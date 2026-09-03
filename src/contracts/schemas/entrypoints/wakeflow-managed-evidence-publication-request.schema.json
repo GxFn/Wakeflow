@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:managed-evidence-publication-request:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_REQUEST_SCHEMA",
+  "title": "WakeflowManagedEvidencePublicationRequestV1",
+  "description": "Closed MCP preview/apply/recover request for one local Managed Evidence publication.",
+  "$comment": "Preview accepts only a Demand identity and logical configured source selection. Evidence/Event/Commit identities, capture time, Config/Demand expectations, source digests, Manifest, record tree and transaction digest are owner-derived. Apply requires the exact preview plan and digest. Recover accepts only the Demand identity and never accepts source bytes or a replacement plan.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/previewRequest" },
+    { "$ref": "#/$defs/applyRequest" },
+    { "$ref": "#/$defs/recoverRequest" }
+  ],
+  "$defs": {
+    "previewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "demandId", "selection"],
+      "properties": {
+        "root": { "$ref": "#/$defs/workspaceRoot" },
+        "mode": { "const": "preview" },
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "selection": { "$ref": "#/$defs/sourceSelection" }
+      }
+    },
+    "applyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "demandId", "plan", "planDigest"],
+      "properties": {
+        "root": { "$ref": "#/$defs/workspaceRoot" },
+        "mode": { "const": "apply" },
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "plan": { "$ref": "#/$defs/publicationPlan" },
+        "planDigest": { "$ref": "#/$defs/sha256Digest" }
+      }
+    },
+    "recoverRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "demandId"],
+      "properties": {
+        "root": { "$ref": "#/$defs/workspaceRoot" },
+        "mode": { "const": "recover" },
+        "demandId": { "$ref": "#/$defs/demandId" }
+      }
+    },
+    "sourceSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceType",
+        "source",
+        "sensitivity",
+        "opaqueContentPolicy"
+      ],
+      "properties": {
+        "evidenceType": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "source": { "$ref": "#/$defs/source" },
+        "sensitivity": {
+          "enum": ["internal", "public"]
+        },
+        "opaqueContentPolicy": {
+          "enum": ["controller-confirmed", "reject"]
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "path", "resourceType"],
+      "properties": {
+        "root": { "$ref": "#/$defs/sourceRoot" },
+        "path": { "$ref": "#/$defs/portableResourcePath" },
+        "resourceType": {
+          "enum": ["file", "tree"]
+        }
+      }
+    },
+    "sourceRoot": {
+      "oneOf": [
+        { "$ref": "#/$defs/repositoryRoot" },
+        { "$ref": "#/$defs/supportSurfaceRoot" }
+      ]
+    },
+    "repositoryRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "repositoryId"],
+      "properties": {
+        "kind": { "const": "repository" },
+        "repositoryId": { "$ref": "#/$defs/repositoryId" }
+      }
+    },
+    "supportSurfaceRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "surfaceId"],
+      "properties": {
+        "kind": { "const": "support-surface" },
+        "surfaceId": { "$ref": "#/$defs/surfaceId" }
+      }
+    },
+    "publicationPlan": {
+      "type": "object",
+      "description": "Complete owner-produced Managed Evidence Publication Transaction. The domain parser revalidates its exact shape and relations before Apply.",
+      "minProperties": 1
+    },
+    "workspaceRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute path of the existing Wakeflow workspace root. It is never returned."
+    },
+    "portableResourcePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "surfaceId": {
+      "type": "string",
+      "pattern": "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -43,6 +43,14 @@ import {
   TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF,
   TestDispatchProjectionPathError,
 } from "../../testing/test-dispatch-projection-paths.js";
+import {
+  inspectManagedEvidenceRecordSetInventory,
+  ManagedEvidenceRecordSetInventoryError,
+  type ManagedEvidenceRecordSetInventory,
+} from "../../evidence/managed-evidence-record-set-inventory.js";
+import {
+  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME,
+} from "../../evidence/managed-evidence-resource-paths.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：健康 Demand 根目录的排他资源清单。
@@ -50,9 +58,16 @@ import {
  * 本能力不仅验证必需资源存在，还证明根目录和事件溯源子树中不存在未知项。提交记录
  * 和快照内容由各自存储验证；本模块负责目录层级、文件系统节点类型、私有权限位、
  * 健康状态下候选目录与事务目录为空，并对可重建TaskPackage、TestCard和Test dispatch
- * packet投影执行封闭命名和私有节点策略检查。投影内容与事件的对应关系由各投影store
- * 验证；尚未出现真实消费者的可选投影目录不要求提前存在。
+ * packet投影执行封闭命名和私有节点策略检查。Managed Evidence作为不可变业务内容，
+ * 额外通过专用record-set inventory关闭healthy Manifest/顶层，并对当前事务stage/final
+ * 执行完整tree分类；与Aggregate selector的关系仍由Root Authority验证。尚未出现真实
+ * 消费者的可选投影目录不要求提前存在。
  */
+
+export type DemandEventSourcingRootInventoryPhase =
+  | "healthy"
+  | "demand-publication"
+  | "managed-evidence-publication";
 
 export interface DemandEventSourcingRootInventory {
   readonly commitCount: number;
@@ -60,6 +75,7 @@ export interface DemandEventSourcingRootInventory {
   readonly artifactCount: number;
   readonly transactionCount: 0 | 1;
   readonly appendCandidateCount: 0;
+  readonly managedEvidence: Readonly<ManagedEvidenceRecordSetInventory>;
   readonly nodes: Readonly<{
     readonly root: Readonly<FileNodeSnapshot>;
     readonly identity: Readonly<FileNodeSnapshot>;
@@ -131,6 +147,7 @@ const EVENT_SOURCING_NAMES = Object.freeze([
   "snapshots",
 ] as const);
 const ARTIFACT_NAMES = new Set([
+  "managed-evidence",
   "task-packages",
   "test-cards",
   "test-dispatch-packets",
@@ -205,6 +222,28 @@ function mapReadError(error: StableDirectoryReadError, path: string): never {
   fail("operation-failure", path);
 }
 
+function mapManagedEvidenceError(
+  error: ManagedEvidenceRecordSetInventoryError,
+): never {
+  if (error.reason === "aborted") fail("aborted", "$signal");
+  if (error.reason === "root-scope") fail("root-scope", "$root");
+  if (error.reason === "capacity") fail("capacity", "$managed-evidence");
+  if (error.reason === "source-changed") {
+    fail("source-changed", "$managed-evidence");
+  }
+  if (error.reason === "node-policy") {
+    fail("node-policy", "$managed-evidence");
+  }
+  if (
+    error.reason === "tree-shape" ||
+    error.reason === "transaction" ||
+    error.reason === "record"
+  ) {
+    fail("tree-shape", "$managed-evidence");
+  }
+  fail("operation-failure", "$managed-evidence");
+}
+
 async function readResource(
   root: RootedDirectory,
   ref: PortableResourcePath,
@@ -226,7 +265,7 @@ async function readResource(
 }
 
 function parseOptions(value: unknown): Readonly<{
-  readonly phase: "healthy" | "publication";
+  readonly phase: DemandEventSourcingRootInventoryPhase;
   readonly signal: AbortSignal | undefined;
 }> {
   let record: Readonly<Record<string, unknown>>;
@@ -245,12 +284,16 @@ function parseOptions(value: unknown): Readonly<{
         !(record.signal instanceof AbortSignal))) ||
     (record.phase !== undefined &&
       record.phase !== "healthy" &&
-      record.phase !== "publication")
+      record.phase !== "demand-publication" &&
+      record.phase !== "managed-evidence-publication")
   ) {
     fail("input", "$options");
   }
   return Object.freeze({
-    phase: record.phase === "publication" ? "publication" : "healthy",
+    phase: record.phase === "demand-publication" ||
+        record.phase === "managed-evidence-publication"
+      ? record.phase
+      : "healthy",
     signal: record.signal as AbortSignal | undefined,
   });
 }
@@ -284,7 +327,7 @@ function optionalEntryNode(
 export async function inspectDemandEventSourcingRootInventory(
   root: RootedDirectory,
   options?: {
-    readonly phase?: "healthy" | "publication";
+    readonly phase?: DemandEventSourcingRootInventoryPhase;
     readonly signal?: AbortSignal;
   },
 ): Promise<Readonly<DemandEventSourcingRootInventory>> {
@@ -398,6 +441,7 @@ export async function inspectDemandEventSourcingRootInventory(
           signal,
           testDispatchPacketsNode,
         );
+  const managedEvidenceNode = optionalEntryNode(artifacts, "managed-evidence");
   const transactions = await readResource(
     root,
     DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
@@ -450,9 +494,10 @@ export async function inspectDemandEventSourcingRootInventory(
     });
   }
   assertDirectory(transactions.directoryNode, "$transactions");
+  let managedEvidenceTransactionNode: Readonly<FileNodeSnapshot> | undefined;
   if (phase === "healthy") {
     if (transactions.entries.length !== 0) fail("tree-shape", "$transactions");
-  } else {
+  } else if (phase === "demand-publication") {
     if (
       transactions.entries.length !== 1 ||
       transactions.entries[0]?.name !== "publication.json"
@@ -460,6 +505,39 @@ export async function inspectDemandEventSourcingRootInventory(
       fail("tree-shape", "$transactions");
     }
     assertFile(transactions.entries[0].node, "$transactions/publication.json");
+    if (managedEvidenceNode !== undefined) {
+      fail("tree-shape", "$managed-evidence");
+    }
+  } else {
+    if (
+      transactions.entries.length !== 1 ||
+      transactions.entries[0]?.name !==
+        MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME
+    ) {
+      fail("tree-shape", "$transactions");
+    }
+    managedEvidenceTransactionNode = transactions.entries[0].node;
+    assertFile(
+      managedEvidenceTransactionNode,
+      "$transactions/managed-evidence-publication.json",
+    );
+  }
+  let managedEvidence: Readonly<ManagedEvidenceRecordSetInventory>;
+  try {
+    managedEvidence = await inspectManagedEvidenceRecordSetInventory(root, {
+      ...(managedEvidenceNode === undefined
+        ? {}
+        : { expectedRootNode: managedEvidenceNode }),
+      ...(managedEvidenceTransactionNode === undefined
+        ? {}
+        : { expectedTransactionNode: managedEvidenceTransactionNode }),
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof ManagedEvidenceRecordSetInventoryError) {
+      mapManagedEvidenceError(error);
+    }
+    throw error;
   }
   assertDirectory(commits.directoryNode, "$commits");
   assertDirectory(snapshots.directoryNode, "$snapshots");
@@ -524,9 +602,11 @@ export async function inspectDemandEventSourcingRootInventory(
     artifactCount:
       taskPackages.entries.length +
       (testCards?.entries.length ?? 0) +
-      (testDispatchPackets?.entries.length ?? 0),
+      (testDispatchPackets?.entries.length ?? 0) +
+      managedEvidence.recordCount,
     transactionCount: transactions.entries.length as 0 | 1,
     appendCandidateCount: 0,
+    managedEvidence,
     nodes: Object.freeze({
       root: after.directoryNode,
       identity: requiredEntryNode(after, "identity.json", "$identity"),

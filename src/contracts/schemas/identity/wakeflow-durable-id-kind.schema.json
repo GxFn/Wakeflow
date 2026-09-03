@@ -25,7 +25,8 @@
     "target-review-decision",
     "target-review-resume",
     "target-task",
+    "todo",
     "window"
   ],
-  "examples": ["program", "requirement", "window"]
+  "examples": ["program", "requirement", "todo", "window"]
 }

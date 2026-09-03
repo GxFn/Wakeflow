@@ -17,18 +17,23 @@ import {
   todoTransactionRef,
 } from "../../../src/governance/todo/todo-paths.js";
 
-test("public IDs map to deterministic fixed-length cross-platform storage keys", () => {
-  const id = parseTodoItemId("TODO:RH1:001");
+test("typed TODO IDs map to deterministic fixed-length storage keys", () => {
+  const id = parseTodoItemId(
+    "todo_11111111-1111-4111-8111-111111111111",
+  );
   const key = todoItemStorageKey(id);
   match(key, /^item-[0-9a-f]{64}$/u);
   equal(key.includes(":"), false);
   equal(key.includes(id), false);
   equal(todoItemStorageKey(id), key);
-  notEqual(todoItemStorageKey("TODO:RH1:002"), key);
+  notEqual(
+    todoItemStorageKey("todo_22222222-2222-4222-8222-222222222222"),
+    key,
+  );
 });
 
 test("all aggregate refs stay under the fixed TODO root", () => {
-  const id = parseTodoItemId("TODO-RH1-PATHS");
+  const id = parseTodoItemId("todo_b59554ae-ab64-4d37-8716-ec4ace2c1c78");
   for (const ref of [
     todoItemRootRef(id),
     todoIntakeRef(id),
@@ -48,14 +53,16 @@ test("all aggregate refs stay under the fixed TODO root", () => {
   equal(todoAppendStageRef(id).endsWith(".stage"), true);
 });
 
-test("TODO item ID keeps one bounded case-sensitive opaque vocabulary", () => {
-  equal(parseTodoItemId("A"), "A");
-  equal(parseTodoItemId("A".repeat(128)), "A".repeat(128));
+test("TODO item ID delegates the closed durable todo kind", () => {
+  const valid = "todo_33333333-3333-4333-8333-333333333333";
+  equal(parseTodoItemId(valid), valid);
   for (const value of [
-    "A".repeat(129),
-    "-leading",
-    "contains/slash",
-    "contains space",
+    "TODO-M2-T09",
+    "demand_33333333-3333-4333-8333-333333333333",
+    "todo_33333333-3333-3333-8333-333333333333",
+    "todo_33333333-3333-4333-7333-333333333333",
+    "todo_33333333-3333-4333-8333-33333333333A",
+    "todo_33333333-3333-4333-8333-333333333333_extra",
     "contains\ud800surrogate",
   ]) {
     let caught: unknown;
@@ -67,5 +74,8 @@ test("TODO item ID keeps one bounded case-sensitive opaque vocabulary", () => {
     equal(caught instanceof TodoItemIdError, true);
     if (caught instanceof TodoItemIdError) equal(caught.path, "$candidate");
   }
-  notEqual(todoItemStorageKey("TODO-A"), todoItemStorageKey("todo-a"));
+  notEqual(
+    todoItemStorageKey(valid),
+    todoItemStorageKey("todo_44444444-4444-4444-8444-444444444444"),
+  );
 });

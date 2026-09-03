@@ -163,7 +163,7 @@ export async function materializeDemandPublicationStage(
       signal === undefined ? undefined : { signal },
     );
     await inspectDemandEventSourcingRootInventory(stageRoot, {
-      phase: "publication",
+      phase: "demand-publication",
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {

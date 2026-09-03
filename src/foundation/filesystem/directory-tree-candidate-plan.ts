@@ -22,6 +22,7 @@ import {
 } from "../numeric/byte-count.js";
 import type { FileNodeSnapshot } from "./file-node-snapshot.js";
 import {
+  joinPortableResourcePath,
   parsePortableResourcePath,
   PortableResourcePathError,
   type PortableResourcePath,
@@ -755,7 +756,11 @@ export function joinDirectoryTreeCandidatePath(
   candidateRootPath: PortableResourcePath,
   relativePath: PortableResourcePath,
 ): PortableResourcePath {
-  return parsePortableResourcePath(`${candidateRootPath}/${relativePath}`);
+  return joinPortableResourcePath(
+    candidateRootPath,
+    relativePath,
+    "$candidatePath",
+  );
 }
 
 export function assertDirectoryTreeCandidateNotAborted(

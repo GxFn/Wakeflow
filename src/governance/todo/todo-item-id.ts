@@ -1,17 +1,18 @@
-import { TODO_ITEM_ID_PATTERN_SOURCE } from "../../contracts/generated/governance/todo/todo-item-id.generated.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  WakeflowDurableIdError,
+  type WakeflowDurableId,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 
 /**
- * Wakeflow Governance / TODO：稳定、用户可读的 TODO 条目 ID。
+ * Wakeflow Governance / TODO：TODO 持久类型化身份的领域窄边界。
  *
- * TODO ID 保留现有公开入口的不透明令牌语义，不强制迁移为 UUID 持久标识类别。它只在
- * 创建时授予品牌类型，不从标题、路径、时间或数组位置推导，也不判断条目是否存在。
+ * TODO ID 使用共享 `todo_<UUIDv4>` durable kind；本模块只把通用词法错误映射为TODO
+ * 领域错误，便于路径、Intake与Collection保持稳定错误面。它不分配身份、不判断条目
+ * 是否存在，也不维护第二份正则或品牌类型。
  */
 
-declare const TODO_ITEM_ID_BRAND: unique symbol;
-
-export type TodoItemId = string & {
-  readonly [TODO_ITEM_ID_BRAND]: "TodoItemId";
-};
+export type TodoItemId = WakeflowDurableId<"todo">;
 
 /** TODO item ID 词法失败的稳定、脱敏错误。 */
 export class TodoItemIdError extends Error {
@@ -21,30 +22,27 @@ export class TodoItemIdError extends Error {
   readonly path: string;
 
   constructor(path: string) {
-    super("TODO item ID does not match its closed portable vocabulary.");
+    super("TODO item ID is not a canonical Wakeflow todo durable ID.");
     this.path = path;
   }
 }
-
-const TODO_ITEM_ID_PATTERN = new RegExp(TODO_ITEM_ID_PATTERN_SOURCE, "u");
 
 function normalizePath(value: unknown): string {
   return typeof value === "string" && value.length > 0 ? value : "$todoId";
 }
 
-/** 严格解析 opaque TODO ID，不执行字符串强制转换。 */
+/** 严格解析共享 durable `todo` kind，不执行字符串强制转换。 */
 export function parseTodoItemId(
   value: unknown,
   errorPath?: string,
 ): TodoItemId {
   const path = normalizePath(errorPath);
-  if (
-    typeof value !== "string"
-    || !value.isWellFormed()
-    || value.normalize("NFC") !== value
-    || !TODO_ITEM_ID_PATTERN.test(value)
-  ) {
-    throw new TodoItemIdError(path);
+  try {
+    return parseWakeflowDurableIdOfKind(value, "todo", path);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowDurableIdError) {
+      throw new TodoItemIdError(path);
+    }
+    throw error;
   }
-  return value as TodoItemId;
 }

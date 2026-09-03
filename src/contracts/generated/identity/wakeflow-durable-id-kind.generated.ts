@@ -24,6 +24,7 @@ export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
   "target-review-decision",
   "target-review-resume",
   "target-task",
+  "todo",
   "window"
 ] as const);
 

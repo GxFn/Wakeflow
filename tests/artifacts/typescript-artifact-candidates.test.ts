@@ -24,6 +24,13 @@ import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../..
 import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-product-defect-remediation-public-contract.js";
 import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/governance/lifecycle/demand-completion-public-contract.js";
 import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/demand/publication/demand-publication-public-contract.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/governance/evidence/managed-evidence-public-contract.js";
+import {
+  WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
+} from "../../src/governance/ledger/ledger-authority-public-contract.js";
+import { WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/todo/todo-inspection-public-contract.js";
+import { WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/todo/todo-intake-publication-public-contract.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-resume-public-contract.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-card-planning-public-contract.js";
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-delivery-preparation-public-contract.js";
@@ -219,6 +226,11 @@ test(
             WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME,
             WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
             WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
+            WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
             WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
             WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
             WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,

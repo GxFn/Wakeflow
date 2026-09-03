@@ -1,6 +1,7 @@
 import type {
   ArchiveReceipt as TodoArchiveReceiptWire,
   DemandMount as TodoDemandMountWire,
+  Withdrawal as TodoWithdrawalWire,
   WakeflowTodoState as TodoStateWire,
 } from "../../contracts/generated/governance/todo/todo-state.generated.js";
 import { WAKEFLOW_TODO_STATE_SCHEMA } from "../../contracts/generated/governance/todo/todo-state.generated.js";
@@ -59,10 +60,10 @@ import {
 /**
  * Wakeflow Governance / TODO：TODO 条目的唯一可变状态快照与前向转换。
  *
- * 修订 1 从不可变接收记录创建为待领取或等待依赖；领取操作绑定 Demand 挂载；Archive
- * 只能从指定的已申领状态创建 `archived` 终态，并写入业务归档回执。Demand/Task 的
- * blocked、observing、completed 与 cancelled 生命周期不在 TODO 状态中重复保存。
- * 领域事务负责互斥锁、恢复意图、磁盘条件替换和投影发布，本模块保持为纯函数。
+ * 修订 1 从不可变 Intake 创建为待领取或等待触发；activate 只解除等待，withdraw 保存
+ * 尚未形成 Demand 的终止原因，claim 绑定 Demand 挂载，Archive 只从已领取状态写入业务
+ * 归档回执。Demand/Task 的 blocked、observing、completed 与 cancelled 生命周期不在
+ * TODO 状态中重复保存。领域事务负责互斥锁、恢复意图、磁盘条件替换和投影发布，本模块保持为纯函数。
  */
 
 const TODO_STATE_ARTIFACT_KIND = "wakeflow-todo-state" as const;
@@ -72,6 +73,7 @@ export type TodoStatus =
   | "pending-claim"
   | "parked"
   | "claimed"
+  | "withdrawn"
   | "archived";
 
 export interface TodoDemandMount {
@@ -92,6 +94,11 @@ export interface TodoArchiveReceipt {
   readonly archivedAt: UtcInstant;
 }
 
+export interface TodoWithdrawal {
+  readonly reason: string;
+  readonly withdrawnAt: UtcInstant;
+}
+
 export interface TodoState {
   readonly artifactKind: typeof TODO_STATE_ARTIFACT_KIND;
   readonly schemaVersion: typeof TODO_STATE_SCHEMA_VERSION;
@@ -101,6 +108,7 @@ export interface TodoState {
   readonly status: TodoStatus;
   readonly updatedAt: UtcInstant;
   readonly mount: Readonly<TodoDemandMount> | null;
+  readonly withdrawal: Readonly<TodoWithdrawal> | null;
   readonly archive: Readonly<TodoArchiveReceipt> | null;
 }
 
@@ -118,6 +126,7 @@ export type TodoStateErrorReason =
   | "mount"
   | "revision"
   | "status"
+  | "withdrawal"
   | "archive"
   | "representation";
 
@@ -131,6 +140,7 @@ const ERROR_MESSAGES = {
   "mount": "TODO state demand mount is inconsistent.",
   "revision": "TODO state revision chain is inconsistent.",
   "status": "TODO state status and payload are inconsistent.",
+  "withdrawal": "TODO state withdrawal is inconsistent.",
   "archive": "TODO state archive receipt is inconsistent.",
   "representation": "TODO state bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<TodoStateErrorReason, string>>;
@@ -164,6 +174,7 @@ const MOUNT_FIELDS = Object.freeze([
   "identityDigest",
   "stateRootRef",
 ] as const);
+const WITHDRAWAL_INPUT_FIELDS = Object.freeze(["reason"] as const);
 const ARCHIVE_INPUT_FIELDS = Object.freeze([
   "archiveId",
   "artifactKind",
@@ -174,6 +185,9 @@ const ARCHIVE_INPUT_FIELDS = Object.freeze([
   "schemaVersion",
   "todoId",
 ] as const);
+const CONTROL_EXCEPT_LF_PATTERN =
+  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const MAXIMUM_WITHDRAWAL_REASON_CODE_POINTS = 4096;
 
 function fail(reason: TodoStateErrorReason, path: string): never {
   throw new TodoStateError(reason, path);
@@ -195,6 +209,20 @@ function parseTime(value: unknown, path: string): UtcInstant {
     if (error instanceof UtcInstantError) fail("time", path);
     throw error;
   }
+}
+
+function parseWithdrawalReason(value: unknown, path: string): string {
+  if (
+    typeof value !== "string"
+    || !value.isWellFormed()
+    || value.normalize("NFC") !== value
+    || CONTROL_EXCEPT_LF_PATTERN.test(value)
+    || !/^(?!\s)[\s\S]*\S$/u.test(value)
+    || Array.from(value).length > MAXIMUM_WITHDRAWAL_REASON_CODE_POINTS
+  ) {
+    fail("withdrawal", path);
+  }
+  return value;
 }
 
 function parseDurableId<K extends "demand" | "archive">(
@@ -236,6 +264,18 @@ function normalizeMount(
   });
 }
 
+function normalizeWithdrawal(
+  value: Readonly<TodoWithdrawalWire>,
+): Readonly<TodoWithdrawal> {
+  return Object.freeze({
+    reason: parseWithdrawalReason(value.reason, "$/withdrawal/reason"),
+    withdrawnAt: parseTime(
+      value.withdrawnAt,
+      "$/withdrawal/withdrawnAt",
+    ),
+  });
+}
+
 function normalizeArchive(
   value: Readonly<TodoArchiveReceiptWire>,
 ): Readonly<TodoArchiveReceipt> {
@@ -265,10 +305,29 @@ function assertStateRelations(state: Readonly<TodoState>): void {
   ) {
     fail("revision", "$/previousStateDigest");
   }
+  if (
+    (state.status === "parked" && state.revision !== 1)
+    || (
+      (state.status === "claimed" || state.status === "withdrawn")
+      && state.revision < 2
+    )
+    || (state.status === "archived" && state.revision < 3)
+  ) {
+    fail("revision", "$/revision");
+  }
   const mounted = state.mount !== null;
   const requiresMount = state.status === "claimed"
     || state.status === "archived";
   if (mounted !== requiresMount) fail("status", "$/mount");
+
+  if (state.status !== "withdrawn") {
+    if (state.withdrawal !== null) fail("status", "$/withdrawal");
+  } else if (
+    state.withdrawal === null
+    || state.updatedAt !== state.withdrawal.withdrawnAt
+  ) {
+    fail("withdrawal", "$/withdrawal");
+  }
 
   if (state.status !== "archived") {
     if (state.archive !== null) fail("status", "$/archive");
@@ -307,6 +366,9 @@ function normalizeWireState(
     status: wire.status,
     updatedAt: parseTime(wire.updatedAt, "$/updatedAt"),
     mount: wire.mount === null ? null : normalizeMount(wire.mount),
+    withdrawal: wire.withdrawal === null
+      ? null
+      : normalizeWithdrawal(wire.withdrawal),
     archive: wire.archive === null ? null : normalizeArchive(wire.archive),
   });
   assertStateRelations(state);
@@ -359,6 +421,24 @@ export function parseTodoDemandMount(value: unknown): Readonly<TodoDemandMount> 
   });
 }
 
+function parseWithdrawalInput(value: unknown): string {
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value, "$withdrawal");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$withdrawal");
+    throw error;
+  }
+  const keys = Object.keys(record).sort();
+  if (
+    keys.length !== WITHDRAWAL_INPUT_FIELDS.length
+    || keys.some((key, index) => key !== WITHDRAWAL_INPUT_FIELDS[index])
+  ) {
+    fail("input", "$withdrawal");
+  }
+  return parseWithdrawalReason(record.reason, "$/withdrawal/reason");
+}
+
 /** 从 immutable intake 创建 revision 1 状态。 */
 export function createInitialTodoState(
   intake: Readonly<TodoIntake>,
@@ -369,9 +449,10 @@ export function createInitialTodoState(
     todoId: intake.todoId,
     revision: 1,
     previousStateDigest: null,
-    status: intake.initialStatus,
+    status: intake.readiness.status === "ready" ? "pending-claim" : "parked",
     updatedAt: intake.createdAt,
     mount: null,
+    withdrawal: null,
     archive: null,
   });
 }
@@ -402,6 +483,61 @@ function nextRevision(current: Readonly<TodoState>): number {
   return current.revision + 1;
 }
 
+/** 将等待触发的条目纯计算为可领取状态。 */
+export function activateTodoState(
+  currentValue: unknown,
+  options: TodoStateTransitionOptions = {},
+): Readonly<TodoState> {
+  const current = parseTodoState(currentValue);
+  if (current.status !== "parked") fail("status", "$/status");
+  const revision = nextRevision(current);
+  const previousStateDigest = computeTodoStateDigest(current);
+  const updatedAt = readTransitionClock(options);
+  return parseTodoState({
+    artifactKind: TODO_STATE_ARTIFACT_KIND,
+    schemaVersion: TODO_STATE_SCHEMA_VERSION,
+    todoId: current.todoId,
+    revision,
+    previousStateDigest,
+    status: "pending-claim",
+    updatedAt,
+    mount: null,
+    withdrawal: null,
+    archive: null,
+  });
+}
+
+/** 将尚未形成 Demand 的条目纯计算为带原因的撤回终态。 */
+export function withdrawTodoState(
+  currentValue: unknown,
+  withdrawalValue: unknown,
+  options: TodoStateTransitionOptions = {},
+): Readonly<TodoState> {
+  const current = parseTodoState(currentValue);
+  if (current.status !== "pending-claim" && current.status !== "parked") {
+    fail("status", "$/status");
+  }
+  const reason = parseWithdrawalInput(withdrawalValue);
+  const revision = nextRevision(current);
+  const previousStateDigest = computeTodoStateDigest(current);
+  const withdrawnAt = readTransitionClock(options);
+  return parseTodoState({
+    artifactKind: TODO_STATE_ARTIFACT_KIND,
+    schemaVersion: TODO_STATE_SCHEMA_VERSION,
+    todoId: current.todoId,
+    revision,
+    previousStateDigest,
+    status: "withdrawn",
+    updatedAt: withdrawnAt,
+    mount: null,
+    withdrawal: {
+      reason,
+      withdrawnAt,
+    },
+    archive: null,
+  });
+}
+
 /** 从指定的待领取状态纯计算已领取状态。 */
 export function claimTodoState(
   currentValue: unknown,
@@ -425,6 +561,7 @@ export function claimTodoState(
     status: "claimed",
     updatedAt,
     mount,
+    withdrawal: null,
     archive: null,
   });
 }
@@ -499,6 +636,7 @@ export function archiveTodoState(
     status: "archived",
     updatedAt: archivedAt,
     mount: current.mount,
+    withdrawal: null,
     archive: {
       artifactKind: "wakeflow-business-archive-receipt",
       schemaVersion: 1,

@@ -25,8 +25,12 @@ export const MANAGED_EVIDENCE_ROOT_REF = parsePortableResourcePath(
 );
 export const MANAGED_EVIDENCE_MANIFEST_FILE_NAME = "manifest.json" as const;
 export const MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME = "payload" as const;
+export const MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME =
+  "managed-evidence-publication.json" as const;
 export const MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF =
-  parsePortableResourcePath("transactions/managed-evidence-publication.json");
+  parsePortableResourcePath(
+    `transactions/${MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME}`,
+  );
 
 const MANAGED_EVIDENCE_RECORD_DIRECTORY_PATTERN =
   /^(?<evidenceId>evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;

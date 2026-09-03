@@ -4,7 +4,7 @@
  */
 
 /** TODO item ID 的 Schema 派生正则源。 */
-export const TODO_ITEM_ID_PATTERN_SOURCE = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" as const;
+export const TODO_ITEM_ID_PATTERN_SOURCE = "^todo_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" as const;
 
 /** Schema 层的 TODO item ID；运行时解析后再授予品牌类型。 */
 export type WakeflowTodoItemIdText = string;
@@ -30,4 +30,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TODO_ITEM_ID_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:todo:item-id:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TODO_ITEM_ID_SCHEMA\",\"title\":\"WakeflowTodoItemIdText\",\"description\":\"TODO intake 使用的稳定、用户可读 opaque ID；允许字母、数字、点、下划线、冒号和连字符，不从标题或路径推导。\",\"$comment\":\"TODO ID 不是 Wakeflow durable UUID kind；它保留当前公开输入的可读标识，但创建后不可复用或改写。\",\"type\":\"string\",\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$\",\"examples\":[\"TODO-M2-T09\"]}");
+export const WAKEFLOW_TODO_ITEM_ID_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:todo:item-id:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TODO_ITEM_ID_SCHEMA\",\"title\":\"WakeflowTodoItemIdText\",\"description\":\"TODO intake 使用的 Wakeflow 持久类型化身份；由 owner 分配，不从标题、路径、时间或集合位置推导。\",\"$comment\":\"运行时解析器必须继续通过 Wakeflow durable ID 的 todo kind 准入；本 Schema 只提供被多个领域合同复用的 wire 结构。\",\"type\":\"string\",\"pattern\":\"^todo_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\",\"examples\":[\"todo_11111111-1111-4111-8111-111111111111\"]}");

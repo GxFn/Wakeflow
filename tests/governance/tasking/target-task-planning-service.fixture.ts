@@ -47,6 +47,7 @@ import { demandFinalRootRef } from "../../../src/governance/demand/publication/d
 import { materializeWakeflowActiveLayout } from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
 import type { TargetTaskPlanningPreviewRequest } from "../../../src/governance/tasking/target-task-planning-service.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { todoIntakeDraft } from "../todo/todo-intake.fixture.js";
 
 export const PLANNING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -81,7 +82,7 @@ const PUBLICATION_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit",
 );
 export const PLANNING_RECORDED_AT = parseUtcInstant("2026-08-29T12:00:00.000Z");
-const TODO_ID = parseTodoItemId("TODO-TARGET-TASK-PLANNING");
+const TODO_ID = parseTodoItemId("todo_c60b6125-149d-458e-8d6e-98bffc9cd2f1");
 const ROLES = [
   "code-facts",
   "landing-plan",
@@ -158,33 +159,6 @@ export async function createTargetTaskPlanningWorkspaceFixture(
     testingMode === "real-environment"
       ? "在已确认Test环境中运行真实场景验证"
       : "运行新增 TypeScript 聚焦测试";
-  const appendedTodo = await appendTodoItem(
-    workspaceRoot,
-    {
-      todoId: TODO_ID,
-      initialStatus: "pending-claim",
-      type: "requirement",
-      priority: "P1",
-      ownerWindowId: controllerWindow.windowId,
-      goal: "建立一份可审计的 implementation TaskPackage",
-      affectsRetestOrDispatch: false,
-      dependency: null,
-      recommendedWindowId: PLANNING_WINDOW_ID,
-      autoClaim: true,
-      testingDecision: {
-        mode: testingMode,
-        summary: testingSummary,
-      },
-      documents: [
-        {
-          label: "requirement",
-          ref: `requirements/${REQUIREMENT_ID}/record.json`,
-          anchor: null,
-        },
-      ],
-    },
-    { clock: () => PLANNING_RECORDED_AT },
-  );
 
   const ledgerRoot = await RootedDirectory.open(ledgerPath);
   const ledgerStore = new LedgerAuthorityStore(ledgerRoot);
@@ -269,6 +243,23 @@ export async function createTargetTaskPlanningWorkspaceFixture(
   ) {
     throw new Error("Expected real-environment authority member fixture.");
   }
+  const appendedTodo = await appendTodoItem(
+    workspaceRoot,
+    todoIntakeDraft(TODO_ID, {
+      programId: PLANNING_PROGRAM_ID,
+      originWindowId: controllerWindow.windowId,
+      controllerWindowId: controllerWindow.windowId,
+      summary: "建立一份可审计的 implementation TaskPackage",
+      intakeRationale: "已确认的 Ledger Authority 可以进入 Demand 与 Task 规划。",
+      testingDecision: {
+        mode: testingMode,
+        summary: testingSummary,
+        environmentMemberRef: environmentAuthority?.memberRef ?? null,
+      },
+      authorityRefs,
+    }),
+    { clock: () => PLANNING_RECORDED_AT },
+  );
 
   const identity = createDemandIdentity(
     {

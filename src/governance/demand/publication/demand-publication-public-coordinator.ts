@@ -236,8 +236,7 @@ export async function executeDemandPublicationPublicRequest(
   try {
     if (request.mode === "preview") {
       if (
-        containsPrivateText(request.demand, privateValues) ||
-        containsPrivateText(request.authorityMembers, privateValues)
+        containsPrivateText(request.demand, privateValues)
       ) {
         fail("privacy", undefined, "unchanged");
       }
@@ -249,7 +248,6 @@ export async function executeDemandPublicationPublicRequest(
           {
             todoId: request.todoId,
             demand: request.demand,
-            authorityMembers: request.authorityMembers,
           },
           options.preview,
         );

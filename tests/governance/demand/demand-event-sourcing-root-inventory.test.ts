@@ -42,6 +42,14 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
     equal(inventory.commitCount, 0);
     equal(inventory.snapshotCount, 0);
     equal(inventory.artifactCount, 0);
+    await rejects(
+      inspectDemandEventSourcingRootInventory(root, {
+        phase: "publication" as never,
+      }),
+      (error: unknown) =>
+        error instanceof DemandEventSourcingRootInventoryError &&
+        error.reason === "input",
+    );
 
     const projectionPath = path.join(
       fixtureRoot,

@@ -3,7 +3,6 @@ import { types } from "node:util";
 import pLimit from "p-limit";
 
 import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import type { WakeflowConfigRootPlacementEntry } from "../../configuration/wakeflow-config-root-placement.js";
 import {
   createWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
@@ -11,7 +10,6 @@ import {
   type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parsePlainRecord,
   PassiveOwnDataError,
@@ -60,6 +58,16 @@ import {
 } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import {
+  createManagedEvidenceCapturePlan,
+  ManagedEvidenceCapturePlanError,
+  type ManagedEvidenceCaptureDemandExpectation,
+  type ManagedEvidenceCapturePlan,
+} from "./managed-evidence-capture-plan.js";
+import {
+  openConfiguredManagedEvidenceSourceRoot,
+  ManagedEvidenceConfiguredSourceRootError,
+} from "./managed-evidence-configured-source-root.js";
+import {
   createManagedEvidenceManifest,
   MANAGED_EVIDENCE_PAYLOAD_LIMITS,
   type ManagedEvidenceManifest,
@@ -79,26 +87,6 @@ import {
  * file/tree字节并派生opaque列表，最后生成完整Managed Evidence Manifest与Demand
  * CAS基线。Preview不创建Evidence目录、stage、Event或投影，也不执行宿主效果。
  */
-
-export const MANAGED_EVIDENCE_CAPTURE_PLAN_KIND =
-  "WakeflowManagedEvidenceCapturePlan" as const;
-export const MANAGED_EVIDENCE_CAPTURE_PLAN_VERSION = 1 as const;
-
-export interface ManagedEvidenceCaptureDemandExpectation {
-  readonly streamRevision: number;
-  readonly stateDigest: Sha256Digest;
-  readonly lastEventId: WakeflowDurableId<"demand-event">;
-  readonly lastEventDigest: Sha256Digest;
-}
-
-export interface ManagedEvidenceCapturePlan {
-  readonly kind: typeof MANAGED_EVIDENCE_CAPTURE_PLAN_KIND;
-  readonly schemaVersion: typeof MANAGED_EVIDENCE_CAPTURE_PLAN_VERSION;
-  readonly configDigest: Sha256Digest;
-  readonly expectedDemand: Readonly<ManagedEvidenceCaptureDemandExpectation>;
-  readonly manifest: Readonly<ManagedEvidenceManifest>;
-  readonly planDigest: Sha256Digest;
-}
 
 export interface ManagedEvidenceCapturePlanningOptions {
   readonly clock?: UtcWallClock;
@@ -274,55 +262,6 @@ function rethrowPlanningError(error: unknown): never {
   if (error instanceof StableFileReadError) mapStableFileError(error);
   if (error instanceof LoadedArtifactTreeIdentityError) mapArtifactError(error);
   throw error;
-}
-
-function selectedRootKey(source: Readonly<ManagedEvidenceSource>): string {
-  return source.root.kind === "repository"
-    ? `repository.${source.root.repositoryId}.root`
-    : `support.${source.root.surfaceId}.root`;
-}
-
-function sourcePlacement(
-  config: Readonly<WakeflowConfigAuthoritySnapshot>,
-  source: Readonly<ManagedEvidenceSource>,
-): Readonly<WakeflowConfigRootPlacementEntry> {
-  const entityExists =
-    source.root.kind === "repository"
-      ? config.indexes.repositoryById[source.root.repositoryId] !== undefined
-      : config.indexes.surfaceById[source.root.surfaceId] !== undefined;
-  if (!entityExists) fail("source-root");
-  const placement = config.placements.roots.find(
-    (entry) => entry.key === selectedRootKey(source),
-  );
-  if (
-    placement === undefined ||
-    placement.state !== "present" ||
-    placement.realPath === null
-  ) {
-    fail("source-root");
-  }
-  return placement;
-}
-
-async function openConfiguredSourceRoot(
-  placement: Readonly<WakeflowConfigRootPlacementEntry>,
-): Promise<RootedDirectory> {
-  let root: RootedDirectory;
-  try {
-    root = await RootedDirectory.open(placement.absolutePath, "$sourceRoot");
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("source-root", error);
-    throw error;
-  }
-  if (root.absolutePath !== placement.realPath) {
-    try {
-      await root.close();
-    } catch {
-      // 位置关系错误优先。
-    }
-    fail("source-root");
-  }
-  return root;
 }
 
 function mapStableFileError(error: StableFileReadError): never {
@@ -545,9 +484,18 @@ async function captureSelectedSource(
   selection: Readonly<ManagedEvidenceSourceSelection>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<CapturedSource>> {
-  const sourceRoot = await openConfiguredSourceRoot(
-    sourcePlacement(config, selection.source),
-  );
+  let sourceRoot: RootedDirectory;
+  try {
+    sourceRoot = await openConfiguredManagedEvidenceSourceRoot(
+      config,
+      selection.source,
+    );
+  } catch (error: unknown) {
+    if (error instanceof ManagedEvidenceConfiguredSourceRootError) {
+      fail("source-root", error);
+    }
+    throw error;
+  }
   let result: Readonly<CapturedSource> | undefined;
   let failure: unknown;
   try {
@@ -671,20 +619,6 @@ function allocateEvidenceId(
   }
 }
 
-function planBasis(
-  configDigest: Sha256Digest,
-  expectedDemand: Readonly<ManagedEvidenceCaptureDemandExpectation>,
-  manifest: Readonly<ManagedEvidenceManifest>,
-) {
-  return Object.freeze({
-    kind: MANAGED_EVIDENCE_CAPTURE_PLAN_KIND,
-    schemaVersion: MANAGED_EVIDENCE_CAPTURE_PLAN_VERSION,
-    configDigest,
-    expectedDemand,
-    manifest,
-  });
-}
-
 export class ManagedEvidenceCapturePlanningService {
   readonly #workspaceRoot: RootedDirectory;
 
@@ -780,15 +714,18 @@ export class ManagedEvidenceCapturePlanningService {
         }
         throw error;
       }
-      const basis = planBasis(
-        context.config.configDigest,
-        expectedDemand,
-        manifest,
-      );
-      result = Object.freeze({
-        ...basis,
-        planDigest: computeCanonicalJsonSha256Digest(basis, "$plan"),
-      });
+      try {
+        result = createManagedEvidenceCapturePlan({
+          configDigest: context.config.configDigest,
+          expectedDemand,
+          manifest,
+        });
+      } catch (error: unknown) {
+        if (error instanceof ManagedEvidenceCapturePlanError) {
+          fail("operation-failure", error);
+        }
+        throw error;
+      }
     } catch (error: unknown) {
       failure = error;
     }

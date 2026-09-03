@@ -23,6 +23,46 @@ import {
   type WakeflowDemandPublicationResultV1,
 } from "../contracts/generated/entrypoints/wakeflow-demand-publication-result.generated.js";
 import {
+  WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA,
+  type WakeflowRequirementPublicationRequestV1,
+} from "../contracts/generated/entrypoints/wakeflow-requirement-publication-request.generated.js";
+import {
+  WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA,
+  type WakeflowRequirementPublicationResultV1,
+} from "../contracts/generated/entrypoints/wakeflow-requirement-publication-result.generated.js";
+import {
+  WAKEFLOW_CONFIRMATION_PUBLICATION_REQUEST_SCHEMA,
+  type WakeflowConfirmationPublicationRequestV1,
+} from "../contracts/generated/entrypoints/wakeflow-confirmation-publication-request.generated.js";
+import {
+  WAKEFLOW_CONFIRMATION_PUBLICATION_RESULT_SCHEMA,
+  type WakeflowConfirmationPublicationResultV1,
+} from "../contracts/generated/entrypoints/wakeflow-confirmation-publication-result.generated.js";
+import {
+  WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_REQUEST_SCHEMA,
+  type WakeflowManagedEvidencePublicationRequestV1,
+} from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-request.generated.js";
+import {
+  WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_RESULT_SCHEMA,
+  type WakeflowManagedEvidencePublicationResultV1,
+} from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-result.generated.js";
+import {
+  WAKEFLOW_TODO_INSPECTION_REQUEST_SCHEMA,
+  type WakeflowTodoInspectionRequestV1,
+} from "../contracts/generated/entrypoints/wakeflow-todo-inspection-request.generated.js";
+import {
+  WAKEFLOW_TODO_INSPECTION_RESULT_SCHEMA,
+  type WakeflowTodoInspectionResultV1,
+} from "../contracts/generated/entrypoints/wakeflow-todo-inspection-result.generated.js";
+import {
+  WAKEFLOW_TODO_INTAKE_PUBLICATION_REQUEST_SCHEMA,
+  type WakeflowTodoIntakePublicationRequestV1,
+} from "../contracts/generated/entrypoints/wakeflow-todo-intake-publication-request.generated.js";
+import {
+  WAKEFLOW_TODO_INTAKE_PUBLICATION_RESULT_SCHEMA,
+  type WakeflowTodoIntakePublicationResultV1,
+} from "../contracts/generated/entrypoints/wakeflow-todo-intake-publication-result.generated.js";
+import {
   WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA,
   type WakeflowWindowHostBindingRegistrationRequestV1,
 } from "../contracts/generated/entrypoints/wakeflow-window-host-binding-registration-request.generated.js";
@@ -276,6 +316,40 @@ import {
   type DemandPublicationPublicResult,
 } from "../governance/demand/publication/demand-publication-public-coordinator.js";
 import {
+  ManagedEvidencePublicContractError,
+  WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
+} from "../governance/evidence/managed-evidence-public-contract.js";
+import {
+  ManagedEvidencePublicCoordinatorError,
+  type ManagedEvidencePublicResult,
+} from "../governance/evidence/managed-evidence-public-coordinator.js";
+import {
+  LedgerAuthorityPublicationPublicContractError,
+  WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
+  type ConfirmationPublicationPublicResult,
+  type RequirementPublicationPublicResult,
+} from "../governance/ledger/ledger-authority-public-contract.js";
+import {
+  LedgerAuthorityPublicationPublicCoordinatorError,
+} from "../governance/ledger/ledger-authority-public-coordinator.js";
+import {
+  TodoInspectionPublicContractError,
+  WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
+  type TodoInspectionPublicResult,
+} from "../governance/todo/todo-inspection-public-contract.js";
+import {
+  TodoInspectionPublicCoordinatorError,
+} from "../governance/todo/todo-inspection-public-coordinator.js";
+import {
+  TodoIntakePublicationPublicContractError,
+  WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
+  type TodoIntakePublicationPublicResult,
+} from "../governance/todo/todo-intake-publication-public-contract.js";
+import {
+  TodoIntakePublicationPublicCoordinatorError,
+} from "../governance/todo/todo-intake-publication-public-coordinator.js";
+import {
   DemandControllerRoutePublicContractError,
   WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
 } from "../governance/controller/demand-controller-route-public-contract.js";
@@ -305,7 +379,7 @@ import {
  *
  * JSON Schema 是每个工具的可移植 wire 权威，官方 SDK 负责协议、tools/list、
  * tools/call 与调用前结构校验。领域 owner 仍独立复验容量、关系、根作用域和 mutation
- * authority。当前只发布已闭环的Maintenance、Demand Publication、Demand Controller
+ * authority。当前只发布已闭环的Maintenance、Ledger/TODO/Demand/Managed Evidence、Demand Controller
  * Route inspection、Window Host Binding registration、Target Task Planning、Implementation Delivery
  * Preparation、Target Host Effect Claim/Outcome/Rearm、TargetResult Import与Controller
  * Implementation/Test Review Decision、Product Defect Remediation、Review/Resume、
@@ -374,9 +448,29 @@ type WakeflowDemandPublicationMcpExecutor = (
   value: unknown,
 ) => Promise<Readonly<DemandPublicationPublicResult>>;
 
+type WakeflowManagedEvidenceMcpExecutor = (
+  value: unknown,
+) => Promise<Readonly<ManagedEvidencePublicResult>>;
+
+type WakeflowRequirementPublicationMcpExecutor = (
+  value: unknown,
+) => Promise<Readonly<RequirementPublicationPublicResult>>;
+
+type WakeflowConfirmationPublicationMcpExecutor = (
+  value: unknown,
+) => Promise<Readonly<ConfirmationPublicationPublicResult>>;
+
 type WakeflowDemandControllerRouteMcpExecutor = (
   value: unknown,
 ) => Promise<Readonly<DemandControllerRoutePublicResult>>;
+
+type WakeflowTodoInspectionMcpExecutor = (
+  value: unknown,
+) => Promise<Readonly<TodoInspectionPublicResult>>;
+
+type WakeflowTodoIntakePublicationMcpExecutor = (
+  value: unknown,
+) => Promise<Readonly<TodoIntakePublicationPublicResult>>;
 
 type WakeflowTestCardPlanningMcpExecutor = (
   value: unknown,
@@ -393,10 +487,15 @@ interface CreateWakeflowPublicMcpServerOptions {
   readonly claimTargetHostEffect: WakeflowTargetHostEffectClaimMcpExecutor;
   readonly completeDemand: WakeflowDemandCompletionMcpExecutor;
   readonly createDemand: WakeflowDemandPublicationMcpExecutor;
+  readonly recordManagedEvidence: WakeflowManagedEvidenceMcpExecutor;
+  readonly publishConfirmation: WakeflowConfirmationPublicationMcpExecutor;
+  readonly publishRequirement: WakeflowRequirementPublicationMcpExecutor;
   readonly executeMaintenance: WakeflowMaintenanceMcpExecutor;
   readonly importTargetResult: WakeflowTargetResultImportMcpExecutor;
   readonly inspectDemandRoute: WakeflowDemandControllerRouteMcpExecutor;
   readonly inspectTargetResultReview: WakeflowTargetResultReviewInspectionMcpExecutor;
+  readonly inspectTodo: WakeflowTodoInspectionMcpExecutor;
+  readonly intakeTodo: WakeflowTodoIntakePublicationMcpExecutor;
   readonly resumeTargetResultReview: WakeflowTargetResultReviewResumeMcpExecutor;
   readonly planTargetTask: WakeflowTargetTaskPlanningMcpExecutor;
   readonly planTestCard: WakeflowTestCardPlanningMcpExecutor;
@@ -424,8 +523,13 @@ type WakeflowPublicMcpServerConfigurationErrorReason =
   | "controller-product-defect-remediation-executor"
   | "demand-completion-executor"
   | "demand-publication-executor"
+  | "managed-evidence-executor"
+  | "confirmation-publication-executor"
+  | "requirement-publication-executor"
   | "maintenance-executor"
   | "demand-controller-route-executor"
+  | "todo-inspection-executor"
+  | "todo-intake-publication-executor"
   | "target-task-planning-executor"
   | "test-card-planning-executor"
   | "test-delivery-preparation-executor"
@@ -458,9 +562,19 @@ const CONFIGURATION_ERROR_MESSAGES = {
     "Wakeflow MCP Demand Completion executor is invalid.",
   "demand-publication-executor":
     "Wakeflow MCP Demand Publication executor is invalid.",
+  "managed-evidence-executor":
+    "Wakeflow MCP Managed Evidence executor is invalid.",
+  "confirmation-publication-executor":
+    "Wakeflow MCP Confirmation Publication executor is invalid.",
+  "requirement-publication-executor":
+    "Wakeflow MCP Requirement Publication executor is invalid.",
   "maintenance-executor": "Wakeflow MCP Maintenance executor is invalid.",
   "demand-controller-route-executor":
     "Wakeflow MCP Demand Controller Route executor is invalid.",
+  "todo-inspection-executor":
+    "Wakeflow MCP TODO Inspection executor is invalid.",
+  "todo-intake-publication-executor":
+    "Wakeflow MCP TODO Intake Publication executor is invalid.",
   "target-task-planning-executor":
     "Wakeflow MCP Target Task Planning executor is invalid.",
   "test-card-planning-executor":
@@ -553,13 +667,18 @@ function parseServerOptions(
     "importTargetResult",
     "inspectDemandRoute",
     "inspectTargetResultReview",
+    "inspectTodo",
+    "intakeTodo",
     "planTargetTask",
     "planTestCard",
     "prepareImplementationDelivery",
     "prepareTestDelivery",
+    "publishConfirmation",
+    "publishRequirement",
     "rearmTargetHostEffect",
     "recordControllerImplementationReviewDecision",
     "recordControllerTestReviewDecision",
+    "recordManagedEvidence",
     "recordTargetHostEffectOutcome",
     "registerWindowHostBinding",
     "resumeTargetResultReview",
@@ -600,6 +719,12 @@ function parseServerOptions(
     failConfiguration("demand-publication-executor");
   }
   if (
+    typeof record.recordManagedEvidence !== "function" ||
+    types.isProxy(record.recordManagedEvidence)
+  ) {
+    failConfiguration("managed-evidence-executor");
+  }
+  if (
     typeof record.executeMaintenance !== "function" ||
     types.isProxy(record.executeMaintenance)
   ) {
@@ -622,6 +747,18 @@ function parseServerOptions(
     types.isProxy(record.inspectTargetResultReview)
   ) {
     failConfiguration("target-result-review-inspection-executor");
+  }
+  if (
+    typeof record.inspectTodo !== "function" ||
+    types.isProxy(record.inspectTodo)
+  ) {
+    failConfiguration("todo-inspection-executor");
+  }
+  if (
+    typeof record.intakeTodo !== "function" ||
+    types.isProxy(record.intakeTodo)
+  ) {
+    failConfiguration("todo-intake-publication-executor");
   }
   if (
     typeof record.resumeTargetResultReview !== "function" ||
@@ -652,6 +789,18 @@ function parseServerOptions(
     types.isProxy(record.prepareTestDelivery)
   ) {
     failConfiguration("test-delivery-preparation-executor");
+  }
+  if (
+    typeof record.publishConfirmation !== "function" ||
+    types.isProxy(record.publishConfirmation)
+  ) {
+    failConfiguration("confirmation-publication-executor");
+  }
+  if (
+    typeof record.publishRequirement !== "function" ||
+    types.isProxy(record.publishRequirement)
+  ) {
+    failConfiguration("requirement-publication-executor");
   }
   if (
     typeof record.rearmTargetHostEffect !== "function" ||
@@ -694,6 +843,8 @@ function parseServerOptions(
       record.completeDemand as WakeflowDemandCompletionMcpExecutor,
     createDemand:
       record.createDemand as WakeflowDemandPublicationMcpExecutor,
+    recordManagedEvidence:
+      record.recordManagedEvidence as WakeflowManagedEvidenceMcpExecutor,
     executeMaintenance:
       record.executeMaintenance as WakeflowMaintenanceMcpExecutor,
     importTargetResult:
@@ -702,6 +853,10 @@ function parseServerOptions(
       record.inspectDemandRoute as WakeflowDemandControllerRouteMcpExecutor,
     inspectTargetResultReview:
       record.inspectTargetResultReview as WakeflowTargetResultReviewInspectionMcpExecutor,
+    inspectTodo:
+      record.inspectTodo as WakeflowTodoInspectionMcpExecutor,
+    intakeTodo:
+      record.intakeTodo as WakeflowTodoIntakePublicationMcpExecutor,
     resumeTargetResultReview:
       record.resumeTargetResultReview as WakeflowTargetResultReviewResumeMcpExecutor,
     planTargetTask:
@@ -711,6 +866,10 @@ function parseServerOptions(
       record.prepareImplementationDelivery as WakeflowTargetDeliveryPreparationMcpExecutor,
     prepareTestDelivery:
       record.prepareTestDelivery as WakeflowTestDeliveryPreparationMcpExecutor,
+    publishConfirmation:
+      record.publishConfirmation as WakeflowConfirmationPublicationMcpExecutor,
+    publishRequirement:
+      record.publishRequirement as WakeflowRequirementPublicationMcpExecutor,
     rearmTargetHostEffect:
       record.rearmTargetHostEffect as WakeflowTargetHostEffectRearmMcpExecutor,
     recordControllerImplementationReviewDecision:
@@ -1052,6 +1211,46 @@ function demandPublicationError(error: unknown) {
   return null;
 }
 
+function managedEvidenceError(error: unknown) {
+  if (error instanceof ManagedEvidencePublicContractError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      path: error.path,
+    });
+  }
+  if (error instanceof ManagedEvidencePublicCoordinatorError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      ...(error.causeCode === null ? {} : { causeCode: error.causeCode }),
+      ...(error.causeReason === null ? {} : { causeReason: error.causeReason }),
+      publicationAuthority: error.publicationAuthority,
+    });
+  }
+  return null;
+}
+
+function ledgerAuthorityPublicationError(error: unknown) {
+  if (error instanceof LedgerAuthorityPublicationPublicContractError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      path: error.path,
+    });
+  }
+  if (error instanceof LedgerAuthorityPublicationPublicCoordinatorError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      ...(error.causeCode === null ? {} : { causeCode: error.causeCode }),
+      ...(error.causeReason === null ? {} : { causeReason: error.causeReason }),
+      publicationAuthority: error.publicationAuthority,
+    });
+  }
+  return null;
+}
+
 function demandCompletionError(error: unknown) {
   if (error instanceof DemandCompletionPublicContractError) {
     return Object.freeze({
@@ -1091,6 +1290,45 @@ function demandControllerRouteError(error: unknown) {
   return null;
 }
 
+function todoInspectionError(error: unknown) {
+  if (error instanceof TodoInspectionPublicContractError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      path: error.path,
+    });
+  }
+  if (error instanceof TodoInspectionPublicCoordinatorError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      ...(error.causeCode === null ? {} : { causeCode: error.causeCode }),
+      ...(error.causeReason === null ? {} : { causeReason: error.causeReason }),
+    });
+  }
+  return null;
+}
+
+function todoIntakePublicationError(error: unknown) {
+  if (error instanceof TodoIntakePublicationPublicContractError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      path: error.path,
+    });
+  }
+  if (error instanceof TodoIntakePublicationPublicCoordinatorError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      ...(error.causeCode === null ? {} : { causeCode: error.causeCode }),
+      ...(error.causeReason === null ? {} : { causeReason: error.causeReason }),
+      publicationAuthority: error.publicationAuthority,
+    });
+  }
+  return null;
+}
+
 function errorEnvelope(tool: string, error: unknown): WakeflowMcpErrorEnvelope {
   const known =
     maintenanceError(error) ??
@@ -1109,8 +1347,12 @@ function errorEnvelope(tool: string, error: unknown): WakeflowMcpErrorEnvelope {
     controllerTestReviewDecisionError(error) ??
     controllerProductDefectRemediationError(error) ??
     demandPublicationError(error) ??
+    managedEvidenceError(error) ??
+    ledgerAuthorityPublicationError(error) ??
     demandCompletionError(error) ??
-    demandControllerRouteError(error);
+    demandControllerRouteError(error) ??
+    todoInspectionError(error) ??
+    todoIntakePublicationError(error);
   return Object.freeze({
     kind: "WakeflowMcpError",
     schemaVersion: 1,
@@ -1158,7 +1400,7 @@ function successfulToolResult(value: unknown): CallToolResult {
   };
 }
 
-/** 创建只注册当前十八个真实公共工具的官方 MCP server 实例。 */
+/** 创建只注册当前二十三个真实公共工具的官方 MCP server 实例。 */
 export function createWakeflowPublicMcpServer(
   options: Readonly<CreateWakeflowPublicMcpServerOptions>,
 ): McpServer {
@@ -1175,8 +1417,17 @@ export function createWakeflowPublicMcpServer(
         "Apply must return the exact confirmation and digest produced by that preview.",
         "Wakeflow never performs host effects: the Agent executes each returned window launch intent with host capabilities.",
         `After a host window is created, pass its exact opaque result to ${WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME}.`,
-        `To publish a pending TODO as a Demand, call ${WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME} in preview mode with only authored Demand text, placement, and selected Ledger members; review the complete owner-derived plan, then apply that exact plan and digest.`,
+        `To publish immutable Requirement authority from the current Design surface, call ${WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME} in preview mode with only its title, Design surface identity, and selected Markdown members; review the owner-derived plan, then apply that exact plan and digest.`,
+        `To publish one pre-Demand Confirmation authority, call ${WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME} through the same preview/apply contract. Wakeflow allocates both the Confirmation identity and its future isolated Demand identity.`,
+        "Ledger authority publication creates only immutable Requirement or Confirmation authority. It does not create a TODO, publish a Demand, run Design, or perform a host effect; retain the selected Design source until apply or recovery is current.",
+        `Call ${WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME} to list one bounded TODO summary page or inspect one exact item. The result never selects an eligible or next item and never authorizes claim or mutation.`,
+        "A TODO page token continues the same normalized filter only while the exact collection snapshot remains current. On stale-page-token, restart from the first page instead of joining different snapshots.",
+        `After the requirement authority and queue semantics are confirmed, call ${WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME} in preview mode. Review the complete owner-derived Intake plan, then apply that exact plan and digest.`,
+        `Use ${WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME} recover only for its exact plan after a recoverable failure. Intake creates no Demand, performs no host effect, and never executes Auto Claim.`,
+        `To publish a pending TODO as a Demand, call ${WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME} in preview mode with only the TODO identity and authored Demand text/placement. Wakeflow reads the complete Ledger Authority exclusively from that immutable TODO Intake; review the plan, then apply its exact digest.`,
         `Only call ${WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME} in recover mode when the failed exact operation reports publicationAuthority=recoverable. After apply or recovery is current, inspect the new Demand Route.`,
+        `To record local Managed Evidence, call ${WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME} in preview mode with only the Demand identity and configured logical source selection; review the complete owner-derived transaction, then apply that exact plan and digest.`,
+        `Call ${WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME} in recover mode only for an interrupted Demand-level Evidence transaction. Results contain metadata receipts only; payload bytes and the internal Reader are not public.`,
         `Call ${WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME} to inspect the current Demand responsibility frontiers before selecting a domain owner.`,
         "A Demand Controller Route is a read-only observation, never mutation authority or Controller acceptance.",
         `Only when the Route selects Test Card Planning may the Controller call ${WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME} in preview mode, review the complete frozen Card/Event plan, then apply that exact plan and digest.`,
@@ -1210,6 +1461,78 @@ export function createWakeflowPublicMcpServer(
         `Only when the Route selects Demand Completion Preflight, call ${WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME} in preview mode, review the exact terminal plan, then apply that plan and digest.`,
         "Demand Completion appends the successful terminal Event only after all required acceptance, Test closure, claimed TODO, and absent WorkClaim gates pass. It does not archive the TODO or Demand, close host windows, create a BusinessArchive, or perform resource cleanup.",
       ].join(" "),
+    },
+  );
+
+  server.registerTool(
+    WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
+    {
+      title: "Publish Wakeflow Requirement Authority",
+      description: [
+        "Preview, apply, or recover one immutable Requirement authority publication from the current Design surface.",
+        "Preview accepts only a title, the Design surface identity, and 1–32 role-bound Markdown member paths. Wakeflow derives Program and Requirement identities, source observations, digests, Ledger paths, and the complete publication plan.",
+        "Apply accepts only the exact preview plan and digest, revalidates current source bytes, and publishes additively and idempotently. Recover uses only the exact plan plus durable intent, stage, and final state; it reports input-required when a partial stage lacks source bytes.",
+        "Success returns the plan or metadata-only Requirement/member references. It exposes no Workspace or source physical path, document bytes, internal loaded record, stage, lock, or host effect.",
+      ].join(" "),
+      inputSchema: fromJsonSchema<WakeflowRequirementPublicationRequestV1>(
+        WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA,
+      ),
+      outputSchema: fromJsonSchema<WakeflowRequirementPublicationResultV1>(
+        WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA,
+      ),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await admitted.publishRequirement(request);
+        return successfulToolResult(result);
+      } catch (error: unknown) {
+        return failedToolResult(
+          WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
+          error,
+        );
+      }
+    },
+  );
+
+  server.registerTool(
+    WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
+    {
+      title: "Publish Wakeflow Confirmation Authority",
+      description: [
+        "Preview, apply, or recover one immutable pre-Demand Confirmation authority publication from the current Design surface.",
+        "Preview accepts only a title, the Design surface identity, and 1–32 role-bound Markdown member paths. Wakeflow derives Program and Confirmation identities, the future isolated Demand identity, source observations, digests, Ledger paths, and the complete publication plan.",
+        "Apply accepts only the exact preview plan and digest, revalidates current source bytes, and publishes additively and idempotently. Recover uses only the exact plan plus durable intent, stage, and final state; it reports input-required when a partial stage lacks source bytes.",
+        "Success returns the plan or metadata-only Confirmation, future Demand, and member references. It creates no Demand and exposes no Workspace or source physical path, document bytes, internal loaded record, stage, lock, or host effect.",
+      ].join(" "),
+      inputSchema: fromJsonSchema<WakeflowConfirmationPublicationRequestV1>(
+        WAKEFLOW_CONFIRMATION_PUBLICATION_REQUEST_SCHEMA,
+      ),
+      outputSchema: fromJsonSchema<WakeflowConfirmationPublicationResultV1>(
+        WAKEFLOW_CONFIRMATION_PUBLICATION_RESULT_SCHEMA,
+      ),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await admitted.publishConfirmation(request);
+        return successfulToolResult(result);
+      } catch (error: unknown) {
+        return failedToolResult(
+          WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
+          error,
+        );
+      }
     },
   );
 
@@ -1250,6 +1573,44 @@ export function createWakeflowPublicMcpServer(
   );
 
   server.registerTool(
+    WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
+    {
+      title: "Record Wakeflow Managed Evidence",
+      description: [
+        "Preview, apply, or recover one immutable local Managed Evidence publication for an existing Demand.",
+        "Preview accepts only the Demand identity and a configured repository/support-surface source selection. Wakeflow derives Evidence/Event/Commit identities, capture time, source digest, Manifest, record tree, CAS expectations, and transaction digest.",
+        "Apply accepts only the exact preview plan and digest. Recover inspects the Demand-level durable journal and may return current, retired-stale, or healthy.",
+        "Apply and recover results contain typed IDs, digests, and Event/Commit/Aggregate cursors only. They return no source path, Manifest body, payload bytes, private node, host identity, or Reader output. Preview includes the caller-selected logical source inside the confirmation plan. This tool performs no host effect.",
+      ].join(" "),
+      inputSchema:
+        fromJsonSchema<WakeflowManagedEvidencePublicationRequestV1>(
+          WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_REQUEST_SCHEMA,
+        ),
+      outputSchema:
+        fromJsonSchema<WakeflowManagedEvidencePublicationResultV1>(
+          WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_RESULT_SCHEMA,
+        ),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await admitted.recordManagedEvidence(request);
+        return successfulToolResult(result);
+      } catch (error: unknown) {
+        return failedToolResult(
+          WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
+          error,
+        );
+      }
+    },
+  );
+
+  server.registerTool(
     WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
     {
       title: "Maintain Wakeflow Workspace",
@@ -1277,6 +1638,80 @@ export function createWakeflowPublicMcpServer(
         return successfulToolResult(result);
       } catch (error: unknown) {
         return failedToolResult(WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME, error);
+      }
+    },
+  );
+
+  server.registerTool(
+    WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
+    {
+      title: "Inspect Wakeflow TODO",
+      description: [
+        "List one bounded page of TODO summaries or inspect one exact TODO item from the strict JSON Authority.",
+        "List uses the fixed createdAt and TODO-ID order, optional observation filters, a default page size of 20, and a maximum of 100. Its opaque token binds the normalized filter and exact collection snapshot.",
+        "Item returns complete business Intake with Ledger member references and a redacted State. Results expose no workspace root, file node, storage key, Board/projection content, lock, transaction, state-root ref, or mount identity digest.",
+        "This tool is read-only. It does not derive eligibility, select the next item, claim work, create a TODO or Demand, repair a projection, or grant mutation authority.",
+      ].join(" "),
+      inputSchema: fromJsonSchema<WakeflowTodoInspectionRequestV1>(
+        WAKEFLOW_TODO_INSPECTION_REQUEST_SCHEMA,
+      ),
+      outputSchema: fromJsonSchema<WakeflowTodoInspectionResultV1>(
+        WAKEFLOW_TODO_INSPECTION_RESULT_SCHEMA,
+      ),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await admitted.inspectTodo(request);
+        return successfulToolResult(result);
+      } catch (error: unknown) {
+        return failedToolResult(
+          WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
+          error,
+        );
+      }
+    },
+  );
+
+  server.registerTool(
+    WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
+    {
+      title: "Intake Wakeflow TODO",
+      description: [
+        "Preview, apply, or recover one immutable TODO Intake and its initial State.",
+        "Preview accepts only author-owned queue semantics, one current origin window, a testing decision, and selected immutable Ledger members. Wakeflow derives Program, Controller, complete member references, environment reference, TODO ID, time, Config/Collection expectations, and the complete Intake plan.",
+        "Apply and recover require the exact preview plan and digest. Publication is additive and idempotent, and interrupted Collection transactions use the existing exact recovery owner.",
+        "Success returns only TODO identity, initial status, and Intake/State/Collection digests. This tool creates no Demand, performs no host effect, and does not execute Auto Claim.",
+      ].join(" "),
+      inputSchema:
+        fromJsonSchema<WakeflowTodoIntakePublicationRequestV1>(
+          WAKEFLOW_TODO_INTAKE_PUBLICATION_REQUEST_SCHEMA,
+        ),
+      outputSchema:
+        fromJsonSchema<WakeflowTodoIntakePublicationResultV1>(
+          WAKEFLOW_TODO_INTAKE_PUBLICATION_RESULT_SCHEMA,
+        ),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await admitted.intakeTodo(request);
+        return successfulToolResult(result);
+      } catch (error: unknown) {
+        return failedToolResult(
+          WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
+          error,
+        );
       }
     },
   );

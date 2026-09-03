@@ -25,8 +25,9 @@ import {
  * Wakeflow Governance / TODO：完整条目清单的确定性集合快照。
  *
  * 每个条目由不可变 Intake 和唯一当前 State 组成。本模块验证 ID 关联、存储键、重复
- * 条目、确定性排序和集合摘要。它不枚举文件系统、不持有集合锁，也不把 Markdown
- * 投影作为快照输入。
+ * 条目、确定性排序和集合摘要，并把 pending/parked/claimed 计为活动调度条目。
+ * withdrawn/archived 仍保留在权威与摘要中，但不计入活动数量。本模块不枚举文件系统、
+ * 不持有集合锁，也不把 Markdown 投影作为快照输入。
  */
 
 const TODO_COLLECTION_SNAPSHOT_KIND =
@@ -57,6 +58,7 @@ export type TodoCollectionErrorReason =
   | "too-many-items"
   | "item-shape"
   | "item-identity"
+  | "item-lineage"
   | "duplicate";
 
 const ERROR_MESSAGES = {
@@ -64,6 +66,7 @@ const ERROR_MESSAGES = {
   "too-many-items": "TODO collection exceeds its item budget.",
   "item-shape": "TODO collection item shape is invalid.",
   "item-identity": "TODO collection intake and state identities differ.",
+  "item-lineage": "TODO collection state is unreachable from its immutable intake.",
   "duplicate": "TODO collection contains a duplicate TODO item.",
 } as const satisfies Readonly<Record<TodoCollectionErrorReason, string>>;
 
@@ -97,6 +100,26 @@ function compareItems(
   return time === 0 ? compareText(left.todoId, right.todoId) : time;
 }
 
+const STATE_REVISION_BY_INITIAL_READINESS = Object.freeze({
+  ready: Object.freeze({
+    "pending-claim": 1,
+    parked: null,
+    claimed: 2,
+    withdrawn: 2,
+    archived: 3,
+  }),
+  parked: Object.freeze({
+    "pending-claim": 2,
+    parked: 1,
+    claimed: 3,
+    withdrawn: 2,
+    archived: 4,
+  }),
+} as const satisfies Readonly<Record<
+  TodoIntake["readiness"]["status"],
+  Readonly<Record<TodoState["status"], number | null>>
+>>);
+
 function normalizeItem(value: unknown, index: number): Readonly<TodoCollectionItem> {
   const path = `$items/${index}`;
   let record: Readonly<Record<string, unknown>>;
@@ -122,6 +145,11 @@ function normalizeItem(value: unknown, index: number): Readonly<TodoCollectionIt
     throw error;
   }
   if (intake.todoId !== state.todoId) fail("item-identity", path);
+  const expectedRevision =
+    STATE_REVISION_BY_INITIAL_READINESS[intake.readiness.status][state.status];
+  if (expectedRevision === null || state.revision !== expectedRevision) {
+    fail("item-lineage", path);
+  }
   return Object.freeze({
     todoId: intake.todoId,
     storageKey: todoItemStorageKey(intake.todoId),
@@ -143,6 +171,13 @@ function digestBasis(items: readonly Readonly<TodoCollectionItem>[]) {
       stateDigest: item.stateDigest,
     })),
   };
+}
+
+/** 判断状态是否仍属于当前调度集合；终态仍保留在权威和集合摘要中。 */
+export function isTodoCollectionStatusActive(
+  status: TodoState["status"],
+): boolean {
+  return status !== "withdrawn" && status !== "archived";
 }
 
 /** 从一组 Intake/State 配对生成完整、排序且冻结的集合快照。 */
@@ -177,7 +212,7 @@ export function createTodoCollectionSnapshot(
     schemaVersion: TODO_COLLECTION_SNAPSHOT_VERSION,
     itemCount: frozenItems.length,
     activeItemCount: frozenItems.filter(
-      (item) => item.state.status !== "archived",
+      (item) => isTodoCollectionStatusActive(item.state.status),
     ).length,
     items: frozenItems,
     collectionDigest: computeCanonicalJsonSha256Digest(digestBasis(frozenItems)),

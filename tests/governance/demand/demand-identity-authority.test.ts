@@ -64,7 +64,7 @@ const OTHER_DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand",
 );
 const CREATED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
-const TODO_ID = parseTodoItemId("TODO-RH2-EVENT-SOURCING");
+const TODO_ID = parseTodoItemId("todo_bf91ec0c-529f-4d41-8f10-a6dd262deae7");
 const ROLES = [
   "code-facts",
   "landing-plan",

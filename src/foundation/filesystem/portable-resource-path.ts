@@ -106,3 +106,19 @@ export function splitPortableResourcePath(
   const admitted = parsePath(value, path);
   return Object.freeze(admitted.split("/")) as PortableResourcePathSegments;
 }
+
+/**
+ * 连接两个已经具有独立语义的可移植路径，并对组合结果重新执行完整词法准入。
+ *
+ * 本函数不接受空路径，也不推断“目录”或“文件”角色；调用方负责决定父子关系。
+ */
+export function joinPortableResourcePath(
+  parentValue: PortableResourcePath,
+  childValue: PortableResourcePath,
+  errorPath?: string,
+): PortableResourcePath {
+  const path = normalizeErrorPath(errorPath);
+  const parent = parsePath(parentValue, `${path}.parent`);
+  const child = parsePath(childValue, `${path}.child`);
+  return parsePath(`${parent}/${child}`, path);
+}

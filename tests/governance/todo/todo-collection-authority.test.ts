@@ -22,6 +22,7 @@ import { createTodoIntake, renderTodoIntake } from "../../../src/governance/todo
 import { todoItemStorageKey } from "../../../src/governance/todo/todo-paths.js";
 import { createInitialTodoState, renderTodoState } from "../../../src/governance/todo/todo-state.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { todoIntakeDraft } from "./todo-intake.fixture.js";
 
 interface Fixture {
   readonly rootPath: string;
@@ -53,27 +54,9 @@ function fixture(): Fixture {
 }
 
 function createItem(todoId: string) {
-  const intake = createTodoIntake({
-    todoId,
-    initialStatus: "pending-claim",
-    type: "requirement",
-    priority: "P1",
-    ownerWindowId: "window_11111111-1111-4111-8111-111111111111",
-    goal: `Implement ${todoId}`,
-    affectsRetestOrDispatch: false,
-    dependency: null,
-    recommendedWindowId: "window_22222222-2222-4222-8222-222222222222",
-    autoClaim: true,
-    testingDecision: {
-      mode: "controller-only",
-      summary: "Focused tests",
-    },
-    documents: [{
-      label: "plan",
-      ref: `ledger/requirements/${todoId}/record.json`,
-      anchor: null,
-    }],
-  }, { clock: () => CREATED_AT });
+  const intake = createTodoIntake(todoIntakeDraft(todoId), {
+    clock: () => CREATED_AT,
+  });
   return { intake, state: createInitialTodoState(intake) };
 }
 
@@ -126,8 +109,8 @@ test("empty initialized authority is valid and projection may be missing", async
 
 test("complete items produce exact physical sources and a current projection", async () => {
   const target = fixture();
-  const first = writeItem(target, "TODO-AUTHORITY-A");
-  const second = writeItem(target, "TODO-AUTHORITY-B");
+  const first = writeItem(target, "todo_33712737-448b-433f-8a4d-f40891fdbc92");
+  const second = writeItem(target, "todo_a69e1937-4df2-494d-8fbb-97bfa5811c42");
   const projection = renderTodoBoardProjection([first, second]);
   writeFileSync(target.projectionPath, projection.content, { mode: 0o600 });
   const root = await RootedDirectory.open(target.rootPath);
@@ -147,14 +130,14 @@ test("complete items produce exact physical sources and a current projection", a
 
 test("projection drift is diagnostic and never corrupts JSON authority", async () => {
   const target = fixture();
-  writeItem(target, "TODO-AUTHORITY-STALE");
+  writeItem(target, "todo_f4026be4-2489-4f9f-8c53-a46a2d326de0");
   writeFileSync(target.projectionPath, "stale projection\n", { mode: 0o600 });
   const root = await RootedDirectory.open(target.rootPath);
   try {
     const snapshot = await inspectTodoCollectionAuthority(root);
     equal(snapshot.collection.itemCount, 1);
     equal(snapshot.projection.status, "stale");
-    equal(snapshot.projection.expected.content.includes("TODO-AUTHORITY-STALE"), true);
+    equal(snapshot.projection.expected.content.includes("todo_f4026be4-2489-4f9f-8c53-a46a2d326de0"), true);
   } finally {
     await root.close();
     rmSync(target.rootPath, { recursive: true, force: true });
@@ -164,7 +147,7 @@ test("projection drift is diagnostic and never corrupts JSON authority", async (
 test("pending transaction blocks normal authority inspection", async () => {
   const target = fixture();
   writeFileSync(
-    path.join(target.transactionsRoot, `${todoItemStorageKey("TODO-RECOVERY")}.json`),
+    path.join(target.transactionsRoot, `${todoItemStorageKey("todo_3920f955-5e63-47e7-8e36-8f8bde261aaa")}.json`),
     "{}\n",
     { mode: 0o600 },
   );
@@ -183,21 +166,21 @@ test("pending transaction blocks normal authority inspection", async () => {
 test("incomplete, misplaced, linked, and extra layout resources fail closed", async () => {
   const scenarios: Array<(target: Fixture) => void> = [
     (target) => {
-      const key = todoItemStorageKey("TODO-INCOMPLETE");
+      const key = todoItemStorageKey("todo_3898536e-8843-4ba7-8568-4cb0499ff115");
       mkdirSync(path.join(target.itemsRoot, key), { mode: 0o700 });
     },
     (target) => {
-      writeItem(target, "TODO-MISPLACED", todoItemStorageKey("TODO-OTHER"));
+      writeItem(target, "todo_9673d41f-4fc1-4084-872d-cb7044737bb4", todoItemStorageKey("todo_2a725bb8-3057-46fa-832e-b4a44f4676db"));
     },
     (target) => {
-      const item = writeItem(target, "TODO-LINKED");
+      const item = writeItem(target, "todo_e4b6ed5d-f778-4a65-8cb0-35c91e25ccd4");
       const itemRoot = path.join(target.itemsRoot, todoItemStorageKey(item.intake.todoId));
       const statePath = path.join(itemRoot, "state.json");
       rmSync(statePath);
       symlinkSync("intake.json", statePath);
     },
     (target) => {
-      const item = writeItem(target, "TODO-EXTRA");
+      const item = writeItem(target, "todo_8ab75721-8dca-45f8-870e-16a84e82031b");
       const itemRoot = path.join(target.itemsRoot, todoItemStorageKey(item.intake.todoId));
       writeFileSync(path.join(itemRoot, "extra.json"), "{}\n", { mode: 0o600 });
     },

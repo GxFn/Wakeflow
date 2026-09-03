@@ -15,9 +15,9 @@ import {
 /**
  * Wakeflow Governance / TODO：TODO 聚合的可移植路径词汇。
  *
- * 公开 TODO ID 允许冒号等不适合作为跨平台文件名的字符，因此条目目录使用完整的
- * SHA-256 存储键。接收记录仍保存真实 ID；资源清单必须反向核对存储键，不能把摘要
- * 目录名升级为业务身份，也不能省略碰撞检查。
+ * 条目目录继续使用完整SHA-256存储键，使物理布局保持固定长度且不直接披露业务身份。
+ * 接收记录保存真实typed ID；资源清单必须反向核对存储键，不能把摘要目录名升级为
+ * 业务身份，也不能因UUID碰撞概率低而省略存储键碰撞检查。
  */
 
 export const TODO_COLLECTION_ROOT_REF = parsePortableResourcePath(

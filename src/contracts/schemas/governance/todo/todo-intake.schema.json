@@ -3,26 +3,26 @@
   "$id": "urn:wakeflow:governance:todo:intake:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TODO_INTAKE_SCHEMA",
   "title": "WakeflowTodoIntake",
-  "description": "一个 TODO item 创建后不可变的 pre-demand intake authority；展示状态和 demand mount 不进入本记录。",
-  "$comment": "Schema 负责 portable structure；window typed ID、testing decision/type 关系、document anchor 与领域字段顺序由 TODO intake codec 继续校验。",
+  "description": "TODO 条目创建后不可变的 Demand 前调度接收权威；Ledger 来源、初始就绪条件与调度策略在创建时冻结。",
+  "$comment": "Schema 负责可移植数据结构；类型化标识、Ledger 引用排序与角色闭包、Config 窗口关系、就绪状态与自动领取策略、测试环境关系分别由 TODO Intake 编解码器及后续规划层继续验证。",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "artifactKind",
     "schemaVersion",
+    "programId",
     "todoId",
     "createdAt",
-    "initialStatus",
-    "type",
+    "demandType",
     "priority",
-    "ownerWindowId",
-    "goal",
-    "affectsRetestOrDispatch",
-    "dependency",
-    "recommendedWindowId",
+    "originWindowId",
+    "controllerWindowId",
+    "summary",
+    "intakeRationale",
+    "readiness",
     "autoClaim",
     "testingDecision",
-    "documents"
+    "authorityRefs"
   ],
   "properties": {
     "artifactKind": {
@@ -31,19 +31,16 @@
     "schemaVersion": {
       "const": 1
     },
+    "programId": {
+      "$ref": "#/$defs/programId"
+    },
     "todoId": {
       "$ref": "urn:wakeflow:governance:todo:item-id:v1"
     },
     "createdAt": {
       "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
     },
-    "initialStatus": {
-      "enum": [
-        "pending-claim",
-        "parked"
-      ]
-    },
-    "type": {
+    "demandType": {
       "enum": [
         "requirement",
         "bug",
@@ -59,27 +56,27 @@
         "P3"
       ]
     },
-    "ownerWindowId": {
+    "originWindowId": {
       "$ref": "#/$defs/windowId"
     },
-    "goal": {
+    "controllerWindowId": {
+      "$ref": "#/$defs/windowId"
+    },
+    "summary": {
       "$ref": "#/$defs/nonEmptyText"
     },
-    "affectsRetestOrDispatch": {
-      "type": "boolean"
+    "intakeRationale": {
+      "$ref": "#/$defs/nonEmptyText"
     },
-    "dependency": {
+    "readiness": {
       "oneOf": [
         {
-          "type": "null"
+          "$ref": "#/$defs/readyReadiness"
         },
         {
-          "$ref": "#/$defs/nonEmptyText"
+          "$ref": "#/$defs/parkedReadiness"
         }
       ]
-    },
-    "recommendedWindowId": {
-      "$ref": "#/$defs/windowId"
     },
     "autoClaim": {
       "type": "boolean"
@@ -87,12 +84,13 @@
     "testingDecision": {
       "$ref": "#/$defs/testingDecision"
     },
-    "documents": {
+    "authorityRefs": {
       "type": "array",
       "minItems": 1,
       "maxItems": 32,
+      "uniqueItems": true,
       "items": {
-        "$ref": "#/$defs/documentReference"
+        "$ref": "urn:wakeflow:governance:ledger:authority-member-reference:v1"
       }
     }
   },
@@ -103,16 +101,52 @@
       "maxLength": 8192,
       "pattern": "^(?!\\s)[\\s\\S]*\\S$"
     },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
     "windowId": {
       "type": "string",
       "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "readyReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "const": "ready"
+        }
+      }
+    },
+    "parkedReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "trigger"
+      ],
+      "properties": {
+        "status": {
+          "const": "parked"
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+        }
+      }
     },
     "testingDecision": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "mode",
-        "summary"
+        "summary",
+        "environmentMemberRef"
       ],
       "properties": {
         "mode": {
@@ -127,34 +161,14 @@
           "minLength": 1,
           "maxLength": 4096,
           "pattern": "^(?!\\s)[\\s\\S]*\\S$"
-        }
-      }
-    },
-    "documentReference": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "label",
-        "ref",
-        "anchor"
-      ],
-      "properties": {
-        "label": {
-          "type": "string",
-          "pattern": "^[A-Za-z][A-Za-z0-9-]{0,63}$"
         },
-        "ref": {
-          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-        },
-        "anchor": {
+        "environmentMemberRef": {
           "oneOf": [
             {
               "type": "null"
             },
             {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
-              "maxLength": 256
+              "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
             }
           ]
         }

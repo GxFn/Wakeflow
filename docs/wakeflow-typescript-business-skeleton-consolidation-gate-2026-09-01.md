@@ -1156,3 +1156,1146 @@ release gate、push或缓存刷新。
 当前工作树是一个可独立提交的基础检查点：Managed Evidence已经具备零写capture到Event/资源计划的全部纯骨干，并补足Event前
 stage退休机制；尚未创建journal、stage/final或公共工具。下一步应先提交TS与Atlas两个独立检查点，再从持久Publication
 Transaction合同开始，避免中央Root Inventory/Application变化继续扩大同一diff。
+
+### 13.24 Managed Evidence Publication Transaction合同
+
+本单元没有直接进入物理Application，而是先关闭journal中真正需要耐久保存的不可变恢复意图。审阅现有代码时发现，若
+Publication codec直接从`managed-evidence-capture-planning-service.ts`导入plan类型与常量，纯合同层会反向加载Config、
+RootedDirectory、Ledger和`p-limit`等I/O依赖。因此新增`managed-evidence-capture-plan.ts`，把零写plan的字段准入、关系重建和
+摘要计算从Planning Service中提取出来；Service仍独占实际Config/Demand/source读取。
+
+持久Transaction采用以下关闭结构：
+
+```text
+wakeflow-managed-evidence-publication-transaction v1
+├── capturePlanDigest
+├── manifest
+├── recordTreePlanDigest
+└── demandEventSourcingAppend
+    ├── expectedStreamRevision
+    ├── expectedStateDigest
+    ├── expectedLastEventId
+    ├── expectedLastEventDigest
+    ├── eventId
+    ├── commandDigest
+    └── commitId
+```
+
+Transaction不保存`prepared/executing/committed`等可变phase。Manifest只出现一次；Demand/Evidence ID、Config digest、
+stage/final路径、完整record tree plan与`evidence.record-managed-evidence`Command均由codec确定性重建。这样既保留恢复所需的
+完整source/payload事实，又不继承旧JS plan中Manifest、Event、next state、transaction和路径多份复制的问题。
+
+三项摘要各自承担不同边界：
+
+| 摘要 | 关闭内容 | 后续用途 |
+| --- | --- | --- |
+| `capturePlanDigest` | Config摘要＋Event Stream预期＋Manifest | 证明apply收到的是同一份零写preview |
+| `recordTreePlanDigest` | Manifest文档＋payload路径/mode/bytes/digest＋stage/final | 复验stage materialization与发布 |
+| `commandDigest` | exact Managed Evidence Event Sourcing Command | 与Event Store commit执行幂等匹配 |
+
+`expectedStreamRevision`最大值收紧为`Number.MAX_SAFE_INTEGER - 1`，为本次Event追加保留一个合法修订号。新的纯factory、parser、
+deterministic document codec和digest函数会分别重建capture plan、record tree与Command，拒绝任一摘要、Event ID或字段集合漂移。
+它不会签发内存`PreparedDemandEventStreamCommit` capability；Application必须在真实当前Aggregate上重新执行Decider/prepare。
+
+[Node.js 24文件系统文档](https://nodejs.org/docs/latest-v24.x/api/fs.html)仍明确Promise文件操作本身不提供同步或线程安全；
+[SQLite Atomic Commit](https://www.sqlite.org/atomiccommit.html)要求恢复journal在修改目标前完整flush；
+[Microsoft Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)要求append-only Event Store以
+乐观并发拒绝过期写入。因而当前合同继续支持`durable immutable intent → durable stage → optimistic Event append →
+forward finalization → exact journal retirement`，没有引入全Demand锁或伪数据库事务。
+
+```text
+Managed Evidence adjacent focused: 15 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 104 / 214 external refs
+Schema digest: sha256:2ded2c05dcc81a8808a92a818f8584c308ab276c916a4cf33c7419cca73d7851
+Architecture: parser=swc / 744 modules / 5215 dependencies / 0 violations
+```
+
+本单元仍未创建journal文件、stage/final或Event。下一审阅单元进入Demand Root Inventory：先让healthy读取接纳可选且关闭的
+`artifacts/managed-evidence` final集合，并为`managed-evidence-publication`增加只读事务分类；Inventory不得执行source重读、
+candidate退休、Event追加或前向发布。
+
+### 13.25 Managed Evidence Record Set与Demand Root健康闭包
+
+直接把`managed-evidence`加入Root Inventory允许名称会产生错误的健康语义：任意目录只要名字像`evidence_<uuid>`，即使
+Manifest损坏、payload漂移、属于其他Demand或没有对应Event，也会被普通Root Authority接受。因此本单元新增
+`managed-evidence-record-set-inventory.ts`，并同时接入Demand Root Inventory与Root Authority；没有采用只放宽白名单的短路径。
+
+每份final record执行：
+
+```text
+稳定关闭record根的manifest.json + payload/顶层
+→ 按expected node读取manifest.json
+→ 解析完整Managed Evidence Manifest
+→ 复验目录名与evidenceId
+→ 重建ManagedEvidenceRecordTreePlan
+→ 返回最小record selector/provenance摘要
+```
+
+record-set枚举使用固定4并发，保持输入顺序并在最终再次读取容器；容量与Aggregate `managedEvidence`上限一致，为10,000份final，
+事务期额外允许一个stage。普通healthy Demand加载不会重新SHA-256扫描全部历史payload，返回值明确标记
+`payloadVerification: deferred`；未来Evidence reader在实际读取一份记录时负责该份payload的完整或定向复验。这样避免每条
+业务命令随历史Evidence总字节数线性退化。Root Authority现有`audit: true`只表示Event Stream从Commit 1完整重放，不会被
+悄悄扩展成全部Evidence payload内容审计。
+
+Root Inventory phase从含糊的`publication`收敛为三个明确值：
+
+| phase | transaction目录 | Managed Evidence物理集合 |
+| --- | --- | --- |
+| `healthy` | 必须为空 | 可选容器；只允许完整final records，不允许stage |
+| `demand-publication` | 只允许`publication.json` | Fresh Demand根不得提前出现Managed Evidence容器 |
+| `managed-evidence-publication` | 只允许`managed-evidence-publication.json` | journal-only、同ID partial/complete stage或同ID完整final四种可恢复分类 |
+
+事务Inventory从固定journal解析exact transaction；当前stage必须是transaction record plan的安全子集，当前final会按完整
+record plan复验全部payload字节，stage/final共存、foreign stage、未知成员和摘要/mode漂移均失败关闭。Inventory只返回
+`absent / stage-incomplete / stage-complete / final`观察，不执行任何恢复动作，也不判断Event是否已提交。
+
+普通Root Authority在重放Aggregate后，进一步要求final集合与`managedEvidence` selector逐项一致，并同时闭合Program ID、
+Demand ID和immutable Demand Authority digest。真实测试先放置完整final但不追加Event，Authority以`closure`拒绝；随后通过
+现有Command Handler追加Managed Evidence Event，完整audit加载才通过；把物理Manifest替换为另一Program的合法Manifest也会再次
+以`closure`拒绝。这证明物理目录不能替代Event Sourcing权威，同时说明healthy必须读取Manifest而不能只比较目录ID。
+
+```text
+Adjacent focused: 21 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 104 / 214 external refs
+Schema digest: sha256:2ded2c05dcc81a8808a92a818f8584c308ab276c916a4cf33c7419cca73d7851
+Architecture: parser=swc / 746 modules / 5253 dependencies / 0 violations
+Candidate build: Codex 445 files / Claude Code 450 files / releaseEligible=false
+```
+
+当前仍没有创建、读取和精确退休journal的领域store，也没有stage materializer、按需Evidence reader或Publication Application。下一单元应先实现
+Managed Evidence transaction store，使固定0600单槽journal具有`exclusive-create → stable read → exact-retire`生命周期；随后才
+进入payload/Manifest stage物化。
+
+### 13.26 Managed Evidence Publication Transaction Store
+
+新增`managed-evidence-publication-transaction-store.ts`，成为固定
+`transactions/managed-evidence-publication.json`的唯一领域生命周期owner。它没有复用Demand首次发布或Ledger的“ensure exact”
+策略：普通apply遇到任何现存journal，即使字节完全相同，也返回`transaction-exists`并要求显式恢复，避免正常入口暗中接管一次
+未完成事务。
+
+Store合同：
+
+```text
+create：完整解析Transaction
+     → Catalog准入exclusive-create
+     → 0600 atomic create + file/parent durability
+     → committed后忽略取消并稳定readback
+
+load：固定路径inspect
+   → 0600 / single-link / current-user
+   → bounded deterministic JSON read
+   → Transaction完整关系重建
+   → 签发进程内Stored capability
+
+retire：只接受Store签发capability
+     → Catalog准入exact-retire
+     → 按原node再次稳定读取exact文档
+     → digest/text/node全部一致
+     → exact durable unlink
+```
+
+`retire`不接收裸路径、Transaction或调用方自造node；structured clone不能取得退休权限。文档替换、mode/link漂移、缺失或
+unlink提交不确定均不伪造成功。成功后原capability失效。Store仍不决定何时退休：Event前取消与Event后前向完成由未来
+Application依据Transaction、Root Inventory与Commit Store授权。
+
+Record Set Inventory改为调用Store的统一`load`入口，不再维护第二套journal文件解析、容量与节点策略。测试共享的纯Fixture也
+从Transaction/Inventory/Store三份重复构造中提取，正式测试文件由298/379行分别降到194/346行，新Store测试保持217行。
+
+```text
+Adjacent focused: 24 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 104 / 214 external refs
+Schema digest: sha256:2ded2c05dcc81a8808a92a818f8584c308ab276c916a4cf33c7419cca73d7851
+Architecture: parser=swc / 749 modules / 5275 dependencies / 0 violations
+Candidate build: Codex 447 files / Claude Code 452 files / releaseEligible=false
+```
+
+下一单元进入stage materializer，但只实现“从Transaction Manifest所指source重验并物化同一record plan”的物理能力；Event
+append、stage→final、失败前退休和journal退休仍不在同一文件提前组合。
+
+### 13.27 Managed Evidence Payload与Stage Materializer
+
+Stage物化拆为两个紧密相邻owner，避免把source类型分支、journal恢复与Manifest提交顺序堆入一个近900行文件：
+
+| 文件 | 唯一职责 |
+| --- | --- |
+| `managed-evidence-publication-payload-materializer.ts` | file/tree source稳定复验与`payload/**`耐久复制 |
+| `managed-evidence-publication-stage-materializer.ts` | exact journal、容器/stage进度、Manifest-last与完整stage readback |
+
+Materializer要求未来Application先按Config打开正确source root；自身不会重读Config或猜测repository/support路径。执行顺序：
+
+```text
+解析Transaction并load exact journal
+→ Catalog准入并物化可选managed-evidence容器
+→ 创建或接纳同ID stage root
+→ 精确恢复manifest target的Foundation atomic-file residue
+→ 检查完整record plan进度
+→ complete：不读取source，直接重用
+→ partial且Manifest已出现：拒绝
+→ partial且payload已完整：不读取已变化source，直接继续
+→ 其他partial：按Manifest重验并复制source
+→ journal node/text/digest仍相同
+→ 最后atomic-create manifest.json
+→ 忽略提交后取消，完整stage + journal readback
+```
+
+file来源只执行一份bounded stable streaming copy到`payload/content`。tree来源打开选择路径的exact子根，并复用Loaded Artifact
+transfer：复制前后各计算一次完整tree identity，missing目录/文件按计划补齐，普通文件0600、Manifest声明的executable文件0700。
+任何source新增/缺失/摘要漂移、foreign stage成员、错误mode或Manifest提前出现都会失败关闭；安全partial payload保留供同journal重试。
+
+`manifest.json`仍是complete-stage marker，使用Foundation atomic create并处理其精确target残留。若Manifest已经提交，后续
+candidate/journal readback不再接受Abort遮蔽；无法证明完整结果则报告`recovery-required`。模块仍不追加Event、不rename final、
+不退休stage或journal。
+
+```text
+Adjacent focused: 29 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 104 / 214 external refs
+Schema digest: sha256:2ded2c05dcc81a8808a92a818f8584c308ab276c916a4cf33c7419cca73d7851
+Architecture: parser=swc / 752 modules / 5320 dependencies / 0 violations
+Candidate build: Codex 447 files / Claude Code 452 files / releaseEligible=false
+```
+
+双宿主候选文件数没有增长，因为Stage Materializer尚无Public/Application生产入口；Architecture仍扫描并验证其内部依赖。下一单元
+应建立`managed-evidence-publication-record-publisher.ts`，只负责“完整stage→不存在final”的同根耐久rename与exact readback；
+Event-before-final的业务顺序仍留给Application。
+
+### 13.28 Managed Evidence Final Record Publisher
+
+新增`managed-evidence-publication-record-publisher.ts`，只拥有完整stage到immutable final record的同根耐久发布。相邻重构把
+“journal仍是同一Transaction/同一node”的复验下沉为Transaction Store的
+`requireCurrentManagedEvidencePublicationTransaction(...)`，Stage与Publisher不再各自复制digest/text/node比较。
+
+Publisher状态矩阵：
+
+| stage | final | 处理 |
+| --- | --- | --- |
+| absent | absent | `stage-missing` |
+| incomplete/conflicting | absent | `stage-conflict` |
+| complete | absent | Catalog准入→preinspect→durable rename→final exact readback |
+| absent | exact complete | `current`幂等成功 |
+| present | present | 冲突；不删除任一资源 |
+| absent | conflicting final | `final-conflict` |
+
+rename前重新加载exact journal；成功后忽略取消，再次验证final完整tree与同一journal。Foundation报告destination appeared、source changed、
+durability/commit uncertain时，Publisher会观察stage/final：只有“stage absent + exact final”可识别为同一并发winner并返回`current`，
+其他组合保留错误或报告`commit-uncertain`。journal始终保留，供Application完成Event/final闭包后退休。
+
+Node没有`renameat2(RENAME_NOREPLACE)`；Foundation rename的目标absent是协作式前置条件。这里固定单槽exact journal作为Wakeflow
+协作边界，并对同一Transaction并发winner做幂等结算；不声称能够阻止同一OS用户的非协作外部写入者。
+
+Publisher不检查Event是否提交，这是有意的物理/业务分层；当前没有生产Application caller，只有测试可以直接调用。未来
+Application必须固定执行`complete stage → optimistic Event append → final publisher → closure → journal retire`。
+
+```text
+Adjacent focused: 32 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 104 / 214 external refs
+Schema digest: sha256:2ded2c05dcc81a8808a92a818f8584c308ab276c916a4cf33c7419cca73d7851
+Architecture: parser=swc / 754 modules / 5340 dependencies / 0 violations
+Candidate build: Codex 447 files / Claude Code 452 files / releaseEligible=false
+```
+
+下一阶段不应立刻注册MCP，而应先审阅并实现内部Application/Recovery orchestration：统一Config/Demand/source复验、Event前冲突退休、
+Event幂等追加、final前向完成、Root Authority closure与journal-last退休。
+
+### 13.29 Managed Evidence Publication Application与Recovery
+
+本单元补齐内部资源Application，但继续不注册公共工具。普通Demand Root Authority仍只接纳无journal健康根；新增事务期专用加载入口，
+在复用完整Identity/Authority/Ledger/Event审计的同时，只允许以下恢复组合：Event前`absent / stage-incomplete / stage-complete`、Event后
+`stage-complete / final`。`final before Event`及`Event selector before complete stage`均以closure失败关闭。Commit归属继续由Application
+按`commitId + commandDigest + expected revision + exact Event/Manifest`单独证明，Root物理形态不能代替Event Store事实。
+
+实现按不可逆边界拆为：
+
+```text
+managed-evidence-publication-application-service
+├── 当前Config/Demand/source准入
+├── journal创建与stage物化
+└── Apply/Recovery路线选择
+
+managed-evidence-publication-transaction-settlement
+├── Event append / Commit recovery lookup
+├── Event后final前向完成
+├── Event前stale candidate退休
+└── transaction closure → journal retire → healthy closure
+```
+
+Planning与Application共用新的`managed-evidence-configured-source-root.ts`，只把Manifest逻辑repository/support root闭合到当前Config
+placement与real path。正常顺序是`journal → complete stage → Event → final → journal retire`；Recovery在Event存在后绝不重读source或
+回滚Event；Demand CAS过期，或仍需source的partial/absent stage遇到Config过期时，才退休safe candidate。完整stage不因后续Config/source
+变化倒退。journal已经退休的重复Recovery返回重新审计后的`healthy`，
+覆盖末端提交成功但调用方未收到结果的情形。
+
+官方依据继续采用SQLite durable journal顺序、Microsoft Event Sourcing乐观并发和Node 24单资源文件原语边界。没有新增全Demand锁、
+可变phase或伪多资源原子API。4项真实Application测试覆盖正常Apply、Event前/后崩溃前向恢复、Event前CAS冲突退休和末端健康重试；
+Managed Evidence聚焦集合共44项通过。TypeScript、104 Schema/214 refs、758模块/5388依赖架构检查均通过；双宿主候选仍为
+447/452且`releaseEligible=false`。下一阶段仍须先审阅按需Evidence reader与Public边界，不能从内部Application推断第19个MCP工具已存在。
+
+### 13.30 Managed Evidence按需Reader
+
+按需Reader已经作为内部consumer落地，但没有直接复制旧JS“每次把整份Evidence全部读入内存”的方式。物理
+`managed-evidence-record-reader.ts`签发一份Manifest/top-level capability，并区分：
+
+```text
+Manifest metadata only → deferred
+one complete payload member → member
+exact complete record tree → complete
+```
+
+成员读取先核对Manifest descriptor的portable ref、bytes、SHA-256和executable/private mode，并要求调用方提供明确`maximumBytes`；完整验证才
+遍历整树。Manifest v1没有分块摘要，因此没有加入不可独立认证的byte range语义。通用父子路径连接下沉为
+`joinPortableResourcePath(...)`，candidate join继续保留兼容名称但只委托通用能力。
+
+`managed-evidence-reading-service.ts`先加载Event-backed Demand Authority，再把指定record交给物理Reader；Record Set Inventory也复用同一
+metadata loader，删除重复Manifest/顶层验证。只读上下文使用Snapshot + tail，mutation上下文继续完整audit。真实tree负例证明：未请求成员
+漂移不会强迫单成员读取扫描全树，但完整验证和该成员自身读取都会发现漂移。
+
+本单元聚焦55项通过（Managed Evidence 46 + Portable Resource Path 9）；TypeScript、104 Schema/214 refs、761模块/5420依赖均通过。
+双宿主候选变为448/453且仍`releaseEligible=false`：物理Reader因Inventory成为制品依赖，但Reading Service尚无Public入口。下一步应先设计
+Public读取/记录边界的暴露范围、bytes上限与敏感信息策略，不能直接把内部`Uint8Array`结果映射到MCP。
+
+### 13.31 Managed Evidence Public与第19个MCP工具
+
+用户确认先公开记录而不公开原始读取后，`wakeflow_record_evidence`以`preview / apply / recover`进入共享官方MCP Server。Preview只接收
+Demand ID与逻辑source selection，并返回完整确认Transaction；新Publication Planning Service在capture成功后分配Event/Commit ID。Apply要求
+root、Demand ID与exact plan/digest，并在任何副作用前交叉检查Demand ID；Recover只接收root与Demand ID。
+
+Apply/Recover结果严格metadata-only：Evidence/Demand ID、Transaction/Manifest/payload/record-plan/Command摘要及Event/Commit/Aggregate游标。
+Manifest正文、source ref、Config/window、机器路径、节点、bytes与内部Reader均不公开。Recover结果区分`current / retired-stale / healthy`，避免把
+“没有journal”冒充某次Evidence提交成功。
+
+Application错误新增publication authority，MCP信封可稳定报告`recoverable`而不泄露root/source。共享Server与Codex/Claude composition roots注册
+相同第19工具；annotations为non-destructive、idempotent、closed-world且无host effect。两份新Schema使总数变为106，digest为
+`sha256:1340ac3fd131aaeaacd6befa947a9e380222df8e4ce3efc9be285f8b0cbe4c57`。
+
+Public聚焦47项、TypeScript、768模块/5469依赖架构门和双候选stdio均通过；候选闭包为465/470且`releaseEligible=false`。这只是TS候选公共纵切，
+没有执行插件validate/smoke、release gate、publish或缓存刷新。
+
+### 13.32 十九工具与Managed Evidence技术核实节点
+
+本节点重新读取当前TS Public Server、Route、Event Decider、Evidence Application/Reader、旧JS 31工具组合层、当前测试装配和Atlas，
+并复核MCP 2025-11-25 Tool合同与Microsoft Event Sourcing指导。旧JS只用于恢复产品场景，不作为TS分层或工具粒度权威。
+
+#### 当前十九工具不是旧31工具的子集
+
+当前TS按单一owner重新拆成六组：
+
+| 分组 | 数量 | 当前公共能力 |
+| --- | ---: | --- |
+| Workspace | 2 | Maintenance、Window Binding registration |
+| Demand入口/路由/终结 | 3 | Demand Publication、Controller Route、Completion |
+| Managed Evidence | 1 | 本地file/tree记录的preview/apply/recover |
+| Task/Test/Delivery Planning | 4 | Target Task、TestCard、Implementation Delivery、Test Delivery |
+| Agent宿主效果握手 | 3 | Claim、Outcome、Rearm；Wakeflow不执行宿主效果 |
+| Result/Review | 6 | Result Import、Inspection、Resume、Implementation/Test Decision、Product Defect Remediation |
+
+调用形态为3个`preview/apply/recover`、5个`preview/apply`、2个只读观察和9个单步记录/授权。共享能力只在真实相同
+状态机处复用：Target Task Planning同时接纳implementation/test，Claim/Outcome与Review Inspection/Resume服务两种workType；没有
+动态handler registry、第二Route表或按宿主分叉的业务owner。
+
+MCP官方合同把annotations定义为提示而非权限。当前实现仍由闭合Schema、领域parser、当前Authority与exact plan/digest决定准入；
+`structuredContent`和文本JSON同时返回，`outputSchema`由官方SDK与领域边界双重验证，符合
+[MCP Tools 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)。
+
+Demand继续是唯一采用Event Sourcing的业务聚合：不可变Event Stream是写权威，Snapshot/Route/Inventory都是可重建读模型；固定
+`expectedStreamRevision`执行乐观并发。Managed Evidence跨文件发布使用耐久journal前向结算，但没有把journal伪装成第二Event Store。
+这与[Microsoft Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)关于append-only、聚合重放、
+投影和乐观并发的边界一致，也没有把Event Sourcing扩张到Config、Binding或所有本地文件。
+
+#### Evidence纵切的完成与停止边界
+
+当前`wakeflow_record_evidence`只捕获Config声明的repository/support-surface内本地file/tree。旧JS同名工具还混合HTTPS、Git commit和
+任意artifact/event relations；这些来源的信任、验证与生命周期不同，不能重新塞入当前本地文件Manifest。未来若有真实consumer，应分别
+设计External Evidence Reference或Evidence Relation命令，不扩大Managed Evidence本地记录合同。
+
+Evidence写入纵切已经闭合：零写Planning、exact Transaction、journal、stage、Event、final、journal-last退休、健康Root、按需内部Reader及
+metadata-only Public。读取内容仍未公开，Route也不把Evidence伪装成必经阶段；因此当前完成的是“记录能力”，不是跨窗口Evidence消费产品。
+
+#### 当前真正的零到一入口缺口
+
+Fresh Maintenance会创建严格空TODO authority。`wakeflow_create_demand`只能从现有`pending-claim` TODO生成计划并在根发布后CAS claim，
+但当前TS没有TODO append/intake或inspection公共工具。因此Atlas所说的端到端链准确边界是“从既有pending TODO到Completion”，不是
+“从用户输入或空Workspace到Completion”。这比Archive、Pod或泛化View更靠前，是下一项真实consumer缺口。
+
+旧JS剩余能力需要分三类处理，不能按名称逐个翻译：
+
+1. **应作为后续真实纵切重新设计**：TODO intake/inspection、Window replacement/decommission、Continuation/Cancellation、Archive/Retention、Pod。
+2. **需要真实consumer再决定**：External Evidence Reference/relations、Evidence读取公共面、Controller return。
+3. **不应默认恢复为通用工具**：generic state-transition recovery、generic view、手工release lock；新TS优先使用owner-specific recovery、明确读模型和自动claim结算。
+
+#### 测试成本重新评估
+
+`wakeflow-public-mcp-server.test.ts`当前3966行、39项。虽然唯一fixture边界仍成立，Evidence新增时为了验证catalog/config/双宿主集合，
+聚焦集合被迫执行整份共享文件；本次47项运行约52秒。当前runner按测试源文件选择，不能只选该文件中的catalog测试。这已经构成此前
+“无证据不物理拆分”条件的变化。
+
+推荐先做一个有界测试维护单元：把Public Server的composition配置、十九工具catalog/Schema/annotations和双宿主工具集合迁到独立
+`wakeflow-public-mcp-catalog.test.ts`，继续复用唯一连接fixture；真实业务纵切和错误信封留在现有文件，不创建生产registry或复制领域样例。
+以后新增Public工具只需运行其owner MCP测试与catalog测试，不再默认执行全部生命周期纵切。相比给runner增加依赖测试名称文本的
+`--test-name-pattern`，物理owner边界更稳定、可审阅。
+
+#### 推荐顺序
+
+```text
+TC-1 Public MCP catalog测试归位
+→ TC-2 重新核验测试清单与十九工具边界
+→ 下一真实业务：TODO Intake + Inspection（不新增独立Claim owner）
+→ 再按真实consumer选择Evidence Reading、Lifecycle或Archive
+```
+
+本节点不建议立即扩张Foundation，也不建议一次补齐旧版31工具。当前验证基线仍为Public聚焦47项、TypeScript通过、106 Schema/214 refs、
+768模块/5469依赖、Atlas全current、候选465/470且`releaseEligible=false`；完整TypeScript、双插件validate/smoke和真实宿主会话仍未运行。
+
+### 13.33 TC-1：Public MCP catalog测试归位
+
+新增`tests/entrypoints/wakeflow-public-mcp-catalog.test.ts`，迁移且收紧三项横切证据：
+
+1. 十九个具名executor及额外配置字段的组合根拒绝；
+2. 十九工具完整名称、request/result Schema ID、四项MCP annotations、自包含Schema和关键描述片段；
+3. Codex/Claude Code固定composition roots的工具集合一致性。
+
+新文件所有executor默认失败，不拥有领域成功样例，也不调用任何业务owner。原
+`wakeflow-public-mcp-server.test.ts`保留36项真实Planning/Delivery/Result/Review/Completion纵切、SDK准入和稳定错误信封，测试总数仍为39，
+没有用“拆文件”删除行为证据。原catalog只抽查9个工具的部分annotations；新矩阵逐项复验全部19个工具。
+
+规模变化：
+
+```text
+共享业务/错误测试：3966 → 3485行；39 → 36项
+新增catalog测试：355行；3项
+合计：3966 → 3840行（-126）；39项保持不变
+```
+
+验证结果：
+
+```text
+Catalog focused: 3 pass / 0 fail / 0 skip（约2.3秒）
+Shared business/error: 36 pass / 0 fail / 0 skip（约50秒）
+Evidence daily focused: 11 pass / 0 fail / 0 skip（约18.5秒）
+TypeScript: pass
+Schema: 106 / 214 external refs
+Architecture: parser=swc / 769 modules / 5481 dependencies / 0 violations
+git diff --check: pass
+```
+
+Evidence日常门由原先必须带上整份共享39项的47项集合，收敛为owner MCP 2项、Coordinator 4项、catalog 3项和candidate 2项；
+完整共享业务/错误文件仍在本单元单独通过。下一步先做TC-2清单复核，确认没有测试名称、文档或Atlas仍把catalog归给业务文件，
+再进入TODO Intake + Inspection设计，不直接编码TODO Public。
+
+### 13.34 TC-2：测试清单与十九工具边界复核
+
+TC-2确认三项横切测试标题只存在于`wakeflow-public-mcp-catalog.test.ts`；原共享业务文件不再导入
+`createWakeflowPublicMcpServer`配置错误、Claude composition root或Managed Evidence catalog常量。当前正式`.test.ts`源为242个，
+其中Public MCP catalog 3项、共享业务/错误36项。
+
+完整catalog矩阵与Server options的executor字段集合在运行时互相比较，并额外检查无重复项；未来增加executor而忘记配置负例时，测试会在
+进入逐项Proxy检查前失败。该矩阵不是第二个生产registry，只是读取组合根公开合同的测试期望。
+
+Atlas已同步测试归位、769模块/5481依赖和Public分层门，全部30份来源指纹保持current。复核图义时修正了H0图中遗留的
+`registerTool × 18`为真实`× 19`，没有修改生产Server。Atlas 33份文档、44张图、247条直接导入声明和882条证据边通过完整检查与构建。
+
+TC-1/TC-2至此关闭。下一单元进入TODO Intake + Inspection的需求与旧逻辑审阅，只确定Authority、输入最小化、写入/查询边界和首文件顺序；
+在设计确认前不注册第20个工具。
+
+### 13.35 TODO Intake + Inspection公共化前设计复核
+
+本轮读取当前15个TODO生产模块、5份领域Schema、10个聚焦测试文件、Demand Publication真实consumer、旧JS
+`wakeflow_deliver / wakeflow_next_work / wakeflow_claim_next`、当前安装规则、TencentDB-Agent-Memory的Route/Service/Store与串行队列实现，
+并核对CQRS、稳定分页和幂等请求实践。没有修改运行时代码。
+
+#### 已经足够的技术内核
+
+当前TODO Foundation/Domain不需要重做锁或事务：
+
+- immutable Intake与revisioned State分离；State只保留`pending-claim / parked / claimed / archived`；
+- JSON item authority为唯一事实，Markdown Board只是可重建投影；
+- Collection Authority执行有界树扫描、0600/0700/单链接/owner/稳定节点复验；
+- Collection Service拥有append/claim/archive、集合级短锁、可选collection CAS和稳定错误；
+- Transaction Storage使用immutable journal、stage、exact source expectation、投影发布和前向恢复；
+- Demand Publication已把TODO claim作为root-first跨资源事务的最后一步，不能再公开第二个`claim_next` owner。
+
+TencentDB-Agent-Memory采用薄Route、Service/Store分层以及per-asset进程内`SerialQueue`，说明公共入口不应直接承载存储细节；但其队列只防
+单进程同key并发，Wakeflow需要跨进程和崩溃恢复，现有文件锁 + journal + CAS更符合本地权威场景，不应换成内存队列或SQLite。
+
+#### 公共化前必须重新决定的旧设计
+
+1. `TodoItemId`注释明确为了旧公开入口保留人工可读字符串，不进入`WakeflowDurableId`。这与“新TS不承担过渡兼容”和现有typed identity
+   体系冲突；腾讯短ID依靠数据库唯一约束重试，而Wakeflow已有UUIDv4 typed ID能力。
+2. `TodoIntake.documents`只保存`label + portable path + anchor`，没有Ledger record/member identity与digest；Demand Publication又让调用方
+   重新选择`authorityMembers`。TODO来源与最终Demand Authority之间不存在机器绑定。
+3. TS只有内部`LedgerAuthorityStore.publish`，没有公共Ledger Record producer。即使现在公开TODO append，空Workspace仍无法通过公共面生成
+   Demand Publication所需的immutable Requirement/Confirmation记录。
+4. `affectsRetestOrDispatch`只进入Board；`autoClaim`在当前TS没有自动领取consumer；`parked`可创建但没有unpark transition。这些字段若直接
+   进入公共合同，会把旧表格占位固化为已实现产品能力。
+5. `ownerWindowId / recommendedWindowId / dependency / priority`目前也主要进入投影，但未来Inspection是合理consumer；公共Planning仍必须用
+   当前Config验证窗口存在，不能把typed字符串格式当作当前拓扑关系。
+
+#### 标准化公共边界
+
+[Microsoft CQRS](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs)允许读写模型共享同一存储，但要求Command和Query分别建模；
+这正好保持MCP `readOnlyHint`准确。因此Inspection与Intake不合并成一个`wakeflow_manage_todo`工具。
+
+TODO集合上限为65,536，Inspection不能直接返回完整Authority。列表查询应从第一版就有上限和续页；
+[Google AIP-158](https://google.aip.dev/158)要求有界page size、opaque continuation且后续筛选条件保持不变，
+[Kubernetes API列表语义](https://kubernetes.io/docs/reference/using-api/api-concepts)进一步用resource version绑定一致快照。
+Wakeflow可用collection digest绑定filter与最后排序位置，集合变化时返回stale并要求重新开始；cursor不承担授权。
+
+Intake写入应采用`preview / apply / recover`：preview分配owner-derived ID/time并冻结当前Config、Ledger Authority与Collection digest；apply只消费
+exact plan/digest；同计划重复apply复验现存Intake/State并返回current；journal后失败报告recoverable。该语义与
+[Stripe幂等请求](https://docs.stripe.com/api/idempotent_requests)“同一key只能重放相同参数”的原则一致，但权威仍由Wakeflow自身CAS/journal证明。
+
+#### 待选路线
+
+**A. 先修正合同再公共化（推荐）**
+
+```text
+A1 将TODO纳入typed durable identity（owner在preview分配todo_<uuid>）
+→ A2 用完整Ledger Authority Member References替换无摘要documents，并剪除无consumer字段
+→ A3 补齐Requirement/Confirmation Ledger Publication公共纵切
+→ A4 单独实现有界wakeflow_inspect_todo
+→ A5 实现wakeflow_intake_todo preview/apply/recover
+→ A6 Demand Publication从TODO Intake派生Authority，不再让调用方重新选择无绑定成员
+```
+
+每一步仍按1～2个紧邻文件审阅，不一次重写整个TODO系统。`ownerWindowId`、priority、dependency、testing decision等字段是否保留，按
+Inspection与Demand的真实消费逐项决定；`parked`/`autoClaim`只有在同轮加入真实状态转换/调度consumer时才公开。
+
+**B. 只先公开Inspection**
+
+复用当前Collection Authority做只读、有界查询，暂不公开Intake。改动小且不会写错数据，但Inspection会先固化可能随后删除的人工ID、
+documents和占位字段，存在返工。
+
+**C. 直接包装当前Service（不推荐）**
+
+最快得到`inspect + append`，但保留旧人工ID、路径式documents、无消费字段和Ledger断链；它只能让测试fixture中的预置Ledger工作，不能闭合
+真实空Workspace，也会把兼容决定升级为新TS公共协议。
+
+不建议把Ledger Publication与TODO append合并成一个跨根“Work Intake”大事务：它会把两个owner、两类恢复和两种生命周期绑成新Saga，
+与当前显式Agent分步调用和避免通用orchestrator的方向相反。
+
+### 13.36 A1：TODO typed durable identity
+
+用户确认路线A后，TODO身份从旧人工字符串一次性迁移为`todo_<lowercase UUIDv4>`，不保留双格式parser、兼容alias或迁移分支。
+`wakeflow-durable-id-kind.schema.json`新增已有真实Intake/State/Transaction/Demand consumer的`todo` kind；
+`todo-item-id.ts`改为`WakeflowDurableId<"todo">`的领域窄facade，只映射通用词法错误，不维护第二份正则或品牌。
+
+专属`todo-item-id.schema.json`继续作为TODO、Demand Publication和Completion多个wire合同共享的Schema，但pattern与通用durable ID完全一致。
+四份entrypoint自包含Schema镜像同步更新；所有生成文件由codegen重建，没有手改生成产物。
+
+物理条目目录继续使用`item-<SHA-256(todoId)>`：这不再是为了允许冒号，而是保持固定长度、不直接披露业务身份并继续执行存储键碰撞检查。
+所有TODO/Demand/Tasking测试身份迁移为合法typed ID；并发与容量测试使用确定性合法UUID序列。更长ID使8 MiB Board Projection的精确边界
+从“254项仍可写”变为“253项仍可写、第254项拒绝”，容量上限没有放宽。
+
+```text
+A1 focused closure: 92 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 106 / 214 external refs
+Schema digest: sha256:02e84c3ce2b12a437efdb8520c34ac73c39d3804d602c4a08b93b46709a17663
+Architecture: parser=swc / 769 modules / 5482 dependencies / 0 violations
+Candidate build: Codex 465 / Claude Code 470 / releaseEligible=false
+```
+
+A1不分配ID；owner-derived UUID将在未来Intake Planning preview中生成。下一单元A2审阅并修改Intake Authority字段：用Ledger Member References
+替换path-only documents，并逐项决定`parked / autoClaim / affectsRetestOrDispatch / ownerWindow / recommendedWindow / dependency`的保留或删除。
+在A2确认前不实现Ledger Public、Inspection或第20个工具。
+
+### 13.37 A2：TODO Intake Authority字段与pre-demand生命周期待确认
+
+本轮对照当前TS consumer、旧Design handoff/Auto Claim规则、TODO Backlog规则及成熟任务系统后，确认A2不能只机械替换`documents`。
+现有字段同时混合来源事实、调度提示、派生Config身份和未完成状态能力；若原样公开会形成第二套Goal权威和永久不可恢复的parked条目。
+
+#### 推荐Intake字段
+
+| 当前字段 | 推荐处理 | 新语义/来源 |
+| --- | --- | --- |
+| `todoId` | 保留typed语义，未来由Planning分配 | `todo_<UUIDv4>`；调用方不提供 |
+| `createdAt` | 保留，owner派生 | Preview读取一次UTC clock |
+| — | 新增`programId` | 从当前Config派生，绑定Workspace程序身份 |
+| `initialStatus + dependency` | 合并为discriminated `readiness` | `{status:"ready"}`或`{status:"parked", trigger}`；关闭非法组合 |
+| `type` | 改名`demandType` | 继续成为Demand Identity的类型来源 |
+| `priority` | 保留 | Inspection/Controller调度输入，不自动替Controller选择 |
+| `ownerWindowId` | 改名`originWindowId` | 调用方选择、Planning验证为当前Config窗口；表示来源，不冒充调用认证 |
+| `recommendedWindowId` | 改为owner派生`controllerWindowId` | 当前Config唯一Controller；调用方不能改写 |
+| `goal` | 改名`summary` | 只作排队摘要；用户Goal权威仍在Ledger/Demand，不形成第二Goal |
+| — | 新增`intakeRationale` | 说明为何进入TODO而不是现有Demand/风险记录 |
+| `affectsRetestOrDispatch` | 删除 | 一个boolean混合两种语义且无领域consumer；未来应由typed关系表达 |
+| `autoClaim` | 保留 | 已确认的无人值守选择策略；只改变claim时机，不授予设计/发布/验收权限 |
+| `testingDecision` | 保留并补`environmentMemberRef` | `real-environment`必须精确绑定authorityRefs中的唯一环境member；其他模式为null |
+| `documents` | 替换为`authorityRefs` | 1～32个完整immutable Ledger Member References，含record/member identity、role、media type与digests |
+
+Public Planning未来仍只接收最小Ledger member selectors，读取Ledger Store后派生完整`authorityRefs`。A2先让TodoIntake保存并解析完整引用；
+Demand Publication的当前caller selection随后必须与Intake references精确相等，A6再删除重复输入。这样可逐步闭合而不建立兼容分支。
+
+#### `parked`不能继续只有表示能力
+
+旧产品允许`parked`表示已确认的依赖等待，并要求`Auto Claim: no`；当前TS却只有创建parked，没有activate、withdraw或archive路径。成熟系统把
+暂停与恢复作为成对转换，例如[Kubernetes Job suspend/resume](https://kubernetes.io/docs/concepts/workloads/controllers/job/)；任务系统也区分
+“完成”和“不再计划”，例如[GitHub issue close reason](https://docs.github.com/en/issues/planning-and-tracking-with-projects/customizing-views-in-your-project/filtering-projects)。
+
+如果保留parked，推荐补齐pre-demand状态机：
+
+```text
+ready intake  → pending-claim ─→ claimed ─→ archived
+parked intake → parked ─activate→ pending-claim
+pending-claim / parked ─withdraw→ withdrawn
+```
+
+`withdrawn`只表示未形成Demand的TODO被明确撤回，保存reason/revision/digest/time；claimed以后必须走Demand Cancellation或BusinessArchive，不能
+withdraw。`activate`和`withdraw`都复用现有Collection lock、CAS、TodoTransaction与恢复存储，不引入Event Sourcing。
+
+#### 待确认范围
+
+**A2-F（推荐）：完整pre-demand调度模型**
+
+- 采用上述字段矩阵；
+- 保留ready/parked与Auto Claim；
+- 同轮设计并依次实现`activate`、`withdraw`纯状态/Transaction/Service能力；
+- Public Intake/Inspection仍在后续单元，不在A2直接注册工具。
+
+**A2-M：最小ready-only模型**
+
+- Intake只允许ready，删除parked/trigger；
+- 保留Auto Claim；
+- 不实现activate/withdraw，未准备好或不再计划的候选不进入TODO；
+- 代码更少，但不再承载旧产品的显式依赖等待/backlog能力。
+
+不推荐保留当前`initialStatus + dependency`而继续没有转换入口：它既不是完整队列，也不是严格ready-only intake。
+
+### 13.38 A2-F1：不可变 TODO Intake 合同与直接消费者
+
+A2-F 按文件级顺序先关闭 Intake，不提前实现状态转换或公共工具。`TodoIntake` v1 已一次性采用新 TS 合同，不保留旧字段兼容分支：
+
+- 新增 `programId / originWindowId / controllerWindowId / intakeRationale`；`type` 改为 `demandType`，`goal` 改为只用于排队观察的 `summary`；
+- `initialStatus + dependency` 合并为 `ready | parked` 判别联合 `readiness`，并强制 parked 不能开启 `autoClaim`；
+- 删除无领域消费者的 `affectsRetestOrDispatch`，以 1～32 个完整 `LedgerAuthorityMemberReference` 替换 path-only `documents`；
+- 按 Demand 类型强制最小 Authority role 闭包，草稿入口排序引用，磁盘入口拒绝非规范顺序、重复 member ref 和缺失角色；
+- `real-environment` 精确绑定唯一 `test-environment` member，research 只允许 `not-applicable`，其他 Demand 类型拒绝该模式；
+- Schema 只关闭可移植结构，codec 关闭类型化身份、规范 Unicode、引用与字段关系；Config 中 Program/Window 当前性和 Ledger 物理存在性仍由未来 Planning 复验。
+
+`TodoState` 的 revision 1 现在从 `readiness` 派生 `pending-claim / parked`；`TodoTransaction` 的 append 关系同步更新，并补齐嵌套 Intake 新增 Ledger member schema 后的运行时 Schema 依赖目录。Markdown Board 改为显示 Demand 类型、来源/Controller 窗口、摘要、接收理由、trigger、测试决定和带角色的 Authority member 链接，不再展示旧 Goal、推荐窗口或 path-only documents。
+
+Demand Publication 与 Tasking 真实 fixture 已调整为先发布 Ledger record，再由 `published.loaded` 生成带 record/member digest 的引用，最后创建 TODO；同一引用集合继续进入 Demand Authority，避免测试以占位路径掩盖断链。8 MiB Board 上限保持不变，新行宽下 248 条最大摘要记录仍合法，第 249 条在 journal 创建前被拒绝。
+
+```text
+A2-F1 focused: 83 pass / 0 fail / 0 skip
+  TODO owner: 52
+  Demand Publication + Tasking direct consumers: 31
+TypeScript: pass
+Schema: 106 / 215 external refs
+Schema digest: sha256:46bda0f309a6242e74340e8b9aef19f025a7a1ad577a75131f3992cf645f3012
+Architecture: parser=swc / 770 modules / 5499 dependencies / 0 violations
+Candidates: Codex 465 / Claude Code 470 / releaseEligible=false
+```
+
+A2-F1 尚未增加 `activate / withdraw / withdrawn`，也没有注册 TODO Intake/Inspection 公共 MCP；当前 parked 仍只能创建、不能恢复。下一审阅单元 A2-F2 才修改 `TodoState`、`TodoTransaction` 与 Collection Service 的前置 Demand 转换，并继续复用现有锁、CAS、journal 和恢复存储。
+
+### 13.39 A2-F2a：TODO State 的 activate/withdraw 纯状态语义
+
+本单元只审阅并修改 `todo-state.schema.json`、`todo-state.ts` 与对应聚焦测试，尚未授权任何新的磁盘 mutation：
+
+- `TodoStatus` 新增 `withdrawn`；该状态只终止尚未形成 Demand 的 `pending-claim / parked` 条目；
+- `withdrawal={reason, withdrawnAt}` 与 `updatedAt`、revision、previous state digest共同形成撤回终态证明；reason执行长度、首尾空白、well-formed Unicode、NFC和控制字符校验；
+- `activateTodoState(...)` 只允许 `parked → pending-claim`，复用不可变Intake中的原始trigger，不另建长期activation receipt；
+- `withdrawTodoState(...)` 只允许 `pending-claim|parked → withdrawn`；claimed/withdrawn/archived均不能撤回，claimed以后继续属于Demand lifecycle或Business Archive；
+- `claimTodoState(...)` 与 `archiveTodoState(...)` 显式保持`withdrawal=null`；状态载荷、最低revision、mount、withdrawal和archive关系全部失败关闭；
+- 所有转换先验证状态、输入、revision和摘要，再读取wall clock；本模块仍为无I/O纯函数，不增加Event Store。
+
+```text
+State focused: 11 pass / 0 fail / 0 skip
+Intake + State + Transaction + Collection projection regression: 29 pass
+TypeScript: pass
+Schema: 106 / 215 external refs
+Schema digest: sha256:9883d700ab8b7317221f16c6cdd5a3bc590a2ff35c900dbc078ad8efcca4fa2b
+Architecture: parser=swc / 770 modules / 5499 dependencies / 0 violations
+git diff --check: pass
+```
+
+该步骤只是A2-F2的状态骨干，尚未完成耐久能力。代码审阅发现`TodoCollectionSnapshot.activeItemCount`和Board目前只排除`archived`，因此会把合法`withdrawn`误当成活动条目；Transaction也尚无activate/withdraw operation，Service/Recovery更没有写入入口。下一审阅单元应先修正`todo-collection.ts + todo-board-projection.ts`的终态消费，再进入Transaction/Service，不能提前把纯状态函数写成已可用产品能力。
+
+### 13.40 A2-F2b：TODO 活动集合与 Board 终态语义
+
+`todo-collection.ts`现在拥有唯一的`isTodoCollectionStatusActive(...)`调度分类，`todo-board-projection.ts`直接复用，不再分别维护终态判断：
+
+```text
+活动调度：pending-claim / parked / claimed
+终态保留：withdrawn / archived
+```
+
+终态条目不会从JSON Authority或`collectionDigest`删除，`itemCount`继续包含它们；它们只从`activeItemCount`和活动Markdown Board中排除。因此withdraw保留可审计事实但不会重新进入调度，archive也维持原有行为。Board仍是单向可重建投影，不能反向驱动任何转换。
+
+聚焦测试新增五状态分类矩阵，并在同一集合中验证withdrawn/archived均保留不同权威摘要、活动数为0且Board不泄漏终态行。完整TODO聚焦面56项通过；Schema 106/215、Architecture 770/5499/0违规及`git diff --check`继续通过。
+
+A2-F2仍未闭合：纯State转换已有正确读模型，但没有可恢复写入者。下一审阅单元进入`todo-transaction.schema.json + todo-transaction.ts`，增加activate/withdraw operation及exact source/target关系；在Transaction完成前不修改Service或注册公共工具。
+
+### 13.41 A2-F2c：TODO Transaction操作矩阵
+
+`todo-transaction.schema.json`与`todo-transaction.ts`现在统一承载五种恢复操作：
+
+| operation | target State | targetIntake | expected State |
+| --- | --- | --- | --- |
+| append | Intake Readiness派生的revision 1 | 完整Intake | null |
+| activate | pending-claim | null | exact digest必需 |
+| withdraw | withdrawn | null | exact digest必需 |
+| claim | claimed | null | exact digest必需 |
+| archive | archived | null | exact digest必需 |
+
+四种State mutation共享同一CAS信封：expected collection/intake/state digests、完整target State、target State/Collection digests和createdAt。Codec要求`targetState.previousStateDigest === expectedStateDigest`、target时间等于transaction时间、目标集合摘要不同，并按operation关闭目标status。它不保存可变phase，也不把完整旧State复制进journal。
+
+源状态是否合法仍由创建transaction时持有完整前序State的Collection owner校验：Journal只需要exact digest在崩溃恢复时区分source、target与conflict。当前通用Transaction Storage的类型面已经接受新operation，但尚未运行activate/withdraw物理替换与恢复测试，也没有Service producer；因此本单元仍不是可调用的耐久mutation。
+
+Transaction聚焦5项、完整TODO聚焦57项通过；Schema 106/215，digest
+`sha256:822fadf056de707784c6440ca1a04d438cb3bd3aff62f5b78704a43817760b2b`；Architecture 770模块/5499依赖/0违规，`git diff --check`通过。
+
+下一单元应审阅`todo-collection-transaction-storage.ts`的`buildTransaction / ensureStateTarget / recovery`，用完整expected State关闭source→target单步关系，并做activate/withdraw真实磁盘与崩溃重放测试；随后Service才可暴露领域入口。
+
+### 13.42 A2-F2d：TODO Transaction Storage真实写入与恢复
+
+`todo-collection-transaction-storage.ts`现在在任何容量计算、journal或stage写入前，用完整Intake/source/target关闭状态变更：
+
+- activate只接受parked source；
+- withdraw只接受pending-claim或parked source；
+- claim只接受pending-claim source；
+- archive只接受claimed source；
+- source、target与Intake必须是同一todoId；
+- target revision必须严格等于source revision + 1；
+- target previous digest必须等于完整source State的Canonical摘要。
+
+非法source状态、revision跳跃或身份关系以`transition`失败，并通过空临时根证明不会创建任何文件。合法activate/withdraw继续复用既有state exact-source atomic replace、同一collection journal、Board deterministic rewrite和journal-last retirement；没有第二套存储路径。
+
+真实磁盘测试覆盖两种正常提交，以及“State已替换、Board目标被symlink阻断”的崩溃点。失败时journal保留；显式Recovery识别当前State已是exact target，不重写Authority，只修复Board并退休journal。withdrawn条目继续保留在Authority/digest中，但Recovery后的活动数量与Board均排除它。
+
+Storage聚焦4项、完整TODO聚焦60项通过；Schema 106/215，digest
+`sha256:822fadf056de707784c6440ca1a04d438cb3bd3aff62f5b78704a43817760b2b`；Architecture 770模块/5502依赖/0违规，`git diff --check`通过。
+
+A2-F2现在只缺Service领域入口。下一单元审阅`todo-collection-service.ts`及其测试，增加严格activate/withdraw输入、集合与item CAS、clock/error映射和Recovery结果；Public仍后置。
+
+### 13.43 A2-F2e：TODO Collection Service与A2内部闭合
+
+`todo-collection-service.ts`现在提供两个新的内部领域入口：
+
+| 入口 | 调用方输入 | owner派生 |
+| --- | --- | --- |
+| `activateTodoItem` | todoId、intakeDigest、stateDigest | target revision/digest/status、时间、transaction与projection |
+| `withdrawTodoItem` | todoId、intakeDigest、stateDigest、reason | withdrawn载荷、时间、target摘要、transaction与projection |
+
+两者复用现有collection短锁、可选expected collection CAS、item Intake/State双摘要CAS、State纯转换、Transaction Storage和通用Recovery。调用方不能提供目标State、operation journal、revision或时间。局部`expectedItemForMutation(...)`同时收敛claim/archive重复的not-found与CAS逻辑，没有增加Manager或第二写owner。
+
+Service错误保持稳定：状态不允许映射为`transition`；stale item/collection映射为`cas-mismatch`；withdraw reason与closed input错误映射为`input`；State/Intake已包装的clock错误统一映射到`$options/clock`，并删除原先不可达的`UtcWallClockError`分支。无效reason或clock不会创建journal或改变Authority。
+
+真实Service测试覆盖正常activate/withdraw、stale摘要、重复activate、withdrawn后禁止claim、终态Board语义，以及State已提交但Board失败后的两类显式Recovery。Service 14项、完整TODO 62项通过；Schema 106/215，digest
+`sha256:822fadf056de707784c6440ca1a04d438cb3bd3aff62f5b78704a43817760b2b`；Architecture 770/5502/0违规；候选Codex 465、Claude Code 470且`releaseEligible=false`；Atlas与`git diff --check`通过。
+
+A2-F2至此完成“内部手动pre-demand生命周期”：ready/parked创建、activate、withdraw、claim和archive均有唯一State/Transaction/Storage/Service路径。它仍没有Public Intake/Inspection/activate/withdraw工具，也没有Auto Claim scheduler；`autoClaim`只保存策略，未来consumer必须服从mainline availability与Controller authority，不能在本单元悄悄自动执行。进入A3前应先做一次A2范围复核，再决定Ledger Publication Public的首文件。
+
+### 13.44 A2整体核实结论
+
+本节点重新读取TODO 15个生产模块、5份手写Schema、10个聚焦测试文件、Demand Publication/Lifecycle直接consumer与公共工具catalog。核实发现并修复一项真实Authority缺陷：State codec单独看不到Intake，原Collection只核对todoId，因而可能接受“ready Intake + parked revision 1”或revision跳跃等形式合法但不可达的配对。
+
+`todo-collection.ts`现在按不可变Intake Readiness关闭精确revision矩阵：
+
+| 初始Readiness | pending-claim | parked | claimed | withdrawn | archived |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ready | 1 | 不可达 | 2 | 2 | 3 |
+| parked | 2 | 1 | 3 | 2 | 4 |
+
+违反矩阵以`item-lineage`失败，物理Authority加载、Transaction目标集合和Board渲染都会共同消费该门。测试同时覆盖两个不可达负例，以及parked→activate→claim→archive完整1/2/3/4正向链。
+
+#### A2已闭合
+
+- typed `todo_<UUIDv4>` identity，无旧格式兼容；
+- Ledger-bound immutable Intake、角色闭包与测试环境关系；
+- ready/parked/activate/withdraw/claim/archive可达状态与精确revision；
+- withdrawn/archived终态保留Authority但退出活动计数/Board；
+- 五操作journal、完整source→target、atomic replace、CAS、锁、崩溃Recovery；
+- 单一Collection Service写owner及稳定错误映射。
+
+#### 明确后续，不是A2漏洞
+
+- `programId`和窗口当前拓扑、Ledger引用物理/current关系：由未来Intake Planning基于Config/Ledger复验；
+- `priority / summary / intakeRationale / originWindow / controllerWindow`：当前Board消费，未来Inspection/Planning继续消费；
+- `autoClaim`：当前只有持久策略与Board，没有scheduler；未来必须先证明idle healthy mainline和Controller authority；
+- Demand Publication仍由caller重复提交Ledger selectors，尚未精确等同`intake.authorityRefs`：留给A6；
+- Public Ledger/TODO producer、Inspection和pre-demand mutation工具均不存在，19工具catalog未变化。
+
+最终验证为TODO 63项 + Demand Publication/Tasking 31项，共94项通过；Schema 106/215、digest
+`sha256:822fadf056de707784c6440ca1a04d438cb3bd3aff62f5b78704a43817760b2b`；Architecture 770/5502/0违规；候选465/470且`releaseEligible=false`；Atlas与`git diff --check`通过。未运行完整TypeScript清单、插件validate/smoke或release gate。
+
+A2可以关闭。原路线A3仍成立：Ledger Publication Public是空Workspace创建合法TODO的前置producer。下一步先审阅Ledger Record/Store、公共Planning/Application惯例和Requirement/Confirmation最小author-owned输入，再向用户提交首文件方案，不直接编码。
+
+### 13.45 A3 Ledger Publication Public设计审阅
+
+本轮读取Ledger 12个生产模块、4份Schema、5个聚焦测试文件，交叉核对Demand/TODO/Tasking/Evidence消费者、旧JS Ledger/TODO公共面、本机TencentDB-Agent-Memory的Route→Service→Store实现，以及MCP/AIP/OCI官方规范。没有修改运行时代码。
+
+#### 现有内核已经足够
+
+当前Ledger不需要重写Store：Requirement/Confirmation Record已关闭typed ID、Program/Demand关系、角色、路径排序/碰撞、media type、digest和确定文档；Publisher执行per-record lock、compact intent、完整candidate tree、same-filesystem directory publish、readback、intent-last retirement和幂等复用；Recovery能从完整stage前向提交，partial stage明确返回`recovery-input-required`。长期记录为0755/0644，事务资源为0700/0600。
+
+缺口只在公共纵切：author-owned输入、Config/Design source Planning、exact public plan、Application错误authority、wire Schema/Coordinator/MCP接线。旧JS没有独立Ledger producer，`wakeflow_deliver`直接追加path-only TODO，不能作为新TS方案。
+
+TencentDB-Agent-Memory采用每类资源独立Route和Schema准入，再委托共享MetadataService/Store；这支持“公共名称按业务类别清晰、内部物理能力共享”的方向。但其数据库写入/ACL/补偿语义不适用于Wakeflow本地immutable tree，不能照搬SQLite或把跨owner失败伪装为原子事务。
+
+[MCP 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/schema)要求tool输入/输出以JSON Schema表达；annotations只是提示，不能替代服务端确定性校验。[MCP tool annotations说明](https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/)建议本地追加型、可重试工具使用`destructiveHint=false / idempotentHint=true / openWorldHint=false`，但实际安全仍由Store证明。[AIP-155](https://google.aip.dev/155)把稳定request identity用于重试去重；Wakeflow由preview生成完整plan/record ID并在apply重放同一plan，承担同类职责。[OCI Descriptor](https://specs.opencontainers.org/image-spec/descriptor/?v=v1.1.0)要求消费者核对media type、digest与size，适合Public plan保存成员描述符而不复制正文。
+
+#### 推荐方案A3-S：两个公共工具，共享内部pipeline
+
+```text
+wakeflow_publish_requirement
+wakeflow_publish_confirmation
+```
+
+两个工具都采用`preview / apply / recover`，共享Ledger source selection、plan codec、Planning/Application Service和现有Store；不复制物理事务。分开公共名称的理由是业务语义不同：Requirement是S1设计权威，Confirmation预分配一个未来isolated Demand身份；后者preview同时分配`confirmationId + demandId`，调用方不能自造。现有Demand Publication随后从Confirmation引用派生该Demand ID。
+
+Public preview只接收：
+
+- Requirement/Confirmation title；
+- 一个明确的`designSurfaceId`；
+- 1～32个`{role, path}`成员选择。
+
+Planning验证surface在当前Config中存在、capability为design且placement current；每个path必须是该surface内的strict UTF-8/NFC/LF Markdown普通文件。成员`path`同时成为Ledger member path，`mediaType`固定由owner派生为`text/markdown`。第一版不接受inline正文、多source root、repository raw file、绝对路径、caller digest/size/ID/time或任意media type。
+
+Preview稳定读取全部文件后才分配ID/time，返回不含正文bytes的完整plan：Config digest、surface/member selectors、size/digest descriptors、Record、compact publication intent/tree plan和planDigest。Apply重新打开当前Config/source，逐成员复验size/digest后调用Store；exact plan重试幂等。若崩溃留下incomplete stage且源文件不再是原字节，Recover必须诚实返回`input-required`，不能从digest虚构内容；调用方保留Design源直到publication current。
+
+Apply/Recover成功只返回record ID/ref/digest与完整member references，不返回源物理路径或正文。A3不建立Ledger Markdown projection、列表cache、通用文件上传器，也不与TODO Intake合并为跨根Saga。
+
+#### 其他候选
+
+- **A3-U：一个`wakeflow_publish_ledger_record`判别联合工具。** 工具更少，但Requirement与Confirmation的语义、ID分配和恢复提示混在一个名字中；与用户要求的业务类别清晰及Tencent的资源Route风格不如A3-S。
+- **A3-I：inline Markdown正文。** 实现短，但把最多16MiB内容复制进MCP request/preview，增加隐私、上下文和重试成本，也失去Design source稳定观察；不推荐。
+- **A3-M：每个成员任意repository/support source。** 最灵活但过早引入跨根选择、混合信任和映射语义；Design可先把确认文档写入Design surface，真实consumer出现后再扩。
+
+#### 首文件顺序
+
+用户确认A3-S后，第一审阅单元为`src/governance/ledger/ledger-authority-publication-input.ts`及聚焦测试。它只定义Requirement/Confirmation author-owned判别联合、designSurfaceId、family-specific role/path选择、排序/唯一性与停止边界；不读取Config/files、不分配ID、不生成plan。随后依次进入Plan codec→Planning→Application/Recovery→两套Public wire/Coordinator→MCP接线。
+
+### 13.46 A3-S1 Ledger Authority Publication Input
+
+新增`ledger-authority-publication-input.ts`，但没有把family重新暴露给两个独立公共工具。文件提供两个专用入口：
+
+- `parseRequirementAuthorityPublicationInput(...)`；
+- `parseConfirmationAuthorityPublicationInput(...)`。
+
+两者接收相同的最小author-owned字段`title / designSurfaceId / documents[{role,path}]`，由parser固定注入`family`。因此未来`wakeflow_publish_requirement`调用方不能提交confirmation family，反之亦然；Public Coordinator也不需要信任重复判别字段。
+
+文档选择执行：1～32项上限、family-specific role、`.md`后缀、portable relative path、拒绝`.git/.wakeflow-active/.wakeflow-local`、根`record.json`、反斜杠/遍历、精确重复、case碰撞和file/directory prefix碰撞，并按path排序后递归冻结。Role允许表使用`Record<Role,true>`穷尽映射，未来Record Schema联合新增role时TypeScript会要求同步，而不是Set静默漏项。
+
+title执行well-formed Unicode、NFC、首尾非空白、控制字符和8192 code points限制；designSurfaceId只做typed surface词法，Config capability/placement仍属于Planning。输入明确拒绝family、program/record/demand ID、time、digest、size、mediaType和inline content；固定media type常量为`text/markdown`。
+
+新文件聚焦5项、Ledger完整6文件22项通过；Schema仍106/215，Architecture变为772模块/5508依赖/0违规；候选仍465/470且`releaseEligible=false`，`git diff --check`通过。下一单元进入`ledger-authority-publication-plan.ts`：定义Config/source descriptors、Record/Intent与planDigest关系，不执行I/O。
+
+### 13.47 A3-S2 Ledger Authority Publication Plan
+
+新增`ledger-authority-publication-plan.ts`。Plan没有再保存一份member descriptors：现有compact `LedgerRecordPublicationIntent`已经包含完整Record、每个member的path/digest/media type、tree plan中的size/mode/digest，以及final/intent/lock/stage refs。新Plan只增加：
+
+```text
+kind + schemaVersion
+configDigest
+designSurfaceId
+intent
+```
+
+成员正文仍不进入Plan。`computeLedgerAuthorityPublicationPlanDigest(...)`对完整规范化Plan计算Canonical JSON摘要；Plan对象自身不内嵌摘要，Public preview未来返回`plan + planDigest`，避免自引用。
+
+Plan parser不信任Planning构造物：先严格解析Config digest和compact Intent，再从Intent Record重建A3-S1输入，重新执行family role、Design surface typed ID、`.md` path、排序/collision和title profile；并强制所有member media type为owner固定的`text/markdown`。因此伪造Plan不能把`text/plain`、`.git`路径、非法surface或跨family role带入Apply。
+
+Requirement与Confirmation使用同一Plan；Confirmation Record内owner-derived future Demand ID原样保留。Plan只证明preview一致，不证明Config仍current、Design surface placement有效、source bytes未漂移或已获得写权限，这些属于Planning/Application。
+
+新增Plan测试5项，完整Ledger 7文件27项通过；Schema仍106/215，Architecture774模块/5520依赖/0违规；候选465/470且`releaseEligible=false`，`git diff --check`通过。下一单元进入零写Planning Service：读取Config、验证Design surface、strict-read成员、最后分配ID/time并创建Record/Intent/Plan。
+
+### 13.48 A3-S3 Ledger Authority Publication零写Planning
+
+本单元新增两个相邻生产职责，没有建立通用File Manager或配置根注册表：
+
+- `ledger-authority-publication-source.ts`只负责把当前Config唯一Design窗口绑定的support surface解析为稳定根，4路有界读取1～32份strict UTF-8/NFC/LF Markdown，并签发`path / node / byteCount / digest`观察；
+- `ledger-authority-publication-planning-service.ts`负责Config current、Ledger固定布局、ID/time分配、Record/compact Intent/tree plan、目标占用检查及`plan + planDigest`。
+
+Requirement与Confirmation使用两个独立preview方法，调用方仍不能提交family。Requirement只分配`requirementId`；Confirmation恰好分配`confirmationId + future demandId`，并在Workspace中检查该Demand最终根及Publication stage/transaction/lock均未被占用。两类记录都从Config派生`programId`，从稳定source派生media type、size与digest，从owner clock派生唯一`recordedAt`。
+
+多文件读取没有伪装成文件系统事务。Node 24明确说明Promise文件系统操作本身不提供跨操作同步，因此本实现先逐文件用既有no-follow FileHandle内核完成稳定读取，再在ID分配后重新打开Design根，按原节点、size和digest进行第二遍流式复验；任何成员漂移都在读取clock之前以`source-changed`停止。[Node.js v24 fs文档](https://nodejs.org/docs/latest-v24.x/api/fs.html)同时说明FileHandle封装真实文件描述符且必须显式关闭，本实现所有成功/失败路径均显式关闭Design与Ledger根。
+
+Plan只携带内容描述符，不复制Markdown正文；这沿用[OCI Content Descriptor](https://github.com/opencontainers/image-spec/blob/main/descriptor.md)的media type、原始字节size和digest关系。Application仍必须重新读取并同时验证size/digest，Planning成功不授予写入权限。
+
+实现顺序刻意让可预见失败尽量早发生：输入/Config/source profile/容量/Ledger layout先用固定验证身份和时间关闭，不消费注入Factory或Clock；随后分配真实ID、检查Ledger及future Demand占用；二次source与Config复验成功后才读取一次clock。Preview不创建Ledger intent/stage/final目录，也不创建`.wakeflow-active`。
+
+真实临时目录测试5项覆盖Requirement/Confirmation owner字段、无正文Plan与零写、错误surface/缺失文件/CRLF在ID分配前失败、UUID分配期间改写Markdown被第二遍复验捕获、Ledger目标占用和Confirmation重复UUID。完整Ledger 8文件32项通过；Schema仍106/215且digest不变，Architecture为777模块/5562依赖/0违规，`git diff --check`通过。未运行完整TypeScript、插件smoke或release gate。
+
+下一单元进入A3-S4 Application前的材料化边界审阅：需要决定是先建立“按Plan重读并返回exact member bytes”的无写Payload Materializer，还是直接把该职责嵌入Application。优先选择能让source drift、input-required和Store调用保持单一写owner的最小方案，不提前接Public/MCP。
+
+### 13.49 A3-S4 Ledger Authority Publication Payload Materializer
+
+按确认的独立方案新增`ledger-authority-publication-payload-materializer.ts`，并扩展相邻Source模块的内存payload入口。Materializer是函数而非class：它不持有跨调用状态，只在一次操作中接收Workspace `RootedDirectory`和exact Plan，返回现有`LedgerAuthorityStore.publish(...)`可直接消费的有序`{path, bytes}`成员。
+
+执行顺序固定为：
+
+```text
+严格解析Plan与options
+→ 重新读取Config并核对configDigest/programId
+→ 从Plan Record重建family-specific Design source选择
+→ 第一遍strict-read形成node/size/digest观察
+→ 与Record digest及tree-plan size/digest逐成员核对
+→ 第二遍按原节点strict-read并取得exact bytes
+→ 对返回bytes再次核对size/digest
+→ 重新读取Config确认未漂移
+→ 返回内存payload
+```
+
+Source模块没有要求Foundation返回raw bytes；Strict Text已经拒绝BOM、非法UTF-8、CRLF、非NFC和非唯一末尾LF，因此可把验证后的文本重新编码为唯一UTF-8字节，并再次核对原稳定读取的byte count和SHA-256。第二遍读取带`expectedNode`，既是多文件二次复验，也是字节取得点。返回数组和成员对象冻结，`Uint8Array`是每次调用新建的调用方副本；调用方即使修改，后续Store仍会独立重算Record声明摘要。
+
+本模块不打开Ledger根，不检查或创建intent/stage/final，不选择Apply/Recover，也不缓存正文。`source-changed`、stale Config、malformed Plan和pre-aborted均在任何Ledger写入前失败。Application下一步只需验证public plan digest、打开Ledger/检查Publication authority，然后把Materializer结果交给Store；无需再拥有一份文件读取实现。
+
+测试环境初始化已从Planning测试提取为`ledger-authority-publication.fixture.ts`，供Planning、Payload及后续Application/Recovery共享，减少Config/Design/Ledger夹具复制。新增Materializer 6项（1个父测试+5个子测试），完整Ledger 9个测试文件38项通过；Schema仍106/215且digest不变，Architecture为780模块/5580依赖/0违规，Atlas与`git diff --check`随后同步核验。未运行完整TypeScript、插件smoke或release gate。
+
+下一单元进入A3-S5 Application/Recovery编排设计。首要问题不再是如何读取bytes，而是现有Store的`publish / recoverRecordPublication`两条路径如何与exact Plan、Config current及partial stage的`recovery-input-required`组合成一个无重复状态机的领域Service。
+
+### 13.50 A3-S5a Ledger Store exact-intent Recovery
+
+Application设计审阅发现：若只在Application外层读取`transactions/<recordId>.intent.json`再调用原Store恢复，会在检查与锁之间留下竞态，也无法正确处理intent文件自身的durable atomic stage。为避免把恢复状态判断复制到Application，本单元先在既有Store owner内部增加exact入口，尚未创建Application Service。
+
+`ledger-record-publication-recovery.ts`把原恢复过程收敛为一个共享私有函数：
+
+- 旧`recoverLedgerAuthorityRecordPublication(root, recordId, signal)`保留，继续服务只凭Ledger自身证据的内部维护恢复；
+- 新`recoverExactLedgerAuthorityRecordPublication(root, expectedIntent, signal)`先严格解析expected intent，从中派生family/record ID，再进入同一恢复过程；
+- target-scoped atomic intent stage恢复后、取得逐记录锁前，持久intent必须与expected逐字段相同；
+- 取得锁并重新读取后，再次同时核对首次观察和expected，随后才允许检查stage/final并前向提交；
+- complete stage、partial stage `recovery-input-required`、post-rename intent retirement和锁恢复继续使用原实现，没有新增phase、journal或第二状态机。
+
+`LedgerAuthorityStore`只新增薄门面`recoverExactRecordPublication(expectedIntent, options)`，继续使用原`LedgerAuthorityStoreOptions`与结果合同。后续Application不需要导入私有storage函数，也不能在Store外自行解释intent/stage/final组合。
+
+Store测试把complete-stage和partial-stage路径切换到exact入口，并新增“同record ID、不同Record内容”的冲突测试：调用后原intent与完整stage仍存在，final与lock均不存在，证明差异在逐记录锁及发布前关闭。旧按ID入口仍由missing-intent和post-rename路径覆盖。
+
+完整Ledger 39项通过；Schema仍106/215且digest不变，Architecture保持780模块/5580依赖/0违规，`git diff --check`通过。A3-S5a只是Store能力加固，不是Application或Public producer。下一单元A3-S5b可以只新增Application Service与测试：Apply组合Payload Materializer→Store.publish，Recover组合exact Plan/digest→Store exact recovery，并统一错误authority。
+
+### 13.51 A3-S5b Ledger Authority Publication Application Service
+
+新增`ledger-authority-publication-application-service.ts`，成为Plan确认之后唯一的Ledger Publication领域编排owner。它没有复制Store状态机：
+
+- `apply(plan, planDigest)`先严格重算Canonical摘要，再通过A3-S4 Materializer取得exact source bytes；
+- 重新读取当前Config、核对Program/config digest并打开current Ledger placement；
+- 先调用A3-S5a exact Recovery观察是否已有同一intent：complete stage/final直接前向完成，partial stage标记为recoverable并随后用payload调用原`Store.publish`补齐；
+- exact intent与final均不存在时，先严格读取final确认不是幂等current；Confirmation首次写入还要复验future Demand根、stage、transaction与lock均未占用；
+- `recover(plan, planDigest)`不读取Design source，只允许exact complete stage/post-rename final前向完成；partial stage返回`input-required`，调用方必须保留原Plan并重新`apply`提供字节；
+- intent已退休但final完整时，严格Reader验证整个目录树、Record及每个member的size/digest后返回`current`；无操作返回`not-found`，无intent的孤立stage/lock/final竞态返回`recovery-required`。
+
+成功结果区分`published / recovered / current`，返回内部loaded record和由Reader事实创建的完整member references；Public层后续只投影稳定record/member receipt，不暴露节点或物理路径。失败错误携带`publicationAuthority`：`unchanged / recoverable / current / unknown`，避免把取消、partial stage、已提交final或孤立residue混成同一种“重试失败”。
+
+写入边界尤其保持两点：Apply只有在payload、Config和Ledger布局都关闭后才进入Store；一旦exact intent已存在，前向恢复优先于future Demand首次占用门，防止已开始事务被后续观察倒退阻断。Config digest若与Plan不同则保守停止，因为当前Plan不保存旧Ledger placement，Application不能猜测迁移前根。
+
+真实测试7项（1个父测试+6个子测试）覆盖首次发布/幂等current、Confirmation future Demand冲突、删除Design source后的complete-stage Recover、partial-stage input-required→Apply补齐、错误digest/stale Config零写，以及absent与orphan residue分类。完整Ledger 46项通过；Schema仍106/215且digest不变，Architecture为782模块/5606依赖/0违规，`git diff --check`通过。未运行完整TypeScript、插件smoke或release gate。
+
+A3内部纵切现在已经具有Input→Plan→Planning→Payload→Application/Recovery→Store。下一单元进入A3-S6公共合同设计：分别为Requirement与Confirmation定义preview/apply/recover wire Schema和metadata-only receipt，再建立共享Coordinator；仍先不接MCP注册。
+
+### 13.52 A3-S6a Requirement Publication Public Schema
+
+新增两份Schema正典及其生成合同：
+
+- `wakeflow-requirement-publication-request.schema.json`；
+- `wakeflow-requirement-publication-result.schema.json`。
+
+Request是preview/apply/recover判别联合。Preview只允许`root / mode / title / designSurfaceId / documents[{role,path}]`，不接收family、Requirement/Program ID、time、media type、digest、size、bytes或Ledger路径。Role只允许Requirement联合，path必须同时满足portable path与Markdown外形；大小写保留根、前缀碰撞和Unicode NFC仍由A3-S1领域parser作最终关闭。Apply与Recover都必须交回exact `plan + planDigest`；Recover不允许只提交Requirement ID。
+
+Result保持对象根和三模式判别联合。Preview返回完整Plan/digest供确认；Apply/Recover只返回metadata receipt：`publicationAuthority=current`、disposition、Requirement ID、record ref/digest和1～32份完整Requirement member references。Member reference在wire内自包含，并收窄`family=requirement`、Requirement roles及`mediaType=text/markdown`，不直接复用允许Confirmation的宽领域Schema。Loaded record、source node/bytes、absolute path、stage、lock和恢复capability均不能出现在结果中。
+
+模式关系进一步关闭：Apply receipt允许`published / recovered / current`；Recover只允许`recovered / current`，Schema拒绝“不可能的Recover首次published”。Recover成功也带planDigest，因为该Application明确按exact Plan恢复。
+
+[MCP 2025-11-25 Tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)要求input参数符合`inputSchema`，定义`outputSchema`时structured result应满足它；[2026-07-28规范候选说明](https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/)虽然允许完整JSON Schema 2020-12组合与引用，也明确实现不应自动解引用外部URI。因此Wakeflow继续发布无外部`urn:`引用的自包含工具Schema。
+
+真实Schema测试使用当前Planning/Application生成preview、published和current recovery结果，并覆盖family/ID/inline content/Confirmation role/保留路径拒绝、Recover缺Plan/digest、wrong family/media type、内部loaded泄漏和不可能disposition。通用MCP wire测试已把新request/result加入SHA-256词法镜像清单。
+
+Schema总数增至108，external refs保持215，digest为`sha256:4824467bf57ac7095794d7e53d9534ec783715000bf324edd352d70abbf16d66`；完整Ledger 47项通过，Architecture为785模块/5612依赖/0违规，`git diff --check`通过。尚无Public parser、Coordinator或MCP注册。下一单元A3-S6b按同一原则实现Confirmation request/result Schema，并额外公开owner-derived future Demand ID。
+
+### 13.53 A3-S6b Confirmation Publication Public Schema
+
+新增Confirmation专用request/result Schema及生成合同。它没有把Requirement/Confirmation重新合并为带`family`的通用工具：公共名称、role联合、record ID和receipt继续按业务类别分开，内部才共享A3-S1～S5b pipeline。
+
+Preview request与Requirement拥有相同字段层级，但只接受`goal-stage-decision / user-confirmation / requirement-delta / supporting-evidence`四类Confirmation Markdown选择。`confirmationId`与`demandId`均为additional property，调用方不能提交；Planning在preview中分配二者。Apply/Recover仍必须交回exact Plan/digest。
+
+Preview result的完整Plan包含owner-derived future Demand ID，供调用方确认。Apply/Recover metadata receipt明确返回`confirmationId + demandId + recordRef/digest + Confirmation member references`；member reference固定`family=confirmation`、Confirmation roles和`text/markdown`。Demand ID使用领域名称`demandId`而非另造`futureDemandId`别名，其“未来”语义由Confirmation record生命周期表达。
+
+Recover result沿用A3-S6a关系，只允许`recovered/current`，不允许`published`。结果不暴露Workspace/Design/Ledger物理路径、loaded record、source bytes/node、stage、lock或恢复capability。
+
+真实Schema测试覆盖Preview拒绝caller-supplied family/Confirmation/Demand ID、Requirement role和inline bytes；验证Plan中的future Demand进入receipt；并拒绝缺失demandId、错误family/role及Recover=`published`。通用自包含wire测试已纳入两份新Schema及SHA-256词法镜像。
+
+Schema总数增至110，external refs仍为215，digest为`sha256:34f6646e49bf84e2f6fcce96ab3da1d7b411f72a2202393752bed64bd3df0b71`；完整Ledger 48项通过，Architecture为788模块/5618依赖/0违规，`git diff --check`通过。A3两类wire Schema至此完成，但仍不是公共能力。下一单元A3-S7a应实现共享Public Contract：两个工具名、两套request parser、容量和递归冻结准入，不接Coordinator或MCP。
+
+### 13.54 A3-S7a Ledger Authority Publication Public Contract
+
+新增单一`ledger-authority-public-contract.ts`，共享两个工具真正相同的wire基础，同时保留两套独立类型和parser：
+
+- `WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME = wakeflow_publish_requirement`；
+- `WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME = wakeflow_publish_confirmation`；
+- `parseRequirementPublicationPublicRequest(...)`；
+- `parseConfirmationPublicationPublicRequest(...)`。
+
+共同边界为被动JSON准入、递归冻结、RFC 8785 Canonical byte容量和稳定`json/capacity/schema/plan`错误。最大请求为2 MiB：现有compact Intent硬上限1 MiB，余量只服务Plan外壳、root、digest与JSON结构，不为inline payload预留空间。Accessor/Proxy、循环、非JSON值和超限值在任何领域调用前停止。
+
+两个Schema的Apply/Recover顶层形状相同，Plan又刻意是开放object，由领域Plan parser关闭。若Contract只做Schema校验，Requirement Plan可以被提交给Confirmation工具。因此每个parser在Schema后纯内存调用`parseLedgerAuthorityPublicationPlan(...)`并核对Record artifact family；malformed Plan和cross-family Plan都以`plan`失败。Preview无需Plan，继续由各family Schema限制role与owner字段。
+
+Contract只导出生成的request/result类型别名，不解析成功result、不打开Workspace、不读取Design/Ledger，也不调用Planning/Application。Plan digest相等性仍由Application复算；Contract family准入不是写入授权。
+
+聚焦测试5项（1个父测试+4个子测试）验证稳定工具名、双Preview递归冻结、Apply/Recover正向准入与双向cross-family拒绝、schema/plan/capacity分类及getter零执行。完整Ledger 53项通过；Schema保持110/215及digest不变，Architecture为790模块/5629依赖/0违规，`git diff --check`通过。
+
+下一单元A3-S7b进入共享Public Coordinator：分别暴露Requirement/Confirmation executor，路由preview/apply/recover，打开/关闭Workspace根，调用Planning/Application并投影符合两套result Schema的metadata receipt；仍不接MCP Server。
+
+### 13.55 A3-S7b Ledger Authority Publication Public Coordinator
+
+新增`ledger-authority-public-coordinator.ts`，导出两个独立、尚未注册MCP的executor：
+
+- `executeRequirementPublicationPublicRequest(...)`；
+- `executeConfirmationPublicationPublicRequest(...)`。
+
+两者先使用A3-S7a各自parser，因此cross-family Plan在任何RootedDirectory打开前失败。进入Coordinator后共享Workspace根生命周期、私有根文本集合、模式路由、Planning/Application错误映射和result Schema回读；family只用于选择专用Planning方法、工具名、result kind/schema及receipt形状。
+
+Preview检查title/documents不包含请求root或规范物理root文本，调用对应Planning并返回`ready + plan + planDigest`。Apply/Recover检查Plan隐私后只调用A3-S5b Application，继承其`unchanged/recoverable/current/unknown`效果权威。Coordinator不访问Store、不解释stage/lock或source，也不分配ID/time。
+
+成功receipt再次关闭内部结果关系：Application operation必须等于请求mode；`current`与`wroteAuthority=false`一致，`published/recovered`与true一致；Recover不能published；record family、record ID/ref/digest及每个member reference的family、record、path、digest、role/media必须等于loaded事实。Requirement receipt只返回Requirement metadata；Confirmation额外返回owner-derived Demand ID。最终结果递归转为JSON、限制2 MiB、扫描私有根文本并通过对应output Schema，不直接序列化loaded对象。
+
+Coordinator聚焦测试4项（1个父测试+3个子测试）完成双family真实preview/apply/recover，验证source drift映射为`apply/unchanged`、cross-family Plan在无效root之前失败、privacy/root错误保持unchanged，以及结果不含Workspace root、loaded或inode。完整Ledger 57项通过；Schema保持110/215及digest不变，Architecture为792模块/5640依赖/0违规，`git diff --check`通过。
+
+A3现在只缺真实MCP组合与注册。下一单元必须先审阅Public Server options和Codex/Claude固定组合根的三文件耦合：若无法保持1～2文件编译闭合，应把它作为一个不可拆的注册单元明确处理，而不是引入可选executor或临时兼容分支。
+
+### 13.56 A3-S8 Ledger Authority Publication MCP注册与双宿主接线
+
+`wakeflow-public-mcp-server.ts`现在把Requirement与Confirmation作为两个独立、必填的公共executor：
+
+- `publishRequirement`固定服务`wakeflow_publish_requirement`；
+- `publishConfirmation`固定服务`wakeflow_publish_confirmation`；
+- Server options继续执行closed shape、函数类型和Proxy拒绝，没有optional executor、缺能力降级或宿主条件分支；
+- 两个工具分别发布自包含request/result Schema，成功返回Canonical文本与同事实`structuredContent`，已知失败返回不带stack/root的`isError`信封；
+- 两者均声明`readOnlyHint=false / destructiveHint=false / idempotentHint=true / openWorldHint=false`，准确表达本地不可变记录的追加式、exact-plan重放语义。
+
+[MCP 2025-11-25 Schema](https://modelcontextprotocol.io/specification/2025-11-25/schema)明确`outputSchema`约束`structuredContent`，并把annotations定义为客户端提示而非执行安全边界；[官方TypeScript SDK Server文档](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/server.md)要求工具级错误以`isError=true`返回，便于模型观察与修正。因此Wakeflow继续由SDK执行wire前置校验，同时由Public Contract、Coordinator和Application重复关闭family、容量、根、source及效果权威，不依赖annotations授权写入。
+
+Requirement工具的Apply重读并验证Design源字节；Recover不读取Design源，只使用exact Plan和持久intent/stage/final，partial stage缺字节时返回`input-required`。Confirmation遵循同一物理合同，但preview由owner同时分配Confirmation ID和未来isolated Demand ID；发布成功不等于创建Demand、TODO或执行Design。
+
+Codex与Claude Code组合根同时注入同一对host-neutral Coordinator，没有新增宿主适配器。独立MCP测试用真实Codex Requirement完成`preview → apply → recover(current)`，再用真实Claude Confirmation完成`preview → apply`；另验证`recoverable`错误效果权威及root脱敏。Catalog逐项检查21个工具的名称、Schema、annotations、描述和双宿主集合，并遍历全部21个required executor的Proxy拒绝。
+
+本单元聚焦Ledger与MCP共62项通过；Schema保持110/215及digest `sha256:34f6646e49bf84e2f6fcce96ab3da1d7b411f72a2202393752bed64bd3df0b71`；Architecture为793模块/5655依赖/0违规；候选构建为Codex 477、Claude Code 482，`releaseEligible=false`。A3至此完成真实空Workspace所需的Requirement/Confirmation Ledger producer公共纵切。
+
+下一节点回到已确认路线A4，但先做`wakeflow_inspect_todo`只读查询的设计复核：重新检查当前Collection Authority、排序/filter/page cursor和公共最小披露，再确定首个1～2文件单元，不直接从内部TODO对象生成无界列表工具。
+
+### 13.57 A4 TODO Inspection Public设计复核
+
+本轮只做设计复核，没有修改运行时代码。读取了当前TODO 16个生产模块、5份领域Schema、11个测试/fixture，重点核对`todo-collection / todo-collection-authority / todo-collection-service / todo-board-projection / todo-intake / todo-state`；同时复查旧JS `wakeflow_next_work`、Design handoff和Controller候选扫描，阅读本机TencentDB-Agent-Memory的pagination、v3 router、MetadataService及SQLite/Mongo Store list实现，并联网核对MCP、AIP-158和Kubernetes一致分页规范。
+
+#### 当前TS事实与不能直接包装的内部入口
+
+当前JSON权威已经足够：每个TODO由不可变`intake.json`和唯一当前`state.json`组成；Collection按`createdAt ASC + todoId ASC`形成确定顺序和`collectionDigest`，最多65,536项。Authority reader有界扫描完整items tree，以16并发稳定读取两类0600文件，执行前后完整tree identity复验，并在`transactions/`非空时返回`recovery-required`。Markdown Board只是可重建投影，缺失/stale/unsafe不改变JSON Authority。
+
+现有`inspectTodoItems(...)`不能成为公共结果。它返回完整`TodoCollectionAuthoritySnapshot`，其中包含每个文件的resource path、inode/node snapshot、byte count、物理digest，以及整份Board预期正文和projection source；这些是内部稳定读取与恢复证据，不是业务查询字段。直接序列化还会一次返回最多65,536份完整Intake/State，违反上下文与wire容量边界。
+
+旧JS `wakeflow_next_work`在writer lock内读取整份8 MiB Markdown Board，返回所有rows和board digest；Design主要把digest交给后续append CAS，Controller自行选择候选。它没有分页/filter，也不真正选择“next”。新TS的A5 Intake将由owner读取当前集合并生成exact plan，不需要A4继续为写入暴露整板digest，因此公共名称应采用`wakeflow_inspect_todo`，明确它只观察、不选择、不领取。
+
+TencentDB-Agent-Memory值得保留的是`Schema → Router → Service → Store`分层、list/get分离、默认20/最大100及统一分页信封。其list使用`limit + offset + total`并由SQLite/Mongo排序查询，适合数据库；但没有把一次list的snapshot version绑定后续页面，`ORDER BY created_at`也没有稳定tie-breaker。Wakeflow是会发生文件CAS更新的本地集合，不能直接照搬offset语义。
+
+#### 标准化方案A：一致快照的list + exact item（推荐）
+
+只注册一个只读工具`wakeflow_inspect_todo`，request使用两个关闭view：
+
+```text
+{ root, view: "list", filter?, pageSize?, pageToken? }
+{ root, view: "item", todoId }
+```
+
+`list`的第一版filter只包含真实消费维度：`statuses[] / priorities[] / demandTypes[] / autoClaim / originWindowId`；缺省表示不过滤，不暗中替Controller判定“eligible”。集合顺序固定复用`createdAt ASC + todoId ASC`，不按priority重排，也不增加用户可选sort。`pageSize`可选，缺省或0使用20、最大100；大于100收窄为100，负数/非整数拒绝。后续页允许改变pageSize，其他filter必须与首请求相同。
+
+返回list summary只含选择与进一步检查所需事实：TODO ID、创建/更新时间、当前status/revision、Demand type、priority、summary、当前parked trigger、origin/controller窗口、Auto Claim、testing mode、挂载Demand ID，以及Intake/State digest。它不返回完整Authority refs、intake rationale、withdraw/archive详情或物理来源。`item`按精确TODO ID返回完整业务Intake和脱敏State：保留Ledger member references与业务终态事实，但从mount移除`stateRootRef/identityDigest`，不返回文件node、绝对路径、Board正文、projection诊断、lock或transaction。
+
+[AIP-158](https://google.aip.dev/158)要求list从第一版就分页、page token为URL-safe opaque值、后续请求除pageSize外保持其他参数一致；[Kubernetes API list](https://kubernetes.io/docs/reference/using-api/api-concepts/)进一步用固定resourceVersion与continue position保证多页来自同一snapshot。Wakeflow对应使用versioned opaque binary page token，内部绑定`collectionDigest + normalized filter digest + next offset`：
+
+- 当前`collectionDigest`与token不同时返回稳定`stale-page-token`，要求从第一页重新开始；
+- filter不同时返回`page-token-mismatch`；
+- token只表示继续位置，不是授权、CAS或mutation capability；
+- 不引入server-side session、token数据库、HMAC secret或过期调度；二进制布局属于内部实现，不进入公共文档合同。
+
+结果返回`collectionDigest / itemCount / activeItemCount / totalMatched / items / nextPageToken`。空`nextPageToken`是唯一末页信号。公共Coordinator仍重新解析request/result、限制Canonical byte容量、扫描私有root文本并通过output Schema；MCP annotation固定`readOnlyHint=true / openWorldHint=false`。[MCP 2025-11-25 Schema](https://modelcontextprotocol.io/specification/2025-11-25/schema)把output Schema用于structured result，并明确annotation只是提示，因此只读安全仍由Authority与领域投影证明。
+
+第一版每次list仍读取一次完整严格Authority再在内存filter/page。AIP-158明确初始小集合采用内存分页是合理实现；它限制wire/context但不伪称减少底层I/O。当前不新增`todo-index.json`、SQLite、缓存、后台watch或第二份集合Authority。只有真实profiling证明全量稳定扫描成为瓶颈时，才单独设计由TODO mutation transaction同步维护的索引；不能让Markdown Board反向成为查询权威。
+
+#### 其他候选
+
+- **方案B：只做summary list。** 文件更少，但Controller选择后无法通过同一公共能力读取完整Authority、终态原因和Ledger refs；A5/A6很快会需要exact item，届时必须扩Schema或再增加工具。
+- **方案C：直接返回内部snapshot或旧式offset整板。** 实现最快，但泄漏物理证据、响应无界且跨页不一致；Tencent的数据库offset也不解决Wakeflow文件集合的snapshot漂移，不采用。
+- **方案D：先建持久JSON查询索引。** 读性能更好，但会扩展所有五类mutation、Recovery与projection事务，在没有规模证据时属于过度设计，不采用。
+
+推荐方案A。确认后首文件为`src/governance/todo/todo-inspection-query.ts`及单一聚焦测试：只实现纯内存request normalization、summary/detail投影、filter、顺序和opaque page-token一致性，不打开Workspace、不读取Config/files、不注册MCP。下一单元才把它接到严格Collection Authority；分页能力暂不下沉Foundation，因为当前只有一个真实consumer。
+
+### 13.58 A4-S1 TODO Inspection Query
+
+新增`todo-inspection-query.ts`，它只消费已经通过`createTodoCollectionSnapshot`/Collection Authority关闭的领域快照。文件没有导入Filesystem、Config、Workspace、MCP或Store，也没有class、缓存、session和索引；所有行为由纯函数与冻结结果表达。
+
+`parseTodoInspectionQuery(...)`关闭两个view：
+
+- `list`允许可选`statuses / priorities / demandTypes / autoClaim / originWindowId` filter、pageSize与pageToken；枚举数组拒绝空值和重复项，再按领域固定顺序规范化；
+- pageSize缺省或0为20，大于100收窄为100，负数、非整数和显式undefined拒绝；
+- `item`只允许typed TODO ID；两个view均拒绝额外字段、Proxy、accessor、Symbol和非被动容器。
+
+List复用Collection既有`createdAt ASC + todoId ASC`顺序，不重新按priority排序。Summary返回ID、时间、status/revision、Demand type、priority、窗口、summary、当前parked trigger、Auto Claim、testing mode、挂载Demand ID及Intake/State digest；不返回Authority refs或内部物理信息。Item返回完整不可变Intake及脱敏State：保留Ledger member refs、withdrawal和缩减后的archive事实，但mount只投影Demand ID，不暴露`stateRootRef / identityDigest`。
+
+page token使用Node原生Buffer生成固定长度、版本化二进制payload，再编码为canonical base64url；内部含magic/version、完整collection digest、normalized query digest、next offset及16-byte SHA-256 checksum。它不包含root或业务正文，不需要第三方库/server-side状态/HMAC secret；checksum只拒绝损坏或任意修改，不把token升级为签名或授权。相同filter集合在数组顺序不同、pageSize改变时仍连续；filter变化返回`page-token-mismatch`，Collection digest变化返回`stale-page-token`，非法编码/校验/offset返回`page-token`。
+
+聚焦4项通过，覆盖三维filter与origin/Auto Claim、pageSize变化后的连续分页、query/snapshot绑定与token篡改、完整item脱敏、not-found、枚举/容量/typed ID/closed shape及getter零执行。Architecture为795模块/5669依赖/0违规；Schema保持110/215及digest `sha256:34f6646e49bf84e2f6fcce96ab3da1d7b411f72a2202393752bed64bd3df0b71`；候选仍为Codex477/Claude482，因为纯Query尚未被入口闭包消费。
+
+实现复核后删除原本可能增加的`todo-inspection-service.ts`计划：现有`todo-collection-service.ts#inspectTodoItems`已经是严格Authority I/O owner，再加一层只会转发。下一单元应直接建立`wakeflow-todo-inspection-request/result`两份自包含Schema；随后Public Contract/Coordinator组合`RootedDirectory → inspectTodoItems → executeTodoInspectionQuery`，不创建第二个读取Service。
+
+### 13.59 A4-S2～S5 TODO Inspection Public闭环
+
+新增两份自包含entrypoint Schema、Public Contract和Public Coordinator。Request以`list/item`判别联合关闭root、filter、pageSize/token与typed TODO ID；Result分别关闭最多100项summary页和单项完整业务Intake/脱敏State。Schema明确拒绝`eligible / next / sort`、物理root、stateRootRef、mount identity digest、Board/projection、lock和transaction。
+
+Contract执行128 KiB被动JSON容量、Schema后二次领域parser及规范filter；Coordinator直接组合既有`inspectTodoItems`与纯Query，没有新增转发Service。它完整打开/关闭RootedDirectory，扫描request root/规范root私值，限制结果8 MiB并以result Schema回读。Collection transaction未退休、token query不匹配、stale snapshot、not-found和Authority错误均保留稳定cause code/reason；查询不取得writer lock，也不修复projection。
+
+`wakeflow_inspect_todo`作为第22个required executor同时进入Public Server和Codex/Claude组合根，annotations为`readOnly=true / destructive=false / idempotent=true / openWorld=false`。工具说明明确结果不选择eligible/next、不claim、不创建TODO/Demand。A4聚焦Query4 + Schema2 + Coordinator4 + MCP2 + catalog3，共15项通过。
+
+### 13.60 A5 TODO Intake Public完整纵切
+
+A5没有包装旧append参数，而是建立author/owner分界：Public preview只接收Demand type、priority、origin window、summary、intake rationale、readiness、Auto Claim、testing mode/summary及1～32个`{recordId,memberPath}`选择。调用方不能提交Program、Controller、TODO ID、createdAt、完整refs、environment ref、digest、Collection CAS或初始State。
+
+内部纵切为：
+
+```text
+authored input
+→ current Config + strict Collection + immutable Ledger
+→ owner派生Program/Controller/full refs/environment/TODO ID/time
+→ exact Plan(configDigest + expectedCollectionDigest + targetIntake)
+→ Application复验Config/Ledger/current Collection
+→ 既有appendTodoItem / recoverTodoItemTransaction
+→ metadata-only receipt
+```
+
+Planning先用固定草稿ID/time关闭role、testing和readiness关系，重新读取Config与Collection后才消费UUID/clock；origin window必须存在于current Config，Controller由唯一索引派生。Application不创建第二journal/lock/stage/projection writer；首次append、exact current重试、stale Collection、Ledger/Config漂移和projection失败后的recoverable journal均走现有Collection Service。写入前再次读取Config，写入成功后再复验；若此时Config漂移，错误的`publicationAuthority=current`诚实保留已提交效果。
+
+Public request采用preview/apply/recover，Apply/Recover都必须重放exact Plan/digest。成功只返回TODO ID、初始status与Intake/State/Collection digest；不返回完整Intake或物理恢复对象。`wakeflow_intake_todo`成为第23个双宿主required工具，明确不创建Demand、不执行Auto Claim或宿主效果。A5内部/Public/MCP及catalog相邻11项通过；完整TODO领域现为79项通过。
+
+### 13.61 A6 Demand Publication Authority单源收敛
+
+`wakeflow_create_demand` preview已删除caller `authorityMembers`。公共request现在只含TODO ID与authored Demand text/execution placement；传入旧字段会被Schema/领域closed-shape同时拒绝。
+
+Planning从选定pending TODO的immutable `intake.authorityRefs`取得唯一完整成员集，按record/member逐项重读Ledger并比较完整Canonical ref；Demand Authority不再存在“TODO refs一组、caller selectors另一组”的双输入。Main placement直接使用该集合。Isolated placement仍允许调用方指出一个Confirmation authorization member，但Planning只在TODO已绑定refs中解析它；未绑定或不同Demand的Confirmation失败后不分配ID/time。
+
+受影响Demand Publication 24项全部通过，并新增断言证明plan Authority refs逐项等于TODO Intake refs。公共端到端测试通过同一Codex MCP Server执行：
+
+```text
+publish Requirement Ledger Authority
+→ intake TODO
+→ inspect exact TODO
+→ create Demand（无authorityMembers）
+→ inspect Demand Route
+```
+
+Route最终为`work-available / implementation-task-planning`，所有中间结果均不含Workspace root，最终序列也不出现旧`authorityMembers`字段。
+
+### 13.62 A4→A6公共零到一技术核实点
+
+当前核实事实：
+
+- Public MCP为23个required、双宿主同名同Schema工具；候选stdio Client实测一致；
+- TODO完整领域79项通过；A4/A5/A6及相邻Public核实矩阵48项通过；Candidate/Schema/零到一入口专项7项通过；
+- Schema 114份、215 external refs，digest `sha256:6759f10e8583f43725518a9f239894bbf990089c87e908f559bb17ec3403af5e`；
+- Architecture 815模块、5803依赖、0违规；
+- Candidate闭包Codex490 / Claude495，`releaseEligible=false`，manifest分别为`sha256:98ed5f74baec692220b35c4227ebff4e610ea368a1d119308ee30ec932971163`与`sha256:637f4b4daefcd26b3386fde0e79680deff7898b485c229e9ee8e84afe95a21d0`；
+- 没有新增SQLite、查询索引、通用pagination Foundation、TODO第二状态机或跨Ledger/TODO Saga。
+
+核实测试从一份已建立Config/Ledger/Active静态根的v3 Workspace fixture开始；Workspace Maintenance的fresh public纵切已有独立测试，本测试没有重复执行宿主窗口创建。它证明“技术骨干准备完成后，Requirement/Confirmation → TODO → Demand → Route”全部可由新TS公共工具完成，不证明插件release、真实宿主窗口或旧JS等价。
+
+到此应暂停真实业务继续扩张，先对A4～A6和此前Foundation/骨干做统一Review；后续方向需基于这次核实点重新排序，而不是自动继续旧路线。

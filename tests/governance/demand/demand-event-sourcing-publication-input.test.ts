@@ -20,14 +20,13 @@ const CONFIRMATION_MEMBER = Object.freeze({
 
 function request() {
   return {
-    todoId: "TODO-DEMAND-PUBLICATION-INPUT",
+    todoId: "todo_9e9b3e91-55e2-43c1-8e93-68226aa84f80",
     demand: {
       title: "Demand Event Sourcing Publication",
       goal: "从当前TODO与Ledger权威派生一份Demand",
       completionDefinition: "发布revision 1并精确领取TODO",
       executionPlacement: { mode: "main" },
     },
-    authorityMembers: [REQUIREMENT_MEMBER, CONFIRMATION_MEMBER],
   };
 }
 
@@ -41,22 +40,20 @@ function isInputError(
     (path === undefined || error.path === path);
 }
 
-test("Publication preview input keeps only authored intent and canonical member selections", () => {
+test("Publication preview input keeps only authored Demand intent and TODO identity", () => {
   const parsed = parseDemandEventSourcingPublicationPreviewRequest(request());
 
-  equal(parsed.todoId, "TODO-DEMAND-PUBLICATION-INPUT");
+  equal(parsed.todoId, "todo_9e9b3e91-55e2-43c1-8e93-68226aa84f80");
   deepEqual(parsed.demand, {
     title: "Demand Event Sourcing Publication",
     goal: "从当前TODO与Ledger权威派生一份Demand",
     completionDefinition: "发布revision 1并精确领取TODO",
     executionPlacement: { mode: "main" },
   });
-  deepEqual(parsed.authorityMembers, [CONFIRMATION_MEMBER, REQUIREMENT_MEMBER]);
   equal(Object.isFrozen(parsed), true);
   equal(Object.isFrozen(parsed.demand), true);
   equal(Object.isFrozen(parsed.demand.executionPlacement), true);
-  equal(Object.isFrozen(parsed.authorityMembers), true);
-  equal(parsed.authorityMembers.every(Object.isFrozen), true);
+  equal(Object.hasOwn(parsed, "authorityMembers"), false);
   equal(Object.hasOwn(parsed, "programId"), false);
   equal(Object.hasOwn(parsed, "demandType"), false);
   equal(Object.hasOwn(parsed, "testingDecision"), false);
@@ -64,7 +61,7 @@ test("Publication preview input keeps only authored intent and canonical member 
   equal(Object.hasOwn(parsed, "recordedAt"), false);
 });
 
-test("isolated placement names one selected Confirmation member", () => {
+test("isolated placement names one Confirmation member for later TODO-bound resolution", () => {
   const parsed = parseDemandEventSourcingPublicationPreviewRequest({
     ...request(),
     demand: {
@@ -96,26 +93,6 @@ test("isolated placement names one selected Confirmation member", () => {
           ...request().demand,
           executionPlacement: {
             mode: "isolated",
-            authorizationMember: {
-              recordId: CONFIRMATION_ID,
-              memberPath: "decisions/not-selected.md",
-            },
-          },
-        },
-      }),
-    isInputError(
-      "placement",
-      "$/demand/executionPlacement/authorizationMember",
-    ),
-  );
-  throws(
-    () =>
-      parseDemandEventSourcingPublicationPreviewRequest({
-        ...request(),
-        demand: {
-          ...request().demand,
-          executionPlacement: {
-            mode: "isolated",
             authorizationMember: REQUIREMENT_MEMBER,
           },
         },
@@ -127,7 +104,7 @@ test("isolated placement names one selected Confirmation member", () => {
   );
 });
 
-test("Publication preview input rejects authority invention and non-canonical identity text", () => {
+test("Publication preview input rejects caller authority sets and non-canonical identity text", () => {
   throws(
     () =>
       parseDemandEventSourcingPublicationPreviewRequest({
@@ -142,51 +119,7 @@ test("Publication preview input rejects authority invention and non-canonical id
         ...request(),
         authorityMembers: [],
       }),
-    isInputError("authority-selection", "$/authorityMembers"),
-  );
-  throws(
-    () =>
-      parseDemandEventSourcingPublicationPreviewRequest({
-        ...request(),
-        authorityMembers: [REQUIREMENT_MEMBER, { ...REQUIREMENT_MEMBER }],
-      }),
-    isInputError("authority-selection", "$/authorityMembers"),
-  );
-  throws(
-    () =>
-      parseDemandEventSourcingPublicationPreviewRequest({
-        ...request(),
-        authorityMembers: [
-          {
-            recordId: "demand_33333333-3333-4333-8333-333333333333",
-            memberPath: "authority/requirement-design.md",
-          },
-        ],
-      }),
-    isInputError("authority-selection", "$/authorityMembers/0/recordId"),
-  );
-  throws(
-    () =>
-      parseDemandEventSourcingPublicationPreviewRequest({
-        ...request(),
-        authorityMembers: [
-          {
-            recordId: REQUIREMENT_ID,
-            memberPath: "record.json",
-          },
-        ],
-      }),
-    isInputError("authority-selection", "$/authorityMembers/0/memberPath"),
-  );
-  throws(
-    () =>
-      parseDemandEventSourcingPublicationPreviewRequest({
-        ...request(),
-        authorityMembers: [
-          { ...REQUIREMENT_MEMBER, role: "requirement-design" },
-        ],
-      }),
-    isInputError("authority-selection", "$/authorityMembers/0"),
+    isInputError("input", "$request"),
   );
   throws(
     () =>

@@ -4,7 +4,7 @@
  */
 
 /**
- * TODO intake 使用的稳定、用户可读 opaque ID；允许字母、数字、点、下划线、冒号和连字符，不从标题或路径推导。
+ * TODO intake 使用的 Wakeflow 持久类型化身份；由 owner 分配，不从标题、路径、时间或集合位置推导。
  */
 export type WakeflowTodoItemIdText = string
 /**
@@ -20,15 +20,47 @@ export type NullableDigest = (null | WakeflowSha256DigestText)
  * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。
  */
 export type WakeflowPortableResourcePathText = string
+/**
+ * 跨领域只读消费一份已验证 Ledger authority member 的完整 ref/digest 关系。
+ */
+export type WakeflowLedgerAuthorityMemberReference = ({
+[k: string]: unknown | undefined
+} & {
+[k: string]: unknown | undefined
+} & {
+artifactKind: "wakeflow-ledger-authority-member-reference"
+schemaVersion: 1
+family: ("requirement" | "confirmation")
+recordId: (string | string)
+recordRef: WakeflowPortableResourcePathText
+recordDigest: WakeflowSha256DigestText
+memberPath: WakeflowPortableResourcePathText
+memberRef: WakeflowPortableResourcePathText
+memberDigest: WakeflowSha256DigestText
+role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence" | "goal-stage-decision")
+mediaType: string
+} & {
+artifactKind: "wakeflow-ledger-authority-member-reference"
+schemaVersion: 1
+family: ("requirement" | "confirmation")
+recordId: (string | string)
+recordRef: WakeflowPortableResourcePathText
+recordDigest: WakeflowSha256DigestText
+memberPath: WakeflowPortableResourcePathText
+memberRef: WakeflowPortableResourcePathText
+memberDigest: WakeflowSha256DigestText
+role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence" | "goal-stage-decision")
+mediaType: string
+})
 
 /**
- * 一个 TODO item append、claim 或 archive 的 immutable recovery plan；expected 与 target digest 允许 owner 判断前向恢复、幂等重放或冲突。
+ * TODO 条目 append、activate、withdraw、claim 或 archive 的不可变恢复计划；前序与目标摘要用于判断前向恢复、幂等重放或冲突。
  */
 export interface WakeflowTodoTransaction {
 artifactKind: "wakeflow-todo-transaction"
 schemaVersion: 1
 todoId: WakeflowTodoItemIdText
-operation: ("append" | "claim" | "archive")
+operation: ("append" | "activate" | "withdraw" | "claim" | "archive")
 createdAt: WakeflowUtcInstantText
 expectedCollectionDigest: WakeflowSha256DigestText
 expectedIntakeDigest: NullableDigest
@@ -40,40 +72,43 @@ targetStateDigest: WakeflowSha256DigestText
 targetCollectionDigest: WakeflowSha256DigestText
 }
 /**
- * 一个 TODO item 创建后不可变的 pre-demand intake authority；展示状态和 demand mount 不进入本记录。
+ * TODO 条目创建后不可变的 Demand 前调度接收权威；Ledger 来源、初始就绪条件与调度策略在创建时冻结。
  */
 export interface WakeflowTodoIntake {
 artifactKind: "wakeflow-todo-intake"
 schemaVersion: 1
+programId: string
 todoId: WakeflowTodoItemIdText
 createdAt: WakeflowUtcInstantText
-initialStatus: ("pending-claim" | "parked")
-type: ("requirement" | "bug" | "supplement" | "research")
+demandType: ("requirement" | "bug" | "supplement" | "research")
 priority: ("P0" | "P1" | "P2" | "P3")
-ownerWindowId: string
-goal: string
-affectsRetestOrDispatch: boolean
-dependency: (null | string)
-recommendedWindowId: string
+originWindowId: string
+controllerWindowId: string
+summary: string
+intakeRationale: string
+readiness: (ReadyReadiness | ParkedReadiness)
 autoClaim: boolean
 testingDecision: TestingDecision
 /**
  * @minItems 1
  * @maxItems 32
  */
-documents: [DocumentReference, ...(DocumentReference)[]]
+authorityRefs: [WakeflowLedgerAuthorityMemberReference, ...(WakeflowLedgerAuthorityMemberReference)[]]
+}
+export interface ReadyReadiness {
+status: "ready"
+}
+export interface ParkedReadiness {
+status: "parked"
+trigger: string
 }
 export interface TestingDecision {
 mode: ("controller-only" | "real-environment" | "not-applicable")
 summary: string
-}
-export interface DocumentReference {
-label: string
-ref: WakeflowPortableResourcePathText
-anchor: (null | string)
+environmentMemberRef: (null | WakeflowPortableResourcePathText)
 }
 /**
- * 一个 TODO item 可更新的当前状态快照；revision、previous digest、mount 与 archive receipt 绑定每次前向转换。
+ * TODO 条目唯一可更新的当前状态快照；修订链、Demand 挂载、撤回事实与归档回执绑定每次前向转换。
  */
 export interface WakeflowTodoState {
 artifactKind: "wakeflow-todo-state"
@@ -81,15 +116,20 @@ schemaVersion: 1
 todoId: WakeflowTodoItemIdText
 revision: number
 previousStateDigest: (null | WakeflowSha256DigestText)
-status: ("pending-claim" | "parked" | "claimed" | "archived")
+status: ("pending-claim" | "parked" | "claimed" | "withdrawn" | "archived")
 updatedAt: WakeflowUtcInstantText
 mount: (null | DemandMount)
+withdrawal: (null | Withdrawal)
 archive: (null | ArchiveReceipt)
 }
 export interface DemandMount {
 demandId: string
 stateRootRef: WakeflowPortableResourcePathText
 identityDigest: WakeflowSha256DigestText
+}
+export interface Withdrawal {
+reason: string
+withdrawnAt: WakeflowUtcInstantText
 }
 export interface ArchiveReceipt {
 artifactKind: "wakeflow-business-archive-receipt"
@@ -124,4 +164,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TODO_TRANSACTION_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:todo:transaction:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TODO_TRANSACTION_SCHEMA\",\"title\":\"WakeflowTodoTransaction\",\"description\":\"一个 TODO item append、claim 或 archive 的 immutable recovery plan；expected 与 target digest 允许 owner 判断前向恢复、幂等重放或冲突。\",\"$comment\":\"Journal 不保存可变 phase。磁盘 effect 顺序、lock、projection publish 和 exact journal retirement 由 TODO collection owner 执行。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"todoId\",\"operation\",\"createdAt\",\"expectedCollectionDigest\",\"expectedIntakeDigest\",\"expectedStateDigest\",\"targetIntake\",\"targetState\",\"targetIntakeDigest\",\"targetStateDigest\",\"targetCollectionDigest\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-todo-transaction\"},\"schemaVersion\":{\"const\":1},\"todoId\":{\"$ref\":\"urn:wakeflow:governance:todo:item-id:v1\"},\"operation\":{\"enum\":[\"append\",\"claim\",\"archive\"]},\"createdAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"expectedCollectionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"expectedIntakeDigest\":{\"$ref\":\"#/$defs/nullableDigest\"},\"expectedStateDigest\":{\"$ref\":\"#/$defs/nullableDigest\"},\"targetIntake\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:governance:todo:intake:v1\"}]},\"targetState\":{\"$ref\":\"urn:wakeflow:governance:todo:state:v1\"},\"targetIntakeDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetStateDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetCollectionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}},\"$defs\":{\"nullableDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}]}}}");
+export const WAKEFLOW_TODO_TRANSACTION_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:todo:transaction:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TODO_TRANSACTION_SCHEMA\",\"title\":\"WakeflowTodoTransaction\",\"description\":\"TODO 条目 append、activate、withdraw、claim 或 archive 的不可变恢复计划；前序与目标摘要用于判断前向恢复、幂等重放或冲突。\",\"$comment\":\"Journal 不保存可变阶段。操作与目标状态关系由 Transaction codec 校验；源状态授权、磁盘效果顺序、锁、投影发布和精确退休由 TODO Collection owner 负责。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"todoId\",\"operation\",\"createdAt\",\"expectedCollectionDigest\",\"expectedIntakeDigest\",\"expectedStateDigest\",\"targetIntake\",\"targetState\",\"targetIntakeDigest\",\"targetStateDigest\",\"targetCollectionDigest\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-todo-transaction\"},\"schemaVersion\":{\"const\":1},\"todoId\":{\"$ref\":\"urn:wakeflow:governance:todo:item-id:v1\"},\"operation\":{\"enum\":[\"append\",\"activate\",\"withdraw\",\"claim\",\"archive\"]},\"createdAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"expectedCollectionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"expectedIntakeDigest\":{\"$ref\":\"#/$defs/nullableDigest\"},\"expectedStateDigest\":{\"$ref\":\"#/$defs/nullableDigest\"},\"targetIntake\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:governance:todo:intake:v1\"}]},\"targetState\":{\"$ref\":\"urn:wakeflow:governance:todo:state:v1\"},\"targetIntakeDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetStateDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetCollectionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}},\"$defs\":{\"nullableDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}]}}}");

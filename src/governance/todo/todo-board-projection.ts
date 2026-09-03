@@ -2,6 +2,7 @@ import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   createTodoCollectionSnapshot,
+  isTodoCollectionStatusActive,
   type TodoCollectionSnapshot,
 } from "./todo-collection.js";
 import { TODO_BOARD_PROJECTION_REF } from "./todo-paths.js";
@@ -9,8 +10,8 @@ import { TODO_BOARD_PROJECTION_REF } from "./todo-paths.js";
 /**
  * Wakeflow Governance / TODO：JSON 权威集合的 Markdown 投影。
  *
- * 投影只使用已经验证的 Intake 和 State 快照，不展示已归档条目。文件内容携带集合
- * 基准摘要，缺失或损坏时可以重建；Claim 和 Archive 操作绝不能反向读取投影作为状态。
+ * 投影只使用已经验证的 Intake 和 State 快照，不展示已撤回或已归档条目。文件内容携带
+ * 集合基准摘要，缺失或损坏时可以重建；任何状态转换都不能反向读取投影作为权威。
  */
 
 const TODO_BOARD_PROJECTION_KIND =
@@ -30,23 +31,24 @@ export interface TodoBoardProjection {
 const TODO_PROJECTION_COLUMNS = Object.freeze([
   "ID",
   "Status",
-  "Type",
+  "Demand Type",
   "Priority",
-  "Owner",
-  "Item / Goal",
-  "Affects Retest / Dispatch",
+  "Origin Window",
+  "Controller Window",
+  "Summary",
+  "Intake Rationale",
   "Dependency / Trigger",
-  "Recommended Window",
   "Current Mount",
   "Auto Claim",
   "Testing Decision",
-  "Documents",
+  "Authority",
 ] as const);
 
 type TodoProjectionColumn = (typeof TODO_PROJECTION_COLUMNS)[number];
 type TodoProjectionRow = Readonly<Record<TodoProjectionColumn, string>>;
 const ESCAPED_TEXT_COLUMNS = new Set<TodoProjectionColumn>([
-  "Item / Goal",
+  "Summary",
+  "Intake Rationale",
   "Dependency / Trigger",
   "Testing Decision",
 ]);
@@ -67,15 +69,13 @@ const PREFIX_LINES = Object.freeze([
   TODO_PROJECTION_DIVIDER,
 ] as const);
 
-function documentLinks(
-  documents: Readonly<TodoCollectionSnapshot["items"][number]["intake"]["documents"]>,
+function authorityLinks(
+  authorityRefs: Readonly<
+    TodoCollectionSnapshot["items"][number]["intake"]["authorityRefs"]
+  >,
 ): string {
-  return documents.map((document) => (
-    `[${document.label}](${encodeMarkdownLinkDestination(document.ref)}${
-      document.anchor === null
-        ? ""
-        : `#${encodeMarkdownLinkComponent(document.anchor)}`
-    })`
+  return authorityRefs.map((reference) => (
+    `[${reference.role}](${encodeMarkdownLinkDestination(reference.memberRef)})`
   )).join(" ");
 }
 
@@ -95,17 +95,19 @@ function rowFor(
   return {
     ID: item.todoId,
     Status: item.state.status,
-    Type: item.intake.type,
+    "Demand Type": item.intake.demandType,
     Priority: item.intake.priority,
-    Owner: item.intake.ownerWindowId,
-    "Item / Goal": item.intake.goal,
-    "Affects Retest / Dispatch": item.intake.affectsRetestOrDispatch ? "yes" : "no",
-    "Dependency / Trigger": item.intake.dependency ?? "none",
-    "Recommended Window": item.intake.recommendedWindowId,
+    "Origin Window": item.intake.originWindowId,
+    "Controller Window": item.intake.controllerWindowId,
+    Summary: item.intake.summary,
+    "Intake Rationale": item.intake.intakeRationale,
+    "Dependency / Trigger": item.intake.readiness.status === "parked"
+      ? item.intake.readiness.trigger
+      : "none",
     "Current Mount": item.state.mount?.stateRootRef ?? "none",
     "Auto Claim": item.intake.autoClaim ? "yes" : "no",
     "Testing Decision": `${item.intake.testingDecision.mode}: ${item.intake.testingDecision.summary}`,
-    Documents: documentLinks(item.intake.documents),
+    Authority: authorityLinks(item.intake.authorityRefs),
   };
 }
 
@@ -143,7 +145,7 @@ export function renderTodoBoardProjection(
 ): Readonly<TodoBoardProjection> {
   const collection = createTodoCollectionSnapshot(items);
   const rows = collection.items
-    .filter((item) => item.state.status !== "archived")
+    .filter((item) => isTodoCollectionStatusActive(item.state.status))
     .map((item) => renderProjectionRow(rowFor(item)));
   const content = `${PREFIX_LINES.join("\n")}\n${
     rows.length === 0 ? "" : `${rows.join("\n")}\n`

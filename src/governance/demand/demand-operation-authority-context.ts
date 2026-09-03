@@ -27,9 +27,10 @@ import {
 /**
  * Wakeflow Governance / Demand：一次业务操作共享的只读组合权威上下文。
  *
- * 本模块只负责安全打开当前Config、Ledger root和一个已发布Demand root，并执行完整
- * Demand/Ledger闭合审计。它不解释Tasking、Delivery、Result或Review规则，也不写事件、
- * 投影或宿主状态；各领域owner在该上下文之上继续执行自己的准入。
+ * 本模块只负责安全打开当前Config、Ledger root和一个已发布Demand root。Mutation入口
+ * 从Commit 1完整audit；只读入口允许Snapshot + tail，但两者都执行同一Demand/Ledger/
+ * Inventory闭包。它不解释Tasking、Delivery、Result或Review规则，也不写事件、投影或
+ * 宿主状态；各领域owner在该上下文之上继续执行自己的准入。
  */
 
 export interface DemandOperationAuthorityContext {
@@ -156,11 +157,11 @@ export async function closeDemandOperationRoot(
   }
 }
 
-/** 打开当前Config、Ledger与完整审计后的Demand组合上下文。 */
-export async function openDemandOperationAuthorityContext(
+async function openDemandAuthorityContext(
   workspaceRoot: RootedDirectory,
   demandId: WakeflowDurableId<"demand">,
   signal: AbortSignal | undefined,
+  audit: boolean,
 ): Promise<Readonly<DemandOperationAuthorityContext>> {
   let config: Readonly<WakeflowConfigAuthoritySnapshot>;
   try {
@@ -184,7 +185,7 @@ export async function openDemandOperationAuthorityContext(
       demandRoot,
       new LedgerAuthorityStore(ledgerRoot),
       {
-        audit: true,
+        ...(audit ? { audit: true } : {}),
         ...(signal === undefined ? {} : { signal }),
       },
     );
@@ -215,6 +216,27 @@ export async function openDemandOperationAuthorityContext(
     }
     throw error;
   }
+}
+
+/** 打开当前Config、Ledger与从Commit 1完整审计后的Demand组合上下文。 */
+export async function openDemandOperationAuthorityContext(
+  workspaceRoot: RootedDirectory,
+  demandId: WakeflowDurableId<"demand">,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<DemandOperationAuthorityContext>> {
+  return openDemandAuthorityContext(workspaceRoot, demandId, signal, true);
+}
+
+/**
+ * 打开适合只读消费的Demand组合上下文；允许Root Authority使用Snapshot + tail，
+ * 仍执行完整Inventory、Identity、Authority、Ledger、revision 1与当前Aggregate闭包。
+ */
+export async function openDemandReadAuthorityContext(
+  workspaceRoot: RootedDirectory,
+  demandId: WakeflowDurableId<"demand">,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<DemandOperationAuthorityContext>> {
+  return openDemandAuthorityContext(workspaceRoot, demandId, signal, false);
 }
 
 /** 关闭组合上下文持有的Demand与Ledger根，首个关闭失败优先。 */

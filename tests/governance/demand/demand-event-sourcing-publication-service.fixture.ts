@@ -12,15 +12,22 @@ import {
   createConfirmationRecord,
   createRequirementRecord,
 } from "../../../src/governance/ledger/ledger-authority-record.js";
-import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
+import {
+  createLedgerAuthorityMemberReference,
+  LedgerAuthorityStore,
+} from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
   appendTodoItem,
   initializeTodoCollection,
 } from "../../../src/governance/todo/todo-collection-service.js";
+import { parseTodoItemId } from "../../../src/governance/todo/todo-item-id.js";
 import { materializeWakeflowActiveLayout } from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { todoIntakeDraft } from "../todo/todo-intake.fixture.js";
 
-export const PUBLICATION_TODO_ID = "TODO-DEMAND-PUBLICATION-PREVIEW";
+export const PUBLICATION_TODO_ID = parseTodoItemId(
+  "todo_88340ce6-2c27-4cb8-83bb-86f46b74d5b1",
+);
 export const PUBLICATION_REQUIREMENT_ID =
   "requirement_33333333-3333-4333-8333-333333333333";
 export const PUBLICATION_CONFIRMATION_A_ID =
@@ -96,8 +103,15 @@ async function publishConfirmation(
   });
 }
 
+export type DemandPublicationFixtureAuthorityMode =
+  | "requirement"
+  | "isolated"
+  | "conflicting-confirmations";
+
 /** 创建Preview、Apply和Recovery测试共用的一份未领取TODO及完整Ledger Authority。 */
-export async function createDemandEventSourcingPublicationWorkspaceFixture(): Promise<
+export async function createDemandEventSourcingPublicationWorkspaceFixture(
+  authorityMode: DemandPublicationFixtureAuthorityMode = "requirement",
+): Promise<
   Readonly<DemandEventSourcingPublicationWorkspaceFixture>
 > {
   const fixtureRoot = mkdtempSync(
@@ -113,6 +127,15 @@ export async function createDemandEventSourcingPublicationWorkspaceFixture(): Pr
     mkdirSync(path.join(workspacePath, relative), { mode: 0o755 });
   }
   const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
+  const controllerWindow = config.topology.windows.find(
+    (window) => window.role === "controller",
+  );
+  const originWindow = config.topology.windows.find(
+    (window) => window.role === "design",
+  );
+  if (controllerWindow === undefined || originWindow === undefined) {
+    throw new Error("Expected Controller and Design window fixtures.");
+  }
   writeFileSync(
     path.join(workspacePath, "wakeflow.config.json"),
     renderWakeflowConfigV3(config),
@@ -123,33 +146,6 @@ export async function createDemandEventSourcingPublicationWorkspaceFixture(): Pr
     recoveringFreshLayout: false,
   });
   await initializeTodoCollection(workspaceRoot, { freshWorkspace: true });
-  const appended = await appendTodoItem(
-    workspaceRoot,
-    {
-      todoId: PUBLICATION_TODO_ID,
-      initialStatus: "pending-claim",
-      type: "requirement",
-      priority: "P1",
-      ownerWindowId: "window_55555555-5555-4555-8555-555555555555",
-      goal: "发布一份完整Demand Event Sourcing初始权威",
-      affectsRetestOrDispatch: false,
-      dependency: null,
-      recommendedWindowId: "window_88888888-8888-4888-8888-888888888888",
-      autoClaim: true,
-      testingDecision: {
-        mode: "controller-only",
-        summary: "运行新增TypeScript聚焦测试",
-      },
-      documents: [
-        {
-          label: "requirement",
-          ref: `requirements/${PUBLICATION_REQUIREMENT_ID}/record.json`,
-          anchor: null,
-        },
-      ],
-    },
-    { clock: () => PUBLICATION_RECORDED_AT },
-  );
 
   const ledgerRoot = await RootedDirectory.open(ledgerPath);
   try {
@@ -174,18 +170,25 @@ export async function createDemandEventSourcingPublicationWorkspaceFixture(): Pr
       },
       { clock: () => PUBLICATION_RECORDED_AT },
     );
-    await store.publish(
+    const publishedRequirement = await store.publish(
       requirement,
       members.map(({ path: memberPath, bytes }) => ({
         path: memberPath,
         bytes,
       })),
     );
-    const requirementMembers = requirement.documents.map((document) =>
-      Object.freeze({
-        recordId: PUBLICATION_REQUIREMENT_ID,
-        memberPath: document.path,
-      }),
+    const requirementMembers = publishedRequirement.loaded.documents.map(
+      (document) =>
+        Object.freeze({
+          recordId: PUBLICATION_REQUIREMENT_ID,
+          memberPath: document.path,
+        }),
+    );
+    const requirementAuthorityRefs = publishedRequirement.loaded.documents.map(
+      (document) => createLedgerAuthorityMemberReference(
+        publishedRequirement.loaded,
+        document.path,
+      ),
     );
     const confirmationA = await publishConfirmation(store, {
       confirmationId: PUBLICATION_CONFIRMATION_A_ID,
@@ -199,6 +202,46 @@ export async function createDemandEventSourcingPublicationWorkspaceFixture(): Pr
       role: "supporting-evidence",
       memberPath: "evidence/other-demand.md",
     });
+    const loadedConfirmationA = await store.loadConfirmation(
+      PUBLICATION_CONFIRMATION_A_ID,
+    );
+    const loadedConfirmationB = await store.loadConfirmation(
+      PUBLICATION_CONFIRMATION_B_ID,
+    );
+    const confirmationAReference = createLedgerAuthorityMemberReference(
+      loadedConfirmationA,
+      confirmationA.memberPath,
+    );
+    const confirmationBReference = createLedgerAuthorityMemberReference(
+      loadedConfirmationB,
+      confirmationB.memberPath,
+    );
+    const authorityRefs = authorityMode === "isolated"
+      ? [...requirementAuthorityRefs, confirmationAReference]
+      : authorityMode === "conflicting-confirmations"
+        ? [
+            ...requirementAuthorityRefs,
+            confirmationAReference,
+            confirmationBReference,
+          ]
+        : requirementAuthorityRefs;
+    const appended = await appendTodoItem(
+      workspaceRoot,
+      todoIntakeDraft(PUBLICATION_TODO_ID, {
+        programId: config.program.programId,
+        originWindowId: originWindow.windowId,
+        controllerWindowId: controllerWindow.windowId,
+        summary: "发布一份完整 Demand Event Sourcing 初始权威",
+        intakeRationale: "已确认的 Ledger Authority 可以进入 Demand 发布规划。",
+        testingDecision: {
+          mode: "controller-only",
+          summary: "运行新增 TypeScript 聚焦测试",
+          environmentMemberRef: null,
+        },
+        authorityRefs,
+      }),
+      { clock: () => PUBLICATION_RECORDED_AT },
+    );
     return Object.freeze({
       fixtureRoot,
       workspacePath,

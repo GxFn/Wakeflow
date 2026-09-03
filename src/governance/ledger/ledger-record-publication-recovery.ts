@@ -31,7 +31,12 @@ import {
   settleCommittedLedgerIntent,
   withLedgerRecordPublicationLock,
 } from "./ledger-record-publication-storage.js";
-import { sameLedgerRecordPublicationIntent } from "./ledger-record-publication-intent.js";
+import {
+  parseLedgerRecordPublicationIntent,
+  sameLedgerRecordPublicationIntent,
+  LedgerRecordPublicationIntentError,
+  type LedgerRecordPublicationIntent,
+} from "./ledger-record-publication-intent.js";
 
 /** Wakeflow Governance / Ledger：由精简发布意图记录驱动的单记录前向恢复。 */
 
@@ -55,17 +60,40 @@ function parseRecordIdentity(recordIdValue: unknown): Readonly<{
   });
 }
 
-/**
- * 本函数只依据精简发布意图记录以及现有暂存目录、最终目录状态恢复一次记录发布。
- * 如果暂存目录缺少成员字节，函数会明确要求调用方使用原始发布输入重试，而不会
- * 根据摘要虚构缺失内容。
- */
-export async function recoverLedgerAuthorityRecordPublication(
+function parseExpectedIntent(
+  value: unknown,
+): Readonly<LedgerRecordPublicationIntent> {
+  try {
+    return parseLedgerRecordPublicationIntent(value);
+  } catch (error: unknown) {
+    if (error instanceof LedgerRecordPublicationIntentError) {
+      fail("input", "$expectedIntent");
+    }
+    throw error;
+  }
+}
+
+function intentIdentity(
+  intent: Readonly<LedgerRecordPublicationIntent>,
+): Readonly<{
+  readonly family: LedgerAuthorityFamily;
+  readonly recordId: LedgerAuthorityRecordId;
+}> {
+  return Object.freeze({
+    family: ledgerAuthorityFamily(intent.record),
+    recordId: ledgerAuthorityRecordId(intent.record),
+  });
+}
+
+async function recoverPublication(
   root: RootedDirectory,
-  recordIdValue: unknown,
+  identity: Readonly<{
+    readonly family: LedgerAuthorityFamily;
+    readonly recordId: LedgerAuthorityRecordId;
+  }>,
+  expectedIntent: Readonly<LedgerRecordPublicationIntent> | null,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
-  const identity = parseRecordIdentity(recordIdValue);
   const intentRef = ledgerRecordPublicationIntentRefForIdentity(
     identity.family,
     identity.recordId,
@@ -85,6 +113,8 @@ export async function recoverLedgerAuthorityRecordPublication(
     ledgerAuthorityFamily(observed.intent.record) !== identity.family
     || ledgerAuthorityRecordId(observed.intent.record) !== identity.recordId
     || observed.intent.lockRef !== lockRef
+    || (expectedIntent !== null
+      && !sameLedgerRecordPublicationIntent(observed.intent, expectedIntent))
   ) {
     fail("conflict", "$intent");
   }
@@ -99,6 +129,8 @@ export async function recoverLedgerAuthorityRecordPublication(
     if (
       stored === null
       || !sameLedgerRecordPublicationIntent(stored.intent, observed.intent)
+      || (expectedIntent !== null
+        && !sameLedgerRecordPublicationIntent(stored.intent, expectedIntent))
     ) {
       fail("conflict", "$intent");
     }
@@ -177,4 +209,35 @@ export async function recoverLedgerAuthorityRecordPublication(
     await retireLedgerRecordPublicationIntent(root, freshStored, signal);
     return Object.freeze({ wroteAuthority: true, loaded });
   });
+}
+
+/**
+ * 本函数只依据精简发布意图记录以及现有暂存目录、最终目录状态恢复一次记录发布。
+ * 如果暂存目录缺少成员字节，函数会明确要求调用方使用原始发布输入重试，而不会
+ * 根据摘要虚构缺失内容。
+ */
+export async function recoverLedgerAuthorityRecordPublication(
+  root: RootedDirectory,
+  recordIdValue: unknown,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<LedgerAuthorityPublicationResult>> {
+  const identity = parseRecordIdentity(recordIdValue);
+  return recoverPublication(root, identity, null, signal);
+}
+
+/**
+ * 只恢复与调用方exact intent逐字段一致的发布；锁前和锁内都重新复验。
+ */
+export async function recoverExactLedgerAuthorityRecordPublication(
+  root: RootedDirectory,
+  expectedIntentValue: unknown,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<LedgerAuthorityPublicationResult>> {
+  const expectedIntent = parseExpectedIntent(expectedIntentValue);
+  return recoverPublication(
+    root,
+    intentIdentity(expectedIntent),
+    expectedIntent,
+    signal,
+  );
 }

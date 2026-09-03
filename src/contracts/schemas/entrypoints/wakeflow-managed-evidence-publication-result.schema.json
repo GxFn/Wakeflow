@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:managed-evidence-publication-result:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_RESULT_SCHEMA",
+  "title": "WakeflowManagedEvidencePublicationResultV1",
+  "description": "Successful preview, apply, or recovery metadata result for one Managed Evidence publication.",
+  "$comment": "Preview returns the complete owner-produced transaction, including the caller-selected logical source ref, for confirmation. Apply and completed recovery return only immutable IDs and digests. Retired recovery reports the exact retired transaction identity. Healthy recovery reports only current Demand cursor metadata. Apply/recover results expose no source ref, Config/window identity, physical path, Manifest body, payload bytes, inode, handle, or internal capability.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/previewResult" },
+    { "$ref": "#/$defs/applyResult" },
+    { "$ref": "#/$defs/currentRecoveryResult" },
+    { "$ref": "#/$defs/retiredRecoveryResult" },
+    { "$ref": "#/$defs/healthyRecoveryResult" }
+  ],
+  "$defs": {
+    "previewResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "status",
+        "plan",
+        "planDigest"
+      ],
+      "properties": {
+        "kind": { "const": "WakeflowManagedEvidencePublicationPreviewResult" },
+        "schemaVersion": { "const": 1 },
+        "tool": { "const": "wakeflow_record_evidence" },
+        "mode": { "const": "preview" },
+        "status": { "const": "ready" },
+        "plan": { "$ref": "#/$defs/publicationPlan" },
+        "planDigest": { "$ref": "#/$defs/sha256Digest" }
+      }
+    },
+    "applyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "status",
+        "planDigest",
+        "publication"
+      ],
+      "properties": {
+        "kind": { "const": "WakeflowManagedEvidencePublicationApplyResult" },
+        "schemaVersion": { "const": 1 },
+        "tool": { "const": "wakeflow_record_evidence" },
+        "mode": { "const": "apply" },
+        "status": { "const": "current" },
+        "planDigest": { "$ref": "#/$defs/sha256Digest" },
+        "publication": { "$ref": "#/$defs/publicationReceipt" }
+      }
+    },
+    "currentRecoveryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "status",
+        "publication"
+      ],
+      "properties": {
+        "kind": { "const": "WakeflowManagedEvidencePublicationRecoveryResult" },
+        "schemaVersion": { "const": 1 },
+        "tool": { "const": "wakeflow_record_evidence" },
+        "mode": { "const": "recover" },
+        "status": { "const": "current" },
+        "publication": { "$ref": "#/$defs/publicationReceipt" }
+      }
+    },
+    "retiredRecoveryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "status",
+        "retirement"
+      ],
+      "properties": {
+        "kind": { "const": "WakeflowManagedEvidencePublicationRecoveryResult" },
+        "schemaVersion": { "const": 1 },
+        "tool": { "const": "wakeflow_record_evidence" },
+        "mode": { "const": "recover" },
+        "status": { "const": "retired-stale" },
+        "retirement": { "$ref": "#/$defs/retirementReceipt" }
+      }
+    },
+    "healthyRecoveryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "status",
+        "health"
+      ],
+      "properties": {
+        "kind": { "const": "WakeflowManagedEvidencePublicationRecoveryResult" },
+        "schemaVersion": { "const": 1 },
+        "tool": { "const": "wakeflow_record_evidence" },
+        "mode": { "const": "recover" },
+        "status": { "const": "healthy" },
+        "health": { "$ref": "#/$defs/healthReceipt" }
+      }
+    },
+    "publicationReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "demandId",
+        "evidenceId",
+        "transactionDigest",
+        "manifestDigest",
+        "payloadArtifactDigest",
+        "recordTreePlanDigest",
+        "commandDigest",
+        "event",
+        "commit",
+        "aggregate"
+      ],
+      "properties": {
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "evidenceId": { "$ref": "#/$defs/evidenceId" },
+        "transactionDigest": { "$ref": "#/$defs/sha256Digest" },
+        "manifestDigest": { "$ref": "#/$defs/sha256Digest" },
+        "payloadArtifactDigest": { "$ref": "#/$defs/sha256Digest" },
+        "recordTreePlanDigest": { "$ref": "#/$defs/sha256Digest" },
+        "commandDigest": { "$ref": "#/$defs/sha256Digest" },
+        "event": { "$ref": "#/$defs/eventReceipt" },
+        "commit": { "$ref": "#/$defs/commitReceipt" },
+        "aggregate": { "$ref": "#/$defs/aggregateReceipt" }
+      }
+    },
+    "retirementReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "demandId",
+        "evidenceId",
+        "transactionDigest",
+        "manifestDigest",
+        "payloadArtifactDigest"
+      ],
+      "properties": {
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "evidenceId": { "$ref": "#/$defs/evidenceId" },
+        "transactionDigest": { "$ref": "#/$defs/sha256Digest" },
+        "manifestDigest": { "$ref": "#/$defs/sha256Digest" },
+        "payloadArtifactDigest": { "$ref": "#/$defs/sha256Digest" }
+      }
+    },
+    "healthReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "demandId",
+        "streamRevision",
+        "stateDigest",
+        "managedEvidenceCount"
+      ],
+      "properties": {
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "streamRevision": { "$ref": "#/$defs/positiveSafeInteger" },
+        "stateDigest": { "$ref": "#/$defs/sha256Digest" },
+        "managedEvidenceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      }
+    },
+    "eventReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "streamRevision"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "streamRevision": { "$ref": "#/$defs/positiveSafeInteger" }
+      }
+    },
+    "commitReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commitId", "commitSequence", "commitDigest"],
+      "properties": {
+        "commitId": { "$ref": "#/$defs/commitId" },
+        "commitSequence": { "$ref": "#/$defs/positiveSafeInteger" },
+        "commitDigest": { "$ref": "#/$defs/sha256Digest" }
+      }
+    },
+    "aggregateReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["streamRevision", "stateDigest"],
+      "properties": {
+        "streamRevision": { "$ref": "#/$defs/positiveSafeInteger" },
+        "stateDigest": { "$ref": "#/$defs/sha256Digest" }
+      }
+    },
+    "publicationPlan": {
+      "type": "object",
+      "description": "Complete owner-produced Managed Evidence Publication Transaction.",
+      "minProperties": 1
+    },
+    "positiveSafeInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "evidenceId": {
+      "type": "string",
+      "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "commitId": {
+      "type": "string",
+      "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

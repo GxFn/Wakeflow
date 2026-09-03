@@ -1,11 +1,17 @@
 import type {
-  DocumentReference as TodoDocumentReferenceWire,
   WakeflowTodoIntake as TodoIntakeWire,
 } from "../../contracts/generated/governance/todo/todo-intake.generated.js";
 import { WAKEFLOW_TODO_INTAKE_SCHEMA } from "../../contracts/generated/governance/todo/todo-intake.generated.js";
 import { WAKEFLOW_TODO_ITEM_ID_SCHEMA } from "../../contracts/generated/governance/todo/todo-item-id.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  WakeflowDurableIdError,
+  type WakeflowDurableId,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
@@ -19,6 +25,7 @@ import {
   type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
+  parseDenseArray,
   parsePlainRecord,
   PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
@@ -27,11 +34,6 @@ import {
   PortableResourcePathError,
   type PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -44,60 +46,64 @@ import {
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
 import {
+  parseLedgerAuthorityMemberReference,
+} from "../ledger/ledger-authority-reader.js";
+import {
+  LedgerAuthorityStoreError,
+  type LedgerAuthorityMemberReference,
+} from "../ledger/ledger-authority-store-contract.js";
+import {
   parseTodoItemId,
   TodoItemIdError,
   type TodoItemId,
 } from "./todo-item-id.js";
 
 /**
- * Wakeflow Governance / TODO：创建后不可变的 TODO Intake 权威记录编解码器。
+ * Wakeflow Governance / TODO：创建后不可变的 Demand 前调度接收权威。
  *
- * 接收记录保存来源意图、职责、测试决定和文档引用；当前状态、Demand 挂载、修订号和
- * 归档回执明确属于 `TodoState`。Schema 限制可移植结构，本模块补充类型化窗口 ID、
- * Unicode、测试模式与类型关系、文档唯一性、固定字段顺序、确定性格式化字节和
- * Canonical JSON 语义摘要。
+ * Intake 绑定 Program、来源窗口和 Controller 窗口、初始就绪条件、调度策略以及完整的
+ * 不可变 Ledger 成员引用。`summary` 仅用于队列观察，不替代 Ledger 或 Demand 的目标；
+ * 当前状态、Demand 挂载、修订与归档回执均属于 `TodoState`，Intake 不拥有生命周期转换。
  */
 
 const TODO_INTAKE_ARTIFACT_KIND = "wakeflow-todo-intake" as const;
 const TODO_INTAKE_SCHEMA_VERSION = 1 as const;
 
-export type TodoIntakeInitialStatus = "pending-claim" | "parked";
-export type TodoIntakeType = "requirement" | "bug" | "supplement" | "research";
-export type TodoIntakePriority = "P0" | "P1" | "P2" | "P3";
+export type TodoDemandType = "requirement" | "bug" | "supplement" | "research";
+export type TodoPriority = "P0" | "P1" | "P2" | "P3";
 export type TodoTestingDecisionMode =
   | "controller-only"
   | "real-environment"
   | "not-applicable";
 
-export interface TodoDocumentReference {
-  readonly label: string;
-  readonly ref: PortableResourcePath;
-  readonly anchor: string | null;
-}
+export type TodoReadiness =
+  | Readonly<{ readonly status: "ready" }>
+  | Readonly<{ readonly status: "parked"; readonly trigger: string }>;
 
 export interface TodoTestingDecision {
   readonly mode: TodoTestingDecisionMode;
   readonly summary: string;
+  readonly environmentMemberRef: PortableResourcePath | null;
 }
 
 export interface TodoIntake {
   readonly artifactKind: typeof TODO_INTAKE_ARTIFACT_KIND;
   readonly schemaVersion: typeof TODO_INTAKE_SCHEMA_VERSION;
+  readonly programId: WakeflowDurableId<"program">;
   readonly todoId: TodoItemId;
   readonly createdAt: UtcInstant;
-  readonly initialStatus: TodoIntakeInitialStatus;
-  readonly type: TodoIntakeType;
-  readonly priority: TodoIntakePriority;
-  readonly ownerWindowId: WakeflowDurableId<"window">;
-  readonly goal: string;
-  readonly affectsRetestOrDispatch: boolean;
-  readonly dependency: string | null;
-  readonly recommendedWindowId: WakeflowDurableId<"window">;
+  readonly demandType: TodoDemandType;
+  readonly priority: TodoPriority;
+  readonly originWindowId: WakeflowDurableId<"window">;
+  readonly controllerWindowId: WakeflowDurableId<"window">;
+  readonly summary: string;
+  readonly intakeRationale: string;
+  readonly readiness: Readonly<TodoReadiness>;
   readonly autoClaim: boolean;
   readonly testingDecision: Readonly<TodoTestingDecision>;
-  readonly documents: readonly [
-    Readonly<TodoDocumentReference>,
-    ...Readonly<TodoDocumentReference>[],
+  readonly authorityRefs: readonly [
+    Readonly<LedgerAuthorityMemberReference>,
+    ...Readonly<LedgerAuthorityMemberReference>[],
   ];
 }
 
@@ -112,23 +118,25 @@ export type TodoIntakeErrorReason =
   | "identifier"
   | "time"
   | "text"
+  | "readiness"
   | "testing-decision"
-  | "documents"
+  | "authority"
   | "representation";
 
 const ERROR_MESSAGES = {
-  "input": "TODO intake input is invalid.",
-  "json": "TODO intake is not passive JSON data.",
-  "schema": "TODO intake does not satisfy its portable Schema.",
-  "identifier": "TODO intake contains an invalid typed identifier.",
-  "time": "TODO intake contains an invalid creation time.",
-  "text": "TODO intake contains non-canonical text.",
-  "testing-decision": "TODO intake testing decision is inconsistent with its type.",
-  "documents": "TODO intake document references are inconsistent.",
-  "representation": "TODO intake bytes are not its deterministic domain representation.",
+  input: "TODO intake input is invalid.",
+  json: "TODO intake is not passive JSON data.",
+  schema: "TODO intake does not satisfy its portable Schema.",
+  identifier: "TODO intake contains an invalid typed identifier.",
+  time: "TODO intake contains an invalid creation time.",
+  text: "TODO intake contains non-canonical text.",
+  readiness: "TODO intake readiness and Auto Claim policy are inconsistent.",
+  "testing-decision": "TODO intake testing decision is inconsistent with its Demand type or Authority.",
+  authority: "TODO intake Ledger Authority references are inconsistent.",
+  representation: "TODO intake bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<TodoIntakeErrorReason, string>>;
 
-/** TODO Intake 准入、关系或持久化表示验证失败时返回的稳定、脱敏错误。 */
+/** TODO Intake准入、关系或持久化表示失败时返回的稳定、脱敏错误。 */
 export class TodoIntakeError extends Error {
   override readonly name = "TodoIntakeError";
   readonly code = "wakeflow-todo-intake" as const;
@@ -146,26 +154,45 @@ const validateWireIntake = createRuntimeJsonSchemaValidator<TodoIntakeWire>(
   WAKEFLOW_TODO_INTAKE_SCHEMA,
   [
     WAKEFLOW_TODO_ITEM_ID_SCHEMA,
-    WAKEFLOW_UTC_INSTANT_SCHEMA,
+    WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
 
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const DRAFT_FIELDS = Object.freeze([
-  "affectsRetestOrDispatch",
+  "authorityRefs",
   "autoClaim",
-  "dependency",
-  "documents",
-  "goal",
-  "initialStatus",
-  "ownerWindowId",
+  "controllerWindowId",
+  "demandType",
+  "intakeRationale",
+  "originWindowId",
   "priority",
-  "recommendedWindowId",
+  "programId",
+  "readiness",
+  "summary",
   "testingDecision",
   "todoId",
-  "type",
 ] as const);
+const REQUIRED_AUTHORITY_ROLES = Object.freeze({
+  requirement: Object.freeze([
+    "original-plan",
+    "requirement-design",
+    "code-facts",
+    "landing-plan",
+    "non-goals",
+    "user-confirmation",
+  ]),
+  bug: Object.freeze(["reproduction", "scope", "non-goals"]),
+  supplement: Object.freeze([
+    "requirement-design",
+    "requirement-delta",
+    "user-confirmation",
+  ]),
+  research: Object.freeze(["research-question", "boundaries"]),
+} as const satisfies Readonly<Record<TodoDemandType, readonly string[]>>);
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "1970-01-01T00:00:00.000Z",
   "$draftValidationInstant",
@@ -186,12 +213,13 @@ function parseCanonicalText(value: string, path: string): string {
   return value;
 }
 
-function parseWindowId(
-  value: string,
+function parseDurableId<K extends "program" | "window">(
+  value: unknown,
+  kind: K,
   path: string,
-): WakeflowDurableId<"window"> {
+): WakeflowDurableId<K> {
   try {
-    return parseWakeflowDurableIdOfKind(value, "window", path);
+    return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) fail("identifier", path);
     throw error;
@@ -207,56 +235,146 @@ function parseCreatedAt(value: string): UtcInstant {
   }
 }
 
+function parseEnvironmentMemberRef(
+  value: string | null,
+): PortableResourcePath | null {
+  if (value === null) return null;
+  try {
+    return parsePortableResourcePath(
+      value,
+      "$/testingDecision/environmentMemberRef",
+    );
+  } catch (error: unknown) {
+    if (error instanceof PortableResourcePathError) {
+      fail("testing-decision", "$/testingDecision/environmentMemberRef");
+    }
+    throw error;
+  }
+}
+
+function parseReadiness(
+  value: Readonly<TodoIntakeWire["readiness"]>,
+): Readonly<TodoReadiness> {
+  return value.status === "ready"
+    ? Object.freeze({ status: "ready" as const })
+    : Object.freeze({
+      status: "parked" as const,
+      trigger: parseCanonicalText(value.trigger, "$/readiness/trigger"),
+    });
+}
+
 function parseTestingDecision(
-  wire: Readonly<TodoIntakeWire>,
+  value: Readonly<TodoIntakeWire["testingDecision"]>,
 ): Readonly<TodoTestingDecision> {
-  const decision = Object.freeze({
-    mode: wire.testingDecision.mode,
-    summary: parseCanonicalText(
-      wire.testingDecision.summary,
-      "$/testingDecision/summary",
+  return Object.freeze({
+    mode: value.mode,
+    summary: parseCanonicalText(value.summary, "$/testingDecision/summary"),
+    environmentMemberRef: parseEnvironmentMemberRef(
+      value.environmentMemberRef,
     ),
   });
+}
+
+function referenceKey(
+  reference: Readonly<LedgerAuthorityMemberReference>,
+): string {
+  return reference.memberRef;
+}
+
+function parseAuthorityReference(
+  value: unknown,
+  path: string,
+): Readonly<LedgerAuthorityMemberReference> {
+  try {
+    return parseLedgerAuthorityMemberReference(value);
+  } catch (error: unknown) {
+    if (error instanceof LedgerAuthorityStoreError) fail("authority", path);
+    throw error;
+  }
+}
+
+function freezeCanonicalAuthorityRefs(
+  parsed: readonly Readonly<LedgerAuthorityMemberReference>[],
+): TodoIntake["authorityRefs"] {
+  const first = parsed[0];
+  if (first === undefined) fail("authority", "$/authorityRefs");
+  const refs: [
+    Readonly<LedgerAuthorityMemberReference>,
+    ...Readonly<LedgerAuthorityMemberReference>[],
+  ] = [first];
+  refs.push(...parsed.slice(1));
+  for (let index = 1; index < refs.length; index += 1) {
+    const previous = refs[index - 1];
+    const current = refs[index];
+    if (
+      previous === undefined
+      || current === undefined
+      || referenceKey(previous) >= referenceKey(current)
+    ) {
+      fail("authority", `$/authorityRefs/${index}`);
+    }
+  }
+  return Object.freeze(refs);
+}
+
+function parseAuthorityRefs(
+  values: readonly TodoIntakeWire["authorityRefs"][number][],
+): TodoIntake["authorityRefs"] {
+  return freezeCanonicalAuthorityRefs(values.map((value, index) =>
+    parseAuthorityReference(value, `$/authorityRefs/${index}`)));
+}
+
+function parseDraftAuthorityRefs(value: unknown): TodoIntake["authorityRefs"] {
+  let values: readonly unknown[];
+  try {
+    values = parseDenseArray(value, 32, "$/authorityRefs");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$/authorityRefs");
+    throw error;
+  }
+  const parsed = values.map((entry, index) =>
+    parseAuthorityReference(entry, `$/authorityRefs/${index}`));
+  return freezeCanonicalAuthorityRefs(
+    parsed.sort((left, right) => {
+      const leftKey = referenceKey(left);
+      const rightKey = referenceKey(right);
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    }),
+  );
+}
+
+function assertRelations(intake: Readonly<TodoIntake>): void {
+  if (intake.readiness.status === "parked" && intake.autoClaim) {
+    fail("readiness", "$/autoClaim");
+  }
   if (
-    (wire.type === "research" && decision.mode !== "not-applicable")
-    || (wire.type !== "research" && decision.mode === "not-applicable")
+    intake.demandType === "research"
+      ? intake.testingDecision.mode !== "not-applicable"
+      : intake.testingDecision.mode === "not-applicable"
   ) {
     fail("testing-decision", "$/testingDecision/mode");
   }
-  return decision;
-}
-
-function parseDocuments(
-  values: readonly TodoDocumentReferenceWire[],
-): TodoIntake["documents"] {
-  const documents: Readonly<TodoDocumentReference>[] = [];
-  const labels = new Set<string>();
-  const targets = new Set<string>();
-  for (const [index, value] of values.entries()) {
-    const path = `$/documents/${index}`;
-    const label = parseCanonicalText(value.label, `${path}/label`);
-    let ref: PortableResourcePath;
-    try {
-      ref = parsePortableResourcePath(value.ref, `${path}/ref`);
-    } catch (error: unknown) {
-      if (error instanceof PortableResourcePathError) {
-        fail("documents", `${path}/ref`);
-      }
-      throw error;
-    }
-    const anchor = value.anchor === null
-      ? null
-      : parseCanonicalText(value.anchor, `${path}/anchor`);
-    const target = `${ref}#${anchor ?? ""}`;
-    if (labels.has(label) || targets.has(target)) {
-      fail("documents", path);
-    }
-    labels.add(label);
-    targets.add(target);
-    documents.push(Object.freeze({ label, ref, anchor }));
+  const roles = new Set<string>(
+    intake.authorityRefs.map((reference) => reference.role),
+  );
+  for (const role of REQUIRED_AUTHORITY_ROLES[intake.demandType]) {
+    if (!roles.has(role)) fail("authority", "$/authorityRefs");
   }
-  if (documents.length === 0) fail("documents", "$/documents");
-  return Object.freeze(documents) as TodoIntake["documents"];
+  const environmentRefs = intake.authorityRefs.filter(
+    (reference) => reference.role === "test-environment",
+  );
+  if (intake.testingDecision.mode === "real-environment") {
+    if (
+      intake.testingDecision.environmentMemberRef === null
+      || environmentRefs.length !== 1
+      || environmentRefs[0]?.memberRef
+        !== intake.testingDecision.environmentMemberRef
+    ) {
+      fail("testing-decision", "$/testingDecision/environmentMemberRef");
+    }
+  } else if (intake.testingDecision.environmentMemberRef !== null) {
+    fail("testing-decision", "$/testingDecision/environmentMemberRef");
+  }
 }
 
 function normalizeWire(wire: Readonly<TodoIntakeWire>): Readonly<TodoIntake> {
@@ -267,31 +385,39 @@ function normalizeWire(wire: Readonly<TodoIntakeWire>): Readonly<TodoIntake> {
     if (error instanceof TodoItemIdError) fail("identifier", "$/todoId");
     throw error;
   }
-  return Object.freeze({
+  const intake = Object.freeze({
     artifactKind: TODO_INTAKE_ARTIFACT_KIND,
     schemaVersion: TODO_INTAKE_SCHEMA_VERSION,
+    programId: parseDurableId(wire.programId, "program", "$/programId"),
     todoId,
     createdAt: parseCreatedAt(wire.createdAt),
-    initialStatus: wire.initialStatus,
-    type: wire.type,
+    demandType: wire.demandType,
     priority: wire.priority,
-    ownerWindowId: parseWindowId(wire.ownerWindowId, "$/ownerWindowId"),
-    goal: parseCanonicalText(wire.goal, "$/goal"),
-    affectsRetestOrDispatch: wire.affectsRetestOrDispatch,
-    dependency: wire.dependency === null
-      ? null
-      : parseCanonicalText(wire.dependency, "$/dependency"),
-    recommendedWindowId: parseWindowId(
-      wire.recommendedWindowId,
-      "$/recommendedWindowId",
+    originWindowId: parseDurableId(
+      wire.originWindowId,
+      "window",
+      "$/originWindowId",
     ),
+    controllerWindowId: parseDurableId(
+      wire.controllerWindowId,
+      "window",
+      "$/controllerWindowId",
+    ),
+    summary: parseCanonicalText(wire.summary, "$/summary"),
+    intakeRationale: parseCanonicalText(
+      wire.intakeRationale,
+      "$/intakeRationale",
+    ),
+    readiness: parseReadiness(wire.readiness),
     autoClaim: wire.autoClaim,
-    testingDecision: parseTestingDecision(wire),
-    documents: parseDocuments(wire.documents),
+    testingDecision: parseTestingDecision(wire.testingDecision),
+    authorityRefs: parseAuthorityRefs(wire.authorityRefs),
   });
+  assertRelations(intake);
+  return intake;
 }
 
-/** 解析任意内存值为不可变 TODO intake 领域模型。 */
+/** 将任意内存值解析为不可变的 TODO Intake 领域模型。 */
 export function parseTodoIntake(value: unknown): Readonly<TodoIntake> {
   let json: JsonValue;
   try {
@@ -338,19 +464,19 @@ export function createTodoIntake(
   const admitted = parseTodoIntake({
     artifactKind: TODO_INTAKE_ARTIFACT_KIND,
     schemaVersion: TODO_INTAKE_SCHEMA_VERSION,
+    programId: record.programId,
     todoId: record.todoId,
     createdAt: DRAFT_VALIDATION_INSTANT,
-    initialStatus: record.initialStatus,
-    type: record.type,
+    demandType: record.demandType,
     priority: record.priority,
-    ownerWindowId: record.ownerWindowId,
-    goal: record.goal,
-    affectsRetestOrDispatch: record.affectsRetestOrDispatch,
-    dependency: record.dependency,
-    recommendedWindowId: record.recommendedWindowId,
+    originWindowId: record.originWindowId,
+    controllerWindowId: record.controllerWindowId,
+    summary: record.summary,
+    intakeRationale: record.intakeRationale,
+    readiness: record.readiness,
     autoClaim: record.autoClaim,
     testingDecision: record.testingDecision,
-    documents: record.documents,
+    authorityRefs: parseDraftAuthorityRefs(record.authorityRefs),
   });
   let createdAt: UtcInstant;
   try {
@@ -362,12 +488,12 @@ export function createTodoIntake(
   return Object.freeze({ ...admitted, createdAt });
 }
 
-/** 渲染具有唯一字段顺序的确定性美化 JSON 字节。 */
+/** 渲染具有唯一字段顺序的确定性美化JSON字节。 */
 export function renderTodoIntake(intake: unknown): string {
   return renderDeterministicJsonDocument(parseTodoIntake(intake), "$intake");
 }
 
-/** 解析磁盘文档，并拒绝领域字段顺序或格式化表示发生漂移。 */
+/** 解析磁盘文档，并拒绝领域字段顺序或格式化表示漂移。 */
 export function parseTodoIntakeDocument(text: unknown): Readonly<TodoIntake> {
   let json: JsonValue;
   try {
@@ -385,7 +511,5 @@ export function parseTodoIntakeDocument(text: unknown): Readonly<TodoIntake> {
 
 /** 计算 Intake 的 Canonical JSON 语义摘要，不绑定格式化字节。 */
 export function computeTodoIntakeDigest(intake: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseTodoIntake(intake),
-  );
+  return computeCanonicalJsonSha256Digest(parseTodoIntake(intake));
 }

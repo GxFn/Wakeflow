@@ -15,7 +15,6 @@ import {
   withRootedExclusiveFileLock,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
-  UtcWallClockError,
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
 import {
@@ -57,11 +56,13 @@ import {
   TODO_TRANSACTIONS_ROOT_REF,
 } from "./todo-paths.js";
 import {
+  activateTodoState,
   archiveTodoState,
   claimTodoState,
   createInitialTodoState,
   TodoStateError,
   type TodoState,
+  withdrawTodoState,
 } from "./todo-state.js";
 import type { TodoTransactionOperation } from "./todo-transaction.js";
 import {
@@ -117,6 +118,17 @@ interface ParsedSignalOptions {
 const CLAIM_FIELDS = Object.freeze([
   "intakeDigest",
   "mount",
+  "stateDigest",
+  "todoId",
+] as const);
+const ACTIVATE_FIELDS = Object.freeze([
+  "intakeDigest",
+  "stateDigest",
+  "todoId",
+] as const);
+const WITHDRAW_FIELDS = Object.freeze([
+  "intakeDigest",
+  "reason",
   "stateDigest",
   "todoId",
 ] as const);
@@ -312,8 +324,10 @@ function createIntakeForAppend(
   try {
     return createTodoIntake(draft, clock === undefined ? {} : { clock });
   } catch (error: unknown) {
-    if (error instanceof TodoIntakeError) fail("input", "$draft");
-    if (error instanceof UtcWallClockError) fail("input", "$options/clock");
+    if (error instanceof TodoIntakeError) {
+      if (error.reason === "time") fail("input", "$options/clock");
+      fail("input", "$draft");
+    }
     throw error;
   }
 }
@@ -328,9 +342,49 @@ function claimStateForMutation(
   } catch (error: unknown) {
     if (error instanceof TodoStateError) {
       if (error.reason === "status") fail("transition", "$claim");
+      if (error.reason === "time") fail("input", "$options/clock");
       fail("input", "$claim");
     }
-    if (error instanceof UtcWallClockError) fail("input", "$options/clock");
+    throw error;
+  }
+}
+
+function activateStateForMutation(
+  current: Readonly<TodoState>,
+  clock: UtcWallClock | undefined,
+): Readonly<TodoState> {
+  try {
+    return activateTodoState(
+      current,
+      clock === undefined ? {} : { clock },
+    );
+  } catch (error: unknown) {
+    if (error instanceof TodoStateError) {
+      if (error.reason === "status") fail("transition", "$activate");
+      if (error.reason === "time") fail("input", "$options/clock");
+      fail("input", "$activate");
+    }
+    throw error;
+  }
+}
+
+function withdrawStateForMutation(
+  current: Readonly<TodoState>,
+  reason: unknown,
+  clock: UtcWallClock | undefined,
+): Readonly<TodoState> {
+  try {
+    return withdrawTodoState(
+      current,
+      { reason },
+      clock === undefined ? {} : { clock },
+    );
+  } catch (error: unknown) {
+    if (error instanceof TodoStateError) {
+      if (error.reason === "status") fail("transition", "$withdraw");
+      if (error.reason === "time") fail("input", "$options/clock");
+      fail("input", "$withdraw/reason");
+    }
     throw error;
   }
 }
@@ -352,11 +406,26 @@ function archiveStateForMutation(
       if (error.reason === "archive") {
         fail("authorization", "$archive/receipt");
       }
+      if (error.reason === "time") fail("input", "$options/clock");
       fail("input", "$archive/receipt");
     }
-    if (error instanceof UtcWallClockError) fail("input", "$options/clock");
     throw error;
   }
+}
+
+function expectedItemForMutation(
+  current: Readonly<TodoCollectionAuthoritySnapshot>,
+  todoId: TodoItemId,
+  intakeDigest: Sha256Digest,
+  stateDigest: Sha256Digest,
+  path: string,
+): Readonly<StoredTodoCollectionItem> {
+  const item = current.items.find((entry) => entry.todoId === todoId);
+  if (item === undefined) fail("not-found", `${path}/todoId`);
+  if (item.intakeDigest !== intakeDigest || item.stateDigest !== stateDigest) {
+    fail("cas-mismatch", path);
+  }
+  return item;
 }
 
 function lineageFor(
@@ -465,6 +534,84 @@ export async function appendTodoItem(
   });
 }
 
+/** 根据精确的Intake/State预期，把等待触发的条目提交为可领取状态。 */
+export async function activateTodoItem(
+  root: RootedDirectory,
+  input: unknown,
+  options?: TodoCollectionMutationOptions,
+): Promise<Readonly<TodoCollectionMutationResult>> {
+  const values = exactInput(input, ACTIVATE_FIELDS, "$activate");
+  const todoId = parseItemId(values.todoId, "$activate/todoId");
+  const intakeDigest = parseDigest(
+    values.intakeDigest,
+    "$activate/intakeDigest",
+  );
+  const stateDigest = parseDigest(values.stateDigest, "$activate/stateDigest");
+  const parsed = parseMutationOptions(options);
+  return runLocked(root, parsed.signal, "$activate", async () => {
+    const current = await inspectStrict(root, parsed.signal);
+    assertCollectionExpectation(current, parsed.expectedCollectionDigest);
+    const item = expectedItemForMutation(
+      current,
+      todoId,
+      intakeDigest,
+      stateDigest,
+      "$activate",
+    );
+    const target = activateStateForMutation(item.state, parsed.clock);
+    return itemResult(await commitTodoCollectionTransaction(
+      root,
+      "activate",
+      current,
+      item.intake,
+      item.state,
+      target,
+      parsed.signal,
+    ));
+  });
+}
+
+/** 根据精确的Intake/State预期，把尚未形成Demand的条目提交为撤回终态。 */
+export async function withdrawTodoItem(
+  root: RootedDirectory,
+  input: unknown,
+  options?: TodoCollectionMutationOptions,
+): Promise<Readonly<TodoCollectionMutationResult>> {
+  const values = exactInput(input, WITHDRAW_FIELDS, "$withdraw");
+  const todoId = parseItemId(values.todoId, "$withdraw/todoId");
+  const intakeDigest = parseDigest(
+    values.intakeDigest,
+    "$withdraw/intakeDigest",
+  );
+  const stateDigest = parseDigest(values.stateDigest, "$withdraw/stateDigest");
+  const parsed = parseMutationOptions(options);
+  return runLocked(root, parsed.signal, "$withdraw", async () => {
+    const current = await inspectStrict(root, parsed.signal);
+    assertCollectionExpectation(current, parsed.expectedCollectionDigest);
+    const item = expectedItemForMutation(
+      current,
+      todoId,
+      intakeDigest,
+      stateDigest,
+      "$withdraw",
+    );
+    const target = withdrawStateForMutation(
+      item.state,
+      values.reason,
+      parsed.clock,
+    );
+    return itemResult(await commitTodoCollectionTransaction(
+      root,
+      "withdraw",
+      current,
+      item.intake,
+      item.state,
+      target,
+      parsed.signal,
+    ));
+  });
+}
+
 /** 根据精确的接收记录/状态预期前向提交领取操作。 */
 export async function claimTodoItem(
   root: RootedDirectory,
@@ -479,11 +626,13 @@ export async function claimTodoItem(
   return runLocked(root, parsed.signal, "$claim", async () => {
     const current = await inspectStrict(root, parsed.signal);
     assertCollectionExpectation(current, parsed.expectedCollectionDigest);
-    const item = current.items.find((entry) => entry.todoId === todoId);
-    if (item === undefined) fail("not-found", "$claim/todoId");
-    if (item.intakeDigest !== intakeDigest || item.stateDigest !== stateDigest) {
-      fail("cas-mismatch", "$claim");
-    }
+    const item = expectedItemForMutation(
+      current,
+      todoId,
+      intakeDigest,
+      stateDigest,
+      "$claim",
+    );
     const target = claimStateForMutation(item.state, values.mount, parsed.clock);
     return itemResult(await commitTodoCollectionTransaction(
       root,
@@ -511,11 +660,13 @@ export async function archiveTodoItem(
   return runLocked(root, parsed.signal, "$archive", async () => {
     const current = await inspectStrict(root, parsed.signal);
     assertCollectionExpectation(current, parsed.expectedCollectionDigest);
-    const item = current.items.find((entry) => entry.todoId === todoId);
-    if (item === undefined) fail("not-found", "$archive/todoId");
-    if (item.intakeDigest !== intakeDigest || item.stateDigest !== stateDigest) {
-      fail("cas-mismatch", "$archive");
-    }
+    const item = expectedItemForMutation(
+      current,
+      todoId,
+      intakeDigest,
+      stateDigest,
+      "$archive",
+    );
     const target = archiveStateForMutation(
       item.state,
       values.receipt,

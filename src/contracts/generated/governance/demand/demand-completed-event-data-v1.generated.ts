@@ -8,7 +8,7 @@
  */
 export type WakeflowSha256DigestText = string
 /**
- * TODO intake 使用的稳定、用户可读 opaque ID；允许字母、数字、点、下划线、冒号和连字符，不从标题或路径推导。
+ * TODO intake 使用的 Wakeflow 持久类型化身份；由 owner 分配，不从标题、路径、时间或集合位置推导。
  */
 export type WakeflowTodoItemIdText = string
 /**

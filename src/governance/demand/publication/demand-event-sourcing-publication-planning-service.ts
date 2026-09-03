@@ -12,6 +12,7 @@ import {
   type WakeflowDurableId,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parsePlainRecord,
   PassiveOwnDataError,
@@ -299,7 +300,10 @@ async function readPendingTodo(
 }
 
 function selectionKey(
-  value: Readonly<DemandEventSourcingPublicationAuthorityMemberSelection>,
+  value: Readonly<{
+    readonly recordId: string;
+    readonly memberPath: string;
+  }>,
 ): string {
   return `${value.recordId}\u0000${value.memberPath}`;
 }
@@ -332,7 +336,7 @@ async function loadSelectedRecord(
 async function selectAuthority(
   store: LedgerAuthorityStore,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
-  request: Readonly<DemandEventSourcingPublicationPreviewRequest>,
+  todo: Readonly<PendingTodoSource>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<SelectedAuthority>> {
   const loadedByRecordId = new Map<
@@ -346,11 +350,15 @@ async function selectAuthority(
   >();
   let confirmationDemandId: WakeflowDurableId<"demand"> | null = null;
 
-  for (const selection of request.authorityMembers) {
-    let loaded = loadedByRecordId.get(selection.recordId);
+  for (const expected of todo.item.intake.authorityRefs) {
+    const selection = {
+      recordId: expected.recordId,
+      memberPath: expected.memberPath,
+    } as const;
+    let loaded = loadedByRecordId.get(expected.recordId);
     if (loaded === undefined) {
       loaded = await loadSelectedRecord(store, selection, signal);
-      loadedByRecordId.set(selection.recordId, loaded);
+      loadedByRecordId.set(expected.recordId, loaded);
       if (loaded.record.programId !== config.model.program.programId) {
         fail("authority");
       }
@@ -375,6 +383,12 @@ async function selectAuthority(
         fail("authority", error);
       }
       throw error;
+    }
+    if (
+      computeCanonicalJsonSha256Digest(reference)
+        !== computeCanonicalJsonSha256Digest(expected)
+    ) {
+      fail("authority");
     }
     references.push(reference);
     referenceBySelection.set(selectionKey(selection), reference);
@@ -453,7 +467,7 @@ function createIdentityAndAuthority(
         title: request.demand.title,
         goal: request.demand.goal,
         completionDefinition: request.demand.completionDefinition,
-        demandType: todo.item.intake.type,
+        demandType: todo.item.intake.demandType,
         source: todo.lineage,
         executionPlacement: executionPlacement(request, selected),
       },
@@ -603,7 +617,7 @@ export class DemandEventSourcingPublicationPlanningService {
       const selected = await selectAuthority(
         new LedgerAuthorityStore(ledgerRoot),
         config,
-        request,
+        todo,
         options.signal,
       );
 

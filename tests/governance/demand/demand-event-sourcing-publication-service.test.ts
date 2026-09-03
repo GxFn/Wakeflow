@@ -65,6 +65,7 @@ import {
 import {
   materializeWakeflowActiveLayout,
 } from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
+import { todoIntakeDraft } from "../todo/todo-intake.fixture.js";
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -112,27 +113,6 @@ async function fixture(todoId: string) {
     recoveringFreshLayout: false,
   });
   await initializeTodoCollection(workspaceRoot, { freshWorkspace: true });
-  const appended = await appendTodoItem(workspaceRoot, {
-    todoId,
-    initialStatus: "pending-claim",
-    type: "requirement",
-    priority: "P1",
-    ownerWindowId: "window_55555555-5555-4555-8555-555555555555",
-    goal: "实现标准 Demand Event Sourcing",
-    affectsRetestOrDispatch: false,
-    dependency: null,
-    recommendedWindowId: "window_66666666-6666-4666-8666-666666666666",
-    autoClaim: true,
-    testingDecision: {
-      mode: "controller-only",
-      summary: "新增 TypeScript 聚焦测试",
-    },
-    documents: [{
-      label: "requirement",
-      ref: `requirements/${REQUIREMENT_ID}/record.json`,
-      anchor: null,
-    }],
-  }, { clock: () => CREATED_AT });
 
   const ledgerStore = new LedgerAuthorityStore(ledgerRoot);
   await ledgerStore.initialize({ freshLedger: true });
@@ -156,6 +136,26 @@ async function fixture(todoId: string) {
     requirement,
     members.map(({ path: memberPath, bytes }) => ({ path: memberPath, bytes })),
   );
+  const requirementAuthorityRefs = published.loaded.documents.map((document) => (
+    createLedgerAuthorityMemberReference(published.loaded, document.path)
+  ));
+  const appended = await appendTodoItem(
+    workspaceRoot,
+    todoIntakeDraft(todoId, {
+      programId: PROGRAM_ID,
+      originWindowId: "window_66666666-6666-4666-8666-666666666666",
+      controllerWindowId: "window_55555555-5555-4555-8555-555555555555",
+      summary: "实现标准 Demand Event Sourcing",
+      intakeRationale: "已发布的 Ledger Authority 可以进入 Demand 发布。",
+      testingDecision: {
+        mode: "controller-only",
+        summary: "新增 TypeScript 聚焦测试",
+        environmentMemberRef: null,
+      },
+      authorityRefs: requirementAuthorityRefs,
+    }),
+    { clock: () => CREATED_AT },
+  );
   const identity = createDemandIdentity({
     programId: PROGRAM_ID,
     demandId: DEMAND_ID,
@@ -167,9 +167,7 @@ async function fixture(todoId: string) {
     executionPlacement: { mode: "main" },
   }, { clock: () => CREATED_AT });
   const authority = createDemandAuthority(identity, {
-    authorityRefs: published.loaded.documents.map((document) => (
-      createLedgerAuthorityMemberReference(published.loaded, document.path)
-    )),
+    authorityRefs: requirementAuthorityRefs,
     testingDecision: {
       mode: "controller-only",
       summary: "新增 TypeScript 聚焦测试",
@@ -208,7 +206,7 @@ function publishInput(value: Awaited<ReturnType<typeof fixture>>) {
 }
 
 test("publication uses Command Handler and binds exact TODO predecessor", async () => {
-  const value = await fixture("TODO-RH2-PUBLISH");
+  const value = await fixture("todo_e50c89b4-c5e6-4f7e-8a01-33ec39f24bb7");
   try {
     const result = await publishDemandFromTodo(
       value.workspaceRoot,
@@ -234,7 +232,7 @@ test("publication uses Command Handler and binds exact TODO predecessor", async 
 });
 
 test("sidecar-only publication recovers without an event append journal", async () => {
-  const value = await fixture("TODO-RH2-SIDECAR-RECOVERY");
+  const value = await fixture("todo_5dc6c7ed-6bd6-4811-8489-34c053848793");
   try {
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
     const transaction = createDemandEventSourcingPublicationTransaction(
@@ -295,7 +293,7 @@ test("sidecar-only publication recovers without an event append journal", async 
 });
 
 test("publication recovery 回滚 canonical sidecar 之前的 inactive partial stage", async () => {
-  const value = await fixture("TODO-RH2-PARTIAL-SIDECAR");
+  const value = await fixture("todo_0d587ce5-c18f-4262-8074-f799d7a2b894");
   try {
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
     const transaction = createDemandEventSourcingPublicationTransaction(
@@ -345,7 +343,7 @@ test("publication recovery 回滚 canonical sidecar 之前的 inactive partial s
 });
 
 test("recovery without publication storage performs no initialization effects", async () => {
-  const value = await fixture("TODO-RH2-NO-RECOVERY-EVIDENCE");
+  const value = await fixture("todo_78f8ebd7-3d85-408d-8305-10dc34f996fe");
   try {
     let caught: unknown;
     try {
@@ -372,7 +370,7 @@ test("recovery without publication storage performs no initialization effects", 
 });
 
 test("published root marker is settled before normal authority load", async () => {
-  const value = await fixture("TODO-RH2-ROOT-RECOVERY");
+  const value = await fixture("todo_269fc19a-d964-4ae7-8552-2c79c36dfa28");
   try {
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
     const transaction = createDemandEventSourcingPublicationTransaction(
@@ -440,7 +438,7 @@ test("published root marker is settled before normal authority load", async () =
 });
 
 test("publication recovery first settles an interrupted TODO claim", async () => {
-  const value = await fixture("TODO-RH2-TODO-RECOVERY");
+  const value = await fixture("todo_6fa009bc-2390-47f6-84d9-cf9a182f7732");
   const projectionPath = path.join(
     value.workspacePath,
     ".wakeflow-active/current/todo/global-todo-board.md",
@@ -483,7 +481,7 @@ test("publication recovery first settles an interrupted TODO claim", async () =>
 });
 
 test("normal publication does not recover TODO residue before sidecar commit", async () => {
-  const value = await fixture("TODO-RH2-PREFLIGHT-RESIDUE");
+  const value = await fixture("todo_a4620e01-3f57-4adc-8499-36d218d8cd0a");
   const projectionPath = path.join(
     value.workspacePath,
     ".wakeflow-active/current/todo/global-todo-board.md",
@@ -542,7 +540,7 @@ test("normal publication does not recover TODO residue before sidecar commit", a
 });
 
 test("unresolved Authority has no publication effects", async () => {
-  const value = await fixture("TODO-RH2-BAD-AUTHORITY");
+  const value = await fixture("todo_aed61111-87fb-45e0-8aba-77adb0f507af");
   try {
     const badAuthority = {
       ...value.authority,

@@ -18,6 +18,13 @@ import { executeTargetTaskPlanningPublicRequest } from "../governance/tasking/ta
 import { executeDemandControllerRoutePublicRequest } from "../governance/controller/demand-controller-route-public-coordinator.js";
 import { executeDemandCompletionPublicRequest } from "../governance/lifecycle/demand-completion-public-coordinator.js";
 import { executeDemandPublicationPublicRequest } from "../governance/demand/publication/demand-publication-public-coordinator.js";
+import { executeManagedEvidencePublicRequest } from "../governance/evidence/managed-evidence-public-coordinator.js";
+import {
+  executeConfirmationPublicationPublicRequest,
+  executeRequirementPublicationPublicRequest,
+} from "../governance/ledger/ledger-authority-public-coordinator.js";
+import { executeTodoInspectionPublicRequest } from "../governance/todo/todo-inspection-public-coordinator.js";
+import { executeTodoIntakePublicationPublicRequest } from "../governance/todo/todo-intake-publication-public-coordinator.js";
 import { executeTargetResultReviewResumePublicRequest } from "../governance/review/target-result-review-resume-public-coordinator.js";
 import { executeTestCardPlanningPublicRequest } from "../governance/testing/test-card-planning-public-coordinator.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
@@ -25,7 +32,7 @@ import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 /** Codex 制品内固定的 MCP server identity；版本由制品装配入口注入。 */
 const CODEX_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-codex" as const;
 
-/** 创建固定组合Maintenance、Controller Route、Tasking、Delivery与Binding的Codex MCP server。 */
+/** 创建固定组合Maintenance、Ledger/TODO/Evidence、Controller Route、Tasking、Delivery与Binding的Codex MCP server。 */
 export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
   return createWakeflowPublicMcpServer({
     serverName: CODEX_WAKEFLOW_MCP_SERVER_NAME,
@@ -33,9 +40,14 @@ export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
     executeMaintenance: executeCodexWakeflowMaintenance,
     completeDemand: executeDemandCompletionPublicRequest,
     createDemand: executeDemandPublicationPublicRequest,
+    recordManagedEvidence: executeManagedEvidencePublicRequest,
+    publishConfirmation: executeConfirmationPublicationPublicRequest,
+    publishRequirement: executeRequirementPublicationPublicRequest,
     inspectDemandRoute: executeDemandControllerRoutePublicRequest,
     importTargetResult: executeCodexTargetResultImport,
     inspectTargetResultReview: executeCodexTargetResultReviewInspection,
+    inspectTodo: executeTodoInspectionPublicRequest,
+    intakeTodo: executeTodoIntakePublicationPublicRequest,
     resumeTargetResultReview: executeTargetResultReviewResumePublicRequest,
     planTargetTask: executeTargetTaskPlanningPublicRequest,
     planTestCard: executeTestCardPlanningPublicRequest,

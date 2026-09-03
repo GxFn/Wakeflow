@@ -11,34 +11,21 @@ import {
   type TodoIntakeErrorReason,
 } from "../../../src/governance/todo/todo-intake.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import {
+  TODO_CONTROLLER_WINDOW_ID,
+  TODO_ORIGIN_WINDOW_ID,
+  TODO_PROGRAM_ID,
+  todoAuthorityRefs,
+  todoIntakeDraft,
+} from "./todo-intake.fixture.js";
 
 const CREATED_AT = parseUtcInstant("2026-08-26T09:00:00.000Z");
+const TODO_ID = "todo_ab1be840-8133-4c97-8eaa-6741625cf4ac";
 
-function draft(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    todoId: "TODO-RH1-001",
-    initialStatus: "pending-claim",
-    type: "requirement",
-    priority: "P1",
-    ownerWindowId: "window_11111111-1111-4111-8111-111111111111",
-    goal: "Implement normalized TODO intake",
-    affectsRetestOrDispatch: false,
-    dependency: null,
-    recommendedWindowId: "window_22222222-2222-4222-8222-222222222222",
-    autoClaim: true,
-    testingDecision: {
-      mode: "controller-only",
-      summary: "Focused target tests",
-    },
-    documents: [
-      {
-        label: "original-plan",
-        ref: "ledger/requirements/TODO-RH1-001/requirement.json",
-        anchor: null,
-      },
-    ],
-    ...overrides,
-  };
+function draft(
+  overrides: Readonly<Record<string, unknown>> = {},
+): Record<string, unknown> {
+  return todoIntakeDraft(TODO_ID, overrides);
 }
 
 function expectIntakeError(
@@ -58,16 +45,23 @@ function expectIntakeError(
   equal(caught.reason, reason);
 }
 
-test("draft creation produces a frozen immutable intake and deterministic document", () => {
+test("draft creation freezes scheduling metadata and immutable Ledger authority", () => {
   const intake = createTodoIntake(draft(), { clock: () => CREATED_AT });
   equal(intake.artifactKind, "wakeflow-todo-intake");
   equal(intake.schemaVersion, 1);
+  equal(intake.programId, TODO_PROGRAM_ID);
+  equal(intake.todoId, TODO_ID);
   equal(intake.createdAt, CREATED_AT);
-  equal(intake.todoId, "TODO-RH1-001");
+  equal(intake.originWindowId, TODO_ORIGIN_WINDOW_ID);
+  equal(intake.controllerWindowId, TODO_CONTROLLER_WINDOW_ID);
+  equal(intake.demandType, "requirement");
+  equal(intake.readiness.status, "ready");
+  equal(intake.authorityRefs.length, 6);
   equal(Object.isFrozen(intake), true);
+  equal(Object.isFrozen(intake.readiness), true);
   equal(Object.isFrozen(intake.testingDecision), true);
-  equal(Object.isFrozen(intake.documents), true);
-  equal(Object.isFrozen(intake.documents[0]), true);
+  equal(Object.isFrozen(intake.authorityRefs), true);
+  equal(Object.isFrozen(intake.authorityRefs[0]), true);
 
   const text = renderTodoIntake(intake);
   equal(text.startsWith('{\n  "artifactKind": "wakeflow-todo-intake",'), true);
@@ -87,60 +81,116 @@ test("semantic digest is stable while domain representation order is exact", () 
   notEqual(reorderedText, renderTodoIntake(intake));
 });
 
-test("testing mode is tied to TODO type", () => {
+test("Demand type closes required roles and testing environment relation", () => {
+  const research = createTodoIntake(draft({
+    demandType: "research",
+  }), { clock: () => CREATED_AT });
+  equal(research.testingDecision.mode, "not-applicable");
+
   expectIntakeError(
     () => createTodoIntake(draft({
-      type: "research",
+      demandType: "research",
       testingDecision: {
         mode: "controller-only",
-        summary: "Inspect only",
+        summary: "Invalid research execution decision",
+        environmentMemberRef: null,
       },
     }), { clock: () => CREATED_AT }),
     "testing-decision",
   );
+
+  const realEnvironment = createTodoIntake(draft({
+    testingDecision: {
+      mode: "real-environment",
+      summary: "Use the confirmed Test environment",
+    },
+  }), { clock: () => CREATED_AT });
+  equal(realEnvironment.testingDecision.mode, "real-environment");
   equal(
-    createTodoIntake(draft({
-      type: "research",
+    realEnvironment.authorityRefs.some((reference) =>
+      reference.memberRef
+        === realEnvironment.testingDecision.environmentMemberRef),
+    true,
+  );
+
+  expectIntakeError(
+    () => createTodoIntake(draft({
       testingDecision: {
-        mode: "not-applicable",
-        summary: "Research has no execution target",
+        mode: "real-environment",
+        summary: "Missing exact environment relation",
+        environmentMemberRef: null,
       },
-    }), { clock: () => CREATED_AT }).type,
-    "research",
+      authorityRefs: todoAuthorityRefs("requirement", "real-environment"),
+    }), { clock: () => CREATED_AT }),
+    "testing-decision",
   );
 });
 
-test("document labels and targets are unique portable structured refs", () => {
-  const duplicate = {
-    label: "original-plan",
-    ref: "ledger/requirements/TODO-RH1-001/requirement.json",
-    anchor: null,
-  };
+test("authority references are complete, unique, and canonically ordered", () => {
+  const refs = todoAuthorityRefs();
+  const normalized = createTodoIntake(draft({
+    authorityRefs: [...refs].reverse(),
+  }), { clock: () => CREATED_AT });
+  deepEqual(normalized.authorityRefs, refs);
   expectIntakeError(
-    () => createTodoIntake(draft({ documents: [duplicate, duplicate] }), {
+    () => createTodoIntake(draft({ authorityRefs: refs.slice(1) }), {
       clock: () => CREATED_AT,
     }),
-    "documents",
+    "authority",
   );
   expectIntakeError(
-    () => createTodoIntake(draft({ documents: [{
-      label: "plan",
-      ref: "../outside.json",
-      anchor: null,
-    }] }), { clock: () => CREATED_AT }),
+    () => parseTodoIntake({
+      ...createTodoIntake(draft(), { clock: () => CREATED_AT }),
+      authorityRefs: [...refs].reverse(),
+    }),
+    "authority",
+  );
+  expectIntakeError(
+    () => createTodoIntake(draft({
+      authorityRefs: [refs[0], refs[0], ...refs.slice(1)],
+    }), { clock: () => CREATED_AT }),
+    "authority",
+  );
+});
+
+test("parked readiness requires a trigger and disables Auto Claim", () => {
+  const parked = createTodoIntake(draft({
+    readiness: {
+      status: "parked",
+      trigger: "Wait for the confirmed upstream decision.",
+    },
+    autoClaim: false,
+  }), { clock: () => CREATED_AT });
+  equal(parked.readiness.status, "parked");
+
+  expectIntakeError(
+    () => createTodoIntake(draft({
+      readiness: {
+        status: "parked",
+        trigger: "Wait for the confirmed upstream decision.",
+      },
+      autoClaim: true,
+    }), { clock: () => CREATED_AT }),
+    "readiness",
+  );
+  expectIntakeError(
+    () => createTodoIntake(draft({
+      readiness: { status: "parked" },
+      autoClaim: false,
+    }), { clock: () => CREATED_AT }),
     "schema",
   );
 });
 
-test("typed IDs, Unicode, schema shape, and draft shape fail distinctly", () => {
+test("typed IDs, canonical text, Schema shape, and draft shape fail distinctly", () => {
   expectIntakeError(
-    () => createTodoIntake(draft({ ownerWindowId: "repository_bad" }), {
+    () => createTodoIntake(draft({ originWindowId: "repository_bad" }), {
       clock: () => CREATED_AT,
     }),
     "schema",
   );
   expectIntakeError(
-    () => createTodoIntake(draft({ goal: "cafe\u0301" }), {
+    () => createTodoIntake(draft({ summary: "cafe\u0301" }), {
       clock: () => CREATED_AT,
     }),
     "text",
@@ -167,7 +217,7 @@ test("draft admission is passive and never executes accessors", () => {
     enumerable: true,
     get() {
       getterCalls += 1;
-      return "TODO-never";
+      return TODO_ID;
     },
   });
   expectIntakeError(
@@ -180,7 +230,7 @@ test("draft admission is passive and never executes accessors", () => {
 test("draft semantics are closed before the wall clock is observed", () => {
   let clockCalls = 0;
   expectIntakeError(
-    () => createTodoIntake(draft({ goal: "cafe\u0301" }), {
+    () => createTodoIntake(draft({ summary: "cafe\u0301" }), {
       clock: () => {
         clockCalls += 1;
         return CREATED_AT;

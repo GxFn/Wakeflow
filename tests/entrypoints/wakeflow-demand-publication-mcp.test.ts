@@ -31,7 +31,6 @@ test("Codex MCP从pending TODO发布Demand并进入首个Controller Route", asyn
         mode: "preview",
         todoId: PUBLICATION_TODO_ID,
         demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
-        authorityMembers: fixture.requirementMembers,
       },
     });
     equal(previewCall.isError, undefined);

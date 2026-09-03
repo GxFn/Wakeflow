@@ -244,7 +244,7 @@ test("Ledger publishes one complete durable tree and idempotently reuses it", as
   }
 });
 
-test("complete private stage recovers from compact intent without member payload", async () => {
+test("complete private stage recovers from exact compact intent without member payload", async () => {
   const { rootPath, root, store } = await fixture();
   try {
     const record = requirementRecord(REQUIREMENT_ID, "Recover staged authority");
@@ -261,12 +261,56 @@ test("complete private stage recovers from compact intent without member payload
       tokenUuid: "99999999-9999-4999-8999-999999999999",
     }), { mode: 0o600 });
 
-    const recovered = await store.recoverRecordPublication(REQUIREMENT_ID);
+    const recovered = await store.recoverExactRecordPublication(
+      publication.intent,
+    );
     equal(recovered.wroteAuthority, true);
     equal(recovered.loaded.recordDigest.length, 71);
     equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), false);
     equal(existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))), false);
     equal(existsSync(lockPath), false);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("exact recovery rejects a different intent before lock or publication", async () => {
+  const { rootPath, root, store } = await fixture();
+  try {
+    const record = requirementRecord(REQUIREMENT_ID, "Exact recovery source");
+    const publication = publicationPlan(record);
+    writeIntent(rootPath, publication.intent);
+    await createDirectoryTreeCandidateDurably(
+      root,
+      publication.intent.stageRef,
+      publication.files,
+      CANDIDATE_OPTIONS,
+    );
+    const conflicting = publicationPlan(
+      requirementRecord(REQUIREMENT_ID, "Conflicting recovery source"),
+    );
+
+    await expectStoreError(
+      () => store.recoverExactRecordPublication(conflicting.intent),
+      "conflict",
+    );
+    equal(
+      existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))),
+      true,
+    );
+    equal(
+      existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))),
+      true,
+    );
+    equal(
+      existsSync(path.join(rootPath, ...publication.intent.finalRootRef.split("/"))),
+      false,
+    );
+    equal(
+      existsSync(path.join(rootPath, ...publication.intent.lockRef.split("/"))),
+      false,
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -313,7 +357,7 @@ test("incomplete stage requests exact input and publish retry fills only missing
     );
 
     await expectStoreError(
-      () => store.recoverRecordPublication(REQUIREMENT_ID),
+      () => store.recoverExactRecordPublication(publication.intent),
       "recovery-input-required",
     );
     equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), true);

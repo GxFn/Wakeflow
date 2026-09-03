@@ -44,7 +44,6 @@ test("Publication Planning preview derives main and isolated plans without write
             demand: demandEventSourcingPublicationAuthoredDemand({
               mode: "main",
             }),
-            authorityMembers: [...fixture.requirementMembers].reverse(),
           },
           {
             uuidFactory: demandEventSourcingPublicationUuidFactory(
@@ -86,6 +85,12 @@ test("Publication Planning preview derives main and isolated plans without write
           ),
           [...PUBLICATION_REQUIRED_ROLES].sort(),
         );
+        const sourceTodo = (await inspectTodoItems(fixture.workspaceRoot)).items
+          .find((item) => item.todoId === PUBLICATION_TODO_ID);
+        deepEqual(
+          preview.plan.authority.authorityRefs,
+          sourceTodo?.intake.authorityRefs,
+        );
         equal(
           preview.plan.expectedTodoStateDigest,
           fixture.initialTodoStateDigest,
@@ -106,128 +111,108 @@ test("Publication Planning preview derives main and isolated plans without write
     await t.test(
       "isolated placement derives Demand identity from Confirmation",
       async () => {
+        const isolatedFixture =
+          await createDemandEventSourcingPublicationWorkspaceFixture("isolated");
         const uuidCalls = { value: 0 };
         const clockCalls = { value: 0 };
-        const preview = await service.preview(
-          {
-            todoId: PUBLICATION_TODO_ID,
-            demand: demandEventSourcingPublicationAuthoredDemand({
-              mode: "isolated",
-              authorizationMember: fixture.confirmationA,
-            }),
-            authorityMembers: [
-              ...fixture.requirementMembers,
-              fixture.confirmationA,
-            ],
-          },
-          {
-            uuidFactory: demandEventSourcingPublicationUuidFactory(
-              [
-                "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-                "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
-              ],
-              uuidCalls,
-            ),
-            clock: () => {
-              clockCalls.value += 1;
-              return PUBLICATION_RECORDED_AT;
+        try {
+          const preview = await new DemandEventSourcingPublicationPlanningService(
+            isolatedFixture.workspaceRoot,
+          ).preview(
+            {
+              todoId: PUBLICATION_TODO_ID,
+              demand: demandEventSourcingPublicationAuthoredDemand({
+                mode: "isolated",
+                authorizationMember: isolatedFixture.confirmationA,
+              }),
             },
-          },
-        );
+            {
+              uuidFactory: demandEventSourcingPublicationUuidFactory(
+                [
+                  "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                  "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+                ],
+                uuidCalls,
+              ),
+              clock: () => {
+                clockCalls.value += 1;
+                return PUBLICATION_RECORDED_AT;
+              },
+            },
+          );
 
-        equal(preview.plan.demandId, PUBLICATION_CONFIRMATION_DEMAND_A);
-        equal(
-          preview.plan.identity.demandId,
-          PUBLICATION_CONFIRMATION_DEMAND_A,
-        );
-        equal(preview.plan.identity.executionPlacement.mode, "isolated");
-        if (preview.plan.identity.executionPlacement.mode === "isolated") {
           equal(
-            preview.plan.identity.executionPlacement.authorizationRef.recordId,
-            PUBLICATION_CONFIRMATION_A_ID,
+            preview.plan.demandId,
+            PUBLICATION_CONFIRMATION_DEMAND_A,
           );
           equal(
-            preview.plan.identity.executionPlacement.authorizationRef.role,
-            "goal-stage-decision",
+            preview.plan.identity.demandId,
+            PUBLICATION_CONFIRMATION_DEMAND_A,
+          );
+          equal(preview.plan.identity.executionPlacement.mode, "isolated");
+          if (preview.plan.identity.executionPlacement.mode === "isolated") {
+            equal(
+              preview.plan.identity.executionPlacement.authorizationRef.recordId,
+              PUBLICATION_CONFIRMATION_A_ID,
+            );
+            equal(
+              preview.plan.identity.executionPlacement.authorizationRef.role,
+              "goal-stage-decision",
+            );
+          }
+          equal(uuidCalls.value, 2);
+          equal(clockCalls.value, 1);
+        } finally {
+          await cleanupDemandEventSourcingPublicationWorkspaceFixture(
+            isolatedFixture,
           );
         }
-        equal(uuidCalls.value, 2);
-        equal(clockCalls.value, 1);
       },
     );
 
     await t.test(
       "conflicting Confirmation demand identities fail before allocation",
       async () => {
+        const conflictingFixture =
+          await createDemandEventSourcingPublicationWorkspaceFixture(
+            "conflicting-confirmations",
+          );
         const uuidCalls = { value: 0 };
         const clockCalls = { value: 0 };
-        await rejects(
-          service.preview(
-            {
-              todoId: PUBLICATION_TODO_ID,
-              demand: demandEventSourcingPublicationAuthoredDemand({
-                mode: "main",
-              }),
-              authorityMembers: [
-                ...fixture.requirementMembers,
-                fixture.confirmationA,
-                fixture.confirmationB,
-              ],
-            },
-            {
-              uuidFactory: demandEventSourcingPublicationUuidFactory(
-                ["ffffffff-ffff-4fff-8fff-ffffffffffff"],
-                uuidCalls,
-              ),
-              clock: () => {
-                clockCalls.value += 1;
-                return PUBLICATION_RECORDED_AT;
+        try {
+          await rejects(
+            new DemandEventSourcingPublicationPlanningService(
+              conflictingFixture.workspaceRoot,
+            ).preview(
+              {
+                todoId: PUBLICATION_TODO_ID,
+                demand: demandEventSourcingPublicationAuthoredDemand({
+                  mode: "main",
+                }),
               },
-            },
-          ),
-          (error: unknown) =>
-            error instanceof
-              DemandEventSourcingPublicationPlanningServiceError &&
-            error.reason === "authority",
-        );
-        equal(uuidCalls.value, 0);
-        equal(clockCalls.value, 0);
-      },
-    );
-
-    await t.test(
-      "incomplete role closure fails before allocation",
-      async () => {
-        const uuidCalls = { value: 0 };
-        const clockCalls = { value: 0 };
-        await rejects(
-          service.preview(
-            {
-              todoId: PUBLICATION_TODO_ID,
-              demand: demandEventSourcingPublicationAuthoredDemand({
-                mode: "main",
-              }),
-              authorityMembers: [fixture.requirementMembers[0]],
-            },
-            {
-              uuidFactory: demandEventSourcingPublicationUuidFactory(
-                ["ffffffff-ffff-4fff-8fff-ffffffffffff"],
-                uuidCalls,
-              ),
-              clock: () => {
-                clockCalls.value += 1;
-                return PUBLICATION_RECORDED_AT;
+              {
+                uuidFactory: demandEventSourcingPublicationUuidFactory(
+                  ["ffffffff-ffff-4fff-8fff-ffffffffffff"],
+                  uuidCalls,
+                ),
+                clock: () => {
+                  clockCalls.value += 1;
+                  return PUBLICATION_RECORDED_AT;
+                },
               },
-            },
-          ),
-          (error: unknown) =>
-            error instanceof
-              DemandEventSourcingPublicationPlanningServiceError &&
-            error.reason === "authority" &&
-            error.causeReason === "role",
-        );
-        equal(uuidCalls.value, 0);
-        equal(clockCalls.value, 0);
+            ),
+            (error: unknown) =>
+              error instanceof
+                DemandEventSourcingPublicationPlanningServiceError &&
+              error.reason === "authority",
+          );
+          equal(uuidCalls.value, 0);
+          equal(clockCalls.value, 0);
+        } finally {
+          await cleanupDemandEventSourcingPublicationWorkspaceFixture(
+            conflictingFixture,
+          );
+        }
       },
     );
 

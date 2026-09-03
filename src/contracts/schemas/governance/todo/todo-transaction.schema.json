@@ -3,8 +3,8 @@
   "$id": "urn:wakeflow:governance:todo:transaction:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TODO_TRANSACTION_SCHEMA",
   "title": "WakeflowTodoTransaction",
-  "description": "一个 TODO item append、claim 或 archive 的 immutable recovery plan；expected 与 target digest 允许 owner 判断前向恢复、幂等重放或冲突。",
-  "$comment": "Journal 不保存可变 phase。磁盘 effect 顺序、lock、projection publish 和 exact journal retirement 由 TODO collection owner 执行。",
+  "description": "TODO 条目 append、activate、withdraw、claim 或 archive 的不可变恢复计划；前序与目标摘要用于判断前向恢复、幂等重放或冲突。",
+  "$comment": "Journal 不保存可变阶段。操作与目标状态关系由 Transaction codec 校验；源状态授权、磁盘效果顺序、锁、投影发布和精确退休由 TODO Collection owner 负责。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -35,6 +35,8 @@
     "operation": {
       "enum": [
         "append",
+        "activate",
+        "withdraw",
         "claim",
         "archive"
       ]

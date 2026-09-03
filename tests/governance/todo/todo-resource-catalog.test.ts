@@ -116,7 +116,9 @@ test("TODO static resource catalog closes roots, lock, and projection", () => {
 });
 
 test("TODO item resource catalog binds one concrete aggregate without cataloging stages", () => {
-  const todoId = parseTodoItemId("TODO:RH1:CATALOG");
+  const todoId = parseTodoItemId(
+    "todo_55555555-5555-4555-8555-555555555555",
+  );
   const storageKey = todoItemStorageKey(todoId);
   const catalog = createTodoItemResourceCatalog(todoId);
 

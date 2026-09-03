@@ -45,6 +45,7 @@ import {
   materializeLedgerAuthorityLayout,
 } from "./ledger-authority-layout.js";
 import {
+  recoverExactLedgerAuthorityRecordPublication,
   recoverLedgerAuthorityRecordPublication,
 } from "./ledger-record-publication-recovery.js";
 import { publishLedgerAuthorityRecord } from "./ledger-record-publisher.js";
@@ -223,6 +224,21 @@ export class LedgerAuthorityStore {
     return recoverLedgerAuthorityRecordPublication(
       this.#root,
       recordIdValue,
+      signal,
+    );
+  }
+
+  /**
+   * 按调用方已经确认的exact Intent恢复同一发布；任何持久Intent差异都在提交前拒绝。
+   */
+  async recoverExactRecordPublication(
+    expectedIntentValue: unknown,
+    options?: LedgerAuthorityStoreOptions,
+  ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
+    const { signal } = parseLedgerAuthorityStoreOptions(options);
+    return recoverExactLedgerAuthorityRecordPublication(
+      this.#root,
+      expectedIntentValue,
       signal,
     );
   }

@@ -38,7 +38,6 @@ async function previewPublic(
       mode: "preview",
       todoId: PUBLICATION_TODO_ID,
       demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
-      authorityMembers: fixture.requirementMembers,
     },
     {
       preview: {
@@ -117,7 +116,6 @@ test("Demand Publication public preview/apply returns only the stable receipt", 
             ...demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
             title: fixture.workspacePath,
           },
-          authorityMembers: fixture.requirementMembers,
         },
         {
           preview: {

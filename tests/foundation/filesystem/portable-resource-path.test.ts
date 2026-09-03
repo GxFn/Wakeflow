@@ -2,6 +2,7 @@ import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  joinPortableResourcePath,
   parsePortableResourcePath,
   PortableResourcePathError,
   splitPortableResourcePath,
@@ -62,6 +63,33 @@ test("splitting preserves exact text and returns a frozen non-empty sequence", (
     "需求 evidence.json",
   ]);
   equal(Object.isFrozen(segments), true);
+});
+
+test("joining revalidates both branded inputs and the combined path", () => {
+  const parent = parsePortableResourcePath("records/evidence");
+  const child = parsePortableResourcePath("payload/结果.txt");
+  equal(
+    joinPortableResourcePath(parent, child),
+    "records/evidence/payload/结果.txt",
+  );
+  expectPortableResourcePathError(
+    () => joinPortableResourcePath(
+      asPortableResourcePath("records/../escape"),
+      child,
+      "$.join",
+    ),
+    "format",
+    "$.join.parent",
+  );
+  expectPortableResourcePathError(
+    () => joinPortableResourcePath(
+      parent,
+      asPortableResourcePath("payload/../escape"),
+      "$.join",
+    ),
+    "format",
+    "$.join.child",
+  );
 });
 
 test("absolute, scheme-like, backslash, empty, and dot forms are rejected", () => {

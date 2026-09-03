@@ -45,11 +45,19 @@ function defaultMcpExecutors(): WakeflowMcpExecutorSet {
       unexpectedMcpExecutor("claimTargetHostEffect"),
     completeDemand: async () => unexpectedMcpExecutor("completeDemand"),
     createDemand: async () => unexpectedMcpExecutor("createDemand"),
+    recordManagedEvidence: async () =>
+      unexpectedMcpExecutor("recordManagedEvidence"),
+    publishConfirmation: async () =>
+      unexpectedMcpExecutor("publishConfirmation"),
+    publishRequirement: async () =>
+      unexpectedMcpExecutor("publishRequirement"),
     executeMaintenance: async () => unexpectedMcpExecutor("executeMaintenance"),
     importTargetResult: async () => unexpectedMcpExecutor("importTargetResult"),
     inspectDemandRoute: async () => unexpectedMcpExecutor("inspectDemandRoute"),
     inspectTargetResultReview: async () =>
       unexpectedMcpExecutor("inspectTargetResultReview"),
+    inspectTodo: async () => unexpectedMcpExecutor("inspectTodo"),
+    intakeTodo: async () => unexpectedMcpExecutor("intakeTodo"),
     planTargetTask: async () => unexpectedMcpExecutor("planTargetTask"),
     planTestCard: async () => unexpectedMcpExecutor("planTestCard"),
     prepareImplementationDelivery: async () =>

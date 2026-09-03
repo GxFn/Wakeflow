@@ -120,6 +120,21 @@ import {
 
 const TODO_TRANSACTION_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
 
+type TodoStateMutationOperation = Exclude<
+  TodoTransactionOperation,
+  "append"
+>;
+
+const SOURCE_STATUSES_BY_MUTATION = Object.freeze({
+  activate: Object.freeze(["parked"]),
+  withdraw: Object.freeze(["pending-claim", "parked"]),
+  claim: Object.freeze(["pending-claim"]),
+  archive: Object.freeze(["claimed"]),
+} as const satisfies Readonly<Record<
+  TodoStateMutationOperation,
+  readonly TodoState["status"][]
+>>);
+
 interface JournalSource {
   readonly resourcePath: PortableResourcePath;
   readonly node: Readonly<FileNodeSnapshot>;
@@ -230,6 +245,25 @@ function targetPairs(
     : [...pairs(snapshot), { intake, state }];
 }
 
+function assertStateMutationTransition(
+  operation: TodoStateMutationOperation,
+  intake: Readonly<TodoIntake>,
+  expectedState: Readonly<TodoState>,
+  targetState: Readonly<TodoState>,
+): void {
+  if (
+    intake.todoId !== expectedState.todoId
+    || intake.todoId !== targetState.todoId
+    || !SOURCE_STATUSES_BY_MUTATION[operation].some(
+      (status) => status === expectedState.status,
+    )
+    || targetState.revision !== expectedState.revision + 1
+    || targetState.previousStateDigest !== computeTodoStateDigest(expectedState)
+  ) {
+    fail("transition", "$transaction/transition");
+  }
+}
+
 function buildTransaction(
   operation: TodoTransactionOperation,
   current: Readonly<TodoCollectionAuthoritySnapshot>,
@@ -237,6 +271,17 @@ function buildTransaction(
   expectedState: Readonly<TodoState> | null,
   targetState: Readonly<TodoState>,
 ): Readonly<TodoTransaction> {
+  if (operation === "append") {
+    if (expectedState !== null) fail("transition", "$transaction/transition");
+  } else {
+    if (expectedState === null) fail("transition", "$transaction/transition");
+    assertStateMutationTransition(
+      operation,
+      intake,
+      expectedState,
+      targetState,
+    );
+  }
   const targets = targetPairs(current, intake.todoId, intake, targetState);
   const targetCollection = createTodoCollectionSnapshot(targets);
   encodeBoundedContent(

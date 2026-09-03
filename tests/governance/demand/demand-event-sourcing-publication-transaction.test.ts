@@ -49,7 +49,7 @@ const CREATED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
 const COLLECTION_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
 const STATE_DIGEST = parseSha256Digest(`sha256:${"c".repeat(64)}`);
-const TODO_ID = parseTodoItemId("TODO-RH2-PUBLICATION");
+const TODO_ID = parseTodoItemId("todo_cd6f37a1-a5be-48cf-8d19-0e4ab14be0d4");
 const REQUIRED_ROLES = [
   "code-facts",
   "landing-plan",

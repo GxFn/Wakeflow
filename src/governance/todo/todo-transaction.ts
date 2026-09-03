@@ -3,6 +3,7 @@ import { WAKEFLOW_TODO_TRANSACTION_SCHEMA } from "../../contracts/generated/gove
 import { WAKEFLOW_TODO_INTAKE_SCHEMA } from "../../contracts/generated/governance/todo/todo-intake.generated.js";
 import { WAKEFLOW_TODO_STATE_SCHEMA } from "../../contracts/generated/governance/todo/todo-state.generated.js";
 import { WAKEFLOW_TODO_ITEM_ID_SCHEMA } from "../../contracts/generated/governance/todo/todo-item-id.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
@@ -47,18 +48,23 @@ import {
 } from "./todo-state.js";
 
 /**
- * Wakeflow Governance / TODO：追加、领取与归档操作的不可变恢复计划编解码器。
+ * Wakeflow Governance / TODO：TODO集合变更的不可变恢复计划编解码器。
  *
- * 恢复意图同时绑定预期集合、目标集合、接收记录和状态语义摘要，并保存完整的目标
- * 状态；追加操作还会保存不可变的目标接收记录。它不保存可变阶段、不执行文件系统
- * 副作用，也不决定恢复意图何时可以退休。
+ * 恢复意图同时绑定预期集合、目标集合、Intake与State语义摘要，并保存完整目标State；
+ * append还保存不可变目标Intake。activate、withdraw、claim与archive共用同一CAS恢复
+ * 结构，只以目标状态矩阵区分。它不保存可变阶段、不执行文件系统副作用，也不决定恢复意图何时可以退休。
  */
 
 const TODO_TRANSACTION_ARTIFACT_KIND =
   "wakeflow-todo-transaction" as const;
 const TODO_TRANSACTION_SCHEMA_VERSION = 1 as const;
 
-export type TodoTransactionOperation = "append" | "claim" | "archive";
+export type TodoTransactionOperation =
+  | "append"
+  | "activate"
+  | "withdraw"
+  | "claim"
+  | "archive";
 
 export interface TodoTransaction {
   readonly artifactKind: typeof TODO_TRANSACTION_ARTIFACT_KIND;
@@ -118,11 +124,22 @@ const validateWireTransaction =
       WAKEFLOW_TODO_INTAKE_SCHEMA,
       WAKEFLOW_TODO_STATE_SCHEMA,
       WAKEFLOW_TODO_ITEM_ID_SCHEMA,
+      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
       WAKEFLOW_SHA256_DIGEST_SCHEMA,
       WAKEFLOW_UTC_INSTANT_SCHEMA,
       WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     ],
   );
+
+const TARGET_STATUS_BY_MUTATION = Object.freeze({
+  activate: "pending-claim",
+  withdraw: "withdrawn",
+  claim: "claimed",
+  archive: "archived",
+} as const satisfies Readonly<Record<
+  Exclude<TodoTransactionOperation, "append">,
+  TodoState["status"]
+>>);
 
 function fail(reason: TodoTransactionErrorReason, path: string): never {
   throw new TodoTransactionError(reason, path);
@@ -187,7 +204,11 @@ function assertTransactionRelations(
         !== computeTodoIntakeDigest(transaction.targetIntake)
       || transaction.targetState.revision !== 1
       || transaction.targetState.previousStateDigest !== null
-      || transaction.targetState.status !== transaction.targetIntake.initialStatus
+      || transaction.targetState.status !== (
+        transaction.targetIntake.readiness.status === "ready"
+          ? "pending-claim"
+          : "parked"
+      )
       || transaction.targetIntake.createdAt !== transaction.createdAt
     ) {
       fail("operation", "$/operation");
@@ -206,10 +227,8 @@ function assertTransactionRelations(
     fail("operation", "$/operation");
   }
   if (
-    (transaction.operation === "claim"
-      && transaction.targetState.status !== "claimed")
-    || (transaction.operation === "archive"
-      && transaction.targetState.status !== "archived")
+    transaction.targetState.status
+      !== TARGET_STATUS_BY_MUTATION[transaction.operation]
   ) {
     fail("operation", "$/targetState/status");
   }

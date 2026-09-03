@@ -36,7 +36,6 @@ async function previewMainPlan(
     {
       todoId: PUBLICATION_TODO_ID,
       demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
-      authorityMembers: fixture.requirementMembers,
     },
     {
       uuidFactory: demandEventSourcingPublicationUuidFactory(uuids, calls),

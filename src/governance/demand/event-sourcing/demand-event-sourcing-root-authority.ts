@@ -38,6 +38,7 @@ import {
   DemandEventSourcingRootInventoryError,
   inspectDemandEventSourcingRootInventory,
   type DemandEventSourcingRootInventory,
+  type DemandEventSourcingRootInventoryPhase,
 } from "./demand-event-sourcing-root-inventory.js";
 import {
   DEMAND_EVENT_SOURCING_AUTHORITY_REF,
@@ -58,11 +59,12 @@ import {
 } from "../../ledger/ledger-authority-store.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：健康 Demand 根目录的组合权威加载。
+ * Wakeflow Governance / Demand Event Sourcing：Demand根目录的组合权威加载。
  *
  * 本边界组合完整根目录资源清单、不可变身份/权威关系记录、Ledger 精确引用解析、
  * 聚合仓储重建和修订 1 发布关系验证。事件存储和聚合仓储本身仍不依赖 Ledger；
- * 只有需要完整 Demand 权威事实的上层才调用本函数。
+ * 普通入口只接受无事务健康根；Managed Evidence专用入口接纳journal绑定且关系关闭
+ * 的事务期根。只有需要完整Demand权威事实的上层才调用本文件。
  */
 
 const IDENTITY_MAXIMUM_BYTES = parseByteCount(512 * 1024);
@@ -93,7 +95,7 @@ export type DemandEventSourcingRootAuthorityErrorReason =
 
 const ERROR_MESSAGES = {
   input: "Demand Event Sourcing root authority input is invalid.",
-  inventory: "Demand Event Sourcing root inventory is not healthy.",
+  inventory: "Demand Event Sourcing root inventory does not satisfy its requested phase.",
   identity: "Demand Event Sourcing root identity is invalid.",
   authority: "Demand Event Sourcing root authority record is invalid.",
   ledger:
@@ -128,6 +130,84 @@ function fail(
   throw new DemandEventSourcingRootAuthorityError(reason, path);
 }
 
+function sameOptionalNode(
+  left: Readonly<FileNodeSnapshot> | undefined,
+  right: Readonly<FileNodeSnapshot> | undefined,
+): boolean {
+  return left === undefined
+    ? right === undefined
+    : right !== undefined && sameFileNodeSnapshot(left, right);
+}
+
+function sameStringArray(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+function sameManagedEvidencePublication(
+  left: Readonly<
+    DemandEventSourcingRootInventory["managedEvidence"]["publication"]
+  >,
+  right: Readonly<
+    DemandEventSourcingRootInventory["managedEvidence"]["publication"]
+  >,
+): boolean {
+  if (left === null || right === null) return left === right;
+  const leftProgress = left.stageProgress;
+  const rightProgress = right.stageProgress;
+  return (
+    left.transactionDigest === right.transactionDigest &&
+    left.evidenceId === right.evidenceId &&
+    left.physicalState === right.physicalState &&
+    sameFileNodeSnapshot(left.transactionNode, right.transactionNode) &&
+    (leftProgress === undefined || rightProgress === undefined
+      ? leftProgress === rightProgress
+      : leftProgress.candidateRootPath === rightProgress.candidateRootPath &&
+        leftProgress.plan.treeDigest === rightProgress.plan.treeDigest &&
+        leftProgress.status === rightProgress.status &&
+        sameFileNodeSnapshot(leftProgress.rootNode, rightProgress.rootNode) &&
+        sameStringArray(
+          leftProgress.missingDirectories,
+          rightProgress.missingDirectories,
+        ) &&
+        sameStringArray(leftProgress.missingFiles, rightProgress.missingFiles))
+  );
+}
+
+function sameManagedEvidenceInventory(
+  left: Readonly<DemandEventSourcingRootInventory>["managedEvidence"],
+  right: Readonly<DemandEventSourcingRootInventory>["managedEvidence"],
+): boolean {
+  return (
+    sameManagedEvidencePublication(left.publication, right.publication) &&
+    left.recordCount === right.recordCount &&
+    sameOptionalNode(left.rootNode, right.rootNode) &&
+    left.records.length === right.records.length &&
+    left.records.every((record, index) => {
+      const other = right.records[index];
+      return (
+        other !== undefined &&
+        record.evidenceId === other.evidenceId &&
+        record.programId === other.programId &&
+        record.demandId === other.demandId &&
+        record.demandAuthorityDigest === other.demandAuthorityDigest &&
+        record.manifestDigest === other.manifestDigest &&
+        record.payloadArtifactDigest === other.payloadArtifactDigest &&
+        record.recordTreePlanDigest === other.recordTreePlanDigest &&
+        record.payloadVerification === other.payloadVerification &&
+        sameFileNodeSnapshot(record.rootNode, other.rootNode) &&
+        sameFileNodeSnapshot(record.manifestNode, other.manifestNode) &&
+        sameFileNodeSnapshot(record.payloadNode, other.payloadNode)
+      );
+    })
+  );
+}
+
 function sameInventory(
   left: Readonly<DemandEventSourcingRootInventory>,
   right: Readonly<DemandEventSourcingRootInventory>,
@@ -138,6 +218,10 @@ function sameInventory(
     left.artifactCount === right.artifactCount &&
     left.transactionCount === right.transactionCount &&
     left.appendCandidateCount === right.appendCandidateCount &&
+    sameManagedEvidenceInventory(
+      left.managedEvidence,
+      right.managedEvidence,
+    ) &&
     sameFileNodeSnapshot(left.nodes.root, right.nodes.root) &&
     sameFileNodeSnapshot(left.nodes.identity, right.nodes.identity) &&
     sameFileNodeSnapshot(left.nodes.authority, right.nodes.authority) &&
@@ -159,13 +243,128 @@ function sameInventory(
   );
 }
 
-function sameOptionalNode(
-  left: Readonly<FileNodeSnapshot> | undefined,
-  right: Readonly<FileNodeSnapshot> | undefined,
+function sameManagedEvidenceSelector(
+  record: Readonly<
+    DemandEventSourcingRootInventory["managedEvidence"]["records"][number]
+  >,
+  selector: NonNullable<
+    DemandEventSourcingAggregate["state"]["managedEvidence"]
+  >[number],
 ): boolean {
-  return left === undefined
-    ? right === undefined
-    : right !== undefined && sameFileNodeSnapshot(left, right);
+  return (
+    record.evidenceId === selector.evidenceId &&
+    record.manifestDigest === selector.manifestDigest &&
+    record.payloadArtifactDigest === selector.payloadArtifactDigest
+  );
+}
+
+function assertClosedManagedEvidenceRecords(
+  records: Readonly<
+    DemandEventSourcingRootInventory["managedEvidence"]["records"]
+  >,
+  selectors: NonNullable<
+    DemandEventSourcingAggregate["state"]["managedEvidence"]
+  >,
+  identity: Readonly<DemandIdentity>,
+  authorityDigest: Sha256Digest,
+): void {
+  if (
+    records.length !== selectors.length ||
+    records.some((record, index) => {
+      const selector = selectors[index];
+      return (
+        selector === undefined ||
+        !sameManagedEvidenceSelector(record, selector) ||
+        record.programId !== identity.programId ||
+        record.demandId !== identity.demandId ||
+        record.demandAuthorityDigest !== authorityDigest
+      );
+    })
+  ) {
+    fail("closure", "$managed-evidence");
+  }
+}
+
+function assertManagedEvidenceClosure(
+  inventory: Readonly<DemandEventSourcingRootInventory>,
+  identity: Readonly<DemandIdentity>,
+  authorityDigest: Sha256Digest,
+  aggregate: Readonly<DemandEventSourcingAggregate>,
+  phase: Extract<
+    DemandEventSourcingRootInventoryPhase,
+    "healthy" | "managed-evidence-publication"
+  >,
+): void {
+  const records = inventory.managedEvidence.records;
+  const selectors = aggregate.state.managedEvidence ?? [];
+  const publication = inventory.managedEvidence.publication;
+  if (phase === "healthy") {
+    if (publication !== null) fail("closure", "$managed-evidence");
+    assertClosedManagedEvidenceRecords(
+      records,
+      selectors,
+      identity,
+      authorityDigest,
+    );
+    return;
+  }
+
+  if (publication === null) fail("closure", "$managed-evidence");
+  const manifest = publication.transaction.manifest;
+  if (
+    manifest.evidenceId !== publication.evidenceId ||
+    manifest.programId !== identity.programId ||
+    manifest.demandId !== identity.demandId ||
+    manifest.demandAuthorityDigest !== authorityDigest
+  ) {
+    fail("closure", "$managed-evidence");
+  }
+  const targetSelector = selectors.find(
+    (selector) => selector.evidenceId === manifest.evidenceId,
+  );
+  const targetRecord = records.find(
+    (record) => record.evidenceId === manifest.evidenceId,
+  );
+  if (
+    targetSelector !== undefined &&
+    (targetSelector.manifestDigest !== manifest.manifestDigest ||
+      targetSelector.payloadArtifactDigest !== manifest.payload.artifactDigest)
+  ) {
+    fail("closure", "$managed-evidence");
+  }
+  if (publication.physicalState === "final") {
+    if (
+      targetSelector === undefined ||
+      targetRecord === undefined ||
+      !sameManagedEvidenceSelector(targetRecord, targetSelector)
+    ) {
+      fail("closure", "$managed-evidence");
+    }
+    assertClosedManagedEvidenceRecords(
+      records,
+      selectors,
+      identity,
+      authorityDigest,
+    );
+    return;
+  }
+  if (
+    targetRecord !== undefined ||
+    (targetSelector !== undefined &&
+      publication.physicalState !== "stage-complete")
+  ) {
+    fail("closure", "$managed-evidence");
+  }
+  assertClosedManagedEvidenceRecords(
+    records,
+    targetSelector === undefined
+      ? selectors
+      : selectors.filter(
+          (selector) => selector.evidenceId !== manifest.evidenceId,
+        ),
+    identity,
+    authorityDigest,
+  );
 }
 
 async function readRecord(
@@ -232,11 +431,16 @@ function parseOptions(value: unknown): Readonly<{
   });
 }
 
-/** 加载健康根目录；`audit: true` 明确要求从提交 1 开始完整重放。 */
-export async function loadDemandEventSourcingRootAuthority(
+type RootAuthorityPhase = Extract<
+  DemandEventSourcingRootInventoryPhase,
+  "healthy" | "managed-evidence-publication"
+>;
+
+async function loadRootAuthority(
   root: RootedDirectory,
   ledgerStore: LedgerAuthorityStore,
   options?: { readonly audit?: boolean; readonly signal?: AbortSignal },
+  phase: RootAuthorityPhase = "healthy",
 ): Promise<Readonly<LoadedDemandEventSourcingRootAuthority>> {
   if (
     typeof root !== "object" ||
@@ -255,7 +459,10 @@ export async function loadDemandEventSourcingRootAuthority(
   try {
     inventory = await inspectDemandEventSourcingRootInventory(
       root,
-      signal === undefined ? undefined : { signal },
+      {
+        phase,
+        ...(signal === undefined ? {} : { signal }),
+      },
     );
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
@@ -397,11 +604,21 @@ export async function loadDemandEventSourcingRootAuthority(
   ) {
     fail("closure", "$root");
   }
+  assertManagedEvidenceClosure(
+    inventory,
+    identity,
+    authorityDigest,
+    aggregate,
+    phase,
+  );
   let finalInventory: Readonly<DemandEventSourcingRootInventory>;
   try {
     finalInventory = await inspectDemandEventSourcingRootInventory(
       root,
-      signal === undefined ? undefined : { signal },
+      {
+        phase,
+        ...(signal === undefined ? {} : { signal }),
+      },
     );
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
@@ -423,4 +640,33 @@ export async function loadDemandEventSourcingRootAuthority(
     loadMode,
     replayedCommitCount,
   });
+}
+
+/** 加载健康根目录；`audit: true` 明确要求从提交 1 开始完整重放。 */
+export async function loadDemandEventSourcingRootAuthority(
+  root: RootedDirectory,
+  ledgerStore: LedgerAuthorityStore,
+  options?: { readonly audit?: boolean; readonly signal?: AbortSignal },
+): Promise<Readonly<LoadedDemandEventSourcingRootAuthority>> {
+  return loadRootAuthority(root, ledgerStore, options, "healthy");
+}
+
+/**
+ * 加载一个Managed Evidence事务期Demand根。
+ *
+ * 该边界仍完整验证Identity、Authority、Ledger与Event Stream，只把当前journal
+ * 绑定的stage/final作为受限恢复状态接纳。它不证明目标Commit ID；Evidence
+ * Application必须再用Transaction中的Commit ID与Command digest闭合Event归属。
+ */
+export async function loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication(
+  root: RootedDirectory,
+  ledgerStore: LedgerAuthorityStore,
+  options?: { readonly audit?: boolean; readonly signal?: AbortSignal },
+): Promise<Readonly<LoadedDemandEventSourcingRootAuthority>> {
+  return loadRootAuthority(
+    root,
+    ledgerStore,
+    options,
+    "managed-evidence-publication",
+  );
 }

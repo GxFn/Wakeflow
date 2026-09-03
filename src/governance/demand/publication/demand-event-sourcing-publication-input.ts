@@ -4,7 +4,6 @@ import {
   type WakeflowDurableId,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
-  parseDenseArray,
   parsePlainRecord,
   PassiveOwnDataError,
 } from "../../../foundation/data/passive-own-data.js";
@@ -22,8 +21,8 @@ import {
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：公共预览进入领域前的输入边界。
  *
- * 调用方只编写Demand的人类语义、选择TODO前序和Ledger成员，并明确执行位置。Program、
- * Demand类型、测试决定、TODO lineage/CAS、完整Ledger引用、摘要、时间和持久身份均由后续
+ * 调用方只编写Demand的人类语义、选择TODO前序，并明确执行位置。完整Ledger成员集合只
+ * 来自immutable TODO Intake；Program、Demand类型、测试决定、TODO lineage/CAS、摘要、时间和持久身份均由后续
  * Publication owner从当前权威派生。本模块不读取文件、不分配身份，也不创建发布事务。
  */
 
@@ -54,10 +53,6 @@ export interface DemandEventSourcingPublicationAuthoredDemand {
 export interface DemandEventSourcingPublicationPreviewRequest {
   readonly todoId: TodoItemId;
   readonly demand: Readonly<DemandEventSourcingPublicationAuthoredDemand>;
-  readonly authorityMembers: readonly [
-    Readonly<DemandEventSourcingPublicationAuthorityMemberSelection>,
-    ...Readonly<DemandEventSourcingPublicationAuthorityMemberSelection>[],
-  ];
 }
 
 export type DemandEventSourcingPublicationInputErrorReason =
@@ -93,7 +88,6 @@ export class DemandEventSourcingPublicationInputError extends Error {
 }
 
 const REQUEST_FIELDS = Object.freeze([
-  "authorityMembers",
   "demand",
   "todoId",
 ] as const);
@@ -112,7 +106,6 @@ const ISOLATED_PLACEMENT_FIELDS = Object.freeze([
   "authorizationMember",
   "mode",
 ] as const);
-const MAXIMUM_AUTHORITY_MEMBERS = 32;
 const MAXIMUM_IDENTITY_TEXT_LENGTH = 16_384;
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
@@ -215,61 +208,8 @@ function parseAuthorityMember(
   });
 }
 
-function authorityMemberKey(
-  value: Readonly<DemandEventSourcingPublicationAuthorityMemberSelection>,
-): string {
-  return `${value.recordId}\u0000${value.memberPath}`;
-}
-
-function parseAuthorityMembers(
-  value: unknown,
-): DemandEventSourcingPublicationPreviewRequest["authorityMembers"] {
-  let values: readonly unknown[];
-  try {
-    values = parseDenseArray(
-      value,
-      MAXIMUM_AUTHORITY_MEMBERS,
-      "$/authorityMembers",
-    );
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      fail("authority-selection", "$/authorityMembers");
-    }
-    throw error;
-  }
-  if (values.length === 0) {
-    fail("authority-selection", "$/authorityMembers");
-  }
-  const members = values.map((entry, index) =>
-    parseAuthorityMember(entry, `$/authorityMembers/${index}`),
-  );
-  const keys = members.map(authorityMemberKey);
-  if (new Set(keys).size !== keys.length) {
-    fail("authority-selection", "$/authorityMembers");
-  }
-  members.sort((left, right) => {
-    const leftKey = authorityMemberKey(left);
-    const rightKey = authorityMemberKey(right);
-    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-  });
-  const first = members[0];
-  if (first === undefined) {
-    fail("authority-selection", "$/authorityMembers");
-  }
-  return Object.freeze([first, ...members.slice(1)]);
-}
-
-function hasAuthorityMember(
-  members: DemandEventSourcingPublicationPreviewRequest["authorityMembers"],
-  expected: Readonly<DemandEventSourcingPublicationAuthorityMemberSelection>,
-): boolean {
-  const key = authorityMemberKey(expected);
-  return members.some((member) => authorityMemberKey(member) === key);
-}
-
 function parseExecutionPlacement(
   value: unknown,
-  authorityMembers: DemandEventSourcingPublicationPreviewRequest["authorityMembers"],
 ): DemandEventSourcingPublicationExecutionPlacementSelection {
   let record: Readonly<Record<string, unknown>>;
   try {
@@ -303,8 +243,7 @@ function parseExecutionPlacement(
     "$/demand/executionPlacement/authorizationMember",
   );
   if (
-    !authorizationMember.recordId.startsWith("confirmation_") ||
-    !hasAuthorityMember(authorityMembers, authorizationMember)
+    !authorizationMember.recordId.startsWith("confirmation_")
   ) {
     fail("placement", "$/demand/executionPlacement/authorizationMember");
   }
@@ -316,7 +255,6 @@ function parseExecutionPlacement(
 
 function parseAuthoredDemand(
   value: unknown,
-  authorityMembers: DemandEventSourcingPublicationPreviewRequest["authorityMembers"],
 ): Readonly<DemandEventSourcingPublicationAuthoredDemand> {
   const record = exactRecord(
     value,
@@ -331,10 +269,7 @@ function parseAuthoredDemand(
       record.completionDefinition,
       "$/demand/completionDefinition",
     ),
-    executionPlacement: parseExecutionPlacement(
-      record.executionPlacement,
-      authorityMembers,
-    ),
+    executionPlacement: parseExecutionPlacement(record.executionPlacement),
   });
 }
 
@@ -350,10 +285,8 @@ export function parseDemandEventSourcingPublicationPreviewRequest(
     if (error instanceof TodoItemIdError) fail("todo", "$/todoId");
     throw error;
   }
-  const authorityMembers = parseAuthorityMembers(record.authorityMembers);
   return Object.freeze({
     todoId,
-    demand: parseAuthoredDemand(record.demand, authorityMembers),
-    authorityMembers,
+    demand: parseAuthoredDemand(record.demand),
   });
 }

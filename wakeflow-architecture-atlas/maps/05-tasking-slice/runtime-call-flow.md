@@ -3,10 +3,10 @@ diagramId: ts-tasking-runtime-t1
 viewType: runtime-call-sequence
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:0eae581be2a350ceb3e1f4fe0c4db9b0d3659514142e39f8f05eb5c6f8780dbc
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:e66e1da8f9545a6b92ba8137610010aea289734454b9ed1ae5f6e5ef46510e38
 audience:
   - maintainer
   - reviewer
@@ -205,3 +205,4 @@ sequenceDiagram
 - 文件Projection是本地读取便利层，不是向目标窗口派发任务的宿主效果。
 - T1B已由同一公共MCP Planning工具消费，并受Controller Route frontier约束。
 - Tasking合同和Service已进入`d17602e`；后续变化必须刷新本文指纹。
+- A2-F1真实fixture已证明TODO Intake和Demand Authority复用同一Ledger member refs；生产Tasking调用时序与状态owner没有变化。

@@ -1,12 +1,12 @@
 ---
 diagramId: ts-governance-demand-runtime-e0
 viewType: runtime-call-sequence
-truthKind: in-progress-worktree
+truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T21:36:39-07:00
-baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:313b1eb0fb6ad13c82f47f807cb63e3560ec5100ba08a3a55f9c9cb91e039ae8
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:0458a427b22590bb4451dd2d11e15154d27950aa133f048a794b906c37b352c8
 audience:
   - maintainer
   - reviewer
@@ -15,13 +15,17 @@ generatedBy: manual
 refreshTriggers:
   - src/governance/demand/event-sourcing/**
   - src/governance/demand/publication/**
+  - src/governance/evidence/**
 sourcePaths:
   - src/governance/demand/**
+  - src/governance/evidence/**
   - src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts
 schemaPaths:
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json
+  - src/contracts/schemas/governance/evidence/**
 testPaths:
   - tests/governance/demand/**
+  - tests/governance/evidence/**
   - tests/entrypoints/wakeflow-demand-publication-mcp.test.ts
 ---
 
@@ -165,7 +169,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   accTitle: 从公共preview到精确应用和Demand事件根前向恢复
-  accDescr: MCP客户端先提交只含作者语义与Ledger成员选择的preview；Planning零写读取Config、TODO和Ledger并返回完整transaction及摘要。客户端确认后以原plan和digest调用apply，Application复验当前权威并委托物理Publication Service。后者保存sidecar、发布包含revision 1的Demand根，再claim TODO；recover只凭demandId和exact sidecar前向完成。公共层不复制物理状态机，也不执行宿主效果。
+  accDescr: MCP客户端先提交只含作者语义与Ledger成员选择的preview；Planning零写读取Config、Ledger-bound TODO和Ledger并返回完整transaction及摘要。客户端确认后以原plan和digest调用apply，Application复验当前权威并委托物理Publication Service。后者保存sidecar、发布包含revision 1的Demand根，再claim TODO；recover只凭demandId和exact sidecar前向完成。当前Planning尚未把调用方选择与Intake authorityRefs精确等同；公共层不复制物理状态机，也不执行宿主效果。
 
   autonumber
   participant CLIENT as MCP客户端/Controller
@@ -226,7 +230,7 @@ sequenceDiagram
 | 图中术语 | 解释 |
 | --- | --- |
 | Publication transaction | Identity、Authority、TODO预期、revision 1 IDs与所有派生路径的自包含不可变计划 |
-| authored Demand | 调用方拥有的title、goal、completion definition、执行位置与Ledger成员选择；不含系统派生身份、时间、摘要或CAS |
+| authored Demand | 调用方拥有的title、goal、completion definition、执行位置、typed TODO选择与Ledger成员选择；不含系统派生Demand身份、时间、摘要或CAS；Ledger选择暂未由Intake引用唯一派生 |
 | exact apply | 必须提交preview返回的完整plan及其digest；Application重新解析并复验当前Config/Ledger与输出闭合 |
 | 同级sidecar | 位于Demand最终根之外的流程意图；根尚未发布时仍可找到恢复依据 |
 | 内部marker | 暂存/最终Demand根内的transaction副本，用来证明发布根与sidecar相同 |
@@ -247,11 +251,155 @@ sequenceDiagram
 | `E-E2-22` | Application/Public Coordinator输出闭合 | Canonical JSON语义比较、commit digest与稳定脱敏回执 |
 | `E-E2-23`、`E-E2-24` | Public recover与Application Service | recover只接受Demand ID，缺失或冲突sidecar失败关闭 |
 
+## E3：Managed Evidence内部Application与恢复闭包
+
+```mermaid
+flowchart LR
+  accTitle: Managed Evidence内部可恢复发布与按需读取
+  accDescr: Capture Planning Service与Application共用Config逻辑source root解析；Application按journal、完整stage、Event、final和journal-last完成可恢复发布。健康Root Authority关闭Event selector与final关系。Reading Service提供三级内部读取。Public Planning从Capture结果生成完整Transaction，Coordinator路由preview、apply和recover并只投影metadata receipt；官方MCP注册wakeflow_record_evidence，但不公开Reader bytes。
+
+  subgraph PLAN["① 零写计划"]
+    PLAN_SERVICE["[代码] Capture Planning Service"]
+    CAPTURE_PLAN["[计划] Capture Plan codec"]
+    SOURCE_ROOT["[代码] Configured Source Root\n逻辑root → current real path"]
+    TRANSACTION["[计划] Publication Transaction\n无可变phase"]
+    RECORD_PLAN["[计划] Record Tree Plan"]
+    COMMAND["[计划] Managed Evidence Event Command"]
+  end
+
+  subgraph INVENTORY["② 事务与文件只读分类"]
+    ROOT_INVENTORY["[代码] Demand Root Inventory\n三类phase"]
+    RECORD_SET["[代码] Record Set Inventory"]
+    TX_STORE["[代码] Transaction Store\nstrict create / load / exact retire"]
+    JOURNAL_TREE["[观察] journal / stage / final\nabsent或关闭状态"]
+  end
+
+  subgraph MATERIALIZE["③ Payload、Stage与Final物理owner"]
+    PAYLOAD_MATERIALIZER["[代码] Payload Materializer\nfile稳定copy / tree前后identity"]
+    STAGE_MATERIALIZER["[代码] Stage Materializer\njournal → safe partial → Manifest-last"]
+    RECORD_PUBLISHER["[代码] Final Record Publisher\ncomplete stage → durable final / current"]
+  end
+
+  subgraph ORCHESTRATE["④ Application与不可逆结算"]
+    APPLICATION["[代码] Publication Application\nApply / recover路线选择"]
+    SETTLEMENT["[代码] Transaction Settlement\nEvent后前向 / Event前stale退休"]
+    HANDLER["[代码] Command Handler"]
+    RETIRE["[Foundation] Candidate Retirement"]
+  end
+
+  subgraph AUTHORITY["⑤ 事务期与健康态闭包"]
+    ROOT_AUTHORITY["[代码] Demand Root Authority\ntransaction phase / healthy"]
+    REPOSITORY["[权威] Repository重放Aggregate"]
+    CLOSURE{"[守卫] selector / final / identity\n是否逐项一致"}
+  end
+
+  subgraph READ["⑥ Event-backed按需读取"]
+    READ_CONTEXT["[代码] Demand Read Authority Context\nSnapshot + tail"]
+    READ_SERVICE["[代码] Evidence Reading Service\n定位Event-backed record"]
+    RECORD_READER["[代码] Record Reader\nManifest capability + 内容验证"]
+    READ_RESULT["[结果] deferred / member / complete"]
+  end
+
+  subgraph PUBLIC_EVIDENCE["⑦ metadata-only公共记录"]
+    PUBLIC_PLANNING["[代码] Publication Planning\nCapture + Event/Commit ID"]
+    PUBLIC_COORD["[代码] Public Coordinator\npreview / apply / recover"]
+    PUBLIC_SCHEMA["[Schema] Request / Result\nmetadata-only Apply/Recover"]
+    MCP_TOOL["[公共] wakeflow_record_evidence"]
+  end
+
+  PLAN_SERVICE -->|"E-E3-01 创建"| CAPTURE_PLAN
+  PLAN_SERVICE -->|"E-E3-22 解析逻辑source root"| SOURCE_ROOT
+  TRANSACTION -->|"E-E3-02 重验preview"| CAPTURE_PLAN
+  TRANSACTION -->|"E-E3-03 派生"| RECORD_PLAN
+  TRANSACTION -->|"E-E3-04 派生"| COMMAND
+  ROOT_INVENTORY -->|"E-E3-05 调用"| RECORD_SET
+  RECORD_SET -->|"E-E3-06 分类stage/final"| JOURNAL_TREE
+  ROOT_AUTHORITY -->|"E-E3-08 读取排他清单"| ROOT_INVENTORY
+  ROOT_AUTHORITY -->|"E-E3-09 重放"| REPOSITORY
+  ROOT_INVENTORY -->|"E-E3-10 final摘要集合"| CLOSURE
+  REPOSITORY -->|"E-E3-11 Aggregate selector"| CLOSURE
+  CLOSURE -->|"E-E3-12 一致才健康"| ROOT_AUTHORITY
+  RECORD_SET -->|"E-E3-13 load固定journal"| TX_STORE
+  TX_STORE -->|"E-E3-14 稳定读取并签发capability"| JOURNAL_TREE
+  STAGE_MATERIALIZER -->|"E-E3-15 load exact journal"| TX_STORE
+  STAGE_MATERIALIZER -->|"E-E3-16 委托source copy"| PAYLOAD_MATERIALIZER
+  PAYLOAD_MATERIALIZER -->|"E-E3-17 按record plan物化payload"| RECORD_PLAN
+  STAGE_MATERIALIZER -->|"E-E3-18 Manifest-last形成完整stage"| JOURNAL_TREE
+  RECORD_PUBLISHER -->|"E-E3-19 require exact journal"| TX_STORE
+  RECORD_PUBLISHER -->|"E-E3-20 按record plan发布"| RECORD_PLAN
+  RECORD_PUBLISHER -->|"E-E3-21 stage→final或current"| JOURNAL_TREE
+  APPLICATION -->|"E-E3-23 重验当前source placement"| SOURCE_ROOT
+  APPLICATION -->|"E-E3-24 absent-only创建journal"| TX_STORE
+  APPLICATION -->|"E-E3-25 物化或重用完整stage"| STAGE_MATERIALIZER
+  APPLICATION -->|"E-E3-26 进入不可逆边界"| SETTLEMENT
+  SETTLEMENT -->|"E-E3-27 exact Event append / lookup"| HANDLER
+  HANDLER -->|"E-E3-28 乐观并发提交"| REPOSITORY
+  SETTLEMENT -->|"E-E3-29 Event后发布final"| RECORD_PUBLISHER
+  SETTLEMENT -->|"E-E3-30 Event前stale退休"| RETIRE
+  SETTLEMENT -->|"E-E3-31 事务期与健康态复验"| ROOT_AUTHORITY
+  SETTLEMENT -->|"E-E3-32 最后退休journal"| TX_STORE
+  RECORD_SET -->|"E-E3-33 复用metadata loader"| RECORD_READER
+  READ_SERVICE -->|"E-E3-34 打开只读Authority"| READ_CONTEXT
+  READ_CONTEXT -->|"E-E3-35 Snapshot + tail闭包"| ROOT_AUTHORITY
+  READ_SERVICE -->|"E-E3-36 读取指定record"| RECORD_READER
+  RECORD_READER -->|"E-E3-37 重建exact plan"| RECORD_PLAN
+  RECORD_READER -->|"E-E3-38 读取Manifest/member/tree"| JOURNAL_TREE
+  RECORD_READER -->|"E-E3-39 签发分级证明"| READ_RESULT
+  PUBLIC_PLANNING -->|"E-E3-40 调用零写capture"| PLAN_SERVICE
+  PUBLIC_PLANNING -->|"E-E3-41 生成完整Transaction"| TRANSACTION
+  PUBLIC_COORD -->|"E-E3-42 preview"| PUBLIC_PLANNING
+  PUBLIC_COORD -->|"E-E3-43 apply / recover"| APPLICATION
+  PUBLIC_COORD -->|"E-E3-44 重验并脱敏"| PUBLIC_SCHEMA
+  MCP_TOOL -->|"E-E3-45 官方Server调用"| PUBLIC_COORD
+```
+
+### 本图术语说明
+
+| 图中术语 | 解释 |
+| --- | --- |
+| Capture Plan codec | 只解析Config摘要、Event Stream预期、Manifest及plan digest的纯合同；不依赖Planning I/O Service |
+| 无可变phase | Transaction不保存`prepared/executing/committed`字段；恢复阶段从journal、stage/final与Event Store事实观察 |
+| 三类phase | `healthy`、`demand-publication`、`managed-evidence-publication`三个明确Root Inventory上下文 |
+| Record Set Inventory | healthy路径关闭final Manifest与顶层、将历史payload复验标记为deferred；事务路径对当前stage/final执行完整record-plan分类 |
+| Transaction Store | 固定0600单槽的strict create/load/exact retire owner；现存exact journal也不被普通create接管，retire只接受Store签发能力 |
+| Payload Materializer | file来源执行stable streaming copy；tree来源在复制前后计算完整Loaded Artifact identity并保留executable mode |
+| Stage Materializer | 只在exact journal下创建/补齐stage；完整payload可脱离变化source恢复，Manifest必须最后出现 |
+| Final Record Publisher | 只把完整stage同根rename为不存在final；final已存在时只接受stage absent且整树exact，journal保持不变 |
+| Configured Source Root | 把Manifest中的repository/support逻辑根闭合到当前Config entity、present placement与real path；不读取source内容 |
+| Transaction Settlement | Application下的不可逆边界owner；Event提交后只能发布final并退休journal，Event缺失且基线过期时才可退休safe candidate |
+| transaction phase | journal存在时的专用Root Authority模式；允许目标stage/final与Event selector处于被事务顺序明确解释的中间组合 |
+| Read Authority Context | 只读消费使用普通Root Authority的Snapshot + tail路径；mutation上下文继续从Commit 1完整audit |
+| deferred / member / complete | 分别表示只验证Manifest顶层、一个完整payload文件、整棵record tree；三者不能互相冒充 |
+| Manifest capability | Record Reader进程内签发的WeakSet能力；structured clone不能取得成员或整树读取权限 |
+| metadata-only receipt | Apply/Recover只返回typed ID、摘要与Event/Commit/Aggregate游标；不返回Manifest、source ref或payload bytes |
+| Aggregate selector | Event重放得到的`evidenceId + manifestDigest + payloadArtifactDigest`最小当前状态 |
+| 健康闭包 | 物理final的Manifest摘要集合与Event selector、Program/Demand/Authority身份全部一致；具体payload内容在Evidence读取时复验 |
+
+### E3边级证据
+
+| 边编号 | 代码位置 | 测试重点 |
+| --- | --- | --- |
+| `E-E3-01` | `managed-evidence-capture-planning-service.ts` → `managed-evidence-capture-plan.ts` | 既有file/tree preview保持零写且digest不变 |
+| `E-E3-02`–`E-E3-04` | `managed-evidence-publication-transaction.ts` | capture/record/command三摘要轴分别替换均拒绝；deterministic document重读 |
+| `E-E3-05` | `demand-event-sourcing-root-inventory.ts` → `managed-evidence-record-set-inventory.ts` | healthy、demand-publication与managed-evidence-publication严格分流 |
+| `E-E3-06` | Record Set Inventory、Transaction codec与Foundation candidate inspection | journal-only、partial/complete stage、当前final payload漂移，以及healthy历史payload复验deferred |
+| `E-E3-08`–`E-E3-12` | `demand-event-sourcing-root-authority.ts`、Root Inventory与Repository | 完整final但无Event及foreign Program Manifest均拒绝；真实Command Handler追加后audit加载通过 |
+| `E-E3-13`、`E-E3-14` | Record Set Inventory与Transaction Store | Inventory复用Store load；Application/Settlement分别消费strict create/load/exact retire |
+| `E-E3-15`–`E-E3-18` | Payload/Stage Materializer、Transaction Store、Record Plan与Foundation transfer/candidate | 5项测试覆盖file/tree、executable、safe partial、Manifest-last、journal缺失与source漂移 |
+| `E-E3-19`–`E-E3-21` | Final Record Publisher、Store、Record Plan与Foundation directory publication | 3项测试覆盖真实rename、current、journal保留、缺失/不完整/双根及final漂移；Publisher不读取Event |
+| `E-E3-22`、`E-E3-23` | Capture Planning/Application → Configured Source Root | Planning旧行为回归通过；Application重验当前Config placement后才读取source |
+| `E-E3-24`–`E-E3-29` | Application、Settlement、Store、Stage、Command Handler与Publisher | 正常真实Apply严格执行journal→stage→Event→final并最终恢复healthy Root |
+| `E-E3-30`–`E-E3-32` | Settlement、Candidate Retirement、Root Authority与Store | Event前CAS过期退休partial；Event前/后完整stage脱离source恢复；journal已退休重试返回healthy |
+| `E-E3-33`–`E-E3-36` | Record Set Inventory、Reading Service、Read Context与Record Reader | Inventory删除重复Manifest loader；Reader先取得Event-backed healthy Authority |
+| `E-E3-37`–`E-E3-39` | Record Reader、Record Plan与final tree | 容量、未知member、capability clone、opaque tree、无关/目标成员漂移及完整tree验证 |
+| `E-E3-40`–`E-E3-45` | Publication Planning、Public Coordinator、Schema与MCP工具 | 四类恢复结果、Demand/plan绑定、recoverable错误、23工具双宿主与候选stdio测试 |
+
 ## 停止边界
 
 - 当前文件Event Store只在单进程内按canonical Demand root串行append；跨进程竞争靠固定槽位硬链接与冲突检测。
 - Repository load不写Snapshot；Snapshot发布必须由显式上层策略触发。
 - Publication流程锁只保护首次Demand根跨资源发布；普通Event append不取得该流程锁。
-- `evidence.record-managed-evidence`已经能沿E0路径形成v1 Event与Aggregate selector，并由聚焦测试完成真实Commit重放；
-  当前没有资源Application调用该Command，因而本图不能证明Evidence payload或Manifest文件已耐久发布。
-- 公共化不改变revision 1持久字节、事件家族或物理恢复顺序；提交`f7c005d`尚未通过完整TypeScript发布门。
+- `evidence.record-managed-evidence`已经沿E3形成内部写入/读取闭包，并由`wakeflow_record_evidence`公开metadata-only记录。
+- Manifest v1没有chunk/Merkle identity，不能把byte range描述为独立可验证Evidence内容。
+- 公共入口分组没有改变Transaction、Event、恢复或Reader证明语义；当前完整门1023项全通过，Demand input反向依赖18文件/80项独立通过。
+- A2已关闭TODO内部手动生命周期与Intake/State可达性；A4/A5已公开Inspection/Intake，A6已删除Demand独立Authority selectors。Auto Claim consumer仍缺失。

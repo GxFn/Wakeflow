@@ -3,10 +3,10 @@ diagramId: ts-tasking-file-f5
 viewType: file-dependency
 truthKind: current-code
 reviewDepth: L3
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:26:05-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:0eae581be2a350ceb3e1f4fe0c4db9b0d3659514142e39f8f05eb5c6f8780dbc
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:e66e1da8f9545a6b92ba8137610010aea289734454b9ed1ae5f6e5ef46510e38
 audience:
   - maintainer
   - reviewer
@@ -134,7 +134,7 @@ flowchart LR
 
 | 生产模块 | 聚焦闭包模块 | 依赖 | 违规 |
 | ---: | ---: | ---: | ---: |
-| 9 | 740 | 5182 | 0 |
+| 9 | 823 | 5817 | 0 |
 
 ## 边级证据
 
@@ -152,3 +152,4 @@ flowchart LR
 - TaskPackage/Event是权威事实；projection缺失不允许调用方伪造文件补齐。
 - 公共Coordinator与wire Schema允许两种workType，但test只接受最小选择并由owner派生完整内容。
 - Tasking相关源码、Schema和测试已进入`d17602e`。
+- A2-F1只调整测试fixture的前置权威顺序；本图Tasking生产文件的直接import声明已逐条复核，没有新增TODO依赖边。

@@ -3,10 +3,10 @@ diagramId: ts-tasking-vertical-t0
 viewType: vertical-slice
 truthKind: current-code
 reviewDepth: L2
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:26:05-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:0eae581be2a350ceb3e1f4fe0c4db9b0d3659514142e39f8f05eb5c6f8780dbc
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:e66e1da8f9545a6b92ba8137610010aea289734454b9ed1ae5f6e5ef46510e38
 audience:
   - maintainer
   - reviewer
@@ -63,16 +63,19 @@ apply不信任旧preview：它验证plan digest，按commitId检查已有Commit�
 Config/Demand/Ledger权威并复验TaskPackage拓扑与Config时效性，再执行严格Demand Command。事件权威
 一旦current，即使文件投影失败也不能回滚事件；重试只需从唯一规划事件恢复投影。
 
+A2-F1没有改变Tasking生产合同。共享真实fixture现在先发布Ledger，再用同一组完整member refs创建TODO Intake与Demand Authority；
+这加强了测试前置事实，但不把Tasking变成TODO Authority的owner。
+
 ## 核验快照
 
 | 项目 | 读取值 |
 | --- | --- |
 | 生产源码 | 9 个Tasking模块 |
-| 全仓Architecture | 740个模块、5182条依赖、0违规 |
+| 全仓Architecture | 823个模块、5817条依赖、10个显式生产根、0违规 |
 | 测试 | 6个正式测试、2个fixture；公共Coordinator覆盖implementation/test两种请求 |
 | 合同 | 1个TaskPackage Schema、1个生成合同 |
 | 提交状态 | TaskPackage、Planning Authority/Input/Service及测试已提交 |
-| 来源指纹 | `0eae581be2a350ceb3e1f4fe0c4db9b0d3659514142e39f8f05eb5c6f8780dbc` |
+| 来源指纹 | `e66e1da8f9545a6b92ba8137610010aea289734454b9ed1ae5f6e5ef46510e38` |
 
 ## T0：Target Task Planning垂直切片
 
@@ -181,7 +184,8 @@ flowchart TB
 
 | 证据 | 当前结果 | 说明 |
 | --- | --- | --- |
-| 全仓architecture | 740模块、5182依赖、0违规 | 当前纵切所在静态依赖边界 |
+| 全仓architecture | 823模块、5817依赖、10个显式生产根、0违规 | 当前纵切所在静态依赖边界 |
+| A2-F1相邻回归 | Demand Publication/Tasking直接consumer共31项通过 | Ledger-first TODO fixture未改变Planning结果 |
 | TaskPackage测试 | 解析、创建、文档、摘要与implementation/test联合 | 合同和字段关系负例 |
 | Planning Service测试 | preview/apply/idempotency/Config变化/测试路由/投影恢复 | 纵切主链证据 |
 | Projection Store测试 | 事件来源、0600、缺失/冲突/幂等 | Event权威与文件投影边界 |

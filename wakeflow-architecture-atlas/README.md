@@ -9,7 +9,7 @@
 wakeflow-architecture-atlas/
 ├── AGENTS.md            AI维护图谱时的局部权威、证据与隔离规则
 ├── CLAUDE.md            Claude Code入口，仅补充宿主注意事项
-├── maps/                 33份审阅文档与43张Mermaid图的正典
+├── maps/                 33份审阅文档与44张Mermaid图的正典
 ├── src/                  本地阅读器与文件依赖交互视图
 ├── scripts/              只读结构、链接、指纹与路径检查
 ├── package.json          独立依赖和命令
@@ -26,6 +26,17 @@ npm run check:structure
 npm run check
 ```
 
+## 唯一 FigJam 派生视图
+
+当前只维护一份可编辑的
+[Wakeflow Architecture Atlas FigJam](https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc)。
+它在新 Figma 账号下基于提交
+`08334ab9c1d8bd923966a976fdf7989bc56ac38c`重建旧板的业务主链与状态恢复内容，并增加当前公共组合架构。
+后续更新继续写入同一文件，不维护并行的Legacy/Current分支。
+
+该FigJam包含公共组合架构、端到端公共主链、业务状态与恢复三张摘要图。它只用于协作阅读；
+`maps/**/*.md`中的Markdown/Mermaid、来源指纹以及Wakeflow源码仍是事实正典。
+
 ## 与Wakeflow主开发的边界
 
 - 不属于根npm workspace，根`npm install`、`npm test`和release脚本不会执行本项目。
@@ -35,8 +46,8 @@ npm run check
 - Markdown和来源指纹不是第二状态权威；源码变化后必须显式运行`npm run check`并刷新文档。
 
 `npm run check:structure`会机器验证这些隔离条件：根`package.json`没有workspace或script引用、根
-TypeScript/dependency-cruiser配置没有接入、本地依赖与构建输出均被忽略。它还验证33份文档、43张图、
-30份来源指纹、Markdown链接、787条边证据和图中203条可解析TypeScript直接导入。来源漂移只有在文档
+TypeScript/dependency-cruiser配置没有接入、本地依赖与构建输出均被忽略。它还验证33份文档、44张图、
+30份来源指纹、Markdown链接、897条边证据和图中242条可解析TypeScript直接导入。来源漂移只有在文档
 明确标为`stale`时通过结构门，并会列入`staleFingerprints`；`npm run check:current`与`npm run check`仍要求
 全部来源指纹当前。
 

@@ -29,10 +29,20 @@
 Review、blocked Resume、Completion、real-environment Testing和Product Defect Remediation/retest，并通过902项
 TypeScript测试。随后A1–A4收敛MCP测试装配、22项Controller Route矩阵和跨owner测试归属。提交`f7c005d`又以
 author-owned输入、零写Planning、exact-plan Application和双宿主第18个MCP工具补齐Demand Publication Public；
-该切片提交时通过918项完整TypeScript门；当前工作树进一步建立Managed Evidence Manifest、真实
-`evidence` ID、本地source selection、零写capture Planning、Managed Evidence Event/Aggregate selector、资源路径/目录及
-完整record tree plan；Foundation另完成candidate tree精确退休。Evidence 23项、Retirement 7项与Candidate 2项通过，
-但资源发布/Application/Public仍未实现。当前完整TypeScript门为948项全通过。
+该切片提交时通过918项完整TypeScript门；提交`8811a3c`进一步建立Managed Evidence Manifest、真实
+`evidence` ID、本地source selection、零写capture Planning、Managed Evidence Event/Aggregate selector、资源路径/目录、
+完整record tree plan及Foundation candidate tree精确退休。其完整TypeScript门为948项全通过。后续提交继续新增不可变
+Publication Transaction、纯Capture Plan codec、严格Transaction Store、file/tree Payload/Stage Materializer、幂等Final Record
+Publisher、record-set Inventory、三类Demand Root phase、事务期/健康Root Authority闭包，以及内部Application/Recovery与不可逆
+Transaction Settlement、按需Record Reader/Reading Service及第19个metadata-only公共工具。随后TODO身份收敛为
+`todo_<UUIDv4>` shared durable kind；随后A2-F1把不可变Intake收敛为Program/Window/Readiness及完整Ledger member refs，
+TODO owner 52项与Demand Publication/Tasking直接consumer 31项通过。A2-F2a又实现activate/withdraw纯State转换；
+A2-F2b统一Collection活动计数与Board终态过滤；A2-F2c关闭五操作Transaction合同，完整TODO面57项通过。
+A2-F2d关闭Storage source→target、真实写入与崩溃恢复；A2-F2e补齐唯一Service入口，完整TODO面62项通过。
+整体复核又以Intake Readiness关闭精确State revision可达性，完整TODO面63项通过。A2内部手动生命周期关闭；
+Auto Claim consumer仍未实现。A3-S1已新增两个未来Ledger公共工具共用的author-owned输入codec；
+A3-S2进一步建立不携带成员字节的纯Publication Plan；A3-S3已从当前Config唯一Design surface稳定读取并二次复验Markdown，
+由owner分配ID/time并生成零写计划；A3-S4按exact Plan返回Store兼容的新鲜内存字节；A3-S5a把expected Intent守卫加入Store恢复；A3-S5b～S8闭合Apply/Recovery、双family wire/Coordinator与双宿主MCP。A4进一步公开TODO list/item Query与一致page token；A5公开owner-derived exact Intake并复用原Collection transaction；A6删除Demand caller authorityMembers，使Authority唯一来自Intake。公共工具现为23个，零到一MCP链已通过并提交于`cfc61f4`；统一Review随后把公共入口拆成四个静态注册组，完成1023项完整门并提交于`08334ab`。
 
 ## HTML阅读页
 
@@ -116,16 +126,16 @@ HTML、搜索索引和渲染SVG均为可删除重建产物；禁止在`.build/`�
 | 文档包 | 总体/权威图 | 变更影响图 | 文件导入图 | 符号调用图 | 状态/恢复图 | 证据图 | 文档状态 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 00 绘图标准 | 已创建 | 不适用 | 不适用 | 不适用 | 不适用 | 已创建 | 当前 |
-| 01 总体架构 | 已创建 | 已创建 | 已创建 | 已创建 | 不适用 | 已创建 | 进行中：18工具、103 Schema；当前完整门948项 |
+| 01 总体架构 | 已创建 | 已创建 | 已创建 | 已创建 | 不适用 | 已创建 | 核实点：23工具、114 Schema；TODO79、A4-A6 48及专项7项通过 |
 | 02 基础能力 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 进行中：Loaded Artifact identity已有首个Manifest consumer，transfer仍冻结 |
 | 03 配置与工作区 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：维护事务、窗口身份和资源矩阵已提交 |
-| 04 治理与事件溯源 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 进行中：15个Event家族；Evidence资源Application仍缺失 |
+| 04 治理与事件溯源 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 核实点：A2-A6闭合；Demand只消费Intake refs；Auto Claim仍后续 |
 | 05 任务规划纵切 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：implementation/test共用公共Planning |
 | 06 实现投递与审阅 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：Delivery/Result/Review公共纵切闭合 |
 | 07 返工与完成 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：普通返工、产品缺陷返工、Resume与Completion闭合 |
 | 08 真实环境测试 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：Card、Task、Delivery、Result、Review与retest闭合 |
-| 09 公共MCP与宿主接缝 | 已创建 | 不适用 | 复用01 | 已创建 | 按能力记录 | 嵌入各图 | 当前：仍为18工具；Evidence资源目录尚无Application/Public |
-| 10 端到端业务 | 已创建 | 主图内记录边界 | 由下层提供 | 由下层提供 | 已创建 | 已创建 | 进行中：pending TODO到Completion公开；Evidence资源Application与Archive仍缺口 |
+| 09 公共MCP与宿主接缝 | 已创建 | 不适用 | 复用01 | 已创建 | 按能力记录 | 嵌入各图 | 当前：23工具；TODO Inspection/Intake双宿主公开，Auto Claim不执行 |
+| 10 端到端业务 | 已创建 | 主图内记录边界 | 由下层提供 | 由下层提供 | 已创建 | 已创建 | 核实点：Ledger→TODO→Demand→Route公开；Archive/Research/Redesign仍缺口 |
 
 ## 每个文档包的可选文件
 
@@ -178,5 +188,8 @@ HTML、搜索索引和渲染SVG均为可删除重建产物；禁止在`.build/`�
 
 `01-overall-architecture/`至`10-end-to-end-business-flow/`已经建立首轮覆盖。下一步不是继续扩展
 抽象图，而是随真实源码变化刷新来源指纹、逐图验证并修正漂移。Demand Publication Public已提交；Managed
-Evidence已完成Manifest、零写capture Planning、Event/Aggregate selector、资源路径/目录及record tree plan，但资源Application/Public尚未存在。Research Completion、
-Implementation Redesign与Archive仍须等待真实生产者、消费者和测试后再建图。
+Evidence已完成Manifest、零写capture Planning、Event/Aggregate selector、资源路径/record plan、不可变Transaction、严格
+Transaction Store、file/tree Payload/Stage Materializer、Final Record Publisher、Root Inventory/Authority闭包及内部
+Application/Recovery/Transaction Settlement、按需Record Reader/Reading Service及metadata-only Public。Research Completion、
+Implementation Redesign与Archive仍须等待真实生产者、消费者和测试后再建图。TODO A2-F1已经关闭不可变Intake合同，A2-F2a已关闭纯State转换；
+A2内部State、读模型、Transaction、Storage与Service已闭合并完成可达性复核；Public接线前仍不把activate/withdraw画成外部可调用主链。

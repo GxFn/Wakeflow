@@ -3,9 +3,9 @@ diagramId: ts-configuration-workspace-w0
 viewType: architecture
 truthKind: current-code
 reviewDepth: L1
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:26:05-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
 sourceFingerprint: sha256:505f4f76b12dd208bcd117075a93a6f626d6b11503f47109b3d9fec484fddc7a
 audience:
   - maintainer
@@ -200,9 +200,9 @@ flowchart TB
 | 证据 | 当前结果 | 能证明什么 |
 | --- | --- | --- |
 | Configuration/Workspace dependency-cruiser | 202 模块、1373 依赖、0 违规 | 当前闭包无循环、未解析依赖或跨层违规 |
-| 正式测试清单 | 54 个 `*.test.ts` | 覆盖主要配置、Maintenance、Managed、Support、Active和Window边界；已进入948项完整门 |
+| 正式测试清单 | 配置/Workspace领域测试 + 聚焦入口 | 覆盖主要配置、Maintenance、Managed、Support、Active和Window边界；已进入1023项完整门 |
 | Schema/生成合同 | 7/7 | Config、Maintenance、Binding和投影具有生成合同来源 |
-| 公共入口静态检查 | 18工具双宿主组合 | Maintenance与Binding保持Workspace owner；Demand Publication与其余治理工具只消费关闭、脱敏或owner派生事实 |
+| 公共入口静态检查 | 23工具双宿主组合 | Maintenance与Binding保持Workspace owner；Ledger/TODO/Demand/Evidence与其余治理工具只消费关闭、脱敏或owner派生事实 |
 
 ## 下钻入口
 

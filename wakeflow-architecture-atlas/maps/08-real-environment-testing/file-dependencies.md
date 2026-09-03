@@ -3,10 +3,10 @@ diagramId: ts-real-testing-file-f8
 viewType: file-dependency
 truthKind: current-code
 reviewDepth: L3
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:26:05-07:00
-baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:79e7a84af1b73a7d6d51bd50b4a10cc63b80b82aa4119206e2e780cce0d6cb6d
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: mixed
@@ -121,9 +121,10 @@ flowchart LR
 
 | Testing生产模块 | 当前全仓受检模块 | 当前全仓依赖 | 违规 |
 | ---: | ---: | ---: | ---: |
-| 23 | 740 | 5182 | 0 |
+| 23 | 823 | 5817 | 0 |
 
 ## 停止边界
 
 Testing已进入`d17602e`；rerun、real-environment Completion、blocked Resume和product-defect Remediation/retest
 均有真实consumer。真实宿主效果仍由Agent执行，MCP只签发Action并记录观察。
+A2-F1只收紧共享fixture的Ledger/TODO前置事实；本图23个Testing生产模块的直接import边已复核且没有变化。

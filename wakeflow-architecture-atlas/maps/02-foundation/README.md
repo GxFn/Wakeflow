@@ -1,12 +1,12 @@
 ---
 diagramId: ts-foundation-capability-b0
 viewType: architecture
-truthKind: in-progress-worktree
+truthKind: current-code
 reviewDepth: L1
-verifiedAt: 2026-09-02
-snapshotObservedAt: 2026-09-02T00:01:58-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:be32826a7dd27f3f23364d53e4a0520d2df4f0cbe054822747de84e122164308
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:dbd7556c754c439d9f93d3760cab89655a7a60d8cf61cedaa66579ba9736225f
 audience:
   - maintainer
   - reviewer
@@ -15,15 +15,22 @@ documentationOwner: Wakeflow Source Maintenance
 generatedBy: mixed
 refreshTriggers:
   - src/foundation/**
+  - src/contracts/identity/**
+  - src/contracts/schemas/identity/**
+  - src/contracts/generated/identity/**
   - src/contracts/schemas/foundation/**
   - src/contracts/generated/foundation/**
+  - tests/contracts/identity/**
   - tests/foundation/**
 sourcePaths:
   - src/foundation/**
+  - src/contracts/identity/**
 schemaPaths:
   - src/contracts/schemas/foundation/**
+  - src/contracts/schemas/identity/**
 testPaths:
   - tests/foundation/**
+  - tests/contracts/identity/**
 ---
 
 # Foundation：确定性能力与安全边界
@@ -32,7 +39,8 @@ testPaths:
 > Wakeflow 配置、工作区或治理业务状态。
 >
 > Runtime JSON Schema、`utc-instant`、只创建确定性 JSON 资源和完整 Git object ID均已进入提交基线；
-> 当前工作树进一步增加封闭directory candidate的精确、可续接退休能力；Managed Evidence仍只是未来consumer。
+> 当前源码中的Managed Evidence已真实消费Loaded Artifact transfer candidate、directory candidate退休、完整tree inspection和通用portable path连接；
+> A1又让真实TODO Intake/State/Transaction/Demand consumers进入共享`todo_<UUIDv4>` durable kind。
 
 ## 当前结论
 
@@ -47,13 +55,13 @@ Foundation 不反向依赖任何产品领域。
 
 | 项目 | 读取值 |
 | --- | --- |
-| 分支/提交 | `main`；`d17602ed9931a1898f713c740752c54b94bd8086` |
-| 工作树 | Loaded Artifact runtime export及directory candidate精确退休待提交 |
+| 分支/提交 | `main`；当前核实点`08334ab9c1d8bd923966a976fdf7989bc56ac38c` |
+| 工作树 | 生产Foundation无未提交改动；Loaded Artifact transfer、directory candidate退休与portable path join已有Managed Evidence真实consumer |
 | 生产源码 | 63 个 `.ts` 模块 |
 | Foundation 测试 | 57 个 `*.test.ts`；另有 2 个测试支持文件 |
 | Foundation 合同 | 6 个 JSON Schema、6 个生成 TypeScript 合同 |
 | 依赖扫描 | 68 个闭包模块、301 条依赖、0 违规；SWC 解析器 |
-| 来源指纹 | `6d67a06cfe0baa9cea6c8e4816b029ed8a5f7846d04475569fc9f704528c44f8` |
+| 来源指纹 | `dbd7556c754c439d9f93d3760cab89655a7a60d8cf61cedaa66579ba9736225f` |
 
 ## B0：Foundation 能力全景
 
@@ -119,6 +127,7 @@ flowchart TB
 | 递归 JSON 值准入 | 把未知值转换为无源引用、递归冻结的 JSON 树，并拒绝循环、代理、隐藏字段和非法数值 |
 | RFC 8785 | JSON Canonicalization Scheme；为相同 JSON 值生成稳定字节表示 |
 | 可移植资源路径 | 只表达根目录内逻辑位置的 NFC 相对路径；不包含物理绝对根 |
+| 可移植路径连接 | `joinPortableResourcePath`重新验证父、子与组合结果，不猜测目录/文件角色 |
 | `RootedDirectory` | 持有真实目录句柄、规范路径和初始节点快照的一次操作范围能力 |
 | 稳定读取 | 打开前后复验根、路径和节点，并对内容施加容量、节点类型、摘要与取消边界 |
 | stage | 原子提交前的自描述暂存文件；提交或崩溃后必须可被有界恢复识别 |
@@ -159,7 +168,7 @@ flowchart TB
 | Configuration | 9 | v3配置读取、替换、锁、恢复和选择 |
 | Hosts | 7 | Claude Code可移植设置与两宿主维护执行能力 |
 | Entrypoints | 1 | 公共MCP结果的规范JSON表示 |
-| Contracts | 1 | 应用级身份合同复用Foundation解析能力 |
+| Contracts | 1 | 应用级身份合同复用Foundation UUID能力；当前durable kind已包含真实TODO身份 |
 
 ## 状态、恢复与失败关闭
 
@@ -185,9 +194,10 @@ flowchart TB
 - `runtime-json-schema.ts`安全支持无原型JSON对象的`uniqueItems`比较；
 - `utc-instant.ts`只在明确的UTC解析/比较边界使用，不拥有跨authority因果排序；
 - `create-only-deterministic-json-resource.ts`已由Test Dispatch等真实consumer使用；
-- Loaded Artifact tree identity已由进行中的Managed Evidence Manifest复用；transfer candidate/publication仍无生产consumer；
-- directory candidate retirement已实现并验证，但尚无生产consumer；Event前/Event后调用权仍属于未来Evidence事务owner；
+- Loaded Artifact tree identity与transfer candidate已由Managed Evidence Planning/Stage消费；transfer publication仍无生产consumer；
+- directory candidate retirement由Evidence Transaction Settlement在Event前stale恢复中消费；Event后路径禁止调用；
 - `git-object-id.ts`闭合完整SHA-1/SHA-256身份，不接受缩写。
+- TODO身份不再维护人工可读兼容词汇；`TodoItemId`只是共享`WakeflowDurableId<"todo">`的领域错误窄边界。
 
 Foundation继续只提供机制；任何领域owner、资源family或业务事务必须留在上层。
 

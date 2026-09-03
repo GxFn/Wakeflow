@@ -3,10 +3,10 @@ diagramId: ts-real-testing-x0
 viewType: vertical-slice
 truthKind: current-code
 reviewDepth: L2
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:26:05-07:00
-baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:79e7a84af1b73a7d6d51bd50b4a10cc63b80b82aa4119206e2e780cce0d6cb6d
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: mixed
@@ -37,6 +37,9 @@ Remediation Authorization重开原产品Target；修复accept后由TestCard Plan
 
 公共MCP通过Route、TestCard Planning、最小Test Task Planning、Test Delivery、Claim/Outcome、Result Import、
 Inspection/Test Decision、Remediation与Completion工具暴露该链；Server不会自动串联这些步骤，Agent按Route调用。
+
+A2-F1没有改变Testing状态机。共享Planning fixture现在先发布含`test-environment`的Ledger record，再把同一完整member ref同时写入
+TODO Intake与Demand Authority，因而真实环境测试前置关系不再由path-only占位文档模拟。
 
 ## X0：TestCard到真实测试Result
 
@@ -139,12 +142,12 @@ flowchart TB
 | 项目 | 读取值 |
 | --- | --- |
 | 生产源码 | 23个Testing模块 |
-| 当前全仓架构门 | 740模块、5182依赖、0违规；Testing语义未受Foundation Retirement增量影响 |
+| 当前全仓架构门 | 823模块、5817依赖、10个显式生产根、0违规；入口解耦只改变MCP组合层，Testing语义未变 |
 | 测试 | 9个正式测试、4个fixture |
 | 合同 | 5个Schema、5个生成合同 |
 | 提交状态 | Testing及相邻公共入口已进入`d17602e` |
-| 最近完整TypeScript门 | 948 pass / 0 fail / 0 cancelled / 0 skip；覆盖当前全部增量 |
-| 来源指纹 | `7f70498f7256fe4cba57c95d0b89ad1c49297afa71d34cf3a0ed1dedef2f4604` |
+| 最近完整TypeScript门 | 1023 pass / 0 fail / 0 cancelled / 0 skip；覆盖提交`08334ab`，Testing语义未变 |
+| 来源指纹 | `0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853` |
 
 ## 关键边界
 

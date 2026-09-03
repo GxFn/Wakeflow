@@ -3,10 +3,10 @@ diagramId: ts-foundation-runtime-c0
 viewType: runtime-call-sequence
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-02
-snapshotObservedAt: 2026-09-02T00:01:58-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:519046c9a9efdec06e8b7d27ef1f06fd414c3483a9fd521f938778caad937221
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:c2208f1d32e5228d50ee7874d0bd5cd562c2a13290674a0628f6a8e696197cd7
 audience:
   - maintainer
   - reviewer

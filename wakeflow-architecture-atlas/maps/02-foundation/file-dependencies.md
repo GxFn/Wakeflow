@@ -1,12 +1,12 @@
 ---
 diagramId: ts-foundation-file-dependency-f2
 viewType: file-dependency
-truthKind: in-progress-worktree
+truthKind: current-code
 reviewDepth: L3
-verifiedAt: 2026-09-02
-snapshotObservedAt: 2026-09-02T00:01:58-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:be32826a7dd27f3f23364d53e4a0520d2df4f0cbe054822747de84e122164308
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:d7947083b55fb0bab4129c90753de8520d1e2d29d3d6b424ac7c54b6642e22e2
 audience:
   - maintainer
   - reviewer
@@ -104,6 +104,7 @@ flowchart LR
 
   TREE_PLAN -->|"E-F2-24 规范JSON摘要"| CANONICAL_SHA
   TREE_PLAN -->|"E-F2-25 节点与路径"| SNAPSHOT
+  TREE_PLAN -->|"E-F2-43 通用路径连接"| PATH
   TREE_PUB -->|"E-F2-26 根作用域"| ROOT
   TREE_PUB -->|"E-F2-27 节点与路径"| SNAPSHOT
   ARTIFACT_PUB -->|"E-F2-28 发布目录树"| TREE_PUB
@@ -146,7 +147,7 @@ flowchart LR
 | `F-FDN-03` | `src/foundation/data/canonical-json.ts` | `canonicalizeJson` | 已实现 | 生成 RFC 8785 规范 JSON 与 UTF-8 字节 |
 | `F-FDN-04` | `src/foundation/crypto/sha256.ts` | `parseSha256Digest`、`computeSha256Digest` | 已实现 | 完整 SHA-256 摘要词法与计算 |
 | `F-FDN-05` | `src/foundation/crypto/canonical-json-sha256.ts` | `computeCanonicalJsonSha256Digest` | 已实现 | 组合规范 JSON 与 SHA-256 形成语义摘要 |
-| `F-FS-01` | `src/foundation/filesystem/portable-resource-path.ts` | `parsePortableResourcePath` | 已实现 | 根目录内可移植 NFC 相对路径 |
+| `F-FS-01` | `src/foundation/filesystem/portable-resource-path.ts` | `parse/split/joinPortableResourcePath` | 已实现 | 根目录内可移植NFC相对路径及重新准入的父子连接 |
 | `F-FS-02` | `src/foundation/filesystem/file-node-snapshot.ts` | `createFileNodeSnapshot`、`sameFileNodeSnapshot` | 已实现 | 文件节点身份与完整快照比较 |
 | `F-FS-03` | `src/foundation/filesystem/rooted-directory.ts` | `RootedDirectory` | 已实现 | 打开、复验并关闭一次操作范围的真实目录根 |
 | `F-FS-04` | `src/foundation/filesystem/stable-file-read.ts` | `readStableFile` | 已实现 | O_NOFOLLOW、有界精确读取、摘要和前后复验 |
@@ -183,7 +184,7 @@ flowchart LR
 | `E-F2-01`–`E-F2-03` | 数据/摘要 | 被依赖的准入与生成合同 | 文件顶部静态 imports | `tests/foundation/{data,crypto}/**` |
 | `E-F2-04`–`E-F2-12` | 路径、根与稳定读取 | 生成模式、节点、摘要和根作用域 | dependency-cruiser直接边 | `tests/foundation/filesystem/{portable-resource-path,rooted-directory,stable-*}.test.ts` |
 | `E-F2-13`–`E-F2-23` | 原子写入、恢复、锁与只创建 | 根、路径、稳定读取与提交门面 | 写入/恢复模块静态 imports | 原子写入、stage recovery、exclusive lock与create-only测试 |
-| `E-F2-24`–`E-F2-29`、`E-F2-37`–`E-F2-42` | 目录树、退休与Artifact发布 | 规范摘要、节点、路径、精确退休和发布能力 | plan/retirement/publication静态 imports | directory tree、retirement与loaded artifact tree测试 |
+| `E-F2-24`–`E-F2-29`、`E-F2-37`–`E-F2-43` | 目录树、退休与Artifact发布 | 规范摘要、节点、通用路径连接、精确退休和发布能力 | plan/retirement/publication静态 imports | directory tree、retirement、portable path与loaded artifact tree测试 |
 | `E-F2-30`–`E-F2-36` | Git、UTC与事件演进 | 根、摘要、Schema和JSON准入 | 对应模块静态 imports | Git观察、Git object ID、UTC与版本演进测试 |
 
 ## 折叠清单
@@ -193,7 +194,7 @@ flowchart LR
 - UTF-8、字节数、UUID和 Node system error 等单职责原语；
 - 原子写入的 stage address、stage I/O、target I/O、settlement 与 unlink 子模块；
 - 目录物化、文件/目录 candidate、复制 candidate、tree scan 与稳定资源树读取；
-- Loaded Artifact Tree 的 identity、candidate 与 transfer plan；identity已由进行中的Managed Evidence Manifest消费，transfer仍无生产consumer；
+- Loaded Artifact Tree 的identity、candidate与transfer plan；Managed Evidence已消费identity及transfer candidate/plan，transfer publication仍无生产consumer；
 - 单调时钟、时长、截止点与墙上时钟；
 - 6 个 JSON Schema 到 6 个生成合同的逐文件映射。
 
@@ -201,5 +202,5 @@ flowchart LR
 
 - 本图不证明调用顺序、提交点或失败恢复顺序。
 - Foundation机制不拥有配置、治理或宿主业务状态。
-- Foundation 62个生产模块已进入`d17602e`；当前工作树新增第63个candidate retirement模块，后续来源变化仍须复核。
+- 当前提交基线包含63个Foundation生产模块；candidate retirement已有Managed Evidence恢复consumer，后续来源变化仍须复核。
 - 完整 63 模块导入图应由 dependency-cruiser数据按需查询，不应一次塞入文档主图。

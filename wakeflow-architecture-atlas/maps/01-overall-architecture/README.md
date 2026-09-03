@@ -1,12 +1,12 @@
 ---
 diagramId: ts-overall-architecture-a0
 viewType: architecture
-truthKind: in-progress-worktree
+truthKind: current-code
 reviewDepth: L0
-verifiedAt: 2026-09-02
-snapshotObservedAt: 2026-09-02T00:01:58-07:00
-baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:1a22720a35fb3f78d08fb80e6d690bc9be095a193ee371c9723c17f4edfa2794
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:29a16787a76280ef72c6c4069e7d9ccf640363f77c44a3721db4120c3e6144dd
 audience:
   - maintainer
   - reviewer
@@ -28,32 +28,32 @@ testPaths:
 
 # Wakeflow TypeScript 总体架构
 
-> 本文绑定Demand Publication实现提交`f7c005d`及其完整TypeScript核实结果，并纳入当前未提交的
-> Managed Evidence source selection、零写capture Planning、Event/Aggregate selector、资源路径/目录及record tree plan。双宿主候选仍明确`releaseEligible=false`。
+> 本文以提交`08334ab`为当前核实点：`cfc61f4`已闭合Managed Evidence Public、A2 TODO内部生命周期、A3 Ledger Authority Public、A4 Inspection Public、A5 Intake Public与A6 Demand Authority单源收敛；`08334ab`进一步提交统一技术Review、四个静态MCP注册组与测试解耦。双宿主候选仍明确`releaseEligible=false`。
 
 ## 当前结论
 
 当前TypeScript候选运行时由一套共享源码组成：基础能力、配置、工作区和治理领域保持宿主中立；
 Codex与Claude Code只在宿主实现和固定组合根分开。官方MCP SDK拥有协议、stdio和工具路由；
-Wakeflow公共适配层当前注册18个已有真实领域owner的工具，其中`wakeflow_create_demand`以
-`preview → exact apply / explicit recover`公开TODO-backed Demand Publication。
+Wakeflow公共适配层当前注册23个已有真实领域owner的工具；`wakeflow_publish_requirement`与
+`wakeflow_publish_confirmation`公开immutable Ledger Authority producer，`wakeflow_create_demand`公开TODO-backed Demand Publication，
+`wakeflow_record_evidence`公开metadata-only Managed Evidence记录。
 
-治理源码已经闭合Demand Publication、Controller Route、implementation/test Tasking、Delivery、Host Effect事实记录、Result、
+治理源码已经闭合TODO内部生命周期与Inspection/Intake Public、Demand Publication、Controller Route、implementation/test Tasking、Delivery、Host Effect事实记录、Result、
 Implementation/Test Review、blocked Resume、Product Defect Remediation/retest与Completion。Agent仍独占真实
-宿主效果执行；Research Completion、Implementation Redesign、Evidence资源Application/Public及Archive仍是明确缺口。`core/`、
+宿主效果执行；Research Completion、Implementation Redesign与Archive仍是明确缺口。内部Evidence Reader bytes仍未公开。`core/`、
 `plugins/`和安装缓存仍是旧JS对照/发布面，不属于本图描述的TS候选闭包。
 
 ## 核验快照
 
 | 项目 | 读取值 |
 | --- | --- |
-| 分支 | `main`，相对本地`origin/main`领先2个提交 |
-| `HEAD` | `901d5be5722e0849b350fcf8c0d8a432835a5cbf` |
-| 工作树 | 候选stdio测试维护、Managed Evidence Manifest/Capture/Event/Resource/Record Plan骨干及本次Review/Atlas记录待提交 |
-| dependency-cruiser | 740个模块、5182条依赖、0条违规 |
-| 生产TS模块 | 375个手写模块 + 103个生成合同 |
-| 当前公共MCP工具 | 18个，双宿主名称与Schema集合一致 |
-| 当前验证 | 完整TypeScript门948项全通过；103 Schema、212 external refs；Architecture 0违规 |
+| 分支 | `main`，相对本地`origin/main`领先6个提交 |
+| `HEAD` | `08334ab9c1d8bd923966a976fdf7989bc56ac38c` |
+| 工作树 | 生产TypeScript与测试无未提交改动；仅Architecture Atlas文档同步待提交 |
+| dependency-cruiser | 823个模块、5817条依赖、10个显式生产根、0条违规 |
+| 生产TS模块 | 413个手写模块 + 114个生成合同 |
+| 当前公共MCP工具 | 23个，双宿主名称与Schema集合一致 |
+| 当前验证 | 完整TypeScript门1023项全通过；entrypoint 12文件/25项与Demand input反向依赖18文件/80项通过；114 Schema、215 external refs；Architecture 0违规 |
 
 ### 生产模块分布
 
@@ -62,11 +62,11 @@ Implementation/Test Review、blocked Resume、Product Defect Remediation/retest�
 | 基础能力 | 63 | 数据、加密、身份、时间、根目录文件系统、原子性、锁、树候选精确退休与Git观察 |
 | 配置 | 10 | v3配置、选择、放置与配置权威 |
 | 工作区 | 81 | 维护事务、资源矩阵、活动面、静态物化、宿主本地布局和窗口身份 |
-| 治理 | 181 | TODO、台账、Demand/Evidence Selection/Planning/Event/Resource/Record Plan、Controller Route、Tasking、Delivery、Result、Review、Lifecycle与Testing |
+| 治理 | 213 | TODO生命周期/Inspection/Intake、台账、Ledger/Demand/Evidence Planning、Payload、Application、Public Contract/Coordinator、Controller Route、Tasking、Delivery、Result、Review、Lifecycle与Testing |
 | 宿主 | 11 | Codex/Claude Code资源Profile、身份Profile与宿主专用维护执行 |
-| 入口 | 28 | 两宿主固定组合、公共MCP适配、固定host facade和stdio生命周期 |
+| 入口 | 34 | 两宿主固定组合、58行Public Server、四注册组、共享结果适配、固定host facade和stdio生命周期 |
 | 手写合同 | 1 | 应用级类型化身份解析边界 |
-| 生成合同 | 103 | 由JSON Schema派生的类型和运行时Schema常量 |
+| 生成合同 | 114 | 由JSON Schema派生的类型和运行时Schema常量 |
 
 ## A0：总体架构与边界
 
@@ -81,7 +81,7 @@ flowchart TB
     direction LR
     CODEX_ROOT["[源码] Codex组合根"]
     CLAUDE_ROOT["[源码] Claude Code组合根"]
-    PUBLIC_MCP["[源码] 公共MCP适配层\n注册18个真实owner工具"]
+    PUBLIC_MCP["[源码] 公共MCP适配层\n注册23个真实owner工具"]
     STDIO["[源码] 官方stdio生命周期边界"]
   end
 
@@ -136,7 +136,7 @@ flowchart TB
 | 图中术语 | 解释 |
 | --- | --- |
 | 固定组合根 | 在模块装载时绑定宿主Profile与执行端口的入口，不接受运行时宿主选择器 |
-| 公共MCP适配层 | 将官方MCP SDK调用转换为当前18个公共领域执行函数的薄层 |
+| 公共MCP适配层 | 将官方MCP SDK调用转换为当前23个公共领域执行函数的薄层 |
 | 宿主中立领域 | 不直接导入Codex或Claude Code具体实现的配置、工作区和治理代码 |
 | 宿主专用实现 | 只在对应组合根注入的资源Profile、身份Profile或宿主维护执行 |
 | wire合同 | MCP输入/输出使用的自包含JSON Schema和生成TypeScript合同 |
@@ -169,7 +169,7 @@ flowchart TB
 | `E-A0-05`、`E-A0-06`、`E-A0-07`、`E-A0-08` | MCP宿主/组合根 | 固定制品/stdio | 启动与调用 | 两宿主`run*WakeflowMcpStdio` | 公共MCP官方Client测试 |
 | `E-A0-09`、`E-A0-10` | 组合根 | 公共Server | 固定组合 | 两宿主`create*WakeflowMcpServer` | 公共MCP与Window Binding入口测试 |
 | `E-A0-11`、`E-A0-12` | 组合根 | 宿主实现 | 固定注入 | 两宿主Maintenance/Binding入口 | 两宿主Maintenance入口测试 |
-| `E-A0-13`、`E-A0-14` | 公共MCP层 | 领域/合同 | 调用与Schema准入 | `createWakeflowPublicMcpServer` | 18工具list/call、双宿主一致性、自包含Schema与Demand Publication真实MCP测试 |
+| `E-A0-13`、`E-A0-14` | 公共MCP层 | 领域/合同 | 调用与Schema准入 | `createWakeflowPublicMcpServer` | 独立23工具catalog/双宿主测试及Ledger/TODO/Demand/Evidence真实MCP测试 |
 | `E-A0-15`、`E-A0-16` | 宿主实现 | 宿主中立领域 | 实现宿主端口 | `src/hosts/*`和宿主entrypoint facade | Maintenance与Binding纵切测试 |
 | `E-A0-17`、`E-A0-18` | 宿主中立领域 | 基础/生成合同 | 静态依赖 | dependency-cruiser快照 | 架构规则与0违规结果 |
 
@@ -185,11 +185,13 @@ flowchart TB
 
 ## 当前停止边界
 
-- 当前公共MCP发布18个工具；`wakeflow_create_demand`可从pending TODO生成完整计划、精确应用或显式恢复，并在成功后进入Route检查。
-- Managed Evidence当前已有本地source selection、零写capture Planning、Event/Aggregate selector、资源路径/目录及record tree plan，尚无Root Inventory集成、资源Application或公共工具。
+- 当前公共MCP发布23个工具；Requirement/Confirmation、TODO Inspection/Intake、Demand与Managed Evidence均以明确业务工具进入各自owner。
+- Managed Evidence公共结果只含metadata receipt；内部deferred/member/complete Reader和payload bytes仍不公开。
+- A2 TODO内部生命周期、A4 Inspection Public和A5 Intake Public均已闭合；A6使Demand Authority只读取immutable Intake refs。Auto Claim仍只是Intake策略字段，没有执行consumer。
+- A3 Ledger producer已与A4/A5/A6形成公开`Ledger → TODO → Demand → Route`链；每一步仍是独立owner，不是跨根Saga。
 - 公共Target Task Planning支持完整implementation输入和最小`{workType:"test"}`派生请求。
 - Agent执行宿主效果，MCP只规划、验证并记录Wakeflow自己的权威。
-- 当前完整TypeScript门为948项，已覆盖Evidence与Candidate Retirement。旧JS对照、双宿主插件smoke与release gate不属于本次证据。
+- 当前完整TypeScript门为1023项，覆盖提交`08334ab`；entrypoint 12文件/25项和Demand input反向依赖18文件/80项也独立通过。旧JS等价、双宿主plugin validator/smoke、真实宿主窗口与release gate仍未运行。
 - 本文必须在`src/**`或架构规则变化后重新核验。
 
 ## 下钻入口

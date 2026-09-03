@@ -3,10 +3,10 @@ diagramId: ts-real-testing-runtime-x1
 viewType: runtime-call-sequence
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
-baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:79e7a84af1b73a7d6d51bd50b4a10cc63b80b82aa4119206e2e780cce0d6cb6d
+verifiedAt: 2026-09-03
+snapshotObservedAt: 2026-09-03T03:13:56-07:00
+baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
+sourceFingerprint: sha256:0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: manual
@@ -139,3 +139,4 @@ sequenceDiagram
 
 Testing与公共入口已提交；本文不声明某次真实宿主测试已经实际执行。Agent仍负责一次性宿主效果，
 Wakeflow公共工具负责Card/Task/Delivery/Result/Review/Remediation/Completion的确定性权威与路由。
+A2-F1真实fixture把唯一`test-environment` member ref同时绑定到TODO Intake与Demand Authority；生产Testing调用时序和owner边界不变。

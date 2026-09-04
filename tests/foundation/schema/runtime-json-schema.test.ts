@@ -171,16 +171,13 @@ test("Schema and dependency admission execute no accessors", () => {
 });
 
 test("unresolved, duplicate, and malformed Schema catalogs fail closed", () => {
-  expectSchemaError(
-    () =>
-      createRuntimeJsonSchemaValidator({
-        $schema: "https://json-schema.org/draft/2020-12/schema",
-        $id: "urn:wakeflow:test:missing-ref",
-        $ref: "urn:wakeflow:test:missing",
-      }),
-    "schema-compile",
-    "$schema",
-  );
+  // 编译推迟到第一次校验；未解析的引用在那一刻以 schema-compile 报出。
+  const unresolved = createRuntimeJsonSchemaValidator({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "urn:wakeflow:test:missing-ref",
+    $ref: "urn:wakeflow:test:missing",
+  });
+  expectSchemaError(() => unresolved({}), "schema-compile", "$schema");
   const dependency = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "urn:wakeflow:test:duplicate",

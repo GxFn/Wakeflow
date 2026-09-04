@@ -31,6 +31,11 @@ import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/govern
 import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-card-planning-public-contract.js";
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-delivery-preparation-public-contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
+import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
+import {
+  findWakeflowToolRegistration,
+  measureWakeflowToolCatalogBytes,
+} from "../../src/kernel/tool-registry.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-contract.js";
 import {
   connectWakeflowMcpServerForTest,
@@ -235,6 +240,8 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
   ),
 ] satisfies readonly Readonly<ExpectedPublicTool>[]);
 
+const WAKEFLOW_PUBLIC_TOOL_LIST_INTERIM_BUDGET_BYTES = 128 * 1024;
+
 function unavailableExecutor(): Promise<never> {
   return Promise.reject(new Error("Catalog test executors must not run."));
 }
@@ -269,52 +276,41 @@ function validPublicServerOptions(): PublicServerOptions {
   });
 }
 
-const EXECUTOR_CONFIGURATION_CASES = Object.freeze([
-  ["executeMaintenance", "maintenance-executor"],
-  ["completeDemand", "demand-completion-executor"],
-  ["createDemand", "demand-publication-executor"],
-  ["recordManagedEvidence", "managed-evidence-executor"],
-  ["publishConfirmation", "confirmation-publication-executor"],
-  ["publishRequirement", "requirement-publication-executor"],
-  ["resumeTargetResultReview", "target-result-review-resume-executor"],
-  ["registerWindowHostBinding", "window-host-binding-executor"],
-  ["claimTargetHostEffect", "target-host-effect-claim-executor"],
-  ["inspectDemandRoute", "demand-controller-route-executor"],
-  ["planTargetTask", "target-task-planning-executor"],
-  ["planTestCard", "test-card-planning-executor"],
-  ["prepareImplementationDelivery", "target-delivery-preparation-executor"],
-  ["prepareTestDelivery", "test-delivery-preparation-executor"],
-  ["recordTargetHostEffectOutcome", "target-host-effect-outcome-executor"],
-  ["rearmTargetHostEffect", "target-host-effect-rearm-executor"],
-  ["importTargetResult", "target-result-import-executor"],
-  ["inspectTargetResultReview", "target-result-review-inspection-executor"],
-  ["inspectTodo", "todo-inspection-executor"],
-  ["intakeTodo", "todo-intake-publication-executor"],
-  [
-    "recordControllerImplementationReviewDecision",
-    "controller-implementation-review-decision-executor",
-  ],
-  [
-    "recordControllerTestReviewDecision",
-    "controller-test-review-decision-executor",
-  ],
-  [
-    "authorizeProductDefectRemediation",
-    "controller-product-defect-remediation-executor",
-  ],
-] as const satisfies readonly (readonly [ExecutorField, string])[]);
+const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
+  "executeMaintenance",
+  "completeDemand",
+  "createDemand",
+  "recordManagedEvidence",
+  "publishConfirmation",
+  "publishRequirement",
+  "resumeTargetResultReview",
+  "registerWindowHostBinding",
+  "claimTargetHostEffect",
+  "inspectDemandRoute",
+  "planTargetTask",
+  "planTestCard",
+  "prepareImplementationDelivery",
+  "prepareTestDelivery",
+  "recordTargetHostEffectOutcome",
+  "rearmTargetHostEffect",
+  "importTargetResult",
+  "inspectTargetResultReview",
+  "inspectTodo",
+  "intakeTodo",
+  "recordControllerImplementationReviewDecision",
+  "recordControllerTestReviewDecision",
+  "authorizeProductDefectRemediation",
+] as const satisfies readonly ExecutorField[]);
 
 test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   const valid = validPublicServerOptions();
   const configuredExecutorFields = Object.keys(valid)
     .filter((field) => field !== "serverName" && field !== "serverVersion")
     .sort();
-  const exercisedExecutorFields = EXECUTOR_CONFIGURATION_CASES.map(
-    ([field]) => field,
-  ).sort();
+  const exercisedExecutorFields = [...EXECUTOR_CONFIGURATION_FIELDS].sort();
   deepEqual(exercisedExecutorFields, configuredExecutorFields);
   equal(new Set(exercisedExecutorFields).size, exercisedExecutorFields.length);
-  for (const [field, reason] of EXECUTOR_CONFIGURATION_CASES) {
+  for (const field of EXECUTOR_CONFIGURATION_FIELDS) {
     const executor = valid[field];
     throws(
       () =>
@@ -324,7 +320,8 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
         }),
       (error: unknown) =>
         error instanceof WakeflowPublicMcpServerConfigurationError &&
-        error.reason === reason,
+        error.reason === "executor" &&
+        error.field === field,
     );
   }
   throws(
@@ -361,20 +358,30 @@ test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
   for (const expected of PUBLIC_TOOL_CATALOG) {
     const actual = actualByName.get(expected.name);
     equal(actual?.inputSchema.$id, expected.inputId);
-    equal(actual?.outputSchema?.$id, expected.outputId);
+    // ADR-0004 选项 A：结果 Schema 只在服务端校验，不进 tools/list。
+    equal(actual?.outputSchema, undefined);
+    equal(
+      findWakeflowToolRegistration(WAKEFLOW_PUBLIC_TOOL_CATALOG, expected.name)
+        ?.resultSchema.$id,
+      expected.outputId,
+    );
     deepEqual(actual?.annotations, expected.annotations);
     equal(
       JSON.stringify(actual?.inputSchema).includes('"$ref":"urn:'),
-      false,
-    );
-    equal(
-      JSON.stringify(actual?.outputSchema).includes('"$ref":"urn:'),
       false,
     );
     for (const fragment of expected.descriptionFragments ?? []) {
       equal(actual?.description?.includes(fragment), true);
     }
   }
+  // 体积预算：ADR-0004 的 60 KB 目标在 L1 合同收敛后复测；这里先锁住不回退。
+  const listBytes = Buffer.byteLength(JSON.stringify(listed.tools), "utf8");
+  equal(listBytes <= WAKEFLOW_PUBLIC_TOOL_LIST_INTERIM_BUDGET_BYTES, true);
+  equal(
+    measureWakeflowToolCatalogBytes(WAKEFLOW_PUBLIC_TOOL_CATALOG) <=
+      WAKEFLOW_PUBLIC_TOOL_LIST_INTERIM_BUDGET_BYTES,
+    true,
+  );
 });
 
 test("Codex与Claude Code composition root发布同一二十三工具集合", async () => {

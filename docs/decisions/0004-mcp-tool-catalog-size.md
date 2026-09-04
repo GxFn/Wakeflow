@@ -5,6 +5,7 @@
 > 裁决日期：2026-09-03，用户确认采用建议方案（选项 A，目标总载荷低于 60 KB）
 > 回写：plan §3 新增 TSD-13；§8.1 P1 退出门；§9 Schema 行；§14 新增第 14 项；plan 落盘保留与清理 owner 列入 §8.1 P0 待核实事项。codegen、Schema 与协调器改动在 P1 执行
 > 基线提交：`c0098e2`
+> 落地记录：2026-09-04 L0.5 落地第 1 项（结果 Schema 不进 `tools/list`）与第 3 项（描述压到两句），第 2 项在 `wakeflow_maintain_workspace` 以"同一请求加 `planDigest`、服务端重算"落地；`tools/list` 从 319,252 字节降到 119,825 字节，剩余体积在请求 Schema，60 KB 目标待 L1 各切片收敛合同后复测（进度日志 13.73）
 > 相关：[reviews/2026-09-03 评估 A2](../reviews/2026-09-03-typescript-checkpoint-review.md)、[plan §3 TSD-05](../plan/typescript-reimplementation-plan.md)、`src/contracts/schemas/entrypoints/`、`tooling/codegen/schema-types.ts`
 
 ## 背景

@@ -1,69 +1,59 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 
+import { executeTargetDeliveryPreparationPublicRequest } from "../governance/delivery/target-delivery-preparation-public-coordinator.js";
+import { executeTargetHostEffectClaimPublicRequest } from "../governance/delivery/target-host-effect-claim-public-coordinator.js";
+import { executeTargetHostEffectOutcomePublicRequest } from "../governance/delivery/target-host-effect-outcome-public-coordinator.js";
+import { executeTargetHostEffectRearmPublicRequest } from "../governance/delivery/target-host-effect-rearm-public-coordinator.js";
+import { executeTargetResultImportPublicRequest } from "../governance/result/target-result-import-public-coordinator.js";
+import { executeTestDeliveryPreparationPublicRequest } from "../governance/testing/test-delivery-preparation-public-coordinator.js";
+import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { executeWakeflowWindowHostBindingPublicRequest } from "../workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
-import { executeCodexTargetDeliveryPreparation } from "./codex-wakeflow-target-delivery-preparation.js";
-import { executeCodexTargetHostEffectClaim } from "./codex-wakeflow-target-host-effect-claim.js";
-import { executeCodexTargetHostEffectOutcome } from "./codex-wakeflow-target-host-effect-outcome.js";
-import { executeCodexTargetHostEffectRearm } from "./codex-wakeflow-target-host-effect-rearm.js";
-import { executeCodexTargetResultImport } from "./codex-wakeflow-target-result-import.js";
-import { executeCodexTargetResultReviewInspection } from "./codex-wakeflow-target-result-review-inspection.js";
-import { executeCodexTestDeliveryPreparation } from "./codex-wakeflow-test-delivery-preparation.js";
-import { executeCodexControllerImplementationReviewDecision } from "./codex-wakeflow-controller-implementation-review-decision.js";
-import { executeCodexControllerProductDefectRemediation } from "./codex-wakeflow-controller-product-defect-remediation.js";
-import { executeCodexControllerTestReviewDecision } from "./codex-wakeflow-controller-test-review-decision.js";
-import { executeCodexWakeflowWindowHostBindingRegistration } from "./codex-wakeflow-window-host-binding.js";
-import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
-import { executeTargetTaskPlanningPublicRequest } from "../capabilities/tasking/plan-target-task.js";
-import { executeDemandControllerRoutePublicRequest } from "../governance/controller/demand-controller-route-public-coordinator.js";
-import { executeDemandCompletionPublicRequest } from "../governance/lifecycle/demand-completion-public-coordinator.js";
-import { executeDemandPublicationPublicRequest } from "../governance/demand/publication/demand-publication-public-coordinator.js";
-import { executeManagedEvidencePublicRequest } from "../governance/evidence/managed-evidence-public-coordinator.js";
-import {
-  executeConfirmationPublicationPublicRequest,
-  executeRequirementPublicationPublicRequest,
-} from "../governance/ledger/ledger-authority-public-coordinator.js";
-import { executeTodoInspectionPublicRequest } from "../governance/todo/todo-inspection-public-coordinator.js";
-import { executeTodoIntakePublicationPublicRequest } from "../governance/todo/todo-intake-publication-public-coordinator.js";
-import { executeTargetResultReviewResumePublicRequest } from "../governance/review/target-result-review-resume-public-coordinator.js";
-import { executeTestCardPlanningPublicRequest } from "../governance/testing/test-card-planning-public-coordinator.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
+import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
+import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
 
-/** Codex 制品内固定的 MCP server identity；版本由制品装配入口注入。 */
+/**
+ * Wakeflow Entrypoint / Codex：Codex 制品的 MCP composition root。
+ *
+ * 宿主身份与 profile 在模块装载时固定；需要宿主的工具在这里绑定 facade，其余
+ * 复用与宿主无关的 executor。公共目录由登记表生成，本文件不选择业务步骤，也不
+ * 执行宿主效果。
+ */
+
 const CODEX_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-codex" as const;
 
-/** 创建固定组合Maintenance、Ledger/TODO/Evidence、Controller Route、Tasking、Delivery与Binding的Codex MCP server。 */
+const CODEX_HOST_IDENTITY = Object.freeze({ hostId: "codex" as const });
+
+const CODEX_HOST_FACADE = Object.freeze({
+  hostId: "codex" as const,
+  resourceProfile: codexWorkspaceHostResourceProfile,
+  identityProfile: codexWindowHostIdentityProfile,
+});
+
+/** 创建按登记表发布全部公共工具的 Codex MCP server。 */
 export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
   return createWakeflowPublicMcpServer({
     serverName: CODEX_WAKEFLOW_MCP_SERVER_NAME,
     serverVersion,
+    ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,
     executeMaintenance: executeCodexWakeflowMaintenance,
-    completeDemand: executeDemandCompletionPublicRequest,
-    createDemand: executeDemandPublicationPublicRequest,
-    recordManagedEvidence: executeManagedEvidencePublicRequest,
-    publishConfirmation: executeConfirmationPublicationPublicRequest,
-    publishRequirement: executeRequirementPublicationPublicRequest,
-    inspectDemandRoute: executeDemandControllerRoutePublicRequest,
-    importTargetResult: executeCodexTargetResultImport,
-    inspectTargetResultReview: executeCodexTargetResultReviewInspection,
-    inspectTodo: executeTodoInspectionPublicRequest,
-    intakeTodo: executeTodoIntakePublicationPublicRequest,
-    resumeTargetResultReview: executeTargetResultReviewResumePublicRequest,
-    planTargetTask: executeTargetTaskPlanningPublicRequest,
-    planTestCard: executeTestCardPlanningPublicRequest,
-    prepareImplementationDelivery: executeCodexTargetDeliveryPreparation,
-    prepareTestDelivery: executeCodexTestDeliveryPreparation,
-    claimTargetHostEffect: executeCodexTargetHostEffectClaim,
-    recordTargetHostEffectOutcome: executeCodexTargetHostEffectOutcome,
-    rearmTargetHostEffect: executeCodexTargetHostEffectRearm,
-    recordControllerImplementationReviewDecision:
-      executeCodexControllerImplementationReviewDecision,
-    recordControllerTestReviewDecision:
-      executeCodexControllerTestReviewDecision,
-    authorizeProductDefectRemediation:
-      executeCodexControllerProductDefectRemediation,
-    registerWindowHostBinding:
-      executeCodexWakeflowWindowHostBindingRegistration,
+    registerWindowHostBinding: (value: unknown) =>
+      executeWakeflowWindowHostBindingPublicRequest(CODEX_HOST_FACADE, value),
+    prepareImplementationDelivery: (value: unknown) =>
+      executeTargetDeliveryPreparationPublicRequest(CODEX_HOST_FACADE, value),
+    prepareTestDelivery: (value: unknown) =>
+      executeTestDeliveryPreparationPublicRequest(CODEX_HOST_FACADE, value),
+    claimTargetHostEffect: (value: unknown) =>
+      executeTargetHostEffectClaimPublicRequest(CODEX_HOST_FACADE, value),
+    rearmTargetHostEffect: (value: unknown) =>
+      executeTargetHostEffectRearmPublicRequest(CODEX_HOST_FACADE, value),
+    recordTargetHostEffectOutcome: (value: unknown) =>
+      executeTargetHostEffectOutcomePublicRequest(CODEX_HOST_IDENTITY, value),
+    importTargetResult: (value: unknown) =>
+      executeTargetResultImportPublicRequest(CODEX_HOST_IDENTITY, value),
   });
 }
 

@@ -169,10 +169,12 @@ function uniqueJsonItems(enabled: boolean, value: unknown): boolean {
 }
 
 /**
- * 编译不访问网络的本地 Schema 目录，并返回可复用的校验器。
+ * 为不访问网络的本地 Schema 目录返回可复用的校验器。
  *
- * 每次调用都创建独立的 Ajv 实例，避免不同领域 Schema 目录的 `$id`、格式或错误
- * 状态相互污染。调用方应在模块初始化时创建一次校验器，而不是为每次请求重新编译。
+ * Schema 目录的形状与 `$id` 在调用时立即准入；Ajv 实例与编译推迟到第一次校验，
+ * 因此在模块初始化时创建校验器不再产生编译成本，未被使用的校验器永远不编译。
+ * 每个校验器拥有独立的 Ajv 实例，避免不同领域 Schema 目录的 `$id`、格式或错误
+ * 状态相互污染；编译失败在第一次校验时以 `schema-compile` 报出。
  */
 export function createRuntimeJsonSchemaValidator<Value>(
   rootSchema: unknown,
@@ -180,6 +182,20 @@ export function createRuntimeJsonSchemaValidator<Value>(
 ): RuntimeJsonSchemaValidator<Value> {
   const root = schemaObject(rootSchema, "$schema", "schema-input");
   const admittedDependencies = dependencySchemas(dependencies);
+  let compiled: ((value: JsonValue) => RuntimeJsonSchemaValidation<Value>) | null =
+    null;
+  return (value: JsonValue): RuntimeJsonSchemaValidation<Value> => {
+    if (compiled === null) {
+      compiled = compileRuntimeJsonSchemaValidator<Value>(root, admittedDependencies);
+    }
+    return compiled(value);
+  };
+}
+
+function compileRuntimeJsonSchemaValidator<Value>(
+  root: JsonObject,
+  admittedDependencies: readonly JsonObject[],
+): (value: JsonValue) => RuntimeJsonSchemaValidation<Value> {
   const ajv = new Ajv2020({
     allErrors: false,
     strict: true,

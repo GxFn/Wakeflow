@@ -2450,3 +2450,15 @@ wakeflow-public-mcp-tool.ts                  145行：Canonical成功结果与�
 - 门：typecheck 通过；架构门 838 模块 ok；全量 `npm test` 通过（1,031 测试，Schema 漂移检查 ok）。L0.4 两个试点到此结束。
 - L0 余项：L0.5（工具登记表、预编译校验器惰性加载、单一组合根、`tools/list` 与热启动度量）、L0.6（六层方向规则补全、lint 与格式、knip、复杂度上限、L0 退出门逐项度量）、推迟的 L0.2（foundation 收敛，待内核消费者齐全后做）。旧 `TargetTaskPlanningService` 与 plan 模块仍供其他切片的 fixture 使用，随 L1 tasking 切片删除。
 - 确认记录（2026-09-04）：用户按建议确认两项设计决定——`maintain_workspace` 的 `planRef` 以原请求重算实现、fresh selection 的 ID 确定性派生；残余风险选 `details` 方案：`WakeflowError` 增加可选 `details`（封闭的短标识键值，至多 8 项），维护事务错误经它公开 `operationId`，MCP 错误信封原样携带；ADR-0013 决定 D 同步；加入 `details` 后全量 `npm test` 再次通过（1,032 测试）。用户同时授权提交代码并进入 L0.5。
+
+### 13.73 L0.5：工具登记表、单一组合根与冷启动（2026-09-04）
+
+- 基线度量（`.build` 上对 Codex 组合根做 `tools/list`，导入加创建计时，三次取整）：冷启动 2,221 到 2,424 毫秒，其中导入 2,194 毫秒、创建 server 320 毫秒；`tools/list` 319,252 字节，约 91,000 token，其中请求 Schema 103,643、结果 Schema 195,774、描述 13,779 字节。原因：87 个合同模块在装载时各自编译一份 Ajv；SDK 的 `fromJsonSchema` 对 46 份 Schema 逐个预编译（317 毫秒）；结果 Schema 内联进目录。
+- 新建 `src/kernel/tool-registry.ts`：登记表为纯数据（名字、切片、调用形状、executor 绑定名、标题、不超过 640 字节的描述、请求与结果 Schema、注解），`createWakeflowToolCatalog` 准入唯一性、Schema 身份词干一致与注解同形状的一致；`publicToolDefinition` 只投影请求 Schema；`measureWakeflowToolCatalogBytes` 给体积门用。
+- 新建 `src/entrypoints/wakeflow-public-mcp-catalog.ts`（23 条登记与 executor 接口）、`wakeflow-public-mcp-shared-executors.ts`（15 个与宿主无关的 executor）；`wakeflow-public-mcp-tool.ts` 改为按登记表注册、惰性编译的请求校验提供者（`WAKEFLOW_JSON_SCHEMA_VALIDATOR`，与服务端解析共用同一套 Ajv 规则）与旧领域错误的结构投影；`wakeflow-public-mcp-server.ts` 成为唯一组合根，配置准入由登记表派生（330 行降到 96 行）。两个宿主组合根各自内联宿主 facade。删除四个静态注册组（1,485 行）与 24 个同构宿主入口文件；`src/entrypoints` 从 34 个文件降到 10 个，架构门模块数 838 降到 816。
+- `createRuntimeJsonSchemaValidator` 改为惰性编译：Schema 形状与 `$id` 目录在创建时准入，Ajv 实例与编译推迟到第一次校验，未被调用的校验器永远不编译。
+- ADR-0004 选项 A 落地情况：第 1 项结果 Schema 不进 `tools/list`（保留在登记表供服务端校验，目录测试改为断言登记表里的结果 Schema 身份）；第 3 项描述压到两句并保留目录测试锁定的边界短语；第 2 项已在 `maintain_workspace` 落地，其余效果工具随 L1 切片。
+- 结果度量：冷启动 324 到 329 毫秒（导入 320、创建 6），低于 500 毫秒门；`tools/list` 119,825 字节，约 34,000 token；请求 Schema 103,643 字节未变，描述 10,752 字节。60 KB 目标要靠 L1 各切片收敛请求 Schema，目录测试先以 128 KB 为过渡预算锁住不回退。
+- 不做与推迟：codegen 预编译校验器不做——惰性编译后剩余冷启动是 816 个模块的装载时间（导入 320 毫秒中 SDK 61 毫秒），不再是编译；`response_format` 推迟到 L1 有厚结果的读切片，追加型结果本就只含身份、修订、摘要与 `next`；`kernel/idempotency-store` 已在 13.72 说明不需要。
+- 测试：`tests/kernel/tool-registry.test.ts`（准入规则）、`tests/entrypoints/wakeflow-public-mcp-catalog-binding.test.ts`（取代注册组绑定测试：23 个工具按登记表绑定到同名 executor，注册配置不含 outputSchema）；目录测试改为结果 Schema 不上线、体积预算、配置错误原因收敛为 `executor` 加 `field`；运行时 Schema 测试改为编译失败在第一次校验报出。
+- 门：typecheck 通过；架构门 816 模块 ok；全量 `npm test` 通过（1,033 测试，Schema 漂移检查 ok）。L0.5 到此结束，余 L0.6 与推迟的 L0.2。

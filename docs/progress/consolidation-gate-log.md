@@ -2485,3 +2485,27 @@ wakeflow-public-mcp-tool.ts                  145行：Canonical成功结果与�
 | kernel 每个模块有直接测试 | 11 个模块 11 份直接测试 | 满足 | — |
 
 - 门：全量 `npm test`（含新加的 lint、格式、knip 三道）通过：typecheck，架构门 821 模块 ok，Biome 0 错误，格式检查通过，knip 无发现，1,044 测试通过，Schema 漂移检查 ok。L0.6 到此结束；L0 余下推迟的 L0.2（foundation 收敛）与三项未满足的退出门按表中 owner 进入 L1 与 L0.2。
+
+### 13.75 L1 endpoint 切片：设计定案（2026-09-04）
+
+依据能力卡 2（Q1 到 Q8 已裁决）、ADR-0009 与 ADR-0013 §4 第 2 行。用户于 2026-09-04 授权进入本切片；以下是设计权范围内的定案，多选项处已按能力卡与 ADR 的裁决落地，不再另开问题。
+
+- 公共工具一个：`wakeflow_register_window_binding`，请求以 `operation` 判别：`inspect`（读：启动意图重算、绑定与工作声明状态、`next`）、`register`（登记）、`replace`（两步替换的第二步：消费新句柄并对旧绑定 CAS）、`decommission`（退役：三段关闭观察加可选 `session-end` 记录，判定 machine-verified、manual-host-gate、blocked）、`release-claim`（工作声明强制释放：`expectedClaimDigest` 加证据）。旧工具 register_window、replace_windows、release_window_lock 由此吸收；Schema 词干 `window-host-binding-registration` 保留，内容重写。
+- 证据准入：登记与替换都要求一条宿主 hook `session-start` 观察记录，其会话标识等于句柄值、`cwd` 等于该窗口配置根的绝对路径；Claude 另要求 tmux 四元组（socketName 可空、sessionName、windowId、paneId），落为定位器记录；Codex 只要线程标识。退役的机器验证等级：Claude 关前活、关闭结果 closed、关后缺席加 `session-end` 记录为 machine-verified；Codex 归档只到 manual-host-gate；有工作声明或证据自相矛盾为 blocked 并拒绝。强制释放只在声明超过 2 小时、或持有会话有 `session-end` 记录、或 Claude pane 观察为 pane-dead/missing 时接受。
+- hook 观察记录进内核：`src/kernel/hook-observations.ts` 定义记录（hostId、event ∈ session-start | user-prompt-submit | stop | session-end | turn-complete、sessionId、cwd、recordedAt、turnId、promptDigest、lastAssistantMessageDigest、transcriptRef；只存摘要不存正文）、存放位置 `.wakeflow-local/runtime/hosts/<host>/observations/hooks/`（0700/0600）、确定性 recordId 与有界读取；L3 的 hook 脚本与测试都用同一写入函数。
+- 绑定不进事件流：绑定登记表仍是工作区级私有权威文件；工作声明强制释放只删除声明文件并留下观察回执，Demand 侧由 delivery 切片的 rearm 对账；围栏令牌在结果准入侧生效（ADR-0009 §3）。
+- Claude pane 分类器按旧版顺序原样移植为纯函数（binding-mismatch、host-context-drift、missing、duplicate、coordinate-mismatch、pane-window-mismatch、pane-dead、process-mismatch、metadata-mismatch、live），输入改为 Agent 交回的 `list-panes` 行与窗口选项；只有 live 可派发。
+- 切片文件：`contract.ts`、`decide.ts`（纯决定与 given-when-then 测试）、`service.ts`（内核命令外壳上的薄壳；绑定不走 Demand 追加形状）、`projection.ts`、`tool.ts`（登记表条目由切片导出，目录只汇总）；场景验收新增 `card-02/register-window-binding`。删除对象：`wakeflow-window-host-binding-public-coordinator`、`-public-contract`、`-registration`、`-registration-authority`、`wakeflow-agent-host-window-observation`（含 authority）及其测试；store、投影、启动意图模块随后续步骤吸收。
+
+### 13.76 L1 endpoint 切片：实现与验收（2026-09-04）
+
+按 13.75 定案落地，切片目录 `src/capabilities/endpoint/`（`contract.ts`、`decide.ts`、`pane-classification.ts`、`locator-store.ts`、`projection.ts`、`service.ts`），内核新增 `hook-observations.ts` 与 `layout.ts`，词汇新增 `contracts/vocabulary/wakeflow-host-id.ts`。
+
+- 合同：`wakeflow_register_window_binding` 请求 Schema 重写为五路 `oneOf`（inspect、register、replace、decommission、release-claim），结果 Schema 为 `WakeflowWindowBindingInspection | WakeflowWindowBindingMutation`；登记表条目由切片导出（`WINDOW_BINDING_TOOL_REGISTRATION`，形状 append、注解 destructive），目录只汇总；描述 634 字节，在 640 上限内。工作区切片的 `next.suggestedTool` 改为字面量，切片之间不再互相 import。
+- 决定与证据：`decideEndpointCommand` 是纯函数，13 种拒绝理由各有测试；register 与 replace 要求 `session-start` hook 记录的会话等于句柄值、`cwd` 等于窗口配置根（字面比较再按 realpath 比较，宿主 hook 报告的符号链接路径也能匹配）；Claude 缺 tmux 坐标为 `invalid-request/tmux-coordinates-required`；decommission 的 `machine-verified` 只在 tmux 关前活、关闭 closed、关后缺席加 `session-end` 记录时给出，其余 `manual-host-gate`，矛盾为 `closure-blocked`；release-claim 的恢复门为固定 2 小时（`WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS`），不自动清理，释放只删声明文件并写 `observations/claim-releases/<claimId>.json` 回执。
+- 效果：五种操作都走 `runCommandShell`；register、replace、decommission 在旧绑定 store 的互斥门内执行，进门后重比绑定摘要，漂移为 `concurrency-conflict/binding-changed`；replace 用 `replaceFileAtomically` 带期望节点，decommission 用 `unlinkRegularFileExactly` 带期望节点；定位器与投影随后刷新（投影由旧编译器算文档、切片只落盘）。声明根尚未建立时视为无声明，不是布局故障。
+- 删除：`wakeflow-window-host-binding-public-coordinator`、`-public-contract`、`-registration`、`-registration-authority`、`wakeflow-window-runtime-registered-projection-publication` 与旧入口测试；`wakeflow-agent-host-window-observation`（含 authority）仍被 delivery 与 testing 的 host-effect claim 使用，留给投递切片删除。delivery 与 testing 的两个 fixture 改为经端点切片登记（先写 `session-start` 记录）。
+- 验收：`tests/capabilities/endpoint/decide.test.ts` 5 项、`service.test.ts` 3 项（Codex 登记与重放、Codex 替换退役与声明强制释放、Claude tmux 定位器与机器核实退役；声明用真实 store 建立并经持有、过期、释放三态）、`tests/kernel/hook-observations.test.ts` 2 项；场景 `card-02/window-handshake` 与 `card-02/window-replace` 接线并通过（场景报告 pass=5）。修掉两处测试侧 `RootedDirectory` 未 close 的句柄泄漏（Node 的 DEP0137 警告）。
+- 度量：协调器 20 个 7,185 行 → 19 个 6,867 行（对基线 8,075 降 15%，退出门 40% 仍未满足）；`tools/list` 119,825 → 125,158 字节，增量全在五路请求 Schema（压缩后 6,657 字节，旧单操作 1,659 字节），仍在 128 KB 过渡预算内，60 KB 目标继续由后续切片收敛；架构门 827 模块 ok。
+- 未做与残余：每窗口操作互斥锁未实现（跨调用占用由 delivery 的工作声明表达）；retitle 与 arrange 指令未提供；L3 的 hook 脚本尚未接入写入函数；没有真实宿主会话，Claude 路径的 tmux 观察只在测试里由 fixture 交回，标注 not-run: host session unavailable。
+- 门：全量 `npm test` 通过：typecheck，架构门 827 模块 ok，Biome 0 错误（3 处旧树警告不变），格式检查通过，knip 无发现，1,053 测试通过，Schema 漂移检查 ok。本切片未提交，等待用户决定。

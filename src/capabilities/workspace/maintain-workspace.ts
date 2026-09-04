@@ -51,7 +51,6 @@ import {
   type WakeflowStaticMaterializationAction,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
-import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../workspace/window-runtime/wakeflow-window-host-binding-public-contract.js";
 import {
   compileWakeflowWindowLaunchIntents,
   WakeflowWindowLaunchIntentError,
@@ -318,7 +317,8 @@ function nextAfterLaunchIntents(
   return Object.freeze({
     frontier: "window-launch",
     owner: "user",
-    suggestedTool: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    // 切片之间不互相引用；公共工具名是词汇，不是依赖。
+    suggestedTool: "wakeflow_register_window_binding",
     blockers: Object.freeze([]),
   });
 }

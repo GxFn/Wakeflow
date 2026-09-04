@@ -4,6 +4,7 @@
 > 提出日期：2026-09-04
 > 基线提交：`c0098e2`
 > 相关：[ADR-0003 修订](./0003-host-effect-layer-ownership.md)、[ADR-0007](./0007-rebuild-mandate-and-bottom-up-flow.md)、[能力卡 2](../requirements/capabilities/02-window-model.md)、[能力卡 4](../requirements/capabilities/04-demand-lifecycle.md)、[能力卡 5](../requirements/capabilities/05-task-planning.md)
+> 落地记录：2026-09-04 L1 endpoint 切片落地 `wakeflow_register_window_binding`（inspect、register、replace、decommission、release-claim），hook 观察记录进内核 `src/kernel/hook-observations.ts`，Claude 定位器与 pane 分类器进 `src/capabilities/endpoint/`；执行参数使用 Codex `create_thread` 与 `set_thread_title`、Claude `claude --session-id`；场景 `card-02/window-handshake` 与 `card-02/window-replace` 通过（进度日志 13.76）
 
 ## 背景
 

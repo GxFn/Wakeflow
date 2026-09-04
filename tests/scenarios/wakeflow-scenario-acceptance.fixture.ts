@@ -41,6 +41,16 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     title: "一次性工作区上 preview 零写、apply 生成配置与固定协议根",
   },
   {
+    scenarioId: "card-02/window-handshake",
+    card: "02-window-endpoints",
+    title: "inspect 给出启动意图与执行参数，Agent 回执经 hook 证据登记为私有绑定，重放幂等",
+  },
+  {
+    scenarioId: "card-02/window-replace",
+    card: "02-window-endpoints",
+    title: "新握手以 CAS 替换旧绑定，旧代际退出投影，脱敏结果不含句柄与路径",
+  },
+  {
     scenarioId: "card-04/create-demand",
     card: "04-demand-lifecycle",
     title: "需求发布、TODO 摄入、Demand 创建后 Route 指向实现任务规划",

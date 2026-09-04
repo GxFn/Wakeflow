@@ -49,8 +49,6 @@ import { WAKEFLOW_TODO_INSPECTION_REQUEST_SCHEMA } from "../contracts/generated/
 import { WAKEFLOW_TODO_INSPECTION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-todo-inspection-result.generated.js";
 import { WAKEFLOW_TODO_INTAKE_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-todo-intake-publication-request.generated.js";
 import { WAKEFLOW_TODO_INTAKE_PUBLICATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-todo-intake-publication-result.generated.js";
-import { WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-window-host-binding-registration-request.generated.js";
-import { WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-window-host-binding-registration-result.generated.js";
 import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../governance/controller/demand-controller-route-public-contract.js";
 import type { DemandControllerRoutePublicResult } from "../governance/controller/demand-controller-route-public-coordinator.js";
 import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../governance/delivery/target-delivery-preparation-public-contract.js";
@@ -103,8 +101,8 @@ import {
   type WakeflowToolCatalog,
   type WakeflowToolRegistration,
 } from "../kernel/tool-registry.js";
-import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../workspace/window-runtime/wakeflow-window-host-binding-public-contract.js";
-import type { WakeflowWindowHostBindingPublicResult } from "../workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.js";
+import { WINDOW_BINDING_TOOL_REGISTRATION } from "../capabilities/endpoint/contract.js";
+import type { WindowBindingResult } from "../capabilities/endpoint/contract.js";
 import type { WakeflowPublicMcpExecutor } from "./wakeflow-public-mcp-tool.js";
 
 /**
@@ -139,7 +137,7 @@ export interface WakeflowPublicMcpExecutors {
   readonly recordControllerTestReviewDecision: WakeflowPublicMcpExecutor<ControllerTestReviewDecisionPublicResult>;
   readonly recordManagedEvidence: WakeflowPublicMcpExecutor<ManagedEvidencePublicResult>;
   readonly recordTargetHostEffectOutcome: WakeflowPublicMcpExecutor<TargetHostEffectOutcomePublicResult>;
-  readonly registerWindowHostBinding: WakeflowPublicMcpExecutor<WakeflowWindowHostBindingPublicResult>;
+  readonly registerWindowHostBinding: WakeflowPublicMcpExecutor<WindowBindingResult>;
   readonly resumeTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewResumePublicResult>;
 }
 
@@ -188,18 +186,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
       openWorldHint: false,
     },
   },
-  {
-    name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
-    slice: "endpoint",
-    shape: "append",
-    executor: "registerWindowHostBinding",
-    title: "Register Wakeflow Window Host Binding",
-    description:
-      "Register the opaque current-host window identifier the Agent observed after executing one Wakeflow launch intent; Wakeflow never creates or inspects the host window. The private handle is stored in a 0600 Binding authority file and never returned in the result or runtime projection.",
-    requestSchema: WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
+  WINDOW_BINDING_TOOL_REGISTRATION satisfies Registration,
   {
     name: WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
     slice: "requirement",

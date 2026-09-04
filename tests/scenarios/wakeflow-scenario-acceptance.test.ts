@@ -12,7 +12,11 @@ import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governan
 import { WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/ledger/ledger-authority-public-contract.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/tasking/target-task-planning-public-contract.js";
 import { WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/todo/todo-intake-publication-public-contract.js";
+import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
+import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
+import { writeHostHookObservation } from "../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {
   connectWakeflowMcpServerForTest,
@@ -29,7 +33,7 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 三个场景在同一个一次性工作区上顺序运行：初始化 → 创建 Demand → 规划任务。
+ * 五个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 创建 Demand → 规划任务。
  * 所有调用都经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内。
  */
 
@@ -57,6 +61,7 @@ interface ScenarioContext {
   designPath?: string;
   memberRefs?: readonly string[];
   demandId?: string;
+  productBinding?: { readonly bindingId: string; readonly bindingDigest: string };
 }
 
 async function call(
@@ -132,6 +137,166 @@ async function scenarioFreshInitialize(context: ScenarioContext): Promise<string
   context.repositoryId = repository.repositoryId;
   context.designPath = path.join(root, design.path);
   return `status=${result.status}; launchIntents=${previewed.launchIntents.length}; config+active present`;
+}
+
+interface BindingMutation {
+  readonly kind: string;
+  readonly disposition: string;
+  readonly binding: { readonly bindingId: string; readonly bindingDigest: string } | null;
+  readonly next: { readonly frontier: string | null };
+}
+
+/** Agent 在宿主里启动窗口后，宿主 hook 会留下 session-start 记录；这里代替宿主写入。 */
+async function recordSessionStart(context: ScenarioContext, sessionId: string, placement: string) {
+  const root = await RootedDirectory.open(context.workspace.workspacePath);
+  try {
+    await writeHostHookObservation(root, {
+      hostId: "codex",
+      event: "session-start",
+      sessionId,
+      cwd: path.resolve(context.workspace.workspacePath, placement),
+      recordedAt: parseUtcInstant(new Date().toISOString()),
+    });
+  } finally {
+    await root.close();
+  }
+}
+
+async function scenarioWindowHandshake(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.productWindowId)
+    throw new Error("scenario ordering: fresh-initialize must run first");
+  const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "inspect",
+    windowId: context.productWindowId,
+  });
+  assertNoPrivatePath(context, inspected);
+  const inspection = inspected.structuredContent as {
+    readonly binding: { readonly status: string };
+    readonly launchIntent: {
+      readonly intentDigest: string;
+      readonly root: { readonly configuredPlacement: string };
+      readonly execution: { readonly kind: string; readonly tool: string };
+    };
+    readonly next: { readonly frontier: string | null };
+  };
+  equal(inspection.binding.status, "unregistered");
+  equal(inspection.launchIntent.execution.kind, "codex");
+  equal(inspection.launchIntent.execution.tool, "create_thread");
+  equal(inspection.next.frontier, "window-registration");
+  const handle = { kind: "codex-thread", value: "codex-host-owned-thread:scenario-1" };
+  await recordSessionStart(context, handle.value, inspection.launchIntent.root.configuredPlacement);
+  const observation = {
+    handle,
+    launchIntentDigest: inspection.launchIntent.intentDigest,
+    observedAt: new Date().toISOString(),
+  };
+  const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "register",
+    windowId: context.productWindowId,
+    observation,
+  });
+  assertNoPrivatePath(context, registered);
+  const mutation = registered.structuredContent as BindingMutation;
+  equal(mutation.disposition, "registered");
+  equal(
+    JSON.stringify(registered.structuredContent).includes(handle.value),
+    false,
+    "raw handle leaked",
+  );
+  if (mutation.binding === null) throw new Error("registered binding missing");
+  const replayed = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "register",
+    windowId: context.productWindowId,
+    observation,
+  });
+  const replay = replayed.structuredContent as BindingMutation;
+  equal(replay.disposition, "replayed");
+  equal(replay.binding?.bindingId, mutation.binding.bindingId);
+  const projection = readFileSync(
+    path.join(
+      root,
+      ".wakeflow-local/runtime/hosts/codex/projections/window-runtime",
+      `${context.productWindowId}.json`,
+    ),
+    "utf8",
+  );
+  equal(projection.includes('"status": "registered"'), true);
+  equal(projection.includes(handle.value), false, "projection leaked the raw handle");
+  context.productBinding = mutation.binding;
+  return `inspect=${inspection.binding.status}; register=${mutation.disposition}; replay=${replay.disposition}; next=${mutation.next.frontier}`;
+}
+
+async function scenarioWindowReplace(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.productWindowId || !context.productBinding) {
+    throw new Error("scenario ordering: window-handshake must run first");
+  }
+  const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "inspect",
+    windowId: context.productWindowId,
+  });
+  const inspection = inspected.structuredContent as {
+    readonly launchIntent: {
+      readonly intentDigest: string;
+      readonly root: { readonly configuredPlacement: string };
+    };
+  };
+  const handle = { kind: "codex-thread", value: "codex-host-owned-thread:scenario-2" };
+  await recordSessionStart(context, handle.value, inspection.launchIntent.root.configuredPlacement);
+  const stale = await context.connection.client.callTool({
+    name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    arguments: {
+      root,
+      operation: "replace",
+      windowId: context.productWindowId,
+      observation: {
+        handle,
+        launchIntentDigest: inspection.launchIntent.intentDigest,
+        observedAt: new Date().toISOString(),
+      },
+      expectedBindingId: context.productBinding.bindingId,
+      expectedBindingDigest: `sha256:${"0".repeat(64)}`,
+    },
+  });
+  equal(stale.isError, true, "stale binding expectation must be rejected");
+  const replaced = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "replace",
+    windowId: context.productWindowId,
+    observation: {
+      handle,
+      launchIntentDigest: inspection.launchIntent.intentDigest,
+      observedAt: new Date().toISOString(),
+    },
+    expectedBindingId: context.productBinding.bindingId,
+    expectedBindingDigest: context.productBinding.bindingDigest,
+  });
+  assertNoPrivatePath(context, replaced);
+  const mutation = replaced.structuredContent as BindingMutation;
+  equal(mutation.disposition, "replaced");
+  if (mutation.binding === null) throw new Error("replaced binding missing");
+  equal(
+    mutation.binding.bindingId === context.productBinding.bindingId,
+    false,
+    "binding generation did not change",
+  );
+  const bindingFile = readFileSync(
+    path.join(
+      root,
+      ".wakeflow-local/runtime/hosts/codex/identity/window-bindings",
+      `${context.productWindowId}.json`,
+    ),
+    "utf8",
+  );
+  equal(bindingFile.includes(handle.value), true);
+  equal(bindingFile.includes("scenario-1"), false, "old generation still on disk");
+  context.productBinding = mutation.binding;
+  return `stale-cas=rejected; replace=${mutation.disposition}; generation changed`;
 }
 
 async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
@@ -321,6 +486,8 @@ async function scenarioPlanImplementationTask(context: ScenarioContext): Promise
 const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Promise<string>>> =
   Object.freeze({
     "card-01/fresh-initialize": scenarioFreshInitialize,
+    "card-02/window-handshake": scenarioWindowHandshake,
+    "card-02/window-replace": scenarioWindowReplace,
     "card-04/create-demand": scenarioCreateDemand,
     "card-05/plan-implementation-task": scenarioPlanImplementationTask,
   });

@@ -48,7 +48,7 @@
 
 **宿主差异**：占位符表 Claude 比 Codex 多三项；Codex 句柄只有 thread id；Claude 句柄是 session id，tmux 坐标在定位器里。
 
-**现 TS 状态**：`wakeflow_register_window_binding` 已公开，请求为 Agent 的创建观察 `{kind: WakeflowAgentHostWindowCreationObservation, source: agent-host-create-result, hostId, windowId, launchIntentDigest, handle{kind, value}, observedAt}`，结果 `disposition: registered | replayed`；两宿主的身份 profile 已带 `handleKind`、最大长度与保留值表；登记后发布 registered 运行投影。
+**现 TS 状态**：`wakeflow_register_window_binding` 一个工具五种 `operation`（inspect、register、replace、decommission、release-claim），切片 `src/capabilities/endpoint/`（2026-09-04 L1 endpoint）。register 请求为 `{root, operation, windowId, observation{handle{kind, value}, launchIntentDigest, observedAt, tmux?}}`；准入要求同一 `sessionId`、同一窗口配置根的 `session-start` hook 观察记录（`src/kernel/hook-observations.ts`，`.wakeflow-local/runtime/hosts/<host>/observations/hooks/`），Claude 还要求 tmux 四元组；同句柄重放 `replayed`，异句柄 `precondition-failed/handle-conflict`，意图漂移 `launch-intent-drift`；结果只带 `bindingId`、`bindingDigest`、`registeredAt`、`launchIntentDigest` 与投影回执，原始句柄留在 0600 绑定文件；变更在绑定登记表互斥门内，登记后重发 registered 投影；旧的 `WakeflowAgentHostWindowCreationObservation` 包装与 `-registration`、`-public-coordinator` 模块已删除。
 
 **实现判断**：`hostVerifiedAt` 删除；登记必须绑定 `launchIntentDigest`，防止登记与意图脱节；登记成功即刷新该窗口的运行投影，修正旧文档与代码的矛盾。
 
@@ -76,7 +76,7 @@
 
 **不变量**：观察不明确时保留互斥锁，只有显式 `safe-to-release` 才释放；原始 session、window、pane、thread id 只存在于 `.wakeflow-local`。
 
-**现 TS 状态**：没有定位器，没有互斥锁，没有观察分类器。
+**现 TS 状态**：定位器记录 `src/capabilities/endpoint/locator-store.ts`，位于 `.wakeflow-local/runtime/hosts/claude-code/identity/window-locators/<windowId>.json`（0700/0600），随 register 与 replace 重写、随 decommission 删除；分类器 `pane-classification.ts` 按旧顺序原样移植为纯函数，输入为 Agent 交回的 pane 观察行；Codex 的 `locator` 标为 `not-applicable`。每窗口操作互斥锁未实现：变更只在登记表互斥门内串行，跨调用的操作占用留给 delivery 切片的工作声明。
 
 **实现判断**：新边界下分类器的输入改为 Agent 交回的 `list-panes` 行与窗口选项，分类逻辑与状态词汇原样保留，输出不可伪造的裁定；定位器记录保留；互斥锁保留但 owner 从进程身份改为 Agent 会话中的操作 id 加 Controller 绑定；Codex 没有对等物，`locator` 继续标记不适用。
 
@@ -94,7 +94,7 @@
 - Codex 退役只有计划与观察，`archived` 也只是 `manual-host-gate`，理由是归档不是终止证明。`wakeflow-codex-decommission.mjs:204-247`。
 - 从不自动做的事：宿主创建与关闭、路由撤销、定位器删除、worktree 清理、有租约时替换。
 
-**现 TS 状态**：没有 replace、decommission 公共入口；delivery 里有窗口工作声明的释放结算。
+**现 TS 状态**：两步替换已落地：`inspect` 返回该窗口的启动意图与执行参数，`replace` 消费新句柄并对旧绑定做 `expectedBindingId` 加 `expectedBindingDigest` 的 CAS，新绑定铸造新 `bindingId` 且 `registeredAt` 严格递增，定位器随之换代；`decommission` 以关前、关闭结果、关后三段观察加可选 `session-end` 记录判定 `machine-verified | manual-host-gate`，矛盾或失败为 `precondition-failed/closure-blocked`，退役后定位器一并删除并重发 unregistered 投影；持有工作声明时替换与退役都以 `claim-held` 拒绝；`release-claim` 只在声明超过 2 小时、持有会话已 `session-end`、或 Claude pane 为 pane-dead/missing 时接受，只删声明文件并在 `observations/claim-releases/` 留下回执。
 
 **实现判断**：替换采用两步形状，`inspect` 返回该窗口的启动意图作为内容，Agent 创建新窗口后调用 replace 消费新句柄并对旧绑定做 CAS；退役后定位器一并删除，修正旧代码从不删除的缺口；退役的机器验证等级词汇 `machine-verified | manual-host-gate | blocked` 保留，但证明材料改为 Agent 交回的关闭前活、关闭结果、关闭后缺席三段观察。
 
@@ -137,7 +137,7 @@
 - `resume-window` 要求定位器缺失或 pane-dead，复用旧句柄发新定位器代际；`retitle-window` 用 `rename-window`；`arrange-windows` 按 windowId 排序对每个窗口取互斥锁再 `move-window`。`:659-853`。
 - Codex 没有生命周期模块，Agent 自己 `create_thread` 再 `set_thread_title`。
 
-**现 TS 状态**：无。
+**现 TS 状态**：`inspect` 结果的 `launchIntent.execution` 给出执行参数：Claude 为 tmux socket、session、窗口名与 cwd、`claude` 命令行（`--session-id` 由 Agent 生成 UUID v4、`--permission-mode` 默认 acceptEdits、`--effort` 按角色回退再回退 controller max 其余 xhigh、可选 `--model`、cwd 不是工作区根时 `--add-dir`）；Codex 为 `create_thread` 的标题、cwd、model、effort 与后续 `set_thread_title`。Wakeflow 不 spawn 进程；retitle 与 arrange 未提供。
 
 **实现判断**：以上全部变为启动意图与操作意图里的"执行说明"内容，Wakeflow 不再 spawn 任何进程；`preflight` 变为 skills 里的自检步骤；`resume` 变为"同一逻辑窗口、新观察证据"的重新登记路径；session id 由 Agent 生成，Wakeflow 只验形状、占位符与唯一性。
 

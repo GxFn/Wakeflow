@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 
+import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
 import { executeTargetDeliveryPreparationPublicRequest } from "../governance/delivery/target-delivery-preparation-public-coordinator.js";
 import { executeTargetHostEffectClaimPublicRequest } from "../governance/delivery/target-host-effect-claim-public-coordinator.js";
 import { executeTargetHostEffectOutcomePublicRequest } from "../governance/delivery/target-host-effect-outcome-public-coordinator.js";
@@ -9,7 +10,6 @@ import { executeTargetResultImportPublicRequest } from "../governance/result/tar
 import { executeTestDeliveryPreparationPublicRequest } from "../governance/testing/test-delivery-preparation-public-coordinator.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { executeWakeflowWindowHostBindingPublicRequest } from "../workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
@@ -41,7 +41,7 @@ export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
     ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,
     executeMaintenance: executeCodexWakeflowMaintenance,
     registerWindowHostBinding: (value: unknown) =>
-      executeWakeflowWindowHostBindingPublicRequest(CODEX_HOST_FACADE, value),
+      executeWindowBindingRequest(CODEX_HOST_FACADE, value),
     prepareImplementationDelivery: (value: unknown) =>
       executeTargetDeliveryPreparationPublicRequest(CODEX_HOST_FACADE, value),
     prepareTestDelivery: (value: unknown) =>

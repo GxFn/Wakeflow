@@ -36,7 +36,7 @@ import {
   findWakeflowToolRegistration,
   measureWakeflowToolCatalogBytes,
 } from "../../src/kernel/tool-registry.js";
-import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-contract.js";
+import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import {
   connectWakeflowMcpServerForTest,
   connectWakeflowMcpTestClient,
@@ -205,7 +205,8 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
   expectedTool(
     WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
     "window-host-binding-registration",
-    ADDITIVE,
+    DESTRUCTIVE,
+    ["never creates, inspects, or closes host windows", "raw handles never leave"],
   ),
   expectedTool(
     WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME,

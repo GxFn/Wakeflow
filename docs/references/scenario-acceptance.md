@@ -12,6 +12,8 @@
 | --- | --- | --- | --- | --- |
 | `card-01/fresh-initialize` | 01 | 一次性工作区初始化 | preview 零写且 `ready`；apply `completed`；`wakeflow.config.json` 与 `.wakeflow-active` 存在；结果不含私有路径 | pass |
 | `card-04/create-demand` | 04 | 需求发布、TODO 摄入、Demand 创建 | 六份需求文档发布；TODO 摄入；Demand 创建；Route 为 `work-available` 且前沿含实现任务规划 | pass（按当前 TS 代码；L1 按 ADR-0011 重塑为需求包认领） |
+| `card-02/window-handshake` | 02 | 窗口握手：启动意图、Agent 回执、绑定登记 | inspect 为 `unregistered` 且执行参数为 Codex `create_thread`；写入 `session-start` hook 记录后 register 为 `registered`；同一回执重放 `replayed`；结果与投影不含原始句柄与私有路径 | pass |
+| `card-02/window-replace` | 02 | 替换窗口：新握手以 CAS 换代 | 过期绑定摘要被拒绝；replace 为 `replaced` 且绑定代际变化；磁盘绑定文件只含新句柄 | pass |
 | `card-05/plan-implementation-task` | 05 | 规划实现任务 | preview 零写；apply `committed` 且 `planned`；同一计划重放 `idempotent`；Route 前沿前进到投递规划 | pass |
 
 ## 2. 待接线场景
@@ -22,8 +24,6 @@
 | --- | --- | --- | --- |
 | `card-01/reconfigure` | 01 | 重新配置拓扑，preview 零写，apply 只改声明差异 | maintenance reconfigure |
 | `card-01/reconcile-noop` | 01 | 健康工作区 reconcile 零步 `no-op` | maintenance reconcile |
-| `card-02/window-handshake` | 02 | 窗口启动意图、Agent 回执、绑定登记、身份派生 | 窗口握手（ADR-0009） |
-| `card-02/window-replace` | 02 | 替换窗口：新握手加旧声明退役 | 窗口替换 |
 | `card-03/requirement-package` | 03 | 需求包 preview 摘要、章节校验、发布即上板（ADR-0011） | 需求包切片 |
 | `card-05/test-contract` | 05 | test 任务包携带测试合同，步骤来自需求包验收标准 | 测试合同切片（ADR-0012 D4） |
 | `card-06/delivery-chain` | 06 | 一次调用准备与许可、工作声明、落地证据 UserPromptSubmit、rearm 上限、回调 wake-controller 与 acknowledged | 投递切片（ADR-0012 D1 D2） |

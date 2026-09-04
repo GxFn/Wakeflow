@@ -100,7 +100,7 @@ export interface WakeflowWindowHostBindingInventory {
   readonly bindings: readonly Readonly<WakeflowWindowHostBinding>[];
 }
 
-interface WakeflowWindowHostBindingStoreContext {
+export interface WakeflowWindowHostBindingStoreContext {
   readonly inventory: Readonly<WakeflowWindowHostBindingInventory>;
   readonly uuidFactory: UuidV4Factory | undefined;
   readonly wallClock: UtcWallClock | undefined;

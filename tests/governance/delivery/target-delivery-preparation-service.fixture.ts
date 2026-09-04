@@ -1,12 +1,13 @@
 import { mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 
+import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { TargetTaskPlanningService } from "../../../src/governance/tasking/target-task-planning-service.js";
-import { registerWakeflowWindowHostBinding } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-registration.js";
+import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
@@ -76,25 +77,37 @@ export async function createTargetDeliveryPreparationWorkspaceFixture(
     if (launchIntent === undefined) {
       throw new Error("Expected exact product window launch intent.");
     }
-    const registration = await registerWakeflowWindowHostBinding(
-      fixture.workspaceRoot,
+    await writeHostHookObservation(fixture.workspaceRoot, {
+      hostId: "codex",
+      event: "session-start",
+      sessionId: RAW_HANDLE,
+      cwd: path.resolve(fixture.workspacePath, launchIntent.root.configuredPlacement),
+      recordedAt: BINDING_OBSERVED_AT,
+    });
+    const registration = await executeWindowBindingRequest(
       {
-        config,
+        hostId: "codex",
         resourceProfile: codexWorkspaceHostResourceProfile,
         identityProfile: codexWindowHostIdentityProfile,
+      },
+      {
+        root: fixture.workspacePath,
+        operation: "register",
+        windowId: launchIntent.windowId,
         observation: {
-          hostId: "codex",
-          windowId: launchIntent.windowId,
-          launchIntentDigest: launchIntent.intentDigest,
           handle: { kind: "codex-thread", value: RAW_HANDLE },
+          launchIntentDigest: launchIntent.intentDigest,
           observedAt: BINDING_OBSERVED_AT,
         },
       },
       {
         uuidFactory: () => BINDING_UUID,
-        wallClock: () => BINDING_REGISTERED_AT,
+        clock: () => BINDING_REGISTERED_AT,
       },
     );
+    if (registration.kind !== "WakeflowWindowBindingMutation" || registration.binding === null) {
+      throw new Error("Expected a registered Binding fixture.");
+    }
     const bindingRootPath = path.join(
       fixture.workspacePath,
       ...wakeflowWindowHostBindingRootRef(

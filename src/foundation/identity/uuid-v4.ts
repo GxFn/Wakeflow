@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 
+import { computeSha256Hex } from "../crypto/sha256.js";
+import { encodeUtf8 } from "../text/utf8.js";
+
 /**
  * Wakeflow Foundation / Identity：规范化 UUIDv4 词法与生成。
  *
@@ -36,13 +39,15 @@ export type UuidV4ErrorReason =
   | "format"
   | "factory-type"
   | "factory-failure"
-  | "factory-result";
+  | "factory-result"
+  | "derivation-input";
 
 const ERROR_MESSAGES = {
   "format": "UUID v4 must be a canonical lowercase RFC 9562 UUID version 4 string.",
   "factory-type": "The UUID v4 factory must be a function.",
   "factory-failure": "The UUID v4 factory failed.",
   "factory-result": "The UUID v4 factory must return one canonical lowercase RFC 9562 UUID version 4 string.",
+  "derivation-input": "UUID v4 derivation needs a non-empty namespace and NUL-free parts.",
 } as const satisfies Readonly<Record<UuidV4ErrorReason, string>>;
 
 /**
@@ -121,4 +126,42 @@ export function createUuidV4(
     fail("factory-result", "$uuidFactory");
   }
   return value as UuidV4;
+}
+
+/**
+ * 由命名空间与若干片段确定性派生一个 UUID v4 形状的值。
+ *
+ * 同一命名空间与同一输入永远得到同一个 UUID，因此重试与重算不会造出第二个身份；
+ * 输出仍满足版本位与变体位，与随机分配的 UUID 共用同一词法合同。
+ */
+export function deriveUuidV4(
+  namespace: string,
+  ...parts: readonly string[]
+): UuidV4 {
+  if (
+    typeof namespace !== "string"
+    || namespace.length === 0
+    || namespace.includes("\u0000")
+    || parts.some((part) => typeof part !== "string" || part.includes("\u0000"))
+  ) {
+    fail("derivation-input", "$namespace");
+  }
+  const hex = computeSha256Hex(
+    encodeUtf8([namespace, ...parts].join("\u0000")),
+  );
+  const digits = hex.slice(0, 32).split("");
+  digits[12] = "4";
+  const variant = Number.parseInt(digits[16] ?? "0", 16);
+  digits[16] = ((variant & 0x3) | 0x8).toString(16);
+  const flat = digits.join("");
+  return parseUuidV4(
+    [
+      flat.slice(0, 8),
+      flat.slice(8, 12),
+      flat.slice(12, 16),
+      flat.slice(16, 20),
+      flat.slice(20, 32),
+    ].join("-"),
+    "$derived",
+  );
 }

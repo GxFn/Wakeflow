@@ -49,6 +49,11 @@ import {
 
 interface DurableFileCandidateOptions {
   readonly mode: number;
+  /**
+   * `fsync`：内容与候选目录项都同步；`content-only`：只同步内容，候选目录项不同步，
+   * 供随后会被 link 到权威槽位并由目标结算负责目录项持久性的候选使用。
+   */
+  readonly durability?: "fsync" | "content-only";
   readonly signal?: AbortSignal;
 }
 
@@ -110,6 +115,7 @@ export class DurableFileCandidateError extends Error {
 
 interface ParsedOptions {
   readonly mode: number;
+  readonly durability: "fsync" | "content-only";
   readonly signal: AbortSignal | undefined;
 }
 
@@ -150,7 +156,14 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   if (
     !Object.hasOwn(record, "mode")
-    || Object.keys(record).some((key) => key !== "mode" && key !== "signal")
+    || Object.keys(record).some(
+      (key) => key !== "mode" && key !== "signal" && key !== "durability",
+    )
+    || (
+      record.durability !== undefined
+      && record.durability !== "fsync"
+      && record.durability !== "content-only"
+    )
     || typeof record.mode !== "number"
     || !Number.isInteger(record.mode)
     || record.mode < 0
@@ -167,6 +180,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   return Object.freeze({
     mode: record.mode,
+    durability: (record.durability ?? "fsync") as "fsync" | "content-only",
     signal: record.signal as AbortSignal | undefined,
   });
 }
@@ -483,7 +497,7 @@ export async function createFileCandidateDurably(
     ) {
       fail("candidate-changed", "$candidate");
     }
-    await syncParent(parent);
+    if (options.durability === "fsync") await syncParent(parent);
     const finalHandle = await verifyBytes(handle, input, options.signal);
     const finalPath = await inspectParentTarget(
       parent,

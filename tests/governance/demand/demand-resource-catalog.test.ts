@@ -19,6 +19,7 @@ import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
+  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
   DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_AUTHORITY_REF,
   DEMAND_EVENT_SOURCING_IDENTITY_REF,
@@ -217,6 +218,13 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
         processing: "directory-container:materialize-directory",
       },
       {
+        declarationId: `${prefix}.index-root`,
+        ownerId: "demand-event-sourcing",
+        relativePath: `${rootRef}/${DEMAND_EVENT_STREAM_INDEX_ROOT_REF}`,
+        mode: "0700",
+        processing: "directory-container:materialize-directory",
+      },
+      {
         declarationId: `${prefix}.artifacts-root`,
         ownerId: "demand-event-sourcing",
         relativePath: `${rootRef}/${DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF}`,
@@ -274,7 +282,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
       },
     ],
   );
-  equal(catalog.length, 15);
+  equal(catalog.length, 16);
   equal(
     catalog.every(
       (entry) =>
@@ -304,7 +312,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
   assertDeepFrozen(catalog);
   deepEqual(createDemandEventSourcingResourceCatalog(DEMAND_ID), catalog);
 
-  const publicationMarker = catalog[12];
+  const publicationMarker = catalog[13];
   deepEqual(
     admitWakeflowResourceOperation(
       publicationMarker.processing,
@@ -458,7 +466,7 @@ test("Demand commit and snapshot declarations keep authority and checkpoint dist
         processing: {
           kind: "resource",
           role: "derived-checkpoint",
-          allowedMutationRecipes: ["exclusive-create"],
+          allowedMutationRecipes: ["exclusive-create", "exact-retire"],
           recoveryStrategy: "rebuild-from-authority",
         },
       },

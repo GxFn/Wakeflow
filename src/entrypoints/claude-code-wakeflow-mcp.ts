@@ -14,7 +14,7 @@ import { executeClaudeCodeControllerProductDefectRemediation } from "./claude-co
 import { executeClaudeCodeControllerTestReviewDecision } from "./claude-code-wakeflow-controller-test-review-decision.js";
 import { executeClaudeCodeWakeflowWindowHostBindingRegistration } from "./claude-code-wakeflow-window-host-binding.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
-import { executeTargetTaskPlanningPublicRequest } from "../governance/tasking/target-task-planning-public-coordinator.js";
+import { executeTargetTaskPlanningPublicRequest } from "../capabilities/tasking/plan-target-task.js";
 import { executeDemandControllerRoutePublicRequest } from "../governance/controller/demand-controller-route-public-coordinator.js";
 import { executeDemandCompletionPublicRequest } from "../governance/lifecycle/demand-completion-public-coordinator.js";
 import { executeDemandPublicationPublicRequest } from "../governance/demand/publication/demand-publication-public-coordinator.js";

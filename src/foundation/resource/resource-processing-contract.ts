@@ -116,7 +116,7 @@ export type WakeflowDerivedProjectionProcessingContract =
 export type WakeflowDerivedCheckpointProcessingContract =
   ResourceProcessingContract<
     "derived-checkpoint",
-    readonly ["exclusive-create"],
+    readonly ["exclusive-create"] | readonly ["exclusive-create", "exact-retire"],
     "rebuild-from-authority"
   >;
 
@@ -266,7 +266,7 @@ const ROLE_POLICIES = Object.freeze({
   }),
   "derived-checkpoint": Object.freeze({
     recoveryStrategy: "rebuild-from-authority",
-    allowedRecipes: Object.freeze(["exclusive-create"] as const),
+    allowedRecipes: Object.freeze(["exclusive-create", "exact-retire"] as const),
     requiredRecipes: Object.freeze(["exclusive-create"] as const),
   }),
   "managed-integration-text": Object.freeze({
@@ -486,7 +486,10 @@ export type WakeflowResourceOperation =
       "derived-projection",
       "exclusive-create" | "deterministic-rewrite"
     >
-  | ResourceMutationOperation<"derived-checkpoint", "exclusive-create">
+  | ResourceMutationOperation<
+      "derived-checkpoint",
+      "exclusive-create" | "exact-retire"
+    >
   | ResourceMutationOperation<
       "managed-integration-text",
       "exact-source-recompose"

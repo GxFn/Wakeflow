@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:maintenance-public-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA",
   "title": "WakeflowMaintenancePublicResultV1",
-  "description": "Closed successful MCP output contract for one Wakeflow workspace Maintenance operation. Nested receipts remain owned by their producing domains.",
+  "description": "Closed successful MCP output contract for one Wakeflow workspace Maintenance effect. Nested plans and receipts remain owned by their producing domains; every result carries next.",
   "type": "object",
   "oneOf": [
     {
@@ -55,6 +55,61 @@
         "$ref": "#/$defs/domainObject"
       }
     },
+    "next": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frontier",
+        "owner",
+        "suggestedTool",
+        "blockers"
+      ],
+      "description": "Next responsibility derived after this call: who acts, which tool, and what blocks.",
+      "properties": {
+        "frontier": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "owner": {
+          "enum": [
+            "controller",
+            "target",
+            "test",
+            "user",
+            "none"
+          ]
+        },
+        "suggestedTool": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      }
+    },
     "previewResult": {
       "type": "object",
       "additionalProperties": false,
@@ -67,11 +122,12 @@
         "action",
         "status",
         "blockerCodes",
-        "confirmation",
-        "confirmationDigest",
+        "planDigest",
+        "plan",
         "freshConfigCompilation",
         "launchIntents",
-        "launchSetDigest"
+        "launchSetDigest",
+        "next"
       ],
       "properties": {
         "kind": {
@@ -104,7 +160,10 @@
             "type": "string"
           }
         },
-        "confirmation": {
+        "planDigest": {
+          "$ref": "#/$defs/nullableSha256Digest"
+        },
+        "plan": {
           "oneOf": [
             {
               "$ref": "#/$defs/domainObject"
@@ -112,10 +171,8 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "confirmationDigest": {
-          "$ref": "#/$defs/nullableSha256Digest"
+          ],
+          "description": "The zero-write execution plan a ready preview derived; apply re-derives it and compares planDigest."
         },
         "freshConfigCompilation": {
           "oneOf": [
@@ -132,6 +189,9 @@
         },
         "launchSetDigest": {
           "$ref": "#/$defs/nullableSha256Digest"
+        },
+        "next": {
+          "$ref": "#/$defs/next"
         }
       },
       "allOf": [
@@ -152,11 +212,11 @@
                 "type": "array",
                 "maxItems": 0
               },
-              "confirmation": {
-                "$ref": "#/$defs/domainObject"
-              },
-              "confirmationDigest": {
+              "planDigest": {
                 "$ref": "#/$defs/sha256Digest"
+              },
+              "plan": {
+                "$ref": "#/$defs/domainObject"
               }
             }
           },
@@ -166,10 +226,10 @@
                 "type": "array",
                 "minItems": 1
               },
-              "confirmation": {
+              "planDigest": {
                 "type": "null"
               },
-              "confirmationDigest": {
+              "plan": {
                 "type": "null"
               },
               "launchIntents": {
@@ -198,9 +258,9 @@
         "operationId",
         "planDigest",
         "stepReceipts",
-        "confirmationDigest",
         "launchIntents",
-        "launchSetDigest"
+        "launchSetDigest",
+        "next"
       ],
       "properties": {
         "kind": {
@@ -257,14 +317,14 @@
             "$ref": "#/$defs/domainObject"
           }
         },
-        "confirmationDigest": {
-          "$ref": "#/$defs/nullableSha256Digest"
-        },
         "launchIntents": {
           "$ref": "#/$defs/launchIntents"
         },
         "launchSetDigest": {
           "$ref": "#/$defs/nullableSha256Digest"
+        },
+        "next": {
+          "$ref": "#/$defs/next"
         }
       },
       "allOf": [
@@ -289,9 +349,6 @@
                   "completed",
                   "no-op"
                 ]
-              },
-              "confirmationDigest": {
-                "$ref": "#/$defs/sha256Digest"
               }
             }
           },
@@ -305,9 +362,6 @@
               },
               "operationId": {
                 "$ref": "#/$defs/maintenanceOperationId"
-              },
-              "confirmationDigest": {
-                "type": "null"
               },
               "launchIntents": {
                 "type": "array",

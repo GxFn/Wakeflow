@@ -15,7 +15,7 @@ generatedBy: mixed
 refreshTriggers:
   - src/**
   - tests/**
-  - docs/wakeflow-typescript-file-review-ledger-2026-08-28.md
+  - docs/progress/file-review-ledger.md
 sourcePaths:
   - src/**
 schemaPaths:

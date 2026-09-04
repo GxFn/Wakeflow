@@ -1,6 +1,10 @@
 import { types } from "node:util";
 
-import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import {
+  parseSha256Digest,
+  Sha256Error,
+  type Sha256Digest,
+} from "../../../foundation/crypto/sha256.js";
 import {
   parsePlainRecord,
   PassiveOwnDataError,
@@ -32,14 +36,22 @@ import { DemandFileEventStoreError } from "./demand-file-event-store.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing：标准命令执行管线。
  *
- * 固定顺序为“加载 → 决策 → 演进并准备 → 按预期游标追加”。命令摘要只能从已准入
- * 命令计算；使用相同 `commitId` 重试时，处理程序会在再次执行领域转换前先解析已有
- * 提交记录。命令处理程序不接受持久化事件、不写入快照，也不执行外部副作用。
+ * 固定顺序为“加载 → 决策 → 演进并准备 → 按预期游标追加 → 刷新快照”。命令摘要只能
+ * 从已准入命令计算；使用相同 `commitId` 重试时，处理程序会在再次执行领域转换前先
+ * 解析已有提交记录。快照按 ADR-0005 在每次成功追加后刷新，刷新失败不改变提交。
  */
 
 export interface ExecuteDemandEventSourcingCommandOptions {
   readonly commitId: WakeflowDurableId<"demand-event-commit">;
   readonly expectedStreamRevision: number;
+  /**
+   * 客户端幂等绑定：同键同请求摘要的重试返回首次结果，同键不同摘要以
+   * `idempotency-conflict` 拒绝。键随提交持久化并进入索引。
+   */
+  readonly idempotency?: Readonly<{
+    readonly key: string;
+    readonly requestDigest: Sha256Digest;
+  }>;
   readonly signal?: AbortSignal;
 }
 
@@ -49,6 +61,8 @@ export interface DemandEventSourcingCommandResult {
   readonly commandDigest: Sha256Digest;
   readonly commit: Readonly<DemandEventStreamCommit>;
   readonly aggregate: Readonly<DemandEventSourcingAggregate>;
+  /** 提交后的快照刷新结果；快照是可重建缓存，`stale` 不影响提交有效性。 */
+  readonly checkpoint: "refreshed" | "stale" | "unchanged";
 }
 
 export type DemandEventSourcingCommandHandlerErrorReason =
@@ -90,7 +104,13 @@ export class DemandEventSourcingCommandHandlerError extends Error {
   }
 }
 
-const OPTION_FIELDS = new Set(["commitId", "expectedStreamRevision", "signal"]);
+const OPTION_FIELDS = new Set([
+  "commitId",
+  "expectedStreamRevision",
+  "idempotency",
+  "signal",
+]);
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 
 function fail(
   reason: DemandEventSourcingCommandHandlerErrorReason,
@@ -151,9 +171,35 @@ function parseOptions(
   ) {
     fail("input", "$/signal");
   }
+  let idempotency: ExecuteDemandEventSourcingCommandOptions["idempotency"];
+  if (record.idempotency !== undefined) {
+    let bound: Readonly<Record<string, unknown>>;
+    try {
+      bound = parsePlainRecord(record.idempotency, "$/idempotency");
+    } catch (error: unknown) {
+      if (error instanceof PassiveOwnDataError) fail("input", "$/idempotency");
+      throw error;
+    }
+    if (
+      Object.keys(bound).sort().join(",") !== "key,requestDigest" ||
+      typeof bound.key !== "string" ||
+      !IDEMPOTENCY_KEY_PATTERN.test(bound.key)
+    ) {
+      fail("input", "$/idempotency");
+    }
+    let requestDigest: Sha256Digest;
+    try {
+      requestDigest = parseSha256Digest(bound.requestDigest, "$/idempotency/requestDigest");
+    } catch (error: unknown) {
+      if (error instanceof Sha256Error) fail("input", "$/idempotency/requestDigest");
+      throw error;
+    }
+    idempotency = Object.freeze({ key: bound.key, requestDigest });
+  }
   return Object.freeze({
     commitId,
     expectedStreamRevision: expected as number,
+    ...(idempotency === undefined ? {} : { idempotency }),
     ...(signal === undefined ? {} : { signal }),
   });
 }
@@ -249,6 +295,34 @@ export async function executeDemandEventSourcingCommand(
   const commandDigest = computeDemandEventSourcingCommandDigest(command);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
 
+  if (options.idempotency !== undefined) {
+    // 客户端键先于任何领域转换解析：同键同摘要即首次结果，同键异摘要即冲突。
+    let bound: Readonly<DemandEventStreamCommit> | null;
+    try {
+      bound = await repository.findCommitByIdempotencyKey(
+        options.idempotency.key,
+        options.signal === undefined ? undefined : { signal: options.signal },
+      );
+    } catch (error: unknown) {
+      mapRepositoryError(error);
+    }
+    if (bound !== null) {
+      if (bound.idempotency?.requestDigest !== options.idempotency.requestDigest) {
+        fail("idempotency-conflict", "$/idempotency/key");
+      }
+      const current = await loadAggregateForCommand(repository, options.signal);
+      if (current === null) fail("stream", "$repository");
+      return Object.freeze({
+        disposition: "idempotent",
+        command,
+        commandDigest,
+        commit: bound,
+        aggregate: current.aggregate,
+        checkpoint: "unchanged",
+      });
+    }
+  }
+
   const loaded = await loadAggregateForCommand(repository, options.signal);
   const current = loaded?.aggregate ?? null;
   const currentRevision = current?.streamRevision ?? 0;
@@ -276,6 +350,7 @@ export async function executeDemandEventSourcingCommand(
       commandDigest,
       commit: existing,
       aggregate: loaded.aggregate,
+      checkpoint: "unchanged",
     });
   }
   let events;
@@ -293,6 +368,9 @@ export async function executeDemandEventSourcingCommand(
       commitId: options.commitId,
       commandDigest,
       events,
+      ...(options.idempotency === undefined
+        ? {}
+        : { idempotency: options.idempotency }),
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamCommitError) {
@@ -309,11 +387,25 @@ export async function executeDemandEventSourcingCommand(
   } catch (error: unknown) {
     mapRepositoryError(error);
   }
+  let checkpoint: DemandEventSourcingCommandResult["checkpoint"] = "unchanged";
+  if (receipt.disposition === "committed") {
+    try {
+      await repository.refreshCheckpoints(
+        prepared.aggregate,
+        options.signal === undefined ? undefined : { signal: options.signal },
+      );
+      checkpoint = "refreshed";
+    } catch (error: unknown) {
+      if (!(error instanceof DemandEventSourcingRepositoryError)) throw error;
+      checkpoint = "stale";
+    }
+  }
   return Object.freeze({
     disposition: receipt.disposition,
     command,
     commandDigest,
     commit: prepared.commit,
     aggregate: prepared.aggregate,
+    checkpoint,
   });
 }

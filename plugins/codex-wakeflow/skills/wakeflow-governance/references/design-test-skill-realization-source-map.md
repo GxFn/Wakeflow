@@ -15,7 +15,7 @@ Date: 2026-08-24
 > vocabulary; this map governs capability, role boundaries, and acceptance intent.
 > Wakeflow currently persists one Pod Design request/handoff generation; a different
 > second generation remains a documented capability gap.
-> Staged re-derivation: `docs/wakeflow-execution-craft-plan-2026-07-09.md`.
+> Staged re-derivation: `docs/archive/wakeflow-execution-craft-plan-2026-07-09.md`.
 
 ## Purpose
 

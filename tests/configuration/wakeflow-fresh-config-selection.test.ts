@@ -161,3 +161,28 @@ test("Fresh selection snapshots all data and validates before ID allocation", ()
   }
   equal(invalidFactoryCalls, 0);
 });
+
+test("Fresh selection without a factory derives the same IDs from the same selection", () => {
+  const first = compileWakeflowFreshConfigSelection(
+    createMinimalWakeflowFreshConfigSelection(),
+  );
+  const second = compileWakeflowFreshConfigSelection(
+    createMinimalWakeflowFreshConfigSelection(),
+  );
+  deepEqual(second.allocations, first.allocations);
+  equal(second.configDigest, first.configDigest);
+  const renamed = createMinimalWakeflowFreshConfigSelection();
+  (renamed.program as Record<string, unknown>).displayName = "Another Program";
+  const third = compileWakeflowFreshConfigSelection(renamed);
+  equal(third.allocations.windows[0]?.id === first.allocations.windows[0]?.id, false);
+  equal(
+    new Set([
+      ...third.allocations.windows.map((entry) => entry.id),
+      ...third.allocations.repositories.map((entry) => entry.id),
+      ...third.allocations.supportSurfaces.map((entry) => entry.id),
+    ]).size,
+    third.allocations.windows.length
+      + third.allocations.repositories.length
+      + third.allocations.supportSurfaces.length,
+  );
+});

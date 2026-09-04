@@ -42,6 +42,8 @@ export interface ExactRegularFileUnlinkOptions {
   readonly expectedNode: Readonly<FileNodeSnapshot>;
   /** 普通资源要求路径持续不存在；协调锁允许后继持有者立即取得同一路径名。 */
   readonly settlement?: "absent" | "replacement-allowed";
+  /** `none` 只用于退休可重建的派生检查点或候选残留，跳过文件与父目录同步。 */
+  readonly durability?: "fsync" | "none";
   readonly signal?: AbortSignal;
 }
 
@@ -118,6 +120,7 @@ export class ExactRegularFileUnlinkError extends Error {
 interface ParsedOptions {
   readonly expectedNode: Readonly<FileNodeSnapshot>;
   readonly settlement: "absent" | "replacement-allowed";
+  readonly durability: "fsync" | "none";
   readonly signal: AbortSignal | undefined;
 }
 
@@ -182,7 +185,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     if (error instanceof PassiveOwnDataError) fail("input", "$options");
     throw error;
   }
-  const allowed = new Set(["expectedNode", "settlement", "signal"]);
+  const allowed = new Set(["expectedNode", "settlement", "durability", "signal"]);
   if (
     !Object.hasOwn(record, "expectedNode")
     || Object.keys(record).some((key) => !allowed.has(key))
@@ -203,7 +206,11 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   if (settlement !== "absent" && settlement !== "replacement-allowed") {
     fail("input", "$options.settlement");
   }
-  return Object.freeze({ expectedNode, settlement, signal });
+  const durability = record.durability === undefined ? "fsync" : record.durability;
+  if (durability !== "fsync" && durability !== "none") {
+    fail("input", "$options.durability");
+  }
+  return Object.freeze({ expectedNode, settlement, durability, signal });
 }
 
 function mapParentHandleError(
@@ -507,8 +514,10 @@ export async function unlinkRegularFileExactly(
     if (!sameUnlinkedNode(nodeBefore, afterUnlink, remainingLinkCount)) {
       fail("commit-uncertain", "$resourcePath");
     }
-    await syncCommittedSource(source);
-    await syncParent(parent);
+    if (parsed.durability === "fsync") {
+      await syncCommittedSource(source);
+      await syncParent(parent);
+    }
     replacementObserved = (
       await observeSettlement(parent, nodeBefore, parsed.settlement)
     ) || replacementObserved;

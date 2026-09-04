@@ -14,7 +14,6 @@ import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
   sameFileNodeIdentity,
-  sameFileNodeSnapshot,
   type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
@@ -359,6 +358,21 @@ async function closeHandle(
   }
 }
 
+function sameDirectoryFacts(
+  left: Readonly<FileNodeSnapshot>,
+  right: Readonly<FileNodeSnapshot>,
+): boolean {
+  return (
+    left.kind === "directory"
+    && right.kind === "directory"
+    && sameFileNodeIdentity(left, right)
+    && left.rawMode === right.rawMode
+    && left.permissionBits === right.permissionBits
+    && left.userId === right.userId
+    && left.groupId === right.groupId
+  );
+}
+
 async function performAtomicCreate(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
@@ -453,12 +467,14 @@ async function performAtomicCreate(
       parent,
       "commit-uncertain",
     );
+    // 目录一旦发布，其他写入者就可以在里面建立事实；这会改变链接数、大小与时间戳，
+    // 但不改变目录本身的身份、类型、权限位与属主。终检只比较这些稳定事实。
     if (
       afterPath === null
       || afterPath.kind !== "directory"
       || afterHandle.permissionBits !== options.mode
-      || !sameFileNodeSnapshot(hardened, afterHandle)
-      || !sameFileNodeSnapshot(afterHandle, afterPath)
+      || !sameDirectoryFacts(hardened, afterHandle)
+      || !sameDirectoryFacts(afterHandle, afterPath)
     ) {
       fail("commit-uncertain", "$resourcePath");
     }

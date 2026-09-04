@@ -41,6 +41,9 @@ export const DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF =
   parsePortableResourcePath("event-sourcing/snapshots");
 export const DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF =
   parsePortableResourcePath("event-sourcing/append-candidates");
+/** 可删除、可重建的身份索引检查点目录；文件按提交序号命名，由 kernel 事件流索引拥有。 */
+export const DEMAND_EVENT_STREAM_INDEX_ROOT_REF =
+  parsePortableResourcePath("event-sourcing/index");
 
 const APPEND_CANDIDATE_PATTERN =
   /^(?<sequence>[0-9]{16})__(?<commitId>demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})__(?<pid>[1-9][0-9]*)-(?<threadId>0|[1-9][0-9]*)-(?<token>[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;

@@ -60,6 +60,7 @@ import {
   DemandFileEventSnapshotStore,
   DemandFileEventSnapshotStoreError,
   type DemandFileEventSnapshotPublishReceipt,
+  type DemandFileEventSnapshotReadResult,
 } from "./demand-file-event-snapshot-store.js";
 import {
   computeDemandEventSourcingStoredEventDigest,
@@ -69,6 +70,8 @@ import {
   upcastDemandEventSourcingStoredEvent,
   DemandEventSourcingUpcasterError,
 } from "./demand-event-sourcing-upcaster.js";
+import type { DemandUncommittedEvent } from "./demand-event-sourcing-event.js";
+import { computeDemandEventStreamCommitDigest } from "./demand-event-stream-commit.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：聚合仓储。
@@ -77,6 +80,10 @@ import {
  * 从提交 1 完整重放。仓储不会在加载过程中写入快照、不决定命令、不访问 Ledger 或
  * TODO，也不执行 Demand 根目录发布。
  */
+
+/** 快照保留的最新份数与清扫周期；快照是可重建缓存。 */
+const SNAPSHOT_RETENTION = 2;
+const CHECKPOINT_SWEEP_INTERVAL = 16;
 
 export interface LoadedDemandEventSourcingAggregate {
   readonly aggregate: Readonly<DemandEventSourcingAggregate>;
@@ -361,13 +368,29 @@ export class DemandEventSourcingRepository {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<LoadedDemandEventSourcingAggregate> | null> {
     const signal = parseSignal(options);
-    let observations;
-    try {
-      observations = await this.#snapshotStore.readSnapshots(
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      mapStoreError(error);
+    // 快照是可重建缓存：并发的检查点刷新会让一次快照目录读取报告
+    // stream-changed，此时立即重读一次；仍失败（含崩溃残留的暂存文件）则视为
+    // 本次没有可用快照，退回完整重放并以 `snapshotStatus: "invalid"` 报告。
+    // 缓存问题绝不变成加载失败；只有中止照常上抛。
+    let observations: Readonly<DemandFileEventSnapshotReadResult> =
+      Object.freeze({ snapshots: Object.freeze([]) });
+    let snapshotStoreFailed = false;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        observations = await this.#snapshotStore.readSnapshots(
+          signal === undefined ? undefined : { signal },
+        );
+        snapshotStoreFailed = false;
+        break;
+      } catch (error: unknown) {
+        if (
+          !(error instanceof DemandFileEventSnapshotStoreError) ||
+          error.reason === "aborted"
+        ) {
+          mapStoreError(error);
+        }
+        snapshotStoreFailed = true;
+      }
     }
     const valid = observations.snapshots
       .filter((entry) => entry.status === "valid")
@@ -375,6 +398,7 @@ export class DemandEventSourcingRepository {
     let snapshotAttemptFailed = observations.snapshots.some(
       (entry) => entry.status === "invalid",
     );
+    if (snapshotStoreFailed) snapshotAttemptFailed = true;
 
     for (const observation of valid) {
       if (observation.status !== "valid") continue;
@@ -1129,39 +1153,18 @@ export class DemandEventSourcingRepository {
       }
       throw error;
     }
-    let stream;
-    try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      mapStoreError(error);
-    }
-    if (stream.commits.length === 0) return null;
-    const aggregate = replayCommits(null, stream.commits);
-    let located: Readonly<LocatedTestCardCreatedEvent> | undefined;
-    for (const commit of stream.commits) {
-      for (const storedEvent of commit.events) {
-        let event;
-        try {
-          event = upcastDemandEventSourcingStoredEvent(storedEvent);
-        } catch (error: unknown) {
-          if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
-          }
-          throw error;
-        }
-        if (
-          event.eventType !== "testing.test-card-created" ||
-          event.data.testCard.testCardId !== testCardId
-        ) {
-          continue;
-        }
-        if (located !== undefined) fail("stream", "$events");
-        located = Object.freeze({ storedEvent, event });
-      }
-    }
-    if (located === undefined) return null;
+    const found = await this.#findUniqueEvent(
+      "testing.test-card-created",
+      (event) => event.eventType === "testing.test-card-created" && event.data.testCard.testCardId === testCardId,
+      signal,
+    );
+    if (found === null) return null;
+    const aggregate = found.aggregate;
+    if (found.event.eventType !== "testing.test-card-created") fail("stream", "$events");
+    const located: Readonly<LocatedTestCardCreatedEvent> = Object.freeze({
+      storedEvent: found.storedEvent,
+      event: found.event,
+    });
     const testCard = located.event.data.testCard;
     const currentSummary = aggregate.state.currentTestCard;
     const targetSummary = aggregate.state.targetTasks.find(
@@ -1213,39 +1216,18 @@ export class DemandEventSourcingRepository {
       }
       throw error;
     }
-    let stream;
-    try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      mapStoreError(error);
-    }
-    if (stream.commits.length === 0) return null;
-    const aggregate = replayCommits(null, stream.commits);
-    let located: Readonly<LocatedTargetTaskPlannedEvent> | undefined;
-    for (const commit of stream.commits) {
-      for (const storedEvent of commit.events) {
-        let event;
-        try {
-          event = upcastDemandEventSourcingStoredEvent(storedEvent);
-        } catch (error: unknown) {
-          if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
-          }
-          throw error;
-        }
-        if (
-          event.eventType !== "tasking.target-task-planned" ||
-          event.data.taskPackage.taskPackageId !== taskPackageId
-        ) {
-          continue;
-        }
-        if (located !== undefined) fail("stream", "$events");
-        located = Object.freeze({ storedEvent, event });
-      }
-    }
-    if (located === undefined) return null;
+    const found = await this.#findUniqueEvent(
+      "tasking.target-task-planned",
+      (event) => event.eventType === "tasking.target-task-planned" && event.data.taskPackage.taskPackageId === taskPackageId,
+      signal,
+    );
+    if (found === null) return null;
+    const aggregate = found.aggregate;
+    if (found.event.eventType !== "tasking.target-task-planned") fail("stream", "$events");
+    const located: Readonly<LocatedTargetTaskPlannedEvent> = Object.freeze({
+      storedEvent: found.storedEvent,
+      event: found.event,
+    });
     const taskPackage = located.event.data.taskPackage;
     const summary = aggregate.state.targetTasks.find(
       (entry) => entry.taskPackageId === taskPackageId,
@@ -1280,39 +1262,18 @@ export class DemandEventSourcingRepository {
       }
       throw error;
     }
-    let stream;
-    try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      mapStoreError(error);
-    }
-    if (stream.commits.length === 0) return null;
-    const aggregate = replayCommits(null, stream.commits);
-    let located: Readonly<LocatedTestDeliveryPreparedEvent> | undefined;
-    for (const commit of stream.commits) {
-      for (const storedEvent of commit.events) {
-        let event;
-        try {
-          event = upcastDemandEventSourcingStoredEvent(storedEvent);
-        } catch (error: unknown) {
-          if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
-          }
-          throw error;
-        }
-        if (
-          event.eventType !== "testing.test-delivery-prepared" ||
-          event.data.intent.targetDeliveryId !== targetDeliveryId
-        ) {
-          continue;
-        }
-        if (located !== undefined) fail("stream", "$events");
-        located = Object.freeze({ storedEvent, event });
-      }
-    }
-    if (located === undefined) return null;
+    const found = await this.#findUniqueEvent(
+      "testing.test-delivery-prepared",
+      (event) => event.eventType === "testing.test-delivery-prepared" && event.data.intent.targetDeliveryId === targetDeliveryId,
+      signal,
+    );
+    if (found === null) return null;
+    const aggregate = found.aggregate;
+    if (found.event.eventType !== "testing.test-delivery-prepared") fail("stream", "$events");
+    const located: Readonly<LocatedTestDeliveryPreparedEvent> = Object.freeze({
+      storedEvent: found.storedEvent,
+      event: found.event,
+    });
     const intent = located.event.data.intent;
     const target = aggregate.state.targetTasks.find(
       (entry) => entry.targetTaskId === intent.target.targetTaskId,
@@ -1362,39 +1323,18 @@ export class DemandEventSourcingRepository {
       }
       throw error;
     }
-    let stream;
-    try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      mapStoreError(error);
-    }
-    if (stream.commits.length === 0) return null;
-    const aggregate = replayCommits(null, stream.commits);
-    let located: Readonly<LocatedTargetDeliveryPreparedEvent> | undefined;
-    for (const commit of stream.commits) {
-      for (const storedEvent of commit.events) {
-        let event;
-        try {
-          event = upcastDemandEventSourcingStoredEvent(storedEvent);
-        } catch (error: unknown) {
-          if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
-          }
-          throw error;
-        }
-        if (
-          event.eventType !== "delivery.target-delivery-prepared" ||
-          event.data.intent.targetDeliveryId !== targetDeliveryId
-        ) {
-          continue;
-        }
-        if (located !== undefined) fail("stream", "$events");
-        located = Object.freeze({ storedEvent, event });
-      }
-    }
-    if (located === undefined) return null;
+    const found = await this.#findUniqueEvent(
+      "delivery.target-delivery-prepared",
+      (event) => event.eventType === "delivery.target-delivery-prepared" && event.data.intent.targetDeliveryId === targetDeliveryId,
+      signal,
+    );
+    if (found === null) return null;
+    const aggregate = found.aggregate;
+    if (found.event.eventType !== "delivery.target-delivery-prepared") fail("stream", "$events");
+    const located: Readonly<LocatedTargetDeliveryPreparedEvent> = Object.freeze({
+      storedEvent: found.storedEvent,
+      event: found.event,
+    });
     const intent = located.event.data.intent;
     const target = aggregate.state.targetTasks.find(
       (entry) => entry.targetTaskId === intent.target.targetTaskId,
@@ -1425,39 +1365,18 @@ export class DemandEventSourcingRepository {
       if (error instanceof WindowWorkClaimError) fail("input", "$claimId");
       throw error;
     }
-    let stream;
-    try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      mapStoreError(error);
-    }
-    if (stream.commits.length === 0) return null;
-    const aggregate = replayCommits(null, stream.commits);
-    let located: Readonly<LocatedTargetHostEffectClaimedEvent> | undefined;
-    for (const commit of stream.commits) {
-      for (const storedEvent of commit.events) {
-        let event;
-        try {
-          event = upcastDemandEventSourcingStoredEvent(storedEvent);
-        } catch (error: unknown) {
-          if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
-          }
-          throw error;
-        }
-        if (
-          event.eventType !== "delivery.target-host-effect-claimed" ||
-          event.data.claim.claimId !== claimId
-        ) {
-          continue;
-        }
-        if (located !== undefined) fail("stream", "$events");
-        located = Object.freeze({ storedEvent, event });
-      }
-    }
-    if (located === undefined) return null;
+    const found = await this.#findUniqueEvent(
+      "delivery.target-host-effect-claimed",
+      (event) => event.eventType === "delivery.target-host-effect-claimed" && event.data.claim.claimId === claimId,
+      signal,
+    );
+    if (found === null) return null;
+    const aggregate = found.aggregate;
+    if (found.event.eventType !== "delivery.target-host-effect-claimed") fail("stream", "$events");
+    const located: Readonly<LocatedTargetHostEffectClaimedEvent> = Object.freeze({
+      storedEvent: found.storedEvent,
+      event: found.event,
+    });
     const claim = located.event.data.claim;
     if (
       aggregate.demandId !== claim.target.demandId ||
@@ -1484,39 +1403,18 @@ export class DemandEventSourcingRepository {
       if (error instanceof WindowWorkClaimError) fail("input", "$actionId");
       throw error;
     }
-    let stream;
-    try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      mapStoreError(error);
-    }
-    if (stream.commits.length === 0) return null;
-    const aggregate = replayCommits(null, stream.commits);
-    let located: Readonly<LocatedTargetHostEffectObservedEvent> | undefined;
-    for (const commit of stream.commits) {
-      for (const storedEvent of commit.events) {
-        let event;
-        try {
-          event = upcastDemandEventSourcingStoredEvent(storedEvent);
-        } catch (error: unknown) {
-          if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
-          }
-          throw error;
-        }
-        if (
-          event.eventType !== "delivery.target-host-effect-observed" ||
-          event.data.observation.action.actionId !== actionId
-        ) {
-          continue;
-        }
-        if (located !== undefined) fail("stream", "$events");
-        located = Object.freeze({ storedEvent, event });
-      }
-    }
-    if (located === undefined) return null;
+    const found = await this.#findUniqueEvent(
+      "delivery.target-host-effect-observed",
+      (event) => event.eventType === "delivery.target-host-effect-observed" && event.data.observation.action.actionId === actionId,
+      signal,
+    );
+    if (found === null) return null;
+    const aggregate = found.aggregate;
+    if (found.event.eventType !== "delivery.target-host-effect-observed") fail("stream", "$events");
+    const located: Readonly<LocatedTargetHostEffectObservedEvent> = Object.freeze({
+      storedEvent: found.storedEvent,
+      event: found.event,
+    });
     const observation = located.event.data.observation;
     if (
       aggregate.demandId !== located.event.demandId ||
@@ -1542,39 +1440,18 @@ export class DemandEventSourcingRepository {
       if (error instanceof WindowWorkClaimError) fail("input", "$actionId");
       throw error;
     }
-    let stream;
-    try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      mapStoreError(error);
-    }
-    if (stream.commits.length === 0) return null;
-    const aggregate = replayCommits(null, stream.commits);
-    let located: Readonly<LocatedTargetHostEffectRearmedEvent> | undefined;
-    for (const commit of stream.commits) {
-      for (const storedEvent of commit.events) {
-        let event;
-        try {
-          event = upcastDemandEventSourcingStoredEvent(storedEvent);
-        } catch (error: unknown) {
-          if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
-          }
-          throw error;
-        }
-        if (
-          event.eventType !== "delivery.target-host-effect-rearmed" ||
-          event.data.rearm.rejectedAttempt.claimId !== actionId
-        ) {
-          continue;
-        }
-        if (located !== undefined) fail("stream", "$events");
-        located = Object.freeze({ storedEvent, event });
-      }
-    }
-    if (located === undefined) return null;
+    const found = await this.#findUniqueEvent(
+      "delivery.target-host-effect-rearmed",
+      (event) => event.eventType === "delivery.target-host-effect-rearmed" && event.data.rearm.rejectedAttempt.claimId === actionId,
+      signal,
+    );
+    if (found === null) return null;
+    const aggregate = found.aggregate;
+    if (found.event.eventType !== "delivery.target-host-effect-rearmed") fail("stream", "$events");
+    const located: Readonly<LocatedTargetHostEffectRearmedEvent> = Object.freeze({
+      storedEvent: found.storedEvent,
+      event: found.event,
+    });
     if (located.storedEvent.streamRevision > aggregate.streamRevision) {
       fail("stream", "$events");
     }
@@ -1594,6 +1471,81 @@ export class DemandEventSourcingRepository {
       if (error instanceof WindowWorkClaimError) fail("input", "$actionId");
       throw error;
     }
+    const found = await this.#findUniqueEvent(
+      "result.target-result-recorded",
+      (event) => event.eventType === "result.target-result-recorded" && event.data.result.hostEffect.actionId === actionId,
+      signal,
+    );
+    if (found === null) return null;
+    const aggregate = found.aggregate;
+    if (found.event.eventType !== "result.target-result-recorded") fail("stream", "$events");
+    const located: Readonly<LocatedTargetResultRecordedEvent> = Object.freeze({
+      storedEvent: found.storedEvent,
+      event: found.event,
+    });
+    if (located.storedEvent.streamRevision > aggregate.streamRevision) {
+      fail("stream", "$events");
+    }
+    return located;
+  }
+
+  /** 通过快照加尾部得到当前聚合；不存在事件流时返回 `null`。 */
+  async #currentAggregate(
+    signal: AbortSignal | undefined,
+  ): Promise<Readonly<DemandEventSourcingAggregate> | null> {
+    const loaded = await this.load(signal === undefined ? undefined : { signal });
+    return loaded?.aggregate ?? null;
+  }
+
+  /**
+   * 收集某一事件类型的全部持久化事件：索引可用时只读命中的提交文件，并用索引里的
+   * 提交摘要复验；索引落后于聚合的尾部提交逐个补读；索引不可用则退回完整读取。
+   */
+  async #storedEventsOfType(
+    aggregate: Readonly<DemandEventSourcingAggregate>,
+    eventType: DemandUncommittedEvent["eventType"],
+    signal: AbortSignal | undefined,
+  ): Promise<readonly Readonly<DemandEventSourcingStoredEvent>[]> {
+    const located = await this.#eventStore.readIndex(
+      aggregate.demandId,
+      signal === undefined ? undefined : { signal },
+    );
+    if (located !== null && located.index.commitSequence <= aggregate.commitSequence) {
+      const sequences = new Set<number>(located.index.byType[eventType] ?? []);
+      for (
+        let sequence = located.index.commitSequence + 1;
+        sequence <= aggregate.commitSequence;
+        sequence += 1
+      ) {
+        sequences.add(sequence);
+      }
+      const collected: Readonly<DemandEventSourcingStoredEvent>[] = [];
+      let consistent = true;
+      for (const sequence of [...sequences].sort((left, right) => left - right)) {
+        let commit;
+        try {
+          commit = await this.#eventStore.readCommitAt(
+            sequence,
+            signal === undefined ? undefined : { signal },
+          );
+        } catch (error: unknown) {
+          mapStoreError(error);
+        }
+        const expectedDigest = located.index.digests[String(sequence)];
+        if (
+          commit === null ||
+          (expectedDigest !== undefined &&
+            computeDemandEventStreamCommitDigest(commit) !== expectedDigest)
+        ) {
+          consistent = false;
+          break;
+        }
+        for (const storedEvent of commit.events) {
+          if (storedEvent.eventType === eventType) collected.push(storedEvent);
+        }
+      }
+      if (consistent) return Object.freeze(collected);
+    }
     let stream;
     try {
       stream = await this.#eventStore.readCommits(
@@ -1602,35 +1554,50 @@ export class DemandEventSourcingRepository {
     } catch (error: unknown) {
       mapStoreError(error);
     }
-    if (stream.commits.length === 0) return null;
-    const aggregate = replayCommits(null, stream.commits);
-    let located: Readonly<LocatedTargetResultRecordedEvent> | undefined;
-    for (const commit of stream.commits) {
-      for (const storedEvent of commit.events) {
-        let event;
-        try {
-          event = upcastDemandEventSourcingStoredEvent(storedEvent);
-        } catch (error: unknown) {
-          if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
-          }
-          throw error;
+    return Object.freeze(
+      stream.commits.flatMap((commit) =>
+        commit.events.filter((storedEvent) => storedEvent.eventType === eventType),
+      ),
+    );
+  }
+
+  /** 按类型与匹配条件定位唯一事件；匹配到多个即事件流不合法。 */
+  async #findUniqueEvent(
+    eventType: DemandUncommittedEvent["eventType"],
+    matches: (event: Readonly<DemandUncommittedEvent>) => boolean,
+    signal: AbortSignal | undefined,
+  ): Promise<
+    | Readonly<{
+        readonly aggregate: Readonly<DemandEventSourcingAggregate>;
+        readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
+        readonly event: Readonly<DemandUncommittedEvent>;
+      }>
+    | null
+  > {
+    const aggregate = await this.#currentAggregate(signal);
+    if (aggregate === null) return null;
+    let located:
+      | Readonly<{
+          readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
+          readonly event: Readonly<DemandUncommittedEvent>;
+        }>
+      | undefined;
+    for (const storedEvent of await this.#storedEventsOfType(aggregate, eventType, signal)) {
+      let event;
+      try {
+        event = upcastDemandEventSourcingStoredEvent(storedEvent);
+      } catch (error: unknown) {
+        if (error instanceof DemandEventSourcingUpcasterError) {
+          fail("stream", "$events");
         }
-        if (
-          event.eventType !== "result.target-result-recorded" ||
-          event.data.result.hostEffect.actionId !== actionId
-        ) {
-          continue;
-        }
-        if (located !== undefined) fail("stream", "$events");
-        located = Object.freeze({ storedEvent, event });
+        throw error;
       }
+      if (event.eventType !== eventType || !matches(event)) continue;
+      if (located !== undefined) fail("stream", "$events");
+      located = Object.freeze({ storedEvent, event });
     }
     if (located === undefined) return null;
-    if (located.storedEvent.streamRevision > aggregate.streamRevision) {
-      fail("stream", "$events");
-    }
-    return located;
+    return Object.freeze({ aggregate, ...located });
   }
 
   /** 仅为命令重试解析 `commitId`；普通加载不会因此扫描历史。 */
@@ -1650,6 +1617,23 @@ export class DemandEventSourcingRepository {
       if (error instanceof WakeflowDurableIdError) fail("input", "$commitId");
       throw error;
     }
+    const located = await this.#eventStore.readIndex(
+      null,
+      signal === undefined ? undefined : { signal },
+    );
+    const indexedSequence = located?.index.commits[commitId];
+    if (indexedSequence !== undefined) {
+      let commit;
+      try {
+        commit = await this.#eventStore.readCommitAt(
+          indexedSequence,
+          signal === undefined ? undefined : { signal },
+        );
+      } catch (error: unknown) {
+        mapStoreError(error);
+      }
+      if (commit !== null && commit.commitId === commitId) return commit;
+    }
     let stream;
     try {
       stream = await this.#eventStore.readCommits(
@@ -1660,6 +1644,45 @@ export class DemandEventSourcingRepository {
     }
     return (
       stream.commits.find((commit) => commit.commitId === commitId) ?? null
+    );
+  }
+
+  /** 按客户端幂等键定位提交：索引 O(1)，索引不可用时回退完整读取。 */
+  async findCommitByIdempotencyKey(
+    key: string,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<Readonly<DemandEventStreamCommit> | null> {
+    const signal = parseSignal(options);
+    if (typeof key !== "string" || key.length === 0 || key.length > 128) {
+      fail("input", "$idempotencyKey");
+    }
+    const located = await this.#eventStore.readIndex(
+      null,
+      signal === undefined ? undefined : { signal },
+    );
+    const indexedSequence = located?.index.keys[key];
+    if (indexedSequence !== undefined) {
+      let commit;
+      try {
+        commit = await this.#eventStore.readCommitAt(
+          indexedSequence,
+          signal === undefined ? undefined : { signal },
+        );
+      } catch (error: unknown) {
+        mapStoreError(error);
+      }
+      if (commit !== null && commit.idempotency?.key === key) return commit;
+    }
+    let stream;
+    try {
+      stream = await this.#eventStore.readCommits(
+        signal === undefined ? undefined : { signal },
+      );
+    } catch (error: unknown) {
+      mapStoreError(error);
+    }
+    return (
+      stream.commits.find((commit) => commit.idempotency?.key === key) ?? null
     );
   }
 
@@ -1702,5 +1725,47 @@ export class DemandEventSourcingRepository {
       }
       throw error;
     }
+  }
+
+  /**
+   * 追加成功后刷新检查点：发布当前聚合的快照并退休更早的快照（ADR-0005）。
+   * 快照是可重建缓存，退休失败只计数。
+   */
+  async refreshCheckpoints(
+    aggregateValue: unknown,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<
+    Readonly<{
+      readonly snapshot: DemandFileEventSnapshotPublishReceipt["disposition"];
+      readonly retiredSnapshots: number;
+    }>
+  > {
+    const signal = parseSignal(options);
+    const receipt = await this.publishSnapshot(
+      aggregateValue,
+      signal === undefined ? undefined : { signal },
+    );
+    let retiredSnapshots = 0;
+    try {
+      // 常态只退休恰好落到保留窗口之外的那一份；每隔一段做一次清扫兜底。
+      if (
+        await this.#snapshotStore.retireSnapshotAt(
+          receipt.commitSequence - SNAPSHOT_RETENTION,
+          signal === undefined ? undefined : { signal },
+        )
+      ) {
+        retiredSnapshots += 1;
+      }
+      if (receipt.commitSequence % CHECKPOINT_SWEEP_INTERVAL === 0) {
+        const sweep = await this.#snapshotStore.retireSnapshotsBefore(
+          receipt.commitSequence - SNAPSHOT_RETENTION + 1,
+          signal === undefined ? undefined : { signal },
+        );
+        retiredSnapshots += sweep.retired;
+      }
+    } catch (error: unknown) {
+      if (!(error instanceof DemandFileEventSnapshotStoreError)) throw error;
+    }
+    return Object.freeze({ snapshot: receipt.disposition, retiredSnapshots });
   }
 }

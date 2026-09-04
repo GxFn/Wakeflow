@@ -5,6 +5,7 @@ import {
 
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
+  type DurableAtomicFileDurability,
   assertDurableAtomicFileNotAborted,
   assertDurableAtomicFileRoot,
   failDurableAtomicFileWrite as fail,
@@ -69,6 +70,7 @@ async function performWrite<
   signal: AbortSignal | undefined,
   publication: Publication,
   expected: Readonly<DurableAtomicFileExpectation> | null,
+  durability: DurableAtomicFileDurability = "fsync",
 ): Promise<Readonly<DurableAtomicFileWriteResult<Publication>>> {
   const parent = await openDurableAtomicFileTargetParent(root, resourcePath);
   let openStage: Readonly<OpenDurableAtomicFileStage> | undefined;
@@ -105,6 +107,7 @@ async function performWrite<
       input,
       mode,
       signal,
+      durability,
     );
     await assertDurableAtomicFileTargetParentCurrent(parent);
     await assertDurableAtomicFileStageCurrent(stage);
@@ -151,10 +154,12 @@ async function performWrite<
         mode,
         2n,
       );
-      try {
-        await stage.handle.sync();
-      } catch {
-        fail("durability-failure", "$resourcePath");
+      if (durability === "fsync") {
+        try {
+          await stage.handle.sync();
+        } catch {
+          fail("durability-failure", "$resourcePath");
+        }
       }
       const verifiedLinkedNode = await verifyDurableAtomicFileHandleBytes(
         stage.handle,
@@ -166,7 +171,7 @@ async function performWrite<
         fail("commit-uncertain", "$resourcePath");
       }
       // 先保证双链接对具备崩溃持久性；后续清理中断时，暂存文件恢复仍可前向结算。
-      await syncDurableAtomicFileTargetParent(parent);
+      if (durability === "fsync") await syncDurableAtomicFileTargetParent(parent);
       await assertDurableAtomicFileTargetParentCurrent(parent);
       const durableLinkedNode = await inspectCommittedDurableAtomicFileTarget(
         parent,
@@ -180,12 +185,14 @@ async function performWrite<
       }
       await unlinkOwnedDurableAtomicFileStage(stage);
       stagePathOwned = false;
-      try {
-        await stage.handle.sync();
-      } catch {
-        fail("durability-failure", "$resourcePath");
+      if (durability === "fsync") {
+        try {
+          await stage.handle.sync();
+        } catch {
+          fail("durability-failure", "$resourcePath");
+        }
       }
-      await syncDurableAtomicFileTargetParent(parent);
+      if (durability === "fsync") await syncDurableAtomicFileTargetParent(parent);
       await assertDurableAtomicFileTargetParentCurrent(parent);
       const verifiedFinalNode = await verifyDurableAtomicFileHandleBytes(
         stage.handle,
@@ -211,10 +218,12 @@ async function performWrite<
       }
       committed = true;
       stagePathOwned = false;
-      try {
-        await stage.handle.sync();
-      } catch {
-        fail("durability-failure", "$resourcePath");
+      if (durability === "fsync") {
+        try {
+          await stage.handle.sync();
+        } catch {
+          fail("durability-failure", "$resourcePath");
+        }
       }
       const verifiedCommittedNode = await verifyDurableAtomicFileHandleBytes(
         stage.handle,
@@ -232,7 +241,7 @@ async function performWrite<
       if (!sameFileNodeSnapshot(verifiedCommittedNode, committedNode)) {
         fail("commit-uncertain", "$resourcePath");
       }
-      await syncDurableAtomicFileTargetParent(parent);
+      if (durability === "fsync") await syncDurableAtomicFileTargetParent(parent);
       await assertDurableAtomicFileTargetParentCurrent(parent);
       finalNode = await inspectCommittedDurableAtomicFileTarget(
         parent,
@@ -259,7 +268,7 @@ async function performWrite<
   if (openStage !== undefined && stagePathOwned && !committed) {
     try {
       await unlinkOwnedDurableAtomicFileStage(openStage);
-      await syncDurableAtomicFileTargetParent(parent);
+      if (durability === "fsync") await syncDurableAtomicFileTargetParent(parent);
       stagePathOwned = false;
     } catch (error: unknown) {
       primaryError = error;
@@ -306,6 +315,7 @@ export async function createFileAtomically(
     parsed.signal,
     "created",
     null,
+    parsed.durability,
   );
 }
 

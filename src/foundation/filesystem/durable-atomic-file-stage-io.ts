@@ -250,6 +250,7 @@ export async function prepareDurableAtomicFileStage(
   input: Readonly<DurableAtomicFileInputBytes>,
   mode: number,
   signal: AbortSignal | undefined,
+  durability: "fsync" | "none" = "fsync",
 ): Promise<Readonly<PreparedDurableAtomicFileStage>> {
   await writeExactBytes(exclusive.handle, input.bytes, signal);
   assertDurableAtomicFileNotAborted(signal);
@@ -271,10 +272,12 @@ export async function prepareDurableAtomicFileStage(
   ) {
     fail("stage-write-failure", "$stage");
   }
-  try {
-    await exclusive.handle.sync();
-  } catch {
-    fail("stage-sync-failure", "$stage");
+  if (durability === "fsync") {
+    try {
+      await exclusive.handle.sync();
+    } catch {
+      fail("stage-sync-failure", "$stage");
+    }
   }
   const afterSync = await snapshotDurableAtomicFileHandle(
     exclusive.handle,

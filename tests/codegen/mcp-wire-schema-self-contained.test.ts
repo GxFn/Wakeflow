@@ -31,6 +31,22 @@ function externalReferences(value: unknown, result: string[] = []): string[] {
   return result;
 }
 
+/** 镜像的约束核心必须与权威一致；本地只允许额外的 description/title 文案。 */
+function mirrorCore(
+  value: JsonObject,
+  expected: JsonObject,
+  label: string,
+): JsonObject {
+  const extra = Object.keys(value).filter(
+    (key) =>
+      !Object.hasOwn(expected, key) && key !== "description" && key !== "title",
+  );
+  deepEqual(extra, [], `${label} carries keywords the Foundation mirror lacks`);
+  return Object.fromEntries(
+    Object.keys(expected).map((key) => [key, value[key]]),
+  );
+}
+
 function definition(schema: JsonObject, name: string): JsonObject {
   const definitions = schema.$defs;
   if (definitions === null || typeof definitions !== "object") {
@@ -87,72 +103,34 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     maxLength: utc.maxLength,
     pattern: utc.pattern,
   };
-  for (const name of [
-    "wakeflow-window-host-binding-registration-request.schema.json",
-    "wakeflow-window-host-binding-registration-result.schema.json",
-    "wakeflow-target-task-planning-request.schema.json",
-    "wakeflow-target-task-planning-result.schema.json",
-    "wakeflow-target-delivery-preparation-request.schema.json",
-    "wakeflow-target-delivery-preparation-result.schema.json",
-    "wakeflow-target-host-effect-claim-request.schema.json",
-    "wakeflow-target-host-effect-claim-result.schema.json",
-    "wakeflow-target-host-effect-outcome-request.schema.json",
-    "wakeflow-target-host-effect-outcome-result.schema.json",
-    "wakeflow-target-host-effect-rearm-request.schema.json",
-    "wakeflow-target-host-effect-rearm-result.schema.json",
-    "wakeflow-target-result-review-inspection-result.schema.json",
-    "wakeflow-controller-implementation-review-decision-request.schema.json",
-    "wakeflow-controller-implementation-review-decision-result.schema.json",
-    "wakeflow-controller-test-review-decision-request.schema.json",
-    "wakeflow-controller-test-review-decision-result.schema.json",
-    "wakeflow-controller-product-defect-remediation-request.schema.json",
-    "wakeflow-controller-product-defect-remediation-result.schema.json",
-    "wakeflow-target-result-import-request.schema.json",
-    "wakeflow-target-result-import-result.schema.json",
-    "wakeflow-demand-controller-route-result.schema.json",
-    "wakeflow-demand-completion-request.schema.json",
-    "wakeflow-demand-completion-result.schema.json",
-    "wakeflow-confirmation-publication-request.schema.json",
-    "wakeflow-confirmation-publication-result.schema.json",
-    "wakeflow-requirement-publication-request.schema.json",
-    "wakeflow-requirement-publication-result.schema.json",
-    "wakeflow-target-result-review-resume-request.schema.json",
-    "wakeflow-target-result-review-resume-result.schema.json",
-    "wakeflow-test-card-planning-request.schema.json",
-    "wakeflow-test-card-planning-result.schema.json",
-    "wakeflow-test-delivery-preparation-request.schema.json",
-    "wakeflow-test-delivery-preparation-result.schema.json",
-  ]) {
+  // 任何 wire Schema 只要携带或引用 Foundation 词法镜像，就必须与权威一字不差；
+  // 不再要求未使用的镜像存在（ADR-0012 D2 单次追加请求已不携带摘要与时刻）。
+  const mirrors: ReadonlyArray<readonly [string, JsonObject]> = [
+    ["sha256Digest", expectedSha],
+    ["utcInstant", expectedUtc],
+  ];
+  const mirrorCounts = new Map<string, number>();
+  for (const name of names) {
     const schema = readSchema(`src/contracts/schemas/entrypoints/${name}`);
-    deepEqual(definition(schema, "sha256Digest"), expectedSha);
+    const text = JSON.stringify(schema);
+    const definitions = (schema.$defs ?? {}) as JsonObject;
+    for (const [mirror, expected] of mirrors) {
+      if (text.includes(`#/$defs/${mirror}`)) definition(schema, mirror);
+      if (!Object.hasOwn(definitions, mirror)) continue;
+      deepEqual(
+        mirrorCore(definition(schema, mirror), expected, `${name} ${mirror}`),
+        expected,
+        `${name} ${mirror} must mirror the Foundation authority`,
+      );
+      mirrorCounts.set(mirror, (mirrorCounts.get(mirror) ?? 0) + 1);
+    }
   }
-  for (const name of [
-    "wakeflow-window-host-binding-registration-request.schema.json",
-    "wakeflow-window-host-binding-registration-result.schema.json",
-    "wakeflow-target-task-planning-request.schema.json",
-    "wakeflow-target-task-planning-result.schema.json",
-    "wakeflow-target-delivery-preparation-request.schema.json",
-    "wakeflow-target-delivery-preparation-result.schema.json",
-    "wakeflow-target-host-effect-claim-request.schema.json",
-    "wakeflow-target-host-effect-claim-result.schema.json",
-    "wakeflow-target-host-effect-outcome-request.schema.json",
-    "wakeflow-target-host-effect-outcome-result.schema.json",
-    "wakeflow-target-host-effect-rearm-result.schema.json",
-    "wakeflow-target-result-review-inspection-result.schema.json",
-    "wakeflow-controller-implementation-review-decision-result.schema.json",
-    "wakeflow-controller-test-review-decision-result.schema.json",
-    "wakeflow-controller-product-defect-remediation-result.schema.json",
-    "wakeflow-target-result-import-result.schema.json",
-    "wakeflow-demand-completion-request.schema.json",
-    "wakeflow-demand-completion-result.schema.json",
-    "wakeflow-target-result-review-resume-result.schema.json",
-    "wakeflow-test-card-planning-request.schema.json",
-    "wakeflow-test-card-planning-result.schema.json",
-    "wakeflow-test-delivery-preparation-request.schema.json",
-    "wakeflow-test-delivery-preparation-result.schema.json",
-  ]) {
-    const schema = readSchema(`src/contracts/schemas/entrypoints/${name}`);
-    deepEqual(definition(schema, "utcInstant"), expectedUtc);
+  for (const [mirror] of mirrors) {
+    equal(
+      (mirrorCounts.get(mirror) ?? 0) > 0,
+      true,
+      `at least one wire Schema must still mirror ${mirror}`,
+    );
   }
 
   const routeRequest = readSchema(
@@ -174,29 +152,10 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json",
   );
   for (const sharedDefinition of [
-    "plan",
-    "taskPackage",
-    "authorityMemberReference",
-    "assignment",
-    "implementationAssignment",
-    "testAssignment",
-    "boundaries",
-    "acceptanceAnchor",
-    "testCardTuple",
-    "nonEmptyTextList",
-    "textList",
-    "humanText",
-    "portableResourcePath",
-    "sha256Digest",
-    "utcInstant",
-    "programId",
     "demandId",
     "repositoryId",
     "windowId",
-    "taskPackageId",
-    "targetTaskId",
-    "eventId",
-    "commitId",
+    "portableResourcePath",
   ]) {
     deepEqual(
       definition(planningRequest, sharedDefinition),
@@ -204,32 +163,65 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       `Planning wire definition ${sharedDefinition} must not drift`,
     );
   }
-  const domainTaskPackage = readSchema(
-    "src/contracts/schemas/governance/tasking/task-package.schema.json",
-  );
-  const publicTaskPackage = definition(planningRequest, "taskPackage");
-  deepEqual(
-    [...(publicTaskPackage.required as string[])].sort(),
-    [...(domainTaskPackage.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicTaskPackage.properties as Record<string, unknown>).sort(),
-    Object.keys(domainTaskPackage.properties as Record<string, unknown>).sort(),
-    "Public Planning TaskPackage fields must mirror the full domain union",
-  );
-  deepEqual(
-    (publicTaskPackage.properties as Record<string, unknown>).workType,
-    { enum: ["implementation", "test"] },
-  );
+  // ADR-0012 D2：单次追加信封，幂等键与观察到的流修订随请求一起到达。
+  deepEqual(planningRequest.required, [
+    "root",
+    "demandId",
+    "idempotencyKey",
+    "expectedStreamRevision",
+    "taskPackage",
+  ]);
+  deepEqual((planningRequest.properties as JsonObject).taskPackage, {
+    $ref: "#/$defs/requestedTaskPackage",
+  });
+  deepEqual(definition(planningRequest, "requestedTaskPackage"), {
+    oneOf: [
+      { $ref: "#/$defs/implementationTaskPackageRequest" },
+      { $ref: "#/$defs/testTaskPackageRequest" },
+    ],
+  });
   const implementationTaskRequest = definition(
     planningRequest,
     "implementationTaskPackageRequest",
   );
-  const testTaskRequest = definition(planningRequest, "testTaskPackageRequest");
+  const implementationRequestFields = [
+    "acceptanceAnchors",
+    "assignment",
+    "boundaries",
+    "commitExpectation",
+    "completionExpectations",
+    "confirmedContext",
+    "objective",
+    "selectedAuthorityMemberRefs",
+    "workType",
+  ];
+  deepEqual(
+    Object.keys(implementationTaskRequest.properties as JsonObject).sort(),
+    implementationRequestFields,
+  );
+  deepEqual(
+    [...(implementationTaskRequest.required as string[])].sort(),
+    implementationRequestFields,
+  );
   deepEqual(
     (implementationTaskRequest.properties as Record<string, unknown>).workType,
     { const: "implementation" },
   );
+  // 公共草稿不得发明领域任务包没有的字段；成员引用在领域里叫 selectedAuthorityRefs。
+  const domainTaskPackage = readSchema(
+    "src/contracts/schemas/governance/tasking/task-package.schema.json",
+  );
+  const domainFields = Object.keys(domainTaskPackage.properties as JsonObject);
+  equal(domainFields.includes("selectedAuthorityRefs"), true);
+  for (const field of implementationRequestFields) {
+    if (field === "selectedAuthorityMemberRefs") continue;
+    equal(
+      domainFields.includes(field),
+      true,
+      `Planning request field ${field} must exist on the domain TaskPackage`,
+    );
+  }
+  const testTaskRequest = definition(planningRequest, "testTaskPackageRequest");
   deepEqual(testTaskRequest.required, ["workType"]);
   deepEqual(Object.keys(testTaskRequest.properties as JsonObject), [
     "workType",
@@ -237,6 +229,16 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   deepEqual((testTaskRequest.properties as JsonObject).workType, {
     const: "test",
   });
+  deepEqual((planningResult.properties as JsonObject).status, {
+    enum: ["committed", "idempotent"],
+  });
+  equal((planningResult.required as string[]).includes("next"), true);
+  deepEqual(definition(planningResult, "next").required, [
+    "frontier",
+    "owner",
+    "suggestedTool",
+    "blockers",
+  ]);
   const implementationTargetTask = definition(
     planningResult,
     "implementationTargetTask",

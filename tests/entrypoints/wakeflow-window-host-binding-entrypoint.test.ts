@@ -60,24 +60,22 @@ test(
   },
   async (t) => {
     const root = await fixture(t);
+    const selected = selection();
     const preview = await executeCodexWakeflowMaintenance({
       root,
       action: "fresh-initialize",
       mode: "preview",
-      request: { selection: selection() },
+      request: { selection: selected },
     });
-    if (
-      preview.mode !== "preview" ||
-      preview.confirmation === null ||
-      preview.confirmationDigest === null
-    ) {
-      throw new Error("Expected a ready Fresh confirmation.");
+    if (preview.mode !== "preview" || preview.planDigest === null) {
+      throw new Error("Expected a ready Fresh plan.");
     }
     await executeCodexWakeflowMaintenance({
       root,
+      action: "fresh-initialize",
       mode: "apply",
-      confirmation: preview.confirmation,
-      confirmationDigest: preview.confirmationDigest,
+      request: { selection: selected },
+      planDigest: preview.planDigest,
     });
     const launchIntent = preview.launchIntents[0];
     const otherIntent = preview.launchIntents[1];

@@ -460,6 +460,7 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
     const invalidCreate: readonly [unknown, string][] = [
       [{}, "$options"],
       [{ mode: 0o600, extra: true }, "$options"],
+      [{ mode: 0o600, durability: "bogus" }, "$options.durability"],
       [{ mode: -1 }, "$options.mode"],
       [{ mode: 0o1000 }, "$options.mode"],
       [{ mode: 0o600, signal: {} }, "$options.signal"],

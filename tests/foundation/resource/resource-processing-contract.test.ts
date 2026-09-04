@@ -342,6 +342,22 @@ test("derived checkpoint remains distinct from mutable and immutable projections
     "operation",
     "$/recipe",
   );
+  const retirableCheckpoint = parseWakeflowResourceProcessingContract({
+    kind: "resource",
+    role: "derived-checkpoint",
+    allowedMutationRecipes: ["exclusive-create", "exact-retire"],
+    recoveryStrategy: "rebuild-from-authority",
+  });
+  deepEqual(admitWakeflowResourceOperation(retirableCheckpoint, "exact-retire"), {
+    kind: "resource-mutation",
+    role: "derived-checkpoint",
+    recipe: "exact-retire",
+  });
+  expectResourceProcessingError(
+    () => admitWakeflowResourceOperation(checkpoint, "exact-retire"),
+    "operation",
+    "$/recipe",
+  );
   expectResourceProcessingError(
     () => parseWakeflowResourceProcessingContract({
       kind: "resource",

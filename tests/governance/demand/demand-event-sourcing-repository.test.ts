@@ -131,7 +131,10 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
     } finally {
       releaseDurableAtomicFileStageAddress(stageAddress);
     }
-    await rejects(repository.load(), (error: unknown) => error instanceof Error);
+    // 残留暂存文件只让快照不可用：load 退回完整重放并报告 invalid，不再拒绝。
+    const staged = await repository.load();
+    equal(staged?.snapshotStatus, "invalid");
+    equal(staged?.replayedCommitCount, 1);
     const stageRecovery = await snapshotStore.recoverPublicationStages();
     equal(stageRecovery.retiredStageCount, 1);
 

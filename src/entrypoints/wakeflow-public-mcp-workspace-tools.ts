@@ -21,12 +21,8 @@ import {
 } from "../contracts/generated/entrypoints/wakeflow-window-host-binding-registration-result.generated.js";
 import {
   WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
-  WakeflowMaintenancePublicContractError,
-} from "../workspace/maintenance/wakeflow-maintenance-public-contract.js";
-import {
-  WakeflowMaintenancePublicCoordinatorError,
   type WakeflowMaintenancePublicResult,
-} from "../workspace/maintenance/wakeflow-maintenance-public-coordinator.js";
+} from "../capabilities/workspace/maintain-workspace.js";
 import {
   WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
   WakeflowWindowHostBindingPublicContractError,
@@ -45,27 +41,6 @@ import {
 export interface WakeflowPublicMcpWorkspaceExecutors {
   readonly executeMaintenance: WakeflowPublicMcpExecutor<WakeflowMaintenancePublicResult>;
   readonly registerWindowHostBinding: WakeflowPublicMcpExecutor<WakeflowWindowHostBindingPublicResult>;
-}
-
-function maintenanceError(
-  error: unknown,
-): Readonly<WakeflowPublicMcpErrorDetails> | null {
-  if (error instanceof WakeflowMaintenancePublicContractError) {
-    return Object.freeze({
-      code: error.code,
-      reason: error.reason,
-      path: error.path,
-    });
-  }
-  if (error instanceof WakeflowMaintenancePublicCoordinatorError) {
-    return Object.freeze({
-      code: error.code,
-      reason: error.reason,
-      ...(error.causeCode === null ? {} : { causeCode: error.causeCode }),
-      ...(error.operationId === null ? {} : { operationId: error.operationId }),
-    });
-  }
-  return null;
 }
 
 function windowHostBindingError(
@@ -102,9 +77,9 @@ export function registerWakeflowPublicMcpWorkspaceTools(
     name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
     title: "Maintain Wakeflow Workspace",
     description: [
-      "Preview, apply a confirmed preview, or recover one Wakeflow workspace Maintenance transaction.",
-      "Preview is read-only. Apply and recover may mutate Wakeflow-owned local resources.",
-      "Returned window launch intents require explicit Agent host actions.",
+      "Preview, apply, or recover one Wakeflow workspace Maintenance transaction (fresh-initialize, reconfigure, reconcile).",
+      "Preview is read-only and returns the plan with its planDigest; apply resends the same action and request with that planDigest, and Wakeflow re-derives the plan and rejects any drift.",
+      "Recover finishes an interrupted transaction by its operationId. Returned window launch intents require explicit Agent host actions; every result carries next.",
     ].join(" "),
     inputSchema: fromJsonSchema<WakeflowMaintenancePublicRequestV1>(
       WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA,
@@ -119,7 +94,7 @@ export function registerWakeflowPublicMcpWorkspaceTools(
       openWorldHint: false,
     },
     execute: executors.executeMaintenance,
-    mapError: maintenanceError,
+    mapError: () => null,
   });
 
   registerWakeflowPublicMcpTool<

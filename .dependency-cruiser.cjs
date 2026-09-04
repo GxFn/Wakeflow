@@ -59,12 +59,26 @@ module.exports = {
       to: { path: "^(?:core|plugins|test)/" },
     },
     {
+      name: "kernel-depends-only-on-foundation-and-contracts",
+      severity: "error",
+      comment: "kernel 是应用内核，只能依赖 foundation 与 contracts，不得取得任何切片、旧领域、宿主或入口能力（ADR-0013）。",
+      from: { path: "^src/kernel/" },
+      to: { path: "^src/(?:configuration|workspace|governance|capabilities|hosts|entrypoints)/" },
+    },
+    {
+      name: "capabilities-do-not-import-each-other",
+      severity: "error",
+      comment: "垂直切片之间不得互相引用；共享内容下沉到 kernel 或经 contracts 相遇（ADR-0013）。",
+      from: { path: "^src/capabilities/([^/]+)/" },
+      to: { path: "^src/capabilities/(?!$1/)[^/]+/" },
+    },
+    {
       name: "foundation-does-not-depend-on-product-domains",
       severity: "error",
       comment: "foundation 只能向更低 foundation 或 foundation contracts 依赖。",
       from: { path: "^src/foundation/" },
       to: {
-        path: "^src/(?:contracts/(?:identity|generated/identity)|configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|hosts|entrypoints)/",
+        path: "^src/(?:contracts/(?:identity|vocabulary|generated/identity)|configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities|hosts|entrypoints)/",
       },
     },
     {
@@ -73,7 +87,7 @@ module.exports = {
       comment: "应用级身份合同只能依赖生成合同与 Foundation，不能反向取得领域状态。",
       from: { path: "^src/contracts/identity/" },
       to: {
-        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|hosts|entrypoints)/",
+        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities|hosts|entrypoints)/",
       },
     },
     {
@@ -121,7 +135,7 @@ module.exports = {
       severity: "error",
       comment: "host-neutral 领域代码不得绕过根作用域 filesystem foundation。",
       from: {
-        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability)/",
+        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities)/",
       },
       to: { path: "^node:fs(?:/promises)?$" },
     },
@@ -130,7 +144,7 @@ module.exports = {
       severity: "error",
       comment: "host-neutral 领域代码不得绕过封闭的 foundation 系统进程能力。",
       from: {
-        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability)/",
+        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities)/",
       },
       to: { path: "^node:child_process$" },
     },
@@ -139,7 +153,7 @@ module.exports = {
       severity: "error",
       comment: "宿主中立运行时只依赖端口与Profile数据，不得反向导入具体宿主实现。",
       from: {
-        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability)/",
+        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities)/",
       },
       to: { path: "^src/hosts/" },
     },

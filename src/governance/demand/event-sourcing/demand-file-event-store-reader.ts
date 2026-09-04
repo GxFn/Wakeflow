@@ -355,32 +355,13 @@ export async function readDemandFileEventCommitsAfter(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandFileEventStoreTailReadResult>> {
   const cursor = parseCursor(cursorValue);
-  const before = await readDemandFileEventDirectory(
+  // 尾部读取按序号逐文件探测，不枚举整个提交目录：成本只与尾部长度有关。
+  const anchorLoaded = await readDemandFileEventCommitOrNull(
     root,
-    DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
-    DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
+    demandEventStreamCommitRef(cursor.commitSequence),
     signal,
   );
-  if (before.entries.length < cursor.commitSequence) {
-    fail("stream-invalid", "$cursor/commitSequence");
-  }
-  assertInventoryNames(before);
-  const selected = before.entries.slice(cursor.commitSequence - 1);
-  const loaded = await readCommitEntries(
-    root,
-    selected,
-    cursor.commitSequence - 1,
-    signal,
-  );
-  const after = await readDemandFileEventDirectory(
-    root,
-    DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
-    DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
-    signal,
-    before.directoryNode,
-  );
-  if (!sameDirectoryRead(before, after)) fail("stream-changed", "$commits");
-  const anchor = loaded[0]?.commit;
+  const anchor = anchorLoaded?.commit;
   if (
     anchor === undefined
     || anchor.commitSequence !== cursor.commitSequence
@@ -389,25 +370,37 @@ export async function readDemandFileEventCommitsAfter(
   ) {
     fail("stream-invalid", "$cursor");
   }
+  const commits: Readonly<DemandEventStreamCommit>[] = [];
   let previous = anchor;
-  for (const [index, entry] of loaded.slice(1).entries()) {
-    const commit = entry.commit;
+  for (
+    let sequence = cursor.commitSequence + 1;
+    sequence <= DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS;
+    sequence += 1
+  ) {
+    const loaded = await readDemandFileEventCommitOrNull(
+      root,
+      demandEventStreamCommitRef(parseDemandEventCommitSequence(sequence, "$tail")),
+      signal,
+    );
+    if (loaded === null) break;
+    const commit = loaded.commit;
     if (
-      commit.commitSequence !== previous.commitSequence + 1
+      commit.commitSequence !== sequence
       || commit.demandId !== previous.demandId
       || commit.expectedStreamRevision !== previous.lastStreamRevision
       || commit.previousCommitDigest
         !== computeDemandEventStreamCommitDigest(previous)
     ) {
-      fail("stream-invalid", `$tail/${index}`);
+      fail("stream-invalid", `$tail/${commits.length}`);
     }
+    commits.push(commit);
     previous = commit;
   }
   const finalCursor = demandFileEventCursorFrom(previous);
   if (finalCursor === null) fail("stream-invalid", "$commits");
   return Object.freeze({
     anchorCommit: anchor,
-    commits: Object.freeze(loaded.slice(1).map((entry) => entry.commit)),
+    commits: Object.freeze(commits),
     cursor: finalCursor,
   });
 }
@@ -480,8 +473,17 @@ export async function assertDemandFileEventAppendAdmission(
   prepared: Readonly<PreparedDemandEventStreamCommit>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  const { commit, sourceExpectation } = prepared;
   const prefix = await readAllDemandFileEventCommits(root, signal);
+  assertDemandFileEventAppendAdmissionAgainstPrefix(prefix.commits, prepared);
+}
+
+/** 对一段已读入的完整前缀执行同一套追加准入检查，不做任何 I/O。 */
+export function assertDemandFileEventAppendAdmissionAgainstPrefix(
+  prefixCommits: readonly Readonly<DemandEventStreamCommit>[],
+  prepared: Readonly<PreparedDemandEventStreamCommit>,
+): void {
+  const { commit, sourceExpectation } = prepared;
+  const prefix = { commits: prefixCommits };
   if (prefix.commits.length !== commit.commitSequence - 1) {
     fail("concurrency-conflict", "$commit/commitSequence");
   }
@@ -545,6 +547,14 @@ export async function assertDemandFileEventAppendAdmission(
 
   if (prefix.commits.some((current) => current.commitId === commit.commitId)) {
     fail("append-identity-conflict", "$commit/commitId");
+  }
+  if (
+    commit.idempotency !== undefined
+    && prefix.commits.some(
+      (current) => current.idempotency?.key === commit.idempotency?.key,
+    )
+  ) {
+    fail("append-identity-conflict", "$commit/idempotency/key");
   }
   const eventIds = new Set<string>();
   for (const current of prefix.commits) {

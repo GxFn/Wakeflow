@@ -653,9 +653,9 @@ bundle) live only inside each artifact. `npm run check:core` keeps the copies
 honest.
 
 Current Pod behavior and acceptance authority are documented in
-[docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md).
+[docs/archive/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/archive/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md).
 The non-Pod hardening history is recorded in
-[docs/wakeflow-hardening-design-compliance-2026-07-30.md](docs/wakeflow-hardening-design-compliance-2026-07-30.md).
+[docs/archive/wakeflow-hardening-design-compliance-2026-07-30.md](docs/archive/wakeflow-hardening-design-compliance-2026-07-30.md).
 The dual-edition flow and architecture deep dive are historical v0.7.x
 snapshots, retained to explain evolution rather than current commands,
 tool counts, prompt shape, or Pod ownership.
@@ -680,7 +680,7 @@ Common source areas:
 | `plugins/codex-wakeflow/templates/wakeflow-asset-bundle.json` | Deterministically generated install carrier for those templates; never hand-edited. |
 | `plugins/codex-wakeflow/assets/` | Marketplace and plugin presentation assets. |
 | `test/` | Development-only regression tests kept outside the marketplace scan surface. |
-| `docs/` | Development planning and architecture notes kept outside the plugin artifact. |
+| `docs/` | Development documentation system kept outside the plugin artifact; start at `docs/README.md`. |
 
 Backend/source-maintenance command references live in
 [scripts/README.md](plugins/codex-wakeflow/scripts/README.md). Installed

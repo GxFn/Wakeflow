@@ -217,6 +217,7 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
       [{ expectedNode: { ...expected.node } }, "$options.expectedNode"],
       [{ expectedNode: expected.node, settlement: null }, "$options.settlement"],
       [{ expectedNode: expected.node, settlement: "eventually-absent" }, "$options.settlement"],
+      [{ expectedNode: expected.node, durability: "bogus" }, "$options.durability"],
       [{ expectedNode: expected.node, signal: {} }, "$options.signal"],
     ];
     for (const [options, expectedPath] of invalid) {

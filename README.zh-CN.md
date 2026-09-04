@@ -539,9 +539,9 @@ memory 文件模板、skills、template bundle）只存在于各自 artifact 内
 `npm run check:core` 负责保证副本不漂移。
 
 当前 Pod 行为与验收权威见
-[docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md)；
+[docs/archive/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/archive/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md)；
 非 Pod 硬化演进记录见
-[docs/wakeflow-hardening-design-compliance-2026-07-30.md](docs/wakeflow-hardening-design-compliance-2026-07-30.md)。
+[docs/archive/wakeflow-hardening-design-compliance-2026-07-30.md](docs/archive/wakeflow-hardening-design-compliance-2026-07-30.md)。
 双版本架构流和 deep-dive 是保留的 v0.7.x 历史快照，不代表当前命令、工具数量、
 提示词结构或 Pod 归属。
 
@@ -563,7 +563,7 @@ memory 文件模板、skills、template bundle）只存在于各自 artifact 内
 | `plugins/codex-wakeflow/templates/wakeflow-asset-bundle.json` | 确定性生成的安装运输物，不可手工编辑。 |
 | `plugins/codex-wakeflow/assets/` | Marketplace 和插件展示资源。 |
 | `test/` | 开发期回归测试，不进入 marketplace 扫描面。 |
-| `docs/` | 开发期规划和架构文档，不进入插件 artifact。 |
+| `docs/` | 开发文档系统，不进入插件 artifact；入口为 `docs/README.md`。 |
 
 后端/源码维护命令说明在 [scripts/README.md](plugins/codex-wakeflow/scripts/README.md)。
 已安装总控使用 MCP tools 与 skills，不把原始脚本当作操作入口。

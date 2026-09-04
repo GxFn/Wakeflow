@@ -5,7 +5,19 @@ import {
   type ToolAnnotations,
 } from "@modelcontextprotocol/server";
 
+import os from "node:os";
+
 import { canonicalizeJson } from "../foundation/data/canonical-json.js";
+import { parseJsonValue } from "../foundation/data/json-value.js";
+import { isWakeflowError } from "../kernel/error.js";
+import { assertCanonicalTextWithinLimit } from "../kernel/limits.js";
+import {
+  assertPublicJson,
+  createRedactionBoundary,
+} from "../kernel/redaction.js";
+
+/** 进程级脱敏边界：用户 home 路径永不进入任何公共结果，与各 owner 的根扫描叠加。 */
+const PROCESS_REDACTION_BOUNDARY = createRedactionBoundary([os.homedir()]);
 
 /** 公共MCP executor只接收SDK已解析的wire值，并返回一个领域公共结果。 */
 export type WakeflowPublicMcpExecutor<Result> = (
@@ -17,6 +29,8 @@ export interface WakeflowPublicMcpErrorDetails {
   readonly code: string;
   readonly reason: string;
   readonly path?: string;
+  readonly retryable?: boolean;
+  readonly details?: Readonly<Record<string, string>>;
   readonly causeCode?: string;
   readonly causeReason?: string;
   readonly operationId?: string;
@@ -63,12 +77,13 @@ function errorEnvelope(
     schemaVersion: 1,
     tool,
     status: "error",
-    error:
-      mapError(error) ??
-      Object.freeze({
-        code: "wakeflow-unexpected",
-        reason: "unexpected",
-      }),
+    error: isWakeflowError(error)
+      ? error.toPublicDetails()
+      : (mapError(error) ??
+        Object.freeze({
+          code: "wakeflow-unexpected",
+          reason: "unexpected",
+        })),
   });
 }
 
@@ -97,6 +112,8 @@ function failedToolResult(
  */
 function successfulToolResult(value: unknown): CallToolResult {
   const text = canonicalizeJson(value, "$result");
+  assertCanonicalTextWithinLimit(text, "publicResultBytes", "$result");
+  assertPublicJson(parseJsonValue(value, "$result"), PROCESS_REDACTION_BOUNDARY, "$result");
   const structuredContent: unknown = JSON.parse(text);
   if (
     structuredContent === null ||

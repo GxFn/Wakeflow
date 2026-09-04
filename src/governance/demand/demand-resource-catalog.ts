@@ -15,6 +15,7 @@ import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
+  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
   DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_AUTHORITY_REF,
   DEMAND_EVENT_SOURCING_IDENTITY_REF,
@@ -23,6 +24,7 @@ import {
   DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
 } from "./event-sourcing/demand-event-sourcing-paths.js";
+import { streamIndexRef } from "../../kernel/event-stream/stream-index.js";
 import {
   demandFinalPublicationMarkerRef,
   demandFinalRootRef,
@@ -222,6 +224,7 @@ type DemandEventSourcingResourceCatalog = readonly [
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
+  Readonly<WakeflowWorkspaceResourceDeclaration>,
 ];
 
 /**
@@ -288,6 +291,11 @@ export function createDemandEventSourcingResourceCatalog(
       `${prefix}.append-candidates-root`,
       DEMAND_EVENT_SOURCING_OWNER_ID,
       demandChildRef(demandId, DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF),
+    ),
+    privateDirectoryDeclaration(
+      `${prefix}.index-root`,
+      DEMAND_EVENT_SOURCING_OWNER_ID,
+      demandChildRef(demandId, DEMAND_EVENT_STREAM_INDEX_ROOT_REF),
     ),
     privateDirectoryDeclaration(
       `${prefix}.artifacts-root`,
@@ -450,7 +458,33 @@ export function createDemandEventSourcingSnapshotResourceDeclaration(
     {
       kind: "resource",
       role: "derived-checkpoint",
-      allowedMutationRecipes: ["exclusive-create"],
+      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
+      recoveryStrategy: "rebuild-from-authority",
+    },
+  );
+}
+
+/** 为一个提交序号生成事件流索引检查点声明；索引与快照同为可退休的派生检查点。 */
+export function createDemandEventStreamIndexResourceDeclaration(
+  demandValue: unknown,
+  commitSequenceValue: unknown,
+): Readonly<WakeflowWorkspaceResourceDeclaration> {
+  const demandId = parseDemandId(demandValue);
+  const commitSequence = parseDemandEventCommitSequence(
+    commitSequenceValue,
+    "$commitSequence",
+  );
+  return privateFileDeclaration(
+    `demand.event-sourcing.${demandId}.index-${commitSequence}`,
+    DEMAND_EVENT_SOURCING_OWNER_ID,
+    demandChildRef(
+      demandId,
+      streamIndexRef(DEMAND_EVENT_STREAM_INDEX_ROOT_REF, commitSequence),
+    ),
+    {
+      kind: "resource",
+      role: "derived-checkpoint",
+      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
       recoveryStrategy: "rebuild-from-authority",
     },
   );

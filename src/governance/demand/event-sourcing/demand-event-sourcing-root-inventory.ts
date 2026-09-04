@@ -21,6 +21,7 @@ import {
   DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_ROOT_REF,
   DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
+  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
   DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
   parseDemandEventStreamCommitFileName,
@@ -83,6 +84,7 @@ export interface DemandEventSourcingRootInventory {
     readonly eventSourcing: Readonly<FileNodeSnapshot>;
     readonly commits: Readonly<FileNodeSnapshot>;
     readonly snapshots: Readonly<FileNodeSnapshot>;
+    readonly index: Readonly<FileNodeSnapshot>;
     readonly appendCandidates: Readonly<FileNodeSnapshot>;
     readonly artifacts: Readonly<FileNodeSnapshot>;
     readonly taskPackages: Readonly<FileNodeSnapshot>;
@@ -144,6 +146,7 @@ const ROOT_NAMES = Object.freeze([
 const EVENT_SOURCING_NAMES = Object.freeze([
   "append-candidates",
   "commits",
+  "index",
   "snapshots",
 ] as const);
 const ARTIFACT_NAMES = new Set([
@@ -394,6 +397,13 @@ export async function inspectDemandEventSourcingRootInventory(
     signal,
     requiredEntryNode(eventSourcing, "snapshots", "$snapshots"),
   );
+  const indexes = await readResource(
+    root,
+    DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+    DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
+    signal,
+    requiredEntryNode(eventSourcing, "index", "$index"),
+  );
   const artifacts = await readResource(
     root,
     DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
@@ -567,6 +577,18 @@ export async function inspectDemandEventSourcingRootInventory(
       throw error;
     }
   });
+  assertDirectory(indexes.directoryNode, "$index");
+  indexes.entries.forEach((entry, index) => {
+    assertFile(entry.node, `$index/${index}`);
+    try {
+      parseDemandEventStreamCommitFileName(entry.name);
+    } catch (error: unknown) {
+      if (error instanceof DemandEventSourcingPathError) {
+        fail("tree-shape", `$index/${index}`);
+      }
+      throw error;
+    }
+  });
 
   let after;
   try {
@@ -618,6 +640,7 @@ export async function inspectDemandEventSourcingRootInventory(
       ),
       commits: commits.directoryNode,
       snapshots: snapshots.directoryNode,
+      index: indexes.directoryNode,
       appendCandidates: candidates.directoryNode,
       artifacts: artifacts.directoryNode,
       taskPackages: taskPackages.directoryNode,

@@ -36,6 +36,19 @@ import {
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
 import { createDemandEventStreamCommitResourceDeclaration } from "../demand-resource-catalog.js";
 import {
+  advanceStreamIndex,
+  buildStreamIndex,
+  publishStreamIndex,
+  readLatestStreamIndex,
+  retireStreamIndexAt,
+  retireStreamIndexesBefore,
+  type IndexableCommit,
+  type LocatedStreamIndex,
+  type StreamIndex,
+} from "../../../kernel/event-stream/stream-index.js";
+import { isWakeflowError } from "../../../kernel/error.js";
+import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
+import {
   computeDemandEventStreamCommitDigest,
   assertPreparedDemandEventStreamCommit,
   parseDemandEventStreamCommit,
@@ -53,6 +66,7 @@ import {
   DEMAND_EVENT_SOURCING_ROOT_REF,
   DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
+  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
 } from "./demand-event-sourcing-paths.js";
 import {
   DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
@@ -69,7 +83,7 @@ import {
   type DemandFileEventStoreTailReadResult,
 } from "./demand-file-event-store-contract.js";
 import {
-  assertDemandFileEventAppendAdmission,
+  assertDemandFileEventAppendAdmissionAgainstPrefix,
   readAllDemandFileEventCommits,
   readDemandFileEventCommit,
   readDemandFileEventCommitAt,
@@ -77,6 +91,39 @@ import {
   readDemandFileEventCommitsAfter,
   readDemandFileEventDirectory,
 } from "./demand-file-event-store-reader.js";
+import {
+  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES,
+  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
+  DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES,
+} from "./demand-file-event-store-contract.js";
+
+/** 索引保留的最新检查点数量；更早的索引文件在刷新后退休，每隔一段做一次清扫兜底。 */
+const STREAM_INDEX_RETENTION = 2;
+const STREAM_INDEX_SWEEP_INTERVAL = 16;
+
+function indexableCommit(
+  commit: Readonly<DemandEventStreamCommit>,
+): Readonly<IndexableCommit> {
+  return Object.freeze({
+    commitId: commit.commitId,
+    commitSequence: commit.commitSequence,
+    expectedStreamRevision: commit.expectedStreamRevision,
+    lastStreamRevision: commit.lastStreamRevision,
+    previousCommitDigest: commit.previousCommitDigest,
+    digest: computeDemandEventStreamCommitDigest(commit),
+    byteLength: encodeUtf8(renderDemandEventStreamCommit(commit)).byteLength,
+    events: commit.events.map((event) =>
+      Object.freeze({
+        eventId: event.eventId,
+        streamRevision: event.streamRevision,
+        eventType: event.eventType,
+      }),
+    ),
+    ...(commit.idempotency === undefined
+      ? {}
+      : { idempotencyKey: commit.idempotency.key }),
+  });
+}
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：受根作用域约束的本地文件事件存储。
@@ -175,6 +222,7 @@ export class DemandFileEventStore {
       DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
       DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
       DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
+      DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
     ]) {
       try {
         const result = await materializeDirectoryPath(this.#root, ref, {
@@ -216,14 +264,179 @@ export class DemandFileEventStore {
     return readDemandFileEventCommitAt(this.#root, sequence, signal);
   }
 
+  /** 读取最新可用的身份索引；缺失、损坏或不属于该流时返回 `null`，从不重建。 */
+  async readIndex(
+    expectedStreamId: string | null,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<Readonly<LocatedStreamIndex> | null> {
+    const { signal } = parseDemandFileEventStoreOptions(options);
+    return readLatestStreamIndex(
+      this.#root,
+      DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+      expectedStreamId,
+      signal,
+    );
+  }
+
+  /**
+   * 追加准入：索引可用且恰好落后一个提交时，只读前序提交文件做 O(1) 检查；
+   * 否则读完整前缀做同一套检查并顺带重建索引。返回准入所依据的索引。
+   */
+  async #admitAppend(
+    prepared: Readonly<PreparedDemandEventStreamCommit>,
+    commit: Readonly<DemandEventStreamCommit>,
+    signal: AbortSignal | undefined,
+  ): Promise<Readonly<StreamIndex>> {
+    const located = await readLatestStreamIndex(
+      this.#root,
+      DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+      commit.demandId,
+      signal,
+    );
+    if (
+      located !== null &&
+      located.index.commitSequence === commit.commitSequence - 1
+    ) {
+      const admitted = await this.#admitAppendWithIndex(
+        located.index,
+        prepared,
+        commit,
+        signal,
+      );
+      if (admitted) return located.index;
+    }
+    const prefix = await readAllDemandFileEventCommits(this.#root, signal);
+    assertDemandFileEventAppendAdmissionAgainstPrefix(prefix.commits, prepared);
+    return buildStreamIndex(
+      commit.demandId,
+      prefix.commits.map((entry) => indexableCommit(entry)),
+    );
+  }
+
+  /** 返回 `false` 表示索引与磁盘不一致，调用方回退到完整前缀。 */
+  async #admitAppendWithIndex(
+    index: Readonly<StreamIndex>,
+    prepared: Readonly<PreparedDemandEventStreamCommit>,
+    commit: Readonly<DemandEventStreamCommit>,
+    signal: AbortSignal | undefined,
+  ): Promise<boolean> {
+    const { sourceExpectation } = prepared;
+    const commitBytes = encodeUtf8(
+      renderDemandEventStreamCommit(commit),
+    ).byteLength;
+    if (
+      index.commitSequence >= DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS ||
+      commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES ||
+      index.totalCommitBytes + commitBytes >
+        DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES
+    ) {
+      fail("capacity", "$commit");
+    }
+    if (commit.commitSequence === 1) {
+      if (
+        commit.expectedStreamRevision !== 0 ||
+        commit.previousCommitDigest !== null
+      ) {
+        fail("concurrency-conflict", "$commit");
+      }
+      if (
+        sourceExpectation.lastEventDigest !== null ||
+        sourceExpectation.stateDigest !== null
+      ) {
+        fail("append-provenance-conflict", "$preparedCommit/sourceExpectation");
+      }
+    } else {
+      const previous = await readDemandFileEventCommitAt(
+        this.#root,
+        commit.commitSequence - 1,
+        signal,
+      );
+      if (
+        previous === null ||
+        computeDemandEventStreamCommitDigest(previous) !== index.lastCommitDigest
+      ) {
+        return false;
+      }
+      if (
+        previous.lastStreamRevision !== commit.expectedStreamRevision ||
+        index.lastCommitDigest !== commit.previousCommitDigest ||
+        previous.demandId !== commit.demandId
+      ) {
+        fail("concurrency-conflict", "$commit");
+      }
+      const previousLastEvent = previous.events.at(-1);
+      if (previousLastEvent === undefined) return false;
+      if (
+        sourceExpectation.stateDigest !==
+          previousLastEvent.resultingStateDigest ||
+        sourceExpectation.lastEventDigest !==
+          computeDemandEventSourcingStoredEventDigest(previousLastEvent)
+      ) {
+        fail("append-provenance-conflict", "$preparedCommit/sourceExpectation");
+      }
+    }
+    if (Object.hasOwn(index.commits, commit.commitId)) {
+      fail("append-identity-conflict", "$commit/commitId");
+    }
+    if (
+      commit.idempotency !== undefined &&
+      Object.hasOwn(index.keys, commit.idempotency.key)
+    ) {
+      fail("append-identity-conflict", "$commit/idempotency/key");
+    }
+    for (const [position, event] of commit.events.entries()) {
+      if (Object.hasOwn(index.events, event.eventId)) {
+        fail("append-identity-conflict", `$commit/events/${position}/eventId`);
+      }
+    }
+    return true;
+  }
+
+  /** 提交成功后推进并发布索引；索引是缓存，任何失败只让它落后，不影响提交。 */
+  async #refreshIndex(
+    index: Readonly<StreamIndex>,
+    commit: Readonly<DemandEventStreamCommit>,
+    signal: AbortSignal | undefined,
+  ): Promise<void> {
+    try {
+      const advanced =
+        index.commits[commit.commitId] === commit.commitSequence
+          ? index
+          : advanceStreamIndex(index, indexableCommit(commit));
+      await publishStreamIndex(this.#root, DEMAND_EVENT_STREAM_INDEX_ROOT_REF, advanced, {
+        mode: DEMAND_FILE_EVENT_STORE_FILE_MODE,
+        ...(signal === undefined ? {} : { signal }),
+      });
+      await retireStreamIndexAt(
+        this.#root,
+        DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+        advanced.commitSequence - STREAM_INDEX_RETENTION,
+        signal,
+      );
+      if (advanced.commitSequence % STREAM_INDEX_SWEEP_INTERVAL === 0) {
+        await retireStreamIndexesBefore(
+          this.#root,
+          DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+          advanced.commitSequence - (STREAM_INDEX_RETENTION - 1),
+          signal,
+        );
+      }
+    } catch (error: unknown) {
+      if (isWakeflowError(error)) return;
+      throw error;
+    }
+  }
+
   async #retireCandidate(
     ref: PortableResourcePath,
     node: Readonly<FileNodeSnapshot>,
     signal: AbortSignal | undefined,
+    durability: "fsync" | "none" = "fsync",
   ): Promise<void> {
     try {
       await unlinkRegularFileExactly(this.#root, ref, {
         expectedNode: node,
+        durability,
         ...(signal === undefined ? {} : { signal }),
       });
     } catch (error: unknown) {
@@ -404,11 +617,7 @@ export class DemandFileEventStore {
         commitDigest: computeDemandEventStreamCommitDigest(commit),
       });
     }
-    await assertDemandFileEventAppendAdmission(
-      this.#root,
-      preparedValue,
-      signal,
-    );
+    const admittedIndex = await this.#admitAppend(preparedValue, commit, signal);
 
     const ownerToken = `${process.pid}-${threadId}-${createUuidV4()}`;
     const candidateRef = demandEventAppendCandidateRef(
@@ -426,6 +635,8 @@ export class DemandFileEventStore {
           encodeUtf8(renderDemandEventStreamCommit(commit)),
           {
             mode: DEMAND_FILE_EVENT_STORE_FILE_MODE,
+            // 内容先同步，目录项持久性由 link 后的目标结算负责。
+            durability: "content-only",
             ...(signal === undefined ? {} : { signal }),
           },
         )
@@ -495,7 +706,8 @@ export class DemandFileEventStore {
       if (linkedNode === null) {
         fail("commit-uncertain", "$commit");
       }
-      await this.#retireCandidate(candidateRef, linkedNode, undefined);
+      // 提交已由 link 持久化；候选残留即使在崩溃后留下，也由候选恢复按双链接结算。
+      await this.#retireCandidate(candidateRef, linkedNode, undefined, "none");
       const committed = await readDemandFileEventCommitOrNull(
         this.#root,
         commitRef,
@@ -507,6 +719,7 @@ export class DemandFileEventStore {
       ) {
         fail("commit-uncertain", "$commit");
       }
+      await this.#refreshIndex(admittedIndex, commit, signal);
       return Object.freeze({
         disposition,
         commitSequence: commit.commitSequence,

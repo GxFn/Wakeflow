@@ -8,7 +8,8 @@ import { TargetHostEffectClaimPublicCoordinatorError } from "../../src/governanc
 import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/governance/lifecycle/demand-completion-public-contract.js";
 import { DemandCompletionPublicCoordinatorError } from "../../src/governance/lifecycle/demand-completion-public-coordinator.js";
 import { DemandControllerRoutePublicCoordinatorError } from "../../src/governance/controller/demand-controller-route-public-coordinator.js";
-import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME, WakeflowMaintenancePublicContractError } from "../../src/workspace/maintenance/wakeflow-maintenance-public-contract.js";
+import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
+import { WakeflowError } from "../../src/kernel/error.js";
 import { createTaskPackageFixture, TASKING_DEMAND_ID } from "../governance/tasking/task-package.fixture.js";
 import {
   connectWakeflowMcpTestClient,
@@ -61,7 +62,9 @@ function hostEffectClaimRequest() {
 test("Workspace注册组只公开合同错误字段", async (t) => {
   const client = await connectWakeflowMcpTestClient(t, {
     executeMaintenance: async () => {
-      throw new WakeflowMaintenancePublicContractError("shape", "$request");
+      throw new WakeflowError("invalid-request", "shape", "$request", {
+        details: { operationId: "maintenance_operation_11111111-1111-4111-8111-111111111111" },
+      });
     },
   });
   const result = await client.callTool({
@@ -76,9 +79,13 @@ test("Workspace注册组只公开合同错误字段", async (t) => {
   equal(result.isError, true);
   deepEqual(JSON.parse(wakeflowMcpTextContent(result)), {
     error: {
-      code: "wakeflow-maintenance-public-contract",
+      code: "invalid-request",
+      details: {
+        operationId: "maintenance_operation_11111111-1111-4111-8111-111111111111",
+      },
       path: "$request",
       reason: "shape",
+      retryable: false,
     },
     kind: "WakeflowMcpError",
     schemaVersion: 1,

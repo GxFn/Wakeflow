@@ -11,7 +11,7 @@ import {
 } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   executeWakeflowMaintenancePublicRequest,
-} from "../workspace/maintenance/wakeflow-maintenance-public-coordinator.js";
+} from "../capabilities/workspace/maintain-workspace.js";
 import type {
   WakeflowMaintenancePublicHostFacade,
 } from "../workspace/maintenance/wakeflow-maintenance-public-host-facade.js";

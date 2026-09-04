@@ -35,8 +35,15 @@ export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(
   "$durableAtomicFile.maximumBytes",
 );
 
+/**
+ * `fsync`：文件与父目录都同步到持久介质，权威事实必须用它；
+ * `none`：只保证 rename/link 的原子可见性，不做任何同步，只用于可重建的派生检查点。
+ */
+export type DurableAtomicFileDurability = "fsync" | "none";
+
 export interface DurableAtomicFileCreateOptions {
   readonly mode: number;
+  readonly durability?: DurableAtomicFileDurability;
   readonly signal?: AbortSignal;
 }
 
@@ -141,6 +148,7 @@ export class DurableAtomicFileWriteError extends Error {
 
 interface ParsedDurableAtomicFileCreateOptions {
   readonly mode: number;
+  readonly durability: DurableAtomicFileDurability;
   readonly signal: AbortSignal | undefined;
 }
 
@@ -205,6 +213,7 @@ function parseMode(value: unknown): number {
 function parseOptionRecord(
   value: unknown,
   required: readonly string[],
+  optional: readonly string[] = [],
 ): Readonly<Record<string, unknown>> {
   let record: Readonly<Record<string, unknown>>;
   try {
@@ -215,7 +224,7 @@ function parseOptionRecord(
     }
     throw error;
   }
-  const allowed = new Set([...required, "signal"]);
+  const allowed = new Set([...required, ...optional, "signal"]);
   if (
     required.some((field) => !Object.hasOwn(record, field))
     || Object.keys(record).some((key) => !allowed.has(key))
@@ -233,12 +242,21 @@ function parseSignal(value: unknown): AbortSignal | undefined {
   return value;
 }
 
+function parseDurability(value: unknown): DurableAtomicFileDurability {
+  if (value === undefined) return "fsync";
+  if (value !== "fsync" && value !== "none") {
+    failDurableAtomicFileWrite("input", "$options.durability");
+  }
+  return value;
+}
+
 export function parseDurableAtomicFileCreateOptions(
   value: unknown,
 ): Readonly<ParsedDurableAtomicFileCreateOptions> {
-  const record = parseOptionRecord(value, ["mode"]);
+  const record = parseOptionRecord(value, ["mode"], ["durability"]);
   return Object.freeze({
     mode: parseMode(record.mode),
+    durability: parseDurability(record.durability),
     signal: parseSignal(record.signal),
   });
 }
@@ -340,6 +358,7 @@ export function parseDurableAtomicFileReplaceOptions(
   const record = parseOptionRecord(value, ["expected", "mode"]);
   return Object.freeze({
     mode: parseMode(record.mode),
+    durability: "fsync" as const,
     expected: parseExpectation(record.expected),
     signal: parseSignal(record.signal),
   });

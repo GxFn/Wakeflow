@@ -134,6 +134,36 @@ const ERROR_MESSAGES = {
   string
 >>;
 
+/** 并发 create 的胜者在 stage 退休前让目标短暂拥有两个硬链接；败者有界重读而不是失败。 */
+const CONCURRENT_PUBLICATION_RETRY_DELAYS_MS = Object.freeze([
+  1, 2, 4, 8, 16, 32, 64, 128, 256,
+]);
+
+async function loadCurrentProjection(
+  root: RootedDirectory,
+  taskPackageId: WakeflowDurableId<"task-package">,
+  taskPackageDigest: Sha256Digest,
+  disposition: "created" | "current",
+  signal: AbortSignal | undefined,
+): Promise<Readonly<LoadedTaskPackageProjection>> {
+  for (const [attempt, delay] of CONCURRENT_PUBLICATION_RETRY_DELAYS_MS.entries()) {
+    try {
+      return await loadProjection(root, taskPackageId, taskPackageDigest, signal);
+    } catch (error: unknown) {
+      if (
+        disposition !== "current"
+        || !(error instanceof TaskPackageProjectionStoreError)
+        || error.reason !== "recovery-required"
+        || attempt === CONCURRENT_PUBLICATION_RETRY_DELAYS_MS.length - 1
+      ) {
+        throw error;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  return loadProjection(root, taskPackageId, taskPackageDigest, signal);
+}
+
 export class TaskPackageProjectionStoreError extends Error {
   override readonly name = "TaskPackageProjectionStoreError";
   readonly code = "wakeflow-task-package-projection-store" as const;
@@ -298,6 +328,10 @@ async function projectionNodeOrNull(
         || error.reason === "resource-alias"
       ) {
         fail("node-policy", "$projection");
+      }
+      // 并发发布者退休 stage 时目标的链接数在观察中途变化；这是要重试的瞬态，不是根失效。
+      if (error.reason === "resource-changed") {
+        fail("recovery-required", "$projection");
       }
       fail("root-scope", "$root");
     }
@@ -560,10 +594,11 @@ export class TaskPackageProjectionStore {
     }
     let projection: Readonly<LoadedTaskPackageProjection>;
     try {
-      projection = await loadProjection(
+      projection = await loadCurrentProjection(
         this.#root,
         taskPackageId,
         taskPackageDigest,
+        disposition,
         signal,
       );
     } catch (error: unknown) {

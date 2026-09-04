@@ -142,6 +142,13 @@ previousCommitDigest: (null | WakeflowSha256DigestText)
  * @maxItems 64
  */
 events: [WakeflowDemandEventSourcingStoredEvent, ...(WakeflowDemandEventSourcingStoredEvent)[]]
+/**
+ * Optional client idempotency binding: the key that produced this commit and the digest of the request body it was bound to. Absent for commits appended without a client key.
+ */
+idempotency?: {
+key: string
+requestDigest: WakeflowSha256DigestText
+}
 }
 /**
  * Demand Event Store 中稳定的 persisted event envelope；eventType 与 eventVersion 由版本 Registry 路由到严格 payload codec。

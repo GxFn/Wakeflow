@@ -104,6 +104,43 @@ export interface DemandEventStreamCommit {
     Readonly<DemandEventSourcingStoredEvent>,
     ...Readonly<DemandEventSourcingStoredEvent>[],
   ];
+  /** 客户端幂等键与它绑定的请求摘要；没有客户端键的提交省略。 */
+  readonly idempotency?: Readonly<DemandEventStreamCommitIdempotency>;
+}
+
+export interface DemandEventStreamCommitIdempotency {
+  readonly key: string;
+  readonly requestDigest: Sha256Digest;
+}
+
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
+
+function parseIdempotency(
+  value: unknown,
+  path: string,
+): Readonly<DemandEventStreamCommitIdempotency> | undefined {
+  if (value === undefined) return undefined;
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value, path);
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", path);
+    throw error;
+  }
+  const keys = Object.keys(record).sort();
+  if (
+    keys.length !== 2 ||
+    keys[0] !== "key" ||
+    keys[1] !== "requestDigest" ||
+    typeof record.key !== "string" ||
+    !IDEMPOTENCY_KEY_PATTERN.test(record.key)
+  ) {
+    fail("input", path);
+  }
+  return Object.freeze({
+    key: record.key,
+    requestDigest: parseDigest(record.requestDigest, `${path}/requestDigest`),
+  });
 }
 
 /** 已准备追加操作对指定物理前缀的进程内、非持久化源资源预期。 */
@@ -125,6 +162,7 @@ export interface PrepareDemandEventStreamCommitInput {
     Readonly<DemandUncommittedEvent>,
     ...Readonly<DemandUncommittedEvent>[],
   ];
+  readonly idempotency?: Readonly<DemandEventStreamCommitIdempotency>;
 }
 
 export type DemandEventStreamCommitErrorReason =
@@ -189,6 +227,7 @@ const PREPARE_FIELDS = Object.freeze([
   "commitId",
   "events",
 ] as const);
+const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency"] as const);
 const ISSUED_PREPARED_COMMITS = new WeakSet<object>();
 
 function fail(reason: DemandEventStreamCommitErrorReason, path: string): never {
@@ -279,6 +318,10 @@ export function parseDemandEventStreamCommit(
     throw error;
   }
   const demandId = parseDemandId(wire.demandId, "$/demandId");
+  const idempotency = parseIdempotency(
+    (wire as { readonly idempotency?: unknown }).idempotency,
+    "$/idempotency",
+  );
   const events: DemandEventSourcingStoredEvent[] = [];
   const eventIds = new Set<string>();
   for (const [index, eventValue] of wire.events.entries()) {
@@ -331,6 +374,7 @@ export function parseDemandEventStreamCommit(
         ? null
         : parseDigest(wire.previousCommitDigest, "$/previousCommitDigest"),
     events: Object.freeze(frozenEvents),
+    ...(idempotency === undefined ? {} : { idempotency }),
   });
 }
 
@@ -370,6 +414,7 @@ function parsePrepareInput(value: unknown): Readonly<{
   readonly commitId: WakeflowDurableId<"demand-event-commit">;
   readonly commandDigest: Sha256Digest;
   readonly events: readonly Readonly<DemandUncommittedEvent>[];
+  readonly idempotency: Readonly<DemandEventStreamCommitIdempotency> | undefined;
 }> {
   let record: Readonly<Record<string, unknown>>;
   try {
@@ -378,13 +423,16 @@ function parsePrepareInput(value: unknown): Readonly<{
     if (error instanceof PassiveOwnDataError) fail("input", "$input");
     throw error;
   }
-  const keys = Object.keys(record).sort();
+  const keys = Object.keys(record)
+    .filter((key) => !(PREPARE_OPTIONAL_FIELDS as readonly string[]).includes(key))
+    .sort();
   if (
     keys.length !== PREPARE_FIELDS.length ||
     keys.some((key, index) => key !== PREPARE_FIELDS[index])
   ) {
     fail("input", "$input");
   }
+  const idempotency = parseIdempotency(record.idempotency, "$/idempotency");
   let values: readonly unknown[];
   try {
     values = parseDenseArray(
@@ -411,6 +459,7 @@ function parsePrepareInput(value: unknown): Readonly<{
     commitId: parseCommitId(record.commitId, "$/commitId"),
     commandDigest: parseDigest(record.commandDigest, "$/commandDigest"),
     events: Object.freeze(events),
+    idempotency,
   });
 }
 
@@ -670,6 +719,7 @@ function buildDemandEventStreamCommit(
     lastStreamRevision: expectedStreamRevision + storedEvents.length,
     previousCommitDigest: current?.lastCommitDigest ?? null,
     events: storedEvents,
+    ...(input.idempotency === undefined ? {} : { idempotency: input.idempotency }),
   });
   const aggregate = applyDemandEventStreamCommit(current, commit);
   const sourceExpectation = Object.freeze({

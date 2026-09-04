@@ -1,0 +1,299 @@
+# Wakeflow 下一阶段开发方向与落地方案（并行开发 · 意图对齐 · 并发地基）
+
+> **历史路线图。** 本文的 stream、容量门、共享 Pod worktree、全局 Design
+> 与 teardown 方案仅记录 2026-07-02 的实现阶段，已被
+> `docs/archive/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md`
+> 取代；不得作为当前 Pod 的实现或操作指引。
+
+> 生成于 2026-07-02，基线 v0.6.3（commit 570f8d8）。本方案合并两个输入：
+> ① `docs/archive/wakeflow-architecture-deep-dive-2026-07-02.md`（架构深读，含薄弱点评估）；
+> ② `AlembicWorkspace/Design/docs/current/wakeflow-parallel-dev-intent-drift-2026-06-26.md`（并行开发 + 意图漂移 + 验收即产出，修订稿，一直封存等待 Fable 5 就位）。
+> 模型前提现已满足：控制器可运行 Fable 5（`hosts.claude-code.modelByRole` / `effortByRole` 已支持按角色钉模型与推理力度）。本文把两者收敛为一个可执行的分阶段方案；`file:line` 引用对应 v0.6.3。
+
+---
+
+## 0. 战略定位：三条主线，一个顺序
+
+| 主线 | 来源 | 为什么是现在 |
+| --- | --- | --- |
+| **S1 并发地基**（新增） | 架构深读·批判性评估 #1 | 并行开发会把"state.json 无写锁"从理论风险变成必然事故：多 stream 下控制器会在一个回合内并行发起多个状态写调用 |
+| **S2 并行开发 F3**（刚需） | 需求设计 P1 | 用户逐字痛点："Codex 能并行化一个任务，Claude Code 连一个需求都并不了"。stream=独立窗口方案已经对抗式复核收窄，真新代码只剩三件 |
+| **S3 意图对齐 F1+F2**（低风险） | 需求设计 P2（2026-07-02 再收窄） | 意图并排 + 需求审视提醒：让 Design 设想与总控派发意图在正确的时刻出现在同一屏，对齐与否由 Agent 当场确认；Fable 5 控制器的判断力是该方案成立的前提 |
+
+顺序论证：**S1 必须先行或与 S2 同波**——F3 的完成定义要求"两条 stream 并行执行、各自结果回收"，而 Claude Code 控制器天然可能在一个回合内并行调用 `wakeflow_add_task` × 2 或 add_task + decide；这两个调用都是 state.json 的读-改-写（`wakeflow-state.mjs:796-801`），无互斥则丢更新（双双读到 revision N、各写 N+1）。今天靠"单控制器回合串行"的约定兜底；多 stream 后这个约定不再成立。S3 与 S2 文件域不相交，可并行或随后。
+
+**为什么等 Fable 5**（记录动机，避免日后误读）：
+1. 多 stream 并行的控制器认知负载——同时追踪 N 条 stream 的任务/锁/回执而不混线，需要强控制器；
+2. 意图对齐的判断权整体交给 Agent（并排提醒而非分数/机械门），前提是控制器有足够判断力；
+3. 无人值守纪律（不轮询、不越权、池耗尽即停）对模型服从性要求高。
+这三点都指向控制器模型，而不是运行时代码——所以运行时改动一直冻结到现在。
+
+---
+
+## 1. PD 拍板建议（拍定后即为本方案的约束）
+
+| PD | 建议决议 | 理由 |
+| --- | --- | --- |
+| **PD-1 并行范围** | **接受收窄**：P1 只做"一个需求内同 repo 多 stream"；放松单活跃 demand 另立未来需求 | 与用户逐字诉求一致；单活跃 demand 是全系统假定（`wakeflow-active-demands.mjs:46-50`、`wakeflow-next-work.mjs:267-270`、`wakeflow-demand-sequence.mjs:96-102`），爆炸半径最大 |
+| **PD-2 stream 窗口注册落点** | **运行时派生覆盖层 `.wakeflow-local/wakeflow.config.json`**（= 基础 config + 活动 stream 条目的完整派生副本，由 stream-open/close 重生成） | 本轮测绘核实：core 侧**所有**配置解析已优先读该路径——`workspaceConfigPath`（`wakeflow-config.mjs:79-84`）与 `readWorkspaceConfig`（`wakeflow-window-runtime.mjs:42-50`）。即证据解析（`wakeflow-state.mjs:381-393`）、窗口 dispatch 配置、setup 状态**零 core 改动**就能看到 stream 窗口。唯一要补的是 claude-host 侧约 10 处直接读 tracked config 的调用点（`:127,:142,:157,:170,:599,:935,:1166,:1188,:1257`）换成"覆盖层优先"helper——纯 host-local 改动 |
+| **PD-3 streamId 落点** | 已解决（留记录）：落 `wakeflow-state.schema.json:55` 开放 `targetTasks[]` items，零 schema 改动 | 需求文档已接地核实 |
+| **PD-4 worktree 回收时机** | **三层**：① stream 全部任务被 accept 后由控制器显式 `stream-close`；② `archive-demand` 前强制 GC 检查（有存活 stream 则拒绝归档，提示先 close）；③ dirty worktree（未提交改动）拒删，须 `--force` | 防 stale 堆积（今天无 worktree GC）+ 防误删未提交工作；归档门与现有"归档是硬闸门"哲学一致 |
+| **PD-5 漂移门 vs advisory** | **决议升级：相似度分数整体移除**。机制 = 两句意图并排 + 条件化提醒，最终确认归 Agent；"gate 化"议题随分数移除而消解（没有分数就没有门槛） | 原需求文档自己已断言"低相似 ≠ 漂移、未 calibrate 前近乎无用"——顺着这个怀疑走到底就是删掉分数；且脚本算分暗含"脚本在判断"，与 Wakeflow 信任模型（脚本只记录，判断归 Agent）相抵触 |
+| **PD-6 LLM-judge slice** | **不做，整体砍掉** | 它是"裁判"野心唯一回潮口；等到了 Fable 5 控制器，Agent 直读两句意图的判断力已覆盖其价值，slice 失去存在理由 |
+| **PD-7 stream 间依赖 / 合并回主线** | **不在本轮**；作为 Phase 3 候选独立需求（dependency-gate + merge 流程）。P1 内的运营答案：合并是 stream-close 前的人工/后续任务动作，`--delete-branch` 对未合并分支拒绝 | 本轮只并行独立 stream；依赖门牵出 producer/consumer 排序与合并策略，是另一个完整需求 |
+| **PD-8 波次评审 vs 流式评审**（2026-07-02 新增） | **P1 采用波次模型**：波内并行执行，波尾统一 reduce + decide（零 reducer 改动）；按 stream 的 scoped reduce 登记为 Phase 3 E-1 | `reduce-results` 的全量语义（任一开放任务缺结果即不出候选，`wakeflow-state.mjs:1153-1166`）是既有设计；为 P1 改 reducer 违反 additive-only 红线，且波次模型已满足"并行化一个需求"的逐字诉求 |
+
+---
+
+## 2. 分阶段落地
+
+### Phase 0 —— 并发地基（规模 S）——✅ 已于 2026-07-02 落地（与 Phase 1 合并为 0.7.0 一次发布）
+
+**唯一目标**：state root 的读-改-写获得进程级互斥，为多 stream 扫清前提。
+
+**W0-a：per-state-root 写锁**
+- 新增 `core/scripts/lib/wakeflow-state-lock.mjs`（约 80 行）：`writeFileSync(<file>, {pid, createdAt}, {flag:"wx"})` 原子取锁；忙等退避重试（上限 ~2s）；stale 判定（锁龄 > 30s 视为死锁残留，stderr 告警后夺锁）；`finally` 释放。底层实现为通用 `withFileLock(file, fn)`，`withStateRootLock(stateRoot, fn)` 是其 state-root 特化——Phase 1 的 dispatch-group 组文件写复用同一原语（W1-b）。
+- 接入 `wakeflow-state.mjs` 全部**状态写**命令：`add-task-package`、`reduce-results`、`decide-review`、`complete-demand`、`adopt-demand-host`、`archive-demand`。要点：**state 的 readJson 移进锁内**（读-改-写整体原子），当前各命令在锁外读会留下窗口。`import-target-result` 不改 state（`wakeflow-state.mjs:1068` revision 不变），只写独立结果文件，无需锁——加一条测试钉住这个事实即可。
+- 语义零变化、schema 零触碰、additive-only。**落地改进**：锁文件位于 state root **旁**（`<root>.state-lock`）而非 root 内——归档 staging 复制、P1-0 脱敏扫描、`rmSync` 对它天然不可见，无需任何排除清单。**范围补充**：`wakeflow-render-progress` 的写段（同样重写 wakeflow-state.json，`wakeflow-render-progress.mjs:383` 起）纳入同一把锁，其既有"重读 + revision 比对"守卫从"检测到竞态即失败"升级为"竞态不可能发生"。
+
+**W0-b：并发回归测试**
+- 新增 `test/wakeflow-state-concurrency.test.mjs`：并发 spawn 两个 `add-task-package --write`，断言两个 package 都在、revision 严格递增无丢失；并发 `import-target-result` × 2 断言两结果文件共存、各自锁释放正确。
+
+**完成定义（可证伪，已验证）**：争锁超时用例直接证明互斥生效（新鲜外部锁令命令 fail-closed 且不删他人锁）；4 路并行 add 全部落地、revision 严格连续 1→5；并行 import 不 bump revision；stale 锁被告警夺回；`npm test` 全绿（含双 edition 字节平价与双 smoke）；版本随 Phase 1 一并 bump 至 0.7.0。
+
+### Phase 1 —— F3 并行开发（版本 0.7.0，规模 M，主交付）——✅ 已于 2026-07-02 落地并通过 tmux 真机验收（W1-a/b/c 机制 + W1-d 散文与 0.7.0 bump；散文限 Claude 版——Codex 版无 stream 能力，不写虚构文档。真机验收记录：沙箱工作区 + 专用 tmux socket，两 stream 真实起窗（worktree/独立分支/覆盖层注册/会话注册），第三条触 pool-exhausted 硬阻塞；完整闭环——真实 tmux 投递落 pane 且 readback 回读提示词、record sent、目标在 worktree 分支真实提交、import 释放锁、reduce 正确解析 repo 相对证据 ref、candidate→accept；活动监视器实测在锁释放后把窗口徽标翻 done；clean close 保留未合并分支、末 stream 关闭即删覆盖层、监视器自行退出。真 claude 二进制探针：起窗、folder-trust 自动确认、入场提示投递、真实模型回复 READY、pane 回读完整 UI。Phase 2 的派发侧真机项（compact 同屏两句 + Intent check 提醒）同场验证通过）
+
+stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<demandKey>/<streamId>`。锁/绑定/启动/group fan-out 全按 windowName 键（`wakeflow-delivery-store.mjs:152-153`、`wakeflow-state.mjs:675`、`wakeflow-delivery.mjs:306-308`），独立窗口名自动获得独立锁与独立 targetTaskId——**不改锁键、不改 id 方案、不改 sameTargetDescriptor**（需求文档对抗式复核结论，本轮测绘复认）。
+
+**并行模式的系统语义（2026-07-02 深化——这不是实现细节，是并行模式的使用契约）**
+
+1. **评审是波次的，执行才是并行的**。`reduce-results` 对全部开放任务是全量语义：任何一个开放任务缺结果就不出转移候选（`wakeflow-state.mjs:1153-1166`，missing → `waiting-results`、candidate=null）——这是既有设计不是缺陷，但它决定了并行模式下**快 stream 的结果无法先于慢 stream 被验收**。P1 的使用契约因此是**波次模型**：一波 = 一个 dispatch group 内并发派发的一组 stream 任务；波内并行执行，波尾统一 reduce → decide → 下一波。**不为 P1 改 reducer**（红线保持）；按 stream 的流式评审登记为 Phase 3 E-1。
+2. **回执策略默认 `group-ready`**。传输扇入与波次模型天然对齐：早完成的 stream 在自检 `review_pack` 时因 missing sent results 被拒绝构建回执（`wakeflow-return-policy.mjs:44-48`），**唯一一次 controller-return 由末位完成者构建**，控制器每波只被唤醒一次。`per-target` 在全量 reduce 语义下只能"看"不能"决"，P1 不推荐。
+3. **分支的归宿必须显式**。stream 产出 = `<demandKey>/<streamId>` 分支上的已验收 commits；**合并回主线不是运行时行为**（PD-7 范围外），是 stream-close 前的人工/后续任务动作。防"验收过的工作随手删没"：`--delete-branch` 用 `git branch -d`（未合并即拒绝），`--force` 才升级 `-D`。
+4. **Test 窗口是波内串行资源**。Test 仍是单窗口单锁，多 stream 的真机验证任务按窗口锁自然排队；Test 成为瓶颈时先加真实 Test 窗口（配置层已支持），不发明新机制。
+5. **stream 重启后按既有机制恢复**。stream 窗口就是普通注册窗口：worktree、覆盖层、thread-registry 都在盘上，`launch-all`/`replace-all` 的 resume 路径原样适用；`stream-list` 负责三方对账（注册在、worktree 亡 → broken 提示 close；worktree 在、tmux 亡 → resumable）。
+6. **计数权威 = 覆盖层注册条目**。maxStreams 按覆盖层 stream 条目计数；stream-open 前三方对账一致才继续；同 repo 的 stream-open 串行执行（防 git ref 锁竞争与注册重生成互踩）。
+
+**W1-a：stream 生命周期（claude-host 新子命令，host-local）**
+- `stream-open --repo <windowName> --stream <streamId> --demand-key <key> [--base <branch>]`：
+  1. 从配置解析 repo 路径；
+  2. worktree 目录固定 `<workspaceRoot>/.wakeflow-local/worktrees/<slug(repo)>__<slug(streamId)>`；
+  3. `git -C <repoPath> worktree add <dir> -b <demandKey>/<streamId> <base>`——**独立分支是硬约束**（git 拒绝两个 worktree 检出同一分支）；
+  4. 注册 stream 窗口（W1-b）；
+  5. 复用既有 `launch-window` 起 tmux `claude` 会话（cwd=worktree，窗口名 `<repo>__<streamId>`），session id 走既有 `register-thread` 入 thread-registry；
+  6. 同 repo 的 stream-open 互斥（复用 W0 锁原语做 per-repo 开流锁，见系统语义 #6）。
+- `stream-close --window <name> [--delete-branch] [--force]`：dirty worktree 拒删（须 `--force`）；`git worktree remove`；`--delete-branch` 用 `git branch -d`（未合并拒绝，`--force` 才 `-D`，见系统语义 #3）；注销注册（重生成覆盖层）；杀 tmux 窗口；清窗口锁。
+- `stream-list`：列活动 stream + 三方对账（注册/worktree/tmux），并入 `window-status` 输出。
+- git 子命令经由既有进程边界（`wakeflow-process.mjs` 白名单含 git；worktree 子命令加入允许清单）。
+
+**W1-b：注册与解析（PD-2 落地，核心零改）**
+- stream-open/close 重生成 `.wakeflow-local/wakeflow.config.json` = 当前 tracked config + 活动 stream 条目 `{windowName, path: <worktree相对路径>, role: "Parallel stream of <repo>", mode: "internal", managedAgents: false, stream: {repo, streamId, demandKey, branch}}`；重生成时断言 windowName 全局唯一。
+- 覆盖层带派生标记 `{derived: {from: "wakeflow.config.json", baseHash, generatedAt}}`；**新鲜度纪律**：stream-open/close 每次从当前 base 重生成；`check-workspace` 校验 baseHash，不匹配即报"stale overlay"；最后一条 stream 关闭时删除覆盖层（回到直读 base）。
+- claude-host 新增 `readWorkspaceConfigPreferLocal()` helper，替换其 9-10 处直接读 tracked config 的调用点（`wakeflow-claude-host.mjs:127,:142,:157,:170,:599,:935,:1166,:1188,:1257` 一带）——host-local，不触 core。
+- **波次并发安全（落地时对抗式复核后撤销）**：原判断"组文件互踩 → group-ready 扇入错判"是**错的**——就绪扇入的 `expectedTargets` 从 **packets** 推导（`wakeflow-dispatch-group-review.mjs:45`、快照 `:122`），组文件只承载策略/controllerWindow/排序元数据且**首写生效**（`wakeflow-dispatch-commands.mjs` 写守卫 `!existingGroup`），策略冲突由 upsert 守卫先行拒绝。并行首备的竞态只影响排序外观，**无需组文件锁**；packets 各自独立文件天然并发安全。
+- 收益（本轮测绘核实）：core 的 `workspaceConfigPath` 已优先读覆盖层（`wakeflow-config.mjs:79-84`），因此 **reduce 的证据解析**（`evidenceRepoRootForWindow`，`wakeflow-state.mjs:381-393`）自动把 stream 窗口的 repo 相对证据 ref 解析到 worktree——不补这条，stream 结果会在 reduce 处 false-fail（正是 cdb04b2/77d2e5c 修过的闭环断裂模式在 stream 上的重演）。
+
+**W1-c：池上界与耗尽兜底**
+- 配置：`wakeflow.config.json` → `hosts.claude-code.maxStreamsPerRepo`（缺省 2），可被 `repositories[].maxStreams` 覆盖。
+- `stream-open` 计数活动 stream ≥ 上界时输出结构化 `pool-exhausted` 失败（block，绝不 spawn 第 N+1 个窗口），`agentNext` 指引"等某 stream 回收后重试或顺序化"——无人值守红线。
+- `archive-demand` 归档门（PD-4 ②）：state root 归档前检查该 demand 的活动 stream，存活即拒绝。
+
+**W1-d：散文与真机验收**
+- skills 双写（sync-core 不覆盖散文）：`wakeflow-controller` 增"stream 调度：一 stream 一任务、按 windowName 派发、**波次纪律（一波一组、group-ready 回执、波尾统一 reduce+decide）**、池耗尽即停"；`wakeflow-governance` 增 stream 生命周期/分支命名/合并归宿/回收纪律；`wakeflow-target` 增一句"stream 窗口只在自己的 worktree/分支内工作，不碰主检出"；CLAUDE.md/AGENTS.md 补 stream 边界一条。
+- **真机验收**（= 需求文档 F3 可证伪定义 + 本轮补强项）：沙箱 repo 起两条 stream 各派一任务 → 两 worktree 各在 `<demandKey>/<streamA|B>` 分支、两 tmux 窗口并行、两把锁文件键不同、`state.targetTasks[]` 两条不互覆盖、各自结果回收只释放自己的锁；**补强**：① stream 窗口用 repo 相对路径记录证据 ref，`reduce-results` 正确解析不 false-fail（cdb04b2/77d2e5c 断裂模式的 stream 版回归）；② 波次语义钉住——仅一条结果在场时 reduce 报 `waiting-results` 且无候选，双结果在场时一次 reduce 出候选、一次 decide 收波；③ group-ready 扇入——早完成 stream 不产生 controller-return，唯一回执由末位完成者构建；④ 并行 prepare 同组后 `expectedTargets` 两条俱在（组文件锁生效）；⑤ 第三条 stream 触 `maxStreams` 见 block；⑥ `stream-close --delete-branch` 对未合并分支拒绝；⑦ `stream-close` 清干净 worktree 与注册，覆盖层在最后一条 stream 关闭后消失。
+
+**明确不做（红线重申）**：复合锁键 / streamId 穿线进锁推导 / 新 targetTaskId 方案 / 改 `sameTargetDescriptor` / **改 reducer 全量语义（波次模型内解决，流式评审见 Phase 3 E-1）** / 放松单活跃 demand / stream 间依赖与合并回主线 / 把 worktree 隔离重新解读为多分支搜索。
+
+### Phase 2 —— F1+F2 意图对齐（版本 0.7.1，规模 S）——✅ 已于 2026-07-02 落地（npm test 291/291；落地微调：review 提醒落在独立的 `intentCheck` 附加字段而非 nextAction——nextAction 是机器令牌，追加散文会破坏消费者；state-root 包的 objective/designIntent 从 packets 按 stateRef 索引取得，未派发任务回落 task summary 并标注来源）
+
+> **设计要义（2026-07-02 按用户方向对原 F1 的再收窄）**：原需求的词法相似度基线**整体移除**。理由有三：
+> ① 原需求文档自己已断言"低相似 ≠ 漂移、未 calibrate 前近乎无用"——顺着这个怀疑走到底，就该删掉分数，而不是保留一个没人该信的数字；
+> ② 让脚本算分暗含"脚本在判断"，与 Wakeflow 信任模型（脚本只创建/校验/记录，判断归 Agent 与人）相抵触；
+> ③ **双向弹性是常态**——Design 的 designIntent 是实现设想不是合同，总控的派发是当下最优安排不是转写；偏离常常是适配而非错误，任何数值门槛都会把正当弹性错报成漂移。
+>
+> 一句话机制：**把无意识漂移变成有意识确认**。运行时只负责让两句意图（Design 的 `designIntent`、总控的 `objective`）在两个判断时刻出现在 Agent 的同一屏；对齐与否由 Agent 当场确认；怀疑漂移时的唯一规定动作是**需求审视**（回读 Original Plan / Requirement Design）；需求本身要改，走**既有** `redesign` 裁决。零分数、零门禁、零新裁决、零新确认字段。
+
+**两个判断时刻（机制的全部内容）**
+
+1. **派发时（自检）**：designIntent 在场时，`prepare-dispatch` 输出（含 compact）同屏回显 `designIntent` + `objective`，`agentNext` 追加一句："对照 Design 设想确认此次安排是有意一致或有意调整；有意调整应体现在 objective 措辞里。"总控作者 objective 的那一刻就是确认时刻——objective 本身已入 packet、入幂等 hash、可 trace，**它就是确认记录**，无需新增字段。
+2. **验收时（对照）**：review pack 每个可评审条目并排给出 `designIntent`（在场才出现）/ `objective` / 结果摘要三元组；当任一任务带 designIntent，pack 的 nextAction 追加一句："若交付偏离设想且派发时未声明有意调整，先做需求审视；需求要改走 redesign。"`decide-review` 的 reason（既有必填、入事件）**就是验收侧确认记录**。
+
+**W2-a：字段贯通（core，additive）**
+- `add-task-package` 增 `--design-intent` → `taskPackage.designIntent`（开放 schema `task-package.schema.json:17`，零改动）；MCP `wakeflow_add_task` 与 `wakeflow_create_demand` 的 `taskPackages[]` 透传（Design 交付材料可作者）。
+- MCP `wakeflow_prepare_delivery` 增 `objective` 参数转发 `--objective`（CLI 侧 `wakeflow-dispatch-commands.mjs:415` 已支持，只缺 MCP 转发 `wakeflow-mcp-tools.mjs:694-713`）。作者化仍可选——不作者时回落 summary，两句趋同、并排自然无信息，这本身就是正确行为而非缺陷。
+- prepare 把 `packet.designIntent` 从任务包带上 packet（一个字段；不入 `dispatchPacketComparable`，重放安全，`wakeflow-idempotency.mjs:49-69`）。`objective` 在 comparable 内 → **authored objective 须在首次 prepare 给出**，同 revision 换 objective 触既有守卫（`:443-445`）——特性而非缺陷："改意图 = 新 revision"。
+- **明确不做**：相似度库、intentDrift 块、verdict 字段、intent-drift.jsonl、gates 新字段——全部不建。
+
+**W2-b：两个判断时刻的落点（两个 builder 同步）**
+- prepare 输出 compact 与完整分支（`wakeflow-dispatch-commands.mjs:498-512` 一带）designIntent 在场时回显两句 + agentNext 提醒；缺省时零痕迹。
+- state-root 验收 pack（`wakeflow-review-commands.mjs:388-422`）与 delivery/group pack（`wakeflow-review-pack.mjs:57-76`、`wakeflow-review-commands.mjs:87-105`）条目并排 `objective`（来源：packet，回落 targetTask.summary 并标注来源）+ `designIntent`（缺省即整字段省略，不产 null 占位噪音）；条件化 nextAction 提醒行。
+- 测试钉死：门禁对象（`controllerReviewReady` / `totalControlVerdictRequired` 等）逐字段不因 designIntent 在/缺而变化；`decide_review` 白名单与语义零改动。
+
+**W2-c：散文（双 edition）与真机验收**
+- controller skill 新增「意图对齐」小节（约 6 行）：双向弹性原则、两个判断时刻、"提醒不是门"、需求审视路径、redesign 是既有逃生门。Design 指引一句：designIntent 是一句实现设想，可缺省，**不是验收标准**。
+- **真机验收**（可证伪）：designIntent 在场的真实派发 → prepare compact 同屏两句 + 提醒行；review pack 条目并排三元组、nextAction 有条件提醒；designIntent 缺省 → 全链路零痕迹（无提醒、无占位字段）；门禁/裁决逐字段零变化；trace 可回放确认链 designIntent（任务包）→ objective（packet）→ decision reason（事件）。
+
+### Phase 3 —— 地基加固与规模化（观察触发，不在本轮承诺）
+
+本节把两类来源统一登记为后续阶段计划：**E 系 = 本轮 F3/F2 深化中显式推迟的演进项**；**H 系 = 架构深读（`wakeflow-architecture-deep-dive-2026-07-02.md` §6）发现的现存薄弱点**。每项带触发条件——触发前不做（守"更少"），触发后按本方案同样的 wave 纪律立项。
+
+| # | 候选 | 来源 | 触发条件 |
+| --- | --- | --- | --- |
+| E-1 | ~~按 stream 的流式评审~~ **已消解（§4.5）**：前提是需求内多 stream 波次，需求内并行被整体删除后不复存在 | PD-8 | ~~波次长尾等待成为真实主要痛点~~ 前提消失 |
+| E-2 | 多活跃 demand 放松（原 C4，PD-1 移出）——**已落地 0.7.5-0.7.6（§4.6 容量模型 + §4.7 需求舱）** | PD-1 | ~~需求内多 stream 用满后仍有跨需求并行诉求~~ 修正（§4.5）：并行只在需求层，触发即"多个需求需要同时开发" |
+| E-3 | ~~stream 依赖门 / 分支合并回主线流程化~~ **已被取代（§4.5/§4.7）**：需求内 stream 依赖随需求内并行删除而消解；合并回主线定为人工评审、去中心化（pending-merges 台账） | PD-7 | ~~"B 需 A 的 commit"或波尾合并冲突高频出现~~ 前提消失 |
+| H-1 | 窗口锁续租：活动监视器对 pane 忙碌的窗口续 TTL（今天固定 7200s——超 2 小时的长任务锁过期后，同窗可被再次派发，两任务在同一 pane 排队混流） | 深读 §4.7 引申（本轮新发现） | 出现一次真实的"长任务锁过期后误派" |
+| H-2 | schema 最小运行时校验：手写断言器（守零依赖 §0-2）接入 state root 读入口与 `wakeflow-validate` | 深读 §6-2 | schema 与代码的漂移真实发生一次 |
+| H-3 | LLM 契约 lint：测试断言每个状态写命令的输出都携带 `agentNext` + `forbiddenConclusions`（软护栏的**存在性**由硬测试保证） | 深读 §6-3 | 随任意 Phase 搭车，成本约一个测试文件 |
+| H-4 | readback 强化：pane 抓屏升级为结构化回执（如目标窗口首个动作写 ack 工件）；在此之前 pane 抓屏 + 窗口锁 + 活动监视已够用 | 深读 §6-4 | 无人值守规模化后出现静默丢投递 |
+| H-5 | `wakeflow-setup.mjs`（2604 行）拆分 + 各脚本手写 argv 解析（hasFlag/getValue/valuesFor 三件套 × N 份）统一进共享 lib | 深读 §6-6 | 机会性重构，搭任何触碰 setup 的需求便车 |
+| H-6 | 协议人体工学：波次批量 prepare 的输出聚合。**不**合并 prepare/send/record 三步——步骤分离是证据模型本身，README 明令不得折叠 | 深读 §6-5 | 每波 stream 数 ≥3 后控制器上下文压力再评估 |
+
+已消解、不再列入的项：漂移 gate 化（随 PD-5 决议升级——分数已移除，无门可设）；RA3 的写序/锁释放/spawn 错误处理（核实已于 0.5.x-0.6.x 落地：`wakeflow-state.mjs:1267-1276` F41 写序、`:1024-1031` 共享锁释放、`wakeflow-runtime.mjs:139-169` SIGKILL 升级与 spawn error 兜底）；并发写竞态（Phase 0）；组文件锁（对抗式复核证伪撤销）。
+
+**2026-07-02 真机验收后的观察项增补**（实现与验收过程新暴露；带 ⚡ 的五项 = O-wave——观察性/加固小波，**✅ 已于当日落地（0.7.2，npm test 295/295；O-2 另经真 tmux 冒烟验证 promptEchoed 无误报）**）：
+
+| # | 候选 | 来源 | 触发/建议 |
+| --- | --- | --- | --- |
+| H-7 ⚡ | 监视器进程作用域防护：`window-status`/`check-workspace` 显示 monitor pid+root 归属；文档写明清理须按 `--root` 过滤 | 真机验收事故：宽 pgrep 误杀了另一工作区的生产监视器（纯可视化组件，已原样恢复） | 建议立即搭车 |
+| O-2 ⚡ | `deliver` readback 自动断言：envelope.prompt 首行不在 paneTail 时输出 warning（不 fail） | 真机验证 pane 抓屏可靠，残余间隙 = "落 pane ≠ 模型开始处理"；比完整 ack 工件便宜一个量级 | 建议立即搭车 |
+| H-8 ⚡ | `set-unattended --write` 后若派生覆盖层存在则同步重生成（复用 `regenerateOverlay`） | stream 存活期间改 tracked config → 覆盖层立即 stale，下次 stream 操作才刷新 | 建议立即搭车 |
+| H-10 ⚡ | 写锁 stale-break 前加 `process.kill(pid,0)` 存活检查，活进程加倍耐心 | Phase 0 自查：30s 固定阈值 vs archive 大 state root 的合法长持锁 | 建议立即搭车 |
+| （H-3 ⚡） | LLM 契约 lint（原 H-3，价值上升：Phase 2 引入条件化 agentNext 覆盖，覆盖点将增多） | 深读 §6-3 | 并入 O-wave |
+| H-9 | 全局 TODO 板的单写者假定：markdown 读-改-写无锁，靠"Design 唯一追加、控制器唯一消费"纪律 | 本轮复盘 | 丢一行 TODO 时触发；对策现成（`withFileLock` 复用到板文件） |
+| H-11 | review-pack 的 packet 扫描随传输历史线性增长（`prune-runtime` 不清 packets 的既有累积叠加） | Phase 2 实现自查 | 长寿工作区 review-pack 变慢时触发；方向 = prune 扩展到 fully-accepted 组的 packets（原 P1-3 案） |
+| E-4 | 测试环境的机械化承载：`wakeflow_deliver` 增 testEnvironmentRef 链接、test-card 增结构化 environment 字段（当前由散文约定承载：S1 出口门禁的 Test Environment Spec → 总控复制进 realScenarioConditions） | 2026-07-02 阶段路线治理（用户需求 #3） | 散文约定在真实使用中被绕过/漏带一次即触发 |
+| E-5 | Design 门禁的机械助攻：`wakeflow_create_demand` 输出咨询性 designGate 块（五项各自有无链接证据，advisory 不设门——意图对齐"正确时刻的正确信息"模式复用） | 2026-07-02 门禁合理性自审：执行力全靠散文是本设计的最薄弱点 | requirement 未过门禁被执行再次发生一次即触发 |
+
+真机验收带来的权重修正：H-1（锁续租）↑——并行 stream 使长任务更常见；H-4（完整 ack）↓——pane 抓屏实测可靠，O-2 覆盖大半残余间隙；E-1 维持——波尾等待是否成真痛点待真实多任务波数据。
+
+**2026-07-02 对抗式深审（自审 + 独立代理交叉，0.7.3）**：20 条确认发现全部修复——自审 9 条（跨 repo 覆盖层竞态→全局互斥、覆盖层/host writeJson 原子写、损坏 packet 容错、EPERM 视为存活、分支名 git 净化（marker 保留原始 key）、close 脏检查 fail-closed + repo 缺失 --force 路径、基础窗口名碰撞前置检查 + worktree 回滚、readback 读文件守卫、state 锁 realpath 归一）；代理 11 条中修 9（O-2 的 before/after 行数不等致 paneChanged 恒真、rework 多 packet 时意图三元组可能配错波次（按结果的 dispatchGroup 选 packet）、close 无在飞锁守卫、空锁文件被误判 stale（改按 mtime 计龄）、stream-open 不校验 demand（completed/archived 拒绝）、monitor ps 匹配加 --root + pidfile O_EXCL、import 归档竞态重查 + 结果 id 加熵、配置解析 fail-closed）。**新登记观察项**：H-12 archive 门与 stream-open 跨锁域 TOCTOU（需跨域协调，概率低）；H-13 锁心跳（>120s 活持锁仍可被夺，H-10 的 4× 只是缓解）；H-14 并行 init 的单活跃扫描 TOCTOU（事后可见可恢复）。补测欠账：空锁 mtime 计龄与 rework packet 选择暂无独立测试（逻辑经全量回归覆盖）。
+
+---
+
+## 3. 推进机制与工程纪律
+
+**每个 wave 的固定回路**（不区分谁实施）：
+1. 实现（core 改动只写 `core/`，散文按 edition 双写）；
+2. `npm test`（= check:core 字节平价 + 双 edition validate + 双 smoke + 全部脚本测试）；
+3. 新增测试随 wave 落地（先能失败、后转绿）；
+4. 版本 bump 五处一致（两 plugin.json + 两 package.json + marketplace.json，`test/wakeflow-version-parity.test.mjs` 钉住）；
+5. 真机验收按各 Phase 的可证伪定义执行并留证据。
+
+**Dogfood 路径（推荐）**：Phase 0 体量小、且是其余一切的前提，直接实施；Phase 1 起走 Wakeflow 自身闭环——本 roadmap 经 Design 以 `wakeflow_deliver` 交付（designKey 建议 `wakeflow-parallel-dev-2026-07`，requirement 类型挂本文件 + intent-drift 需求文档为 Original Plan / Requirement Design），控制器 `wakeflow_create_demand` 认领，按 wave 派发到 Wakeflow 仓窗口，证据验收。**Phase 1 的交付过程本身就是 F3 之前最后一次单 stream 模式的全链路回归，Phase 2 的交付过程则应直接跑在 Phase 1 产出的多 stream 模式上——交付即验收。**
+
+**模型配置基线**：workspace config 建议钉 `hosts.claude-code.modelByRole.controller = "claude-fable-5"`（effortByRole 维持 controller=max、其余 xhigh 的既有画像默认）；Codex 侧不变（F3 为 Claude Code 侧刚需，Codex 线程并行已可用，`wakeflow-host-profile.mjs:122` 的"no worktree"策略保留）。
+
+---
+
+## 4. 风险清单（含对策）
+
+| 风险 | 对策 |
+| --- | --- |
+| 覆盖层 stale（base config 改动后 stream 覆盖层遮蔽新值） | baseHash 派生标记 + open/close 每次重生成 + check-workspace 校验 + 末 stream 关闭即删（W1-b） |
+| worktree 内子窗口 scope-block 的相对坐标失准（worktree 深度 ≠ 原 repo 深度） | 不依赖 scope-block 相对坐标：投递提示携带 workspace 相对 stateRoot，launch 用 `--add-dir <workspace>`；列为已知外观性缺陷，不做坐标重写 |
+| 并发写竞态（Phase 0 未先行就上多 stream） | 硬排序：Phase 0 是 Phase 1 的前置门，W1 任何 wave 不得先于 W0-a 合入 |
+| 每 stream = 完整 claude 进程 + worktree + 模型花费；monitor 轮询成本随窗口数线性 | `maxStreamsPerRepo` 缺省 2 + pool-exhausted 硬 block（W1-c）；大 fleet 前先观测 monitor 开销（`wakeflow-claude-host.mjs:452-548`） |
+| authored objective 与幂等 hash 的交互（同 revision 换 objective 被守卫拒绝） | 特性化：首次 prepare 即作者化；文档与 skills 写明"改意图 = 新 revision（重新 add/decide 路径）" |
+| 提醒疲劳（模板化提醒被 Agent 习惯性忽略） | 提醒严格条件化：仅 designIntent 在场才出现、一句话、不带分数不带占位；designIntent 缺省时全链路零痕迹（W2-b） |
+| 双 edition 散文漂移（skills 不被 sync-core 同步） | 每 wave 的 DoD 含"两 edition 散文核对"一项；host 词只在 L3 |
+| worktree 残留堆积 | 三层回收（PD-4）+ 归档硬门 + `stream-list` 三方对账可见性 |
+| 双宿主并存时 Codex 侧经 host-neutral 覆盖层看见 stream 窗口 | 双重既有兜底，不新增机制：demand 归属门（claude-code 持有则 codex 驱动命令 fail-closed）+ codex 侧无该窗口 thread 注册（require-thread / 发送即失败） |
+| 波次模型的隐性约束被误用（波中途 reduce 得 `waiting-results`、波中途 add-task 被 `waiting-results` 态拒绝） | skills 波次纪律写明"波尾才 reduce"；真机验收 ② 把该语义钉为并行契约的一部分而非意外 |
+
+---
+
+## 4.7 需求舱（demand pod，E-6）——✅ 已于 2026-07-02 落地（0.7.6）
+
+预防清单全部落实：**controllerWindow 入 state root**（init/create_demand 记录，prepare 默认链 flag > state > config——舱回执误路由的机械灭杀）；**H-9 板锁**（deliver/consume 整命令临界区）；`pod-open`（幂等可续、板前置检查、跨舱仓库交集预警、成本提示）；`pod-close`（收舱顺序门 complete→stream-close→archive→pod-close，--force 兜底）；`pod-list`（孤儿舱对账）；**pending-merges 台账**（stream-close 时分支存活即记账——去中心化合并的记忆）；Test 环境独占性写入 controller skill；多路复用散文全量替换为舱模型（双版本）。测试：controllerWindow 路由链、舱幂等开合、交集预警、顺序门、台账行。Codex 舱对称落地为后续项；板锁并发测试待补（原语与 Phase 0 同源）。
+
+## 4.7.0 原设计记录——用户三决策
+
+用户裁定多需求并行的最终形态：**去中心化需求舱**，取代 4.6 的"单总控多路复用"。一个需求 = 一个舱（自己的总控 + 仓库隔离 worktree 窗口 + 自己的 Test），**每舱独立 tmux session**，彼此不知道对方；分支合并完全去中心化（人工，Wakeflow 不承载）；不设瘦入口总控——**现任总控抽空执行 `pod-open` 开新舱**即可，新舱总控自己认领新需求后自主运行。实施要点：`pod-open --demand-key <key>`（编排既有机制：舱 session + 按需 N×stream-open 落入舱 session + `Controller__<slug>`/`Test__<slug>` 窗口 + 入舱定向提示写明"claim 该需求、派发用本舱窗口名、prepare 显式 --controller-window"）；`pod-close`（归档后收舱）；`maxActiveDemands`=舱数上界、`maxStreamsPerRepo`=单仓并发舱数上界（语义已就位）；4.6 的"单总控多路复用"散文（Multiple Active Demands 回合声明等）将被舱模型替换，容量门/仪表盘/板锁（H-9，硬前置）保留。Codex 舱对称落地为后续项。
+
+## 4.6 E-2 多活跃 demand ——✅ 已于 2026-07-02 落地（0.7.5，npm test 304/304；4.7 用户裁定后，其"单总控多路复用"操作模型被需求舱取代，容量机制保留）
+
+用户拍板三决策：maxActiveDemands 默认 2（配置可调，=1 完全恢复单活跃）；跨需求同仓 = 后来者走隔离窗口（主检出归先占 demand）；**单控制器**统管全部活跃 demand（唯一验收权威）。落点：三处入口门改为容量判定（init / demand-sequence claim / next-work 候选守卫），next-work 输出 activeDemands+demandCapacity 仪表盘，Claude 侧总控粘贴互斥（只序列化 paste+Enter，总控依旧永不 busy），skills 双版本载入多活跃纪律（回合声明 demand、重读 root、总控换新 runbook）与语义清扫（"multiple controllers can run in parallel" 等歧义句修正）。测试钉死：默认 2 并行、第三个 fail-closed、=1 旋钮回归旧语义、两 demand 交错闭环互不干扰（revision 各自 4）、归档释放容量（completed 未归档仍占位）。
+
+## 4.5 设计纠正（2026-07-02，用户裁定）——需求内并行被整体删除
+
+用户明确：**需求内不存在窗口级并行**。同一 demand 内每个仓库只运行一个窗口、收到一个**组合任务包**（窗口自排优先级、一份带证据的结果收尾）；同一 demand 内一个窗口永远不会被同时派发两个任务。原 F3 的"同仓多 stream"是对用户意图的误读（需求文档的"并行化一个需求"被读成了需求内并行；用户真实诉求是**多个需求并行开发**，即 E-2）。
+
+纠正落点：① 机器硬门——`stream-open` 拒绝同 (repo, demand) 的第二个窗口；② 全部散文（controller/governance/target skill、CLAUDE.md、双版本路线图、入场提示、help）改写为组合包模型；③ worktree 机制**重定位**为跨需求隔离窗口（isolation worktree window）——多活跃 demand 同触一仓时后来者的隔离检出，`maxStreams` 语义变为"一仓可承载的并发 demand 数上界"；④ 随之消解：PD-8（波次评审——需求内并行波不复存在）、E-1（流式评审——前提消失）；Phase 1 的真机验收记录保留为历史（其"两 stream 同仓"场景按新裁定不再是合法用法）。E-2（多活跃 demand）设计草案已提出，待用户拍板三项决策（maxActiveDemands 默认值、跨需求同仓窗口模型、控制器形态）。
+
+## 5. 一页总览
+
+```
+Phase 0  0.6.4  并发地基     state-root 写锁 + 并发回归        S    前置门
+Phase 1  0.7.0  并行开发 F3  stream 生命周期/注册解析/池上界    M    刚需主交付（W1-a..d）
+Phase 2  0.7.1  意图对齐 F1+F2  两句意图并排 + 需求审视提醒（零分数零门禁） S  可与 Phase 1 并行
+Phase 3  —      加固+规模化（观察触发）  E系: 多活跃demand(已落地0.7.5-0.7.6·§4.6/4.7)·流式评审与stream依赖已随§4.5消解 · H系: 锁续租/schema校验/契约lint/readback/setup拆分/批量人体工学  不承诺
+```
+
+红线一句话版：additive-only；不改锁键/id/裁决语义；意图对齐只并排提醒、不算分不设门、最终确认归 Agent；池耗尽即停；host 词不进 core；散文双写；每 wave 全测试绿 + 真机验收留证。
+
+## 6. 全仓综合审计修复波 ——✅ 已于 2026-07-02 落地（0.7.7）
+
+三路后台代理（散文一致性 / 代码对抗 / 连通性）+ 主线复核，共 40 项确认发现，本波全部修复：
+
+**P0/P1 代码（core + claude-host）**
+- H1 tmux 前缀误匹配：`sessionTarget()` 给全部 22 处 session 目标加 `=` 精确匹配前缀（pod session 名 `wakeflow-<pod>` 与 `wakeflow` 前缀碰撞实测危险）。
+- H2 controller-return 锁误挂：`deliver` 按 envelope.kind 识别 ControllerReturnEnvelope 传 `controllerReturn`，pod 总控窗口不再走目标窗口锁；paste 互斥降为按窗口锁；pod-close 清扫 pod 窗口的 delivery/paste 锁。
+- H3 pod 断电恢复：stream-open 幂等续开（registered+dead → 只补 launch+register，跳过 worktree/overlay 重建），pod-open 永远委托；Controller/Test 首启后经 `register-thread` 注册 session id，重开时 `--resume --session-id` 续同一会话。
+- H4 行级生命周期闸 + todoId 领取：next-work 对"自己已有未归档 state root"的候选行直接 blocked（防重复建需求）；pod 总控提示词改用 `todoId` 领取（消费行）并带 resume 分支。
+- M5 证据解析 `__` 后缀回退（state 归档器 + review 解析器双处）：`Repo__pod` 在 overlay 条目消失后回退基仓库解析。
+- M6 `wakeflow_claim_next` 增加 `controllerWindow` 参数并全链路透传（schema→argv→claim-todo→create-demand）。
+- M7 容量 TOCTOU：init 的容量扫描与 demand/state 首写包进 workspace 级 `.capacity-lock` 临界区。
+- M8 舰队操作只读 tracked config（launch-all/replace-all/arrange 永不把 pod 窗口收编进主 session）。
+- GAP1 MCP 根解析向上爬找 `wakeflow.config.json`（子仓库窗口的 MCP 不再把根解析到自己仓库）。
+- GAP6 replace-all 重建总控时用总控向 entry-sync（不再当 target 等派发）；GAP7/GAP5/A7 三处文案纠正；GAP8 容量满降为 warning（ok:true，在飞需求仍可评审）。
+- L9 pod 路径尊重 `workspaceCurrentDir`；L10 台账回退对齐 `../wakeflow-ledger`；L11 pending-merges 去重 + overlay 再生失败显式 fail；L12 pod-open/close 向子命令透传 `--state-dir` + stream-close 清理 entry-sync 文件。
+
+**散文/文档（19 项，双版本）**
+- A1/A2 zh README 退役工具名（init_demand→create_demand、intake_design_handoff→deliver，补 claim_next）；A12 六份 README 工具表对齐（补 render_progress + 宿主归属/窗口锁行）。
+- A3 helper 命令表 9→24（按舰队/投递/策略/跨需求分组）；A4 删除 `--open-terminal`/iTerm2 `tmux -CC` 幻影能力（README×2 + scripts README + 平台注记）；A5 `deliver --delivery-file` 升为主传输（README×2 + wakeflow-delivery.md）；A6 无人值守段落改写为 recorded-permissionMode 模型；A8 恢复语句去乱码；A9 四处 v0.5.6 钉子 → v0.7.7。
+- A10 系统性补齐：windows.md 第 6 步路由 pod/stream 窗口、status/dispatch 多需求化、review.md 意图三元组 + intentCheck、两版 README Demand Pods 章节、根 README 容量胶囊、codex README 宿主中立容量条目。
+- A13 window-dispatch.md 写入"一仓一窗一组合包"规则 + 标准提示词改为组合包措辞（双版本）；A14 claude 路线图 stream 词汇清理；GAP2 review 决策枚举 wait→redesign；GAP4 合并归属统一为"人工审核、去中心化"（总控 skill + S6）。
+- 模板包（双版本，JSON 校验通过）：A15 handoff-inbox 死表面×2 → TODO board via deliver；A16 调度策略状态词表对齐板面词汇；A17 board 分隔行 13→12 列；A18 Design 边界补"deliver 是唯一许可写"；A19 `[alembic]` 残留 → `[wakeflow]`；GAP9 需求设计模板补齐出口门（Landing Plan/designIntent 列、Test Environment Spec、User Confirmation Ledger、Handoff Readiness 三新项）。
+
+**登记未修（后续观察）**：GAP3 全 pod 重启 runbook（pod-open 已幂等续开，缺一页操作文档）；Codex 版 pod 对称性（用户已定先 CC）；testing-validation.md 现代化重写；target skill 的 deliver 化措辞再统一。
+
+## 7. 配置命名迁移 ——✅ 已于 2026-07-02 落地（0.7.8）
+
+`workspace.config.json` → **`wakeflow.config.json`**（明确这是 Wakeflow 的配置项，不是任意工作区元数据）。规则：
+
+- 规范名 `wakeflow.config.json`（tracked 与 `.wakeflow-local/` overlay 双层同名）；解析顺序 新名 > 旧名，两层均只读回退旧名 `workspace.config.json`——改名前的已装工作区（如 AlembicWorkspace）零中断。
+- 写入方写"解析到的那个文件"：全新工作区得到新名；旧名工作区继续写旧名（不产生双文件脑裂）；旧名 overlay 存在时原地再生，全新 overlay 用新名。
+- `check-workspace` 对旧名给 `legacy-name` 提示（一行 `git mv` 即迁移完成）。
+- 船载默认配置六个文件 `git mv`；`package.json` files 数组、host-profile/MCP 描述、报错文案、全部 skills/docs/README/模板同步改名；新增 `test/wakeflow-config-name.test.mjs`（旧名可读、新名优先、旧名工作区 stream-open 正常 + 迁移提示）3 用例。
+
+
+## 8. H-15 舰队重建的环境卫生 + 新会话认证事故 ——加固已落地，事故根因待用户侧确认（2026-07-02 夜）
+
+真机事故：agent 会话内 kill 整个 tmux server 后重建舰队，8 个新窗口的 `claude` 全部 "Not logged in"。排查结论（按证伪顺序）：
+
+- ~~环境变量污染~~：探针窗口实测 0 个 `CLAUDE*`/`ANTHROPIC*` 变量——tmux 不把调用方环境并入窗口（窗口环境=server 环境）；污染论对"登录失败"不成立。
+- ~~Keychain 锁定~~：条目元数据可读；~~刷新风暴轮换~~：条目 mdat 早于事故且冷却后单窗重启依旧失败。
+- 剩余强怀疑：claude 二进制当日 04:53 自动升级 2.1.197→2.1.198，**每个新启动的会话都认证失败**，旧进程不受影响；无头环境无法验证/修复交互式 OAuth——恢复动作归用户（任一窗口 `/login` 一次，然后 `launch-all` 重拉其余窗口）。
+- 教训：验证"窗口健康"必须同时断言 **claude 确实启动** 且 **已登录**（pane 里没有 "Not logged in" ≠ 登录成功——claude 没跑起来时同样没有这行）。
+
+无论根因归属，两项加固成立并已落地：
+1. `ensureServer` 引导 server 的 `new-session` 传入净化环境（剥 `CLAUDE*`/`ANTHROPIC*`）：server 环境是全部窗口的继承源，从 agent 会话重建时不应把 13 个 agent 会话变量带给用户舰队（PATH 等保持调用方值）。
+2. 恢复舰队的正确顺序：优先 `launch-all`（续同 id、保上下文）；`replace-all` 才是全新重建；绝不用 `env -i` 包装调用（会出现"窗口建成但注册失败"的半成功态，注册表指向死会话，比全失败更危险）。
+
+
+## 9. 本地存储清晰化（storage clarity）——✅ 已于 2026-07-04 落地（0.7.9）
+
+规划与现状深读见 `wakeflow-local-storage-clarity-plan-2026-07-04.md`。四阶段全部完成：
+
+- **A 就地说明**：新增 core 脚本 `wakeflow-storage.mjs`（白名单 + MCP 接线）。`wakeflow_view scope=storage` = 存储地图（每棵树 class/size/age + legacy/unknown/aging preserved，分类是描述不是授权）；`seed-readmes --write` 在 `.wakeflow-active/`、`.wakeflow-local/`、`wakeflow-delivery/`、`hosts/`、ledger 根收敛五份就地 README（每份只答"这是什么/谁写/能动吗"）。
+- **B 残留生命周期**：canonical 抢救位 `.wakeflow-local/preserved/<日期>-<原因>/ + MANIFEST.md`（`wakeflow-storage preserve` 是唯一许可的人工保全动作）；`archive-demand --redact` 的原件改为**机器移入** canonical 位（消灭"人工挪原件"这个无主树之源，失败降级为旧行为 + 警告）；`check-workspace` 新增 storage 区（unknown-tree / legacy-residue / preserved-aging / readmes-stale，全部提醒不拦截）；`wakeflow_prune_runtime target=preserved` 按 `preservedRetentionDays`（默认 30）dry-run 列候选、`--apply` 删除。
+- **C 引导重写**：`wakeflow-ledgers.md` 双版本以存储地图为骨架重写（三层 + 分类表 + 抢救 convention + "ledger 位置看 config"）；CLAUDE.md/AGENTS.md 加存储指针；两版 controller skill 增"空闲时看存储地图；unknown-tree 一律路由用户"习惯条。
+- **D 真机治理（AlembicWorkspace）**：七棵无主树（~1774 文件/11.8M）全部折入 canonical preserved/（纯移动 + 补写 manifest，零删除，删除权走 prune dry-run 留给用户）；五份 README 落位；终态 map：unknown=0、legacy=0、preserved=7（全带 manifest）、check-workspace storage 区 0 gap。
+
+新增 `test/wakeflow-storage.test.mjs` 4 用例（map 分类与只读性、seed 幂等与配置化 ledger 路径、preserve/prune 全生命周期、preserve 拒绝态）；archive 测试更新为断言机器移动 + manifest。
+
+
+## 10. 需求信息生命周期（storage clarity 第二波）——✅ 已于 2026-07-04 落地（0.7.10）
+
+见 `wakeflow-local-storage-clarity-plan-2026-07-04.md` §7。一句话：出处入数据（demand.json source.designKey/documents）、执行入时间线（六动作自动追加 progress 三节，投影不权威、失败不阻断）、归档成脊椎（manifest v2 + archive-summary.md 一页串联需求→结论→任务台账→测试→原件指针）。孤儿机制 progress-log 的三节设计被真正接通。

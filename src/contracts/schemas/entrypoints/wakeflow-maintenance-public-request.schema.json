@@ -3,20 +3,26 @@
   "$id": "urn:wakeflow:entrypoints:maintenance-public-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA",
   "title": "WakeflowMaintenancePublicRequestV1",
-  "description": "Closed MCP input contract for previewing, applying, or recovering one Wakeflow workspace Maintenance operation. Nested domain values are revalidated by their owning domain modules.",
+  "description": "Closed MCP input contract for one Wakeflow workspace Maintenance effect: preview derives a plan without writing, apply re-derives the same plan and executes it only when planDigest matches, recover finishes an interrupted transaction by its operation ID. Nested domain values are revalidated by their owning domain modules.",
   "type": "object",
   "oneOf": [
     {
-      "$ref": "#/$defs/freshPreviewRequest"
+      "$ref": "#/$defs/freshInitializePreviewRequest"
+    },
+    {
+      "$ref": "#/$defs/freshInitializeApplyRequest"
     },
     {
       "$ref": "#/$defs/reconfigurePreviewRequest"
     },
     {
+      "$ref": "#/$defs/reconfigureApplyRequest"
+    },
+    {
       "$ref": "#/$defs/reconcilePreviewRequest"
     },
     {
-      "$ref": "#/$defs/applyRequest"
+      "$ref": "#/$defs/reconcileApplyRequest"
     },
     {
       "$ref": "#/$defs/recoverRequest"
@@ -59,115 +65,77 @@
     "sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$",
-      "description": "Algorithm-prefixed lowercase SHA-256 digest of the exact confirmation returned by preview."
+      "description": "Algorithm-prefixed lowercase SHA-256 digest of the exact execution plan returned by preview. Apply re-derives the plan and rejects a different digest."
     },
     "maintenanceOperationId": {
       "type": "string",
       "pattern": "^maintenance_operation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
       "description": "Typed identifier of one prepared Maintenance transaction."
     },
-    "freshPreviewRequest": {
+    "freshInitializeBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection"
+      ],
+      "properties": {
+        "selection": {
+          "$ref": "#/$defs/jsonValue",
+          "description": "Fresh user selection compiled by the Configuration owner into a typed Config v3 model."
+        }
+      }
+    },
+    "reconfigureBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desiredConfig"
+      ],
+      "properties": {
+        "desiredConfig": {
+          "$ref": "#/$defs/jsonValue",
+          "description": "Complete desired Config document revalidated by the Configuration owner."
+        }
+      }
+    },
+    "reconcileBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 0
+    },
+    "freshInitializePreviewRequest": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "root",
-        "action",
         "mode",
+        "action",
         "request"
       ],
       "properties": {
         "root": {
           "$ref": "#/$defs/root"
+        },
+        "mode": {
+          "const": "preview"
         },
         "action": {
           "const": "fresh-initialize"
         },
-        "mode": {
-          "const": "preview"
-        },
         "request": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "selection"
-          ],
-          "properties": {
-            "selection": {
-              "$ref": "#/$defs/jsonValue",
-              "description": "Fresh user selection compiled by the Configuration owner into a typed Config v3 model."
-            }
-          }
+          "$ref": "#/$defs/freshInitializeBody"
         }
       }
     },
-    "reconfigurePreviewRequest": {
+    "freshInitializeApplyRequest": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "root",
+        "mode",
         "action",
-        "mode",
-        "request"
-      ],
-      "properties": {
-        "root": {
-          "$ref": "#/$defs/root"
-        },
-        "action": {
-          "const": "reconfigure"
-        },
-        "mode": {
-          "const": "preview"
-        },
-        "request": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "desiredConfig"
-          ],
-          "properties": {
-            "desiredConfig": {
-              "$ref": "#/$defs/jsonValue",
-              "description": "Complete desired Config document revalidated by the Configuration owner."
-            }
-          }
-        }
-      }
-    },
-    "reconcilePreviewRequest": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "root",
-        "action",
-        "mode",
-        "request"
-      ],
-      "properties": {
-        "root": {
-          "$ref": "#/$defs/root"
-        },
-        "action": {
-          "const": "reconcile"
-        },
-        "mode": {
-          "const": "preview"
-        },
-        "request": {
-          "type": "object",
-          "additionalProperties": false,
-          "maxProperties": 0
-        }
-      }
-    },
-    "applyRequest": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "confirmation",
-        "confirmationDigest"
+        "request",
+        "planDigest"
       ],
       "properties": {
         "root": {
@@ -176,11 +144,117 @@
         "mode": {
           "const": "apply"
         },
-        "confirmation": {
-          "$ref": "#/$defs/jsonValue",
-          "description": "Exact confirmation envelope returned by a ready preview and revalidated by the Maintenance owner."
+        "action": {
+          "const": "fresh-initialize"
         },
-        "confirmationDigest": {
+        "request": {
+          "$ref": "#/$defs/freshInitializeBody"
+        },
+        "planDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "reconfigurePreviewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "mode",
+        "action",
+        "request"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/root"
+        },
+        "mode": {
+          "const": "preview"
+        },
+        "action": {
+          "const": "reconfigure"
+        },
+        "request": {
+          "$ref": "#/$defs/reconfigureBody"
+        }
+      }
+    },
+    "reconfigureApplyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "mode",
+        "action",
+        "request",
+        "planDigest"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/root"
+        },
+        "mode": {
+          "const": "apply"
+        },
+        "action": {
+          "const": "reconfigure"
+        },
+        "request": {
+          "$ref": "#/$defs/reconfigureBody"
+        },
+        "planDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "reconcilePreviewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "mode",
+        "action",
+        "request"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/root"
+        },
+        "mode": {
+          "const": "preview"
+        },
+        "action": {
+          "const": "reconcile"
+        },
+        "request": {
+          "$ref": "#/$defs/reconcileBody"
+        }
+      }
+    },
+    "reconcileApplyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "mode",
+        "action",
+        "request",
+        "planDigest"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/root"
+        },
+        "mode": {
+          "const": "apply"
+        },
+        "action": {
+          "const": "reconcile"
+        },
+        "request": {
+          "$ref": "#/$defs/reconcileBody"
+        },
+        "planDigest": {
           "$ref": "#/$defs/sha256Digest"
         }
       }

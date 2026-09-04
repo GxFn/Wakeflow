@@ -58,8 +58,9 @@ on authorized Wakeflow source maintenance in this repository.
   evidence, isolation, and append-only history deterministic.
 - Runtime behavior belongs in code, schemas, tests, and the installed plugin
   instructions or skills that own it. Repository-maintenance rules belong in
-  this file. Historical plans under `docs/` are evidence, not current command
-  authority.
+  this file. The documentation system and its authority order are defined in
+  `docs/README.md`; `docs/archive/` holds historical evidence, not current
+  command authority.
 - When changing a public MCP tool, state shape, task package, prompt, template,
   or installed rule, update every real producer and consumer plus focused
   regression coverage. Do not make documentation claim an unimplemented
@@ -77,9 +78,12 @@ on authorized Wakeflow source maintenance in this repository.
 - Run the affected host validators and smoke tests for host-specific changes:
   `npm run validate` / `npm run smoke` for Codex and
   `npm run validate:claude` / `npm run smoke:claude` for Claude Code.
-- Run `npm test` before declaring a release-ready change complete. It is the
-  repository-wide gate for shared-core parity, both artifact validators, both
-  smoke suites, and the regression tests.
+- Run `npm test` before declaring a change complete. Since 2026-09-03 it is
+  the TypeScript gate only: typecheck, architecture rules, TypeScript tests,
+  and the Schema drift check (ADR-0008). The retired JavaScript gate, that is
+  shared-core parity, both artifact validators, both smoke suites, and the old
+  regression tests, stays runnable as `npm run test:legacy` until E4 deletes
+  the old tree; run it only when a change touches `core/` or `plugins/`.
 - Run `git diff --check` before handoff and report any test that could not be
   run. Do not present an unavailable real-host session as a passing test.
 - Claude Code account or login availability may limit a real session test, but

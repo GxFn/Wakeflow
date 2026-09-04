@@ -19,6 +19,7 @@ import {
 } from "../contracts/identity/wakeflow-durable-id.js";
 import {
   createUuidV4,
+  deriveUuidV4,
   UuidV4Error,
   type UuidV4Factory,
 } from "../foundation/identity/uuid-v4.js";
@@ -220,15 +221,23 @@ function optionalProperty(
   return source[key] === undefined ? {} : { [key]: source[key] };
 }
 
+const FRESH_SELECTION_ID_NAMESPACE = "wakeflow-fresh-config-selection";
+
+/**
+ * 分配 typed ID。没有注入 factory 时，ID 由 selection 的规范摘要、种类与 selection key
+ * 确定性派生：同一 selection 在 preview 与 apply 重算出同一 Config，摘要才可能相符。
+ */
 function allocateId<Kind extends "program" | "repository" | "surface" | "window">(
   kind: Kind,
   options: Readonly<ParsedOptions>,
   seenUuid: Set<string>,
+  seed: Sha256Digest,
+  key: string,
 ): WakeflowDurableId<Kind> {
   let uuid;
   try {
     uuid = options.uuidFactory === undefined
-      ? createUuidV4()
+      ? deriveUuidV4(FRESH_SELECTION_ID_NAMESPACE, seed, kind, key)
       : createUuidV4(options.uuidFactory);
   } catch (error: unknown) {
     if (error instanceof UuidV4Error) fail("id-source", "$options.uuidFactory");
@@ -373,11 +382,12 @@ export function compileWakeflowFreshConfigSelection(
   }
 
   const seenUuid = new Set<string>();
-  const programId = allocateId("program", options, seenUuid);
+  const seed = computeCanonicalJsonSha256Digest(selection);
+  const programId = allocateId("program", options, seenUuid, seed, "program");
   const repositoryByKey = new Map<string, WakeflowDurableId<"repository">>();
   const repositoryAllocations: WakeflowFreshConfigSelectionAllocation<"repository">[] = [];
   const repositories = repositorySelections.map(({ key, value }) => {
-    const repositoryId = allocateId("repository", options, seenUuid);
+    const repositoryId = allocateId("repository", options, seenUuid, seed, key);
     repositoryByKey.set(key, repositoryId);
     repositoryAllocations.push(Object.freeze({
       selectionKey: key,
@@ -396,7 +406,7 @@ export function compileWakeflowFreshConfigSelection(
   const surfaceByKey = new Map<string, WakeflowDurableId<"surface">>();
   const surfaceAllocations: WakeflowFreshConfigSelectionAllocation<"surface">[] = [];
   const supportSurfaces = surfaceSelections.map(({ key, value }) => {
-    const surfaceId = allocateId("surface", options, seenUuid);
+    const surfaceId = allocateId("surface", options, seenUuid, seed, key);
     surfaceByKey.set(key, surfaceId);
     surfaceAllocations.push(Object.freeze({ selectionKey: key, id: surfaceId }));
     return {
@@ -412,7 +422,7 @@ export function compileWakeflowFreshConfigSelection(
 
   const windowAllocations: WakeflowFreshConfigSelectionAllocation<"window">[] = [];
   const windows = windowSelections.map(({ key, path, root, value }) => {
-    const windowId = allocateId("window", options, seenUuid);
+    const windowId = allocateId("window", options, seenUuid, seed, key);
     windowAllocations.push(Object.freeze({ selectionKey: key, id: windowId }));
     let resolvedRoot: Readonly<Record<string, unknown>>;
     if (root.kind === "program") {

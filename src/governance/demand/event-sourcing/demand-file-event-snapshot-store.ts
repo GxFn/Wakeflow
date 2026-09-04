@@ -12,6 +12,10 @@ import {
   type DurableAtomicFileStageRecoveryReceipt,
 } from "../../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
+import {
+  unlinkRegularFileExactly,
+  ExactRegularFileUnlinkError,
+} from "../../../foundation/filesystem/exact-regular-file-unlink.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
@@ -42,7 +46,10 @@ import { encodeUtf8 } from "../../../foundation/text/utf8.js";
 import {
   createDemandEventSourcingSnapshotResourceDeclaration,
 } from "../demand-resource-catalog.js";
-import type { DemandEventCommitSequence } from "./demand-event-stream-position.js";
+import {
+  parseDemandEventCommitSequence,
+  type DemandEventCommitSequence,
+} from "./demand-event-stream-position.js";
 import {
   parseDemandEventSourcingSnapshot,
   parseDemandEventSourcingSnapshotDocument,
@@ -428,6 +435,86 @@ export class DemandFileEventSnapshotStore {
   }
 
   /** 按 `commitSequence` 不替换目标地发布一个可重建快照。 */
+  /** 直接退休一个序号的快照；不存在或失败返回 `false`。 */
+  async retireSnapshotAt(
+    sequence: number,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<boolean> {
+    const { signal } = parseOptions(options);
+    if (!Number.isSafeInteger(sequence) || sequence < 1) return false;
+    const ref = demandEventSourcingSnapshotRef(
+      parseDemandEventCommitSequence(sequence, "$sequence"),
+    );
+    let node;
+    try {
+      node = (await this.#root.inspectExistingResource(ref)).node;
+    } catch (error: unknown) {
+      if (error instanceof RootedDirectoryError) return false;
+      throw error;
+    }
+    if (node.kind !== "file") return false;
+    try {
+      await unlinkRegularFileExactly(this.#root, ref, {
+        expectedNode: node,
+        durability: "none",
+        ...(signal === undefined ? {} : { signal }),
+      });
+      return true;
+    } catch (error: unknown) {
+      if (error instanceof ExactRegularFileUnlinkError) return false;
+      throw error;
+    }
+  }
+
+  /**
+   * 退休序号小于 `keepFromSequence` 的快照；快照是可删除的检查点，退休失败只计数。
+   */
+  async retireSnapshotsBefore(
+    keepFromSequence: number,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<Readonly<{ retired: number; failed: number }>> {
+    const { signal } = parseOptions(options);
+    if (!Number.isSafeInteger(keepFromSequence) || keepFromSequence < 1) {
+      fail("input", "$keepFromSequence");
+    }
+    let read;
+    try {
+      read = await readDirectory(this.#root, signal);
+    } catch (error: unknown) {
+      if (error instanceof DemandFileEventSnapshotStoreError) {
+        return Object.freeze({ retired: 0, failed: 0 });
+      }
+      throw error;
+    }
+    let retired = 0;
+    let failed = 0;
+    for (const entry of read.entries) {
+      let sequence;
+      try {
+        sequence = parseDemandEventStreamCommitFileName(entry.name).commitSequence;
+      } catch (error: unknown) {
+        if (error instanceof DemandEventSourcingPathError) continue;
+        throw error;
+      }
+      if (sequence >= keepFromSequence || entry.node.kind !== "file") continue;
+      try {
+        await unlinkRegularFileExactly(this.#root, entry.resourcePath, {
+          expectedNode: entry.node,
+          durability: "none",
+          ...(signal === undefined ? {} : { signal }),
+        });
+        retired += 1;
+      } catch (error: unknown) {
+        if (error instanceof ExactRegularFileUnlinkError) {
+          failed += 1;
+          continue;
+        }
+        throw error;
+      }
+    }
+    return Object.freeze({ retired, failed });
+  }
+
   async publish(
     snapshotValue: unknown,
     options?: { readonly signal?: AbortSignal },
@@ -466,6 +553,7 @@ export class DemandFileEventSnapshotStore {
     try {
       await createFileAtomically(this.#root, ref, bytes, {
         mode: DEMAND_FILE_EVENT_STORE_FILE_MODE,
+          durability: "none",
         ...(signal === undefined ? {} : { signal }),
       });
       return Object.freeze({

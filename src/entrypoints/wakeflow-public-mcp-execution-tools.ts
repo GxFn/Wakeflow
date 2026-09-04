@@ -107,14 +107,7 @@ import {
   TargetResultImportPublicCoordinatorError,
   type TargetResultImportPublicResult,
 } from "../governance/result/target-result-import-public-coordinator.js";
-import {
-  TargetTaskPlanningPublicContractError,
-  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
-} from "../governance/tasking/target-task-planning-public-contract.js";
-import {
-  TargetTaskPlanningPublicCoordinatorError,
-  type TargetTaskPlanningPublicResult,
-} from "../governance/tasking/target-task-planning-public-coordinator.js";
+import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../governance/tasking/target-task-planning-public-contract.js";
 import {
   TestCardPlanningPublicContractError,
   WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
@@ -141,30 +134,12 @@ import {
 export interface WakeflowPublicMcpExecutionExecutors {
   readonly claimTargetHostEffect: WakeflowPublicMcpExecutor<TargetHostEffectClaimPublicResult>;
   readonly importTargetResult: WakeflowPublicMcpExecutor<TargetResultImportPublicResult>;
-  readonly planTargetTask: WakeflowPublicMcpExecutor<TargetTaskPlanningPublicResult>;
+  readonly planTargetTask: WakeflowPublicMcpExecutor<WakeflowTargetTaskPlanningResultV1>;
   readonly planTestCard: WakeflowPublicMcpExecutor<TestCardPlanningPublicResult>;
   readonly prepareImplementationDelivery: WakeflowPublicMcpExecutor<TargetDeliveryPreparationPublicResult>;
   readonly prepareTestDelivery: WakeflowPublicMcpExecutor<TestDeliveryPreparationPublicResult>;
   readonly rearmTargetHostEffect: WakeflowPublicMcpExecutor<TargetHostEffectRearmPublicResult>;
   readonly recordTargetHostEffectOutcome: WakeflowPublicMcpExecutor<TargetHostEffectOutcomePublicResult>;
-}
-
-function targetTaskPlanningError(
-  error: unknown,
-): Readonly<WakeflowPublicMcpErrorDetails> | null {
-  if (error instanceof TargetTaskPlanningPublicContractError) {
-    return Object.freeze({ code: error.code, reason: error.reason, path: error.path });
-  }
-  if (error instanceof TargetTaskPlanningPublicCoordinatorError) {
-    return Object.freeze({
-      code: error.code,
-      reason: error.reason,
-      ...(error.causeCode === null ? {} : { causeCode: error.causeCode }),
-      ...(error.causeReason === null ? {} : { causeReason: error.causeReason }),
-      eventAuthority: error.eventAuthority,
-    });
-  }
-  return null;
 }
 
 function testCardPlanningError(
@@ -335,10 +310,10 @@ export function registerWakeflowPublicMcpExecutionTools(
     name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
     title: "Plan Wakeflow Target Task",
     description: [
-      "Preview or apply one complete immutable Implementation or Test TaskPackage for an existing Demand.",
-      "Implementation preview accepts complete Controller-authored package content. Test preview accepts only workType=test and derives assignment, objective, Authority references, boundaries, completion expectations, Target identity, and TestCard tuple from the current frozen TestCard.",
-      "Preview is read-only. Apply revalidates current Config, Demand Authority, TestCard or Ledger references, product WorkClaims, and stream position.",
-      "Apply only appends the planning event and materializes its TaskPackage projection; it never performs Delivery or host effects.",
+      "Append one immutable Implementation or Test TaskPackage plan to an existing Demand in a single call.",
+      "Supply the stream revision you observed and a client idempotency key: a retry with the same key and body returns the first result; a stale revision or a reused key with a different body is rejected.",
+      "Test requests carry only workType=test and derive the package from the current frozen TestCard.",
+      "The result carries the planning event, the projection receipt, and the next Controller frontier; it never performs Delivery or host effects.",
     ].join(" "),
     inputSchema: fromJsonSchema<WakeflowTargetTaskPlanningRequestV1>(
       WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA,
@@ -353,7 +328,7 @@ export function registerWakeflowPublicMcpExecutionTools(
       openWorldHint: false,
     },
     execute: executors.planTargetTask,
-    mapError: targetTaskPlanningError,
+    mapError: () => null,
   });
 
   registerWakeflowPublicMcpTool<

@@ -6,13 +6,7 @@
   "description": "跨 Aggregate 绑定一份 immutable TODO intake 的 portable ref/digest。",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "schemaVersion",
-    "todoId",
-    "intakeRef",
-    "intakeDigest"
-  ],
+  "required": ["artifactKind", "schemaVersion", "todoId", "intakeRef", "intakeDigest"],
   "properties": {
     "artifactKind": {
       "const": "wakeflow-todo-intake-lineage"

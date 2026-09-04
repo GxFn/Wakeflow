@@ -1,0 +1,31 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreWorkspaces": ["plugins/codex-wakeflow", "plugins/claude-code-wakeflow"],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "src/entrypoints/codex-wakeflow-mcp.ts",
+        "src/entrypoints/claude-code-wakeflow-mcp.ts",
+        "tooling/architecture/check-dependencies.ts",
+        "tooling/codegen/schema-types.ts",
+        "tooling/testing/run-typescript-tests.ts",
+        "tooling/artifacts/build-typescript-artifact-candidates.ts",
+        "tests/**/*.test.ts",
+        "tests/scenarios/*.ts"
+      ],
+      "project": ["src/**/*.ts", "tooling/**/*.ts", "tests/**/*.ts"],
+      "ignore": [
+        "src/contracts/generated/**",
+        "src/configuration/**",
+        "src/workspace/**",
+        "src/governance/**",
+        "src/foundation/**",
+        "src/hosts/**",
+        "tests/governance/**",
+        "tests/foundation/**",
+        "test/**"
+      ],
+      "ignoreDependencies": ["@swc/core"]
+    }
+  }
+}

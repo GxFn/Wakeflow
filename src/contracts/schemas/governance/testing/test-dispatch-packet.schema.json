@@ -201,10 +201,7 @@
           "maxItems": 2,
           "uniqueItems": true,
           "items": {
-            "enum": [
-              "skills/wakeflow-target/SKILL.md",
-              "skills/wakeflow-test/SKILL.md"
-            ]
+            "enum": ["skills/wakeflow-target/SKILL.md", "skills/wakeflow-test/SKILL.md"]
           }
         }
       }

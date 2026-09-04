@@ -43,9 +43,7 @@ test("公共输出与请求分别以 output-boundary 与 privacy-violation 失�
   throws(
     () => assertRequestFreeOfPrivateText({ a: { "b c": "/Users/someone/Workspace" } }, boundary),
     (error: unknown) =>
-      isWakeflowError(error) &&
-      error.code === "privacy-violation" &&
-      error.path === "$.a.b_c",
+      isWakeflowError(error) && error.code === "privacy-violation" && error.path === "$.a.b_c",
   );
   const merged = mergeRedactionBoundaries(boundary, createRedactionBoundary(["/Users/other"]));
   equal(merged.privateValues.size, 4);

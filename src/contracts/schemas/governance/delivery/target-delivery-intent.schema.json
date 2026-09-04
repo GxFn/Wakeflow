@@ -43,12 +43,7 @@
     "target": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "targetTaskId",
-        "taskPackageId",
-        "taskPackageRef",
-        "taskPackageDigest"
-      ],
+      "required": ["targetTaskId", "taskPackageId", "taskPackageRef", "taskPackageDigest"],
       "properties": {
         "targetTaskId": {
           "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/targetTaskId"
@@ -134,12 +129,7 @@
     "rework": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "decision",
-        "previousResult",
-        "rationaleSummary",
-        "requiredCorrections"
-      ],
+      "required": ["decision", "previousResult", "rationaleSummary", "requiredCorrections"],
       "properties": {
         "decision": {
           "type": "object",

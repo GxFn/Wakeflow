@@ -33,13 +33,7 @@
       "$ref": "urn:wakeflow:governance:todo:item-id:v1"
     },
     "operation": {
-      "enum": [
-        "append",
-        "activate",
-        "withdraw",
-        "claim",
-        "archive"
-      ]
+      "enum": ["append", "activate", "withdraw", "claim", "archive"]
     },
     "createdAt": {
       "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"

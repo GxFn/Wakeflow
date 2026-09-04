@@ -111,14 +111,8 @@ function outputFixture(t: TestContext): string {
 
 test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) => {
   const output = outputFixture(t);
-  const first = buildTypescriptArtifactCandidates(
-    process.cwd(),
-    OUTPUT_RELATIVE,
-  );
-  const second = buildTypescriptArtifactCandidates(
-    process.cwd(),
-    OUTPUT_RELATIVE,
-  );
+  const first = buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
+  const second = buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
   deepEqual(second, first);
   equal(first.releaseEligible, false);
   equal(first.artifacts.length, 2);
@@ -143,10 +137,7 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) =
       const absolute = path.join(artifactRoot, file.path);
       equal(readFileSync(absolute).byteLength, file.bytes);
       equal(digest(absolute), file.sha256);
-      equal(
-        lstatSync(absolute).mode & 0o777,
-        file.mode === "0755" ? 0o755 : 0o644,
-      );
+      equal(lstatSync(absolute).mode & 0o777, file.mode === "0755" ? 0o755 : 0o644);
       equal(/\.(?:ts|cts|mts|map)$/u.test(file.path), false);
     }
 
@@ -161,88 +152,74 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) =
       Object.keys(packageDocument.dependencies).sort(),
       [...manifest.externalPackages].sort(),
     );
-    equal(
-      packageDocument.dependencies["@modelcontextprotocol/server"],
-      "2.0.0",
-    );
+    equal(packageDocument.dependencies["@modelcontextprotocol/server"], "2.0.0");
 
     const peerDirectory =
-      artifact.hostId === "codex"
-        ? "lib/hosts/claude-code/"
-        : "lib/hosts/codex/";
+      artifact.hostId === "codex" ? "lib/hosts/claude-code/" : "lib/hosts/codex/";
     const admittedPeerProfile = `${peerDirectory}wakeflow-workspace-host-resource-profile.js`;
     deepEqual(
-      manifest.files
-        .map((file) => file.path)
-        .filter((file) => file.startsWith(peerDirectory)),
+      manifest.files.map((file) => file.path).filter((file) => file.startsWith(peerDirectory)),
       [admittedPeerProfile],
     );
   }
 });
 
-test(
-  "两个候选入口都通过官方 stdio Client 发布相同技术骨干工具",
-  {
-    timeout: 20_000,
-  },
-  async (t) => {
-    const output = outputFixture(t);
-    const built = buildTypescriptArtifactCandidates(
-      process.cwd(),
-      OUTPUT_RELATIVE,
-    );
+test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工具", {
+  timeout: 20_000,
+}, async (t) => {
+  const output = outputFixture(t);
+  const built = buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
 
-    for (const artifact of built.artifacts) {
-      const artifactRoot = path.join(output, artifact.outputDirectory);
-      const transport = new StdioClientTransport({
-        command: process.execPath,
-        args: [path.join(artifactRoot, "mcp/server.mjs")],
-        cwd: artifactRoot,
-        stderr: "pipe",
-      });
-      let stderr = "";
-      transport.stderr?.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString("utf8");
-      });
-      const client = new Client({
-        name: `wakeflow-${artifact.hostId}-artifact-test`,
-        version: "1.0.0-test",
-      });
-      try {
-        await client.connect(transport);
-        const listed = await client.listTools();
-        deepEqual(
-          listed.tools.map((tool) => tool.name).sort(),
-          [
-            WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
-            WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME,
-            WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
-            WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
-            WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
-            WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
-          ].sort(),
-        );
-      } finally {
-        await Promise.allSettled([client.close(), transport.close()]);
-      }
-      equal(stderr, "");
+  for (const artifact of built.artifacts) {
+    const artifactRoot = path.join(output, artifact.outputDirectory);
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [path.join(artifactRoot, "mcp/server.mjs")],
+      cwd: artifactRoot,
+      stderr: "pipe",
+    });
+    let stderr = "";
+    transport.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    const client = new Client({
+      name: `wakeflow-${artifact.hostId}-artifact-test`,
+      version: "1.0.0-test",
+    });
+    try {
+      await client.connect(transport);
+      const listed = await client.listTools();
+      deepEqual(
+        listed.tools.map((tool) => tool.name).sort(),
+        [
+          WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+          WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME,
+          WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
+          WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+        ].sort(),
+      );
+    } finally {
+      await Promise.allSettled([client.close(), transport.close()]);
     }
-  },
-);
+    equal(stderr, "");
+  }
+});

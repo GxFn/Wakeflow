@@ -1,13 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  readdirSync,
-  realpathSync,
-  rmSync,
-  statSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -37,8 +30,7 @@ async function fixture(t: TestContext, label: string) {
     shell: false,
     windowsHide: true,
   });
-  if (initialized.status !== 0)
-    throw new Error("Cannot initialize fixture Git.");
+  if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
   t.after(() => rmSync(absolutePath, { recursive: true, force: true }));
   return absolutePath;
 }
@@ -191,8 +183,7 @@ test("Public recovery consumes only an operation ID and its private intent", asy
     await withWakeflowMaintenanceGate(
       rooted,
       {
-        expectedCoreLayoutInspectionDigest:
-          executionPlan.sharedPreview.coreLayoutInspectionDigest,
+        expectedCoreLayoutInspectionDigest: executionPlan.sharedPreview.coreLayoutInspectionDigest,
         operationId: RECOVERY_OPERATION_ID,
       },
       async (context) => {

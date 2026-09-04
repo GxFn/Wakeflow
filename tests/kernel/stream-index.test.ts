@@ -75,11 +75,19 @@ test("索引按提交推进并可从文档往返解析", () => {
 test("链接不上或身份重复的提交被拒绝，损坏文档解析失败", () => {
   const base = advanceStreamIndex(createStreamIndex("demand_x"), FIRST);
   throws(
-    () => advanceStreamIndex(base, commit(3, DIGEST_A, DIGEST_B, [{ eventId: "e9", eventType: "t" }], 1)),
+    () =>
+      advanceStreamIndex(
+        base,
+        commit(3, DIGEST_A, DIGEST_B, [{ eventId: "e9", eventType: "t" }], 1),
+      ),
     (error: unknown) => isWakeflowError(error) && error.reason === "index-anchor",
   );
   throws(
-    () => advanceStreamIndex(base, commit(2, DIGEST_A, DIGEST_B, [{ eventId: "e1", eventType: "t" }], 1)),
+    () =>
+      advanceStreamIndex(
+        base,
+        commit(2, DIGEST_A, DIGEST_B, [{ eventId: "e1", eventType: "t" }], 1),
+      ),
     (error: unknown) => isWakeflowError(error) && error.reason === "event-id-conflict",
   );
   throws(
@@ -115,10 +123,10 @@ test("索引以不可替换文件发布、读取最新可用者、退休旧文�
     equal(await readLatestStreamIndex(root, directory, "demand_other"), null);
     const retirement = await retireStreamIndexesBefore(root, directory, 2);
     equal(retirement.retired, 1);
-    deepEqual(
-      readdirSync(path.join(fixtureRoot, "event-sourcing", "index")).sort(),
-      ["0000000000000002.json", "0000000000000003.json"],
-    );
+    deepEqual(readdirSync(path.join(fixtureRoot, "event-sourcing", "index")).sort(), [
+      "0000000000000002.json",
+      "0000000000000003.json",
+    ]);
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });

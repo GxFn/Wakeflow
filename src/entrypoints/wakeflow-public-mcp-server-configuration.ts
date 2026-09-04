@@ -1,15 +1,11 @@
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../foundation/data/passive-own-data.js";
+import { parsePlainRecord, PassiveOwnDataError } from "../foundation/data/passive-own-data.js";
 import type { WakeflowToolCatalog } from "../kernel/tool-registry.js";
 import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.js";
 
 /** Public Server固定组合所需的完整、关闭依赖集合。 */
-export interface CreateWakeflowPublicMcpServerOptions
-  extends WakeflowPublicMcpExecutors {
+export interface CreateWakeflowPublicMcpServerOptions extends WakeflowPublicMcpExecutors {
   readonly serverName: string;
   readonly serverVersion: string;
 }
@@ -25,9 +21,7 @@ const CONFIGURATION_ERROR_MESSAGES = {
   "server-name": "Wakeflow MCP server name is invalid.",
   "server-version": "Wakeflow MCP server version is invalid.",
   executor: "Wakeflow MCP server executor is invalid.",
-} as const satisfies Readonly<
-  Record<WakeflowPublicMcpServerConfigurationErrorReason, string>
->;
+} as const satisfies Readonly<Record<WakeflowPublicMcpServerConfigurationErrorReason, string>>;
 
 /** MCP composition root配置无效时返回的稳定错误。 */
 export class WakeflowPublicMcpServerConfigurationError extends Error {
@@ -54,10 +48,7 @@ function fail(
   throw new WakeflowPublicMcpServerConfigurationError(reason, field);
 }
 
-function nonEmptyText(
-  value: unknown,
-  reason: "server-name" | "server-version",
-): string {
+function nonEmptyText(value: unknown, reason: "server-name" | "server-version"): string {
   if (typeof value !== "string" || value.length === 0) fail(reason);
   return value;
 }

@@ -56,10 +56,7 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readNonNegativeInteger(
-  record: Readonly<Record<string, unknown>>,
-  field: string,
-): number {
+function readNonNegativeInteger(record: Readonly<Record<string, unknown>>, field: string): number {
   const value = record[field];
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw new Error(`dependency-cruiser summary field ${field} is invalid`);
@@ -69,10 +66,10 @@ function readNonNegativeInteger(
 
 function parseModule(value: unknown): DependencyCruiseModule {
   if (
-    !isRecord(value)
-    || typeof value.source !== "string"
-    || !Array.isArray(value.dependents)
-    || value.dependents.some((entry) => typeof entry !== "string")
+    !isRecord(value) ||
+    typeof value.source !== "string" ||
+    !Array.isArray(value.dependents) ||
+    value.dependents.some((entry) => typeof entry !== "string")
   ) {
     throw new Error("dependency-cruiser returned an invalid module");
   }
@@ -96,31 +93,20 @@ function parseReport(value: unknown): DependencyCruiseReport {
       error: readNonNegativeInteger(summary, "error"),
       warn: readNonNegativeInteger(summary, "warn"),
       totalCruised: readNonNegativeInteger(summary, "totalCruised"),
-      totalDependenciesCruised: readNonNegativeInteger(
-        summary,
-        "totalDependenciesCruised",
-      ),
+      totalDependenciesCruised: readNonNegativeInteger(summary, "totalDependenciesCruised"),
       violations: summary.violations,
       optionsUsed: summary.optionsUsed,
     },
   };
 }
 
-function admittedProductionRootCount(
-  modules: readonly DependencyCruiseModule[],
-): number {
+function admittedProductionRootCount(modules: readonly DependencyCruiseModule[]): number {
   const roots = modules
     .filter((module) => module.source.startsWith("src/"))
-    .filter(
-      (module) => !module.dependents.some((dependent) =>
-        dependent.startsWith("src/")
-      ),
-    )
+    .filter((module) => !module.dependents.some((dependent) => dependent.startsWith("src/")))
     .map((module) => module.source)
     .sort();
-  const unadmitted = roots.filter(
-    (source) => !ADMITTED_PRODUCTION_ROOTS.has(source),
-  );
+  const unadmitted = roots.filter((source) => !ADMITTED_PRODUCTION_ROOTS.has(source));
   if (unadmitted.length > 0) {
     fail(`unadmitted production roots: ${unadmitted.join(", ")}`);
   }
@@ -147,22 +133,26 @@ function run(): void {
     "bin",
     "dependency-cruise.mjs",
   );
-  const result = spawnSync(process.execPath, [
-    cli,
-    "--config",
-    ".dependency-cruiser.cjs",
-    "--output-type",
-    "json",
-    "src",
-    "tests",
-    "tooling",
-  ], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-    shell: false,
-    windowsHide: true,
-  });
+  const result = spawnSync(
+    process.execPath,
+    [
+      cli,
+      "--config",
+      ".dependency-cruiser.cjs",
+      "--output-type",
+      "json",
+      "src",
+      "tests",
+      "tooling",
+    ],
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      shell: false,
+      windowsHide: true,
+    },
+  );
 
   if (result.error !== undefined) fail("dependency-cruiser could not start");
   let decoded: unknown;
@@ -176,29 +166,31 @@ function run(): void {
     fail("the configured parser is not SWC");
   }
   if (
-    report.modules.length === 0
-    || report.summary.totalCruised === 0
-    || report.summary.totalDependenciesCruised === 0
+    report.modules.length === 0 ||
+    report.summary.totalCruised === 0 ||
+    report.summary.totalDependenciesCruised === 0
   ) {
     fail("no TypeScript modules or dependencies were actually scanned");
   }
   if (
-    result.status !== 0
-    || report.summary.error > 0
-    || report.summary.warn > 0
-    || report.summary.violations.length > 0
+    result.status !== 0 ||
+    report.summary.error > 0 ||
+    report.summary.warn > 0 ||
+    report.summary.violations.length > 0
   ) {
     fail("one or more dependency rules were violated");
   }
   const productionRoots = admittedProductionRootCount(report.modules);
 
-  process.stdout.write(`${JSON.stringify({
-    ok: true,
-    parser: "swc",
-    modules: report.summary.totalCruised,
-    dependencies: report.summary.totalDependenciesCruised,
-    productionRoots,
-  })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: true,
+      parser: "swc",
+      modules: report.summary.totalCruised,
+      dependencies: report.summary.totalDependenciesCruised,
+      productionRoots,
+    })}\n`,
+  );
 }
 
 run();

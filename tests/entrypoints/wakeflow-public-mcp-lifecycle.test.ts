@@ -44,8 +44,7 @@ async function taskPackageForTargetDelivery(
   );
   try {
     const repository = new DemandEventSourcingRepository(demandRoot);
-    const prepared =
-      await repository.findTargetDeliveryPreparedEvent(targetDeliveryId);
+    const prepared = await repository.findTargetDeliveryPreparedEvent(targetDeliveryId);
     if (prepared === null) {
       throw new Error("Expected Target Delivery Prepared Event.");
     }
@@ -219,10 +218,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       readonly event: { readonly eventId: string };
     };
     equal(replayedOutcome.status, "already-recorded");
-    equal(
-      replayedOutcome.observation.observationDigest,
-      outcome.observation.observationDigest,
-    );
+    equal(replayedOutcome.observation.observationDigest, outcome.observation.observationDigest);
     equal(replayedOutcome.event.eventId, outcome.event.eventId);
 
     const taskPackage = await taskPackageForTargetDelivery(
@@ -237,8 +233,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       observationDigest: outcome.observation.observationDigest,
       report: {
         workType: "implementation" as const,
-        content:
-          createImplementationTargetResultReportContentFixture(taskPackage),
+        content: createImplementationTargetResultReportContentFixture(taskPackage),
       },
     };
     const importedCall = await client.callTool({
@@ -272,10 +267,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(imported.result.demandId, fixture.intent.demandId);
     equal(imported.result.targetDeliveryId, fixture.intent.targetDeliveryId);
     equal(imported.result.hostEffect.actionId, issued.claim.claimId);
-    equal(
-      imported.result.hostEffect.observationDigest,
-      outcome.observation.observationDigest,
-    );
+    equal(imported.result.hostEffect.observationDigest, outcome.observation.observationDigest);
     equal(imported.result.report.outcome, "completed");
     equal(existsSync(claimPath), false);
     equal(textContent(importedCall).includes(fixture.workspacePath), false);
@@ -302,11 +294,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
       arguments: resultRequest,
     });
-    equal(
-      replayedResultCall.isError,
-      undefined,
-      textContent(replayedResultCall),
-    );
+    equal(replayedResultCall.isError, undefined, textContent(replayedResultCall));
     const replayedResult = replayedResultCall.structuredContent as {
       readonly status: string;
       readonly result: { readonly resultDigest: string };
@@ -339,10 +327,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       };
     };
     equal(inspection.reviewUnit.workType, "implementation");
-    equal(
-      inspection.reviewUnit.targetResult.resultDigest,
-      imported.result.resultDigest,
-    );
+    equal(inspection.reviewUnit.targetResult.resultDigest, imported.result.resultDigest);
     equal(Object.hasOwn(inspection, "decision"), false);
     equal(textContent(inspectionCall).includes(fixture.workspacePath), false);
 
@@ -402,11 +387,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       name: WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
       arguments: decisionRequest,
     });
-    equal(
-      replayedDecisionCall.isError,
-      undefined,
-      textContent(replayedDecisionCall),
-    );
+    equal(replayedDecisionCall.isError, undefined, textContent(replayedDecisionCall));
     const replayedDecision = replayedDecisionCall.structuredContent as {
       readonly status: string;
       readonly decision: { readonly targetReviewDecisionId: string };
@@ -427,11 +408,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
         demandId: fixture.intent.demandId,
       },
     });
-    equal(
-      completionPreviewCall.isError,
-      undefined,
-      textContent(completionPreviewCall),
-    );
+    equal(completionPreviewCall.isError, undefined, textContent(completionPreviewCall));
     const completionPreview = completionPreviewCall.structuredContent as {
       readonly mode: string;
       readonly status: string;
@@ -443,14 +420,8 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(completionPreview.mode, "preview");
     equal(completionPreview.status, "ready");
     equal(completionPreview.plan.demandId, fixture.intent.demandId);
-    equal(
-      textContent(completionPreviewCall).includes(fixture.workspacePath),
-      false,
-    );
-    equal(
-      textContent(completionPreviewCall).includes(fixture.rawHandle),
-      false,
-    );
+    equal(textContent(completionPreviewCall).includes(fixture.workspacePath), false);
+    equal(textContent(completionPreviewCall).includes(fixture.rawHandle), false);
 
     const completionApplyRequest = {
       root: fixture.workspacePath,
@@ -505,11 +476,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       name: WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
       arguments: completionApplyRequest,
     });
-    equal(
-      replayedCompletionCall.isError,
-      undefined,
-      textContent(replayedCompletionCall),
-    );
+    equal(replayedCompletionCall.isError, undefined, textContent(replayedCompletionCall));
     const replayedCompletion = replayedCompletionCall.structuredContent as {
       readonly status: string;
       readonly disposition: string;

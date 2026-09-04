@@ -41,20 +41,10 @@
       "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
     },
     "demandType": {
-      "enum": [
-        "requirement",
-        "bug",
-        "supplement",
-        "research"
-      ]
+      "enum": ["requirement", "bug", "supplement", "research"]
     },
     "priority": {
-      "enum": [
-        "P0",
-        "P1",
-        "P2",
-        "P3"
-      ]
+      "enum": ["P0", "P1", "P2", "P3"]
     },
     "originWindowId": {
       "$ref": "#/$defs/windowId"
@@ -112,9 +102,7 @@
     "readyReadiness": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status"
-      ],
+      "required": ["status"],
       "properties": {
         "status": {
           "const": "ready"
@@ -124,10 +112,7 @@
     "parkedReadiness": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "trigger"
-      ],
+      "required": ["status", "trigger"],
       "properties": {
         "status": {
           "const": "parked"
@@ -143,18 +128,10 @@
     "testingDecision": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "mode",
-        "summary",
-        "environmentMemberRef"
-      ],
+      "required": ["mode", "summary", "environmentMemberRef"],
       "properties": {
         "mode": {
-          "enum": [
-            "controller-only",
-            "real-environment",
-            "not-applicable"
-          ]
+          "enum": ["controller-only", "real-environment", "not-applicable"]
         },
         "summary": {
           "type": "string",

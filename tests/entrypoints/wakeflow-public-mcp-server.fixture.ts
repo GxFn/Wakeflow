@@ -1,34 +1,21 @@
 import type { TestContext } from "node:test";
 
-import {
-  Client,
-  InMemoryTransport,
-  type CallToolResult,
-} from "@modelcontextprotocol/client";
+import { Client, InMemoryTransport, type CallToolResult } from "@modelcontextprotocol/client";
 
 import { createWakeflowPublicMcpServer } from "../../src/entrypoints/wakeflow-public-mcp-server.js";
 
 type WakeflowPublicMcpServer = ReturnType<typeof createWakeflowPublicMcpServer>;
-type WakeflowPublicMcpServerOptions = Parameters<
-  typeof createWakeflowPublicMcpServer
->[0];
-type WakeflowMcpExecutorSet = Omit<
-  WakeflowPublicMcpServerOptions,
-  "serverName" | "serverVersion"
->;
+type WakeflowPublicMcpServerOptions = Parameters<typeof createWakeflowPublicMcpServer>[0];
+type WakeflowMcpExecutorSet = Omit<WakeflowPublicMcpServerOptions, "serverName" | "serverVersion">;
 
-export type WakeflowMcpExecutorOverrides = Readonly<
-  Partial<WakeflowMcpExecutorSet>
->;
+export type WakeflowMcpExecutorOverrides = Readonly<Partial<WakeflowMcpExecutorSet>>;
 
 export interface ConnectedWakeflowMcpTestClient {
   readonly client: Client;
   readonly close: () => Promise<void>;
 }
 
-function unexpectedMcpExecutor(
-  capability: keyof WakeflowMcpExecutorSet,
-): never {
+function unexpectedMcpExecutor(capability: keyof WakeflowMcpExecutorSet): never {
   throw new Error(`${capability} executor was not expected in this test.`);
 }
 
@@ -41,41 +28,32 @@ function defaultMcpExecutors(): WakeflowMcpExecutorSet {
   return {
     authorizeProductDefectRemediation: async () =>
       unexpectedMcpExecutor("authorizeProductDefectRemediation"),
-    claimTargetHostEffect: async () =>
-      unexpectedMcpExecutor("claimTargetHostEffect"),
+    claimTargetHostEffect: async () => unexpectedMcpExecutor("claimTargetHostEffect"),
     completeDemand: async () => unexpectedMcpExecutor("completeDemand"),
     createDemand: async () => unexpectedMcpExecutor("createDemand"),
-    recordManagedEvidence: async () =>
-      unexpectedMcpExecutor("recordManagedEvidence"),
-    publishConfirmation: async () =>
-      unexpectedMcpExecutor("publishConfirmation"),
-    publishRequirement: async () =>
-      unexpectedMcpExecutor("publishRequirement"),
+    recordManagedEvidence: async () => unexpectedMcpExecutor("recordManagedEvidence"),
+    publishConfirmation: async () => unexpectedMcpExecutor("publishConfirmation"),
+    publishRequirement: async () => unexpectedMcpExecutor("publishRequirement"),
     executeMaintenance: async () => unexpectedMcpExecutor("executeMaintenance"),
     importTargetResult: async () => unexpectedMcpExecutor("importTargetResult"),
     inspectDemandRoute: async () => unexpectedMcpExecutor("inspectDemandRoute"),
-    inspectTargetResultReview: async () =>
-      unexpectedMcpExecutor("inspectTargetResultReview"),
+    inspectTargetResultReview: async () => unexpectedMcpExecutor("inspectTargetResultReview"),
     inspectTodo: async () => unexpectedMcpExecutor("inspectTodo"),
     intakeTodo: async () => unexpectedMcpExecutor("intakeTodo"),
     planTargetTask: async () => unexpectedMcpExecutor("planTargetTask"),
     planTestCard: async () => unexpectedMcpExecutor("planTestCard"),
     prepareImplementationDelivery: async () =>
       unexpectedMcpExecutor("prepareImplementationDelivery"),
-    prepareTestDelivery: async () =>
-      unexpectedMcpExecutor("prepareTestDelivery"),
-    rearmTargetHostEffect: async () =>
-      unexpectedMcpExecutor("rearmTargetHostEffect"),
+    prepareTestDelivery: async () => unexpectedMcpExecutor("prepareTestDelivery"),
+    rearmTargetHostEffect: async () => unexpectedMcpExecutor("rearmTargetHostEffect"),
     recordControllerImplementationReviewDecision: async () =>
       unexpectedMcpExecutor("recordControllerImplementationReviewDecision"),
     recordControllerTestReviewDecision: async () =>
       unexpectedMcpExecutor("recordControllerTestReviewDecision"),
     recordTargetHostEffectOutcome: async () =>
       unexpectedMcpExecutor("recordTargetHostEffectOutcome"),
-    registerWindowHostBinding: async () =>
-      unexpectedMcpExecutor("registerWindowHostBinding"),
-    resumeTargetResultReview: async () =>
-      unexpectedMcpExecutor("resumeTargetResultReview"),
+    registerWindowHostBinding: async () => unexpectedMcpExecutor("registerWindowHostBinding"),
+    resumeTargetResultReview: async () => unexpectedMcpExecutor("resumeTargetResultReview"),
   };
 }
 
@@ -87,8 +65,7 @@ export async function connectWakeflowMcpServerForTest(
     name: "wakeflow-mcp-focused-client",
     version: "1.0.0-test",
   });
-  const [clientTransport, serverTransport] =
-    InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const close = async (): Promise<void> => {
     await Promise.allSettled([client.close(), server.close()]);
   };

@@ -7,15 +7,7 @@
   "$comment": "The stored Claim Event derives work type, target, route, Host observation, and Test lineage. Raw attempt/readback evidence is bounded and digested by the Wakeflow owner, then discarded instead of entering the event stream or result.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "root",
-    "demandId",
-    "actionId",
-    "claimDigest",
-    "attempt",
-    "readback",
-    "observedAt"
-  ],
+  "required": ["root", "demandId", "actionId", "claimDigest", "attempt", "readback", "observedAt"],
   "properties": {
     "root": {
       "$ref": "#/$defs/workspaceRoot"

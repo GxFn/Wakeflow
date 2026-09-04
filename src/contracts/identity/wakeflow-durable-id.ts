@@ -25,8 +25,7 @@ import {
 export { WAKEFLOW_DURABLE_ID_KINDS };
 export type { WakeflowDurableIdKind };
 
-const WAKEFLOW_DURABLE_ID_KIND_SET: ReadonlySet<string> =
-  new Set(WAKEFLOW_DURABLE_ID_KINDS);
+const WAKEFLOW_DURABLE_ID_KIND_SET: ReadonlySet<string> = new Set(WAKEFLOW_DURABLE_ID_KINDS);
 
 declare const WAKEFLOW_DURABLE_ID_BRAND: unique symbol;
 
@@ -36,11 +35,10 @@ declare const WAKEFLOW_DURABLE_ID_BRAND: unique symbol;
  * 泛型参数保留标识类别；例如 Program ID 不能赋给 Window ID。模板字符串类型让
  * 编辑器保留可读的 `<kind>_<uuid>` 外形，品牌类型阻止普通字符串绕过解析。
  */
-export type WakeflowDurableId<
-  K extends WakeflowDurableIdKind = WakeflowDurableIdKind,
-> = `${K}_${string}` & {
-  readonly [WAKEFLOW_DURABLE_ID_BRAND]: K;
-};
+export type WakeflowDurableId<K extends WakeflowDurableIdKind = WakeflowDurableIdKind> =
+  `${K}_${string}` & {
+    readonly [WAKEFLOW_DURABLE_ID_BRAND]: K;
+  };
 
 /**
  * 一个持久身份的冻结词法事实。
@@ -48,15 +46,14 @@ export type WakeflowDurableId<
  * 条件类型把类别联合分配为判别联合；检查 `kind` 后，`value` 会同步收窄为
  * 对应的 WakeflowDurableId，而 uuid 始终保留底层 UuidV4 品牌。
  */
-export type ParsedWakeflowDurableId<
-  K extends WakeflowDurableIdKind = WakeflowDurableIdKind,
-> = K extends WakeflowDurableIdKind
-  ? Readonly<{
-      kind: K;
-      uuid: UuidV4;
-      value: WakeflowDurableId<K>;
-    }>
-  : never;
+export type ParsedWakeflowDurableId<K extends WakeflowDurableIdKind = WakeflowDurableIdKind> =
+  K extends WakeflowDurableIdKind
+    ? Readonly<{
+        kind: K;
+        uuid: UuidV4;
+        value: WakeflowDurableId<K>;
+      }>
+    : never;
 
 /** Wakeflow 持久身份失败的稳定分类。 */
 export type WakeflowDurableIdErrorReason =
@@ -66,7 +63,7 @@ export type WakeflowDurableIdErrorReason =
   | "kind-mismatch";
 
 const ERROR_MESSAGES = {
-  "format": "Wakeflow durable ID must match <known kind>_<canonical lowercase UUID v4>.",
+  format: "Wakeflow durable ID must match <known kind>_<canonical lowercase UUID v4>.",
   "kind-unknown": "Wakeflow durable ID kind is not part of the closed durable identity vocabulary.",
   "uuid-format": "Wakeflow durable ID contains an invalid UUID v4 component.",
   "kind-mismatch": "Wakeflow durable ID kind does not match the expected kind.",
@@ -95,24 +92,15 @@ function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
 }
 
-function fail(
-  reason: WakeflowDurableIdErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowDurableIdErrorReason, path: string): never {
   throw new WakeflowDurableIdError(reason, path);
 }
 
-function isWakeflowDurableIdKind(
-  value: unknown,
-): value is WakeflowDurableIdKind {
-  return typeof value === "string"
-    && WAKEFLOW_DURABLE_ID_KIND_SET.has(value);
+function isWakeflowDurableIdKind(value: unknown): value is WakeflowDurableIdKind {
+  return typeof value === "string" && WAKEFLOW_DURABLE_ID_KIND_SET.has(value);
 }
 
-function parseWakeflowDurableIdKind(
-  value: unknown,
-  path: string,
-): WakeflowDurableIdKind {
+function parseWakeflowDurableIdKind(value: unknown, path: string): WakeflowDurableIdKind {
   if (!isWakeflowDurableIdKind(value)) fail("kind-unknown", path);
   return value;
 }
@@ -126,24 +114,15 @@ function parseUuidComponent(value: unknown, path: string): UuidV4 {
   }
 }
 
-function parseDurableId(
-  value: unknown,
-  path: string,
-): ParsedWakeflowDurableId {
+function parseDurableId(value: unknown, path: string): ParsedWakeflowDurableId {
   if (typeof value !== "string") fail("format", path);
 
   const separatorIndex = value.indexOf("_");
-  if (
-    separatorIndex <= 0
-    || separatorIndex !== value.lastIndexOf("_")
-  ) {
+  if (separatorIndex <= 0 || separatorIndex !== value.lastIndexOf("_")) {
     fail("format", path);
   }
 
-  const kind = parseWakeflowDurableIdKind(
-    value.slice(0, separatorIndex),
-    path,
-  );
+  const kind = parseWakeflowDurableIdKind(value.slice(0, separatorIndex), path);
   const uuid = parseUuidComponent(value.slice(separatorIndex + 1), path);
   const typedValue = value as WakeflowDurableId<typeof kind>;
 
@@ -162,16 +141,12 @@ function parseDurableId(
  * 确定性调用应显式传入已经由 `createUuidV4` 或 `parseUuidV4` 授予品牌类型的
  * `UuidV4`，本层不重复暴露 UUID 工厂。
  */
-export function createWakeflowDurableId<
-  K extends WakeflowDurableIdKind,
->(
+export function createWakeflowDurableId<K extends WakeflowDurableIdKind>(
   kind: K,
   uuid?: UuidV4,
 ): WakeflowDurableId<K> {
   const admittedKind = parseWakeflowDurableIdKind(kind, "$kind");
-  const admittedUuid = uuid === undefined
-    ? createUuidV4()
-    : parseUuidComponent(uuid, "$uuid");
+  const admittedUuid = uuid === undefined ? createUuidV4() : parseUuidComponent(uuid, "$uuid");
 
   return `${admittedKind}_${admittedUuid}` as WakeflowDurableId<K>;
 }
@@ -195,18 +170,13 @@ export function parseWakeflowDurableId(
  * 这是记录解析器最常用的入口；`kind` 不一致时不会返回宽泛 ID，也不查找
  * 目标实体是否存在。
  */
-export function parseWakeflowDurableIdOfKind<
-  K extends WakeflowDurableIdKind,
->(
+export function parseWakeflowDurableIdOfKind<K extends WakeflowDurableIdKind>(
   value: unknown,
   expectedKind: K,
   errorPath?: string,
 ): WakeflowDurableId<K> {
   const path = normalizeErrorPath(errorPath);
-  const admittedExpectedKind = parseWakeflowDurableIdKind(
-    expectedKind,
-    "$expectedKind",
-  );
+  const admittedExpectedKind = parseWakeflowDurableIdKind(expectedKind, "$expectedKind");
   const parsed = parseDurableId(value, path);
   if (parsed.kind !== admittedExpectedKind) fail("kind-mismatch", path);
 

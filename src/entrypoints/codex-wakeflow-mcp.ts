@@ -58,8 +58,6 @@ export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
 }
 
 /** 通过官方 stdio transport 运行 Codex MCP composition root。 */
-export function runCodexWakeflowMcpStdio(
-  serverVersion: string,
-): StdioServerHandle {
+export function runCodexWakeflowMcpStdio(serverVersion: string): StdioServerHandle {
   return runWakeflowMcpStdio(() => createCodexWakeflowMcpServer(serverVersion));
 }

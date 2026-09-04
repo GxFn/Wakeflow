@@ -41,18 +41,15 @@ import { fail, isWakeflowError } from "../error.js";
  * 都不再重放整条流。索引损坏或落后时，消费者回退到全量读取并重建；索引从不是权威。
  */
 
-export const STREAM_INDEX_ARTIFACT_KIND = "wakeflow-event-stream-index" as const;
-export const STREAM_INDEX_SCHEMA_VERSION = 1 as const;
-export const STREAM_INDEX_MAXIMUM_BYTES = parseByteCount(
-  8 * 1024 * 1024,
-  "$streamIndex.maximumBytes",
-);
-export const STREAM_INDEX_MAXIMUM_FILES = 10_000;
+const STREAM_INDEX_ARTIFACT_KIND = "wakeflow-event-stream-index" as const;
+const STREAM_INDEX_SCHEMA_VERSION = 1 as const;
+const STREAM_INDEX_MAXIMUM_BYTES = parseByteCount(8 * 1024 * 1024, "$streamIndex.maximumBytes");
+const STREAM_INDEX_MAXIMUM_FILES = 10_000;
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const FILE_NAME_PATTERN = /^(?<sequence>[0-9]{16})\.json$/u;
 
-export interface StreamIndexEvent {
+interface StreamIndexEvent {
   readonly sequence: number;
   readonly revision: number;
   readonly type: string;
@@ -78,7 +75,7 @@ export interface StreamIndex {
   readonly keys: Readonly<Record<string, number>>;
 }
 
-export interface IndexableCommitEvent {
+interface IndexableCommitEvent {
   readonly eventId: string;
   readonly streamRevision: number;
   readonly eventType: string;
@@ -153,8 +150,7 @@ export function advanceStreamIndex(
   }
   if (
     commit.idempotencyKey !== undefined &&
-    (!isNonEmptyToken(commit.idempotencyKey) ||
-      Object.hasOwn(index.keys, commit.idempotencyKey))
+    (!isNonEmptyToken(commit.idempotencyKey) || Object.hasOwn(index.keys, commit.idempotencyKey))
   ) {
     fail("precondition-failed", "idempotency-key-conflict", "$commit.idempotencyKey");
   }
@@ -221,9 +217,15 @@ function record(value: JsonValue, path: string): JsonObject {
   return value as JsonObject;
 }
 
-/** 严格解析一份索引文档；任何形状或一致性问题都以 `invalid-request` 失败。 */
-export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
-  const root = record(value, "$");
+interface ParsedIndexHeader {
+  readonly streamId: string;
+  readonly commitSequence: number;
+  readonly streamRevision: number;
+  readonly lastCommitDigest: string | null;
+  readonly totalCommitBytes: number;
+}
+
+function parseIndexHeader(root: JsonObject): ParsedIndexHeader {
   if (
     root.artifactKind !== STREAM_INDEX_ARTIFACT_KIND ||
     root.schemaVersion !== STREAM_INDEX_SCHEMA_VERSION ||
@@ -236,13 +238,22 @@ export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
   ) {
     fail("invalid-request", "index-shape", "$");
   }
-  const commits = record(root.commits ?? null, "$.commits");
-  const digests = record(root.digests ?? null, "$.digests");
-  const events = record(root.events ?? null, "$.events");
-  const byType = record(root.byType ?? null, "$.byType");
-  const keys = record(root.keys ?? null, "$.keys");
+  return {
+    streamId: root.streamId,
+    commitSequence: root.commitSequence,
+    streamRevision: root.streamRevision,
+    lastCommitDigest: root.lastCommitDigest,
+    totalCommitBytes: root.totalCommitBytes,
+  };
+}
+
+function parseIndexCommits(
+  header: ParsedIndexHeader,
+  commits: JsonObject,
+  digests: JsonObject,
+): Set<number> {
   const commitEntries = Object.entries(commits);
-  if (commitEntries.length !== root.commitSequence) {
+  if (commitEntries.length !== header.commitSequence) {
     fail("invalid-request", "index-shape", "$.commits");
   }
   const sequences = new Set<number>();
@@ -251,7 +262,7 @@ export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
       !isNonEmptyToken(commitId) ||
       !isSequence(sequence) ||
       sequence < 1 ||
-      sequence > root.commitSequence ||
+      sequence > header.commitSequence ||
       sequences.has(sequence) ||
       !isDigest(digests[String(sequence)])
     ) {
@@ -259,15 +270,23 @@ export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
     }
     sequences.add(sequence);
   }
-  if (Object.keys(digests).length !== root.commitSequence) {
+  if (Object.keys(digests).length !== header.commitSequence) {
     fail("invalid-request", "index-shape", "$.digests");
   }
   if (
-    root.commitSequence > 0 &&
-    digests[String(root.commitSequence)] !== root.lastCommitDigest
+    header.commitSequence > 0 &&
+    digests[String(header.commitSequence)] !== header.lastCommitDigest
   ) {
     fail("invalid-request", "index-shape", "$.lastCommitDigest");
   }
+  return sequences;
+}
+
+function parseIndexEvents(
+  header: ParsedIndexHeader,
+  events: JsonObject,
+  sequences: ReadonlySet<number>,
+): Record<string, StreamIndexEvent> {
   const parsedEvents: Record<string, StreamIndexEvent> = {};
   const revisions = new Set<number>();
   for (const [eventId, entry] of Object.entries(events)) {
@@ -278,7 +297,7 @@ export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
       !sequences.has(located.sequence) ||
       !isSequence(located.revision) ||
       located.revision < 1 ||
-      located.revision > root.streamRevision ||
+      located.revision > header.streamRevision ||
       revisions.has(located.revision) ||
       !isNonEmptyToken(located.type) ||
       Object.keys(located).length !== 3
@@ -292,9 +311,13 @@ export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
       type: located.type,
     });
   }
-  if (revisions.size !== root.streamRevision) {
+  if (revisions.size !== header.streamRevision) {
     fail("invalid-request", "index-shape", "$.streamRevision");
   }
+  return parsedEvents;
+}
+
+function parseIndexKeys(keys: JsonObject, sequences: ReadonlySet<number>): Record<string, number> {
   const parsedKeys: Record<string, number> = {};
   for (const [key, sequence] of Object.entries(keys)) {
     if (!isNonEmptyToken(key) || !isSequence(sequence) || !sequences.has(sequence)) {
@@ -302,6 +325,13 @@ export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
     }
     parsedKeys[key] = sequence;
   }
+  return parsedKeys;
+}
+
+function parseIndexByType(
+  byType: JsonObject,
+  sequences: ReadonlySet<number>,
+): Record<string, readonly number[]> {
   const parsedByType: Record<string, readonly number[]> = {};
   for (const [type, list] of Object.entries(byType)) {
     if (!isNonEmptyToken(type) || !Array.isArray(list) || list.length === 0) {
@@ -316,14 +346,27 @@ export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
     }
     parsedByType[type] = Object.freeze([...(list as number[])]);
   }
+  return parsedByType;
+}
+
+/** 严格解析一份索引文档；任何形状或一致性问题都以 `invalid-request` 失败。 */
+export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
+  const root = record(value, "$");
+  const header = parseIndexHeader(root);
+  const commits = record(root.commits ?? null, "$.commits");
+  const digests = record(root.digests ?? null, "$.digests");
+  const sequences = parseIndexCommits(header, commits, digests);
+  const parsedEvents = parseIndexEvents(header, record(root.events ?? null, "$.events"), sequences);
+  const parsedKeys = parseIndexKeys(record(root.keys ?? null, "$.keys"), sequences);
+  const parsedByType = parseIndexByType(record(root.byType ?? null, "$.byType"), sequences);
   return Object.freeze({
     artifactKind: STREAM_INDEX_ARTIFACT_KIND,
     schemaVersion: STREAM_INDEX_SCHEMA_VERSION,
-    streamId: root.streamId,
-    commitSequence: root.commitSequence,
-    streamRevision: root.streamRevision,
-    lastCommitDigest: root.lastCommitDigest,
-    totalCommitBytes: root.totalCommitBytes,
+    streamId: header.streamId,
+    commitSequence: header.commitSequence,
+    streamRevision: header.streamRevision,
+    lastCommitDigest: header.lastCommitDigest,
+    totalCommitBytes: header.totalCommitBytes,
     commits: Object.freeze({ ...(commits as Record<string, number>) }),
     digests: Object.freeze({ ...(digests as Record<string, string>) }),
     events: Object.freeze(parsedEvents),
@@ -336,7 +379,7 @@ export function renderStreamIndex(index: Readonly<StreamIndex>): string {
   return renderDeterministicJsonDocument(index as unknown as JsonValue);
 }
 
-export function streamIndexFileName(sequence: number): string {
+function streamIndexFileName(sequence: number): string {
   if (!isSequence(sequence)) fail("invalid-request", "index-sequence", "$sequence");
   return `${String(sequence).padStart(16, "0")}.json`;
 }
@@ -359,7 +402,7 @@ async function listIndexFiles(
   directoryRef: PortableResourcePath,
   signal: AbortSignal | undefined,
 ): Promise<readonly IndexFileEntry[] | null> {
-  let read;
+  let read: Awaited<ReturnType<typeof readStableResourceDirectory>>;
   try {
     read = await readStableResourceDirectory(root, directoryRef, {
       maximumEntries: STREAM_INDEX_MAXIMUM_FILES,
@@ -374,7 +417,11 @@ async function listIndexFiles(
     const match = FILE_NAME_PATTERN.exec(entry.name);
     const sequence = match?.groups?.sequence;
     if (sequence === undefined || entry.node.kind !== "file") continue;
-    entries.push({ sequence: Number(sequence), resourcePath: entry.resourcePath, node: entry.node });
+    entries.push({
+      sequence: Number(sequence),
+      resourcePath: entry.resourcePath,
+      node: entry.node,
+    });
   }
   entries.sort((left, right) => right.sequence - left.sequence);
   return entries;

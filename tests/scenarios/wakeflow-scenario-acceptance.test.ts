@@ -74,10 +74,7 @@ async function call(
   return result;
 }
 
-function assertNoPrivatePath(
-  context: ScenarioContext,
-  result: CallToolResult,
-): void {
+function assertNoPrivatePath(context: ScenarioContext, result: CallToolResult): void {
   equal(
     JSON.stringify(result.structuredContent).includes(context.workspace.fixtureRoot),
     false,
@@ -122,9 +119,7 @@ async function scenarioFreshInitialize(context: ScenarioContext): Promise<string
   const config = parseWakeflowConfigV3(
     JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")),
   );
-  const design = config.topology.supportSurfaces.find(
-    (surface) => surface.capability === "design",
-  );
+  const design = config.topology.supportSurfaces.find((surface) => surface.capability === "design");
   const designWindow = config.topology.windows.find((w) => w.role === "design");
   const productWindow = config.topology.windows.find((w) => w.role === "product");
   const repository = config.topology.repositories[0];
@@ -146,11 +141,9 @@ async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
   }
   mkdirSync(path.join(context.designPath, "authority"), { recursive: true });
   for (const document of REQUIREMENT_DOCUMENTS) {
-    writeFileSync(
-      path.join(context.designPath, document.path),
-      `# ${document.role}\n`,
-      { mode: 0o644 },
-    );
+    writeFileSync(path.join(context.designPath, document.path), `# ${document.role}\n`, {
+      mode: 0o644,
+    });
   }
   const requirementPreview = await call(
     context,
@@ -183,64 +176,56 @@ async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
     (reference) => reference.memberRef,
   );
 
-  const intakePreview = await call(
-    context,
-    WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
-    {
-      root,
-      mode: "preview",
-      intake: {
-        demandType: "requirement",
-        priority: "P1",
-        originWindowId: context.designWindowId,
-        summary: "Implement the scenario acceptance requirement",
-        intakeRationale: "The confirmed requirement is ready for Demand publication.",
-        readiness: { status: "ready" },
-        autoClaim: false,
-        testingDecision: {
-          mode: "controller-only",
-          summary: "Controller validates focused implementation checks.",
-        },
-        authorityMembers: requirement.publication.memberReferences.map(
-          (reference) => ({
-            recordId: reference.recordId,
-            memberPath: reference.memberPath,
-          }),
-        ),
+  const intakePreview = await call(context, WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    intake: {
+      demandType: "requirement",
+      priority: "P1",
+      originWindowId: context.designWindowId,
+      summary: "Implement the scenario acceptance requirement",
+      intakeRationale: "The confirmed requirement is ready for Demand publication.",
+      readiness: { status: "ready" },
+      autoClaim: false,
+      testingDecision: {
+        mode: "controller-only",
+        summary: "Controller validates focused implementation checks.",
       },
+      authorityMembers: requirement.publication.memberReferences.map((reference) => ({
+        recordId: reference.recordId,
+        memberPath: reference.memberPath,
+      })),
     },
-  );
+  });
   const intakePlan = intakePreview.structuredContent as PreviewPlan;
-  const intakeApplied = await call(
-    context,
-    WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
-    { root, mode: "apply", plan: intakePlan.plan, planDigest: intakePlan.planDigest },
-  );
+  const intakeApplied = await call(context, WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    plan: intakePlan.plan,
+    planDigest: intakePlan.planDigest,
+  });
   const intake = intakeApplied.structuredContent as {
     readonly publication: { readonly todoId: string };
   };
 
-  const demandPreview = await call(
-    context,
-    WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
-    {
-      root,
-      mode: "preview",
-      todoId: intake.publication.todoId,
-      demand: {
-        title: "Scenario acceptance demand",
-        goal: "Implement the confirmed requirement through the new TS chain.",
-        completionDefinition: "The confirmed implementation and focused checks are accepted.",
-        executionPlacement: { mode: "main" },
-      },
+  const demandPreview = await call(context, WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    todoId: intake.publication.todoId,
+    demand: {
+      title: "Scenario acceptance demand",
+      goal: "Implement the confirmed requirement through the new TS chain.",
+      completionDefinition: "The confirmed implementation and focused checks are accepted.",
+      executionPlacement: { mode: "main" },
     },
-  );
+  });
   const demandPlan = demandPreview.structuredContent as PreviewPlan;
-  const demandApplied = await call(
-    context,
-    WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
-    { root, mode: "apply", plan: demandPlan.plan, planDigest: demandPlan.planDigest },
-  );
+  const demandApplied = await call(context, WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    plan: demandPlan.plan,
+    planDigest: demandPlan.planDigest,
+  });
   assertNoPrivatePath(context, demandApplied);
   const demand = demandApplied.structuredContent as {
     readonly publication: { readonly demandId: string };
@@ -254,11 +239,10 @@ async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
 }
 
 async function routeFrontiers(context: ScenarioContext) {
-  const routeCall = await call(
-    context,
-    WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
-    { root: context.workspace.workspacePath, demandId: context.demandId },
-  );
+  const routeCall = await call(context, WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+  });
   assertNoPrivatePath(context, routeCall);
   const route = routeCall.structuredContent as {
     readonly route: {
@@ -272,11 +256,14 @@ async function routeFrontiers(context: ScenarioContext) {
   };
 }
 
-async function scenarioPlanImplementationTask(
-  context: ScenarioContext,
-): Promise<string> {
+async function scenarioPlanImplementationTask(context: ScenarioContext): Promise<string> {
   const root = context.workspace.workspacePath;
-  if (!context.demandId || !context.memberRefs || !context.repositoryId || !context.productWindowId) {
+  if (
+    !context.demandId ||
+    !context.memberRefs ||
+    !context.repositoryId ||
+    !context.productWindowId
+  ) {
     throw new Error("scenario ordering: create-demand must run first");
   }
   const demandRoot = path.join(root, ".wakeflow-active", "current");
@@ -301,12 +288,14 @@ async function scenarioPlanImplementationTask(
       },
       completionExpectations: ["聚焦检查通过", "结果按合同回报"],
       commitExpectation: "leave-uncommitted",
-      acceptanceAnchors: [{
-        anchorId: "scenario-slice",
-        claim: "最小切片满足需求设计",
-        probe: "运行聚焦检查",
-        expected: "检查通过且无越界改动",
-      }],
+      acceptanceAnchors: [
+        {
+          anchorId: "scenario-slice",
+          claim: "最小切片满足需求设计",
+          probe: "运行聚焦检查",
+          expected: "检查通过且无越界改动",
+        },
+      ],
     },
   };
   const committed = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, request);
@@ -329,13 +318,12 @@ async function scenarioPlanImplementationTask(
   return `append=${result.status}; replay=${replay.status}; next=${result.next.suggestedTool}`;
 }
 
-const SCENARIO_RUNNERS: Readonly<
-  Record<string, (context: ScenarioContext) => Promise<string>>
-> = Object.freeze({
-  "card-01/fresh-initialize": scenarioFreshInitialize,
-  "card-04/create-demand": scenarioCreateDemand,
-  "card-05/plan-implementation-task": scenarioPlanImplementationTask,
-});
+const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Promise<string>>> =
+  Object.freeze({
+    "card-01/fresh-initialize": scenarioFreshInitialize,
+    "card-04/create-demand": scenarioCreateDemand,
+    "card-05/plan-implementation-task": scenarioPlanImplementationTask,
+  });
 
 test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务并报告结论", async () => {
   const workspace = createScenarioWorkspace();

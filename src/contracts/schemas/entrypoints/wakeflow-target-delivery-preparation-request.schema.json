@@ -178,12 +178,7 @@
     "intentTarget": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "targetTaskId",
-        "taskPackageId",
-        "taskPackageRef",
-        "taskPackageDigest"
-      ],
+      "required": ["targetTaskId", "taskPackageId", "taskPackageRef", "taskPackageDigest"],
       "properties": {
         "targetTaskId": {
           "$ref": "#/$defs/targetTaskId"
@@ -218,12 +213,7 @@
     "rework": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "decision",
-        "previousResult",
-        "rationaleSummary",
-        "requiredCorrections"
-      ],
+      "required": ["decision", "previousResult", "rationaleSummary", "requiredCorrections"],
       "properties": {
         "decision": {
           "$ref": "#/$defs/reviewDecisionReference"

@@ -75,12 +75,7 @@
     "authoredDemand": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "title",
-        "goal",
-        "completionDefinition",
-        "executionPlacement"
-      ],
+      "required": ["title", "goal", "completionDefinition", "executionPlacement"],
       "properties": {
         "title": {
           "$ref": "#/$defs/identityText"

@@ -100,13 +100,11 @@ test("plan_target_task 一次调用追加规划事件并返回 next", async () =
         },
         options,
       ),
-      (error: unknown) =>
-        isWakeflowError(error) && error.code === "privacy-violation",
+      (error: unknown) => isWakeflowError(error) && error.code === "privacy-violation",
     );
     await rejects(
       executeTargetTaskPlanningPublicRequest({ ...request, idempotencyKey: "bad key!" }),
-      (error: unknown) =>
-        isWakeflowError(error) && error.code === "invalid-request",
+      (error: unknown) => isWakeflowError(error) && error.code === "invalid-request",
     );
     equal(await commitCount(fixture.workspacePath, demandId), before + 1);
   } finally {

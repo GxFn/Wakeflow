@@ -2462,3 +2462,26 @@ wakeflow-public-mcp-tool.ts                  145行：Canonical成功结果与�
 - 不做与推迟：codegen 预编译校验器不做——惰性编译后剩余冷启动是 816 个模块的装载时间（导入 320 毫秒中 SDK 61 毫秒），不再是编译；`response_format` 推迟到 L1 有厚结果的读切片，追加型结果本就只含身份、修订、摘要与 `next`；`kernel/idempotency-store` 已在 13.72 说明不需要。
 - 测试：`tests/kernel/tool-registry.test.ts`（准入规则）、`tests/entrypoints/wakeflow-public-mcp-catalog-binding.test.ts`（取代注册组绑定测试：23 个工具按登记表绑定到同名 executor，注册配置不含 outputSchema）；目录测试改为结果 Schema 不上线、体积预算、配置错误原因收敛为 `executor` 加 `field`；运行时 Schema 测试改为编译失败在第一次校验报出。
 - 门：typecheck 通过；架构门 816 模块 ok；全量 `npm test` 通过（1,033 测试，Schema 漂移检查 ok）。L0.5 到此结束，余 L0.6 与推迟的 L0.2。
+
+### 13.74 L0.6：六层方向规则、lint 门与 L0 退出门度量（2026-09-04）
+
+- dependency-cruiser 重写为三节共 18 条：通用 6 条（循环、不可解析、未声明依赖、dev 依赖、运行时不反向依赖测试与旧树、新测试不 import 旧 JS）；六层方向 8 条（foundation 只依赖 foundation；contracts 只依赖 foundation 与 contracts；kernel 只依赖 foundation 与 contracts；切片互不引用；宿主中立运行时不导入 hosts；任何更低层不导入 entrypoints；宿主互不引用；宿主中立运行时的文件系统与进程效果只经 foundation）；过渡 4 条守住旧树内部接缝（configuration 对 workspace、workspace 与 governance 的组合缝、governance 对 workspace 的合同缝），随 L1 删除旧树时一并删除。原 12 条旧规则由这两节取代。
+- lint 与格式：Biome 2.5.12 一套工具。格式统一为两空格、双引号、尾随逗号、100 列，只对新树（kernel、capabilities、entrypoints、contracts、tooling 与对应测试）启用，一次性重排 118 个文件；旧树格式不动、随 L1 删除。lint 用推荐规则集，认知复杂度上限新树 15、tooling 30、测试 45；旧树关闭复杂度、隐式 any let、正则控制字符、非空断言与 import type 四类噪声规则。首轮基线 781 错误（其中旧树隐式 any let 339、复杂度 318、正则控制字符 110）；新树的 27 处逐一修掉：`parseStreamIndex`、`findPrivateText`、命令外壳与效果外壳按职责拆函数，两处切片的 `switch`+`fail` 改为查表（Biome 不做类型推断，把 `never` 返回当作贯穿），`matchAll` 取代赋值表达式循环，显式类型取代隐式 `let`。收尾 0 错误、3 处旧树警告。
+- 未使用代码：knip 6.34.0，入口为两个组合根、四个 tooling 脚本与全部测试；旧树目录先忽略、随 L1 逐目录纳入。新树清出 7 个未使用导出与 10 个只在文件内使用的导出类型（全部改为模块内私有），删除 `openDemandAuditAuthorityContext`、`createDemandEventStreamIndexResourceDeclaration` 与全量前缀版 `assertDemandFileEventAppendAdmission` 三个 L0.3 遗留的无消费者函数。
+- `npm test` 现为：typecheck、架构门、lint、格式检查、knip、TypeScript 测试、Schema 漂移检查；新增脚本 `lint`、`lint:fix`、`format`、`format:check`、`check:unused`。
+- 内核直接测试补齐：`ids`、`next-projection`、`command-shell`、`append-command`、`publication-transaction` 各一份（假规格驱动，不触碰领域代码）；至此内核 11 个模块每个都有直接测试。
+- L0 退出门逐项度量：
+
+| 退出门 | 度量 | 结论 | 未满足时的 owner |
+| --- | --- | --- | --- |
+| 协调器总行数降 40% 以上 | 基线 22 个 8,075 行 → 20 个 7,185 行（降 11%） | 未满足 | L1 各切片删除自己的协调器 |
+| 治理层 catch 行占比低于 5% | `src/governance` 84,925 行中含 `catch` 的 1,522 行，1.8% | 满足 | — |
+| 一次写命令只读一次事件流 | 命令处理器一次加载（快照加尾部）；幂等键查询只读索引；不再全量重放 | 满足 | — |
+| 100 个 commit 下 append 低于 50 毫秒 | 60 commit 均值 56.9 毫秒（fsync 4.5 毫秒一次） | 未满足 | 推迟的 L0.2：foundation 协议 fsync 次数 |
+| 组合根热启动低于 500 毫秒 | 324 到 329 毫秒 | 满足 | — |
+| `tools/list` 低于 60 KB | 119,825 字节，过渡预算 128 KB 已锁 | 未满足 | L1 各切片收敛请求 Schema |
+| lint 门为绿 | Biome lint 0 错误、格式检查通过、knip 无发现 | 满足 | — |
+| foundation 文件数不高于 20 | 63 | 未满足 | 推迟的 L0.2 |
+| kernel 每个模块有直接测试 | 11 个模块 11 份直接测试 | 满足 | — |
+
+- 门：全量 `npm test`（含新加的 lint、格式、knip 三道）通过：typecheck，架构门 821 模块 ok，Biome 0 错误，格式检查通过，knip 无发现，1,044 测试通过，Schema 漂移检查 ok。L0.6 到此结束；L0 余下推迟的 L0.2（foundation 收敛）与三项未满足的退出门按表中 owner 进入 L1 与 L0.2。

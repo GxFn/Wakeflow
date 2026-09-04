@@ -238,6 +238,7 @@ test("Config authority replacement 通过专属锁串行并发writer", async () 
       true,
     );
     equal(
+      // biome-ignore lint/correctness/noUnsafeOptionalChaining: 上一断言已保证 rejected[0] 存在
       (rejected[0]?.reason as WakeflowConfigAuthorityReplacementError).reason,
       "conflict",
     );

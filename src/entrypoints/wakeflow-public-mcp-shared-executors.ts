@@ -24,8 +24,7 @@ import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.j
  * profile 的工具在各自的组合根里绑定 facade。
  */
 export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
-  authorizeProductDefectRemediation:
-    executeControllerProductDefectRemediationPublicRequest,
+  authorizeProductDefectRemediation: executeControllerProductDefectRemediationPublicRequest,
   completeDemand: executeDemandCompletionPublicRequest,
   createDemand: executeDemandPublicationPublicRequest,
   inspectDemandRoute: executeDemandControllerRoutePublicRequest,
@@ -38,8 +37,7 @@ export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
   publishRequirement: executeRequirementPublicationPublicRequest,
   recordControllerImplementationReviewDecision:
     executeControllerImplementationReviewDecisionPublicRequest,
-  recordControllerTestReviewDecision:
-    executeControllerTestReviewDecisionPublicRequest,
+  recordControllerTestReviewDecision: executeControllerTestReviewDecisionPublicRequest,
   recordManagedEvidence: executeManagedEvidencePublicRequest,
   resumeTargetResultReview: executeTargetResultReviewResumePublicRequest,
 }) satisfies Readonly<

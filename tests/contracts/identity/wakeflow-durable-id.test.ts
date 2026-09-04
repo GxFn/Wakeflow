@@ -64,10 +64,7 @@ function asUuidV4(value: unknown): UuidV4 {
 
 test("durable kind vocabulary is runtime frozen and parser-compatible", () => {
   equal(Object.isFrozen(WAKEFLOW_DURABLE_ID_KINDS), true);
-  throws(
-    () => (WAKEFLOW_DURABLE_ID_KINDS as unknown as string[]).push("lease"),
-    TypeError,
-  );
+  throws(() => (WAKEFLOW_DURABLE_ID_KINDS as unknown as string[]).push("lease"), TypeError);
 
   for (const kind of WAKEFLOW_DURABLE_ID_KINDS) {
     const value = createWakeflowDurableId(kind, FIXED_UUID);
@@ -80,10 +77,7 @@ test("durable kind vocabulary is runtime frozen and parser-compatible", () => {
 });
 
 test("creation preserves the exact kind in the branded return type", () => {
-  const programId: WakeflowDurableId<"program"> = createWakeflowDurableId(
-    "program",
-    FIXED_UUID,
-  );
+  const programId: WakeflowDurableId<"program"> = createWakeflowDurableId("program", FIXED_UUID);
   equal(programId, `program_${FIXED_UUID_TEXT}`);
 
   const broadId: WakeflowDurableId = programId;
@@ -121,13 +115,15 @@ test("untyped parsing returns frozen discriminated lexical facts", () => {
 
 test("kind-specific parsing returns the requested branded scalar", () => {
   const value = `requirement_${FIXED_UUID_TEXT}`;
-  const requirementId: WakeflowDurableId<"requirement"> =
-    parseWakeflowDurableIdOfKind(value, "requirement", "$.requirementId");
+  const requirementId: WakeflowDurableId<"requirement"> = parseWakeflowDurableIdOfKind(
+    value,
+    "requirement",
+    "$.requirementId",
+  );
 
   equal(requirementId, value);
   expectWakeflowDurableIdError(
-    () =>
-      parseWakeflowDurableIdOfKind(value, "confirmation", "$.confirmationId"),
+    () => parseWakeflowDurableIdOfKind(value, "confirmation", "$.confirmationId"),
     "kind-mismatch",
     "$.confirmationId",
   );
@@ -186,11 +182,7 @@ test("creation and expected-kind boundaries revalidate runtime values", () => {
   );
   expectWakeflowDurableIdError(
     () =>
-      parseWakeflowDurableIdOfKind(
-        `program_${FIXED_UUID_TEXT}`,
-        asDurableKind("binding"),
-        "$.id",
-      ),
+      parseWakeflowDurableIdOfKind(`program_${FIXED_UUID_TEXT}`, asDurableKind("binding"), "$.id"),
     "kind-unknown",
     "$expectedKind",
   );
@@ -219,10 +211,7 @@ test("default creation composes the official UUIDv4 source", () => {
   equal(parsed.uuid.length, FIXED_UUID_TEXT.length);
 
   const injectedUuid = createUuidV4(() => FIXED_UUID_TEXT);
-  equal(
-    createWakeflowDurableId("archive", injectedUuid),
-    `archive_${FIXED_UUID_TEXT}`,
-  );
+  equal(createWakeflowDurableId("archive", injectedUuid), `archive_${FIXED_UUID_TEXT}`);
 });
 
 test("errors normalize paths and do not disclose rejected identity material", () => {

@@ -83,12 +83,7 @@
     "observedState": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "streamRevision",
-        "stateDigest",
-        "lastEventId",
-        "lastEventDigest"
-      ],
+      "required": ["streamRevision", "stateDigest", "lastEventId", "lastEventDigest"],
       "properties": {
         "streamRevision": {
           "type": "integer",
@@ -108,13 +103,7 @@
     "todoSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "todoId",
-        "intakeRef",
-        "intakeDigest",
-        "stateRevision",
-        "stateDigest"
-      ],
+      "required": ["todoId", "intakeRef", "intakeDigest", "stateRevision", "stateDigest"],
       "properties": {
         "todoId": {
           "$ref": "urn:wakeflow:governance:todo:item-id:v1"

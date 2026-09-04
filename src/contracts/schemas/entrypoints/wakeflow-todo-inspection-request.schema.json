@@ -6,10 +6,7 @@
   "description": "Closed read-only MCP request for listing one bounded TODO page or inspecting one exact TODO item.",
   "$comment": "List filters observation fields only and never asks Wakeflow to select an eligible or next item. Page tokens continue one normalized filter over one exact collection snapshot and provide no mutation authority. Item inspection selects one typed TODO identity.",
   "type": "object",
-  "oneOf": [
-    { "$ref": "#/$defs/listRequest" },
-    { "$ref": "#/$defs/itemRequest" }
-  ],
+  "oneOf": [{ "$ref": "#/$defs/listRequest" }, { "$ref": "#/$defs/itemRequest" }],
   "$defs": {
     "listRequest": {
       "type": "object",

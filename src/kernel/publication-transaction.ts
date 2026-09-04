@@ -1,9 +1,6 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import {
-  runCommandShell,
-  type CommandShellBinding,
-} from "./command-shell.js";
+import { runCommandShell, type CommandShellBinding } from "./command-shell.js";
 import { fail } from "./error.js";
 import type { NextProjection } from "./next-projection.js";
 
@@ -18,7 +15,7 @@ import type { NextProjection } from "./next-projection.js";
  * 因此 preview 不需要为了 apply 而写任何文件。
  */
 
-export type PublicationTransactionMode = "preview" | "apply" | "recover";
+type PublicationTransactionMode = "preview" | "apply" | "recover";
 
 export interface PublicationTransactionEnvelope {
   readonly root: string;
@@ -57,9 +54,7 @@ export type PublicationTransactionPhase<Plan, Outcome> =
 
 export interface PublicationTransactionSpec<Input, Context, Plan, Outcome, Result> {
   readonly tool: string;
-  readonly parseRequest: (
-    value: unknown,
-  ) => Readonly<{
+  readonly parseRequest: (value: unknown) => Readonly<{
     readonly envelope: PublicationTransactionEnvelope;
     readonly input: Input;
   }>;
@@ -126,38 +121,34 @@ export async function runPublicationTransaction<Input, Context, Plan, Outcome, R
     admitEnvelope,
     async (context, binding) => {
       const { envelope, input } = binding;
-      let phase: PublicationTransactionPhase<Plan, Outcome>;
-      if (envelope.mode === "recover") {
-        const operationId = envelope.operationId as string;
-        const outcome = await spec.recover(context, operationId);
-        phase = Object.freeze({ mode: "recover" as const, operationId, outcome });
-      } else {
-        const planned = await spec.plan(context, input);
-        if (envelope.mode === "preview") {
-          phase = Object.freeze({ mode: "preview" as const, planned });
-        } else {
-          if (
-            planned.status !== "ready" ||
-            planned.plan === null ||
-            planned.digest === null
-          ) {
-            fail("precondition-failed", "plan-blocked", "$request.planDigest");
-          }
-          if (planned.digest !== envelope.planDigest) {
-            fail("precondition-failed", "plan-drift", "$request.planDigest");
-          }
-          const outcome = await spec.apply(context, input, planned.plan);
-          phase = Object.freeze({
-            mode: "apply" as const,
-            planned,
-            plan: planned.plan,
-            outcome,
-          });
-        }
-      }
-      const next =
-        spec.next === undefined ? NO_NEXT : await spec.next(context, phase);
+      const phase = await runPhase(spec, context, envelope, input);
+      const next = spec.next === undefined ? NO_NEXT : await spec.next(context, phase);
       return spec.result(envelope, input, phase, next);
     },
   );
+}
+
+async function runPhase<Input, Context, Plan, Outcome, Result>(
+  spec: Readonly<PublicationTransactionSpec<Input, Context, Plan, Outcome, Result>>,
+  context: Context,
+  envelope: Readonly<PublicationTransactionEnvelope>,
+  input: Input,
+): Promise<PublicationTransactionPhase<Plan, Outcome>> {
+  if (envelope.mode === "recover") {
+    const operationId = envelope.operationId as string;
+    const outcome = await spec.recover(context, operationId);
+    return Object.freeze({ mode: "recover" as const, operationId, outcome });
+  }
+  const planned = await spec.plan(context, input);
+  if (envelope.mode === "preview") {
+    return Object.freeze({ mode: "preview" as const, planned });
+  }
+  if (planned.status !== "ready" || planned.plan === null || planned.digest === null) {
+    fail("precondition-failed", "plan-blocked", "$request.planDigest");
+  }
+  if (planned.digest !== envelope.planDigest) {
+    fail("precondition-failed", "plan-drift", "$request.planDigest");
+  }
+  const outcome = await spec.apply(context, input, planned.plan);
+  return Object.freeze({ mode: "apply" as const, planned, plan: planned.plan, outcome });
 }

@@ -33,6 +33,7 @@ function expectCanonicalJsonError(
 
 test("RFC 8785 primitive serialization example is reproduced exactly", () => {
   const value = {
+    // biome-ignore lint/correctness/noPrecisionLoss: RFC 8785 示例数值必须原样书写
     numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27],
     string: "€$\u000f\nA'B\"\\\\\"/",
     literals: [null, true, false],

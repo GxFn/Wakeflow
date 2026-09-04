@@ -46,12 +46,7 @@
       "$ref": "#/$defs/nonEmptyText"
     },
     "demandType": {
-      "enum": [
-        "requirement",
-        "bug",
-        "supplement",
-        "research"
-      ]
+      "enum": ["requirement", "bug", "supplement", "research"]
     },
     "source": {
       "$ref": "urn:wakeflow:governance:todo:intake-lineage:v1"
@@ -85,9 +80,7 @@
     "mainPlacement": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "mode"
-      ],
+      "required": ["mode"],
       "properties": {
         "mode": {
           "const": "main"
@@ -97,10 +90,7 @@
     "isolatedPlacement": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "mode",
-        "authorizationRef"
-      ],
+      "required": ["mode", "authorizationRef"],
       "properties": {
         "mode": {
           "const": "isolated"

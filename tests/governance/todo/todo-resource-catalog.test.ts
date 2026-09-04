@@ -111,8 +111,8 @@ test("TODO static resource catalog closes roots, lock, and projection", () => {
       && entry.tracking.privacy === "runtime-private"),
     true,
   );
-  equal(Number.parseInt("0600", 8), TODO_AUTHORITY_FILE_MODE);
-  equal(Number.parseInt("0700", 8), TODO_AUTHORITY_DIRECTORY_MODE);
+  equal(0o0600, TODO_AUTHORITY_FILE_MODE);
+  equal(0o0700, TODO_AUTHORITY_DIRECTORY_MODE);
 });
 
 test("TODO item resource catalog binds one concrete aggregate without cataloging stages", () => {

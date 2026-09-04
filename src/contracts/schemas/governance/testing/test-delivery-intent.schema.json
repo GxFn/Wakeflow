@@ -126,12 +126,7 @@
     "replacement": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "authorizationOrdinal",
-        "previousDelivery",
-        "rejectedHostEffect"
-      ],
+      "required": ["kind", "authorizationOrdinal", "previousDelivery", "rejectedHostEffect"],
       "properties": {
         "kind": {
           "const": "rejected-before-effect"
@@ -144,11 +139,7 @@
         "previousDelivery": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "targetDeliveryId",
-            "intentDigest",
-            "testDispatchPacketDigest"
-          ],
+          "required": ["targetDeliveryId", "intentDigest", "testDispatchPacketDigest"],
           "properties": {
             "targetDeliveryId": {
               "$ref": "#/$defs/targetDeliveryId"

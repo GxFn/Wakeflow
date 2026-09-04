@@ -24,7 +24,7 @@ test("minimal edit preserves user fields and deduplicates only Wakeflow ownershi
     "\t\"theme\": \"dark\",",
     "\t\"permissions\": {",
     "\t\t\"deny\": [\"Read(./.env)\"],",
-    `\t\t\"allow\": [\"Read(./docs/**)\", \"${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}\", \"${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}\"]`,
+    `\t\t"allow": ["Read(./docs/**)", "${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}", "${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}"]`,
     "\t},",
     "\t\"custom\": { \"preserved\": true }",
     "}",

@@ -1,12 +1,7 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  fail,
-  isWakeflowError,
-  toWakeflowError,
-  WakeflowError,
-} from "../../src/kernel/error.js";
+import { fail, isWakeflowError, toWakeflowError, WakeflowError } from "../../src/kernel/error.js";
 import {
   isWakeflowErrorCode,
   WAKEFLOW_ERROR_CODES,
@@ -37,9 +32,7 @@ test("fail 抛出内核错误，toWakeflowError 把陌生异常包成 unexpected
   throws(
     () => fail("concurrency-conflict", "stream-revision", "$.expectedStreamRevision"),
     (error: unknown) =>
-      isWakeflowError(error) &&
-      error.code === "concurrency-conflict" &&
-      error.retryable === false,
+      isWakeflowError(error) && error.code === "concurrency-conflict" && error.retryable === false,
   );
   const wrapped = toWakeflowError(new Error("/Users/private/path leaked"), "$.request");
   equal(wrapped.code, "unexpected");
@@ -65,10 +58,7 @@ test("WakeflowError details 只接受少量短标识并进入公共细节", () =
   });
   equal(Object.isFrozen(error.details), true);
   equal(new WakeflowError("unexpected", "x", "$", { details: {} }).details, null);
-  equal(
-    Object.hasOwn(new WakeflowError("unexpected", "x").toPublicDetails(), "details"),
-    false,
-  );
+  equal(Object.hasOwn(new WakeflowError("unexpected", "x").toPublicDetails(), "details"), false);
   throws(
     () => new WakeflowError("unexpected", "x", "$", { details: { path: "/Users/someone/x" } }),
     TypeError,
@@ -82,4 +72,3 @@ test("WakeflowError details 只接受少量短标识并进入公共细节", () =
     TypeError,
   );
 });
-

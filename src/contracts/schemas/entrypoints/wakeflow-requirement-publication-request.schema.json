@@ -15,13 +15,7 @@
     "previewRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "title",
-        "designSurfaceId",
-        "documents"
-      ],
+      "required": ["root", "mode", "title", "designSurfaceId", "documents"],
       "properties": {
         "root": { "$ref": "#/$defs/workspaceRoot" },
         "mode": { "const": "preview" },

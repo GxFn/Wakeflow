@@ -32,11 +32,9 @@ const EXTRA_DOCUMENTS = Object.freeze([
 test("公共MCP从Design Ledger到TODO Intake再到Demand Route闭合零到一链", async () => {
   const fixture = await createLedgerAuthorityPublicationFixture();
   for (const document of EXTRA_DOCUMENTS) {
-    writeFileSync(
-      path.join(fixture.designPath, document.path),
-      `# ${document.role}\n`,
-      { mode: 0o644 },
-    );
+    writeFileSync(path.join(fixture.designPath, document.path), `# ${document.role}\n`, {
+      mode: 0o644,
+    });
   }
   await materializeWakeflowActiveLayout(fixture.workspaceRoot, {
     recoveringFreshLayout: false,
@@ -78,11 +76,7 @@ test("公共MCP从Design Ledger到TODO Intake再到Demand Route闭合零到一�
         planDigest: requirementPreview.planDigest,
       },
     });
-    equal(
-      requirementApplyCall.isError,
-      undefined,
-      wakeflowMcpTextContent(requirementApplyCall),
-    );
+    equal(requirementApplyCall.isError, undefined, wakeflowMcpTextContent(requirementApplyCall));
     const requirement = requirementApplyCall.structuredContent as {
       readonly publication: Readonly<{
         readonly memberReferences: readonly Readonly<{
@@ -109,20 +103,14 @@ test("公共MCP从Design Ledger到TODO Intake再到Demand Route闭合零到一�
             mode: "controller-only",
             summary: "Controller validates focused implementation checks.",
           },
-          authorityMembers: requirement.publication.memberReferences.map(
-            (reference) => ({
-              recordId: reference.recordId,
-              memberPath: reference.memberPath,
-            }),
-          ),
+          authorityMembers: requirement.publication.memberReferences.map((reference) => ({
+            recordId: reference.recordId,
+            memberPath: reference.memberPath,
+          })),
         },
       },
     });
-    equal(
-      intakePreviewCall.isError,
-      undefined,
-      wakeflowMcpTextContent(intakePreviewCall),
-    );
+    equal(intakePreviewCall.isError, undefined, wakeflowMcpTextContent(intakePreviewCall));
     const intakePreview = intakePreviewCall.structuredContent as {
       readonly plan: Readonly<Record<string, unknown>>;
       readonly planDigest: string;
@@ -136,11 +124,7 @@ test("公共MCP从Design Ledger到TODO Intake再到Demand Route闭合零到一�
         planDigest: intakePreview.planDigest,
       },
     });
-    equal(
-      intakeApplyCall.isError,
-      undefined,
-      wakeflowMcpTextContent(intakeApplyCall),
-    );
+    equal(intakeApplyCall.isError, undefined, wakeflowMcpTextContent(intakeApplyCall));
     const intake = intakeApplyCall.structuredContent as {
       readonly publication: Readonly<{ readonly todoId: string }>;
     };
@@ -153,11 +137,7 @@ test("公共MCP从Design Ledger到TODO Intake再到Demand Route闭合零到一�
         todoId: intake.publication.todoId,
       },
     });
-    equal(
-      todoInspectionCall.isError,
-      undefined,
-      wakeflowMcpTextContent(todoInspectionCall),
-    );
+    equal(todoInspectionCall.isError, undefined, wakeflowMcpTextContent(todoInspectionCall));
     const inspectedTodo = todoInspectionCall.structuredContent as {
       readonly item: Readonly<{
         readonly intake: Readonly<{
@@ -181,11 +161,7 @@ test("公共MCP从Design Ledger到TODO Intake再到Demand Route闭合零到一�
         },
       },
     });
-    equal(
-      demandPreviewCall.isError,
-      undefined,
-      wakeflowMcpTextContent(demandPreviewCall),
-    );
+    equal(demandPreviewCall.isError, undefined, wakeflowMcpTextContent(demandPreviewCall));
     const demandPreview = demandPreviewCall.structuredContent as {
       readonly plan: Readonly<Record<string, unknown>>;
       readonly planDigest: string;
@@ -199,11 +175,7 @@ test("公共MCP从Design Ledger到TODO Intake再到Demand Route闭合零到一�
         planDigest: demandPreview.planDigest,
       },
     });
-    equal(
-      demandApplyCall.isError,
-      undefined,
-      wakeflowMcpTextContent(demandApplyCall),
-    );
+    equal(demandApplyCall.isError, undefined, wakeflowMcpTextContent(demandApplyCall));
     const demand = demandApplyCall.structuredContent as {
       readonly publication: Readonly<{ readonly demandId: string }>;
     };
@@ -224,9 +196,7 @@ test("公共MCP从Design Ledger到TODO Intake再到Demand Route闭合零到一�
     };
     equal(route.route.disposition, "work-available");
     equal(
-      route.route.frontiers.some(
-        (frontier) => frontier.kind === "implementation-task-planning",
-      ),
+      route.route.frontiers.some((frontier) => frontier.kind === "implementation-task-planning"),
       true,
     );
     const serialized = JSON.stringify({

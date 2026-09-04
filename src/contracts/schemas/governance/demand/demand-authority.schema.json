@@ -54,18 +54,10 @@
     "testingDecision": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "mode",
-        "summary",
-        "environmentMemberRef"
-      ],
+      "required": ["mode", "summary", "environmentMemberRef"],
       "properties": {
         "mode": {
-          "enum": [
-            "controller-only",
-            "real-environment",
-            "not-applicable"
-          ]
+          "enum": ["controller-only", "real-environment", "not-applicable"]
         },
         "summary": {
           "$ref": "#/$defs/nonEmptyText"

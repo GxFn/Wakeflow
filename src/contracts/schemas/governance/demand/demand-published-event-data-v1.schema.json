@@ -6,12 +6,7 @@
   "description": "publication.demand-published persisted event v1 的严格 payload。",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "identityRef",
-    "identityDigest",
-    "authorityRef",
-    "authorityDigest"
-  ],
+  "required": ["identityRef", "identityDigest", "authorityRef", "authorityDigest"],
   "properties": {
     "identityRef": {
       "const": "identity.json"

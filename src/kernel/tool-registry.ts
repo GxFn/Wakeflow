@@ -11,9 +11,9 @@ import { fail } from "./error.js";
  * 本模块不认识 MCP SDK，也不持有任何 executor。
  */
 
-export type WakeflowToolShape = "read" | "append" | "effect";
+type WakeflowToolShape = "read" | "append" | "effect";
 
-export interface WakeflowToolAnnotations {
+interface WakeflowToolAnnotations {
   readonly readOnlyHint: boolean;
   readonly destructiveHint: boolean;
   readonly idempotentHint: boolean;
@@ -49,12 +49,11 @@ export interface WakeflowPublicToolDefinition {
 const TOOL_NAME_PATTERN = /^wakeflow_[a-z][a-z0-9_]{2,62}$/u;
 const SLICE_PATTERN = /^[a-z][a-z0-9-]{0,31}$/u;
 const EXECUTOR_PATTERN = /^[a-z][A-Za-z0-9]{0,63}$/u;
-const SCHEMA_ID_PATTERN =
-  /^urn:wakeflow:entrypoints:([a-z0-9-]+)-(request|result):v1$/u;
+const SCHEMA_ID_PATTERN = /^urn:wakeflow:entrypoints:([a-z0-9-]+)-(request|result):v1$/u;
 const TITLE_MAXIMUM_LENGTH = 80;
 /** ADR-0004：描述压到一到两句工作流描述；边界说明进 server instructions 或技能。 */
 export const WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES = 640;
-export const WAKEFLOW_TOOL_CATALOG_MAXIMUM_TOOLS = 32;
+const WAKEFLOW_TOOL_CATALOG_MAXIMUM_TOOLS = 32;
 
 function schemaStem(
   schema: Readonly<Record<string, unknown>>,
@@ -86,9 +85,7 @@ function assertAnnotationsFitShape(
   }
   const consistent =
     shape === "read"
-      ? annotations.readOnlyHint &&
-        !annotations.destructiveHint &&
-        annotations.idempotentHint
+      ? annotations.readOnlyHint && !annotations.destructiveHint && annotations.idempotentHint
       : shape === "append"
         ? !annotations.readOnlyHint && annotations.idempotentHint
         : !annotations.readOnlyHint;
@@ -124,8 +121,7 @@ export function createWakeflowToolCatalog(
       registration.title.length > TITLE_MAXIMUM_LENGTH ||
       typeof registration.description !== "string" ||
       registration.description.length === 0 ||
-      Buffer.byteLength(registration.description, "utf8") >
-        WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES
+      Buffer.byteLength(registration.description, "utf8") > WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES
     ) {
       fail("unexpected", "tool-catalog-registration", path);
     }
@@ -185,9 +181,7 @@ export function findWakeflowToolRegistration(
 }
 
 /** 公开目录的规范 JSON 字节数，作为 `tools/list` 体积预算的度量基准。 */
-export function measureWakeflowToolCatalogBytes(
-  catalog: Readonly<WakeflowToolCatalog>,
-): number {
+export function measureWakeflowToolCatalogBytes(catalog: Readonly<WakeflowToolCatalog>): number {
   return encodeCanonicalJson(
     parseJsonValue(catalog.tools.map(publicToolDefinition), "$catalog"),
     "$catalog",

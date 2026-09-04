@@ -1,10 +1,7 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  McpServer,
-  type CallToolResult,
-} from "@modelcontextprotocol/server";
+import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 
 import {
   WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS,
@@ -28,10 +25,7 @@ test("登记表把二十三个工具绑定到同名executor，且只公开请求
   server.registerTool = ((
     name: string,
     configuration: Readonly<Record<string, unknown>>,
-    callback: (
-      request: never,
-      context: never,
-    ) => CallToolResult | Promise<CallToolResult>,
+    callback: (request: never, context: never) => CallToolResult | Promise<CallToolResult>,
   ) => {
     captured.set(name, {
       configuration,
@@ -67,9 +61,9 @@ test("登记表把二十三个工具绑定到同名executor，且只公开请求
     const result = await registration.handler(request);
     equal(result.isError, true);
     deepEqual(calls.at(-1), { field: tool.executor, request });
-    const envelope = JSON.parse(
-      (result.content[0] as { readonly text: string }).text,
-    ) as { readonly error: { readonly code: string } };
+    const envelope = JSON.parse((result.content[0] as { readonly text: string }).text) as {
+      readonly error: { readonly code: string };
+    };
     equal(envelope.error.code, "wakeflow-unexpected");
   }
   equal(calls.length, WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length);

@@ -548,8 +548,6 @@ async function assertCollectionRoot(
         entry.name === "global-todo-board.md"
         || entry.name === "collection.lock"
       ) {
-        // Board由Projection observation分类；Lock由exclusive-lock owner准入。
-        continue;
       } else {
         fail("tree-shape", `$todoRoot/${entry.name}`);
       }

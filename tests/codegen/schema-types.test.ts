@@ -1,18 +1,5 @@
-import {
-  deepEqual,
-  equal,
-  match,
-  rejects,
-  throws,
-} from "node:assert/strict";
-import {
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { deepEqual, equal, match, rejects, throws } from "node:assert/strict";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -25,22 +12,14 @@ import {
 } from "../../tooling/codegen/schema-types.js";
 
 const repoRoot = process.cwd();
-const identitySchemaRelativePath =
-  "identity/wakeflow-durable-id-kind.schema.json";
-const identityGeneratedRelativePath =
-  "identity/wakeflow-durable-id-kind.generated.ts";
-const utcInstantSchemaRelativePath =
-  "foundation/utc-instant.schema.json";
-const utcInstantGeneratedRelativePath =
-  "foundation/utc-instant.generated.ts";
-const portableResourcePathSchemaRelativePath =
-  "foundation/portable-resource-path.schema.json";
-const portableResourcePathGeneratedRelativePath =
-  "foundation/portable-resource-path.generated.ts";
-const artifactSchemaRelativePath =
-  "foundation/loaded-artifact-tree-manifest.schema.json";
-const configSchemaRelativePath =
-  "configuration/wakeflow-config-v3.schema.json";
+const identitySchemaRelativePath = "identity/wakeflow-durable-id-kind.schema.json";
+const identityGeneratedRelativePath = "identity/wakeflow-durable-id-kind.generated.ts";
+const utcInstantSchemaRelativePath = "foundation/utc-instant.schema.json";
+const utcInstantGeneratedRelativePath = "foundation/utc-instant.generated.ts";
+const portableResourcePathSchemaRelativePath = "foundation/portable-resource-path.schema.json";
+const portableResourcePathGeneratedRelativePath = "foundation/portable-resource-path.generated.ts";
+const artifactSchemaRelativePath = "foundation/loaded-artifact-tree-manifest.schema.json";
+const configSchemaRelativePath = "configuration/wakeflow-config-v3.schema.json";
 
 function generatedFiles(root: string): readonly string[] {
   const files: string[] = [];
@@ -56,16 +35,8 @@ function generatedFiles(root: string): readonly string[] {
 }
 
 function copyIdentitySchema(fixtureRoot: string): void {
-  const source = path.join(
-    repoRoot,
-    "src/contracts/schemas",
-    identitySchemaRelativePath,
-  );
-  const destination = path.join(
-    fixtureRoot,
-    "src/contracts/schemas",
-    identitySchemaRelativePath,
-  );
+  const source = path.join(repoRoot, "src/contracts/schemas", identitySchemaRelativePath);
+  const destination = path.join(fixtureRoot, "src/contracts/schemas", identitySchemaRelativePath);
   mkdirSync(path.dirname(destination), { recursive: true });
   writeFileSync(destination, readFileSync(source));
 }
@@ -85,31 +56,20 @@ test("new-project Schema catalog closes the current shared contracts", () => {
   ]) {
     equal(paths.includes(required), true, required);
   }
-  const identity = catalog.find(
-    (record) => record.relativePath === identitySchemaRelativePath,
-  );
-  const utcInstant = catalog.find(
-    (record) => record.relativePath === utcInstantSchemaRelativePath,
-  );
+  const identity = catalog.find((record) => record.relativePath === identitySchemaRelativePath);
+  const utcInstant = catalog.find((record) => record.relativePath === utcInstantSchemaRelativePath);
   const portableResourcePath = catalog.find(
     (record) => record.relativePath === portableResourcePathSchemaRelativePath,
   );
+  equal(identity?.id, "urn:wakeflow:identity:durable-id-kind:v1");
+  equal(utcInstant?.id, "urn:wakeflow:foundation:time:utc-instant:v1");
+  equal(portableResourcePath?.id, "urn:wakeflow:foundation:filesystem:portable-resource-path:v1");
   equal(
-    identity?.id,
-    "urn:wakeflow:identity:durable-id-kind:v1",
-  );
-  equal(
-    utcInstant?.id,
-    "urn:wakeflow:foundation:time:utc-instant:v1",
-  );
-  equal(
-    portableResourcePath?.id,
-    "urn:wakeflow:foundation:filesystem:portable-resource-path:v1",
-  );
-  equal(
-    catalog.every((record) => record.externalRefs.every((reference) => (
-      catalog.some((candidate) => reference.startsWith(candidate.id))
-    ))),
+    catalog.every((record) =>
+      record.externalRefs.every((reference) =>
+        catalog.some((candidate) => reference.startsWith(candidate.id)),
+      ),
+    ),
     true,
   );
 });
@@ -130,12 +90,13 @@ test("Schema generation emits portable runtime contracts under .build", async ()
 
     const files = generatedFiles(absolute);
     equal(files.length, catalog.length);
-    const relativeFiles = files.map((file) => (
-      path.relative(absolute, file).split(path.sep).join("/")
-    ));
-    deepEqual(relativeFiles, catalog.map((record) => (
-      record.relativePath.replace(/\.schema\.json$/u, ".generated.ts")
-    )));
+    const relativeFiles = files.map((file) =>
+      path.relative(absolute, file).split(path.sep).join("/"),
+    );
+    deepEqual(
+      relativeFiles,
+      catalog.map((record) => record.relativePath.replace(/\.schema\.json$/u, ".generated.ts")),
+    );
 
     const identityGenerated = readFileSync(
       path.join(absolute, identityGeneratedRelativePath),
@@ -150,53 +111,35 @@ test("Schema generation emits portable runtime contracts under .build", async ()
     );
     match(utcInstantGenerated, /export const UTC_INSTANT_PATTERN_SOURCE/u);
     match(utcInstantGenerated, /export type WakeflowUtcInstantText/u);
-    const utcSchema = JSON.parse(readFileSync(
-      path.join(
-        repoRoot,
-        "src/contracts/schemas",
-        utcInstantSchemaRelativePath,
+    const utcSchema = JSON.parse(
+      readFileSync(
+        path.join(repoRoot, "src/contracts/schemas", utcInstantSchemaRelativePath),
+        "utf8",
       ),
-      "utf8",
-    )) as { readonly pattern?: unknown };
+    ) as { readonly pattern?: unknown };
     equal(typeof utcSchema.pattern, "string");
-    equal(
-      utcInstantGenerated.includes(JSON.stringify(utcSchema.pattern)),
-      true,
-    );
+    equal(utcInstantGenerated.includes(JSON.stringify(utcSchema.pattern)), true);
 
     const portableResourcePathGenerated = readFileSync(
       path.join(absolute, portableResourcePathGeneratedRelativePath),
       "utf8",
     );
-    match(
-      portableResourcePathGenerated,
-      /export const PORTABLE_RESOURCE_PATH_PATTERN_SOURCE/u,
-    );
-    match(
-      portableResourcePathGenerated,
-      /export type WakeflowPortableResourcePathText/u,
-    );
-    const portableResourcePathSchema = JSON.parse(readFileSync(
-      path.join(
-        repoRoot,
-        "src/contracts/schemas",
-        portableResourcePathSchemaRelativePath,
+    match(portableResourcePathGenerated, /export const PORTABLE_RESOURCE_PATH_PATTERN_SOURCE/u);
+    match(portableResourcePathGenerated, /export type WakeflowPortableResourcePathText/u);
+    const portableResourcePathSchema = JSON.parse(
+      readFileSync(
+        path.join(repoRoot, "src/contracts/schemas", portableResourcePathSchemaRelativePath),
+        "utf8",
       ),
-      "utf8",
-    )) as { readonly pattern?: unknown };
+    ) as { readonly pattern?: unknown };
     equal(typeof portableResourcePathSchema.pattern, "string");
     equal(
-      portableResourcePathGenerated.includes(
-        JSON.stringify(portableResourcePathSchema.pattern),
-      ),
+      portableResourcePathGenerated.includes(JSON.stringify(portableResourcePathSchema.pattern)),
       true,
     );
 
     const configGenerated = readFileSync(
-      path.join(
-        absolute,
-        configSchemaRelativePath.replace(/\.schema\.json$/u, ".generated.ts"),
-      ),
+      path.join(absolute, configSchemaRelativePath.replace(/\.schema\.json$/u, ".generated.ts")),
       "utf8",
     );
     match(configGenerated, /export const WAKEFLOW_CONFIG_V3_SCHEMA/u);
@@ -230,7 +173,9 @@ test("Schema catalog uses strict source semantics and closed references", async 
   const orderedRoot = mkdtempSync(path.join(tmpdir(), "wakeflow-schema-order-"));
   const orderedSchemas = path.join(orderedRoot, "src/contracts/schemas");
   mkdirSync(orderedSchemas, { recursive: true });
-  writeFileSync(path.join(orderedSchemas, "Z.schema.json"), `{
+  writeFileSync(
+    path.join(orderedSchemas, "Z.schema.json"),
+    `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wakeflow:test:prototype-record",
   "title": "WakeflowPrototypeRecord",
@@ -240,13 +185,21 @@ test("Schema catalog uses strict source semantics and closed references", async 
   "properties": {
     "__proto__": { "type": "string" }
   }
-}\n`);
-  writeFileSync(path.join(orderedSchemas, "a.schema.json"), `${JSON.stringify({
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "urn:wakeflow:test:plain-text",
-    title: "WakeflowPlainText",
-    type: "string",
-  }, null, 2)}\n`);
+}\n`,
+  );
+  writeFileSync(
+    path.join(orderedSchemas, "a.schema.json"),
+    `${JSON.stringify(
+      {
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        $id: "urn:wakeflow:test:plain-text",
+        title: "WakeflowPlainText",
+        type: "string",
+      },
+      null,
+      2,
+    )}\n`,
+  );
   try {
     const catalog = loadSchemaCatalog(orderedRoot);
     deepEqual(
@@ -254,10 +207,10 @@ test("Schema catalog uses strict source semantics and closed references", async 
       ["Z.schema.json", "a.schema.json"],
     );
     await buildSchemaTypes(orderedRoot);
-    const generated = readFileSync(path.join(
-      orderedRoot,
-      "src/contracts/generated/Z.generated.ts",
-    ), "utf8");
+    const generated = readFileSync(
+      path.join(orderedRoot, "src/contracts/generated/Z.generated.ts"),
+      "utf8",
+    );
     const restoreCall = generated.match(
       /export const WAKEFLOW_TEST_PROTO_SCHEMA = restoreGeneratedSchema\((.+)\);/u,
     );
@@ -272,8 +225,7 @@ test("Schema catalog uses strict source semantics and closed references", async 
       readonly properties?: Readonly<Record<string, unknown>>;
     };
     equal(
-      restored.properties !== undefined
-        && Object.hasOwn(restored.properties, "__proto__"),
+      restored.properties !== undefined && Object.hasOwn(restored.properties, "__proto__"),
       true,
     );
   } finally {
@@ -284,7 +236,9 @@ test("Schema catalog uses strict source semantics and closed references", async 
   const invalidSchemas = path.join(invalidRoot, "src/contracts/schemas");
   mkdirSync(invalidSchemas, { recursive: true });
   try {
-    writeFileSync(path.join(invalidSchemas, "invalid.schema.json"), `{
+    writeFileSync(
+      path.join(invalidSchemas, "invalid.schema.json"),
+      `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wakeflow:test:duplicate",
   "title": "WakeflowDuplicateSchema",
@@ -292,11 +246,12 @@ test("Schema catalog uses strict source semantics and closed references", async 
   "$defs": {
     "value": { "type": "string", "type": "number" }
   }
-}\n`);
+}\n`,
+    );
     throws(
       () => loadSchemaCatalog(invalidRoot),
-      (error: unknown) => error instanceof SchemaCodegenError
-        && error.code === "wakeflow-schema-json-duplicate-key",
+      (error: unknown) =>
+        error instanceof SchemaCodegenError && error.code === "wakeflow-schema-json-duplicate-key",
     );
 
     writeFileSync(
@@ -310,8 +265,8 @@ test("Schema catalog uses strict source semantics and closed references", async 
     );
     throws(
       () => loadSchemaCatalog(invalidRoot),
-      (error: unknown) => error instanceof SchemaCodegenError
-        && error.code === "wakeflow-schema-ref",
+      (error: unknown) =>
+        error instanceof SchemaCodegenError && error.code === "wakeflow-schema-ref",
     );
   } finally {
     rmSync(invalidRoot, { recursive: true, force: true });
@@ -332,8 +287,8 @@ test("Schema check rejects a modified committed generated vocabulary", async () 
 
     await rejects(
       checkSchemaTypes(fixtureRoot),
-      (error: unknown) => error instanceof SchemaCodegenError
-        && error.code === "wakeflow-schema-generated-drift",
+      (error: unknown) =>
+        error instanceof SchemaCodegenError && error.code === "wakeflow-schema-generated-drift",
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -354,8 +309,8 @@ test("Schema check cannot use the committed generated directory as scratch", asy
 
     await rejects(
       checkSchemaTypes(fixtureRoot, "src/contracts/generated"),
-      (error: unknown) => error instanceof SchemaCodegenError
-        && error.code === "wakeflow-schema-output-scope",
+      (error: unknown) =>
+        error instanceof SchemaCodegenError && error.code === "wakeflow-schema-output-scope",
     );
     equal(readFileSync(generated, "utf8"), before);
   } finally {

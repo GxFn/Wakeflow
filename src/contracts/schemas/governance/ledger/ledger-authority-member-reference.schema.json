@@ -27,10 +27,7 @@
       "const": 1
     },
     "family": {
-      "enum": [
-        "requirement",
-        "confirmation"
-      ]
+      "enum": ["requirement", "confirmation"]
     },
     "recordId": {
       "oneOf": [
@@ -90,9 +87,7 @@
             "const": "requirement"
           }
         },
-        "required": [
-          "family"
-        ]
+        "required": ["family"]
       },
       "then": {
         "properties": {
@@ -127,9 +122,7 @@
             "const": "confirmation"
           }
         },
-        "required": [
-          "family"
-        ]
+        "required": ["family"]
       },
       "then": {
         "properties": {

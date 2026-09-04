@@ -33,17 +33,10 @@
       "pattern": "^maintenance_operation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "hostId": {
-      "enum": [
-        "codex",
-        "claude-code"
-      ]
+      "enum": ["codex", "claude-code"]
     },
     "action": {
-      "enum": [
-        "fresh-initialize",
-        "reconfigure",
-        "reconcile"
-      ]
+      "enum": ["fresh-initialize", "reconfigure", "reconcile"]
     },
     "domainObject": {
       "type": "object",
@@ -58,12 +51,7 @@
     "next": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "frontier",
-        "owner",
-        "suggestedTool",
-        "blockers"
-      ],
+      "required": ["frontier", "owner", "suggestedTool", "blockers"],
       "description": "Next responsibility derived after this call: who acts, which tool, and what blocks.",
       "properties": {
         "frontier": {
@@ -79,13 +67,7 @@
           ]
         },
         "owner": {
-          "enum": [
-            "controller",
-            "target",
-            "test",
-            "user",
-            "none"
-          ]
+          "enum": ["controller", "target", "test", "user", "none"]
         },
         "suggestedTool": {
           "oneOf": [
@@ -149,10 +131,7 @@
           "$ref": "#/$defs/action"
         },
         "status": {
-          "enum": [
-            "ready",
-            "blocked"
-          ]
+          "enum": ["ready", "blocked"]
         },
         "blockerCodes": {
           "type": "array",
@@ -197,9 +176,7 @@
       "allOf": [
         {
           "if": {
-            "required": [
-              "status"
-            ],
+            "required": ["status"],
             "properties": {
               "status": {
                 "const": "ready"
@@ -276,10 +253,7 @@
           "$ref": "#/$defs/hostId"
         },
         "mode": {
-          "enum": [
-            "apply",
-            "recover"
-          ]
+          "enum": ["apply", "recover"]
         },
         "action": {
           "oneOf": [
@@ -292,11 +266,7 @@
           ]
         },
         "status": {
-          "enum": [
-            "completed",
-            "no-op",
-            "recovered"
-          ]
+          "enum": ["completed", "no-op", "recovered"]
         },
         "operationId": {
           "oneOf": [
@@ -330,9 +300,7 @@
       "allOf": [
         {
           "if": {
-            "required": [
-              "mode"
-            ],
+            "required": ["mode"],
             "properties": {
               "mode": {
                 "const": "apply"
@@ -345,10 +313,7 @@
                 "$ref": "#/$defs/action"
               },
               "status": {
-                "enum": [
-                  "completed",
-                  "no-op"
-                ]
+                "enum": ["completed", "no-op"]
               }
             }
           },

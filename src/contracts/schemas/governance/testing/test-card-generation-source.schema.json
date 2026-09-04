@@ -27,12 +27,7 @@
     "productDefectRetest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "previousTestCard",
-        "testReviewDecision",
-        "productDefectRemediation"
-      ],
+      "required": ["kind", "previousTestCard", "testReviewDecision", "productDefectRemediation"],
       "properties": {
         "kind": {
           "const": "product-defect-retest"

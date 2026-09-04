@@ -6,10 +6,7 @@
   "description": "Closed MCP request carrying an Agent-observed host create result into the current-host Window Host Binding owner.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "root",
-    "observation"
-  ],
+  "required": ["root", "observation"],
   "properties": {
     "root": {
       "type": "string",
@@ -39,10 +36,7 @@
           "const": "agent-host-create-result"
         },
         "hostId": {
-          "enum": [
-            "codex",
-            "claude-code"
-          ]
+          "enum": ["codex", "claude-code"]
         },
         "windowId": {
           "type": "string",
@@ -54,10 +48,7 @@
         "handle": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "kind",
-            "value"
-          ],
+          "required": ["kind", "value"],
           "properties": {
             "kind": {
               "type": "string",

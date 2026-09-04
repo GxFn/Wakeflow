@@ -17,15 +17,7 @@
     "previewResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "plan",
-        "planDigest"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "plan", "planDigest"],
       "properties": {
         "kind": {
           "const": "WakeflowTestCardPlanningPreviewResult"

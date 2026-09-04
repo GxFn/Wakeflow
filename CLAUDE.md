@@ -79,8 +79,9 @@ on authorized Wakeflow source maintenance in this repository.
   `npm run validate` / `npm run smoke` for Codex and
   `npm run validate:claude` / `npm run smoke:claude` for Claude Code.
 - Run `npm test` before declaring a change complete. Since 2026-09-03 it is
-  the TypeScript gate only: typecheck, architecture rules, TypeScript tests,
-  and the Schema drift check (ADR-0008). The retired JavaScript gate, that is
+  the TypeScript gate only: typecheck, architecture rules, lint and format
+  checks (Biome), unused-code check (knip), TypeScript tests, and the Schema
+  drift check (ADR-0008). The retired JavaScript gate, that is
   shared-core parity, both artifact validators, both smoke suites, and the old
   regression tests, stays runnable as `npm run test:legacy` until E4 deletes
   the old tree; run it only when a change touches `core/` or `plugins/`.

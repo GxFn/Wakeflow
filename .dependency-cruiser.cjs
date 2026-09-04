@@ -1,3 +1,15 @@
+/**
+ * Wakeflow 依赖方向规则（ADR-0013 六层形状）。
+ *
+ * 层从低到高：foundation → contracts → kernel → capabilities（含过渡期的旧领域
+ * configuration、workspace、governance）→ hosts → entrypoints。依赖只能向下；
+ * 垂直切片之间互不引用；宿主实现互不引用；tests 与 tooling 不进入运行时。
+ * "过渡"一节里的规则守住旧树内部的接缝，随 L1 各切片删除旧树时一并删除。
+ */
+
+const LEGACY_DOMAIN_ROOTS = "configuration|workspace|governance";
+const HOST_NEUTRAL_RUNTIME = `^src/(?:${LEGACY_DOMAIN_ROOTS}|kernel|capabilities)/`;
+
 const WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES =
   "^src/workspace/(?:active/(?:wakeflow-active-workspace-fresh-projection-authority|wakeflow-active-workspace-projection-inspection)|maintenance/(?:wakeflow-static-materialization-preview|wakeflow-static-materialization-step-executor)|(?:wakeflow-shared-coordination-layout|wakeflow-workspace-static-resource-matrix))\\.ts$";
 
@@ -10,6 +22,7 @@ const GOVERNANCE_WORKSPACE_CONTRACT_TARGETS =
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
+    // ---- 通用 -------------------------------------------------------------
     {
       name: "no-circular",
       severity: "error",
@@ -29,9 +42,7 @@ module.exports = {
       severity: "error",
       comment: "生产源码不得依赖 package.json 未声明的包。",
       from: { path: "^src/" },
-      to: {
-        dependencyTypes: ["npm-no-pkg", "npm-unknown"],
-      },
+      to: { dependencyTypes: ["npm-no-pkg", "npm-unknown"] },
     },
     {
       name: "no-runtime-dev-dependency",
@@ -58,42 +69,72 @@ module.exports = {
       from: { path: "^tests/" },
       to: { path: "^(?:core|plugins|test)/" },
     },
+
+    // ---- 六层方向（ADR-0013）------------------------------------------------
     {
-      name: "kernel-depends-only-on-foundation-and-contracts",
+      name: "layer-foundation-depends-only-on-foundation",
       severity: "error",
-      comment: "kernel 是应用内核，只能依赖 foundation 与 contracts，不得取得任何切片、旧领域、宿主或入口能力（ADR-0013）。",
-      from: { path: "^src/kernel/" },
-      to: { path: "^src/(?:configuration|workspace|governance|capabilities|hosts|entrypoints)/" },
+      comment: "foundation 是最底层：只能依赖 foundation 自身与 foundation 的生成合同。",
+      from: { path: "^src/foundation/" },
+      to: {
+        path: `^src/(?:contracts/(?:identity|vocabulary|generated/identity)|${LEGACY_DOMAIN_ROOTS}|kernel|capabilities|hosts|entrypoints)/`,
+      },
     },
     {
-      name: "capabilities-do-not-import-each-other",
+      name: "layer-contracts-depend-only-on-foundation",
       severity: "error",
-      comment: "垂直切片之间不得互相引用；共享内容下沉到 kernel 或经 contracts 相遇（ADR-0013）。",
+      comment: "contracts 是数据与词汇：只能依赖 foundation 与其他 contracts，不得取得内核、切片、领域、宿主或入口。",
+      from: { path: "^src/contracts/" },
+      to: { path: `^src/(?:${LEGACY_DOMAIN_ROOTS}|kernel|capabilities|hosts|entrypoints)/` },
+    },
+    {
+      name: "layer-kernel-depends-only-on-foundation-and-contracts",
+      severity: "error",
+      comment: "kernel 是应用内核，只能依赖 foundation 与 contracts，不得取得任何切片、旧领域、宿主或入口能力。",
+      from: { path: "^src/kernel/" },
+      to: { path: `^src/(?:${LEGACY_DOMAIN_ROOTS}|capabilities|hosts|entrypoints)/` },
+    },
+    {
+      name: "layer-capabilities-do-not-import-each-other",
+      severity: "error",
+      comment: "垂直切片之间不得互相引用；共享内容下沉到 kernel 或经 contracts 相遇。",
       from: { path: "^src/capabilities/([^/]+)/" },
       to: { path: "^src/capabilities/(?!$1/)[^/]+/" },
     },
     {
-      name: "foundation-does-not-depend-on-product-domains",
+      name: "layer-host-neutral-runtime-does-not-import-hosts",
       severity: "error",
-      comment: "foundation 只能向更低 foundation 或 foundation contracts 依赖。",
-      from: { path: "^src/foundation/" },
-      to: {
-        path: "^src/(?:contracts/(?:identity|vocabulary|generated/identity)|configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities|hosts|entrypoints)/",
-      },
+      comment: "切片与旧领域是宿主中立的：只依赖 profile 数据与端口，不得反向导入具体宿主实现。",
+      from: { path: HOST_NEUTRAL_RUNTIME },
+      to: { path: "^src/hosts/" },
     },
     {
-      name: "application-identity-contract-does-not-depend-on-domains",
+      name: "layer-runtime-does-not-depend-on-entrypoints",
       severity: "error",
-      comment: "应用级身份合同只能依赖生成合同与 Foundation，不能反向取得领域状态。",
-      from: { path: "^src/contracts/identity/" },
-      to: {
-        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities|hosts|entrypoints)/",
-      },
+      comment: "composition root 只能位于 entrypoints；任何更低层不得反向取得入口能力。",
+      from: { path: "^src/(?!entrypoints/)" },
+      to: { path: "^src/entrypoints/" },
     },
     {
-      name: "configuration-uses-only-workspace-resource-contract",
+      name: "layer-hosts-do-not-import-each-other",
       severity: "error",
-      comment: "Configuration只可复用Workspace的纯资源声明合同，不能取得Workspace状态或执行能力。",
+      comment: "Codex 与 Claude Code 宿主实现互不引用；共同部分下沉到 kernel 或切片。",
+      from: { path: "^src/hosts/([^/]+)/" },
+      to: { path: "^src/hosts/(?!$1/)[^/]+/" },
+    },
+    {
+      name: "layer-domain-effects-use-foundation",
+      severity: "error",
+      comment: "宿主中立运行时不得绕过根作用域 filesystem 与封闭的系统进程 foundation。",
+      from: { path: HOST_NEUTRAL_RUNTIME },
+      to: { path: "^node:(?:fs(?:/promises)?|child_process)$" },
+    },
+
+    // ---- 过渡：旧树内部接缝（随 L1 删除旧树时一并删除）---------------------
+    {
+      name: "transitional-configuration-uses-only-workspace-resource-contract",
+      severity: "error",
+      comment: "Configuration 只可复用 Workspace 的纯资源声明合同，不能取得 Workspace 状态或执行能力。",
       from: { path: "^src/configuration/" },
       to: {
         path: "^src/workspace/",
@@ -101,82 +142,25 @@ module.exports = {
       },
     },
     {
-      name: "workspace-governance-composition-source-is-explicit",
+      name: "transitional-workspace-governance-composition-source-is-explicit",
       severity: "error",
-      comment: "只有Workspace初始化与静态矩阵组合根可以取得Governance owner能力。",
-      from: {
-        path: "^src/workspace/",
-        pathNot: WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES,
-      },
+      comment: "只有 Workspace 初始化与静态矩阵组合根可以取得 Governance owner 能力。",
+      from: { path: "^src/workspace/", pathNot: WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES },
       to: { path: "^src/governance/" },
     },
     {
-      name: "workspace-governance-composition-target-is-explicit",
+      name: "transitional-workspace-governance-composition-target-is-explicit",
       severity: "error",
-      comment: "Workspace组合缝只能取得已列明的Governance布局、目录和初始化owner。",
+      comment: "Workspace 组合缝只能取得已列明的 Governance 布局、目录和初始化 owner。",
       from: { path: WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES },
-      to: {
-        path: "^src/governance/",
-        pathNot: WORKSPACE_GOVERNANCE_COMPOSITION_TARGETS,
-      },
+      to: { path: "^src/governance/", pathNot: WORKSPACE_GOVERNANCE_COMPOSITION_TARGETS },
     },
     {
-      name: "governance-uses-only-workspace-contract-seams",
+      name: "transitional-governance-uses-only-workspace-contract-seams",
       severity: "error",
-      comment: "Governance只能取得Workspace布局、资源声明、宿主Profile和Window身份合同。",
+      comment: "Governance 只能取得 Workspace 布局、资源声明、宿主 Profile 和 Window 身份合同。",
       from: { path: "^src/governance/" },
-      to: {
-        path: "^src/workspace/",
-        pathNot: GOVERNANCE_WORKSPACE_CONTRACT_TARGETS,
-      },
-    },
-    {
-      name: "domain-filesystem-effects-use-foundation",
-      severity: "error",
-      comment: "host-neutral 领域代码不得绕过根作用域 filesystem foundation。",
-      from: {
-        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities)/",
-      },
-      to: { path: "^node:fs(?:/promises)?$" },
-    },
-    {
-      name: "domain-process-effects-use-foundation",
-      severity: "error",
-      comment: "host-neutral 领域代码不得绕过封闭的 foundation 系统进程能力。",
-      from: {
-        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities)/",
-      },
-      to: { path: "^node:child_process$" },
-    },
-    {
-      name: "host-neutral-runtime-does-not-import-host-implementations",
-      severity: "error",
-      comment: "宿主中立运行时只依赖端口与Profile数据，不得反向导入具体宿主实现。",
-      from: {
-        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|kernel|capabilities)/",
-      },
-      to: { path: "^src/hosts/" },
-    },
-    {
-      name: "runtime-does-not-depend-on-entrypoints",
-      severity: "error",
-      comment: "composition root只能位于entrypoints，普通运行时不得反向取得入口能力。",
-      from: { path: "^src/(?!entrypoints/)" },
-      to: { path: "^src/entrypoints/" },
-    },
-    {
-      name: "codex-host-does-not-import-claude-code-host",
-      severity: "error",
-      comment: "Codex宿主实现不得取得Claude Code宿主能力。",
-      from: { path: "^src/hosts/codex/" },
-      to: { path: "^src/hosts/claude-code/" },
-    },
-    {
-      name: "claude-code-host-does-not-import-codex-host",
-      severity: "error",
-      comment: "Claude Code宿主实现不得取得Codex宿主能力。",
-      from: { path: "^src/hosts/claude-code/" },
-      to: { path: "^src/hosts/codex/" },
+      to: { path: "^src/workspace/", pathNot: GOVERNANCE_WORKSPACE_CONTRACT_TARGETS },
     },
   ],
   options: {
@@ -194,9 +178,7 @@ module.exports = {
       ],
     },
     includeOnly: ["^(?:src|tests|tooling)/"],
-    tsConfig: {
-      fileName: "tsconfig.json",
-    },
+    tsConfig: { fileName: "tsconfig.json" },
     enhancedResolveOptions: {
       exportsFields: ["exports"],
       conditionNames: ["import", "node", "default", "types"],

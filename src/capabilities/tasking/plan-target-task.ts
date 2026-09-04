@@ -66,12 +66,10 @@ import {
   type AppendCommandBinding,
   type AppendCommandEnvelope,
 } from "../../kernel/append-command.js";
+import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import { fail, isWakeflowError } from "../../kernel/error.js";
 import { deriveDurableId } from "../../kernel/ids.js";
-import {
-  deriveNextProjection,
-  type NextProjection,
-} from "../../kernel/next-projection.js";
+import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 
 /**
  * Wakeflow Capabilities / Tasking：`wakeflow_plan_target_task` 切片（ADR-0013 试点）。
@@ -89,9 +87,7 @@ export interface ExecuteTargetTaskPlanningOptions {
 type PublicResult = Readonly<WakeflowTargetTaskPlanningResultV1>;
 
 interface SliceInput {
-  readonly taskPackage: ReturnType<
-    typeof parseTargetTaskPlanningPreviewRequest
-  >["taskPackage"];
+  readonly taskPackage: ReturnType<typeof parseTargetTaskPlanningPreviewRequest>["taskPackage"];
 }
 
 interface SliceOutcome {
@@ -102,15 +98,15 @@ interface SliceOutcome {
   readonly projection: Readonly<TaskPackageProjectionMaterializationReceipt>;
 }
 
-const validateResult =
-  createRuntimeJsonSchemaValidator<WakeflowTargetTaskPlanningResultV1>(
-    WAKEFLOW_TARGET_TASK_PLANNING_RESULT_SCHEMA,
-  );
+const validateResult = createRuntimeJsonSchemaValidator<WakeflowTargetTaskPlanningResultV1>(
+  WAKEFLOW_TARGET_TASK_PLANNING_RESULT_SCHEMA,
+);
 
 function mapAuthorityError(error: unknown): never {
   if (error instanceof TargetTaskPlanningAuthorityError) {
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-    if (error.reason === "root") fail("root-invalid", "demand-root", "$request.demandId", { cause: error });
+    if (error.reason === "root")
+      fail("root-invalid", "demand-root", "$request.demandId", { cause: error });
     fail("precondition-failed", `authority-${error.reason}`, "$request", { cause: error });
   }
   if (error instanceof TestTaskPlanningAuthorityError) {
@@ -125,22 +121,27 @@ function mapAuthorityError(error: unknown): never {
   throw error;
 }
 
+const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, string, string]>> =
+  Object.freeze({
+    "concurrency-conflict": [
+      "concurrency-conflict",
+      "stream-revision",
+      "$request.expectedStreamRevision",
+    ],
+    "idempotency-conflict": ["idempotency-mismatch", "request-digest", "$request.idempotencyKey"],
+    "decision-rejected": ["precondition-failed", "decision-rejected", "$request.taskPackage"],
+    aborted: ["io-failure", "aborted", "$signal"],
+    input: ["invalid-request", "command", "$request"],
+  });
+
 function mapHandlerError(error: unknown): never {
   if (error instanceof DemandEventSourcingCommandHandlerError) {
-    switch (error.reason) {
-      case "concurrency-conflict":
-        fail("concurrency-conflict", "stream-revision", "$request.expectedStreamRevision", { cause: error });
-      case "idempotency-conflict":
-        fail("idempotency-mismatch", "request-digest", "$request.idempotencyKey", { cause: error });
-      case "decision-rejected":
-        fail("precondition-failed", "decision-rejected", "$request.taskPackage", { cause: error });
-      case "aborted":
-        fail("io-failure", "aborted", "$signal", { cause: error });
-      case "input":
-        fail("invalid-request", "command", "$request", { cause: error });
-      default:
-        fail("io-failure", "event-stream", "$request.demandId", { cause: error });
-    }
+    const [code, reason, path] = HANDLER_ERROR_TABLE[error.reason] ?? [
+      "io-failure",
+      "event-stream",
+      "$request.demandId",
+    ];
+    fail(code, reason, path, { cause: error });
   }
   throw error;
 }
@@ -173,11 +174,7 @@ async function buildPackage(
   const clock = options.clock === undefined ? {} : { clock: options.clock };
   try {
     if (input.taskPackage.workType === "test") {
-      const sources = await loadTestTaskPlanningSources(
-        workspaceRoot,
-        context,
-        options.signal,
-      );
+      const sources = await loadTestTaskPlanningSources(workspaceRoot, context, options.signal);
       const taskPackage = createTestTaskPackage(
         {
           configDigest: context.config.configDigest,
@@ -241,7 +238,7 @@ async function execute(
   const repository = new DemandEventSourcingRepository(authority.demandRoot);
   const signal = options.signal === undefined ? {} : { signal: options.signal };
   // 幂等键先于任何领域校验解析：重试不该因为"已有活动谱系"之类的后置条件被误拒。
-  let bound;
+  let bound: Awaited<ReturnType<typeof repository.findCommitByIdempotencyKey>>;
   try {
     bound = await repository.findCommitByIdempotencyKey(binding.idempotencyKey, signal);
   } catch (error: unknown) {
@@ -266,13 +263,7 @@ async function execute(
       projection: await materialize(authority.demandRoot, taskPackage, signal),
     });
   }
-  const drafted = await buildPackage(
-    authority,
-    context.workspaceRoot,
-    input,
-    binding,
-    options,
-  );
+  const drafted = await buildPackage(authority, context.workspaceRoot, input, binding, options);
   const eventId = deriveDurableId(
     "demand-event",
     "plan-target-task",
@@ -301,9 +292,7 @@ async function execute(
     mapHandlerError(error);
   }
   const taskPackage =
-    commandResult.disposition === "idempotent"
-      ? plannedTaskPackage(commandResult)
-      : drafted;
+    commandResult.disposition === "idempotent" ? plannedTaskPackage(commandResult) : drafted;
   return Object.freeze({
     commandResult,
     taskPackage,
@@ -415,7 +404,7 @@ export async function executeTargetTaskPlanningPublicRequest(
       tool: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseTargetTaskPlanningPublicRequest(raw);
-        let parsed;
+        let parsed: ReturnType<typeof parseTargetTaskPlanningPreviewRequest>;
         try {
           parsed = parseTargetTaskPlanningPreviewRequest({
             demandId: request.demandId,

@@ -218,12 +218,7 @@
     "observedEventStream": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "streamRevision",
-        "stateDigest",
-        "lastEventId",
-        "lastEventDigest"
-      ],
+      "required": ["streamRevision", "stateDigest", "lastEventId", "lastEventDigest"],
       "properties": {
         "streamRevision": {
           "type": "integer",
@@ -424,11 +419,7 @@
                 "type": "object",
                 "properties": {
                   "phase": {
-                    "enum": [
-                      "planned",
-                      "rework-requested",
-                      "product-defect-rework-requested"
-                    ]
+                    "enum": ["planned", "rework-requested", "product-defect-rework-requested"]
                   }
                 }
               }
@@ -503,10 +494,7 @@
                 "type": "object",
                 "properties": {
                   "phase": {
-                    "enum": [
-                      "host-effect-accepted",
-                      "host-effect-indeterminate"
-                    ]
+                    "enum": ["host-effect-accepted", "host-effect-indeterminate"]
                   }
                 }
               }
@@ -745,10 +733,7 @@
                 "type": "object",
                 "properties": {
                   "phase": {
-                    "enum": [
-                      "test-host-effect-accepted",
-                      "test-host-effect-indeterminate"
-                    ]
+                    "enum": ["test-host-effect-accepted", "test-host-effect-indeterminate"]
                   }
                 }
               }
@@ -992,13 +977,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "kind",
-            "owner",
-            "targetTaskId",
-            "targetReviewDecisionId",
-            "decisionDigest"
-          ],
+          "required": ["kind", "owner", "targetTaskId", "targetReviewDecisionId", "decisionDigest"],
           "properties": {
             "kind": {
               "const": "implementation-redesign-not-implemented"

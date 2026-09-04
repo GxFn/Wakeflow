@@ -40,9 +40,7 @@ interface CandidateDefinition {
   readonly directoryName: "codex-wakeflow" | "claude-code-wakeflow";
   readonly referencePackagePath: string;
   readonly entrypoint: string;
-  readonly runExport:
-    | "runCodexWakeflowMcpStdio"
-    | "runClaudeCodeWakeflowMcpStdio";
+  readonly runExport: "runCodexWakeflowMcpStdio" | "runClaudeCodeWakeflowMcpStdio";
   readonly currentHostDirectory: string;
   readonly peerHostDirectory: string;
   readonly admittedPeerProfile: string;
@@ -57,8 +55,7 @@ const CANDIDATES = Object.freeze([
     runExport: "runCodexWakeflowMcpStdio",
     currentHostDirectory: "hosts/codex/",
     peerHostDirectory: "hosts/claude-code/",
-    admittedPeerProfile:
-      "hosts/claude-code/wakeflow-workspace-host-resource-profile.js",
+    admittedPeerProfile: "hosts/claude-code/wakeflow-workspace-host-resource-profile.js",
   }),
   Object.freeze({
     hostId: "claude-code",
@@ -68,8 +65,7 @@ const CANDIDATES = Object.freeze([
     runExport: "runClaudeCodeWakeflowMcpStdio",
     currentHostDirectory: "hosts/claude-code/",
     peerHostDirectory: "hosts/codex/",
-    admittedPeerProfile:
-      "hosts/codex/wakeflow-workspace-host-resource-profile.js",
+    admittedPeerProfile: "hosts/codex/wakeflow-workspace-host-resource-profile.js",
   }),
 ] as const satisfies readonly Readonly<CandidateDefinition>[]);
 
@@ -114,10 +110,12 @@ function fail(code: string, message: string): never {
 }
 
 function isPlainRecord(value: unknown): value is JsonRecord {
-  return value !== null
-    && typeof value === "object"
-    && !Array.isArray(value)
-    && Object.getPrototypeOf(value) === Object.prototype;
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
 }
 
 function lstatOrNull(target: string): Stats | null {
@@ -142,10 +140,10 @@ function compareCodeUnits(left: string, right: string): number {
 function assertBelow(parent: string, child: string, code: string): void {
   const relative = path.relative(parent, child);
   if (
-    relative.length === 0
-    || relative === ".."
-    || relative.startsWith(`..${path.sep}`)
-    || path.isAbsolute(relative)
+    relative.length === 0 ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
   ) {
     fail(code, "artifact path escaped its declared parent");
   }
@@ -160,11 +158,7 @@ function assertRealDirectory(directory: string, label: string): void {
 
 function ensureRealDirectoryPath(root: string, directory: string): void {
   const relative = path.relative(root, directory);
-  if (
-    relative === ".."
-    || relative.startsWith(`..${path.sep}`)
-    || path.isAbsolute(relative)
-  ) {
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     fail("wakeflow-artifact-output-scope", "output directory escaped repository root");
   }
   let current = root;
@@ -185,11 +179,11 @@ function ensureRealDirectoryPath(root: string, directory: string): void {
 function readBoundedRegularFile(file: string): Buffer {
   const stat = lstatOrNull(file);
   if (
-    stat === null
-    || stat.isSymbolicLink()
-    || !stat.isFile()
-    || stat.nlink !== 1
-    || stat.size > MAXIMUM_MODULE_BYTES
+    stat === null ||
+    stat.isSymbolicLink() ||
+    !stat.isFile() ||
+    stat.nlink !== 1 ||
+    stat.size > MAXIMUM_MODULE_BYTES
   ) {
     fail("wakeflow-artifact-source-file", "artifact source must be one bounded regular file");
   }
@@ -319,10 +313,7 @@ function dependenciesForClosure(
   for (const name of closure.externalPackages) {
     const version = directDependencies[name];
     if (version === undefined) {
-      fail(
-        "wakeflow-artifact-dependency",
-        `compiled runtime imports undeclared package ${name}`,
-      );
+      fail("wakeflow-artifact-dependency", `compiled runtime imports undeclared package ${name}`);
     }
     result[name] = version;
   }
@@ -351,22 +342,24 @@ function jsonBytes(value: unknown): Buffer {
 }
 
 function compiledArtifactBytes(source: Buffer): Buffer {
-  const text = source.toString("utf8").replace(
-    /\n\/\/# sourceMappingURL=[^\r\n]+(?:\r?\n)?$/u,
-    "\n",
-  );
+  const text = source
+    .toString("utf8")
+    .replace(/\n\/\/# sourceMappingURL=[^\r\n]+(?:\r?\n)?$/u, "\n");
   return Buffer.from(text, "utf8");
 }
 
 function launcherBytes(definition: Readonly<CandidateDefinition>): Buffer {
-  return Buffer.from([
-    "#!/usr/bin/env node",
-    "// 此文件由 Wakeflow TypeScript 候选制品装配器生成，禁止手工修改。",
-    `import { ${definition.runExport} } from \"../lib/${definition.entrypoint}\";`,
-    "",
-    `${definition.runExport}(${JSON.stringify(CANDIDATE_VERSION)});`,
-    "",
-  ].join("\n"), "utf8");
+  return Buffer.from(
+    [
+      "#!/usr/bin/env node",
+      "// 此文件由 Wakeflow TypeScript 候选制品装配器生成，禁止手工修改。",
+      `import { ${definition.runExport} } from "../lib/${definition.entrypoint}";`,
+      "",
+      `${definition.runExport}(${JSON.stringify(CANDIDATE_VERSION)});`,
+      "",
+    ].join("\n"),
+    "utf8",
+  );
 }
 
 function mcpConfiguration(definition: Readonly<CandidateDefinition>): JsonRecord {
@@ -384,6 +377,7 @@ function mcpConfiguration(definition: Readonly<CandidateDefinition>): JsonRecord
         mcpServers: {
           wakeflow: {
             command: "node",
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
             args: ["${CLAUDE_PLUGIN_ROOT}/mcp/server.mjs"],
           },
         },
@@ -397,10 +391,7 @@ function packageMetadata(
   if (typeof referencePackage.name !== "string") {
     fail("wakeflow-artifact-package", "reference package name is invalid");
   }
-  if (
-    typeof referencePackage.version !== "string"
-    || referencePackage.version.length === 0
-  ) {
+  if (typeof referencePackage.version !== "string" || referencePackage.version.length === 0) {
     fail("wakeflow-artifact-package", "reference package version is invalid");
   }
   return {
@@ -434,35 +425,35 @@ function assembleCandidate(
 ): Readonly<TypescriptArtifactCandidateBuildRecord> {
   const closure = compiledModuleClosure(compiledRoot, definition.entrypoint);
   const dependencies = dependenciesForClosure(closure, directDependencies);
-  const referencePackage = readJsonRecord(path.join(
-    repositoryRoot,
-    definition.referencePackagePath,
-  ));
+  const referencePackage = readJsonRecord(
+    path.join(repositoryRoot, definition.referencePackagePath),
+  );
   const candidateRoot = path.join(stageRoot, definition.directoryName);
   mkdirSync(candidateRoot, { mode: 0o755 });
 
-  const payload: Array<Readonly<{
-    path: string;
-    bytes: number;
-    sha256: string;
-    mode: "0644" | "0755";
-    scope: CompiledFileScope | "entrypoint" | "metadata";
-  }>> = [];
+  const payload: Array<
+    Readonly<{
+      path: string;
+      bytes: number;
+      sha256: string;
+      mode: "0644" | "0755";
+      scope: CompiledFileScope | "entrypoint" | "metadata";
+    }>
+  > = [];
 
   for (const relative of closure.files) {
-    const bytes = compiledArtifactBytes(readBoundedRegularFile(path.join(
-      compiledRoot,
-      relative,
-    )));
+    const bytes = compiledArtifactBytes(readBoundedRegularFile(path.join(compiledRoot, relative)));
     const destination = `lib/${relative}`;
     writeExclusive(candidateRoot, destination, bytes);
-    payload.push(Object.freeze({
-      path: destination,
-      bytes: bytes.byteLength,
-      sha256: sha256(bytes),
-      mode: "0644",
-      scope: compiledFileScope(definition, relative),
-    }));
+    payload.push(
+      Object.freeze({
+        path: destination,
+        bytes: bytes.byteLength,
+        sha256: sha256(bytes),
+        mode: "0644",
+        scope: compiledFileScope(definition, relative),
+      }),
+    );
   }
 
   const generatedFiles = [
@@ -487,13 +478,15 @@ function assembleCandidate(
   ];
   for (const file of generatedFiles) {
     writeExclusive(candidateRoot, file.path, file.bytes, file.mode);
-    payload.push(Object.freeze({
-      path: file.path,
-      bytes: file.bytes.byteLength,
-      sha256: sha256(file.bytes),
-      mode: file.mode === 0o755 ? "0755" : "0644",
-      scope: file.scope,
-    }));
+    payload.push(
+      Object.freeze({
+        path: file.path,
+        bytes: file.bytes.byteLength,
+        sha256: sha256(file.bytes),
+        mode: file.mode === 0o755 ? "0755" : "0644",
+        scope: file.scope,
+      }),
+    );
   }
 
   payload.sort((left, right) => compareCodeUnits(left.path, right.path));
@@ -531,11 +524,7 @@ function removeRealDirectory(directory: string): void {
   rmSync(directory, { recursive: true, force: false });
 }
 
-function replaceOutputAtomically(
-  repositoryRoot: string,
-  stage: string,
-  output: string,
-): void {
+function replaceOutputAtomically(repositoryRoot: string, stage: string, output: string): void {
   const backup = path.join(
     path.dirname(output),
     `.${path.basename(output)}.backup-${process.pid}-${randomUUID()}`,
@@ -591,13 +580,9 @@ export function buildTypescriptArtifactCandidates(
   const artifacts: TypescriptArtifactCandidateBuildRecord[] = [];
   try {
     for (const definition of CANDIDATES) {
-      artifacts.push(assembleCandidate(
-        repositoryRoot,
-        compiledRoot,
-        stage,
-        definition,
-        directDependencies,
-      ));
+      artifacts.push(
+        assembleCandidate(repositoryRoot, compiledRoot, stage, definition, directDependencies),
+      );
     }
     replaceOutputAtomically(repositoryRoot, stage, output);
   } catch (error: unknown) {
@@ -616,8 +601,7 @@ export function buildTypescriptArtifactCandidates(
 
 function isMainModule(): boolean {
   const invoked = process.argv[1];
-  return invoked !== undefined
-    && path.resolve(invoked) === fileURLToPath(import.meta.url);
+  return invoked !== undefined && path.resolve(invoked) === fileURLToPath(import.meta.url);
 }
 
 if (isMainModule()) {

@@ -65,10 +65,7 @@
         "summary": { "$ref": "#/$defs/nonEmptyText" },
         "intakeRationale": { "$ref": "#/$defs/nonEmptyText" },
         "readiness": {
-          "oneOf": [
-            { "$ref": "#/$defs/readyReadiness" },
-            { "$ref": "#/$defs/parkedReadiness" }
-          ]
+          "oneOf": [{ "$ref": "#/$defs/readyReadiness" }, { "$ref": "#/$defs/parkedReadiness" }]
         },
         "autoClaim": { "type": "boolean" },
         "testingDecision": { "$ref": "#/$defs/testingDecision" },
@@ -113,10 +110,7 @@
       "required": ["recordId", "memberPath"],
       "properties": {
         "recordId": {
-          "oneOf": [
-            { "$ref": "#/$defs/requirementId" },
-            { "$ref": "#/$defs/confirmationId" }
-          ]
+          "oneOf": [{ "$ref": "#/$defs/requirementId" }, { "$ref": "#/$defs/confirmationId" }]
         },
         "memberPath": { "$ref": "#/$defs/portableResourcePath" }
       }

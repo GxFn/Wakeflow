@@ -45,13 +45,7 @@
       ]
     },
     "status": {
-      "enum": [
-        "pending-claim",
-        "parked",
-        "claimed",
-        "withdrawn",
-        "archived"
-      ]
+      "enum": ["pending-claim", "parked", "claimed", "withdrawn", "archived"]
     },
     "updatedAt": {
       "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
@@ -99,11 +93,7 @@
     "demandMount": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "demandId",
-        "stateRootRef",
-        "identityDigest"
-      ],
+      "required": ["demandId", "stateRootRef", "identityDigest"],
       "properties": {
         "demandId": {
           "$ref": "#/$defs/demandId"
@@ -119,10 +109,7 @@
     "withdrawal": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "reason",
-        "withdrawnAt"
-      ],
+      "required": ["reason", "withdrawnAt"],
       "properties": {
         "reason": {
           "type": "string",

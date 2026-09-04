@@ -10,7 +10,10 @@ import { DemandCompletionPublicCoordinatorError } from "../../src/governance/lif
 import { DemandControllerRoutePublicCoordinatorError } from "../../src/governance/controller/demand-controller-route-public-coordinator.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WakeflowError } from "../../src/kernel/error.js";
-import { createTaskPackageFixture, TASKING_DEMAND_ID } from "../governance/tasking/task-package.fixture.js";
+import {
+  createTaskPackageFixture,
+  TASKING_DEMAND_ID,
+} from "../governance/tasking/task-package.fixture.js";
 import {
   connectWakeflowMcpTestClient,
   wakeflowMcpTextContent,
@@ -18,10 +21,8 @@ import {
 
 const ZERO_DIGEST = parseSha256Digest(`sha256:${"0".repeat(64)}`);
 const WINDOW_ID = "window_11111111-1111-4111-8111-111111111111";
-const BINDING_ID =
-  "window_binding_22222222-2222-4222-8222-222222222222";
-const DELIVERY_ID =
-  "target-delivery_33333333-3333-4333-8333-333333333333";
+const BINDING_ID = "window_binding_22222222-2222-4222-8222-222222222222";
+const DELIVERY_ID = "target-delivery_33333333-3333-4333-8333-333333333333";
 
 function hostEffectClaimRequest() {
   const taskPackage = createTaskPackageFixture();
@@ -159,10 +160,7 @@ test("Execution注册组保留Claim与Event双authority", async (t) => {
     tool: WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
   });
   equal(wakeflowMcpTextContent(result).includes(request.root), false);
-  equal(
-    wakeflowMcpTextContent(result).includes(request.observation.handle.value),
-    false,
-  );
+  equal(wakeflowMcpTextContent(result).includes(request.observation.handle.value), false);
 });
 
 test("Review注册组保留Completion event authority", async (t) => {

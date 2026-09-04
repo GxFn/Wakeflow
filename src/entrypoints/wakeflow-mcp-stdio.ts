@@ -1,10 +1,5 @@
-import type {
-  McpServerFactory,
-} from "@modelcontextprotocol/server";
-import {
-  serveStdio,
-  type StdioServerHandle,
-} from "@modelcontextprotocol/server/stdio";
+import type { McpServerFactory } from "@modelcontextprotocol/server";
+import { serveStdio, type StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 
 /**
  * Wakeflow Entrypoint / MCP：官方 SDK stdio transport 的进程生命周期边界。
@@ -19,9 +14,7 @@ function writeStableTransportError(message: string): void {
 }
 
 /** 在当前进程 stdio 上运行一个 connection-pinned MCP server factory。 */
-export function runWakeflowMcpStdio(
-  factory: McpServerFactory,
-): StdioServerHandle {
+export function runWakeflowMcpStdio(factory: McpServerFactory): StdioServerHandle {
   const handle = serveStdio(factory, {
     onerror: () => {
       process.exitCode = 1;
@@ -34,11 +27,13 @@ export function runWakeflowMcpStdio(
     if (closePromise !== undefined) return closePromise;
     process.off("SIGINT", closeFromSignal);
     process.off("SIGTERM", closeFromSignal);
-    closePromise = Promise.resolve().then(() => handle.close()).catch(() => {
-      process.exitCode = 1;
-      writeStableTransportError("Wakeflow MCP stdio shutdown failed.");
-      throw new Error("Wakeflow MCP stdio shutdown failed.");
-    });
+    closePromise = Promise.resolve()
+      .then(() => handle.close())
+      .catch(() => {
+        process.exitCode = 1;
+        writeStableTransportError("Wakeflow MCP stdio shutdown failed.");
+        throw new Error("Wakeflow MCP stdio shutdown failed.");
+      });
     return closePromise;
   };
   function closeFromSignal(): void {

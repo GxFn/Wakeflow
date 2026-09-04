@@ -37,12 +37,7 @@
       "$ref": "#/$defs/sha256Digest"
     },
     "decision": {
-      "enum": [
-        "accept",
-        "request-another-attempt",
-        "escalate-product-defect",
-        "blocked"
-      ]
+      "enum": ["accept", "request-another-attempt", "escalate-product-defect", "blocked"]
     },
     "assessment": {
       "$ref": "#/$defs/assessment"

@@ -78,10 +78,7 @@
       "description": "Optional client idempotency binding: the key that produced this commit and the digest of the request body it was bound to. Absent for commits appended without a client key.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "key",
-        "requestDigest"
-      ],
+      "required": ["key", "requestDigest"],
       "properties": {
         "key": {
           "type": "string",

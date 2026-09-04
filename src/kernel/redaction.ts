@@ -16,15 +16,10 @@ export interface RedactionBoundary {
 }
 
 /** 建立边界；短于两个字符的值被忽略，避免把 `/` 这样的值当作私有。 */
-export function createRedactionBoundary(
-  values: Iterable<string>,
-): RedactionBoundary {
+export function createRedactionBoundary(values: Iterable<string>): RedactionBoundary {
   const admitted = new Set<string>();
   for (const value of values) {
-    if (
-      typeof value === "string" &&
-      value.length >= MINIMUM_PRIVATE_VALUE_LENGTH
-    ) {
+    if (typeof value === "string" && value.length >= MINIMUM_PRIVATE_VALUE_LENGTH) {
       admitted.add(value);
     }
   }
@@ -34,39 +29,45 @@ export function createRedactionBoundary(
 export function mergeRedactionBoundaries(
   ...boundaries: readonly RedactionBoundary[]
 ): RedactionBoundary {
-  return createRedactionBoundary(
-    boundaries.flatMap((boundary) => [...boundary.privateValues]),
-  );
+  return createRedactionBoundary(boundaries.flatMap((boundary) => [...boundary.privateValues]));
 }
 
 function isJsonArray(value: JsonArray | JsonObject): value is JsonArray {
   return Array.isArray(value);
 }
 
-function findPrivateText(
-  value: JsonValue,
+function findPrivateString(
+  value: string,
   boundary: RedactionBoundary,
   path: string,
 ): string | null {
-  if (typeof value === "string") {
-    for (const privateValue of boundary.privateValues) {
-      if (value.includes(privateValue)) return path;
-    }
-    return null;
+  for (const privateValue of boundary.privateValues) {
+    if (value.includes(privateValue)) return path;
   }
-  if (value === null || typeof value !== "object") return null;
-  if (isJsonArray(value)) {
-    for (let index = 0; index < value.length; index += 1) {
-      const entry = value[index];
-      if (entry === undefined) continue;
-      const hit = findPrivateText(entry, boundary, `${path}[${index}]`);
-      if (hit !== null) return hit;
-    }
-    return null;
+  return null;
+}
+
+function findPrivateInArray(
+  value: JsonArray,
+  boundary: RedactionBoundary,
+  path: string,
+): string | null {
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    if (entry === undefined) continue;
+    const hit = findPrivateText(entry, boundary, `${path}[${index}]`);
+    if (hit !== null) return hit;
   }
-  const record: JsonObject = value;
+  return null;
+}
+
+function findPrivateInObject(
+  record: JsonObject,
+  boundary: RedactionBoundary,
+  path: string,
+): string | null {
   for (const key of Object.keys(record)) {
-    const keyHit = findPrivateText(key, boundary, `${path}.${key}`);
+    const keyHit = findPrivateString(key, boundary, `${path}.${key}`);
     if (keyHit !== null) return keyHit;
     const entry = record[key];
     if (entry === undefined) continue;
@@ -74,6 +75,18 @@ function findPrivateText(
     if (hit !== null) return hit;
   }
   return null;
+}
+
+function findPrivateText(
+  value: JsonValue,
+  boundary: RedactionBoundary,
+  path: string,
+): string | null {
+  if (typeof value === "string") return findPrivateString(value, boundary, path);
+  if (value === null || typeof value !== "object") return null;
+  return isJsonArray(value)
+    ? findPrivateInArray(value, boundary, path)
+    : findPrivateInObject(value, boundary, path);
 }
 
 /** 返回第一个含私有值的结构路径，没有则返回 null。 */
@@ -85,19 +98,12 @@ export function locatePrivateText(
   return findPrivateText(value, boundary, path);
 }
 
-export function containsPrivateText(
-  value: JsonValue,
-  boundary: RedactionBoundary,
-): boolean {
+export function containsPrivateText(value: JsonValue, boundary: RedactionBoundary): boolean {
   return findPrivateText(value, boundary, "$") !== null;
 }
 
 /** 公共输出含私有值即以 `output-boundary` 失败，路径指向命中的结构位置。 */
-export function assertPublicJson(
-  value: JsonValue,
-  boundary: RedactionBoundary,
-  path = "$",
-): void {
+export function assertPublicJson(value: JsonValue, boundary: RedactionBoundary, path = "$"): void {
   const hit = findPrivateText(value, boundary, path);
   if (hit !== null) {
     fail("output-boundary", "private-value", sanitizePath(hit));

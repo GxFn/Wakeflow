@@ -7,13 +7,7 @@
   "$comment": "本 Schema 只闭合 portable manifest shape。ref 的 UTF-8 字节上限、NFC/case collision、fileCount/totalBytes 派生相等、物理 no-follow 观察与两遍树稳定性由 foundation/artifact/loaded-artifact-tree-identity 运行时能力负责。",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "fileCount",
-    "files",
-    "schemaVersion",
-    "totalBytes"
-  ],
+  "required": ["artifactKind", "fileCount", "files", "schemaVersion", "totalBytes"],
   "properties": {
     "artifactKind": {
       "const": "wakeflow-loaded-artifact-tree"
@@ -45,12 +39,7 @@
       "title": "LoadedArtifactTreeFile",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "bytes",
-        "digest",
-        "executable",
-        "ref"
-      ],
+      "required": ["bytes", "digest", "executable", "ref"],
       "properties": {
         "bytes": {
           "type": "integer",

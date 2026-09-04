@@ -6,9 +6,7 @@
   "description": "lifecycle.demand-cancelled persisted event v1 的严格 payload。",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "reason"
-  ],
+  "required": ["reason"],
   "properties": {
     "reason": {
       "type": "string",

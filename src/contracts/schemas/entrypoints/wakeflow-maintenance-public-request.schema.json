@@ -75,9 +75,7 @@
     "freshInitializeBody": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "selection"
-      ],
+      "required": ["selection"],
       "properties": {
         "selection": {
           "$ref": "#/$defs/jsonValue",
@@ -88,9 +86,7 @@
     "reconfigureBody": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "desiredConfig"
-      ],
+      "required": ["desiredConfig"],
       "properties": {
         "desiredConfig": {
           "$ref": "#/$defs/jsonValue",
@@ -106,12 +102,7 @@
     "freshInitializePreviewRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "action",
-        "request"
-      ],
+      "required": ["root", "mode", "action", "request"],
       "properties": {
         "root": {
           "$ref": "#/$defs/root"
@@ -130,13 +121,7 @@
     "freshInitializeApplyRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "action",
-        "request",
-        "planDigest"
-      ],
+      "required": ["root", "mode", "action", "request", "planDigest"],
       "properties": {
         "root": {
           "$ref": "#/$defs/root"
@@ -158,12 +143,7 @@
     "reconfigurePreviewRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "action",
-        "request"
-      ],
+      "required": ["root", "mode", "action", "request"],
       "properties": {
         "root": {
           "$ref": "#/$defs/root"
@@ -182,13 +162,7 @@
     "reconfigureApplyRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "action",
-        "request",
-        "planDigest"
-      ],
+      "required": ["root", "mode", "action", "request", "planDigest"],
       "properties": {
         "root": {
           "$ref": "#/$defs/root"
@@ -210,12 +184,7 @@
     "reconcilePreviewRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "action",
-        "request"
-      ],
+      "required": ["root", "mode", "action", "request"],
       "properties": {
         "root": {
           "$ref": "#/$defs/root"
@@ -234,13 +203,7 @@
     "reconcileApplyRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "action",
-        "request",
-        "planDigest"
-      ],
+      "required": ["root", "mode", "action", "request", "planDigest"],
       "properties": {
         "root": {
           "$ref": "#/$defs/root"
@@ -262,11 +225,7 @@
     "recoverRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "root",
-        "mode",
-        "operationId"
-      ],
+      "required": ["root", "mode", "operationId"],
       "properties": {
         "root": {
           "$ref": "#/$defs/root"

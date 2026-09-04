@@ -143,13 +143,7 @@
     "rejectedAttempt": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "claimId",
-        "claimDigest",
-        "claimEventId",
-        "claimCommitId",
-        "observationDigest"
-      ],
+      "required": ["claimId", "claimDigest", "claimEventId", "claimCommitId", "observationDigest"],
       "properties": {
         "claimId": {
           "$ref": "#/$defs/claimId"

@@ -49,11 +49,7 @@
     "identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "bindingRef",
-        "bindingId"
-      ],
+      "required": ["status", "bindingRef", "bindingId"],
       "properties": {
         "status": {
           "const": "registered"
@@ -75,10 +71,7 @@
     "preflight": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "blockingReasons"
-      ],
+      "required": ["status", "blockingReasons"],
       "properties": {
         "status": {
           "const": "blocked"
@@ -90,10 +83,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "code",
-              "source"
-            ],
+            "required": ["code", "source"],
             "properties": {
               "code": {
                 "const": "root-unobserved"
@@ -109,11 +99,7 @@
     "sourceFingerprints": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "desiredTopologyDigest",
-        "windowTopologyDigest",
-        "rootObservationDigest"
-      ],
+      "required": ["desiredTopologyDigest", "windowTopologyDigest", "rootObservationDigest"],
       "properties": {
         "desiredTopologyDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"

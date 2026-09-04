@@ -28,7 +28,7 @@ export interface AppendCommandBinding {
   readonly expectedStreamRevision: number;
 }
 
-export interface AppendCommandParsedRequest<Input> {
+interface AppendCommandParsedRequest<Input> {
   readonly envelope: AppendCommandEnvelope;
   readonly input: Input;
 }
@@ -36,9 +36,7 @@ export interface AppendCommandParsedRequest<Input> {
 export interface AppendCommandSpec<Input, Context, Outcome, Result> {
   readonly tool: string;
   /** 用切片自己的 Schema 解析请求；返回信封与切片输入。 */
-  readonly parseRequest: (
-    value: unknown,
-  ) => Readonly<AppendCommandParsedRequest<Input>>;
+  readonly parseRequest: (value: unknown) => Readonly<AppendCommandParsedRequest<Input>>;
   /** 打开本次命令需要的上下文（配置、权威、Demand 根等）。 */
   readonly open: (
     workspaceRoot: RootedDirectory,
@@ -52,10 +50,7 @@ export interface AppendCommandSpec<Input, Context, Outcome, Result> {
     binding: Readonly<AppendCommandBinding>,
   ) => Promise<Outcome>;
   /** 从追加后的状态派生下一前沿；缺省为无前沿。 */
-  readonly next?: (
-    context: Context,
-    outcome: Outcome,
-  ) => Promise<Readonly<NextProjection>>;
+  readonly next?: (context: Context, outcome: Outcome) => Promise<Readonly<NextProjection>>;
   /** 组装公共结果；内核随后做脱敏与上限检查。 */
   readonly result: (
     envelope: Readonly<AppendCommandEnvelope>,
@@ -82,19 +77,12 @@ export async function runAppendCommand<Input, Context, Outcome, Result>(
     spec,
     value,
     (binding) => {
-      parseIdempotencyKey(
-        binding.envelope.idempotencyKey,
-        "$request.idempotencyKey",
-      );
+      parseIdempotencyKey(binding.envelope.idempotencyKey, "$request.idempotencyKey");
       if (
         !Number.isSafeInteger(binding.envelope.expectedStreamRevision) ||
         binding.envelope.expectedStreamRevision < 0
       ) {
-        fail(
-          "invalid-request",
-          "expected-stream-revision",
-          "$request.expectedStreamRevision",
-        );
+        fail("invalid-request", "expected-stream-revision", "$request.expectedStreamRevision");
       }
     },
     async (context, shell) => {
@@ -110,8 +98,7 @@ export async function runAppendCommand<Input, Context, Outcome, Result>(
         expectedStreamRevision: envelope.expectedStreamRevision,
       });
       const outcome = await spec.execute(context, shell.input, binding);
-      const next =
-        spec.next === undefined ? NO_NEXT : await spec.next(context, outcome);
+      const next = spec.next === undefined ? NO_NEXT : await spec.next(context, outcome);
       return spec.result(envelope, outcome, next);
     },
   );

@@ -160,13 +160,7 @@
     "targetTask": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "targetTaskId",
-        "taskPackageId",
-        "taskPackageDigest",
-        "windowId",
-        "phase"
-      ],
+      "required": ["targetTaskId", "taskPackageId", "taskPackageDigest", "windowId", "phase"],
       "properties": {
         "targetTaskId": {
           "$ref": "#/$defs/targetTaskId"
@@ -389,11 +383,7 @@
             }
           },
           "else": {
-            "required": [
-              "repositoryId",
-              "commitExpectation",
-              "acceptanceAnchorIds"
-            ],
+            "required": ["repositoryId", "commitExpectation", "acceptanceAnchorIds"],
             "properties": {
               "workType": false,
               "repositoryId": {
@@ -854,12 +844,7 @@
             "properties": {
               "currentDelivery": {
                 "type": "object",
-                "required": [
-                  "workClaim",
-                  "hostEffect",
-                  "targetResult",
-                  "reviewDecision"
-                ],
+                "required": ["workClaim", "hostEffect", "targetResult", "reviewDecision"],
                 "properties": {
                   "workClaim": {},
                   "hostEffect": {
@@ -1057,13 +1042,7 @@
     "testCurrentDelivery": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "targetDeliveryId",
-        "intentDigest",
-        "hostId",
-        "bindingId",
-        "testAttemptId"
-      ],
+      "required": ["targetDeliveryId", "intentDigest", "hostId", "bindingId", "testAttemptId"],
       "properties": {
         "targetDeliveryId": {
           "$ref": "#/$defs/targetDeliveryId"
@@ -1417,13 +1396,7 @@
     "targetResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "targetResultId",
-        "resultDigest",
-        "outcome",
-        "reportedAt",
-        "claimHandling"
-      ],
+      "required": ["targetResultId", "resultDigest", "outcome", "reportedAt", "claimHandling"],
       "properties": {
         "targetResultId": {
           "type": "string",
@@ -1539,12 +1512,7 @@
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         },
         "decision": {
-          "enum": [
-            "accept",
-            "request-another-attempt",
-            "escalate-product-defect",
-            "blocked"
-          ]
+          "enum": ["accept", "request-another-attempt", "escalate-product-defect", "blocked"]
         },
         "controllerWindowId": {
           "$ref": "#/$defs/windowId"
@@ -1557,12 +1525,7 @@
     "testCard": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "testCardId",
-        "testCardDigest",
-        "targetTaskId",
-        "testWindowId"
-      ],
+      "required": ["testCardId", "testCardDigest", "targetTaskId", "testWindowId"],
       "properties": {
         "testCardId": {
           "type": "string",
@@ -1582,12 +1545,7 @@
     "pendingTestRetest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "previousTestCard",
-        "testReviewDecision",
-        "productDefectRemediation"
-      ],
+      "required": ["kind", "previousTestCard", "testReviewDecision", "productDefectRemediation"],
       "properties": {
         "kind": {
           "const": "product-defect-retest"

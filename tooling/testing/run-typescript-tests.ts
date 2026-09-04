@@ -24,16 +24,12 @@ function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function assertRealDirectoryChain(
-  root: string,
-  directory: string,
-  message: string,
-): void {
+function assertRealDirectoryChain(root: string, directory: string, message: string): void {
   const relative = nodePath.relative(root, directory);
   if (
-    relative === ".."
-    || relative.startsWith(`..${nodePath.sep}`)
-    || nodePath.isAbsolute(relative)
+    relative === ".." ||
+    relative.startsWith(`..${nodePath.sep}`) ||
+    nodePath.isAbsolute(relative)
   ) {
     fail(message);
   }
@@ -81,18 +77,15 @@ function collectTestSources(root: string): readonly string[] {
   return Object.freeze(result);
 }
 
-function assertCurrentTestSource(
-  sourceRoot: string,
-  value: string,
-): string {
+function assertCurrentTestSource(sourceRoot: string, value: string): string {
   const source = nodePath.resolve(value);
   const relative = nodePath.relative(sourceRoot, source);
   if (
-    relative.length === 0
-    || relative === ".."
-    || relative.startsWith(`..${nodePath.sep}`)
-    || nodePath.isAbsolute(relative)
-    || !relative.endsWith(".test.ts")
+    relative.length === 0 ||
+    relative === ".." ||
+    relative.startsWith(`..${nodePath.sep}`) ||
+    nodePath.isAbsolute(relative) ||
+    !relative.endsWith(".test.ts")
   ) {
     fail("focused test source must be one .test.ts file below tests/");
   }
@@ -119,10 +112,7 @@ function selectedTestSources(
   }
   const seen = new Set<string>();
   const sources = focusedValues.map((value) => {
-    const source = assertCurrentTestSource(
-      sourceRoot,
-      nodePath.resolve(repositoryRoot, value),
-    );
+    const source = assertCurrentTestSource(sourceRoot, nodePath.resolve(repositoryRoot, value));
     if (seen.has(source)) fail("focused test sources cannot contain duplicates");
     seen.add(source);
     return source;
@@ -141,29 +131,21 @@ export function compiledTypeScriptTests(
   return selectedTestSources(repositoryRoot, focusedValues).map((source) => {
     const relative = nodePath.relative(sourceRoot, source);
     if (
-      relative.length === 0
-      || relative === ".."
-      || relative.startsWith(`..${nodePath.sep}`)
-      || nodePath.isAbsolute(relative)
+      relative.length === 0 ||
+      relative === ".." ||
+      relative.startsWith(`..${nodePath.sep}`) ||
+      nodePath.isAbsolute(relative)
     ) {
       fail("test source escaped the tests root");
     }
-    const output = nodePath.join(
-      outputRoot,
-      relative.replace(/\.ts$/u, ".js"),
-    );
+    const output = nodePath.join(outputRoot, relative.replace(/\.ts$/u, ".js"));
     assertRealDirectoryChain(
       outputRoot,
       nodePath.dirname(output),
       "compiled test parent chain must contain only real directories",
     );
     const stat = lstatSync(output, { throwIfNoEntry: false });
-    if (
-      stat === undefined
-      || stat.isSymbolicLink()
-      || !stat.isFile()
-      || stat.nlink !== 1
-    ) {
+    if (stat === undefined || stat.isSymbolicLink() || !stat.isFile() || stat.nlink !== 1) {
       fail("a current test source has no regular compiled output");
     }
     return output;
@@ -180,10 +162,7 @@ function parseInvocation(values: readonly string[]): readonly string[] | undefin
 
 function run(): void {
   const repositoryRoot = process.cwd();
-  const files = compiledTypeScriptTests(
-    repositoryRoot,
-    parseInvocation(process.argv.slice(2)),
-  );
+  const files = compiledTypeScriptTests(repositoryRoot, parseInvocation(process.argv.slice(2)));
   const result = spawnSync(process.execPath, ["--test", ...files], {
     cwd: repositoryRoot,
     stdio: "inherit",
@@ -196,8 +175,7 @@ function run(): void {
 
 function isMainModule(): boolean {
   const invoked = process.argv[1];
-  return invoked !== undefined
-    && nodePath.resolve(invoked) === fileURLToPath(import.meta.url);
+  return invoked !== undefined && nodePath.resolve(invoked) === fileURLToPath(import.meta.url);
 }
 
 if (isMainModule()) run();

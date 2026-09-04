@@ -56,12 +56,7 @@
     "file": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "path",
-        "byteCount",
-        "digest",
-        "mode"
-      ],
+      "required": ["path", "byteCount", "digest", "mode"],
       "properties": {
         "path": {
           "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"

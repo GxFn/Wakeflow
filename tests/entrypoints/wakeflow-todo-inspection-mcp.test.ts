@@ -24,9 +24,7 @@ import {
 const TODO_ID = "todo_b1111111-1111-4111-8111-111111111111";
 
 async function createFixture(): Promise<string> {
-  const rootPath = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-todo-inspection-mcp-"),
-  );
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-todo-inspection-mcp-"));
   const root = await RootedDirectory.open(rootPath);
   try {
     await materializeWakeflowActiveLayout(root, {
@@ -57,7 +55,10 @@ test("Codex MCP有界查询TODO summary与exact item", async () => {
       readonly view: "list";
       readonly items: readonly Readonly<{ readonly todoId: string }>[];
     };
-    deepEqual(list.items.map((entry) => entry.todoId), [TODO_ID]);
+    deepEqual(
+      list.items.map((entry) => entry.todoId),
+      [TODO_ID],
+    );
 
     const itemCall = await connection.client.callTool({
       name: WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,

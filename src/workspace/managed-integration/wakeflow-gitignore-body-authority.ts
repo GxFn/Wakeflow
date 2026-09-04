@@ -113,7 +113,7 @@ export class WakeflowGitignoreBodyAuthorityError extends Error {
 
 const ACTIVE_ROOT_REF = parsePortableResourcePath(WAKEFLOW_ACTIVE_ROOT);
 const LOCAL_ROOT_REF = parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
-const GITIGNORE_MAGIC_PATTERN = /[\\*?\[\]#!]/gu;
+const GITIGNORE_MAGIC_PATTERN = /[\\*?[\]#!]/gu;
 const GITIGNORE_MAGIC_CHARACTERS = new Set([
   "\\",
   "*",

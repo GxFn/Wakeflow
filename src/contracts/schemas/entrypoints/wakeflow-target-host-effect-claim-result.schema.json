@@ -173,14 +173,7 @@
     "implementationClaim": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "claimId",
-        "claimRef",
-        "claimDigest",
-        "claimedAt",
-        "target",
-        "route"
-      ],
+      "required": ["claimId", "claimRef", "claimDigest", "claimedAt", "target", "route"],
       "properties": {
         "claimId": {
           "$ref": "#/$defs/claimId"
@@ -205,14 +198,7 @@
     "testClaim": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "claimId",
-        "claimRef",
-        "claimDigest",
-        "claimedAt",
-        "target",
-        "route"
-      ],
+      "required": ["claimId", "claimRef", "claimDigest", "claimedAt", "target", "route"],
       "properties": {
         "claimId": {
           "$ref": "#/$defs/claimId"
@@ -237,13 +223,7 @@
     "implementationTarget": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "workType",
-        "demandId",
-        "targetTaskId",
-        "targetDeliveryId",
-        "intentDigest"
-      ],
+      "required": ["workType", "demandId", "targetTaskId", "targetDeliveryId", "intentDigest"],
       "properties": {
         "workType": {
           "const": "implementation"
@@ -453,13 +433,7 @@
     "actionWorkClaim": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "claimId",
-        "claimRef",
-        "claimDigest",
-        "expectedStateDigest",
-        "claimCommitId"
-      ],
+      "required": ["claimId", "claimRef", "claimDigest", "expectedStateDigest", "claimCommitId"],
       "properties": {
         "claimId": {
           "$ref": "#/$defs/claimId"

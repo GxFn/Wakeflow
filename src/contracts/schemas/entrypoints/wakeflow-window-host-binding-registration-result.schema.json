@@ -27,30 +27,19 @@
       "const": "wakeflow_register_window_binding"
     },
     "hostId": {
-      "enum": [
-        "codex",
-        "claude-code"
-      ]
+      "enum": ["codex", "claude-code"]
     },
     "windowId": {
       "type": "string",
       "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "disposition": {
-      "enum": [
-        "registered",
-        "replayed"
-      ]
+      "enum": ["registered", "replayed"]
     },
     "binding": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "bindingId",
-        "bindingRef",
-        "registeredAt",
-        "source"
-      ],
+      "required": ["bindingId", "bindingRef", "registeredAt", "source"],
       "properties": {
         "bindingId": {
           "type": "string",
@@ -65,11 +54,7 @@
         "source": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "kind",
-            "launchIntentDigest",
-            "observedAt"
-          ],
+          "required": ["kind", "launchIntentDigest", "observedAt"],
           "properties": {
             "kind": {
               "const": "agent-host-create-result"
@@ -87,11 +72,7 @@
     "projection": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "resourceRef",
-        "projectionDigest",
-        "documentDigest"
-      ],
+      "required": ["resourceRef", "projectionDigest", "documentDigest"],
       "properties": {
         "resourceRef": {
           "$ref": "#/$defs/portableResourcePath"

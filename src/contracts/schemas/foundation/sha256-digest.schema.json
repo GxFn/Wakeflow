@@ -7,7 +7,5 @@
   "$comment": "摘要只证明 exact bytes 或 canonical semantics 的相等性；它不是签名、授权、来源真实性或抗恶意篡改证明。",
   "type": "string",
   "pattern": "^sha256:[0-9a-f]{64}$",
-  "examples": [
-    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  ]
+  "examples": ["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
 }

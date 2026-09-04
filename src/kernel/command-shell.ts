@@ -2,16 +2,12 @@ import os from "node:os";
 
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
-import {
-  JsonValueError,
-  parseJsonValue,
-  type JsonValue,
-} from "../foundation/data/json-value.js";
+import { JsonValueError, parseJsonValue, type JsonValue } from "../foundation/data/json-value.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
-import { fail, isWakeflowError, toWakeflowError } from "./error.js";
+import { fail, toWakeflowError } from "./error.js";
 import { assertWithinByteLimit } from "./limits.js";
 import {
   assertPublicJson,
@@ -35,10 +31,7 @@ export interface CommandShellSpec<Envelope extends { readonly root: string }, In
     value: unknown,
   ) => Readonly<{ readonly envelope: Envelope; readonly input: Input }>;
   /** 打开本次命令需要的上下文（配置、权威、Demand 根、宿主 facade 等）。 */
-  readonly open: (
-    workspaceRoot: RootedDirectory,
-    envelope: Readonly<Envelope>,
-  ) => Promise<Context>;
+  readonly open: (workspaceRoot: RootedDirectory, envelope: Readonly<Envelope>) => Promise<Context>;
   readonly close: (context: Context) => Promise<void>;
   /** 除工作区根与 home 之外还必须脱敏的值，例如 ledger 根与宿主句柄。 */
   readonly privateValues?: (context: Context) => Iterable<string>;
@@ -68,11 +61,7 @@ function payloadWithoutRoot(json: JsonValue): JsonValue {
   if (json === null || typeof json !== "object" || Array.isArray(json)) {
     fail("invalid-request", "not-object", "$request");
   }
-  return Object.freeze(
-    Object.fromEntries(
-      Object.entries(json).filter(([key]) => key !== "root"),
-    ),
-  );
+  return Object.freeze(Object.fromEntries(Object.entries(json).filter(([key]) => key !== "root")));
 }
 
 /**
@@ -116,11 +105,7 @@ export async function runCommandShell<
     requestDigest,
     workspaceRoot,
   });
-  let boundary = createRedactionBoundary([
-    envelope.root,
-    workspaceRoot.absolutePath,
-    os.homedir(),
-  ]);
+  let boundary = createRedactionBoundary([envelope.root, workspaceRoot.absolutePath, os.homedir()]);
   let context: Context | undefined;
   let result: Result | undefined;
   let failure: unknown;
@@ -140,25 +125,33 @@ export async function runCommandShell<
     assertWithinByteLimit(assembledJson, "publicResultBytes", "$result");
     result = assembled;
   } catch (error: unknown) {
-    failure = isWakeflowError(error)
-      ? error
-      : toWakeflowError(error, "$request");
+    failure = toWakeflowError(error, "$request");
   }
+  failure = await releaseCommandShell(spec, context, workspaceRoot, failure);
+  if (failure !== undefined) throw failure;
+  if (result === undefined) fail("unexpected", "no-result", "$result");
+  return result;
+}
+
+/** 关闭上下文与根；主体失败优先，关闭失败只在主体成功时成为结局。 */
+async function releaseCommandShell<Envelope extends { readonly root: string }, Input, Context>(
+  spec: Readonly<CommandShellSpec<Envelope, Input, Context>>,
+  context: Context | undefined,
+  workspaceRoot: RootedDirectory,
+  failure: unknown,
+): Promise<unknown> {
+  let outcome = failure;
   if (context !== undefined) {
     try {
       await spec.close(context);
     } catch (error: unknown) {
-      if (failure === undefined) failure = toWakeflowError(error, "$context");
+      outcome ??= toWakeflowError(error, "$context");
     }
   }
   try {
     await workspaceRoot.close();
   } catch (error: unknown) {
-    if (failure === undefined) {
-      failure = toWakeflowError(error, "$request.root");
-    }
+    outcome ??= toWakeflowError(error, "$request.root");
   }
-  if (failure !== undefined) throw failure;
-  if (result === undefined) fail("unexpected", "no-result", "$result");
-  return result;
+  return outcome;
 }

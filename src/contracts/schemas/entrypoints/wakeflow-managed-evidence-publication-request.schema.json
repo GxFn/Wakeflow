@@ -48,12 +48,7 @@
     "sourceSelection": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "evidenceType",
-        "source",
-        "sensitivity",
-        "opaqueContentPolicy"
-      ],
+      "required": ["evidenceType", "source", "sensitivity", "opaqueContentPolicy"],
       "properties": {
         "evidenceType": {
           "type": "string",
@@ -81,10 +76,7 @@
       }
     },
     "sourceRoot": {
-      "oneOf": [
-        { "$ref": "#/$defs/repositoryRoot" },
-        { "$ref": "#/$defs/supportSurfaceRoot" }
-      ]
+      "oneOf": [{ "$ref": "#/$defs/repositoryRoot" }, { "$ref": "#/$defs/supportSurfaceRoot" }]
     },
     "repositoryRoot": {
       "type": "object",

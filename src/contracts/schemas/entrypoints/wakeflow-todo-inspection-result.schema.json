@@ -6,10 +6,7 @@
   "description": "Successful bounded TODO list page or exact redacted TODO item inspection.",
   "$comment": "The result is observation only. It exposes no workspace root, file node, storage key, Board/projection content, lock, transaction, state-root ref, mount identity digest, eligibility decision, claim authority, or mutation capability.",
   "type": "object",
-  "oneOf": [
-    { "$ref": "#/$defs/listResult" },
-    { "$ref": "#/$defs/itemResult" }
-  ],
+  "oneOf": [{ "$ref": "#/$defs/listResult" }, { "$ref": "#/$defs/itemResult" }],
   "$defs": {
     "listResult": {
       "type": "object",
@@ -52,15 +49,7 @@
     "itemResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "status",
-        "view",
-        "collection",
-        "item"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "status", "view", "collection", "item"],
       "properties": {
         "kind": { "const": "WakeflowTodoInspectionItem" },
         "schemaVersion": { "const": 1 },
@@ -122,18 +111,12 @@
         "controllerWindowId": { "$ref": "#/$defs/windowId" },
         "summary": { "$ref": "#/$defs/nonEmptyText" },
         "parkedTrigger": {
-          "oneOf": [
-            { "type": "null" },
-            { "$ref": "#/$defs/reasonText" }
-          ]
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/reasonText" }]
         },
         "autoClaim": { "type": "boolean" },
         "testingMode": { "$ref": "#/$defs/testingMode" },
         "mountedDemandId": {
-          "oneOf": [
-            { "type": "null" },
-            { "$ref": "#/$defs/demandId" }
-          ]
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/demandId" }]
         },
         "intakeDigest": { "$ref": "#/$defs/sha256Digest" },
         "stateDigest": { "$ref": "#/$defs/sha256Digest" }
@@ -216,10 +199,7 @@
         "summary": { "$ref": "#/$defs/nonEmptyText" },
         "intakeRationale": { "$ref": "#/$defs/nonEmptyText" },
         "readiness": {
-          "oneOf": [
-            { "$ref": "#/$defs/readyReadiness" },
-            { "$ref": "#/$defs/parkedReadiness" }
-          ]
+          "oneOf": [{ "$ref": "#/$defs/readyReadiness" }, { "$ref": "#/$defs/parkedReadiness" }]
         },
         "autoClaim": { "type": "boolean" },
         "testingDecision": { "$ref": "#/$defs/testingDecision" },
@@ -255,45 +235,26 @@
         "mode": { "$ref": "#/$defs/testingMode" },
         "summary": { "$ref": "#/$defs/reasonText" },
         "environmentMemberRef": {
-          "oneOf": [
-            { "type": "null" },
-            { "$ref": "#/$defs/portableResourcePath" }
-          ]
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/portableResourcePath" }]
         }
       }
     },
     "stateDetail": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "revision",
-        "updatedAt",
-        "mountedDemandId",
-        "withdrawal",
-        "archive"
-      ],
+      "required": ["status", "revision", "updatedAt", "mountedDemandId", "withdrawal", "archive"],
       "properties": {
         "status": { "$ref": "#/$defs/todoStatus" },
         "revision": { "$ref": "#/$defs/revision" },
         "updatedAt": { "$ref": "#/$defs/utcInstant" },
         "mountedDemandId": {
-          "oneOf": [
-            { "type": "null" },
-            { "$ref": "#/$defs/demandId" }
-          ]
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/demandId" }]
         },
         "withdrawal": {
-          "oneOf": [
-            { "type": "null" },
-            { "$ref": "#/$defs/withdrawal" }
-          ]
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/withdrawal" }]
         },
         "archive": {
-          "oneOf": [
-            { "type": "null" },
-            { "$ref": "#/$defs/archiveDetail" }
-          ]
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/archiveDetail" }]
         }
       },
       "allOf": [
@@ -395,10 +356,7 @@
         "schemaVersion": { "const": 1 },
         "family": { "enum": ["requirement", "confirmation"] },
         "recordId": {
-          "oneOf": [
-            { "$ref": "#/$defs/requirementId" },
-            { "$ref": "#/$defs/confirmationId" }
-          ]
+          "oneOf": [{ "$ref": "#/$defs/requirementId" }, { "$ref": "#/$defs/confirmationId" }]
         },
         "recordRef": { "$ref": "#/$defs/portableResourcePath" },
         "recordDigest": { "$ref": "#/$defs/sha256Digest" },

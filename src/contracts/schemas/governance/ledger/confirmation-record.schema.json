@@ -70,12 +70,7 @@
     "document": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "role",
-        "path",
-        "mediaType",
-        "digest"
-      ],
+      "required": ["role", "path", "mediaType", "digest"],
       "properties": {
         "role": {
           "enum": [

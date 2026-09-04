@@ -74,12 +74,7 @@
     "claimTransition": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "commitId",
-        "eventId",
-        "expectedStreamRevision",
-        "expectedStateDigest"
-      ],
+      "required": ["commitId", "eventId", "expectedStreamRevision", "expectedStateDigest"],
       "properties": {
         "commitId": {
           "$ref": "#/$defs/commitId"

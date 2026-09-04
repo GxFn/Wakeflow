@@ -14,14 +14,8 @@ import { parseJsonValue, type JsonValue } from "../foundation/data/json-value.js
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 import { fail, isWakeflowError } from "../kernel/error.js";
 import { assertCanonicalTextWithinLimit } from "../kernel/limits.js";
-import {
-  assertPublicJson,
-  createRedactionBoundary,
-} from "../kernel/redaction.js";
-import {
-  publicToolDefinition,
-  type WakeflowToolCatalog,
-} from "../kernel/tool-registry.js";
+import { assertPublicJson, createRedactionBoundary } from "../kernel/redaction.js";
+import { publicToolDefinition, type WakeflowToolCatalog } from "../kernel/tool-registry.js";
 
 /**
  * Wakeflow Entrypoint / MCP：公共工具的协议边界。
@@ -36,12 +30,10 @@ import {
 const PROCESS_REDACTION_BOUNDARY = createRedactionBoundary([os.homedir()]);
 
 /** 公共MCP executor只接收SDK已解析的wire值，并返回一个领域公共结果。 */
-export type WakeflowPublicMcpExecutor<Result> = (
-  value: unknown,
-) => Promise<Readonly<Result>>;
+export type WakeflowPublicMcpExecutor<Result> = (value: unknown) => Promise<Readonly<Result>>;
 
 /** 可安全公开到MCP错误信封中的稳定、脱敏领域错误字段。 */
-export interface WakeflowPublicMcpErrorDetails {
+interface WakeflowPublicMcpErrorDetails {
   readonly code: string;
   readonly reason: string;
   readonly path?: string;
@@ -53,11 +45,7 @@ export interface WakeflowPublicMcpErrorDetails {
   readonly bindingAuthority?: "unchanged" | "current" | "unknown";
   readonly claimAuthority?: "unchanged" | "current" | "released" | "unknown";
   readonly eventAuthority?: "unchanged" | "current" | "unknown";
-  readonly publicationAuthority?:
-    | "unchanged"
-    | "recoverable"
-    | "current"
-    | "unknown";
+  readonly publicationAuthority?: "unchanged" | "recoverable" | "current" | "unknown";
 }
 
 interface WakeflowPublicMcpErrorEnvelope {
@@ -92,9 +80,7 @@ function ownText(value: object, key: string): string | null {
  * 旧领域错误的结构投影：只取自身数据属性里的稳定字符串字段，从不复制消息、
  * 调用栈或原因链。内核错误走 `toPublicDetails`，随 L1 切片迁移后本投影退役。
  */
-function legacyErrorDetails(
-  error: unknown,
-): Readonly<WakeflowPublicMcpErrorDetails> | null {
+function legacyErrorDetails(error: unknown): Readonly<WakeflowPublicMcpErrorDetails> | null {
   if (typeof error !== "object" || error === null) return null;
   const code = ownText(error, "code");
   const reason = ownText(error, "reason");
@@ -107,10 +93,7 @@ function legacyErrorDetails(
   return Object.freeze(details) as unknown as Readonly<WakeflowPublicMcpErrorDetails>;
 }
 
-function errorEnvelope(
-  tool: string,
-  error: unknown,
-): Readonly<WakeflowPublicMcpErrorEnvelope> {
+function errorEnvelope(tool: string, error: unknown): Readonly<WakeflowPublicMcpErrorEnvelope> {
   return Object.freeze({
     kind: "WakeflowMcpError",
     schemaVersion: 1,
@@ -164,7 +147,7 @@ function successfulToolResult(value: unknown): CallToolResult {
  * 给 SDK 的请求校验器提供者：Schema 在注册时准入，Ajv 编译推迟到该工具第一次
  * 被调用，因此注册二十余个工具不再支付编译成本。
  */
-export const WAKEFLOW_JSON_SCHEMA_VALIDATOR: jsonSchemaValidator = Object.freeze({
+const WAKEFLOW_JSON_SCHEMA_VALIDATOR: jsonSchemaValidator = Object.freeze({
   getValidator<T>(schema: JsonSchemaType): JsonSchemaValidator<T> {
     const validate = createRuntimeJsonSchemaValidator<T>(schema);
     return (input: unknown) => {

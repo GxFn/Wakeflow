@@ -58,10 +58,7 @@
           "$ref": "#/$defs/nonEmptyTextList"
         },
         "commitExpectation": {
-          "enum": [
-            "commit",
-            "leave-uncommitted"
-          ]
+          "enum": ["commit", "leave-uncommitted"]
         },
         "acceptanceAnchors": {
           "type": "array",
@@ -76,9 +73,7 @@
     "testTaskPackageRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "workType"
-      ],
+      "required": ["workType"],
       "properties": {
         "workType": {
           "const": "test"
@@ -114,10 +109,7 @@
     "implementationAssignment": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "repositoryId",
-        "windowId"
-      ],
+      "required": ["repositoryId", "windowId"],
       "properties": {
         "repositoryId": {
           "$ref": "#/$defs/repositoryId"
@@ -130,11 +122,7 @@
     "boundaries": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "inScope",
-        "outOfScope",
-        "forbidden"
-      ],
+      "required": ["inScope", "outOfScope", "forbidden"],
       "properties": {
         "inScope": {
           "$ref": "#/$defs/nonEmptyTextList"
@@ -163,12 +151,7 @@
     "acceptanceAnchor": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "anchorId",
-        "claim",
-        "probe",
-        "expected"
-      ],
+      "required": ["anchorId", "claim", "probe", "expected"],
       "properties": {
         "anchorId": {
           "$ref": "#/$defs/anchorId"
@@ -191,13 +174,7 @@
     }
   },
   "additionalProperties": false,
-  "required": [
-    "root",
-    "demandId",
-    "idempotencyKey",
-    "expectedStreamRevision",
-    "taskPackage"
-  ],
+  "required": ["root", "demandId", "idempotencyKey", "expectedStreamRevision", "taskPackage"],
   "properties": {
     "root": {
       "type": "string",

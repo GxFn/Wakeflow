@@ -15,15 +15,7 @@
     "previewResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "plan",
-        "planDigest"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "plan", "planDigest"],
       "properties": {
         "kind": { "const": "WakeflowRequirementPublicationPreviewResult" },
         "schemaVersion": { "const": 1 },
@@ -37,15 +29,7 @@
     "applyResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "planDigest",
-        "publication"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "planDigest", "publication"],
       "properties": {
         "kind": { "const": "WakeflowRequirementPublicationApplyResult" },
         "schemaVersion": { "const": 1 },
@@ -59,15 +43,7 @@
     "recoveryResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "planDigest",
-        "publication"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "planDigest", "publication"],
       "properties": {
         "kind": { "const": "WakeflowRequirementPublicationRecoveryResult" },
         "schemaVersion": { "const": 1 },

@@ -641,7 +641,8 @@ npm run validate:claude
 npm run smoke        # codex artifact smoke
 npm run smoke:claude
 npm run test:wakeflow
-npm test             # check:core + both validates + both smokes + tests
+npm run test:legacy  # check:core + both validates + both smokes + old JS tests
+npm test             # TypeScript gate: typecheck, architecture, lint, format, knip, tests, schema drift
 npm run release:check # strict, independent pre-publish consistency check
 ```
 

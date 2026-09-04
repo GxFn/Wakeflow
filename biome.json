@@ -1,0 +1,88 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": ["src/**", "tests/**", "tooling/**", "!src/contracts/generated/**"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 15 }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["tooling/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": { "maxAllowedComplexity": 30 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["tests/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": { "maxAllowedComplexity": 45 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/configuration/**",
+        "src/workspace/**",
+        "src/governance/**",
+        "src/foundation/**",
+        "src/hosts/**",
+        "tests/configuration/**",
+        "tests/workspace/**",
+        "tests/governance/**",
+        "tests/foundation/**",
+        "tests/hosts/**"
+      ],
+      "formatter": { "enabled": false },
+      "linter": {
+        "rules": {
+          "complexity": { "noExcessiveCognitiveComplexity": "off" },
+          "suspicious": {
+            "noImplicitAnyLet": "off",
+            "noControlCharactersInRegex": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off",
+            "useImportType": "off"
+          }
+        }
+      }
+    }
+  ]
+}

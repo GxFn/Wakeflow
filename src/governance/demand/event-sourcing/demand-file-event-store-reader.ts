@@ -214,7 +214,7 @@ function assertCommitChain(
   }
 }
 
-export function demandFileEventCursorFrom(
+function demandFileEventCursorFrom(
   commit: Readonly<DemandEventStreamCommit> | undefined,
 ): Readonly<DemandFileEventStoreCursor> | null {
   if (commit === undefined) return null;
@@ -458,23 +458,6 @@ export async function readDemandFileEventCommitAt(
     fail("stream-invalid", "$commit/commitSequence");
   }
   return loaded.commit;
-}
-
-/**
- * 在候选资源产生任何副作用前，验证完整有界前缀与下一次追加的准入关系。
- *
- * `commitId`、`eventId` 是不可变事件流身份，`sourceExpectation` 则把进程内状态绑定到
- * 持久化尾部；两者都不能只留给事后审计。当前事件流总量硬上限为
- * 64 MiB，因此当前通过验证完整前缀保证正确性；未来若增加派生身份索引，它仍
- * 必须由同一提交权威重建，并保持本函数遇到不确定状态时保守拒绝的语义。
- */
-export async function assertDemandFileEventAppendAdmission(
-  root: RootedDirectory,
-  prepared: Readonly<PreparedDemandEventStreamCommit>,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  const prefix = await readAllDemandFileEventCommits(root, signal);
-  assertDemandFileEventAppendAdmissionAgainstPrefix(prefix.commits, prepared);
 }
 
 /** 对一段已读入的完整前缀执行同一套追加准入检查，不做任何 I/O。 */

@@ -50,10 +50,7 @@ import {
  */
 
 type PublicServerOptions = Parameters<typeof createWakeflowPublicMcpServer>[0];
-type ExecutorField = Exclude<
-  keyof PublicServerOptions,
-  "serverName" | "serverVersion"
->;
+type ExecutorField = Exclude<keyof PublicServerOptions, "serverName" | "serverVersion">;
 
 interface ExpectedPublicTool {
   readonly name: string;
@@ -118,18 +115,12 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     "target-host-effect-claim",
     ADDITIVE,
   ),
-  expectedTool(
-    WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-    "demand-completion",
-    DESTRUCTIVE,
-    ["Completion is not Archive"],
-  ),
-  expectedTool(
-    WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
-    "demand-publication",
-    DESTRUCTIVE,
-    ["performs no host effect"],
-  ),
+  expectedTool(WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, "demand-completion", DESTRUCTIVE, [
+    "Completion is not Archive",
+  ]),
+  expectedTool(WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME, "demand-publication", DESTRUCTIVE, [
+    "performs no host effect",
+  ]),
   expectedTool(
     WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
     "requirement-publication",
@@ -142,11 +133,7 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     ADDITIVE,
     ["future isolated Demand identity", "creates no Demand"],
   ),
-  expectedTool(
-    WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
-    "target-result-import",
-    DESTRUCTIVE,
-  ),
+  expectedTool(WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, "target-result-import", DESTRUCTIVE),
   expectedTool(
     WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
     "demand-controller-route",
@@ -157,38 +144,26 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     "target-result-review-inspection",
     READ_ONLY,
   ),
-  expectedTool(
-    WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
-    "todo-inspection",
-    READ_ONLY,
-    ["does not derive eligibility", "state-root ref"],
-  ),
+  expectedTool(WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME, "todo-inspection", READ_ONLY, [
+    "does not derive eligibility",
+    "state-root ref",
+  ]),
   expectedTool(
     WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
     "todo-intake-publication",
     ADDITIVE,
     ["creates no Demand", "does not execute Auto Claim"],
   ),
-  expectedTool(
-    WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
-    "maintenance-public",
-    {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-    },
-  ),
-  expectedTool(
-    WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
-    "target-task-planning",
-    ADDITIVE,
-  ),
-  expectedTool(
-    WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
-    "test-card-planning",
-    ADDITIVE,
-    ["creates no Test Task", "runs no Test"],
-  ),
+  expectedTool(WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME, "maintenance-public", {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+  }),
+  expectedTool(WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, "target-task-planning", ADDITIVE),
+  expectedTool(WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME, "test-card-planning", ADDITIVE, [
+    "creates no Test Task",
+    "runs no Test",
+  ]),
   expectedTool(
     WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
     "target-delivery-preparation",
@@ -331,8 +306,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
         extra: true,
       } as never),
     (error: unknown) =>
-      error instanceof WakeflowPublicMcpServerConfigurationError &&
-      error.reason === "options",
+      error instanceof WakeflowPublicMcpServerConfigurationError && error.reason === "options",
   );
 });
 
@@ -342,18 +316,10 @@ test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
   equal(typeof instructions, "string");
   equal(Buffer.byteLength(instructions ?? "", "utf8") <= 1_024, true);
   equal(instructions?.includes("never performs Agent host effects"), true);
-  equal(
-    instructions?.includes(WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME),
-    true,
-  );
+  equal(instructions?.includes(WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME), true);
   const listed = await client.listTools();
-  const actualByName = new Map(
-    listed.tools.map((tool) => [tool.name, tool] as const),
-  );
-  deepEqual(
-    [...actualByName.keys()].sort(),
-    PUBLIC_TOOL_CATALOG.map((tool) => tool.name).sort(),
-  );
+  const actualByName = new Map(listed.tools.map((tool) => [tool.name, tool] as const));
+  deepEqual([...actualByName.keys()].sort(), PUBLIC_TOOL_CATALOG.map((tool) => tool.name).sort());
 
   for (const expected of PUBLIC_TOOL_CATALOG) {
     const actual = actualByName.get(expected.name);
@@ -361,15 +327,11 @@ test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
     // ADR-0004 选项 A：结果 Schema 只在服务端校验，不进 tools/list。
     equal(actual?.outputSchema, undefined);
     equal(
-      findWakeflowToolRegistration(WAKEFLOW_PUBLIC_TOOL_CATALOG, expected.name)
-        ?.resultSchema.$id,
+      findWakeflowToolRegistration(WAKEFLOW_PUBLIC_TOOL_CATALOG, expected.name)?.resultSchema.$id,
       expected.outputId,
     );
     deepEqual(actual?.annotations, expected.annotations);
-    equal(
-      JSON.stringify(actual?.inputSchema).includes('"$ref":"urn:'),
-      false,
-    );
+    equal(JSON.stringify(actual?.inputSchema).includes('"$ref":"urn:'), false);
     for (const fragment of expected.descriptionFragments ?? []) {
       equal(actual?.description?.includes(fragment), true);
     }
@@ -386,23 +348,15 @@ test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
 
 test("Codex与Claude Code composition root发布同一二十三工具集合", async () => {
   const listedNames: string[][] = [];
-  for (const createServer of [
-    createCodexWakeflowMcpServer,
-    createClaudeCodeWakeflowMcpServer,
-  ]) {
+  for (const createServer of [createCodexWakeflowMcpServer, createClaudeCodeWakeflowMcpServer]) {
     const server = createServer("1.0.0-test");
     const { client, close } = await connectWakeflowMcpServerForTest(server);
     try {
-      listedNames.push(
-        (await client.listTools()).tools.map((entry) => entry.name).sort(),
-      );
+      listedNames.push((await client.listTools()).tools.map((entry) => entry.name).sort());
     } finally {
       await close();
     }
   }
   deepEqual(listedNames[0], listedNames[1]);
-  deepEqual(
-    listedNames[0],
-    PUBLIC_TOOL_CATALOG.map((tool) => tool.name).sort(),
-  );
+  deepEqual(listedNames[0], PUBLIC_TOOL_CATALOG.map((tool) => tool.name).sort());
 });

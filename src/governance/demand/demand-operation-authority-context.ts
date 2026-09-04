@@ -220,7 +220,7 @@ async function openDemandAuthorityContext(
 
 /**
  * 打开当前Config、Ledger与Demand组合上下文；按 ADR-0005 默认走快照加尾部，
- * 只有校验类入口用 `openDemandAuditAuthorityContext` 从 Commit 1 完整审计。
+ * 校验类入口应直接用仓储的 `audit` 从 Commit 1 完整审计。
  */
 export async function openDemandOperationAuthorityContext(
   workspaceRoot: RootedDirectory,
@@ -228,15 +228,6 @@ export async function openDemandOperationAuthorityContext(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandOperationAuthorityContext>> {
   return openDemandAuthorityContext(workspaceRoot, demandId, signal, false);
-}
-
-/** 从 Commit 1 完整审计后打开组合上下文；只供校验类入口使用。 */
-export async function openDemandAuditAuthorityContext(
-  workspaceRoot: RootedDirectory,
-  demandId: WakeflowDurableId<"demand">,
-  signal: AbortSignal | undefined,
-): Promise<Readonly<DemandOperationAuthorityContext>> {
-  return openDemandAuthorityContext(workspaceRoot, demandId, signal, true);
 }
 
 /**

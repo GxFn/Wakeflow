@@ -5,7 +5,7 @@
  * 输入只用路由的结构形状，不依赖治理层类型；前沿到工具的映射是一张数据表。
  */
 
-export type NextOwner = "controller" | "target" | "test" | "user" | "none";
+type NextOwner = "controller" | "target" | "test" | "user" | "none";
 
 export interface NextProjection {
   readonly frontier: string | null;
@@ -26,91 +26,90 @@ interface FrontierRoute {
 }
 
 /** 前沿种类 → 责任方与建议工具；未列出的种类归 Controller 且不建议工具。 */
-export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> =
-  Object.freeze({
-    "implementation-task-planning": {
-      owner: "controller",
-      tool: "wakeflow_plan_target_task",
-    },
-    "test-card-planning": {
-      owner: "controller",
-      tool: "wakeflow_plan_test_card",
-    },
-    "test-task-planning": {
-      owner: "controller",
-      tool: "wakeflow_plan_target_task",
-    },
-    "implementation-delivery-planning": {
-      owner: "controller",
-      tool: "wakeflow_prepare_implementation_delivery",
-    },
-    "implementation-host-effect-claim": {
-      owner: "controller",
-      tool: "wakeflow_claim_target_host_effect",
-    },
-    "implementation-host-effect-execution": {
-      owner: "controller",
-      tool: "wakeflow_record_target_host_effect_outcome",
-    },
-    "implementation-target-result-import": {
-      owner: "target",
-      tool: "wakeflow_import_target_result",
-    },
-    "implementation-host-effect-rearm": {
-      owner: "controller",
-      tool: "wakeflow_rearm_target_host_effect",
-    },
-    "implementation-result-review": {
-      owner: "controller",
-      tool: "wakeflow_record_controller_implementation_review_decision",
-    },
-    "implementation-review-resume": {
-      owner: "controller",
-      tool: "wakeflow_resume_target_result_review",
-    },
-    "implementation-redesign-required": { owner: "user", tool: null },
-    "test-delivery-planning": {
-      owner: "controller",
-      tool: "wakeflow_prepare_test_delivery",
-    },
-    "test-host-effect-claim": {
-      owner: "controller",
-      tool: "wakeflow_claim_target_host_effect",
-    },
-    "test-host-effect-execution": {
-      owner: "controller",
-      tool: "wakeflow_record_target_host_effect_outcome",
-    },
-    "test-target-result-import": {
-      owner: "test",
-      tool: "wakeflow_import_target_result",
-    },
-    "test-result-review": {
-      owner: "controller",
-      tool: "wakeflow_record_controller_test_review_decision",
-    },
-    "test-delivery-rerun-planning": {
-      owner: "controller",
-      tool: "wakeflow_prepare_test_delivery",
-    },
-    "product-defect-remediation-authorization": {
-      owner: "controller",
-      tool: "wakeflow_authorize_product_defect_remediation",
-    },
-    "test-review-resume": {
-      owner: "controller",
-      tool: "wakeflow_resume_target_result_review",
-    },
-    "test-delivery-replacement-planning": {
-      owner: "controller",
-      tool: "wakeflow_prepare_test_delivery",
-    },
-    "demand-completion-preflight": {
-      owner: "controller",
-      tool: "wakeflow_complete_demand",
-    },
-    "research-completion-required": { owner: "user", tool: null },
-  });
+export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Object.freeze({
+  "implementation-task-planning": {
+    owner: "controller",
+    tool: "wakeflow_plan_target_task",
+  },
+  "test-card-planning": {
+    owner: "controller",
+    tool: "wakeflow_plan_test_card",
+  },
+  "test-task-planning": {
+    owner: "controller",
+    tool: "wakeflow_plan_target_task",
+  },
+  "implementation-delivery-planning": {
+    owner: "controller",
+    tool: "wakeflow_prepare_implementation_delivery",
+  },
+  "implementation-host-effect-claim": {
+    owner: "controller",
+    tool: "wakeflow_claim_target_host_effect",
+  },
+  "implementation-host-effect-execution": {
+    owner: "controller",
+    tool: "wakeflow_record_target_host_effect_outcome",
+  },
+  "implementation-target-result-import": {
+    owner: "target",
+    tool: "wakeflow_import_target_result",
+  },
+  "implementation-host-effect-rearm": {
+    owner: "controller",
+    tool: "wakeflow_rearm_target_host_effect",
+  },
+  "implementation-result-review": {
+    owner: "controller",
+    tool: "wakeflow_record_controller_implementation_review_decision",
+  },
+  "implementation-review-resume": {
+    owner: "controller",
+    tool: "wakeflow_resume_target_result_review",
+  },
+  "implementation-redesign-required": { owner: "user", tool: null },
+  "test-delivery-planning": {
+    owner: "controller",
+    tool: "wakeflow_prepare_test_delivery",
+  },
+  "test-host-effect-claim": {
+    owner: "controller",
+    tool: "wakeflow_claim_target_host_effect",
+  },
+  "test-host-effect-execution": {
+    owner: "controller",
+    tool: "wakeflow_record_target_host_effect_outcome",
+  },
+  "test-target-result-import": {
+    owner: "test",
+    tool: "wakeflow_import_target_result",
+  },
+  "test-result-review": {
+    owner: "controller",
+    tool: "wakeflow_record_controller_test_review_decision",
+  },
+  "test-delivery-rerun-planning": {
+    owner: "controller",
+    tool: "wakeflow_prepare_test_delivery",
+  },
+  "product-defect-remediation-authorization": {
+    owner: "controller",
+    tool: "wakeflow_authorize_product_defect_remediation",
+  },
+  "test-review-resume": {
+    owner: "controller",
+    tool: "wakeflow_resume_target_result_review",
+  },
+  "test-delivery-replacement-planning": {
+    owner: "controller",
+    tool: "wakeflow_prepare_test_delivery",
+  },
+  "demand-completion-preflight": {
+    owner: "controller",
+    tool: "wakeflow_complete_demand",
+  },
+  "research-completion-required": { owner: "user", tool: null },
+});
 
 export function deriveNextProjection(
   route: Readonly<NextProjectionRouteShape>,

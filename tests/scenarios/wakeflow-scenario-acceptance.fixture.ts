@@ -95,9 +95,7 @@ export function scenarioToolText(result: CallToolResult): string {
 }
 
 /** 渲染场景报告；只含场景编号、结论与证据摘要，从不包含临时路径。 */
-export function renderScenarioReport(
-  outcomes: readonly ScenarioOutcome[],
-): string {
+export function renderScenarioReport(outcomes: readonly ScenarioOutcome[]): string {
   const lines = [
     "| 场景 | 能力卡 | 结论 | 证据 |",
     "| --- | --- | --- | --- |",
@@ -110,8 +108,6 @@ export function renderScenarioReport(
   for (const outcome of outcomes) {
     counts.set(outcome.verdict, (counts.get(outcome.verdict) ?? 0) + 1);
   }
-  const summary = [...counts.entries()]
-    .map(([verdict, count]) => `${verdict}=${count}`)
-    .join(", ");
+  const summary = [...counts.entries()].map(([verdict, count]) => `${verdict}=${count}`).join(", ");
   return `${lines.join("\n")}\n\nsummary: ${summary}\n`;
 }

@@ -29,10 +29,7 @@
       "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "hostId": {
-      "enum": [
-        "codex",
-        "claude-code"
-      ]
+      "enum": ["codex", "claude-code"]
     },
     "windowId": {
       "type": "string",
@@ -45,10 +42,7 @@
     "handle": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "value"
-      ],
+      "required": ["kind", "value"],
       "properties": {
         "kind": {
           "type": "string",
@@ -65,11 +59,7 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "launchIntentDigest",
-        "observedAt"
-      ],
+      "required": ["kind", "launchIntentDigest", "observedAt"],
       "properties": {
         "kind": {
           "const": "agent-host-create-result"

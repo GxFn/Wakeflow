@@ -21,9 +21,7 @@ function schema(stem: string, kind: "request" | "result") {
   });
 }
 
-function registration(
-  overrides: Partial<WakeflowToolRegistration> = {},
-): WakeflowToolRegistration {
+function registration(overrides: Partial<WakeflowToolRegistration> = {}): WakeflowToolRegistration {
   return {
     name: "wakeflow_example_tool",
     slice: "example",
@@ -73,7 +71,9 @@ test("tool catalog 准入唯一名字、绑定名与 Schema 身份，并按形�
   equal(findWakeflowToolRegistration(catalog, "wakeflow_example_read")?.shape, "read");
   equal(findWakeflowToolRegistration(catalog, "wakeflow_missing"), null);
 
-  const definition = publicToolDefinition(catalog.tools[0]!);
+  const first = catalog.tools[0];
+  if (first === undefined) throw new Error("catalog must keep its first tool");
+  const definition = publicToolDefinition(first);
   deepEqual(Object.keys(definition).sort(), [
     "annotations",
     "description",
@@ -93,10 +93,7 @@ test("tool catalog 准入唯一名字、绑定名与 Schema 身份，并按形�
     [registration({ description: "x".repeat(WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES + 1) })],
     "tool-catalog-registration",
   );
-  rejects(
-    [registration({ resultSchema: schema("other", "result") })],
-    "tool-catalog-schema-stem",
-  );
+  rejects([registration({ resultSchema: schema("other", "result") })], "tool-catalog-schema-stem");
   rejects(
     [registration({ requestSchema: schema("example", "result") })],
     "tool-catalog-request-schema",

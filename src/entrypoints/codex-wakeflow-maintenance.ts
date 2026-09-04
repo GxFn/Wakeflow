@@ -1,20 +1,12 @@
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
   executeCodexMaintenanceExecution,
   previewCodexMaintenanceExecution,
   recoverCodexMaintenanceExecution,
 } from "../hosts/codex/codex-maintenance-execution.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  executeWakeflowMaintenancePublicRequest,
-} from "../capabilities/workspace/maintain-workspace.js";
-import type {
-  WakeflowMaintenancePublicHostFacade,
-} from "../workspace/maintenance/wakeflow-maintenance-public-host-facade.js";
+import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { executeWakeflowMaintenancePublicRequest } from "../capabilities/workspace/maintain-workspace.js";
+import type { WakeflowMaintenancePublicHostFacade } from "../workspace/maintenance/wakeflow-maintenance-public-host-facade.js";
 
 /**
  * Wakeflow Entrypoint / Codex：Codex 制品的公共 Maintenance composition root。
@@ -37,11 +29,6 @@ const CODEX_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
 }) satisfies Readonly<WakeflowMaintenancePublicHostFacade>;
 
 /** 执行一个经过公共合同准入的 Codex workspace Maintenance 请求。 */
-export async function executeCodexWakeflowMaintenance(
-  value: unknown,
-) {
-  return executeWakeflowMaintenancePublicRequest(
-    CODEX_MAINTENANCE_PUBLIC_HOST_FACADE,
-    value,
-  );
+export async function executeCodexWakeflowMaintenance(value: unknown) {
+  return executeWakeflowMaintenancePublicRequest(CODEX_MAINTENANCE_PUBLIC_HOST_FACADE, value);
 }

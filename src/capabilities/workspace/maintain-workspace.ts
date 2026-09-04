@@ -24,6 +24,7 @@ import {
 } from "../../foundation/data/json-value.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import { fail } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -66,23 +67,18 @@ import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/works
  * 事务执行；recover 只凭操作标识完成被中断的事务。每个结果带 `next`。
  */
 
-export const WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME =
-  "wakeflow_maintain_workspace" as const;
-export const WAKEFLOW_MAINTENANCE_PUBLIC_SCHEMA_VERSION = 1 as const;
+export const WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME = "wakeflow_maintain_workspace" as const;
+const WAKEFLOW_MAINTENANCE_PUBLIC_SCHEMA_VERSION = 1 as const;
 
-export type WakeflowMaintenancePublicRequest =
-  Readonly<WakeflowMaintenancePublicRequestV1>;
-export type WakeflowMaintenancePublicResult =
-  Readonly<WakeflowMaintenancePublicResultV1>;
+type WakeflowMaintenancePublicRequest = Readonly<WakeflowMaintenancePublicRequestV1>;
+export type WakeflowMaintenancePublicResult = Readonly<WakeflowMaintenancePublicResultV1>;
 
-const validateRequest =
-  createRuntimeJsonSchemaValidator<WakeflowMaintenancePublicRequestV1>(
-    WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA,
-  );
-const validateResult =
-  createRuntimeJsonSchemaValidator<WakeflowMaintenancePublicResultV1>(
-    WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA,
-  );
+const validateRequest = createRuntimeJsonSchemaValidator<WakeflowMaintenancePublicRequestV1>(
+  WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA,
+);
+const validateResult = createRuntimeJsonSchemaValidator<WakeflowMaintenancePublicResultV1>(
+  WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA,
+);
 
 type SliceInput =
   | Readonly<{
@@ -113,9 +109,7 @@ interface SlicePlan {
 type SliceOutcome = Readonly<WakeflowMaintenanceExecutionTransactionReceipt>;
 
 /** 公共 Maintenance 请求由 wire Schema 解析；失败以 `invalid-request` 报出。 */
-export function parseWakeflowMaintenancePublicRequest(
-  value: unknown,
-): WakeflowMaintenancePublicRequest {
+function parseWakeflowMaintenancePublicRequest(value: unknown): WakeflowMaintenancePublicRequest {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$request");
@@ -153,10 +147,7 @@ function admitHostFacade(
       currentHostProfile: facade.currentHostProfile,
       hostProfiles: facade.hostProfiles,
     });
-    if (
-      parsed.currentHostProfile.hostId !== facade.hostId ||
-      parsed.signal !== undefined
-    ) {
+    if (parsed.currentHostProfile.hostId !== facade.hostId || parsed.signal !== undefined) {
       fail("unexpected", "host-facade", "$facade");
     }
     return Object.freeze({
@@ -171,17 +162,13 @@ function admitHostFacade(
   }
 }
 
-function desiredConfigFor(
-  input: Extract<SliceInput, { readonly kind: "effect" }>,
-): Readonly<{
+function desiredConfigFor(input: Extract<SliceInput, { readonly kind: "effect" }>): Readonly<{
   readonly desiredConfig: WakeflowConfigV3Model | null;
   readonly compilation: Readonly<WakeflowFreshConfigCompilation> | null;
 }> {
   try {
     if (input.action === "fresh-initialize") {
-      const compilation = compileWakeflowFreshConfigSelection(
-        input.body.selection,
-      );
+      const compilation = compileWakeflowFreshConfigSelection(input.body.selection);
       return Object.freeze({ desiredConfig: compilation.config, compilation });
     }
     if (input.action === "reconfigure") {
@@ -209,14 +196,18 @@ function desiredConfigFor(
 function mapPreviewError(error: unknown): never {
   if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-    if (error.reason === "input") fail("invalid-request", "preview-input", "$request", { cause: error });
+    if (error.reason === "input")
+      fail("invalid-request", "preview-input", "$request", { cause: error });
     fail("precondition-failed", error.reason, "$request", { cause: error });
   }
   if (error instanceof WakeflowStaticMaterializationPreviewError) {
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-    if (error.reason === "root-scope") fail("root-invalid", "root-scope", "$request.root", { cause: error });
-    if (error.reason === "inspection") fail("io-failure", "inspection", "$request.root", { cause: error });
-    if (error.reason === "config") fail("precondition-failed", "config", "$request", { cause: error });
+    if (error.reason === "root-scope")
+      fail("root-invalid", "root-scope", "$request.root", { cause: error });
+    if (error.reason === "inspection")
+      fail("io-failure", "inspection", "$request.root", { cause: error });
+    if (error.reason === "config")
+      fail("precondition-failed", "config", "$request", { cause: error });
     fail("invalid-request", error.reason, "$request", { cause: error });
   }
   if (error instanceof WakeflowWindowLaunchIntentError) {
@@ -225,35 +216,39 @@ function mapPreviewError(error: unknown): never {
   throw error;
 }
 
+const TRANSACTION_ERROR_TABLE: Readonly<
+  Record<string, readonly [WakeflowErrorCode, string | null, string]>
+> = Object.freeze({
+  aborted: ["io-failure", "aborted", "$signal"],
+  input: ["invalid-request", "transaction-input", "$request"],
+  "plan-blocked": ["precondition-failed", null, "$request.planDigest"],
+  "plan-stale": ["precondition-failed", null, "$request.planDigest"],
+  "source-config": ["precondition-failed", null, "$request.planDigest"],
+  capability: ["precondition-failed", null, "$request.planDigest"],
+  gate: ["concurrency-conflict", "maintenance-gate", "$request.root"],
+  "recovery-required": ["recovery-required", null, "$request.root"],
+  intent: ["recovery-required", null, "$request.root"],
+  journal: ["recovery-required", null, "$request.root"],
+  "terminal-closure": ["recovery-required", null, "$request.root"],
+});
+
 function mapTransactionError(error: unknown): never {
   if (error instanceof WakeflowMaintenanceExecutionTransactionError) {
+    const [code, reason, path] = TRANSACTION_ERROR_TABLE[error.reason] ?? [
+      "io-failure",
+      null,
+      "$request.root",
+    ];
     // 事务已登记的操作标识随错误公开：中断后 Agent 只凭它调用 recover。
     const details =
-      error.operationId === null ? {} : { details: { operationId: error.operationId } };
-    switch (error.reason) {
-      case "aborted":
-        fail("io-failure", "aborted", "$signal", { cause: error, ...details });
-      case "input":
-        fail("invalid-request", "transaction-input", "$request", { cause: error });
-      case "plan-blocked":
-      case "plan-stale":
-      case "source-config":
-      case "capability":
-        fail("precondition-failed", error.reason, "$request.planDigest", { cause: error });
-      case "gate":
-        fail("concurrency-conflict", "maintenance-gate", "$request.root", {
-          cause: error,
-          retryable: true,
-          ...details,
-        });
-      case "recovery-required":
-      case "intent":
-      case "journal":
-      case "terminal-closure":
-        fail("recovery-required", error.reason, "$request.root", { cause: error, ...details });
-      default:
-        fail("io-failure", error.reason, "$request.root", { cause: error, ...details });
-    }
+      error.operationId === null || code === "invalid-request" || code === "precondition-failed"
+        ? {}
+        : { details: { operationId: error.operationId } };
+    fail(code, reason ?? error.reason, path, {
+      cause: error,
+      retryable: code === "concurrency-conflict",
+      ...details,
+    });
   }
   if (error instanceof WakeflowMaintenanceOperationIdError) {
     fail("invalid-request", "operation-id", "$request.operationId", { cause: error });
@@ -273,10 +268,7 @@ function expectedLaunchIntents(
   ) {
     return null;
   }
-  return compileWakeflowWindowLaunchIntents(
-    request.desiredConfig,
-    profiles.currentHostProfile,
-  );
+  return compileWakeflowWindowLaunchIntents(request.desiredConfig, profiles.currentHostProfile);
 }
 
 async function planMaintenance(
@@ -287,22 +279,17 @@ async function planMaintenance(
     fail("invalid-request", "mode", "$request.mode");
   }
   const { desiredConfig, compilation } = desiredConfigFor(input);
-  const executionRequest: WakeflowStaticMaterializationPreviewRequest =
-    Object.freeze({
-      action: input.action,
-      desiredConfig,
-      currentHostProfile: context.profiles.currentHostProfile,
-      hostProfiles: context.profiles.hostProfiles,
-    });
+  const executionRequest: WakeflowStaticMaterializationPreviewRequest = Object.freeze({
+    action: input.action,
+    desiredConfig,
+    currentHostProfile: context.profiles.currentHostProfile,
+    hostProfiles: context.profiles.hostProfiles,
+  });
   let executionPlan: Readonly<WakeflowMaintenanceExecutionPlan>;
   let launchIntentSet: Readonly<WakeflowWindowLaunchIntentSet> | null;
   try {
     executionPlan = await context.facade.preview(context.root, executionRequest);
-    launchIntentSet = expectedLaunchIntents(
-      executionPlan,
-      executionRequest,
-      context.profiles,
-    );
+    launchIntentSet = expectedLaunchIntents(executionPlan, executionRequest, context.profiles);
   } catch (error: unknown) {
     mapPreviewError(error);
   }
@@ -359,9 +346,7 @@ function deriveNext(
   return nextAfterLaunchIntents(null);
 }
 
-function freshCompilationView(
-  compilation: Readonly<WakeflowFreshConfigCompilation> | null,
-) {
+function freshCompilationView(compilation: Readonly<WakeflowFreshConfigCompilation> | null) {
   return compilation === null
     ? null
     : Object.freeze({
@@ -464,8 +449,7 @@ function parseRequest(value: unknown): Readonly<{
       input: Object.freeze({ kind: "recover" as const }),
     });
   }
-  const planDigest =
-    request.mode === "apply" ? (request.planDigest as Sha256Digest) : null;
+  const planDigest = request.mode === "apply" ? (request.planDigest as Sha256Digest) : null;
   return Object.freeze({
     envelope: Object.freeze({
       root: request.root,
@@ -522,8 +506,7 @@ export async function executeWakeflowMaintenancePublicRequest(
         }
       },
       next: async (_context, phase) => deriveNext(phase),
-      result: (_envelope, input, phase, next) =>
-        assembleResult(facade, input, phase, next),
+      result: (_envelope, input, phase, next) => assembleResult(facade, input, phase, next),
     },
     value,
   );

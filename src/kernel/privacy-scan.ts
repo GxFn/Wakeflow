@@ -9,7 +9,7 @@ import { fail } from "./error.js";
  * 类别与位置，从不含命中的文本，因此可以进入公共错误与记录。
  */
 
-export const PRIVACY_FINDING_KINDS = Object.freeze([
+const PRIVACY_FINDING_KINDS = Object.freeze([
   "private-key",
   "provider-credential",
   "credential-assignment",
@@ -17,7 +17,7 @@ export const PRIVACY_FINDING_KINDS = Object.freeze([
   "bare-uuid",
 ] as const);
 
-export type PrivacyFindingKind = (typeof PRIVACY_FINDING_KINDS)[number];
+type PrivacyFindingKind = (typeof PRIVACY_FINDING_KINDS)[number];
 
 export interface PrivacyFinding {
   readonly kind: PrivacyFindingKind;
@@ -70,11 +70,7 @@ function pathIsAllowed(candidate: string, roots: readonly string[]): boolean {
   });
 }
 
-function uuidIsPrefixed(
-  text: string,
-  index: number,
-  prefixes: readonly string[],
-): boolean {
+function uuidIsPrefixed(text: string, index: number, prefixes: readonly string[]): boolean {
   return prefixes.some(
     (prefix) => index >= prefix.length && text.startsWith(prefix, index - prefix.length),
   );
@@ -88,12 +84,8 @@ function collect(
   sink: Match[],
 ): void {
   pattern.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
-    if (match[0].length === 0) {
-      pattern.lastIndex += 1;
-      continue;
-    }
+  for (const match of text.matchAll(pattern)) {
+    if (match[0].length === 0) continue;
     if (accept(match)) {
       sink.push({ kind, index: match.index, length: match[0].length });
     }
@@ -113,10 +105,7 @@ function locate(text: string, index: number): { line: number; column: number } {
 }
 
 /** 扫描一段文本，返回按位置排序的命中列表；空列表表示通过。 */
-export function scanPrivacy(
-  text: string,
-  policy: PrivacyScanPolicy,
-): readonly PrivacyFinding[] {
+export function scanPrivacy(text: string, policy: PrivacyScanPolicy): readonly PrivacyFinding[] {
   const matches: Match[] = [];
   collect(text, PRIVATE_KEY_PATTERN, "private-key", () => true, matches);
   collect(text, PROVIDER_CREDENTIAL_PATTERN, "provider-credential", () => true, matches);
@@ -150,11 +139,7 @@ export function scanPrivacy(
 }
 
 /** 任一命中即以 `privacy-violation` 失败，原因是第一个命中的类别。 */
-export function assertPrivacyClean(
-  text: string,
-  policy: PrivacyScanPolicy,
-  path = "$",
-): void {
+export function assertPrivacyClean(text: string, policy: PrivacyScanPolicy, path = "$"): void {
   const first = scanPrivacy(text, policy)[0];
   if (first !== undefined) fail("privacy-violation", first.kind, path);
 }

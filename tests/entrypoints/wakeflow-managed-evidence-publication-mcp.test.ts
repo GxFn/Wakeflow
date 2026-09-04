@@ -89,11 +89,7 @@ test("Codex MCP以preview/apply记录Evidence且只返回metadata receipt", asyn
         demandId: EVIDENCE_DEMAND_ID,
       },
     });
-    equal(
-      recoveredCall.isError,
-      undefined,
-      wakeflowMcpTextContent(recoveredCall),
-    );
+    equal(recoveredCall.isError, undefined, wakeflowMcpTextContent(recoveredCall));
     const recovered = recoveredCall.structuredContent as {
       readonly mode: "recover";
       readonly status: "healthy";

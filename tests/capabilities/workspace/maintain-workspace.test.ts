@@ -35,11 +35,7 @@ function selection() {
   return value;
 }
 
-function wakeflowFailure(
-  code: string,
-  reason: string,
-  path?: string,
-): (error: unknown) => boolean {
+function wakeflowFailure(code: string, reason: string, path?: string): (error: unknown) => boolean {
   return (error: unknown) =>
     isWakeflowError(error) &&
     error.code === code &&
@@ -58,12 +54,15 @@ test("maintain_workspace preview 零写给出摘要，apply 重算比对，漂�
   equal(typeof preview.planDigest, "string");
   equal(preview.plan !== null, true);
   equal(preview.launchIntents.length, 4);
-  deepEqual({ ...preview.next }, {
-    frontier: "workspace-maintenance-apply",
-    owner: "user",
-    suggestedTool: "wakeflow_maintain_workspace",
-    blockers: [],
-  });
+  deepEqual(
+    { ...preview.next },
+    {
+      frontier: "workspace-maintenance-apply",
+      owner: "user",
+      suggestedTool: "wakeflow_maintain_workspace",
+      blockers: [],
+    },
+  );
   deepEqual(readdirSync(root).sort(), before, "preview must not write");
   equal(JSON.stringify(preview).includes(root), false);
   const planDigest = preview.planDigest as string;
@@ -114,7 +113,10 @@ test("maintain_workspace preview 零写给出摘要，apply 重算比对，漂�
   });
   equal(reconciled.status, "no-op");
   equal(reconciled.operationId, null);
-  deepEqual({ ...reconciled.next }, { frontier: null, owner: "none", suggestedTool: null, blockers: [] });
+  deepEqual(
+    { ...reconciled.next },
+    { frontier: null, owner: "none", suggestedTool: null, blockers: [] },
+  );
 });
 
 test("maintain_workspace 在边界拒绝缺摘要的 apply、未知模式与含私有路径的请求", async (t) => {

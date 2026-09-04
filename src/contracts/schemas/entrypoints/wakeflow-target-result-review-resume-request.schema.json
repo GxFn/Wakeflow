@@ -7,13 +7,7 @@
   "$comment": "The caller supplies only the current Route/Inspector state selector and a Controller resolution summary. Wakeflow derives the blocked Decision, TargetResult, Snapshot, Controller, time, Resume, Event, and Commit identities.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "root",
-    "demandId",
-    "targetTaskId",
-    "expectedBlockedState",
-    "resolutionSummary"
-  ],
+  "required": ["root", "demandId", "targetTaskId", "expectedBlockedState", "resolutionSummary"],
   "properties": {
     "root": {
       "type": "string",

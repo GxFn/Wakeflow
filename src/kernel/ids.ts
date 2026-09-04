@@ -3,11 +3,7 @@ import {
   type WakeflowDurableId,
   type WakeflowDurableIdKind,
 } from "../contracts/identity/wakeflow-durable-id.js";
-import {
-  deriveUuidV4,
-  parseUuidV4,
-  UuidV4Error,
-} from "../foundation/identity/uuid-v4.js";
+import { deriveUuidV4, parseUuidV4, UuidV4Error } from "../foundation/identity/uuid-v4.js";
 import { fail } from "./error.js";
 
 /**
@@ -20,10 +16,7 @@ import { fail } from "./error.js";
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 
-export function parseIdempotencyKey(
-  value: unknown,
-  path = "$idempotencyKey",
-): string {
+export function parseIdempotencyKey(value: unknown, path = "$idempotencyKey"): string {
   if (typeof value !== "string" || !IDEMPOTENCY_KEY_PATTERN.test(value)) {
     fail("invalid-request", "idempotency-key", path);
   }
@@ -31,10 +24,7 @@ export function parseIdempotencyKey(
 }
 
 /** 由命名空间与若干片段派生一个稳定的 UUID v4 形状字符串（Foundation 原语的内核门面）。 */
-export function deterministicUuidV4(
-  namespace: string,
-  ...parts: readonly string[]
-): string {
+export function deterministicUuidV4(namespace: string, ...parts: readonly string[]): string {
   try {
     return deriveUuidV4(namespace, ...parts);
   } catch (error: unknown) {
@@ -62,10 +52,5 @@ export function deriveDemandCommitId(
   demandId: string,
   idempotencyKey: string,
 ): WakeflowDurableId<"demand-event-commit"> {
-  return deriveDurableId(
-    "demand-event-commit",
-    "append-command",
-    demandId,
-    idempotencyKey,
-  );
+  return deriveDurableId("demand-event-commit", "append-command", demandId, idempotencyKey);
 }

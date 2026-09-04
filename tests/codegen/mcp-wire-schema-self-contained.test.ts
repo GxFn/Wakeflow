@@ -8,9 +8,7 @@ interface JsonObject {
 }
 
 function readSchema(relative: string): JsonObject {
-  return JSON.parse(
-    readFileSync(path.join(process.cwd(), relative), "utf8"),
-  ) as JsonObject;
+  return JSON.parse(readFileSync(path.join(process.cwd(), relative), "utf8")) as JsonObject;
 }
 
 function externalReferences(value: unknown, result: string[] = []): string[] {
@@ -18,11 +16,7 @@ function externalReferences(value: unknown, result: string[] = []): string[] {
     for (const entry of value) externalReferences(entry, result);
   } else if (value !== null && typeof value === "object") {
     for (const [key, entry] of Object.entries(value)) {
-      if (
-        key === "$ref" &&
-        typeof entry === "string" &&
-        !entry.startsWith("#")
-      ) {
+      if (key === "$ref" && typeof entry === "string" && !entry.startsWith("#")) {
         result.push(entry);
       }
       externalReferences(entry, result);
@@ -32,19 +26,12 @@ function externalReferences(value: unknown, result: string[] = []): string[] {
 }
 
 /** 镜像的约束核心必须与权威一致；本地只允许额外的 description/title 文案。 */
-function mirrorCore(
-  value: JsonObject,
-  expected: JsonObject,
-  label: string,
-): JsonObject {
+function mirrorCore(value: JsonObject, expected: JsonObject, label: string): JsonObject {
   const extra = Object.keys(value).filter(
-    (key) =>
-      !Object.hasOwn(expected, key) && key !== "description" && key !== "title",
+    (key) => !Object.hasOwn(expected, key) && key !== "description" && key !== "title",
   );
   deepEqual(extra, [], `${label} carries keywords the Foundation mirror lacks`);
-  return Object.fromEntries(
-    Object.keys(expected).map((key) => [key, value[key]]),
-  );
+  return Object.fromEntries(Object.keys(expected).map((key) => [key, value[key]]));
 }
 
 function definition(schema: JsonObject, name: string): JsonObject {
@@ -60,10 +47,7 @@ function definition(schema: JsonObject, name: string): JsonObject {
 }
 
 test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
-  const schemaRoot = path.join(
-    process.cwd(),
-    "src/contracts/schemas/entrypoints",
-  );
+  const schemaRoot = path.join(process.cwd(), "src/contracts/schemas/entrypoints");
   const handle = opendirSync(schemaRoot);
   const names: string[] = [];
   try {
@@ -79,20 +63,14 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   }
   for (const name of names.sort()) {
     equal(
-      externalReferences(
-        readSchema(`src/contracts/schemas/entrypoints/${name}`),
-      ).length,
+      externalReferences(readSchema(`src/contracts/schemas/entrypoints/${name}`)).length,
       0,
       `${name} must not advertise unresolved external refs`,
     );
   }
 
-  const sha = readSchema(
-    "src/contracts/schemas/foundation/sha256-digest.schema.json",
-  );
-  const utc = readSchema(
-    "src/contracts/schemas/foundation/utc-instant.schema.json",
-  );
+  const sha = readSchema("src/contracts/schemas/foundation/sha256-digest.schema.json");
+  const utc = readSchema("src/contracts/schemas/foundation/utc-instant.schema.json");
   const expectedSha = {
     type: sha.type,
     pattern: sha.pattern,
@@ -151,12 +129,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const planningResult = readSchema(
     "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json",
   );
-  for (const sharedDefinition of [
-    "demandId",
-    "repositoryId",
-    "windowId",
-    "portableResourcePath",
-  ]) {
+  for (const sharedDefinition of ["demandId", "repositoryId", "windowId", "portableResourcePath"]) {
     deepEqual(
       definition(planningRequest, sharedDefinition),
       definition(planningResult, sharedDefinition),
@@ -180,10 +153,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       { $ref: "#/$defs/testTaskPackageRequest" },
     ],
   });
-  const implementationTaskRequest = definition(
-    planningRequest,
-    "implementationTaskPackageRequest",
-  );
+  const implementationTaskRequest = definition(planningRequest, "implementationTaskPackageRequest");
   const implementationRequestFields = [
     "acceptanceAnchors",
     "assignment",
@@ -203,10 +173,9 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     [...(implementationTaskRequest.required as string[])].sort(),
     implementationRequestFields,
   );
-  deepEqual(
-    (implementationTaskRequest.properties as Record<string, unknown>).workType,
-    { const: "implementation" },
-  );
+  deepEqual((implementationTaskRequest.properties as Record<string, unknown>).workType, {
+    const: "implementation",
+  });
   // 公共草稿不得发明领域任务包没有的字段；成员引用在领域里叫 selectedAuthorityRefs。
   const domainTaskPackage = readSchema(
     "src/contracts/schemas/governance/tasking/task-package.schema.json",
@@ -223,9 +192,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   }
   const testTaskRequest = definition(planningRequest, "testTaskPackageRequest");
   deepEqual(testTaskRequest.required, ["workType"]);
-  deepEqual(Object.keys(testTaskRequest.properties as JsonObject), [
-    "workType",
-  ]);
+  deepEqual(Object.keys(testTaskRequest.properties as JsonObject), ["workType"]);
   deepEqual((testTaskRequest.properties as JsonObject).workType, {
     const: "test",
   });
@@ -239,10 +206,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "suggestedTool",
     "blockers",
   ]);
-  const implementationTargetTask = definition(
-    planningResult,
-    "implementationTargetTask",
-  );
+  const implementationTargetTask = definition(planningResult, "implementationTargetTask");
   const testTargetTask = definition(planningResult, "testTargetTask");
   deepEqual((implementationTargetTask.properties as JsonObject).workType, {
     const: "implementation",
@@ -250,14 +214,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   deepEqual((testTargetTask.properties as JsonObject).workType, {
     const: "test",
   });
-  equal(
-    Object.hasOwn(testTargetTask.properties as JsonObject, "repositoryId"),
-    false,
-  );
-  equal(
-    Object.hasOwn(testTargetTask.properties as JsonObject, "testCard"),
-    true,
-  );
+  equal(Object.hasOwn(testTargetTask.properties as JsonObject, "repositoryId"), false);
+  equal(Object.hasOwn(testTargetTask.properties as JsonObject, "testCard"), true);
 
   const deliveryRequest = readSchema(
     "src/contracts/schemas/entrypoints/wakeflow-target-delivery-preparation-request.schema.json",
@@ -359,12 +317,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const outcomeResult = readSchema(
     "src/contracts/schemas/entrypoints/wakeflow-target-host-effect-outcome-result.schema.json",
   );
-  for (const sharedDefinition of [
-    "sha256Digest",
-    "utcInstant",
-    "demandId",
-    "claimId",
-  ]) {
+  for (const sharedDefinition of ["sha256Digest", "utcInstant", "demandId", "claimId"]) {
     deepEqual(
       definition(outcomeRequest, sharedDefinition),
       definition(outcomeResult, sharedDefinition),
@@ -438,26 +391,16 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const testReport = readSchema(
     "src/contracts/schemas/governance/result/test-target-result-report.schema.json",
   );
-  const implementationContent = definition(
-    resultImportRequest,
-    "implementationReportContent",
-  );
+  const implementationContent = definition(resultImportRequest, "implementationReportContent");
   const testContent = definition(resultImportRequest, "testReportContent");
   for (const [publicContent, domainReport] of [
     [implementationContent, implementationReport],
     [testContent, testReport],
   ] as const) {
-    const omitted = new Set([
-      "kind",
-      "schemaVersion",
-      "reportedAt",
-      "reportDigest",
-    ]);
+    const omitted = new Set(["kind", "schemaVersion", "reportedAt", "reportDigest"]);
     deepEqual(
       [...(publicContent.required as string[])].sort(),
-      (domainReport.required as string[])
-        .filter((field) => !omitted.has(field))
-        .sort(),
+      (domainReport.required as string[]).filter((field) => !omitted.has(field)).sort(),
     );
     deepEqual(
       Object.keys(publicContent.properties as Record<string, unknown>).sort(),
@@ -476,12 +419,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     [...(domainTargetResult.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicTargetResult.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainTargetResult.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicTargetResult.properties as Record<string, unknown>).sort(),
+    Object.keys(domainTargetResult.properties as Record<string, unknown>).sort(),
   );
 
   const reviewInspectionRequest = readSchema(
@@ -497,36 +436,24 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       `Review inspection wire definition ${sharedDefinition} must not drift`,
     );
   }
-  const publicReviewTaskPackage = definition(
-    reviewInspectionResult,
-    "reviewTaskPackage",
-  );
+  const publicReviewTaskPackage = definition(reviewInspectionResult, "reviewTaskPackage");
   deepEqual(
     [...(publicReviewTaskPackage.required as string[])].sort(),
     [...(domainTaskPackage.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicReviewTaskPackage.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicReviewTaskPackage.properties as Record<string, unknown>).sort(),
     Object.keys(domainTaskPackage.properties as Record<string, unknown>).sort(),
     "Public Review TaskPackage fields must mirror the domain TaskPackage",
   );
-  const publicReviewTargetResult = definition(
-    reviewInspectionResult,
-    "targetResult",
-  );
+  const publicReviewTargetResult = definition(reviewInspectionResult, "targetResult");
   deepEqual(
     [...(publicReviewTargetResult.required as string[])].sort(),
     [...(domainTargetResult.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicReviewTargetResult.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainTargetResult.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicReviewTargetResult.properties as Record<string, unknown>).sort(),
+    Object.keys(domainTargetResult.properties as Record<string, unknown>).sort(),
     "Public Review TargetResult fields must mirror the domain TargetResult",
   );
   const publicReviewUnit = definition(reviewInspectionResult, "reviewUnit");
@@ -534,20 +461,11 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     { $ref: "#/$defs/reportedReviewUnit" },
     { $ref: "#/$defs/blockedReviewUnit" },
   ]);
-  const reportedReviewUnit = definition(
-    reviewInspectionResult,
-    "reportedReviewUnit",
-  );
-  const blockedReviewUnit = definition(
-    reviewInspectionResult,
-    "blockedReviewUnit",
-  );
+  const reportedReviewUnit = definition(reviewInspectionResult, "reportedReviewUnit");
+  const blockedReviewUnit = definition(reviewInspectionResult, "blockedReviewUnit");
   deepEqual(
     [...(blockedReviewUnit.required as string[])].sort(),
-    [
-      ...(reportedReviewUnit.required as string[]),
-      "currentBlockedDecision",
-    ].sort(),
+    [...(reportedReviewUnit.required as string[]), "currentBlockedDecision"].sort(),
   );
   deepEqual(
     Object.keys(blockedReviewUnit.properties as Record<string, unknown>).sort(),
@@ -562,10 +480,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   deepEqual((blockedReviewUnit.properties as Record<string, unknown>).status, {
     const: "review-blocked",
   });
-  const currentBlockedDecision = definition(
-    reviewInspectionResult,
-    "currentBlockedDecision",
-  );
+  const currentBlockedDecision = definition(reviewInspectionResult, "currentBlockedDecision");
   deepEqual(currentBlockedDecision.required, ["sourceEvent", "decision"]);
 
   const implementationDecisionRequest = readSchema(
@@ -574,11 +489,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const implementationDecisionResult = readSchema(
     "src/contracts/schemas/entrypoints/wakeflow-controller-implementation-review-decision-result.schema.json",
   );
-  for (const sharedDefinition of [
-    "sha256Digest",
-    "demandId",
-    "targetResultId",
-  ]) {
+  for (const sharedDefinition of ["sha256Digest", "demandId", "targetResultId"]) {
     deepEqual(
       definition(implementationDecisionRequest, sharedDefinition),
       definition(implementationDecisionResult, sharedDefinition),
@@ -588,21 +499,14 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const domainImplementationDecision = readSchema(
     "src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json",
   );
-  const publicImplementationDecision = definition(
-    implementationDecisionResult,
-    "decision",
-  );
+  const publicImplementationDecision = definition(implementationDecisionResult, "decision");
   deepEqual(
     [...(publicImplementationDecision.required as string[])].sort(),
     [...(domainImplementationDecision.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicImplementationDecision.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainImplementationDecision.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicImplementationDecision.properties as Record<string, unknown>).sort(),
+    Object.keys(domainImplementationDecision.properties as Record<string, unknown>).sort(),
     "Public Implementation Decision fields must mirror the domain Decision",
   );
   const judgmentFields = [
@@ -614,18 +518,12 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "residualRisks",
   ];
   deepEqual(
-    Object.keys(
-      implementationDecisionRequest.properties as Record<string, unknown>,
-    )
+    Object.keys(implementationDecisionRequest.properties as Record<string, unknown>)
       .filter(
         (field) =>
-          ![
-            "root",
-            "demandId",
-            "targetResultId",
-            "snapshotDigest",
-            "reviewUnitDigest",
-          ].includes(field),
+          !["root", "demandId", "targetResultId", "snapshotDigest", "reviewUnitDigest"].includes(
+            field,
+          ),
       )
       .sort(),
     judgmentFields,
@@ -638,11 +536,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const testDecisionResult = readSchema(
     "src/contracts/schemas/entrypoints/wakeflow-controller-test-review-decision-result.schema.json",
   );
-  for (const sharedDefinition of [
-    "sha256Digest",
-    "demandId",
-    "targetResultId",
-  ]) {
+  for (const sharedDefinition of ["sha256Digest", "demandId", "targetResultId"]) {
     deepEqual(
       definition(testDecisionRequest, sharedDefinition),
       definition(testDecisionResult, sharedDefinition),
@@ -658,25 +552,17 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     [...(domainTestDecision.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicTestDecision.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainTestDecision.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicTestDecision.properties as Record<string, unknown>).sort(),
+    Object.keys(domainTestDecision.properties as Record<string, unknown>).sort(),
     "Public Test Decision fields must mirror the domain Decision",
   );
   deepEqual(
     Object.keys(testDecisionRequest.properties as Record<string, unknown>)
       .filter(
         (field) =>
-          ![
-            "root",
-            "demandId",
-            "targetResultId",
-            "snapshotDigest",
-            "reviewUnitDigest",
-          ].includes(field),
+          !["root", "demandId", "targetResultId", "snapshotDigest", "reviewUnitDigest"].includes(
+            field,
+          ),
       )
       .sort(),
     judgmentFields,
@@ -704,27 +590,18 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const domainRemediationAuthorization = readSchema(
     "src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json",
   );
-  const publicRemediationAuthorization = definition(
-    remediationResult,
-    "authorization",
-  );
+  const publicRemediationAuthorization = definition(remediationResult, "authorization");
   deepEqual(
     [...(publicRemediationAuthorization.required as string[])].sort(),
     [...(domainRemediationAuthorization.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicRemediationAuthorization.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainRemediationAuthorization.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicRemediationAuthorization.properties as Record<string, unknown>).sort(),
+    Object.keys(domainRemediationAuthorization.properties as Record<string, unknown>).sort(),
     "Public Product Remediation fields must mirror the domain Authorization",
   );
   deepEqual(
-    Object.keys(
-      remediationRequest.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(remediationRequest.properties as Record<string, unknown>).sort(),
     [
       "affectedTargets",
       "authorizationRationale",
@@ -799,21 +676,14 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const domainAuthorityMember = readSchema(
     "src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json",
   );
-  const publicAuthorityMember = definition(
-    completionRequest,
-    "authorityMemberReference",
-  );
+  const publicAuthorityMember = definition(completionRequest, "authorityMemberReference");
   deepEqual(
     [...(publicAuthorityMember.required as string[])].sort(),
     [...(domainAuthorityMember.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicAuthorityMember.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainAuthorityMember.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicAuthorityMember.properties as Record<string, unknown>).sort(),
+    Object.keys(domainAuthorityMember.properties as Record<string, unknown>).sort(),
     "Public Completion plan Authority reference fields must mirror Ledger Authority",
   );
 
@@ -857,18 +727,13 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "Public TestCard fields must mirror the domain TestCard",
   );
 
-  const publicTestCardAuthority = definition(
-    testCardPlanningRequest,
-    "demandAuthority",
-  );
+  const publicTestCardAuthority = definition(testCardPlanningRequest, "demandAuthority");
   deepEqual(
     [...(publicTestCardAuthority.required as string[])].sort(),
     [...(domainAuthority.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicTestCardAuthority.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicTestCardAuthority.properties as Record<string, unknown>).sort(),
     Object.keys(domainAuthority.properties as Record<string, unknown>).sort(),
     "Public TestCard plan Authority fields must mirror Demand Authority",
   );
@@ -882,12 +747,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     [...(domainAuthorityMember.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicTestCardAuthorityMember.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainAuthorityMember.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicTestCardAuthorityMember.properties as Record<string, unknown>).sort(),
+    Object.keys(domainAuthorityMember.properties as Record<string, unknown>).sort(),
     "Public TestCard Authority reference fields must mirror Ledger Authority",
   );
 
@@ -943,52 +804,33 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     [...(domainTestDeliveryIntent.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicTestDeliveryIntent.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainTestDeliveryIntent.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicTestDeliveryIntent.properties as Record<string, unknown>).sort(),
+    Object.keys(domainTestDeliveryIntent.properties as Record<string, unknown>).sort(),
     "Public Test Delivery Intent fields must mirror the domain Intent",
   );
 
   const domainTestExecutionAttempt = readSchema(
     "src/contracts/schemas/governance/testing/test-execution-attempt.schema.json",
   );
-  const publicTestExecutionAttempt = definition(
-    testDeliveryRequest,
-    "testExecutionAttempt",
-  );
+  const publicTestExecutionAttempt = definition(testDeliveryRequest, "testExecutionAttempt");
   deepEqual(
     [...(publicTestExecutionAttempt.required as string[])].sort(),
     [...(domainTestExecutionAttempt.required as string[])].sort(),
   );
   deepEqual(
-    Object.keys(
-      publicTestExecutionAttempt.properties as Record<string, unknown>,
-    ).sort(),
-    Object.keys(
-      domainTestExecutionAttempt.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(publicTestExecutionAttempt.properties as Record<string, unknown>).sort(),
+    Object.keys(domainTestExecutionAttempt.properties as Record<string, unknown>).sort(),
     "Public Test Execution Attempt fields must mirror the domain Attempt",
   );
 
-  const testDeliveryPreviewRequest = definition(
-    testDeliveryRequest,
-    "previewRequest",
-  );
+  const testDeliveryPreviewRequest = definition(testDeliveryRequest, "previewRequest");
   deepEqual(
-    Object.keys(
-      testDeliveryPreviewRequest.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(testDeliveryPreviewRequest.properties as Record<string, unknown>).sort(),
     ["demandId", "mode", "root", "targetTaskId"],
     "Public Test Delivery preview must not restore mode or lineage echoes",
   );
 
-  const authoredContent = definition(
-    testCardPlanningRequest,
-    "authoredContent",
-  );
+  const authoredContent = definition(testCardPlanningRequest, "authoredContent");
   deepEqual(
     Object.keys(authoredContent.properties as Record<string, unknown>).sort(),
     [
@@ -1010,14 +852,9 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     ],
     "Public TestCard preview must contain exactly Controller-authored content",
   );
-  const testCardPreviewRequest = definition(
-    testCardPlanningRequest,
-    "previewRequest",
-  );
+  const testCardPreviewRequest = definition(testCardPlanningRequest, "previewRequest");
   deepEqual(
-    Object.keys(
-      testCardPreviewRequest.properties as Record<string, unknown>,
-    ).sort(),
+    Object.keys(testCardPreviewRequest.properties as Record<string, unknown>).sort(),
     ["demandId", "mode", "root", "testCard"],
     "Public TestCard preview must not restore an Authority path selector",
   );
@@ -1037,13 +874,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   }
   deepEqual(
     Object.keys(resumeRequest.properties as Record<string, unknown>).sort(),
-    [
-      "root",
-      "demandId",
-      "targetTaskId",
-      "expectedBlockedState",
-      "resolutionSummary",
-    ].sort(),
+    ["root", "demandId", "targetTaskId", "expectedBlockedState", "resolutionSummary"].sort(),
     "Public Resume request must not restore derived Decision, Result, or Snapshot echoes",
   );
   const domainResume = readSchema(
@@ -1067,12 +898,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       [...(domainDefinition.required as string[])].sort(),
     );
     deepEqual(
-      Object.keys(
-        publicDefinition.properties as Record<string, unknown>,
-      ).sort(),
-      Object.keys(
-        domainDefinition.properties as Record<string, unknown>,
-      ).sort(),
+      Object.keys(publicDefinition.properties as Record<string, unknown>).sort(),
+      Object.keys(domainDefinition.properties as Record<string, unknown>).sort(),
       `Public Resume result definition ${sharedDefinition} fields must mirror its domain definition`,
     );
   }

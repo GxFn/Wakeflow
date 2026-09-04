@@ -17,15 +17,7 @@
     "previewResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "plan",
-        "planDigest"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "plan", "planDigest"],
       "properties": {
         "kind": {
           "const": "WakeflowTargetDeliveryPreparationPreviewResult"
@@ -165,11 +157,7 @@
       ],
       "properties": {
         "purpose": {
-          "enum": [
-            "initial",
-            "implementation-review-rework",
-            "product-defect-remediation"
-          ]
+          "enum": ["initial", "implementation-review-rework", "product-defect-remediation"]
         },
         "targetTaskId": {
           "$ref": "#/$defs/targetTaskId"
@@ -322,12 +310,7 @@
     "intentTarget": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "targetTaskId",
-        "taskPackageId",
-        "taskPackageRef",
-        "taskPackageDigest"
-      ],
+      "required": ["targetTaskId", "taskPackageId", "taskPackageRef", "taskPackageDigest"],
       "properties": {
         "targetTaskId": {
           "$ref": "#/$defs/targetTaskId"
@@ -362,12 +345,7 @@
     "rework": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "decision",
-        "previousResult",
-        "rationaleSummary",
-        "requiredCorrections"
-      ],
+      "required": ["decision", "previousResult", "rationaleSummary", "requiredCorrections"],
       "properties": {
         "decision": {
           "$ref": "#/$defs/reviewDecisionReference"

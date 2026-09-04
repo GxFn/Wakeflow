@@ -18,15 +18,7 @@
     "previewResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "plan",
-        "planDigest"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "plan", "planDigest"],
       "properties": {
         "kind": {
           "const": "WakeflowDemandCompletionPreviewResult"
@@ -414,12 +406,7 @@
     "observedState": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "streamRevision",
-        "stateDigest",
-        "lastEventId",
-        "lastEventDigest"
-      ],
+      "required": ["streamRevision", "stateDigest", "lastEventId", "lastEventDigest"],
       "properties": {
         "streamRevision": {
           "type": "integer",
@@ -439,13 +426,7 @@
     "todoSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "todoId",
-        "intakeRef",
-        "intakeDigest",
-        "stateRevision",
-        "stateDigest"
-      ],
+      "required": ["todoId", "intakeRef", "intakeDigest", "stateRevision", "stateDigest"],
       "properties": {
         "todoId": {
           "$ref": "#/$defs/todoId"

@@ -79,11 +79,7 @@ test("Codex与Claude MCP分别发布Requirement和Confirmation权威", async () 
           planDigest: preview.planDigest,
         },
       });
-      equal(
-        recoverCall.isError,
-        undefined,
-        wakeflowMcpTextContent(recoverCall),
-      );
+      equal(recoverCall.isError, undefined, wakeflowMcpTextContent(recoverCall));
       const recovered = recoverCall.structuredContent as {
         readonly mode: "recover";
         readonly publication: Readonly<{ readonly disposition: string }>;
@@ -130,10 +126,7 @@ test("Codex与Claude MCP分别发布Requirement和Confirmation权威", async () 
         }>;
       };
       equal(applied.status, "current");
-      equal(
-        applied.publication.confirmationId.startsWith("confirmation_"),
-        true,
-      );
+      equal(applied.publication.confirmationId.startsWith("confirmation_"), true);
       equal(applied.publication.demandId.startsWith("demand_"), true);
       const serialized = JSON.stringify(applied);
       equal(serialized.includes(fixture.workspacePath), false);

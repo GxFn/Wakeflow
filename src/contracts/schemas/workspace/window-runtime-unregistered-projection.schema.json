@@ -33,32 +33,21 @@
       "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "hostId": {
-      "enum": [
-        "codex",
-        "claude-code"
-      ]
+      "enum": ["codex", "claude-code"]
     },
     "windowId": {
       "type": "string",
       "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "role": {
-      "enum": [
-        "controller",
-        "design",
-        "test",
-        "product"
-      ]
+      "enum": ["controller", "design", "test", "product"]
     },
     "logicalRoot": {
       "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "kind",
-            "programId"
-          ],
+          "required": ["kind", "programId"],
           "properties": {
             "kind": {
               "const": "program"
@@ -72,10 +61,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "kind",
-            "surfaceId"
-          ],
+          "required": ["kind", "surfaceId"],
           "properties": {
             "kind": {
               "const": "support-surface"
@@ -89,10 +75,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "kind",
-            "repositoryId"
-          ],
+          "required": ["kind", "repositoryId"],
           "properties": {
             "kind": {
               "const": "repository"
@@ -114,9 +97,7 @@
     "identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status"
-      ],
+      "required": ["status"],
       "properties": {
         "status": {
           "const": "unregistered"
@@ -126,10 +107,7 @@
     "rootObservation": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "observationDigest"
-      ],
+      "required": ["status", "observationDigest"],
       "properties": {
         "status": {
           "const": "unobserved"
@@ -142,10 +120,7 @@
     "preflight": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "blockingReasons"
-      ],
+      "required": ["status", "blockingReasons"],
       "properties": {
         "status": {
           "const": "blocked"
@@ -157,10 +132,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "code",
-              "source"
-            ],
+            "required": ["code", "source"],
             "properties": {
               "code": {
                 "const": "identity-unregistered"
@@ -176,11 +148,7 @@
     "sourceFingerprints": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "desiredTopologyDigest",
-        "windowTopologyDigest",
-        "rootObservationDigest"
-      ],
+      "required": ["desiredTopologyDigest", "windowTopologyDigest", "rootObservationDigest"],
       "properties": {
         "desiredTopologyDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
@@ -205,9 +173,7 @@
             "const": "controller"
           }
         },
-        "required": [
-          "role"
-        ]
+        "required": ["role"]
       },
       "then": {
         "properties": {
@@ -218,9 +184,7 @@
                 "const": "program"
               }
             },
-            "required": [
-              "kind"
-            ]
+            "required": ["kind"]
           },
           "configuredPlacement": {
             "const": "."
@@ -232,15 +196,10 @@
       "if": {
         "properties": {
           "role": {
-            "enum": [
-              "design",
-              "test"
-            ]
+            "enum": ["design", "test"]
           }
         },
-        "required": [
-          "role"
-        ]
+        "required": ["role"]
       },
       "then": {
         "properties": {
@@ -251,9 +210,7 @@
                 "const": "support-surface"
               }
             },
-            "required": [
-              "kind"
-            ]
+            "required": ["kind"]
           },
           "configuredPlacement": {
             "not": {
@@ -270,9 +227,7 @@
             "const": "product"
           }
         },
-        "required": [
-          "role"
-        ]
+        "required": ["role"]
       },
       "then": {
         "properties": {
@@ -283,9 +238,7 @@
                 "const": "repository"
               }
             },
-            "required": [
-              "kind"
-            ]
+            "required": ["kind"]
           },
           "configuredPlacement": {
             "not": {

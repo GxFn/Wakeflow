@@ -7,14 +7,7 @@
   "$comment": "Rearm 不执行宿主能力、不复用旧 Claim，也不授权自动重试；下一次效果必须重新取得全新 WindowWorkClaim。",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "kind",
-    "schemaVersion",
-    "target",
-    "rejectedAttempt",
-    "rearmedAt",
-    "rearmDigest"
-  ],
+  "required": ["kind", "schemaVersion", "target", "rejectedAttempt", "rearmedAt", "rearmDigest"],
   "properties": {
     "kind": {
       "const": "WakeflowTargetHostEffectRearm"
@@ -67,13 +60,7 @@
     "rejectedAttempt": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "claimId",
-        "claimDigest",
-        "claimEventId",
-        "claimCommitId",
-        "observationDigest"
-      ],
+      "required": ["claimId", "claimDigest", "claimEventId", "claimCommitId", "observationDigest"],
       "properties": {
         "claimId": {
           "$ref": "#/$defs/claimId"

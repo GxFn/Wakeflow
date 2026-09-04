@@ -17,15 +17,7 @@
     "previewResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "plan",
-        "planDigest"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "plan", "planDigest"],
       "properties": {
         "kind": { "const": "WakeflowManagedEvidencePublicationPreviewResult" },
         "schemaVersion": { "const": 1 },
@@ -39,15 +31,7 @@
     "applyResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "planDigest",
-        "publication"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "planDigest", "publication"],
       "properties": {
         "kind": { "const": "WakeflowManagedEvidencePublicationApplyResult" },
         "schemaVersion": { "const": 1 },
@@ -61,14 +45,7 @@
     "currentRecoveryResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "publication"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "publication"],
       "properties": {
         "kind": { "const": "WakeflowManagedEvidencePublicationRecoveryResult" },
         "schemaVersion": { "const": 1 },
@@ -81,14 +58,7 @@
     "retiredRecoveryResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "retirement"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "retirement"],
       "properties": {
         "kind": { "const": "WakeflowManagedEvidencePublicationRecoveryResult" },
         "schemaVersion": { "const": 1 },
@@ -101,14 +71,7 @@
     "healthyRecoveryResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "schemaVersion",
-        "tool",
-        "mode",
-        "status",
-        "health"
-      ],
+      "required": ["kind", "schemaVersion", "tool", "mode", "status", "health"],
       "properties": {
         "kind": { "const": "WakeflowManagedEvidencePublicationRecoveryResult" },
         "schemaVersion": { "const": 1 },
@@ -167,12 +130,7 @@
     "healthReceipt": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "demandId",
-        "streamRevision",
-        "stateDigest",
-        "managedEvidenceCount"
-      ],
+      "required": ["demandId", "streamRevision", "stateDigest", "managedEvidenceCount"],
       "properties": {
         "demandId": { "$ref": "#/$defs/demandId" },
         "streamRevision": { "$ref": "#/$defs/positiveSafeInteger" },

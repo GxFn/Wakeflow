@@ -529,7 +529,8 @@ npm run validate:claude
 npm run smoke        # codex artifact 冒烟
 npm run smoke:claude
 npm run test:wakeflow
-npm test             # check:core + 双 validate + 双 smoke + 全部测试
+npm run test:legacy  # check:core + 双 validate + 双 smoke + 旧 JS 测试
+npm test             # TypeScript 门：typecheck、架构、lint、格式、knip、测试、Schema 漂移
 ```
 
 共享 core 规则：宿主中立的 runtime 文件放在 `core/`，由 `tools/sync-core.mjs`

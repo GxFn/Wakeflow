@@ -51,14 +51,7 @@
     "testTargetTask": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "workType",
-        "targetTaskId",
-        "taskPackageId",
-        "windowId",
-        "phase",
-        "testCard"
-      ],
+      "required": ["workType", "targetTaskId", "taskPackageId", "windowId", "phase", "testCard"],
       "properties": {
         "workType": {
           "const": "test"
@@ -83,18 +76,10 @@
     "taskPackageProjection": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "disposition",
-        "resourceRef",
-        "taskPackageDigest",
-        "documentDigest"
-      ],
+      "required": ["disposition", "resourceRef", "taskPackageDigest", "documentDigest"],
       "properties": {
         "disposition": {
-          "enum": [
-            "created",
-            "current"
-          ]
+          "enum": ["created", "current"]
         },
         "resourceRef": {
           "$ref": "#/$defs/portableResourcePath"
@@ -134,10 +119,7 @@
     "testCardTuple": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "testCardId",
-        "testCardDigest"
-      ],
+      "required": ["testCardId", "testCardDigest"],
       "properties": {
         "testCardId": {
           "$ref": "#/$defs/testCardId"
@@ -167,12 +149,7 @@
     "next": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "frontier",
-        "owner",
-        "suggestedTool",
-        "blockers"
-      ],
+      "required": ["frontier", "owner", "suggestedTool", "blockers"],
       "description": "Next Controller responsibility derived from the route after this append.",
       "properties": {
         "frontier": {
@@ -188,13 +165,7 @@
           ]
         },
         "owner": {
-          "enum": [
-            "controller",
-            "target",
-            "test",
-            "user",
-            "none"
-          ]
+          "enum": ["controller", "target", "test", "user", "none"]
         },
         "suggestedTool": {
           "oneOf": [
@@ -245,10 +216,7 @@
       "const": "wakeflow_plan_target_task"
     },
     "status": {
-      "enum": [
-        "committed",
-        "idempotent"
-      ]
+      "enum": ["committed", "idempotent"]
     },
     "demandId": {
       "$ref": "#/$defs/demandId"
@@ -256,10 +224,7 @@
     "event": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "eventId",
-        "streamRevision"
-      ],
+      "required": ["eventId", "streamRevision"],
       "properties": {
         "eventId": {
           "$ref": "#/$defs/eventId"
@@ -274,11 +239,7 @@
     "commit": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "commitId",
-        "commitSequence",
-        "commitDigest"
-      ],
+      "required": ["commitId", "commitSequence", "commitDigest"],
       "properties": {
         "commitId": {
           "$ref": "#/$defs/commitId"

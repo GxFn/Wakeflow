@@ -11,9 +11,7 @@ import {
   type WakeflowPublicMcpExecutor,
 } from "./wakeflow-public-mcp-tool.js";
 
-export {
-  WakeflowPublicMcpServerConfigurationError,
-} from "./wakeflow-public-mcp-server-configuration.js";
+export { WakeflowPublicMcpServerConfigurationError } from "./wakeflow-public-mcp-server-configuration.js";
 
 /**
  * Wakeflow公共MCP的唯一组合根。
@@ -25,10 +23,7 @@ export {
 export function createWakeflowPublicMcpServer(
   options: Readonly<CreateWakeflowPublicMcpServerOptions>,
 ): McpServer {
-  const admitted = parseCreateWakeflowPublicMcpServerOptions(
-    options,
-    WAKEFLOW_PUBLIC_TOOL_CATALOG,
-  );
+  const admitted = parseCreateWakeflowPublicMcpServerOptions(options, WAKEFLOW_PUBLIC_TOOL_CATALOG);
   const server = new McpServer(
     {
       name: admitted.serverName,
@@ -44,8 +39,7 @@ export function createWakeflowPublicMcpServer(
       ].join(" "),
     },
   );
-  const { serverName: _serverName, serverVersion: _serverVersion, ...executors } =
-    admitted;
+  const { serverName: _serverName, serverVersion: _serverVersion, ...executors } = admitted;
   registerWakeflowPublicMcpCatalog(
     server,
     WAKEFLOW_PUBLIC_TOOL_CATALOG,

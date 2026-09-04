@@ -34,9 +34,7 @@ const CLAUDE_CODE_HOST_FACADE = Object.freeze({
 });
 
 /** 创建按登记表发布全部公共工具的 Claude Code MCP server。 */
-export function createClaudeCodeWakeflowMcpServer(
-  serverVersion: string,
-): McpServer {
+export function createClaudeCodeWakeflowMcpServer(serverVersion: string): McpServer {
   return createWakeflowPublicMcpServer({
     serverName: CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME,
     serverVersion,
@@ -60,10 +58,6 @@ export function createClaudeCodeWakeflowMcpServer(
 }
 
 /** 通过官方 stdio transport 运行 Claude Code MCP composition root。 */
-export function runClaudeCodeWakeflowMcpStdio(
-  serverVersion: string,
-): StdioServerHandle {
-  return runWakeflowMcpStdio(() =>
-    createClaudeCodeWakeflowMcpServer(serverVersion),
-  );
+export function runClaudeCodeWakeflowMcpStdio(serverVersion: string): StdioServerHandle {
+  return runWakeflowMcpStdio(() => createClaudeCodeWakeflowMcpServer(serverVersion));
 }

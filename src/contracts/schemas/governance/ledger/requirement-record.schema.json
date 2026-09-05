@@ -3,8 +3,8 @@
   "$id": "urn:wakeflow:governance:ledger:requirement-record:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_REQUIREMENT_RECORD_SCHEMA",
   "title": "WakeflowRequirementRecord",
-  "description": "Wakeflow Ledger 中一次确认后不可变的 requirement authority record。",
-  "$comment": "Schema 负责 portable structure；document role、顺序、路径前缀与大小写碰撞以及领域 representation 由 Ledger codec 继续校验。",
+  "description": "需求包在 Ledger 中的不可变记录：头部元数据（含发布时的 parked 触发条件）、requirement.md 与 landing.md 加可选附件的成员摘要、章节锚点与确认点 1 的摘要（ADR-0011 D1 D3 D4）。recordedAt 取确认时间，使记录字节由请求完全决定。",
+  "$comment": "Schema 负责可移植结构；成员路径与角色的一致性、章节必需表、隐私扫描与 requirementId 的内容派生由 requirement 切片校验。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,7 +14,16 @@
     "programId",
     "recordedAt",
     "title",
-    "documents"
+    "demandType",
+    "priority",
+    "originWindowId",
+    "testingDecision",
+    "taskPlanReview",
+    "supersedes",
+    "parked",
+    "confirmation",
+    "documents",
+    "sections"
   ],
   "properties": {
     "artifactKind": {
@@ -33,14 +42,86 @@
       "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
     },
     "title": {
-      "$ref": "#/$defs/nonEmptyText"
+      "$ref": "#/$defs/singleLineText"
+    },
+    "demandType": {
+      "enum": ["requirement", "bug", "supplement", "research"]
+    },
+    "priority": {
+      "enum": ["P0", "P1", "P2", "P3"]
+    },
+    "originWindowId": {
+      "$ref": "#/$defs/windowId"
+    },
+    "testingDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "summary"],
+      "properties": {
+        "mode": {
+          "enum": ["controller-only", "real-environment", "not-applicable"]
+        },
+        "summary": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "taskPlanReview": {
+      "enum": ["controller", "user"]
+    },
+    "supersedes": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/requirementId"
+        }
+      ]
+    },
+    "parked": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["trigger"],
+          "properties": {
+            "trigger": {
+              "$ref": "#/$defs/text"
+            }
+          }
+        }
+      ]
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confirmedAt", "sectionDigest"],
+      "properties": {
+        "confirmedAt": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        },
+        "sectionDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
     },
     "documents": {
       "type": "array",
-      "minItems": 1,
-      "maxItems": 32,
+      "minItems": 2,
+      "maxItems": 18,
       "items": {
         "$ref": "#/$defs/document"
+      }
+    },
+    "sections": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/section"
       }
     }
   },
@@ -53,10 +134,20 @@
       "type": "string",
       "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "nonEmptyText": {
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "singleLineText": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 8192,
+      "maxLength": 256,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F]*\\S$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
       "pattern": "^(?!\\s)[\\s\\S]*\\S$"
     },
     "document": {
@@ -65,21 +156,7 @@
       "required": ["role", "path", "mediaType", "digest"],
       "properties": {
         "role": {
-          "enum": [
-            "original-plan",
-            "requirement-design",
-            "code-facts",
-            "landing-plan",
-            "non-goals",
-            "user-confirmation",
-            "reproduction",
-            "scope",
-            "requirement-delta",
-            "research-question",
-            "boundaries",
-            "test-environment",
-            "supporting-evidence"
-          ]
+          "enum": ["requirement", "landing", "attachment"]
         },
         "path": {
           "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
@@ -89,6 +166,33 @@
           "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
         },
         "digest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "anchor", "heading", "line", "bodyDigest"],
+      "properties": {
+        "path": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "anchor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]{0,127}$"
+        },
+        "heading": {
+          "$ref": "#/$defs/singleLineText"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "bodyDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }

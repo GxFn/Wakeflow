@@ -58,7 +58,6 @@ import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../../contracts/generated/gover
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_TODO_ITEM_ID_SCHEMA } from "../../../contracts/generated/governance/todo/todo-item-id.generated.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA } from "../../../contracts/generated/workspace/window-host-binding.generated.js";
 import {
   parseJsonValue,
@@ -152,7 +151,6 @@ const validateCompletedV1 =
       WAKEFLOW_DEMAND_COMPLETION_SCHEMA,
       WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
       WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_TODO_ITEM_ID_SCHEMA,
       WAKEFLOW_UTC_INSTANT_SCHEMA,
     ],
   );

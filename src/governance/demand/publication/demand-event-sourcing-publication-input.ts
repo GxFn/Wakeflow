@@ -1,5 +1,6 @@
 import {
   parseWakeflowDurableId,
+  parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
@@ -12,22 +13,18 @@ import {
   PortableResourcePathError,
   type PortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
-import {
-  parseTodoItemId,
-  TodoItemIdError,
-  type TodoItemId,
-} from "../../todo/todo-item-id.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：公共预览进入领域前的输入边界。
  *
- * 调用方只编写Demand的人类语义、选择TODO前序，并明确执行位置。完整Ledger成员集合只
- * 来自immutable TODO Intake；Program、Demand类型、测试决定、TODO lineage/CAS、摘要、时间和持久身份均由后续
- * Publication owner从当前权威派生。本模块不读取文件、不分配身份，也不创建发布事务。
+ * 调用方只编写Demand的人类语义、选择看板上的需求包，并明确执行位置。完整Ledger成员
+ * 集合只来自immutable需求包记录；Program、Demand类型、测试决定、需求包谱系/认领CAS、
+ * 摘要、时间和持久身份均由后续Publication owner从当前权威派生。本模块不读取文件、
+ * 不分配身份，也不创建发布事务。
  */
 
 export type DemandEventSourcingPublicationAuthorityRecordId =
-  WakeflowDurableId<"requirement"> | WakeflowDurableId<"confirmation">;
+  WakeflowDurableId<"requirement">;
 
 /** 指定一份Ledger不可变记录中的成员；role、摘要和media type不由调用方重复提交。 */
 export interface DemandEventSourcingPublicationAuthorityMemberSelection {
@@ -51,16 +48,17 @@ export interface DemandEventSourcingPublicationAuthoredDemand {
 }
 
 export interface DemandEventSourcingPublicationPreviewRequest {
-  readonly todoId: TodoItemId;
+  readonly requirementId: WakeflowDurableId<"requirement">;
   readonly demand: Readonly<DemandEventSourcingPublicationAuthoredDemand>;
 }
 
 export type DemandEventSourcingPublicationInputErrorReason =
-  "input" | "todo" | "identity" | "authority-selection" | "placement";
+  "input" | "requirement" | "identity" | "authority-selection" | "placement";
 
 const ERROR_MESSAGES = {
   input: "Demand Event Sourcing publication input is invalid.",
-  todo: "Demand Event Sourcing publication input contains an invalid TODO identity.",
+  requirement:
+    "Demand Event Sourcing publication input contains an invalid requirement identity.",
   identity: "Demand Event Sourcing publication authored identity is invalid.",
   "authority-selection":
     "Demand Event Sourcing publication authority member selection is invalid.",
@@ -89,7 +87,7 @@ export class DemandEventSourcingPublicationInputError extends Error {
 
 const REQUEST_FIELDS = Object.freeze([
   "demand",
-  "todoId",
+  "requirementId",
 ] as const);
 const AUTHORED_DEMAND_FIELDS = Object.freeze([
   "completionDefinition",
@@ -168,9 +166,7 @@ function parseAuthorityRecordId(
     }
     throw error;
   }
-  if (parsed.kind !== "requirement" && parsed.kind !== "confirmation") {
-    fail("authority-selection", path);
-  }
+  if (parsed.kind !== "requirement") fail("authority-selection", path);
   return parsed.value;
 }
 
@@ -238,18 +234,12 @@ function parseExecutionPlacement(
     "$/demand/executionPlacement",
     "placement",
   );
-  const authorizationMember = parseAuthorityMember(
-    record.authorizationMember,
-    "$/demand/executionPlacement/authorizationMember",
-  );
-  if (
-    !authorizationMember.recordId.startsWith("confirmation_")
-  ) {
-    fail("placement", "$/demand/executionPlacement/authorizationMember");
-  }
   return Object.freeze({
     mode: "isolated" as const,
-    authorizationMember,
+    authorizationMember: parseAuthorityMember(
+      record.authorizationMember,
+      "$/demand/executionPlacement/authorizationMember",
+    ),
   });
 }
 
@@ -278,15 +268,21 @@ export function parseDemandEventSourcingPublicationPreviewRequest(
   value: unknown,
 ): Readonly<DemandEventSourcingPublicationPreviewRequest> {
   const record = exactRecord(value, REQUEST_FIELDS, "$request", "input");
-  let todoId: TodoItemId;
+  let requirementId: WakeflowDurableId<"requirement">;
   try {
-    todoId = parseTodoItemId(record.todoId, "$/todoId");
+    requirementId = parseWakeflowDurableIdOfKind(
+      record.requirementId,
+      "requirement",
+      "$/requirementId",
+    );
   } catch (error: unknown) {
-    if (error instanceof TodoItemIdError) fail("todo", "$/todoId");
+    if (error instanceof WakeflowDurableIdError) {
+      fail("requirement", "$/requirementId");
+    }
     throw error;
   }
   return Object.freeze({
-    todoId,
+    requirementId,
     demand: parseAuthoredDemand(record.demand),
   });
 }

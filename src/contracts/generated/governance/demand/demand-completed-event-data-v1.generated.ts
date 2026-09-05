@@ -8,10 +8,6 @@
  */
 export type WakeflowSha256DigestText = string
 /**
- * TODO intake 使用的 Wakeflow 持久类型化身份；由 owner 分配，不从标题、路径、时间或集合位置推导。
- */
-export type WakeflowTodoItemIdText = string
-/**
  * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。
  */
 export type WakeflowPortableResourcePathText = string
@@ -40,7 +36,7 @@ testingMode: ("controller-only" | "real-environment")
 postAcceptanceRouteDigest: WakeflowSha256DigestText
 reviewSnapshotDigest: WakeflowSha256DigestText
 observedState: ObservedState
-todoSource: TodoSource
+packageSource: PackageSource
 completedAt: WakeflowUtcInstantText
 completionDigest: WakeflowSha256DigestText
 }
@@ -50,12 +46,12 @@ stateDigest: WakeflowSha256DigestText
 lastEventId: string
 lastEventDigest: WakeflowSha256DigestText
 }
-export interface TodoSource {
-todoId: WakeflowTodoItemIdText
-intakeRef: WakeflowPortableResourcePathText
-intakeDigest: WakeflowSha256DigestText
-stateRevision: number
-stateDigest: WakeflowSha256DigestText
+export interface PackageSource {
+requirementId: string
+recordRef: WakeflowPortableResourcePathText
+recordDigest: WakeflowSha256DigestText
+claimStateRevision: number
+claimStateDigest: WakeflowSha256DigestText
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

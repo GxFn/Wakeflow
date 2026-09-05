@@ -20,7 +20,7 @@
 
 **不变量**：demandId 是根目录名；`demand.json` 由 revision 1 事件绑定；`state.demandDigest`、`demandAuthorityDigest`、`lastEvent.eventDigest` 组成摘要链；每个核心 JSON 逐字节等于规范 JSON 加换行。
 
-**现 TS 状态**：Demand 根含 `identity.json`、`authority.json`、`event-sourcing/{commits, snapshots, append-candidates}`；身份与权威为不可变 JSON，状态由事件重放得到；`entryMode` 已删除；隔离位置由 Confirmation 引用授权，按 ADR-0010 改为 Demand 身份记 `podId`。
+**现 TS 状态**：Demand 根含 `identity.json`、`authority.json`、`event-sourcing/{commits, snapshots, append-candidates}`；身份与权威为不可变 JSON，状态由事件重放得到；`entryMode` 已删除；身份 `source` 为需求包谱系 `{requirementId, recordRef, recordDigest}`；confirmation family 已删除，`executionPlacement.isolated` 暂不可达，按 ADR-0010 改为 Demand 身份记 `podId`。
 
 **实现判断**：根旁 sidecar 的做法保留，锁与事务 stage 不进根；旧 `core/schemas/wakeflow-state-machine/` 里带 `allowedActions`、`stages`、`demandKey` 的幽灵 schema 不移植；`executionPlacement.selection` 是文档错误，只保留 `{mode, authorizationRef}`。
 
@@ -58,7 +58,7 @@
 - complete：评审 idle、零租约、每个目标任务 accepted 或 superseded 且 accepted 的选中一个 current 非 blocked 结果、任务包与测试卡全部 closed 或 superseded；只有 research 允许零目标完成；完成事件 `changedArtifacts: []`；不做 TODO 归档、不写工件、不关 Pod、不做业务归档。`:390-437`。
 - 生命周期失败闭合：同一锁下判定"什么都没写"或"事件已提交则向前完成租约释放"，否则 recovery-required；首次 apply 重建整份计划比对，漂移即 stale-plan。`:816-893`。
 
-**现 TS 状态**：`create_demand` 从 `{todoId, demand}` 创建，权威从 intake 单源收敛；`complete_demand` 公开；cancel 路径完整但不可达；continue 不存在；research 完成与实现重设计有 blocker。
+**现 TS 状态**：`create_demand` 从 `{requirementId, demand}` 创建（2026-09-04 L1 requirement 的最小适配），权威从需求包记录单源收敛，根先建后在看板 CAS 认领，已有未终态的活动 Demand 时以 `active-demand-exists` 拒绝；`complete_demand` 公开，完成记录带 `packageSource` 但尚不把需求包置 archived；cancel 路径完整但不可达；continue 不存在；research 完成与实现重设计有 blocker。
 
 **实现判断**：create 的"根先于认领"顺序与四种结果状态保留；cancel 与 continue 在 L1 补公共入口；stale-plan 检测保留。
 

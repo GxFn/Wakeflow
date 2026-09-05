@@ -33,13 +33,11 @@ import {
 
 /** TestCard Planning对real-environment Route、Config Test Window和WorkClaim的组合准入。 */
 
+/** Test Basis 来自需求包的 `requirement.md`；research 类型没有真实环境测试。 */
 const TEST_BASIS_ROLES = Object.freeze({
-  requirement: Object.freeze(["requirement-design"] as const),
-  bug: Object.freeze(["reproduction", "scope"] as const),
-  supplement: Object.freeze([
-    "requirement-design",
-    "requirement-delta",
-  ] as const),
+  requirement: Object.freeze(["requirement"] as const),
+  bug: Object.freeze(["requirement"] as const),
+  supplement: Object.freeze(["requirement"] as const),
   research: Object.freeze([] as const),
 }) satisfies Readonly<
   Record<DemandType, readonly LedgerAuthorityMemberReference["role"][]>

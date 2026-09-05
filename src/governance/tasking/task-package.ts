@@ -299,11 +299,11 @@ const AUTHORED_CONTENT_DRAFT_REFERENCE = parseLedgerAuthorityMemberReference({
   recordRef:
     "requirements/requirement_00000000-0000-4000-8000-000000000010/record.json",
   recordDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
-  memberPath: "validation.md",
+  memberPath: "requirement.md",
   memberRef:
-    "requirements/requirement_00000000-0000-4000-8000-000000000010/validation.md",
+    "requirements/requirement_00000000-0000-4000-8000-000000000010/requirement.md",
   memberDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
-  role: "requirement-design",
+  role: "requirement",
   mediaType: "text/markdown",
 });
 

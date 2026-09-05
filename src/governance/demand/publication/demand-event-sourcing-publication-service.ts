@@ -47,13 +47,15 @@ import {
   samePublicationTransaction,
 } from "./demand-event-sourcing-publication-storage.js";
 import {
-  assertPendingTodoItem,
-  claimTodoForDemandPublication,
-  demandPublicationTodoResult,
-  exactClaimedTodoItem,
-  inspectTodoForDemandPublication,
-  recoverTodoForDemandPublication,
-} from "./demand-event-sourcing-publication-todo.js";
+  assertPendingPackage,
+  claimPackageForDemandPublication,
+  exactClaimedPackage,
+  inspectPackageForDemandPublication,
+} from "./demand-event-sourcing-publication-package.js";
+import {
+  assertNoActiveDemand,
+  DemandEventSourcingPublicationPlanningServiceError,
+} from "./demand-event-sourcing-publication-planning-service.js";
 import {
   loadFinalDemandPublication,
   materializeDemandPublicationStage,
@@ -69,17 +71,16 @@ import {
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：跨资源发布流程编排。
  *
- * 本模块只负责同级发布意图文件、Demand 根目录和 TODO 的提交顺序，以及流程锁和公开
- * 入口。根作用域存储、TODO 关系验证和暂存根目录构建分别由相邻模块负责；纯事件追加
- * 不使用该流程锁或发布事务。
+ * 本模块只负责同级发布意图文件、Demand 根目录和看板认领的提交顺序，以及流程锁和
+ * 公开入口。根作用域存储、认领关系验证和暂存根目录构建分别由相邻模块负责；纯事件
+ * 追加不使用该流程锁或发布事务。
  */
 
 const PUBLISH_FIELDS = Object.freeze([
   "authority",
   "commitId",
   "eventId",
-  "expectedTodoCollectionDigest",
-  "expectedTodoStateDigest",
+  "expectedClaimStateDigest",
   "identity",
   "recordedAt",
 ] as const);
@@ -167,13 +168,9 @@ async function applyPublication(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandEventSourcingPublicationResult>> {
   const transaction = storedSidecar.transaction;
-  let todoSnapshot = await recoverTodoForDemandPublication(
-    root,
-    transaction.todoId,
-    signal,
-  );
-  const alreadyClaimed = exactClaimedTodoItem(todoSnapshot, transaction);
-  if (alreadyClaimed === null) assertPendingTodoItem(todoSnapshot, transaction);
+  const before = await inspectPackageForDemandPublication(root, transaction, signal);
+  const alreadyClaimed = exactClaimedPackage(before, transaction);
+  if (alreadyClaimed === null) assertPendingPackage(before, transaction);
 
   let finalNode = await publicationNodeOrNull(root, transaction.finalRootRef);
   let stageNode = await publicationNodeOrNull(root, transaction.stageRef);
@@ -205,7 +202,7 @@ async function applyPublication(
     }
   }
 
-  const todo = await claimTodoForDemandPublication(root, transaction, signal);
+  await claimPackageForDemandPublication(root, transaction, signal);
   const currentMarkerNode = await publicationNodeOrNull(root, markerRef);
   if (currentMarkerNode !== null) {
     const marker = await readPublicationTransactionAt(
@@ -231,12 +228,11 @@ async function applyPublication(
     transaction,
     signal,
   );
-  todoSnapshot = await inspectTodoForDemandPublication(
-    root,
-    signal,
+  const claim = exactClaimedPackage(
+    await inspectPackageForDemandPublication(root, transaction, signal),
+    transaction,
   );
-  const finalItem = exactClaimedTodoItem(todoSnapshot, transaction);
-  if (finalItem === null) fail("conflict", "$todo");
+  if (claim === null) fail("conflict", "$board");
 
   const sidecarRef = demandPublicationTransactionRef(transaction.demandId);
   const sidecarNode = await publicationNodeOrNull(root, sidecarRef);
@@ -262,11 +258,7 @@ async function applyPublication(
     wroteDemandRoot,
     demandId: transaction.demandId,
     rootRef: transaction.finalRootRef,
-    todo: Object.freeze({
-      item: finalItem,
-      lineageRef: todo.lineageRef,
-      snapshot: todoSnapshot,
-    }),
+    claim,
     loaded,
   });
 }
@@ -325,18 +317,17 @@ async function loadIdempotentResult(
   ) {
     return null;
   }
-  const snapshot = await inspectTodoForDemandPublication(
-    root,
-    signal,
+  const claim = exactClaimedPackage(
+    await inspectPackageForDemandPublication(root, transaction, signal),
+    transaction,
   );
-  const item = exactClaimedTodoItem(snapshot, transaction);
-  if (item === null) return null;
+  if (claim === null) return null;
   return Object.freeze({
     publicationAuthority: "current" as const,
     wroteDemandRoot: false,
     demandId: transaction.demandId,
     rootRef: transaction.finalRootRef,
-    todo: demandPublicationTodoResult(snapshot, item),
+    claim,
     loaded: await loadFinalDemandPublication(
       root,
       ledgerStore,
@@ -397,8 +388,8 @@ async function classifyPublicationAuthority(
     ) {
       return "unknown";
     }
-    assertPendingTodoItem(
-      await inspectTodoForDemandPublication(root, signal),
+    assertPendingPackage(
+      await inspectPackageForDemandPublication(root, transaction, signal),
       transaction,
     );
     return "unchanged";
@@ -407,8 +398,8 @@ async function classifyPublicationAuthority(
   }
 }
 
-/** 根据已确认的身份/权威关系记录和指定待处理 TODO，发布修订号 1 的 Demand。 */
-export async function publishDemandFromTodo(
+/** 根据已确认的身份/权威关系记录和看板上待认领的需求包，发布修订号 1 的 Demand。 */
+export async function publishDemandFromPackage(
   root: RootedDirectory,
   ledgerStore: LedgerAuthorityStore,
   inputValue: unknown,
@@ -454,19 +445,26 @@ export async function publishDemandFromTodo(
       }
       throw error;
     }
-    // Authority 和 TODO 准入完成前，不创建任何发布基础目录或文件。
-    const initialTodo = await inspectTodoForDemandPublication(
+    // Authority 和看板准入完成前，不创建任何发布基础目录或文件。
+    const initialPackage = await inspectPackageForDemandPublication(
       root,
+      transaction,
       signal,
     );
-    if (exactClaimedTodoItem(initialTodo, transaction) === null) {
-      if (
-        initialTodo.collection.collectionDigest !==
-        transaction.expectedTodoCollectionDigest
-      ) {
-        fail("cas-mismatch", "$/expectedTodoCollectionDigest");
+    if (exactClaimedPackage(initialPackage, transaction) === null) {
+      assertPendingPackage(initialPackage, transaction);
+      // ADR-0011 D7 在 apply 再查一次：两个 ready 计划不能各自造出一个活动 Demand。
+      try {
+        await assertNoActiveDemand(root, signal);
+      } catch (error: unknown) {
+        if (
+          error instanceof DemandEventSourcingPublicationPlanningServiceError &&
+          error.reason === "active-demand-exists"
+        ) {
+          fail("conflict", "$board");
+        }
+        throw error;
       }
-      assertPendingTodoItem(initialTodo, transaction);
     }
   } catch (error: unknown) {
     rethrowWithPublicationAuthority(error, "unchanged");
@@ -485,17 +483,10 @@ export async function publishDemandFromTodo(
           signal,
         );
         if (idempotent !== null) return idempotent;
-        const currentTodo = await inspectTodoForDemandPublication(
-          root,
-          signal,
+        assertPendingPackage(
+          await inspectPackageForDemandPublication(root, transaction, signal),
+          transaction,
         );
-        if (
-          currentTodo.collection.collectionDigest !==
-          transaction.expectedTodoCollectionDigest
-        ) {
-          fail("cas-mismatch", "$/expectedTodoCollectionDigest");
-        }
-        assertPendingTodoItem(currentTodo, transaction);
       }
       publicationIntentWriteAttempted = true;
       const stored = await ensurePublicationTransaction(
@@ -645,5 +636,5 @@ export {
   DemandEventSourcingPublicationServiceError,
   type DemandEventSourcingPublicationEffectAuthority,
   type DemandEventSourcingPublicationResult,
-  type DemandEventSourcingPublicationTodoResult,
+  type DemandEventSourcingPublicationClaimResult,
 } from "./demand-event-sourcing-publication-contract.js";

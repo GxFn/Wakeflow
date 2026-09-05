@@ -31,6 +31,7 @@ import {
   PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { TEST_ENVIRONMENT_AUTHORITY_ROLE } from "../demand/model/demand-authority.js";
 import {
   parseUtcInstant,
   UtcInstantError,
@@ -295,7 +296,7 @@ function testBasisAuthorities(
     const previous = parsed[index - 1];
     if (
       current === undefined ||
-      current.role === "test-environment" ||
+      current.role === TEST_ENVIRONMENT_AUTHORITY_ROLE ||
       current.memberRef === environmentAuthority.memberRef ||
       (previous !== undefined &&
         compareAuthorityMemberRefs(previous, current) >= 0)
@@ -526,7 +527,7 @@ export function parseTestCard(value: unknown): Readonly<TestCard> {
     wire.environmentAuthority,
     "$/environmentAuthority",
   );
-  if (environmentAuthority.role !== "test-environment") {
+  if (environmentAuthority.role !== TEST_ENVIRONMENT_AUTHORITY_ROLE) {
     fail("authority", "$/environmentAuthority/role");
   }
   const parsedTestBasisAuthorities = testBasisAuthorities(

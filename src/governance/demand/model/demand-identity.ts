@@ -5,8 +5,7 @@ import {
   WAKEFLOW_DEMAND_IDENTITY_SCHEMA,
 } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/todo/todo-intake-lineage.generated.js";
-import { WAKEFLOW_TODO_ITEM_ID_SCHEMA } from "../../../contracts/generated/governance/todo/todo-item-id.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
@@ -52,15 +51,15 @@ import {
   type LedgerAuthorityMemberReference,
 } from "../../ledger/ledger-authority-store.js";
 import {
-  parseTodoIntakeLineageReference,
-  TodoIntakeLineageError,
-  type TodoIntakeLineageReference,
-} from "../../todo/todo-intake-lineage.js";
+  parseRequirementLineageReference,
+  RequirementLineageError,
+  type RequirementLineageReference,
+} from "./requirement-lineage.js";
 
 /**
  * Wakeflow Governance / Demand Model：事件溯源聚合的不可变身份记录。
  *
- * 身份记录固定 Demand 的目标、类型、TODO 接收来源引用和执行位置；它不是事件、
+ * 身份记录固定 Demand 的目标、类型、需求包谱系引用和执行位置；它不是事件、
  * 快照或可变状态。所有正常 Demand 必须在发布时与必需的权威关系记录一起创建，之后
  * 不能被事件存储替换。
  */
@@ -88,7 +87,7 @@ export interface DemandIdentity {
   readonly goal: string;
   readonly completionDefinition: string;
   readonly demandType: DemandType;
-  readonly source: Readonly<TodoIntakeLineageReference>;
+  readonly source: Readonly<RequirementLineageReference>;
   readonly executionPlacement: DemandExecutionPlacement;
 }
 
@@ -114,7 +113,7 @@ const ERROR_MESSAGES = {
   "identifier": "Demand identity contains an invalid typed identity.",
   "time": "Demand identity contains an invalid creation time.",
   "text": "Demand identity contains non-canonical text.",
-  "source": "Demand identity TODO lineage is invalid.",
+  "source": "Demand identity requirement lineage is invalid.",
   "placement": "Demand identity execution placement is invalid.",
   "representation": "Demand identity bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<DemandIdentityErrorReason, string>>;
@@ -136,8 +135,7 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandIdentityWire>(
   WAKEFLOW_DEMAND_IDENTITY_SCHEMA,
   [
     WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-    WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA,
-    WAKEFLOW_TODO_ITEM_ID_SCHEMA,
+    WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA,
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
@@ -191,11 +189,11 @@ function parseId<Kind extends "program" | "demand">(
 function normalizeWire(
   wire: Readonly<DemandIdentityWire>,
 ): Readonly<DemandIdentity> {
-  let source: Readonly<TodoIntakeLineageReference>;
+  let source: Readonly<RequirementLineageReference>;
   try {
-    source = parseTodoIntakeLineageReference(wire.source);
+    source = parseRequirementLineageReference(wire.source);
   } catch (error: unknown) {
-    if (error instanceof TodoIntakeLineageError) fail("source", "$/source");
+    if (error instanceof RequirementLineageError) fail("source", "$/source");
     throw error;
   }
   let executionPlacement: DemandExecutionPlacement;

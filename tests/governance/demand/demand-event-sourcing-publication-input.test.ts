@@ -7,24 +7,23 @@ import {
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-input.js";
 
 const REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";
-const CONFIRMATION_ID = "confirmation_11111111-1111-4111-8111-111111111111";
 
 const REQUIREMENT_MEMBER = Object.freeze({
   recordId: REQUIREMENT_ID,
-  memberPath: "authority/requirement-design.md",
+  memberPath: "requirement.md",
 });
-const CONFIRMATION_MEMBER = Object.freeze({
-  recordId: CONFIRMATION_ID,
-  memberPath: "decisions/placement.md",
+const FOREIGN_MEMBER = Object.freeze({
+  recordId: "demand_11111111-1111-4111-8111-111111111111",
+  memberPath: "identity.json",
 });
 
 function request() {
   return {
-    todoId: "todo_9e9b3e91-55e2-43c1-8e93-68226aa84f80",
+    requirementId: REQUIREMENT_ID,
     demand: {
       title: "Demand Event Sourcing Publication",
-      goal: "从当前TODO与Ledger权威派生一份Demand",
-      completionDefinition: "发布revision 1并精确领取TODO",
+      goal: "从看板上的需求包与Ledger权威派生一份Demand",
+      completionDefinition: "发布revision 1并精确认领需求包",
       executionPlacement: { mode: "main" },
     },
   };
@@ -40,14 +39,14 @@ function isInputError(
     (path === undefined || error.path === path);
 }
 
-test("Publication preview input keeps only authored Demand intent and TODO identity", () => {
+test("Publication preview input keeps only authored Demand intent and requirement identity", () => {
   const parsed = parseDemandEventSourcingPublicationPreviewRequest(request());
 
-  equal(parsed.todoId, "todo_9e9b3e91-55e2-43c1-8e93-68226aa84f80");
+  equal(parsed.requirementId, REQUIREMENT_ID);
   deepEqual(parsed.demand, {
     title: "Demand Event Sourcing Publication",
-    goal: "从当前TODO与Ledger权威派生一份Demand",
-    completionDefinition: "发布revision 1并精确领取TODO",
+    goal: "从看板上的需求包与Ledger权威派生一份Demand",
+    completionDefinition: "发布revision 1并精确认领需求包",
     executionPlacement: { mode: "main" },
   });
   equal(Object.isFrozen(parsed), true);
@@ -59,23 +58,24 @@ test("Publication preview input keeps only authored Demand intent and TODO ident
   equal(Object.hasOwn(parsed, "testingDecision"), false);
   equal(Object.hasOwn(parsed, "eventId"), false);
   equal(Object.hasOwn(parsed, "recordedAt"), false);
+  equal(Object.hasOwn(parsed, "todoId"), false);
 });
 
-test("isolated placement names one Confirmation member for later TODO-bound resolution", () => {
+test("isolated placement names one requirement package member for later resolution", () => {
   const parsed = parseDemandEventSourcingPublicationPreviewRequest({
     ...request(),
     demand: {
       ...request().demand,
       executionPlacement: {
         mode: "isolated",
-        authorizationMember: { ...CONFIRMATION_MEMBER },
+        authorizationMember: { ...REQUIREMENT_MEMBER },
       },
     },
   });
 
   deepEqual(parsed.demand.executionPlacement, {
     mode: "isolated",
-    authorizationMember: CONFIRMATION_MEMBER,
+    authorizationMember: REQUIREMENT_MEMBER,
   });
   equal(Object.isFrozen(parsed.demand.executionPlacement), true);
   if (parsed.demand.executionPlacement.mode === "isolated") {
@@ -93,13 +93,30 @@ test("isolated placement names one Confirmation member for later TODO-bound reso
           ...request().demand,
           executionPlacement: {
             mode: "isolated",
-            authorizationMember: REQUIREMENT_MEMBER,
+            authorizationMember: FOREIGN_MEMBER,
           },
         },
       }),
     isInputError(
-      "placement",
-      "$/demand/executionPlacement/authorizationMember",
+      "authority-selection",
+      "$/demand/executionPlacement/authorizationMember/recordId",
+    ),
+  );
+  throws(
+    () =>
+      parseDemandEventSourcingPublicationPreviewRequest({
+        ...request(),
+        demand: {
+          ...request().demand,
+          executionPlacement: {
+            mode: "isolated",
+            authorizationMember: { ...REQUIREMENT_MEMBER, memberPath: "record.json" },
+          },
+        },
+      }),
+    isInputError(
+      "authority-selection",
+      "$/demand/executionPlacement/authorizationMember/memberPath",
     ),
   );
 });
@@ -109,9 +126,17 @@ test("Publication preview input rejects caller authority sets and non-canonical 
     () =>
       parseDemandEventSourcingPublicationPreviewRequest({
         ...request(),
-        todoId: "todo with spaces",
+        requirementId: "requirement with spaces",
       }),
-    isInputError("todo", "$/todoId"),
+    isInputError("requirement", "$/requirementId"),
+  );
+  throws(
+    () =>
+      parseDemandEventSourcingPublicationPreviewRequest({
+        ...request(),
+        requirementId: "todo_9e9b3e91-55e2-43c1-8e93-68226aa84f80",
+      }),
+    isInputError("requirement", "$/requirementId"),
   );
   throws(
     () =>
@@ -133,7 +158,7 @@ test("Publication preview input rejects caller authority sets and non-canonical 
     () =>
       parseDemandEventSourcingPublicationPreviewRequest({
         ...request(),
-        demand: { ...request().demand, goal: "e\u0301" },
+        demand: { ...request().demand, goal: "é" },
       }),
     isInputError("identity", "$/demand/goal"),
   );

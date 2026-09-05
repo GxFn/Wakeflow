@@ -92,16 +92,20 @@ function collect(
   }
 }
 
-function locate(text: string, index: number): { line: number; column: number } {
+/** 按递增的位置一次走完文本；命中已排序，所以行列定位总体线性。 */
+function createLocator(text: string): (index: number) => { line: number; column: number } {
+  let cursor = 0;
   let line = 1;
   let lineStart = 0;
-  for (let cursor = 0; cursor < index; cursor += 1) {
-    if (text.charCodeAt(cursor) === 10) {
-      line += 1;
-      lineStart = cursor + 1;
+  return (index: number) => {
+    for (; cursor < index; cursor += 1) {
+      if (text.charCodeAt(cursor) === 10) {
+        line += 1;
+        lineStart = cursor + 1;
+      }
     }
-  }
-  return { line, column: index - lineStart + 1 };
+    return { line, column: index - lineStart + 1 };
+  };
 }
 
 /** 扫描一段文本，返回按位置排序的命中列表；空列表表示通过。 */
@@ -125,9 +129,10 @@ export function scanPrivacy(text: string, policy: PrivacyScanPolicy): readonly P
     matches,
   );
   matches.sort((left, right) => left.index - right.index);
+  const locator = createLocator(text);
   return Object.freeze(
     matches.map((match) => {
-      const position = locate(text, match.index);
+      const position = locator(match.index);
       return Object.freeze({
         kind: match.kind,
         line: position.line,

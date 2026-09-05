@@ -4,16 +4,13 @@ import {
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  parseWakeflowDurableId,
+  parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
+  type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
-  ledgerAuthorityFamily,
-  ledgerAuthorityRecordId,
   ledgerRecordPublicationIntentRefForIdentity,
   ledgerRecordPublicationLockRefForIdentity,
-  type LedgerAuthorityFamily,
-  type LedgerAuthorityRecordId,
 } from "./ledger-authority-paths.js";
 import {
   throwLedgerAuthorityStoreError as fail,
@@ -40,24 +37,15 @@ import {
 
 /** Wakeflow Governance / Ledger：由精简发布意图记录驱动的单记录前向恢复。 */
 
-function parseRecordIdentity(recordIdValue: unknown): Readonly<{
-  readonly family: LedgerAuthorityFamily;
-  readonly recordId: LedgerAuthorityRecordId;
-}> {
-  let parsed;
+function parseRecordIdentity(
+  recordIdValue: unknown,
+): WakeflowDurableId<"requirement"> {
   try {
-    parsed = parseWakeflowDurableId(recordIdValue, "$recordId");
+    return parseWakeflowDurableIdOfKind(recordIdValue, "requirement", "$recordId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) fail("input", "$recordId");
     throw error;
   }
-  if (parsed.kind !== "requirement" && parsed.kind !== "confirmation") {
-    fail("input", "$recordId");
-  }
-  return Object.freeze({
-    family: parsed.kind,
-    recordId: parsed.value as LedgerAuthorityRecordId,
-  });
 }
 
 function parseExpectedIntent(
@@ -73,35 +61,14 @@ function parseExpectedIntent(
   }
 }
 
-function intentIdentity(
-  intent: Readonly<LedgerRecordPublicationIntent>,
-): Readonly<{
-  readonly family: LedgerAuthorityFamily;
-  readonly recordId: LedgerAuthorityRecordId;
-}> {
-  return Object.freeze({
-    family: ledgerAuthorityFamily(intent.record),
-    recordId: ledgerAuthorityRecordId(intent.record),
-  });
-}
-
 async function recoverPublication(
   root: RootedDirectory,
-  identity: Readonly<{
-    readonly family: LedgerAuthorityFamily;
-    readonly recordId: LedgerAuthorityRecordId;
-  }>,
+  recordId: WakeflowDurableId<"requirement">,
   expectedIntent: Readonly<LedgerRecordPublicationIntent> | null,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
-  const intentRef = ledgerRecordPublicationIntentRefForIdentity(
-    identity.family,
-    identity.recordId,
-  );
-  const lockRef = ledgerRecordPublicationLockRefForIdentity(
-    identity.family,
-    identity.recordId,
-  );
+  const intentRef = ledgerRecordPublicationIntentRefForIdentity(recordId);
+  const lockRef = ledgerRecordPublicationLockRefForIdentity(recordId);
   await recoverLedgerIntentAtomicStages(root, intentRef, signal);
   const observed = await existingLedgerRecordPublicationIntentOrNull(
     root,
@@ -110,8 +77,7 @@ async function recoverPublication(
   );
   if (observed === null) fail("not-found", "$intent");
   if (
-    ledgerAuthorityFamily(observed.intent.record) !== identity.family
-    || ledgerAuthorityRecordId(observed.intent.record) !== identity.recordId
+    observed.intent.record.requirementId !== recordId
     || observed.intent.lockRef !== lockRef
     || (expectedIntent !== null
       && !sameLedgerRecordPublicationIntent(observed.intent, expectedIntent))
@@ -135,8 +101,7 @@ async function recoverPublication(
       fail("conflict", "$intent");
     }
     if (
-      ledgerAuthorityFamily(stored.intent.record) !== identity.family
-      || ledgerAuthorityRecordId(stored.intent.record) !== identity.recordId
+      stored.intent.record.requirementId !== recordId
       || stored.intent.lockRef !== lockRef
     ) {
       fail("conflict", "$intent");
@@ -221,8 +186,7 @@ export async function recoverLedgerAuthorityRecordPublication(
   recordIdValue: unknown,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
-  const identity = parseRecordIdentity(recordIdValue);
-  return recoverPublication(root, identity, null, signal);
+  return recoverPublication(root, parseRecordIdentity(recordIdValue), null, signal);
 }
 
 /**
@@ -236,7 +200,7 @@ export async function recoverExactLedgerAuthorityRecordPublication(
   const expectedIntent = parseExpectedIntent(expectedIntentValue);
   return recoverPublication(
     root,
-    intentIdentity(expectedIntent),
+    expectedIntent.record.requirementId,
     expectedIntent,
     signal,
   );

@@ -64,10 +64,6 @@ const SHA256_DIGEST_SCHEMA_ID = "urn:wakeflow:foundation:crypto:sha256-digest:v1
 const SHA256_DIGEST_SCHEMA_TITLE = "WakeflowSha256DigestText";
 const SHA256_DIGEST_PATTERN_EXPORT = "SHA256_DIGEST_PATTERN_SOURCE";
 
-const TODO_ITEM_ID_SCHEMA_ID = "urn:wakeflow:governance:todo:item-id:v1";
-const TODO_ITEM_ID_SCHEMA_TITLE = "WakeflowTodoItemIdText";
-const TODO_ITEM_ID_PATTERN_EXPORT = "TODO_ITEM_ID_PATTERN_SOURCE";
-
 const RUNTIME_SCHEMA_EXPORT_KEY = "x-wakeflow-runtime-export";
 const RUNTIME_SCHEMA_EXPORT_PATTERN = /^[A-Z][A-Z0-9_]*_SCHEMA$/u;
 
@@ -748,40 +744,6 @@ function generateSha256DigestContract(record: SchemaCatalogRecord, bannerComment
   ].join("\n");
 }
 
-/** TODO 不透明条目 ID 的唯一运行时词法投影。 */
-function generateTodoItemIdContract(record: SchemaCatalogRecord, bannerComment: string): string {
-  const pattern: unknown = record.schema.pattern;
-  if (
-    record.schema.title !== TODO_ITEM_ID_SCHEMA_TITLE ||
-    record.schema.type !== "string" ||
-    typeof pattern !== "string" ||
-    pattern.length === 0
-  ) {
-    fail(
-      "wakeflow-schema-runtime-pattern",
-      `${record.relativePath} is not the expected TODO item ID Schema`,
-    );
-  }
-  try {
-    new RegExp(pattern, "u");
-  } catch {
-    fail(
-      "wakeflow-schema-runtime-pattern",
-      `${record.relativePath} contains an invalid TODO item ID pattern`,
-    );
-  }
-  return [
-    bannerComment,
-    "",
-    "/** TODO item ID 的 Schema 派生正则源。 */",
-    `export const ${TODO_ITEM_ID_PATTERN_EXPORT} = ${JSON.stringify(pattern)} as const;`,
-    "",
-    "/** Schema 层的 TODO item ID；运行时解析后再授予品牌类型。 */",
-    "export type WakeflowTodoItemIdText = string;",
-    ...runtimeSchemaModuleLines(record),
-  ].join("\n");
-}
-
 /**
  * 已登记的运行时词汇和词法常量使用窄投影；其余结构类型完整委托给
  * `json-schema-to-typescript`，并通过本地 Schema 目录阻止网络引用。
@@ -803,9 +765,6 @@ async function generateSchemaModule(
   }
   if (record.id === SHA256_DIGEST_SCHEMA_ID) {
     return generateSha256DigestContract(record, bannerComment);
-  }
-  if (record.id === TODO_ITEM_ID_SCHEMA_ID) {
-    return generateTodoItemIdContract(record, bannerComment);
   }
 
   const fallbackName = path.basename(record.relativePath, ".schema.json");

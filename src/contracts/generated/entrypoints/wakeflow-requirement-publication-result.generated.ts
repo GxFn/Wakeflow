@@ -4,78 +4,764 @@
  */
 
 /**
- * Successful preview, apply, or exact recovery result for one immutable Requirement authority publication.
+ * wakeflow_publish_requirement 的结果：preview 给出摘要、缺章与阻塞；apply 与 recover 给出需求包回执与看板状态。
  */
-export type WakeflowRequirementPublicationResultV1 = (PreviewResult | ApplyResult | RecoveryResult)
+export type WakeflowRequirementPublicationResultV1 = (PreviewResult | MutationResult)
+export type Action = ("publish" | "activate" | "withdraw")
 export type Sha256Digest = string
 export type RequirementId = string
+export type SingleLineText = string
+export type DemandType = ("requirement" | "bug" | "supplement" | "research")
+export type Priority = ("P0" | "P1" | "P2" | "P3")
+export type Text = string
 export type PortableResourcePath = string
-export type RequirementDocumentRole = ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence")
-export type RecoveryPublicationReceipt = (PublicationReceipt & {
-disposition?: ("recovered" | "current")
-[k: string]: unknown | undefined
-})
+export type Anchor = string
+export type Status = ("pending" | "parked" | "claimed" | "withdrawn" | "archived")
 
 export interface PreviewResult {
-kind: "WakeflowRequirementPublicationPreviewResult"
+kind: "WakeflowRequirementPublicationPreview"
 schemaVersion: 1
 tool: "wakeflow_publish_requirement"
 mode: "preview"
-status: "ready"
-plan: PublicationPlan
-planDigest: Sha256Digest
-}
+action: Action
+status: ("ready" | "blocked")
 /**
- * Complete owner-produced Ledger authority publication plan. Its exact domain shape is revalidated before Apply or Recover.
+ * @maxItems 64
  */
-export interface PublicationPlan {
-[k: string]: unknown | undefined
+blockers: string[]
+planDigest: (null | Sha256Digest)
+requirementId: (null | RequirementId)
+summary: (null | PreviewSummary)
+next: NextProjection
 }
-export interface ApplyResult {
-kind: "WakeflowRequirementPublicationApplyResult"
+export interface PreviewSummary {
+title: SingleLineText
+demandType: DemandType
+priority: Priority
+testingDecision: TestingDecision
+/**
+ * @maxItems 16
+ */
+sections: []|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]|[{
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}, {
+path: PortableResourcePath
+anchor: Anchor
+heading: SingleLineText
+text: string
+}]
+/**
+ * @maxItems 32
+ */
+missingSections: {
+path: PortableResourcePath
+anchor: Anchor
+}[]
+}
+export interface TestingDecision {
+mode: ("controller-only" | "real-environment" | "not-applicable")
+summary: Text
+}
+export interface NextProjection {
+frontier: (null | string)
+owner: ("controller" | "target" | "test" | "user" | "none")
+suggestedTool: (null | string)
+/**
+ * @maxItems 64
+ */
+blockers: string[]
+}
+export interface MutationResult {
+kind: "WakeflowRequirementPublicationMutation"
 schemaVersion: 1
 tool: "wakeflow_publish_requirement"
-mode: "apply"
-status: "current"
-planDigest: Sha256Digest
-publication: PublicationReceipt
+mode: ("apply" | "recover")
+action: Action
+disposition: ("published" | "current" | "activated" | "withdrawn" | "recovered")
+package: PackageReceipt
+superseded: (null | PackageReceipt)
+next: NextProjection
 }
-export interface PublicationReceipt {
-publicationAuthority: "current"
-disposition: ("published" | "recovered" | "current")
+export interface PackageReceipt {
 requirementId: RequirementId
 recordRef: PortableResourcePath
 recordDigest: Sha256Digest
-/**
- * @minItems 1
- * @maxItems 32
- */
-memberReferences: [RequirementMemberReference, ...(RequirementMemberReference)[]]
-}
-/**
- * Self-contained public mirror of one Requirement-family Ledger authority member reference.
- */
-export interface RequirementMemberReference {
-artifactKind: "wakeflow-ledger-authority-member-reference"
-schemaVersion: 1
-family: "requirement"
-recordId: RequirementId
-recordRef: PortableResourcePath
-recordDigest: Sha256Digest
-memberPath: PortableResourcePath
-memberRef: PortableResourcePath
-memberDigest: Sha256Digest
-role: RequirementDocumentRole
-mediaType: "text/markdown"
-}
-export interface RecoveryResult {
-kind: "WakeflowRequirementPublicationRecoveryResult"
-schemaVersion: 1
-tool: "wakeflow_publish_requirement"
-mode: "recover"
-status: "current"
-planDigest: Sha256Digest
-publication: RecoveryPublicationReceipt
+status: Status
+revision: number
+stateDigest: Sha256Digest
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -99,4 +785,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:requirement-publication-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA\",\"title\":\"WakeflowRequirementPublicationResultV1\",\"description\":\"Successful preview, apply, or exact recovery result for one immutable Requirement authority publication.\",\"$comment\":\"Preview returns the complete owner-produced plan for confirmation. Apply and recover return only stable Requirement and member-reference metadata. They expose no Workspace/Design/Ledger physical path, source node, source bytes, loaded record internals, lock, stage, file handle or private recovery capability.\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/previewResult\"},{\"$ref\":\"#/$defs/applyResult\"},{\"$ref\":\"#/$defs/recoveryResult\"}],\"$defs\":{\"previewResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"plan\",\"planDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowRequirementPublicationPreviewResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_publish_requirement\"},\"mode\":{\"const\":\"preview\"},\"status\":{\"const\":\"ready\"},\"plan\":{\"$ref\":\"#/$defs/publicationPlan\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"applyResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"planDigest\",\"publication\"],\"properties\":{\"kind\":{\"const\":\"WakeflowRequirementPublicationApplyResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_publish_requirement\"},\"mode\":{\"const\":\"apply\"},\"status\":{\"const\":\"current\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"publication\":{\"$ref\":\"#/$defs/publicationReceipt\"}}},\"recoveryResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"planDigest\",\"publication\"],\"properties\":{\"kind\":{\"const\":\"WakeflowRequirementPublicationRecoveryResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_publish_requirement\"},\"mode\":{\"const\":\"recover\"},\"status\":{\"const\":\"current\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"publication\":{\"$ref\":\"#/$defs/recoveryPublicationReceipt\"}}},\"recoveryPublicationReceipt\":{\"allOf\":[{\"$ref\":\"#/$defs/publicationReceipt\"},{\"type\":\"object\",\"properties\":{\"disposition\":{\"enum\":[\"recovered\",\"current\"]}}}]},\"publicationReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"publicationAuthority\",\"disposition\",\"requirementId\",\"recordRef\",\"recordDigest\",\"memberReferences\"],\"properties\":{\"publicationAuthority\":{\"const\":\"current\"},\"disposition\":{\"enum\":[\"published\",\"recovered\",\"current\"]},\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"recordRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"recordDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"memberReferences\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/requirementMemberReference\"}}}},\"requirementMemberReference\":{\"description\":\"Self-contained public mirror of one Requirement-family Ledger authority member reference.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"family\",\"recordId\",\"recordRef\",\"recordDigest\",\"memberPath\",\"memberRef\",\"memberDigest\",\"role\",\"mediaType\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-ledger-authority-member-reference\"},\"schemaVersion\":{\"const\":1},\"family\":{\"const\":\"requirement\"},\"recordId\":{\"$ref\":\"#/$defs/requirementId\"},\"recordRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"recordDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"memberPath\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"memberRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"memberDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"role\":{\"$ref\":\"#/$defs/requirementDocumentRole\"},\"mediaType\":{\"const\":\"text/markdown\"}}},\"publicationPlan\":{\"type\":\"object\",\"description\":\"Complete owner-produced Ledger authority publication plan. Its exact domain shape is revalidated before Apply or Recover.\",\"minProperties\":1},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"requirementDocumentRole\":{\"enum\":[\"original-plan\",\"requirement-design\",\"code-facts\",\"landing-plan\",\"non-goals\",\"user-confirmation\",\"reproduction\",\"scope\",\"requirement-delta\",\"research-question\",\"boundaries\",\"test-environment\",\"supporting-evidence\"]},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"}}}");
+export const WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:requirement-publication-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA\",\"title\":\"WakeflowRequirementPublicationResultV1\",\"description\":\"wakeflow_publish_requirement 的结果：preview 给出摘要、缺章与阻塞；apply 与 recover 给出需求包回执与看板状态。\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/previewResult\"},{\"$ref\":\"#/$defs/mutationResult\"}],\"$defs\":{\"previewResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"action\",\"status\",\"blockers\",\"planDigest\",\"requirementId\",\"summary\",\"next\"],\"properties\":{\"kind\":{\"const\":\"WakeflowRequirementPublicationPreview\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_publish_requirement\"},\"mode\":{\"const\":\"preview\"},\"action\":{\"$ref\":\"#/$defs/action\"},\"status\":{\"enum\":[\"ready\",\"blocked\"]},\"blockers\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256}},\"planDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/sha256Digest\"}]},\"requirementId\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/requirementId\"}]},\"summary\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/previewSummary\"}]},\"next\":{\"$ref\":\"#/$defs/nextProjection\"}}},\"mutationResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"action\",\"disposition\",\"package\",\"superseded\",\"next\"],\"properties\":{\"kind\":{\"const\":\"WakeflowRequirementPublicationMutation\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_publish_requirement\"},\"mode\":{\"enum\":[\"apply\",\"recover\"]},\"action\":{\"$ref\":\"#/$defs/action\"},\"disposition\":{\"enum\":[\"published\",\"current\",\"activated\",\"withdrawn\",\"recovered\"]},\"package\":{\"$ref\":\"#/$defs/packageReceipt\"},\"superseded\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/packageReceipt\"}]},\"next\":{\"$ref\":\"#/$defs/nextProjection\"}}},\"previewSummary\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"title\",\"demandType\",\"priority\",\"testingDecision\",\"sections\",\"missingSections\"],\"properties\":{\"title\":{\"$ref\":\"#/$defs/singleLineText\"},\"demandType\":{\"$ref\":\"#/$defs/demandType\"},\"priority\":{\"$ref\":\"#/$defs/priority\"},\"testingDecision\":{\"$ref\":\"#/$defs/testingDecision\"},\"sections\":{\"type\":\"array\",\"maxItems\":16,\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"path\",\"anchor\",\"heading\",\"text\"],\"properties\":{\"path\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"anchor\":{\"$ref\":\"#/$defs/anchor\"},\"heading\":{\"$ref\":\"#/$defs/singleLineText\"},\"text\":{\"type\":\"string\",\"maxLength\":4096}}}},\"missingSections\":{\"type\":\"array\",\"maxItems\":32,\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"path\",\"anchor\"],\"properties\":{\"path\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"anchor\":{\"$ref\":\"#/$defs/anchor\"}}}}}},\"packageReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"requirementId\",\"recordRef\",\"recordDigest\",\"status\",\"revision\",\"stateDigest\"],\"properties\":{\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"recordRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"recordDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"status\":{\"$ref\":\"#/$defs/status\"},\"revision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"nextProjection\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"frontier\",\"owner\",\"suggestedTool\",\"blockers\"],\"properties\":{\"frontier\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}]},\"owner\":{\"enum\":[\"controller\",\"target\",\"test\",\"user\",\"none\"]},\"suggestedTool\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}]},\"blockers\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256}}}},\"action\":{\"enum\":[\"publish\",\"activate\",\"withdraw\"]},\"status\":{\"enum\":[\"pending\",\"parked\",\"claimed\",\"withdrawn\",\"archived\"]},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":1024,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"anchor\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[\\\\p{L}\\\\p{N}][\\\\p{L}\\\\p{N}-]{0,127}$\"},\"singleLineText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256,\"pattern\":\"^(?!\\\\s)[^\\\\u0000-\\\\u001F\\\\u007F]*\\\\S$\"},\"demandType\":{\"enum\":[\"requirement\",\"bug\",\"supplement\",\"research\"]},\"priority\":{\"enum\":[\"P0\",\"P1\",\"P2\",\"P3\"]},\"testingDecision\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\",\"summary\"],\"properties\":{\"mode\":{\"enum\":[\"controller-only\",\"real-environment\",\"not-applicable\"]},\"summary\":{\"$ref\":\"#/$defs/text\"}}},\"text\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":4096,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"}}}");

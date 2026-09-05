@@ -20,7 +20,10 @@ import {
 } from "../demand/demand-operation-authority-context.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandTargetTaskState } from "../demand/model/demand-aggregate-state.js";
-import type { DemandTestingDecision } from "../demand/model/demand-authority.js";
+import {
+  TEST_ENVIRONMENT_AUTHORITY_ROLE,
+  type DemandTestingDecision,
+} from "../demand/model/demand-authority.js";
 import type { DemandType } from "../demand/model/demand-identity.js";
 import type { LedgerAuthorityMemberReference } from "../ledger/ledger-authority-store.js";
 import {
@@ -336,22 +339,21 @@ function blockingTarget(
   });
 }
 
+/** 真实环境测试的环境权威是需求包里唯一的环境角色成员，且其摘要与Ledger记录一致。 */
 function testEnvironmentAuthority(
   loaded: Readonly<LoadedDemandEventSourcingRootAuthority>,
 ): Readonly<LedgerAuthorityMemberReference> {
-  const environmentMemberRef =
-    loaded.authority.testingDecision.environmentMemberRef;
-  const source = loaded.admittedAuthority.resolvedAuthority.find(
-    (entry) =>
-      entry.reference.role === "test-environment" &&
-      entry.reference.memberRef === environmentMemberRef,
+  const candidates = loaded.admittedAuthority.resolvedAuthority.filter(
+    (entry) => entry.reference.role === TEST_ENVIRONMENT_AUTHORITY_ROLE,
   );
+  const source = candidates[0];
   if (
-    environmentMemberRef === null ||
+    loaded.authority.testingDecision.environmentMemberRef !== null ||
+    candidates.length !== 1 ||
     source === undefined ||
     source.reference.memberDigest !==
       source.record.documents.find(
-        (document) => document.memberRef === environmentMemberRef,
+        (document) => document.memberRef === source.reference.memberRef,
       )?.digest
   ) {
     fail("relation");

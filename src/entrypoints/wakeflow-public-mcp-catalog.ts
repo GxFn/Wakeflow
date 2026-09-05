@@ -2,8 +2,6 @@ import {
   WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
   type WakeflowMaintenancePublicResult,
 } from "../capabilities/workspace/maintain-workspace.js";
-import { WAKEFLOW_CONFIRMATION_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-confirmation-publication-request.generated.js";
-import { WAKEFLOW_CONFIRMATION_PUBLICATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-confirmation-publication-result.generated.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-controller-implementation-review-decision-request.generated.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-controller-implementation-review-decision-result.generated.js";
 import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-controller-product-defect-remediation-request.generated.js";
@@ -20,8 +18,6 @@ import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA } from "../contracts/generat
 import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-request.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-result.generated.js";
-import { WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-requirement-publication-request.generated.js";
-import { WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-requirement-publication-result.generated.js";
 import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-delivery-preparation-request.generated.js";
 import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-delivery-preparation-result.generated.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-host-effect-claim-request.generated.js";
@@ -45,10 +41,6 @@ import { WAKEFLOW_TEST_CARD_PLANNING_REQUEST_SCHEMA } from "../contracts/generat
 import { WAKEFLOW_TEST_CARD_PLANNING_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-card-planning-result.generated.js";
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-delivery-preparation-request.generated.js";
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-delivery-preparation-result.generated.js";
-import { WAKEFLOW_TODO_INSPECTION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-todo-inspection-request.generated.js";
-import { WAKEFLOW_TODO_INSPECTION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-todo-inspection-result.generated.js";
-import { WAKEFLOW_TODO_INTAKE_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-todo-intake-publication-request.generated.js";
-import { WAKEFLOW_TODO_INTAKE_PUBLICATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-todo-intake-publication-result.generated.js";
 import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../governance/controller/demand-controller-route-public-contract.js";
 import type { DemandControllerRoutePublicResult } from "../governance/controller/demand-controller-route-public-coordinator.js";
 import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../governance/delivery/target-delivery-preparation-public-contract.js";
@@ -63,12 +55,6 @@ import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../governance/dema
 import type { DemandPublicationPublicResult } from "../governance/demand/publication/demand-publication-public-coordinator.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../governance/evidence/managed-evidence-public-contract.js";
 import type { ManagedEvidencePublicResult } from "../governance/evidence/managed-evidence-public-coordinator.js";
-import {
-  WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-  type ConfirmationPublicationPublicResult,
-  type RequirementPublicationPublicResult,
-} from "../governance/ledger/ledger-authority-public-contract.js";
 import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../governance/lifecycle/demand-completion-public-contract.js";
 import type { DemandCompletionPublicResult } from "../governance/lifecycle/demand-completion-public-coordinator.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../governance/result/target-result-import-public-contract.js";
@@ -89,19 +75,17 @@ import type { TestCardPlanningPublicResult } from "../governance/testing/test-ca
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../governance/testing/test-delivery-preparation-public-contract.js";
 import type { TestDeliveryPreparationPublicResult } from "../governance/testing/test-delivery-preparation-public-coordinator.js";
 import {
-  WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
-  type TodoInspectionPublicResult,
-} from "../governance/todo/todo-inspection-public-contract.js";
-import {
-  WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
-  type TodoIntakePublicationPublicResult,
-} from "../governance/todo/todo-intake-publication-public-contract.js";
-import {
   createWakeflowToolCatalog,
   type WakeflowToolCatalog,
   type WakeflowToolRegistration,
 } from "../kernel/tool-registry.js";
 import { WINDOW_BINDING_TOOL_REGISTRATION } from "../capabilities/endpoint/contract.js";
+import {
+  BOARD_INSPECTION_TOOL_REGISTRATION,
+  REQUIREMENT_PUBLICATION_TOOL_REGISTRATION,
+  type BoardInspectionResult,
+  type RequirementPublicationResult,
+} from "../capabilities/requirement/contract.js";
 import type { WindowBindingResult } from "../capabilities/endpoint/contract.js";
 import type { WakeflowPublicMcpExecutor } from "./wakeflow-public-mcp-tool.js";
 
@@ -124,14 +108,12 @@ export interface WakeflowPublicMcpExecutors {
   readonly importTargetResult: WakeflowPublicMcpExecutor<TargetResultImportPublicResult>;
   readonly inspectDemandRoute: WakeflowPublicMcpExecutor<DemandControllerRoutePublicResult>;
   readonly inspectTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewInspectionPublicResult>;
-  readonly inspectTodo: WakeflowPublicMcpExecutor<TodoInspectionPublicResult>;
-  readonly intakeTodo: WakeflowPublicMcpExecutor<TodoIntakePublicationPublicResult>;
   readonly planTargetTask: WakeflowPublicMcpExecutor<WakeflowTargetTaskPlanningResultV1>;
   readonly planTestCard: WakeflowPublicMcpExecutor<TestCardPlanningPublicResult>;
   readonly prepareImplementationDelivery: WakeflowPublicMcpExecutor<TargetDeliveryPreparationPublicResult>;
   readonly prepareTestDelivery: WakeflowPublicMcpExecutor<TestDeliveryPreparationPublicResult>;
-  readonly publishConfirmation: WakeflowPublicMcpExecutor<ConfirmationPublicationPublicResult>;
-  readonly publishRequirement: WakeflowPublicMcpExecutor<RequirementPublicationPublicResult>;
+  readonly publishRequirement: WakeflowPublicMcpExecutor<RequirementPublicationResult>;
+  readonly inspectBoard: WakeflowPublicMcpExecutor<BoardInspectionResult>;
   readonly rearmTargetHostEffect: WakeflowPublicMcpExecutor<TargetHostEffectRearmPublicResult>;
   readonly recordControllerImplementationReviewDecision: WakeflowPublicMcpExecutor<ControllerImplementationReviewDecisionPublicResult>;
   readonly recordControllerTestReviewDecision: WakeflowPublicMcpExecutor<ControllerTestReviewDecisionPublicResult>;
@@ -187,54 +169,8 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
     },
   },
   WINDOW_BINDING_TOOL_REGISTRATION satisfies Registration,
-  {
-    name: WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-    slice: "requirement",
-    shape: "effect",
-    executor: "publishRequirement",
-    title: "Publish Wakeflow Requirement Authority",
-    description:
-      "Preview, apply, or recover one immutable Requirement authority publication from the current Design surface: preview takes a title, the Design surface identity, and 1-32 role-bound Markdown member paths, apply takes the exact preview plan and digest and revalidates current source bytes, and recover uses only the exact plan plus durable intent, stage, and final state. Results return metadata-only Requirement and member references, never a physical path, document bytes, or host effect.",
-    requestSchema: WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
-  {
-    name: WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
-    slice: "requirement",
-    shape: "effect",
-    executor: "publishConfirmation",
-    title: "Publish Wakeflow Confirmation Authority",
-    description:
-      "Preview, apply, or recover one immutable pre-Demand Confirmation authority publication from the current Design surface: preview takes a title, the Design surface identity, and 1-32 role-bound Markdown member paths while Wakeflow derives the Confirmation identity, the future isolated Demand identity, source digests, and the publication plan; apply takes the exact preview plan and digest and revalidates current source bytes. It creates no Demand and exposes no physical path, document bytes, or host effect.",
-    requestSchema: WAKEFLOW_CONFIRMATION_PUBLICATION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_CONFIRMATION_PUBLICATION_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
-  {
-    name: WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
-    slice: "requirement",
-    shape: "effect",
-    executor: "intakeTodo",
-    title: "Intake Wakeflow TODO",
-    description:
-      "Preview, apply, or recover one immutable TODO Intake and its initial State from author-owned queue semantics, one current origin window, a testing decision, and selected immutable Ledger members; apply and recover require the exact preview plan and digest and publish additively and idempotently. Success returns only TODO identity, initial status, and digests; this tool creates no Demand, performs no host effect, and does not execute Auto Claim.",
-    requestSchema: WAKEFLOW_TODO_INTAKE_PUBLICATION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TODO_INTAKE_PUBLICATION_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
-  {
-    name: WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME,
-    slice: "requirement",
-    shape: "read",
-    executor: "inspectTodo",
-    title: "Inspect Wakeflow TODO",
-    description:
-      "List one bounded page of TODO summaries (fixed createdAt and TODO-ID order, optional observation filters, page size 20, maximum 100, opaque snapshot-bound token) or inspect one exact TODO item with its Ledger member references and redacted State. Read-only: it does not derive eligibility, select or claim work, create a TODO or Demand, or expose a workspace root, state-root ref, lock, or projection content.",
-    requestSchema: WAKEFLOW_TODO_INSPECTION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TODO_INSPECTION_RESULT_SCHEMA,
-    annotations: READ_ONLY,
-  },
+  REQUIREMENT_PUBLICATION_TOOL_REGISTRATION satisfies Registration,
+  BOARD_INSPECTION_TOOL_REGISTRATION satisfies Registration,
   {
     name: WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
     slice: "demand",
@@ -242,7 +178,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
     executor: "createDemand",
     title: "Create Wakeflow Demand",
     description:
-      "Preview, apply, or explicitly recover one TODO-backed Demand Event Sourcing publication: preview derives Program, Demand type, testing, Ledger Authority, identities, Event and Commit data, and TODO CAS from current authority, apply takes the exact preview plan and digest, and recover takes a Demand ID with durable sidecar evidence. This tool performs no host effect and returns no machine path; inspect the Demand Route after publication is current.",
+      "Preview, apply, or explicitly recover one Demand publication that claims a pending requirement package: preview derives Program, Demand type, testing decision, Ledger authority from the package record, identities, Event and Commit data, and the board claim CAS from current authority, and refuses a second active Demand; apply takes the exact preview plan and digest (root first, then claim), and recover takes a Demand ID with durable sidecar evidence. Main placement only until pods land. This tool performs no host effect and returns no machine path.",
     requestSchema: WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA,
     annotations: DESTRUCTIVE,
@@ -433,7 +369,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
     executor: "completeDemand",
     title: "Complete Wakeflow Demand",
     description:
-      "Preview or apply one exact successful Demand terminal transition only when the current Route selects Demand Completion Preflight: preview exposes the immutable Completion plan, apply revalidates current Config, Demand Authority, accepted Implementation and required Test closure, claimed TODO, absent participating WorkClaims, and Event Stream position before appending the terminal Event. Completion is not Archive: it does not archive or delete the TODO, move the Demand, create a BusinessArchive, close host windows, or prune transport.",
+      "Preview or apply one exact successful Demand terminal transition only when the current Route selects Demand Completion Preflight: preview exposes the immutable Completion plan, apply revalidates current Config, Demand Authority, accepted Implementation and required Test closure, the claimed requirement package, absent participating WorkClaims, and Event Stream position before appending the terminal Event. Completion is not Archive yet: it does not mark the package archived, move the Demand, create a BusinessArchive, close host windows, or prune transport.",
     requestSchema: WAKEFLOW_DEMAND_COMPLETION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_DEMAND_COMPLETION_RESULT_SCHEMA,
     annotations: DESTRUCTIVE,

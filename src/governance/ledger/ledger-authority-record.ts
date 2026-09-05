@@ -1,10 +1,4 @@
 import type {
-  WakeflowConfirmationRecord as ConfirmationRecordWire,
-} from "../../contracts/generated/governance/ledger/confirmation-record.generated.js";
-import {
-  WAKEFLOW_CONFIRMATION_RECORD_SCHEMA,
-} from "../../contracts/generated/governance/ledger/confirmation-record.generated.js";
-import type {
   WakeflowRequirementRecord as RequirementRecordWire,
 } from "../../contracts/generated/governance/ledger/requirement-record.generated.js";
 import {
@@ -61,38 +55,59 @@ import {
 } from "../../foundation/time/wall-clock.js";
 
 /**
- * Wakeflow Governance / Ledger：Requirement 与 Confirmation 的不可变权威记录。
+ * Wakeflow Governance / Ledger：需求包的不可变权威记录（ADR-0011 D1 D3 D4）。
  *
- * 这两类记录是 Demand 事件溯源发布流程的上游事实，不是 Demand 事件或可变快照。
- * 记录只声明 Wakeflow 的写入时间 `recordedAt`，不虚构已经认证的人类操作者身份。
- * `status=confirmed` 和 Requirement 到 Demand 的反向索引已经删除：记录存在本身
- * 就表示确认事实，Demand 关系由下游 Authority 引用派生。
+ * 一份需求包是 `requirements/<requirementId>/` 下的一条 Ledger 记录：`record.json`
+ * 加成员 `requirement.md`、`landing.md` 与可选 `attachments/<name>`。记录头部携带
+ * demandType、优先级、来源窗口、测试决策、任务计划评审方、supersedes 链、确认点 1
+ * 的摘要与章节锚点表。记录只声明 Wakeflow 的写入时间 `recordedAt`，不虚构已经
+ * 认证的人类操作者身份；记录存在本身就表示需求包已发布。
  *
- * 本模块只负责 JSON 编解码、类型化标识、文档成员关系和语义摘要。成员字节、
- * 不可变发布、重新加载和引用解析由 `LedgerAuthorityStore` 负责。
+ * 本模块只负责 JSON 编解码、类型化标识、成员与章节的结构关系和语义摘要。章节必需
+ * 表、标题别名、隐私扫描与 requirementId 的内容派生由 requirement 切片在发布时
+ * 校验；成员字节、不可变发布、重新加载和引用解析由 `LedgerAuthorityStore` 负责。
  */
 
 const REQUIREMENT_RECORD_ARTIFACT_KIND =
   "wakeflow-requirement-record" as const;
-const CONFIRMATION_RECORD_ARTIFACT_KIND =
-  "wakeflow-confirmation-record" as const;
 const LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION = 1 as const;
+const REQUIREMENT_DOCUMENT_PATH = "requirement.md";
+const LANDING_DOCUMENT_PATH = "landing.md";
+const ATTACHMENTS_DIRECTORY = "attachments";
 
 export type RequirementDocumentRole =
   RequirementRecordWire["documents"][number]["role"];
-export type ConfirmationDocumentRole =
-  ConfirmationRecordWire["documents"][number]["role"];
-export type LedgerAuthorityDocumentRole =
-  | RequirementDocumentRole
-  | ConfirmationDocumentRole;
+export type RequirementDemandType = RequirementRecordWire["demandType"];
+export type RequirementPriority = RequirementRecordWire["priority"];
+export type RequirementTestingMode =
+  RequirementRecordWire["testingDecision"]["mode"];
+export type RequirementTaskPlanReview = RequirementRecordWire["taskPlanReview"];
 
-export interface LedgerAuthorityDocument<
-  Role extends LedgerAuthorityDocumentRole = LedgerAuthorityDocumentRole,
-> {
-  readonly role: Role;
+export interface LedgerAuthorityDocument {
+  readonly role: RequirementDocumentRole;
   readonly path: PortableResourcePath;
   readonly mediaType: string;
   readonly digest: Sha256Digest;
+}
+
+export interface RequirementTestingDecision {
+  readonly mode: RequirementTestingMode;
+  readonly summary: string;
+}
+
+/** 确认点 1 的持久摘要：用户确认的时刻与被确认章节的正文摘要。 */
+export interface RequirementConfirmationPoint {
+  readonly confirmedAt: UtcInstant;
+  readonly sectionDigest: Sha256Digest;
+}
+
+/** 成员文档中的一个 H2 章节；锚点供任务包按“记录摘要加章节锚点”引用。 */
+export interface RequirementSection {
+  readonly path: PortableResourcePath;
+  readonly anchor: string;
+  readonly heading: string;
+  readonly line: number;
+  readonly bodyDigest: Sha256Digest;
 }
 
 export interface RequirementRecord {
@@ -102,27 +117,40 @@ export interface RequirementRecord {
   readonly programId: WakeflowDurableId<"program">;
   readonly recordedAt: UtcInstant;
   readonly title: string;
-  readonly documents: readonly [
-    Readonly<LedgerAuthorityDocument<RequirementDocumentRole>>,
-    ...Readonly<LedgerAuthorityDocument<RequirementDocumentRole>>[],
-  ];
+  readonly demandType: RequirementDemandType;
+  readonly priority: RequirementPriority;
+  readonly originWindowId: WakeflowDurableId<"window">;
+  readonly testingDecision: Readonly<RequirementTestingDecision>;
+  readonly taskPlanReview: RequirementTaskPlanReview;
+  readonly supersedes: WakeflowDurableId<"requirement"> | null;
+  /** 发布时的搁置触发条件；有值即以 parked 上板，recover 据此重建看板状态。 */
+  readonly parked: Readonly<{ readonly trigger: string }> | null;
+  readonly confirmation: Readonly<RequirementConfirmationPoint>;
+  readonly documents: readonly Readonly<LedgerAuthorityDocument>[];
+  readonly sections: readonly Readonly<RequirementSection>[];
 }
 
-export interface ConfirmationRecord {
-  readonly artifactKind: typeof CONFIRMATION_RECORD_ARTIFACT_KIND;
-  readonly schemaVersion: typeof LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION;
-  readonly confirmationId: WakeflowDurableId<"confirmation">;
-  readonly programId: WakeflowDurableId<"program">;
-  readonly demandId: WakeflowDurableId<"demand">;
-  readonly recordedAt: UtcInstant;
-  readonly title: string;
-  readonly documents: readonly [
-    Readonly<LedgerAuthorityDocument<ConfirmationDocumentRole>>,
-    ...Readonly<LedgerAuthorityDocument<ConfirmationDocumentRole>>[],
-  ];
-}
+/** Ledger 权威记录只剩需求包一种；别名保留给按家族读取的消费方。 */
+export type LedgerAuthorityRecord = RequirementRecord;
 
-export type LedgerAuthorityRecord = RequirementRecord | ConfirmationRecord;
+type RequirementRecordDraftFields = Omit<
+  RequirementRecord,
+  "artifactKind" | "schemaVersion" | "recordedAt"
+>;
+
+/**
+ * 创建输入：省略协议头与写入时间。标识字段接受 `<kind>_<uuid>` 文本外形，由
+ * 编解码器解析并授予品牌；已解析的类型化标识原样通过。
+ */
+export interface CreateRequirementRecordInput extends Omit<
+  RequirementRecordDraftFields,
+  "requirementId" | "programId" | "originWindowId" | "supersedes"
+> {
+  readonly requirementId: `requirement_${string}`;
+  readonly programId: `program_${string}`;
+  readonly originWindowId: `window_${string}`;
+  readonly supersedes: `requirement_${string}` | null;
+}
 
 export interface CreateLedgerAuthorityRecordOptions {
   readonly clock?: UtcWallClock;
@@ -136,6 +164,8 @@ export type LedgerAuthorityRecordErrorReason =
   | "time"
   | "text"
   | "document"
+  | "section"
+  | "relation"
   | "representation";
 
 const ERROR_MESSAGES = {
@@ -143,9 +173,11 @@ const ERROR_MESSAGES = {
   "json": "Ledger authority record is not passive JSON data.",
   "schema": "Ledger authority record does not satisfy its portable Schema.",
   "identifier": "Ledger authority record contains an invalid typed identity.",
-  "time": "Ledger authority record contains an invalid recorded time.",
+  "time": "Ledger authority record contains an invalid instant.",
   "text": "Ledger authority record contains non-canonical text.",
   "document": "Ledger authority document inventory is inconsistent.",
+  "section": "Ledger authority section table is inconsistent.",
+  "relation": "Ledger authority record header fields contradict each other.",
   "representation": "Ledger authority record bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<
   LedgerAuthorityRecordErrorReason,
@@ -166,35 +198,31 @@ export class LedgerAuthorityRecordError extends Error {
   }
 }
 
-const SCHEMA_DEPENDENCIES = Object.freeze([
-  WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-  WAKEFLOW_SHA256_DIGEST_SCHEMA,
-  WAKEFLOW_UTC_INSTANT_SCHEMA,
-]);
 const validateRequirementWire =
   createRuntimeJsonSchemaValidator<RequirementRecordWire>(
     WAKEFLOW_REQUIREMENT_RECORD_SCHEMA,
-    SCHEMA_DEPENDENCIES,
-  );
-const validateConfirmationWire =
-  createRuntimeJsonSchemaValidator<ConfirmationRecordWire>(
-    WAKEFLOW_CONFIRMATION_RECORD_SCHEMA,
-    SCHEMA_DEPENDENCIES,
+    [
+      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+      WAKEFLOW_SHA256_DIGEST_SCHEMA,
+      WAKEFLOW_UTC_INSTANT_SCHEMA,
+    ],
   );
 
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const REQUIREMENT_DRAFT_FIELDS = Object.freeze([
+  "confirmation",
+  "demandType",
   "documents",
+  "originWindowId",
+  "parked",
+  "priority",
   "programId",
   "requirementId",
-  "title",
-] as const);
-const CONFIRMATION_DRAFT_FIELDS = Object.freeze([
-  "confirmationId",
-  "demandId",
-  "documents",
-  "programId",
+  "sections",
+  "supersedes",
+  "taskPlanReview",
+  "testingDecision",
   "title",
 ] as const);
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
@@ -220,7 +248,7 @@ function parseCanonicalText(value: string, path: string): string {
   return value;
 }
 
-function parseId<Kind extends "requirement" | "confirmation" | "program" | "demand">(
+function parseId<Kind extends "requirement" | "program" | "window">(
   value: unknown,
   kind: Kind,
   path: string,
@@ -233,59 +261,75 @@ function parseId<Kind extends "requirement" | "confirmation" | "program" | "dema
   }
 }
 
-function parseRecordedAt(value: unknown): UtcInstant {
+function parseInstant(value: unknown, path: string): UtcInstant {
   try {
-    return parseUtcInstant(value, "$/recordedAt");
+    return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/recordedAt");
+    if (error instanceof UtcInstantError) fail("time", path);
     throw error;
   }
 }
 
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
+function parseDigest(
+  value: unknown,
+  reason: LedgerAuthorityRecordErrorReason,
+  path: string,
+): Sha256Digest {
+  try {
+    return parseSha256Digest(value, path);
+  } catch (error: unknown) {
+    if (error instanceof Sha256Error) fail(reason, path);
+    throw error;
+  }
 }
 
-function parseDocument<Role extends LedgerAuthorityDocumentRole>(
-  wire: Readonly<{
-    role: Role;
-    path: string;
-    mediaType: string;
-    digest: string;
-  }>,
-  index: number,
-): Readonly<LedgerAuthorityDocument<Role>> {
-  const path = `$/documents/${index}`;
+function parseMemberPath(
+  value: unknown,
+  reason: LedgerAuthorityRecordErrorReason,
+  path: string,
+): PortableResourcePath {
   let memberPath: PortableResourcePath;
   try {
-    memberPath = parsePortableResourcePath(wire.path, `${path}/path`);
+    memberPath = parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("document", `${path}/path`);
-    }
+    if (error instanceof PortableResourcePathError) fail(reason, path);
     throw error;
   }
   if (
     memberPath.toLowerCase() === "record.json"
     || memberPath.toLowerCase().startsWith("record.json/")
   ) {
-    fail("document", `${path}/path`);
+    fail(reason, path);
   }
-  let digest: Sha256Digest;
-  try {
-    digest = parseSha256Digest(wire.digest, `${path}/digest`);
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("document", `${path}/digest`);
-    throw error;
-  }
+  return memberPath;
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function parseDocument(
+  wire: RequirementRecordWire["documents"][number],
+  index: number,
+): Readonly<LedgerAuthorityDocument> {
+  const path = `$/documents/${index}`;
+  const memberPath = parseMemberPath(wire.path, "document", `${path}/path`);
+  const segments = splitPortableResourcePath(memberPath);
+  const roleMatchesPath = wire.role === "requirement"
+    ? memberPath === REQUIREMENT_DOCUMENT_PATH
+    : wire.role === "landing"
+      ? memberPath === LANDING_DOCUMENT_PATH
+      : segments.length === 2 && segments[0] === ATTACHMENTS_DIRECTORY;
+  if (!roleMatchesPath) fail("document", `${path}/path`);
   return Object.freeze({
     role: wire.role,
     path: memberPath,
     mediaType: parseCanonicalText(wire.mediaType, `${path}/mediaType`),
-    digest,
+    digest: parseDigest(wire.digest, "document", `${path}/digest`),
   });
 }
 
+/** 成员按路径严格升序、无大小写冲突，且恰有一份 requirement.md 与一份 landing.md。 */
 function assertDocumentRelations(
   documents: readonly Readonly<LedgerAuthorityDocument>[],
 ): void {
@@ -293,6 +337,8 @@ function assertDocumentRelations(
     string,
     Readonly<{ readonly path: string; readonly kind: "directory" | "file" }>
   >();
+  let requirementCount = 0;
+  let landingCount = 0;
   for (let index = 0; index < documents.length; index += 1) {
     const document = documents[index];
     if (document === undefined) fail("document", "$/documents");
@@ -319,55 +365,117 @@ function assertDocumentRelations(
         nodesByCaseKey.set(caseKey, Object.freeze({ path: nodePath, kind }));
       }
     }
+    if (document.role === "requirement") requirementCount += 1;
+    if (document.role === "landing") landingCount += 1;
+  }
+  if (requirementCount !== 1 || landingCount !== 1) {
+    fail("document", "$/documents");
+  }
+}
+
+function parseSection(
+  wire: RequirementRecordWire["sections"][number],
+  index: number,
+): Readonly<RequirementSection> {
+  const path = `$/sections/${index}`;
+  if (!Number.isInteger(wire.line) || wire.line < 1) {
+    fail("section", `${path}/line`);
+  }
+  return Object.freeze({
+    path: parseMemberPath(wire.path, "section", `${path}/path`),
+    anchor: parseCanonicalText(wire.anchor, `${path}/anchor`),
+    heading: parseCanonicalText(wire.heading, `${path}/heading`),
+    line: wire.line,
+    bodyDigest: parseDigest(wire.bodyDigest, "section", `${path}/bodyDigest`),
+  });
+}
+
+/** 章节只能指向成员文档，且同一文档内锚点唯一。 */
+function assertSectionRelations(
+  documents: readonly Readonly<LedgerAuthorityDocument>[],
+  sections: readonly Readonly<RequirementSection>[],
+): void {
+  const documentPaths = new Set<string>(documents.map((document) => document.path));
+  const seen = new Set<string>();
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    if (section === undefined) fail("section", "$/sections");
+    if (!documentPaths.has(section.path)) {
+      fail("section", `$/sections/${index}/path`);
+    }
+    const key = `${section.path}\u0000${section.anchor}`;
+    if (seen.has(key)) fail("section", `$/sections/${index}/anchor`);
+    seen.add(key);
   }
 }
 
 function normalizeRequirement(
   wire: Readonly<RequirementRecordWire>,
 ): Readonly<RequirementRecord> {
+  const requirementId = parseId(
+    wire.requirementId,
+    "requirement",
+    "$/requirementId",
+  );
+  const supersedes = wire.supersedes === null
+    ? null
+    : parseId(wire.supersedes, "requirement", "$/supersedes");
+  if (supersedes === requirementId) fail("relation", "$/supersedes");
+  if (
+    (wire.demandType === "research")
+    !== (wire.testingDecision.mode === "not-applicable")
+  ) {
+    fail("relation", "$/testingDecision/mode");
+  }
   const documents = Object.freeze(wire.documents.map((document, index) => (
     parseDocument(document, index)
-  ))) as RequirementRecord["documents"];
+  )));
   assertDocumentRelations(documents);
+  const sections = Object.freeze(wire.sections.map((section, index) => (
+    parseSection(section, index)
+  )));
+  assertSectionRelations(documents, sections);
   return Object.freeze({
     artifactKind: REQUIREMENT_RECORD_ARTIFACT_KIND,
     schemaVersion: LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION,
-    requirementId: parseId(
-      wire.requirementId,
-      "requirement",
-      "$/requirementId",
-    ),
+    requirementId,
     programId: parseId(wire.programId, "program", "$/programId"),
-    recordedAt: parseRecordedAt(wire.recordedAt),
+    recordedAt: parseInstant(wire.recordedAt, "$/recordedAt"),
     title: parseCanonicalText(wire.title, "$/title"),
+    demandType: wire.demandType,
+    priority: wire.priority,
+    originWindowId: parseId(wire.originWindowId, "window", "$/originWindowId"),
+    testingDecision: Object.freeze({
+      mode: wire.testingDecision.mode,
+      summary: parseCanonicalText(
+        wire.testingDecision.summary,
+        "$/testingDecision/summary",
+      ),
+    }),
+    taskPlanReview: wire.taskPlanReview,
+    supersedes,
+    parked: wire.parked === null
+      ? null
+      : Object.freeze({
+        trigger: parseCanonicalText(wire.parked.trigger, "$/parked/trigger"),
+      }),
+    confirmation: Object.freeze({
+      confirmedAt: parseInstant(
+        wire.confirmation.confirmedAt,
+        "$/confirmation/confirmedAt",
+      ),
+      sectionDigest: parseDigest(
+        wire.confirmation.sectionDigest,
+        "schema",
+        "$/confirmation/sectionDigest",
+      ),
+    }),
     documents,
+    sections,
   });
 }
 
-function normalizeConfirmation(
-  wire: Readonly<ConfirmationRecordWire>,
-): Readonly<ConfirmationRecord> {
-  const documents = Object.freeze(wire.documents.map((document, index) => (
-    parseDocument(document, index)
-  ))) as ConfirmationRecord["documents"];
-  assertDocumentRelations(documents);
-  return Object.freeze({
-    artifactKind: CONFIRMATION_RECORD_ARTIFACT_KIND,
-    schemaVersion: LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION,
-    confirmationId: parseId(
-      wire.confirmationId,
-      "confirmation",
-      "$/confirmationId",
-    ),
-    programId: parseId(wire.programId, "program", "$/programId"),
-    demandId: parseId(wire.demandId, "demand", "$/demandId"),
-    recordedAt: parseRecordedAt(wire.recordedAt),
-    title: parseCanonicalText(wire.title, "$/title"),
-    documents,
-  });
-}
-
-/** 将任意 JSON 值解析为字段集合严格受限的 `Requirement` 或 `Confirmation` 判别联合。 */
+/** 将任意 JSON 值解析为字段集合严格受限、关系已闭合的需求包记录。 */
 export function parseLedgerAuthorityRecord(
   value: unknown,
 ): Readonly<LedgerAuthorityRecord> {
@@ -385,23 +493,15 @@ export function parseLedgerAuthorityRecord(
     if (error instanceof PassiveOwnDataError) fail("schema", "$record");
     throw error;
   }
-  if (record.artifactKind === REQUIREMENT_RECORD_ARTIFACT_KIND) {
-    const result = validateRequirementWire(json);
-    if (!result.ok) fail("schema", result.path);
-    return normalizeRequirement(result.value);
+  if (record.artifactKind !== REQUIREMENT_RECORD_ARTIFACT_KIND) {
+    fail("schema", "$/artifactKind");
   }
-  if (record.artifactKind === CONFIRMATION_RECORD_ARTIFACT_KIND) {
-    const result = validateConfirmationWire(json);
-    if (!result.ok) fail("schema", result.path);
-    return normalizeConfirmation(result.value);
-  }
-  fail("schema", "$/artifactKind");
+  const result = validateRequirementWire(json);
+  if (!result.ok) fail("schema", result.path);
+  return normalizeRequirement(result.value);
 }
 
-function exactDraft(
-  value: unknown,
-  fields: readonly string[],
-): Readonly<Record<string, unknown>> {
+function exactDraft(value: unknown): Readonly<Record<string, unknown>> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value, "$draft");
@@ -411,8 +511,8 @@ function exactDraft(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== fields.length
-    || keys.some((key, index) => key !== fields[index])
+    keys.length !== REQUIREMENT_DRAFT_FIELDS.length
+    || keys.some((key, index) => key !== REQUIREMENT_DRAFT_FIELDS[index])
   ) {
     fail("input", "$draft");
   }
@@ -438,46 +538,34 @@ function recordTime(options: CreateLedgerAuthorityRecordOptions): UtcInstant {
   }
 }
 
-/** 从不含协议头和写入时间的纯数据草稿创建 `Requirement` 权威记录。 */
+/**
+ * 从不含协议头和写入时间的草稿创建需求包记录。
+ *
+ * 草稿的全部结构关系先以占位时间闭合，再读取墙上时钟；关系失败时不触碰时钟。
+ */
 export function createRequirementRecord(
-  draft: unknown,
+  input: CreateRequirementRecordInput,
   options: CreateLedgerAuthorityRecordOptions = {},
 ): Readonly<RequirementRecord> {
-  const record = exactDraft(draft, REQUIREMENT_DRAFT_FIELDS);
+  const draft = exactDraft(input);
   const admitted = parseLedgerAuthorityRecord({
     artifactKind: REQUIREMENT_RECORD_ARTIFACT_KIND,
     schemaVersion: LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION,
-    requirementId: record.requirementId,
-    programId: record.programId,
+    requirementId: draft.requirementId,
+    programId: draft.programId,
     recordedAt: DRAFT_VALIDATION_INSTANT,
-    title: record.title,
-    documents: record.documents,
+    title: draft.title,
+    demandType: draft.demandType,
+    priority: draft.priority,
+    originWindowId: draft.originWindowId,
+    testingDecision: draft.testingDecision,
+    taskPlanReview: draft.taskPlanReview,
+    supersedes: draft.supersedes,
+    parked: draft.parked,
+    confirmation: draft.confirmation,
+    documents: draft.documents,
+    sections: draft.sections,
   });
-  if (admitted.artifactKind !== REQUIREMENT_RECORD_ARTIFACT_KIND) {
-    fail("schema", "$/artifactKind");
-  }
-  return Object.freeze({ ...admitted, recordedAt: recordTime(options) });
-}
-
-/** 从不含协议头和写入时间的纯数据草稿创建 `Confirmation` 权威记录。 */
-export function createConfirmationRecord(
-  draft: unknown,
-  options: CreateLedgerAuthorityRecordOptions = {},
-): Readonly<ConfirmationRecord> {
-  const record = exactDraft(draft, CONFIRMATION_DRAFT_FIELDS);
-  const admitted = parseLedgerAuthorityRecord({
-    artifactKind: CONFIRMATION_RECORD_ARTIFACT_KIND,
-    schemaVersion: LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION,
-    confirmationId: record.confirmationId,
-    programId: record.programId,
-    demandId: record.demandId,
-    recordedAt: DRAFT_VALIDATION_INSTANT,
-    title: record.title,
-    documents: record.documents,
-  });
-  if (admitted.artifactKind !== CONFIRMATION_RECORD_ARTIFACT_KIND) {
-    fail("schema", "$/artifactKind");
-  }
   return Object.freeze({ ...admitted, recordedAt: recordTime(options) });
 }
 

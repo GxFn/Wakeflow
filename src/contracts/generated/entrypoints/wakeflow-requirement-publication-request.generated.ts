@@ -4,55 +4,77 @@
  */
 
 /**
- * Closed MCP preview/apply/recover request for one immutable Requirement authority publication.
+ * wakeflow_publish_requirement 的请求：publish 发布需求包（记录加上板），activate 让 parked 包回到 pending，withdraw 撤回；preview 零写、apply 带 planDigest、recover 带 operationId。
  */
-export type WakeflowRequirementPublicationRequestV1 = (PreviewRequest | ApplyRequest | RecoverRequest)
-/**
- * Absolute path of the existing Wakeflow workspace root. Physical validation remains owned by RootedDirectory and this value is never returned.
- */
+export type WakeflowRequirementPublicationRequestV1 = (PublishRequest | ActivateRequest | WithdrawRequest | RecoverRequest)
 export type WorkspaceRoot = string
-export type Title = string
-export type SurfaceId = string
-export type RequirementDocumentRole = ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence")
-export type MarkdownResourcePath = (PortableResourcePath & string)
-export type PortableResourcePath = string
 export type Sha256Digest = string
+export type SurfaceId = string
+export type SingleLineText = string
+export type DemandType = ("requirement" | "bug" | "supplement" | "research")
+export type Priority = ("P0" | "P1" | "P2" | "P3")
+export type WindowId = string
+export type Text = string
+export type RequirementId = string
+export type MarkdownPath = PortableResourcePath
+export type PortableResourcePath = string
+export type TextPath = (PortableResourcePath & string)
+export type UtcInstant = string
 
-export interface PreviewRequest {
+export interface PublishRequest {
 root: WorkspaceRoot
-mode: "preview"
-title: Title
+mode: ("preview" | "apply")
+planDigest?: Sha256Digest
+action: "publish"
+package: PackageInput
+}
+export interface PackageInput {
 designSurfaceId: SurfaceId
-/**
- * @minItems 1
- * @maxItems 32
- */
-documents: [DocumentSelection, ...(DocumentSelection)[]]
+title: SingleLineText
+demandType: DemandType
+priority: Priority
+originWindowId: WindowId
+testingDecision: TestingDecision
+taskPlanReview?: ("controller" | "user")
+supersedes?: RequirementId
+parked?: {
+trigger: Text
 }
+requirementPath: MarkdownPath
+landingPath: MarkdownPath
 /**
- * One strict Markdown path under the selected Design surface. The path is also the future Ledger member path.
+ * @maxItems 16
  */
-export interface DocumentSelection {
-role: RequirementDocumentRole
-path: MarkdownResourcePath
+attachments?: []|[TextPath]|[TextPath, TextPath]|[TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]|[TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath, TextPath]
+confirmation?: {
+confirmedAt: UtcInstant
 }
-export interface ApplyRequest {
+}
+export interface TestingDecision {
+mode: ("controller-only" | "real-environment" | "not-applicable")
+summary: Text
+}
+export interface ActivateRequest {
 root: WorkspaceRoot
-mode: "apply"
-plan: PublicationPlan
-planDigest: Sha256Digest
+mode: ("preview" | "apply")
+planDigest?: Sha256Digest
+action: "activate"
+requirementId: RequirementId
+expectedStateDigest: Sha256Digest
 }
-/**
- * Complete owner-produced Ledger authority publication plan. The domain Plan parser revalidates its exact shape and all Record/Intent/tree relations.
- */
-export interface PublicationPlan {
-[k: string]: unknown | undefined
+export interface WithdrawRequest {
+root: WorkspaceRoot
+mode: ("preview" | "apply")
+planDigest?: Sha256Digest
+action: "withdraw"
+requirementId: RequirementId
+expectedStateDigest: Sha256Digest
+reason: Text
 }
 export interface RecoverRequest {
 root: WorkspaceRoot
 mode: "recover"
-plan: PublicationPlan
-planDigest: Sha256Digest
+operationId: RequirementId
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -76,4 +98,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:requirement-publication-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA\",\"title\":\"WakeflowRequirementPublicationRequestV1\",\"description\":\"Closed MCP preview/apply/recover request for one immutable Requirement authority publication.\",\"$comment\":\"Preview accepts only a title, the current Design surface identity, and family-specific Markdown member selections. Program/Requirement identity, time, media type, size, digests, Ledger paths and publication intent are owner-derived. Apply and recover both require the exact preview plan and digest; no mode accepts inline bytes, family, physical paths or replacement owner fields.\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/previewRequest\"},{\"$ref\":\"#/$defs/applyRequest\"},{\"$ref\":\"#/$defs/recoverRequest\"}],\"$defs\":{\"previewRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"title\",\"designSurfaceId\",\"documents\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"const\":\"preview\"},\"title\":{\"$ref\":\"#/$defs/title\"},\"designSurfaceId\":{\"$ref\":\"#/$defs/surfaceId\"},\"documents\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/documentSelection\"}}}},\"applyRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"plan\",\"planDigest\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"const\":\"apply\"},\"plan\":{\"$ref\":\"#/$defs/publicationPlan\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"recoverRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"plan\",\"planDigest\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"const\":\"recover\"},\"plan\":{\"$ref\":\"#/$defs/publicationPlan\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"documentSelection\":{\"description\":\"One strict Markdown path under the selected Design surface. The path is also the future Ledger member path.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"role\",\"path\"],\"properties\":{\"role\":{\"$ref\":\"#/$defs/requirementDocumentRole\"},\"path\":{\"$ref\":\"#/$defs/markdownResourcePath\"}}},\"publicationPlan\":{\"type\":\"object\",\"description\":\"Complete owner-produced Ledger authority publication plan. The domain Plan parser revalidates its exact shape and all Record/Intent/tree relations.\",\"minProperties\":1},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root. Physical validation remains owned by RootedDirectory and this value is never returned.\"},\"title\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"markdownResourcePath\":{\"allOf\":[{\"$ref\":\"#/$defs/portableResourcePath\"},{\"type\":\"string\",\"pattern\":\"^(?!(?:\\\\.git|\\\\.wakeflow-active|\\\\.wakeflow-local|record\\\\.json)(?:/|$)).+\\\\.md$\"}]},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"requirementDocumentRole\":{\"enum\":[\"original-plan\",\"requirement-design\",\"code-facts\",\"landing-plan\",\"non-goals\",\"user-confirmation\",\"reproduction\",\"scope\",\"requirement-delta\",\"research-question\",\"boundaries\",\"test-environment\",\"supporting-evidence\"]},\"surfaceId\":{\"type\":\"string\",\"pattern\":\"^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"}}}");
+export const WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:requirement-publication-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA\",\"title\":\"WakeflowRequirementPublicationRequestV1\",\"description\":\"wakeflow_publish_requirement 的请求：publish 发布需求包（记录加上板），activate 让 parked 包回到 pending，withdraw 撤回；preview 零写、apply 带 planDigest、recover 带 operationId。\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/publishRequest\"},{\"$ref\":\"#/$defs/activateRequest\"},{\"$ref\":\"#/$defs/withdrawRequest\"},{\"$ref\":\"#/$defs/recoverRequest\"}],\"$defs\":{\"publishRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"action\",\"package\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"enum\":[\"preview\",\"apply\"]},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"action\":{\"const\":\"publish\"},\"package\":{\"$ref\":\"#/$defs/packageInput\"}}},\"activateRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"action\",\"requirementId\",\"expectedStateDigest\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"enum\":[\"preview\",\"apply\"]},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"action\":{\"const\":\"activate\"},\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"expectedStateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"withdrawRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"action\",\"requirementId\",\"expectedStateDigest\",\"reason\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"enum\":[\"preview\",\"apply\"]},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"action\":{\"const\":\"withdraw\"},\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"expectedStateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"reason\":{\"$ref\":\"#/$defs/text\"}}},\"recoverRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"operationId\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"const\":\"recover\"},\"operationId\":{\"$ref\":\"#/$defs/requirementId\"}}},\"packageInput\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"designSurfaceId\",\"title\",\"demandType\",\"priority\",\"originWindowId\",\"testingDecision\",\"requirementPath\",\"landingPath\"],\"properties\":{\"designSurfaceId\":{\"$ref\":\"#/$defs/surfaceId\"},\"title\":{\"$ref\":\"#/$defs/singleLineText\"},\"demandType\":{\"$ref\":\"#/$defs/demandType\"},\"priority\":{\"$ref\":\"#/$defs/priority\"},\"originWindowId\":{\"$ref\":\"#/$defs/windowId\"},\"testingDecision\":{\"$ref\":\"#/$defs/testingDecision\"},\"taskPlanReview\":{\"enum\":[\"controller\",\"user\"]},\"supersedes\":{\"$ref\":\"#/$defs/requirementId\"},\"parked\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"trigger\"],\"properties\":{\"trigger\":{\"$ref\":\"#/$defs/text\"}}},\"requirementPath\":{\"$ref\":\"#/$defs/markdownPath\"},\"landingPath\":{\"$ref\":\"#/$defs/markdownPath\"},\"attachments\":{\"type\":\"array\",\"maxItems\":16,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/textPath\"}},\"confirmation\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"confirmedAt\"],\"properties\":{\"confirmedAt\":{\"$ref\":\"#/$defs/utcInstant\"}}}}},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":4096},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":1024,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"markdownPath\":{\"allOf\":[{\"$ref\":\"#/$defs/portableResourcePath\"},{\"type\":\"string\",\"pattern\":\"^(?!(?:\\\\.git|\\\\.wakeflow-active|\\\\.wakeflow-local|record\\\\.json)(?:/|$)).+\\\\.md$\"}]},\"textPath\":{\"allOf\":[{\"$ref\":\"#/$defs/portableResourcePath\"},{\"type\":\"string\",\"pattern\":\"^(?!(?:\\\\.git|\\\\.wakeflow-active|\\\\.wakeflow-local|record\\\\.json)(?:/|$)).+\\\\.(?:md|txt|json|csv|yaml|yml|toml)$\"}]},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"surfaceId\":{\"type\":\"string\",\"pattern\":\"^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"singleLineText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256,\"pattern\":\"^(?!\\\\s)[^\\\\u0000-\\\\u001F\\\\u007F]*\\\\S$\"},\"text\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":4096,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"demandType\":{\"enum\":[\"requirement\",\"bug\",\"supplement\",\"research\"]},\"priority\":{\"enum\":[\"P0\",\"P1\",\"P2\",\"P3\"]},\"testingDecision\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\",\"summary\"],\"properties\":{\"mode\":{\"enum\":[\"controller-only\",\"real-environment\",\"not-applicable\"]},\"summary\":{\"$ref\":\"#/$defs/text\"}}}}}");

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:ledger:requirement-lineage:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA",
+  "title": "WakeflowRequirementLineageReference",
+  "description": "跨 Aggregate 绑定一份不可变需求包记录的可移植 ref/digest；Demand 身份以此记录来源需求包。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactKind", "schemaVersion", "requirementId", "recordRef", "recordDigest"],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-requirement-lineage"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "recordRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "recordDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  }
+}

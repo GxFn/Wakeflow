@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_IDENTITY_SCHEMA",
   "title": "WakeflowDemandIdentity",
   "description": "Demand Event Sourcing Aggregate 创建后不可变的 identity authority。",
-  "$comment": "TODO lineage、isolated placement authorization 和 typed identity 的跨记录解析由 Demand identity codec 继续校验。",
+  "$comment": "需求包谱系、isolated placement authorization 和 typed identity 的跨记录解析由 Demand identity codec 继续校验。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -49,7 +49,7 @@
       "enum": ["requirement", "bug", "supplement", "research"]
     },
     "source": {
-      "$ref": "urn:wakeflow:governance:todo:intake-lineage:v1"
+      "$ref": "urn:wakeflow:governance:ledger:requirement-lineage:v1"
     },
     "executionPlacement": {
       "oneOf": [

@@ -23,7 +23,7 @@ import {
   demandEventSourcingPublicationPhysicalPath,
   demandEventSourcingPublicationUuidFactory,
   PUBLICATION_RECORDED_AT,
-  PUBLICATION_TODO_ID,
+  PUBLICATION_REQUIREMENT_ID,
   type DemandEventSourcingPublicationWorkspaceFixture,
 } from "./demand-event-sourcing-publication-service.fixture.js";
 
@@ -36,7 +36,7 @@ async function previewPublic(
     {
       root: fixture.workspacePath,
       mode: "preview",
-      todoId: PUBLICATION_TODO_ID,
+      requirementId: PUBLICATION_REQUIREMENT_ID,
       demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
     },
     {
@@ -84,16 +84,16 @@ test("Demand Publication public contract closes all three modes", () => {
       parseDemandPublicationPublicRequest({
         root: "/workspace",
         mode: "preview",
-        todoId: PUBLICATION_TODO_ID,
+        requirementId: PUBLICATION_REQUIREMENT_ID,
         demand: {
           ...demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
           demandType: "requirement",
         },
         authorityMembers: [
           {
-            recordId: "requirement_33333333-3333-4333-8333-333333333333",
-            memberPath: "authority/requirement-design.md",
-            role: "requirement-design",
+            recordId: PUBLICATION_REQUIREMENT_ID,
+            memberPath: "requirement.md",
+            role: "requirement",
           },
         ],
       }),
@@ -111,7 +111,7 @@ test("Demand Publication public preview/apply returns only the stable receipt", 
         {
           root: fixture.workspacePath,
           mode: "preview",
-          todoId: PUBLICATION_TODO_ID,
+          requirementId: PUBLICATION_REQUIREMENT_ID,
           demand: {
             ...demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
             title: fixture.workspacePath,
@@ -137,7 +137,8 @@ test("Demand Publication public preview/apply returns only the stable receipt", 
     ]);
     const plan = parseDemandEventSourcingPublicationTransaction(preview.plan);
     equal(preview.status, "ready");
-    equal(plan.todoId, PUBLICATION_TODO_ID);
+    equal(plan.requirementId, PUBLICATION_REQUIREMENT_ID);
+    equal(plan.expectedClaimStateDigest, fixture.initialClaimStateDigest);
     equal(JSON.stringify(preview).includes(fixture.workspacePath), false);
 
     await rejects(
@@ -168,7 +169,9 @@ test("Demand Publication public preview/apply returns only the stable receipt", 
     equal(applied.publication.demandId, plan.demandId);
     equal(applied.publication.event.streamRevision, 1);
     equal(applied.publication.commit.commitSequence, 1);
-    equal(applied.publication.todoClaim.stateRevision, 2);
+    equal(applied.publication.claim.requirementId, PUBLICATION_REQUIREMENT_ID);
+    equal(applied.publication.claim.stateRevision, 2);
+    equal(Object.hasOwn(applied.publication, "todoClaim"), false);
     equal(Object.hasOwn(applied.publication, "rootRef"), false);
     equal(Object.hasOwn(applied.publication, "authority"), false);
     equal(Object.hasOwn(applied.publication, "aggregate"), false);

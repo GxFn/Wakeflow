@@ -3,8 +3,8 @@
   "$id": "urn:wakeflow:entrypoints:demand-publication-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA",
   "title": "WakeflowDemandPublicationResultV1",
-  "description": "Successful preview, apply, or recovery result for one TODO-backed Demand Event Sourcing publication.",
-  "$comment": "Preview carries the complete owner-produced plan for review. Apply and recover return only stable publication receipts; full Aggregate, Demand Authority content, TODO snapshots, machine paths, and host effects are not public results.",
+  "description": "Successful preview, apply, or recovery result for one requirement-package-backed Demand Event Sourcing publication.",
+  "$comment": "Preview carries the complete owner-produced plan for review. Apply and recover return only stable publication receipts; full Aggregate, Demand Authority content, board claim snapshots, machine paths, and host effects are not public results.",
   "type": "object",
   "oneOf": [
     {
@@ -111,7 +111,7 @@
         "event",
         "commit",
         "stateDigest",
-        "todoClaim"
+        "claim"
       ],
       "properties": {
         "publicationAuthority": {
@@ -138,8 +138,8 @@
         "stateDigest": {
           "$ref": "#/$defs/sha256Digest"
         },
-        "todoClaim": {
-          "$ref": "#/$defs/todoClaimReceipt"
+        "claim": {
+          "$ref": "#/$defs/claimReceipt"
         }
       }
     },
@@ -172,33 +172,10 @@
         }
       }
     },
-    "todoClaimReceipt": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["todoId", "intakeDigest", "stateRevision", "stateDigest"],
-      "properties": {
-        "todoId": {
-          "$ref": "#/$defs/todoId"
-        },
-        "intakeDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "stateRevision": {
-          "const": 2
-        },
-        "stateDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        }
-      }
-    },
     "publicationPlan": {
       "type": "object",
       "description": "Complete owner-produced Demand Event Sourcing publication transaction. Its exact domain shape is revalidated before Apply.",
       "minProperties": 1
-    },
-    "todoId": {
-      "type": "string",
-      "pattern": "^todo_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "demandId": {
       "type": "string",
@@ -215,6 +192,27 @@
     "sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "claimReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirementId", "stateRevision", "stateDigest"],
+      "properties": {
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "stateRevision": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "stateDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     }
   }
 }

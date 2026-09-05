@@ -63,10 +63,10 @@ export const SELECTED_AUTHORITY_REF = parseLedgerAuthorityMemberReference({
   recordId: REQUIREMENT_ID,
   recordRef: `${REQUIREMENT_ROOT}/record.json`,
   recordDigest: RECORD_DIGEST,
-  memberPath: "design/implementation.md",
-  memberRef: `${REQUIREMENT_ROOT}/design/implementation.md`,
+  memberPath: "requirement.md",
+  memberRef: `${REQUIREMENT_ROOT}/requirement.md`,
   memberDigest: MEMBER_DIGEST,
-  role: "requirement-design",
+  role: "requirement",
   mediaType: "text/markdown",
 });
 

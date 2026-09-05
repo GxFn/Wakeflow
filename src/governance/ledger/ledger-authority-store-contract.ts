@@ -52,9 +52,12 @@ export interface LedgerAuthorityPublicationResult<
   readonly loaded: Readonly<LoadedLedgerAuthorityRecord<RecordType>>;
 }
 
-interface LedgerAuthorityMemberReferenceFields {
+/** 跨领域只读消费一份已验证需求包成员的完整 ref/digest 关系。 */
+export interface LedgerAuthorityMemberReference {
   readonly artifactKind: "wakeflow-ledger-authority-member-reference";
   readonly schemaVersion: 1;
+  readonly family: LedgerAuthorityFamily;
+  readonly recordId: WakeflowDurableId<"requirement">;
   readonly recordRef: PortableResourcePath;
   readonly recordDigest: Sha256Digest;
   readonly memberPath: PortableResourcePath;
@@ -63,16 +66,6 @@ interface LedgerAuthorityMemberReferenceFields {
   readonly role: LedgerAuthorityDocument["role"];
   readonly mediaType: string;
 }
-
-export type LedgerAuthorityMemberReference =
-  | Readonly<LedgerAuthorityMemberReferenceFields & {
-      readonly family: "requirement";
-      readonly recordId: WakeflowDurableId<"requirement">;
-    }>
-  | Readonly<LedgerAuthorityMemberReferenceFields & {
-      readonly family: "confirmation";
-      readonly recordId: WakeflowDurableId<"confirmation">;
-    }>;
 
 export interface ResolvedLedgerAuthorityMember {
   readonly reference: Readonly<LedgerAuthorityMemberReference>;

@@ -58,38 +58,6 @@ export type HumanText = string
  */
 export type NonEmptyTextList = [HumanText, ...(HumanText)[]]
 /**
- * 跨领域只读消费一份已验证 Ledger authority member 的完整 ref/digest 关系。
- */
-export type WakeflowLedgerAuthorityMemberReference = ({
-[k: string]: unknown | undefined
-} & {
-[k: string]: unknown | undefined
-} & {
-artifactKind: "wakeflow-ledger-authority-member-reference"
-schemaVersion: 1
-family: ("requirement" | "confirmation")
-recordId: (string | string)
-recordRef: WakeflowPortableResourcePathText
-recordDigest: WakeflowSha256DigestText
-memberPath: WakeflowPortableResourcePathText
-memberRef: WakeflowPortableResourcePathText
-memberDigest: WakeflowSha256DigestText
-role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence" | "goal-stage-decision")
-mediaType: string
-} & {
-artifactKind: "wakeflow-ledger-authority-member-reference"
-schemaVersion: 1
-family: ("requirement" | "confirmation")
-recordId: (string | string)
-recordRef: WakeflowPortableResourcePathText
-recordDigest: WakeflowSha256DigestText
-memberPath: WakeflowPortableResourcePathText
-memberRef: WakeflowPortableResourcePathText
-memberDigest: WakeflowSha256DigestText
-role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence" | "goal-stage-decision")
-mediaType: string
-})
-/**
  * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。
  */
 export type WakeflowPortableResourcePathText = string
@@ -106,6 +74,22 @@ windowId: WindowId
 }
 export interface TestAssignment {
 windowId: WindowId
+}
+/**
+ * 跨领域只读消费一份已验证需求包成员的完整 ref/digest 关系；成员角色为 requirement、landing 或 attachment。
+ */
+export interface WakeflowLedgerAuthorityMemberReference {
+artifactKind: "wakeflow-ledger-authority-member-reference"
+schemaVersion: 1
+family: "requirement"
+recordId: string
+recordRef: WakeflowPortableResourcePathText
+recordDigest: WakeflowSha256DigestText
+memberPath: WakeflowPortableResourcePathText
+memberRef: WakeflowPortableResourcePathText
+memberDigest: WakeflowSha256DigestText
+role: ("requirement" | "landing" | "attachment")
+mediaType: string
 }
 export interface Boundaries {
 inScope: NonEmptyTextList

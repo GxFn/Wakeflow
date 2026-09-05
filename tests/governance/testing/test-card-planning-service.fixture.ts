@@ -47,7 +47,7 @@ export function createTestCardContentFixture(
       "所有implementation Target均已接受",
     ] as const),
     realScenarioConditions: Object.freeze([
-      "使用冻结test-environment Authority描述的现有环境",
+      "使用冻结landing Authority描述的现有环境",
       "不创建或猜测额外配置与凭据",
     ] as const),
     successMeans: Object.freeze([

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:board-inspection-request:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_BOARD_INSPECTION_REQUEST_SCHEMA",
+  "title": "WakeflowBoardInspectionRequestV1",
+  "description": "wakeflow_inspect_board 的请求：list 按优先级列出需求包及其认领状态，package 读一个需求包的记录头部与章节锚点。",
+  "type": "object",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/listRequest"
+    },
+    {
+      "$ref": "#/$defs/packageRequest"
+    }
+  ],
+  "$defs": {
+    "listRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "view"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "view": {
+          "const": "list"
+        },
+        "filter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "statuses": {
+              "type": "array",
+              "maxItems": 5,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/status"
+              }
+            },
+            "priorities": {
+              "type": "array",
+              "maxItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/priority"
+              }
+            },
+            "demandTypes": {
+              "type": "array",
+              "maxItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/demandType"
+              }
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      }
+    },
+    "packageRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "view", "requirementId"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "view": {
+          "const": "package"
+        },
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
+        }
+      }
+    },
+    "workspaceRoot": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "status": {
+      "enum": ["pending", "parked", "claimed", "withdrawn", "archived"]
+    },
+    "priority": {
+      "enum": ["P0", "P1", "P2", "P3"]
+    },
+    "demandType": {
+      "enum": ["requirement", "bug", "supplement", "research"]
+    }
+  }
+}

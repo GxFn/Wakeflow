@@ -27,7 +27,6 @@ import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../../governance/ledger/ledger-authority-store.js";
-import { TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST } from "../../governance/todo/todo-collection-initialization-authority.js";
 import {
   compileWakeflowFreshWindowRuntimeAuthority,
   WakeflowFreshWindowRuntimeAuthorityError,
@@ -63,6 +62,7 @@ import {
   type WakeflowWorkspaceCoreLayoutInspection,
 } from "./wakeflow-workspace-core-layout-inspection.js";
 import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../active/wakeflow-active-resource-catalog.js";
+import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../active/wakeflow-requirement-board-initialization.js";
 import {
   createWakeflowActiveWorkspaceFreshProjectionAuthority,
   WakeflowActiveWorkspaceFreshProjectionAuthorityError,
@@ -408,7 +408,7 @@ async function inspectActiveWorkspaceProjectionParticipant(
         targetKey: "active.workspace-projection",
         sourceDigest: null,
         targetDigest: authority.authorityDigest,
-        dependsOn: ["active:todo-collection"],
+        dependsOn: ["active:requirement-board"],
       }),
     );
     return;
@@ -616,12 +616,12 @@ export async function previewWakeflowStaticMaterialization(
     );
     steps.push(
       step({
-        stepId: "active:todo-collection",
-        kind: "initialize-todo-collection",
-        ownerId: "todo-collection",
-        targetKey: "active.todo.collection",
+        stepId: "active:requirement-board",
+        kind: "initialize-requirement-board",
+        ownerId: "requirement-board",
+        targetKey: "active.board",
         sourceDigest: null,
-        targetDigest: TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST,
+        targetDigest: REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
         dependsOn: ["core:active-layout"],
       }),
     );
@@ -796,7 +796,7 @@ export async function previewWakeflowStaticMaterialization(
     ["materialize-local-protocol", 0],
     ["materialize-shared-coordination-layout", 1],
     ["materialize-active-layout", 2],
-    ["initialize-todo-collection", 3],
+    ["initialize-requirement-board", 3],
     ["publish-fresh-active-workspace-projection", 4],
     ["materialize-ledger-layout", 5],
     ["publish-unregistered-window-runtime", 6],

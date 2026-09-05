@@ -10,8 +10,8 @@ import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflo
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../../src/governance/demand/demand-resource-catalog.js";
 import { WINDOW_WORK_CLAIM_STATIC_RESOURCE_CATALOG } from "../../src/governance/delivery/window-work-claim-resource-catalog.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../../src/governance/ledger/ledger-resource-catalog.js";
-import { WAKEFLOW_TODO_STATIC_RESOURCE_CATALOG } from "../../src/governance/todo/todo-resource-catalog.js";
 import { WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/active/wakeflow-active-resource-catalog.js";
+import { WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG } from "../../src/workspace/active/wakeflow-requirement-board-initialization.js";
 import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";
@@ -47,14 +47,17 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
   equal(codex.kind, "WakeflowWorkspaceStaticResourceMatrix");
   equal(codex.hostId, "codex");
   equal(claude.hostId, "claude-code");
-  equal(codex.declarations.length, 43);
-  equal(claude.declarations.length, 51);
+  // 共享目录相对 L0 的 43/51 变化：TODO 集合的 5 条声明（看板投影、集合锁、items、
+  // 根、transactions）删除，需求看板加 2 条（`board/` 目录与 `board/index.md` 索引），
+  // Ledger 的 `confirmations/` 根随 confirmation family 删除减 1；宿主目录不变。
+  equal(codex.declarations.length, 39);
+  equal(claude.declarations.length, 47);
 
   const expectedSharedIds = sorted(
     [
       ...WAKEFLOW_CONFIG_RESOURCE_CATALOG,
       ...WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG,
-      ...WAKEFLOW_TODO_STATIC_RESOURCE_CATALOG,
+      ...WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,
       ...WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
       ...WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
       ...WINDOW_WORK_CLAIM_STATIC_RESOURCE_CATALOG,
@@ -84,7 +87,7 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
       matrix.declarations.some(
         (entry) =>
           entry.declarationId.includes("demand_") ||
-          entry.declarationId.includes("active.todo.item."),
+          entry.declarationId.includes("requirement_"),
       ),
       false,
     );

@@ -3,119 +3,273 @@
   "$id": "urn:wakeflow:entrypoints:requirement-publication-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA",
   "title": "WakeflowRequirementPublicationRequestV1",
-  "description": "Closed MCP preview/apply/recover request for one immutable Requirement authority publication.",
-  "$comment": "Preview accepts only a title, the current Design surface identity, and family-specific Markdown member selections. Program/Requirement identity, time, media type, size, digests, Ledger paths and publication intent are owner-derived. Apply and recover both require the exact preview plan and digest; no mode accepts inline bytes, family, physical paths or replacement owner fields.",
+  "description": "wakeflow_publish_requirement 的请求：publish 发布需求包（记录加上板），activate 让 parked 包回到 pending，withdraw 撤回；preview 零写、apply 带 planDigest、recover 带 operationId。",
   "type": "object",
   "oneOf": [
-    { "$ref": "#/$defs/previewRequest" },
-    { "$ref": "#/$defs/applyRequest" },
-    { "$ref": "#/$defs/recoverRequest" }
+    {
+      "$ref": "#/$defs/publishRequest"
+    },
+    {
+      "$ref": "#/$defs/activateRequest"
+    },
+    {
+      "$ref": "#/$defs/withdrawRequest"
+    },
+    {
+      "$ref": "#/$defs/recoverRequest"
+    }
   ],
   "$defs": {
-    "previewRequest": {
+    "publishRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["root", "mode", "title", "designSurfaceId", "documents"],
+      "required": ["root", "mode", "action", "package"],
       "properties": {
-        "root": { "$ref": "#/$defs/workspaceRoot" },
-        "mode": { "const": "preview" },
-        "title": { "$ref": "#/$defs/title" },
-        "designSurfaceId": { "$ref": "#/$defs/surfaceId" },
-        "documents": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 32,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/documentSelection" }
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "mode": {
+          "enum": ["preview", "apply"]
+        },
+        "planDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "action": {
+          "const": "publish"
+        },
+        "package": {
+          "$ref": "#/$defs/packageInput"
         }
       }
     },
-    "applyRequest": {
+    "activateRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["root", "mode", "plan", "planDigest"],
+      "required": ["root", "mode", "action", "requirementId", "expectedStateDigest"],
       "properties": {
-        "root": { "$ref": "#/$defs/workspaceRoot" },
-        "mode": { "const": "apply" },
-        "plan": { "$ref": "#/$defs/publicationPlan" },
-        "planDigest": { "$ref": "#/$defs/sha256Digest" }
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "mode": {
+          "enum": ["preview", "apply"]
+        },
+        "planDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "action": {
+          "const": "activate"
+        },
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "expectedStateDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "withdrawRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "action", "requirementId", "expectedStateDigest", "reason"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "mode": {
+          "enum": ["preview", "apply"]
+        },
+        "planDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "action": {
+          "const": "withdraw"
+        },
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "expectedStateDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        }
       }
     },
     "recoverRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["root", "mode", "plan", "planDigest"],
+      "required": ["root", "mode", "operationId"],
       "properties": {
-        "root": { "$ref": "#/$defs/workspaceRoot" },
-        "mode": { "const": "recover" },
-        "plan": { "$ref": "#/$defs/publicationPlan" },
-        "planDigest": { "$ref": "#/$defs/sha256Digest" }
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "mode": {
+          "const": "recover"
+        },
+        "operationId": {
+          "$ref": "#/$defs/requirementId"
+        }
       }
     },
-    "documentSelection": {
-      "description": "One strict Markdown path under the selected Design surface. The path is also the future Ledger member path.",
+    "packageInput": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["role", "path"],
+      "required": [
+        "designSurfaceId",
+        "title",
+        "demandType",
+        "priority",
+        "originWindowId",
+        "testingDecision",
+        "requirementPath",
+        "landingPath"
+      ],
       "properties": {
-        "role": { "$ref": "#/$defs/requirementDocumentRole" },
-        "path": { "$ref": "#/$defs/markdownResourcePath" }
+        "designSurfaceId": {
+          "$ref": "#/$defs/surfaceId"
+        },
+        "title": {
+          "$ref": "#/$defs/singleLineText"
+        },
+        "demandType": {
+          "$ref": "#/$defs/demandType"
+        },
+        "priority": {
+          "$ref": "#/$defs/priority"
+        },
+        "originWindowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "testingDecision": {
+          "$ref": "#/$defs/testingDecision"
+        },
+        "taskPlanReview": {
+          "enum": ["controller", "user"]
+        },
+        "supersedes": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "parked": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["trigger"],
+          "properties": {
+            "trigger": {
+              "$ref": "#/$defs/text"
+            }
+          }
+        },
+        "requirementPath": {
+          "$ref": "#/$defs/markdownPath"
+        },
+        "landingPath": {
+          "$ref": "#/$defs/markdownPath"
+        },
+        "attachments": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/textPath"
+          }
+        },
+        "confirmation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["confirmedAt"],
+          "properties": {
+            "confirmedAt": {
+              "$ref": "#/$defs/utcInstant"
+            }
+          }
+        }
       }
-    },
-    "publicationPlan": {
-      "type": "object",
-      "description": "Complete owner-produced Ledger authority publication plan. The domain Plan parser revalidates its exact shape and all Record/Intent/tree relations.",
-      "minProperties": 1
     },
     "workspaceRoot": {
       "type": "string",
       "minLength": 1,
-      "description": "Absolute path of the existing Wakeflow workspace root. Physical validation remains owned by RootedDirectory and this value is never returned."
+      "maxLength": 4096
     },
-    "title": {
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "utcInstant": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 30,
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "portableResourcePath": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 8192,
-      "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
     },
-    "markdownResourcePath": {
+    "markdownPath": {
       "allOf": [
-        { "$ref": "#/$defs/portableResourcePath" },
+        {
+          "$ref": "#/$defs/portableResourcePath"
+        },
         {
           "type": "string",
           "pattern": "^(?!(?:\\.git|\\.wakeflow-active|\\.wakeflow-local|record\\.json)(?:/|$)).+\\.md$"
         }
       ]
     },
-    "portableResourcePath": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
-    },
-    "requirementDocumentRole": {
-      "enum": [
-        "original-plan",
-        "requirement-design",
-        "code-facts",
-        "landing-plan",
-        "non-goals",
-        "user-confirmation",
-        "reproduction",
-        "scope",
-        "requirement-delta",
-        "research-question",
-        "boundaries",
-        "test-environment",
-        "supporting-evidence"
+    "textPath": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/portableResourcePath"
+        },
+        {
+          "type": "string",
+          "pattern": "^(?!(?:\\.git|\\.wakeflow-active|\\.wakeflow-local|record\\.json)(?:/|$)).+\\.(?:md|txt|json|csv|yaml|yml|toml)$"
+        }
       ]
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "surfaceId": {
       "type": "string",
       "pattern": "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "sha256Digest": {
+    "windowId": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "singleLineText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F]*\\S$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+    },
+    "demandType": {
+      "enum": ["requirement", "bug", "supplement", "research"]
+    },
+    "priority": {
+      "enum": ["P0", "P1", "P2", "P3"]
+    },
+    "testingDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "summary"],
+      "properties": {
+        "mode": {
+          "enum": ["controller-only", "real-environment", "not-applicable"]
+        },
+        "summary": {
+          "$ref": "#/$defs/text"
+        }
+      }
     }
   }
 }

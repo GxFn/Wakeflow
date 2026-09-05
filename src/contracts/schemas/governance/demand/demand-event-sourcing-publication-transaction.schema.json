@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:governance:demand:event-sourcing-publication-transaction:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA",
   "title": "WakeflowDemandEventSourcingPublicationTransaction",
-  "description": "TODO-backed Demand Event Sourcing root publication 的自包含 immutable recovery plan。",
+  "description": "需求包认领驱动的 Demand Event Sourcing root publication 的自包含 immutable recovery plan。",
   "$comment": "Plan 保存 initial command 与由纯 Decider/evolve 得到的 exact commit；snapshot 是 derived cache，不进入跨资源 transaction authority。",
   "type": "object",
   "additionalProperties": false,
@@ -11,9 +11,8 @@
     "artifactKind",
     "schemaVersion",
     "demandId",
-    "todoId",
-    "expectedTodoCollectionDigest",
-    "expectedTodoStateDigest",
+    "requirementId",
+    "expectedClaimStateDigest",
     "stageRef",
     "finalRootRef",
     "identity",
@@ -35,13 +34,11 @@
     "demandId": {
       "$ref": "#/$defs/demandId"
     },
-    "todoId": {
-      "$ref": "urn:wakeflow:governance:todo:item-id:v1"
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "expectedTodoCollectionDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "expectedTodoStateDigest": {
+    "expectedClaimStateDigest": {
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     },
     "stageRef": {

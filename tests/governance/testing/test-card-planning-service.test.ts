@@ -109,10 +109,10 @@ test("TestCard preview零写，Apply创建唯一Event并路由到Test Task plann
     deepEqual(preview.plan.generationSource, { kind: "initial" });
     equal(Object.hasOwn(card, "generationSource"), false);
     equal(card.requirementGoal, "建立一份可审计的 implementation TaskPackage");
-    equal(card.environmentAuthority.role, "test-environment");
+    equal(card.environmentAuthority.role, "landing");
     deepEqual(
       card.testBasisAuthorities.map((reference) => reference.role),
-      ["requirement-design"],
+      ["requirement"],
     );
     equal(card.implementationBaselines.length, 1);
     equal(card.controllerSelfChecks.length, 2);
@@ -351,33 +351,39 @@ test("Test Basis按Demand类型完整派生并保持稳定顺序", async () => {
         memberPath: parsePortableResourcePath(`${name}.md`),
         memberRef: parsePortableResourcePath(`basis/${name}.md`),
       });
-    const designB = reference("requirement-design", "z-design");
-    const designA = reference("requirement-design", "a-design");
-    const reproduction = reference("reproduction", "b-reproduction");
-    const scopeA = reference("scope", "c-scope");
-    const scopeB = reference("scope", "d-scope");
-    const delta = reference("requirement-delta", "e-delta");
+    const requirementB = reference("requirement", "z-requirement");
+    const requirementA = reference("requirement", "a-requirement");
+    const landing = reference("landing", "b-landing");
+    const attachment = reference("attachment", "c-attachment");
 
     deepEqual(
-      deriveTestCardBasisAuthorities("requirement", [designB, scopeA, designA]),
-      [designA, designB],
+      deriveTestCardBasisAuthorities("requirement", [
+        requirementB,
+        landing,
+        requirementA,
+      ]),
+      [requirementA, requirementB],
     );
     deepEqual(
-      deriveTestCardBasisAuthorities("bug", [scopeB, reproduction, scopeA]),
-      [reproduction, scopeA, scopeB],
+      deriveTestCardBasisAuthorities("bug", [attachment, requirementA, landing]),
+      [requirementA],
     );
     deepEqual(
-      deriveTestCardBasisAuthorities("supplement", [delta, designB, designA]),
-      [designA, delta, designB],
+      deriveTestCardBasisAuthorities("supplement", [
+        landing,
+        requirementB,
+        requirementA,
+      ]),
+      [requirementA, requirementB],
     );
     throws(
-      () => deriveTestCardBasisAuthorities("bug", [reproduction]),
+      () => deriveTestCardBasisAuthorities("bug", [landing, attachment]),
       (error: unknown) =>
         error instanceof TestCardPlanningAuthorityError &&
         error.reason === "test-basis",
     );
     throws(
-      () => deriveTestCardBasisAuthorities("research", [designA]),
+      () => deriveTestCardBasisAuthorities("research", [requirementA]),
       (error: unknown) =>
         error instanceof TestCardPlanningAuthorityError &&
         error.reason === "test-basis",

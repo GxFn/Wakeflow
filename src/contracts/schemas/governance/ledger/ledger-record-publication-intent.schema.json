@@ -25,14 +25,7 @@
       "const": 1
     },
     "record": {
-      "oneOf": [
-        {
-          "$ref": "urn:wakeflow:governance:ledger:requirement-record:v1"
-        },
-        {
-          "$ref": "urn:wakeflow:governance:ledger:confirmation-record:v1"
-        }
-      ]
+      "$ref": "urn:wakeflow:governance:ledger:requirement-record:v1"
     },
     "finalRootRef": {
       "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"

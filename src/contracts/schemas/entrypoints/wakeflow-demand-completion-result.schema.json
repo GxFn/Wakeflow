@@ -265,7 +265,7 @@
         "postAcceptanceRouteDigest",
         "reviewSnapshotDigest",
         "observedState",
-        "todoSource",
+        "packageSource",
         "completedAt",
         "completionDigest"
       ],
@@ -300,8 +300,8 @@
         "observedState": {
           "$ref": "#/$defs/observedState"
         },
-        "todoSource": {
-          "$ref": "#/$defs/todoSource"
+        "packageSource": {
+          "$ref": "#/$defs/packageSource"
         },
         "completedAt": {
           "$ref": "#/$defs/utcInstant"
@@ -335,11 +335,11 @@
           "const": 1
         },
         "family": {
-          "enum": ["requirement", "confirmation"]
+          "enum": ["requirement"]
         },
         "recordId": {
           "type": "string",
-          "pattern": "^(?:requirement|confirmation)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
         "recordRef": {
           "$ref": "#/$defs/portableResourcePath"
@@ -357,22 +357,7 @@
           "$ref": "#/$defs/sha256Digest"
         },
         "role": {
-          "enum": [
-            "original-plan",
-            "requirement-design",
-            "code-facts",
-            "landing-plan",
-            "non-goals",
-            "user-confirmation",
-            "reproduction",
-            "scope",
-            "requirement-delta",
-            "research-question",
-            "boundaries",
-            "test-environment",
-            "supporting-evidence",
-            "goal-stage-decision"
-          ]
+          "enum": ["requirement", "landing", "attachment"]
         },
         "mediaType": {
           "type": "string",
@@ -423,29 +408,6 @@
         }
       }
     },
-    "todoSource": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["todoId", "intakeRef", "intakeDigest", "stateRevision", "stateDigest"],
-      "properties": {
-        "todoId": {
-          "$ref": "#/$defs/todoId"
-        },
-        "intakeRef": {
-          "$ref": "#/$defs/portableResourcePath"
-        },
-        "intakeDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "stateRevision": {
-          "type": "integer",
-          "minimum": 2
-        },
-        "stateDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        }
-      }
-    },
     "nonEmptyText": {
       "type": "string",
       "minLength": 1,
@@ -467,10 +429,6 @@
       "maxLength": 30,
       "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
     },
-    "todoId": {
-      "type": "string",
-      "pattern": "^todo_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
     "programId": {
       "type": "string",
       "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -490,6 +448,39 @@
     "commitId": {
       "type": "string",
       "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "packageSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirementId",
+        "recordRef",
+        "recordDigest",
+        "claimStateRevision",
+        "claimStateDigest"
+      ],
+      "properties": {
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "recordRef": {
+          "$ref": "#/$defs/portableResourcePath"
+        },
+        "recordDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "claimStateRevision": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "claimStateDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
     }
   }
 }

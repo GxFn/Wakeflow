@@ -9,8 +9,7 @@ import { WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA } from "../../../contracts/g
 import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
 import { WAKEFLOW_DEMAND_IDENTITY_SCHEMA } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/todo/todo-intake-lineage.generated.js";
-import { WAKEFLOW_TODO_ITEM_ID_SCHEMA } from "../../../contracts/generated/governance/todo/todo-item-id.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
@@ -77,16 +76,11 @@ import {
   demandFinalRootRef,
   demandPublicationStageRef,
 } from "./demand-publication-paths.js";
-import {
-  parseTodoItemId,
-  TodoItemIdError,
-  type TodoItemId,
-} from "../../todo/todo-item-id.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：跨资源恢复计划。
  *
- * 事务记录保存完整、不可变的身份/权威关系记录、TODO 预期、初始命令，以及由同一
+ * 事务记录保存完整、不可变的身份/权威关系记录、看板认领前序摘要、初始命令，以及由同一
  * 决策器和状态演进逻辑得到的精确提交记录。快照是可重建缓存，不进入事务权威事实；
  * 恢复流程必须重新计算并验证命令与提交关系后，才能执行副作用。
  */
@@ -102,9 +96,8 @@ export interface DemandEventSourcingPublicationTransaction {
   readonly schemaVersion:
     typeof DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA_VERSION;
   readonly demandId: WakeflowDurableId<"demand">;
-  readonly todoId: TodoItemId;
-  readonly expectedTodoCollectionDigest: Sha256Digest;
-  readonly expectedTodoStateDigest: Sha256Digest;
+  readonly requirementId: WakeflowDurableId<"requirement">;
+  readonly expectedClaimStateDigest: Sha256Digest;
   readonly stageRef: PortableResourcePath;
   readonly finalRootRef: PortableResourcePath;
   readonly identity: Readonly<DemandIdentity>;
@@ -122,7 +115,6 @@ export type DemandEventSourcingPublicationTransactionErrorReason =
   | "json"
   | "schema"
   | "identifier"
-  | "todo"
   | "path"
   | "digest"
   | "identity"
@@ -137,7 +129,6 @@ const ERROR_MESSAGES = {
   "json": "Demand Event Sourcing publication transaction is not passive JSON data.",
   "schema": "Demand Event Sourcing publication transaction does not satisfy its Schema.",
   "identifier": "Demand Event Sourcing publication transaction contains an invalid identity.",
-  "todo": "Demand Event Sourcing publication transaction contains an invalid TODO identity.",
   "path": "Demand Event Sourcing publication transaction contains an invalid path.",
   "digest": "Demand Event Sourcing publication transaction contains an invalid digest.",
   "identity": "Demand Event Sourcing publication transaction contains an invalid Demand identity.",
@@ -175,8 +166,7 @@ const validateWire = createRuntimeJsonSchemaValidator<TransactionWire>(
     WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA,
     WAKEFLOW_DEMAND_IDENTITY_SCHEMA,
     WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-    WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA,
-    WAKEFLOW_TODO_ITEM_ID_SCHEMA,
+    WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA,
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
@@ -186,8 +176,7 @@ const CREATE_FIELDS = Object.freeze([
   "authority",
   "commitId",
   "eventId",
-  "expectedTodoCollectionDigest",
-  "expectedTodoStateDigest",
+  "expectedClaimStateDigest",
   "identity",
   "recordedAt",
 ] as const);
@@ -251,11 +240,17 @@ export function parseDemandEventSourcingPublicationTransaction(
     }
     throw error;
   }
-  let todoId: TodoItemId;
+  let requirementId: WakeflowDurableId<"requirement">;
   try {
-    todoId = parseTodoItemId(wire.todoId, "$/todoId");
+    requirementId = parseWakeflowDurableIdOfKind(
+      wire.requirementId,
+      "requirement",
+      "$/requirementId",
+    );
   } catch (error: unknown) {
-    if (error instanceof TodoItemIdError) fail("todo", "$/todoId");
+    if (error instanceof WakeflowDurableIdError) {
+      fail("identifier", "$/requirementId");
+    }
     throw error;
   }
   let identity: Readonly<DemandIdentity>;
@@ -304,13 +299,9 @@ export function parseDemandEventSourcingPublicationTransaction(
     wire.initialCommitDigest,
     "$/initialCommitDigest",
   );
-  const expectedTodoCollectionDigest = parseDigest(
-    wire.expectedTodoCollectionDigest,
-    "$/expectedTodoCollectionDigest",
-  );
-  const expectedTodoStateDigest = parseDigest(
-    wire.expectedTodoStateDigest,
-    "$/expectedTodoStateDigest",
+  const expectedClaimStateDigest = parseDigest(
+    wire.expectedClaimStateDigest,
+    "$/expectedClaimStateDigest",
   );
   const stageRef = parsePath(wire.stageRef, "$/stageRef");
   const finalRootRef = parsePath(wire.finalRootRef, "$/finalRootRef");
@@ -333,7 +324,7 @@ export function parseDemandEventSourcingPublicationTransaction(
   if (
     identity.demandId !== demandId
     || authority.demandId !== demandId
-    || identity.source.todoId !== todoId
+    || identity.source.requirementId !== requirementId
     || stageRef !== demandPublicationStageRef(demandId)
     || finalRootRef !== demandFinalRootRef(demandId)
     || identityDigest !== computeDemandIdentityDigest(identity)
@@ -354,9 +345,8 @@ export function parseDemandEventSourcingPublicationTransaction(
     artifactKind: DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA_VERSION,
     demandId,
-    todoId,
-    expectedTodoCollectionDigest,
-    expectedTodoStateDigest,
+    requirementId,
+    expectedClaimStateDigest,
     stageRef,
     finalRootRef,
     identity,
@@ -411,13 +401,9 @@ export function createDemandEventSourcingPublicationTransaction(
   }
   const identityDigest = computeDemandIdentityDigest(identity);
   const authorityDigest = computeDemandAuthorityDigest(authority);
-  const expectedTodoCollectionDigest = parseDigest(
-    input.expectedTodoCollectionDigest,
-    "$/expectedTodoCollectionDigest",
-  );
-  const expectedTodoStateDigest = parseDigest(
-    input.expectedTodoStateDigest,
-    "$/expectedTodoStateDigest",
+  const expectedClaimStateDigest = parseDigest(
+    input.expectedClaimStateDigest,
+    "$/expectedClaimStateDigest",
   );
   let initialCommand: Readonly<PublishDemandCommand>;
   try {
@@ -463,9 +449,8 @@ export function createDemandEventSourcingPublicationTransaction(
     artifactKind: DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA_VERSION,
     demandId: identity.demandId,
-    todoId: identity.source.todoId,
-    expectedTodoCollectionDigest,
-    expectedTodoStateDigest,
+    requirementId: identity.source.requirementId,
+    expectedClaimStateDigest,
     stageRef: demandPublicationStageRef(identity.demandId),
     finalRootRef: demandFinalRootRef(identity.demandId),
     identity,

@@ -62,9 +62,10 @@ import {
 /**
  * Wakeflow Governance / Demand Model：事件溯源聚合发布所需的必需权威关系验证。
  *
- * 权威关系记录只保存可解析的 Ledger 成员引用、身份语义摘要和测试决定。旧
- * `entryMode` 已删除；Pod 或隔离执行位置必须由真实 Confirmation 引用、同一 Demand
- * 关系和位置授权共同证明。本模块不写入 Ledger 或 Demand 文件，也不追加事件流。
+ * 权威关系记录只保存可解析的需求包成员引用、身份语义摘要和测试决定。四类
+ * Demand 都要求 `requirement` 与 `landing` 两个成员（ADR-0011 D3）；测试环境不再
+ * 由 Ledger 成员证明，`environmentMemberRef` 恒为 `null`。本模块不写入 Ledger 或
+ * Demand 文件，也不追加事件流。
  */
 
 const DEMAND_AUTHORITY_ARTIFACT_KIND =
@@ -153,22 +154,18 @@ export class DemandAuthorityError extends Error {
   }
 }
 
+const PACKAGE_ROLES = Object.freeze(["requirement", "landing"] as const);
+/**
+ * 真实环境Test执行的环境权威成员角色。Confirmation family 退役后，需求包的
+ * `landing.md`（落地方案与测试决策）充当环境权威，`requirement.md` 充当Test Basis；
+ * Pod 切片按 ADR-0010 接管专用环境权威前，二者由同一需求包记录冻结。
+ */
+export const TEST_ENVIRONMENT_AUTHORITY_ROLE = "landing" as const;
 const REQUIRED_ROLES = Object.freeze({
-  requirement: Object.freeze([
-    "original-plan",
-    "requirement-design",
-    "code-facts",
-    "landing-plan",
-    "non-goals",
-    "user-confirmation",
-  ]),
-  bug: Object.freeze(["reproduction", "scope", "non-goals"]),
-  supplement: Object.freeze([
-    "requirement-design",
-    "requirement-delta",
-    "user-confirmation",
-  ]),
-  research: Object.freeze(["research-question", "boundaries"]),
+  requirement: PACKAGE_ROLES,
+  bug: PACKAGE_ROLES,
+  supplement: PACKAGE_ROLES,
+  research: PACKAGE_ROLES,
 } as const satisfies Readonly<Record<DemandType, readonly string[]>>);
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
@@ -312,32 +309,13 @@ function assertIdentityRelations(
   ) {
     fail("testing", "$/testingDecision/mode");
   }
-  const environmentRefs = authority.authorityRefs.filter(
-    (entry) => entry.role === "test-environment",
-  );
-  if (authority.testingDecision.mode === "real-environment") {
-    if (
-      authority.testingDecision.environmentMemberRef === null
-      || environmentRefs.length !== 1
-      || environmentRefs[0]?.memberRef
-        !== authority.testingDecision.environmentMemberRef
-    ) {
-      fail("testing", "$/testingDecision/environmentMemberRef");
-    }
-  } else if (authority.testingDecision.environmentMemberRef !== null) {
+  if (authority.testingDecision.environmentMemberRef !== null) {
     fail("testing", "$/testingDecision/environmentMemberRef");
   }
   if (identity.executionPlacement.mode === "isolated") {
     const expected = identity.executionPlacement.authorizationRef;
-    const authorization = authority.authorityRefs.find(
-      (entry) => sameReference(entry, expected),
-    );
     if (
-      authorization === undefined
-      || authorization.family !== "confirmation"
-      || !["goal-stage-decision", "user-confirmation"].includes(
-        authorization.role,
-      )
+      !authority.authorityRefs.some((entry) => sameReference(entry, expected))
     ) {
       fail("placement", "$/authorityRefs");
     }
@@ -447,8 +425,8 @@ export function createDemandAuthority(
 }
 
 /**
- * 通过 `LedgerAuthorityStore` 解析每个成员，并证明 Program、同一 Demand 的
- * Confirmation、测试决定和隔离执行位置授权关系全部成立。
+ * 通过 `LedgerAuthorityStore` 解析每个成员，并证明每个成员都属于同一 Program
+ * 的需求包记录。
  */
 export async function admitDemandAuthority(
   identityValue: unknown,
@@ -509,12 +487,6 @@ export async function admitDemandAuthority(
   for (const [index, resolution] of ledgerResolutions.entries()) {
     const record = resolution.loaded;
     if (record.record.programId !== identity.programId) {
-      fail("resolution", `$/authorityRefs/${index}`);
-    }
-    if (
-      record.record.artifactKind === "wakeflow-confirmation-record"
-      && record.record.demandId !== identity.demandId
-    ) {
       fail("resolution", `$/authorityRefs/${index}`);
     }
     resolved.push(Object.freeze({

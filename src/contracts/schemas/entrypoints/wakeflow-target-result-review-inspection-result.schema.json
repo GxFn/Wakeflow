@@ -986,11 +986,11 @@
           "const": 1
         },
         "family": {
-          "enum": ["requirement", "confirmation"]
+          "enum": ["requirement"]
         },
         "recordId": {
           "type": "string",
-          "pattern": "^(?:requirement|confirmation)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
         "recordRef": {
           "$ref": "#/$defs/portableResourcePath"
@@ -1008,22 +1008,7 @@
           "$ref": "#/$defs/sha256Digest"
         },
         "role": {
-          "enum": [
-            "original-plan",
-            "requirement-design",
-            "code-facts",
-            "landing-plan",
-            "non-goals",
-            "user-confirmation",
-            "reproduction",
-            "scope",
-            "requirement-delta",
-            "research-question",
-            "boundaries",
-            "test-environment",
-            "supporting-evidence",
-            "goal-stage-decision"
-          ]
+          "enum": ["requirement", "landing", "attachment"]
         },
         "mediaType": {
           "type": "string",

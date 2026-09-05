@@ -9,15 +9,21 @@ import { parseWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../../src/governance/controller/demand-controller-route-public-contract.js";
 import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/demand/publication/demand-publication-public-contract.js";
-import { WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/ledger/ledger-authority-public-contract.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/tasking/target-task-planning-public-contract.js";
-import { WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/todo/todo-intake-publication-public-contract.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
+import {
+  WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/requirement/contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
 import { writeHostHookObservation } from "../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
+import {
+  FIXTURE_LANDING_MARKDOWN,
+  FIXTURE_REQUIREMENT_MARKDOWN,
+} from "../governance/ledger/requirement-package.fixture.js";
 import {
   connectWakeflowMcpServerForTest,
   type ConnectedWakeflowMcpTestClient,
@@ -33,18 +39,9 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 五个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 创建 Demand → 规划任务。
+ * 六个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand → 规划任务。
  * 所有调用都经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内。
  */
-
-const REQUIREMENT_DOCUMENTS = Object.freeze([
-  { role: "original-plan", path: "authority/original-plan.md" },
-  { role: "requirement-design", path: "authority/requirement-design.md" },
-  { role: "code-facts", path: "authority/code-facts.md" },
-  { role: "landing-plan", path: "authority/landing-plan.md" },
-  { role: "non-goals", path: "authority/non-goals.md" },
-  { role: "user-confirmation", path: "authority/user-confirmation.md" },
-] as const);
 
 interface PreviewPlan {
   readonly plan: Readonly<Record<string, unknown>>;
@@ -60,6 +57,8 @@ interface ScenarioContext {
   repositoryId?: string;
   designPath?: string;
   memberRefs?: readonly string[];
+  requirementId?: string;
+  requirementStateDigest?: string;
   demandId?: string;
   productBinding?: { readonly bindingId: string; readonly bindingDigest: string };
 }
@@ -299,84 +298,116 @@ async function scenarioWindowReplace(context: ScenarioContext): Promise<string> 
   return `stale-cas=rejected; replace=${mutation.disposition}; generation changed`;
 }
 
-async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
+interface PublicationPreview {
+  readonly status: string;
+  readonly blockers: readonly string[];
+  readonly planDigest: string | null;
+  readonly requirementId: string | null;
+  readonly summary: { readonly sections: readonly { readonly anchor: string }[] } | null;
+  readonly next: { readonly frontier: string | null };
+}
+
+async function scenarioRequirementPackage(context: ScenarioContext): Promise<string> {
   const root = context.workspace.workspacePath;
   if (!context.designSurfaceId || !context.designWindowId || !context.designPath) {
     throw new Error("scenario ordering: fresh-initialize must run first");
   }
-  mkdirSync(path.join(context.designPath, "authority"), { recursive: true });
-  for (const document of REQUIREMENT_DOCUMENTS) {
-    writeFileSync(path.join(context.designPath, document.path), `# ${document.role}\n`, {
-      mode: 0o644,
-    });
-  }
-  const requirementPreview = await call(
-    context,
-    WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-    {
-      root,
-      mode: "preview",
-      title: "Scenario acceptance requirement",
-      designSurfaceId: context.designSurfaceId,
-      documents: [...REQUIREMENT_DOCUMENTS],
+  mkdirSync(path.join(context.designPath, "drafts"), { recursive: true });
+  writeFileSync(
+    path.join(context.designPath, "drafts", "requirement.md"),
+    FIXTURE_REQUIREMENT_MARKDOWN,
+    { mode: 0o644 },
+  );
+  writeFileSync(path.join(context.designPath, "drafts", "landing.md"), FIXTURE_LANDING_MARKDOWN, {
+    mode: 0o644,
+  });
+  const packageInput = {
+    designSurfaceId: context.designSurfaceId,
+    title: "Scenario acceptance requirement",
+    demandType: "requirement",
+    priority: "P1",
+    originWindowId: context.designWindowId,
+    testingDecision: {
+      mode: "controller-only",
+      summary: "Controller validates focused implementation checks.",
     },
-  );
-  const requirementPlan = requirementPreview.structuredContent as PreviewPlan;
-  const requirementApplied = await call(
-    context,
-    WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-    { root, mode: "apply", plan: requirementPlan.plan, planDigest: requirementPlan.planDigest },
-  );
-  assertNoPrivatePath(context, requirementApplied);
-  const requirement = requirementApplied.structuredContent as {
-    readonly publication: {
-      readonly memberReferences: readonly {
-        readonly recordId: string;
-        readonly memberPath: string;
-        readonly memberRef: string;
-      }[];
-    };
+    requirementPath: "drafts/requirement.md",
+    landingPath: "drafts/landing.md",
   };
-  context.memberRefs = requirement.publication.memberReferences.map(
-    (reference) => reference.memberRef,
-  );
-
-  const intakePreview = await call(context, WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME, {
+  const blocked = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
     root,
     mode: "preview",
-    intake: {
-      demandType: "requirement",
-      priority: "P1",
-      originWindowId: context.designWindowId,
-      summary: "Implement the scenario acceptance requirement",
-      intakeRationale: "The confirmed requirement is ready for Demand publication.",
-      readiness: { status: "ready" },
-      autoClaim: false,
-      testingDecision: {
-        mode: "controller-only",
-        summary: "Controller validates focused implementation checks.",
-      },
-      authorityMembers: requirement.publication.memberReferences.map((reference) => ({
-        recordId: reference.recordId,
-        memberPath: reference.memberPath,
-      })),
-    },
+    action: "publish",
+    package: packageInput,
   });
-  const intakePlan = intakePreview.structuredContent as PreviewPlan;
-  const intakeApplied = await call(context, WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME, {
+  assertNoPrivatePath(context, blocked);
+  const blockedPreview = blocked.structuredContent as PublicationPreview;
+  equal(blockedPreview.status, "blocked");
+  equal(blockedPreview.blockers.includes("user-confirmation-missing"), true);
+  equal(blockedPreview.next.frontier, "requirement-confirmation");
+  equal((blockedPreview.summary?.sections.length ?? 0) > 0, true, "preview summary is empty");
+  const confirmed = { ...packageInput, confirmation: { confirmedAt: new Date().toISOString() } };
+  const before = readdirSync(root).sort();
+  const ready = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: confirmed,
+  });
+  const readyPreview = ready.structuredContent as PublicationPreview;
+  equal(readyPreview.status, "ready");
+  if (readyPreview.planDigest === null) throw new Error("ready preview lacks a plan digest");
+  equal(readdirSync(root).sort().join(","), before.join(","), "preview wrote");
+  const applied = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
     root,
     mode: "apply",
-    plan: intakePlan.plan,
-    planDigest: intakePlan.planDigest,
+    action: "publish",
+    package: confirmed,
+    planDigest: readyPreview.planDigest,
   });
-  const intake = intakeApplied.structuredContent as {
-    readonly publication: { readonly todoId: string };
+  assertNoPrivatePath(context, applied);
+  const mutation = applied.structuredContent as {
+    readonly disposition: string;
+    readonly package: {
+      readonly requirementId: string;
+      readonly status: string;
+      readonly stateDigest: string;
+    };
+    readonly next: { readonly frontier: string | null; readonly suggestedTool: string | null };
   };
+  equal(mutation.disposition, "published");
+  equal(mutation.package.status, "pending");
+  equal(mutation.next.frontier, "requirement-claim");
+  const board = await call(context, WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, {
+    root,
+    view: "list",
+  });
+  assertNoPrivatePath(context, board);
+  const list = board.structuredContent as {
+    readonly counts: { readonly pending: number };
+    readonly packages: readonly { readonly requirementId: string; readonly status: string }[];
+  };
+  equal(list.counts.pending, 1);
+  equal(list.packages[0]?.requirementId, mutation.package.requirementId);
+  equal(
+    existsSync(
+      path.join(root, "Ledger", "requirements", mutation.package.requirementId, "record.json"),
+    ),
+    true,
+  );
+  context.requirementId = mutation.package.requirementId;
+  context.requirementStateDigest = mutation.package.stateDigest;
+  return `preview=blocked:${blockedPreview.blockers.length}; ready; apply=${mutation.disposition}; board pending=${list.counts.pending}`;
+}
 
+async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.requirementId)
+    throw new Error("scenario ordering: requirement-package must run first");
   const demandPreview = await call(context, WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME, {
     root,
     mode: "preview",
-    todoId: intake.publication.todoId,
+    requirementId: context.requirementId,
     demand: {
       title: "Scenario acceptance demand",
       goal: "Implement the confirmed requirement through the new TS chain.",
@@ -393,14 +424,36 @@ async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
   });
   assertNoPrivatePath(context, demandApplied);
   const demand = demandApplied.structuredContent as {
-    readonly publication: { readonly demandId: string };
+    readonly publication: {
+      readonly demandId: string;
+      readonly claim: { readonly requirementId: string; readonly stateRevision: number };
+    };
   };
   context.demandId = demand.publication.demandId;
-
+  equal(demand.publication.claim.requirementId, context.requirementId);
+  equal(demand.publication.claim.stateRevision, 2);
+  const board = await call(context, WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, {
+    root,
+    view: "package",
+    requirementId: context.requirementId,
+  });
+  const view = board.structuredContent as {
+    readonly package: {
+      readonly status: string;
+      readonly claim: { readonly demandId: string } | null;
+    };
+    readonly record: { readonly sections: readonly { readonly anchor: string }[] };
+  };
+  equal(view.package.status, "claimed");
+  equal(view.package.claim?.demandId, context.demandId);
+  context.memberRefs = [
+    `requirements/${context.requirementId}/requirement.md`,
+    `requirements/${context.requirementId}/landing.md`,
+  ];
   const route = await routeFrontiers(context);
   equal(route.disposition, "work-available");
   equal(route.kinds.includes("implementation-task-planning"), true);
-  return `todo+demand published; route=${route.disposition}:${route.kinds.join("+")}`;
+  return `claim=claimed rev2; route=${route.disposition}:${route.kinds.join("+")}`;
 }
 
 async function routeFrontiers(context: ScenarioContext) {
@@ -488,6 +541,7 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-01/fresh-initialize": scenarioFreshInitialize,
     "card-02/window-handshake": scenarioWindowHandshake,
     "card-02/window-replace": scenarioWindowReplace,
+    "card-03/requirement-package": scenarioRequirementPackage,
     "card-04/create-demand": scenarioCreateDemand,
     "card-05/plan-implementation-task": scenarioPlanImplementationTask,
   });

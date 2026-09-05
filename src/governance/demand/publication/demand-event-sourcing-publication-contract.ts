@@ -1,8 +1,8 @@
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import type { DeterministicJsonFileResult } from "../../../foundation/filesystem/deterministic-json-file.js";
+import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import type { RequirementClaimState } from "../../../kernel/requirement-board.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../event-sourcing/demand-event-sourcing-root-authority.js";
-import type { StoredTodoCollectionItem, TodoCollectionAuthoritySnapshot } from "../../todo/todo-collection-authority.js";
-import type { TodoIntakeLineageReference } from "../../todo/todo-intake-lineage.js";
 import type { DemandEventSourcingPublicationTransaction } from "./demand-event-sourcing-publication-transaction.js";
 
 /** Demand 事件溯源发布流程的稳定公共合同和错误词汇。 */
@@ -21,10 +21,10 @@ export const DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS =
 export type DemandEventSourcingPublicationEffectAuthority =
   "unchanged" | "recoverable" | "current" | "unknown";
 
-export interface DemandEventSourcingPublicationTodoResult {
-  readonly item: Readonly<StoredTodoCollectionItem>;
-  readonly lineageRef: Readonly<TodoIntakeLineageReference>;
-  readonly snapshot: Readonly<TodoCollectionAuthoritySnapshot>;
+/** 发布完成后需求包在看板上的 `claimed` 状态及其摘要（修订 2）。 */
+export interface DemandEventSourcingPublicationClaimResult {
+  readonly state: RequirementClaimState;
+  readonly digest: Sha256Digest;
 }
 
 export interface DemandEventSourcingPublicationResult {
@@ -32,7 +32,7 @@ export interface DemandEventSourcingPublicationResult {
   readonly wroteDemandRoot: boolean;
   readonly demandId: DemandEventSourcingPublicationTransaction["demandId"];
   readonly rootRef: PortableResourcePath;
-  readonly todo: Readonly<DemandEventSourcingPublicationTodoResult>;
+  readonly claim: Readonly<DemandEventSourcingPublicationClaimResult>;
   readonly loaded: Readonly<LoadedDemandEventSourcingRootAuthority>;
 }
 
@@ -45,7 +45,7 @@ export type DemandEventSourcingPublicationServiceErrorReason =
   | "input"
   | "root-scope"
   | "authority"
-  | "todo-not-found"
+  | "package-not-found"
   | "cas-mismatch"
   | "capacity"
   | "conflict"
@@ -60,7 +60,7 @@ const ERROR_MESSAGES = {
   "input": "Demand Event Sourcing publication input is invalid.",
   "root-scope": "Demand Event Sourcing publication workspace root changed.",
   "authority": "Demand Event Sourcing publication authority is unresolved.",
-  "todo-not-found": "Demand Event Sourcing publication TODO does not exist.",
+  "package-not-found": "Demand Event Sourcing publication requirement package is not on the board.",
   "cas-mismatch": "Demand Event Sourcing publication expectation is stale.",
   "capacity": "Demand Event Sourcing publication resource exceeds its byte budget.",
   "conflict": "Demand Event Sourcing publication resources conflict.",

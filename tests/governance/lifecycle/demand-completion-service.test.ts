@@ -28,14 +28,15 @@ import {
 } from "../../../src/governance/lifecycle/demand-completion-service.js";
 import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/demand-post-acceptance-route.js";
 import { ControllerTestReviewDecisionService } from "../../../src/governance/review/controller-test-review-decision-service.js";
-import { inspectTodoItems } from "../../../src/governance/todo/todo-collection-service.js";
-import { todoStateRef } from "../../../src/governance/todo/todo-paths.js";
 import { createWindowWorkClaimInStore } from "../../../src/governance/delivery/window-work-claim-store.js";
+import { requirementClaimStateRef } from "../../../src/kernel/layout.js";
+import { readRequirementClaimState } from "../../../src/kernel/requirement-board.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 import {
   cleanupControllerTestReviewDecisionServiceFixture,
   createControllerTestReviewDecisionServiceFixture,
 } from "../review/controller-test-review-decision-service.fixture.js";
+import { PLANNING_REQUIREMENT_ID } from "../tasking/target-task-planning-service.fixture.js";
 import {
   cleanupAcceptedDemandCompletionWorkspaceFixture,
   completionUuidFactory,
@@ -100,7 +101,10 @@ test("Completion preview零写，Apply提交终态且精确重试不依赖后来
       fixture.workspacePath,
       fixture.intent.demandId,
     );
-    const beforeTodo = await inspectTodoItems(fixture.workspaceRoot);
+    const beforeClaim = await readRequirementClaimState(
+      fixture.workspaceRoot,
+      PLANNING_REQUIREMENT_ID,
+    );
     const preview = await service.preview(
       {
         demandId: fixture.intent.demandId,
@@ -115,11 +119,16 @@ test("Completion preview零写，Apply提交终态且精确重试不依赖后来
       beforeDemand,
     );
     equal(
-      (await inspectTodoItems(fixture.workspaceRoot)).collection
-        .collectionDigest,
-      beforeTodo.collection.collectionDigest,
+      (await readRequirementClaimState(
+        fixture.workspaceRoot,
+        PLANNING_REQUIREMENT_ID,
+      ))?.digest,
+      beforeClaim?.digest,
     );
-    equal(preview.plan.completion.todoSource.stateRevision, 2);
+    equal(preview.plan.completion.packageSource.requirementId, PLANNING_REQUIREMENT_ID);
+    equal(preview.plan.completion.packageSource.claimStateRevision, 2);
+    equal(preview.plan.completion.packageSource.claimStateDigest, beforeClaim?.digest);
+    equal(Object.hasOwn(preview.plan.completion, "todoSource"), false);
     equal(
       parseDemandCompletion(preview.plan.completion).completionDigest,
       preview.plan.completion.completionDigest,
@@ -163,14 +172,14 @@ test("Completion preview零写，Apply提交终态且精确重试不依赖后来
       "lifecycle.demand-completed",
     );
     equal(applied.commandResult.commit.events[0]?.eventVersion, 1);
-    const todoAfter = await inspectTodoItems(fixture.workspaceRoot);
-    const todoItem = todoAfter.items.find(
-      (item) => item.todoId === preview.plan.completion.todoSource.todoId,
+    const claimAfter = await readRequirementClaimState(
+      fixture.workspaceRoot,
+      preview.plan.completion.packageSource.requirementId,
     );
-    equal(todoItem?.state.status, "claimed");
+    equal(claimAfter?.state.status, "claimed");
     equal(
-      todoItem?.stateDigest,
-      preview.plan.completion.todoSource.stateDigest,
+      claimAfter?.digest,
+      preview.plan.completion.packageSource.claimStateDigest,
     );
     const terminalRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
@@ -386,7 +395,7 @@ test("Completion拒绝尚未执行Test的real-environment路线和残留WorkClai
   }
 });
 
-test("Completion拒绝缺失的claimed TODO来源", async () => {
+test("Completion拒绝缺失的claimed需求包来源", async () => {
   const fixture = await createAcceptedDemandCompletionWorkspaceFixture();
   try {
     const service = new DemandCompletionService(fixture.workspaceRoot);
@@ -399,17 +408,17 @@ test("Completion拒绝缺失的claimed TODO来源", async () => {
         uuidFactory: completionUuidFactory(),
       },
     );
-    const todo = await inspectTodoItems(fixture.workspaceRoot);
-    const item = todo.items[0];
-    if (item === undefined) throw new Error("Expected claimed TODO fixture.");
     rmSync(
-      path.join(fixture.workspacePath, ...todoStateRef(item.todoId).split("/")),
+      path.join(
+        fixture.workspacePath,
+        ...requirementClaimStateRef(PLANNING_REQUIREMENT_ID).split("/"),
+      ),
     );
     await rejects(
       service.apply(preview.plan, preview.planDigest),
       (error: unknown) =>
         error instanceof DemandCompletionServiceError &&
-        error.reason === "todo",
+        error.reason === "package",
     );
   } finally {
     await cleanupAcceptedDemandCompletionWorkspaceFixture(fixture);

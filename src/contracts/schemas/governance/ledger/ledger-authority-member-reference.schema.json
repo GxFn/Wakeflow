@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:governance:ledger:authority-member-reference:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA",
   "title": "WakeflowLedgerAuthorityMemberReference",
-  "description": "跨领域只读消费一份已验证 Ledger authority member 的完整 ref/digest 关系。",
+  "description": "跨领域只读消费一份已验证需求包成员的完整 ref/digest 关系；成员角色为 requirement、landing 或 attachment。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -27,19 +27,11 @@
       "const": 1
     },
     "family": {
-      "enum": ["requirement", "confirmation"]
+      "enum": ["requirement"]
     },
     "recordId": {
-      "oneOf": [
-        {
-          "type": "string",
-          "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        {
-          "type": "string",
-          "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        }
-      ]
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "recordRef": {
       "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
@@ -57,89 +49,11 @@
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     },
     "role": {
-      "enum": [
-        "original-plan",
-        "requirement-design",
-        "code-facts",
-        "landing-plan",
-        "non-goals",
-        "user-confirmation",
-        "reproduction",
-        "scope",
-        "requirement-delta",
-        "research-question",
-        "boundaries",
-        "test-environment",
-        "supporting-evidence",
-        "goal-stage-decision"
-      ]
+      "enum": ["requirement", "landing", "attachment"]
     },
     "mediaType": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "family": {
-            "const": "requirement"
-          }
-        },
-        "required": ["family"]
-      },
-      "then": {
-        "properties": {
-          "recordId": {
-            "type": "string",
-            "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-          },
-          "role": {
-            "enum": [
-              "original-plan",
-              "requirement-design",
-              "code-facts",
-              "landing-plan",
-              "non-goals",
-              "user-confirmation",
-              "reproduction",
-              "scope",
-              "requirement-delta",
-              "research-question",
-              "boundaries",
-              "test-environment",
-              "supporting-evidence"
-            ]
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "family": {
-            "const": "confirmation"
-          }
-        },
-        "required": ["family"]
-      },
-      "then": {
-        "properties": {
-          "recordId": {
-            "type": "string",
-            "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-          },
-          "role": {
-            "enum": [
-              "goal-stage-decision",
-              "user-confirmation",
-              "requirement-delta",
-              "supporting-evidence"
-            ]
-          }
-        }
-      }
-    }
-  ]
+  }
 }

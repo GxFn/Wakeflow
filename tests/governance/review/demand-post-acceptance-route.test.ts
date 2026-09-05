@@ -125,7 +125,7 @@ test("controller-only在全部产品Target accepted后只进入completion prefli
   }
 });
 
-test("real-environment只路由到Test planning并暴露精确环境Authority引用", async () => {
+test("real-environment只路由到Test planning并暴露需求包的环境Authority引用", async () => {
   const fixture =
     await createControllerImplementationReviewDecisionServiceFixture({
       testingMode: "real-environment",
@@ -141,11 +141,9 @@ test("real-environment只路由到Test planning并暴露精确环境Authority引
     if (route.nextStage.status !== "real-environment-test-planning") {
       throw new Error("Expected real-environment Test planning route.");
     }
-    equal(route.nextStage.testEnvironmentAuthority.role, "test-environment");
-    equal(
-      route.nextStage.testEnvironmentAuthority.memberRef,
-      route.testingDecision.environmentMemberRef,
-    );
+    equal(route.nextStage.testEnvironmentAuthority.role, "landing");
+    equal(route.nextStage.testEnvironmentAuthority.memberPath, "landing.md");
+    equal(route.testingDecision.environmentMemberRef, null);
     equal(route.acceptedTargets.length, 1);
     equal(
       /(?:bytes|source|rawHandle|threadId|sessionId)/u.test(

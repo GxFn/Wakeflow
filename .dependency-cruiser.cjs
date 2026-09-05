@@ -11,10 +11,10 @@ const LEGACY_DOMAIN_ROOTS = "configuration|workspace|governance";
 const HOST_NEUTRAL_RUNTIME = `^src/(?:${LEGACY_DOMAIN_ROOTS}|kernel|capabilities)/`;
 
 const WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES =
-  "^src/workspace/(?:active/(?:wakeflow-active-workspace-fresh-projection-authority|wakeflow-active-workspace-projection-inspection)|maintenance/(?:wakeflow-static-materialization-preview|wakeflow-static-materialization-step-executor)|(?:wakeflow-shared-coordination-layout|wakeflow-workspace-static-resource-matrix))\\.ts$";
+  "^src/workspace/(?:maintenance/(?:wakeflow-static-materialization-preview|wakeflow-static-materialization-step-executor)|(?:wakeflow-shared-coordination-layout|wakeflow-workspace-static-resource-matrix))\\.ts$";
 
 const WORKSPACE_GOVERNANCE_COMPOSITION_TARGETS =
-  "^src/governance/(?:delivery/window-work-claim-resource-catalog|demand/demand-resource-catalog|ledger/(?:ledger-authority-(?:layout|store|storage-policy)|ledger-resource-catalog)|todo/(?:todo-collection-(?:initialization(?:-authority)?|service)|todo-paths|todo-resource-catalog))\\.ts$";
+  "^src/governance/(?:delivery/window-work-claim-resource-catalog|demand/demand-resource-catalog|ledger/(?:ledger-authority-(?:layout|store|storage-policy)|ledger-resource-catalog))\\.ts$";
 
 const GOVERNANCE_WORKSPACE_CONTRACT_TARGETS =
   "^src/workspace/(?:active/(?:wakeflow-active-layout-inspection|wakeflow-active-paths)|window-runtime/(?:wakeflow-agent-host-window-observation-authority|wakeflow-window-host-binding(?:-id|-store-authority|-store)?|wakeflow-window-host-identity-profile)|workspace-(?:host-resource-profile|resource-declaration|shared-runtime-resource-catalog))\\.ts$";

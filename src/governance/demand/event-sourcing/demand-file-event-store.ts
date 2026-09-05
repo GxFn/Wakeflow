@@ -130,7 +130,7 @@ function indexableCommit(
  *
  * 本类只持有一个 Demand 根目录，并协调初始化、候选资源到不替换目标提交，以及候选
  * 资源恢复。提交清单、读取逻辑和公共合同由相邻模块负责；事件存储不执行领域决策或
- * 状态演进，不解析 Ledger/TODO 引用，也不发布 Demand 根目录。同一进程内对同一
+ * 状态演进，不解析 Ledger/看板引用，也不发布 Demand 根目录。同一进程内对同一
  * canonical Demand root 的append短事务串行；跨进程/线程竞争仍由exclusive link与
  * candidate owner/recovery合同处理。
  */

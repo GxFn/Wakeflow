@@ -16,11 +16,9 @@ import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governan
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/governance/evidence/managed-evidence-public-contract.js";
 import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/governance/lifecycle/demand-completion-public-contract.js";
 import {
-  WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-} from "../../src/governance/ledger/ledger-authority-public-contract.js";
-import { WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/todo/todo-inspection-public-contract.js";
-import { WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/todo/todo-intake-publication-public-contract.js";
+} from "../../src/capabilities/requirement/contract.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
 import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-product-defect-remediation-public-contract.js";
@@ -124,15 +122,13 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
   expectedTool(
     WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
     "requirement-publication",
-    ADDITIVE,
-    ["source bytes", "host effect"],
+    DESTRUCTIVE,
+    ["confirmation point 1", "never creates a Demand"],
   ),
-  expectedTool(
-    WAKEFLOW_CONFIRMATION_PUBLICATION_PUBLIC_TOOL_NAME,
-    "confirmation-publication",
-    ADDITIVE,
-    ["future isolated Demand identity", "creates no Demand"],
-  ),
+  expectedTool(WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, "board-inspection", READ_ONLY, [
+    "sorted by priority",
+    "never claims",
+  ]),
   expectedTool(WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, "target-result-import", DESTRUCTIVE),
   expectedTool(
     WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
@@ -143,16 +139,6 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
     "target-result-review-inspection",
     READ_ONLY,
-  ),
-  expectedTool(WAKEFLOW_TODO_INSPECTION_PUBLIC_TOOL_NAME, "todo-inspection", READ_ONLY, [
-    "does not derive eligibility",
-    "state-root ref",
-  ]),
-  expectedTool(
-    WAKEFLOW_TODO_INTAKE_PUBLICATION_PUBLIC_TOOL_NAME,
-    "todo-intake-publication",
-    ADDITIVE,
-    ["creates no Demand", "does not execute Auto Claim"],
   ),
   expectedTool(WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME, "maintenance-public", {
     readOnlyHint: false,
@@ -231,14 +217,12 @@ function validPublicServerOptions(): PublicServerOptions {
     completeDemand: unavailableExecutor,
     createDemand: unavailableExecutor,
     recordManagedEvidence: unavailableExecutor,
-    publishConfirmation: unavailableExecutor,
     publishRequirement: unavailableExecutor,
     executeMaintenance: unavailableExecutor,
     importTargetResult: unavailableExecutor,
     inspectDemandRoute: unavailableExecutor,
     inspectTargetResultReview: unavailableExecutor,
-    inspectTodo: unavailableExecutor,
-    intakeTodo: unavailableExecutor,
+    inspectBoard: unavailableExecutor,
     planTargetTask: unavailableExecutor,
     planTestCard: unavailableExecutor,
     prepareImplementationDelivery: unavailableExecutor,
@@ -257,7 +241,6 @@ const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
   "completeDemand",
   "createDemand",
   "recordManagedEvidence",
-  "publishConfirmation",
   "publishRequirement",
   "resumeTargetResultReview",
   "registerWindowHostBinding",
@@ -271,8 +254,7 @@ const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
   "rearmTargetHostEffect",
   "importTargetResult",
   "inspectTargetResultReview",
-  "inspectTodo",
-  "intakeTodo",
+  "inspectBoard",
   "recordControllerImplementationReviewDecision",
   "recordControllerTestReviewDecision",
   "authorizeProductDefectRemediation",
@@ -311,7 +293,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   );
 });
 
-test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
+test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
   const client = await connectWakeflowMcpTestClient(t);
   const instructions = client.getInstructions();
   equal(typeof instructions, "string");
@@ -347,7 +329,7 @@ test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
   );
 });
 
-test("Codex与Claude Code composition root发布同一二十三工具集合", async () => {
+test("Codex与Claude Code composition root发布同一二十一工具集合", async () => {
   const listedNames: string[][] = [];
   for (const createServer of [createCodexWakeflowMcpServer, createClaudeCodeWakeflowMcpServer]) {
     const server = createServer("1.0.0-test");

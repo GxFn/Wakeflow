@@ -18,15 +18,7 @@ import {
   parseLedgerAuthorityMemberReference,
   resolveLoadedLedgerAuthorityMemberReference,
 } from "./ledger-authority-reader.js";
-import type {
-  ConfirmationRecord,
-  LedgerAuthorityRecord,
-  RequirementRecord,
-} from "./ledger-authority-record.js";
-import {
-  confirmationRootRef,
-  requirementRootRef,
-} from "./ledger-authority-paths.js";
+import type { RequirementRecord } from "./ledger-authority-record.js";
 import {
   LedgerAuthorityStoreError,
   isLedgerAbortSignal,
@@ -54,15 +46,15 @@ const LEDGER_MEMBER_REFERENCE_BATCH_MAXIMUM = 32;
 const LEDGER_MEMBER_READ_CONCURRENCY = 8;
 
 /**
- * Wakeflow Governance / Ledger：`Requirement` 与 `Confirmation` 权威记录的根作用域门面。
+ * Wakeflow Governance / Ledger：需求包权威记录的根作用域门面。
  *
  * 本类只持有已经打开的 Ledger `RootedDirectory`，并把具体职责委托给不可变记录
  * 读取器、成员引用编解码器和逐记录暂存发布职责所有者。正常读取不观察事务目录；
  * 一条记录的意图记录、暂存目录或锁文件不会阻断另一条已提交的权威记录。
  *
- * 本类不负责 Demand 事件溯源、`Requirement`/`Confirmation` 的业务生成时机、Ledger
- * 投影或业务归档。长期记录目录树使用 `0755`、`0644` 权限位；短期事务资源使用
- * `0700`、`0600` 权限位。
+ * 本类不负责需求包的章节校验、看板认领状态、Demand 事件溯源、Ledger 投影或业务
+ * 归档。长期记录目录树使用 `0755`、`0644` 权限位；短期事务资源使用 `0700`、
+ * `0600` 权限位。
  */
 
 function parseInitializeOptions(
@@ -85,14 +77,6 @@ function parseInitializeOptions(
     fail("input", "$options");
   }
   return Object.freeze({ signal: record.signal });
-}
-
-function referenceRootRef(
-  reference: Readonly<LedgerAuthorityMemberReference>,
-) {
-  return reference.family === "requirement"
-    ? requirementRootRef(reference.recordId)
-    : confirmationRootRef(reference.recordId);
 }
 
 export class LedgerAuthorityStore {
@@ -138,74 +122,15 @@ export class LedgerAuthorityStore {
       if (error instanceof WakeflowDurableIdError) fail("input", "$requirementId");
       throw error;
     }
-    const loaded = await loadLedgerAuthorityRecord(
-      this.#root,
-      requirementRootRef(requirementId),
-      "requirement",
-      requirementId,
-      signal,
-    );
-    if (loaded.record.artifactKind !== "wakeflow-requirement-record") {
-      fail("conflict", "$record");
-    }
-    return Object.freeze({ ...loaded, record: loaded.record });
-  }
-
-  async loadConfirmation(
-    confirmationIdValue: unknown,
-    options?: LedgerAuthorityStoreOptions,
-  ): Promise<Readonly<LoadedLedgerAuthorityRecord<ConfirmationRecord>>> {
-    const { signal } = parseLedgerAuthorityStoreOptions(options);
-    let confirmationId;
-    try {
-      confirmationId = parseWakeflowDurableIdOfKind(
-        confirmationIdValue,
-        "confirmation",
-        "$confirmationId",
-      );
-    } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$confirmationId");
-      throw error;
-    }
-    const loaded = await loadLedgerAuthorityRecord(
-      this.#root,
-      confirmationRootRef(confirmationId),
-      "confirmation",
-      confirmationId,
-      signal,
-    );
-    if (loaded.record.artifactKind !== "wakeflow-confirmation-record") {
-      fail("conflict", "$record");
-    }
-    return Object.freeze({ ...loaded, record: loaded.record });
+    return loadLedgerAuthorityRecord(this.#root, requirementId, signal);
   }
 
   /** 整体发布一条不可变记录目录树，或幂等复用完全一致的已有记录。 */
   async publish(
-    recordValue: Readonly<RequirementRecord>,
+    recordValue: Readonly<RequirementRecord> | unknown,
     membersValue: readonly LedgerAuthorityMemberInput[],
     options?: LedgerAuthorityStoreOptions,
-  ): Promise<Readonly<LedgerAuthorityPublicationResult<RequirementRecord>>>;
-  async publish(
-    recordValue: Readonly<ConfirmationRecord>,
-    membersValue: readonly LedgerAuthorityMemberInput[],
-    options?: LedgerAuthorityStoreOptions,
-  ): Promise<Readonly<LedgerAuthorityPublicationResult<ConfirmationRecord>>>;
-  async publish(
-    recordValue: Readonly<LedgerAuthorityRecord>,
-    membersValue: readonly LedgerAuthorityMemberInput[],
-    options?: LedgerAuthorityStoreOptions,
-  ): Promise<Readonly<LedgerAuthorityPublicationResult>>;
-  async publish(
-    recordValue: unknown,
-    membersValue: readonly LedgerAuthorityMemberInput[],
-    options?: LedgerAuthorityStoreOptions,
-  ): Promise<Readonly<LedgerAuthorityPublicationResult>>;
-  async publish(
-    recordValue: unknown,
-    membersValue: readonly LedgerAuthorityMemberInput[],
-    options?: LedgerAuthorityStoreOptions,
-  ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
+  ): Promise<Readonly<LedgerAuthorityPublicationResult<RequirementRecord>>> {
     const { signal } = parseLedgerAuthorityStoreOptions(options);
     return publishLedgerAuthorityRecord(
       this.#root,
@@ -251,8 +176,6 @@ export class LedgerAuthorityStore {
     const reference = parseLedgerAuthorityMemberReference(referenceValue);
     const loaded = await loadLedgerAuthorityRecord(
       this.#root,
-      referenceRootRef(reference),
-      reference.family,
       reference.recordId,
       signal,
     );
@@ -303,8 +226,6 @@ export class LedgerAuthorityStore {
       if (loaded === undefined) {
         loaded = await loadLedgerAuthorityRecord(
           this.#root,
-          referenceRootRef(reference),
-          reference.family,
           reference.recordId,
           signal,
         );

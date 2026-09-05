@@ -43,11 +43,13 @@ import {
   LedgerAuthorityStoreError,
 } from "../../governance/ledger/ledger-authority-store.js";
 import { LEDGER_DURABLE_DIRECTORY_MODE } from "../../governance/ledger/ledger-authority-storage-policy.js";
+import { isWakeflowError } from "../../kernel/error.js";
+import { REQUIREMENT_BOARD_ROOT_REF } from "../../kernel/layout.js";
 import {
-  initializeFreshTodoCollection,
-  FreshTodoCollectionInitializationError,
-} from "../../governance/todo/todo-collection-initialization.js";
-import { TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST } from "../../governance/todo/todo-collection-initialization-authority.js";
+  listRequirementClaimStates,
+  materializeRequirementBoardRoot,
+  publishRequirementBoardIndex,
+} from "../../kernel/requirement-board.js";
 import { createWakeflowGitignoreBodyAuthority } from "../managed-integration/wakeflow-gitignore-body-authority.js";
 import {
   recomposeWakeflowWorkspaceGitignore,
@@ -89,6 +91,7 @@ import {
   WakeflowActiveLayoutMaterializationError,
 } from "../active/wakeflow-active-layout-materialization.js";
 import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../active/wakeflow-active-resource-catalog.js";
+import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../active/wakeflow-requirement-board-initialization.js";
 import { createWakeflowActiveWorkspaceFreshProjectionAuthority } from "../active/wakeflow-active-workspace-fresh-projection-authority.js";
 import {
   publishWakeflowActiveWorkspaceProjection,
@@ -413,7 +416,27 @@ async function executeSharedCoordinationLayout(
   }
 }
 
-async function executeTodoCollectionInitialization(
+async function requirementBoardRootExists(root: RootedDirectory): Promise<boolean> {
+  try {
+    await root.inspectExistingResource(REQUIREMENT_BOARD_ROOT_REF, "$board");
+    return true;
+  } catch (error: unknown) {
+    if (
+      error instanceof RootedDirectoryError &&
+      error.reason === "resource-not-found"
+    ) {
+      return false;
+    }
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    throw error;
+  }
+}
+
+/**
+ * Fresh 初始化把需求看板目录与空索引交给内核 owner。普通执行要求看板目录严格不存在；
+ * affected-step 恢复只接受没有任何认领状态与未知条目的空看板，索引由内核确定性重写。
+ */
+async function executeRequirementBoardInitialization(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
@@ -422,29 +445,34 @@ async function executeTodoCollectionInitialization(
 ) {
   if (
     request.action !== "fresh-initialize" ||
-    step.targetKey !== "active.todo.collection"
+    step.targetKey !== "active.board"
   ) {
-    fail("plan", "$todoCollection");
+    fail("plan", "$board");
   }
-  assertStepTarget(step, TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST);
+  assertStepTarget(step, REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST);
+  const existed = await requirementBoardRootExists(root);
+  if (existed && !recovering) fail("strict-absent", "$board");
   try {
-    const result = await initializeFreshTodoCollection(root, {
-      recoveringFreshCollection: recovering,
-      ...(signal === undefined ? {} : { signal }),
-    });
-    return receipt(step.stepId, result.disposition, {
-      authorityDigest: result.authorityDigest,
-      collectionDigest: result.snapshot.collection.collectionDigest,
-      projectionDigest: result.snapshot.projection.source?.digest ?? null,
+    if (existed) {
+      const listing = await listRequirementClaimStates(root, signal);
+      if (listing.states.length !== 0 || listing.skipped !== 0) {
+        fail("owner", "$board");
+      }
+    }
+    await materializeRequirementBoardRoot(root, signal);
+    const indexDigest = await publishRequirementBoardIndex(root, [], signal);
+    return receipt(step.stepId, existed ? "current" : "created", {
+      authorityDigest: REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
+      indexDigest,
     });
   } catch (error: unknown) {
-    if (error instanceof FreshTodoCollectionInitializationError) {
-      if (error.reason === "strict-absent") {
-        fail("strict-absent", "$todoCollection");
-      }
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("owner", "$todoCollection");
+    if (error instanceof WakeflowStaticMaterializationStepExecutionError) {
+      throw error;
+    }
+    if (isWakeflowError(error)) {
+      if (error.reason.endsWith("-aborted")) fail("aborted", "$signal");
+      if (error.reason.endsWith("-root-scope")) fail("root-scope", "$root");
+      fail("owner", "$board");
     }
     throw error;
   }
@@ -1078,8 +1106,8 @@ export async function executeWakeflowStaticMaterializationStep(
   if (step.kind === "materialize-active-layout") {
     return executeActiveLayout(root, step, recovering, signal);
   }
-  if (step.kind === "initialize-todo-collection") {
-    return executeTodoCollectionInitialization(
+  if (step.kind === "initialize-requirement-board") {
+    return executeRequirementBoardInitialization(
       root,
       step,
       request,

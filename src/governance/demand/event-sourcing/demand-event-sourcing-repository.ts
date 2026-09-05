@@ -78,7 +78,7 @@ import { computeDemandEventStreamCommitDigest } from "./demand-event-stream-comm
  *
  * 正常加载选择最新可用的不可变快照，只打开它的锚定提交和后续事件流尾部；审计始终
  * 从提交 1 完整重放。仓储不会在加载过程中写入快照、不决定命令、不访问 Ledger 或
- * TODO，也不执行 Demand 根目录发布。
+ * 看板认领，也不执行 Demand 根目录发布。
  */
 
 /** 快照保留的最新份数与清扫周期；快照是可重建缓存。 */

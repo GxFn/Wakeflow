@@ -39,8 +39,8 @@ import {
  * Wakeflow Governance / Demand Publication：公共根作用域、模式路由和结果脱敏边界。
  *
  * Coordinator不解释Authority选择、不构造Identity/Event，也不执行宿主效果。Preview委托
- * Planning Service；Apply/Recover委托Application Service；成功后只投影revision 1和TODO
- * claim的稳定回执，完整Aggregate、Authority内容、物理节点和机器路径不会进入公共结果。
+ * Planning Service；Apply/Recover委托Application Service；成功后只投影revision 1和
+ * 看板认领的稳定回执，完整Aggregate、Authority内容、物理节点和机器路径不会进入公共结果。
  */
 
 export type DemandPublicationPublicResult =
@@ -162,7 +162,7 @@ function publicationReceipt(
 ) {
   const commit = publication.loaded.firstCommit;
   const event = commit.events[0];
-  const todo = publication.todo.item;
+  const claim = publication.claim.state;
   if (
     publication.publicationAuthority !== "current" ||
     commit.commitSequence !== 1 ||
@@ -173,11 +173,11 @@ function publicationReceipt(
     event === undefined ||
     event.eventType !== "publication.demand-published" ||
     event.streamRevision !== 1 ||
-    todo.state.status !== "claimed" ||
-    todo.state.revision !== 2 ||
-    todo.state.mount === null ||
-    todo.state.mount.demandId !== publication.demandId ||
-    todo.state.mount.identityDigest !== publication.loaded.identityDigest
+    claim.status !== "claimed" ||
+    claim.revision < 2 ||
+    claim.claim === null ||
+    claim.claim.demandId !== publication.demandId ||
+    claim.requirementId !== publication.loaded.identity.source.requirementId
   ) {
     fail("output", undefined, "current");
   }
@@ -197,11 +197,10 @@ function publicationReceipt(
       commitDigest: computeDemandEventStreamCommitDigest(commit),
     }),
     stateDigest: event.resultingStateDigest,
-    todoClaim: Object.freeze({
-      todoId: todo.todoId,
-      intakeDigest: todo.intakeDigest,
-      stateRevision: 2 as const,
-      stateDigest: todo.stateDigest,
+    claim: Object.freeze({
+      requirementId: claim.requirementId,
+      stateRevision: claim.revision,
+      stateDigest: publication.claim.digest,
     }),
   });
 }
@@ -246,7 +245,7 @@ export async function executeDemandPublicationPublicRequest(
           root,
         ).preview(
           {
-            todoId: request.todoId,
+            requirementId: request.requirementId,
             demand: request.demand,
           },
           options.preview,

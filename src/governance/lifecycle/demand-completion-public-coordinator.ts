@@ -36,7 +36,7 @@ import {
  * Wakeflow Governance / Lifecycle：Demand Completion公共终态写入边界。
  *
  * Coordinator只执行已确认的preview/apply，不把completed解释为TODO归档、BusinessArchive、
- * 宿主关闭或资源清理。内部Service仍拥有全部Route、TODO、WorkClaim、Config与Event准入。
+ * 宿主关闭或资源清理。内部Service仍拥有全部Route、看板认领、WorkClaim、Config与Event准入。
  */
 
 export type DemandCompletionPublicResult =

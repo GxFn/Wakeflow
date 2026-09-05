@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_COMPLETION_SCHEMA",
   "title": "WakeflowDemandCompletion",
   "description": "Controller在全部必要implementation与Test Target接受后形成的Demand成功终态记录。",
-  "$comment": "testingMode必须与冻结Demand Authority及preflight route一致。Completion绑定post-acceptance route、Review Snapshot、Event Stream与claimed TODO来源；它不删除Test lineage、不归档TODO、不关闭宿主资源，也不表示BusinessArchive已经完成。",
+  "$comment": "testingMode必须与冻结Demand Authority及preflight route一致。Completion绑定post-acceptance route、Review Snapshot、Event Stream与claimed 需求包来源；它不删除Test lineage、不把需求包置 archived、不关闭宿主资源，也不表示BusinessArchive已经完成。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,7 @@
     "postAcceptanceRouteDigest",
     "reviewSnapshotDigest",
     "observedState",
-    "todoSource",
+    "packageSource",
     "completedAt",
     "completionDigest"
   ],
@@ -53,8 +53,8 @@
     "observedState": {
       "$ref": "#/$defs/observedState"
     },
-    "todoSource": {
-      "$ref": "#/$defs/todoSource"
+    "packageSource": {
+      "$ref": "#/$defs/packageSource"
     },
     "completedAt": {
       "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
@@ -100,25 +100,32 @@
         }
       }
     },
-    "todoSource": {
+    "packageSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["todoId", "intakeRef", "intakeDigest", "stateRevision", "stateDigest"],
+      "required": [
+        "requirementId",
+        "recordRef",
+        "recordDigest",
+        "claimStateRevision",
+        "claimStateDigest"
+      ],
       "properties": {
-        "todoId": {
-          "$ref": "urn:wakeflow:governance:todo:item-id:v1"
+        "requirementId": {
+          "type": "string",
+          "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
-        "intakeRef": {
+        "recordRef": {
           "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
         },
-        "intakeDigest": {
+        "recordDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         },
-        "stateRevision": {
+        "claimStateRevision": {
           "type": "integer",
           "minimum": 2
         },
-        "stateDigest": {
+        "claimStateDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }

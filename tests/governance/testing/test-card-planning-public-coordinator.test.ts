@@ -63,7 +63,7 @@ test("公共TestCard preview零写并以exact plan创建唯一Event", async () =
       preview.plan.testCard.testBasisAuthorities.map(
         (reference) => reference.role,
       ),
-      ["requirement-design"],
+      ["requirement"],
     );
     equal(JSON.stringify(preview).includes(fixture.workspacePath), false);
 

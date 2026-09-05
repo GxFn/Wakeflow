@@ -24,7 +24,7 @@
 
 **宿主差异**：无。
 
-**现 TS 状态**：`wakeflow_publish_requirement` 与 `wakeflow_publish_confirmation` 已公开，preview 输入为 `{title, designSurfaceId, documents[{role, path}]}`，apply 与 recover 走 plan 加摘要；记录 schema 增加 `recordedAt`；成员引用 schema 11 字段，含 `memberPath` 与 `mediaType`；confirmation 记录仍必填 `demandId`，由发布规划在确认时**预先分配** demandId，并预留该 Demand 的最终根与 stage 引用。
+**现 TS 状态**：（2026-09-04 L1 requirement，切片 `src/capabilities/requirement/`）`wakeflow_publish_requirement` 一次调用完成 ledger 记录与上板，`action ∈ publish | activate | withdraw`，preview 零写、apply 同一请求加 `planDigest`（服务端重算）、recover 带 `requirementId`；记录 `requirements/<requirementId>/` 含 `record.json`、`requirement.md`、`landing.md` 与可选 `attachments/`，头部带 demandType、priority、originWindowId、testingDecision、taskPlanReview、supersedes、`confirmation{confirmedAt, sectionDigest}` 与章节锚点表；`requirementId` 由内容确定性派生；confirmation family、`wakeflow_publish_confirmation` 已删除；成员引用 family 只剩 `requirement`，角色 `requirement | landing | attachment`；记录文本经内核隐私扫描（不允许绝对路径与裸 UUID）。
 
 **实现判断**：记录成员文本加入与证据相同的隐私扫描；`supporting-evidence` 角色允许被 Demand 作为非必需引用；`archive` family 的 `documents` 与 `todo` 两种 archiveKind 放弃，只保留 `demand`。
 
@@ -50,7 +50,7 @@
 
 **宿主差异**：无。
 
-**现 TS 状态**：RH-1 已重切为 JSON intake 与 state 权威加 Markdown 投影，typed `todo_<uuidv4>`；`wakeflow_intake_todo` 输入为结构化 `{demandType, priority, originWindowId, summary, intakeRationale, readiness, autoClaim, testingDecision, authorityMembers[{recordId, memberPath}]}`，成员在接收时机器解析并绑定摘要；状态 `pending-claim | parked | claimed | withdrawn | archived` 带修订矩阵；`wakeflow_inspect_todo` 提供查询、过滤与分页；认领并入 `create_demand`，`next_work` 由 `inspect_demand_route` 与 `inspect_todo` 替代；集合锁、事务存储与 dead-owner 恢复已实现。
+**现 TS 状态**：TODO 集合与 `wakeflow_intake_todo`、`wakeflow_inspect_todo` 已删除。看板是需求包认领状态：`.wakeflow-active/current/board/<requirementId>.json`（内核 `src/kernel/requirement-board.ts`，0700/0600），状态 `pending | parked | claimed | withdrawn | archived`，修订链加 `previousStateDigest`，每次变更为带期望的整文件 CAS 替换，无集合锁与日志；人读索引 `board/index.md` 确定性重写并由活动索引链接。`wakeflow_inspect_board` 提供 list（按优先级、发布时间、标识排序，有界 `limit`，各状态计数，无分页令牌）与 package 视图；认领由 `create_demand(requirementId)` 执行，活动 Demand 未终态时拒绝再认领。
 
 **实现判断**：旧的 `claim_next`、`deliver`、`next_work` 三个公共工具不再出现；`expectedBoardDigest` 不再是可选项，集合级 CAS 由 TS 的 collection digest 承担；旧 13 列压缩为结构化字段后，Markdown 投影只保留人读需要的列。
 
@@ -76,7 +76,7 @@
 - `executionPlacement` 为 `main` 或 `isolated` 加授权引用，授权角色只能是 `goal-stage-decision` 或 `user-confirmation`。`:651-676`。
 - `entryMode ∈ {design-delivery, controller-inline, pod-design}`；`authority` 可为 null，此时 Demand 永远没有权威。`:72-76`。
 
-**现 TS 状态**：`wakeflow_create_demand` preview 输入为 `{todoId, demand}`，权威从 TODO intake 的 `authorityMembers` 单源收敛（A6），不再由调用方另传 `authorityMembers`；四种类型与测试决策词汇保留；`entryMode` 已删除，隔离位置由 Confirmation 引用授权，按 ADR-0010 改为 Demand 身份记 `podId`，同一 pod 已有活动 Demand 时创建被拒绝。
+**现 TS 状态**：`wakeflow_create_demand` preview 输入为 `{requirementId, demand}`，权威从需求包记录单源收敛（成员 requirement.md、landing.md 与附件），demandType 与 testingDecision 取自记录头部，Demand 身份 `source` 为需求包谱系 `{requirementId, recordRef, recordDigest}`；四类都要求 `requirement` 与 `landing` 两个成员，章节必需表在发布时校验；`executionPlacement.isolated` 因 confirmation 授权消失暂不可达，pod 切片按 ADR-0010 接管。
 
 **实现判断**：角色要求表原样保留；`authority: null` 的 Demand 不再允许，intake 必须携带满足类型要求的成员；`entryMode` 不恢复。
 
@@ -95,7 +95,7 @@
 - 投递前需要用户对目标、范围、非目标、完成证据、落地意图、测试决策、剩余决定的显式确认，再对提交本身单独确认；就绪状态六种。`references/design-handoff.md:39-58`。
 - 草稿到 ledger 记录的"提升"在旧体系不存在。
 
-**现 TS 状态**：`publish_requirement` 以 `designSurfaceId` 加 `documents[{role, path}]` 从支撑面路径发布记录，即草稿提升已由工具实现。
+**现 TS 状态**：`publish_requirement` 从设计面路径读取 `requirement.md`、`landing.md` 与附件发布记录；章节标题中英文别名表在 `src/contracts/vocabulary/requirement-sections.ts`；两份草稿模板尚未移入 skills（L3）。
 
 **实现判断**：模板资产改为 skills 内的内容，不再作为制品里的模板 bundle；`drafts/` 目录保留。
 
@@ -109,7 +109,7 @@
 
 **旧实现**：四个 ledger 投影 `requirement-designs/index.md`、`goal-stage-confirmation/index.md`、`workspace/workspace-record-map.md`、`workspace/archive/index.md`，带 `<!-- wakeflow:ledger-projection:v1:… -->` 标记，按 recordId 排序，转义与单尾换行确定；部分失败时权威已提交而投影记为 stale。活动投影 `.wakeflow-active/index.md` 与 `current/workspace-current-status.md` 只链接 TODO 板，不列行。`wakeflow-ledger-projector.mjs:33-38`、`:759-845`、`wakeflow-active-projector.mjs:1039-1108`。
 
-**现 TS 状态**：ledger 记录发布带投影；TODO 有单向 Markdown 投影；活动投影有 fresh 权威与发布。
+**现 TS 状态**：ledger 记录不带 Markdown 投影；看板索引 `board/index.md` 由内核确定性重写；活动投影链接看板索引。
 
 **实现判断**：投影语义按资源处理标准的 derived-projection 角色，`deterministic-rewrite`，不引入新问题。
 

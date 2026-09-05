@@ -196,7 +196,7 @@ test("shared maintenance transaction executes all steps and retires terminal jou
   );
   equal(
     existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")),
-    true,
+    false,
   );
   equal(
     existsSync(path.join(workspace.absolutePath, "Ledger", "transactions")),
@@ -208,8 +208,8 @@ test("shared maintenance transaction executes all steps and retires terminal jou
         workspace.absolutePath,
         ".wakeflow-active",
         "current",
-        "todo",
-        "global-todo-board.md",
+        "board",
+        "index.md",
       ),
     ),
     true,
@@ -228,7 +228,7 @@ test("shared maintenance transaction executes all steps and retires terminal jou
   equal(statSync(activeStatusPath).mode & 0o777, 0o600);
   equal(
     readFileSync(activeIndexPath, "utf8").includes(
-      "current/todo/global-todo-board.md",
+      "current/board/index.md",
     ),
     true,
   );
@@ -572,7 +572,7 @@ test("recovery creates the journal from an intent-only durable prefix", async (t
   );
 });
 
-test("recovery reuses the exact empty TODO collection after effect-before-checkpoint", async (t) => {
+test("recovery reuses the exact empty requirement board after effect-before-checkpoint", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
@@ -580,7 +580,7 @@ test("recovery reuses the exact empty TODO collection after effect-before-checkp
     workspace.root,
     input,
   );
-  const privateError = new Error("interrupt after TODO initialization effect");
+  const privateError = new Error("interrupt after requirement board initialization effect");
   try {
     await withWakeflowMaintenanceGate(
       workspace.root,
@@ -613,7 +613,7 @@ test("recovery reuses the exact empty TODO collection after effect-before-checkp
             step.stepId,
             { sourceConfig: null, recoveringAffectedStep: false },
           );
-          if (step.kind === "initialize-todo-collection") throw privateError;
+          if (step.kind === "initialize-requirement-board") throw privateError;
           source = await checkpointWakeflowMaintenanceJournal(
             workspace.root,
             context,
@@ -622,7 +622,7 @@ test("recovery reuses the exact empty TODO collection after effect-before-checkp
             completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
-        throw new Error("Expected TODO initialization step.");
+        throw new Error("Expected requirement board initialization step.");
       },
     );
   } catch (error: unknown) {
@@ -632,17 +632,17 @@ test("recovery reuses the exact empty TODO collection after effect-before-checkp
     workspace.absolutePath,
     ".wakeflow-active",
     "current",
-    "todo",
-    "global-todo-board.md",
+    "board",
+    "index.md",
   );
-  equal(readFileSync(boardPath, "utf8").includes("# Global TODO Board"), true);
+  equal(readFileSync(boardPath, "utf8").startsWith("# Requirement Board\n"), true);
 
   const recovered = await recoverSharedMaintenanceTransaction(
     workspace.root,
     OPERATION_ID,
   );
   equal(recovered.status, "recovered");
-  equal(recovered.stepReceipts[0]?.stepId, "active:todo-collection");
+  equal(recovered.stepReceipts[0]?.stepId, "active:requirement-board");
   equal(recovered.stepReceipts[0]?.disposition, "current");
   equal(
     existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),

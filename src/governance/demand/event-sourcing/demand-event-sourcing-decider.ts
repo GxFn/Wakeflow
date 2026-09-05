@@ -762,8 +762,9 @@ export function parseDemandEventSourcingCommand(
       authority.testingDecision.mode !== "real-environment" ||
       computeDemandAuthorityDigest(authority) !==
         testCard.demandAuthorityDigest ||
-      authority.testingDecision.environmentMemberRef !==
-        testCard.environmentAuthority.memberRef ||
+      // ADR-0011 D3：环境规格在 landing.md 的测试决策节里，环境权威即 landing 成员。
+      authority.testingDecision.environmentMemberRef !== null ||
+      testCard.environmentAuthority.role !== "landing" ||
       !authority.authorityRefs.some(
         (reference) =>
           canonicalizeJson(reference, "$authorityReference") ===

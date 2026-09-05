@@ -5,6 +5,7 @@
 > 裁决日期：2026-09-04。用户指出需求入口不顺畅，并确认：取消确认记录与 TODO 摄入，需求包成为唯一交接物；两份文档加必需章节取代六个角色文件；任务清单默认由 Controller 自主。用户同时纠正两点：pod 不进入需求入口的词汇，pod 只是用户要求开启的一套并行开发环境；同一子窗口接受多个任务沿用任务包逻辑
 > 基线提交：`c0098e2`
 > 相关：[能力卡 3](../requirements/capabilities/03-requirement-entry-and-todo.md)、[能力卡 4](../requirements/capabilities/04-demand-lifecycle.md)、[能力卡 5](../requirements/capabilities/05-task-planning.md)、[ADR-0010](./0010-worktree-isolated-execution-and-converged-flow.md)、[功能与场景总览](../requirements/wakeflow-functions-and-scenarios.md)
+> 落地记录：2026-09-04 L1 requirement 切片落地 D1 到 D5 与 D7 的入口侧：`wakeflow_publish_requirement`（publish、activate、withdraw；两段 preview 承担确认点 1）、`wakeflow_inspect_board`、内核看板 `src/kernel/requirement-board.ts`；`publish_confirmation`、`intake_todo`、`inspect_todo` 与 confirmation family 删除；`create_demand(requirementId)` 以最小适配接入，`taskPlanReview` 进记录头部，任务包引用改为记录摘要加章节锚点留给 tasking 切片（进度日志 13.78）
 
 ## 背景
 

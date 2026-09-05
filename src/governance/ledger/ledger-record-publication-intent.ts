@@ -8,7 +8,6 @@ import { WAKEFLOW_DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA } from "../../contracts/g
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_CONFIRMATION_RECORD_SCHEMA } from "../../contracts/generated/governance/ledger/confirmation-record.generated.js";
 import { WAKEFLOW_REQUIREMENT_RECORD_SCHEMA } from "../../contracts/generated/governance/ledger/requirement-record.generated.js";
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import {
@@ -38,7 +37,7 @@ import {
   parseLedgerAuthorityRecord,
   renderLedgerAuthorityRecord,
   LedgerAuthorityRecordError,
-  type LedgerAuthorityRecord,
+  type RequirementRecord,
 } from "./ledger-authority-record.js";
 import {
   LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH,
@@ -66,7 +65,7 @@ const LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA_VERSION = 1 as const;
 export interface LedgerRecordPublicationIntent {
   readonly artifactKind: typeof LEDGER_RECORD_PUBLICATION_INTENT_ARTIFACT_KIND;
   readonly schemaVersion: typeof LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA_VERSION;
-  readonly record: Readonly<LedgerAuthorityRecord>;
+  readonly record: Readonly<RequirementRecord>;
   readonly finalRootRef: ReturnType<typeof ledgerAuthorityRootRef>;
   readonly intentRef: ReturnType<typeof ledgerRecordPublicationIntentRef>;
   readonly lockRef: ReturnType<typeof ledgerRecordPublicationLockRef>;
@@ -120,7 +119,6 @@ const validateWire = createRuntimeJsonSchemaValidator<LedgerRecordPublicationInt
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
-    WAKEFLOW_CONFIRMATION_RECORD_SCHEMA,
     WAKEFLOW_REQUIREMENT_RECORD_SCHEMA,
   ],
 );
@@ -132,7 +130,7 @@ function fail(
   throw new LedgerRecordPublicationIntentError(reason, path);
 }
 
-function normalizeRecord(value: unknown): Readonly<LedgerAuthorityRecord> {
+function normalizeRecord(value: unknown): Readonly<RequirementRecord> {
   try {
     return parseLedgerAuthorityRecord(value);
   } catch (error: unknown) {
@@ -158,7 +156,7 @@ function normalizeTreePlan(value: unknown): Readonly<DirectoryTreeCandidatePlan>
   }
 }
 
-function expectedPlanFiles(record: Readonly<LedgerAuthorityRecord>) {
+function expectedPlanFiles(record: Readonly<RequirementRecord>) {
   const recordBytes = encodeUtf8(renderLedgerAuthorityRecord(record));
   return Object.freeze([{
     path: "record.json",
@@ -176,7 +174,7 @@ function expectedPlanFiles(record: Readonly<LedgerAuthorityRecord>) {
 }
 
 function assertTreePlanMatchesRecord(
-  record: Readonly<LedgerAuthorityRecord>,
+  record: Readonly<RequirementRecord>,
   plan: Readonly<DirectoryTreeCandidatePlan>,
 ): void {
   const expected = expectedPlanFiles(record);

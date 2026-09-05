@@ -17,13 +17,18 @@ import {
   computeWakeflowConfigV3Digest,
   parseWakeflowConfigV3,
 } from "../../../src/configuration/wakeflow-config-v3.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   RootedDirectory,
 } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
-  initializeFreshTodoCollection,
-} from "../../../src/governance/todo/todo-collection-initialization.js";
+  createRequirementClaimState,
+  createRequirementClaimStateFile,
+  materializeRequirementBoardRoot,
+  publishRequirementBoardIndex,
+} from "../../../src/kernel/requirement-board.js";
 import {
   materializeWakeflowActiveLayout,
 } from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
@@ -55,9 +60,8 @@ async function fixture(t: TestContext) {
   await materializeWakeflowActiveLayout(root, {
     recoveringFreshLayout: false,
   });
-  await initializeFreshTodoCollection(root, {
-    recoveringFreshCollection: false,
-  });
+  await materializeRequirementBoardRoot(root);
+  await publishRequirementBoardIndex(root, []);
   t.after(async () => {
     await root.close();
     rmSync(absolutePath, { recursive: true, force: true });
@@ -265,4 +269,43 @@ test("unmanaged target or Demand residue causes zero sibling write", async (t) =
     demand.absolutePath,
     ".wakeflow-active/current/demand_11111111-1111-4111-8111-111111111111",
   )).isDirectory(), true);
+});
+
+test("Fresh workspace projection inspection rejects a board that already carries a claim state", async (t) => {
+  const workspace = await fixture(t);
+  await createRequirementClaimStateFile(
+    workspace.root,
+    createRequirementClaimState({
+      requirementId: "requirement_11111111-1111-4111-8111-111111111111",
+      programId: "program_22222222-2222-4222-8222-222222222222",
+      recordDigest: parseSha256Digest(`sha256:${"a".repeat(64)}`),
+      title: "Pending package",
+      demandType: "requirement",
+      priority: "P1",
+      publishedAt: parseUtcInstant("2026-09-04T00:00:00Z"),
+      supersedes: null,
+      parkedTrigger: null,
+    }),
+  );
+  let caught: unknown;
+  try {
+    await inspectWakeflowActiveWorkspaceProjection(
+      workspace.root,
+      request(config()),
+    );
+  } catch (error: unknown) {
+    caught = error;
+  }
+  equal(
+    caught instanceof WakeflowActiveWorkspaceProjectionInspectionError,
+    true,
+  );
+  if (caught instanceof WakeflowActiveWorkspaceProjectionInspectionError) {
+    equal(caught.reason, "board");
+    equal(caught.path, "$board");
+  }
+  equal(existsSync(physical(
+    workspace.absolutePath,
+    WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+  )), false);
 });

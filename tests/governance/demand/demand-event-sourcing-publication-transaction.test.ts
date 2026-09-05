@@ -1,6 +1,7 @@
 import {
   deepEqual,
   equal,
+  throws,
 } from "node:assert/strict";
 import { test } from "node:test";
 
@@ -14,16 +15,15 @@ import {
 import {
   createDemandIdentity,
 } from "../../../src/governance/demand/model/demand-identity.js";
+import { parseRequirementLineageReference } from "../../../src/governance/demand/model/requirement-lineage.js";
 import {
   createDemandEventSourcingPublicationTransaction,
+  DemandEventSourcingPublicationTransactionError,
   parseDemandEventSourcingPublicationTransaction,
   parseDemandEventSourcingPublicationTransactionDocument,
   renderDemandEventSourcingPublicationTransaction,
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-transaction.js";
 import { parseLedgerAuthorityMemberReference } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { parseTodoIntakeLineageReference } from "../../../src/governance/todo/todo-intake-lineage.js";
-import { parseTodoItemId } from "../../../src/governance/todo/todo-item-id.js";
-import { todoIntakeRef } from "../../../src/governance/todo/todo-paths.js";
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -47,19 +47,13 @@ const COMMIT_ID = parseWakeflowDurableIdOfKind(
 );
 const CREATED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
-const COLLECTION_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
 const STATE_DIGEST = parseSha256Digest(`sha256:${"c".repeat(64)}`);
-const TODO_ID = parseTodoItemId("todo_cd6f37a1-a5be-48cf-8d19-0e4ab14be0d4");
-const REQUIRED_ROLES = [
-  "code-facts",
-  "landing-plan",
-  "non-goals",
-  "original-plan",
-  "requirement-design",
-  "user-confirmation",
+const PACKAGE_MEMBERS = [
+  { role: "requirement", path: "requirement.md" },
+  { role: "landing", path: "landing.md" },
 ] as const;
 
-function authorityReference(role: typeof REQUIRED_ROLES[number]) {
+function authorityReference(member: (typeof PACKAGE_MEMBERS)[number]) {
   return parseLedgerAuthorityMemberReference({
     artifactKind: "wakeflow-ledger-authority-member-reference",
     schemaVersion: 1,
@@ -67,10 +61,10 @@ function authorityReference(role: typeof REQUIRED_ROLES[number]) {
     recordId: REQUIREMENT_ID,
     recordRef: `requirements/${REQUIREMENT_ID}/record.json`,
     recordDigest: DIGEST,
-    memberPath: `authority/${role}.md`,
-    memberRef: `requirements/${REQUIREMENT_ID}/authority/${role}.md`,
+    memberPath: member.path,
+    memberRef: `requirements/${REQUIREMENT_ID}/${member.path}`,
     memberDigest: DIGEST,
-    role,
+    role: member.role,
     mediaType: "text/markdown",
   });
 }
@@ -81,19 +75,19 @@ test("Demand Event Sourcing publication transaction 自包含 initial command �
     demandId: DEMAND_ID,
     title: "Demand publication",
     goal: "发布标准 Event Sourcing root",
-    completionDefinition: "TODO 与 revision 1 闭合",
+    completionDefinition: "看板认领与 revision 1 闭合",
     demandType: "requirement",
-    source: parseTodoIntakeLineageReference({
-      artifactKind: "wakeflow-todo-intake-lineage",
+    source: parseRequirementLineageReference({
+      artifactKind: "wakeflow-requirement-lineage",
       schemaVersion: 1,
-      todoId: TODO_ID,
-      intakeRef: todoIntakeRef(TODO_ID),
-      intakeDigest: DIGEST,
+      requirementId: REQUIREMENT_ID,
+      recordRef: `requirements/${REQUIREMENT_ID}/record.json`,
+      recordDigest: DIGEST,
     }),
     executionPlacement: { mode: "main" },
   }, { clock: () => CREATED_AT });
   const authority = createDemandAuthority(identity, {
-    authorityRefs: REQUIRED_ROLES.map(authorityReference),
+    authorityRefs: PACKAGE_MEMBERS.map(authorityReference),
     testingDecision: {
       mode: "controller-only",
       summary: "运行聚焦 TypeScript 测试",
@@ -107,16 +101,17 @@ test("Demand Event Sourcing publication transaction 自包含 initial command �
     eventId: EVENT_ID,
     commitId: COMMIT_ID,
     recordedAt: CREATED_AT,
-    expectedTodoCollectionDigest: COLLECTION_DIGEST,
-    expectedTodoStateDigest: STATE_DIGEST,
+    expectedClaimStateDigest: STATE_DIGEST,
   });
 
   equal(transaction.artifactKind, "wakeflow-demand-event-sourcing-publication-transaction");
+  equal(transaction.requirementId, REQUIREMENT_ID);
+  equal(transaction.expectedClaimStateDigest, STATE_DIGEST);
   equal(transaction.initialCommand.commandType, "publication.publish-demand");
   equal(transaction.initialCommit.commitId, COMMIT_ID);
   equal(transaction.initialCommit.commitSequence, 1);
   equal(transaction.initialCommit.expectedStreamRevision, 0);
-  equal(transaction.expectedTodoCollectionDigest, COLLECTION_DIGEST);
+  equal(Object.hasOwn(transaction, "todoId"), false);
 
   const text = renderDemandEventSourcingPublicationTransaction(transaction);
   deepEqual(parseDemandEventSourcingPublicationTransactionDocument(text), transaction);
@@ -125,5 +120,14 @@ test("Demand Event Sourcing publication transaction 自包含 initial command �
       JSON.parse(canonicalizeJson(transaction, "$transaction")),
     ),
     transaction,
+  );
+  throws(
+    () => parseDemandEventSourcingPublicationTransaction({
+      ...transaction,
+      requirementId: "requirement_99999999-9999-4999-8999-999999999999",
+    }),
+    (error: unknown) =>
+      error instanceof DemandEventSourcingPublicationTransactionError
+      && error.reason === "relation",
   );
 });

@@ -21,6 +21,7 @@ import {
 const FIXED_UUID_TEXT = "12345678-90ab-4cde-8fab-1234567890ab";
 const FIXED_UUID = parseUuidV4(FIXED_UUID_TEXT);
 const RETIRED_DURABLE_ID_KINDS = [
+  "confirmation",
   "delivery",
   "delivery-run",
   "dispatch-group",
@@ -30,6 +31,7 @@ const RETIRED_DURABLE_ID_KINDS = [
   "pod-design-request",
   "preservation",
   "review-candidate",
+  "todo",
 ] as const;
 
 function expectWakeflowDurableIdError(
@@ -123,9 +125,9 @@ test("kind-specific parsing returns the requested branded scalar", () => {
 
   equal(requirementId, value);
   expectWakeflowDurableIdError(
-    () => parseWakeflowDurableIdOfKind(value, "confirmation", "$.confirmationId"),
+    () => parseWakeflowDurableIdOfKind(value, "window", "$.windowId"),
     "kind-mismatch",
-    "$.confirmationId",
+    "$.windowId",
   );
 });
 

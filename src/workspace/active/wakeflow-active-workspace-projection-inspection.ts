@@ -31,14 +31,9 @@ import {
   readStrictTextFile,
   StrictTextFileError,
 } from "../../foundation/filesystem/strict-text-file.js";
-import {
-  TODO_EMPTY_BOARD_PROJECTION,
-  TODO_EMPTY_COLLECTION_SNAPSHOT,
-} from "../../governance/todo/todo-collection-initialization-authority.js";
-import {
-  inspectTodoItems,
-  TodoCollectionServiceError,
-} from "../../governance/todo/todo-collection-service.js";
+import { isWakeflowError } from "../../kernel/error.js";
+import { REQUIREMENT_BOARD_INDEX_REF } from "../../kernel/layout.js";
+import { listRequirementClaimStates } from "../../kernel/requirement-board.js";
 import {
   assertWakeflowActiveLayoutCurrent,
   WakeflowActiveLayoutInspectionError,
@@ -47,6 +42,10 @@ import {
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
   WAKEFLOW_ACTIVE_ROOT_REF,
 } from "./wakeflow-active-paths.js";
+import {
+  REQUIREMENT_BOARD_EMPTY_INDEX,
+  REQUIREMENT_BOARD_EMPTY_INDEX_DIGEST,
+} from "./wakeflow-requirement-board-initialization.js";
 import {
   createWakeflowActiveWorkspaceFreshProjectionAuthority,
   WAKEFLOW_ACTIVE_WORKSPACE_PROJECTION_FILE_MODE,
@@ -58,9 +57,11 @@ import {
 /**
  * Wakeflow Workspace / Active：Fresh workspace两份投影的零写入inspection。
  *
- * Inspection先证明Active Layout、空TODO authority和Fresh namespace，再稳定读取两个
- * `0600`目标。只有缺失、exact current或带本owner marker的stale文件可以进入发布；
- * unknown entry、unmanaged bytes、symlink、hard link或mode漂移全部保持现场并失败。
+ * Inspection先证明Active Layout、空需求看板和Fresh namespace，再稳定读取两个
+ * `0600`目标。看板允许尚未物化，或只含与空渲染完全一致的 `index.md`；出现任何认领
+ * 状态或无法读入的条目即不再是Fresh workspace。只有缺失、exact current或带本owner
+ * marker的stale文件可以进入发布；unknown entry、unmanaged bytes、symlink、hard link
+ * 或mode漂移全部保持现场并失败。
  */
 
 export type WakeflowActiveWorkspaceProjectionTargetStatus =
@@ -81,7 +82,7 @@ export interface WakeflowActiveWorkspaceProjectionInspection {
   readonly status: "current" | "publication-required";
   readonly authority:
     Readonly<WakeflowActiveWorkspaceFreshProjectionAuthority>;
-  readonly todoCollectionDigest: Sha256Digest;
+  readonly boardIndexDigest: Sha256Digest;
   readonly targets: readonly [
     Readonly<WakeflowActiveWorkspaceProjectionTargetInspection>,
     Readonly<WakeflowActiveWorkspaceProjectionTargetInspection>,
@@ -98,7 +99,7 @@ export interface WakeflowActiveWorkspaceProjectionInspectionRequest {
 export type WakeflowActiveWorkspaceProjectionInspectionErrorReason =
   | "input"
   | "layout"
-  | "todo"
+  | "board"
   | "namespace"
   | "lock-present"
   | "target-policy"
@@ -109,7 +110,7 @@ export type WakeflowActiveWorkspaceProjectionInspectionErrorReason =
 const ERROR_MESSAGES = {
   input: "Active workspace projection inspection input is invalid.",
   layout: "Active workspace projection requires the current Active Layout.",
-  todo: "Active workspace projection requires the exact empty TODO authority.",
+  board: "Active workspace projection requires the exact empty requirement board.",
   namespace: "Active workspace projection Fresh namespace is not closed.",
   "lock-present": "Active workspace projection lock is already present.",
   "target-policy": "Active workspace projection target violates its node policy.",
@@ -246,7 +247,7 @@ async function assertFreshNamespace(
     "index.md",
     "projector.lock",
   ]);
-  const currentAllowed = new Set(["todo", "workspace-current-status.md"]);
+  const currentAllowed = new Set(["board", "workspace-current-status.md"]);
   if (
     active.entries.some((entry) => !activeAllowed.has(entry.name))
     || current.entries.some((entry) => !currentAllowed.has(entry.name))
@@ -259,33 +260,47 @@ async function assertFreshNamespace(
   if (!allowLock && lock !== undefined) fail("lock-present", "$lock");
 }
 
-async function assertEmptyTodo(
+async function assertEmptyBoard(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<Sha256Digest> {
-  let snapshot;
+  let listing;
   try {
-    snapshot = await inspectTodoItems(root, signal);
+    listing = await listRequirementClaimStates(root, signal);
   } catch (error: unknown) {
-    if (error instanceof TodoCollectionServiceError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("todo", "$todo");
+    if (isWakeflowError(error)) {
+      if (error.reason === "board-listing-aborted") fail("aborted", "$signal");
+      if (error.reason === "board-listing-root-scope") fail("root-scope", "$root");
+      fail("board", "$board");
     }
     throw error;
   }
-  if (
-    snapshot.collection.collectionDigest
-      !== TODO_EMPTY_COLLECTION_SNAPSHOT.collectionDigest
-    || snapshot.collection.itemCount !== 0
-    || snapshot.collection.activeItemCount !== 0
-    || snapshot.items.length !== 0
-    || snapshot.projection.status !== "current"
-    || snapshot.projection.source?.digest
-      !== TODO_EMPTY_BOARD_PROJECTION.sourceDigest
-  ) {
-    fail("todo", "$todo");
+  if (listing.states.length !== 0 || listing.skipped !== 0) {
+    fail("board", "$board");
   }
-  return snapshot.collection.collectionDigest;
+  let index;
+  try {
+    index = await readStrictTextFile(root, REQUIREMENT_BOARD_INDEX_REF, {
+      maximumBytes: WAKEFLOW_ACTIVE_WORKSPACE_PROJECTION_MAXIMUM_BYTES,
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch (error: unknown) {
+    if (
+      error instanceof StableFileReadError
+      && error.reason === "not-found"
+    ) {
+      return REQUIREMENT_BOARD_EMPTY_INDEX_DIGEST;
+    }
+    if (error instanceof StableFileReadError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "root-scope") fail("root-scope", "$root");
+      fail("board", "$board/index");
+    }
+    if (error instanceof StrictTextFileError) fail("board", "$board/index");
+    throw error;
+  }
+  if (index.text !== REQUIREMENT_BOARD_EMPTY_INDEX) fail("board", "$board/index");
+  return REQUIREMENT_BOARD_EMPTY_INDEX_DIGEST;
 }
 
 async function inspectTarget(
@@ -389,7 +404,7 @@ export async function inspectWakeflowActiveWorkspaceProjection(
     }
     throw error;
   }
-  const todoCollectionDigest = await assertEmptyTodo(rootValue, request.signal);
+  const boardIndexDigest = await assertEmptyBoard(rootValue, request.signal);
   await assertFreshNamespace(
     rootValue,
     optionRecord.allowLock === true,
@@ -416,7 +431,7 @@ export async function inspectWakeflowActiveWorkspaceProjection(
     kind: "WakeflowActiveWorkspaceProjectionInspection" as const,
     status,
     authorityDigest: authority.authorityDigest,
-    todoCollectionDigest,
+    boardIndexDigest,
     targets: targets.map((entry) => ({
       resourcePath: entry.resourcePath,
       status: entry.status,
@@ -428,7 +443,7 @@ export async function inspectWakeflowActiveWorkspaceProjection(
     kind: basis.kind,
     status,
     authority,
-    todoCollectionDigest,
+    boardIndexDigest,
     targets,
     observationDigest: computeCanonicalJsonSha256Digest(basis),
   });

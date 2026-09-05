@@ -40,8 +40,6 @@ const ADMITTED_PRODUCTION_ROOTS: ReadonlySet<string> = new Set([
   "src/entrypoints/codex-wakeflow-mcp.ts",
   "src/foundation/artifact/loaded-artifact-tree-transfer-publication.ts",
   "src/governance/evidence/managed-evidence-reading-service.ts",
-  // kernel 库入口：ADR-0013 L0.1 建立，L1 的 requirement 与 result-review 切片是首个 consumer，接入后从此表删除。
-  "src/kernel/privacy-scan.ts",
   // 过渡：L0.4 试点把 plan_target_task 迁到 capabilities/tasking 后，旧 service 只剩测试 fixture 消费；
   // L1 tasking 切片迁移 fixture 并删除它与 target-task-planning-plan.ts。
   "src/governance/tasking/target-task-planning-service.ts",

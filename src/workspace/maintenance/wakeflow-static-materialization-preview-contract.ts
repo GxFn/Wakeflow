@@ -45,7 +45,7 @@ const WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS = Object.freeze([
   "materialize-local-protocol",
   "materialize-shared-coordination-layout",
   "materialize-active-layout",
-  "initialize-todo-collection",
+  "initialize-requirement-board",
   "publish-fresh-active-workspace-projection",
   "materialize-ledger-layout",
   "publish-unregistered-window-runtime",

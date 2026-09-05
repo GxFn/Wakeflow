@@ -47,10 +47,6 @@ import {
 import { loadLedgerAuthorityRecord } from "./ledger-authority-reader.js";
 import { computeLedgerAuthorityRecordDigest } from "./ledger-authority-record.js";
 import {
-  ledgerAuthorityFamily,
-  ledgerAuthorityRecordId,
-} from "./ledger-authority-paths.js";
-import {
   LedgerAuthorityStoreError,
   throwLedgerAuthorityStoreError as fail,
   type LoadedLedgerAuthorityRecord,
@@ -416,9 +412,7 @@ export async function loadExactPublishedLedgerRecord(
   }
   const loaded = await loadLedgerAuthorityRecord(
     root,
-    intent.finalRootRef,
-    ledgerAuthorityFamily(intent.record),
-    ledgerAuthorityRecordId(intent.record),
+    intent.record.requirementId,
     signal,
   );
   if (

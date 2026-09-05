@@ -3,7 +3,6 @@ import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../contracts/generated/gov
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_TODO_ITEM_ID_SCHEMA } from "../../contracts/generated/governance/todo/todo-item-id.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
@@ -20,11 +19,7 @@ import {
   parseJsonValue,
   type JsonValue,
 } from "../../foundation/data/json-value.js";
-import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  type PortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -37,17 +32,15 @@ import {
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
 import {
-  parseTodoItemId,
-  TodoItemIdError,
-  type TodoItemId,
-} from "../todo/todo-item-id.js";
-import { todoIntakeRef } from "../todo/todo-paths.js";
+  parseRequirementLineageReference,
+  RequirementLineageError,
+} from "../demand/model/requirement-lineage.js";
 
 /**
  * Wakeflow Governance / Lifecycle：Demand成功终态的不可变事件载荷。
  *
  * Completion绑定Controller、冻结Authority、testing mode、post-acceptance route、Review
- * Snapshot、Event Stream和claimed TODO来源。它不删除Test lineage，也不执行TODO归档、
+ * Snapshot、Event Stream和已认领的需求包来源。它不删除Test lineage，也不执行看板归档、
  * BusinessArchive或宿主关闭。
  */
 
@@ -57,12 +50,13 @@ const COMPLETION_SCHEMA_VERSION = 1 as const;
 export type DemandCompletionTestingMode =
   "controller-only" | "real-environment";
 
-export interface DemandCompletionTodoSource {
-  readonly todoId: TodoItemId;
-  readonly intakeRef: PortableResourcePath;
-  readonly intakeDigest: Sha256Digest;
-  readonly stateRevision: number;
-  readonly stateDigest: Sha256Digest;
+/** 完成时看板上需求包的认领状态与其 Ledger 记录谱系。 */
+export interface DemandCompletionPackageSource {
+  readonly requirementId: WakeflowDurableId<"requirement">;
+  readonly recordRef: PortableResourcePath;
+  readonly recordDigest: Sha256Digest;
+  readonly claimStateRevision: number;
+  readonly claimStateDigest: Sha256Digest;
 }
 
 export interface DemandCompletion {
@@ -81,7 +75,7 @@ export interface DemandCompletion {
     readonly lastEventId: WakeflowDurableId<"demand-event">;
     readonly lastEventDigest: Sha256Digest;
   }>;
-  readonly todoSource: Readonly<DemandCompletionTodoSource>;
+  readonly packageSource: Readonly<DemandCompletionPackageSource>;
   readonly completedAt: UtcInstant;
   readonly completionDigest: Sha256Digest;
 }
@@ -103,7 +97,7 @@ export interface DemandCompletionRouteSource {
 export interface CreateDemandCompletionInput {
   readonly controllerWindowId: WakeflowDurableId<"window">;
   readonly routeSource: Readonly<DemandCompletionRouteSource>;
-  readonly todoSource: Readonly<DemandCompletionTodoSource>;
+  readonly packageSource: Readonly<DemandCompletionPackageSource>;
 }
 
 export interface CreateDemandCompletionOptions {
@@ -119,7 +113,7 @@ export type DemandCompletionErrorReason =
   | "position"
   | "time"
   | "route"
-  | "todo"
+  | "package"
   | "relation";
 
 const ERROR_MESSAGES = {
@@ -127,11 +121,11 @@ const ERROR_MESSAGES = {
   schema: "Demand Completion does not satisfy its Schema.",
   identifier: "Demand Completion contains an invalid typed identity.",
   digest: "Demand Completion contains an invalid or inconsistent digest.",
-  path: "Demand Completion contains an invalid TODO reference.",
+  path: "Demand Completion contains an invalid requirement package reference.",
   position: "Demand Completion contains an invalid revision.",
   time: "Demand Completion contains an invalid completion time.",
   route: "Demand Completion requires a valid completion-preflight route.",
-  todo: "Demand Completion TODO source is invalid.",
+  package: "Demand Completion requirement package source is invalid.",
   relation: "Demand Completion sources are inconsistent.",
 } as const satisfies Readonly<Record<DemandCompletionErrorReason, string>>;
 
@@ -154,7 +148,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandCompletionWire>(
   [
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
-    WAKEFLOW_TODO_ITEM_ID_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
@@ -199,7 +192,7 @@ function completionBasis(
     postAcceptanceRouteDigest: value.postAcceptanceRouteDigest,
     reviewSnapshotDigest: value.reviewSnapshotDigest,
     observedState: value.observedState,
-    todoSource: value.todoSource,
+    packageSource: value.packageSource,
     completedAt: value.completedAt,
   };
 }
@@ -218,35 +211,29 @@ export function parseDemandCompletion(
   const validated = validateWire(json);
   if (!validated.ok) fail("schema", validated.path);
   const wire = validated.value;
-  let todoId: TodoItemId;
+  let lineage;
   try {
-    todoId = parseTodoItemId(wire.todoSource.todoId, "$/todoSource/todoId");
+    lineage = parseRequirementLineageReference({
+      artifactKind: "wakeflow-requirement-lineage",
+      schemaVersion: 1,
+      requirementId: wire.packageSource.requirementId,
+      recordRef: wire.packageSource.recordRef,
+      recordDigest: wire.packageSource.recordDigest,
+    });
   } catch (error: unknown) {
-    if (error instanceof TodoItemIdError) {
-      fail("todo", "$/todoSource/todoId");
+    if (error instanceof RequirementLineageError) {
+      fail(
+        error.reason === "path" ? "path" : "package",
+        `$/packageSource${error.path.slice(1)}`,
+      );
     }
     throw error;
-  }
-  let intakeRef: PortableResourcePath;
-  try {
-    intakeRef = parsePortableResourcePath(
-      wire.todoSource.intakeRef,
-      "$/todoSource/intakeRef",
-    );
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("path", "$/todoSource/intakeRef");
-    }
-    throw error;
-  }
-  if (intakeRef !== todoIntakeRef(todoId)) {
-    fail("relation", "$/todoSource/intakeRef");
   }
   if (
     !Number.isSafeInteger(wire.observedState.streamRevision) ||
     wire.observedState.streamRevision < 1 ||
-    !Number.isSafeInteger(wire.todoSource.stateRevision) ||
-    wire.todoSource.stateRevision < 2
+    !Number.isSafeInteger(wire.packageSource.claimStateRevision) ||
+    wire.packageSource.claimStateRevision < 2
   ) {
     fail("position", "$completion");
   }
@@ -293,17 +280,14 @@ export function parseDemandCompletion(
         "$/observedState/lastEventDigest",
       ),
     }),
-    todoSource: Object.freeze({
-      todoId,
-      intakeRef,
-      intakeDigest: digest(
-        wire.todoSource.intakeDigest,
-        "$/todoSource/intakeDigest",
-      ),
-      stateRevision: wire.todoSource.stateRevision,
-      stateDigest: digest(
-        wire.todoSource.stateDigest,
-        "$/todoSource/stateDigest",
+    packageSource: Object.freeze({
+      requirementId: lineage.requirementId,
+      recordRef: lineage.recordRef,
+      recordDigest: lineage.recordDigest,
+      claimStateRevision: wire.packageSource.claimStateRevision,
+      claimStateDigest: digest(
+        wire.packageSource.claimStateDigest,
+        "$/packageSource/claimStateDigest",
       ),
     }),
     completedAt,
@@ -315,7 +299,7 @@ export function parseDemandCompletion(
   return Object.freeze({ ...basis, completionDigest });
 }
 
-/** 从completion-preflight route和精确claimed TODO来源创建成功终态记录。 */
+/** 从completion-preflight route和精确claimed需求包来源创建成功终态记录。 */
 export function createDemandCompletion(
   input: Readonly<CreateDemandCompletionInput>,
   options: CreateDemandCompletionOptions = {},
@@ -344,7 +328,7 @@ export function createDemandCompletion(
     postAcceptanceRouteDigest: input.routeSource.routeDigest,
     reviewSnapshotDigest: input.routeSource.reviewSnapshotDigest,
     observedState: input.routeSource.observedState,
-    todoSource: input.todoSource,
+    packageSource: input.packageSource,
     completedAt,
   });
   return parseDemandCompletion({

@@ -42,6 +42,7 @@ import { StrictTextFileError } from "../../foundation/filesystem/strict-text-fil
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
+  type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
@@ -51,14 +52,11 @@ import {
   type LedgerAuthorityRecord,
 } from "./ledger-authority-record.js";
 import {
-  confirmationRootRef,
-  ledgerAuthorityFamily,
+  LEDGER_AUTHORITY_FAMILY,
   ledgerAuthorityMemberRef,
-  ledgerAuthorityRecordId,
   ledgerAuthorityRecordRef,
   ledgerAuthorityRootRef,
   requirementRootRef,
-  type LedgerAuthorityFamily,
 } from "./ledger-authority-paths.js";
 import {
   assertLedgerAuthorityNode,
@@ -174,14 +172,13 @@ async function readRecordDocument(
   }
 }
 
-/** 从指定的最终根目录严格加载一条不可变 Ledger 权威记录。 */
+/** 按需求包标识从最终根目录严格加载一条不可变 Ledger 权威记录。 */
 export async function loadLedgerAuthorityRecord(
   root: RootedDirectory,
-  rootRef: PortableResourcePath,
-  expectedFamily: LedgerAuthorityFamily,
-  expectedId: string,
+  requirementId: WakeflowDurableId<"requirement">,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LoadedLedgerAuthorityRecord>> {
+  const rootRef = requirementRootRef(requirementId);
   let tree;
   try {
     tree = await readStableResourceTree(root, rootRef, {
@@ -216,13 +213,7 @@ export async function loadLedgerAuthorityRecord(
     if (error instanceof LedgerAuthorityRecordError) fail("record", "$record");
     throw error;
   }
-  if (
-    ledgerAuthorityFamily(record) !== expectedFamily
-    || ledgerAuthorityRecordId(record) !== expectedId
-    || ledgerAuthorityRootRef(record) !== rootRef
-  ) {
-    fail("conflict", "$record");
-  }
+  if (record.requirementId !== requirementId) fail("conflict", "$record");
   const expected = expectedResourcePaths(record);
   if (
     tree.entries.length !== expected.size
@@ -255,7 +246,7 @@ export async function loadLedgerAuthorityRecord(
   });
   const recordSource = fileSource(read, "$record/record.json");
   return Object.freeze({
-    family: expectedFamily,
+    family: LEDGER_AUTHORITY_FAMILY,
     record,
     recordRootRef: rootRef,
     recordRef: recordSource.resourcePath,
@@ -316,60 +307,40 @@ export function parseLedgerAuthorityMemberReference(
     result.value.memberDigest,
     "$/memberDigest",
   );
-  let reference: Readonly<LedgerAuthorityMemberReference>;
+  let recordId: WakeflowDurableId<"requirement">;
   try {
-    reference = result.value.family === "requirement"
-      ? Object.freeze({
-        artifactKind: MEMBER_REFERENCE_ARTIFACT_KIND,
-        schemaVersion: MEMBER_REFERENCE_SCHEMA_VERSION,
-        family: "requirement" as const,
-        recordId: parseWakeflowDurableIdOfKind(
-          result.value.recordId,
-          "requirement",
-          "$/recordId",
-        ),
-        recordRef,
-        recordDigest,
-        memberPath,
-        memberRef,
-        memberDigest,
-        role: result.value.role,
-        mediaType: result.value.mediaType,
-      })
-      : Object.freeze({
-        artifactKind: MEMBER_REFERENCE_ARTIFACT_KIND,
-        schemaVersion: MEMBER_REFERENCE_SCHEMA_VERSION,
-        family: "confirmation" as const,
-        recordId: parseWakeflowDurableIdOfKind(
-          result.value.recordId,
-          "confirmation",
-          "$/recordId",
-        ),
-        recordRef,
-        recordDigest,
-        memberPath,
-        memberRef,
-        memberDigest,
-        role: result.value.role,
-        mediaType: result.value.mediaType,
-      });
+    recordId = parseWakeflowDurableIdOfKind(
+      result.value.recordId,
+      "requirement",
+      "$/recordId",
+    );
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) fail("input", "$/recordId");
     throw error;
   }
-  const expectedRoot = reference.family === "requirement"
-    ? requirementRootRef(reference.recordId)
-    : confirmationRootRef(reference.recordId);
+  const expectedRoot = requirementRootRef(recordId);
   if (
-    reference.recordRef !== `${expectedRoot}/record.json`
-    || reference.memberRef !== `${expectedRoot}/${reference.memberPath}`
+    recordRef !== `${expectedRoot}/record.json`
+    || memberRef !== `${expectedRoot}/${memberPath}`
   ) {
     fail("input", "$reference");
   }
-  return reference;
+  return Object.freeze({
+    artifactKind: MEMBER_REFERENCE_ARTIFACT_KIND,
+    schemaVersion: MEMBER_REFERENCE_SCHEMA_VERSION,
+    family: LEDGER_AUTHORITY_FAMILY,
+    recordId,
+    recordRef,
+    recordDigest,
+    memberPath,
+    memberRef,
+    memberDigest,
+    role: result.value.role,
+    mediaType: result.value.mediaType,
+  });
 }
 
-/** 从已经严格加载的记录创建可跨领域传递的成员引用。 */
+/** 从已经严格加载的记录创建可跨领域传递的成员引用；角色取自记录中的成员声明。 */
 export function createLedgerAuthorityMemberReference(
   loaded: Readonly<LoadedLedgerAuthorityRecord>,
   memberPathValue: unknown,
@@ -381,7 +352,7 @@ export function createLedgerAuthorityMemberReference(
     artifactKind: MEMBER_REFERENCE_ARTIFACT_KIND,
     schemaVersion: MEMBER_REFERENCE_SCHEMA_VERSION,
     family: loaded.family,
-    recordId: ledgerAuthorityRecordId(loaded.record),
+    recordId: loaded.record.requirementId,
     recordRef: loaded.recordRef,
     recordDigest: loaded.recordDigest,
     memberPath: document.path,

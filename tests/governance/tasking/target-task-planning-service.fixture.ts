@@ -11,9 +11,7 @@ import path from "node:path";
 import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
 import { renderWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3-document.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
@@ -25,29 +23,23 @@ import {
   type DemandTestingMode,
 } from "../../../src/governance/demand/model/demand-authority.js";
 import {
-  computeDemandIdentityDigest,
   createDemandIdentity,
   renderDemandIdentity,
 } from "../../../src/governance/demand/model/demand-identity.js";
 import {
-  createConfirmationRecord,
-  createRequirementRecord,
-} from "../../../src/governance/ledger/ledger-authority-record.js";
-import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { parseTodoItemId } from "../../../src/governance/todo/todo-item-id.js";
-import {
-  appendTodoItem,
-  claimTodoItem,
-  initializeTodoCollection,
-} from "../../../src/governance/todo/todo-collection-service.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { materializeWakeflowActiveLayout } from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
 import type { TargetTaskPlanningPreviewRequest } from "../../../src/governance/tasking/target-task-planning-service.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
-import { todoIntakeDraft } from "../todo/todo-intake.fixture.js";
+import {
+  claimFixtureRequirement,
+  placePendingClaimState,
+  requirementLineageOf,
+} from "../demand/requirement-board.fixture.js";
+import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
 
 export const PLANNING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -65,13 +57,9 @@ export const PLANNING_WINDOW_ID = parseWakeflowDurableIdOfKind(
   "window_88888888-8888-4888-8888-888888888888",
   "window",
 );
-const REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
+export const PLANNING_REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
   "requirement_33333333-3333-4333-8333-333333333333",
   "requirement",
-);
-const PLACEMENT_CONFIRMATION_ID = parseWakeflowDurableIdOfKind(
-  "confirmation_34343434-3434-4434-8434-343434343434",
-  "confirmation",
 );
 const PUBLICATION_EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_44444444-4444-4444-8444-444444444444",
@@ -82,15 +70,6 @@ const PUBLICATION_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit",
 );
 export const PLANNING_RECORDED_AT = parseUtcInstant("2026-08-29T12:00:00.000Z");
-const TODO_ID = parseTodoItemId("todo_c60b6125-149d-458e-8d6e-98bffc9cd2f1");
-const ROLES = [
-  "code-facts",
-  "landing-plan",
-  "non-goals",
-  "original-plan",
-  "requirement-design",
-  "user-confirmation",
-] as const;
 
 export const PLANNING_UUIDS = Object.freeze([
   "66666666-6666-4666-8666-666666666666",
@@ -121,6 +100,10 @@ export function planningUuidFactory(): () => string {
   };
 }
 
+/**
+ * 创建一份已发布并被 `PLANNING_DEMAND_ID` 认领的需求包、Demand 根与修订 1 事件流，
+ * 供 tasking、delivery、review、lifecycle 等测试直接进入后续阶段。
+ */
 export async function createTargetTaskPlanningWorkspaceFixture(
   options: TargetTaskPlanningWorkspaceFixtureOptions = {},
 ): Promise<Readonly<TargetTaskPlanningWorkspaceFixture>> {
@@ -139,12 +122,6 @@ export async function createTargetTaskPlanningWorkspaceFixture(
     mkdirSync(path.join(workspacePath, relative), { mode: 0o755 });
   }
   const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
-  const controllerWindow = config.topology.windows.find(
-    (window) => window.role === "controller",
-  );
-  if (controllerWindow === undefined) {
-    throw new Error("Expected Controller window fixture.");
-  }
   writeFileSync(
     path.join(workspacePath, "wakeflow.config.json"),
     renderWakeflowConfigV3(config),
@@ -154,7 +131,6 @@ export async function createTargetTaskPlanningWorkspaceFixture(
   await materializeWakeflowActiveLayout(workspaceRoot, {
     recoveringFreshLayout: false,
   });
-  await initializeTodoCollection(workspaceRoot, { freshWorkspace: true });
   const testingSummary =
     testingMode === "real-environment"
       ? "在已确认Test环境中运行真实场景验证"
@@ -163,103 +139,23 @@ export async function createTargetTaskPlanningWorkspaceFixture(
   const ledgerRoot = await RootedDirectory.open(ledgerPath);
   const ledgerStore = new LedgerAuthorityStore(ledgerRoot);
   await ledgerStore.initialize({ freshLedger: true });
-  const roles: readonly ((typeof ROLES)[number] | "test-environment")[] =
-    testingMode === "real-environment"
-      ? Object.freeze([
-          ...ROLES.slice(0, 5),
-          "test-environment" as const,
-          ROLES[5],
-        ])
-      : ROLES;
-  const members = roles.map((role) => {
-    const bytes = encodeUtf8(`# ${role}\n`);
-    return {
-      role,
-      path: `authority/${role}.md`,
-      mediaType: "text/markdown",
-      digest: computeSha256Digest(bytes),
-      bytes,
-    };
+  const loaded = await publishFixtureRequirement(ledgerStore, {
+    requirementId: PLANNING_REQUIREMENT_ID,
+    title: "Target Task Planning requirement",
+    testingDecision: { mode: testingMode, summary: testingSummary },
   });
-  const requirement = createRequirementRecord(
-    {
-      requirementId: REQUIREMENT_ID,
-      programId: PLANNING_PROGRAM_ID,
-      title: "Target Task Planning requirement",
-      documents: members.map(({ bytes: _bytes, ...document }) => document),
-    },
-    { clock: () => PLANNING_RECORDED_AT },
+  const authorityRefs = Object.freeze(
+    loaded.documents.map((document) =>
+      createLedgerAuthorityMemberReference(loaded, document.path),
+    ),
   );
-  const published = await ledgerStore.publish(
-    requirement,
-    members.map(({ path: memberPath, bytes }) => ({
-      path: memberPath,
-      bytes,
-    })),
+  const placementAuthority = authorityRefs.find(
+    (reference) => reference.role === "requirement",
   );
-  const requirementAuthorityRefs = published.loaded.documents.map((document) =>
-    createLedgerAuthorityMemberReference(published.loaded, document.path),
-  );
-  let placementAuthority:
-    ReturnType<typeof createLedgerAuthorityMemberReference> | undefined;
-  if (executionPlacement === "isolated") {
-    const placementBytes = encodeUtf8("# Explicit isolated placement\n");
-    const placementPath = "decisions/isolated-placement.md";
-    const confirmation = createConfirmationRecord(
-      {
-        confirmationId: PLACEMENT_CONFIRMATION_ID,
-        programId: PLANNING_PROGRAM_ID,
-        demandId: PLANNING_DEMAND_ID,
-        title: "Authorize isolated execution placement",
-        documents: [
-          {
-            role: "goal-stage-decision",
-            path: placementPath,
-            mediaType: "text/markdown",
-            digest: computeSha256Digest(placementBytes),
-          },
-        ],
-      },
-      { clock: () => PLANNING_RECORDED_AT },
-    );
-    const publishedConfirmation = await ledgerStore.publish(confirmation, [
-      { path: placementPath, bytes: placementBytes },
-    ]);
-    placementAuthority = createLedgerAuthorityMemberReference(
-      publishedConfirmation.loaded,
-      placementPath,
-    );
+  if (placementAuthority === undefined) {
+    throw new Error("Expected requirement member fixture.");
   }
-  const authorityRefs = Object.freeze([
-    ...requirementAuthorityRefs,
-    ...(placementAuthority === undefined ? [] : [placementAuthority]),
-  ]);
-  const environmentAuthority = authorityRefs.find(
-    (reference) => reference.role === "test-environment",
-  );
-  if (
-    testingMode === "real-environment" &&
-    environmentAuthority === undefined
-  ) {
-    throw new Error("Expected real-environment authority member fixture.");
-  }
-  const appendedTodo = await appendTodoItem(
-    workspaceRoot,
-    todoIntakeDraft(TODO_ID, {
-      programId: PLANNING_PROGRAM_ID,
-      originWindowId: controllerWindow.windowId,
-      controllerWindowId: controllerWindow.windowId,
-      summary: "建立一份可审计的 implementation TaskPackage",
-      intakeRationale: "已确认的 Ledger Authority 可以进入 Demand 与 Task 规划。",
-      testingDecision: {
-        mode: testingMode,
-        summary: testingSummary,
-        environmentMemberRef: environmentAuthority?.memberRef ?? null,
-      },
-      authorityRefs,
-    }),
-    { clock: () => PLANNING_RECORDED_AT },
-  );
+  await placePendingClaimState(workspaceRoot, loaded);
 
   const identity = createDemandIdentity(
     {
@@ -269,9 +165,9 @@ export async function createTargetTaskPlanningWorkspaceFixture(
       goal: "建立一份可审计的 implementation TaskPackage",
       completionDefinition: "事件提交并生成严格可重建投影",
       demandType: "requirement",
-      source: appendedTodo.lineageRef,
+      source: requirementLineageOf(loaded),
       executionPlacement:
-        placementAuthority === undefined
+        executionPlacement === "main"
           ? { mode: "main" as const }
           : {
               mode: "isolated" as const,
@@ -285,22 +181,14 @@ export async function createTargetTaskPlanningWorkspaceFixture(
     testingDecision: {
       mode: testingMode,
       summary: testingSummary,
-      environmentMemberRef: environmentAuthority?.memberRef ?? null,
+      environmentMemberRef: null,
     },
   });
-  await claimTodoItem(
+  await claimFixtureRequirement(
     workspaceRoot,
-    {
-      todoId: TODO_ID,
-      intakeDigest: appendedTodo.item.intakeDigest,
-      stateDigest: appendedTodo.item.stateDigest,
-      mount: {
-        demandId: PLANNING_DEMAND_ID,
-        stateRootRef: demandFinalRootRef(PLANNING_DEMAND_ID),
-        identityDigest: computeDemandIdentityDigest(identity),
-      },
-    },
-    { clock: () => PLANNING_RECORDED_AT },
+    PLANNING_REQUIREMENT_ID,
+    PLANNING_DEMAND_ID,
+    PLANNING_RECORDED_AT,
   );
 
   const demandRootPath = path.join(

@@ -32,7 +32,8 @@ export const LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES = parseByteCount(
   "$ledger.publicationIntentMaximumBytes",
 );
 
-export const LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS = 32;
+/** 与需求包记录 Schema 的 `documents.maxItems` 一致：两份主文档加至多十六份附件。 */
+export const LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS = 18;
 export const LEDGER_AUTHORITY_MAXIMUM_TREE_FILES =
   LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS + 1;
 export const LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES = 256;

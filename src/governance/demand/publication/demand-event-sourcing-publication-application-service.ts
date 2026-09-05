@@ -37,7 +37,7 @@ import {
   type DemandEventSourcingPublicationTransaction,
 } from "./demand-event-sourcing-publication-transaction.js";
 import {
-  publishDemandFromTodo,
+  publishDemandFromPackage,
   recoverDemandPublication,
   DemandEventSourcingPublicationServiceError,
   type DemandEventSourcingPublicationEffectAuthority,
@@ -50,7 +50,7 @@ import { demandFinalRootRef } from "./demand-publication-paths.js";
  *
  * 本Service持有已打开的Workspace根，负责公共层以下的plan digest、当前Config/Ledger根、
  * 低层Publication执行调用和结果闭合。Planning Service继续只读生成计划；物理执行Service
- * 继续独占sidecar、stage、Demand根、锁和TODO claim。本层不复制这些状态机或恢复步骤。
+ * 继续独占sidecar、stage、Demand根、锁和看板认领。本层不复制这些状态机或恢复步骤。
  */
 
 export interface DemandEventSourcingPublicationApplicationOptions {
@@ -305,7 +305,7 @@ function assertPublicationMatchesPlan(
   publication: Readonly<DemandEventSourcingPublicationResult>,
   plan: Readonly<DemandEventSourcingPublicationTransaction>,
 ): void {
-  const todo = publication.todo.item;
+  const claim = publication.claim.state;
   if (
     publication.publicationAuthority !== "current" ||
     publication.demandId !== plan.demandId ||
@@ -317,14 +317,12 @@ function assertPublicationMatchesPlan(
     !sameJson(publication.loaded.firstCommit, plan.initialCommit) ||
     computeDemandEventStreamCommitDigest(publication.loaded.firstCommit) !==
       plan.initialCommitDigest ||
-    !sameJson(publication.todo.lineageRef, plan.identity.source) ||
-    todo.todoId !== plan.todoId ||
-    todo.state.status !== "claimed" ||
-    todo.state.previousStateDigest !== plan.expectedTodoStateDigest ||
-    todo.state.mount === null ||
-    todo.state.mount.demandId !== plan.demandId ||
-    todo.state.mount.stateRootRef !== plan.finalRootRef ||
-    todo.state.mount.identityDigest !== plan.identityDigest
+    claim.requirementId !== plan.requirementId ||
+    claim.recordDigest !== plan.identity.source.recordDigest ||
+    claim.status !== "claimed" ||
+    claim.previousStateDigest !== plan.expectedClaimStateDigest ||
+    claim.claim === null ||
+    claim.claim.demandId !== plan.demandId
   ) {
     fail("output", undefined, "current");
   }
@@ -334,7 +332,7 @@ function assertRecoveredPublication(
   publication: Readonly<DemandEventSourcingPublicationResult>,
   demandId: WakeflowDurableId<"demand">,
 ): void {
-  const todo = publication.todo.item;
+  const claim = publication.claim.state;
   if (
     publication.publicationAuthority !== "current" ||
     publication.demandId !== demandId ||
@@ -343,11 +341,11 @@ function assertRecoveredPublication(
     publication.loaded.authority.demandId !== demandId ||
     publication.loaded.firstCommit.demandId !== demandId ||
     publication.loaded.firstCommit.commitSequence !== 1 ||
-    todo.state.status !== "claimed" ||
-    todo.state.mount === null ||
-    todo.state.mount.demandId !== demandId ||
-    todo.state.mount.stateRootRef !== publication.rootRef ||
-    todo.state.mount.identityDigest !== publication.loaded.identityDigest
+    claim.requirementId !== publication.loaded.identity.source.requirementId ||
+    claim.recordDigest !== publication.loaded.identity.source.recordDigest ||
+    claim.status !== "claimed" ||
+    claim.claim === null ||
+    claim.claim.demandId !== demandId
   ) {
     fail("output", undefined, "current");
   }
@@ -362,8 +360,7 @@ function publicationInput(
     eventId: plan.initialCommand.eventId,
     commitId: plan.initialCommit.commitId,
     recordedAt: plan.initialCommand.recordedAt,
-    expectedTodoStateDigest: plan.expectedTodoStateDigest,
-    expectedTodoCollectionDigest: plan.expectedTodoCollectionDigest,
+    expectedClaimStateDigest: plan.expectedClaimStateDigest,
   });
 }
 
@@ -413,7 +410,7 @@ export class DemandEventSourcingPublicationApplicationService {
       );
       let publication;
       try {
-        publication = await publishDemandFromTodo(
+        publication = await publishDemandFromPackage(
           this.#workspaceRoot,
           authority.ledgerStore,
           publicationInput(plan),

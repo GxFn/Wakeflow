@@ -222,19 +222,11 @@
           "const": 1
         },
         "family": {
-          "enum": ["requirement", "confirmation"]
+          "enum": ["requirement"]
         },
         "recordId": {
-          "oneOf": [
-            {
-              "type": "string",
-              "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-            },
-            {
-              "type": "string",
-              "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-            }
-          ]
+          "type": "string",
+          "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
         "recordRef": {
           "$ref": "#/$defs/portableResourcePath"
@@ -252,91 +244,13 @@
           "$ref": "#/$defs/sha256Digest"
         },
         "role": {
-          "enum": [
-            "original-plan",
-            "requirement-design",
-            "code-facts",
-            "landing-plan",
-            "non-goals",
-            "user-confirmation",
-            "reproduction",
-            "scope",
-            "requirement-delta",
-            "research-question",
-            "boundaries",
-            "test-environment",
-            "supporting-evidence",
-            "goal-stage-decision"
-          ]
+          "enum": ["requirement", "landing", "attachment"]
         },
         "mediaType": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
         }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "family": {
-                "const": "requirement"
-              }
-            },
-            "required": ["family"]
-          },
-          "then": {
-            "properties": {
-              "recordId": {
-                "type": "string",
-                "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-              },
-              "role": {
-                "enum": [
-                  "original-plan",
-                  "requirement-design",
-                  "code-facts",
-                  "landing-plan",
-                  "non-goals",
-                  "user-confirmation",
-                  "reproduction",
-                  "scope",
-                  "requirement-delta",
-                  "research-question",
-                  "boundaries",
-                  "test-environment",
-                  "supporting-evidence"
-                ]
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "family": {
-                "const": "confirmation"
-              }
-            },
-            "required": ["family"]
-          },
-          "then": {
-            "properties": {
-              "recordId": {
-                "type": "string",
-                "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-              },
-              "role": {
-                "enum": [
-                  "goal-stage-decision",
-                  "user-confirmation",
-                  "requirement-delta",
-                  "supporting-evidence"
-                ]
-              }
-            }
-          }
-        }
-      ]
+      }
     },
     "demandAuthority": {
       "description": "Demand publication 时必须存在并永久冻结的 Ledger authority closure。",

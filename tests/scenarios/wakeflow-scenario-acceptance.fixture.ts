@@ -51,9 +51,14 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     title: "新握手以 CAS 替换旧绑定，旧代际退出投影，脱敏结果不含句柄与路径",
   },
   {
+    scenarioId: "card-03/requirement-package",
+    card: "03-requirement-entry-and-todo",
+    title: "需求包 preview 摘要与章节校验，用户确认后一次调用发布即上板",
+  },
+  {
     scenarioId: "card-04/create-demand",
     card: "04-demand-lifecycle",
-    title: "需求发布、TODO 摄入、Demand 创建后 Route 指向实现任务规划",
+    title: "认领需求包即创建 Demand，看板置 claimed，Route 指向实现任务规划",
   },
   {
     scenarioId: "card-05/plan-implementation-task",

@@ -11,7 +11,7 @@ import {
   demandEventSourcingPublicationAuthoredDemand,
   demandEventSourcingPublicationUuidFactory,
   PUBLICATION_RECORDED_AT,
-  PUBLICATION_TODO_ID,
+  PUBLICATION_REQUIREMENT_ID,
   type DemandEventSourcingPublicationWorkspaceFixture,
 } from "../demand/demand-event-sourcing-publication-service.fixture.js";
 
@@ -36,7 +36,7 @@ export async function createManagedEvidenceCapturePlanningWorkspaceFixture(): Pr
     await createDemandEventSourcingPublicationWorkspaceFixture();
   try {
     const demandPreviewRequest = {
-      todoId: PUBLICATION_TODO_ID,
+      requirementId: PUBLICATION_REQUIREMENT_ID,
       demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
     } satisfies DemandEventSourcingPublicationPreviewRequest;
     const preview = await new DemandEventSourcingPublicationPlanningService(

@@ -20,7 +20,10 @@ import {
 import { publishWakeflowConfigAuthority } from "../../../src/configuration/wakeflow-config-authority-publication.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { initializeFreshTodoCollection } from "../../../src/governance/todo/todo-collection-initialization.js";
+import {
+  materializeRequirementBoardRoot,
+  publishRequirementBoardIndex,
+} from "../../../src/kernel/requirement-board.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { recomposeWakeflowWorkspaceGitignore } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
@@ -121,9 +124,8 @@ async function installCurrentStaticSurface(
   await materializeWakeflowSharedCoordinationLayout(fixtureValue.root, {
     mode: "ensure",
   });
-  await initializeFreshTodoCollection(fixtureValue.root, {
-    recoveringFreshCollection: false,
-  });
+  await materializeRequirementBoardRoot(fixtureValue.root);
+  await publishRequirementBoardIndex(fixtureValue.root, []);
   await publishWakeflowActiveWorkspaceProjection(
     fixtureValue.root,
     {
@@ -214,7 +216,7 @@ test("fresh static preview is deterministic, ordered and strictly read-only", as
       "materialize-local-protocol",
       "materialize-shared-coordination-layout",
       "materialize-active-layout",
-      "initialize-todo-collection",
+      "initialize-requirement-board",
       "publish-fresh-active-workspace-projection",
       "materialize-ledger-layout",
       "publish-unregistered-window-runtime",
@@ -232,7 +234,7 @@ test("fresh static preview is deterministic, ordered and strictly read-only", as
   const activeProjectionStep = preview.steps.find(
     (entry) => entry.kind === "publish-fresh-active-workspace-projection",
   );
-  deepEqual(activeProjectionStep?.dependsOn, ["active:todo-collection"]);
+  deepEqual(activeProjectionStep?.dependsOn, ["active:requirement-board"]);
   equal(configStep?.kind, "publish-config");
   equal(configStep?.dependsOn.length, 14);
   equal(/^sha256:[0-9a-f]{64}$/u.test(preview.planDigest), true);

@@ -22,24 +22,23 @@ import {
   renderMarkdownJsonStringLiteral,
 } from "../../foundation/text/markdown-json-string-literal.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import {
-  TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST,
-} from "../../governance/todo/todo-collection-initialization-authority.js";
-import {
-  TODO_BOARD_PROJECTION_REF,
-} from "../../governance/todo/todo-paths.js";
+import { REQUIREMENT_BOARD_INDEX_REF } from "../../kernel/layout.js";
 import {
   WAKEFLOW_ACTIVE_ROOT_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
 } from "./wakeflow-active-paths.js";
+import {
+  REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
+} from "./wakeflow-requirement-board-initialization.js";
 
 /**
  * Wakeflow Workspace / Active：Fresh Workspace 的两份可丢弃人类投影权威。
  *
  * 本authority只接受desired Config与“Demand集合严格为空”的fresh事实，生成Workspace
- * Index和idle Status。它不读取TODO正文、不生成per-Demand文档、不链接尚不存在的
- * Ledger投影，也不把Markdown升级为Config、TODO或Demand状态权威。
+ * Index和idle Status。它不读取需求包正文、不生成per-Demand文档、不链接尚不存在的
+ * Ledger投影，也不把Markdown升级为Config、需求看板或Demand状态权威；索引只链接
+ * 内核布局里的看板人读投影 `board/index.md`。
  */
 
 export const WAKEFLOW_ACTIVE_WORKSPACE_PROJECTION_SCHEMA_VERSION = 1 as const;
@@ -60,8 +59,8 @@ export interface WakeflowActiveWorkspaceFreshProjectionAuthority {
   readonly schemaVersion:
     typeof WAKEFLOW_ACTIVE_WORKSPACE_PROJECTION_SCHEMA_VERSION;
   readonly configDigest: Sha256Digest;
-  readonly todoInitializationAuthorityDigest:
-    typeof TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST;
+  readonly boardInitializationAuthorityDigest:
+    typeof REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST;
   readonly demandSet: "empty";
   readonly orientation: "idle";
   readonly language: WakeflowConfigV3Model["presentation"]["language"];
@@ -111,36 +110,36 @@ const TEXT = Object.freeze({
     indexTitle: "Wakeflow Active Workspace",
     statusTitle: "Workspace Current Status",
     projectionNotice:
-      "Generated projection only. Config, TODO, and Demand event streams remain authoritative.",
+      "Generated projection only. Config, requirement packages, and Demand event streams remain authoritative.",
     program: "Program",
     programId: "Program ID",
     status: "Current status",
-    todo: "Global TODO",
+    board: "Requirement board",
     demands: "Active demands",
     noDemands: "No active Demand roots.",
     orientation: "Orientation",
     source: "Projection source",
     demandCount: "Active Demand count",
     nextAction: "Next action",
-    inspectTodo: "Inspect the canonical TODO authority before creating work.",
+    inspectBoard: "Inspect the requirement board before creating work.",
     back: "Active workspace index",
   }),
   "zh-Hans": Object.freeze({
     indexTitle: "Wakeflow 活动工作区",
     statusTitle: "工作区当前状态",
     projectionNotice:
-      "仅为生成式投影。Config、TODO 与 Demand 事件流仍是权威。",
+      "仅为生成式投影。Config、需求包与 Demand 事件流仍是权威。",
     program: "程序",
     programId: "程序 ID",
     status: "当前状态",
-    todo: "全局 TODO",
+    board: "需求看板",
     demands: "活动 Demand",
     noDemands: "当前没有活动 Demand 根。",
     orientation: "运行方向",
     source: "投影来源",
     demandCount: "活动 Demand 数量",
     nextAction: "下一动作",
-    inspectTodo: "创建工作前检查规范 TODO 权威。",
+    inspectBoard: "创建工作前检查需求看板。",
     back: "活动工作区索引",
   }),
 });
@@ -197,7 +196,7 @@ function renderIndex(
     `- ${text.program}: ${literal(model.program.displayName, "$/program/displayName")}`,
     `- ${text.programId}: ${literal(model.program.programId, "$/program/programId")}`,
     `- [${text.status}](${relativeFromActive(WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF)})`,
-    `- [${text.todo}](${relativeFromActive(TODO_BOARD_PROJECTION_REF)})`,
+    `- [${text.board}](${relativeFromActive(REQUIREMENT_BOARD_INDEX_REF)})`,
     "",
     `## ${text.demands}`,
     "",
@@ -222,7 +221,7 @@ function renderStatus(
     `- ${text.programId}: ${literal(model.program.programId, "$/program/programId")}`,
     `- ${text.source}: ${literal(sourceDigest, "$/sourceDigest")}`,
     `- ${text.demandCount}: 0`,
-    `- ${text.nextAction}: ${text.inspectTodo}`,
+    `- ${text.nextAction}: ${text.inspectBoard}`,
     "",
     `[${text.back}](../index.md)`,
     "",
@@ -259,8 +258,8 @@ export function createWakeflowActiveWorkspaceFreshProjectionAuthority(
     kind: "WakeflowActiveWorkspaceFreshProjectionSource" as const,
     schemaVersion: WAKEFLOW_ACTIVE_WORKSPACE_PROJECTION_SCHEMA_VERSION,
     configDigest,
-    todoInitializationAuthorityDigest:
-      TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST,
+    boardInitializationAuthorityDigest:
+      REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
     demandSet: "empty" as const,
     orientation: "idle" as const,
     language: model.presentation.language,
@@ -282,8 +281,8 @@ export function createWakeflowActiveWorkspaceFreshProjectionAuthority(
     kind: "WakeflowActiveWorkspaceFreshProjectionAuthority" as const,
     schemaVersion: WAKEFLOW_ACTIVE_WORKSPACE_PROJECTION_SCHEMA_VERSION,
     configDigest,
-    todoInitializationAuthorityDigest:
-      TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST,
+    boardInitializationAuthorityDigest:
+      REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
     demandSet: "empty" as const,
     orientation: "idle" as const,
     language: model.presentation.language,
@@ -298,7 +297,7 @@ export function createWakeflowActiveWorkspaceFreshProjectionAuthority(
     kind: basis.kind,
     schemaVersion: basis.schemaVersion,
     configDigest,
-    todoInitializationAuthorityDigest: basis.todoInitializationAuthorityDigest,
+    boardInitializationAuthorityDigest: basis.boardInitializationAuthorityDigest,
     demandSet: basis.demandSet,
     orientation: basis.orientation,
     language: basis.language,

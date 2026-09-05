@@ -21,7 +21,7 @@ import {
   demandEventSourcingPublicationPhysicalPath,
   demandEventSourcingPublicationUuidFactory,
   PUBLICATION_RECORDED_AT,
-  PUBLICATION_TODO_ID,
+  PUBLICATION_REQUIREMENT_ID,
   type DemandEventSourcingPublicationWorkspaceFixture,
 } from "./demand-event-sourcing-publication-service.fixture.js";
 
@@ -34,7 +34,7 @@ async function previewMainPlan(
     fixture.workspaceRoot,
   ).preview(
     {
-      todoId: PUBLICATION_TODO_ID,
+      requirementId: PUBLICATION_REQUIREMENT_ID,
       demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
     },
     {
@@ -79,6 +79,9 @@ test("Publication Application applies one exact plan and exposes the first Route
     equal(applied.publication.publicationAuthority, "current");
     equal(applied.publication.wroteDemandRoot, true);
     equal(applied.publication.demandId, preview.plan.demandId);
+    equal(applied.publication.claim.state.status, "claimed");
+    equal(applied.publication.claim.state.requirementId, PUBLICATION_REQUIREMENT_ID);
+    equal(applied.publication.claim.state.claim?.demandId, preview.plan.demandId);
 
     const route = await executeDemandControllerRoutePublicRequest({
       root: fixture.workspacePath,
@@ -123,6 +126,7 @@ test("Publication Application recovers an exact sidecar and preserves unknown wi
     const recovered = await service.recover(preview.plan.demandId);
     equal(recovered.publication.publicationAuthority, "current");
     equal(recovered.publication.demandId, preview.plan.demandId);
+    equal(recovered.publication.claim.state.revision, 2);
     equal(existsSync(sidecarPath), false);
     equal(
       existsSync(

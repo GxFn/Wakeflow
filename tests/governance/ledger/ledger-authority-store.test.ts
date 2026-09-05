@@ -37,11 +37,8 @@ import {
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
-  createConfirmationRecord,
   createRequirementRecord,
   renderLedgerAuthorityRecord,
   type RequirementRecord,
@@ -57,41 +54,28 @@ import {
   createLedgerRecordPublicationIntent,
   renderLedgerRecordPublicationIntent,
 } from "../../../src/governance/ledger/ledger-record-publication-intent.js";
+import {
+  FIXTURE_LANDING_MARKDOWN,
+  FIXTURE_RECORDED_AT,
+  FIXTURE_REQUIREMENT_ID,
+  FIXTURE_REQUIREMENT_MARKDOWN,
+  fixtureDocuments,
+  requirementMembers,
+  requirementRecordDraft,
+} from "./requirement-package.fixture.js";
 
-const REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
-  "requirement_11111111-1111-4111-8111-111111111111",
-  "requirement",
-);
-const OTHER_REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
-  "requirement_22222222-2222-4222-8222-222222222222",
-  "requirement",
-);
-const THIRD_REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
-  "requirement_33333333-3333-4333-8333-333333333333",
-  "requirement",
-);
-const CONFIRMATION_ID = parseWakeflowDurableIdOfKind(
-  "confirmation_44444444-4444-4444-8444-444444444444",
-  "confirmation",
-);
-const PROGRAM_ID = parseWakeflowDurableIdOfKind(
-  "program_55555555-5555-4555-8555-555555555555",
-  "program",
-);
-const DEMAND_ID = parseWakeflowDurableIdOfKind(
-  "demand_66666666-6666-4666-8666-666666666666",
-  "demand",
-);
-const RECORDED_AT = parseUtcInstant("2026-08-27T08:00:00.000Z");
-const REQUIREMENT_BYTES = encodeUtf8("# Event Sourcing requirement\n");
-const CONFIRMATION_BYTES = encodeUtf8("# Confirmed\n");
+const REQUIREMENT_ID = FIXTURE_REQUIREMENT_ID;
+const OTHER_REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";
+const THIRD_REQUIREMENT_ID = "requirement_33333333-3333-4333-8333-333333333333";
+const UNRELATED_REQUIREMENT_ID = "requirement_44444444-4444-4444-8444-444444444444";
+const MEMBERS = requirementMembers();
 
 const CANDIDATE_OPTIONS = {
   directoryMode: 0o755,
   maximumDepth: 64,
   maximumEntries: 256,
   maximumFileBytes: 4 * 1024 * 1024,
-  maximumFiles: 33,
+  maximumFiles: 19,
   maximumTotalBytes: 16 * 1024 * 1024,
 } as const;
 
@@ -120,36 +104,30 @@ async function fixture() {
 }
 
 function requirementRecord(
-  requirementId: typeof REQUIREMENT_ID,
+  requirementId: `requirement_${string}`,
   title: string,
-  bytes = REQUIREMENT_BYTES,
 ): Readonly<RequirementRecord> {
-  return createRequirementRecord({
-    requirementId,
-    programId: PROGRAM_ID,
-    title,
-    documents: [{
-      role: "requirement-design",
-      path: "design/requirement.md",
-      mediaType: "text/markdown",
-      digest: computeSha256Digest(bytes),
-    }],
-  }, { clock: () => RECORDED_AT });
+  return createRequirementRecord(
+    requirementRecordDraft({ requirementId, title }),
+    { clock: () => FIXTURE_RECORDED_AT },
+  );
 }
 
-function publicationPlan(
-  record: Readonly<RequirementRecord>,
-  bytes = REQUIREMENT_BYTES,
-) {
-  const files = [{
-    path: "design/requirement.md",
-    bytes,
-    mode: 0o644,
-  }, {
-    path: "record.json",
-    bytes: encodeUtf8(renderLedgerAuthorityRecord(record)),
-    mode: 0o644,
-  }] as const;
+function publicationPlan(record: Readonly<RequirementRecord>) {
+  const files = [
+    ...MEMBERS.map((member) => ({
+      path: member.path,
+      bytes: member.bytes,
+      mode: 0o644,
+    })),
+    {
+      path: "record.json",
+      bytes: encodeUtf8(renderLedgerAuthorityRecord(record)),
+      mode: 0o644,
+    },
+  ].sort((left, right) => (
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0
+  ));
   const plan = planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS);
   return {
     files,
@@ -169,21 +147,26 @@ function writeIntent(
   chmodSync(target, 0o600);
 }
 
-test("Ledger publishes one complete durable tree and idempotently reuses it", async () => {
+test("Ledger publishes one requirement package tree and idempotently reuses it", async () => {
   const { rootPath, root, store } = await fixture();
   try {
+    deepEqual(readdirSync(rootPath).sort(), ["requirements", "transactions"]);
     equal(statSync(path.join(rootPath, "requirements")).mode & 0o777, 0o755);
-    equal(statSync(path.join(rootPath, "confirmations")).mode & 0o777, 0o755);
     equal(statSync(path.join(rootPath, "transactions")).mode & 0o777, 0o700);
 
-    const record = requirementRecord(REQUIREMENT_ID, "Demand Event Sourcing");
-    const created = await store.publish(record, [{
-      path: "design/requirement.md",
-      bytes: REQUIREMENT_BYTES,
-    }]);
+    const record = requirementRecord(REQUIREMENT_ID, "示例需求");
+    const created = await store.publish(record, MEMBERS);
     equal(created.wroteAuthority, true);
+    equal(created.loaded.family, "requirement");
     equal(created.loaded.record.requirementId, REQUIREMENT_ID);
     equal(created.loaded.recordRef, `requirements/${REQUIREMENT_ID}/record.json`);
+    deepEqual(
+      created.loaded.documents.map((document) => [document.role, document.memberRef]),
+      [
+        ["landing", `requirements/${REQUIREMENT_ID}/landing.md`],
+        ["requirement", `requirements/${REQUIREMENT_ID}/requirement.md`],
+      ],
+    );
     equal(
       statSync(path.join(rootPath, "requirements", REQUIREMENT_ID)).mode & 0o777,
       0o755,
@@ -194,49 +177,72 @@ test("Ledger publishes one complete durable tree and idempotently reuses it", as
     );
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
 
-    const reused = await store.publish(record, [{
-      path: "design/requirement.md",
-      bytes: REQUIREMENT_BYTES,
-    }]);
+    const reused = await store.publish(record, MEMBERS);
     equal(reused.wroteAuthority, false);
     equal(reused.loaded.recordDigest, created.loaded.recordDigest);
-    deepEqual((await store.loadRequirement(REQUIREMENT_ID)).record, record);
+    const loaded = await store.loadRequirement(REQUIREMENT_ID);
+    deepEqual(loaded.record, record);
+    equal(loaded.recordDigest, created.loaded.recordDigest);
+    deepEqual(
+      loaded.documents.map((document) => document.digest),
+      MEMBERS.map((member) => computeSha256Digest(member.bytes)),
+    );
 
-    const reference = createLedgerAuthorityMemberReference(
-      created.loaded,
-      "design/requirement.md",
+    const [landingReference, requirementReference] = ["landing.md", "requirement.md"].map(
+      (memberPath) => createLedgerAuthorityMemberReference(created.loaded, memberPath),
     );
-    deepEqual((await store.resolveMemberReference(reference)).bytes, REQUIREMENT_BYTES);
+    if (landingReference === undefined || requirementReference === undefined) {
+      throw new Error("Expected two member references.");
+    }
+    deepEqual(
+      [landingReference, requirementReference].map((reference) => [
+        reference.family,
+        reference.role,
+        reference.memberPath,
+        reference.memberRef,
+      ]),
+      [
+        ["requirement", "landing", "landing.md", `requirements/${REQUIREMENT_ID}/landing.md`],
+        ["requirement", "requirement", "requirement.md", `requirements/${REQUIREMENT_ID}/requirement.md`],
+      ],
+    );
+    deepEqual(
+      parseLedgerAuthorityMemberReference(JSON.parse(JSON.stringify(requirementReference))),
+      requirementReference,
+    );
+    const resolved = await store.resolveMemberReferences([landingReference, requirementReference]);
+    deepEqual(
+      resolved.map((entry) => entry.bytes),
+      [encodeUtf8(FIXTURE_LANDING_MARKDOWN), encodeUtf8(FIXTURE_REQUIREMENT_MARKDOWN)],
+    );
+    equal((await store.resolveMemberReference(requirementReference)).document.role, "requirement");
+
     await expectStoreError(
-      () => parseLedgerAuthorityMemberReference({
-        ...reference,
-        family: "confirmation",
-      }),
+      () => parseLedgerAuthorityMemberReference({ ...requirementReference, family: "other" }),
+      "input",
+    );
+    await expectStoreError(
+      () => parseLedgerAuthorityMemberReference({ ...requirementReference, role: "goal-stage-decision" }),
       "input",
     );
     await expectStoreError(
       () => parseLedgerAuthorityMemberReference({
-        ...reference,
-        role: "goal-stage-decision",
-      }),
-      "input",
-    );
-    await expectStoreError(
-      () => parseLedgerAuthorityMemberReference({
-        ...reference,
+        ...requirementReference,
         memberPath: "Record.json",
-        memberRef: reference.recordRef,
+        memberRef: requirementReference.recordRef,
       }),
       "input",
+    );
+    await expectStoreError(
+      () => store.resolveMemberReference({ ...requirementReference, role: "landing" }),
+      "conflict",
     );
 
     const conflict = requirementRecord(REQUIREMENT_ID, "Conflicting title");
+    await expectStoreError(() => store.publish(conflict, MEMBERS), "conflict");
     await expectStoreError(
-      () => store.publish(conflict, [{
-        path: "design/requirement.md",
-        bytes: REQUIREMENT_BYTES,
-      }]),
-      "conflict",
+      () => store.publish(record, requirementMembers(fixtureDocuments({ landing: "# 改动\n" }))),
+      "member",
     );
   } finally {
     await root.close();
@@ -362,10 +368,7 @@ test("incomplete stage requests exact input and publish retry fills only missing
     );
     equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), true);
 
-    const resumed = await store.publish(record, [{
-      path: "design/requirement.md",
-      bytes: REQUIREMENT_BYTES,
-    }]);
+    const resumed = await store.publish(record, MEMBERS);
     equal(resumed.wroteAuthority, true);
     equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), false);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
@@ -379,15 +382,12 @@ test("one pending record intent does not block unrelated reads or publications",
   const { rootPath, root, store } = await fixture();
   try {
     const first = requirementRecord(REQUIREMENT_ID, "Committed record");
-    await store.publish(first, [{
-      path: "design/requirement.md",
-      bytes: REQUIREMENT_BYTES,
-    }]);
+    await store.publish(first, MEMBERS);
 
     const pending = requirementRecord(OTHER_REQUIREMENT_ID, "Pending record");
     writeIntent(rootPath, publicationPlan(pending).intent);
     const unrelatedTarget = parsePortableResourcePath(
-      `transactions/${CONFIRMATION_ID}.intent.json`,
+      `transactions/${UNRELATED_REQUIREMENT_ID}.intent.json`,
     );
     const intendedBytes = encodeUtf8("unrelated-intent");
     const address = issueDurableAtomicFileStageAddress(
@@ -413,49 +413,11 @@ test("one pending record intent does not block unrelated reads or publications",
     deepEqual((await store.loadRequirement(REQUIREMENT_ID)).record, first);
 
     const third = requirementRecord(THIRD_REQUIREMENT_ID, "Independent record");
-    const published = await store.publish(third, [{
-      path: "design/requirement.md",
-      bytes: REQUIREMENT_BYTES,
-    }]);
+    const published = await store.publish(third, MEMBERS);
     equal(published.wroteAuthority, true);
     deepEqual((await store.loadRequirement(REQUIREMENT_ID)).record, first);
     equal(existsSync(path.join(rootPath, ...unrelatedStage.split("/"))), true);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 2);
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("confirmation member references remain exact under the staged store", async () => {
-  const { rootPath, root, store } = await fixture();
-  try {
-    const record = createConfirmationRecord({
-      confirmationId: CONFIRMATION_ID,
-      programId: PROGRAM_ID,
-      demandId: DEMAND_ID,
-      title: "Confirmed staged publication",
-      documents: [{
-        role: "user-confirmation",
-        path: "decisions/confirmation.md",
-        mediaType: "text/markdown",
-        digest: computeSha256Digest(CONFIRMATION_BYTES),
-      }],
-    }, { clock: () => RECORDED_AT });
-    const published = await store.publish(record, [{
-      path: "decisions/confirmation.md",
-      bytes: CONFIRMATION_BYTES,
-    }]);
-    const reference = createLedgerAuthorityMemberReference(
-      published.loaded,
-      "decisions/confirmation.md",
-    );
-    const [resolved] = await store.resolveMemberReferences([reference]);
-    deepEqual(resolved?.bytes, CONFIRMATION_BYTES);
-    equal(
-      statSync(path.join(rootPath, "confirmations", CONFIRMATION_ID)).mode & 0o777,
-      0o755,
-    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -467,14 +429,8 @@ test("same record concurrent publication has one commit and one idempotent resul
   try {
     const record = requirementRecord(REQUIREMENT_ID, "Concurrent authority");
     const results = await Promise.all([
-      store.publish(record, [{
-        path: "design/requirement.md",
-        bytes: REQUIREMENT_BYTES,
-      }]),
-      store.publish(record, [{
-        path: "design/requirement.md",
-        bytes: REQUIREMENT_BYTES,
-      }]),
+      store.publish(record, MEMBERS),
+      store.publish(record, MEMBERS),
     ]);
     deepEqual(
       results.map((result) => result.wroteAuthority).sort(),
@@ -507,10 +463,6 @@ test("published final with remaining exact intent settles forward", async () => 
 
     const recovered = await store.recoverRecordPublication(REQUIREMENT_ID);
     equal(recovered.wroteAuthority, false);
-    equal(recovered.loaded.record.artifactKind, "wakeflow-requirement-record");
-    if (recovered.loaded.record.artifactKind !== "wakeflow-requirement-record") {
-      throw new Error("Expected recovered requirement record.");
-    }
     equal(recovered.loaded.record.requirementId, REQUIREMENT_ID);
     equal(existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))), false);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);

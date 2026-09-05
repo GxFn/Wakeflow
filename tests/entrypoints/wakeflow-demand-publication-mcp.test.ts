@@ -9,7 +9,6 @@ import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,
   demandEventSourcingPublicationAuthoredDemand,
-  PUBLICATION_TODO_ID,
 } from "../governance/demand/demand-event-sourcing-publication-service.fixture.js";
 import {
   connectWakeflowMcpServerForTest,
@@ -19,7 +18,7 @@ import {
 
 const PUBLICATION_DEMAND_ID = "demand_22222222-2222-4222-8222-222222222222";
 
-test("Codex MCP从pending TODO发布Demand并进入首个Controller Route", async () => {
+test("Codex MCP从pending需求包发布Demand并进入首个Controller Route", async () => {
   const fixture = await createDemandEventSourcingPublicationWorkspaceFixture();
   const server = createCodexWakeflowMcpServer("1.0.0-test");
   const { client, close } = await connectWakeflowMcpServerForTest(server);
@@ -29,7 +28,7 @@ test("Codex MCP从pending TODO发布Demand并进入首个Controller Route", asyn
       arguments: {
         root: fixture.workspacePath,
         mode: "preview",
-        todoId: PUBLICATION_TODO_ID,
+        requirementId: fixture.requirementId,
         demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
       },
     });

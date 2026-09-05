@@ -106,8 +106,8 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
         workspace.absolutePath,
         ".wakeflow-active",
         "current",
-        "todo",
-        "global-todo-board.md",
+        "board",
+        "index.md",
       ),
     ),
     true,
@@ -147,7 +147,7 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
   );
   equal(
     existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")),
-    true,
+    false,
   );
   equal(
     existsSync(path.join(workspace.absolutePath, "Ledger", "transactions")),

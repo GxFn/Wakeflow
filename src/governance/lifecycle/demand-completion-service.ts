@@ -75,7 +75,7 @@ import {
 /**
  * Wakeflow Governance / Lifecycle：Demand Completion preview/apply编排。
  *
- * Preview零写读取Route、TODO、WorkClaim、Config和Demand Authority。Apply对未提交计划重读全部
+ * Preview零写读取Route、看板认领、WorkClaim、Config和Demand Authority。Apply对未提交计划重读全部
  * 来源并追加唯一`lifecycle.demand-completed` Event；已提交重试只使用plan内冻结Authority重建
  * 原command，不依赖后来TODO归档、Config或Ledger状态。
  */
@@ -120,7 +120,7 @@ export type DemandCompletionServiceErrorReason =
   | "config"
   | "demand-authority"
   | "route"
-  | "todo"
+  | "package"
   | "claim"
   | "plan"
   | "completion"
@@ -137,7 +137,7 @@ const ERROR_MESSAGES = {
   config: "Demand Completion Config authority is invalid or stale.",
   "demand-authority": "Demand Completion Demand authority is invalid.",
   route: "Demand Completion post-acceptance route is not admitted.",
-  todo: "Demand Completion TODO authority is invalid or stale.",
+  package: "Demand Completion requirement package claim is invalid or stale.",
   claim: "Demand Completion cannot retain a WorkClaim.",
   plan: "Demand Completion plan is invalid or stale.",
   completion: "Demand Completion record is invalid.",
@@ -486,7 +486,7 @@ export class DemandCompletionService {
           {
             controllerWindowId: sources.controllerWindowId,
             routeSource: sources.routeSource,
-            todoSource: sources.todoSource,
+            packageSource: sources.packageSource,
           },
           options.clock === undefined ? {} : { clock: options.clock },
         );
@@ -630,7 +630,7 @@ export class DemandCompletionService {
                 {
                   controllerWindowId: sources.controllerWindowId,
                   routeSource: sources.routeSource,
-                  todoSource: sources.todoSource,
+                  packageSource: sources.packageSource,
                 },
                 { clock: () => plan.completion.completedAt },
               );

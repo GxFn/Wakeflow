@@ -4,114 +4,72 @@ import path from "node:path";
 
 import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
 import { renderWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3-document.js";
-import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+} from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import type { Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import {
-  createConfirmationRecord,
-  createRequirementRecord,
-} from "../../../src/governance/ledger/ledger-authority-record.js";
-import {
-  createLedgerAuthorityMemberReference,
-  LedgerAuthorityStore,
-} from "../../../src/governance/ledger/ledger-authority-store.js";
-import {
-  appendTodoItem,
-  initializeTodoCollection,
-} from "../../../src/governance/todo/todo-collection-service.js";
-import { parseTodoItemId } from "../../../src/governance/todo/todo-item-id.js";
+import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { materializeWakeflowActiveLayout } from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
-import { todoIntakeDraft } from "../todo/todo-intake.fixture.js";
+import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
+import {
+  placePendingClaimState,
+  type RequirementClaimStateFixture,
+} from "./requirement-board.fixture.js";
 
-export const PUBLICATION_TODO_ID = parseTodoItemId(
-  "todo_88340ce6-2c27-4cb8-83bb-86f46b74d5b1",
+export const PUBLICATION_REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
+  "requirement_33333333-3333-4333-8333-333333333333",
+  "requirement",
 );
-export const PUBLICATION_REQUIREMENT_ID =
-  "requirement_33333333-3333-4333-8333-333333333333";
-export const PUBLICATION_CONFIRMATION_A_ID =
-  "confirmation_44444444-4444-4444-8444-444444444444";
-export const PUBLICATION_CONFIRMATION_B_ID =
-  "confirmation_55555555-5555-4555-8555-555555555555";
-export const PUBLICATION_CONFIRMATION_DEMAND_A =
-  "demand_66666666-6666-4666-8666-666666666666";
-export const PUBLICATION_CONFIRMATION_DEMAND_B =
-  "demand_77777777-7777-4777-8777-777777777777";
+export const PUBLICATION_SECOND_REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
+  "requirement_34343434-3434-4434-8434-343434343434",
+  "requirement",
+);
 export const PUBLICATION_RECORDED_AT = parseUtcInstant(
   "2026-09-01T12:00:00.000Z",
 );
-export const PUBLICATION_REQUIRED_ROLES = [
-  "code-facts",
-  "landing-plan",
-  "non-goals",
-  "original-plan",
-  "requirement-design",
-  "user-confirmation",
-] as const;
-
-export interface PublicationAuthorityMemberSelectionFixture {
-  readonly recordId: string;
-  readonly memberPath: string;
-}
+/** 需求包全部成员按引用位置排序后的角色序列（`landing.md` 先于 `requirement.md`）。 */
+export const PUBLICATION_PACKAGE_ROLES = ["landing", "requirement"] as const;
 
 export interface DemandEventSourcingPublicationWorkspaceFixture {
   readonly fixtureRoot: string;
   readonly workspacePath: string;
+  readonly ledgerPath: string;
   readonly workspaceRoot: RootedDirectory;
-  readonly initialTodoStateDigest: string;
-  readonly requirementMembers: readonly Readonly<PublicationAuthorityMemberSelectionFixture>[];
-  readonly confirmationA: Readonly<PublicationAuthorityMemberSelectionFixture>;
-  readonly confirmationB: Readonly<PublicationAuthorityMemberSelectionFixture>;
+  readonly requirementId: WakeflowDurableId<"requirement">;
+  readonly recordDigest: Sha256Digest;
+  readonly initialClaimStateDigest: Sha256Digest;
 }
 
-function memberBytes(role: string): Uint8Array {
-  return encodeUtf8(`# ${role}\n`);
-}
-
-async function publishConfirmation(
-  store: LedgerAuthorityStore,
-  input: Readonly<{
-    confirmationId: string;
-    demandId: string;
-    role: "goal-stage-decision" | "supporting-evidence";
-    memberPath: string;
-  }>,
-): Promise<Readonly<PublicationAuthorityMemberSelectionFixture>> {
-  const bytes = memberBytes(input.role);
-  const record = createConfirmationRecord(
-    {
-      confirmationId: input.confirmationId,
-      programId: "program_11111111-1111-4111-8111-111111111111",
-      demandId: input.demandId,
-      title: `Confirmation ${input.confirmationId}`,
-      documents: [
-        {
-          role: input.role,
-          path: input.memberPath,
-          mediaType: "text/markdown",
-          digest: computeSha256Digest(bytes),
-        },
-      ],
-    },
-    { clock: () => PUBLICATION_RECORDED_AT },
-  );
-  await store.publish(record, [{ path: input.memberPath, bytes }]);
-  return Object.freeze({
-    recordId: input.confirmationId,
-    memberPath: input.memberPath,
-  });
-}
-
-export type DemandPublicationFixtureAuthorityMode =
-  | "requirement"
-  | "isolated"
-  | "conflicting-confirmations";
-
-/** 创建Preview、Apply和Recovery测试共用的一份未领取TODO及完整Ledger Authority。 */
-export async function createDemandEventSourcingPublicationWorkspaceFixture(
-  authorityMode: DemandPublicationFixtureAuthorityMode = "requirement",
+/** 发布一份需求包记录并以 pending 状态放上看板。 */
+export async function publishPendingPackage(
+  workspaceRoot: RootedDirectory,
+  ledgerPath: string,
+  requirementId: WakeflowDurableId<"requirement">,
 ): Promise<
+  Readonly<{
+    readonly recordDigest: Sha256Digest;
+    readonly claim: Readonly<RequirementClaimStateFixture>;
+  }>
+> {
+  const ledgerRoot = await RootedDirectory.open(ledgerPath);
+  try {
+    const loaded = await publishFixtureRequirement(
+      new LedgerAuthorityStore(ledgerRoot),
+      { requirementId },
+    );
+    const claim = await placePendingClaimState(workspaceRoot, loaded);
+    return Object.freeze({ recordDigest: loaded.recordDigest, claim });
+  } finally {
+    await ledgerRoot.close();
+  }
+}
+
+/** 创建Preview、Apply和Recovery测试共用的一份待认领需求包及其Ledger记录。 */
+export async function createDemandEventSourcingPublicationWorkspaceFixture(): Promise<
   Readonly<DemandEventSourcingPublicationWorkspaceFixture>
 > {
   const fixtureRoot = mkdtempSync(
@@ -127,136 +85,40 @@ export async function createDemandEventSourcingPublicationWorkspaceFixture(
     mkdirSync(path.join(workspacePath, relative), { mode: 0o755 });
   }
   const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
-  const controllerWindow = config.topology.windows.find(
-    (window) => window.role === "controller",
-  );
-  const originWindow = config.topology.windows.find(
-    (window) => window.role === "design",
-  );
-  if (controllerWindow === undefined || originWindow === undefined) {
-    throw new Error("Expected Controller and Design window fixtures.");
-  }
   writeFileSync(
     path.join(workspacePath, "wakeflow.config.json"),
     renderWakeflowConfigV3(config),
     { mode: 0o644 },
   );
   const workspaceRoot = await RootedDirectory.open(workspacePath);
-  await materializeWakeflowActiveLayout(workspaceRoot, {
-    recoveringFreshLayout: false,
-  });
-  await initializeTodoCollection(workspaceRoot, { freshWorkspace: true });
-
-  const ledgerRoot = await RootedDirectory.open(ledgerPath);
   try {
-    const store = new LedgerAuthorityStore(ledgerRoot);
-    await store.initialize({ freshLedger: true });
-    const members = PUBLICATION_REQUIRED_ROLES.map((role) => {
-      const bytes = memberBytes(role);
-      return {
-        role,
-        path: `authority/${role}.md`,
-        mediaType: "text/markdown",
-        digest: computeSha256Digest(bytes),
-        bytes,
-      };
+    await materializeWakeflowActiveLayout(workspaceRoot, {
+      recoveringFreshLayout: false,
     });
-    const requirement = createRequirementRecord(
-      {
-        requirementId: PUBLICATION_REQUIREMENT_ID,
-        programId: "program_11111111-1111-4111-8111-111111111111",
-        title: "Demand Publication planning requirement",
-        documents: members.map(({ bytes: _bytes, ...document }) => document),
-      },
-      { clock: () => PUBLICATION_RECORDED_AT },
-    );
-    const publishedRequirement = await store.publish(
-      requirement,
-      members.map(({ path: memberPath, bytes }) => ({
-        path: memberPath,
-        bytes,
-      })),
-    );
-    const requirementMembers = publishedRequirement.loaded.documents.map(
-      (document) =>
-        Object.freeze({
-          recordId: PUBLICATION_REQUIREMENT_ID,
-          memberPath: document.path,
-        }),
-    );
-    const requirementAuthorityRefs = publishedRequirement.loaded.documents.map(
-      (document) => createLedgerAuthorityMemberReference(
-        publishedRequirement.loaded,
-        document.path,
-      ),
-    );
-    const confirmationA = await publishConfirmation(store, {
-      confirmationId: PUBLICATION_CONFIRMATION_A_ID,
-      demandId: PUBLICATION_CONFIRMATION_DEMAND_A,
-      role: "goal-stage-decision",
-      memberPath: "decisions/isolated-placement.md",
-    });
-    const confirmationB = await publishConfirmation(store, {
-      confirmationId: PUBLICATION_CONFIRMATION_B_ID,
-      demandId: PUBLICATION_CONFIRMATION_DEMAND_B,
-      role: "supporting-evidence",
-      memberPath: "evidence/other-demand.md",
-    });
-    const loadedConfirmationA = await store.loadConfirmation(
-      PUBLICATION_CONFIRMATION_A_ID,
-    );
-    const loadedConfirmationB = await store.loadConfirmation(
-      PUBLICATION_CONFIRMATION_B_ID,
-    );
-    const confirmationAReference = createLedgerAuthorityMemberReference(
-      loadedConfirmationA,
-      confirmationA.memberPath,
-    );
-    const confirmationBReference = createLedgerAuthorityMemberReference(
-      loadedConfirmationB,
-      confirmationB.memberPath,
-    );
-    const authorityRefs = authorityMode === "isolated"
-      ? [...requirementAuthorityRefs, confirmationAReference]
-      : authorityMode === "conflicting-confirmations"
-        ? [
-            ...requirementAuthorityRefs,
-            confirmationAReference,
-            confirmationBReference,
-          ]
-        : requirementAuthorityRefs;
-    const appended = await appendTodoItem(
+    const ledgerRoot = await RootedDirectory.open(ledgerPath);
+    try {
+      await new LedgerAuthorityStore(ledgerRoot).initialize({ freshLedger: true });
+    } finally {
+      await ledgerRoot.close();
+    }
+    const published = await publishPendingPackage(
       workspaceRoot,
-      todoIntakeDraft(PUBLICATION_TODO_ID, {
-        programId: config.program.programId,
-        originWindowId: originWindow.windowId,
-        controllerWindowId: controllerWindow.windowId,
-        summary: "发布一份完整 Demand Event Sourcing 初始权威",
-        intakeRationale: "已确认的 Ledger Authority 可以进入 Demand 发布规划。",
-        testingDecision: {
-          mode: "controller-only",
-          summary: "运行新增 TypeScript 聚焦测试",
-          environmentMemberRef: null,
-        },
-        authorityRefs,
-      }),
-      { clock: () => PUBLICATION_RECORDED_AT },
+      ledgerPath,
+      PUBLICATION_REQUIREMENT_ID,
     );
     return Object.freeze({
       fixtureRoot,
       workspacePath,
+      ledgerPath,
       workspaceRoot,
-      initialTodoStateDigest: appended.item.stateDigest,
-      requirementMembers: Object.freeze(requirementMembers),
-      confirmationA,
-      confirmationB,
+      requirementId: PUBLICATION_REQUIREMENT_ID,
+      recordDigest: published.recordDigest,
+      initialClaimStateDigest: published.claim.digest,
     });
   } catch (error: unknown) {
     await workspaceRoot.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
     throw error;
-  } finally {
-    await ledgerRoot.close();
   }
 }
 
@@ -272,7 +134,7 @@ export function demandEventSourcingPublicationAuthoredDemand<
 >(executionPlacement: ExecutionPlacement) {
   return {
     title: "Demand Event Sourcing Publication",
-    goal: "从当前TODO与Ledger生成完整revision 1计划",
+    goal: "从看板上的需求包与Ledger生成完整revision 1计划",
     completionDefinition: "计划可精确Apply并支持前向Recovery",
     executionPlacement,
   };

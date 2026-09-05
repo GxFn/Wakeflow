@@ -7,12 +7,11 @@ import {
 } from "../../../configuration/wakeflow-config-authority-snapshot.js";
 import {
   createWakeflowDurableId,
-  parseWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
+  WakeflowDurableIdError,
   type WakeflowDurableId,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
-import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parsePlainRecord,
   PassiveOwnDataError,
@@ -35,6 +34,22 @@ import {
   UtcWallClockError,
   type UtcWallClock,
 } from "../../../foundation/time/wall-clock.js";
+import { WakeflowError } from "../../../kernel/error.js";
+import {
+  listRequirementClaimStates,
+  readRequirementClaimState,
+  type RequirementClaimState,
+  type RequirementClaimStateSource,
+} from "../../../kernel/requirement-board.js";
+import {
+  closeDemandOperationRoot,
+  DemandOperationAuthorityContextError,
+  openDemandOperationRoot,
+} from "../demand-operation-authority-context.js";
+import {
+  DemandEventSourcingRepository,
+  DemandEventSourcingRepositoryError,
+} from "../event-sourcing/demand-event-sourcing-repository.js";
 import {
   createDemandAuthority,
   DemandAuthorityError,
@@ -47,26 +62,19 @@ import {
   type DemandIdentity,
 } from "../model/demand-identity.js";
 import {
+  parseRequirementLineageReference,
+  RequirementLineageError,
+  type RequirementLineageReference,
+} from "../model/requirement-lineage.js";
+import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
   type LedgerAuthorityMemberReference,
-  type LoadedLedgerAuthorityRecord,
 } from "../../ledger/ledger-authority-store.js";
-import type { StoredTodoCollectionItem } from "../../todo/todo-collection-authority.js";
-import {
-  inspectTodoItems,
-  TodoCollectionServiceError,
-} from "../../todo/todo-collection-service.js";
-import {
-  parseTodoIntakeLineageReference,
-  TodoIntakeLineageError,
-  type TodoIntakeLineageReference,
-} from "../../todo/todo-intake-lineage.js";
 import {
   parseDemandEventSourcingPublicationPreviewRequest,
   DemandEventSourcingPublicationInputError,
-  type DemandEventSourcingPublicationAuthorityMemberSelection,
   type DemandEventSourcingPublicationPreviewRequest,
 } from "./demand-event-sourcing-publication-input.js";
 import {
@@ -85,9 +93,12 @@ import {
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：零写Preview计划职责所有者。
  *
- * Service持有一次调用范围外已打开的Workspace根；每次Preview仍重新读取Config、TODO和
- * Ledger。调用方只选择上游事实，Service派生完整Identity、Authority、revision 1事务和
- * 摘要。既有Publication执行Service继续独占sidecar、stage、Demand根与TODO claim副作用。
+ * Service持有一次调用范围外已打开的Workspace根；每次Preview仍重新读取Config、看板认领
+ * 状态和Ledger需求包记录。调用方只选择需求包并编写Demand语义，Service派生完整Identity、
+ * Authority、revision 1事务和摘要：Demand类型与测试决定来自需求包记录头部，权威成员
+ * 集合是记录的全部成员，来源谱系绑定记录引用与摘要（ADR-0011 D7）。总控同一时刻只允许
+ * 一个活动Demand：看板上任一`claimed`包对应的Demand未到终态即拒绝。既有Publication执行
+ * Service继续独占sidecar、stage、Demand根与看板认领副作用。
  */
 
 export interface DemandEventSourcingPublicationPreviewOptions {
@@ -107,7 +118,9 @@ export type DemandEventSourcingPublicationPlanningServiceErrorReason =
   | "identity"
   | "time"
   | "config"
-  | "todo"
+  | "board"
+  | "active-demand-exists"
+  | "isolated-placement-retired"
   | "authority"
   | "conflict"
   | "root"
@@ -120,7 +133,12 @@ const ERROR_MESSAGES = {
   identity: "Demand Event Sourcing publication identity allocation failed.",
   time: "Demand Event Sourcing publication time allocation failed.",
   config: "Demand Event Sourcing publication Config authority is invalid.",
-  todo: "Demand Event Sourcing publication TODO authority is invalid.",
+  board:
+    "Demand Event Sourcing publication requirement package is not pending on the board.",
+  "active-demand-exists":
+    "Demand Event Sourcing publication is refused while another Demand is active.",
+  "isolated-placement-retired":
+    "Demand Event Sourcing publication no longer supports isolated execution placement.",
   authority: "Demand Event Sourcing publication Ledger authority is invalid.",
   conflict: "Demand Event Sourcing publication identity is already occupied.",
   root: "Demand Event Sourcing publication root could not be held safely.",
@@ -158,22 +176,18 @@ interface ParsedPreviewOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-interface PendingTodoSource {
-  readonly item: Readonly<StoredTodoCollectionItem>;
-  readonly lineage: Readonly<TodoIntakeLineageReference>;
-  readonly collectionDigest: Sha256Digest;
-}
+type LoadedRequirementPackage = Awaited<
+  ReturnType<LedgerAuthorityStore["loadRequirement"]>
+>;
 
-interface SelectedAuthority {
+interface PackageSource {
+  readonly claim: Readonly<RequirementClaimStateSource>;
+  readonly loaded: Readonly<LoadedRequirementPackage>;
+  readonly lineage: Readonly<RequirementLineageReference>;
   readonly references: readonly [
     Readonly<LedgerAuthorityMemberReference>,
     ...Readonly<LedgerAuthorityMemberReference>[],
   ];
-  readonly referenceBySelection: ReadonlyMap<
-    string,
-    Readonly<LedgerAuthorityMemberReference>
-  >;
-  readonly confirmationDemandId: WakeflowDurableId<"demand"> | null;
 }
 
 const DRAFT_VALIDATION_DEMAND_ID = parseWakeflowDurableIdOfKind(
@@ -239,6 +253,14 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted");
 }
 
+function mapBoardError(error: unknown): never {
+  if (error instanceof WakeflowError) {
+    if (error.reason.endsWith("-aborted")) fail("aborted", error);
+    fail("board", error);
+  }
+  throw error;
+}
+
 async function readConfig(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
@@ -258,71 +280,125 @@ async function readConfig(
   }
 }
 
-async function readPendingTodo(
+/** 需求包必须以 `pending` 状态在看板上，其摘要就是计划里的认领前序。 */
+async function readPendingClaim(
   root: RootedDirectory,
   request: Readonly<DemandEventSourcingPublicationPreviewRequest>,
   signal: AbortSignal | undefined,
-): Promise<Readonly<PendingTodoSource>> {
-  let snapshot;
+): Promise<Readonly<RequirementClaimStateSource>> {
+  let source: Readonly<RequirementClaimStateSource> | null;
   try {
-    snapshot = await inspectTodoItems(root, signal);
+    source = await readRequirementClaimState(root, request.requirementId, signal);
   } catch (error: unknown) {
-    if (error instanceof TodoCollectionServiceError) {
-      if (error.reason === "aborted") fail("aborted", error);
-      fail("todo", error);
+    mapBoardError(error);
+  }
+  if (source === null || source.state.status !== "pending") fail("board");
+  return source;
+}
+
+async function resourceExists(
+  root: RootedDirectory,
+  ref: ReturnType<typeof demandFinalRootRef>,
+): Promise<boolean> {
+  try {
+    await root.inspectExistingResource(ref);
+    return true;
+  } catch (error: unknown) {
+    if (
+      error instanceof RootedDirectoryError &&
+      error.reason === "resource-not-found"
+    ) {
+      return false;
     }
+    if (error instanceof RootedDirectoryError) fail("root", error);
     throw error;
   }
-  const item = snapshot.items.find(
-    (candidate) => candidate.todoId === request.todoId,
-  );
-  if (item === undefined || item.state.status !== "pending-claim") {
-    fail("todo");
-  }
-  let lineage;
-  try {
-    lineage = parseTodoIntakeLineageReference({
-      artifactKind: "wakeflow-todo-intake-lineage",
-      schemaVersion: 1,
-      todoId: item.todoId,
-      intakeRef: item.intakeSource.resourcePath,
-      intakeDigest: item.intakeDigest,
-    });
-  } catch (error: unknown) {
-    if (error instanceof TodoIntakeLineageError) fail("todo", error);
-    throw error;
-  }
-  return Object.freeze({
-    item,
-    lineage,
-    collectionDigest: snapshot.collection.collectionDigest,
-  });
 }
 
-function selectionKey(
-  value: Readonly<{
-    readonly recordId: string;
-    readonly memberPath: string;
-  }>,
-): string {
-  return `${value.recordId}\u0000${value.memberPath}`;
-}
-
-async function loadSelectedRecord(
-  store: LedgerAuthorityStore,
-  selection: Readonly<DemandEventSourcingPublicationAuthorityMemberSelection>,
+/** 一个已认领包对应的 Demand 根存在且聚合未到终态即为活动 Demand；根无法证明终态时同样视为活动。 */
+async function demandIsActive(
+  root: RootedDirectory,
+  state: RequirementClaimState,
   signal: AbortSignal | undefined,
-): Promise<Readonly<LoadedLedgerAuthorityRecord>> {
+): Promise<boolean> {
+  if (state.claim === null) return false;
+  let demandId: WakeflowDurableId<"demand">;
   try {
-    return selection.recordId.startsWith("requirement_")
-      ? await store.loadRequirement(
-          selection.recordId,
-          signal === undefined ? undefined : { signal },
-        )
-      : await store.loadConfirmation(
-          selection.recordId,
-          signal === undefined ? undefined : { signal },
-        );
+    demandId = parseWakeflowDurableIdOfKind(state.claim.demandId, "demand");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowDurableIdError) fail("board", error);
+    throw error;
+  }
+  if (!(await resourceExists(root, demandFinalRootRef(demandId)))) return false;
+  let demandRoot: RootedDirectory;
+  try {
+    demandRoot = await openDemandOperationRoot(root, demandId);
+  } catch (error: unknown) {
+    if (error instanceof DemandOperationAuthorityContextError) return true;
+    throw error;
+  }
+  let active = true;
+  let failure: unknown;
+  try {
+    const loaded = await new DemandEventSourcingRepository(demandRoot).load(
+      signal === undefined ? undefined : { signal },
+    );
+    if (loaded !== null) {
+      const lifecycle = loaded.aggregate.state.lifecycle;
+      active = lifecycle !== "completed" && lifecycle !== "cancelled";
+    }
+  } catch (error: unknown) {
+    if (
+      error instanceof DemandEventSourcingRepositoryError &&
+      error.reason === "aborted"
+    ) {
+      failure = error;
+    }
+  }
+  try {
+    await closeDemandOperationRoot(demandRoot);
+  } catch (error: unknown) {
+    if (failure === undefined) failure = error;
+  }
+  if (failure !== undefined) {
+    if (failure instanceof DemandEventSourcingRepositoryError) {
+      fail("aborted", failure);
+    }
+    if (failure instanceof DemandOperationAuthorityContextError) {
+      fail("root", failure);
+    }
+    throw failure;
+  }
+  return active;
+}
+
+/** ADR-0011 D7：总控已有活动 Demand 时拒绝再认领任何需求包。preview 与 apply 都检查。 */
+export async function assertNoActiveDemand(
+  root: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  let states: readonly RequirementClaimState[];
+  try {
+    states = (await listRequirementClaimStates(root, signal)).states;
+  } catch (error: unknown) {
+    mapBoardError(error);
+  }
+  for (const state of states) {
+    if (state.status !== "claimed") continue;
+    if (await demandIsActive(root, state, signal)) fail("active-demand-exists");
+  }
+}
+
+async function loadPackageRecord(
+  store: LedgerAuthorityStore,
+  requirementId: WakeflowDurableId<"requirement">,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<LoadedRequirementPackage>> {
+  try {
+    return await store.loadRequirement(
+      requirementId,
+      signal === undefined ? undefined : { signal },
+    );
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
       if (error.reason === "aborted") fail("aborted", error);
@@ -333,130 +409,79 @@ async function loadSelectedRecord(
   }
 }
 
-async function selectAuthority(
+/** 需求包记录必须属于当前 Program 且与看板状态绑定同一记录摘要；全部成员进入权威闭包。 */
+async function loadPackageSource(
   store: LedgerAuthorityStore,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
-  todo: Readonly<PendingTodoSource>,
+  claim: Readonly<RequirementClaimStateSource>,
   signal: AbortSignal | undefined,
-): Promise<Readonly<SelectedAuthority>> {
-  const loadedByRecordId = new Map<
-    string,
-    Readonly<LoadedLedgerAuthorityRecord>
-  >();
+): Promise<Readonly<PackageSource>> {
+  const requirementId = parseWakeflowDurableIdOfKind(
+    claim.state.requirementId,
+    "requirement",
+  );
+  const loaded = await loadPackageRecord(store, requirementId, signal);
+  if (loaded.record.programId !== config.model.program.programId) {
+    fail("authority");
+  }
+  if (
+    loaded.recordDigest !== claim.state.recordDigest ||
+    loaded.record.programId !== claim.state.programId
+  ) {
+    fail("board");
+  }
+  let lineage: Readonly<RequirementLineageReference>;
+  try {
+    lineage = parseRequirementLineageReference({
+      artifactKind: "wakeflow-requirement-lineage",
+      schemaVersion: 1,
+      requirementId,
+      recordRef: loaded.recordRef,
+      recordDigest: loaded.recordDigest,
+    });
+  } catch (error: unknown) {
+    if (error instanceof RequirementLineageError) fail("authority", error);
+    throw error;
+  }
   const references: LedgerAuthorityMemberReference[] = [];
-  const referenceBySelection = new Map<
-    string,
-    Readonly<LedgerAuthorityMemberReference>
-  >();
-  let confirmationDemandId: WakeflowDurableId<"demand"> | null = null;
-
-  for (const expected of todo.item.intake.authorityRefs) {
-    const selection = {
-      recordId: expected.recordId,
-      memberPath: expected.memberPath,
-    } as const;
-    let loaded = loadedByRecordId.get(expected.recordId);
-    if (loaded === undefined) {
-      loaded = await loadSelectedRecord(store, selection, signal);
-      loadedByRecordId.set(expected.recordId, loaded);
-      if (loaded.record.programId !== config.model.program.programId) {
-        fail("authority");
-      }
-      if (loaded.record.artifactKind === "wakeflow-confirmation-record") {
-        if (
-          confirmationDemandId !== null &&
-          confirmationDemandId !== loaded.record.demandId
-        ) {
-          fail("authority");
-        }
-        confirmationDemandId = loaded.record.demandId;
-      }
-    }
-    let reference;
+  for (const document of loaded.documents) {
     try {
-      reference = createLedgerAuthorityMemberReference(
-        loaded,
-        selection.memberPath,
-      );
+      references.push(createLedgerAuthorityMemberReference(loaded, document.path));
     } catch (error: unknown) {
-      if (error instanceof LedgerAuthorityStoreError) {
-        fail("authority", error);
-      }
+      if (error instanceof LedgerAuthorityStoreError) fail("authority", error);
       throw error;
     }
-    if (
-      computeCanonicalJsonSha256Digest(reference)
-        !== computeCanonicalJsonSha256Digest(expected)
-    ) {
-      fail("authority");
-    }
-    references.push(reference);
-    referenceBySelection.set(selectionKey(selection), reference);
   }
-
   const first = references[0];
   if (first === undefined) fail("authority");
-  const closedReferences: SelectedAuthority["references"] = Object.freeze([
+  const closedReferences: PackageSource["references"] = Object.freeze([
     first,
     ...references.slice(1),
   ]);
-  return Object.freeze({
-    references: closedReferences,
-    referenceBySelection,
-    confirmationDemandId,
-  });
+  return Object.freeze({ claim, loaded, lineage, references: closedReferences });
 }
 
 function executionPlacement(
   request: Readonly<DemandEventSourcingPublicationPreviewRequest>,
-  selected: Readonly<SelectedAuthority>,
 ): DemandExecutionPlacement {
-  const placement = request.demand.executionPlacement;
-  if (placement.mode === "main") return Object.freeze({ mode: "main" });
-  const authorizationRef = selected.referenceBySelection.get(
-    selectionKey(placement.authorizationMember),
-  );
-  if (
-    authorizationRef === undefined ||
-    authorizationRef.family !== "confirmation"
-  ) {
-    fail("authority");
+  if (request.demand.executionPlacement.mode !== "main") {
+    // Confirmation 授权已随 ADR-0011 退役；隔离执行位置由 Pod 切片按 ADR-0010 接管。
+    fail("isolated-placement-retired");
   }
-  return Object.freeze({
-    mode: "isolated" as const,
-    authorizationRef,
-  });
-}
-
-function testingDecision(
-  todo: Readonly<PendingTodoSource>,
-  selected: Readonly<SelectedAuthority>,
-) {
-  const source = todo.item.intake.testingDecision;
-  const environmentRef = selected.references.find(
-    (reference) => reference.role === "test-environment",
-  );
-  return Object.freeze({
-    mode: source.mode,
-    summary: source.summary,
-    environmentMemberRef:
-      source.mode === "real-environment"
-        ? (environmentRef?.memberRef ?? null)
-        : null,
-  });
+  return Object.freeze({ mode: "main" });
 }
 
 function createIdentityAndAuthority(
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   request: Readonly<DemandEventSourcingPublicationPreviewRequest>,
-  todo: Readonly<PendingTodoSource>,
-  selected: Readonly<SelectedAuthority>,
+  source: Readonly<PackageSource>,
   demandId: WakeflowDurableId<"demand">,
   createdAt: UtcInstant,
 ): Readonly<{
   readonly identity: Readonly<DemandIdentity>;
   readonly authority: Readonly<DemandAuthority>;
 }> {
+  const record = source.loaded.record;
   let identity;
   let authority;
   try {
@@ -467,15 +492,19 @@ function createIdentityAndAuthority(
         title: request.demand.title,
         goal: request.demand.goal,
         completionDefinition: request.demand.completionDefinition,
-        demandType: todo.item.intake.demandType,
-        source: todo.lineage,
-        executionPlacement: executionPlacement(request, selected),
+        demandType: record.demandType,
+        source: source.lineage,
+        executionPlacement: executionPlacement(request),
       },
       { clock: () => createdAt },
     );
     authority = createDemandAuthority(identity, {
-      authorityRefs: selected.references,
-      testingDecision: testingDecision(todo, selected),
+      authorityRefs: source.references,
+      testingDecision: {
+        mode: record.testingDecision.mode,
+        summary: record.testingDecision.summary,
+        environmentMemberRef: null,
+      },
     });
   } catch (error: unknown) {
     if (
@@ -506,25 +535,6 @@ function allocateId<
   if (seen.has(uuid)) fail("identity");
   seen.add(uuid);
   return createWakeflowDurableId(kind, uuid);
-}
-
-async function resourceExists(
-  root: RootedDirectory,
-  ref: ReturnType<typeof demandFinalRootRef>,
-): Promise<boolean> {
-  try {
-    await root.inspectExistingResource(ref);
-    return true;
-  } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError &&
-      error.reason === "resource-not-found"
-    ) {
-      return false;
-    }
-    if (error instanceof RootedDirectoryError) fail("root", error);
-    throw error;
-  }
 }
 
 async function assertDemandIdentityAvailable(
@@ -585,7 +595,7 @@ export class DemandEventSourcingPublicationPlanningService {
     this.#workspaceRoot = workspaceRoot;
   }
 
-  /** 从当前Config、TODO与Ledger零写生成完整revision 1发布计划。 */
+  /** 从当前Config、看板与Ledger需求包零写生成完整revision 1发布计划。 */
   async preview(
     requestValue: unknown,
     optionsValue: DemandEventSourcingPublicationPreviewOptions = {},
@@ -604,20 +614,21 @@ export class DemandEventSourcingPublicationPlanningService {
     }
 
     const config = await readConfig(this.#workspaceRoot, options.signal);
-    const todo = await readPendingTodo(
+    const claim = await readPendingClaim(
       this.#workspaceRoot,
       request,
       options.signal,
     );
+    await assertNoActiveDemand(this.#workspaceRoot, options.signal);
     const ledgerRoot = await openLedgerRoot(config);
     let result:
       Readonly<DemandEventSourcingPublicationPreviewResult> | undefined;
     let failure: unknown;
     try {
-      const selected = await selectAuthority(
+      const source = await loadPackageSource(
         new LedgerAuthorityStore(ledgerRoot),
         config,
-        todo,
+        claim,
         options.signal,
       );
 
@@ -625,20 +636,14 @@ export class DemandEventSourcingPublicationPlanningService {
       createIdentityAndAuthority(
         config,
         request,
-        todo,
-        selected,
-        selected.confirmationDemandId ?? DRAFT_VALIDATION_DEMAND_ID,
+        source,
+        DRAFT_VALIDATION_DEMAND_ID,
         DRAFT_VALIDATION_INSTANT,
       );
 
       assertNotAborted(options.signal);
       const seenUuids = new Set<string>();
-      const demandId =
-        selected.confirmationDemandId ??
-        allocateId("demand", options.uuidFactory, seenUuids);
-      if (selected.confirmationDemandId !== null) {
-        seenUuids.add(parseWakeflowDurableId(demandId).uuid);
-      }
+      const demandId = allocateId("demand", options.uuidFactory, seenUuids);
       await assertDemandIdentityAvailable(this.#workspaceRoot, demandId);
       const eventId = allocateId(
         "demand-event",
@@ -654,8 +659,7 @@ export class DemandEventSourcingPublicationPlanningService {
       const { identity, authority } = createIdentityAndAuthority(
         config,
         request,
-        todo,
-        selected,
+        source,
         demandId,
         time,
       );
@@ -667,8 +671,7 @@ export class DemandEventSourcingPublicationPlanningService {
           eventId,
           commitId,
           recordedAt: time,
-          expectedTodoStateDigest: todo.item.stateDigest,
-          expectedTodoCollectionDigest: todo.collectionDigest,
+          expectedClaimStateDigest: source.claim.digest,
         });
       } catch (error: unknown) {
         if (error instanceof DemandEventSourcingPublicationTransactionError) {

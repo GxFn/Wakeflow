@@ -3,163 +3,347 @@
   "$id": "urn:wakeflow:entrypoints:requirement-publication-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA",
   "title": "WakeflowRequirementPublicationResultV1",
-  "description": "Successful preview, apply, or exact recovery result for one immutable Requirement authority publication.",
-  "$comment": "Preview returns the complete owner-produced plan for confirmation. Apply and recover return only stable Requirement and member-reference metadata. They expose no Workspace/Design/Ledger physical path, source node, source bytes, loaded record internals, lock, stage, file handle or private recovery capability.",
+  "description": "wakeflow_publish_requirement 的结果：preview 给出摘要、缺章与阻塞；apply 与 recover 给出需求包回执与看板状态。",
   "type": "object",
   "oneOf": [
-    { "$ref": "#/$defs/previewResult" },
-    { "$ref": "#/$defs/applyResult" },
-    { "$ref": "#/$defs/recoveryResult" }
+    {
+      "$ref": "#/$defs/previewResult"
+    },
+    {
+      "$ref": "#/$defs/mutationResult"
+    }
   ],
   "$defs": {
     "previewResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "schemaVersion", "tool", "mode", "status", "plan", "planDigest"],
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "action",
+        "status",
+        "blockers",
+        "planDigest",
+        "requirementId",
+        "summary",
+        "next"
+      ],
       "properties": {
-        "kind": { "const": "WakeflowRequirementPublicationPreviewResult" },
-        "schemaVersion": { "const": 1 },
-        "tool": { "const": "wakeflow_publish_requirement" },
-        "mode": { "const": "preview" },
-        "status": { "const": "ready" },
-        "plan": { "$ref": "#/$defs/publicationPlan" },
-        "planDigest": { "$ref": "#/$defs/sha256Digest" }
-      }
-    },
-    "applyResult": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "schemaVersion", "tool", "mode", "status", "planDigest", "publication"],
-      "properties": {
-        "kind": { "const": "WakeflowRequirementPublicationApplyResult" },
-        "schemaVersion": { "const": 1 },
-        "tool": { "const": "wakeflow_publish_requirement" },
-        "mode": { "const": "apply" },
-        "status": { "const": "current" },
-        "planDigest": { "$ref": "#/$defs/sha256Digest" },
-        "publication": { "$ref": "#/$defs/publicationReceipt" }
-      }
-    },
-    "recoveryResult": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "schemaVersion", "tool", "mode", "status", "planDigest", "publication"],
-      "properties": {
-        "kind": { "const": "WakeflowRequirementPublicationRecoveryResult" },
-        "schemaVersion": { "const": 1 },
-        "tool": { "const": "wakeflow_publish_requirement" },
-        "mode": { "const": "recover" },
-        "status": { "const": "current" },
-        "planDigest": { "$ref": "#/$defs/sha256Digest" },
-        "publication": { "$ref": "#/$defs/recoveryPublicationReceipt" }
-      }
-    },
-    "recoveryPublicationReceipt": {
-      "allOf": [
-        { "$ref": "#/$defs/publicationReceipt" },
-        {
-          "type": "object",
-          "properties": {
-            "disposition": { "enum": ["recovered", "current"] }
+        "kind": {
+          "const": "WakeflowRequirementPublicationPreview"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "tool": {
+          "const": "wakeflow_publish_requirement"
+        },
+        "mode": {
+          "const": "preview"
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        },
+        "status": {
+          "enum": ["ready", "blocked"]
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
+        },
+        "planDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          ]
+        },
+        "requirementId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/requirementId"
+            }
+          ]
+        },
+        "summary": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/previewSummary"
+            }
+          ]
+        },
+        "next": {
+          "$ref": "#/$defs/nextProjection"
         }
-      ]
+      }
     },
-    "publicationReceipt": {
+    "mutationResult": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "publicationAuthority",
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "action",
         "disposition",
+        "package",
+        "superseded",
+        "next"
+      ],
+      "properties": {
+        "kind": {
+          "const": "WakeflowRequirementPublicationMutation"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "tool": {
+          "const": "wakeflow_publish_requirement"
+        },
+        "mode": {
+          "enum": ["apply", "recover"]
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        },
+        "disposition": {
+          "enum": ["published", "current", "activated", "withdrawn", "recovered"]
+        },
+        "package": {
+          "$ref": "#/$defs/packageReceipt"
+        },
+        "superseded": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/packageReceipt"
+            }
+          ]
+        },
+        "next": {
+          "$ref": "#/$defs/nextProjection"
+        }
+      }
+    },
+    "previewSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "demandType",
+        "priority",
+        "testingDecision",
+        "sections",
+        "missingSections"
+      ],
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/singleLineText"
+        },
+        "demandType": {
+          "$ref": "#/$defs/demandType"
+        },
+        "priority": {
+          "$ref": "#/$defs/priority"
+        },
+        "testingDecision": {
+          "$ref": "#/$defs/testingDecision"
+        },
+        "sections": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "anchor", "heading", "text"],
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/portableResourcePath"
+              },
+              "anchor": {
+                "$ref": "#/$defs/anchor"
+              },
+              "heading": {
+                "$ref": "#/$defs/singleLineText"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            }
+          }
+        },
+        "missingSections": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "anchor"],
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/portableResourcePath"
+              },
+              "anchor": {
+                "$ref": "#/$defs/anchor"
+              }
+            }
+          }
+        }
+      }
+    },
+    "packageReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
         "requirementId",
         "recordRef",
         "recordDigest",
-        "memberReferences"
+        "status",
+        "revision",
+        "stateDigest"
       ],
       "properties": {
-        "publicationAuthority": { "const": "current" },
-        "disposition": {
-          "enum": ["published", "recovered", "current"]
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
         },
-        "requirementId": { "$ref": "#/$defs/requirementId" },
-        "recordRef": { "$ref": "#/$defs/portableResourcePath" },
-        "recordDigest": { "$ref": "#/$defs/sha256Digest" },
-        "memberReferences": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 32,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/requirementMemberReference" }
+        "recordRef": {
+          "$ref": "#/$defs/portableResourcePath"
+        },
+        "recordDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "stateDigest": {
+          "$ref": "#/$defs/sha256Digest"
         }
       }
     },
-    "requirementMemberReference": {
-      "description": "Self-contained public mirror of one Requirement-family Ledger authority member reference.",
+    "nextProjection": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "artifactKind",
-        "schemaVersion",
-        "family",
-        "recordId",
-        "recordRef",
-        "recordDigest",
-        "memberPath",
-        "memberRef",
-        "memberDigest",
-        "role",
-        "mediaType"
-      ],
+      "required": ["frontier", "owner", "suggestedTool", "blockers"],
       "properties": {
-        "artifactKind": {
-          "const": "wakeflow-ledger-authority-member-reference"
+        "frontier": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
         },
-        "schemaVersion": { "const": 1 },
-        "family": { "const": "requirement" },
-        "recordId": { "$ref": "#/$defs/requirementId" },
-        "recordRef": { "$ref": "#/$defs/portableResourcePath" },
-        "recordDigest": { "$ref": "#/$defs/sha256Digest" },
-        "memberPath": { "$ref": "#/$defs/portableResourcePath" },
-        "memberRef": { "$ref": "#/$defs/portableResourcePath" },
-        "memberDigest": { "$ref": "#/$defs/sha256Digest" },
-        "role": { "$ref": "#/$defs/requirementDocumentRole" },
-        "mediaType": { "const": "text/markdown" }
+        "owner": {
+          "enum": ["controller", "target", "test", "user", "none"]
+        },
+        "suggestedTool": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
       }
     },
-    "publicationPlan": {
-      "type": "object",
-      "description": "Complete owner-produced Ledger authority publication plan. Its exact domain shape is revalidated before Apply or Recover.",
-      "minProperties": 1
+    "action": {
+      "enum": ["publish", "activate", "withdraw"]
+    },
+    "status": {
+      "enum": ["pending", "parked", "claimed", "withdrawn", "archived"]
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "portableResourcePath": {
       "type": "string",
       "minLength": 1,
+      "maxLength": 1024,
       "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
-    },
-    "requirementDocumentRole": {
-      "enum": [
-        "original-plan",
-        "requirement-design",
-        "code-facts",
-        "landing-plan",
-        "non-goals",
-        "user-confirmation",
-        "reproduction",
-        "scope",
-        "requirement-delta",
-        "research-question",
-        "boundaries",
-        "test-environment",
-        "supporting-evidence"
-      ]
     },
     "requirementId": {
       "type": "string",
       "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "sha256Digest": {
+    "anchor": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]{0,127}$"
+    },
+    "singleLineText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F]*\\S$"
+    },
+    "demandType": {
+      "enum": ["requirement", "bug", "supplement", "research"]
+    },
+    "priority": {
+      "enum": ["P0", "P1", "P2", "P3"]
+    },
+    "testingDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "summary"],
+      "properties": {
+        "mode": {
+          "enum": ["controller-only", "real-environment", "not-applicable"]
+        },
+        "summary": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!\\s)[\\s\\S]*\\S$"
     }
   }
 }

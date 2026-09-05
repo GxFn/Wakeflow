@@ -9,6 +9,17 @@ import {
   createWakeflowActiveWorkspaceFreshProjectionAuthority,
 } from "../../../src/workspace/active/wakeflow-active-workspace-fresh-projection-authority.js";
 import {
+  REQUIREMENT_BOARD_EMPTY_INDEX,
+  REQUIREMENT_BOARD_EMPTY_INDEX_DIGEST,
+  REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
+  WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,
+} from "../../../src/workspace/active/wakeflow-requirement-board-initialization.js";
+import {
+  REQUIREMENT_BOARD_INDEX_REF,
+  REQUIREMENT_BOARD_ROOT_REF,
+} from "../../../src/kernel/layout.js";
+import { renderRequirementBoardIndex } from "../../../src/kernel/requirement-board.js";
+import {
   createMinimalWakeflowConfigV3,
 } from "../../configuration/wakeflow-config-v3.fixture.js";
 
@@ -27,10 +38,12 @@ test("Fresh Active workspace projection uses current TS paths and no legacy Ledg
     ".wakeflow-active/current/workspace-current-status.md",
   ]);
   const [index, status] = authority.files;
-  equal(index?.content.includes(
-    "current/todo/global-todo-board.md",
-  ), true);
-  equal(index?.content.includes("current/global-todo-board.md"), false);
+  equal(index?.content.includes("(current/board/index.md)"), true);
+  equal(index?.content.includes("global-todo-board.md"), false);
+  equal(
+    authority.boardInitializationAuthorityDigest,
+    REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
+  );
   equal(index?.content.includes("workspace-record-map.md"), false);
   equal(status?.content.includes("`\"idle\"`"), true);
   equal(status?.content.includes("../index.md"), true);
@@ -110,4 +123,40 @@ test("Active resource catalog separates layout ownership from projection ownersh
       },
     ],
   );
+});
+
+test("Requirement board initialization authority binds the kernel layout and the empty index", () => {
+  deepEqual(
+    WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG.map((entry) => ({
+      declarationId: entry.declarationId,
+      ownerId: entry.ownerId,
+      path: entry.placement.relativePath,
+      mode: entry.nodePolicy.kind === "tree" ? entry.nodePolicy.rootMode : entry.nodePolicy.mode,
+      role: entry.processing.kind === "resource"
+        ? entry.processing.role
+        : "directory-container",
+    })),
+    [
+      {
+        declarationId: "active.board.root",
+        ownerId: "requirement-board",
+        path: REQUIREMENT_BOARD_ROOT_REF,
+        mode: "0700",
+        role: "directory-container",
+      },
+      {
+        declarationId: "active.board.index",
+        ownerId: "requirement-board",
+        path: REQUIREMENT_BOARD_INDEX_REF,
+        mode: "0600",
+        role: "derived-projection",
+      },
+    ],
+  );
+  equal(REQUIREMENT_BOARD_ROOT_REF, ".wakeflow-active/current/board");
+  equal(REQUIREMENT_BOARD_INDEX_REF, ".wakeflow-active/current/board/index.md");
+  equal(REQUIREMENT_BOARD_EMPTY_INDEX, renderRequirementBoardIndex([]));
+  equal(REQUIREMENT_BOARD_EMPTY_INDEX.startsWith("# Requirement Board\n"), true);
+  match(REQUIREMENT_BOARD_EMPTY_INDEX_DIGEST, /^sha256:[0-9a-f]{64}$/u);
+  match(REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST, /^sha256:[0-9a-f]{64}$/u);
 });

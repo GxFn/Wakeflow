@@ -3,8 +3,8 @@
   "$id": "urn:wakeflow:entrypoints:demand-publication-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA",
   "title": "WakeflowDemandPublicationRequestV1",
-  "description": "Closed MCP preview/apply/recover request for one TODO-backed Demand Event Sourcing publication.",
-  "$comment": "Preview accepts only Controller-authored Demand text, execution placement, and TODO identity. The complete Ledger member set comes only from the immutable TODO Intake; Config, Demand type, testing decision, references, digests, time, IDs, paths, Event/Commit data, and TODO CAS are owner-derived. Apply replays the exact preview plan and digest; recover accepts only the Demand identity.",
+  "description": "Closed MCP preview/apply/recover request for one requirement-package-backed Demand Event Sourcing publication.",
+  "$comment": "Preview accepts only Controller-authored Demand text, execution placement, and the requirement package identity. The complete Ledger member set comes only from the immutable requirement package record; Config, Demand type, testing decision, references, digests, time, IDs, paths, Event/Commit data, and the board claim CAS are owner-derived. Apply replays the exact preview plan and digest; recover accepts only the Demand identity.",
   "type": "object",
   "oneOf": [
     {
@@ -21,7 +21,7 @@
     "previewRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["root", "mode", "todoId", "demand"],
+      "required": ["root", "mode", "requirementId", "demand"],
       "properties": {
         "root": {
           "$ref": "#/$defs/workspaceRoot"
@@ -29,8 +29,8 @@
         "mode": {
           "const": "preview"
         },
-        "todoId": {
-          "$ref": "#/$defs/todoId"
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
         },
         "demand": {
           "$ref": "#/$defs/authoredDemand"
@@ -156,13 +156,9 @@
       "minLength": 1,
       "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
     },
-    "todoId": {
-      "type": "string",
-      "pattern": "^todo_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
     "authorityRecordId": {
       "type": "string",
-      "pattern": "^(?:requirement|confirmation)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "demandId": {
       "type": "string",
@@ -171,6 +167,10 @@
     "sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     }
   }
 }

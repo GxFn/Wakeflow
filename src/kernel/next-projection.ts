@@ -27,6 +27,14 @@ interface FrontierRoute {
 
 /** 前沿种类 → 责任方与建议工具；未列出的种类归 Controller 且不建议工具。 */
 export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Object.freeze({
+  "requirement-confirmation": {
+    owner: "user",
+    tool: "wakeflow_publish_requirement",
+  },
+  "requirement-claim": {
+    owner: "controller",
+    tool: "wakeflow_create_demand",
+  },
   "implementation-task-planning": {
     owner: "controller",
     tool: "wakeflow_plan_target_task",

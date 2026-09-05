@@ -178,8 +178,6 @@ export function parseTestCardPlanningPlan(
     authority.testingDecision.mode !== "real-environment" ||
     computeDemandAuthorityDigest(authority) !==
       testCard.demandAuthorityDigest ||
-    authority.testingDecision.environmentMemberRef !==
-      testCard.environmentAuthority.memberRef ||
     !authority.authorityRefs.some(
       (reference) =>
         canonicalizeJson(reference, "$authorityReference") ===

@@ -15,8 +15,8 @@ import {
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../governance/demand/demand-resource-catalog.js";
 import { WINDOW_WORK_CLAIM_STATIC_RESOURCE_CATALOG } from "../governance/delivery/window-work-claim-resource-catalog.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../governance/ledger/ledger-resource-catalog.js";
-import { WAKEFLOW_TODO_STATIC_RESOURCE_CATALOG } from "../governance/todo/todo-resource-catalog.js";
 import { WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG } from "./active/wakeflow-active-resource-catalog.js";
+import { WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG } from "./active/wakeflow-requirement-board-initialization.js";
 import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "./managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "./workspace-host-resource-catalog.js";
@@ -97,7 +97,7 @@ export class WakeflowWorkspaceStaticResourceMatrixError extends Error {
 const SHARED_STATIC_RESOURCE_CATALOG = Object.freeze([
   ...WAKEFLOW_CONFIG_RESOURCE_CATALOG,
   ...WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG,
-  ...WAKEFLOW_TODO_STATIC_RESOURCE_CATALOG,
+  ...WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,
   ...WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
   ...WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
   ...WINDOW_WORK_CLAIM_STATIC_RESOURCE_CATALOG,

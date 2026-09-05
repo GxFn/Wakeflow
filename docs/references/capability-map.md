@@ -32,7 +32,7 @@
 | 20 | `wakeflow_archive` | 8 | 并入 `wakeflow_complete_demand` 与取消 | 缺席 | L1；消费冻结的 artifact 传输 foundation；前置含无未释放工作声明；verify 报告入归档包（ADR-0012 D3） |
 | 21 | `wakeflow_intake_test_card` | 5 | test 任务包的 `testContract`（`plan_target_task`） | 重切 | 独立测试卡与 TS 现有 `plan_test_card` 在 L1 删除（ADR-0012 D4） |
 | 22 | `wakeflow_deliver` | 6 | 无；宿主执行由 Agent 按 skills 完成 | 放弃 | TSD-12：内容由 prepare 工具提供，执行证据由 outcome 工具准入 |
-| 23 | `wakeflow_next_work` | 3 | 待认领需求包查询（ADR-0011，名称 L1 定） | 重切 | TS 现有 `inspect_todo` 在 L1 按需求包重塑 |
+| 23 | `wakeflow_next_work` | 3 | 待认领需求包查询 `wakeflow_inspect_board`（ADR-0011，2026-09-04 L1 requirement 落地） | 重切 | `inspect_todo` 已删除，看板查询列出需求包认领状态 |
 | 24 | `wakeflow_claim_next` | 3 | 认领并入 `wakeflow_create_demand(requirementId)` | 重切 | 认领即创建；一个总控一次一个（ADR-0011） |
 | 25 | `wakeflow_cancel_demand` | 4 | cancel 接到 service 与工具 | 缺席 | L1；TODO 行置 `withdrawn`（能力卡 4 Q4） |
 | 26 | `wakeflow_pod_open` | 2、4 | `wakeflow_pod` | 缺席 | L1；ADR-0010 D6 四状态，只有 main 的 Controller 调用 |
@@ -51,7 +51,7 @@
 | `wakeflow_maintain_workspace` | 效果 | maintain_workspace | workspace |
 | `wakeflow_register_window_binding` | 追加（含 inspect 与 replace） | register_window、replace_windows、release_window_lock | endpoint |
 | `wakeflow_publish_requirement` | 效果 | deliver（TODO 追加）、intake_todo（TS） | requirement |
-| 板查询 | 读 | next_work、inspect_todo（TS） | requirement |
+| `wakeflow_inspect_board` | 读 | next_work、inspect_todo（TS） | requirement |
 | `wakeflow_create_demand` | 效果 | create_demand、claim_next | demand |
 | `wakeflow_complete_demand` | 效果（完成即归档） | complete_demand、archive、verify 前置 | demand |
 | `wakeflow_cancel_demand` | 效果 | cancel_demand | demand |

@@ -19,7 +19,7 @@
 
 **不变量**：信封摘要覆盖除自身外的全部字段；prompt 逐字节贯穿 packet、信封、许可；一个投递只允许一次宿主效果，靠 `oneShot`、唯一的 claim 转换和"只有这个状态修订能跨越宿主效果边界"保证；多目标计划禁止任何成员已有 `currentDelivery`。
 
-**现 TS 状态**：`prepare_implementation_delivery` 与 `prepare_test_delivery` 公开，`claim_target_host_effect` 签发 `TargetDeliveryAgentHostAction{effect: send-message-to-observed-target-window, prompt, windowId, bindingId, claimDigest, expectedStateDigest, hostObservation}`；窗口工作声明在共享协调根；传输记录随 Demand 事件流。
+**现 TS 状态**（2026-09-10，gate-log §13.84）：`wakeflow_prepare_delivery` 一次调用取得窗口工作声明（内核 `kernel/work-claims.ts`）、追加 `delivery.delivery-prepared.v1` 信封并返回一次性许可 `permit{prompt, hostAction{effect: send-prompt-to-window, hostId, windowId, displayTitle, bindingId, handleDigest}, fence{claimId, claimDigest, streamRevision}, issuedAt}`；实现与 test 目标共用；请求只带 `authored{goal, focus, boundary}`，prompt 骨架由 Wakeflow 渲染且只含相对路径；旧的 preview、apply、claim 三段与 Agent 窗口观察前置删除。
 
 **实现判断**：按 ADR-0009，许可里增加围栏令牌，即声明摘要与事件流修订号，并进入信封与结果；`readbackPolicy.maxObservations = 1` 作为记录级常量保留；prompt 上限 65,536 字符进入记录合同；controller 系列操作按 6.4 处理。
 
@@ -38,7 +38,7 @@
 
 **宿主差异**：Claude 有 pane 级观察与互斥锁；Codex 没有观察能力，只能自述。
 
-**现 TS 状态**：执行完全交给 Agent，无 Claude transport 代码，符合 TSD-12。
+**现 TS 状态**（2026-09-10）：执行完全交给 Agent；落地证据是目标会话的 `user-prompt-submit` hook 记录（`promptDigest` 等于信封 prompt 摘要），Codex 另接受宿主发送调用的返回摘要；Q1、Q2 按此落地，回读只是补充观察。
 
 **实现判断**：按 ADR-0009，Claude 的粘贴、回车、`capture-pane` 与 Codex 的线程发送都成为 skills 步骤；旧的首行子串匹配放弃；回读改为 Agent 的结构化观察声明加宿主 hook 记录引用，Wakeflow 只做摘要与一致性；prompt 临时文件路径与 inspect、sweep 命令放弃；tmux 控制模式写进 Claude skills 作为可选的更强观察手段。
 
@@ -59,7 +59,7 @@
 - 投递的状态 journal 只能由投递编排自己的失败闭合恢复，通用 `recover_state_transition` 明确拒绝接管。
 - 目标窗口在投递中被替换：绑定不再 current 时预检失败，`send-claimed` 的投递既不能重发也不能 rearm，只能手工记 outcome 或释放租约。
 
-**现 TS 状态**：`record_target_host_effect_outcome` 与 `rearm_target_host_effect` 公开，claim、outcome、rearm 三元组带事件；租约释放结算在 delivery 内。
+**现 TS 状态**（2026-09-10）：`wakeflow_record_delivery_outcome` 按证据派生 accepted、rejected-before-send、indeterminate（`delivery.delivery-outcome-recorded.v1`），rejected 立即释放声明、indeterminate 保留；ambiguous 出口是同工具再次调用（惰性重查 hook 记录）、静默 10 分钟后以 `landing-evidence-missing` 加 `landing-silence-exceeded` 交 Controller、显式 `resolution` 只在 indeterminate 允许（Q3）；`wakeflow_rearm_delivery` 同信封换新声明与代际，上限 3（Q4，`DELIVERY_REARM_LIMIT`）。
 
 **实现判断**：rejected-before-send 立即释放、ambiguous 保留的语义保留；投递 journal 的恢复继续由投递自己拥有，与 ADR-0006 放弃通用 recover 一致；outcome 的准入增加围栏令牌校验，过期令牌的结果拒绝。
 
@@ -77,7 +77,7 @@
 - 反向通道 `controller-preview | apply | pre-send` 与 `controller-outcome`；内容由代码生成：group id、目标任务 id、`resultSetDigest`、`reviewSnapshotDigest` 与"本回调只是传输证据"的声明；发到 Controller 窗口的绑定；不占目标租约；每个结果集只允许一次逻辑回传，`return-rearm-required` 状态存在但没有任何回传 rearm 实现。`wakeflow-result-review-orchestration.mjs:1862-1941`、`:2305-2345`。
 - 是否必须由 group 的 `returnPolicy.mode` 决定，`group-ready` 或 `per-target`；不是结果导入或评审的前置条件。
 
-**现 TS 状态**：没有回传操作。
+**现 TS 状态**（2026-09-10）：仍没有回传操作；`wake-controller` 的生产者是 `import_target_result`，按 gate-log §13.83 D4 随 result-review 切片落地。
 
 **实现判断**：在 ADR-0009 的握手里，回传是一种效果种类"唤醒 Controller"，内容由 Wakeflow 生成，Agent 执行，宿主 hook 提供证据。
 

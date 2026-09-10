@@ -1,9 +1,7 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  inspectWindowWorkClaim,
-  WindowWorkClaimStoreError,
-} from "../delivery/window-work-claim-store.js";
+import { isWakeflowError } from "../../kernel/error.js";
+import { inspectWorkClaim } from "../../kernel/work-claims.js";
 import type { DemandOperationAuthorityContext } from "../demand/demand-operation-authority-context.js";
 import {
   DemandEventSourcingRepository,
@@ -149,7 +147,7 @@ async function assertNoProductClaims(
 ): Promise<void> {
   for (const windowId of [...new Set(windowIds)].sort()) {
     try {
-      const inspected = await inspectWindowWorkClaim(
+      const inspected = await inspectWorkClaim(
         workspaceRoot,
         windowId,
         signal === undefined ? {} : { signal },
@@ -157,7 +155,7 @@ async function assertNoProductClaims(
       if (inspected.status !== "absent") fail("claim");
     } catch (error: unknown) {
       if (error instanceof TestCardPlanningAuthorityError) throw error;
-      if (error instanceof WindowWorkClaimStoreError) {
+      if (isWakeflowError(error)) {
         if (error.reason === "aborted") fail("aborted", error);
         fail("claim", error);
       }

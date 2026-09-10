@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { createTargetDeliveryIntent } from "../../../src/governance/delivery/target-delivery-intent.js";
 import { createTargetDeliveryReworkContext } from "../../../src/governance/delivery/target-delivery-rework-context.js";
 
 import {
@@ -12,15 +11,14 @@ import {
 } from "../../../src/governance/tasking/task-package.js";
 import {
   cancelDemandAggregateState,
-  claimTargetHostEffectInDemandAggregateState,
   computeDemandAggregateStateDigest,
   createInitialDemandAggregateState,
   decideTargetResultReviewInDemandAggregateState,
-  observeTargetHostEffectInDemandAggregateState,
-  prepareTargetDeliveryInDemandAggregateState,
+  prepareDeliveryInDemandAggregateState,
   planTargetTaskInDemandAggregateState,
   parseDemandAggregateState,
-  rearmTargetHostEffectInDemandAggregateState,
+  rearmDeliveryInDemandAggregateState,
+  recordDeliveryOutcomeInDemandAggregateState,
   recordTargetResultInDemandAggregateState,
   DemandAggregateStateError,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
@@ -36,14 +34,15 @@ import {
   taskPackageDraft,
 } from "../tasking/task-package.fixture.js";
 import {
-  createTargetDeliveryIntentFixture,
-  TARGET_DELIVERY_BINDING_ID,
-  TARGET_DELIVERY_ID,
-} from "../delivery/target-delivery-intent.fixture.js";
-import { createWindowWorkClaimFixture } from "../delivery/window-work-claim.fixture.js";
-import { windowWorkClaimRef } from "../../../src/governance/delivery/window-work-claim-resource-catalog.js";
-import { createTargetDeliveryHostEffectObservationFixture } from "../delivery/target-delivery-host-effect-observation.fixture.js";
-import { createTargetHostEffectRearmFixture } from "../delivery/target-host-effect-rearm.fixture.js";
+  createDeliveryEnvelopeFixture,
+  createDeliveryOutcomeFixture,
+  createDeliveryRearmFixture,
+  createWorkClaimFixture,
+  DELIVERY_BINDING_ID,
+  DELIVERY_ID,
+  OTHER_DELIVERY_CLAIM_ID,
+  THIRD_DELIVERY_CLAIM_ID,
+} from "../delivery/delivery-records.fixture.js";
 import { createTargetResultFixture } from "../result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionForState } from "../review/controller-implementation-review-decision.fixture.js";
 
@@ -85,53 +84,28 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   equal(Object.isFrozen(planned.targetTasks[0]), true);
   equal(Object.hasOwn(planned.targetTasks[0]!, "workType"), false);
 
-  const intent = createTargetDeliveryIntentFixture();
-  const prepared = prepareTargetDeliveryInDemandAggregateState(planned, intent);
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim });
+  const prepared = prepareDeliveryInDemandAggregateState(planned, envelope);
   deepEqual(prepared.targetTasks[0], {
     ...planned.targetTasks[0],
     phase: "delivery-prepared",
     currentDelivery: {
-      targetDeliveryId: TARGET_DELIVERY_ID,
-      intentDigest: intent.intentDigest,
+      deliveryId: DELIVERY_ID,
+      envelopeDigest: envelope.envelopeDigest,
+      promptDigest: envelope.promptDigest,
+      generation: 1,
       hostId: "codex",
-      bindingId: TARGET_DELIVERY_BINDING_ID,
-    },
-  });
-  throws(
-    () => prepareTargetDeliveryInDemandAggregateState(prepared, intent),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
-  );
-
-  const claim = createWindowWorkClaimFixture(
-    undefined,
-    computeDemandAggregateStateDigest(prepared),
-  );
-  const claimed = claimTargetHostEffectInDemandAggregateState(prepared, claim);
-  deepEqual(claimed.targetTasks[0], {
-    ...prepared.targetTasks[0],
-    phase: "host-effect-claimed",
-    currentDelivery: {
-      ...(prepared.targetTasks[0]?.phase === "delivery-prepared"
-        ? prepared.targetTasks[0].currentDelivery
-        : {}),
-      workClaim: {
+      bindingId: DELIVERY_BINDING_ID,
+      fence: {
         claimId: claim.claimId,
-        claimRef: windowWorkClaimRef(TASKING_WINDOW_ID),
         claimDigest: claim.claimDigest,
-        claimedAt: claim.claimedAt,
-        hostObservationAuthorityDigest: claim.hostObservation.authorityDigest,
-        claimEventId: claim.claimTransition.eventId,
-        claimCommitId: claim.claimTransition.commitId,
-        claimEventStreamRevision:
-          claim.claimTransition.expectedStreamRevision + 1,
-        claimExpectedStateDigest: claim.claimTransition.expectedStateDigest,
+        streamRevision: envelope.fence.expectedStreamRevision + 1,
       },
     },
   });
   throws(
-    () => claimTargetHostEffectInDemandAggregateState(claimed, claim),
+    () => prepareDeliveryInDemandAggregateState(prepared, envelope),
     (error: unknown) =>
       error instanceof DemandAggregateStateError &&
       error.reason === "transition",
@@ -139,41 +113,36 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
 
   const observedCases = [
     {
-      attemptStatus: "accepted" as const,
+      disposition: "accepted" as const,
       readbackStatus: "pending" as const,
       phase: "host-effect-accepted" as const,
-      disposition: "accepted" as const,
       claimHandling: "retain" as const,
     },
     {
-      attemptStatus: "indeterminate" as const,
+      disposition: "indeterminate" as const,
       readbackStatus: "unavailable" as const,
       phase: "host-effect-indeterminate" as const,
-      disposition: "indeterminate" as const,
       claimHandling: "retain" as const,
     },
     {
-      attemptStatus: "rejected-before-effect" as const,
+      disposition: "rejected-before-send" as const,
       readbackStatus: "unavailable" as const,
       phase: "host-effect-rejected" as const,
-      disposition: "rejected-before-effect" as const,
       claimHandling: "release-authorized" as const,
     },
   ];
-  let accepted = claimed;
-  let acceptedObservation;
-  let rejected = claimed;
-  let rejectedObservation;
+  let accepted = prepared;
+  let acceptedOutcome: ReturnType<typeof createDeliveryOutcomeFixture> | undefined;
+  let rejected = prepared;
+  let rejectedOutcome: ReturnType<typeof createDeliveryOutcomeFixture> | undefined;
   for (const candidate of observedCases) {
-    const observation = createTargetDeliveryHostEffectObservationFixture({
+    const outcome = createDeliveryOutcomeFixture({
       claim,
-      attemptStatus: candidate.attemptStatus,
+      envelope,
+      disposition: candidate.disposition,
       readbackStatus: candidate.readbackStatus,
     });
-    const observed = observeTargetHostEffectInDemandAggregateState(
-      claimed,
-      observation,
-    );
+    const observed = recordDeliveryOutcomeInDemandAggregateState(prepared, outcome);
     equal(observed.targetTasks[0]?.phase, candidate.phase);
     const current = observed.targetTasks[0];
     if (
@@ -181,45 +150,51 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
       current?.phase !== "host-effect-indeterminate" &&
       current?.phase !== "host-effect-rejected"
     ) {
-      throw new Error("Expected observed host effect state.");
+      throw new Error("Expected observed delivery outcome state.");
     }
-    equal(
-      current.currentDelivery.hostEffect.disposition,
-      candidate.disposition,
-    );
-    equal(
-      current.currentDelivery.hostEffect.claimHandling,
-      candidate.claimHandling,
-    );
+    equal(current.currentDelivery.outcome.disposition, candidate.disposition);
+    equal(current.currentDelivery.outcome.claimHandling, candidate.claimHandling);
+    equal(current.currentDelivery.outcome.outcomeDigest, outcome.outcomeDigest);
     if (current.phase === "host-effect-accepted") {
       accepted = observed;
-      acceptedObservation = observation;
+      acceptedOutcome = outcome;
     }
     if (current.phase === "host-effect-rejected") {
       rejected = observed;
-      rejectedObservation = observation;
+      rejectedOutcome = outcome;
     }
   }
 
-  if (rejectedObservation === undefined) {
-    throw new Error("Expected rejected observation fixture.");
+  if (rejectedOutcome === undefined || acceptedOutcome === undefined) {
+    throw new Error("Expected accepted and rejected outcome fixtures.");
   }
-  const rearm = createTargetHostEffectRearmFixture(claim, rejectedObservation);
-  const rearmed = rearmTargetHostEffectInDemandAggregateState(rejected, rearm);
-  equal(rearmed.targetTasks[0]?.phase, "delivery-prepared");
+  // accepted 之后不能再记录结局；indeterminate 才允许再次记录。
   throws(
-    () => rearmTargetHostEffectInDemandAggregateState(accepted, rearm),
+    () => recordDeliveryOutcomeInDemandAggregateState(accepted, acceptedOutcome),
+    (error: unknown) =>
+      error instanceof DemandAggregateStateError &&
+      error.reason === "transition",
+  );
+  const rearm = createDeliveryRearmFixture(envelope, rejectedOutcome);
+  const rearmed = rearmDeliveryInDemandAggregateState(rejected, rearm);
+  equal(rearmed.targetTasks[0]?.phase, "delivery-prepared");
+  if (rearmed.targetTasks[0]?.phase !== "delivery-prepared") {
+    throw new Error("Expected rearmed delivery-prepared target.");
+  }
+  equal(rearmed.targetTasks[0].currentDelivery.generation, 2);
+  equal(rearmed.targetTasks[0].currentDelivery.fence.claimId, rearm.fence.claimId);
+  equal(rearmed.targetTasks[0].currentDelivery.deliveryId, DELIVERY_ID);
+  throws(
+    () => rearmDeliveryInDemandAggregateState(accepted, rearm),
     (error: unknown) =>
       error instanceof DemandAggregateStateError &&
       error.reason === "transition",
   );
 
-  if (acceptedObservation === undefined) {
-    throw new Error("Expected accepted observation fixture.");
-  }
   const targetResult = createTargetResultFixture({
     claim,
-    observation: acceptedObservation,
+    envelope,
+    outcome: acceptedOutcome,
   });
   const resultReported = recordTargetResultInDemandAggregateState(
     accepted,
@@ -231,10 +206,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
     throw new Error("Expected result-reported target.");
   }
   equal(reportedTarget.currentDelivery.targetResult.outcome, "completed");
-  equal(
-    reportedTarget.currentDelivery.targetResult.claimHandling,
-    "release-authorized",
-  );
+  equal(reportedTarget.currentDelivery.outcome.disposition, "accepted");
 
   for (const candidate of [
     { decision: "accept" as const, phase: "accepted" as const },
@@ -279,63 +251,58 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
     resultReported,
     reworkDecision,
   );
-  const reworkIntent = createTargetDeliveryIntent(
-    {
-      targetDeliveryId: parseWakeflowDurableIdOfKind(
-        "target-delivery_89898989-8989-4989-8989-898989898989",
-        "target-delivery",
-      ),
-      taskPackage,
-      hostId: "codex",
-      bindingId: TARGET_DELIVERY_BINDING_ID,
-      language: "zh-Hans",
-      rework: createTargetDeliveryReworkContext({
-        decision: reworkDecision,
-        previousResult: targetResult,
-      }),
-    },
-    {
-      clock: () => parseUtcInstant("2026-08-29T12:14:00.000Z"),
-    },
+  const reworkDeliveryId = parseWakeflowDurableIdOfKind(
+    "target-delivery_89898989-8989-4989-8989-898989898989",
+    "target-delivery",
   );
-  const reworkPrepared = prepareTargetDeliveryInDemandAggregateState(
+  const reworkClaim = createWorkClaimFixture({
+    claimId: OTHER_DELIVERY_CLAIM_ID,
+    deliveryId: reworkDeliveryId,
+  });
+  const reworkEnvelope = createDeliveryEnvelopeFixture({
+    claim: reworkClaim,
+    deliveryId: reworkDeliveryId,
+    rework: createTargetDeliveryReworkContext({
+      decision: reworkDecision,
+      previousResult: targetResult,
+    }),
+    preparedAt: parseUtcInstant("2026-08-29T12:14:00.000Z"),
+  });
+  const reworkPrepared = prepareDeliveryInDemandAggregateState(
     reworkRequested,
-    reworkIntent,
+    reworkEnvelope,
   );
   equal(reworkPrepared.targetTasks[0]?.phase, "delivery-prepared");
   if (reworkPrepared.targetTasks[0]?.phase !== "delivery-prepared") {
     throw new Error("Expected rework delivery-prepared target.");
   }
-  equal(
-    reworkPrepared.targetTasks[0].currentDelivery.targetDeliveryId,
-    reworkIntent.targetDeliveryId,
-  );
+  equal(reworkPrepared.targetTasks[0].currentDelivery.deliveryId, reworkDeliveryId);
+  equal(reworkPrepared.targetTasks[0].currentDelivery.generation, 1);
   equal(reworkPrepared.targetTasks[0].taskPackageId, taskPackage.taskPackageId);
   throws(
-    () => prepareTargetDeliveryInDemandAggregateState(planned, reworkIntent),
+    () => prepareDeliveryInDemandAggregateState(planned, reworkEnvelope),
     (error: unknown) =>
       error instanceof DemandAggregateStateError &&
       error.reason === "transition",
   );
   throws(
     () =>
-      prepareTargetDeliveryInDemandAggregateState(
+      prepareDeliveryInDemandAggregateState(
         reworkRequested,
-        createTargetDeliveryIntent(
-          {
-            targetDeliveryId: parseWakeflowDurableIdOfKind(
+        createDeliveryEnvelopeFixture({
+          claim: createWorkClaimFixture({
+            claimId: THIRD_DELIVERY_CLAIM_ID,
+            deliveryId: parseWakeflowDurableIdOfKind(
               "target-delivery_90909090-9090-4090-8090-909090909090",
               "target-delivery",
             ),
-            taskPackage,
-            hostId: "codex",
-            bindingId: TARGET_DELIVERY_BINDING_ID,
-            language: "zh-Hans",
-          },
-          {
-            clock: () => parseUtcInstant("2026-08-29T12:16:00.000Z"),
-          },
-        ),
+          }),
+          deliveryId: parseWakeflowDurableIdOfKind(
+            "target-delivery_90909090-9090-4090-8090-909090909090",
+            "target-delivery",
+          ),
+          preparedAt: parseUtcInstant("2026-08-29T12:16:00.000Z"),
+        }),
       ),
     (error: unknown) =>
       error instanceof DemandAggregateStateError &&

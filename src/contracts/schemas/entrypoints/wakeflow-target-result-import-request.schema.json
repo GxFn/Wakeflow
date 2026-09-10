@@ -7,7 +7,7 @@
   "$comment": "The stored Claim and Observation derive work type, Task, Delivery, Host, repository/window, Test lineage, Result identity, and Event identity. report.workType only discriminates the external Agent Report grammar and is rechecked against stored authority.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["root", "demandId", "actionId", "observationDigest", "report"],
+  "required": ["root", "demandId", "deliveryId", "claimDigest", "report"],
   "properties": {
     "root": {
       "$ref": "#/$defs/workspaceRoot"
@@ -15,10 +15,10 @@
     "demandId": {
       "$ref": "#/$defs/demandId"
     },
-    "actionId": {
-      "$ref": "#/$defs/claimId"
+    "deliveryId": {
+      "$ref": "#/$defs/targetDeliveryId"
     },
-    "observationDigest": {
+    "claimDigest": {
       "$ref": "#/$defs/sha256Digest"
     },
     "report": {
@@ -363,9 +363,9 @@
       "type": "string",
       "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "claimId": {
+    "targetDeliveryId": {
       "type": "string",
-      "pattern": "^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "pattern": "^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     }
   }
 }

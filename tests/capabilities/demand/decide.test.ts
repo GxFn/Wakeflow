@@ -30,9 +30,11 @@ import {
   type DemandAggregateState,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
-import { createTargetDeliveryHostEffectObservationFixture } from "../../governance/delivery/target-delivery-host-effect-observation.fixture.js";
-import { createTargetDeliveryIntentFixture } from "../../governance/delivery/target-delivery-intent.fixture.js";
-import { createWindowWorkClaimFixture } from "../../governance/delivery/window-work-claim.fixture.js";
+import {
+  createDeliveryEnvelopeFixture,
+  createDeliveryOutcomeFixture,
+  createWorkClaimFixture,
+} from "../../governance/delivery/delivery-records.fixture.js";
 import { createTargetResultFixture } from "../../governance/result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionForState } from "../../governance/review/controller-implementation-review-decision.fixture.js";
 import {
@@ -186,32 +188,25 @@ function reportedState() {
     taskPackage,
   });
   const tasking = evolveDemandEventSourcingState(active, planned);
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim });
   const [prepared] = decideDemandEventSourcingCommand(tasking, {
-    commandType: "delivery.prepare-target-delivery",
+    commandType: "delivery.prepare-delivery",
     commandVersion: 1,
     eventId: eventId("88888888-8888-4888-8888-888888888888"),
-    intent: createTargetDeliveryIntentFixture(),
+    envelope,
     taskPackage,
   });
   const deliveryPrepared = evolveDemandEventSourcingState(tasking, prepared);
-  const claim = createWindowWorkClaimFixture(
-    undefined,
-    computeDemandAggregateStateDigest(deliveryPrepared),
-  );
-  const [claimed] = decideDemandEventSourcingCommand(deliveryPrepared, {
-    commandType: "delivery.claim-target-host-effect",
+  const outcome = createDeliveryOutcomeFixture({ claim, envelope });
+  const [observed] = decideDemandEventSourcingCommand(deliveryPrepared, {
+    commandType: "delivery.record-delivery-outcome",
     commandVersion: 1,
-    claim,
+    eventId: eventId("a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1"),
+    outcome,
   });
-  const hostEffectClaimed = evolveDemandEventSourcingState(deliveryPrepared, claimed);
-  const observation = createTargetDeliveryHostEffectObservationFixture({ claim });
-  const [observed] = decideDemandEventSourcingCommand(hostEffectClaimed, {
-    commandType: "delivery.record-target-host-effect-observation",
-    commandVersion: 1,
-    observation,
-  });
-  const hostEffectObserved = evolveDemandEventSourcingState(hostEffectClaimed, observed);
-  const targetResult = createTargetResultFixture({ claim, observation });
+  const hostEffectObserved = evolveDemandEventSourcingState(deliveryPrepared, observed);
+  const targetResult = createTargetResultFixture({ claim, envelope, outcome });
   const [resultEvent] = decideDemandEventSourcingCommand(hostEffectObserved, {
     commandType: "result.record-target-result",
     commandVersion: 1,

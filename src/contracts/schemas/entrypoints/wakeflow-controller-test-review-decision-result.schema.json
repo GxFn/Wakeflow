@@ -160,7 +160,7 @@
     "testExecution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["testAttemptId", "testCard", "testDispatchPacketDigest"],
+      "required": ["testAttemptId", "testCard"],
       "properties": {
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
@@ -177,9 +177,6 @@
               "$ref": "#/$defs/sha256Digest"
             }
           }
-        },
-        "testDispatchPacketDigest": {
-          "$ref": "#/$defs/sha256Digest"
         }
       }
     },

@@ -22,26 +22,7 @@ import type { WakeflowTestCardCreatedEventDataV2 } from "../../../contracts/gene
 import { WAKEFLOW_TEST_CARD_CREATED_EVENT_DATA_V2_SCHEMA } from "../../../contracts/generated/governance/demand/test-card-created-event-data-v2.generated.js";
 import { WAKEFLOW_TEST_CARD_SCHEMA } from "../../../contracts/generated/governance/testing/test-card.generated.js";
 import { WAKEFLOW_TEST_CARD_GENERATION_SOURCE_SCHEMA } from "../../../contracts/generated/governance/testing/test-card-generation-source.generated.js";
-import type { WakeflowTestDeliveryPreparedEventDataV1 } from "../../../contracts/generated/governance/demand/test-delivery-prepared-event-data-v1.generated.js";
-import { WAKEFLOW_TEST_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/test-delivery-prepared-event-data-v1.generated.js";
-import { WAKEFLOW_TEST_DELIVERY_INTENT_SCHEMA } from "../../../contracts/generated/governance/testing/test-delivery-intent.generated.js";
 import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
-import type { WakeflowTargetDeliveryPreparedEventDataV1 } from "../../../contracts/generated/governance/demand/target-delivery-prepared-event-data-v1.generated.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-delivery-prepared-event-data-v1.generated.js";
-import type { WakeflowTargetDeliveryPreparedEventDataV2 } from "../../../contracts/generated/governance/demand/target-delivery-prepared-event-data-v2.generated.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V2_SCHEMA } from "../../../contracts/generated/governance/demand/target-delivery-prepared-event-data-v2.generated.js";
-import type { WakeflowTargetDeliveryPreparedEventDataV3 } from "../../../contracts/generated/governance/demand/target-delivery-prepared-event-data-v3.generated.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V3_SCHEMA } from "../../../contracts/generated/governance/demand/target-delivery-prepared-event-data-v3.generated.js";
-import { WAKEFLOW_TARGET_DELIVERY_INTENT_SCHEMA } from "../../../contracts/generated/governance/delivery/target-delivery-intent.generated.js";
-import type { WakeflowTargetHostEffectClaimedEventDataV1 } from "../../../contracts/generated/governance/demand/target-host-effect-claimed-event-data-v1.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIMED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-host-effect-claimed-event-data-v1.generated.js";
-import { WAKEFLOW_WINDOW_WORK_CLAIM_SCHEMA } from "../../../contracts/generated/governance/delivery/window-work-claim.generated.js";
-import type { WakeflowTargetHostEffectObservedEventDataV1 } from "../../../contracts/generated/governance/demand/target-host-effect-observed-event-data-v1.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_OBSERVED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-host-effect-observed-event-data-v1.generated.js";
-import { WAKEFLOW_TARGET_DELIVERY_HOST_EFFECT_OBSERVATION_SCHEMA } from "../../../contracts/generated/governance/delivery/target-delivery-host-effect-observation.generated.js";
-import type { WakeflowTargetHostEffectRearmedEventDataV1 } from "../../../contracts/generated/governance/demand/target-host-effect-rearmed-event-data-v1.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_REARMED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-host-effect-rearmed-event-data-v1.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_SCHEMA } from "../../../contracts/generated/governance/delivery/target-host-effect-rearm.generated.js";
 import type { WakeflowTargetResultRecordedEventDataV1 } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v1.generated.js";
 import { WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v1.generated.js";
 import type { WakeflowControllerTargetReviewDecidedEventDataV1 } from "../../../contracts/generated/governance/demand/controller-target-review-decided-event-data-v1.generated.js";
@@ -57,6 +38,15 @@ import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } f
 import { WAKEFLOW_TARGET_RESULT_SCHEMA } from "../../../contracts/generated/governance/result/target-result.generated.js";
 import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
 import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/test-target-result-report.generated.js";
+import type { WakeflowDeliveryPreparedEventDataV1 } from "../../../contracts/generated/governance/demand/delivery-prepared-event-data-v1.generated.js";
+import { WAKEFLOW_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-prepared-event-data-v1.generated.js";
+import type { WakeflowDeliveryOutcomeRecordedEventDataV1 } from "../../../contracts/generated/governance/demand/delivery-outcome-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_DELIVERY_OUTCOME_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-outcome-recorded-event-data-v1.generated.js";
+import type { WakeflowDeliveryRearmedEventDataV1 } from "../../../contracts/generated/governance/demand/delivery-rearmed-event-data-v1.generated.js";
+import { WAKEFLOW_DELIVERY_REARMED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-rearmed-event-data-v1.generated.js";
+import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
+import { WAKEFLOW_DELIVERY_OUTCOME_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-outcome.generated.js";
+import { WAKEFLOW_DELIVERY_REARM_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-rearm.generated.js";
 import { WAKEFLOW_GIT_OBJECT_ID_SCHEMA } from "../../../contracts/generated/foundation/git-object-id.generated.js";
 import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
@@ -84,10 +74,9 @@ import type { DemandEventSourcingPersistedEventEnvelope } from "./demand-event-s
 /** Demand 事件溯源各事件家族的持久化版本编解码器和当前版本写入器。 */
 
 export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
-  "delivery.target-delivery-prepared",
-  "delivery.target-host-effect-claimed",
-  "delivery.target-host-effect-observed",
-  "delivery.target-host-effect-rearmed",
+  "delivery.delivery-outcome-recorded",
+  "delivery.delivery-prepared",
+  "delivery.delivery-rearmed",
   "evidence.managed-evidence-recorded",
   "lifecycle.decision-recorded",
   "lifecycle.demand-cancelled",
@@ -101,17 +90,15 @@ export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
   "review.target-result-resumed",
   "tasking.target-task-planned",
   "testing.test-card-created",
-  "testing.test-delivery-prepared",
 ] as const);
 
 type DemandEventSourcingCurrentEventType =
   (typeof DEMAND_EVENT_SOURCING_EVENT_TYPES)[number];
 
 export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
-  "delivery.target-delivery-prepared": 3,
-  "delivery.target-host-effect-claimed": 1,
-  "delivery.target-host-effect-observed": 1,
-  "delivery.target-host-effect-rearmed": 1,
+  "delivery.delivery-outcome-recorded": 1,
+  "delivery.delivery-prepared": 1,
+  "delivery.delivery-rearmed": 1,
   "evidence.managed-evidence-recorded": 1,
   "lifecycle.decision-recorded": 1,
   "lifecycle.demand-cancelled": 1,
@@ -125,7 +112,6 @@ export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
   "review.target-result-resumed": 1,
   "tasking.target-task-planned": 1,
   "testing.test-card-created": 2,
-  "testing.test-delivery-prepared": 1,
 } as const satisfies Readonly<
   Record<DemandEventSourcingCurrentEventType, number>
 >);
@@ -220,66 +206,13 @@ const validateTestCardCreatedV2 =
       WAKEFLOW_UTC_INSTANT_SCHEMA,
     ],
   );
-const validateTestDeliveryPreparedV1 =
-  createRuntimeJsonSchemaValidator<WakeflowTestDeliveryPreparedEventDataV1>(
-    WAKEFLOW_TEST_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA,
+const validateDeliveryPreparedV1 =
+  createRuntimeJsonSchemaValidator<WakeflowDeliveryPreparedEventDataV1>(
+    WAKEFLOW_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA,
     [
-      WAKEFLOW_TEST_DELIVERY_INTENT_SCHEMA,
-      WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
-      WAKEFLOW_TEST_CARD_SCHEMA,
-      WAKEFLOW_TASK_PACKAGE_SCHEMA,
-      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-      WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
-    ],
-  );
-const validateTargetDeliveryPreparedV1 =
-  createRuntimeJsonSchemaValidator<WakeflowTargetDeliveryPreparedEventDataV1>(
-    WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA,
-    [
-      WAKEFLOW_TARGET_DELIVERY_INTENT_SCHEMA,
-      WAKEFLOW_TASK_PACKAGE_SCHEMA,
-      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-      WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
-    ],
-  );
-const validateTargetDeliveryPreparedV2 =
-  createRuntimeJsonSchemaValidator<WakeflowTargetDeliveryPreparedEventDataV2>(
-    WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V2_SCHEMA,
-    [
-      WAKEFLOW_TARGET_DELIVERY_INTENT_SCHEMA,
-      WAKEFLOW_TASK_PACKAGE_SCHEMA,
-      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-      WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
-    ],
-  );
-const validateTargetDeliveryPreparedV3 =
-  createRuntimeJsonSchemaValidator<WakeflowTargetDeliveryPreparedEventDataV3>(
-    WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V3_SCHEMA,
-    [
-      WAKEFLOW_TARGET_DELIVERY_INTENT_SCHEMA,
-      WAKEFLOW_TASK_PACKAGE_SCHEMA,
-      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-      WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
-    ],
-  );
-const validateTargetHostEffectClaimedV1 =
-  createRuntimeJsonSchemaValidator<WakeflowTargetHostEffectClaimedEventDataV1>(
-    WAKEFLOW_TARGET_HOST_EFFECT_CLAIMED_EVENT_DATA_V1_SCHEMA,
-    [
-      WAKEFLOW_WINDOW_WORK_CLAIM_SCHEMA,
-      WAKEFLOW_TARGET_DELIVERY_INTENT_SCHEMA,
+      WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA,
+      WAKEFLOW_DELIVERY_OUTCOME_SCHEMA,
+      WAKEFLOW_DELIVERY_REARM_SCHEMA,
       WAKEFLOW_TASK_PACKAGE_SCHEMA,
       WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
       WAKEFLOW_TEST_CARD_SCHEMA,
@@ -290,12 +223,13 @@ const validateTargetHostEffectClaimedV1 =
       WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
     ],
   );
-const validateTargetHostEffectObservedV1 =
-  createRuntimeJsonSchemaValidator<WakeflowTargetHostEffectObservedEventDataV1>(
-    WAKEFLOW_TARGET_HOST_EFFECT_OBSERVED_EVENT_DATA_V1_SCHEMA,
+const validateDeliveryOutcomeRecordedV1 =
+  createRuntimeJsonSchemaValidator<WakeflowDeliveryOutcomeRecordedEventDataV1>(
+    WAKEFLOW_DELIVERY_OUTCOME_RECORDED_EVENT_DATA_V1_SCHEMA,
     [
-      WAKEFLOW_TARGET_DELIVERY_HOST_EFFECT_OBSERVATION_SCHEMA,
-      WAKEFLOW_TARGET_DELIVERY_INTENT_SCHEMA,
+      WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA,
+      WAKEFLOW_DELIVERY_OUTCOME_SCHEMA,
+      WAKEFLOW_DELIVERY_REARM_SCHEMA,
       WAKEFLOW_TASK_PACKAGE_SCHEMA,
       WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
       WAKEFLOW_TEST_CARD_SCHEMA,
@@ -306,13 +240,16 @@ const validateTargetHostEffectObservedV1 =
       WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
     ],
   );
-const validateTargetHostEffectRearmedV1 =
-  createRuntimeJsonSchemaValidator<WakeflowTargetHostEffectRearmedEventDataV1>(
-    WAKEFLOW_TARGET_HOST_EFFECT_REARMED_EVENT_DATA_V1_SCHEMA,
+const validateDeliveryRearmedV1 =
+  createRuntimeJsonSchemaValidator<WakeflowDeliveryRearmedEventDataV1>(
+    WAKEFLOW_DELIVERY_REARMED_EVENT_DATA_V1_SCHEMA,
     [
-      WAKEFLOW_TARGET_HOST_EFFECT_REARM_SCHEMA,
-      WAKEFLOW_TARGET_DELIVERY_INTENT_SCHEMA,
+      WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA,
+      WAKEFLOW_DELIVERY_OUTCOME_SCHEMA,
+      WAKEFLOW_DELIVERY_REARM_SCHEMA,
       WAKEFLOW_TASK_PACKAGE_SCHEMA,
+      WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
+      WAKEFLOW_TEST_CARD_SCHEMA,
       WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
       WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
       WAKEFLOW_SHA256_DIGEST_SCHEMA,
@@ -328,7 +265,6 @@ const validateTargetResultRecordedV1 =
       WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA,
       WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA,
       WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
-      WAKEFLOW_TARGET_DELIVERY_INTENT_SCHEMA,
       WAKEFLOW_TASK_PACKAGE_SCHEMA,
       WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
       WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
@@ -461,86 +397,29 @@ function upcastTestCardCreatedV1ToV2(
   );
 }
 
-function parseTestDeliveryPreparedV1(
+function parseDeliveryPreparedV1(
   value: Readonly<JsonValue>,
 ): Readonly<JsonValue> {
-  const result = validateTestDeliveryPreparedV1(value);
-  if (!result.ok)
-    throw new TypeError("Test delivery prepared v1 data is invalid.");
+  const result = validateDeliveryPreparedV1(value);
+  if (!result.ok) throw new TypeError("Delivery prepared v1 data is invalid.");
   return parseJsonValue(result.value, "$data");
 }
 
-function parseTargetDeliveryPreparedV1(
+function parseDeliveryOutcomeRecordedV1(
   value: Readonly<JsonValue>,
 ): Readonly<JsonValue> {
-  const result = validateTargetDeliveryPreparedV1(value);
+  const result = validateDeliveryOutcomeRecordedV1(value);
   if (!result.ok) {
-    throw new TypeError("Target delivery prepared v1 data is invalid.");
+    throw new TypeError("Delivery outcome recorded v1 data is invalid.");
   }
   return parseJsonValue(result.value, "$data");
 }
 
-function parseTargetDeliveryPreparedV2(
+function parseDeliveryRearmedV1(
   value: Readonly<JsonValue>,
 ): Readonly<JsonValue> {
-  const result = validateTargetDeliveryPreparedV2(value);
-  if (!result.ok) {
-    throw new TypeError("Target delivery prepared v2 data is invalid.");
-  }
-  return parseJsonValue(result.value, "$data");
-}
-
-function parseTargetDeliveryPreparedV3(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  const result = validateTargetDeliveryPreparedV3(value);
-  if (!result.ok) {
-    throw new TypeError("Target delivery prepared v3 data is invalid.");
-  }
-  return parseJsonValue(result.value, "$data");
-}
-
-/** v1初次投递数据已经是当前内存形状；升版只开放受约束的rework变体。 */
-function upcastTargetDeliveryPreparedV1ToV2(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  return value;
-}
-
-/** v2 Intent也是v3当前形状；v3只开放新的产品缺陷remediation变体。 */
-function upcastTargetDeliveryPreparedV2ToV3(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  return value;
-}
-
-function parseTargetHostEffectClaimedV1(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  const result = validateTargetHostEffectClaimedV1(value);
-  if (!result.ok) {
-    throw new TypeError("Target host effect claimed v1 data is invalid.");
-  }
-  return parseJsonValue(result.value, "$data");
-}
-
-function parseTargetHostEffectObservedV1(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  const result = validateTargetHostEffectObservedV1(value);
-  if (!result.ok) {
-    throw new TypeError("Target host effect observed v1 data is invalid.");
-  }
-  return parseJsonValue(result.value, "$data");
-}
-
-function parseTargetHostEffectRearmedV1(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  const result = validateTargetHostEffectRearmedV1(value);
-  if (!result.ok) {
-    throw new TypeError("Target host effect rearmed v1 data is invalid.");
-  }
+  const result = validateDeliveryRearmedV1(value);
+  if (!result.ok) throw new TypeError("Delivery rearmed v1 data is invalid.");
   return parseJsonValue(result.value, "$data");
 }
 
@@ -663,67 +542,27 @@ const TEST_CARD_CREATED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   ],
 });
 
-const TEST_DELIVERY_PREPARED_REGISTRY =
+const DELIVERY_PREPARED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
+  currentVersion:
+    DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["delivery.delivery-prepared"],
+  codecs: [{ version: 1, parse: parseDeliveryPreparedV1 }],
+  steps: [],
+});
+const DELIVERY_OUTCOME_RECORDED_REGISTRY =
   new EventSourcingVersionEvolutionRegistry({
     currentVersion:
       DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[
-        "testing.test-delivery-prepared"
+        "delivery.delivery-outcome-recorded"
       ],
-    codecs: [{ version: 1, parse: parseTestDeliveryPreparedV1 }],
+    codecs: [{ version: 1, parse: parseDeliveryOutcomeRecordedV1 }],
     steps: [],
   });
-
-const TARGET_DELIVERY_PREPARED_REGISTRY =
-  new EventSourcingVersionEvolutionRegistry({
-    currentVersion:
-      DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[
-        "delivery.target-delivery-prepared"
-      ],
-    codecs: [
-      { version: 1, parse: parseTargetDeliveryPreparedV1 },
-      { version: 2, parse: parseTargetDeliveryPreparedV2 },
-      { version: 3, parse: parseTargetDeliveryPreparedV3 },
-    ],
-    steps: [
-      {
-        fromVersion: 1,
-        toVersion: 2,
-        upcast: upcastTargetDeliveryPreparedV1ToV2,
-      },
-      {
-        fromVersion: 2,
-        toVersion: 3,
-        upcast: upcastTargetDeliveryPreparedV2ToV3,
-      },
-    ],
-  });
-const TARGET_HOST_EFFECT_CLAIMED_REGISTRY =
-  new EventSourcingVersionEvolutionRegistry({
-    currentVersion:
-      DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[
-        "delivery.target-host-effect-claimed"
-      ],
-    codecs: [{ version: 1, parse: parseTargetHostEffectClaimedV1 }],
-    steps: [],
-  });
-const TARGET_HOST_EFFECT_OBSERVED_REGISTRY =
-  new EventSourcingVersionEvolutionRegistry({
-    currentVersion:
-      DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[
-        "delivery.target-host-effect-observed"
-      ],
-    codecs: [{ version: 1, parse: parseTargetHostEffectObservedV1 }],
-    steps: [],
-  });
-const TARGET_HOST_EFFECT_REARMED_REGISTRY =
-  new EventSourcingVersionEvolutionRegistry({
-    currentVersion:
-      DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[
-        "delivery.target-host-effect-rearmed"
-      ],
-    codecs: [{ version: 1, parse: parseTargetHostEffectRearmedV1 }],
-    steps: [],
-  });
+const DELIVERY_REARMED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
+  currentVersion:
+    DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["delivery.delivery-rearmed"],
+  codecs: [{ version: 1, parse: parseDeliveryRearmedV1 }],
+  steps: [],
+});
 const TARGET_RESULT_RECORDED_REGISTRY =
   new EventSourcingVersionEvolutionRegistry({
     currentVersion:
@@ -767,10 +606,9 @@ const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_REGISTRY =
   });
 
 const EVENT_VERSION_REGISTRIES = Object.freeze({
-  "delivery.target-delivery-prepared": TARGET_DELIVERY_PREPARED_REGISTRY,
-  "delivery.target-host-effect-claimed": TARGET_HOST_EFFECT_CLAIMED_REGISTRY,
-  "delivery.target-host-effect-observed": TARGET_HOST_EFFECT_OBSERVED_REGISTRY,
-  "delivery.target-host-effect-rearmed": TARGET_HOST_EFFECT_REARMED_REGISTRY,
+  "delivery.delivery-outcome-recorded": DELIVERY_OUTCOME_RECORDED_REGISTRY,
+  "delivery.delivery-prepared": DELIVERY_PREPARED_REGISTRY,
+  "delivery.delivery-rearmed": DELIVERY_REARMED_REGISTRY,
   "evidence.managed-evidence-recorded": MANAGED_EVIDENCE_RECORDED_REGISTRY,
   "lifecycle.decision-recorded": DECISION_RECORDED_REGISTRY,
   "lifecycle.demand-cancelled": CANCELLED_REGISTRY,
@@ -785,7 +623,6 @@ const EVENT_VERSION_REGISTRIES = Object.freeze({
   "review.target-result-resumed": CONTROLLER_TARGET_REVIEW_RESUMED_REGISTRY,
   "tasking.target-task-planned": TARGET_TASK_PLANNED_REGISTRY,
   "testing.test-card-created": TEST_CARD_CREATED_REGISTRY,
-  "testing.test-delivery-prepared": TEST_DELIVERY_PREPARED_REGISTRY,
 } as const satisfies Readonly<
   Record<
     DemandEventSourcingCurrentEventType,
@@ -794,14 +631,10 @@ const EVENT_VERSION_REGISTRIES = Object.freeze({
 >);
 
 export const DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS = Object.freeze({
-  "delivery.target-delivery-prepared":
-    TARGET_DELIVERY_PREPARED_REGISTRY.supportedVersions,
-  "delivery.target-host-effect-claimed":
-    TARGET_HOST_EFFECT_CLAIMED_REGISTRY.supportedVersions,
-  "delivery.target-host-effect-observed":
-    TARGET_HOST_EFFECT_OBSERVED_REGISTRY.supportedVersions,
-  "delivery.target-host-effect-rearmed":
-    TARGET_HOST_EFFECT_REARMED_REGISTRY.supportedVersions,
+  "delivery.delivery-outcome-recorded":
+    DELIVERY_OUTCOME_RECORDED_REGISTRY.supportedVersions,
+  "delivery.delivery-prepared": DELIVERY_PREPARED_REGISTRY.supportedVersions,
+  "delivery.delivery-rearmed": DELIVERY_REARMED_REGISTRY.supportedVersions,
   "evidence.managed-evidence-recorded":
     MANAGED_EVIDENCE_RECORDED_REGISTRY.supportedVersions,
   "lifecycle.decision-recorded": DECISION_RECORDED_REGISTRY.supportedVersions,
@@ -820,8 +653,6 @@ export const DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS = Object.freeze({
     CONTROLLER_TARGET_REVIEW_RESUMED_REGISTRY.supportedVersions,
   "tasking.target-task-planned": TARGET_TASK_PLANNED_REGISTRY.supportedVersions,
   "testing.test-card-created": TEST_CARD_CREATED_REGISTRY.supportedVersions,
-  "testing.test-delivery-prepared":
-    TEST_DELIVERY_PREPARED_REGISTRY.supportedVersions,
 } as const satisfies Readonly<
   Record<DemandEventSourcingCurrentEventType, readonly number[]>
 >);

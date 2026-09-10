@@ -31,7 +31,7 @@ import {
  */
 
 const ROLLED_BACK_TEST_TASK_CREATED_AT = parseUtcInstant("2026-08-29T12:19:00.000Z");
-const TEST_TASK_EXPECTED_REVISION = 8;
+const TEST_TASK_EXPECTED_REVISION = 7;
 
 async function withDemandRoot<Result>(
   workspacePath: string,
@@ -70,7 +70,7 @@ function rewriteConfig(workspacePath: string): void {
 test("test 任务包从测试卡派生、投影落盘、路由前进，同键重放不看后来的配置", async () => {
   const fixture = await createTestTaskPlanningWorkspaceFixture();
   try {
-    const demandId = fixture.intent.demandId;
+    const demandId = fixture.demandId;
     equal(await streamRevision(fixture.workspacePath, demandId), TEST_TASK_EXPECTED_REVISION);
     const planned = await planFixtureTestTask(fixture, TEST_TASK_EXPECTED_REVISION, {
       clock: () => ROLLED_BACK_TEST_TASK_CREATED_AT,
@@ -139,7 +139,7 @@ test("并发相同 test 规划收敛为一个事件，随后同键重放为 idem
       true,
     );
     equal((await planFixtureTestTask(fixture, TEST_TASK_EXPECTED_REVISION)).status, "idempotent");
-    equal(await streamRevision(fixture.workspacePath, fixture.intent.demandId), TEST_TASK_EXPECTED_REVISION + 1);
+    equal(await streamRevision(fixture.workspacePath, fixture.demandId), TEST_TASK_EXPECTED_REVISION + 1);
   } finally {
     await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }
@@ -148,7 +148,7 @@ test("并发相同 test 规划收敛为一个事件，随后同键重放为 idem
 test("没有测试卡时 test 规划被拒绝，且不追加事件", async () => {
   const withoutCard = await createTestCardPlanningWorkspaceFixture();
   try {
-    const before = await streamRevision(withoutCard.workspacePath, withoutCard.intent.demandId);
+    const before = await streamRevision(withoutCard.workspacePath, withoutCard.demandId);
     await rejects(
       planFixtureTestTask(withoutCard, before),
       (error: unknown) =>
@@ -156,7 +156,7 @@ test("没有测试卡时 test 规划被拒绝，且不追加事件", async () =>
         error.code === "precondition-failed" &&
         error.reason === "test-authority",
     );
-    equal(await streamRevision(withoutCard.workspacePath, withoutCard.intent.demandId), before);
+    equal(await streamRevision(withoutCard.workspacePath, withoutCard.demandId), before);
   } finally {
     await cleanupTestCardPlanningWorkspaceFixture(withoutCard);
   }

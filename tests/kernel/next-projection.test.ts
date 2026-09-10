@@ -13,7 +13,7 @@ test("next projection 按路由第一前沿派生责任方与建议工具", () =
     {
       frontier: "implementation-delivery-planning",
       owner: "controller",
-      suggestedTool: "wakeflow_prepare_implementation_delivery",
+      suggestedTool: "wakeflow_prepare_delivery",
       blockers: [],
     },
   );

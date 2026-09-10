@@ -105,7 +105,6 @@ export interface ControllerTestReviewDecision extends ControllerTestReviewJudgme
       readonly testCardId: WakeflowDurableId<"test-card">;
       readonly testCardDigest: Sha256Digest;
     }>;
-    readonly testDispatchPacketDigest: Sha256Digest;
   }>;
   readonly decidedAt: UtcInstant;
   readonly decisionDigest: Sha256Digest;
@@ -408,10 +407,6 @@ export function parseControllerTestReviewDecision(
         "$/testExecution/testCard/testCardDigest",
       ),
     }),
-    testDispatchPacketDigest: digest(
-      wire.testExecution.testDispatchPacketDigest,
-      "$/testExecution/testDispatchPacketDigest",
-    ),
   });
   const independentChecks = Object.freeze([
     firstCheck,

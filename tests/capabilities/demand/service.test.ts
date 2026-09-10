@@ -10,25 +10,20 @@ import {
 } from "../../../src/capabilities/demand/lifecycle.js";
 import { executeDemandRouteInspectionRequest } from "../../../src/capabilities/demand/service.js";
 import { executeTargetTaskPlanningPublicRequest } from "../../../src/capabilities/tasking/service.js";
-import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
-import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { TargetHostEffectClaimService } from "../../../src/governance/delivery/target-host-effect-claim-service.js";
-import { windowWorkClaimRef } from "../../../src/governance/delivery/window-work-claim-resource-catalog.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { deriveDurableId } from "../../../src/kernel/ids.js";
-import { demandLifecycleJournalRef } from "../../../src/kernel/layout.js";
+import { demandLifecycleJournalRef, workClaimRef } from "../../../src/kernel/layout.js";
 import { readRequirementClaimState } from "../../../src/kernel/requirement-board.js";
 import {
-  CLAIMED_AT,
-  claimUuidFactory,
-  cleanupTargetHostEffectClaimWorkspaceFixture,
-  createTargetHostEffectClaimWorkspaceFixture,
-} from "../../governance/delivery/target-host-effect-claim-service.fixture.js";
+  cleanupDeliveryWorkspaceFixture,
+  createDeliveryWorkspaceFixture,
+  prepareFixtureDelivery,
+} from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
   cleanupAcceptedDemandCompletionWorkspaceFixture,
   createAcceptedDemandCompletionWorkspaceFixture,
@@ -108,10 +103,10 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
   const fixture = await createAcceptedDemandCompletionWorkspaceFixture();
   try {
     const root = fixture.workspacePath;
-    const demandId = fixture.intent.demandId;
+    const demandId = fixture.demandId;
     const ledgerArchives = path.join(fixture.fixtureRoot, "wakeflow-ledger", "archives", demandId);
 
-    await escalate(fixture.workspaceRoot, root, demandId, fixture.intent.target.targetTaskId);
+    await escalate(fixture.workspaceRoot, root, demandId, fixture.targetTaskId);
     const awaiting = await executeDemandRouteInspectionRequest({ root, demandId });
     if (awaiting.status !== "current") throw new Error("Expected an active route.");
     equal(awaiting.route.disposition, "awaiting-decision");
@@ -280,7 +275,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
         ],
         lineage: {
           kind: "continuation",
-          continuesTargetTaskId: fixture.intent.target.targetTaskId,
+          continuesTargetTaskId: fixture.targetTaskId,
         },
         sectionAnchors: [],
       },
@@ -344,20 +339,13 @@ test("未接受的目标让完成在 preview 阻塞；取消释放本 Demand 的
     await cleanupTargetTaskPlanningWorkspaceFixture(planning);
   }
 
-  const fixture = await createTargetHostEffectClaimWorkspaceFixture();
+  const fixture = await createDeliveryWorkspaceFixture();
   try {
     const root = fixture.workspacePath;
-    const demandId = fixture.intent.demandId;
-    const claimed = await new TargetHostEffectClaimService(
-      fixture.workspaceRoot,
-      codexWorkspaceHostResourceProfile,
-      codexWindowHostIdentityProfile,
-    ).claim(fixture.claimRequest, { clock: () => CLAIMED_AT, uuidFactory: claimUuidFactory() });
-    if (claimed.action === null) throw new Error("Expected an issued claim.");
-    const claimPath = path.join(
-      root,
-      ...windowWorkClaimRef(fixture.intent.route.windowId).split("/"),
-    );
+    const demandId = fixture.demandId;
+    const prepared = await prepareFixtureDelivery(fixture);
+    equal(prepared.status, "committed");
+    const claimPath = path.join(root, ...workClaimRef(fixture.route.windowId).split("/"));
     equal(existsSync(claimPath), true);
 
     const reason = "Cancelled while the window still holds the claim.";
@@ -389,6 +377,6 @@ test("未接受的目标让完成在 preview 阻塞；取消释放本 Demand 的
     equal(cancelled.package.status, "withdrawn");
     equal(await demandRootExists(root, demandId), false);
   } finally {
-    await cleanupTargetHostEffectClaimWorkspaceFixture(fixture);
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });

@@ -77,15 +77,11 @@ test("Controller Test Review以Card容量准入并在wall clock回拨时持久�
     equal(decided.decision.decision, "accept");
     equal(decided.decision.decidedAt, ROLLED_BACK_DECIDED_AT);
     equal(decided.decision.testExecution.testAttemptId, fixture.testAttemptId);
-    equal(
-      decided.decision.testExecution.testDispatchPacketDigest,
-      fixture.testDispatchPacketDigest,
-    );
 
     demandRoot = await RootedDirectory.open(
       path.join(
         fixture.workspacePath,
-        ...demandFinalRootRef(fixture.testClaimRequest.demandId).split("/"),
+        ...demandFinalRootRef(fixture.demandId).split("/"),
       ),
     );
     const repository = new DemandEventSourcingRepository(demandRoot);
@@ -129,7 +125,7 @@ test("Controller Test Review以Card容量准入并在wall clock回拨时持久�
 
     const route = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     equal(route.nextStage.status, "completion-preflight");
     if (
@@ -200,7 +196,7 @@ test("Controller Test Review仅在Card容量可用时授权另一attempt plannin
 
     const route = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     equal(route.nextStage.status, "test-another-attempt-planning");
     if (route.nextStage.status !== "test-another-attempt-planning") {

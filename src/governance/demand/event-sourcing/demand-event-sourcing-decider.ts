@@ -27,17 +27,15 @@ import {
 import {
   cancelDemandAggregateState,
   authorizeProductDefectRemediationInDemandAggregateState,
-  claimTargetHostEffectInDemandAggregateState,
   completeDemandAggregateState,
   continueDemandAggregateState,
   createTestCardInDemandAggregateState,
   createInitialDemandAggregateState,
   decideTargetResultReviewInDemandAggregateState,
   escalateDemandAggregateState,
-  observeTargetHostEffectInDemandAggregateState,
-  prepareTestDeliveryInDemandAggregateState,
-  prepareTargetDeliveryInDemandAggregateState,
-  rearmTargetHostEffectInDemandAggregateState,
+  recordDeliveryOutcomeInDemandAggregateState,
+  prepareDeliveryInDemandAggregateState,
+  rearmDeliveryInDemandAggregateState,
   recordDecisionInDemandAggregateState,
   recordManagedEvidenceInDemandAggregateState,
   recordTargetResultInDemandAggregateState,
@@ -59,11 +57,21 @@ import {
   type TaskPackage,
 } from "../../tasking/task-package.js";
 import {
-  assertTargetDeliveryIntentMatchesTaskPackage,
-  parseTargetDeliveryIntent,
-  TargetDeliveryIntentError,
-  type TargetDeliveryIntent,
-} from "../../delivery/target-delivery-intent.js";
+  assertDeliveryEnvelopeMatchesTaskPackage,
+  DeliveryEnvelopeError,
+  parseDeliveryEnvelope,
+  type DeliveryEnvelope,
+} from "../../delivery/delivery-envelope.js";
+import {
+  DeliveryOutcomeError,
+  parseDeliveryOutcome,
+  type DeliveryOutcome,
+} from "../../delivery/delivery-outcome.js";
+import {
+  DeliveryRearmError,
+  parseDeliveryRearm,
+  type DeliveryRearm,
+} from "../../delivery/delivery-rearm.js";
 import {
   createTargetDeliveryReworkContext,
   TargetDeliveryReworkContextError,
@@ -72,23 +80,6 @@ import {
   createTargetDeliveryProductDefectRemediationContext,
   TargetDeliveryProductDefectRemediationContextError,
 } from "../../delivery/target-delivery-product-defect-remediation-context.js";
-import {
-  parseWindowWorkClaim,
-  WindowWorkClaimError,
-  type WindowWorkClaim,
-} from "../../delivery/window-work-claim.js";
-import {
-  parseTargetDeliveryHostEffectObservation,
-  targetDeliveryHostEffectObservationEventId,
-  TargetDeliveryHostEffectObservationError,
-  type TargetDeliveryHostEffectObservation,
-} from "../../delivery/target-delivery-host-effect-observation.js";
-import {
-  parseTargetHostEffectRearm,
-  targetHostEffectRearmEventId,
-  TargetHostEffectRearmError,
-  type TargetHostEffectRearm,
-} from "../../delivery/target-host-effect-rearm.js";
 import {
   parseTargetResult,
   targetResultRecordedEventIdFromResult,
@@ -137,6 +128,10 @@ import {
   type DemandCompletion,
 } from "../../lifecycle/demand-completion.js";
 import {
+  assertTestExecutionAttemptMatchesCard,
+  TestExecutionAttemptError,
+} from "../../testing/test-execution-attempt.js";
+import {
   parseTestCard,
   TestCardError,
   type TestCard,
@@ -146,12 +141,6 @@ import {
   TestCardGenerationSourceError,
   type TestCardGenerationSource,
 } from "../../testing/test-card-generation-source.js";
-import {
-  assertTestDeliveryIntentMatchesSources,
-  parseTestDeliveryIntent,
-  TestDeliveryIntentError,
-  type TestDeliveryIntent,
-} from "../../testing/test-delivery-intent.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：Demand 聚合的纯决策器。
@@ -240,12 +229,14 @@ export interface CreateTestCardCommand {
   readonly generationAuthorization?: Readonly<ControllerProductDefectRemediationAuthorization>;
 }
 
-export interface PrepareTargetDeliveryCommand {
-  readonly commandType: "delivery.prepare-target-delivery";
+export interface PrepareDeliveryCommand {
+  readonly commandType: "delivery.prepare-delivery";
   readonly commandVersion: 1;
   readonly eventId: WakeflowDurableId<"demand-event">;
-  readonly intent: Readonly<TargetDeliveryIntent>;
+  readonly envelope: Readonly<DeliveryEnvelope>;
   readonly taskPackage: Readonly<TaskPackage>;
+  /** test 信封的合同来源；实现信封不带。 */
+  readonly testCard?: Readonly<TestCard>;
   readonly reworkSource?: Readonly<{
     readonly decision: Readonly<ControllerImplementationReviewDecision>;
     readonly previousResult: Readonly<TargetResult>;
@@ -256,31 +247,18 @@ export interface PrepareTargetDeliveryCommand {
   }>;
 }
 
-export interface PrepareTestDeliveryCommand {
-  readonly commandType: "testing.prepare-test-delivery";
+export interface RecordDeliveryOutcomeCommand {
+  readonly commandType: "delivery.record-delivery-outcome";
   readonly commandVersion: 1;
   readonly eventId: WakeflowDurableId<"demand-event">;
-  readonly intent: Readonly<TestDeliveryIntent>;
-  readonly taskPackage: Readonly<TaskPackage>;
-  readonly testCard: Readonly<TestCard>;
+  readonly outcome: Readonly<DeliveryOutcome>;
 }
 
-export interface ClaimTargetHostEffectCommand {
-  readonly commandType: "delivery.claim-target-host-effect";
+export interface RearmDeliveryCommand {
+  readonly commandType: "delivery.rearm-delivery";
   readonly commandVersion: 1;
-  readonly claim: Readonly<WindowWorkClaim>;
-}
-
-export interface RecordTargetHostEffectObservationCommand {
-  readonly commandType: "delivery.record-target-host-effect-observation";
-  readonly commandVersion: 1;
-  readonly observation: Readonly<TargetDeliveryHostEffectObservation>;
-}
-
-export interface RearmTargetHostEffectCommand {
-  readonly commandType: "delivery.rearm-target-host-effect";
-  readonly commandVersion: 1;
-  readonly rearm: Readonly<TargetHostEffectRearm>;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly rearm: Readonly<DeliveryRearm>;
 }
 
 export interface RecordTargetResultCommand {
@@ -317,11 +295,9 @@ export type DemandEventSourcingCommand =
   | RecordManagedEvidenceCommand
   | CreateTestCardCommand
   | PlanTargetTaskCommand
-  | PrepareTestDeliveryCommand
-  | PrepareTargetDeliveryCommand
-  | ClaimTargetHostEffectCommand
-  | RecordTargetHostEffectObservationCommand
-  | RearmTargetHostEffectCommand
+  | PrepareDeliveryCommand
+  | RecordDeliveryOutcomeCommand
+  | RearmDeliveryCommand
   | RecordTargetResultCommand
   | DecideTargetResultReviewCommand
   | ResumeTargetResultReviewCommand
@@ -340,13 +316,11 @@ export type DemandEventSourcingDecisionErrorReason =
   | "managed-evidence-manifest"
   | "test-card"
   | "test-card-generation-source"
-  | "test-delivery-intent"
-  | "target-delivery-intent"
+  | "delivery-envelope"
   | "target-delivery-rework-context"
   | "target-delivery-product-defect-remediation-context"
-  | "window-work-claim"
-  | "target-delivery-host-effect-observation"
-  | "target-host-effect-rearm"
+  | "delivery-outcome"
+  | "delivery-rearm"
   | "target-result"
   | "controller-implementation-review-decision"
   | "controller-review-decision"
@@ -376,20 +350,16 @@ const ERROR_MESSAGES = {
   "test-card": "Demand Event Sourcing command contains an invalid TestCard.",
   "test-card-generation-source":
     "Demand Event Sourcing command contains an invalid TestCard Generation Source.",
-  "test-delivery-intent":
-    "Demand Event Sourcing command contains an invalid Test Delivery Intent.",
-  "target-delivery-intent":
-    "Demand Event Sourcing command contains an invalid Target Delivery Intent.",
+  "delivery-envelope":
+    "Demand Event Sourcing command contains an invalid Delivery Envelope.",
   "target-delivery-rework-context":
     "Demand Event Sourcing command contains an invalid Target Delivery rework source.",
   "target-delivery-product-defect-remediation-context":
     "Demand Event Sourcing command contains an invalid Target Delivery product-defect remediation source.",
-  "window-work-claim":
-    "Demand Event Sourcing command contains an invalid Window Work Claim.",
-  "target-delivery-host-effect-observation":
-    "Demand Event Sourcing command contains an invalid Target Delivery Host Effect observation.",
-  "target-host-effect-rearm":
-    "Demand Event Sourcing command contains an invalid Target Host Effect Rearm.",
+  "delivery-outcome":
+    "Demand Event Sourcing command contains an invalid Delivery Outcome.",
+  "delivery-rearm":
+    "Demand Event Sourcing command contains an invalid Delivery Rearm.",
   "target-result":
     "Demand Event Sourcing command contains an invalid TargetResult.",
   "controller-implementation-review-decision":
@@ -501,52 +471,23 @@ const CREATE_RETEST_CARD_FIELDS = Object.freeze([
   "generationSource",
   "testCard",
 ] as const);
-const PREPARE_TARGET_DELIVERY_FIELDS = Object.freeze([
+const PREPARE_DELIVERY_BASE_FIELDS = Object.freeze([
+  "commandType",
+  "commandVersion",
+  "envelope",
+  "eventId",
+  "taskPackage",
+] as const);
+const RECORD_DELIVERY_OUTCOME_FIELDS = Object.freeze([
   "commandType",
   "commandVersion",
   "eventId",
-  "intent",
-  "taskPackage",
+  "outcome",
 ] as const);
-const PREPARE_TEST_DELIVERY_FIELDS = Object.freeze([
+const REARM_DELIVERY_FIELDS = Object.freeze([
   "commandType",
   "commandVersion",
   "eventId",
-  "intent",
-  "taskPackage",
-  "testCard",
-] as const);
-const PREPARE_TARGET_DELIVERY_REWORK_FIELDS = Object.freeze([
-  "commandType",
-  "commandVersion",
-  "eventId",
-  "intent",
-  "reworkSource",
-  "taskPackage",
-] as const);
-const PREPARE_TARGET_DELIVERY_PRODUCT_DEFECT_REMEDIATION_FIELDS = Object.freeze(
-  [
-    "commandType",
-    "commandVersion",
-    "eventId",
-    "intent",
-    "productDefectRemediationSource",
-    "taskPackage",
-  ] as const,
-);
-const CLAIM_TARGET_HOST_EFFECT_FIELDS = Object.freeze([
-  "claim",
-  "commandType",
-  "commandVersion",
-] as const);
-const RECORD_TARGET_HOST_EFFECT_OBSERVATION_FIELDS = Object.freeze([
-  "commandType",
-  "commandVersion",
-  "observation",
-] as const);
-const REARM_TARGET_HOST_EFFECT_FIELDS = Object.freeze([
-  "commandType",
-  "commandVersion",
   "rearm",
 ] as const);
 const RECORD_TARGET_RESULT_FIELDS = Object.freeze([
@@ -958,47 +899,75 @@ export function parseDemandEventSourcingCommand(
     });
   }
 
-  if (base.commandType === "delivery.prepare-target-delivery") {
+  if (base.commandType === "delivery.prepare-delivery") {
     const hasReworkSource = Object.hasOwn(base, "reworkSource");
     const hasProductDefectRemediationSource = Object.hasOwn(
       base,
       "productDefectRemediationSource",
     );
+    const hasTestCard = Object.hasOwn(base, "testCard");
     if (hasReworkSource && hasProductDefectRemediationSource) {
       fail("input", "$command");
     }
     const command = exactCommand(
       base,
-      hasReworkSource
-        ? PREPARE_TARGET_DELIVERY_REWORK_FIELDS
-        : hasProductDefectRemediationSource
-          ? PREPARE_TARGET_DELIVERY_PRODUCT_DEFECT_REMEDIATION_FIELDS
-          : PREPARE_TARGET_DELIVERY_FIELDS,
+      [
+        ...PREPARE_DELIVERY_BASE_FIELDS,
+        ...(hasTestCard ? (["testCard"] as const) : []),
+        ...(hasReworkSource ? (["reworkSource"] as const) : []),
+        ...(hasProductDefectRemediationSource
+          ? (["productDefectRemediationSource"] as const)
+          : []),
+      ].sort(),
     );
-    let intent: Readonly<TargetDeliveryIntent>;
+    let envelope: Readonly<DeliveryEnvelope>;
     let taskPackage: Readonly<TaskPackage>;
     try {
-      intent = parseTargetDeliveryIntent(command.intent);
+      envelope = parseDeliveryEnvelope(command.envelope);
     } catch (error: unknown) {
-      if (error instanceof TargetDeliveryIntentError) {
-        fail("target-delivery-intent", "$/intent");
+      if (error instanceof DeliveryEnvelopeError) {
+        fail("delivery-envelope", "$/envelope");
       }
       throw error;
     }
     try {
       taskPackage = parseTaskPackage(command.taskPackage);
-      assertTargetDeliveryIntentMatchesTaskPackage(intent, taskPackage);
+      assertDeliveryEnvelopeMatchesTaskPackage(envelope, taskPackage);
     } catch (error: unknown) {
       if (error instanceof TaskPackageError) {
         fail("task-package", "$/taskPackage");
       }
-      if (error instanceof TargetDeliveryIntentError) {
-        fail("target-delivery-intent", "$/intent");
+      if (error instanceof DeliveryEnvelopeError) {
+        fail("delivery-envelope", "$/envelope");
       }
       throw error;
     }
-    let reworkSource: PrepareTargetDeliveryCommand["reworkSource"];
-    let productDefectRemediationSource: PrepareTargetDeliveryCommand["productDefectRemediationSource"];
+    let testCard: Readonly<TestCard> | undefined;
+    if (envelope.workType === "test") {
+      if (!hasTestCard) fail("test-card", "$/testCard");
+      try {
+        testCard = parseTestCard(command.testCard);
+        assertTestExecutionAttemptMatchesCard(envelope.attempt, testCard);
+      } catch (error: unknown) {
+        if (error instanceof TestCardError) fail("test-card", "$/testCard");
+        if (error instanceof TestExecutionAttemptError) {
+          fail("delivery-envelope", "$/envelope/attempt");
+        }
+        throw error;
+      }
+      if (
+        testCard.testCardId !== envelope.testCard.testCardId ||
+        testCard.testCardDigest !== envelope.testCard.testCardDigest ||
+        hasReworkSource ||
+        hasProductDefectRemediationSource
+      ) {
+        fail("test-card", "$/testCard");
+      }
+    } else if (hasTestCard) {
+      fail("input", "$command");
+    }
+    let reworkSource: PrepareDeliveryCommand["reworkSource"];
+    let productDefectRemediationSource: PrepareDeliveryCommand["productDefectRemediationSource"];
     if (hasReworkSource) {
       let source: Readonly<Record<string, unknown>>;
       try {
@@ -1044,9 +1013,9 @@ export function parseDemandEventSourcingCommand(
           previousResult,
         });
         if (
-          intent.rework === undefined ||
+          envelope.rework === undefined ||
           computeCanonicalJsonSha256Digest(projected) !==
-            computeCanonicalJsonSha256Digest(intent.rework)
+            computeCanonicalJsonSha256Digest(envelope.rework)
         ) {
           fail("target-delivery-rework-context", "$/reworkSource");
         }
@@ -1058,7 +1027,7 @@ export function parseDemandEventSourcingCommand(
         throw error;
       }
       reworkSource = Object.freeze({ decision, previousResult });
-    } else if (intent.rework !== undefined) {
+    } else if (envelope.rework !== undefined) {
       fail("target-delivery-rework-context", "$/reworkSource");
     }
     if (hasProductDefectRemediationSource) {
@@ -1122,9 +1091,9 @@ export function parseDemandEventSourcingCommand(
           previousResult,
         });
         if (
-          intent.productDefectRemediation === undefined ||
+          envelope.productDefectRemediation === undefined ||
           computeCanonicalJsonSha256Digest(projected) !==
-            computeCanonicalJsonSha256Digest(intent.productDefectRemediation)
+            computeCanonicalJsonSha256Digest(envelope.productDefectRemediation)
         ) {
           fail(
             "target-delivery-product-defect-remediation-context",
@@ -1147,18 +1116,19 @@ export function parseDemandEventSourcingCommand(
         authorization,
         previousResult,
       });
-    } else if (intent.productDefectRemediation !== undefined) {
+    } else if (envelope.productDefectRemediation !== undefined) {
       fail(
         "target-delivery-product-defect-remediation-context",
         "$/productDefectRemediationSource",
       );
     }
     return Object.freeze({
-      commandType: "delivery.prepare-target-delivery",
+      commandType: "delivery.prepare-delivery",
       commandVersion: 1,
       eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      intent,
+      envelope,
       taskPackage,
+      ...(testCard === undefined ? {} : { testCard }),
       ...(reworkSource === undefined ? {} : { reworkSource }),
       ...(productDefectRemediationSource === undefined
         ? {}
@@ -1166,102 +1136,38 @@ export function parseDemandEventSourcingCommand(
     });
   }
 
-  if (base.commandType === "testing.prepare-test-delivery") {
-    const command = exactCommand(base, PREPARE_TEST_DELIVERY_FIELDS);
-    let intent: Readonly<TestDeliveryIntent>;
-    let taskPackage: Readonly<TaskPackage>;
-    let testCard: Readonly<TestCard>;
+  if (base.commandType === "delivery.record-delivery-outcome") {
+    const command = exactCommand(base, RECORD_DELIVERY_OUTCOME_FIELDS);
+    let outcome: Readonly<DeliveryOutcome>;
     try {
-      intent = parseTestDeliveryIntent(command.intent);
+      outcome = parseDeliveryOutcome(command.outcome);
     } catch (error: unknown) {
-      if (error instanceof TestDeliveryIntentError) {
-        fail("test-delivery-intent", "$/intent");
-      }
-      throw error;
-    }
-    try {
-      taskPackage = parseTaskPackage(command.taskPackage);
-    } catch (error: unknown) {
-      if (error instanceof TaskPackageError) {
-        fail("task-package", "$/taskPackage");
-      }
-      throw error;
-    }
-    try {
-      testCard = parseTestCard(command.testCard);
-      assertTestDeliveryIntentMatchesSources(intent, taskPackage, testCard);
-    } catch (error: unknown) {
-      if (error instanceof TestCardError) fail("test-card", "$/testCard");
-      if (error instanceof TestDeliveryIntentError) {
-        fail("test-delivery-intent", "$/intent");
+      if (error instanceof DeliveryOutcomeError) {
+        fail("delivery-outcome", "$/outcome");
       }
       throw error;
     }
     return Object.freeze({
-      commandType: "testing.prepare-test-delivery",
+      commandType: "delivery.record-delivery-outcome",
       commandVersion: 1,
       eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      intent,
-      taskPackage,
-      testCard,
+      outcome,
     });
   }
 
-  if (base.commandType === "delivery.claim-target-host-effect") {
-    const command = exactCommand(base, CLAIM_TARGET_HOST_EFFECT_FIELDS);
-    let claim: Readonly<WindowWorkClaim>;
+  if (base.commandType === "delivery.rearm-delivery") {
+    const command = exactCommand(base, REARM_DELIVERY_FIELDS);
+    let rearm: Readonly<DeliveryRearm>;
     try {
-      claim = parseWindowWorkClaim(command.claim);
+      rearm = parseDeliveryRearm(command.rearm);
     } catch (error: unknown) {
-      if (error instanceof WindowWorkClaimError) {
-        fail("window-work-claim", "$/claim");
-      }
+      if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$/rearm");
       throw error;
     }
     return Object.freeze({
-      commandType: "delivery.claim-target-host-effect",
+      commandType: "delivery.rearm-delivery",
       commandVersion: 1,
-      claim,
-    });
-  }
-
-  if (base.commandType === "delivery.record-target-host-effect-observation") {
-    const command = exactCommand(
-      base,
-      RECORD_TARGET_HOST_EFFECT_OBSERVATION_FIELDS,
-    );
-    let observation: Readonly<TargetDeliveryHostEffectObservation>;
-    try {
-      observation = parseTargetDeliveryHostEffectObservation(
-        command.observation,
-      );
-    } catch (error: unknown) {
-      if (error instanceof TargetDeliveryHostEffectObservationError) {
-        fail("target-delivery-host-effect-observation", "$/observation");
-      }
-      throw error;
-    }
-    return Object.freeze({
-      commandType: "delivery.record-target-host-effect-observation",
-      commandVersion: 1,
-      observation,
-    });
-  }
-
-  if (base.commandType === "delivery.rearm-target-host-effect") {
-    const command = exactCommand(base, REARM_TARGET_HOST_EFFECT_FIELDS);
-    let rearm: Readonly<TargetHostEffectRearm>;
-    try {
-      rearm = parseTargetHostEffectRearm(command.rearm);
-    } catch (error: unknown) {
-      if (error instanceof TargetHostEffectRearmError) {
-        fail("target-host-effect-rearm", "$/rearm");
-      }
-      throw error;
-    }
-    return Object.freeze({
-      commandType: "delivery.rearm-target-host-effect",
-      commandVersion: 1,
+      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
       rearm,
     });
   }
@@ -1566,9 +1472,9 @@ export function decideDemandEventSourcingCommand(
       }),
     );
   }
-  if (command.commandType === "delivery.rearm-target-host-effect") {
+  if (command.commandType === "delivery.rearm-delivery") {
     try {
-      rearmTargetHostEffectInDemandAggregateState(state, command.rearm);
+      rearmDeliveryInDemandAggregateState(state, command.rearm);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1577,19 +1483,17 @@ export function decideDemandEventSourcingCommand(
     }
     return singleEvent(
       parseDemandUncommittedEvent({
-        eventId: targetHostEffectRearmEventId(command.rearm),
-        demandId: command.rearm.target.demandId,
+        eventId: command.eventId,
+        demandId: state.demandId,
         recordedAt: command.rearm.rearmedAt,
-        eventType: "delivery.target-host-effect-rearmed",
+        eventType: "delivery.delivery-rearmed",
         data: { rearm: command.rearm },
       }),
     );
   }
-  if (
-    command.commandType === "delivery.record-target-host-effect-observation"
-  ) {
+  if (command.commandType === "delivery.record-delivery-outcome") {
     try {
-      observeTargetHostEffectInDemandAggregateState(state, command.observation);
+      recordDeliveryOutcomeInDemandAggregateState(state, command.outcome);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1598,41 +1502,20 @@ export function decideDemandEventSourcingCommand(
     }
     return singleEvent(
       parseDemandUncommittedEvent({
-        eventId: targetDeliveryHostEffectObservationEventId(
-          command.observation.action.actionId,
-        ),
+        eventId: command.eventId,
         demandId: state.demandId,
-        recordedAt: command.observation.observedAt,
-        eventType: "delivery.target-host-effect-observed",
-        data: { observation: command.observation },
+        recordedAt: command.outcome.observedAt,
+        eventType: "delivery.delivery-outcome-recorded",
+        data: { outcome: command.outcome },
       }),
     );
   }
-  if (command.commandType === "delivery.claim-target-host-effect") {
-    try {
-      claimTargetHostEffectInDemandAggregateState(state, command.claim);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.claim.claimTransition.eventId,
-        demandId: command.claim.target.demandId,
-        recordedAt: command.claim.claimedAt,
-        eventType: "delivery.target-host-effect-claimed",
-        data: { claim: command.claim },
-      }),
-    );
-  }
-  if (command.commandType === "delivery.prepare-target-delivery") {
-    if (state.demandId !== command.intent.demandId) {
-      fail("identity", "$/intent/demandId");
+  if (command.commandType === "delivery.prepare-delivery") {
+    if (state.demandId !== command.envelope.demandId) {
+      fail("identity", "$/envelope/demandId");
     }
     try {
-      prepareTargetDeliveryInDemandAggregateState(state, command.intent);
+      prepareDeliveryInDemandAggregateState(state, command.envelope);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1642,32 +1525,10 @@ export function decideDemandEventSourcingCommand(
     return singleEvent(
       parseDemandUncommittedEvent({
         eventId: command.eventId,
-        demandId: command.intent.demandId,
-        recordedAt: command.intent.preparedAt,
-        eventType: "delivery.target-delivery-prepared",
-        data: { intent: command.intent },
-      }),
-    );
-  }
-  if (command.commandType === "testing.prepare-test-delivery") {
-    if (state.demandId !== command.intent.demandId) {
-      fail("identity", "$/intent/demandId");
-    }
-    try {
-      prepareTestDeliveryInDemandAggregateState(state, command.intent);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.intent.demandId,
-        recordedAt: command.intent.preparedAt,
-        eventType: "testing.test-delivery-prepared",
-        data: { intent: command.intent },
+        demandId: command.envelope.demandId,
+        recordedAt: command.envelope.preparedAt,
+        eventType: "delivery.delivery-prepared",
+        data: { envelope: command.envelope },
       }),
     );
   }
@@ -1893,11 +1754,21 @@ export function evolveDemandEventSourcingState(
       throw error;
     }
   }
-  if (event.eventType === "delivery.target-delivery-prepared") {
+  if (event.eventType === "delivery.delivery-prepared") {
     try {
-      return prepareTargetDeliveryInDemandAggregateState(
+      return prepareDeliveryInDemandAggregateState(state, event.data.envelope);
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/targetTasks");
+      }
+      throw error;
+    }
+  }
+  if (event.eventType === "delivery.delivery-outcome-recorded") {
+    try {
+      return recordDeliveryOutcomeInDemandAggregateState(
         state,
-        event.data.intent,
+        event.data.outcome,
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
@@ -1906,51 +1777,9 @@ export function evolveDemandEventSourcingState(
       throw error;
     }
   }
-  if (event.eventType === "testing.test-delivery-prepared") {
+  if (event.eventType === "delivery.delivery-rearmed") {
     try {
-      return prepareTestDeliveryInDemandAggregateState(
-        state,
-        event.data.intent,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "delivery.target-host-effect-claimed") {
-    try {
-      return claimTargetHostEffectInDemandAggregateState(
-        state,
-        event.data.claim,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "delivery.target-host-effect-observed") {
-    try {
-      return observeTargetHostEffectInDemandAggregateState(
-        state,
-        event.data.observation,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "delivery.target-host-effect-rearmed") {
-    try {
-      return rearmTargetHostEffectInDemandAggregateState(
-        state,
-        event.data.rearm,
-      );
+      return rearmDeliveryInDemandAggregateState(state, event.data.rearm);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");

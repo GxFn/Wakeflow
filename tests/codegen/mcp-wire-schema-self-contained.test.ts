@@ -227,151 +227,108 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   equal(Object.hasOwn(testTargetTask.properties as JsonObject, "repositoryId"), false);
   equal(Object.hasOwn(testTargetTask.properties as JsonObject, "testCard"), true);
 
-  const deliveryRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-delivery-preparation-request.schema.json",
+  const prepareRequest = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-request.schema.json",
   );
-  const deliveryResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-delivery-preparation-result.schema.json",
+  const prepareResult = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-result.schema.json",
   );
-  for (const sharedDefinition of [
-    "plan",
-    "intent",
-    "intentTarget",
-    "intentRoute",
-    "rework",
-    "productDefectRemediation",
-    "reviewDecisionReference",
-    "previousResultReference",
-    "requiredCorrection",
-    "productDefectRequiredCorrection",
-    "checkId",
-    "longSummary",
-    "methodSummary",
-    "observationSummary",
-    "portableResourcePath",
-    "sha256Digest",
-    "utcInstant",
-    "hostId",
-    "programId",
-    "demandId",
-    "targetTaskId",
-    "taskPackageId",
-    "windowId",
-    "bindingId",
-    "targetDeliveryId",
-    "targetReviewDecisionId",
-    "targetResultId",
-    "productDefectRemediationId",
-    "eventId",
-    "commitId",
-  ]) {
-    deepEqual(
-      definition(deliveryRequest, sharedDefinition),
-      definition(deliveryResult, sharedDefinition),
-      `Delivery Preparation wire definition ${sharedDefinition} must not drift`,
-    );
-  }
-  const domainIntent = readSchema(
-    "src/contracts/schemas/governance/delivery/target-delivery-intent.schema.json",
-  );
-  const publicIntent = definition(deliveryRequest, "intent");
-  deepEqual(
-    [...(publicIntent.required as string[])].sort(),
-    [...(domainIntent.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicIntent.properties as Record<string, unknown>).sort(),
-    Object.keys(domainIntent.properties as Record<string, unknown>).sort(),
-    "Public Delivery Intent fields must mirror the domain Intent",
-  );
-
-  const claimRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-host-effect-claim-request.schema.json",
-  );
-  const claimResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-host-effect-claim-result.schema.json",
-  );
-  for (const sharedDefinition of [
-    "sha256Digest",
-    "utcInstant",
-    "hostId",
-    "demandId",
-    "targetTaskId",
-    "targetDeliveryId",
-    "windowId",
-    "bindingId",
-  ]) {
-    deepEqual(
-      definition(claimRequest, sharedDefinition),
-      definition(claimResult, sharedDefinition),
-      `Host Effect Claim wire definition ${sharedDefinition} must not drift`,
-    );
-  }
-  const domainObservation = readSchema(
-    "src/contracts/schemas/workspace/agent-host-window-observation.schema.json",
-  );
-  const publicObservation = definition(claimRequest, "observation");
-  deepEqual(
-    [...(publicObservation.required as string[])].sort(),
-    [...(domainObservation.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicObservation.properties as Record<string, unknown>).sort(),
-    Object.keys(domainObservation.properties as Record<string, unknown>).sort(),
-    "Public Claim observation fields must mirror the transient domain observation",
-  );
-
   const outcomeRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-host-effect-outcome-request.schema.json",
+    "src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-request.schema.json",
   );
   const outcomeResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-host-effect-outcome-result.schema.json",
+    "src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-result.schema.json",
   );
-  for (const sharedDefinition of ["sha256Digest", "utcInstant", "demandId", "claimId"]) {
-    deepEqual(
-      definition(outcomeRequest, sharedDefinition),
-      definition(outcomeResult, sharedDefinition),
-      `Host Effect Outcome wire definition ${sharedDefinition} must not drift`,
-    );
-  }
-  for (const sharedDefinition of ["sha256Digest", "demandId", "claimId"]) {
-    deepEqual(
-      definition(claimResult, sharedDefinition),
-      definition(outcomeRequest, sharedDefinition),
-      `Claim result and Outcome request definition ${sharedDefinition} must not drift`,
-    );
-  }
-
   const rearmRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-host-effect-rearm-request.schema.json",
+    "src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-request.schema.json",
   );
   const rearmResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-host-effect-rearm-result.schema.json",
+    "src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-result.schema.json",
   );
-  for (const sharedDefinition of ["sha256Digest", "demandId", "claimId"]) {
+  const deliveryIdentityDefinitions = [
+    "sha256Digest",
+    "utcInstant",
+    "demandId",
+    "targetTaskId",
+    "deliveryId",
+    "claimId",
+    "windowId",
+    "bindingId",
+    "eventId",
+    "commitId",
+  ];
+  for (const [label, left, right] of [
+    ["Prepare Delivery", prepareRequest, prepareResult],
+    ["Record Delivery Outcome", outcomeRequest, outcomeResult],
+    ["Rearm Delivery", rearmRequest, rearmResult],
+    ["Prepare result and Outcome request", prepareResult, outcomeRequest],
+    ["Outcome result and Rearm request", outcomeResult, rearmRequest],
+  ] as const) {
+    for (const sharedDefinition of deliveryIdentityDefinitions) {
+      deepEqual(
+        definition(left, sharedDefinition),
+        definition(right, sharedDefinition),
+        `${label} wire definition ${sharedDefinition} must not drift`,
+      );
+    }
+  }
+  for (const sharedDefinition of [
+    "permit",
+    "hostAction",
+    "fence",
+    "delivery",
+    "event",
+    "commit",
+    "next",
+  ]) {
     deepEqual(
-      definition(rearmRequest, sharedDefinition),
+      definition(prepareResult, sharedDefinition),
       definition(rearmResult, sharedDefinition),
-      `Host Effect Rearm wire definition ${sharedDefinition} must not drift`,
-    );
-    deepEqual(
-      definition(outcomeResult, sharedDefinition),
-      definition(rearmRequest, sharedDefinition),
-      `Outcome result and Rearm request definition ${sharedDefinition} must not drift`,
+      `Prepare and Rearm permit definition ${sharedDefinition} must not drift`,
     );
   }
-  const domainRearm = readSchema(
-    "src/contracts/schemas/governance/delivery/target-host-effect-rearm.schema.json",
-  );
-  const publicRearm = definition(rearmResult, "rearm");
   deepEqual(
-    [...(publicRearm.required as string[])].sort(),
-    [...(domainRearm.required as string[])].sort(),
+    Object.keys(prepareRequest.properties as JsonObject).sort(),
+    [
+      "authored",
+      "demandId",
+      "expectedStreamRevision",
+      "idempotencyKey",
+      "language",
+      "root",
+      "targetTaskId",
+    ],
+    "Public prepare request carries only the Controller-authored parts and stream position",
   );
+  deepEqual(Object.keys(definition(prepareRequest, "authored").properties as JsonObject).sort(), [
+    "boundary",
+    "focus",
+    "goal",
+  ]);
+  // 许可从不携带原始句柄：宿主动作只暴露句柄摘要。
+  deepEqual(Object.keys(definition(prepareResult, "hostAction").properties as JsonObject).sort(), [
+    "bindingId",
+    "displayTitle",
+    "effect",
+    "handleDigest",
+    "hostId",
+    "windowId",
+  ]);
   deepEqual(
-    Object.keys(publicRearm.properties as Record<string, unknown>).sort(),
-    Object.keys(domainRearm.properties as Record<string, unknown>).sort(),
-    "Public Rearm fields must mirror the domain Rearm fact",
+    Object.keys(outcomeRequest.properties as JsonObject).sort(),
+    [
+      "attempt",
+      "claimDigest",
+      "deliveryId",
+      "demandId",
+      "expectedStreamRevision",
+      "idempotencyKey",
+      "observedAt",
+      "readback",
+      "resolution",
+      "root",
+    ],
+    "Public outcome request never restores a disposition echo: Wakeflow derives it",
   );
 
   const resultImportRequest = readSchema(
@@ -383,7 +340,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   for (const sharedDefinition of [
     "sha256Digest",
     "demandId",
-    "claimId",
+    "targetDeliveryId",
     "repositoryId",
     "portableResourcePath",
     "gitObjectId",
@@ -764,84 +721,6 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     Object.keys(publicTestCardAuthorityMember.properties as Record<string, unknown>).sort(),
     Object.keys(domainAuthorityMember.properties as Record<string, unknown>).sort(),
     "Public TestCard Authority reference fields must mirror Ledger Authority",
-  );
-
-  const testDeliveryRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-test-delivery-preparation-request.schema.json",
-  );
-  const testDeliveryResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-test-delivery-preparation-result.schema.json",
-  );
-  for (const sharedDefinition of [
-    "plan",
-    "intent",
-    "intentTarget",
-    "intentRoute",
-    "testExecutionAttempt",
-    "testCardTuple",
-    "replacement",
-    "rerunSource",
-    "environmentSetup",
-    "setupPolicy",
-    "portableResourcePath",
-    "sha256Digest",
-    "utcInstant",
-    "hostId",
-    "programId",
-    "demandId",
-    "targetTaskId",
-    "taskPackageId",
-    "testCardId",
-    "windowId",
-    "bindingId",
-    "targetDeliveryId",
-    "testAttemptId",
-    "targetResultId",
-    "targetReviewDecisionId",
-    "claimId",
-    "eventId",
-    "commitId",
-  ]) {
-    deepEqual(
-      definition(testDeliveryRequest, sharedDefinition),
-      definition(testDeliveryResult, sharedDefinition),
-      `Test Delivery Preparation wire definition ${sharedDefinition} must not drift`,
-    );
-  }
-
-  const domainTestDeliveryIntent = readSchema(
-    "src/contracts/schemas/governance/testing/test-delivery-intent.schema.json",
-  );
-  const publicTestDeliveryIntent = definition(testDeliveryRequest, "intent");
-  deepEqual(
-    [...(publicTestDeliveryIntent.required as string[])].sort(),
-    [...(domainTestDeliveryIntent.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicTestDeliveryIntent.properties as Record<string, unknown>).sort(),
-    Object.keys(domainTestDeliveryIntent.properties as Record<string, unknown>).sort(),
-    "Public Test Delivery Intent fields must mirror the domain Intent",
-  );
-
-  const domainTestExecutionAttempt = readSchema(
-    "src/contracts/schemas/governance/testing/test-execution-attempt.schema.json",
-  );
-  const publicTestExecutionAttempt = definition(testDeliveryRequest, "testExecutionAttempt");
-  deepEqual(
-    [...(publicTestExecutionAttempt.required as string[])].sort(),
-    [...(domainTestExecutionAttempt.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicTestExecutionAttempt.properties as Record<string, unknown>).sort(),
-    Object.keys(domainTestExecutionAttempt.properties as Record<string, unknown>).sort(),
-    "Public Test Execution Attempt fields must mirror the domain Attempt",
-  );
-
-  const testDeliveryPreviewRequest = definition(testDeliveryRequest, "previewRequest");
-  deepEqual(
-    Object.keys(testDeliveryPreviewRequest.properties as Record<string, unknown>).sort(),
-    ["demandId", "mode", "root", "targetTaskId"],
-    "Public Test Delivery preview must not restore mode or lineage echoes",
   );
 
   const authoredContent = definition(testCardPlanningRequest, "authoredContent");

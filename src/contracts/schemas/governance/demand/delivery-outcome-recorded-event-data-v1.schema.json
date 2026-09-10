@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:delivery-outcome-recorded-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DELIVERY_OUTCOME_RECORDED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowDeliveryOutcomeRecordedEventDataV1",
+  "description": "`delivery.delivery-outcome-recorded` 事件的数据：一次投递代际的处置。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome"],
+  "properties": {
+    "outcome": {
+      "$ref": "urn:wakeflow:governance:delivery:delivery-outcome:v1"
+    }
+  }
+}

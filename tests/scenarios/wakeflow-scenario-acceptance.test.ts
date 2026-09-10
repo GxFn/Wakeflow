@@ -14,9 +14,12 @@ import {
   WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/demand/contract.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-delivery-preparation-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
+import {
+  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/delivery/contract.js";
+import { computeDeliveryPromptDigest } from "../../src/governance/delivery/delivery-envelope.js";
+import { workClaimRef } from "../../src/kernel/layout.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
@@ -55,8 +58,8 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 八个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
- * 规划任务 → 投递、认领、回执、结果、评审后完成即归档 → 续接与取消。
+ * 十个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
+ * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 结果、评审后完成即归档 → 续接与取消。
  * 所有调用都经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内。
  */
 
@@ -77,6 +80,33 @@ interface ScenarioContext {
   productHandle?: string;
   targetTaskId?: string;
   taskPackageId?: string;
+  delivery?: DeliveryPermit | undefined;
+  deliveryAccepted?: boolean;
+}
+
+interface DeliveryPermit {
+  readonly deliveryId: string;
+  readonly claimId: string;
+  readonly claimDigest: string;
+  readonly prompt: string;
+  readonly issuedAt: string;
+  readonly streamRevision: number;
+}
+
+interface OutcomeResult {
+  readonly status: string;
+  readonly outcome: {
+    readonly disposition: string;
+    readonly evidenceKind: string;
+    readonly claimHandling: string;
+  };
+  readonly target: { readonly phase: string };
+  readonly event: { readonly streamRevision: number };
+  readonly next: {
+    readonly frontier: string | null;
+    readonly owner: string | null;
+    readonly blockers: readonly string[];
+  };
 }
 
 async function call(
@@ -654,44 +684,71 @@ async function boardPackageStatus(context: ScenarioContext): Promise<string> {
     .status;
 }
 
-/** 卡 6、7 的工具链把已规划的实现目标推到 accepted；这里是 Agent 与 Controller 的真实调用序列。 */
-async function driveTargetToAcceptance(context: ScenarioContext): Promise<string> {
-  const root = context.workspace.workspacePath;
-  if (
-    !context.demandId ||
-    !context.targetTaskId ||
-    !context.taskPackageId ||
-    !context.productWindowId ||
-    !context.productBinding ||
-    !context.productHandle ||
-    !context.repositoryId
-  ) {
+async function currentStreamRevision(context: ScenarioContext): Promise<number> {
+  const route = await inspectRoute(context);
+  const revision = route.route?.observedEventStream.streamRevision;
+  if (revision === undefined) throw new Error("expected an active route with a stream revision");
+  return revision;
+}
+
+/** Controller 一次调用准备投递：取得声明、追加信封、拿到许可；宿主发送不在这里。 */
+async function prepareDelivery(
+  context: ScenarioContext,
+  idempotencyKey: string,
+  expectedStreamRevision: number,
+): Promise<{ readonly status: string; readonly permit: DeliveryPermit }> {
+  if (!context.demandId || !context.targetTaskId) {
     throw new Error("scenario ordering: plan-implementation-task must run first");
   }
-  const preparation = await call(context, WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME, {
-    root,
-    mode: "preview",
+  const prepared = await call(context, WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
     demandId: context.demandId,
+    idempotencyKey,
+    expectedStreamRevision,
     targetTaskId: context.targetTaskId,
-  });
-  const preparationPlan = preparation.structuredContent as {
-    readonly plan: Readonly<Record<string, unknown>>;
-    readonly planDigest: string;
-  };
-  const prepared = await call(context, WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME, {
-    root,
-    mode: "apply",
-    plan: preparationPlan.plan,
-    planDigest: preparationPlan.planDigest,
+    authored: {
+      goal: "按任务包完成本轮实现，只改分配仓库。",
+      focus: ["先读任务包与需求锚点", "聚焦验证通过后再回写结果"],
+      boundary: "不触碰其他仓库；不自行提交。",
+    },
+    language: "en",
   });
   assertNoPrivatePath(context, prepared);
-  const delivery = (
-    prepared.structuredContent as {
-      readonly targetDelivery: { readonly targetDeliveryId: string; readonly intentDigest: string };
-    }
-  ).targetDelivery;
+  const body = prepared.structuredContent as {
+    readonly status: string;
+    readonly delivery: { readonly deliveryId: string };
+    readonly permit: {
+      readonly prompt: string;
+      readonly hostAction: { readonly effect: string };
+      readonly fence: {
+        readonly claimId: string;
+        readonly claimDigest: string;
+        readonly streamRevision: number;
+      };
+      readonly issuedAt: string;
+    };
+  };
+  equal(body.permit.hostAction.effect, "send-prompt-to-window");
+  return {
+    status: body.status,
+    permit: {
+      deliveryId: body.delivery.deliveryId,
+      claimId: body.permit.fence.claimId,
+      claimDigest: body.permit.fence.claimDigest,
+      prompt: body.permit.prompt,
+      issuedAt: body.permit.issuedAt,
+      streamRevision: body.permit.fence.streamRevision,
+    },
+  };
+}
+
+/** 目标窗口收到 prompt 后，宿主 hook 会留下 user-prompt-submit 记录；这里代替宿主写入。 */
+async function landPrompt(context: ScenarioContext, prompt: string): Promise<void> {
+  if (!context.productWindowId || !context.productHandle) {
+    throw new Error("scenario ordering: window-handshake must run first");
+  }
   const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
-    root,
+    root: context.workspace.workspacePath,
     operation: "inspect",
     windowId: context.productWindowId,
   });
@@ -700,49 +757,113 @@ async function driveTargetToAcceptance(context: ScenarioContext): Promise<string
       readonly launchIntent: { readonly root: { readonly configuredPlacement: string } };
     }
   ).launchIntent.root.configuredPlacement;
-  const claimCall = await call(context, WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME, {
-    root,
-    workType: "implementation",
-    demandId: context.demandId,
-    targetTaskId: context.targetTaskId,
-    targetDeliveryId: delivery.targetDeliveryId,
-    intentDigest: delivery.intentDigest,
-    observation: {
-      kind: "WakeflowAgentHostWindowObservation",
-      schemaVersion: 1,
-      source: "agent-host-inspection-result",
+  const root = await RootedDirectory.open(context.workspace.workspacePath);
+  try {
+    await writeHostHookObservation(root, {
       hostId: "codex",
-      windowId: context.productWindowId,
-      bindingId: context.productBinding.bindingId,
-      handle: { kind: "codex-thread", value: context.productHandle },
-      attestedRoot: {
-        status: "matches-configured-root",
-        logicalRoot: { kind: "repository", repositoryId: context.repositoryId },
-        configuredPlacement: placement,
-      },
-      observedAt: new Date().toISOString(),
-    },
-  });
-  // 认领结果里的宿主动作 prompt 由 Agent 原样粘贴给目标窗口，其中含工作区路径是投递切片的既有语义。
-  const claim = claimCall.structuredContent as {
-    readonly status: string;
-    readonly claim: { readonly claimId: string; readonly claimDigest: string };
-    readonly action: { readonly issuedAt: string } | null;
-  };
-  equal(claim.status, "issued");
-  if (claim.action === null) throw new Error("expected a host action");
-  const outcomeCall = await call(context, WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME, {
-    root,
+      event: "user-prompt-submit",
+      sessionId: context.productHandle,
+      cwd: path.resolve(context.workspace.workspacePath, placement),
+      recordedAt: parseUtcInstant(new Date().toISOString()),
+      promptDigest: computeDeliveryPromptDigest(prompt),
+    });
+  } finally {
+    await root.close();
+  }
+}
+
+/** Agent 记录一次发送尝试；处置由 Wakeflow 按证据派生，而不是由 Agent 宣称。 */
+async function recordOutcome(
+  context: ScenarioContext,
+  permit: DeliveryPermit,
+  idempotencyKey: string,
+): Promise<OutcomeResult> {
+  if (!context.demandId) throw new Error("scenario ordering: create-demand must run first");
+  const recorded = await call(context, WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
     demandId: context.demandId,
-    actionId: claim.claim.claimId,
-    claimDigest: claim.claim.claimDigest,
-    attempt: { status: "accepted", evidence: { scenario: "accepted" } },
-    readback: { status: "pending", evidence: { scenario: false } },
-    observedAt: new Date(Math.max(Date.now(), Date.parse(claim.action.issuedAt) + 1)).toISOString(),
+    idempotencyKey,
+    expectedStreamRevision: await currentStreamRevision(context),
+    deliveryId: permit.deliveryId,
+    claimDigest: permit.claimDigest,
+    attempt: { status: "sent" },
+    readback: { status: "pending" },
+    observedAt: new Date(Math.max(Date.now(), Date.parse(permit.issuedAt) + 1)).toISOString(),
   });
-  const outcome = outcomeCall.structuredContent as {
-    readonly observation: { readonly observationDigest: string };
-  };
+  assertNoPrivatePath(context, recorded);
+  return recorded.structuredContent as OutcomeResult;
+}
+
+async function scenarioDeliveryChain(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.productWindowId)
+    throw new Error("scenario ordering: window-handshake must run first");
+  const before = await inspectRoute(context);
+  equal(before.route?.frontiers[0]?.kind, "implementation-delivery-planning");
+  const expectedStreamRevision = await currentStreamRevision(context);
+  const prepared = await prepareDelivery(context, "scenario-prepare-1", expectedStreamRevision);
+  equal(prepared.status, "committed");
+  equal(prepared.permit.prompt.includes(context.workspace.fixtureRoot), false);
+  equal(prepared.permit.prompt.includes(prepared.permit.deliveryId), true);
+  equal(prepared.permit.prompt.includes(prepared.permit.claimDigest), true);
+  equal(existsSync(path.join(root, ...workClaimRef(context.productWindowId).split("/"))), true);
+  const afterPrepare = await inspectRoute(context);
+  equal(afterPrepare.route?.frontiers[0]?.kind, "implementation-host-effect-execution");
+  const replayed = await prepareDelivery(context, "scenario-prepare-1", expectedStreamRevision);
+  equal(replayed.status, "idempotent");
+  equal(replayed.permit.deliveryId, prepared.permit.deliveryId);
+  equal(replayed.permit.claimDigest, prepared.permit.claimDigest);
+
+  // 发送已发出但目标会话还没有留下记录：结局是 indeterminate，声明保留，等待证据。
+  const indeterminate = await recordOutcome(context, prepared.permit, "scenario-outcome-1");
+  equal(indeterminate.status, "recorded");
+  equal(indeterminate.outcome.disposition, "indeterminate");
+  equal(indeterminate.outcome.claimHandling, "retain");
+  equal(indeterminate.target.phase, "host-effect-indeterminate");
+  equal(indeterminate.next.blockers.includes("landing-evidence-missing"), true);
+  equal(existsSync(path.join(root, ...workClaimRef(context.productWindowId).split("/"))), true);
+  context.delivery = prepared.permit;
+  context.deliveryAccepted = false;
+  return `prepare=${prepared.status}; replay=${replayed.status}; outcome=${indeterminate.outcome.disposition}; claim=${indeterminate.outcome.claimHandling}`;
+}
+
+async function scenarioAmbiguousResolution(context: ScenarioContext): Promise<string> {
+  if (!context.delivery) throw new Error("scenario ordering: delivery-chain must run first");
+  await landPrompt(context, context.delivery.prompt);
+  const accepted = await recordOutcome(context, context.delivery, "scenario-outcome-2");
+  equal(accepted.status, "recorded");
+  equal(accepted.outcome.disposition, "accepted");
+  equal(accepted.outcome.evidenceKind, "hook-record");
+  equal(accepted.outcome.claimHandling, "retain");
+  equal(accepted.target.phase, "host-effect-accepted");
+  equal(accepted.next.frontier, "implementation-target-result-import");
+  const route = await inspectRoute(context);
+  equal(route.route?.frontiers[0]?.kind, "implementation-target-result-import");
+  context.deliveryAccepted = true;
+  return `outcome=${accepted.outcome.disposition}; evidence=${accepted.outcome.evidenceKind}; route=${route.route?.frontiers[0]?.kind}`;
+}
+
+/** 卡 7 的工具链把已 accepted 的投递推到评审 accept；未投递时先走完整投递链。 */
+async function driveTargetToAcceptance(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (
+    !context.demandId ||
+    !context.targetTaskId ||
+    !context.taskPackageId ||
+    !context.productWindowId
+  ) {
+    throw new Error("scenario ordering: plan-implementation-task must run first");
+  }
+  if (!context.delivery || context.deliveryAccepted !== true) {
+    const revision = await currentStreamRevision(context);
+    const prepared = await prepareDelivery(context, `scenario-prepare-r${revision}`, revision);
+    await landPrompt(context, prepared.permit.prompt);
+    const accepted = await recordOutcome(context, prepared.permit, `scenario-outcome-r${revision}`);
+    equal(accepted.outcome.disposition, "accepted");
+    context.delivery = prepared.permit;
+    context.deliveryAccepted = true;
+  }
+  const permit = context.delivery;
   const demandRoot = await RootedDirectory.open(
     path.join(root, ...demandFinalRootRef(context.demandId).split("/")),
   );
@@ -759,14 +880,16 @@ async function driveTargetToAcceptance(context: ScenarioContext): Promise<string
   const imported = await call(context, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, {
     root,
     demandId: context.demandId,
-    actionId: claim.claim.claimId,
-    observationDigest: outcome.observation.observationDigest,
+    deliveryId: permit.deliveryId,
+    claimDigest: permit.claimDigest,
     report: {
       workType: "implementation",
       content: createImplementationTargetResultReportContentFixture(taskPackage),
     },
   });
   assertNoPrivatePath(context, imported);
+  const importStatus = (imported.structuredContent as { readonly status: string }).status;
+  equal(existsSync(path.join(root, ...workClaimRef(context.productWindowId).split("/"))), false);
   const inspectionCall = await call(
     context,
     WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
@@ -799,7 +922,9 @@ async function driveTargetToAcceptance(context: ScenarioContext): Promise<string
   );
   const decision = decided.structuredContent as { readonly status: string };
   equal(decision.status, "decided");
-  return `claim=${claim.status}; review=${decision.status}`;
+  context.delivery = undefined;
+  context.deliveryAccepted = false;
+  return `import=${importStatus}; review=${decision.status}`;
 }
 
 async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<string> {
@@ -973,6 +1098,8 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-03/requirement-package": scenarioRequirementPackage,
     "card-04/create-demand": scenarioCreateDemand,
     "card-05/plan-implementation-task": scenarioPlanImplementationTask,
+    "card-06/delivery-chain": scenarioDeliveryChain,
+    "card-06/ambiguous-resolution": scenarioAmbiguousResolution,
     "card-08/complete-and-archive": scenarioCompleteAndArchive,
     "card-04/complete-and-continue": scenarioCompleteAndContinue,
   });

@@ -11,7 +11,7 @@ import {
 import {
   projectTargetDeliveryReworkContext,
   type TargetDeliveryReworkContext,
-} from "./target-delivery-intent.js";
+} from "./delivery-envelope.js";
 
 /**
  * Wakeflow Governance / Delivery：从完整Review历史组装返工投递上下文。

@@ -18,10 +18,7 @@ import type { PortableResourcePath } from "../../foundation/filesystem/portable-
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
-import {
-  inspectWindowWorkClaim,
-  releaseWindowWorkClaimInStore,
-} from "../../governance/delivery/window-work-claim-store.js";
+import { inspectWorkClaim, releaseWorkClaim } from "../../kernel/work-claims.js";
 import {
   DemandEventSourcingCommandHandlerError,
   executeDemandEventSourcingCommand,
@@ -728,18 +725,10 @@ async function releaseClaims(context: DemandSliceContext, plan: TerminalPlan): P
   if (plan.action !== "cancel") return 0;
   let released = 0;
   for (const windowId of plan.windowIds) {
-    const inspected = await inspectWindowWorkClaim(
-      context.root,
-      windowId as WakeflowDurableId<"window">,
-      signalOptions(context.signal),
-    );
-    if (inspected.status !== "claimed" || inspected.claim === undefined) continue;
-    if (inspected.claim.target.demandId !== plan.demandId) continue;
-    await releaseWindowWorkClaimInStore(
-      context.root,
-      inspected.claim,
-      signalOptions(context.signal),
-    );
+    const inspected = await inspectWorkClaim(context.root, windowId, signalOptions(context.signal));
+    if (inspected.claim === null) continue;
+    if (inspected.claim.holder.demandId !== plan.demandId) continue;
+    await releaseWorkClaim(context.root, inspected.claim, signalOptions(context.signal));
     released += 1;
   }
   return released;

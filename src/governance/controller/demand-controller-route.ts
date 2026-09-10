@@ -97,10 +97,6 @@ type ImplementationFrontierDescriptor =
       readonly owner: "target-delivery-preparation";
     }>
   | Readonly<{
-      readonly kind: "implementation-host-effect-claim";
-      readonly owner: "target-host-effect-claim";
-    }>
-  | Readonly<{
       readonly kind: "implementation-host-effect-execution";
       readonly owner: "agent-host";
     }>
@@ -131,12 +127,12 @@ type TestFrontierDescriptor =
       readonly owner: "test-delivery-preparation";
     }>
   | Readonly<{
-      readonly kind: "test-host-effect-claim";
-      readonly owner: "target-host-effect-claim";
-    }>
-  | Readonly<{
       readonly kind: "test-host-effect-execution";
       readonly owner: "agent-host";
+    }>
+  | Readonly<{
+      readonly kind: "test-host-effect-rearm";
+      readonly owner: "target-host-effect-rearm";
     }>
   | Readonly<{
       readonly kind: "test-target-result-import";
@@ -158,10 +154,7 @@ type TestFrontierDescriptor =
       readonly kind: "test-review-resume";
       readonly owner: "controller-target-review-resume";
     }>
-  | Readonly<{
-      readonly kind: "test-delivery-replacement-planning";
-      readonly owner: "test-delivery-preparation";
-    }>;
+;
 
 type ScopedDemandFrontierDescriptor = Readonly<
   { readonly scope: "demand" } & DemandFrontierDescriptor
@@ -294,12 +287,6 @@ export function resolveDemandControllerImplementationFrontierDescriptor(
     case "delivery-prepared":
       return Object.freeze({
         scope: "target" as const,
-        kind: "implementation-host-effect-claim" as const,
-        owner: "target-host-effect-claim" as const,
-      });
-    case "host-effect-claimed":
-      return Object.freeze({
-        scope: "target" as const,
         kind: "implementation-host-effect-execution" as const,
         owner: "agent-host" as const,
       });
@@ -366,13 +353,7 @@ export function resolveDemandControllerPostAcceptanceFrontierDescriptor(
         kind: "test-delivery-planning" as const,
         owner: "test-delivery-preparation" as const,
       });
-    case "test-dispatch-planning":
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "test-host-effect-claim" as const,
-        owner: "target-host-effect-claim" as const,
-      });
-    case "test-host-effect-claimed":
+    case "test-host-effect-execution":
       return Object.freeze({
         scope: "target" as const,
         kind: "test-host-effect-execution" as const,
@@ -408,11 +389,11 @@ export function resolveDemandControllerPostAcceptanceFrontierDescriptor(
         kind: "test-review-resume" as const,
         owner: "controller-target-review-resume" as const,
       });
-    case "test-delivery-replacement-planning":
+    case "test-delivery-rearm-planning":
       return Object.freeze({
         scope: "target" as const,
-        kind: "test-delivery-replacement-planning" as const,
-        owner: "test-delivery-preparation" as const,
+        kind: "test-host-effect-rearm" as const,
+        owner: "target-host-effect-rearm" as const,
       });
   }
 }
@@ -496,8 +477,7 @@ function targetTaskIdFromPostAcceptanceStage(
       return null;
     case "test-delivery-planning":
       return stage.testTask.targetTaskId;
-    case "test-dispatch-planning":
-    case "test-host-effect-claimed":
+    case "test-host-effect-execution":
     case "test-result-planning":
       return stage.testDelivery.targetTaskId;
     case "test-result-review-planning":
@@ -506,7 +486,7 @@ function targetTaskIdFromPostAcceptanceStage(
     case "test-product-defect-escalated":
     case "test-review-blocked":
       return stage.testReview.targetTaskId;
-    case "test-delivery-replacement-planning":
+    case "test-delivery-rearm-planning":
       return stage.rejectedDelivery.targetTaskId;
   }
 }

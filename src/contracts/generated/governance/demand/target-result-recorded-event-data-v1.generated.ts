@@ -4,7 +4,7 @@
  */
 
 /**
- * Wakeflow从当前TaskPackage与Host Effect Event authority补齐的不可变implementation或Test TargetResult。
+ * Wakeflow 从当前任务包与投递处置事件权威补齐的不可变 implementation 或 Test TargetResult。
  */
 export type WakeflowTargetResult = ({
 [k: string]: unknown | undefined
@@ -16,10 +16,10 @@ targetResultId: string
 programId: string
 demandId: string
 targetTaskId: string
-targetDeliveryId: string
+deliveryId: string
 taskPackage: TaskPackage
 assignment: (ImplementationAssignment | TestAssignment)
-hostEffect: HostEffect
+delivery: Delivery
 report: (WakeflowImplementationTargetResultReport | WakeflowTestTargetResultReport)
 testExecution?: TestExecution
 resultDigest: WakeflowSha256DigestText
@@ -98,15 +98,15 @@ windowId: string
 export interface TestAssignment {
 windowId: string
 }
-export interface HostEffect {
-actionId: string
+export interface Delivery {
+generation: number
+fence: {
+claimId: string
 claimDigest: WakeflowSha256DigestText
-claimEventId: string
-claimCommitId: string
-observationDigest: WakeflowSha256DigestText
+}
+outcomeDigest: WakeflowSha256DigestText
 disposition: ("accepted" | "indeterminate")
 readbackStatus: ("confirmed" | "pending" | "unavailable")
-observedEventId: string
 observedAt: WakeflowUtcInstantText
 }
 /**
@@ -182,7 +182,6 @@ testCard: {
 testCardId: string
 testCardDigest: WakeflowSha256DigestText
 }
-testDispatchPacketDigest: WakeflowSha256DigestText
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

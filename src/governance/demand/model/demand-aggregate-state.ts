@@ -2,7 +2,6 @@ import type {
   WakeflowDemandAggregateState as DemandAggregateStateWire,
   CurrentDelivery as ProductCurrentDeliveryWire,
   TestCurrentDelivery as TestCurrentDeliveryWire,
-  TestClaimedCurrentDelivery as TestClaimedCurrentDeliveryWire,
   TestObservedCurrentDelivery as TestObservedCurrentDeliveryWire,
   TestResultCurrentDelivery as TestResultCurrentDeliveryWire,
   TestReviewedCurrentDelivery as TestReviewedCurrentDeliveryWire,
@@ -28,11 +27,6 @@ import {
   type JsonValue,
 } from "../../../foundation/data/json-value.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  type PortableResourcePath,
-} from "../../../foundation/filesystem/portable-resource-path.js";
-import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
@@ -56,31 +50,25 @@ import {
   type TaskPackageCommitExpectation,
 } from "../../tasking/task-package.js";
 import {
-  parseTargetDeliveryIntent,
-  targetDeliveryPurpose,
-  TargetDeliveryIntentError,
-  type TargetDeliveryIntent,
-} from "../../delivery/target-delivery-intent.js";
+  deliveryPurpose,
+  DeliveryEnvelopeError,
+  parseDeliveryEnvelope,
+  type DeliveryEnvelope,
+} from "../../delivery/delivery-envelope.js";
 import {
-  parseWindowWorkClaim,
-  parseWindowWorkClaimId,
-  WindowWorkClaimError,
-  type WindowWorkClaim,
-  type WindowWorkClaimId,
-} from "../../delivery/window-work-claim.js";
-import { windowWorkClaimRef } from "../../delivery/window-work-claim-resource-catalog.js";
+  DeliveryOutcomeError,
+  parseDeliveryOutcome,
+  type DeliveryDisposition,
+  type DeliveryEvidenceKind,
+  type DeliveryOutcome,
+  type DeliveryReadbackStatus,
+} from "../../delivery/delivery-outcome.js";
 import {
-  parseTargetDeliveryHostEffectObservation,
-  targetDeliveryHostEffectDisposition,
-  TargetDeliveryHostEffectObservationError,
-  type TargetDeliveryHostEffectDisposition,
-  type TargetDeliveryHostEffectObservation,
-} from "../../delivery/target-delivery-host-effect-observation.js";
-import {
-  parseTargetHostEffectRearm,
-  TargetHostEffectRearmError,
-  type TargetHostEffectRearm,
-} from "../../delivery/target-host-effect-rearm.js";
+  DELIVERY_REARM_LIMIT,
+  DeliveryRearmError,
+  parseDeliveryRearm,
+  type DeliveryRearm,
+} from "../../delivery/delivery-rearm.js";
 import {
   parseTargetResult,
   TargetResultError,
@@ -124,12 +112,6 @@ import {
   TestExecutionAttemptError,
   type TestExecutionAttempt,
 } from "../../testing/test-execution-attempt.js";
-import {
-  parseTestDeliveryIntent,
-  MAXIMUM_TEST_DELIVERY_AUTHORIZATIONS_PER_ATTEMPT,
-  TestDeliveryIntentError,
-  type TestDeliveryIntent,
-} from "../../testing/test-delivery-intent.js";
 import type { WakeflowWorkspaceHostId } from "../../../workspace/workspace-host-resource-profile.js";
 import {
   parseWakeflowWindowHostBindingId,
@@ -143,9 +125,9 @@ import {
  * 本状态不保存事件流修订号、事件尾部、身份/权威关系摘要或更新时间；这些事实
  * 属于事件溯源的持久化封装或快照。`authorityDigest` 让纯 Decider 能验证新任务绑定
  * publication 时冻结的 Authority；`targetTasks` 只保存调度前真正需要的最小摘要，
- * 完整 TaskPackage、TargetDeliveryIntent、WindowWorkClaim、Host Effect Observation、
- * Rearm、TargetResult 与Controller Review Decision仍属于事件数据；状态只保存当前
- * Delivery、Result和Review的最小摘要。`currentTestCard`只指向当前测试合同；已经
+ * 完整 TaskPackage、Delivery Envelope、Delivery Outcome、Delivery Rearm、TargetResult
+ * 与 Controller Review Decision 仍属于事件数据；状态只保存当前 Delivery（含围栏与
+ * 结局摘要）、Result 和 Review 的最小摘要，工作声明本身在内核的共享协调根。`currentTestCard`只指向当前测试合同；已经
  * 观察到产品缺陷的旧Test Target继续作为历史代际保留自己的Card、attempt、Result与
  * Decision。`managedEvidence`只在首个Evidence Event后出现，且只保存Manifest与payload
  * 的精确selector；完整Manifest仍由Event拥有。`pendingTestRetest`只记录产品缺陷修复后
@@ -177,53 +159,41 @@ export interface DemandPlannedTargetTaskState extends DemandImplementationTarget
   readonly phase: "planned";
 }
 
-export interface DemandDeliveryPreparedTargetTaskState extends DemandImplementationTargetTaskStateBase {
-  readonly phase: "delivery-prepared";
-  readonly currentDelivery: Readonly<{
-    readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
-    readonly intentDigest: Sha256Digest;
-    readonly hostId: WakeflowWorkspaceHostId;
-    readonly bindingId: WakeflowWindowHostBindingId;
-  }>;
-}
-
-export interface DemandWorkClaimSummary {
-  readonly claimId: WindowWorkClaimId;
-  readonly claimRef: PortableResourcePath;
+export interface DemandDeliveryFenceSummary {
+  readonly claimId: WakeflowDurableId<"work-claim">;
   readonly claimDigest: Sha256Digest;
-  readonly claimedAt: UtcInstant;
-  readonly hostObservationAuthorityDigest: Sha256Digest;
-  readonly claimEventId: WakeflowDurableId<"demand-event">;
-  readonly claimCommitId: WakeflowDurableId<"demand-event-commit">;
-  readonly claimEventStreamRevision: number;
-  readonly claimExpectedStateDigest: Sha256Digest;
+  readonly streamRevision: number;
 }
 
-interface DemandHostEffectDeliveryBase {
-  readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
-  readonly intentDigest: Sha256Digest;
+/** 当前投递的最小摘要：信封身份、代际、绑定代际与围栏；prompt 全文留在事件里。 */
+export interface DemandCurrentDeliveryBase {
+  readonly deliveryId: WakeflowDurableId<"target-delivery">;
+  readonly envelopeDigest: Sha256Digest;
+  readonly promptDigest: Sha256Digest;
+  readonly generation: number;
   readonly hostId: WakeflowWorkspaceHostId;
   readonly bindingId: WakeflowWindowHostBindingId;
-  readonly workClaim: Readonly<DemandWorkClaimSummary>;
+  readonly fence: Readonly<DemandDeliveryFenceSummary>;
 }
 
-export interface DemandHostEffectClaimedTargetTaskState extends DemandImplementationTargetTaskStateBase {
-  readonly phase: "host-effect-claimed";
-  readonly currentDelivery: Readonly<DemandHostEffectDeliveryBase>;
+export interface DemandDeliveryPreparedTargetTaskState extends DemandImplementationTargetTaskStateBase {
+  readonly phase: "delivery-prepared";
+  readonly currentDelivery: Readonly<DemandCurrentDeliveryBase>;
 }
 
-export interface DemandHostEffectSummary {
-  readonly observationDigest: Sha256Digest;
-  readonly disposition: TargetDeliveryHostEffectDisposition;
-  readonly readbackStatus: TargetDeliveryHostEffectObservation["readback"]["status"];
+export interface DemandDeliveryOutcomeSummary {
+  readonly outcomeDigest: Sha256Digest;
+  readonly disposition: DeliveryDisposition;
+  readonly evidenceKind: DeliveryEvidenceKind;
+  readonly readbackStatus: DeliveryReadbackStatus;
   readonly claimHandling: "retain" | "release-authorized";
   readonly observedAt: UtcInstant;
 }
 
 interface DemandObservedHostEffectTargetTaskStateBase extends DemandImplementationTargetTaskStateBase {
   readonly currentDelivery: Readonly<
-    DemandHostEffectDeliveryBase & {
-      readonly hostEffect: Readonly<DemandHostEffectSummary>;
+    DemandCurrentDeliveryBase & {
+      readonly outcome: Readonly<DemandDeliveryOutcomeSummary>;
     }
   >;
 }
@@ -251,8 +221,8 @@ export interface DemandTargetResultSummary {
 export interface DemandResultReportedTargetTaskState extends DemandImplementationTargetTaskStateBase {
   readonly phase: "result-reported";
   readonly currentDelivery: Readonly<
-    DemandHostEffectDeliveryBase & {
-      readonly hostEffect: Readonly<DemandHostEffectSummary>;
+    DemandCurrentDeliveryBase & {
+      readonly outcome: Readonly<DemandDeliveryOutcomeSummary>;
       readonly targetResult: Readonly<DemandTargetResultSummary>;
     }
   >;
@@ -268,8 +238,8 @@ export interface DemandTargetReviewDecisionSummary {
 
 interface DemandReviewedTargetTaskStateBase extends DemandImplementationTargetTaskStateBase {
   readonly currentDelivery: Readonly<
-    DemandHostEffectDeliveryBase & {
-      readonly hostEffect: Readonly<DemandHostEffectSummary>;
+    DemandCurrentDeliveryBase & {
+      readonly outcome: Readonly<DemandDeliveryOutcomeSummary>;
       readonly targetResult: Readonly<DemandTargetResultSummary>;
       readonly reviewDecision: Readonly<DemandTargetReviewDecisionSummary>;
     }
@@ -322,7 +292,6 @@ type DemandReviewedTargetPhase =
 export type DemandTargetTaskState =
   | DemandPlannedTargetTaskState
   | DemandDeliveryPreparedTargetTaskState
-  | DemandHostEffectClaimedTargetTaskState
   | DemandHostEffectAcceptedTargetTaskState
   | DemandHostEffectIndeterminateTargetTaskState
   | DemandHostEffectRejectedTargetTaskState
@@ -335,7 +304,6 @@ export type DemandTargetTaskState =
   | DemandSupersededTargetTaskState
   | DemandTestPlannedTargetTaskState
   | DemandTestDeliveryPreparedTargetTaskState
-  | DemandTestHostEffectClaimedTargetTaskState
   | DemandTestHostEffectAcceptedTargetTaskState
   | DemandTestHostEffectIndeterminateTargetTaskState
   | DemandTestHostEffectRejectedTargetTaskState
@@ -358,19 +326,15 @@ export interface DemandTestPlannedTargetTaskState extends DemandTestTargetTaskSt
   readonly phase: "planned";
 }
 
-export interface DemandTestDeliveryAuthorizationSummary {
-  readonly ordinal: number;
-  readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
-  readonly intentDigest: Sha256Digest;
+export interface DemandTestAttemptDeliverySummary {
+  readonly deliveryId: WakeflowDurableId<"target-delivery">;
+  readonly envelopeDigest: Sha256Digest;
   readonly preparedAt: UtcInstant;
 }
 
 export interface DemandTestAttemptState {
   readonly attempt: Readonly<TestExecutionAttempt>;
-  readonly deliveryAuthorizations: readonly [
-    Readonly<DemandTestDeliveryAuthorizationSummary>,
-    ...Readonly<DemandTestDeliveryAuthorizationSummary>[],
-  ];
+  readonly delivery: Readonly<DemandTestAttemptDeliverySummary>;
 }
 
 export type DemandTestAttemptLineage = readonly [
@@ -378,11 +342,7 @@ export type DemandTestAttemptLineage = readonly [
   ...Readonly<DemandTestAttemptState>[],
 ];
 
-interface DemandTestCurrentDeliveryBase {
-  readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
-  readonly intentDigest: Sha256Digest;
-  readonly hostId: WakeflowWorkspaceHostId;
-  readonly bindingId: WakeflowWindowHostBindingId;
+export interface DemandTestCurrentDeliveryBase extends DemandCurrentDeliveryBase {
   readonly testAttemptId: WakeflowDurableId<"test-attempt">;
 }
 
@@ -392,25 +352,10 @@ export interface DemandTestDeliveryPreparedTargetTaskState extends DemandTestTar
   readonly testAttempts: DemandTestAttemptLineage;
 }
 
-export interface DemandTestWorkClaimSummary extends DemandWorkClaimSummary {
-  readonly testDispatchPacketDigest: Sha256Digest;
-}
-
-export interface DemandTestHostEffectClaimedTargetTaskState extends DemandTestTargetTaskStateBase {
-  readonly phase: "test-host-effect-claimed";
-  readonly currentDelivery: Readonly<
-    DemandTestCurrentDeliveryBase & {
-      readonly workClaim: Readonly<DemandTestWorkClaimSummary>;
-    }
-  >;
-  readonly testAttempts: DemandTestAttemptLineage;
-}
-
 interface DemandTestObservedHostEffectTargetTaskStateBase extends DemandTestTargetTaskStateBase {
   readonly currentDelivery: Readonly<
     DemandTestCurrentDeliveryBase & {
-      readonly workClaim: Readonly<DemandTestWorkClaimSummary>;
-      readonly hostEffect: Readonly<DemandHostEffectSummary>;
+      readonly outcome: Readonly<DemandDeliveryOutcomeSummary>;
     }
   >;
   readonly testAttempts: DemandTestAttemptLineage;
@@ -432,8 +377,7 @@ export interface DemandTestResultReportedTargetTaskState extends DemandTestObser
   readonly phase: "test-result-reported";
   readonly currentDelivery: Readonly<
     DemandTestCurrentDeliveryBase & {
-      readonly workClaim: Readonly<DemandTestWorkClaimSummary>;
-      readonly hostEffect: Readonly<DemandHostEffectSummary>;
+      readonly outcome: Readonly<DemandDeliveryOutcomeSummary>;
       readonly targetResult: Readonly<DemandTargetResultSummary>;
     }
   >;
@@ -450,8 +394,7 @@ export interface DemandTestReviewDecisionSummary {
 interface DemandTestReviewedTargetTaskStateBase extends DemandTestObservedHostEffectTargetTaskStateBase {
   readonly currentDelivery: Readonly<
     DemandTestCurrentDeliveryBase & {
-      readonly workClaim: Readonly<DemandTestWorkClaimSummary>;
-      readonly hostEffect: Readonly<DemandHostEffectSummary>;
+      readonly outcome: Readonly<DemandDeliveryOutcomeSummary>;
       readonly targetResult: Readonly<DemandTargetResultSummary>;
       readonly reviewDecision: Readonly<DemandTestReviewDecisionSummary>;
     }
@@ -534,17 +477,15 @@ export type DemandAggregateStateErrorReason =
   | "identifier"
   | "digest"
   | "task-package"
-  | "target-delivery-intent"
-  | "window-work-claim"
-  | "target-delivery-host-effect-observation"
-  | "target-host-effect-rearm"
+  | "delivery-envelope"
+  | "delivery-outcome"
+  | "delivery-rearm"
   | "target-result"
   | "controller-review-decision"
   | "controller-product-defect-remediation-authorization"
   | "controller-target-review-resume"
   | "test-card"
   | "test-card-generation-source"
-  | "test-delivery-intent"
   | "managed-evidence-manifest"
   | "relation"
   | "transition";
@@ -556,14 +497,12 @@ const ERROR_MESSAGES = {
   digest: "Demand aggregate state contains an invalid digest.",
   "task-package":
     "Demand aggregate state transition contains an invalid TaskPackage.",
-  "target-delivery-intent":
-    "Demand aggregate state transition contains an invalid Target Delivery Intent.",
-  "window-work-claim":
-    "Demand aggregate state transition contains an invalid Window Work Claim.",
-  "target-delivery-host-effect-observation":
-    "Demand aggregate state transition contains an invalid Target Delivery Host Effect observation.",
-  "target-host-effect-rearm":
-    "Demand aggregate state transition contains an invalid Target Host Effect Rearm.",
+  "delivery-envelope":
+    "Demand aggregate state transition contains an invalid Delivery Envelope.",
+  "delivery-outcome":
+    "Demand aggregate state transition contains an invalid Delivery Outcome.",
+  "delivery-rearm":
+    "Demand aggregate state transition contains an invalid Delivery Rearm.",
   "target-result":
     "Demand aggregate state transition contains an invalid TargetResult.",
   "controller-review-decision":
@@ -576,8 +515,6 @@ const ERROR_MESSAGES = {
     "Demand aggregate state transition contains an invalid TestCard.",
   "test-card-generation-source":
     "Demand aggregate state transition contains an invalid TestCard Generation Source.",
-  "test-delivery-intent":
-    "Demand aggregate state transition contains an invalid Test Delivery Intent.",
   "managed-evidence-manifest":
     "Demand aggregate state transition contains an invalid Managed Evidence Manifest.",
   relation: "Demand aggregate target task summaries are inconsistent.",
@@ -628,7 +565,8 @@ function parseId<
     | "demand-event-commit"
     | "evidence"
     | "test-attempt"
-    | "test-card",
+    | "test-card"
+    | "work-claim",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
@@ -639,9 +577,14 @@ function parseId<
 }
 
 function parseCurrentDeliveryBase(
-  value: ProductCurrentDeliveryWire,
+  value:
+    | ProductCurrentDeliveryWire
+    | TestCurrentDeliveryWire
+    | TestObservedCurrentDeliveryWire
+    | TestResultCurrentDeliveryWire
+    | TestReviewedCurrentDeliveryWire,
   path: string,
-): DemandDeliveryPreparedTargetTaskState["currentDelivery"] {
+): Readonly<DemandCurrentDeliveryBase> {
   let bindingId: WakeflowWindowHostBindingId;
   try {
     bindingId = parseWakeflowWindowHostBindingId(
@@ -654,105 +597,41 @@ function parseCurrentDeliveryBase(
     }
     throw error;
   }
+  if (
+    !Number.isSafeInteger(value.generation) ||
+    value.generation < 1 ||
+    value.generation > DELIVERY_REARM_LIMIT + 1 ||
+    !Number.isSafeInteger(value.fence.streamRevision) ||
+    value.fence.streamRevision < 2
+  ) {
+    fail("relation", `${path}/generation`);
+  }
   return Object.freeze({
-    targetDeliveryId: parseId(
-      value.targetDeliveryId,
+    deliveryId: parseId(
+      value.deliveryId,
       "target-delivery",
-      `${path}/targetDeliveryId`,
+      `${path}/deliveryId`,
     ),
-    intentDigest: parseDigest(value.intentDigest, `${path}/intentDigest`),
+    envelopeDigest: parseDigest(value.envelopeDigest, `${path}/envelopeDigest`),
+    promptDigest: parseDigest(value.promptDigest, `${path}/promptDigest`),
+    generation: value.generation,
     hostId: value.hostId,
     bindingId,
+    fence: Object.freeze({
+      claimId: parseId(value.fence.claimId, "work-claim", `${path}/fence/claimId`),
+      claimDigest: parseDigest(value.fence.claimDigest, `${path}/fence/claimDigest`),
+      streamRevision: value.fence.streamRevision,
+    }),
   });
 }
 
-function parseWorkClaimSummary(
+function parseDeliveryOutcomeSummary(
   value: NonNullable<
-    | ProductCurrentDeliveryWire["workClaim"]
-    | TestClaimedCurrentDeliveryWire["workClaim"]
-  >,
-  windowId: WakeflowDurableId<"window">,
-  path: string,
-): DemandHostEffectClaimedTargetTaskState["currentDelivery"]["workClaim"] {
-  let claimRef: PortableResourcePath;
-  try {
-    claimRef = parsePortableResourcePath(value.claimRef, `${path}/claimRef`);
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("relation", `${path}/claimRef`);
-    }
-    throw error;
-  }
-  if (claimRef !== windowWorkClaimRef(windowId)) {
-    fail("relation", `${path}/claimRef`);
-  }
-  let claimId: WindowWorkClaimId;
-  try {
-    claimId = parseWindowWorkClaimId(value.claimId, `${path}/claimId`);
-  } catch (error: unknown) {
-    if (error instanceof WindowWorkClaimError) {
-      fail("identifier", `${path}/claimId`);
-    }
-    throw error;
-  }
-  let claimedAt: UtcInstant;
-  try {
-    claimedAt = parseUtcInstant(value.claimedAt, `${path}/claimedAt`);
-  } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("relation", `${path}/claimedAt`);
-    throw error;
-  }
-  return Object.freeze({
-    claimId,
-    claimRef,
-    claimDigest: parseDigest(value.claimDigest, `${path}/claimDigest`),
-    claimedAt,
-    hostObservationAuthorityDigest: parseDigest(
-      value.hostObservationAuthorityDigest,
-      `${path}/hostObservationAuthorityDigest`,
-    ),
-    claimEventId: parseId(
-      value.claimEventId,
-      "demand-event",
-      `${path}/claimEventId`,
-    ),
-    claimCommitId: parseId(
-      value.claimCommitId,
-      "demand-event-commit",
-      `${path}/claimCommitId`,
-    ),
-    claimEventStreamRevision: value.claimEventStreamRevision,
-    claimExpectedStateDigest: parseDigest(
-      value.claimExpectedStateDigest,
-      `${path}/claimExpectedStateDigest`,
-    ),
-  });
-}
-
-function parseTestWorkClaimSummary(
-  value: NonNullable<
-    | TestClaimedCurrentDeliveryWire["workClaim"]
-    | TestObservedCurrentDeliveryWire["workClaim"]
-  >,
-  windowId: WakeflowDurableId<"window">,
-  path: string,
-): Readonly<DemandTestWorkClaimSummary> {
-  return Object.freeze({
-    ...parseWorkClaimSummary(value, windowId, path),
-    testDispatchPacketDigest: parseDigest(
-      value.testDispatchPacketDigest,
-      `${path}/testDispatchPacketDigest`,
-    ),
-  });
-}
-
-function parseHostEffectSummary(
-  value: NonNullable<
-    | ProductCurrentDeliveryWire["hostEffect"]
-    | TestObservedCurrentDeliveryWire["hostEffect"]
+    | ProductCurrentDeliveryWire["outcome"]
+    | TestObservedCurrentDeliveryWire["outcome"]
   >,
   path: string,
-): Readonly<DemandHostEffectSummary> {
+): Readonly<DemandDeliveryOutcomeSummary> {
   let observedAt: UtcInstant;
   try {
     observedAt = parseUtcInstant(value.observedAt, `${path}/observedAt`);
@@ -761,19 +640,24 @@ function parseHostEffectSummary(
       fail("relation", `${path}/observedAt`);
     throw error;
   }
-  // observedAt 只保留来源时钟的审计事实；Aggregate 的因果顺序由 Event 流修订、
-  // 当前状态摘要和 Observation 对 Claim 的精确引用保证，不比较跨来源墙钟。
+  // observedAt 只保留来源时钟的审计事实；因果顺序由事件流修订、当前状态摘要与
+  // 处置对围栏的精确引用保证，不比较跨来源墙钟。
+  if (
+    (value.disposition === "rejected-before-send") !==
+    (value.claimHandling === "release-authorized")
+  ) {
+    fail("relation", `${path}/claimHandling`);
+  }
   return Object.freeze({
-    observationDigest: parseDigest(
-      value.observationDigest,
-      `${path}/observationDigest`,
-    ),
+    outcomeDigest: parseDigest(value.outcomeDigest, `${path}/outcomeDigest`),
     disposition: value.disposition,
+    evidenceKind: value.evidenceKind,
     readbackStatus: value.readbackStatus,
     claimHandling: value.claimHandling,
     observedAt,
   });
 }
+
 
 function parseTargetResultSummary(
   value: NonNullable<ProductCurrentDeliveryWire["targetResult"]>,
@@ -1085,34 +969,14 @@ function parseProductDefectRemediationSummary(
 function parseTestCurrentDelivery(
   value: Readonly<
     | TestCurrentDeliveryWire
-    | TestClaimedCurrentDeliveryWire
     | TestObservedCurrentDeliveryWire
     | TestResultCurrentDeliveryWire
     | TestReviewedCurrentDeliveryWire
   >,
   path: string,
 ): Readonly<DemandTestCurrentDeliveryBase> {
-  let bindingId: WakeflowWindowHostBindingId;
-  try {
-    bindingId = parseWakeflowWindowHostBindingId(
-      value.bindingId,
-      `${path}/bindingId`,
-    );
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostBindingIdError) {
-      fail("identifier", `${path}/bindingId`);
-    }
-    throw error;
-  }
   return Object.freeze({
-    targetDeliveryId: parseId(
-      value.targetDeliveryId,
-      "target-delivery",
-      `${path}/targetDeliveryId`,
-    ),
-    intentDigest: parseDigest(value.intentDigest, `${path}/intentDigest`),
-    hostId: value.hostId,
-    bindingId,
+    ...parseCurrentDeliveryBase(value, path),
     testAttemptId: parseId(
       value.testAttemptId,
       "test-attempt",
@@ -1134,60 +998,29 @@ function parseTestAttemptState(
     }
     throw error;
   }
-  const authorizationValues = value.deliveryAuthorizations;
-  if (
-    authorizationValues.length === 0 ||
-    authorizationValues.length >
-      MAXIMUM_TEST_DELIVERY_AUTHORIZATIONS_PER_ATTEMPT
-  ) {
-    fail("relation", `${path}/deliveryAuthorizations`);
+  let preparedAt: UtcInstant;
+  try {
+    preparedAt = parseUtcInstant(value.delivery.preparedAt, `${path}/delivery/preparedAt`);
+  } catch (error: unknown) {
+    if (error instanceof UtcInstantError) {
+      fail("relation", `${path}/delivery/preparedAt`);
+    }
+    throw error;
   }
-  const parsedAuthorizations = authorizationValues.map(
-    (authorization, index) => {
-      const authorizationPath = `${path}/deliveryAuthorizations/${index}`;
-      let preparedAt: UtcInstant;
-      try {
-        preparedAt = parseUtcInstant(
-          authorization.preparedAt,
-          `${authorizationPath}/preparedAt`,
-        );
-      } catch (error: unknown) {
-        if (error instanceof UtcInstantError) {
-          fail("relation", `${authorizationPath}/preparedAt`);
-        }
-        throw error;
-      }
-      return Object.freeze({
-        ordinal: authorization.ordinal,
-        targetDeliveryId: parseId(
-          authorization.targetDeliveryId,
-          "target-delivery",
-          `${authorizationPath}/targetDeliveryId`,
-        ),
-        intentDigest: parseDigest(
-          authorization.intentDigest,
-          `${authorizationPath}/intentDigest`,
-        ),
-        preparedAt,
-      });
-    },
-  );
-  if (
-    new Set(parsedAuthorizations.map((entry) => entry.targetDeliveryId))
-      .size !== parsedAuthorizations.length ||
-    parsedAuthorizations.some((entry, index) => entry.ordinal !== index + 1)
-  ) {
-    fail("relation", `${path}/deliveryAuthorizations`);
-  }
-  const firstAuthorization = parsedAuthorizations[0];
-  if (firstAuthorization === undefined) {
-    fail("relation", `${path}/deliveryAuthorizations`);
-  }
-  const deliveryAuthorizations: DemandTestAttemptState["deliveryAuthorizations"] =
-    Object.freeze([firstAuthorization, ...parsedAuthorizations.slice(1)]);
   return Object.freeze({
     attempt,
-    deliveryAuthorizations,
+    delivery: Object.freeze({
+      deliveryId: parseId(
+        value.delivery.deliveryId,
+        "target-delivery",
+        `${path}/delivery/deliveryId`,
+      ),
+      envelopeDigest: parseDigest(
+        value.delivery.envelopeDigest,
+        `${path}/delivery/envelopeDigest`,
+      ),
+      preparedAt,
+    }),
   });
 }
 
@@ -1242,15 +1075,14 @@ function parseTestAttemptLineage(
       priorResultIds.add(resultId);
       reviewDecisionIds.add(decisionId);
     }
-    for (const authorization of state.deliveryAuthorizations) {
-      if (deliveryIds.has(authorization.targetDeliveryId)) {
-        fail("relation", `${path}/${index}/deliveryAuthorizations`);
-      }
-      deliveryIds.add(authorization.targetDeliveryId);
+    if (deliveryIds.has(state.delivery.deliveryId)) {
+      fail("relation", `${path}/${index}/delivery`);
     }
+    deliveryIds.add(state.delivery.deliveryId);
   }
   return Object.freeze([first, ...attempts.slice(1)]);
 }
+
 
 function parseTargetTasks(
   values: readonly DemandAggregateStateWire["targetTasks"][number][],
@@ -1259,6 +1091,7 @@ function parseTargetTasks(
   const packageIds = new Set<string>();
   const repositoryIds = new Set<string>();
   const testCardIds = new Set<string>();
+  const claimIds = new Set<string>();
   let previousTargetTaskId: string | undefined;
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
@@ -1292,6 +1125,13 @@ function parseTargetTasks(
       ),
       windowId: parseId(value.windowId, "window", `${path}/windowId`),
     };
+    // 每个当前投递的围栏声明在整个状态里唯一：同一声明不能同时服务两个目标。
+    const registerClaim = (delivery: Readonly<DemandCurrentDeliveryBase>) => {
+      if (claimIds.has(delivery.fence.claimId)) {
+        fail("relation", `${path}/currentDelivery/fence/claimId`);
+      }
+      claimIds.add(delivery.fence.claimId);
+    };
     if (value.workType === "test") {
       if (value.testCard === undefined || value.reworkCount !== undefined) {
         fail("relation", path);
@@ -1318,7 +1158,6 @@ function parseTargetTasks(
       }
       if (
         (value.phase !== "test-delivery-prepared" &&
-          value.phase !== "test-host-effect-claimed" &&
           value.phase !== "test-host-effect-accepted" &&
           value.phase !== "test-host-effect-indeterminate" &&
           value.phase !== "test-host-effect-rejected" &&
@@ -1336,12 +1175,12 @@ function parseTargetTasks(
       const currentDelivery = parseTestCurrentDelivery(
         value.currentDelivery as
           | TestCurrentDeliveryWire
-          | TestClaimedCurrentDeliveryWire
           | TestObservedCurrentDeliveryWire
           | TestResultCurrentDeliveryWire
           | TestReviewedCurrentDeliveryWire,
         `${path}/currentDelivery`,
       );
+      registerClaim(currentDelivery);
       const testAttempts = parseTestAttemptLineage(
         value.testAttempts,
         common.targetTaskId,
@@ -1349,15 +1188,14 @@ function parseTargetTasks(
         `${path}/testAttempts`,
       );
       const attemptState = testAttempts.at(-1)!;
-      const authorization = attemptState.deliveryAuthorizations.at(-1)!;
       if (
         attemptState.attempt.targetTaskId !== common.targetTaskId ||
         attemptState.attempt.testCard.testCardId !== testCard.testCardId ||
         attemptState.attempt.testCard.testCardDigest !==
           testCard.testCardDigest ||
         currentDelivery.testAttemptId !== attemptState.attempt.testAttemptId ||
-        currentDelivery.targetDeliveryId !== authorization.targetDeliveryId ||
-        currentDelivery.intentDigest !== authorization.intentDigest
+        currentDelivery.deliveryId !== attemptState.delivery.deliveryId ||
+        currentDelivery.envelopeDigest !== attemptState.delivery.envelopeDigest
       ) {
         fail("relation", `${path}/testAttempts`);
       }
@@ -1372,30 +1210,20 @@ function parseTargetTasks(
             testAttempts,
           }),
         );
-      } else if (value.phase === "test-host-effect-claimed") {
-        const claimedDelivery =
-          value.currentDelivery as TestClaimedCurrentDeliveryWire;
-        if (claimedDelivery.workClaim === undefined) {
-          fail("relation", `${path}/currentDelivery/workClaim`);
-        }
-        result.push(
-          Object.freeze({
-            ...common,
-            workType: "test" as const,
-            testCard,
-            phase: "test-host-effect-claimed" as const,
-            currentDelivery: Object.freeze({
-              ...currentDelivery,
-              workClaim: parseTestWorkClaimSummary(
-                claimedDelivery.workClaim,
-                common.windowId,
-                `${path}/currentDelivery/workClaim`,
-              ),
-            }),
-            testAttempts,
-          }),
-        );
-      } else if (
+        continue;
+      }
+      const observedDelivery = value.currentDelivery as
+        | TestObservedCurrentDeliveryWire
+        | TestResultCurrentDeliveryWire
+        | TestReviewedCurrentDeliveryWire;
+      if (observedDelivery.outcome === undefined) {
+        fail("relation", `${path}/currentDelivery/outcome`);
+      }
+      const outcome = parseDeliveryOutcomeSummary(
+        observedDelivery.outcome,
+        `${path}/currentDelivery/outcome`,
+      );
+      if (
         value.phase === "test-accepted" ||
         value.phase === "test-another-attempt-requested" ||
         value.phase === "test-product-defect" ||
@@ -1404,24 +1232,11 @@ function parseTargetTasks(
         const reviewedDelivery =
           value.currentDelivery as TestReviewedCurrentDeliveryWire;
         if (
-          reviewedDelivery.workClaim === undefined ||
-          reviewedDelivery.hostEffect === undefined ||
           reviewedDelivery.targetResult === undefined ||
-          reviewedDelivery.reviewDecision === undefined
+          reviewedDelivery.reviewDecision === undefined ||
+          outcome.disposition === "rejected-before-send"
         ) {
           fail("relation", `${path}/currentDelivery`);
-        }
-        const workClaim = parseTestWorkClaimSummary(
-          reviewedDelivery.workClaim,
-          common.windowId,
-          `${path}/currentDelivery/workClaim`,
-        );
-        const hostEffect = parseHostEffectSummary(
-          reviewedDelivery.hostEffect,
-          `${path}/currentDelivery/hostEffect`,
-        );
-        if (hostEffect.disposition === "rejected-before-effect") {
-          fail("relation", `${path}/currentDelivery/hostEffect`);
         }
         const targetResult = parseTargetResultSummary(
           reviewedDelivery.targetResult,
@@ -1445,8 +1260,7 @@ function parseTargetTasks(
             phase: expectedPhase,
             currentDelivery: Object.freeze({
               ...currentDelivery,
-              workClaim,
-              hostEffect,
+              outcome,
               targetResult,
               reviewDecision,
             }),
@@ -1457,23 +1271,10 @@ function parseTargetTasks(
         const resultDelivery =
           value.currentDelivery as TestResultCurrentDeliveryWire;
         if (
-          resultDelivery.workClaim === undefined ||
-          resultDelivery.hostEffect === undefined ||
-          resultDelivery.targetResult === undefined
+          resultDelivery.targetResult === undefined ||
+          outcome.disposition === "rejected-before-send"
         ) {
           fail("relation", `${path}/currentDelivery`);
-        }
-        const workClaim = parseTestWorkClaimSummary(
-          resultDelivery.workClaim,
-          common.windowId,
-          `${path}/currentDelivery/workClaim`,
-        );
-        const hostEffect = parseHostEffectSummary(
-          resultDelivery.hostEffect,
-          `${path}/currentDelivery/hostEffect`,
-        );
-        if (hostEffect.disposition === "rejected-before-effect") {
-          fail("relation", `${path}/currentDelivery/hostEffect`);
         }
         result.push(
           Object.freeze({
@@ -1483,8 +1284,7 @@ function parseTargetTasks(
             phase: "test-result-reported" as const,
             currentDelivery: Object.freeze({
               ...currentDelivery,
-              workClaim,
-              hostEffect,
+              outcome,
               targetResult: parseTargetResultSummary(
                 resultDelivery.targetResult,
                 `${path}/currentDelivery/targetResult`,
@@ -1494,27 +1294,10 @@ function parseTargetTasks(
           }),
         );
       } else {
-        const observedDelivery =
-          value.currentDelivery as TestObservedCurrentDeliveryWire;
-        if (
-          observedDelivery.workClaim === undefined ||
-          observedDelivery.hostEffect === undefined
-        ) {
-          fail("relation", `${path}/currentDelivery`);
-        }
-        const workClaim = parseTestWorkClaimSummary(
-          observedDelivery.workClaim,
-          common.windowId,
-          `${path}/currentDelivery/workClaim`,
-        );
-        const hostEffect = parseHostEffectSummary(
-          observedDelivery.hostEffect,
-          `${path}/currentDelivery/hostEffect`,
-        );
         const expectedPhase =
-          hostEffect.disposition === "accepted"
+          outcome.disposition === "accepted"
             ? ("test-host-effect-accepted" as const)
-            : hostEffect.disposition === "indeterminate"
+            : outcome.disposition === "indeterminate"
               ? ("test-host-effect-indeterminate" as const)
               : ("test-host-effect-rejected" as const);
         if (value.phase !== expectedPhase) fail("relation", `${path}/phase`);
@@ -1526,8 +1309,7 @@ function parseTargetTasks(
             phase: expectedPhase,
             currentDelivery: Object.freeze({
               ...currentDelivery,
-              workClaim,
-              hostEffect,
+              outcome,
             }),
             testAttempts,
           }),
@@ -1583,207 +1365,330 @@ function parseTargetTasks(
           supersededByTargetTaskId,
         }),
       );
-    } else if (value.phase === "planned") {
+      continue;
+    }
+    if (value.phase === "planned") {
       result.push(Object.freeze({ ...base, phase: "planned" as const }));
-    } else if (value.phase === "delivery-prepared") {
-      if (productCurrentDelivery === undefined) {
-        fail("relation", `${path}/currentDelivery`);
-      }
+      continue;
+    }
+    if (productCurrentDelivery === undefined) {
+      fail("relation", `${path}/currentDelivery`);
+    }
+    const currentDelivery = parseCurrentDeliveryBase(
+      productCurrentDelivery,
+      `${path}/currentDelivery`,
+    );
+    registerClaim(currentDelivery);
+    if (value.phase === "delivery-prepared") {
       result.push(
         Object.freeze({
           ...base,
           phase: "delivery-prepared" as const,
-          currentDelivery: parseCurrentDeliveryBase(
-            productCurrentDelivery,
-            `${path}/currentDelivery`,
+          currentDelivery,
+        }),
+      );
+      continue;
+    }
+    if (productCurrentDelivery.outcome === undefined) {
+      fail("relation", `${path}/currentDelivery/outcome`);
+    }
+    const observedDelivery = Object.freeze({
+      ...currentDelivery,
+      outcome: parseDeliveryOutcomeSummary(
+        productCurrentDelivery.outcome,
+        `${path}/currentDelivery/outcome`,
+      ),
+    });
+    if (
+      value.phase === "host-effect-accepted" ||
+      value.phase === "host-effect-indeterminate" ||
+      value.phase === "host-effect-rejected"
+    ) {
+      const expectedPhase =
+        observedDelivery.outcome.disposition === "accepted"
+          ? ("host-effect-accepted" as const)
+          : observedDelivery.outcome.disposition === "indeterminate"
+            ? ("host-effect-indeterminate" as const)
+            : ("host-effect-rejected" as const);
+      if (value.phase !== expectedPhase) fail("relation", `${path}/phase`);
+      result.push(
+        Object.freeze({
+          ...base,
+          phase: expectedPhase,
+          currentDelivery: observedDelivery,
+        }),
+      );
+      continue;
+    }
+    if (
+      productCurrentDelivery.targetResult === undefined ||
+      observedDelivery.outcome.disposition === "rejected-before-send"
+    ) {
+      fail("relation", `${path}/currentDelivery/targetResult`);
+    }
+    const resultDelivery = Object.freeze({
+      ...observedDelivery,
+      targetResult: parseTargetResultSummary(
+        productCurrentDelivery.targetResult,
+        `${path}/currentDelivery/targetResult`,
+      ),
+    });
+    if (value.phase === "result-reported") {
+      result.push(
+        Object.freeze({
+          ...base,
+          phase: "result-reported" as const,
+          currentDelivery: resultDelivery,
+        }),
+      );
+      continue;
+    }
+    if (productCurrentDelivery.reviewDecision === undefined) {
+      fail("relation", `${path}/currentDelivery/reviewDecision`);
+    }
+    const reviewDecision = parseTargetReviewDecisionSummary(
+      productCurrentDelivery.reviewDecision,
+      `${path}/currentDelivery/reviewDecision`,
+    );
+    const reviewedDelivery = Object.freeze({
+      ...resultDelivery,
+      reviewDecision,
+    });
+    if (value.phase === "product-defect-rework-requested") {
+      if (value.productDefectRemediation === undefined) {
+        fail("relation", `${path}/productDefectRemediation`);
+      }
+      result.push(
+        Object.freeze({
+          ...base,
+          phase: "product-defect-rework-requested" as const,
+          currentDelivery: reviewedDelivery,
+          productDefectRemediation: parseProductDefectRemediationSummary(
+            value.productDefectRemediation,
+            reviewDecision,
+            `${path}/productDefectRemediation`,
           ),
         }),
       );
-    } else {
-      if (
-        productCurrentDelivery === undefined ||
-        productCurrentDelivery.workClaim === undefined
-      ) {
-        fail("relation", `${path}/currentDelivery/workClaim`);
-      }
-      const workClaim = parseWorkClaimSummary(
-        productCurrentDelivery.workClaim,
-        base.windowId,
-        `${path}/currentDelivery/workClaim`,
-      );
-      const currentDelivery = Object.freeze({
-        ...parseCurrentDeliveryBase(
-          productCurrentDelivery,
-          `${path}/currentDelivery`,
-        ),
-        workClaim,
-      });
-      if (value.phase === "host-effect-claimed") {
-        result.push(
-          Object.freeze({
-            ...base,
-            phase: "host-effect-claimed" as const,
-            currentDelivery,
-          }),
-        );
-      } else {
-        if (productCurrentDelivery.hostEffect === undefined) {
-          fail("relation", `${path}/currentDelivery/hostEffect`);
-        }
-        const observedDelivery = Object.freeze({
-          ...currentDelivery,
-          hostEffect: parseHostEffectSummary(
-            productCurrentDelivery.hostEffect,
-            `${path}/currentDelivery/hostEffect`,
-          ),
-        });
-        if (value.phase === "host-effect-accepted") {
-          result.push(
-            Object.freeze({
-              ...base,
-              phase: "host-effect-accepted" as const,
-              currentDelivery: observedDelivery,
-            }),
-          );
-        } else if (value.phase === "host-effect-indeterminate") {
-          result.push(
-            Object.freeze({
-              ...base,
-              phase: "host-effect-indeterminate" as const,
-              currentDelivery: observedDelivery,
-            }),
-          );
-        } else if (value.phase === "host-effect-rejected") {
-          result.push(
-            Object.freeze({
-              ...base,
-              phase: "host-effect-rejected" as const,
-              currentDelivery: observedDelivery,
-            }),
-          );
-        } else {
-          if (productCurrentDelivery.targetResult === undefined) {
-            fail("relation", `${path}/currentDelivery/targetResult`);
-          }
-          const resultDelivery = Object.freeze({
-            ...observedDelivery,
-            targetResult: parseTargetResultSummary(
-              productCurrentDelivery.targetResult,
-              `${path}/currentDelivery/targetResult`,
-            ),
-          });
-          if (value.phase === "result-reported") {
-            result.push(
-              Object.freeze({
-                ...base,
-                phase: "result-reported" as const,
-                currentDelivery: resultDelivery,
-              }),
-            );
-          } else {
-            if (productCurrentDelivery.reviewDecision === undefined) {
-              fail("relation", `${path}/currentDelivery/reviewDecision`);
-            }
-            const reviewDecision = parseTargetReviewDecisionSummary(
-              productCurrentDelivery.reviewDecision,
-              `${path}/currentDelivery/reviewDecision`,
-            );
-            const reviewedDelivery = Object.freeze({
-              ...resultDelivery,
-              reviewDecision,
-            });
-            if (value.phase === "product-defect-rework-requested") {
-              if (value.productDefectRemediation === undefined) {
-                fail("relation", `${path}/productDefectRemediation`);
-              }
-              result.push(
-                Object.freeze({
-                  ...base,
-                  phase: "product-defect-rework-requested" as const,
-                  currentDelivery: reviewedDelivery,
-                  productDefectRemediation:
-                    parseProductDefectRemediationSummary(
-                      value.productDefectRemediation,
-                      reviewDecision,
-                      `${path}/productDefectRemediation`,
-                    ),
-                }),
-              );
-            } else {
-              const phase = reviewPhaseForDecision(reviewDecision.decision);
-              if (value.phase !== phase) fail("relation", `${path}/phase`);
-              result.push(
-                Object.freeze({
-                  ...base,
-                  phase,
-                  currentDelivery: reviewedDelivery,
-                }),
-              );
-            }
-          }
-        }
-      }
+      continue;
     }
+    const phase = reviewPhaseForDecision(reviewDecision.decision);
+    if (value.phase !== phase) fail("relation", `${path}/phase`);
+    result.push(
+      Object.freeze({
+        ...base,
+        phase,
+        currentDelivery: reviewedDelivery,
+      }),
+    );
   }
   return Object.freeze(result);
 }
 
-/** `delivery.target-delivery-prepared` 当前事件使用的纯状态转换。 */
-export function prepareTargetDeliveryInDemandAggregateState(
+
+type DeliveryBearingTargetTaskState = Exclude<
+  DemandTargetTaskState,
+  | DemandPlannedTargetTaskState
+  | DemandTestPlannedTargetTaskState
+  | DemandSupersededTargetTaskState
+>;
+
+function deliveryBearingTargets(
+  current: Readonly<DemandAggregateState>,
+): readonly Readonly<DeliveryBearingTargetTaskState>[] {
+  return current.targetTasks.filter(
+    (entry): entry is Readonly<DeliveryBearingTargetTaskState> =>
+      entry.phase !== "planned" && entry.phase !== "superseded",
+  );
+}
+
+function currentDeliveryOf(
+  envelope: Readonly<DeliveryEnvelope>,
+  generation: number,
+): Readonly<DemandCurrentDeliveryBase> {
+  return Object.freeze({
+    deliveryId: envelope.deliveryId,
+    envelopeDigest: envelope.envelopeDigest,
+    promptDigest: envelope.promptDigest,
+    generation,
+    hostId: envelope.route.hostId,
+    bindingId: envelope.route.bindingId,
+    fence: Object.freeze({
+      claimId: envelope.fence.claimId,
+      claimDigest: envelope.fence.claimDigest,
+      streamRevision: envelope.fence.expectedStreamRevision + 1,
+    }),
+  });
+}
+
+function assertClaimUnused(
+  current: Readonly<DemandAggregateState>,
+  claimId: WakeflowDurableId<"work-claim">,
+): void {
+  if (
+    deliveryBearingTargets(current).some(
+      (entry) => entry.currentDelivery.fence.claimId === claimId,
+    )
+  ) {
+    fail("transition", "$/targetTasks");
+  }
+}
+
+/** `delivery.delivery-prepared.v1` 使用的纯状态转换：实现与 test 两类目标共用。 */
+export function prepareDeliveryInDemandAggregateState(
   currentValue: unknown,
-  intentValue: unknown,
+  envelopeValue: unknown,
 ): Readonly<DemandAggregateState> {
   const current = parseDemandAggregateState(currentValue);
-  let intent: Readonly<TargetDeliveryIntent>;
+  let envelope: Readonly<DeliveryEnvelope>;
   try {
-    intent = parseTargetDeliveryIntent(intentValue);
+    envelope = parseDeliveryEnvelope(envelopeValue);
   } catch (error: unknown) {
-    if (error instanceof TargetDeliveryIntentError) {
-      fail("target-delivery-intent", "$intent");
+    if (error instanceof DeliveryEnvelopeError) {
+      fail("delivery-envelope", "$envelope");
     }
     throw error;
   }
   const target = current.targetTasks.find(
-    (entry) => entry.targetTaskId === intent.target.targetTaskId,
+    (entry) => entry.targetTaskId === envelope.target.targetTaskId,
   );
   if (
     current.lifecycle !== "active" ||
-    intent.demandId !== current.demandId ||
+    envelope.demandId !== current.demandId ||
     target === undefined ||
-    target.workType === "test" ||
-    target.taskPackageId !== intent.target.taskPackageId ||
-    target.taskPackageDigest !== intent.target.taskPackageDigest ||
-    target.windowId !== intent.route.windowId
+    target.taskPackageId !== envelope.target.taskPackageId ||
+    target.taskPackageDigest !== envelope.target.taskPackageDigest ||
+    target.windowId !== envelope.route.windowId ||
+    deliveryBearingTargets(current).some(
+      (entry) => entry.currentDelivery.deliveryId === envelope.deliveryId,
+    )
   ) {
     fail("transition", "$/targetTasks");
   }
-  const purpose = targetDeliveryPurpose(intent);
-  if (target.phase === "planned") {
-    if (purpose !== "initial") {
+  assertClaimUnused(current, envelope.fence.claimId);
+  const currentDelivery = currentDeliveryOf(envelope, 1);
+  if (envelope.workType === "test") {
+    const currentTestCard = current.currentTestCard;
+    if (
+      currentTestCard === undefined ||
+      target.workType !== "test" ||
+      target.testCard.testCardId !== envelope.testCard.testCardId ||
+      target.testCard.testCardDigest !== envelope.testCard.testCardDigest ||
+      currentTestCard.testCardId !== envelope.testCard.testCardId ||
+      currentTestCard.testCardDigest !== envelope.testCard.testCardDigest ||
+      envelope.attempt.targetTaskId !== target.targetTaskId
+    ) {
+      fail("transition", "$/targetTasks");
+    }
+    const attemptDelivery = Object.freeze({
+      deliveryId: envelope.deliveryId,
+      envelopeDigest: envelope.envelopeDigest,
+      preparedAt: envelope.preparedAt,
+    });
+    const testCurrentDelivery = Object.freeze({
+      ...currentDelivery,
+      testAttemptId: envelope.attempt.testAttemptId,
+    });
+    if (envelope.attempt.mode === "initial") {
+      if (target.phase !== "planned") fail("transition", "$/targetTasks");
+      return parseDemandAggregateState({
+        ...current,
+        targetTasks: current.targetTasks.map((entry) =>
+          entry.targetTaskId === target.targetTaskId
+            ? {
+                ...target,
+                phase: "test-delivery-prepared",
+                currentDelivery: testCurrentDelivery,
+                testAttempts: [{ attempt: envelope.attempt, delivery: attemptDelivery }],
+              }
+            : entry,
+        ),
+      });
+    }
+    if (target.phase !== "test-another-attempt-requested") {
+      fail("transition", "$/targetTasks");
+    }
+    const previousAttempt = target.testAttempts.at(-1)!;
+    try {
+      assertRerunTestExecutionAttemptFollows(
+        envelope.attempt,
+        previousAttempt.attempt,
+      );
+    } catch (error: unknown) {
+      if (error instanceof TestExecutionAttemptError) {
+        fail("transition", "$/targetTasks");
+      }
+      throw error;
+    }
+    const rerunSource = envelope.attempt.rerunSource;
+    if (
+      target.testAttempts.length >= 10 ||
+      target.testAttempts.some(
+        (entry) => entry.attempt.testAttemptId === envelope.attempt.testAttemptId,
+      ) ||
+      rerunSource.previousResult.targetResultId !==
+        target.currentDelivery.targetResult.targetResultId ||
+      rerunSource.previousResult.resultDigest !==
+        target.currentDelivery.targetResult.resultDigest ||
+      rerunSource.reviewDecision.targetReviewDecisionId !==
+        target.currentDelivery.reviewDecision.targetReviewDecisionId ||
+      rerunSource.reviewDecision.decisionDigest !==
+        target.currentDelivery.reviewDecision.decisionDigest ||
+      target.currentDelivery.reviewDecision.decision !==
+        "request-another-attempt"
+    ) {
+      fail("transition", "$/targetTasks");
+    }
+    return parseDemandAggregateState({
+      ...current,
+      targetTasks: current.targetTasks.map((entry) =>
+        entry.targetTaskId === target.targetTaskId
+          ? {
+              ...target,
+              phase: "test-delivery-prepared",
+              currentDelivery: testCurrentDelivery,
+              testAttempts: [
+                ...target.testAttempts,
+                { attempt: envelope.attempt, delivery: attemptDelivery },
+              ],
+            }
+          : entry,
+      ),
+    });
+  }
+  if (target.workType === "test") fail("transition", "$/targetTasks");
+  const purpose = deliveryPurpose(envelope);
+  if (target.phase === "planned" || target.phase === "host-effect-rejected") {
+    // 初次投递，或 rearm 用尽后换新信封重新准备。
+    if (purpose !== "initial") fail("transition", "$/targetTasks");
+    if (
+      target.phase === "host-effect-rejected" &&
+      target.currentDelivery.generation <= DELIVERY_REARM_LIMIT
+    ) {
       fail("transition", "$/targetTasks");
     }
   } else if (target.phase === "rework-requested") {
     if (
       purpose !== "implementation-review-rework" ||
-      intent.rework === undefined ||
-      intent.targetDeliveryId === target.currentDelivery.targetDeliveryId ||
-      intent.rework.decision.targetReviewDecisionId !==
+      envelope.rework === undefined ||
+      envelope.deliveryId === target.currentDelivery.deliveryId ||
+      envelope.rework.decision.targetReviewDecisionId !==
         target.currentDelivery.reviewDecision.targetReviewDecisionId ||
-      intent.rework.decision.decisionDigest !==
+      envelope.rework.decision.decisionDigest !==
         target.currentDelivery.reviewDecision.decisionDigest ||
-      intent.rework.previousResult.targetResultId !==
+      envelope.rework.previousResult.targetResultId !==
         target.currentDelivery.targetResult.targetResultId ||
-      intent.rework.previousResult.resultDigest !==
+      envelope.rework.previousResult.resultDigest !==
         target.currentDelivery.targetResult.resultDigest
     ) {
       fail("transition", "$/targetTasks");
     }
   } else if (target.phase === "product-defect-rework-requested") {
-    const remediation = intent.productDefectRemediation;
+    const remediation = envelope.productDefectRemediation;
     if (
       purpose !== "product-defect-remediation" ||
       remediation === undefined ||
-      intent.targetDeliveryId === target.currentDelivery.targetDeliveryId ||
+      envelope.deliveryId === target.currentDelivery.deliveryId ||
       remediation.authorization.productDefectRemediationId !==
         target.productDefectRemediation.productDefectRemediationId ||
       remediation.authorization.authorizationDigest !==
@@ -1821,460 +1726,98 @@ export function prepareTargetDeliveryInDemandAggregateState(
         return {
           ...withoutRemediation,
           phase: "delivery-prepared",
-          currentDelivery: {
-            targetDeliveryId: intent.targetDeliveryId,
-            intentDigest: intent.intentDigest,
-            hostId: intent.route.hostId,
-            bindingId: intent.route.bindingId,
-          },
+          currentDelivery,
         };
       }
+      const { currentDelivery: _previous, ...withoutDelivery } = target as typeof target & {
+        readonly currentDelivery?: unknown;
+      };
       return {
-        ...target,
+        ...withoutDelivery,
         phase: "delivery-prepared",
-        currentDelivery: {
-          targetDeliveryId: intent.targetDeliveryId,
-          intentDigest: intent.intentDigest,
-          hostId: intent.route.hostId,
-          bindingId: intent.route.bindingId,
-        },
+        currentDelivery,
       };
     }),
   });
 }
 
-/** `testing.test-delivery-prepared.v1`使用的Test Delivery授权状态转换。 */
-export function prepareTestDeliveryInDemandAggregateState(
-  currentValue: unknown,
-  intentValue: unknown,
-): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let intent: Readonly<TestDeliveryIntent>;
-  try {
-    intent = parseTestDeliveryIntent(intentValue);
-  } catch (error: unknown) {
-    if (error instanceof TestDeliveryIntentError) {
-      fail("test-delivery-intent", "$intent");
-    }
-    throw error;
+function phaseForDisposition(
+  workType: "implementation" | "test",
+  disposition: DeliveryDisposition,
+): DemandTargetTaskState["phase"] {
+  if (workType === "test") {
+    return disposition === "accepted"
+      ? "test-host-effect-accepted"
+      : disposition === "indeterminate"
+        ? "test-host-effect-indeterminate"
+        : "test-host-effect-rejected";
   }
-  const target = current.targetTasks.find(
-    (entry) => entry.targetTaskId === intent.target.targetTaskId,
-  );
-  if (
-    current.lifecycle !== "active" ||
-    current.currentTestCard === undefined ||
-    intent.demandId !== current.demandId ||
-    target === undefined ||
-    target.workType !== "test" ||
-    target.taskPackageId !== intent.target.taskPackageId ||
-    target.taskPackageDigest !== intent.target.taskPackageDigest ||
-    target.windowId !== intent.route.windowId ||
-    target.testCard.testCardId !== intent.target.testCard.testCardId ||
-    target.testCard.testCardDigest !== intent.target.testCard.testCardDigest ||
-    current.currentTestCard.testCardId !== intent.target.testCard.testCardId ||
-    current.currentTestCard.testCardDigest !==
-      intent.target.testCard.testCardDigest ||
-    intent.attempt.targetTaskId !== target.targetTaskId ||
-    intent.attempt.testCard.testCardId !== target.testCard.testCardId ||
-    intent.attempt.testCard.testCardDigest !== target.testCard.testCardDigest ||
-    current.targetTasks.some(
-      (entry) =>
-        "currentDelivery" in entry &&
-        entry.currentDelivery.targetDeliveryId === intent.targetDeliveryId,
-    )
-  ) {
-    fail("transition", "$/targetTasks");
-  }
-  if (intent.replacement === undefined) {
-    if (intent.attempt.mode === "initial") {
-      if (target.phase !== "planned") {
-        fail("transition", "$/targetTasks");
-      }
-      return parseDemandAggregateState({
-        ...current,
-        targetTasks: current.targetTasks.map((entry) =>
-          entry.targetTaskId === target.targetTaskId
-            ? {
-                ...target,
-                phase: "test-delivery-prepared",
-                currentDelivery: {
-                  targetDeliveryId: intent.targetDeliveryId,
-                  intentDigest: intent.intentDigest,
-                  hostId: intent.route.hostId,
-                  bindingId: intent.route.bindingId,
-                  testAttemptId: intent.attempt.testAttemptId,
-                },
-                testAttempts: [
-                  {
-                    attempt: intent.attempt,
-                    deliveryAuthorizations: [
-                      {
-                        ordinal: 1,
-                        targetDeliveryId: intent.targetDeliveryId,
-                        intentDigest: intent.intentDigest,
-                        preparedAt: intent.preparedAt,
-                      },
-                    ],
-                  },
-                ],
-              }
-            : entry,
-        ),
-      });
-    }
-    if (target.phase !== "test-another-attempt-requested") {
-      fail("transition", "$/targetTasks");
-    }
-    const previousAttempt = target.testAttempts.at(-1)!;
-    try {
-      assertRerunTestExecutionAttemptFollows(
-        intent.attempt,
-        previousAttempt.attempt,
-      );
-    } catch (error: unknown) {
-      if (error instanceof TestExecutionAttemptError) {
-        fail("transition", "$/targetTasks");
-      }
-      throw error;
-    }
-    if (
-      target.testAttempts.length >= 10 ||
-      target.testAttempts.some(
-        (entry) => entry.attempt.testAttemptId === intent.attempt.testAttemptId,
-      ) ||
-      intent.attempt.rerunSource.previousResult.targetResultId !==
-        target.currentDelivery.targetResult.targetResultId ||
-      intent.attempt.rerunSource.previousResult.resultDigest !==
-        target.currentDelivery.targetResult.resultDigest ||
-      intent.attempt.rerunSource.reviewDecision.targetReviewDecisionId !==
-        target.currentDelivery.reviewDecision.targetReviewDecisionId ||
-      intent.attempt.rerunSource.reviewDecision.decisionDigest !==
-        target.currentDelivery.reviewDecision.decisionDigest ||
-      target.currentDelivery.reviewDecision.decision !==
-        "request-another-attempt"
-    ) {
-      fail("transition", "$/targetTasks");
-    }
-    return parseDemandAggregateState({
-      ...current,
-      targetTasks: current.targetTasks.map((entry) =>
-        entry.targetTaskId === target.targetTaskId
-          ? {
-              ...target,
-              phase: "test-delivery-prepared",
-              currentDelivery: {
-                targetDeliveryId: intent.targetDeliveryId,
-                intentDigest: intent.intentDigest,
-                hostId: intent.route.hostId,
-                bindingId: intent.route.bindingId,
-                testAttemptId: intent.attempt.testAttemptId,
-              },
-              testAttempts: [
-                ...target.testAttempts,
-                {
-                  attempt: intent.attempt,
-                  deliveryAuthorizations: [
-                    {
-                      ordinal: 1,
-                      targetDeliveryId: intent.targetDeliveryId,
-                      intentDigest: intent.intentDigest,
-                      preparedAt: intent.preparedAt,
-                    },
-                  ],
-                },
-              ],
-            }
-          : entry,
-      ),
-    });
-  }
-  if (target.phase !== "test-host-effect-rejected") {
-    fail("transition", "$/targetTasks");
-  }
-  const attemptState = target.testAttempts.at(-1)!;
-  const previousAuthorization = attemptState.deliveryAuthorizations.at(-1)!;
-  const replacement = intent.replacement;
-  if (
-    replacement.authorizationOrdinal !==
-      attemptState.deliveryAuthorizations.length + 1 ||
-    replacement.previousDelivery.targetDeliveryId !==
-      target.currentDelivery.targetDeliveryId ||
-    replacement.previousDelivery.targetDeliveryId !==
-      previousAuthorization.targetDeliveryId ||
-    replacement.previousDelivery.intentDigest !==
-      target.currentDelivery.intentDigest ||
-    replacement.previousDelivery.intentDigest !==
-      previousAuthorization.intentDigest ||
-    replacement.previousDelivery.testDispatchPacketDigest !==
-      target.currentDelivery.workClaim.testDispatchPacketDigest ||
-    replacement.rejectedHostEffect.claimId !==
-      target.currentDelivery.workClaim.claimId ||
-    replacement.rejectedHostEffect.claimDigest !==
-      target.currentDelivery.workClaim.claimDigest ||
-    replacement.rejectedHostEffect.claimEventId !==
-      target.currentDelivery.workClaim.claimEventId ||
-    replacement.rejectedHostEffect.claimCommitId !==
-      target.currentDelivery.workClaim.claimCommitId ||
-    replacement.rejectedHostEffect.observationDigest !==
-      target.currentDelivery.hostEffect.observationDigest ||
-    replacement.rejectedHostEffect.observedAt !==
-      target.currentDelivery.hostEffect.observedAt ||
-    target.currentDelivery.hostEffect.disposition !==
-      "rejected-before-effect" ||
-    target.currentDelivery.hostEffect.claimHandling !== "release-authorized" ||
-    intent.attempt.testAttemptId !== attemptState.attempt.testAttemptId
-  ) {
-    fail("transition", "$/targetTasks");
-  }
-  return parseDemandAggregateState({
-    ...current,
-    targetTasks: current.targetTasks.map((entry) =>
-      entry.targetTaskId === target.targetTaskId
-        ? {
-            ...target,
-            phase: "test-delivery-prepared",
-            currentDelivery: {
-              targetDeliveryId: intent.targetDeliveryId,
-              intentDigest: intent.intentDigest,
-              hostId: intent.route.hostId,
-              bindingId: intent.route.bindingId,
-              testAttemptId: intent.attempt.testAttemptId,
-            },
-            testAttempts: [
-              ...target.testAttempts.slice(0, -1),
-              {
-                attempt: attemptState.attempt,
-                deliveryAuthorizations: [
-                  ...attemptState.deliveryAuthorizations,
-                  {
-                    ordinal: replacement.authorizationOrdinal,
-                    targetDeliveryId: intent.targetDeliveryId,
-                    intentDigest: intent.intentDigest,
-                    preparedAt: intent.preparedAt,
-                  },
-                ],
-              },
-            ],
-          }
-        : entry,
-    ),
-  });
+  return disposition === "accepted"
+    ? "host-effect-accepted"
+    : disposition === "indeterminate"
+      ? "host-effect-indeterminate"
+      : "host-effect-rejected";
 }
 
-/** `delivery.target-host-effect-claimed.v1` 使用的纯状态转换。 */
-export function claimTargetHostEffectInDemandAggregateState(
+/**
+ * `delivery.delivery-outcome-recorded.v1` 使用的纯状态转换。首次处置来自
+ * delivery-prepared；indeterminate 之后允许再记一次（hook 记录到达或 Controller 显式解决）。
+ */
+export function recordDeliveryOutcomeInDemandAggregateState(
   currentValue: unknown,
-  claimValue: unknown,
+  outcomeValue: unknown,
 ): Readonly<DemandAggregateState> {
   const current = parseDemandAggregateState(currentValue);
-  let claim: Readonly<WindowWorkClaim>;
+  let outcome: Readonly<DeliveryOutcome>;
   try {
-    claim = parseWindowWorkClaim(claimValue);
+    outcome = parseDeliveryOutcome(outcomeValue);
   } catch (error: unknown) {
-    if (error instanceof WindowWorkClaimError) {
-      fail("window-work-claim", "$claim");
+    if (error instanceof DeliveryOutcomeError) {
+      fail("delivery-outcome", "$outcome");
     }
     throw error;
   }
-  const target = current.targetTasks.find(
-    (entry) => entry.targetTaskId === claim.target.targetTaskId,
-  );
-  if (
-    current.lifecycle !== "active" ||
-    claim.target.demandId !== current.demandId ||
-    target === undefined ||
-    target.windowId !== claim.route.windowId ||
-    claim.claimTransition.expectedStateDigest !==
-      computeDemandAggregateStateDigest(current)
-  ) {
-    fail("transition", "$/targetTasks");
-  }
-  const workClaim = {
-    claimId: claim.claimId,
-    claimRef: windowWorkClaimRef(claim.route.windowId),
-    claimDigest: claim.claimDigest,
-    claimedAt: claim.claimedAt,
-    hostObservationAuthorityDigest: claim.hostObservation.authorityDigest,
-    claimEventId: claim.claimTransition.eventId,
-    claimCommitId: claim.claimTransition.commitId,
-    claimEventStreamRevision: claim.claimTransition.expectedStreamRevision + 1,
-    claimExpectedStateDigest: claim.claimTransition.expectedStateDigest,
-  } as const;
-  if (target.workType === "test") {
-    const claimTarget = claim.target;
-    if (
-      !("workType" in claimTarget) ||
-      claimTarget.workType !== "test" ||
-      target.phase !== "test-delivery-prepared" ||
-      target.currentDelivery.targetDeliveryId !==
-        claimTarget.targetDeliveryId ||
-      target.currentDelivery.intentDigest !== claimTarget.intentDigest ||
-      target.currentDelivery.hostId !== claim.route.hostId ||
-      target.currentDelivery.bindingId !== claim.route.bindingId ||
-      target.currentDelivery.testAttemptId !== claimTarget.testAttemptId
-    ) {
-      fail("transition", "$/targetTasks");
-    }
-    return parseDemandAggregateState({
-      ...current,
-      targetTasks: current.targetTasks.map((entry) =>
-        entry.targetTaskId === target.targetTaskId
-          ? {
-              ...entry,
-              phase: "test-host-effect-claimed",
-              currentDelivery: {
-                ...target.currentDelivery,
-                workClaim: {
-                  ...workClaim,
-                  testDispatchPacketDigest:
-                    claimTarget.testDispatchPacketDigest,
-                },
-              },
-            }
-          : entry,
-      ),
-    });
-  }
-  if (
-    "workType" in claim.target ||
-    target.phase !== "delivery-prepared" ||
-    target.currentDelivery.targetDeliveryId !== claim.target.targetDeliveryId ||
-    target.currentDelivery.intentDigest !== claim.target.intentDigest ||
-    target.currentDelivery.hostId !== claim.route.hostId ||
-    target.currentDelivery.bindingId !== claim.route.bindingId
-  ) {
-    fail("transition", "$/targetTasks");
-  }
-  return parseDemandAggregateState({
-    ...current,
-    targetTasks: current.targetTasks.map((entry) =>
-      entry.targetTaskId === target.targetTaskId
-        ? {
-            ...entry,
-            phase: "host-effect-claimed",
-            currentDelivery: {
-              ...target.currentDelivery,
-              workClaim,
-            },
-          }
-        : entry,
-    ),
-  });
-}
-
-/** `delivery.target-host-effect-observed.v1` 使用的纯状态转换。 */
-export function observeTargetHostEffectInDemandAggregateState(
-  currentValue: unknown,
-  observationValue: unknown,
-): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let observation: Readonly<TargetDeliveryHostEffectObservation>;
-  try {
-    observation = parseTargetDeliveryHostEffectObservation(observationValue);
-  } catch (error: unknown) {
-    if (error instanceof TargetDeliveryHostEffectObservationError) {
-      fail("target-delivery-host-effect-observation", "$observation");
-    }
-    throw error;
-  }
-  const deliveryTargets = current.targetTasks.filter(
-    (
-      entry,
-    ): entry is Exclude<
-      DemandTargetTaskState,
-      | DemandPlannedTargetTaskState
-      | DemandTestPlannedTargetTaskState
-      | DemandSupersededTargetTaskState
-    > => entry.phase !== "planned" && entry.phase !== "superseded",
-  );
-  const candidates = deliveryTargets.filter(
-    (entry) =>
-      entry.currentDelivery.targetDeliveryId ===
-      observation.action.targetDeliveryId,
+  const candidates = deliveryBearingTargets(current).filter(
+    (entry) => entry.currentDelivery.deliveryId === outcome.deliveryId,
   );
   const target = candidates.length === 1 ? candidates[0] : undefined;
   if (
     target === undefined ||
-    (target.phase !== "host-effect-claimed" &&
-      target.phase !== "test-host-effect-claimed")
-  ) {
-    fail("transition", "$/targetTasks");
-  }
-  if (
     current.lifecycle !== "active" ||
-    target.windowId !== observation.action.windowId ||
-    target.currentDelivery.intentDigest !== observation.action.intentDigest ||
-    target.currentDelivery.hostId !== observation.action.hostId ||
-    target.currentDelivery.bindingId !== observation.action.bindingId ||
-    target.currentDelivery.workClaim.claimId !== observation.action.actionId ||
-    target.currentDelivery.workClaim.claimDigest !==
-      observation.action.claimDigest ||
-    target.currentDelivery.workClaim.hostObservationAuthorityDigest !==
-      observation.action.hostObservationAuthorityDigest ||
-    target.currentDelivery.workClaim.claimEventId !==
-      observation.action.claimEventId ||
-    target.currentDelivery.workClaim.claimCommitId !==
-      observation.action.claimCommitId ||
-    target.currentDelivery.workClaim.claimEventStreamRevision !==
-      observation.action.claimEventStreamRevision ||
-    target.currentDelivery.workClaim.claimExpectedStateDigest !==
-      observation.action.claimExpectedStateDigest ||
-    target.currentDelivery.workClaim.claimedAt !== observation.action.issuedAt
+    target.currentDelivery.generation !== outcome.generation ||
+    target.currentDelivery.fence.claimId !== outcome.fence.claimId ||
+    target.currentDelivery.fence.claimDigest !== outcome.fence.claimDigest
   ) {
     fail("transition", "$/targetTasks");
   }
-  if (target.workType === "test") {
-    if (
-      target.phase !== "test-host-effect-claimed" ||
-      !("workType" in observation.action) ||
-      observation.action.workType !== "test" ||
-      target.currentDelivery.testAttemptId !==
-        observation.action.testAttemptId ||
-      target.currentDelivery.workClaim.testDispatchPacketDigest !==
-        observation.action.testDispatchPacketDigest
-    ) {
-      fail("transition", "$/targetTasks");
-    }
-  } else if (
-    target.phase !== "host-effect-claimed" ||
-    "workType" in observation.action
-  ) {
+  const firstOutcome =
+    target.phase === "delivery-prepared" || target.phase === "test-delivery-prepared";
+  const reevaluation =
+    target.phase === "host-effect-indeterminate" ||
+    target.phase === "test-host-effect-indeterminate";
+  if (!firstOutcome && !reevaluation) fail("transition", "$/targetTasks");
+  if (reevaluation && outcome.disposition === "indeterminate") {
     fail("transition", "$/targetTasks");
   }
-  const disposition = targetDeliveryHostEffectDisposition(observation);
-  const phase =
-    target.workType === "test"
-      ? disposition === "accepted"
-        ? ("test-host-effect-accepted" as const)
-        : disposition === "indeterminate"
-          ? ("test-host-effect-indeterminate" as const)
-          : ("test-host-effect-rejected" as const)
-      : disposition === "accepted"
-        ? ("host-effect-accepted" as const)
-        : disposition === "indeterminate"
-          ? ("host-effect-indeterminate" as const)
-          : ("host-effect-rejected" as const);
-  const claimHandling =
-    disposition === "rejected-before-effect"
-      ? ("release-authorized" as const)
-      : ("retain" as const);
+  const workType = target.workType === "test" ? "test" : "implementation";
+  const summary: DemandDeliveryOutcomeSummary = Object.freeze({
+    outcomeDigest: outcome.outcomeDigest,
+    disposition: outcome.disposition,
+    evidenceKind: outcome.evidence.kind,
+    readbackStatus: outcome.readback.status,
+    claimHandling: outcome.claimHandling,
+    observedAt: outcome.observedAt,
+  });
   return parseDemandAggregateState({
     ...current,
     targetTasks: current.targetTasks.map((entry) =>
       entry.targetTaskId === target.targetTaskId
         ? {
             ...entry,
-            phase,
+            phase: phaseForDisposition(workType, outcome.disposition),
             currentDelivery: {
               ...target.currentDelivery,
-              hostEffect: {
-                observationDigest: observation.observationDigest,
-                disposition,
-                readbackStatus: observation.readback.status,
-                claimHandling,
-                observedAt: observation.observedAt,
-              },
+              outcome: summary,
             },
           }
         : entry,
@@ -2282,66 +1825,66 @@ export function observeTargetHostEffectInDemandAggregateState(
   });
 }
 
-/** `delivery.target-host-effect-rearmed.v1` 使用的纯状态转换。 */
-export function rearmTargetHostEffectInDemandAggregateState(
+/** `delivery.delivery-rearmed.v1` 使用的纯状态转换：同一信封、新声明与围栏、代际加一。 */
+export function rearmDeliveryInDemandAggregateState(
   currentValue: unknown,
   rearmValue: unknown,
 ): Readonly<DemandAggregateState> {
   const current = parseDemandAggregateState(currentValue);
-  let rearm: Readonly<TargetHostEffectRearm>;
+  let rearm: Readonly<DeliveryRearm>;
   try {
-    rearm = parseTargetHostEffectRearm(rearmValue);
+    rearm = parseDeliveryRearm(rearmValue);
   } catch (error: unknown) {
-    if (error instanceof TargetHostEffectRearmError) {
-      fail("target-host-effect-rearm", "$rearm");
-    }
+    if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$rearm");
     throw error;
   }
-  const target = current.targetTasks.find(
-    (entry) => entry.targetTaskId === rearm.target.targetTaskId,
+  const candidates = deliveryBearingTargets(current).filter(
+    (entry) => entry.currentDelivery.deliveryId === rearm.deliveryId,
   );
-  // rearmedAt只保留Rearm来源时钟的审计事实；Rejected Attempt身份、Observation
-  // 摘要、当前Aggregate状态与Event append CAS共同建立因果关系，不比较墙钟。
+  const target = candidates.length === 1 ? candidates[0] : undefined;
+  // rearmedAt 只保留来源时钟的审计事实；因果关系由处置摘要、围栏与追加 CAS 建立。
   if (
-    current.lifecycle !== "active" ||
-    rearm.target.demandId !== current.demandId ||
     target === undefined ||
-    target.phase !== "host-effect-rejected" ||
-    target.currentDelivery.targetDeliveryId !== rearm.target.targetDeliveryId ||
-    target.currentDelivery.workClaim.claimId !==
-      rearm.rejectedAttempt.claimId ||
-    target.currentDelivery.workClaim.claimDigest !==
-      rearm.rejectedAttempt.claimDigest ||
-    target.currentDelivery.workClaim.claimEventId !==
-      rearm.rejectedAttempt.claimEventId ||
-    target.currentDelivery.workClaim.claimCommitId !==
-      rearm.rejectedAttempt.claimCommitId ||
-    target.currentDelivery.hostEffect.observationDigest !==
-      rearm.rejectedAttempt.observationDigest ||
-    target.currentDelivery.hostEffect.disposition !==
-      "rejected-before-effect" ||
-    target.currentDelivery.hostEffect.claimHandling !== "release-authorized"
+    current.lifecycle !== "active" ||
+    (target.phase !== "host-effect-rejected" &&
+      target.phase !== "test-host-effect-rejected") ||
+    target.currentDelivery.generation !== rearm.previousGeneration ||
+    target.currentDelivery.fence.claimId !== rearm.previousFence.claimId ||
+    target.currentDelivery.fence.claimDigest !== rearm.previousFence.claimDigest ||
+    target.currentDelivery.outcome.outcomeDigest !== rearm.rejectedOutcomeDigest ||
+    target.currentDelivery.outcome.disposition !== "rejected-before-send" ||
+    rearm.generation > DELIVERY_REARM_LIMIT + 1
   ) {
     fail("transition", "$/targetTasks");
   }
+  assertClaimUnused(current, rearm.fence.claimId);
+  const { outcome: _outcome, ...withoutOutcome } = target.currentDelivery;
+  const rearmed = {
+    ...withoutOutcome,
+    generation: rearm.generation,
+    fence: {
+      claimId: rearm.fence.claimId,
+      claimDigest: rearm.fence.claimDigest,
+      streamRevision: rearm.fence.expectedStreamRevision + 1,
+    },
+  };
   return parseDemandAggregateState({
     ...current,
     targetTasks: current.targetTasks.map((entry) =>
       entry.targetTaskId === target.targetTaskId
         ? {
             ...entry,
-            phase: "delivery-prepared",
-            currentDelivery: {
-              targetDeliveryId: target.currentDelivery.targetDeliveryId,
-              intentDigest: target.currentDelivery.intentDigest,
-              hostId: target.currentDelivery.hostId,
-              bindingId: target.currentDelivery.bindingId,
-            },
+            phase:
+              target.workType === "test"
+                ? "test-delivery-prepared"
+                : "delivery-prepared",
+            currentDelivery: rearmed,
           }
         : entry,
     ),
   });
 }
+
 
 /** `result.target-result-recorded.v1` 使用的纯状态转换。 */
 export function recordTargetResultInDemandAggregateState(
@@ -2373,20 +1916,19 @@ export function recordTargetResultInDemandAggregateState(
       target.testCard.testCardId !== result.testExecution.testCard.testCardId ||
       target.testCard.testCardDigest !==
         result.testExecution.testCard.testCardDigest ||
-      target.currentDelivery.targetDeliveryId !== result.targetDeliveryId ||
+      target.currentDelivery.deliveryId !== result.deliveryId ||
       target.currentDelivery.testAttemptId !==
         result.testExecution.testAttemptId ||
-      target.currentDelivery.workClaim.claimId !== result.hostEffect.actionId ||
-      target.currentDelivery.workClaim.claimDigest !==
-        result.hostEffect.claimDigest ||
-      target.currentDelivery.workClaim.testDispatchPacketDigest !==
-        result.testExecution.testDispatchPacketDigest ||
-      target.currentDelivery.hostEffect.observationDigest !==
-        result.hostEffect.observationDigest ||
-      target.currentDelivery.hostEffect.disposition !==
-        result.hostEffect.disposition ||
-      target.currentDelivery.hostEffect.readbackStatus !==
-        result.hostEffect.readbackStatus ||
+      target.currentDelivery.generation !== result.delivery.generation ||
+      target.currentDelivery.fence.claimId !== result.delivery.fence.claimId ||
+      target.currentDelivery.fence.claimDigest !==
+        result.delivery.fence.claimDigest ||
+      target.currentDelivery.outcome.outcomeDigest !==
+        result.delivery.outcomeDigest ||
+      target.currentDelivery.outcome.disposition !==
+        result.delivery.disposition ||
+      target.currentDelivery.outcome.readbackStatus !==
+        result.delivery.readbackStatus ||
       current.targetTasks.some(
         (entry) =>
           (entry.phase === "result-reported" ||
@@ -2445,16 +1987,17 @@ export function recordTargetResultInDemandAggregateState(
     target.taskPackageDigest !== result.taskPackage.digest ||
     target.repositoryId !== result.assignment.repositoryId ||
     target.windowId !== result.assignment.windowId ||
-    target.currentDelivery.targetDeliveryId !== result.targetDeliveryId ||
-    target.currentDelivery.workClaim.claimId !== result.hostEffect.actionId ||
-    target.currentDelivery.workClaim.claimDigest !==
-      result.hostEffect.claimDigest ||
-    target.currentDelivery.hostEffect.observationDigest !==
-      result.hostEffect.observationDigest ||
-    target.currentDelivery.hostEffect.disposition !==
-      result.hostEffect.disposition ||
-    target.currentDelivery.hostEffect.readbackStatus !==
-      result.hostEffect.readbackStatus ||
+    target.currentDelivery.deliveryId !== result.deliveryId ||
+    target.currentDelivery.generation !== result.delivery.generation ||
+    target.currentDelivery.fence.claimId !== result.delivery.fence.claimId ||
+    target.currentDelivery.fence.claimDigest !==
+      result.delivery.fence.claimDigest ||
+    target.currentDelivery.outcome.outcomeDigest !==
+      result.delivery.outcomeDigest ||
+    target.currentDelivery.outcome.disposition !==
+      result.delivery.disposition ||
+    target.currentDelivery.outcome.readbackStatus !==
+      result.delivery.readbackStatus ||
     result.report.repositoryChange.repositoryId !== target.repositoryId ||
     reportAnchorIds.some(
       (anchorId) => !target.acceptanceAnchorIds.includes(anchorId),
@@ -2553,9 +2096,7 @@ export function decideTargetResultReviewInDemandAggregateState(
       decision.testExecution.testCard.testCardId !==
         target.testCard.testCardId ||
       decision.testExecution.testCard.testCardDigest !==
-        target.testCard.testCardDigest ||
-      decision.testExecution.testDispatchPacketDigest !==
-        target.currentDelivery.workClaim.testDispatchPacketDigest
+        target.testCard.testCardDigest
     ) {
       fail("transition", "$/targetTasks");
     }
@@ -2668,8 +2209,6 @@ export function authorizeProductDefectRemediationInDemandAggregateState(
       authorization.source.testCard.testCardDigest ||
     testTarget.currentDelivery.testAttemptId !==
       authorization.source.testAttemptId ||
-    testTarget.currentDelivery.workClaim.testDispatchPacketDigest !==
-      authorization.source.testDispatchPacketDigest ||
     testTarget.currentDelivery.targetResult.targetResultId !==
       authorization.source.targetResult.targetResultId ||
     testTarget.currentDelivery.targetResult.resultDigest !==

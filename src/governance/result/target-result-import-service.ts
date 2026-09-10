@@ -34,13 +34,9 @@ import {
   DemandEventSourcingRepositoryError,
 } from "../demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES } from "../demand/event-sourcing/demand-file-event-store-contract.js";
-import {
-  inspectWindowWorkClaim,
-  WindowWorkClaimStoreError,
-} from "../delivery/window-work-claim-store.js";
-import { settleAuthorizedWindowWorkClaimRelease } from "../delivery/window-work-claim-release-settlement.js";
-import type { WindowWorkClaim } from "../delivery/window-work-claim.js";
-import type { TargetDeliveryHostEffectObservation } from "../delivery/target-delivery-host-effect-observation.js";
+import { WakeflowError } from "../../kernel/error.js";
+import { inspectWorkClaim, releaseWorkClaim } from "../../kernel/work-claims.js";
+import type { DeliveryEnvelope } from "../delivery/delivery-envelope.js";
 import {
   targetResultRecordedCommitIdFromResult,
   type TargetResult,
@@ -68,6 +64,7 @@ import {
 import {
   loadTargetResultImportSources,
   TargetResultImportAuthorityError,
+  type TargetResultImportCurrentDelivery,
 } from "./target-result-import-authority.js";
 import {
   parseTargetResultImportOptions,
@@ -89,8 +86,8 @@ export interface TargetResultImportResult {
   readonly disposition: "committed" | "idempotent";
   readonly claimAuthority: "released";
   readonly eventAuthority: "current";
-  readonly claim: Readonly<WindowWorkClaim>;
-  readonly observation: Readonly<TargetDeliveryHostEffectObservation>;
+  readonly envelope: Readonly<DeliveryEnvelope>;
+  readonly currentDelivery: Readonly<TargetResultImportCurrentDelivery>;
   readonly result: Readonly<TargetResult>;
   readonly commandDigest: Sha256Digest;
   readonly commandResult: Readonly<DemandEventSourcingCommandResult>;
@@ -103,12 +100,11 @@ export type TargetResultImportServiceErrorReason =
   | "config"
   | "demand-authority"
   | "task-package"
-  | "intent"
+  | "envelope"
   | "test-card"
-  | "packet"
-  | "claim-event"
+  | "fence"
   | "host"
-  | "observation"
+  | "outcome"
   | "report"
   | "state"
   | "claim"
@@ -125,13 +121,11 @@ const ERROR_MESSAGES = {
   config: "TargetResult Import Config authority is unavailable.",
   "demand-authority": "TargetResult Import Demand authority is invalid.",
   "task-package": "TargetResult Import TaskPackage authority is invalid.",
-  intent: "TargetResult Import TargetDeliveryIntent authority is invalid.",
+  envelope: "TargetResult Import Delivery Envelope authority is invalid.",
   "test-card": "TargetResult Import TestCard authority is invalid.",
-  packet: "TargetResult Import TestDispatchPacket authority is invalid.",
-  "claim-event": "TargetResult Import Claim Event authority is invalid.",
-  host: "TargetResult Import Claim belongs to another Host.",
-  observation:
-    "TargetResult Import Host Effect Observation authority is invalid.",
+  fence: "TargetResult Import fence token does not match the current delivery generation.",
+  host: "TargetResult Import delivery belongs to another Host.",
+  outcome: "TargetResult Import delivery has no accepted or indeterminate outcome.",
   report: "TargetResult Import Agent report is invalid.",
   state: "TargetResult Import Aggregate state is invalid.",
   claim: "TargetResult Import Claim release failed.",
@@ -341,15 +335,6 @@ async function executeResultEvent(
   }
 }
 
-function sameClaim(
-  left: Readonly<WindowWorkClaim>,
-  right: Readonly<WindowWorkClaim>,
-): boolean {
-  return (
-    left.claimId === right.claimId && left.claimDigest === right.claimDigest
-  );
-}
-
 export class TargetResultImportService {
   readonly #workspaceRoot: RootedDirectory;
   readonly #hostId: WakeflowWorkspaceHostId;
@@ -425,8 +410,22 @@ export class TargetResultImportService {
         }
         throw error;
       }
-      const { claim, observation } = sources;
+      const { envelope, currentDelivery } = sources;
       const existingEvent = sources.existingResultEvent;
+      if (currentDelivery.outcome.disposition === "rejected-before-send") {
+        fail("outcome", undefined, existingEvent === null ? "unchanged" : "current");
+      }
+      const deliveryBinding = Object.freeze({
+        generation: currentDelivery.generation,
+        fence: Object.freeze({
+          claimId: currentDelivery.fence.claimId,
+          claimDigest: currentDelivery.fence.claimDigest,
+        }),
+        outcomeDigest: currentDelivery.outcome.outcomeDigest,
+        disposition: currentDelivery.outcome.disposition,
+        readbackStatus: currentDelivery.outcome.readbackStatus,
+        observedAt: currentDelivery.outcome.observedAt,
+      });
       knownEventAuthority = existingEvent === null ? "unchanged" : "current";
       let result: Readonly<TargetResult>;
       if (existingEvent !== null) {
@@ -446,9 +445,9 @@ export class TargetResultImportService {
                 );
         if (
           !reportMatches ||
-          result.targetTaskId !== claim.target.targetTaskId ||
-          result.targetDeliveryId !== claim.target.targetDeliveryId ||
-          result.hostEffect.observationDigest !== request.observationDigest
+          result.targetTaskId !== envelope.target.targetTaskId ||
+          result.deliveryId !== envelope.deliveryId ||
+          result.delivery.fence.claimDigest !== request.claimDigest
         ) {
           fail("state", undefined, knownEventAuthority);
         }
@@ -471,10 +470,8 @@ export class TargetResultImportService {
           result = createTestTargetResult({
             taskPackage: sources.taskPackage,
             testCard: sources.testCard,
-            intent: sources.intent,
-            packet: sources.packet,
-            claim,
-            observation,
+            envelope,
+            delivery: deliveryBinding,
             report,
           });
         } catch (error: unknown) {
@@ -508,9 +505,8 @@ export class TargetResultImportService {
         try {
           result = createImplementationTargetResult({
             taskPackage: sources.taskPackage,
-            intent: sources.intent,
-            claim,
-            observation,
+            envelope,
+            delivery: deliveryBinding,
             report,
           });
         } catch (error: unknown) {
@@ -529,7 +525,7 @@ export class TargetResultImportService {
       }
 
       const target = context.loaded.aggregate.state.targetTasks.find(
-        (entry) => entry.targetTaskId === claim.target.targetTaskId,
+        (entry) => entry.targetTaskId === envelope.target.targetTaskId,
       );
       if (existingEvent === null) {
         const targetMatches =
@@ -537,32 +533,31 @@ export class TargetResultImportService {
             ? target?.workType === "test" &&
               (target.phase === "test-host-effect-accepted" ||
                 target.phase === "test-host-effect-indeterminate") &&
+              sources.envelope.workType === "test" &&
               target.currentDelivery.testAttemptId ===
-                sources.intent.attempt.testAttemptId &&
-              target.currentDelivery.workClaim.testDispatchPacketDigest ===
-                sources.packet.packetDigest &&
-              target.currentDelivery.hostEffect.observationDigest ===
-                observation.observationDigest
+                sources.envelope.attempt.testAttemptId &&
+              target.currentDelivery.outcome.outcomeDigest ===
+                currentDelivery.outcome.outcomeDigest
             : target !== undefined &&
               target.workType !== "test" &&
               (target.phase === "host-effect-accepted" ||
                 target.phase === "host-effect-indeterminate") &&
-              target.currentDelivery.hostEffect.observationDigest ===
-                observation.observationDigest;
+              target.currentDelivery.outcome.outcomeDigest ===
+                currentDelivery.outcome.outcomeDigest;
         if (!targetMatches) {
           fail("state", undefined, knownEventAuthority, knownClaimAuthority);
         }
       }
 
-      const inspected = await inspectWindowWorkClaim(
+      const inspected = await inspectWorkClaim(
         this.#workspaceRoot,
-        claim.route.windowId,
+        envelope.route.windowId,
         options.signal === undefined ? {} : { signal: options.signal },
       );
       const currentClaim =
-        inspected.status === "claimed" &&
-        inspected.claim !== undefined &&
-        sameClaim(inspected.claim, claim);
+        inspected.claim !== null &&
+        inspected.claim.claimId === currentDelivery.fence.claimId &&
+        inspected.claim.claimDigest === currentDelivery.fence.claimDigest;
       if (
         (inspected.status === "claimed" && !currentClaim) ||
         (existingEvent === null && inspected.status === "absent")
@@ -580,14 +575,13 @@ export class TargetResultImportService {
         options.signal,
       );
       knownEventAuthority = "current";
-      if (inspected.status !== "absent") {
+      if (inspected.claim !== null) {
         try {
-          await settleAuthorizedWindowWorkClaimRelease(
-            this.#workspaceRoot,
-            claim,
-          );
+          await releaseWorkClaim(this.#workspaceRoot, inspected.claim, {
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+          });
         } catch (error: unknown) {
-          if (error instanceof WindowWorkClaimStoreError) {
+          if (error instanceof WakeflowError) {
             fail("claim", error, "current", "unknown");
           }
           throw error;
@@ -602,8 +596,8 @@ export class TargetResultImportService {
         disposition: executed.result.disposition,
         claimAuthority: "released" as const,
         eventAuthority: "current" as const,
-        claim,
-        observation,
+        envelope,
+        currentDelivery,
         result,
         commandDigest: executed.commandDigest,
         commandResult: executed.result,
@@ -622,17 +616,13 @@ export class TargetResultImportService {
           knownEventAuthority,
           knownClaimAuthority,
         );
-      } else if (error instanceof WindowWorkClaimStoreError) {
+      } else if (error instanceof WakeflowError) {
         failure = new TargetResultImportServiceError(
           error.reason === "aborted" ? "aborted" : "claim",
           error.code,
           error.reason,
           knownEventAuthority,
-          error.claimAuthority === "current"
-            ? "current"
-            : knownClaimAuthority === "released"
-              ? "released"
-              : "unknown",
+          knownClaimAuthority === "released" ? "released" : "unknown",
         );
       } else {
         failure = error;

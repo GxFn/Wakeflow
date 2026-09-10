@@ -342,7 +342,7 @@
     "testExecution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["testAttemptId", "testCard", "testDispatchPacketDigest"],
+      "required": ["testAttemptId", "testCard"],
       "properties": {
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
@@ -359,9 +359,6 @@
               "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
             }
           }
-        },
-        "testDispatchPacketDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }
     },

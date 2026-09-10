@@ -13,7 +13,7 @@ import {
   PassiveOwnDataError,
 } from "../foundation/data/passive-own-data.js";
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../governance/demand/demand-resource-catalog.js";
-import { WINDOW_WORK_CLAIM_STATIC_RESOURCE_CATALOG } from "../governance/delivery/window-work-claim-resource-catalog.js";
+import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../governance/ledger/ledger-resource-catalog.js";
 import { WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG } from "./active/wakeflow-active-resource-catalog.js";
 import { WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG } from "./active/wakeflow-requirement-board-initialization.js";
@@ -100,7 +100,7 @@ const SHARED_STATIC_RESOURCE_CATALOG = Object.freeze([
   ...WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,
   ...WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
   ...WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
-  ...WINDOW_WORK_CLAIM_STATIC_RESOURCE_CATALOG,
+  WORK_CLAIMS_ROOT_RESOURCE_DECLARATION,
   ...WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG,
   ...WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG,
   ...WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG,

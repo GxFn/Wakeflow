@@ -5,13 +5,16 @@ import { test } from "node:test";
 
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
 import {
   WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/demand/contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
-import { windowWorkClaimRef } from "../../src/governance/delivery/window-work-claim-resource-catalog.js";
+import {
+  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/delivery/contract.js";
+import { workClaimRef } from "../../src/kernel/layout.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
@@ -19,9 +22,11 @@ import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } f
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
 import {
-  cleanupTargetHostEffectClaimWorkspaceFixture,
-  createTargetHostEffectClaimWorkspaceFixture,
-} from "../governance/delivery/target-host-effect-claim-service.fixture.js";
+  cleanupDeliveryWorkspaceFixture,
+  createDeliveryWorkspaceFixture,
+  DELIVERY_AUTHORED,
+  landFixturePrompt,
+} from "../governance/delivery/delivery-workspace.fixture.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
 import { controllerImplementationReviewDecisionInput } from "../governance/review/controller-implementation-review-decision.fixture.js";
 import {
@@ -36,203 +41,194 @@ import {
  * 能沿Route连接Execution与Review注册组，且一次性Action、隐私和幂等关系没有在组合层漂移。
  */
 
-async function taskPackageForTargetDelivery(
+async function taskPackageForDelivery(
   workspacePath: string,
   demandId: string,
-  targetDeliveryId: string,
+  deliveryId: string,
 ): Promise<Readonly<TaskPackage>> {
   const demandRoot = await RootedDirectory.open(
     path.join(workspacePath, ...demandFinalRootRef(demandId).split("/")),
   );
   try {
     const repository = new DemandEventSourcingRepository(demandRoot);
-    const prepared = await repository.findTargetDeliveryPreparedEvent(targetDeliveryId);
-    if (prepared === null) {
-      throw new Error("Expected Target Delivery Prepared Event.");
-    }
+    const prepared = await repository.findDeliveryPreparedEvent(deliveryId);
+    if (prepared === null) throw new Error("Expected Delivery Prepared Event.");
     const planned = await repository.findTargetTaskPlannedEvent(
-      prepared.event.data.intent.target.taskPackageId,
+      prepared.event.data.envelope.target.taskPackageId,
     );
-    if (planned === null) {
-      throw new Error("Expected Target Task Planned Event.");
-    }
+    if (planned === null) throw new Error("Expected Target Task Planned Event.");
     return planned.event.data.taskPackage;
   } finally {
     await demandRoot.close();
   }
 }
 
-test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与Completion且不执行宿主发送", async () => {
-  const fixture = await createTargetHostEffectClaimWorkspaceFixture();
+test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controller Review与Completion且不执行宿主发送", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
   const server = createCodexWakeflowMcpServer("1.0.0-test");
   const { client, close } = await connectWakeflowMcpServerForTest(server);
   try {
     const before = await client.callTool({
       name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-      arguments: {
-        root: fixture.workspacePath,
-        demandId: fixture.claimRequest.demandId,
-      },
+      arguments: { root: fixture.workspacePath, demandId: fixture.demandId },
     });
     equal(before.isError, undefined);
     equal(
-      (
-        before.structuredContent as {
-          route: { frontiers: { kind: string }[] };
-        }
-      ).route.frontiers[0]?.kind,
-      "implementation-host-effect-claim",
+      (before.structuredContent as { route: { frontiers: { kind: string }[] } }).route.frontiers[0]
+        ?.kind,
+      "implementation-delivery-planning",
     );
 
-    const request = {
+    const prepareRequest = {
       root: fixture.workspacePath,
-      ...fixture.claimRequest,
-      observation: {
-        ...fixture.claimRequest.observation,
-        observedAt: new Date().toISOString(),
-      },
+      demandId: fixture.demandId,
+      idempotencyKey: "mcp-prepare-1",
+      expectedStreamRevision: 2,
+      targetTaskId: fixture.targetTaskId,
+      authored: DELIVERY_AUTHORED,
+      language: "en",
     } as const;
-    const issuedCall = await client.callTool({
-      name: WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
-      arguments: request,
+    const preparedCall = await client.callTool({
+      name: WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+      arguments: prepareRequest,
     });
-    equal(issuedCall.isError, undefined);
-    const issued = issuedCall.structuredContent as {
+    equal(preparedCall.isError, undefined, textContent(preparedCall));
+    const prepared = preparedCall.structuredContent as {
       readonly status: string;
-      readonly claim: {
-        readonly claimId: string;
-        readonly claimDigest: string;
-        readonly route: { readonly windowId: string };
+      readonly delivery: {
+        readonly deliveryId: string;
+        readonly windowId: string;
+        readonly phase: string;
       };
-      readonly action: null | {
-        readonly effect: string;
+      readonly permit: {
         readonly prompt: string;
+        readonly hostAction: { readonly effect: string; readonly handleDigest: string };
+        readonly fence: {
+          readonly claimId: string;
+          readonly claimDigest: string;
+          readonly streamRevision: number;
+        };
         readonly issuedAt: string;
       };
+      readonly event: { readonly eventId: string; readonly streamRevision: number };
     };
-    equal(issued.status, "issued");
-    equal(issued.action?.effect, "send-message-to-observed-target-window");
-    equal(issued.action?.prompt.includes(fixture.workspacePath), true);
-    if (issued.action === null) {
-      throw new Error("Expected one host action for the issued Claim.");
-    }
-    equal(textContent(issuedCall).includes(fixture.rawHandle), false);
+    equal(prepared.status, "committed");
+    equal(prepared.delivery.phase, "delivery-prepared");
+    equal(prepared.permit.hostAction.effect, "send-prompt-to-window");
+    equal(prepared.permit.prompt.includes(fixture.workspacePath), false);
+    equal(prepared.permit.prompt.includes(prepared.delivery.deliveryId), true);
+    equal(textContent(preparedCall).includes(fixture.route.rawHandle), false);
     const claimPath = path.join(
       fixture.workspacePath,
-      ...windowWorkClaimRef(issued.claim.route.windowId).split("/"),
+      ...workClaimRef(prepared.delivery.windowId).split("/"),
     );
     equal(existsSync(claimPath), true);
 
     const after = await client.callTool({
       name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-      arguments: {
-        root: fixture.workspacePath,
-        demandId: fixture.claimRequest.demandId,
-      },
+      arguments: { root: fixture.workspacePath, demandId: fixture.demandId },
     });
     equal(after.isError, undefined);
     equal(
-      (
-        after.structuredContent as {
-          route: { frontiers: { kind: string }[] };
-        }
-      ).route.frontiers[0]?.kind,
+      (after.structuredContent as { route: { frontiers: { kind: string }[] } }).route.frontiers[0]
+        ?.kind,
       "implementation-host-effect-execution",
     );
 
     const replayedCall = await client.callTool({
-      name: WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
-      arguments: request,
+      name: WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+      arguments: prepareRequest,
     });
-    equal(replayedCall.isError, undefined);
+    equal(replayedCall.isError, undefined, textContent(replayedCall));
     const replayed = replayedCall.structuredContent as {
       readonly status: string;
-      readonly action: unknown;
-      readonly claim: { readonly claimId: string };
+      readonly delivery: { readonly deliveryId: string };
+      readonly permit: { readonly fence: { readonly claimDigest: string } };
     };
-    equal(replayed.status, "already-claimed");
-    equal(replayed.action, null);
-    equal(replayed.claim.claimId, issued.claim.claimId);
+    equal(replayed.status, "idempotent");
+    equal(replayed.delivery.deliveryId, prepared.delivery.deliveryId);
+    equal(replayed.permit.fence.claimDigest, prepared.permit.fence.claimDigest);
     equal(textContent(replayedCall).includes(fixture.workspacePath), false);
-    equal(textContent(replayedCall).includes(fixture.rawHandle), false);
+    equal(textContent(replayedCall).includes(fixture.route.rawHandle), false);
 
+    await landFixturePrompt(
+      fixture,
+      fixture.route,
+      prepared.permit.prompt,
+      parseUtcInstant(new Date().toISOString()),
+    );
     const outcomeRequest = {
       root: fixture.workspacePath,
-      demandId: fixture.claimRequest.demandId,
-      actionId: issued.claim.claimId,
-      claimDigest: issued.claim.claimDigest,
-      attempt: {
-        status: "accepted" as const,
-        evidence: { sourceTestHostResult: "accepted" },
-      },
-      readback: {
-        status: "pending" as const,
-        evidence: { sourceTestVisible: false },
-      },
+      demandId: fixture.demandId,
+      idempotencyKey: "mcp-outcome-1",
+      expectedStreamRevision: prepared.event.streamRevision,
+      deliveryId: prepared.delivery.deliveryId,
+      claimDigest: prepared.permit.fence.claimDigest,
+      attempt: { status: "sent" as const },
+      readback: { status: "pending" as const },
       observedAt: new Date(
-        Math.max(Date.now(), Date.parse(issued.action.issuedAt) + 1),
+        Math.max(Date.now(), Date.parse(prepared.permit.issuedAt) + 1),
       ).toISOString(),
     };
     const outcomeCall = await client.callTool({
-      name: WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
       arguments: outcomeRequest,
     });
-    equal(outcomeCall.isError, undefined);
+    equal(outcomeCall.isError, undefined, textContent(outcomeCall));
     const outcome = outcomeCall.structuredContent as {
       readonly status: string;
-      readonly effectDisposition: string;
-      readonly claimAuthority: string;
-      readonly observation: { readonly observationDigest: string };
+      readonly outcome: {
+        readonly disposition: string;
+        readonly evidenceKind: string;
+        readonly claimHandling: string;
+        readonly outcomeDigest: string;
+      };
+      readonly target: { readonly phase: string };
       readonly event: { readonly eventId: string };
     };
     equal(outcome.status, "recorded");
-    equal(outcome.effectDisposition, "accepted");
-    equal(outcome.claimAuthority, "current");
+    equal(outcome.outcome.disposition, "accepted");
+    equal(outcome.outcome.evidenceKind, "hook-record");
+    equal(outcome.outcome.claimHandling, "retain");
+    equal(outcome.target.phase, "host-effect-accepted");
     equal(textContent(outcomeCall).includes(fixture.workspacePath), false);
-    equal(textContent(outcomeCall).includes(fixture.rawHandle), false);
-    equal(textContent(outcomeCall).includes("sourceTestHostResult"), false);
+    equal(textContent(outcomeCall).includes(fixture.route.rawHandle), false);
 
     const afterOutcome = await client.callTool({
       name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-      arguments: {
-        root: fixture.workspacePath,
-        demandId: fixture.claimRequest.demandId,
-      },
+      arguments: { root: fixture.workspacePath, demandId: fixture.demandId },
     });
     equal(afterOutcome.isError, undefined);
     equal(
-      (
-        afterOutcome.structuredContent as {
-          route: { frontiers: { kind: string }[] };
-        }
-      ).route.frontiers[0]?.kind,
+      (afterOutcome.structuredContent as { route: { frontiers: { kind: string }[] } }).route
+        .frontiers[0]?.kind,
       "implementation-target-result-import",
     );
 
     const replayedOutcomeCall = await client.callTool({
-      name: WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
       arguments: outcomeRequest,
     });
-    equal(replayedOutcomeCall.isError, undefined);
+    equal(replayedOutcomeCall.isError, undefined, textContent(replayedOutcomeCall));
     const replayedOutcome = replayedOutcomeCall.structuredContent as {
       readonly status: string;
-      readonly observation: { readonly observationDigest: string };
+      readonly outcome: { readonly outcomeDigest: string };
       readonly event: { readonly eventId: string };
     };
-    equal(replayedOutcome.status, "already-recorded");
-    equal(replayedOutcome.observation.observationDigest, outcome.observation.observationDigest);
+    equal(replayedOutcome.status, "idempotent");
+    equal(replayedOutcome.outcome.outcomeDigest, outcome.outcome.outcomeDigest);
     equal(replayedOutcome.event.eventId, outcome.event.eventId);
 
-    const taskPackage = await taskPackageForTargetDelivery(
+    const taskPackage = await taskPackageForDelivery(
       fixture.workspacePath,
-      fixture.intent.demandId,
-      fixture.intent.targetDeliveryId,
+      fixture.demandId,
+      prepared.delivery.deliveryId,
     );
     const resultRequest = {
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      actionId: issued.claim.claimId,
-      observationDigest: outcome.observation.observationDigest,
+      demandId: fixture.demandId,
+      deliveryId: prepared.delivery.deliveryId,
+      claimDigest: prepared.permit.fence.claimDigest,
       report: {
         workType: "implementation" as const,
         content: createImplementationTargetResultReportContentFixture(taskPackage),
@@ -251,10 +247,10 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       readonly result: {
         readonly workType: string;
         readonly demandId: string;
-        readonly targetDeliveryId: string;
-        readonly hostEffect: {
-          readonly actionId: string;
-          readonly observationDigest: string;
+        readonly deliveryId: string;
+        readonly delivery: {
+          readonly fence: { readonly claimId: string };
+          readonly outcomeDigest: string;
         };
         readonly report: { readonly outcome: string };
         readonly resultDigest: string;
@@ -266,21 +262,18 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(imported.claimAuthority, "released");
     equal(imported.eventAuthority, "current");
     equal(imported.result.workType, "implementation");
-    equal(imported.result.demandId, fixture.intent.demandId);
-    equal(imported.result.targetDeliveryId, fixture.intent.targetDeliveryId);
-    equal(imported.result.hostEffect.actionId, issued.claim.claimId);
-    equal(imported.result.hostEffect.observationDigest, outcome.observation.observationDigest);
+    equal(imported.result.demandId, fixture.demandId);
+    equal(imported.result.deliveryId, prepared.delivery.deliveryId);
+    equal(imported.result.delivery.fence.claimId, prepared.permit.fence.claimId);
+    equal(imported.result.delivery.outcomeDigest, outcome.outcome.outcomeDigest);
     equal(imported.result.report.outcome, "completed");
     equal(existsSync(claimPath), false);
     equal(textContent(importedCall).includes(fixture.workspacePath), false);
-    equal(textContent(importedCall).includes(fixture.rawHandle), false);
+    equal(textContent(importedCall).includes(fixture.route.rawHandle), false);
 
     const afterResult = await client.callTool({
       name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-      arguments: {
-        root: fixture.workspacePath,
-        demandId: fixture.claimRequest.demandId,
-      },
+      arguments: { root: fixture.workspacePath, demandId: fixture.demandId },
     });
     equal(afterResult.isError, undefined);
     equal(
@@ -309,8 +302,8 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
 
     const inspectionRequest = {
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
     };
     const inspectionCall = await client.callTool({
       name: WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
@@ -336,7 +329,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     const judgment = controllerImplementationReviewDecisionInput("accept");
     const decisionRequest = {
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
+      demandId: fixture.demandId,
       targetResultId: inspection.reviewUnit.targetResult.targetResultId,
       snapshotDigest: inspection.snapshotDigest,
       reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
@@ -366,13 +359,13 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(decision.eventAuthority, "current");
     equal(decision.decision.decision, "accept");
     equal(textContent(decisionCall).includes(fixture.workspacePath), false);
-    equal(textContent(decisionCall).includes(fixture.rawHandle), false);
+    equal(textContent(decisionCall).includes(fixture.route.rawHandle), false);
 
     const afterDecision = await client.callTool({
       name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
       },
     });
     equal(afterDecision.isError, undefined);
@@ -407,7 +400,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       arguments: {
         root: fixture.workspacePath,
         mode: "preview",
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
       },
     });
     equal(completionPreviewCall.isError, undefined, textContent(completionPreviewCall));
@@ -421,20 +414,20 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     };
     equal(completionPreview.mode, "preview");
     equal(completionPreview.status, "ready", completionPreview.blockers.join(","));
-    equal(completionPreview.demandId, fixture.intent.demandId);
+    equal(completionPreview.demandId, fixture.demandId);
     equal(
       completionPreview.verify?.gates.every((gate) => gate.status === "pass"),
       true,
     );
     equal(textContent(completionPreviewCall).includes(fixture.workspacePath), false);
-    equal(textContent(completionPreviewCall).includes(fixture.rawHandle), false);
+    equal(textContent(completionPreviewCall).includes(fixture.route.rawHandle), false);
 
     const completionCall = await client.callTool({
       name: WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         mode: "apply",
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
         planDigest: completionPreview.planDigest,
       },
     });
@@ -450,10 +443,10 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(completion.package.status, "archived");
     equal(completion.next.frontier, "demand-continuation");
     equal(textContent(completionCall).includes(fixture.workspacePath), false);
-    equal(textContent(completionCall).includes(fixture.rawHandle), false);
+    equal(textContent(completionCall).includes(fixture.route.rawHandle), false);
     equal(
       existsSync(
-        path.join(fixture.workspacePath, ...demandFinalRootRef(fixture.intent.demandId).split("/")),
+        path.join(fixture.workspacePath, ...demandFinalRootRef(fixture.demandId).split("/")),
       ),
       false,
       "active root survived completion",
@@ -463,7 +456,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
       },
     });
     equal(terminalRouteCall.isError, undefined, textContent(terminalRouteCall));
@@ -480,7 +473,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
       arguments: {
         root: fixture.workspacePath,
         mode: "recover",
-        operationId: fixture.intent.demandId,
+        operationId: fixture.demandId,
       },
     });
     equal(recoveredCall.isError, undefined, textContent(recoveredCall));
@@ -494,6 +487,6 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(recovered.archive.archiveRef, completion.archive.archiveRef);
   } finally {
     await close();
-    await cleanupTargetHostEffectClaimWorkspaceFixture(fixture);
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });

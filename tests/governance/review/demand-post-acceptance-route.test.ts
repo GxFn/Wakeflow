@@ -56,7 +56,7 @@ test("controller-only在全部产品Target accepted后只进入completion prefli
   try {
     const waiting = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(waiting.nextStage.status, "not-ready");
     if (waiting.nextStage.status !== "not-ready") {
@@ -69,19 +69,19 @@ test("controller-only在全部产品Target accepted后只进入completion prefli
     const decision = await acceptCurrentTarget(fixture);
     const before = await inspectDemandInventory(
       fixture.workspacePath,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     const first = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     const second = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     const after = await inspectDemandInventory(
       fixture.workspacePath,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     deepEqual(second, first);
     deepEqual(after, before);
@@ -113,7 +113,7 @@ test("controller-only在全部产品Target accepted后只进入completion prefli
     await rejects(
       readDemandPostAcceptanceRoute(
         fixture.workspaceRoot,
-        fixture.intent.demandId,
+        fixture.demandId,
         { extra: true } as never,
       ),
       (error: unknown) =>
@@ -134,7 +134,7 @@ test("real-environment只路由到Test planning并暴露需求包的环境Author
     await acceptCurrentTarget(fixture);
     const route = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(route.testingDecision.mode, "real-environment");
     equal(route.nextStage.status, "real-environment-test-planning");

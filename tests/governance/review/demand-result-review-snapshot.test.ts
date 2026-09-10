@@ -7,12 +7,8 @@ import { test } from "node:test";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
-import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
-import { TargetHostEffectClaimService } from "../../../src/governance/delivery/target-host-effect-claim-service.js";
-import { TargetHostEffectOutcomeService } from "../../../src/governance/delivery/target-host-effect-outcome-service.js";
 import {
   readDemandResultReviewSnapshot,
   DemandResultReviewSnapshotError,
@@ -20,14 +16,12 @@ import {
 import { TargetResultImportService } from "../../../src/governance/result/target-result-import-service.js";
 import { TaskPackageProjectionStore } from "../../../src/governance/tasking/task-package-projection-store.js";
 import {
-  CLAIMED_AT,
-  claimUuidFactory,
-  cleanupTargetHostEffectClaimWorkspaceFixture,
-  createTargetHostEffectClaimWorkspaceFixture,
-} from "../delivery/target-host-effect-claim-service.fixture.js";
+  cleanupDeliveryWorkspaceFixture,
+  createDeliveryWorkspaceFixture,
+  deliverFixtureTarget,
+} from "../delivery/delivery-workspace.fixture.js";
 import { createImplementationTargetResultReportContentFixture } from "../result/implementation-target-result-report.fixture.js";
 
-const OUTCOME_AT = parseUtcInstant("2026-08-29T12:06:00.000Z");
 const REPORTED_AT = parseUtcInstant("2026-08-29T12:10:00.000Z");
 
 async function openDemandRoot(
@@ -53,11 +47,12 @@ async function withDemandRoot<Result>(
 }
 
 test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查输入", async () => {
-  const fixture = await createTargetHostEffectClaimWorkspaceFixture();
+  const fixture = await createDeliveryWorkspaceFixture();
   try {
+    const delivered = await deliverFixtureTarget(fixture);
     const prepared = await withDemandRoot(
       fixture.workspacePath,
-      fixture.intent.demandId,
+      fixture.demandId,
       async (demandRoot) => {
         const awaiting = await readDemandResultReviewSnapshot(demandRoot);
         const awaitingTarget = awaiting.targets[0];
@@ -72,38 +67,18 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
         return { awaitingTarget, loadedTaskPackage };
       },
     );
-    equal(prepared.awaitingTarget.phase, "delivery-prepared");
+    equal(prepared.awaitingTarget.phase, "host-effect-accepted");
     equal(Object.hasOwn(prepared.awaitingTarget, "targetResult"), false);
     equal(
       Object.hasOwn(prepared.awaitingTarget.taskPackage, "objective"),
       false,
     );
 
-    const claimed = await new TargetHostEffectClaimService(
-      fixture.workspaceRoot,
-      codexWorkspaceHostResourceProfile,
-      codexWindowHostIdentityProfile,
-    ).claim(fixture.claimRequest, {
-      clock: () => CLAIMED_AT,
-      uuidFactory: claimUuidFactory(),
-    });
-    if (claimed.action === null) throw new Error("Expected issued action.");
-    const outcome = await new TargetHostEffectOutcomeService(
-      fixture.workspaceRoot,
-      "codex",
-    ).record({
-      demandId: fixture.intent.demandId,
-      actionId: claimed.action.actionId,
-      claimDigest: claimed.action.workClaim.claimDigest,
-      attempt: { status: "accepted", evidence: { fixture: "review" } },
-      readback: { status: "pending", evidence: { visible: false } },
-      observedAt: OUTCOME_AT,
-    });
     await new TargetResultImportService(fixture.workspaceRoot, "codex").import(
       {
-        demandId: fixture.intent.demandId,
-        actionId: claimed.action.actionId,
-        observationDigest: outcome.observation.observationDigest,
+        demandId: fixture.demandId,
+        deliveryId: delivered.prepared.delivery.deliveryId,
+        claimDigest: delivered.prepared.permit.fence.claimDigest,
         report: {
           workType: "implementation",
           content: createImplementationTargetResultReportContentFixture(
@@ -116,7 +91,7 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
 
     const observed = await withDemandRoot(
       fixture.workspacePath,
-      fixture.intent.demandId,
+      fixture.demandId,
       async (demandRoot) => {
         const before =
           await inspectDemandEventSourcingRootInventory(demandRoot);
@@ -158,7 +133,7 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
     equal(after.transactionCount, before.transactionCount);
     equal(after.appendCandidateCount, before.appendCandidateCount);
   } finally {
-    await cleanupTargetHostEffectClaimWorkspaceFixture(fixture);
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });
 

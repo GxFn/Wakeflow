@@ -67,30 +67,19 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
     mkdirSync(path.join(fixtureRoot, "artifacts", "test-cards"), {
       mode: 0o700,
     });
-    mkdirSync(path.join(fixtureRoot, "artifacts", "test-dispatch-packets"), {
-      mode: 0o700,
-    });
     const testCardPath = path.join(
       fixtureRoot,
       "artifacts",
       "test-cards",
       "test-card_22222222-2222-4222-8222-222222222222.json",
     );
-    const packetPath = path.join(
-      fixtureRoot,
-      "artifacts",
-      "test-dispatch-packets",
-      "target-delivery_33333333-3333-4333-8333-333333333333.json",
-    );
     writeFileSync(testCardPath, "{}\n", { mode: 0o600 });
-    writeFileSync(packetPath, "{}\n", { mode: 0o600 });
     const testingInventory =
       await inspectDemandEventSourcingRootInventory(root);
-    equal(testingInventory.artifactCount, 2);
+    equal(testingInventory.artifactCount, 1);
     equal(testingInventory.nodes.testCards?.kind, "directory");
-    equal(testingInventory.nodes.testDispatchPackets?.kind, "directory");
+    equal(Object.hasOwn(testingInventory.nodes, "testDispatchPackets"), false);
     rmSync(testCardPath);
-    rmSync(packetPath);
     const invalidTestCardPath = path.join(
       fixtureRoot,
       "artifacts",

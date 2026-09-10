@@ -1,13 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 
+import {
+  executePrepareDeliveryRequest,
+  executeRearmDeliveryRequest,
+  executeRecordDeliveryOutcomeRequest,
+} from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
-import { executeTargetDeliveryPreparationPublicRequest } from "../governance/delivery/target-delivery-preparation-public-coordinator.js";
-import { executeTargetHostEffectClaimPublicRequest } from "../governance/delivery/target-host-effect-claim-public-coordinator.js";
-import { executeTargetHostEffectOutcomePublicRequest } from "../governance/delivery/target-host-effect-outcome-public-coordinator.js";
-import { executeTargetHostEffectRearmPublicRequest } from "../governance/delivery/target-host-effect-rearm-public-coordinator.js";
 import { executeTargetResultImportPublicRequest } from "../governance/result/target-result-import-public-coordinator.js";
-import { executeTestDeliveryPreparationPublicRequest } from "../governance/testing/test-delivery-preparation-public-coordinator.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { executeClaudeCodeWakeflowMaintenance } from "./claude-code-wakeflow-maintenance.js";
@@ -42,16 +42,11 @@ export function createClaudeCodeWakeflowMcpServer(serverVersion: string): McpSer
     executeMaintenance: executeClaudeCodeWakeflowMaintenance,
     registerWindowHostBinding: (value: unknown) =>
       executeWindowBindingRequest(CLAUDE_CODE_HOST_FACADE, value),
-    prepareImplementationDelivery: (value: unknown) =>
-      executeTargetDeliveryPreparationPublicRequest(CLAUDE_CODE_HOST_FACADE, value),
-    prepareTestDelivery: (value: unknown) =>
-      executeTestDeliveryPreparationPublicRequest(CLAUDE_CODE_HOST_FACADE, value),
-    claimTargetHostEffect: (value: unknown) =>
-      executeTargetHostEffectClaimPublicRequest(CLAUDE_CODE_HOST_FACADE, value),
-    rearmTargetHostEffect: (value: unknown) =>
-      executeTargetHostEffectRearmPublicRequest(CLAUDE_CODE_HOST_FACADE, value),
-    recordTargetHostEffectOutcome: (value: unknown) =>
-      executeTargetHostEffectOutcomePublicRequest(CLAUDE_CODE_HOST_IDENTITY, value),
+    prepareDelivery: (value: unknown) =>
+      executePrepareDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
+    recordDeliveryOutcome: (value: unknown) =>
+      executeRecordDeliveryOutcomeRequest(CLAUDE_CODE_HOST_FACADE, value),
+    rearmDelivery: (value: unknown) => executeRearmDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
     importTargetResult: (value: unknown) =>
       executeTargetResultImportPublicRequest(CLAUDE_CODE_HOST_IDENTITY, value),
   });

@@ -12,10 +12,11 @@ import { buildTypescriptArtifactCandidates } from "../../tooling/artifacts/build
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-delivery-preparation-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-rearm-public-contract.js";
+import {
+  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/delivery/contract.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
@@ -35,7 +36,6 @@ import {
 } from "../../src/capabilities/requirement/contract.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-resume-public-contract.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-card-planning-public-contract.js";
-import { WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-delivery-preparation-public-contract.js";
 
 const OUTPUT_RELATIVE = ".build/test-artifacts/typescript-candidates";
 
@@ -196,10 +196,9 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
         [
           WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
           WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME,
+          WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+          WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+          WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME,
@@ -215,7 +214,6 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
           WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
           WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
           WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
         ].sort(),
       );

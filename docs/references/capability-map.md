@@ -16,8 +16,8 @@
 | 4 | `wakeflow_register_window` | 2 | `wakeflow_register_window_binding` | 重切 | 已实现；绑定增加 `podId` |
 | 5 | `wakeflow_create_demand` | 4 | `wakeflow_create_demand` | 重切 | 已实现（demand 切片，确定性计划）；`executionPlacement` 改为 `podId` 留给 pod 切片，已有活动 Demand 时拒绝 |
 | 6 | `wakeflow_add_task` | 5 | `wakeflow_plan_target_task` | 重切 | 已实现（tasking 切片）：追加型一次调用；锚点 `requirementRef` 指向需求包验收标准；谱系 `replacement`（旧目标 `superseded`）与 `continuation`；`taskPlanReview: user` 须回显 `planReview`；可选 `sectionAnchors`；字段集按能力卡 5 Q1 保持 |
-| 7 | `wakeflow_prepare_delivery` | 6 | `prepare_delivery` 一次调用（含许可；实现与测试共用） | 重切 | TS 现有 `prepare_implementation_delivery`、`prepare_test_delivery`、`claim_target_host_effect` 在 L1 合并；prompt 改为 Wakeflow 骨架加 Controller 三段（ADR-0012 D2） |
-| 8 | `wakeflow_record_delivery` | 6 | `record_delivery_outcome`（或 hook 自动）、`rearm_target_host_effect` | 重切 | 落地证据 UserPromptSubmit；ambiguous 出口；rearm 上限 3（能力卡 6 修订、ADR-0012 D1 D2） |
+| 7 | `wakeflow_prepare_delivery` | 6 | `prepare_delivery` 一次调用（含许可；实现与测试共用） | 已落地 | 2026-09-10 L1 delivery 切片 6a：`wakeflow_prepare_delivery` 合并旧三工具，prompt 为 Wakeflow 骨架加 Controller 三段（ADR-0012 D2；gate-log §13.84） |
+| 8 | `wakeflow_record_delivery` | 6 | `record_delivery_outcome`（hook 记录惰性核对）、`rearm_delivery` | 已落地 | 2026-09-10：处置由 `user-prompt-submit` 记录或 Codex 发送返回派生；indeterminate 再调用重查；rearm 上限 3（gate-log §13.84） |
 | 9 | `wakeflow_record_target_result` | 7 | `wakeflow_import_target_result` | 重切 | 已实现；导入时核证据定位符与隐私扫描、增加 `branch` 与 `commit` 在 L1 补 |
 | 10 | `wakeflow_review_pack` | 7 | `wakeflow_inspect_target_result_review` | 重切 | 已实现；回调内容改由 `import_target_result` 返回，不再经 review_pack（ADR-0012 D1） |
 | 11 | `wakeflow_reduce_results` | 7 | 并入评审 inspection 与评审 preview 的结果谱系 | 重切 | 结果归约不再是独立工具；strict result-trace 并入评审 preview（能力卡 9 Q5） |
@@ -26,12 +26,12 @@
 | 14 | `wakeflow_continue_demand` | 4 | `wakeflow_continue_demand`（continue 与 record-decision） | 重切 | 已实现（demand 切片）：从归档重开、需求包回到 claimed、路由先要求新任务包；与 `plan_target_task` 分开（能力卡 4 Q3） |
 | 15 | `wakeflow_record_evidence` | 8 | `wakeflow_record_evidence` | 重切 | 已实现；来源根增加 `pod-worktree` 与 `observation`，kind 闭集，隐私扫描收窄在 L1 补 |
 | 16 | `wakeflow_recover_state_transition` | 4 | 无 | 放弃 | ADR-0002：通用 recover 放弃，每个 preview/apply 工具自带 recover |
-| 17 | `wakeflow_release_window_lock` | 2 | 工作声明释放 | 缺席 | L1；租约改为工作声明加围栏令牌（ADR-0009） |
+| 17 | `wakeflow_release_window_lock` | 2 | 工作声明释放 | 已落地 | endpoint 切片的 release-claim 加 delivery 切片的内核声明 `kernel/work-claims.ts`（ADR-0009；gate-log §13.84） |
 | 18 | `wakeflow_view` | 9 | 无 | 放弃 | ADR-0006：通用读取违反脱敏边界；config 事实归 `wakeflow_status`，storage 归 `wakeflow_verify`，result-trace 并入评审 preview |
 | 19 | `wakeflow_storage_preserve` | 8 | 无 | 放弃 | 能力卡 8 Q6：归档封存、清理删除，不再有第三种保留状态 |
 | 20 | `wakeflow_archive` | 8 | 并入 `wakeflow_complete_demand` 与 `wakeflow_cancel_demand` | 重切 | 已实现（demand 切片）：归档包在 `<ledger>/archives/`，前置含无未释放工作声明，verify 报告入归档包（ADR-0012 D3） |
 | 21 | `wakeflow_intake_test_card` | 5 | test 任务包的 `testContract`（`plan_target_task`） | 重切 | 独立测试卡与 TS 现有 `plan_test_card` 在 delivery 切片删除（ADR-0012 D4；gate-log §13.81 D1） |
-| 22 | `wakeflow_deliver` | 6 | 无；宿主执行由 Agent 按 skills 完成 | 放弃 | TSD-12：内容由 prepare 工具提供，执行证据由 outcome 工具准入 |
+| 22 | `wakeflow_deliver` | 6 | 无；宿主执行由 Agent 按 skills 完成 | 放弃 | TSD-12：内容由 `prepare_delivery` 许可提供，执行证据由 `record_delivery_outcome` 按 hook 记录准入（2026-09-10 落地） |
 | 23 | `wakeflow_next_work` | 3 | 待认领需求包查询 `wakeflow_inspect_board`（ADR-0011，2026-09-04 L1 requirement 落地） | 重切 | `inspect_todo` 已删除，看板查询列出需求包认领状态 |
 | 24 | `wakeflow_claim_next` | 3 | 认领并入 `wakeflow_create_demand(requirementId)` | 重切 | 认领即创建；一个总控一次一个（ADR-0011） |
 | 25 | `wakeflow_cancel_demand` | 4 | `wakeflow_cancel_demand` | 重切 | 已实现（demand 切片）：需求包置 `withdrawn`，释放本 Demand 的工作声明，有待评审结果时拒绝（能力卡 4 Q4） |
@@ -57,9 +57,9 @@
 | `wakeflow_cancel_demand` | 效果 | cancel_demand | demand |
 | `wakeflow_continue_demand` | 追加 | continue_demand | demand |
 | `wakeflow_plan_target_task` | 追加 | add_task、intake_test_card、plan_test_card（TS） | tasking |
-| `wakeflow_prepare_delivery` | 追加（含许可） | prepare_delivery 三段、prepare_implementation_delivery 与 prepare_test_delivery 与 claim_target_host_effect（TS） | delivery |
-| `wakeflow_record_delivery_outcome` | 追加（或 hook 自动） | record_delivery target-outcome | delivery |
-| `wakeflow_rearm_delivery` | 追加 | record_delivery target-rearm | delivery |
+| `wakeflow_prepare_delivery` | 追加（含许可） | prepare_delivery 三段、prepare_implementation_delivery 与 prepare_test_delivery 与 claim_target_host_effect（TS） | delivery（已落地 2026-09-10） |
+| `wakeflow_record_delivery_outcome` | 追加（hook 记录惰性核对） | record_delivery target-outcome、record_target_host_effect_outcome（TS） | delivery（已落地 2026-09-10） |
+| `wakeflow_rearm_delivery` | 追加 | record_delivery target-rearm、rearm_target_host_effect（TS） | delivery（已落地 2026-09-10） |
 | `wakeflow_import_target_result` | 追加（返回回调与许可） | record_target_result、review_pack 与 controller 回传四步 | result-review |
 | `wakeflow_inspect_target_result_review` | 读 | review_pack、reduce_results | result-review |
 | `wakeflow_record_implementation_review_decision` | 追加 | decide_review、resume_target_result_review（TS） | result-review |

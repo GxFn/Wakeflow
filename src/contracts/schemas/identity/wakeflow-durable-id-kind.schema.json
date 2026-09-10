@@ -24,7 +24,8 @@
     "target-review-decision",
     "target-review-resume",
     "target-task",
-    "window"
+    "window",
+    "work-claim"
   ],
   "examples": ["program", "requirement", "window"]
 }

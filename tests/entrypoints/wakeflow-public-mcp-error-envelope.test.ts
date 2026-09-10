@@ -1,13 +1,11 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import {
   WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/demand/contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
-import { TargetHostEffectClaimPublicCoordinatorError } from "../../src/governance/delivery/target-host-effect-claim-public-coordinator.js";
+import { WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME } from "../../src/capabilities/delivery/contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import {
@@ -19,43 +17,18 @@ import {
   wakeflowMcpTextContent,
 } from "./wakeflow-public-mcp-server.fixture.js";
 
-const ZERO_DIGEST = parseSha256Digest(`sha256:${"0".repeat(64)}`);
-const WINDOW_ID = "window_11111111-1111-4111-8111-111111111111";
-const BINDING_ID = "window_binding_22222222-2222-4222-8222-222222222222";
-const DELIVERY_ID = "target-delivery_33333333-3333-4333-8333-333333333333";
-
-function hostEffectClaimRequest() {
+function prepareDeliveryRequest() {
   const taskPackage = createTaskPackageFixture();
-  if (taskPackage.workType !== "implementation") {
-    throw new Error("Expected an implementation TaskPackage fixture.");
-  }
   return {
-    root: "/workspace/private-claim",
-    workType: "implementation" as const,
+    root: "/workspace/private-delivery",
     demandId: taskPackage.demandId,
+    idempotencyKey: "envelope-prepare-1",
+    expectedStreamRevision: 2,
     targetTaskId: taskPackage.targetTaskId,
-    targetDeliveryId: DELIVERY_ID,
-    intentDigest: ZERO_DIGEST,
-    observation: {
-      kind: "WakeflowAgentHostWindowObservation",
-      schemaVersion: 1,
-      source: "agent-host-inspection-result",
-      hostId: "codex",
-      windowId: WINDOW_ID,
-      bindingId: BINDING_ID,
-      handle: {
-        kind: "codex-thread",
-        value: "private-target-host-handle",
-      },
-      attestedRoot: {
-        status: "matches-configured-root",
-        logicalRoot: {
-          kind: "repository",
-          repositoryId: taskPackage.assignment.repositoryId,
-        },
-        configuredPlacement: "Product",
-      },
-      observedAt: "2026-09-01T10:00:00.000Z",
+    authored: {
+      goal: "按任务包完成本轮实现。",
+      focus: ["先读任务包"],
+      boundary: "不触碰其他仓库。",
     },
   } as const;
 }
@@ -123,40 +96,34 @@ test("Authority注册组保留稳定cause且不回显root", async (t) => {
   equal(wakeflowMcpTextContent(result).includes(root), false);
 });
 
-test("Execution注册组保留Claim与Event双authority", async (t) => {
+test("Execution注册组把窗口占用作为稳定前置条件错误返回且不回显路径", async (t) => {
   const client = await connectWakeflowMcpTestClient(t, {
-    claimTargetHostEffect: async () => {
-      throw new TargetHostEffectClaimPublicCoordinatorError(
-        "claim",
-        "wakeflow-window-work-claim-store",
-        "write",
-        "current",
-        "unknown",
-      );
+    prepareDelivery: async () => {
+      throw new WakeflowError("precondition-failed", "window-claimed", "$request.targetTaskId", {
+        details: { blockers: "window-claimed:demand_22222222-2222-4222-8222-222222222222" },
+      });
     },
   });
-  const request = hostEffectClaimRequest();
+  const request = prepareDeliveryRequest();
   const result = await client.callTool({
-    name: WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
+    name: WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
     arguments: request,
   });
   equal(result.isError, true);
   deepEqual(JSON.parse(wakeflowMcpTextContent(result)), {
     error: {
-      causeCode: "wakeflow-window-work-claim-store",
-      causeReason: "write",
-      claimAuthority: "current",
-      code: "wakeflow-target-host-effect-claim-public-coordinator",
-      eventAuthority: "unknown",
-      reason: "claim",
+      code: "precondition-failed",
+      details: { blockers: "window-claimed:demand_22222222-2222-4222-8222-222222222222" },
+      path: "$request.targetTaskId",
+      reason: "window-claimed",
+      retryable: false,
     },
     kind: "WakeflowMcpError",
     schemaVersion: 1,
     status: "error",
-    tool: WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
+    tool: WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
   });
   equal(wakeflowMcpTextContent(result).includes(request.root), false);
-  equal(wakeflowMcpTextContent(result).includes(request.observation.handle.value), false);
 });
 
 test("Review注册组保留Completion event authority", async (t) => {

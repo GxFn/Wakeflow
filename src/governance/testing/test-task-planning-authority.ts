@@ -1,9 +1,7 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { canonicalizeJson } from "../../foundation/data/canonical-json.js";
-import {
-  inspectWindowWorkClaim,
-  WindowWorkClaimStoreError,
-} from "../delivery/window-work-claim-store.js";
+import { isWakeflowError } from "../../kernel/error.js";
+import { inspectWorkClaim } from "../../kernel/work-claims.js";
 import type { DemandOperationAuthorityContext } from "../demand/demand-operation-authority-context.js";
 import {
   DemandEventSourcingRepository,
@@ -116,7 +114,7 @@ async function assertProductClaimsAbsent(
     ),
   ].sort()) {
     try {
-      const claim = await inspectWindowWorkClaim(
+      const claim = await inspectWorkClaim(
         workspaceRoot,
         windowId,
         signal === undefined ? {} : { signal },
@@ -124,7 +122,7 @@ async function assertProductClaimsAbsent(
       if (claim.status !== "absent") fail("claim");
     } catch (error: unknown) {
       if (error instanceof TestTaskPlanningAuthorityError) throw error;
-      if (error instanceof WindowWorkClaimStoreError) {
+      if (isWakeflowError(error)) {
         if (error.reason === "aborted") fail("aborted", error);
         fail("claim", error);
       }

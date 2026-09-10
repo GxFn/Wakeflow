@@ -51,8 +51,8 @@ test("Review Inspector返回当前Implementation reported unit且保持零写", 
     }
     const request = {
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
     };
     const parsed = parseTargetResultReviewInspectionPublicRequest(request);
     equal(Object.isFrozen(parsed), true);
@@ -80,7 +80,7 @@ test("Review Inspector返回当前Implementation reported unit且保持零写", 
     equal(inspected.reviewUnit.reviewUnitDigest, target.reviewUnitDigest);
     equal(inspected.snapshotDigest, fixture.reviewSnapshot.snapshotDigest);
     equal(containsText(inspected, fixture.workspacePath), false);
-    equal(containsText(inspected, fixture.rawHandle), false);
+    equal(containsText(inspected, fixture.route.rawHandle), false);
     deepEqual(
       await readControllerImplementationReviewDecisionServiceSnapshot(fixture),
       fixture.reviewSnapshot,
@@ -111,7 +111,7 @@ test("Review Inspector共享返回当前Test reported unit但不产生verdict", 
     }
     const inspected = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetTaskId: fixture.testTargetTaskId,
     });
     equal(inspected.reviewUnit.workType, "test");
@@ -152,8 +152,8 @@ test("Review Inspector返回当前Implementation blocked Decision与恢复CAS基
       await readControllerImplementationReviewDecisionServiceSnapshot(fixture);
     const inspected = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
     });
     equal(inspected.reviewUnit.status, "review-blocked");
     if (inspected.reviewUnit.status !== "review-blocked") {
@@ -188,7 +188,7 @@ test("Review Inspector返回当前Implementation blocked Decision与恢复CAS基
     equal(inspected.snapshotDigest, blockedSnapshot.snapshotDigest);
     equal(inspected.reviewUnit.priorReviewHistory.length, 0);
     equal(containsText(inspected, fixture.workspacePath), false);
-    equal(containsText(inspected, fixture.rawHandle), false);
+    equal(containsText(inspected, fixture.route.rawHandle), false);
     deepEqual(
       await readControllerImplementationReviewDecisionServiceSnapshot(fixture),
       blockedSnapshot,
@@ -243,7 +243,7 @@ test("Review Inspector共享返回当前Test blocked Decision与同一Result", a
     );
     const inspected = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetTaskId: fixture.testTargetTaskId,
     });
     equal(inspected.reviewUnit.status, "review-blocked");

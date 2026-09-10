@@ -1,13 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 
+import {
+  executePrepareDeliveryRequest,
+  executeRearmDeliveryRequest,
+  executeRecordDeliveryOutcomeRequest,
+} from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
-import { executeTargetDeliveryPreparationPublicRequest } from "../governance/delivery/target-delivery-preparation-public-coordinator.js";
-import { executeTargetHostEffectClaimPublicRequest } from "../governance/delivery/target-host-effect-claim-public-coordinator.js";
-import { executeTargetHostEffectOutcomePublicRequest } from "../governance/delivery/target-host-effect-outcome-public-coordinator.js";
-import { executeTargetHostEffectRearmPublicRequest } from "../governance/delivery/target-host-effect-rearm-public-coordinator.js";
 import { executeTargetResultImportPublicRequest } from "../governance/result/target-result-import-public-coordinator.js";
-import { executeTestDeliveryPreparationPublicRequest } from "../governance/testing/test-delivery-preparation-public-coordinator.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
@@ -42,16 +42,10 @@ export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
     executeMaintenance: executeCodexWakeflowMaintenance,
     registerWindowHostBinding: (value: unknown) =>
       executeWindowBindingRequest(CODEX_HOST_FACADE, value),
-    prepareImplementationDelivery: (value: unknown) =>
-      executeTargetDeliveryPreparationPublicRequest(CODEX_HOST_FACADE, value),
-    prepareTestDelivery: (value: unknown) =>
-      executeTestDeliveryPreparationPublicRequest(CODEX_HOST_FACADE, value),
-    claimTargetHostEffect: (value: unknown) =>
-      executeTargetHostEffectClaimPublicRequest(CODEX_HOST_FACADE, value),
-    rearmTargetHostEffect: (value: unknown) =>
-      executeTargetHostEffectRearmPublicRequest(CODEX_HOST_FACADE, value),
-    recordTargetHostEffectOutcome: (value: unknown) =>
-      executeTargetHostEffectOutcomePublicRequest(CODEX_HOST_IDENTITY, value),
+    prepareDelivery: (value: unknown) => executePrepareDeliveryRequest(CODEX_HOST_FACADE, value),
+    recordDeliveryOutcome: (value: unknown) =>
+      executeRecordDeliveryOutcomeRequest(CODEX_HOST_FACADE, value),
+    rearmDelivery: (value: unknown) => executeRearmDeliveryRequest(CODEX_HOST_FACADE, value),
     importTargetResult: (value: unknown) =>
       executeTargetResultImportPublicRequest(CODEX_HOST_IDENTITY, value),
   });

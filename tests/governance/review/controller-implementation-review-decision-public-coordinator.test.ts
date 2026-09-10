@@ -33,13 +33,13 @@ test("Decision Public Coordinator只记录Controller独立判断并精确幂等"
   try {
     const inspection = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
     });
     const judgment = controllerImplementationReviewDecisionInput("accept");
     const request = {
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
+      demandId: fixture.demandId,
       targetResultId: inspection.reviewUnit.targetResult.targetResultId,
       snapshotDigest: inspection.snapshotDigest,
       reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
@@ -67,7 +67,7 @@ test("Decision Public Coordinator只记录Controller独立判断并精确幂等"
       () =>
         parseControllerImplementationReviewDecisionPublicRequest({
           ...request,
-          targetTaskId: fixture.intent.target.targetTaskId,
+          targetTaskId: fixture.targetTaskId,
         }),
       (error: unknown) =>
         error instanceof
@@ -100,21 +100,21 @@ test("Decision Public Coordinator只记录Controller独立判断并精确幂等"
     equal(decided.disposition, "committed");
     equal(decided.eventAuthority, "current");
     equal(decided.decision.decision, "accept");
-    equal(decided.decision.targetTaskId, fixture.intent.target.targetTaskId);
+    equal(decided.decision.targetTaskId, fixture.targetTaskId);
     equal(
       decided.decision.reviewed.targetResultId,
       inspection.reviewUnit.targetResult.targetResultId,
     );
     equal(
-      decided.decision.controllerWindowId === fixture.intent.route.windowId,
+      decided.decision.controllerWindowId === fixture.route.windowId,
       false,
     );
     equal(containsText(decided, fixture.workspacePath), false);
-    equal(containsText(decided, fixture.rawHandle), false);
+    equal(containsText(decided, fixture.route.rawHandle), false);
 
     const route = await inspectActiveRoute({
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
+      demandId: fixture.demandId,
     });
     equal(route.route.frontiers[0]?.kind, "demand-completion-preflight");
 

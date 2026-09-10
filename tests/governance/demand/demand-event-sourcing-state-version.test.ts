@@ -13,10 +13,9 @@ test("Demand Event Sourcing state-model version 独立于 event version", () => 
   equal(
     DEMAND_EVENT_SOURCING_EVENT_TYPES.join(","),
     [
-      "delivery.target-delivery-prepared",
-      "delivery.target-host-effect-claimed",
-      "delivery.target-host-effect-observed",
-      "delivery.target-host-effect-rearmed",
+      "delivery.delivery-outcome-recorded",
+      "delivery.delivery-prepared",
+      "delivery.delivery-rearmed",
       "evidence.managed-evidence-recorded",
       "lifecycle.decision-recorded",
       "lifecycle.demand-cancelled",
@@ -30,7 +29,6 @@ test("Demand Event Sourcing state-model version 独立于 event version", () => 
       "review.target-result-resumed",
       "tasking.target-task-planned",
       "testing.test-card-created",
-      "testing.test-delivery-prepared",
     ].join(","),
   );
   equal(parseDemandEventSourcingStateModelVersion(1), 1);

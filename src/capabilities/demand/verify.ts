@@ -5,7 +5,7 @@ import {
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { inspectWindowWorkClaim } from "../../governance/delivery/window-work-claim-store.js";
+import { inspectWorkClaim } from "../../kernel/work-claims.js";
 import { DemandEventSourcingRepository } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { managedEvidenceManifestRef } from "../../governance/evidence/managed-evidence-resource-paths.js";
@@ -105,9 +105,9 @@ function boardGate(input: VerifyInput): VerifyGateOutcome {
 async function workClaimGate(input: VerifyInput): Promise<VerifyGateOutcome> {
   const held: string[] = [];
   for (const windowId of input.windowIds) {
-    const result = await inspectWindowWorkClaim(
+    const result = await inspectWorkClaim(
       input.workspaceRoot,
-      windowId as Parameters<typeof inspectWindowWorkClaim>[1],
+      windowId,
       signalOptions(input.signal),
     );
     if (result.status !== "absent") held.push(windowId);

@@ -235,10 +235,6 @@ function sameInventory(
     sameFileNodeSnapshot(left.nodes.artifacts, right.nodes.artifacts) &&
     sameFileNodeSnapshot(left.nodes.taskPackages, right.nodes.taskPackages) &&
     sameOptionalNode(left.nodes.testCards, right.nodes.testCards) &&
-    sameOptionalNode(
-      left.nodes.testDispatchPackets,
-      right.nodes.testDispatchPackets,
-    ) &&
     sameFileNodeSnapshot(left.nodes.transactions, right.nodes.transactions)
   );
 }

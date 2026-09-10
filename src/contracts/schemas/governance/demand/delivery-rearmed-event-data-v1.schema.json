@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:delivery-rearmed-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DELIVERY_REARMED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowDeliveryRearmedEventDataV1",
+  "description": "`delivery.delivery-rearmed` 事件的数据：同一信封的新代际。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rearm"],
+  "properties": {
+    "rearm": {
+      "$ref": "urn:wakeflow:governance:delivery:delivery-rearm:v1"
+    }
+  }
+}

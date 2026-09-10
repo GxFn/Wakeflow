@@ -111,3 +111,14 @@ export function hostRuntimeRootRef(hostId: WakeflowHostId): PortableResourcePath
 export function hostHookObservationsRootRef(hostId: WakeflowHostId): PortableResourcePath {
   return parsePortableResourcePath(`${hostRuntimeRootRef(hostId)}/observations/hooks`, "$layout");
 }
+
+/** 共享协调根下的窗口工作声明目录：`.wakeflow-local/runtime/shared/coordination/window-work-claims`。 */
+export const WORK_CLAIMS_ROOT_REF = parsePortableResourcePath(
+  `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/shared/coordination/window-work-claims`,
+  "$layout",
+);
+
+/** 每个稳定窗口至多一份当前工作声明，路径只由 `windowId` 决定。 */
+export function workClaimRef(windowId: string): PortableResourcePath {
+  return parsePortableResourcePath(`${WORK_CLAIMS_ROOT_REF}/${windowId}.json`, "$layout");
+}

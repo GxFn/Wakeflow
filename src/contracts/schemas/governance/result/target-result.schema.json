@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:governance:result:target-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_SCHEMA",
   "title": "WakeflowTargetResult",
-  "description": "Wakeflow从当前TaskPackage与Host Effect Event authority补齐的不可变implementation或Test TargetResult。",
+  "description": "Wakeflow 从当前任务包与投递处置事件权威补齐的不可变 implementation 或 Test TargetResult。",
   "$comment": "workType显式区分单仓库implementation结果与无repository mutation的Test结果；完整Result进入Demand Event Sourcing，Aggregate只保存review选择所需摘要。本记录是Controller review输入，不是自动acceptance或Test verdict。",
   "type": "object",
   "additionalProperties": false,
@@ -15,10 +15,10 @@
     "programId",
     "demandId",
     "targetTaskId",
-    "targetDeliveryId",
+    "deliveryId",
     "taskPackage",
     "assignment",
-    "hostEffect",
+    "delivery",
     "report",
     "resultDigest"
   ],
@@ -44,7 +44,7 @@
     "targetTaskId": {
       "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/targetTaskId"
     },
-    "targetDeliveryId": {
+    "deliveryId": {
       "$ref": "#/$defs/targetDeliveryId"
     },
     "taskPackage": {
@@ -60,8 +60,8 @@
         }
       ]
     },
-    "hostEffect": {
-      "$ref": "#/$defs/hostEffect"
+    "delivery": {
+      "$ref": "#/$defs/delivery"
     },
     "report": {
       "oneOf": [
@@ -136,15 +136,7 @@
     },
     "claimId": {
       "type": "string",
-      "pattern": "^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "eventId": {
-      "type": "string",
-      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "commitId": {
-      "type": "string",
-      "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "pattern": "^work-claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "taskPackage": {
       "type": "object",
@@ -188,7 +180,7 @@
     "testExecution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["testAttemptId", "testCard", "testDispatchPacketDigest"],
+      "required": ["testAttemptId", "testCard"],
       "properties": {
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
@@ -205,40 +197,40 @@
               "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
             }
           }
-        },
-        "testDispatchPacketDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }
     },
-    "hostEffect": {
+    "delivery": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "actionId",
-        "claimDigest",
-        "claimEventId",
-        "claimCommitId",
-        "observationDigest",
+        "generation",
+        "fence",
+        "outcomeDigest",
         "disposition",
         "readbackStatus",
-        "observedEventId",
         "observedAt"
       ],
       "properties": {
-        "actionId": {
-          "$ref": "#/$defs/claimId"
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
         },
-        "claimDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        "fence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["claimId", "claimDigest"],
+          "properties": {
+            "claimId": {
+              "$ref": "#/$defs/claimId"
+            },
+            "claimDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
         },
-        "claimEventId": {
-          "$ref": "#/$defs/eventId"
-        },
-        "claimCommitId": {
-          "$ref": "#/$defs/commitId"
-        },
-        "observationDigest": {
+        "outcomeDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         },
         "disposition": {
@@ -246,9 +238,6 @@
         },
         "readbackStatus": {
           "enum": ["confirmed", "pending", "unavailable"]
-        },
-        "observedEventId": {
-          "$ref": "#/$defs/eventId"
         },
         "observedAt": {
           "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"

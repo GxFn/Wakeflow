@@ -129,7 +129,6 @@
         "testTargetTaskId",
         "testCard",
         "testAttemptId",
-        "testDispatchPacketDigest",
         "targetResult",
         "testReviewDecision"
       ],
@@ -166,9 +165,6 @@
         },
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
-        },
-        "testDispatchPacketDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         },
         "targetResult": {
           "type": "object",

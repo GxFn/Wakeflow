@@ -55,7 +55,6 @@ testCardId: string
 testCardDigest: WakeflowSha256DigestText
 }
 testAttemptId: string
-testDispatchPacketDigest: WakeflowSha256DigestText
 targetResult: {
 targetResultId: string
 resultDigest: WakeflowSha256DigestText

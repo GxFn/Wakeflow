@@ -28,7 +28,6 @@ function defaultMcpExecutors(): WakeflowMcpExecutorSet {
   return {
     authorizeProductDefectRemediation: async () =>
       unexpectedMcpExecutor("authorizeProductDefectRemediation"),
-    claimTargetHostEffect: async () => unexpectedMcpExecutor("claimTargetHostEffect"),
     cancelDemand: async () => unexpectedMcpExecutor("cancelDemand"),
     completeDemand: async () => unexpectedMcpExecutor("completeDemand"),
     continueDemand: async () => unexpectedMcpExecutor("continueDemand"),
@@ -42,16 +41,13 @@ function defaultMcpExecutors(): WakeflowMcpExecutorSet {
     inspectBoard: async () => unexpectedMcpExecutor("inspectBoard"),
     planTargetTask: async () => unexpectedMcpExecutor("planTargetTask"),
     planTestCard: async () => unexpectedMcpExecutor("planTestCard"),
-    prepareImplementationDelivery: async () =>
-      unexpectedMcpExecutor("prepareImplementationDelivery"),
-    prepareTestDelivery: async () => unexpectedMcpExecutor("prepareTestDelivery"),
-    rearmTargetHostEffect: async () => unexpectedMcpExecutor("rearmTargetHostEffect"),
+    prepareDelivery: async () => unexpectedMcpExecutor("prepareDelivery"),
+    rearmDelivery: async () => unexpectedMcpExecutor("rearmDelivery"),
     recordControllerImplementationReviewDecision: async () =>
       unexpectedMcpExecutor("recordControllerImplementationReviewDecision"),
     recordControllerTestReviewDecision: async () =>
       unexpectedMcpExecutor("recordControllerTestReviewDecision"),
-    recordTargetHostEffectOutcome: async () =>
-      unexpectedMcpExecutor("recordTargetHostEffectOutcome"),
+    recordDeliveryOutcome: async () => unexpectedMcpExecutor("recordDeliveryOutcome"),
     registerWindowHostBinding: async () => unexpectedMcpExecutor("registerWindowHostBinding"),
     resumeTargetResultReview: async () => unexpectedMcpExecutor("resumeTargetResultReview"),
   };

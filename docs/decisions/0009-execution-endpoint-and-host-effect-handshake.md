@@ -5,6 +5,7 @@
 > 基线提交：`c0098e2`
 > 相关：[ADR-0003 修订](./0003-host-effect-layer-ownership.md)、[ADR-0007](./0007-rebuild-mandate-and-bottom-up-flow.md)、[能力卡 2](../requirements/capabilities/02-window-model.md)、[能力卡 4](../requirements/capabilities/04-demand-lifecycle.md)、[能力卡 5](../requirements/capabilities/05-task-planning.md)
 > 落地记录：2026-09-04 L1 endpoint 切片落地 `wakeflow_register_window_binding`（inspect、register、replace、decommission、release-claim），hook 观察记录进内核 `src/kernel/hook-observations.ts`，Claude 定位器与 pane 分类器进 `src/capabilities/endpoint/`；执行参数使用 Codex `create_thread` 与 `set_thread_title`、Claude `claude --session-id`；场景 `card-02/window-handshake` 与 `card-02/window-replace` 通过（进度日志 13.76）
+> 落地记录：2026-09-10 L1 delivery 切片 6a 落地五步握手中的准备、许可与结局三步：`wakeflow_prepare_delivery` 取得窗口工作声明（内核 `src/kernel/work-claims.ts`）并返回带围栏令牌的一次性许可，`wakeflow_record_delivery_outcome` 以目标会话的 `user-prompt-submit` hook 记录（Codex 另认发送返回）证明落地，`wakeflow_rearm_delivery` 同信封换代际；场景 `card-06/delivery-chain` 与 `card-06/ambiguous-resolution` 通过（进度日志 13.83、13.84）
 
 ## 背景
 

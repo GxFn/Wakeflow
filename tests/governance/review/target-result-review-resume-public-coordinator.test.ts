@@ -42,8 +42,8 @@ test("Resume Public Coordinator闭合blocked inspect到第二代Implementation D
   try {
     const reported = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
     });
     if (reported.reviewUnit.status !== "reported") {
       throw new Error("Expected initial reported review unit.");
@@ -54,7 +54,7 @@ test("Resume Public Coordinator闭合blocked inspect到第二代Implementation D
       await executeControllerImplementationReviewDecisionPublicRequest(
         {
           root: fixture.workspacePath,
-          demandId: fixture.intent.demandId,
+          demandId: fixture.demandId,
           targetResultId: reported.reviewUnit.targetResult.targetResultId,
           snapshotDigest: reported.snapshotDigest,
           reviewUnitDigest: reported.reviewUnit.reviewUnitDigest,
@@ -77,8 +77,8 @@ test("Resume Public Coordinator闭合blocked inspect到第二代Implementation D
     const blockedContext =
       await executeTargetResultReviewInspectionPublicRequest({
         root: fixture.workspacePath,
-        demandId: fixture.intent.demandId,
-        targetTaskId: fixture.intent.target.targetTaskId,
+        demandId: fixture.demandId,
+        targetTaskId: fixture.targetTaskId,
       });
     if (blockedContext.reviewUnit.status !== "review-blocked") {
       throw new Error("Expected current blocked review context.");
@@ -90,8 +90,8 @@ test("Resume Public Coordinator闭合blocked inspect到第二代Implementation D
     );
     const request = {
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
       expectedBlockedState: {
         streamRevision: blockedContext.eventStream.streamRevision,
         stateDigest: blockedContext.eventStream.stateDigest,
@@ -158,17 +158,17 @@ test("Resume Public Coordinator闭合blocked inspect到第二代Implementation D
       blockedContext.snapshotDigest,
     );
     equal(containsText(resumed, fixture.workspacePath), false);
-    equal(containsText(resumed, fixture.rawHandle), false);
+    equal(containsText(resumed, fixture.route.rawHandle), false);
 
     const route = await inspectActiveRoute({
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
+      demandId: fixture.demandId,
     });
     equal(route.route.frontiers[0]?.kind, "implementation-result-review");
     const reopened = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
     });
     if (reopened.reviewUnit.status !== "reported") {
       throw new Error("Expected reopened reported review unit.");
@@ -184,7 +184,7 @@ test("Resume Public Coordinator闭合blocked inspect到第二代Implementation D
       await executeControllerImplementationReviewDecisionPublicRequest(
         {
           root: fixture.workspacePath,
-          demandId: fixture.intent.demandId,
+          demandId: fixture.demandId,
           targetResultId: reopened.reviewUnit.targetResult.targetResultId,
           snapshotDigest: reopened.snapshotDigest,
           reviewUnitDigest: reopened.reviewUnit.reviewUnitDigest,
@@ -257,7 +257,7 @@ test("Resume Public Coordinator共享恢复Test review并保留同一Result", as
     }
     const context = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetTaskId: fixture.testTargetTaskId,
     });
     if (context.reviewUnit.status !== "review-blocked") {
@@ -265,7 +265,7 @@ test("Resume Public Coordinator共享恢复Test review并保留同一Result", as
     }
     const request = {
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetTaskId: fixture.testTargetTaskId,
       expectedBlockedState: {
         streamRevision: context.eventStream.streamRevision,
@@ -288,7 +288,7 @@ test("Resume Public Coordinator共享恢复Test review并保留同一Result", as
     equal(resumedTarget, fixture.testTargetTaskId);
     const reopened = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetTaskId: fixture.testTargetTaskId,
     });
     if (
@@ -303,7 +303,7 @@ test("Resume Public Coordinator共享恢复Test review并保留同一Result", as
     );
     const route = await inspectActiveRoute({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
     });
     equal(route.route.frontiers[0]?.kind, "test-result-review");
   } finally {

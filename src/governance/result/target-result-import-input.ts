@@ -16,11 +16,6 @@ import {
 } from "../../foundation/data/passive-own-data.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import {
-  parseWindowWorkClaimId,
-  WindowWorkClaimError,
-  type WindowWorkClaimId,
-} from "../delivery/window-work-claim.js";
-import {
   parseImplementationTargetResultReportContent,
   ImplementationTargetResultReportError,
   type ImplementationTargetResultReportContent,
@@ -45,8 +40,9 @@ export type TargetResultImportAgentReport =
 
 export interface TargetResultImportRequest {
   readonly demandId: WakeflowDurableId<"demand">;
-  readonly actionId: WindowWorkClaimId;
-  readonly observationDigest: Sha256Digest;
+  readonly deliveryId: WakeflowDurableId<"target-delivery">;
+  /** 围栏令牌：必须等于当前投递代际的声明摘要（ADR-0009 决定 3）。 */
+  readonly claimDigest: Sha256Digest;
   readonly report: TargetResultImportAgentReport;
 }
 
@@ -110,7 +106,7 @@ export function parseTargetResultImportRequest(
   value: unknown,
 ): Readonly<TargetResultImportRequest> {
   const parsed = record(value);
-  const expected = ["actionId", "demandId", "observationDigest", "report"];
+  const expected = ["claimDigest", "deliveryId", "demandId", "report"];
   const keys = Object.keys(parsed).sort();
   if (
     keys.length !== expected.length ||
@@ -118,11 +114,11 @@ export function parseTargetResultImportRequest(
   ) {
     fail("input");
   }
-  let actionId: WindowWorkClaimId;
+  let deliveryId: WakeflowDurableId<"target-delivery">;
   try {
-    actionId = parseWindowWorkClaimId(parsed.actionId);
+    deliveryId = parseWakeflowDurableIdOfKind(parsed.deliveryId, "target-delivery");
   } catch (error: unknown) {
-    if (error instanceof WindowWorkClaimError) fail("identity");
+    if (error instanceof WakeflowDurableIdError) fail("identity");
     throw error;
   }
   const reportRecord = record(parsed.report);
@@ -159,20 +155,17 @@ export function parseTargetResultImportRequest(
     }
     throw error;
   }
-  let observationDigest: Sha256Digest;
+  let claimDigest: Sha256Digest;
   try {
-    observationDigest = parseSha256Digest(
-      parsed.observationDigest,
-      "$/observationDigest",
-    );
+    claimDigest = parseSha256Digest(parsed.claimDigest, "$/claimDigest");
   } catch (error: unknown) {
     if (error instanceof Sha256Error) fail("digest");
     throw error;
   }
   return Object.freeze({
     demandId: demandId(parsed.demandId),
-    actionId,
-    observationDigest,
+    deliveryId,
+    claimDigest,
     report,
   });
 }

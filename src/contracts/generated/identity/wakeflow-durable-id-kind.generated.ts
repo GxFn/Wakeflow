@@ -23,7 +23,8 @@ export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
   "target-review-decision",
   "target-review-resume",
   "target-task",
-  "window"
+  "window",
+  "work-claim"
 ] as const);
 
 /** 从同一 Schema 枚举派生的持久标识类别联合类型。 */

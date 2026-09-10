@@ -154,7 +154,6 @@ function result() {
           testCardId: "test-card_99999999-9999-4999-8999-999999999999",
           testCardDigest: DIGEST,
         },
-        testDispatchPacketDigest: DIGEST,
       },
       ...judgment("accept"),
       decidedAt: "2026-08-29T12:33:00.000Z",

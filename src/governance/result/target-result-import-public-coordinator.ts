@@ -37,7 +37,7 @@ import {
   type TestTargetResultReport,
 } from "./test-target-result-report.js";
 import {
-  targetResultIdForAction,
+  targetResultIdForClaim,
   targetResultRecordedCommitIdFromResult,
   targetResultRecordedEventIdFromResult,
 } from "./target-result.js";
@@ -208,7 +208,7 @@ function projectImportResult(
   request: ReturnType<typeof parseTargetResultImportPublicRequest>,
   hostId: WakeflowWorkspaceHostId,
 ) {
-  const { claim, observation, result, commandResult } = imported;
+  const { envelope, currentDelivery, result, commandResult } = imported;
   const event = commandResult.commit.events.find(
     (entry) =>
       entry.eventType === "result.target-result-recorded" &&
@@ -229,18 +229,17 @@ function projectImportResult(
     commandResult.commit.events.length !== 1 ||
     imported.claimAuthority !== "released" ||
     imported.eventAuthority !== "current" ||
-    claim.route.hostId !== hostId ||
-    claim.target.demandId !== request.demandId ||
-    claim.claimId !== request.actionId ||
-    observation.action.actionId !== request.actionId ||
-    observation.observationDigest !== request.observationDigest ||
-    result.targetResultId !== targetResultIdForAction(request.actionId) ||
+    envelope.route.hostId !== hostId ||
+    envelope.demandId !== request.demandId ||
+    envelope.deliveryId !== request.deliveryId ||
+    currentDelivery.fence.claimDigest !== request.claimDigest ||
+    result.targetResultId !== targetResultIdForClaim(currentDelivery.fence.claimId) ||
     result.demandId !== request.demandId ||
-    result.targetTaskId !== claim.target.targetTaskId ||
-    result.targetDeliveryId !== claim.target.targetDeliveryId ||
-    result.hostEffect.actionId !== claim.claimId ||
-    result.hostEffect.claimDigest !== claim.claimDigest ||
-    result.hostEffect.observationDigest !== observation.observationDigest ||
+    result.targetTaskId !== envelope.target.targetTaskId ||
+    result.deliveryId !== envelope.deliveryId ||
+    result.delivery.fence.claimId !== currentDelivery.fence.claimId ||
+    result.delivery.fence.claimDigest !== currentDelivery.fence.claimDigest ||
+    result.delivery.outcomeDigest !== currentDelivery.outcome.outcomeDigest ||
     !reportMatches ||
     (imported.status === "recorded") !==
       (imported.disposition === "committed") ||
@@ -344,8 +343,8 @@ export async function executeTargetResultImportPublicRequest(
       ).import(
         {
           demandId: request.demandId,
-          actionId: request.actionId,
-          observationDigest: request.observationDigest,
+          deliveryId: request.deliveryId,
+          claimDigest: request.claimDigest,
           report: request.report,
         },
         options.resultImport,

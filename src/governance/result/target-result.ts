@@ -10,7 +10,7 @@ import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governan
 import { WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA } from "../../contracts/generated/workspace/window-host-binding.generated.js";
 import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
 import {
-  createWakeflowDurableId,
+
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
@@ -36,24 +36,15 @@ import {
   PortableResourcePathError,
   type PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import { parseUuidV4 } from "../../foundation/identity/uuid-v4.js";
+import { deriveDurableId } from "../../kernel/ids.js";
+import { derivedIdFromWorkClaim } from "../../kernel/work-claims.js";
+import type { DeliveryReadbackStatus } from "../delivery/delivery-outcome.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
   UtcInstantError,
   type UtcInstant,
 } from "../../foundation/time/utc-instant.js";
-import {
-  targetDeliveryHostEffectObservationEventId,
-  type TargetDeliveryHostEffectObservation,
-} from "../delivery/target-delivery-host-effect-observation.js";
-import {
-  parseWindowWorkClaim,
-  parseWindowWorkClaimId,
-  WindowWorkClaimError,
-  type WindowWorkClaim,
-  type WindowWorkClaimId,
-} from "../delivery/window-work-claim.js";
 import {
   parseImplementationTargetResultReport,
   ImplementationTargetResultReportError,
@@ -75,9 +66,18 @@ import type { TargetResultOutcome } from "./target-result-report-contract.js";
 
 const RESULT_KIND = "WakeflowTargetResult" as const;
 const RESULT_SCHEMA_VERSION = 1 as const;
-const CLAIM_ID_PREFIX = "window_work_claim_";
-const EVENT_ID_PREFIX = "demand-event_";
-const COMMIT_ID_PREFIX = "demand-event-commit_";
+
+export interface TargetResultDeliveryBinding {
+  readonly generation: number;
+  readonly fence: Readonly<{
+    readonly claimId: WakeflowDurableId<"work-claim">;
+    readonly claimDigest: Sha256Digest;
+  }>;
+  readonly outcomeDigest: Sha256Digest;
+  readonly disposition: "accepted" | "indeterminate";
+  readonly readbackStatus: DeliveryReadbackStatus;
+  readonly observedAt: UtcInstant;
+}
 
 interface TargetResultBase {
   readonly kind: typeof RESULT_KIND;
@@ -87,23 +87,14 @@ interface TargetResultBase {
   readonly programId: WakeflowDurableId<"program">;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly targetTaskId: WakeflowDurableId<"target-task">;
-  readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
+  readonly deliveryId: WakeflowDurableId<"target-delivery">;
   readonly taskPackage: Readonly<{
     readonly taskPackageId: WakeflowDurableId<"task-package">;
     readonly ref: PortableResourcePath;
     readonly digest: Sha256Digest;
   }>;
-  readonly hostEffect: Readonly<{
-    readonly actionId: WindowWorkClaimId;
-    readonly claimDigest: Sha256Digest;
-    readonly claimEventId: WakeflowDurableId<"demand-event">;
-    readonly claimCommitId: WakeflowDurableId<"demand-event-commit">;
-    readonly observationDigest: Sha256Digest;
-    readonly disposition: "accepted" | "indeterminate";
-    readonly readbackStatus: TargetDeliveryHostEffectObservation["readback"]["status"];
-    readonly observedEventId: WakeflowDurableId<"demand-event">;
-    readonly observedAt: UtcInstant;
-  }>;
+  /** 结果绑定的投递代际与围栏：导入必须带回信封里的同一令牌。 */
+  readonly delivery: Readonly<TargetResultDeliveryBinding>;
   readonly resultDigest: Sha256Digest;
 }
 
@@ -128,7 +119,6 @@ export interface TestTargetResult extends TargetResultBase {
       readonly testCardId: WakeflowDurableId<"test-card">;
       readonly testCardDigest: Sha256Digest;
     }>;
-    readonly testDispatchPacketDigest: Sha256Digest;
   }>;
   readonly report: Readonly<TestTargetResultReport>;
 }
@@ -154,7 +144,7 @@ const ERROR_MESSAGES = {
   digest: "Target Result contains an invalid or inconsistent digest.",
   path: "Target Result contains an invalid portable resource path.",
   time: "Target Result contains an invalid time.",
-  claim: "Target Result requires a valid WindowWorkClaim.",
+  claim: "Target Result requires a valid delivery fence claim.",
   report: "Target Result requires a matching implementation or Test Report.",
   relation: "Target Result sources are inconsistent.",
   representation: "Target Result bytes are not deterministic.",
@@ -204,8 +194,7 @@ function id<
     | "window"
     | "test-attempt"
     | "test-card"
-    | "demand-event"
-    | "demand-event-commit",
+    | "work-claim",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
@@ -242,15 +231,6 @@ function instant(value: unknown, path: string): UtcInstant {
   }
 }
 
-function actionId(value: unknown, path: string): WindowWorkClaimId {
-  try {
-    return parseWindowWorkClaimId(value, path);
-  } catch (error: unknown) {
-    if (error instanceof WindowWorkClaimError) fail("identifier", path);
-    throw error;
-  }
-}
-
 export type TargetResultBasis =
   | Omit<ImplementationTargetResult, "resultDigest">
   | Omit<TestTargetResult, "resultDigest">;
@@ -267,10 +247,10 @@ function resultBasis(
         programId: value.programId,
         demandId: value.demandId,
         targetTaskId: value.targetTaskId,
-        targetDeliveryId: value.targetDeliveryId,
+        deliveryId: value.deliveryId,
         taskPackage: value.taskPackage,
         assignment: value.assignment,
-        hostEffect: value.hostEffect,
+        delivery: value.delivery,
         testExecution: value.testExecution,
         report: value.report,
       })
@@ -282,10 +262,10 @@ function resultBasis(
         programId: value.programId,
         demandId: value.demandId,
         targetTaskId: value.targetTaskId,
-        targetDeliveryId: value.targetDeliveryId,
+        deliveryId: value.deliveryId,
         taskPackage: value.taskPackage,
         assignment: value.assignment,
-        hostEffect: value.hostEffect,
+        delivery: value.delivery,
         report: value.report,
       });
 }
@@ -313,11 +293,7 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
     programId: id(wire.programId, "program", "$/programId"),
     demandId: id(wire.demandId, "demand", "$/demandId"),
     targetTaskId: id(wire.targetTaskId, "target-task", "$/targetTaskId"),
-    targetDeliveryId: id(
-      wire.targetDeliveryId,
-      "target-delivery",
-      "$/targetDeliveryId",
-    ),
+    deliveryId: id(wire.deliveryId, "target-delivery", "$/deliveryId"),
     taskPackage: Object.freeze({
       taskPackageId: id(
         wire.taskPackage.taskPackageId,
@@ -327,37 +303,16 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
       ref: resourcePath(wire.taskPackage.ref, "$/taskPackage/ref"),
       digest: digest(wire.taskPackage.digest, "$/taskPackage/digest"),
     }),
-    hostEffect: Object.freeze({
-      actionId: actionId(wire.hostEffect.actionId, "$/hostEffect/actionId"),
-      claimDigest: digest(
-        wire.hostEffect.claimDigest,
-        "$/hostEffect/claimDigest",
-      ),
-      claimEventId: id(
-        wire.hostEffect.claimEventId,
-        "demand-event",
-        "$/hostEffect/claimEventId",
-      ),
-      claimCommitId: id(
-        wire.hostEffect.claimCommitId,
-        "demand-event-commit",
-        "$/hostEffect/claimCommitId",
-      ),
-      observationDigest: digest(
-        wire.hostEffect.observationDigest,
-        "$/hostEffect/observationDigest",
-      ),
-      disposition: wire.hostEffect.disposition,
-      readbackStatus: wire.hostEffect.readbackStatus,
-      observedEventId: id(
-        wire.hostEffect.observedEventId,
-        "demand-event",
-        "$/hostEffect/observedEventId",
-      ),
-      observedAt: instant(
-        wire.hostEffect.observedAt,
-        "$/hostEffect/observedAt",
-      ),
+    delivery: Object.freeze({
+      generation: wire.delivery.generation,
+      fence: Object.freeze({
+        claimId: id(wire.delivery.fence.claimId, "work-claim", "$/delivery/fence/claimId"),
+        claimDigest: digest(wire.delivery.fence.claimDigest, "$/delivery/fence/claimDigest"),
+      }),
+      outcomeDigest: digest(wire.delivery.outcomeDigest, "$/delivery/outcomeDigest"),
+      disposition: wire.delivery.disposition,
+      readbackStatus: wire.delivery.readbackStatus,
+      observedAt: instant(wire.delivery.observedAt, "$/delivery/observedAt"),
     }),
   } as const;
   let basis: Readonly<TargetResultBasis>;
@@ -431,20 +386,11 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
             "$/testExecution/testCard/testCardDigest",
           ),
         }),
-        testDispatchPacketDigest: digest(
-          wire.testExecution.testDispatchPacketDigest,
-          "$/testExecution/testDispatchPacketDigest",
-        ),
       }),
       report,
     });
   }
-  if (
-    targetResultIdForAction(basis.hostEffect.actionId) !==
-      basis.targetResultId ||
-    targetDeliveryHostEffectObservationEventId(basis.hostEffect.actionId) !==
-      basis.hostEffect.observedEventId
-  ) {
+  if (targetResultIdForClaim(basis.delivery.fence.claimId) !== basis.targetResultId) {
     fail("relation", "$result");
   }
   // reportedAt 是Report来源时钟给出的审计事实；Result与Host Effect的因果关系
@@ -456,70 +402,26 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
   return Object.freeze({ ...basis, resultDigest });
 }
 
-function uuidFrom(value: string, prefix: string) {
-  return parseUuidV4(value.slice(prefix.length));
-}
-
-export function targetResultIdForAction(
-  actionIdValue: unknown,
+/** 结果身份由围栏声明的 UUID 派生：一个声明代际至多一份结果。 */
+export function targetResultIdForClaim(
+  claimId: WakeflowDurableId<"work-claim">,
 ): WakeflowDurableId<"target-result"> {
-  const admitted = actionId(actionIdValue, "$actionId");
-  return createWakeflowDurableId(
-    "target-result",
-    uuidFrom(admitted, CLAIM_ID_PREFIX),
-  );
+  return derivedIdFromWorkClaim("target-result", claimId);
 }
 
-export function targetResultRecordedEventId(
-  claimValue: unknown,
-): WakeflowDurableId<"demand-event"> {
-  let claim: Readonly<WindowWorkClaim>;
-  try {
-    claim = parseWindowWorkClaim(claimValue);
-  } catch (error: unknown) {
-    if (error instanceof WindowWorkClaimError) fail("claim", "$claim");
-    throw error;
-  }
-  return createWakeflowDurableId(
-    "demand-event",
-    uuidFrom(claim.claimTransition.commitId, COMMIT_ID_PREFIX),
-  );
-}
-
+/** 结果事件与提交的身份由同一声明派生，重放自然命中同一提交。 */
 export function targetResultRecordedEventIdFromResult(
   resultValue: unknown,
 ): WakeflowDurableId<"demand-event"> {
   const result = parseTargetResult(resultValue);
-  return createWakeflowDurableId(
-    "demand-event",
-    uuidFrom(result.hostEffect.claimCommitId, COMMIT_ID_PREFIX),
-  );
-}
-
-export function targetResultRecordedCommitId(
-  claimValue: unknown,
-): WakeflowDurableId<"demand-event-commit"> {
-  let claim: Readonly<WindowWorkClaim>;
-  try {
-    claim = parseWindowWorkClaim(claimValue);
-  } catch (error: unknown) {
-    if (error instanceof WindowWorkClaimError) fail("claim", "$claim");
-    throw error;
-  }
-  return createWakeflowDurableId(
-    "demand-event-commit",
-    uuidFrom(claim.claimTransition.eventId, EVENT_ID_PREFIX),
-  );
+  return deriveDurableId("demand-event", "target-result", result.delivery.fence.claimId);
 }
 
 export function targetResultRecordedCommitIdFromResult(
   resultValue: unknown,
 ): WakeflowDurableId<"demand-event-commit"> {
   const result = parseTargetResult(resultValue);
-  return createWakeflowDurableId(
-    "demand-event-commit",
-    uuidFrom(result.hostEffect.claimEventId, EVENT_ID_PREFIX),
-  );
+  return deriveDurableId("demand-event-commit", "target-result", result.delivery.fence.claimId);
 }
 
 export function renderTargetResult(value: unknown): string {

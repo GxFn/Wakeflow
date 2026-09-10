@@ -9,7 +9,7 @@ import { compileWakeflowFreshConfigSelection } from "../../src/configuration/wak
 import { executeClaudeCodeWakeflowMaintenance } from "../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { executeCodexWakeflowMaintenance } from "../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { WINDOW_WORK_CLAIMS_ROOT_REF } from "../../src/governance/delivery/window-work-claim-resource-catalog.js";
+import { WORK_CLAIMS_ROOT_REF } from "../../src/kernel/layout.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
@@ -85,7 +85,7 @@ test("Codex public entrypoint completes Fresh preview/apply and a no-op reconcil
   equal(applied.next.frontier, "window-launch");
   equal(applied.next.suggestedTool, "wakeflow_register_window_binding");
   equal(existsSync(path.join(root, "wakeflow.config.json")), true);
-  const claimRoot = path.join(root, ...WINDOW_WORK_CLAIMS_ROOT_REF.split("/"));
+  const claimRoot = path.join(root, ...WORK_CLAIMS_ROOT_REF.split("/"));
   equal(existsSync(claimRoot), true);
   equal(statSync(claimRoot).mode & 0o777, 0o700);
   equal(JSON.stringify(applied).includes(root), false);

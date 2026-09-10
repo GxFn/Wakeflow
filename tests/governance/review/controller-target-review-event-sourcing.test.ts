@@ -24,13 +24,14 @@ import {
   type PreparedDemandEventStreamCommit,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
-import { targetDeliveryHostEffectObservationCommitId } from "../../../src/governance/delivery/target-delivery-host-effect-observation.js";
 import { targetResultRecordedCommitIdFromResult } from "../../../src/governance/result/target-result.js";
 import { controllerImplementationReviewDecisionCommitId } from "../../../src/governance/review/controller-implementation-review-decision.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
-import { createTargetDeliveryHostEffectObservationFixture } from "../delivery/target-delivery-host-effect-observation.fixture.js";
-import { createTargetDeliveryIntentFixture } from "../delivery/target-delivery-intent.fixture.js";
-import { createWindowWorkClaimFixture } from "../delivery/window-work-claim.fixture.js";
+import {
+  createDeliveryEnvelopeFixture,
+  createDeliveryOutcomeFixture,
+  createWorkClaimFixture,
+} from "../delivery/delivery-records.fixture.js";
 import { createTargetResultFixture } from "../result/target-result.fixture.js";
 import {
   createTaskPackageFixture,
@@ -64,6 +65,14 @@ const DELIVERY_EVENT_ID = parseWakeflowDurableIdOfKind(
 );
 const DELIVERY_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit_06060606-0606-4606-8606-060606060606",
+  "demand-event-commit",
+);
+const OUTCOME_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_08080808-0808-4808-8808-080808080808",
+  "demand-event",
+);
+const OUTCOME_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_09090909-0909-4909-8909-090909090909",
   "demand-event-commit",
 );
 const WRONG_COMMIT_ID = parseWakeflowDurableIdOfKind(
@@ -121,44 +130,36 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
     PLANNING_COMMIT_ID,
     preparedCommits,
   );
-  const intent = createTargetDeliveryIntentFixture();
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({
+    claim,
+    expectedStreamRevision: aggregate.streamRevision,
+  });
   aggregate = appendCommand(
     aggregate,
     {
-      commandType: "delivery.prepare-target-delivery",
+      commandType: "delivery.prepare-delivery",
       commandVersion: 1,
       eventId: DELIVERY_EVENT_ID,
-      intent,
+      envelope,
       taskPackage,
     },
     DELIVERY_COMMIT_ID,
     preparedCommits,
   );
-  const claim = createWindowWorkClaimFixture(undefined, aggregate.stateDigest);
+  const outcome = createDeliveryOutcomeFixture({ claim, envelope });
   aggregate = appendCommand(
     aggregate,
     {
-      commandType: "delivery.claim-target-host-effect",
+      commandType: "delivery.record-delivery-outcome",
       commandVersion: 1,
-      claim,
+      eventId: OUTCOME_EVENT_ID,
+      outcome,
     },
-    claim.claimTransition.commitId,
+    OUTCOME_COMMIT_ID,
     preparedCommits,
   );
-  const observation = createTargetDeliveryHostEffectObservationFixture({
-    claim,
-  });
-  aggregate = appendCommand(
-    aggregate,
-    {
-      commandType: "delivery.record-target-host-effect-observation",
-      commandVersion: 1,
-      observation,
-    },
-    targetDeliveryHostEffectObservationCommitId(claim.claimId),
-    preparedCommits,
-  );
-  const result = createTargetResultFixture({ claim, observation });
+  const result = createTargetResultFixture({ claim, envelope, outcome });
   aggregate = appendCommand(
     aggregate,
     {
@@ -169,7 +170,7 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
     targetResultRecordedCommitIdFromResult(result),
     preparedCommits,
   );
-  equal(aggregate.streamRevision, 6);
+  equal(aggregate.streamRevision, 5);
   equal(aggregate.state.targetTasks[0]?.phase, "result-reported");
 
   const fixtureRoot = mkdtempSync(
@@ -231,7 +232,7 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
       commandDigest: computeDemandEventSourcingCommandDigest(command),
       events,
     });
-    equal(prepared.aggregate.streamRevision, 7);
+    equal(prepared.aggregate.streamRevision, 6);
     equal(prepared.aggregate.state.targetTasks[0]?.phase, "accepted");
     equal(prepared.commit.events[0]?.eventType, "review.target-result-decided");
     equal(prepared.commit.events[0]?.eventVersion, 1);

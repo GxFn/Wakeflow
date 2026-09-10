@@ -4,12 +4,7 @@ import { test } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
-import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { TargetDeliveryPreparationService } from "../../../src/governance/delivery/target-delivery-preparation-service.js";
-import { TargetHostEffectClaimService } from "../../../src/governance/delivery/target-host-effect-claim-service.js";
-import { TargetHostEffectOutcomeService } from "../../../src/governance/delivery/target-host-effect-outcome-service.js";
-import { targetDeliveryPurpose } from "../../../src/governance/delivery/target-delivery-intent.js";
+import { deliveryPurpose } from "../../../src/governance/delivery/delivery-envelope.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
   parseDemandEventSourcingCommand,
@@ -39,6 +34,12 @@ import {
   cleanupControllerTestReviewDecisionServiceFixture,
   createControllerTestReviewDecisionServiceFixture,
 } from "./controller-test-review-decision-service.fixture.js";
+import {
+  landFixturePrompt,
+  loadFixtureDeliveryEnvelope,
+  prepareFixtureDelivery,
+  recordFixtureDeliveryOutcome,
+} from "../delivery/delivery-workspace.fixture.js";
 
 const DECIDED_AT = parseUtcInstant("2026-08-29T12:35:00.000Z");
 const PRODUCT_DEFECT_DECISION_UUID = "a6a6a6a6-a6a6-46a6-86a6-a6a6a6a6a6a6";
@@ -78,7 +79,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     );
     const defectRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     equal(defectRoute.nextStage.status, "test-product-defect-escalated");
     if (defectRoute.nextStage.status !== "test-product-defect-escalated") {
@@ -89,7 +90,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
       throw new Error("Expected implementation baseline.");
     }
     const remediationRequest = {
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       testReviewDecisionId: decided.decision.targetReviewDecisionId,
       postAcceptanceRouteDigest: defectRoute.routeDigest,
       affectedTargets: [
@@ -176,7 +177,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     demandRoot = await RootedDirectory.open(
       path.join(
         fixture.workspacePath,
-        ...demandFinalRootRef(fixture.testClaimRequest.demandId).split("/"),
+        ...demandFinalRootRef(fixture.demandId).split("/"),
       ),
     );
     const repository = new DemandEventSourcingRepository(demandRoot);
@@ -219,7 +220,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     );
     const blockedRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     equal(blockedRoute.nextStage.status, "not-ready");
     if (blockedRoute.nextStage.status !== "not-ready") {
@@ -292,63 +293,51 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
 
     await demandRoot.close();
     demandRoot = undefined;
-    const preparation = new TargetDeliveryPreparationService(
-      fixture.workspaceRoot,
-      codexWorkspaceHostResourceProfile,
-      codexWindowHostIdentityProfile,
+    const remediationTargetRef = {
+      workspacePath: fixture.workspacePath,
+      demandId: fixture.demandId,
+      targetTaskId: implementationBaseline.targetTaskId,
+    };
+    const remediationPrepareOverrides = {
+      idempotencyKey: "remediation-prepare-1",
+      expectedStreamRevision: blockedRoute.observedEventStream.streamRevision,
+      language: "en" as const,
+    };
+    const remediationPrepared = await prepareFixtureDelivery(
+      remediationTargetRef,
+      remediationPrepareOverrides,
+      { clock: () => parseUtcInstant("2026-08-29T12:38:00.000Z") },
     );
-    const deliveryUuids = [
-      "d9d9d9d9-d9d9-49d9-89d9-d9d9d9d9d9d9",
-      "eaeaeaea-eaea-4aea-8aea-eaeaeaeaeaea",
-      "fbfbfbfb-fbfb-4bfb-8bfb-fbfbfbfbfbfb",
-    ];
-    let deliveryUuidIndex = 0;
-    const deliveryPreview = await preparation.preview(
-      {
-        demandId: fixture.testClaimRequest.demandId,
-        targetTaskId: implementationBaseline.targetTaskId,
-      },
-      {
-        clock: () => parseUtcInstant("2026-08-29T12:38:00.000Z"),
-        uuidFactory: () => deliveryUuids[deliveryUuidIndex++] ?? "invalid",
-      },
+    equal(remediationPrepared.status, "committed");
+    const remediationEnvelope = await loadFixtureDeliveryEnvelope(
+      fixture,
+      remediationPrepared.delivery.deliveryId,
     );
+    equal(deliveryPurpose(remediationEnvelope), "product-defect-remediation");
     equal(
-      targetDeliveryPurpose(deliveryPreview.plan.intent),
-      "product-defect-remediation",
-    );
-    equal(
-      deliveryPreview.plan.intent.productDefectRemediation?.authorization
+      remediationEnvelope.productDefectRemediation?.authorization
         .productDefectRemediationId,
       authorization.productDefectRemediationId,
     );
     equal(
-      deliveryPreview.plan.intent.productDefectRemediation
-        ?.requiredCorrections[0]?.checkId,
+      remediationEnvelope.productDefectRemediation?.requiredCorrections[0]?.checkId,
       "controller-product-defect",
     );
     equal(
-      deliveryPreview.plan.intent.portablePrompt.includes(
-        "Product-defect remediation basis",
-      ),
+      remediationPrepared.permit.prompt.includes("Product-defect remediation basis"),
       true,
     );
-    const deliveryApplied = await preparation.apply(
-      deliveryPreview.plan,
-      deliveryPreview.planDigest,
+    const deliveryReplayed = await prepareFixtureDelivery(
+      remediationTargetRef,
+      remediationPrepareOverrides,
+      { clock: () => parseUtcInstant("2026-08-29T12:38:30.000Z") },
     );
-    equal(deliveryApplied.disposition, "committed");
-    equal(deliveryApplied.commandResult.commit.events[0]?.eventVersion, 3);
-    const deliveryReplayed = await preparation.apply(
-      deliveryPreview.plan,
-      deliveryPreview.planDigest,
-    );
-    equal(deliveryReplayed.disposition, "idempotent");
+    equal(deliveryReplayed.status, "idempotent");
 
     demandRoot = await RootedDirectory.open(
       path.join(
         fixture.workspacePath,
-        ...demandFinalRootRef(fixture.testClaimRequest.demandId).split("/"),
+        ...demandFinalRootRef(fixture.demandId).split("/"),
       ),
     );
     const preparedHistory = await new DemandEventSourcingRepository(
@@ -378,55 +367,27 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     await demandRoot.close();
     demandRoot = undefined;
 
-    const claimUuids = [
-      "14141414-1414-4414-8414-141414141414",
-      "15151515-1515-4515-8515-151515151515",
-      "16161616-1616-4616-8616-161616161616",
-    ];
-    let claimUuidIndex = 0;
-    const claimed = await new TargetHostEffectClaimService(
-      fixture.workspaceRoot,
-      codexWorkspaceHostResourceProfile,
-      codexWindowHostIdentityProfile,
-    ).claim(
-      {
-        workType: "implementation",
-        demandId: deliveryPreview.plan.intent.demandId,
-        targetTaskId: deliveryPreview.plan.intent.target.targetTaskId,
-        targetDeliveryId: deliveryPreview.plan.intent.targetDeliveryId,
-        intentDigest: deliveryPreview.plan.intent.intentDigest,
-        observation: {
-          ...fixture.claimRequest.observation,
-          observedAt: parseUtcInstant("2026-08-29T12:39:00.000Z"),
-        },
-      },
-      {
-        clock: () => parseUtcInstant("2026-08-29T12:40:00.000Z"),
-        uuidFactory: () => claimUuids[claimUuidIndex++] ?? "invalid",
-      },
+    await landFixturePrompt(
+      fixture,
+      fixture.route,
+      remediationPrepared.permit.prompt,
+      parseUtcInstant("2026-08-29T12:39:00.000Z"),
     );
-    if (claimed.action === null) {
-      throw new Error("Expected product remediation host action.");
-    }
-    const remediationOutcome = await new TargetHostEffectOutcomeService(
-      fixture.workspaceRoot,
-      "codex",
-    ).record({
-      demandId: deliveryPreview.plan.intent.demandId,
-      actionId: claimed.action.actionId,
-      claimDigest: claimed.action.workClaim.claimDigest,
-      attempt: {
-        status: "accepted",
-        evidence: { remediation: "host-effect-accepted" },
+    const remediationOutcome = await recordFixtureDeliveryOutcome(
+      fixture,
+      remediationPrepared,
+      {
+        idempotencyKey: "remediation-outcome-1",
+        observedAt: parseUtcInstant("2026-08-29T12:41:00.000Z"),
       },
-      readback: { status: "pending", evidence: { visible: false } },
-      observedAt: parseUtcInstant("2026-08-29T12:41:00.000Z"),
-    });
+      { clock: () => parseUtcInstant("2026-08-29T12:41:00.000Z") },
+    );
+    equal(remediationOutcome.outcome.disposition, "accepted");
     await new TargetResultImportService(fixture.workspaceRoot, "codex").import(
       {
-        demandId: deliveryPreview.plan.intent.demandId,
-        actionId: claimed.action.actionId,
-        observationDigest: remediationOutcome.observation.observationDigest,
+        demandId: fixture.demandId,
+        deliveryId: remediationPrepared.delivery.deliveryId,
+        claimDigest: remediationPrepared.permit.fence.claimDigest,
         report: {
           workType: "implementation",
           content: createImplementationTargetResultReportContentFixture(
@@ -440,7 +401,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     demandRoot = await RootedDirectory.open(
       path.join(
         fixture.workspacePath,
-        ...demandFinalRootRef(fixture.testClaimRequest.demandId).split("/"),
+        ...demandFinalRootRef(fixture.demandId).split("/"),
       ),
     );
     const remediationReviewSnapshot =
@@ -460,7 +421,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
         fixture.workspaceRoot,
       ).decide(
         {
-          demandId: fixture.testClaimRequest.demandId,
+          demandId: fixture.demandId,
           targetResultId: remediationReviewTarget.targetResult.targetResultId,
           snapshotDigest: remediationReviewSnapshot.snapshotDigest,
           reviewUnitDigest: remediationReviewTarget.reviewUnitDigest,
@@ -479,7 +440,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     equal(acceptedRemediation.decision.decision, "accept");
     const retestRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     equal(retestRoute.nextStage.status, "real-environment-test-planning");
 
@@ -493,7 +454,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     const cardPlanning = new TestCardPlanningService(fixture.workspaceRoot);
     const cardPreview = await cardPlanning.preview(
       {
-        demandId: fixture.testClaimRequest.demandId,
+        demandId: fixture.demandId,
         testCard: fixture.testCardContent,
       },
       {
@@ -540,7 +501,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     demandRoot = await RootedDirectory.open(
       path.join(
         fixture.workspacePath,
-        ...demandFinalRootRef(fixture.testClaimRequest.demandId).split("/"),
+        ...demandFinalRootRef(fixture.demandId).split("/"),
       ),
     );
     const beforeRetest = await new DemandEventSourcingRepository(
@@ -574,13 +535,13 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     await cardPlanning.apply(cardPreview.plan, cardPreview.planDigest);
     const newTestRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     equal(newTestRoute.nextStage.status, "test-task-planning");
     await executeTargetTaskPlanningPublicRequest(
       {
         root: fixture.workspacePath,
-        demandId: fixture.testClaimRequest.demandId,
+        demandId: fixture.demandId,
         idempotencyKey: "remediation-test-plan",
         expectedStreamRevision: newTestRoute.observedEventStream.streamRevision,
         taskPackage: { workType: "test" },
@@ -589,14 +550,14 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     );
     const newTestDeliveryRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     equal(newTestDeliveryRoute.nextStage.status, "test-delivery-planning");
 
     demandRoot = await RootedDirectory.open(
       path.join(
         fixture.workspacePath,
-        ...demandFinalRootRef(fixture.testClaimRequest.demandId).split("/"),
+        ...demandFinalRootRef(fixture.demandId).split("/"),
       ),
     );
     const retestHistory = await new DemandEventSourcingRepository(

@@ -16,7 +16,9 @@
 | `card-02/window-handshake` | 02 | 窗口握手：启动意图、Agent 回执、绑定登记 | inspect 为 `unregistered` 且执行参数为 Codex `create_thread`；写入 `session-start` hook 记录后 register 为 `registered`；同一回执重放 `replayed`；结果与投影不含原始句柄与私有路径 | pass |
 | `card-02/window-replace` | 02 | 替换窗口：新握手以 CAS 换代 | 过期绑定摘要被拒绝；replace 为 `replaced` 且绑定代际变化；磁盘绑定文件只含新句柄 | pass |
 | `card-05/plan-implementation-task` | 05 | 规划实现任务与同仓库替代 | 发明的验收锚点序号（`ac-9`）被拒绝；首包追加 `committed` 且 `planned`，锚点 `requirementRef` 指向需求包验收标准 `ac-1`，`lineage: null`，`sectionAnchors` 含 `goal`；同仓库第二包以 `lineage: replacement` 追加 `committed`，结果回显被替代目标；同一替代请求重放 `idempotent` 且活动根零写；`next` 与 Route 前沿前进到投递规划；后续投递、评审与完成即归档（`card-08`）只针对替代后的目标；结果不含私有路径 | pass |
-| `card-08/complete-and-archive` | 08 | 完成即归档 | 经公共工具投递准备、认领、回执、结果导入、评审接受后 Route 为 `demand-completion-preflight`；`complete_demand` preview 零写、`ready` 且八道 verify 门全 `pass`；apply `completed`，需求包 `archived`，`next` 指向 continue；活动根已删除，`<ledger>/archives/<demandId>/<修订号>/manifest.json` 存在；Route 查询返回 `archived: completed`；recover 返回 `recovered` 且同一终态事件 | pass |
+| `card-06/delivery-chain` | 06 | 一次调用准备投递并取得许可 | Route 为投递规划；`prepare_delivery` 追加 `committed`，许可动作为 `send-prompt-to-window`，prompt 不含私有路径且含 deliveryId 与声明摘要，窗口工作声明文件存在；Route 前进到宿主效果执行；同键重放 `idempotent` 且同一投递与围栏；无落地记录时 `record_delivery_outcome` 为 `indeterminate`、声明 `retain`、phase `host-effect-indeterminate`，`next.blockers` 含 `landing-evidence-missing` | pass |
+| `card-06/ambiguous-resolution` | 06 | hook 记录到达后再次记录结局 | 写入目标会话的 `user-prompt-submit` 记录（`promptDigest` 等于许可 prompt 摘要）后，新键再次调用为 `accepted`、证据 `hook-record`、声明 `retain`、phase `host-effect-accepted`；`next` 与 Route 前沿为结果导入 | pass |
+| `card-08/complete-and-archive` | 08 | 完成即归档 | 经公共工具结果导入（`deliveryId` 加围栏摘要，导入后声明释放）、评审接受后 Route 为 `demand-completion-preflight`；`complete_demand` preview 零写、`ready` 且八道 verify 门全 `pass`；apply `completed`，需求包 `archived`，`next` 指向 continue；活动根已删除，`<ledger>/archives/<demandId>/<修订号>/manifest.json` 存在；Route 查询返回 `archived: completed`；recover 返回 `recovered` 且同一终态事件 | pass |
 | `card-04/complete-and-continue` | 04 | continue 与 cancel | `continue_demand` preview `ready`、apply `continued`，需求包回到 `claimed`，Route 为 `work-available` 且前沿为实现任务规划；`cancel_demand` preview `ready`、apply `cancelled`，需求包 `withdrawn`，活动根删除；取消后 continue 的 preview 为 `blocked` 并含 `archive-outcome:cancelled` | pass |
 
 ## 2. 待接线场景
@@ -28,8 +30,7 @@
 | `card-01/reconfigure` | 01 | 重新配置拓扑，preview 零写，apply 只改声明差异 | maintenance reconfigure |
 | `card-01/reconcile-noop` | 01 | 健康工作区 reconcile 零步 `no-op` | maintenance reconcile |
 | `card-05/test-contract` | 05 | test 任务包携带测试合同，步骤来自需求包验收标准 | delivery 切片（ADR-0012 D4；gate-log §13.81 D1） |
-| `card-06/delivery-chain` | 06 | 一次调用准备与许可、工作声明、落地证据 UserPromptSubmit、rearm 上限、回调 wake-controller 与 acknowledged | 投递切片（ADR-0012 D1 D2） |
-| `card-06/ambiguous-resolution` | 06 | ambiguous 显式解决 | 投递切片 |
+| `card-06/wake-controller` | 06 | 回调 wake-controller 与 acknowledged | 结果与评审切片（gate-log §13.83 D4） |
 | `card-07/import-and-review` | 07 | 结果导入核定位符与隐私扫描、逐步记录与分类、escalate 与 decision-recorded、approved 基线对比 | 结果与评审切片（ADR-0012 D4 D5） |
 | `card-08/evidence` | 08 | 三种来源加 `pod-worktree` 与 `observation`，kind 闭集，隐私扫描收窄 | 证据切片 |
 | `card-09/status-and-verify` | 09 | status 含 pod 段与 TODO 摘要；verify 门集合与 `unavailable` 计数 | 观察切片 |

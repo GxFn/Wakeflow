@@ -70,7 +70,6 @@ function baseInput(): CreateControllerTestReviewDecisionInput {
         ),
         testCardDigest: parseSha256Digest(`sha256:${"6".repeat(64)}`),
       },
-      testDispatchPacketDigest: parseSha256Digest(`sha256:${"7".repeat(64)}`),
     },
     decision: "accept",
     assessment: {

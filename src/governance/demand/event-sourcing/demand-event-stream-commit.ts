@@ -64,8 +64,6 @@ import {
   assertSupportedDemandEventSourcingStateModelVersion,
   DemandEventSourcingStateVersionError,
 } from "./demand-event-sourcing-state-version.js";
-import { targetDeliveryHostEffectObservationCommitId } from "../../delivery/target-delivery-host-effect-observation.js";
-import { targetHostEffectRearmCommitId } from "../../delivery/target-host-effect-rearm.js";
 import { targetResultRecordedCommitIdFromResult } from "../../result/target-result.js";
 import { controllerReviewDecisionCommitId } from "../../review/controller-review-decision.js";
 import { controllerTargetReviewResumeCommitId } from "../../review/controller-target-review-resume.js";
@@ -483,25 +481,16 @@ function assertEventCommitBoundary(
   ) {
     fail("relation", path);
   }
+  // 围栏令牌的期望修订必须等于本次提交的期望修订：信封与新代际都绑定它们被追加时的流位置。
   if (
-    event.eventType === "delivery.target-host-effect-claimed" &&
-    (event.data.claim.claimTransition.commitId !== commitId ||
-      event.data.claim.claimTransition.expectedStreamRevision !==
-        expectedStreamRevision)
+    event.eventType === "delivery.delivery-prepared" &&
+    event.data.envelope.fence.expectedStreamRevision !== expectedStreamRevision
   ) {
     fail("relation", path);
   }
   if (
-    event.eventType === "delivery.target-host-effect-observed" &&
-    targetDeliveryHostEffectObservationCommitId(
-      event.data.observation.action.actionId,
-    ) !== commitId
-  ) {
-    fail("relation", path);
-  }
-  if (
-    event.eventType === "delivery.target-host-effect-rearmed" &&
-    targetHostEffectRearmCommitId(event.data.rearm) !== commitId
+    event.eventType === "delivery.delivery-rearmed" &&
+    event.data.rearm.fence.expectedStreamRevision !== expectedStreamRevision
   ) {
     fail("relation", path);
   }

@@ -46,8 +46,8 @@ function implementationRequest() {
   return {
     root: "/workspace",
     demandId: result.demandId,
-    actionId: result.hostEffect.actionId,
-    observationDigest: result.hostEffect.observationDigest,
+    deliveryId: result.deliveryId,
+    claimDigest: result.delivery.fence.claimDigest,
     report: {
       workType: "implementation",
       content: implementationReportContent(),
@@ -140,14 +140,13 @@ function testResult() {
           testCardId: TEST_CARD_ID,
           testCardDigest: DIGEST,
         },
-        testDispatchPacketDigest: DIGEST,
       },
       resultDigest: DIGEST,
     },
   } as const;
 }
 
-test("Result Import Request只接受Action、Observation与判别式Agent Report", () => {
+test("Result Import Request只接受投递身份、围栏摘要与判别式Agent Report", () => {
   const implementation = implementationRequest();
   const testing = testRequest();
   equal(validateRequest(implementation).ok, true);

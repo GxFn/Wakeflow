@@ -11,7 +11,7 @@ import {
 import {
   projectTargetDeliveryProductDefectRemediationContext,
   type TargetDeliveryProductDefectRemediationContext,
-} from "./target-delivery-intent.js";
+} from "./delivery-envelope.js";
 
 /**
  * Wakeflow Governance / Delivery：从完整产品缺陷Authorization历史组装投递投影。

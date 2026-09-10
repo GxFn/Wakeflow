@@ -19,12 +19,12 @@ import {
   TASKING_AUTHORITY_DIGEST,
   TASKING_DEMAND_ID,
 } from "../tasking/task-package.fixture.js";
-import { createTargetDeliveryIntentFixture } from "../delivery/target-delivery-intent.fixture.js";
-import { createWindowWorkClaimFixture } from "../delivery/window-work-claim.fixture.js";
-import { targetDeliveryHostEffectObservationCommitId } from "../../../src/governance/delivery/target-delivery-host-effect-observation.js";
-import { createTargetDeliveryHostEffectObservationFixture } from "../delivery/target-delivery-host-effect-observation.fixture.js";
-import { targetHostEffectRearmCommitId } from "../../../src/governance/delivery/target-host-effect-rearm.js";
-import { createTargetHostEffectRearmFixture } from "../delivery/target-host-effect-rearm.fixture.js";
+import {
+  createDeliveryEnvelopeFixture,
+  createDeliveryOutcomeFixture,
+  createDeliveryRearmFixture,
+  createWorkClaimFixture,
+} from "../delivery/delivery-records.fixture.js";
 
 const DEMAND_ID = TASKING_DEMAND_ID;
 const EVENT_ID = parseWakeflowDurableIdOfKind(
@@ -57,6 +57,22 @@ const DELIVERY_EVENT_ID = parseWakeflowDurableIdOfKind(
 );
 const DELIVERY_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit_99999999-9999-4999-8999-999999999999",
+  "demand-event-commit",
+);
+const OUTCOME_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1",
+  "demand-event",
+);
+const OUTCOME_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_a2a2a2a2-a2a2-4a2a-8a2a-a2a2a2a2a2a2",
+  "demand-event-commit",
+);
+const REARM_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_a3a3a3a3-a3a3-4a3a-8a3a-a3a3a3a3a3a3",
+  "demand-event",
+);
+const REARM_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_a4a4a4a4-a4a4-4a4a-8a4a-a4a4a4a4a4a4",
   "demand-event-commit",
 );
 const RECORDED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
@@ -185,12 +201,13 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
     equal(retriedPlan.aggregate.streamRevision, 2);
     equal((await eventStore.readCommits()).commits.length, 2);
 
-    const intent = createTargetDeliveryIntentFixture();
+    const claim = createWorkClaimFixture();
+    const envelope = createDeliveryEnvelopeFixture({ claim });
     const deliveryCommand = Object.freeze({
-      commandType: "delivery.prepare-target-delivery",
+      commandType: "delivery.prepare-delivery" as const,
       commandVersion: 1 as const,
       eventId: DELIVERY_EVENT_ID,
-      intent,
+      envelope,
       taskPackage,
     });
     const prepared = await executeDemandEventSourcingCommand(
@@ -200,10 +217,7 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
     );
     equal(prepared.disposition, "committed");
     equal(prepared.aggregate.streamRevision, 3);
-    equal(
-      prepared.aggregate.lastEvent.eventType,
-      "delivery.target-delivery-prepared",
-    );
+    equal(prepared.aggregate.lastEvent.eventType, "delivery.delivery-prepared");
     equal(prepared.aggregate.state.targetTasks[0]?.phase, "delivery-prepared");
     equal(
       (await repository.audit()).aggregate.state.targetTasks[0]?.phase,
@@ -218,144 +232,100 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
     equal(retriedDelivery.aggregate.streamRevision, 3);
     equal((await eventStore.readCommits()).commits.length, 3);
 
-    const claim = createWindowWorkClaimFixture(
-      undefined,
-      prepared.aggregate.stateDigest,
-    );
-    const claimCommand = Object.freeze({
-      commandType: "delivery.claim-target-host-effect" as const,
-      commandVersion: 1 as const,
+    const outcome = createDeliveryOutcomeFixture({
       claim,
-    });
-    await rejects(
-      executeDemandEventSourcingCommand(repository, claimCommand, {
-        commitId: DELIVERY_COMMIT_ID,
-        expectedStreamRevision: 3,
-      }),
-      (error: unknown) =>
-        error instanceof DemandEventSourcingCommandHandlerError &&
-        error.reason === "decision-rejected",
-    );
-    equal((await eventStore.readCommits()).commits.length, 3);
-    const claimed = await executeDemandEventSourcingCommand(
-      repository,
-      claimCommand,
-      {
-        commitId: claim.claimTransition.commitId,
-        expectedStreamRevision: 3,
-      },
-    );
-    equal(claimed.disposition, "committed");
-    equal(claimed.aggregate.streamRevision, 4);
-    equal(
-      claimed.aggregate.lastEvent.eventType,
-      "delivery.target-host-effect-claimed",
-    );
-    equal(claimed.aggregate.state.targetTasks[0]?.phase, "host-effect-claimed");
-    const retriedClaim = await executeDemandEventSourcingCommand(
-      repository,
-      claimCommand,
-      {
-        commitId: claim.claimTransition.commitId,
-        expectedStreamRevision: 3,
-      },
-    );
-    equal(retriedClaim.disposition, "idempotent");
-    equal(retriedClaim.aggregate.streamRevision, 4);
-    equal((await eventStore.readCommits()).commits.length, 4);
-
-    const observation = createTargetDeliveryHostEffectObservationFixture({
-      claim,
-      attemptStatus: "rejected-before-effect",
+      envelope,
+      disposition: "rejected-before-send",
       readbackStatus: "unavailable",
     });
-    const observationCommand = Object.freeze({
-      commandType: "delivery.record-target-host-effect-observation" as const,
+    const outcomeCommand = Object.freeze({
+      commandType: "delivery.record-delivery-outcome" as const,
       commandVersion: 1 as const,
-      observation,
+      eventId: OUTCOME_EVENT_ID,
+      outcome,
     });
+    // 复用另一条命令的 commitId：同 id 不同命令按幂等冲突拒绝，不写入。
     await rejects(
-      executeDemandEventSourcingCommand(repository, observationCommand, {
+      executeDemandEventSourcingCommand(repository, outcomeCommand, {
         commitId: DELIVERY_COMMIT_ID,
-        expectedStreamRevision: 4,
+        expectedStreamRevision: 3,
       }),
+      (error: unknown) =>
+        error instanceof DemandEventSourcingCommandHandlerError &&
+        error.reason === "idempotency-conflict",
+    );
+    equal((await eventStore.readCommits()).commits.length, 3);
+    const observed = await executeDemandEventSourcingCommand(
+      repository,
+      outcomeCommand,
+      { commitId: OUTCOME_COMMIT_ID, expectedStreamRevision: 3 },
+    );
+    equal(observed.disposition, "committed");
+    equal(observed.aggregate.streamRevision, 4);
+    equal(
+      observed.aggregate.lastEvent.eventType,
+      "delivery.delivery-outcome-recorded",
+    );
+    equal(observed.aggregate.state.targetTasks[0]?.phase, "host-effect-rejected");
+    const retriedObservation = await executeDemandEventSourcingCommand(
+      repository,
+      outcomeCommand,
+      { commitId: OUTCOME_COMMIT_ID, expectedStreamRevision: 3 },
+    );
+    equal(retriedObservation.disposition, "idempotent");
+    equal(retriedObservation.aggregate.streamRevision, 4);
+    equal((await eventStore.readCommits()).commits.length, 4);
+
+    // 围栏期望修订与提交边界不一致的 rearm 在决策边界被拒。
+    await rejects(
+      executeDemandEventSourcingCommand(
+        repository,
+        {
+          commandType: "delivery.rearm-delivery",
+          commandVersion: 1,
+          eventId: REARM_EVENT_ID,
+          rearm: createDeliveryRearmFixture(envelope, outcome, {
+            expectedStreamRevision: 3,
+          }),
+        },
+        { commitId: REARM_COMMIT_ID, expectedStreamRevision: 4 },
+      ),
       (error: unknown) =>
         error instanceof DemandEventSourcingCommandHandlerError &&
         error.reason === "decision-rejected",
     );
     equal((await eventStore.readCommits()).commits.length, 4);
-    const observed = await executeDemandEventSourcingCommand(
-      repository,
-      observationCommand,
-      {
-        commitId: targetDeliveryHostEffectObservationCommitId(claim.claimId),
-        expectedStreamRevision: 4,
-      },
-    );
-    equal(observed.disposition, "committed");
-    equal(observed.aggregate.streamRevision, 5);
-    equal(
-      observed.aggregate.lastEvent.eventType,
-      "delivery.target-host-effect-observed",
-    );
-    equal(
-      observed.aggregate.state.targetTasks[0]?.phase,
-      "host-effect-rejected",
-    );
-    const retriedObservation = await executeDemandEventSourcingCommand(
-      repository,
-      observationCommand,
-      {
-        commitId: targetDeliveryHostEffectObservationCommitId(claim.claimId),
-        expectedStreamRevision: 4,
-      },
-    );
-    equal(retriedObservation.disposition, "idempotent");
-    equal(retriedObservation.aggregate.streamRevision, 5);
-    equal((await eventStore.readCommits()).commits.length, 5);
-
-    const rearm = createTargetHostEffectRearmFixture(claim, observation);
+    const rearm = createDeliveryRearmFixture(envelope, outcome, {
+      expectedStreamRevision: 4,
+    });
     const rearmCommand = Object.freeze({
-      commandType: "delivery.rearm-target-host-effect" as const,
+      commandType: "delivery.rearm-delivery" as const,
       commandVersion: 1 as const,
+      eventId: REARM_EVENT_ID,
       rearm,
     });
-    await rejects(
-      executeDemandEventSourcingCommand(repository, rearmCommand, {
-        commitId: targetDeliveryHostEffectObservationCommitId(claim.claimId),
-        expectedStreamRevision: 5,
-      }),
-      (error: unknown) =>
-        error instanceof DemandEventSourcingCommandHandlerError &&
-        error.reason === "decision-rejected",
-    );
-    equal((await eventStore.readCommits()).commits.length, 5);
     const rearmed = await executeDemandEventSourcingCommand(
       repository,
       rearmCommand,
-      {
-        commitId: targetHostEffectRearmCommitId(rearm),
-        expectedStreamRevision: 5,
-      },
+      { commitId: REARM_COMMIT_ID, expectedStreamRevision: 4 },
     );
     equal(rearmed.disposition, "committed");
-    equal(rearmed.aggregate.streamRevision, 6);
-    equal(
-      rearmed.aggregate.lastEvent.eventType,
-      "delivery.target-host-effect-rearmed",
-    );
+    equal(rearmed.aggregate.streamRevision, 5);
+    equal(rearmed.aggregate.lastEvent.eventType, "delivery.delivery-rearmed");
     equal(rearmed.aggregate.state.targetTasks[0]?.phase, "delivery-prepared");
+    const rearmedTarget = rearmed.aggregate.state.targetTasks[0];
+    if (rearmedTarget?.phase !== "delivery-prepared") {
+      throw new Error("Expected rearmed delivery-prepared target.");
+    }
+    equal(rearmedTarget.currentDelivery.generation, 2);
     const retriedRearm = await executeDemandEventSourcingCommand(
       repository,
       rearmCommand,
-      {
-        commitId: targetHostEffectRearmCommitId(rearm),
-        expectedStreamRevision: 5,
-      },
+      { commitId: REARM_COMMIT_ID, expectedStreamRevision: 4 },
     );
     equal(retriedRearm.disposition, "idempotent");
-    equal(retriedRearm.aggregate.streamRevision, 6);
-    equal((await eventStore.readCommits()).commits.length, 6);
+    equal(retriedRearm.aggregate.streamRevision, 5);
+    equal((await eventStore.readCommits()).commits.length, 5);
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });

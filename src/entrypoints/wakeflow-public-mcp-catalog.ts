@@ -12,14 +12,6 @@ import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA } from "../contracts/generat
 import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-request.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-result.generated.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-delivery-preparation-request.generated.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-delivery-preparation-result.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-host-effect-claim-request.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-host-effect-claim-result.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-host-effect-outcome-request.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-host-effect-outcome-result.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-host-effect-rearm-request.generated.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-host-effect-rearm-result.generated.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-import-request.generated.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-import-result.generated.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-review-inspection-request.generated.js";
@@ -28,16 +20,6 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_REQUEST_SCHEMA } from "../contract
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-review-resume-result.generated.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-card-planning-request.generated.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-card-planning-result.generated.js";
-import { WAKEFLOW_TEST_DELIVERY_PREPARATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-delivery-preparation-request.generated.js";
-import { WAKEFLOW_TEST_DELIVERY_PREPARATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-delivery-preparation-result.generated.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../governance/delivery/target-delivery-preparation-public-contract.js";
-import type { TargetDeliveryPreparationPublicResult } from "../governance/delivery/target-delivery-preparation-public-coordinator.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../governance/delivery/target-host-effect-claim-public-contract.js";
-import type { TargetHostEffectClaimPublicResult } from "../governance/delivery/target-host-effect-claim-public-coordinator.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../governance/delivery/target-host-effect-outcome-public-contract.js";
-import type { TargetHostEffectOutcomePublicResult } from "../governance/delivery/target-host-effect-outcome-public-coordinator.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME } from "../governance/delivery/target-host-effect-rearm-public-contract.js";
-import type { TargetHostEffectRearmPublicResult } from "../governance/delivery/target-host-effect-rearm-public-coordinator.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../governance/evidence/managed-evidence-public-contract.js";
 import type { ManagedEvidencePublicResult } from "../governance/evidence/managed-evidence-public-coordinator.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../governance/result/target-result-import-public-contract.js";
@@ -54,8 +36,6 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../govern
 import type { TargetResultReviewResumePublicResult } from "../governance/review/target-result-review-resume-public-coordinator.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../governance/testing/test-card-planning-public-contract.js";
 import type { TestCardPlanningPublicResult } from "../governance/testing/test-card-planning-public-coordinator.js";
-import { WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../governance/testing/test-delivery-preparation-public-contract.js";
-import type { TestDeliveryPreparationPublicResult } from "../governance/testing/test-delivery-preparation-public-coordinator.js";
 import {
   createWakeflowToolCatalog,
   type WakeflowToolCatalog,
@@ -74,6 +54,14 @@ import {
   type DemandRouteInspectionResult,
 } from "../capabilities/demand/contract.js";
 import { WINDOW_BINDING_TOOL_REGISTRATION } from "../capabilities/endpoint/contract.js";
+import {
+  PREPARE_DELIVERY_TOOL_REGISTRATION,
+  REARM_DELIVERY_TOOL_REGISTRATION,
+  RECORD_DELIVERY_OUTCOME_TOOL_REGISTRATION,
+  type PrepareDeliveryResult,
+  type RearmDeliveryResult,
+  type RecordDeliveryOutcomeResult,
+} from "../capabilities/delivery/contract.js";
 import {
   TARGET_TASK_PLANNING_TOOL_REGISTRATION,
   type TargetTaskPlanningResult,
@@ -99,7 +87,6 @@ import type { WakeflowPublicMcpExecutor } from "./wakeflow-public-mcp-tool.js";
 /** 组合根必须提供的完整 executor 集合；键即登记表里的绑定名。 */
 export interface WakeflowPublicMcpExecutors {
   readonly authorizeProductDefectRemediation: WakeflowPublicMcpExecutor<ControllerProductDefectRemediationPublicResult>;
-  readonly claimTargetHostEffect: WakeflowPublicMcpExecutor<TargetHostEffectClaimPublicResult>;
   readonly cancelDemand: WakeflowPublicMcpExecutor<DemandCancellationResult>;
   readonly completeDemand: WakeflowPublicMcpExecutor<DemandCompletionResult>;
   readonly continueDemand: WakeflowPublicMcpExecutor<DemandContinuationResult>;
@@ -110,15 +97,14 @@ export interface WakeflowPublicMcpExecutors {
   readonly inspectTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewInspectionPublicResult>;
   readonly planTargetTask: WakeflowPublicMcpExecutor<TargetTaskPlanningResult>;
   readonly planTestCard: WakeflowPublicMcpExecutor<TestCardPlanningPublicResult>;
-  readonly prepareImplementationDelivery: WakeflowPublicMcpExecutor<TargetDeliveryPreparationPublicResult>;
-  readonly prepareTestDelivery: WakeflowPublicMcpExecutor<TestDeliveryPreparationPublicResult>;
+  readonly prepareDelivery: WakeflowPublicMcpExecutor<PrepareDeliveryResult>;
   readonly publishRequirement: WakeflowPublicMcpExecutor<RequirementPublicationResult>;
   readonly inspectBoard: WakeflowPublicMcpExecutor<BoardInspectionResult>;
-  readonly rearmTargetHostEffect: WakeflowPublicMcpExecutor<TargetHostEffectRearmPublicResult>;
+  readonly rearmDelivery: WakeflowPublicMcpExecutor<RearmDeliveryResult>;
   readonly recordControllerImplementationReviewDecision: WakeflowPublicMcpExecutor<ControllerImplementationReviewDecisionPublicResult>;
   readonly recordControllerTestReviewDecision: WakeflowPublicMcpExecutor<ControllerTestReviewDecisionPublicResult>;
   readonly recordManagedEvidence: WakeflowPublicMcpExecutor<ManagedEvidencePublicResult>;
-  readonly recordTargetHostEffectOutcome: WakeflowPublicMcpExecutor<TargetHostEffectOutcomePublicResult>;
+  readonly recordDeliveryOutcome: WakeflowPublicMcpExecutor<RecordDeliveryOutcomeResult>;
   readonly registerWindowHostBinding: WakeflowPublicMcpExecutor<WindowBindingResult>;
   readonly resumeTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewResumePublicResult>;
 }
@@ -201,65 +187,9 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
     annotations: ADDITIVE,
   },
   TARGET_TASK_PLANNING_TOOL_REGISTRATION satisfies Registration,
-  {
-    name: WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
-    slice: "delivery",
-    shape: "effect",
-    executor: "prepareImplementationDelivery",
-    title: "Prepare Wakeflow Implementation Delivery",
-    description:
-      "Preview or apply one immutable Implementation Delivery Preparation plan for a current planned, rework-requested, or product-defect-rework-requested Target: preview exposes the exact Intent and portable prompt, apply revalidates current Config, Demand, TaskPackage, Binding, and stream authority before appending the preparation Event. Apply never creates a WindowWorkClaim, returns an Agent Host Action, or performs a host effect.",
-    requestSchema: WAKEFLOW_TARGET_DELIVERY_PREPARATION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TARGET_DELIVERY_PREPARATION_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
-  {
-    name: WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
-    slice: "delivery",
-    shape: "effect",
-    executor: "prepareTestDelivery",
-    title: "Prepare Wakeflow Test Delivery",
-    description:
-      "Preview or apply one immutable Test Delivery authorization for the current Test Target: preview accepts only Demand and Target identity, Wakeflow derives initial, rerun, or replacement mode with its exact TestCard, attempt, prior review, rejected Host Effect, Binding, and Event lineage, and apply revalidates current authority before appending the preparation Event. This tool creates no Dispatch Packet or WindowWorkClaim, returns no Agent Host Action, performs no host effect, and runs no Test.",
-    requestSchema: WAKEFLOW_TEST_DELIVERY_PREPARATION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TEST_DELIVERY_PREPARATION_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
-  {
-    name: WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
-    slice: "delivery",
-    shape: "append",
-    executor: "claimTargetHostEffect",
-    title: "Claim Wakeflow Target Host Effect",
-    description: `Acquire or recover one durable cross-Demand window Claim for an exact prepared Implementation or Test Delivery using a fresh Agent host observation; only the first committed call returns a transient Agent Host Action, and idempotent replay returns already-claimed with action=null. Wakeflow validates the private Binding but never executes the host effect: after executing an issued Action at most once, record the observed fact with ${WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME}.`,
-    requestSchema: WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
-  {
-    name: WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,
-    slice: "delivery",
-    shape: "append",
-    executor: "recordTargetHostEffectOutcome",
-    title: "Record Wakeflow Target Host Effect Outcome",
-    description:
-      "Record an already-observed Implementation or Test Target Host Effect attempt with at most one bounded readback; the stored Claim Event derives all target, route, host observation, and Test lineage fields, and raw evidence is reduced to digests and omitted from the Event and result. accepted and indeterminate outcomes retain the Claim and never authorize another send; only a proved rejected-before-effect outcome records its Event and then releases that exact Claim.",
-    requestSchema: WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_RESULT_SCHEMA,
-    annotations: DESTRUCTIVE,
-  },
-  {
-    name: WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME,
-    slice: "delivery",
-    shape: "append",
-    executor: "rearmTargetHostEffect",
-    title: "Rearm Wakeflow Target Host Effect",
-    description:
-      "Explicitly rearm one Implementation Target Host Effect only after its stored Outcome proves rejected-before-effect and the exact old Claim is released; the stored Claim and Observation derive every identity and caller-authored Task or Delivery echoes are rejected. It only appends the Rearm Event for the same immutable Delivery and never performs the host effect, creates a Claim, returns an Agent Host Action, or handles Test replacement Delivery.",
-    requestSchema: WAKEFLOW_TARGET_HOST_EFFECT_REARM_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TARGET_HOST_EFFECT_REARM_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
+  PREPARE_DELIVERY_TOOL_REGISTRATION satisfies Registration,
+  RECORD_DELIVERY_OUTCOME_TOOL_REGISTRATION satisfies Registration,
+  REARM_DELIVERY_TOOL_REGISTRATION satisfies Registration,
   {
     name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
     slice: "result-review",

@@ -46,7 +46,7 @@ export async function createTestTaskPlanningWorkspaceFixture(
     const service = new TestCardPlanningService(fixture.workspaceRoot);
     const preview = await service.preview(
       {
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
         testCard: fixture.testCardContent,
       },
       {
@@ -59,7 +59,7 @@ export async function createTestTaskPlanningWorkspaceFixture(
       ...fixture,
       testCard: preview.plan.testCard,
       testTaskRequest: Object.freeze({
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
         taskPackage: Object.freeze({ workType: "test" as const }),
       }),
     });
@@ -69,9 +69,9 @@ export async function createTestTaskPlanningWorkspaceFixture(
   }
 }
 
-/** 经切片追加一份 test 任务包；期望修订由调用方给出（测试卡之后通常是 8）。 */
+/** 经切片追加一份 test 任务包；期望修订由调用方给出（测试卡之后通常是 7）。 */
 export async function planFixtureTestTask(
-  fixture: Readonly<{ readonly workspacePath: string; readonly intent: { readonly demandId: string } }>,
+  fixture: Readonly<{ readonly workspacePath: string; readonly demandId: string }>,
   expectedStreamRevision: number,
   options: ExecuteTargetTaskPlanningOptions = { clock: () => TEST_TASK_PACKAGE_CREATED_AT },
   idempotencyKey = "fixture-test-plan-1",
@@ -79,7 +79,7 @@ export async function planFixtureTestTask(
   return executeTargetTaskPlanningPublicRequest(
     {
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
+      demandId: fixture.demandId,
       idempotencyKey,
       expectedStreamRevision,
       taskPackage: { workType: "test" },

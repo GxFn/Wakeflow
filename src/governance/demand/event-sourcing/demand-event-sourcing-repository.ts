@@ -16,11 +16,6 @@ import {
   type TaskPackage,
 } from "../../tasking/task-package.js";
 import type { DemandTargetTaskState } from "../model/demand-aggregate-state.js";
-import {
-  parseWindowWorkClaimId,
-  WindowWorkClaimError,
-  type WindowWorkClaimId,
-} from "../../delivery/window-work-claim.js";
 
 import {
   applyDemandEventStreamCommit,
@@ -32,11 +27,9 @@ import type { DemandEventSourcingAggregate } from "./demand-event-sourcing-aggre
 import type {
   TargetTaskPlannedUncommittedEvent,
   TestCardCreatedUncommittedEvent,
-  TestDeliveryPreparedUncommittedEvent,
-  TargetDeliveryPreparedUncommittedEvent,
-  TargetHostEffectClaimedUncommittedEvent,
-  TargetHostEffectObservedUncommittedEvent,
-  TargetHostEffectRearmedUncommittedEvent,
+  DeliveryPreparedUncommittedEvent,
+  DeliveryOutcomeRecordedUncommittedEvent,
+  DeliveryRearmedUncommittedEvent,
   TargetResultRecordedUncommittedEvent,
   ControllerTargetReviewDecidedUncommittedEvent,
   ControllerTargetReviewResumedUncommittedEvent,
@@ -177,29 +170,19 @@ export interface LocatedTestCardCreatedEvent {
   readonly event: Readonly<TestCardCreatedUncommittedEvent>;
 }
 
-export interface LocatedTargetDeliveryPreparedEvent {
+export interface LocatedDeliveryPreparedEvent {
   readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
-  readonly event: Readonly<TargetDeliveryPreparedUncommittedEvent>;
+  readonly event: Readonly<DeliveryPreparedUncommittedEvent>;
 }
 
-export interface LocatedTestDeliveryPreparedEvent {
+export interface LocatedDeliveryOutcomeRecordedEvent {
   readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
-  readonly event: Readonly<TestDeliveryPreparedUncommittedEvent>;
+  readonly event: Readonly<DeliveryOutcomeRecordedUncommittedEvent>;
 }
 
-export interface LocatedTargetHostEffectClaimedEvent {
+export interface LocatedDeliveryRearmedEvent {
   readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
-  readonly event: Readonly<TargetHostEffectClaimedUncommittedEvent>;
-}
-
-export interface LocatedTargetHostEffectObservedEvent {
-  readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
-  readonly event: Readonly<TargetHostEffectObservedUncommittedEvent>;
-}
-
-export interface LocatedTargetHostEffectRearmedEvent {
-  readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
-  readonly event: Readonly<TargetHostEffectRearmedUncommittedEvent>;
+  readonly event: Readonly<DeliveryRearmedUncommittedEvent>;
 }
 
 export interface LocatedTargetResultRecordedEvent {
@@ -558,12 +541,12 @@ export class DemandEventSourcingRepository {
           );
           continue;
         }
-        if (event.eventType === "delivery.target-delivery-prepared") {
-          const targetDeliveryId = event.data.intent.targetDeliveryId;
-          if (targetDeliveryIds.has(targetDeliveryId)) {
+        if (event.eventType === "delivery.delivery-prepared") {
+          const deliveryId = event.data.envelope.deliveryId;
+          if (targetDeliveryIds.has(deliveryId)) {
             fail("stream", "$events");
           }
-          targetDeliveryIds.add(targetDeliveryId);
+          targetDeliveryIds.add(deliveryId);
           continue;
         }
         if (event.eventType === "testing.test-card-created") {
@@ -585,12 +568,12 @@ export class DemandEventSourcingRepository {
           const result = event.data.result;
           if (
             targetResultIds.has(result.targetResultId) ||
-            resultActionIds.has(result.hostEffect.actionId)
+            resultActionIds.has(result.delivery.fence.claimId)
           ) {
             fail("stream", "$events");
           }
           targetResultIds.add(result.targetResultId);
-          resultActionIds.add(result.hostEffect.actionId);
+          resultActionIds.add(result.delivery.fence.claimId);
           targetResults.push(
             Object.freeze({
               sourceEvent: targetResultSourceEvent(storedEvent),
@@ -911,8 +894,6 @@ export class DemandEventSourcingRepository {
           authorization.source.testCard.testCardDigest ||
         decision.testExecution.testAttemptId !==
           authorization.source.testAttemptId ||
-        decision.testExecution.testDispatchPacketDigest !==
-          authorization.source.testDispatchPacketDigest ||
         sourceDecision?.sourceEvent.streamRevision !==
           authorization.source.streamRevision ||
         source.sourceEvent.streamRevision !==
@@ -1243,60 +1224,46 @@ export class DemandEventSourcingRepository {
     return located;
   }
 
-  /** 完整审计事件流后，按Test Delivery身份定位唯一prepared事件。 */
-  async findTestDeliveryPreparedEvent(
-    targetDeliveryIdValue: unknown,
+  /** 完整审计事件流后，按投递身份定位唯一 prepared 事件（信封）。 */
+  async findDeliveryPreparedEvent(
+    deliveryIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
-  ): Promise<Readonly<LocatedTestDeliveryPreparedEvent> | null> {
+  ): Promise<Readonly<LocatedDeliveryPreparedEvent> | null> {
     const signal = parseSignal(options);
-    let targetDeliveryId: WakeflowDurableId<"target-delivery">;
+    let deliveryId: WakeflowDurableId<"target-delivery">;
     try {
-      targetDeliveryId = parseWakeflowDurableIdOfKind(
-        targetDeliveryIdValue,
+      deliveryId = parseWakeflowDurableIdOfKind(
+        deliveryIdValue,
         "target-delivery",
-        "$targetDeliveryId",
+        "$deliveryId",
       );
     } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) {
-        fail("input", "$targetDeliveryId");
-      }
+      if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId");
       throw error;
     }
     const found = await this.#findUniqueEvent(
-      "testing.test-delivery-prepared",
-      (event) => event.eventType === "testing.test-delivery-prepared" && event.data.intent.targetDeliveryId === targetDeliveryId,
+      "delivery.delivery-prepared",
+      (event) => event.eventType === "delivery.delivery-prepared" && event.data.envelope.deliveryId === deliveryId,
       signal,
     );
     if (found === null) return null;
     const aggregate = found.aggregate;
-    if (found.event.eventType !== "testing.test-delivery-prepared") fail("stream", "$events");
-    const located: Readonly<LocatedTestDeliveryPreparedEvent> = Object.freeze({
+    if (found.event.eventType !== "delivery.delivery-prepared") fail("stream", "$events");
+    const located: Readonly<LocatedDeliveryPreparedEvent> = Object.freeze({
       storedEvent: found.storedEvent,
       event: found.event,
     });
-    const intent = located.event.data.intent;
+    const envelope = located.event.data.envelope;
     const target = aggregate.state.targetTasks.find(
-      (entry) => entry.targetTaskId === intent.target.targetTaskId,
+      (entry) => entry.targetTaskId === envelope.target.targetTaskId,
     );
-    const authorization =
-      target?.workType === "test" && target.phase !== "planned"
-        ? target.testAttempts
-            .flatMap((attempt) => attempt.deliveryAuthorizations)
-            .find((entry) => entry.targetDeliveryId === intent.targetDeliveryId)
-        : undefined;
     if (
-      aggregate.demandId !== intent.demandId ||
+      aggregate.demandId !== envelope.demandId ||
       target === undefined ||
-      target.workType !== "test" ||
-      target.taskPackageId !== intent.target.taskPackageId ||
-      target.taskPackageDigest !== intent.target.taskPackageDigest ||
-      target.windowId !== intent.route.windowId ||
-      target.testCard.testCardId !== intent.target.testCard.testCardId ||
-      target.testCard.testCardDigest !==
-        intent.target.testCard.testCardDigest ||
-      authorization === undefined ||
-      authorization.intentDigest !== intent.intentDigest ||
-      authorization.preparedAt !== intent.preparedAt ||
+      target.taskPackageId !== envelope.target.taskPackageId ||
+      target.taskPackageDigest !== envelope.target.taskPackageDigest ||
+      target.windowId !== envelope.route.windowId ||
+      located.storedEvent.streamRevision !== envelope.fence.expectedStreamRevision + 1 ||
       located.storedEvent.streamRevision > aggregate.streamRevision
     ) {
       fail("stream", "$events");
@@ -1304,176 +1271,67 @@ export class DemandEventSourcingRepository {
     return located;
   }
 
-  /** 完整审计事件流后，按Target Delivery身份定位唯一prepared事件。 */
-  async findTargetDeliveryPreparedEvent(
-    targetDeliveryIdValue: unknown,
+  /** 完整审计事件流后，按投递身份收集全部 outcome 事件（按流修订号升序）。 */
+  async findDeliveryOutcomeRecordedEvents(
+    deliveryIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
-  ): Promise<Readonly<LocatedTargetDeliveryPreparedEvent> | null> {
+  ): Promise<readonly Readonly<LocatedDeliveryOutcomeRecordedEvent>[]> {
     const signal = parseSignal(options);
-    let targetDeliveryId: WakeflowDurableId<"target-delivery">;
+    let deliveryId: WakeflowDurableId<"target-delivery">;
     try {
-      targetDeliveryId = parseWakeflowDurableIdOfKind(
-        targetDeliveryIdValue,
+      deliveryId = parseWakeflowDurableIdOfKind(
+        deliveryIdValue,
         "target-delivery",
-        "$targetDeliveryId",
+        "$deliveryId",
       );
     } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) {
-        fail("input", "$targetDeliveryId");
+      if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId");
+      throw error;
+    }
+    const aggregate = await this.#currentAggregate(signal);
+    if (aggregate === null) return Object.freeze([]);
+    const located: Readonly<LocatedDeliveryOutcomeRecordedEvent>[] = [];
+    for (const storedEvent of await this.#storedEventsOfType(
+      aggregate,
+      "delivery.delivery-outcome-recorded",
+      signal,
+    )) {
+      let event;
+      try {
+        event = upcastDemandEventSourcingStoredEvent(storedEvent);
+      } catch (error: unknown) {
+        if (error instanceof DemandEventSourcingUpcasterError) fail("stream", "$events");
+        throw error;
       }
-      throw error;
+      if (
+        event.eventType !== "delivery.delivery-outcome-recorded" ||
+        event.data.outcome.deliveryId !== deliveryId
+      ) {
+        continue;
+      }
+      if (storedEvent.streamRevision > aggregate.streamRevision) fail("stream", "$events");
+      located.push(Object.freeze({ storedEvent, event }));
     }
-    const found = await this.#findUniqueEvent(
-      "delivery.target-delivery-prepared",
-      (event) => event.eventType === "delivery.target-delivery-prepared" && event.data.intent.targetDeliveryId === targetDeliveryId,
-      signal,
-    );
-    if (found === null) return null;
-    const aggregate = found.aggregate;
-    if (found.event.eventType !== "delivery.target-delivery-prepared") fail("stream", "$events");
-    const located: Readonly<LocatedTargetDeliveryPreparedEvent> = Object.freeze({
-      storedEvent: found.storedEvent,
-      event: found.event,
-    });
-    const intent = located.event.data.intent;
-    const target = aggregate.state.targetTasks.find(
-      (entry) => entry.targetTaskId === intent.target.targetTaskId,
-    );
-    if (
-      aggregate.demandId !== intent.demandId ||
-      target === undefined ||
-      target.taskPackageId !== intent.target.taskPackageId ||
-      target.taskPackageDigest !== intent.target.taskPackageDigest ||
-      target.windowId !== intent.route.windowId ||
-      located.storedEvent.streamRevision > aggregate.streamRevision
-    ) {
-      fail("stream", "$events");
-    }
-    return located;
-  }
-
-  /** 完整审计事件流后，按WindowWorkClaim身份定位唯一Claim Event。 */
-  async findTargetHostEffectClaimedEvent(
-    claimIdValue: unknown,
-    options?: { readonly signal?: AbortSignal },
-  ): Promise<Readonly<LocatedTargetHostEffectClaimedEvent> | null> {
-    const signal = parseSignal(options);
-    let claimId: WindowWorkClaimId;
-    try {
-      claimId = parseWindowWorkClaimId(claimIdValue, "$claimId");
-    } catch (error: unknown) {
-      if (error instanceof WindowWorkClaimError) fail("input", "$claimId");
-      throw error;
-    }
-    const found = await this.#findUniqueEvent(
-      "delivery.target-host-effect-claimed",
-      (event) => event.eventType === "delivery.target-host-effect-claimed" && event.data.claim.claimId === claimId,
-      signal,
-    );
-    if (found === null) return null;
-    const aggregate = found.aggregate;
-    if (found.event.eventType !== "delivery.target-host-effect-claimed") fail("stream", "$events");
-    const located: Readonly<LocatedTargetHostEffectClaimedEvent> = Object.freeze({
-      storedEvent: found.storedEvent,
-      event: found.event,
-    });
-    const claim = located.event.data.claim;
-    if (
-      aggregate.demandId !== claim.target.demandId ||
-      located.storedEvent.eventId !== claim.claimTransition.eventId ||
-      located.storedEvent.streamRevision !==
-        claim.claimTransition.expectedStreamRevision + 1 ||
-      located.storedEvent.streamRevision > aggregate.streamRevision
-    ) {
-      fail("stream", "$events");
-    }
-    return located;
-  }
-
-  /** 完整审计事件流后，按Action/Claim身份定位唯一Host Effect Observation。 */
-  async findTargetHostEffectObservedEvent(
-    actionIdValue: unknown,
-    options?: { readonly signal?: AbortSignal },
-  ): Promise<Readonly<LocatedTargetHostEffectObservedEvent> | null> {
-    const signal = parseSignal(options);
-    let actionId: WindowWorkClaimId;
-    try {
-      actionId = parseWindowWorkClaimId(actionIdValue, "$actionId");
-    } catch (error: unknown) {
-      if (error instanceof WindowWorkClaimError) fail("input", "$actionId");
-      throw error;
-    }
-    const found = await this.#findUniqueEvent(
-      "delivery.target-host-effect-observed",
-      (event) => event.eventType === "delivery.target-host-effect-observed" && event.data.observation.action.actionId === actionId,
-      signal,
-    );
-    if (found === null) return null;
-    const aggregate = found.aggregate;
-    if (found.event.eventType !== "delivery.target-host-effect-observed") fail("stream", "$events");
-    const located: Readonly<LocatedTargetHostEffectObservedEvent> = Object.freeze({
-      storedEvent: found.storedEvent,
-      event: found.event,
-    });
-    const observation = located.event.data.observation;
-    if (
-      aggregate.demandId !== located.event.demandId ||
-      located.storedEvent.streamRevision <=
-        observation.action.claimEventStreamRevision ||
-      located.storedEvent.streamRevision > aggregate.streamRevision
-    ) {
-      fail("stream", "$events");
-    }
-    return located;
-  }
-
-  /** 完整审计事件流后，按旧Action/Claim身份定位唯一Rearm Event。 */
-  async findTargetHostEffectRearmedEvent(
-    actionIdValue: unknown,
-    options?: { readonly signal?: AbortSignal },
-  ): Promise<Readonly<LocatedTargetHostEffectRearmedEvent> | null> {
-    const signal = parseSignal(options);
-    let actionId: WindowWorkClaimId;
-    try {
-      actionId = parseWindowWorkClaimId(actionIdValue, "$actionId");
-    } catch (error: unknown) {
-      if (error instanceof WindowWorkClaimError) fail("input", "$actionId");
-      throw error;
-    }
-    const found = await this.#findUniqueEvent(
-      "delivery.target-host-effect-rearmed",
-      (event) => event.eventType === "delivery.target-host-effect-rearmed" && event.data.rearm.rejectedAttempt.claimId === actionId,
-      signal,
-    );
-    if (found === null) return null;
-    const aggregate = found.aggregate;
-    if (found.event.eventType !== "delivery.target-host-effect-rearmed") fail("stream", "$events");
-    const located: Readonly<LocatedTargetHostEffectRearmedEvent> = Object.freeze({
-      storedEvent: found.storedEvent,
-      event: found.event,
-    });
-    if (located.storedEvent.streamRevision > aggregate.streamRevision) {
-      fail("stream", "$events");
-    }
-    return located;
+    located.sort((left, right) => left.storedEvent.streamRevision - right.storedEvent.streamRevision);
+    return Object.freeze(located);
   }
 
   /** 完整审计事件流后，按Action/Claim身份定位唯一TargetResult Event。 */
   async findTargetResultRecordedEvent(
-    actionIdValue: unknown,
+    claimIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LocatedTargetResultRecordedEvent> | null> {
     const signal = parseSignal(options);
-    let actionId: WindowWorkClaimId;
+    let claimId: WakeflowDurableId<"work-claim">;
     try {
-      actionId = parseWindowWorkClaimId(actionIdValue, "$actionId");
+      claimId = parseWakeflowDurableIdOfKind(claimIdValue, "work-claim", "$claimId");
     } catch (error: unknown) {
-      if (error instanceof WindowWorkClaimError) fail("input", "$actionId");
+      if (error instanceof WakeflowDurableIdError) fail("input", "$claimId");
       throw error;
     }
     const found = await this.#findUniqueEvent(
       "result.target-result-recorded",
-      (event) => event.eventType === "result.target-result-recorded" && event.data.result.hostEffect.actionId === actionId,
+      (event) => event.eventType === "result.target-result-recorded" && event.data.result.delivery.fence.claimId === claimId,
       signal,
     );
     if (found === null) return null;

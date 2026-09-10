@@ -483,7 +483,6 @@
         "kind": {
           "enum": [
             "implementation-delivery-planning",
-            "implementation-host-effect-claim",
             "implementation-host-effect-execution",
             "implementation-target-result-import",
             "implementation-host-effect-rearm",
@@ -495,7 +494,6 @@
         "owner": {
           "enum": [
             "target-delivery-preparation",
-            "target-host-effect-claim",
             "agent-host",
             "target-result-import",
             "target-host-effect-rearm",
@@ -538,31 +536,6 @@
           "if": {
             "properties": {
               "kind": {
-                "const": "implementation-host-effect-claim"
-              }
-            },
-            "required": ["kind"]
-          },
-          "then": {
-            "properties": {
-              "owner": {
-                "const": "target-host-effect-claim"
-              },
-              "target": {
-                "type": "object",
-                "properties": {
-                  "phase": {
-                    "const": "delivery-prepared"
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
                 "const": "implementation-host-effect-execution"
               }
             },
@@ -577,7 +550,7 @@
                 "type": "object",
                 "properties": {
                   "phase": {
-                    "const": "host-effect-claimed"
+                    "const": "delivery-prepared"
                   }
                 }
               }
@@ -722,25 +695,24 @@
         "kind": {
           "enum": [
             "test-delivery-planning",
-            "test-host-effect-claim",
             "test-host-effect-execution",
             "test-target-result-import",
             "test-result-review",
             "test-delivery-rerun-planning",
             "product-defect-remediation-authorization",
             "test-review-resume",
-            "test-delivery-replacement-planning"
+            "test-host-effect-rearm"
           ]
         },
         "owner": {
           "enum": [
             "test-delivery-preparation",
-            "target-host-effect-claim",
             "agent-host",
             "target-result-import",
             "controller-test-review",
             "controller-product-defect-remediation",
-            "controller-target-review-resume"
+            "controller-target-review-resume",
+            "target-host-effect-rearm"
           ]
         },
         "target": {
@@ -777,31 +749,6 @@
           "if": {
             "properties": {
               "kind": {
-                "const": "test-host-effect-claim"
-              }
-            },
-            "required": ["kind"]
-          },
-          "then": {
-            "properties": {
-              "owner": {
-                "const": "target-host-effect-claim"
-              },
-              "target": {
-                "type": "object",
-                "properties": {
-                  "phase": {
-                    "const": "test-delivery-prepared"
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
                 "const": "test-host-effect-execution"
               }
             },
@@ -816,7 +763,7 @@
                 "type": "object",
                 "properties": {
                   "phase": {
-                    "const": "test-host-effect-claimed"
+                    "const": "test-delivery-prepared"
                   }
                 }
               }
@@ -952,7 +899,7 @@
           "if": {
             "properties": {
               "kind": {
-                "const": "test-delivery-replacement-planning"
+                "const": "test-host-effect-rearm"
               }
             },
             "required": ["kind"]
@@ -960,7 +907,7 @@
           "then": {
             "properties": {
               "owner": {
-                "const": "test-delivery-preparation"
+                "const": "target-host-effect-rearm"
               },
               "target": {
                 "type": "object",
@@ -1010,7 +957,6 @@
           "enum": [
             "planned",
             "delivery-prepared",
-            "host-effect-claimed",
             "host-effect-accepted",
             "host-effect-indeterminate",
             "host-effect-rejected",
@@ -1056,7 +1002,6 @@
           "enum": [
             "planned",
             "test-delivery-prepared",
-            "test-host-effect-claimed",
             "test-host-effect-accepted",
             "test-host-effect-indeterminate",
             "test-host-effect-rejected",

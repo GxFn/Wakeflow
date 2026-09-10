@@ -1,3 +1,4 @@
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { deepEqual, equal, rejects, throws } from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -36,7 +37,8 @@ import {
   TestCardPlanningService,
   TestCardPlanningServiceError,
 } from "../../../src/governance/testing/test-card-planning-service.js";
-import { createWindowWorkClaimInStore } from "../../../src/governance/delivery/window-work-claim-store.js";
+import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
+import { DELIVERY_CLAIM_ID } from "../delivery/delivery-records.fixture.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 import {
   cleanupAcceptedDemandCompletionWorkspaceFixture,
@@ -89,11 +91,11 @@ test("TestCard preview零写，Apply创建唯一Event并路由到Test Task plann
     const service = new TestCardPlanningService(fixture.workspaceRoot);
     const before = await demandInventory(
       fixture.workspacePath,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     const preview = await service.preview(
       {
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
         testCard: fixture.testCardContent,
       },
       {
@@ -102,7 +104,7 @@ test("TestCard preview零写，Apply创建唯一Event并路由到Test Task plann
       },
     );
     deepEqual(
-      await demandInventory(fixture.workspacePath, fixture.intent.demandId),
+      await demandInventory(fixture.workspacePath, fixture.demandId),
       before,
     );
     const card = preview.plan.testCard;
@@ -177,7 +179,7 @@ test("TestCard preview零写，Apply创建唯一Event并路由到Test Task plann
     const applied = await service.apply(preview.plan, preview.planDigest);
     equal(applied.status, "created");
     equal(applied.disposition, "committed");
-    equal(applied.commandResult.aggregate.streamRevision, 8);
+    equal(applied.commandResult.aggregate.streamRevision, 7);
     equal(
       applied.commandResult.commit.events[0]?.eventType,
       "testing.test-card-created",
@@ -203,7 +205,7 @@ test("TestCard preview零写，Apply创建唯一Event并路由到Test Task plann
     );
     const next = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(next.nextStage.status, "test-task-planning");
     if (next.nextStage.status !== "test-task-planning") {
@@ -212,7 +214,7 @@ test("TestCard preview零写，Apply创建唯一Event并路由到Test Task plann
     equal(next.nextStage.testCard.testCardId, card.testCardId);
     await rejects(
       service.preview({
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
         testCard: fixture.testCardContent,
       }),
       (error: unknown) =>
@@ -225,7 +227,7 @@ test("TestCard preview零写，Apply创建唯一Event并路由到Test Task plann
     equal(replayed.status, "already-created");
     equal(replayed.disposition, "idempotent");
     equal(
-      (await auditedAggregate(fixture.workspacePath, fixture.intent.demandId))
+      (await auditedAggregate(fixture.workspacePath, fixture.demandId))
         .state.currentTestCard?.testCardDigest,
       card.testCardDigest,
     );
@@ -241,7 +243,7 @@ test("并发相同TestCard plan收敛为一个Event", async () => {
     const second = new TestCardPlanningService(fixture.workspaceRoot);
     const preview = await first.preview(
       {
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
         testCard: fixture.testCardContent,
       },
       {
@@ -258,9 +260,9 @@ test("并发相同TestCard plan收敛为一个Event", async () => {
       "idempotent",
     ]);
     equal(
-      (await auditedAggregate(fixture.workspacePath, fixture.intent.demandId))
+      (await auditedAggregate(fixture.workspacePath, fixture.demandId))
         .streamRevision,
-      8,
+      7,
     );
   } finally {
     await cleanupTestCardPlanningWorkspaceFixture(fixture);
@@ -272,7 +274,7 @@ test("TestCard Planning拒绝controller-only和preview后的WorkClaim漂移", as
   try {
     await rejects(
       new TestCardPlanningService(controllerOnly.workspaceRoot).preview({
-        demandId: controllerOnly.intent.demandId,
+        demandId: controllerOnly.demandId,
         testCard: createTestCardContentFixture(),
       }),
       (error: unknown) =>
@@ -288,7 +290,7 @@ test("TestCard Planning拒绝controller-only和preview后的WorkClaim漂移", as
     const service = new TestCardPlanningService(fixture.workspaceRoot);
     const preview = await service.preview(
       {
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
         testCard: fixture.testCardContent,
       },
       {
@@ -300,25 +302,23 @@ test("TestCard Planning拒绝controller-only和preview后的WorkClaim漂移", as
     if (reported?.status !== "reported") {
       throw new Error("Expected prior reported TargetResult fixture.");
     }
-    const root = await RootedDirectory.open(
-      path.join(
-        fixture.workspacePath,
-        ...demandFinalRootRef(fixture.intent.demandId).split("/"),
-      ),
-    );
-    let priorClaim;
-    try {
-      const located = await new DemandEventSourcingRepository(
-        root,
-      ).findTargetHostEffectClaimedEvent(
-        reported.targetResult.hostEffect.actionId,
-      );
-      if (located === null) throw new Error("Expected prior Claim Event.");
-      priorClaim = located.event.data.claim;
-    } finally {
-      await root.close();
-    }
-    await createWindowWorkClaimInStore(fixture.workspaceRoot, priorClaim);
+    const priorClaim = createWorkClaim({
+      claimId: DELIVERY_CLAIM_ID,
+      hostId: "codex",
+      windowId: parseWakeflowDurableIdOfKind(fixture.route.windowId, "window"),
+      bindingId: fixture.route.bindingId,
+      holder: {
+        demandId: parseWakeflowDurableIdOfKind(fixture.demandId, "demand"),
+        targetTaskId: parseWakeflowDurableIdOfKind(reported.targetTaskId, "target-task"),
+        deliveryId: parseWakeflowDurableIdOfKind(
+          fixture.delivered.prepared.delivery.deliveryId,
+          "target-delivery",
+        ),
+        generation: 1,
+      },
+      claimedAt: TEST_CARD_CREATED_AT,
+    });
+    await takeWorkClaim(fixture.workspaceRoot, priorClaim);
     await rejects(
       service.apply(preview.plan, preview.planDigest),
       (error: unknown) =>

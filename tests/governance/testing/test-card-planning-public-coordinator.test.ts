@@ -35,12 +35,12 @@ test("公共TestCard preview零写并以exact plan创建唯一Event", async () =
     const request = {
       root: fixture.workspacePath,
       mode: "preview" as const,
-      demandId: fixture.intent.demandId,
+      demandId: fixture.demandId,
       testCard: fixture.testCardContent,
     };
     const before = await demandInventory(
       fixture.workspacePath,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     const preview = await executeTestCardPlanningPublicRequest(request, {
       preview: {
@@ -49,7 +49,7 @@ test("公共TestCard preview零写并以exact plan创建唯一Event", async () =
       },
     });
     deepEqual(
-      await demandInventory(fixture.workspacePath, fixture.intent.demandId),
+      await demandInventory(fixture.workspacePath, fixture.demandId),
       before,
     );
     equal(preview.mode, "preview");
@@ -58,7 +58,7 @@ test("公共TestCard preview零写并以exact plan创建唯一Event", async () =
     }
     equal(preview.tool, "wakeflow_plan_test_card");
     equal(preview.status, "ready");
-    equal(preview.plan.testCard.demandId, fixture.intent.demandId);
+    equal(preview.plan.testCard.demandId, fixture.demandId);
     deepEqual(
       preview.plan.testCard.testBasisAuthorities.map(
         (reference) => reference.role,
@@ -86,7 +86,7 @@ test("公共TestCard preview零写并以exact plan创建唯一Event", async () =
     equal(JSON.stringify(applied).includes(fixture.workspacePath), false);
     const route = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(route.nextStage.status, "test-task-planning");
 
@@ -114,12 +114,12 @@ test("公共TestCard边界拒绝未知字段、私有根、超限输入与伪造
   try {
     const before = await demandInventory(
       fixture.workspacePath,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     const request = {
       root: fixture.workspacePath,
       mode: "preview" as const,
-      demandId: fixture.intent.demandId,
+      demandId: fixture.demandId,
       testCard: fixture.testCardContent,
     };
     await rejects(
@@ -210,7 +210,7 @@ test("公共TestCard边界拒绝未知字段、私有根、超限输入与伪造
         error.eventAuthority === "unchanged",
     );
     deepEqual(
-      await demandInventory(fixture.workspacePath, fixture.intent.demandId),
+      await demandInventory(fixture.workspacePath, fixture.demandId),
       before,
     );
   } finally {

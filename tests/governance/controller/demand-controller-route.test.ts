@@ -10,14 +10,10 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
 import { createRuntimeJsonSchemaValidator } from "../../../src/foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
-import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   buildDemandControllerRoute,
   type DemandControllerRoute,
 } from "../../../src/governance/controller/demand-controller-route.js";
-import { TargetHostEffectClaimService } from "../../../src/governance/delivery/target-host-effect-claim-service.js";
-import { TargetHostEffectOutcomeService } from "../../../src/governance/delivery/target-host-effect-outcome-service.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
@@ -29,11 +25,12 @@ import { ControllerImplementationReviewDecisionService } from "../../../src/gove
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { TestCardPlanningService } from "../../../src/governance/testing/test-card-planning-service.js";
 import {
-  CLAIMED_AT,
-  claimUuidFactory,
-  cleanupTargetHostEffectClaimWorkspaceFixture,
-  createTargetHostEffectClaimWorkspaceFixture,
-} from "../delivery/target-host-effect-claim-service.fixture.js";
+  cleanupDeliveryWorkspaceFixture,
+  createDeliveryWorkspaceFixture,
+  landFixturePrompt,
+  prepareFixtureDelivery,
+  recordFixtureDeliveryOutcome,
+} from "../delivery/delivery-workspace.fixture.js";
 import {
   cleanupControllerImplementationReviewDecisionServiceFixture,
   createControllerImplementationReviewDecisionServiceFixture,
@@ -144,57 +141,26 @@ test("Controller Route从空Demand进入Task Planning并跟随planned Target", a
   }
 });
 
-test("Controller Route保持Claim、Agent宿主效果与Result Import边界", async () => {
-  const fixture = await createTargetHostEffectClaimWorkspaceFixture();
+test("Controller Route保持投递准备、Agent宿主效果与Result Import边界", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
   try {
-    const claimReady = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.intent.demandId,
-    );
-    equal(claimReady.frontiers[0]?.kind, "implementation-host-effect-claim");
-    equal(claimReady.frontiers[0]?.owner, "target-host-effect-claim");
+    const planningReady = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
+    equal(planningReady.frontiers[0]?.kind, "implementation-delivery-planning");
+    equal(planningReady.frontiers[0]?.owner, "target-delivery-preparation");
 
-    const claimed = await new TargetHostEffectClaimService(
-      fixture.workspaceRoot,
-      codexWorkspaceHostResourceProfile,
-      codexWindowHostIdentityProfile,
-    ).claim(fixture.claimRequest, {
-      clock: () => CLAIMED_AT,
-      uuidFactory: claimUuidFactory(),
-    });
-    if (claimed.action === null) throw new Error("Expected Agent Host Action.");
-    const hostEffect = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.intent.demandId,
-    );
-    equal(
-      hostEffect.frontiers[0]?.kind,
-      "implementation-host-effect-execution",
-    );
+    const prepared = await prepareFixtureDelivery(fixture);
+    const hostEffect = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
+    equal(hostEffect.frontiers[0]?.kind, "implementation-host-effect-execution");
     equal(hostEffect.frontiers[0]?.owner, "agent-host");
 
-    await new TargetHostEffectOutcomeService(
-      fixture.workspaceRoot,
-      "codex",
-    ).record({
-      demandId: fixture.intent.demandId,
-      actionId: claimed.action.actionId,
-      claimDigest: claimed.action.workClaim.claimDigest,
-      attempt: { status: "accepted", evidence: { route: "accepted" } },
-      readback: { status: "pending", evidence: { visible: false } },
-      observedAt: parseUtcInstant("2026-08-29T12:06:00.000Z"),
-    });
-    const resultImport = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.intent.demandId,
-    );
-    equal(
-      resultImport.frontiers[0]?.kind,
-      "implementation-target-result-import",
-    );
+    await landFixturePrompt(fixture, fixture.route, prepared.permit.prompt);
+    const recorded = await recordFixtureDeliveryOutcome(fixture, prepared);
+    equal(recorded.outcome.disposition, "accepted");
+    const resultImport = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
+    equal(resultImport.frontiers[0]?.kind, "implementation-target-result-import");
     equal(resultImport.frontiers[0]?.owner, "target-result-import");
   } finally {
-    await cleanupTargetHostEffectClaimWorkspaceFixture(fixture);
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });
 
@@ -204,7 +170,7 @@ test("Controller Route组合Review Snapshot并在accept后委托Completion Route
   try {
     const review = await readControllerRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(review.frontiers[0]?.kind, "implementation-result-review");
     equal(review.frontiers[0]?.owner, "controller-implementation-review");
@@ -218,7 +184,7 @@ test("Controller Route组合Review Snapshot并在accept后委托Completion Route
     });
     const completion = await readControllerRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(completion.frontiers[0]?.kind, "demand-completion-preflight");
     equal(completion.frontiers[0]?.owner, "demand-completion");
@@ -253,7 +219,7 @@ test("Controller Route把redesign诚实暴露为Design能力缺口", async () =>
     );
     const route = await readControllerRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(route.disposition, "blocked");
     equal(route.frontiers[0]?.kind, "implementation-redesign-required");
@@ -270,7 +236,7 @@ test("Controller Route只映射Post-Acceptance Test责任而不复制其领域�
   try {
     const testCardPlanning = await readControllerRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(testCardPlanning.frontiers[0]?.kind, "test-card-planning");
     equal(testCardPlanning.frontiers[0]?.owner, "test-card-planning");
@@ -280,7 +246,7 @@ test("Controller Route只映射Post-Acceptance Test责任而不复制其领域�
     const planning = new TestCardPlanningService(fixture.workspaceRoot);
     const preview = await planning.preview(
       {
-        demandId: fixture.intent.demandId,
+        demandId: fixture.demandId,
         testCard: fixture.testCardContent,
       },
       {
@@ -291,7 +257,7 @@ test("Controller Route只映射Post-Acceptance Test责任而不复制其领域�
     await planning.apply(preview.plan, preview.planDigest);
     const testTaskPlanning = await readControllerRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(testTaskPlanning.frontiers[0]?.kind, "test-task-planning");
     equal(testTaskPlanning.frontiers[0]?.owner, "test-task-planning");
@@ -310,7 +276,7 @@ test("Controller Route不会把尚未支持的isolated Test Planning声明为可
   try {
     const route = await readControllerRoute(
       fixture.workspaceRoot,
-      fixture.intent.demandId,
+      fixture.demandId,
     );
     equal(route.disposition, "blocked");
     equal(route.frontiers[0]?.kind, "test-card-planning");

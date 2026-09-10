@@ -66,6 +66,18 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     title: "实现任务包 preview 零写、apply 提交且重放幂等，Route 前进到投递规划",
   },
   {
+    scenarioId: "card-06/delivery-chain",
+    card: "06-delivery-and-callback",
+    title:
+      "一次调用取得声明、追加信封并返回可移植许可，重放幂等；无落地证据的结局是 indeterminate 且保留声明",
+  },
+  {
+    scenarioId: "card-06/ambiguous-resolution",
+    card: "06-delivery-and-callback",
+    title:
+      "目标会话的 user-prompt-submit 记录到达后，再次记录结局即 accepted，Route 前进到结果导入",
+  },
+  {
     scenarioId: "card-08/complete-and-archive",
     card: "08-evidence-and-archive",
     title:

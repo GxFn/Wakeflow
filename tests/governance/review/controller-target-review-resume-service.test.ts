@@ -82,8 +82,8 @@ test("blocked Review经显式Resume形成新generation并允许第二代Decision
       throw new Error("Expected review-blocked target.");
     }
     const resumeRequest = Object.freeze({
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
       expectedBlockedState: Object.freeze({
         streamRevision: blockedSnapshot.eventStream.streamRevision,
         stateDigest: blockedSnapshot.eventStream.stateDigest,
@@ -182,8 +182,8 @@ test("blocked Review经显式Resume形成新generation并允许第二代Decision
     );
     const inspected = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.intent.demandId,
-      targetTaskId: fixture.intent.target.targetTaskId,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.targetTaskId,
     });
     deepEqual(
       inspected.reviewUnit.priorReviewHistory.map((entry) => entry.kind),
@@ -300,7 +300,7 @@ test("Test blocked Resume重新开放同一Result且不创建attempt", async () 
     const blockedAttempts = blockedStateTarget.testAttempts;
     const blockedSnapshot = await readTestReviewSnapshot(
       fixture.workspacePath,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     const blockedTarget = blockedSnapshot.targets.find(
       (target) => target.targetTaskId === fixture.testTargetTaskId,
@@ -312,7 +312,7 @@ test("Test blocked Resume重新开放同一Result且不创建attempt", async () 
       throw new Error("Expected Test review-blocked snapshot.");
     }
     const resumeRequest = {
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetTaskId: fixture.testTargetTaskId,
       expectedBlockedState: {
         streamRevision: blockedSnapshot.eventStream.streamRevision,
@@ -345,7 +345,7 @@ test("Test blocked Resume重新开放同一Result且不创建attempt", async () 
 
     const reportedSnapshot = await readTestReviewSnapshot(
       fixture.workspacePath,
-      fixture.testClaimRequest.demandId,
+      fixture.demandId,
     );
     const reportedTarget = reportedSnapshot.targets.find(
       (target) => target.targetTaskId === fixture.testTargetTaskId,

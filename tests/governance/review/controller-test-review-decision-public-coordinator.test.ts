@@ -31,7 +31,7 @@ test("Test Decision Public Coordinator只记录Controller判断并精确幂等",
   try {
     const inspection = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetTaskId: fixture.testTargetTaskId,
     });
     if (
@@ -43,7 +43,7 @@ test("Test Decision Public Coordinator只记录Controller判断并精确幂等",
     const judgment = fixture.testDecisionRequest;
     const request = {
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetResultId: inspection.reviewUnit.targetResult.targetResultId,
       snapshotDigest: inspection.snapshotDigest,
       reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
@@ -99,18 +99,14 @@ test("Test Decision Public Coordinator只记录Controller判断并精确幂等",
     equal(decided.decision.decision, "accept");
     equal(decided.decision.targetTaskId, fixture.testTargetTaskId);
     equal(decided.decision.testExecution.testAttemptId, fixture.testAttemptId);
-    equal(
-      decided.decision.testExecution.testDispatchPacketDigest,
-      fixture.testDispatchPacketDigest,
-    );
     equal(containsText(decided, fixture.workspacePath), false);
-    equal(containsText(decided, fixture.testRawHandle), false);
+    equal(containsText(decided, fixture.testRoute.rawHandle), false);
     equal(Object.hasOwn(decided, "nextAttempt"), false);
     equal(Object.hasOwn(decided, "productRemediation"), false);
 
     const route = await inspectActiveRoute({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
     });
     equal(route.route.frontiers[0]?.kind, "demand-completion-preflight");
 

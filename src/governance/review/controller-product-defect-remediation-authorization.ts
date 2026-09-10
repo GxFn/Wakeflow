@@ -107,7 +107,6 @@ export interface ControllerProductDefectRemediationAuthorization {
       readonly testCardDigest: Sha256Digest;
     }>;
     readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-    readonly testDispatchPacketDigest: Sha256Digest;
     readonly targetResult: Readonly<{
       readonly targetResultId: WakeflowDurableId<"target-result">;
       readonly resultDigest: Sha256Digest;
@@ -389,10 +388,6 @@ function parseSource(
       value.testAttemptId,
       "test-attempt",
       "$/source/testAttemptId",
-    ),
-    testDispatchPacketDigest: digest(
-      value.testDispatchPacketDigest,
-      "$/source/testDispatchPacketDigest",
     ),
     targetResult: Object.freeze({
       targetResultId: id(
@@ -686,7 +681,6 @@ export function createControllerProductDefectRemediationAuthorization(
     testTargetTaskId: decision.targetTaskId,
     testCard: decision.testExecution.testCard,
     testAttemptId: decision.testExecution.testAttemptId,
-    testDispatchPacketDigest: decision.testExecution.testDispatchPacketDigest,
     targetResult: Object.freeze({
       targetResultId: decision.reviewed.targetResultId,
       resultDigest: decision.reviewed.targetResultDigest,

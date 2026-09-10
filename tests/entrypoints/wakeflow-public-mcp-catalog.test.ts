@@ -14,10 +14,11 @@ import {
   WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/demand/contract.js";
-import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-delivery-preparation-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
-import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-rearm-public-contract.js";
+import {
+  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/delivery/contract.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/governance/evidence/managed-evidence-public-contract.js";
 import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
@@ -31,7 +32,6 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../..
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-resume-public-contract.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-card-planning-public-contract.js";
-import { WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-delivery-preparation-public-contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import {
@@ -112,11 +112,10 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     DESTRUCTIVE,
     ["does not create Delivery", "let Test modify product code"],
   ),
-  expectedTool(
-    WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
-    "target-host-effect-claim",
-    ADDITIVE,
-  ),
+  expectedTool(WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, "prepare-delivery", ADDITIVE, [
+    "takes the window work claim",
+    "Sending is the Agent host effect",
+  ]),
   expectedTool(WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, "demand-completion", DESTRUCTIVE, [
     "seals the archive package",
     "deletes the active root",
@@ -162,22 +161,10 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     "creates no Test Task",
     "runs no Test",
   ]),
-  expectedTool(
-    WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
-    "target-delivery-preparation",
-    ADDITIVE,
-  ),
-  expectedTool(
-    WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
-    "test-delivery-preparation",
-    ADDITIVE,
-    ["derives initial, rerun, or replacement mode", "creates no Dispatch Packet"],
-  ),
-  expectedTool(
-    WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME,
-    "target-host-effect-rearm",
-    ADDITIVE,
-  ),
+  expectedTool(WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, "rearm-delivery", ADDITIVE, [
+    "At most three rearms per envelope",
+    "Never performs the host effect",
+  ]),
   expectedTool(
     WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
     "controller-implementation-review-decision",
@@ -196,9 +183,10 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     ["payload bytes"],
   ),
   expectedTool(
-    WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,
-    "target-host-effect-outcome",
+    WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+    "record-delivery-outcome",
     DESTRUCTIVE,
+    ["user-prompt-submit hook record", "everything else stays indeterminate"],
   ),
   expectedTool(
     WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
@@ -225,7 +213,6 @@ function validPublicServerOptions(): PublicServerOptions {
     serverName: "wakeflow-public-catalog-test",
     serverVersion: "1.0.0-test",
     authorizeProductDefectRemediation: unavailableExecutor,
-    claimTargetHostEffect: unavailableExecutor,
     cancelDemand: unavailableExecutor,
     completeDemand: unavailableExecutor,
     continueDemand: unavailableExecutor,
@@ -239,12 +226,11 @@ function validPublicServerOptions(): PublicServerOptions {
     inspectBoard: unavailableExecutor,
     planTargetTask: unavailableExecutor,
     planTestCard: unavailableExecutor,
-    prepareImplementationDelivery: unavailableExecutor,
-    prepareTestDelivery: unavailableExecutor,
-    rearmTargetHostEffect: unavailableExecutor,
+    prepareDelivery: unavailableExecutor,
+    rearmDelivery: unavailableExecutor,
     recordControllerImplementationReviewDecision: unavailableExecutor,
     recordControllerTestReviewDecision: unavailableExecutor,
-    recordTargetHostEffectOutcome: unavailableExecutor,
+    recordDeliveryOutcome: unavailableExecutor,
     registerWindowHostBinding: unavailableExecutor,
     resumeTargetResultReview: unavailableExecutor,
   });
@@ -260,14 +246,12 @@ const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
   "publishRequirement",
   "resumeTargetResultReview",
   "registerWindowHostBinding",
-  "claimTargetHostEffect",
   "inspectDemandRoute",
   "planTargetTask",
   "planTestCard",
-  "prepareImplementationDelivery",
-  "prepareTestDelivery",
-  "recordTargetHostEffectOutcome",
-  "rearmTargetHostEffect",
+  "prepareDelivery",
+  "recordDeliveryOutcome",
+  "rearmDelivery",
   "importTargetResult",
   "inspectTargetResultReview",
   "inspectBoard",
@@ -309,7 +293,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   );
 });
 
-test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
+test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
   const client = await connectWakeflowMcpTestClient(t);
   const instructions = client.getInstructions();
   equal(typeof instructions, "string");
@@ -345,7 +329,7 @@ test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
   );
 });
 
-test("Codex与Claude Code composition root发布同一二十三工具集合", async () => {
+test("Codex与Claude Code composition root发布同一二十一工具集合", async () => {
   const listedNames: string[][] = [];
   for (const createServer of [createCodexWakeflowMcpServer, createClaudeCodeWakeflowMcpServer]) {
     const server = createServer("1.0.0-test");

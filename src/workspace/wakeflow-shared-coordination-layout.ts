@@ -1,6 +1,6 @@
 import { types } from "node:util";
 
-import { WINDOW_WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "../governance/delivery/window-work-claim-resource-catalog.js";
+import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import {
@@ -24,14 +24,46 @@ import {
   WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION,
   WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION,
 } from "./workspace-shared-runtime-resource-catalog.js";
-import type { WakeflowWorkspaceResourceDeclaration } from "./workspace-resource-declaration.js";
+import {
+  parseWakeflowWorkspaceResourceDeclaration,
+  type WakeflowWorkspaceResourceDeclaration,
+} from "./workspace-resource-declaration.js";
 
-/** Wakeflow Workspace：shared/coordination/WindowWorkClaim静态目录链的唯一物化owner。 */
+/** Wakeflow Workspace：shared/coordination/工作声明静态目录链的唯一物化 owner。 */
+
+/** 窗口工作声明目录：路径由内核 `layout.ts` 定义，物化与静态矩阵由本模块声明。 */
+export const WORK_CLAIMS_ROOT_RESOURCE_DECLARATION =
+  parseWakeflowWorkspaceResourceDeclaration({
+    kind: "WakeflowWorkspaceResourceDeclaration",
+    declarationId: "coordination.window-work-claims-root",
+    family: "coordination",
+    ownerId: "shared-runtime-layout",
+    scope: "host-neutral",
+    placement: {
+      root: { kind: "workspace" },
+      relativePath: WORK_CLAIMS_ROOT_REF,
+    },
+    tracking: { disposition: "ignored", privacy: "runtime-private" },
+    nodePolicy: {
+      kind: "directory",
+      mode: "0700",
+      symlinkPolicy: "reject",
+      existingModePolicy: "observe-without-change",
+    },
+    processing: {
+      kind: "directory-container",
+      materializationRecipe: "materialize-directory",
+      existingDirectoryPolicy: "observe-without-mode-change",
+      collisionPolicy: "reject-non-directory",
+      descendantAuthority: "separate-declaration-required",
+      recoveryStrategy: "report-only",
+    },
+  });
 
 export const WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS = Object.freeze([
   WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION,
   WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION,
-  WINDOW_WORK_CLAIMS_ROOT_RESOURCE_DECLARATION,
+  WORK_CLAIMS_ROOT_RESOURCE_DECLARATION,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
 export const WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST: Sha256Digest =

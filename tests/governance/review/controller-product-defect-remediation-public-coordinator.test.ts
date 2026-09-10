@@ -34,7 +34,7 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
   try {
     const inspection = await executeTargetResultReviewInspectionPublicRequest({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       targetTaskId: fixture.testTargetTaskId,
     });
     if (
@@ -46,7 +46,7 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
     const testDecision = await executeControllerTestReviewDecisionPublicRequest(
       {
         root: fixture.workspacePath,
-        demandId: fixture.testClaimRequest.demandId,
+        demandId: fixture.demandId,
         targetResultId: inspection.reviewUnit.targetResult.targetResultId,
         snapshotDigest: inspection.snapshotDigest,
         reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
@@ -76,7 +76,7 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
     );
     const route = await inspectActiveRoute({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
     });
     equal(
       route.route.frontiers[0]?.kind,
@@ -90,7 +90,7 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
     if (baseline === undefined) throw new Error("Expected product baseline.");
     const request = {
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
       testReviewDecisionId: testDecision.decision.targetReviewDecisionId,
       postAcceptanceRouteDigest,
       affectedTargets: [
@@ -158,12 +158,12 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
     );
     equal(authorized.authorization.boundary, "existing-task-packages-only");
     equal(containsText(authorized, fixture.workspacePath), false);
-    equal(containsText(authorized, fixture.testRawHandle), false);
+    equal(containsText(authorized, fixture.testRoute.rawHandle), false);
     equal(Object.hasOwn(authorized, "targetDelivery"), false);
 
     const after = await inspectActiveRoute({
       root: fixture.workspacePath,
-      demandId: fixture.testClaimRequest.demandId,
+      demandId: fixture.demandId,
     });
     equal(after.route.frontiers[0]?.kind, "implementation-delivery-planning");
     equal(after.route.frontiers[0]?.scope, "target");

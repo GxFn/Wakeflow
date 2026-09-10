@@ -49,15 +49,11 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
   },
   "implementation-delivery-planning": {
     owner: "controller",
-    tool: "wakeflow_prepare_implementation_delivery",
-  },
-  "implementation-host-effect-claim": {
-    owner: "controller",
-    tool: "wakeflow_claim_target_host_effect",
+    tool: "wakeflow_prepare_delivery",
   },
   "implementation-host-effect-execution": {
     owner: "controller",
-    tool: "wakeflow_record_target_host_effect_outcome",
+    tool: "wakeflow_record_delivery_outcome",
   },
   "implementation-target-result-import": {
     owner: "target",
@@ -65,7 +61,7 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
   },
   "implementation-host-effect-rearm": {
     owner: "controller",
-    tool: "wakeflow_rearm_target_host_effect",
+    tool: "wakeflow_rearm_delivery",
   },
   "implementation-result-review": {
     owner: "controller",
@@ -78,15 +74,15 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
   "implementation-redesign-required": { owner: "user", tool: null },
   "test-delivery-planning": {
     owner: "controller",
-    tool: "wakeflow_prepare_test_delivery",
-  },
-  "test-host-effect-claim": {
-    owner: "controller",
-    tool: "wakeflow_claim_target_host_effect",
+    tool: "wakeflow_prepare_delivery",
   },
   "test-host-effect-execution": {
     owner: "controller",
-    tool: "wakeflow_record_target_host_effect_outcome",
+    tool: "wakeflow_record_delivery_outcome",
+  },
+  "test-host-effect-rearm": {
+    owner: "controller",
+    tool: "wakeflow_rearm_delivery",
   },
   "test-target-result-import": {
     owner: "test",
@@ -98,7 +94,7 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
   },
   "test-delivery-rerun-planning": {
     owner: "controller",
-    tool: "wakeflow_prepare_test_delivery",
+    tool: "wakeflow_prepare_delivery",
   },
   "product-defect-remediation-authorization": {
     owner: "controller",
@@ -107,10 +103,6 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
   "test-review-resume": {
     owner: "controller",
     tool: "wakeflow_resume_target_result_review",
-  },
-  "test-delivery-replacement-planning": {
-    owner: "controller",
-    tool: "wakeflow_prepare_test_delivery",
   },
   "demand-completion-preflight": {
     owner: "controller",

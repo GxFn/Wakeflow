@@ -138,7 +138,7 @@ test("陈旧或非closed Decision请求在UUID和时钟读取前零写拒绝", a
       service.decide(
         {
           ...fixture.decisionRequest,
-          targetTaskId: fixture.intent.target.targetTaskId,
+          targetTaskId: fixture.targetTaskId,
         },
         {
           clock: () => {

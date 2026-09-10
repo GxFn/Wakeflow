@@ -45,7 +45,6 @@ import {
   createDemandEventStreamCommitResourceDeclaration,
   createTaskPackageProjectionResourceDeclaration,
   createTestCardProjectionResourceDeclaration,
-  createTestDispatchPacketProjectionResourceDeclaration,
   WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
 } from "../../../src/governance/demand/demand-resource-catalog.js";
 import {
@@ -54,10 +53,8 @@ import {
 } from "../../../src/governance/tasking/task-package-projection-paths.js";
 import {
   testCardProjectionRef,
-  testDispatchPacketProjectionRef,
   TEST_CARD_PROJECTIONS_ROOT_REF,
-  TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF,
-} from "../../../src/governance/testing/test-dispatch-projection-paths.js";
+} from "../../../src/governance/testing/test-card-projection-paths.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -71,10 +68,6 @@ const TASK_PACKAGE_ID = parseWakeflowDurableIdOfKind(
 const TEST_CARD_ID = parseWakeflowDurableIdOfKind(
   "test-card_33333333-3333-4333-8333-333333333333",
   "test-card",
-);
-const TARGET_DELIVERY_ID = parseWakeflowDurableIdOfKind(
-  "target-delivery_44444444-4444-4444-8444-444444444444",
-  "target-delivery",
 );
 
 function assertDeepFrozen(value: unknown): void {
@@ -246,13 +239,6 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
         processing: "directory-container:materialize-directory",
       },
       {
-        declarationId: `${prefix}.test-dispatch-packets-root`,
-        ownerId: "demand-testing-projection",
-        relativePath: `${rootRef}/${TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF}`,
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
         declarationId: `${prefix}.transactions-root`,
         ownerId: "demand-event-sourcing",
         relativePath: `${rootRef}/${DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF}`,
@@ -282,7 +268,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
       },
     ],
   );
-  equal(catalog.length, 16);
+  equal(catalog.length, 15);
   equal(
     catalog.every(
       (entry) =>
@@ -312,7 +298,12 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
   assertDeepFrozen(catalog);
   deepEqual(createDemandEventSourcingResourceCatalog(DEMAND_ID), catalog);
 
-  const publicationMarker = catalog[13];
+  const publicationMarker = catalog.find(
+    (entry) => entry.declarationId === `${prefix}.publication-marker`,
+  );
+  if (publicationMarker === undefined) {
+    throw new Error("Expected the publication marker declaration.");
+  }
   deepEqual(
     admitWakeflowResourceOperation(
       publicationMarker.processing,
@@ -382,14 +373,10 @@ test("TaskPackage projection declaration remains derived and create-only", () =>
   assertDeepFrozen(declaration);
 });
 
-test("TestCard与Test dispatch packet投影声明保持derived/create-only", () => {
+test("TestCard投影声明保持derived/create-only", () => {
   const card = createTestCardProjectionResourceDeclaration(
     DEMAND_ID,
     TEST_CARD_ID,
-  );
-  const packet = createTestDispatchPacketProjectionResourceDeclaration(
-    DEMAND_ID,
-    TARGET_DELIVERY_ID,
   );
   deepEqual(
     {
@@ -402,25 +389,6 @@ test("TestCard与Test dispatch packet投影声明保持derived/create-only", () 
       declarationId: `demand.testing.${DEMAND_ID}.test-card.${TEST_CARD_ID}`,
       ownerId: "demand-testing-projection",
       relativePath: `${demandFinalRootRef(DEMAND_ID)}/${testCardProjectionRef(TEST_CARD_ID)}`,
-      processing: {
-        kind: "resource",
-        role: "derived-projection",
-        allowedMutationRecipes: ["exclusive-create"],
-        recoveryStrategy: "rebuild-from-authority",
-      },
-    },
-  );
-  deepEqual(
-    {
-      declarationId: packet.declarationId,
-      ownerId: packet.ownerId,
-      relativePath: packet.placement.relativePath,
-      processing: packet.processing,
-    },
-    {
-      declarationId: `demand.testing.${DEMAND_ID}.test-dispatch-packet.${TARGET_DELIVERY_ID}`,
-      ownerId: "demand-testing-projection",
-      relativePath: `${demandFinalRootRef(DEMAND_ID)}/${testDispatchPacketProjectionRef(TARGET_DELIVERY_ID)}`,
       processing: {
         kind: "resource",
         role: "derived-projection",

@@ -66,8 +66,8 @@ commitExpectation?: ("commit" | "leave-uncommitted")
  * @maxItems 32
  */
 acceptanceAnchorIds?: [string, ...(string)[]]
-phase: ("planned" | "test-delivery-prepared" | "test-host-effect-claimed" | "test-host-effect-accepted" | "test-host-effect-indeterminate" | "test-host-effect-rejected" | "test-result-reported" | "test-accepted" | "test-another-attempt-requested" | "test-product-defect" | "test-review-blocked" | "delivery-prepared" | "host-effect-claimed" | "host-effect-accepted" | "host-effect-indeterminate" | "host-effect-rejected" | "result-reported" | "accepted" | "product-defect-rework-requested" | "rework-requested" | "redesign-requested" | "review-blocked" | "superseded")
-currentDelivery?: (CurrentDelivery | TestCurrentDelivery | TestClaimedCurrentDelivery | TestObservedCurrentDelivery | TestResultCurrentDelivery | TestReviewedCurrentDelivery)
+phase: ("planned" | "test-delivery-prepared" | "test-host-effect-accepted" | "test-host-effect-indeterminate" | "test-host-effect-rejected" | "test-result-reported" | "test-accepted" | "test-another-attempt-requested" | "test-product-defect" | "test-review-blocked" | "delivery-prepared" | "host-effect-accepted" | "host-effect-indeterminate" | "host-effect-rejected" | "result-reported" | "accepted" | "product-defect-rework-requested" | "rework-requested" | "redesign-requested" | "review-blocked" | "superseded")
+currentDelivery?: (CurrentDelivery | TestCurrentDelivery | TestObservedCurrentDelivery | TestResultCurrentDelivery | TestReviewedCurrentDelivery)
 testCard?: TestCard
 /**
  * @minItems 1
@@ -78,10 +78,6 @@ productDefectRemediation?: ProductDefectRemediation
 reworkCount?: number
 supersededByTargetTaskId?: string
 })
-/**
- * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。
- */
-export type WakeflowPortableResourcePathText = string
 /**
  * Wakeflow 持久记录与事件使用的严格 UTC instant 文本：四位年份、大写 T/Z，并允许省略小数秒或保留 1 至 9 位小数秒。
  */
@@ -126,29 +122,26 @@ state: WakeflowDemandAggregateState
 stateDigest: WakeflowSha256DigestText
 }
 export interface CurrentDelivery {
-targetDeliveryId: string
-intentDigest: WakeflowSha256DigestText
+deliveryId: string
+envelopeDigest: WakeflowSha256DigestText
+promptDigest: WakeflowSha256DigestText
+generation: number
 hostId: ("codex" | "claude-code")
 bindingId: string
-workClaim?: WorkClaim
-hostEffect?: HostEffect
+fence: Fence
+outcome?: Outcome
 targetResult?: TargetResult
 reviewDecision?: ReviewDecision
 }
-export interface WorkClaim {
+export interface Fence {
 claimId: string
-claimRef: WakeflowPortableResourcePathText
 claimDigest: WakeflowSha256DigestText
-claimedAt: WakeflowUtcInstantText
-hostObservationAuthorityDigest: WakeflowSha256DigestText
-claimEventId: string
-claimCommitId: string
-claimEventStreamRevision: number
-claimExpectedStateDigest: WakeflowSha256DigestText
+streamRevision: number
 }
-export interface HostEffect {
-observationDigest: WakeflowSha256DigestText
-disposition: ("accepted" | "indeterminate" | "rejected-before-effect")
+export interface Outcome {
+outcomeDigest: WakeflowSha256DigestText
+disposition: ("accepted" | "indeterminate" | "rejected-before-send")
+evidenceKind: ("hook-record" | "host-send-return" | "agent-declaration" | "controller-resolution")
 readbackStatus: ("confirmed" | "pending" | "unavailable")
 claimHandling: ("retain" | "release-authorized")
 observedAt: WakeflowUtcInstantText
@@ -168,59 +161,48 @@ controllerWindowId: string
 decidedAt: WakeflowUtcInstantText
 }
 export interface TestCurrentDelivery {
-targetDeliveryId: string
-intentDigest: WakeflowSha256DigestText
+deliveryId: string
+envelopeDigest: WakeflowSha256DigestText
+promptDigest: WakeflowSha256DigestText
+generation: number
 hostId: ("codex" | "claude-code")
 bindingId: string
+fence: Fence
 testAttemptId: string
-}
-export interface TestClaimedCurrentDelivery {
-targetDeliveryId: string
-intentDigest: WakeflowSha256DigestText
-hostId: ("codex" | "claude-code")
-bindingId: string
-testAttemptId: string
-workClaim: TestWorkClaim
-}
-export interface TestWorkClaim {
-claimId: string
-claimRef: WakeflowPortableResourcePathText
-claimDigest: WakeflowSha256DigestText
-claimedAt: WakeflowUtcInstantText
-hostObservationAuthorityDigest: WakeflowSha256DigestText
-claimEventId: string
-claimCommitId: string
-claimEventStreamRevision: number
-claimExpectedStateDigest: WakeflowSha256DigestText
-testDispatchPacketDigest: WakeflowSha256DigestText
 }
 export interface TestObservedCurrentDelivery {
-targetDeliveryId: string
-intentDigest: WakeflowSha256DigestText
+deliveryId: string
+envelopeDigest: WakeflowSha256DigestText
+promptDigest: WakeflowSha256DigestText
+generation: number
 hostId: ("codex" | "claude-code")
 bindingId: string
+fence: Fence
 testAttemptId: string
-workClaim: TestWorkClaim
-hostEffect: HostEffect
+outcome: Outcome
 }
 export interface TestResultCurrentDelivery {
-targetDeliveryId: string
-intentDigest: WakeflowSha256DigestText
+deliveryId: string
+envelopeDigest: WakeflowSha256DigestText
+promptDigest: WakeflowSha256DigestText
+generation: number
 hostId: ("codex" | "claude-code")
 bindingId: string
+fence: Fence
 testAttemptId: string
-workClaim: TestWorkClaim
-hostEffect: HostEffect
+outcome: Outcome
 targetResult: TargetResult
 }
 export interface TestReviewedCurrentDelivery {
-targetDeliveryId: string
-intentDigest: WakeflowSha256DigestText
+deliveryId: string
+envelopeDigest: WakeflowSha256DigestText
+promptDigest: WakeflowSha256DigestText
+generation: number
 hostId: ("codex" | "claude-code")
 bindingId: string
+fence: Fence
 testAttemptId: string
-workClaim: TestWorkClaim
-hostEffect: HostEffect
+outcome: Outcome
 targetResult: TargetResult
 reviewDecision: TestReviewDecision
 }
@@ -239,11 +221,7 @@ testWindowId: string
 }
 export interface TestAttemptState {
 attempt: WakeflowTestExecutionAttempt
-/**
- * @minItems 1
- * @maxItems 32
- */
-deliveryAuthorizations: [TestDeliveryAuthorization, ...(TestDeliveryAuthorization)[]]
+delivery: TestAttemptDelivery
 }
 export interface TestCardTuple {
 testCardId: string
@@ -264,10 +242,9 @@ targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
 }
 }
-export interface TestDeliveryAuthorization {
-ordinal: number
-targetDeliveryId: string
-intentDigest: WakeflowSha256DigestText
+export interface TestAttemptDelivery {
+deliveryId: string
+envelopeDigest: WakeflowSha256DigestText
 preparedAt: WakeflowUtcInstantText
 }
 export interface ProductDefectRemediation {

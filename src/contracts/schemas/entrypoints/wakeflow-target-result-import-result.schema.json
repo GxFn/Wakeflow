@@ -103,10 +103,10 @@
         "programId",
         "demandId",
         "targetTaskId",
-        "targetDeliveryId",
+        "deliveryId",
         "taskPackage",
         "assignment",
-        "hostEffect",
+        "delivery",
         "report",
         "resultDigest"
       ],
@@ -132,7 +132,7 @@
         "targetTaskId": {
           "$ref": "#/$defs/targetTaskId"
         },
-        "targetDeliveryId": {
+        "deliveryId": {
           "$ref": "#/$defs/targetDeliveryId"
         },
         "taskPackage": {
@@ -148,8 +148,8 @@
             }
           ]
         },
-        "hostEffect": {
-          "$ref": "#/$defs/hostEffect"
+        "delivery": {
+          "$ref": "#/$defs/delivery"
         },
         "report": {
           "oneOf": [
@@ -245,54 +245,10 @@
         }
       }
     },
-    "hostEffect": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "actionId",
-        "claimDigest",
-        "claimEventId",
-        "claimCommitId",
-        "observationDigest",
-        "disposition",
-        "readbackStatus",
-        "observedEventId",
-        "observedAt"
-      ],
-      "properties": {
-        "actionId": {
-          "$ref": "#/$defs/claimId"
-        },
-        "claimDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "claimEventId": {
-          "$ref": "#/$defs/eventId"
-        },
-        "claimCommitId": {
-          "$ref": "#/$defs/commitId"
-        },
-        "observationDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "disposition": {
-          "enum": ["accepted", "indeterminate"]
-        },
-        "readbackStatus": {
-          "enum": ["confirmed", "pending", "unavailable"]
-        },
-        "observedEventId": {
-          "$ref": "#/$defs/eventId"
-        },
-        "observedAt": {
-          "$ref": "#/$defs/utcInstant"
-        }
-      }
-    },
     "testExecution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["testAttemptId", "testCard", "testDispatchPacketDigest"],
+      "required": ["testAttemptId", "testCard"],
       "properties": {
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
@@ -309,9 +265,6 @@
               "$ref": "#/$defs/sha256Digest"
             }
           }
-        },
-        "testDispatchPacketDigest": {
-          "$ref": "#/$defs/sha256Digest"
         }
       }
     },
@@ -719,7 +672,7 @@
     },
     "claimId": {
       "type": "string",
-      "pattern": "^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "pattern": "^work-claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "eventId": {
       "type": "string",
@@ -728,6 +681,50 @@
     "commitId": {
       "type": "string",
       "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generation",
+        "fence",
+        "outcomeDigest",
+        "disposition",
+        "readbackStatus",
+        "observedAt"
+      ],
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "fence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["claimId", "claimDigest"],
+          "properties": {
+            "claimId": {
+              "$ref": "#/$defs/claimId"
+            },
+            "claimDigest": {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          }
+        },
+        "outcomeDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "disposition": {
+          "enum": ["accepted", "indeterminate"]
+        },
+        "readbackStatus": {
+          "enum": ["confirmed", "pending", "unavailable"]
+        },
+        "observedAt": {
+          "$ref": "#/$defs/utcInstant"
+        }
+      }
     }
   }
 }

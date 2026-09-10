@@ -10,7 +10,6 @@ import {
   DemandEventSourcingDecisionError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { computeDemandAggregateStateDigest } from "../../../src/governance/demand/model/demand-aggregate-state.js";
-import { createTargetDeliveryIntent } from "../../../src/governance/delivery/target-delivery-intent.js";
 import { createTargetDeliveryReworkContext } from "../../../src/governance/delivery/target-delivery-rework-context.js";
 import {
   createTaskPackageFixture,
@@ -19,12 +18,12 @@ import {
   TASKING_DEMAND_ID,
 } from "../tasking/task-package.fixture.js";
 import {
-  createTargetDeliveryIntentFixture,
-  TARGET_DELIVERY_BINDING_ID,
-} from "../delivery/target-delivery-intent.fixture.js";
-import { createWindowWorkClaimFixture } from "../delivery/window-work-claim.fixture.js";
-import { createTargetDeliveryHostEffectObservationFixture } from "../delivery/target-delivery-host-effect-observation.fixture.js";
-import { createTargetHostEffectRearmFixture } from "../delivery/target-host-effect-rearm.fixture.js";
+  createDeliveryEnvelopeFixture,
+  createDeliveryOutcomeFixture,
+  createDeliveryRearmFixture,
+  createWorkClaimFixture,
+  OTHER_DELIVERY_CLAIM_ID,
+} from "../delivery/delivery-records.fixture.js";
 import { createTargetResultFixture } from "../result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionForState } from "../review/controller-implementation-review-decision.fixture.js";
 
@@ -43,6 +42,22 @@ const CANCELLED_EVENT_ID = parseWakeflowDurableIdOfKind(
 const DELIVERY_EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_88888888-8888-4888-8888-888888888888",
   "demand-event",
+);
+const OUTCOME_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1",
+  "demand-event",
+);
+const REJECTED_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_a2a2a2a2-a2a2-4a2a-8a2a-a2a2a2a2a2a2",
+  "demand-event",
+);
+const REARM_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_a3a3a3a3-a3a3-4a3a-8a3a-a3a3a3a3a3a3",
+  "demand-event",
+);
+const REWORK_DELIVERY_ID = parseWakeflowDurableIdOfKind(
+  "target-delivery_89898989-8989-4989-8989-898989898989",
+  "target-delivery",
 );
 const PUBLISHED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const CANCELLED_AT = parseUtcInstant("2026-08-26T11:00:00.000Z");
@@ -84,63 +99,42 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
   const tasking = evolveDemandEventSourcingState(active, planned);
   equal(tasking.targetTasks[0]?.targetTaskId, TARGET_TASK_ID);
 
-  const intent = createTargetDeliveryIntentFixture();
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim });
   const [prepared] = decideDemandEventSourcingCommand(tasking, {
-    commandType: "delivery.prepare-target-delivery",
+    commandType: "delivery.prepare-delivery",
     commandVersion: 1,
     eventId: DELIVERY_EVENT_ID,
-    intent,
+    envelope,
     taskPackage,
   });
-  equal(prepared?.eventType, "delivery.target-delivery-prepared");
-  if (prepared?.eventType !== "delivery.target-delivery-prepared") {
-    throw new Error("Expected target delivery prepared event.");
+  equal(prepared?.eventType, "delivery.delivery-prepared");
+  if (prepared?.eventType !== "delivery.delivery-prepared") {
+    throw new Error("Expected delivery prepared event.");
   }
-  equal(prepared.data.intent.intentDigest, intent.intentDigest);
+  equal(prepared.data.envelope.envelopeDigest, envelope.envelopeDigest);
+  equal(prepared.recordedAt, envelope.preparedAt);
   const deliveryPrepared = evolveDemandEventSourcingState(tasking, prepared);
   equal(deliveryPrepared.targetTasks[0]?.phase, "delivery-prepared");
 
-  const claim = createWindowWorkClaimFixture(
-    undefined,
-    computeDemandAggregateStateDigest(deliveryPrepared),
-  );
-  const [claimed] = decideDemandEventSourcingCommand(deliveryPrepared, {
-    commandType: "delivery.claim-target-host-effect",
+  const outcome = createDeliveryOutcomeFixture({ claim, envelope });
+  const [observed] = decideDemandEventSourcingCommand(deliveryPrepared, {
+    commandType: "delivery.record-delivery-outcome",
     commandVersion: 1,
-    claim,
+    eventId: OUTCOME_EVENT_ID,
+    outcome,
   });
-  equal(claimed?.eventType, "delivery.target-host-effect-claimed");
-  if (claimed?.eventType !== "delivery.target-host-effect-claimed") {
-    throw new Error("Expected target host effect claimed event.");
+  equal(observed?.eventType, "delivery.delivery-outcome-recorded");
+  if (observed?.eventType !== "delivery.delivery-outcome-recorded") {
+    throw new Error("Expected delivery outcome recorded event.");
   }
-  equal(claimed.eventId, claim.claimTransition.eventId);
-  const hostEffectClaimed = evolveDemandEventSourcingState(
-    deliveryPrepared,
-    claimed,
-  );
-  equal(hostEffectClaimed.targetTasks[0]?.phase, "host-effect-claimed");
-  const observation = createTargetDeliveryHostEffectObservationFixture({
-    claim,
-  });
-  const [observed] = decideDemandEventSourcingCommand(hostEffectClaimed, {
-    commandType: "delivery.record-target-host-effect-observation",
-    commandVersion: 1,
-    observation,
-  });
-  equal(observed?.eventType, "delivery.target-host-effect-observed");
-  if (observed?.eventType !== "delivery.target-host-effect-observed") {
-    throw new Error("Expected target host effect observed event.");
-  }
-  equal(
-    observed.data.observation.observationDigest,
-    observation.observationDigest,
-  );
+  equal(observed.data.outcome.outcomeDigest, outcome.outcomeDigest);
   const hostEffectObserved = evolveDemandEventSourcingState(
-    hostEffectClaimed,
+    deliveryPrepared,
     observed,
   );
   equal(hostEffectObserved.targetTasks[0]?.phase, "host-effect-accepted");
-  const targetResult = createTargetResultFixture({ claim, observation });
+  const targetResult = createTargetResultFixture({ claim, envelope, outcome });
   const [resultEvent] = decideDemandEventSourcingCommand(hostEffectObserved, {
     commandType: "result.record-target-result",
     commandVersion: 1,
@@ -192,35 +186,28 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     resultReported,
     reworkDecisionEvent,
   );
-  const reworkIntent = createTargetDeliveryIntent(
-    {
-      targetDeliveryId: parseWakeflowDurableIdOfKind(
-        "target-delivery_89898989-8989-4989-8989-898989898989",
-        "target-delivery",
-      ),
-      taskPackage,
-      hostId: "codex",
-      bindingId: TARGET_DELIVERY_BINDING_ID,
-      language: "zh-Hans",
-      rework: createTargetDeliveryReworkContext({
-        decision: reworkDecision,
-        previousResult: targetResult,
-      }),
-    },
-    {
-      clock: () => parseUtcInstant("2026-08-29T12:16:00.000Z"),
-    },
-  );
+  const reworkEnvelope = createDeliveryEnvelopeFixture({
+    claim: createWorkClaimFixture({
+      claimId: OTHER_DELIVERY_CLAIM_ID,
+      deliveryId: REWORK_DELIVERY_ID,
+    }),
+    deliveryId: REWORK_DELIVERY_ID,
+    rework: createTargetDeliveryReworkContext({
+      decision: reworkDecision,
+      previousResult: targetResult,
+    }),
+    preparedAt: parseUtcInstant("2026-08-29T12:16:00.000Z"),
+  });
   throws(
     () =>
       decideDemandEventSourcingCommand(reworkRequested, {
-        commandType: "delivery.prepare-target-delivery",
+        commandType: "delivery.prepare-delivery",
         commandVersion: 1,
         eventId: parseWakeflowDurableIdOfKind(
           "demand-event_89898989-8989-4989-8989-898989898989",
           "demand-event",
         ),
-        intent: reworkIntent,
+        envelope: reworkEnvelope,
         taskPackage,
       }),
     (error: unknown) =>
@@ -230,13 +217,13 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
   throws(
     () =>
       decideDemandEventSourcingCommand(reworkRequested, {
-        commandType: "delivery.prepare-target-delivery",
+        commandType: "delivery.prepare-delivery",
         commandVersion: 1,
         eventId: parseWakeflowDurableIdOfKind(
           "demand-event_89898989-8989-4989-8989-898989898989",
           "demand-event",
         ),
-        intent: reworkIntent,
+        envelope: reworkEnvelope,
         taskPackage,
         reworkSource: {
           decision: reviewDecision,
@@ -250,13 +237,13 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
   const [reworkPreparedEvent] = decideDemandEventSourcingCommand(
     reworkRequested,
     {
-      commandType: "delivery.prepare-target-delivery",
+      commandType: "delivery.prepare-delivery",
       commandVersion: 1,
       eventId: parseWakeflowDurableIdOfKind(
         "demand-event_89898989-8989-4989-8989-898989898989",
         "demand-event",
       ),
-      intent: reworkIntent,
+      envelope: reworkEnvelope,
       taskPackage,
       reworkSource: {
         decision: reworkDecision,
@@ -264,7 +251,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
       },
     },
   );
-  equal(reworkPreparedEvent?.eventType, "delivery.target-delivery-prepared");
+  equal(reworkPreparedEvent?.eventType, "delivery.delivery-prepared");
   throws(
     () =>
       decideDemandEventSourcingCommand(acceptedState, {
@@ -276,27 +263,31 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
       error instanceof DemandEventSourcingDecisionError &&
       error.reason === "transition",
   );
-  const rejectedObservation = createTargetDeliveryHostEffectObservationFixture({
+  const rejectedOutcome = createDeliveryOutcomeFixture({
     claim,
-    attemptStatus: "rejected-before-effect",
+    envelope,
+    disposition: "rejected-before-send",
     readbackStatus: "unavailable",
   });
-  const [rejectedEvent] = decideDemandEventSourcingCommand(hostEffectClaimed, {
-    commandType: "delivery.record-target-host-effect-observation",
+  const [rejectedEvent] = decideDemandEventSourcingCommand(deliveryPrepared, {
+    commandType: "delivery.record-delivery-outcome",
     commandVersion: 1,
-    observation: rejectedObservation,
+    eventId: REJECTED_EVENT_ID,
+    outcome: rejectedOutcome,
   });
   const rejectedState = evolveDemandEventSourcingState(
-    hostEffectClaimed,
+    deliveryPrepared,
     rejectedEvent,
   );
-  const rearm = createTargetHostEffectRearmFixture(claim, rejectedObservation);
+  equal(rejectedState.targetTasks[0]?.phase, "host-effect-rejected");
+  const rearm = createDeliveryRearmFixture(envelope, rejectedOutcome);
   const [rearmedEvent] = decideDemandEventSourcingCommand(rejectedState, {
-    commandType: "delivery.rearm-target-host-effect",
+    commandType: "delivery.rearm-delivery",
     commandVersion: 1,
+    eventId: REARM_EVENT_ID,
     rearm,
   });
-  equal(rearmedEvent?.eventType, "delivery.target-host-effect-rearmed");
+  equal(rearmedEvent?.eventType, "delivery.delivery-rearmed");
   const rearmedState = evolveDemandEventSourcingState(
     rejectedState,
     rearmedEvent,

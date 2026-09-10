@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:delivery-prepared-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowDeliveryPreparedEventDataV1",
+  "description": "`delivery.delivery-prepared` 事件的数据：一份投递信封。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["envelope"],
+  "properties": {
+    "envelope": {
+      "$ref": "urn:wakeflow:governance:delivery:delivery-envelope:v1"
+    }
+  }
+}

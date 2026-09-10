@@ -121,7 +121,6 @@ testCard: {
 testCardId: string
 testCardDigest: WakeflowSha256DigestText
 }
-testDispatchPacketDigest: WakeflowSha256DigestText
 }
 export interface Assessment1 {
 conclusion: ("satisfied" | "defect-observed" | "inconclusive")

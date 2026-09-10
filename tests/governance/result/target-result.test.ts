@@ -4,20 +4,24 @@ import { test } from "node:test";
 import {
   parseTargetResultDocument,
   renderTargetResult,
-  targetResultIdForAction,
-  targetResultRecordedCommitId,
-  targetResultRecordedEventId,
+  targetResultIdForClaim,
+  targetResultRecordedCommitIdFromResult,
+  targetResultRecordedEventIdFromResult,
 } from "../../../src/governance/result/target-result.js";
 import {
   createImplementationTargetResult,
   ImplementationTargetResultError,
 } from "../../../src/governance/result/implementation-target-result.js";
 import { createImplementationTargetResultReport } from "../../../src/governance/result/implementation-target-result-report.js";
-import { createTargetDeliveryHostEffectObservationFixture } from "../delivery/target-delivery-host-effect-observation.fixture.js";
-import { createTargetDeliveryIntentFixture } from "../delivery/target-delivery-intent.fixture.js";
-import { createWindowWorkClaimFixture } from "../delivery/window-work-claim.fixture.js";
+import { deriveDurableId } from "../../../src/kernel/ids.js";
+import {
+  createDeliveryEnvelopeFixture,
+  createDeliveryOutcomeFixture,
+  createWorkClaimFixture,
+  OTHER_DELIVERY_CLAIM_ID,
+} from "../delivery/delivery-records.fixture.js";
 import { createTaskPackageFixture } from "../tasking/task-package.fixture.js";
-import { createTargetResultFixture } from "./target-result.fixture.js";
+import { createTargetResultFixture, deliveryBindingFromOutcome } from "./target-result.fixture.js";
 import {
   createImplementationTargetResultReportContentFixture,
   createImplementationTargetResultReportFixture,
@@ -32,26 +36,30 @@ function implementationTaskPackageFixture() {
   return taskPackage;
 }
 
-test("TargetResult闭合TaskPackage、Host Effect与Agent Report但不表示acceptance", () => {
-  const result = createTargetResultFixture();
+test("TargetResult闭合TaskPackage、投递信封、结局与Agent Report但不表示acceptance", () => {
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim });
+  const outcome = createDeliveryOutcomeFixture({ claim, envelope });
+  const result = createTargetResultFixture({ claim, envelope, outcome });
   equal(result.workType, "implementation");
   equal(Object.hasOwn(result, "testExecution"), false);
-  equal(
-    result.targetResultId,
-    targetResultIdForAction(result.hostEffect.actionId),
-  );
+  equal(result.deliveryId, envelope.deliveryId);
+  equal(result.targetResultId, targetResultIdForClaim(claim.claimId));
+  equal(result.delivery.fence.claimId, claim.claimId);
+  equal(result.delivery.fence.claimDigest, claim.claimDigest);
+  equal(result.delivery.outcomeDigest, outcome.outcomeDigest);
+  equal(result.delivery.disposition, "accepted");
+  equal(result.delivery.generation, 1);
   equal(result.report.outcome, "completed");
-  equal(result.report.reportedAt < result.hostEffect.observedAt, true);
   equal(Object.hasOwn(result, "controllerDecision"), false);
-  equal(Object.hasOwn(result, "transportGroup"), false);
-  const claim = createWindowWorkClaimFixture();
+  equal(Object.hasOwn(result, "hostEffect"), false);
   equal(
-    targetResultRecordedEventId(claim),
-    `demand-event_${claim.claimTransition.commitId.slice("demand-event-commit_".length)}`,
+    targetResultRecordedEventIdFromResult(result),
+    deriveDurableId("demand-event", "target-result", claim.claimId),
   );
   equal(
-    targetResultRecordedCommitId(claim),
-    `demand-event-commit_${claim.claimTransition.eventId.slice("demand-event_".length)}`,
+    targetResultRecordedCommitIdFromResult(result),
+    deriveDurableId("demand-event-commit", "target-result", claim.claimId),
   );
   const document = renderTargetResult(result);
   equal(parseTargetResultDocument(document).resultDigest, result.resultDigest);
@@ -59,18 +67,15 @@ test("TargetResult闭合TaskPackage、Host Effect与Agent Report但不表示acce
 
 test("completed TargetResult要求完整anchor mapping与TaskPackage commit policy", () => {
   const taskPackage = implementationTaskPackageFixture();
-  const intent = createTargetDeliveryIntentFixture();
-  const claim = createWindowWorkClaimFixture();
-  const observation = createTargetDeliveryHostEffectObservationFixture({
-    claim,
-  });
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim });
+  const delivery = deliveryBindingFromOutcome(createDeliveryOutcomeFixture({ claim, envelope }));
   throws(
     () =>
       createImplementationTargetResult({
         taskPackage,
-        intent,
-        claim,
-        observation,
+        envelope,
+        delivery,
         report: createImplementationTargetResultReport(
           {
             ...createImplementationTargetResultReportContentFixture(),
@@ -87,9 +92,8 @@ test("completed TargetResult要求完整anchor mapping与TaskPackage commit poli
     () =>
       createImplementationTargetResult({
         taskPackage,
-        intent,
-        claim,
-        observation,
+        envelope,
+        delivery,
         report: createImplementationTargetResultReport(
           {
             ...createImplementationTargetResultReportContentFixture(),
@@ -108,29 +112,41 @@ test("completed TargetResult要求完整anchor mapping与TaskPackage commit poli
   );
 });
 
-test("rejected-before-effect不能产生TargetResult", () => {
-  const claim = createWindowWorkClaimFixture();
+test("投递绑定必须跟随信封：另一把声明的围栏或 rejected 结局都不能产生 TargetResult", () => {
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim });
+  const foreignClaim = createWorkClaimFixture({ claimId: OTHER_DELIVERY_CLAIM_ID });
   throws(
     () =>
       createImplementationTargetResult({
         taskPackage: implementationTaskPackageFixture(),
-        intent: createTargetDeliveryIntentFixture(),
-        claim,
-        observation: createTargetDeliveryHostEffectObservationFixture({
-          claim,
-          attemptStatus: "rejected-before-effect",
-          readbackStatus: "unavailable",
-        }),
+        envelope,
+        delivery: deliveryBindingFromOutcome(
+          createDeliveryOutcomeFixture({ claim: foreignClaim, envelope }),
+        ),
         report: createImplementationTargetResultReportFixture(),
       }),
     (error: unknown) =>
       error instanceof ImplementationTargetResultError &&
-      error.reason === "relation",
+      error.reason === "delivery",
+  );
+  throws(
+    () =>
+      deliveryBindingFromOutcome(
+        createDeliveryOutcomeFixture({
+          claim,
+          envelope,
+          disposition: "rejected-before-send",
+          readbackStatus: "unavailable",
+        }),
+      ),
+    (error: unknown) => error instanceof Error,
   );
 });
 
 test("blocked TargetResult允许部分或空anchor evidence且仍不是acceptance", () => {
-  const claim = createWindowWorkClaimFixture();
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim });
   const report = createImplementationTargetResultReport(
     {
       ...createImplementationTargetResultReportContentFixture(),
@@ -142,11 +158,13 @@ test("blocked TargetResult允许部分或空anchor evidence且仍不是acceptanc
   );
   const result = createImplementationTargetResult({
     taskPackage: implementationTaskPackageFixture(),
-    intent: createTargetDeliveryIntentFixture(),
-    claim,
-    observation: createTargetDeliveryHostEffectObservationFixture({ claim }),
+    envelope,
+    delivery: deliveryBindingFromOutcome(
+      createDeliveryOutcomeFixture({ claim, envelope, disposition: "indeterminate", readbackStatus: "unavailable" }),
+    ),
     report,
   });
   equal(result.report.outcome, "blocked");
+  equal(result.delivery.disposition, "indeterminate");
   equal(Object.hasOwn(result, "accepted"), false);
 });

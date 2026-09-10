@@ -46,28 +46,6 @@ import {
   type TaskPackage,
 } from "../../tasking/task-package.js";
 import {
-  parseTargetDeliveryIntent,
-  TargetDeliveryIntentError,
-  type TargetDeliveryIntent,
-} from "../../delivery/target-delivery-intent.js";
-import {
-  parseWindowWorkClaim,
-  WindowWorkClaimError,
-  type WindowWorkClaim,
-} from "../../delivery/window-work-claim.js";
-import {
-  parseTargetDeliveryHostEffectObservation,
-  targetDeliveryHostEffectObservationEventId,
-  TargetDeliveryHostEffectObservationError,
-  type TargetDeliveryHostEffectObservation,
-} from "../../delivery/target-delivery-host-effect-observation.js";
-import {
-  parseTargetHostEffectRearm,
-  targetHostEffectRearmEventId,
-  TargetHostEffectRearmError,
-  type TargetHostEffectRearm,
-} from "../../delivery/target-host-effect-rearm.js";
-import {
   parseTargetResult,
   targetResultRecordedEventIdFromResult,
   TargetResultError,
@@ -106,11 +84,22 @@ import {
   TestCardGenerationSourceError,
   type TestCardGenerationSource,
 } from "../../testing/test-card-generation-source.js";
+
 import {
-  parseTestDeliveryIntent,
-  TestDeliveryIntentError,
-  type TestDeliveryIntent,
-} from "../../testing/test-delivery-intent.js";
+  DeliveryEnvelopeError,
+  parseDeliveryEnvelope,
+  type DeliveryEnvelope,
+} from "../../delivery/delivery-envelope.js";
+import {
+  DeliveryOutcomeError,
+  parseDeliveryOutcome,
+  type DeliveryOutcome,
+} from "../../delivery/delivery-outcome.js";
+import {
+  DeliveryRearmError,
+  parseDeliveryRearm,
+  type DeliveryRearm,
+} from "../../delivery/delivery-rearm.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：尚未进入事件存储的领域事件。
@@ -219,53 +208,33 @@ export interface TestCardCreatedUncommittedEvent {
   }>;
 }
 
-export interface TargetDeliveryPreparedUncommittedEvent {
+export interface DeliveryPreparedUncommittedEvent {
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly recordedAt: UtcInstant;
-  readonly eventType: "delivery.target-delivery-prepared";
+  readonly eventType: "delivery.delivery-prepared";
   readonly data: Readonly<{
-    readonly intent: Readonly<TargetDeliveryIntent>;
+    readonly envelope: Readonly<DeliveryEnvelope>;
   }>;
 }
 
-export interface TestDeliveryPreparedUncommittedEvent {
+export interface DeliveryOutcomeRecordedUncommittedEvent {
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly recordedAt: UtcInstant;
-  readonly eventType: "testing.test-delivery-prepared";
+  readonly eventType: "delivery.delivery-outcome-recorded";
   readonly data: Readonly<{
-    readonly intent: Readonly<TestDeliveryIntent>;
+    readonly outcome: Readonly<DeliveryOutcome>;
   }>;
 }
 
-export interface TargetHostEffectClaimedUncommittedEvent {
+export interface DeliveryRearmedUncommittedEvent {
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly recordedAt: UtcInstant;
-  readonly eventType: "delivery.target-host-effect-claimed";
+  readonly eventType: "delivery.delivery-rearmed";
   readonly data: Readonly<{
-    readonly claim: Readonly<WindowWorkClaim>;
-  }>;
-}
-
-export interface TargetHostEffectObservedUncommittedEvent {
-  readonly eventId: WakeflowDurableId<"demand-event">;
-  readonly demandId: WakeflowDurableId<"demand">;
-  readonly recordedAt: UtcInstant;
-  readonly eventType: "delivery.target-host-effect-observed";
-  readonly data: Readonly<{
-    readonly observation: Readonly<TargetDeliveryHostEffectObservation>;
-  }>;
-}
-
-export interface TargetHostEffectRearmedUncommittedEvent {
-  readonly eventId: WakeflowDurableId<"demand-event">;
-  readonly demandId: WakeflowDurableId<"demand">;
-  readonly recordedAt: UtcInstant;
-  readonly eventType: "delivery.target-host-effect-rearmed";
-  readonly data: Readonly<{
-    readonly rearm: Readonly<TargetHostEffectRearm>;
+    readonly rearm: Readonly<DeliveryRearm>;
   }>;
 }
 
@@ -319,11 +288,9 @@ export type DemandUncommittedEvent =
   | ManagedEvidenceRecordedUncommittedEvent
   | TestCardCreatedUncommittedEvent
   | TargetTaskPlannedUncommittedEvent
-  | TestDeliveryPreparedUncommittedEvent
-  | TargetDeliveryPreparedUncommittedEvent
-  | TargetHostEffectClaimedUncommittedEvent
-  | TargetHostEffectObservedUncommittedEvent
-  | TargetHostEffectRearmedUncommittedEvent
+  | DeliveryPreparedUncommittedEvent
+  | DeliveryOutcomeRecordedUncommittedEvent
+  | DeliveryRearmedUncommittedEvent
   | TargetResultRecordedUncommittedEvent
   | ControllerTargetReviewDecidedUncommittedEvent
   | ControllerTargetReviewResumedUncommittedEvent
@@ -337,11 +304,9 @@ export type DemandEventSourcingEventErrorReason =
   | "event-type"
   | "text"
   | "task-package"
-  | "target-delivery-intent"
-  | "test-delivery-intent"
-  | "window-work-claim"
-  | "target-delivery-host-effect-observation"
-  | "target-host-effect-rearm"
+  | "delivery-envelope"
+  | "delivery-outcome"
+  | "delivery-rearm"
   | "target-result"
   | "controller-review-decision"
   | "controller-product-defect-remediation-authorization"
@@ -363,16 +328,12 @@ const ERROR_MESSAGES = {
   text: "Demand Event Sourcing event contains non-canonical text.",
   "task-package":
     "Demand Event Sourcing event contains an invalid TaskPackage.",
-  "target-delivery-intent":
-    "Demand Event Sourcing event contains an invalid Target Delivery Intent.",
-  "test-delivery-intent":
-    "Demand Event Sourcing event contains an invalid Test Delivery Intent.",
-  "window-work-claim":
-    "Demand Event Sourcing event contains an invalid Window Work Claim.",
-  "target-delivery-host-effect-observation":
-    "Demand Event Sourcing event contains an invalid Target Delivery Host Effect observation.",
-  "target-host-effect-rearm":
-    "Demand Event Sourcing event contains an invalid Target Host Effect Rearm.",
+  "delivery-envelope":
+    "Demand Event Sourcing event contains an invalid Delivery Envelope.",
+  "delivery-outcome":
+    "Demand Event Sourcing event contains an invalid Delivery Outcome.",
+  "delivery-rearm":
+    "Demand Event Sourcing event contains an invalid Delivery Rearm.",
   "target-result":
     "Demand Event Sourcing event contains an invalid TargetResult.",
   "controller-review-decision":
@@ -472,17 +433,9 @@ const TEST_CARD_CREATED_DATA_FIELDS = Object.freeze([
   "generationSource",
   "testCard",
 ] as const);
-const TARGET_DELIVERY_PREPARED_DATA_FIELDS = Object.freeze(["intent"] as const);
-const TEST_DELIVERY_PREPARED_DATA_FIELDS = Object.freeze(["intent"] as const);
-const TARGET_HOST_EFFECT_CLAIMED_DATA_FIELDS = Object.freeze([
-  "claim",
-] as const);
-const TARGET_HOST_EFFECT_OBSERVED_DATA_FIELDS = Object.freeze([
-  "observation",
-] as const);
-const TARGET_HOST_EFFECT_REARMED_DATA_FIELDS = Object.freeze([
-  "rearm",
-] as const);
+const DELIVERY_PREPARED_DATA_FIELDS = Object.freeze(["envelope"] as const);
+const DELIVERY_OUTCOME_RECORDED_DATA_FIELDS = Object.freeze(["outcome"] as const);
+const DELIVERY_REARMED_DATA_FIELDS = Object.freeze(["rearm"] as const);
 const TARGET_RESULT_RECORDED_DATA_FIELDS = Object.freeze(["result"] as const);
 const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze([
   "decision",
@@ -774,150 +727,65 @@ export function parseDemandUncommittedEvent(
     });
   }
 
-  if (record.eventType === "delivery.target-delivery-prepared") {
-    const data = exactRecord(
-      record.data,
-      TARGET_DELIVERY_PREPARED_DATA_FIELDS,
-      "$/data",
-    );
-    let intent: Readonly<TargetDeliveryIntent>;
+  if (record.eventType === "delivery.delivery-prepared") {
+    const data = exactRecord(record.data, DELIVERY_PREPARED_DATA_FIELDS, "$/data");
+    let envelope: Readonly<DeliveryEnvelope>;
     try {
-      intent = parseTargetDeliveryIntent(data.intent);
+      envelope = parseDeliveryEnvelope(data.envelope);
     } catch (error: unknown) {
-      if (error instanceof TargetDeliveryIntentError) {
-        fail("target-delivery-intent", "$/data/intent");
+      if (error instanceof DeliveryEnvelopeError) {
+        fail("delivery-envelope", "$/data/envelope");
       }
       throw error;
     }
-    if (intent.demandId !== demandId || intent.preparedAt !== recordedAt) {
+    if (envelope.demandId !== demandId || envelope.preparedAt !== recordedAt) {
       fail("relation", "$event");
     }
     return Object.freeze({
       eventId,
       demandId,
       recordedAt,
-      eventType: "delivery.target-delivery-prepared",
-      data: Object.freeze({ intent }),
+      eventType: "delivery.delivery-prepared",
+      data: Object.freeze({ envelope }),
     });
   }
 
-  if (record.eventType === "testing.test-delivery-prepared") {
-    const data = exactRecord(
-      record.data,
-      TEST_DELIVERY_PREPARED_DATA_FIELDS,
-      "$/data",
-    );
-    let intent: Readonly<TestDeliveryIntent>;
+  if (record.eventType === "delivery.delivery-outcome-recorded") {
+    const data = exactRecord(record.data, DELIVERY_OUTCOME_RECORDED_DATA_FIELDS, "$/data");
+    let outcome: Readonly<DeliveryOutcome>;
     try {
-      intent = parseTestDeliveryIntent(data.intent);
+      outcome = parseDeliveryOutcome(data.outcome);
     } catch (error: unknown) {
-      if (error instanceof TestDeliveryIntentError) {
-        fail("test-delivery-intent", "$/data/intent");
+      if (error instanceof DeliveryOutcomeError) {
+        fail("delivery-outcome", "$/data/outcome");
       }
       throw error;
     }
-    if (intent.demandId !== demandId || intent.preparedAt !== recordedAt) {
-      fail("relation", "$event");
-    }
+    if (outcome.observedAt !== recordedAt) fail("relation", "$event");
     return Object.freeze({
       eventId,
       demandId,
       recordedAt,
-      eventType: "testing.test-delivery-prepared",
-      data: Object.freeze({ intent }),
+      eventType: "delivery.delivery-outcome-recorded",
+      data: Object.freeze({ outcome }),
     });
   }
 
-  if (record.eventType === "delivery.target-host-effect-claimed") {
-    const data = exactRecord(
-      record.data,
-      TARGET_HOST_EFFECT_CLAIMED_DATA_FIELDS,
-      "$/data",
-    );
-    let claim: Readonly<WindowWorkClaim>;
+  if (record.eventType === "delivery.delivery-rearmed") {
+    const data = exactRecord(record.data, DELIVERY_REARMED_DATA_FIELDS, "$/data");
+    let rearm: Readonly<DeliveryRearm>;
     try {
-      claim = parseWindowWorkClaim(data.claim);
+      rearm = parseDeliveryRearm(data.rearm);
     } catch (error: unknown) {
-      if (error instanceof WindowWorkClaimError) {
-        fail("window-work-claim", "$/data/claim");
-      }
+      if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$/data/rearm");
       throw error;
     }
-    if (
-      claim.target.demandId !== demandId ||
-      claim.claimedAt !== recordedAt ||
-      claim.claimTransition.eventId !== eventId
-    ) {
-      fail("relation", "$event");
-    }
+    if (rearm.rearmedAt !== recordedAt) fail("relation", "$event");
     return Object.freeze({
       eventId,
       demandId,
       recordedAt,
-      eventType: "delivery.target-host-effect-claimed",
-      data: Object.freeze({ claim }),
-    });
-  }
-
-  if (record.eventType === "delivery.target-host-effect-observed") {
-    const data = exactRecord(
-      record.data,
-      TARGET_HOST_EFFECT_OBSERVED_DATA_FIELDS,
-      "$/data",
-    );
-    let observation: Readonly<TargetDeliveryHostEffectObservation>;
-    try {
-      observation = parseTargetDeliveryHostEffectObservation(data.observation);
-    } catch (error: unknown) {
-      if (error instanceof TargetDeliveryHostEffectObservationError) {
-        fail("target-delivery-host-effect-observation", "$/data/observation");
-      }
-      throw error;
-    }
-    if (
-      observation.observedAt !== recordedAt ||
-      targetDeliveryHostEffectObservationEventId(
-        observation.action.actionId,
-      ) !== eventId
-    ) {
-      fail("relation", "$event");
-    }
-    return Object.freeze({
-      eventId,
-      demandId,
-      recordedAt,
-      eventType: "delivery.target-host-effect-observed",
-      data: Object.freeze({ observation }),
-    });
-  }
-
-  if (record.eventType === "delivery.target-host-effect-rearmed") {
-    const data = exactRecord(
-      record.data,
-      TARGET_HOST_EFFECT_REARMED_DATA_FIELDS,
-      "$/data",
-    );
-    let rearm: Readonly<TargetHostEffectRearm>;
-    try {
-      rearm = parseTargetHostEffectRearm(data.rearm);
-    } catch (error: unknown) {
-      if (error instanceof TargetHostEffectRearmError) {
-        fail("target-host-effect-rearm", "$/data/rearm");
-      }
-      throw error;
-    }
-    if (
-      rearm.target.demandId !== demandId ||
-      rearm.rearmedAt !== recordedAt ||
-      targetHostEffectRearmEventId(rearm) !== eventId
-    ) {
-      fail("relation", "$event");
-    }
-    return Object.freeze({
-      eventId,
-      demandId,
-      recordedAt,
-      eventType: "delivery.target-host-effect-rearmed",
+      eventType: "delivery.delivery-rearmed",
       data: Object.freeze({ rearm }),
     });
   }

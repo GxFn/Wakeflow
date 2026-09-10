@@ -95,7 +95,7 @@ test("plan_target_task 一次调用追加规划事件并返回 next；重放、�
     equal(committed.targetTask.lineage, null);
     equal(committed.taskPackageProjection.disposition, "created");
     equal(committed.next.frontier, "implementation-delivery-planning");
-    equal(committed.next.suggestedTool, "wakeflow_prepare_implementation_delivery");
+    equal(committed.next.suggestedTool, "wakeflow_prepare_delivery");
     equal(JSON.stringify(committed).includes(fixture.workspacePath), false);
     equal(await commitCount(fixture), before + 1);
 

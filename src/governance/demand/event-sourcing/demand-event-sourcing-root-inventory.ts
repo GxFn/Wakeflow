@@ -39,11 +39,9 @@ import {
 } from "../../tasking/task-package-projection-paths.js";
 import {
   parseTestCardProjectionFileName,
-  parseTestDispatchPacketProjectionFileName,
   TEST_CARD_PROJECTIONS_ROOT_REF,
-  TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF,
-  TestDispatchProjectionPathError,
-} from "../../testing/test-dispatch-projection-paths.js";
+  TestCardProjectionPathError,
+} from "../../testing/test-card-projection-paths.js";
 import {
   inspectManagedEvidenceRecordSetInventory,
   ManagedEvidenceRecordSetInventoryError,
@@ -89,7 +87,6 @@ export interface DemandEventSourcingRootInventory {
     readonly artifacts: Readonly<FileNodeSnapshot>;
     readonly taskPackages: Readonly<FileNodeSnapshot>;
     readonly testCards?: Readonly<FileNodeSnapshot>;
-    readonly testDispatchPackets?: Readonly<FileNodeSnapshot>;
     readonly transactions: Readonly<FileNodeSnapshot>;
   }>;
 }
@@ -153,7 +150,6 @@ const ARTIFACT_NAMES = new Set([
   "managed-evidence",
   "task-packages",
   "test-cards",
-  "test-dispatch-packets",
 ]);
 
 function fail(
@@ -437,20 +433,6 @@ export async function inspectDemandEventSourcingRootInventory(
           signal,
           testCardsNode,
         );
-  const testDispatchPacketsNode = optionalEntryNode(
-    artifacts,
-    "test-dispatch-packets",
-  );
-  const testDispatchPackets =
-    testDispatchPacketsNode === undefined
-      ? undefined
-      : await readResource(
-          root,
-          TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF,
-          DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
-          signal,
-          testDispatchPacketsNode,
-        );
   const managedEvidenceNode = optionalEntryNode(artifacts, "managed-evidence");
   const transactions = await readResource(
     root,
@@ -479,25 +461,8 @@ export async function inspectDemandEventSourcingRootInventory(
       try {
         parseTestCardProjectionFileName(entry.name);
       } catch (error: unknown) {
-        if (error instanceof TestDispatchProjectionPathError) {
+        if (error instanceof TestCardProjectionPathError) {
           fail("tree-shape", `$test-cards/${index}`);
-        }
-        throw error;
-      }
-    });
-  }
-  if (testDispatchPackets !== undefined) {
-    assertDirectory(
-      testDispatchPackets.directoryNode,
-      "$test-dispatch-packets",
-    );
-    testDispatchPackets.entries.forEach((entry, index) => {
-      assertFile(entry.node, `$test-dispatch-packets/${index}`);
-      try {
-        parseTestDispatchPacketProjectionFileName(entry.name);
-      } catch (error: unknown) {
-        if (error instanceof TestDispatchProjectionPathError) {
-          fail("tree-shape", `$test-dispatch-packets/${index}`);
         }
         throw error;
       }
@@ -624,7 +589,6 @@ export async function inspectDemandEventSourcingRootInventory(
     artifactCount:
       taskPackages.entries.length +
       (testCards?.entries.length ?? 0) +
-      (testDispatchPackets?.entries.length ?? 0) +
       managedEvidence.recordCount,
     transactionCount: transactions.entries.length as 0 | 1,
     appendCandidateCount: 0,
@@ -647,9 +611,6 @@ export async function inspectDemandEventSourcingRootInventory(
       ...(testCards === undefined
         ? {}
         : { testCards: testCards.directoryNode }),
-      ...(testDispatchPackets === undefined
-        ? {}
-        : { testDispatchPackets: testDispatchPackets.directoryNode }),
       transactions: transactions.directoryNode,
     }),
   });

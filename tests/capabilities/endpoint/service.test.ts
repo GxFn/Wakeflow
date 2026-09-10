@@ -14,11 +14,6 @@ import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflo
 import type { Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { createWindowWorkClaimInStore } from "../../../src/governance/delivery/window-work-claim-store.js";
-import {
-  createWindowWorkClaim,
-  createWindowWorkClaimId,
-} from "../../../src/governance/delivery/window-work-claim.js";
 import { executeClaudeCodeWakeflowMaintenance } from "../../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
@@ -27,6 +22,7 @@ import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-w
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
+import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
 import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 
@@ -322,32 +318,20 @@ test("Codex：replace 以 CAS 换代，decommission 走人工宿主门，声明�
 
   // 一份真实工作声明：持有期间替换与退役都被拒绝；两小时后可强制释放。
   const bindingId = parseWakeflowWindowHostBindingId(registered.binding.bindingId);
-  const claim = createWindowWorkClaim(
-    {
-      claimId: createWindowWorkClaimId(),
-      programId: createWakeflowDurableId("program"),
-      target: {
-        demandId: createWakeflowDurableId("demand"),
-        targetTaskId: createWakeflowDurableId("target-task"),
-        targetDeliveryId: createWakeflowDurableId("target-delivery"),
-        intentDigest: DIGEST("1"),
-        intentPreparedAt: parseUtcInstant("2026-09-04T10:00:30.000Z"),
-      },
-      route: { hostId: "codex", windowId: intent.windowId as never, bindingId },
-      hostObservation: {
-        authorityDigest: DIGEST("2"),
-        observedAt: parseUtcInstant("2026-09-04T10:00:30.000Z"),
-      },
-      claimTransition: {
-        commitId: createWakeflowDurableId("demand-event-commit"),
-        eventId: createWakeflowDurableId("demand-event"),
-        expectedStreamRevision: 3,
-        expectedStateDigest: DIGEST("3"),
-      },
+  const claim = createWorkClaim({
+    claimId: createWakeflowDurableId("work-claim"),
+    hostId: "codex",
+    windowId: intent.windowId as never,
+    bindingId,
+    holder: {
+      demandId: createWakeflowDurableId("demand"),
+      targetTaskId: createWakeflowDurableId("target-task"),
+      deliveryId: createWakeflowDurableId("target-delivery"),
+      generation: 1,
     },
-    { clock: () => parseUtcInstant("2026-09-04T10:01:00.000Z") },
-  );
-  await createWindowWorkClaimInStore(rooted, claim);
+    claimedAt: parseUtcInstant("2026-09-04T10:01:00.000Z"),
+  });
+  await takeWorkClaim(rooted, claim);
   await expectFailure(
     executeWindowBindingRequest(
       CODEX,

@@ -67,7 +67,7 @@
 - 交回指针是 MCP 调用 `wakeflow_record_target_result operation=import`，明确禁止写本地结果文件；目标窗口还可调用 review_pack、prepare_delivery 的 controller 系列、record_delivery 的 controller-outcome。`wakeflow-target/SKILL.md:96-137`。
 - 禁止：XML 或 JSON 包装、目标到目标的下一跳投递、结果里出现原始句柄或绝对路径；长度限制只在文档里。
 
-**现 TS 状态**：`target-delivery-intent.ts` 与 `test-dispatch-packet.ts` 持有 briefing 与 packet；prompt 仍由 Agent 提供并进入 `TargetDeliveryAgentHostAction.prompt`。
+**现 TS 状态**（2026-09-10，gate-log §13.84）：prompt 骨架由 delivery 切片的 `src/capabilities/delivery/prompt.ts` 从任务包与 Controller 三段 `authored{goal, focus, boundary}` 确定性渲染（Q6 落地），全文与摘要进投递信封；packet 家族删除，`sectionAnchors` 进入阅读顺序。
 
 **实现判断**：按 TSD-12"Wakeflow 提供内容"，prompt 应由 Wakeflow 从 packet 确定性渲染骨架，即身份块含 demandId、阅读顺序、必需技能、交回指针、派发记录，Controller 只写目标、完成焦点、边界三段人话；整段 prompt 带摘要进入信封。
 

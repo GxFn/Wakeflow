@@ -143,7 +143,6 @@
         "testTargetTaskId",
         "testCard",
         "testAttemptId",
-        "testDispatchPacketDigest",
         "targetResult",
         "testReviewDecision"
       ],
@@ -180,9 +179,6 @@
         },
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
-        },
-        "testDispatchPacketDigest": {
-          "$ref": "#/$defs/sha256Digest"
         },
         "targetResult": {
           "type": "object",

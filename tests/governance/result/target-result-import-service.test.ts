@@ -5,8 +5,6 @@ import { test } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
-import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   closeDemandOperationAuthorityContext,
   openDemandOperationAuthorityContext,
@@ -17,11 +15,6 @@ import {
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
-import { TargetHostEffectClaimService } from "../../../src/governance/delivery/target-host-effect-claim-service.js";
-import { TargetHostEffectOutcomeService } from "../../../src/governance/delivery/target-host-effect-outcome-service.js";
-import { inspectWindowWorkClaim } from "../../../src/governance/delivery/window-work-claim-store.js";
-import { WINDOW_WORK_CLAIMS_ROOT_REF } from "../../../src/governance/delivery/window-work-claim-resource-catalog.js";
-import { WINDOW_WORK_CLAIM_DIRECTORY_MODE } from "../../../src/governance/delivery/window-work-claim-store.js";
 import { targetResultRecordedCommitIdFromResult } from "../../../src/governance/result/target-result.js";
 import { createImplementationTargetResult } from "../../../src/governance/result/implementation-target-result.js";
 import {
@@ -30,16 +23,24 @@ import {
 } from "../../../src/governance/result/target-result-import-service.js";
 import { createImplementationTargetResultReport } from "../../../src/governance/result/implementation-target-result-report.js";
 import { parseTargetResultImportRequest } from "../../../src/governance/result/target-result-import-input.js";
+import { deriveDurableId } from "../../../src/kernel/ids.js";
+import { WORK_CLAIMS_ROOT_REF } from "../../../src/kernel/layout.js";
+import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
 import {
-  CLAIMED_AT,
-  claimUuidFactory,
-  cleanupTargetHostEffectClaimWorkspaceFixture,
-  createTargetHostEffectClaimWorkspaceFixture,
-} from "../delivery/target-host-effect-claim-service.fixture.js";
+  cleanupDeliveryWorkspaceFixture,
+  createDeliveryWorkspaceFixture,
+  deliverFixtureTarget,
+  loadFixtureDeliveryOutcome,
+  prepareFixtureDelivery,
+  recordFixtureDeliveryOutcome,
+  type DeliveredTarget,
+  type DeliveryWorkspaceFixture,
+} from "../delivery/delivery-workspace.fixture.js";
 import { createImplementationTargetResultReportContentFixture } from "./implementation-target-result-report.fixture.js";
+import { deliveryBindingFromOutcome } from "./target-result.fixture.js";
 
-const OUTCOME_AT = parseUtcInstant("2026-08-29T12:06:00.000Z");
-const REPORTED_AT = parseUtcInstant("2026-08-29T12:03:00.000Z");
+const REPORTED_AT = parseUtcInstant("2026-08-29T12:10:00.000Z");
+const CLAIM_DIRECTORY_MODE = 0o700;
 
 async function aggregate(workspacePath: string, demandId: string) {
   const root = await RootedDirectory.open(
@@ -52,21 +53,14 @@ async function aggregate(workspacePath: string, demandId: string) {
   }
 }
 
-async function loadTaskPackage(
-  fixture: Awaited<
-    ReturnType<typeof createTargetHostEffectClaimWorkspaceFixture>
-  >,
-) {
+async function loadTaskPackage(fixture: Readonly<DeliveryWorkspaceFixture>) {
   const root = await RootedDirectory.open(
-    path.join(
-      fixture.workspacePath,
-      ...demandFinalRootRef(fixture.intent.demandId).split("/"),
-    ),
+    path.join(fixture.workspacePath, ...demandFinalRootRef(fixture.demandId).split("/")),
   );
   try {
-    const located = await new DemandEventSourcingRepository(
-      root,
-    ).findTargetTaskPlannedEvent(fixture.intent.target.taskPackageId);
+    const located = await new DemandEventSourcingRepository(root).findTargetTaskPlannedEvent(
+      fixture.taskPackageId,
+    );
     if (located === null) throw new Error("Expected TaskPackage event.");
     return located.event.data.taskPackage;
   } finally {
@@ -74,65 +68,28 @@ async function loadTaskPackage(
   }
 }
 
-async function prepareOutcome(
-  fixture: Awaited<
-    ReturnType<typeof createTargetHostEffectClaimWorkspaceFixture>
-  >,
-  status: "accepted" | "indeterminate",
-) {
-  const claimed = await new TargetHostEffectClaimService(
-    fixture.workspaceRoot,
-    codexWorkspaceHostResourceProfile,
-    codexWindowHostIdentityProfile,
-  ).claim(fixture.claimRequest, {
-    clock: () => CLAIMED_AT,
-    uuidFactory: claimUuidFactory(),
-  });
-  if (claimed.action === null) throw new Error("Expected issued Action.");
-  const outcome = await new TargetHostEffectOutcomeService(
-    fixture.workspaceRoot,
-    "codex",
-  ).record({
-    demandId: fixture.intent.demandId,
-    actionId: claimed.action.actionId,
-    claimDigest: claimed.action.workClaim.claimDigest,
-    attempt: { status, evidence: { fixture: status } },
-    readback:
-      status === "accepted"
-        ? { status: "pending", evidence: { visible: false } }
-        : { status: "unavailable" },
-    observedAt: OUTCOME_AT,
-  });
-  return { claimed, outcome, taskPackage: await loadTaskPackage(fixture) };
-}
-
-function importRequest(
-  fixture: Awaited<
-    ReturnType<typeof createTargetHostEffectClaimWorkspaceFixture>
-  >,
-  actionId: string,
-  observationDigest: string,
-  taskPackage: Awaited<ReturnType<typeof loadTaskPackage>>,
+async function importRequest(
+  fixture: Readonly<DeliveryWorkspaceFixture>,
+  delivered: Readonly<Pick<DeliveredTarget, "prepared">>,
 ) {
   return {
-    demandId: fixture.intent.demandId,
-    actionId,
-    observationDigest,
+    demandId: fixture.demandId,
+    deliveryId: delivered.prepared.delivery.deliveryId,
+    claimDigest: delivered.prepared.permit.fence.claimDigest,
     report: {
       workType: "implementation" as const,
-      content:
-        createImplementationTargetResultReportContentFixture(taskPackage),
+      content: createImplementationTargetResultReportContentFixture(await loadTaskPackage(fixture)),
     },
   };
 }
 
 async function seedResultEvent(
-  fixture: Awaited<
-    ReturnType<typeof createTargetHostEffectClaimWorkspaceFixture>
-  >,
-  requestValue: ReturnType<typeof importRequest>,
+  fixture: Readonly<DeliveryWorkspaceFixture>,
+  delivered: Readonly<DeliveredTarget>,
+  requestValue: Awaited<ReturnType<typeof importRequest>>,
 ) {
   const request = parseTargetResultImportRequest(requestValue);
+  const outcome = await loadFixtureDeliveryOutcome(fixture, request.deliveryId);
   const context = await openDemandOperationAuthorityContext(
     fixture.workspaceRoot,
     request.demandId,
@@ -140,39 +97,16 @@ async function seedResultEvent(
   );
   try {
     const repository = new DemandEventSourcingRepository(context.demandRoot);
-    const claimEvent = await repository.findTargetHostEffectClaimedEvent(
-      request.actionId,
-    );
-    const preparedEvent =
-      claimEvent === null
-        ? null
-        : await repository.findTargetDeliveryPreparedEvent(
-            claimEvent.event.data.claim.target.targetDeliveryId,
-          );
-    const observedEvent = await repository.findTargetHostEffectObservedEvent(
-      request.actionId,
-    );
-    if (
-      claimEvent === null ||
-      preparedEvent === null ||
-      observedEvent === null
-    ) {
-      throw new Error("Expected complete result source events.");
-    }
     const taskEvent = await repository.findTargetTaskPlannedEvent(
-      preparedEvent.event.data.intent.target.taskPackageId,
+      delivered.envelope.target.taskPackageId,
     );
-    if (
-      taskEvent === null ||
-      taskEvent.event.data.taskPackage.workType !== "implementation"
-    ) {
+    if (taskEvent === null || taskEvent.event.data.taskPackage.workType !== "implementation") {
       throw new Error("Expected implementation TaskPackage event.");
     }
     const result = createImplementationTargetResult({
       taskPackage: taskEvent.event.data.taskPackage,
-      intent: preparedEvent.event.data.intent,
-      claim: claimEvent.event.data.claim,
-      observation: observedEvent.event.data.observation,
+      envelope: delivered.envelope,
+      delivery: deliveryBindingFromOutcome(outcome),
       report: createImplementationTargetResultReport(request.report.content, {
         clock: () => REPORTED_AT,
       }),
@@ -180,13 +114,9 @@ async function seedResultEvent(
     await rejects(
       executeDemandEventSourcingCommand(
         repository,
+        { commandType: "result.record-target-result", commandVersion: 1, result },
         {
-          commandType: "result.record-target-result",
-          commandVersion: 1,
-          result,
-        },
-        {
-          commitId: claimEvent.event.data.claim.claimTransition.commitId,
+          commitId: deriveDurableId("demand-event-commit", "wrong-result-commit", request.demandId),
           expectedStreamRevision: context.loaded.aggregate.streamRevision,
         },
       ),
@@ -196,11 +126,7 @@ async function seedResultEvent(
     );
     return await executeDemandEventSourcingCommand(
       repository,
-      {
-        commandType: "result.record-target-result",
-        commandVersion: 1,
-        result,
-      },
+      { commandType: "result.record-target-result", commandVersion: 1, result },
       {
         commitId: targetResultRecordedCommitIdFromResult(result),
         expectedStreamRevision: context.loaded.aggregate.streamRevision,
@@ -211,47 +137,34 @@ async function seedResultEvent(
   }
 }
 
-test("accepted TargetResult Event提交后释放Claim且精确重试幂等", async () => {
-  const fixture = await createTargetHostEffectClaimWorkspaceFixture();
+test("accepted TargetResult Event提交后释放声明且精确重试幂等；围栏、宿主与报告漂移被拒", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
   try {
-    const { claimed, outcome, taskPackage } = await prepareOutcome(
-      fixture,
-      "accepted",
+    const delivered = await deliverFixtureTarget(fixture);
+    const request = await importRequest(fixture, delivered);
+    const service = new TargetResultImportService(fixture.workspaceRoot, "codex");
+    await rejects(
+      service.import({ ...request, claimDigest: `sha256:${"f".repeat(64)}` }),
+      (error: unknown) =>
+        error instanceof TargetResultImportServiceError && error.reason === "fence",
     );
-    const request = importRequest(
-      fixture,
-      claimed.claim.claimId,
-      outcome.observation.observationDigest,
-      taskPackage,
+    await rejects(
+      new TargetResultImportService(fixture.workspaceRoot, "claude-code").import(request),
+      (error: unknown) =>
+        error instanceof TargetResultImportServiceError && error.reason === "host",
     );
-    const service = new TargetResultImportService(
-      fixture.workspaceRoot,
-      "codex",
-    );
-    const recorded = await service.import(request, {
-      clock: () => REPORTED_AT,
-    });
+    const recorded = await service.import(request, { clock: () => REPORTED_AT });
     equal(recorded.status, "recorded");
     equal(recorded.result.report.outcome, "completed");
-    equal(
-      recorded.result.report.reportedAt < recorded.result.hostEffect.observedAt,
-      true,
-    );
+    equal(recorded.result.deliveryId, delivered.prepared.delivery.deliveryId);
+    equal(recorded.result.delivery.disposition, "accepted");
+    equal(recorded.result.delivery.fence.claimDigest, delivered.prepared.permit.fence.claimDigest);
     equal(recorded.claimAuthority, "released");
     equal(
-      (await aggregate(fixture.workspacePath, fixture.intent.demandId)).state
-        .targetTasks[0]?.phase,
+      (await aggregate(fixture.workspacePath, fixture.demandId)).state.targetTasks[0]?.phase,
       "result-reported",
     );
-    equal(
-      (
-        await inspectWindowWorkClaim(
-          fixture.workspaceRoot,
-          fixture.intent.route.windowId,
-        )
-      ).status,
-      "absent",
-    );
+    equal((await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId)).status, "absent");
 
     const replayed = await service.import(request, {
       clock: () => parseUtcInstant("2026-08-29T12:20:00.000Z"),
@@ -263,10 +176,7 @@ test("accepted TargetResult Event提交后释放Claim且精确重试幂等", asy
         ...request,
         report: {
           ...request.report,
-          content: {
-            ...request.report.content,
-            summary: "同一Action不能覆盖为另一份Agent Report。",
-          },
+          content: { ...request.report.content, summary: "同一投递不能覆盖为另一份Agent Report。" },
         },
       }),
       (error: unknown) =>
@@ -275,112 +185,70 @@ test("accepted TargetResult Event提交后释放Claim且精确重试幂等", asy
         error.eventAuthority === "current",
     );
     await rejects(
-      service.import({
-        ...request,
-        observationDigest: `sha256:${"f".repeat(64)}`,
-      }),
+      new TargetResultImportService(fixture.workspaceRoot, "claude-code").import(request),
       (error: unknown) =>
-        error instanceof TargetResultImportServiceError &&
-        error.reason === "state" &&
-        error.eventAuthority === "current",
-    );
-    await rejects(
-      new TargetResultImportService(
-        fixture.workspaceRoot,
-        "claude-code",
-      ).import(request),
-      (error: unknown) =>
-        error instanceof TargetResultImportServiceError &&
-        error.reason === "host" &&
-        error.eventAuthority === "current",
+        error instanceof TargetResultImportServiceError && error.reason === "host",
     );
   } finally {
-    await cleanupTargetHostEffectClaimWorkspaceFixture(fixture);
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });
 
-test("indeterminate transport可以由真实TargetResult关闭工作Claim", async () => {
-  const fixture = await createTargetHostEffectClaimWorkspaceFixture();
+test("indeterminate 结局可以由真实 TargetResult 关闭工作声明", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
   try {
-    const { claimed, outcome, taskPackage } = await prepareOutcome(
-      fixture,
-      "indeterminate",
+    const prepared = await prepareFixtureDelivery(fixture);
+    const recorded = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      attempt: { status: "sent" },
+      readback: { status: "unavailable" },
+    });
+    equal(recorded.outcome.disposition, "indeterminate");
+    equal(recorded.outcome.claimHandling, "retain");
+    const imported = await new TargetResultImportService(fixture.workspaceRoot, "codex").import(
+      await importRequest(fixture, { prepared }),
+      { clock: () => REPORTED_AT },
     );
-    const recorded = await new TargetResultImportService(
-      fixture.workspaceRoot,
-      "codex",
-    ).import(
-      importRequest(
-        fixture,
-        claimed.claim.claimId,
-        outcome.observation.observationDigest,
-        taskPackage,
-      ),
-      {
-        clock: () => REPORTED_AT,
-      },
-    );
-    equal(recorded.result.hostEffect.disposition, "indeterminate");
-    equal(recorded.claimAuthority, "released");
+    equal(imported.result.delivery.disposition, "indeterminate");
+    equal(imported.claimAuthority, "released");
+    equal((await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId)).status, "absent");
   } finally {
-    await cleanupTargetHostEffectClaimWorkspaceFixture(fixture);
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });
 
-test("Result Event已提交但Claim仍在时，重试只完成精确释放", async () => {
-  const fixture = await createTargetHostEffectClaimWorkspaceFixture();
-  const claimRootPath = path.join(
-    fixture.workspacePath,
-    ...WINDOW_WORK_CLAIMS_ROOT_REF.split("/"),
-  );
+test("Result Event已提交但声明仍在时，重试只完成精确释放", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  const claimRootPath = path.join(fixture.workspacePath, ...WORK_CLAIMS_ROOT_REF.split("/"));
   let claimRootRestricted = false;
   try {
-    const { claimed, outcome, taskPackage } = await prepareOutcome(
-      fixture,
-      "accepted",
-    );
-    const request = importRequest(
-      fixture,
-      claimed.claim.claimId,
-      outcome.observation.observationDigest,
-      taskPackage,
-    );
-    const seeded = await seedResultEvent(fixture, request);
+    const delivered = await deliverFixtureTarget(fixture);
+    const request = await importRequest(fixture, delivered);
+    const seeded = await seedResultEvent(fixture, delivered, request);
     equal(seeded.disposition, "committed");
-    equal(
-      (
-        await inspectWindowWorkClaim(
-          fixture.workspaceRoot,
-          fixture.intent.route.windowId,
-        )
-      ).status,
-      "claimed",
-    );
+    equal((await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId)).status, "claimed");
     await chmod(claimRootPath, 0o500);
     claimRootRestricted = true;
     await rejects(
-      new TargetResultImportService(fixture.workspaceRoot, "codex").import(
-        request,
-        { clock: () => REPORTED_AT },
-      ),
+      new TargetResultImportService(fixture.workspaceRoot, "codex").import(request, {
+        clock: () => REPORTED_AT,
+      }),
       (error: unknown) =>
         error instanceof TargetResultImportServiceError &&
         error.reason === "claim" &&
         error.claimAuthority === "unknown" &&
         error.eventAuthority === "current",
     );
-    await chmod(claimRootPath, WINDOW_WORK_CLAIM_DIRECTORY_MODE);
+    await chmod(claimRootPath, CLAIM_DIRECTORY_MODE);
     claimRootRestricted = false;
-    const recovered = await new TargetResultImportService(
-      fixture.workspaceRoot,
-      "codex",
-    ).import(request, { clock: () => REPORTED_AT });
+    const recovered = await new TargetResultImportService(fixture.workspaceRoot, "codex").import(
+      request,
+      { clock: () => REPORTED_AT },
+    );
     equal(recovered.status, "already-recorded");
     equal(recovered.claimAuthority, "released");
+    equal((await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId)).status, "absent");
   } finally {
-    if (claimRootRestricted) {
-      await chmod(claimRootPath, WINDOW_WORK_CLAIM_DIRECTORY_MODE);
-    }
-    await cleanupTargetHostEffectClaimWorkspaceFixture(fixture);
+    if (claimRootRestricted) await chmod(claimRootPath, CLAIM_DIRECTORY_MODE);
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });

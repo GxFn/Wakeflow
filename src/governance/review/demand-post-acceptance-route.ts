@@ -12,7 +12,6 @@ import {
   PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import type { WindowWorkClaimId } from "../delivery/window-work-claim.js";
 import {
   closeDemandOperationAuthorityContext,
   openDemandOperationAuthorityContext,
@@ -128,55 +127,18 @@ export type DemandPostAcceptanceNextStage =
       }>;
     }>
   | Readonly<{
-      readonly status: "test-dispatch-planning";
-      readonly testDelivery: Readonly<{
-        readonly targetTaskId: WakeflowDurableId<"target-task">;
-        readonly taskPackageId: WakeflowDurableId<"task-package">;
-        readonly taskPackageDigest: Sha256Digest;
-        readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
-        readonly intentDigest: Sha256Digest;
-        readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-        readonly testCardId: WakeflowDurableId<"test-card">;
-        readonly testCardDigest: Sha256Digest;
-        readonly testWindowId: WakeflowDurableId<"window">;
-      }>;
-    }>
-  | Readonly<{
-      readonly status: "test-host-effect-claimed";
-      readonly testDelivery: Readonly<{
-        readonly targetTaskId: WakeflowDurableId<"target-task">;
-        readonly taskPackageId: WakeflowDurableId<"task-package">;
-        readonly taskPackageDigest: Sha256Digest;
-        readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
-        readonly intentDigest: Sha256Digest;
-        readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-        readonly testDispatchPacketDigest: Sha256Digest;
-        readonly workClaimId: WindowWorkClaimId;
-        readonly workClaimDigest: Sha256Digest;
-        readonly testCardId: WakeflowDurableId<"test-card">;
-        readonly testCardDigest: Sha256Digest;
-        readonly testWindowId: WakeflowDurableId<"window">;
-      }>;
+      readonly status: "test-host-effect-execution";
+      readonly testDelivery: Readonly<DemandPostAcceptanceTestDelivery>;
     }>
   | Readonly<{
       readonly status: "test-result-planning";
-      readonly testDelivery: Readonly<{
-        readonly targetTaskId: WakeflowDurableId<"target-task">;
-        readonly taskPackageId: WakeflowDurableId<"task-package">;
-        readonly taskPackageDigest: Sha256Digest;
-        readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
-        readonly intentDigest: Sha256Digest;
-        readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-        readonly testDispatchPacketDigest: Sha256Digest;
-        readonly workClaimId: WindowWorkClaimId;
-        readonly workClaimDigest: Sha256Digest;
-        readonly observationDigest: Sha256Digest;
-        readonly disposition: "accepted" | "indeterminate";
-        readonly readbackStatus: "confirmed" | "pending" | "unavailable";
-        readonly testCardId: WakeflowDurableId<"test-card">;
-        readonly testCardDigest: Sha256Digest;
-        readonly testWindowId: WakeflowDurableId<"window">;
-      }>;
+      readonly testDelivery: Readonly<
+        DemandPostAcceptanceTestDelivery & {
+          readonly outcomeDigest: Sha256Digest;
+          readonly disposition: "accepted" | "indeterminate";
+          readonly readbackStatus: "confirmed" | "pending" | "unavailable";
+        }
+      >;
     }>
   | Readonly<{
       readonly status: "test-result-review-planning";
@@ -184,7 +146,7 @@ export type DemandPostAcceptanceNextStage =
         readonly targetTaskId: WakeflowDurableId<"target-task">;
         readonly taskPackageId: WakeflowDurableId<"task-package">;
         readonly taskPackageDigest: Sha256Digest;
-        readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
+        readonly deliveryId: WakeflowDurableId<"target-delivery">;
         readonly testAttemptId: WakeflowDurableId<"test-attempt">;
         readonly testCardId: WakeflowDurableId<"test-card">;
         readonly testCardDigest: Sha256Digest;
@@ -206,21 +168,31 @@ export type DemandPostAcceptanceNextStage =
       readonly testReview: Readonly<DemandPostAcceptanceReviewedTest>;
     }>
   | Readonly<{
-      readonly status: "test-delivery-replacement-planning";
-      readonly rejectedDelivery: Readonly<{
-        readonly targetTaskId: WakeflowDurableId<"target-task">;
-        readonly targetDeliveryId: WakeflowDurableId<"target-delivery">;
-        readonly intentDigest: Sha256Digest;
-        readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-        readonly testDispatchPacketDigest: Sha256Digest;
-        readonly workClaimId: WindowWorkClaimId;
-        readonly workClaimDigest: Sha256Digest;
-        readonly observationDigest: Sha256Digest;
-        readonly testCardId: WakeflowDurableId<"test-card">;
-        readonly testCardDigest: Sha256Digest;
-        readonly testWindowId: WakeflowDurableId<"window">;
-      }>;
+      readonly status: "test-delivery-rearm-planning";
+      readonly rejectedDelivery: Readonly<
+        DemandPostAcceptanceTestDelivery & {
+          readonly outcomeDigest: Sha256Digest;
+        }
+      >;
     }>;
+
+/** 当前 test 投递的最小摘要：信封身份、代际与围栏；prompt 与处置全文留在事件里。 */
+export interface DemandPostAcceptanceTestDelivery {
+  readonly targetTaskId: WakeflowDurableId<"target-task">;
+  readonly taskPackageId: WakeflowDurableId<"task-package">;
+  readonly taskPackageDigest: Sha256Digest;
+  readonly deliveryId: WakeflowDurableId<"target-delivery">;
+  readonly envelopeDigest: Sha256Digest;
+  readonly generation: number;
+  readonly fence: Readonly<{
+    readonly claimId: WakeflowDurableId<"work-claim">;
+    readonly claimDigest: Sha256Digest;
+  }>;
+  readonly testAttemptId: WakeflowDurableId<"test-attempt">;
+  readonly testCardId: WakeflowDurableId<"test-card">;
+  readonly testCardDigest: Sha256Digest;
+  readonly testWindowId: WakeflowDurableId<"window">;
+}
 
 export interface DemandPostAcceptanceRoute {
   readonly kind: typeof ROUTE_KIND;
@@ -428,40 +400,40 @@ function nextStage(
     if (testTarget.windowId !== currentTestCard.testWindowId) {
       fail("relation");
     }
+    const testDelivery = (
+      target: typeof testTarget & {
+        readonly currentDelivery: Readonly<{
+          readonly deliveryId: WakeflowDurableId<"target-delivery">;
+          readonly envelopeDigest: Sha256Digest;
+          readonly generation: number;
+          readonly fence: Readonly<{
+            readonly claimId: WakeflowDurableId<"work-claim">;
+            readonly claimDigest: Sha256Digest;
+          }>;
+          readonly testAttemptId: WakeflowDurableId<"test-attempt">;
+        }>;
+      },
+    ): Readonly<DemandPostAcceptanceTestDelivery> =>
+      Object.freeze({
+        targetTaskId: target.targetTaskId,
+        taskPackageId: target.taskPackageId,
+        taskPackageDigest: target.taskPackageDigest,
+        deliveryId: target.currentDelivery.deliveryId,
+        envelopeDigest: target.currentDelivery.envelopeDigest,
+        generation: target.currentDelivery.generation,
+        fence: Object.freeze({
+          claimId: target.currentDelivery.fence.claimId,
+          claimDigest: target.currentDelivery.fence.claimDigest,
+        }),
+        testAttemptId: target.currentDelivery.testAttemptId,
+        testCardId: target.testCard.testCardId,
+        testCardDigest: target.testCard.testCardDigest,
+        testWindowId: target.windowId,
+      });
     if (testTarget.phase === "test-delivery-prepared") {
       return Object.freeze({
-        status: "test-dispatch-planning" as const,
-        testDelivery: Object.freeze({
-          targetTaskId: testTarget.targetTaskId,
-          taskPackageId: testTarget.taskPackageId,
-          taskPackageDigest: testTarget.taskPackageDigest,
-          targetDeliveryId: testTarget.currentDelivery.targetDeliveryId,
-          intentDigest: testTarget.currentDelivery.intentDigest,
-          testAttemptId: testTarget.currentDelivery.testAttemptId,
-          testCardId: testTarget.testCard.testCardId,
-          testCardDigest: testTarget.testCard.testCardDigest,
-          testWindowId: testTarget.windowId,
-        }),
-      });
-    }
-    if (testTarget.phase === "test-host-effect-claimed") {
-      return Object.freeze({
-        status: "test-host-effect-claimed" as const,
-        testDelivery: Object.freeze({
-          targetTaskId: testTarget.targetTaskId,
-          taskPackageId: testTarget.taskPackageId,
-          taskPackageDigest: testTarget.taskPackageDigest,
-          targetDeliveryId: testTarget.currentDelivery.targetDeliveryId,
-          intentDigest: testTarget.currentDelivery.intentDigest,
-          testAttemptId: testTarget.currentDelivery.testAttemptId,
-          testDispatchPacketDigest:
-            testTarget.currentDelivery.workClaim.testDispatchPacketDigest,
-          workClaimId: testTarget.currentDelivery.workClaim.claimId,
-          workClaimDigest: testTarget.currentDelivery.workClaim.claimDigest,
-          testCardId: testTarget.testCard.testCardId,
-          testCardDigest: testTarget.testCard.testCardDigest,
-          testWindowId: testTarget.windowId,
-        }),
+        status: "test-host-effect-execution" as const,
+        testDelivery: testDelivery(testTarget),
       });
     }
     if (
@@ -471,46 +443,22 @@ function nextStage(
       return Object.freeze({
         status: "test-result-planning" as const,
         testDelivery: Object.freeze({
-          targetTaskId: testTarget.targetTaskId,
-          taskPackageId: testTarget.taskPackageId,
-          taskPackageDigest: testTarget.taskPackageDigest,
-          targetDeliveryId: testTarget.currentDelivery.targetDeliveryId,
-          intentDigest: testTarget.currentDelivery.intentDigest,
-          testAttemptId: testTarget.currentDelivery.testAttemptId,
-          testDispatchPacketDigest:
-            testTarget.currentDelivery.workClaim.testDispatchPacketDigest,
-          workClaimId: testTarget.currentDelivery.workClaim.claimId,
-          workClaimDigest: testTarget.currentDelivery.workClaim.claimDigest,
-          observationDigest:
-            testTarget.currentDelivery.hostEffect.observationDigest,
+          ...testDelivery(testTarget),
+          outcomeDigest: testTarget.currentDelivery.outcome.outcomeDigest,
           disposition:
             testTarget.phase === "test-host-effect-accepted"
               ? ("accepted" as const)
               : ("indeterminate" as const),
-          readbackStatus: testTarget.currentDelivery.hostEffect.readbackStatus,
-          testCardId: testTarget.testCard.testCardId,
-          testCardDigest: testTarget.testCard.testCardDigest,
-          testWindowId: testTarget.windowId,
+          readbackStatus: testTarget.currentDelivery.outcome.readbackStatus,
         }),
       });
     }
     if (testTarget.phase === "test-host-effect-rejected") {
       return Object.freeze({
-        status: "test-delivery-replacement-planning" as const,
+        status: "test-delivery-rearm-planning" as const,
         rejectedDelivery: Object.freeze({
-          targetTaskId: testTarget.targetTaskId,
-          targetDeliveryId: testTarget.currentDelivery.targetDeliveryId,
-          intentDigest: testTarget.currentDelivery.intentDigest,
-          testAttemptId: testTarget.currentDelivery.testAttemptId,
-          testDispatchPacketDigest:
-            testTarget.currentDelivery.workClaim.testDispatchPacketDigest,
-          workClaimId: testTarget.currentDelivery.workClaim.claimId,
-          workClaimDigest: testTarget.currentDelivery.workClaim.claimDigest,
-          observationDigest:
-            testTarget.currentDelivery.hostEffect.observationDigest,
-          testCardId: testTarget.testCard.testCardId,
-          testCardDigest: testTarget.testCard.testCardDigest,
-          testWindowId: testTarget.windowId,
+          ...testDelivery(testTarget),
+          outcomeDigest: testTarget.currentDelivery.outcome.outcomeDigest,
         }),
       });
     }
@@ -521,7 +469,7 @@ function nextStage(
           targetTaskId: testTarget.targetTaskId,
           taskPackageId: testTarget.taskPackageId,
           taskPackageDigest: testTarget.taskPackageDigest,
-          targetDeliveryId: testTarget.currentDelivery.targetDeliveryId,
+          deliveryId: testTarget.currentDelivery.deliveryId,
           testAttemptId: testTarget.currentDelivery.testAttemptId,
           testCardId: testTarget.testCard.testCardId,
           testCardDigest: testTarget.testCard.testCardDigest,

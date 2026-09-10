@@ -91,14 +91,6 @@ const FRONTIER_MATRIX = [
     source: { kind: "implementation", phases: ["delivery-prepared"] },
     expected: {
       scope: "target",
-      kind: "implementation-host-effect-claim",
-      owner: "target-host-effect-claim",
-    },
-  },
-  {
-    source: { kind: "implementation", phases: ["host-effect-claimed"] },
-    expected: {
-      scope: "target",
       kind: "implementation-host-effect-execution",
       owner: "agent-host",
     },
@@ -193,18 +185,7 @@ const FRONTIER_MATRIX = [
   {
     source: {
       kind: "post-acceptance",
-      statuses: ["test-dispatch-planning"],
-    },
-    expected: {
-      scope: "target",
-      kind: "test-host-effect-claim",
-      owner: "target-host-effect-claim",
-    },
-  },
-  {
-    source: {
-      kind: "post-acceptance",
-      statuses: ["test-host-effect-claimed"],
+      statuses: ["test-host-effect-execution"],
     },
     expected: {
       scope: "target",
@@ -270,12 +251,12 @@ const FRONTIER_MATRIX = [
   {
     source: {
       kind: "post-acceptance",
-      statuses: ["test-delivery-replacement-planning"],
+      statuses: ["test-delivery-rearm-planning"],
     },
     expected: {
       scope: "target",
-      kind: "test-delivery-replacement-planning",
-      owner: "test-delivery-preparation",
+      kind: "test-host-effect-rearm",
+      owner: "target-host-effect-rearm",
     },
   },
 ] as const satisfies readonly FrontierMatrixRow[];
@@ -319,8 +300,8 @@ const MATRIX_TYPE_COVERAGE = {
     : false;
 }>;
 
-test("Controller Route以二十二项轻量矩阵完整映射frontier、owner与phase", () => {
-  equal(FRONTIER_MATRIX.length, 22);
+test("Controller Route以二十项轻量矩阵完整映射frontier、owner与phase", () => {
+  equal(FRONTIER_MATRIX.length, 20);
   deepEqual(MATRIX_TYPE_COVERAGE, {
     demand: true,
     implementation: true,
@@ -358,7 +339,7 @@ test("Controller Route以二十二项轻量矩阵完整映射frontier、owner与
     }
   }
 
-  equal(frontierKinds.size, 22);
+  equal(frontierKinds.size, 20);
   equal(
     resolveDemandControllerImplementationFrontierDescriptor("accepted"),
     null,

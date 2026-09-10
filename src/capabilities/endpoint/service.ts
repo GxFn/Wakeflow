@@ -39,12 +39,7 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
-import {
-  inspectWindowWorkClaim,
-  releaseWindowWorkClaimInStore,
-  WindowWorkClaimStoreError,
-} from "../../governance/delivery/window-work-claim-store.js";
-import type { WindowWorkClaim } from "../../governance/delivery/window-work-claim.js";
+import { inspectWorkClaim, releaseWorkClaim, type WorkClaim } from "../../kernel/work-claims.js";
 import { runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
@@ -201,7 +196,7 @@ interface LoadedState {
   readonly bindings: readonly Readonly<WakeflowWindowHostBinding>[];
   readonly binding: Readonly<WakeflowWindowHostBinding> | null;
   readonly bindingDigest: Sha256Digest | null;
-  readonly claim: Readonly<WindowWorkClaim> | null;
+  readonly claim: Readonly<WorkClaim> | null;
   readonly claimExpired: boolean;
   readonly locator: Readonly<WindowLocatorRecord> | null;
   readonly sessions: HookSessions;
@@ -267,19 +262,6 @@ function mapBindingStoreError(error: unknown): never {
     }
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("io-failure", `binding-${error.reason}`, "$request.windowId", { cause: error });
-  }
-  throw error;
-}
-
-function mapClaimStoreError(error: unknown): never {
-  if (error instanceof WindowWorkClaimStoreError) {
-    if (error.reason === "not-found")
-      fail("not-found", "claim-absent", "$request.windowId", { cause: error });
-    if (error.reason === "expectation-mismatch") {
-      fail("precondition-failed", "claim-drift", "$request.expectedClaimDigest", { cause: error });
-    }
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-    fail("io-failure", `claim-${error.reason}`, "$request.windowId", { cause: error });
   }
   throw error;
 }
@@ -359,25 +341,9 @@ async function loadBindings(
 async function loadClaim(
   context: EndpointContext,
   windowId: WakeflowWindowRuntimeDesiredWindow["windowId"],
-): Promise<Readonly<WindowWorkClaim> | null> {
-  try {
-    const inspected = await inspectWindowWorkClaim(
-      context.root,
-      windowId,
-      signalOptions(context.signal),
-    );
-    return inspected.status === "claimed" ? (inspected.claim ?? null) : null;
-  } catch (error: unknown) {
-    // 声明根尚未建立（还没有任何投递）意味着没有声明，不是布局故障。
-    if (
-      error instanceof WindowWorkClaimStoreError &&
-      error.reason === "layout" &&
-      error.path === "$claimRoot"
-    ) {
-      return null;
-    }
-    mapClaimStoreError(error);
-  }
+): Promise<Readonly<WorkClaim> | null> {
+  // 声明根尚未建立（还没有任何投递）意味着没有声明，内核返回 absent 而不是布局故障。
+  return (await inspectWorkClaim(context.root, windowId, signalOptions(context.signal))).claim;
 }
 
 /**
@@ -422,7 +388,7 @@ async function loadHookSessions(
   return Object.freeze({ started, ended });
 }
 
-function claimExpiredAt(claim: Readonly<WindowWorkClaim>, now: UtcInstant): boolean {
+function claimExpiredAt(claim: Readonly<WorkClaim>, now: UtcInstant): boolean {
   return Date.parse(claim.claimedAt) + WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS <= Date.parse(now);
 }
 
@@ -634,7 +600,7 @@ function nextFor(
   context: EndpointContext,
   bindings: readonly Readonly<WakeflowWindowHostBinding>[],
   registered: boolean,
-  claim: Readonly<WindowWorkClaim> | null,
+  claim: Readonly<WorkClaim> | null,
   claimExpired: boolean,
 ): Readonly<NextProjection> {
   const bound = new Set(bindings.map((entry) => entry.windowId));
@@ -658,13 +624,13 @@ function bindingSummary(binding: Readonly<WakeflowWindowHostBinding>) {
   };
 }
 
-function claimSummary(claim: Readonly<WindowWorkClaim> | null, expired: boolean) {
+function claimSummary(claim: Readonly<WorkClaim> | null, expired: boolean) {
   if (claim === null) return { status: "absent" };
   return {
     status: "held",
     claimId: claim.claimId,
     claimDigest: claim.claimDigest,
-    demandId: claim.target.demandId,
+    demandId: claim.holder.demandId,
     claimedAt: claim.claimedAt,
     expiresAt: new Date(
       Date.parse(claim.claimedAt) + WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
@@ -968,7 +934,7 @@ async function mutateBinding(
 
 async function writeClaimReleaseReceipt(
   context: EndpointContext,
-  claim: Readonly<WindowWorkClaim>,
+  claim: Readonly<WorkClaim>,
   loaded: LoadedState,
   request: ReleaseClaimRequest,
 ): Promise<void> {
@@ -976,10 +942,10 @@ async function writeClaimReleaseReceipt(
     kind: "WakeflowWorkClaimForcedRelease",
     schemaVersion: 1,
     hostId: context.facade.hostId,
-    windowId: claim.route.windowId,
+    windowId: claim.windowId,
     claimId: claim.claimId,
     claimDigest: claim.claimDigest,
-    demandId: claim.target.demandId,
+    demandId: claim.holder.demandId,
     releasedAt: loaded.now,
     evidence: request.evidence.liveness.kind,
     claimExpired: loaded.claimExpired,
@@ -1022,11 +988,7 @@ async function releaseClaim(
 ): Promise<Readonly<{ readonly claimId: string; readonly claimDigest: Sha256Digest }>> {
   const claim = loaded.claim;
   if (claim === null) fail("not-found", "claim-absent", "$request.windowId");
-  try {
-    await releaseWindowWorkClaimInStore(context.root, claim, signalOptions(context.signal));
-  } catch (error: unknown) {
-    mapClaimStoreError(error);
-  }
+  await releaseWorkClaim(context.root, claim, signalOptions(context.signal));
   await writeClaimReleaseReceipt(context, claim, loaded, request);
   return Object.freeze({ claimId: claim.claimId, claimDigest: claim.claimDigest });
 }

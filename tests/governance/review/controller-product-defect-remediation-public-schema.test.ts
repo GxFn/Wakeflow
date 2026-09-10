@@ -69,7 +69,6 @@ function result() {
           testCardDigest: DIGEST,
         },
         testAttemptId: "test-attempt_99999999-9999-4999-8999-999999999999",
-        testDispatchPacketDigest: DIGEST,
         targetResult: {
           targetResultId: "target-result_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
           resultDigest: DIGEST,

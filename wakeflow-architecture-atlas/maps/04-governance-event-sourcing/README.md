@@ -1,7 +1,7 @@
 ---
 diagramId: ts-governance-demand-event-sourcing-g0
 viewType: architecture
-truthKind: current-code
+truthKind: stale
 reviewDepth: L1
 verifiedAt: 2026-09-03
 snapshotObservedAt: 2026-09-03T03:13:56-07:00

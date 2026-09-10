@@ -1,7 +1,7 @@
 ---
 diagramId: ts-real-testing-runtime-x1
 viewType: runtime-call-sequence
-truthKind: current-code
+truthKind: stale
 reviewDepth: L4
 verifiedAt: 2026-09-03
 snapshotObservedAt: 2026-09-03T03:13:56-07:00

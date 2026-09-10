@@ -1,5 +1,9 @@
 # Wakeflow Architecture Atlas（架构与代码图谱）
 
+> **2026-09-04 图谱审查：当前内容待复核。** 30 份来源指纹全部漂移，检查器发现 11 处已删除源码的图内引用。
+> 已将旧图和逐图台账标为 `stale`，保留旧核验日期、指纹及图正文；尚未完成重绘。
+> 当前更新范围、已实现与目标设计的区分、44 图逐项安排见 [图谱更新计划](./plans/typescript-atlas-refresh-plan.md)。以下旧快照数字不代表当前代码或已验证能力。
+
 本目录是一个独立、只读Wakeflow源码的流程图子项目。它把可审阅Markdown/Mermaid、交互阅读器和
 结构验收收敛在同一package中，不拥有Wakeflow运行状态，也不进入插件制品或根发布门。
 
@@ -10,6 +14,7 @@ wakeflow-architecture-atlas/
 ├── AGENTS.md            AI维护图谱时的局部权威、证据与隔离规则
 ├── CLAUDE.md            Claude Code入口，仅补充宿主注意事项
 ├── maps/                 33份审阅文档与44张Mermaid图的正典
+├── plans/                差异审查、逐图更新计划与核验快照
 ├── src/                  本地阅读器与文件依赖交互视图
 ├── scripts/              只读结构、链接、指纹与路径检查
 ├── package.json          独立依赖和命令

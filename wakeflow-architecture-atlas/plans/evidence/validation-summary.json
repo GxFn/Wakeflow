@@ -1,0 +1,116 @@
+{
+  "kind": "WakeflowAtlasPlanValidationSummary",
+  "observedAt": "2026-09-05T03:23:18.261Z",
+  "baselineCommit": "0ac416e0b0defb5d94c2a9793ee70f54a231894f",
+  "checks": {
+    "atlasTypecheck": {
+      "status": "pass",
+      "evidence": "npm run check completed typecheck before check:current"
+    },
+    "atlasBuild": {
+      "status": "pass",
+      "exitCode": 0,
+      "limitation": "Existing chunk size warnings; build does not validate diagram rendering."
+    },
+    "atlasCurrent": {
+      "status": "fail",
+      "exitCode": 1,
+      "staleFingerprints": 30,
+      "errorCount": 41
+    },
+    "atlasStructure": {
+      "status": "fail",
+      "exitCode": 1,
+      "errorCount": 11,
+      "errors": [
+        "01-overall-architecture/file-dependencies.md: missing TypeScript source wakeflow-public-mcp-workspace-tools.ts",
+        "01-overall-architecture/file-dependencies.md: missing TypeScript source wakeflow-public-mcp-authority-tools.ts",
+        "01-overall-architecture/file-dependencies.md: missing TypeScript source wakeflow-public-mcp-execution-tools.ts",
+        "01-overall-architecture/file-dependencies.md: missing TypeScript source wakeflow-public-mcp-review-tools.ts",
+        "01-overall-architecture/file-dependencies.md: missing TypeScript source codex-wakeflow-window-host-binding.ts",
+        "01-overall-architecture/file-dependencies.md: missing TypeScript source claude-code-wakeflow-window-host-binding.ts",
+        "03-configuration-workspace/file-dependencies.md: missing TypeScript source wakeflow-maintenance-public-coordinator.ts",
+        "03-configuration-workspace/file-dependencies.md: missing TypeScript source wakeflow-window-host-binding-registration.ts",
+        "03-configuration-workspace/file-dependencies.md: missing TypeScript source wakeflow-window-runtime-registered-projection-publication.ts",
+        "04-governance-event-sourcing/file-dependencies.md: missing TypeScript source demand-event-sourcing-publication-todo.ts",
+        "05-tasking-slice/file-dependencies.md: missing TypeScript source target-task-planning-public-coordinator.ts"
+      ]
+    },
+    "rootNpmTest": {
+      "status": "fail",
+      "exitCode": 2,
+      "phase": "typecheck",
+      "diagnosticCount": 86,
+      "firstDiagnostics": [
+        {
+          "path": "src/capabilities/demand/archive.ts",
+          "line": 325,
+          "column": 5,
+          "code": "TS2345"
+        },
+        {
+          "path": "src/capabilities/demand/verify.ts",
+          "line": 123,
+          "column": 86,
+          "code": "TS2339"
+        },
+        {
+          "path": "src/governance/demand/publication/demand-publication-public-coordinator.ts",
+          "line": 236,
+          "column": 9,
+          "code": "TS2367"
+        },
+        {
+          "path": "src/governance/demand/publication/demand-publication-public-coordinator.ts",
+          "line": 238,
+          "column": 37,
+          "code": "TS2339"
+        },
+        {
+          "path": "src/governance/demand/publication/demand-publication-public-coordinator.ts",
+          "line": 248,
+          "column": 36,
+          "code": "TS2339"
+        },
+        {
+          "path": "src/governance/demand/publication/demand-publication-public-coordinator.ts",
+          "line": 249,
+          "column": 29,
+          "code": "TS2339"
+        },
+        {
+          "path": "src/governance/demand/publication/demand-publication-public-coordinator.ts",
+          "line": 274,
+          "column": 16,
+          "code": "TS2367"
+        },
+        {
+          "path": "src/governance/demand/publication/demand-publication-public-coordinator.ts",
+          "line": 275,
+          "column": 39,
+          "code": "TS2339"
+        }
+      ],
+      "scope": "Concurrent Demand implementation and its consumers; no root source modifications in this atlas task."
+    },
+    "planAndMetadata": {
+      "ok": true,
+      "preservedMermaidBlocks": 44,
+      "preservedBaselineMetadata": 31,
+      "newPlanLinksChecked": 74,
+      "diagramRegisterRows": 44,
+      "newArtifactBytes": 152044,
+      "errors": []
+    },
+    "diffCheck": {
+      "status": "pass"
+    }
+  },
+  "notRun": [
+    "Mermaid parsing and visual verification of all diagrams",
+    "Real Codex or Claude Code host effects",
+    "Online FigJam inspection or mutation",
+    "Legacy JavaScript test gate"
+  ],
+  "worktreeNote": "Demand development continued after the fixed audit snapshot. Archive and verify helper files appeared under src/capabilities/demand during validation; no completed public lifecycle integration is inferred."
+}

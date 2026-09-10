@@ -1,7 +1,7 @@
 ---
 diagramId: ts-real-testing-file-f8
 viewType: file-dependency
-truthKind: current-code
+truthKind: stale
 reviewDepth: L3
 verifiedAt: 2026-09-03
 snapshotObservedAt: 2026-09-03T03:13:56-07:00

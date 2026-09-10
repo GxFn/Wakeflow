@@ -1,7 +1,7 @@
 ---
 diagramId: ts-configuration-workspace-file-f3
 viewType: file-dependency
-truthKind: current-code
+truthKind: stale
 reviewDepth: L3
 verifiedAt: 2026-09-01
 snapshotObservedAt: 2026-09-01T06:42:28-07:00

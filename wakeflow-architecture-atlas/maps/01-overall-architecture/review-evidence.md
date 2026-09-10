@@ -1,7 +1,7 @@
 ---
 diagramId: ts-overall-change-impact-d0
 viewType: evidence
-truthKind: current-code
+truthKind: stale
 reviewDepth: L5
 verifiedAt: 2026-09-03
 snapshotObservedAt: 2026-09-03T03:13:56-07:00

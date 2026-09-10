@@ -1,0 +1,2499 @@
+{
+  "kind": "WakeflowAtlasAuditSnapshot",
+  "schemaVersion": 1,
+  "observedAt": "2026-09-05T03:08:44.009Z",
+  "authority": "reading-evidence-only",
+  "scope": "Wakeflow TypeScript architecture atlas audit and refresh planning",
+  "baselineCommit": "0ac416e0b0defb5d94c2a9793ee70f54a231894f",
+  "atlasRecordedBaselines": [
+    "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+    "d17602ed9931a1898f713c740752c54b94bd8086"
+  ],
+  "counts": {
+    "documents": 33,
+    "diagrams": 44,
+    "fingerprintedDocuments": 30,
+    "driftedDocuments": 30,
+    "currentLabelsBefore": 31,
+    "missingSourceOccurrences": 11,
+    "committedSchemaCount": 106,
+    "observedWorktreeSchemaCount": 114,
+    "registeredPublicTools": 21
+  },
+  "measurementNotes": [
+    "The current-code labels and source fingerprints below are captured before this audit marks stale pages.",
+    "Direct-import and evidence counts in atlas-check-before.json retain the existing checker field names; resolved/skipped imports and present edge tokens are not complete semantic verification.",
+    "Public tool count was verified from the unchanged REGISTRATIONS source and its three slice registrations. New uncommitted Demand schemas are not registered tools.",
+    "Root source, Schema, and test files were read only. No full runtime or real-host validation is claimed."
+  ],
+  "worktreeChanges": [
+    {
+      "status": " M",
+      "path": "docs/progress/consolidation-gate-log.md"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-completion-request.generated.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-completion-result.generated.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-controller-route-request.generated.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-controller-route-result.generated.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-publication-request.generated.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-publication-result.generated.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/generated/governance/demand/demand-aggregate-state.generated.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-completion-request.schema.json"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json"
+    },
+    {
+      "status": " M",
+      "path": "src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/controller/demand-controller-route.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/demand/event-sourcing/demand-event-sourcing-event.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/demand/model/demand-aggregate-state.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/demand/publication/demand-event-sourcing-publication-service.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/ledger/ledger-authority-layout.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/ledger/ledger-authority-paths.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/governance/ledger/ledger-resource-catalog.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/kernel/layout.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/kernel/next-projection.ts"
+    },
+    {
+      "status": " M",
+      "path": "src/kernel/requirement-board.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-cancellation-request.generated.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-cancellation-result.generated.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-continuation-request.generated.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/generated/entrypoints/wakeflow-demand-continuation-result.generated.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/generated/governance/archive/demand-archive-manifest.generated.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/generated/governance/demand/demand-continued-event-data-v1.generated.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.ts"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-request.schema.json"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-result.schema.json"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/schemas/governance/archive/demand-archive-manifest.schema.json"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json"
+    },
+    {
+      "status": "??",
+      "path": "src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json"
+    },
+    {
+      "status": "??",
+      "path": "src/governance/demand/publication/demand-active-guard.ts"
+    }
+  ],
+  "documents": [
+    {
+      "file": "maps/00-agentic-diagram-standard.md",
+      "title": "Wakeflow 架构与代码图谱标准",
+      "diagramId": null,
+      "truthKind": null,
+      "baselineCommit": null,
+      "verifiedAt": "",
+      "documentDigest": "sha256:0f41c0dda5d95bdbb9c02434cbc4aaf840a11c86cede33292c3784dbf90ab54c",
+      "storedSourceFingerprint": null,
+      "observedSourceFingerprint": null,
+      "fingerprintMatches": null,
+      "sourcePatterns": [],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 0,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 264,
+          "title": "流程图生成与人工审阅边界",
+          "kind": "flowchart TB",
+          "digest": "sha256:c59a398b58af8ce25440abde1fb0ab5be7ffd9422d5020394ac3af8cf1d17ccc",
+          "edgeIds": [
+            "E-STD-01",
+            "E-STD-02",
+            "E-STD-03",
+            "E-STD-04",
+            "E-STD-05",
+            "E-STD-06",
+            "E-STD-07"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/01-diagram-review-ledger.md",
+      "title": "44张流程图逐图代码审阅台账",
+      "diagramId": "ts-atlas-review-ledger",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:caf0d80f520aa4cc269fd12d6fc238291e90ad89454a7240cf8acf6503a5c813",
+      "storedSourceFingerprint": null,
+      "observedSourceFingerprint": null,
+      "fingerprintMatches": null,
+      "sourcePatterns": [],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 0,
+      "diagrams": []
+    },
+    {
+      "file": "maps/01-overall-architecture/README.md",
+      "title": "Wakeflow TypeScript 总体架构",
+      "diagramId": "ts-overall-architecture-a0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:f984b4248cc8e99668e51edd1490908a6299f5899cc296cd7dab77db343cab1c",
+      "storedSourceFingerprint": "sha256:29a16787a76280ef72c6c4069e7d9ccf640363f77c44a3721db4120c3e6144dd",
+      "observedSourceFingerprint": "sha256:48fabb53701f713a8e0629d0cab3f739446bc07fa081a94abc81b5db91352283",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/**",
+        "src/contracts/schemas/**",
+        "tests/entrypoints/**",
+        "tests/codegen/**"
+      ],
+      "refreshTriggers": [
+        "src/**",
+        "package.json",
+        ".dependency-cruiser.cjs"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 623,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 73,
+          "title": "Wakeflow TypeScript总体架构与宿主边界",
+          "kind": "flowchart TB",
+          "digest": "sha256:8c4f027d15c13fe2dc10cff0e71458e8ac25a7cf8ba133b1add5436a25b665c8",
+          "edgeIds": [
+            "E-A0-01",
+            "E-A0-02",
+            "E-A0-03",
+            "E-A0-04",
+            "E-A0-05",
+            "E-A0-06",
+            "E-A0-07",
+            "E-A0-08",
+            "E-A0-09",
+            "E-A0-10",
+            "E-A0-11",
+            "E-A0-12",
+            "E-A0-13",
+            "E-A0-14",
+            "E-A0-15",
+            "E-A0-16",
+            "E-A0-17",
+            "E-A0-18"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/01-overall-architecture/file-dependencies.md",
+      "title": "总体架构：关键文件导入依赖",
+      "diagramId": "ts-overall-entrypoint-file-dependency-f0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:49c30a4aaf3f9df94ef838593a1c2870f21b88cceca8df7ba440a073de1bbc85",
+      "storedSourceFingerprint": "sha256:c2653a60c69a849e5b2d5e0fac4e675e7e3c8c223ecfdfd702a55d83377baabb",
+      "observedSourceFingerprint": "sha256:d14e4b6ee8e126468e31dfb2c1ccb24a75eb8cd335b6c45e1e25e3515a57360f",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/entrypoints/**",
+        "src/hosts/**",
+        "src/workspace/maintenance/**",
+        "src/workspace/window-runtime/**",
+        "src/governance/tasking/**",
+        "src/governance/demand/event-sourcing/**",
+        "src/governance/evidence/**",
+        "src/contracts/schemas/entrypoints/**",
+        "src/contracts/schemas/governance/evidence/**",
+        "tests/entrypoints/**",
+        "tests/codegen/mcp-wire-schema-self-contained.test.ts",
+        "tests/artifacts/typescript-artifact-candidates.test.ts"
+      ],
+      "refreshTriggers": [
+        "src/entrypoints/**",
+        "src/hosts/**",
+        "src/workspace/maintenance/**",
+        "src/workspace/window-runtime/**",
+        "src/governance/tasking/**",
+        "src/governance/demand/event-sourcing/**",
+        "src/governance/evidence/**",
+        "src/contracts/generated/entrypoints/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 167,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 49,
+          "title": "Wakeflow TypeScript MCP组合根关键文件导入关系",
+          "kind": "flowchart TB",
+          "digest": "sha256:bfb3f9c28f2f9a71ff9be6b85c4c60d86d82e50ba3871aba1934979d92aeb3ea",
+          "edgeIds": [
+            "E-F0-01",
+            "E-F0-02",
+            "E-F0-03",
+            "E-F0-04",
+            "E-F0-05",
+            "E-F0-06",
+            "E-F0-07",
+            "E-F0-08",
+            "E-F0-09",
+            "E-F0-10",
+            "E-F0-11",
+            "E-F0-12",
+            "E-F0-13",
+            "E-F0-14",
+            "E-F0-15",
+            "E-F0-16",
+            "E-F0-17",
+            "E-F0-18",
+            "E-F0-19",
+            "E-F0-20",
+            "E-F0-21",
+            "E-F0-22",
+            "E-F0-23",
+            "E-F0-24",
+            "E-F0-25",
+            "E-F0-26",
+            "E-F0-27",
+            "E-F0-28",
+            "E-F0-29",
+            "E-F0-30",
+            "E-F0-31",
+            "E-F0-32",
+            "E-F0-33",
+            "E-F0-34"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/01-overall-architecture/review-evidence.md",
+      "title": "总体架构：提交影响与审阅证据",
+      "diagramId": "ts-overall-change-impact-d0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:dad53273e10a66cc0fbef65a93aa4b1b4f194f5ea7693867e2cf6f9a2d74e60a",
+      "storedSourceFingerprint": "sha256:c0e3645dbba5275f8def7403b097ff95cad28e82d85ff3c0839e1992bb8b7dfa",
+      "observedSourceFingerprint": "sha256:6b7ffe367bc1b8ae286ed1cf273056522e907be6d1488f5dc38c20ad13003aac",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/**",
+        "src/contracts/schemas/**",
+        "tests/**"
+      ],
+      "refreshTriggers": [
+        "src/**",
+        "tests/**",
+        "docs/progress/file-review-ledger.md"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 895,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 33,
+          "title": "Wakeflow TypeScript治理骨干与公共组合技术Review提交影响",
+          "kind": "flowchart LR",
+          "digest": "sha256:8383d5d484ab7003e7c2e117488bb07c26c9f38473a143b301fbee841d399d1e",
+          "edgeIds": [
+            "E-D0-01",
+            "E-D0-02",
+            "E-D0-03",
+            "E-D0-04",
+            "E-D0-05",
+            "E-D0-06",
+            "E-D0-07",
+            "E-D0-15",
+            "E-D0-17",
+            "E-D0-18",
+            "E-D0-19",
+            "E-D0-12",
+            "E-D0-13",
+            "E-D0-14",
+            "E-D0-08",
+            "E-D0-16",
+            "E-D0-09",
+            "E-D0-10",
+            "E-D0-11"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/01-overall-architecture/runtime-call-flow.md",
+      "title": "总体架构：公共MCP符号调用流",
+      "diagramId": "ts-overall-public-mcp-call-flow-v0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:b95a5dd9d96f090fcb16bbdea67caf4052436da7d3b2ad0534d01794dcc84ca2",
+      "storedSourceFingerprint": "sha256:daa982eebcd93a7c69a4b8bbee85d7f921f8755f6c87bf1be1976a90fe02cc42",
+      "observedSourceFingerprint": "sha256:4d26b2e9344cd428c182f9cbd4265a82afb641994441f1e4412d9eb96edc2943",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/entrypoints/**",
+        "src/workspace/maintenance/wakeflow-maintenance-public-coordinator.ts",
+        "src/workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.ts",
+        "src/governance/tasking/target-task-planning-public-coordinator.ts",
+        "src/contracts/schemas/entrypoints/**",
+        "tests/entrypoints/**"
+      ],
+      "refreshTriggers": [
+        "src/entrypoints/**",
+        "src/workspace/maintenance/wakeflow-maintenance-public-coordinator.ts",
+        "src/workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.ts",
+        "src/governance/tasking/target-task-planning-public-coordinator.ts",
+        "tests/entrypoints/**"
+      ],
+      "unmatchedPatterns": [
+        "src/workspace/maintenance/wakeflow-maintenance-public-coordinator.ts",
+        "src/workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.ts",
+        "src/governance/tasking/target-task-planning-public-coordinator.ts"
+      ],
+      "matchedSourceCount": 65,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 49,
+          "title": "Wakeflow公共MCP进程启动与二十三工具调用时序",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:25afc9b3974015aae378a26501ccb1d0607476730290320cc5eea2eff3390424",
+          "edgeIds": [
+            "E-V0-01",
+            "E-V0-02",
+            "E-V0-03",
+            "E-V0-04",
+            "E-V0-05",
+            "E-V0-06",
+            "E-V0-23",
+            "E-V0-07",
+            "E-V0-08",
+            "E-V0-09",
+            "E-V0-10",
+            "E-V0-11",
+            "E-V0-21",
+            "E-V0-22",
+            "E-V0-19",
+            "E-V0-20",
+            "E-V0-12",
+            "E-V0-13",
+            "E-V0-14",
+            "E-V0-15",
+            "E-V0-16",
+            "E-V0-17",
+            "E-V0-18"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/02-foundation/README.md",
+      "title": "Foundation：确定性能力与安全边界",
+      "diagramId": "ts-foundation-capability-b0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:5ee6dfecb1af0fdf44726449ec002775cbaedd14a49f59b6689b49f242aea6a0",
+      "storedSourceFingerprint": "sha256:dbd7556c754c439d9f93d3760cab89655a7a60d8cf61cedaa66579ba9736225f",
+      "observedSourceFingerprint": "sha256:84560c66ec039ea12a3b92d1ec2168d2f11073250fee9de80759e5117cf8dbcc",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/foundation/**",
+        "src/contracts/identity/**",
+        "src/contracts/schemas/foundation/**",
+        "src/contracts/schemas/identity/**",
+        "tests/foundation/**",
+        "tests/contracts/identity/**"
+      ],
+      "refreshTriggers": [
+        "src/foundation/**",
+        "src/contracts/identity/**",
+        "src/contracts/schemas/identity/**",
+        "src/contracts/generated/identity/**",
+        "src/contracts/schemas/foundation/**",
+        "src/contracts/generated/foundation/**",
+        "tests/contracts/identity/**",
+        "tests/foundation/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 131,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 68,
+          "title": "Wakeflow TypeScript Foundation确定性能力与安全边界",
+          "kind": "flowchart TB",
+          "digest": "sha256:44f914853405afb69c75cc6bb1bde032c9d78b06978a3763423e91910960cc0b",
+          "edgeIds": [
+            "E-B0-01",
+            "E-B0-02",
+            "E-B0-03",
+            "E-B0-04",
+            "E-B0-05",
+            "E-B0-06",
+            "E-B0-07",
+            "E-B0-08",
+            "E-B0-09",
+            "E-B0-10",
+            "E-B0-11",
+            "E-B0-12",
+            "E-B0-13",
+            "E-B0-14",
+            "E-B0-15",
+            "E-B0-16",
+            "E-B0-17",
+            "E-B0-18"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/02-foundation/file-dependencies.md",
+      "title": "Foundation：关键文件导入依赖",
+      "diagramId": "ts-foundation-file-dependency-f2",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:d30a5db0524abd71aa0b0b69d11372789a2d86609fc2054430702924854f44ac",
+      "storedSourceFingerprint": "sha256:d7947083b55fb0bab4129c90753de8520d1e2d29d3d6b424ac7c54b6642e22e2",
+      "observedSourceFingerprint": "sha256:edfcc624f99ce26c1dba225fd5220d2abe209f8c35655015e6e746d9d293aca8",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/foundation/**",
+        "src/contracts/schemas/foundation/**",
+        "tests/foundation/**"
+      ],
+      "refreshTriggers": [
+        "src/foundation/**",
+        "src/contracts/generated/foundation/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 128,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 35,
+          "title": "Wakeflow Foundation关键文件导入依赖",
+          "kind": "flowchart LR",
+          "digest": "sha256:7d8a13bae42b539329d74f53286bf657cd75d3a6bc4de34fdd074a9e7a86c4f4",
+          "edgeIds": [
+            "E-F2-01",
+            "E-F2-02",
+            "E-F2-03",
+            "E-F2-04",
+            "E-F2-05",
+            "E-F2-06",
+            "E-F2-07",
+            "E-F2-08",
+            "E-F2-09",
+            "E-F2-10",
+            "E-F2-11",
+            "E-F2-12",
+            "E-F2-13",
+            "E-F2-14",
+            "E-F2-15",
+            "E-F2-16",
+            "E-F2-17",
+            "E-F2-18",
+            "E-F2-19",
+            "E-F2-20",
+            "E-F2-21",
+            "E-F2-22",
+            "E-F2-23",
+            "E-F2-24",
+            "E-F2-25",
+            "E-F2-43",
+            "E-F2-26",
+            "E-F2-27",
+            "E-F2-28",
+            "E-F2-29",
+            "E-F2-39",
+            "E-F2-40",
+            "E-F2-41",
+            "E-F2-42",
+            "E-F2-30",
+            "E-F2-31",
+            "E-F2-32",
+            "E-F2-33",
+            "E-F2-34",
+            "E-F2-35",
+            "E-F2-36",
+            "E-F2-37",
+            "E-F2-38"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/02-foundation/runtime-call-flow.md",
+      "title": "Foundation：稳定读取、原子写入与恢复调用流",
+      "diagramId": "ts-foundation-runtime-c0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:dc4741b3706a5f0eee0dbc5a013dcae3086564464b7f825f443662e0d8d2e76a",
+      "storedSourceFingerprint": "sha256:c2208f1d32e5228d50ee7874d0bd5cd562c2a13290674a0628f6a8e696197cd7",
+      "observedSourceFingerprint": "sha256:e1cf372077f4ece82fbed1ba42a05640fce52163c8f6be6ab54ea3b7691012a7",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/foundation/filesystem/**",
+        "tests/foundation/filesystem/**"
+      ],
+      "refreshTriggers": [
+        "src/foundation/filesystem/rooted-directory.ts",
+        "src/foundation/filesystem/stable-file-read.ts",
+        "src/foundation/filesystem/durable-atomic-file-*.ts",
+        "src/foundation/filesystem/rooted-exclusive-file-lock.ts",
+        "src/foundation/filesystem/create-only-deterministic-json-resource.ts"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 68,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 44,
+          "title": "Foundation根作用域稳定文件读取",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:e5d78a85f39d1be54b25949be24723352a09807eba615aa6c7b9b43e059d910a",
+          "edgeIds": [
+            "E-C0-01",
+            "E-C0-02",
+            "E-C0-03",
+            "E-C0-04",
+            "E-C0-05",
+            "E-C0-06",
+            "E-C0-07",
+            "E-C0-08",
+            "E-C0-09",
+            "E-C0-10",
+            "E-C0-11",
+            "E-C0-12"
+          ]
+        },
+        {
+          "block": 2,
+          "line": 102,
+          "title": "Foundation耐久原子文件替换与崩溃恢复",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:c77864cbb1a4826c1dc345029e19d440aa72be03bed8de0da3a891eb71e7e994",
+          "edgeIds": [
+            "E-C1-01",
+            "E-C1-02",
+            "E-C1-03",
+            "E-C1-04",
+            "E-C1-05",
+            "E-C1-06",
+            "E-C1-07",
+            "E-C1-08",
+            "E-C1-09",
+            "E-C1-10",
+            "E-C1-11",
+            "E-C1-12",
+            "E-C1-13"
+          ]
+        },
+        {
+          "block": 3,
+          "line": 165,
+          "title": "Foundation只创建确定性JSON资源幂等物化",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:ed39547a2031cf0ba06a1c12ce370f3e84dce461247d0e0d4f3372ad2e7124ef",
+          "edgeIds": [
+            "E-C2-01",
+            "E-C2-02",
+            "E-C2-03",
+            "E-C2-04",
+            "E-C2-05",
+            "E-C2-06"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/03-configuration-workspace/README.md",
+      "title": "Configuration 与 Workspace：权威、资源和维护边界",
+      "diagramId": "ts-configuration-workspace-w0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:789743365b027bea3572f2991c970b555a1ae7b9009bc46a940a2c1fed7a6994",
+      "storedSourceFingerprint": "sha256:505f4f76b12dd208bcd117075a93a6f626d6b11503f47109b3d9fec484fddc7a",
+      "observedSourceFingerprint": "sha256:d19423b678da56b68fb7e982c1058d08a5d268111a41fb50b9136fe0ff20acf9",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/configuration/**",
+        "src/workspace/**",
+        "src/contracts/schemas/configuration/**",
+        "src/contracts/schemas/workspace/**",
+        "tests/configuration/**",
+        "tests/workspace/**"
+      ],
+      "refreshTriggers": [
+        "src/configuration/**",
+        "src/workspace/**",
+        "src/contracts/schemas/configuration/**",
+        "src/contracts/schemas/workspace/**",
+        "tests/configuration/**",
+        "tests/workspace/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 145,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 65,
+          "title": "Wakeflow Configuration与Workspace权威及维护边界",
+          "kind": "flowchart TB",
+          "digest": "sha256:6d35f8ba4f5420e44f63082fdd51d356526d9b873a56a642060b3be3ba8ec433",
+          "edgeIds": [
+            "E-W0-01",
+            "E-W0-02",
+            "E-W0-03",
+            "E-W0-04",
+            "E-W0-05",
+            "E-W0-06",
+            "E-W0-07",
+            "E-W0-08",
+            "E-W0-09",
+            "E-W0-10",
+            "E-W0-11",
+            "E-W0-12",
+            "E-W0-13",
+            "E-W0-14",
+            "E-W0-15",
+            "E-W0-16",
+            "E-W0-17",
+            "E-W0-18",
+            "E-W0-19"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/03-configuration-workspace/file-dependencies.md",
+      "title": "Configuration 与 Workspace：关键文件导入依赖",
+      "diagramId": "ts-configuration-workspace-file-f3",
+      "truthKind": "current-code",
+      "baselineCommit": "d17602ed9931a1898f713c740752c54b94bd8086",
+      "verifiedAt": "2026-09-01",
+      "documentDigest": "sha256:928bcd41ffeb7127c0679b32368296edc42e0d29ea1ed1409d9dc236070c8004",
+      "storedSourceFingerprint": "sha256:505f4f76b12dd208bcd117075a93a6f626d6b11503f47109b3d9fec484fddc7a",
+      "observedSourceFingerprint": "sha256:d19423b678da56b68fb7e982c1058d08a5d268111a41fb50b9136fe0ff20acf9",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/configuration/**",
+        "src/workspace/**",
+        "src/contracts/schemas/configuration/**",
+        "src/contracts/schemas/workspace/**",
+        "tests/configuration/**",
+        "tests/workspace/**"
+      ],
+      "refreshTriggers": [
+        "src/configuration/**",
+        "src/workspace/**",
+        "src/contracts/generated/configuration/**",
+        "src/contracts/generated/workspace/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 145,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 38,
+          "title": "Wakeflow Configuration与Workspace关键文件依赖",
+          "kind": "flowchart LR",
+          "digest": "sha256:5e07cf2dce97f5383fd7e3ee052798e99db331619a27151d1749874dd2930cc6",
+          "edgeIds": [
+            "E-F3-01",
+            "E-F3-02",
+            "E-F3-03",
+            "E-F3-04",
+            "E-F3-05",
+            "E-F3-06",
+            "E-F3-07",
+            "E-F3-08",
+            "E-F3-09",
+            "E-F3-10",
+            "E-F3-11",
+            "E-F3-12",
+            "E-F3-13",
+            "E-F3-14",
+            "E-F3-15",
+            "E-F3-16",
+            "E-F3-17",
+            "E-F3-18",
+            "E-F3-19",
+            "E-F3-20",
+            "E-F3-21",
+            "E-F3-22",
+            "E-F3-23",
+            "E-F3-24",
+            "E-F3-25",
+            "E-F3-26",
+            "E-F3-27",
+            "E-F3-28",
+            "E-F3-29",
+            "E-F3-30",
+            "E-F3-31",
+            "E-F3-32",
+            "E-F3-33",
+            "E-F3-34",
+            "E-F3-35",
+            "E-F3-36",
+            "E-F3-37",
+            "E-F3-38"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/03-configuration-workspace/runtime-call-flow.md",
+      "title": "Configuration 与 Workspace：Config、Maintenance与Binding运行时流程",
+      "diagramId": "ts-configuration-workspace-runtime-r0",
+      "truthKind": "current-code",
+      "baselineCommit": "d17602ed9931a1898f713c740752c54b94bd8086",
+      "verifiedAt": "2026-09-01",
+      "documentDigest": "sha256:78e9b37f5cd5b30f5567eb4674a51881b6a8678628dda69443e874ddef9cfd34",
+      "storedSourceFingerprint": "sha256:b6dd57a06e70a41b33cb1e7e678e82b73fe85e97f93417b2ef4af42790377a27",
+      "observedSourceFingerprint": "sha256:c481d48eb2346ca3639a81a61ccbb7d42604ab94cffdeb5f8c78a5c1b71d83e6",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/configuration/**",
+        "src/workspace/maintenance/**",
+        "src/workspace/window-runtime/**",
+        "tests/configuration/**",
+        "tests/workspace/maintenance/**",
+        "tests/workspace/window-runtime/**"
+      ],
+      "refreshTriggers": [
+        "src/configuration/**",
+        "src/workspace/maintenance/**",
+        "src/workspace/window-runtime/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 74,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 36,
+          "title": "Wakeflow Config v3权威读取条件替换与恢复",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:d4a19f5a5fedc394fd4fd0130d0cf6dee5880d4608f3e342fff77a5e87907490",
+          "edgeIds": [
+            "E-R0-01",
+            "E-R0-02",
+            "E-R0-03",
+            "E-R0-04",
+            "E-R0-05",
+            "E-R0-06",
+            "E-R0-07",
+            "E-R0-08",
+            "E-R0-09",
+            "E-R0-10",
+            "E-R0-11"
+          ]
+        },
+        {
+          "block": 2,
+          "line": 99,
+          "title": "Wakeflow Maintenance从零写入preview到可恢复transaction",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:82e2f1ecbd1aff5f58f7ca1cd2fcb56ab7348e497ddb210c81a45eff6bee7c45",
+          "edgeIds": [
+            "E-R1-01",
+            "E-R1-02",
+            "E-R1-03",
+            "E-R1-04",
+            "E-R1-05",
+            "E-R1-06",
+            "E-R1-07",
+            "E-R1-08",
+            "E-R1-09",
+            "E-R1-10",
+            "E-R1-11",
+            "E-R1-12",
+            "E-R1-13",
+            "E-R1-14",
+            "E-R1-15",
+            "E-R1-16",
+            "E-R1-17",
+            "E-R1-18",
+            "E-R1-19",
+            "E-R1-20",
+            "E-R1-21"
+          ]
+        },
+        {
+          "block": 3,
+          "line": 178,
+          "title": "Wakeflow Window Host Binding首次注册和Agent观察闭合",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:fcbb06b1bf5f136680f5db5f2735315ece6607a8db8c208e44e9e083f253b464",
+          "edgeIds": [
+            "E-R2-01",
+            "E-R2-02",
+            "E-R2-03",
+            "E-R2-04",
+            "E-R2-05",
+            "E-R2-06",
+            "E-R2-07"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/04-governance-event-sourcing/README.md",
+      "title": "Governance：Demand事件权威与聚合",
+      "diagramId": "ts-governance-demand-event-sourcing-g0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:1834688f0c29954cc1499b0ce9995baab573ee08efe6d3ba2dc2eb8b19827ffc",
+      "storedSourceFingerprint": "sha256:f4d9f29af5dcbee79ea289315d39e6f6b29fbaa2830aa9759862244f9a4a9409",
+      "observedSourceFingerprint": "sha256:80a02a14727856bc6e5a0d4ed9e1bcd781dc615fef36a47697d3e8502be4db06",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/demand/**",
+        "src/governance/evidence/**",
+        "src/governance/ledger/**",
+        "src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts",
+        "src/contracts/schemas/governance/demand/**",
+        "src/contracts/schemas/governance/evidence/**",
+        "src/contracts/schemas/governance/ledger/**",
+        "src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json",
+        "tests/governance/demand/**",
+        "tests/governance/evidence/**",
+        "tests/governance/ledger/**",
+        "tests/entrypoints/wakeflow-demand-publication-mcp.test.ts"
+      ],
+      "refreshTriggers": [
+        "src/governance/demand/**",
+        "src/governance/evidence/**",
+        "src/governance/ledger/**",
+        "src/contracts/schemas/governance/demand/**",
+        "src/contracts/generated/governance/demand/**",
+        "tests/governance/demand/**",
+        "tests/governance/ledger/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 155,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 85,
+          "title": "Wakeflow Demand事件权威与聚合重建",
+          "kind": "flowchart TB",
+          "digest": "sha256:31ab0467113a62df01158d5245116197e84c712dca1f1ecc98076fddebe8084d",
+          "edgeIds": [
+            "E-G0-18",
+            "E-G0-19",
+            "E-G0-20",
+            "E-G0-21",
+            "E-G0-22",
+            "E-G0-01",
+            "E-G0-02",
+            "E-G0-03",
+            "E-G0-04",
+            "E-G0-05",
+            "E-G0-06",
+            "E-G0-07",
+            "E-G0-08",
+            "E-G0-09",
+            "E-G0-10",
+            "E-G0-11",
+            "E-G0-12",
+            "E-G0-13",
+            "E-G0-14",
+            "E-G0-15",
+            "E-G0-16",
+            "E-G0-17"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/04-governance-event-sourcing/file-dependencies.md",
+      "title": "Governance：Demand事件溯源关键文件依赖",
+      "diagramId": "ts-governance-demand-file-f4",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:8a050ae45ce799fa3b9c2af8cbe08a32d6d10a93ecc3d31a4758924a0d374fd7",
+      "storedSourceFingerprint": "sha256:f9656e6bd5d30525b68d627c037b477fa2b8e11482175e1830705b7eb9f6796d",
+      "observedSourceFingerprint": "sha256:018b68277a3b0ad54d38225592bb6e1779e4011872a5e3056950006e140054be",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/demand/**",
+        "src/governance/evidence/**",
+        "src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts",
+        "src/contracts/schemas/governance/demand/**",
+        "src/contracts/schemas/governance/evidence/**",
+        "src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json",
+        "tests/governance/demand/**",
+        "tests/governance/evidence/**",
+        "tests/entrypoints/wakeflow-demand-publication-mcp.test.ts"
+      ],
+      "refreshTriggers": [
+        "src/governance/demand/**",
+        "src/governance/evidence/**",
+        "src/contracts/generated/governance/demand/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 133,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 42,
+          "title": "Wakeflow Demand事件溯源关键文件导入关系",
+          "kind": "flowchart LR",
+          "digest": "sha256:1b1c94f50537f3d8eb4acb3d567477f5c3194c48b37185da88776f9656d9ba06",
+          "edgeIds": [
+            "E-F4-01",
+            "E-F4-02",
+            "E-F4-03",
+            "E-F4-04",
+            "E-F4-05",
+            "E-F4-06",
+            "E-F4-47",
+            "E-F4-48",
+            "E-F4-49",
+            "E-F4-50",
+            "E-F4-51",
+            "E-F4-52",
+            "E-F4-53",
+            "E-F4-54",
+            "E-F4-55",
+            "E-F4-59",
+            "E-F4-60",
+            "E-F4-61",
+            "E-F4-62",
+            "E-F4-63",
+            "E-F4-64",
+            "E-F4-65",
+            "E-F4-66",
+            "E-F4-67",
+            "E-F4-68",
+            "E-F4-69",
+            "E-F4-70",
+            "E-F4-71",
+            "E-F4-72",
+            "E-F4-73",
+            "E-F4-74",
+            "E-F4-75",
+            "E-F4-76",
+            "E-F4-77",
+            "E-F4-78",
+            "E-F4-79",
+            "E-F4-80",
+            "E-F4-81",
+            "E-F4-82",
+            "E-F4-83",
+            "E-F4-84",
+            "E-F4-85",
+            "E-F4-86",
+            "E-F4-87",
+            "E-F4-88",
+            "E-F4-89",
+            "E-F4-90",
+            "E-F4-91",
+            "E-F4-92",
+            "E-F4-93",
+            "E-F4-07",
+            "E-F4-08",
+            "E-F4-09",
+            "E-F4-10",
+            "E-F4-11",
+            "E-F4-12",
+            "E-F4-13",
+            "E-F4-14",
+            "E-F4-15",
+            "E-F4-16",
+            "E-F4-17",
+            "E-F4-18",
+            "E-F4-19",
+            "E-F4-20",
+            "E-F4-21",
+            "E-F4-22",
+            "E-F4-23",
+            "E-F4-24",
+            "E-F4-25",
+            "E-F4-26",
+            "E-F4-27",
+            "E-F4-28",
+            "E-F4-58",
+            "E-F4-29",
+            "E-F4-30",
+            "E-F4-31",
+            "E-F4-32",
+            "E-F4-33",
+            "E-F4-34",
+            "E-F4-35",
+            "E-F4-36",
+            "E-F4-37",
+            "E-F4-38",
+            "E-F4-39",
+            "E-F4-40",
+            "E-F4-41",
+            "E-F4-42",
+            "E-F4-43",
+            "E-F4-44",
+            "E-F4-45",
+            "E-F4-46"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/04-governance-event-sourcing/runtime-call-flow.md",
+      "title": "Governance：Demand Command、Append、Load与Publication流程",
+      "diagramId": "ts-governance-demand-runtime-e0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:f25ef8654c852ea81e475673bf8e73ae2facf2dec3033f27ef01da6f8b79f1e0",
+      "storedSourceFingerprint": "sha256:0458a427b22590bb4451dd2d11e15154d27950aa133f048a794b906c37b352c8",
+      "observedSourceFingerprint": "sha256:fcfb0b2df393396ac1bd424de11bca3c5e5477084afa0ebffbc9019627aee23f",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/demand/**",
+        "src/governance/evidence/**",
+        "src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts",
+        "src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json",
+        "src/contracts/schemas/governance/evidence/**",
+        "tests/governance/demand/**",
+        "tests/governance/evidence/**",
+        "tests/entrypoints/wakeflow-demand-publication-mcp.test.ts"
+      ],
+      "refreshTriggers": [
+        "src/governance/demand/event-sourcing/**",
+        "src/governance/demand/publication/**",
+        "src/governance/evidence/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 105,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 36,
+          "title": "Demand业务Command从纯决策到文件Event Store追加",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:0407f7bdd11d3849c56acda96e975d163e04b0b4d6257f360e50edec659782de",
+          "edgeIds": [
+            "E-E0-01",
+            "E-E0-02",
+            "E-E0-03",
+            "E-E0-04",
+            "E-E0-05",
+            "E-E0-06",
+            "E-E0-07",
+            "E-E0-08",
+            "E-E0-09",
+            "E-E0-10",
+            "E-E0-11"
+          ]
+        },
+        {
+          "block": 2,
+          "line": 101,
+          "title": "Demand Repository正常加载完整审计与不可变快照",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:a985544cdf680b271e558da2c383198a145511baaa5cb3b4e66978eeb01a1e79",
+          "edgeIds": [
+            "E-E1-01",
+            "E-E1-02",
+            "E-E1-03",
+            "E-E1-04",
+            "E-E1-05",
+            "E-E1-06",
+            "E-E1-07",
+            "E-E1-08",
+            "E-E1-09",
+            "E-E1-10",
+            "E-E1-11"
+          ]
+        },
+        {
+          "block": 3,
+          "line": 169,
+          "title": "从公共preview到精确应用和Demand事件根前向恢复",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:5823dacae9980fb758484cce8c88fb610b3930ce339b3895086bb72d23a1806c",
+          "edgeIds": [
+            "E-E2-16",
+            "E-E2-17",
+            "E-E2-18",
+            "E-E2-19",
+            "E-E2-20",
+            "E-E2-21",
+            "E-E2-01",
+            "E-E2-02",
+            "E-E2-03",
+            "E-E2-04",
+            "E-E2-05",
+            "E-E2-06",
+            "E-E2-07",
+            "E-E2-08",
+            "E-E2-09",
+            "E-E2-10",
+            "E-E2-11",
+            "E-E2-12",
+            "E-E2-13",
+            "E-E2-14",
+            "E-E2-22",
+            "E-E2-23",
+            "E-E2-24",
+            "E-E2-15"
+          ]
+        },
+        {
+          "block": 4,
+          "line": 256,
+          "title": "Managed Evidence内部可恢复发布与按需读取",
+          "kind": "flowchart LR",
+          "digest": "sha256:3cd689b212cb790c0414c9ab3896cf901edb658ccc46e863a8c4c0960165bf74",
+          "edgeIds": [
+            "E-E3-01",
+            "E-E3-22",
+            "E-E3-02",
+            "E-E3-03",
+            "E-E3-04",
+            "E-E3-05",
+            "E-E3-06",
+            "E-E3-08",
+            "E-E3-09",
+            "E-E3-10",
+            "E-E3-11",
+            "E-E3-12",
+            "E-E3-13",
+            "E-E3-14",
+            "E-E3-15",
+            "E-E3-16",
+            "E-E3-17",
+            "E-E3-18",
+            "E-E3-19",
+            "E-E3-20",
+            "E-E3-21",
+            "E-E3-23",
+            "E-E3-24",
+            "E-E3-25",
+            "E-E3-26",
+            "E-E3-27",
+            "E-E3-28",
+            "E-E3-29",
+            "E-E3-30",
+            "E-E3-31",
+            "E-E3-32",
+            "E-E3-33",
+            "E-E3-34",
+            "E-E3-35",
+            "E-E3-36",
+            "E-E3-37",
+            "E-E3-38",
+            "E-E3-39",
+            "E-E3-40",
+            "E-E3-41",
+            "E-E3-42",
+            "E-E3-43",
+            "E-E3-44",
+            "E-E3-45"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/05-tasking-slice/README.md",
+      "title": "Tasking纵切：Demand到不可变TaskPackage",
+      "diagramId": "ts-tasking-vertical-t0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:d6522b96ac5f24d7ed8dd1bccd79f6b2c58092aa3bfc6b878637d2e62bcbcdc0",
+      "storedSourceFingerprint": "sha256:e66e1da8f9545a6b92ba8137610010aea289734454b9ed1ae5f6e5ef46510e38",
+      "observedSourceFingerprint": "sha256:033d2c7fdc2c6061335adeb4862f34853e2335f9e7c520c1dde758e494e658b8",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/tasking/**",
+        "src/governance/testing/test-task-package.ts",
+        "src/governance/testing/test-task-planning-authority.ts",
+        "src/governance/testing/test-card.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/governance/delivery/window-work-claim-store.ts",
+        "src/contracts/schemas/governance/tasking/**",
+        "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
+        "tests/governance/tasking/**",
+        "tests/governance/testing/test-task-planning-service*"
+      ],
+      "refreshTriggers": [
+        "src/governance/tasking/**",
+        "src/governance/demand/**",
+        "src/governance/testing/test-task-package.ts",
+        "src/governance/testing/test-task-planning-authority.ts",
+        "src/governance/testing/test-card.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/governance/delivery/window-work-claim-store.ts",
+        "src/contracts/schemas/governance/tasking/**",
+        "tests/governance/tasking/**",
+        "tests/governance/testing/test-task-planning-service*"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 25,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 82,
+          "title": "从Demand权威到不可变TaskPackage事件与投影",
+          "kind": "flowchart TB",
+          "digest": "sha256:17678f1ae8094423e4634bd774a50a316720ffad853df2eaf9c9faca5c2775e0",
+          "edgeIds": [
+            "E-T0-01",
+            "E-T0-02",
+            "E-T0-13",
+            "E-T0-03",
+            "E-T0-04",
+            "E-T0-05",
+            "E-T0-06",
+            "E-T0-07",
+            "E-T0-08",
+            "E-T0-09",
+            "E-T0-10",
+            "E-T0-11",
+            "E-T0-12",
+            "E-T0-14"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/05-tasking-slice/file-dependencies.md",
+      "title": "Tasking纵切：关键文件导入依赖",
+      "diagramId": "ts-tasking-file-f5",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:b7c90c7c3ecc680a652c80d6929d1e1e01d095d9ed4d60a121c040fc5972d3bc",
+      "storedSourceFingerprint": "sha256:e66e1da8f9545a6b92ba8137610010aea289734454b9ed1ae5f6e5ef46510e38",
+      "observedSourceFingerprint": "sha256:033d2c7fdc2c6061335adeb4862f34853e2335f9e7c520c1dde758e494e658b8",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/tasking/**",
+        "src/governance/testing/test-task-package.ts",
+        "src/governance/testing/test-task-planning-authority.ts",
+        "src/governance/testing/test-card.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/governance/delivery/window-work-claim-store.ts",
+        "src/contracts/schemas/governance/tasking/**",
+        "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
+        "tests/governance/tasking/**",
+        "tests/governance/testing/test-task-planning-service*"
+      ],
+      "refreshTriggers": [
+        "src/governance/tasking/**",
+        "src/governance/demand/**",
+        "src/governance/testing/test-task-package.ts",
+        "src/governance/testing/test-task-planning-authority.ts",
+        "src/governance/testing/test-card.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/governance/delivery/window-work-claim-store.ts"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 25,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 44,
+          "title": "Target Task Planning关键文件依赖",
+          "kind": "flowchart LR",
+          "digest": "sha256:3c337aedac731c2069638b4b7c7e575d5c16d482eb860ed60d7b3db765195a65",
+          "edgeIds": [
+            "E-F5-01",
+            "E-F5-02",
+            "E-F5-03",
+            "E-F5-04",
+            "E-F5-05",
+            "E-F5-06",
+            "E-F5-07",
+            "E-F5-08",
+            "E-F5-09",
+            "E-F5-10",
+            "E-F5-11",
+            "E-F5-12",
+            "E-F5-13",
+            "E-F5-14",
+            "E-F5-15",
+            "E-F5-16",
+            "E-F5-17",
+            "E-F5-18",
+            "E-F5-19",
+            "E-F5-20",
+            "E-F5-21"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/05-tasking-slice/runtime-call-flow.md",
+      "title": "Tasking纵切：preview、apply与投影恢复",
+      "diagramId": "ts-tasking-runtime-t1",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:7f0d02dab34cfde97eba44396b8e34b6256f9c6f5c1a3c06a633025b4886a03e",
+      "storedSourceFingerprint": "sha256:e66e1da8f9545a6b92ba8137610010aea289734454b9ed1ae5f6e5ef46510e38",
+      "observedSourceFingerprint": "sha256:033d2c7fdc2c6061335adeb4862f34853e2335f9e7c520c1dde758e494e658b8",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/tasking/**",
+        "src/governance/testing/test-task-package.ts",
+        "src/governance/testing/test-task-planning-authority.ts",
+        "src/governance/testing/test-card.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/governance/delivery/window-work-claim-store.ts",
+        "src/contracts/schemas/governance/tasking/**",
+        "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
+        "tests/governance/tasking/**",
+        "tests/governance/testing/test-task-planning-service*"
+      ],
+      "refreshTriggers": [
+        "src/governance/tasking/**",
+        "src/governance/demand/**",
+        "src/governance/testing/test-task-package.ts",
+        "src/governance/testing/test-task-planning-authority.ts",
+        "src/governance/testing/test-card.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/governance/delivery/window-work-claim-store.ts"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 25,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 44,
+          "title": "Target Task Planning零写入preview",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:13e5c3392d1b24456c22ad8cdccda183da4411c6a95d95dc0c22de2a7b30d0b9",
+          "edgeIds": [
+            "E-T1-01",
+            "E-T1-02",
+            "E-T1-03",
+            "E-T1-04",
+            "E-T1-05",
+            "E-T1-08",
+            "E-T1-09"
+          ]
+        },
+        {
+          "block": 2,
+          "line": 95,
+          "title": "Target Task Planning公共test选择与owner派生",
+          "kind": "flowchart LR",
+          "digest": "sha256:9e65281c6542d9b5a1e72a3751db6445ed815da86d46266bf809e5fd3c1ccd36",
+          "edgeIds": [
+            "E-T1-13",
+            "E-T1-06",
+            "E-T1-07",
+            "E-T1-10",
+            "E-T1-11",
+            "E-T1-12"
+          ]
+        },
+        {
+          "block": 3,
+          "line": 137,
+          "title": "Target Task Planning apply和TaskPackage投影恢复",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:5760d6f64d5de714f3327b873bad674a770dbb9e80e6bc5dc49c9434780e4e44",
+          "edgeIds": [
+            "E-T2-01",
+            "E-T2-02",
+            "E-T2-03",
+            "E-T2-04",
+            "E-T2-05",
+            "E-T2-06",
+            "E-T2-07",
+            "E-T2-08",
+            "E-T2-09",
+            "E-T2-14",
+            "E-T2-10",
+            "E-T2-11",
+            "E-T2-12",
+            "E-T2-13"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/06-implementation-delivery-review/README.md",
+      "title": "实现投递与Controller Review纵切",
+      "diagramId": "ts-delivery-review-vertical-d0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:06a948497244b8035538b2a2feff292f4a130c96e96cb862a2998ae45f03bb44",
+      "storedSourceFingerprint": "sha256:2aa76ec90d7e2b8ceb9212e45a53ea3f0f64f2916bbd610852a9862db2ff0ae0",
+      "observedSourceFingerprint": "sha256:e5b0c0921a4a99efbc5cf166ff137e6a53c7290d31dab3a4d2c65ee0b81c2ee5",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/delivery/**",
+        "src/governance/result/**",
+        "src/governance/review/**",
+        "tests/governance/delivery/**",
+        "tests/governance/result/**",
+        "tests/governance/review/**"
+      ],
+      "refreshTriggers": [
+        "src/governance/delivery/**",
+        "src/governance/result/**",
+        "src/governance/review/**",
+        "tests/governance/{delivery,result,review}/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 124,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 61,
+          "title": "从TaskPackage到宿主效果TargetResult与Controller Review",
+          "kind": "flowchart TB",
+          "digest": "sha256:cb1105a7d8b00d01bcd2f501b6caf52a25e670d9edf651422dc3af31635098be",
+          "edgeIds": [
+            "E-D0-01",
+            "E-D0-02",
+            "E-D0-03",
+            "E-D0-04",
+            "E-D0-05",
+            "E-D0-06",
+            "E-D0-07",
+            "E-D0-08",
+            "E-D0-09",
+            "E-D0-10",
+            "E-D0-11",
+            "E-D0-12",
+            "E-D0-13",
+            "E-D0-14",
+            "E-D0-15"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/06-implementation-delivery-review/file-dependencies.md",
+      "title": "实现投递与审阅：关键文件依赖",
+      "diagramId": "ts-delivery-review-file-f6",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:940ea750067364ce2bda65264292826f4069c6ce7495ef19be920c5bdaea55c9",
+      "storedSourceFingerprint": "sha256:2aa76ec90d7e2b8ceb9212e45a53ea3f0f64f2916bbd610852a9862db2ff0ae0",
+      "observedSourceFingerprint": "sha256:e5b0c0921a4a99efbc5cf166ff137e6a53c7290d31dab3a4d2c65ee0b81c2ee5",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/delivery/**",
+        "src/governance/result/**",
+        "src/governance/review/**",
+        "tests/governance/delivery/**",
+        "tests/governance/result/**",
+        "tests/governance/review/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 124,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 27,
+          "title": "Delivery Result与Controller Review关键文件依赖",
+          "kind": "flowchart LR",
+          "digest": "sha256:c586a8ed9f2c19fbbf3031e069589db1044061fc0cb2d9924ba23cbe2d7611ba",
+          "edgeIds": [
+            "E-F6-01",
+            "E-F6-02",
+            "E-F6-03",
+            "E-F6-04",
+            "E-F6-05",
+            "E-F6-06",
+            "E-F6-07",
+            "E-F6-08",
+            "E-F6-09",
+            "E-F6-10",
+            "E-F6-11",
+            "E-F6-12",
+            "E-F6-13",
+            "E-F6-14",
+            "E-F6-15",
+            "E-F6-16",
+            "E-F6-17",
+            "E-F6-18",
+            "E-F6-19",
+            "E-F6-20",
+            "E-F6-21",
+            "E-F6-22",
+            "E-F6-23",
+            "E-F6-24",
+            "E-F6-25",
+            "E-F6-26",
+            "E-F6-27"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/06-implementation-delivery-review/runtime-call-flow.md",
+      "title": "实现投递与审阅：准备、Claim、Result和Review调用流",
+      "diagramId": "ts-delivery-review-runtime-d1",
+      "truthKind": "current-code",
+      "baselineCommit": "d17602ed9931a1898f713c740752c54b94bd8086",
+      "verifiedAt": "2026-09-01",
+      "documentDigest": "sha256:1c4d91706869f37e32ab4f957b0307a6c946cd30515faefc118ce64d68ed22c7",
+      "storedSourceFingerprint": "sha256:2aa76ec90d7e2b8ceb9212e45a53ea3f0f64f2916bbd610852a9862db2ff0ae0",
+      "observedSourceFingerprint": "sha256:e5b0c0921a4a99efbc5cf166ff137e6a53c7290d31dab3a4d2c65ee0b81c2ee5",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/delivery/**",
+        "src/governance/result/**",
+        "src/governance/review/**",
+        "tests/governance/delivery/**",
+        "tests/governance/result/**",
+        "tests/governance/review/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 124,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 27,
+          "title": "Target Delivery准备WorkClaim与一次性Agent Host Action",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:66fd20339269bb2c8185c51bc4c3d41b0b1a8ad53909db4e750150f6ccd35c65",
+          "edgeIds": [
+            "E-D1-01",
+            "E-D1-02",
+            "E-D1-03",
+            "E-D1-04",
+            "E-D1-05",
+            "E-D1-06",
+            "E-D1-07",
+            "E-D1-08",
+            "E-D1-09",
+            "E-D1-10"
+          ]
+        },
+        {
+          "block": 2,
+          "line": 75,
+          "title": "宿主效果观察与TargetResult事件导入",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:4afcbe370d2b9ddec941ebeac6817cd39f918ca9269d4e39cc59985361f0f7b1",
+          "edgeIds": [
+            "E-D2-01",
+            "E-D2-02",
+            "E-D2-03",
+            "E-D2-04",
+            "E-D2-05",
+            "E-D2-06",
+            "E-D2-07",
+            "E-D2-09",
+            "E-D2-10",
+            "E-D2-08"
+          ]
+        },
+        {
+          "block": 3,
+          "line": 128,
+          "title": "Controller Implementation TargetResult审阅决定与后续路由",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:f3400638051b8cd08cf385caadf78f366a74fb3650d4ff78c7e40d013cf5b105",
+          "edgeIds": [
+            "E-D3-01",
+            "E-D3-02",
+            "E-D3-03",
+            "E-D3-04",
+            "E-D3-05",
+            "E-D3-06",
+            "E-D3-07",
+            "E-D3-08"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/07-review-rework-completion/README.md",
+      "title": "Review返工、blocked恢复与Demand完成",
+      "diagramId": "ts-review-rework-completion-l0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:668279bc5388bf2a3c329bf912721d9d87b6212590197e2156b9d5a5683ab496",
+      "storedSourceFingerprint": "sha256:d0ab87bef6d03e8d6b65b636ef6637a180352e236c3344b42e8c6cae256e667a",
+      "observedSourceFingerprint": "sha256:2ba6883ef7991e2e21e76f29654ae5f8729568abbb87a5b7c05d72a2dd86b570",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/review/**",
+        "src/governance/lifecycle/**",
+        "src/governance/delivery/target-delivery-rework-context.ts",
+        "src/governance/testing/**",
+        "src/governance/result/**",
+        "tests/governance/review/**",
+        "tests/governance/lifecycle/**",
+        "tests/governance/testing/**",
+        "tests/governance/result/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 116,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 46,
+          "title": "Controller Review返工blocked恢复与Demand完成",
+          "kind": "flowchart TB",
+          "digest": "sha256:ca532260276d135594e6950112db9381508f8175ac913ed34892f0c9549508f6",
+          "edgeIds": [
+            "E-L0-01",
+            "E-L0-02",
+            "E-L0-03",
+            "E-L0-04",
+            "E-L0-05",
+            "E-L0-06",
+            "E-L0-07",
+            "E-L0-08",
+            "E-L0-09",
+            "E-L0-10",
+            "E-L0-11",
+            "E-L0-12",
+            "E-L0-18",
+            "E-L0-19",
+            "E-L0-20",
+            "E-L0-21",
+            "E-L0-24",
+            "E-L0-22",
+            "E-L0-23",
+            "E-L0-13",
+            "E-L0-14",
+            "E-L0-15",
+            "E-L0-16",
+            "E-L0-17"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/07-review-rework-completion/file-dependencies.md",
+      "title": "Review返工与Completion：关键文件依赖",
+      "diagramId": "ts-review-completion-file-f7",
+      "truthKind": "current-code",
+      "baselineCommit": "d17602ed9931a1898f713c740752c54b94bd8086",
+      "verifiedAt": "2026-09-01",
+      "documentDigest": "sha256:711f0d16148f0a664a8211ac0fa5031af7f65054843fd0cd4ca55f58bb5219a0",
+      "storedSourceFingerprint": "sha256:b2fb77d6e677dd47b85eb174a423068e70aa60354582822d1d4b1e5a942c79f1",
+      "observedSourceFingerprint": "sha256:b4a321d3f61c23132328f967f5ed6d23dd921fee95929c6ec9e14d8bbae9a250",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/review/**",
+        "src/governance/lifecycle/**",
+        "src/governance/testing/**",
+        "src/governance/result/**",
+        "src/governance/delivery/**",
+        "tests/governance/review/**",
+        "tests/governance/lifecycle/**",
+        "tests/governance/testing/**",
+        "tests/governance/result/**",
+        "tests/governance/delivery/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 169,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 21,
+          "title": "Review返工blocked恢复与Demand Completion关键依赖",
+          "kind": "flowchart LR",
+          "digest": "sha256:a3acbffd316894fe449504d85ee4902098a3eb11fbd42a049e3ee0e7e658a5f2",
+          "edgeIds": [
+            "E-F7-01",
+            "E-F7-02",
+            "E-F7-03",
+            "E-F7-19",
+            "E-F7-25",
+            "E-F7-26",
+            "E-F7-27",
+            "E-F7-28",
+            "E-F7-29",
+            "E-F7-30",
+            "E-F7-31",
+            "E-F7-32",
+            "E-F7-20",
+            "E-F7-21",
+            "E-F7-22",
+            "E-F7-23",
+            "E-F7-24",
+            "E-F7-04",
+            "E-F7-05",
+            "E-F7-06",
+            "E-F7-07",
+            "E-F7-08",
+            "E-F7-09",
+            "E-F7-10",
+            "E-F7-11",
+            "E-F7-12",
+            "E-F7-13",
+            "E-F7-14",
+            "E-F7-15",
+            "E-F7-16",
+            "E-F7-17",
+            "E-F7-18"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/07-review-rework-completion/runtime-call-flow.md",
+      "title": "Review返工、Resume与Completion调用流",
+      "diagramId": "ts-review-completion-runtime-l1",
+      "truthKind": "current-code",
+      "baselineCommit": "d17602ed9931a1898f713c740752c54b94bd8086",
+      "verifiedAt": "2026-09-01",
+      "documentDigest": "sha256:55faa3ab60f70a6bf7efdb4308d0fd11748f7260f1ae887fae44939a6b72a81c",
+      "storedSourceFingerprint": "sha256:b2fb77d6e677dd47b85eb174a423068e70aa60354582822d1d4b1e5a942c79f1",
+      "observedSourceFingerprint": "sha256:b4a321d3f61c23132328f967f5ed6d23dd921fee95929c6ec9e14d8bbae9a250",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/review/**",
+        "src/governance/lifecycle/**",
+        "src/governance/testing/**",
+        "src/governance/result/**",
+        "src/governance/delivery/**",
+        "tests/governance/review/**",
+        "tests/governance/lifecycle/**",
+        "tests/governance/testing/**",
+        "tests/governance/result/**",
+        "tests/governance/delivery/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 169,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 21,
+          "title": "Controller Review rework和blocked恢复",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:6d8992b2a61f2a219e0b71b3ff625a4e5c81d84b9098949bb325804671e215a7",
+          "edgeIds": [
+            "E-L1-01",
+            "E-L1-02",
+            "E-L1-03",
+            "E-L1-04",
+            "E-L1-05",
+            "E-L1-06",
+            "E-L1-07",
+            "E-L1-08"
+          ]
+        },
+        {
+          "block": 2,
+          "line": 71,
+          "title": "Demand成功完成preview和幂等apply",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:d62e802b468ee666a93760134054b8613a39bc367844740d4afbccb2a95a8fc2",
+          "edgeIds": [
+            "E-L2-01",
+            "E-L2-02",
+            "E-L2-03",
+            "E-L2-04",
+            "E-L2-05",
+            "E-L2-06",
+            "E-L2-07",
+            "E-L2-08",
+            "E-L2-09",
+            "E-L2-10"
+          ]
+        },
+        {
+          "block": 3,
+          "line": 127,
+          "title": "Product Defect Remediation授权返工与重新测试",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:a8fabc6e3c2448a1372ae9c47fd3e9d061b1575b17e2a247f32ea9d98a582916",
+          "edgeIds": [
+            "E-L3-01",
+            "E-L3-02",
+            "E-L3-03",
+            "E-L3-04",
+            "E-L3-05",
+            "E-L3-06",
+            "E-L3-07",
+            "E-L3-08",
+            "E-L3-09",
+            "E-L3-10"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/08-real-environment-testing/README.md",
+      "title": "真实环境Testing纵切",
+      "diagramId": "ts-real-testing-x0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:30d61232b814ccab654c714757fb0d53fd02239aba7b45a5d4507d2e396867ec",
+      "storedSourceFingerprint": "sha256:0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853",
+      "observedSourceFingerprint": "sha256:88d1a1ce6b2cd33d952167a0a782570a4c6c4baf6d5e6d3e24dc3da94720a9a5",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/testing/**",
+        "src/governance/tasking/**",
+        "src/governance/delivery/**",
+        "src/governance/result/**",
+        "src/governance/review/**",
+        "src/governance/lifecycle/**",
+        "src/entrypoints/**",
+        "src/contracts/schemas/governance/testing/**",
+        "src/contracts/schemas/governance/tasking/**",
+        "src/contracts/schemas/governance/result/**",
+        "src/contracts/schemas/governance/review/**",
+        "src/contracts/schemas/governance/lifecycle/**",
+        "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
+        "tests/governance/testing/**",
+        "tests/governance/tasking/**",
+        "tests/governance/delivery/**",
+        "tests/governance/result/**",
+        "tests/governance/review/**",
+        "tests/governance/lifecycle/**",
+        "tests/entrypoints/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 218,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 46,
+          "title": "从Review路由到真实环境Test Result",
+          "kind": "flowchart TB",
+          "digest": "sha256:bb06d25032bc342582eaddbb3a67414a367e8405d07b40ebe42fcded6f9f2e2c",
+          "edgeIds": [
+            "E-X0-01",
+            "E-X0-02",
+            "E-X0-03",
+            "E-X0-04",
+            "E-X0-05",
+            "E-X0-06",
+            "E-X0-19",
+            "E-X0-07",
+            "E-X0-08",
+            "E-X0-09",
+            "E-X0-10",
+            "E-X0-11",
+            "E-X0-12",
+            "E-X0-13",
+            "E-X0-14",
+            "E-X0-15",
+            "E-X0-16",
+            "E-X0-17",
+            "E-X0-18",
+            "E-X0-20",
+            "E-X0-21",
+            "E-X0-24",
+            "E-X0-22",
+            "E-X0-23"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/08-real-environment-testing/file-dependencies.md",
+      "title": "真实环境Testing：关键文件依赖",
+      "diagramId": "ts-real-testing-file-f8",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:61f3cfda359a7b39e14538b8de1a8ab58f630fc08db4bf0be16f4de04e6ec1a2",
+      "storedSourceFingerprint": "sha256:0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853",
+      "observedSourceFingerprint": "sha256:88d1a1ce6b2cd33d952167a0a782570a4c6c4baf6d5e6d3e24dc3da94720a9a5",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/testing/**",
+        "src/governance/tasking/**",
+        "src/governance/delivery/**",
+        "src/governance/result/**",
+        "src/governance/review/**",
+        "src/governance/lifecycle/**",
+        "src/entrypoints/**",
+        "src/contracts/schemas/governance/testing/**",
+        "src/contracts/schemas/governance/tasking/**",
+        "src/contracts/schemas/governance/result/**",
+        "src/contracts/schemas/governance/review/**",
+        "src/contracts/schemas/governance/lifecycle/**",
+        "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
+        "tests/governance/testing/**",
+        "tests/governance/tasking/**",
+        "tests/governance/delivery/**",
+        "tests/governance/result/**",
+        "tests/governance/review/**",
+        "tests/governance/lifecycle/**",
+        "tests/entrypoints/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 218,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 22,
+          "title": "TestCard Test Delivery与Dispatch关键文件依赖",
+          "kind": "flowchart LR",
+          "digest": "sha256:d3873adc7581898745df65d25d4fddab0ab2eec7ad077ff6468dfe1be5116a2f",
+          "edgeIds": [
+            "E-F8-01",
+            "E-F8-02",
+            "E-F8-03",
+            "E-F8-04",
+            "E-F8-05",
+            "E-F8-06",
+            "E-F8-07",
+            "E-F8-08",
+            "E-F8-09",
+            "E-F8-10",
+            "E-F8-30",
+            "E-F8-11",
+            "E-F8-12",
+            "E-F8-13",
+            "E-F8-14",
+            "E-F8-15",
+            "E-F8-16",
+            "E-F8-17",
+            "E-F8-18",
+            "E-F8-19",
+            "E-F8-31",
+            "E-F8-20",
+            "E-F8-21",
+            "E-F8-22",
+            "E-F8-23",
+            "E-F8-24",
+            "E-F8-25",
+            "E-F8-26",
+            "E-F8-27",
+            "E-F8-28",
+            "E-F8-29",
+            "E-F8-32",
+            "E-F8-33"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/08-real-environment-testing/runtime-call-flow.md",
+      "title": "真实环境Testing：Card、Delivery与Result调用流",
+      "diagramId": "ts-real-testing-runtime-x1",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:dc8b5a8406657b881638f8cd16f4417af6108b6c5140316a9e5b8e56547d0923",
+      "storedSourceFingerprint": "sha256:0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853",
+      "observedSourceFingerprint": "sha256:88d1a1ce6b2cd33d952167a0a782570a4c6c4baf6d5e6d3e24dc3da94720a9a5",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/testing/**",
+        "src/governance/tasking/**",
+        "src/governance/delivery/**",
+        "src/governance/result/**",
+        "src/governance/review/**",
+        "src/governance/lifecycle/**",
+        "src/entrypoints/**",
+        "src/contracts/schemas/governance/testing/**",
+        "src/contracts/schemas/governance/tasking/**",
+        "src/contracts/schemas/governance/result/**",
+        "src/contracts/schemas/governance/review/**",
+        "src/contracts/schemas/governance/lifecycle/**",
+        "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
+        "tests/governance/testing/**",
+        "tests/governance/tasking/**",
+        "tests/governance/delivery/**",
+        "tests/governance/result/**",
+        "tests/governance/review/**",
+        "tests/governance/lifecycle/**",
+        "tests/entrypoints/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 218,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 22,
+          "title": "TestCard规划Test TaskPackage和Test Delivery授权",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:c94a86d48cbda8dda6e5211e05732f494bbe0c12a4cd03740aa4c036e5a4171a",
+          "edgeIds": [
+            "E-X1-01",
+            "E-X1-02",
+            "E-X1-03",
+            "E-X1-04",
+            "E-X1-05",
+            "E-X1-06",
+            "E-X1-07"
+          ]
+        },
+        {
+          "block": 2,
+          "line": 68,
+          "title": "Test Dispatch Claim真实环境执行与Test Result",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:2573d78a78ce2d1694f2d4949c4d6ca3716e3e490896e833a10271730ec00262",
+          "edgeIds": [
+            "E-X2-01",
+            "E-X2-02",
+            "E-X2-03",
+            "E-X2-04",
+            "E-X2-05",
+            "E-X2-06",
+            "E-X2-07",
+            "E-X2-08",
+            "E-X2-09",
+            "E-X2-14",
+            "E-X2-10",
+            "E-X2-11",
+            "E-X2-18",
+            "E-X2-19",
+            "E-X2-16",
+            "E-X2-17",
+            "E-X2-15",
+            "E-X2-12",
+            "E-X2-13"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/09-public-mcp-host-seams/README.md",
+      "title": "公共MCP与宿主接缝",
+      "diagramId": "ts-public-mcp-host-h0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:4107de9dc841638b6fc7b5b8b00c067247d366bba85a1ca6037f4f0be524b5bc",
+      "storedSourceFingerprint": "sha256:6f3d1131cd3e8a9751992d13fdeb5515182d3ce4b17c39ef5ade750d68d9226a",
+      "observedSourceFingerprint": "sha256:a9672da57cd63dad86cef93b3eb6d5c893916d7185101c98833ed137141efc82",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/entrypoints/**",
+        "src/hosts/**",
+        "src/workspace/window-runtime/**",
+        "src/governance/**",
+        "src/contracts/generated/entrypoints/**",
+        "src/contracts/schemas/entrypoints/**",
+        "tests/entrypoints/**",
+        "tests/hosts/**",
+        "tests/workspace/window-runtime/**",
+        "tests/governance/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 462,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 42,
+          "title": "Wakeflow公共MCP控制平面与Agent宿主效果平面",
+          "kind": "flowchart TB",
+          "digest": "sha256:44cd664e20126a555ef0c8d5de04abdc0aaa3c6d507e6f5abda00c7950a723a9",
+          "edgeIds": [
+            "E-H0-01",
+            "E-H0-02",
+            "E-H0-03",
+            "E-H0-04",
+            "E-H0-05",
+            "E-H0-06",
+            "E-H0-15",
+            "E-H0-07",
+            "E-H0-08",
+            "E-H0-09",
+            "E-H0-10",
+            "E-H0-11",
+            "E-H0-12",
+            "E-H0-13",
+            "E-H0-14"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/09-public-mcp-host-seams/host-effect-handshake.md",
+      "title": "Agent宿主效果握手",
+      "diagramId": "ts-agent-host-handshake-h1",
+      "truthKind": "current-code",
+      "baselineCommit": "d17602ed9931a1898f713c740752c54b94bd8086",
+      "verifiedAt": "2026-09-01",
+      "documentDigest": "sha256:d1d33f2f92f07c691b2f66020d8ce14d0f60bfeb5c571ce3265294743631b4bb",
+      "storedSourceFingerprint": "sha256:76256d77e1692c887b3c9ac5e60404912ecb8ab0ee38fdadf5d8fe5637219ea7",
+      "observedSourceFingerprint": "sha256:04391937aa1ed41387ec4ad78d8ebcc4afe330dbd1c13359bee58203e9dbbd9d",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/governance/delivery/**",
+        "src/governance/testing/**",
+        "src/governance/result/**",
+        "src/governance/review/**",
+        "src/workspace/window-runtime/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 108,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 18,
+          "title": "Wakeflow Agent宿主效果提交执行观察握手",
+          "kind": "sequenceDiagram",
+          "digest": "sha256:54463235534fe496ea7bb0c0ac81791df7df0e21560d2f138855234c256462d9",
+          "edgeIds": [
+            "E-H1-01",
+            "E-H1-02",
+            "E-H1-03",
+            "E-H1-04",
+            "E-H1-05",
+            "E-H1-06",
+            "E-H1-07",
+            "E-H1-08",
+            "E-H1-09",
+            "E-H1-10",
+            "E-H1-13",
+            "E-H1-11",
+            "E-H1-14",
+            "E-H1-15",
+            "E-H1-12"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/10-end-to-end-business-flow/README.md",
+      "title": "Wakeflow端到端业务流程",
+      "diagramId": "ts-end-to-end-business-z0",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:34fbed98cb71f53390110f0f361f88dafce36c484fafbe8c76e55131550d156d",
+      "storedSourceFingerprint": "sha256:0f4fcb7d28b9d95f8b1a35150a4ef09927e6003bb13437f3ee0a363ef9457022",
+      "observedSourceFingerprint": "sha256:333f38750df68e27901390d828dcc675953456258698611c153674d8a6dfba96",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/configuration/**",
+        "src/workspace/**",
+        "src/governance/**",
+        "src/entrypoints/**",
+        "src/contracts/schemas/**",
+        "tests/**"
+      ],
+      "refreshTriggers": [
+        "wakeflow-architecture-atlas/maps/01-overall-architecture/**",
+        "wakeflow-architecture-atlas/maps/02-foundation/**",
+        "wakeflow-architecture-atlas/maps/03-configuration-workspace/**",
+        "wakeflow-architecture-atlas/maps/04-governance-event-sourcing/**",
+        "wakeflow-architecture-atlas/maps/05-tasking-slice/**",
+        "wakeflow-architecture-atlas/maps/06-implementation-delivery-review/**",
+        "wakeflow-architecture-atlas/maps/07-review-rework-completion/**",
+        "wakeflow-architecture-atlas/maps/08-real-environment-testing/**",
+        "wakeflow-architecture-atlas/maps/09-public-mcp-host-seams/**"
+      ],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 673,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 67,
+          "title": "Wakeflow从需求进入到实现返工条件测试和完成的端到端业务流程",
+          "kind": "flowchart TB",
+          "digest": "sha256:88dc02bac7e2a35a8080500f8fb760c706006d52cdae5cdac08ee57c2cf092b1",
+          "edgeIds": [
+            "E-Z0-01",
+            "E-Z0-02",
+            "E-Z0-36",
+            "E-Z0-37",
+            "E-Z0-38",
+            "E-Z0-03",
+            "E-Z0-04",
+            "E-Z0-33",
+            "E-Z0-34",
+            "E-Z0-35",
+            "E-Z0-05",
+            "E-Z0-06",
+            "E-Z0-07",
+            "E-Z0-08",
+            "E-Z0-09",
+            "E-Z0-10",
+            "E-Z0-11",
+            "E-Z0-12",
+            "E-Z0-13",
+            "E-Z0-14",
+            "E-Z0-15",
+            "E-Z0-16",
+            "E-Z0-17",
+            "E-Z0-18",
+            "E-Z0-19",
+            "E-Z0-20",
+            "E-Z0-21",
+            "E-Z0-22",
+            "E-Z0-25",
+            "E-Z0-26",
+            "E-Z0-27",
+            "E-Z0-28",
+            "E-Z0-31",
+            "E-Z0-32",
+            "E-Z0-29",
+            "E-Z0-30",
+            "E-Z0-23",
+            "E-Z0-24"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/10-end-to-end-business-flow/review-evidence.md",
+      "title": "端到端Review证据矩阵",
+      "diagramId": "ts-end-to-end-evidence-z2",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:5f8528c52a7de4b0b35354af28dbc81aab7da8257afb08c5660d08702cdff5ec",
+      "storedSourceFingerprint": "sha256:c0e3645dbba5275f8def7403b097ff95cad28e82d85ff3c0839e1992bb8b7dfa",
+      "observedSourceFingerprint": "sha256:6b7ffe367bc1b8ae286ed1cf273056522e907be6d1488f5dc38c20ad13003aac",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/**",
+        "tests/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 895,
+      "diagrams": []
+    },
+    {
+      "file": "maps/10-end-to-end-business-flow/state-and-recovery.md",
+      "title": "端到端异常、幂等与恢复路径",
+      "diagramId": "ts-end-to-end-state-z1",
+      "truthKind": "current-code",
+      "baselineCommit": "08334ab9c1d8bd923966a976fdf7989bc56ac38c",
+      "verifiedAt": "2026-09-03",
+      "documentDigest": "sha256:421bc18eb82c15536417661656cba9364e58211fd86a0b1c60779315e8ea3aa4",
+      "storedSourceFingerprint": "sha256:915e2b49e5cb1363bd858b1a4e565a14e02b1eb4336f8e6035e64c29ec3082f6",
+      "observedSourceFingerprint": "sha256:79ac54bf71206064447fdb461fed172edfbc08636ef0fb4ae1f589096b71fe26",
+      "fingerprintMatches": false,
+      "sourcePatterns": [
+        "src/workspace/**",
+        "src/governance/**",
+        "tests/workspace/**",
+        "tests/governance/**"
+      ],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 425,
+      "diagrams": [
+        {
+          "block": 1,
+          "line": 21,
+          "title": "Wakeflow端到端业务状态与恢复分支",
+          "kind": "stateDiagram-v2",
+          "digest": "sha256:79087cec5186bd337087b373bfa209516ecd663622139e9552db28f5f7d1ed51",
+          "edgeIds": [
+            "E-Z1-01",
+            "E-Z1-02",
+            "E-Z1-03",
+            "E-Z1-04",
+            "E-Z1-38",
+            "E-Z1-05",
+            "E-Z1-06",
+            "E-Z1-07",
+            "E-Z1-08",
+            "E-Z1-09",
+            "E-Z1-10",
+            "E-Z1-11",
+            "E-Z1-12",
+            "E-Z1-13",
+            "E-Z1-14",
+            "E-Z1-15",
+            "E-Z1-16",
+            "E-Z1-17",
+            "E-Z1-18",
+            "E-Z1-19",
+            "E-Z1-20",
+            "E-Z1-21",
+            "E-Z1-22",
+            "E-Z1-23",
+            "E-Z1-24",
+            "E-Z1-25",
+            "E-Z1-26",
+            "E-Z1-27",
+            "E-Z1-28",
+            "E-Z1-33",
+            "E-Z1-34",
+            "E-Z1-35",
+            "E-Z1-36",
+            "E-Z1-37",
+            "E-Z1-29",
+            "E-Z1-30",
+            "E-Z1-31",
+            "E-Z1-32"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "maps/README.md",
+      "title": "Wakeflow 架构与代码图谱",
+      "diagramId": null,
+      "truthKind": null,
+      "baselineCommit": null,
+      "verifiedAt": "",
+      "documentDigest": "sha256:81e058bbdac5b78761a87ca7ac0c8877b556758ee0b11eb7506124c1560765e0",
+      "storedSourceFingerprint": null,
+      "observedSourceFingerprint": null,
+      "fingerprintMatches": null,
+      "sourcePatterns": [],
+      "refreshTriggers": [],
+      "unmatchedPatterns": [],
+      "matchedSourceCount": 0,
+      "diagrams": []
+    }
+  ]
+}

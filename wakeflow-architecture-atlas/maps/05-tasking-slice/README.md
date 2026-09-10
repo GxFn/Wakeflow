@@ -1,7 +1,7 @@
 ---
 diagramId: ts-tasking-vertical-t0
 viewType: vertical-slice
-truthKind: current-code
+truthKind: stale
 reviewDepth: L2
 verifiedAt: 2026-09-03
 snapshotObservedAt: 2026-09-03T03:13:56-07:00

@@ -1,7 +1,7 @@
 ---
 diagramId: ts-end-to-end-evidence-z2
 viewType: evidence-matrix
-truthKind: current-code
+truthKind: stale
 reviewDepth: L5
 verifiedAt: 2026-09-03
 snapshotObservedAt: 2026-09-03T03:13:56-07:00

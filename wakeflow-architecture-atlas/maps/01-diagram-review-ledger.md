@@ -1,7 +1,7 @@
 ---
 diagramId: ts-atlas-review-ledger
 viewType: review-ledger
-truthKind: current-code
+truthKind: stale
 reviewDepth: L5
 verifiedAt: 2026-09-03
 snapshotObservedAt: 2026-09-03T03:13:56-07:00

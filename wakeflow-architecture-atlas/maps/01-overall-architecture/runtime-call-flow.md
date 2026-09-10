@@ -1,7 +1,7 @@
 ---
 diagramId: ts-overall-public-mcp-call-flow-v0
 viewType: call-flow
-truthKind: current-code
+truthKind: stale
 reviewDepth: L4
 verifiedAt: 2026-09-03
 snapshotObservedAt: 2026-09-03T03:13:56-07:00

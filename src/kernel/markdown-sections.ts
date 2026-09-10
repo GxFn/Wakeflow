@@ -93,6 +93,45 @@ export function parseMarkdownSections(text: string, level = 2): readonly Markdow
   return Object.freeze(sections);
 }
 
+export interface MarkdownListItem {
+  /** `<prefix>-<序号>`，序号从 1 起，只数顶层列表项。 */
+  readonly itemId: string;
+  readonly ordinal: number;
+  /** 列表项首行所在行，相对章节正文从 1 起。 */
+  readonly line: number;
+  /** 去掉列表标记的项文本；缩进续行以空格并入。 */
+  readonly text: string;
+}
+
+const LIST_ITEM_PATTERN = /^(?:[-*+]|[0-9]{1,3}[.)])\s+(.+?)\s*$/u;
+const CONTINUATION_PATTERN = /^\s+(\S.*?)\s*$/u;
+
+/**
+ * 章节正文里的顶层列表项（`-`、`*`、`+` 或 `1.`），围栏代码块里的行不算；
+ * 缩进的续行并入前一项。任务包的验收锚点以 `itemId` 引用需求包验收标准的一条。
+ */
+export function parseMarkdownListItems(body: string, prefix = "item"): readonly MarkdownListItem[] {
+  const items: { itemId: string; ordinal: number; line: number; text: string }[] = [];
+  let fence: string | null = null;
+  body.split(/\r?\n/u).forEach((line, index) => {
+    const fenced = nextFence(fence, line);
+    fence = fenced.fence;
+    if (fenced.hit || fence !== null) return;
+    const item = LIST_ITEM_PATTERN.exec(line);
+    if (item !== null) {
+      const ordinal = items.length + 1;
+      items.push({ itemId: `${prefix}-${ordinal}`, ordinal, line: index + 1, text: item[1] ?? "" });
+      return;
+    }
+    const continuation = CONTINUATION_PATTERN.exec(line);
+    const last = items.at(-1);
+    if (continuation !== null && last !== undefined) {
+      last.text = `${last.text} ${continuation[1] ?? ""}`;
+    }
+  });
+  return Object.freeze(items.map((item) => Object.freeze({ ...item })));
+}
+
 /** 章节正文的摘要：按 UTF-8 字节计算，供记录绑定章节内容。 */
 export function markdownSectionBodyDigest(body: string): Sha256Digest {
   return computeSha256Digest(encodeUtf8(body, "$section"));

@@ -81,12 +81,31 @@ export interface TaskPackageBoundaries {
   readonly forbidden: readonly string[];
 }
 
+/** 锚点引用需求包验收标准节的一条列表项；Wakeflow 校验引用存在，Controller 不能发明锚点（ADR-0012 D5）。 */
+export interface TaskPackageRequirementRef {
+  readonly recordDigest: Sha256Digest;
+  readonly sectionAnchor: string;
+  readonly itemId: string;
+}
+
 export interface TaskPackageAcceptanceAnchor {
   readonly anchorId: string;
   readonly claim: string;
   readonly probe: string;
   readonly expected: string;
+  readonly requirementRef: Readonly<TaskPackageRequirementRef>;
 }
+
+/** 同仓库再来一个包必须声明谱系：替代未接受的旧目标，或续接已接受的旧目标（能力卡 5 Q2）。 */
+export type TaskPackageLineage =
+  | Readonly<{ readonly kind: "replacement"; readonly replacesTargetTaskId: WakeflowDurableId<"target-task"> }>
+  | Readonly<{ readonly kind: "continuation"; readonly continuesTargetTaskId: WakeflowDurableId<"target-task"> }>
+  | null;
+
+/** 需求包 `taskPlanReview` 为 user 时，任务清单先交用户过目，确认时间记入包（ADR-0011 补充）。 */
+export type TaskPackagePlanReview =
+  | Readonly<{ readonly reviewer: "controller" }>
+  | Readonly<{ readonly reviewer: "user"; readonly confirmedAt: UtcInstant }>;
 
 export interface TaskPackageTestCardTuple {
   readonly testCardId: WakeflowDurableId<"test-card">;
@@ -121,6 +140,10 @@ export interface ImplementationTaskPackage extends TaskPackageBase {
     Readonly<TaskPackageAcceptanceAnchor>,
     ...Readonly<TaskPackageAcceptanceAnchor>[],
   ];
+  readonly lineage: TaskPackageLineage;
+  readonly planReview: TaskPackagePlanReview;
+  /** 选中成员里进一步指向的章节锚点，须在需求包记录的 `sections` 里。 */
+  readonly sectionAnchors: readonly string[];
 }
 
 export interface TestTaskPackage extends TaskPackageBase {
@@ -146,7 +169,10 @@ export type TaskPackageContentDraft = Readonly<
     | "commitExpectation"
     | "completionExpectations"
     | "confirmedContext"
+    | "lineage"
     | "objective"
+    | "planReview"
+    | "sectionAnchors"
     | "selectedAuthorityRefs"
     | "workType"
   >
@@ -218,8 +244,11 @@ const DRAFT_FIELDS = Object.freeze([
   "confirmedContext",
   "demandAuthorityDigest",
   "demandId",
+  "lineage",
   "objective",
+  "planReview",
   "programId",
+  "sectionAnchors",
   "selectedAuthorityRefs",
   "targetTaskId",
   "taskPackageId",
@@ -249,7 +278,10 @@ const CONTENT_DRAFT_FIELDS = Object.freeze([
   "commitExpectation",
   "completionExpectations",
   "confirmedContext",
+  "lineage",
   "objective",
+  "planReview",
+  "sectionAnchors",
   "selectedAuthorityRefs",
   "workType",
 ] as const);
@@ -260,7 +292,10 @@ const AUTHORED_CONTENT_DRAFT_FIELDS = Object.freeze([
   "commitExpectation",
   "completionExpectations",
   "confirmedContext",
+  "lineage",
   "objective",
+  "planReview",
+  "sectionAnchors",
   "workType",
 ] as const);
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
@@ -430,10 +465,70 @@ function parseAcceptanceAnchors(
         claim: parseCanonicalText(value.claim, `${path}/claim`),
         probe: parseCanonicalText(value.probe, `${path}/probe`),
         expected: parseCanonicalText(value.expected, `${path}/expected`),
+        requirementRef: Object.freeze({
+          recordDigest: parseDigest(
+            value.requirementRef.recordDigest,
+            `${path}/requirementRef/recordDigest`,
+          ),
+          sectionAnchor: value.requirementRef.sectionAnchor,
+          itemId: value.requirementRef.itemId,
+        }),
       }),
     );
   }
   return Object.freeze(parsed);
+}
+
+function parseLineage(
+  value: TaskPackageWire["lineage"],
+  targetTaskId: WakeflowDurableId<"target-task">,
+): TaskPackageLineage {
+  if (value === undefined || value === null) return null;
+  if (value.kind === "replacement") {
+    const replacesTargetTaskId = parseId(
+      value.replacesTargetTaskId,
+      "target-task",
+      "$/lineage/replacesTargetTaskId",
+    );
+    if (replacesTargetTaskId === targetTaskId) fail("relation", "$/lineage");
+    return Object.freeze({ kind: "replacement" as const, replacesTargetTaskId });
+  }
+  const continuesTargetTaskId = parseId(
+    value.continuesTargetTaskId,
+    "target-task",
+    "$/lineage/continuesTargetTaskId",
+  );
+  if (continuesTargetTaskId === targetTaskId) fail("relation", "$/lineage");
+  return Object.freeze({ kind: "continuation" as const, continuesTargetTaskId });
+}
+
+function parsePlanReview(
+  value: TaskPackageWire["planReview"],
+): TaskPackagePlanReview {
+  if (value === undefined) fail("schema", "$/planReview");
+  if (value.reviewer === "controller") {
+    return Object.freeze({ reviewer: "controller" as const });
+  }
+  let confirmedAt: UtcInstant;
+  try {
+    confirmedAt = parseUtcInstant(value.confirmedAt, "$/planReview/confirmedAt");
+  } catch (error: unknown) {
+    if (error instanceof UtcInstantError) fail("time", "$/planReview/confirmedAt");
+    throw error;
+  }
+  return Object.freeze({ reviewer: "user" as const, confirmedAt });
+}
+
+function parseSectionAnchors(
+  value: TaskPackageWire["sectionAnchors"],
+): readonly string[] {
+  if (value === undefined) fail("schema", "$/sectionAnchors");
+  const seen = new Set<string>();
+  for (const [index, anchor] of value.entries()) {
+    if (seen.has(anchor)) fail("relation", `$/sectionAnchors/${index}`);
+    seen.add(anchor);
+  }
+  return Object.freeze([...value]);
 }
 
 function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
@@ -514,10 +609,19 @@ function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
       workType: "implementation" as const,
       commitExpectation: wire.commitExpectation,
       acceptanceAnchors: parsedAnchors,
+      lineage: parseLineage(wire.lineage, common.targetTaskId),
+      planReview: parsePlanReview(wire.planReview),
+      sectionAnchors: parseSectionAnchors(wire.sectionAnchors),
     };
     return Object.freeze(implementation);
   }
-  if (wire.testCard === undefined || acceptanceAnchors.length !== 0) {
+  if (
+    wire.testCard === undefined ||
+    acceptanceAnchors.length !== 0 ||
+    wire.lineage !== undefined ||
+    wire.planReview !== undefined ||
+    wire.sectionAnchors !== undefined
+  ) {
     fail("schema", "$/testCard");
   }
   const test: TestTaskPackage = {
@@ -614,7 +718,12 @@ export function createTaskPackage(
     acceptanceAnchors: record.acceptanceAnchors,
     ...(record.workType === "test"
       ? { testCard: record.testCard }
-      : { commitExpectation: record.commitExpectation }),
+      : {
+          commitExpectation: record.commitExpectation,
+          lineage: record.lineage,
+          planReview: record.planReview,
+          sectionAnchors: record.sectionAnchors,
+        }),
   });
   return Object.freeze({
     ...admitted,
@@ -664,6 +773,9 @@ export function parseTaskPackageContentDraft(
     completionExpectations: record.completionExpectations,
     commitExpectation: record.commitExpectation,
     acceptanceAnchors: record.acceptanceAnchors,
+    lineage: record.lineage,
+    planReview: record.planReview,
+    sectionAnchors: record.sectionAnchors,
   });
   if (parsed.workType !== "implementation") {
     fail("relation", "$/workType");
@@ -678,6 +790,9 @@ export function parseTaskPackageContentDraft(
     completionExpectations: parsed.completionExpectations,
     commitExpectation: parsed.commitExpectation,
     acceptanceAnchors: parsed.acceptanceAnchors,
+    lineage: parsed.lineage,
+    planReview: parsed.planReview,
+    sectionAnchors: parsed.sectionAnchors,
   });
 }
 
@@ -711,6 +826,9 @@ export function parseTaskPackageAuthoredContentDraft(
     completionExpectations: record.completionExpectations,
     commitExpectation: record.commitExpectation,
     acceptanceAnchors: record.acceptanceAnchors,
+    lineage: record.lineage,
+    planReview: record.planReview,
+    sectionAnchors: record.sectionAnchors,
   });
   return Object.freeze({
     assignment: parsed.assignment,
@@ -721,6 +839,9 @@ export function parseTaskPackageAuthoredContentDraft(
     completionExpectations: parsed.completionExpectations,
     commitExpectation: parsed.commitExpectation,
     acceptanceAnchors: parsed.acceptanceAnchors,
+    lineage: parsed.lineage,
+    planReview: parsed.planReview,
+    sectionAnchors: parsed.sectionAnchors,
   });
 }
 

@@ -21,7 +21,6 @@ import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/de
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { ControllerTestReviewDecisionService } from "../../../src/governance/review/controller-test-review-decision-service.js";
 import { TargetResultImportService } from "../../../src/governance/result/target-result-import-service.js";
-import { TargetTaskPlanningService } from "../../../src/governance/tasking/target-task-planning-service.js";
 import { parseTestDeliveryIntent } from "../../../src/governance/testing/test-delivery-intent.js";
 import { executeTestDeliveryPreparationPublicRequest } from "../../../src/governance/testing/test-delivery-preparation-public-coordinator.js";
 import {
@@ -49,7 +48,7 @@ import {
   cleanupTestTaskPlanningWorkspaceFixture,
   createTestTaskPlanningWorkspaceFixture,
   TEST_TASK_PACKAGE_CREATED_AT,
-  testTaskPlanningUuidFactory,
+  planFixtureTestTask,
 } from "./test-task-planning-service.fixture.js";
 import {
   cleanupTestDeliveryPreparationWorkspaceFixture,
@@ -641,19 +640,12 @@ test("Test Delivery Apply在Event提交前拒绝Config digest漂移", async () =
 test("Test Delivery拒绝缺失Binding，Attempt拒绝旧mode并派生rerun环境策略", async () => {
   const withoutBinding = await createTestTaskPlanningWorkspaceFixture();
   try {
-    const planning = new TargetTaskPlanningService(
-      withoutBinding.workspaceRoot,
-    );
-    const task = await planning.preview(withoutBinding.testTaskRequest, {
-      clock: () => TEST_TASK_PACKAGE_CREATED_AT,
-      uuidFactory: testTaskPlanningUuidFactory(),
-    });
-    await planning.apply(task.plan, task.planDigest);
+    const task = await planFixtureTestTask(withoutBinding, 8);
     await rejects(
       service(withoutBinding.workspaceRoot).preview({
         mode: "initial",
         demandId: withoutBinding.intent.demandId,
-        targetTaskId: task.plan.taskPackage.targetTaskId,
+        targetTaskId: task.targetTask.targetTaskId,
       }),
       (error: unknown) =>
         error instanceof TestDeliveryPreparationServiceError &&
@@ -662,7 +654,7 @@ test("Test Delivery拒绝缺失Binding，Attempt拒绝旧mode并派生rerun环�
     await rejects(
       service(withoutBinding.workspaceRoot).preview({
         demandId: withoutBinding.intent.demandId,
-        targetTaskId: task.plan.taskPackage.targetTaskId,
+        targetTaskId: task.targetTask.targetTaskId,
       }),
       (error: unknown) =>
         error instanceof TestDeliveryPreparationServiceError &&

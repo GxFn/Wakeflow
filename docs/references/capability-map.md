@@ -15,7 +15,7 @@
 | 3 | `wakeflow_replace_windows` | 2 | 窗口替换并入 `wakeflow_register_window_binding` 的替换操作 | 缺席 | L1；替换是新握手加旧声明退役，见 ADR-0009 |
 | 4 | `wakeflow_register_window` | 2 | `wakeflow_register_window_binding` | 重切 | 已实现；绑定增加 `podId` |
 | 5 | `wakeflow_create_demand` | 4 | `wakeflow_create_demand` | 重切 | 已实现（demand 切片，确定性计划）；`executionPlacement` 改为 `podId` 留给 pod 切片，已有活动 Demand 时拒绝 |
-| 6 | `wakeflow_add_task` | 5 | `wakeflow_plan_target_task` | 重切 | 已实现；字段集按能力卡 5 Q1 保持 |
+| 6 | `wakeflow_add_task` | 5 | `wakeflow_plan_target_task` | 重切 | 已实现（tasking 切片）：追加型一次调用；锚点 `requirementRef` 指向需求包验收标准；谱系 `replacement`（旧目标 `superseded`）与 `continuation`；`taskPlanReview: user` 须回显 `planReview`；可选 `sectionAnchors`；字段集按能力卡 5 Q1 保持 |
 | 7 | `wakeflow_prepare_delivery` | 6 | `prepare_delivery` 一次调用（含许可；实现与测试共用） | 重切 | TS 现有 `prepare_implementation_delivery`、`prepare_test_delivery`、`claim_target_host_effect` 在 L1 合并；prompt 改为 Wakeflow 骨架加 Controller 三段（ADR-0012 D2） |
 | 8 | `wakeflow_record_delivery` | 6 | `record_delivery_outcome`（或 hook 自动）、`rearm_target_host_effect` | 重切 | 落地证据 UserPromptSubmit；ambiguous 出口；rearm 上限 3（能力卡 6 修订、ADR-0012 D1 D2） |
 | 9 | `wakeflow_record_target_result` | 7 | `wakeflow_import_target_result` | 重切 | 已实现；导入时核证据定位符与隐私扫描、增加 `branch` 与 `commit` 在 L1 补 |
@@ -30,7 +30,7 @@
 | 18 | `wakeflow_view` | 9 | 无 | 放弃 | ADR-0006：通用读取违反脱敏边界；config 事实归 `wakeflow_status`，storage 归 `wakeflow_verify`，result-trace 并入评审 preview |
 | 19 | `wakeflow_storage_preserve` | 8 | 无 | 放弃 | 能力卡 8 Q6：归档封存、清理删除，不再有第三种保留状态 |
 | 20 | `wakeflow_archive` | 8 | 并入 `wakeflow_complete_demand` 与 `wakeflow_cancel_demand` | 重切 | 已实现（demand 切片）：归档包在 `<ledger>/archives/`，前置含无未释放工作声明，verify 报告入归档包（ADR-0012 D3） |
-| 21 | `wakeflow_intake_test_card` | 5 | test 任务包的 `testContract`（`plan_target_task`） | 重切 | 独立测试卡与 TS 现有 `plan_test_card` 在 L1 删除（ADR-0012 D4） |
+| 21 | `wakeflow_intake_test_card` | 5 | test 任务包的 `testContract`（`plan_target_task`） | 重切 | 独立测试卡与 TS 现有 `plan_test_card` 在 delivery 切片删除（ADR-0012 D4；gate-log §13.81 D1） |
 | 22 | `wakeflow_deliver` | 6 | 无；宿主执行由 Agent 按 skills 完成 | 放弃 | TSD-12：内容由 prepare 工具提供，执行证据由 outcome 工具准入 |
 | 23 | `wakeflow_next_work` | 3 | 待认领需求包查询 `wakeflow_inspect_board`（ADR-0011，2026-09-04 L1 requirement 落地） | 重切 | `inspect_todo` 已删除，看板查询列出需求包认领状态 |
 | 24 | `wakeflow_claim_next` | 3 | 认领并入 `wakeflow_create_demand(requirementId)` | 重切 | 认领即创建；一个总控一次一个（ADR-0011） |

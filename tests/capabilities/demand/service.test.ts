@@ -9,7 +9,7 @@ import {
   executeDemandContinuationRequest,
 } from "../../../src/capabilities/demand/lifecycle.js";
 import { executeDemandRouteInspectionRequest } from "../../../src/capabilities/demand/service.js";
-import { executeTargetTaskPlanningPublicRequest } from "../../../src/capabilities/tasking/plan-target-task.js";
+import { executeTargetTaskPlanningPublicRequest } from "../../../src/capabilities/tasking/service.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -266,8 +266,23 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
         completionExpectations: ["聚焦检查通过"],
         commitExpectation: "leave-uncommitted",
         acceptanceAnchors: [
-          { anchorId: "opt", claim: "优化生效", probe: "运行检查", expected: "通过" },
+          {
+            anchorId: "opt",
+            claim: "优化生效",
+            probe: "运行检查",
+            expected: "通过",
+            requirementRef: {
+              recordDigest: fixture.recordDigest,
+              sectionAnchor: "acceptance-criteria",
+              itemId: "ac-2",
+            },
+          },
         ],
+        lineage: {
+          kind: "continuation",
+          continuesTargetTaskId: fixture.intent.target.targetTaskId,
+        },
+        sectionAnchors: [],
       },
     });
     equal(planned.status, "committed");

@@ -5,15 +5,13 @@ import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-confi
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { TargetTaskPlanningService } from "../../../src/governance/tasking/target-task-planning-service.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 import {
   cleanupTestTaskPlanningWorkspaceFixture,
   createTestTaskPlanningWorkspaceFixture,
-  TEST_TASK_PACKAGE_CREATED_AT,
-  testTaskPlanningUuidFactory,
+  planFixtureTestTask,
   type TestTaskPlanningWorkspaceFixture,
 } from "./test-task-planning-service.fixture.js";
 import type { TestCardPlanningWorkspaceFixtureOptions } from "./test-card-planning-service.fixture.js";
@@ -55,13 +53,8 @@ export async function createTestDeliveryPreparationWorkspaceFixture(
   const fixture = await createTestTaskPlanningWorkspaceFixture(options);
   const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
   try {
-    const planning = new TargetTaskPlanningService(fixture.workspaceRoot);
-    const preview = await planning.preview(fixture.testTaskRequest, {
-      clock: () => TEST_TASK_PACKAGE_CREATED_AT,
-      uuidFactory: testTaskPlanningUuidFactory(),
-    });
-    await planning.apply(preview.plan, preview.planDigest);
-    if (preview.plan.taskPackage.workType !== "test") {
+    const planned = await planFixtureTestTask(fixture, 8);
+    if (planned.targetTask.workType !== "test") {
       throw new Error("Expected Test TaskPackage fixture.");
     }
     const launchIntent = compileWakeflowWindowLaunchIntents(
@@ -69,7 +62,7 @@ export async function createTestDeliveryPreparationWorkspaceFixture(
       codexWorkspaceHostResourceProfile,
     ).intents.find(
       (entry) =>
-        entry.windowId === preview.plan.taskPackage.assignment.windowId,
+        entry.windowId === planned.targetTask.windowId,
     );
     if (launchIntent === undefined) {
       throw new Error("Expected exact Test window launch intent.");
@@ -107,13 +100,13 @@ export async function createTestDeliveryPreparationWorkspaceFixture(
     }
     return Object.freeze({
       ...fixture,
-      testTargetTaskId: preview.plan.taskPackage.targetTaskId,
-      testTaskPackageId: preview.plan.taskPackage.taskPackageId,
+      testTargetTaskId: planned.targetTask.targetTaskId,
+      testTaskPackageId: planned.targetTask.taskPackageId,
       testBindingId: registration.binding.bindingId,
       testRawHandle: TEST_RAW_HANDLE,
       testDeliveryRequest: Object.freeze({
         demandId: fixture.intent.demandId,
-        targetTaskId: preview.plan.taskPackage.targetTaskId,
+        targetTaskId: planned.targetTask.targetTaskId,
       }),
     });
   } catch (error: unknown) {

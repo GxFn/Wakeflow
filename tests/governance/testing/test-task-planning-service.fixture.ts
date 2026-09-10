@@ -1,5 +1,9 @@
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import type { TargetTaskPlanningPreviewRequest } from "../../../src/governance/tasking/target-task-planning-service.js";
+import type { TargetTaskPlanningResult } from "../../../src/capabilities/tasking/contract.js";
+import {
+  executeTargetTaskPlanningPublicRequest,
+  type ExecuteTargetTaskPlanningOptions,
+} from "../../../src/capabilities/tasking/service.js";
 import { TestCardPlanningService } from "../../../src/governance/testing/test-card-planning-service.js";
 import type { TestCard } from "../../../src/governance/testing/test-card.js";
 import {
@@ -23,7 +27,10 @@ const TEST_TASK_PLANNING_UUIDS = Object.freeze([
 
 export interface TestTaskPlanningWorkspaceFixture extends TestCardPlanningWorkspaceFixture {
   readonly testCard: Readonly<TestCard>;
-  readonly testTaskRequest: Readonly<TargetTaskPlanningPreviewRequest>;
+  readonly testTaskRequest: Readonly<{
+    readonly demandId: string;
+    readonly taskPackage: Readonly<{ readonly workType: "test" }>;
+  }>;
 }
 
 export function testTaskPlanningUuidFactory(): () => string {
@@ -60,6 +67,25 @@ export async function createTestTaskPlanningWorkspaceFixture(
     await cleanupTestCardPlanningWorkspaceFixture(fixture);
     throw error;
   }
+}
+
+/** 经切片追加一份 test 任务包；期望修订由调用方给出（测试卡之后通常是 8）。 */
+export async function planFixtureTestTask(
+  fixture: Readonly<{ readonly workspacePath: string; readonly intent: { readonly demandId: string } }>,
+  expectedStreamRevision: number,
+  options: ExecuteTargetTaskPlanningOptions = { clock: () => TEST_TASK_PACKAGE_CREATED_AT },
+  idempotencyKey = "fixture-test-plan-1",
+): Promise<TargetTaskPlanningResult> {
+  return executeTargetTaskPlanningPublicRequest(
+    {
+      root: fixture.workspacePath,
+      demandId: fixture.intent.demandId,
+      idempotencyKey,
+      expectedStreamRevision,
+      taskPackage: { workType: "test" },
+    },
+    options,
+  );
 }
 
 export async function cleanupTestTaskPlanningWorkspaceFixture(

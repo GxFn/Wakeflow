@@ -26,11 +26,6 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_REQUEST_SCHEMA } from "../cont
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-review-inspection-result.generated.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-review-resume-request.generated.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-review-resume-result.generated.js";
-import { WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
-import {
-  WAKEFLOW_TARGET_TASK_PLANNING_RESULT_SCHEMA,
-  type WakeflowTargetTaskPlanningResultV1,
-} from "../contracts/generated/entrypoints/wakeflow-target-task-planning-result.generated.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-card-planning-request.generated.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-card-planning-result.generated.js";
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-delivery-preparation-request.generated.js";
@@ -57,7 +52,6 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../go
 import type { TargetResultReviewInspectionPublicResult } from "../governance/review/target-result-review-inspection-public-coordinator.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../governance/review/target-result-review-resume-public-contract.js";
 import type { TargetResultReviewResumePublicResult } from "../governance/review/target-result-review-resume-public-coordinator.js";
-import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../governance/tasking/target-task-planning-public-contract.js";
 import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../governance/testing/test-card-planning-public-contract.js";
 import type { TestCardPlanningPublicResult } from "../governance/testing/test-card-planning-public-coordinator.js";
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../governance/testing/test-delivery-preparation-public-contract.js";
@@ -80,6 +74,10 @@ import {
   type DemandRouteInspectionResult,
 } from "../capabilities/demand/contract.js";
 import { WINDOW_BINDING_TOOL_REGISTRATION } from "../capabilities/endpoint/contract.js";
+import {
+  TARGET_TASK_PLANNING_TOOL_REGISTRATION,
+  type TargetTaskPlanningResult,
+} from "../capabilities/tasking/contract.js";
 import {
   BOARD_INSPECTION_TOOL_REGISTRATION,
   REQUIREMENT_PUBLICATION_TOOL_REGISTRATION,
@@ -110,7 +108,7 @@ export interface WakeflowPublicMcpExecutors {
   readonly importTargetResult: WakeflowPublicMcpExecutor<TargetResultImportPublicResult>;
   readonly inspectDemandRoute: WakeflowPublicMcpExecutor<DemandRouteInspectionResult>;
   readonly inspectTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewInspectionPublicResult>;
-  readonly planTargetTask: WakeflowPublicMcpExecutor<WakeflowTargetTaskPlanningResultV1>;
+  readonly planTargetTask: WakeflowPublicMcpExecutor<TargetTaskPlanningResult>;
   readonly planTestCard: WakeflowPublicMcpExecutor<TestCardPlanningPublicResult>;
   readonly prepareImplementationDelivery: WakeflowPublicMcpExecutor<TargetDeliveryPreparationPublicResult>;
   readonly prepareTestDelivery: WakeflowPublicMcpExecutor<TestDeliveryPreparationPublicResult>;
@@ -202,18 +200,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
     resultSchema: WAKEFLOW_TEST_CARD_PLANNING_RESULT_SCHEMA,
     annotations: ADDITIVE,
   },
-  {
-    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
-    slice: "tasking",
-    shape: "append",
-    executor: "planTargetTask",
-    title: "Plan Wakeflow Target Task",
-    description:
-      "Append one immutable Implementation or Test TaskPackage plan to an existing Demand in a single call, supplying the observed stream revision and a client idempotency key: the same key and body replays the first result, a stale revision or a reused key with a different body is rejected, and Test requests carry only workType=test. The result carries the planning event, the projection receipt, and the next Controller frontier; it never performs Delivery or host effects.",
-    requestSchema: WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TARGET_TASK_PLANNING_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
+  TARGET_TASK_PLANNING_TOOL_REGISTRATION satisfies Registration,
   {
     name: WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
     slice: "delivery",

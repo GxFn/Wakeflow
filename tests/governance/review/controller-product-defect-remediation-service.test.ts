@@ -31,7 +31,7 @@ import { ControllerTestReviewDecisionService } from "../../../src/governance/rev
 import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { TargetResultImportService } from "../../../src/governance/result/target-result-import-service.js";
-import { TargetTaskPlanningService } from "../../../src/governance/tasking/target-task-planning-service.js";
+import { executeTargetTaskPlanningPublicRequest } from "../../../src/capabilities/tasking/service.js";
 import { TestCardPlanningService } from "../../../src/governance/testing/test-card-planning-service.js";
 import { createImplementationTargetResultReportContentFixture } from "../result/implementation-target-result-report.fixture.js";
 import { controllerImplementationReviewDecisionInput } from "./controller-implementation-review-decision.fixture.js";
@@ -577,24 +577,16 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
       fixture.testClaimRequest.demandId,
     );
     equal(newTestRoute.nextStage.status, "test-task-planning");
-    const taskUuids = [
-      "22222222-2222-4222-8222-222222222222",
-      "23232323-2323-4323-8323-232323232323",
-      "24242424-2424-4424-8424-242424242424",
-    ];
-    let taskUuidIndex = 0;
-    const taskPlanning = new TargetTaskPlanningService(fixture.workspaceRoot);
-    const taskPreview = await taskPlanning.preview(
+    await executeTargetTaskPlanningPublicRequest(
       {
+        root: fixture.workspacePath,
         demandId: fixture.testClaimRequest.demandId,
+        idempotencyKey: "remediation-test-plan",
+        expectedStreamRevision: newTestRoute.observedEventStream.streamRevision,
         taskPackage: { workType: "test" },
       },
-      {
-        clock: () => parseUtcInstant("2026-08-29T12:45:00.000Z"),
-        uuidFactory: () => taskUuids[taskUuidIndex++] ?? "invalid",
-      },
+      { clock: () => parseUtcInstant("2026-08-29T12:45:00.000Z") },
     );
-    await taskPlanning.apply(taskPreview.plan, taskPreview.planDigest);
     const newTestDeliveryRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
       fixture.testClaimRequest.demandId,

@@ -168,7 +168,7 @@
                   "else": {
                     "properties": {
                       "phase": {
-                        "const": "accepted"
+                        "enum": ["accepted", "superseded"]
                       }
                     }
                   }
@@ -291,7 +291,8 @@
             "product-defect-rework-requested",
             "rework-requested",
             "redesign-requested",
-            "review-blocked"
+            "review-blocked",
+            "superseded"
           ]
         },
         "currentDelivery": {
@@ -334,6 +335,9 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 1024
+        },
+        "supersededByTargetTaskId": {
+          "$ref": "#/$defs/targetTaskId"
         }
       },
       "allOf": [
@@ -497,7 +501,8 @@
                   "product-defect-rework-requested",
                   "rework-requested",
                   "redesign-requested",
-                  "review-blocked"
+                  "review-blocked",
+                  "superseded"
                 ]
               }
             }
@@ -1076,6 +1081,35 @@
                   }
                 }
               }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "superseded"
+              }
+            },
+            "required": ["phase"]
+          },
+          "then": {
+            "required": ["supersededByTargetTaskId", "repositoryId"],
+            "properties": {
+              "workType": false,
+              "currentDelivery": false,
+              "productDefectRemediation": false,
+              "supersededByTargetTaskId": {
+                "$ref": "#/$defs/targetTaskId"
+              },
+              "repositoryId": {
+                "$ref": "#/$defs/repositoryId"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "supersededByTargetTaskId": false
             }
           }
         }

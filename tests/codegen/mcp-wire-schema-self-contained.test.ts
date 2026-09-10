@@ -161,7 +161,9 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "commitExpectation",
     "completionExpectations",
     "confirmedContext",
+    "lineage",
     "objective",
+    "sectionAnchors",
     "selectedAuthorityMemberRefs",
     "workType",
   ];
@@ -169,6 +171,14 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     Object.keys(implementationTaskRequest.properties as JsonObject).sort(),
     implementationRequestFields,
   );
+  // 能力卡 5 D3：plan review 是请求级可选回显，只携带用户确认时刻。
+  deepEqual(Object.keys(planningRequest.properties as JsonObject), [
+    ...(planningRequest.required as string[]),
+    "planReview",
+  ]);
+  const planReviewEcho = (planningRequest.properties as JsonObject).planReview as JsonObject;
+  deepEqual(planReviewEcho.required, ["confirmedAt"]);
+  deepEqual(Object.keys(planReviewEcho.properties as JsonObject), ["confirmedAt"]);
   deepEqual(
     [...(implementationTaskRequest.required as string[])].sort(),
     implementationRequestFields,

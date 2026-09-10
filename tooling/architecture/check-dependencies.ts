@@ -40,9 +40,6 @@ const ADMITTED_PRODUCTION_ROOTS: ReadonlySet<string> = new Set([
   "src/entrypoints/codex-wakeflow-mcp.ts",
   "src/foundation/artifact/loaded-artifact-tree-transfer-publication.ts",
   "src/governance/evidence/managed-evidence-reading-service.ts",
-  // 过渡：L0.4 试点把 plan_target_task 迁到 capabilities/tasking 后，旧 service 只剩测试 fixture 消费；
-  // L1 tasking 切片迁移 fixture 并删除它与 target-task-planning-plan.ts。
-  "src/governance/tasking/target-task-planning-service.ts",
   "src/workspace/maintenance/wakeflow-maintenance-orphan-gate-recovery.ts",
   "src/workspace/maintenance/wakeflow-prepared-maintenance-recovery.ts",
   "src/workspace/managed-integration/wakeflow-gitignore-recomposition-recovery.ts",

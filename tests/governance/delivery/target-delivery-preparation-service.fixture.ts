@@ -6,7 +6,6 @@ import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-confi
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { TargetTaskPlanningService } from "../../../src/governance/tasking/target-task-planning-service.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
@@ -15,8 +14,7 @@ import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-conf
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
-  planningUuidFactory,
-  PLANNING_RECORDED_AT,
+  planFixtureTargetTask,
   type TargetTaskPlanningWorkspaceFixture,
   type TargetTaskPlanningWorkspaceFixtureOptions,
 } from "../tasking/target-task-planning-service.fixture.js";
@@ -51,12 +49,10 @@ export async function createTargetDeliveryPreparationWorkspaceFixture(
   const fixture = await createTargetTaskPlanningWorkspaceFixture(options);
   const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
   try {
-    const planning = new TargetTaskPlanningService(fixture.workspaceRoot);
-    const preview = await planning.preview(fixture.request, {
-      clock: () => PLANNING_RECORDED_AT,
-      uuidFactory: planningUuidFactory(),
-    });
-    await planning.apply(preview.plan, preview.planDigest);
+    const planned = await planFixtureTargetTask(fixture);
+    if (planned.targetTask.workType !== "implementation") {
+      throw new Error("Expected an implementation TaskPackage fixture.");
+    }
 
     mkdirSync(path.join(fixture.workspacePath, ".wakeflow-local", "runtime"), {
       mode: 0o700,
@@ -72,7 +68,7 @@ export async function createTargetDeliveryPreparationWorkspaceFixture(
       codexWorkspaceHostResourceProfile,
     ).intents.find(
       (entry) =>
-        entry.windowId === preview.plan.taskPackage.assignment.windowId,
+        entry.windowId === planned.targetTask.windowId,
     );
     if (launchIntent === undefined) {
       throw new Error("Expected exact product window launch intent.");
@@ -119,8 +115,8 @@ export async function createTargetDeliveryPreparationWorkspaceFixture(
     }
     return Object.freeze({
       ...fixture,
-      targetTaskId: preview.plan.taskPackage.targetTaskId,
-      taskPackageId: preview.plan.taskPackage.taskPackageId,
+      targetTaskId: planned.targetTask.targetTaskId,
+      taskPackageId: planned.targetTask.taskPackageId,
       bindingId: registration.binding.bindingId,
       rawHandle: RAW_HANDLE,
       bindingRootPath,

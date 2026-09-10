@@ -624,6 +624,8 @@ function routeBasis(
   const blockingTargets: Readonly<DemandPostAcceptanceBlockingTarget>[] = [];
   for (const target of snapshot.targets) {
     if (targetWorkType(target) !== "implementation") continue;
+    // 被替代的目标是历史，既不阻塞也不计入 accepted。
+    if (target.status === "awaiting-result" && target.phase === "superseded") continue;
     const accepted = acceptedTarget(target);
     if (accepted === null) {
       blockingTargets.push(blockingTarget(target));

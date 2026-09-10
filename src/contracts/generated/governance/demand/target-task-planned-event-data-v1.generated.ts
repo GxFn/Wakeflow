@@ -35,6 +35,20 @@ commitExpectation?: ("commit" | "leave-uncommitted")
  */
 acceptanceAnchors: AcceptanceAnchor[]
 testCard?: TestCardTuple
+lineage?: (null | {
+kind: "replacement"
+replacesTargetTaskId: string
+} | {
+kind: "continuation"
+continuesTargetTaskId: string
+})
+planReview?: ({
+reviewer: "controller"
+} | {
+reviewer: "user"
+confirmedAt: WakeflowUtcInstantText
+})
+sectionAnchors?: SectionAnchors
 })
 /**
  * Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。
@@ -57,6 +71,10 @@ export type WakeflowPortableResourcePathText = string
  * @maxItems 32
  */
 export type TextList = string[]
+/**
+ * @maxItems 32
+ */
+export type SectionAnchors = string[]
 
 /**
  * tasking.target-task-planned persisted event v1 的严格 payload。
@@ -97,6 +115,12 @@ anchorId: string
 claim: string
 probe: string
 expected: string
+requirementRef: RequirementRef
+}
+export interface RequirementRef {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+itemId: string
 }
 export interface TestCardTuple {
 testCardId: string

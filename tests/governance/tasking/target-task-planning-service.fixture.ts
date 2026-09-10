@@ -32,7 +32,12 @@ import {
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { materializeWakeflowActiveLayout } from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
-import type { TargetTaskPlanningPreviewRequest } from "../../../src/governance/tasking/target-task-planning-service.js";
+import type { WakeflowTargetTaskPlanningRequestV1 } from "../../../src/contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
+import {
+  executeTargetTaskPlanningPublicRequest,
+  type ExecuteTargetTaskPlanningOptions,
+} from "../../../src/capabilities/tasking/service.js";
+import type { TargetTaskPlanningResult } from "../../../src/capabilities/tasking/contract.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 import {
   claimFixtureRequirement,
@@ -78,16 +83,26 @@ export const PLANNING_UUIDS = Object.freeze([
   "99999999-9999-4999-8999-999999999999",
 ] as const);
 
+/** 切片请求里 Controller 拥有的部分：Demand 与任务包草稿；根、幂等键与修订由 `planFixtureTargetTask` 补。 */
+export interface TargetTaskPlanningFixtureRequest {
+  readonly demandId: string;
+  readonly taskPackage: WakeflowTargetTaskPlanningRequestV1["taskPackage"];
+}
+
 export interface TargetTaskPlanningWorkspaceFixture {
   readonly fixtureRoot: string;
   readonly workspacePath: string;
   readonly workspaceRoot: RootedDirectory;
-  readonly request: Readonly<TargetTaskPlanningPreviewRequest>;
+  /** 需求包记录摘要：验收锚点的 requirementRef 指向它。 */
+  readonly recordDigest: string;
+  readonly request: Readonly<TargetTaskPlanningFixtureRequest>;
 }
 
 export interface TargetTaskPlanningWorkspaceFixtureOptions {
   readonly testingMode?: Exclude<DemandTestingMode, "not-applicable">;
   readonly executionPlacement?: "main" | "isolated";
+  /** 需求包头部的任务清单审阅要求；user 时切片要求请求带 planReview。 */
+  readonly taskPlanReview?: "controller" | "user";
 }
 
 export function planningUuidFactory(): () => string {
@@ -143,6 +158,7 @@ export async function createTargetTaskPlanningWorkspaceFixture(
     requirementId: PLANNING_REQUIREMENT_ID,
     title: "Target Task Planning requirement",
     testingDecision: { mode: testingMode, summary: testingSummary },
+    taskPlanReview: options.taskPlanReview ?? "controller",
   });
   const authorityRefs = Object.freeze(
     loaded.documents.map((document) =>
@@ -239,59 +255,75 @@ export async function createTargetTaskPlanningWorkspaceFixture(
     await ledgerRoot.close();
   }
 
-  return Object.freeze({
-    fixtureRoot,
-    workspacePath,
-    workspaceRoot,
-    request: Object.freeze({
-      demandId: PLANNING_DEMAND_ID,
-      taskPackage: Object.freeze({
-        assignment: Object.freeze({
+  const memberRefs = authority.authorityRefs.map((reference) => reference.memberRef);
+  const [firstMemberRef, ...otherMemberRefs] = memberRefs;
+  if (firstMemberRef === undefined) throw new Error("Expected at least one authority member.");
+  const taskPackage: WakeflowTargetTaskPlanningRequestV1["taskPackage"] = {
+        assignment: {
           repositoryId: PLANNING_REPOSITORY_ID,
           windowId: PLANNING_WINDOW_ID,
-        }),
+        },
         workType: "implementation" as const,
         objective: "实现 Target Task Planning 公共垂直切片",
-        confirmedContext: Object.freeze([
-          "Demand Authority 已发布",
-          "当前只规划任务，不执行 Delivery",
-        ]) as readonly [string, ...string[]],
-        selectedAuthorityMemberRefs: Object.freeze(
-          authority.authorityRefs.map((reference) => reference.memberRef),
-        ) as readonly [
-          (typeof authority.authorityRefs)[number]["memberRef"],
-          ...(typeof authority.authorityRefs)[number]["memberRef"][],
-        ],
-        boundaries: Object.freeze({
-          inScope: Object.freeze([
-            "追加 target-task-planned 事件",
-          ]) as readonly [string, ...string[]],
-          outOfScope: Object.freeze(["Delivery transport"]),
-          forbidden: Object.freeze(["调用宿主发送能力"]),
-        }),
-        completionExpectations: Object.freeze([
-          "Apply 可幂等重试",
-          "TaskPackage 投影严格回读",
-        ]) as readonly [string, ...string[]],
+        confirmedContext: ["Demand Authority 已发布", "当前只规划任务，不执行 Delivery"],
+        selectedAuthorityMemberRefs: [firstMemberRef, ...otherMemberRefs],
+        boundaries: {
+          inScope: ["追加 target-task-planned 事件"],
+          outOfScope: ["Delivery transport"],
+          forbidden: ["调用宿主发送能力"],
+        },
+        completionExpectations: ["Apply 可幂等重试", "TaskPackage 投影严格回读"],
         commitExpectation: "leave-uncommitted" as const,
-        acceptanceAnchors: Object.freeze([
-          Object.freeze({
+        acceptanceAnchors: [
+          {
             anchorId: "planning-commit",
             claim: "Planning 只追加一条业务事件",
             probe: "审计 Event Store 并检查 stream revision",
             expected: "同一 plan 重试不增加事件",
-          }),
-        ]) as readonly [
-          Readonly<{
-            anchorId: string;
-            claim: string;
-            probe: string;
-            expected: string;
-          }>,
+            requirementRef: {
+              recordDigest: loaded.recordDigest,
+              sectionAnchor: "acceptance-criteria",
+              itemId: "ac-1",
+            },
+          },
         ],
-      }),
-    }),
+        lineage: null,
+        sectionAnchors: [],
+  };
+  return Object.freeze({
+    fixtureRoot,
+    workspacePath,
+    workspaceRoot,
+    recordDigest: loaded.recordDigest,
+    request: Object.freeze({ demandId: PLANNING_DEMAND_ID, taskPackage }),
   });
+}
+
+/** 经切片追加一份任务包；同一 fixture 同一键重放得同一结果。 */
+export async function planFixtureTargetTask(
+  fixture: Readonly<{
+    readonly workspacePath: string;
+    readonly request: Readonly<TargetTaskPlanningFixtureRequest>;
+  }>,
+  overrides: Readonly<{
+    readonly idempotencyKey?: string;
+    readonly expectedStreamRevision?: number;
+    readonly taskPackage?: WakeflowTargetTaskPlanningRequestV1["taskPackage"];
+    readonly planReview?: { readonly confirmedAt: string };
+  }> = {},
+  options: ExecuteTargetTaskPlanningOptions = { clock: () => PLANNING_RECORDED_AT },
+): Promise<TargetTaskPlanningResult> {
+  return executeTargetTaskPlanningPublicRequest(
+    {
+      root: fixture.workspacePath,
+      demandId: fixture.request.demandId,
+      idempotencyKey: overrides.idempotencyKey ?? "fixture-plan-1",
+      expectedStreamRevision: overrides.expectedStreamRevision ?? 1,
+      taskPackage: overrides.taskPackage ?? fixture.request.taskPackage,
+      ...(overrides.planReview === undefined ? {} : { planReview: overrides.planReview }),
+    },
+    options,
+  );
 }
 
 export async function cleanupTargetTaskPlanningWorkspaceFixture(

@@ -2565,3 +2565,35 @@ wakeflow-public-mcp-tool.ts                  145行：Canonical成功结果与�
 - 度量：协调器 16 个 5,957 行 → 13 个 5,023 行（对基线 8,075 降 38%）；`tools/list` 114,783 → 113,012 字节（23 工具）；架构门 769 模块。
 - 残余：rework 阈值仍是常量（ADR-0012 要求进配置）；real-environment 模式的 Demand 续接后规划新实现目标仍被"存在测试目标即拒绝"的聚合规则挡住；归档候选残留（`archives/<demandId>/.candidate-*`）与失败中途的生命周期日志由维护对账清理，尚未实现；worktree 来源成员留空给 pod 切片；verify 门是内嵌最小集，观察切片再扩为独立 `wakeflow_verify`；`record-decision` 没有步骤日志，recover 只服务 continue；`lifecycle.ts` 1,382 行偏大，后续切片可把日志与归档步骤下沉。
 - 门：全量 `npm test` 通过：typecheck，架构门 769 模块 ok，Biome 0 错误（3 处旧树警告不变），格式检查通过，knip 无发现，926 测试通过（删除的发布、完成与路由协调器测试让总数从 945 降到 926），Schema 漂移检查 ok。本切片未提交，等待用户决定。
+
+### 13.81 L1 tasking 切片：设计定案（2026-09-09）
+
+demand 切片已提交（`82b83ea`）。按 ADR-0013 G 序，下一片是 tasking（第 5 片）。依据能力卡 5（Q1 到 Q6 确认记录与 ADR-0012 修订表）、ADR-0011 补充（`selectedAuthorityMemberRefs` 改为记录摘要加章节锚点；`taskPlanReview: user` 时任务清单先交用户过目）、ADR-0012 D4 与 D5，以及 L0.3 试点切片 `src/capabilities/tasking/plan-target-task.ts`。四处多选项列在末尾；用户于 2026-09-09 裁决『四个决定按建议』并授权进入本切片。
+
+- 范围与工具：切片 `src/capabilities/tasking/`，公共工具仍只有 `wakeflow_plan_target_task`（追加型一次调用，`idempotencyKey` 加 `expectedStreamRevision`，结果带 `next`），登记表条目移入切片 `contract.ts`；试点的 `plan-target-task.ts` 拆为 `contract.ts`、`decide.ts`（锚点引用校验、谱系规则、审阅门，纯函数）、`service.ts`、`projection.ts`。
+- 任务包 v2（改造 `governance/tasking/task-package.ts` 与 Schema，事件 `tasking.target-task-planned` 升到 v2）：
+  - 验收锚点增加 `requirementRef{recordDigest, sectionAnchor, itemId}`（ADR-0012 D5）：指向需求包 `requirement.md` 验收标准节（锚点 `acceptance-criteria`）的一条列表项；内核 `markdown-sections` 增列表项切分，`itemId` 取该节内顶层列表项序号 `ac-<n>`，记录不可变且摘要钉住内容；引用的记录摘要不等于 Demand 谱系、节不存在或序号越界即拒绝，Controller 不能发明锚点。
+  - 谱系 `lineage: {kind: "replacement", replacesTargetTaskId} | {kind: "continuation", continuesTargetTaskId} | null`（能力卡 5 Q2）：replacement 在创建时让旧目标进入新的终态 phase `superseded`（路由、完成与仓库独占都不再计入）；continuation 要求谱系头已 accepted；同仓库规则定为"同一仓库同时只有一个未接受且未被替代的实现目标"。
+  - `taskPlanReview: user` 的需求包：追加请求必须带 `planReview{confirmedAt}`，摘要写进任务包；缺失时以 `precondition-failed/task-plan-review-required` 拒绝，结果 `next` 指向用户；不新增状态、工具或投影。
+  - `selectedAuthorityRefs` 保持 Ledger 成员引用，增加可选 `sectionAnchors[]`（须在记录 `sections` 里），`confirmedContext` 保持自由文本。
+  - test 类型任务包在本切片不动（仍绑定测试卡）。
+- 删除：`target-task-planning-service.ts`、`-plan.ts`、`-authority.ts`、`-input.ts`、`-public-contract.ts`（约 1,565 行）及其测试；八处仍用 `TargetTaskPlanningService` 的 fixture（controller、delivery、review、testing）改经切片执行器规划；`task-package.ts`、`task-package-projection-store.ts`、`-paths.ts` 保留改造。
+- 验收：`tests/capabilities/tasking/decide.test.ts`（锚点引用四种拒绝、谱系互斥与 superseded、审阅门）、`service.test.ts`（真实需求包锚点、replacement 让旧目标 superseded 且路由只剩新目标、`continue_demand` 之后的 continuation、`taskPlanReview: user` 的拒绝与通过）；场景 `card-05/plan-implementation-task` 扩展为带 `requirementRef` 的锚点与审阅门；`card-05/test-contract` 的归属按 D1。
+- 裁决（2026-09-09，按建议）：
+  - D1 测试合同归属。A：tasking 一并落 `testContract`，删除测试卡家族与 `plan_test_card`，改写 14 个消费者（聚合、决定器、路由、测试投递、dispatch packet、结果、评审、声明），约 9,100 行测试域代码受波及。B（建议）：tasking 只做实现任务包 v2 与谱系；`testContract`、测试卡删除与 `plan_test_card` 删除并入 delivery 切片，那里本来要按能力卡 6 重写 `prepare_delivery`、dispatch packet 与 test delivery，删卡代价最小；`card-05/test-contract` 场景随之挂到 delivery 切片。
+  - D2 `selectedAuthorityRefs` 形状。建议保持成员引用加可选章节锚点；备选是改成 `{recordDigest, sectionAnchor}` 二元组，会波及投递 briefing、评审快照与证据的成员引用。
+  - D3 `taskPlanReview: user` 的门。建议请求回显 `planReview.confirmedAt` 并记入任务包，与需求确认点同形；备选是新增"待审阅"状态与确认工具。
+  - D4 replacement 的旧目标。建议新增 `superseded` phase；备选是从聚合删除旧目标，但评审快照与历史结果引用会断。
+
+### 13.82 L1 tasking 切片：实现与验收（2026-09-09）
+
+按 13.81 定案与四项裁决落地，单代理实现。切片目录 `src/capabilities/tasking/`：`contract.ts`（工具合同与登记表条目）、`decide.ts`（验收标准切分、锚点引用、章节锚点、审阅门、谱系期望与拓扑阻塞，纯函数）、`service.ts`（`runAppendCommand` 上的规划执行器，实现与 test 两类包共用一个入口）。试点的 `plan-target-task.ts` 与 `projection.ts` 设想合并进 `service.ts`，投影仍由既有 `task-package-projection-store` 写出。
+
+- 合同：`governance/tasking/task-package` 升为 v2 形状（Schema 版本号不变，字段只增）：验收锚点必带 `requirementRef{recordDigest, sectionAnchor, itemId}`；实现包必带 `lineage`（`replacement | continuation | null`）、`planReview`（`controller` 或 `user + confirmedAt`）与 `sectionAnchors[]`，test 包禁止这三项。wire Schema `target-task-planning-request` 同步（实现包草稿加 `lineage`、`sectionAnchors` 与锚点 `requirementRef`，请求级可选 `planReview{confirmedAt}`），`-result` 回显 `lineage`；`target-result-review-inspection-result` 的任务包镜像补齐同样字段；聚合状态 Schema 加终态 phase `superseded` 与 `supersededByTargetTaskId`（completed 终态允许 superseded 目标并存）；`demand-controller-route-result` 的 phase 枚举同步。合同数 114 不变；目录仍 23 个工具，`wakeflow_plan_target_task` 描述 634 字节（上限 640）。
+- 内核：`markdown-sections` 新增 `parseMarkdownListItems`（顶层 `-`/`*`/`+`/`1.` 列表项，围栏内不切，缩进续行并入，序号 `ac-<n>`）。需求包 `requirement.md` 经 Ledger 成员引用与记录摘要双重钉住后读入，锚点引用逐条对照：记录摘要不等于 Demand 谱系记 `anchor-record-drift`，节不是 `acceptance-criteria` 记 `anchor-section`，序号越界记 `anchor-item-unknown`，`sectionAnchors` 不在记录 `sections` 记 `section-anchor-unknown`，全部以 `precondition-failed` 拒绝并在 `details.blockers` 列全。
+- 谱系与聚合：`planTargetTaskInDemandAggregateState` 按同仓库状态裁决——已有未接受且未被替代的目标时新包必须是它的 replacement 且旧目标处于可替代 phase（planned、delivery-prepared、host-effect-rejected、rework-requested、product-defect-rework-requested、redesign-requested、review-blocked），旧目标改写为 `superseded` 并记 `supersededByTargetTaskId`；只剩已接受目标时必须是其中之一的 continuation；仓库尚无目标时不得声明谱系。superseded 目标在路由（解析器返回空、开放目标集合排除）、评审后路由、完成转换与终态校验、测试卡基线与 test 包规划里一律不计入；demand 切片临时放宽的『续接后与已接受目标共用仓库』改由 continuation 谱系正式承担。审阅门：需求包 `taskPlanReview: user` 而请求缺 `planReview` 记 `task-plan-review-required`，非 user 却带 `planReview` 记 `task-plan-review-not-requested`。
+- 删除：`target-task-planning-service.ts`（758 行）、`-plan.ts`（202）、`-authority.ts`（228）、`-input.ts`（329）、`-public-contract.ts`（48）、试点 `capabilities/tasking/plan-target-task.ts`（456）与三份旧测试（409 行），共 2,430 行；架构门的过渡准入项随之删除（生产根 11 → 10）。controller、delivery、review、testing 的八处 fixture 改经切片执行器规划（`planFixtureTargetTask`、`planFixtureTestTask`）。
+- 验收：`tests/capabilities/tasking/decide.test.ts` 4 项（验收标准切分与围栏、锚点引用四类阻塞、谱系期望三态与可替代 phase、审阅门）；`service.test.ts` 4 项（真实需求包锚点提交与 `next`、发明锚点与漂移摘要拒绝、同仓库第二包必须 replacement 且旧目标 `superseded`、`taskPlanReview: user` 的拒绝与通过）；聚合测试新增 replacement 转换（无谱系拒绝、被替代目标不可再替代、superseded-only 不能 completed）；`test-task-planning-service.test.ts` 改写为 3 项围绕切片；`capabilities/demand/service.test.ts` 的续接后规划改为 continuation 谱系；场景 `card-05/plan-implementation-task` 扩为『发明锚点拒绝 → 首包提交 → 同仓库 replacement → 重放幂等 → 路由』，其后 `card-08` 的投递、评审与完成即归档在存在 superseded 目标的状态上通过，场景报告 pass=8。
+- 度量：协调器 13 个 5,023 行不变（tasking 本无协调器）；`tools/list` 113,012 → 113,956 字节（23 工具）；架构门 769 → 765 模块；测试 926 → 928。
+- 残余：test 类型包与 `plan_test_card` 未动，`testContract` 与测试卡删除按 D1 落 delivery 切片；`planReview.confirmedAt` 只记录不核实；`sectionAnchors` 只校验存在，不进投递 briefing（能力卡 6）；review inspection 的任务包镜像仍是手写副本，四处 wire Schema 靠 codegen 镜像测试防漂移；`service.ts` 646 行里 test 包分支约 200 行，随 delivery 切片一并删除；rework 阈值仍是常量。
+- 门：全量 `npm test` 通过：typecheck，架构门 765 模块 ok，Biome 0 错误（3 处旧树警告不变），格式检查通过，knip 无发现，928 测试通过，Schema 漂移检查 ok。本切片未提交，等待用户决定。

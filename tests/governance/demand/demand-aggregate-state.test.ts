@@ -6,7 +6,10 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createTargetDeliveryIntent } from "../../../src/governance/delivery/target-delivery-intent.js";
 import { createTargetDeliveryReworkContext } from "../../../src/governance/delivery/target-delivery-rework-context.js";
 
-import { computeTaskPackageDigest } from "../../../src/governance/tasking/task-package.js";
+import {
+  computeTaskPackageDigest,
+  createTaskPackage,
+} from "../../../src/governance/tasking/task-package.js";
 import {
   cancelDemandAggregateState,
   claimTargetHostEffectInDemandAggregateState,
@@ -25,10 +28,12 @@ import {
   createTaskPackageFixture,
   TARGET_TASK_ID,
   TASKING_AUTHORITY_DIGEST,
+  TASKING_CREATED_AT,
   TASKING_DEMAND_ID,
   TASKING_REPOSITORY_ID,
   TASKING_WINDOW_ID,
   TASK_PACKAGE_ID,
+  taskPackageDraft,
 } from "../tasking/task-package.fixture.js";
 import {
   createTargetDeliveryIntentFixture,
@@ -406,5 +411,97 @@ test("completed终态需要accepted目标，未实现业务域仍不能空占位
       }),
     (error: unknown) =>
       error instanceof DemandAggregateStateError && error.reason === "schema",
+  );
+});
+
+test("replacement 谱系：旧目标进入 superseded，后续规划与 completed 终态只计入未被替代的目标", () => {
+  const active = createInitialDemandAggregateState(
+    TASKING_DEMAND_ID,
+    TASKING_AUTHORITY_DIGEST,
+  );
+  const planned = planTargetTaskInDemandAggregateState(
+    active,
+    createTaskPackageFixture(),
+  );
+  const clock = () => TASKING_CREATED_AT;
+  const replacementTargetTaskId =
+    "target-task_13131313-1313-4313-8313-131313131313";
+  const replacement = createTaskPackage(
+    {
+      ...taskPackageDraft(),
+      taskPackageId: "task-package_12121212-1212-4212-8212-121212121212",
+      targetTaskId: replacementTargetTaskId,
+      lineage: { kind: "replacement", replacesTargetTaskId: TARGET_TASK_ID },
+    },
+    { clock },
+  );
+  // 同仓库已有未接受目标时，没有谱系的新包被拒绝。
+  throws(
+    () =>
+      planTargetTaskInDemandAggregateState(
+        planned,
+        createTaskPackage(
+          {
+            ...taskPackageDraft(),
+            taskPackageId: "task-package_12121212-1212-4212-8212-121212121212",
+            targetTaskId: replacementTargetTaskId,
+          },
+          { clock },
+        ),
+      ),
+    (error: unknown) =>
+      error instanceof DemandAggregateStateError &&
+      error.reason === "transition" &&
+      error.path === "$state/targetTasks/lineage",
+  );
+  const replaced = planTargetTaskInDemandAggregateState(planned, replacement);
+  const superseded = replaced.targetTasks.find(
+    (target) => target.targetTaskId === TARGET_TASK_ID,
+  );
+  if (superseded?.phase !== "superseded") {
+    throw new Error("Expected the replaced target to be superseded.");
+  }
+  equal(superseded.supersededByTargetTaskId, replacementTargetTaskId);
+  equal(superseded.taskPackageId, TASK_PACKAGE_ID);
+  equal(
+    replaced.targetTasks.find(
+      (target) => String(target.targetTaskId) === replacementTargetTaskId,
+    )?.phase,
+    "planned",
+  );
+  // 已被替代的目标不能再被替代：第三个包必须替代当前未接受的新目标。
+  throws(
+    () =>
+      planTargetTaskInDemandAggregateState(
+        replaced,
+        createTaskPackage(
+          {
+            ...taskPackageDraft(),
+            taskPackageId: "task-package_14141414-1414-4414-8414-141414141414",
+            targetTaskId: "target-task_15151515-1515-4515-8515-151515151515",
+            lineage: {
+              kind: "replacement",
+              replacesTargetTaskId: TARGET_TASK_ID,
+            },
+          },
+          { clock },
+        ),
+      ),
+    (error: unknown) =>
+      error instanceof DemandAggregateStateError &&
+      error.reason === "transition",
+  );
+  // completed 终态要求至少一个已接受的未被替代实现目标；只剩 superseded 目标不能是 completed。
+  throws(
+    () =>
+      parseDemandAggregateState({
+        ...replaced,
+        lifecycle: "completed",
+        targetTasks: [superseded],
+      }),
+    (error: unknown) =>
+      error instanceof DemandAggregateStateError &&
+      error.reason === "relation" &&
+      error.path === "$/lifecycle",
   );
 });

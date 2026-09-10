@@ -281,6 +281,7 @@ export function resolveDemandControllerImplementationFrontierDescriptor(
 ): ScopedImplementationFrontierDescriptor | null {
   switch (phase) {
     case "accepted":
+    case "superseded":
       return null;
     case "planned":
     case "rework-requested":
@@ -670,7 +671,7 @@ function routeBasis(
   }
 
   const openImplementationTargets = implementationTargets.filter(
-    (target) => target.phase !== "accepted",
+    (target) => target.phase !== "accepted" && target.phase !== "superseded",
   );
   if (openImplementationTargets.length > 0) {
     if (

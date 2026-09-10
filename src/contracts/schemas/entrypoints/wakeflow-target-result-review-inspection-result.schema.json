@@ -798,7 +798,7 @@
     "reviewTaskPackageAcceptanceAnchor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["anchorId", "claim", "probe", "expected"],
+      "required": ["anchorId", "claim", "probe", "expected", "requirementRef"],
       "properties": {
         "anchorId": {
           "$ref": "#/$defs/reviewTaskPackageAnchorId"
@@ -811,7 +811,101 @@
         },
         "expected": {
           "$ref": "#/$defs/reviewTaskPackageHumanText"
+        },
+        "requirementRef": {
+          "$ref": "#/$defs/reviewTaskPackageRequirementRef"
         }
+      }
+    },
+    "reviewTaskPackageRequirementRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recordDigest", "sectionAnchor", "itemId"],
+      "properties": {
+        "recordDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "sectionAnchor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^ac-[1-9][0-9]{0,2}$"
+        }
+      }
+    },
+    "reviewTaskPackageLineage": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "replacesTargetTaskId"],
+          "properties": {
+            "kind": {
+              "const": "replacement"
+            },
+            "replacesTargetTaskId": {
+              "$ref": "#/$defs/reviewTaskPackageTargetTaskId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "continuesTargetTaskId"],
+          "properties": {
+            "kind": {
+              "const": "continuation"
+            },
+            "continuesTargetTaskId": {
+              "$ref": "#/$defs/reviewTaskPackageTargetTaskId"
+            }
+          }
+        }
+      ]
+    },
+    "reviewTaskPackagePlanReview": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer"],
+          "properties": {
+            "reviewer": {
+              "const": "controller"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer", "confirmedAt"],
+          "properties": {
+            "reviewer": {
+              "const": "user"
+            },
+            "confirmedAt": {
+              "$ref": "#/$defs/utcInstant"
+            }
+          }
+        }
+      ]
+    },
+    "reviewTaskPackageSectionAnchors": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
       }
     },
     "reviewTaskPackageTestCardTuple": {
@@ -913,6 +1007,15 @@
             "$ref": "#/$defs/reviewTaskPackageAcceptanceAnchor"
           }
         },
+        "lineage": {
+          "$ref": "#/$defs/reviewTaskPackageLineage"
+        },
+        "planReview": {
+          "$ref": "#/$defs/reviewTaskPackagePlanReview"
+        },
+        "sectionAnchors": {
+          "$ref": "#/$defs/reviewTaskPackageSectionAnchors"
+        },
         "testCard": {
           "$ref": "#/$defs/reviewTaskPackageTestCardTuple"
         }
@@ -928,7 +1031,7 @@
             "required": ["workType"]
           },
           "then": {
-            "required": ["commitExpectation"],
+            "required": ["commitExpectation", "lineage", "planReview", "sectionAnchors"],
             "properties": {
               "commitExpectation": {
                 "enum": ["commit", "leave-uncommitted"]
@@ -940,7 +1043,16 @@
                 "type": "array",
                 "minItems": 1
               },
-              "testCard": false
+              "testCard": false,
+              "lineage": {
+                "$ref": "#/$defs/reviewTaskPackageLineage"
+              },
+              "planReview": {
+                "$ref": "#/$defs/reviewTaskPackagePlanReview"
+              },
+              "sectionAnchors": {
+                "$ref": "#/$defs/reviewTaskPackageSectionAnchors"
+              }
             }
           },
           "else": {
@@ -956,7 +1068,10 @@
               "acceptanceAnchors": {
                 "type": "array",
                 "maxItems": 0
-              }
+              },
+              "lineage": false,
+              "planReview": false,
+              "sectionAnchors": false
             }
           }
         }

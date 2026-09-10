@@ -1018,7 +1018,8 @@
             "product-defect-rework-requested",
             "rework-requested",
             "redesign-requested",
-            "review-blocked"
+            "review-blocked",
+            "superseded"
           ]
         }
       }

@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:target-task-planning-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA",
   "title": "WakeflowTargetTaskPlanningRequestV1",
-  "description": "Single-call request appending one immutable Implementation or Test TaskPackage plan to an existing Demand. The client supplies an idempotency key and the stream revision it observed; a retry with the same key and body returns the first result.",
+  "description": "Single-call request appending one immutable Implementation or Test TaskPackage plan to an existing Demand. The client supplies an idempotency key and the stream revision it observed; a retry with the same key and body returns the first result. 实现任务包的每个验收锚点必须带 requirementRef 指向需求包验收标准的一条；同仓库再来一个包必须声明 lineage（replacement 或 continuation）。",
   "type": "object",
   "$defs": {
     "requestedTaskPackage": {
@@ -20,15 +20,17 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "acceptanceAnchors",
         "assignment",
-        "workType",
-        "objective",
-        "confirmedContext",
-        "selectedAuthorityMemberRefs",
         "boundaries",
-        "completionExpectations",
         "commitExpectation",
-        "acceptanceAnchors"
+        "completionExpectations",
+        "confirmedContext",
+        "lineage",
+        "objective",
+        "sectionAnchors",
+        "selectedAuthorityMemberRefs",
+        "workType"
       ],
       "properties": {
         "assignment": {
@@ -66,6 +68,17 @@
           "maxItems": 32,
           "items": {
             "$ref": "#/$defs/acceptanceAnchor"
+          }
+        },
+        "lineage": {
+          "$ref": "#/$defs/lineage"
+        },
+        "sectionAnchors": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/anchor"
           }
         }
       }
@@ -151,7 +164,7 @@
     "acceptanceAnchor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["anchorId", "claim", "probe", "expected"],
+      "required": ["anchorId", "claim", "probe", "expected", "requirementRef"],
       "properties": {
         "anchorId": {
           "$ref": "#/$defs/anchorId"
@@ -164,6 +177,9 @@
         },
         "expected": {
           "$ref": "#/$defs/humanText"
+        },
+        "requirementRef": {
+          "$ref": "#/$defs/requirementRef"
         }
       }
     },
@@ -171,6 +187,70 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "anchor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "requirementRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recordDigest", "sectionAnchor", "itemId"],
+      "properties": {
+        "recordDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "sectionAnchor": {
+          "$ref": "#/$defs/anchor"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^ac-[1-9][0-9]{0,2}$"
+        }
+      }
+    },
+    "lineage": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "replacesTargetTaskId"],
+          "properties": {
+            "kind": {
+              "const": "replacement"
+            },
+            "replacesTargetTaskId": {
+              "$ref": "#/$defs/targetTaskId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "continuesTargetTaskId"],
+          "properties": {
+            "kind": {
+              "const": "continuation"
+            },
+            "continuesTargetTaskId": {
+              "$ref": "#/$defs/targetTaskId"
+            }
+          }
+        }
+      ]
     }
   },
   "additionalProperties": false,
@@ -199,6 +279,20 @@
     },
     "taskPackage": {
       "$ref": "#/$defs/requestedTaskPackage"
+    },
+    "planReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confirmedAt"],
+      "properties": {
+        "confirmedAt": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 30,
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      },
+      "description": "需求包 taskPlanReview 为 user 时必带：用户过目任务清单的时间；Wakeflow 只记录，不核实内容。"
     }
   }
 }

@@ -30,7 +30,7 @@ type FrontierMatrixRow =
         readonly kind: "implementation";
         readonly phases: readonly Exclude<
           DemandControllerImplementationTargetPhase,
-          "accepted"
+          "accepted" | "superseded"
         >[];
       }>;
       readonly expected: ExpectedFrontier;
@@ -306,7 +306,7 @@ const MATRIX_TYPE_COVERAGE = {
     ? true
     : false;
   readonly implementation: Exclude<
-    Exclude<DemandControllerImplementationTargetPhase, "accepted">,
+    Exclude<DemandControllerImplementationTargetPhase, "accepted" | "superseded">,
     ImplementationPhaseInMatrix
   > extends never
     ? true

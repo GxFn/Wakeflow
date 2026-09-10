@@ -23,7 +23,7 @@
 
 **不变量**：工件绑定 demand 与 authority 摘要；CAS 两次检查，锁内再查；同 id 同字节同事件意图为幂等重放，否则冲突。
 
-**现 TS 状态**：`wakeflow_plan_target_task` 已公开，事件 `tasking.target-task-planned`，任务包为 immutable JSON 加 event；replacement 与 continuation 谱系待核对；`plan_test_card` 已公开。
+**现 TS 状态**（2026-09-09，tasking 切片，[gate-log §13.81、§13.82](../../progress/consolidation-gate-log.md)）：`wakeflow_plan_target_task` 是追加型一次调用（`idempotencyKey` 加 `expectedStreamRevision`，结果带 `next`），切片在 `src/capabilities/tasking/`，事件 `tasking.target-task-planned`，任务包为不可变 JSON 加事件。任务包 v2：每个验收锚点带 `requirementRef{recordDigest, sectionAnchor, itemId}`，指向需求包 `requirement.md` 验收标准节（`acceptance-criteria`）的一条顶层列表项 `ac-<n>`，Wakeflow 校验记录摘要、节与序号，Controller 不能发明锚点；`lineage` 为 `replacement`、`continuation` 或 `null`：replacement 在创建时让旧目标进入终态 `superseded`（路由、完成与仓库独占不再计入，只有 planned、delivery-prepared、host-effect-rejected、rework-requested、product-defect-rework-requested、redesign-requested、review-blocked 可被替代），continuation 要求谱系头已 accepted，同仓库同时只有一个未接受且未被替代的实现目标；需求包 `taskPlanReview: user` 时请求必须回显 `planReview{confirmedAt}` 并记入任务包，否则以 `precondition-failed/task-plan-review-required` 拒绝；`selectedAuthorityRefs` 保持 Ledger 成员引用，另可带 `sectionAnchors[]`（须是记录 `sections` 里的锚点）。test 类型任务包与 `plan_test_card` 本切片未动，`testContract` 与测试卡删除并入 delivery 切片（§13.81 D1）。
 
 **实现判断**：字段名沿用 v3 的 `reviewInputContract` 与 `craftMapping`，不回到 v2 的 `evidenceContract`；规划时不要求窗口已有绑定，投递准备时才要求；replacement 与 continuation 保持互斥。
 

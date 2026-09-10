@@ -307,6 +307,12 @@ export interface DemandReviewBlockedTargetTaskState extends DemandReviewedTarget
   readonly phase: "review-blocked";
 }
 
+/** 被替代的实现目标：终态，不再参与路由、完成与仓库独占；历史在事件流里。 */
+export interface DemandSupersededTargetTaskState extends DemandImplementationTargetTaskStateBase {
+  readonly phase: "superseded";
+  readonly supersededByTargetTaskId: WakeflowDurableId<"target-task">;
+}
+
 type DemandReviewedTargetPhase =
   | DemandAcceptedTargetTaskState["phase"]
   | DemandReworkRequestedTargetTaskState["phase"]
@@ -326,6 +332,7 @@ export type DemandTargetTaskState =
   | DemandReworkRequestedTargetTaskState
   | DemandRedesignRequestedTargetTaskState
   | DemandReviewBlockedTargetTaskState
+  | DemandSupersededTargetTaskState
   | DemandTestPlannedTargetTaskState
   | DemandTestDeliveryPreparedTargetTaskState
   | DemandTestHostEffectClaimedTargetTaskState
@@ -1540,8 +1547,8 @@ function parseTargetTasks(
       "repository",
       `${path}/repositoryId`,
     );
-    // 一个仓库同时只能有一个未接受的实现目标；已接受的目标是续接后的历史，可以共用仓库。
-    if (value.phase !== "accepted") {
+    // 一个仓库同时只能有一个未接受且未被替代的实现目标；已接受与被替代的目标是历史。
+    if (value.phase !== "accepted" && value.phase !== "superseded") {
       if (repositoryIds.has(repositoryId)) fail("relation", path);
       repositoryIds.add(repositoryId);
     }
@@ -1559,7 +1566,24 @@ function parseTargetTasks(
     };
     const productCurrentDelivery = value.currentDelivery as
       ProductCurrentDeliveryWire | undefined;
-    if (value.phase === "planned") {
+    if (value.phase === "superseded") {
+      if (value.supersededByTargetTaskId === undefined) {
+        fail("schema", `${path}/supersededByTargetTaskId`);
+      }
+      const supersededByTargetTaskId = parseId(
+        value.supersededByTargetTaskId,
+        "target-task",
+        `${path}/supersededByTargetTaskId`,
+      );
+      if (supersededByTargetTaskId === targetTaskId) fail("relation", path);
+      result.push(
+        Object.freeze({
+          ...base,
+          phase: "superseded" as const,
+          supersededByTargetTaskId,
+        }),
+      );
+    } else if (value.phase === "planned") {
       result.push(Object.freeze({ ...base, phase: "planned" as const }));
     } else if (value.phase === "delivery-prepared") {
       if (productCurrentDelivery === undefined) {
@@ -2159,8 +2183,10 @@ export function observeTargetHostEffectInDemandAggregateState(
       entry,
     ): entry is Exclude<
       DemandTargetTaskState,
-      DemandPlannedTargetTaskState | DemandTestPlannedTargetTaskState
-    > => entry.phase !== "planned",
+      | DemandPlannedTargetTaskState
+      | DemandTestPlannedTargetTaskState
+      | DemandSupersededTargetTaskState
+    > => entry.phase !== "planned" && entry.phase !== "superseded",
   );
   const candidates = deliveryTargets.filter(
     (entry) =>
@@ -2803,6 +2829,9 @@ function normalizeState(
   const implementationTargets = targetTasks.filter(
     (target) => target.workType !== "test",
   );
+  const liveImplementationTargets = implementationTargets.filter(
+    (target) => target.phase !== "superseded",
+  );
   const testTargets = targetTasks.filter(
     (target) => target.workType === "test",
   );
@@ -2839,8 +2868,8 @@ function normalizeState(
       (target) => target.phase !== "test-product-defect",
     ) ||
     (currentTestCard !== undefined &&
-      (implementationTargets.length === 0 ||
-        implementationTargets.some((target) => target.phase !== "accepted") ||
+      (liveImplementationTargets.length === 0 ||
+        liveImplementationTargets.some((target) => target.phase !== "accepted") ||
         currentTestTargets.length > 1 ||
         (currentTestTargets.length === 0 &&
           testTargets.some(
@@ -2874,8 +2903,8 @@ function normalizeState(
   if (
     wire.lifecycle === "completed" &&
     (pendingTestRetest !== undefined ||
-      implementationTargets.length === 0 ||
-      implementationTargets.some((target) => target.phase !== "accepted") ||
+      liveImplementationTargets.length === 0 ||
+      liveImplementationTargets.some((target) => target.phase !== "accepted") ||
       (testTargets.length === 0
         ? currentTestCard !== undefined
         : currentTestCard === undefined ||
@@ -3081,6 +3110,80 @@ export function createInitialDemandAggregateState(
   });
 }
 
+/** 可被替代的实现目标 phase：没有在飞的宿主效果，也没有待评审的结果。 */
+const REPLACEABLE_PHASES: readonly DemandTargetTaskState["phase"][] = Object.freeze([
+  "planned",
+  "delivery-prepared",
+  "host-effect-rejected",
+  "rework-requested",
+  "product-defect-rework-requested",
+  "redesign-requested",
+  "review-blocked",
+]);
+
+function supersedeTarget(
+  target: Readonly<DemandTargetTaskState>,
+  supersededByTargetTaskId: WakeflowDurableId<"target-task">,
+): Readonly<DemandSupersededTargetTaskState> {
+  if (target.workType === "test") fail("transition", "$state/targetTasks");
+  return Object.freeze({
+    targetTaskId: target.targetTaskId,
+    taskPackageId: target.taskPackageId,
+    taskPackageDigest: target.taskPackageDigest,
+    repositoryId: target.repositoryId,
+    windowId: target.windowId,
+    commitExpectation: target.commitExpectation,
+    acceptanceAnchorIds: target.acceptanceAnchorIds,
+    ...(target.reworkCount === undefined ? {} : { reworkCount: target.reworkCount }),
+    phase: "superseded" as const,
+    supersededByTargetTaskId,
+  });
+}
+
+/**
+ * 同仓库谱系（能力卡 5 Q2）：仓库里已有未接受且未被替代的目标时，新包必须是它的
+ * replacement 且旧目标可替代；只剩已接受目标时，新包必须是其中一个的 continuation；
+ * 仓库尚无目标时不得声明谱系。返回被替代目标的标识。
+ */
+function applyLineage(
+  current: Readonly<DemandAggregateState>,
+  taskPackage: Readonly<TaskPackage>,
+): WakeflowDurableId<"target-task"> | null {
+  if (taskPackage.workType !== "implementation") return null;
+  const repositoryId = taskPackage.assignment.repositoryId;
+  const sameRepository = current.targetTasks.filter(
+    (entry) => entry.workType !== "test" && entry.repositoryId === repositoryId,
+  );
+  const open = sameRepository.find(
+    (entry) => entry.phase !== "accepted" && entry.phase !== "superseded",
+  );
+  const lineage = taskPackage.lineage;
+  if (open !== undefined) {
+    if (
+      lineage === null ||
+      lineage.kind !== "replacement" ||
+      lineage.replacesTargetTaskId !== open.targetTaskId ||
+      !REPLACEABLE_PHASES.includes(open.phase)
+    ) {
+      fail("transition", "$state/targetTasks/lineage");
+    }
+    return open.targetTaskId;
+  }
+  const accepted = sameRepository.filter((entry) => entry.phase === "accepted");
+  if (accepted.length > 0) {
+    if (
+      lineage === null ||
+      lineage.kind !== "continuation" ||
+      !accepted.some((entry) => entry.targetTaskId === lineage.continuesTargetTaskId)
+    ) {
+      fail("transition", "$state/targetTasks/lineage");
+    }
+    return null;
+  }
+  if (lineage !== null) fail("transition", "$state/targetTasks/lineage");
+  return null;
+}
+
 /** `tasking.target-task-planned.v1` 使用的纯状态转换。 */
 export function planTargetTaskInDemandAggregateState(
   currentValue: unknown,
@@ -3120,7 +3223,10 @@ export function planTargetTaskInDemandAggregateState(
           target.testCard.testCardId === currentTestCard.testCardId,
       ) ||
       current.targetTasks.some(
-        (target) => target.workType !== "test" && target.phase !== "accepted",
+        (target) =>
+          target.workType !== "test" &&
+          target.phase !== "accepted" &&
+          target.phase !== "superseded",
       )
     ) {
       fail("transition", "$state/currentTestCard");
@@ -3143,22 +3249,19 @@ export function planTargetTaskInDemandAggregateState(
       ),
     });
   }
-  // 续接后的新规划允许与已接受的历史目标共用仓库；未接受的目标仍然独占仓库。
-  const continuing = current.continuation?.planningRequired === true;
   if (
     current.currentTestCard !== undefined ||
-    current.targetTasks.some((entry) => entry.workType === "test") ||
-    current.targetTasks.some(
-      (entry) =>
-        entry.workType !== "test" &&
-        entry.repositoryId === taskPackage.assignment.repositoryId &&
-        !(continuing && entry.phase === "accepted"),
-    )
+    current.targetTasks.some((entry) => entry.workType === "test")
   ) {
     fail("transition", "$state/targetTasks");
   }
+  const superseded = applyLineage(current, taskPackage);
   const nextTargetTasks = [
-    ...current.targetTasks,
+    ...current.targetTasks.map((entry) =>
+      entry.targetTaskId === superseded
+        ? supersedeTarget(entry, taskPackage.targetTaskId)
+        : entry,
+    ),
     Object.freeze({
       targetTaskId: taskPackage.targetTaskId,
       taskPackageId: taskPackage.taskPackageId,
@@ -3211,7 +3314,7 @@ export function completeDemandAggregateState(
     throw error;
   }
   const implementationTargets = current.targetTasks.filter(
-    (target) => target.workType !== "test",
+    (target) => target.workType !== "test" && target.phase !== "superseded",
   );
   const testTargets = current.targetTasks.filter(
     (target) => target.workType === "test",
@@ -3239,7 +3342,7 @@ export function completeDemandAggregateState(
     completion.authorityDigest !== current.authorityDigest ||
     completion.observedState.stateDigest !==
       computeDemandAggregateStateDigest(current) ||
-    current.targetTasks.length === 0 ||
+    implementationTargets.length === 0 ||
     implementationTargets.some((target) => target.phase !== "accepted") ||
     current.awaitingDecision !== undefined ||
     current.continuation?.planningRequired === true ||
@@ -3282,7 +3385,7 @@ export function createTestCardInDemandAggregateState(
     ),
   );
   const implementationTargets = current.targetTasks.filter(
-    (target) => target.workType !== "test",
+    (target) => target.workType !== "test" && target.phase !== "superseded",
   );
   const testTargets = current.targetTasks.filter(
     (target) => target.workType === "test",

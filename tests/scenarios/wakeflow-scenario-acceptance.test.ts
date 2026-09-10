@@ -25,7 +25,7 @@ import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } f
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
 import { controllerImplementationReviewDecisionInput } from "../governance/review/controller-implementation-review-decision.fixture.js";
-import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/tasking/target-task-planning-public-contract.js";
+import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
@@ -71,6 +71,7 @@ interface ScenarioContext {
   memberRefs?: readonly string[];
   requirementId?: string;
   requirementStateDigest?: string;
+  recordDigest?: string;
   demandId?: string;
   productBinding?: { readonly bindingId: string; readonly bindingDigest: string };
   productHandle?: string;
@@ -463,12 +464,14 @@ async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
   const view = board.structuredContent as {
     readonly package: {
       readonly status: string;
+      readonly recordDigest: string;
       readonly claim: { readonly demandId: string } | null;
     };
     readonly record: { readonly sections: readonly { readonly anchor: string }[] };
   };
   equal(view.package.status, "claimed");
   equal(view.package.claim?.demandId, context.demandId);
+  context.recordDigest = view.package.recordDigest;
   context.memberRefs = [
     `requirements/${context.requirementId}/requirement.md`,
     `requirements/${context.requirementId}/landing.md`,
@@ -503,7 +506,8 @@ async function scenarioPlanImplementationTask(context: ScenarioContext): Promise
     !context.demandId ||
     !context.memberRefs ||
     !context.repositoryId ||
-    !context.productWindowId
+    !context.productWindowId ||
+    !context.recordDigest
   ) {
     throw new Error("scenario ordering: create-demand must run first");
   }
@@ -535,10 +539,37 @@ async function scenarioPlanImplementationTask(context: ScenarioContext): Promise
           claim: "最小切片满足需求设计",
           probe: "运行聚焦检查",
           expected: "检查通过且无越界改动",
+          requirementRef: {
+            recordDigest: context.recordDigest,
+            sectionAnchor: "acceptance-criteria",
+            itemId: "ac-1",
+          },
         },
       ],
+      lineage: null,
+      sectionAnchors: ["goal"],
     },
   };
+  const invented = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      ...request,
+      idempotencyKey: "scenario-plan-invented",
+      taskPackage: {
+        ...request.taskPackage,
+        acceptanceAnchors: [
+          {
+            ...request.taskPackage.acceptanceAnchors[0],
+            requirementRef: {
+              ...request.taskPackage.acceptanceAnchors[0]?.requirementRef,
+              itemId: "ac-9",
+            },
+          },
+        ],
+      },
+    },
+  });
+  equal(invented.isError, true, "an invented acceptance anchor must be rejected");
   const committed = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, request);
   assertNoPrivatePath(context, committed);
   const result = committed.structuredContent as {
@@ -552,17 +583,44 @@ async function scenarioPlanImplementationTask(context: ScenarioContext): Promise
   };
   equal(result.status, "committed");
   equal(result.targetTask.phase, "planned");
-  context.targetTaskId = result.targetTask.targetTaskId;
-  context.taskPackageId = result.targetTask.taskPackageId;
   equal(result.next.frontier, "implementation-delivery-planning");
+  // 同仓库第二个包必须声明 replacement：旧目标进入 superseded，后续投递、评审与完成只针对新目标。
+  const replacementRequest = {
+    ...request,
+    idempotencyKey: "scenario-plan-replacement",
+    expectedStreamRevision: 2,
+    taskPackage: {
+      ...request.taskPackage,
+      objective: "改按更小的切片实现场景验收需求",
+      lineage: { kind: "replacement", replacesTargetTaskId: result.targetTask.targetTaskId },
+    },
+  };
+  const replaced = await call(
+    context,
+    WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    replacementRequest,
+  );
+  assertNoPrivatePath(context, replaced);
+  const replacement = replaced.structuredContent as typeof result & {
+    readonly targetTask: { readonly lineage: { readonly replacesTargetTaskId?: string } | null };
+  };
+  equal(replacement.status, "committed");
+  equal(replacement.targetTask.phase, "planned");
+  equal(replacement.targetTask.lineage?.replacesTargetTaskId, result.targetTask.targetTaskId);
+  context.targetTaskId = replacement.targetTask.targetTaskId;
+  context.taskPackageId = replacement.targetTask.taskPackageId;
   const afterCommit = readdirSync(demandRoot, { recursive: true }).length;
-  const replayed = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, request);
+  const replayed = await call(
+    context,
+    WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    replacementRequest,
+  );
   const replay = replayed.structuredContent as { readonly status: string };
   equal(replay.status, "idempotent");
   equal(readdirSync(demandRoot, { recursive: true }).length, afterCommit, "replay wrote");
   const route = await routeFrontiers(context);
   equal(route.kinds.includes("implementation-delivery-planning"), true);
-  return `append=${result.status}; replay=${replay.status}; next=${result.next.suggestedTool}`;
+  return `invented-anchor=rejected; append=${result.status}; replacement=${replacement.status}; replay=${replay.status}; next=${replacement.next.suggestedTool}`;
 }
 
 interface RouteInspection {

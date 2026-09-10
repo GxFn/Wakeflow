@@ -157,6 +157,9 @@ test("test TaskPackage is a closed discriminated variant without repository muta
     assignment: _assignment,
     commitExpectation: _commitExpectation,
     acceptanceAnchors: _acceptanceAnchors,
+    lineage: _lineage,
+    planReview: _planReview,
+    sectionAnchors: _sectionAnchors,
     ...common
   } = implementation;
   const testPackage = parseTaskPackage({

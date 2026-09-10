@@ -25,7 +25,8 @@
         "taskPackageId",
         "repositoryId",
         "windowId",
-        "phase"
+        "phase",
+        "lineage"
       ],
       "properties": {
         "workType": {
@@ -45,6 +46,9 @@
         },
         "phase": {
           "const": "planned"
+        },
+        "lineage": {
+          "$ref": "#/$defs/lineage"
         }
       }
     },
@@ -189,6 +193,39 @@
           }
         }
       }
+    },
+    "lineage": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "replacesTargetTaskId"],
+          "properties": {
+            "kind": {
+              "const": "replacement"
+            },
+            "replacesTargetTaskId": {
+              "$ref": "#/$defs/targetTaskId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "continuesTargetTaskId"],
+          "properties": {
+            "kind": {
+              "const": "continuation"
+            },
+            "continuesTargetTaskId": {
+              "$ref": "#/$defs/targetTaskId"
+            }
+          }
+        }
+      ]
     }
   },
   "additionalProperties": false,

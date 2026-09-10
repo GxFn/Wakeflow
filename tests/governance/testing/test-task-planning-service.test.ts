@@ -5,25 +5,15 @@ import { test } from "node:test";
 
 import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
 import { renderWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3-document.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
-import { createWindowWorkClaimInStore } from "../../../src/governance/delivery/window-work-claim-store.js";
 import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/demand-post-acceptance-route.js";
-import {
-  computeTargetTaskPlanningPlanDigest,
-  createTargetTaskPlanningPlan,
-} from "../../../src/governance/tasking/target-task-planning-plan.js";
 import { taskPackageProjectionRef } from "../../../src/governance/tasking/task-package-projection-paths.js";
-import {
-  parseTaskPackage,
-  renderTaskPackage,
-} from "../../../src/governance/tasking/task-package.js";
-import {
-  TargetTaskPlanningService,
-  TargetTaskPlanningServiceError,
-} from "../../../src/governance/tasking/target-task-planning-service.js";
+import { TaskPackageProjectionStore } from "../../../src/governance/tasking/task-package-projection-store.js";
+import { isWakeflowError } from "../../../src/kernel/error.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 import {
   cleanupTestCardPlanningWorkspaceFixture,
@@ -32,38 +22,37 @@ import {
 import {
   cleanupTestTaskPlanningWorkspaceFixture,
   createTestTaskPlanningWorkspaceFixture,
-  TEST_TASK_PACKAGE_CREATED_AT,
-  testTaskPlanningUuidFactory,
+  planFixtureTestTask,
 } from "./test-task-planning-service.fixture.js";
 
-const ROLLED_BACK_TEST_TASK_CREATED_AT = parseUtcInstant(
-  "2026-08-29T12:19:00.000Z",
-);
+/**
+ * test 任务包经 tasking 切片规划：从测试卡派生、投影落盘、路由前进到测试投递规划、
+ * 同键重放幂等；并发相同请求收敛为一个事件；没有测试卡时拒绝。
+ */
 
-async function streamRevision(
+const ROLLED_BACK_TEST_TASK_CREATED_AT = parseUtcInstant("2026-08-29T12:19:00.000Z");
+const TEST_TASK_EXPECTED_REVISION = 8;
+
+async function withDemandRoot<Result>(
   workspacePath: string,
   demandId: string,
-): Promise<number> {
+  use: (root: RootedDirectory) => Promise<Result>,
+): Promise<Result> {
   const root = await RootedDirectory.open(
     path.join(workspacePath, ...demandFinalRootRef(demandId).split("/")),
   );
   try {
-    return (await new DemandEventSourcingRepository(root).audit()).aggregate
-      .streamRevision;
+    return await use(root);
   } finally {
     await root.close();
   }
 }
 
-function projectionPath(
-  workspacePath: string,
-  demandId: string,
-  taskPackageId: string,
-): string {
-  return path.join(
+async function streamRevision(workspacePath: string, demandId: string): Promise<number> {
+  return withDemandRoot(
     workspacePath,
-    ...demandFinalRootRef(demandId).split("/"),
-    ...taskPackageProjectionRef(taskPackageId).split("/"),
+    demandId,
+    async (root) => (await new DemandEventSourcingRepository(root).audit()).aggregate.streamRevision,
   );
 }
 
@@ -78,201 +67,97 @@ function rewriteConfig(workspacePath: string): void {
   );
 }
 
-test("Test Task在wall clock回拨时仍从TestCard派生Package并提交规划Event", async () => {
+test("test 任务包从测试卡派生、投影落盘、路由前进，同键重放不看后来的配置", async () => {
   const fixture = await createTestTaskPlanningWorkspaceFixture();
   try {
-    const service = new TargetTaskPlanningService(fixture.workspaceRoot);
-    const beforeRevision = await streamRevision(
-      fixture.workspacePath,
-      fixture.intent.demandId,
-    );
-    const preview = await service.preview(fixture.testTaskRequest, {
+    const demandId = fixture.intent.demandId;
+    equal(await streamRevision(fixture.workspacePath, demandId), TEST_TASK_EXPECTED_REVISION);
+    const planned = await planFixtureTestTask(fixture, TEST_TASK_EXPECTED_REVISION, {
       clock: () => ROLLED_BACK_TEST_TASK_CREATED_AT,
-      uuidFactory: testTaskPlanningUuidFactory(),
     });
-    equal(
-      await streamRevision(fixture.workspacePath, fixture.intent.demandId),
-      beforeRevision,
+    equal(planned.status, "committed");
+    equal(planned.targetTask.workType, "test");
+    if (planned.targetTask.workType !== "test") throw new Error("Expected a test target.");
+    equal(planned.targetTask.targetTaskId, fixture.testCard.targetTaskId);
+    equal(planned.targetTask.windowId, fixture.testCard.testWindowId);
+    deepEqual(
+      { ...planned.targetTask.testCard },
+      { testCardId: fixture.testCard.testCardId, testCardDigest: fixture.testCard.testCardDigest },
     );
-    const taskPackage = preview.plan.taskPackage;
-    equal(taskPackage.workType, "test");
-    if (taskPackage.workType !== "test") {
-      throw new Error("Expected Test TaskPackage.");
-    }
+    equal(planned.taskPackageProjection.disposition, "created");
+    equal(planned.next.frontier, "test-delivery-planning");
+    const projectionPath = path.join(
+      fixture.workspacePath,
+      ...demandFinalRootRef(demandId).split("/"),
+      ...taskPackageProjectionRef(planned.targetTask.taskPackageId).split("/"),
+    );
+    equal(existsSync(projectionPath), true);
+    const taskPackage = await withDemandRoot(fixture.workspacePath, demandId, async (root) =>
+      (
+        await new TaskPackageProjectionStore(root).load(planned.targetTask.taskPackageId, {
+          expectedTaskPackageDigest: parseSha256Digest(planned.taskPackageProjection.taskPackageDigest),
+        })
+      ).taskPackage,
+    );
+    if (taskPackage.workType !== "test") throw new Error("Expected a test TaskPackage.");
     equal(taskPackage.createdAt, ROLLED_BACK_TEST_TASK_CREATED_AT);
-    equal(taskPackage.targetTaskId, fixture.testCard.targetTaskId);
-    deepEqual(taskPackage.assignment, {
-      windowId: fixture.testCard.testWindowId,
-    });
-    deepEqual(taskPackage.testCard, {
-      testCardId: fixture.testCard.testCardId,
-      testCardDigest: fixture.testCard.testCardDigest,
-    });
     equal(taskPackage.objective, fixture.testCard.question);
     deepEqual(taskPackage.acceptanceAnchors, []);
-    equal(Object.hasOwn(taskPackage, "commitExpectation"), false);
-    equal(Object.hasOwn(taskPackage.assignment, "repositoryId"), false);
     deepEqual(
       taskPackage.selectedAuthorityRefs.map((reference) => reference.memberRef),
       [
-        ...fixture.testCard.testBasisAuthorities.map(
-          (reference) => reference.memberRef,
-        ),
+        ...fixture.testCard.testBasisAuthorities.map((reference) => reference.memberRef),
         fixture.testCard.environmentAuthority.memberRef,
       ].sort(),
     );
-    equal(
-      renderTaskPackage(parseTaskPackage(taskPackage)),
-      renderTaskPackage(taskPackage),
-    );
-    const targetPath = projectionPath(
-      fixture.workspacePath,
-      fixture.intent.demandId,
-      taskPackage.taskPackageId,
-    );
-    equal(existsSync(targetPath), false);
-
-    const applied = await service.apply(preview.plan, preview.planDigest);
-    equal(applied.disposition, "committed");
-    equal(applied.commandResult.aggregate.streamRevision, beforeRevision + 1);
-    equal(applied.projection.disposition, "created");
-    equal(existsSync(targetPath), true);
-    const target = applied.commandResult.aggregate.state.targetTasks.find(
-      (entry) => entry.targetTaskId === taskPackage.targetTaskId,
-    );
-    equal(target?.workType, "test");
-    equal(target?.phase, "planned");
-    const route = await readDemandPostAcceptanceRoute(
-      fixture.workspaceRoot,
-      fixture.intent.demandId,
-    );
+    const route = await readDemandPostAcceptanceRoute(fixture.workspaceRoot, demandId);
     equal(route.nextStage.status, "test-delivery-planning");
-    if (route.nextStage.status !== "test-delivery-planning") {
-      throw new Error("Expected Test Delivery planning route.");
-    }
+    if (route.nextStage.status !== "test-delivery-planning") throw new Error("Expected test delivery planning.");
     equal(route.nextStage.testTask.taskPackageId, taskPackage.taskPackageId);
 
     rewriteConfig(fixture.workspacePath);
-    const replayed = await service.apply(preview.plan, preview.planDigest);
-    equal(replayed.disposition, "idempotent");
-    equal(replayed.projection.disposition, "current");
+    const replayed = await planFixtureTestTask(fixture, TEST_TASK_EXPECTED_REVISION, {
+      clock: () => ROLLED_BACK_TEST_TASK_CREATED_AT,
+    });
+    equal(replayed.status, "idempotent");
+    equal(replayed.taskPackageProjection.disposition, "current");
+    equal(await streamRevision(fixture.workspacePath, demandId), TEST_TASK_EXPECTED_REVISION + 1);
   } finally {
     await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }
 });
 
-test("并发相同Test Task plan收敛为一个target-task-planned Event", async () => {
+test("并发相同 test 规划收敛为一个事件，随后同键重放为 idempotent", async () => {
   const fixture = await createTestTaskPlanningWorkspaceFixture();
   try {
-    const service = new TargetTaskPlanningService(fixture.workspaceRoot);
-    const preview = await service.preview(fixture.testTaskRequest, {
-      clock: () => TEST_TASK_PACKAGE_CREATED_AT,
-      uuidFactory: testTaskPlanningUuidFactory(),
-    });
     const settled = await Promise.allSettled([
-      service.apply(preview.plan, preview.planDigest),
-      service.apply(preview.plan, preview.planDigest),
+      planFixtureTestTask(fixture, TEST_TASK_EXPECTED_REVISION),
+      planFixtureTestTask(fixture, TEST_TASK_EXPECTED_REVISION),
     ]);
     equal(
-      settled.some(
-        (entry) =>
-          entry.status === "fulfilled" &&
-          entry.value.disposition === "committed",
-      ),
+      settled.some((entry) => entry.status === "fulfilled" && entry.value.status === "committed"),
       true,
     );
-    equal(
-      (await service.apply(preview.plan, preview.planDigest)).disposition,
-      "idempotent",
-    );
-    equal(
-      await streamRevision(fixture.workspacePath, fixture.intent.demandId),
-      9,
-    );
+    equal((await planFixtureTestTask(fixture, TEST_TASK_EXPECTED_REVISION)).status, "idempotent");
+    equal(await streamRevision(fixture.workspacePath, fixture.intent.demandId), TEST_TASK_EXPECTED_REVISION + 1);
   } finally {
     await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }
 });
 
-test("Test Task Planning拒绝缺失TestCard和伪造派生内容", async () => {
+test("没有测试卡时 test 规划被拒绝，且不追加事件", async () => {
   const withoutCard = await createTestCardPlanningWorkspaceFixture();
   try {
+    const before = await streamRevision(withoutCard.workspacePath, withoutCard.intent.demandId);
     await rejects(
-      new TargetTaskPlanningService(withoutCard.workspaceRoot).preview({
-        demandId: withoutCard.intent.demandId,
-        taskPackage: { workType: "test" },
-      }),
+      planFixtureTestTask(withoutCard, before),
       (error: unknown) =>
-        error instanceof TargetTaskPlanningServiceError &&
-        error.reason === "test-route",
+        isWakeflowError(error) &&
+        error.code === "precondition-failed" &&
+        error.reason === "test-authority",
     );
+    equal(await streamRevision(withoutCard.workspacePath, withoutCard.intent.demandId), before);
   } finally {
     await cleanupTestCardPlanningWorkspaceFixture(withoutCard);
-  }
-
-  const fixture = await createTestTaskPlanningWorkspaceFixture();
-  try {
-    const service = new TargetTaskPlanningService(fixture.workspaceRoot);
-    const preview = await service.preview(fixture.testTaskRequest, {
-      clock: () => TEST_TASK_PACKAGE_CREATED_AT,
-      uuidFactory: testTaskPlanningUuidFactory(),
-    });
-    const tamperedPackage = parseTaskPackage({
-      ...preview.plan.taskPackage,
-      objective: "伪造一个未经TestCard批准的新目标",
-    });
-    const tamperedPlan = createTargetTaskPlanningPlan({
-      demandId: preview.plan.demandId,
-      expectedStreamRevision: preview.plan.expectedStreamRevision,
-      commitId: preview.plan.commitId,
-      eventId: preview.plan.eventId,
-      taskPackage: tamperedPackage,
-    });
-    await rejects(
-      service.apply(
-        tamperedPlan,
-        computeTargetTaskPlanningPlanDigest(tamperedPlan),
-      ),
-      (error: unknown) =>
-        error instanceof TargetTaskPlanningServiceError &&
-        error.reason === "task-package" &&
-        error.eventAuthority === "unchanged",
-    );
-    const reported = fixture.reviewSnapshot.targets[0];
-    if (reported?.status !== "reported") {
-      throw new Error("Expected prior reported TargetResult fixture.");
-    }
-    const demandRoot = await RootedDirectory.open(
-      path.join(
-        fixture.workspacePath,
-        ...demandFinalRootRef(fixture.intent.demandId).split("/"),
-      ),
-    );
-    let priorClaim;
-    try {
-      const located = await new DemandEventSourcingRepository(
-        demandRoot,
-      ).findTargetHostEffectClaimedEvent(
-        reported.targetResult.hostEffect.actionId,
-      );
-      if (located === null) throw new Error("Expected prior Claim Event.");
-      priorClaim = located.event.data.claim;
-    } finally {
-      await demandRoot.close();
-    }
-    await createWindowWorkClaimInStore(fixture.workspaceRoot, priorClaim);
-    await rejects(
-      service.apply(preview.plan, preview.planDigest),
-      (error: unknown) =>
-        error instanceof TargetTaskPlanningServiceError &&
-        error.reason === "claim" &&
-        error.eventAuthority === "unchanged",
-    );
-    equal(
-      await streamRevision(fixture.workspacePath, fixture.intent.demandId),
-      8,
-    );
-  } finally {
-    await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }
 });

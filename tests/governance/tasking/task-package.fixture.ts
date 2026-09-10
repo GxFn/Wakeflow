@@ -104,7 +104,15 @@ export function taskPackageDraft() {
       claim: "TaskPackage 具有唯一确定性表示",
       probe: "渲染后严格回读并重新计算摘要",
       expected: "领域值和摘要均保持不变",
+      requirementRef: {
+        recordDigest: RECORD_DIGEST,
+        sectionAnchor: "acceptance-criteria",
+        itemId: "ac-1",
+      },
     }],
+    lineage: null,
+    planReview: { reviewer: "controller" as const },
+    sectionAnchors: [],
   };
 }
 

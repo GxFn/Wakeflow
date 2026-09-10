@@ -27,7 +27,6 @@ import {
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { ControllerImplementationReviewDecisionService } from "../../../src/governance/review/controller-implementation-review-decision-service.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
-import { TargetTaskPlanningService } from "../../../src/governance/tasking/target-task-planning-service.js";
 import { TestCardPlanningService } from "../../../src/governance/testing/test-card-planning-service.js";
 import {
   CLAIMED_AT,
@@ -43,8 +42,7 @@ import { controllerImplementationReviewDecisionInput } from "../review/controlle
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
-  planningUuidFactory,
-  PLANNING_RECORDED_AT,
+  planFixtureTargetTask,
 } from "../tasking/target-task-planning-service.fixture.js";
 import {
   cleanupTestCardPlanningWorkspaceFixture,
@@ -87,12 +85,7 @@ test("Controller Route从空Demand进入Task Planning并跟随planned Target", a
     const { routeDigest, ...basis } = initial;
     equal(routeDigest, computeCanonicalJsonSha256Digest(basis));
 
-    const planning = new TargetTaskPlanningService(fixture.workspaceRoot);
-    const preview = await planning.preview(fixture.request, {
-      clock: () => PLANNING_RECORDED_AT,
-      uuidFactory: planningUuidFactory(),
-    });
-    await planning.apply(preview.plan, preview.planDigest);
+    const plannedTask = await planFixtureTargetTask(fixture);
     const planned = await readControllerRoute(
       fixture.workspaceRoot,
       fixture.request.demandId,
@@ -104,10 +97,7 @@ test("Controller Route从空Demand进入Task Planning并跟随planned Target", a
     }
     equal(plannedFrontier.target.workType, "implementation");
     equal(plannedFrontier.target.phase, "planned");
-    equal(
-      plannedFrontier.target.targetTaskId,
-      preview.plan.taskPackage.targetTaskId,
-    );
+    equal(plannedFrontier.target.targetTaskId, plannedTask.targetTask.targetTaskId);
 
     const demandRoot = await RootedDirectory.open(
       path.join(

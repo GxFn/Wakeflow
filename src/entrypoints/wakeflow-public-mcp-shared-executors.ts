@@ -2,7 +2,7 @@ import {
   executeBoardInspectionRequest,
   executeRequirementPublicationRequest,
 } from "../capabilities/requirement/service.js";
-import { executeTargetTaskPlanningPublicRequest } from "../capabilities/tasking/plan-target-task.js";
+import { executeTargetTaskPlanningPublicRequest } from "../capabilities/tasking/service.js";
 import {
   executeDemandCancellationRequest,
   executeDemandCompletionRequest,

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:callback-reissued-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_CALLBACK_REISSUED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowCallbackReissuedEventDataV1",
+  "description": "result.callback-reissued persisted event v1 的严格 payload：同一结果的 wake-controller 回调按当前 Controller 绑定重发一代。",
+  "$comment": "回调不取工作声明；代际上限 4（三次重发）；prompt 内容不变，绑定按当前 Controller 窗口重算。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reissue"],
+  "properties": {
+    "reissue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetResultId",
+        "callbackId",
+        "previousGeneration",
+        "generation",
+        "controllerWindowId",
+        "bindingId",
+        "bindingDigest",
+        "promptDigest",
+        "issuedAt"
+      ],
+      "properties": {
+        "targetResultId": {
+          "type": "string",
+          "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "callbackId": {
+          "type": "string",
+          "pattern": "^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "previousGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 4
+        },
+        "controllerWindowId": {
+          "type": "string",
+          "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "bindingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "bindingDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "promptDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "issuedAt": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        }
+      }
+    }
+  }
+}

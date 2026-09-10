@@ -105,12 +105,9 @@ type ImplementationFrontierDescriptor =
       readonly owner: "controller-implementation-review";
     }>
   | Readonly<{
-      readonly kind: "implementation-review-resume";
-      readonly owner: "controller-target-review-resume";
-    }>
-  | Readonly<{
-      readonly kind: "implementation-redesign-required";
-      readonly owner: "design";
+      /** blocked 之后等待外部条件解除；解除后 Controller 带 resumption 再决定（§13.87 D4）。 */
+      readonly kind: "implementation-review-blocked";
+      readonly owner: "controller-implementation-review";
     }>;
 
 type TestFrontierDescriptor =
@@ -139,14 +136,9 @@ type TestFrontierDescriptor =
       readonly owner: "test-delivery-preparation";
     }>
   | Readonly<{
-      readonly kind: "product-defect-remediation-authorization";
-      readonly owner: "controller-product-defect-remediation";
-    }>
-  | Readonly<{
-      readonly kind: "test-review-resume";
-      readonly owner: "controller-target-review-resume";
-    }>
-;
+      readonly kind: "test-review-blocked";
+      readonly owner: "controller-test-review";
+    }>;
 
 type ScopedDemandFrontierDescriptor = Readonly<
   { readonly scope: "demand" } & DemandFrontierDescriptor
@@ -175,8 +167,9 @@ export type DemandControllerRouteFrontier =
 
 export type DemandControllerRouteBlocker =
   | Readonly<{
-      readonly kind: "implementation-redesign-not-implemented";
-      readonly owner: "design";
+      /** 评审 blocked：外部条件未解除；同一结果上的下一份决定必须带 resumption。 */
+      readonly kind: "external-condition";
+      readonly owner: "controller-implementation-review" | "controller-test-review";
       readonly targetTaskId: WakeflowDurableId<"target-task">;
       readonly targetReviewDecisionId: WakeflowDurableId<"target-review-decision">;
       readonly decisionDigest: Sha256Digest;
@@ -296,6 +289,8 @@ export function resolveDemandControllerImplementationFrontierDescriptor(
         owner: "target-host-effect-rearm" as const,
       });
     case "result-reported":
+    case "escalated":
+      // escalated 期间由 Demand 的 awaiting-decision 前沿覆盖；回答后回到评审。
       return Object.freeze({
         scope: "target" as const,
         kind: "implementation-result-review" as const,
@@ -304,14 +299,8 @@ export function resolveDemandControllerImplementationFrontierDescriptor(
     case "review-blocked":
       return Object.freeze({
         scope: "target" as const,
-        kind: "implementation-review-resume" as const,
-        owner: "controller-target-review-resume" as const,
-      });
-    case "redesign-requested":
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "implementation-redesign-required" as const,
-        owner: "design" as const,
+        kind: "implementation-review-blocked" as const,
+        owner: "controller-implementation-review" as const,
       });
   }
 }
@@ -352,6 +341,7 @@ export function resolveDemandControllerPostAcceptanceFrontierDescriptor(
         owner: "target-result-import" as const,
       });
     case "test-result-review-planning":
+    case "test-review-escalated":
       return Object.freeze({
         scope: "target" as const,
         kind: "test-result-review" as const,
@@ -363,17 +353,11 @@ export function resolveDemandControllerPostAcceptanceFrontierDescriptor(
         kind: "test-delivery-rerun-planning" as const,
         owner: "test-delivery-preparation" as const,
       });
-    case "test-product-defect-escalated":
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "product-defect-remediation-authorization" as const,
-        owner: "controller-product-defect-remediation" as const,
-      });
     case "test-review-blocked":
       return Object.freeze({
         scope: "target" as const,
-        kind: "test-review-resume" as const,
-        owner: "controller-target-review-resume" as const,
+        kind: "test-review-blocked" as const,
+        owner: "controller-test-review" as const,
       });
     case "test-delivery-rearm-planning":
       return Object.freeze({
@@ -430,10 +414,10 @@ function implementationFrontier(
     return Object.freeze({ frontier: null, blocker: null });
   }
   const blocker =
-    target.phase === "redesign-requested"
+    target.phase === "review-blocked"
       ? Object.freeze({
-          kind: "implementation-redesign-not-implemented" as const,
-          owner: "design" as const,
+          kind: "external-condition" as const,
+          owner: "controller-implementation-review" as const,
           targetTaskId: target.targetTaskId,
           targetReviewDecisionId:
             target.currentDelivery.reviewDecision.targetReviewDecisionId,
@@ -464,8 +448,8 @@ function targetTaskIdFromPostAcceptanceStage(
     case "test-result-review-planning":
       return stage.testResult.targetTaskId;
     case "test-another-attempt-planning":
-    case "test-product-defect-escalated":
     case "test-review-blocked":
+    case "test-review-escalated":
       return stage.testReview.targetTaskId;
     case "test-delivery-rearm-planning":
       return stage.rejectedDelivery.targetTaskId;
@@ -496,6 +480,21 @@ function postAcceptanceFrontier(
   return Object.freeze({
     ...descriptor,
     target: testTargetReference(target),
+  });
+}
+
+/** test-review-blocked 前沿携带外部条件阻塞项；其余 post-acceptance 前沿没有阻塞项。 */
+function postAcceptanceBlocker(
+  route: Readonly<DemandPostAcceptanceRoute>,
+): Readonly<DemandControllerRouteBlocker> | null {
+  const stage = route.nextStage;
+  if (stage.status !== "test-review-blocked") return null;
+  return Object.freeze({
+    kind: "external-condition" as const,
+    owner: "controller-test-review" as const,
+    targetTaskId: stage.testReview.targetTaskId,
+    targetReviewDecisionId: stage.testReview.targetReviewDecisionId,
+    decisionDigest: stage.testReview.decisionDigest,
   });
 }
 
@@ -682,12 +681,13 @@ function routeBasis(
       ]),
     };
   }
+  const blocker = postAcceptanceBlocker(postAcceptanceRoute);
   return {
     ...common,
     postAcceptanceRouteDigest: postAcceptanceRoute.routeDigest,
-    disposition: "work-available",
+    disposition: blocker === null ? "work-available" : "blocked",
     frontiers: Object.freeze([postAcceptanceFrontierValue]),
-    blockers: Object.freeze([]),
+    blockers: Object.freeze(blocker === null ? [] : [blocker]),
   };
 }
 

@@ -1,8 +1,8 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
-  controllerImplementationReviewDecisionCommitId,
   controllerImplementationReviewDecisionEventId,
   createControllerImplementationReviewDecision,
   parseControllerImplementationReviewDecision,
@@ -14,6 +14,7 @@ import {
   CONTROLLER_REVIEW_DECIDED_AT,
   CONTROLLER_REVIEW_DECISION_UUID,
   controllerImplementationReviewDecisionInput,
+  controllerReviewEscalationFixture,
   createControllerImplementationReviewDecisionFixture,
 } from "./controller-implementation-review-decision.fixture.js";
 
@@ -24,11 +25,15 @@ function createDecision(input = controllerImplementationReviewDecisionInput()) {
   });
 }
 
-test("Controller Implementation Review Decision保存独立审查事实并派生稳定Event身份", () => {
+test("Controller Implementation Review Decision保存独立审查事实、完成证据并派生稳定Event身份", () => {
   const decision = createControllerImplementationReviewDecisionFixture();
   equal(decision.decision, "accept");
   equal(decision.assessment.requirementAlignment, "aligned");
   equal(decision.independentChecks[0].outcome, "passed");
+  equal(decision.escalation, null);
+  equal(decision.resumption, null);
+  equal(decision.callbackLanding, null);
+  equal(decision.targetCompletion?.event, "stop");
   equal(Object.isFrozen(decision), true);
   equal(Object.isFrozen(decision.reviewed), true);
   equal(Object.isFrozen(decision.independentChecks), true);
@@ -37,61 +42,58 @@ test("Controller Implementation Review Decision保存独立审查事实并派生
     controllerImplementationReviewDecisionEventId(decision),
     `demand-event_${CONTROLLER_REVIEW_DECISION_UUID}`,
   );
-  equal(
-    controllerImplementationReviewDecisionCommitId(decision),
-    `demand-event-commit_${CONTROLLER_REVIEW_DECISION_UUID}`,
-  );
   const rendered = renderControllerImplementationReviewDecision(decision);
   equal(
-    parseControllerImplementationReviewDecisionDocument(rendered)
-      .decisionDigest,
+    parseControllerImplementationReviewDecisionDocument(rendered).decisionDigest,
     decision.decisionDigest,
   );
 });
 
-test("四类Controller决定使用不同的assessment、check与blocking关系", () => {
-  for (const decisionType of [
-    "accept",
-    "rework",
-    "redesign",
-    "blocked",
-  ] as const) {
-    equal(
-      createDecision(controllerImplementationReviewDecisionInput(decisionType))
-        .decision,
-      decisionType,
-    );
+test("四类Controller决定：accept 要求完成证据，escalate 当且仅当携带升级，blocked 要求阻塞原因", () => {
+  for (const decisionType of ["accept", "rework", "blocked", "escalate"] as const) {
+    const decision = createDecision(controllerImplementationReviewDecisionInput(decisionType));
+    equal(decision.decision, decisionType);
+    equal(decision.escalation !== null, decisionType === "escalate");
   }
-
   throws(
     () =>
       createDecision({
         ...controllerImplementationReviewDecisionInput("accept"),
-        assessment: {
-          requirementAlignment: "aligned",
-          implementationQuality: "defective",
-        },
+        targetCompletion: null,
       }),
     (error: unknown) =>
       error instanceof ControllerImplementationReviewDecisionError &&
-      error.reason === "schema",
+      (error.reason === "schema" || error.reason === "relation"),
+  );
+  throws(
+    () =>
+      createDecision({
+        ...controllerImplementationReviewDecisionInput("accept"),
+        assessment: { requirementAlignment: "aligned", implementationQuality: "defective" },
+      }),
+    (error: unknown) =>
+      error instanceof ControllerImplementationReviewDecisionError &&
+      (error.reason === "schema" || error.reason === "relation"),
   );
   throws(
     () =>
       createDecision({
         ...controllerImplementationReviewDecisionInput("rework"),
-        independentChecks: [
-          {
-            checkId: "no-failure",
-            method: "只运行成功路径",
-            outcome: "passed",
-            observation: "未复现缺陷。",
-          },
-        ],
+        escalation: controllerReviewEscalationFixture(),
       }),
     (error: unknown) =>
       error instanceof ControllerImplementationReviewDecisionError &&
-      error.reason === "schema",
+      (error.reason === "schema" || error.reason === "relation"),
+  );
+  throws(
+    () =>
+      createDecision({
+        ...controllerImplementationReviewDecisionInput("escalate"),
+        escalation: null,
+      }),
+    (error: unknown) =>
+      error instanceof ControllerImplementationReviewDecisionError &&
+      (error.reason === "schema" || error.reason === "relation"),
   );
   throws(
     () =>
@@ -101,21 +103,31 @@ test("四类Controller决定使用不同的assessment、check与blocking关系",
       }),
     (error: unknown) =>
       error instanceof ControllerImplementationReviewDecisionError &&
-      error.reason === "schema",
+      (error.reason === "schema" || error.reason === "relation"),
   );
-  throws(
-    () =>
-      createDecision({
-        ...controllerImplementationReviewDecisionInput("accept"),
-        reviewed: {
-          ...controllerImplementationReviewDecisionInput("accept").reviewed,
-          targetResultOutcome: "blocked",
-        },
-      }),
-    (error: unknown) =>
-      error instanceof ControllerImplementationReviewDecisionError &&
-      error.reason === "schema",
-  );
+});
+
+test("resumption 记录 blocked 或 escalated 之后再决定的依据，并进入摘要", () => {
+  const resumed = createDecision({
+    ...controllerImplementationReviewDecisionInput("rework"),
+    resumption: {
+      previousDecisionId: parseWakeflowDurableIdOfKind(
+        "target-review-decision_dededede-dede-4ded-8ded-dededededede",
+        "target-review-decision",
+      ),
+      basis: {
+        kind: "decision-recorded",
+        escalationEventId: parseWakeflowDurableIdOfKind(
+          "demand-event_efefefef-efef-4efe-8efe-efefefefefef",
+          "demand-event",
+        ),
+      },
+      summary: "用户已回答升级：按原表述返工。",
+    },
+  });
+  equal(resumed.resumption?.basis.kind, "decision-recorded");
+  const plain = createDecision(controllerImplementationReviewDecisionInput("rework"));
+  equal(resumed.decisionDigest === plain.decisionDigest, false);
 });
 
 test("Controller Implementation Review Decision拒绝重复check、非法时间、非NFC文本和摘要漂移", () => {
@@ -124,10 +136,7 @@ test("Controller Implementation Review Decision拒绝重复check、非法时间�
     () =>
       createDecision({
         ...base,
-        independentChecks: [
-          base.independentChecks[0],
-          base.independentChecks[0],
-        ],
+        independentChecks: [base.independentChecks[0], base.independentChecks[0]],
       }),
     (error: unknown) =>
       error instanceof ControllerImplementationReviewDecisionError &&
@@ -147,14 +156,12 @@ test("Controller Implementation Review Decision拒绝重复check、非法时间�
         uuidFactory: () => CONTROLLER_REVIEW_DECISION_UUID,
       }),
     (error: unknown) =>
-      error instanceof ControllerImplementationReviewDecisionError &&
-      error.reason === "time",
+      error instanceof ControllerImplementationReviewDecisionError && error.reason === "time",
   );
   throws(
-    () => createDecision({ ...base, rationale: "Cafe\u0301" }),
+    () => createDecision({ ...base, rationale: "Café" }),
     (error: unknown) =>
-      error instanceof ControllerImplementationReviewDecisionError &&
-      error.reason === "text",
+      error instanceof ControllerImplementationReviewDecisionError && error.reason === "text",
   );
   const decision = createDecision(base);
   throws(
@@ -164,7 +171,6 @@ test("Controller Implementation Review Decision拒绝重复check、非法时间�
         decisionDigest: `sha256:${"0".repeat(64)}`,
       }),
     (error: unknown) =>
-      error instanceof ControllerImplementationReviewDecisionError &&
-      error.reason === "digest",
+      error instanceof ControllerImplementationReviewDecisionError && error.reason === "digest",
   );
 });

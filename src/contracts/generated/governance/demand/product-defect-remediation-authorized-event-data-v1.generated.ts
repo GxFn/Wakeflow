@@ -31,11 +31,6 @@ controllerWindowId: string
 source: Source
 /**
  * @minItems 1
- * @maxItems 32
- */
-failedChecks: [FailedCheck, ...(FailedCheck)[]]
-/**
- * @minItems 1
  * @maxItems 10000
  */
 affectedTargets: [AffectedTarget, ...(AffectedTarget)[]]
@@ -43,9 +38,13 @@ boundary: "existing-task-packages-only"
 authorizationRationale: string
 authorizedAt: WakeflowUtcInstantText
 authorizationDigest: WakeflowSha256DigestText
+/**
+ * @minItems 1
+ * @maxItems 20
+ */
+failedSteps: [FailedStep]|[FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]|[FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep, FailedStep]
 }
 export interface Source {
-postAcceptanceRouteDigest: WakeflowSha256DigestText
 reviewSnapshotDigest: WakeflowSha256DigestText
 stateDigest: WakeflowSha256DigestText
 streamRevision: number
@@ -65,20 +64,14 @@ taskPackageId: string
 taskPackageDigest: WakeflowSha256DigestText
 }
 }
-export interface FailedCheck {
-checkId: string
-outcome: "failed"
-method: string
-observation: string
-}
 export interface AffectedTarget {
 baseline: ImplementationBaseline
+correctionObjective: string
 /**
  * @minItems 1
- * @maxItems 32
+ * @maxItems 20
  */
-failedCheckIds: [string, ...(string)[]]
-correctionObjective: string
+failedStepIds: [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]
 }
 export interface ImplementationBaseline {
 targetTaskId: string
@@ -90,6 +83,10 @@ targetResultId: string
 resultDigest: WakeflowSha256DigestText
 targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
+}
+export interface FailedStep {
+stepId: string
+observed: string
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

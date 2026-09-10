@@ -21,10 +21,12 @@ disposition: ("committed" | "left-uncommitted" | "no-changes")
  * @maxItems 64
  */
 commits: GitObjectId[]
+branch: (null | BranchName)
 })
 export type RepositoryId = string
 export type GitObjectId = (GitSha1ObjectId | GitSha256ObjectId)
-export type Token = string
+export type BranchName = string
+export type EvidenceKind = ("test-output" | "diff" | "document" | "transcript" | "commit")
 export type PortableResourcePath = string
 /**
  * @maxItems 64
@@ -34,6 +36,7 @@ export type EvidenceLocators = EvidenceLocator[]
  * @maxItems 64
  */
 export type HumanTextList = HumanText[]
+export type Token = string
 export type TestReportContent = ({
 [k: string]: unknown | undefined
 } & {
@@ -43,14 +46,137 @@ evidenceLocators: EvidenceLocators
 verification: HumanTextList
 risks: HumanTextList
 /**
- * @maxItems 32
+ * @maxItems 20
  */
-stepEvidence: StepEvidence[]
+steps: []|[Step]|[Step, Step]|[Step, Step, Step]|[Step, Step, Step, Step]|[Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]
+})
+export type Step = ({
+[k: string]: unknown | undefined
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
 })
 export type StepId = string
 
 /**
- * Closed MCP request for importing one target-authored implementation or test Report into an authority-enriched TargetResult.
+ * Single-call request importing one target-authored implementation or test Report into an authority-enriched TargetResult: evidence locators must resolve inside this Demand's managed evidence records and match their digests, report text passes the privacy scan, test steps carry observed/evidence/verdict and a failure classification, and the same idempotency key and body replays the first result.
  */
 export interface WakeflowTargetResultImportRequestV1 {
 root: WorkspaceRoot
@@ -58,6 +184,14 @@ demandId: DemandId
 deliveryId: TargetDeliveryId
 claimDigest: Sha256Digest
 report: (ImplementationReport | TestReport)
+/**
+ * Client-generated key binding this request to at most one commit.
+ */
+idempotencyKey: string
+/**
+ * Demand stream revision the caller observed; a stale value is rejected.
+ */
+expectedStreamRevision: number
 }
 export interface ImplementationReport {
 workType: "implementation"
@@ -84,7 +218,7 @@ algorithm: "sha256"
 value: string
 }
 export interface EvidenceLocator {
-kind: Token
+kind: EvidenceKind
 ref: PortableResourcePath
 digest: Sha256Digest
 }
@@ -104,9 +238,10 @@ export interface TestReport {
 workType: "test"
 content: TestReportContent
 }
-export interface StepEvidence {
-stepId: StepId
-evidence: EvidenceRef
+export interface Failure {
+classification: ("product-defect" | "harness-defect" | "environment" | "flaky" | "missing-evidence" | "out-of-scope" | "needs-decision")
+likelyOwner: ("implementation" | "test" | "environment" | "user")
+recommendedAction: HumanText
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -130,4 +265,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:target-result-import-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA\",\"title\":\"WakeflowTargetResultImportRequestV1\",\"description\":\"Closed MCP request for importing one target-authored implementation or test Report into an authority-enriched TargetResult.\",\"$comment\":\"The stored Claim and Observation derive work type, Task, Delivery, Host, repository/window, Test lineage, Result identity, and Event identity. report.workType only discriminates the external Agent Report grammar and is rechecked against stored authority.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"demandId\",\"deliveryId\",\"claimDigest\",\"report\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"deliveryId\":{\"$ref\":\"#/$defs/targetDeliveryId\"},\"claimDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"report\":{\"oneOf\":[{\"$ref\":\"#/$defs/implementationReport\"},{\"$ref\":\"#/$defs/testReport\"}]}},\"$defs\":{\"implementationReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"workType\",\"content\"],\"properties\":{\"workType\":{\"const\":\"implementation\"},\"content\":{\"$ref\":\"#/$defs/implementationReportContent\"}}},\"testReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"workType\",\"content\"],\"properties\":{\"workType\":{\"const\":\"test\"},\"content\":{\"$ref\":\"#/$defs/testReportContent\"}}},\"implementationReportContent\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"outcome\",\"summary\",\"repositoryChange\",\"evidenceLocators\",\"verification\",\"risks\",\"anchorEvidence\"],\"properties\":{\"outcome\":{\"$ref\":\"#/$defs/resultOutcome\"},\"summary\":{\"$ref\":\"#/$defs/humanText\"},\"repositoryChange\":{\"$ref\":\"#/$defs/repositoryChange\"},\"evidenceLocators\":{\"$ref\":\"#/$defs/evidenceLocators\"},\"verification\":{\"$ref\":\"#/$defs/humanTextList\"},\"risks\":{\"$ref\":\"#/$defs/humanTextList\"},\"anchorEvidence\":{\"type\":\"array\",\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/anchorEvidence\"}}}},\"testReportContent\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"outcome\",\"summary\",\"evidenceLocators\",\"verification\",\"risks\",\"stepEvidence\"],\"properties\":{\"outcome\":{\"$ref\":\"#/$defs/resultOutcome\"},\"summary\":{\"$ref\":\"#/$defs/humanText\"},\"evidenceLocators\":{\"$ref\":\"#/$defs/evidenceLocators\"},\"verification\":{\"$ref\":\"#/$defs/humanTextList\"},\"risks\":{\"$ref\":\"#/$defs/humanTextList\"},\"stepEvidence\":{\"type\":\"array\",\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/stepEvidence\"}}},\"allOf\":[{\"if\":{\"properties\":{\"outcome\":{\"const\":\"completed\"}},\"required\":[\"outcome\"]},\"then\":{\"properties\":{\"stepEvidence\":{\"type\":\"array\",\"minItems\":1}}}}]},\"repositoryChange\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"repositoryId\",\"disposition\",\"commits\"],\"properties\":{\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"disposition\":{\"enum\":[\"committed\",\"left-uncommitted\",\"no-changes\"]},\"commits\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/gitObjectId\"}}},\"allOf\":[{\"if\":{\"properties\":{\"disposition\":{\"const\":\"committed\"}},\"required\":[\"disposition\"]},\"then\":{\"properties\":{\"commits\":{\"type\":\"array\",\"minItems\":1}}},\"else\":{\"properties\":{\"commits\":{\"type\":\"array\",\"maxItems\":0}}}}]},\"evidenceLocators\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/evidenceLocator\"}},\"evidenceLocator\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"ref\",\"digest\"],\"properties\":{\"kind\":{\"$ref\":\"#/$defs/token\"},\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"evidenceRef\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"ref\",\"digest\"],\"properties\":{\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"anchorEvidence\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"anchorId\",\"evidenceRefs\"],\"properties\":{\"anchorId\":{\"$ref\":\"#/$defs/token\"},\"evidenceRefs\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/evidenceRef\"}}}},\"stepEvidence\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"stepId\",\"evidence\"],\"properties\":{\"stepId\":{\"$ref\":\"#/$defs/stepId\"},\"evidence\":{\"$ref\":\"#/$defs/evidenceRef\"}}},\"humanTextList\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"resultOutcome\":{\"enum\":[\"completed\",\"blocked\",\"needs-review\"]},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root.\"},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"token\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"gitObjectId\":{\"oneOf\":[{\"$ref\":\"#/$defs/gitSha1ObjectId\"},{\"$ref\":\"#/$defs/gitSha256ObjectId\"}]},\"gitSha1ObjectId\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"algorithm\",\"value\"],\"properties\":{\"algorithm\":{\"const\":\"sha1\"},\"value\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{40}$\"}}},\"gitSha256ObjectId\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"algorithm\",\"value\"],\"properties\":{\"algorithm\":{\"const\":\"sha256\"},\"value\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{64}$\"}}},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"repositoryId\":{\"type\":\"string\",\"pattern\":\"^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetDeliveryId\":{\"type\":\"string\",\"pattern\":\"^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"stepId\":{\"type\":\"string\",\"pattern\":\"^ts-[1-9][0-9]?$\"}}}");
+export const WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:target-result-import-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA\",\"title\":\"WakeflowTargetResultImportRequestV1\",\"description\":\"Single-call request importing one target-authored implementation or test Report into an authority-enriched TargetResult: evidence locators must resolve inside this Demand's managed evidence records and match their digests, report text passes the privacy scan, test steps carry observed/evidence/verdict and a failure classification, and the same idempotency key and body replays the first result.\",\"$comment\":\"The stored Claim and Observation derive work type, Task, Delivery, Host, repository/window, Test lineage, Result identity, and Event identity. report.workType only discriminates the external Agent Report grammar and is rechecked against stored authority.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"demandId\",\"idempotencyKey\",\"expectedStreamRevision\",\"deliveryId\",\"claimDigest\",\"report\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"deliveryId\":{\"$ref\":\"#/$defs/targetDeliveryId\"},\"claimDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"report\":{\"oneOf\":[{\"$ref\":\"#/$defs/implementationReport\"},{\"$ref\":\"#/$defs/testReport\"}]},\"idempotencyKey\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9._:-]+$\",\"description\":\"Client-generated key binding this request to at most one commit.\"},\"expectedStreamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991,\"description\":\"Demand stream revision the caller observed; a stale value is rejected.\"}},\"$defs\":{\"implementationReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"workType\",\"content\"],\"properties\":{\"workType\":{\"const\":\"implementation\"},\"content\":{\"$ref\":\"#/$defs/implementationReportContent\"}}},\"testReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"workType\",\"content\"],\"properties\":{\"workType\":{\"const\":\"test\"},\"content\":{\"$ref\":\"#/$defs/testReportContent\"}}},\"implementationReportContent\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"outcome\",\"summary\",\"repositoryChange\",\"evidenceLocators\",\"verification\",\"risks\",\"anchorEvidence\"],\"properties\":{\"outcome\":{\"$ref\":\"#/$defs/resultOutcome\"},\"summary\":{\"$ref\":\"#/$defs/humanText\"},\"repositoryChange\":{\"$ref\":\"#/$defs/repositoryChange\"},\"evidenceLocators\":{\"$ref\":\"#/$defs/evidenceLocators\"},\"verification\":{\"$ref\":\"#/$defs/humanTextList\"},\"risks\":{\"$ref\":\"#/$defs/humanTextList\"},\"anchorEvidence\":{\"type\":\"array\",\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/anchorEvidence\"}}}},\"testReportContent\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"outcome\",\"summary\",\"evidenceLocators\",\"verification\",\"risks\",\"steps\"],\"properties\":{\"outcome\":{\"$ref\":\"#/$defs/resultOutcome\"},\"summary\":{\"$ref\":\"#/$defs/humanText\"},\"evidenceLocators\":{\"$ref\":\"#/$defs/evidenceLocators\"},\"verification\":{\"$ref\":\"#/$defs/humanTextList\"},\"risks\":{\"$ref\":\"#/$defs/humanTextList\"},\"steps\":{\"type\":\"array\",\"maxItems\":20,\"items\":{\"$ref\":\"#/$defs/step\"}}},\"allOf\":[{\"if\":{\"properties\":{\"outcome\":{\"const\":\"completed\"}},\"required\":[\"outcome\"]},\"then\":{\"properties\":{\"steps\":{\"type\":\"array\",\"minItems\":1}}}}]},\"repositoryChange\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"repositoryId\",\"disposition\",\"branch\",\"commits\"],\"properties\":{\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"disposition\":{\"enum\":[\"committed\",\"left-uncommitted\",\"no-changes\"]},\"commits\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/gitObjectId\"}},\"branch\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/branchName\"}]}},\"allOf\":[{\"if\":{\"properties\":{\"disposition\":{\"const\":\"committed\"}},\"required\":[\"disposition\"]},\"then\":{\"properties\":{\"commits\":{\"type\":\"array\",\"minItems\":1}}},\"else\":{\"properties\":{\"commits\":{\"type\":\"array\",\"maxItems\":0}}}}]},\"evidenceLocators\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/evidenceLocator\"}},\"evidenceLocator\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"ref\",\"digest\"],\"properties\":{\"kind\":{\"$ref\":\"#/$defs/evidenceKind\"},\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"evidenceRef\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"ref\",\"digest\"],\"properties\":{\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"anchorEvidence\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"anchorId\",\"evidenceRefs\"],\"properties\":{\"anchorId\":{\"$ref\":\"#/$defs/token\"},\"evidenceRefs\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/evidenceRef\"}}}},\"humanTextList\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"resultOutcome\":{\"enum\":[\"completed\",\"blocked\",\"needs-review\"]},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root.\"},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"token\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"gitObjectId\":{\"oneOf\":[{\"$ref\":\"#/$defs/gitSha1ObjectId\"},{\"$ref\":\"#/$defs/gitSha256ObjectId\"}]},\"gitSha1ObjectId\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"algorithm\",\"value\"],\"properties\":{\"algorithm\":{\"const\":\"sha1\"},\"value\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{40}$\"}}},\"gitSha256ObjectId\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"algorithm\",\"value\"],\"properties\":{\"algorithm\":{\"const\":\"sha256\"},\"value\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{64}$\"}}},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"repositoryId\":{\"type\":\"string\",\"pattern\":\"^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetDeliveryId\":{\"type\":\"string\",\"pattern\":\"^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"stepId\":{\"type\":\"string\",\"pattern\":\"^ts-[1-9][0-9]?$\"},\"evidenceKind\":{\"enum\":[\"test-output\",\"diff\",\"document\",\"transcript\",\"commit\"]},\"branchName\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":255,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$\"},\"failure\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"classification\",\"likelyOwner\",\"recommendedAction\"],\"properties\":{\"classification\":{\"enum\":[\"product-defect\",\"harness-defect\",\"environment\",\"flaky\",\"missing-evidence\",\"out-of-scope\",\"needs-decision\"]},\"likelyOwner\":{\"enum\":[\"implementation\",\"test\",\"environment\",\"user\"]},\"recommendedAction\":{\"$ref\":\"#/$defs/humanText\"}}},\"step\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"stepId\",\"observed\",\"evidence\",\"verdict\"],\"properties\":{\"stepId\":{\"$ref\":\"#/$defs/stepId\"},\"observed\":{\"$ref\":\"#/$defs/humanText\"},\"evidence\":{\"$ref\":\"#/$defs/evidenceRef\"},\"verdict\":{\"enum\":[\"pass\",\"fail\",\"blocked\",\"cannot-conclude\"]},\"failure\":{\"$ref\":\"#/$defs/failure\"}},\"allOf\":[{\"if\":{\"properties\":{\"verdict\":{\"const\":\"pass\"}},\"required\":[\"verdict\"]},\"then\":{\"properties\":{\"failure\":false}},\"else\":{\"required\":[\"failure\"],\"properties\":{\"failure\":{\"$ref\":\"#/$defs/failure\"}}}}]}}}");

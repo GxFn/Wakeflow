@@ -7,7 +7,12 @@ import {
   executeRecordDeliveryOutcomeRequest,
 } from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
-import { executeTargetResultImportPublicRequest } from "../governance/result/target-result-import-public-coordinator.js";
+import {
+  executeImplementationReviewDecisionRequest,
+  executeTargetResultImportRequest,
+  executeTargetResultReviewInspectionRequest,
+  executeTestReviewDecisionRequest,
+} from "../capabilities/result-review/service.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
@@ -24,8 +29,6 @@ import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-e
  */
 
 const CODEX_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-codex" as const;
-
-const CODEX_HOST_IDENTITY = Object.freeze({ hostId: "codex" as const });
 
 const CODEX_HOST_FACADE = Object.freeze({
   hostId: "codex" as const,
@@ -47,7 +50,13 @@ export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
       executeRecordDeliveryOutcomeRequest(CODEX_HOST_FACADE, value),
     rearmDelivery: (value: unknown) => executeRearmDeliveryRequest(CODEX_HOST_FACADE, value),
     importTargetResult: (value: unknown) =>
-      executeTargetResultImportPublicRequest(CODEX_HOST_IDENTITY, value),
+      executeTargetResultImportRequest(CODEX_HOST_FACADE, value),
+    inspectTargetResultReview: (value: unknown) =>
+      executeTargetResultReviewInspectionRequest(CODEX_HOST_FACADE, value),
+    recordImplementationReviewDecision: (value: unknown) =>
+      executeImplementationReviewDecisionRequest(CODEX_HOST_FACADE, value),
+    recordTestReviewDecision: (value: unknown) =>
+      executeTestReviewDecisionRequest(CODEX_HOST_FACADE, value),
   });
 }
 

@@ -31,8 +31,9 @@ import type {
   DeliveryRearmedUncommittedEvent,
   TargetResultRecordedUncommittedEvent,
   ControllerTargetReviewDecidedUncommittedEvent,
-  ControllerTargetReviewResumedUncommittedEvent,
   ProductDefectRemediationAuthorizedUncommittedEvent,
+  DemandEscalatedUncommittedEvent,
+  DecisionRecordedUncommittedEvent,
 } from "./demand-event-sourcing-event.js";
 import type {
   DemandEventCommitSequence,
@@ -104,12 +105,16 @@ export interface AuditedTargetTaskPackageSource {
   >;
 }
 
-/** 一份TargetResult的不可变记录事件来源。 */
+/** 一份TargetResult的不可变记录事件来源：结果、导入时签发的回调记录与证据解析收据。 */
 export interface AuditedTargetResultSource {
   readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
   readonly result: Readonly<
     TargetResultRecordedUncommittedEvent["data"]["result"]
   >;
+  readonly callback: Readonly<
+    TargetResultRecordedUncommittedEvent["data"]["callback"]
+  >;
+  readonly evidenceResolution: TargetResultRecordedUncommittedEvent["data"]["evidenceResolution"];
 }
 
 
@@ -121,14 +126,6 @@ export interface AuditedControllerReviewDecisionSource {
   >;
 }
 
-/** 一份Controller Target Review Resume的不可变记录事件来源。 */
-export interface AuditedControllerTargetReviewResumeSource {
-  readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
-  readonly resume: Readonly<
-    ControllerTargetReviewResumedUncommittedEvent["data"]["resume"]
-  >;
-}
-
 /** 一份Controller产品缺陷修复授权的不可变记录事件来源。 */
 export interface AuditedProductDefectRemediationAuthorizationSource {
   readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
@@ -137,14 +134,26 @@ export interface AuditedProductDefectRemediationAuthorizationSource {
   >;
 }
 
+/** 一次升级及用户回答的不可变事件来源；评审的 resumption 由它们闭合（§13.87 D4）。 */
+export interface AuditedDemandEscalationSource {
+  readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
+  readonly escalation: DemandEscalatedUncommittedEvent["data"]["escalation"];
+}
+
+export interface AuditedDemandDecisionRecordSource {
+  readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
+  readonly decision: DecisionRecordedUncommittedEvent["data"]["decision"];
+}
+
 /** 一次完整Event Stream审计生成的TaskPackage、TargetResult与Review历史来源。 */
 export interface AuditedDemandTargetResultHistory {
   readonly aggregate: Readonly<DemandEventSourcingAggregate>;
   readonly taskPackages: readonly Readonly<AuditedTargetTaskPackageSource>[];
   readonly targetResults: readonly Readonly<AuditedTargetResultSource>[];
   readonly targetReviewDecisions: readonly Readonly<AuditedControllerReviewDecisionSource>[];
-  readonly targetReviewResumes: readonly Readonly<AuditedControllerTargetReviewResumeSource>[];
   readonly productDefectRemediationAuthorizations: readonly Readonly<AuditedProductDefectRemediationAuthorizationSource>[];
+  readonly escalations: readonly Readonly<AuditedDemandEscalationSource>[];
+  readonly decisionRecords: readonly Readonly<AuditedDemandDecisionRecordSource>[];
   readonly replayedCommitCount: number;
 }
 
@@ -469,10 +478,10 @@ export class DemandEventSourcingRepository {
     const targetResults: Readonly<AuditedTargetResultSource>[] = [];
     const targetReviewDecisions: Readonly<AuditedControllerReviewDecisionSource>[] =
       [];
-    const targetReviewResumes: Readonly<AuditedControllerTargetReviewResumeSource>[] =
-      [];
     const productDefectRemediationAuthorizations: Readonly<AuditedProductDefectRemediationAuthorizationSource>[] =
       [];
+    const escalations: Readonly<AuditedDemandEscalationSource>[] = [];
+    const decisionRecords: Readonly<AuditedDemandDecisionRecordSource>[] = [];
     const taskPackageIds = new Set<string>();
     const targetTaskIds = new Set<string>();
     const targetDeliveryIds = new Set<string>();
@@ -480,8 +489,19 @@ export class DemandEventSourcingRepository {
     const resultActionIds = new Set<string>();
     const targetReviewDecisionIds = new Set<string>();
     const reviewedGenerationKeys = new Set<string>();
-    const targetReviewResumeIds = new Set<string>();
-    const resumedBlockedDecisionIds = new Set<string>();
+    const resumedDecisionIds = new Set<string>();
+    /** 每份结果回调的当前代际，随重发事件推进；最终必须与聚合摘要一致。 */
+    const callbackByResultId = new Map<
+      string,
+      Readonly<{
+        readonly callbackId: string;
+        readonly generation: number;
+        readonly promptDigest: string;
+        readonly issuedAt: string;
+        readonly controllerWindowId: string;
+        readonly bindingId: string;
+      }>
+    >();
     const productDefectRemediationIds = new Set<string>();
     const remediatedTestDecisionIds = new Set<string>();
     const storedEventByRevision = new Map<
@@ -537,12 +557,29 @@ export class DemandEventSourcingRepository {
           }
           targetResultIds.add(result.targetResultId);
           resultActionIds.add(result.delivery.fence.claimId);
+          callbackByResultId.set(result.targetResultId, event.data.callback);
           targetResults.push(
             Object.freeze({
               sourceEvent: targetResultSourceEvent(storedEvent),
               result,
+              callback: event.data.callback,
+              evidenceResolution: event.data.evidenceResolution,
             }),
           );
+          continue;
+        }
+        if (event.eventType === "result.callback-reissued") {
+          const reissue = event.data.reissue;
+          const current = callbackByResultId.get(reissue.targetResultId);
+          if (
+            current === undefined ||
+            current.callbackId !== reissue.callbackId ||
+            current.generation !== reissue.previousGeneration ||
+            current.promptDigest !== reissue.promptDigest
+          ) {
+            fail("stream", "$events");
+          }
+          callbackByResultId.set(reissue.targetResultId, reissue);
           continue;
         }
         if (event.eventType === "review.target-result-decided") {
@@ -559,6 +596,29 @@ export class DemandEventSourcingRepository {
           }
           targetReviewDecisionIds.add(decision.targetReviewDecisionId);
           reviewedGenerationKeys.add(generationKey);
+          // resumption 只指向同一目标上更早的 blocked 或 escalate 决定，且每份决定至多被续接一次。
+          const resumption = decision.resumption;
+          if (resumption !== null) {
+            const previous = targetReviewDecisions.find(
+              (entry) =>
+                entry.decision.targetReviewDecisionId ===
+                resumption.previousDecisionId,
+            );
+            if (
+              previous === undefined ||
+              previous.decision.targetTaskId !== decision.targetTaskId ||
+              previous.decision.reviewed.targetResultId !==
+                decision.reviewed.targetResultId ||
+              resumedDecisionIds.has(resumption.previousDecisionId) ||
+              (resumption.basis.kind === "condition-cleared") !==
+                (previous.decision.decision === "blocked") ||
+              (resumption.basis.kind === "decision-recorded" &&
+                previous.decision.decision !== "escalate")
+            ) {
+              fail("stream", "$events");
+            }
+            resumedDecisionIds.add(resumption.previousDecisionId);
+          }
           targetReviewDecisions.push(
             Object.freeze({
               sourceEvent: targetResultSourceEvent(storedEvent),
@@ -567,24 +627,20 @@ export class DemandEventSourcingRepository {
           );
           continue;
         }
-        if (event.eventType === "review.target-result-resumed") {
-          const resume = event.data.resume;
-          if (
-            targetReviewResumeIds.has(resume.targetReviewResumeId) ||
-            resumedBlockedDecisionIds.has(
-              resume.blockedDecision.targetReviewDecisionId,
-            )
-          ) {
-            fail("stream", "$events");
-          }
-          targetReviewResumeIds.add(resume.targetReviewResumeId);
-          resumedBlockedDecisionIds.add(
-            resume.blockedDecision.targetReviewDecisionId,
-          );
-          targetReviewResumes.push(
+        if (event.eventType === "lifecycle.demand-escalated") {
+          escalations.push(
             Object.freeze({
               sourceEvent: targetResultSourceEvent(storedEvent),
-              resume,
+              escalation: event.data.escalation,
+            }),
+          );
+          continue;
+        }
+        if (event.eventType === "lifecycle.decision-recorded") {
+          decisionRecords.push(
+            Object.freeze({
+              sourceEvent: targetResultSourceEvent(storedEvent),
+              decision: event.data.decision,
             }),
           );
           continue;
@@ -660,12 +716,13 @@ export class DemandEventSourcingRepository {
         target.phase !== "accepted" &&
         target.phase !== "product-defect-rework-requested" &&
         target.phase !== "rework-requested" &&
-        target.phase !== "redesign-requested" &&
+        target.phase !== "escalated" &&
         target.phase !== "review-blocked" &&
         target.phase !== "test-accepted" &&
         target.phase !== "test-another-attempt-requested" &&
         target.phase !== "test-product-defect" &&
-        target.phase !== "test-review-blocked"
+        target.phase !== "test-review-blocked" &&
+        target.phase !== "test-escalated"
       ) {
         continue;
       }
@@ -687,6 +744,19 @@ export class DemandEventSourcingRepository {
         resultSource.result.report.reportedAt !==
           target.currentDelivery.targetResult.reportedAt ||
         resultSource.sourceEvent.streamRevision > aggregate.streamRevision
+      ) {
+        fail("stream", "$events");
+      }
+      const callback = callbackByResultId.get(resultSource.result.targetResultId);
+      const summary = target.currentDelivery.targetResult.callback;
+      if (
+        callback === undefined ||
+        callback.callbackId !== summary.callbackId ||
+        callback.generation !== summary.generation ||
+        callback.promptDigest !== summary.promptDigest ||
+        callback.issuedAt !== summary.issuedAt ||
+        callback.controllerWindowId !== summary.controllerWindowId ||
+        callback.bindingId !== summary.bindingId
       ) {
         fail("stream", "$events");
       }
@@ -717,7 +787,12 @@ export class DemandEventSourcingRepository {
           target.currentDelivery.reviewDecision.controllerWindowId ||
         decisionSource.decision.decidedAt !==
           target.currentDelivery.reviewDecision.decidedAt ||
-        decisionSource.sourceEvent.streamRevision > aggregate.streamRevision
+        decisionSource.sourceEvent.streamRevision > aggregate.streamRevision ||
+        (decisionSource.decision.kind === "WakeflowControllerTestReviewDecision" &&
+          decisionSource.decision.decision === "escalate" &&
+          (target.phase === "test-product-defect") !==
+            (decisionSource.decision.escalation?.classification ===
+              "product-defect"))
       ) {
         fail("stream", "$events");
       }
@@ -733,33 +808,6 @@ export class DemandEventSourcingRepository {
         target === undefined ||
         (source.decision.kind === "WakeflowControllerTestReviewDecision") !==
           (target.workType === "test")
-      ) {
-        fail("stream", "$events");
-      }
-    }
-    const decisionById = new Map(
-      targetReviewDecisions.map(
-        (source) => [source.decision.targetReviewDecisionId, source] as const,
-      ),
-    );
-    for (const source of targetReviewResumes) {
-      const blocked = decisionById.get(
-        source.resume.blockedDecision.targetReviewDecisionId,
-      );
-      const target = targetById.get(source.resume.targetTaskId);
-      if (
-        target === undefined ||
-        blocked === undefined ||
-        (blocked.decision.kind === "WakeflowControllerTestReviewDecision") !==
-          (target.workType === "test") ||
-        blocked.decision.decision !== "blocked" ||
-        blocked.decision.decisionDigest !==
-          source.resume.blockedDecision.decisionDigest ||
-        blocked.decision.reviewed.targetResultId !==
-          source.resume.blockedDecision.targetResultId ||
-        blocked.decision.reviewed.targetResultDigest !==
-          source.resume.blockedDecision.targetResultDigest ||
-        blocked.sourceEvent.streamRevision >= source.sourceEvent.streamRevision
       ) {
         fail("stream", "$events");
       }
@@ -782,16 +830,27 @@ export class DemandEventSourcingRepository {
         authorization.source.streamRevision,
       );
       const decision = sourceDecision?.decision;
-      const expectedFailedChecks =
-        decision?.kind === "WakeflowControllerTestReviewDecision"
-          ? decision.independentChecks.filter(
-              (check) => check.outcome === "failed",
-            )
+      const escalatedResult = targetResultById.get(
+        authorization.source.targetResult.targetResultId,
+      );
+      const expectedFailedSteps =
+        escalatedResult?.result.workType === "test"
+          ? escalatedResult.result.report.steps
+              .filter((step) => step.verdict === "fail")
+              .map((step) => ({ stepId: step.stepId, observed: step.observed }))
           : [];
+      const remediation =
+        decision?.kind === "WakeflowControllerTestReviewDecision" &&
+        decision.escalation?.classification === "product-defect"
+          ? decision.escalation.remediation
+          : undefined;
       if (
         decision === undefined ||
         decision.kind !== "WakeflowControllerTestReviewDecision" ||
-        decision.decision !== "escalate-product-defect" ||
+        decision.decision !== "escalate" ||
+        remediation === undefined ||
+        authorization.authorizationRationale !==
+          remediation.authorizationRationale ||
         decision.programId !== authorization.programId ||
         decision.demandId !== authorization.demandId ||
         decision.controllerWindowId !== authorization.controllerWindowId ||
@@ -820,15 +879,28 @@ export class DemandEventSourcingRepository {
           authorization.source.testTargetTaskId ||
         sourceTestPackage.sourceEvent.streamRevision >=
           authorization.source.streamRevision ||
-        expectedFailedChecks.length !== authorization.failedChecks.length ||
-        expectedFailedChecks.some((check, index) => {
-          const projected = authorization.failedChecks[index];
+        expectedFailedSteps.length !== authorization.failedSteps.length ||
+        expectedFailedSteps.some((step, index) => {
+          const projected = authorization.failedSteps[index];
           return (
             projected === undefined ||
-            projected.checkId !== check.checkId ||
-            projected.outcome !== "failed" ||
-            projected.method !== check.method ||
-            projected.observation !== check.observation
+            projected.stepId !== step.stepId ||
+            projected.observed !== step.observed
+          );
+        }) ||
+        remediation.affectedTargets.length !==
+          authorization.affectedTargets.length ||
+        remediation.affectedTargets.some((declared) => {
+          const affected = authorization.affectedTargets.find(
+            (entry) => entry.baseline.targetTaskId === declared.targetTaskId,
+          );
+          return (
+            affected === undefined ||
+            affected.correctionObjective !== declared.correctionObjective ||
+            affected.failedStepIds.length !== declared.failedStepIds.length ||
+            declared.failedStepIds.some(
+              (stepId) => !affected.failedStepIds.includes(stepId),
+            )
           );
         })
       ) {
@@ -963,11 +1035,11 @@ export class DemandEventSourcingRepository {
           target.productDefectRemediation.authorizedAt ||
         affected.correctionObjective !==
           target.productDefectRemediation.correctionObjective ||
-        affected.failedCheckIds.length !==
-          target.productDefectRemediation.failedCheckIds.length ||
-        affected.failedCheckIds.some(
+        affected.failedStepIds.length !==
+          target.productDefectRemediation.failedStepIds.length ||
+        affected.failedStepIds.some(
           (id, index) =>
-            id !== target.productDefectRemediation.failedCheckIds[index],
+            id !== target.productDefectRemediation.failedStepIds[index],
         )
       ) {
         fail("stream", "$events");
@@ -978,10 +1050,11 @@ export class DemandEventSourcingRepository {
       taskPackages: Object.freeze(taskPackages),
       targetResults: Object.freeze(targetResults),
       targetReviewDecisions: Object.freeze(targetReviewDecisions),
-      targetReviewResumes: Object.freeze(targetReviewResumes),
       productDefectRemediationAuthorizations: Object.freeze(
         productDefectRemediationAuthorizations,
       ),
+      escalations: Object.freeze(escalations),
+      decisionRecords: Object.freeze(decisionRecords),
       replayedCommitCount: stream.commits.length,
     });
   }

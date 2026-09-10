@@ -46,6 +46,14 @@ function definition(schema: JsonObject, name: string): JsonObject {
   return value as JsonObject;
 }
 
+/** 两份 Schema 共有的本地定义名：请求与结果共享的词法必须逐字节一致。 */
+function sharedDefinitions(left: JsonObject, right: JsonObject): readonly string[] {
+  const rightDefinitions = right.$defs as JsonObject;
+  return Object.keys(left.$defs as JsonObject).filter((name) =>
+    Object.hasOwn(rightDefinitions, name),
+  );
+}
+
 test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const schemaRoot = path.join(process.cwd(), "src/contracts/schemas/entrypoints");
   const handle = opendirSync(schemaRoot);
@@ -291,21 +299,25 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       );
     }
   }
-  for (const sharedDefinition of [
-    "permit",
-    "hostAction",
-    "fence",
-    "delivery",
-    "event",
-    "commit",
-    "next",
-  ]) {
+  for (const sharedDefinition of ["hostAction", "fence", "event", "commit", "next"]) {
     deepEqual(
       definition(prepareResult, sharedDefinition),
       definition(rearmResult, sharedDefinition),
       `Prepare and Rearm permit definition ${sharedDefinition} must not drift`,
     );
   }
+  // 回调重发的许可没有围栏（§13.87 D1）：Rearm 的 permit.fence 可空，其余字段与 Prepare 一致。
+  const { fence: prepareFence, ...preparePermit } = definition(prepareResult, "permit")
+    .properties as JsonObject;
+  const { fence: rearmFence, ...rearmPermit } = definition(rearmResult, "permit")
+    .properties as JsonObject;
+  deepEqual(preparePermit, rearmPermit);
+  deepEqual(prepareFence, { $ref: "#/$defs/fence" });
+  deepEqual(rearmFence, { oneOf: [{ type: "null" }, { $ref: "#/$defs/fence" }] });
+  deepEqual(
+    ((definition(rearmResult, "delivery").properties as JsonObject).workType as JsonObject).enum,
+    ["implementation", "test", "callback"],
+  );
   deepEqual(
     Object.keys(prepareRequest.properties as JsonObject).sort(),
     [
@@ -383,7 +395,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     [implementationContent, implementationReport],
     [testContent, testReport],
   ] as const) {
-    const omitted = new Set(["kind", "schemaVersion", "reportedAt", "reportDigest"]);
+    // verdict 由 Wakeflow 从逐步记录派生（§13.85 D3），不由目标 Agent 提交。
+    const omitted = new Set(["kind", "schemaVersion", "reportedAt", "reportDigest", "verdict"]);
     deepEqual(
       [...(publicContent.required as string[])].sort(),
       (domainReport.required as string[]).filter((field) => !omitted.has(field)).sort(),
@@ -443,160 +456,129 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "Public Review TargetResult fields must mirror the domain TargetResult",
   );
   const publicReviewUnit = definition(reviewInspectionResult, "reviewUnit");
-  deepEqual(publicReviewUnit.oneOf, [
-    { $ref: "#/$defs/reportedReviewUnit" },
-    { $ref: "#/$defs/blockedReviewUnit" },
-  ]);
-  const reportedReviewUnit = definition(reviewInspectionResult, "reportedReviewUnit");
-  const blockedReviewUnit = definition(reviewInspectionResult, "blockedReviewUnit");
+  deepEqual((publicReviewUnit.properties as JsonObject).status, {
+    enum: ["reported", "review-blocked", "escalated"],
+  });
   deepEqual(
-    [...(blockedReviewUnit.required as string[])].sort(),
-    [...(reportedReviewUnit.required as string[]), "currentBlockedDecision"].sort(),
-  );
-  deepEqual(
-    Object.keys(blockedReviewUnit.properties as Record<string, unknown>).sort(),
+    Object.keys(publicReviewUnit.properties as JsonObject).sort(),
     [
-      ...Object.keys(reportedReviewUnit.properties as Record<string, unknown>),
-      "currentBlockedDecision",
-    ].sort(),
+      "allowedDecisions",
+      "attemptScope",
+      "callback",
+      "currentDecision",
+      "outcome",
+      "priorReviewHistory",
+      "resumptionBasis",
+      "reviewUnitDigest",
+      "status",
+      "targetCompletion",
+      "targetResult",
+      "targetResultSourceEvent",
+      "targetTaskId",
+      "taskPackage",
+      "taskPackageSourceEvent",
+      "testSteps",
+      "workType",
+    ],
+    "Review inspection unit carries callback, completion, allowed decisions, and the per-step record",
   );
-  deepEqual((reportedReviewUnit.properties as Record<string, unknown>).status, {
-    const: "reported",
-  });
-  deepEqual((blockedReviewUnit.properties as Record<string, unknown>).status, {
-    const: "review-blocked",
-  });
-  const currentBlockedDecision = definition(reviewInspectionResult, "currentBlockedDecision");
-  deepEqual(currentBlockedDecision.required, ["sourceEvent", "decision"]);
+  deepEqual(
+    (
+      (definition(reviewInspectionResult, "callbackStatus").properties as JsonObject)
+        .status as JsonObject
+    ).enum,
+    ["pending", "landed", "silent", "acknowledged"],
+  );
 
   const implementationDecisionRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-controller-implementation-review-decision-request.schema.json",
+    "src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json",
   );
   const implementationDecisionResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-controller-implementation-review-decision-result.schema.json",
+    "src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-result.schema.json",
   );
-  for (const sharedDefinition of ["sha256Digest", "demandId", "targetResultId"]) {
+  for (const sharedDefinition of sharedDefinitions(
+    implementationDecisionRequest,
+    implementationDecisionResult,
+  )) {
     deepEqual(
       definition(implementationDecisionRequest, sharedDefinition),
       definition(implementationDecisionResult, sharedDefinition),
       `Implementation Decision wire definition ${sharedDefinition} must not drift`,
     );
   }
-  const domainImplementationDecision = readSchema(
-    "src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json",
-  );
-  const publicImplementationDecision = definition(implementationDecisionResult, "decision");
-  deepEqual(
-    [...(publicImplementationDecision.required as string[])].sort(),
-    [...(domainImplementationDecision.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicImplementationDecision.properties as Record<string, unknown>).sort(),
-    Object.keys(domainImplementationDecision.properties as Record<string, unknown>).sort(),
-    "Public Implementation Decision fields must mirror the domain Decision",
-  );
+  const appendEnvelopeFields = [
+    "root",
+    "demandId",
+    "idempotencyKey",
+    "expectedStreamRevision",
+    "targetResultId",
+    "snapshotDigest",
+    "reviewUnitDigest",
+  ];
   const judgmentFields = [
     "assessment",
     "blockingReasons",
     "decision",
+    "escalation",
     "independentChecks",
     "rationale",
     "residualRisks",
+    "resumption",
   ];
   deepEqual(
     Object.keys(implementationDecisionRequest.properties as Record<string, unknown>)
-      .filter(
-        (field) =>
-          !["root", "demandId", "targetResultId", "snapshotDigest", "reviewUnitDigest"].includes(
-            field,
-          ),
-      )
+      .filter((field) => !appendEnvelopeFields.includes(field))
       .sort(),
     judgmentFields,
-    "Public Decision request must contain exactly the Controller judgment fields",
+    "Public Implementation Decision request carries exactly the Controller judgment plus escalation and resumption",
   );
+  deepEqual((implementationDecisionRequest.properties as JsonObject).decision, {
+    enum: ["accept", "rework", "blocked", "escalate"],
+  });
 
   const testDecisionRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-controller-test-review-decision-request.schema.json",
+    "src/contracts/schemas/entrypoints/wakeflow-test-review-decision-request.schema.json",
   );
   const testDecisionResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-controller-test-review-decision-result.schema.json",
+    "src/contracts/schemas/entrypoints/wakeflow-test-review-decision-result.schema.json",
   );
-  for (const sharedDefinition of ["sha256Digest", "demandId", "targetResultId"]) {
+  for (const sharedDefinition of sharedDefinitions(testDecisionRequest, testDecisionResult)) {
     deepEqual(
       definition(testDecisionRequest, sharedDefinition),
       definition(testDecisionResult, sharedDefinition),
       `Test Decision wire definition ${sharedDefinition} must not drift`,
     );
   }
-  const domainTestDecision = readSchema(
-    "src/contracts/schemas/governance/review/controller-test-review-decision.schema.json",
-  );
-  const publicTestDecision = definition(testDecisionResult, "decision");
-  deepEqual(
-    [...(publicTestDecision.required as string[])].sort(),
-    [...(domainTestDecision.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicTestDecision.properties as Record<string, unknown>).sort(),
-    Object.keys(domainTestDecision.properties as Record<string, unknown>).sort(),
-    "Public Test Decision fields must mirror the domain Decision",
-  );
   deepEqual(
     Object.keys(testDecisionRequest.properties as Record<string, unknown>)
-      .filter(
-        (field) =>
-          !["root", "demandId", "targetResultId", "snapshotDigest", "reviewUnitDigest"].includes(
-            field,
-          ),
-      )
+      .filter((field) => !appendEnvelopeFields.includes(field))
       .sort(),
-    judgmentFields,
-    "Public Test Decision request must contain exactly the Controller judgment fields",
+    [...judgmentFields, "stepIds"].sort(),
+    "Public Test Decision request adds the rerun step scope to the Controller judgment",
   );
-
-  const remediationRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-controller-product-defect-remediation-request.schema.json",
-  );
-  const remediationResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-controller-product-defect-remediation-result.schema.json",
-  );
-  for (const sharedDefinition of [
-    "sha256Digest",
-    "demandId",
-    "targetReviewDecisionId",
-    "targetTaskId",
-  ]) {
-    deepEqual(
-      definition(remediationRequest, sharedDefinition),
-      definition(remediationResult, sharedDefinition),
-      `Product Remediation wire definition ${sharedDefinition} must not drift`,
-    );
-  }
-  const domainRemediationAuthorization = readSchema(
-    "src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json",
-  );
-  const publicRemediationAuthorization = definition(remediationResult, "authorization");
+  deepEqual((testDecisionRequest.properties as JsonObject).decision, {
+    enum: ["accept", "request-another-attempt", "blocked", "escalate"],
+  });
   deepEqual(
-    [...(publicRemediationAuthorization.required as string[])].sort(),
-    [...(domainRemediationAuthorization.required as string[])].sort(),
+    (
+      (definition(testDecisionRequest, "testEscalation").properties as JsonObject)
+        .classification as JsonObject
+    ).enum,
+    ["product-defect", "needs-decision"],
   );
   deepEqual(
-    Object.keys(publicRemediationAuthorization.properties as Record<string, unknown>).sort(),
-    Object.keys(domainRemediationAuthorization.properties as Record<string, unknown>).sort(),
-    "Public Product Remediation fields must mirror the domain Authorization",
+    Object.keys((testDecisionResult.properties as JsonObject).attached as JsonObject)
+      .map((key) => key)
+      .sort(),
+    ["additionalProperties", "properties", "required", "type"],
   );
   deepEqual(
-    Object.keys(remediationRequest.properties as Record<string, unknown>).sort(),
-    [
-      "affectedTargets",
-      "authorizationRationale",
-      "demandId",
-      "postAcceptanceRouteDigest",
-      "root",
-      "testReviewDecisionId",
-    ],
-    "Public Product Remediation request must not expose Test Target or baseline echoes",
+    Object.keys(
+      ((testDecisionResult.properties as JsonObject).attached as JsonObject)
+        .properties as JsonObject,
+    ).sort(),
+    ["escalationEventId", "productDefectRemediationId"],
+    "Test Decision result names the escalation or remediation appended in the same commit",
   );
 
   const completionRequest = readSchema(
@@ -708,48 +690,18 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "Review inspection test contract mirror must not drift from the domain contract",
   );
 
-  const resumeRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-result-review-resume-request.schema.json",
-  );
-  const resumeResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-result-review-resume-result.schema.json",
-  );
-  for (const sharedDefinition of ["sha256Digest", "demandId", "targetTaskId"]) {
-    deepEqual(
-      definition(resumeRequest, sharedDefinition),
-      definition(resumeResult, sharedDefinition),
-      `Target Result Review Resume wire definition ${sharedDefinition} must not drift`,
-    );
-  }
+  // 结果导入请求带幂等键与观察修订；回调许可随结果返回（§13.87 D1）。
+  deepEqual(Object.keys(resultImportRequest.properties as JsonObject).sort(), [
+    "claimDigest",
+    "deliveryId",
+    "demandId",
+    "expectedStreamRevision",
+    "idempotencyKey",
+    "report",
+    "root",
+  ]);
   deepEqual(
-    Object.keys(resumeRequest.properties as Record<string, unknown>).sort(),
-    ["root", "demandId", "targetTaskId", "expectedBlockedState", "resolutionSummary"].sort(),
-    "Public Resume request must not restore derived Decision, Result, or Snapshot echoes",
+    Object.keys(definition(resultImportResult, "callbackPermit").properties as JsonObject).sort(),
+    ["generation", "hostAction", "issuedAt", "prompt"],
   );
-  const domainResume = readSchema(
-    "src/contracts/schemas/governance/review/controller-target-review-resume.schema.json",
-  );
-  const publicResume = definition(resumeResult, "resume");
-  deepEqual(
-    [...(publicResume.required as string[])].sort(),
-    [...(domainResume.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicResume.properties as Record<string, unknown>).sort(),
-    Object.keys(domainResume.properties as Record<string, unknown>).sort(),
-    "Public Resume result fields must mirror the domain Resume",
-  );
-  for (const sharedDefinition of ["blockedDecision", "blockedSource"]) {
-    const publicDefinition = definition(resumeResult, sharedDefinition);
-    const domainDefinition = definition(domainResume, sharedDefinition);
-    deepEqual(
-      [...(publicDefinition.required as string[])].sort(),
-      [...(domainDefinition.required as string[])].sort(),
-    );
-    deepEqual(
-      Object.keys(publicDefinition.properties as Record<string, unknown>).sort(),
-      Object.keys(domainDefinition.properties as Record<string, unknown>).sort(),
-      `Public Resume result definition ${sharedDefinition} fields must mirror its domain definition`,
-    );
-  }
 });

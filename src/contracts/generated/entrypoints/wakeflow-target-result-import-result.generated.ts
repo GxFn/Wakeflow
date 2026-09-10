@@ -3,24 +3,6 @@
  * Source: src/contracts/schemas/entrypoints/wakeflow-target-result-import-result.schema.json
  */
 
-/**
- * Successful result for one idempotently imported target-authored Report and its authority-enriched TargetResult Event.
- */
-export type WakeflowTargetResultImportResultV1 = ({
-[k: string]: unknown | undefined
-} & {
-kind: "WakeflowTargetResultImportResult"
-schemaVersion: 1
-tool: "wakeflow_import_target_result"
-status: ("recorded" | "already-recorded")
-disposition: ("committed" | "idempotent")
-claimAuthority: "released"
-eventAuthority: "current"
-result: TargetResult
-event: EventReceipt
-commit: CommitReceipt
-stateDigest: Sha256Digest
-})
 export type TargetResult = ({
 [k: string]: unknown | undefined
 } & {
@@ -62,9 +44,11 @@ disposition: ("committed" | "left-uncommitted" | "no-changes")
  * @maxItems 64
  */
 commits: GitObjectId[]
+branch: (null | BranchName)
 })
 export type GitObjectId = (GitSha1ObjectId | GitSha256ObjectId)
-export type Token = string
+export type BranchName = string
+export type EvidenceKind = ("test-output" | "diff" | "document" | "transcript" | "commit")
 /**
  * @maxItems 64
  */
@@ -73,6 +57,7 @@ export type EvidenceLocators = EvidenceLocator[]
  * @maxItems 64
  */
 export type HumanTextList = HumanText[]
+export type Token = string
 export type TestReport = ({
 [k: string]: unknown | undefined
 } & {
@@ -83,18 +68,159 @@ summary: HumanText
 evidenceLocators: EvidenceLocators
 verification: HumanTextList
 risks: HumanTextList
-/**
- * @maxItems 32
- */
-stepEvidence: StepEvidence[]
 reportedAt: UtcInstant
 reportDigest: Sha256Digest
+/**
+ * @maxItems 20
+ */
+steps: []|[Step]|[Step, Step]|[Step, Step, Step]|[Step, Step, Step, Step]|[Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+})
+export type Step = ({
+[k: string]: unknown | undefined
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: StepId
+observed: HumanText
+evidence: EvidenceRef
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
 })
 export type StepId = string
 export type TestAttemptId = string
 export type EventId = string
 export type CommitId = string
+export type BindingId = string
 
+/**
+ * Result of one target result import append: the recorded (or idempotently matched) TargetResult, the wake-controller callback permit, the event and commit receipts, and the next frontier.
+ */
+export interface WakeflowTargetResultImportResultV1 {
+kind: "WakeflowTargetResultImportResult"
+schemaVersion: 1
+tool: "wakeflow_import_target_result"
+status: ("committed" | "idempotent")
+result: TargetResult
+event: EventReceipt
+commit: CommitReceipt
+stateDigest: Sha256Digest
+demandId: DemandId
+callback: Callback
+next: Next
+}
 export interface TaskPackage {
 taskPackageId: TaskPackageId
 ref: PortableResourcePath
@@ -143,7 +269,7 @@ algorithm: "sha256"
 value: string
 }
 export interface EvidenceLocator {
-kind: Token
+kind: EvidenceKind
 ref: PortableResourcePath
 digest: Sha256Digest
 }
@@ -159,12 +285,15 @@ export interface EvidenceRef {
 ref: PortableResourcePath
 digest: Sha256Digest
 }
-export interface StepEvidence {
-stepId: StepId
-evidence: EvidenceRef
+export interface Failure {
+classification: ("product-defect" | "harness-defect" | "environment" | "flaky" | "missing-evidence" | "out-of-scope" | "needs-decision")
+likelyOwner: ("implementation" | "test" | "environment" | "user")
+recommendedAction: HumanText
 }
 export interface TestExecution {
 testAttemptId: TestAttemptId
+ordinal: number
+stepIds: (null | [StepId]|[StepId, StepId]|[StepId, StepId, StepId]|[StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId]|[StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId, StepId])
 }
 export interface EventReceipt {
 eventId: EventId
@@ -174,6 +303,42 @@ export interface CommitReceipt {
 commitId: CommitId
 commitSequence: number
 commitDigest: Sha256Digest
+}
+/**
+ * wake-controller 回调：目标 Agent 把 permit.prompt 送进 Controller 窗口；落地由 Controller 会话的 user-prompt-submit 记录证明。
+ */
+export interface Callback {
+callbackId: TargetDeliveryId
+permit: CallbackPermit
+}
+export interface CallbackPermit {
+prompt: string
+hostAction: HostAction
+generation: number
+issuedAt: UtcInstant
+}
+/**
+ * Agent 执行的一次性宿主动作：把回调 prompt 送进 Controller 窗口；原始句柄不出现。
+ */
+export interface HostAction {
+effect: "send-prompt-to-window"
+hostId: ("codex" | "claude-code")
+windowId: WindowId
+displayTitle: string
+bindingId: BindingId
+handleDigest: Sha256Digest
+}
+/**
+ * Next responsibility derived from the route after this call.
+ */
+export interface Next {
+frontier: (null | string)
+owner: ("controller" | "target" | "test" | "user" | "none")
+suggestedTool: (null | string)
+/**
+ * @maxItems 64
+ */
+blockers: string[]
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -197,4 +362,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TARGET_RESULT_IMPORT_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:target-result-import-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TARGET_RESULT_IMPORT_RESULT_SCHEMA\",\"title\":\"WakeflowTargetResultImportResultV1\",\"description\":\"Successful result for one idempotently imported target-authored Report and its authority-enriched TargetResult Event.\",\"$comment\":\"A successful import always has a current Result Event and a released Claim. The TargetResult is Controller review input, never Controller acceptance, Test verdict, or Demand completion.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"status\",\"disposition\",\"claimAuthority\",\"eventAuthority\",\"result\",\"event\",\"commit\",\"stateDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowTargetResultImportResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_import_target_result\"},\"status\":{\"enum\":[\"recorded\",\"already-recorded\"]},\"disposition\":{\"enum\":[\"committed\",\"idempotent\"]},\"claimAuthority\":{\"const\":\"released\"},\"eventAuthority\":{\"const\":\"current\"},\"result\":{\"$ref\":\"#/$defs/targetResult\"},\"event\":{\"$ref\":\"#/$defs/eventReceipt\"},\"commit\":{\"$ref\":\"#/$defs/commitReceipt\"},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}},\"allOf\":[{\"if\":{\"properties\":{\"status\":{\"const\":\"recorded\"}},\"required\":[\"status\"]},\"then\":{\"properties\":{\"disposition\":{\"const\":\"committed\"}}}},{\"if\":{\"properties\":{\"status\":{\"const\":\"already-recorded\"}},\"required\":[\"status\"]},\"then\":{\"properties\":{\"disposition\":{\"const\":\"idempotent\"}}}}],\"$defs\":{\"targetResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"workType\",\"targetResultId\",\"programId\",\"demandId\",\"targetTaskId\",\"deliveryId\",\"taskPackage\",\"assignment\",\"delivery\",\"report\",\"resultDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowTargetResult\"},\"schemaVersion\":{\"const\":1},\"workType\":{\"enum\":[\"implementation\",\"test\"]},\"targetResultId\":{\"$ref\":\"#/$defs/targetResultId\"},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"targetTaskId\":{\"$ref\":\"#/$defs/targetTaskId\"},\"deliveryId\":{\"$ref\":\"#/$defs/targetDeliveryId\"},\"taskPackage\":{\"$ref\":\"#/$defs/taskPackage\"},\"assignment\":{\"oneOf\":[{\"$ref\":\"#/$defs/implementationAssignment\"},{\"$ref\":\"#/$defs/testAssignment\"}]},\"delivery\":{\"$ref\":\"#/$defs/delivery\"},\"report\":{\"oneOf\":[{\"$ref\":\"#/$defs/implementationReport\"},{\"$ref\":\"#/$defs/testReport\"}]},\"testExecution\":{\"$ref\":\"#/$defs/testExecution\"},\"resultDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}},\"allOf\":[{\"if\":{\"properties\":{\"workType\":{\"const\":\"test\"}},\"required\":[\"workType\"]},\"then\":{\"required\":[\"testExecution\"],\"properties\":{\"assignment\":{\"$ref\":\"#/$defs/testAssignment\"},\"report\":{\"$ref\":\"#/$defs/testReport\"},\"testExecution\":{\"$ref\":\"#/$defs/testExecution\"}}},\"else\":{\"properties\":{\"assignment\":{\"$ref\":\"#/$defs/implementationAssignment\"},\"report\":{\"$ref\":\"#/$defs/implementationReport\"},\"testExecution\":false}}}]},\"taskPackage\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"taskPackageId\",\"ref\",\"digest\"],\"properties\":{\"taskPackageId\":{\"$ref\":\"#/$defs/taskPackageId\"},\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"implementationAssignment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"repositoryId\",\"windowId\"],\"properties\":{\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"windowId\":{\"$ref\":\"#/$defs/windowId\"}}},\"testAssignment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"windowId\"],\"properties\":{\"windowId\":{\"$ref\":\"#/$defs/windowId\"}}},\"testExecution\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"testAttemptId\"],\"properties\":{\"testAttemptId\":{\"$ref\":\"#/$defs/testAttemptId\"}}},\"implementationReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"outcome\",\"summary\",\"repositoryChange\",\"evidenceLocators\",\"verification\",\"risks\",\"anchorEvidence\",\"reportedAt\",\"reportDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowImplementationTargetResultReport\"},\"schemaVersion\":{\"const\":1},\"outcome\":{\"$ref\":\"#/$defs/resultOutcome\"},\"summary\":{\"$ref\":\"#/$defs/humanText\"},\"repositoryChange\":{\"$ref\":\"#/$defs/repositoryChange\"},\"evidenceLocators\":{\"$ref\":\"#/$defs/evidenceLocators\"},\"verification\":{\"$ref\":\"#/$defs/humanTextList\"},\"risks\":{\"$ref\":\"#/$defs/humanTextList\"},\"anchorEvidence\":{\"type\":\"array\",\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/anchorEvidence\"}},\"reportedAt\":{\"$ref\":\"#/$defs/utcInstant\"},\"reportDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"testReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"outcome\",\"summary\",\"evidenceLocators\",\"verification\",\"risks\",\"stepEvidence\",\"reportedAt\",\"reportDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowTestTargetResultReport\"},\"schemaVersion\":{\"const\":1},\"outcome\":{\"$ref\":\"#/$defs/resultOutcome\"},\"summary\":{\"$ref\":\"#/$defs/humanText\"},\"evidenceLocators\":{\"$ref\":\"#/$defs/evidenceLocators\"},\"verification\":{\"$ref\":\"#/$defs/humanTextList\"},\"risks\":{\"$ref\":\"#/$defs/humanTextList\"},\"stepEvidence\":{\"type\":\"array\",\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/stepEvidence\"}},\"reportedAt\":{\"$ref\":\"#/$defs/utcInstant\"},\"reportDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}},\"allOf\":[{\"if\":{\"properties\":{\"outcome\":{\"const\":\"completed\"}},\"required\":[\"outcome\"]},\"then\":{\"properties\":{\"stepEvidence\":{\"type\":\"array\",\"minItems\":1}}}}]},\"repositoryChange\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"repositoryId\",\"disposition\",\"commits\"],\"properties\":{\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"disposition\":{\"enum\":[\"committed\",\"left-uncommitted\",\"no-changes\"]},\"commits\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/gitObjectId\"}}},\"allOf\":[{\"if\":{\"properties\":{\"disposition\":{\"const\":\"committed\"}},\"required\":[\"disposition\"]},\"then\":{\"properties\":{\"commits\":{\"type\":\"array\",\"minItems\":1}}},\"else\":{\"properties\":{\"commits\":{\"type\":\"array\",\"maxItems\":0}}}}]},\"evidenceLocators\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/evidenceLocator\"}},\"evidenceLocator\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"ref\",\"digest\"],\"properties\":{\"kind\":{\"$ref\":\"#/$defs/token\"},\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"evidenceRef\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"ref\",\"digest\"],\"properties\":{\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"anchorEvidence\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"anchorId\",\"evidenceRefs\"],\"properties\":{\"anchorId\":{\"$ref\":\"#/$defs/token\"},\"evidenceRefs\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/evidenceRef\"}}}},\"stepEvidence\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"stepId\",\"evidence\"],\"properties\":{\"stepId\":{\"$ref\":\"#/$defs/stepId\"},\"evidence\":{\"$ref\":\"#/$defs/evidenceRef\"}}},\"humanTextList\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"eventReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"eventId\",\"streamRevision\"],\"properties\":{\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"streamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991}}},\"commitReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"commitId\",\"commitSequence\",\"commitDigest\"],\"properties\":{\"commitId\":{\"$ref\":\"#/$defs/commitId\"},\"commitSequence\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"commitDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"resultOutcome\":{\"enum\":[\"completed\",\"blocked\",\"needs-review\"]},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"token\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"gitObjectId\":{\"oneOf\":[{\"$ref\":\"#/$defs/gitSha1ObjectId\"},{\"$ref\":\"#/$defs/gitSha256ObjectId\"}]},\"gitSha1ObjectId\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"algorithm\",\"value\"],\"properties\":{\"algorithm\":{\"const\":\"sha1\"},\"value\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{40}$\"}}},\"gitSha256ObjectId\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"algorithm\",\"value\"],\"properties\":{\"algorithm\":{\"const\":\"sha256\"},\"value\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{64}$\"}}},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"},\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetTaskId\":{\"type\":\"string\",\"pattern\":\"^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetDeliveryId\":{\"type\":\"string\",\"pattern\":\"^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetResultId\":{\"type\":\"string\",\"pattern\":\"^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"taskPackageId\":{\"type\":\"string\",\"pattern\":\"^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"repositoryId\":{\"type\":\"string\",\"pattern\":\"^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"testAttemptId\":{\"type\":\"string\",\"pattern\":\"^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"claimId\":{\"type\":\"string\",\"pattern\":\"^work-claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"eventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"commitId\":{\"type\":\"string\",\"pattern\":\"^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"delivery\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"generation\",\"fence\",\"outcomeDigest\",\"disposition\",\"readbackStatus\",\"observedAt\"],\"properties\":{\"generation\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":4},\"fence\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"claimId\",\"claimDigest\"],\"properties\":{\"claimId\":{\"$ref\":\"#/$defs/claimId\"},\"claimDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"outcomeDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"disposition\":{\"enum\":[\"accepted\",\"indeterminate\"]},\"readbackStatus\":{\"enum\":[\"confirmed\",\"pending\",\"unavailable\"]},\"observedAt\":{\"$ref\":\"#/$defs/utcInstant\"}}},\"stepId\":{\"type\":\"string\",\"pattern\":\"^ts-[1-9][0-9]?$\"}}}");
+export const WAKEFLOW_TARGET_RESULT_IMPORT_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:target-result-import-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TARGET_RESULT_IMPORT_RESULT_SCHEMA\",\"title\":\"WakeflowTargetResultImportResultV1\",\"description\":\"Result of one target result import append: the recorded (or idempotently matched) TargetResult, the wake-controller callback permit, the event and commit receipts, and the next frontier.\",\"$comment\":\"A successful import always has a current Result Event and a released Claim. The TargetResult is Controller review input, never Controller acceptance, Test verdict, or Demand completion.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"status\",\"demandId\",\"result\",\"callback\",\"event\",\"commit\",\"stateDigest\",\"next\"],\"properties\":{\"kind\":{\"const\":\"WakeflowTargetResultImportResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_import_target_result\"},\"status\":{\"enum\":[\"committed\",\"idempotent\"]},\"result\":{\"$ref\":\"#/$defs/targetResult\"},\"event\":{\"$ref\":\"#/$defs/eventReceipt\"},\"commit\":{\"$ref\":\"#/$defs/commitReceipt\"},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"callback\":{\"$ref\":\"#/$defs/callback\"},\"next\":{\"$ref\":\"#/$defs/next\"}},\"$defs\":{\"targetResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"workType\",\"targetResultId\",\"programId\",\"demandId\",\"targetTaskId\",\"deliveryId\",\"taskPackage\",\"assignment\",\"delivery\",\"report\",\"resultDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowTargetResult\"},\"schemaVersion\":{\"const\":1},\"workType\":{\"enum\":[\"implementation\",\"test\"]},\"targetResultId\":{\"$ref\":\"#/$defs/targetResultId\"},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"targetTaskId\":{\"$ref\":\"#/$defs/targetTaskId\"},\"deliveryId\":{\"$ref\":\"#/$defs/targetDeliveryId\"},\"taskPackage\":{\"$ref\":\"#/$defs/taskPackage\"},\"assignment\":{\"oneOf\":[{\"$ref\":\"#/$defs/implementationAssignment\"},{\"$ref\":\"#/$defs/testAssignment\"}]},\"delivery\":{\"$ref\":\"#/$defs/delivery\"},\"report\":{\"oneOf\":[{\"$ref\":\"#/$defs/implementationReport\"},{\"$ref\":\"#/$defs/testReport\"}]},\"testExecution\":{\"$ref\":\"#/$defs/testExecution\"},\"resultDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}},\"allOf\":[{\"if\":{\"properties\":{\"workType\":{\"const\":\"test\"}},\"required\":[\"workType\"]},\"then\":{\"required\":[\"testExecution\"],\"properties\":{\"assignment\":{\"$ref\":\"#/$defs/testAssignment\"},\"report\":{\"$ref\":\"#/$defs/testReport\"},\"testExecution\":{\"$ref\":\"#/$defs/testExecution\"}}},\"else\":{\"properties\":{\"assignment\":{\"$ref\":\"#/$defs/implementationAssignment\"},\"report\":{\"$ref\":\"#/$defs/implementationReport\"},\"testExecution\":false}}}]},\"taskPackage\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"taskPackageId\",\"ref\",\"digest\"],\"properties\":{\"taskPackageId\":{\"$ref\":\"#/$defs/taskPackageId\"},\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"implementationAssignment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"repositoryId\",\"windowId\"],\"properties\":{\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"windowId\":{\"$ref\":\"#/$defs/windowId\"}}},\"testAssignment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"windowId\"],\"properties\":{\"windowId\":{\"$ref\":\"#/$defs/windowId\"}}},\"testExecution\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"testAttemptId\",\"ordinal\",\"stepIds\"],\"properties\":{\"testAttemptId\":{\"$ref\":\"#/$defs/testAttemptId\"},\"ordinal\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10},\"stepIds\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"array\",\"minItems\":1,\"maxItems\":20,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/stepId\"}}]}}},\"implementationReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"outcome\",\"summary\",\"repositoryChange\",\"evidenceLocators\",\"verification\",\"risks\",\"anchorEvidence\",\"reportedAt\",\"reportDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowImplementationTargetResultReport\"},\"schemaVersion\":{\"const\":1},\"outcome\":{\"$ref\":\"#/$defs/resultOutcome\"},\"summary\":{\"$ref\":\"#/$defs/humanText\"},\"repositoryChange\":{\"$ref\":\"#/$defs/repositoryChange\"},\"evidenceLocators\":{\"$ref\":\"#/$defs/evidenceLocators\"},\"verification\":{\"$ref\":\"#/$defs/humanTextList\"},\"risks\":{\"$ref\":\"#/$defs/humanTextList\"},\"anchorEvidence\":{\"type\":\"array\",\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/anchorEvidence\"}},\"reportedAt\":{\"$ref\":\"#/$defs/utcInstant\"},\"reportDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"testReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"outcome\",\"summary\",\"evidenceLocators\",\"verification\",\"risks\",\"steps\",\"verdict\",\"reportedAt\",\"reportDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowTestTargetResultReport\"},\"schemaVersion\":{\"const\":1},\"outcome\":{\"$ref\":\"#/$defs/resultOutcome\"},\"summary\":{\"$ref\":\"#/$defs/humanText\"},\"evidenceLocators\":{\"$ref\":\"#/$defs/evidenceLocators\"},\"verification\":{\"$ref\":\"#/$defs/humanTextList\"},\"risks\":{\"$ref\":\"#/$defs/humanTextList\"},\"reportedAt\":{\"$ref\":\"#/$defs/utcInstant\"},\"reportDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"steps\":{\"type\":\"array\",\"maxItems\":20,\"items\":{\"$ref\":\"#/$defs/step\"}},\"verdict\":{\"enum\":[\"pass\",\"fail\",\"blocked\",\"cannot-conclude\"]}},\"allOf\":[{\"if\":{\"properties\":{\"outcome\":{\"const\":\"completed\"}},\"required\":[\"outcome\"]},\"then\":{\"properties\":{\"steps\":{\"type\":\"array\",\"minItems\":1}}}}]},\"repositoryChange\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"repositoryId\",\"disposition\",\"branch\",\"commits\"],\"properties\":{\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"disposition\":{\"enum\":[\"committed\",\"left-uncommitted\",\"no-changes\"]},\"commits\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/gitObjectId\"}},\"branch\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/branchName\"}]}},\"allOf\":[{\"if\":{\"properties\":{\"disposition\":{\"const\":\"committed\"}},\"required\":[\"disposition\"]},\"then\":{\"properties\":{\"commits\":{\"type\":\"array\",\"minItems\":1}}},\"else\":{\"properties\":{\"commits\":{\"type\":\"array\",\"maxItems\":0}}}}]},\"evidenceLocators\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/evidenceLocator\"}},\"evidenceLocator\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"ref\",\"digest\"],\"properties\":{\"kind\":{\"$ref\":\"#/$defs/evidenceKind\"},\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"evidenceRef\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"ref\",\"digest\"],\"properties\":{\"ref\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"anchorEvidence\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"anchorId\",\"evidenceRefs\"],\"properties\":{\"anchorId\":{\"$ref\":\"#/$defs/token\"},\"evidenceRefs\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/evidenceRef\"}}}},\"humanTextList\":{\"type\":\"array\",\"maxItems\":64,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"eventReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"eventId\",\"streamRevision\"],\"properties\":{\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"streamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991}}},\"commitReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"commitId\",\"commitSequence\",\"commitDigest\"],\"properties\":{\"commitId\":{\"$ref\":\"#/$defs/commitId\"},\"commitSequence\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"commitDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"resultOutcome\":{\"enum\":[\"completed\",\"blocked\",\"needs-review\"]},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"token\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"gitObjectId\":{\"oneOf\":[{\"$ref\":\"#/$defs/gitSha1ObjectId\"},{\"$ref\":\"#/$defs/gitSha256ObjectId\"}]},\"gitSha1ObjectId\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"algorithm\",\"value\"],\"properties\":{\"algorithm\":{\"const\":\"sha1\"},\"value\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{40}$\"}}},\"gitSha256ObjectId\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"algorithm\",\"value\"],\"properties\":{\"algorithm\":{\"const\":\"sha256\"},\"value\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{64}$\"}}},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"},\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetTaskId\":{\"type\":\"string\",\"pattern\":\"^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetDeliveryId\":{\"type\":\"string\",\"pattern\":\"^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetResultId\":{\"type\":\"string\",\"pattern\":\"^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"taskPackageId\":{\"type\":\"string\",\"pattern\":\"^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"repositoryId\":{\"type\":\"string\",\"pattern\":\"^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"testAttemptId\":{\"type\":\"string\",\"pattern\":\"^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"claimId\":{\"type\":\"string\",\"pattern\":\"^work-claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"eventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"commitId\":{\"type\":\"string\",\"pattern\":\"^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"delivery\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"generation\",\"fence\",\"outcomeDigest\",\"disposition\",\"readbackStatus\",\"observedAt\"],\"properties\":{\"generation\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":4},\"fence\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"claimId\",\"claimDigest\"],\"properties\":{\"claimId\":{\"$ref\":\"#/$defs/claimId\"},\"claimDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"outcomeDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"disposition\":{\"enum\":[\"accepted\",\"indeterminate\"]},\"readbackStatus\":{\"enum\":[\"confirmed\",\"pending\",\"unavailable\"]},\"observedAt\":{\"$ref\":\"#/$defs/utcInstant\"}}},\"stepId\":{\"type\":\"string\",\"pattern\":\"^ts-[1-9][0-9]?$\"},\"evidenceKind\":{\"enum\":[\"test-output\",\"diff\",\"document\",\"transcript\",\"commit\"]},\"branchName\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":255,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$\"},\"failure\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"classification\",\"likelyOwner\",\"recommendedAction\"],\"properties\":{\"classification\":{\"enum\":[\"product-defect\",\"harness-defect\",\"environment\",\"flaky\",\"missing-evidence\",\"out-of-scope\",\"needs-decision\"]},\"likelyOwner\":{\"enum\":[\"implementation\",\"test\",\"environment\",\"user\"]},\"recommendedAction\":{\"$ref\":\"#/$defs/humanText\"}}},\"step\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"stepId\",\"observed\",\"evidence\",\"verdict\"],\"properties\":{\"stepId\":{\"$ref\":\"#/$defs/stepId\"},\"observed\":{\"$ref\":\"#/$defs/humanText\"},\"evidence\":{\"$ref\":\"#/$defs/evidenceRef\"},\"verdict\":{\"enum\":[\"pass\",\"fail\",\"blocked\",\"cannot-conclude\"]},\"failure\":{\"$ref\":\"#/$defs/failure\"}},\"allOf\":[{\"if\":{\"properties\":{\"verdict\":{\"const\":\"pass\"}},\"required\":[\"verdict\"]},\"then\":{\"properties\":{\"failure\":false}},\"else\":{\"required\":[\"failure\"],\"properties\":{\"failure\":{\"$ref\":\"#/$defs/failure\"}}}}]},\"bindingId\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$\"},\"hostAction\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"effect\",\"hostId\",\"windowId\",\"displayTitle\",\"bindingId\",\"handleDigest\"],\"description\":\"Agent 执行的一次性宿主动作：把回调 prompt 送进 Controller 窗口；原始句柄不出现。\",\"properties\":{\"effect\":{\"const\":\"send-prompt-to-window\"},\"hostId\":{\"enum\":[\"codex\",\"claude-code\"]},\"windowId\":{\"$ref\":\"#/$defs/windowId\"},\"displayTitle\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256},\"bindingId\":{\"$ref\":\"#/$defs/bindingId\"},\"handleDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"callbackPermit\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"prompt\",\"hostAction\",\"generation\",\"issuedAt\"],\"properties\":{\"prompt\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":65536},\"hostAction\":{\"$ref\":\"#/$defs/hostAction\"},\"generation\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":4},\"issuedAt\":{\"$ref\":\"#/$defs/utcInstant\"}}},\"callback\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"callbackId\",\"permit\"],\"description\":\"wake-controller 回调：目标 Agent 把 permit.prompt 送进 Controller 窗口；落地由 Controller 会话的 user-prompt-submit 记录证明。\",\"properties\":{\"callbackId\":{\"$ref\":\"#/$defs/targetDeliveryId\"},\"permit\":{\"$ref\":\"#/$defs/callbackPermit\"}}},\"next\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"frontier\",\"owner\",\"suggestedTool\",\"blockers\"],\"description\":\"Next responsibility derived from the route after this call.\",\"properties\":{\"frontier\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}]},\"owner\":{\"enum\":[\"controller\",\"target\",\"test\",\"user\",\"none\"]},\"suggestedTool\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}]},\"blockers\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256}}}}}}");

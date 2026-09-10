@@ -1,21 +1,17 @@
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import type {
+  TargetResultImportResult,
+  TargetResultReviewInspectionResult,
+  TestReviewDecisionRequest,
+  TestReviewDecisionResult,
+} from "../../../src/capabilities/result-review/contract.js";
+import {
+  executeTargetResultImportRequest,
+  executeTestReviewDecisionRequest,
+  type ExecuteResultReviewOptions,
+} from "../../../src/capabilities/result-review/service.js";
+import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DeliveryEnvelope } from "../../../src/governance/delivery/delivery-envelope.js";
-import {
-  TargetResultImportService,
-  type TargetResultImportResult,
-} from "../../../src/governance/result/target-result-import-service.js";
-import {
-  readDemandResultReviewSnapshot,
-  type DemandResultReviewSnapshot,
-} from "../../../src/governance/review/demand-result-review-snapshot.js";
-import {
-  parseControllerTestReviewDecisionRequest,
-  type ControllerTestReviewDecisionRequest,
-} from "../../../src/governance/review/controller-test-review-decision-input.js";
-import {
-  withFixtureDemandRoot,
-  type DeliveredTarget,
-} from "../delivery/delivery-workspace.fixture.js";
+import type { DeliveredTarget } from "../delivery/delivery-workspace.fixture.js";
 import {
   cleanupTestDeliveryWorkspaceFixture,
   createTestDeliveryWorkspaceFixture,
@@ -23,56 +19,188 @@ import {
   type TestDeliveryWorkspaceFixture,
 } from "../delivery/test-delivery-workspace.fixture.js";
 import type { TestTaskPlanningWorkspaceFixtureOptions } from "../tasking/test-task-planning.fixture.js";
+import {
+  CODEX_REVIEW_FACADE,
+  currentFixtureStreamRevision,
+  inspectFixtureReview,
+  landFixtureTargetCompletion,
+  type FixtureEvidence,
+} from "./controller-implementation-review-decision-service.fixture.js";
+
+/**
+ * 测试链的评审夹具：测试投递 accepted → 经切片导入逐步记录（证据沿用实现链记录的受管证据）
+ * → 测试会话 Stop 记录 → 检查投影 → 一份可直接提交的 accept 决定请求。
+ */
 
 export const TEST_RESULT_REPORTED_AT = parseUtcInstant("2026-08-29T12:34:00.000Z");
+export const TEST_TARGET_STOPPED_AT = parseUtcInstant("2026-08-29T12:35:00.000Z");
+export const TEST_REVIEW_INSPECTED_AT = parseUtcInstant("2026-08-29T12:36:00.000Z");
+export const TEST_REVIEW_DECIDED_AT = parseUtcInstant("2026-08-29T12:37:00.000Z");
+export const TEST_REVIEW_DECISION_UUID = "e5e5e5e5-e5e5-45e5-85e5-e5e5e5e5e5e5";
+
+export type TestStepFailureContent = Readonly<{
+  readonly classification:
+    | "product-defect"
+    | "harness-defect"
+    | "environment"
+    | "flaky"
+    | "missing-evidence"
+    | "out-of-scope"
+    | "needs-decision";
+  readonly likelyOwner: "implementation" | "test" | "environment" | "user";
+  readonly recommendedAction: string;
+}>;
+
+export type TestStepContent = Readonly<{
+  readonly stepId: string;
+  readonly observed: string;
+  readonly evidence: Readonly<{ readonly ref: string; readonly digest: string }>;
+  readonly verdict: "pass" | "fail" | "blocked" | "cannot-conclude";
+  readonly failure?: TestStepFailureContent;
+}>;
 
 export interface ControllerTestReviewDecisionServiceFixture extends TestDeliveryWorkspaceFixture {
   readonly testDelivered: Readonly<DeliveredTarget>;
   readonly testEnvelope: Readonly<DeliveryEnvelope>;
   readonly testAttemptId: string;
   readonly testImported: Readonly<TargetResultImportResult>;
-  readonly reviewSnapshot: Readonly<DemandResultReviewSnapshot>;
-  readonly testDecisionRequest: Readonly<ControllerTestReviewDecisionRequest>;
+  readonly testInspection: Readonly<TargetResultReviewInspectionResult>;
+  readonly testDecisionRequest: Readonly<TestReviewDecisionRequest>;
 }
 
-export function testResultReportContent(stepIds: readonly string[]) {
-  const evidenceLocators = stepIds.map((stepId, index) =>
-    Object.freeze({
-      kind: "test-step-report" as const,
-      ref: `evidence/test-runs/${stepId}.json`,
-      digest: `sha256:${String(index + 1).repeat(64)}`,
+/** 一步通过的记录；失败步骤由调用方改写 verdict 与 failure。 */
+export function passingStep(stepId: string, evidence: Readonly<FixtureEvidence>): TestStepContent {
+  return Object.freeze({
+    stepId,
+    observed: `${stepId} 按合同 then 表现一致。`,
+    evidence: Object.freeze({ ref: evidence.ref, digest: evidence.digest }),
+    verdict: "pass" as const,
+  });
+}
+
+export function failingStep(
+  stepId: string,
+  evidence: Readonly<FixtureEvidence>,
+  classification: TestStepFailureContent["classification"],
+  verdict: "fail" | "blocked" | "cannot-conclude" = "fail",
+): TestStepContent {
+  const owner: TestStepFailureContent["likelyOwner"] =
+    classification === "product-defect"
+      ? "implementation"
+      : classification === "environment"
+        ? "environment"
+        : classification === "needs-decision" || classification === "out-of-scope"
+          ? "user"
+          : "test";
+  return Object.freeze({
+    stepId,
+    observed: `${stepId} 观察到与合同 then 不一致的行为。`,
+    evidence: Object.freeze({ ref: evidence.ref, digest: evidence.digest }),
+    verdict,
+    failure: Object.freeze({
+      classification,
+      likelyOwner: owner,
+      recommendedAction: `按 ${classification} 处理 ${stepId}。`,
     }),
-  );
+  });
+}
+
+export function testResultReportContent(
+  steps: readonly TestStepContent[],
+  evidence: Readonly<FixtureEvidence>,
+  outcome: "completed" | "blocked" | "needs-review" = "completed",
+) {
   return {
-    outcome: "completed" as const,
-    summary: "已执行测试合同的全部步骤并返回逐步事实。",
-    evidenceLocators,
-    verification: ["逐项复验Evidence ref与digest。"],
-    risks: ["Result仍需Controller独立审查。"],
-    stepEvidence: stepIds.map((stepId, index) => ({
-      stepId,
-      evidence: {
-        ref: evidenceLocators[index]!.ref,
-        digest: evidenceLocators[index]!.digest,
-      },
-    })),
+    outcome,
+    summary: "已执行测试合同范围内的步骤并返回逐步记录。",
+    evidenceLocators: [{ kind: "test-output", ref: evidence.ref, digest: evidence.digest }],
+    verification: ["逐项复验 Evidence ref 与 digest。"],
+    risks: ["结果仍需 Controller 独立审查。"],
+    steps: steps.map((step) => ({ ...step })),
   };
 }
 
-/** 导入测试结果：逐步证据按测试合同的 stepId 生成。 */
+export interface ImportFixtureTestOptions {
+  readonly idempotencyKey?: string;
+  readonly expectedStreamRevision?: number;
+  readonly reportedAt?: UtcInstant;
+  readonly steps?: readonly TestStepContent[];
+  readonly outcome?: "completed" | "blocked" | "needs-review";
+}
+
+/** 经切片导入测试结果：逐步记录按测试合同的 stepId 生成，缺省全部 pass。 */
 export async function importFixtureTestResult(
   fixture: Readonly<TestDeliveryWorkspaceFixture>,
   delivered: Readonly<DeliveredTarget>,
-  reportedAt = TEST_RESULT_REPORTED_AT,
+  options: ImportFixtureTestOptions = {},
 ): Promise<Readonly<TargetResultImportResult>> {
-  return new TargetResultImportService(fixture.workspaceRoot, "codex").import(
+  const steps =
+    options.steps ?? fixture.testStepIds.map((stepId) => passingStep(stepId, fixture.evidence));
+  return executeTargetResultImportRequest(
+    CODEX_REVIEW_FACADE,
     {
+      root: fixture.workspacePath,
       demandId: fixture.demandId,
+      idempotencyKey: options.idempotencyKey ?? "fixture-test-import-1",
+      expectedStreamRevision:
+        options.expectedStreamRevision ?? (await currentFixtureStreamRevision(fixture)),
       deliveryId: delivered.prepared.delivery.deliveryId,
       claimDigest: delivered.prepared.permit.fence.claimDigest,
-      report: { workType: "test", content: testResultReportContent(fixture.testStepIds) },
+      report: {
+        workType: "test",
+        content: testResultReportContent(steps, fixture.evidence, options.outcome),
+      },
     },
-    { clock: () => reportedAt },
+    { clock: () => options.reportedAt ?? TEST_RESULT_REPORTED_AT },
+  );
+}
+
+/** 测试决定请求：accept 判断；调用方按需覆盖决定、范围与升级。 */
+export function fixtureTestDecisionRequest(
+  fixture: Readonly<{ readonly workspacePath: string; readonly demandId: string }>,
+  inspection: Readonly<TargetResultReviewInspectionResult>,
+  expectedStreamRevision: number,
+  idempotencyKey = "fixture-test-decision-1",
+): Readonly<TestReviewDecisionRequest> {
+  return {
+    root: fixture.workspacePath,
+    demandId: fixture.demandId,
+    idempotencyKey,
+    expectedStreamRevision,
+    targetResultId: inspection.reviewUnit.targetResult.targetResultId,
+    snapshotDigest: inspection.snapshotDigest,
+    reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
+    decision: "accept" as const,
+    assessment: Object.freeze({
+      conclusion: "satisfied" as const,
+      evidenceSufficiency: "sufficient" as const,
+    }),
+    independentChecks: [
+      {
+        checkId: "controller-test-evidence",
+        method: "重新读取逐步Evidence并复验冻结Test问题。",
+        outcome: "passed" as const,
+        observation: "全部合同步骤的Evidence闭合且未观察到产品缺陷。",
+      },
+    ],
+    rationale: "Controller独立检查已关闭当前真实环境风险。",
+    blockingReasons: [],
+    residualRisks: ["该决定不替代后续Demand completion检查。"],
+  };
+}
+
+export async function decideFixtureTest(
+  fixture: Readonly<ControllerTestReviewDecisionServiceFixture>,
+  overrides: Partial<TestReviewDecisionRequest> = {},
+  options: ExecuteResultReviewOptions = {
+    clock: () => TEST_REVIEW_DECIDED_AT,
+    uuidFactory: () => TEST_REVIEW_DECISION_UUID,
+  },
+): Promise<Readonly<TestReviewDecisionResult>> {
+  return executeTestReviewDecisionRequest(
+    CODEX_REVIEW_FACADE,
+    { ...fixture.testDecisionRequest, ...overrides },
+    options,
   );
 }
 
@@ -87,34 +215,9 @@ export async function createControllerTestReviewDecisionServiceFixture(
     }
     const testAttemptId = testDelivered.envelope.attempt.testAttemptId;
     const testImported = await importFixtureTestResult(fixture, testDelivered);
-    const reviewSnapshot = await withFixtureDemandRoot(fixture, readDemandResultReviewSnapshot);
-    const target = reviewSnapshot.targets.find(
-      (entry) => entry.targetTaskId === fixture.testTargetTaskId,
-    );
-    if (target?.status !== "reported" || target.targetResult.workType !== "test") {
-      throw new Error("Expected reported Test review target fixture.");
-    }
-    const testDecisionRequest = parseControllerTestReviewDecisionRequest({
-      demandId: fixture.demandId,
-      targetResultId: target.targetResult.targetResultId,
-      snapshotDigest: reviewSnapshot.snapshotDigest,
-      reviewUnitDigest: target.reviewUnitDigest,
-      decision: "accept" as const,
-      assessment: Object.freeze({
-        conclusion: "satisfied" as const,
-        evidenceSufficiency: "sufficient" as const,
-      }),
-      independentChecks: Object.freeze([
-        Object.freeze({
-          checkId: "controller-test-evidence",
-          method: "重新读取逐步Evidence并复验冻结Test问题。",
-          outcome: "passed" as const,
-          observation: "全部批准步骤的Evidence闭合且未观察到产品缺陷。",
-        }),
-      ] as const),
-      rationale: "Controller独立检查已关闭当前真实环境风险。",
-      blockingReasons: Object.freeze([]),
-      residualRisks: Object.freeze(["该决定不替代后续Demand completion检查。"]),
+    await landFixtureTargetCompletion(fixture, fixture.testRoute, TEST_TARGET_STOPPED_AT);
+    const testInspection = await inspectFixtureReview(fixture, fixture.testTargetTaskId, {
+      clock: () => TEST_REVIEW_INSPECTED_AT,
     });
     return Object.freeze({
       ...fixture,
@@ -122,8 +225,12 @@ export async function createControllerTestReviewDecisionServiceFixture(
       testEnvelope: testDelivered.envelope,
       testAttemptId,
       testImported,
-      reviewSnapshot,
-      testDecisionRequest,
+      testInspection,
+      testDecisionRequest: fixtureTestDecisionRequest(
+        fixture,
+        testInspection,
+        testImported.event.streamRevision,
+      ),
     });
   } catch (error: unknown) {
     await cleanupTestDeliveryWorkspaceFixture(fixture);

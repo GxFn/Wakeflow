@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA",
   "title": "WakeflowImplementationTargetResultReport",
   "description": "目标Agent对一个implementation Target Task提交的严格业务结果陈述。",
-  "$comment": "Report不声明transport、Claim或Controller acceptance；Wakeflow import owner从当前Event Sourcing authority补齐这些事实。当前v1仅支持单仓库implementation，不包含Test mapping、supersedes或多round兼容字段。",
+  "$comment": "Report不声明transport、Claim或Controller acceptance；Wakeflow import owner从当前Event Sourcing authority补齐这些事实。当前v1仅支持单仓库implementation，不包含Test mapping、supersedes或多round兼容字段。 evidenceLocator.kind 是闭集词汇；repositoryChange.branch 记录结果所在分支（主检出为 null，ADR-0010）。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -101,7 +101,7 @@
     "repositoryChange": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repositoryId", "disposition", "commits"],
+      "required": ["repositoryId", "disposition", "branch", "commits"],
       "properties": {
         "repositoryId": {
           "$ref": "#/$defs/repositoryId"
@@ -116,6 +116,16 @@
           "items": {
             "$ref": "urn:wakeflow:foundation:version-control:git-object-id:v1"
           }
+        },
+        "branch": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/branchName"
+            }
+          ]
         }
       },
       "allOf": [
@@ -153,7 +163,7 @@
       "required": ["kind", "ref", "digest"],
       "properties": {
         "kind": {
-          "$ref": "#/$defs/token"
+          "$ref": "#/$defs/evidenceKind"
         },
         "ref": {
           "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
@@ -194,6 +204,15 @@
           }
         }
       }
+    },
+    "evidenceKind": {
+      "enum": ["test-output", "diff", "document", "transcript", "commit"]
+    },
+    "branchName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$"
     }
   }
 }

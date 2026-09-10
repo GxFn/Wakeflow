@@ -35,7 +35,10 @@ import {
   createDeliveryOutcomeFixture,
   createWorkClaimFixture,
 } from "../../governance/delivery/delivery-records.fixture.js";
-import { createTargetResultFixture } from "../../governance/result/target-result.fixture.js";
+import {
+  createTargetResultCallbackFixture,
+  createTargetResultFixture,
+} from "../../governance/result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionForState } from "../../governance/review/controller-implementation-review-decision.fixture.js";
 import {
   createTaskPackageFixture,
@@ -211,6 +214,8 @@ function reportedState() {
     commandType: "result.record-target-result",
     commandVersion: 1,
     result: targetResult,
+    callback: createTargetResultCallbackFixture(targetResult),
+    evidenceResolution: [],
   });
   return { state: evolveDemandEventSourcingState(hostEffectObserved, resultEvent), targetResult };
 }

@@ -86,10 +86,14 @@ import {
   type ControllerProductDefectRemediationAuthorization,
 } from "../../review/controller-product-defect-remediation-authorization.js";
 import {
-  parseControllerTargetReviewResume,
-  ControllerTargetReviewResumeError,
-  type ControllerTargetReviewResume,
-} from "../../review/controller-target-review-resume.js";
+  deriveTargetResultCallbackId,
+  parseTargetResultCallbackRecord,
+  parseTargetResultCallbackReissue,
+  TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
+  TargetResultCallbackError,
+  type TargetResultCallbackRecord,
+  type TargetResultCallbackReissue,
+} from "../../result/target-result-callback.js";
 import {
   parseDemandCompletion,
   DemandCompletionError,
@@ -116,7 +120,8 @@ import {
  * publication 时冻结的 Authority；`targetTasks` 只保存调度前真正需要的最小摘要，
  * 完整 TaskPackage、Delivery Envelope、Delivery Outcome、Delivery Rearm、TargetResult
  * 与 Controller Review Decision 仍属于事件数据；状态只保存当前 Delivery（含围栏与
- * 结局摘要）、Result 和 Review 的最小摘要，工作声明本身在内核的共享协调根。测试合同在 test 任务包里；已经
+ * 结局摘要）、Result（含 wake-controller 回调的当前代际）和 Review 的最小摘要，工作声明
+ * 本身在内核的共享协调根。测试合同在 test 任务包里；已经
  * 观察到产品缺陷的旧Test Target继续作为历史代际保留自己的attempt、Result与
  * Decision。`managedEvidence`只在首个Evidence Event后出现，且只保存Manifest与payload
  * 的精确selector；完整Manifest仍由Event拥有。`pendingTestRetest`只记录产品缺陷修复后
@@ -199,12 +204,23 @@ export interface DemandHostEffectRejectedTargetTaskState extends DemandObservedH
   readonly phase: "host-effect-rejected";
 }
 
+/** 结果回调的当前代际：落地由读侧从 Controller 会话记录派生，这里只记签发事实。 */
+export interface DemandTargetResultCallbackSummary {
+  readonly callbackId: WakeflowDurableId<"target-delivery">;
+  readonly generation: number;
+  readonly promptDigest: Sha256Digest;
+  readonly issuedAt: UtcInstant;
+  readonly controllerWindowId: WakeflowDurableId<"window">;
+  readonly bindingId: WakeflowWindowHostBindingId;
+}
+
 export interface DemandTargetResultSummary {
   readonly targetResultId: WakeflowDurableId<"target-result">;
   readonly resultDigest: Sha256Digest;
   readonly outcome: TargetResult["report"]["outcome"];
   readonly reportedAt: UtcInstant;
   readonly claimHandling: "release-authorized";
+  readonly callback: Readonly<DemandTargetResultCallbackSummary>;
 }
 
 export interface DemandResultReportedTargetTaskState extends DemandImplementationTargetTaskStateBase {
@@ -244,7 +260,7 @@ export interface DemandProductDefectRemediationSummary {
   readonly authorizationDigest: Sha256Digest;
   readonly testReviewDecisionId: WakeflowDurableId<"target-review-decision">;
   readonly testReviewDecisionDigest: Sha256Digest;
-  readonly failedCheckIds: readonly [string, ...string[]];
+  readonly failedStepIds: readonly [string, ...string[]];
   readonly correctionObjective: string;
   readonly authorizedAt: UtcInstant;
 }
@@ -258,8 +274,9 @@ export interface DemandReworkRequestedTargetTaskState extends DemandReviewedTarg
   readonly phase: "rework-requested";
 }
 
-export interface DemandRedesignRequestedTargetTaskState extends DemandReviewedTargetTaskStateBase {
-  readonly phase: "redesign-requested";
+/** 实现评审升级给用户；用户回答后由 Controller 带 resumption 再决定（§13.87 D4）。 */
+export interface DemandEscalatedTargetTaskState extends DemandReviewedTargetTaskStateBase {
+  readonly phase: "escalated";
 }
 
 export interface DemandReviewBlockedTargetTaskState extends DemandReviewedTargetTaskStateBase {
@@ -275,7 +292,7 @@ export interface DemandSupersededTargetTaskState extends DemandImplementationTar
 type DemandReviewedTargetPhase =
   | DemandAcceptedTargetTaskState["phase"]
   | DemandReworkRequestedTargetTaskState["phase"]
-  | DemandRedesignRequestedTargetTaskState["phase"]
+  | DemandEscalatedTargetTaskState["phase"]
   | DemandReviewBlockedTargetTaskState["phase"];
 
 export type DemandTargetTaskState =
@@ -288,7 +305,7 @@ export type DemandTargetTaskState =
   | DemandAcceptedTargetTaskState
   | DemandProductDefectReworkRequestedTargetTaskState
   | DemandReworkRequestedTargetTaskState
-  | DemandRedesignRequestedTargetTaskState
+  | DemandEscalatedTargetTaskState
   | DemandReviewBlockedTargetTaskState
   | DemandSupersededTargetTaskState
   | DemandTestPlannedTargetTaskState
@@ -300,7 +317,8 @@ export type DemandTargetTaskState =
   | DemandTestAcceptedTargetTaskState
   | DemandTestAnotherAttemptRequestedTargetTaskState
   | DemandTestProductDefectTargetTaskState
-  | DemandTestReviewBlockedTargetTaskState;
+  | DemandTestReviewBlockedTargetTaskState
+  | DemandTestEscalatedTargetTaskState;
 
 interface DemandTestTargetTaskStateBase {
   readonly targetTaskId: WakeflowDurableId<"target-task">;
@@ -405,6 +423,11 @@ export interface DemandTestReviewBlockedTargetTaskState extends DemandTestReview
   readonly phase: "test-review-blocked";
 }
 
+/** 测试评审 `escalate{needs-decision}`：升级给用户，回答后带 resumption 再决定。 */
+export interface DemandTestEscalatedTargetTaskState extends DemandTestReviewedTargetTaskStateBase {
+  readonly phase: "test-escalated";
+}
+
 export interface DemandAggregateState {
   readonly artifactKind: typeof DEMAND_AGGREGATE_STATE_ARTIFACT_KIND;
   readonly schemaVersion: typeof DEMAND_AGGREGATE_STATE_SCHEMA_VERSION;
@@ -474,7 +497,7 @@ export type DemandAggregateStateErrorReason =
   | "target-result"
   | "controller-review-decision"
   | "controller-product-defect-remediation-authorization"
-  | "controller-target-review-resume"
+  | "target-result-callback"
   | "managed-evidence-manifest"
   | "relation"
   | "transition";
@@ -498,8 +521,8 @@ const ERROR_MESSAGES = {
     "Demand aggregate state transition contains an invalid Controller Review Decision.",
   "controller-product-defect-remediation-authorization":
     "Demand aggregate state transition contains an invalid Controller Product Defect Remediation Authorization.",
-  "controller-target-review-resume":
-    "Demand aggregate state transition contains an invalid Controller Target Review Resume.",
+  "target-result-callback":
+    "Demand aggregate state transition contains an invalid Target Result callback record.",
   "managed-evidence-manifest":
     "Demand aggregate state transition contains an invalid Managed Evidence Manifest.",
   relation: "Demand aggregate target task summaries are inconsistent.",
@@ -656,16 +679,62 @@ function parseTargetResultSummary(
   }
   // reportedAt只保留Report来源时钟的审计事实；Event流修订、当前状态摘要和
   // TargetResult对Host Effect的精确引用共同建立因果关系，不比较跨来源墙钟。
+  const targetResultId = parseId(
+    value.targetResultId,
+    "target-result",
+    `${path}/targetResultId`,
+  );
   return Object.freeze({
-    targetResultId: parseId(
-      value.targetResultId,
-      "target-result",
-      `${path}/targetResultId`,
-    ),
+    targetResultId,
     resultDigest: parseDigest(value.resultDigest, `${path}/resultDigest`),
     outcome: value.outcome,
     reportedAt,
     claimHandling: "release-authorized" as const,
+    callback: parseCallbackSummary(value.callback, targetResultId, `${path}/callback`),
+  });
+}
+
+function parseCallbackSummary(
+  value: NonNullable<ProductCurrentDeliveryWire["targetResult"]>["callback"],
+  targetResultId: WakeflowDurableId<"target-result">,
+  path: string,
+): Readonly<DemandTargetResultCallbackSummary> {
+  let issuedAt: UtcInstant;
+  try {
+    issuedAt = parseUtcInstant(value.issuedAt, `${path}/issuedAt`);
+  } catch (error: unknown) {
+    if (error instanceof UtcInstantError) fail("relation", `${path}/issuedAt`);
+    throw error;
+  }
+  let bindingId: WakeflowWindowHostBindingId;
+  try {
+    bindingId = parseWakeflowWindowHostBindingId(value.bindingId, `${path}/bindingId`);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowHostBindingIdError) {
+      fail("identifier", `${path}/bindingId`);
+    }
+    throw error;
+  }
+  const callbackId = parseId(value.callbackId, "target-delivery", `${path}/callbackId`);
+  if (
+    callbackId !== deriveTargetResultCallbackId(targetResultId) ||
+    !Number.isSafeInteger(value.generation) ||
+    value.generation < 1 ||
+    value.generation > TARGET_RESULT_CALLBACK_GENERATION_LIMIT
+  ) {
+    fail("relation", `${path}/callbackId`);
+  }
+  return Object.freeze({
+    callbackId,
+    generation: value.generation,
+    promptDigest: parseDigest(value.promptDigest, `${path}/promptDigest`),
+    issuedAt,
+    controllerWindowId: parseId(
+      value.controllerWindowId,
+      "window",
+      `${path}/controllerWindowId`,
+    ),
+    bindingId,
   });
 }
 
@@ -732,21 +801,45 @@ function reviewPhaseForDecision(
     ? "accepted"
     : decision === "rework"
       ? "rework-requested"
-      : decision === "redesign"
-        ? "redesign-requested"
+      : decision === "escalate"
+        ? "escalated"
         : "review-blocked";
 }
 
-function testReviewPhaseForDecision(
+type DemandTestReviewedPhase =
+  | DemandTestAcceptedTargetTaskState["phase"]
+  | DemandTestAnotherAttemptRequestedTargetTaskState["phase"]
+  | DemandTestProductDefectTargetTaskState["phase"]
+  | DemandTestReviewBlockedTargetTaskState["phase"]
+  | DemandTestEscalatedTargetTaskState["phase"];
+
+/** 摘要不带升级分类：escalate 的两个 phase 都成立，精确分类由事件与仓库审计核对。 */
+function testReviewPhasesForDecision(
   decision: ControllerTestReviewDecision["decision"],
-): DemandTargetTaskState["phase"] {
+): readonly DemandTestReviewedPhase[] {
   return decision === "accept"
-    ? "test-accepted"
+    ? ["test-accepted"]
     : decision === "request-another-attempt"
-      ? "test-another-attempt-requested"
-      : decision === "escalate-product-defect"
-        ? "test-product-defect"
-        : "test-review-blocked";
+      ? ["test-another-attempt-requested"]
+      : decision === "escalate"
+        ? ["test-product-defect", "test-escalated"]
+        : ["test-review-blocked"];
+}
+
+function testReviewPhaseForDecision(
+  decision: Readonly<ControllerTestReviewDecision>,
+): DemandTestReviewedPhase {
+  return decision.decision === "escalate"
+    ? decision.escalation?.classification === "product-defect"
+      ? "test-product-defect"
+      : "test-escalated"
+    : testReviewPhasesForDecision(decision.decision)[0] ?? "test-review-blocked";
+}
+
+const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
+
+function compareStepId(left: string, right: string): number {
+  return Number(left.slice(3)) - Number(right.slice(3));
 }
 
 function parseAcceptanceAnchorIds(
@@ -870,24 +963,22 @@ function parseProductDefectRemediationSummary(
   acceptedDecision: Readonly<DemandTargetReviewDecisionSummary>,
   path: string,
 ): Readonly<DemandProductDefectRemediationSummary> {
-  const parsedCheckIds = parseAcceptanceAnchorIds(
-    value.failedCheckIds,
-    `${path}/failedCheckIds`,
-  );
+  const parsedStepIds = value.failedStepIds;
   if (
-    parsedCheckIds.some(
-      (check, index) =>
-        index > 0 && compareText(parsedCheckIds[index - 1]!, check) >= 0,
+    parsedStepIds.some(
+      (stepId, index) =>
+        !STEP_ID_PATTERN.test(stepId) ||
+        (index > 0 && compareStepId(parsedStepIds[index - 1]!, stepId) >= 0),
     )
   ) {
-    fail("relation", `${path}/failedCheckIds`);
+    fail("relation", `${path}/failedStepIds`);
   }
-  const firstCheckId = parsedCheckIds[0];
-  if (firstCheckId === undefined) {
-    fail("relation", `${path}/failedCheckIds`);
+  const firstStepId = parsedStepIds[0];
+  if (firstStepId === undefined) {
+    fail("relation", `${path}/failedStepIds`);
   }
-  const failedCheckIds: DemandProductDefectRemediationSummary["failedCheckIds"] =
-    Object.freeze([firstCheckId, ...parsedCheckIds.slice(1)]);
+  const failedStepIds: DemandProductDefectRemediationSummary["failedStepIds"] =
+    Object.freeze([firstStepId, ...parsedStepIds.slice(1)]);
   let authorizedAt: UtcInstant;
   try {
     authorizedAt = parseUtcInstant(value.authorizedAt, `${path}/authorizedAt`);
@@ -925,7 +1016,7 @@ function parseProductDefectRemediationSummary(
       value.testReviewDecisionDigest,
       `${path}/testReviewDecisionDigest`,
     ),
-    failedCheckIds,
+    failedStepIds,
     correctionObjective: value.correctionObjective,
     authorizedAt,
   });
@@ -1122,7 +1213,8 @@ function parseTargetTasks(
           value.phase !== "test-accepted" &&
           value.phase !== "test-another-attempt-requested" &&
           value.phase !== "test-product-defect" &&
-          value.phase !== "test-review-blocked") ||
+          value.phase !== "test-review-blocked" &&
+          value.phase !== "test-escalated") ||
         value.currentDelivery === undefined ||
         value.testAttempts === undefined ||
         value.testAttempts.length > 10
@@ -1179,7 +1271,8 @@ function parseTargetTasks(
         value.phase === "test-accepted" ||
         value.phase === "test-another-attempt-requested" ||
         value.phase === "test-product-defect" ||
-        value.phase === "test-review-blocked"
+        value.phase === "test-review-blocked" ||
+        value.phase === "test-escalated"
       ) {
         const reviewedDelivery =
           value.currentDelivery as TestReviewedCurrentDeliveryWire;
@@ -1198,10 +1291,12 @@ function parseTargetTasks(
           reviewedDelivery.reviewDecision,
           `${path}/currentDelivery/reviewDecision`,
         );
-        const expectedPhase = testReviewPhaseForDecision(
-          reviewDecision.decision,
-        );
-        if (value.phase !== expectedPhase) {
+        const expectedPhase = value.phase;
+        if (
+          !testReviewPhasesForDecision(reviewDecision.decision).includes(
+            expectedPhase,
+          )
+        ) {
           fail("relation", `${path}/phase`);
         }
         result.push(
@@ -1647,11 +1742,11 @@ export function prepareDeliveryInDemandAggregateState(
       remediation.previousResult.resultDigest !==
         target.currentDelivery.targetResult.resultDigest ||
       remediation.requiredCorrections.length !==
-        target.productDefectRemediation.failedCheckIds.length ||
+        target.productDefectRemediation.failedStepIds.length ||
       remediation.requiredCorrections.some(
         (correction, index) =>
-          correction.checkId !==
-          target.productDefectRemediation.failedCheckIds[index],
+          correction.stepId !==
+          target.productDefectRemediation.failedStepIds[index],
       )
     ) {
       fail("transition", "$/targetTasks");
@@ -1831,10 +1926,28 @@ export function rearmDeliveryInDemandAggregateState(
 }
 
 
-/** `result.target-result-recorded.v1` 使用的纯状态转换。 */
+function callbackSummaryOf(
+  result: Readonly<TargetResult>,
+  callback: Readonly<TargetResultCallbackRecord>,
+): Readonly<DemandTargetResultCallbackSummary> {
+  if (callback.callbackId !== deriveTargetResultCallbackId(result.targetResultId)) {
+    fail("transition", "$callback/callbackId");
+  }
+  return Object.freeze({
+    callbackId: callback.callbackId,
+    generation: callback.generation,
+    promptDigest: callback.promptDigest,
+    issuedAt: callback.issuedAt,
+    controllerWindowId: callback.controllerWindowId,
+    bindingId: callback.bindingId,
+  });
+}
+
+/** `result.target-result-recorded.v1` 使用的纯状态转换：结果与其回调记录一起进入摘要。 */
 export function recordTargetResultInDemandAggregateState(
   currentValue: unknown,
   resultValue: unknown,
+  callbackValue: unknown,
 ): Readonly<DemandAggregateState> {
   const current = parseDemandAggregateState(currentValue);
   let result: Readonly<TargetResult>;
@@ -1844,6 +1957,16 @@ export function recordTargetResultInDemandAggregateState(
     if (error instanceof TargetResultError) fail("target-result", "$result");
     throw error;
   }
+  let callbackRecord: Readonly<TargetResultCallbackRecord>;
+  try {
+    callbackRecord = parseTargetResultCallbackRecord(callbackValue);
+  } catch (error: unknown) {
+    if (error instanceof TargetResultCallbackError) {
+      fail("target-result-callback", "$callback");
+    }
+    throw error;
+  }
+  const callback = callbackSummaryOf(result, callbackRecord);
   const target = current.targetTasks.find(
     (entry) => entry.targetTaskId === result.targetTaskId,
   );
@@ -1896,6 +2019,7 @@ export function recordTargetResultInDemandAggregateState(
                   outcome: result.report.outcome,
                   reportedAt: result.report.reportedAt,
                   claimHandling: "release-authorized",
+                  callback,
                 },
               },
             }
@@ -1970,12 +2094,105 @@ export function recordTargetResultInDemandAggregateState(
                 outcome: result.report.outcome,
                 reportedAt: result.report.reportedAt,
                 claimHandling: "release-authorized",
+                callback,
               },
             },
           }
         : entry,
     ),
   });
+}
+
+/**
+ * `result.callback-reissued.v1` 使用的纯状态转换：同一回调换绑定与代际；只在结果尚未被
+ * Controller 决定的阶段允许，决定一旦记录回调即 acknowledged。
+ */
+export function reissueCallbackInDemandAggregateState(
+  currentValue: unknown,
+  reissueValue: unknown,
+): Readonly<DemandAggregateState> {
+  const current = parseDemandAggregateState(currentValue);
+  let reissue: Readonly<TargetResultCallbackReissue>;
+  try {
+    reissue = parseTargetResultCallbackReissue(reissueValue);
+  } catch (error: unknown) {
+    if (error instanceof TargetResultCallbackError) {
+      fail("target-result-callback", "$reissue");
+    }
+    throw error;
+  }
+  const target = current.targetTasks.find(
+    (entry) =>
+      (entry.phase === "result-reported" || entry.phase === "test-result-reported") &&
+      entry.currentDelivery.targetResult.targetResultId === reissue.targetResultId,
+  );
+  if (
+    current.lifecycle !== "active" ||
+    target === undefined ||
+    (target.phase !== "result-reported" && target.phase !== "test-result-reported")
+  ) {
+    fail("transition", "$/targetTasks");
+  }
+  const callback = target.currentDelivery.targetResult.callback;
+  if (
+    callback.callbackId !== reissue.callbackId ||
+    callback.generation !== reissue.previousGeneration ||
+    callback.promptDigest !== reissue.promptDigest ||
+    reissue.generation > TARGET_RESULT_CALLBACK_GENERATION_LIMIT
+  ) {
+    fail("transition", "$/targetTasks");
+  }
+  return parseDemandAggregateState({
+    ...current,
+    targetTasks: current.targetTasks.map((entry) =>
+      entry.targetTaskId === target.targetTaskId
+        ? {
+            ...target,
+            currentDelivery: {
+              ...target.currentDelivery,
+              targetResult: {
+                ...target.currentDelivery.targetResult,
+                callback: {
+                  ...callback,
+                  generation: reissue.generation,
+                  issuedAt: reissue.issuedAt,
+                  controllerWindowId: reissue.controllerWindowId,
+                  bindingId: reissue.bindingId,
+                },
+              },
+            },
+          }
+        : entry,
+    ),
+  });
+}
+
+type ReviewedTargetTaskState = Extract<
+  DemandTargetTaskState,
+  { readonly currentDelivery: { readonly reviewDecision: unknown } }
+>;
+
+/**
+ * blocked 或 escalated 之后在同一结果上再次决定的准入（§13.87 D4）：新决定必须带
+ * `resumption` 指向当前决定；`condition-cleared` 只接 blocked，`decision-recorded`
+ * 只接已被用户回答的 escalate（`awaitingDecision` 已清除）。
+ */
+function assertResumptionAdmitted(
+  current: Readonly<DemandAggregateState>,
+  target: Readonly<ReviewedTargetTaskState>,
+  decision: Readonly<ControllerReviewDecision>,
+): void {
+  const resumption = decision.resumption;
+  const previous = target.currentDelivery.reviewDecision;
+  if (
+    resumption === null ||
+    resumption.previousDecisionId !== previous.targetReviewDecisionId ||
+    (resumption.basis.kind === "condition-cleared") !== (previous.decision === "blocked") ||
+    (resumption.basis.kind === "decision-recorded" &&
+      (previous.decision !== "escalate" || current.awaitingDecision !== undefined))
+  ) {
+    fail("transition", "$/targetTasks/resumption");
+  }
 }
 
 /** `review.target-result-decided.v1` 使用的纯状态转换。 */
@@ -2024,7 +2241,9 @@ export function decideTargetResultReviewInDemandAggregateState(
   if (decision.kind === "WakeflowControllerTestReviewDecision") {
     if (
       target.workType !== "test" ||
-      target.phase !== "test-result-reported" ||
+      (target.phase !== "test-result-reported" &&
+        target.phase !== "test-review-blocked" &&
+        target.phase !== "test-escalated") ||
       decision.reviewed.targetResultId !==
         target.currentDelivery.targetResult.targetResultId ||
       decision.reviewed.targetResultDigest !==
@@ -2038,7 +2257,12 @@ export function decideTargetResultReviewInDemandAggregateState(
     ) {
       fail("transition", "$/targetTasks");
     }
-    const phase = testReviewPhaseForDecision(decision.decision);
+    if (target.phase === "test-result-reported") {
+      if (decision.resumption !== null) fail("transition", "$/targetTasks/resumption");
+    } else {
+      assertResumptionAdmitted(current, target, decision);
+    }
+    const phase = testReviewPhaseForDecision(decision);
     return parseDemandAggregateState({
       ...current,
       targetTasks: current.targetTasks.map((entry) =>
@@ -2062,7 +2286,12 @@ export function decideTargetResultReviewInDemandAggregateState(
     });
   }
 
-  if (target.workType === "test" || target.phase !== "result-reported") {
+  if (
+    target.workType === "test" ||
+    (target.phase !== "result-reported" &&
+      target.phase !== "review-blocked" &&
+      target.phase !== "escalated")
+  ) {
     fail("transition", "$/targetTasks");
   }
   if (
@@ -2076,6 +2305,11 @@ export function decideTargetResultReviewInDemandAggregateState(
       target.currentDelivery.targetResult.reportedAt
   ) {
     fail("transition", "$/targetTasks");
+  }
+  if (target.phase === "result-reported") {
+    if (decision.resumption !== null) fail("transition", "$/targetTasks/resumption");
+  } else {
+    assertResumptionAdmitted(current, target, decision);
   }
   const phase = reviewPhaseForDecision(decision.decision);
   const reworkCount =
@@ -2153,8 +2387,7 @@ export function authorizeProductDefectRemediationInDemandAggregateState(
       authorization.source.testReviewDecision.decisionDigest ||
     testTarget.currentDelivery.reviewDecision.decidedAt !==
       authorization.source.testReviewDecision.decidedAt ||
-    testTarget.currentDelivery.reviewDecision.decision !==
-      "escalate-product-defect" ||
+    testTarget.currentDelivery.reviewDecision.decision !== "escalate" ||
     testTarget.currentDelivery.reviewDecision.controllerWindowId !==
       authorization.controllerWindowId
   ) {
@@ -2227,69 +2460,12 @@ export function authorizeProductDefectRemediationInDemandAggregateState(
             authorization.source.testReviewDecision.targetReviewDecisionId,
           testReviewDecisionDigest:
             authorization.source.testReviewDecision.decisionDigest,
-          failedCheckIds: authorizedTarget.failedCheckIds,
+          failedStepIds: authorizedTarget.failedStepIds,
           correctionObjective: authorizedTarget.correctionObjective,
           authorizedAt: authorization.authorizedAt,
         },
       };
     }),
-  });
-}
-
-/** `review.target-result-resumed.v1` 使用的纯状态转换。 */
-export function resumeBlockedTargetReviewInDemandAggregateState(
-  currentValue: unknown,
-  resumeValue: unknown,
-): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let resume: Readonly<ControllerTargetReviewResume>;
-  try {
-    resume = parseControllerTargetReviewResume(resumeValue);
-  } catch (error: unknown) {
-    if (error instanceof ControllerTargetReviewResumeError) {
-      fail("controller-target-review-resume", "$resume");
-    }
-    throw error;
-  }
-  const target = current.targetTasks.find(
-    (entry) => entry.targetTaskId === resume.targetTaskId,
-  );
-  if (
-    current.lifecycle !== "active" ||
-    resume.demandId !== current.demandId ||
-    target === undefined ||
-    (target.phase !== "review-blocked" &&
-      target.phase !== "test-review-blocked") ||
-    resume.blockedSource.stateDigest !==
-      computeDemandAggregateStateDigest(current) ||
-    target.currentDelivery.reviewDecision.decision !== "blocked" ||
-    resume.blockedDecision.targetReviewDecisionId !==
-      target.currentDelivery.reviewDecision.targetReviewDecisionId ||
-    resume.blockedDecision.decisionDigest !==
-      target.currentDelivery.reviewDecision.decisionDigest ||
-    resume.blockedDecision.targetResultId !==
-      target.currentDelivery.targetResult.targetResultId ||
-    resume.blockedDecision.targetResultDigest !==
-      target.currentDelivery.targetResult.resultDigest
-  ) {
-    fail("transition", "$/targetTasks");
-  }
-  const { reviewDecision: _reviewDecision, ...resumedDelivery } =
-    target.currentDelivery;
-  return parseDemandAggregateState({
-    ...current,
-    targetTasks: current.targetTasks.map((entry) =>
-      entry.targetTaskId === target.targetTaskId
-        ? {
-            ...target,
-            phase:
-              target.workType === "test"
-                ? "test-result-reported"
-                : "result-reported",
-            currentDelivery: resumedDelivery,
-          }
-        : entry,
-    ),
   });
 }
 
@@ -2351,8 +2527,7 @@ function normalizeState(
             pendingTestRetest.testReviewDecision.targetReviewDecisionId &&
           target.currentDelivery.reviewDecision.decisionDigest ===
             pendingTestRetest.testReviewDecision.decisionDigest &&
-          target.currentDelivery.reviewDecision.decision ===
-            "escalate-product-defect",
+          target.currentDelivery.reviewDecision.decision === "escalate",
       ))
   ) {
     fail("relation", "$/pendingTestRetest");
@@ -2571,7 +2746,7 @@ const REPLACEABLE_PHASES: readonly DemandTargetTaskState["phase"][] = Object.fre
   "host-effect-rejected",
   "rework-requested",
   "product-defect-rework-requested",
-  "redesign-requested",
+  "escalated",
   "review-blocked",
 ]);
 

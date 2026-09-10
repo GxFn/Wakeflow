@@ -60,9 +60,9 @@
 
 ## 未决问题
 
-- ambiguous 静默阈值与重发上限的具体数值。
-- `escalate` 备选方案上限与渲染格式。
-- approved 基线的存放位置：Demand 根下按 stepId 的不可变记录，还是归档时才固化。
+- ambiguous 静默阈值与重发上限的具体数值。（投递与回调都先作常量：静默 10 分钟、重发上限 3；进配置留给观察切片。）
+- `escalate` 备选方案上限与渲染格式。（上限落为 4；渲染仍由 demand 切片的升级事件承担。）
+- approved 基线的存放位置：Demand 根下按 stepId 的不可变记录，还是归档时才固化。（切片 7 按 gate-log §13.87 D6 由读侧从同目标尝试链与 retest 链派生，不新增工件；归档时是否固化留给证据切片。）
 
 ## 落地记录
 
@@ -70,3 +70,4 @@
 - 2026-09-09 L1 tasking 切片：D5 的验收锚点 `requirementRef{recordDigest, sectionAnchor, itemId}` 落地，指向需求包 `requirement.md` 验收标准节的一条列表项，Wakeflow 校验记录摘要、节与序号；`plan_target_task` 保持 D2 的追加形状；D4 的 `testContract` 与测试卡删除按 gate-log §13.81 D1 并入 delivery 切片。记录见 [consolidation-gate-log §13.81、§13.82](../progress/consolidation-gate-log.md)。
 - 2026-09-10 L1 delivery 切片 6a：D1 的投递链落地为三个追加工具 `wakeflow_prepare_delivery`、`wakeflow_record_delivery_outcome`、`wakeflow_rearm_delivery`（实现与 test 共用；`wake-controller` 回调按 gate-log §13.83 D4 随 result-review 切片）；D2 的调用形状落地：请求只带 Controller 三段 `authored{goal, focus, boundary}`，prompt 骨架由 Wakeflow 渲染，处置由 `user-prompt-submit` 记录派生，ambiguous 以再次调用惰性重查、静默阈值 10 分钟与 rearm 上限 3 先作常量；D4 的 `testContract` 与测试卡删除落 6b。记录见 [consolidation-gate-log §13.83、§13.84](../progress/consolidation-gate-log.md)。
 - 2026-09-10 L1 delivery 切片 6b：D4 的测试合同并入 test 任务包 `testContract{question, objectBoundary, steps{stepId, given, when, then, requirementRef}, environment, allowedSkills, setupPolicy, maxAttempts, stopConditions}` 落地，`stepId`、环境成员与实现基线由 Wakeflow 派生，缺陷修复后的复测以 `lineage: retest` 表达并消费聚合的 `pendingTestRetest`；独立测试卡、`plan_test_card` 与 `testing.test-card-created` 事件删除；失败子集重跑 `stepIds` 推迟到 result-review 切片。记录见 [consolidation-gate-log §13.85、§13.86](../progress/consolidation-gate-log.md)。
+- 2026-09-10 L1 result-review 切片 7：D1 的 `wake-controller` 回调落地为结果事件里的回调记录与随 `wakeflow_import_target_result` 返回的许可（不取工作声明、不要求结局调用），落地由 Controller 会话的 `user-prompt-submit` 记录派生，静默后经 `wakeflow_rearm_delivery{deliveryId: callbackId}` 重发（上限 3），决定事件记 `callbackLanding`；D4 的测试结果落为逐步记录 `steps{stepId, observed, evidence, verdict, failure?{classification, likelyOwner, recommendedAction}}`，整体 `verdict` 由 Wakeflow 派生，`request-another-attempt{stepIds}` 只重跑失败子集，approved 基线由读侧派生并在检查投影并列对比；D5 的实现决定词汇 `accept | rework | blocked | escalate`、测试决定 `accept | request-another-attempt | blocked | escalate{product-defect | needs-decision}` 落地，`escalate` 同一提交附带 `lifecycle.demand-escalated` 或缺陷修复授权，用户回答后以带 `resumption` 的新决定回到同一结果；`resume_target_result_review` 与 `authorize_product_defect_remediation` 删除，决定工具改名 `wakeflow_record_implementation_review_decision`、`wakeflow_record_test_review_decision`。记录见 [consolidation-gate-log §13.87、§13.88](../progress/consolidation-gate-log.md)。

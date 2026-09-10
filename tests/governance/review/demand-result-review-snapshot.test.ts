@@ -13,14 +13,16 @@ import {
   readDemandResultReviewSnapshot,
   DemandResultReviewSnapshotError,
 } from "../../../src/governance/review/demand-result-review-snapshot.js";
-import { TargetResultImportService } from "../../../src/governance/result/target-result-import-service.js";
 import { TaskPackageProjectionStore } from "../../../src/governance/tasking/task-package-projection-store.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
   deliverFixtureTarget,
 } from "../delivery/delivery-workspace.fixture.js";
-import { createImplementationTargetResultReportContentFixture } from "../result/implementation-target-result-report.fixture.js";
+import {
+  importFixtureImplementationResult,
+  registerFixtureControllerWindow,
+} from "./controller-implementation-review-decision-service.fixture.js";
 
 const REPORTED_AT = parseUtcInstant("2026-08-29T12:10:00.000Z");
 
@@ -49,6 +51,7 @@ async function withDemandRoot<Result>(
 test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查输入", async () => {
   const fixture = await createDeliveryWorkspaceFixture();
   try {
+    await registerFixtureControllerWindow(fixture);
     const delivered = await deliverFixtureTarget(fixture);
     const prepared = await withDemandRoot(
       fixture.workspacePath,
@@ -74,20 +77,7 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
       false,
     );
 
-    await new TargetResultImportService(fixture.workspaceRoot, "codex").import(
-      {
-        demandId: fixture.demandId,
-        deliveryId: delivered.prepared.delivery.deliveryId,
-        claimDigest: delivered.prepared.permit.fence.claimDigest,
-        report: {
-          workType: "implementation",
-          content: createImplementationTargetResultReportContentFixture(
-            prepared.loadedTaskPackage.taskPackage,
-          ),
-        },
-      },
-      { clock: () => REPORTED_AT },
-    );
+    await importFixtureImplementationResult(fixture, delivered, { reportedAt: REPORTED_AT });
 
     const observed = await withDemandRoot(
       fixture.workspacePath,

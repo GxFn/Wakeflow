@@ -3,11 +3,19 @@
   "$id": "urn:wakeflow:entrypoints:target-result-import-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA",
   "title": "WakeflowTargetResultImportRequestV1",
-  "description": "Closed MCP request for importing one target-authored implementation or test Report into an authority-enriched TargetResult.",
+  "description": "Single-call request importing one target-authored implementation or test Report into an authority-enriched TargetResult: evidence locators must resolve inside this Demand's managed evidence records and match their digests, report text passes the privacy scan, test steps carry observed/evidence/verdict and a failure classification, and the same idempotency key and body replays the first result.",
   "$comment": "The stored Claim and Observation derive work type, Task, Delivery, Host, repository/window, Test lineage, Result identity, and Event identity. report.workType only discriminates the external Agent Report grammar and is rechecked against stored authority.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["root", "demandId", "deliveryId", "claimDigest", "report"],
+  "required": [
+    "root",
+    "demandId",
+    "idempotencyKey",
+    "expectedStreamRevision",
+    "deliveryId",
+    "claimDigest",
+    "report"
+  ],
   "properties": {
     "root": {
       "$ref": "#/$defs/workspaceRoot"
@@ -30,6 +38,19 @@
           "$ref": "#/$defs/testReport"
         }
       ]
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$",
+      "description": "Client-generated key binding this request to at most one commit."
+    },
+    "expectedStreamRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "Demand stream revision the caller observed; a stale value is rejected."
     }
   },
   "$defs": {
@@ -103,14 +124,7 @@
     "testReportContent": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "outcome",
-        "summary",
-        "evidenceLocators",
-        "verification",
-        "risks",
-        "stepEvidence"
-      ],
+      "required": ["outcome", "summary", "evidenceLocators", "verification", "risks", "steps"],
       "properties": {
         "outcome": {
           "$ref": "#/$defs/resultOutcome"
@@ -127,12 +141,11 @@
         "risks": {
           "$ref": "#/$defs/humanTextList"
         },
-        "stepEvidence": {
+        "steps": {
           "type": "array",
-          "maxItems": 32,
-          "uniqueItems": true,
+          "maxItems": 20,
           "items": {
-            "$ref": "#/$defs/stepEvidence"
+            "$ref": "#/$defs/step"
           }
         }
       },
@@ -148,7 +161,7 @@
           },
           "then": {
             "properties": {
-              "stepEvidence": {
+              "steps": {
                 "type": "array",
                 "minItems": 1
               }
@@ -160,7 +173,7 @@
     "repositoryChange": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repositoryId", "disposition", "commits"],
+      "required": ["repositoryId", "disposition", "branch", "commits"],
       "properties": {
         "repositoryId": {
           "$ref": "#/$defs/repositoryId"
@@ -175,6 +188,16 @@
           "items": {
             "$ref": "#/$defs/gitObjectId"
           }
+        },
+        "branch": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/branchName"
+            }
+          ]
         }
       },
       "allOf": [
@@ -220,7 +243,7 @@
       "required": ["kind", "ref", "digest"],
       "properties": {
         "kind": {
-          "$ref": "#/$defs/token"
+          "$ref": "#/$defs/evidenceKind"
         },
         "ref": {
           "$ref": "#/$defs/portableResourcePath"
@@ -259,19 +282,6 @@
           "items": {
             "$ref": "#/$defs/evidenceRef"
           }
-        }
-      }
-    },
-    "stepEvidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["stepId", "evidence"],
-      "properties": {
-        "stepId": {
-          "$ref": "#/$defs/stepId"
-        },
-        "evidence": {
-          "$ref": "#/$defs/evidenceRef"
         }
       }
     },
@@ -365,6 +375,86 @@
     "stepId": {
       "type": "string",
       "pattern": "^ts-[1-9][0-9]?$"
+    },
+    "evidenceKind": {
+      "enum": ["test-output", "diff", "document", "transcript", "commit"]
+    },
+    "branchName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$"
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "likelyOwner", "recommendedAction"],
+      "properties": {
+        "classification": {
+          "enum": [
+            "product-defect",
+            "harness-defect",
+            "environment",
+            "flaky",
+            "missing-evidence",
+            "out-of-scope",
+            "needs-decision"
+          ]
+        },
+        "likelyOwner": {
+          "enum": ["implementation", "test", "environment", "user"]
+        },
+        "recommendedAction": {
+          "$ref": "#/$defs/humanText"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepId", "observed", "evidence", "verdict"],
+      "properties": {
+        "stepId": {
+          "$ref": "#/$defs/stepId"
+        },
+        "observed": {
+          "$ref": "#/$defs/humanText"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidenceRef"
+        },
+        "verdict": {
+          "enum": ["pass", "fail", "blocked", "cannot-conclude"]
+        },
+        "failure": {
+          "$ref": "#/$defs/failure"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "pass"
+              }
+            },
+            "required": ["verdict"]
+          },
+          "then": {
+            "properties": {
+              "failure": false
+            }
+          },
+          "else": {
+            "required": ["failure"],
+            "properties": {
+              "failure": {
+                "$ref": "#/$defs/failure"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

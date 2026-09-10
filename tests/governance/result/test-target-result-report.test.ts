@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   createTestTargetResultReport,
+  deriveTestVerdict,
   parseTestTargetResultReport,
   parseTestTargetResultReportDocument,
   renderTestTargetResultReport,
@@ -14,125 +15,121 @@ import {
 const REPORTED_AT = parseUtcInstant("2026-08-30T10:00:00.000Z");
 const FIRST_DIGEST = `sha256:${"1".repeat(64)}`;
 const SECOND_DIGEST = `sha256:${"2".repeat(64)}`;
+const EVIDENCE_REF =
+  "artifacts/managed-evidence/evidence_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/payload/content";
 
 function completedContent() {
   return {
     outcome: "completed" as const,
-    summary: "已执行Controller批准的真实环境步骤并返回可复核事实。",
-    evidenceLocators: [
-      {
-        kind: "test-step-report",
-        ref: "evidence/test-runs/step-0.json",
-        digest: FIRST_DIGEST,
-      },
-    ],
+    summary: "已执行Controller批准的真实环境步骤并返回逐步记录。",
+    evidenceLocators: [{ kind: "test-output", ref: EVIDENCE_REF, digest: FIRST_DIGEST }],
     verification: ["已复验Evidence文档可读取且摘要一致。"],
     risks: ["该结果不替代Controller的独立判断。"],
-    stepEvidence: [
+    steps: [
       {
         stepId: "ts-1",
-        evidence: {
-          ref: "evidence/test-runs/step-0.json",
-          digest: FIRST_DIGEST,
-        },
+        observed: "入口按需求响应。",
+        evidence: { ref: EVIDENCE_REF, digest: FIRST_DIGEST },
+        verdict: "pass" as const,
       },
     ],
   };
 }
 
-test("TestTargetResultReport只保存逐步Evidence陈述并保持确定性表示", () => {
+function failedStep(stepId: string) {
+  return {
+    stepId,
+    observed: "入口返回了错误状态。",
+    evidence: { ref: EVIDENCE_REF, digest: FIRST_DIGEST },
+    verdict: "fail" as const,
+    failure: {
+      classification: "product-defect" as const,
+      likelyOwner: "implementation" as const,
+      recommendedAction: "升级为产品缺陷修复。",
+    },
+  };
+}
+
+test("TestTargetResultReport保存逐步记录并由Wakeflow派生整体判定", () => {
   const content = completedContent();
-  const report = createTestTargetResultReport(content, {
-    clock: () => REPORTED_AT,
-  });
+  const report = createTestTargetResultReport(content, { clock: () => REPORTED_AT });
   equal(report.kind, "WakeflowTestTargetResultReport");
   equal(report.outcome, "completed");
-  equal(report.stepEvidence[0]?.stepId, "ts-1");
-  equal(report.stepEvidence[0]?.evidence.digest, FIRST_DIGEST);
+  equal(report.verdict, "pass");
+  equal(report.steps[0]?.stepId, "ts-1");
+  equal(report.steps[0]?.evidence.digest, FIRST_DIGEST);
+  equal(Object.hasOwn(report.steps[0] ?? {}, "failure"), false);
   equal(Object.hasOwn(report, "repositoryChange"), false);
-  equal(Object.hasOwn(report, "anchorEvidence"), false);
-  equal(Object.hasOwn(report, "verdict"), false);
-  equal(Object.isFrozen(report.stepEvidence), true);
+  equal(Object.hasOwn(report, "stepEvidence"), false);
+  equal(Object.isFrozen(report.steps), true);
   equal(
-    parseTestTargetResultReportDocument(renderTestTargetResultReport(report))
-      .reportDigest,
+    parseTestTargetResultReportDocument(renderTestTargetResultReport(report)).reportDigest,
     report.reportDigest,
   );
   equal(
     testTargetResultReportContentDigest(content),
     testTargetResultReportContentDigest({ ...content }),
   );
+  const failed = createTestTargetResultReport(
+    { ...content, steps: [content.steps[0]!, failedStep("ts-2")] },
+    { clock: () => REPORTED_AT },
+  );
+  equal(failed.verdict, "fail");
+  equal(failed.steps[1]?.failure?.classification, "product-defect");
+  equal(deriveTestVerdict([]), "cannot-conclude");
+  equal(
+    deriveTestVerdict([{ ...content.steps[0]!, verdict: "blocked" }, content.steps[0]!]),
+    "blocked",
+  );
 });
 
-test("TestTargetResultReport拒绝悬空Evidence、重复ref与重复stepId", () => {
+test("TestTargetResultReport拒绝悬空Evidence、重复stepId、缺失或多余的failure与篡改的verdict", () => {
   const content = completedContent();
-  const firstStep = content.stepEvidence[0]!;
-  const firstLocator = content.evidenceLocators[0]!;
+  const firstStep = content.steps[0]!;
   throws(
     () =>
       createTestTargetResultReport({
         ...content,
-        stepEvidence: [
-          {
-            ...firstStep,
-            evidence: {
-              ...firstStep.evidence,
-              digest: SECOND_DIGEST,
-            },
-          },
-        ],
+        steps: [{ ...firstStep, evidence: { ...firstStep.evidence, digest: SECOND_DIGEST } }],
       }),
     (error: unknown) =>
-      error instanceof TestTargetResultReportError &&
-      error.reason === "relation",
+      error instanceof TestTargetResultReportError && error.reason === "relation",
+  );
+  throws(
+    () => createTestTargetResultReport({ ...content, steps: [firstStep, firstStep] }),
+    (error: unknown) =>
+      error instanceof TestTargetResultReportError && error.reason === "relation",
   );
   throws(
     () =>
       createTestTargetResultReport({
         ...content,
-        evidenceLocators: [
-          ...content.evidenceLocators,
-          {
-            kind: "screenshot",
-            ref: firstLocator.ref,
-            digest: SECOND_DIGEST,
-          },
-        ],
+        steps: [{ ...firstStep, verdict: "fail" }],
       }),
     (error: unknown) =>
       error instanceof TestTargetResultReportError &&
-      error.reason === "relation",
+      (error.reason === "schema" || error.reason === "relation"),
   );
   throws(
     () =>
       createTestTargetResultReport({
         ...content,
-        evidenceLocators: [
-          ...content.evidenceLocators,
-          {
-            kind: "test-step-report",
-            ref: "evidence/test-runs/step-1.json",
-            digest: SECOND_DIGEST,
-          },
-        ],
-        stepEvidence: [
-          {
-            stepId: "ts-1",
-            evidence: {
-              ref: "evidence/test-runs/step-1.json",
-              digest: SECOND_DIGEST,
-            },
-          },
-          firstStep,
-        ],
+        steps: [{ ...failedStep("ts-1"), verdict: "pass" }],
       }),
     (error: unknown) =>
       error instanceof TestTargetResultReportError &&
-      error.reason === "relation",
+      (error.reason === "schema" || error.reason === "relation"),
+  );
+  const report = createTestTargetResultReport(content, { clock: () => REPORTED_AT });
+  throws(
+    () => parseTestTargetResultReport({ ...report, verdict: "fail" }),
+    (error: unknown) =>
+      error instanceof TestTargetResultReportError &&
+      (error.reason === "relation" || error.reason === "digest"),
   );
 });
 
-test("TestTargetResultReport允许blocked部分结果但拒绝空completed结果", () => {
+test("TestTargetResultReport允许blocked部分结果但拒绝空completed结果与含fail的blocked", () => {
   const blocked = createTestTargetResultReport(
     {
       outcome: "blocked",
@@ -140,11 +137,12 @@ test("TestTargetResultReport允许blocked部分结果但拒绝空completed结果
       evidenceLocators: [],
       verification: [],
       risks: ["需要Controller确认环境事实。"],
-      stepEvidence: [],
+      steps: [],
     },
     { clock: () => REPORTED_AT },
   );
-  equal(blocked.stepEvidence.length, 0);
+  equal(blocked.steps.length, 0);
+  equal(blocked.verdict, "cannot-conclude");
   throws(
     () =>
       parseTestTargetResultReport({
@@ -155,5 +153,15 @@ test("TestTargetResultReport允许blocked部分结果但拒绝空completed结果
     (error: unknown) =>
       error instanceof TestTargetResultReportError &&
       (error.reason === "schema" || error.reason === "digest"),
+  );
+  throws(
+    () =>
+      createTestTargetResultReport(
+        { ...completedContent(), outcome: "blocked", steps: [failedStep("ts-1")] },
+        { clock: () => REPORTED_AT },
+      ),
+    (error: unknown) =>
+      error instanceof TestTargetResultReportError &&
+      (error.reason === "schema" || error.reason === "relation"),
   );
 });

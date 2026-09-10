@@ -78,6 +78,24 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
       "目标会话的 user-prompt-submit 记录到达后，再次记录结局即 accepted，Route 前进到结果导入",
   },
   {
+    scenarioId: "card-07/import-and-review",
+    card: "07-results-and-review",
+    title:
+      "结果导入只接受同 Demand 受管证据里能复验摘要的定位符并拒绝隐私泄露；导入落账即释放声明、签发回调许可且重放幂等；完成证据到达前 accept 不在允许集合内",
+  },
+  {
+    scenarioId: "card-06/wake-controller",
+    card: "06-delivery-and-callback",
+    title:
+      "回调许可 prompt 落进 Controller 会话即 landed；未静默与已落地的回调都不能重臂（静默后重发由切片测试注入时钟覆盖）",
+  },
+  {
+    scenarioId: "card-07/escalate-and-resume",
+    card: "07-results-and-review",
+    title:
+      "escalate 同一提交附带升级事件并把 Route 交给用户；record-decision 回答后带 resumption 的 accept 回到同一结果并前进到测试规划",
+  },
+  {
     scenarioId: "card-05/test-contract",
     card: "05-task-planning",
     title:

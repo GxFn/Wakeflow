@@ -4,7 +4,7 @@
  */
 
 /**
- * Controller基于精确Result Review Snapshot作出的单implementation Target审查决定。
+ * Controller基于精确Result Review Snapshot作出的单implementation Target审查决定：accept、rework、blocked 或 escalate（ADR-0012 D5）。
  */
 export type WakeflowControllerImplementationReviewDecision = ({
 [k: string]: unknown | undefined
@@ -17,7 +17,7 @@ demandId: string
 targetTaskId: string
 controllerWindowId: string
 reviewed: Reviewed
-decision: ("accept" | "blocked" | "redesign" | "rework")
+decision: ("accept" | "rework" | "blocked" | "escalate")
 assessment: Assessment
 /**
  * @minItems 1
@@ -29,6 +29,17 @@ blockingReasons: TextList
 residualRisks: TextList
 decidedAt: WakeflowUtcInstantText
 decisionDigest: WakeflowSha256DigestText
+escalation: (null | Escalation)
+resumption: (null | Resumption)
+callbackLanding: (null | {
+recordId: string
+landedAt: WakeflowUtcInstantText
+})
+targetCompletion: (null | {
+recordId: string
+event: ("stop" | "turn-complete")
+observedAt: WakeflowUtcInstantText
+})
 })
 export type TargetReviewDecisionId = string
 /**
@@ -47,6 +58,7 @@ export type HumanText = string
  * @maxItems 32
  */
 export type TextList = HumanText[]
+export type DemandEventId = string
 
 export interface Reviewed {
 snapshotDigest: WakeflowSha256DigestText
@@ -70,6 +82,1015 @@ method: HumanText
 outcome: ("passed" | "failed" | "inconclusive")
 observation: HumanText
 }
+export interface Escalation {
+issue: string
+/**
+ * @maxItems 16
+ */
+requirementRefs: []|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]
+/**
+ * @maxItems 16
+ */
+evidence: []|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]
+/**
+ * @minItems 1
+ * @maxItems 4
+ */
+options: [{
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]
+recommendation: string
+}
+export interface Resumption {
+previousDecisionId: TargetReviewDecisionId
+basis: ({
+kind: "condition-cleared"
+} | {
+kind: "decision-recorded"
+escalationEventId: DemandEventId
+})
+summary: HumanText
+}
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
 function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
@@ -92,4 +1113,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:review:controller-implementation-review-decision:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA\",\"title\":\"WakeflowControllerImplementationReviewDecision\",\"description\":\"Controller基于精确Result Review Snapshot作出的单implementation Target审查决定。\",\"$comment\":\"本记录保存Controller的独立审查陈述和精确并发基线；它不是TargetResult派生结论，也不创建ReviewCandidate。Schema约束决定与双轴assessment/check outcome的最小一致性，真实性仍由Controller负责。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"targetReviewDecisionId\",\"programId\",\"demandId\",\"targetTaskId\",\"controllerWindowId\",\"reviewed\",\"decision\",\"assessment\",\"independentChecks\",\"rationale\",\"blockingReasons\",\"residualRisks\",\"decidedAt\",\"decisionDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowControllerImplementationReviewDecision\"},\"schemaVersion\":{\"const\":1},\"targetReviewDecisionId\":{\"$ref\":\"#/$defs/targetReviewDecisionId\"},\"programId\":{\"$ref\":\"urn:wakeflow:governance:tasking:task-package:v1#/properties/programId\"},\"demandId\":{\"$ref\":\"urn:wakeflow:governance:tasking:task-package:v1#/properties/demandId\"},\"targetTaskId\":{\"$ref\":\"urn:wakeflow:governance:tasking:task-package:v1#/properties/targetTaskId\"},\"controllerWindowId\":{\"$ref\":\"urn:wakeflow:governance:tasking:task-package:v1#/$defs/windowId\"},\"reviewed\":{\"$ref\":\"#/$defs/reviewed\"},\"decision\":{\"enum\":[\"accept\",\"blocked\",\"redesign\",\"rework\"]},\"assessment\":{\"$ref\":\"#/$defs/assessment\"},\"independentChecks\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/independentCheck\"}},\"rationale\":{\"$ref\":\"#/$defs/humanText\"},\"blockingReasons\":{\"$ref\":\"#/$defs/textList\"},\"residualRisks\":{\"$ref\":\"#/$defs/textList\"},\"decidedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"decisionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}},\"allOf\":[{\"if\":{\"properties\":{\"decision\":{\"const\":\"accept\"}},\"required\":[\"decision\"]},\"then\":{\"properties\":{\"reviewed\":{\"type\":\"object\",\"properties\":{\"targetResultOutcome\":{\"enum\":[\"completed\",\"needs-review\"]}}},\"assessment\":{\"type\":\"object\",\"properties\":{\"requirementAlignment\":{\"const\":\"aligned\"},\"implementationQuality\":{\"const\":\"satisfactory\"}}},\"independentChecks\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"outcome\":{\"const\":\"passed\"}}}},\"blockingReasons\":{\"type\":\"array\",\"maxItems\":0}}}},{\"if\":{\"properties\":{\"decision\":{\"const\":\"rework\"}},\"required\":[\"decision\"]},\"then\":{\"properties\":{\"assessment\":{\"type\":\"object\",\"properties\":{\"requirementAlignment\":{\"const\":\"aligned\"},\"implementationQuality\":{\"const\":\"defective\"}}},\"independentChecks\":{\"type\":\"array\",\"contains\":{\"type\":\"object\",\"properties\":{\"outcome\":{\"const\":\"failed\"}},\"required\":[\"outcome\"]},\"minContains\":1},\"blockingReasons\":{\"type\":\"array\",\"maxItems\":0}}}},{\"if\":{\"properties\":{\"decision\":{\"const\":\"redesign\"}},\"required\":[\"decision\"]},\"then\":{\"properties\":{\"assessment\":{\"type\":\"object\",\"properties\":{\"requirementAlignment\":{\"const\":\"mismatch\"}}},\"independentChecks\":{\"type\":\"array\",\"contains\":{\"type\":\"object\",\"properties\":{\"outcome\":{\"enum\":[\"failed\",\"inconclusive\"]}},\"required\":[\"outcome\"]},\"minContains\":1},\"blockingReasons\":{\"type\":\"array\",\"maxItems\":0}}}},{\"if\":{\"properties\":{\"decision\":{\"const\":\"blocked\"}},\"required\":[\"decision\"]},\"then\":{\"properties\":{\"blockingReasons\":{\"type\":\"array\",\"minItems\":1},\"assessment\":{\"type\":\"object\",\"not\":{\"type\":\"object\",\"properties\":{\"requirementAlignment\":{\"const\":\"aligned\"},\"implementationQuality\":{\"const\":\"satisfactory\"}},\"required\":[\"requirementAlignment\",\"implementationQuality\"]}}}}}],\"$defs\":{\"targetReviewDecisionId\":{\"type\":\"string\",\"pattern\":\"^target-review-decision_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"taskPackageId\":{\"type\":\"string\",\"pattern\":\"^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetResultId\":{\"type\":\"string\",\"pattern\":\"^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"reviewed\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"snapshotDigest\",\"reviewUnitDigest\",\"stateDigest\",\"streamRevision\",\"taskPackageId\",\"taskPackageDigest\",\"targetResultId\",\"targetResultDigest\",\"targetResultOutcome\",\"targetResultReportedAt\"],\"properties\":{\"snapshotDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"reviewUnitDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"stateDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"streamRevision\":{\"type\":\"integer\",\"minimum\":1},\"taskPackageId\":{\"$ref\":\"#/$defs/taskPackageId\"},\"taskPackageDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetResultId\":{\"$ref\":\"#/$defs/targetResultId\"},\"targetResultDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetResultOutcome\":{\"enum\":[\"completed\",\"blocked\",\"needs-review\"]},\"targetResultReportedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"}}},\"assessment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"requirementAlignment\",\"implementationQuality\"],\"properties\":{\"requirementAlignment\":{\"enum\":[\"aligned\",\"mismatch\",\"unresolved\"]},\"implementationQuality\":{\"enum\":[\"satisfactory\",\"defective\",\"unverified\"]}}},\"independentCheck\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"checkId\",\"method\",\"outcome\",\"observation\"],\"properties\":{\"checkId\":{\"$ref\":\"#/$defs/token\"},\"method\":{\"$ref\":\"#/$defs/humanText\"},\"outcome\":{\"enum\":[\"passed\",\"failed\",\"inconclusive\"]},\"observation\":{\"$ref\":\"#/$defs/humanText\"}}},\"textList\":{\"type\":\"array\",\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"token\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"}}}");
+export const WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:review:controller-implementation-review-decision:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA\",\"title\":\"WakeflowControllerImplementationReviewDecision\",\"description\":\"Controller基于精确Result Review Snapshot作出的单implementation Target审查决定：accept、rework、blocked 或 escalate（ADR-0012 D5）。\",\"$comment\":\"本记录保存Controller的独立审查陈述和精确并发基线；accept 要求结果 completed、锚点全映射与目标会话完成证据；escalate 携带给用户的问题、需求引用、证据、备选方案与建议并附带 Demand 升级事件；blocked 与 escalated 之后的新决定携带 resumption。callbackLanding 与 targetCompletion 由 Wakeflow 从 hook 记录派生。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"targetReviewDecisionId\",\"programId\",\"demandId\",\"targetTaskId\",\"controllerWindowId\",\"reviewed\",\"decision\",\"assessment\",\"independentChecks\",\"rationale\",\"blockingReasons\",\"residualRisks\",\"escalation\",\"resumption\",\"callbackLanding\",\"targetCompletion\",\"decidedAt\",\"decisionDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowControllerImplementationReviewDecision\"},\"schemaVersion\":{\"const\":1},\"targetReviewDecisionId\":{\"$ref\":\"#/$defs/targetReviewDecisionId\"},\"programId\":{\"$ref\":\"urn:wakeflow:governance:tasking:task-package:v1#/properties/programId\"},\"demandId\":{\"$ref\":\"urn:wakeflow:governance:tasking:task-package:v1#/properties/demandId\"},\"targetTaskId\":{\"$ref\":\"urn:wakeflow:governance:tasking:task-package:v1#/properties/targetTaskId\"},\"controllerWindowId\":{\"$ref\":\"urn:wakeflow:governance:tasking:task-package:v1#/$defs/windowId\"},\"reviewed\":{\"$ref\":\"#/$defs/reviewed\"},\"decision\":{\"enum\":[\"accept\",\"rework\",\"blocked\",\"escalate\"]},\"assessment\":{\"$ref\":\"#/$defs/assessment\"},\"independentChecks\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/independentCheck\"}},\"rationale\":{\"$ref\":\"#/$defs/humanText\"},\"blockingReasons\":{\"$ref\":\"#/$defs/textList\"},\"residualRisks\":{\"$ref\":\"#/$defs/textList\"},\"decidedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"decisionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"escalation\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/escalation\"}]},\"resumption\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/resumption\"}]},\"callbackLanding\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"recordId\",\"landedAt\"],\"properties\":{\"recordId\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256,\"pattern\":\"^[A-Za-z0-9._:-]{1,256}$\"},\"landedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"}}}]},\"targetCompletion\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"recordId\",\"event\",\"observedAt\"],\"properties\":{\"recordId\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256,\"pattern\":\"^[A-Za-z0-9._:-]{1,256}$\"},\"event\":{\"enum\":[\"stop\",\"turn-complete\"]},\"observedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"}}}]}},\"allOf\":[{\"if\":{\"properties\":{\"decision\":{\"const\":\"accept\"}},\"required\":[\"decision\"]},\"then\":{\"properties\":{\"reviewed\":{\"type\":\"object\",\"properties\":{\"targetResultOutcome\":{\"const\":\"completed\"}}},\"assessment\":{\"type\":\"object\",\"properties\":{\"requirementAlignment\":{\"const\":\"aligned\"},\"implementationQuality\":{\"const\":\"satisfactory\"}}},\"independentChecks\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"outcome\":{\"const\":\"passed\"}}}},\"blockingReasons\":{\"type\":\"array\",\"maxItems\":0},\"escalation\":{\"type\":\"null\"},\"targetCompletion\":{\"type\":\"object\"}}}},{\"if\":{\"properties\":{\"decision\":{\"const\":\"rework\"}},\"required\":[\"decision\"]},\"then\":{\"properties\":{\"assessment\":{\"type\":\"object\",\"properties\":{\"requirementAlignment\":{\"const\":\"aligned\"},\"implementationQuality\":{\"const\":\"defective\"}}},\"blockingReasons\":{\"type\":\"array\",\"maxItems\":0},\"escalation\":{\"type\":\"null\"}}}},{\"if\":{\"properties\":{\"decision\":{\"const\":\"blocked\"}},\"required\":[\"decision\"]},\"then\":{\"properties\":{\"blockingReasons\":{\"type\":\"array\",\"minItems\":1},\"escalation\":{\"type\":\"null\"}}}},{\"if\":{\"properties\":{\"decision\":{\"const\":\"escalate\"}},\"required\":[\"decision\"]},\"then\":{\"properties\":{\"escalation\":{\"type\":\"object\"},\"assessment\":{\"type\":\"object\",\"properties\":{\"requirementAlignment\":{\"enum\":[\"mismatch\",\"unresolved\"]}}}}}}],\"$defs\":{\"targetReviewDecisionId\":{\"type\":\"string\",\"pattern\":\"^target-review-decision_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"taskPackageId\":{\"type\":\"string\",\"pattern\":\"^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetResultId\":{\"type\":\"string\",\"pattern\":\"^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"reviewed\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"snapshotDigest\",\"reviewUnitDigest\",\"stateDigest\",\"streamRevision\",\"taskPackageId\",\"taskPackageDigest\",\"targetResultId\",\"targetResultDigest\",\"targetResultOutcome\",\"targetResultReportedAt\"],\"properties\":{\"snapshotDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"reviewUnitDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"stateDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"streamRevision\":{\"type\":\"integer\",\"minimum\":1},\"taskPackageId\":{\"$ref\":\"#/$defs/taskPackageId\"},\"taskPackageDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetResultId\":{\"$ref\":\"#/$defs/targetResultId\"},\"targetResultDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetResultOutcome\":{\"enum\":[\"completed\",\"blocked\",\"needs-review\"]},\"targetResultReportedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"}}},\"assessment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"requirementAlignment\",\"implementationQuality\"],\"properties\":{\"requirementAlignment\":{\"enum\":[\"aligned\",\"mismatch\",\"unresolved\"]},\"implementationQuality\":{\"enum\":[\"satisfactory\",\"defective\",\"unverified\"]}}},\"independentCheck\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"checkId\",\"method\",\"outcome\",\"observation\"],\"properties\":{\"checkId\":{\"$ref\":\"#/$defs/token\"},\"method\":{\"$ref\":\"#/$defs/humanText\"},\"outcome\":{\"enum\":[\"passed\",\"failed\",\"inconclusive\"]},\"observation\":{\"$ref\":\"#/$defs/humanText\"}}},\"textList\":{\"type\":\"array\",\"maxItems\":32,\"uniqueItems\":true,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"token\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"escalation\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"issue\",\"requirementRefs\",\"evidence\",\"options\",\"recommendation\"],\"properties\":{\"issue\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"requirementRefs\":{\"type\":\"array\",\"maxItems\":16,\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"recordDigest\",\"sectionAnchor\"],\"properties\":{\"recordDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"sectionAnchor\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":64,\"pattern\":\"^[a-z0-9]+(?:-[a-z0-9]+)*$\"}}}},\"evidence\":{\"type\":\"array\",\"maxItems\":16,\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"id\",\"digest\"],\"properties\":{\"kind\":{\"enum\":[\"target-result\",\"review-decision\",\"managed-evidence\",\"host-effect\"]},\"id\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128},\"digest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}}}},\"options\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":4,\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"option\",\"impact\"],\"properties\":{\"option\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":1024,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"impact\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":2048,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"}}}},\"recommendation\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":4096,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"}}},\"demandEventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"resumption\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"previousDecisionId\",\"basis\",\"summary\"],\"properties\":{\"previousDecisionId\":{\"$ref\":\"#/$defs/targetReviewDecisionId\"},\"basis\":{\"oneOf\":[{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\"],\"properties\":{\"kind\":{\"const\":\"condition-cleared\"}}},{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"escalationEventId\"],\"properties\":{\"kind\":{\"const\":\"decision-recorded\"},\"escalationEventId\":{\"$ref\":\"#/$defs/demandEventId\"}}}]},\"summary\":{\"$ref\":\"#/$defs/humanText\"}}}}}");

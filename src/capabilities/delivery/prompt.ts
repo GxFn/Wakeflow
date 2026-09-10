@@ -238,7 +238,9 @@ function remediationLines(input: RenderDeliveryPromptInput, labels: Labels): rea
     `- previous result: ${remediation.previousResult.targetResultId} / ${remediation.previousResult.resultDigest}`,
     `- rationale: ${remediation.authorizationRationaleSummary}`,
     `- objective: ${remediation.correctionObjectiveSummary}`,
-    ...correctionLines(remediation.requiredCorrections),
+    ...remediation.requiredCorrections.map(
+      (correction) => `- [fail] ${correction.stepId}: ${correction.observedSummary}`,
+    ),
   ]);
 }
 

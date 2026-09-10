@@ -24,11 +24,12 @@ import {
   THIRD_DELIVERY_CLAIM_ID,
 } from "../delivery/delivery-records.fixture.js";
 import { targetResultRecordedEventIdFromResult } from "../../../src/governance/result/target-result.js";
-import { createTargetResultFixture } from "../result/target-result.fixture.js";
+import {
+  createTargetResultCallbackFixture,
+  createTargetResultFixture,
+} from "../result/target-result.fixture.js";
 import { controllerImplementationReviewDecisionEventId } from "../../../src/governance/review/controller-implementation-review-decision.js";
 import { createControllerImplementationReviewDecisionFixture } from "../review/controller-implementation-review-decision.fixture.js";
-import { controllerTargetReviewResumeEventId } from "../../../src/governance/review/controller-target-review-resume.js";
-import { createControllerTargetReviewResumeFixture } from "../review/controller-target-review-resume.fixture.js";
 
 const EVENT = Object.freeze({
   artifactKind: "wakeflow-demand-event-sourcing-event" as const,
@@ -201,14 +202,7 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
         },
         authorizationRationale: "真实环境Evidence证明产品缺陷。",
         correctionObjective: "在原TaskPackage内修复产品行为。",
-        requiredCorrections: [
-          {
-            checkId: "product-defect",
-            outcome: "failed",
-            method: "复验真实入口。",
-            observation: "产品行为不符合冻结目标。",
-          },
-        ],
+        requiredCorrections: [{ stepId: "ts-1", observed: "产品行为不符合冻结目标。" }],
       }),
     preparedAt: parseUtcInstant("2026-08-29T12:17:00.000Z"),
   });
@@ -273,6 +267,7 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
   }
 
   const targetResult = createTargetResultFixture({ claim, envelope, outcome });
+  const callback = createTargetResultCallbackFixture(targetResult);
   const resultEvent = upcastDemandEventSourcingStoredEvent({
     ...EVENT,
     eventId: targetResultRecordedEventIdFromResult(targetResult),
@@ -280,11 +275,36 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
     streamRevision: 6,
     recordedAt: targetResult.report.reportedAt,
     eventType: "result.target-result-recorded",
-    data: { result: targetResult },
+    data: { result: targetResult, callback, evidenceResolution: [] },
   });
   equal(resultEvent.eventType, "result.target-result-recorded");
   if (resultEvent.eventType === "result.target-result-recorded") {
     equal(resultEvent.data.result.resultDigest, targetResult.resultDigest);
+    equal(resultEvent.data.callback.callbackId, callback.callbackId);
+  }
+  const reissued = upcastDemandEventSourcingStoredEvent({
+    ...EVENT,
+    demandId: targetResult.demandId,
+    streamRevision: 7,
+    recordedAt: parseUtcInstant("2026-08-29T10:10:00.000Z"),
+    eventType: "result.callback-reissued",
+    data: {
+      reissue: {
+        targetResultId: targetResult.targetResultId,
+        callbackId: callback.callbackId,
+        previousGeneration: 1,
+        generation: 2,
+        controllerWindowId: callback.controllerWindowId,
+        bindingId: callback.bindingId,
+        bindingDigest: callback.bindingDigest,
+        promptDigest: callback.promptDigest,
+        issuedAt: parseUtcInstant("2026-08-29T10:10:00.000Z"),
+      },
+    },
+  });
+  equal(reissued.eventType, "result.callback-reissued");
+  if (reissued.eventType === "result.callback-reissued") {
+    equal(reissued.data.reissue.generation, 2);
   }
 
   const reviewDecision = createControllerImplementationReviewDecisionFixture();
@@ -315,21 +335,6 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
       error instanceof DemandEventSourcingUpcasterError &&
       error.reason === "event",
   );
-
-  const reviewResume = createControllerTargetReviewResumeFixture();
-  const resumed = upcastDemandEventSourcingStoredEvent({
-    ...EVENT,
-    eventId: controllerTargetReviewResumeEventId(reviewResume),
-    demandId: reviewResume.demandId,
-    streamRevision: reviewResume.blockedSource.streamRevision + 1,
-    recordedAt: reviewResume.resumedAt,
-    eventType: "review.target-result-resumed",
-    data: { resume: reviewResume },
-  });
-  equal(resumed.eventType, "review.target-result-resumed");
-  if (resumed.eventType === "review.target-result-resumed") {
-    equal(resumed.data.resume.resumeDigest, reviewResume.resumeDigest);
-  }
 
   throws(
     () => upcastDemandEventSourcingStoredEvent({ ...EVENT, eventVersion: 2 }),

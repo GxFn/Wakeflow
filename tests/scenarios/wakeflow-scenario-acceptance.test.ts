@@ -16,19 +16,28 @@ import {
 } from "../../src/capabilities/demand/contract.js";
 import {
   WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
   WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/delivery/contract.js";
+import {
+  WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/result-review/contract.js";
+import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
+import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
 import { computeDeliveryPromptDigest } from "../../src/governance/delivery/delivery-envelope.js";
 import { workClaimRef } from "../../src/kernel/layout.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
-import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/governance/evidence/managed-evidence-public-contract.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
-import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
-import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-test-review-decision-public-contract.js";
-import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
-import { controllerImplementationReviewDecisionInput } from "../governance/review/controller-implementation-review-decision.fixture.js";
+import {
+  ESCALATION_OPTIONS,
+  implementationReviewJudgmentWire,
+} from "../governance/review/controller-implementation-review-decision.fixture.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import {
@@ -59,10 +68,11 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 十一个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
- * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 实现接受后规划测试合同、投递测试并
- * 由 Controller 审查接受 → 完成即归档 → 续接与取消。所有调用都经过公共 MCP 工具，即 Agent 真实使用的入口；
- * 宿主效果不在本骨架内。
+ * 十四个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
+ * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 结果导入与评审检查 → 回调落地 →
+ * 升级、用户回答与带 resumption 的接受 → 实现接受后规划测试合同、投递测试并由 Controller 审查接受 →
+ * 完成即归档 → 续接与取消。所有调用都经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内，
+ * 宿主 hook 记录由场景代替宿主写入。
  */
 
 interface ScenarioContext {
@@ -88,6 +98,79 @@ interface ScenarioContext {
   testWindowId?: string;
   testHandle?: string;
   testTargetTaskId?: string;
+  controllerWindowId?: string;
+  controllerHandle?: string;
+  evidence?: ScenarioEvidence;
+  callback?: CallbackPermit;
+}
+
+interface ScenarioEvidence {
+  readonly evidenceId: string;
+  readonly ref: string;
+  readonly digest: string;
+}
+
+/** 结果导入签发的 wake-controller 回调许可；prompt 由目标 Agent 送进 Controller 窗口。 */
+interface CallbackPermit {
+  readonly callbackId: string;
+  readonly prompt: string;
+  readonly generation: number;
+  readonly issuedAt: string;
+}
+
+interface ImportResult {
+  readonly status: string;
+  readonly result: { readonly targetResultId: string; readonly resultDigest: string };
+  readonly callback: {
+    readonly callbackId: string;
+    readonly permit: {
+      readonly prompt: string;
+      readonly generation: number;
+      readonly issuedAt: string;
+      readonly hostAction: { readonly effect: string; readonly windowId: string };
+    };
+  };
+  readonly event: { readonly streamRevision: number };
+  readonly next: { readonly frontier: string | null };
+}
+
+interface ReviewInspection {
+  readonly snapshotDigest: string;
+  readonly reviewUnit: {
+    readonly status: string;
+    readonly workType: string;
+    readonly reviewUnitDigest: string;
+    readonly targetResult: { readonly targetResultId: string };
+    readonly callback: {
+      readonly status: string;
+      readonly generation: number;
+      readonly landedRecordId: string | null;
+    };
+    readonly targetCompletion: { readonly status: string };
+    readonly allowedDecisions: readonly string[];
+    readonly resumptionBasis: {
+      readonly kind: string;
+      readonly escalationEventId?: string;
+      readonly answered?: boolean;
+    } | null;
+    readonly testSteps: readonly unknown[] | null;
+  };
+}
+
+interface DecisionResult {
+  readonly status: string;
+  readonly decision: {
+    readonly targetReviewDecisionId: string;
+    readonly decision: string;
+    readonly callbackLanding: string;
+    readonly targetCompletion: string;
+  };
+  readonly target: { readonly phase: string };
+  readonly attached: {
+    readonly escalationEventId: string | null;
+    readonly productDefectRemediationId?: string | null;
+  };
+  readonly next: { readonly frontier: string | null };
 }
 
 interface DeliveryPermit {
@@ -179,14 +262,23 @@ async function scenarioFreshInitialize(context: ScenarioContext): Promise<string
   const designWindow = config.topology.windows.find((w) => w.role === "design");
   const productWindow = config.topology.windows.find((w) => w.role === "product");
   const testWindow = config.topology.windows.find((w) => w.role === "test");
+  const controllerWindow = config.topology.windows.find((w) => w.role === "controller");
   const repository = config.topology.repositories[0];
-  if (!design || !designWindow || !productWindow || !testWindow || !repository) {
+  if (
+    !design ||
+    !designWindow ||
+    !productWindow ||
+    !testWindow ||
+    !controllerWindow ||
+    !repository
+  ) {
     throw new Error("fresh config lacks the expected topology");
   }
   context.designSurfaceId = design.surfaceId;
   context.designWindowId = designWindow.windowId;
   context.productWindowId = productWindow.windowId;
   context.testWindowId = testWindow.windowId;
+  context.controllerWindowId = controllerWindow.windowId;
   context.repositoryId = repository.repositoryId;
   context.designPath = path.join(root, design.path);
   return `status=${result.status}; launchIntents=${previewed.launchIntents.length}; config+active present`;
@@ -751,15 +843,19 @@ async function prepareDelivery(
   };
 }
 
-/** 目标窗口收到 prompt 后，宿主 hook 会留下 user-prompt-submit 记录；这里代替宿主写入。 */
-async function landPrompt(
+/**
+ * 宿主 hook 在某个窗口的会话里留下一条记录；这里代替宿主写入。`user-prompt-submit` 证明 prompt 落地
+ * （投递或回调），`stop` 证明目标会话在结果之后结束了本轮（accept 的完成证据，§13.87 D2）。
+ */
+async function recordSessionEvent(
   context: ScenarioContext,
-  prompt: string,
-  windowId = context.productWindowId,
-  handle = context.productHandle,
+  windowId: string | undefined,
+  handle: string | undefined,
+  event: "user-prompt-submit" | "stop",
+  prompt: string | null = null,
 ): Promise<void> {
   if (!windowId || !handle) {
-    throw new Error("scenario ordering: window-handshake must run first");
+    throw new Error("scenario ordering: the window handshake must run first");
   }
   const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root: context.workspace.workspacePath,
@@ -775,15 +871,25 @@ async function landPrompt(
   try {
     await writeHostHookObservation(root, {
       hostId: "codex",
-      event: "user-prompt-submit",
+      event,
       sessionId: handle,
       cwd: path.resolve(context.workspace.workspacePath, placement),
       recordedAt: parseUtcInstant(new Date().toISOString()),
-      promptDigest: computeDeliveryPromptDigest(prompt),
+      ...(prompt === null ? {} : { promptDigest: computeDeliveryPromptDigest(prompt) }),
     });
   } finally {
     await root.close();
   }
+}
+
+/** 目标窗口收到 prompt 后，宿主 hook 会留下 user-prompt-submit 记录。 */
+async function landPrompt(
+  context: ScenarioContext,
+  prompt: string,
+  windowId = context.productWindowId,
+  handle = context.productHandle,
+): Promise<void> {
+  await recordSessionEvent(context, windowId, handle, "user-prompt-submit", prompt);
 }
 
 /** Agent 记录一次发送尝试；处置由 Wakeflow 按证据派生，而不是由 Agent 宣称。 */
@@ -857,100 +963,24 @@ async function scenarioAmbiguousResolution(context: ScenarioContext): Promise<st
   return `outcome=${accepted.outcome.disposition}; evidence=${accepted.outcome.evidenceKind}; route=${route.route?.frontiers[0]?.kind}`;
 }
 
-/** 卡 7 的工具链把已 accepted 的投递推到评审 accept；未投递时先走完整投递链；已接受则不再动。 */
-async function driveTargetToAcceptance(context: ScenarioContext): Promise<string> {
-  const root = context.workspace.workspacePath;
-  if (
-    !context.demandId ||
-    !context.targetTaskId ||
-    !context.taskPackageId ||
-    !context.productWindowId
-  ) {
-    throw new Error("scenario ordering: plan-implementation-task must run first");
+/** 卡 5 与卡 8 依赖卡 7 已把实现目标推到 accepted；顺序错误直接报告，不重走链路。 */
+function requireAcceptedImplementation(context: ScenarioContext): void {
+  if (context.targetAccepted !== true) {
+    throw new Error("scenario ordering: escalate-and-resume must run first");
   }
-  if (context.targetAccepted === true) return "implementation already accepted";
-  if (!context.delivery || context.deliveryAccepted !== true) {
-    const revision = await currentStreamRevision(context);
-    const prepared = await prepareDelivery(context, `scenario-prepare-r${revision}`, revision);
-    await landPrompt(context, prepared.permit.prompt);
-    const accepted = await recordOutcome(context, prepared.permit, `scenario-outcome-r${revision}`);
-    equal(accepted.outcome.disposition, "accepted");
-    context.delivery = prepared.permit;
-    context.deliveryAccepted = true;
-  }
-  const permit = context.delivery;
-  const demandRoot = await RootedDirectory.open(
-    path.join(root, ...demandFinalRootRef(context.demandId).split("/")),
-  );
-  let taskPackage: TaskPackage;
-  try {
-    const planned = await new DemandEventSourcingRepository(demandRoot).findTargetTaskPlannedEvent(
-      context.taskPackageId,
-    );
-    if (planned === null) throw new Error("planned task package missing");
-    taskPackage = planned.event.data.taskPackage;
-  } finally {
-    await demandRoot.close();
-  }
-  const imported = await call(context, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, {
-    root,
-    demandId: context.demandId,
-    deliveryId: permit.deliveryId,
-    claimDigest: permit.claimDigest,
-    report: {
-      workType: "implementation",
-      content: createImplementationTargetResultReportContentFixture(taskPackage),
-    },
-  });
-  assertNoPrivatePath(context, imported);
-  const importStatus = (imported.structuredContent as { readonly status: string }).status;
-  equal(existsSync(path.join(root, ...workClaimRef(context.productWindowId).split("/"))), false);
-  const inspectionCall = await call(
-    context,
-    WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
-    { root, demandId: context.demandId, targetTaskId: context.targetTaskId },
-  );
-  const inspection = inspectionCall.structuredContent as {
-    readonly snapshotDigest: string;
-    readonly reviewUnit: {
-      readonly reviewUnitDigest: string;
-      readonly targetResult: { readonly targetResultId: string };
-    };
-  };
-  const judgment = controllerImplementationReviewDecisionInput("accept");
-  const decided = await call(
-    context,
-    WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-    {
-      root,
-      demandId: context.demandId,
-      targetResultId: inspection.reviewUnit.targetResult.targetResultId,
-      snapshotDigest: inspection.snapshotDigest,
-      reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
-      decision: judgment.decision,
-      assessment: judgment.assessment,
-      independentChecks: judgment.independentChecks,
-      rationale: judgment.rationale,
-      blockingReasons: judgment.blockingReasons,
-      residualRisks: judgment.residualRisks,
-    },
-  );
-  const decision = decided.structuredContent as { readonly status: string };
-  equal(decision.status, "decided");
-  context.delivery = undefined;
-  context.deliveryAccepted = false;
-  context.targetAccepted = true;
-  return `import=${importStatus}; review=${decision.status}`;
 }
 
-/** 测试窗口的握手：Agent 启动窗口留下 session-start 记录后登记私有绑定（卡 2 的同一条链）。 */
-async function registerTestWindow(context: ScenarioContext): Promise<void> {
+/** 窗口握手：Agent 启动窗口留下 session-start 记录后登记私有绑定（卡 2 的同一条链）。 */
+async function registerWindow(
+  context: ScenarioContext,
+  windowId: string,
+  handleValue: string,
+): Promise<void> {
   const root = context.workspace.workspacePath;
-  if (!context.testWindowId) throw new Error("scenario ordering: fresh-initialize must run first");
   const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root,
     operation: "inspect",
-    windowId: context.testWindowId,
+    windowId,
   });
   const inspection = inspected.structuredContent as {
     readonly launchIntent: {
@@ -958,12 +988,12 @@ async function registerTestWindow(context: ScenarioContext): Promise<void> {
       readonly root: { readonly configuredPlacement: string };
     };
   };
-  const handle = { kind: "codex-thread", value: "codex-host-owned-thread:scenario-test" };
+  const handle = { kind: "codex-thread", value: handleValue };
   await recordSessionStart(context, handle.value, inspection.launchIntent.root.configuredPlacement);
   const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root,
     operation: "register",
-    windowId: context.testWindowId,
+    windowId,
     observation: {
       handle,
       launchIntentDigest: inspection.launchIntent.intentDigest,
@@ -971,7 +1001,436 @@ async function registerTestWindow(context: ScenarioContext): Promise<void> {
     },
   });
   equal((registered.structuredContent as BindingMutation).disposition, "registered");
-  context.testHandle = handle.value;
+}
+
+async function registerTestWindow(context: ScenarioContext): Promise<void> {
+  if (!context.testWindowId) throw new Error("scenario ordering: fresh-initialize must run first");
+  const handle = "codex-host-owned-thread:scenario-test";
+  await registerWindow(context, context.testWindowId, handle);
+  context.testHandle = handle;
+}
+
+/** Controller 窗口的握手：回调许可指向它，落地记录也在它的会话里。 */
+async function registerControllerWindow(context: ScenarioContext): Promise<void> {
+  if (!context.controllerWindowId) {
+    throw new Error("scenario ordering: fresh-initialize must run first");
+  }
+  const handle = "codex-host-owned-thread:scenario-controller";
+  await registerWindow(context, context.controllerWindowId, handle);
+  context.controllerHandle = handle;
+}
+
+/** 报告引用的证据必须先成为本 Demand 的受管证据记录（§13.87 D3）；这里从产品仓库登记一份。 */
+async function recordEvidence(context: ScenarioContext): Promise<ScenarioEvidence> {
+  const root = context.workspace.workspacePath;
+  if (!context.demandId || !context.repositoryId) {
+    throw new Error("scenario ordering: create-demand must run first");
+  }
+  const relativePath = "artifacts/review/verification.txt";
+  const content = "verification passed\n";
+  const filePath = path.join(context.workspace.productPath, ...relativePath.split("/"));
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, content);
+  const selection = {
+    evidenceType: "test-output",
+    source: {
+      root: { kind: "repository", repositoryId: context.repositoryId },
+      path: relativePath,
+      resourceType: "file",
+    },
+    sensitivity: "internal",
+    opaqueContentPolicy: "reject",
+  };
+  const preview = await call(context, WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    demandId: context.demandId,
+    selection,
+  });
+  assertNoPrivatePath(context, preview);
+  const previewed = preview.structuredContent as {
+    readonly planDigest: string | null;
+    readonly plan: unknown;
+  };
+  if (previewed.planDigest === null) throw new Error("managed evidence preview is not ready");
+  const applied = await call(context, WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: context.demandId,
+    plan: previewed.plan,
+    planDigest: previewed.planDigest,
+  });
+  assertNoPrivatePath(context, applied);
+  const evidenceId = (
+    applied.structuredContent as { readonly publication: { readonly evidenceId: string } }
+  ).publication.evidenceId;
+  return {
+    evidenceId,
+    ref: `artifacts/managed-evidence/${evidenceId}/payload/content`,
+    digest: computeSha256Digest(encodeUtf8(content)),
+  };
+}
+
+async function loadTaskPackage(
+  context: ScenarioContext,
+  taskPackageId: string,
+): Promise<TaskPackage> {
+  if (!context.demandId) throw new Error("scenario ordering: create-demand must run first");
+  const demandRoot = await RootedDirectory.open(
+    path.join(context.workspace.workspacePath, ...demandFinalRootRef(context.demandId).split("/")),
+  );
+  try {
+    const planned = await new DemandEventSourcingRepository(demandRoot).findTargetTaskPlannedEvent(
+      taskPackageId,
+    );
+    if (planned === null) throw new Error("planned task package missing");
+    return planned.event.data.taskPackage;
+  } finally {
+    await demandRoot.close();
+  }
+}
+
+function importRequest(
+  context: ScenarioContext,
+  permit: DeliveryPermit,
+  idempotencyKey: string,
+  expectedStreamRevision: number,
+  content: unknown,
+): Readonly<Record<string, unknown>> {
+  return {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+    idempotencyKey,
+    expectedStreamRevision,
+    deliveryId: permit.deliveryId,
+    claimDigest: permit.claimDigest,
+    report: { workType: "implementation", content },
+  };
+}
+
+async function inspectReview(
+  context: ScenarioContext,
+  targetTaskId: string,
+): Promise<ReviewInspection> {
+  const inspected = await call(context, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+    targetTaskId,
+  });
+  assertNoPrivatePath(context, inspected);
+  equal(
+    JSON.stringify(inspected.structuredContent).includes("codex-host-owned-thread"),
+    false,
+    "review inspection leaked a raw handle",
+  );
+  return inspected.structuredContent as ReviewInspection;
+}
+
+/** 实现评审决定请求：判断字段来自夹具，基线来自刚读取的检查投影。 */
+function implementationDecisionRequest(
+  context: ScenarioContext,
+  inspection: ReviewInspection,
+  decision: "accept" | "rework" | "blocked" | "escalate",
+  idempotencyKey: string,
+  expectedStreamRevision: number,
+): Readonly<Record<string, unknown>> {
+  return {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+    idempotencyKey,
+    expectedStreamRevision,
+    targetResultId: inspection.reviewUnit.targetResult.targetResultId,
+    snapshotDigest: inspection.snapshotDigest,
+    reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
+    ...implementationReviewJudgmentWire(decision),
+  };
+}
+
+/**
+ * 卡 7：导入只接受同 Demand 受管证据里能复验摘要的定位符，拒绝泄露隐私的报告文本；导入落账即释放
+ * 声明并签发回调许可，重放幂等；完成证据到达前 accept 不在允许集合内，也会被记录工具拒绝。
+ */
+async function scenarioImportAndReview(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (
+    !context.demandId ||
+    !context.targetTaskId ||
+    !context.taskPackageId ||
+    !context.productWindowId ||
+    !context.delivery ||
+    context.deliveryAccepted !== true
+  ) {
+    throw new Error("scenario ordering: ambiguous-resolution must run first");
+  }
+  await registerControllerWindow(context);
+  const evidence = await recordEvidence(context);
+  context.evidence = evidence;
+  const taskPackage = await loadTaskPackage(context, context.taskPackageId);
+  const content = createImplementationTargetResultReportContentFixture(taskPackage, evidence);
+  const permit = context.delivery;
+  const revision = await currentStreamRevision(context);
+
+  const wrongDigest = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    arguments: importRequest(
+      context,
+      permit,
+      "scenario-import-wrong-digest",
+      revision,
+      createImplementationTargetResultReportContentFixture(taskPackage, {
+        ref: evidence.ref,
+        digest: `sha256:${"f".repeat(64)}`,
+      }),
+    ),
+  });
+  equal(wrongDigest.isError, true, "a locator whose digest does not match must be rejected");
+  equal(scenarioToolText(wrongDigest).includes("evidence-unresolved"), true);
+  const leaking = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    arguments: importRequest(context, permit, "scenario-import-private-path", revision, {
+      ...content,
+      summary: `${content.summary} 详见 /Users/example/private-notes/review.txt`,
+    }),
+  });
+  equal(leaking.isError, true, "a report carrying an unlisted absolute path must be rejected");
+  equal(scenarioToolText(leaking).includes("privacy:unlisted-absolute-path"), true);
+  equal(
+    existsSync(path.join(root, ...workClaimRef(context.productWindowId).split("/"))),
+    true,
+    "a rejected import must not release the claim",
+  );
+
+  const imported = await call(
+    context,
+    WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    importRequest(context, permit, "scenario-import-1", revision, content),
+  );
+  assertNoPrivatePath(context, imported);
+  const importResult = imported.structuredContent as ImportResult;
+  equal(importResult.status, "committed");
+  equal(importResult.callback.permit.hostAction.effect, "send-prompt-to-window");
+  equal(importResult.callback.permit.hostAction.windowId, context.controllerWindowId);
+  equal(importResult.callback.permit.generation, 1);
+  equal(
+    importResult.callback.permit.prompt.includes(
+      WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+    ),
+    true,
+    "the callback prompt must point the Controller at the review inspection tool",
+  );
+  equal(importResult.callback.permit.prompt.includes(context.workspace.fixtureRoot), false);
+  equal(importResult.next.frontier, "implementation-result-review");
+  equal(existsSync(path.join(root, ...workClaimRef(context.productWindowId).split("/"))), false);
+  const replayed = await call(
+    context,
+    WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    importRequest(context, permit, "scenario-import-1", revision, content),
+  );
+  const replay = replayed.structuredContent as ImportResult;
+  equal(replay.status, "idempotent");
+  equal(replay.callback.callbackId, importResult.callback.callbackId);
+  equal(replay.result.resultDigest, importResult.result.resultDigest);
+
+  const pending = await inspectReview(context, context.targetTaskId);
+  equal(pending.reviewUnit.status, "reported");
+  equal(pending.reviewUnit.callback.status, "pending");
+  equal(pending.reviewUnit.targetCompletion.status, "pending");
+  equal(pending.reviewUnit.allowedDecisions.includes("accept"), false);
+  equal(pending.reviewUnit.allowedDecisions.includes("rework"), true);
+  const premature = await context.connection.client.callTool({
+    name: WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    arguments: implementationDecisionRequest(
+      context,
+      pending,
+      "accept",
+      "scenario-decision-premature",
+      await currentStreamRevision(context),
+    ),
+  });
+  equal(premature.isError, true, "accept without completion evidence must be rejected");
+  equal(scenarioToolText(premature).includes("target-completion-pending"), true);
+
+  await recordSessionEvent(context, context.productWindowId, context.productHandle, "stop");
+  const confirmed = await inspectReview(context, context.targetTaskId);
+  equal(confirmed.reviewUnit.targetCompletion.status, "confirmed");
+  equal(confirmed.reviewUnit.allowedDecisions.includes("accept"), true);
+  context.callback = {
+    callbackId: importResult.callback.callbackId,
+    prompt: importResult.callback.permit.prompt,
+    generation: importResult.callback.permit.generation,
+    issuedAt: importResult.callback.permit.issuedAt,
+  };
+  return `wrong-digest=rejected; private-path=rejected; import=${importResult.status}; replay=${replay.status}; claim=released; callback=${pending.reviewUnit.callback.status}; completion=${pending.reviewUnit.targetCompletion.status}->${confirmed.reviewUnit.targetCompletion.status}; accept-before-stop=rejected; allowed=${confirmed.reviewUnit.allowedDecisions.join("|")}`;
+}
+
+/**
+ * 卡 6 回调：许可 prompt 落进 Controller 会话即 landed；未静默与已落地的回调都不能重臂。静默后重发
+ * 需要注入时钟，由 tests/capabilities/result-review/service.test.ts 覆盖。
+ */
+async function scenarioWakeController(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.callback || !context.targetTaskId) {
+    throw new Error("scenario ordering: import-and-review must run first");
+  }
+  const rearmRequest = (idempotencyKey: string, expectedStreamRevision: number) => ({
+    root,
+    demandId: context.demandId,
+    idempotencyKey,
+    expectedStreamRevision,
+    deliveryId: context.callback?.callbackId,
+  });
+  const early = await context.connection.client.callTool({
+    name: WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
+    arguments: rearmRequest("scenario-callback-rearm-early", await currentStreamRevision(context)),
+  });
+  equal(early.isError, true, "a callback that is not silent yet must not be re-issued");
+  equal(scenarioToolText(early).includes("callback-pending"), true);
+
+  await landPrompt(
+    context,
+    context.callback.prompt,
+    context.controllerWindowId,
+    context.controllerHandle,
+  );
+  const landed = await inspectReview(context, context.targetTaskId);
+  equal(landed.reviewUnit.callback.status, "landed");
+  equal(typeof landed.reviewUnit.callback.landedRecordId, "string");
+  equal(landed.reviewUnit.callback.generation, 1);
+  const afterLanding = await context.connection.client.callTool({
+    name: WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
+    arguments: rearmRequest("scenario-callback-rearm-landed", await currentStreamRevision(context)),
+  });
+  equal(afterLanding.isError, true, "a landed callback must not be re-issued");
+  equal(scenarioToolText(afterLanding).includes("callback-landed"), true);
+  return `rearm-before-silence=callback-pending; landing=${landed.reviewUnit.callback.status}; rearm-after-landing=callback-landed; silence-reissue=service-test-with-injected-clock`;
+}
+
+/**
+ * 卡 7：escalate 在同一提交附带升级事件并把 Route 交给用户；用户经 continue_demand record-decision
+ * 回答后，带 resumption 的 accept 回到同一结果，目标 accepted，Route 前进到测试规划。
+ */
+async function scenarioEscalateAndResume(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.demandId || !context.targetTaskId || !context.callback) {
+    throw new Error("scenario ordering: wake-controller must run first");
+  }
+  const before = await inspectReview(context, context.targetTaskId);
+  const escalateRequest = implementationDecisionRequest(
+    context,
+    before,
+    "escalate",
+    "scenario-decision-escalate",
+    await currentStreamRevision(context),
+  );
+  const escalatedCall = await call(
+    context,
+    WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    escalateRequest,
+  );
+  assertNoPrivatePath(context, escalatedCall);
+  const escalated = escalatedCall.structuredContent as DecisionResult;
+  equal(escalated.status, "committed");
+  equal(escalated.target.phase, "escalated");
+  equal(escalated.decision.callbackLanding, "landed");
+  equal(escalated.decision.targetCompletion, "confirmed");
+  const escalationEventId = escalated.attached.escalationEventId;
+  if (escalationEventId === null) throw new Error("escalate must attach the escalation event");
+  const replayed = await call(
+    context,
+    WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    escalateRequest,
+  );
+  const replay = replayed.structuredContent as DecisionResult;
+  equal(replay.status, "idempotent");
+  equal(replay.decision.targetReviewDecisionId, escalated.decision.targetReviewDecisionId);
+  const awaiting = await inspectRoute(context);
+  equal(awaiting.route?.disposition, "awaiting-decision");
+  equal(awaiting.route?.frontiers[0]?.kind, "decision-required");
+
+  const waiting = await inspectReview(context, context.targetTaskId);
+  equal(waiting.reviewUnit.status, "escalated");
+  equal(waiting.reviewUnit.callback.status, "acknowledged");
+  equal(waiting.reviewUnit.resumptionBasis?.kind, "decision-recorded");
+  equal(waiting.reviewUnit.resumptionBasis?.escalationEventId, escalationEventId);
+  equal(waiting.reviewUnit.resumptionBasis?.answered, false);
+  equal(waiting.reviewUnit.allowedDecisions.length, 0);
+
+  const decision = {
+    text: "按当前实现接受，需求补充由设计侧另行提交。",
+    chosenOption: ESCALATION_OPTIONS[0].option,
+  };
+  const decisionPreview = await call(context, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    demandId: context.demandId,
+    action: "record-decision",
+    decision,
+  });
+  const previewed = decisionPreview.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(previewed.status, "ready", previewed.blockers.join(","));
+  const recorded = await call(context, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: context.demandId,
+    action: "record-decision",
+    decision,
+    planDigest: previewed.planDigest,
+  });
+  assertNoPrivatePath(context, recorded);
+  const recording = recorded.structuredContent as {
+    readonly disposition: string;
+    readonly next: { readonly frontier: string | null };
+  };
+  equal(recording.disposition, "decision-recorded");
+  equal(recording.next.frontier, "implementation-result-review");
+
+  const answered = await inspectReview(context, context.targetTaskId);
+  equal(answered.reviewUnit.resumptionBasis?.answered, true);
+  equal(answered.reviewUnit.allowedDecisions.includes("accept"), true);
+  const withoutResumption = await context.connection.client.callTool({
+    name: WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    arguments: implementationDecisionRequest(
+      context,
+      answered,
+      "accept",
+      "scenario-decision-no-resumption",
+      await currentStreamRevision(context),
+    ),
+  });
+  equal(withoutResumption.isError, true, "re-deciding an escalated unit needs a resumption");
+  equal(scenarioToolText(withoutResumption).includes("resumption-missing"), true);
+  const acceptedCall = await call(
+    context,
+    WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    {
+      ...implementationDecisionRequest(
+        context,
+        answered,
+        "accept",
+        "scenario-decision-accept",
+        await currentStreamRevision(context),
+      ),
+      resumption: {
+        previousDecisionId: escalated.decision.targetReviewDecisionId,
+        basis: { kind: "decision-recorded", escalationEventId },
+        summary: "用户已回答升级问题：按当前实现接受。",
+      },
+    },
+  );
+  assertNoPrivatePath(context, acceptedCall);
+  const accepted = acceptedCall.structuredContent as DecisionResult;
+  equal(accepted.status, "committed");
+  equal(accepted.target.phase, "accepted");
+  equal(accepted.attached.escalationEventId, null);
+  equal(accepted.next.frontier, "test-task-planning");
+  context.delivery = undefined;
+  context.deliveryAccepted = false;
+  context.targetAccepted = true;
+  return `escalate=${escalated.status}; replay=${replay.status}; route=${awaiting.route?.disposition}; callback=${waiting.reviewUnit.callback.status}; record-decision=${recording.disposition}; accept-without-resumption=rejected; resumed-accept=${accepted.status}; phase=${accepted.target.phase}; next=${accepted.next.frontier}`;
 }
 
 /**
@@ -980,10 +1439,17 @@ async function registerTestWindow(context: ScenarioContext): Promise<void> {
  */
 async function scenarioTestContract(context: ScenarioContext): Promise<string> {
   const root = context.workspace.workspacePath;
-  if (!context.demandId || !context.memberRefs || !context.recordDigest || !context.testWindowId) {
-    throw new Error("scenario ordering: create-demand must run first");
+  if (
+    !context.demandId ||
+    !context.memberRefs ||
+    !context.recordDigest ||
+    !context.testWindowId ||
+    !context.evidence
+  ) {
+    throw new Error("scenario ordering: create-demand and import-and-review must run first");
   }
-  const chain = await driveTargetToAcceptance(context);
+  requireAcceptedImplementation(context);
+  const evidence = context.evidence;
   const afterAccept = await inspectRoute(context);
   equal(afterAccept.route?.frontiers[0]?.kind, "test-task-planning");
   await registerTestWindow(context);
@@ -1104,16 +1570,17 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
   const accepted = await recordOutcome(context, prepared.permit, "scenario-test-outcome-1");
   equal(accepted.outcome.disposition, "accepted");
   equal(accepted.target.phase, "test-host-effect-accepted");
-  const stepEvidence = ["ts-1", "ts-2"].map((stepId, index) => ({
+  const steps = ["ts-1", "ts-2"].map((stepId) => ({
     stepId,
-    evidence: {
-      ref: `evidence/test-runs/${stepId}.json`,
-      digest: `sha256:${String(index + 1).repeat(64)}`,
-    },
+    observed: `${stepId} 在已确认环境中观察到合同所述行为。`,
+    evidence: { ref: evidence.ref, digest: evidence.digest },
+    verdict: "pass",
   }));
   const imported = await call(context, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, {
     root,
     demandId: context.demandId,
+    idempotencyKey: "scenario-test-import-1",
+    expectedStreamRevision: await currentStreamRevision(context),
     deliveryId: prepared.permit.deliveryId,
     claimDigest: prepared.permit.claimDigest,
     report: {
@@ -1121,34 +1588,28 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
       content: {
         outcome: "completed",
         summary: "已按测试合同执行两步并返回逐步证据。",
-        evidenceLocators: stepEvidence.map((entry) => ({
-          kind: "test-step-report",
-          ...entry.evidence,
-        })),
+        evidenceLocators: [{ kind: "test-output", ref: evidence.ref, digest: evidence.digest }],
         verification: ["逐项复验 Evidence ref 与 digest。"],
         risks: ["结果仍需 Controller 独立审查。"],
-        stepEvidence,
+        steps,
       },
     },
   });
   assertNoPrivatePath(context, imported);
-  const importStatus = (imported.structuredContent as { readonly status: string }).status;
-  equal(importStatus, "recorded");
-  const inspectionCall = await call(
-    context,
-    WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
-    { root, demandId: context.demandId, targetTaskId: planned.targetTask.targetTaskId },
-  );
-  const inspection = inspectionCall.structuredContent as {
-    readonly snapshotDigest: string;
-    readonly reviewUnit: {
-      readonly reviewUnitDigest: string;
-      readonly targetResult: { readonly targetResultId: string };
-    };
-  };
-  const decided = await call(context, WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, {
+  const importResult = imported.structuredContent as ImportResult;
+  equal(importResult.status, "committed");
+  equal(importResult.callback.permit.hostAction.windowId, context.controllerWindowId);
+  // 测试会话留下 Stop 记录后，accept 才进入允许集合。
+  await recordSessionEvent(context, context.testWindowId, context.testHandle, "stop");
+  const inspection = await inspectReview(context, planned.targetTask.targetTaskId);
+  equal(inspection.reviewUnit.workType, "test");
+  equal(inspection.reviewUnit.testSteps?.length, 2);
+  equal(inspection.reviewUnit.allowedDecisions.includes("accept"), true);
+  const decided = await call(context, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, {
     root,
     demandId: context.demandId,
+    idempotencyKey: "scenario-test-decision-1",
+    expectedStreamRevision: await currentStreamRevision(context),
     targetResultId: inspection.reviewUnit.targetResult.targetResultId,
     snapshotDigest: inspection.snapshotDigest,
     reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
@@ -1167,16 +1628,18 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
     residualRisks: ["该决定不替代后续 Demand completion 检查。"],
   });
   assertNoPrivatePath(context, decided);
-  const decision = decided.structuredContent as { readonly status: string };
-  equal(decision.status, "decided");
+  const decision = decided.structuredContent as DecisionResult;
+  equal(decision.status, "committed");
+  equal(decision.target.phase, "test-accepted");
+  equal(decision.attached.productDefectRemediationId, null);
   const route = await inspectRoute(context);
   equal(route.route?.frontiers[0]?.kind, "demand-completion-preflight");
-  return `${chain}; invented-step=rejected; plan=${planned.status}; second-open=rejected; delivery=${accepted.outcome.disposition}; import=${importStatus}; review=${decision.status}; next=${route.route?.frontiers[0]?.kind}`;
+  return `invented-step=rejected; plan=${planned.status}; second-open=rejected; delivery=${accepted.outcome.disposition}; import=${importResult.status}; review=${decision.status}; next=${route.route?.frontiers[0]?.kind}`;
 }
 
 async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<string> {
   const root = context.workspace.workspacePath;
-  const chain = await driveTargetToAcceptance(context);
+  requireAcceptedImplementation(context);
   const beforeCompletion = await inspectRoute(context);
   equal(beforeCompletion.route?.frontiers[0]?.kind, "demand-completion-preflight");
   const before = readdirSync(root, { recursive: true }).length;
@@ -1242,7 +1705,7 @@ async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<str
   };
   equal(recovery.disposition, "recovered");
   equal(recovery.terminalEvent.eventId, completed.terminalEvent.eventId);
-  return `${chain}; complete=${completed.disposition}; archive files=${completed.archive.fileCount}; package=${completed.package.status}; recover=${recovery.disposition}`;
+  return `complete=${completed.disposition}; archive files=${completed.archive.fileCount}; package=${completed.package.status}; recover=${recovery.disposition}`;
 }
 
 async function scenarioCompleteAndContinue(context: ScenarioContext): Promise<string> {
@@ -1347,12 +1810,15 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-05/plan-implementation-task": scenarioPlanImplementationTask,
     "card-06/delivery-chain": scenarioDeliveryChain,
     "card-06/ambiguous-resolution": scenarioAmbiguousResolution,
+    "card-07/import-and-review": scenarioImportAndReview,
+    "card-06/wake-controller": scenarioWakeController,
+    "card-07/escalate-and-resume": scenarioEscalateAndResume,
     "card-05/test-contract": scenarioTestContract,
     "card-08/complete-and-archive": scenarioCompleteAndArchive,
     "card-04/complete-and-continue": scenarioCompleteAndContinue,
   });
 
-test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、测试合同、完成即归档、续接与取消并报告结论", async () => {
+test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、投递、结果导入与评审、回调、升级续审、测试合同、完成即归档、续接与取消并报告结论", async () => {
   const workspace = createScenarioWorkspace();
   const connection = await connectWakeflowMcpServerForTest(
     createCodexWakeflowMcpServer("1.0.0-scenario"),

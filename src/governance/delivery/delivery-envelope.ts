@@ -119,6 +119,12 @@ export interface ProjectTargetDeliveryReworkContextInput {
   }>[];
 }
 
+/** 产品缺陷修复要求纠正的一个测试合同步骤：步骤编号与失败观察摘要（§13.87 D5）。 */
+export interface TargetDeliveryProductDefectCorrection {
+  readonly stepId: string;
+  readonly observedSummary: string;
+}
+
 export interface TargetDeliveryProductDefectRemediationContext {
   readonly authorization: Readonly<{
     readonly productDefectRemediationId: WakeflowDurableId<"product-defect-remediation">;
@@ -135,12 +141,8 @@ export interface TargetDeliveryProductDefectRemediationContext {
   readonly authorizationRationaleSummary: string;
   readonly correctionObjectiveSummary: string;
   readonly requiredCorrections: readonly [
-    Readonly<TargetDeliveryRequiredCorrection & { readonly outcome: "failed" }>,
-    ...Readonly<
-      TargetDeliveryRequiredCorrection & {
-        readonly outcome: "failed";
-      }
-    >[],
+    Readonly<TargetDeliveryProductDefectCorrection>,
+    ...Readonly<TargetDeliveryProductDefectCorrection>[],
   ];
 }
 
@@ -151,10 +153,8 @@ export interface ProjectTargetDeliveryProductDefectRemediationContextInput {
   readonly authorizationRationale: string;
   readonly correctionObjective: string;
   readonly requiredCorrections: readonly Readonly<{
-    readonly checkId: string;
-    readonly outcome: "failed";
-    readonly method: string;
-    readonly observation: string;
+    readonly stepId: string;
+    readonly observed: string;
   }>[];
 }
 
@@ -499,8 +499,10 @@ function remediationText(
   return value;
 }
 
-function remediationCheckId(value: unknown, path: string): string {
-  if (typeof value !== "string" || !REWORK_CHECK_ID_PATTERN.test(value)) {
+const REMEDIATION_STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
+
+function remediationStepId(value: unknown, path: string): string {
+  if (typeof value !== "string" || !REMEDIATION_STEP_ID_PATTERN.test(value)) {
     fail("product-defect-remediation", path);
   }
   return value;
@@ -542,7 +544,7 @@ export function parseTargetDeliveryProductDefectRemediationContext(
   try {
     correctionValues = parseDenseArray(
       record.requiredCorrections,
-      32,
+      20,
       `${path}/requiredCorrections`,
     );
   } catch (error: unknown) {
@@ -558,32 +560,20 @@ export function parseTargetDeliveryProductDefectRemediationContext(
     const correctionPath = `${path}/requiredCorrections/${index}`;
     const correction = remediationRecord(
       value,
-      ["checkId", "outcome", "methodSummary", "observationSummary"],
+      ["stepId", "observedSummary"],
       correctionPath,
     );
-    if (correction.outcome !== "failed") {
-      fail("product-defect-remediation", `${correctionPath}/outcome`);
-    }
     return Object.freeze({
-      checkId: remediationCheckId(
-        correction.checkId,
-        `${correctionPath}/checkId`,
-      ),
-      outcome: "failed" as const,
-      methodSummary: remediationText(
-        correction.methodSummary,
-        MAXIMUM_REWORK_METHOD_CODE_POINTS,
-        `${correctionPath}/methodSummary`,
-      ),
-      observationSummary: remediationText(
-        correction.observationSummary,
+      stepId: remediationStepId(correction.stepId, `${correctionPath}/stepId`),
+      observedSummary: remediationText(
+        correction.observedSummary,
         MAXIMUM_REWORK_OBSERVATION_CODE_POINTS,
-        `${correctionPath}/observationSummary`,
+        `${correctionPath}/observedSummary`,
       ),
     });
   });
   if (
-    new Set(corrections.map((correction) => correction.checkId)).size !==
+    new Set(corrections.map((correction) => correction.stepId)).size !==
     corrections.length
   ) {
     fail("product-defect-remediation", `${path}/requiredCorrections`);
@@ -679,14 +669,9 @@ export function projectTargetDeliveryProductDefectRemediationContext(
       MAXIMUM_REWORK_RATIONALE_CODE_POINTS,
     ),
     requiredCorrections: input.requiredCorrections.map((correction) => ({
-      checkId: correction.checkId,
-      outcome: "failed",
-      methodSummary: summarizeRemediationText(
-        correction.method,
-        MAXIMUM_REWORK_METHOD_CODE_POINTS,
-      ),
-      observationSummary: summarizeRemediationText(
-        correction.observation,
+      stepId: correction.stepId,
+      observedSummary: summarizeRemediationText(
+        correction.observed,
         MAXIMUM_REWORK_OBSERVATION_CODE_POINTS,
       ),
     })),

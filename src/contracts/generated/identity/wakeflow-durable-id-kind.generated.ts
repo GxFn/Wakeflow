@@ -20,7 +20,6 @@ export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
   "target-delivery",
   "target-result",
   "target-review-decision",
-  "target-review-resume",
   "target-task",
   "window",
   "work-claim"

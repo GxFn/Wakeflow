@@ -6,7 +6,6 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { parseDemandEventStreamRevision } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import {
-  controllerTestReviewDecisionCommitId,
   controllerTestReviewDecisionEventId,
   createControllerTestReviewDecision,
   parseControllerTestReviewDecisionDocument,
@@ -21,17 +20,18 @@ const ROLLED_BACK_AT = parseUtcInstant("2026-08-29T12:33:00.000Z");
 const DECISION_UUID = "e5e5e5e5-e5e5-45e5-85e5-e5e5e5e5e5e5";
 const EQUAL_TIME_DECISION_UUID = "e6e6e6e6-e6e6-46e6-86e6-e6e6e6e6e6e6";
 const ROLLBACK_DECISION_UUID = "e7e7e7e7-e7e7-47e7-87e7-e7e7e7e7e7e7";
+const PRODUCT_TARGET_TASK_ID = parseWakeflowDurableIdOfKind(
+  "target-task_99999999-9999-4999-8999-999999999999",
+  "target-task",
+);
 
-function baseInput(): CreateControllerTestReviewDecisionInput {
+export function testReviewDecisionBaseInput(): CreateControllerTestReviewDecisionInput {
   return {
     programId: parseWakeflowDurableIdOfKind(
       "program_11111111-1111-4111-8111-111111111111",
       "program",
     ),
-    demandId: parseWakeflowDurableIdOfKind(
-      "demand_22222222-2222-4222-8222-222222222222",
-      "demand",
-    ),
+    demandId: parseWakeflowDurableIdOfKind("demand_22222222-2222-4222-8222-222222222222", "demand"),
     targetTaskId: parseWakeflowDurableIdOfKind(
       "target-task_33333333-3333-4333-8333-333333333333",
       "target-task",
@@ -65,10 +65,7 @@ function baseInput(): CreateControllerTestReviewDecisionInput {
       ),
     },
     decision: "accept",
-    assessment: {
-      conclusion: "satisfied",
-      evidenceSufficiency: "sufficient",
-    },
+    assessment: { conclusion: "satisfied", evidenceSufficiency: "sufficient" },
     independentChecks: [
       {
         checkId: "controller-test-evidence",
@@ -80,6 +77,31 @@ function baseInput(): CreateControllerTestReviewDecisionInput {
     rationale: "Controller独立检查已关闭当前真实环境风险。",
     blockingReasons: [],
     residualRisks: ["该决定不替代后续Demand completion检查。"],
+    stepIds: null,
+    escalation: null,
+    resumption: null,
+    callbackLanding: null,
+    targetCompletion: {
+      recordId: "20260829T123430000Z-stop-fixture",
+      event: "stop",
+      observedAt: parseUtcInstant("2026-08-29T12:34:30.000Z"),
+    },
+  };
+}
+
+export function productDefectEscalation() {
+  return {
+    classification: "product-defect" as const,
+    remediation: {
+      affectedTargets: [
+        {
+          targetTaskId: PRODUCT_TARGET_TASK_ID,
+          failedStepIds: ["ts-1"] as const,
+          correctionObjective: "在原TaskPackage边界内恢复批准的入口合同。",
+        },
+      ] as const,
+      authorizationRationale: "真实环境Evidence证明已接受实现存在产品缺陷。",
+    },
   };
 }
 
@@ -90,40 +112,35 @@ function createDecision(input: CreateControllerTestReviewDecisionInput) {
   });
 }
 
-test("ControllerTestReviewDecision接受完整Evidence但不自动完成Demand", () => {
-  const decision = createDecision(baseInput());
+test("ControllerTestReviewDecision接受完整Evidence与完成证据但不自动完成Demand", () => {
+  const decision = createDecision(testReviewDecisionBaseInput());
   equal(decision.kind, "WakeflowControllerTestReviewDecision");
   equal(decision.decision, "accept");
+  equal(decision.stepIds, null);
+  equal(decision.escalation, null);
+  equal(decision.targetCompletion?.event, "stop");
   equal(Object.hasOwn(decision, "demandCompletion"), false);
+  equal(controllerTestReviewDecisionEventId(decision), `demand-event_${DECISION_UUID}`);
   equal(
-    controllerTestReviewDecisionEventId(decision),
-    `demand-event_${DECISION_UUID}`,
-  );
-  equal(
-    controllerTestReviewDecisionCommitId(decision),
-    `demand-event-commit_${DECISION_UUID}`,
-  );
-  equal(
-    parseControllerTestReviewDecisionDocument(
-      renderControllerTestReviewDecision(decision),
-    ).decisionDigest,
+    parseControllerTestReviewDecisionDocument(renderControllerTestReviewDecision(decision))
+      .decisionDigest,
     decision.decisionDigest,
+  );
+  throws(
+    () => createDecision({ ...testReviewDecisionBaseInput(), targetCompletion: null }),
+    (error: unknown) =>
+      error instanceof ControllerTestReviewDecisionError &&
+      (error.reason === "schema" || error.reason === "relation"),
   );
 });
 
-test("ControllerTestReviewDecision区分另一次attempt、产品缺陷与阻塞", () => {
-  const base = baseInput();
+test("ControllerTestReviewDecision区分带范围的另一次attempt、产品缺陷升级、需要决定的升级与阻塞", () => {
+  const base = testReviewDecisionBaseInput();
   const anotherAttempt = createDecision({
     ...base,
-    reviewed: {
-      ...base.reviewed,
-      targetResultOutcome: "needs-review",
-    },
+    reviewed: { ...base.reviewed, targetResultOutcome: "needs-review" },
     decision: "request-another-attempt",
-    assessment: {
-      conclusion: "inconclusive",
-      evidenceSufficiency: "insufficient",
-    },
+    assessment: { conclusion: "inconclusive", evidenceSufficiency: "insufficient" },
     independentChecks: [
       {
         checkId: "controller-test-inconclusive",
@@ -133,21 +150,23 @@ test("ControllerTestReviewDecision区分另一次attempt、产品缺陷与阻塞
       },
     ],
     rationale: "需要后续owner规划另一logical Test attempt。",
+    stepIds: ["ts-2"],
+    targetCompletion: null,
   });
   equal(anotherAttempt.decision, "request-another-attempt");
-  equal(Object.hasOwn(anotherAttempt, "nextAttempt"), false);
+  equal(anotherAttempt.stepIds?.[0], "ts-2");
+  throws(
+    () => createDecision({ ...base, decision: "accept", stepIds: ["ts-1"] }),
+    (error: unknown) =>
+      error instanceof ControllerTestReviewDecisionError &&
+      (error.reason === "schema" || error.reason === "relation"),
+  );
 
   const productDefect = createDecision({
     ...base,
-    reviewed: {
-      ...base.reviewed,
-      targetResultOutcome: "needs-review",
-    },
-    decision: "escalate-product-defect",
-    assessment: {
-      conclusion: "defect-observed",
-      evidenceSufficiency: "sufficient",
-    },
+    reviewed: { ...base.reviewed, targetResultOutcome: "needs-review" },
+    decision: "escalate",
+    assessment: { conclusion: "defect-observed", evidenceSufficiency: "sufficient" },
     independentChecks: [
       {
         checkId: "controller-product-defect",
@@ -157,21 +176,45 @@ test("ControllerTestReviewDecision区分另一次attempt、产品缺陷与阻塞
       },
     ],
     rationale: "保留Evidence并升级到产品remediation，不重派Test。",
+    escalation: productDefectEscalation(),
+    targetCompletion: null,
   });
-  equal(productDefect.decision, "escalate-product-defect");
-  equal(Object.hasOwn(productDefect, "productMutation"), false);
+  equal(productDefect.decision, "escalate");
+  equal(productDefect.escalation?.classification, "product-defect");
+
+  const needsDecision = createDecision({
+    ...base,
+    reviewed: { ...base.reviewed, targetResultOutcome: "needs-review" },
+    decision: "escalate",
+    assessment: { conclusion: "inconclusive", evidenceSufficiency: "sufficient" },
+    independentChecks: [
+      {
+        checkId: "controller-needs-decision",
+        method: "对照需求包与真实环境行为。",
+        outcome: "inconclusive",
+        observation: "需求对该行为没有明确表述，需要用户裁定。",
+      },
+    ],
+    rationale: "Controller 不能单方面裁定需求含义。",
+    escalation: {
+      classification: "needs-decision",
+      userDecision: {
+        issue: "真实环境行为与需求表述冲突，需要用户裁定。",
+        requirementRefs: [],
+        evidence: [],
+        options: [{ option: "按当前行为接受。", impact: "需求包需要补充说明。" }],
+        recommendation: "建议补充需求说明后接受。",
+      },
+    },
+    targetCompletion: null,
+  });
+  equal(needsDecision.escalation?.classification, "needs-decision");
 
   const blocked = createDecision({
     ...base,
-    reviewed: {
-      ...base.reviewed,
-      targetResultOutcome: "blocked",
-    },
+    reviewed: { ...base.reviewed, targetResultOutcome: "blocked" },
     decision: "blocked",
-    assessment: {
-      conclusion: "inconclusive",
-      evidenceSufficiency: "insufficient",
-    },
+    assessment: { conclusion: "inconclusive", evidenceSufficiency: "insufficient" },
     independentChecks: [
       {
         checkId: "controller-environment-blocked",
@@ -182,22 +225,30 @@ test("ControllerTestReviewDecision区分另一次attempt、产品缺陷与阻塞
     ],
     rationale: "等待外部环境事实。",
     blockingReasons: ["Test环境所有者尚未恢复访问。"],
+    targetCompletion: null,
   });
   equal(blocked.decision, "blocked");
 });
 
-test("ControllerTestReviewDecision拒绝矛盾结论并允许wall clock重复或回拨", () => {
-  const base = baseInput();
+test("ControllerTestReviewDecision拒绝矛盾结论、无升级的 escalate 并允许wall clock重复或回拨", () => {
+  const base = testReviewDecisionBaseInput();
   throws(
     () =>
       createDecision({
         ...base,
-        independentChecks: [
-          {
-            ...base.independentChecks[0],
-            outcome: "failed",
-          },
-        ],
+        independentChecks: [{ ...base.independentChecks[0], outcome: "failed" }],
+      }),
+    (error: unknown) =>
+      error instanceof ControllerTestReviewDecisionError &&
+      (error.reason === "schema" || error.reason === "relation"),
+  );
+  throws(
+    () =>
+      createDecision({
+        ...base,
+        decision: "escalate",
+        assessment: { conclusion: "defect-observed", evidenceSufficiency: "sufficient" },
+        targetCompletion: null,
       }),
     (error: unknown) =>
       error instanceof ControllerTestReviewDecisionError &&
@@ -217,21 +268,12 @@ test("ControllerTestReviewDecision拒绝矛盾结论并允许wall clock重复或
     () =>
       createDecision({
         ...base,
-        reviewed: {
-          ...base.reviewed,
-          targetResultOutcome: "blocked",
-        },
-        decision: "escalate-product-defect",
-        assessment: {
-          conclusion: "defect-observed",
-          evidenceSufficiency: "sufficient",
-        },
-        independentChecks: [
-          {
-            ...base.independentChecks[0],
-            outcome: "failed",
-          },
-        ],
+        reviewed: { ...base.reviewed, targetResultOutcome: "blocked" },
+        decision: "escalate",
+        assessment: { conclusion: "defect-observed", evidenceSufficiency: "sufficient" },
+        independentChecks: [{ ...base.independentChecks[0], outcome: "failed" }],
+        escalation: productDefectEscalation(),
+        targetCompletion: null,
       }),
     (error: unknown) =>
       error instanceof ControllerTestReviewDecisionError &&

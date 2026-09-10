@@ -150,11 +150,12 @@ export type DemandPostAcceptanceNextStage =
       readonly testReview: Readonly<DemandPostAcceptanceReviewedTest>;
     }>
   | Readonly<{
-      readonly status: "test-product-defect-escalated";
+      readonly status: "test-review-blocked";
       readonly testReview: Readonly<DemandPostAcceptanceReviewedTest>;
     }>
   | Readonly<{
-      readonly status: "test-review-blocked";
+      /** `escalate{needs-decision}` 已升级给用户；回答后由 Controller 带 resumption 再决定。 */
+      readonly status: "test-review-escalated";
       readonly testReview: Readonly<DemandPostAcceptanceReviewedTest>;
     }>
   | Readonly<{
@@ -193,7 +194,8 @@ type ReviewedTestTargetState = Extract<
       | "test-accepted"
       | "test-another-attempt-requested"
       | "test-product-defect"
-      | "test-review-blocked";
+      | "test-review-blocked"
+      | "test-escalated";
   }
 >;
 type DeliveryBearingTestTargetState = Exclude<
@@ -404,48 +406,28 @@ function nextStage(
   if (openTestTargets.length > 1) fail("relation");
   const testTarget = openTestTargets[0];
   if (testTarget === undefined) {
-    return closedTestStage(loaded, snapshot, testTargets);
+    return closedTestStage(loaded, testTargets);
   }
   return openTestStage(testTarget);
 }
 
-/** 没有未终结 test 目标：待消费复测或首个合同交给 test 任务规划；否则最新缺陷代际等待升级授权。 */
+/**
+ * 没有未终结 test 目标：待消费复测或首个合同交给 test 任务规划。缺陷修复授权与
+ * `escalate{product-defect}` 同一提交落地（§13.87 D5），因此历史缺陷代际之后要么有待消费
+ * 的复测，要么已被 retest 谱系消费；其他组合是不一致的事件流。
+ */
 function closedTestStage(
   loaded: Readonly<LoadedDemandEventSourcingRootAuthority>,
-  snapshot: Readonly<DemandResultReviewSnapshot>,
   testTargets: readonly Readonly<TestTargetState>[],
 ): Readonly<DemandPostAcceptanceNextStage> {
   const pendingTestRetest = loaded.aggregate.state.pendingTestRetest;
-  if (pendingTestRetest !== undefined || testTargets.length === 0) {
-    return Object.freeze({
-      status: "test-task-planning" as const,
-      testEnvironmentAuthority: resolveDemandTestEnvironmentAuthority(loaded),
-      retest: pendingTestRetest ?? null,
-    });
-  }
-  const retestedTargetIds = new Set(
-    snapshot.targets.flatMap((target) =>
-      target.status !== "awaiting-result" &&
-      target.taskPackage.workType === "test" &&
-      target.taskPackage.lineage !== null
-        ? [target.taskPackage.lineage.retestsTargetTaskId]
-        : [],
-    ),
-  );
-  const latest = testTargets.filter(
-    (target) => !retestedTargetIds.has(target.targetTaskId),
-  );
-  const escalated = latest[0];
-  if (
-    latest.length !== 1 ||
-    escalated === undefined ||
-    escalated.phase !== "test-product-defect"
-  ) {
+  if (pendingTestRetest === undefined && testTargets.length !== 0) {
     fail("relation");
   }
   return Object.freeze({
-    status: "test-product-defect-escalated" as const,
-    testReview: reviewedTest(escalated),
+    status: "test-task-planning" as const,
+    testEnvironmentAuthority: resolveDemandTestEnvironmentAuthority(loaded),
+    retest: pendingTestRetest ?? null,
   });
 }
 
@@ -560,11 +542,14 @@ function openTestStage(
         status: "test-review-blocked" as const,
         testReview: reviewedTest(testTarget),
       });
-    case "test-product-defect":
+    case "test-escalated":
       return Object.freeze({
-        status: "test-product-defect-escalated" as const,
+        status: "test-review-escalated" as const,
         testReview: reviewedTest(testTarget),
       });
+    case "test-product-defect":
+      // 缺陷代际不是未终结目标；调用方已按 phase 过滤。
+      fail("relation");
   }
 }
 

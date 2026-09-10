@@ -23,7 +23,7 @@
 
 **宿主差异**：无。
 
-**现 TS 状态**：`wakeflow_import_target_result` 公开，事件 `result.target-result-recorded`；结果记录随 Demand 事件流。
+**现 TS 状态**：`wakeflow_import_target_result` 公开，事件 `result.target-result-recorded`；结果记录随 Demand 事件流。（切片 7 落地：导入解析并核验证据定位符、扫描报告文本、签发回调许可；见文末落地记录。）
 
 **实现判断**：按 ADR-0010，结果记录增加 `branch` 与 `commit`，`repositoryChanges` 的 disposition 保留；结果导入必须引用宿主 Stop hook 记录（ADR-0009 调整一）；`supersedes` 与两种关系词汇保留。
 
@@ -60,7 +60,7 @@
 - 返工是同一任务同一包的新一轮投递；redesign 在机制上与 rework 相同，只多一个"任务有仓库且为 implementation"的门，后续靠 replacement 包完成。
 - 决定事件只存 `resultSetDigest`，从不存 `reviewSnapshotDigest`。
 
-**现 TS 状态**：`record_controller_implementation_review_decision`、`record_controller_test_review_decision`、`resume_target_result_review`、`authorize_product_defect_remediation` 已公开，决定分实现与测试两类。
+**现 TS 状态**：决定分实现与测试两类，工具为 `wakeflow_record_implementation_review_decision` 与 `wakeflow_record_test_review_decision`；`resume_target_result_review` 与 `authorize_product_defect_remediation` 已于切片 7 删除（分别并入带 `resumption` 的再决定与 `escalate{product-defect}`）。
 
 **实现判断**：`accept` 要求 `outcome === completed` 且全部验收锚点已映射；accept 后的 Demand 状态由剩余任务派生而不是固定 `planned`；`blocked` 决定让任务也进入 `blocked`，并按能力卡 4 Q1 允许新的评审决定解除；cancel 遇到 pending 候选时拒绝而不是静默丢弃。
 
@@ -80,7 +80,7 @@
 - 尝试：`testAttempts[]` 最多 10，模式 `initial | resume | restart`，后续尝试必须指向前一尝试及其结果；新尝试要求 `attempts < maxAttempts`、前一投递 accepted 或 ambiguous、任务处于 `needs-rework`，即只有 rework、redesign、blocked 的评审决定能开启下一次尝试；rejected-before-send 的信封替换不消耗尝试。`wakeflow-demand-core-records.mjs:1045-1241`、`wakeflow-delivery-orchestration.mjs:667-760`。
 - Test 发现产品缺陷而产品谱系已 accepted：**没有机制**，文档记为能力缺口和停止条件。`stage-route-map.md:143-149`。
 
-**现 TS 状态**：`authorize_product_defect_remediation` 已实现缺陷返工授权，产品任务返工并产生新的测试代际；测试决定单独一类。
+**现 TS 状态**：缺陷返工授权由 `wakeflow_record_test_review_decision` 的 `escalate{product-defect}` 在同一提交追加，产品任务返工并产生新的测试代际；测试决定单独一类。
 
 **实现判断**：Test 结果增加机器字段 `verdict ∈ pass | fail | blocked | cannot-conclude`，与 `outcome` 并存，边界门的四种结局落成字段；尝试模式与 10 次上限保留；缺陷返工授权保留为正式能力（能力卡 5 Q5）。
 
@@ -139,3 +139,16 @@
 | Q4 | 保持两类决定 |
 | Q5 | `verdict` 落成逐步与整体两级 |
 | 工具面 | `resume_target_result_review` 并入 escalate 的回流 |
+
+## 落地记录（2026-09-10，L1 result-review 切片 7）
+
+按 [gate-log §13.87](../../progress/consolidation-gate-log.md) 八项裁决（D1 到 D8，用户于 2026-09-10 确认）落地，实现与验收记录见 §13.88。
+
+| 节 | 落地 |
+| --- | --- |
+| 7.1 结果记录 | `wakeflow_import_target_result{root, demandId, idempotencyKey, expectedStreamRevision, deliveryId, claimDigest, report}` 追加型一次调用，同键重放。Q1：证据定位符只接受同 Demand 受管证据记录内的 `artifacts/managed-evidence/<evidenceId>/manifest.json` 或 `payload/<member>`，导入时读文件核 sha256，缺失或不符即 `precondition-failed/evidence-unresolved`；`kind` 闭集 `test-output \| diff \| document \| transcript \| commit`。Q2：`summary`、`verification`、`risks`、锚点与步骤自由文本经内核隐私扫描，命中即 `precondition-failed/privacy:<规则>`。实现报告 `repositoryChange` 带 `branch`（`null` 为主检出）与 `commits`。结果事件记 `evidenceResolution[]` 收据与回调段；导入成功返回 `callback{callbackId, permit{prompt, hostAction, generation, issuedAt}}`，prompt 由 Wakeflow 渲染且不含路径与句柄；导入释放窗口工作声明 |
+| 7.2 评审投影 | `wakeflow_inspect_target_result_review` 只读：`reviewUnit{status ∈ reported \| review-blocked \| escalated, callback{status ∈ pending \| landed \| silent \| acknowledged, generation, issuedAt, landedRecordId}, targetCompletion{status ∈ pending \| confirmed, recordId, event, observedAt}, allowedDecisions, currentDecision, resumptionBasis, priorReviewHistory, testSteps[]{stepId, given, when, expected, observed, evidence, verdict, failure, baseline}, attemptScope{ordinal, stepIds}}`。完成证据是目标会话在结果 `reportedAt` 之后的 `stop \| turn-complete` 记录（D2）；升级未被用户回答时 `allowedDecisions` 为空 |
+| 7.3 实现决定 | `wakeflow_record_implementation_review_decision`：`accept \| rework \| blocked \| escalate`；`accept` 要求 `outcome === completed`、锚点全映射且完成证据 `confirmed`（Q3）；`escalate{issue, requirementRefs, evidence, options[≤4], recommendation}` 同一提交附带 `lifecycle.demand-escalated{source: review-decision}`，Demand 进入 `awaiting-decision`；blocked 与 escalated 之后在同一结果上记录带 `resumption{previousDecisionId, basis: condition-cleared \| decision-recorded{escalationEventId}, summary}` 的新决定（D4）；决定事件记 `callbackLanding` 与 `targetCompletion`；第三次 rework 刹车不变 |
+| 7.4 测试判定与尝试 | Test 报告 `steps[]{stepId, observed, evidence, verdict, failure?{classification, likelyOwner, recommendedAction}}`，整体 `verdict` 由 Wakeflow 派生（Q5）；`wakeflow_record_test_review_decision`：`accept \| request-another-attempt{stepIds} \| blocked \| escalate{classification}`；分类到决定的机器规则（D7）：`request-another-attempt` 只接受 `harness-defect \| flaky \| missing-evidence` 失败步骤且容量未满、同一步连续两次 `flaky` 拒绝；`blocked` 要求 `environment` 或整体 blocked；`escalate{product-defect}` 携带 `remediation{affectedTargets{targetTaskId, failedStepIds, correctionObjective}, authorizationRationale}` 并在同一提交追加 `review.product-defect-remediation-authorized`（D5），产品目标 `product-defect-rework-requested`、6b 的 retest 谱系不变；`escalate{needs-decision}` 附带 Demand 升级事件；重跑尝试 `rerunSource.stepIds` 只覆盖失败子集，范围外步骤沿用同目标尝试链或 retest 链里 `then` 相同步骤的通过基线（D6），整体判定按并集派生 |
+| 7.5 评审状态 | 评审状态由事件重放派生；`missingTargetTaskIds` 与候选写入不存在；Controller 路由前沿 `implementation-result-review \| implementation-review-blocked \| test-result-review \| test-review-blocked`，escalated 期间由 `awaiting-decision`（前沿 `decision-required`，owner user）覆盖；回调静默时 `wakeflow_rearm_delivery{deliveryId: callbackId}` 重发（上限 3，不取声明） |
+| 工具面 | 公共工具 20 → 18：`resume_target_result_review`、`authorize_product_defect_remediation` 删除，`record_controller_*` 改名（D8）；旧 6 个协调器删除 |

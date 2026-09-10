@@ -252,6 +252,13 @@ export async function prepareFixtureDelivery(
   );
 }
 
+/** 同一会话同一时刻只能有一条记录；第 n 次投递的落地时刻顺延 n-1 秒。 */
+export function fixtureLandingInstant(attempt: number): UtcInstant {
+  return attempt === 1
+    ? DELIVERY_LANDED_AT
+    : parseUtcInstant(new Date(Date.parse(DELIVERY_LANDED_AT) + (attempt - 1) * 1000).toISOString());
+}
+
 /** 在目标会话里落地一条与许可 prompt 摘要一致的 `user-prompt-submit` 记录。 */
 export async function landFixturePrompt(
   fixture: Readonly<{ readonly workspaceRoot: TargetTaskPlanningWorkspaceFixture["workspaceRoot"] }>,
@@ -303,14 +310,27 @@ export async function recordFixtureDeliveryOutcome(
   );
 }
 
-/** 准备 → 落地 → accepted 结局：目标进入 host-effect-accepted，流修订前进两步。 */
+/**
+ * 准备 → 落地 → accepted 结局：目标进入 host-effect-accepted，流修订前进两步。
+ * 返工后的再投递传入 attempt 序号换结局幂等键并显式给出期望修订。
+ */
 export async function deliverFixtureTarget(
   fixture: Readonly<DeliveryWorkspaceFixture>,
   overrides: PrepareFixtureDeliveryOverrides = {},
+  attempt = 1,
 ): Promise<Readonly<DeliveredTarget>> {
   const prepared = await prepareFixtureDelivery(fixture, overrides);
-  const landed = await landFixturePrompt(fixture, fixture.route, prepared.permit.prompt);
-  const recorded = await recordFixtureDeliveryOutcome(fixture, prepared);
+  const landed = await landFixturePrompt(
+    fixture,
+    fixture.route,
+    prepared.permit.prompt,
+    fixtureLandingInstant(attempt),
+  );
+  const recorded = await recordFixtureDeliveryOutcome(
+    fixture,
+    prepared,
+    attempt === 1 ? {} : { idempotencyKey: `fixture-outcome-r${attempt}` },
+  );
   if (recorded.outcome.disposition !== "accepted") {
     throw new Error("Expected an accepted delivery fixture.");
   }

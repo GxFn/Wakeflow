@@ -196,7 +196,7 @@
     "rerunSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["previousAttemptId", "previousResult", "reviewDecision"],
+      "required": ["previousAttemptId", "previousResult", "reviewDecision", "stepIds"],
       "properties": {
         "previousAttemptId": {
           "$ref": "#/$defs/testAttemptId"
@@ -226,6 +226,22 @@
               "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
             }
           }
+        },
+        "stepIds": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/stepId"
+              }
+            }
+          ]
         }
       }
     },
@@ -262,6 +278,10 @@
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }
+    },
+    "stepId": {
+      "type": "string",
+      "pattern": "^ts-[1-9][0-9]?$"
     }
   }
 }

@@ -7,6 +7,7 @@ import {
   type TestTaskPlanningWorkspaceFixtureOptions,
 } from "../tasking/test-task-planning.fixture.js";
 import {
+  fixtureLandingInstant,
   landFixturePrompt,
   loadFixtureDeliveryEnvelope,
   prepareFixtureDelivery,
@@ -39,7 +40,7 @@ export async function createTestDeliveryWorkspaceFixture(
 ): Promise<Readonly<TestDeliveryWorkspaceFixture>> {
   const fixture = await createTestTaskPlanningWorkspaceFixture(options);
   try {
-    const planned = await planFixtureTestTask(fixture, 6);
+    const planned = await planFixtureTestTask(fixture, 7);
     if (planned.targetTask.workType !== "test") {
       throw new Error("Expected Test TaskPackage fixture.");
     }
@@ -68,18 +69,27 @@ export async function cleanupTestDeliveryWorkspaceFixture(
   await cleanupTestTaskPlanningWorkspaceFixture(fixture);
 }
 
-/** 测试目标同样三步；实现接受（6）与测试任务包（7）之后的期望修订缺省 7。 */
+/**
+ * 测试目标同样三步；证据（5）、结果（6）、实现接受（7）与测试任务包（8）之后的期望修订缺省 8。
+ * 第二次及以后的尝试（request-another-attempt 之后）传入 attempt 序号换幂等键并显式给出期望修订。
+ */
 export async function deliverFixtureTestTarget(
   fixture: Readonly<TestDeliveryWorkspaceFixture>,
   overrides: PrepareFixtureDeliveryOverrides = {},
+  attempt = 1,
 ): Promise<Readonly<DeliveredTarget>> {
   const prepared = await prepareFixtureDelivery(
     { workspacePath: fixture.workspacePath, demandId: fixture.demandId, targetTaskId: fixture.testTargetTaskId },
-    { expectedStreamRevision: 7, idempotencyKey: "fixture-test-prepare-1", ...overrides },
+    { expectedStreamRevision: 8, idempotencyKey: `fixture-test-prepare-${attempt}`, ...overrides },
   );
-  const landed = await landFixturePrompt(fixture, fixture.testRoute, prepared.permit.prompt);
+  const landed = await landFixturePrompt(
+    fixture,
+    fixture.testRoute,
+    prepared.permit.prompt,
+    fixtureLandingInstant(attempt),
+  );
   const recorded = await recordFixtureDeliveryOutcome(fixture, prepared, {
-    idempotencyKey: "fixture-test-outcome-1",
+    idempotencyKey: `fixture-test-outcome-${attempt}`,
   });
   if (recorded.outcome.disposition !== "accepted") {
     throw new Error("Expected an accepted Test delivery fixture.");

@@ -36,6 +36,15 @@ import {
   UtcWallClockError,
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
+import { isEvidenceLocatorKind } from "../../contracts/vocabulary/evidence-locator-kinds.js";
+import {
+  isTestFailureClassification,
+  isTestFailureOwner,
+  isTestStepVerdict,
+  type TestFailureClassification,
+  type TestFailureOwner,
+  type TestStepVerdict,
+} from "../../contracts/vocabulary/test-step-vocabulary.js";
 import type {
   TargetResultEvidenceLocator,
   TargetResultOutcome,
@@ -44,26 +53,36 @@ import type {
 /**
  * Wakeflow Governance / Result：Test Agent提交的逐步执行结果陈述。
  *
- * Report只把测试合同的 stepId 映射到外部Evidence Artifact；它不解释Evidence真假，
- * 不声明product repository change、测试通过、Controller acceptance或Demand completion。
- * TaskPackage（含测试合同）、attempt、Claim和Observation的闭合由TargetResult owner负责。
+ * Report按测试合同逐步记录 observed、证据、verdict 与失败分类（ADR-0012 D4）；整体
+ * verdict 由步骤派生。它不解释Evidence真假，不声明product repository change、测试通过、
+ * Controller acceptance或Demand completion。TaskPackage（含测试合同）、attempt、Claim和
+ * Observation的闭合由TargetResult owner负责。
  */
 
 const REPORT_KIND = "WakeflowTestTargetResultReport" as const;
 const REPORT_SCHEMA_VERSION = 1 as const;
-const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const MAXIMUM_EVIDENCE_LOCATORS = 64;
 const MAXIMUM_CONTRACT_STEPS = 20;
 const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
 
-export interface TestTargetResultStepEvidence {
+export interface TestTargetResultStepFailure {
+  readonly classification: TestFailureClassification;
+  readonly likelyOwner: TestFailureOwner;
+  readonly recommendedAction: string;
+}
+
+/** 一步的记录：观察到什么、证据在哪里、判定如何；非 pass 必带失败分类。 */
+export interface TestTargetResultStep {
   readonly stepId: string;
+  readonly observed: string;
   readonly evidence: Readonly<{
     readonly ref: PortableResourcePath;
     readonly digest: Sha256Digest;
   }>;
+  readonly verdict: TestStepVerdict;
+  readonly failure?: Readonly<TestTargetResultStepFailure>;
 }
 
 export interface TestTargetResultReportContent {
@@ -72,12 +91,14 @@ export interface TestTargetResultReportContent {
   readonly evidenceLocators: readonly Readonly<TargetResultEvidenceLocator>[];
   readonly verification: readonly string[];
   readonly risks: readonly string[];
-  readonly stepEvidence: readonly Readonly<TestTargetResultStepEvidence>[];
+  readonly steps: readonly Readonly<TestTargetResultStep>[];
 }
 
 export interface TestTargetResultReport extends TestTargetResultReportContent {
   readonly kind: typeof REPORT_KIND;
   readonly schemaVersion: typeof REPORT_SCHEMA_VERSION;
+  /** 由步骤派生：含 fail 即 fail，否则含 blocked 即 blocked，否则含 cannot-conclude 即 cannot-conclude，否则 pass；无步骤为 cannot-conclude。 */
+  readonly verdict: TestStepVerdict;
   readonly reportedAt: UtcInstant;
   readonly reportDigest: Sha256Digest;
 }
@@ -178,13 +199,6 @@ function humanText(value: unknown, path: string): string {
   return value;
 }
 
-function token(value: unknown, path: string): string {
-  if (typeof value !== "string" || !TOKEN_PATTERN.test(value)) {
-    fail("text", path);
-  }
-  return value;
-}
-
 function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
@@ -230,8 +244,9 @@ function evidenceLocators(
   const locators = value.map((entry, index) => {
     const path = `$/evidenceLocators/${index}`;
     const record = exactRecord(entry, ["digest", "kind", "ref"], path);
+    if (!isEvidenceLocatorKind(record.kind)) fail("text", `${path}/kind`);
     return Object.freeze({
-      kind: token(record.kind, `${path}/kind`),
+      kind: record.kind,
       ref: resourcePath(record.ref, `${path}/ref`),
       digest: digest(record.digest, `${path}/digest`),
     });
@@ -243,22 +258,60 @@ function evidenceLocators(
   return Object.freeze(locators);
 }
 
-function stepEvidence(
+/** 整体判定只从步骤派生；调用方不能自行宣称。 */
+export function deriveTestVerdict(
+  steps: readonly Readonly<{ readonly verdict: TestStepVerdict }>[],
+): TestStepVerdict {
+  if (steps.length === 0) return "cannot-conclude";
+  if (steps.some((step) => step.verdict === "fail")) return "fail";
+  if (steps.some((step) => step.verdict === "blocked")) return "blocked";
+  if (steps.some((step) => step.verdict === "cannot-conclude")) return "cannot-conclude";
+  return "pass";
+}
+
+function stepFailure(value: unknown, path: string): Readonly<TestTargetResultStepFailure> {
+  const record = exactRecord(
+    value,
+    ["classification", "likelyOwner", "recommendedAction"],
+    path,
+  );
+  if (!isTestFailureClassification(record.classification)) {
+    fail("input", `${path}/classification`);
+  }
+  if (!isTestFailureOwner(record.likelyOwner)) fail("input", `${path}/likelyOwner`);
+  return Object.freeze({
+    classification: record.classification,
+    likelyOwner: record.likelyOwner,
+    recommendedAction: humanText(record.recommendedAction, `${path}/recommendedAction`),
+  });
+}
+
+function parseSteps(
   value: unknown,
   locators: readonly Readonly<TargetResultEvidenceLocator>[],
-): readonly Readonly<TestTargetResultStepEvidence>[] {
+): readonly Readonly<TestTargetResultStep>[] {
   if (!Array.isArray(value) || value.length > MAXIMUM_CONTRACT_STEPS) {
-    fail("input", "$/stepEvidence");
+    fail("input", "$/steps");
   }
   const locatorTuples = new Set(
     locators.map((entry) => `${entry.ref}\0${entry.digest}`),
   );
   const steps = value.map((entry, index) => {
-    const path = `$/stepEvidence/${index}`;
-    const record = exactRecord(entry, ["evidence", "stepId"], path);
+    const path = `$/steps/${index}`;
+    const hasFailure =
+      typeof entry === "object" && entry !== null && Object.hasOwn(entry, "failure");
+    const record = exactRecord(
+      entry,
+      hasFailure
+        ? ["evidence", "failure", "observed", "stepId", "verdict"]
+        : ["evidence", "observed", "stepId", "verdict"],
+      path,
+    );
     if (typeof record.stepId !== "string" || !STEP_ID_PATTERN.test(record.stepId)) {
       fail("input", `${path}/stepId`);
     }
+    if (!isTestStepVerdict(record.verdict)) fail("input", `${path}/verdict`);
+    if ((record.verdict === "pass") === hasFailure) fail("relation", `${path}/failure`);
     const evidence = exactRecord(
       record.evidence,
       ["digest", "ref"],
@@ -275,11 +328,14 @@ function stepEvidence(
     }
     return Object.freeze({
       stepId: record.stepId,
+      observed: humanText(record.observed, `${path}/observed`),
       evidence: admittedEvidence,
+      verdict: record.verdict,
+      ...(hasFailure ? { failure: stepFailure(record.failure, `${path}/failure`) } : {}),
     });
   });
   if (new Set(steps.map((entry) => entry.stepId)).size !== steps.length) {
-    fail("relation", "$/stepEvidence");
+    fail("relation", "$/steps");
   }
   return Object.freeze(steps);
 }
@@ -294,7 +350,7 @@ export function parseTestTargetResultReportContent(
       "evidenceLocators",
       "outcome",
       "risks",
-      "stepEvidence",
+      "steps",
       "summary",
       "verification",
     ],
@@ -308,9 +364,13 @@ export function parseTestTargetResultReportContent(
     fail("input", "$/outcome");
   }
   const locators = evidenceLocators(record.evidenceLocators);
-  const steps = stepEvidence(record.stepEvidence, locators);
-  if (record.outcome === "completed" && steps.length === 0) {
-    fail("relation", "$/stepEvidence");
+  const steps = parseSteps(record.steps, locators);
+  // completed 至少一步；blocked 不能同时含 fail（失败不是阻断）。覆盖范围由 TargetResult owner 对照合同核对。
+  if (
+    (record.outcome === "completed" && steps.length === 0) ||
+    (record.outcome === "blocked" && steps.some((step) => step.verdict === "fail"))
+  ) {
+    fail("relation", "$/steps");
   }
   return Object.freeze({
     outcome: record.outcome,
@@ -318,7 +378,7 @@ export function parseTestTargetResultReportContent(
     evidenceLocators: locators,
     verification: textList(record.verification, "$/verification"),
     risks: textList(record.risks, "$/risks"),
-    stepEvidence: steps,
+    steps,
   });
 }
 
@@ -333,7 +393,8 @@ function reportBasis(
     evidenceLocators: value.evidenceLocators,
     verification: value.verification,
     risks: value.risks,
-    stepEvidence: value.stepEvidence,
+    steps: value.steps,
+    verdict: value.verdict,
     reportedAt: value.reportedAt,
   };
 }
@@ -358,12 +419,14 @@ export function parseTestTargetResultReport(
     evidenceLocators: wire.evidenceLocators,
     verification: wire.verification,
     risks: wire.risks,
-    stepEvidence: wire.stepEvidence,
+    steps: wire.steps,
   });
+  if (wire.verdict !== deriveTestVerdict(content.steps)) fail("relation", "$/verdict");
   const basis = reportBasis({
     kind: REPORT_KIND,
     schemaVersion: REPORT_SCHEMA_VERSION,
     ...content,
+    verdict: wire.verdict,
     reportedAt: instant(wire.reportedAt, "$/reportedAt"),
   });
   const reportDigest = digest(wire.reportDigest, "$/reportDigest");
@@ -393,6 +456,7 @@ export function createTestTargetResultReport(
     kind: REPORT_KIND,
     schemaVersion: REPORT_SCHEMA_VERSION,
     ...content,
+    verdict: deriveTestVerdict(content.steps),
     reportedAt,
   });
   return parseTestTargetResultReport({

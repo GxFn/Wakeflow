@@ -24,15 +24,16 @@ import {
   type PreparedDemandEventStreamCommit,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
-import { targetResultRecordedCommitIdFromResult } from "../../../src/governance/result/target-result.js";
-import { controllerImplementationReviewDecisionCommitId } from "../../../src/governance/review/controller-implementation-review-decision.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
   createWorkClaimFixture,
 } from "../delivery/delivery-records.fixture.js";
-import { createTargetResultFixture } from "../result/target-result.fixture.js";
+import {
+  createTargetResultCallbackFixture,
+  createTargetResultFixture,
+} from "../result/target-result.fixture.js";
 import {
   createTaskPackageFixture,
   TASKING_AUTHORITY_DIGEST,
@@ -75,7 +76,11 @@ const OUTCOME_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit_09090909-0909-4909-8909-090909090909",
   "demand-event-commit",
 );
-const WRONG_COMMIT_ID = parseWakeflowDurableIdOfKind(
+const RESULT_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a",
+  "demand-event-commit",
+);
+const DECISION_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit_07070707-0707-4707-8707-070707070707",
   "demand-event-commit",
 );
@@ -88,10 +93,7 @@ function appendCommand(
   commitId: WakeflowDurableId<"demand-event-commit">,
   preparedCommits?: PreparedDemandEventStreamCommit[],
 ): Readonly<DemandEventSourcingAggregate> {
-  const events = decideDemandEventSourcingCommand(
-    current?.state ?? null,
-    command,
-  );
+  const events = decideDemandEventSourcingCommand(current?.state ?? null, command);
   const prepared = prepareDemandEventStreamCommit(current, {
     commitId,
     commandDigest: computeDemandEventSourcingCommandDigest(command),
@@ -121,12 +123,7 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
   const taskPackage = createTaskPackageFixture();
   aggregate = appendCommand(
     aggregate,
-    {
-      commandType: "tasking.plan-target-task",
-      commandVersion: 1,
-      eventId: PLANNING_EVENT_ID,
-      taskPackage,
-    },
+    { commandType: "tasking.plan-target-task", commandVersion: 1, eventId: PLANNING_EVENT_ID, taskPackage },
     PLANNING_COMMIT_ID,
     preparedCommits,
   );
@@ -150,32 +147,31 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
   const outcome = createDeliveryOutcomeFixture({ claim, envelope });
   aggregate = appendCommand(
     aggregate,
-    {
-      commandType: "delivery.record-delivery-outcome",
-      commandVersion: 1,
-      eventId: OUTCOME_EVENT_ID,
-      outcome,
-    },
+    { commandType: "delivery.record-delivery-outcome", commandVersion: 1, eventId: OUTCOME_EVENT_ID, outcome },
     OUTCOME_COMMIT_ID,
     preparedCommits,
   );
   const result = createTargetResultFixture({ claim, envelope, outcome });
+  const callback = createTargetResultCallbackFixture(result);
   aggregate = appendCommand(
     aggregate,
     {
       commandType: "result.record-target-result",
       commandVersion: 1,
       result,
+      callback,
+      evidenceResolution: [],
     },
-    targetResultRecordedCommitIdFromResult(result),
+    RESULT_COMMIT_ID,
     preparedCommits,
   );
   equal(aggregate.streamRevision, 5);
-  equal(aggregate.state.targetTasks[0]?.phase, "result-reported");
+  const reported = aggregate.state.targetTasks[0];
+  equal(reported?.phase, "result-reported");
+  if (reported?.phase !== "result-reported") throw new Error("Expected result-reported target.");
+  equal(reported.currentDelivery.targetResult.callback.callbackId, callback.callbackId);
 
-  const fixtureRoot = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-controller-review-event-"),
-  );
+  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-controller-review-event-"));
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const store = new DemandFileEventStore(root);
@@ -196,39 +192,22 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
     throws(
       () =>
         prepareDemandEventStreamCommit(aggregate, {
-          commitId:
-            controllerImplementationReviewDecisionCommitId(staleDecision),
+          commitId: DECISION_COMMIT_ID,
           commandDigest: computeDemandEventSourcingCommandDigest(staleCommand),
-          events: decideDemandEventSourcingCommand(
-            aggregate.state,
-            staleCommand,
-          ),
+          events: decideDemandEventSourcingCommand(aggregate.state, staleCommand),
         }),
       (error: unknown) =>
-        error instanceof DemandEventStreamCommitError &&
-        error.reason === "relation",
+        error instanceof DemandEventStreamCommitError && error.reason === "relation",
     );
-    const decision =
-      createControllerImplementationReviewDecisionForSnapshot(reportedSnapshot);
+    const decision = createControllerImplementationReviewDecisionForSnapshot(reportedSnapshot);
     const command = Object.freeze({
       commandType: "review.decide-target-result" as const,
       commandVersion: 1 as const,
       decision,
     });
     const events = decideDemandEventSourcingCommand(aggregate.state, command);
-    throws(
-      () =>
-        prepareDemandEventStreamCommit(aggregate, {
-          commitId: WRONG_COMMIT_ID,
-          commandDigest: computeDemandEventSourcingCommandDigest(command),
-          events,
-        }),
-      (error: unknown) =>
-        error instanceof DemandEventStreamCommitError &&
-        error.reason === "relation",
-    );
     const prepared = prepareDemandEventStreamCommit(aggregate, {
-      commitId: controllerImplementationReviewDecisionCommitId(decision),
+      commitId: DECISION_COMMIT_ID,
       commandDigest: computeDemandEventSourcingCommandDigest(command),
       events,
     });
@@ -236,10 +215,7 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
     equal(prepared.aggregate.state.targetTasks[0]?.phase, "accepted");
     equal(prepared.commit.events[0]?.eventType, "review.target-result-decided");
     equal(prepared.commit.events[0]?.eventVersion, 1);
-    deepEqual(
-      applyDemandEventStreamCommit(aggregate, prepared.commit),
-      prepared.aggregate,
-    );
+    deepEqual(applyDemandEventStreamCommit(aggregate, prepared.commit), prepared.aggregate);
     await store.append(prepared);
     const snapshot = await readDemandResultReviewSnapshot(root);
     const target = snapshot.targets[0];
@@ -248,12 +224,134 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
     }
     equal(target.phase, "accepted");
     equal(target.reviewDecision.decisionDigest, decision.decisionDigest);
-    equal(
-      target.reviewDecisionSourceEvent.streamRevision,
-      prepared.aggregate.streamRevision,
-    );
+    equal(target.reviewDecisionSourceEvent.streamRevision, prepared.aggregate.streamRevision);
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
+});
+
+test("escalate 决定在同一提交附带升级事件；blocked 之后带 resumption 的再决定回到同一结果", () => {
+  const preparedCommits: PreparedDemandEventStreamCommit[] = [];
+  let aggregate = appendCommand(
+    null,
+    {
+      commandType: "publication.publish-demand",
+      commandVersion: 1,
+      demandId: TASKING_DEMAND_ID,
+      eventId: PUBLICATION_EVENT_ID,
+      recordedAt: PUBLICATION_AT,
+      identityDigest: IDENTITY_DIGEST,
+      authorityDigest: TASKING_AUTHORITY_DIGEST,
+    },
+    PUBLICATION_COMMIT_ID,
+    preparedCommits,
+  );
+  const taskPackage = createTaskPackageFixture();
+  aggregate = appendCommand(
+    aggregate,
+    { commandType: "tasking.plan-target-task", commandVersion: 1, eventId: PLANNING_EVENT_ID, taskPackage },
+    PLANNING_COMMIT_ID,
+  );
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim, expectedStreamRevision: aggregate.streamRevision });
+  aggregate = appendCommand(
+    aggregate,
+    { commandType: "delivery.prepare-delivery", commandVersion: 1, eventId: DELIVERY_EVENT_ID, envelope, taskPackage },
+    DELIVERY_COMMIT_ID,
+  );
+  const outcome = createDeliveryOutcomeFixture({ claim, envelope });
+  aggregate = appendCommand(
+    aggregate,
+    { commandType: "delivery.record-delivery-outcome", commandVersion: 1, eventId: OUTCOME_EVENT_ID, outcome },
+    OUTCOME_COMMIT_ID,
+  );
+  const result = createTargetResultFixture({ claim, envelope, outcome });
+  aggregate = appendCommand(
+    aggregate,
+    {
+      commandType: "result.record-target-result",
+      commandVersion: 1,
+      result,
+      callback: createTargetResultCallbackFixture(result),
+      evidenceResolution: [],
+    },
+    RESULT_COMMIT_ID,
+  );
+
+  const escalate = createControllerImplementationReviewDecisionForState(
+    aggregate.stateDigest,
+    "escalate",
+    aggregate.streamRevision,
+    result,
+  );
+  const escalatedEvents = decideDemandEventSourcingCommand(aggregate.state, {
+    commandType: "review.decide-target-result",
+    commandVersion: 1,
+    decision: escalate,
+  });
+  equal(escalatedEvents.length, 2);
+  equal(escalatedEvents[1]?.eventType, "lifecycle.demand-escalated");
+  const escalatedCommit = prepareDemandEventStreamCommit(aggregate, {
+    commitId: DECISION_COMMIT_ID,
+    commandDigest: parseSha256Digest(`sha256:${"5".repeat(64)}`),
+    events: escalatedEvents,
+  });
+  equal(escalatedCommit.aggregate.state.targetTasks[0]?.phase, "escalated");
+  equal(escalatedCommit.aggregate.state.awaitingDecision?.escalationEventId, escalatedEvents[1]?.eventId);
+
+  const blocked = createControllerImplementationReviewDecisionForState(
+    aggregate.stateDigest,
+    "blocked",
+    aggregate.streamRevision,
+    result,
+  );
+  const blockedCommit = prepareDemandEventStreamCommit(aggregate, {
+    commitId: DECISION_COMMIT_ID,
+    commandDigest: parseSha256Digest(`sha256:${"6".repeat(64)}`),
+    events: decideDemandEventSourcingCommand(aggregate.state, {
+      commandType: "review.decide-target-result",
+      commandVersion: 1,
+      decision: blocked,
+    }),
+  });
+  equal(blockedCommit.aggregate.state.targetTasks[0]?.phase, "review-blocked");
+  const resumed = createControllerImplementationReviewDecisionForState(
+    blockedCommit.aggregate.stateDigest,
+    "rework",
+    blockedCommit.aggregate.streamRevision,
+    result,
+    {
+      resumption: {
+        previousDecisionId: blocked.targetReviewDecisionId,
+        basis: { kind: "condition-cleared" },
+        summary: "外部依赖已恢复，可以继续评审。",
+      },
+    },
+  );
+  const resumedEvents = decideDemandEventSourcingCommand(blockedCommit.aggregate.state, {
+    commandType: "review.decide-target-result",
+    commandVersion: 1,
+    decision: resumed,
+  });
+  equal(resumedEvents.length, 1);
+  const resumedCommit = prepareDemandEventStreamCommit(blockedCommit.aggregate, {
+    commitId: RESULT_COMMIT_ID,
+    commandDigest: parseSha256Digest(`sha256:${"7".repeat(64)}`),
+    events: resumedEvents,
+  });
+  equal(resumedCommit.aggregate.state.targetTasks[0]?.phase, "rework-requested");
+  const withoutResumption = createControllerImplementationReviewDecisionForState(
+    blockedCommit.aggregate.stateDigest,
+    "rework",
+    blockedCommit.aggregate.streamRevision,
+    result,
+  );
+  throws(() =>
+    decideDemandEventSourcingCommand(blockedCommit.aggregate.state, {
+      commandType: "review.decide-target-result",
+      commandVersion: 1,
+      decision: withoutResumption,
+    }),
+  );
 });

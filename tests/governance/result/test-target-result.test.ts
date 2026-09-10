@@ -1,9 +1,7 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { TargetResultImportService } from "../../../src/governance/result/target-result-import-service.js";
 import {
   createTestTargetResult,
   TestTargetResultError,
@@ -25,12 +23,15 @@ import {
   createTestDeliveryWorkspaceFixture,
   deliverFixtureTestTarget,
 } from "../delivery/test-delivery-workspace.fixture.js";
-import { testResultReportContent } from "../review/controller-test-review-decision-service.fixture.js";
+import {
+  importFixtureTestResult,
+  passingStep,
+  TEST_RESULT_REPORTED_AT,
+  testResultReportContent,
+} from "../review/controller-test-review-decision-service.fixture.js";
 import { deliveryBindingFromOutcome } from "./target-result.fixture.js";
 
-const TEST_RESULT_REPORTED_AT = parseUtcInstant("2026-08-29T12:40:00.000Z");
-
-test("TestTargetResult闭合测试合同、attempt与投递结局但不产生verdict", async () => {
+test("TestTargetResult闭合测试合同、attempt与投递结局并携带派生判定，但不表示acceptance", async () => {
   const fixture = await createTestDeliveryWorkspaceFixture();
   try {
     const delivered = await deliverFixtureTestTarget(fixture);
@@ -47,64 +48,47 @@ test("TestTargetResult闭合测试合同、attempt与投递结局但不产生ver
       return located.event.data.taskPackage;
     });
 
-    const reportContent = testResultReportContent(fixture.testStepIds);
+    const steps = fixture.testStepIds.map((stepId) => passingStep(stepId, fixture.evidence));
+    const reportContent = testResultReportContent(steps, fixture.evidence);
     const report = createTestTargetResultReport(reportContent, {
       clock: () => TEST_RESULT_REPORTED_AT,
     });
     const delivery = deliveryBindingFromOutcome(outcome);
-    const result = createTestTargetResult({
-      taskPackage,
-      envelope,
-      delivery,
-      report,
-    });
+    const result = createTestTargetResult({ taskPackage, envelope, delivery, report });
     equal(result.workType, "test");
     equal(result.deliveryId, envelope.deliveryId);
     equal(result.delivery.disposition, "accepted");
     equal(result.assignment.windowId, taskPackage.assignment.windowId);
     equal(Object.hasOwn(result.assignment, "repositoryId"), false);
     equal(result.testExecution.testAttemptId, envelope.attempt.testAttemptId);
-    equal(Object.hasOwn(result.testExecution, "testCard"), false);
-    equal(Object.hasOwn(result.testExecution, "testDispatchPacketDigest"), false);
-    equal(result.report.stepEvidence.length, taskPackage.testContract.steps.length);
+    equal(result.testExecution.ordinal, 1);
+    equal(result.testExecution.stepIds, null);
+    equal(result.report.steps.length, taskPackage.testContract.steps.length);
+    equal(result.report.verdict, "pass");
     equal(Object.hasOwn(result, "controllerDecision"), false);
-    equal(Object.hasOwn(result.report, "verdict"), false);
     equal(parseTargetResultDocument(renderTargetResult(result)).resultDigest, result.resultDigest);
 
     const incompleteReport = createTestTargetResultReport(
       {
         outcome: "completed",
         summary: "只返回第一步，不能形成完整Test Result。",
-        evidenceLocators: reportContent.evidenceLocators.slice(0, 1),
+        evidenceLocators: reportContent.evidenceLocators,
         verification: [],
-        risks: ["批准步骤尚未全部执行。"],
-        stepEvidence: report.stepEvidence.slice(0, 1),
+        risks: ["合同步骤尚未全部执行。"],
+        steps: steps.slice(0, 1),
       },
       { clock: () => TEST_RESULT_REPORTED_AT },
     );
     throws(
-      () =>
-        createTestTargetResult({
-          taskPackage,
-          envelope,
-          delivery,
-          report: incompleteReport,
-        }),
+      () => createTestTargetResult({ taskPackage, envelope, delivery, report: incompleteReport }),
       (error: unknown) => error instanceof TestTargetResultError && error.reason === "relation",
     );
 
-    const owner = new TargetResultImportService(fixture.workspaceRoot, "codex");
-    const request = {
-      demandId: fixture.demandId,
-      deliveryId: envelope.deliveryId,
-      claimDigest: delivered.prepared.permit.fence.claimDigest,
-      report: { workType: "test" as const, content: reportContent },
-    };
-    const recorded = await owner.import(request, { clock: () => TEST_RESULT_REPORTED_AT });
-    equal(recorded.status, "recorded");
+    const recorded = await importFixtureTestResult(fixture, delivered, { steps });
+    equal(recorded.status, "committed");
     equal(recorded.result.workType, "test");
     equal(recorded.result.resultDigest, result.resultDigest);
-    equal(recorded.claimAuthority, "released");
+    equal(recorded.callback.permit.hostAction.effect, "send-prompt-to-window");
     equal(
       (await inspectWorkClaim(fixture.workspaceRoot, taskPackage.assignment.windowId)).status,
       "absent",
@@ -131,10 +115,13 @@ test("TestTargetResult闭合测试合同、attempt与投递结局但不产生ver
       equal(reviewTarget.targetResult.workType, "test");
     });
 
-    const replayed = await owner.import(request, { clock: () => TEST_RESULT_REPORTED_AT });
-    equal(replayed.status, "already-recorded");
-    equal(replayed.disposition, "idempotent");
-    equal(replayed.claimAuthority, "released");
+    const replayed = await importFixtureTestResult(fixture, delivered, {
+      steps,
+      expectedStreamRevision: recorded.event.streamRevision - 1,
+    });
+    equal(replayed.status, "idempotent");
+    equal(replayed.result.resultDigest, recorded.result.resultDigest);
+    equal(replayed.callback.callbackId, recorded.callback.callbackId);
   } finally {
     await cleanupTestDeliveryWorkspaceFixture(fixture);
   }

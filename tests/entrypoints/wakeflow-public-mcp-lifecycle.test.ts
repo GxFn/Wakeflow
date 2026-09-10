@@ -17,9 +17,11 @@ import {
 import { workClaimRef } from "../../src/kernel/layout.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
-import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
-import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
-import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
+import {
+  WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/result-review/contract.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
 import {
   cleanupDeliveryWorkspaceFixture,
@@ -28,7 +30,13 @@ import {
   landFixturePrompt,
 } from "../governance/delivery/delivery-workspace.fixture.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
-import { controllerImplementationReviewDecisionInput } from "../governance/review/controller-implementation-review-decision.fixture.js";
+import {
+  landFixtureCallback,
+  landFixtureTargetCompletion,
+  recordFixtureEvidence,
+  registerFixtureControllerWindow,
+} from "../governance/review/controller-implementation-review-decision-service.fixture.js";
+import { implementationReviewJudgmentWire } from "../governance/review/controller-implementation-review-decision.fixture.js";
 import {
   connectWakeflowMcpServerForTest,
   wakeflowMcpTextContent as textContent,
@@ -65,6 +73,7 @@ async function taskPackageForDelivery(
 
 test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controller Review与Completion且不执行宿主发送", async () => {
   const fixture = await createDeliveryWorkspaceFixture();
+  const controllerRoute = await registerFixtureControllerWindow(fixture);
   const server = createCodexWakeflowMcpServer("1.0.0-test");
   const { client, close } = await connectWakeflowMcpServerForTest(server);
   try {
@@ -184,7 +193,7 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
         readonly outcomeDigest: string;
       };
       readonly target: { readonly phase: string };
-      readonly event: { readonly eventId: string };
+      readonly event: { readonly eventId: string; readonly streamRevision: number };
     };
     equal(outcome.status, "recorded");
     equal(outcome.outcome.disposition, "accepted");
@@ -224,14 +233,18 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
       fixture.demandId,
       prepared.delivery.deliveryId,
     );
+    // 报告引用的证据必须先成为本 Demand 的受管证据记录（§13.87 D3）。
+    const evidence = await recordFixtureEvidence(fixture);
     const resultRequest = {
       root: fixture.workspacePath,
       demandId: fixture.demandId,
+      idempotencyKey: "mcp-import-1",
+      expectedStreamRevision: outcome.event.streamRevision + 1,
       deliveryId: prepared.delivery.deliveryId,
       claimDigest: prepared.permit.fence.claimDigest,
       report: {
         workType: "implementation" as const,
-        content: createImplementationTargetResultReportContentFixture(taskPackage),
+        content: createImplementationTargetResultReportContentFixture(taskPackage, evidence),
       },
     };
     const importedCall = await client.callTool({
@@ -241,9 +254,6 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
     equal(importedCall.isError, undefined, textContent(importedCall));
     const imported = importedCall.structuredContent as {
       readonly status: string;
-      readonly disposition: string;
-      readonly claimAuthority: string;
-      readonly eventAuthority: string;
       readonly result: {
         readonly workType: string;
         readonly demandId: string;
@@ -252,15 +262,24 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
           readonly fence: { readonly claimId: string };
           readonly outcomeDigest: string;
         };
-        readonly report: { readonly outcome: string };
+        readonly report: { readonly outcome: string; readonly reportedAt: string };
         readonly resultDigest: string;
       };
-      readonly event: { readonly eventId: string };
+      readonly callback: {
+        readonly callbackId: string;
+        readonly permit: {
+          readonly prompt: string;
+          readonly hostAction: { readonly effect: string; readonly windowId: string };
+          readonly generation: number;
+        };
+      };
+      readonly event: { readonly eventId: string; readonly streamRevision: number };
     };
-    equal(imported.status, "recorded");
-    equal(imported.disposition, "committed");
-    equal(imported.claimAuthority, "released");
-    equal(imported.eventAuthority, "current");
+    equal(imported.status, "committed");
+    equal(imported.callback.permit.hostAction.effect, "send-prompt-to-window");
+    equal(imported.callback.permit.hostAction.windowId, controllerRoute.windowId);
+    equal(imported.callback.permit.generation, 1);
+    equal(imported.callback.permit.prompt.includes(fixture.workspacePath), false);
     equal(imported.result.workType, "implementation");
     equal(imported.result.demandId, fixture.demandId);
     equal(imported.result.deliveryId, prepared.delivery.deliveryId);
@@ -295,10 +314,23 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
       readonly result: { readonly resultDigest: string };
       readonly event: { readonly eventId: string };
     };
-    equal(replayedResult.status, "already-recorded");
+    equal(replayedResult.status, "idempotent");
     equal(replayedResult.result.resultDigest, imported.result.resultDigest);
     equal(replayedResult.event.eventId, imported.event.eventId);
     equal(existsSync(claimPath), false);
+
+    // Controller 会话落地回调、目标会话留下 Stop 记录：检查投影据此给出 landed 与 confirmed。
+    await landFixtureCallback(
+      fixture,
+      controllerRoute,
+      imported.callback.permit.prompt,
+      parseUtcInstant(new Date().toISOString()),
+    );
+    await landFixtureTargetCompletion(
+      fixture,
+      fixture.route,
+      parseUtcInstant(new Date(Date.parse(imported.result.report.reportedAt) + 1000).toISOString()),
+    );
 
     const inspectionRequest = {
       root: fixture.workspacePath,
@@ -319,45 +351,52 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
           readonly targetResultId: string;
           readonly resultDigest: string;
         };
+        readonly callback: { readonly status: string };
+        readonly targetCompletion: { readonly status: string };
+        readonly allowedDecisions: readonly string[];
       };
     };
     equal(inspection.reviewUnit.workType, "implementation");
     equal(inspection.reviewUnit.targetResult.resultDigest, imported.result.resultDigest);
+    equal(inspection.reviewUnit.callback.status, "landed");
+    equal(inspection.reviewUnit.targetCompletion.status, "confirmed");
+    equal(inspection.reviewUnit.allowedDecisions.includes("accept"), true);
     equal(Object.hasOwn(inspection, "decision"), false);
     equal(textContent(inspectionCall).includes(fixture.workspacePath), false);
+    equal(textContent(inspectionCall).includes(controllerRoute.rawHandle), false);
 
-    const judgment = controllerImplementationReviewDecisionInput("accept");
     const decisionRequest = {
       root: fixture.workspacePath,
       demandId: fixture.demandId,
+      idempotencyKey: "mcp-decision-1",
+      expectedStreamRevision: imported.event.streamRevision,
       targetResultId: inspection.reviewUnit.targetResult.targetResultId,
       snapshotDigest: inspection.snapshotDigest,
       reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
-      decision: judgment.decision,
-      assessment: judgment.assessment,
-      independentChecks: judgment.independentChecks,
-      rationale: judgment.rationale,
-      blockingReasons: judgment.blockingReasons,
-      residualRisks: judgment.residualRisks,
+      ...implementationReviewJudgmentWire("accept"),
     };
     const decisionCall = await client.callTool({
-      name: WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
       arguments: decisionRequest,
     });
     equal(decisionCall.isError, undefined, textContent(decisionCall));
     const decision = decisionCall.structuredContent as {
       readonly status: string;
-      readonly eventAuthority: string;
       readonly decision: {
         readonly decision: string;
         readonly targetReviewDecisionId: string;
         readonly decisionDigest: string;
+        readonly callbackLanding: string;
+        readonly targetCompletion: string;
       };
+      readonly target: { readonly phase: string };
       readonly event: { readonly eventId: string };
     };
-    equal(decision.status, "decided");
-    equal(decision.eventAuthority, "current");
+    equal(decision.status, "committed");
     equal(decision.decision.decision, "accept");
+    equal(decision.decision.callbackLanding, "landed");
+    equal(decision.decision.targetCompletion, "confirmed");
+    equal(decision.target.phase, "accepted");
     equal(textContent(decisionCall).includes(fixture.workspacePath), false);
     equal(textContent(decisionCall).includes(fixture.route.rawHandle), false);
 
@@ -379,7 +418,7 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
     );
 
     const replayedDecisionCall = await client.callTool({
-      name: WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
       arguments: decisionRequest,
     });
     equal(replayedDecisionCall.isError, undefined, textContent(replayedDecisionCall));
@@ -388,7 +427,7 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
       readonly decision: { readonly targetReviewDecisionId: string };
       readonly event: { readonly eventId: string };
     };
-    equal(replayedDecision.status, "already-decided");
+    equal(replayedDecision.status, "idempotent");
     equal(
       replayedDecision.decision.targetReviewDecisionId,
       decision.decision.targetReviewDecisionId,

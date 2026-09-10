@@ -45,19 +45,29 @@ import {
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
 import {
-  parseDemandEventStreamRevision,
   DemandEventStreamPositionError,
+  parseDemandEventStreamRevision,
 } from "../demand/event-sourcing/demand-event-stream-position.js";
-import type {
-  ControllerIndependentReviewCheck,
-  ControllerReviewedTargetResult,
+import {
+  normalizeControllerReviewCallbackLanding,
+  normalizeControllerReviewResumption,
+  normalizeControllerReviewTargetCompletion,
+  normalizeControllerTestReviewEscalation,
+  type ControllerIndependentReviewCheck,
+  type ControllerReviewCallbackLanding,
+  type ControllerReviewedTargetResult,
+  type ControllerReviewResumption,
+  type ControllerReviewTargetCompletion,
+  type ControllerTestReviewEscalation,
 } from "./controller-review-decision-contract.js";
 
 /**
- * Controller对一份精确Test TargetResult作出的不可变审查决定。
+ * Wakeflow Governance / Review：Controller对单个test Target的审查决定。
  *
- * Decision记录Controller conclusion与后续授权，不执行下一attempt、产品修复或Demand
- * completion。Result的completed也不能替代本记录中的独立检查。
+ * 词汇：accept、request-another-attempt（附 stepIds，只跑失败子集）、blocked、escalate
+ * （附分类：product-defect 走授权返工，needs-decision 走用户决策）（ADR-0012 D4）。
+ * 分类到决定的准入由切片按逐步记录判定；本记录只约束形状与最小一致性。Result 的
+ * completed 与 pass 都不能替代本记录中的独立检查。
  */
 
 const DECISION_KIND = "WakeflowControllerTestReviewDecision" as const;
@@ -68,7 +78,7 @@ const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
 export type ControllerTestReviewDecisionType =
-  "accept" | "request-another-attempt" | "escalate-product-defect" | "blocked";
+  "accept" | "request-another-attempt" | "blocked" | "escalate";
 
 export type ControllerTestConclusion =
   "satisfied" | "defect-observed" | "inconclusive";
@@ -88,6 +98,10 @@ export interface ControllerTestReviewJudgment {
   readonly rationale: string;
   readonly blockingReasons: readonly string[];
   readonly residualRisks: readonly string[];
+  /** request-another-attempt 的重跑范围；其余决定为 null。 */
+  readonly stepIds: readonly [string, ...string[]] | null;
+  readonly escalation: Readonly<ControllerTestReviewEscalation> | null;
+  readonly resumption: Readonly<ControllerReviewResumption> | null;
 }
 
 export interface ControllerTestReviewDecision extends ControllerTestReviewJudgment {
@@ -102,6 +116,8 @@ export interface ControllerTestReviewDecision extends ControllerTestReviewJudgme
   readonly testExecution: Readonly<{
     readonly testAttemptId: WakeflowDurableId<"test-attempt">;
   }>;
+  readonly callbackLanding: Readonly<ControllerReviewCallbackLanding> | null;
+  readonly targetCompletion: Readonly<ControllerReviewTargetCompletion> | null;
   readonly decidedAt: UtcInstant;
   readonly decisionDigest: Sha256Digest;
 }
@@ -255,19 +271,45 @@ function textList(values: readonly unknown[], path: string): readonly string[] {
   return Object.freeze(admitted);
 }
 
+function stepIdList(
+  values: readonly string[] | null,
+  path: string,
+): readonly [string, ...string[]] | null {
+  if (values === null) return null;
+  const [first, ...rest] = values;
+  if (first === undefined || new Set(values).size !== values.length) {
+    fail("relation", path);
+  }
+  return Object.freeze([first, ...rest]);
+}
+
+/**
+ * 决定与评估、检查、范围、升级的最小一致性（ADR-0012 D4）：
+ * accept 要求 completed、satisfied/sufficient、检查全过、无阻塞、有完成证据；
+ * request-another-attempt 要求 inconclusive 或 insufficient、带范围；escalate 当且仅当带分类：
+ * product-defect 要求 defect-observed/sufficient 且有失败检查，needs-decision 不能是 satisfied；
+ * blocked 要求阻塞原因。分类到决定的路由由切片按逐步记录判定。
+ */
 export function assertControllerTestReviewJudgment(
   judgment: Readonly<ControllerTestReviewJudgment>,
   resultOutcome?: ControllerReviewedTargetResult["targetResultOutcome"],
+  targetCompletion: Readonly<ControllerReviewTargetCompletion> | null = null,
 ): void {
   const {
     decision,
     assessment,
     independentChecks: checks,
     blockingReasons,
+    stepIds,
+    escalation,
   } = judgment;
+  const escalates = decision === "escalate";
   if (
+    escalates !== (escalation !== null) ||
+    (decision === "request-another-attempt") !== (stepIds !== null) ||
     (decision === "accept" &&
       ((resultOutcome !== undefined && resultOutcome !== "completed") ||
+        targetCompletion === null ||
         assessment.conclusion !== "satisfied" ||
         assessment.evidenceSufficiency !== "sufficient" ||
         checks.some((check) => check.outcome !== "passed") ||
@@ -280,12 +322,16 @@ export function assertControllerTestReviewJudgment(
             check.outcome === "failed" || check.outcome === "inconclusive",
         ) ||
         blockingReasons.length !== 0)) ||
-    (decision === "escalate-product-defect" &&
+    (escalation !== null &&
+      escalation.classification === "product-defect" &&
       (resultOutcome === "blocked" ||
         assessment.conclusion !== "defect-observed" ||
         assessment.evidenceSufficiency !== "sufficient" ||
         !checks.some((check) => check.outcome === "failed") ||
         blockingReasons.length !== 0)) ||
+    (escalation !== null &&
+      escalation.classification === "needs-decision" &&
+      assessment.conclusion === "satisfied") ||
     (decision === "blocked" &&
       (blockingReasons.length === 0 ||
         (assessment.conclusion === "satisfied" &&
@@ -314,8 +360,31 @@ function decisionBasis(
     rationale: value.rationale,
     blockingReasons: value.blockingReasons,
     residualRisks: value.residualRisks,
+    stepIds: value.stepIds,
+    escalation: value.escalation,
+    resumption: value.resumption,
+    callbackLanding: value.callbackLanding,
+    targetCompletion: value.targetCompletion,
     decidedAt: value.decidedAt,
   };
+}
+
+function reviewedOf(wire: DecisionWire["reviewed"]): Readonly<ControllerReviewedTargetResult> {
+  return Object.freeze({
+    snapshotDigest: digest(wire.snapshotDigest, "$/reviewed/snapshotDigest"),
+    reviewUnitDigest: digest(wire.reviewUnitDigest, "$/reviewed/reviewUnitDigest"),
+    stateDigest: digest(wire.stateDigest, "$/reviewed/stateDigest"),
+    streamRevision: streamRevision(wire.streamRevision, "$/reviewed/streamRevision"),
+    taskPackageId: id(wire.taskPackageId, "task-package", "$/reviewed/taskPackageId"),
+    taskPackageDigest: digest(wire.taskPackageDigest, "$/reviewed/taskPackageDigest"),
+    targetResultId: id(wire.targetResultId, "target-result", "$/reviewed/targetResultId"),
+    targetResultDigest: digest(wire.targetResultDigest, "$/reviewed/targetResultDigest"),
+    targetResultOutcome: wire.targetResultOutcome,
+    targetResultReportedAt: instant(
+      wire.targetResultReportedAt,
+      "$/reviewed/targetResultReportedAt",
+    ),
+  });
 }
 
 export function parseControllerTestReviewDecision(
@@ -347,44 +416,7 @@ export function parseControllerTestReviewDecision(
   }
   const firstCheck = checks[0];
   if (firstCheck === undefined) fail("schema", "$/independentChecks");
-  const reviewed = Object.freeze({
-    snapshotDigest: digest(
-      wire.reviewed.snapshotDigest,
-      "$/reviewed/snapshotDigest",
-    ),
-    reviewUnitDigest: digest(
-      wire.reviewed.reviewUnitDigest,
-      "$/reviewed/reviewUnitDigest",
-    ),
-    stateDigest: digest(wire.reviewed.stateDigest, "$/reviewed/stateDigest"),
-    streamRevision: streamRevision(
-      wire.reviewed.streamRevision,
-      "$/reviewed/streamRevision",
-    ),
-    taskPackageId: id(
-      wire.reviewed.taskPackageId,
-      "task-package",
-      "$/reviewed/taskPackageId",
-    ),
-    taskPackageDigest: digest(
-      wire.reviewed.taskPackageDigest,
-      "$/reviewed/taskPackageDigest",
-    ),
-    targetResultId: id(
-      wire.reviewed.targetResultId,
-      "target-result",
-      "$/reviewed/targetResultId",
-    ),
-    targetResultDigest: digest(
-      wire.reviewed.targetResultDigest,
-      "$/reviewed/targetResultDigest",
-    ),
-    targetResultOutcome: wire.reviewed.targetResultOutcome,
-    targetResultReportedAt: instant(
-      wire.reviewed.targetResultReportedAt,
-      "$/reviewed/targetResultReportedAt",
-    ),
-  });
+  const reviewed = reviewedOf(wire.reviewed);
   const testExecution = Object.freeze({
     testAttemptId: id(
       wire.testExecution.testAttemptId,
@@ -392,22 +424,35 @@ export function parseControllerTestReviewDecision(
       "$/testExecution/testAttemptId",
     ),
   });
-  const independentChecks = Object.freeze([
-    firstCheck,
-    ...checks.slice(1),
-  ]) as ControllerTestReviewDecision["independentChecks"];
-  const blockingReasons = textList(wire.blockingReasons, "$/blockingReasons");
-  const decidedAt = instant(wire.decidedAt, "$/decidedAt");
+  const targetCompletion = normalizeControllerReviewTargetCompletion(
+    wire.targetCompletion,
+    "$/targetCompletion",
+    fail,
+  );
+  const judgment: ControllerTestReviewJudgment = {
+    decision: wire.decision,
+    assessment: Object.freeze({
+      conclusion: wire.assessment.conclusion,
+      evidenceSufficiency: wire.assessment.evidenceSufficiency,
+    }),
+    independentChecks: Object.freeze([firstCheck, ...checks.slice(1)]),
+    rationale: humanText(wire.rationale, "$/rationale"),
+    blockingReasons: textList(wire.blockingReasons, "$/blockingReasons"),
+    residualRisks: textList(wire.residualRisks, "$/residualRisks"),
+    stepIds: stepIdList(wire.stepIds, "$/stepIds"),
+    escalation:
+      wire.escalation === null
+        ? null
+        : normalizeControllerTestReviewEscalation(wire.escalation, "$/escalation", fail),
+    resumption:
+      wire.resumption === null
+        ? null
+        : normalizeControllerReviewResumption(wire.resumption, "$/resumption", fail),
+  };
   assertControllerTestReviewJudgment(
-    {
-      decision: wire.decision,
-      assessment: wire.assessment,
-      independentChecks,
-      rationale: wire.rationale,
-      blockingReasons,
-      residualRisks: wire.residualRisks,
-    },
+    judgment,
     reviewed.targetResultOutcome,
+    targetCompletion,
   );
   // decidedAt只保存审计观察；因果顺序由reported Snapshot、stream revision和append CAS证明。
   const basis = decisionBasis({
@@ -428,16 +473,14 @@ export function parseControllerTestReviewDecision(
     ),
     reviewed,
     testExecution,
-    decision: wire.decision,
-    assessment: Object.freeze({
-      conclusion: wire.assessment.conclusion,
-      evidenceSufficiency: wire.assessment.evidenceSufficiency,
-    }),
-    independentChecks,
-    rationale: humanText(wire.rationale, "$/rationale"),
-    blockingReasons,
-    residualRisks: textList(wire.residualRisks, "$/residualRisks"),
-    decidedAt,
+    ...judgment,
+    callbackLanding: normalizeControllerReviewCallbackLanding(
+      wire.callbackLanding,
+      "$/callbackLanding",
+      fail,
+    ),
+    targetCompletion,
+    decidedAt: instant(wire.decidedAt, "$/decidedAt"),
   });
   const decisionDigest = digest(wire.decisionDigest, "$/decisionDigest");
   if (computeCanonicalJsonSha256Digest(basis) !== decisionDigest) {
@@ -491,6 +534,11 @@ export function createControllerTestReviewDecision(
     rationale: input.rationale,
     blockingReasons: input.blockingReasons,
     residualRisks: input.residualRisks,
+    stepIds: input.stepIds,
+    escalation: input.escalation,
+    resumption: input.resumption,
+    callbackLanding: input.callbackLanding,
+    targetCompletion: input.targetCompletion,
     decidedAt,
   });
   return parseControllerTestReviewDecision({

@@ -76,6 +76,8 @@ export interface RerunTestExecutionAttempt extends TestExecutionAttemptBase {
       readonly targetReviewDecisionId: WakeflowDurableId<"target-review-decision">;
       readonly decisionDigest: Sha256Digest;
     }>;
+    /** 只跑失败子集时的步骤范围；null 为全部合同步骤。 */
+    readonly stepIds: readonly string[] | null;
   }>;
 }
 
@@ -93,6 +95,7 @@ export interface CreateRerunTestExecutionAttemptInput {
   readonly previousAttempt: Readonly<TestExecutionAttempt>;
   readonly previousResult: RerunTestExecutionAttempt["rerunSource"]["previousResult"];
   readonly reviewDecision: RerunTestExecutionAttempt["rerunSource"]["reviewDecision"];
+  readonly stepIds: readonly string[] | null;
 }
 
 export type TestExecutionAttemptErrorReason =
@@ -220,7 +223,13 @@ export function parseTestExecutionAttempt(
     });
   }
   if (wire.rerunSource === undefined) fail("schema", "$/rerunSource");
+  const scopedStepIds =
+    wire.rerunSource.stepIds === null ? null : Object.freeze([...wire.rerunSource.stepIds]);
+  if (scopedStepIds !== null && new Set(scopedStepIds).size !== scopedStepIds.length) {
+    fail("relation", "$/rerunSource/stepIds");
+  }
   const rerunSource = Object.freeze({
+    stepIds: scopedStepIds,
     previousAttemptId: id(
       wire.rerunSource.previousAttemptId,
       "test-attempt",
@@ -316,6 +325,7 @@ export function createRerunTestExecutionAttempt(
       previousAttemptId: previousAttempt.testAttemptId,
       previousResult: input.previousResult,
       reviewDecision: input.reviewDecision,
+      stepIds: input.stepIds,
     },
   });
   if (attempt.mode !== "rerun") fail("relation", "$/mode");
@@ -331,13 +341,17 @@ export function assertTestExecutionAttemptMatchesPackage(
   const taskPackage = testPackage(taskPackageValue);
   const contract = attemptContract(taskPackage);
   const policy = taskPackage.testContract.setupPolicy;
+  const contractStepIds = new Set(taskPackage.testContract.steps.map((step) => step.stepId));
   if (
     attempt.targetTaskId !== taskPackage.targetTaskId ||
     attempt.contract.taskPackageId !== contract.taskPackageId ||
     attempt.contract.taskPackageDigest !== contract.taskPackageDigest ||
     attempt.environmentSetup.policy !== policy ||
     attempt.environmentSetup.directive !== setupDirective(policy, attempt.mode) ||
-    attempt.ordinal > taskPackage.testContract.maxAttempts
+    attempt.ordinal > taskPackage.testContract.maxAttempts ||
+    (attempt.mode === "rerun" &&
+      attempt.rerunSource.stepIds !== null &&
+      attempt.rerunSource.stepIds.some((stepId) => !contractStepIds.has(stepId)))
   ) {
     fail("relation", "$attempt");
   }

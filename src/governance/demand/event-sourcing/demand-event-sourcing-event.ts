@@ -58,11 +58,15 @@ import {
   type ControllerReviewDecision,
 } from "../../review/controller-review-decision.js";
 import {
-  controllerTargetReviewResumeEventId,
-  parseControllerTargetReviewResume,
-  ControllerTargetReviewResumeError,
-  type ControllerTargetReviewResume,
-} from "../../review/controller-target-review-resume.js";
+  deriveTargetResultCallbackId,
+  parseTargetResultCallbackRecord,
+  parseTargetResultCallbackReissue,
+  parseTargetResultEvidenceResolutions,
+  TargetResultCallbackError,
+  type TargetResultCallbackRecord,
+  type TargetResultCallbackReissue,
+  type TargetResultEvidenceResolution,
+} from "../../result/target-result-callback.js";
 import {
   parseControllerProductDefectRemediationAuthorization,
   productDefectRemediationAuthorizedEventId,
@@ -224,6 +228,20 @@ export interface TargetResultRecordedUncommittedEvent {
   readonly eventType: "result.target-result-recorded";
   readonly data: Readonly<{
     readonly result: Readonly<TargetResult>;
+    /** 导入时签发的 wake-controller 回调记录（§13.87 D1）。 */
+    readonly callback: Readonly<TargetResultCallbackRecord>;
+    /** 证据定位符的解析收据（§13.87 D3）。 */
+    readonly evidenceResolution: readonly Readonly<TargetResultEvidenceResolution>[];
+  }>;
+}
+
+export interface CallbackReissuedUncommittedEvent {
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly recordedAt: UtcInstant;
+  readonly eventType: "result.callback-reissued";
+  readonly data: Readonly<{
+    readonly reissue: Readonly<TargetResultCallbackReissue>;
   }>;
 }
 
@@ -234,16 +252,6 @@ export interface ControllerTargetReviewDecidedUncommittedEvent {
   readonly eventType: "review.target-result-decided";
   readonly data: Readonly<{
     readonly decision: Readonly<ControllerReviewDecision>;
-  }>;
-}
-
-export interface ControllerTargetReviewResumedUncommittedEvent {
-  readonly eventId: WakeflowDurableId<"demand-event">;
-  readonly demandId: WakeflowDurableId<"demand">;
-  readonly recordedAt: UtcInstant;
-  readonly eventType: "review.target-result-resumed";
-  readonly data: Readonly<{
-    readonly resume: Readonly<ControllerTargetReviewResume>;
   }>;
 }
 
@@ -270,8 +278,8 @@ export type DemandUncommittedEvent =
   | DeliveryOutcomeRecordedUncommittedEvent
   | DeliveryRearmedUncommittedEvent
   | TargetResultRecordedUncommittedEvent
+  | CallbackReissuedUncommittedEvent
   | ControllerTargetReviewDecidedUncommittedEvent
-  | ControllerTargetReviewResumedUncommittedEvent
   | ProductDefectRemediationAuthorizedUncommittedEvent;
 
 export type DemandEventSourcingEventErrorReason =
@@ -286,9 +294,9 @@ export type DemandEventSourcingEventErrorReason =
   | "delivery-outcome"
   | "delivery-rearm"
   | "target-result"
+  | "target-result-callback"
   | "controller-review-decision"
   | "controller-product-defect-remediation-authorization"
-  | "controller-target-review-resume"
   | "demand-completion"
   | "lifecycle-data"
   | "managed-evidence-manifest"
@@ -316,8 +324,8 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing event contains an invalid Controller Review Decision.",
   "controller-product-defect-remediation-authorization":
     "Demand Event Sourcing event contains an invalid Controller Product Defect Remediation Authorization.",
-  "controller-target-review-resume":
-    "Demand Event Sourcing event contains an invalid Controller Target Review Resume.",
+  "target-result-callback":
+    "Demand Event Sourcing event contains an invalid Target Result callback record.",
   "demand-completion":
     "Demand Event Sourcing event contains an invalid Demand Completion.",
   "lifecycle-data":
@@ -405,12 +413,14 @@ const TARGET_TASK_PLANNED_DATA_FIELDS = Object.freeze(["taskPackage"] as const);
 const DELIVERY_PREPARED_DATA_FIELDS = Object.freeze(["envelope"] as const);
 const DELIVERY_OUTCOME_RECORDED_DATA_FIELDS = Object.freeze(["outcome"] as const);
 const DELIVERY_REARMED_DATA_FIELDS = Object.freeze(["rearm"] as const);
-const TARGET_RESULT_RECORDED_DATA_FIELDS = Object.freeze(["result"] as const);
+const TARGET_RESULT_RECORDED_DATA_FIELDS = Object.freeze([
+  "callback",
+  "evidenceResolution",
+  "result",
+] as const);
+const CALLBACK_REISSUED_DATA_FIELDS = Object.freeze(["reissue"] as const);
 const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze([
   "decision",
-] as const);
-const CONTROLLER_TARGET_REVIEW_RESUMED_DATA_FIELDS = Object.freeze([
-  "resume",
 ] as const);
 const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS = Object.freeze([
   "authorization",
@@ -738,10 +748,25 @@ export function parseDemandUncommittedEvent(
       }
       throw error;
     }
+    let callback: Readonly<TargetResultCallbackRecord>;
+    let evidenceResolution: readonly Readonly<TargetResultEvidenceResolution>[];
+    try {
+      callback = parseTargetResultCallbackRecord(data.callback, "$/data/callback");
+      evidenceResolution = parseTargetResultEvidenceResolutions(
+        data.evidenceResolution,
+        "$/data/evidenceResolution",
+      );
+    } catch (error: unknown) {
+      if (error instanceof TargetResultCallbackError) {
+        fail("target-result-callback", error.path);
+      }
+      throw error;
+    }
     if (
       result.demandId !== demandId ||
       result.report.reportedAt !== recordedAt ||
-      targetResultRecordedEventIdFromResult(result) !== eventId
+      targetResultRecordedEventIdFromResult(result) !== eventId ||
+      callback.callbackId !== deriveTargetResultCallbackId(result.targetResultId)
     ) {
       fail("relation", "$event");
     }
@@ -750,7 +775,33 @@ export function parseDemandUncommittedEvent(
       demandId,
       recordedAt,
       eventType: "result.target-result-recorded",
-      data: Object.freeze({ result }),
+      data: Object.freeze({ result, callback, evidenceResolution }),
+    });
+  }
+
+  if (record.eventType === "result.callback-reissued") {
+    const data = exactRecord(record.data, CALLBACK_REISSUED_DATA_FIELDS, "$/data");
+    let reissue: Readonly<TargetResultCallbackReissue>;
+    try {
+      reissue = parseTargetResultCallbackReissue(data.reissue, "$/data/reissue");
+    } catch (error: unknown) {
+      if (error instanceof TargetResultCallbackError) {
+        fail("target-result-callback", error.path);
+      }
+      throw error;
+    }
+    if (
+      reissue.issuedAt !== recordedAt ||
+      reissue.callbackId !== deriveTargetResultCallbackId(reissue.targetResultId)
+    ) {
+      fail("relation", "$event");
+    }
+    return Object.freeze({
+      eventId,
+      demandId,
+      recordedAt,
+      eventType: "result.callback-reissued",
+      data: Object.freeze({ reissue }),
     });
   }
 
@@ -820,37 +871,6 @@ export function parseDemandUncommittedEvent(
       recordedAt,
       eventType: "review.product-defect-remediation-authorized",
       data: Object.freeze({ authorization }),
-    });
-  }
-
-  if (record.eventType === "review.target-result-resumed") {
-    const data = exactRecord(
-      record.data,
-      CONTROLLER_TARGET_REVIEW_RESUMED_DATA_FIELDS,
-      "$/data",
-    );
-    let resume: Readonly<ControllerTargetReviewResume>;
-    try {
-      resume = parseControllerTargetReviewResume(data.resume);
-    } catch (error: unknown) {
-      if (error instanceof ControllerTargetReviewResumeError) {
-        fail("controller-target-review-resume", "$/data/resume");
-      }
-      throw error;
-    }
-    if (
-      resume.demandId !== demandId ||
-      resume.resumedAt !== recordedAt ||
-      controllerTargetReviewResumeEventId(resume) !== eventId
-    ) {
-      fail("relation", "$event");
-    }
-    return Object.freeze({
-      eventId,
-      demandId,
-      recordedAt,
-      eventType: "review.target-result-resumed",
-      data: Object.freeze({ resume }),
     });
   }
 

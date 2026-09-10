@@ -10,7 +10,6 @@ import { inspectDemandEventSourcingRootInventory } from "../../../src/governance
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
-import { ControllerImplementationReviewDecisionService } from "../../../src/governance/review/controller-implementation-review-decision-service.js";
 import {
   readDemandPostAcceptanceRoute,
   DemandPostAcceptanceRouteError,
@@ -22,6 +21,7 @@ import {
 import {
   cleanupControllerImplementationReviewDecisionServiceFixture,
   createControllerImplementationReviewDecisionServiceFixture,
+  decideFixtureImplementation,
   type ControllerImplementationReviewDecisionServiceFixture,
 } from "./controller-implementation-review-decision-service.fixture.js";
 
@@ -31,9 +31,7 @@ const ACCEPT_UUID = "c2c2c2c2-c2c2-42c2-82c2-c2c2c2c2c2c2";
 async function acceptCurrentTarget(
   fixture: Readonly<ControllerImplementationReviewDecisionServiceFixture>,
 ) {
-  return new ControllerImplementationReviewDecisionService(
-    fixture.workspaceRoot,
-  ).decide(fixture.decisionRequest, {
+  return decideFixtureImplementation(fixture, {}, {
     clock: () => ACCEPTED_AT,
     uuidFactory: () => ACCEPT_UUID,
   });
@@ -98,7 +96,7 @@ test("controller-only在全部产品Target accepted后只进入completion prefli
     );
     equal(
       first.acceptedTargets[0]?.targetResultId,
-      decision.decision.reviewed.targetResultId,
+      fixture.decisionRequest.targetResultId,
     );
     const { routeDigest, ...basis } = first;
     equal(routeDigest, computeCanonicalJsonSha256Digest(basis));

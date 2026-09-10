@@ -23,9 +23,8 @@ import type { WakeflowControllerTargetReviewDecidedEventDataV1 } from "../../../
 import { WAKEFLOW_CONTROLLER_TARGET_REVIEW_DECIDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/controller-target-review-decided-event-data-v1.generated.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA } from "../../../contracts/generated/governance/review/controller-implementation-review-decision.generated.js";
 import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA } from "../../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
-import type { WakeflowControllerTargetReviewResumedEventDataV1 } from "../../../contracts/generated/governance/demand/controller-target-review-resumed-event-data-v1.generated.js";
-import { WAKEFLOW_CONTROLLER_TARGET_REVIEW_RESUMED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/controller-target-review-resumed-event-data-v1.generated.js";
-import { WAKEFLOW_CONTROLLER_TARGET_REVIEW_RESUME_SCHEMA } from "../../../contracts/generated/governance/review/controller-target-review-resume.generated.js";
+import type { WakeflowCallbackReissuedEventDataV1 } from "../../../contracts/generated/governance/demand/callback-reissued-event-data-v1.generated.js";
+import { WAKEFLOW_CALLBACK_REISSUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/callback-reissued-event-data-v1.generated.js";
 import type { WakeflowProductDefectRemediationAuthorizedEventDataV1 } from "../../../contracts/generated/governance/demand/product-defect-remediation-authorized-event-data-v1.generated.js";
 import { WAKEFLOW_PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/product-defect-remediation-authorized-event-data-v1.generated.js";
 import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } from "../../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
@@ -78,10 +77,10 @@ export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
   "lifecycle.demand-continued",
   "lifecycle.demand-escalated",
   "publication.demand-published",
+  "result.callback-reissued",
   "result.target-result-recorded",
   "review.product-defect-remediation-authorized",
   "review.target-result-decided",
-  "review.target-result-resumed",
   "tasking.target-task-planned",
 ] as const);
 
@@ -99,10 +98,10 @@ export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
   "lifecycle.demand-continued": 1,
   "lifecycle.demand-escalated": 1,
   "publication.demand-published": 1,
+  "result.callback-reissued": 1,
   "result.target-result-recorded": 1,
   "review.product-defect-remediation-authorized": 1,
   "review.target-result-decided": 1,
-  "review.target-result-resumed": 1,
   "tasking.target-task-planned": 1,
 } as const satisfies Readonly<
   Record<DemandEventSourcingCurrentEventType, number>
@@ -252,17 +251,10 @@ const validateControllerTargetReviewDecidedV1 =
       WAKEFLOW_UTC_INSTANT_SCHEMA,
     ],
   );
-const validateControllerTargetReviewResumedV1 =
-  createRuntimeJsonSchemaValidator<WakeflowControllerTargetReviewResumedEventDataV1>(
-    WAKEFLOW_CONTROLLER_TARGET_REVIEW_RESUMED_EVENT_DATA_V1_SCHEMA,
-    [
-      WAKEFLOW_CONTROLLER_TARGET_REVIEW_RESUME_SCHEMA,
-      WAKEFLOW_TASK_PACKAGE_SCHEMA,
-      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-    ],
+const validateCallbackReissuedV1 =
+  createRuntimeJsonSchemaValidator<WakeflowCallbackReissuedEventDataV1>(
+    WAKEFLOW_CALLBACK_REISSUED_EVENT_DATA_V1_SCHEMA,
+    [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
   );
 const validateProductDefectRemediationAuthorizedV1 =
   createRuntimeJsonSchemaValidator<WakeflowProductDefectRemediationAuthorizedEventDataV1>(
@@ -377,12 +369,12 @@ function parseControllerTargetReviewDecidedV1(
   return parseJsonValue(result.value, "$data");
 }
 
-function parseControllerTargetReviewResumedV1(
+function parseCallbackReissuedV1(
   value: Readonly<JsonValue>,
 ): Readonly<JsonValue> {
-  const result = validateControllerTargetReviewResumedV1(value);
+  const result = validateCallbackReissuedV1(value);
   if (!result.ok) {
-    throw new TypeError("Controller target review resumed v1 data is invalid.");
+    throw new TypeError("Callback reissued v1 data is invalid.");
   }
   return parseJsonValue(result.value, "$data");
 }
@@ -499,15 +491,12 @@ const CONTROLLER_TARGET_REVIEW_DECIDED_REGISTRY =
     codecs: [{ version: 1, parse: parseControllerTargetReviewDecidedV1 }],
     steps: [],
   });
-const CONTROLLER_TARGET_REVIEW_RESUMED_REGISTRY =
-  new EventSourcingVersionEvolutionRegistry({
-    currentVersion:
-      DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[
-        "review.target-result-resumed"
-      ],
-    codecs: [{ version: 1, parse: parseControllerTargetReviewResumedV1 }],
-    steps: [],
-  });
+const CALLBACK_REISSUED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
+  currentVersion:
+    DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["result.callback-reissued"],
+  codecs: [{ version: 1, parse: parseCallbackReissuedV1 }],
+  steps: [],
+});
 const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_REGISTRY =
   new EventSourcingVersionEvolutionRegistry({
     currentVersion:
@@ -534,11 +523,11 @@ const EVENT_VERSION_REGISTRIES = Object.freeze({
   "lifecycle.demand-continued": CONTINUED_REGISTRY,
   "lifecycle.demand-escalated": ESCALATED_REGISTRY,
   "publication.demand-published": PUBLISHED_REGISTRY,
+  "result.callback-reissued": CALLBACK_REISSUED_REGISTRY,
   "result.target-result-recorded": TARGET_RESULT_RECORDED_REGISTRY,
   "review.product-defect-remediation-authorized":
     PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_REGISTRY,
   "review.target-result-decided": CONTROLLER_TARGET_REVIEW_DECIDED_REGISTRY,
-  "review.target-result-resumed": CONTROLLER_TARGET_REVIEW_RESUMED_REGISTRY,
   "tasking.target-task-planned": TARGET_TASK_PLANNED_REGISTRY,
 } as const satisfies Readonly<
   Record<
@@ -560,14 +549,13 @@ export const DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS = Object.freeze({
   "lifecycle.demand-continued": CONTINUED_REGISTRY.supportedVersions,
   "lifecycle.demand-escalated": ESCALATED_REGISTRY.supportedVersions,
   "publication.demand-published": PUBLISHED_REGISTRY.supportedVersions,
+  "result.callback-reissued": CALLBACK_REISSUED_REGISTRY.supportedVersions,
   "result.target-result-recorded":
     TARGET_RESULT_RECORDED_REGISTRY.supportedVersions,
   "review.product-defect-remediation-authorized":
     PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_REGISTRY.supportedVersions,
   "review.target-result-decided":
     CONTROLLER_TARGET_REVIEW_DECIDED_REGISTRY.supportedVersions,
-  "review.target-result-resumed":
-    CONTROLLER_TARGET_REVIEW_RESUMED_REGISTRY.supportedVersions,
   "tasking.target-task-planned": TARGET_TASK_PLANNED_REGISTRY.supportedVersions,
 } as const satisfies Readonly<
   Record<DemandEventSourcingCurrentEventType, readonly number[]>

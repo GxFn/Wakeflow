@@ -13,11 +13,6 @@ import {
   executeDemandRouteInspectionRequest,
 } from "../capabilities/demand/service.js";
 import { executeManagedEvidencePublicRequest } from "../governance/evidence/managed-evidence-public-coordinator.js";
-import { executeControllerImplementationReviewDecisionPublicRequest } from "../governance/review/controller-implementation-review-decision-public-coordinator.js";
-import { executeControllerProductDefectRemediationPublicRequest } from "../governance/review/controller-product-defect-remediation-public-coordinator.js";
-import { executeControllerTestReviewDecisionPublicRequest } from "../governance/review/controller-test-review-decision-public-coordinator.js";
-import { executeTargetResultReviewInspectionPublicRequest } from "../governance/review/target-result-review-inspection-public-coordinator.js";
-import { executeTargetResultReviewResumePublicRequest } from "../governance/review/target-result-review-resume-public-coordinator.js";
 import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.js";
 
 /**
@@ -27,37 +22,26 @@ import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.j
  * profile 的工具在各自的组合根里绑定 facade。
  */
 export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
-  authorizeProductDefectRemediation: executeControllerProductDefectRemediationPublicRequest,
   cancelDemand: executeDemandCancellationRequest,
   completeDemand: executeDemandCompletionRequest,
   continueDemand: executeDemandContinuationRequest,
   createDemand: executeDemandCreationRequest,
   inspectDemandRoute: executeDemandRouteInspectionRequest,
-  inspectTargetResultReview: executeTargetResultReviewInspectionPublicRequest,
   inspectBoard: executeBoardInspectionRequest,
   planTargetTask: executeTargetTaskPlanningPublicRequest,
   publishRequirement: executeRequirementPublicationRequest,
-  recordControllerImplementationReviewDecision:
-    executeControllerImplementationReviewDecisionPublicRequest,
-  recordControllerTestReviewDecision: executeControllerTestReviewDecisionPublicRequest,
   recordManagedEvidence: executeManagedEvidencePublicRequest,
-  resumeTargetResultReview: executeTargetResultReviewResumePublicRequest,
 }) satisfies Readonly<
   Pick<
     WakeflowPublicMcpExecutors,
-    | "authorizeProductDefectRemediation"
     | "cancelDemand"
     | "completeDemand"
     | "continueDemand"
     | "createDemand"
     | "inspectDemandRoute"
-    | "inspectTargetResultReview"
     | "inspectBoard"
     | "planTargetTask"
     | "publishRequirement"
-    | "recordControllerImplementationReviewDecision"
-    | "recordControllerTestReviewDecision"
     | "recordManagedEvidence"
-    | "resumeTargetResultReview"
   >
 >;

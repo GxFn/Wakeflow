@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:rearm-delivery-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_REARM_DELIVERY_RESULT_SCHEMA",
   "title": "WakeflowRearmDeliveryResultV1",
-  "description": "Result of one delivery rearm: the new generation with its re-issued permit, the appended event, and next.",
+  "description": "Result of one delivery rearm: the new generation with its re-issued permit, the appended event, and next. A callback deliveryId (the wake-controller callback of a recorded result) re-issues the callback permit against the current Controller binding without a work claim (kind callback).",
   "$comment": "The permit carries the same prompt as the original envelope with a new fence; sending remains the Agent host effect.",
   "type": "object",
   "additionalProperties": false,
@@ -241,7 +241,14 @@
           "$ref": "#/$defs/hostAction"
         },
         "fence": {
-          "$ref": "#/$defs/fence"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/fence"
+            }
+          ]
         },
         "issuedAt": {
           "$ref": "#/$defs/utcInstant"
@@ -277,7 +284,7 @@
           "maximum": 4
         },
         "workType": {
-          "enum": ["implementation", "test"]
+          "enum": ["implementation", "test", "callback"]
         },
         "targetTaskId": {
           "$ref": "#/$defs/targetTaskId"
@@ -286,15 +293,23 @@
           "$ref": "#/$defs/windowId"
         },
         "phase": {
-          "enum": ["delivery-prepared", "test-delivery-prepared"]
+          "enum": [
+            "delivery-prepared",
+            "test-delivery-prepared",
+            "result-reported",
+            "test-result-reported"
+          ]
         }
       }
     },
     "rearm": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["previousGeneration", "generation"],
+      "required": ["kind", "previousGeneration", "generation"],
       "properties": {
+        "kind": {
+          "enum": ["target", "callback"]
+        },
         "previousGeneration": {
           "type": "integer",
           "minimum": 1,

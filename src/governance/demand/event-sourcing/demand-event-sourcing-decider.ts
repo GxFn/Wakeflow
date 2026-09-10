@@ -37,7 +37,7 @@ import {
   recordDecisionInDemandAggregateState,
   recordManagedEvidenceInDemandAggregateState,
   recordTargetResultInDemandAggregateState,
-  resumeBlockedTargetReviewInDemandAggregateState,
+  reissueCallbackInDemandAggregateState,
   planTargetTaskInDemandAggregateState,
   parseDemandAggregateState,
   DemandAggregateStateError,
@@ -95,12 +95,16 @@ import {
   ControllerReviewDecisionError,
   type ControllerReviewDecision,
 } from "../../review/controller-review-decision.js";
+import type { ControllerReviewEscalation } from "../../review/controller-review-decision-contract.js";
 import {
-  controllerTargetReviewResumeEventId,
-  parseControllerTargetReviewResume,
-  ControllerTargetReviewResumeError,
-  type ControllerTargetReviewResume,
-} from "../../review/controller-target-review-resume.js";
+  parseTargetResultCallbackRecord,
+  parseTargetResultCallbackReissue,
+  parseTargetResultEvidenceResolutions,
+  TargetResultCallbackError,
+  type TargetResultCallbackRecord,
+  type TargetResultCallbackReissue,
+  type TargetResultEvidenceResolution,
+} from "../../result/target-result-callback.js";
 import {
   parseControllerProductDefectRemediationAuthorization,
   productDefectRemediationAuthorizedEventId,
@@ -241,24 +245,27 @@ export interface RecordTargetResultCommand {
   readonly commandType: "result.record-target-result";
   readonly commandVersion: 1;
   readonly result: Readonly<TargetResult>;
+  readonly callback: Readonly<TargetResultCallbackRecord>;
+  readonly evidenceResolution: readonly Readonly<TargetResultEvidenceResolution>[];
 }
 
+/** 回调重发：不取声明、按当前 Controller 绑定重算、代际加一（§13.87 D1）。 */
+export interface ReissueCallbackCommand {
+  readonly commandType: "result.reissue-callback";
+  readonly commandVersion: 1;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly reissue: Readonly<TargetResultCallbackReissue>;
+}
+
+/**
+ * 评审决定：escalate 在同一提交附带升级事件；测试 `escalate{product-defect}` 必须携带
+ * 由决定与基线派生的缺陷修复授权，同一提交附带授权事件（§13.87 D5）。
+ */
 export interface DecideTargetResultReviewCommand {
   readonly commandType: "review.decide-target-result";
   readonly commandVersion: 1;
   readonly decision: Readonly<ControllerReviewDecision>;
-}
-
-export interface ResumeTargetResultReviewCommand {
-  readonly commandType: "review.resume-target-result";
-  readonly commandVersion: 1;
-  readonly resume: Readonly<ControllerTargetReviewResume>;
-}
-
-export interface AuthorizeProductDefectRemediationCommand {
-  readonly commandType: "review.authorize-product-defect-remediation";
-  readonly commandVersion: 1;
-  readonly authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
+  readonly authorization?: Readonly<ControllerProductDefectRemediationAuthorization>;
 }
 
 export type DemandEventSourcingCommand =
@@ -274,9 +281,8 @@ export type DemandEventSourcingCommand =
   | RecordDeliveryOutcomeCommand
   | RearmDeliveryCommand
   | RecordTargetResultCommand
-  | DecideTargetResultReviewCommand
-  | ResumeTargetResultReviewCommand
-  | AuthorizeProductDefectRemediationCommand;
+  | ReissueCallbackCommand
+  | DecideTargetResultReviewCommand;
 
 export type DemandEventSourcingDecisionErrorReason =
   | "input"
@@ -295,10 +301,10 @@ export type DemandEventSourcingDecisionErrorReason =
   | "delivery-outcome"
   | "delivery-rearm"
   | "target-result"
+  | "target-result-callback"
   | "controller-implementation-review-decision"
   | "controller-review-decision"
   | "controller-product-defect-remediation-authorization"
-  | "controller-target-review-resume"
   | "state"
   | "identity"
   | "transition"
@@ -338,8 +344,8 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing command contains an invalid Controller Review Decision.",
   "controller-product-defect-remediation-authorization":
     "Demand Event Sourcing command contains an invalid Controller Product Defect Remediation Authorization.",
-  "controller-target-review-resume":
-    "Demand Event Sourcing command contains an invalid Controller Target Review Resume.",
+  "target-result-callback":
+    "Demand Event Sourcing command contains an invalid Target Result callback record.",
   state: "Demand Event Sourcing Decider received an invalid aggregate state.",
   identity: "Demand Event Sourcing command does not belong to the aggregate.",
   transition:
@@ -444,24 +450,28 @@ const REARM_DELIVERY_FIELDS = Object.freeze([
   "rearm",
 ] as const);
 const RECORD_TARGET_RESULT_FIELDS = Object.freeze([
+  "callback",
   "commandType",
   "commandVersion",
+  "evidenceResolution",
   "result",
+] as const);
+const REISSUE_CALLBACK_FIELDS = Object.freeze([
+  "commandType",
+  "commandVersion",
+  "eventId",
+  "reissue",
 ] as const);
 const DECIDE_TARGET_RESULT_REVIEW_FIELDS = Object.freeze([
   "commandType",
   "commandVersion",
   "decision",
 ] as const);
-const RESUME_TARGET_RESULT_REVIEW_FIELDS = Object.freeze([
-  "commandType",
-  "commandVersion",
-  "resume",
-] as const);
-const AUTHORIZE_PRODUCT_DEFECT_REMEDIATION_FIELDS = Object.freeze([
+const DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS = Object.freeze([
   "authorization",
   "commandType",
   "commandVersion",
+  "decision",
 ] as const);
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
@@ -1010,15 +1020,56 @@ export function parseDemandEventSourcingCommand(
       }
       throw error;
     }
+    let callback: Readonly<TargetResultCallbackRecord>;
+    let evidenceResolution: readonly Readonly<TargetResultEvidenceResolution>[];
+    try {
+      callback = parseTargetResultCallbackRecord(command.callback, "$/callback");
+      evidenceResolution = parseTargetResultEvidenceResolutions(
+        command.evidenceResolution,
+        "$/evidenceResolution",
+      );
+    } catch (error: unknown) {
+      if (error instanceof TargetResultCallbackError) {
+        fail("target-result-callback", error.path);
+      }
+      throw error;
+    }
     return Object.freeze({
       commandType: "result.record-target-result",
       commandVersion: 1,
       result,
+      callback,
+      evidenceResolution,
+    });
+  }
+
+  if (base.commandType === "result.reissue-callback") {
+    const command = exactCommand(base, REISSUE_CALLBACK_FIELDS);
+    let reissue: Readonly<TargetResultCallbackReissue>;
+    try {
+      reissue = parseTargetResultCallbackReissue(command.reissue, "$/reissue");
+    } catch (error: unknown) {
+      if (error instanceof TargetResultCallbackError) {
+        fail("target-result-callback", error.path);
+      }
+      throw error;
+    }
+    return Object.freeze({
+      commandType: "result.reissue-callback",
+      commandVersion: 1,
+      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+      reissue,
     });
   }
 
   if (base.commandType === "review.decide-target-result") {
-    const command = exactCommand(base, DECIDE_TARGET_RESULT_REVIEW_FIELDS);
+    const hasAuthorization = Object.hasOwn(base, "authorization");
+    const command = exactCommand(
+      base,
+      hasAuthorization
+        ? DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS
+        : DECIDE_TARGET_RESULT_REVIEW_FIELDS,
+    );
     let decision: Readonly<ControllerReviewDecision>;
     try {
       decision = parseControllerReviewDecision(command.decision);
@@ -1028,18 +1079,17 @@ export function parseDemandEventSourcingCommand(
       }
       throw error;
     }
-    return Object.freeze({
-      commandType: "review.decide-target-result",
-      commandVersion: 1,
-      decision,
-    });
-  }
-
-  if (base.commandType === "review.authorize-product-defect-remediation") {
-    const command = exactCommand(
-      base,
-      AUTHORIZE_PRODUCT_DEFECT_REMEDIATION_FIELDS,
-    );
+    const productDefect =
+      decision.kind === "WakeflowControllerTestReviewDecision" &&
+      decision.escalation?.classification === "product-defect";
+    if (productDefect !== hasAuthorization) fail("input", "$/authorization");
+    if (!hasAuthorization) {
+      return Object.freeze({
+        commandType: "review.decide-target-result",
+        commandVersion: 1,
+        decision,
+      });
+    }
     let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
     try {
       authorization = parseControllerProductDefectRemediationAuthorization(
@@ -1056,28 +1106,26 @@ export function parseDemandEventSourcingCommand(
       }
       throw error;
     }
-    return Object.freeze({
-      commandType: "review.authorize-product-defect-remediation",
-      commandVersion: 1,
-      authorization,
-    });
-  }
-
-  if (base.commandType === "review.resume-target-result") {
-    const command = exactCommand(base, RESUME_TARGET_RESULT_REVIEW_FIELDS);
-    let resume: Readonly<ControllerTargetReviewResume>;
-    try {
-      resume = parseControllerTargetReviewResume(command.resume);
-    } catch (error: unknown) {
-      if (error instanceof ControllerTargetReviewResumeError) {
-        fail("controller-target-review-resume", "$/resume");
-      }
-      throw error;
+    if (
+      authorization.source.testReviewDecision.targetReviewDecisionId !==
+        decision.targetReviewDecisionId ||
+      authorization.source.testReviewDecision.decisionDigest !==
+        decision.decisionDigest ||
+      authorization.source.reviewSnapshotDigest !==
+        decision.reviewed.snapshotDigest ||
+      authorization.source.streamRevision !==
+        decision.reviewed.streamRevision + 1
+    ) {
+      fail(
+        "controller-product-defect-remediation-authorization",
+        "$/authorization/source",
+      );
     }
     return Object.freeze({
-      commandType: "review.resume-target-result",
+      commandType: "review.decide-target-result",
       commandVersion: 1,
-      resume,
+      decision,
+      authorization,
     });
   }
 
@@ -1183,77 +1231,16 @@ export function decideDemandEventSourcingCommand(
       }),
     );
   }
-  if (command.commandType === "review.authorize-product-defect-remediation") {
-    try {
-      authorizeProductDefectRemediationInDemandAggregateState(
-        state,
-        command.authorization,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: productDefectRemediationAuthorizedEventId(
-          command.authorization,
-        ),
-        demandId: command.authorization.demandId,
-        recordedAt: command.authorization.authorizedAt,
-        eventType: "review.product-defect-remediation-authorized",
-        data: { authorization: command.authorization },
-      }),
-    );
-  }
-  if (command.commandType === "review.resume-target-result") {
-    try {
-      resumeBlockedTargetReviewInDemandAggregateState(state, command.resume);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: controllerTargetReviewResumeEventId(command.resume),
-        demandId: command.resume.demandId,
-        recordedAt: command.resume.resumedAt,
-        eventType: "review.target-result-resumed",
-        data: { resume: command.resume },
-      }),
-    );
-  }
   if (command.commandType === "review.decide-target-result") {
-    let decided: Readonly<DemandAggregateState>;
-    try {
-      decided = decideTargetResultReviewInDemandAggregateState(
-        state,
-        command.decision,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-    const decidedEvent = parseDemandUncommittedEvent({
-      eventId: controllerReviewDecisionEventId(command.decision),
-      demandId: command.decision.demandId,
-      recordedAt: command.decision.decidedAt,
-      eventType: "review.target-result-decided",
-      data: { decision: command.decision },
-    });
-    const brake = reworkBrakeEscalation(decided, command.decision, decidedEvent);
-    return brake === null
-      ? singleEvent(decidedEvent)
-      : Object.freeze([decidedEvent, brake]);
+    return decideReview(state, command);
   }
   if (command.commandType === "result.record-target-result") {
     try {
-      recordTargetResultInDemandAggregateState(state, command.result);
+      recordTargetResultInDemandAggregateState(
+        state,
+        command.result,
+        command.callback,
+      );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1266,7 +1253,30 @@ export function decideDemandEventSourcingCommand(
         demandId: command.result.demandId,
         recordedAt: command.result.report.reportedAt,
         eventType: "result.target-result-recorded",
-        data: { result: command.result },
+        data: {
+          result: command.result,
+          callback: command.callback,
+          evidenceResolution: command.evidenceResolution,
+        },
+      }),
+    );
+  }
+  if (command.commandType === "result.reissue-callback") {
+    try {
+      reissueCallbackInDemandAggregateState(state, command.reissue);
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/targetTasks");
+      }
+      throw error;
+    }
+    return singleEvent(
+      parseDemandUncommittedEvent({
+        eventId: command.eventId,
+        demandId: state.demandId,
+        recordedAt: command.reissue.issuedAt,
+        eventType: "result.callback-reissued",
+        data: { reissue: command.reissue },
       }),
     );
   }
@@ -1430,6 +1440,124 @@ export function decideDemandEventSourcingCommand(
 }
 
 /**
+ * 评审决定的事件组：决定事件之后，escalate 附带升级（实现 escalate 与测试
+ * needs-decision），测试 product-defect 附带缺陷修复授权，rework 达阈值附带刹车升级。
+ */
+function decideReview(
+  state: Readonly<DemandAggregateState>,
+  command: DecideTargetResultReviewCommand,
+): DecidedEvents {
+  let decided: Readonly<DemandAggregateState>;
+  try {
+    decided = decideTargetResultReviewInDemandAggregateState(
+      state,
+      command.decision,
+    );
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks");
+    }
+    throw error;
+  }
+  const decidedEvent = parseDemandUncommittedEvent({
+    eventId: controllerReviewDecisionEventId(command.decision),
+    demandId: command.decision.demandId,
+    recordedAt: command.decision.decidedAt,
+    eventType: "review.target-result-decided",
+    data: { decision: command.decision },
+  });
+  const authorization = command.authorization;
+  if (authorization !== undefined) {
+    try {
+      authorizeProductDefectRemediationInDemandAggregateState(
+        decided,
+        authorization,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/targetTasks");
+      }
+      throw error;
+    }
+    return Object.freeze([
+      decidedEvent,
+      parseDemandUncommittedEvent({
+        eventId: productDefectRemediationAuthorizedEventId(authorization),
+        demandId: authorization.demandId,
+        recordedAt: authorization.authorizedAt,
+        eventType: "review.product-defect-remediation-authorized",
+        data: { authorization },
+      }),
+    ]);
+  }
+  const escalation = reviewEscalation(decided, command.decision, decidedEvent);
+  if (escalation !== null) return Object.freeze([decidedEvent, escalation]);
+  const brake = reworkBrakeEscalation(decided, command.decision, decidedEvent);
+  return brake === null
+    ? singleEvent(decidedEvent)
+    : Object.freeze([decidedEvent, brake]);
+}
+
+function reviewEscalationContent(
+  decision: DecideTargetResultReviewCommand["decision"],
+): Readonly<ControllerReviewEscalation> | null {
+  if (decision.decision !== "escalate") return null;
+  if (decision.kind === "WakeflowControllerImplementationReviewDecision") {
+    return decision.escalation;
+  }
+  return decision.escalation?.classification === "needs-decision"
+    ? decision.escalation.userDecision
+    : null;
+}
+
+/** escalate 决定同一提交附带 `lifecycle.demand-escalated{source: review-decision}`。 */
+function reviewEscalation(
+  decided: Readonly<DemandAggregateState>,
+  decision: DecideTargetResultReviewCommand["decision"],
+  decidedEvent: Readonly<DemandUncommittedEvent>,
+): Readonly<DemandUncommittedEvent> | null {
+  const content = reviewEscalationContent(decision);
+  if (content === null) return null;
+  const escalationEvent = parseDemandUncommittedEvent({
+    eventId: derivedEventId("demand-event:review-escalation", decidedEvent.eventId),
+    demandId: decision.demandId,
+    recordedAt: decision.decidedAt,
+    eventType: "lifecycle.demand-escalated",
+    data: {
+      escalation: {
+        issue: content.issue,
+        requirementRefs: content.requirementRefs,
+        evidence: content.evidence,
+        options: content.options,
+        recommendation: content.recommendation,
+        source: {
+          kind: "review-decision",
+          targetTaskId: decision.targetTaskId,
+          targetReviewDecisionId: decision.targetReviewDecisionId,
+          decisionDigest: decision.decisionDigest,
+        },
+      },
+    },
+  });
+  if (escalationEvent.eventType !== "lifecycle.demand-escalated") {
+    fail("lifecycle-data", "$/decision/escalation");
+  }
+  try {
+    escalateDemandAggregateState(
+      decided,
+      escalationEvent.data.escalation,
+      escalationEvent.eventId,
+    );
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/awaitingDecision");
+    }
+    throw error;
+  }
+  return escalationEvent;
+}
+
+/**
  * 第三次 rework 刹车：评审决定为 rework 且该目标累计 rework 次数达到阈值时，
  * 同一提交附带一个 `lifecycle.demand-escalated`；升级事件标识由决定事件派生。
  */
@@ -1453,7 +1581,7 @@ function reworkBrakeEscalation(
   }
   const reworkCount = target.reworkCount ?? 0;
   return parseDemandUncommittedEvent({
-    eventId: reworkBrakeEventId(decidedEvent.eventId),
+    eventId: derivedEventId("demand-event:rework-brake", decidedEvent.eventId),
     demandId: decision.demandId,
     recordedAt: decision.decidedAt,
     eventType: "lifecycle.demand-escalated",
@@ -1494,12 +1622,13 @@ function reworkBrakeEscalation(
   });
 }
 
-function reworkBrakeEventId(
+function derivedEventId(
+  namespace: string,
   decisionEventId: WakeflowDurableId<"demand-event">,
 ): WakeflowDurableId<"demand-event"> {
   return createWakeflowDurableId(
     "demand-event",
-    parseUuidV4(deriveUuidV4("demand-event:rework-brake", decisionEventId), "$eventId"),
+    parseUuidV4(deriveUuidV4(namespace, decisionEventId), "$eventId"),
   );
 }
 
@@ -1587,7 +1716,21 @@ export function evolveDemandEventSourcingState(
   }
   if (event.eventType === "result.target-result-recorded") {
     try {
-      return recordTargetResultInDemandAggregateState(state, event.data.result);
+      return recordTargetResultInDemandAggregateState(
+        state,
+        event.data.result,
+        event.data.callback,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/targetTasks");
+      }
+      throw error;
+    }
+  }
+  if (event.eventType === "result.callback-reissued") {
+    try {
+      return reissueCallbackInDemandAggregateState(state, event.data.reissue);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1613,19 +1756,6 @@ export function evolveDemandEventSourcingState(
       return authorizeProductDefectRemediationInDemandAggregateState(
         state,
         event.data.authorization,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "review.target-result-resumed") {
-    try {
-      return resumeBlockedTargetReviewInDemandAggregateState(
-        state,
-        event.data.resume,
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {

@@ -17,11 +17,12 @@ import {
   WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
   WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/delivery/contract.js";
-import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
-import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
-import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
-import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-test-review-decision-public-contract.js";
-import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-product-defect-remediation-public-contract.js";
+import {
+  WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/result-review/contract.js";
 import {
   WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
@@ -34,7 +35,6 @@ import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/requirement/contract.js";
-import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-resume-public-contract.js";
 
 const OUTPUT_RELATIVE = ".build/test-artifacts/typescript-candidates";
 
@@ -200,10 +200,8 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
           WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME,
-          WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
           WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
           WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
           WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,

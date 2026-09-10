@@ -12,7 +12,6 @@ import {
   createControllerProductDefectRemediationAuthorization,
   parseControllerProductDefectRemediationAuthorization,
   parseControllerProductDefectRemediationAuthorizationDocument,
-  productDefectRemediationAuthorizedCommitId,
   productDefectRemediationAuthorizedEventId,
   renderControllerProductDefectRemediationAuthorization,
   ControllerProductDefectRemediationAuthorizationError,
@@ -23,91 +22,12 @@ import {
   type ControllerTestReviewDecision,
 } from "../../../src/governance/review/controller-test-review-decision.js";
 import type { TestImplementationBaseline } from "../../../src/governance/tasking/task-package.js";
+import { testReviewDecisionBaseInput } from "./controller-test-review-decision.test.js";
 
-const REPORTED_AT = parseUtcInstant("2026-08-29T12:34:00.000Z");
 const DECIDED_AT = parseUtcInstant("2026-08-29T12:35:00.000Z");
 const AUTHORIZED_AT = parseUtcInstant("2026-08-29T12:33:00.000Z");
 const DECISION_UUID = "e5e5e5e5-e5e5-45e5-85e5-e5e5e5e5e5e5";
 const AUTHORIZATION_UUID = "f6f6f6f6-f6f6-46f6-86f6-f6f6f6f6f6f6";
-
-function productDefectDecision(): Readonly<ControllerTestReviewDecision> {
-  return createControllerTestReviewDecision(
-    {
-      programId: parseWakeflowDurableIdOfKind(
-        "program_11111111-1111-4111-8111-111111111111",
-        "program",
-      ),
-      demandId: parseWakeflowDurableIdOfKind(
-        "demand_22222222-2222-4222-8222-222222222222",
-        "demand",
-      ),
-      targetTaskId: parseWakeflowDurableIdOfKind(
-        "target-task_33333333-3333-4333-8333-333333333333",
-        "target-task",
-      ),
-      controllerWindowId: parseWakeflowDurableIdOfKind(
-        "window_44444444-4444-4444-8444-444444444444",
-        "window",
-      ),
-      reviewed: {
-        snapshotDigest: parseSha256Digest(`sha256:${"1".repeat(64)}`),
-        reviewUnitDigest: parseSha256Digest(`sha256:${"2".repeat(64)}`),
-        stateDigest: parseSha256Digest(`sha256:${"3".repeat(64)}`),
-        streamRevision: parseDemandEventStreamRevision(12),
-        taskPackageId: parseWakeflowDurableIdOfKind(
-          "task-package_55555555-5555-4555-8555-555555555555",
-          "task-package",
-        ),
-        taskPackageDigest: parseSha256Digest(`sha256:${"4".repeat(64)}`),
-        targetResultId: parseWakeflowDurableIdOfKind(
-          "target-result_66666666-6666-4666-8666-666666666666",
-          "target-result",
-        ),
-        targetResultDigest: parseSha256Digest(`sha256:${"5".repeat(64)}`),
-        targetResultOutcome: "completed",
-        targetResultReportedAt: REPORTED_AT,
-      },
-      testExecution: {
-        testAttemptId: parseWakeflowDurableIdOfKind(
-          "test-attempt_77777777-7777-4777-8777-777777777777",
-          "test-attempt",
-        ),
-      },
-      decision: "escalate-product-defect",
-      assessment: {
-        conclusion: "defect-observed",
-        evidenceSufficiency: "sufficient",
-      },
-      independentChecks: [
-        {
-          checkId: "api-contract",
-          method: "复验真实环境入口与返回合同。",
-          outcome: "failed",
-          observation: "产品入口在批准输入下返回错误状态。",
-        },
-        {
-          checkId: "diagnostic-log",
-          method: "复验诊断日志是否足以定位执行边界。",
-          outcome: "passed",
-          observation: "诊断日志完整记录了当前执行边界。",
-        },
-        {
-          checkId: "state-persistence",
-          method: "重启后重新读取产品状态。",
-          outcome: "failed",
-          observation: "重启后产品状态没有保留已确认值。",
-        },
-      ],
-      rationale: "充分Evidence证明已接受实现存在产品缺陷。",
-      blockingReasons: [],
-      residualRisks: ["修复后仍需规划复测任务包验证新基线。"],
-    },
-    {
-      clock: () => DECIDED_AT,
-      uuidFactory: () => DECISION_UUID,
-    },
-  );
-}
 
 function baseline(key: "a" | "b"): Readonly<TestImplementationBaseline> {
   const first = key === "a";
@@ -124,9 +44,7 @@ function baseline(key: "a" | "b"): Readonly<TestImplementationBaseline> {
         : "task-package_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       "task-package",
     ),
-    taskPackageDigest: parseSha256Digest(
-      `sha256:${first ? "8".repeat(64) : "9".repeat(64)}`,
-    ),
+    taskPackageDigest: parseSha256Digest(`sha256:${first ? "8".repeat(64) : "9".repeat(64)}`),
     repositoryId: parseWakeflowDurableIdOfKind(
       first
         ? "repository_dddddddd-dddd-4ddd-8ddd-dddddddddddd"
@@ -145,27 +63,65 @@ function baseline(key: "a" | "b"): Readonly<TestImplementationBaseline> {
         : "target-result_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
       "target-result",
     ),
-    resultDigest: parseSha256Digest(
-      `sha256:${first ? "a".repeat(64) : "b".repeat(64)}`,
-    ),
+    resultDigest: parseSha256Digest(`sha256:${first ? "a".repeat(64) : "b".repeat(64)}`),
     targetReviewDecisionId: parseWakeflowDurableIdOfKind(
       first
         ? "target-review-decision_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
         : "target-review-decision_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       "target-review-decision",
     ),
-    decisionDigest: parseSha256Digest(
-      `sha256:${first ? "c".repeat(64) : "d".repeat(64)}`,
-    ),
+    decisionDigest: parseSha256Digest(`sha256:${first ? "c".repeat(64) : "d".repeat(64)}`),
   });
 }
 
+/** 两个产品目标分别对应一个失败步骤；决定里的顺序故意倒置，授权按 targetTaskId 排序。 */
+function productDefectDecision(): Readonly<ControllerTestReviewDecision> {
+  const base = testReviewDecisionBaseInput();
+  return createControllerTestReviewDecision(
+    {
+      ...base,
+      reviewed: { ...base.reviewed, targetResultOutcome: "needs-review" },
+      decision: "escalate",
+      assessment: { conclusion: "defect-observed", evidenceSufficiency: "sufficient" },
+      independentChecks: [
+        {
+          checkId: "api-contract",
+          method: "复验真实环境入口与返回合同。",
+          outcome: "failed",
+          observation: "产品入口在批准输入下返回错误状态。",
+        },
+      ],
+      rationale: "充分Evidence证明已接受实现存在产品缺陷。",
+      escalation: {
+        classification: "product-defect",
+        remediation: {
+          affectedTargets: [
+            {
+              targetTaskId: baseline("b").targetTaskId,
+              failedStepIds: ["ts-3"],
+              correctionObjective: "在原TaskPackage边界内修复状态持久化。",
+            },
+            {
+              targetTaskId: baseline("a").targetTaskId,
+              failedStepIds: ["ts-1"],
+              correctionObjective: "在原TaskPackage边界内恢复批准的入口合同。",
+            },
+          ],
+          authorizationRationale: "两个产品Target分别拥有可定位且不跨包的修复责任。",
+        },
+      },
+      targetCompletion: null,
+    },
+    { clock: () => DECIDED_AT, uuidFactory: () => DECISION_UUID },
+  );
+}
+
 function input(): CreateControllerProductDefectRemediationAuthorizationInput {
+  const decision = productDefectDecision();
   return {
-    decision: productDefectDecision(),
+    decision,
     routeSource: {
-      postAcceptanceRouteDigest: parseSha256Digest(`sha256:${"e".repeat(64)}`),
-      reviewSnapshotDigest: parseSha256Digest(`sha256:${"f".repeat(64)}`),
+      reviewSnapshotDigest: decision.reviewed.snapshotDigest,
       stateDigest: parseSha256Digest(`sha256:${"0".repeat(64)}`),
       streamRevision: parseDemandEventStreamRevision(13),
     },
@@ -176,72 +132,50 @@ function input(): CreateControllerProductDefectRemediationAuthorizationInput {
       ),
       taskPackageDigest: parseSha256Digest(`sha256:${"6".repeat(64)}`),
     },
-    affectedTargets: [
-      {
-        baseline: baseline("b"),
-        failedCheckIds: ["state-persistence"],
-        correctionObjective: "在原TaskPackage边界内修复状态持久化。",
-      },
-      {
-        baseline: baseline("a"),
-        failedCheckIds: ["api-contract"],
-        correctionObjective: "在原TaskPackage边界内恢复批准的入口合同。",
-      },
+    failedSteps: [
+      { stepId: "ts-3", observed: "重启后产品状态没有保留已确认值。" },
+      { stepId: "ts-1", observed: "产品入口在批准输入下返回错误状态。" },
     ],
-    authorizationRationale: "两个产品Target分别拥有可定位且不跨包的修复责任。",
+    baselines: [baseline("b"), baseline("a")],
   };
 }
 
-function createAuthorization(
-  value: CreateControllerProductDefectRemediationAuthorizationInput = input(),
-) {
+function createAuthorization(value: CreateControllerProductDefectRemediationAuthorizationInput = input()) {
   return createControllerProductDefectRemediationAuthorization(value, {
     clock: () => AUTHORIZED_AT,
     uuidFactory: () => AUTHORIZATION_UUID,
   });
 }
 
-test("产品缺陷修复授权冻结原包baseline与失败检查映射", () => {
+test("产品缺陷修复授权从决定的 remediation 与读侧基线派生失败步骤映射", () => {
   const authorization = createAuthorization();
-  equal(
-    authorization.kind,
-    "WakeflowControllerProductDefectRemediationAuthorization",
-  );
-  equal(
-    authorization.productDefectRemediationId,
-    `product-defect-remediation_${AUTHORIZATION_UUID}`,
-  );
+  equal(authorization.kind, "WakeflowControllerProductDefectRemediationAuthorization");
+  equal(authorization.productDefectRemediationId, `product-defect-remediation_${AUTHORIZATION_UUID}`);
   equal(
     parseWakeflowDurableId(authorization.productDefectRemediationId).kind,
     "product-defect-remediation",
   );
-  equal(
-    productDefectRemediationAuthorizedEventId(authorization),
-    `demand-event_${AUTHORIZATION_UUID}`,
-  );
-  equal(
-    productDefectRemediationAuthorizedCommitId(authorization),
-    `demand-event-commit_${AUTHORIZATION_UUID}`,
-  );
+  equal(productDefectRemediationAuthorizedEventId(authorization), `demand-event_${AUTHORIZATION_UUID}`);
   equal(authorization.boundary, "existing-task-packages-only");
-  equal(
-    authorization.authorizedAt <
-      authorization.source.testReviewDecision.decidedAt,
-    true,
-  );
+  equal(authorization.source.streamRevision, 13);
+  equal(authorization.source.reviewSnapshotDigest, input().decision.reviewed.snapshotDigest);
+  equal(Object.hasOwn(authorization.source, "postAcceptanceRouteDigest"), false);
   deepEqual(
-    authorization.failedChecks.map((check) => check.checkId),
-    ["api-contract", "state-persistence"],
+    authorization.failedSteps.map((step) => step.stepId),
+    ["ts-1", "ts-3"],
   );
   deepEqual(
     authorization.affectedTargets.map((target) => target.baseline.targetTaskId),
     [baseline("a").targetTaskId, baseline("b").targetTaskId],
   );
+  deepEqual(authorization.affectedTargets[0]?.failedStepIds, ["ts-1"]);
+  equal(
+    authorization.authorizationRationale,
+    "两个产品Target分别拥有可定位且不跨包的修复责任。",
+  );
   equal(Object.isFrozen(authorization), true);
   equal(Object.isFrozen(authorization.source), true);
   equal(Object.isFrozen(authorization.affectedTargets[0]?.baseline), true);
-  equal(Object.hasOwn(authorization, "aggregateMutation"), false);
-  equal(Object.hasOwn(authorization, "targetDelivery"), false);
   equal(
     parseControllerProductDefectRemediationAuthorizationDocument(
       renderControllerProductDefectRemediationAuthorization(authorization),
@@ -250,7 +184,7 @@ test("产品缺陷修复授权冻结原包baseline与失败检查映射", () => 
   );
 });
 
-test("修复授权在分配身份与时间前拒绝错误Decision和不闭合映射", () => {
+test("修复授权在分配身份与时间前拒绝错误Decision、缺失基线与不闭合映射", () => {
   let uuidReads = 0;
   let clockReads = 0;
   const options = {
@@ -265,34 +199,13 @@ test("修复授权在分配身份与时间前拒绝错误Decision和不闭合映
   };
   const valid = input();
   const acceptDecision = createControllerTestReviewDecision(
-    {
-      ...valid.decision,
-      decision: "accept",
-      assessment: {
-        conclusion: "satisfied",
-        evidenceSufficiency: "sufficient",
-      },
-      independentChecks: [
-        {
-          checkId: "accepted",
-          method: "复验全部Test Evidence。",
-          outcome: "passed",
-          observation: "未观察到产品缺陷。",
-        },
-      ],
-    },
-    {
-      clock: () => DECIDED_AT,
-      uuidFactory: () => DECISION_UUID,
-    },
+    testReviewDecisionBaseInput(),
+    { clock: () => DECIDED_AT, uuidFactory: () => DECISION_UUID },
   );
   throws(
     () =>
       createControllerProductDefectRemediationAuthorization(
-        {
-          ...valid,
-          decision: acceptDecision,
-        },
+        { ...valid, decision: acceptDecision },
         options,
       ),
     (error: unknown) =>
@@ -302,15 +215,17 @@ test("修复授权在分配身份与时间前拒绝错误Decision和不闭合映
   throws(
     () =>
       createControllerProductDefectRemediationAuthorization(
-        {
-          ...valid,
-          affectedTargets: [
-            {
-              ...valid.affectedTargets[0],
-              failedCheckIds: ["api-contract"],
-            },
-          ],
-        },
+        { ...valid, baselines: [baseline("a")] },
+        options,
+      ),
+    (error: unknown) =>
+      error instanceof ControllerProductDefectRemediationAuthorizationError &&
+      error.reason === "relation",
+  );
+  throws(
+    () =>
+      createControllerProductDefectRemediationAuthorization(
+        { ...valid, failedSteps: [valid.failedSteps[1]!] },
         options,
       ),
     (error: unknown) =>
@@ -322,10 +237,7 @@ test("修复授权在分配身份与时间前拒绝错误Decision和不闭合映
       createControllerProductDefectRemediationAuthorization(
         {
           ...valid,
-          routeSource: {
-            ...valid.routeSource,
-            streamRevision: parseDemandEventStreamRevision(14),
-          },
+          routeSource: { ...valid.routeSource, streamRevision: parseDemandEventStreamRevision(14) },
         },
         options,
       ),
@@ -344,6 +256,16 @@ test("修复授权拒绝顺序漂移与摘要篡改", () => {
       parseControllerProductDefectRemediationAuthorization({
         ...authorization,
         affectedTargets: [...authorization.affectedTargets].reverse(),
+      }),
+    (error: unknown) =>
+      error instanceof ControllerProductDefectRemediationAuthorizationError &&
+      error.reason === "relation",
+  );
+  throws(
+    () =>
+      parseControllerProductDefectRemediationAuthorization({
+        ...authorization,
+        failedSteps: [...authorization.failedSteps].reverse(),
       }),
     (error: unknown) =>
       error instanceof ControllerProductDefectRemediationAuthorizationError &&

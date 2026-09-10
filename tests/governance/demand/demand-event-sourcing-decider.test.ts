@@ -24,7 +24,10 @@ import {
   createWorkClaimFixture,
   OTHER_DELIVERY_CLAIM_ID,
 } from "../delivery/delivery-records.fixture.js";
-import { createTargetResultFixture } from "../result/target-result.fixture.js";
+import {
+  createTargetResultCallbackFixture,
+  createTargetResultFixture,
+} from "../result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionForState } from "../review/controller-implementation-review-decision.fixture.js";
 
 const PUBLISHED_EVENT_ID = parseWakeflowDurableIdOfKind(
@@ -139,6 +142,8 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     commandType: "result.record-target-result",
     commandVersion: 1,
     result: targetResult,
+    callback: createTargetResultCallbackFixture(targetResult),
+    evidenceResolution: [],
   });
   equal(resultEvent?.eventType, "result.target-result-recorded");
   const resultReported = evolveDemandEventSourcingState(

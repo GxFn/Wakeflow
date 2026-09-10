@@ -47,6 +47,7 @@ import {
   UtcWallClockError,
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
+import { isEvidenceLocatorKind } from "../../contracts/vocabulary/evidence-locator-kinds.js";
 import type {
   TargetResultEvidenceLocator,
   TargetResultOutcome,
@@ -65,6 +66,7 @@ const REPORT_SCHEMA_VERSION = 1 as const;
 const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/u;
 
 export type ImplementationTargetResultRepositoryDisposition =
   "committed" | "left-uncommitted" | "no-changes";
@@ -83,6 +85,8 @@ export interface ImplementationTargetResultReportContent {
   readonly repositoryChange: Readonly<{
     readonly repositoryId: WakeflowDurableId<"repository">;
     readonly disposition: ImplementationTargetResultRepositoryDisposition;
+    /** 结果所在分支；主检出为 null，pod 切片后为 worktree 分支（ADR-0010）。 */
+    readonly branch: string | null;
     readonly commits: readonly Readonly<GitObjectId>[];
   }>;
   readonly evidenceLocators: readonly Readonly<TargetResultEvidenceLocator>[];
@@ -301,9 +305,15 @@ export function parseImplementationTargetResultReportContent(
   }
   const repository = jsonRecord(
     record.repositoryChange,
-    ["commits", "disposition", "repositoryId"],
+    ["branch", "commits", "disposition", "repositoryId"],
     "$/repositoryChange",
   );
+  if (
+    repository.branch !== null &&
+    (typeof repository.branch !== "string" || !BRANCH_PATTERN.test(repository.branch))
+  ) {
+    fail("text", "$/repositoryChange/branch");
+  }
   if (
     repository.disposition !== "committed" &&
     repository.disposition !== "left-uncommitted" &&
@@ -335,8 +345,9 @@ export function parseImplementationTargetResultReportContent(
   const locators = record.evidenceLocators.map((entry, index) => {
     const path = `$/evidenceLocators/${index}`;
     const locator = jsonRecord(entry, ["digest", "kind", "ref"], path);
+    if (!isEvidenceLocatorKind(locator.kind)) fail("text", `${path}/kind`);
     return Object.freeze({
-      kind: token(locator.kind, `${path}/kind`),
+      kind: locator.kind,
       ref: resourcePath(locator.ref, `${path}/ref`),
       digest: digest(locator.digest, `${path}/digest`),
     });
@@ -402,6 +413,7 @@ export function parseImplementationTargetResultReportContent(
         "$/repositoryChange/repositoryId",
       ),
       disposition: repository.disposition,
+      branch: repository.branch,
       commits: Object.freeze(commits),
     }),
     evidenceLocators: Object.freeze(locators),

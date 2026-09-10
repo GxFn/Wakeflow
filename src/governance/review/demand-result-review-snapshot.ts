@@ -12,7 +12,6 @@ import type { TaskPackage } from "../tasking/task-package.js";
 import type { TargetResultOutcome } from "../result/target-result-report-contract.js";
 import type { TargetResult } from "../result/target-result.js";
 import type { ControllerReviewDecision } from "./controller-review-decision.js";
-import type { ControllerTargetReviewResume } from "./controller-target-review-resume.js";
 import type {
   DemandLifecycle,
   DemandTargetTaskState,
@@ -47,12 +46,13 @@ type AwaitingResultPhase = Exclude<
   | "accepted"
   | "product-defect-rework-requested"
   | "rework-requested"
-  | "redesign-requested"
+  | "escalated"
   | "review-blocked"
   | "test-accepted"
   | "test-another-attempt-requested"
   | "test-product-defect"
   | "test-review-blocked"
+  | "test-escalated"
 >;
 
 type ReviewDecidedPhase = Extract<
@@ -60,12 +60,13 @@ type ReviewDecidedPhase = Extract<
   | "accepted"
   | "product-defect-rework-requested"
   | "rework-requested"
-  | "redesign-requested"
+  | "escalated"
   | "review-blocked"
   | "test-accepted"
   | "test-another-attempt-requested"
   | "test-product-defect"
   | "test-review-blocked"
+  | "test-escalated"
 >;
 
 export interface DemandResultReviewAwaitingTarget {
@@ -92,18 +93,11 @@ export interface DemandResultReviewReportedTarget {
   readonly reviewUnitDigest: Sha256Digest;
 }
 
-/** 当前Target Task在本次决定之前的有序Decision/Resume历史。 */
-export type DemandTargetReviewHistoryEntry =
-  | Readonly<{
-      readonly kind: "decision";
-      readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
-      readonly decision: Readonly<ControllerReviewDecision>;
-    }>
-  | Readonly<{
-      readonly kind: "resume";
-      readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
-      readonly resume: Readonly<ControllerTargetReviewResume>;
-    }>;
+/** 当前Target Task在本次决定之前的有序Decision历史（blocked/escalated 的续接也是决定）。 */
+export interface DemandTargetReviewHistoryEntry {
+  readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
+  readonly decision: Readonly<ControllerReviewDecision>;
+}
 
 export interface DemandResultReviewDecidedTarget {
   readonly status: "review-decided";
@@ -243,27 +237,12 @@ function priorReviewHistory(
     )
     .map((entry) =>
       Object.freeze({
-        kind: "decision" as const,
         sourceEvent: entry.sourceEvent,
         decision: entry.decision,
       }),
     );
-  const resumes = sources.targetReviewResumes
-    .filter(
-      (entry) =>
-        entry.resume.targetTaskId === targetTaskId &&
-        (beforeStreamRevision === null ||
-          entry.sourceEvent.streamRevision < beforeStreamRevision),
-    )
-    .map((entry) =>
-      Object.freeze({
-        kind: "resume" as const,
-        sourceEvent: entry.sourceEvent,
-        resume: entry.resume,
-      }),
-    );
   return Object.freeze(
-    [...decisions, ...resumes].sort(
+    decisions.sort(
       (left, right) =>
         left.sourceEvent.streamRevision - right.sourceEvent.streamRevision,
     ),
@@ -287,12 +266,13 @@ function isResultBearingTarget(
     target.phase === "accepted" ||
     target.phase === "product-defect-rework-requested" ||
     target.phase === "rework-requested" ||
-    target.phase === "redesign-requested" ||
+    target.phase === "escalated" ||
     target.phase === "review-blocked" ||
     target.phase === "test-accepted" ||
     target.phase === "test-another-attempt-requested" ||
     target.phase === "test-product-defect" ||
-    target.phase === "test-review-blocked"
+    target.phase === "test-review-blocked" ||
+    target.phase === "test-escalated"
   );
 }
 

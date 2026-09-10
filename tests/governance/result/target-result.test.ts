@@ -100,6 +100,7 @@ test("completed TargetResult要求完整anchor mapping与TaskPackage commit poli
             repositoryChange: {
               repositoryId: taskPackage.assignment.repositoryId,
               disposition: "committed",
+              branch: null,
               commits: [{ algorithm: "sha1", value: "a".repeat(40) }],
             },
           },

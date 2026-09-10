@@ -56,9 +56,9 @@ import {
 /**
  * Wakeflow Governance / Review：Controller对Test产品缺陷作出的产品返工授权。
  *
- * Authorization把一份精确`escalate-product-defect` Decision映射到原TaskPackage
- * 边界内的Implementation baseline和失败检查。它不修改Aggregate、不创建Delivery，
- * 也不允许Test窗口修复产品；后续Event owner才有权提交状态转换。
+ * Authorization把一份精确`escalate{product-defect}` Decision映射到原TaskPackage
+ * 边界内的Implementation baseline和失败步骤。它不修改Aggregate、不创建Delivery，
+ * 也不允许Test窗口修复产品；它由决定器在同一提交随决定事件派生（§13.87 D5）。
  */
 
 const AUTHORIZATION_KIND =
@@ -67,25 +67,23 @@ const AUTHORIZATION_SCHEMA_VERSION = 1 as const;
 const AUTHORIZATION_ID_PREFIX = "product-defect-remediation_";
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
 
 export interface ProductDefectRemediationRouteSource {
-  readonly postAcceptanceRouteDigest: Sha256Digest;
   readonly reviewSnapshotDigest: Sha256Digest;
   readonly stateDigest: Sha256Digest;
   readonly streamRevision: DemandEventStreamRevision;
 }
 
-export interface ProductDefectRemediationFailedCheck {
-  readonly checkId: string;
-  readonly outcome: "failed";
-  readonly method: string;
-  readonly observation: string;
+/** 测试结果里判定为 fail 的合同步骤引用（stepId 与 observed 原文）。 */
+export interface ProductDefectRemediationFailedStep {
+  readonly stepId: string;
+  readonly observed: string;
 }
 
 export interface ProductDefectRemediationAffectedTarget {
   readonly baseline: Readonly<TestImplementationBaseline>;
-  readonly failedCheckIds: readonly [string, ...string[]];
+  readonly failedStepIds: readonly [string, ...string[]];
   readonly correctionObjective: string;
 }
 
@@ -97,7 +95,6 @@ export interface ControllerProductDefectRemediationAuthorization {
   readonly demandId: WakeflowDurableId<"demand">;
   readonly controllerWindowId: WakeflowDurableId<"window">;
   readonly source: Readonly<{
-    readonly postAcceptanceRouteDigest: Sha256Digest;
     readonly reviewSnapshotDigest: Sha256Digest;
     readonly stateDigest: Sha256Digest;
     readonly streamRevision: DemandEventStreamRevision;
@@ -117,9 +114,9 @@ export interface ControllerProductDefectRemediationAuthorization {
       readonly decidedAt: UtcInstant;
     }>;
   }>;
-  readonly failedChecks: readonly [
-    Readonly<ProductDefectRemediationFailedCheck>,
-    ...Readonly<ProductDefectRemediationFailedCheck>[],
+  readonly failedSteps: readonly [
+    Readonly<ProductDefectRemediationFailedStep>,
+    ...Readonly<ProductDefectRemediationFailedStep>[],
   ];
   readonly affectedTargets: readonly [
     Readonly<ProductDefectRemediationAffectedTarget>,
@@ -132,12 +129,6 @@ export interface ControllerProductDefectRemediationAuthorization {
   readonly authorizationDigest: Sha256Digest;
 }
 
-export interface CreateProductDefectRemediationAffectedTargetInput {
-  readonly baseline: Readonly<TestImplementationBaseline>;
-  readonly failedCheckIds: readonly [string, ...string[]];
-  readonly correctionObjective: string;
-}
-
 export interface CreateControllerProductDefectRemediationAuthorizationInput {
   readonly decision: Readonly<ControllerTestReviewDecision>;
   readonly routeSource: Readonly<ProductDefectRemediationRouteSource>;
@@ -146,11 +137,10 @@ export interface CreateControllerProductDefectRemediationAuthorizationInput {
     readonly taskPackageId: WakeflowDurableId<"task-package">;
     readonly taskPackageDigest: Sha256Digest;
   }>;
-  readonly affectedTargets: readonly [
-    Readonly<CreateProductDefectRemediationAffectedTargetInput>,
-    ...Readonly<CreateProductDefectRemediationAffectedTargetInput>[],
-  ];
-  readonly authorizationRationale: string;
+  /** 被评审测试结果里 verdict 为 fail 的步骤；受影响目标的映射取自决定的 remediation。 */
+  readonly failedSteps: readonly Readonly<ProductDefectRemediationFailedStep>[];
+  /** 决定引用的每个产品目标的当前 approved 基线（读侧派生，§13.87 D6）。 */
+  readonly baselines: readonly Readonly<TestImplementationBaseline>[];
 }
 
 export interface CreateControllerProductDefectRemediationAuthorizationOptions {
@@ -183,7 +173,7 @@ const ERROR_MESSAGES = {
   time: "Controller Product Defect Remediation Authorization contains an invalid time.",
   text: "Controller Product Defect Remediation Authorization contains invalid text.",
   decision:
-    "Controller Product Defect Remediation Authorization requires an exact product-defect Test Decision.",
+    "Controller Product Defect Remediation Authorization requires an exact escalate{product-defect} Test Decision.",
   relation:
     "Controller Product Defect Remediation Authorization sources are inconsistent.",
   representation:
@@ -291,8 +281,8 @@ function text(value: unknown, path: string): string {
   return value;
 }
 
-function checkId(value: unknown, path: string): string {
-  if (typeof value !== "string" || !CHECK_ID_PATTERN.test(value)) {
+function stepId(value: unknown, path: string): string {
+  if (typeof value !== "string" || !STEP_ID_PATTERN.test(value)) {
     fail("text", path);
   }
   return value;
@@ -300,6 +290,26 @@ function checkId(value: unknown, path: string): string {
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** 合同步骤按编号排序：ts-2 在 ts-10 之前。 */
+function compareStepId(left: string, right: string): number {
+  return Number(left.slice(3)) - Number(right.slice(3));
+}
+
+function admitStepIds(
+  values: readonly string[],
+  path: string,
+): ProductDefectRemediationAffectedTarget["failedStepIds"] {
+  const stepIds = values.map((value, index) => stepId(value, `${path}/${index}`));
+  const first = stepIds[0];
+  if (first === undefined) fail("relation", path);
+  stepIds.forEach((value, index) => {
+    if (index > 0 && compareStepId(stepIds[index - 1]!, value) >= 0) {
+      fail("relation", `${path}/${index}`);
+    }
+  });
+  return Object.freeze([first, ...stepIds.slice(1)]);
 }
 
 function parseBaseline(
@@ -338,16 +348,9 @@ function parseAffectedTarget(
   value: Readonly<AuthorizationWire["affectedTargets"][number]>,
   path: string,
 ): Readonly<ProductDefectRemediationAffectedTarget> {
-  const failedCheckIds = value.failedCheckIds.map((value, index) =>
-    checkId(value, `${path}/failedCheckIds/${index}`),
-  );
-  const first = failedCheckIds[0];
-  if (first === undefined) fail("relation", `${path}/failedCheckIds`);
-  const admittedCheckIds: ProductDefectRemediationAffectedTarget["failedCheckIds"] =
-    Object.freeze([first, ...failedCheckIds.slice(1)]);
   return Object.freeze({
     baseline: parseBaseline(value.baseline, `${path}/baseline`),
-    failedCheckIds: admittedCheckIds,
+    failedStepIds: admitStepIds(value.failedStepIds, `${path}/failedStepIds`),
     correctionObjective: text(
       value.correctionObjective,
       `${path}/correctionObjective`,
@@ -355,14 +358,30 @@ function parseAffectedTarget(
   });
 }
 
+function parseFailedSteps(
+  values: readonly Readonly<ProductDefectRemediationFailedStep>[],
+  path: string,
+): ControllerProductDefectRemediationAuthorization["failedSteps"] {
+  const steps = values.map((step, index) =>
+    Object.freeze({
+      stepId: stepId(step.stepId, `${path}/${index}/stepId`),
+      observed: text(step.observed, `${path}/${index}/observed`),
+    }),
+  );
+  const first = steps[0];
+  if (first === undefined) fail("relation", path);
+  steps.forEach((step, index) => {
+    if (index > 0 && compareStepId(steps[index - 1]!.stepId, step.stepId) >= 0) {
+      fail("relation", `${path}/${index}/stepId`);
+    }
+  });
+  return Object.freeze([first, ...steps.slice(1)]);
+}
+
 function parseSource(
   value: Readonly<AuthorizationWire["source"]>,
 ): Readonly<ControllerProductDefectRemediationAuthorization["source"]> {
   return Object.freeze({
-    postAcceptanceRouteDigest: digest(
-      value.postAcceptanceRouteDigest,
-      "$/source/postAcceptanceRouteDigest",
-    ),
     reviewSnapshotDigest: digest(
       value.reviewSnapshotDigest,
       "$/source/reviewSnapshotDigest",
@@ -424,19 +443,16 @@ function parseSource(
 
 function assertRelations(
   source: Readonly<ControllerProductDefectRemediationAuthorization["source"]>,
-  failedChecks: ControllerProductDefectRemediationAuthorization["failedChecks"],
+  failedSteps: ControllerProductDefectRemediationAuthorization["failedSteps"],
   affectedTargets: ControllerProductDefectRemediationAuthorization["affectedTargets"],
 ): void {
-  const failedCheckIds = new Set(failedChecks.map((check) => check.checkId));
-  const mappedCheckIds = new Set<string>();
+  const failedStepIds = new Set(failedSteps.map((step) => step.stepId));
+  const mappedStepIds = new Set<string>();
   const targetTaskIds = new Set<string>();
   const taskPackageIds = new Set<string>();
   const repositoryIds = new Set<string>();
   const targetResultIds = new Set<string>();
   const targetReviewDecisionIds = new Set<string>();
-  if (failedCheckIds.size !== failedChecks.length) {
-    fail("relation", "$/failedChecks");
-  }
   affectedTargets.forEach((target, index) => {
     const path = `$/affectedTargets/${index}`;
     const baseline = target.baseline;
@@ -464,24 +480,12 @@ function assertRelations(
     repositoryIds.add(baseline.repositoryId);
     targetResultIds.add(baseline.targetResultId);
     targetReviewDecisionIds.add(baseline.targetReviewDecisionId);
-    const seen = new Set<string>();
-    target.failedCheckIds.forEach((id, checkIndex) => {
-      if (
-        !failedCheckIds.has(id) ||
-        seen.has(id) ||
-        (checkIndex > 0 &&
-          compareText(target.failedCheckIds[checkIndex - 1]!, id) >= 0)
-      ) {
-        fail("relation", `${path}/failedCheckIds`);
-      }
-      seen.add(id);
-      mappedCheckIds.add(id);
+    target.failedStepIds.forEach((id) => {
+      if (!failedStepIds.has(id)) fail("relation", `${path}/failedStepIds`);
+      mappedStepIds.add(id);
     });
   });
-  if (
-    mappedCheckIds.size !== failedCheckIds.size ||
-    [...failedCheckIds].some((id) => !mappedCheckIds.has(id))
-  ) {
+  if (mappedStepIds.size !== failedStepIds.size) {
     fail("relation", "$/affectedTargets");
   }
 }
@@ -503,7 +507,7 @@ function authorizationBasis(
     demandId: value.demandId,
     controllerWindowId: value.controllerWindowId,
     source: value.source,
-    failedChecks: value.failedChecks,
+    failedSteps: value.failedSteps,
     affectedTargets: value.affectedTargets,
     boundary: "existing-task-packages-only",
     authorizationRationale: value.authorizationRationale,
@@ -526,21 +530,7 @@ export function parseControllerProductDefectRemediationAuthorization(
   if (!validated.ok) fail("schema", validated.path);
   const wire = validated.value;
   const source = parseSource(wire.source);
-  const failedChecks = wire.failedChecks.map((check, index) =>
-    Object.freeze({
-      checkId: checkId(check.checkId, `$/failedChecks/${index}/checkId`),
-      outcome: "failed" as const,
-      method: text(check.method, `$/failedChecks/${index}/method`),
-      observation: text(
-        check.observation,
-        `$/failedChecks/${index}/observation`,
-      ),
-    }),
-  );
-  const firstCheck = failedChecks[0];
-  if (firstCheck === undefined) fail("relation", "$/failedChecks");
-  const admittedChecks: ControllerProductDefectRemediationAuthorization["failedChecks"] =
-    Object.freeze([firstCheck, ...failedChecks.slice(1)]);
+  const failedSteps = parseFailedSteps(wire.failedSteps, "$/failedSteps");
   const targets = wire.affectedTargets.map((target, index) =>
     parseAffectedTarget(target, `$/affectedTargets/${index}`),
   );
@@ -549,7 +539,7 @@ export function parseControllerProductDefectRemediationAuthorization(
   const admittedTargets: ControllerProductDefectRemediationAuthorization["affectedTargets"] =
     Object.freeze([firstTarget, ...targets.slice(1)]);
   const authorizedAt = instant(wire.authorizedAt, "$/authorizedAt");
-  assertRelations(source, admittedChecks, admittedTargets);
+  assertRelations(source, failedSteps, admittedTargets);
   const basis = authorizationBasis({
     kind: AUTHORIZATION_KIND,
     schemaVersion: AUTHORIZATION_SCHEMA_VERSION,
@@ -566,7 +556,7 @@ export function parseControllerProductDefectRemediationAuthorization(
       "$/controllerWindowId",
     ),
     source,
-    failedChecks: admittedChecks,
+    failedSteps,
     affectedTargets: admittedTargets,
     boundary: "existing-task-packages-only",
     authorizationRationale: text(
@@ -589,10 +579,6 @@ function normalizeRouteSource(
   value: Readonly<ProductDefectRemediationRouteSource>,
 ): Readonly<ProductDefectRemediationRouteSource> {
   return Object.freeze({
-    postAcceptanceRouteDigest: digest(
-      value.postAcceptanceRouteDigest,
-      "$input/routeSource/postAcceptanceRouteDigest",
-    ),
     reviewSnapshotDigest: digest(
       value.reviewSnapshotDigest,
       "$input/routeSource/reviewSnapshotDigest",
@@ -605,38 +591,58 @@ function normalizeRouteSource(
   });
 }
 
-function normalizeAffectedTargetInput(
-  value: Readonly<CreateProductDefectRemediationAffectedTargetInput>,
-  index: number,
-): Readonly<ProductDefectRemediationAffectedTarget> {
-  const path = `$input/affectedTargets/${index}`;
-  const baseline = parseBaseline(
-    value.baseline as AuthorizationWire["affectedTargets"][number]["baseline"],
-    `${path}/baseline`,
-  );
-  const failedCheckIds = value.failedCheckIds
-    .map((value, checkIndex) =>
-      checkId(value, `${path}/failedCheckIds/${checkIndex}`),
-    )
-    .sort(compareText);
-  const first = failedCheckIds[0];
-  if (first === undefined) fail("relation", `${path}/failedCheckIds`);
-  const admittedCheckIds: ProductDefectRemediationAffectedTarget["failedCheckIds"] =
-    Object.freeze([first, ...failedCheckIds.slice(1)]);
-  return Object.freeze({
-    baseline,
-    failedCheckIds: admittedCheckIds,
-    correctionObjective: text(
-      value.correctionObjective,
-      `${path}/correctionObjective`,
-    ),
+function normalizeBaselines(
+  values: readonly Readonly<TestImplementationBaseline>[],
+): ReadonlyMap<string, Readonly<TestImplementationBaseline>> {
+  const baselines = new Map<string, Readonly<TestImplementationBaseline>>();
+  values.forEach((value, index) => {
+    const baseline = parseBaseline(
+      value as AuthorizationWire["affectedTargets"][number]["baseline"],
+      `$input/baselines/${index}`,
+    );
+    if (baselines.has(baseline.targetTaskId)) {
+      fail("relation", `$input/baselines/${index}/targetTaskId`);
+    }
+    baselines.set(baseline.targetTaskId, baseline);
   });
+  return baselines;
+}
+
+/** 决定的 remediation 目标与读侧基线合成受影响目标；每个目标必须有基线。 */
+function deriveAffectedTargets(
+  decision: Readonly<ControllerTestReviewDecision>,
+  baselines: ReadonlyMap<string, Readonly<TestImplementationBaseline>>,
+): ControllerProductDefectRemediationAuthorization["affectedTargets"] {
+  if (decision.escalation?.classification !== "product-defect") {
+    fail("decision", "$input/decision/escalation");
+  }
+  const targets = decision.escalation.remediation.affectedTargets.map(
+    (target, index) => {
+      const path = `$input/decision/escalation/remediation/affectedTargets/${index}`;
+      const baseline = baselines.get(target.targetTaskId);
+      if (baseline === undefined) fail("relation", `${path}/targetTaskId`);
+      return Object.freeze({
+        baseline,
+        failedStepIds: admitStepIds(
+          [...target.failedStepIds].sort(compareStepId),
+          `${path}/failedStepIds`,
+        ),
+        correctionObjective: target.correctionObjective,
+      });
+    },
+  );
+  const sorted = [...targets].sort((left, right) =>
+    compareText(left.baseline.targetTaskId, right.baseline.targetTaskId),
+  );
+  const first = sorted[0];
+  if (first === undefined) fail("decision", "$input/decision/escalation");
+  return Object.freeze([first, ...sorted.slice(1)]);
 }
 
 /**
- * 从一份产品缺陷Test Decision创建原TaskPackage边界内的Controller授权。
+ * 从一份 `escalate{product-defect}` Test Decision 创建原 TaskPackage 边界内的授权。
  *
- * Decision、route source、检查映射和文本会在读取UUID与时钟前完成准入。
+ * Decision、route source、失败步骤映射和文本会在读取UUID与时钟前完成准入。
  */
 export function createControllerProductDefectRemediationAuthorization(
   input: Readonly<CreateControllerProductDefectRemediationAuthorizationInput>,
@@ -651,36 +657,29 @@ export function createControllerProductDefectRemediationAuthorization(
     }
     throw error;
   }
-  if (decision.decision !== "escalate-product-defect") {
+  if (
+    decision.decision !== "escalate" ||
+    decision.escalation?.classification !== "product-defect"
+  ) {
     fail("decision", "$input/decision/decision");
   }
   const routeSource = normalizeRouteSource(input.routeSource);
-  if (routeSource.streamRevision !== decision.reviewed.streamRevision + 1) {
-    fail("relation", "$input/routeSource/streamRevision");
+  if (
+    routeSource.streamRevision !== decision.reviewed.streamRevision + 1 ||
+    routeSource.reviewSnapshotDigest !== decision.reviewed.snapshotDigest
+  ) {
+    fail("relation", "$input/routeSource");
   }
-  const failedChecks = decision.independentChecks
-    .filter((check) => check.outcome === "failed")
-    .map((check) =>
-      Object.freeze({
-        checkId: check.checkId,
-        outcome: "failed" as const,
-        method: check.method,
-        observation: check.observation,
-      }),
-    );
-  const firstCheck = failedChecks[0];
-  if (firstCheck === undefined) fail("decision", "$input/decision");
-  const admittedChecks: ControllerProductDefectRemediationAuthorization["failedChecks"] =
-    Object.freeze([firstCheck, ...failedChecks.slice(1)]);
-  const affectedTargets = input.affectedTargets
-    .map(normalizeAffectedTargetInput)
-    .sort((left, right) =>
-      compareText(left.baseline.targetTaskId, right.baseline.targetTaskId),
-    );
-  const firstTarget = affectedTargets[0];
-  if (firstTarget === undefined) fail("relation", "$input/affectedTargets");
-  const admittedTargets: ControllerProductDefectRemediationAuthorization["affectedTargets"] =
-    Object.freeze([firstTarget, ...affectedTargets.slice(1)]);
+  const failedSteps = parseFailedSteps(
+    [...input.failedSteps].sort((left, right) =>
+      compareStepId(String(left.stepId), String(right.stepId)),
+    ),
+    "$input/failedSteps",
+  );
+  const admittedTargets = deriveAffectedTargets(
+    decision,
+    normalizeBaselines(input.baselines),
+  );
   const source = Object.freeze({
     ...routeSource,
     testTargetTaskId: decision.targetTaskId,
@@ -706,11 +705,9 @@ export function createControllerProductDefectRemediationAuthorization(
       decidedAt: decision.decidedAt,
     }),
   });
-  assertRelations(source, admittedChecks, admittedTargets);
-  const authorizationRationale = text(
-    input.authorizationRationale,
-    "$input/authorizationRationale",
-  );
+  assertRelations(source, failedSteps, admittedTargets);
+  const authorizationRationale =
+    decision.escalation.remediation.authorizationRationale;
 
   let productDefectRemediationId: WakeflowDurableId<"product-defect-remediation">;
   try {
@@ -745,7 +742,7 @@ export function createControllerProductDefectRemediationAuthorization(
     demandId: decision.demandId,
     controllerWindowId: decision.controllerWindowId,
     source,
-    failedChecks: admittedChecks,
+    failedSteps,
     affectedTargets: admittedTargets,
     boundary: "existing-task-packages-only",
     authorizationRationale,

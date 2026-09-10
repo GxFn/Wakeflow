@@ -119,7 +119,7 @@ export async function createTestTaskPlanningWorkspaceFixture(
   });
 }
 
-/** 经切片追加一份 test 任务包；期望修订由调用方给出（实现接受之后通常是 6）。 */
+/** 经切片追加一份 test 任务包；期望修订由调用方给出（证据、结果、实现接受之后通常是 7）。 */
 export async function planFixtureTestTask(
   fixture: Readonly<{
     readonly workspacePath: string;

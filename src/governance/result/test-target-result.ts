@@ -75,19 +75,24 @@ function fail(reason: TestTargetResultErrorReason): never {
   throw new TestTargetResultError(reason);
 }
 
-/** Report 的每条步骤证据都指向合同里的 stepId 且不重复；`completed` 必须覆盖全部步骤。 */
+/**
+ * Report 的每一步都属于合同并落在本次尝试的范围内（重跑可只跑失败子集）；
+ * `completed` 必须覆盖范围内的每个 stepId 恰一次。
+ */
 function assertReportMatchesContract(
   report: Readonly<TestTargetResultReport>,
   taskPackage: Readonly<TestTaskPackage>,
+  scope: readonly string[] | null,
 ): void {
-  const stepIds = new Set(taskPackage.testContract.steps.map((step) => step.stepId));
-  const evidence = report.stepEvidence;
+  const contractIds = new Set(taskPackage.testContract.steps.map((step) => step.stepId));
+  if (scope?.some((stepId) => !contractIds.has(stepId))) fail("envelope");
+  const scopedIds = scope === null ? contractIds : new Set(scope);
   const seen = new Set<string>();
-  for (const entry of evidence) {
-    if (!stepIds.has(entry.stepId) || seen.has(entry.stepId)) fail("relation");
-    seen.add(entry.stepId);
+  for (const step of report.steps) {
+    if (!scopedIds.has(step.stepId) || seen.has(step.stepId)) fail("relation");
+    seen.add(step.stepId);
   }
-  if (report.outcome === "completed" && seen.size !== stepIds.size) {
+  if (report.outcome === "completed" && seen.size !== scopedIds.size) {
     fail("relation");
   }
 }
@@ -130,7 +135,9 @@ export function createTestTargetResult(
   } catch {
     fail("delivery");
   }
-  assertReportMatchesContract(report, taskPackage);
+  const attempt = envelope.attempt;
+  const stepIds = attempt.mode === "rerun" ? attempt.rerunSource.stepIds : null;
+  assertReportMatchesContract(report, taskPackage, stepIds);
   const basis = {
     kind: "WakeflowTargetResult" as const,
     schemaVersion: 1 as const,
@@ -158,7 +165,9 @@ export function createTestTargetResult(
       observedAt: input.delivery.observedAt,
     }),
     testExecution: Object.freeze({
-      testAttemptId: envelope.attempt.testAttemptId,
+      testAttemptId: attempt.testAttemptId,
+      ordinal: attempt.ordinal,
+      stepIds,
     }),
     report,
   } satisfies Readonly<TargetResultBasis>;

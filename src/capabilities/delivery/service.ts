@@ -67,6 +67,14 @@ import type {
   DemandDeliveryOutcomeSummary,
   DemandTargetTaskState,
 } from "../../governance/demand/model/demand-aggregate-state.js";
+import {
+  deriveTargetResultCallbackStatus,
+  parseTargetResultCallbackReissue,
+  TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
+  TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
+  TargetResultCallbackError,
+  type TargetResultCallbackReissue,
+} from "../../governance/result/target-result-callback.js";
 import type { TargetResult } from "../../governance/result/target-result.js";
 import {
   ControllerImplementationReviewDecisionError,
@@ -195,6 +203,28 @@ interface PermitOutcome extends CommandOutcome {
   readonly eventId: WakeflowDurableId<"demand-event">;
 }
 
+/** 回调重发的许可：不取声明、没有围栏；prompt 与摘要沿用结果事件里的回调记录。 */
+interface CallbackPermitOutcome extends CommandOutcome {
+  readonly kind: "callback";
+  readonly targetTaskId: WakeflowDurableId<"target-task">;
+  readonly workType: "implementation" | "test";
+  readonly phase: string;
+  readonly callbackId: WakeflowDurableId<"target-delivery">;
+  readonly resultDigest: Sha256Digest;
+  readonly prompt: string;
+  readonly promptDigest: Sha256Digest;
+  readonly route: Readonly<WindowRoute>;
+  readonly generation: number;
+  readonly issuedAt: UtcInstant;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+}
+
+type RearmOutcome = PermitOutcome | CallbackPermitOutcome;
+
+function isCallbackPermit(outcome: RearmOutcome): outcome is CallbackPermitOutcome {
+  return "kind" in outcome && outcome.kind === "callback";
+}
+
 interface OutcomeOutcome extends CommandOutcome {
   readonly outcome: Readonly<DeliveryOutcome>;
   readonly targetTaskId: WakeflowDurableId<"target-task">;
@@ -266,6 +296,7 @@ function mapRecordError(error: unknown, path: string): never {
     error instanceof DeliveryEnvelopeError ||
     error instanceof DeliveryOutcomeError ||
     error instanceof DeliveryRearmError ||
+    error instanceof TargetResultCallbackError ||
     error instanceof TestExecutionAttemptError ||
     error instanceof TargetDeliveryReworkContextError ||
     error instanceof TargetDeliveryProductDefectRemediationContextError
@@ -630,22 +661,50 @@ async function loadRemediationSource(
   });
 }
 
-function testAttemptFor(
+/** 重跑范围来自 `request-another-attempt{stepIds}` 决定记录（§13.87 D6）。 */
+async function loadRerunStepIds(
+  repository: DemandEventSourcingRepository,
+  targetReviewDecisionId: string,
+  signal: AbortSignal | undefined,
+): Promise<readonly string[] | null> {
+  const history = await loadHistory(repository, signal);
+  const decision = history.targetReviewDecisions.find(
+    (entry) => entry.decision.targetReviewDecisionId === targetReviewDecisionId,
+  )?.decision;
+  if (decision?.kind !== "WakeflowControllerTestReviewDecision") {
+    fail("precondition-failed", "rerun-decision", "$request.targetTaskId");
+  }
+  return decision.stepIds;
+}
+
+async function testAttemptFor(
+  repository: DemandEventSourcingRepository,
   target: Readonly<DemandTargetTaskState>,
   taskPackage: Readonly<TestTaskPackage>,
   testAttemptId: WakeflowDurableId<"test-attempt">,
-): Readonly<TestExecutionAttempt> {
+  signal: AbortSignal | undefined,
+): Promise<Readonly<TestExecutionAttempt>> {
   if (target.workType !== "test")
     fail("precondition-failed", "target-work-type", "$request.targetTaskId");
-  try {
-    if (target.phase === "planned")
+  if (target.phase === "planned") {
+    try {
       return createInitialTestExecutionAttempt({ testAttemptId, taskPackage });
-    if (target.phase !== "test-another-attempt-requested") {
-      fail("precondition-failed", "rerun-phase", "$request.targetTaskId");
+    } catch (error: unknown) {
+      mapRecordError(error, "$request.targetTaskId");
     }
-    const previousAttempt = target.testAttempts.at(-1);
-    if (previousAttempt === undefined)
-      fail("precondition-failed", "rerun-history", "$request.targetTaskId");
+  }
+  if (target.phase !== "test-another-attempt-requested") {
+    fail("precondition-failed", "rerun-phase", "$request.targetTaskId");
+  }
+  const previousAttempt = target.testAttempts.at(-1);
+  if (previousAttempt === undefined)
+    fail("precondition-failed", "rerun-history", "$request.targetTaskId");
+  const stepIds = await loadRerunStepIds(
+    repository,
+    target.currentDelivery.reviewDecision.targetReviewDecisionId,
+    signal,
+  );
+  try {
     return createRerunTestExecutionAttempt({
       testAttemptId,
       taskPackage,
@@ -658,6 +717,7 @@ function testAttemptFor(
         targetReviewDecisionId: target.currentDelivery.reviewDecision.targetReviewDecisionId,
         decisionDigest: target.currentDelivery.reviewDecision.decisionDigest,
       },
+      stepIds,
     });
   } catch (error: unknown) {
     mapRecordError(error, "$request.targetTaskId");
@@ -902,7 +962,7 @@ async function prepareSources(
       taskPackage.demandId,
       binding.idempotencyKey,
     );
-    const attempt = testAttemptFor(target, taskPackage, testAttemptId);
+    const attempt = await testAttemptFor(repository, target, taskPackage, testAttemptId, signal);
     return Object.freeze({
       prompt: {
         taskPackage,
@@ -1083,16 +1143,85 @@ function prepareResult(
   });
 }
 
+function callbackPermitBody(
+  envelope: Readonly<AppendCommandEnvelope>,
+  outcome: CallbackPermitOutcome,
+  nextProjection: Readonly<NextProjection>,
+) {
+  const { commandResult, route } = outcome;
+  const stored = commandResult.commit.events[0];
+  if (stored === undefined) fail("unexpected", "commit-empty", "$result");
+  return {
+    schemaVersion: WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION,
+    demandId: envelope.demandId,
+    delivery: {
+      deliveryId: outcome.callbackId,
+      // 回调没有信封：绑定的是结果本身，这里记结果摘要。
+      envelopeDigest: outcome.resultDigest,
+      promptDigest: outcome.promptDigest,
+      generation: outcome.generation,
+      workType: "callback",
+      targetTaskId: outcome.targetTaskId,
+      windowId: route.binding.windowId,
+      phase: outcome.phase,
+    },
+    permit: {
+      prompt: outcome.prompt,
+      hostAction: {
+        effect: "send-prompt-to-window",
+        hostId: route.binding.hostId,
+        windowId: route.binding.windowId,
+        displayTitle: route.displayTitle,
+        bindingId: route.binding.bindingId,
+        handleDigest: route.handleDigest,
+      },
+      fence: null,
+      issuedAt: outcome.issuedAt,
+    },
+    event: { eventId: outcome.eventId, streamRevision: stored.streamRevision },
+    commit: {
+      commitId: commandResult.commit.commitId,
+      commitSequence: commandResult.commit.commitSequence,
+      commitDigest: computeDemandEventStreamCommitDigest(commandResult.commit),
+    },
+    stateDigest: commandResult.aggregate.stateDigest,
+    next: {
+      frontier: nextProjection.frontier,
+      owner: nextProjection.owner,
+      suggestedTool: nextProjection.suggestedTool,
+      blockers: [...nextProjection.blockers],
+    },
+  };
+}
+
 function rearmResult(
   envelope: Readonly<AppendCommandEnvelope>,
-  outcome: PermitOutcome,
+  outcome: RearmOutcome,
   nextProjection: Readonly<NextProjection>,
 ): RearmDeliveryResult {
+  const status = outcome.commandResult.disposition === "committed" ? "rearmed" : "idempotent";
+  if (isCallbackPermit(outcome)) {
+    return admitRearmDeliveryResult({
+      kind: "WakeflowRearmDeliveryResult",
+      tool: WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
+      status,
+      rearm: {
+        kind: "callback",
+        previousGeneration: outcome.generation - 1,
+        generation: outcome.generation,
+      },
+      ...callbackPermitBody(envelope, outcome, nextProjection),
+    });
+  }
   return admitRearmDeliveryResult({
     kind: "WakeflowRearmDeliveryResult",
     tool: WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
-    status: outcome.commandResult.disposition === "committed" ? "rearmed" : "idempotent",
-    rearm: { previousGeneration: outcome.generation - 1, generation: outcome.generation },
+    status,
+    rearm: {
+      kind: "target",
+      previousGeneration: outcome.generation - 1,
+      generation: outcome.generation,
+    },
     ...permitBody(envelope, outcome, nextProjection),
   });
 }
@@ -1458,11 +1587,148 @@ interface RearmInput {
   readonly deliveryId: string;
 }
 
+type ResultBearingTarget = Extract<
+  DemandTargetTaskState,
+  { readonly phase: "result-reported" | "test-result-reported" }
+>;
+
+/** 回调 id 命中某个已回报结果的当前回调即走回调分支；否则按投递 id 查找。 */
+function callbackTargetOf(
+  context: SliceContext,
+  callbackId: string,
+): Readonly<ResultBearingTarget> | null {
+  const target = context.authority.loaded.aggregate.state.targetTasks.find(
+    (entry): entry is ResultBearingTarget =>
+      (entry.phase === "result-reported" || entry.phase === "test-result-reported") &&
+      entry.currentDelivery.targetResult.callback.callbackId === callbackId,
+  );
+  return target ?? null;
+}
+
+async function replayCallbackReissue(
+  context: SliceContext,
+  commandResult: Readonly<Pick<DemandEventSourcingCommandResult, "commit" | "aggregate">>,
+): Promise<CallbackPermitOutcome> {
+  const stored = commandResult.commit.events[0];
+  if (stored === undefined) fail("precondition-failed", "commit-empty", "$request.idempotencyKey");
+  const event = upcastDemandEventSourcingStoredEvent(stored);
+  if (event.eventType !== "result.callback-reissued") {
+    fail("precondition-failed", "commit-kind", "$request.idempotencyKey");
+  }
+  const reissue = event.data.reissue;
+  const target = callbackTargetOf(context, reissue.callbackId);
+  if (target === null) fail("precondition-failed", "callback-phase", "$request.deliveryId");
+  const located = await loadResultEvent(context, target.currentDelivery.fence.claimId);
+  const route = await loadRoute(context, reissue.controllerWindowId);
+  return Object.freeze({
+    kind: "callback" as const,
+    commandResult: Object.freeze({ disposition: "idempotent" as const, ...commandResult }),
+    targetTaskId: target.targetTaskId,
+    workType: target.workType === "test" ? ("test" as const) : ("implementation" as const),
+    phase: target.phase,
+    callbackId: reissue.callbackId,
+    resultDigest: target.currentDelivery.targetResult.resultDigest,
+    prompt: located.callback.portablePrompt,
+    promptDigest: reissue.promptDigest,
+    route,
+    generation: reissue.generation,
+    issuedAt: reissue.issuedAt,
+    eventId: stored.eventId,
+  });
+}
+
+async function loadResultEvent(context: SliceContext, claimId: WakeflowDurableId<"work-claim">) {
+  const repository = new DemandEventSourcingRepository(context.authority.demandRoot);
+  try {
+    const located = await repository.findTargetResultRecordedEvent(
+      claimId,
+      signalOptions(context.options.signal),
+    );
+    if (located === null) fail("precondition-failed", "result-missing", "$request.deliveryId");
+    return located.event.data;
+  } catch (error: unknown) {
+    mapRepositoryError(error);
+  }
+}
+
+/**
+ * 回调重发（§13.87 D1）：只在 silent（签发后超过静默阈值仍无落地记录）时允许；不取声明，
+ * 按当前 Controller 绑定重算目标（绑定已换即旧代际作废），代际加一，上限三次。
+ */
+async function executeCallbackReissue(
+  context: SliceContext,
+  target: Readonly<ResultBearingTarget>,
+  binding: Readonly<AppendCommandBinding>,
+): Promise<CallbackPermitOutcome> {
+  const { authority, options } = context;
+  const callback = target.currentDelivery.targetResult.callback;
+  if (callback.generation >= TARGET_RESULT_CALLBACK_GENERATION_LIMIT) {
+    rejectWith([`callback-limit:${callback.generation}`], "$request.deliveryId");
+  }
+  const route = await loadRoute(context, callback.controllerWindowId);
+  const now = nowFrom(options);
+  const records = await sessionRecords(context, route.binding.handle.value, callback.issuedAt);
+  const status = deriveTargetResultCallbackStatus({
+    issuedAt: callback.issuedAt,
+    promptDigest: callback.promptDigest,
+    landingRecords: records,
+    acknowledged: false,
+    now,
+    silenceMilliseconds: TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
+  });
+  if (status.status !== "silent") rejectWith([`callback-${status.status}`], "$request.deliveryId");
+  const located = await loadResultEvent(context, target.currentDelivery.fence.claimId);
+  let reissue: Readonly<TargetResultCallbackReissue>;
+  try {
+    reissue = parseTargetResultCallbackReissue({
+      targetResultId: target.currentDelivery.targetResult.targetResultId,
+      callbackId: callback.callbackId,
+      previousGeneration: callback.generation,
+      generation: callback.generation + 1,
+      controllerWindowId: callback.controllerWindowId,
+      bindingId: route.binding.bindingId,
+      bindingDigest: route.bindingDigest,
+      promptDigest: callback.promptDigest,
+      issuedAt: now,
+    });
+  } catch (error: unknown) {
+    mapRecordError(error, "$request.deliveryId");
+  }
+  const demandId = authority.loaded.identity.demandId;
+  const command = parseDemandEventSourcingCommand({
+    commandType: "result.reissue-callback",
+    commandVersion: 1,
+    eventId: deriveDurableId("demand-event", "reissue-callback", demandId, binding.idempotencyKey),
+    reissue,
+  });
+  const repository = new DemandEventSourcingRepository(authority.demandRoot);
+  const commandResult = await appendCommand(repository, command, binding, options.signal);
+  if (commandResult.disposition === "idempotent")
+    return replayCallbackReissue(context, commandResult);
+  const stored = commandResult.commit.events[0];
+  if (stored === undefined) fail("unexpected", "commit-empty", "$result");
+  return Object.freeze({
+    kind: "callback" as const,
+    commandResult,
+    targetTaskId: target.targetTaskId,
+    workType: target.workType === "test" ? ("test" as const) : ("implementation" as const),
+    phase: target.phase,
+    callbackId: callback.callbackId,
+    resultDigest: target.currentDelivery.targetResult.resultDigest,
+    prompt: located.callback.portablePrompt,
+    promptDigest: callback.promptDigest,
+    route,
+    generation: reissue.generation,
+    issuedAt: now,
+    eventId: stored.eventId,
+  });
+}
+
 async function executeRearm(
   context: SliceContext,
   input: RearmInput,
   binding: Readonly<AppendCommandBinding>,
-): Promise<PermitOutcome> {
+): Promise<RearmOutcome> {
   const { authority, options } = context;
   const repository = new DemandEventSourcingRepository(authority.demandRoot);
   const bound = await boundCommit(repository, binding, options.signal);
@@ -1470,13 +1736,14 @@ async function executeRearm(
     if (bound.idempotency?.requestDigest !== binding.requestDigest) {
       fail("idempotency-mismatch", "request-digest", "$request.idempotencyKey");
     }
-    return replayPermit(
-      context,
-      { commit: bound, aggregate: authority.loaded.aggregate },
-      "delivery.delivery-rearmed",
-    );
+    const replayed = { commit: bound, aggregate: authority.loaded.aggregate };
+    return bound.events[0].eventType === "result.callback-reissued"
+      ? replayCallbackReissue(context, replayed)
+      : replayPermit(context, replayed, "delivery.delivery-rearmed");
   }
   assertFreshRevision(context, binding);
+  const callbackTarget = callbackTargetOf(context, input.deliveryId);
+  if (callbackTarget !== null) return executeCallbackReissue(context, callbackTarget, binding);
   const target = deliveryTargetOf(context, input.deliveryId);
   const blockers = deriveRearmBlockers({
     phase: target.phase,
@@ -1554,7 +1821,7 @@ export async function executeRearmDeliveryRequest(
   value: unknown,
   options: ExecuteDeliveryOptions = {},
 ): Promise<RearmDeliveryResult> {
-  return runAppendCommand<RearmInput, SliceContext, PermitOutcome, RearmDeliveryResult>(
+  return runAppendCommand<RearmInput, SliceContext, RearmOutcome, RearmDeliveryResult>(
     {
       tool: WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {

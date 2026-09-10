@@ -4,7 +4,7 @@
  */
 
 /**
- * Controller基于精确Result Review Snapshot作出的单implementation Target审查决定。
+ * Controller基于精确Result Review Snapshot作出的单implementation Target审查决定：accept、rework、blocked 或 escalate（ADR-0012 D5）。
  */
 export type WakeflowControllerImplementationReviewDecision = ({
 [k: string]: unknown | undefined
@@ -17,7 +17,7 @@ demandId: string
 targetTaskId: string
 controllerWindowId: string
 reviewed: Reviewed
-decision: ("accept" | "blocked" | "redesign" | "rework")
+decision: ("accept" | "rework" | "blocked" | "escalate")
 assessment: Assessment
 /**
  * @minItems 1
@@ -29,6 +29,17 @@ blockingReasons: TextList
 residualRisks: TextList
 decidedAt: WakeflowUtcInstantText
 decisionDigest: WakeflowSha256DigestText
+escalation: (null | Escalation)
+resumption: (null | Resumption)
+callbackLanding: (null | {
+recordId: string
+landedAt: WakeflowUtcInstantText
+})
+targetCompletion: (null | {
+recordId: string
+event: ("stop" | "turn-complete")
+observedAt: WakeflowUtcInstantText
+})
 })
 /**
  * Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。
@@ -43,7 +54,7 @@ export type WakeflowUtcInstantText = string
  */
 export type TextList = string[]
 /**
- * Controller基于精确Test Result Review Snapshot作出的单Test Target审查决定。
+ * Controller基于精确Result Review Snapshot作出的单test Target审查决定：accept、request-another-attempt（附 stepIds）、blocked 或 escalate（附分类；product-defect 走授权返工，needs-decision 走用户决策）。
  */
 export type WakeflowControllerTestReviewDecision = ({
 [k: string]: unknown | undefined
@@ -57,7 +68,7 @@ targetTaskId: string
 controllerWindowId: string
 reviewed: Reviewed1
 testExecution: TestExecution
-decision: ("accept" | "request-another-attempt" | "escalate-product-defect" | "blocked")
+decision: ("accept" | "request-another-attempt" | "blocked" | "escalate")
 assessment: Assessment1
 /**
  * @minItems 1
@@ -69,11 +80,30 @@ blockingReasons: TextList1
 residualRisks: TextList1
 decidedAt: WakeflowUtcInstantText
 decisionDigest: WakeflowSha256DigestText
+stepIds: (null | [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string])
+escalation: (null | TestEscalation)
+resumption: (null | Resumption1)
+callbackLanding: (null | {
+recordId: string
+landedAt: WakeflowUtcInstantText
+})
+targetCompletion: (null | {
+recordId: string
+event: ("stop" | "turn-complete")
+observedAt: WakeflowUtcInstantText
+})
 })
 /**
  * @maxItems 32
  */
 export type TextList1 = string[]
+export type TestEscalation = ({
+[k: string]: unknown | undefined
+} & {
+classification: ("product-defect" | "needs-decision")
+remediation?: Remediation
+userDecision?: Escalation1
+})
 
 /**
  * review.target-result-decided事件版本1的持久化数据。
@@ -103,6 +133,1015 @@ method: string
 outcome: ("passed" | "failed" | "inconclusive")
 observation: string
 }
+export interface Escalation {
+issue: string
+/**
+ * @maxItems 16
+ */
+requirementRefs: []|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]
+/**
+ * @maxItems 16
+ */
+evidence: []|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]
+/**
+ * @minItems 1
+ * @maxItems 4
+ */
+options: [{
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]
+recommendation: string
+}
+export interface Resumption {
+previousDecisionId: string
+basis: ({
+kind: "condition-cleared"
+} | {
+kind: "decision-recorded"
+escalationEventId: string
+})
+summary: string
+}
 export interface Reviewed1 {
 snapshotDigest: WakeflowSha256DigestText
 reviewUnitDigest: WakeflowSha256DigestText
@@ -127,6 +1166,1039 @@ checkId: string
 method: string
 outcome: ("passed" | "failed" | "inconclusive")
 observation: string
+}
+export interface Remediation {
+/**
+ * @minItems 1
+ * @maxItems 32
+ */
+affectedTargets: [{
+targetTaskId: string
+/**
+ * @minItems 1
+ * @maxItems 20
+ */
+failedStepIds: [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+correctionObjective: string
+}, ...({
+targetTaskId: string
+/**
+ * @minItems 1
+ * @maxItems 20
+ */
+failedStepIds: [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+correctionObjective: string
+})[]]
+authorizationRationale: string
+}
+export interface Escalation1 {
+issue: string
+/**
+ * @maxItems 16
+ */
+requirementRefs: []|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]|[{
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}, {
+recordDigest: WakeflowSha256DigestText
+sectionAnchor: string
+}]
+/**
+ * @maxItems 16
+ */
+evidence: []|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]|[{
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}, {
+kind: ("target-result" | "review-decision" | "managed-evidence" | "host-effect")
+id: string
+digest: WakeflowSha256DigestText
+}]
+/**
+ * @minItems 1
+ * @maxItems 4
+ */
+options: [{
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]|[{
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}, {
+option: string
+impact: string
+}]
+recommendation: string
+}
+export interface Resumption1 {
+previousDecisionId: string
+basis: ({
+kind: "condition-cleared"
+} | {
+kind: "decision-recorded"
+escalationEventId: string
+})
+summary: string
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

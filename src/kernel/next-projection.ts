@@ -61,13 +61,12 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
   },
   "implementation-result-review": {
     owner: "controller",
-    tool: "wakeflow_record_controller_implementation_review_decision",
+    tool: "wakeflow_record_implementation_review_decision",
   },
-  "implementation-review-resume": {
+  "implementation-review-blocked": {
     owner: "controller",
-    tool: "wakeflow_resume_target_result_review",
+    tool: "wakeflow_record_implementation_review_decision",
   },
-  "implementation-redesign-required": { owner: "user", tool: null },
   "test-delivery-planning": {
     owner: "controller",
     tool: "wakeflow_prepare_delivery",
@@ -86,19 +85,15 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
   },
   "test-result-review": {
     owner: "controller",
-    tool: "wakeflow_record_controller_test_review_decision",
+    tool: "wakeflow_record_test_review_decision",
   },
   "test-delivery-rerun-planning": {
     owner: "controller",
     tool: "wakeflow_prepare_delivery",
   },
-  "product-defect-remediation-authorization": {
+  "test-review-blocked": {
     owner: "controller",
-    tool: "wakeflow_authorize_product_defect_remediation",
-  },
-  "test-review-resume": {
-    owner: "controller",
-    tool: "wakeflow_resume_target_result_review",
+    tool: "wakeflow_record_test_review_decision",
   },
   "demand-completion-preflight": {
     owner: "controller",

@@ -23,10 +23,10 @@ test("Demand Event Sourcing state-model version 独立于 event version", () => 
       "lifecycle.demand-continued",
       "lifecycle.demand-escalated",
       "publication.demand-published",
+      "result.callback-reissued",
       "result.target-result-recorded",
       "review.product-defect-remediation-authorized",
       "review.target-result-decided",
-      "review.target-result-resumed",
       "tasking.target-task-planned",
     ].join(","),
   );

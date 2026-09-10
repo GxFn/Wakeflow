@@ -64,9 +64,6 @@ import {
   assertSupportedDemandEventSourcingStateModelVersion,
   DemandEventSourcingStateVersionError,
 } from "./demand-event-sourcing-state-version.js";
-import { targetResultRecordedCommitIdFromResult } from "../../result/target-result.js";
-import { controllerReviewDecisionCommitId } from "../../review/controller-review-decision.js";
-import { controllerTargetReviewResumeCommitId } from "../../review/controller-target-review-resume.js";
 import {
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
@@ -464,7 +461,6 @@ function parsePrepareInput(value: unknown): Readonly<{
 /** 复验事件自身声明的提交边界，避免恢复身份与实际 Commit 脱节。 */
 function assertEventCommitBoundary(
   event: Readonly<DemandUncommittedEvent>,
-  commitId: WakeflowDurableId<"demand-event-commit">,
   expectedStreamRevision: number,
   path: string,
 ): void {
@@ -488,23 +484,10 @@ function assertEventCommitBoundary(
   ) {
     fail("relation", path);
   }
-  if (
-    event.eventType === "result.target-result-recorded" &&
-    targetResultRecordedCommitIdFromResult(event.data.result) !== commitId
-  ) {
-    fail("relation", path);
-  }
+  // 结果与决定的提交由追加命令的幂等键派生（ADR-0013 决定 C）；决定仍绑定它审查时的流位置。
   if (
     event.eventType === "review.target-result-decided" &&
-    (controllerReviewDecisionCommitId(event.data.decision) !== commitId ||
-      event.data.decision.reviewed.streamRevision !== expectedStreamRevision)
-  ) {
-    fail("relation", path);
-  }
-  if (
-    event.eventType === "review.target-result-resumed" &&
-    (controllerTargetReviewResumeCommitId(event.data.resume) !== commitId ||
-      event.data.resume.blockedSource.streamRevision !== expectedStreamRevision)
+    event.data.decision.reviewed.streamRevision !== expectedStreamRevision
   ) {
     fail("relation", path);
   }
@@ -571,7 +554,6 @@ export function applyDemandEventStreamCommit(
     }
     assertEventCommitBoundary(
       currentEvent,
-      commit.commitId,
       commit.expectedStreamRevision,
       `$/events/${index}`,
     );
@@ -668,7 +650,6 @@ function buildDemandEventStreamCommit(
   for (const [index, event] of input.events.entries()) {
     assertEventCommitBoundary(
       event,
-      input.commitId,
       expectedStreamRevision,
       `$/events/${index}`,
     );

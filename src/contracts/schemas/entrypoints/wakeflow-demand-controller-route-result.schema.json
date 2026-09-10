@@ -468,8 +468,7 @@
             "implementation-target-result-import",
             "implementation-host-effect-rearm",
             "implementation-result-review",
-            "implementation-review-resume",
-            "implementation-redesign-required"
+            "implementation-review-blocked"
           ]
         },
         "owner": {
@@ -478,9 +477,7 @@
             "agent-host",
             "target-result-import",
             "target-host-effect-rearm",
-            "controller-implementation-review",
-            "controller-target-review-resume",
-            "design"
+            "controller-implementation-review"
           ]
         },
         "target": {
@@ -606,7 +603,7 @@
                 "type": "object",
                 "properties": {
                   "phase": {
-                    "const": "result-reported"
+                    "enum": ["result-reported", "escalated"]
                   }
                 }
               }
@@ -617,7 +614,7 @@
           "if": {
             "properties": {
               "kind": {
-                "const": "implementation-review-resume"
+                "const": "implementation-review-blocked"
               }
             },
             "required": ["kind"]
@@ -625,38 +622,13 @@
           "then": {
             "properties": {
               "owner": {
-                "const": "controller-target-review-resume"
+                "const": "controller-implementation-review"
               },
               "target": {
                 "type": "object",
                 "properties": {
                   "phase": {
                     "const": "review-blocked"
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "implementation-redesign-required"
-              }
-            },
-            "required": ["kind"]
-          },
-          "then": {
-            "properties": {
-              "owner": {
-                "const": "design"
-              },
-              "target": {
-                "type": "object",
-                "properties": {
-                  "phase": {
-                    "const": "redesign-requested"
                   }
                 }
               }
@@ -680,8 +652,7 @@
             "test-target-result-import",
             "test-result-review",
             "test-delivery-rerun-planning",
-            "product-defect-remediation-authorization",
-            "test-review-resume",
+            "test-review-blocked",
             "test-host-effect-rearm"
           ]
         },
@@ -691,8 +662,6 @@
             "agent-host",
             "target-result-import",
             "controller-test-review",
-            "controller-product-defect-remediation",
-            "controller-target-review-resume",
             "target-host-effect-rearm"
           ]
         },
@@ -794,7 +763,7 @@
                 "type": "object",
                 "properties": {
                   "phase": {
-                    "const": "test-result-reported"
+                    "enum": ["test-result-reported", "test-escalated"]
                   }
                 }
               }
@@ -830,56 +799,6 @@
           "if": {
             "properties": {
               "kind": {
-                "const": "product-defect-remediation-authorization"
-              }
-            },
-            "required": ["kind"]
-          },
-          "then": {
-            "properties": {
-              "owner": {
-                "const": "controller-product-defect-remediation"
-              },
-              "target": {
-                "type": "object",
-                "properties": {
-                  "phase": {
-                    "const": "test-product-defect"
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "test-review-resume"
-              }
-            },
-            "required": ["kind"]
-          },
-          "then": {
-            "properties": {
-              "owner": {
-                "const": "controller-target-review-resume"
-              },
-              "target": {
-                "type": "object",
-                "properties": {
-                  "phase": {
-                    "const": "test-review-blocked"
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
                 "const": "test-host-effect-rearm"
               }
             },
@@ -895,6 +814,31 @@
                 "properties": {
                   "phase": {
                     "const": "test-host-effect-rejected"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "test-review-blocked"
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "owner": {
+                "const": "controller-test-review"
+              },
+              "target": {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "const": "test-review-blocked"
                   }
                 }
               }
@@ -944,7 +888,7 @@
             "result-reported",
             "product-defect-rework-requested",
             "rework-requested",
-            "redesign-requested",
+            "escalated",
             "review-blocked",
             "superseded"
           ]
@@ -988,35 +932,14 @@
             "test-result-reported",
             "test-another-attempt-requested",
             "test-product-defect",
-            "test-review-blocked"
+            "test-review-blocked",
+            "test-escalated"
           ]
         }
       }
     },
     "blocker": {
       "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kind", "owner", "targetTaskId", "targetReviewDecisionId", "decisionDigest"],
-          "properties": {
-            "kind": {
-              "const": "implementation-redesign-not-implemented"
-            },
-            "owner": {
-              "const": "design"
-            },
-            "targetTaskId": {
-              "$ref": "#/$defs/targetTaskId"
-            },
-            "targetReviewDecisionId": {
-              "$ref": "#/$defs/targetReviewDecisionId"
-            },
-            "decisionDigest": {
-              "$ref": "#/$defs/sha256Digest"
-            }
-          }
-        },
         {
           "type": "object",
           "additionalProperties": false,

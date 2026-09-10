@@ -7,7 +7,12 @@ import {
   executeRecordDeliveryOutcomeRequest,
 } from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
-import { executeTargetResultImportPublicRequest } from "../governance/result/target-result-import-public-coordinator.js";
+import {
+  executeImplementationReviewDecisionRequest,
+  executeTargetResultImportRequest,
+  executeTargetResultReviewInspectionRequest,
+  executeTestReviewDecisionRequest,
+} from "../capabilities/result-review/service.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { executeClaudeCodeWakeflowMaintenance } from "./claude-code-wakeflow-maintenance.js";
@@ -24,8 +29,6 @@ import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-e
  */
 
 const CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-claude-code" as const;
-
-const CLAUDE_CODE_HOST_IDENTITY = Object.freeze({ hostId: "claude-code" as const });
 
 const CLAUDE_CODE_HOST_FACADE = Object.freeze({
   hostId: "claude-code" as const,
@@ -48,7 +51,13 @@ export function createClaudeCodeWakeflowMcpServer(serverVersion: string): McpSer
       executeRecordDeliveryOutcomeRequest(CLAUDE_CODE_HOST_FACADE, value),
     rearmDelivery: (value: unknown) => executeRearmDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
     importTargetResult: (value: unknown) =>
-      executeTargetResultImportPublicRequest(CLAUDE_CODE_HOST_IDENTITY, value),
+      executeTargetResultImportRequest(CLAUDE_CODE_HOST_FACADE, value),
+    inspectTargetResultReview: (value: unknown) =>
+      executeTargetResultReviewInspectionRequest(CLAUDE_CODE_HOST_FACADE, value),
+    recordImplementationReviewDecision: (value: unknown) =>
+      executeImplementationReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value),
+    recordTestReviewDecision: (value: unknown) =>
+      executeTestReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value),
   });
 }
 

@@ -18,10 +18,10 @@
 | 6 | `wakeflow_add_task` | 5 | `wakeflow_plan_target_task` | 重切 | 已实现（tasking 切片）：追加型一次调用；锚点 `requirementRef` 指向需求包验收标准；谱系 `replacement`（旧目标 `superseded`）与 `continuation`；`taskPlanReview: user` 须回显 `planReview`；可选 `sectionAnchors`；字段集按能力卡 5 Q1 保持 |
 | 7 | `wakeflow_prepare_delivery` | 6 | `prepare_delivery` 一次调用（含许可；实现与测试共用） | 已落地 | 2026-09-10 L1 delivery 切片 6a：`wakeflow_prepare_delivery` 合并旧三工具，prompt 为 Wakeflow 骨架加 Controller 三段（ADR-0012 D2；gate-log §13.84） |
 | 8 | `wakeflow_record_delivery` | 6 | `record_delivery_outcome`（hook 记录惰性核对）、`rearm_delivery` | 已落地 | 2026-09-10：处置由 `user-prompt-submit` 记录或 Codex 发送返回派生；indeterminate 再调用重查；rearm 上限 3（gate-log §13.84） |
-| 9 | `wakeflow_record_target_result` | 7 | `wakeflow_import_target_result` | 重切 | 已实现；导入时核证据定位符与隐私扫描、增加 `branch` 与 `commit` 在 L1 补 |
-| 10 | `wakeflow_review_pack` | 7 | `wakeflow_inspect_target_result_review` | 重切 | 已实现；回调内容改由 `import_target_result` 返回，不再经 review_pack（ADR-0012 D1） |
-| 11 | `wakeflow_reduce_results` | 7 | 并入评审 inspection 与评审 preview 的结果谱系 | 重切 | 结果归约不再是独立工具；strict result-trace 并入评审 preview（能力卡 9 Q5） |
-| 12 | `wakeflow_decide_review` | 7 | 实现决定 `accept \| rework \| blocked \| escalate`、测试决定 `accept \| request-another-attempt \| escalate` | 重切 | `redesign` 删除；`resume_target_result_review` 与 `authorize_product_defect_remediation` 并入 escalate 路由（ADR-0012 D4 D5） |
+| 9 | `wakeflow_record_target_result` | 7 | `wakeflow_import_target_result` | 已落地 | 2026-09-10 L1 result-review 切片 7：定位符只解析同 Demand 受管证据记录并核摘要，报告文本隐私扫描，`branch` 与 `commit` 进结果记录，导入即签发 `wake-controller` 回调许可（gate-log §13.88） |
+| 10 | `wakeflow_review_pack` | 7 | `wakeflow_inspect_target_result_review` | 已落地 | 2026-09-10：只读投影附回调状态、完成证据、`allowedDecisions`、逐步表与 approved 基线；回调内容由 `import_target_result` 返回（ADR-0012 D1；gate-log §13.88） |
+| 11 | `wakeflow_reduce_results` | 7 | 并入评审 inspection 与评审 preview 的结果谱系 | 已落地 | 2026-09-10：`allowedDecisions` 由检查投影按分类路由派生，不再有独立归约写入；strict result-trace 并入评审 preview（能力卡 9 Q5） |
+| 12 | `wakeflow_decide_review` | 7 | `wakeflow_record_implementation_review_decision`（`accept \| rework \| blocked \| escalate`）、`wakeflow_record_test_review_decision`（`accept \| request-another-attempt \| blocked \| escalate`） | 已落地 | 2026-09-10：`redesign` 删除；blocked 与 escalated 之后以带 `resumption` 的新决定回到同一结果；`resume_target_result_review` 与 `authorize_product_defect_remediation` 并入 escalate 路由（ADR-0012 D4 D5；gate-log §13.88） |
 | 13 | `wakeflow_complete_demand` | 4 | `wakeflow_complete_demand`（完成即归档） | 重切 | 已实现（demand 切片）：preview 内嵌八道 verify 门与归档前置，apply 一个事务含归档、需求包 archived、活动根删除（ADR-0012 D3） |
 | 14 | `wakeflow_continue_demand` | 4 | `wakeflow_continue_demand`（continue 与 record-decision） | 重切 | 已实现（demand 切片）：从归档重开、需求包回到 claimed、路由先要求新任务包；与 `plan_target_task` 分开（能力卡 4 Q3） |
 | 15 | `wakeflow_record_evidence` | 8 | `wakeflow_record_evidence` | 重切 | 已实现；来源根增加 `pod-worktree` 与 `observation`，kind 闭集，隐私扫描收窄在 L1 补 |
@@ -60,10 +60,10 @@
 | `wakeflow_prepare_delivery` | 追加（含许可） | prepare_delivery 三段、prepare_implementation_delivery 与 prepare_test_delivery 与 claim_target_host_effect（TS） | delivery（已落地 2026-09-10） |
 | `wakeflow_record_delivery_outcome` | 追加（hook 记录惰性核对） | record_delivery target-outcome、record_target_host_effect_outcome（TS） | delivery（已落地 2026-09-10） |
 | `wakeflow_rearm_delivery` | 追加 | record_delivery target-rearm、rearm_target_host_effect（TS） | delivery（已落地 2026-09-10） |
-| `wakeflow_import_target_result` | 追加（返回回调与许可） | record_target_result、review_pack 与 controller 回传四步 | result-review |
-| `wakeflow_inspect_target_result_review` | 读 | review_pack、reduce_results | result-review |
-| `wakeflow_record_implementation_review_decision` | 追加 | decide_review、resume_target_result_review（TS） | result-review |
-| `wakeflow_record_test_review_decision` | 追加 | decide_review、authorize_product_defect_remediation（TS） | result-review |
+| `wakeflow_import_target_result` | 追加（返回回调与许可） | record_target_result、review_pack 与 controller 回传四步 | result-review（已落地 2026-09-10） |
+| `wakeflow_inspect_target_result_review` | 读 | review_pack、reduce_results | result-review（已落地 2026-09-10） |
+| `wakeflow_record_implementation_review_decision` | 追加 | decide_review、resume_target_result_review（TS） | result-review（已落地 2026-09-10） |
+| `wakeflow_record_test_review_decision` | 追加 | decide_review、authorize_product_defect_remediation（TS） | result-review（已落地 2026-09-10） |
 | `wakeflow_record_evidence` | 效果 | record_evidence | evidence |
 | `wakeflow_pod` | 效果 | pod_open、pod_record、pod_bind、pod_plan、prune_runtime | pod |
 | `wakeflow_status` | 读（带 demandId 附路由） | status、view config、inspect_demand_route（TS） | observation |

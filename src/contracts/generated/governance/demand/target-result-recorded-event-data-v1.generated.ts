@@ -45,13 +45,14 @@ disposition: ("committed" | "left-uncommitted" | "no-changes")
  * @maxItems 64
  */
 commits: WakeflowGitObjectId[]
+branch: (null | string)
 })
 /**
  * Git完整对象身份及其显式对象格式；支持SHA-1和SHA-256仓库。
  */
 export type WakeflowGitObjectId = (Sha1 | Sha256)
 /**
- * Test Agent对一次logical Test attempt提交的严格逐步执行结果陈述。
+ * Test Agent 按测试合同逐步记录的执行结果陈述：每步 observed、证据、verdict 与失败分类；整体 verdict 由 Wakeflow 从步骤派生。
  */
 export type WakeflowTestTargetResultReport = ({
 [k: string]: unknown | undefined
@@ -72,12 +73,136 @@ verification: string[]
  * @maxItems 64
  */
 risks: string[]
-/**
- * @maxItems 32
- */
-stepEvidence: StepEvidence[]
 reportedAt: WakeflowUtcInstantText
 reportDigest: WakeflowSha256DigestText
+/**
+ * @maxItems 20
+ */
+steps: []|[Step]|[Step, Step]|[Step, Step, Step]|[Step, Step, Step, Step]|[Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+})
+export type Step = ({
+[k: string]: unknown | undefined
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
+} & {
+stepId: string
+observed: string
+evidence: EvidenceRef1
+verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
+failure?: Failure
 })
 
 /**
@@ -85,6 +210,25 @@ reportDigest: WakeflowSha256DigestText
  */
 export interface WakeflowTargetResultRecordedEventDataV1 {
 result: WakeflowTargetResult
+callback: {
+callbackId: string
+controllerWindowId: string
+bindingId: string
+bindingDigest: WakeflowSha256DigestText
+portablePrompt: string
+promptDigest: WakeflowSha256DigestText
+generation: 1
+issuedAt: WakeflowUtcInstantText
+}
+/**
+ * @maxItems 64
+ */
+evidenceResolution: {
+ref: WakeflowPortableResourcePathText
+digest: WakeflowSha256DigestText
+evidenceId: string
+bytes: number
+}[]
 }
 export interface TaskPackage {
 taskPackageId: string
@@ -146,7 +290,7 @@ algorithm: "sha256"
 value: string
 }
 export interface EvidenceLocator {
-kind: string
+kind: ("test-output" | "diff" | "document" | "transcript" | "commit")
 ref: WakeflowPortableResourcePathText
 digest: WakeflowSha256DigestText
 }
@@ -163,20 +307,23 @@ ref: WakeflowPortableResourcePathText
 digest: WakeflowSha256DigestText
 }
 export interface EvidenceLocator1 {
-kind: string
+kind: ("test-output" | "diff" | "document" | "transcript" | "commit")
 ref: WakeflowPortableResourcePathText
 digest: WakeflowSha256DigestText
-}
-export interface StepEvidence {
-stepId: string
-evidence: EvidenceRef1
 }
 export interface EvidenceRef1 {
 ref: WakeflowPortableResourcePathText
 digest: WakeflowSha256DigestText
 }
+export interface Failure {
+classification: ("product-defect" | "harness-defect" | "environment" | "flaky" | "missing-evidence" | "out-of-scope" | "needs-decision")
+likelyOwner: ("implementation" | "test" | "environment" | "user")
+recommendedAction: string
+}
 export interface TestExecution {
 testAttemptId: string
+ordinal: number
+stepIds: (null | [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string])
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -200,4 +347,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:demand:event-sourcing:target-result-recorded-data:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA\",\"title\":\"WakeflowTargetResultRecordedEventDataV1\",\"description\":\"result.target-result-recorded persisted event v1 的严格 payload。\",\"$comment\":\"完整TargetResult是目标窗口陈述与Wakeflow authority闭合后的review输入；事件不表示Controller已经接受结果。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"result\"],\"properties\":{\"result\":{\"$ref\":\"urn:wakeflow:governance:result:target-result:v1\"}}}");
+export const WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:demand:event-sourcing:target-result-recorded-data:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA\",\"title\":\"WakeflowTargetResultRecordedEventDataV1\",\"description\":\"result.target-result-recorded persisted event v1 的严格 payload。\",\"$comment\":\"完整TargetResult是目标窗口陈述与Wakeflow authority闭合后的review输入；事件不表示Controller已经接受结果。callback 是 Wakeflow 渲染的 wake-controller 回调记录（落地由 Controller 会话的 user-prompt-submit 记录证明）；evidenceResolution 是导入时对证据定位符的解析收据。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"result\",\"callback\",\"evidenceResolution\"],\"properties\":{\"result\":{\"$ref\":\"urn:wakeflow:governance:result:target-result:v1\"},\"callback\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"callbackId\",\"controllerWindowId\",\"bindingId\",\"bindingDigest\",\"portablePrompt\",\"promptDigest\",\"generation\",\"issuedAt\"],\"properties\":{\"callbackId\":{\"type\":\"string\",\"pattern\":\"^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"controllerWindowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"bindingId\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$\"},\"bindingDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"portablePrompt\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":65536},\"promptDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"generation\":{\"const\":1},\"issuedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"}}},\"evidenceResolution\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"ref\",\"digest\",\"evidenceId\",\"bytes\"],\"properties\":{\"ref\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"digest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"evidenceId\":{\"type\":\"string\",\"pattern\":\"^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"bytes\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991}}}}}}");

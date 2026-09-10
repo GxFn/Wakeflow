@@ -115,7 +115,7 @@ const FRONTIER_MATRIX = [
     },
   },
   {
-    source: { kind: "implementation", phases: ["result-reported"] },
+    source: { kind: "implementation", phases: ["result-reported", "escalated"] },
     expected: {
       scope: "target",
       kind: "implementation-result-review",
@@ -126,16 +126,8 @@ const FRONTIER_MATRIX = [
     source: { kind: "implementation", phases: ["review-blocked"] },
     expected: {
       scope: "target",
-      kind: "implementation-review-resume",
-      owner: "controller-target-review-resume",
-    },
-  },
-  {
-    source: { kind: "implementation", phases: ["redesign-requested"] },
-    expected: {
-      scope: "target",
-      kind: "implementation-redesign-required",
-      owner: "design",
+      kind: "implementation-review-blocked",
+      owner: "controller-implementation-review",
     },
   },
   {
@@ -196,7 +188,7 @@ const FRONTIER_MATRIX = [
   {
     source: {
       kind: "post-acceptance",
-      statuses: ["test-result-review-planning"],
+      statuses: ["test-result-review-planning", "test-review-escalated"],
     },
     expected: {
       scope: "target",
@@ -218,23 +210,12 @@ const FRONTIER_MATRIX = [
   {
     source: {
       kind: "post-acceptance",
-      statuses: ["test-product-defect-escalated"],
-    },
-    expected: {
-      scope: "target",
-      kind: "product-defect-remediation-authorization",
-      owner: "controller-product-defect-remediation",
-    },
-  },
-  {
-    source: {
-      kind: "post-acceptance",
       statuses: ["test-review-blocked"],
     },
     expected: {
       scope: "target",
-      kind: "test-review-resume",
-      owner: "controller-target-review-resume",
+      kind: "test-review-blocked",
+      owner: "controller-test-review",
     },
   },
   {
@@ -289,8 +270,8 @@ const MATRIX_TYPE_COVERAGE = {
     : false;
 }>;
 
-test("Controller Route以十九项轻量矩阵完整映射frontier、owner与phase", () => {
-  equal(FRONTIER_MATRIX.length, 19);
+test("Controller Route以十七项轻量矩阵完整映射frontier、owner与phase", () => {
+  equal(FRONTIER_MATRIX.length, 17);
   deepEqual(MATRIX_TYPE_COVERAGE, {
     demand: true,
     implementation: true,
@@ -328,7 +309,7 @@ test("Controller Route以十九项轻量矩阵完整映射frontier、owner与pha
     }
   }
 
-  equal(frontierKinds.size, 19);
+  equal(frontierKinds.size, 17);
   equal(
     resolveDemandControllerImplementationFrontierDescriptor("accepted"),
     null,

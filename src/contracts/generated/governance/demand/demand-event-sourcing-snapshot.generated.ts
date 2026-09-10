@@ -65,7 +65,7 @@ commitExpectation?: ("commit" | "leave-uncommitted")
  * @maxItems 32
  */
 acceptanceAnchorIds?: [string, ...(string)[]]
-phase: ("planned" | "test-delivery-prepared" | "test-host-effect-accepted" | "test-host-effect-indeterminate" | "test-host-effect-rejected" | "test-result-reported" | "test-accepted" | "test-another-attempt-requested" | "test-product-defect" | "test-review-blocked" | "delivery-prepared" | "host-effect-accepted" | "host-effect-indeterminate" | "host-effect-rejected" | "result-reported" | "accepted" | "product-defect-rework-requested" | "rework-requested" | "redesign-requested" | "review-blocked" | "superseded")
+phase: ("planned" | "test-delivery-prepared" | "test-host-effect-accepted" | "test-host-effect-indeterminate" | "test-host-effect-rejected" | "test-result-reported" | "test-accepted" | "test-another-attempt-requested" | "test-product-defect" | "test-review-blocked" | "test-escalated" | "delivery-prepared" | "host-effect-accepted" | "host-effect-indeterminate" | "host-effect-rejected" | "result-reported" | "accepted" | "product-defect-rework-requested" | "rework-requested" | "escalated" | "review-blocked" | "superseded")
 currentDelivery?: (CurrentDelivery | TestCurrentDelivery | TestObservedCurrentDelivery | TestResultCurrentDelivery | TestReviewedCurrentDelivery)
 /**
  * @minItems 1
@@ -150,11 +150,19 @@ resultDigest: WakeflowSha256DigestText
 outcome: ("completed" | "blocked" | "needs-review")
 reportedAt: WakeflowUtcInstantText
 claimHandling: "release-authorized"
+callback: {
+callbackId: string
+generation: number
+promptDigest: WakeflowSha256DigestText
+issuedAt: WakeflowUtcInstantText
+controllerWindowId: string
+bindingId: string
+}
 }
 export interface ReviewDecision {
 targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
-decision: ("accept" | "blocked" | "redesign" | "rework")
+decision: ("accept" | "rework" | "blocked" | "escalate")
 controllerWindowId: string
 decidedAt: WakeflowUtcInstantText
 }
@@ -207,7 +215,7 @@ reviewDecision: TestReviewDecision
 export interface TestReviewDecision {
 targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
-decision: ("accept" | "request-another-attempt" | "escalate-product-defect" | "blocked")
+decision: ("accept" | "request-another-attempt" | "blocked" | "escalate")
 controllerWindowId: string
 decidedAt: WakeflowUtcInstantText
 }
@@ -229,6 +237,7 @@ reviewDecision: {
 targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
 }
+stepIds: (null | [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string])
 }
 export interface Contract {
 taskPackageId: string
@@ -246,9 +255,9 @@ testReviewDecisionId: string
 testReviewDecisionDigest: WakeflowSha256DigestText
 /**
  * @minItems 1
- * @maxItems 32
+ * @maxItems 20
  */
-failedCheckIds: [string, ...(string)[]]
+failedStepIds: [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]
 correctionObjective: string
 authorizedAt: WakeflowUtcInstantText
 }

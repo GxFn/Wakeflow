@@ -17,7 +17,8 @@ import {
  * Wakeflow Governance / Delivery：从完整产品缺陷Authorization历史组装投递投影。
  *
  * 本模块验证Authorization选中的产品baseline与先前accepted TargetResult后，只投影
- * Target执行所需的有界来源；它不修改TaskPackage、不授权跨包修复，也不读取文件。
+ * Target执行所需的有界来源（失败步骤编号与观察摘要）；它不修改TaskPackage、不授权
+ * 跨包修复，也不读取文件。
  */
 
 export interface CreateTargetDeliveryProductDefectRemediationContextInput {
@@ -99,18 +100,13 @@ export function createTargetDeliveryProductDefectRemediationContext(
   ) {
     fail("relation");
   }
-  const failedCheckById = new Map(
-    authorization.failedChecks.map((check) => [check.checkId, check] as const),
+  const failedStepById = new Map(
+    authorization.failedSteps.map((step) => [step.stepId, step] as const),
   );
-  const requiredCorrections = affected.failedCheckIds.map((checkId) => {
-    const check = failedCheckById.get(checkId);
-    if (check === undefined) fail("relation");
-    return Object.freeze({
-      checkId: check.checkId,
-      outcome: "failed" as const,
-      method: check.method,
-      observation: check.observation,
-    });
+  const requiredCorrections = affected.failedStepIds.map((stepId) => {
+    const step = failedStepById.get(stepId);
+    if (step === undefined) fail("relation");
+    return Object.freeze({ stepId: step.stepId, observed: step.observed });
   });
   return projectTargetDeliveryProductDefectRemediationContext({
     authorization: Object.freeze({

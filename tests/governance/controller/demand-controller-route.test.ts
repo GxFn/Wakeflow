@@ -21,7 +21,6 @@ import {
   openDemandOperationAuthorityContext,
 } from "../../../src/governance/demand/demand-operation-authority-context.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
-import { ControllerImplementationReviewDecisionService } from "../../../src/governance/review/controller-implementation-review-decision-service.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import {
   cleanupDeliveryWorkspaceFixture,
@@ -33,8 +32,9 @@ import {
 import {
   cleanupControllerImplementationReviewDecisionServiceFixture,
   createControllerImplementationReviewDecisionServiceFixture,
+  decideFixtureImplementation,
 } from "../review/controller-implementation-review-decision-service.fixture.js";
-import { controllerImplementationReviewDecisionInput } from "../review/controller-implementation-review-decision.fixture.js";
+import { implementationReviewJudgmentWire } from "../review/controller-implementation-review-decision.fixture.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
@@ -174,12 +174,7 @@ test("Controller Route组合Review Snapshot并在accept后委托Completion Route
     equal(review.frontiers[0]?.owner, "controller-implementation-review");
     equal(Object.hasOwn(review, "postAcceptanceRouteDigest"), false);
 
-    await new ControllerImplementationReviewDecisionService(
-      fixture.workspaceRoot,
-    ).decide(fixture.decisionRequest, {
-      clock: () => parseUtcInstant("2026-08-29T12:15:00.000Z"),
-      uuidFactory: () => "33333333-3333-4333-8333-333333333333",
-    });
+    await decideFixtureImplementation(fixture);
     const completion = await readControllerRoute(
       fixture.workspaceRoot,
       fixture.demandId,
@@ -193,39 +188,47 @@ test("Controller Route组合Review Snapshot并在accept后委托Completion Route
   }
 });
 
-test("Controller Route把redesign诚实暴露为Design能力缺口", async () => {
+test("Controller Route把blocked评审暴露为外部条件阻塞，把escalate交给Demand的awaiting-decision前沿", async () => {
   const fixture =
     await createControllerImplementationReviewDecisionServiceFixture();
   try {
-    const judgment = controllerImplementationReviewDecisionInput("redesign");
-    await new ControllerImplementationReviewDecisionService(
-      fixture.workspaceRoot,
-    ).decide(
-      {
-        ...fixture.decisionRequest,
-        decision: judgment.decision,
-        assessment: judgment.assessment,
-        independentChecks: judgment.independentChecks,
-        rationale: judgment.rationale,
-        blockingReasons: judgment.blockingReasons,
-        residualRisks: judgment.residualRisks,
-      },
+    const blocked = await decideFixtureImplementation(
+      fixture,
+      { ...implementationReviewJudgmentWire("blocked"), idempotencyKey: "fixture-decision-blocked" },
       {
         clock: () => parseUtcInstant("2026-08-29T12:16:00.000Z"),
         uuidFactory: () => "34343434-3434-4434-8434-343434343434",
       },
     );
-    const route = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.demandId,
-    );
-    equal(route.disposition, "blocked");
-    equal(route.frontiers[0]?.kind, "implementation-redesign-required");
-    equal(route.frontiers[0]?.owner, "design");
-    equal(route.blockers[0]?.kind, "implementation-redesign-not-implemented");
-    equal(Object.hasOwn(route, "postAcceptanceRouteDigest"), false);
+    equal(blocked.target.phase, "review-blocked");
+    const blockedRoute = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
+    equal(blockedRoute.disposition, "blocked");
+    equal(blockedRoute.frontiers[0]?.kind, "implementation-review-blocked");
+    equal(blockedRoute.frontiers[0]?.owner, "controller-implementation-review");
+    equal(blockedRoute.blockers[0]?.kind, "external-condition");
+    equal(Object.hasOwn(blockedRoute, "postAcceptanceRouteDigest"), false);
   } finally {
     await cleanupControllerImplementationReviewDecisionServiceFixture(fixture);
+  }
+  const escalating =
+    await createControllerImplementationReviewDecisionServiceFixture();
+  try {
+    const escalated = await decideFixtureImplementation(
+      escalating,
+      { ...implementationReviewJudgmentWire("escalate"), idempotencyKey: "fixture-decision-escalate" },
+      {
+        clock: () => parseUtcInstant("2026-08-29T12:16:00.000Z"),
+        uuidFactory: () => "35353535-3535-4535-8535-353535353535",
+      },
+    );
+    equal(escalated.target.phase, "escalated");
+    equal(typeof escalated.attached.escalationEventId, "string");
+    const route = await readControllerRoute(escalating.workspaceRoot, escalating.demandId);
+    equal(route.disposition, "awaiting-decision");
+    equal(route.frontiers[0]?.kind, "decision-required");
+    equal(route.blockers[0]?.kind, "awaiting-decision");
+  } finally {
+    await cleanupControllerImplementationReviewDecisionServiceFixture(escalating);
   }
 });
 
@@ -242,7 +245,7 @@ test("Controller Route只映射Post-Acceptance Test责任而不复制其领域�
     equal(Object.hasOwn(testTaskPlanning, "postAcceptanceRouteDigest"), true);
     equal(JSON.stringify(testTaskPlanning).includes("landing.md"), false);
 
-    const planned = await planFixtureTestTask(fixture, 6);
+    const planned = await planFixtureTestTask(fixture, 7);
     if (planned.targetTask.workType !== "test") {
       throw new Error("Expected a Test target task.");
     }

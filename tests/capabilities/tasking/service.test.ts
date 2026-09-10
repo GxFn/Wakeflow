@@ -285,7 +285,7 @@ test("test 任务包：合同步骤引用验收标准，窗口、环境与基线
     const contract = fixture.testTaskRequest.taskPackage.testContract;
     const firstStep = contract.steps[0];
     await rejects(
-      planFixtureTestTask(fixture, 6, {
+      planFixtureTestTask(fixture, 7, {
         idempotencyKey: "test-plan-invented",
         taskPackage: {
           testContract: {
@@ -299,15 +299,15 @@ test("test 任务包：合同步骤引用验收标准，窗口、环境与基线
       rejectedWith("step-item-unknown"),
     );
     await rejects(
-      planFixtureTestTask(fixture, 6, {
+      planFixtureTestTask(fixture, 7, {
         idempotencyKey: "test-plan-retest",
         taskPackage: { lineage: { kind: "retest", retestsTargetTaskId: fixture.targetTaskId } },
       }),
       rejectedWith("lineage-unexpected"),
     );
-    const planned = await planFixtureTestTask(fixture, 6);
+    const planned = await planFixtureTestTask(fixture, 7);
     equal(planned.status, "committed");
-    equal(planned.event.streamRevision, 7);
+    equal(planned.event.streamRevision, 8);
     if (planned.targetTask.workType !== "test") throw new Error("Expected a Test target.");
     equal(planned.targetTask.phase, "planned");
     equal(planned.targetTask.lineage, null);
@@ -331,11 +331,11 @@ test("test 任务包：合同步骤引用验收标准，窗口、环境与基线
     equal(taskPackage.implementationBaselines.length, 1);
     equal(taskPackage.implementationBaselines[0]?.targetTaskId, fixture.targetTaskId);
     equal(taskPackage.implementationBaselines[0]?.taskPackageId, fixture.taskPackageId);
-    const replayed = await planFixtureTestTask(fixture, 6);
+    const replayed = await planFixtureTestTask(fixture, 7);
     equal(replayed.status, "idempotent");
     equal(replayed.targetTask.targetTaskId, planned.targetTask.targetTaskId);
     await rejects(
-      planFixtureTestTask(fixture, 7, { idempotencyKey: "test-plan-second" }),
+      planFixtureTestTask(fixture, 8, { idempotencyKey: "test-plan-second" }),
       rejectedWith("test-target-open"),
     );
   } finally {

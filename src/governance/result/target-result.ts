@@ -115,6 +115,9 @@ export interface TestTargetResult extends TargetResultBase {
   }>;
   readonly testExecution: Readonly<{
     readonly testAttemptId: WakeflowDurableId<"test-attempt">;
+    readonly ordinal: number;
+    /** 本次尝试的范围：null 为全部合同步骤，重跑可只跑失败子集（ADR-0012 D4）。 */
+    readonly stepIds: readonly string[] | null;
   }>;
   readonly report: Readonly<TestTargetResultReport>;
 }
@@ -370,6 +373,11 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
           "test-attempt",
           "$/testExecution/testAttemptId",
         ),
+        ordinal: wire.testExecution.ordinal,
+        stepIds:
+          wire.testExecution.stepIds === null
+            ? null
+            : Object.freeze([...wire.testExecution.stepIds]),
       }),
       report,
     });

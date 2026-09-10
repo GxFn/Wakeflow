@@ -4,12 +4,24 @@ import {
   createImplementationTargetResult,
   type CreateImplementationTargetResultInput,
 } from "../../../src/governance/result/implementation-target-result.js";
-import type { TargetResultDeliveryBinding } from "../../../src/governance/result/target-result.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import {
+  computeTargetResultCallbackPromptDigest,
+  deriveTargetResultCallbackId,
+  parseTargetResultCallbackRecord,
+  type TargetResultCallbackRecord,
+} from "../../../src/governance/result/target-result-callback.js";
+import type {
+  TargetResult,
+  TargetResultDeliveryBinding,
+} from "../../../src/governance/result/target-result.js";
 import type { WorkClaim } from "../../../src/kernel/work-claims.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
   createWorkClaimFixture,
+  DELIVERY_BINDING_DIGEST,
+  DELIVERY_BINDING_ID,
 } from "../delivery/delivery-records.fixture.js";
 import { createTaskPackageFixture } from "../tasking/task-package.fixture.js";
 import { createImplementationTargetResultReportFixture } from "./implementation-target-result-report.fixture.js";
@@ -28,6 +40,26 @@ export function deliveryBindingFromOutcome(
     disposition: outcome.disposition,
     readbackStatus: outcome.readback.status,
     observedAt: outcome.observedAt,
+  });
+}
+
+export const TARGET_RESULT_CALLBACK_ISSUED_AT = parseUtcInstant("2026-08-29T09:56:00.000Z");
+export const TARGET_RESULT_CALLBACK_WINDOW_ID = "window_55555555-5555-4555-8555-555555555555";
+
+/** 与结果同时进入事件的 wake-controller 回调记录（纯记录测试用；prompt 是固定文本）。 */
+export function createTargetResultCallbackFixture(
+  result: Readonly<TargetResult>,
+  prompt = `Wakeflow callback fixture for ${result.targetResultId}`,
+): Readonly<TargetResultCallbackRecord> {
+  return parseTargetResultCallbackRecord({
+    callbackId: deriveTargetResultCallbackId(result.targetResultId),
+    controllerWindowId: TARGET_RESULT_CALLBACK_WINDOW_ID,
+    bindingId: DELIVERY_BINDING_ID,
+    bindingDigest: DELIVERY_BINDING_DIGEST,
+    portablePrompt: prompt,
+    promptDigest: computeTargetResultCallbackPromptDigest(prompt),
+    generation: 1,
+    issuedAt: TARGET_RESULT_CALLBACK_ISSUED_AT,
   });
 }
 

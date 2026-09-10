@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:target-result-import-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_IMPORT_RESULT_SCHEMA",
   "title": "WakeflowTargetResultImportResultV1",
-  "description": "Successful result for one idempotently imported target-authored Report and its authority-enriched TargetResult Event.",
+  "description": "Result of one target result import append: the recorded (or idempotently matched) TargetResult, the wake-controller callback permit, the event and commit receipts, and the next frontier.",
   "$comment": "A successful import always has a current Result Event and a released Claim. The TargetResult is Controller review input, never Controller acceptance, Test verdict, or Demand completion.",
   "type": "object",
   "additionalProperties": false,
@@ -12,13 +12,13 @@
     "schemaVersion",
     "tool",
     "status",
-    "disposition",
-    "claimAuthority",
-    "eventAuthority",
+    "demandId",
     "result",
+    "callback",
     "event",
     "commit",
-    "stateDigest"
+    "stateDigest",
+    "next"
   ],
   "properties": {
     "kind": {
@@ -31,16 +31,7 @@
       "const": "wakeflow_import_target_result"
     },
     "status": {
-      "enum": ["recorded", "already-recorded"]
-    },
-    "disposition": {
       "enum": ["committed", "idempotent"]
-    },
-    "claimAuthority": {
-      "const": "released"
-    },
-    "eventAuthority": {
-      "const": "current"
     },
     "result": {
       "$ref": "#/$defs/targetResult"
@@ -53,44 +44,17 @@
     },
     "stateDigest": {
       "$ref": "#/$defs/sha256Digest"
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "callback": {
+      "$ref": "#/$defs/callback"
+    },
+    "next": {
+      "$ref": "#/$defs/next"
     }
   },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "recorded"
-          }
-        },
-        "required": ["status"]
-      },
-      "then": {
-        "properties": {
-          "disposition": {
-            "const": "committed"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "already-recorded"
-          }
-        },
-        "required": ["status"]
-      },
-      "then": {
-        "properties": {
-          "disposition": {
-            "const": "idempotent"
-          }
-        }
-      }
-    }
-  ],
   "$defs": {
     "targetResult": {
       "type": "object",
@@ -248,10 +212,31 @@
     "testExecution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["testAttemptId"],
+      "required": ["testAttemptId", "ordinal", "stepIds"],
       "properties": {
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "stepIds": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/stepId"
+              }
+            }
+          ]
         }
       }
     },
@@ -323,7 +308,8 @@
         "evidenceLocators",
         "verification",
         "risks",
-        "stepEvidence",
+        "steps",
+        "verdict",
         "reportedAt",
         "reportDigest"
       ],
@@ -349,19 +335,21 @@
         "risks": {
           "$ref": "#/$defs/humanTextList"
         },
-        "stepEvidence": {
-          "type": "array",
-          "maxItems": 32,
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/$defs/stepEvidence"
-          }
-        },
         "reportedAt": {
           "$ref": "#/$defs/utcInstant"
         },
         "reportDigest": {
           "$ref": "#/$defs/sha256Digest"
+        },
+        "steps": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "verdict": {
+          "enum": ["pass", "fail", "blocked", "cannot-conclude"]
         }
       },
       "allOf": [
@@ -376,7 +364,7 @@
           },
           "then": {
             "properties": {
-              "stepEvidence": {
+              "steps": {
                 "type": "array",
                 "minItems": 1
               }
@@ -388,7 +376,7 @@
     "repositoryChange": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repositoryId", "disposition", "commits"],
+      "required": ["repositoryId", "disposition", "branch", "commits"],
       "properties": {
         "repositoryId": {
           "$ref": "#/$defs/repositoryId"
@@ -403,6 +391,16 @@
           "items": {
             "$ref": "#/$defs/gitObjectId"
           }
+        },
+        "branch": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/branchName"
+            }
+          ]
         }
       },
       "allOf": [
@@ -448,7 +446,7 @@
       "required": ["kind", "ref", "digest"],
       "properties": {
         "kind": {
-          "$ref": "#/$defs/token"
+          "$ref": "#/$defs/evidenceKind"
         },
         "ref": {
           "$ref": "#/$defs/portableResourcePath"
@@ -487,19 +485,6 @@
           "items": {
             "$ref": "#/$defs/evidenceRef"
           }
-        }
-      }
-    },
-    "stepEvidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["stepId", "evidence"],
-      "properties": {
-        "stepId": {
-          "$ref": "#/$defs/stepId"
-        },
-        "evidence": {
-          "$ref": "#/$defs/evidenceRef"
         }
       }
     },
@@ -707,6 +692,201 @@
     "stepId": {
       "type": "string",
       "pattern": "^ts-[1-9][0-9]?$"
+    },
+    "evidenceKind": {
+      "enum": ["test-output", "diff", "document", "transcript", "commit"]
+    },
+    "branchName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$"
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "likelyOwner", "recommendedAction"],
+      "properties": {
+        "classification": {
+          "enum": [
+            "product-defect",
+            "harness-defect",
+            "environment",
+            "flaky",
+            "missing-evidence",
+            "out-of-scope",
+            "needs-decision"
+          ]
+        },
+        "likelyOwner": {
+          "enum": ["implementation", "test", "environment", "user"]
+        },
+        "recommendedAction": {
+          "$ref": "#/$defs/humanText"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepId", "observed", "evidence", "verdict"],
+      "properties": {
+        "stepId": {
+          "$ref": "#/$defs/stepId"
+        },
+        "observed": {
+          "$ref": "#/$defs/humanText"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidenceRef"
+        },
+        "verdict": {
+          "enum": ["pass", "fail", "blocked", "cannot-conclude"]
+        },
+        "failure": {
+          "$ref": "#/$defs/failure"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "pass"
+              }
+            },
+            "required": ["verdict"]
+          },
+          "then": {
+            "properties": {
+              "failure": false
+            }
+          },
+          "else": {
+            "required": ["failure"],
+            "properties": {
+              "failure": {
+                "$ref": "#/$defs/failure"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "bindingId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "hostAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effect", "hostId", "windowId", "displayTitle", "bindingId", "handleDigest"],
+      "description": "Agent 执行的一次性宿主动作：把回调 prompt 送进 Controller 窗口；原始句柄不出现。",
+      "properties": {
+        "effect": {
+          "const": "send-prompt-to-window"
+        },
+        "hostId": {
+          "enum": ["codex", "claude-code"]
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "displayTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "bindingId": {
+          "$ref": "#/$defs/bindingId"
+        },
+        "handleDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "callbackPermit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prompt", "hostAction", "generation", "issuedAt"],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536
+        },
+        "hostAction": {
+          "$ref": "#/$defs/hostAction"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "issuedAt": {
+          "$ref": "#/$defs/utcInstant"
+        }
+      }
+    },
+    "callback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["callbackId", "permit"],
+      "description": "wake-controller 回调：目标 Agent 把 permit.prompt 送进 Controller 窗口；落地由 Controller 会话的 user-prompt-submit 记录证明。",
+      "properties": {
+        "callbackId": {
+          "$ref": "#/$defs/targetDeliveryId"
+        },
+        "permit": {
+          "$ref": "#/$defs/callbackPermit"
+        }
+      }
+    },
+    "next": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontier", "owner", "suggestedTool", "blockers"],
+      "description": "Next responsibility derived from the route after this call.",
+      "properties": {
+        "frontier": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "owner": {
+          "enum": ["controller", "target", "test", "user", "none"]
+        },
+        "suggestedTool": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
     }
   }
 }

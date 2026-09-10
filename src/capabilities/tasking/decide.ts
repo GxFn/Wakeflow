@@ -125,7 +125,7 @@ const REPLACEABLE_PHASES: readonly string[] = Object.freeze([
   "host-effect-rejected",
   "rework-requested",
   "product-defect-rework-requested",
-  "redesign-requested",
+  "escalated",
   "review-blocked",
 ]);
 

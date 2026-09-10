@@ -26,8 +26,6 @@ function unexpectedMcpExecutor(capability: keyof WakeflowMcpExecutorSet): never 
  */
 function defaultMcpExecutors(): WakeflowMcpExecutorSet {
   return {
-    authorizeProductDefectRemediation: async () =>
-      unexpectedMcpExecutor("authorizeProductDefectRemediation"),
     cancelDemand: async () => unexpectedMcpExecutor("cancelDemand"),
     completeDemand: async () => unexpectedMcpExecutor("completeDemand"),
     continueDemand: async () => unexpectedMcpExecutor("continueDemand"),
@@ -42,13 +40,11 @@ function defaultMcpExecutors(): WakeflowMcpExecutorSet {
     planTargetTask: async () => unexpectedMcpExecutor("planTargetTask"),
     prepareDelivery: async () => unexpectedMcpExecutor("prepareDelivery"),
     rearmDelivery: async () => unexpectedMcpExecutor("rearmDelivery"),
-    recordControllerImplementationReviewDecision: async () =>
-      unexpectedMcpExecutor("recordControllerImplementationReviewDecision"),
-    recordControllerTestReviewDecision: async () =>
-      unexpectedMcpExecutor("recordControllerTestReviewDecision"),
+    recordImplementationReviewDecision: async () =>
+      unexpectedMcpExecutor("recordImplementationReviewDecision"),
+    recordTestReviewDecision: async () => unexpectedMcpExecutor("recordTestReviewDecision"),
     recordDeliveryOutcome: async () => unexpectedMcpExecutor("recordDeliveryOutcome"),
     registerWindowHostBinding: async () => unexpectedMcpExecutor("registerWindowHostBinding"),
-    resumeTargetResultReview: async () => unexpectedMcpExecutor("resumeTargetResultReview"),
   };
 }
 

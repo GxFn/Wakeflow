@@ -281,8 +281,11 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
       equal(rearmed.rearm.generation, generation);
       equal(rearmed.delivery.deliveryId, prepared.delivery.deliveryId);
       equal(rearmed.delivery.generation, generation);
+      equal(rearmed.rearm.kind, "target");
       equal(rearmed.permit.prompt, prepared.permit.prompt);
-      equal(rearmed.permit.fence.claimId === permit.fence.claimId, false);
+      const fence = rearmed.permit.fence;
+      if (fence === null) throw new Error("Expected a target rearm fence.");
+      equal(fence.claimId === permit.fence.claimId, false);
       equal(rearmed.next.frontier, "implementation-host-effect-execution");
       equal(existsSync(claimPath(fixture)), true);
       const claim = (await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId)).claim;
@@ -294,11 +297,16 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
         streamRevision,
       );
       equal(replay.status, "idempotent");
-      equal(replay.permit.fence.claimDigest, rearmed.permit.fence.claimDigest);
-      permit = rearmed.permit;
+      equal(replay.permit.fence?.claimDigest, fence.claimDigest);
+      permit = { ...rearmed.permit, fence };
       const rejectedAgain = await recordFixtureDeliveryOutcome(
         fixture,
-        { ...prepared, permit, event: rearmed.event, delivery: rearmed.delivery },
+        {
+          ...prepared,
+          permit,
+          event: rearmed.event,
+          delivery: { ...prepared.delivery, generation: rearmed.delivery.generation },
+        },
         {
           idempotencyKey: `fixture-outcome-rejected-${generation}`,
           attempt: { status: "failed-before-send" },

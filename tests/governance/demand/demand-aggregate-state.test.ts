@@ -43,7 +43,10 @@ import {
   OTHER_DELIVERY_CLAIM_ID,
   THIRD_DELIVERY_CLAIM_ID,
 } from "../delivery/delivery-records.fixture.js";
-import { createTargetResultFixture } from "../result/target-result.fixture.js";
+import {
+  createTargetResultCallbackFixture,
+  createTargetResultFixture,
+} from "../result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionForState } from "../review/controller-implementation-review-decision.fixture.js";
 
 test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要", () => {
@@ -199,6 +202,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   const resultReported = recordTargetResultInDemandAggregateState(
     accepted,
     targetResult,
+    createTargetResultCallbackFixture(targetResult),
   );
   equal(resultReported.targetTasks[0]?.phase, "result-reported");
   const reportedTarget = resultReported.targetTasks[0];
@@ -206,12 +210,13 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
     throw new Error("Expected result-reported target.");
   }
   equal(reportedTarget.currentDelivery.targetResult.outcome, "completed");
+  equal(reportedTarget.currentDelivery.targetResult.callback.generation, 1);
   equal(reportedTarget.currentDelivery.outcome.disposition, "accepted");
 
   for (const candidate of [
     { decision: "accept" as const, phase: "accepted" as const },
     { decision: "rework" as const, phase: "rework-requested" as const },
-    { decision: "redesign" as const, phase: "redesign-requested" as const },
+    { decision: "escalate" as const, phase: "escalated" as const },
     { decision: "blocked" as const, phase: "review-blocked" as const },
   ]) {
     const decision = createControllerImplementationReviewDecisionForState(
@@ -229,7 +234,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
     if (
       target?.phase !== "accepted" &&
       target?.phase !== "rework-requested" &&
-      target?.phase !== "redesign-requested" &&
+      target?.phase !== "escalated" &&
       target?.phase !== "review-blocked"
     ) {
       throw new Error("Expected reviewed target state.");

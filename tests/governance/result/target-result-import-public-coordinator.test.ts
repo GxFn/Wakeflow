@@ -204,7 +204,7 @@ test("Result Import Public Coordinator从Test Report生成共享TargetResult", a
       claimDigest: delivered.prepared.permit.fence.claimDigest,
       report: {
         workType: "test" as const,
-        content: testResultReportContent(fixture.testCard),
+        content: testResultReportContent(fixture.testStepIds),
       },
     };
     const imported = await executeTargetResultImportPublicRequest(

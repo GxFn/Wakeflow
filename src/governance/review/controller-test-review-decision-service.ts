@@ -47,7 +47,7 @@ import {
  *
  * Service以TargetResult ID定位唯一当前Test reported unit，从Event Stream重建
  * Review Snapshot，并从
- * TestCard创建事件读取`maxAttempts`；请求另一attempt只形成后续授权，不创建attempt、
+ * test 任务包的测试合同读取`maxAttempts`；请求另一attempt只形成后续授权，不创建attempt、
  * Delivery或宿主效果。相同Result与Snapshot的已提交Decision构成幂等权威。
  */
 
@@ -93,7 +93,7 @@ const ERROR_MESSAGES = {
   transition: "Controller Test Review Decision transition is not admitted.",
   event: "Controller Test Review Decision Event append failed.",
   "attempt-capacity":
-    "Controller Test Review Decision requests an attempt beyond the TestCard capacity.",
+    "Controller Test Review Decision requests an attempt beyond the test contract capacity.",
   "commit-capacity":
     "Controller Test Review Decision Event Commit exceeds its capacity.",
   aborted: "Controller Test Review Decision was aborted.",
@@ -387,11 +387,10 @@ export class ControllerTestReviewDecisionService {
         const aggregateTarget = history.aggregate.state.targetTasks.find(
           (entry) => entry.targetTaskId === target.targetTaskId,
         );
-        const testCardSource = history.testCards.find(
-          (source) =>
-            source.testCard.testCardId ===
-            target.targetResult.testExecution.testCard.testCardId,
-        );
+        const testPackage =
+          target.taskPackage.workType === "test"
+            ? target.taskPackage
+            : undefined;
         if (
           context.config.model.program.programId !==
             target.taskPackage.programId ||
@@ -399,18 +398,16 @@ export class ControllerTestReviewDecisionService {
           target.taskPackage.demandId !== request.demandId ||
           aggregateTarget?.workType !== "test" ||
           aggregateTarget.phase !== "test-result-reported" ||
-          testCardSource === undefined ||
-          testCardSource.testCard.testCardId !==
-            target.targetResult.testExecution.testCard.testCardId ||
-          testCardSource.testCard.testCardDigest !==
-            target.targetResult.testExecution.testCard.testCardDigest
+          testPackage === undefined ||
+          aggregateTarget.currentDelivery.testAttemptId !==
+            target.targetResult.testExecution.testAttemptId
         ) {
           fail("controller-authority");
         }
         if (
           request.decision === "request-another-attempt" &&
           aggregateTarget.testAttempts.length >=
-            testCardSource.testCard.maxAttempts
+            testPackage.testContract.maxAttempts
         ) {
           fail("attempt-capacity");
         }

@@ -137,10 +137,11 @@ test("real-environment只路由到Test planning并暴露需求包的环境Author
       fixture.demandId,
     );
     equal(route.testingDecision.mode, "real-environment");
-    equal(route.nextStage.status, "real-environment-test-planning");
-    if (route.nextStage.status !== "real-environment-test-planning") {
+    equal(route.nextStage.status, "test-task-planning");
+    if (route.nextStage.status !== "test-task-planning") {
       throw new Error("Expected real-environment Test planning route.");
     }
+    equal(route.nextStage.retest, null);
     equal(route.nextStage.testEnvironmentAuthority.role, "landing");
     equal(route.nextStage.testEnvironmentAuthority.memberPath, "landing.md");
     equal(route.testingDecision.environmentMemberRef, null);

@@ -22,7 +22,7 @@ const ROLLED_BACK_DECIDED_AT = parseUtcInstant("2026-08-29T12:33:00.000Z");
 const DECISION_UUID = "e5e5e5e5-e5e5-45e5-85e5-e5e5e5e5e5e5";
 const ANOTHER_ATTEMPT_DECISION_UUID = "f5f5f5f5-f5f5-45f5-85f5-f5f5f5f5f5f5";
 
-test("Controller Test Review以Card容量准入并在wall clock回拨时持久化accept决定", async () => {
+test("Controller Test Review以合同容量准入并在wall clock回拨时持久化accept决定", async () => {
   const fixture = await createControllerTestReviewDecisionServiceFixture();
   let demandRoot: RootedDirectory | undefined;
   try {
@@ -162,7 +162,7 @@ test("Controller Test Review以Card容量准入并在wall clock回拨时持久�
   }
 });
 
-test("Controller Test Review仅在Card容量可用时授权另一attempt planning", async () => {
+test("Controller Test Review仅在合同容量可用时授权另一attempt planning", async () => {
   const fixture = await createControllerTestReviewDecisionServiceFixture({
     maxAttempts: 2,
   });

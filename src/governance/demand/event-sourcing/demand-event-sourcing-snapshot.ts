@@ -5,7 +5,6 @@ import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/gener
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
 import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
-import { WAKEFLOW_TEST_CARD_SCHEMA } from "../../../contracts/generated/governance/testing/test-card.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
@@ -133,7 +132,6 @@ const validateWire = createRuntimeJsonSchemaValidator<SnapshotWire>(
     WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
-    WAKEFLOW_TEST_CARD_SCHEMA,
     WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],

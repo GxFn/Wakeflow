@@ -44,9 +44,9 @@ import type {
 /**
  * Wakeflow Governance / Result：Test Agent提交的逐步执行结果陈述。
  *
- * Report只映射Controller批准的plan步骤与外部Evidence Artifact；它不解释Evidence真假，
+ * Report只把测试合同的 stepId 映射到外部Evidence Artifact；它不解释Evidence真假，
  * 不声明product repository change、测试通过、Controller acceptance或Demand completion。
- * TaskPackage、TestCard、attempt、Claim和Observation的闭合由TargetResult owner负责。
+ * TaskPackage（含测试合同）、attempt、Claim和Observation的闭合由TargetResult owner负责。
  */
 
 const REPORT_KIND = "WakeflowTestTargetResultReport" as const;
@@ -55,11 +55,11 @@ const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const MAXIMUM_EVIDENCE_LOCATORS = 64;
-const MAXIMUM_PLAN_STEPS = 32;
+const MAXIMUM_CONTRACT_STEPS = 20;
+const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
 
 export interface TestTargetResultStepEvidence {
-  readonly planIndex: number;
-  readonly step: string;
+  readonly stepId: string;
   readonly evidence: Readonly<{
     readonly ref: PortableResourcePath;
     readonly digest: Sha256Digest;
@@ -247,7 +247,7 @@ function stepEvidence(
   value: unknown,
   locators: readonly Readonly<TargetResultEvidenceLocator>[],
 ): readonly Readonly<TestTargetResultStepEvidence>[] {
-  if (!Array.isArray(value) || value.length > MAXIMUM_PLAN_STEPS) {
+  if (!Array.isArray(value) || value.length > MAXIMUM_CONTRACT_STEPS) {
     fail("input", "$/stepEvidence");
   }
   const locatorTuples = new Set(
@@ -255,13 +255,9 @@ function stepEvidence(
   );
   const steps = value.map((entry, index) => {
     const path = `$/stepEvidence/${index}`;
-    const record = exactRecord(entry, ["evidence", "planIndex", "step"], path);
-    if (
-      !Number.isSafeInteger(record.planIndex) ||
-      (record.planIndex as number) < 0 ||
-      (record.planIndex as number) >= MAXIMUM_PLAN_STEPS
-    ) {
-      fail("input", `${path}/planIndex`);
+    const record = exactRecord(entry, ["evidence", "stepId"], path);
+    if (typeof record.stepId !== "string" || !STEP_ID_PATTERN.test(record.stepId)) {
+      fail("input", `${path}/stepId`);
     }
     const evidence = exactRecord(
       record.evidence,
@@ -278,17 +274,11 @@ function stepEvidence(
       fail("relation", `${path}/evidence`);
     }
     return Object.freeze({
-      planIndex: record.planIndex as number,
-      step: humanText(record.step, `${path}/step`),
+      stepId: record.stepId,
       evidence: admittedEvidence,
     });
   });
-  if (
-    steps.some(
-      (entry, index) =>
-        index > 0 && entry.planIndex <= steps[index - 1]!.planIndex,
-    )
-  ) {
+  if (new Set(steps.map((entry) => entry.stepId)).size !== steps.length) {
     fail("relation", "$/stepEvidence");
   }
   return Object.freeze(steps);

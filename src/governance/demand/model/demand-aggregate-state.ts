@@ -13,7 +13,6 @@ import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foun
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
 import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
-import { WAKEFLOW_TEST_CARD_SCHEMA } from "../../../contracts/generated/governance/testing/test-card.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
@@ -97,16 +96,6 @@ import {
   type DemandCompletion,
 } from "../../lifecycle/demand-completion.js";
 import {
-  parseTestCard,
-  TestCardError,
-  type TestCard,
-} from "../../testing/test-card.js";
-import {
-  parseTestCardGenerationSource,
-  TestCardGenerationSourceError,
-  type TestCardGenerationSource,
-} from "../../testing/test-card-generation-source.js";
-import {
   assertRerunTestExecutionAttemptFollows,
   parseTestExecutionAttempt,
   TestExecutionAttemptError,
@@ -127,8 +116,8 @@ import {
  * publication 时冻结的 Authority；`targetTasks` 只保存调度前真正需要的最小摘要，
  * 完整 TaskPackage、Delivery Envelope、Delivery Outcome、Delivery Rearm、TargetResult
  * 与 Controller Review Decision 仍属于事件数据；状态只保存当前 Delivery（含围栏与
- * 结局摘要）、Result 和 Review 的最小摘要，工作声明本身在内核的共享协调根。`currentTestCard`只指向当前测试合同；已经
- * 观察到产品缺陷的旧Test Target继续作为历史代际保留自己的Card、attempt、Result与
+ * 结局摘要）、Result 和 Review 的最小摘要，工作声明本身在内核的共享协调根。测试合同在 test 任务包里；已经
+ * 观察到产品缺陷的旧Test Target继续作为历史代际保留自己的attempt、Result与
  * Decision。`managedEvidence`只在首个Evidence Event后出现，且只保存Manifest与payload
  * 的精确selector；完整Manifest仍由Event拥有。`pendingTestRetest`只记录产品缺陷修复后
  * 尚待创建的一代复测，不复制完整Authorization或事件历史。尚未实现的Pod不使用
@@ -319,7 +308,6 @@ interface DemandTestTargetTaskStateBase {
   readonly taskPackageDigest: Sha256Digest;
   readonly workType: "test";
   readonly windowId: WakeflowDurableId<"window">;
-  readonly testCard: Readonly<DemandTestCardSummary>;
 }
 
 export interface DemandTestPlannedTargetTaskState extends DemandTestTargetTaskStateBase {
@@ -426,9 +414,7 @@ export interface DemandAggregateState {
   readonly targetTasks: readonly Readonly<DemandTargetTaskState>[];
   /** 已由Event记录的Managed Evidence最小selector；完整Manifest不复制到Aggregate。 */
   readonly managedEvidence?: readonly Readonly<DemandManagedEvidenceSummary>[];
-  /** 当前可规划或执行的测试合同；历史Test Target保留自己的Card摘要。 */
-  readonly currentTestCard?: Readonly<DemandTestCardSummary>;
-  /** 已获Controller授权、尚未由新TestCard消费的一次产品缺陷复测。 */
+  /** 已获Controller授权、尚未由 retest 谱系的 test 任务包消费的一次产品缺陷复测。 */
   readonly pendingTestRetest?: Readonly<DemandPendingTestRetest>;
   /** 一次尚未得到用户回答的升级；存在时路由为 awaiting-decision（ADR-0012 D5）。 */
   readonly awaitingDecision?: Readonly<DemandAwaitingDecision>;
@@ -459,16 +445,21 @@ export interface DemandManagedEvidenceSummary {
   readonly payloadArtifactDigest: Sha256Digest;
 }
 
-export type DemandPendingTestRetest = Extract<
-  TestCardGenerationSource,
-  Readonly<{ readonly kind: "product-defect-retest" }>
->;
-
-export interface DemandTestCardSummary {
-  readonly testCardId: WakeflowDurableId<"test-card">;
-  readonly testCardDigest: Sha256Digest;
-  readonly targetTaskId: WakeflowDurableId<"target-task">;
-  readonly testWindowId: WakeflowDurableId<"window">;
+export interface DemandPendingTestRetest {
+  readonly kind: "product-defect-retest";
+  readonly previousTestTarget: Readonly<{
+    readonly targetTaskId: WakeflowDurableId<"target-task">;
+    readonly taskPackageId: WakeflowDurableId<"task-package">;
+    readonly taskPackageDigest: Sha256Digest;
+  }>;
+  readonly testReviewDecision: Readonly<{
+    readonly targetReviewDecisionId: WakeflowDurableId<"target-review-decision">;
+    readonly decisionDigest: Sha256Digest;
+  }>;
+  readonly productDefectRemediation: Readonly<{
+    readonly productDefectRemediationId: WakeflowDurableId<"product-defect-remediation">;
+    readonly authorizationDigest: Sha256Digest;
+  }>;
 }
 
 export type DemandAggregateStateErrorReason =
@@ -484,8 +475,6 @@ export type DemandAggregateStateErrorReason =
   | "controller-review-decision"
   | "controller-product-defect-remediation-authorization"
   | "controller-target-review-resume"
-  | "test-card"
-  | "test-card-generation-source"
   | "managed-evidence-manifest"
   | "relation"
   | "transition";
@@ -511,10 +500,6 @@ const ERROR_MESSAGES = {
     "Demand aggregate state transition contains an invalid Controller Product Defect Remediation Authorization.",
   "controller-target-review-resume":
     "Demand aggregate state transition contains an invalid Controller Target Review Resume.",
-  "test-card":
-    "Demand aggregate state transition contains an invalid TestCard.",
-  "test-card-generation-source":
-    "Demand aggregate state transition contains an invalid TestCard Generation Source.",
   "managed-evidence-manifest":
     "Demand aggregate state transition contains an invalid Managed Evidence Manifest.",
   relation: "Demand aggregate target task summaries are inconsistent.",
@@ -540,7 +525,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandAggregateStateWire>(
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-    WAKEFLOW_TEST_CARD_SCHEMA,
     WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
@@ -565,7 +549,6 @@ function parseId<
     | "demand-event-commit"
     | "evidence"
     | "test-attempt"
-    | "test-card"
     | "work-claim",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
   try {
@@ -833,72 +816,54 @@ function parseManagedEvidenceSummaries(
   return Object.freeze(result);
 }
 
-function parseTestCardSummary(
-  value: Readonly<
-    NonNullable<DemandAggregateStateWire["targetTasks"][number]["testCard"]>
-  >,
-  path: string,
-): Readonly<DemandTestCardSummary> {
+/** 待消费的复测记录只引用聚合内的历史 test 目标、其审查决定与缺陷修复授权。 */
+function parsePendingTestRetest(
+  value: NonNullable<DemandAggregateStateWire["pendingTestRetest"]>,
+): Readonly<DemandPendingTestRetest> {
+  const path = "$/pendingTestRetest";
   return Object.freeze({
-    testCardId: parseId(value.testCardId, "test-card", `${path}/testCardId`),
-    testCardDigest: parseDigest(value.testCardDigest, `${path}/testCardDigest`),
-    targetTaskId: parseId(
-      value.targetTaskId,
-      "target-task",
-      `${path}/targetTaskId`,
-    ),
-    testWindowId: parseId(value.testWindowId, "window", `${path}/testWindowId`),
+    kind: "product-defect-retest" as const,
+    previousTestTarget: Object.freeze({
+      targetTaskId: parseId(
+        value.previousTestTarget.targetTaskId,
+        "target-task",
+        `${path}/previousTestTarget/targetTaskId`,
+      ),
+      taskPackageId: parseId(
+        value.previousTestTarget.taskPackageId,
+        "task-package",
+        `${path}/previousTestTarget/taskPackageId`,
+      ),
+      taskPackageDigest: parseDigest(
+        value.previousTestTarget.taskPackageDigest,
+        `${path}/previousTestTarget/taskPackageDigest`,
+      ),
+    }),
+    testReviewDecision: Object.freeze({
+      targetReviewDecisionId: parseId(
+        value.testReviewDecision.targetReviewDecisionId,
+        "target-review-decision",
+        `${path}/testReviewDecision/targetReviewDecisionId`,
+      ),
+      decisionDigest: parseDigest(
+        value.testReviewDecision.decisionDigest,
+        `${path}/testReviewDecision/decisionDigest`,
+      ),
+    }),
+    productDefectRemediation: Object.freeze({
+      productDefectRemediationId: parseId(
+        value.productDefectRemediation.productDefectRemediationId,
+        "product-defect-remediation",
+        `${path}/productDefectRemediation/productDefectRemediationId`,
+      ),
+      authorizationDigest: parseDigest(
+        value.productDefectRemediation.authorizationDigest,
+        `${path}/productDefectRemediation/authorizationDigest`,
+      ),
+    }),
   });
 }
 
-function testTargetMatchesCard(
-  target: Readonly<DemandTestTargetTaskStateBase>,
-  testCard: Readonly<DemandTestCardSummary>,
-): boolean {
-  return (
-    target.targetTaskId === testCard.targetTaskId &&
-    target.windowId === testCard.testWindowId &&
-    target.testCard.testCardId === testCard.testCardId &&
-    target.testCard.testCardDigest === testCard.testCardDigest
-  );
-}
-
-function parsePendingTestRetest(
-  value: unknown,
-): Readonly<DemandPendingTestRetest> {
-  let source: Readonly<TestCardGenerationSource>;
-  try {
-    source = parseTestCardGenerationSource(value);
-  } catch (error: unknown) {
-    if (error instanceof TestCardGenerationSourceError) {
-      fail("test-card-generation-source", "$/pendingTestRetest");
-    }
-    throw error;
-  }
-  if (source.kind !== "product-defect-retest") {
-    fail("relation", "$/pendingTestRetest/kind");
-  }
-  return source;
-}
-
-function pendingTestRetestMatches(
-  left: Readonly<DemandPendingTestRetest>,
-  right: Readonly<DemandPendingTestRetest>,
-): boolean {
-  return (
-    left.previousTestCard.testCardId === right.previousTestCard.testCardId &&
-    left.previousTestCard.testCardDigest ===
-      right.previousTestCard.testCardDigest &&
-    left.testReviewDecision.targetReviewDecisionId ===
-      right.testReviewDecision.targetReviewDecisionId &&
-    left.testReviewDecision.decisionDigest ===
-      right.testReviewDecision.decisionDigest &&
-    left.productDefectRemediation.productDefectRemediationId ===
-      right.productDefectRemediation.productDefectRemediationId &&
-    left.productDefectRemediation.authorizationDigest ===
-      right.productDefectRemediation.authorizationDigest
-  );
-}
 
 function parseProductDefectRemediationSummary(
   value: Readonly<ProductDefectRemediationWire>,
@@ -1026,8 +991,11 @@ function parseTestAttemptState(
 
 function parseTestAttemptLineage(
   values: readonly TestAttemptStateWire[],
-  targetTaskId: WakeflowDurableId<"target-task">,
-  testCard: Readonly<DemandTestCardSummary>,
+  target: Readonly<{
+    readonly targetTaskId: WakeflowDurableId<"target-task">;
+    readonly taskPackageId: WakeflowDurableId<"task-package">;
+    readonly taskPackageDigest: Sha256Digest;
+  }>,
   path: string,
 ): DemandTestAttemptLineage {
   if (values.length === 0 || values.length > 10) fail("relation", path);
@@ -1046,9 +1014,9 @@ function parseTestAttemptLineage(
     const previous = index === 0 ? undefined : attempts[index - 1];
     if (
       attemptIds.has(attempt.testAttemptId) ||
-      attempt.targetTaskId !== targetTaskId ||
-      attempt.testCard.testCardId !== testCard.testCardId ||
-      attempt.testCard.testCardDigest !== testCard.testCardDigest ||
+      attempt.targetTaskId !== target.targetTaskId ||
+      attempt.contract.taskPackageId !== target.taskPackageId ||
+      attempt.contract.taskPackageDigest !== target.taskPackageDigest ||
       (index === 0 && (attempt.mode !== "initial" || attempt.ordinal !== 1))
     ) {
       fail("relation", `${path}/${index}/attempt`);
@@ -1090,7 +1058,6 @@ function parseTargetTasks(
   const result: Readonly<DemandTargetTaskState>[] = [];
   const packageIds = new Set<string>();
   const repositoryIds = new Set<string>();
-  const testCardIds = new Set<string>();
   const claimIds = new Set<string>();
   let previousTargetTaskId: string | undefined;
   for (let index = 0; index < values.length; index += 1) {
@@ -1133,24 +1100,14 @@ function parseTargetTasks(
       claimIds.add(delivery.fence.claimId);
     };
     if (value.workType === "test") {
-      if (value.testCard === undefined || value.reworkCount !== undefined) {
+      if (value.reworkCount !== undefined) {
         fail("relation", path);
       }
-      const testCard = parseTestCardSummary(value.testCard, `${path}/testCard`);
-      if (
-        testCardIds.has(testCard.testCardId) ||
-        testCard.targetTaskId !== common.targetTaskId ||
-        testCard.testWindowId !== common.windowId
-      ) {
-        fail("relation", `${path}/testCard`);
-      }
-      testCardIds.add(testCard.testCardId);
       if (value.phase === "planned") {
         result.push(
           Object.freeze({
             ...common,
             workType: "test" as const,
-            testCard,
             phase: "planned" as const,
           }),
         );
@@ -1183,16 +1140,12 @@ function parseTargetTasks(
       registerClaim(currentDelivery);
       const testAttempts = parseTestAttemptLineage(
         value.testAttempts,
-        common.targetTaskId,
-        testCard,
+        common,
         `${path}/testAttempts`,
       );
       const attemptState = testAttempts.at(-1)!;
       if (
         attemptState.attempt.targetTaskId !== common.targetTaskId ||
-        attemptState.attempt.testCard.testCardId !== testCard.testCardId ||
-        attemptState.attempt.testCard.testCardDigest !==
-          testCard.testCardDigest ||
         currentDelivery.testAttemptId !== attemptState.attempt.testAttemptId ||
         currentDelivery.deliveryId !== attemptState.delivery.deliveryId ||
         currentDelivery.envelopeDigest !== attemptState.delivery.envelopeDigest
@@ -1204,7 +1157,6 @@ function parseTargetTasks(
           Object.freeze({
             ...common,
             workType: "test" as const,
-            testCard,
             phase: "test-delivery-prepared" as const,
             currentDelivery,
             testAttempts,
@@ -1256,7 +1208,6 @@ function parseTargetTasks(
           Object.freeze({
             ...common,
             workType: "test" as const,
-            testCard,
             phase: expectedPhase,
             currentDelivery: Object.freeze({
               ...currentDelivery,
@@ -1280,7 +1231,6 @@ function parseTargetTasks(
           Object.freeze({
             ...common,
             workType: "test" as const,
-            testCard,
             phase: "test-result-reported" as const,
             currentDelivery: Object.freeze({
               ...currentDelivery,
@@ -1305,7 +1255,6 @@ function parseTargetTasks(
           Object.freeze({
             ...common,
             workType: "test" as const,
-            testCard,
             phase: expectedPhase,
             currentDelivery: Object.freeze({
               ...currentDelivery,
@@ -1568,15 +1517,11 @@ export function prepareDeliveryInDemandAggregateState(
   assertClaimUnused(current, envelope.fence.claimId);
   const currentDelivery = currentDeliveryOf(envelope, 1);
   if (envelope.workType === "test") {
-    const currentTestCard = current.currentTestCard;
     if (
-      currentTestCard === undefined ||
       target.workType !== "test" ||
-      target.testCard.testCardId !== envelope.testCard.testCardId ||
-      target.testCard.testCardDigest !== envelope.testCard.testCardDigest ||
-      currentTestCard.testCardId !== envelope.testCard.testCardId ||
-      currentTestCard.testCardDigest !== envelope.testCard.testCardDigest ||
-      envelope.attempt.targetTaskId !== target.targetTaskId
+      envelope.attempt.targetTaskId !== target.targetTaskId ||
+      envelope.attempt.contract.taskPackageId !== target.taskPackageId ||
+      envelope.attempt.contract.taskPackageDigest !== target.taskPackageDigest
     ) {
       fail("transition", "$/targetTasks");
     }
@@ -1913,9 +1858,6 @@ export function recordTargetResultInDemandAggregateState(
       target.taskPackageId !== result.taskPackage.taskPackageId ||
       target.taskPackageDigest !== result.taskPackage.digest ||
       target.windowId !== result.assignment.windowId ||
-      target.testCard.testCardId !== result.testExecution.testCard.testCardId ||
-      target.testCard.testCardDigest !==
-        result.testExecution.testCard.testCardDigest ||
       target.currentDelivery.deliveryId !== result.deliveryId ||
       target.currentDelivery.testAttemptId !==
         result.testExecution.testAttemptId ||
@@ -2092,11 +2034,7 @@ export function decideTargetResultReviewInDemandAggregateState(
       decision.reviewed.targetResultReportedAt !==
         target.currentDelivery.targetResult.reportedAt ||
       decision.testExecution.testAttemptId !==
-        target.currentDelivery.testAttemptId ||
-      decision.testExecution.testCard.testCardId !==
-        target.testCard.testCardId ||
-      decision.testExecution.testCard.testCardDigest !==
-        target.testCard.testCardDigest
+        target.currentDelivery.testAttemptId
     ) {
       fail("transition", "$/targetTasks");
     }
@@ -2187,7 +2125,6 @@ export function authorizeProductDefectRemediationInDemandAggregateState(
     }
     throw error;
   }
-  const currentTestCard = current.currentTestCard;
   const testTarget = current.targetTasks.find(
     (target) => target.targetTaskId === authorization.source.testTargetTaskId,
   );
@@ -2196,17 +2133,14 @@ export function authorizeProductDefectRemediationInDemandAggregateState(
     authorization.demandId !== current.demandId ||
     authorization.source.stateDigest !==
       computeDemandAggregateStateDigest(current) ||
-    currentTestCard === undefined ||
-    currentTestCard.testCardId !== authorization.source.testCard.testCardId ||
-    currentTestCard.testCardDigest !==
-      authorization.source.testCard.testCardDigest ||
+    current.pendingTestRetest !== undefined ||
     testTarget === undefined ||
     testTarget.workType !== "test" ||
     testTarget.phase !== "test-product-defect" ||
-    testTarget.testCard.testCardId !==
-      authorization.source.testCard.testCardId ||
-    testTarget.testCard.testCardDigest !==
-      authorization.source.testCard.testCardDigest ||
+    testTarget.taskPackageId !==
+      authorization.source.testTaskPackage.taskPackageId ||
+    testTarget.taskPackageDigest !==
+      authorization.source.testTaskPackage.taskPackageDigest ||
     testTarget.currentDelivery.testAttemptId !==
       authorization.source.testAttemptId ||
     testTarget.currentDelivery.targetResult.targetResultId !==
@@ -2224,7 +2158,7 @@ export function authorizeProductDefectRemediationInDemandAggregateState(
     testTarget.currentDelivery.reviewDecision.controllerWindowId !==
       authorization.controllerWindowId
   ) {
-    fail("transition", "$state/currentTestCard");
+    fail("transition", "$state/targetTasks");
   }
   const authorizationTargets = new Map(
     authorization.affectedTargets.map(
@@ -2259,13 +2193,15 @@ export function authorizeProductDefectRemediationInDemandAggregateState(
   ) {
     fail("transition", "$state/targetTasks");
   }
-  const { currentTestCard: _currentTestCard, ...withoutCurrentTestCard } =
-    current;
   return parseDemandAggregateState({
-    ...withoutCurrentTestCard,
+    ...current,
     pendingTestRetest: {
       kind: "product-defect-retest",
-      previousTestCard: authorization.source.testCard,
+      previousTestTarget: {
+        targetTaskId: testTarget.targetTaskId,
+        taskPackageId: testTarget.taskPackageId,
+        taskPackageDigest: testTarget.taskPackageDigest,
+      },
       testReviewDecision: {
         targetReviewDecisionId:
           authorization.source.testReviewDecision.targetReviewDecisionId,
@@ -2374,10 +2310,6 @@ function normalizeState(
   const testTargets = targetTasks.filter(
     (target) => target.workType === "test",
   );
-  const currentTestCard =
-    wire.currentTestCard === undefined
-      ? undefined
-      : parseTestCardSummary(wire.currentTestCard, "$/currentTestCard");
   const pendingTestRetest =
     wire.pendingTestRetest === undefined
       ? undefined
@@ -2390,45 +2322,31 @@ function normalizeState(
     wire.continuation === undefined
       ? undefined
       : parseContinuationState(wire.continuation);
-  const currentTestTargets =
-    currentTestCard === undefined
-      ? []
-      : testTargets.filter((target) =>
-          testTargetMatchesCard(target, currentTestCard),
-        );
-  const historicalTestTargets =
-    currentTestCard === undefined
-      ? testTargets
-      : testTargets.filter(
-          (target) => !testTargetMatchesCard(target, currentTestCard),
-        );
+  // 同一时间只有一个未终结的 test 目标（能力卡 5 Q4）；历史代际只能停在 test-product-defect。
+  const openTestTargets = testTargets.filter(
+    (target) => target.phase !== "test-product-defect",
+  );
+  // 未终结的 test 目标只能站在全部已接受的实现基线上；缺陷代际之后的产品返工不受此限。
   if (
-    historicalTestTargets.some(
-      (target) => target.phase !== "test-product-defect",
-    ) ||
-    (currentTestCard !== undefined &&
+    openTestTargets.length > 1 ||
+    (openTestTargets.length === 1 &&
       (liveImplementationTargets.length === 0 ||
-        liveImplementationTargets.some((target) => target.phase !== "accepted") ||
-        currentTestTargets.length > 1 ||
-        (currentTestTargets.length === 0 &&
-          testTargets.some(
-            (target) =>
-              target.targetTaskId === currentTestCard.targetTaskId ||
-              target.testCard.testCardId === currentTestCard.testCardId,
-          ))))
+        liveImplementationTargets.some((target) => target.phase !== "accepted")))
   ) {
-    fail("relation", "$/currentTestCard");
+    fail("relation", "$/targetTasks");
   }
   if (
     pendingTestRetest !== undefined &&
-    (currentTestCard !== undefined ||
+    (openTestTargets.length !== 0 ||
       !testTargets.some(
         (target) =>
           target.phase === "test-product-defect" &&
-          target.testCard.testCardId ===
-            pendingTestRetest.previousTestCard.testCardId &&
-          target.testCard.testCardDigest ===
-            pendingTestRetest.previousTestCard.testCardDigest &&
+          target.targetTaskId ===
+            pendingTestRetest.previousTestTarget.targetTaskId &&
+          target.taskPackageId ===
+            pendingTestRetest.previousTestTarget.taskPackageId &&
+          target.taskPackageDigest ===
+            pendingTestRetest.previousTestTarget.taskPackageDigest &&
           target.currentDelivery.reviewDecision.targetReviewDecisionId ===
             pendingTestRetest.testReviewDecision.targetReviewDecisionId &&
           target.currentDelivery.reviewDecision.decisionDigest ===
@@ -2444,11 +2362,9 @@ function normalizeState(
     (pendingTestRetest !== undefined ||
       liveImplementationTargets.length === 0 ||
       liveImplementationTargets.some((target) => target.phase !== "accepted") ||
-      (testTargets.length === 0
-        ? currentTestCard !== undefined
-        : currentTestCard === undefined ||
-          currentTestTargets.length !== 1 ||
-          currentTestTargets[0]?.phase !== "test-accepted"))
+      (testTargets.length > 0 &&
+        (openTestTargets.length !== 1 ||
+          openTestTargets[0]?.phase !== "test-accepted")))
   ) {
     fail("relation", "$/lifecycle");
   }
@@ -2460,7 +2376,6 @@ function normalizeState(
     lifecycle: wire.lifecycle,
     targetTasks,
     ...(managedEvidence === undefined ? {} : { managedEvidence }),
-    ...(currentTestCard === undefined ? {} : { currentTestCard }),
     ...(pendingTestRetest === undefined ? {} : { pendingTestRetest }),
     ...(awaitingDecision === undefined ? {} : { awaitingDecision }),
     ...(continuation === undefined ? {} : { continuation }),
@@ -2749,29 +2664,61 @@ export function planTargetTaskInDemandAggregateState(
     fail("transition", "$state/targetTasks");
   }
   if (taskPackage.workType === "test") {
-    const currentTestCard = current.currentTestCard;
+    const testTargets = current.targetTasks.filter(
+      (target) => target.workType === "test",
+    );
+    const liveImplementationTargets = current.targetTasks.filter(
+      (target) => target.workType !== "test" && target.phase !== "superseded",
+    );
+    const baselineByTarget = new Map(
+      taskPackage.implementationBaselines.map(
+        (baseline) => [baseline.targetTaskId, baseline] as const,
+      ),
+    );
+    const pendingTestRetest = current.pendingTestRetest;
+    const lineage = taskPackage.lineage;
+    const lineageCloses =
+      lineage === null
+        ? pendingTestRetest === undefined && testTargets.length === 0
+        : pendingTestRetest !== undefined &&
+          lineage.retestsTargetTaskId ===
+            pendingTestRetest.previousTestTarget.targetTaskId &&
+          lineage.productDefectRemediationId ===
+            pendingTestRetest.productDefectRemediation
+              .productDefectRemediationId &&
+          lineage.authorizationDigest ===
+            pendingTestRetest.productDefectRemediation.authorizationDigest;
     if (
-      currentTestCard === undefined ||
-      currentTestCard.testCardId !== taskPackage.testCard.testCardId ||
-      currentTestCard.testCardDigest !== taskPackage.testCard.testCardDigest ||
-      currentTestCard.targetTaskId !== taskPackage.targetTaskId ||
-      currentTestCard.testWindowId !== taskPackage.assignment.windowId ||
-      current.targetTasks.some(
-        (target) =>
-          target.workType === "test" &&
-          target.testCard.testCardId === currentTestCard.testCardId,
-      ) ||
-      current.targetTasks.some(
-        (target) =>
-          target.workType !== "test" &&
-          target.phase !== "accepted" &&
-          target.phase !== "superseded",
-      )
+      !lineageCloses ||
+      testTargets.some((target) => target.phase !== "test-product-defect") ||
+      liveImplementationTargets.length === 0 ||
+      liveImplementationTargets.length !== baselineByTarget.size ||
+      liveImplementationTargets.some((target) => {
+        const baseline = baselineByTarget.get(target.targetTaskId);
+        return (
+          target.phase !== "accepted" ||
+          baseline === undefined ||
+          baseline.taskPackageId !== target.taskPackageId ||
+          baseline.taskPackageDigest !== target.taskPackageDigest ||
+          baseline.repositoryId !== target.repositoryId ||
+          baseline.windowId !== target.windowId ||
+          baseline.targetResultId !==
+            target.currentDelivery.targetResult.targetResultId ||
+          baseline.resultDigest !==
+            target.currentDelivery.targetResult.resultDigest ||
+          baseline.targetReviewDecisionId !==
+            target.currentDelivery.reviewDecision.targetReviewDecisionId ||
+          baseline.decisionDigest !==
+            target.currentDelivery.reviewDecision.decisionDigest
+        );
+      })
     ) {
-      fail("transition", "$state/currentTestCard");
+      fail("transition", "$state/targetTasks");
     }
+    const { pendingTestRetest: _pendingTestRetest, ...withoutPendingTestRetest } =
+      current;
     return parseDemandAggregateState({
-      ...current,
+      ...withoutPendingTestRetest,
       targetTasks: [
         ...current.targetTasks,
         {
@@ -2780,7 +2727,6 @@ export function planTargetTaskInDemandAggregateState(
           taskPackageDigest: computeTaskPackageDigest(taskPackage),
           workType: "test",
           windowId: taskPackage.assignment.windowId,
-          testCard: currentTestCard,
           phase: "planned",
         },
       ].sort((left, right) =>
@@ -2789,7 +2735,7 @@ export function planTargetTaskInDemandAggregateState(
     });
   }
   if (
-    current.currentTestCard !== undefined ||
+    current.pendingTestRetest !== undefined ||
     current.targetTasks.some((entry) => entry.workType === "test")
   ) {
     fail("transition", "$state/targetTasks");
@@ -2858,23 +2804,15 @@ export function completeDemandAggregateState(
   const testTargets = current.targetTasks.filter(
     (target) => target.workType === "test",
   );
-  const currentTestCard = current.currentTestCard;
-  const currentTestTarget =
-    currentTestCard === undefined
-      ? undefined
-      : testTargets.find((target) =>
-          testTargetMatchesCard(target, currentTestCard),
-        );
+  const openTestTargets = testTargets.filter(
+    (target) => target.phase !== "test-product-defect",
+  );
   const testingClosed =
     completion.testingMode === "controller-only"
-      ? currentTestCard === undefined && testTargets.length === 0
-      : currentTestCard !== undefined &&
-        currentTestTarget?.phase === "test-accepted" &&
-        testTargets.every(
-          (target) =>
-            target === currentTestTarget ||
-            target.phase === "test-product-defect",
-        );
+      ? testTargets.length === 0
+      : current.pendingTestRetest === undefined &&
+        openTestTargets.length === 1 &&
+        openTestTargets[0]?.phase === "test-accepted";
   if (
     current.lifecycle !== "active" ||
     completion.demandId !== current.demandId ||
@@ -2892,105 +2830,6 @@ export function completeDemandAggregateState(
   return parseDemandAggregateState({
     ...current,
     lifecycle: "completed",
-  });
-}
-
-/** `testing.test-card-created`当前版本使用的TestCard准入转换。 */
-export function createTestCardInDemandAggregateState(
-  currentValue: unknown,
-  testCardValue: unknown,
-  generationSourceValue: unknown,
-): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let testCard: Readonly<TestCard>;
-  let generationSource: Readonly<TestCardGenerationSource>;
-  try {
-    testCard = parseTestCard(testCardValue);
-  } catch (error: unknown) {
-    if (error instanceof TestCardError) fail("test-card", "$testCard");
-    throw error;
-  }
-  try {
-    generationSource = parseTestCardGenerationSource(generationSourceValue);
-  } catch (error: unknown) {
-    if (error instanceof TestCardGenerationSourceError) {
-      fail("test-card-generation-source", "$generationSource");
-    }
-    throw error;
-  }
-  const baselineByTarget = new Map(
-    testCard.implementationBaselines.map(
-      (baseline) => [baseline.targetTaskId, baseline] as const,
-    ),
-  );
-  const implementationTargets = current.targetTasks.filter(
-    (target) => target.workType !== "test" && target.phase !== "superseded",
-  );
-  const testTargets = current.targetTasks.filter(
-    (target) => target.workType === "test",
-  );
-  const generationCloses =
-    generationSource.kind === "initial"
-      ? current.pendingTestRetest === undefined && testTargets.length === 0
-      : current.pendingTestRetest !== undefined &&
-        pendingTestRetestMatches(current.pendingTestRetest, generationSource) &&
-        testTargets.some(
-          (target) =>
-            target.phase === "test-product-defect" &&
-            target.testCard.testCardId ===
-              generationSource.previousTestCard.testCardId &&
-            target.testCard.testCardDigest ===
-              generationSource.previousTestCard.testCardDigest &&
-            target.currentDelivery.reviewDecision.targetReviewDecisionId ===
-              generationSource.testReviewDecision.targetReviewDecisionId &&
-            target.currentDelivery.reviewDecision.decisionDigest ===
-              generationSource.testReviewDecision.decisionDigest,
-        );
-  if (
-    current.lifecycle !== "active" ||
-    current.currentTestCard !== undefined ||
-    testCard.demandId !== current.demandId ||
-    testCard.demandAuthorityDigest !== current.authorityDigest ||
-    testCard.source.stateDigest !==
-      computeDemandAggregateStateDigest(current) ||
-    implementationTargets.length === 0 ||
-    !generationCloses ||
-    implementationTargets.length !== baselineByTarget.size ||
-    implementationTargets.some((target) => {
-      const baseline = baselineByTarget.get(target.targetTaskId);
-      return (
-        target.phase !== "accepted" ||
-        baseline === undefined ||
-        baseline.taskPackageId !== target.taskPackageId ||
-        baseline.taskPackageDigest !== target.taskPackageDigest ||
-        baseline.repositoryId !== target.repositoryId ||
-        baseline.windowId !== target.windowId ||
-        baseline.targetResultId !==
-          target.currentDelivery.targetResult.targetResultId ||
-        baseline.resultDigest !==
-          target.currentDelivery.targetResult.resultDigest ||
-        baseline.targetReviewDecisionId !==
-          target.currentDelivery.reviewDecision.targetReviewDecisionId ||
-        baseline.decisionDigest !==
-          target.currentDelivery.reviewDecision.decisionDigest
-      );
-    }) ||
-    current.targetTasks.some(
-      (target) => target.targetTaskId === testCard.targetTaskId,
-    )
-  ) {
-    fail("transition", "$state");
-  }
-  const { pendingTestRetest: _pendingTestRetest, ...withoutPendingTestRetest } =
-    current;
-  return parseDemandAggregateState({
-    ...withoutPendingTestRetest,
-    currentTestCard: {
-      testCardId: testCard.testCardId,
-      testCardDigest: testCard.testCardDigest,
-      targetTaskId: testCard.targetTaskId,
-      testWindowId: testCard.testWindowId,
-    },
   });
 }
 

@@ -201,11 +201,29 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     );
   }
   const testTaskRequest = definition(planningRequest, "testTaskPackageRequest");
-  deepEqual(testTaskRequest.required, ["workType"]);
-  deepEqual(Object.keys(testTaskRequest.properties as JsonObject), ["workType"]);
+  const testRequestFields = [
+    "boundaries",
+    "completionExpectations",
+    "confirmedContext",
+    "lineage",
+    "objective",
+    "selectedAuthorityMemberRefs",
+    "testContract",
+    "workType",
+  ];
+  deepEqual([...(testTaskRequest.required as string[])].sort(), testRequestFields);
+  deepEqual(Object.keys(testTaskRequest.properties as JsonObject).sort(), testRequestFields);
   deepEqual((testTaskRequest.properties as JsonObject).workType, {
     const: "test",
   });
+  for (const field of testRequestFields) {
+    if (field === "selectedAuthorityMemberRefs") continue;
+    equal(
+      domainFields.includes(field),
+      true,
+      `Test planning request field ${field} must exist on the domain TaskPackage`,
+    );
+  }
   deepEqual((planningResult.properties as JsonObject).status, {
     enum: ["committed", "idempotent"],
   });
@@ -225,7 +243,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     const: "test",
   });
   equal(Object.hasOwn(testTargetTask.properties as JsonObject, "repositoryId"), false);
-  equal(Object.hasOwn(testTargetTask.properties as JsonObject, "testCard"), true);
+  equal(Object.hasOwn(testTargetTask.properties as JsonObject, "testCard"), false);
+  equal(Object.hasOwn(testTargetTask.properties as JsonObject, "testContract"), true);
 
   const prepareRequest = readSchema(
     "src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-request.schema.json",
@@ -651,105 +670,42 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     enum: ["pending", "parked", "claimed", "withdrawn", "archived"],
   });
 
-  const domainAuthority = readSchema(
-    "src/contracts/schemas/governance/demand/demand-authority.schema.json",
+  // 测试合同随 test 任务包进入规划请求：Controller 只写合同内容，环境与 stepId 由 Wakeflow 派生。
+  const contractDomainTaskPackage = readSchema(
+    "src/contracts/schemas/governance/tasking/task-package.schema.json",
   );
-  const domainAuthorityMember = readSchema(
-    "src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json",
+  const contractPlanningRequest = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
   );
-
-  const testCardPlanningRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-test-card-planning-request.schema.json",
-  );
-  const testCardPlanningResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-test-card-planning-result.schema.json",
-  );
-  for (const sharedDefinition of [
-    "plan",
-    "demandAuthority",
-    "testCard",
-    "generationSource",
-    "authorityMemberReference",
-    "portableResourcePath",
-    "sha256Digest",
-    "utcInstant",
-    "demandId",
-    "eventId",
-    "commitId",
-  ]) {
-    deepEqual(
-      definition(testCardPlanningRequest, sharedDefinition),
-      definition(testCardPlanningResult, sharedDefinition),
-      `TestCard Planning wire definition ${sharedDefinition} must not drift`,
-    );
-  }
-
-  const domainTestCard = readSchema(
-    "src/contracts/schemas/governance/testing/test-card.schema.json",
-  );
-  const publicTestCard = definition(testCardPlanningRequest, "testCard");
+  const domainTestContract = definition(contractDomainTaskPackage, "testContract");
   deepEqual(
-    [...(publicTestCard.required as string[])].sort(),
-    [...(domainTestCard.required as string[])].sort(),
+    Object.keys(
+      definition(contractPlanningRequest, "testContractRequest").properties as JsonObject,
+    ).sort(),
+    Object.keys(domainTestContract.properties as JsonObject)
+      .filter((key) => key !== "environment")
+      .sort(),
+    "Controller-authored test contract must mirror the domain contract minus the derived environment",
   );
   deepEqual(
-    Object.keys(publicTestCard.properties as Record<string, unknown>).sort(),
-    Object.keys(domainTestCard.properties as Record<string, unknown>).sort(),
-    "Public TestCard fields must mirror the domain TestCard",
+    Object.keys(
+      definition(contractPlanningRequest, "testContractStepRequest").properties as JsonObject,
+    ).sort(),
+    Object.keys(definition(contractDomainTaskPackage, "testContractStep").properties as JsonObject)
+      .filter((key) => key !== "stepId")
+      .sort(),
+    "Controller-authored test step must mirror the domain step minus the derived stepId",
   );
-
-  const publicTestCardAuthority = definition(testCardPlanningRequest, "demandAuthority");
-  deepEqual(
-    [...(publicTestCardAuthority.required as string[])].sort(),
-    [...(domainAuthority.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicTestCardAuthority.properties as Record<string, unknown>).sort(),
-    Object.keys(domainAuthority.properties as Record<string, unknown>).sort(),
-    "Public TestCard plan Authority fields must mirror Demand Authority",
-  );
-
-  const publicTestCardAuthorityMember = definition(
-    testCardPlanningRequest,
-    "authorityMemberReference",
+  const contractReviewInspection = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-result.schema.json",
   );
   deepEqual(
-    [...(publicTestCardAuthorityMember.required as string[])].sort(),
-    [...(domainAuthorityMember.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicTestCardAuthorityMember.properties as Record<string, unknown>).sort(),
-    Object.keys(domainAuthorityMember.properties as Record<string, unknown>).sort(),
-    "Public TestCard Authority reference fields must mirror Ledger Authority",
-  );
-
-  const authoredContent = definition(testCardPlanningRequest, "authoredContent");
-  deepEqual(
-    Object.keys(authoredContent.properties as Record<string, unknown>).sort(),
-    [
-      "allowedOperations",
-      "allowedSkills",
-      "approvedPlan",
-      "cannotConclude",
-      "controllerSelfChecks",
-      "evidenceRequired",
-      "failureMeans",
-      "forbiddenOperations",
-      "maxAttempts",
-      "objectBoundary",
-      "question",
-      "realScenarioConditions",
-      "setupPolicy",
-      "stopConditions",
-      "successMeans",
-    ],
-    "Public TestCard preview must contain exactly Controller-authored content",
-  );
-  const testCardPreviewRequest = definition(testCardPlanningRequest, "previewRequest");
-  deepEqual(
-    Object.keys(testCardPreviewRequest.properties as Record<string, unknown>).sort(),
-    ["demandId", "mode", "root", "testCard"],
-    "Public TestCard preview must not restore an Authority path selector",
+    Object.keys(
+      definition(contractReviewInspection, "reviewTaskPackageTestContract")
+        .properties as JsonObject,
+    ).sort(),
+    Object.keys(domainTestContract.properties as JsonObject).sort(),
+    "Review inspection test contract mirror must not drift from the domain contract",
   );
 
   const resumeRequest = readSchema(

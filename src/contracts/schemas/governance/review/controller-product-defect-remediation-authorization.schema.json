@@ -102,10 +102,6 @@
       "type": "string",
       "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "testCardId": {
-      "type": "string",
-      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
     "testAttemptId": {
       "type": "string",
       "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -127,7 +123,7 @@
         "stateDigest",
         "streamRevision",
         "testTargetTaskId",
-        "testCard",
+        "testTaskPackage",
         "testAttemptId",
         "targetResult",
         "testReviewDecision"
@@ -149,19 +145,6 @@
         },
         "testTargetTaskId": {
           "$ref": "#/$defs/targetTaskId"
-        },
-        "testCard": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["testCardId", "testCardDigest"],
-          "properties": {
-            "testCardId": {
-              "$ref": "#/$defs/testCardId"
-            },
-            "testCardDigest": {
-              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-            }
-          }
         },
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
@@ -192,6 +175,19 @@
             },
             "decidedAt": {
               "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+            }
+          }
+        },
+        "testTaskPackage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["taskPackageId", "taskPackageDigest"],
+          "properties": {
+            "taskPackageId": {
+              "$ref": "#/$defs/taskPackageId"
+            },
+            "taskPackageDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
             }
           }
         }

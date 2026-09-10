@@ -34,6 +34,7 @@ import {
 } from "../demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES } from "../demand/event-sourcing/demand-file-event-store-contract.js";
 import { parseDemandEventStreamRevision } from "../demand/event-sourcing/demand-event-stream-position.js";
+import { computeTaskPackageDigest } from "../tasking/task-package.js";
 import {
   buildDemandPostAcceptanceRoute,
   DemandPostAcceptanceRouteError,
@@ -61,7 +62,7 @@ import {
  * Wakeflow Governance / Review：把当前Test产品缺陷升级为同Demand产品返工授权。
  *
  * 调用方只选择受影响Target、失败检查映射和修复目标。Service从当前route、完整Event
- * history和TestCard派生baseline、Decision、Result与stream位置，并原子追加授权Event。
+ * history 和 test 任务包派生 baseline、Decision、Result 与 stream 位置，并原子追加授权 Event。
  */
 
 export interface ControllerProductDefectRemediationServiceResult {
@@ -82,7 +83,7 @@ export type ControllerProductDefectRemediationServiceErrorReason =
   | "controller-authority"
   | "route"
   | "state"
-  | "test-card"
+  | "test-task-package"
   | "authorization"
   | "transition"
   | "event"
@@ -102,8 +103,8 @@ const ERROR_MESSAGES = {
   route:
     "Controller Product Defect Remediation route is stale or inconsistent.",
   state: "Controller Product Defect Remediation Event history is invalid.",
-  "test-card":
-    "Controller Product Defect Remediation TestCard baseline is invalid.",
+  "test-task-package":
+    "Controller Product Defect Remediation test TaskPackage baseline is invalid.",
   authorization:
     "Controller Product Defect Remediation Authorization is invalid.",
   transition:
@@ -354,10 +355,8 @@ function initialAuthorization(
     decision.kind !== "WakeflowControllerTestReviewDecision" ||
     decision.decision !== "escalate-product-defect" ||
     decision.targetTaskId !== route.nextStage.testReview.targetTaskId ||
-    decision.testExecution.testCard.testCardId !==
-      route.nextStage.testReview.testCardId ||
-    decision.testExecution.testCard.testCardDigest !==
-      route.nextStage.testReview.testCardDigest ||
+    decision.testExecution.testAttemptId !==
+      route.nextStage.testReview.testAttemptId ||
     decision.controllerWindowId !==
       context.config.indexes.controllerWindow.windowId ||
     decision.programId !== context.config.model.program.programId ||
@@ -365,19 +364,20 @@ function initialAuthorization(
   ) {
     fail("controller-authority");
   }
-  const testCardSource = history.testCards.find(
-    (entry) =>
-      entry.testCard.testCardId === decision.testExecution.testCard.testCardId,
-  );
+  const testReview = route.nextStage.testReview;
+  const testPackage = history.taskPackages.find(
+    (entry) => entry.taskPackage.taskPackageId === testReview.taskPackageId,
+  )?.taskPackage;
   if (
-    testCardSource === undefined ||
-    testCardSource.testCard.testCardDigest !==
-      decision.testExecution.testCard.testCardDigest
+    testPackage === undefined ||
+    testPackage.workType !== "test" ||
+    testPackage.targetTaskId !== decision.targetTaskId ||
+    computeTaskPackageDigest(testPackage) !== testReview.taskPackageDigest
   ) {
-    fail("test-card");
+    fail("test-task-package");
   }
   const baselineByTarget = new Map(
-    testCardSource.testCard.implementationBaselines.map(
+    testPackage.implementationBaselines.map(
       (baseline) => [baseline.targetTaskId, baseline] as const,
     ),
   );
@@ -401,7 +401,7 @@ function initialAuthorization(
       accepted.targetReviewDecisionId !== baseline.targetReviewDecisionId ||
       accepted.decisionDigest !== baseline.decisionDigest
     ) {
-      fail("test-card");
+      fail("test-task-package");
     }
     return Object.freeze({
       baseline,
@@ -426,6 +426,10 @@ function initialAuthorization(
           streamRevision: parseDemandEventStreamRevision(
             route.observedEventStream.streamRevision,
           ),
+        },
+        testTaskPackage: {
+          taskPackageId: testReview.taskPackageId,
+          taskPackageDigest: testReview.taskPackageDigest,
         },
         affectedTargets,
         authorizationRationale: request.authorizationRationale,

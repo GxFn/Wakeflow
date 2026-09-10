@@ -18,7 +18,6 @@ import { executeControllerProductDefectRemediationPublicRequest } from "../gover
 import { executeControllerTestReviewDecisionPublicRequest } from "../governance/review/controller-test-review-decision-public-coordinator.js";
 import { executeTargetResultReviewInspectionPublicRequest } from "../governance/review/target-result-review-inspection-public-coordinator.js";
 import { executeTargetResultReviewResumePublicRequest } from "../governance/review/target-result-review-resume-public-coordinator.js";
-import { executeTestCardPlanningPublicRequest } from "../governance/testing/test-card-planning-public-coordinator.js";
 import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.js";
 
 /**
@@ -37,7 +36,6 @@ export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
   inspectTargetResultReview: executeTargetResultReviewInspectionPublicRequest,
   inspectBoard: executeBoardInspectionRequest,
   planTargetTask: executeTargetTaskPlanningPublicRequest,
-  planTestCard: executeTestCardPlanningPublicRequest,
   publishRequirement: executeRequirementPublicationRequest,
   recordControllerImplementationReviewDecision:
     executeControllerImplementationReviewDecisionPublicRequest,
@@ -56,7 +54,6 @@ export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
     | "inspectTargetResultReview"
     | "inspectBoard"
     | "planTargetTask"
-    | "planTestCard"
     | "publishRequirement"
     | "recordControllerImplementationReviewDecision"
     | "recordControllerTestReviewDecision"

@@ -16,12 +16,6 @@ import { WAKEFLOW_MANAGED_EVIDENCE_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../.
 import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
 import type { WakeflowTargetTaskPlannedEventDataV1 } from "../../../contracts/generated/governance/demand/target-task-planned-event-data-v1.generated.js";
 import { WAKEFLOW_TARGET_TASK_PLANNED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-task-planned-event-data-v1.generated.js";
-import type { WakeflowTestCardCreatedEventDataV1 } from "../../../contracts/generated/governance/demand/test-card-created-event-data-v1.generated.js";
-import { WAKEFLOW_TEST_CARD_CREATED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/test-card-created-event-data-v1.generated.js";
-import type { WakeflowTestCardCreatedEventDataV2 } from "../../../contracts/generated/governance/demand/test-card-created-event-data-v2.generated.js";
-import { WAKEFLOW_TEST_CARD_CREATED_EVENT_DATA_V2_SCHEMA } from "../../../contracts/generated/governance/demand/test-card-created-event-data-v2.generated.js";
-import { WAKEFLOW_TEST_CARD_SCHEMA } from "../../../contracts/generated/governance/testing/test-card.generated.js";
-import { WAKEFLOW_TEST_CARD_GENERATION_SOURCE_SCHEMA } from "../../../contracts/generated/governance/testing/test-card-generation-source.generated.js";
 import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import type { WakeflowTargetResultRecordedEventDataV1 } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v1.generated.js";
 import { WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v1.generated.js";
@@ -89,7 +83,6 @@ export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
   "review.target-result-decided",
   "review.target-result-resumed",
   "tasking.target-task-planned",
-  "testing.test-card-created",
 ] as const);
 
 type DemandEventSourcingCurrentEventType =
@@ -111,7 +104,6 @@ export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
   "review.target-result-decided": 1,
   "review.target-result-resumed": 1,
   "tasking.target-task-planned": 1,
-  "testing.test-card-created": 2,
 } as const satisfies Readonly<
   Record<DemandEventSourcingCurrentEventType, number>
 >);
@@ -183,29 +175,6 @@ const validateTargetTaskPlannedV1 =
       WAKEFLOW_UTC_INSTANT_SCHEMA,
     ],
   );
-const validateTestCardCreatedV1 =
-  createRuntimeJsonSchemaValidator<WakeflowTestCardCreatedEventDataV1>(
-    WAKEFLOW_TEST_CARD_CREATED_EVENT_DATA_V1_SCHEMA,
-    [
-      WAKEFLOW_TEST_CARD_SCHEMA,
-      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-    ],
-  );
-const validateTestCardCreatedV2 =
-  createRuntimeJsonSchemaValidator<WakeflowTestCardCreatedEventDataV2>(
-    WAKEFLOW_TEST_CARD_CREATED_EVENT_DATA_V2_SCHEMA,
-    [
-      WAKEFLOW_TEST_CARD_SCHEMA,
-      WAKEFLOW_TEST_CARD_GENERATION_SOURCE_SCHEMA,
-      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-    ],
-  );
 const validateDeliveryPreparedV1 =
   createRuntimeJsonSchemaValidator<WakeflowDeliveryPreparedEventDataV1>(
     WAKEFLOW_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA,
@@ -215,7 +184,6 @@ const validateDeliveryPreparedV1 =
       WAKEFLOW_DELIVERY_REARM_SCHEMA,
       WAKEFLOW_TASK_PACKAGE_SCHEMA,
       WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
-      WAKEFLOW_TEST_CARD_SCHEMA,
       WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
       WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
       WAKEFLOW_SHA256_DIGEST_SCHEMA,
@@ -232,7 +200,6 @@ const validateDeliveryOutcomeRecordedV1 =
       WAKEFLOW_DELIVERY_REARM_SCHEMA,
       WAKEFLOW_TASK_PACKAGE_SCHEMA,
       WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
-      WAKEFLOW_TEST_CARD_SCHEMA,
       WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
       WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
       WAKEFLOW_SHA256_DIGEST_SCHEMA,
@@ -249,7 +216,6 @@ const validateDeliveryRearmedV1 =
       WAKEFLOW_DELIVERY_REARM_SCHEMA,
       WAKEFLOW_TASK_PACKAGE_SCHEMA,
       WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
-      WAKEFLOW_TEST_CARD_SCHEMA,
       WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
       WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
       WAKEFLOW_SHA256_DIGEST_SCHEMA,
@@ -363,38 +329,6 @@ function parseTargetTaskPlannedV1(
   if (!result.ok)
     throw new TypeError("Target task planned v1 data is invalid.");
   return parseJsonValue(result.value, "$data");
-}
-
-function parseTestCardCreatedV1(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  const result = validateTestCardCreatedV1(value);
-  if (!result.ok) throw new TypeError("TestCard created v1 data is invalid.");
-  return parseJsonValue(result.value, "$data");
-}
-
-function parseTestCardCreatedV2(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  const result = validateTestCardCreatedV2(value);
-  if (!result.ok) throw new TypeError("TestCard created v2 data is invalid.");
-  return parseJsonValue(result.value, "$data");
-}
-
-/** v1只支持首份Card；升版显式补充initial代际原因。 */
-function upcastTestCardCreatedV1ToV2(
-  value: Readonly<JsonValue>,
-): Readonly<JsonValue> {
-  if (value === null || Array.isArray(value) || typeof value !== "object") {
-    throw new TypeError("TestCard created v1 data is invalid.");
-  }
-  return parseJsonValue(
-    {
-      ...value,
-      generationSource: { kind: "initial" },
-    },
-    "$data",
-  );
 }
 
 function parseDeliveryPreparedV1(
@@ -526,22 +460,6 @@ const TARGET_TASK_PLANNED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   steps: [],
 });
 
-const TEST_CARD_CREATED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
-  currentVersion:
-    DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["testing.test-card-created"],
-  codecs: [
-    { version: 1, parse: parseTestCardCreatedV1 },
-    { version: 2, parse: parseTestCardCreatedV2 },
-  ],
-  steps: [
-    {
-      fromVersion: 1,
-      toVersion: 2,
-      upcast: upcastTestCardCreatedV1ToV2,
-    },
-  ],
-});
-
 const DELIVERY_PREPARED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   currentVersion:
     DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["delivery.delivery-prepared"],
@@ -622,7 +540,6 @@ const EVENT_VERSION_REGISTRIES = Object.freeze({
   "review.target-result-decided": CONTROLLER_TARGET_REVIEW_DECIDED_REGISTRY,
   "review.target-result-resumed": CONTROLLER_TARGET_REVIEW_RESUMED_REGISTRY,
   "tasking.target-task-planned": TARGET_TASK_PLANNED_REGISTRY,
-  "testing.test-card-created": TEST_CARD_CREATED_REGISTRY,
 } as const satisfies Readonly<
   Record<
     DemandEventSourcingCurrentEventType,
@@ -652,7 +569,6 @@ export const DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS = Object.freeze({
   "review.target-result-resumed":
     CONTROLLER_TARGET_REVIEW_RESUMED_REGISTRY.supportedVersions,
   "tasking.target-task-planned": TARGET_TASK_PLANNED_REGISTRY.supportedVersions,
-  "testing.test-card-created": TEST_CARD_CREATED_REGISTRY.supportedVersions,
 } as const satisfies Readonly<
   Record<DemandEventSourcingCurrentEventType, readonly number[]>
 >);

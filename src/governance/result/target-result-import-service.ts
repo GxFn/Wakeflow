@@ -101,7 +101,6 @@ export type TargetResultImportServiceErrorReason =
   | "demand-authority"
   | "task-package"
   | "envelope"
-  | "test-card"
   | "fence"
   | "host"
   | "outcome"
@@ -122,7 +121,6 @@ const ERROR_MESSAGES = {
   "demand-authority": "TargetResult Import Demand authority is invalid.",
   "task-package": "TargetResult Import TaskPackage authority is invalid.",
   envelope: "TargetResult Import Delivery Envelope authority is invalid.",
-  "test-card": "TargetResult Import TestCard authority is invalid.",
   fence: "TargetResult Import fence token does not match the current delivery generation.",
   host: "TargetResult Import delivery belongs to another Host.",
   outcome: "TargetResult Import delivery has no accepted or indeterminate outcome.",
@@ -469,7 +467,6 @@ export class TargetResultImportService {
         try {
           result = createTestTargetResult({
             taskPackage: sources.taskPackage,
-            testCard: sources.testCard,
             envelope,
             delivery: deliveryBinding,
             report,

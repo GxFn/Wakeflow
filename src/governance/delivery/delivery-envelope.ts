@@ -4,7 +4,6 @@ import {
 } from "../../configuration/wakeflow-config-v3.js";
 import type { WakeflowDeliveryEnvelope as DeliveryEnvelopeWire } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
 import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
-import { WAKEFLOW_TEST_CARD_SCHEMA } from "../../contracts/generated/governance/testing/test-card.generated.js";
 import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
@@ -174,7 +173,6 @@ export type DeliveryEnvelopeErrorReason =
   | "product-defect-remediation"
   | "time"
   | "task-package"
-  | "test-card"
   | "attempt"
   | "relation";
 
@@ -192,7 +190,6 @@ const ERROR_MESSAGES = {
     "Delivery Envelope product-defect remediation context is invalid or inconsistent.",
   time: "Delivery Envelope contains an invalid preparation time.",
   "task-package": "Delivery Envelope source TaskPackage is invalid.",
-  "test-card": "Delivery Envelope source TestCard is invalid.",
   attempt: "Delivery Envelope test attempt is invalid or does not follow its sources.",
   relation: "Delivery Envelope does not match its TaskPackage, route, or sources.",
 } as const satisfies Readonly<Record<DeliveryEnvelopeErrorReason, string>>;
@@ -227,7 +224,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DeliveryEnvelopeWire>(
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_TASK_PACKAGE_SCHEMA,
-    WAKEFLOW_TEST_CARD_SCHEMA,
     WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
     WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
@@ -249,8 +245,7 @@ function parseId<
     | "target-review-decision"
     | "product-defect-remediation"
     | "window"
-    | "work-claim"
-    | "test-card",
+    | "work-claim",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
@@ -771,18 +766,12 @@ export interface ImplementationDeliveryEnvelope extends DeliveryEnvelopeBase {
   readonly workType: "implementation";
   readonly rework?: Readonly<TargetDeliveryReworkContext>;
   readonly productDefectRemediation?: Readonly<TargetDeliveryProductDefectRemediationContext>;
-  readonly testCard?: never;
   readonly attempt?: never;
-}
-
-export interface DeliveryTestCardTuple {
-  readonly testCardId: WakeflowDurableId<"test-card">;
-  readonly testCardDigest: Sha256Digest;
 }
 
 export interface TestDeliveryEnvelope extends DeliveryEnvelopeBase {
   readonly workType: "test";
-  readonly testCard: Readonly<DeliveryTestCardTuple>;
+  /** 逻辑尝试自带 `contract`，绑定当前 test 任务包身份与摘要。 */
   readonly attempt: Readonly<TestExecutionAttempt>;
   readonly rework?: never;
   readonly productDefectRemediation?: never;
@@ -830,10 +819,6 @@ function envelopeBasis(value: EnvelopeBasis): EnvelopeBasis {
     return Object.freeze({
       ...shared,
       workType: "test" as const,
-      testCard: Object.freeze({
-        testCardId: value.testCard.testCardId,
-        testCardDigest: value.testCard.testCardDigest,
-      }),
       attempt: value.attempt,
     });
   }
@@ -915,7 +900,7 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
   };
   let basis: EnvelopeBasis;
   if (wire.workType === "test") {
-    if (wire.testCard === undefined || wire.attempt === undefined) fail("schema", "$/workType");
+    if (wire.attempt === undefined) fail("schema", "$/workType");
     let attempt: Readonly<TestExecutionAttempt>;
     try {
       attempt = parseTestExecutionAttempt(wire.attempt);
@@ -923,18 +908,14 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
       if (error instanceof TestExecutionAttemptError) fail("attempt", "$/attempt");
       throw error;
     }
-    const testCard = Object.freeze({
-      testCardId: parseId(wire.testCard.testCardId, "test-card", "$/testCard/testCardId"),
-      testCardDigest: digest(wire.testCard.testCardDigest, "$/testCard/testCardDigest"),
-    });
     if (
       attempt.targetTaskId !== shared.target.targetTaskId ||
-      attempt.testCard.testCardId !== testCard.testCardId ||
-      attempt.testCard.testCardDigest !== testCard.testCardDigest
+      attempt.contract.taskPackageId !== shared.target.taskPackageId ||
+      attempt.contract.taskPackageDigest !== shared.target.taskPackageDigest
     ) {
       fail("relation", "$/attempt");
     }
-    basis = envelopeBasis({ ...shared, workType: "test", testCard, attempt });
+    basis = envelopeBasis({ ...shared, workType: "test", attempt });
   } else {
     const rework =
       wire.rework === undefined ? undefined : parseTargetDeliveryReworkContext(wire.rework, "$/rework");
@@ -1015,8 +996,8 @@ export function assertDeliveryEnvelopeMatchesTaskPackage(
   if (taskPackage.workType === "test") {
     if (
       envelope.workType !== "test" ||
-      envelope.testCard.testCardId !== taskPackage.testCard.testCardId ||
-      envelope.testCard.testCardDigest !== taskPackage.testCard.testCardDigest
+      envelope.attempt.contract.taskPackageId !== taskPackage.taskPackageId ||
+      envelope.attempt.contract.taskPackageDigest !== envelope.target.taskPackageDigest
     ) {
       fail("relation", "$sources");
     }

@@ -47,11 +47,23 @@ export interface DeliveryPromptReturn {
   readonly generation: number;
 }
 
+export interface DeliveryTestContractStepSection {
+  readonly stepId: string;
+  readonly given: string;
+  readonly when: string;
+  readonly then: string;
+}
+
+/** 测试合同在 prompt 里的可移植摘要：问题、边界、逐步 GWT、环境成员与尝试预算。 */
 export interface DeliveryTestContractSection {
-  readonly approvedPlan: readonly string[];
+  readonly question: string;
+  readonly objectBoundary: string;
+  readonly steps: readonly Readonly<DeliveryTestContractStepSection>[];
+  readonly environmentMemberRef: string;
   readonly allowedSkills: readonly string[];
   readonly setupDirective: string;
   readonly attemptOrdinal: number;
+  readonly maxAttempts: number;
   readonly stopConditions: readonly string[];
 }
 
@@ -234,9 +246,14 @@ function testLines(input: RenderDeliveryPromptInput, labels: Labels): readonly s
   const contract = input.testContract;
   if (contract === null) return [];
   return section(labels.test, [
-    `- attempt: ${contract.attemptOrdinal}`,
-    `- environment: ${contract.setupDirective}`,
-    ...contract.approvedPlan.map((step, index) => `- step ${index + 1}: ${step}`),
+    `- question: ${contract.question}`,
+    `- object boundary: ${contract.objectBoundary}`,
+    `- attempt: ${contract.attemptOrdinal} of ${contract.maxAttempts}`,
+    `- environment: ${contract.environmentMemberRef}`,
+    `- setup: ${contract.setupDirective}`,
+    ...contract.steps.map(
+      (step) => `- ${step.stepId}: given ${step.given}; when ${step.when}; then ${step.then}`,
+    ),
     ...(contract.allowedSkills.length === 0
       ? []
       : [`- allowed skills: ${contract.allowedSkills.join(", ")}`]),

@@ -7,7 +7,7 @@ test("next projection 按路由第一前沿派生责任方与建议工具", () =
   deepEqual(
     deriveNextProjection({
       disposition: "advancing",
-      frontiers: [{ kind: "implementation-delivery-planning" }, { kind: "test-card-planning" }],
+      frontiers: [{ kind: "implementation-delivery-planning" }, { kind: "test-task-planning" }],
       blockers: [],
     }),
     {

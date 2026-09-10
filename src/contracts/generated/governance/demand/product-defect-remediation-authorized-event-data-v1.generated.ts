@@ -50,10 +50,6 @@ reviewSnapshotDigest: WakeflowSha256DigestText
 stateDigest: WakeflowSha256DigestText
 streamRevision: number
 testTargetTaskId: string
-testCard: {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
-}
 testAttemptId: string
 targetResult: {
 targetResultId: string
@@ -63,6 +59,10 @@ testReviewDecision: {
 targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
 decidedAt: WakeflowUtcInstantText
+}
+testTaskPackage: {
+taskPackageId: string
+taskPackageDigest: WakeflowSha256DigestText
 }
 }
 export interface FailedCheck {

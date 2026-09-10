@@ -34,14 +34,18 @@ commitExpectation?: ("commit" | "leave-uncommitted")
  * @maxItems 32
  */
 acceptanceAnchors: AcceptanceAnchor[]
-testCard?: TestCardTuple
-lineage?: (null | {
+lineage?: ((null | {
 kind: "replacement"
 replacesTargetTaskId: string
 } | {
 kind: "continuation"
 continuesTargetTaskId: string
-})
+}) | (null | {
+kind: "retest"
+retestsTargetTaskId: string
+productDefectRemediationId: string
+authorizationDigest: WakeflowSha256DigestText
+}))
 planReview?: ({
 reviewer: "controller"
 } | {
@@ -49,6 +53,8 @@ reviewer: "user"
 confirmedAt: WakeflowUtcInstantText
 })
 sectionAnchors?: SectionAnchors
+testContract?: TestContract
+implementationBaselines?: ImplementationBaselines
 })
 /**
  * Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。
@@ -75,6 +81,11 @@ export type TextList = string[]
  * @maxItems 32
  */
 export type SectionAnchors = string[]
+/**
+ * @minItems 1
+ * @maxItems 32
+ */
+export type ImplementationBaselines = [ImplementationBaseline, ...(ImplementationBaseline)[]]
 
 /**
  * tasking.target-task-planned persisted event v1 的严格 payload。
@@ -122,9 +133,44 @@ recordDigest: WakeflowSha256DigestText
 sectionAnchor: string
 itemId: string
 }
-export interface TestCardTuple {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
+export interface TestContract {
+question: string
+objectBoundary: string
+/**
+ * @minItems 1
+ * @maxItems 20
+ */
+steps: [TestContractStep]|[TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]|[TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep, TestContractStep]
+environment: WakeflowLedgerAuthorityMemberReference
+/**
+ * @maxItems 8
+ */
+allowedSkills: []|[string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]
+setupPolicy: ("fresh-once" | "fresh-per-attempt" | "reuse-existing")
+maxAttempts: number
+/**
+ * @minItems 1
+ * @maxItems 8
+ */
+stopConditions: [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]
+}
+export interface TestContractStep {
+stepId: string
+given: string
+when: string
+then: string
+requirementRef: RequirementRef
+}
+export interface ImplementationBaseline {
+targetTaskId: string
+taskPackageId: string
+taskPackageDigest: WakeflowSha256DigestText
+repositoryId: string
+windowId: string
+targetResultId: string
+resultDigest: WakeflowSha256DigestText
+targetReviewDecisionId: string
+decisionDigest: WakeflowSha256DigestText
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

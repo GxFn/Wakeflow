@@ -29,7 +29,6 @@ targetTasks: TargetTask[]
  * @maxItems 10000
  */
 managedEvidence?: [ManagedEvidenceSummary, ...(ManagedEvidenceSummary)[]]
-currentTestCard?: TestCard
 pendingTestRetest?: PendingTestRetest
 awaitingDecision?: {
 escalationEventId: string
@@ -68,7 +67,6 @@ commitExpectation?: ("commit" | "leave-uncommitted")
 acceptanceAnchorIds?: [string, ...(string)[]]
 phase: ("planned" | "test-delivery-prepared" | "test-host-effect-accepted" | "test-host-effect-indeterminate" | "test-host-effect-rejected" | "test-result-reported" | "test-accepted" | "test-another-attempt-requested" | "test-product-defect" | "test-review-blocked" | "delivery-prepared" | "host-effect-accepted" | "host-effect-indeterminate" | "host-effect-rejected" | "result-reported" | "accepted" | "product-defect-rework-requested" | "rework-requested" | "redesign-requested" | "review-blocked" | "superseded")
 currentDelivery?: (CurrentDelivery | TestCurrentDelivery | TestObservedCurrentDelivery | TestResultCurrentDelivery | TestReviewedCurrentDelivery)
-testCard?: TestCard
 /**
  * @minItems 1
  * @maxItems 10
@@ -98,11 +96,11 @@ kind: "WakeflowTestExecutionAttempt"
 schemaVersion: 1
 testAttemptId: string
 targetTaskId: string
-testCard: TestCardTuple
 ordinal: number
 mode: ("initial" | "rerun")
 environmentSetup: EnvironmentSetup
 rerunSource?: RerunSource
+contract: Contract
 })
 
 /**
@@ -213,19 +211,9 @@ decision: ("accept" | "request-another-attempt" | "escalate-product-defect" | "b
 controllerWindowId: string
 decidedAt: WakeflowUtcInstantText
 }
-export interface TestCard {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
-targetTaskId: string
-testWindowId: string
-}
 export interface TestAttemptState {
 attempt: WakeflowTestExecutionAttempt
 delivery: TestAttemptDelivery
-}
-export interface TestCardTuple {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
 }
 export interface EnvironmentSetup {
 policy: ("fresh-once" | "fresh-per-attempt" | "reuse-existing")
@@ -241,6 +229,10 @@ reviewDecision: {
 targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
 }
+}
+export interface Contract {
+taskPackageId: string
+taskPackageDigest: WakeflowSha256DigestText
 }
 export interface TestAttemptDelivery {
 deliveryId: string
@@ -267,10 +259,6 @@ payloadArtifactDigest: WakeflowSha256DigestText
 }
 export interface PendingTestRetest {
 kind: "product-defect-retest"
-previousTestCard: {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
-}
 testReviewDecision: {
 targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
@@ -278,6 +266,11 @@ decisionDigest: WakeflowSha256DigestText
 productDefectRemediation: {
 productDefectRemediationId: string
 authorizationDigest: WakeflowSha256DigestText
+}
+previousTestTarget: {
+targetTaskId: string
+taskPackageId: string
+taskPackageDigest: WakeflowSha256DigestText
 }
 }
 

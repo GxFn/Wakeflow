@@ -30,7 +30,7 @@ import { deliveryBindingFromOutcome } from "./target-result.fixture.js";
 
 const TEST_RESULT_REPORTED_AT = parseUtcInstant("2026-08-29T12:40:00.000Z");
 
-test("TestTargetResult闭合Card、attempt与投递结局但不产生verdict", async () => {
+test("TestTargetResult闭合测试合同、attempt与投递结局但不产生verdict", async () => {
   const fixture = await createTestDeliveryWorkspaceFixture();
   try {
     const delivered = await deliverFixtureTestTarget(fixture);
@@ -47,14 +47,13 @@ test("TestTargetResult闭合Card、attempt与投递结局但不产生verdict", a
       return located.event.data.taskPackage;
     });
 
-    const reportContent = testResultReportContent(fixture.testCard);
+    const reportContent = testResultReportContent(fixture.testStepIds);
     const report = createTestTargetResultReport(reportContent, {
       clock: () => TEST_RESULT_REPORTED_AT,
     });
     const delivery = deliveryBindingFromOutcome(outcome);
     const result = createTestTargetResult({
       taskPackage,
-      testCard: fixture.testCard,
       envelope,
       delivery,
       report,
@@ -62,12 +61,12 @@ test("TestTargetResult闭合Card、attempt与投递结局但不产生verdict", a
     equal(result.workType, "test");
     equal(result.deliveryId, envelope.deliveryId);
     equal(result.delivery.disposition, "accepted");
-    equal(result.assignment.windowId, fixture.testCard.testWindowId);
+    equal(result.assignment.windowId, taskPackage.assignment.windowId);
     equal(Object.hasOwn(result.assignment, "repositoryId"), false);
     equal(result.testExecution.testAttemptId, envelope.attempt.testAttemptId);
-    equal(result.testExecution.testCard.testCardId, fixture.testCard.testCardId);
+    equal(Object.hasOwn(result.testExecution, "testCard"), false);
     equal(Object.hasOwn(result.testExecution, "testDispatchPacketDigest"), false);
-    equal(result.report.stepEvidence.length, fixture.testCard.approvedPlan.length);
+    equal(result.report.stepEvidence.length, taskPackage.testContract.steps.length);
     equal(Object.hasOwn(result, "controllerDecision"), false);
     equal(Object.hasOwn(result.report, "verdict"), false);
     equal(parseTargetResultDocument(renderTargetResult(result)).resultDigest, result.resultDigest);
@@ -87,7 +86,6 @@ test("TestTargetResult闭合Card、attempt与投递结局但不产生verdict", a
       () =>
         createTestTargetResult({
           taskPackage,
-          testCard: fixture.testCard,
           envelope,
           delivery,
           report: incompleteReport,
@@ -108,7 +106,7 @@ test("TestTargetResult闭合Card、attempt与投递结局但不产生verdict", a
     equal(recorded.result.resultDigest, result.resultDigest);
     equal(recorded.claimAuthority, "released");
     equal(
-      (await inspectWorkClaim(fixture.workspaceRoot, fixture.testCard.testWindowId)).status,
+      (await inspectWorkClaim(fixture.workspaceRoot, taskPackage.assignment.windowId)).status,
       "absent",
     );
     equal(

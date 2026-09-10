@@ -25,6 +25,7 @@ import { demandFinalRootRef } from "../../src/governance/demand/publication/dema
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
+import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-test-review-decision-public-contract.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
 import { controllerImplementationReviewDecisionInput } from "../governance/review/controller-implementation-review-decision.fixture.js";
@@ -58,9 +59,10 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 十个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
- * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 结果、评审后完成即归档 → 续接与取消。
- * 所有调用都经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内。
+ * 十一个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
+ * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 实现接受后规划测试合同、投递测试并
+ * 由 Controller 审查接受 → 完成即归档 → 续接与取消。所有调用都经过公共 MCP 工具，即 Agent 真实使用的入口；
+ * 宿主效果不在本骨架内。
  */
 
 interface ScenarioContext {
@@ -82,6 +84,10 @@ interface ScenarioContext {
   taskPackageId?: string;
   delivery?: DeliveryPermit | undefined;
   deliveryAccepted?: boolean;
+  targetAccepted?: boolean;
+  testWindowId?: string;
+  testHandle?: string;
+  testTargetTaskId?: string;
 }
 
 interface DeliveryPermit {
@@ -172,13 +178,15 @@ async function scenarioFreshInitialize(context: ScenarioContext): Promise<string
   const design = config.topology.supportSurfaces.find((surface) => surface.capability === "design");
   const designWindow = config.topology.windows.find((w) => w.role === "design");
   const productWindow = config.topology.windows.find((w) => w.role === "product");
+  const testWindow = config.topology.windows.find((w) => w.role === "test");
   const repository = config.topology.repositories[0];
-  if (!design || !designWindow || !productWindow || !repository) {
+  if (!design || !designWindow || !productWindow || !testWindow || !repository) {
     throw new Error("fresh config lacks the expected topology");
   }
   context.designSurfaceId = design.surfaceId;
   context.designWindowId = designWindow.windowId;
   context.productWindowId = productWindow.windowId;
+  context.testWindowId = testWindow.windowId;
   context.repositoryId = repository.repositoryId;
   context.designPath = path.join(root, design.path);
   return `status=${result.status}; launchIntents=${previewed.launchIntents.length}; config+active present`;
@@ -375,8 +383,8 @@ async function scenarioRequirementPackage(context: ScenarioContext): Promise<str
     priority: "P1",
     originWindowId: context.designWindowId,
     testingDecision: {
-      mode: "controller-only",
-      summary: "Controller validates focused implementation checks.",
+      mode: "real-environment",
+      summary: "Controller validates focused checks, then a test window runs the test contract.",
     },
     requirementPath: "drafts/requirement.md",
     landingPath: "drafts/landing.md",
@@ -696,8 +704,9 @@ async function prepareDelivery(
   context: ScenarioContext,
   idempotencyKey: string,
   expectedStreamRevision: number,
+  targetTaskId = context.targetTaskId,
 ): Promise<{ readonly status: string; readonly permit: DeliveryPermit }> {
-  if (!context.demandId || !context.targetTaskId) {
+  if (!context.demandId || !targetTaskId) {
     throw new Error("scenario ordering: plan-implementation-task must run first");
   }
   const prepared = await call(context, WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, {
@@ -705,10 +714,10 @@ async function prepareDelivery(
     demandId: context.demandId,
     idempotencyKey,
     expectedStreamRevision,
-    targetTaskId: context.targetTaskId,
+    targetTaskId,
     authored: {
-      goal: "按任务包完成本轮实现，只改分配仓库。",
-      focus: ["先读任务包与需求锚点", "聚焦验证通过后再回写结果"],
+      goal: "按任务包完成本轮工作，只动分配给你的范围。",
+      focus: ["先读任务包与需求锚点", "验证通过后再回写结果"],
       boundary: "不触碰其他仓库；不自行提交。",
     },
     language: "en",
@@ -743,14 +752,19 @@ async function prepareDelivery(
 }
 
 /** 目标窗口收到 prompt 后，宿主 hook 会留下 user-prompt-submit 记录；这里代替宿主写入。 */
-async function landPrompt(context: ScenarioContext, prompt: string): Promise<void> {
-  if (!context.productWindowId || !context.productHandle) {
+async function landPrompt(
+  context: ScenarioContext,
+  prompt: string,
+  windowId = context.productWindowId,
+  handle = context.productHandle,
+): Promise<void> {
+  if (!windowId || !handle) {
     throw new Error("scenario ordering: window-handshake must run first");
   }
   const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root: context.workspace.workspacePath,
     operation: "inspect",
-    windowId: context.productWindowId,
+    windowId,
   });
   const placement = (
     inspected.structuredContent as {
@@ -762,7 +776,7 @@ async function landPrompt(context: ScenarioContext, prompt: string): Promise<voi
     await writeHostHookObservation(root, {
       hostId: "codex",
       event: "user-prompt-submit",
-      sessionId: context.productHandle,
+      sessionId: handle,
       cwd: path.resolve(context.workspace.workspacePath, placement),
       recordedAt: parseUtcInstant(new Date().toISOString()),
       promptDigest: computeDeliveryPromptDigest(prompt),
@@ -843,7 +857,7 @@ async function scenarioAmbiguousResolution(context: ScenarioContext): Promise<st
   return `outcome=${accepted.outcome.disposition}; evidence=${accepted.outcome.evidenceKind}; route=${route.route?.frontiers[0]?.kind}`;
 }
 
-/** 卡 7 的工具链把已 accepted 的投递推到评审 accept；未投递时先走完整投递链。 */
+/** 卡 7 的工具链把已 accepted 的投递推到评审 accept；未投递时先走完整投递链；已接受则不再动。 */
 async function driveTargetToAcceptance(context: ScenarioContext): Promise<string> {
   const root = context.workspace.workspacePath;
   if (
@@ -854,6 +868,7 @@ async function driveTargetToAcceptance(context: ScenarioContext): Promise<string
   ) {
     throw new Error("scenario ordering: plan-implementation-task must run first");
   }
+  if (context.targetAccepted === true) return "implementation already accepted";
   if (!context.delivery || context.deliveryAccepted !== true) {
     const revision = await currentStreamRevision(context);
     const prepared = await prepareDelivery(context, `scenario-prepare-r${revision}`, revision);
@@ -924,7 +939,239 @@ async function driveTargetToAcceptance(context: ScenarioContext): Promise<string
   equal(decision.status, "decided");
   context.delivery = undefined;
   context.deliveryAccepted = false;
+  context.targetAccepted = true;
   return `import=${importStatus}; review=${decision.status}`;
+}
+
+/** 测试窗口的握手：Agent 启动窗口留下 session-start 记录后登记私有绑定（卡 2 的同一条链）。 */
+async function registerTestWindow(context: ScenarioContext): Promise<void> {
+  const root = context.workspace.workspacePath;
+  if (!context.testWindowId) throw new Error("scenario ordering: fresh-initialize must run first");
+  const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "inspect",
+    windowId: context.testWindowId,
+  });
+  const inspection = inspected.structuredContent as {
+    readonly launchIntent: {
+      readonly intentDigest: string;
+      readonly root: { readonly configuredPlacement: string };
+    };
+  };
+  const handle = { kind: "codex-thread", value: "codex-host-owned-thread:scenario-test" };
+  await recordSessionStart(context, handle.value, inspection.launchIntent.root.configuredPlacement);
+  const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "register",
+    windowId: context.testWindowId,
+    observation: {
+      handle,
+      launchIntentDigest: inspection.launchIntent.intentDigest,
+      observedAt: new Date().toISOString(),
+    },
+  });
+  equal((registered.structuredContent as BindingMutation).disposition, "registered");
+  context.testHandle = handle.value;
+}
+
+/**
+ * 卡 5 修订 5.2：实现接受后 Controller 撰写测试合同追加 test 任务包，Wakeflow 派生窗口、环境与基线；
+ * 测试投递、逐步证据导入与 Controller 测试审查走同一批公共工具，接受后 Route 到完成预检。
+ */
+async function scenarioTestContract(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.demandId || !context.memberRefs || !context.recordDigest || !context.testWindowId) {
+    throw new Error("scenario ordering: create-demand must run first");
+  }
+  const chain = await driveTargetToAcceptance(context);
+  const afterAccept = await inspectRoute(context);
+  equal(afterAccept.route?.frontiers[0]?.kind, "test-task-planning");
+  await registerTestWindow(context);
+  const revision = await currentStreamRevision(context);
+  const requirementRef = (itemId: string) => ({
+    recordDigest: context.recordDigest,
+    sectionAnchor: "acceptance-criteria",
+    itemId,
+  });
+  const request = {
+    root,
+    demandId: context.demandId,
+    idempotencyKey: "scenario-test-plan-1",
+    expectedStreamRevision: revision,
+    taskPackage: {
+      workType: "test",
+      objective: "在已确认真实环境中验证已接受实现",
+      confirmedContext: ["全部实现目标已被 Controller 接受", "测试环境由需求包 landing 成员描述"],
+      selectedAuthorityMemberRefs: [...context.memberRefs],
+      boundaries: {
+        inScope: ["执行测试合同的批准步骤"],
+        outOfScope: ["修改产品代码"],
+        forbidden: ["创建未批准环境或配置"],
+      },
+      completionExpectations: ["每一步都返回可复核证据"],
+      testContract: {
+        question: "已接受实现能否在真实环境中保持目标行为？",
+        objectBoundary: "只观察当前 Demand 的产品入口与已确认测试环境",
+        steps: [
+          {
+            given: "已确认的真实环境与冻结实现基线",
+            when: "发布需求包并查看看板",
+            // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+            then: "看板列出该包为 pending",
+            requirementRef: requirementRef("ac-1"),
+          },
+          {
+            given: "需求包已在看板",
+            when: "创建 Demand",
+            // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+            then: "看板状态变为 claimed",
+            requirementRef: requirementRef("ac-2"),
+          },
+        ],
+        allowedSkills: [],
+        setupPolicy: "reuse-existing",
+        maxAttempts: 1,
+        stopConditions: ["环境与冻结 Authority 不一致时立即停止"],
+      },
+      lineage: null,
+    },
+  };
+  const invented = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      ...request,
+      idempotencyKey: "scenario-test-plan-invented",
+      taskPackage: {
+        ...request.taskPackage,
+        testContract: {
+          ...request.taskPackage.testContract,
+          steps: [
+            {
+              ...request.taskPackage.testContract.steps[0],
+              requirementRef: requirementRef("ac-9"),
+            },
+          ],
+        },
+      },
+    },
+  });
+  equal(
+    invented.isError,
+    true,
+    "a test step bound to an invented acceptance item must be rejected",
+  );
+  const committed = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, request);
+  assertNoPrivatePath(context, committed);
+  const planned = committed.structuredContent as {
+    readonly status: string;
+    readonly targetTask: {
+      readonly workType: string;
+      readonly targetTaskId: string;
+      readonly windowId: string;
+      readonly lineage: unknown;
+      readonly testContract: { readonly stepCount: number; readonly environmentMemberRef: string };
+    };
+    readonly next: { readonly frontier: string | null };
+  };
+  equal(planned.status, "committed");
+  equal(planned.targetTask.workType, "test");
+  equal(planned.targetTask.windowId, context.testWindowId);
+  equal(planned.targetTask.testContract.stepCount, 2);
+  equal(planned.targetTask.testContract.environmentMemberRef.endsWith("landing.md"), true);
+  equal(planned.targetTask.lineage, null);
+  equal(planned.next.frontier, "test-delivery-planning");
+  context.testTargetTaskId = planned.targetTask.targetTaskId;
+  const second = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      ...request,
+      idempotencyKey: "scenario-test-plan-2",
+      expectedStreamRevision: revision + 1,
+    },
+  });
+  equal(second.isError, true, "a second open test target must be rejected");
+
+  const prepared = await prepareDelivery(
+    context,
+    "scenario-test-prepare-1",
+    revision + 1,
+    planned.targetTask.targetTaskId,
+  );
+  equal(prepared.status, "committed");
+  equal(prepared.permit.prompt.includes("ts-1"), true, "prompt must carry the contract steps");
+  equal(prepared.permit.prompt.includes(context.workspace.fixtureRoot), false);
+  await landPrompt(context, prepared.permit.prompt, context.testWindowId, context.testHandle);
+  const accepted = await recordOutcome(context, prepared.permit, "scenario-test-outcome-1");
+  equal(accepted.outcome.disposition, "accepted");
+  equal(accepted.target.phase, "test-host-effect-accepted");
+  const stepEvidence = ["ts-1", "ts-2"].map((stepId, index) => ({
+    stepId,
+    evidence: {
+      ref: `evidence/test-runs/${stepId}.json`,
+      digest: `sha256:${String(index + 1).repeat(64)}`,
+    },
+  }));
+  const imported = await call(context, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, {
+    root,
+    demandId: context.demandId,
+    deliveryId: prepared.permit.deliveryId,
+    claimDigest: prepared.permit.claimDigest,
+    report: {
+      workType: "test",
+      content: {
+        outcome: "completed",
+        summary: "已按测试合同执行两步并返回逐步证据。",
+        evidenceLocators: stepEvidence.map((entry) => ({
+          kind: "test-step-report",
+          ...entry.evidence,
+        })),
+        verification: ["逐项复验 Evidence ref 与 digest。"],
+        risks: ["结果仍需 Controller 独立审查。"],
+        stepEvidence,
+      },
+    },
+  });
+  assertNoPrivatePath(context, imported);
+  const importStatus = (imported.structuredContent as { readonly status: string }).status;
+  equal(importStatus, "recorded");
+  const inspectionCall = await call(
+    context,
+    WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+    { root, demandId: context.demandId, targetTaskId: planned.targetTask.targetTaskId },
+  );
+  const inspection = inspectionCall.structuredContent as {
+    readonly snapshotDigest: string;
+    readonly reviewUnit: {
+      readonly reviewUnitDigest: string;
+      readonly targetResult: { readonly targetResultId: string };
+    };
+  };
+  const decided = await call(context, WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, {
+    root,
+    demandId: context.demandId,
+    targetResultId: inspection.reviewUnit.targetResult.targetResultId,
+    snapshotDigest: inspection.snapshotDigest,
+    reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
+    decision: "accept",
+    assessment: { conclusion: "satisfied", evidenceSufficiency: "sufficient" },
+    independentChecks: [
+      {
+        checkId: "controller-test-evidence",
+        method: "重新读取逐步 Evidence 并复验冻结测试问题。",
+        outcome: "passed",
+        observation: "全部合同步骤的 Evidence 闭合且未观察到产品缺陷。",
+      },
+    ],
+    rationale: "Controller 独立检查已关闭当前真实环境风险。",
+    blockingReasons: [],
+    residualRisks: ["该决定不替代后续 Demand completion 检查。"],
+  });
+  assertNoPrivatePath(context, decided);
+  const decision = decided.structuredContent as { readonly status: string };
+  equal(decision.status, "decided");
+  const route = await inspectRoute(context);
+  equal(route.route?.frontiers[0]?.kind, "demand-completion-preflight");
+  return `${chain}; invented-step=rejected; plan=${planned.status}; second-open=rejected; delivery=${accepted.outcome.disposition}; import=${importStatus}; review=${decision.status}; next=${route.route?.frontiers[0]?.kind}`;
 }
 
 async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<string> {
@@ -1100,11 +1347,12 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-05/plan-implementation-task": scenarioPlanImplementationTask,
     "card-06/delivery-chain": scenarioDeliveryChain,
     "card-06/ambiguous-resolution": scenarioAmbiguousResolution,
+    "card-05/test-contract": scenarioTestContract,
     "card-08/complete-and-archive": scenarioCompleteAndArchive,
     "card-04/complete-and-continue": scenarioCompleteAndContinue,
   });
 
-test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、完成即归档、续接与取消并报告结论", async () => {
+test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、测试合同、完成即归档、续接与取消并报告结论", async () => {
   const workspace = createScenarioWorkspace();
   const connection = await connectWakeflowMcpServerForTest(
     createCodexWakeflowMcpServer("1.0.0-scenario"),

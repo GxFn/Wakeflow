@@ -7,11 +7,6 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { deliveryPurpose } from "../../../src/governance/delivery/delivery-envelope.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
-  parseDemandEventSourcingCommand,
-  DemandEventSourcingDecisionError,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
-import {
-  createTestCardInDemandAggregateState,
   parseDemandAggregateState,
   planTargetTaskInDemandAggregateState,
   DemandAggregateStateError,
@@ -26,8 +21,7 @@ import { ControllerTestReviewDecisionService } from "../../../src/governance/rev
 import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { TargetResultImportService } from "../../../src/governance/result/target-result-import-service.js";
-import { executeTargetTaskPlanningPublicRequest } from "../../../src/capabilities/tasking/service.js";
-import { TestCardPlanningService } from "../../../src/governance/testing/test-card-planning-service.js";
+import { isWakeflowError } from "../../../src/kernel/error.js";
 import { createImplementationTargetResultReportContentFixture } from "../result/implementation-target-result-report.fixture.js";
 import { controllerImplementationReviewDecisionInput } from "./controller-implementation-review-decision.fixture.js";
 import {
@@ -40,6 +34,7 @@ import {
   prepareFixtureDelivery,
   recordFixtureDeliveryOutcome,
 } from "../delivery/delivery-workspace.fixture.js";
+import { planFixtureTestTask } from "../tasking/test-task-planning.fixture.js";
 
 const DECIDED_AT = parseUtcInstant("2026-08-29T12:35:00.000Z");
 const PRODUCT_DEFECT_DECISION_UUID = "a6a6a6a6-a6a6-46a6-86a6-a6a6a6a6a6a6";
@@ -85,10 +80,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     if (defectRoute.nextStage.status !== "test-product-defect-escalated") {
       throw new Error("Expected product-defect route.");
     }
-    const implementationBaseline = fixture.testCard.implementationBaselines[0];
-    if (implementationBaseline === undefined) {
-      throw new Error("Expected implementation baseline.");
-    }
+    const implementationBaseline = { targetTaskId: fixture.targetTaskId };
     const remediationRequest = {
       demandId: fixture.demandId,
       testReviewDecisionId: decided.decision.targetReviewDecisionId,
@@ -186,10 +178,13 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
       (target) => target.targetTaskId === fixture.testTargetTaskId,
     );
     equal(defectTarget?.phase, "test-product-defect");
-    equal(Object.hasOwn(history.aggregate.state, "currentTestCard"), false);
     equal(
-      history.aggregate.state.pendingTestRetest?.previousTestCard.testCardId,
-      fixture.testCard.testCardId,
+      history.aggregate.state.pendingTestRetest?.previousTestTarget.targetTaskId,
+      fixture.testTargetTaskId,
+    );
+    equal(
+      history.aggregate.state.pendingTestRetest?.previousTestTarget.taskPackageId,
+      fixture.testTaskPackageId,
     );
     equal(
       history.aggregate.state.pendingTestRetest?.productDefectRemediation
@@ -214,9 +209,8 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     );
     equal(history.productDefectRemediationAuthorizations.length, 1);
     equal(
-      (await repository.findTestCardCreatedEvent(fixture.testCard.testCardId))
-        ?.event.data.testCard.testCardDigest,
-      fixture.testCard.testCardDigest,
+      authorization.source.testTaskPackage.taskPackageId,
+      fixture.testTaskPackageId,
     );
     const blockedRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
@@ -233,7 +227,6 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     );
 
     const historical = parseDemandAggregateState(history.aggregate.state);
-    equal(Object.hasOwn(historical, "currentTestCard"), false);
     equal(
       historical.targetTasks.find(
         (target) => target.targetTaskId === fixture.testTargetTaskId,
@@ -356,10 +349,6 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
       "test-product-defect",
     );
     equal(
-      Object.hasOwn(preparedHistory.aggregate.state, "currentTestCard"),
-      false,
-    );
-    equal(
       preparedHistory.aggregate.state.pendingTestRetest
         ?.productDefectRemediation.productDefectRemediationId,
       authorization.productDefectRemediationId,
@@ -442,61 +431,33 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
       fixture.workspaceRoot,
       fixture.demandId,
     );
-    equal(retestRoute.nextStage.status, "real-environment-test-planning");
-
-    const cardUuids = [
-      "18181818-1818-4818-8818-181818181818",
-      "19191919-1919-4919-8919-191919191919",
-      "20202020-2020-4020-8020-202020202020",
-      "21212121-2121-4121-8121-212121212121",
-    ];
-    let cardUuidIndex = 0;
-    const cardPlanning = new TestCardPlanningService(fixture.workspaceRoot);
-    const cardPreview = await cardPlanning.preview(
-      {
-        demandId: fixture.demandId,
-        testCard: fixture.testCardContent,
-      },
-      {
-        clock: () => parseUtcInstant("2026-08-29T12:44:00.000Z"),
-        uuidFactory: () => cardUuids[cardUuidIndex++] ?? "invalid",
-      },
-    );
-    equal(cardPreview.plan.generationSource.kind, "product-defect-retest");
-    if (cardPreview.plan.generationSource.kind !== "product-defect-retest") {
-      throw new Error("Expected product-defect retest generation source.");
+    equal(retestRoute.nextStage.status, "test-task-planning");
+    if (retestRoute.nextStage.status !== "test-task-planning") {
+      throw new Error("Expected retest planning route.");
     }
     equal(
-      cardPreview.plan.generationSource.previousTestCard.testCardId,
-      fixture.testCard.testCardId,
-    );
-    equal(
-      cardPreview.plan.generationSource.productDefectRemediation
+      retestRoute.nextStage.retest?.productDefectRemediation
         .productDefectRemediationId,
       authorization.productDefectRemediationId,
     );
-    equal(Object.hasOwn(cardPreview.plan.testCard, "generationSource"), false);
-    throws(
-      () =>
-        parseDemandEventSourcingCommand({
-          commandType: "testing.create-test-card",
-          commandVersion: 1,
-          eventId: cardPreview.plan.eventId,
-          authority: cardPreview.plan.authority,
-          testCard: cardPreview.plan.testCard,
-          generationSource: cardPreview.plan.generationSource,
-        }),
+    equal(
+      retestRoute.nextStage.retest?.previousTestTarget.targetTaskId,
+      fixture.testTargetTaskId,
+    );
+
+    // 复测任务包必须以 retest 谱系消费待处理授权；首轮谱系在追加前被拒。
+    const retestRevision = retestRoute.observedEventStream.streamRevision;
+    await rejects(
+      planFixtureTestTask(
+        fixture,
+        retestRevision,
+        { idempotencyKey: "remediation-test-plan-initial" },
+        { clock: () => parseUtcInstant("2026-08-29T12:44:00.000Z") },
+      ),
       (error: unknown) =>
-        error instanceof DemandEventSourcingDecisionError &&
-        error.reason === "input",
-    );
-    equal(
-      cardPreview.plan.testCard.testCardId === fixture.testCard.testCardId,
-      false,
-    );
-    equal(
-      cardPreview.plan.testCard.implementationBaselines[0]?.targetResultId,
-      remediationReviewTarget.targetResult.targetResultId,
+        isWakeflowError(error) &&
+        error.code === "precondition-failed" &&
+        error.reason === "lineage-retest-required",
     );
     demandRoot = await RootedDirectory.open(
       path.join(
@@ -512,42 +473,58 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
         .productDefectRemediationId,
       authorization.productDefectRemediationId,
     );
+    const previousTestPackage = beforeRetest.taskPackages.find(
+      (source) => source.taskPackage.taskPackageId === fixture.testTaskPackageId,
+    )?.taskPackage;
+    if (previousTestPackage?.workType !== "test") {
+      throw new Error("Expected previous Test TaskPackage history.");
+    }
     throws(
       () =>
-        createTestCardInDemandAggregateState(
-          beforeRetest.aggregate.state,
-          cardPreview.plan.testCard,
-          {
-            ...cardPreview.plan.generationSource,
-            productDefectRemediation: {
-              productDefectRemediationId:
-                "product-defect-remediation_31313131-3131-4131-8131-313131313131",
-              authorizationDigest: authorization.authorizationDigest,
-            },
+        planTargetTaskInDemandAggregateState(beforeRetest.aggregate.state, {
+          ...previousTestPackage,
+          taskPackageId: "task-package_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          targetTaskId: "target-task_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+          lineage: {
+            kind: "retest",
+            retestsTargetTaskId: fixture.testTargetTaskId,
+            productDefectRemediationId:
+              "product-defect-remediation_31313131-3131-4131-8131-313131313131",
+            authorizationDigest: authorization.authorizationDigest,
           },
-        ),
+        }),
       (error: unknown) =>
         error instanceof DemandAggregateStateError &&
         error.reason === "transition",
     );
     await demandRoot.close();
     demandRoot = undefined;
-    await cardPlanning.apply(cardPreview.plan, cardPreview.planDigest);
-    const newTestRoute = await readDemandPostAcceptanceRoute(
-      fixture.workspaceRoot,
-      fixture.demandId,
-    );
-    equal(newTestRoute.nextStage.status, "test-task-planning");
-    await executeTargetTaskPlanningPublicRequest(
+
+    const retestPlanned = await planFixtureTestTask(
+      fixture,
+      retestRevision,
       {
-        root: fixture.workspacePath,
-        demandId: fixture.demandId,
         idempotencyKey: "remediation-test-plan",
-        expectedStreamRevision: newTestRoute.observedEventStream.streamRevision,
-        taskPackage: { workType: "test" },
+        taskPackage: {
+          lineage: { kind: "retest", retestsTargetTaskId: fixture.testTargetTaskId },
+        },
       },
       { clock: () => parseUtcInstant("2026-08-29T12:45:00.000Z") },
     );
+    equal(retestPlanned.status, "committed");
+    if (retestPlanned.targetTask.workType !== "test") {
+      throw new Error("Expected a retest Test target.");
+    }
+    equal(retestPlanned.targetTask.lineage?.kind, "retest");
+    equal(
+      retestPlanned.targetTask.lineage?.productDefectRemediationId,
+      authorization.productDefectRemediationId,
+    );
+    equal(
+      retestPlanned.targetTask.lineage?.authorizationDigest,
+      authorization.authorizationDigest,
+    );
+    equal(retestPlanned.next.frontier, "test-delivery-planning");
     const newTestDeliveryRoute = await readDemandPostAcceptanceRoute(
       fixture.workspaceRoot,
       fixture.demandId,
@@ -563,14 +540,16 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     const retestHistory = await new DemandEventSourcingRepository(
       demandRoot,
     ).auditTargetResultHistory();
-    equal(retestHistory.testCards.length, 2);
+    const retestPackage = retestHistory.taskPackages.find(
+      (source) =>
+        source.taskPackage.taskPackageId === retestPlanned.targetTask.taskPackageId,
+    )?.taskPackage;
+    if (retestPackage?.workType !== "test") {
+      throw new Error("Expected retest TaskPackage history.");
+    }
     equal(
-      retestHistory.testCards[1]?.generationSource.kind,
-      "product-defect-retest",
-    );
-    equal(
-      retestHistory.aggregate.state.currentTestCard?.testCardId,
-      cardPreview.plan.testCard.testCardId,
+      retestPackage.implementationBaselines[0]?.targetResultId,
+      remediationReviewTarget.targetResult.targetResultId,
     );
     equal(
       Object.hasOwn(retestHistory.aggregate.state, "pendingTestRetest"),
@@ -590,8 +569,7 @@ test("Controller Product Defect Remediation保留旧Test代际并打开精确产
     );
     equal(
       retestHistory.aggregate.state.targetTasks.find(
-        (target) =>
-          target.targetTaskId === cardPreview.plan.testCard.targetTaskId,
+        (target) => target.targetTaskId === retestPlanned.targetTask.targetTaskId,
       )?.phase,
       "planned",
     );

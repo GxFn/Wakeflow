@@ -12,7 +12,6 @@ import {
   parseControllerTestReviewDecisionRequest,
   type ControllerTestReviewDecisionRequest,
 } from "../../../src/governance/review/controller-test-review-decision-input.js";
-import type { TestCard } from "../../../src/governance/testing/test-card.js";
 import {
   withFixtureDemandRoot,
   type DeliveredTarget,
@@ -23,7 +22,7 @@ import {
   deliverFixtureTestTarget,
   type TestDeliveryWorkspaceFixture,
 } from "../delivery/test-delivery-workspace.fixture.js";
-import type { TestCardPlanningWorkspaceFixtureOptions } from "../testing/test-card-planning-service.fixture.js";
+import type { TestTaskPlanningWorkspaceFixtureOptions } from "../tasking/test-task-planning.fixture.js";
 
 export const TEST_RESULT_REPORTED_AT = parseUtcInstant("2026-08-29T12:34:00.000Z");
 
@@ -36,23 +35,22 @@ export interface ControllerTestReviewDecisionServiceFixture extends TestDelivery
   readonly testDecisionRequest: Readonly<ControllerTestReviewDecisionRequest>;
 }
 
-export function testResultReportContent(testCard: Readonly<TestCard>) {
-  const evidenceLocators = testCard.approvedPlan.map((_step, index) =>
+export function testResultReportContent(stepIds: readonly string[]) {
+  const evidenceLocators = stepIds.map((stepId, index) =>
     Object.freeze({
       kind: "test-step-report" as const,
-      ref: `evidence/test-runs/step-${index}.json`,
+      ref: `evidence/test-runs/${stepId}.json`,
       digest: `sha256:${String(index + 1).repeat(64)}`,
     }),
   );
   return {
     outcome: "completed" as const,
-    summary: "已执行全部Controller批准步骤并返回逐步事实。",
+    summary: "已执行测试合同的全部步骤并返回逐步事实。",
     evidenceLocators,
     verification: ["逐项复验Evidence ref与digest。"],
     risks: ["Result仍需Controller独立审查。"],
-    stepEvidence: testCard.approvedPlan.map((step, index) => ({
-      planIndex: index,
-      step,
+    stepEvidence: stepIds.map((stepId, index) => ({
+      stepId,
       evidence: {
         ref: evidenceLocators[index]!.ref,
         digest: evidenceLocators[index]!.digest,
@@ -61,7 +59,7 @@ export function testResultReportContent(testCard: Readonly<TestCard>) {
   };
 }
 
-/** 导入测试结果：逐步证据按测试卡批准步骤生成。 */
+/** 导入测试结果：逐步证据按测试合同的 stepId 生成。 */
 export async function importFixtureTestResult(
   fixture: Readonly<TestDeliveryWorkspaceFixture>,
   delivered: Readonly<DeliveredTarget>,
@@ -72,14 +70,14 @@ export async function importFixtureTestResult(
       demandId: fixture.demandId,
       deliveryId: delivered.prepared.delivery.deliveryId,
       claimDigest: delivered.prepared.permit.fence.claimDigest,
-      report: { workType: "test", content: testResultReportContent(fixture.testCard) },
+      report: { workType: "test", content: testResultReportContent(fixture.testStepIds) },
     },
     { clock: () => reportedAt },
   );
 }
 
 export async function createControllerTestReviewDecisionServiceFixture(
-  options: TestCardPlanningWorkspaceFixtureOptions = {},
+  options: TestTaskPlanningWorkspaceFixtureOptions = {},
 ): Promise<Readonly<ControllerTestReviewDecisionServiceFixture>> {
   const fixture = await createTestDeliveryWorkspaceFixture(options);
   try {

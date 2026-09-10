@@ -150,10 +150,6 @@ function result() {
       },
       testExecution: {
         testAttemptId: "test-attempt_88888888-8888-4888-8888-888888888888",
-        testCard: {
-          testCardId: "test-card_99999999-9999-4999-8999-999999999999",
-          testCardDigest: DIGEST,
-        },
       },
       ...judgment("accept"),
       decidedAt: "2026-08-29T12:33:00.000Z",

@@ -74,16 +74,6 @@ import {
   DemandCompletionError,
   type DemandCompletion,
 } from "../../lifecycle/demand-completion.js";
-import {
-  parseTestCard,
-  TestCardError,
-  type TestCard,
-} from "../../testing/test-card.js";
-import {
-  parseTestCardGenerationSource,
-  TestCardGenerationSourceError,
-  type TestCardGenerationSource,
-} from "../../testing/test-card-generation-source.js";
 
 import {
   DeliveryEnvelopeError,
@@ -197,17 +187,6 @@ export interface TargetTaskPlannedUncommittedEvent {
   }>;
 }
 
-export interface TestCardCreatedUncommittedEvent {
-  readonly eventId: WakeflowDurableId<"demand-event">;
-  readonly demandId: WakeflowDurableId<"demand">;
-  readonly recordedAt: UtcInstant;
-  readonly eventType: "testing.test-card-created";
-  readonly data: Readonly<{
-    readonly testCard: Readonly<TestCard>;
-    readonly generationSource: Readonly<TestCardGenerationSource>;
-  }>;
-}
-
 export interface DeliveryPreparedUncommittedEvent {
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly demandId: WakeflowDurableId<"demand">;
@@ -286,7 +265,6 @@ export type DemandUncommittedEvent =
   | DecisionRecordedUncommittedEvent
   | DemandContinuedUncommittedEvent
   | ManagedEvidenceRecordedUncommittedEvent
-  | TestCardCreatedUncommittedEvent
   | TargetTaskPlannedUncommittedEvent
   | DeliveryPreparedUncommittedEvent
   | DeliveryOutcomeRecordedUncommittedEvent
@@ -314,8 +292,6 @@ export type DemandEventSourcingEventErrorReason =
   | "demand-completion"
   | "lifecycle-data"
   | "managed-evidence-manifest"
-  | "test-card"
-  | "test-card-generation-source"
   | "relation";
 
 const ERROR_MESSAGES = {
@@ -348,9 +324,6 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing event carries invalid lifecycle data.",
   "managed-evidence-manifest":
     "Demand Event Sourcing event contains an invalid Managed Evidence Manifest.",
-  "test-card": "Demand Event Sourcing event contains an invalid TestCard.",
-  "test-card-generation-source":
-    "Demand Event Sourcing event contains an invalid TestCard Generation Source.",
   relation: "Demand Event Sourcing event identity and payload do not close.",
 } as const satisfies Readonly<
   Record<DemandEventSourcingEventErrorReason, string>
@@ -429,10 +402,6 @@ const MANAGED_EVIDENCE_RECORDED_DATA_FIELDS = Object.freeze([
   "manifest",
 ] as const);
 const TARGET_TASK_PLANNED_DATA_FIELDS = Object.freeze(["taskPackage"] as const);
-const TEST_CARD_CREATED_DATA_FIELDS = Object.freeze([
-  "generationSource",
-  "testCard",
-] as const);
 const DELIVERY_PREPARED_DATA_FIELDS = Object.freeze(["envelope"] as const);
 const DELIVERY_OUTCOME_RECORDED_DATA_FIELDS = Object.freeze(["outcome"] as const);
 const DELIVERY_REARMED_DATA_FIELDS = Object.freeze(["rearm"] as const);
@@ -658,42 +627,6 @@ export function parseDemandUncommittedEvent(
       recordedAt,
       eventType: "evidence.managed-evidence-recorded",
       data: Object.freeze({ manifest }),
-    });
-  }
-
-  if (record.eventType === "testing.test-card-created") {
-    const data = exactRecord(
-      record.data,
-      TEST_CARD_CREATED_DATA_FIELDS,
-      "$/data",
-    );
-    let testCard: Readonly<TestCard>;
-    let generationSource: Readonly<TestCardGenerationSource>;
-    try {
-      testCard = parseTestCard(data.testCard);
-    } catch (error: unknown) {
-      if (error instanceof TestCardError) {
-        fail("test-card", "$/data/testCard");
-      }
-      throw error;
-    }
-    try {
-      generationSource = parseTestCardGenerationSource(data.generationSource);
-    } catch (error: unknown) {
-      if (error instanceof TestCardGenerationSourceError) {
-        fail("test-card-generation-source", "$/data/generationSource");
-      }
-      throw error;
-    }
-    if (testCard.demandId !== demandId || testCard.createdAt !== recordedAt) {
-      fail("relation", "$event");
-    }
-    return Object.freeze({
-      eventId,
-      demandId,
-      recordedAt,
-      eventType: "testing.test-card-created",
-      data: Object.freeze({ testCard, generationSource }),
     });
   }
 

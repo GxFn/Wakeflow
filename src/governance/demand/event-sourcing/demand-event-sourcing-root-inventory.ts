@@ -38,11 +38,6 @@ import {
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
 } from "../../tasking/task-package-projection-paths.js";
 import {
-  parseTestCardProjectionFileName,
-  TEST_CARD_PROJECTIONS_ROOT_REF,
-  TestCardProjectionPathError,
-} from "../../testing/test-card-projection-paths.js";
-import {
   inspectManagedEvidenceRecordSetInventory,
   ManagedEvidenceRecordSetInventoryError,
   type ManagedEvidenceRecordSetInventory,
@@ -56,7 +51,7 @@ import {
  *
  * 本能力不仅验证必需资源存在，还证明根目录和事件溯源子树中不存在未知项。提交记录
  * 和快照内容由各自存储验证；本模块负责目录层级、文件系统节点类型、私有权限位、
- * 健康状态下候选目录与事务目录为空，并对可重建TaskPackage、TestCard和Test dispatch
+ * 健康状态下候选目录与事务目录为空，并对可重建TaskPackage
  * packet投影执行封闭命名和私有节点策略检查。Managed Evidence作为不可变业务内容，
  * 额外通过专用record-set inventory关闭healthy Manifest/顶层，并对当前事务stage/final
  * 执行完整tree分类；与Aggregate selector的关系仍由Root Authority验证。尚未出现真实
@@ -86,7 +81,6 @@ export interface DemandEventSourcingRootInventory {
     readonly appendCandidates: Readonly<FileNodeSnapshot>;
     readonly artifacts: Readonly<FileNodeSnapshot>;
     readonly taskPackages: Readonly<FileNodeSnapshot>;
-    readonly testCards?: Readonly<FileNodeSnapshot>;
     readonly transactions: Readonly<FileNodeSnapshot>;
   }>;
 }
@@ -149,7 +143,6 @@ const EVENT_SOURCING_NAMES = Object.freeze([
 const ARTIFACT_NAMES = new Set([
   "managed-evidence",
   "task-packages",
-  "test-cards",
 ]);
 
 function fail(
@@ -422,17 +415,6 @@ export async function inspectDemandEventSourcingRootInventory(
     signal,
     taskPackagesNode,
   );
-  const testCardsNode = optionalEntryNode(artifacts, "test-cards");
-  const testCards =
-    testCardsNode === undefined
-      ? undefined
-      : await readResource(
-          root,
-          TEST_CARD_PROJECTIONS_ROOT_REF,
-          DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
-          signal,
-          testCardsNode,
-        );
   const managedEvidenceNode = optionalEntryNode(artifacts, "managed-evidence");
   const transactions = await readResource(
     root,
@@ -454,20 +436,6 @@ export async function inspectDemandEventSourcingRootInventory(
       throw error;
     }
   });
-  if (testCards !== undefined) {
-    assertDirectory(testCards.directoryNode, "$test-cards");
-    testCards.entries.forEach((entry, index) => {
-      assertFile(entry.node, `$test-cards/${index}`);
-      try {
-        parseTestCardProjectionFileName(entry.name);
-      } catch (error: unknown) {
-        if (error instanceof TestCardProjectionPathError) {
-          fail("tree-shape", `$test-cards/${index}`);
-        }
-        throw error;
-      }
-    });
-  }
   assertDirectory(transactions.directoryNode, "$transactions");
   let managedEvidenceTransactionNode: Readonly<FileNodeSnapshot> | undefined;
   if (phase === "healthy") {
@@ -588,7 +556,6 @@ export async function inspectDemandEventSourcingRootInventory(
     snapshotCount: snapshots.entries.length,
     artifactCount:
       taskPackages.entries.length +
-      (testCards?.entries.length ?? 0) +
       managedEvidence.recordCount,
     transactionCount: transactions.entries.length as 0 | 1,
     appendCandidateCount: 0,
@@ -608,9 +575,6 @@ export async function inspectDemandEventSourcingRootInventory(
       appendCandidates: candidates.directoryNode,
       artifacts: artifacts.directoryNode,
       taskPackages: taskPackages.directoryNode,
-      ...(testCards === undefined
-        ? {}
-        : { testCards: testCards.directoryNode }),
       transactions: transactions.directoryNode,
     }),
   });

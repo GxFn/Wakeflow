@@ -104,10 +104,6 @@
       "type": "string",
       "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "testCardId": {
-      "type": "string",
-      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
     "reviewed": {
       "type": "object",
       "additionalProperties": false,
@@ -160,23 +156,10 @@
     "testExecution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["testAttemptId", "testCard"],
+      "required": ["testAttemptId"],
       "properties": {
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
-        },
-        "testCard": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["testCardId", "testCardDigest"],
-          "properties": {
-            "testCardId": {
-              "$ref": "#/$defs/testCardId"
-            },
-            "testCardDigest": {
-              "$ref": "#/$defs/sha256Digest"
-            }
-          }
         }
       }
     },

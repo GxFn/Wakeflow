@@ -39,10 +39,6 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
     owner: "controller",
     tool: "wakeflow_plan_target_task",
   },
-  "test-card-planning": {
-    owner: "controller",
-    tool: "wakeflow_plan_test_card",
-  },
   "test-task-planning": {
     owner: "controller",
     tool: "wakeflow_plan_target_task",

@@ -37,7 +37,7 @@ import {
  * Wakeflow Governance / Review：Controller Product Defect Remediation公共提交边界。
  *
  * Coordinator只记录Controller已经形成的产品返工授权。它不创建Delivery、不执行修复、
- * 不允许Test修改产品，也不创建下一TestCard或完成Demand。
+ * 不允许Test修改产品，也不规划下一 test 任务包或完成Demand。
  */
 
 export type ControllerProductDefectRemediationPublicResult =
@@ -177,11 +177,12 @@ function projectRemediationResult(
       affectedTargetsMatch &&
       testTarget?.workType === "test" &&
       testTarget.phase === "test-product-defect" &&
-      commandResult.aggregate.state.currentTestCard === undefined &&
-      pendingRetest?.previousTestCard.testCardId ===
-        authorization.source.testCard.testCardId &&
-      pendingRetest.previousTestCard.testCardDigest ===
-        authorization.source.testCard.testCardDigest &&
+      pendingRetest?.previousTestTarget.targetTaskId ===
+        authorization.source.testTargetTaskId &&
+      pendingRetest.previousTestTarget.taskPackageId ===
+        authorization.source.testTaskPackage.taskPackageId &&
+      pendingRetest.previousTestTarget.taskPackageDigest ===
+        authorization.source.testTaskPackage.taskPackageDigest &&
       pendingRetest.testReviewDecision.targetReviewDecisionId ===
         authorization.source.testReviewDecision.targetReviewDecisionId &&
       pendingRetest.testReviewDecision.decisionDigest ===

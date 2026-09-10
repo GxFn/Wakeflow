@@ -86,10 +86,45 @@
     "testTaskPackageRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["workType"],
+      "required": [
+        "workType",
+        "objective",
+        "confirmedContext",
+        "selectedAuthorityMemberRefs",
+        "boundaries",
+        "completionExpectations",
+        "testContract",
+        "lineage"
+      ],
       "properties": {
         "workType": {
           "const": "test"
+        },
+        "objective": {
+          "$ref": "#/$defs/humanText"
+        },
+        "confirmedContext": {
+          "$ref": "#/$defs/nonEmptyTextList"
+        },
+        "selectedAuthorityMemberRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/portableResourcePath"
+          }
+        },
+        "boundaries": {
+          "$ref": "#/$defs/boundaries"
+        },
+        "completionExpectations": {
+          "$ref": "#/$defs/nonEmptyTextList"
+        },
+        "testContract": {
+          "$ref": "#/$defs/testContractRequest"
+        },
+        "lineage": {
+          "$ref": "#/$defs/testLineageRequest"
         }
       }
     },
@@ -246,6 +281,104 @@
               "const": "continuation"
             },
             "continuesTargetTaskId": {
+              "$ref": "#/$defs/targetTaskId"
+            }
+          }
+        }
+      ]
+    },
+    "skillPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^skills/[a-z0-9]+(?:-[a-z0-9]+)*/SKILL\\.md$"
+    },
+    "testContractStepRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["given", "when", "then", "requirementRef"],
+      "properties": {
+        "given": {
+          "$ref": "#/$defs/humanText"
+        },
+        "when": {
+          "$ref": "#/$defs/humanText"
+        },
+        "then": {
+          "$ref": "#/$defs/humanText"
+        },
+        "requirementRef": {
+          "$ref": "#/$defs/requirementRef"
+        }
+      }
+    },
+    "testContractRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question",
+        "objectBoundary",
+        "steps",
+        "allowedSkills",
+        "setupPolicy",
+        "maxAttempts",
+        "stopConditions"
+      ],
+      "properties": {
+        "question": {
+          "$ref": "#/$defs/humanText"
+        },
+        "objectBoundary": {
+          "$ref": "#/$defs/humanText"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/testContractStepRequest"
+          }
+        },
+        "allowedSkills": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/skillPath"
+          }
+        },
+        "setupPolicy": {
+          "enum": ["fresh-once", "fresh-per-attempt", "reuse-existing"]
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "stopConditions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/humanText"
+          }
+        }
+      }
+    },
+    "testLineageRequest": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "retestsTargetTaskId"],
+          "properties": {
+            "kind": {
+              "const": "retest"
+            },
+            "retestsTargetTaskId": {
               "$ref": "#/$defs/targetTaskId"
             }
           }

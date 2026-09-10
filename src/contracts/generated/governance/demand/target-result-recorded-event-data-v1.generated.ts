@@ -168,8 +168,7 @@ ref: WakeflowPortableResourcePathText
 digest: WakeflowSha256DigestText
 }
 export interface StepEvidence {
-planIndex: number
-step: string
+stepId: string
 evidence: EvidenceRef1
 }
 export interface EvidenceRef1 {
@@ -178,10 +177,6 @@ digest: WakeflowSha256DigestText
 }
 export interface TestExecution {
 testAttemptId: string
-testCard: {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
-}
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

@@ -64,9 +64,9 @@ function result() {
         stateDigest: DIGEST,
         streamRevision: 12,
         testTargetTaskId: "target-task_77777777-7777-4777-8777-777777777777",
-        testCard: {
-          testCardId: "test-card_88888888-8888-4888-8888-888888888888",
-          testCardDigest: DIGEST,
+        testTaskPackage: {
+          taskPackageId: "task-package_88888888-8888-4888-8888-888888888888",
+          taskPackageDigest: DIGEST,
         },
         testAttemptId: "test-attempt_99999999-9999-4999-8999-999999999999",
         targetResult: {

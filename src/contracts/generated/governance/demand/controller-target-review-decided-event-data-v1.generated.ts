@@ -117,10 +117,6 @@ targetResultReportedAt: WakeflowUtcInstantText
 }
 export interface TestExecution {
 testAttemptId: string
-testCard: {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
-}
 }
 export interface Assessment1 {
 conclusion: ("satisfied" | "defect-observed" | "inconclusive")

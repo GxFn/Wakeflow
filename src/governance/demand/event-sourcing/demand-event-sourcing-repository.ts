@@ -26,7 +26,6 @@ import {
 import type { DemandEventSourcingAggregate } from "./demand-event-sourcing-aggregate.js";
 import type {
   TargetTaskPlannedUncommittedEvent,
-  TestCardCreatedUncommittedEvent,
   DeliveryPreparedUncommittedEvent,
   DeliveryOutcomeRecordedUncommittedEvent,
   DeliveryRearmedUncommittedEvent,
@@ -113,16 +112,6 @@ export interface AuditedTargetResultSource {
   >;
 }
 
-/** 一份TestCard创建事件的不可变来源。 */
-export interface AuditedTestCardSource {
-  readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
-  readonly testCard: Readonly<
-    TestCardCreatedUncommittedEvent["data"]["testCard"]
-  >;
-  readonly generationSource: Readonly<
-    TestCardCreatedUncommittedEvent["data"]["generationSource"]
-  >;
-}
 
 /** 一份Implementation或Test Controller Review Decision的不可变事件来源。 */
 export interface AuditedControllerReviewDecisionSource {
@@ -153,7 +142,6 @@ export interface AuditedDemandTargetResultHistory {
   readonly aggregate: Readonly<DemandEventSourcingAggregate>;
   readonly taskPackages: readonly Readonly<AuditedTargetTaskPackageSource>[];
   readonly targetResults: readonly Readonly<AuditedTargetResultSource>[];
-  readonly testCards: readonly Readonly<AuditedTestCardSource>[];
   readonly targetReviewDecisions: readonly Readonly<AuditedControllerReviewDecisionSource>[];
   readonly targetReviewResumes: readonly Readonly<AuditedControllerTargetReviewResumeSource>[];
   readonly productDefectRemediationAuthorizations: readonly Readonly<AuditedProductDefectRemediationAuthorizationSource>[];
@@ -165,10 +153,6 @@ export interface LocatedTargetTaskPlannedEvent {
   readonly event: Readonly<TargetTaskPlannedUncommittedEvent>;
 }
 
-export interface LocatedTestCardCreatedEvent {
-  readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
-  readonly event: Readonly<TestCardCreatedUncommittedEvent>;
-}
 
 export interface LocatedDeliveryPreparedEvent {
   readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
@@ -202,11 +186,7 @@ function taskPackageMatchesTargetSummary(
     return false;
   }
   if (taskPackage.workType === "test") {
-    return (
-      target.workType === "test" &&
-      taskPackage.testCard.testCardId === target.testCard.testCardId &&
-      taskPackage.testCard.testCardDigest === target.testCard.testCardDigest
-    );
+    return target.workType === "test";
   }
   return (
     target.workType !== "test" &&
@@ -487,7 +467,6 @@ export class DemandEventSourcingRepository {
     const aggregate = replayCommits(null, stream.commits);
     const taskPackages: Readonly<AuditedTargetTaskPackageSource>[] = [];
     const targetResults: Readonly<AuditedTargetResultSource>[] = [];
-    const testCards: Readonly<AuditedTestCardSource>[] = [];
     const targetReviewDecisions: Readonly<AuditedControllerReviewDecisionSource>[] =
       [];
     const targetReviewResumes: Readonly<AuditedControllerTargetReviewResumeSource>[] =
@@ -498,7 +477,6 @@ export class DemandEventSourcingRepository {
     const targetTaskIds = new Set<string>();
     const targetDeliveryIds = new Set<string>();
     const targetResultIds = new Set<string>();
-    const testCardIds = new Set<string>();
     const resultActionIds = new Set<string>();
     const targetReviewDecisionIds = new Set<string>();
     const reviewedGenerationKeys = new Set<string>();
@@ -547,21 +525,6 @@ export class DemandEventSourcingRepository {
             fail("stream", "$events");
           }
           targetDeliveryIds.add(deliveryId);
-          continue;
-        }
-        if (event.eventType === "testing.test-card-created") {
-          const testCard = event.data.testCard;
-          if (testCardIds.has(testCard.testCardId)) {
-            fail("stream", "$events");
-          }
-          testCardIds.add(testCard.testCardId);
-          testCards.push(
-            Object.freeze({
-              sourceEvent: targetResultSourceEvent(storedEvent),
-              testCard,
-              generationSource: event.data.generationSource,
-            }),
-          );
           continue;
         }
         if (event.eventType === "result.target-result-recorded") {
@@ -666,9 +629,6 @@ export class DemandEventSourcingRepository {
         (source) => [source.taskPackage.taskPackageId, source] as const,
       ),
     );
-    const testCardById = new Map(
-      testCards.map((source) => [source.testCard.testCardId, source] as const),
-    );
     const targetResultById = new Map(
       targetResults.map(
         (source) => [source.result.targetResultId, source] as const,
@@ -693,20 +653,6 @@ export class DemandEventSourcingRepository {
         taskPackageSource.sourceEvent.streamRevision > aggregate.streamRevision
       ) {
         fail("stream", "$events");
-      }
-      if (target.workType === "test") {
-        const testCardSource = testCardById.get(target.testCard.testCardId);
-        if (
-          testCardSource === undefined ||
-          testCardSource.testCard.testCardDigest !==
-            target.testCard.testCardDigest ||
-          testCardSource.testCard.targetTaskId !== target.targetTaskId ||
-          testCardSource.testCard.testWindowId !== target.windowId ||
-          testCardSource.sourceEvent.streamRevision >=
-            taskPackageSource.sourceEvent.streamRevision
-        ) {
-          fail("stream", "$events");
-        }
       }
       if (
         target.phase !== "result-reported" &&
@@ -781,36 +727,6 @@ export class DemandEventSourcingRepository {
         fail("stream", "$events");
       }
     }
-    const referencedTestCardIds = new Set(
-      aggregate.state.targetTasks.flatMap((target) =>
-        target.workType === "test" ? [target.testCard.testCardId] : [],
-      ),
-    );
-    if (aggregate.state.currentTestCard !== undefined) {
-      const source = testCardById.get(
-        aggregate.state.currentTestCard.testCardId,
-      );
-      if (
-        source === undefined ||
-        source.testCard.testCardDigest !==
-          aggregate.state.currentTestCard.testCardDigest ||
-        source.testCard.targetTaskId !==
-          aggregate.state.currentTestCard.targetTaskId ||
-        source.testCard.testWindowId !==
-          aggregate.state.currentTestCard.testWindowId ||
-        source.sourceEvent.streamRevision > aggregate.streamRevision
-      ) {
-        fail("stream", "$events");
-      }
-      referencedTestCardIds.add(source.testCard.testCardId);
-    }
-    if (
-      testCards.some(
-        (source) => !referencedTestCardIds.has(source.testCard.testCardId),
-      )
-    ) {
-      fail("stream", "$events");
-    }
     for (const source of targetReviewDecisions) {
       const target = targetById.get(source.decision.targetTaskId);
       if (
@@ -859,8 +775,8 @@ export class DemandEventSourcingRepository {
       const sourceDecision = reviewDecisionById.get(
         authorization.source.testReviewDecision.targetReviewDecisionId,
       );
-      const sourceCard = testCardById.get(
-        authorization.source.testCard.testCardId,
+      const sourceTestPackage = taskPackageById.get(
+        authorization.source.testTaskPackage.taskPackageId,
       );
       const priorStoredEvent = storedEventByRevision.get(
         authorization.source.streamRevision,
@@ -888,10 +804,6 @@ export class DemandEventSourcingRepository {
           authorization.source.targetResult.targetResultId ||
         decision.reviewed.targetResultDigest !==
           authorization.source.targetResult.resultDigest ||
-        decision.testExecution.testCard.testCardId !==
-          authorization.source.testCard.testCardId ||
-        decision.testExecution.testCard.testCardDigest !==
-          authorization.source.testCard.testCardDigest ||
         decision.testExecution.testAttemptId !==
           authorization.source.testAttemptId ||
         sourceDecision?.sourceEvent.streamRevision !==
@@ -900,12 +812,13 @@ export class DemandEventSourcingRepository {
           authorization.source.streamRevision + 1 ||
         priorStoredEvent?.resultingStateDigest !==
           authorization.source.stateDigest ||
-        sourceCard === undefined ||
-        sourceCard.testCard.testCardDigest !==
-          authorization.source.testCard.testCardDigest ||
-        sourceCard.testCard.targetTaskId !==
+        sourceTestPackage === undefined ||
+        sourceTestPackage.taskPackage.workType !== "test" ||
+        computeTaskPackageDigest(sourceTestPackage.taskPackage) !==
+          authorization.source.testTaskPackage.taskPackageDigest ||
+        sourceTestPackage.taskPackage.targetTaskId !==
           authorization.source.testTargetTaskId ||
-        sourceCard.sourceEvent.streamRevision >=
+        sourceTestPackage.sourceEvent.streamRevision >=
           authorization.source.streamRevision ||
         expectedFailedChecks.length !== authorization.failedChecks.length ||
         expectedFailedChecks.some((check, index) => {
@@ -922,29 +835,29 @@ export class DemandEventSourcingRepository {
         fail("stream", "$events");
       }
       const baselineByTarget = new Map(
-        sourceCard.testCard.implementationBaselines.map(
+        sourceTestPackage.taskPackage.implementationBaselines.map(
           (baseline) => [baseline.targetTaskId, baseline] as const,
         ),
       );
       for (const affected of authorization.affectedTargets) {
         const baseline = affected.baseline;
-        const cardBaseline = baselineByTarget.get(baseline.targetTaskId);
+        const packageBaseline = baselineByTarget.get(baseline.targetTaskId);
         const taskPackageSource = taskPackageById.get(baseline.taskPackageId);
         const resultSource = targetResultById.get(baseline.targetResultId);
         const reviewSource = reviewDecisionById.get(
           baseline.targetReviewDecisionId,
         );
         if (
-          cardBaseline === undefined ||
-          cardBaseline.taskPackageId !== baseline.taskPackageId ||
-          cardBaseline.taskPackageDigest !== baseline.taskPackageDigest ||
-          cardBaseline.repositoryId !== baseline.repositoryId ||
-          cardBaseline.windowId !== baseline.windowId ||
-          cardBaseline.targetResultId !== baseline.targetResultId ||
-          cardBaseline.resultDigest !== baseline.resultDigest ||
-          cardBaseline.targetReviewDecisionId !==
+          packageBaseline === undefined ||
+          packageBaseline.taskPackageId !== baseline.taskPackageId ||
+          packageBaseline.taskPackageDigest !== baseline.taskPackageDigest ||
+          packageBaseline.repositoryId !== baseline.repositoryId ||
+          packageBaseline.windowId !== baseline.windowId ||
+          packageBaseline.targetResultId !== baseline.targetResultId ||
+          packageBaseline.resultDigest !== baseline.resultDigest ||
+          packageBaseline.targetReviewDecisionId !==
             baseline.targetReviewDecisionId ||
-          cardBaseline.decisionDigest !== baseline.decisionDigest ||
+          packageBaseline.decisionDigest !== baseline.decisionDigest ||
           taskPackageSource?.taskPackage.targetTaskId !==
             baseline.targetTaskId ||
           taskPackageSource.taskPackage.workType !== "implementation" ||
@@ -965,76 +878,33 @@ export class DemandEventSourcingRepository {
         }
       }
     }
-    const consumedPreviousCardIds = new Set<string>();
+    // 每份缺陷修复授权至多被一个 retest 谱系的 test 任务包消费，且消费发生在授权之后。
     const consumedRemediationIds = new Set<string>();
-    for (let index = 0; index < testCards.length; index += 1) {
-      const source = testCards[index]!;
-      const card = source.testCard;
-      const precedingStateEvent = storedEventByRevision.get(
-        card.source.streamRevision,
-      );
-      if (
-        source.sourceEvent.streamRevision !== card.source.streamRevision + 1 ||
-        precedingStateEvent?.resultingStateDigest !== card.source.stateDigest
-      ) {
-        fail("stream", "$events");
-      }
-      if (source.generationSource.kind === "initial") {
-        if (index !== 0) fail("stream", "$events");
+    for (const source of taskPackages) {
+      const taskPackage = source.taskPackage;
+      if (taskPackage.workType !== "test" || taskPackage.lineage === null) {
         continue;
       }
-      const generation = source.generationSource;
-      const previousCardSource = testCardById.get(
-        generation.previousTestCard.testCardId,
-      );
-      const decisionSource = reviewDecisionById.get(
-        generation.testReviewDecision.targetReviewDecisionId,
-      );
+      const lineage = taskPackage.lineage;
       const remediationSource = remediationById.get(
-        generation.productDefectRemediation.productDefectRemediationId,
+        lineage.productDefectRemediationId,
       );
-      const previousTestTarget =
-        previousCardSource === undefined
-          ? undefined
-          : targetById.get(previousCardSource.testCard.targetTaskId);
+      const previousTestTarget = targetById.get(lineage.retestsTargetTaskId);
       if (
-        previousCardSource === undefined ||
-        previousCardSource.sourceEvent.streamRevision >=
-          source.sourceEvent.streamRevision ||
-        previousCardSource.testCard.testCardDigest !==
-          generation.previousTestCard.testCardDigest ||
-        previousTestTarget?.workType !== "test" ||
-        previousTestTarget.phase !== "test-product-defect" ||
-        previousTestTarget.testCard.testCardId !==
-          generation.previousTestCard.testCardId ||
-        decisionSource?.decision.kind !==
-          "WakeflowControllerTestReviewDecision" ||
-        decisionSource.decision.decision !== "escalate-product-defect" ||
-        decisionSource.decision.decisionDigest !==
-          generation.testReviewDecision.decisionDigest ||
-        decisionSource.decision.testExecution.testCard.testCardId !==
-          generation.previousTestCard.testCardId ||
         remediationSource === undefined ||
         remediationSource.authorization.authorizationDigest !==
-          generation.productDefectRemediation.authorizationDigest ||
-        remediationSource.authorization.source.testCard.testCardId !==
-          generation.previousTestCard.testCardId ||
-        remediationSource.authorization.source.testReviewDecision
-          .targetReviewDecisionId !==
-          generation.testReviewDecision.targetReviewDecisionId ||
+          lineage.authorizationDigest ||
+        remediationSource.authorization.source.testTargetTaskId !==
+          lineage.retestsTargetTaskId ||
         remediationSource.sourceEvent.streamRevision >=
           source.sourceEvent.streamRevision ||
-        consumedPreviousCardIds.has(generation.previousTestCard.testCardId) ||
-        consumedRemediationIds.has(
-          generation.productDefectRemediation.productDefectRemediationId,
-        )
+        previousTestTarget?.workType !== "test" ||
+        previousTestTarget.phase !== "test-product-defect" ||
+        consumedRemediationIds.has(lineage.productDefectRemediationId)
       ) {
         fail("stream", "$events");
       }
-      consumedPreviousCardIds.add(generation.previousTestCard.testCardId);
-      consumedRemediationIds.add(
-        generation.productDefectRemediation.productDefectRemediationId,
-      );
+      consumedRemediationIds.add(lineage.productDefectRemediationId);
     }
     const pendingTestRetest = aggregate.state.pendingTestRetest;
     const unconsumedRemediations =
@@ -1056,10 +926,12 @@ export class DemandEventSourcingRepository {
             .productDefectRemediationId ||
         source.authorization.authorizationDigest !==
           pendingTestRetest.productDefectRemediation.authorizationDigest ||
-        source.authorization.source.testCard.testCardId !==
-          pendingTestRetest.previousTestCard.testCardId ||
-        source.authorization.source.testCard.testCardDigest !==
-          pendingTestRetest.previousTestCard.testCardDigest ||
+        source.authorization.source.testTargetTaskId !==
+          pendingTestRetest.previousTestTarget.targetTaskId ||
+        source.authorization.source.testTaskPackage.taskPackageId !==
+          pendingTestRetest.previousTestTarget.taskPackageId ||
+        source.authorization.source.testTaskPackage.taskPackageDigest !==
+          pendingTestRetest.previousTestTarget.taskPackageDigest ||
         source.authorization.source.testReviewDecision
           .targetReviewDecisionId !==
           pendingTestRetest.testReviewDecision.targetReviewDecisionId ||
@@ -1105,7 +977,6 @@ export class DemandEventSourcingRepository {
       aggregate,
       taskPackages: Object.freeze(taskPackages),
       targetResults: Object.freeze(targetResults),
-      testCards: Object.freeze(testCards),
       targetReviewDecisions: Object.freeze(targetReviewDecisions),
       targetReviewResumes: Object.freeze(targetReviewResumes),
       productDefectRemediationAuthorizations: Object.freeze(
@@ -1113,64 +984,6 @@ export class DemandEventSourcingRepository {
       ),
       replayedCommitCount: stream.commits.length,
     });
-  }
-
-  /** 完整审计事件流后，按TestCard身份定位唯一创建事件。 */
-  async findTestCardCreatedEvent(
-    testCardIdValue: unknown,
-    options?: { readonly signal?: AbortSignal },
-  ): Promise<Readonly<LocatedTestCardCreatedEvent> | null> {
-    const signal = parseSignal(options);
-    let testCardId: WakeflowDurableId<"test-card">;
-    try {
-      testCardId = parseWakeflowDurableIdOfKind(
-        testCardIdValue,
-        "test-card",
-        "$testCardId",
-      );
-    } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) {
-        fail("input", "$testCardId");
-      }
-      throw error;
-    }
-    const found = await this.#findUniqueEvent(
-      "testing.test-card-created",
-      (event) => event.eventType === "testing.test-card-created" && event.data.testCard.testCardId === testCardId,
-      signal,
-    );
-    if (found === null) return null;
-    const aggregate = found.aggregate;
-    if (found.event.eventType !== "testing.test-card-created") fail("stream", "$events");
-    const located: Readonly<LocatedTestCardCreatedEvent> = Object.freeze({
-      storedEvent: found.storedEvent,
-      event: found.event,
-    });
-    const testCard = located.event.data.testCard;
-    const currentSummary = aggregate.state.currentTestCard;
-    const targetSummary = aggregate.state.targetTasks.find(
-      (target) =>
-        target.workType === "test" &&
-        target.testCard.testCardId === testCard.testCardId,
-    );
-    const retainedByCurrent =
-      currentSummary !== undefined &&
-      currentSummary.testCardId === testCard.testCardId &&
-      currentSummary.testCardDigest === testCard.testCardDigest &&
-      currentSummary.targetTaskId === testCard.targetTaskId &&
-      currentSummary.testWindowId === testCard.testWindowId;
-    const retainedByTarget =
-      targetSummary?.workType === "test" &&
-      targetSummary.testCard.testCardDigest === testCard.testCardDigest &&
-      targetSummary.targetTaskId === testCard.targetTaskId &&
-      targetSummary.windowId === testCard.testWindowId;
-    if (
-      (!retainedByCurrent && !retainedByTarget) ||
-      located.storedEvent.streamRevision > aggregate.streamRevision
-    ) {
-      fail("stream", "$events");
-    }
-    return located;
   }
 
   /**

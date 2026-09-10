@@ -152,17 +152,6 @@ const FRONTIER_MATRIX = [
   {
     source: {
       kind: "post-acceptance",
-      statuses: ["real-environment-test-planning"],
-    },
-    expected: {
-      scope: "demand",
-      kind: "test-card-planning",
-      owner: "test-card-planning",
-    },
-  },
-  {
-    source: {
-      kind: "post-acceptance",
       statuses: ["test-task-planning"],
     },
     expected: {
@@ -300,8 +289,8 @@ const MATRIX_TYPE_COVERAGE = {
     : false;
 }>;
 
-test("Controller Route以二十项轻量矩阵完整映射frontier、owner与phase", () => {
-  equal(FRONTIER_MATRIX.length, 20);
+test("Controller Route以十九项轻量矩阵完整映射frontier、owner与phase", () => {
+  equal(FRONTIER_MATRIX.length, 19);
   deepEqual(MATRIX_TYPE_COVERAGE, {
     demand: true,
     implementation: true,
@@ -339,7 +328,7 @@ test("Controller Route以二十项轻量矩阵完整映射frontier、owner与pha
     }
   }
 
-  equal(frontierKinds.size, 20);
+  equal(frontierKinds.size, 19);
   equal(
     resolveDemandControllerImplementationFrontierDescriptor("accepted"),
     null,

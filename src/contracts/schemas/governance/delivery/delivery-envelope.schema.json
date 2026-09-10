@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA",
   "title": "WakeflowDeliveryEnvelope",
   "description": "一次投递的不可变信封：任务包入口、当前绑定代际、可移植 prompt 与最终 prompt 摘要、围栏令牌；实现与 test 两类任务共用。",
-  "$comment": "事件流是权威。信封不含原始句柄、不含发送结果、不含验收判断；最终 prompt 由可移植 prompt 加工作区根派生，promptDigest 覆盖去除首尾空白后的最终文本，宿主 UserPromptSubmit 记录以此为落地证据。rework 与 productDefectRemediation 互斥且只属于实现包；testCard 与 attempt 只属于 test 包。",
+  "$comment": "事件流是权威。信封不含原始句柄、不含发送结果、不含验收判断；最终 prompt 由可移植 prompt 加工作区根派生，promptDigest 覆盖去除首尾空白后的最终文本，宿主 UserPromptSubmit 记录以此为落地证据。rework 与 productDefectRemediation 互斥且只属于实现包；attempt 只属于 test 包。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -105,20 +105,6 @@
     "productDefectRemediation": {
       "$ref": "#/$defs/productDefectRemediation"
     },
-    "testCard": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["testCardId", "testCardDigest"],
-      "properties": {
-        "testCardId": {
-          "type": "string",
-          "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        "testCardDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        }
-      }
-    },
     "attempt": {
       "$ref": "urn:wakeflow:governance:testing:test-execution-attempt:v1"
     },
@@ -140,11 +126,8 @@
         "required": ["workType"]
       },
       "then": {
-        "required": ["testCard", "attempt"],
+        "required": ["attempt"],
         "properties": {
-          "testCard": {
-            "$ref": "#/$defs/testCardTuple"
-          },
           "attempt": {
             "$ref": "urn:wakeflow:governance:testing:test-execution-attempt:v1"
           },
@@ -154,7 +137,6 @@
       },
       "else": {
         "properties": {
-          "testCard": false,
           "attempt": false
         }
       }
@@ -189,20 +171,6 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
-        }
-      }
-    },
-    "testCardTuple": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["testCardId", "testCardDigest"],
-      "properties": {
-        "testCardId": {
-          "type": "string",
-          "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        "testCardDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }
     },

@@ -3,10 +3,14 @@ import { test } from "node:test";
 
 import {
   deriveAnchorReferenceBlockers,
+  deriveImplementationBaselines,
   deriveLineageBlockers,
   deriveLineageExpectation,
   derivePlanReview,
   deriveSectionAnchorBlockers,
+  deriveTestPlanningBlockers,
+  deriveTestStepReferenceBlockers,
+  deriveTopologyBlockers,
   parseAcceptanceCriteria,
 } from "../../../src/capabilities/tasking/decide.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -15,7 +19,8 @@ import type { DemandAggregateState } from "../../../src/governance/demand/model/
 import { FIXTURE_REQUIREMENT_MARKDOWN } from "../../governance/ledger/requirement-package.fixture.js";
 
 /**
- * tasking 切片纯决定：验收标准条目切分、锚点引用、章节锚点、审阅门、仓库谱系。
+ * tasking 切片纯决定：验收标准条目切分、锚点引用、章节锚点、审阅门、仓库谱系、
+ * 测试合同的步骤引用、规划准入与实现基线。
  */
 
 const RECORD = parseSha256Digest(`sha256:${"1".repeat(64)}`);
@@ -170,5 +175,164 @@ test("仓库谱系：空仓库不得声明谱系，未接受目标必须替代�
       { kind: "continuation", targetTaskIds: ["t-done"] },
     ),
     [],
+  );
+});
+
+test("测试合同步骤引用：记录摘要、节锚点、条目三处各自报出阻塞", () => {
+  const criteria = parseAcceptanceCriteria(FIXTURE_REQUIREMENT_MARKDOWN);
+  const step = (
+    stepId: string,
+    itemId: string,
+    recordDigest = RECORD,
+    sectionAnchor = "acceptance-criteria",
+  ) => ({
+    stepId,
+    requirementRef: { recordDigest, sectionAnchor, itemId },
+  });
+  deepEqual(
+    deriveTestStepReferenceBlockers({
+      steps: [step("ts-1", "ac-1"), step("ts-2", "ac-2")],
+      recordDigest: RECORD,
+      criteria,
+    }),
+    [],
+  );
+  deepEqual(
+    deriveTestStepReferenceBlockers({
+      steps: [
+        step("ts-1", "ac-9"),
+        step("ts-2", "ac-1", OTHER),
+        step("ts-3", "ac-2", RECORD, "goal"),
+      ],
+      recordDigest: RECORD,
+      criteria,
+    }),
+    ["step-item-unknown:ts-1:ac-9", "step-record-drift:ts-2", "step-section:ts-3:goal"],
+  );
+});
+
+test("测试规划准入：真实环境、全部实现已接受、单一未终结测试目标、谱系对上待消费复测", () => {
+  const accepted = (targetTaskId: string) => ({
+    workType: "implementation",
+    repositoryId: REPO,
+    phase: "accepted",
+    targetTaskId,
+    taskPackageId: `tp-${targetTaskId}`,
+    taskPackageDigest: `sha256:${"a".repeat(64)}`,
+    windowId: "w",
+    currentDelivery: {
+      targetResult: {
+        targetResultId: `tr-${targetTaskId}`,
+        resultDigest: `sha256:${"b".repeat(64)}`,
+      },
+      reviewDecision: {
+        targetReviewDecisionId: `rd-${targetTaskId}`,
+        decisionDigest: `sha256:${"c".repeat(64)}`,
+      },
+    },
+  });
+  const active = (
+    targets: readonly Record<string, unknown>[],
+    extra: Record<string, unknown> = {},
+  ) =>
+    ({ lifecycle: "active", targetTasks: targets, ...extra }) as unknown as Parameters<
+      typeof deriveTestPlanningBlockers
+    >[0]["state"];
+  deepEqual(
+    deriveTestPlanningBlockers({
+      testingMode: "controller-only",
+      state: active([], { awaitingDecision: {} }),
+      lineage: null,
+    }),
+    ["testing-mode:controller-only", "awaiting-decision", "implementation-targets-missing"],
+  );
+  deepEqual(
+    deriveTestPlanningBlockers({
+      testingMode: "real-environment",
+      state: active([
+        { ...accepted("t-1"), phase: "rework-requested" },
+        {
+          workType: "test",
+          windowId: "w",
+          phase: "test-delivery-prepared",
+          targetTaskId: "t-test",
+        },
+      ]),
+      lineage: null,
+    }),
+    ["implementation-target-not-accepted:t-1", "test-target-open:t-test"],
+  );
+  deepEqual(
+    deriveTestPlanningBlockers({
+      testingMode: "real-environment",
+      state: active([accepted("t-1")]),
+      lineage: { kind: "retest", retestsTargetTaskId: "t-old" },
+    }),
+    ["lineage-unexpected"],
+  );
+  const defect = active([
+    accepted("t-1"),
+    { workType: "test", windowId: "w", phase: "test-product-defect", targetTaskId: "t-old" },
+  ]);
+  deepEqual(
+    deriveTestPlanningBlockers({ testingMode: "real-environment", state: defect, lineage: null }),
+    ["test-retest-not-authorized"],
+  );
+  const pending = active(
+    [
+      accepted("t-1"),
+      { workType: "test", windowId: "w", phase: "test-product-defect", targetTaskId: "t-old" },
+    ],
+    { pendingTestRetest: { previousTestTarget: { targetTaskId: "t-old" } } },
+  );
+  deepEqual(
+    deriveTestPlanningBlockers({ testingMode: "real-environment", state: pending, lineage: null }),
+    ["lineage-retest-required:t-old"],
+  );
+  deepEqual(
+    deriveTestPlanningBlockers({
+      testingMode: "real-environment",
+      state: pending,
+      lineage: { kind: "retest", retestsTargetTaskId: "t-other" },
+    }),
+    ["lineage-retest-target:t-old"],
+  );
+  deepEqual(
+    deriveTestPlanningBlockers({
+      testingMode: "real-environment",
+      state: pending,
+      lineage: { kind: "retest", retestsTargetTaskId: "t-old" },
+    }),
+    [],
+  );
+  deepEqual(
+    deriveImplementationBaselines(
+      active([
+        accepted("t-1"),
+        { ...accepted("t-2"), phase: "superseded" },
+        { workType: "test", phase: "planned" },
+      ]),
+    ),
+    [
+      {
+        targetTaskId: "t-1",
+        taskPackageId: "tp-t-1",
+        taskPackageDigest: `sha256:${"a".repeat(64)}`,
+        repositoryId: REPO,
+        windowId: "w",
+        targetResultId: "tr-t-1",
+        resultDigest: `sha256:${"b".repeat(64)}`,
+        targetReviewDecisionId: "rd-t-1",
+        decisionDigest: `sha256:${"c".repeat(64)}`,
+      },
+    ],
+  );
+  deepEqual(
+    deriveTopologyBlockers({
+      config: { indexes: { repositoryById: {}, windowById: {} } } as never,
+      repositoryId: "r",
+      windowId: "w",
+    }),
+    ["repository-unknown", "window-unknown"],
   );
 });

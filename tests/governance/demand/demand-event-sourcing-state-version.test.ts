@@ -28,7 +28,6 @@ test("Demand Event Sourcing state-model version 独立于 event version", () => 
       "review.target-result-decided",
       "review.target-result-resumed",
       "tasking.target-task-planned",
-      "testing.test-card-created",
     ].join(","),
   );
   equal(parseDemandEventSourcingStateModelVersion(1), 1);

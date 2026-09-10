@@ -31,7 +31,6 @@ import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../..
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-resume-public-contract.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
-import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-card-planning-public-contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import {
@@ -157,10 +156,6 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     idempotentHint: false,
   }),
   expectedTool(WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, "target-task-planning", ADDITIVE),
-  expectedTool(WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME, "test-card-planning", ADDITIVE, [
-    "creates no Test Task",
-    "runs no Test",
-  ]),
   expectedTool(WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, "rearm-delivery", ADDITIVE, [
     "At most three rearms per envelope",
     "Never performs the host effect",
@@ -225,7 +220,6 @@ function validPublicServerOptions(): PublicServerOptions {
     inspectTargetResultReview: unavailableExecutor,
     inspectBoard: unavailableExecutor,
     planTargetTask: unavailableExecutor,
-    planTestCard: unavailableExecutor,
     prepareDelivery: unavailableExecutor,
     rearmDelivery: unavailableExecutor,
     recordControllerImplementationReviewDecision: unavailableExecutor,
@@ -248,7 +242,6 @@ const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
   "registerWindowHostBinding",
   "inspectDemandRoute",
   "planTargetTask",
-  "planTestCard",
   "prepareDelivery",
   "recordDeliveryOutcome",
   "rearmDelivery",
@@ -293,7 +286,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   );
 });
 
-test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
+test("官方MCP server只发布二十个闭合Schema工具", async (t) => {
   const client = await connectWakeflowMcpTestClient(t);
   const instructions = client.getInstructions();
   equal(typeof instructions, "string");
@@ -329,7 +322,7 @@ test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
   );
 });
 
-test("Codex与Claude Code composition root发布同一二十一工具集合", async () => {
+test("Codex与Claude Code composition root发布同一二十工具集合", async () => {
   const listedNames: string[][] = [];
   for (const createServer of [createCodexWakeflowMcpServer, createClaudeCodeWakeflowMcpServer]) {
     const server = createServer("1.0.0-test");

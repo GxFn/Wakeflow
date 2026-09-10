@@ -17,7 +17,6 @@ export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
   "surface",
   "task-package",
   "test-attempt",
-  "test-card",
   "target-delivery",
   "target-result",
   "target-review-decision",

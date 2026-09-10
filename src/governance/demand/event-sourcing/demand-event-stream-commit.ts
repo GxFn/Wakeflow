@@ -475,12 +475,6 @@ function assertEventCommitBoundary(
   ) {
     fail("relation", path);
   }
-  if (
-    event.eventType === "testing.test-card-created" &&
-    event.data.testCard.source.streamRevision !== expectedStreamRevision
-  ) {
-    fail("relation", path);
-  }
   // 围栏令牌的期望修订必须等于本次提交的期望修订：信封与新代际都绑定它们被追加时的流位置。
   if (
     event.eventType === "delivery.delivery-prepared" &&

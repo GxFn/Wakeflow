@@ -16,11 +16,18 @@ import {
   PLANNING_RECORDED_AT,
   type TargetTaskPlanningWorkspaceFixture,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
+import {
+  cleanupTestTaskPlanningWorkspaceFixture,
+  createTestTaskPackageRequestFixture,
+  createTestTaskPlanningWorkspaceFixture,
+  planFixtureTestTask,
+} from "../../governance/tasking/test-task-planning.fixture.js";
 
 /**
  * tasking 切片效果：一次追加、同键重放、同键异请求、过期修订、私有路径、非法键；
  * 发明的锚点、错误的记录摘要、未知章节锚点与错误拓扑被拒；replacement 让旧目标
- * superseded；需求包要求用户审阅时缺确认被拒、带确认写入包。
+ * superseded；需求包要求用户审阅时缺确认被拒、带确认写入包；test 任务包由测试合同
+ * 与派生的窗口、环境、基线构成，第二个未终结测试目标与错误谱系被拒。
  */
 
 async function withDemandRoot<Result>(
@@ -267,6 +274,93 @@ test("需求包要求用户审阅任务清单时：缺确认被拒，带确认�
     if (taskPackage.workType !== "implementation")
       throw new Error("expected implementation package");
     deepEqual(taskPackage.planReview, { reviewer: "user", confirmedAt: PLANNING_RECORDED_AT });
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("test 任务包：合同步骤引用验收标准，窗口、环境与基线由 Wakeflow 派生，第二个未终结测试目标被拒", async () => {
+  const fixture = await createTestTaskPlanningWorkspaceFixture();
+  try {
+    const contract = fixture.testTaskRequest.taskPackage.testContract;
+    const firstStep = contract.steps[0];
+    await rejects(
+      planFixtureTestTask(fixture, 6, {
+        idempotencyKey: "test-plan-invented",
+        taskPackage: {
+          testContract: {
+            ...contract,
+            steps: [
+              { ...firstStep, requirementRef: { ...firstStep.requirementRef, itemId: "ac-9" } },
+            ],
+          },
+        },
+      }),
+      rejectedWith("step-item-unknown"),
+    );
+    await rejects(
+      planFixtureTestTask(fixture, 6, {
+        idempotencyKey: "test-plan-retest",
+        taskPackage: { lineage: { kind: "retest", retestsTargetTaskId: fixture.targetTaskId } },
+      }),
+      rejectedWith("lineage-unexpected"),
+    );
+    const planned = await planFixtureTestTask(fixture, 6);
+    equal(planned.status, "committed");
+    equal(planned.event.streamRevision, 7);
+    if (planned.targetTask.workType !== "test") throw new Error("Expected a Test target.");
+    equal(planned.targetTask.phase, "planned");
+    equal(planned.targetTask.lineage, null);
+    equal(planned.targetTask.testContract.stepCount, 2);
+    equal(planned.targetTask.testContract.maxAttempts, 1);
+    equal(planned.targetTask.testContract.environmentMemberRef.endsWith("landing.md"), true);
+    equal(planned.next.frontier, "test-delivery-planning");
+    const taskPackage = await loadPackage(
+      fixture,
+      planned.targetTask.taskPackageId,
+      planned.taskPackageProjection.taskPackageDigest,
+    );
+    if (taskPackage.workType !== "test") throw new Error("Expected a Test TaskPackage.");
+    deepEqual(
+      taskPackage.testContract.steps.map((step) => step.stepId),
+      ["ts-1", "ts-2"],
+    );
+    equal(taskPackage.testContract.environment.role, "landing");
+    equal(taskPackage.assignment.windowId, "window_77777777-7777-4777-8777-777777777777");
+    deepEqual(taskPackage.acceptanceAnchors, []);
+    equal(taskPackage.implementationBaselines.length, 1);
+    equal(taskPackage.implementationBaselines[0]?.targetTaskId, fixture.targetTaskId);
+    equal(taskPackage.implementationBaselines[0]?.taskPackageId, fixture.taskPackageId);
+    const replayed = await planFixtureTestTask(fixture, 6);
+    equal(replayed.status, "idempotent");
+    equal(replayed.targetTask.targetTaskId, planned.targetTask.targetTaskId);
+    await rejects(
+      planFixtureTestTask(fixture, 7, { idempotencyKey: "test-plan-second" }),
+      rejectedWith("test-target-open"),
+    );
+  } finally {
+    await cleanupTestTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("controller-only 的 Demand 与尚未接受的实现目标都不能规划 test 任务包", async () => {
+  const fixture = await createTargetTaskPlanningWorkspaceFixture();
+  try {
+    await rejects(
+      planFixtureTestTask(
+        {
+          workspacePath: fixture.workspacePath,
+          testTaskRequest: {
+            demandId: fixture.request.demandId,
+            taskPackage: createTestTaskPackageRequestFixture(fixture),
+          },
+        },
+        1,
+        { idempotencyKey: "test-plan-mode" },
+      ),
+      rejectedWith("testing-mode"),
+    );
+    equal(await commitCount(fixture), 1);
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }

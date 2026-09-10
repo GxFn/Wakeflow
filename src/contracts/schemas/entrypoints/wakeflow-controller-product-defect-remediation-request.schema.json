@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_REQUEST_SCHEMA",
   "title": "WakeflowControllerProductDefectRemediationRequestV1",
   "description": "Closed Controller-authored command for authorizing product remediation from one current product-defect Test Review Decision.",
-  "$comment": "The caller selects only affected existing product targets, failed-check mappings, and correction objectives. Wakeflow derives the Test target, TestCard baselines, Result/Decision lineage, Controller identity, Event position, Authorization/Event/Commit identity, and authorization time.",
+  "$comment": "The caller selects only affected existing product targets, failed-check mappings, and correction objectives. Wakeflow derives the Test target, test 任务包 baselines, Result/Decision lineage, Controller identity, Event position, Authorization/Event/Commit identity, and authorization time.",
   "type": "object",
   "additionalProperties": false,
   "required": [

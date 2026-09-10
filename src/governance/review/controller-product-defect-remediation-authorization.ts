@@ -46,7 +46,7 @@ import {
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
 } from "../demand/event-sourcing/demand-event-stream-position.js";
-import type { TestCardImplementationBaseline } from "../testing/test-card.js";
+import type { TestImplementationBaseline } from "../tasking/task-package.js";
 import {
   parseControllerTestReviewDecision,
   ControllerTestReviewDecisionError,
@@ -84,7 +84,7 @@ export interface ProductDefectRemediationFailedCheck {
 }
 
 export interface ProductDefectRemediationAffectedTarget {
-  readonly baseline: Readonly<TestCardImplementationBaseline>;
+  readonly baseline: Readonly<TestImplementationBaseline>;
   readonly failedCheckIds: readonly [string, ...string[]];
   readonly correctionObjective: string;
 }
@@ -102,9 +102,9 @@ export interface ControllerProductDefectRemediationAuthorization {
     readonly stateDigest: Sha256Digest;
     readonly streamRevision: DemandEventStreamRevision;
     readonly testTargetTaskId: WakeflowDurableId<"target-task">;
-    readonly testCard: Readonly<{
-      readonly testCardId: WakeflowDurableId<"test-card">;
-      readonly testCardDigest: Sha256Digest;
+    readonly testTaskPackage: Readonly<{
+      readonly taskPackageId: WakeflowDurableId<"task-package">;
+      readonly taskPackageDigest: Sha256Digest;
     }>;
     readonly testAttemptId: WakeflowDurableId<"test-attempt">;
     readonly targetResult: Readonly<{
@@ -133,7 +133,7 @@ export interface ControllerProductDefectRemediationAuthorization {
 }
 
 export interface CreateProductDefectRemediationAffectedTargetInput {
-  readonly baseline: Readonly<TestCardImplementationBaseline>;
+  readonly baseline: Readonly<TestImplementationBaseline>;
   readonly failedCheckIds: readonly [string, ...string[]];
   readonly correctionObjective: string;
 }
@@ -141,6 +141,11 @@ export interface CreateProductDefectRemediationAffectedTargetInput {
 export interface CreateControllerProductDefectRemediationAuthorizationInput {
   readonly decision: Readonly<ControllerTestReviewDecision>;
   readonly routeSource: Readonly<ProductDefectRemediationRouteSource>;
+  /** 被升级的 test 目标当前任务包（测试合同与实现基线的载体）。 */
+  readonly testTaskPackage: Readonly<{
+    readonly taskPackageId: WakeflowDurableId<"task-package">;
+    readonly taskPackageDigest: Sha256Digest;
+  }>;
   readonly affectedTargets: readonly [
     Readonly<CreateProductDefectRemediationAffectedTargetInput>,
     ...Readonly<CreateProductDefectRemediationAffectedTargetInput>[],
@@ -225,7 +230,6 @@ function id<
     | "demand"
     | "window"
     | "target-task"
-    | "test-card"
     | "test-attempt"
     | "target-result"
     | "target-review-decision"
@@ -301,7 +305,7 @@ function compareText(left: string, right: string): number {
 function parseBaseline(
   value: Readonly<AuthorizationWire["affectedTargets"][number]["baseline"]>,
   path: string,
-): Readonly<TestCardImplementationBaseline> {
+): Readonly<TestImplementationBaseline> {
   return Object.freeze({
     targetTaskId: id(value.targetTaskId, "target-task", `${path}/targetTaskId`),
     taskPackageId: id(
@@ -373,15 +377,15 @@ function parseSource(
       "target-task",
       "$/source/testTargetTaskId",
     ),
-    testCard: Object.freeze({
-      testCardId: id(
-        value.testCard.testCardId,
-        "test-card",
-        "$/source/testCard/testCardId",
+    testTaskPackage: Object.freeze({
+      taskPackageId: id(
+        value.testTaskPackage.taskPackageId,
+        "task-package",
+        "$/source/testTaskPackage/taskPackageId",
       ),
-      testCardDigest: digest(
-        value.testCard.testCardDigest,
-        "$/source/testCard/testCardDigest",
+      taskPackageDigest: digest(
+        value.testTaskPackage.taskPackageDigest,
+        "$/source/testTaskPackage/taskPackageDigest",
       ),
     }),
     testAttemptId: id(
@@ -448,6 +452,7 @@ function assertRelations(
       targetResultIds.has(baseline.targetResultId) ||
       targetReviewDecisionIds.has(baseline.targetReviewDecisionId) ||
       baseline.targetTaskId === source.testTargetTaskId ||
+      baseline.taskPackageId === source.testTaskPackage.taskPackageId ||
       baseline.targetResultId === source.targetResult.targetResultId ||
       baseline.targetReviewDecisionId ===
         source.testReviewDecision.targetReviewDecisionId
@@ -679,7 +684,17 @@ export function createControllerProductDefectRemediationAuthorization(
   const source = Object.freeze({
     ...routeSource,
     testTargetTaskId: decision.targetTaskId,
-    testCard: decision.testExecution.testCard,
+    testTaskPackage: Object.freeze({
+      taskPackageId: id(
+        input.testTaskPackage.taskPackageId,
+        "task-package",
+        "$input/testTaskPackage/taskPackageId",
+      ),
+      taskPackageDigest: digest(
+        input.testTaskPackage.taskPackageDigest,
+        "$input/testTaskPackage/taskPackageDigest",
+      ),
+    }),
     testAttemptId: decision.testExecution.testAttemptId,
     targetResult: Object.freeze({
       targetResultId: decision.reviewed.targetResultId,

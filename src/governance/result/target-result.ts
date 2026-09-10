@@ -115,10 +115,6 @@ export interface TestTargetResult extends TargetResultBase {
   }>;
   readonly testExecution: Readonly<{
     readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-    readonly testCard: Readonly<{
-      readonly testCardId: WakeflowDurableId<"test-card">;
-      readonly testCardDigest: Sha256Digest;
-    }>;
   }>;
   readonly report: Readonly<TestTargetResultReport>;
 }
@@ -193,7 +189,6 @@ function id<
     | "repository"
     | "window"
     | "test-attempt"
-    | "test-card"
     | "work-claim",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
   try {
@@ -375,17 +370,6 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
           "test-attempt",
           "$/testExecution/testAttemptId",
         ),
-        testCard: Object.freeze({
-          testCardId: id(
-            wire.testExecution.testCard.testCardId,
-            "test-card",
-            "$/testExecution/testCard/testCardId",
-          ),
-          testCardDigest: digest(
-            wire.testExecution.testCard.testCardDigest,
-            "$/testExecution/testCard/testCardDigest",
-          ),
-        }),
       }),
       report,
     });

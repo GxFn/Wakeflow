@@ -76,8 +76,8 @@ import { readDemandResultReviewSnapshot } from "../../governance/review/demand-r
 import {
   computeTaskPackageDigest,
   type TaskPackage,
+  type TestTaskPackage,
 } from "../../governance/tasking/task-package.js";
-import type { TestCard } from "../../governance/testing/test-card.js";
 import {
   createInitialTestExecutionAttempt,
   createRerunTestExecutionAttempt,
@@ -484,20 +484,6 @@ async function loadTaskPackage(
   }
 }
 
-async function loadTestCard(
-  repository: DemandEventSourcingRepository,
-  testCardId: string,
-  signal: AbortSignal | undefined,
-): Promise<Readonly<TestCard>> {
-  try {
-    const located = await repository.findTestCardCreatedEvent(testCardId, signalOptions(signal));
-    if (located === null) fail("precondition-failed", "test-card-missing", "$request.targetTaskId");
-    return located.event.data.testCard;
-  } catch (error: unknown) {
-    mapRepositoryError(error);
-  }
-}
-
 async function next(context: SliceContext, outcome: CommandOutcome): Promise<NextProjection> {
   const snapshot = await readDemandResultReviewSnapshot(
     context.authority.demandRoot,
@@ -646,14 +632,14 @@ async function loadRemediationSource(
 
 function testAttemptFor(
   target: Readonly<DemandTargetTaskState>,
-  testCard: Readonly<TestCard>,
+  taskPackage: Readonly<TestTaskPackage>,
   testAttemptId: WakeflowDurableId<"test-attempt">,
 ): Readonly<TestExecutionAttempt> {
   if (target.workType !== "test")
     fail("precondition-failed", "target-work-type", "$request.targetTaskId");
   try {
     if (target.phase === "planned")
-      return createInitialTestExecutionAttempt({ testAttemptId, testCard });
+      return createInitialTestExecutionAttempt({ testAttemptId, taskPackage });
     if (target.phase !== "test-another-attempt-requested") {
       fail("precondition-failed", "rerun-phase", "$request.targetTaskId");
     }
@@ -662,7 +648,7 @@ function testAttemptFor(
       fail("precondition-failed", "rerun-history", "$request.targetTaskId");
     return createRerunTestExecutionAttempt({
       testAttemptId,
-      testCard,
+      taskPackage,
       previousAttempt: previousAttempt.attempt,
       previousResult: {
         targetResultId: target.currentDelivery.targetResult.targetResultId,
@@ -679,15 +665,28 @@ function testAttemptFor(
 }
 
 function testContractSection(
-  testCard: Readonly<TestCard>,
+  taskPackage: Readonly<TestTaskPackage>,
   attempt: Readonly<TestExecutionAttempt>,
 ): DeliveryTestContractSection {
+  const contract = taskPackage.testContract;
   return Object.freeze({
-    approvedPlan: testCard.approvedPlan,
-    allowedSkills: testCard.allowedSkills,
+    question: contract.question,
+    objectBoundary: contract.objectBoundary,
+    steps: contract.steps.map((step) =>
+      Object.freeze({
+        stepId: step.stepId,
+        given: step.given,
+        when: step.when,
+        // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+        then: step.then,
+      }),
+    ),
+    environmentMemberRef: contract.environment.memberRef,
+    allowedSkills: contract.allowedSkills,
     setupDirective: attempt.environmentSetup.directive,
     attemptOrdinal: attempt.ordinal,
-    stopConditions: testCard.stopConditions,
+    maxAttempts: contract.maxAttempts,
+    stopConditions: contract.stopConditions,
   });
 }
 
@@ -856,7 +855,6 @@ async function executePrepare(
       ),
       envelope,
       taskPackage,
-      ...(sources.testCard === null ? {} : { testCard: sources.testCard }),
       ...(sources.reworkSource === null ? {} : { reworkSource: sources.reworkSource }),
       ...(sources.remediationSource === null
         ? {}
@@ -883,7 +881,6 @@ async function executePrepare(
 
 interface PrepareSources {
   readonly prompt: PromptSources;
-  readonly testCard: Readonly<TestCard> | null;
   readonly attempt: Readonly<TestExecutionAttempt> | null;
   readonly reworkSource: ReworkSource | null;
   readonly remediationSource: Awaited<ReturnType<typeof loadRemediationSource>> | null;
@@ -899,23 +896,21 @@ async function prepareSources(
 ): Promise<PrepareSources> {
   const signal = context.options.signal;
   if (taskPackage.workType === "test") {
-    const testCard = await loadTestCard(repository, taskPackage.testCard.testCardId, signal);
     const testAttemptId = deriveDurableId(
       "test-attempt",
       "prepare-delivery",
       taskPackage.demandId,
       binding.idempotencyKey,
     );
-    const attempt = testAttemptFor(target, testCard, testAttemptId);
+    const attempt = testAttemptFor(target, taskPackage, testAttemptId);
     return Object.freeze({
       prompt: {
         taskPackage,
         route,
         rework: null,
         remediation: null,
-        testContract: testContractSection(testCard, attempt),
+        testContract: testContractSection(taskPackage, attempt),
       },
-      testCard,
       attempt,
       reworkSource: null,
       remediationSource: null,
@@ -927,7 +922,6 @@ async function prepareSources(
       const rework = createTargetDeliveryReworkContext(reworkSource);
       return Object.freeze({
         prompt: { taskPackage, route, rework, remediation: null, testContract: null },
-        testCard: null,
         attempt: null,
         reworkSource,
         remediationSource: null,
@@ -938,7 +932,6 @@ async function prepareSources(
       const remediation = createTargetDeliveryProductDefectRemediationContext(remediationSource);
       return Object.freeze({
         prompt: { taskPackage, route, rework: null, remediation, testContract: null },
-        testCard: null,
         attempt: null,
         reworkSource: null,
         remediationSource,
@@ -949,7 +942,6 @@ async function prepareSources(
   }
   return Object.freeze({
     prompt: { taskPackage, route, rework: null, remediation: null, testContract: null },
-    testCard: null,
     attempt: null,
     reworkSource: null,
     remediationSource: null,
@@ -1003,10 +995,6 @@ function createEnvelope(
       return createDeliveryEnvelope({
         ...shared,
         workType: "test",
-        testCard: {
-          testCardId: taskPackage.testCard.testCardId,
-          testCardDigest: taskPackage.testCard.testCardDigest,
-        },
         attempt: sources.attempt,
       });
     }

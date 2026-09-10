@@ -34,10 +34,6 @@ promptDigest: WakeflowSha256DigestText
 fence: Fence
 rework?: Rework
 productDefectRemediation?: ProductDefectRemediation
-testCard?: {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
-}
 attempt?: WakeflowTestExecutionAttempt
 preparedAt: WakeflowUtcInstantText
 envelopeDigest: WakeflowSha256DigestText
@@ -60,11 +56,11 @@ kind: "WakeflowTestExecutionAttempt"
 schemaVersion: 1
 testAttemptId: string
 targetTaskId: string
-testCard: TestCardTuple
 ordinal: number
 mode: ("initial" | "rerun")
 environmentSetup: EnvironmentSetup
 rerunSource?: RerunSource
+contract: Contract
 })
 /**
  * Wakeflow 持久记录与事件使用的严格 UTC instant 文本：四位年份、大写 T/Z，并允许省略小数秒或保留 1 至 9 位小数秒。
@@ -131,10 +127,6 @@ outcome: "failed"
 methodSummary: string
 observationSummary: string
 }
-export interface TestCardTuple {
-testCardId: string
-testCardDigest: WakeflowSha256DigestText
-}
 export interface EnvironmentSetup {
 policy: ("fresh-once" | "fresh-per-attempt" | "reuse-existing")
 directive: ("prepare-fresh-environment" | "reuse-confirmed-environment")
@@ -149,6 +141,10 @@ reviewDecision: {
 targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
 }
+}
+export interface Contract {
+taskPackageId: string
+taskPackageDigest: WakeflowSha256DigestText
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

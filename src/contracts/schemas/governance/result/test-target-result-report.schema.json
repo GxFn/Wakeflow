@@ -136,20 +136,19 @@
     "stepEvidence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["planIndex", "step", "evidence"],
+      "required": ["stepId", "evidence"],
       "properties": {
-        "planIndex": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 31
-        },
-        "step": {
-          "$ref": "#/$defs/humanText"
+        "stepId": {
+          "$ref": "#/$defs/stepId"
         },
         "evidence": {
           "$ref": "#/$defs/evidenceRef"
         }
       }
+    },
+    "stepId": {
+      "type": "string",
+      "pattern": "^ts-[1-9][0-9]?$"
     }
   }
 }

@@ -22,7 +22,7 @@ import {
   createControllerTestReviewDecision,
   type ControllerTestReviewDecision,
 } from "../../../src/governance/review/controller-test-review-decision.js";
-import type { TestCardImplementationBaseline } from "../../../src/governance/testing/test-card.js";
+import type { TestImplementationBaseline } from "../../../src/governance/tasking/task-package.js";
 
 const REPORTED_AT = parseUtcInstant("2026-08-29T12:34:00.000Z");
 const DECIDED_AT = parseUtcInstant("2026-08-29T12:35:00.000Z");
@@ -72,13 +72,6 @@ function productDefectDecision(): Readonly<ControllerTestReviewDecision> {
           "test-attempt_77777777-7777-4777-8777-777777777777",
           "test-attempt",
         ),
-        testCard: {
-          testCardId: parseWakeflowDurableIdOfKind(
-            "test-card_88888888-8888-4888-8888-888888888888",
-            "test-card",
-          ),
-          testCardDigest: parseSha256Digest(`sha256:${"6".repeat(64)}`),
-        },
       },
       decision: "escalate-product-defect",
       assessment: {
@@ -107,7 +100,7 @@ function productDefectDecision(): Readonly<ControllerTestReviewDecision> {
       ],
       rationale: "充分Evidence证明已接受实现存在产品缺陷。",
       blockingReasons: [],
-      residualRisks: ["修复后仍需创建新TestCard验证新基线。"],
+      residualRisks: ["修复后仍需规划复测任务包验证新基线。"],
     },
     {
       clock: () => DECIDED_AT,
@@ -116,7 +109,7 @@ function productDefectDecision(): Readonly<ControllerTestReviewDecision> {
   );
 }
 
-function baseline(key: "a" | "b"): Readonly<TestCardImplementationBaseline> {
+function baseline(key: "a" | "b"): Readonly<TestImplementationBaseline> {
   const first = key === "a";
   return Object.freeze({
     targetTaskId: parseWakeflowDurableIdOfKind(
@@ -175,6 +168,13 @@ function input(): CreateControllerProductDefectRemediationAuthorizationInput {
       reviewSnapshotDigest: parseSha256Digest(`sha256:${"f".repeat(64)}`),
       stateDigest: parseSha256Digest(`sha256:${"0".repeat(64)}`),
       streamRevision: parseDemandEventStreamRevision(13),
+    },
+    testTaskPackage: {
+      taskPackageId: parseWakeflowDurableIdOfKind(
+        "task-package_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "task-package",
+      ),
+      taskPackageDigest: parseSha256Digest(`sha256:${"6".repeat(64)}`),
     },
     affectedTargets: [
       {

@@ -64,36 +64,17 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
     );
     rmSync(projectionPath);
 
+    // 测试卡目录已随测试合同并入任务包而退役：再出现即树形不合法。
     mkdirSync(path.join(fixtureRoot, "artifacts", "test-cards"), {
       mode: 0o700,
     });
-    const testCardPath = path.join(
-      fixtureRoot,
-      "artifacts",
-      "test-cards",
-      "test-card_22222222-2222-4222-8222-222222222222.json",
-    );
-    writeFileSync(testCardPath, "{}\n", { mode: 0o600 });
-    const testingInventory =
-      await inspectDemandEventSourcingRootInventory(root);
-    equal(testingInventory.artifactCount, 1);
-    equal(testingInventory.nodes.testCards?.kind, "directory");
-    equal(Object.hasOwn(testingInventory.nodes, "testDispatchPackets"), false);
-    rmSync(testCardPath);
-    const invalidTestCardPath = path.join(
-      fixtureRoot,
-      "artifacts",
-      "test-cards",
-      "foreign.json",
-    );
-    writeFileSync(invalidTestCardPath, "{}\n", { mode: 0o600 });
     await rejects(
       inspectDemandEventSourcingRootInventory(root),
       (error: unknown) =>
         error instanceof DemandEventSourcingRootInventoryError &&
         error.reason === "tree-shape",
     );
-    rmSync(invalidTestCardPath);
+    rmSync(path.join(fixtureRoot, "artifacts", "test-cards"), { recursive: true });
 
     const invalidProjectionPath = path.join(
       fixtureRoot,

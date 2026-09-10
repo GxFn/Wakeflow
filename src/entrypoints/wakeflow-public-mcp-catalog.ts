@@ -18,8 +18,6 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_REQUEST_SCHEMA } from "../cont
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-review-inspection-result.generated.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-review-resume-request.generated.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-target-result-review-resume-result.generated.js";
-import { WAKEFLOW_TEST_CARD_PLANNING_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-card-planning-request.generated.js";
-import { WAKEFLOW_TEST_CARD_PLANNING_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-card-planning-result.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../governance/evidence/managed-evidence-public-contract.js";
 import type { ManagedEvidencePublicResult } from "../governance/evidence/managed-evidence-public-coordinator.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../governance/result/target-result-import-public-contract.js";
@@ -34,8 +32,6 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../go
 import type { TargetResultReviewInspectionPublicResult } from "../governance/review/target-result-review-inspection-public-coordinator.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../governance/review/target-result-review-resume-public-contract.js";
 import type { TargetResultReviewResumePublicResult } from "../governance/review/target-result-review-resume-public-coordinator.js";
-import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../governance/testing/test-card-planning-public-contract.js";
-import type { TestCardPlanningPublicResult } from "../governance/testing/test-card-planning-public-coordinator.js";
 import {
   createWakeflowToolCatalog,
   type WakeflowToolCatalog,
@@ -96,7 +92,6 @@ export interface WakeflowPublicMcpExecutors {
   readonly inspectDemandRoute: WakeflowPublicMcpExecutor<DemandRouteInspectionResult>;
   readonly inspectTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewInspectionPublicResult>;
   readonly planTargetTask: WakeflowPublicMcpExecutor<TargetTaskPlanningResult>;
-  readonly planTestCard: WakeflowPublicMcpExecutor<TestCardPlanningPublicResult>;
   readonly prepareDelivery: WakeflowPublicMcpExecutor<PrepareDeliveryResult>;
   readonly publishRequirement: WakeflowPublicMcpExecutor<RequirementPublicationResult>;
   readonly inspectBoard: WakeflowPublicMcpExecutor<BoardInspectionResult>;
@@ -174,18 +169,6 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
     resultSchema: WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_RESULT_SCHEMA,
     annotations: ADDITIVE,
   },
-  {
-    name: WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
-    slice: "tasking",
-    shape: "effect",
-    executor: "planTestCard",
-    title: "Plan Wakeflow Test Card",
-    description:
-      "Preview or apply one Controller-authored real-environment TestCard when the current Demand Route selects Test Card Planning; Wakeflow derives the frozen Test Basis, environment Authority, accepted implementation baselines, Test Window, generation source, and Event identities. Apply only appends the TestCard Event: it creates no Test Task or Delivery, runs no Test, performs no host effect, and grants no Test conclusion.",
-    requestSchema: WAKEFLOW_TEST_CARD_PLANNING_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_TEST_CARD_PLANNING_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
   TARGET_TASK_PLANNING_TOOL_REGISTRATION satisfies Registration,
   PREPARE_DELIVERY_TOOL_REGISTRATION satisfies Registration,
   RECORD_DELIVERY_OUTCOME_TOOL_REGISTRATION satisfies Registration,
@@ -257,7 +240,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
     executor: "authorizeProductDefectRemediation",
     title: "Authorize Wakeflow Product Defect Remediation",
     description:
-      "Authorize bounded remediation of exact existing Implementation TaskPackage baselines only when the current Demand Route selects Product Defect Remediation Authorization, carrying the exact product-defect Test Decision, post-acceptance Route digest, affected product Target identities, failed-check mappings, correction objectives, and Controller rationale while Wakeflow derives every baseline and Event identity. It does not create Delivery, execute a fix, let Test modify product code, create the next TestCard, or complete the Demand.",
+      "Authorize bounded remediation of exact existing Implementation TaskPackage baselines only when the current Demand Route selects Product Defect Remediation Authorization, carrying the exact product-defect Test Decision, post-acceptance Route digest, affected product Target identities, failed-check mappings, correction objectives, and Controller rationale while Wakeflow derives every baseline and Event identity. It does not create Delivery, execute a fix, let Test modify product code, plan the retest task package, or complete the Demand.",
     requestSchema: WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_RESULT_SCHEMA,
     annotations: DESTRUCTIVE,

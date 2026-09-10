@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA",
   "title": "WakeflowDemandAggregateState",
   "description": "由 Demand domain event reducer 唯一生成的最小业务 Aggregate state。",
-  "$comment": "stream revision、event tail 与 snapshot metadata 不进入本状态；authorityDigest 是 TaskPackage 准入所需的 publication 派生事实。managedEvidence 只在首个Evidence Event后出现，并仅投影ID与双摘要selector；完整Manifest留在Event。currentTestCard 只指向当前测试合同；旧 Test Target 保留其 Card、attempt、Result 与 Decision 历史。pendingTestRetest 只投影已授权但尚未由新 Card 消费的一次复测，不复制完整 Authorization。Pod不以空占位字段提前进入状态模型。",
+  "$comment": "stream revision、event tail 与 snapshot metadata 不进入本状态；authorityDigest 是 TaskPackage 准入所需的 publication 派生事实。managedEvidence 只在首个Evidence Event后出现，并仅投影ID与双摘要selector；完整Manifest留在Event。currenttest 任务包 只指向当前测试合同；旧 Test Target 保留其 Card、attempt、Result 与 Decision 历史。pendingTestRetest 只投影已授权但尚未由新 Card 消费的一次复测，不复制完整 Authorization。Pod不以空占位字段提前进入状态模型。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -45,9 +45,6 @@
       "items": {
         "$ref": "#/$defs/managedEvidenceSummary"
       }
-    },
-    "currentTestCard": {
-      "$ref": "#/$defs/testCard"
     },
     "pendingTestRetest": {
       "$ref": "#/$defs/pendingTestRetest"
@@ -311,9 +308,6 @@
               "$ref": "#/$defs/testReviewedCurrentDelivery"
             }
           ]
-        },
-        "testCard": {
-          "$ref": "#/$defs/testCard"
         },
         "testAttempts": {
           "type": "array",
@@ -1378,47 +1372,13 @@
         }
       }
     },
-    "testCard": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["testCardId", "testCardDigest", "targetTaskId", "testWindowId"],
-      "properties": {
-        "testCardId": {
-          "type": "string",
-          "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        "testCardDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        },
-        "targetTaskId": {
-          "$ref": "#/$defs/targetTaskId"
-        },
-        "testWindowId": {
-          "$ref": "#/$defs/windowId"
-        }
-      }
-    },
     "pendingTestRetest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "previousTestCard", "testReviewDecision", "productDefectRemediation"],
+      "required": ["kind", "previousTestTarget", "testReviewDecision", "productDefectRemediation"],
       "properties": {
         "kind": {
           "const": "product-defect-retest"
-        },
-        "previousTestCard": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["testCardId", "testCardDigest"],
-          "properties": {
-            "testCardId": {
-              "type": "string",
-              "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-            },
-            "testCardDigest": {
-              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-            }
-          }
         },
         "testReviewDecision": {
           "type": "object",
@@ -1443,6 +1403,22 @@
               "pattern": "^product-defect-remediation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
             },
             "authorizationDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
+        },
+        "previousTestTarget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["targetTaskId", "taskPackageId", "taskPackageDigest"],
+          "properties": {
+            "targetTaskId": {
+              "$ref": "#/$defs/targetTaskId"
+            },
+            "taskPackageId": {
+              "$ref": "#/$defs/taskPackageId"
+            },
+            "taskPackageDigest": {
               "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
             }
           }

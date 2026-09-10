@@ -44,17 +44,12 @@ import {
   createDemandEventSourcingResourceCatalog,
   createDemandEventStreamCommitResourceDeclaration,
   createTaskPackageProjectionResourceDeclaration,
-  createTestCardProjectionResourceDeclaration,
   WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
 } from "../../../src/governance/demand/demand-resource-catalog.js";
 import {
   taskPackageProjectionRef,
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
 } from "../../../src/governance/tasking/task-package-projection-paths.js";
-import {
-  testCardProjectionRef,
-  TEST_CARD_PROJECTIONS_ROOT_REF,
-} from "../../../src/governance/testing/test-card-projection-paths.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -64,10 +59,6 @@ const COMMIT_SEQUENCE = parseDemandEventCommitSequence(1);
 const TASK_PACKAGE_ID = parseWakeflowDurableIdOfKind(
   "task-package_22222222-2222-4222-8222-222222222222",
   "task-package",
-);
-const TEST_CARD_ID = parseWakeflowDurableIdOfKind(
-  "test-card_33333333-3333-4333-8333-333333333333",
-  "test-card",
 );
 
 function assertDeepFrozen(value: unknown): void {
@@ -232,13 +223,6 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
         processing: "directory-container:materialize-directory",
       },
       {
-        declarationId: `${prefix}.test-cards-root`,
-        ownerId: "demand-testing-projection",
-        relativePath: `${rootRef}/${TEST_CARD_PROJECTIONS_ROOT_REF}`,
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
         declarationId: `${prefix}.transactions-root`,
         ownerId: "demand-event-sourcing",
         relativePath: `${rootRef}/${DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF}`,
@@ -268,7 +252,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
       },
     ],
   );
-  equal(catalog.length, 15);
+  equal(catalog.length, 14);
   equal(
     catalog.every(
       (entry) =>
@@ -371,32 +355,6 @@ test("TaskPackage projection declaration remains derived and create-only", () =>
     },
   );
   assertDeepFrozen(declaration);
-});
-
-test("TestCard投影声明保持derived/create-only", () => {
-  const card = createTestCardProjectionResourceDeclaration(
-    DEMAND_ID,
-    TEST_CARD_ID,
-  );
-  deepEqual(
-    {
-      declarationId: card.declarationId,
-      ownerId: card.ownerId,
-      relativePath: card.placement.relativePath,
-      processing: card.processing,
-    },
-    {
-      declarationId: `demand.testing.${DEMAND_ID}.test-card.${TEST_CARD_ID}`,
-      ownerId: "demand-testing-projection",
-      relativePath: `${demandFinalRootRef(DEMAND_ID)}/${testCardProjectionRef(TEST_CARD_ID)}`,
-      processing: {
-        kind: "resource",
-        role: "derived-projection",
-        allowedMutationRecipes: ["exclusive-create"],
-        recoveryStrategy: "rebuild-from-authority",
-      },
-    },
-  );
 });
 
 test("Demand commit and snapshot declarations keep authority and checkpoint distinct", () => {

@@ -11,12 +11,11 @@ import type {
 } from "../demand/model/demand-aggregate-state.js";
 import type { DeliveryEnvelope } from "../delivery/delivery-envelope.js";
 import type { TaskPackage } from "../tasking/task-package.js";
-import type { TestCard } from "../testing/test-card.js";
 import type { TargetResultImportRequest } from "./target-result-import-input.js";
 
 /**
- * Result Import 从同一 Demand 事件流恢复的不可变来源闭包：任务包、投递信封、当前
- * 投递代际（围栏与处置摘要来自聚合状态），test 另加测试卡。
+ * Result Import 从同一 Demand 事件流恢复的不可变来源闭包：任务包（test 含测试合同）、
+ * 投递信封、当前投递代际（围栏与处置摘要来自聚合状态）。
  */
 
 export interface TargetResultImportCurrentDelivery extends DemandCurrentDeliveryBase {
@@ -41,7 +40,6 @@ export interface TestTargetResultImportSources extends TargetResultImportSourceB
   readonly taskPackage: Readonly<
     Extract<TaskPackage, { readonly workType: "test" }>
   >;
-  readonly testCard: Readonly<TestCard>;
 }
 
 export type TargetResultImportSources =
@@ -53,7 +51,6 @@ export type TargetResultImportAuthorityErrorReason =
   | "fence"
   | "host"
   | "outcome"
-  | "test-card"
   | "state"
   | "aborted";
 
@@ -63,7 +60,6 @@ const ERROR_MESSAGES = {
   fence: "TargetResult Import fence token does not match the current delivery generation.",
   host: "TargetResult Import delivery belongs to another Host.",
   outcome: "TargetResult Import delivery has no accepted or indeterminate outcome.",
-  "test-card": "TargetResult Import TestCard authority is invalid.",
   state: "TargetResult Import Event sources do not close.",
   aborted: "TargetResult Import authority loading was aborted.",
 } as const satisfies Readonly<
@@ -181,15 +177,9 @@ export async function loadTargetResultImportSources(
     const taskPackage = taskEvent.event.data.taskPackage;
     if (envelope.workType === "test") {
       if (taskPackage.workType !== "test") fail("task-package", undefined, eventAuthority);
-      const cardEvent = await repository.findTestCardCreatedEvent(
-        envelope.testCard.testCardId,
-        options,
-      );
-      if (cardEvent === null) fail("test-card", undefined, eventAuthority);
       return Object.freeze({
         workType: "test" as const,
         taskPackage,
-        testCard: cardEvent.event.data.testCard,
         envelope,
         currentDelivery,
         existingResultEvent,

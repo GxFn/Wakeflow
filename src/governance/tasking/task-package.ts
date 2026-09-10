@@ -107,10 +107,51 @@ export type TaskPackagePlanReview =
   | Readonly<{ readonly reviewer: "controller" }>
   | Readonly<{ readonly reviewer: "user"; readonly confirmedAt: UtcInstant }>;
 
-export interface TaskPackageTestCardTuple {
-  readonly testCardId: WakeflowDurableId<"test-card">;
-  readonly testCardDigest: Sha256Digest;
+/** 测试合同的一步：given/when/then 来自需求包验收标准的一条列表项（ADR-0012 D4）。 */
+export interface TestContractStep {
+  readonly stepId: string;
+  readonly given: string;
+  readonly when: string;
+  readonly then: string;
+  readonly requirementRef: Readonly<TaskPackageRequirementRef>;
 }
+
+export type TestSetupPolicy = "fresh-once" | "fresh-per-attempt" | "reuse-existing";
+
+/** test 任务包携带的测试合同；冻结语义由任务包不可变性承担（能力卡 5 修订 5.2）。 */
+export interface TestContract {
+  readonly question: string;
+  readonly objectBoundary: string;
+  readonly steps: readonly [Readonly<TestContractStep>, ...Readonly<TestContractStep>[]];
+  readonly environment: Readonly<LedgerAuthorityMemberReference>;
+  readonly allowedSkills: readonly string[];
+  readonly setupPolicy: TestSetupPolicy;
+  readonly maxAttempts: number;
+  readonly stopConditions: readonly [string, ...string[]];
+}
+
+/** 测试所针对的已接受实现基线；由 Wakeflow 从聚合派生进包，Controller 不撰写。 */
+export interface TestImplementationBaseline {
+  readonly targetTaskId: WakeflowDurableId<"target-task">;
+  readonly taskPackageId: WakeflowDurableId<"task-package">;
+  readonly taskPackageDigest: Sha256Digest;
+  readonly repositoryId: WakeflowDurableId<"repository">;
+  readonly windowId: WakeflowDurableId<"window">;
+  readonly targetResultId: WakeflowDurableId<"target-result">;
+  readonly resultDigest: Sha256Digest;
+  readonly targetReviewDecisionId: WakeflowDurableId<"target-review-decision">;
+  readonly decisionDigest: Sha256Digest;
+}
+
+/** test 包谱系：首轮为 null；产品缺陷修复后的新代际记 retest（能力卡 5 Q5）。 */
+export type TestTaskLineage =
+  | Readonly<{
+      readonly kind: "retest";
+      readonly retestsTargetTaskId: WakeflowDurableId<"target-task">;
+      readonly productDefectRemediationId: WakeflowDurableId<"product-defect-remediation">;
+      readonly authorizationDigest: Sha256Digest;
+    }>
+  | null;
 
 interface TaskPackageBase {
   readonly artifactKind: typeof TASK_PACKAGE_ARTIFACT_KIND;
@@ -150,7 +191,12 @@ export interface TestTaskPackage extends TaskPackageBase {
   readonly assignment: Readonly<TestTaskPackageAssignment>;
   readonly workType: "test";
   readonly acceptanceAnchors: readonly [];
-  readonly testCard: Readonly<TaskPackageTestCardTuple>;
+  readonly testContract: Readonly<TestContract>;
+  readonly implementationBaselines: readonly [
+    Readonly<TestImplementationBaseline>,
+    ...Readonly<TestImplementationBaseline>[],
+  ];
+  readonly lineage: TestTaskLineage;
 }
 
 export type TaskPackage = ImplementationTaskPackage | TestTaskPackage;
@@ -263,12 +309,14 @@ const TEST_DRAFT_FIELDS = Object.freeze([
   "confirmedContext",
   "demandAuthorityDigest",
   "demandId",
+  "implementationBaselines",
+  "lineage",
   "objective",
   "programId",
   "selectedAuthorityRefs",
   "targetTaskId",
   "taskPackageId",
-  "testCard",
+  "testContract",
   "workType",
 ] as const);
 const CONTENT_DRAFT_FIELDS = Object.freeze([
@@ -363,7 +411,9 @@ function parseId<
     | "demand"
     | "task-package"
     | "target-task"
-    | "test-card"
+    | "target-result"
+    | "target-review-decision"
+    | "product-defect-remediation"
     | "repository"
     | "window",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
@@ -480,7 +530,7 @@ function parseAcceptanceAnchors(
 }
 
 function parseLineage(
-  value: TaskPackageWire["lineage"],
+  value: Exclude<TaskPackageWire["lineage"], { readonly kind: "retest" }>,
   targetTaskId: WakeflowDurableId<"target-task">,
 ): TaskPackageLineage {
   if (value === undefined || value === null) return null;
@@ -529,6 +579,129 @@ function parseSectionAnchors(
     seen.add(anchor);
   }
   return Object.freeze([...value]);
+}
+
+const STEP_ID_PREFIX = "ts-";
+
+function parseRequirementRef(
+  value: Readonly<{ readonly recordDigest: string; readonly sectionAnchor: string; readonly itemId: string }>,
+  path: string,
+): Readonly<TaskPackageRequirementRef> {
+  return Object.freeze({
+    recordDigest: parseDigest(value.recordDigest, `${path}/recordDigest`),
+    sectionAnchor: value.sectionAnchor,
+    itemId: value.itemId,
+  });
+}
+
+function parseTestContract(
+  value: TaskPackageWire["testContract"],
+): Readonly<TestContract> {
+  if (value === undefined) fail("schema", "$/testContract");
+  const steps: Readonly<TestContractStep>[] = [];
+  const itemIds = new Set<string>();
+  for (const [index, step] of value.steps.entries()) {
+    const path = `$/testContract/steps/${index}`;
+    // 步骤序号由 Wakeflow 按顺序编为 ts-1…ts-n，一步只引用一条验收标准项。
+    if (step.stepId !== `${STEP_ID_PREFIX}${index + 1}`) fail("relation", `${path}/stepId`);
+    const requirementRef = parseRequirementRef(step.requirementRef, `${path}/requirementRef`);
+    if (itemIds.has(requirementRef.itemId)) fail("relation", `${path}/requirementRef/itemId`);
+    itemIds.add(requirementRef.itemId);
+    steps.push(
+      Object.freeze({
+        stepId: step.stepId,
+        given: parseCanonicalText(step.given, `${path}/given`),
+        when: parseCanonicalText(step.when, `${path}/when`),
+        // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+        then: parseCanonicalText(step.then, `${path}/then`),
+        requirementRef,
+      }),
+    );
+  }
+  const firstStep = steps[0];
+  if (firstStep === undefined) fail("schema", "$/testContract/steps");
+  const stepTuple: TestContract["steps"] = Object.freeze([firstStep, ...steps.slice(1)]);
+  let environment: Readonly<LedgerAuthorityMemberReference>;
+  try {
+    environment = parseLedgerAuthorityMemberReference(value.environment);
+  } catch (error: unknown) {
+    if (error instanceof LedgerAuthorityStoreError) fail("schema", "$/testContract/environment");
+    throw error;
+  }
+  const stopConditions = parseNonEmptyTextList(value.stopConditions, "$/testContract/stopConditions");
+  const skills = new Set<string>();
+  for (const [index, skill] of value.allowedSkills.entries()) {
+    if (skills.has(skill)) fail("relation", `$/testContract/allowedSkills/${index}`);
+    skills.add(skill);
+  }
+  return Object.freeze({
+    question: parseCanonicalText(value.question, "$/testContract/question"),
+    objectBoundary: parseCanonicalText(value.objectBoundary, "$/testContract/objectBoundary"),
+    steps: stepTuple,
+    environment,
+    allowedSkills: Object.freeze([...value.allowedSkills]),
+    setupPolicy: value.setupPolicy,
+    maxAttempts: value.maxAttempts,
+    stopConditions,
+  });
+}
+
+function parseImplementationBaselines(
+  value: TaskPackageWire["implementationBaselines"],
+): TestTaskPackage["implementationBaselines"] {
+  if (value === undefined) fail("schema", "$/implementationBaselines");
+  const parsed: Readonly<TestImplementationBaseline>[] = [];
+  const targetTaskIds = new Set<string>();
+  for (const [index, baseline] of value.entries()) {
+    const path = `$/implementationBaselines/${index}`;
+    const targetTaskId = parseId(baseline.targetTaskId, "target-task", `${path}/targetTaskId`);
+    if (targetTaskIds.has(targetTaskId)) fail("relation", `${path}/targetTaskId`);
+    targetTaskIds.add(targetTaskId);
+    parsed.push(
+      Object.freeze({
+        targetTaskId,
+        taskPackageId: parseId(baseline.taskPackageId, "task-package", `${path}/taskPackageId`),
+        taskPackageDigest: parseDigest(baseline.taskPackageDigest, `${path}/taskPackageDigest`),
+        repositoryId: parseId(baseline.repositoryId, "repository", `${path}/repositoryId`),
+        windowId: parseId(baseline.windowId, "window", `${path}/windowId`),
+        targetResultId: parseId(baseline.targetResultId, "target-result", `${path}/targetResultId`),
+        resultDigest: parseDigest(baseline.resultDigest, `${path}/resultDigest`),
+        targetReviewDecisionId: parseId(
+          baseline.targetReviewDecisionId,
+          "target-review-decision",
+          `${path}/targetReviewDecisionId`,
+        ),
+        decisionDigest: parseDigest(baseline.decisionDigest, `${path}/decisionDigest`),
+      }),
+    );
+  }
+  const first = parsed[0];
+  if (first === undefined) fail("schema", "$/implementationBaselines");
+  return Object.freeze([first, ...parsed.slice(1)]);
+}
+
+function parseTestLineage(
+  value: TaskPackageWire["lineage"],
+  targetTaskId: WakeflowDurableId<"target-task">,
+): TestTaskLineage {
+  if (value === undefined || value === null) return null;
+  if (value.kind !== "retest") fail("schema", "$/lineage");
+  const retestsTargetTaskId = parseId(
+    value.retestsTargetTaskId,
+    "target-task",
+    "$/lineage/retestsTargetTaskId",
+  );
+  if (retestsTargetTaskId === targetTaskId) fail("relation", "$/lineage");
+  return Object.freeze({
+    kind: "retest" as const,
+    retestsTargetTaskId,
+    productDefectRemediationId: parseId(
+      value.productDefectRemediationId,
+      "product-defect-remediation",
+      "$/lineage/productDefectRemediationId",
+    ),
+    authorizationDigest: parseDigest(value.authorizationDigest, "$/lineage/authorizationDigest"),
+  });
 }
 
 function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
@@ -609,37 +782,35 @@ function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
       workType: "implementation" as const,
       commitExpectation: wire.commitExpectation,
       acceptanceAnchors: parsedAnchors,
-      lineage: parseLineage(wire.lineage, common.targetTaskId),
+      lineage: parseLineage(
+        wire.lineage !== undefined && wire.lineage !== null && wire.lineage.kind === "retest"
+          ? fail("schema", "$/lineage")
+          : wire.lineage,
+        common.targetTaskId,
+      ),
       planReview: parsePlanReview(wire.planReview),
       sectionAnchors: parseSectionAnchors(wire.sectionAnchors),
     };
     return Object.freeze(implementation);
   }
   if (
-    wire.testCard === undefined ||
+    wire.testContract === undefined ||
+    wire.implementationBaselines === undefined ||
+    wire.lineage === undefined ||
     acceptanceAnchors.length !== 0 ||
-    wire.lineage !== undefined ||
     wire.planReview !== undefined ||
     wire.sectionAnchors !== undefined
   ) {
-    fail("schema", "$/testCard");
+    fail("schema", "$/testContract");
   }
   const test: TestTaskPackage = {
     ...common,
     assignment: Object.freeze({ windowId }),
     workType: "test" as const,
     acceptanceAnchors: Object.freeze([]) as readonly [],
-    testCard: Object.freeze({
-      testCardId: parseId(
-        wire.testCard.testCardId,
-        "test-card",
-        "$/testCard/testCardId",
-      ),
-      testCardDigest: parseDigest(
-        wire.testCard.testCardDigest,
-        "$/testCard/testCardDigest",
-      ),
-    }),
+    testContract: parseTestContract(wire.testContract),
+    implementationBaselines: parseImplementationBaselines(wire.implementationBaselines),
+    lineage: parseTestLineage(wire.lineage, common.targetTaskId),
   };
   return Object.freeze(test);
 }
@@ -717,7 +888,11 @@ export function createTaskPackage(
     completionExpectations: record.completionExpectations,
     acceptanceAnchors: record.acceptanceAnchors,
     ...(record.workType === "test"
-      ? { testCard: record.testCard }
+      ? {
+          testContract: record.testContract,
+          implementationBaselines: record.implementationBaselines,
+          lineage: record.lineage,
+        }
       : {
           commitExpectation: record.commitExpectation,
           lineage: record.lineage,

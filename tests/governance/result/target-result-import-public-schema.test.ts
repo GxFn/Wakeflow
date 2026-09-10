@@ -21,7 +21,6 @@ const validateResult = createRuntimeJsonSchemaValidator<ImportResultWire>(
 
 const DIGEST = `sha256:${"0".repeat(64)}`;
 const TEST_ATTEMPT_ID = "test-attempt_77777777-7777-4777-8777-777777777777";
-const TEST_CARD_ID = "test-card_88888888-8888-4888-8888-888888888888";
 const EVENT_ID = "demand-event_99999999-9999-4999-8999-999999999999";
 const COMMIT_ID = "demand-event-commit_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
@@ -70,8 +69,7 @@ function testReportContent() {
     risks: ["仍需Controller独立审查。"],
     stepEvidence: [
       {
-        planIndex: 0,
-        step: "执行批准的真实场景步骤。",
+        stepId: "ts-1",
         evidence: {
           ref: "evidence/test-runs/step-0.json",
           digest: DIGEST,
@@ -136,10 +134,6 @@ function testResult() {
       },
       testExecution: {
         testAttemptId: TEST_ATTEMPT_ID,
-        testCard: {
-          testCardId: TEST_CARD_ID,
-          testCardDigest: DIGEST,
-        },
       },
       resultDigest: DIGEST,
     },

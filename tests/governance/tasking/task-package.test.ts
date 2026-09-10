@@ -100,9 +100,9 @@ test("TaskPackage rejects future workflow branches and duplicate local facts", (
     );
   }
   expectTaskPackageError(
-    () => parseTaskPackage({ ...taskPackage, testCard: null }),
+    () => parseTaskPackage({ ...taskPackage, testContract: null }),
     "schema",
-    "$/testCard",
+    "$/testContract",
   );
   expectTaskPackageError(
     () =>
@@ -167,10 +167,39 @@ test("test TaskPackage is a closed discriminated variant without repository muta
     assignment: { windowId: TASKING_WINDOW_ID },
     workType: "test",
     acceptanceAnchors: [],
-    testCard: {
-      testCardId: "test-card_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      testCardDigest: `sha256:${"d".repeat(64)}`,
+    testContract: {
+      question: "已接受实现能否在真实环境保持目标行为？",
+      objectBoundary: "只观察当前 Demand 的产品入口",
+      steps: [
+        {
+          stepId: "ts-1",
+          given: "已确认的真实环境",
+          when: "执行冷启动",
+          // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+          then: "入口按需求响应",
+          requirementRef: implementation.acceptanceAnchors[0]!.requirementRef,
+        },
+      ],
+      environment: SELECTED_AUTHORITY_REF,
+      allowedSkills: ["skills/real-environment-test/SKILL.md"],
+      setupPolicy: "reuse-existing",
+      maxAttempts: 2,
+      stopConditions: ["需要未批准操作时停止"],
     },
+    implementationBaselines: [
+      {
+        targetTaskId: "target-task_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        taskPackageId: "task-package_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        taskPackageDigest: `sha256:${"d".repeat(64)}`,
+        repositoryId: TASKING_REPOSITORY_ID,
+        windowId: TASKING_WINDOW_ID,
+        targetResultId: "target-result_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        resultDigest: `sha256:${"e".repeat(64)}`,
+        targetReviewDecisionId: "target-review-decision_ffffffff-ffff-4fff-8fff-ffffffffffff",
+        decisionDigest: `sha256:${"f".repeat(64)}`,
+      },
+    ],
+    lineage: null,
   });
 
   equal(testPackage.workType, "test");
@@ -180,7 +209,22 @@ test("test TaskPackage is a closed discriminated variant without repository muta
   deepEqual(testPackage.acceptanceAnchors, []);
   equal(Object.hasOwn(testPackage, "commitExpectation"), false);
   equal(Object.hasOwn(testPackage.assignment, "repositoryId"), false);
-  equal(testPackage.testCard.testCardId.startsWith("test-card_"), true);
+  equal(testPackage.testContract.steps[0]?.stepId, "ts-1");
+  equal(testPackage.testContract.environment.role, SELECTED_AUTHORITY_REF.role);
+  equal(testPackage.implementationBaselines.length, 1);
+  equal(testPackage.lineage, null);
+  expectTaskPackageError(
+    () =>
+      parseTaskPackage({
+        ...testPackage,
+        testContract: {
+          ...testPackage.testContract,
+          steps: [{ ...testPackage.testContract.steps[0], stepId: "ts-2" }],
+        },
+      }),
+    "relation",
+    "$/testContract/steps/0/stepId",
+  );
 
   expectTaskPackageError(
     () =>

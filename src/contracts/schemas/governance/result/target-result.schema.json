@@ -130,10 +130,6 @@
       "type": "string",
       "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "testCardId": {
-      "type": "string",
-      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
     "claimId": {
       "type": "string",
       "pattern": "^work-claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -180,23 +176,10 @@
     "testExecution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["testAttemptId", "testCard"],
+      "required": ["testAttemptId"],
       "properties": {
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
-        },
-        "testCard": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["testCardId", "testCardDigest"],
-          "properties": {
-            "testCardId": {
-              "$ref": "#/$defs/testCardId"
-            },
-            "testCardDigest": {
-              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-            }
-          }
         }
       }
     },

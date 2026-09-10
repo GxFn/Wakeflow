@@ -23,7 +23,6 @@ import {
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { ControllerImplementationReviewDecisionService } from "../../../src/governance/review/controller-implementation-review-decision-service.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
-import { TestCardPlanningService } from "../../../src/governance/testing/test-card-planning-service.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
@@ -42,11 +41,10 @@ import {
   planFixtureTargetTask,
 } from "../tasking/target-task-planning-service.fixture.js";
 import {
-  cleanupTestCardPlanningWorkspaceFixture,
-  createTestCardPlanningWorkspaceFixture,
-  TEST_CARD_CREATED_AT,
-  testCardUuidFactory,
-} from "../testing/test-card-planning-service.fixture.js";
+  cleanupTestTaskPlanningWorkspaceFixture,
+  createTestTaskPlanningWorkspaceFixture,
+  planFixtureTestTask,
+} from "../tasking/test-task-planning.fixture.js";
 
 async function readControllerRoute(
   workspaceRoot: RootedDirectory,
@@ -232,45 +230,37 @@ test("Controller Route把redesign诚实暴露为Design能力缺口", async () =>
 });
 
 test("Controller Route只映射Post-Acceptance Test责任而不复制其领域来源", async () => {
-  const fixture = await createTestCardPlanningWorkspaceFixture();
+  const fixture = await createTestTaskPlanningWorkspaceFixture();
   try {
-    const testCardPlanning = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.demandId,
-    );
-    equal(testCardPlanning.frontiers[0]?.kind, "test-card-planning");
-    equal(testCardPlanning.frontiers[0]?.owner, "test-card-planning");
-    equal(Object.hasOwn(testCardPlanning.frontiers[0] ?? {}, "source"), false);
-    equal(Object.hasOwn(testCardPlanning, "postAcceptanceRouteDigest"), true);
-
-    const planning = new TestCardPlanningService(fixture.workspaceRoot);
-    const preview = await planning.preview(
-      {
-        demandId: fixture.demandId,
-        testCard: fixture.testCardContent,
-      },
-      {
-        clock: () => TEST_CARD_CREATED_AT,
-        uuidFactory: testCardUuidFactory(),
-      },
-    );
-    await planning.apply(preview.plan, preview.planDigest);
     const testTaskPlanning = await readControllerRoute(
       fixture.workspaceRoot,
       fixture.demandId,
     );
     equal(testTaskPlanning.frontiers[0]?.kind, "test-task-planning");
     equal(testTaskPlanning.frontiers[0]?.owner, "test-task-planning");
-    const basisMemberRef =
-      preview.plan.testCard.testBasisAuthorities[0].memberRef;
-    equal(JSON.stringify(testTaskPlanning).includes(basisMemberRef), false);
+    equal(Object.hasOwn(testTaskPlanning.frontiers[0] ?? {}, "source"), false);
+    equal(Object.hasOwn(testTaskPlanning, "postAcceptanceRouteDigest"), true);
+    equal(JSON.stringify(testTaskPlanning).includes("landing.md"), false);
+
+    const planned = await planFixtureTestTask(fixture, 6);
+    if (planned.targetTask.workType !== "test") {
+      throw new Error("Expected a Test target task.");
+    }
+    equal(planned.targetTask.testContract.environmentMemberRef.endsWith("landing.md"), true);
+    const testDeliveryPlanning = await readControllerRoute(
+      fixture.workspaceRoot,
+      fixture.demandId,
+    );
+    equal(testDeliveryPlanning.frontiers[0]?.kind, "test-delivery-planning");
+    equal(testDeliveryPlanning.frontiers[0]?.owner, "test-delivery-preparation");
+    equal(JSON.stringify(testDeliveryPlanning).includes("landing.md"), false);
   } finally {
-    await cleanupTestCardPlanningWorkspaceFixture(fixture);
+    await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }
 });
 
 test("Controller Route不会把尚未支持的isolated Test Planning声明为可执行", async () => {
-  const fixture = await createTestCardPlanningWorkspaceFixture({
+  const fixture = await createTestTaskPlanningWorkspaceFixture({
     executionPlacement: "isolated",
   });
   try {
@@ -279,11 +269,11 @@ test("Controller Route不会把尚未支持的isolated Test Planning声明为可
       fixture.demandId,
     );
     equal(route.disposition, "blocked");
-    equal(route.frontiers[0]?.kind, "test-card-planning");
+    equal(route.frontiers[0]?.kind, "test-task-planning");
     deepEqual(route.blockers, [
       {
         kind: "isolated-test-planning-not-implemented",
-        owner: "test-card-planning",
+        owner: "test-task-planning",
       },
     ]);
     equal(Object.hasOwn(route, "postAcceptanceRouteDigest"), true);
@@ -319,6 +309,6 @@ test("Controller Route不会把尚未支持的isolated Test Planning声明为可
     ];
     equal(validateResult(falsePostAcceptanceBlocker).ok, false);
   } finally {
-    await cleanupTestCardPlanningWorkspaceFixture(fixture);
+    await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }
 });

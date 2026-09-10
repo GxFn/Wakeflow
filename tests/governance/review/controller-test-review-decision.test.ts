@@ -63,13 +63,6 @@ function baseInput(): CreateControllerTestReviewDecisionInput {
         "test-attempt_77777777-7777-4777-8777-777777777777",
         "test-attempt",
       ),
-      testCard: {
-        testCardId: parseWakeflowDurableIdOfKind(
-          "test-card_88888888-8888-4888-8888-888888888888",
-          "test-card",
-        ),
-        testCardDigest: parseSha256Digest(`sha256:${"6".repeat(64)}`),
-      },
     },
     decision: "accept",
     assessment: {

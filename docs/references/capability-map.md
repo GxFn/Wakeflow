@@ -30,7 +30,7 @@
 | 18 | `wakeflow_view` | 9 | 无 | 放弃 | ADR-0006：通用读取违反脱敏边界；config 事实归 `wakeflow_status`，storage 归 `wakeflow_verify`，result-trace 并入评审 preview |
 | 19 | `wakeflow_storage_preserve` | 8 | 无 | 放弃 | 能力卡 8 Q6：归档封存、清理删除，不再有第三种保留状态 |
 | 20 | `wakeflow_archive` | 8 | 并入 `wakeflow_complete_demand` 与 `wakeflow_cancel_demand` | 重切 | 已实现（demand 切片）：归档包在 `<ledger>/archives/`，前置含无未释放工作声明，verify 报告入归档包（ADR-0012 D3） |
-| 21 | `wakeflow_intake_test_card` | 5 | test 任务包的 `testContract`（`plan_target_task`） | 重切 | 独立测试卡与 TS 现有 `plan_test_card` 在 delivery 切片删除（ADR-0012 D4；gate-log §13.81 D1） |
+| 21 | `wakeflow_intake_test_card` | 5 | test 任务包的 `testContract`（`plan_target_task`） | 重切 | 已落地（2026-09-10 delivery 切片 6b）：独立测试卡与 `plan_test_card` 删除，测试合同随 test 任务包由 `plan_target_task` 追加，环境、窗口与实现基线由 Wakeflow 派生（ADR-0012 D4；gate-log §13.86） |
 | 22 | `wakeflow_deliver` | 6 | 无；宿主执行由 Agent 按 skills 完成 | 放弃 | TSD-12：内容由 `prepare_delivery` 许可提供，执行证据由 `record_delivery_outcome` 按 hook 记录准入（2026-09-10 落地） |
 | 23 | `wakeflow_next_work` | 3 | 待认领需求包查询 `wakeflow_inspect_board`（ADR-0011，2026-09-04 L1 requirement 落地） | 重切 | `inspect_todo` 已删除，看板查询列出需求包认领状态 |
 | 24 | `wakeflow_claim_next` | 3 | 认领并入 `wakeflow_create_demand(requirementId)` | 重切 | 认领即创建；一个总控一次一个（ADR-0011） |

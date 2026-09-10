@@ -351,7 +351,6 @@
             "implementation-task-planning",
             "research-completion-required",
             "demand-completion-preflight",
-            "test-card-planning",
             "test-task-planning",
             "decision-required"
           ]
@@ -361,7 +360,6 @@
             "target-task-planning",
             "demand-lifecycle",
             "demand-completion",
-            "test-card-planning",
             "test-task-planning",
             "user"
           ]
@@ -415,23 +413,6 @@
             "properties": {
               "owner": {
                 "const": "demand-completion"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "test-card-planning"
-              }
-            },
-            "required": ["kind"]
-          },
-          "then": {
-            "properties": {
-              "owner": {
-                "const": "test-card-planning"
               }
             }
           }
@@ -979,8 +960,7 @@
         "taskPackageId",
         "taskPackageDigest",
         "windowId",
-        "phase",
-        "testCard"
+        "phase"
       ],
       "properties": {
         "workType": {
@@ -1010,19 +990,6 @@
             "test-product-defect",
             "test-review-blocked"
           ]
-        },
-        "testCard": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["testCardId", "testCardDigest"],
-          "properties": {
-            "testCardId": {
-              "$ref": "#/$defs/testCardId"
-            },
-            "testCardDigest": {
-              "$ref": "#/$defs/sha256Digest"
-            }
-          }
         }
       }
     },
@@ -1072,7 +1039,7 @@
               "const": "isolated-test-planning-not-implemented"
             },
             "owner": {
-              "const": "test-card-planning"
+              "const": "test-task-planning"
             }
           }
         },
@@ -1121,10 +1088,6 @@
     "windowId": {
       "type": "string",
       "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "testCardId": {
-      "type": "string",
-      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "targetReviewDecisionId": {
       "type": "string",

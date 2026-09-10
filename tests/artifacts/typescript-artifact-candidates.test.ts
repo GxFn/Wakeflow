@@ -35,7 +35,6 @@ import {
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/requirement/contract.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-resume-public-contract.js";
-import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-card-planning-public-contract.js";
 
 const OUTPUT_RELATIVE = ".build/test-artifacts/typescript-candidates";
 
@@ -213,7 +212,6 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
           WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
           WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
           WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
         ].sort(),
       );

@@ -8,7 +8,6 @@ import {
   parsePlainRecord,
   PassiveOwnDataError,
 } from "../../../foundation/data/passive-own-data.js";
-import { canonicalizeJson } from "../../../foundation/data/canonical-json.js";
 import {
   createWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
@@ -29,7 +28,6 @@ import {
   authorizeProductDefectRemediationInDemandAggregateState,
   completeDemandAggregateState,
   continueDemandAggregateState,
-  createTestCardInDemandAggregateState,
   createInitialDemandAggregateState,
   decideTargetResultReviewInDemandAggregateState,
   escalateDemandAggregateState,
@@ -128,19 +126,9 @@ import {
   type DemandCompletion,
 } from "../../lifecycle/demand-completion.js";
 import {
-  assertTestExecutionAttemptMatchesCard,
+  assertTestExecutionAttemptMatchesPackage,
   TestExecutionAttemptError,
 } from "../../testing/test-execution-attempt.js";
-import {
-  parseTestCard,
-  TestCardError,
-  type TestCard,
-} from "../../testing/test-card.js";
-import {
-  parseTestCardGenerationSource,
-  TestCardGenerationSourceError,
-  type TestCardGenerationSource,
-} from "../../testing/test-card-generation-source.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：Demand 聚合的纯决策器。
@@ -219,24 +207,12 @@ export interface RecordManagedEvidenceCommand {
   readonly manifest: Readonly<ManagedEvidenceManifest>;
 }
 
-export interface CreateTestCardCommand {
-  readonly commandType: "testing.create-test-card";
-  readonly commandVersion: 1;
-  readonly eventId: WakeflowDurableId<"demand-event">;
-  readonly authority: Readonly<DemandAuthority>;
-  readonly testCard: Readonly<TestCard>;
-  readonly generationSource: Readonly<TestCardGenerationSource>;
-  readonly generationAuthorization?: Readonly<ControllerProductDefectRemediationAuthorization>;
-}
-
 export interface PrepareDeliveryCommand {
   readonly commandType: "delivery.prepare-delivery";
   readonly commandVersion: 1;
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly envelope: Readonly<DeliveryEnvelope>;
   readonly taskPackage: Readonly<TaskPackage>;
-  /** test 信封的合同来源；实现信封不带。 */
-  readonly testCard?: Readonly<TestCard>;
   readonly reworkSource?: Readonly<{
     readonly decision: Readonly<ControllerImplementationReviewDecision>;
     readonly previousResult: Readonly<TargetResult>;
@@ -293,7 +269,6 @@ export type DemandEventSourcingCommand =
   | RecordDecisionCommand
   | ContinueDemandCommand
   | RecordManagedEvidenceCommand
-  | CreateTestCardCommand
   | PlanTargetTaskCommand
   | PrepareDeliveryCommand
   | RecordDeliveryOutcomeCommand
@@ -314,8 +289,6 @@ export type DemandEventSourcingDecisionErrorReason =
   | "demand-completion"
   | "lifecycle-data"
   | "managed-evidence-manifest"
-  | "test-card"
-  | "test-card-generation-source"
   | "delivery-envelope"
   | "target-delivery-rework-context"
   | "target-delivery-product-defect-remediation-context"
@@ -347,9 +320,6 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing command carries invalid lifecycle data.",
   "managed-evidence-manifest":
     "Demand Event Sourcing command contains an invalid Managed Evidence Manifest.",
-  "test-card": "Demand Event Sourcing command contains an invalid TestCard.",
-  "test-card-generation-source":
-    "Demand Event Sourcing command contains an invalid TestCard Generation Source.",
   "delivery-envelope":
     "Demand Event Sourcing command contains an invalid Delivery Envelope.",
   "target-delivery-rework-context":
@@ -453,23 +423,6 @@ const RECORD_MANAGED_EVIDENCE_FIELDS = Object.freeze([
   "commandVersion",
   "eventId",
   "manifest",
-] as const);
-const CREATE_TEST_CARD_FIELDS = Object.freeze([
-  "authority",
-  "commandType",
-  "commandVersion",
-  "eventId",
-  "generationSource",
-  "testCard",
-] as const);
-const CREATE_RETEST_CARD_FIELDS = Object.freeze([
-  "authority",
-  "commandType",
-  "commandVersion",
-  "eventId",
-  "generationAuthorization",
-  "generationSource",
-  "testCard",
 ] as const);
 const PREPARE_DELIVERY_BASE_FIELDS = Object.freeze([
   "commandType",
@@ -787,125 +740,12 @@ export function parseDemandEventSourcingCommand(
     });
   }
 
-  if (base.commandType === "testing.create-test-card") {
-    let generationSource: Readonly<TestCardGenerationSource>;
-    try {
-      generationSource = parseTestCardGenerationSource(base.generationSource);
-    } catch (error: unknown) {
-      if (error instanceof TestCardGenerationSourceError) {
-        fail("test-card-generation-source", "$/generationSource");
-      }
-      throw error;
-    }
-    const requiresGenerationAuthorization =
-      generationSource.kind === "product-defect-retest";
-    const command = exactCommand(
-      base,
-      requiresGenerationAuthorization
-        ? CREATE_RETEST_CARD_FIELDS
-        : CREATE_TEST_CARD_FIELDS,
-    );
-    let authority: Readonly<DemandAuthority>;
-    let testCard: Readonly<TestCard>;
-    let generationAuthorization:
-      Readonly<ControllerProductDefectRemediationAuthorization> | undefined;
-    try {
-      authority = parseDemandAuthority(command.authority);
-    } catch (error: unknown) {
-      if (error instanceof DemandAuthorityError) {
-        fail("demand-authority", "$/authority");
-      }
-      throw error;
-    }
-    try {
-      testCard = parseTestCard(command.testCard);
-    } catch (error: unknown) {
-      if (error instanceof TestCardError) fail("test-card", "$/testCard");
-      throw error;
-    }
-    if (requiresGenerationAuthorization) {
-      try {
-        generationAuthorization =
-          parseControllerProductDefectRemediationAuthorization(
-            command.generationAuthorization,
-          );
-      } catch (error: unknown) {
-        if (
-          error instanceof ControllerProductDefectRemediationAuthorizationError
-        ) {
-          fail(
-            "controller-product-defect-remediation-authorization",
-            "$/generationAuthorization",
-          );
-        }
-        throw error;
-      }
-      if (
-        generationSource.kind !== "product-defect-retest" ||
-        generationAuthorization.productDefectRemediationId !==
-          generationSource.productDefectRemediation
-            .productDefectRemediationId ||
-        generationAuthorization.authorizationDigest !==
-          generationSource.productDefectRemediation.authorizationDigest ||
-        generationAuthorization.source.testCard.testCardId !==
-          generationSource.previousTestCard.testCardId ||
-        generationAuthorization.source.testCard.testCardDigest !==
-          generationSource.previousTestCard.testCardDigest ||
-        generationAuthorization.source.testReviewDecision
-          .targetReviewDecisionId !==
-          generationSource.testReviewDecision.targetReviewDecisionId ||
-        generationAuthorization.source.testReviewDecision.decisionDigest !==
-          generationSource.testReviewDecision.decisionDigest
-      ) {
-        fail("test-card-generation-source", "$/generationSource");
-      }
-    }
-    if (
-      authority.demandId !== testCard.demandId ||
-      authority.testingDecision.mode !== "real-environment" ||
-      computeDemandAuthorityDigest(authority) !==
-        testCard.demandAuthorityDigest ||
-      // ADR-0011 D3：环境规格在 landing.md 的测试决策节里，环境权威即 landing 成员。
-      authority.testingDecision.environmentMemberRef !== null ||
-      testCard.environmentAuthority.role !== "landing" ||
-      !authority.authorityRefs.some(
-        (reference) =>
-          canonicalizeJson(reference, "$authorityReference") ===
-          canonicalizeJson(
-            testCard.environmentAuthority,
-            "$environmentAuthority",
-          ),
-      ) ||
-      !testCard.testBasisAuthorities.every((basisAuthority) =>
-        authority.authorityRefs.some(
-          (reference) =>
-            canonicalizeJson(reference, "$authorityReference") ===
-            canonicalizeJson(basisAuthority, "$testBasisAuthority"),
-        ),
-      )
-    ) {
-      fail("test-card", "$/testCard");
-    }
-    return Object.freeze({
-      commandType: "testing.create-test-card",
-      commandVersion: 1,
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      authority,
-      testCard,
-      generationSource,
-      ...(generationAuthorization === undefined
-        ? {}
-        : { generationAuthorization }),
-    });
-  }
-
   if (base.commandType === "delivery.prepare-delivery") {
     const hasReworkSource = Object.hasOwn(base, "reworkSource");
     const hasProductDefectRemediationSource = Object.hasOwn(
       base,
       "productDefectRemediationSource",
     );
-    const hasTestCard = Object.hasOwn(base, "testCard");
     if (hasReworkSource && hasProductDefectRemediationSource) {
       fail("input", "$command");
     }
@@ -913,7 +753,6 @@ export function parseDemandEventSourcingCommand(
       base,
       [
         ...PREPARE_DELIVERY_BASE_FIELDS,
-        ...(hasTestCard ? (["testCard"] as const) : []),
         ...(hasReworkSource ? (["reworkSource"] as const) : []),
         ...(hasProductDefectRemediationSource
           ? (["productDefectRemediationSource"] as const)
@@ -942,29 +781,18 @@ export function parseDemandEventSourcingCommand(
       }
       throw error;
     }
-    let testCard: Readonly<TestCard> | undefined;
     if (envelope.workType === "test") {
-      if (!hasTestCard) fail("test-card", "$/testCard");
       try {
-        testCard = parseTestCard(command.testCard);
-        assertTestExecutionAttemptMatchesCard(envelope.attempt, testCard);
+        assertTestExecutionAttemptMatchesPackage(envelope.attempt, taskPackage);
       } catch (error: unknown) {
-        if (error instanceof TestCardError) fail("test-card", "$/testCard");
         if (error instanceof TestExecutionAttemptError) {
           fail("delivery-envelope", "$/envelope/attempt");
         }
         throw error;
       }
-      if (
-        testCard.testCardId !== envelope.testCard.testCardId ||
-        testCard.testCardDigest !== envelope.testCard.testCardDigest ||
-        hasReworkSource ||
-        hasProductDefectRemediationSource
-      ) {
-        fail("test-card", "$/testCard");
+      if (hasReworkSource || hasProductDefectRemediationSource) {
+        fail("input", "$command");
       }
-    } else if (hasTestCard) {
-      fail("input", "$command");
     }
     let reworkSource: PrepareDeliveryCommand["reworkSource"];
     let productDefectRemediationSource: PrepareDeliveryCommand["productDefectRemediationSource"];
@@ -1128,7 +956,6 @@ export function parseDemandEventSourcingCommand(
       eventId: parseId(command.eventId, "demand-event", "$/eventId"),
       envelope,
       taskPackage,
-      ...(testCard === undefined ? {} : { testCard }),
       ...(reworkSource === undefined ? {} : { reworkSource }),
       ...(productDefectRemediationSource === undefined
         ? {}
@@ -1353,35 +1180,6 @@ export function decideDemandEventSourcingCommand(
         recordedAt: command.completion.completedAt,
         eventType: "lifecycle.demand-completed",
         data: { completion: command.completion },
-      }),
-    );
-  }
-  if (command.commandType === "testing.create-test-card") {
-    if (state.demandId !== command.testCard.demandId) {
-      fail("identity", "$/testCard/demandId");
-    }
-    try {
-      createTestCardInDemandAggregateState(
-        state,
-        command.testCard,
-        command.generationSource,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state");
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.testCard.demandId,
-        recordedAt: command.testCard.createdAt,
-        eventType: "testing.test-card-created",
-        data: {
-          testCard: command.testCard,
-          generationSource: command.generationSource,
-        },
       }),
     );
   }
@@ -1883,20 +1681,6 @@ export function evolveDemandEventSourcingState(
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/lifecycle");
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "testing.test-card-created") {
-    try {
-      return createTestCardInDemandAggregateState(
-        state,
-        event.data.testCard,
-        event.data.generationSource,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state");
       }
       throw error;
     }

@@ -40,7 +40,6 @@ function defaultMcpExecutors(): WakeflowMcpExecutorSet {
     inspectTargetResultReview: async () => unexpectedMcpExecutor("inspectTargetResultReview"),
     inspectBoard: async () => unexpectedMcpExecutor("inspectBoard"),
     planTargetTask: async () => unexpectedMcpExecutor("planTargetTask"),
-    planTestCard: async () => unexpectedMcpExecutor("planTestCard"),
     prepareDelivery: async () => unexpectedMcpExecutor("prepareDelivery"),
     rearmDelivery: async () => unexpectedMcpExecutor("rearmDelivery"),
     recordControllerImplementationReviewDecision: async () =>

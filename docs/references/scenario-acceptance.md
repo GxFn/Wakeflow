@@ -18,7 +18,8 @@
 | `card-05/plan-implementation-task` | 05 | 规划实现任务与同仓库替代 | 发明的验收锚点序号（`ac-9`）被拒绝；首包追加 `committed` 且 `planned`，锚点 `requirementRef` 指向需求包验收标准 `ac-1`，`lineage: null`，`sectionAnchors` 含 `goal`；同仓库第二包以 `lineage: replacement` 追加 `committed`，结果回显被替代目标；同一替代请求重放 `idempotent` 且活动根零写；`next` 与 Route 前沿前进到投递规划；后续投递、评审与完成即归档（`card-08`）只针对替代后的目标；结果不含私有路径 | pass |
 | `card-06/delivery-chain` | 06 | 一次调用准备投递并取得许可 | Route 为投递规划；`prepare_delivery` 追加 `committed`，许可动作为 `send-prompt-to-window`，prompt 不含私有路径且含 deliveryId 与声明摘要，窗口工作声明文件存在；Route 前进到宿主效果执行；同键重放 `idempotent` 且同一投递与围栏；无落地记录时 `record_delivery_outcome` 为 `indeterminate`、声明 `retain`、phase `host-effect-indeterminate`，`next.blockers` 含 `landing-evidence-missing` | pass |
 | `card-06/ambiguous-resolution` | 06 | hook 记录到达后再次记录结局 | 写入目标会话的 `user-prompt-submit` 记录（`promptDigest` 等于许可 prompt 摘要）后，新键再次调用为 `accepted`、证据 `hook-record`、声明 `retain`、phase `host-effect-accepted`；`next` 与 Route 前沿为结果导入 | pass |
-| `card-08/complete-and-archive` | 08 | 完成即归档 | 经公共工具结果导入（`deliveryId` 加围栏摘要，导入后声明释放）、评审接受后 Route 为 `demand-completion-preflight`；`complete_demand` preview 零写、`ready` 且八道 verify 门全 `pass`；apply `completed`，需求包 `archived`，`next` 指向 continue；活动根已删除，`<ledger>/archives/<demandId>/<修订号>/manifest.json` 存在；Route 查询返回 `archived: completed`；recover 返回 `recovered` 且同一终态事件 | pass |
+| `card-05/test-contract` | 05 | 实现接受后规划测试合同、投递测试并由 Controller 审查接受 | 需求包测试决策为 real-environment；实现结果导入并评审接受后 Route 前沿为 `test-task-planning`；test 窗口经 `session-start` 记录握手登记；步骤引用发明的验收条目（`ac-9`）被拒；test 包追加 `committed`，窗口为 test 角色窗口、`stepCount` 2、环境成员为 landing、`lineage: null`，`next` 为 `test-delivery-planning`；第二个未终结 test 目标被拒；`prepare_delivery` 许可 prompt 含 `ts-1` 且不含私有路径；test 窗口落地记录后结局 `accepted`、phase `test-host-effect-accepted`；按 `stepId` 导入逐步证据 `recorded`；`record_controller_test_review_decision` accept 后 Route 为 `demand-completion-preflight` | pass |
+| `card-08/complete-and-archive` | 08 | 完成即归档 | 实现与测试评审都已接受（`card-05/test-contract`）后 Route 为 `demand-completion-preflight`，`testingClosure` 为 real-environment；`complete_demand` preview 零写、`ready` 且八道 verify 门全 `pass`；apply `completed`，需求包 `archived`，`next` 指向 continue；活动根已删除，`<ledger>/archives/<demandId>/<修订号>/manifest.json` 存在；Route 查询返回 `archived: completed`；recover 返回 `recovered` 且同一终态事件 | pass |
 | `card-04/complete-and-continue` | 04 | continue 与 cancel | `continue_demand` preview `ready`、apply `continued`，需求包回到 `claimed`，Route 为 `work-available` 且前沿为实现任务规划；`cancel_demand` preview `ready`、apply `cancelled`，需求包 `withdrawn`，活动根删除；取消后 continue 的 preview 为 `blocked` 并含 `archive-outcome:cancelled` | pass |
 
 ## 2. 待接线场景
@@ -29,7 +30,6 @@
 | --- | --- | --- | --- |
 | `card-01/reconfigure` | 01 | 重新配置拓扑，preview 零写，apply 只改声明差异 | maintenance reconfigure |
 | `card-01/reconcile-noop` | 01 | 健康工作区 reconcile 零步 `no-op` | maintenance reconcile |
-| `card-05/test-contract` | 05 | test 任务包携带测试合同，步骤来自需求包验收标准 | delivery 切片（ADR-0012 D4；gate-log §13.81 D1） |
 | `card-06/wake-controller` | 06 | 回调 wake-controller 与 acknowledged | 结果与评审切片（gate-log §13.83 D4） |
 | `card-07/import-and-review` | 07 | 结果导入核定位符与隐私扫描、逐步记录与分类、escalate 与 decision-recorded、approved 基线对比 | 结果与评审切片（ADR-0012 D4 D5） |
 | `card-08/evidence` | 08 | 三种来源加 `pod-worktree` 与 `observation`，kind 闭集，隐私扫描收窄 | 证据切片 |

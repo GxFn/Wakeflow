@@ -78,6 +78,12 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
       "目标会话的 user-prompt-submit 记录到达后，再次记录结局即 accepted，Route 前进到结果导入",
   },
   {
+    scenarioId: "card-05/test-contract",
+    card: "05-task-planning",
+    title:
+      "实现接受后 Controller 撰写测试合同追加 test 任务包（发明的步骤引用与第二个未终结测试目标被拒），测试投递、逐步证据导入与测试审查接受后 Route 到完成预检",
+  },
+  {
     scenarioId: "card-08/complete-and-archive",
     card: "08-evidence-and-archive",
     title:

@@ -59,10 +59,6 @@ export interface DemandControllerTestTargetReference {
   readonly taskPackageDigest: Sha256Digest;
   readonly windowId: WakeflowDurableId<"window">;
   readonly phase: TestTargetState["phase"];
-  readonly testCard: Readonly<{
-    readonly testCardId: WakeflowDurableId<"test-card">;
-    readonly testCardDigest: Sha256Digest;
-  }>;
 }
 
 type DemandFrontierDescriptor =
@@ -77,10 +73,6 @@ type DemandFrontierDescriptor =
   | Readonly<{
       readonly kind: "demand-completion-preflight";
       readonly owner: "demand-completion";
-    }>
-  | Readonly<{
-      readonly kind: "test-card-planning";
-      readonly owner: "test-card-planning";
     }>
   | Readonly<{
       readonly kind: "test-task-planning";
@@ -195,7 +187,7 @@ export type DemandControllerRouteBlocker =
     }>
   | Readonly<{
       readonly kind: "isolated-test-planning-not-implemented";
-      readonly owner: "test-card-planning";
+      readonly owner: "test-task-planning";
     }>
   | Readonly<{
       readonly kind: "awaiting-decision";
@@ -335,12 +327,6 @@ export function resolveDemandControllerPostAcceptanceFrontierDescriptor(
         kind: "demand-completion-preflight" as const,
         owner: "demand-completion" as const,
       });
-    case "real-environment-test-planning":
-      return Object.freeze({
-        scope: "demand" as const,
-        kind: "test-card-planning" as const,
-        owner: "test-card-planning" as const,
-      });
     case "test-task-planning":
       return Object.freeze({
         scope: "demand" as const,
@@ -428,10 +414,6 @@ function testTargetReference(
     taskPackageDigest: target.taskPackageDigest,
     windowId: target.windowId,
     phase: target.phase,
-    testCard: Object.freeze({
-      testCardId: target.testCard.testCardId,
-      testCardDigest: target.testCard.testCardDigest,
-    }),
   });
 }
 
@@ -472,7 +454,6 @@ function targetTaskIdFromPostAcceptanceStage(
 ): WakeflowDurableId<"target-task"> | null {
   switch (stage.status) {
     case "completion-preflight":
-    case "real-environment-test-planning":
     case "test-task-planning":
       return null;
     case "test-delivery-planning":
@@ -686,7 +667,7 @@ function routeBasis(
   );
   if (
     loaded.identity.executionPlacement.mode === "isolated" &&
-    postAcceptanceRoute.nextStage.status === "real-environment-test-planning"
+    postAcceptanceRoute.nextStage.status === "test-task-planning"
   ) {
     return {
       ...common,
@@ -696,7 +677,7 @@ function routeBasis(
       blockers: Object.freeze([
         Object.freeze({
           kind: "isolated-test-planning-not-implemented" as const,
-          owner: "test-card-planning" as const,
+          owner: "test-task-planning" as const,
         }),
       ]),
     };

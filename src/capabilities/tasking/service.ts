@@ -40,27 +40,23 @@ import {
   LedgerAuthorityStoreError,
   type LoadedLedgerAuthorityRecord,
 } from "../../governance/ledger/ledger-authority-store.js";
+import {
+  DemandPostAcceptanceRouteError,
+  resolveDemandTestEnvironmentAuthority,
+} from "../../governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
 import {
   computeTaskPackageDigest,
   createTaskPackage,
   TaskPackageError,
   type TaskPackage,
+  type TestTaskLineage,
 } from "../../governance/tasking/task-package.js";
 import {
   TaskPackageProjectionStore,
   TaskPackageProjectionStoreError,
   type TaskPackageProjectionMaterializationReceipt,
 } from "../../governance/tasking/task-package-projection-store.js";
-import {
-  createTestTaskPackage,
-  TestTaskPackageError,
-} from "../../governance/testing/test-task-package.js";
-import {
-  assertTestTaskPlanningPackage,
-  loadTestTaskPlanningSources,
-  TestTaskPlanningAuthorityError,
-} from "../../governance/testing/test-task-planning-authority.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import {
   runAppendCommand,
@@ -80,10 +76,13 @@ import {
 } from "./contract.js";
 import {
   deriveAnchorReferenceBlockers,
+  deriveImplementationBaselines,
   deriveLineageBlockers,
   deriveLineageExpectation,
   derivePlanReview,
   deriveSectionAnchorBlockers,
+  deriveTestPlanningBlockers,
+  deriveTestStepReferenceBlockers,
   deriveTopologyBlockers,
   parseAcceptanceCriteria,
 } from "./decide.js";
@@ -94,7 +93,8 @@ import {
  * 追加型一次调用：Controller 提交任务包草稿与幂等键，Wakeflow 读需求包记录核对锚点
  * 引用与章节锚点、对照仓库谱系、执行审阅门与拓扑门、派生确定性身份、追加
  * `tasking.target-task-planned`、物化任务包投影、返回 `next`。同键同请求重放首次结果，
- * 同键异请求以 `idempotency-mismatch` 拒绝。
+ * 同键异请求以 `idempotency-mismatch` 拒绝。test 包由 Controller 撰写测试合同，Wakeflow
+ * 派生测试窗口、环境成员、实现基线与 retest 谱系的授权身份（能力卡 5 修订 5.2）。
  */
 
 export interface ExecuteTargetTaskPlanningOptions {
@@ -106,6 +106,7 @@ type ImplementationRequest = Extract<
   TargetTaskPlanningRequest["taskPackage"],
   { readonly workType: "implementation" }
 >;
+type TestRequest = Extract<TargetTaskPlanningRequest["taskPackage"], { readonly workType: "test" }>;
 
 interface SliceInput {
   readonly taskPackage: TargetTaskPlanningRequest["taskPackage"];
@@ -132,12 +133,18 @@ function signalOptions(signal: AbortSignal | undefined): { readonly signal?: Abo
   return signal === undefined ? {} : { signal };
 }
 
-/** 理由取首个阻塞项的种类（冒号前的 kebab-case 标记），完整阻塞项进 details。 */
+const DETAIL_BLOCKER_LIMIT = 8;
+
+/** 理由取首个阻塞项的种类（冒号前的 kebab-case 标记），阻塞项逐条进 details（至多八条）。 */
 function rejectWith(blockers: readonly string[], path: string): never {
   const first = blockers[0];
   if (first === undefined) fail("unexpected", "empty-blockers", path);
   fail("precondition-failed", first.split(":")[0] ?? first, path, {
-    details: { blockers: blockers.join(",") },
+    details: Object.fromEntries(
+      blockers
+        .slice(0, DETAIL_BLOCKER_LIMIT)
+        .map((blocker, index) => [index === 0 ? "blocker" : `blocker${index + 1}`, blocker]),
+    ),
   });
 }
 
@@ -153,10 +160,7 @@ function mapContextError(error: unknown): never {
 }
 
 function mapPackageError(error: unknown): never {
-  if (error instanceof TestTaskPlanningAuthorityError) {
-    fail("precondition-failed", "test-authority", "$request.taskPackage", { cause: error });
-  }
-  if (error instanceof TaskPackageError || error instanceof TestTaskPackageError) {
+  if (error instanceof TaskPackageError) {
     fail("invalid-request", "task-package", "$request.taskPackage", { cause: error });
   }
   throw error;
@@ -354,35 +358,121 @@ async function buildImplementationPackage(
   return taskPackage;
 }
 
+/** 测试环境成员来自需求包唯一的 landing 角色成员；对不上就是准入阻塞而非内部错误。 */
+function testEnvironmentOf(context: SliceContext) {
+  try {
+    return resolveDemandTestEnvironmentAuthority(context.authority.loaded);
+  } catch (error: unknown) {
+    if (error instanceof DemandPostAcceptanceRouteError) {
+      rejectWith(["test-environment-authority"], "$request.taskPackage");
+    }
+    throw error;
+  }
+}
+
+function testLineageOf(context: SliceContext, requested: TestRequest): TestTaskLineage {
+  const pending = context.authority.loaded.aggregate.state.pendingTestRetest;
+  if (requested.lineage === null || pending === undefined) return null;
+  return Object.freeze({
+    kind: "retest" as const,
+    retestsTargetTaskId: requested.lineage.retestsTargetTaskId as WakeflowDurableId<"target-task">,
+    productDefectRemediationId: pending.productDefectRemediation.productDefectRemediationId,
+    authorizationDigest: pending.productDefectRemediation.authorizationDigest,
+  });
+}
+
 async function buildTestPackage(
   context: SliceContext,
+  input: SliceInput,
+  requested: TestRequest,
   binding: Readonly<AppendCommandBinding>,
 ): Promise<Readonly<TaskPackage>> {
   const { authority, options } = context;
+  const identity = authority.loaded.identity;
+  if (input.planReviewConfirmedAt !== null) {
+    rejectWith(["task-plan-review-not-requested"], "$request.planReview");
+  }
+  const state = authority.loaded.aggregate.state;
+  const planningBlockers = deriveTestPlanningBlockers({
+    testingMode: authority.loaded.authority.testingDecision.mode,
+    state,
+    lineage: requested.lineage,
+  });
+  if (planningBlockers.length > 0) rejectWith(planningBlockers, "$request.taskPackage");
+  const testWindow = authority.config.indexes.testWindow;
+  if (testWindow.role !== "test") {
+    rejectWith([`window-role:${testWindow.role}`], "$request.taskPackage");
+  }
+  const environment = testEnvironmentOf(context);
+  const loaded = await loadRequirementPackage(context);
+  const steps = requested.testContract.steps.map((step, index) =>
+    Object.freeze({
+      stepId: `ts-${index + 1}`,
+      given: step.given,
+      when: step.when,
+      // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+      then: step.then,
+      requirementRef: step.requirementRef,
+    }),
+  );
+  const stepBlockers = deriveTestStepReferenceBlockers({
+    steps,
+    recordDigest: identity.source.recordDigest,
+    criteria: parseAcceptanceCriteria(await readRequirementText(context, loaded)),
+  });
+  if (stepBlockers.length > 0) rejectWith(stepBlockers, "$request.taskPackage.testContract.steps");
+  const selectedAuthorityRefs = resolveAuthorityReferences(
+    context,
+    requested.selectedAuthorityMemberRefs,
+  );
+  let taskPackage: Readonly<TaskPackage>;
   try {
-    const sources = await loadTestTaskPlanningSources(
-      context.workspaceRoot,
-      authority,
-      options.signal,
-    );
-    const taskPackage = createTestTaskPackage(
+    taskPackage = createTaskPackage(
       {
+        programId: identity.programId,
         configDigest: authority.config.configDigest,
+        demandId: identity.demandId,
+        demandAuthorityDigest: authority.loaded.authorityDigest,
         taskPackageId: deriveDurableId(
           "task-package",
           "plan-target-task",
-          authority.loaded.identity.demandId,
+          identity.demandId,
           binding.idempotencyKey,
         ),
-        testCard: sources.testCard,
+        targetTaskId: deriveDurableId(
+          "target-task",
+          "plan-target-task",
+          identity.demandId,
+          binding.idempotencyKey,
+        ),
+        assignment: { windowId: testWindow.windowId },
+        workType: "test",
+        objective: requested.objective,
+        confirmedContext: requested.confirmedContext,
+        selectedAuthorityRefs,
+        boundaries: requested.boundaries,
+        completionExpectations: requested.completionExpectations,
+        acceptanceAnchors: [],
+        testContract: {
+          question: requested.testContract.question,
+          objectBoundary: requested.testContract.objectBoundary,
+          steps,
+          environment,
+          allowedSkills: requested.testContract.allowedSkills,
+          setupPolicy: requested.testContract.setupPolicy,
+          maxAttempts: requested.testContract.maxAttempts,
+          stopConditions: requested.testContract.stopConditions,
+        },
+        implementationBaselines: deriveImplementationBaselines(state),
+        lineage: testLineageOf(context, requested),
       },
       options.clock === undefined ? {} : { clock: options.clock },
     );
-    assertTestTaskPlanningPackage(authority, taskPackage, sources.testCard);
-    return taskPackage;
   } catch (error: unknown) {
     mapPackageError(error);
   }
+  if (taskPackage.workType !== "test") fail("unexpected", "work-type", "$request");
+  return taskPackage;
 }
 
 function buildPackage(
@@ -391,10 +481,7 @@ function buildPackage(
   binding: Readonly<AppendCommandBinding>,
 ): Promise<Readonly<TaskPackage>> {
   if (input.taskPackage.workType === "test") {
-    if (input.planReviewConfirmedAt !== null) {
-      rejectWith(["task-plan-review-not-requested"], "$request.planReview");
-    }
-    return buildTestPackage(context, binding);
+    return buildTestPackage(context, input, input.taskPackage, binding);
   }
   return buildImplementationPackage(context, input, input.taskPackage, binding);
 }
@@ -525,7 +612,12 @@ function targetTaskOf(taskPackage: Readonly<TaskPackage>) {
       taskPackageId: taskPackage.taskPackageId,
       windowId: taskPackage.assignment.windowId,
       phase: "planned" as const,
-      testCard: taskPackage.testCard,
+      lineage: taskPackage.lineage,
+      testContract: {
+        stepCount: taskPackage.testContract.steps.length,
+        maxAttempts: taskPackage.testContract.maxAttempts,
+        environmentMemberRef: taskPackage.testContract.environment.memberRef,
+      },
     };
   }
   return {

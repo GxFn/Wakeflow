@@ -101,10 +101,6 @@ export interface ControllerTestReviewDecision extends ControllerTestReviewJudgme
   readonly reviewed: Readonly<ControllerReviewedTargetResult>;
   readonly testExecution: Readonly<{
     readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-    readonly testCard: Readonly<{
-      readonly testCardId: WakeflowDurableId<"test-card">;
-      readonly testCardDigest: Sha256Digest;
-    }>;
   }>;
   readonly decidedAt: UtcInstant;
   readonly decisionDigest: Sha256Digest;
@@ -192,8 +188,7 @@ function id<
     | "window"
     | "task-package"
     | "target-result"
-    | "test-attempt"
-    | "test-card",
+    | "test-attempt",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
@@ -396,17 +391,6 @@ export function parseControllerTestReviewDecision(
       "test-attempt",
       "$/testExecution/testAttemptId",
     ),
-    testCard: Object.freeze({
-      testCardId: id(
-        wire.testExecution.testCard.testCardId,
-        "test-card",
-        "$/testExecution/testCard/testCardId",
-      ),
-      testCardDigest: digest(
-        wire.testExecution.testCard.testCardDigest,
-        "$/testExecution/testCard/testCardDigest",
-      ),
-    }),
   });
   const independentChecks = Object.freeze([
     firstCheck,

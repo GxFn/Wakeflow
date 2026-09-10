@@ -30,8 +30,7 @@ function completedContent() {
     risks: ["该结果不替代Controller的独立判断。"],
     stepEvidence: [
       {
-        planIndex: 0,
-        step: "在已确认环境执行冷启动并观察真实入口",
+        stepId: "ts-1",
         evidence: {
           ref: "evidence/test-runs/step-0.json",
           digest: FIRST_DIGEST,
@@ -48,7 +47,7 @@ test("TestTargetResultReport只保存逐步Evidence陈述并保持确定性表�
   });
   equal(report.kind, "WakeflowTestTargetResultReport");
   equal(report.outcome, "completed");
-  equal(report.stepEvidence[0]?.planIndex, 0);
+  equal(report.stepEvidence[0]?.stepId, "ts-1");
   equal(report.stepEvidence[0]?.evidence.digest, FIRST_DIGEST);
   equal(Object.hasOwn(report, "repositoryChange"), false);
   equal(Object.hasOwn(report, "anchorEvidence"), false);
@@ -65,7 +64,7 @@ test("TestTargetResultReport只保存逐步Evidence陈述并保持确定性表�
   );
 });
 
-test("TestTargetResultReport拒绝悬空Evidence、重复ref与乱序步骤", () => {
+test("TestTargetResultReport拒绝悬空Evidence、重复ref与重复stepId", () => {
   const content = completedContent();
   const firstStep = content.stepEvidence[0]!;
   const firstLocator = content.evidenceLocators[0]!;
@@ -118,8 +117,7 @@ test("TestTargetResultReport拒绝悬空Evidence、重复ref与乱序步骤", ()
         ],
         stepEvidence: [
           {
-            planIndex: 1,
-            step: "记录冷启动输出",
+            stepId: "ts-1",
             evidence: {
               ref: "evidence/test-runs/step-1.json",
               digest: SECOND_DIGEST,
@@ -138,7 +136,7 @@ test("TestTargetResultReport允许blocked部分结果但拒绝空completed结果
   const blocked = createTestTargetResultReport(
     {
       outcome: "blocked",
-      summary: "环境与冻结TestCard不一致，未执行批准步骤。",
+      summary: "环境与冻结测试合同不一致，未执行合同步骤。",
       evidenceLocators: [],
       verification: [],
       risks: ["需要Controller确认环境事实。"],

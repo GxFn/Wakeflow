@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_TASK_PACKAGE_SCHEMA",
   "title": "WakeflowTaskPackage",
   "description": "Controller 为一个目标窗口规划的不可变 Target Task 执行合同。",
-  "$comment": "workType 是 implementation/test 两个闭合变体的判别字段；Demand 状态、Config 拓扑、完整 authority closure 与 TestCard 来源关系由 Tasking service 校验。 实现任务包的验收锚点必须引用需求包验收标准的一条（requirementRef），谱系 lineage 为 replacement、continuation 或 null，planReview 记录需求包要求的任务清单审阅（ADR-0011 补充、ADR-0012 D5）。",
+  "$comment": "workType 是 implementation/test 两个闭合变体的判别字段；Demand 状态、Config 拓扑、完整 authority closure 与 test 任务包 来源关系由 Tasking service 校验。 实现任务包的验收锚点必须引用需求包验收标准的一条（requirementRef），谱系 lineage 为 replacement、continuation 或 null，planReview 记录需求包要求的任务清单审阅（ADR-0011 补充、ADR-0012 D5）。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -90,17 +90,27 @@
         "$ref": "#/$defs/acceptanceAnchor"
       }
     },
-    "testCard": {
-      "$ref": "#/$defs/testCardTuple"
-    },
     "lineage": {
-      "$ref": "#/$defs/lineage"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/lineage"
+        },
+        {
+          "$ref": "#/$defs/testLineage"
+        }
+      ]
     },
     "planReview": {
       "$ref": "#/$defs/planReview"
     },
     "sectionAnchors": {
       "$ref": "#/$defs/sectionAnchors"
+    },
+    "testContract": {
+      "$ref": "#/$defs/testContract"
+    },
+    "implementationBaselines": {
+      "$ref": "#/$defs/implementationBaselines"
     }
   },
   "allOf": [
@@ -126,7 +136,6 @@
             "type": "array",
             "minItems": 1
           },
-          "testCard": false,
           "lineage": {
             "$ref": "#/$defs/lineage"
           },
@@ -135,14 +144,19 @@
           },
           "sectionAnchors": {
             "$ref": "#/$defs/sectionAnchors"
-          }
+          },
+          "testContract": false,
+          "implementationBaselines": false
         }
       },
       "else": {
-        "required": ["testCard"],
+        "required": ["testContract", "implementationBaselines", "lineage"],
         "properties": {
-          "testCard": {
-            "$ref": "#/$defs/testCardTuple"
+          "testContract": {
+            "$ref": "#/$defs/testContract"
+          },
+          "implementationBaselines": {
+            "$ref": "#/$defs/implementationBaselines"
           },
           "assignment": {
             "$ref": "#/$defs/testAssignment"
@@ -152,7 +166,9 @@
             "type": "array",
             "maxItems": 0
           },
-          "lineage": false,
+          "lineage": {
+            "$ref": "#/$defs/testLineage"
+          },
           "planReview": false,
           "sectionAnchors": false
         }
@@ -175,10 +191,6 @@
     "targetTaskId": {
       "type": "string",
       "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "testCardId": {
-      "type": "string",
-      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "repositoryId": {
       "type": "string",
@@ -286,19 +298,6 @@
         }
       }
     },
-    "testCardTuple": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["testCardId", "testCardDigest"],
-      "properties": {
-        "testCardId": {
-          "$ref": "#/$defs/testCardId"
-        },
-        "testCardDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        }
-      }
-    },
     "requirementRef": {
       "type": "object",
       "additionalProperties": false,
@@ -389,6 +388,190 @@
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
       }
+    },
+    "stepId": {
+      "type": "string",
+      "pattern": "^ts-[1-9][0-9]?$"
+    },
+    "skillPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^skills/[a-z0-9]+(?:-[a-z0-9]+)*/SKILL\\.md$"
+    },
+    "testContractStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepId", "given", "when", "then", "requirementRef"],
+      "properties": {
+        "stepId": {
+          "$ref": "#/$defs/stepId"
+        },
+        "given": {
+          "$ref": "#/$defs/humanText"
+        },
+        "when": {
+          "$ref": "#/$defs/humanText"
+        },
+        "then": {
+          "$ref": "#/$defs/humanText"
+        },
+        "requirementRef": {
+          "$ref": "#/$defs/requirementRef"
+        }
+      }
+    },
+    "testContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question",
+        "objectBoundary",
+        "steps",
+        "environment",
+        "allowedSkills",
+        "setupPolicy",
+        "maxAttempts",
+        "stopConditions"
+      ],
+      "properties": {
+        "question": {
+          "$ref": "#/$defs/humanText"
+        },
+        "objectBoundary": {
+          "$ref": "#/$defs/humanText"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/testContractStep"
+          }
+        },
+        "environment": {
+          "$ref": "urn:wakeflow:governance:ledger:authority-member-reference:v1"
+        },
+        "allowedSkills": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/skillPath"
+          }
+        },
+        "setupPolicy": {
+          "enum": ["fresh-once", "fresh-per-attempt", "reuse-existing"]
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "stopConditions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/humanText"
+          }
+        }
+      }
+    },
+    "implementationBaseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetTaskId",
+        "taskPackageId",
+        "taskPackageDigest",
+        "repositoryId",
+        "windowId",
+        "targetResultId",
+        "resultDigest",
+        "targetReviewDecisionId",
+        "decisionDigest"
+      ],
+      "properties": {
+        "targetTaskId": {
+          "$ref": "#/$defs/targetTaskId"
+        },
+        "taskPackageId": {
+          "$ref": "#/$defs/taskPackageId"
+        },
+        "taskPackageDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "targetResultId": {
+          "$ref": "#/$defs/targetResultId"
+        },
+        "resultDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "targetReviewDecisionId": {
+          "$ref": "#/$defs/targetReviewDecisionId"
+        },
+        "decisionDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "implementationBaselines": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/implementationBaseline"
+      }
+    },
+    "testLineage": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "retestsTargetTaskId",
+            "productDefectRemediationId",
+            "authorizationDigest"
+          ],
+          "properties": {
+            "kind": {
+              "const": "retest"
+            },
+            "retestsTargetTaskId": {
+              "$ref": "#/$defs/targetTaskId"
+            },
+            "productDefectRemediationId": {
+              "$ref": "#/$defs/productDefectRemediationId"
+            },
+            "authorizationDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
+        }
+      ]
+    },
+    "targetResultId": {
+      "type": "string",
+      "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetReviewDecisionId": {
+      "type": "string",
+      "pattern": "^target-review-decision_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "productDefectRemediationId": {
+      "type": "string",
+      "pattern": "^product-defect-remediation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     }
   }
 }

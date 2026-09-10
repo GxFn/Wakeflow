@@ -326,12 +326,7 @@ function buildTargets(
         (target.workType === "test" ||
           taskPackageSource.taskPackage.assignment.repositoryId !==
             target.repositoryId)) ||
-      (taskPackageSource.taskPackage.workType === "test" &&
-        (target.workType !== "test" ||
-          taskPackageSource.taskPackage.testCard.testCardId !==
-            target.testCard.testCardId ||
-          taskPackageSource.taskPackage.testCard.testCardDigest !==
-            target.testCard.testCardDigest))
+      (taskPackageSource.taskPackage.workType === "test" && target.workType !== "test")
     ) {
       fail("relation");
     }

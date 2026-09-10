@@ -65,7 +65,7 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
         ],
         rationale: "当前Test代际已充分证明产品缺陷。",
         blockingReasons: [],
-        residualRisks: ["修复后仍需创建新TestCard。"],
+        residualRisks: ["修复后仍需规划复测任务包。"],
       },
       {
         decision: {
@@ -86,8 +86,7 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
     if (postAcceptanceRouteDigest === undefined) {
       throw new Error("Expected current post-acceptance route digest.");
     }
-    const baseline = fixture.testCard.implementationBaselines[0];
-    if (baseline === undefined) throw new Error("Expected product baseline.");
+    const baseline = { targetTaskId: fixture.targetTaskId };
     const request = {
       root: fixture.workspacePath,
       demandId: fixture.demandId,

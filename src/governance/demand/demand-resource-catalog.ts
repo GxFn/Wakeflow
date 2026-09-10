@@ -39,10 +39,6 @@ import {
   taskPackageProjectionRef,
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
 } from "../tasking/task-package-projection-paths.js";
-import {
-  testCardProjectionRef,
-  TEST_CARD_PROJECTIONS_ROOT_REF,
-} from "../testing/test-card-projection-paths.js";
 
 /**
  * Wakeflow Governance / Demand：Demand Event Sourcing 职责所有者的资源目录。
@@ -54,7 +50,6 @@ import {
 const DEMAND_PUBLICATION_OWNER_ID = "demand-publication" as const;
 const DEMAND_EVENT_SOURCING_OWNER_ID = "demand-event-sourcing" as const;
 const DEMAND_TASKING_PROJECTION_OWNER_ID = "demand-tasking-projection" as const;
-const DEMAND_TESTING_PROJECTION_OWNER_ID = "demand-testing-projection" as const;
 
 function privateDirectoryDeclaration(
   declarationId: string,
@@ -221,7 +216,6 @@ type DemandEventSourcingResourceCatalog = readonly [
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
-  Readonly<WakeflowWorkspaceResourceDeclaration>,
 ];
 
 /**
@@ -305,11 +299,6 @@ export function createDemandEventSourcingResourceCatalog(
       demandChildRef(demandId, TASK_PACKAGE_PROJECTIONS_ROOT_REF),
     ),
     privateDirectoryDeclaration(
-      `${prefix}.test-cards-root`,
-      DEMAND_TESTING_PROJECTION_OWNER_ID,
-      demandChildRef(demandId, TEST_CARD_PROJECTIONS_ROOT_REF),
-    ),
-    privateDirectoryDeclaration(
       `${prefix}.transactions-root`,
       DEMAND_EVENT_SOURCING_OWNER_ID,
       demandChildRef(demandId, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF),
@@ -359,29 +348,6 @@ export function createTaskPackageProjectionResourceDeclaration(
   );
 }
 
-/** 为Event权威TestCard生成按Card身份不可覆盖的目标读取投影声明。 */
-export function createTestCardProjectionResourceDeclaration(
-  demandValue: unknown,
-  testCardValue: unknown,
-): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const demandId = parseDemandId(demandValue);
-  const testCardId = parseWakeflowDurableIdOfKind(
-    testCardValue,
-    "test-card",
-    "$testCardId",
-  );
-  return privateFileDeclaration(
-    `demand.testing.${demandId}.test-card.${testCardId}`,
-    DEMAND_TESTING_PROJECTION_OWNER_ID,
-    demandChildRef(demandId, testCardProjectionRef(testCardId)),
-    {
-      kind: "resource",
-      role: "derived-projection",
-      allowedMutationRecipes: ["exclusive-create"],
-      recoveryStrategy: "rebuild-from-authority",
-    },
-  );
-}
 
 /** 为一个物理事件流槽位生成不可变权威提交声明。 */
 export function createDemandEventStreamCommitResourceDeclaration(

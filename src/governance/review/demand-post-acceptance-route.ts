@@ -18,7 +18,10 @@ import {
   DemandOperationAuthorityContextError,
 } from "../demand/demand-operation-authority-context.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
-import type { DemandTargetTaskState } from "../demand/model/demand-aggregate-state.js";
+import type {
+  DemandPendingTestRetest,
+  DemandTargetTaskState,
+} from "../demand/model/demand-aggregate-state.js";
 import {
   TEST_ENVIRONMENT_AUTHORITY_ROLE,
   type DemandTestingDecision,
@@ -36,7 +39,7 @@ import {
  * Wakeflow Governance / Review：Controller完成Implementation或Test审查后的下一阶段路由读模型。
  *
  * 本模块只根据冻结Demand Authority和完整Review Snapshot选择下一位业务owner。它不创建
- * TestCard、不提交completion Event、不解释或返回测试环境正文，也不把`accepted`解释为Demand已经完成。
+ * test 任务包、不提交completion Event、不解释或返回测试环境正文，也不把`accepted`解释为Demand已经完成。
  * `completion-preflight`明确携带controller-only或real-environment Test closure；它只表示
  * Completion owner可以开始当前准入，不表示Demand已经完成。所有planning状态都只是后续
  * owner的准入入口。
@@ -69,8 +72,6 @@ export interface DemandPostAcceptanceReviewedTest {
   readonly taskPackageId: WakeflowDurableId<"task-package">;
   readonly taskPackageDigest: Sha256Digest;
   readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-  readonly testCardId: WakeflowDurableId<"test-card">;
-  readonly testCardDigest: Sha256Digest;
   readonly testWindowId: WakeflowDurableId<"window">;
   readonly targetResultId: WakeflowDurableId<"target-result">;
   readonly resultDigest: Sha256Digest;
@@ -103,17 +104,10 @@ export type DemandPostAcceptanceNextStage =
       readonly testingClosure: Readonly<DemandPostAcceptanceTestingClosure>;
     }>
   | Readonly<{
-      readonly status: "real-environment-test-planning";
-      readonly testEnvironmentAuthority: Readonly<LedgerAuthorityMemberReference>;
-    }>
-  | Readonly<{
+      /** 首个或复测 test 任务包的规划入口；`retest` 非空时新任务包必须以 retest 谱系消费它。 */
       readonly status: "test-task-planning";
-      readonly testCard: Readonly<{
-        readonly testCardId: WakeflowDurableId<"test-card">;
-        readonly testCardDigest: Sha256Digest;
-        readonly targetTaskId: WakeflowDurableId<"target-task">;
-        readonly testWindowId: WakeflowDurableId<"window">;
-      }>;
+      readonly testEnvironmentAuthority: Readonly<LedgerAuthorityMemberReference>;
+      readonly retest: Readonly<DemandPendingTestRetest> | null;
     }>
   | Readonly<{
       readonly status: "test-delivery-planning";
@@ -122,8 +116,6 @@ export type DemandPostAcceptanceNextStage =
         readonly taskPackageId: WakeflowDurableId<"task-package">;
         readonly taskPackageDigest: Sha256Digest;
         readonly testWindowId: WakeflowDurableId<"window">;
-        readonly testCardId: WakeflowDurableId<"test-card">;
-        readonly testCardDigest: Sha256Digest;
       }>;
     }>
   | Readonly<{
@@ -148,8 +140,6 @@ export type DemandPostAcceptanceNextStage =
         readonly taskPackageDigest: Sha256Digest;
         readonly deliveryId: WakeflowDurableId<"target-delivery">;
         readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-        readonly testCardId: WakeflowDurableId<"test-card">;
-        readonly testCardDigest: Sha256Digest;
         readonly targetResultId: WakeflowDurableId<"target-result">;
         readonly resultDigest: Sha256Digest;
         readonly outcome: "completed" | "blocked" | "needs-review";
@@ -189,10 +179,27 @@ export interface DemandPostAcceptanceTestDelivery {
     readonly claimDigest: Sha256Digest;
   }>;
   readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-  readonly testCardId: WakeflowDurableId<"test-card">;
-  readonly testCardDigest: Sha256Digest;
   readonly testWindowId: WakeflowDurableId<"window">;
 }
+
+type TestTargetState = Extract<
+  DemandTargetTaskState,
+  { readonly workType: "test" }
+>;
+type ReviewedTestTargetState = Extract<
+  TestTargetState,
+  {
+    readonly phase:
+      | "test-accepted"
+      | "test-another-attempt-requested"
+      | "test-product-defect"
+      | "test-review-blocked";
+  }
+>;
+type DeliveryBearingTestTargetState = Exclude<
+  TestTargetState,
+  { readonly phase: "planned" }
+>;
 
 export interface DemandPostAcceptanceRoute {
   readonly kind: typeof ROUTE_KIND;
@@ -312,7 +319,7 @@ function blockingTarget(
 }
 
 /** 真实环境测试的环境权威是需求包里唯一的环境角色成员，且其摘要与Ledger记录一致。 */
-function testEnvironmentAuthority(
+export function resolveDemandTestEnvironmentAuthority(
   loaded: Readonly<LoadedDemandEventSourcingRootAuthority>,
 ): Readonly<LedgerAuthorityMemberReference> {
   const candidates = loaded.admittedAuthority.resolvedAuthority.filter(
@@ -377,69 +384,129 @@ function nextStage(
       blockingTargets,
     });
   }
-  const currentTestCard = loaded.aggregate.state.currentTestCard;
-  if (currentTestCard !== undefined) {
-    if (loaded.authority.testingDecision.mode !== "real-environment") {
+  const state = loaded.aggregate.state;
+  const testTargets = state.targetTasks.filter(
+    (target): target is TestTargetState => target.workType === "test",
+  );
+  if (loaded.authority.testingDecision.mode === "controller-only") {
+    if (testTargets.length > 0 || state.pendingTestRetest !== undefined) {
       fail("relation");
     }
-    const testTargets = loaded.aggregate.state.targetTasks.filter(
-      (target) => target.workType === "test",
-    );
-    const testTarget = testTargets.find(
-      (target) =>
-        target.targetTaskId === currentTestCard.targetTaskId &&
-        target.testCard.testCardId === currentTestCard.testCardId &&
-        target.testCard.testCardDigest === currentTestCard.testCardDigest,
-    );
-    if (testTarget === undefined) {
+    return Object.freeze({
+      status: "completion-preflight" as const,
+      testingClosure: Object.freeze({ mode: "controller-only" as const }),
+    });
+  }
+  // 同一时间只有一个未终结的 test 目标；历史代际只能停在 test-product-defect。
+  const openTestTargets = testTargets.filter(
+    (target) => target.phase !== "test-product-defect",
+  );
+  if (openTestTargets.length > 1) fail("relation");
+  const testTarget = openTestTargets[0];
+  if (testTarget === undefined) {
+    return closedTestStage(loaded, snapshot, testTargets);
+  }
+  return openTestStage(testTarget);
+}
+
+/** 没有未终结 test 目标：待消费复测或首个合同交给 test 任务规划；否则最新缺陷代际等待升级授权。 */
+function closedTestStage(
+  loaded: Readonly<LoadedDemandEventSourcingRootAuthority>,
+  snapshot: Readonly<DemandResultReviewSnapshot>,
+  testTargets: readonly Readonly<TestTargetState>[],
+): Readonly<DemandPostAcceptanceNextStage> {
+  const pendingTestRetest = loaded.aggregate.state.pendingTestRetest;
+  if (pendingTestRetest !== undefined || testTargets.length === 0) {
+    return Object.freeze({
+      status: "test-task-planning" as const,
+      testEnvironmentAuthority: resolveDemandTestEnvironmentAuthority(loaded),
+      retest: pendingTestRetest ?? null,
+    });
+  }
+  const retestedTargetIds = new Set(
+    snapshot.targets.flatMap((target) =>
+      target.status !== "awaiting-result" &&
+      target.taskPackage.workType === "test" &&
+      target.taskPackage.lineage !== null
+        ? [target.taskPackage.lineage.retestsTargetTaskId]
+        : [],
+    ),
+  );
+  const latest = testTargets.filter(
+    (target) => !retestedTargetIds.has(target.targetTaskId),
+  );
+  const escalated = latest[0];
+  if (
+    latest.length !== 1 ||
+    escalated === undefined ||
+    escalated.phase !== "test-product-defect"
+  ) {
+    fail("relation");
+  }
+  return Object.freeze({
+    status: "test-product-defect-escalated" as const,
+    testReview: reviewedTest(escalated),
+  });
+}
+
+function testDelivery(
+  target: Readonly<DeliveryBearingTestTargetState>,
+): Readonly<DemandPostAcceptanceTestDelivery> {
+  return Object.freeze({
+    targetTaskId: target.targetTaskId,
+    taskPackageId: target.taskPackageId,
+    taskPackageDigest: target.taskPackageDigest,
+    deliveryId: target.currentDelivery.deliveryId,
+    envelopeDigest: target.currentDelivery.envelopeDigest,
+    generation: target.currentDelivery.generation,
+    fence: Object.freeze({
+      claimId: target.currentDelivery.fence.claimId,
+      claimDigest: target.currentDelivery.fence.claimDigest,
+    }),
+    testAttemptId: target.currentDelivery.testAttemptId,
+    testWindowId: target.windowId,
+  });
+}
+
+function reviewedTest(
+  target: Readonly<ReviewedTestTargetState>,
+): Readonly<DemandPostAcceptanceReviewedTest> {
+  return Object.freeze({
+    targetTaskId: target.targetTaskId,
+    taskPackageId: target.taskPackageId,
+    taskPackageDigest: target.taskPackageDigest,
+    testAttemptId: target.currentDelivery.testAttemptId,
+    testWindowId: target.windowId,
+    targetResultId: target.currentDelivery.targetResult.targetResultId,
+    resultDigest: target.currentDelivery.targetResult.resultDigest,
+    targetReviewDecisionId:
+      target.currentDelivery.reviewDecision.targetReviewDecisionId,
+    decisionDigest: target.currentDelivery.reviewDecision.decisionDigest,
+  });
+}
+
+/** 唯一未终结 test 目标按其阶段决定下一位 owner。 */
+function openTestStage(
+  testTarget: Readonly<TestTargetState>,
+): Readonly<DemandPostAcceptanceNextStage> {
+  switch (testTarget.phase) {
+    case "planned":
       return Object.freeze({
-        status: "test-task-planning" as const,
-        testCard: currentTestCard,
-      });
-    }
-    if (testTarget.windowId !== currentTestCard.testWindowId) {
-      fail("relation");
-    }
-    const testDelivery = (
-      target: typeof testTarget & {
-        readonly currentDelivery: Readonly<{
-          readonly deliveryId: WakeflowDurableId<"target-delivery">;
-          readonly envelopeDigest: Sha256Digest;
-          readonly generation: number;
-          readonly fence: Readonly<{
-            readonly claimId: WakeflowDurableId<"work-claim">;
-            readonly claimDigest: Sha256Digest;
-          }>;
-          readonly testAttemptId: WakeflowDurableId<"test-attempt">;
-        }>;
-      },
-    ): Readonly<DemandPostAcceptanceTestDelivery> =>
-      Object.freeze({
-        targetTaskId: target.targetTaskId,
-        taskPackageId: target.taskPackageId,
-        taskPackageDigest: target.taskPackageDigest,
-        deliveryId: target.currentDelivery.deliveryId,
-        envelopeDigest: target.currentDelivery.envelopeDigest,
-        generation: target.currentDelivery.generation,
-        fence: Object.freeze({
-          claimId: target.currentDelivery.fence.claimId,
-          claimDigest: target.currentDelivery.fence.claimDigest,
+        status: "test-delivery-planning" as const,
+        testTask: Object.freeze({
+          targetTaskId: testTarget.targetTaskId,
+          taskPackageId: testTarget.taskPackageId,
+          taskPackageDigest: testTarget.taskPackageDigest,
+          testWindowId: testTarget.windowId,
         }),
-        testAttemptId: target.currentDelivery.testAttemptId,
-        testCardId: target.testCard.testCardId,
-        testCardDigest: target.testCard.testCardDigest,
-        testWindowId: target.windowId,
       });
-    if (testTarget.phase === "test-delivery-prepared") {
+    case "test-delivery-prepared":
       return Object.freeze({
         status: "test-host-effect-execution" as const,
         testDelivery: testDelivery(testTarget),
       });
-    }
-    if (
-      testTarget.phase === "test-host-effect-accepted" ||
-      testTarget.phase === "test-host-effect-indeterminate"
-    ) {
+    case "test-host-effect-accepted":
+    case "test-host-effect-indeterminate":
       return Object.freeze({
         status: "test-result-planning" as const,
         testDelivery: Object.freeze({
@@ -452,8 +519,7 @@ function nextStage(
           readbackStatus: testTarget.currentDelivery.outcome.readbackStatus,
         }),
       });
-    }
-    if (testTarget.phase === "test-host-effect-rejected") {
+    case "test-host-effect-rejected":
       return Object.freeze({
         status: "test-delivery-rearm-planning" as const,
         rejectedDelivery: Object.freeze({
@@ -461,8 +527,7 @@ function nextStage(
           outcomeDigest: testTarget.currentDelivery.outcome.outcomeDigest,
         }),
       });
-    }
-    if (testTarget.phase === "test-result-reported") {
+    case "test-result-reported":
       return Object.freeze({
         status: "test-result-review-planning" as const,
         testResult: Object.freeze({
@@ -471,78 +536,36 @@ function nextStage(
           taskPackageDigest: testTarget.taskPackageDigest,
           deliveryId: testTarget.currentDelivery.deliveryId,
           testAttemptId: testTarget.currentDelivery.testAttemptId,
-          testCardId: testTarget.testCard.testCardId,
-          testCardDigest: testTarget.testCard.testCardDigest,
           targetResultId:
             testTarget.currentDelivery.targetResult.targetResultId,
           resultDigest: testTarget.currentDelivery.targetResult.resultDigest,
           outcome: testTarget.currentDelivery.targetResult.outcome,
         }),
       });
-    }
-    if (
-      testTarget.phase === "test-accepted" ||
-      testTarget.phase === "test-another-attempt-requested" ||
-      testTarget.phase === "test-product-defect" ||
-      testTarget.phase === "test-review-blocked"
-    ) {
-      const testReview = Object.freeze({
-        targetTaskId: testTarget.targetTaskId,
-        taskPackageId: testTarget.taskPackageId,
-        taskPackageDigest: testTarget.taskPackageDigest,
-        testAttemptId: testTarget.currentDelivery.testAttemptId,
-        testCardId: testTarget.testCard.testCardId,
-        testCardDigest: testTarget.testCard.testCardDigest,
-        testWindowId: testTarget.windowId,
-        targetResultId: testTarget.currentDelivery.targetResult.targetResultId,
-        resultDigest: testTarget.currentDelivery.targetResult.resultDigest,
-        targetReviewDecisionId:
-          testTarget.currentDelivery.reviewDecision.targetReviewDecisionId,
-        decisionDigest:
-          testTarget.currentDelivery.reviewDecision.decisionDigest,
-      });
-      if (testTarget.phase === "test-accepted") {
-        return Object.freeze({
-          status: "completion-preflight" as const,
-          testingClosure: Object.freeze({
-            mode: "real-environment" as const,
-            testReview,
-          }),
-        });
-      }
+    case "test-accepted":
       return Object.freeze({
-        status:
-          testTarget.phase === "test-another-attempt-requested"
-            ? ("test-another-attempt-planning" as const)
-            : testTarget.phase === "test-product-defect"
-              ? ("test-product-defect-escalated" as const)
-              : ("test-review-blocked" as const),
-        testReview,
+        status: "completion-preflight" as const,
+        testingClosure: Object.freeze({
+          mode: "real-environment" as const,
+          testReview: reviewedTest(testTarget),
+        }),
       });
-    }
-    if (testTarget.phase !== "planned") fail("relation");
-    return Object.freeze({
-      status: "test-delivery-planning" as const,
-      testTask: Object.freeze({
-        targetTaskId: testTarget.targetTaskId,
-        taskPackageId: testTarget.taskPackageId,
-        taskPackageDigest: testTarget.taskPackageDigest,
-        testWindowId: testTarget.windowId,
-        testCardId: testTarget.testCard.testCardId,
-        testCardDigest: testTarget.testCard.testCardDigest,
-      }),
-    });
+    case "test-another-attempt-requested":
+      return Object.freeze({
+        status: "test-another-attempt-planning" as const,
+        testReview: reviewedTest(testTarget),
+      });
+    case "test-review-blocked":
+      return Object.freeze({
+        status: "test-review-blocked" as const,
+        testReview: reviewedTest(testTarget),
+      });
+    case "test-product-defect":
+      return Object.freeze({
+        status: "test-product-defect-escalated" as const,
+        testReview: reviewedTest(testTarget),
+      });
   }
-  if (loaded.authority.testingDecision.mode === "controller-only") {
-    return Object.freeze({
-      status: "completion-preflight" as const,
-      testingClosure: Object.freeze({ mode: "controller-only" as const }),
-    });
-  }
-  return Object.freeze({
-    status: "real-environment-test-planning" as const,
-    testEnvironmentAuthority: testEnvironmentAuthority(loaded),
-  });
 }
 
 function routeBasis(

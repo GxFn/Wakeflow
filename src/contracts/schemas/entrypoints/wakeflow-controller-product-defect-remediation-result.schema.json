@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_RESULT_SCHEMA",
   "title": "WakeflowControllerProductDefectRemediationResultV1",
   "description": "Successful result for one idempotently recorded Controller Product Defect Remediation Authorization Event.",
-  "$comment": "The Authorization opens exact existing product TaskPackage rework. It does not create a Delivery, execute a fix, let Test modify product code, create the next TestCard, or complete the Demand.",
+  "$comment": "The Authorization opens exact existing product TaskPackage rework. It does not create a Delivery, execute a fix, let Test modify product code, create the next test 任务包, or complete the Demand.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -116,10 +116,6 @@
       "type": "string",
       "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "testCardId": {
-      "type": "string",
-      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
     "testAttemptId": {
       "type": "string",
       "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -141,7 +137,7 @@
         "stateDigest",
         "streamRevision",
         "testTargetTaskId",
-        "testCard",
+        "testTaskPackage",
         "testAttemptId",
         "targetResult",
         "testReviewDecision"
@@ -163,19 +159,6 @@
         },
         "testTargetTaskId": {
           "$ref": "#/$defs/targetTaskId"
-        },
-        "testCard": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["testCardId", "testCardDigest"],
-          "properties": {
-            "testCardId": {
-              "$ref": "#/$defs/testCardId"
-            },
-            "testCardDigest": {
-              "$ref": "#/$defs/sha256Digest"
-            }
-          }
         },
         "testAttemptId": {
           "$ref": "#/$defs/testAttemptId"
@@ -206,6 +189,19 @@
             },
             "decidedAt": {
               "$ref": "#/$defs/utcInstant"
+            }
+          }
+        },
+        "testTaskPackage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["taskPackageId", "taskPackageDigest"],
+          "properties": {
+            "taskPackageId": {
+              "$ref": "#/$defs/taskPackageId"
+            },
+            "taskPackageDigest": {
+              "$ref": "#/$defs/sha256Digest"
             }
           }
         }

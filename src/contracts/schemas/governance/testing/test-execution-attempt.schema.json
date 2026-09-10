@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA",
   "title": "WakeflowTestExecutionAttempt",
   "description": "Controller为一次真实环境Test执行授权的逻辑attempt。",
-  "$comment": "initial与rerun都是有独立身份和连续ordinal的logical Test attempt；host-send替代授权不创建新attempt。rerun绑定上一attempt、精确Result和Controller request-another-attempt Decision。environmentSetup是按TestCard策略派生的执行指令，不是环境已准备回执。",
+  "$comment": "initial与rerun都是有独立身份和连续ordinal的logical Test attempt；host-send替代授权不创建新attempt。rerun绑定上一attempt、精确Result和Controller request-another-attempt Decision。environmentSetup是按test 任务包 testContract 的 setupPolicy派生的执行指令，不是环境已准备回执。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,7 +12,7 @@
     "schemaVersion",
     "testAttemptId",
     "targetTaskId",
-    "testCard",
+    "contract",
     "ordinal",
     "mode",
     "environmentSetup"
@@ -28,10 +28,7 @@
       "$ref": "#/$defs/testAttemptId"
     },
     "targetTaskId": {
-      "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/targetTaskId"
-    },
-    "testCard": {
-      "$ref": "#/$defs/testCardTuple"
+      "$ref": "#/$defs/targetTaskId"
     },
     "ordinal": {
       "type": "integer",
@@ -46,6 +43,9 @@
     },
     "rerunSource": {
       "$ref": "#/$defs/rerunSource"
+    },
+    "contract": {
+      "$ref": "#/$defs/contract"
     }
   },
   "allOf": [
@@ -185,19 +185,6 @@
       "type": "string",
       "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "testCardTuple": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["testCardId", "testCardDigest"],
-      "properties": {
-        "testCardId": {
-          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/testCardId"
-        },
-        "testCardDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        }
-      }
-    },
     "targetResultId": {
       "type": "string",
       "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -248,10 +235,31 @@
       "required": ["policy", "directive"],
       "properties": {
         "policy": {
-          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/setupPolicy"
+          "enum": ["fresh-once", "fresh-per-attempt", "reuse-existing"]
         },
         "directive": {
           "enum": ["prepare-fresh-environment", "reuse-confirmed-environment"]
+        }
+      }
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taskPackageId": {
+      "type": "string",
+      "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskPackageId", "taskPackageDigest"],
+      "properties": {
+        "taskPackageId": {
+          "$ref": "#/$defs/taskPackageId"
+        },
+        "taskPackageDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }
     }

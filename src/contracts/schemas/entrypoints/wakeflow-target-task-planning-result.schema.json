@@ -55,7 +55,15 @@
     "testTargetTask": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["workType", "targetTaskId", "taskPackageId", "windowId", "phase", "testCard"],
+      "required": [
+        "workType",
+        "targetTaskId",
+        "taskPackageId",
+        "windowId",
+        "phase",
+        "lineage",
+        "testContract"
+      ],
       "properties": {
         "workType": {
           "const": "test"
@@ -72,8 +80,11 @@
         "phase": {
           "const": "planned"
         },
-        "testCard": {
-          "$ref": "#/$defs/testCardTuple"
+        "lineage": {
+          "$ref": "#/$defs/testLineage"
+        },
+        "testContract": {
+          "$ref": "#/$defs/testContractSummary"
         }
       }
     },
@@ -108,10 +119,6 @@
       "type": "string",
       "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "testCardId": {
-      "type": "string",
-      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
     "repositoryId": {
       "type": "string",
       "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -119,19 +126,6 @@
     "windowId": {
       "type": "string",
       "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "testCardTuple": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["testCardId", "testCardDigest"],
-      "properties": {
-        "testCardId": {
-          "$ref": "#/$defs/testCardId"
-        },
-        "testCardDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        }
-      }
     },
     "portableResourcePath": {
       "type": "string",
@@ -226,6 +220,61 @@
           }
         }
       ]
+    },
+    "productDefectRemediationId": {
+      "type": "string",
+      "pattern": "^product-defect-remediation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testLineage": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "retestsTargetTaskId",
+            "productDefectRemediationId",
+            "authorizationDigest"
+          ],
+          "properties": {
+            "kind": {
+              "const": "retest"
+            },
+            "retestsTargetTaskId": {
+              "$ref": "#/$defs/targetTaskId"
+            },
+            "productDefectRemediationId": {
+              "$ref": "#/$defs/productDefectRemediationId"
+            },
+            "authorizationDigest": {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          }
+        }
+      ]
+    },
+    "testContractSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepCount", "maxAttempts", "environmentMemberRef"],
+      "properties": {
+        "stepCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "environmentMemberRef": {
+          "$ref": "#/$defs/portableResourcePath"
+        }
+      }
     }
   },
   "additionalProperties": false,

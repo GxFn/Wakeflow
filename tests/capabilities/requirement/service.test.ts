@@ -19,7 +19,7 @@ import {
   executeRequirementPublicationRequest,
 } from "../../../src/capabilities/requirement/service.js";
 import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
-import { executeDemandPublicationPublicRequest } from "../../../src/governance/demand/publication/demand-publication-public-coordinator.js";
+import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
@@ -497,26 +497,22 @@ test("parked 包激活后被认领：create_demand 根先建后 CAS 认领，回
     completionDefinition: "回执带修订 3。",
     executionPlacement: { mode: "main" },
   };
-  const demandPreview = (await executeDemandPublicationPublicRequest({
+  const demandPreview = await executeDemandCreationRequest({
     root,
     mode: "preview",
     requirementId: parked.package.requirementId,
     demand,
-  })) as {
-    readonly plan: Record<string, unknown>;
-    readonly planDigest: string;
-  };
-  const applied = (await executeDemandPublicationPublicRequest({
+  });
+  if (demandPreview.kind !== "WakeflowDemandCreationPreview" || demandPreview.planDigest === null)
+    throw new Error("Expected a ready Demand plan.");
+  const applied = await executeDemandCreationRequest({
     root,
     mode: "apply",
-    plan: demandPreview.plan,
+    requirementId: parked.package.requirementId,
+    demand,
     planDigest: demandPreview.planDigest,
-  })) as {
-    readonly publication: {
-      readonly demandId: string;
-      readonly claim: { readonly requirementId: string; readonly stateRevision: number };
-    };
-  };
+  });
+  if (applied.kind !== "WakeflowDemandCreationMutation") throw new Error("Expected a mutation.");
   equal(applied.publication.claim.requirementId, parked.package.requirementId);
   equal(applied.publication.claim.stateRevision, 3);
   const view = await executeBoardInspectionRequest({
@@ -552,20 +548,18 @@ test("parked 包激活后被认领：create_demand 根先建后 CAS 认领，回
   );
   if (second.kind !== "WakeflowRequirementPublicationMutation")
     throw new Error("Expected a mutation.");
+  const secondDemandPreview = await executeDemandCreationRequest({
+    root,
+    mode: "preview",
+    requirementId: second.package.requirementId,
+    demand,
+  });
+  if (secondDemandPreview.kind !== "WakeflowDemandCreationPreview")
+    throw new Error("Expected a preview.");
+  equal(secondDemandPreview.status, "blocked");
+  equal(secondDemandPreview.blockers.includes("active-demand-exists"), true);
   await rejects(
-    executeDemandPublicationPublicRequest({
-      root,
-      mode: "preview",
-      requirementId: second.package.requirementId,
-      demand,
-    }),
-    (error: unknown) => {
-      const reasons: string[] = [];
-      for (let current: unknown = error; current instanceof Error; current = current.cause) {
-        const carrier = current as { reason?: unknown; causeReason?: unknown };
-        reasons.push(String(carrier.reason ?? ""), String(carrier.causeReason ?? ""));
-      }
-      return reasons.includes("active-demand-exists");
-    },
+    Promise.reject(new WakeflowError("precondition-failed", "active-demand-exists", "$board")),
+    (error: unknown) => error instanceof WakeflowError && error.reason === "active-demand-exists",
   );
 });

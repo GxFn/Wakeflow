@@ -21,6 +21,8 @@ export const LEDGER_REQUIREMENTS_ROOT_REF = parsePortableResourcePath(
 export const LEDGER_TRANSACTIONS_ROOT_REF = parsePortableResourcePath(
   "transactions",
 );
+/** 完成或取消的 Demand 归档包容器；包内布局由内核 layout 的 `demandArchiveRef` 给出。 */
+export const LEDGER_ARCHIVES_ROOT_REF = parsePortableResourcePath("archives");
 
 /** Ledger 只剩需求包一个记录家族；字段保留在成员引用中供跨领域消费方判别。 */
 export type LedgerAuthorityFamily = "requirement";

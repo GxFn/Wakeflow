@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:decision-recorded-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowDecisionRecordedEventDataV1",
+  "description": "lifecycle.decision-recorded persisted event v1 的严格 payload：用户对一次升级的回答。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision"],
+  "properties": {
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["escalationEventId", "text", "chosenOption"],
+      "properties": {
+        "escalationEventId": {
+          "type": "string",
+          "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192,
+          "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+        },
+        "chosenOption": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

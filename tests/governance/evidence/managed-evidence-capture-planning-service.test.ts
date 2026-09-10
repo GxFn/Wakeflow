@@ -14,7 +14,6 @@ import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
   EVIDENCE_CAPTURED_AT,
-  EVIDENCE_DEMAND_ID,
   EVIDENCE_DESIGN_SURFACE_ID,
   EVIDENCE_REPOSITORY_ID,
 } from "./managed-evidence-capture-planning-service.fixture.js";
@@ -57,7 +56,7 @@ test("Evidence capture preview从真实tree派生Manifest且保持零写", async
     const service = new ManagedEvidenceCapturePlanningService(
       fixture.publication.workspaceRoot,
     );
-    const plan = await service.preview(EVIDENCE_DEMAND_ID, treeSelection(), {
+    const plan = await service.preview(fixture.demandId, treeSelection(), {
       uuidFactory: () => {
         uuidCalls.value += 1;
         return "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
@@ -101,7 +100,7 @@ test("Evidence capture preview从真实tree派生Manifest且保持零写", async
 
     const demandRoot = path.join(
       fixture.publication.workspacePath,
-      ...demandFinalRootRef(EVIDENCE_DEMAND_ID).split("/"),
+      ...demandFinalRootRef(fixture.demandId).split("/"),
     );
     equal(existsSync(path.join(demandRoot, "evidence")), false);
   } finally {
@@ -115,7 +114,7 @@ test("file来源规范化为content且无需opaque review", async () => {
     const plan = await new ManagedEvidenceCapturePlanningService(
       fixture.publication.workspaceRoot,
     ).preview(
-      EVIDENCE_DEMAND_ID,
+      fixture.demandId,
       {
         evidenceType: "design-review",
         source: {
@@ -165,7 +164,7 @@ test("opaque reject与错误Config root在分配身份和时间前失败", async
     };
     await expectPlanningError(
       () =>
-        service.preview(EVIDENCE_DEMAND_ID, treeSelection("reject"), options),
+        service.preview(fixture.demandId, treeSelection("reject"), options),
       "opaque-content",
     );
     equal(counters.uuid, 0);
@@ -174,7 +173,7 @@ test("opaque reject与错误Config root在分配身份和时间前失败", async
     await expectPlanningError(
       () =>
         service.preview(
-          EVIDENCE_DEMAND_ID,
+          fixture.demandId,
           {
             ...treeSelection(),
             source: {
@@ -204,7 +203,7 @@ test("Capture Planning拒绝资源类型漂移和预取消请求", async () => {
     );
     await expectPlanningError(
       () =>
-        service.preview(EVIDENCE_DEMAND_ID, {
+        service.preview(fixture.demandId, {
           ...treeSelection(),
           source: { ...treeSelection().source, resourceType: "file" },
         }),
@@ -214,7 +213,7 @@ test("Capture Planning拒绝资源类型漂移和预取消请求", async () => {
     controller.abort();
     await expectPlanningError(
       () =>
-        service.preview(EVIDENCE_DEMAND_ID, treeSelection(), {
+        service.preview(fixture.demandId, treeSelection(), {
           signal: controller.signal,
         }),
       "aborted",

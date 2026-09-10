@@ -15,6 +15,7 @@ import {
   ledgerAuthorityRootRef,
   ledgerRecordPublicationIntentRef,
   ledgerRecordPublicationLockRef,
+  LEDGER_ARCHIVES_ROOT_REF,
   LEDGER_REQUIREMENTS_ROOT_REF,
   LEDGER_TRANSACTIONS_ROOT_REF,
 } from "./ledger-authority-paths.js";
@@ -149,10 +150,18 @@ const LEDGER_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
     false,
   );
 
+const LEDGER_ARCHIVES_ROOT_RESOURCE_DECLARATION = directoryDeclaration(
+  "ledger.archives-root",
+  "demand-archive",
+  LEDGER_ARCHIVES_ROOT_REF,
+  true,
+);
+
 /** Ledger 职责所有者的确定性静态资源目录。 */
 export const WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG = Object.freeze([
   LEDGER_REQUIREMENTS_ROOT_RESOURCE_DECLARATION,
   LEDGER_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
+  LEDGER_ARCHIVES_ROOT_RESOURCE_DECLARATION,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
 function memberDeclarationId(

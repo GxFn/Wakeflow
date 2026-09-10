@@ -4,71 +4,69 @@
  */
 
 /**
- * Successful preview, apply, or recovery result for one requirement-package-backed Demand Event Sourcing publication.
+ * wakeflow_create_demand 的结果：preview 给出确定性计划摘要、派生的 demandId 与阻塞项；apply 与 recover 只返回稳定回执（身份与权威摘要、事件与提交、看板认领），不回显聚合、权威内容或路径。
  */
-export type WakeflowDemandPublicationResultV1 = (PreviewResult | ApplyResult | RecoveryResult)
+export type WakeflowDemandPublicationResultV1 = (PreviewResult | MutationResult)
+/**
+ * @maxItems 64
+ */
+export type Blockers = string[]
 export type Sha256Digest = string
 export type DemandId = string
+export type RequirementId = string
 export type EventId = string
 export type CommitId = string
-export type RequirementId = string
 
 export interface PreviewResult {
-kind: "WakeflowDemandPublicationPreviewResult"
+kind: "WakeflowDemandCreationPreview"
 schemaVersion: 1
 tool: "wakeflow_create_demand"
 mode: "preview"
-status: "ready"
-plan: PublicationPlan
-planDigest: Sha256Digest
+status: ("ready" | "blocked")
+blockers: Blockers
+planDigest: (null | Sha256Digest)
+demandId: (null | DemandId)
+requirementId: RequirementId
+next: NextProjection
 }
+export interface NextProjection {
+frontier: (null | string)
+owner: ("controller" | "target" | "test" | "user" | "none")
+suggestedTool: (null | string)
 /**
- * Complete owner-produced Demand Event Sourcing publication transaction. Its exact domain shape is revalidated before Apply.
+ * @maxItems 64
  */
-export interface PublicationPlan {
-[k: string]: unknown | undefined
+blockers: string[]
 }
-export interface ApplyResult {
-kind: "WakeflowDemandPublicationApplyResult"
+export interface MutationResult {
+kind: "WakeflowDemandCreationMutation"
 schemaVersion: 1
 tool: "wakeflow_create_demand"
-mode: "apply"
-status: "current"
-planDigest: Sha256Digest
+mode: ("apply" | "recover")
+disposition: ("created" | "current" | "recovered")
 publication: PublicationReceipt
+next: NextProjection
 }
 export interface PublicationReceipt {
-publicationAuthority: "current"
 demandId: DemandId
 identityDigest: Sha256Digest
 authorityDigest: Sha256Digest
 commandDigest: Sha256Digest
-event: EventReceipt
-commit: CommitReceipt
-stateDigest: Sha256Digest
-claim: ClaimReceipt
-}
-export interface EventReceipt {
+event: {
 eventId: EventId
 streamRevision: 1
 }
-export interface CommitReceipt {
+commit: {
 commitId: CommitId
 commitSequence: 1
 commitDigest: Sha256Digest
 }
-export interface ClaimReceipt {
+stateDigest: Sha256Digest
+claim: {
 requirementId: RequirementId
 stateRevision: number
 stateDigest: Sha256Digest
 }
-export interface RecoveryResult {
-kind: "WakeflowDemandPublicationRecoveryResult"
-schemaVersion: 1
-tool: "wakeflow_create_demand"
-mode: "recover"
-status: "current"
-publication: PublicationReceipt
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -92,4 +90,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:demand-publication-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA\",\"title\":\"WakeflowDemandPublicationResultV1\",\"description\":\"Successful preview, apply, or recovery result for one requirement-package-backed Demand Event Sourcing publication.\",\"$comment\":\"Preview carries the complete owner-produced plan for review. Apply and recover return only stable publication receipts; full Aggregate, Demand Authority content, board claim snapshots, machine paths, and host effects are not public results.\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/previewResult\"},{\"$ref\":\"#/$defs/applyResult\"},{\"$ref\":\"#/$defs/recoveryResult\"}],\"$defs\":{\"previewResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"plan\",\"planDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandPublicationPreviewResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_create_demand\"},\"mode\":{\"const\":\"preview\"},\"status\":{\"const\":\"ready\"},\"plan\":{\"$ref\":\"#/$defs/publicationPlan\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"applyResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"planDigest\",\"publication\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandPublicationApplyResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_create_demand\"},\"mode\":{\"const\":\"apply\"},\"status\":{\"const\":\"current\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"publication\":{\"$ref\":\"#/$defs/publicationReceipt\"}}},\"recoveryResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"publication\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandPublicationRecoveryResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_create_demand\"},\"mode\":{\"const\":\"recover\"},\"status\":{\"const\":\"current\"},\"publication\":{\"$ref\":\"#/$defs/publicationReceipt\"}}},\"publicationReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"publicationAuthority\",\"demandId\",\"identityDigest\",\"authorityDigest\",\"commandDigest\",\"event\",\"commit\",\"stateDigest\",\"claim\"],\"properties\":{\"publicationAuthority\":{\"const\":\"current\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"identityDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"authorityDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"commandDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"event\":{\"$ref\":\"#/$defs/eventReceipt\"},\"commit\":{\"$ref\":\"#/$defs/commitReceipt\"},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"claim\":{\"$ref\":\"#/$defs/claimReceipt\"}}},\"eventReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"eventId\",\"streamRevision\"],\"properties\":{\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"streamRevision\":{\"const\":1}}},\"commitReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"commitId\",\"commitSequence\",\"commitDigest\"],\"properties\":{\"commitId\":{\"$ref\":\"#/$defs/commitId\"},\"commitSequence\":{\"const\":1},\"commitDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"publicationPlan\":{\"type\":\"object\",\"description\":\"Complete owner-produced Demand Event Sourcing publication transaction. Its exact domain shape is revalidated before Apply.\",\"minProperties\":1},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"eventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"commitId\":{\"type\":\"string\",\"pattern\":\"^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"claimReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"requirementId\",\"stateRevision\",\"stateDigest\"],\"properties\":{\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"stateRevision\":{\"type\":\"integer\",\"minimum\":2},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"}}}");
+export const WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:demand-publication-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA\",\"title\":\"WakeflowDemandPublicationResultV1\",\"description\":\"wakeflow_create_demand 的结果：preview 给出确定性计划摘要、派生的 demandId 与阻塞项；apply 与 recover 只返回稳定回执（身份与权威摘要、事件与提交、看板认领），不回显聚合、权威内容或路径。\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/previewResult\"},{\"$ref\":\"#/$defs/mutationResult\"}],\"$defs\":{\"previewResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"blockers\",\"planDigest\",\"demandId\",\"requirementId\",\"next\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandCreationPreview\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_create_demand\"},\"mode\":{\"const\":\"preview\"},\"status\":{\"enum\":[\"ready\",\"blocked\"]},\"blockers\":{\"$ref\":\"#/$defs/blockers\"},\"planDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/sha256Digest\"}]},\"demandId\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/demandId\"}]},\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"next\":{\"$ref\":\"#/$defs/nextProjection\"}}},\"mutationResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"disposition\",\"publication\",\"next\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandCreationMutation\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_create_demand\"},\"mode\":{\"enum\":[\"apply\",\"recover\"]},\"disposition\":{\"enum\":[\"created\",\"current\",\"recovered\"]},\"publication\":{\"$ref\":\"#/$defs/publicationReceipt\"},\"next\":{\"$ref\":\"#/$defs/nextProjection\"}}},\"publicationReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"demandId\",\"identityDigest\",\"authorityDigest\",\"commandDigest\",\"event\",\"commit\",\"stateDigest\",\"claim\"],\"properties\":{\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"identityDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"authorityDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"commandDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"event\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"eventId\",\"streamRevision\"],\"properties\":{\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"streamRevision\":{\"const\":1}}},\"commit\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"commitId\",\"commitSequence\",\"commitDigest\"],\"properties\":{\"commitId\":{\"$ref\":\"#/$defs/commitId\"},\"commitSequence\":{\"const\":1},\"commitDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"claim\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"requirementId\",\"stateRevision\",\"stateDigest\"],\"properties\":{\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"stateRevision\":{\"type\":\"integer\",\"minimum\":2,\"maximum\":9007199254740991},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}}}},\"eventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"commitId\":{\"type\":\"string\",\"pattern\":\"^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root; never returned.\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"nextProjection\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"frontier\",\"owner\",\"suggestedTool\",\"blockers\"],\"properties\":{\"frontier\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}]},\"owner\":{\"enum\":[\"controller\",\"target\",\"test\",\"user\",\"none\"]},\"suggestedTool\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}]},\"blockers\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256}}}},\"blockers\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256}}}}");

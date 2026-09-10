@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:demand-controller-route-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA",
   "title": "WakeflowDemandControllerRouteRequestV1",
-  "description": "Closed read-only MCP request for inspecting one Demand Controller Route.",
+  "description": "wakeflow_inspect_demand_route 的只读请求：一个 Demand 的当前 Controller Route；已归档的 Demand 返回归档回执。",
   "type": "object",
   "additionalProperties": false,
   "required": ["root", "demandId"],

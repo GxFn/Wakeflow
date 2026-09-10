@@ -150,7 +150,7 @@ function writeIntent(
 test("Ledger publishes one requirement package tree and idempotently reuses it", async () => {
   const { rootPath, root, store } = await fixture();
   try {
-    deepEqual(readdirSync(rootPath).sort(), ["requirements", "transactions"]);
+    deepEqual(readdirSync(rootPath).sort(), ["archives", "requirements", "transactions"]);
     equal(statSync(path.join(rootPath, "requirements")).mode & 0o777, 0o755);
     equal(statSync(path.join(rootPath, "transactions")).mode & 0o777, 0o700);
 

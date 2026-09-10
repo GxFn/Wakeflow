@@ -1,6 +1,12 @@
 import type { WakeflowDemandCancelledEventDataV1 } from "../../../contracts/generated/governance/demand/demand-cancelled-event-data-v1.generated.js";
 import { WAKEFLOW_DEMAND_CANCELLED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-cancelled-event-data-v1.generated.js";
 import type { WakeflowDemandCompletedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-completed-event-data-v1.generated.js";
+import type { WakeflowDecisionRecordedEventDataV1 } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
+import type { WakeflowDemandContinuedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
+import type { WakeflowDemandEscalatedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
 import { WAKEFLOW_DEMAND_COMPLETED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-completed-event-data-v1.generated.js";
 import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
 import type { WakeflowDemandPublishedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-published-event-data-v1.generated.js";
@@ -83,8 +89,11 @@ export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
   "delivery.target-host-effect-observed",
   "delivery.target-host-effect-rearmed",
   "evidence.managed-evidence-recorded",
+  "lifecycle.decision-recorded",
   "lifecycle.demand-cancelled",
   "lifecycle.demand-completed",
+  "lifecycle.demand-continued",
+  "lifecycle.demand-escalated",
   "publication.demand-published",
   "result.target-result-recorded",
   "review.product-defect-remediation-authorized",
@@ -104,8 +113,11 @@ export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
   "delivery.target-host-effect-observed": 1,
   "delivery.target-host-effect-rearmed": 1,
   "evidence.managed-evidence-recorded": 1,
+  "lifecycle.decision-recorded": 1,
   "lifecycle.demand-cancelled": 1,
   "lifecycle.demand-completed": 1,
+  "lifecycle.demand-continued": 1,
+  "lifecycle.demand-escalated": 1,
   "publication.demand-published": 1,
   "result.target-result-recorded": 1,
   "review.product-defect-remediation-authorized": 1,
@@ -153,6 +165,26 @@ const validateCompletedV1 =
       WAKEFLOW_SHA256_DIGEST_SCHEMA,
       WAKEFLOW_UTC_INSTANT_SCHEMA,
     ],
+  );
+const LIFECYCLE_REFERENCES = [
+  WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+  WAKEFLOW_SHA256_DIGEST_SCHEMA,
+  WAKEFLOW_UTC_INSTANT_SCHEMA,
+];
+const validateEscalatedV1 =
+  createRuntimeJsonSchemaValidator<WakeflowDemandEscalatedEventDataV1>(
+    WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA,
+    LIFECYCLE_REFERENCES,
+  );
+const validateDecisionRecordedV1 =
+  createRuntimeJsonSchemaValidator<WakeflowDecisionRecordedEventDataV1>(
+    WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA,
+    LIFECYCLE_REFERENCES,
+  );
+const validateContinuedV1 =
+  createRuntimeJsonSchemaValidator<WakeflowDemandContinuedEventDataV1>(
+    WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA,
+    LIFECYCLE_REFERENCES,
   );
 const validateTargetTaskPlannedV1 =
   createRuntimeJsonSchemaValidator<WakeflowTargetTaskPlannedEventDataV1>(
@@ -368,6 +400,26 @@ function parseCompletedV1(value: Readonly<JsonValue>): Readonly<JsonValue> {
   return parseJsonValue(result.value, "$data");
 }
 
+function parseEscalatedV1(value: Readonly<JsonValue>): Readonly<JsonValue> {
+  const result = validateEscalatedV1(value);
+  if (!result.ok) throw new TypeError("Demand escalated v1 data is invalid.");
+  return parseJsonValue(result.value, "$data");
+}
+
+function parseDecisionRecordedV1(
+  value: Readonly<JsonValue>,
+): Readonly<JsonValue> {
+  const result = validateDecisionRecordedV1(value);
+  if (!result.ok) throw new TypeError("Decision recorded v1 data is invalid.");
+  return parseJsonValue(result.value, "$data");
+}
+
+function parseContinuedV1(value: Readonly<JsonValue>): Readonly<JsonValue> {
+  const result = validateContinuedV1(value);
+  if (!result.ok) throw new TypeError("Demand continued v1 data is invalid.");
+  return parseJsonValue(result.value, "$data");
+}
+
 function parseTargetTaskPlannedV1(
   value: Readonly<JsonValue>,
 ): Readonly<JsonValue> {
@@ -567,6 +619,27 @@ const COMPLETED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   steps: [],
 });
 
+const ESCALATED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
+  currentVersion:
+    DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["lifecycle.demand-escalated"],
+  codecs: [{ version: 1, parse: parseEscalatedV1 }],
+  steps: [],
+});
+
+const DECISION_RECORDED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
+  currentVersion:
+    DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["lifecycle.decision-recorded"],
+  codecs: [{ version: 1, parse: parseDecisionRecordedV1 }],
+  steps: [],
+});
+
+const CONTINUED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
+  currentVersion:
+    DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["lifecycle.demand-continued"],
+  codecs: [{ version: 1, parse: parseContinuedV1 }],
+  steps: [],
+});
+
 const TARGET_TASK_PLANNED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   currentVersion:
     DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["tasking.target-task-planned"],
@@ -699,8 +772,11 @@ const EVENT_VERSION_REGISTRIES = Object.freeze({
   "delivery.target-host-effect-observed": TARGET_HOST_EFFECT_OBSERVED_REGISTRY,
   "delivery.target-host-effect-rearmed": TARGET_HOST_EFFECT_REARMED_REGISTRY,
   "evidence.managed-evidence-recorded": MANAGED_EVIDENCE_RECORDED_REGISTRY,
+  "lifecycle.decision-recorded": DECISION_RECORDED_REGISTRY,
   "lifecycle.demand-cancelled": CANCELLED_REGISTRY,
   "lifecycle.demand-completed": COMPLETED_REGISTRY,
+  "lifecycle.demand-continued": CONTINUED_REGISTRY,
+  "lifecycle.demand-escalated": ESCALATED_REGISTRY,
   "publication.demand-published": PUBLISHED_REGISTRY,
   "result.target-result-recorded": TARGET_RESULT_RECORDED_REGISTRY,
   "review.product-defect-remediation-authorized":
@@ -728,8 +804,11 @@ export const DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS = Object.freeze({
     TARGET_HOST_EFFECT_REARMED_REGISTRY.supportedVersions,
   "evidence.managed-evidence-recorded":
     MANAGED_EVIDENCE_RECORDED_REGISTRY.supportedVersions,
+  "lifecycle.decision-recorded": DECISION_RECORDED_REGISTRY.supportedVersions,
   "lifecycle.demand-cancelled": CANCELLED_REGISTRY.supportedVersions,
   "lifecycle.demand-completed": COMPLETED_REGISTRY.supportedVersions,
+  "lifecycle.demand-continued": CONTINUED_REGISTRY.supportedVersions,
+  "lifecycle.demand-escalated": ESCALATED_REGISTRY.supportedVersions,
   "publication.demand-published": PUBLISHED_REGISTRY.supportedVersions,
   "result.target-result-recorded":
     TARGET_RESULT_RECORDED_REGISTRY.supportedVersions,

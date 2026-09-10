@@ -23,6 +23,7 @@ test("Ledger static catalog separates the durable requirements root from private
   )), [
     "ledger.requirements-root",
     "ledger.transactions-root",
+    "ledger.archives-root",
   ]);
   for (const entry of WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG) {
     equal(entry.family, "ledger");
@@ -40,7 +41,10 @@ test("Ledger static catalog separates the durable requirements root from private
         existingModePolicy: "observe-without-change",
       });
     } else {
-      equal(entry.placement.relativePath, "requirements");
+      equal(
+        entry.placement.relativePath,
+        entry.declarationId === "ledger.archives-root" ? "archives" : "requirements",
+      );
       deepEqual(entry.tracking, {
         disposition: "tracked",
         privacy: "shareable",

@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:archive:demand-archive-manifest:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_ARCHIVE_MANIFEST_SCHEMA",
+  "title": "WakeflowDemandArchiveManifest",
+  "description": "一个已完成或已取消 Demand 的归档包清单：谱系、终态事件回执、verify 摘要、负载树摘要（ADR-0012 D3，能力卡 8）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "archiveRef",
+    "demandId",
+    "programId",
+    "requirementId",
+    "outcome",
+    "terminalEvent",
+    "archivedAt",
+    "controllerWindowId",
+    "package",
+    "verify",
+    "payload",
+    "worktree",
+    "manifestDigest"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowDemandArchiveManifest"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "archiveRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "outcome": {
+      "enum": ["completed", "cancelled"]
+    },
+    "terminalEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "streamRevision", "commitId"],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "streamRevision": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 9007199254740991
+        },
+        "commitId": {
+          "type": "string",
+          "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "archivedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "controllerWindowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirementId", "recordRef", "recordDigest", "claimStateRevision"],
+      "properties": {
+        "requirementId": {
+          "type": "string",
+          "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "recordRef": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "recordDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "claimStateRevision": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observationDigest", "reportDigest", "gateCount", "failedCount"],
+      "properties": {
+        "observationDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "reportDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "gateCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "failedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["treeDigest", "fileCount", "totalBytes", "excluded"],
+      "properties": {
+        "treeDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "fileCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "excluded": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+          }
+        }
+      }
+    },
+    "worktree": {
+      "type": "null"
+    },
+    "manifestDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  }
+}

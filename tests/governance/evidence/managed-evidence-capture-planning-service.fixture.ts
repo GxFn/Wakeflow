@@ -2,28 +2,31 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { DemandEventSourcingPublicationApplicationService } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-application-service.js";
-import type { DemandEventSourcingPublicationPreviewRequest } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-input.js";
-import { DemandEventSourcingPublicationPlanningService } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-planning-service.js";
+import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,
   demandEventSourcingPublicationAuthoredDemand,
-  demandEventSourcingPublicationUuidFactory,
   PUBLICATION_RECORDED_AT,
   PUBLICATION_REQUIREMENT_ID,
   type DemandEventSourcingPublicationWorkspaceFixture,
 } from "../demand/demand-event-sourcing-publication-service.fixture.js";
 
-export const EVIDENCE_DEMAND_ID = "demand_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 export const EVIDENCE_REPOSITORY_ID =
   "repository_22222222-2222-4222-8222-222222222222";
 export const EVIDENCE_DESIGN_SURFACE_ID =
   "surface_33333333-3333-4333-8333-333333333333";
 export const EVIDENCE_CAPTURED_AT = parseUtcInstant("2026-09-01T21:00:00.000Z");
+/**
+ * 由需求包与看板认领状态确定性派生的 Demand 标识（demand 切片 `deriveDemandCreationIds`）；
+ * fixture 创建后校验，认领状态形状一变这里就会报出新值。
+ */
+export const EVIDENCE_DEMAND_ID = "demand_0aa174cc-cf4c-484d-8ac2-961b3489b5c6";
 
 export interface ManagedEvidenceCapturePlanningWorkspaceFixture {
   readonly publication: Readonly<DemandEventSourcingPublicationWorkspaceFixture>;
+  /** 由需求包与认领状态确定性派生；同一 fixture 每次得到同一个标识。 */
+  readonly demandId: string;
   readonly repositoryRoot: string;
   readonly designRoot: string;
 }
@@ -35,29 +38,29 @@ export async function createManagedEvidenceCapturePlanningWorkspaceFixture(): Pr
   const publication =
     await createDemandEventSourcingPublicationWorkspaceFixture();
   try {
-    const demandPreviewRequest = {
+    const demandRequest = {
+      root: publication.workspacePath,
       requirementId: PUBLICATION_REQUIREMENT_ID,
       demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
-    } satisfies DemandEventSourcingPublicationPreviewRequest;
-    const preview = await new DemandEventSourcingPublicationPlanningService(
-      publication.workspaceRoot,
-    ).preview(
-      demandPreviewRequest,
-      {
-        uuidFactory: demandEventSourcingPublicationUuidFactory(
-          [
-            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-            "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-          ],
-          { value: 0 },
-        ),
-        clock: () => PUBLICATION_RECORDED_AT,
-      },
+    };
+    const preview = await executeDemandCreationRequest(
+      { ...demandRequest, mode: "preview" },
+      { clock: () => PUBLICATION_RECORDED_AT },
     );
-    await new DemandEventSourcingPublicationApplicationService(
-      publication.workspaceRoot,
-    ).apply(preview.plan, preview.planDigest);
+    if (preview.kind !== "WakeflowDemandCreationPreview" || preview.planDigest === null) {
+      throw new Error("Expected a ready Demand creation plan.");
+    }
+    const created = await executeDemandCreationRequest(
+      { ...demandRequest, mode: "apply", planDigest: preview.planDigest },
+      { clock: () => PUBLICATION_RECORDED_AT },
+    );
+    if (created.kind !== "WakeflowDemandCreationMutation") {
+      throw new Error("Expected a Demand creation mutation.");
+    }
+    const demandId = created.publication.demandId;
+    if (demandId !== EVIDENCE_DEMAND_ID) {
+      throw new Error(`EVIDENCE_DEMAND_ID drifted; derived ${demandId}`);
+    }
 
     const repositoryRoot = path.join(publication.fixtureRoot, "ProductA");
     const designRoot = path.join(publication.workspacePath, "Design");
@@ -86,7 +89,7 @@ export async function createManagedEvidenceCapturePlanningWorkspaceFixture(): Pr
     writeFileSync(path.join(designRoot, "reports/result.txt"), "reviewed\n", {
       mode: 0o644,
     });
-    return Object.freeze({ publication, repositoryRoot, designRoot });
+    return Object.freeze({ publication, demandId, repositoryRoot, designRoot });
   } catch (error: unknown) {
     await cleanupDemandEventSourcingPublicationWorkspaceFixture(publication);
     throw error;

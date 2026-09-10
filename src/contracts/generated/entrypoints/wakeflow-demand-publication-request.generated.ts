@@ -4,23 +4,22 @@
  */
 
 /**
- * Closed MCP preview/apply/recover request for one requirement-package-backed Demand Event Sourcing publication.
+ * wakeflow_create_demand 的请求：认领一个 pending 需求包即创建 Demand。preview 零写，apply 带 planDigest 重算同一计划，recover 带 operationId（即 demandId）向前恢复。Demand 类型、测试决策、权威成员、时间与标识都由 Wakeflow 派生。
  */
-export type WakeflowDemandPublicationRequestV1 = (PreviewRequest | ApplyRequest | RecoverRequest)
+export type WakeflowDemandPublicationRequestV1 = (CreateRequest | RecoverRequest)
 /**
- * Absolute path of the existing Wakeflow workspace root. Physical validation remains owned by RootedDirectory and this value is never returned.
+ * Absolute path of the existing Wakeflow workspace root; never returned.
  */
 export type WorkspaceRoot = string
+export type Sha256Digest = string
 export type RequirementId = string
 export type IdentityText = string
-export type AuthorityRecordId = string
-export type PortableResourcePath = string
-export type Sha256Digest = string
 export type DemandId = string
 
-export interface PreviewRequest {
+export interface CreateRequest {
 root: WorkspaceRoot
-mode: "preview"
+mode: ("preview" | "apply")
+planDigest?: Sha256Digest
 requirementId: RequirementId
 demand: AuthoredDemand
 }
@@ -28,38 +27,14 @@ export interface AuthoredDemand {
 title: IdentityText
 goal: IdentityText
 completionDefinition: IdentityText
-executionPlacement: (MainPlacement | IsolatedPlacement)
-}
-export interface MainPlacement {
+executionPlacement: {
 mode: "main"
 }
-export interface IsolatedPlacement {
-mode: "isolated"
-authorizationMember: AuthorityMemberSelection
-}
-/**
- * Caller selection of one immutable Ledger member. Role, media type, record/member digests, and full refs are resolved by the Publication owner.
- */
-export interface AuthorityMemberSelection {
-recordId: AuthorityRecordId
-memberPath: PortableResourcePath
-}
-export interface ApplyRequest {
-root: WorkspaceRoot
-mode: "apply"
-plan: PublicationPlan
-planDigest: Sha256Digest
-}
-/**
- * Complete owner-produced Demand Event Sourcing publication transaction. The domain transaction parser revalidates its exact closed shape and relations before Apply.
- */
-export interface PublicationPlan {
-[k: string]: unknown | undefined
 }
 export interface RecoverRequest {
 root: WorkspaceRoot
 mode: "recover"
-demandId: DemandId
+operationId: DemandId
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -83,4 +58,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:demand-publication-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA\",\"title\":\"WakeflowDemandPublicationRequestV1\",\"description\":\"Closed MCP preview/apply/recover request for one requirement-package-backed Demand Event Sourcing publication.\",\"$comment\":\"Preview accepts only Controller-authored Demand text, execution placement, and the requirement package identity. The complete Ledger member set comes only from the immutable requirement package record; Config, Demand type, testing decision, references, digests, time, IDs, paths, Event/Commit data, and the board claim CAS are owner-derived. Apply replays the exact preview plan and digest; recover accepts only the Demand identity.\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/previewRequest\"},{\"$ref\":\"#/$defs/applyRequest\"},{\"$ref\":\"#/$defs/recoverRequest\"}],\"$defs\":{\"previewRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"requirementId\",\"demand\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"const\":\"preview\"},\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"demand\":{\"$ref\":\"#/$defs/authoredDemand\"}}},\"applyRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"plan\",\"planDigest\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"const\":\"apply\"},\"plan\":{\"$ref\":\"#/$defs/publicationPlan\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"recoverRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"demandId\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"const\":\"recover\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"}}},\"authoredDemand\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"title\",\"goal\",\"completionDefinition\",\"executionPlacement\"],\"properties\":{\"title\":{\"$ref\":\"#/$defs/identityText\"},\"goal\":{\"$ref\":\"#/$defs/identityText\"},\"completionDefinition\":{\"$ref\":\"#/$defs/identityText\"},\"executionPlacement\":{\"oneOf\":[{\"$ref\":\"#/$defs/mainPlacement\"},{\"$ref\":\"#/$defs/isolatedPlacement\"}]}}},\"mainPlacement\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\"],\"properties\":{\"mode\":{\"const\":\"main\"}}},\"isolatedPlacement\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\",\"authorizationMember\"],\"properties\":{\"mode\":{\"const\":\"isolated\"},\"authorizationMember\":{\"$ref\":\"#/$defs/authorityMemberSelection\"}}},\"authorityMemberSelection\":{\"description\":\"Caller selection of one immutable Ledger member. Role, media type, record/member digests, and full refs are resolved by the Publication owner.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"recordId\",\"memberPath\"],\"properties\":{\"recordId\":{\"$ref\":\"#/$defs/authorityRecordId\"},\"memberPath\":{\"$ref\":\"#/$defs/portableResourcePath\"}}},\"publicationPlan\":{\"type\":\"object\",\"description\":\"Complete owner-produced Demand Event Sourcing publication transaction. The domain transaction parser revalidates its exact closed shape and relations before Apply.\",\"minProperties\":1},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root. Physical validation remains owned by RootedDirectory and this value is never returned.\"},\"identityText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":16384,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"authorityRecordId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"}}}");
+export const WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:demand-publication-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA\",\"title\":\"WakeflowDemandPublicationRequestV1\",\"description\":\"wakeflow_create_demand 的请求：认领一个 pending 需求包即创建 Demand。preview 零写，apply 带 planDigest 重算同一计划，recover 带 operationId（即 demandId）向前恢复。Demand 类型、测试决策、权威成员、时间与标识都由 Wakeflow 派生。\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/createRequest\"},{\"$ref\":\"#/$defs/recoverRequest\"}],\"$defs\":{\"createRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"requirementId\",\"demand\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"enum\":[\"preview\",\"apply\"]},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"demand\":{\"$ref\":\"#/$defs/authoredDemand\"}}},\"recoverRequest\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"mode\",\"operationId\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"mode\":{\"const\":\"recover\"},\"operationId\":{\"$ref\":\"#/$defs/demandId\"}}},\"authoredDemand\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"title\",\"goal\",\"completionDefinition\",\"executionPlacement\"],\"properties\":{\"title\":{\"$ref\":\"#/$defs/identityText\"},\"goal\":{\"$ref\":\"#/$defs/identityText\"},\"completionDefinition\":{\"$ref\":\"#/$defs/identityText\"},\"executionPlacement\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\"],\"properties\":{\"mode\":{\"const\":\"main\"}}}}},\"identityText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":16384,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root; never returned.\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"}}}");

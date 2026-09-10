@@ -52,10 +52,8 @@ import {
   exactClaimedPackage,
   inspectPackageForDemandPublication,
 } from "./demand-event-sourcing-publication-package.js";
-import {
-  assertNoActiveDemand,
-  DemandEventSourcingPublicationPlanningServiceError,
-} from "./demand-event-sourcing-publication-planning-service.js";
+import { WakeflowError } from "../../../kernel/error.js";
+import { assertNoActiveDemand } from "./demand-active-guard.js";
 import {
   loadFinalDemandPublication,
   materializeDemandPublicationStage,
@@ -458,7 +456,7 @@ export async function publishDemandFromPackage(
         await assertNoActiveDemand(root, signal);
       } catch (error: unknown) {
         if (
-          error instanceof DemandEventSourcingPublicationPlanningServiceError &&
+          error instanceof WakeflowError &&
           error.reason === "active-demand-exists"
         ) {
           fail("conflict", "$board");

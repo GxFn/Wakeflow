@@ -4,122 +4,90 @@
  */
 
 /**
- * Successful preview or apply result for one exact Demand completion transition.
+ * wakeflow_complete_demand 的结果：preview 给出 verify 报告、归档引用与阻塞项；apply 与 recover 返回终态事件回执、归档回执、需求包回执与释放的工作声明数。
  */
-export type WakeflowDemandCompletionResultV1 = (PreviewResult | ApplyResult)
-export type DemandId = string
-export type CommitId = string
-export type EventId = string
+export type WakeflowDemandCompletionResultV1 = (PreviewResult | MutationResult)
+/**
+ * @maxItems 64
+ */
+export type Blockers = string[]
 export type Sha256Digest = string
+export type DemandId = string
 export type PortableResourcePath = string
-export type NonEmptyText = string
-export type ProgramId = string
-export type WindowId = string
+export type EventId = string
+export type CommitId = string
 export type RequirementId = string
-export type UtcInstant = string
-export type ApplyResult = ({
-[k: string]: unknown | undefined
-} & {
-kind: "WakeflowDemandCompletionApplyResult"
-schemaVersion: 1
-tool: "wakeflow_complete_demand"
-mode: "apply"
-status: ("completed" | "already-completed")
-disposition: ("committed" | "idempotent")
-eventAuthority: "current"
-completion: Completion
-planDigest: Sha256Digest
-commandDigest: Sha256Digest
-event: EventReceipt
-commit: CommitReceipt
-stateDigest: Sha256Digest
-})
 
 export interface PreviewResult {
-kind: "WakeflowDemandCompletionPreviewResult"
+kind: "WakeflowDemandCompletionPreview"
 schemaVersion: 1
 tool: "wakeflow_complete_demand"
 mode: "preview"
-status: "ready"
-plan: Plan
-planDigest: Sha256Digest
-}
-export interface Plan {
-kind: "WakeflowDemandCompletionPlan"
-schemaVersion: 1
+status: ("ready" | "blocked")
+blockers: Blockers
+planDigest: (null | Sha256Digest)
 demandId: DemandId
-expectedStreamRevision: number
-commitId: CommitId
-eventId: EventId
-authority: Authority
-completion: Completion
+verify: (null | VerifyReport)
+archiveRef: (null | PortableResourcePath)
+next: NextProjection
 }
-export interface Authority {
-artifactKind: "wakeflow-demand-authority"
-schemaVersion: 1
-demandId: DemandId
-identityDigest: Sha256Digest
+export interface VerifyReport {
+observationDigest: Sha256Digest
 /**
  * @minItems 1
- * @maxItems 32
+ * @maxItems 64
  */
-authorityRefs: [AuthorityMemberReference, ...(AuthorityMemberReference)[]]
-testingDecision: TestingDecision
+gates: [{
+gate: string
+status: ("pass" | "fail" | "unavailable")
+detail: (null | string)
+}, ...({
+gate: string
+status: ("pass" | "fail" | "unavailable")
+detail: (null | string)
+})[]]
 }
-export interface AuthorityMemberReference {
-artifactKind: "wakeflow-ledger-authority-member-reference"
+export interface NextProjection {
+frontier: (null | string)
+owner: ("controller" | "target" | "test" | "user" | "none")
+suggestedTool: (null | string)
+/**
+ * @maxItems 64
+ */
+blockers: string[]
+}
+export interface MutationResult {
+kind: "WakeflowDemandCompletionMutation"
 schemaVersion: 1
-family: "requirement"
-recordId: string
-recordRef: PortableResourcePath
-recordDigest: Sha256Digest
-memberPath: PortableResourcePath
-memberRef: PortableResourcePath
-memberDigest: Sha256Digest
-role: ("requirement" | "landing" | "attachment")
-mediaType: string
-}
-export interface TestingDecision {
-mode: ("controller-only" | "real-environment" | "not-applicable")
-summary: NonEmptyText
-environmentMemberRef: (null | PortableResourcePath)
-}
-export interface Completion {
-kind: "WakeflowDemandCompletion"
-schemaVersion: 1
-programId: ProgramId
+tool: "wakeflow_complete_demand"
+mode: ("apply" | "recover")
+disposition: ("completed" | "current" | "recovered")
 demandId: DemandId
-controllerWindowId: WindowId
-authorityDigest: Sha256Digest
-testingMode: ("controller-only" | "real-environment")
-postAcceptanceRouteDigest: Sha256Digest
-reviewSnapshotDigest: Sha256Digest
-observedState: ObservedState
-packageSource: PackageSource
-completedAt: UtcInstant
-completionDigest: Sha256Digest
-}
-export interface ObservedState {
-streamRevision: number
-stateDigest: Sha256Digest
-lastEventId: EventId
-lastEventDigest: Sha256Digest
-}
-export interface PackageSource {
-requirementId: RequirementId
-recordRef: PortableResourcePath
-recordDigest: Sha256Digest
-claimStateRevision: number
-claimStateDigest: Sha256Digest
+terminalEvent: EventReceipt
+archive: ArchiveReceipt
+package: PackageReceipt
+releasedClaims: number
+next: NextProjection
 }
 export interface EventReceipt {
 eventId: EventId
 streamRevision: number
-}
-export interface CommitReceipt {
 commitId: CommitId
-commitSequence: number
-commitDigest: Sha256Digest
+}
+export interface ArchiveReceipt {
+archiveRef: PortableResourcePath
+payloadTreeDigest: Sha256Digest
+fileCount: number
+totalBytes: number
+manifestDigest: Sha256Digest
+}
+export interface PackageReceipt {
+requirementId: RequirementId
+recordRef: PortableResourcePath
+recordDigest: Sha256Digest
+status: ("pending" | "parked" | "claimed" | "withdrawn" | "archived")
+revision: number
+stateDigest: Sha256Digest
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -143,4 +111,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_DEMAND_COMPLETION_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:demand-completion-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_COMPLETION_RESULT_SCHEMA\",\"title\":\"WakeflowDemandCompletionResultV1\",\"description\":\"Successful preview or apply result for one exact Demand completion transition.\",\"$comment\":\"Completion is a successful terminal Demand Event, not TODO archive, BusinessArchive, host close, transport pruning, or resource cleanup. stateDigest is the Completion Event resulting-state digest rather than a claim about a later replay-time Aggregate lifecycle.\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/previewResult\"},{\"$ref\":\"#/$defs/applyResult\"}],\"$defs\":{\"previewResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"plan\",\"planDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandCompletionPreviewResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_complete_demand\"},\"mode\":{\"const\":\"preview\"},\"status\":{\"const\":\"ready\"},\"plan\":{\"$ref\":\"#/$defs/plan\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"applyResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"disposition\",\"eventAuthority\",\"completion\",\"planDigest\",\"commandDigest\",\"event\",\"commit\",\"stateDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandCompletionApplyResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_complete_demand\"},\"mode\":{\"const\":\"apply\"},\"status\":{\"enum\":[\"completed\",\"already-completed\"]},\"disposition\":{\"enum\":[\"committed\",\"idempotent\"]},\"eventAuthority\":{\"const\":\"current\"},\"completion\":{\"$ref\":\"#/$defs/completion\"},\"planDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"commandDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"event\":{\"$ref\":\"#/$defs/eventReceipt\"},\"commit\":{\"$ref\":\"#/$defs/commitReceipt\"},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}},\"allOf\":[{\"if\":{\"properties\":{\"status\":{\"const\":\"completed\"}},\"required\":[\"status\"]},\"then\":{\"properties\":{\"disposition\":{\"const\":\"committed\"}}}},{\"if\":{\"properties\":{\"status\":{\"const\":\"already-completed\"}},\"required\":[\"status\"]},\"then\":{\"properties\":{\"disposition\":{\"const\":\"idempotent\"}}}}]},\"eventReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"eventId\",\"streamRevision\"],\"properties\":{\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"streamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991}}},\"commitReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"commitId\",\"commitSequence\",\"commitDigest\"],\"properties\":{\"commitId\":{\"$ref\":\"#/$defs/commitId\"},\"commitSequence\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"commitDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"plan\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"demandId\",\"expectedStreamRevision\",\"commitId\",\"eventId\",\"authority\",\"completion\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandCompletionPlan\"},\"schemaVersion\":{\"const\":1},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"expectedStreamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"commitId\":{\"$ref\":\"#/$defs/commitId\"},\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"authority\":{\"$ref\":\"#/$defs/authority\"},\"completion\":{\"$ref\":\"#/$defs/completion\"}}},\"authority\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"demandId\",\"identityDigest\",\"authorityRefs\",\"testingDecision\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-demand-authority\"},\"schemaVersion\":{\"const\":1},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"identityDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"authorityRefs\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/authorityMemberReference\"}},\"testingDecision\":{\"$ref\":\"#/$defs/testingDecision\"}}},\"completion\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"programId\",\"demandId\",\"controllerWindowId\",\"authorityDigest\",\"testingMode\",\"postAcceptanceRouteDigest\",\"reviewSnapshotDigest\",\"observedState\",\"packageSource\",\"completedAt\",\"completionDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandCompletion\"},\"schemaVersion\":{\"const\":1},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"controllerWindowId\":{\"$ref\":\"#/$defs/windowId\"},\"authorityDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"testingMode\":{\"enum\":[\"controller-only\",\"real-environment\"]},\"postAcceptanceRouteDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"reviewSnapshotDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"observedState\":{\"$ref\":\"#/$defs/observedState\"},\"packageSource\":{\"$ref\":\"#/$defs/packageSource\"},\"completedAt\":{\"$ref\":\"#/$defs/utcInstant\"},\"completionDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"authorityMemberReference\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"family\",\"recordId\",\"recordRef\",\"recordDigest\",\"memberPath\",\"memberRef\",\"memberDigest\",\"role\",\"mediaType\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-ledger-authority-member-reference\"},\"schemaVersion\":{\"const\":1},\"family\":{\"enum\":[\"requirement\"]},\"recordId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"recordRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"recordDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"memberPath\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"memberRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"memberDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"role\":{\"enum\":[\"requirement\",\"landing\",\"attachment\"]},\"mediaType\":{\"type\":\"string\",\"pattern\":\"^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$\"}}},\"testingDecision\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\",\"summary\",\"environmentMemberRef\"],\"properties\":{\"mode\":{\"enum\":[\"controller-only\",\"real-environment\",\"not-applicable\"]},\"summary\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"environmentMemberRef\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/portableResourcePath\"}]}}},\"observedState\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"streamRevision\",\"stateDigest\",\"lastEventId\",\"lastEventDigest\"],\"properties\":{\"streamRevision\":{\"type\":\"integer\",\"minimum\":1},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"lastEventId\":{\"$ref\":\"#/$defs/eventId\"},\"lastEventDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"nonEmptyText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"},\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"eventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"commitId\":{\"type\":\"string\",\"pattern\":\"^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"packageSource\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"requirementId\",\"recordRef\",\"recordDigest\",\"claimStateRevision\",\"claimStateDigest\"],\"properties\":{\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"recordRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"recordDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"claimStateRevision\":{\"type\":\"integer\",\"minimum\":2},\"claimStateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}}}}");
+export const WAKEFLOW_DEMAND_COMPLETION_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:demand-completion-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_COMPLETION_RESULT_SCHEMA\",\"title\":\"WakeflowDemandCompletionResultV1\",\"description\":\"wakeflow_complete_demand 的结果：preview 给出 verify 报告、归档引用与阻塞项；apply 与 recover 返回终态事件回执、归档回执、需求包回执与释放的工作声明数。\",\"type\":\"object\",\"oneOf\":[{\"$ref\":\"#/$defs/previewResult\"},{\"$ref\":\"#/$defs/mutationResult\"}],\"$defs\":{\"previewResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"status\",\"blockers\",\"planDigest\",\"demandId\",\"verify\",\"archiveRef\",\"next\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandCompletionPreview\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_complete_demand\"},\"mode\":{\"const\":\"preview\"},\"status\":{\"enum\":[\"ready\",\"blocked\"]},\"blockers\":{\"$ref\":\"#/$defs/blockers\"},\"planDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/sha256Digest\"}]},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"verify\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/verifyReport\"}]},\"archiveRef\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"#/$defs/portableResourcePath\"}]},\"next\":{\"$ref\":\"#/$defs/nextProjection\"}}},\"mutationResult\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"mode\",\"disposition\",\"demandId\",\"terminalEvent\",\"archive\",\"package\",\"releasedClaims\",\"next\"],\"properties\":{\"kind\":{\"const\":\"WakeflowDemandCompletionMutation\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_complete_demand\"},\"mode\":{\"enum\":[\"apply\",\"recover\"]},\"disposition\":{\"enum\":[\"completed\",\"current\",\"recovered\"]},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"terminalEvent\":{\"$ref\":\"#/$defs/eventReceipt\"},\"archive\":{\"$ref\":\"#/$defs/archiveReceipt\"},\"package\":{\"$ref\":\"#/$defs/packageReceipt\"},\"releasedClaims\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":1024},\"next\":{\"$ref\":\"#/$defs/nextProjection\"}}},\"verifyReport\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"observationDigest\",\"gates\"],\"properties\":{\"observationDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"gates\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":64,\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"gate\",\"status\",\"detail\"],\"properties\":{\"gate\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":64},\"status\":{\"enum\":[\"pass\",\"fail\",\"unavailable\"]},\"detail\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":256}]}}}}}},\"archiveReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"archiveRef\",\"payloadTreeDigest\",\"fileCount\",\"totalBytes\",\"manifestDigest\"],\"properties\":{\"archiveRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"payloadTreeDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"fileCount\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"totalBytes\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991},\"manifestDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"packageReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"requirementId\",\"recordRef\",\"recordDigest\",\"status\",\"revision\",\"stateDigest\"],\"properties\":{\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"recordRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"recordDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"status\":{\"enum\":[\"pending\",\"parked\",\"claimed\",\"withdrawn\",\"archived\"]},\"revision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"eventReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"eventId\",\"streamRevision\",\"commitId\"],\"properties\":{\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"streamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"commitId\":{\"$ref\":\"#/$defs/commitId\"}}},\"eventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"commitId\":{\"type\":\"string\",\"pattern\":\"^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root; never returned.\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"nextProjection\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"frontier\",\"owner\",\"suggestedTool\",\"blockers\"],\"properties\":{\"frontier\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}]},\"owner\":{\"enum\":[\"controller\",\"target\",\"test\",\"user\",\"none\"]},\"suggestedTool\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}]},\"blockers\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256}}}},\"blockers\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256}}}}");

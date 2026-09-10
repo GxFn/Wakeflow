@@ -37,7 +37,7 @@
 - `blocked` 只有 cancel 一条出路：进入 blocked 时评审被清成 idle，而 decide_review 又要求有 pending 候选。`wakeflow-result-review-orchestration.mjs:1546-1556`。
 - `recover_state_transition` 通用操作只能接受空请求；带 `expectedArtifactKind` 必失败。`wakeflow-demand-state-service.mjs:2018-2023`。
 
-**现 TS 状态**：状态由 15 种事件重放，Controller Route 投影 22 种责任前沿；`lifecycle.demand-cancelled` 与 `demand-completed` 事件存在，cancel 无调用方；`recover_state_transition` 与通用状态锁已按 ADR-0006 放弃，每个工具自带 recover。
+**现 TS 状态**：状态由 18 种事件重放（2026-09-04 L1 demand 切片增加 `lifecycle.demand-escalated`、`decision-recorded`、`demand-continued`），Controller Route 投影 23 种责任前沿与 `awaiting-decision` 判定；同一任务第三次 rework 由决定器自动附带升级事件（阈值常量 3）；`recover_state_transition` 与通用状态锁已按 ADR-0006 放弃，每个工具自带 recover。
 
 **实现判断**：终态集合统一为 `{completed, cancelled, archived}`；只有 Controller 提交事件的规则通过事件 owner 字段保持；旧的 10 个粗粒度状态不再作为存储字段，只作为从聚合派生的人读投影。
 
@@ -58,7 +58,7 @@
 - complete：评审 idle、零租约、每个目标任务 accepted 或 superseded 且 accepted 的选中一个 current 非 blocked 结果、任务包与测试卡全部 closed 或 superseded；只有 research 允许零目标完成；完成事件 `changedArtifacts: []`；不做 TODO 归档、不写工件、不关 Pod、不做业务归档。`:390-437`。
 - 生命周期失败闭合：同一锁下判定"什么都没写"或"事件已提交则向前完成租约释放"，否则 recovery-required；首次 apply 重建整份计划比对，漂移即 stale-plan。`:816-893`。
 
-**现 TS 状态**：`create_demand` 从 `{requirementId, demand}` 创建（2026-09-04 L1 requirement 的最小适配），权威从需求包记录单源收敛，根先建后在看板 CAS 认领，已有未终态的活动 Demand 时以 `active-demand-exists` 拒绝；`complete_demand` 公开，完成记录带 `packageSource` 但尚不把需求包置 archived；cancel 路径完整但不可达；continue 不存在；research 完成与实现重设计有 blocker。
+**现 TS 状态**（2026-09-04 L1 demand 切片，`src/capabilities/demand/`）：`create_demand` 的计划由需求包与看板认领状态确定性派生（demandId、事件与提交标识不含随机与时间），根先建后在看板 CAS 认领，已有活动 Demand 时 preview 报 `active-demand-exists`；`complete_demand` 完成即归档：preview 内嵌八道 verify 门，apply 一个事务写终态事件、封 `<ledger>/archives/<demandId>/<修订号>/`、置需求包 `archived`、删活动根，步骤日志在 `.wakeflow-active/current/lifecycle/`，recover 按日志重放；`cancel_demand` 同一事务，需求包置 `withdrawn`，释放本 Demand 的窗口工作声明，有待评审结果时拒绝；`continue_demand` 从归档重开（`demand-continued`，需求包回到 `claimed`，路由先要求新任务包，同一仓库允许再次规划）并承载 `record-decision`；`inspect_demand_route` 对已归档 Demand 返回归档回执。research 完成与实现重设计仍有 blocker。
 
 **实现判断**：create 的"根先于认领"顺序与四种结果状态保留；cancel 与 continue 在 L1 补公共入口；stale-plan 检测保留。
 

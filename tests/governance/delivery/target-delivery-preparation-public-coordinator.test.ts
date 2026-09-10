@@ -4,7 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
-import { executeDemandControllerRoutePublicRequest } from "../../../src/governance/controller/demand-controller-route-public-coordinator.js";
+import { inspectActiveRoute } from "../../capabilities/demand/route.fixture.js";
 import {
   parseTargetDeliveryPreparationPublicRequest,
   TargetDeliveryPreparationPublicContractError,
@@ -85,7 +85,7 @@ test("Preparation Public Contract拒绝非JSON、超容量和开放字段", () =
 test("Preparation Public Coordinator闭合preview/apply/route且不取得Claim", async () => {
   const fixture = await createTargetDeliveryPreparationWorkspaceFixture();
   try {
-    const routeBefore = await executeDemandControllerRoutePublicRequest({
+    const routeBefore = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.request.demandId,
     });
@@ -113,7 +113,7 @@ test("Preparation Public Coordinator闭合preview/apply/route且不取得Claim",
     equal(JSON.stringify(preview).includes(fixture.rawHandle), false);
     equal(readdirSync(fixture.bindingRootPath).length, 1);
 
-    const routeAfterPreview = await executeDemandControllerRoutePublicRequest({
+    const routeAfterPreview = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.request.demandId,
     });
@@ -162,7 +162,7 @@ test("Preparation Public Coordinator闭合preview/apply/route且不取得Claim",
     equal(existsSync(claimPath), false);
     equal(readdirSync(fixture.bindingRootPath).length, 1);
 
-    const routeAfterApply = await executeDemandControllerRoutePublicRequest({
+    const routeAfterApply = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.request.demandId,
     });
@@ -261,7 +261,7 @@ test("Preparation Public Coordinator闭合preview/apply/route且不取得Claim",
     equal(existsSync(claimPath), true);
     equal(JSON.stringify(lateReplay).includes(fixture.rawHandle), false);
 
-    const routeAfterClaim = await executeDemandControllerRoutePublicRequest({
+    const routeAfterClaim = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.request.demandId,
     });

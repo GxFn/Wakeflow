@@ -63,3 +63,7 @@
 - ambiguous 静默阈值与重发上限的具体数值。
 - `escalate` 备选方案上限与渲染格式。
 - approved 基线的存放位置：Demand 根下按 stepId 的不可变记录，还是归档时才固化。
+
+## 落地记录
+
+- 2026-09-04 L1 demand 切片：D3 完成即归档与取消同一事务落地（`wakeflow_complete_demand`、`wakeflow_cancel_demand`，归档包在 `<ledger>/archives/`，verify 报告入归档包）；D5 的 `lifecycle.demand-escalated`、`lifecycle.decision-recorded` 事件、`awaiting-decision` 路由判定与第三次 rework 刹车落地，用户回答经 `wakeflow_continue_demand{action: record-decision}`；阈值暂为常量 3，进配置留给观察切片。记录见 [consolidation-gate-log §13.79、§13.80](../progress/consolidation-gate-log.md)。

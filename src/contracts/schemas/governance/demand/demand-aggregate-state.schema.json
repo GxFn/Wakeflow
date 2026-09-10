@@ -51,6 +51,82 @@
     },
     "pendingTestRetest": {
       "$ref": "#/$defs/pendingTestRetest"
+    },
+    "awaitingDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["escalationEventId", "issue", "source"],
+      "properties": {
+        "escalationEventId": {
+          "$ref": "#/$defs/demandEventId"
+        },
+        "issue": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192,
+          "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+        },
+        "source": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "targetTaskId", "reworkCount"],
+              "properties": {
+                "kind": {
+                  "const": "rework-brake"
+                },
+                "targetTaskId": {
+                  "type": "string",
+                  "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                "reworkCount": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1024
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "targetTaskId", "targetReviewDecisionId", "decisionDigest"],
+              "properties": {
+                "kind": {
+                  "const": "review-decision"
+                },
+                "targetTaskId": {
+                  "type": "string",
+                  "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                "targetReviewDecisionId": {
+                  "type": "string",
+                  "pattern": "^target-review-decision_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                "decisionDigest": {
+                  "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "kind", "planningRequired"],
+      "properties": {
+        "eventId": {
+          "$ref": "#/$defs/demandEventId"
+        },
+        "kind": {
+          "enum": ["optimization", "requirement-supplement", "verified-bug"]
+        },
+        "planningRequired": {
+          "type": "boolean"
+        }
+      }
     }
   },
   "allOf": [
@@ -253,6 +329,11 @@
         },
         "productDefectRemediation": {
           "$ref": "#/$defs/productDefectRemediation"
+        },
+        "reworkCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
         }
       },
       "allOf": [

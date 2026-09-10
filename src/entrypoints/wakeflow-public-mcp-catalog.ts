@@ -8,12 +8,6 @@ import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_REQUEST_SCHEMA } from ".
 import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-controller-product-defect-remediation-result.generated.js";
 import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-controller-test-review-decision-request.generated.js";
 import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-controller-test-review-decision-result.generated.js";
-import { WAKEFLOW_DEMAND_COMPLETION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-demand-completion-request.generated.js";
-import { WAKEFLOW_DEMAND_COMPLETION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-demand-completion-result.generated.js";
-import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-demand-controller-route-request.generated.js";
-import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-demand-controller-route-result.generated.js";
-import { WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-demand-publication-request.generated.js";
-import { WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-demand-publication-result.generated.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-request.generated.js";
@@ -41,8 +35,6 @@ import { WAKEFLOW_TEST_CARD_PLANNING_REQUEST_SCHEMA } from "../contracts/generat
 import { WAKEFLOW_TEST_CARD_PLANNING_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-card-planning-result.generated.js";
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-delivery-preparation-request.generated.js";
 import { WAKEFLOW_TEST_DELIVERY_PREPARATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-test-delivery-preparation-result.generated.js";
-import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../governance/controller/demand-controller-route-public-contract.js";
-import type { DemandControllerRoutePublicResult } from "../governance/controller/demand-controller-route-public-coordinator.js";
 import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../governance/delivery/target-delivery-preparation-public-contract.js";
 import type { TargetDeliveryPreparationPublicResult } from "../governance/delivery/target-delivery-preparation-public-coordinator.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../governance/delivery/target-host-effect-claim-public-contract.js";
@@ -51,12 +43,8 @@ import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../governa
 import type { TargetHostEffectOutcomePublicResult } from "../governance/delivery/target-host-effect-outcome-public-coordinator.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME } from "../governance/delivery/target-host-effect-rearm-public-contract.js";
 import type { TargetHostEffectRearmPublicResult } from "../governance/delivery/target-host-effect-rearm-public-coordinator.js";
-import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../governance/demand/publication/demand-publication-public-contract.js";
-import type { DemandPublicationPublicResult } from "../governance/demand/publication/demand-publication-public-coordinator.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../governance/evidence/managed-evidence-public-contract.js";
 import type { ManagedEvidencePublicResult } from "../governance/evidence/managed-evidence-public-coordinator.js";
-import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../governance/lifecycle/demand-completion-public-contract.js";
-import type { DemandCompletionPublicResult } from "../governance/lifecycle/demand-completion-public-coordinator.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../governance/result/target-result-import-public-contract.js";
 import type { TargetResultImportPublicResult } from "../governance/result/target-result-import-public-coordinator.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../governance/review/controller-implementation-review-decision-public-contract.js";
@@ -79,6 +67,18 @@ import {
   type WakeflowToolCatalog,
   type WakeflowToolRegistration,
 } from "../kernel/tool-registry.js";
+import {
+  DEMAND_CANCELLATION_TOOL_REGISTRATION,
+  DEMAND_COMPLETION_TOOL_REGISTRATION,
+  DEMAND_CONTINUATION_TOOL_REGISTRATION,
+  DEMAND_CREATION_TOOL_REGISTRATION,
+  DEMAND_ROUTE_INSPECTION_TOOL_REGISTRATION,
+  type DemandCancellationResult,
+  type DemandCompletionResult,
+  type DemandContinuationResult,
+  type DemandCreationResult,
+  type DemandRouteInspectionResult,
+} from "../capabilities/demand/contract.js";
 import { WINDOW_BINDING_TOOL_REGISTRATION } from "../capabilities/endpoint/contract.js";
 import {
   BOARD_INSPECTION_TOOL_REGISTRATION,
@@ -102,11 +102,13 @@ import type { WakeflowPublicMcpExecutor } from "./wakeflow-public-mcp-tool.js";
 export interface WakeflowPublicMcpExecutors {
   readonly authorizeProductDefectRemediation: WakeflowPublicMcpExecutor<ControllerProductDefectRemediationPublicResult>;
   readonly claimTargetHostEffect: WakeflowPublicMcpExecutor<TargetHostEffectClaimPublicResult>;
-  readonly completeDemand: WakeflowPublicMcpExecutor<DemandCompletionPublicResult>;
-  readonly createDemand: WakeflowPublicMcpExecutor<DemandPublicationPublicResult>;
+  readonly cancelDemand: WakeflowPublicMcpExecutor<DemandCancellationResult>;
+  readonly completeDemand: WakeflowPublicMcpExecutor<DemandCompletionResult>;
+  readonly continueDemand: WakeflowPublicMcpExecutor<DemandContinuationResult>;
+  readonly createDemand: WakeflowPublicMcpExecutor<DemandCreationResult>;
   readonly executeMaintenance: WakeflowPublicMcpExecutor<WakeflowMaintenancePublicResult>;
   readonly importTargetResult: WakeflowPublicMcpExecutor<TargetResultImportPublicResult>;
-  readonly inspectDemandRoute: WakeflowPublicMcpExecutor<DemandControllerRoutePublicResult>;
+  readonly inspectDemandRoute: WakeflowPublicMcpExecutor<DemandRouteInspectionResult>;
   readonly inspectTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewInspectionPublicResult>;
   readonly planTargetTask: WakeflowPublicMcpExecutor<WakeflowTargetTaskPlanningResultV1>;
   readonly planTestCard: WakeflowPublicMcpExecutor<TestCardPlanningPublicResult>;
@@ -171,30 +173,11 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
   WINDOW_BINDING_TOOL_REGISTRATION satisfies Registration,
   REQUIREMENT_PUBLICATION_TOOL_REGISTRATION satisfies Registration,
   BOARD_INSPECTION_TOOL_REGISTRATION satisfies Registration,
-  {
-    name: WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
-    slice: "demand",
-    shape: "effect",
-    executor: "createDemand",
-    title: "Create Wakeflow Demand",
-    description:
-      "Preview, apply, or explicitly recover one Demand publication that claims a pending requirement package: preview derives Program, Demand type, testing decision, Ledger authority from the package record, identities, Event and Commit data, and the board claim CAS from current authority, and refuses a second active Demand; apply takes the exact preview plan and digest (root first, then claim), and recover takes a Demand ID with durable sidecar evidence. Main placement only until pods land. This tool performs no host effect and returns no machine path.",
-    requestSchema: WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA,
-    annotations: DESTRUCTIVE,
-  },
-  {
-    name: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
-    slice: "observation",
-    shape: "read",
-    executor: "inspectDemandRoute",
-    title: "Inspect Wakeflow Demand Route",
-    description:
-      "Inspect one current, read-only Demand Controller Route derived from the verified Config, Demand Event Stream, Review Snapshot, and Post-Acceptance Route, identifying typed responsibility frontiers and capability blockers without workspace paths, host handles, prompts, or full business records. This observation never authorizes a mutation, host effect, review decision, or acceptance.",
-    requestSchema: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA,
-    annotations: READ_ONLY,
-  },
+  DEMAND_CREATION_TOOL_REGISTRATION satisfies Registration,
+  DEMAND_ROUTE_INSPECTION_TOOL_REGISTRATION satisfies Registration,
+  DEMAND_COMPLETION_TOOL_REGISTRATION satisfies Registration,
+  DEMAND_CANCELLATION_TOOL_REGISTRATION satisfies Registration,
+  DEMAND_CONTINUATION_TOOL_REGISTRATION satisfies Registration,
   {
     name: WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
     slice: "evidence",
@@ -360,18 +343,6 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
       "Authorize bounded remediation of exact existing Implementation TaskPackage baselines only when the current Demand Route selects Product Defect Remediation Authorization, carrying the exact product-defect Test Decision, post-acceptance Route digest, affected product Target identities, failed-check mappings, correction objectives, and Controller rationale while Wakeflow derives every baseline and Event identity. It does not create Delivery, execute a fix, let Test modify product code, create the next TestCard, or complete the Demand.",
     requestSchema: WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_RESULT_SCHEMA,
-    annotations: DESTRUCTIVE,
-  },
-  {
-    name: WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-    slice: "demand",
-    shape: "effect",
-    executor: "completeDemand",
-    title: "Complete Wakeflow Demand",
-    description:
-      "Preview or apply one exact successful Demand terminal transition only when the current Route selects Demand Completion Preflight: preview exposes the immutable Completion plan, apply revalidates current Config, Demand Authority, accepted Implementation and required Test closure, the claimed requirement package, absent participating WorkClaims, and Event Stream position before appending the terminal Event. Completion is not Archive yet: it does not mark the package archived, move the Demand, create a BusinessArchive, close host windows, or prune transport.",
-    requestSchema: WAKEFLOW_DEMAND_COMPLETION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_DEMAND_COMPLETION_RESULT_SCHEMA,
     annotations: DESTRUCTIVE,
   },
 ]);

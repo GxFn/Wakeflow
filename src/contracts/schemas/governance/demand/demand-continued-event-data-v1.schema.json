@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:demand-continued-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowDemandContinuedEventDataV1",
+  "description": "lifecycle.demand-continued persisted event v1 的严格 payload：从归档重开一个已完成 Demand 的续接谱系。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["continuation"],
+  "properties": {
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "summary",
+        "archiveRef",
+        "archiveManifestDigest",
+        "previousStreamRevision"
+      ],
+      "properties": {
+        "kind": {
+          "enum": ["optimization", "requirement-supplement", "verified-bug"]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+        },
+        "archiveRef": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "archiveManifestDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "previousStreamRevision": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 9007199254740991
+        }
+      }
+    }
+  }
+}

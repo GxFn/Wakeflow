@@ -29,7 +29,9 @@ function defaultMcpExecutors(): WakeflowMcpExecutorSet {
     authorizeProductDefectRemediation: async () =>
       unexpectedMcpExecutor("authorizeProductDefectRemediation"),
     claimTargetHostEffect: async () => unexpectedMcpExecutor("claimTargetHostEffect"),
+    cancelDemand: async () => unexpectedMcpExecutor("cancelDemand"),
     completeDemand: async () => unexpectedMcpExecutor("completeDemand"),
+    continueDemand: async () => unexpectedMcpExecutor("continueDemand"),
     createDemand: async () => unexpectedMcpExecutor("createDemand"),
     recordManagedEvidence: async () => unexpectedMcpExecutor("recordManagedEvidence"),
     publishRequirement: async () => unexpectedMcpExecutor("publishRequirement"),

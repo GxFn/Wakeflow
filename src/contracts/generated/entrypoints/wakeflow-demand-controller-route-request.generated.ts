@@ -6,7 +6,7 @@
 export type DemandId = string
 
 /**
- * Closed read-only MCP request for inspecting one Demand Controller Route.
+ * wakeflow_inspect_demand_route 的只读请求：一个 Demand 的当前 Controller Route；已归档的 Demand 返回归档回执。
  */
 export interface WakeflowDemandControllerRouteRequestV1 {
 /**
@@ -37,4 +37,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:demand-controller-route-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA\",\"title\":\"WakeflowDemandControllerRouteRequestV1\",\"description\":\"Closed read-only MCP request for inspecting one Demand Controller Route.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"demandId\"],\"properties\":{\"root\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root.\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"}},\"$defs\":{\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"}}}");
+export const WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:demand-controller-route-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA\",\"title\":\"WakeflowDemandControllerRouteRequestV1\",\"description\":\"wakeflow_inspect_demand_route 的只读请求：一个 Demand 的当前 Controller Route；已归档的 Demand 返回归档回执。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"demandId\"],\"properties\":{\"root\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root.\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"}},\"$defs\":{\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"}}}");

@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:demand-continuation-result:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_CONTINUATION_RESULT_SCHEMA",
+  "title": "WakeflowDemandContinuationResultV1",
+  "description": "wakeflow_continue_demand 的结果：preview 给出阻塞项与计划摘要；apply 与 recover 返回事件回执与需求包回执。",
+  "type": "object",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/previewResult"
+    },
+    {
+      "$ref": "#/$defs/mutationResult"
+    }
+  ],
+  "$defs": {
+    "previewResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "action",
+        "status",
+        "blockers",
+        "planDigest",
+        "demandId",
+        "next"
+      ],
+      "properties": {
+        "kind": {
+          "const": "WakeflowDemandContinuationPreview"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "tool": {
+          "const": "wakeflow_continue_demand"
+        },
+        "mode": {
+          "const": "preview"
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        },
+        "status": {
+          "enum": ["ready", "blocked"]
+        },
+        "blockers": {
+          "$ref": "#/$defs/blockers"
+        },
+        "planDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          ]
+        },
+        "demandId": {
+          "$ref": "#/$defs/demandId"
+        },
+        "next": {
+          "$ref": "#/$defs/nextProjection"
+        }
+      }
+    },
+    "mutationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "action",
+        "disposition",
+        "demandId",
+        "event",
+        "package",
+        "next"
+      ],
+      "properties": {
+        "kind": {
+          "const": "WakeflowDemandContinuationMutation"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "tool": {
+          "const": "wakeflow_continue_demand"
+        },
+        "mode": {
+          "enum": ["apply", "recover"]
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        },
+        "disposition": {
+          "enum": ["continued", "decision-recorded", "current", "recovered"]
+        },
+        "demandId": {
+          "$ref": "#/$defs/demandId"
+        },
+        "event": {
+          "$ref": "#/$defs/eventReceipt"
+        },
+        "package": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/packageReceipt"
+            }
+          ]
+        },
+        "next": {
+          "$ref": "#/$defs/nextProjection"
+        }
+      }
+    },
+    "action": {
+      "enum": ["continue", "record-decision"]
+    },
+    "packageReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirementId",
+        "recordRef",
+        "recordDigest",
+        "status",
+        "revision",
+        "stateDigest"
+      ],
+      "properties": {
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "recordRef": {
+          "$ref": "#/$defs/portableResourcePath"
+        },
+        "recordDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "status": {
+          "enum": ["pending", "parked", "claimed", "withdrawn", "archived"]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "stateDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "eventReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "streamRevision", "commitId"],
+      "properties": {
+        "eventId": {
+          "$ref": "#/$defs/eventId"
+        },
+        "streamRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "commitId": {
+          "$ref": "#/$defs/commitId"
+        }
+      }
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "commitId": {
+      "type": "string",
+      "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "portableResourcePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
+    },
+    "workspaceRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute path of the existing Wakeflow workspace root; never returned."
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "nextProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontier", "owner", "suggestedTool", "blockers"],
+      "properties": {
+        "frontier": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "owner": {
+          "enum": ["controller", "target", "test", "user", "none"]
+        },
+        "suggestedTool": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    }
+  }
+}

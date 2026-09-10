@@ -619,72 +619,76 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const completionResult = readSchema(
     "src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json",
   );
+  const cancellationRequest = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-request.schema.json",
+  );
+  const cancellationResult = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-result.schema.json",
+  );
+  // 完成即归档（ADR-0012 D3）：终态请求不回显计划，apply 只带 planDigest；取消多一个 reason。
+  for (const [request, fields] of [
+    [completionRequest, ["demandId", "mode", "planDigest", "root"]],
+    [cancellationRequest, ["demandId", "mode", "planDigest", "reason", "root"]],
+  ] as const) {
+    equal(Object.hasOwn(request.$defs as JsonObject, "plan"), false);
+    deepEqual(
+      Object.keys(definition(request, "effectRequest").properties as JsonObject).sort(),
+      [...fields],
+      "Demand terminal requests carry no plan echo",
+    );
+    deepEqual(Object.keys(definition(request, "recoverRequest").properties as JsonObject).sort(), [
+      "mode",
+      "operationId",
+      "root",
+    ]);
+  }
   for (const sharedDefinition of [
-    "plan",
-    "authority",
-    "completion",
-    "authorityMemberReference",
-    "testingDecision",
-    "observedState",
-    "packageSource",
-    "nonEmptyText",
+    "verifyReport",
+    "archiveReceipt",
+    "packageReceipt",
+    "eventReceipt",
+    "nextProjection",
+    "blockers",
     "portableResourcePath",
     "sha256Digest",
-    "utcInstant",
     "requirementId",
-    "programId",
     "demandId",
-    "windowId",
     "eventId",
     "commitId",
   ]) {
     deepEqual(
-      definition(completionRequest, sharedDefinition),
       definition(completionResult, sharedDefinition),
-      `Demand Completion wire definition ${sharedDefinition} must not drift`,
+      definition(cancellationResult, sharedDefinition),
+      `Demand terminal wire definition ${sharedDefinition} must not drift`,
     );
   }
-
-  const domainCompletion = readSchema(
-    "src/contracts/schemas/governance/lifecycle/demand-completion.schema.json",
-  );
-  const publicCompletion = definition(completionRequest, "completion");
   deepEqual(
-    [...(publicCompletion.required as string[])].sort(),
-    [...(domainCompletion.required as string[])].sort(),
+    [...(definition(completionResult, "archiveReceipt").required as string[])].sort(),
+    ["archiveRef", "fileCount", "manifestDigest", "payloadTreeDigest", "totalBytes"],
+    "Public archive receipt names the sealed package without machine paths",
   );
-  deepEqual(
-    Object.keys(publicCompletion.properties as Record<string, unknown>).sort(),
-    Object.keys(domainCompletion.properties as Record<string, unknown>).sort(),
-    "Public Completion fields must mirror the domain Completion",
+  const archiveManifest = readSchema(
+    "src/contracts/schemas/governance/archive/demand-archive-manifest.schema.json",
   );
+  deepEqual((archiveManifest.properties as JsonObject).outcome, {
+    enum: ["completed", "cancelled"],
+  });
+  const verifyGates = (definition(completionResult, "verifyReport").properties as JsonObject)
+    .gates as JsonObject;
+  deepEqual(((verifyGates.items as JsonObject).properties as JsonObject).status, {
+    enum: ["pass", "fail", "unavailable"],
+  });
+  const packageStatus = (definition(completionResult, "packageReceipt").properties as JsonObject)
+    .status as JsonObject;
+  deepEqual(packageStatus, {
+    enum: ["pending", "parked", "claimed", "withdrawn", "archived"],
+  });
 
   const domainAuthority = readSchema(
     "src/contracts/schemas/governance/demand/demand-authority.schema.json",
   );
-  const publicAuthority = definition(completionRequest, "authority");
-  deepEqual(
-    [...(publicAuthority.required as string[])].sort(),
-    [...(domainAuthority.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicAuthority.properties as Record<string, unknown>).sort(),
-    Object.keys(domainAuthority.properties as Record<string, unknown>).sort(),
-    "Public Completion plan Authority fields must mirror Demand Authority",
-  );
-
   const domainAuthorityMember = readSchema(
     "src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json",
-  );
-  const publicAuthorityMember = definition(completionRequest, "authorityMemberReference");
-  deepEqual(
-    [...(publicAuthorityMember.required as string[])].sort(),
-    [...(domainAuthorityMember.required as string[])].sort(),
-  );
-  deepEqual(
-    Object.keys(publicAuthorityMember.properties as Record<string, unknown>).sort(),
-    Object.keys(domainAuthorityMember.properties as Record<string, unknown>).sort(),
-    "Public Completion plan Authority reference fields must mirror Ledger Authority",
   );
 
   const testCardPlanningRequest = readSchema(

@@ -117,6 +117,11 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
     tool: "wakeflow_complete_demand",
   },
   "research-completion-required": { owner: "user", tool: null },
+  "decision-required": { owner: "user", tool: "wakeflow_continue_demand" },
+  "demand-continuation": {
+    owner: "controller",
+    tool: "wakeflow_continue_demand",
+  },
 });
 
 export function deriveNextProjection(
@@ -133,6 +138,14 @@ export function deriveNextProjection(
     });
   }
   const mapped = NEXT_FRONTIER_TABLE[first.kind];
+  if (route.disposition === "awaiting-decision") {
+    return Object.freeze({
+      frontier: first.kind,
+      owner: "user",
+      suggestedTool: mapped?.tool ?? null,
+      blockers,
+    });
+  }
   if (route.disposition === "blocked") {
     return Object.freeze({
       frontier: first.kind,

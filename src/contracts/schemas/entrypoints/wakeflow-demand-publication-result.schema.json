@@ -3,28 +3,35 @@
   "$id": "urn:wakeflow:entrypoints:demand-publication-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA",
   "title": "WakeflowDemandPublicationResultV1",
-  "description": "Successful preview, apply, or recovery result for one requirement-package-backed Demand Event Sourcing publication.",
-  "$comment": "Preview carries the complete owner-produced plan for review. Apply and recover return only stable publication receipts; full Aggregate, Demand Authority content, board claim snapshots, machine paths, and host effects are not public results.",
+  "description": "wakeflow_create_demand 的结果：preview 给出确定性计划摘要、派生的 demandId 与阻塞项；apply 与 recover 只返回稳定回执（身份与权威摘要、事件与提交、看板认领），不回显聚合、权威内容或路径。",
   "type": "object",
   "oneOf": [
     {
       "$ref": "#/$defs/previewResult"
     },
     {
-      "$ref": "#/$defs/applyResult"
-    },
-    {
-      "$ref": "#/$defs/recoveryResult"
+      "$ref": "#/$defs/mutationResult"
     }
   ],
   "$defs": {
     "previewResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "schemaVersion", "tool", "mode", "status", "plan", "planDigest"],
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "status",
+        "blockers",
+        "planDigest",
+        "demandId",
+        "requirementId",
+        "next"
+      ],
       "properties": {
         "kind": {
-          "const": "WakeflowDemandPublicationPreviewResult"
+          "const": "WakeflowDemandCreationPreview"
         },
         "schemaVersion": {
           "const": 1
@@ -36,23 +43,46 @@
           "const": "preview"
         },
         "status": {
-          "const": "ready"
+          "enum": ["ready", "blocked"]
         },
-        "plan": {
-          "$ref": "#/$defs/publicationPlan"
+        "blockers": {
+          "$ref": "#/$defs/blockers"
         },
         "planDigest": {
-          "$ref": "#/$defs/sha256Digest"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          ]
+        },
+        "demandId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/demandId"
+            }
+          ]
+        },
+        "requirementId": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "next": {
+          "$ref": "#/$defs/nextProjection"
         }
       }
     },
-    "applyResult": {
+    "mutationResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "schemaVersion", "tool", "mode", "status", "planDigest", "publication"],
+      "required": ["kind", "schemaVersion", "tool", "mode", "disposition", "publication", "next"],
       "properties": {
         "kind": {
-          "const": "WakeflowDemandPublicationApplyResult"
+          "const": "WakeflowDemandCreationMutation"
         },
         "schemaVersion": {
           "const": 1
@@ -61,41 +91,16 @@
           "const": "wakeflow_create_demand"
         },
         "mode": {
-          "const": "apply"
+          "enum": ["apply", "recover"]
         },
-        "status": {
-          "const": "current"
-        },
-        "planDigest": {
-          "$ref": "#/$defs/sha256Digest"
+        "disposition": {
+          "enum": ["created", "current", "recovered"]
         },
         "publication": {
           "$ref": "#/$defs/publicationReceipt"
-        }
-      }
-    },
-    "recoveryResult": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "schemaVersion", "tool", "mode", "status", "publication"],
-      "properties": {
-        "kind": {
-          "const": "WakeflowDemandPublicationRecoveryResult"
         },
-        "schemaVersion": {
-          "const": 1
-        },
-        "tool": {
-          "const": "wakeflow_create_demand"
-        },
-        "mode": {
-          "const": "recover"
-        },
-        "status": {
-          "const": "current"
-        },
-        "publication": {
-          "$ref": "#/$defs/publicationReceipt"
+        "next": {
+          "$ref": "#/$defs/nextProjection"
         }
       }
     },
@@ -103,7 +108,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "publicationAuthority",
         "demandId",
         "identityDigest",
         "authorityDigest",
@@ -114,9 +118,6 @@
         "claim"
       ],
       "properties": {
-        "publicationAuthority": {
-          "const": "current"
-        },
         "demandId": {
           "$ref": "#/$defs/demandId"
         },
@@ -130,56 +131,56 @@
           "$ref": "#/$defs/sha256Digest"
         },
         "event": {
-          "$ref": "#/$defs/eventReceipt"
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["eventId", "streamRevision"],
+          "properties": {
+            "eventId": {
+              "$ref": "#/$defs/eventId"
+            },
+            "streamRevision": {
+              "const": 1
+            }
+          }
         },
         "commit": {
-          "$ref": "#/$defs/commitReceipt"
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commitId", "commitSequence", "commitDigest"],
+          "properties": {
+            "commitId": {
+              "$ref": "#/$defs/commitId"
+            },
+            "commitSequence": {
+              "const": 1
+            },
+            "commitDigest": {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          }
         },
         "stateDigest": {
           "$ref": "#/$defs/sha256Digest"
         },
         "claim": {
-          "$ref": "#/$defs/claimReceipt"
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requirementId", "stateRevision", "stateDigest"],
+          "properties": {
+            "requirementId": {
+              "$ref": "#/$defs/requirementId"
+            },
+            "stateRevision": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 9007199254740991
+            },
+            "stateDigest": {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          }
         }
       }
-    },
-    "eventReceipt": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["eventId", "streamRevision"],
-      "properties": {
-        "eventId": {
-          "$ref": "#/$defs/eventId"
-        },
-        "streamRevision": {
-          "const": 1
-        }
-      }
-    },
-    "commitReceipt": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["commitId", "commitSequence", "commitDigest"],
-      "properties": {
-        "commitId": {
-          "$ref": "#/$defs/commitId"
-        },
-        "commitSequence": {
-          "const": 1
-        },
-        "commitDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        }
-      }
-    },
-    "publicationPlan": {
-      "type": "object",
-      "description": "Complete owner-produced Demand Event Sourcing publication transaction. Its exact domain shape is revalidated before Apply.",
-      "minProperties": 1
-    },
-    "demandId": {
-      "type": "string",
-      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "eventId": {
       "type": "string",
@@ -189,30 +190,74 @@
       "type": "string",
       "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
+    "workspaceRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute path of the existing Wakeflow workspace root; never returned."
+    },
     "sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "claimReceipt": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["requirementId", "stateRevision", "stateDigest"],
-      "properties": {
-        "requirementId": {
-          "$ref": "#/$defs/requirementId"
-        },
-        "stateRevision": {
-          "type": "integer",
-          "minimum": 2
-        },
-        "stateDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        }
-      }
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "requirementId": {
       "type": "string",
       "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "nextProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontier", "owner", "suggestedTool", "blockers"],
+      "properties": {
+        "frontier": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "owner": {
+          "enum": ["controller", "target", "test", "user", "none"]
+        },
+        "suggestedTool": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
     }
   }
 }

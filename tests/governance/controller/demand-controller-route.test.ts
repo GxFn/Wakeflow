@@ -7,6 +7,7 @@ import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wa
 import type { WakeflowDemandControllerRouteResultV1 as RouteResultWire } from "../../../src/contracts/generated/entrypoints/wakeflow-demand-controller-route-result.generated.js";
 import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA } from "../../../src/contracts/generated/entrypoints/wakeflow-demand-controller-route-result.generated.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
 import { createRuntimeJsonSchemaValidator } from "../../../src/foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
@@ -336,11 +337,12 @@ test("Controller Route不会把尚未支持的isolated Test Planning声明为可
       WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA,
     );
     const result = {
-      kind: "WakeflowDemandControllerRouteInspectionResult",
+      kind: "WakeflowDemandRouteInspection",
       schemaVersion: 1,
       tool: "wakeflow_inspect_demand_route",
       status: "current",
       route,
+      next: deriveNextProjection(route),
     };
     equal(validateResult(result).ok, true);
     const missingSource = structuredClone(result) as typeof result & {

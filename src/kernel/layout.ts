@@ -22,7 +22,7 @@ const REQUIREMENT_ID_PATTERN =
   /^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 /** 共享活动根的当前段：`.wakeflow-active/current`。 */
-const WAKEFLOW_ACTIVE_CURRENT_ROOT_REF = parsePortableResourcePath(
+export const WAKEFLOW_ACTIVE_CURRENT_ROOT_REF = parsePortableResourcePath(
   ".wakeflow-active/current",
   "$layout",
 );
@@ -38,6 +38,50 @@ export const REQUIREMENT_BOARD_INDEX_REF = parsePortableResourcePath(
   `${REQUIREMENT_BOARD_ROOT_REF}/index.md`,
   "$layout",
 );
+
+const DEMAND_ID_PATTERN =
+  /^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+function parseDemandIdText(value: string): string {
+  if (!DEMAND_ID_PATTERN.test(value)) fail("invalid-request", "demand-id", "$demandId");
+  return value;
+}
+
+/** 生命周期事务（完成、取消、续接）的步骤日志目录（0700）；活动根删除后日志仍可恢复。 */
+export const DEMAND_LIFECYCLE_JOURNALS_ROOT_REF = parsePortableResourcePath(
+  `${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/lifecycle`,
+  "$layout",
+);
+
+/** 一个 Demand 的生命周期事务日志：`.wakeflow-active/current/lifecycle/<demandId>.json`。 */
+export function demandLifecycleJournalRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${DEMAND_LIFECYCLE_JOURNALS_ROOT_REF}/${parseDemandIdText(demandId)}.json`,
+    "$layout",
+  );
+}
+
+/** Ledger 内归档包容器（tracked，0755）。 */
+const LEDGER_ARCHIVES_ROOT_REF = parsePortableResourcePath("archives", "$layout");
+
+/** 一个 Demand 归档包：`<ledger>/archives/<demandId>/<终态事件流修订号，十位>/`。 */
+export function demandArchiveRef(demandId: string, streamRevision: number): PortableResourcePath {
+  if (!Number.isSafeInteger(streamRevision) || streamRevision < 2) {
+    fail("invalid-request", "archive-stream-revision", "$streamRevision");
+  }
+  return parsePortableResourcePath(
+    `${LEDGER_ARCHIVES_ROOT_REF}/${parseDemandIdText(demandId)}/${String(streamRevision).padStart(10, "0")}`,
+    "$layout",
+  );
+}
+
+/** 一个 Demand 的全部归档包所在目录。 */
+export function demandArchivesRootRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${LEDGER_ARCHIVES_ROOT_REF}/${parseDemandIdText(demandId)}`,
+    "$layout",
+  );
+}
 
 /** 一个需求包的认领状态文件：`.wakeflow-active/current/board/<requirementId>.json`。 */
 export function requirementClaimStateRef(requirementId: string): PortableResourcePath {

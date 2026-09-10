@@ -309,6 +309,23 @@ export function archiveRequirementClaim(
   });
 }
 
+/** archived → claimed：continue 从归档重开同一个 Demand，只允许归档时的那个 Demand。 */
+export function reclaimRequirementPackage(
+  current: RequirementClaimState,
+  demandId: string,
+  at: UtcInstant,
+): RequirementClaimState {
+  requireStatus(current, ["archived"], "reclaim");
+  if (current.archive === null || current.archive.demandId !== demandId) {
+    fail("precondition-failed", "claim-reclaim-other-demand", "$claimState.archive");
+  }
+  return advance(current, at, {
+    status: "claimed",
+    archive: null,
+    claim: { demandId, claimedAt: parseUtcInstant(at, "$at") },
+  });
+}
+
 function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
   return signal === undefined ? {} : { signal };
 }

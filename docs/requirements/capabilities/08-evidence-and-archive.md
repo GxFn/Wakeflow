@@ -49,7 +49,7 @@
 - 恢复四种合法前缀：活动根在则推进；tombstone 加 sidecar 加 ledger 归档则从 tombstone 完成；sidecar 加 ledger 则从 sidecar 完成；只有 ledger 则返回投影；其余组合全部失败。重复 apply 收敛到同一归档。`:3440-3480`。
 - 明确不做：不关宿主、不删 worktree、不删传输记录。
 
-**现 TS 状态**：没有归档；`loaded-artifact-tree-transfer-*` 四个 foundation 模块为此冻结待用。
+**现 TS 状态**（2026-09-04 L1 demand 切片）：完成与取消都封归档包 `<ledger>/archives/<demandId>/<终态事件流修订号>/`，成员 `manifest.json`（谱系、终态事件回执、verify 摘要、负载树摘要）、`verify-report.json` 与 `payload/**`（Demand 根去掉可重建的 snapshots、index、append-candidates），tracked 0755/0644；隐私门只拒绝凭证类命中；活动根在负载摘要与归档一致后删除；worktree 来源成员留空位给 pod 切片。`loaded-artifact-tree-transfer-*` 未被消费，归档用 `directory-tree-candidate` 整树发布。
 
 **实现判断**：归档内容形状保留，增加 worktree 来源成员，即 worktree 引用、基线提交、最终树摘要，取代"来源树必须精确匹配"；不整体归档 worktree 内容，只归档摘要与显式记录的证据；`archiveKind` 只保留 `demand`；活动根删除的做法保留；归档时检查该 Demand 的窗口工作声明已全部释放并把未释放的暴露给操作者。
 

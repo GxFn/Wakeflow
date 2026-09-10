@@ -1,3 +1,21 @@
+import type { WakeflowDecisionRecordedEventDataV1 } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
+import type { WakeflowDemandContinuedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
+import type { WakeflowDemandEscalatedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import {
+  parseJsonValue,
+  JsonValueError,
+  type JsonValue,
+} from "../../../foundation/data/json-value.js";
+import {
+  createRuntimeJsonSchemaValidator,
+  type RuntimeJsonSchemaValidator,
+} from "../../../foundation/schema/runtime-json-schema.js";
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import {
   parseSha256Digest,
@@ -135,6 +153,41 @@ export interface DemandCompletedUncommittedEvent {
   }>;
 }
 
+/** 升级：问题、需求章节引用、证据、备选方案、建议与来源（ADR-0012 D5）。 */
+export type DemandEscalation = Readonly<WakeflowDemandEscalatedEventDataV1["escalation"]>;
+export type DemandDecisionRecord = Readonly<WakeflowDecisionRecordedEventDataV1["decision"]>;
+export type DemandContinuation = Readonly<WakeflowDemandContinuedEventDataV1["continuation"]>;
+
+export interface DemandEscalatedUncommittedEvent {
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly recordedAt: UtcInstant;
+  readonly eventType: "lifecycle.demand-escalated";
+  readonly data: Readonly<{
+    readonly escalation: DemandEscalation;
+  }>;
+}
+
+export interface DecisionRecordedUncommittedEvent {
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly recordedAt: UtcInstant;
+  readonly eventType: "lifecycle.decision-recorded";
+  readonly data: Readonly<{
+    readonly decision: DemandDecisionRecord;
+  }>;
+}
+
+export interface DemandContinuedUncommittedEvent {
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly recordedAt: UtcInstant;
+  readonly eventType: "lifecycle.demand-continued";
+  readonly data: Readonly<{
+    readonly continuation: DemandContinuation;
+  }>;
+}
+
 export interface ManagedEvidenceRecordedUncommittedEvent {
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly demandId: WakeflowDurableId<"demand">;
@@ -260,6 +313,9 @@ export type DemandUncommittedEvent =
   | DemandPublishedUncommittedEvent
   | DemandCancelledUncommittedEvent
   | DemandCompletedUncommittedEvent
+  | DemandEscalatedUncommittedEvent
+  | DecisionRecordedUncommittedEvent
+  | DemandContinuedUncommittedEvent
   | ManagedEvidenceRecordedUncommittedEvent
   | TestCardCreatedUncommittedEvent
   | TargetTaskPlannedUncommittedEvent
@@ -291,6 +347,7 @@ export type DemandEventSourcingEventErrorReason =
   | "controller-product-defect-remediation-authorization"
   | "controller-target-review-resume"
   | "demand-completion"
+  | "lifecycle-data"
   | "managed-evidence-manifest"
   | "test-card"
   | "test-card-generation-source"
@@ -326,6 +383,8 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing event contains an invalid Controller Target Review Resume.",
   "demand-completion":
     "Demand Event Sourcing event contains an invalid Demand Completion.",
+  "lifecycle-data":
+    "Demand Event Sourcing event carries invalid lifecycle data.",
   "managed-evidence-manifest":
     "Demand Event Sourcing event contains an invalid Managed Evidence Manifest.",
   "test-card": "Demand Event Sourcing event contains an invalid TestCard.",
@@ -364,6 +423,47 @@ const PUBLISHED_DATA_FIELDS = Object.freeze([
 ] as const);
 const CANCELLED_DATA_FIELDS = Object.freeze(["reason"] as const);
 const COMPLETED_DATA_FIELDS = Object.freeze(["completion"] as const);
+const ESCALATED_DATA_FIELDS = Object.freeze(["escalation"] as const);
+const DECISION_RECORDED_DATA_FIELDS = Object.freeze(["decision"] as const);
+const CONTINUED_DATA_FIELDS = Object.freeze(["continuation"] as const);
+const LIFECYCLE_DATA_REFERENCES = Object.freeze([
+  WAKEFLOW_SHA256_DIGEST_SCHEMA,
+  WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+  WAKEFLOW_UTC_INSTANT_SCHEMA,
+]);
+const validateEscalatedData =
+  createRuntimeJsonSchemaValidator<WakeflowDemandEscalatedEventDataV1>(
+    WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA,
+    LIFECYCLE_DATA_REFERENCES,
+  );
+const validateDecisionRecordedData =
+  createRuntimeJsonSchemaValidator<WakeflowDecisionRecordedEventDataV1>(
+    WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA,
+    LIFECYCLE_DATA_REFERENCES,
+  );
+const validateContinuedData =
+  createRuntimeJsonSchemaValidator<WakeflowDemandContinuedEventDataV1>(
+    WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA,
+    LIFECYCLE_DATA_REFERENCES,
+  );
+
+/** 生命周期事件的数据只有 Schema 形状，没有独立领域编解码器；这里按 Schema 严格准入。 */
+function lifecycleData<Data>(
+  validate: RuntimeJsonSchemaValidator<Data>,
+  value: unknown,
+  path: string,
+): Readonly<Data> {
+  let json: JsonValue;
+  try {
+    json = parseJsonValue(value, path);
+  } catch (error: unknown) {
+    if (error instanceof JsonValueError) fail("lifecycle-data", path);
+    throw error;
+  }
+  const result = validate(json);
+  if (!result.ok) fail("lifecycle-data", path);
+  return Object.freeze(result.value);
+}
 const MANAGED_EVIDENCE_RECORDED_DATA_FIELDS = Object.freeze([
   "manifest",
 ] as const);
@@ -542,6 +642,42 @@ export function parseDemandUncommittedEvent(
       recordedAt,
       eventType: "lifecycle.demand-completed",
       data: Object.freeze({ completion }),
+    });
+  }
+
+  if (record.eventType === "lifecycle.demand-escalated") {
+    const data = exactRecord(record.data, ESCALATED_DATA_FIELDS, "$/data");
+    const escalation = lifecycleData(validateEscalatedData, data, "$/data").escalation;
+    return Object.freeze({
+      eventId,
+      demandId,
+      recordedAt,
+      eventType: "lifecycle.demand-escalated",
+      data: Object.freeze({ escalation: Object.freeze(escalation) }),
+    });
+  }
+
+  if (record.eventType === "lifecycle.decision-recorded") {
+    const data = exactRecord(record.data, DECISION_RECORDED_DATA_FIELDS, "$/data");
+    const decision = lifecycleData(validateDecisionRecordedData, data, "$/data").decision;
+    return Object.freeze({
+      eventId,
+      demandId,
+      recordedAt,
+      eventType: "lifecycle.decision-recorded",
+      data: Object.freeze({ decision: Object.freeze(decision) }),
+    });
+  }
+
+  if (record.eventType === "lifecycle.demand-continued") {
+    const data = exactRecord(record.data, CONTINUED_DATA_FIELDS, "$/data");
+    const continuation = lifecycleData(validateContinuedData, data, "$/data").continuation;
+    return Object.freeze({
+      eventId,
+      demandId,
+      recordedAt,
+      eventType: "lifecycle.demand-continued",
+      data: Object.freeze({ continuation: Object.freeze(continuation) }),
     });
   }
 

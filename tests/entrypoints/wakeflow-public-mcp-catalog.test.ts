@@ -7,14 +7,18 @@ import {
   createWakeflowPublicMcpServer,
   WakeflowPublicMcpServerConfigurationError,
 } from "../../src/entrypoints/wakeflow-public-mcp-server.js";
-import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../../src/governance/controller/demand-controller-route-public-contract.js";
+import {
+  WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/demand/contract.js";
 import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-delivery-preparation-public-contract.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-rearm-public-contract.js";
-import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/demand/publication/demand-publication-public-contract.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/governance/evidence/managed-evidence-public-contract.js";
-import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/governance/lifecycle/demand-completion-public-contract.js";
 import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
@@ -114,10 +118,18 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     ADDITIVE,
   ),
   expectedTool(WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, "demand-completion", DESTRUCTIVE, [
-    "Completion is not Archive",
+    "seals the archive package",
+    "deletes the active root",
   ]),
-  expectedTool(WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME, "demand-publication", DESTRUCTIVE, [
-    "performs no host effect",
+  expectedTool(WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, "demand-publication", DESTRUCTIVE, [
+    "Only one active Demand per controller",
+  ]),
+  expectedTool(WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, "demand-cancellation", DESTRUCTIVE, [
+    "withdraws the requirement package",
+  ]),
+  expectedTool(WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, "demand-continuation", DESTRUCTIVE, [
+    "re-opens a completed Demand from its archive",
+    "record-decision answers an escalation",
   ]),
   expectedTool(
     WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
@@ -131,7 +143,7 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
   ]),
   expectedTool(WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, "target-result-import", DESTRUCTIVE),
   expectedTool(
-    WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+    WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
     "demand-controller-route",
     READ_ONLY,
   ),
@@ -214,7 +226,9 @@ function validPublicServerOptions(): PublicServerOptions {
     serverVersion: "1.0.0-test",
     authorizeProductDefectRemediation: unavailableExecutor,
     claimTargetHostEffect: unavailableExecutor,
+    cancelDemand: unavailableExecutor,
     completeDemand: unavailableExecutor,
+    continueDemand: unavailableExecutor,
     createDemand: unavailableExecutor,
     recordManagedEvidence: unavailableExecutor,
     publishRequirement: unavailableExecutor,
@@ -238,7 +252,9 @@ function validPublicServerOptions(): PublicServerOptions {
 
 const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
   "executeMaintenance",
+  "cancelDemand",
   "completeDemand",
+  "continueDemand",
   "createDemand",
   "recordManagedEvidence",
   "publishRequirement",
@@ -293,13 +309,13 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   );
 });
 
-test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
+test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
   const client = await connectWakeflowMcpTestClient(t);
   const instructions = client.getInstructions();
   equal(typeof instructions, "string");
   equal(Buffer.byteLength(instructions ?? "", "utf8") <= 1_024, true);
   equal(instructions?.includes("never performs Agent host effects"), true);
-  equal(instructions?.includes(WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME), true);
+  equal(instructions?.includes(WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME), true);
   const listed = await client.listTools();
   const actualByName = new Map(listed.tools.map((tool) => [tool.name, tool] as const));
   deepEqual([...actualByName.keys()].sort(), PUBLIC_TOOL_CATALOG.map((tool) => tool.name).sort());
@@ -329,7 +345,7 @@ test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
   );
 });
 
-test("Codex与Claude Code composition root发布同一二十一工具集合", async () => {
+test("Codex与Claude Code composition root发布同一二十三工具集合", async () => {
   const listedNames: string[][] = [];
   for (const createServer of [createCodexWakeflowMcpServer, createClaudeCodeWakeflowMcpServer]) {
     const server = createServer("1.0.0-test");

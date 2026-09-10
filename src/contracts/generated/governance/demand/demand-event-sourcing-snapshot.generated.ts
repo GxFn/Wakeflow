@@ -31,6 +31,25 @@ targetTasks: TargetTask[]
 managedEvidence?: [ManagedEvidenceSummary, ...(ManagedEvidenceSummary)[]]
 currentTestCard?: TestCard
 pendingTestRetest?: PendingTestRetest
+awaitingDecision?: {
+escalationEventId: string
+issue: string
+source: ({
+kind: "rework-brake"
+targetTaskId: string
+reworkCount: number
+} | {
+kind: "review-decision"
+targetTaskId: string
+targetReviewDecisionId: string
+decisionDigest: WakeflowSha256DigestText
+})
+}
+continuation?: {
+eventId: string
+kind: ("optimization" | "requirement-supplement" | "verified-bug")
+planningRequired: boolean
+}
 })
 export type TargetTask = ({
 [k: string]: unknown | undefined
@@ -56,6 +75,7 @@ testCard?: TestCard
  */
 testAttempts?: [TestAttemptState]|[TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]
 productDefectRemediation?: ProductDefectRemediation
+reworkCount?: number
 })
 /**
  * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。

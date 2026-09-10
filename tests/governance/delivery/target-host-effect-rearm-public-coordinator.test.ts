@@ -6,7 +6,7 @@ import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-w
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import { executeDemandControllerRoutePublicRequest } from "../../../src/governance/controller/demand-controller-route-public-coordinator.js";
+import { inspectActiveRoute } from "../../capabilities/demand/route.fixture.js";
 import { executeTargetHostEffectClaimPublicRequest } from "../../../src/governance/delivery/target-host-effect-claim-public-coordinator.js";
 import { executeTargetHostEffectOutcomePublicRequest } from "../../../src/governance/delivery/target-host-effect-outcome-public-coordinator.js";
 import {
@@ -151,7 +151,7 @@ test("Rearm Public Coordinator闭合rejected尾部并准入fresh Claim", async (
     equal(containsText(rearmed, fixture.workspacePath), false);
     equal(containsText(rearmed, fixture.rawHandle), false);
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.intent.demandId,
     });

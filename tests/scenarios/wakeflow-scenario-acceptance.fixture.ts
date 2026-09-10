@@ -65,6 +65,17 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     card: "05-task-planning",
     title: "实现任务包 preview 零写、apply 提交且重放幂等，Route 前进到投递规划",
   },
+  {
+    scenarioId: "card-08/complete-and-archive",
+    card: "08-evidence-and-archive",
+    title:
+      "经公共工具投递、认领、回执、结果、评审后完成即归档：verify 门内嵌、一个事务、活动根删除、recover 幂等",
+  },
+  {
+    scenarioId: "card-04/complete-and-continue",
+    card: "04-demand-lifecycle",
+    title: "continue 从归档重开并要求先规划，cancel 撤回需求包并再次归档，取消后不能 continue",
+  },
 ]);
 
 export interface ScenarioWorkspace {

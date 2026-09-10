@@ -13,6 +13,7 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
+  LEDGER_ARCHIVES_ROOT_REF,
   LEDGER_REQUIREMENTS_ROOT_REF,
   LEDGER_TRANSACTIONS_ROOT_REF,
 } from "./ledger-authority-paths.js";
@@ -30,7 +31,7 @@ import {
 /**
  * Wakeflow Governance / Ledger：Ledger 根内固定容器的只读观察与幂等物化。
  *
- * 本模块只拥有 `requirements` 与私有 `transactions` 两个容器的节点策略，不枚举或
+ * 本模块只拥有 `requirements`、`archives` 与私有 `transactions` 三个容器的节点策略，不枚举或
  * 解释任何需求包记录。Maintenance 可以读取该观察来判断配置指定的 Ledger 是否已经
  * 具备基础布局；记录发布仍由 `LedgerAuthorityStore` 的逐记录事务负责。
  */
@@ -46,7 +47,8 @@ type LedgerAuthorityLayoutEntryStatus =
 export interface LedgerAuthorityLayoutEntryInspection {
   readonly resourcePath:
     | typeof LEDGER_REQUIREMENTS_ROOT_REF
-    | typeof LEDGER_TRANSACTIONS_ROOT_REF;
+    | typeof LEDGER_TRANSACTIONS_ROOT_REF
+    | typeof LEDGER_ARCHIVES_ROOT_REF;
   readonly expectedMode: number;
   readonly status: LedgerAuthorityLayoutEntryStatus;
   readonly observedKind: string | null;
@@ -79,6 +81,11 @@ const LEDGER_AUTHORITY_LAYOUT_POLICIES = Object.freeze([
     resourcePath: LEDGER_TRANSACTIONS_ROOT_REF,
     mode: LEDGER_TRANSACTION_DIRECTORY_MODE,
     requireCurrentUser: true,
+  }),
+  Object.freeze({
+    resourcePath: LEDGER_ARCHIVES_ROOT_REF,
+    mode: LEDGER_DURABLE_DIRECTORY_MODE,
+    requireCurrentUser: false,
   }),
 ]) satisfies readonly Readonly<LedgerAuthorityLayoutEntryPolicy>[];
 

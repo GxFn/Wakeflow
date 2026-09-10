@@ -2,7 +2,7 @@ import { deepEqual, equal, rejects, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { executeDemandControllerRoutePublicRequest } from "../../../src/governance/controller/demand-controller-route-public-coordinator.js";
+import { inspectActiveRoute } from "../../capabilities/demand/route.fixture.js";
 import { executeControllerImplementationReviewDecisionPublicRequest } from "../../../src/governance/review/controller-implementation-review-decision-public-coordinator.js";
 import { ControllerTestReviewDecisionService } from "../../../src/governance/review/controller-test-review-decision-service.js";
 import { executeTargetResultReviewInspectionPublicRequest } from "../../../src/governance/review/target-result-review-inspection-public-coordinator.js";
@@ -160,7 +160,7 @@ test("Resume Public Coordinator闭合blocked inspect到第二代Implementation D
     equal(containsText(resumed, fixture.workspacePath), false);
     equal(containsText(resumed, fixture.rawHandle), false);
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.intent.demandId,
     });
@@ -301,7 +301,7 @@ test("Resume Public Coordinator共享恢复Test review并保留同一Result", as
       reopened.reviewUnit.targetResult.testExecution?.testAttemptId,
       context.reviewUnit.targetResult.testExecution?.testAttemptId,
     );
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.testClaimRequest.demandId,
     });

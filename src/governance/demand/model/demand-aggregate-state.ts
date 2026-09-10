@@ -169,6 +169,8 @@ interface DemandImplementationTargetTaskStateBase {
   readonly windowId: WakeflowDurableId<"window">;
   readonly commitExpectation: TaskPackageCommitExpectation;
   readonly acceptanceAnchorIds: readonly string[];
+  /** 已被评审判为 rework 的次数；从未 rework 的目标不写入，保持既有 state digest。 */
+  readonly reworkCount?: number;
 }
 
 export interface DemandPlannedTargetTaskState extends DemandImplementationTargetTaskStateBase {
@@ -478,6 +480,27 @@ export interface DemandAggregateState {
   readonly currentTestCard?: Readonly<DemandTestCardSummary>;
   /** 已获Controller授权、尚未由新TestCard消费的一次产品缺陷复测。 */
   readonly pendingTestRetest?: Readonly<DemandPendingTestRetest>;
+  /** 一次尚未得到用户回答的升级；存在时路由为 awaiting-decision（ADR-0012 D5）。 */
+  readonly awaitingDecision?: Readonly<DemandAwaitingDecision>;
+  /** 最近一次从归档重开的续接谱系；`planningRequired` 直到新任务包规划完成。 */
+  readonly continuation?: Readonly<DemandContinuationState>;
+}
+
+export interface DemandAwaitingDecision {
+  readonly escalationEventId: WakeflowDurableId<"demand-event">;
+  readonly issue: string;
+  readonly source: NonNullable<DemandAggregateStateWire["awaitingDecision"]>["source"];
+}
+
+export type DemandContinuationKind =
+  | "optimization"
+  | "requirement-supplement"
+  | "verified-bug";
+
+export interface DemandContinuationState {
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly kind: DemandContinuationKind;
+  readonly planningRequired: boolean;
 }
 
 export interface DemandManagedEvidenceSummary {
@@ -585,6 +608,7 @@ function fail(reason: DemandAggregateStateErrorReason, path: string): never {
 function parseId<
   Kind extends
     | "demand"
+    | "demand-event"
     | "target-task"
     | "task-package"
     | "repository"
@@ -1262,7 +1286,7 @@ function parseTargetTasks(
       windowId: parseId(value.windowId, "window", `${path}/windowId`),
     };
     if (value.workType === "test") {
-      if (value.testCard === undefined) {
+      if (value.testCard === undefined || value.reworkCount !== undefined) {
         fail("relation", path);
       }
       const testCard = parseTestCardSummary(value.testCard, `${path}/testCard`);
@@ -1516,8 +1540,11 @@ function parseTargetTasks(
       "repository",
       `${path}/repositoryId`,
     );
-    if (repositoryIds.has(repositoryId)) fail("relation", path);
-    repositoryIds.add(repositoryId);
+    // 一个仓库同时只能有一个未接受的实现目标；已接受的目标是续接后的历史，可以共用仓库。
+    if (value.phase !== "accepted") {
+      if (repositoryIds.has(repositoryId)) fail("relation", path);
+      repositoryIds.add(repositoryId);
+    }
     const base = {
       ...common,
       repositoryId,
@@ -1526,6 +1553,9 @@ function parseTargetTasks(
         value.acceptanceAnchorIds,
         `${path}/acceptanceAnchorIds`,
       ),
+      ...(value.reworkCount === undefined
+        ? {}
+        : { reworkCount: value.reworkCount }),
     };
     const productCurrentDelivery = value.currentDelivery as
       ProductCurrentDeliveryWire | undefined;
@@ -2543,12 +2573,17 @@ export function decideTargetResultReviewInDemandAggregateState(
     fail("transition", "$/targetTasks");
   }
   const phase = reviewPhaseForDecision(decision.decision);
+  const reworkCount =
+    decision.decision === "rework"
+      ? (target.reworkCount ?? 0) + 1
+      : target.reworkCount;
   return parseDemandAggregateState({
     ...current,
     targetTasks: current.targetTasks.map((entry) =>
       entry.targetTaskId === target.targetTaskId
         ? {
             ...target,
+            ...(reworkCount === undefined ? {} : { reworkCount }),
             phase,
             currentDelivery: {
               ...target.currentDelivery,
@@ -2779,6 +2814,14 @@ function normalizeState(
     wire.pendingTestRetest === undefined
       ? undefined
       : parsePendingTestRetest(wire.pendingTestRetest);
+  const awaitingDecision =
+    wire.awaitingDecision === undefined
+      ? undefined
+      : parseAwaitingDecision(wire.awaitingDecision, wire.lifecycle);
+  const continuation =
+    wire.continuation === undefined
+      ? undefined
+      : parseContinuationState(wire.continuation);
   const currentTestTargets =
     currentTestCard === undefined
       ? []
@@ -2851,6 +2894,123 @@ function normalizeState(
     ...(managedEvidence === undefined ? {} : { managedEvidence }),
     ...(currentTestCard === undefined ? {} : { currentTestCard }),
     ...(pendingTestRetest === undefined ? {} : { pendingTestRetest }),
+    ...(awaitingDecision === undefined ? {} : { awaitingDecision }),
+    ...(continuation === undefined ? {} : { continuation }),
+  });
+}
+
+/** 升级只在活动 Demand 上等待回答；终态不能携带未回答的升级。 */
+function parseAwaitingDecision(
+  value: NonNullable<DemandAggregateStateWire["awaitingDecision"]>,
+  lifecycle: DemandLifecycle,
+): Readonly<DemandAwaitingDecision> {
+  if (lifecycle !== "active") fail("relation", "$/awaitingDecision");
+  const escalationEventId = parseId(
+    value.escalationEventId,
+    "demand-event",
+    "$/awaitingDecision/escalationEventId",
+  );
+  parseId(
+    value.source.targetTaskId,
+    "target-task",
+    "$/awaitingDecision/source/targetTaskId",
+  );
+  return Object.freeze({
+    escalationEventId,
+    issue: value.issue,
+    source: Object.freeze({ ...value.source }),
+  });
+}
+
+function parseContinuationState(
+  value: NonNullable<DemandAggregateStateWire["continuation"]>,
+): Readonly<DemandContinuationState> {
+  return Object.freeze({
+    eventId: parseId(value.eventId, "demand-event", "$/continuation/eventId"),
+    kind: value.kind,
+    planningRequired: value.planningRequired,
+  });
+}
+
+export interface DemandEscalationSource {
+  readonly issue: string;
+  readonly source: DemandAwaitingDecision["source"];
+}
+
+/** `lifecycle.demand-escalated.v1`：活动 Demand 进入等待决定；同一时刻只能有一个未回答的升级。 */
+export function escalateDemandAggregateState(
+  currentValue: unknown,
+  escalation: Readonly<DemandEscalationSource>,
+  escalationEventIdValue: unknown,
+): Readonly<DemandAggregateState> {
+  const current = parseDemandAggregateState(currentValue);
+  const escalationEventId = parseId(
+    escalationEventIdValue,
+    "demand-event",
+    "$escalationEventId",
+  );
+  if (
+    current.lifecycle !== "active" ||
+    current.awaitingDecision !== undefined ||
+    !current.targetTasks.some(
+      (target) => target.targetTaskId === escalation.source.targetTaskId,
+    )
+  ) {
+    fail("transition", "$state/awaitingDecision");
+  }
+  return parseDemandAggregateState({
+    ...current,
+    awaitingDecision: {
+      escalationEventId,
+      issue: escalation.issue,
+      source: escalation.source,
+    },
+  });
+}
+
+/** `lifecycle.decision-recorded.v1`：用户回答清除等待中的升级。 */
+export function recordDecisionInDemandAggregateState(
+  currentValue: unknown,
+  escalationEventIdValue: unknown,
+): Readonly<DemandAggregateState> {
+  const current = parseDemandAggregateState(currentValue);
+  const escalationEventId = parseId(
+    escalationEventIdValue,
+    "demand-event",
+    "$escalationEventId",
+  );
+  if (
+    current.lifecycle !== "active" ||
+    current.awaitingDecision === undefined ||
+    current.awaitingDecision.escalationEventId !== escalationEventId
+  ) {
+    fail("transition", "$state/awaitingDecision");
+  }
+  const { awaitingDecision: _awaitingDecision, ...rest } = current;
+  return parseDemandAggregateState(rest);
+}
+
+/** `lifecycle.demand-continued.v1`：已完成的 Demand 回到 active，并要求先规划新的任务包。 */
+export function continueDemandAggregateState(
+  currentValue: unknown,
+  kindValue: unknown,
+  eventIdValue: unknown,
+): Readonly<DemandAggregateState> {
+  const current = parseDemandAggregateState(currentValue);
+  const eventId = parseId(eventIdValue, "demand-event", "$eventId");
+  if (
+    current.lifecycle !== "completed" ||
+    (kindValue !== "optimization" &&
+      kindValue !== "requirement-supplement" &&
+      kindValue !== "verified-bug")
+  ) {
+    fail("transition", "$state/lifecycle");
+  }
+  // 已接受的目标留在状态里作为历史；续接要求先规划新的任务包，同一仓库允许再次规划。
+  return parseDemandAggregateState({
+    ...current,
+    lifecycle: "active",
+    continuation: { eventId, kind: kindValue, planningRequired: true },
   });
 }
 
@@ -2983,13 +3143,16 @@ export function planTargetTaskInDemandAggregateState(
       ),
     });
   }
+  // 续接后的新规划允许与已接受的历史目标共用仓库；未接受的目标仍然独占仓库。
+  const continuing = current.continuation?.planningRequired === true;
   if (
     current.currentTestCard !== undefined ||
     current.targetTasks.some((entry) => entry.workType === "test") ||
     current.targetTasks.some(
       (entry) =>
         entry.workType !== "test" &&
-        entry.repositoryId === taskPackage.assignment.repositoryId,
+        entry.repositoryId === taskPackage.assignment.repositoryId &&
+        !(continuing && entry.phase === "accepted"),
     )
   ) {
     fail("transition", "$state/targetTasks");
@@ -3011,6 +3174,11 @@ export function planTargetTaskInDemandAggregateState(
   ].sort((left, right) => compareText(left.targetTaskId, right.targetTaskId));
   return parseDemandAggregateState({
     ...current,
+    ...(current.continuation === undefined
+      ? {}
+      : {
+          continuation: { ...current.continuation, planningRequired: false },
+        }),
     targetTasks: nextTargetTasks,
   });
 }
@@ -3073,6 +3241,8 @@ export function completeDemandAggregateState(
       computeDemandAggregateStateDigest(current) ||
     current.targetTasks.length === 0 ||
     implementationTargets.some((target) => target.phase !== "accepted") ||
+    current.awaitingDecision !== undefined ||
+    current.continuation?.planningRequired === true ||
     !testingClosed
   ) {
     fail("transition", "$state");

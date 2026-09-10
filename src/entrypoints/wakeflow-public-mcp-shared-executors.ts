@@ -3,10 +3,16 @@ import {
   executeRequirementPublicationRequest,
 } from "../capabilities/requirement/service.js";
 import { executeTargetTaskPlanningPublicRequest } from "../capabilities/tasking/plan-target-task.js";
-import { executeDemandControllerRoutePublicRequest } from "../governance/controller/demand-controller-route-public-coordinator.js";
-import { executeDemandPublicationPublicRequest } from "../governance/demand/publication/demand-publication-public-coordinator.js";
+import {
+  executeDemandCancellationRequest,
+  executeDemandCompletionRequest,
+  executeDemandContinuationRequest,
+} from "../capabilities/demand/lifecycle.js";
+import {
+  executeDemandCreationRequest,
+  executeDemandRouteInspectionRequest,
+} from "../capabilities/demand/service.js";
 import { executeManagedEvidencePublicRequest } from "../governance/evidence/managed-evidence-public-coordinator.js";
-import { executeDemandCompletionPublicRequest } from "../governance/lifecycle/demand-completion-public-coordinator.js";
 import { executeControllerImplementationReviewDecisionPublicRequest } from "../governance/review/controller-implementation-review-decision-public-coordinator.js";
 import { executeControllerProductDefectRemediationPublicRequest } from "../governance/review/controller-product-defect-remediation-public-coordinator.js";
 import { executeControllerTestReviewDecisionPublicRequest } from "../governance/review/controller-test-review-decision-public-coordinator.js";
@@ -23,9 +29,11 @@ import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.j
  */
 export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
   authorizeProductDefectRemediation: executeControllerProductDefectRemediationPublicRequest,
-  completeDemand: executeDemandCompletionPublicRequest,
-  createDemand: executeDemandPublicationPublicRequest,
-  inspectDemandRoute: executeDemandControllerRoutePublicRequest,
+  cancelDemand: executeDemandCancellationRequest,
+  completeDemand: executeDemandCompletionRequest,
+  continueDemand: executeDemandContinuationRequest,
+  createDemand: executeDemandCreationRequest,
+  inspectDemandRoute: executeDemandRouteInspectionRequest,
   inspectTargetResultReview: executeTargetResultReviewInspectionPublicRequest,
   inspectBoard: executeBoardInspectionRequest,
   planTargetTask: executeTargetTaskPlanningPublicRequest,
@@ -40,7 +48,9 @@ export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
   Pick<
     WakeflowPublicMcpExecutors,
     | "authorizeProductDefectRemediation"
+    | "cancelDemand"
     | "completeDemand"
+    | "continueDemand"
     | "createDemand"
     | "inspectDemandRoute"
     | "inspectTargetResultReview"

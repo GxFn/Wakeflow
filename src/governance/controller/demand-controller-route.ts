@@ -85,6 +85,10 @@ type DemandFrontierDescriptor =
   | Readonly<{
       readonly kind: "test-task-planning";
       readonly owner: "test-task-planning";
+    }>
+  | Readonly<{
+      readonly kind: "decision-required";
+      readonly owner: "user";
     }>;
 
 type ImplementationFrontierDescriptor =
@@ -199,6 +203,11 @@ export type DemandControllerRouteBlocker =
   | Readonly<{
       readonly kind: "isolated-test-planning-not-implemented";
       readonly owner: "test-card-planning";
+    }>
+  | Readonly<{
+      readonly kind: "awaiting-decision";
+      readonly owner: "user";
+      readonly escalationEventId: WakeflowDurableId<"demand-event">;
     }>;
 
 export interface DemandControllerRoute {
@@ -212,7 +221,11 @@ export interface DemandControllerRoute {
   readonly observedEventStream: DemandPostAcceptanceRoute["observedEventStream"];
   readonly reviewSnapshotDigest: Sha256Digest;
   readonly postAcceptanceRouteDigest?: Sha256Digest;
-  readonly disposition: "work-available" | "blocked" | "terminal";
+  readonly disposition:
+    | "work-available"
+    | "blocked"
+    | "terminal"
+    | "awaiting-decision";
   readonly frontiers: readonly Readonly<DemandControllerRouteFrontier>[];
   readonly blockers: readonly Readonly<DemandControllerRouteBlocker>[];
   readonly routeDigest: Sha256Digest;
@@ -572,6 +585,41 @@ function routeBasis(
       ...common,
       disposition: "terminal",
       frontiers: Object.freeze([]),
+      blockers: Object.freeze([]),
+    };
+  }
+
+  const awaitingDecision = loaded.aggregate.state.awaitingDecision;
+  if (awaitingDecision !== undefined) {
+    return {
+      ...common,
+      disposition: "awaiting-decision",
+      frontiers: Object.freeze([
+        Object.freeze({
+          scope: "demand" as const,
+          kind: "decision-required" as const,
+          owner: "user" as const,
+        }),
+      ]),
+      blockers: Object.freeze([
+        Object.freeze({
+          kind: "awaiting-decision" as const,
+          owner: "user" as const,
+          escalationEventId: awaitingDecision.escalationEventId,
+        }),
+      ]),
+    };
+  }
+  if (loaded.aggregate.state.continuation?.planningRequired === true) {
+    // 续接后先规划新的任务包；已接受的历史目标不再构成完成前置。
+    return {
+      ...common,
+      disposition: "work-available",
+      frontiers: Object.freeze([
+        resolveDemandControllerDemandFrontierDescriptor(
+          "implementation-planning-required",
+        ),
+      ]),
       blockers: Object.freeze([]),
     };
   }

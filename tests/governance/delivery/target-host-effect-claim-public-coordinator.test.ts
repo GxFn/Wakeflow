@@ -2,7 +2,7 @@ import { deepEqual, equal, rejects, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { executeDemandControllerRoutePublicRequest } from "../../../src/governance/controller/demand-controller-route-public-coordinator.js";
+import { inspectActiveRoute } from "../../capabilities/demand/route.fixture.js";
 import {
   parseTargetHostEffectClaimPublicRequest,
   TargetHostEffectClaimPublicContractError,
@@ -138,7 +138,7 @@ test("Claim Public Coordinator签发一次Implementation Action并安全重放",
     ]);
     deepEqual(stringPathsContaining(issued, fixture.rawHandle), []);
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.claimRequest.demandId,
     });
@@ -206,7 +206,7 @@ test("Claim Public Coordinator共享Test packet-bound Action且重放不重签",
     ]);
     deepEqual(stringPathsContaining(issued, fixture.testRawHandle), []);
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.testClaimRequest.demandId,
     });

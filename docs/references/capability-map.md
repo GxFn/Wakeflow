@@ -14,7 +14,7 @@
 | 2 | `wakeflow_maintain_workspace` | 1 | `wakeflow_maintain_workspace` | 重切 | 已实现 fresh、reconfigure、reconcile 三动作；config 按 TSD-16 从 v1 起版并增加 `pods[]` |
 | 3 | `wakeflow_replace_windows` | 2 | 窗口替换并入 `wakeflow_register_window_binding` 的替换操作 | 缺席 | L1；替换是新握手加旧声明退役，见 ADR-0009 |
 | 4 | `wakeflow_register_window` | 2 | `wakeflow_register_window_binding` | 重切 | 已实现；绑定增加 `podId` |
-| 5 | `wakeflow_create_demand` | 4 | `wakeflow_create_demand` | 重切 | 已实现；`executionPlacement` 改为 `podId`，同 pod 已有活动 Demand 时拒绝 |
+| 5 | `wakeflow_create_demand` | 4 | `wakeflow_create_demand` | 重切 | 已实现（demand 切片，确定性计划）；`executionPlacement` 改为 `podId` 留给 pod 切片，已有活动 Demand 时拒绝 |
 | 6 | `wakeflow_add_task` | 5 | `wakeflow_plan_target_task` | 重切 | 已实现；字段集按能力卡 5 Q1 保持 |
 | 7 | `wakeflow_prepare_delivery` | 6 | `prepare_delivery` 一次调用（含许可；实现与测试共用） | 重切 | TS 现有 `prepare_implementation_delivery`、`prepare_test_delivery`、`claim_target_host_effect` 在 L1 合并；prompt 改为 Wakeflow 骨架加 Controller 三段（ADR-0012 D2） |
 | 8 | `wakeflow_record_delivery` | 6 | `record_delivery_outcome`（或 hook 自动）、`rearm_target_host_effect` | 重切 | 落地证据 UserPromptSubmit；ambiguous 出口；rearm 上限 3（能力卡 6 修订、ADR-0012 D1 D2） |
@@ -22,19 +22,19 @@
 | 10 | `wakeflow_review_pack` | 7 | `wakeflow_inspect_target_result_review` | 重切 | 已实现；回调内容改由 `import_target_result` 返回，不再经 review_pack（ADR-0012 D1） |
 | 11 | `wakeflow_reduce_results` | 7 | 并入评审 inspection 与评审 preview 的结果谱系 | 重切 | 结果归约不再是独立工具；strict result-trace 并入评审 preview（能力卡 9 Q5） |
 | 12 | `wakeflow_decide_review` | 7 | 实现决定 `accept \| rework \| blocked \| escalate`、测试决定 `accept \| request-another-attempt \| escalate` | 重切 | `redesign` 删除；`resume_target_result_review` 与 `authorize_product_defect_remediation` 并入 escalate 路由（ADR-0012 D4 D5） |
-| 13 | `wakeflow_complete_demand` | 4 | `wakeflow_complete_demand`（完成即归档） | 重切 | preview 内嵌 verify 与归档前置，apply 一个事务含归档（ADR-0012 D3） |
-| 14 | `wakeflow_continue_demand` | 4 | continue 按 authority supplement 实现 | 缺席 | L1；与 `plan_target_task` 分开（能力卡 4 Q3） |
+| 13 | `wakeflow_complete_demand` | 4 | `wakeflow_complete_demand`（完成即归档） | 重切 | 已实现（demand 切片）：preview 内嵌八道 verify 门与归档前置，apply 一个事务含归档、需求包 archived、活动根删除（ADR-0012 D3） |
+| 14 | `wakeflow_continue_demand` | 4 | `wakeflow_continue_demand`（continue 与 record-decision） | 重切 | 已实现（demand 切片）：从归档重开、需求包回到 claimed、路由先要求新任务包；与 `plan_target_task` 分开（能力卡 4 Q3） |
 | 15 | `wakeflow_record_evidence` | 8 | `wakeflow_record_evidence` | 重切 | 已实现；来源根增加 `pod-worktree` 与 `observation`，kind 闭集，隐私扫描收窄在 L1 补 |
 | 16 | `wakeflow_recover_state_transition` | 4 | 无 | 放弃 | ADR-0002：通用 recover 放弃，每个 preview/apply 工具自带 recover |
 | 17 | `wakeflow_release_window_lock` | 2 | 工作声明释放 | 缺席 | L1；租约改为工作声明加围栏令牌（ADR-0009） |
 | 18 | `wakeflow_view` | 9 | 无 | 放弃 | ADR-0006：通用读取违反脱敏边界；config 事实归 `wakeflow_status`，storage 归 `wakeflow_verify`，result-trace 并入评审 preview |
 | 19 | `wakeflow_storage_preserve` | 8 | 无 | 放弃 | 能力卡 8 Q6：归档封存、清理删除，不再有第三种保留状态 |
-| 20 | `wakeflow_archive` | 8 | 并入 `wakeflow_complete_demand` 与取消 | 缺席 | L1；消费冻结的 artifact 传输 foundation；前置含无未释放工作声明；verify 报告入归档包（ADR-0012 D3） |
+| 20 | `wakeflow_archive` | 8 | 并入 `wakeflow_complete_demand` 与 `wakeflow_cancel_demand` | 重切 | 已实现（demand 切片）：归档包在 `<ledger>/archives/`，前置含无未释放工作声明，verify 报告入归档包（ADR-0012 D3） |
 | 21 | `wakeflow_intake_test_card` | 5 | test 任务包的 `testContract`（`plan_target_task`） | 重切 | 独立测试卡与 TS 现有 `plan_test_card` 在 L1 删除（ADR-0012 D4） |
 | 22 | `wakeflow_deliver` | 6 | 无；宿主执行由 Agent 按 skills 完成 | 放弃 | TSD-12：内容由 prepare 工具提供，执行证据由 outcome 工具准入 |
 | 23 | `wakeflow_next_work` | 3 | 待认领需求包查询 `wakeflow_inspect_board`（ADR-0011，2026-09-04 L1 requirement 落地） | 重切 | `inspect_todo` 已删除，看板查询列出需求包认领状态 |
 | 24 | `wakeflow_claim_next` | 3 | 认领并入 `wakeflow_create_demand(requirementId)` | 重切 | 认领即创建；一个总控一次一个（ADR-0011） |
-| 25 | `wakeflow_cancel_demand` | 4 | cancel 接到 service 与工具 | 缺席 | L1；TODO 行置 `withdrawn`（能力卡 4 Q4） |
+| 25 | `wakeflow_cancel_demand` | 4 | `wakeflow_cancel_demand` | 重切 | 已实现（demand 切片）：需求包置 `withdrawn`，释放本 Demand 的工作声明，有待评审结果时拒绝（能力卡 4 Q4） |
 | 26 | `wakeflow_pod_open` | 2、4 | `wakeflow_pod` | 缺席 | L1；ADR-0010 D6 四状态，只有 main 的 Controller 调用 |
 | 27 | `wakeflow_pod_record` | 2、4 | `wakeflow_pod` | 缺席 | 同上；回执经握手准入，不再有独立记录事件家族 |
 | 28 | `wakeflow_pod_bind` | 2 | `wakeflow_pod` 加 `wakeflow_register_window_binding` | 缺席 | 同上；绑定携带 `podId` |

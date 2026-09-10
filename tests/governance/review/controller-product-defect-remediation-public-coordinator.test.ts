@@ -2,7 +2,7 @@ import { equal, rejects, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { executeDemandControllerRoutePublicRequest } from "../../../src/governance/controller/demand-controller-route-public-coordinator.js";
+import { inspectActiveRoute } from "../../capabilities/demand/route.fixture.js";
 import {
   parseControllerProductDefectRemediationPublicRequest,
   ControllerProductDefectRemediationPublicContractError,
@@ -74,7 +74,7 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
         },
       },
     );
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.testClaimRequest.demandId,
     });
@@ -161,7 +161,7 @@ test("Product Remediation Public Coordinator闭合Test缺陷到既有产品返�
     equal(containsText(authorized, fixture.testRawHandle), false);
     equal(Object.hasOwn(authorized, "targetDelivery"), false);
 
-    const after = await executeDemandControllerRoutePublicRequest({
+    const after = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.testClaimRequest.demandId,
     });

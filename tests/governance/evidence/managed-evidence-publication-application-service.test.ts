@@ -36,7 +36,6 @@ import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
   EVIDENCE_CAPTURED_AT,
-  EVIDENCE_DEMAND_ID,
   EVIDENCE_REPOSITORY_ID,
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
 } from "./managed-evidence-capture-planning-service.fixture.js";
@@ -69,7 +68,7 @@ function demandRootPath(
     fixture.publication.workspacePath,
     ".wakeflow-active",
     "current",
-    EVIDENCE_DEMAND_ID,
+    fixture.demandId,
   );
 }
 
@@ -109,7 +108,7 @@ async function createTransaction(
   const capturePlan = await new ManagedEvidenceCapturePlanningService(
     fixture.publication.workspaceRoot,
   ).preview(
-    EVIDENCE_DEMAND_ID,
+    fixture.demandId,
     {
       evidenceType: "test-output",
       source: {
@@ -176,7 +175,7 @@ test("Application按journal、stage、Event、final和健康闭包完成发布",
       ),
       false,
     );
-    const alreadySettled = await service.recover(EVIDENCE_DEMAND_ID);
+    const alreadySettled = await service.recover(fixture.demandId);
     equal(alreadySettled.disposition, "healthy");
     equal(
       alreadySettled.loaded.aggregate.state.managedEvidence?.[0]?.evidenceId,
@@ -232,7 +231,7 @@ test("Recovery从Event前完整stage继续且不受后续Config/source变化影�
 
     const recovered = await new ManagedEvidencePublicationApplicationService(
       fixture.publication.workspaceRoot,
-    ).recover(EVIDENCE_DEMAND_ID);
+    ).recover(fixture.demandId);
     equal(recovered.disposition, "completed");
     if (recovered.disposition !== "completed") {
       throw new Error("Expected completed recovery.");
@@ -302,7 +301,7 @@ test("Recovery在Event已提交后不重读source并前向发布final", async ()
 
     const recovered = await new ManagedEvidencePublicationApplicationService(
       fixture.publication.workspaceRoot,
-    ).recover(EVIDENCE_DEMAND_ID);
+    ).recover(fixture.demandId);
     equal(recovered.disposition, "completed");
     if (recovered.disposition !== "completed") {
       throw new Error("Expected completed recovery.");
@@ -339,7 +338,7 @@ test("Recovery在目标Event前CAS过期时退休partial stage与journal", async
       {
         commandType: "lifecycle.cancel-demand",
         commandVersion: 1,
-        demandId: EVIDENCE_DEMAND_ID,
+        demandId: fixture.demandId,
         eventId: CANCELLATION_EVENT_ID,
         recordedAt: parseUtcInstant("2026-09-01T21:01:00.000Z"),
         reason: "测试Event前乐观并发冲突恢复",
@@ -356,7 +355,7 @@ test("Recovery在目标Event前CAS过期时退休partial stage与journal", async
 
     const recovered = await new ManagedEvidencePublicationApplicationService(
       fixture.publication.workspaceRoot,
-    ).recover(EVIDENCE_DEMAND_ID);
+    ).recover(fixture.demandId);
     equal(recovered.disposition, "retired-stale");
     if (recovered.disposition !== "retired-stale") {
       throw new Error("Expected stale retirement.");

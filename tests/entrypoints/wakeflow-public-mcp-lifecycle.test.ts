@@ -5,13 +5,15 @@ import { test } from "node:test";
 
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../../src/governance/controller/demand-controller-route-public-contract.js";
+import {
+  WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/demand/contract.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
 import { windowWorkClaimRef } from "../../src/governance/delivery/window-work-claim-resource-catalog.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
-import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/governance/lifecycle/demand-completion-public-contract.js";
 import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
@@ -66,7 +68,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
   const { client, close } = await connectWakeflowMcpServerForTest(server);
   try {
     const before = await client.callTool({
-      name: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         demandId: fixture.claimRequest.demandId,
@@ -122,7 +124,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(existsSync(claimPath), true);
 
     const after = await client.callTool({
-      name: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         demandId: fixture.claimRequest.demandId,
@@ -191,7 +193,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(textContent(outcomeCall).includes("sourceTestHostResult"), false);
 
     const afterOutcome = await client.callTool({
-      name: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         demandId: fixture.claimRequest.demandId,
@@ -274,7 +276,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(textContent(importedCall).includes(fixture.rawHandle), false);
 
     const afterResult = await client.callTool({
-      name: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         demandId: fixture.claimRequest.demandId,
@@ -367,7 +369,7 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     equal(textContent(decisionCall).includes(fixture.rawHandle), false);
 
     const afterDecision = await client.callTool({
-      name: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         demandId: fixture.intent.demandId,
@@ -412,49 +414,53 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     const completionPreview = completionPreviewCall.structuredContent as {
       readonly mode: string;
       readonly status: string;
-      readonly plan: Readonly<Record<string, unknown>> & {
-        readonly demandId: string;
-      };
-      readonly planDigest: string;
+      readonly blockers: readonly string[];
+      readonly planDigest: string | null;
+      readonly demandId: string;
+      readonly verify: { readonly gates: readonly { readonly status: string }[] } | null;
     };
     equal(completionPreview.mode, "preview");
-    equal(completionPreview.status, "ready");
-    equal(completionPreview.plan.demandId, fixture.intent.demandId);
+    equal(completionPreview.status, "ready", completionPreview.blockers.join(","));
+    equal(completionPreview.demandId, fixture.intent.demandId);
+    equal(
+      completionPreview.verify?.gates.every((gate) => gate.status === "pass"),
+      true,
+    );
     equal(textContent(completionPreviewCall).includes(fixture.workspacePath), false);
     equal(textContent(completionPreviewCall).includes(fixture.rawHandle), false);
 
-    const completionApplyRequest = {
-      root: fixture.workspacePath,
-      mode: "apply",
-      plan: completionPreview.plan,
-      planDigest: completionPreview.planDigest,
-    } as const;
     const completionCall = await client.callTool({
       name: WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-      arguments: completionApplyRequest,
+      arguments: {
+        root: fixture.workspacePath,
+        mode: "apply",
+        demandId: fixture.intent.demandId,
+        planDigest: completionPreview.planDigest,
+      },
     });
     equal(completionCall.isError, undefined, textContent(completionCall));
     const completion = completionCall.structuredContent as {
-      readonly status: string;
       readonly disposition: string;
-      readonly eventAuthority: string;
-      readonly completion: {
-        readonly demandId: string;
-        readonly testingMode: string;
-      };
-      readonly event: { readonly eventId: string };
-      readonly stateDigest: string;
+      readonly terminalEvent: { readonly eventId: string; readonly streamRevision: number };
+      readonly archive: { readonly archiveRef: string; readonly fileCount: number };
+      readonly package: { readonly status: string };
+      readonly next: { readonly frontier: string | null; readonly suggestedTool: string | null };
     };
-    equal(completion.status, "completed");
-    equal(completion.disposition, "committed");
-    equal(completion.eventAuthority, "current");
-    equal(completion.completion.demandId, fixture.intent.demandId);
-    equal(completion.completion.testingMode, "controller-only");
+    equal(completion.disposition, "completed");
+    equal(completion.package.status, "archived");
+    equal(completion.next.frontier, "demand-continuation");
     equal(textContent(completionCall).includes(fixture.workspacePath), false);
     equal(textContent(completionCall).includes(fixture.rawHandle), false);
+    equal(
+      existsSync(
+        path.join(fixture.workspacePath, ...demandFinalRootRef(fixture.intent.demandId).split("/")),
+      ),
+      false,
+      "active root survived completion",
+    );
 
     const terminalRouteCall = await client.callTool({
-      name: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         demandId: fixture.intent.demandId,
@@ -462,31 +468,30 @@ test("Codex MCP完成真实Claim、Outcome、TargetResult、Controller Review与
     });
     equal(terminalRouteCall.isError, undefined, textContent(terminalRouteCall));
     const terminalRoute = terminalRouteCall.structuredContent as {
-      readonly route: {
-        readonly lifecycle: string;
-        readonly disposition: string;
-        readonly frontiers: readonly unknown[];
-      };
-    };
-    equal(terminalRoute.route.lifecycle, "completed");
-    equal(terminalRoute.route.disposition, "terminal");
-    equal(terminalRoute.route.frontiers.length, 0);
-
-    const replayedCompletionCall = await client.callTool({
-      name: WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-      arguments: completionApplyRequest,
-    });
-    equal(replayedCompletionCall.isError, undefined, textContent(replayedCompletionCall));
-    const replayedCompletion = replayedCompletionCall.structuredContent as {
       readonly status: string;
-      readonly disposition: string;
-      readonly event: { readonly eventId: string };
-      readonly stateDigest: string;
+      readonly archive: { readonly outcome: string; readonly archiveRef: string };
     };
-    equal(replayedCompletion.status, "already-completed");
-    equal(replayedCompletion.disposition, "idempotent");
-    equal(replayedCompletion.event.eventId, completion.event.eventId);
-    equal(replayedCompletion.stateDigest, completion.stateDigest);
+    equal(terminalRoute.status, "archived");
+    equal(terminalRoute.archive.outcome, "completed");
+    equal(terminalRoute.archive.archiveRef, completion.archive.archiveRef);
+
+    const recoveredCall = await client.callTool({
+      name: WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
+      arguments: {
+        root: fixture.workspacePath,
+        mode: "recover",
+        operationId: fixture.intent.demandId,
+      },
+    });
+    equal(recoveredCall.isError, undefined, textContent(recoveredCall));
+    const recovered = recoveredCall.structuredContent as {
+      readonly disposition: string;
+      readonly terminalEvent: { readonly eventId: string };
+      readonly archive: { readonly archiveRef: string };
+    };
+    equal(recovered.disposition, "recovered");
+    equal(recovered.terminalEvent.eventId, completion.terminalEvent.eventId);
+    equal(recovered.archive.archiveRef, completion.archive.archiveRef);
   } finally {
     await close();
     await cleanupTargetHostEffectClaimWorkspaceFixture(fixture);

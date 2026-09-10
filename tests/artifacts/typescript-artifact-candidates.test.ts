@@ -12,7 +12,6 @@ import { buildTypescriptArtifactCandidates } from "../../tooling/artifacts/build
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/tasking/target-task-planning-public-contract.js";
-import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../../src/governance/controller/demand-controller-route-public-contract.js";
 import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-delivery-preparation-public-contract.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
 import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
@@ -22,8 +21,13 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../..
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
 import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-test-review-decision-public-contract.js";
 import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-product-defect-remediation-public-contract.js";
-import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/governance/lifecycle/demand-completion-public-contract.js";
-import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/demand/publication/demand-publication-public-contract.js";
+import {
+  WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/demand/contract.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/governance/evidence/managed-evidence-public-contract.js";
 import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
@@ -190,7 +194,7 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
       deepEqual(
         listed.tools.map((tool) => tool.name).sort(),
         [
-          WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+          WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
           WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
           WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
@@ -203,7 +207,9 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
           WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
           WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME,
           WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
+          WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
           WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
           WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
           WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,

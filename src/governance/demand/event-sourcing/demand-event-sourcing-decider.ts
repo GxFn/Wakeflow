@@ -10,10 +10,15 @@ import {
 } from "../../../foundation/data/passive-own-data.js";
 import { canonicalizeJson } from "../../../foundation/data/canonical-json.js";
 import {
+  createWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
+import {
+  deriveUuidV4,
+  parseUuidV4,
+} from "../../../foundation/identity/uuid-v4.js";
 import {
   parseUtcInstant,
   UtcInstantError,
@@ -24,13 +29,16 @@ import {
   authorizeProductDefectRemediationInDemandAggregateState,
   claimTargetHostEffectInDemandAggregateState,
   completeDemandAggregateState,
+  continueDemandAggregateState,
   createTestCardInDemandAggregateState,
   createInitialDemandAggregateState,
   decideTargetResultReviewInDemandAggregateState,
+  escalateDemandAggregateState,
   observeTargetHostEffectInDemandAggregateState,
   prepareTestDeliveryInDemandAggregateState,
   prepareTargetDeliveryInDemandAggregateState,
   rearmTargetHostEffectInDemandAggregateState,
+  recordDecisionInDemandAggregateState,
   recordManagedEvidenceInDemandAggregateState,
   recordTargetResultInDemandAggregateState,
   resumeBlockedTargetReviewInDemandAggregateState,
@@ -113,6 +121,9 @@ import {
 import {
   parseDemandUncommittedEvent,
   DemandEventSourcingEventError,
+  type DemandContinuation,
+  type DemandDecisionRecord,
+  type DemandEscalation,
   type DemandUncommittedEvent,
 } from "./demand-event-sourcing-event.js";
 import {
@@ -175,6 +186,34 @@ export interface CompleteDemandCommand {
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly authority: Readonly<DemandAuthority>;
   readonly completion: Readonly<DemandCompletion>;
+}
+
+/** 升级命令由评审决定或第三次 rework 刹车发出；`escalation` 按事件 Schema 准入。 */
+export interface EscalateDemandCommand {
+  readonly commandType: "lifecycle.escalate-demand";
+  readonly commandVersion: 1;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly recordedAt: UtcInstant;
+  readonly escalation: DemandEscalation;
+}
+
+export interface RecordDecisionCommand {
+  readonly commandType: "lifecycle.record-decision";
+  readonly commandVersion: 1;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly recordedAt: UtcInstant;
+  readonly decision: DemandDecisionRecord;
+}
+
+export interface ContinueDemandCommand {
+  readonly commandType: "lifecycle.continue-demand";
+  readonly commandVersion: 1;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly recordedAt: UtcInstant;
+  readonly continuation: DemandContinuation;
 }
 
 export interface PlanTargetTaskCommand {
@@ -272,6 +311,9 @@ export type DemandEventSourcingCommand =
   | PublishDemandCommand
   | CancelDemandCommand
   | CompleteDemandCommand
+  | EscalateDemandCommand
+  | RecordDecisionCommand
+  | ContinueDemandCommand
   | RecordManagedEvidenceCommand
   | CreateTestCardCommand
   | PlanTargetTaskCommand
@@ -294,6 +336,7 @@ export type DemandEventSourcingDecisionErrorReason =
   | "task-package"
   | "demand-authority"
   | "demand-completion"
+  | "lifecycle-data"
   | "managed-evidence-manifest"
   | "test-card"
   | "test-card-generation-source"
@@ -326,6 +369,8 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing command contains an invalid Demand Authority.",
   "demand-completion":
     "Demand Event Sourcing command contains an invalid Demand Completion.",
+  "lifecycle-data":
+    "Demand Event Sourcing command carries invalid lifecycle data.",
   "managed-evidence-manifest":
     "Demand Event Sourcing command contains an invalid Managed Evidence Manifest.",
   "test-card": "Demand Event Sourcing command contains an invalid TestCard.",
@@ -401,6 +446,32 @@ const COMPLETE_DEMAND_FIELDS = Object.freeze([
   "completion",
   "eventId",
 ] as const);
+const ESCALATE_DEMAND_FIELDS = Object.freeze([
+  "commandType",
+  "commandVersion",
+  "demandId",
+  "escalation",
+  "eventId",
+  "recordedAt",
+] as const);
+const RECORD_DECISION_FIELDS = Object.freeze([
+  "commandType",
+  "commandVersion",
+  "decision",
+  "demandId",
+  "eventId",
+  "recordedAt",
+] as const);
+const CONTINUE_DEMAND_FIELDS = Object.freeze([
+  "commandType",
+  "commandVersion",
+  "continuation",
+  "demandId",
+  "eventId",
+  "recordedAt",
+] as const);
+/** 同一任务第三次 rework 自动升级（ADR-0012 D5）；阈值进配置留作后续。 */
+export const DEMAND_REWORK_ESCALATION_THRESHOLD = 3;
 const PLAN_TARGET_TASK_FIELDS = Object.freeze([
   "commandType",
   "commandVersion",
@@ -507,6 +578,61 @@ function fail(
 ): never {
   throw new DemandEventSourcingDecisionError(reason, path);
 }
+
+/** 生命周期命令的数据借事件解析器按 Schema 准入，不另写一份编解码。 */
+function lifecycleEvent(
+  eventType: DemandUncommittedEvent["eventType"],
+  data: unknown,
+): Readonly<DemandUncommittedEvent> {
+  try {
+    return parseDemandUncommittedEvent({
+      eventId: PROBE_EVENT_ID,
+      demandId: PROBE_DEMAND_ID,
+      recordedAt: PROBE_RECORDED_AT,
+      eventType,
+      data,
+    });
+  } catch (error: unknown) {
+    if (error instanceof DemandEventSourcingEventError) {
+      fail("lifecycle-data", "$/data");
+    }
+    throw error;
+  }
+}
+
+function escalationData(value: unknown): DemandEscalation {
+  const event = lifecycleEvent("lifecycle.demand-escalated", {
+    escalation: value,
+  });
+  if (event.eventType !== "lifecycle.demand-escalated") {
+    fail("lifecycle-data", "$/escalation");
+  }
+  return event.data.escalation;
+}
+
+function decisionData(value: unknown): DemandDecisionRecord {
+  const event = lifecycleEvent("lifecycle.decision-recorded", {
+    decision: value,
+  });
+  if (event.eventType !== "lifecycle.decision-recorded") {
+    fail("lifecycle-data", "$/decision");
+  }
+  return event.data.decision;
+}
+
+function continuationData(value: unknown): DemandContinuation {
+  const event = lifecycleEvent("lifecycle.demand-continued", {
+    continuation: value,
+  });
+  if (event.eventType !== "lifecycle.demand-continued") {
+    fail("lifecycle-data", "$/continuation");
+  }
+  return event.data.continuation;
+}
+
+const PROBE_DEMAND_ID = "demand_00000000-0000-4000-8000-000000000000";
+const PROBE_EVENT_ID = "demand-event_00000000-0000-4000-8000-000000000000";
+const PROBE_RECORDED_AT = "2000-01-01T00:00:00.000Z";
 
 function exactCommand(
   record: Readonly<Record<string, unknown>>,
@@ -643,6 +769,42 @@ export function parseDemandEventSourcingCommand(
       eventId: parseId(command.eventId, "demand-event", "$/eventId"),
       authority,
       completion,
+    });
+  }
+
+  if (base.commandType === "lifecycle.escalate-demand") {
+    const command = exactCommand(base, ESCALATE_DEMAND_FIELDS);
+    return Object.freeze({
+      commandType: "lifecycle.escalate-demand",
+      commandVersion: 1,
+      demandId: parseId(command.demandId, "demand", "$/demandId"),
+      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+      recordedAt: parseTime(command.recordedAt),
+      escalation: escalationData(command.escalation),
+    });
+  }
+
+  if (base.commandType === "lifecycle.record-decision") {
+    const command = exactCommand(base, RECORD_DECISION_FIELDS);
+    return Object.freeze({
+      commandType: "lifecycle.record-decision",
+      commandVersion: 1,
+      demandId: parseId(command.demandId, "demand", "$/demandId"),
+      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+      recordedAt: parseTime(command.recordedAt),
+      decision: decisionData(command.decision),
+    });
+  }
+
+  if (base.commandType === "lifecycle.continue-demand") {
+    const command = exactCommand(base, CONTINUE_DEMAND_FIELDS);
+    return Object.freeze({
+      commandType: "lifecycle.continue-demand",
+      commandVersion: 1,
+      demandId: parseId(command.demandId, "demand", "$/demandId"),
+      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+      recordedAt: parseTime(command.recordedAt),
+      continuation: continuationData(command.continuation),
     });
   }
 
@@ -1198,9 +1360,12 @@ export function computeDemandEventSourcingCommandDigest(
   );
 }
 
-function singleEvent(
-  event: Readonly<DemandUncommittedEvent>,
-): readonly [Readonly<DemandUncommittedEvent>] {
+type DecidedEvents = readonly [
+  Readonly<DemandUncommittedEvent>,
+  ...Readonly<DemandUncommittedEvent>[],
+];
+
+function singleEvent(event: Readonly<DemandUncommittedEvent>): DecidedEvents {
   return Object.freeze([event]);
 }
 
@@ -1218,7 +1383,7 @@ function parseState(value: unknown): Readonly<DemandAggregateState> | null {
 export function decideDemandEventSourcingCommand(
   stateValue: unknown,
   commandValue: unknown,
-): readonly [Readonly<DemandUncommittedEvent>] {
+): DecidedEvents {
   const state = parseState(stateValue);
   const command = parseDemandEventSourcingCommand(commandValue);
 
@@ -1358,23 +1523,29 @@ export function decideDemandEventSourcingCommand(
     );
   }
   if (command.commandType === "review.decide-target-result") {
+    let decided: Readonly<DemandAggregateState>;
     try {
-      decideTargetResultReviewInDemandAggregateState(state, command.decision);
+      decided = decideTargetResultReviewInDemandAggregateState(
+        state,
+        command.decision,
+      );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
       }
       throw error;
     }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: controllerReviewDecisionEventId(command.decision),
-        demandId: command.decision.demandId,
-        recordedAt: command.decision.decidedAt,
-        eventType: "review.target-result-decided",
-        data: { decision: command.decision },
-      }),
-    );
+    const decidedEvent = parseDemandUncommittedEvent({
+      eventId: controllerReviewDecisionEventId(command.decision),
+      demandId: command.decision.demandId,
+      recordedAt: command.decision.decidedAt,
+      eventType: "review.target-result-decided",
+      data: { decision: command.decision },
+    });
+    const brake = reworkBrakeEscalation(decided, command.decision, decidedEvent);
+    return brake === null
+      ? singleEvent(decidedEvent)
+      : Object.freeze([decidedEvent, brake]);
   }
   if (command.commandType === "result.record-target-result") {
     try {
@@ -1523,6 +1694,70 @@ export function decideDemandEventSourcingCommand(
     );
   }
   if (state.demandId !== command.demandId) fail("identity", "$/demandId");
+  if (command.commandType === "lifecycle.escalate-demand") {
+    try {
+      escalateDemandAggregateState(state, command.escalation, command.eventId);
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/awaitingDecision");
+      }
+      throw error;
+    }
+    return singleEvent(
+      parseDemandUncommittedEvent({
+        eventId: command.eventId,
+        demandId: command.demandId,
+        recordedAt: command.recordedAt,
+        eventType: "lifecycle.demand-escalated",
+        data: { escalation: command.escalation },
+      }),
+    );
+  }
+  if (command.commandType === "lifecycle.record-decision") {
+    try {
+      recordDecisionInDemandAggregateState(
+        state,
+        command.decision.escalationEventId,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/awaitingDecision");
+      }
+      throw error;
+    }
+    return singleEvent(
+      parseDemandUncommittedEvent({
+        eventId: command.eventId,
+        demandId: command.demandId,
+        recordedAt: command.recordedAt,
+        eventType: "lifecycle.decision-recorded",
+        data: { decision: command.decision },
+      }),
+    );
+  }
+  if (command.commandType === "lifecycle.continue-demand") {
+    try {
+      continueDemandAggregateState(
+        state,
+        command.continuation.kind,
+        command.eventId,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/lifecycle");
+      }
+      throw error;
+    }
+    return singleEvent(
+      parseDemandUncommittedEvent({
+        eventId: command.eventId,
+        demandId: command.demandId,
+        recordedAt: command.recordedAt,
+        eventType: "lifecycle.demand-continued",
+        data: { continuation: command.continuation },
+      }),
+    );
+  }
   if (state.lifecycle !== "active") fail("transition", "$state/lifecycle");
   return singleEvent(
     parseDemandUncommittedEvent({
@@ -1532,6 +1767,80 @@ export function decideDemandEventSourcingCommand(
       eventType: "lifecycle.demand-cancelled",
       data: { reason: command.reason },
     }),
+  );
+}
+
+/**
+ * 第三次 rework 刹车：评审决定为 rework 且该目标累计 rework 次数达到阈值时，
+ * 同一提交附带一个 `lifecycle.demand-escalated`；升级事件标识由决定事件派生。
+ */
+function reworkBrakeEscalation(
+  decided: Readonly<DemandAggregateState>,
+  decision: DecideTargetResultReviewCommand["decision"],
+  decidedEvent: Readonly<DemandUncommittedEvent>,
+): Readonly<DemandUncommittedEvent> | null {
+  if (decision.decision !== "rework" || decided.awaitingDecision !== undefined) {
+    return null;
+  }
+  const target = decided.targetTasks.find(
+    (entry) => entry.targetTaskId === decision.targetTaskId,
+  );
+  if (
+    target === undefined ||
+    target.workType === "test" ||
+    (target.reworkCount ?? 0) < DEMAND_REWORK_ESCALATION_THRESHOLD
+  ) {
+    return null;
+  }
+  const reworkCount = target.reworkCount ?? 0;
+  return parseDemandUncommittedEvent({
+    eventId: reworkBrakeEventId(decidedEvent.eventId),
+    demandId: decision.demandId,
+    recordedAt: decision.decidedAt,
+    eventType: "lifecycle.demand-escalated",
+    data: {
+      escalation: {
+        issue: `Target task ${decision.targetTaskId} was sent back for rework ${reworkCount} times; the third rework brake requires a user decision before further delivery.`,
+        requirementRefs: [],
+        evidence: [
+          {
+            kind: "review-decision",
+            id: decision.targetReviewDecisionId,
+            digest: decision.decisionDigest,
+          },
+        ],
+        options: [
+          {
+            option: "Narrow or restate the requirement, then plan a replacement task package.",
+            impact: "Requires a supplementary requirement package from Design.",
+          },
+          {
+            option: "Accept the current result with the recorded residual risks.",
+            impact: "The demand can complete without another rework round.",
+          },
+          {
+            option: "Cancel the demand.",
+            impact: "Results and evidence are archived; the requirement package is withdrawn.",
+          },
+        ],
+        recommendation:
+          "Review the three rework decisions before choosing; repeated rework usually means the task package or the requirement is under-specified.",
+        source: {
+          kind: "rework-brake",
+          targetTaskId: decision.targetTaskId,
+          reworkCount,
+        },
+      },
+    },
+  });
+}
+
+function reworkBrakeEventId(
+  decisionEventId: WakeflowDurableId<"demand-event">,
+): WakeflowDurableId<"demand-event"> {
+  return createWakeflowDurableId(
+    "demand-event",
+    parseUuidV4(deriveUuidV4("demand-event:rework-brake", decisionEventId), "$eventId"),
   );
 }
 
@@ -1694,6 +2003,47 @@ export function evolveDemandEventSourcingState(
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
+      }
+      throw error;
+    }
+  }
+  if (event.eventType === "lifecycle.demand-escalated") {
+    try {
+      return escalateDemandAggregateState(
+        state,
+        event.data.escalation,
+        event.eventId,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/awaitingDecision");
+      }
+      throw error;
+    }
+  }
+  if (event.eventType === "lifecycle.decision-recorded") {
+    try {
+      return recordDecisionInDemandAggregateState(
+        state,
+        event.data.decision.escalationEventId,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/awaitingDecision");
+      }
+      throw error;
+    }
+  }
+  if (event.eventType === "lifecycle.demand-continued") {
+    try {
+      return continueDemandAggregateState(
+        state,
+        event.data.continuation.kind,
+        event.eventId,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/lifecycle");
       }
       throw error;
     }

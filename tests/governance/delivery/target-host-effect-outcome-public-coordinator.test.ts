@@ -4,7 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { executeDemandControllerRoutePublicRequest } from "../../../src/governance/controller/demand-controller-route-public-coordinator.js";
+import { inspectActiveRoute } from "../../capabilities/demand/route.fixture.js";
 import { parseTargetHostEffectOutcomePublicRequest } from "../../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
 import {
   executeTargetHostEffectOutcomePublicRequest,
@@ -187,7 +187,7 @@ test("Outcome Public Coordinator记录Implementation观察、保持隐私并幂�
         error.eventAuthority === "current",
     );
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.intent.demandId,
     });
@@ -279,7 +279,7 @@ test("Outcome Public Coordinator从stored Test Claim派生目标并在拒绝Even
     deepEqual(stringPathsContaining(recorded, fixture.testRawHandle), []);
     deepEqual(stringPathsContaining(recorded, RAW_ATTEMPT), []);
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.testClaimRequest.demandId,
     });

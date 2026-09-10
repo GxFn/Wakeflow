@@ -2,7 +2,7 @@ import { equal, rejects, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { executeDemandControllerRoutePublicRequest } from "../../../src/governance/controller/demand-controller-route-public-coordinator.js";
+import { inspectActiveRoute } from "../../capabilities/demand/route.fixture.js";
 import {
   parseControllerImplementationReviewDecisionPublicRequest,
   ControllerImplementationReviewDecisionPublicContractError,
@@ -112,7 +112,7 @@ test("Decision Public Coordinator只记录Controller独立判断并精确幂等"
     equal(containsText(decided, fixture.workspacePath), false);
     equal(containsText(decided, fixture.rawHandle), false);
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.intent.demandId,
     });

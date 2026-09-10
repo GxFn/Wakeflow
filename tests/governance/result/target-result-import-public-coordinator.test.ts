@@ -7,7 +7,7 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { executeDemandControllerRoutePublicRequest } from "../../../src/governance/controller/demand-controller-route-public-coordinator.js";
+import { inspectActiveRoute } from "../../capabilities/demand/route.fixture.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { executeTargetHostEffectClaimPublicRequest } from "../../../src/governance/delivery/target-host-effect-claim-public-coordinator.js";
@@ -222,7 +222,7 @@ test("Result Import Public Coordinator生成Implementation TargetResult并释放
     deepEqual(stringPathsContaining(imported, fixture.workspacePath), []);
     deepEqual(stringPathsContaining(imported, fixture.rawHandle), []);
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.intent.demandId,
     });
@@ -351,7 +351,7 @@ test("Result Import Public Coordinator从Test Report生成共享TargetResult", a
     );
     equal(imported.claimAuthority, "released");
 
-    const route = await executeDemandControllerRoutePublicRequest({
+    const route = await inspectActiveRoute({
       root: fixture.workspacePath,
       demandId: fixture.testClaimRequest.demandId,
     });

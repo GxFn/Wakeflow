@@ -17,7 +17,7 @@ import {
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 
-test("Ledger layout inspection observes only the two fixed containers", async () => {
+test("Ledger layout inspection observes only the three fixed containers", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-ledger-layout-"));
   const root = await RootedDirectory.open(rootPath);
   try {
@@ -27,6 +27,7 @@ test("Ledger layout inspection observes only the two fixed containers", async ()
     deepEqual(absent.entries.map((entry) => [entry.resourcePath, entry.status]), [
       ["requirements", "absent"],
       ["transactions", "absent"],
+      ["archives", "absent"],
     ]);
 
     const store = new LedgerAuthorityStore(root);
@@ -36,6 +37,7 @@ test("Ledger layout inspection observes only the two fixed containers", async ()
     deepEqual(current.entries.map((entry) => entry.observedMode), [
       0o755,
       0o700,
+      0o755,
     ]);
 
     chmodSync(path.join(rootPath, "transactions"), 0o755);

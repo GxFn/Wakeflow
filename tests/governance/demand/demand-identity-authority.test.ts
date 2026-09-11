@@ -60,8 +60,10 @@ const REQUIREMENT_LINEAGE = parseRequirementLineageReference({
   recordDigest: `sha256:${"a".repeat(64)}`,
 });
 
+const POD_ID = "pod_99999999-9999-4999-8999-999999999999";
+
 function identityDraft(
-  executionPlacement: unknown = { mode: "main" as const },
+  podId: unknown = POD_ID,
   source: unknown = REQUIREMENT_LINEAGE,
 ) {
   return {
@@ -72,7 +74,7 @@ function identityDraft(
     completionDefinition: "删除 snapshot 后 replay 得到同一 state digest",
     demandType: "requirement" as const,
     source,
-    executionPlacement,
+    podId,
   };
 }
 
@@ -246,51 +248,4 @@ test("Requirement lineage is a closed JSON reference bound to the Ledger layout"
     (error: unknown) =>
       error instanceof RequirementLineageError && error.reason === "path",
   );
-});
-
-test("isolated placement is proven by a package member inside the authority closure", async () => {
-  const { rootPath, root, store, loaded, refs } = await ledgerFixture();
-  try {
-    const placementRef = refs.find((reference) => reference.role === "requirement");
-    if (placementRef === undefined) {
-      throw new Error("Expected requirement member fixture.");
-    }
-    const identity = createDemandIdentity(identityDraft({
-      mode: "isolated",
-      authorizationRef: placementRef,
-    }, requirementLineageOf(loaded)), { clock: () => CREATED_AT });
-    const authority = createDemandAuthority(identity, {
-      authorityRefs: refs,
-      testingDecision: {
-        mode: "controller-only",
-        summary: "运行新增 TypeScript 聚焦测试",
-        environmentMemberRef: null,
-      },
-    });
-    equal(identity.executionPlacement.mode, "isolated");
-    equal(
-      (await admitDemandAuthority(identity, authority, store))
-        .resolvedAuthority.length,
-      refs.length,
-    );
-
-    const stalePlacementIdentity = createDemandIdentity(identityDraft({
-      mode: "isolated",
-      authorizationRef: {
-        ...placementRef,
-        memberDigest: `sha256:${"f".repeat(64)}`,
-      },
-    }, requirementLineageOf(loaded)), { clock: () => CREATED_AT });
-    throws(
-      () => createDemandAuthority(stalePlacementIdentity, {
-        authorityRefs: refs,
-        testingDecision: authority.testingDecision,
-      }),
-      (error: unknown) =>
-        error instanceof DemandAuthorityError && error.reason === "placement",
-    );
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
 });

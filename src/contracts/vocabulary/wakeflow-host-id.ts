@@ -5,7 +5,7 @@
  * 在 hosts 层按同一标识登记。
  */
 
-const WAKEFLOW_HOST_IDS = Object.freeze(["codex", "claude-code"] as const);
+export const WAKEFLOW_HOST_IDS = Object.freeze(["codex", "claude-code"] as const);
 
 export type WakeflowHostId = (typeof WAKEFLOW_HOST_IDS)[number];
 

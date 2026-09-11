@@ -26,6 +26,7 @@ function state(overrides: Partial<EndpointState> = {}): EndpointState {
     windowKnown: true,
     launchIntentDigest: INTENT,
     locatorProvider: "none",
+    worktreeRequired: false,
     binding: null,
     claim: null,
     handleOwners: new Map(),
@@ -35,9 +36,18 @@ function state(overrides: Partial<EndpointState> = {}): EndpointState {
   };
 }
 
-const register = (handleValue: string, hasTmuxCoordinates = false): EndpointCommand => ({
+const register = (
+  handleValue: string,
+  hasTmuxCoordinates = false,
+  hasWorktreeObservation = false,
+): EndpointCommand => ({
   operation: "register",
-  observation: { handleValue, launchIntentDigest: INTENT, hasTmuxCoordinates },
+  observation: {
+    handleValue,
+    launchIntentDigest: INTENT,
+    hasTmuxCoordinates,
+    hasWorktreeObservation,
+  },
 });
 
 test("register：无绑定登记、同句柄重放、异句柄冲突、意图漂移与缺 hook 证据拒绝", () => {
@@ -61,6 +71,7 @@ test("register：无绑定登记、同句柄重放、异句柄冲突、意图漂
       handleValue: "session-a",
       launchIntentDigest: `sha256:${"9".repeat(64)}`,
       hasTmuxCoordinates: false,
+      hasWorktreeObservation: false,
     },
   });
   equal(drift.accepted === false && drift.reason, "launch-intent-drift");
@@ -96,7 +107,12 @@ test("register：无绑定登记、同句柄重放、异句柄冲突、意图漂
 test("replace：CAS 旧绑定、拒绝持有声明与未变句柄，接受新句柄", () => {
   const replace = (handleValue: string, digest = BINDING.bindingDigest): EndpointCommand => ({
     operation: "replace",
-    observation: { handleValue, launchIntentDigest: INTENT, hasTmuxCoordinates: false },
+    observation: {
+      handleValue,
+      launchIntentDigest: INTENT,
+      hasTmuxCoordinates: false,
+      hasWorktreeObservation: false,
+    },
     expectedBindingId: BINDING.bindingId,
     expectedBindingDigest: digest,
   });

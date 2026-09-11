@@ -19,7 +19,7 @@ import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DeliveryEnvelope } from "../../../src/governance/delivery/delivery-envelope.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { executeManagedEvidencePublicRequest } from "../../../src/governance/evidence/managed-evidence-public-coordinator.js";
+import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
 import {
   readDemandResultReviewSnapshot,
   type DemandResultReviewSnapshot,
@@ -91,17 +91,6 @@ export interface ControllerImplementationReviewDecisionServiceFixture extends De
   readonly decisionRequest: Readonly<ImplementationReviewDecisionRequest>;
 }
 
-let evidenceSequence = 0;
-
-/** 每次证据发布消耗三个 UUID（evidence、event、commit）；序列保证同一进程内不重复。 */
-function evidenceUuidFactory(): () => string {
-  return () => {
-    evidenceSequence += 1;
-    const suffix = evidenceSequence.toString(16).padStart(12, "0");
-    return `e1e1e1e1-e1e1-4e1e-8e1e-${suffix}`;
-  };
-}
-
 /** 当前 Demand 事件流修订：追加请求的期望修订由此读取，不写常量。 */
 export async function currentFixtureStreamRevision(
   fixture: Readonly<{ readonly workspacePath: string; readonly demandId: string }>,
@@ -155,30 +144,35 @@ export async function recordFixtureEvidence(
   mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o755 });
   writeFileSync(filePath, content, { mode: 0o644 });
   const selection = {
-    evidenceType: "test-output",
+    kind: "test-output",
     source: {
+      kind: "managed-path",
       root: { kind: "repository", repositoryId: PLANNING_REPOSITORY_ID },
       path: relativePath,
       resourceType: "file",
     },
-    sensitivity: "internal",
-    opaqueContentPolicy: "reject",
+    contentReview: "reject",
   } as const;
-  const preview = await executeManagedEvidencePublicRequest(
+  const preview = await executeRecordEvidenceRequest(
     { root: fixture.workspacePath, mode: "preview", demandId: fixture.demandId, selection },
-    { preview: { uuidFactory: evidenceUuidFactory(), clock: () => capturedAt } },
+    { clock: () => capturedAt },
   );
-  if (preview.mode !== "preview" || preview.planDigest === null) {
-    throw new Error("Expected a ready managed evidence plan.");
+  if (preview.kind !== "WakeflowRecordEvidencePreview" || preview.planDigest === null) {
+    throw new Error(`Expected a ready evidence plan: ${preview.kind === "WakeflowRecordEvidencePreview" ? preview.blockers.join(",") : preview.kind}`);
   }
-  const applied = await executeManagedEvidencePublicRequest({
-    root: fixture.workspacePath,
-    mode: "apply",
-    demandId: fixture.demandId,
-    plan: preview.plan,
-    planDigest: preview.planDigest,
-  });
-  if (applied.mode !== "apply") throw new Error("Expected an applied managed evidence record.");
+  const applied = await executeRecordEvidenceRequest(
+    {
+      root: fixture.workspacePath,
+      mode: "apply",
+      demandId: fixture.demandId,
+      selection,
+      planDigest: preview.planDigest,
+    },
+    { clock: () => capturedAt },
+  );
+  if (applied.kind !== "WakeflowRecordEvidenceMutation" || applied.publication === null) {
+    throw new Error("Expected a recorded evidence publication.");
+  }
   const bytes = encodeUtf8(content);
   return Object.freeze({
     evidenceId: applied.publication.evidenceId,

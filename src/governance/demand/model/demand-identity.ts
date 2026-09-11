@@ -46,11 +46,6 @@ import {
   type UtcWallClock,
 } from "../../../foundation/time/wall-clock.js";
 import {
-  LedgerAuthorityStoreError,
-  parseLedgerAuthorityMemberReference,
-  type LedgerAuthorityMemberReference,
-} from "../../ledger/ledger-authority-store.js";
-import {
   parseRequirementLineageReference,
   RequirementLineageError,
   type RequirementLineageReference,
@@ -59,8 +54,8 @@ import {
 /**
  * Wakeflow Governance / Demand Model：事件溯源聚合的不可变身份记录。
  *
- * 身份记录固定 Demand 的目标、类型、需求包谱系引用和执行位置；它不是事件、
- * 快照或可变状态。所有正常 Demand 必须在发布时与必需的权威关系记录一起创建，之后
+ * 身份记录固定 Demand 的目标、类型、需求包谱系引用和所属 pod（ADR-0010 D3）；它不是
+ * 事件、快照或可变状态。pod 的存在性由 demand 切片按当前配置校验，身份只记标识。所有正常 Demand 必须在发布时与必需的权威关系记录一起创建，之后
  * 不能被事件存储替换。
  */
 
@@ -69,13 +64,6 @@ const DEMAND_IDENTITY_ARTIFACT_KIND =
 const DEMAND_IDENTITY_SCHEMA_VERSION = 1 as const;
 
 export type DemandType = "requirement" | "bug" | "supplement" | "research";
-
-export type DemandExecutionPlacement =
-  | Readonly<{ readonly mode: "main" }>
-  | Readonly<{
-      readonly mode: "isolated";
-      readonly authorizationRef: Readonly<LedgerAuthorityMemberReference>;
-    }>;
 
 export interface DemandIdentity {
   readonly artifactKind: typeof DEMAND_IDENTITY_ARTIFACT_KIND;
@@ -88,7 +76,7 @@ export interface DemandIdentity {
   readonly completionDefinition: string;
   readonly demandType: DemandType;
   readonly source: Readonly<RequirementLineageReference>;
-  readonly executionPlacement: DemandExecutionPlacement;
+  readonly podId: WakeflowDurableId<"pod">;
 }
 
 export interface CreateDemandIdentityOptions {
@@ -103,7 +91,6 @@ export type DemandIdentityErrorReason =
   | "time"
   | "text"
   | "source"
-  | "placement"
   | "representation";
 
 const ERROR_MESSAGES = {
@@ -114,7 +101,6 @@ const ERROR_MESSAGES = {
   "time": "Demand identity contains an invalid creation time.",
   "text": "Demand identity contains non-canonical text.",
   "source": "Demand identity requirement lineage is invalid.",
-  "placement": "Demand identity execution placement is invalid.",
   "representation": "Demand identity bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<DemandIdentityErrorReason, string>>;
 
@@ -147,8 +133,8 @@ const DRAFT_FIELDS = Object.freeze([
   "completionDefinition",
   "demandId",
   "demandType",
-  "executionPlacement",
   "goal",
+  "podId",
   "programId",
   "source",
   "title",
@@ -173,7 +159,7 @@ function parseCanonicalText(value: string, path: string): string {
   return value;
 }
 
-function parseId<Kind extends "program" | "demand">(
+function parseId<Kind extends "program" | "demand" | "pod">(
   value: unknown,
   kind: Kind,
   path: string,
@@ -196,24 +182,6 @@ function normalizeWire(
     if (error instanceof RequirementLineageError) fail("source", "$/source");
     throw error;
   }
-  let executionPlacement: DemandExecutionPlacement;
-  if (wire.executionPlacement.mode === "main") {
-    executionPlacement = Object.freeze({ mode: "main" });
-  } else {
-    try {
-      executionPlacement = Object.freeze({
-        mode: "isolated",
-        authorizationRef: parseLedgerAuthorityMemberReference(
-          wire.executionPlacement.authorizationRef,
-        ),
-      });
-    } catch (error: unknown) {
-      if (error instanceof LedgerAuthorityStoreError) {
-        fail("placement", "$/executionPlacement/authorizationRef");
-      }
-      throw error;
-    }
-  }
   let createdAt: UtcInstant;
   try {
     createdAt = parseUtcInstant(wire.createdAt, "$/createdAt");
@@ -235,7 +203,7 @@ function normalizeWire(
     ),
     demandType: wire.demandType,
     source,
-    executionPlacement,
+    podId: parseId(wire.podId, "pod", "$/podId"),
   });
 }
 
@@ -302,7 +270,7 @@ export function createDemandIdentity(
     completionDefinition: record.completionDefinition,
     demandType: record.demandType,
     source: record.source,
-    executionPlacement: record.executionPlacement,
+    podId: record.podId,
   });
   return Object.freeze({
     ...admitted,

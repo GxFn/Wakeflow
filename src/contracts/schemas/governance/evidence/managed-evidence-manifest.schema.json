@@ -3,8 +3,8 @@
   "$id": "urn:wakeflow:governance:evidence:managed-evidence-manifest:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA",
   "title": "WakeflowManagedEvidenceManifest",
-  "description": "Wakeflow从已配置本地资源根捕获的一份不可变managed evidence内容与provenance清单。",
-  "$comment": "本Schema闭合portable manifest shape。typed ID、真实UTC、NFC、payload artifactDigest、file-source单文件映射、opaque ref子集/顺序、为final record的manifest.json与payload/前缀预留的容量，以及manifestDigest由governance/evidence/managed-evidence-manifest运行时codec复验。Manifest不包含payload字节、外部URL/Git locator、Event位置、Controller acceptance或隐含privacy scan结论。",
+  "description": "Wakeflow 记录的一份不可变受管证据的内容与来源清单：从配置根复制的文件或目录树，或对宿主 hook 观察记录、https 链接、git 提交的引用投影。",
+  "$comment": "本 Schema 闭合 portable manifest shape。typed ID、真实 UTC、NFC、payload artifactDigest、非目录树来源的单一 content 文件映射、kind 与来源的关系、opaque ref 与隐私命中的子集与顺序、为 final record 的 manifest.json 与 payload/ 前缀预留的容量，以及 manifestDigest 由 governance/evidence/managed-evidence-manifest 运行时 codec 复验。Manifest 不包含 payload 字节、原始宿主句柄、会话工作目录、Event 位置或 Controller acceptance。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,11 +14,10 @@
     "programId",
     "demandId",
     "demandAuthorityDigest",
-    "evidenceType",
+    "kind",
     "capturedAt",
     "recordedBy",
     "source",
-    "sensitivity",
     "payload",
     "contentReview",
     "manifestDigest"
@@ -42,9 +41,9 @@
     "demandAuthorityDigest": {
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     },
-    "evidenceType": {
-      "$ref": "#/$defs/token",
-      "description": "用于审阅和检索的领域标签；未知标签不得被消费者解释为权限、充分性或验收策略。"
+    "kind": {
+      "$ref": "#/$defs/evidenceKind",
+      "description": "闭集种类；未知种类不得被消费者解释为权限、充分性或验收策略。"
     },
     "capturedAt": {
       "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
@@ -54,9 +53,6 @@
     },
     "source": {
       "$ref": "#/$defs/source"
-    },
-    "sensitivity": {
-      "enum": ["internal", "public"]
     },
     "payload": {
       "$ref": "#/$defs/payload"
@@ -93,11 +89,36 @@
       "type": "string",
       "pattern": "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "token": {
+    "evidenceKind": {
+      "enum": [
+        "hook-observation",
+        "transcript",
+        "test-output",
+        "diff",
+        "document",
+        "link",
+        "commit"
+      ]
+    },
+    "hostId": {
+      "enum": ["codex", "claude-code"]
+    },
+    "recordId": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 128,
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "hookEvent": {
+      "enum": ["session-start", "user-prompt-submit", "stop", "session-end", "turn-complete"]
+    },
+    "commitOid": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "httpsUrl": {
+      "type": "string",
+      "minLength": 9,
+      "maxLength": 2048,
+      "pattern": "^https://[^\\s\"'`<>]+$"
     },
     "recordedBy": {
       "type": "object",
@@ -113,10 +134,29 @@
       }
     },
     "source": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/managedPathSource"
+        },
+        {
+          "$ref": "#/$defs/observationSource"
+        },
+        {
+          "$ref": "#/$defs/linkSource"
+        },
+        {
+          "$ref": "#/$defs/commitSource"
+        }
+      ]
+    },
+    "managedPathSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["root", "path", "resourceType"],
+      "required": ["kind", "root", "path", "resourceType"],
       "properties": {
+        "kind": {
+          "const": "managed-path"
+        },
         "root": {
           "oneOf": [
             {
@@ -124,6 +164,9 @@
             },
             {
               "$ref": "#/$defs/supportSurfaceRoot"
+            },
+            {
+              "$ref": "#/$defs/podWorktreeRoot"
             }
           ]
         },
@@ -132,6 +175,118 @@
         },
         "resourceType": {
           "enum": ["file", "tree"]
+        }
+      }
+    },
+    "observationSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "hostId",
+        "recordId",
+        "event",
+        "recordedAt",
+        "turnId",
+        "promptDigest",
+        "lastAssistantMessageDigest",
+        "transcript",
+        "recordDigest"
+      ],
+      "description": "宿主 hook 观察记录的脱敏投影：不含原始会话句柄与工作目录；transcript 只记有无。",
+      "properties": {
+        "kind": {
+          "const": "observation"
+        },
+        "hostId": {
+          "$ref": "#/$defs/hostId"
+        },
+        "recordId": {
+          "$ref": "#/$defs/recordId"
+        },
+        "event": {
+          "$ref": "#/$defs/hookEvent"
+        },
+        "recordedAt": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        },
+        "turnId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9._:-]{1,256}$"
+            }
+          ]
+        },
+        "promptDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          ]
+        },
+        "lastAssistantMessageDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          ]
+        },
+        "transcript": {
+          "enum": ["present", "absent"]
+        },
+        "recordDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "linkSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "url", "digest"],
+      "properties": {
+        "kind": {
+          "const": "link"
+        },
+        "url": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "digest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          ]
+        }
+      }
+    },
+    "commitSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "repositoryId", "commitOid"],
+      "properties": {
+        "kind": {
+          "const": "commit"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "commitOid": {
+          "$ref": "#/$defs/commitOid"
         }
       }
     },
@@ -174,10 +329,29 @@
         }
       }
     },
+    "privacyFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "line", "kind"],
+      "properties": {
+        "ref": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": ["unlisted-absolute-path", "bare-uuid"]
+        }
+      }
+    },
     "contentReview": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["disposition", "opaqueFileRefs"],
+      "required": ["disposition", "opaqueFileRefs", "privacyFindings"],
+      "description": "Controller 显式确认过的内容：含控制字符的 opaque 成员与非凭证类隐私命中；凭证类命中永远不能进入记录。",
       "properties": {
         "disposition": {
           "enum": ["controller-confirmed", "not-required"]
@@ -188,6 +362,13 @@
           "uniqueItems": true,
           "items": {
             "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+          }
+        },
+        "privacyFindings": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/privacyFinding"
           }
         }
       },
@@ -206,19 +387,36 @@
               "opaqueFileRefs": {
                 "type": "array",
                 "maxItems": 0
-              }
-            }
-          },
-          "else": {
-            "properties": {
-              "opaqueFileRefs": {
+              },
+              "privacyFindings": {
                 "type": "array",
-                "minItems": 1
+                "maxItems": 0
               }
             }
           }
         }
       ]
+    },
+    "podId": {
+      "type": "string",
+      "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "podWorktreeRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "podId", "repositoryId"],
+      "description": "The git worktree checkout a worktree pod's product window registered for one repository; resolved through the pod's worktree receipt.",
+      "properties": {
+        "kind": {
+          "const": "pod-worktree"
+        },
+        "podId": {
+          "$ref": "#/$defs/podId"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        }
+      }
     }
   }
 }

@@ -39,8 +39,13 @@ import {
   type ManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
 import {
+  createFileAtomically,
+  DurableAtomicFileWriteError,
+} from "../../foundation/filesystem/durable-atomic-file-write.js";
+import {
   MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME,
 } from "./managed-evidence-resource-paths.js";
+import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 import {
   MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
   MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE,
@@ -54,8 +59,9 @@ import {
  * Wakeflow Governance / Evidence：Managed Evidence payload的source-specific物化。
  *
  * file来源执行一份stable streaming copy；tree来源打开exact子根并复用Loaded Artifact
- * transfer，在复制前后重算完整位置无关identity。目标只限已存在stage中的`payload/`；
- * 本模块不读取journal、不创建stage根、不写Manifest、不发布final或Event。
+ * transfer，在复制前后重算完整位置无关identity；引用类来源（observation、link、commit）
+ * 不读任何外部字节，`payload/content` 由 Manifest 的来源投影确定性重建。目标只限已存在
+ * stage中的`payload/`；本模块不读取journal、不创建stage根、不写Manifest、不发布final或Event。
  */
 
 export interface ManagedEvidencePublicationPayloadMaterializationOptions {
@@ -333,11 +339,13 @@ async function materializeFilePayload(
   if (!progress.missingFiles.includes(PAYLOAD_CONTENT_REF)) {
     return Object.freeze([]);
   }
+  const source = transaction.manifest.source;
+  if (source.kind !== "managed-path") fail("input", "$transaction/manifest/source");
   try {
     await copyFileToCandidateDurably(
       sourceRoot,
       demandRoot,
-      transaction.manifest.source.path,
+      source.path,
       joinDirectoryTreeCandidatePath(payloadRoot, CONTENT_REF),
       {
         byteCount: manifestFile.bytes,
@@ -358,16 +366,75 @@ async function materializeFilePayload(
   return Object.freeze([manifestFile.ref]);
 }
 
+function mapProjectionWriteError(error: DurableAtomicFileWriteError): never {
+  if (error.reason === "aborted") fail("aborted", "$signal");
+  if (error.reason === "capacity") fail("capacity", "$payload");
+  if (error.reason === "root-scope") fail("destination-root-scope", "$demandRoot");
+  if (error.reason === "target-exists") fail("stage-conflict", "$payload");
+  if (
+    error.reason === "commit-uncertain" ||
+    error.reason === "durability-failure" ||
+    error.reason === "stage-cleanup-failure" ||
+    error.reason === "stage-recovery-required" ||
+    error.reason === "close-failure"
+  ) {
+    fail("recovery-required", "$payload");
+  }
+  fail("operation-failure", "$payload");
+}
+
+/** 引用类来源：从 Manifest 来源重建投影字节，核对清单里的 content 身份后原子写入。 */
+async function materializeProjectionPayload(
+  demandRoot: RootedDirectory,
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
+  plan: Readonly<ManagedEvidenceRecordTreePlan>,
+  progress: Readonly<DirectoryTreeCandidateProgress>,
+  signal: AbortSignal | undefined,
+): Promise<readonly PortableResourcePath[]> {
+  const source = transaction.manifest.source;
+  if (source.kind === "managed-path") fail("input", "$transaction/manifest/source");
+  const payloadRoot = await ensurePayloadRoot(demandRoot, plan, progress, signal);
+  const manifestFile = transaction.manifest.payload.treeManifest.files[0];
+  if (
+    manifestFile === undefined ||
+    manifestFile.ref !== CONTENT_REF ||
+    transaction.manifest.payload.treeManifest.files.length !== 1
+  ) {
+    fail("input", "$transaction/manifest/payload");
+  }
+  if (!progress.missingFiles.includes(PAYLOAD_CONTENT_REF)) {
+    return Object.freeze([]);
+  }
+  const projection = encodeManagedEvidenceSourceProjection(source);
+  if (projection.byteCount !== manifestFile.bytes || projection.digest !== manifestFile.digest) {
+    fail("source-changed", "$source");
+  }
+  try {
+    await createFileAtomically(
+      demandRoot,
+      joinDirectoryTreeCandidatePath(payloadRoot, CONTENT_REF),
+      projection.bytes,
+      {
+        mode: MANAGED_EVIDENCE_RECORD_FILE_MODE,
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
+  } catch (error: unknown) {
+    if (error instanceof DurableAtomicFileWriteError) mapProjectionWriteError(error);
+    throw error;
+  }
+  return Object.freeze([manifestFile.ref]);
+}
+
 async function openTreeSource(
   sourceRoot: RootedDirectory,
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
 ): Promise<RootedDirectory> {
   let observation;
   try {
-    observation = await sourceRoot.inspectExistingResource(
-      transaction.manifest.source.path,
-      "$source",
-    );
+    const source = transaction.manifest.source;
+    if (source.kind !== "managed-path") fail("input", "$transaction/manifest/source");
+    observation = await sourceRoot.inspectExistingResource(source.path, "$source");
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (
@@ -491,14 +558,13 @@ async function materializeTreePayload(
 
 /** 按Manifest资源类型稳定物化stage payload，不创建或解释Manifest marker。 */
 export async function materializeManagedEvidencePublicationPayload(
-  sourceRootValue: RootedDirectory,
+  sourceRootValue: RootedDirectory | null,
   demandRootValue: RootedDirectory,
   transactionValue: unknown,
   planValue: unknown,
   progress: Readonly<DirectoryTreeCandidateProgress>,
   optionsValue: ManagedEvidencePublicationPayloadMaterializationOptions = {},
 ): Promise<readonly PortableResourcePath[]> {
-  assertRoot(sourceRootValue, "$sourceRoot");
   assertRoot(demandRootValue, "$demandRoot");
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
@@ -506,7 +572,19 @@ export async function materializeManagedEvidencePublicationPayload(
   const plan = parseRecordPlan(planValue);
   assertPlanRelation(transaction, plan);
   assertProgressRelation(progress, plan);
-  return transaction.manifest.source.resourceType === "file"
+  const source = transaction.manifest.source;
+  if (source.kind !== "managed-path") {
+    if (sourceRootValue !== null) fail("input", "$sourceRoot");
+    return materializeProjectionPayload(
+      demandRootValue,
+      transaction,
+      plan,
+      progress,
+      options.signal,
+    );
+  }
+  assertRoot(sourceRootValue, "$sourceRoot");
+  return source.resourceType === "file"
     ? materializeFilePayload(
         sourceRootValue,
         demandRootValue,

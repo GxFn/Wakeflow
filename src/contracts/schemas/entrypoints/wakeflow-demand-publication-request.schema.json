@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:demand-publication-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA",
   "title": "WakeflowDemandPublicationRequestV1",
-  "description": "wakeflow_create_demand 的请求：认领一个 pending 需求包即创建 Demand。preview 零写，apply 带 planDigest 重算同一计划，recover 带 operationId（即 demandId）向前恢复。Demand 类型、测试决策、权威成员、时间与标识都由 Wakeflow 派生。",
+  "description": "wakeflow_create_demand 的请求：认领一个 pending 需求包即创建 Demand。preview 零写，apply 带 planDigest 重算同一计划，recover 带 operationId（即 demandId）向前恢复。podId 缺省为 primary pod；同一 pod 同一时刻只推进一个 Demand（ADR-0010 D3）。Demand 类型、测试决策、权威成员、时间与标识都由 Wakeflow 派生。",
   "type": "object",
   "oneOf": [
     {
@@ -31,6 +31,10 @@
         "requirementId": {
           "$ref": "#/$defs/requirementId"
         },
+        "podId": {
+          "$ref": "#/$defs/podId",
+          "description": "Target pod; omitted means the primary pod. The pod must be open (not closing) and must not have an active Demand."
+        },
         "demand": {
           "$ref": "#/$defs/authoredDemand"
         }
@@ -55,7 +59,7 @@
     "authoredDemand": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["title", "goal", "completionDefinition", "executionPlacement"],
+      "required": ["title", "goal", "completionDefinition"],
       "properties": {
         "title": {
           "$ref": "#/$defs/identityText"
@@ -65,16 +69,6 @@
         },
         "completionDefinition": {
           "$ref": "#/$defs/identityText"
-        },
-        "executionPlacement": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["mode"],
-          "properties": {
-            "mode": {
-              "const": "main"
-            }
-          }
         }
       }
     },
@@ -100,6 +94,10 @@
     "requirementId": {
       "type": "string",
       "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "podId": {
+      "type": "string",
+      "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     }
   }
 }

@@ -141,7 +141,15 @@
       "pattern": "^ts-[1-9][0-9]?$"
     },
     "evidenceKind": {
-      "enum": ["test-output", "diff", "document", "transcript", "commit"]
+      "enum": [
+        "hook-observation",
+        "transcript",
+        "test-output",
+        "diff",
+        "document",
+        "link",
+        "commit"
+      ]
     },
     "failure": {
       "type": "object",

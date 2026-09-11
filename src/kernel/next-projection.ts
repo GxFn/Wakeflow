@@ -105,6 +105,12 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
     owner: "controller",
     tool: "wakeflow_continue_demand",
   },
+  // pod 切片（ADR-0010 D6）：创建后登记窗口，关闭中退役窗口与处置检出，两段 close 都回到 wakeflow_pod。
+  "pod-create-apply": { owner: "controller", tool: "wakeflow_pod" },
+  "pod-window-registration": { owner: "controller", tool: "wakeflow_register_window_binding" },
+  "pod-close-apply": { owner: "controller", tool: "wakeflow_pod" },
+  "pod-window-decommission": { owner: "controller", tool: "wakeflow_register_window_binding" },
+  "pod-worktree-disposal": { owner: "controller", tool: null },
 });
 
 export function deriveNextProjection(

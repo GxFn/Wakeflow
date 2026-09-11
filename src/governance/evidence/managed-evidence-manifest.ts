@@ -52,10 +52,11 @@ import {
   UtcWallClockError,
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
+import { isEvidenceKind, type EvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import {
+  assertManagedEvidenceKindMatchesSource,
   parseManagedEvidenceSourceDescriptor,
   ManagedEvidenceSourceSelectionError,
-  type ManagedEvidenceSensitivity,
   type ManagedEvidenceSource,
 } from "./managed-evidence-source-selection.js";
 
@@ -66,9 +67,10 @@ import {
  * immutable Demand Authority、配置中的逻辑来源和记录窗口。它只描述已经捕获的内容事实：
  * 不保存payload字节，不读取源文件，不提交Event，也不判断Evidence是否真实、充分或可接受。
  *
- * `contentReview`只记录opaque文件是否需要并取得Controller显式复核，不冒充secret扫描、
- * privacy扫描或内容真实性证明。外部HTTPS/Git locator属于另一类Evidence Reference，不进入
- * 本managed manifest。
+ * `contentReview`记录 Controller 显式确认过的内容：含控制字符的 opaque 成员与非凭证类隐私
+ * 命中（能力卡 8 Q1）；凭证类命中永远不能进入记录，它也不冒充内容真实性证明。`kind` 是闭集
+ * 词汇（Q2），与来源绑定；`observation`、`link`、`commit` 是只做定位的引用来源，其 payload
+ * 是来源投影文档。
  */
 
 export const MANAGED_EVIDENCE_MANIFEST_KIND =
@@ -94,6 +96,15 @@ export const MANAGED_EVIDENCE_PAYLOAD_LIMITS = Object.freeze({
 
 export type ManagedEvidenceContentReviewDisposition =
   "controller-confirmed" | "not-required";
+export type ManagedEvidencePrivacyFindingKind = "unlisted-absolute-path" | "bare-uuid";
+
+export interface ManagedEvidencePrivacyFinding {
+  readonly ref: PortableResourcePath;
+  readonly line: number;
+  readonly kind: ManagedEvidencePrivacyFindingKind;
+}
+
+export const MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT = 64;
 
 export interface ManagedEvidenceRecorder {
   readonly windowId: WakeflowDurableId<"window">;
@@ -108,6 +119,7 @@ export interface ManagedEvidencePayload {
 export interface ManagedEvidenceContentReview {
   readonly disposition: ManagedEvidenceContentReviewDisposition;
   readonly opaqueFileRefs: readonly PortableResourcePath[];
+  readonly privacyFindings: readonly Readonly<ManagedEvidencePrivacyFinding>[];
 }
 
 export interface ManagedEvidenceManifest {
@@ -117,11 +129,10 @@ export interface ManagedEvidenceManifest {
   readonly programId: WakeflowDurableId<"program">;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly demandAuthorityDigest: Sha256Digest;
-  readonly evidenceType: string;
+  readonly kind: EvidenceKind;
   readonly capturedAt: UtcInstant;
   readonly recordedBy: Readonly<ManagedEvidenceRecorder>;
-  readonly source: Readonly<ManagedEvidenceSource>;
-  readonly sensitivity: ManagedEvidenceSensitivity;
+  readonly source: ManagedEvidenceSource;
   readonly payload: Readonly<ManagedEvidencePayload>;
   readonly contentReview: Readonly<ManagedEvidenceContentReview>;
   readonly manifestDigest: Sha256Digest;
@@ -132,10 +143,9 @@ export interface ManagedEvidenceManifestDraft {
   readonly programId: WakeflowDurableId<"program">;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly demandAuthorityDigest: Sha256Digest;
-  readonly evidenceType: string;
+  readonly kind: EvidenceKind;
   readonly recordedBy: Readonly<ManagedEvidenceRecorder>;
-  readonly source: Readonly<ManagedEvidenceSource>;
-  readonly sensitivity: ManagedEvidenceSensitivity;
+  readonly source: ManagedEvidenceSource;
   readonly payload: Readonly<ManagedEvidencePayload>;
   readonly contentReview: Readonly<ManagedEvidenceContentReview>;
 }
@@ -153,6 +163,7 @@ export type ManagedEvidenceManifestErrorReason =
   | "digest"
   | "time"
   | "source"
+  | "kind"
   | "payload"
   | "content-review"
   | "ordering"
@@ -166,7 +177,8 @@ const ERROR_MESSAGES = {
   identifier: "Managed evidence manifest contains an invalid typed identity.",
   digest: "Managed evidence manifest contains an invalid digest.",
   time: "Managed evidence manifest contains an invalid capture time.",
-  source: "Managed evidence manifest contains an invalid local source.",
+  source: "Managed evidence manifest contains an invalid source.",
+  kind: "Managed evidence manifest kind does not match its source.",
   payload: "Managed evidence manifest payload identity is inconsistent.",
   "content-review": "Managed evidence manifest content review is inconsistent.",
   ordering: "Managed evidence manifest paths are not in canonical order.",
@@ -197,14 +209,12 @@ const DRAFT_FIELDS = Object.freeze([
   "demandAuthorityDigest",
   "demandId",
   "evidenceId",
-  "evidenceType",
+  "kind",
   "payload",
   "programId",
   "recordedBy",
-  "sensitivity",
   "source",
 ] as const);
-const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
 const validateWire =
   createRuntimeJsonSchemaValidator<ManagedEvidenceManifestWire>(
@@ -255,11 +265,37 @@ function parseTime(value: unknown, path: string): UtcInstant {
   }
 }
 
-function parseEvidenceType(value: unknown): string {
-  if (typeof value !== "string" || !TOKEN_PATTERN.test(value)) {
-    fail("schema", "$/evidenceType");
-  }
+function parseKind(value: unknown): EvidenceKind {
+  if (!isEvidenceKind(value)) fail("schema", "$/kind");
   return value;
+}
+
+function parsePrivacyFindings(
+  value: ManagedEvidenceManifestWire["contentReview"]["privacyFindings"],
+  payloadRefs: ReadonlySet<string>,
+): readonly Readonly<ManagedEvidencePrivacyFinding>[] {
+  return Object.freeze(
+    value.map((finding, index) => {
+      const path = `$/contentReview/privacyFindings/${index}`;
+      let ref: PortableResourcePath;
+      try {
+        ref = parsePortableResourcePath(finding.ref, `${path}/ref`);
+      } catch (error: unknown) {
+        if (error instanceof PortableResourcePathError) fail("content-review", `${path}/ref`);
+        throw error;
+      }
+      if (!payloadRefs.has(ref)) fail("content-review", `${path}/ref`);
+      const previous = value[index - 1];
+      if (
+        previous !== undefined &&
+        (compareText(previous.ref, ref) > 0 ||
+          (previous.ref === ref && previous.line >= finding.line))
+      ) {
+        fail("ordering", path);
+      }
+      return Object.freeze({ ref, line: finding.line, kind: finding.kind });
+    }),
+  );
 }
 
 function parsePayload(
@@ -330,8 +366,9 @@ function parseContentReview(
     }
     return ref;
   });
+  const privacyFindings = parsePrivacyFindings(value.privacyFindings, payloadRefs);
   if (
-    (opaqueFileRefs.length === 0) !==
+    (opaqueFileRefs.length === 0 && privacyFindings.length === 0) !==
     (value.disposition === "not-required")
   ) {
     fail("content-review", "$/contentReview");
@@ -339,6 +376,7 @@ function parseContentReview(
   return Object.freeze({
     disposition: value.disposition,
     opaqueFileRefs: Object.freeze(opaqueFileRefs),
+    privacyFindings,
   });
 }
 
@@ -346,7 +384,7 @@ function manifestBasis(
   wire: Readonly<ManagedEvidenceManifestWire>,
 ): Readonly<ManifestBasis> {
   const payload = parsePayload(wire.payload);
-  let source: Readonly<ManagedEvidenceSource>;
+  let source: ManagedEvidenceSource;
   try {
     source = parseManagedEvidenceSourceDescriptor(wire.source);
   } catch (error: unknown) {
@@ -355,8 +393,17 @@ function manifestBasis(
     }
     throw error;
   }
+  const kind = parseKind(wire.kind);
+  try {
+    assertManagedEvidenceKindMatchesSource(kind, source);
+  } catch (error: unknown) {
+    if (error instanceof ManagedEvidenceSourceSelectionError) fail("kind", "$/kind");
+    throw error;
+  }
+  // 目录树之外的来源（单文件与三种引用投影）都规范化为单一 `content` 成员。
+  const singleContent = source.kind !== "managed-path" || source.resourceType === "file";
   if (
-    source.resourceType === "file" &&
+    singleContent &&
     (payload.treeManifest.fileCount !== 1 ||
       payload.treeManifest.files[0]?.ref !== "content")
   ) {
@@ -372,7 +419,7 @@ function manifestBasis(
       wire.demandAuthorityDigest,
       "$/demandAuthorityDigest",
     ),
-    evidenceType: parseEvidenceType(wire.evidenceType),
+    kind,
     capturedAt: parseTime(wire.capturedAt, "$/capturedAt"),
     recordedBy: Object.freeze({
       windowId: parseId(
@@ -386,7 +433,6 @@ function manifestBasis(
       ),
     }),
     source,
-    sensitivity: wire.sensitivity,
     payload,
     contentReview: parseContentReview(wire.contentReview, payload),
   });
@@ -451,11 +497,10 @@ function candidateManifest(
     programId: record.programId,
     demandId: record.demandId,
     demandAuthorityDigest: record.demandAuthorityDigest,
-    evidenceType: record.evidenceType,
+    kind: record.kind,
     capturedAt,
     recordedBy: record.recordedBy,
     source: record.source,
-    sensitivity: record.sensitivity,
     payload: record.payload,
     contentReview: record.contentReview,
   };

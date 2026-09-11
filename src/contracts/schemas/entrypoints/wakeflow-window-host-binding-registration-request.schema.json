@@ -109,9 +109,12 @@
         },
         "tmux": {
           "$ref": "#/$defs/tmuxCoordinates"
+        },
+        "worktree": {
+          "$ref": "#/$defs/worktreeObservation"
         }
       },
-      "description": "What the Agent observed after executing one launch intent: the opaque host handle and, on Claude Code, the tmux coordinates of the pane running the session."
+      "description": "What the Agent observed after executing one launch intent: the opaque host handle, on Claude Code the tmux coordinates of the pane running the session, and for the product window of a worktree pod the git worktree facts of that session."
     },
     "tmuxPaneObservation": {
       "type": "object",
@@ -417,6 +420,24 @@
               "$ref": "#/$defs/livenessObservation"
             }
           }
+        }
+      }
+    },
+    "worktreeObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["porcelain", "commonDir"],
+      "description": "Git facts the Agent observed inside the product session of a worktree pod: the verbatim output of `git worktree list --porcelain` and of `git rev-parse --git-common-dir` run in the session cwd. Wakeflow parses them, selects the checkout equal to the session-start cwd, and cross-checks the .git pointer files; nothing here is echoed back.",
+      "properties": {
+        "porcelain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536
+        },
+        "commonDir": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
         }
       }
     }

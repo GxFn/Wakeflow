@@ -539,12 +539,12 @@ async function publishManifest(
 
 /** 从exact journal指定的source物化或重用一棵完整耐久stage。 */
 export async function materializeManagedEvidencePublicationStage(
-  sourceRootValue: RootedDirectory,
+  sourceRootValue: RootedDirectory | null,
   demandRootValue: RootedDirectory,
   transactionValue: unknown,
   optionsValue: ManagedEvidencePublicationStageMaterializationOptions = {},
 ): Promise<Readonly<ManagedEvidencePublicationStageMaterializationResult>> {
-  assertRoot(sourceRootValue, "$sourceRoot");
+  if (sourceRootValue !== null) assertRoot(sourceRootValue, "$sourceRoot");
   assertRoot(demandRootValue, "$demandRoot");
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);

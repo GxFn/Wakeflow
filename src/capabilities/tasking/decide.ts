@@ -188,9 +188,11 @@ export interface TopologyInput {
   readonly config: Readonly<WakeflowConfigAuthoritySnapshot>;
   readonly repositoryId: string;
   readonly windowId: string;
+  /** Demand 所在 pod：实现任务只能派给该 pod 的产品窗口（ADR-0010 D2）。 */
+  readonly podId: string;
 }
 
-/** 实现任务只派给 product 窗口，且窗口根仓库必须等于任务仓库（能力卡 5 角色门）。 */
+/** 实现任务只派给本 pod 的 product 窗口，且窗口根仓库必须等于任务仓库（能力卡 5 角色门）。 */
 function lookup<Value>(record: Readonly<Record<string, Value>>, key: string): Value | undefined {
   return Object.hasOwn(record, key) ? record[key] : undefined;
 }
@@ -204,6 +206,8 @@ export function deriveTopologyBlockers(input: Readonly<TopologyInput>): readonly
   else if (window.role !== "product") blockers.push(`window-role:${window.role}`);
   else if (window.root.kind !== "repository" || window.root.repositoryId !== input.repositoryId) {
     blockers.push("window-repository-mismatch");
+  } else if (window.podId !== input.podId) {
+    blockers.push(`assignment-window-pod-mismatch:${window.podId}`);
   }
   return Object.freeze(blockers);
 }

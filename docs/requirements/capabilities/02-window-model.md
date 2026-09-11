@@ -22,7 +22,7 @@
 
 **宿主差异**：`hostTool` 在 Codex 为 `create_thread`，在 Claude 为旧 CLI 的 `launch-window`，新边界下改为 tmux 加 `claude` 命令行的内容说明。Codex 的 `hosts.codex.launch` 偏好被配置接受但旧代码从不读取。
 
-**现 TS 状态**：`wakeflow-window-launch-intent.ts` 与 `wakeflow-window-runtime-desired-topology.ts` 已有；角色与基数规则在配置 codec 中保留。
+**现 TS 状态**：`wakeflow-window-launch-intent.ts` 与 `wakeflow-window-runtime-desired-topology.ts` 已有；角色与基数规则在配置 codec 中按 pod 分组保留（2026-09-10 pod 切片 9：每个窗口带 `podId`，每 pod controller、design、test 各一，primary 每仓库至少一个 product，worktree pod 恰好一个；启动意图带 `podId`、`podName`、`podPlacement`，worktree pod 的产品窗口意图带 `worktree{repositoryId, suggestedName, basePolicy}`，Test 窗口意图带 `attachedWorktrees[]`）。
 
 **实现判断**：启动意图升级为新边界下的正式 Agent 指令内容，含每宿主的执行说明与参数，Claude 为 tmux 与 `claude` 命令行，Codex 为 `create_thread` 与 `set_thread_title` 及 model、effort 参数；意图仍不落盘，由 route 或 inspect 按需重算。
 
@@ -48,7 +48,7 @@
 
 **宿主差异**：占位符表 Claude 比 Codex 多三项；Codex 句柄只有 thread id；Claude 句柄是 session id，tmux 坐标在定位器里。
 
-**现 TS 状态**：`wakeflow_register_window_binding` 一个工具五种 `operation`（inspect、register、replace、decommission、release-claim），切片 `src/capabilities/endpoint/`（2026-09-04 L1 endpoint）。register 请求为 `{root, operation, windowId, observation{handle{kind, value}, launchIntentDigest, observedAt, tmux?}}`；准入要求同一 `sessionId`、同一窗口配置根的 `session-start` hook 观察记录（`src/kernel/hook-observations.ts`，`.wakeflow-local/runtime/hosts/<host>/observations/hooks/`），Claude 还要求 tmux 四元组；同句柄重放 `replayed`，异句柄 `precondition-failed/handle-conflict`，意图漂移 `launch-intent-drift`；结果只带 `bindingId`、`bindingDigest`、`registeredAt`、`launchIntentDigest` 与投影回执，原始句柄留在 0600 绑定文件；变更在绑定登记表互斥门内，登记后重发 registered 投影；旧的 `WakeflowAgentHostWindowCreationObservation` 包装与 `-registration`、`-public-coordinator` 模块已删除。
+**现 TS 状态**：`wakeflow_register_window_binding` 一个工具五种 `operation`（inspect、register、replace、decommission、release-claim），切片 `src/capabilities/endpoint/`（2026-09-04 L1 endpoint）。register 请求为 `{root, operation, windowId, observation{handle{kind, value}, launchIntentDigest, observedAt, tmux?}}`；准入要求同一 `sessionId`、同一窗口配置根的 `session-start` hook 观察记录（`src/kernel/hook-observations.ts`，`.wakeflow-local/runtime/hosts/<host>/observations/hooks/`），Claude 还要求 tmux 四元组；同句柄重放 `replayed`，异句柄 `precondition-failed/handle-conflict`，意图漂移 `launch-intent-drift`；结果只带 `bindingId`、`bindingDigest`、`registeredAt`、`launchIntentDigest` 与投影回执，原始句柄留在 0600 绑定文件；变更在绑定登记表互斥门内，登记后重发 registered 投影；旧的 `WakeflowAgentHostWindowCreationObservation` 包装与 `-registration`、`-public-coordinator` 模块已删除。2026-09-10 pod 切片 9：worktree pod 的产品窗口 `register` 与 `replace` 必须带 `observation.worktree{porcelain, commonDir}`（`git worktree list --porcelain` 与 `git rev-parse --git-common-dir` 原文），会话 `session-start` 的 cwd 按 porcelain 里的检出匹配，Wakeflow 用 `.git` 指针文件与 admin 目录核对后在同一互斥门内写回执 `hosts/<host>/pods/<podId>/worktrees/<repositoryId>.json`（0600），结果只回 `worktree{head, branch, detached, locked}`；`next` 只把同 pod 的未登记窗口列为阻塞（gate-log §13.92）。
 
 **实现判断**：`hostVerifiedAt` 删除；登记必须绑定 `launchIntentDigest`，防止登记与意图脱节；登记成功即刷新该窗口的运行投影，修正旧文档与代码的矛盾。
 
@@ -137,7 +137,7 @@
 - `resume-window` 要求定位器缺失或 pane-dead，复用旧句柄发新定位器代际；`retitle-window` 用 `rename-window`；`arrange-windows` 按 windowId 排序对每个窗口取互斥锁再 `move-window`。`:659-853`。
 - Codex 没有生命周期模块，Agent 自己 `create_thread` 再 `set_thread_title`。
 
-**现 TS 状态**：`inspect` 结果的 `launchIntent.execution` 给出执行参数：Claude 为 tmux socket、session、窗口名与 cwd、`claude` 命令行（`--session-id` 由 Agent 生成 UUID v4、`--permission-mode` 默认 acceptEdits、`--effort` 按角色回退再回退 controller max 其余 xhigh、可选 `--model`、cwd 不是工作区根时 `--add-dir`）；Codex 为 `create_thread` 的标题、cwd、model、effort 与后续 `set_thread_title`。Wakeflow 不 spawn 进程；retitle 与 arrange 未提供。
+**现 TS 状态**：`inspect` 结果的 `launchIntent.execution` 给出执行参数：Claude 为 tmux socket、session、窗口名与 cwd、`claude` 命令行（`--session-id` 由 Agent 生成 UUID v4、`--permission-mode` 默认 acceptEdits、`--effort` 按角色回退再回退 controller max 其余 xhigh、可选 `--model`、cwd 不是工作区根时 `--add-dir`）；Codex 为 `create_thread` 的标题、cwd、model、effort 与后续 `set_thread_title`。Wakeflow 不 spawn 进程；retitle 与 arrange 未提供。2026-09-10 pod 切片 9：执行说明按宿主 profile 的 `surfaces.worktree` 模板给 worktree pod 的产品窗口加 Claude `--worktree wakeflow-<name>`（宿主分支 `worktree-wakeflow-<name>`）或 Codex `environment: worktree`（detached，第一次导入前 `git switch -c`），Test 窗口对已有回执的 worktree 加 `--add-dir`（Claude）或列相对路径（Codex）。
 
 **实现判断**：以上全部变为启动意图与操作意图里的"执行说明"内容，Wakeflow 不再 spawn 任何进程；`preflight` 变为 skills 里的自检步骤；`resume` 变为"同一逻辑窗口、新观察证据"的重新登记路径；session id 由 Agent 生成，Wakeflow 只验形状、占位符与唯一性。
 

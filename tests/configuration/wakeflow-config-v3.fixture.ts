@@ -37,12 +37,14 @@ export function createMinimalWakeflowConfigV3(): Record<string, unknown> {
       windows: [
         {
           windowId: "window_55555555-5555-4555-8555-555555555555",
+          podId: "pod_99999999-9999-4999-8999-999999999999",
           role: "controller",
           displayName: "Controller",
           root: { kind: "program" },
         },
         {
           windowId: "window_66666666-6666-4666-8666-666666666666",
+          podId: "pod_99999999-9999-4999-8999-999999999999",
           role: "design",
           displayName: "Design",
           root: {
@@ -52,6 +54,7 @@ export function createMinimalWakeflowConfigV3(): Record<string, unknown> {
         },
         {
           windowId: "window_77777777-7777-4777-8777-777777777777",
+          podId: "pod_99999999-9999-4999-8999-999999999999",
           role: "test",
           displayName: "Test",
           root: {
@@ -61,6 +64,7 @@ export function createMinimalWakeflowConfigV3(): Record<string, unknown> {
         },
         {
           windowId: "window_88888888-8888-4888-8888-888888888888",
+          podId: "pod_99999999-9999-4999-8999-999999999999",
           role: "product",
           displayName: "Product A",
           root: {
@@ -70,6 +74,16 @@ export function createMinimalWakeflowConfigV3(): Record<string, unknown> {
         },
       ],
     },
+    pods: [
+      {
+        podId: "pod_99999999-9999-4999-8999-999999999999",
+        name: "main",
+        placement: "primary",
+        lifecycle: "open",
+        worktrees: [],
+        closing: null,
+      },
+    ],
     storage: { ledgerRoot: "../wakeflow-ledger" },
     governance: {},
     hosts: {},

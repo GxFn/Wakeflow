@@ -383,15 +383,16 @@ async function assertConfigCurrent(
   }
 }
 
+/** 引用类来源没有物理根：payload 是来源投影，由 Manifest 重建。 */
 async function openSourceRoot(
+  workspaceRoot: RootedDirectory,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
-): Promise<RootedDirectory> {
+): Promise<RootedDirectory | null> {
+  const source = transaction.manifest.source;
+  if (source.kind !== "managed-path") return null;
   try {
-    return await openConfiguredManagedEvidenceSourceRoot(
-      config,
-      transaction.manifest.source,
-    );
+    return await openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceConfiguredSourceRootError) {
       fail("source-root", error);
@@ -410,7 +411,7 @@ async function closeSourceRoot(root: RootedDirectory): Promise<void> {
 }
 
 async function materializeStage(
-  sourceRoot: RootedDirectory,
+  sourceRoot: RootedDirectory | null,
   demandRoot: RootedDirectory,
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
   signal: AbortSignal | undefined,
@@ -536,7 +537,7 @@ export class ManagedEvidencePublicationApplicationService {
       transactionDigestValue,
     );
     let context: Readonly<DemandOperationAuthorityContext> | undefined;
-    let sourceRoot: RootedDirectory | undefined;
+    let sourceRoot: RootedDirectory | null | undefined;
     let result: Readonly<ManagedEvidencePublicationCompletionResult> | undefined;
     let publicationAuthority: ManagedEvidencePublicationEffectAuthority =
       "unchanged";
@@ -586,7 +587,7 @@ export class ManagedEvidencePublicationApplicationService {
           context.config,
           options.signal,
         );
-        sourceRoot = await openSourceRoot(context.config, transaction);
+        sourceRoot = await openSourceRoot(this.#workspaceRoot, context.config, transaction);
         let stored: Readonly<StoredManagedEvidencePublicationTransaction>;
         try {
           stored = await createManagedEvidencePublicationTransactionJournal(
@@ -610,7 +611,7 @@ export class ManagedEvidencePublicationApplicationService {
           transaction,
           options.signal,
         );
-        await closeSourceRoot(sourceRoot);
+        if (sourceRoot !== null) await closeSourceRoot(sourceRoot);
         sourceRoot = undefined;
         const event = await appendManagedEvidencePublicationEvent(
           context.demandRoot,
@@ -636,7 +637,7 @@ export class ManagedEvidencePublicationApplicationService {
     } catch (error: unknown) {
       failure = contextualizeFailure(error, publicationAuthority);
     }
-    if (sourceRoot !== undefined) {
+    if (sourceRoot !== undefined && sourceRoot !== null) {
       try {
         await closeSourceRoot(sourceRoot);
       } catch (error: unknown) {
@@ -677,7 +678,7 @@ export class ManagedEvidencePublicationApplicationService {
     assertNotAborted(options.signal);
     const demandId = parseDemandId(demandIdValue);
     let roots: Readonly<RecoveryRoots> | undefined;
-    let sourceRoot: RootedDirectory | undefined;
+    let sourceRoot: RootedDirectory | null | undefined;
     let result: Readonly<ManagedEvidencePublicationRecoveryResult> | undefined;
     let publicationAuthority: ManagedEvidencePublicationEffectAuthority =
       "unknown";
@@ -790,6 +791,7 @@ export class ManagedEvidencePublicationApplicationService {
         } else {
           if (physicalState !== "stage-complete") {
             sourceRoot = await openSourceRoot(
+              this.#workspaceRoot,
               roots.config,
               stored.transaction,
             );
@@ -799,7 +801,7 @@ export class ManagedEvidencePublicationApplicationService {
               stored.transaction,
               options.signal,
             );
-            await closeSourceRoot(sourceRoot);
+            if (sourceRoot !== null) await closeSourceRoot(sourceRoot);
             sourceRoot = undefined;
           }
           const event = await appendManagedEvidencePublicationEvent(
@@ -827,7 +829,7 @@ export class ManagedEvidencePublicationApplicationService {
     } catch (error: unknown) {
       failure = contextualizeFailure(error, publicationAuthority);
     }
-    if (sourceRoot !== undefined) {
+    if (sourceRoot !== undefined && sourceRoot !== null) {
       try {
         await closeSourceRoot(sourceRoot);
       } catch (error: unknown) {

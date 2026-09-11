@@ -7,7 +7,7 @@ import {
   type WakeflowConfigAuthoritySnapshot,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type {
-  WakeflowConfigV3Model,
+  WakeflowConfigPod,
   WakeflowConfigWindow,
 } from "../../configuration/wakeflow-config-v3.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
@@ -45,6 +45,15 @@ import { fail } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
 import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
+import {
+  admitPodWorktreeObservation,
+  candidateWorktreePaths,
+  createPodWorktreeReceipt,
+  listPodWorktreeReceipts,
+  writePodWorktreeReceipt,
+  type AdmittedPodWorktree,
+  type PodWorktreeReceipt,
+} from "../../kernel/pod-worktree-receipts.js";
 import {
   createWakeflowWindowHostBinding,
   renderWakeflowWindowHostBinding,
@@ -125,6 +134,11 @@ import {
  * hook 观察），纯决定，然后在绑定登记表的互斥门内做一次变更，刷新投影，派生 `next`。
  * 绑定不进 Demand 事件流；强制释放声明只删声明文件并留下回执，Demand 侧由 delivery
  * 切片对账。
+ *
+ * worktree pod 的产品窗口（ADR-0010 D4）：`register` 与 `replace` 的观察必须带 worktree
+ * 原文，会话的 `session-start` cwd 必须是 porcelain 里的一个非主检出；准入后在同一互斥
+ * 门内写 worktree 回执，结果只回 HEAD、分支与锁定状态。Test 窗口的执行说明列出已有回执
+ * 的 worktree（相对工作区根的路径）。
  */
 
 export interface WindowBindingHostFacade {
@@ -182,6 +196,11 @@ interface EndpointContext {
   readonly intent: Readonly<WakeflowWindowLaunchIntent> | null;
   readonly unregisteredEntry: Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry> | null;
   readonly authority: Readonly<WakeflowWindowHostBindingStoreAuthority>;
+  /** 本窗口所属 pod 与本 pod 的全部窗口标识；`next` 只把同 pod 的未登记窗口列为阻塞。 */
+  readonly pod: Readonly<WakeflowConfigPod> | null;
+  readonly podWindowIds: ReadonlySet<string>;
+  /** worktree pod 产品窗口的配置仓库主检出绝对路径；其他窗口为 null。 */
+  readonly repositoryRoot: string | null;
   readonly signal: AbortSignal | undefined;
   readonly clock: UtcWallClock | undefined;
   readonly uuidFactory: UuidV4Factory | undefined;
@@ -190,6 +209,8 @@ interface EndpointContext {
 interface HookSessions {
   readonly started: ReadonlySet<string>;
   readonly ended: ReadonlySet<string>;
+  /** 命中的 `session-start` 记录 cwd（最近一条）；worktree 准入用它选出会话所在的检出。 */
+  readonly cwdBySession: ReadonlyMap<string, string>;
 }
 
 interface LoadedState {
@@ -200,13 +221,23 @@ interface LoadedState {
   readonly claimExpired: boolean;
   readonly locator: Readonly<WindowLocatorRecord> | null;
   readonly sessions: HookSessions;
+  /** worktree pod 里本 pod 已登记的 worktree 回执；Test 窗口的执行说明据此列附加目录。 */
+  readonly worktreeReceipts: readonly Readonly<PodWorktreeReceipt>[];
   readonly now: UtcInstant;
+}
+
+interface WorktreeSummary {
+  readonly head: string;
+  readonly branch: string | null;
+  readonly detached: boolean;
+  readonly locked: boolean;
 }
 
 interface MutationOutcome {
   readonly disposition: MutationDisposition;
   readonly binding: Readonly<WakeflowWindowHostBinding> | null;
   readonly bindings: readonly Readonly<WakeflowWindowHostBinding>[];
+  readonly worktree: Readonly<WorktreeSummary> | null;
   readonly verification: "machine-verified" | "manual-host-gate" | null;
   readonly projection: Readonly<ProjectionReceipt>;
 }
@@ -214,6 +245,7 @@ interface MutationOutcome {
 interface AppliedBinding {
   readonly disposition: MutationDisposition;
   readonly binding: Readonly<WakeflowWindowHostBinding> | null;
+  readonly worktree: Readonly<WorktreeSummary> | null;
 }
 
 function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
@@ -298,6 +330,9 @@ async function openContext(
     facade.resourceProfile,
   );
   const { windowId } = envelope;
+  const intent = intents.intents.find((entry) => entry.windowId === windowId) ?? null;
+  const pod = intent === null ? null : (snapshot.indexes.podById[intent.podId] ?? null);
+  const scope = pod === null ? null : (snapshot.indexes.podScopes[pod.podId] ?? null);
   return Object.freeze({
     root,
     facade,
@@ -305,8 +340,11 @@ async function openContext(
     windows: topology.windows,
     programId: topology.programId,
     window: topology.windows.find((entry) => entry.windowId === windowId) ?? null,
-    intent: intents.intents.find((entry) => entry.windowId === windowId) ?? null,
+    intent,
     unregisteredEntry: unregistered.entries.find((entry) => entry.windowId === windowId) ?? null,
+    pod,
+    podWindowIds: new Set(scope === null ? [] : scope.windows.map((entry) => entry.windowId)),
+    repositoryRoot: intent === null ? null : worktreeRepositoryRoot(snapshot, intent),
     authority: Object.freeze({
       programId: topology.programId,
       resourceProfile: facade.resourceProfile,
@@ -321,6 +359,18 @@ async function openContext(
     clock: options.clock,
     uuidFactory: options.uuidFactory,
   });
+}
+
+/** worktree pod 产品窗口的仓库主检出：配置位置报告里的绝对路径；不是 worktree 窗口即 null。 */
+function worktreeRepositoryRoot(
+  snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
+  intent: Readonly<WakeflowWindowLaunchIntent>,
+): string | null {
+  if (intent.worktree === null) return null;
+  const placement = snapshot.placements.roots.find(
+    (entry) => entry.key === `repository.${intent.worktree?.repositoryId}.root`,
+  );
+  return placement?.absolutePath ?? null;
 }
 
 async function loadBindings(
@@ -360,14 +410,60 @@ async function isWindowRoot(cwd: string, expectedRoot: string): Promise<boolean>
   }
 }
 
+async function realpathOrNull(candidate: string): Promise<string | null> {
+  try {
+    return await realpath(path.resolve(candidate));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `session-start` 记录属于本窗口的判据：普通窗口按配置根；worktree pod 的产品窗口按
+ * 观察里 porcelain 列出的非主检出（登记与换代），没有观察时按已有回执的检出路径。
+ */
+async function sessionRootMatcher(
+  context: EndpointContext,
+  window: Readonly<WakeflowWindowRuntimeDesiredWindow>,
+  observation: CreationObservation | null,
+  receipts: readonly Readonly<PodWorktreeReceipt>[],
+): Promise<(cwd: string) => Promise<boolean>> {
+  if (
+    context.intent?.worktree === null ||
+    context.intent === null ||
+    context.repositoryRoot === null
+  ) {
+    const expectedRoot = path.resolve(context.root.absolutePath, window.configuredPlacement);
+    return (cwd) => isWindowRoot(cwd, expectedRoot);
+  }
+  const candidates = new Set(
+    observation?.worktree === undefined
+      ? receipts
+          .filter((receipt) => receipt.windowId === window.windowId)
+          .map((receipt) => receipt.path)
+      : await candidateWorktreePaths(observation.worktree.porcelain, context.repositoryRoot),
+  );
+  // 主检出里的会话也算"这个窗口的会话"，好让准入报 main-checkout 而不是缺 hook 证据。
+  const repositoryReal = await realpathOrNull(context.repositoryRoot);
+  if (observation?.worktree !== undefined && repositoryReal !== null)
+    candidates.add(repositoryReal);
+  return async (cwd) => {
+    const real = await realpathOrNull(cwd);
+    return real !== null && candidates.has(real);
+  };
+}
+
 /** hook 观察是端点的会话证据：`session-start` 按窗口根匹配，`session-end` 按会话汇总。 */
 async function loadHookSessions(
   context: EndpointContext,
   window: Readonly<WakeflowWindowRuntimeDesiredWindow>,
+  observation: CreationObservation | null,
+  receipts: readonly Readonly<PodWorktreeReceipt>[],
 ): Promise<HookSessions> {
-  const expectedRoot = path.resolve(context.root.absolutePath, window.configuredPlacement);
+  const matches = await sessionRootMatcher(context, window, observation, receipts);
   const options = signalOptions(context.signal);
   const started = new Set<string>();
+  const cwdBySession = new Map<string, string>();
   const ended = new Set<string>();
   const startRecords = await readHostHookObservations(
     context.root,
@@ -376,7 +472,9 @@ async function loadHookSessions(
     options,
   );
   for (const record of startRecords.records) {
-    if (await isWindowRoot(record.cwd, expectedRoot)) started.add(record.sessionId);
+    if (!(await matches(record.cwd))) continue;
+    started.add(record.sessionId);
+    cwdBySession.set(record.sessionId, record.cwd);
   }
   const endRecords = await readHostHookObservations(
     context.root,
@@ -385,14 +483,29 @@ async function loadHookSessions(
     options,
   );
   for (const record of endRecords.records) ended.add(record.sessionId);
-  return Object.freeze({ started, ended });
+  return Object.freeze({ started, ended, cwdBySession });
+}
+
+async function loadWorktreeReceipts(
+  context: EndpointContext,
+): Promise<readonly Readonly<PodWorktreeReceipt>[]> {
+  if (context.pod === null || context.pod.placement !== "worktree") return Object.freeze([]);
+  return listPodWorktreeReceipts(
+    context.root,
+    context.facade.hostId,
+    context.pod.podId,
+    signalOptions(context.signal),
+  );
 }
 
 function claimExpiredAt(claim: Readonly<WorkClaim>, now: UtcInstant): boolean {
   return Date.parse(claim.claimedAt) + WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS <= Date.parse(now);
 }
 
-async function loadState(context: EndpointContext): Promise<LoadedState> {
+async function loadState(
+  context: EndpointContext,
+  observation: CreationObservation | null,
+): Promise<LoadedState> {
   const bindings = await loadBindings(context);
   const now = readUtcWallClock(context.clock);
   const window = context.window;
@@ -404,10 +517,16 @@ async function loadState(context: EndpointContext): Promise<LoadedState> {
       claim: null,
       claimExpired: false,
       locator: null,
-      sessions: Object.freeze({ started: new Set<string>(), ended: new Set<string>() }),
+      sessions: Object.freeze({
+        started: new Set<string>(),
+        ended: new Set<string>(),
+        cwdBySession: new Map<string, string>(),
+      }),
+      worktreeReceipts: Object.freeze([]),
       now,
     });
   }
+  const worktreeReceipts = await loadWorktreeReceipts(context);
   const binding = bindings.find((entry) => entry.windowId === window.windowId) ?? null;
   const claim = await loadClaim(context, window.windowId);
   const locator =
@@ -426,7 +545,8 @@ async function loadState(context: EndpointContext): Promise<LoadedState> {
     claim,
     claimExpired: claim !== null && claimExpiredAt(claim, now),
     locator,
-    sessions: await loadHookSessions(context, window),
+    sessions: await loadHookSessions(context, window, observation, worktreeReceipts),
+    worktreeReceipts,
     now,
   });
 }
@@ -438,6 +558,7 @@ function endpointState(context: EndpointContext, loaded: LoadedState): EndpointS
     windowKnown: context.window !== null && context.intent !== null,
     launchIntentDigest: context.intent?.intentDigest ?? "",
     locatorProvider: locatorProvider(context.facade.hostId),
+    worktreeRequired: context.intent !== null && context.intent.worktree !== null,
     binding:
       loaded.binding === null || loaded.bindingDigest === null
         ? null
@@ -503,6 +624,7 @@ function creationCommand(observation: CreationObservation) {
     handleValue: observation.handle.value,
     launchIntentDigest: observation.launchIntentDigest,
     hasTmuxCoordinates: observation.tmux !== undefined,
+    hasWorktreeObservation: observation.worktree !== undefined,
   });
 }
 
@@ -542,13 +664,85 @@ function toCommand(
   }
 }
 
+type AttachedWorktreeView = {
+  readonly repositoryId: string;
+  readonly status: "receipt-present" | "receipt-missing";
+  /** 从工作区根到 worktree 检出的相对路径；没有回执时为 null。 */
+  readonly pathFromWorkspaceRoot: string | null;
+};
+
+/** Test 窗口要读的 worktree：有回执的给相对工作区根的路径，没有的只报缺失。 */
+function attachedWorktreeViews(
+  context: EndpointContext,
+  intent: Readonly<WakeflowWindowLaunchIntent>,
+  receipts: readonly Readonly<PodWorktreeReceipt>[],
+): readonly AttachedWorktreeView[] {
+  return intent.attachedWorktrees.map((attached) => {
+    const receipt = receipts.find((entry) => entry.repositoryId === attached.repositoryId);
+    return Object.freeze({
+      repositoryId: attached.repositoryId,
+      status: receipt === undefined ? ("receipt-missing" as const) : ("receipt-present" as const),
+      pathFromWorkspaceRoot:
+        receipt === undefined ? null : path.relative(context.root.absolutePath, receipt.path),
+    });
+  });
+}
+
+/** worktree 意图在执行说明里的投影：建议名称、基线策略与宿主动作，从不含路径。 */
+function worktreeInstructions(
+  context: EndpointContext,
+  intent: Readonly<WakeflowWindowLaunchIntent>,
+): JsonObject | null {
+  if (intent.worktree === null) return null;
+  const template = context.facade.resourceProfile.surfaces.worktree;
+  const shared = {
+    repositoryId: intent.worktree.repositoryId,
+    suggestedName: intent.worktree.suggestedName,
+    basePolicy: intent.worktree.basePolicy,
+    registration:
+      "after the session starts inside the worktree, report the handle plus the verbatim output of `git worktree list --porcelain` and `git rev-parse --git-common-dir` run in the session cwd",
+  };
+  if (template.launch === "claude-worktree-flag") {
+    return {
+      ...shared,
+      launch: template.launch,
+      hostBranch: `worktree-${intent.worktree.suggestedName}`,
+      note: "claude --worktree creates the checkout under .claude/worktrees/<name> from the local HEAD; the session cwd is that checkout",
+    };
+  }
+  return {
+    ...shared,
+    launch: template.launch,
+    hostBranch: null,
+    note: `create_thread with a worktree environment starts on a detached HEAD; run git switch -c ${intent.worktree.suggestedName} before the first result import`,
+  };
+}
+
+function claudeAddDirArguments(
+  intent: Readonly<WakeflowWindowLaunchIntent>,
+  attached: readonly AttachedWorktreeView[],
+): readonly string[] {
+  const arguments_: string[] = [];
+  if (intent.root.configuredPlacement !== ".") arguments_.push("--add-dir", "<workspace root>");
+  for (const view of attached) {
+    if (view.pathFromWorkspaceRoot !== null) {
+      arguments_.push("--add-dir", `<workspace root>/${view.pathFromWorkspaceRoot}`);
+    }
+  }
+  return arguments_;
+}
+
 /** Agent 执行启动意图所需的参数：只含配置声明与占位符，绝不含绝对路径或宿主句柄。 */
 function executionInstructions(
-  model: WakeflowConfigV3Model,
-  hostId: WakeflowHostId,
+  context: EndpointContext,
   intent: Readonly<WakeflowWindowLaunchIntent>,
+  receipts: readonly Readonly<PodWorktreeReceipt>[],
 ): JsonObject {
+  const model = context.snapshot.model;
+  const hostId = context.facade.hostId;
   const role = intent.role as WakeflowConfigWindow["role"];
+  const attached = attachedWorktreeViews(context, intent, receipts);
+  const worktree = worktreeInstructions(context, intent);
   if (hostId === "claude-code") {
     const host = model.hosts?.["claude-code"];
     const launch = host?.launch;
@@ -568,6 +762,7 @@ function executionInstructions(
       },
       command: "claude",
       arguments: [
+        ...(intent.worktree === null ? [] : ["--worktree", intent.worktree.suggestedName]),
         "--session-id",
         "<uuid-v4 generated by the Agent>",
         "--permission-mode",
@@ -575,11 +770,13 @@ function executionInstructions(
         "--effort",
         effort,
         ...(modelName === null ? [] : ["--model", modelName]),
-        ...(intent.root.configuredPlacement === "." ? [] : ["--add-dir", "<workspace root>"]),
+        ...claudeAddDirArguments(intent, attached),
       ],
       sessionIdPolicy: "agent-generates-uuid-v4",
       registration:
         "report handle kind claude-session with the generated session id plus the tmux socket, session, window, and pane",
+      worktree,
+      attachedWorktrees: attached,
     };
   }
   const launch = model.hosts?.codex?.launch;
@@ -588,11 +785,14 @@ function executionInstructions(
     tool: "create_thread",
     title: intent.displayTitle,
     cwd: intent.root.configuredPlacement,
+    environment: intent.worktree === null ? "local" : "worktree",
     model: launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null,
     reasoningEffort:
       launch?.reasoningEffortByRole?.[role] ?? launch?.reasoningEffortByRole?.default ?? null,
     followUp: "set_thread_title",
     registration: "report handle kind codex-thread with the created thread id",
+    worktree,
+    attachedWorktrees: attached,
   };
 }
 
@@ -605,7 +805,12 @@ function nextFor(
 ): Readonly<NextProjection> {
   const bound = new Set(bindings.map((entry) => entry.windowId));
   const unregisteredWindowIds = context.windows
-    .filter((entry) => !bound.has(entry.windowId) && entry.windowId !== context.window?.windowId)
+    .filter(
+      (entry) =>
+        context.podWindowIds.has(entry.windowId) &&
+        !bound.has(entry.windowId) &&
+        entry.windowId !== context.window?.windowId,
+    )
     .map((entry) => entry.windowId);
   return deriveEndpointNext({
     registered,
@@ -652,17 +857,18 @@ function inspectionResult(context: EndpointContext, loaded: LoadedState): Window
     role: context.window.role,
     launchIntent: {
       intentDigest: context.intent.intentDigest,
+      podId: context.intent.podId,
+      podName: context.intent.podName,
+      podPlacement: context.intent.podPlacement,
       displayTitle: context.intent.displayTitle,
       root: {
         kind: context.intent.root.kind,
         rootId: context.intent.root.rootId,
         configuredPlacement: context.intent.root.configuredPlacement,
       },
-      execution: executionInstructions(
-        context.snapshot.model,
-        context.facade.hostId,
-        context.intent,
-      ),
+      worktree: context.intent.worktree,
+      attachedWorktrees: context.intent.attachedWorktrees,
+      execution: executionInstructions(context, context.intent, loaded.worktreeReceipts),
     },
     binding:
       loaded.binding === null
@@ -756,6 +962,59 @@ async function refreshProjection(
   );
 }
 
+/** worktree pod 产品窗口：准入观察里的 git 事实（文件系统核对），返回可写进回执的检出。 */
+async function admitWorktree(
+  context: EndpointContext,
+  loaded: LoadedState,
+  observation: CreationObservation,
+): Promise<Readonly<AdmittedPodWorktree> | null> {
+  if (context.intent?.worktree === null || context.intent === null) return null;
+  if (observation.worktree === undefined) {
+    fail("invalid-request", "worktree-receipt-required", "$request.observation.worktree");
+  }
+  if (context.repositoryRoot === null) {
+    fail("precondition-failed", "worktree-repository-unavailable", "$request.observation.worktree");
+  }
+  const sessionCwd = loaded.sessions.cwdBySession.get(observation.handle.value);
+  if (sessionCwd === undefined) {
+    fail("precondition-failed", "hook-evidence-missing", "$request.observation.handle");
+  }
+  return admitPodWorktreeObservation({
+    observation: observation.worktree,
+    sessionCwd,
+    repositoryRoot: context.repositoryRoot,
+  });
+}
+
+async function recordWorktree(
+  context: EndpointContext,
+  binding: Readonly<WakeflowWindowHostBinding>,
+  worktree: Readonly<AdmittedPodWorktree> | null,
+  observedAt: string,
+): Promise<Readonly<WorktreeSummary> | null> {
+  if (worktree === null || context.intent?.worktree === null || context.intent === null)
+    return null;
+  await writePodWorktreeReceipt(
+    context.root,
+    createPodWorktreeReceipt({
+      hostId: context.facade.hostId,
+      podId: context.intent.podId,
+      windowId: binding.windowId,
+      repositoryId: context.intent.worktree.repositoryId,
+      bindingId: binding.bindingId,
+      worktree,
+      observedAt: parseUtcInstant(observedAt, "$request.observation.observedAt"),
+    }),
+    signalOptions(context.signal),
+  );
+  return Object.freeze({
+    head: worktree.head,
+    branch: worktree.branch,
+    detached: worktree.branch === null,
+    locked: worktree.locked,
+  });
+}
+
 async function applyRegister(
   context: EndpointContext,
   store: WakeflowWindowHostBindingStoreContext,
@@ -763,9 +1022,18 @@ async function applyRegister(
   current: Readonly<WakeflowWindowHostBinding> | null,
   request: RegisterRequest,
   replayed: boolean,
+  loaded: LoadedState,
 ): Promise<AppliedBinding> {
-  if (replayed) return Object.freeze({ disposition: "replayed" as const, binding: current });
   const observation = request.observation;
+  const worktree = await admitWorktree(context, loaded, observation);
+  if (replayed) {
+    // 同句柄重放：绑定不动；worktree 回执缺失或换过检出时按当前观察补写，保持幂等。
+    const summary =
+      current === null
+        ? null
+        : await recordWorktree(context, current, worktree, observation.observedAt);
+    return Object.freeze({ disposition: "replayed" as const, binding: current, worktree: summary });
+  }
   const binding = await createWakeflowWindowHostBindingInStore(
     context.root,
     {
@@ -778,7 +1046,8 @@ async function applyRegister(
     },
     store,
   );
-  return Object.freeze({ disposition: "registered" as const, binding });
+  const summary = await recordWorktree(context, binding, worktree, observation.observedAt);
+  return Object.freeze({ disposition: "registered" as const, binding, worktree: summary });
 }
 
 async function applyReplace(
@@ -787,8 +1056,10 @@ async function applyReplace(
   window: Readonly<WakeflowWindowRuntimeDesiredWindow>,
   current: Readonly<WakeflowWindowHostBinding> | null,
   request: ReplaceRequest,
+  loaded: LoadedState,
 ): Promise<AppliedBinding> {
   if (current === null) fail("not-found", "binding-absent", "$request.windowId");
+  const worktree = await admitWorktree(context, loaded, request.observation);
   const bindingRef = wakeflowWindowHostBindingRef(context.facade.resourceProfile, window.windowId);
   const source = await readBindingSource(context, bindingRef);
   const registeredAt = readUtcWallClock(store.wallClock);
@@ -834,7 +1105,12 @@ async function applyReplace(
     }
     throw error;
   }
-  return Object.freeze({ disposition: "replaced" as const, binding: replacement });
+  const summary = await recordWorktree(context, replacement, worktree, observation.observedAt);
+  return Object.freeze({
+    disposition: "replaced" as const,
+    binding: replacement,
+    worktree: summary,
+  });
 }
 
 async function applyDecommission(
@@ -856,7 +1132,7 @@ async function applyDecommission(
     }
     throw error;
   }
-  return Object.freeze({ disposition: "decommissioned" as const, binding: null });
+  return Object.freeze({ disposition: "decommissioned" as const, binding: null, worktree: null });
 }
 
 async function applyMutation(
@@ -866,6 +1142,7 @@ async function applyMutation(
   current: Readonly<WakeflowWindowHostBinding> | null,
   request: MutationRequest,
   decision: MutationDecision,
+  loaded: LoadedState,
 ): Promise<AppliedBinding> {
   switch (request.operation) {
     case "register":
@@ -876,9 +1153,10 @@ async function applyMutation(
         current,
         request,
         decision.disposition === "replayed",
+        loaded,
       );
     case "replace":
-      return applyReplace(context, store, window, current, request);
+      return applyReplace(context, store, window, current, request, loaded);
     case "decommission":
       return applyDecommission(context, window, current);
   }
@@ -911,7 +1189,15 @@ async function mutateBinding(
         if (currentDigest !== loaded.bindingDigest) {
           fail("concurrency-conflict", "binding-changed", "$request.windowId", { retryable: true });
         }
-        const applied = await applyMutation(context, store, window, current, request, decision);
+        const applied = await applyMutation(
+          context,
+          store,
+          window,
+          current,
+          request,
+          decision,
+          loaded,
+        );
         const observation = request.operation === "decommission" ? null : request.observation;
         await refreshLocator(context, window, applied.binding, observation);
         const projection = await refreshProjection(context, entry, applied.binding);
@@ -922,6 +1208,7 @@ async function mutateBinding(
           disposition: applied.disposition,
           binding: applied.binding,
           bindings,
+          worktree: applied.worktree,
           verification: decision.operation === "decommission" ? decision.verification : null,
           projection,
         });
@@ -996,6 +1283,7 @@ async function releaseClaim(
 interface MutationResultInput {
   readonly disposition: MutationDisposition | "claim-released";
   readonly binding: Readonly<WakeflowWindowHostBinding> | null;
+  readonly worktree: Readonly<WorktreeSummary> | null;
   readonly verification: "machine-verified" | "manual-host-gate" | null;
   readonly claim: Readonly<{ readonly claimId: string; readonly claimDigest: Sha256Digest }> | null;
   readonly projection: Readonly<ProjectionReceipt> | null;
@@ -1016,6 +1304,7 @@ function mutationResult(
     operation: request.operation,
     disposition: outcome.disposition,
     binding: outcome.binding === null ? null : bindingSummary(outcome.binding),
+    worktree: outcome.worktree,
     verification: outcome.verification,
     claim: outcome.claim,
     projection: outcome.projection,
@@ -1027,7 +1316,12 @@ async function executeOperation(
   context: EndpointContext,
   request: WindowBindingRequest,
 ): Promise<WindowBindingResult> {
-  const loaded = await loadState(context);
+  const loaded = await loadState(
+    context,
+    request.operation === "register" || request.operation === "replace"
+      ? request.observation
+      : null,
+  );
   if (request.operation === "inspect") return inspectionResult(context, loaded);
   const decision = decideEndpointCommand(
     request.windowId,
@@ -1040,6 +1334,7 @@ async function executeOperation(
     return mutationResult(context, request, {
       disposition: "claim-released",
       binding: loaded.binding,
+      worktree: null,
       verification: null,
       claim,
       projection: null,
@@ -1050,6 +1345,7 @@ async function executeOperation(
   return mutationResult(context, request, {
     disposition: outcome.disposition,
     binding: outcome.binding,
+    worktree: outcome.worktree,
     verification: outcome.verification,
     claim: null,
     projection: outcome.projection,

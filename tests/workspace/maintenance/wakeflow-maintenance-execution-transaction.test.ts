@@ -971,7 +971,7 @@ test("recovery reuses exact Host capability layout after effect-before-checkpoin
     "hosts",
     "codex",
   );
-  equal(readdirSync(path.join(hostRoot, "evidence", "pods")).length, 0);
+  equal(readdirSync(path.join(hostRoot, "pods")).length, 0);
   equal(
     readdirSync(path.join(hostRoot, "operations", "keep-live", "leases"))
       .length,

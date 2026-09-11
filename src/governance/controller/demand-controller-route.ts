@@ -179,10 +179,6 @@ export type DemandControllerRouteBlocker =
       readonly owner: "demand-lifecycle";
     }>
   | Readonly<{
-      readonly kind: "isolated-test-planning-not-implemented";
-      readonly owner: "test-task-planning";
-    }>
-  | Readonly<{
       readonly kind: "awaiting-decision";
       readonly owner: "user";
       readonly escalationEventId: WakeflowDurableId<"demand-event">;
@@ -664,23 +660,6 @@ function routeBasis(
     loaded,
     postAcceptanceRoute,
   );
-  if (
-    loaded.identity.executionPlacement.mode === "isolated" &&
-    postAcceptanceRoute.nextStage.status === "test-task-planning"
-  ) {
-    return {
-      ...common,
-      postAcceptanceRouteDigest: postAcceptanceRoute.routeDigest,
-      disposition: "blocked",
-      frontiers: Object.freeze([postAcceptanceFrontierValue]),
-      blockers: Object.freeze([
-        Object.freeze({
-          kind: "isolated-test-planning-not-implemented" as const,
-          owner: "test-task-planning" as const,
-        }),
-      ]),
-    };
-  }
   const blocker = postAcceptanceBlocker(postAcceptanceRoute);
   return {
     ...common,

@@ -11,10 +11,10 @@
 | # | 旧工具 | 能力组 | 新工具或内部 owner | 判定 | 落地层与备注 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `wakeflow_status` | 9 | `wakeflow_status`（带 demandId 即附路由） | 缺席 | L1；域集合按能力卡 9：增加 pod 段、待认领摘要、已接受未合并列表，删除 hostOperations（ADR-0012 D2） |
-| 2 | `wakeflow_maintain_workspace` | 1 | `wakeflow_maintain_workspace` | 重切 | 已实现 fresh、reconfigure、reconcile 三动作；config 按 TSD-16 从 v1 起版并增加 `pods[]` |
+| 2 | `wakeflow_maintain_workspace` | 1 | `wakeflow_maintain_workspace` | 重切 | 已实现 fresh、reconfigure、reconcile 三动作；config 增加 `pods[]` 与窗口 `podId`（2026-09-10 pod 切片 9，fresh 生成 `main`，reconfigure 拒改 `pods`）；TSD-16 从 v1 起版未做 |
 | 3 | `wakeflow_replace_windows` | 2 | 窗口替换并入 `wakeflow_register_window_binding` 的替换操作 | 缺席 | L1；替换是新握手加旧声明退役，见 ADR-0009 |
-| 4 | `wakeflow_register_window` | 2 | `wakeflow_register_window_binding` | 重切 | 已实现；绑定增加 `podId` |
-| 5 | `wakeflow_create_demand` | 4 | `wakeflow_create_demand` | 重切 | 已实现（demand 切片，确定性计划）；`executionPlacement` 改为 `podId` 留给 pod 切片，已有活动 Demand 时拒绝 |
+| 4 | `wakeflow_register_window` | 2 | `wakeflow_register_window_binding` | 重切 | 已实现；窗口在配置里带 `podId`，worktree pod 的产品窗口握手带 worktree 回执（2026-09-10 pod 切片 9，gate-log §13.92） |
+| 5 | `wakeflow_create_demand` | 4 | `wakeflow_create_demand` | 重切 | 已实现（demand 切片，确定性计划）；身份记 `podId`（缺省 primary），同 pod 已有活动 Demand 时 `pod-busy`（2026-09-10 pod 切片 9） |
 | 6 | `wakeflow_add_task` | 5 | `wakeflow_plan_target_task` | 重切 | 已实现（tasking 切片）：追加型一次调用；锚点 `requirementRef` 指向需求包验收标准；谱系 `replacement`（旧目标 `superseded`）与 `continuation`；`taskPlanReview: user` 须回显 `planReview`；可选 `sectionAnchors`；字段集按能力卡 5 Q1 保持 |
 | 7 | `wakeflow_prepare_delivery` | 6 | `prepare_delivery` 一次调用（含许可；实现与测试共用） | 已落地 | 2026-09-10 L1 delivery 切片 6a：`wakeflow_prepare_delivery` 合并旧三工具，prompt 为 Wakeflow 骨架加 Controller 三段（ADR-0012 D2；gate-log §13.84） |
 | 8 | `wakeflow_record_delivery` | 6 | `record_delivery_outcome`（hook 记录惰性核对）、`rearm_delivery` | 已落地 | 2026-09-10：处置由 `user-prompt-submit` 记录或 Codex 发送返回派生；indeterminate 再调用重查；rearm 上限 3（gate-log §13.84） |
@@ -24,7 +24,7 @@
 | 12 | `wakeflow_decide_review` | 7 | `wakeflow_record_implementation_review_decision`（`accept \| rework \| blocked \| escalate`）、`wakeflow_record_test_review_decision`（`accept \| request-another-attempt \| blocked \| escalate`） | 已落地 | 2026-09-10：`redesign` 删除；blocked 与 escalated 之后以带 `resumption` 的新决定回到同一结果；`resume_target_result_review` 与 `authorize_product_defect_remediation` 并入 escalate 路由（ADR-0012 D4 D5；gate-log §13.88） |
 | 13 | `wakeflow_complete_demand` | 4 | `wakeflow_complete_demand`（完成即归档） | 重切 | 已实现（demand 切片）：preview 内嵌八道 verify 门与归档前置，apply 一个事务含归档、需求包 archived、活动根删除（ADR-0012 D3） |
 | 14 | `wakeflow_continue_demand` | 4 | `wakeflow_continue_demand`（continue 与 record-decision） | 重切 | 已实现（demand 切片）：从归档重开、需求包回到 claimed、路由先要求新任务包；与 `plan_target_task` 分开（能力卡 4 Q3） |
-| 15 | `wakeflow_record_evidence` | 8 | `wakeflow_record_evidence` | 重切 | 已实现；来源根增加 `pod-worktree` 与 `observation`，kind 闭集，隐私扫描收窄在 L1 补 |
+| 15 | `wakeflow_record_evidence` | 8 | `wakeflow_record_evidence` | 已落地 | 2026-09-10 L1 evidence 切片 8：内核 `PublicationTransaction`（apply 重算计划、身份由内容派生、同内容 `already-recorded`）；来源 `managed-path \| observation \| link \| commit`，kind 闭集，隐私白名单加 `controller-confirmed`；`pod-worktree` 根随 pod 切片进表（gate-log §13.90） |
 | 16 | `wakeflow_recover_state_transition` | 4 | 无 | 放弃 | ADR-0002：通用 recover 放弃，每个 preview/apply 工具自带 recover |
 | 17 | `wakeflow_release_window_lock` | 2 | 工作声明释放 | 已落地 | endpoint 切片的 release-claim 加 delivery 切片的内核声明 `kernel/work-claims.ts`（ADR-0009；gate-log §13.84） |
 | 18 | `wakeflow_view` | 9 | 无 | 放弃 | ADR-0006：通用读取违反脱敏边界；config 事实归 `wakeflow_status`，storage 归 `wakeflow_verify`，result-trace 并入评审 preview |
@@ -35,11 +35,11 @@
 | 23 | `wakeflow_next_work` | 3 | 待认领需求包查询 `wakeflow_inspect_board`（ADR-0011，2026-09-04 L1 requirement 落地） | 重切 | `inspect_todo` 已删除，看板查询列出需求包认领状态 |
 | 24 | `wakeflow_claim_next` | 3 | 认领并入 `wakeflow_create_demand(requirementId)` | 重切 | 认领即创建；一个总控一次一个（ADR-0011） |
 | 25 | `wakeflow_cancel_demand` | 4 | `wakeflow_cancel_demand` | 重切 | 已实现（demand 切片）：需求包置 `withdrawn`，释放本 Demand 的工作声明，有待评审结果时拒绝（能力卡 4 Q4） |
-| 26 | `wakeflow_pod_open` | 2、4 | `wakeflow_pod` | 缺席 | L1；ADR-0010 D6 四状态，只有 main 的 Controller 调用 |
-| 27 | `wakeflow_pod_record` | 2、4 | `wakeflow_pod` | 缺席 | 同上；回执经握手准入，不再有独立记录事件家族 |
-| 28 | `wakeflow_pod_bind` | 2 | `wakeflow_pod` 加 `wakeflow_register_window_binding` | 缺席 | 同上；绑定携带 `podId` |
-| 29 | `wakeflow_pod_plan` | 2、4 | `wakeflow_pod` | 缺席 | 同上；design-request 与 test-access 计划放弃，因为不做 Design 跨 pod 交接 |
-| 30 | `wakeflow_prune_runtime` | 8 | 并入 pod 关闭与维护对账 | 缺席 | L1；范围扩到已关闭 pod 的 worktree 检出（能力卡 8 Q7、ADR-0012 D3） |
+| 26 | `wakeflow_pod_open` | 2、4 | `wakeflow_pod` | 已落地 | 2026-09-10 L1 pod 切片 9：`intent.kind: create` 一次配置事务派生窗口集与 worktree 意图，状态由回执派生（gate-log §13.92） |
+| 27 | `wakeflow_pod_record` | 2、4 | `wakeflow_pod` 加 `wakeflow_register_window_binding` | 已落地 | worktree 回执经 `register` / `replace` 的 `observation.worktree` 准入并写 `hosts/<host>/pods/<podId>/worktrees/`，无独立记录事件家族 |
+| 28 | `wakeflow_pod_bind` | 2 | `wakeflow_register_window_binding` | 已落地 | pod 窗口就是配置里带 `podId` 的窗口，握手同一工具；`next` 只列同 pod 未登记窗口 |
+| 29 | `wakeflow_pod_plan` | 2、4 | `wakeflow_pod` | 已落地 | create preview 给出窗口集与 worktree 意图，`inspect` 给出宿主执行说明与 Test 附加目录；design-request 与 test-access 放弃 |
+| 30 | `wakeflow_prune_runtime` | 8 | 并入 pod 关闭 | 已落地 | close 第二段要求检出已由 Agent 处置，Wakeflow 只删自己的回执目录；对账只报告（观察切片） |
 | 31 | `wakeflow_verify` | 9 | `wakeflow_verify` | 缺席 | L1；门集合按能力卡 9 重排，增加 host-hook-channel 与 pod-execution-location |
 
 统计：重切 15，缺席 12，放弃 4。缺席项全部落在 L1 切片；放弃项各有 ADR 或能力卡确认记录。
@@ -64,8 +64,8 @@
 | `wakeflow_inspect_target_result_review` | 读 | review_pack、reduce_results | result-review（已落地 2026-09-10） |
 | `wakeflow_record_implementation_review_decision` | 追加 | decide_review、resume_target_result_review（TS） | result-review（已落地 2026-09-10） |
 | `wakeflow_record_test_review_decision` | 追加 | decide_review、authorize_product_defect_remediation（TS） | result-review（已落地 2026-09-10） |
-| `wakeflow_record_evidence` | 效果 | record_evidence | evidence |
-| `wakeflow_pod` | 效果 | pod_open、pod_record、pod_bind、pod_plan、prune_runtime | pod |
+| `wakeflow_record_evidence` | 效果 | record_evidence | evidence（已落地 2026-09-10） |
+| `wakeflow_pod` | 效果 | pod_open、pod_record、pod_bind、pod_plan、prune_runtime | pod（已落地 2026-09-10） |
 | `wakeflow_status` | 读（带 demandId 附路由） | status、view config、inspect_demand_route（TS） | observation |
 | `wakeflow_verify` | 读 | verify、view storage 与 verification | observation |
 
@@ -111,20 +111,20 @@
 | D6、D7、D8 | Design 与 Test 内置与外部工作面 | 能力卡 1 | 保留 | wakeflow-managed 与 external 两种 ownership |
 | D9 | 共享模板、Skill 与宿主生成物的 source ownership | 能力卡 10 | 重切 | TS 构建器产出，sync-core 删除 |
 | D10 | reset 与 reconcile 职责 | 能力卡 1 | 保留 | maintenance reconcile 已实现 |
-| D11 | 多窗口共享同一产品仓库 | 能力卡 2 | 保留 | 在 pod 作用域内 |
+| D11 | 多窗口共享同一产品仓库 | 能力卡 2 | 保留 | 在 pod 作用域内（primary 每仓库至少一个，worktree pod 恰好一个；已落地 2026-09-10） |
 | D12 | 离线定向、配置解释、存储视图、运行状态 | 能力卡 9 | 重切 | view 放弃，status 与 verify 承接 |
-| D13 | config 分区与字段 | 能力卡 1 | 重切 | TSD-16 从 v1 起版，增加 `pods[]` |
+| D13 | config 分区与字段 | 能力卡 1 | 重切 | 增加 `pods[]` 与窗口 `podId`（已落地 2026-09-10）；TSD-16 从 v1 起版未做 |
 | D14 | local 语义分区 | 能力卡 1 | 保留 | `runtime/shared`、`runtime/hosts/<host>`；`audit` 随 preserve 放弃缩减 |
 | D15 | TargetResult 单一正典 | 能力卡 7 | 保留 | 状态根是唯一结果正典 |
 | D16 | host identity 单一权威 | 能力卡 2 | 保留 | 绑定唯一持有真实句柄 |
 | D17 | transport retention | 能力卡 8 | 保留 | archive 门成立后整链 prune |
-| D18 | Pod host evidence retention | 能力卡 8 | 重切 | pod 记录在 config，证据在 Demand 根 |
+| D18 | Pod host evidence retention | 能力卡 8 | 重切 | pod 记录在 config，证据在 Demand 根，回执在 `hosts/<host>/pods/`（已落地 2026-09-10） |
 | D19 | compatibility lane | 无 | 放弃 | ADR-0008 |
 | D20 | local runtime stable IDs | 能力卡 2 | 保留 | typed durable id |
 | D21 | shared transport 四类职责 | 能力卡 6 | 重切 | group、packet、envelope、run 形状保留，执行移交 Agent |
 | D22 | window identity 与 runtime projection | 能力卡 2 | 保留 | 初始化不写绑定，投递全链校验 bindingId |
 | D23 | Claude window-host 混合文件 | 能力卡 2、6 | 重切 | locator 由 Agent 观察交回，不由 Wakeflow 维护 |
-| D24 到 D28 | 双宿主 Pod 模型、manifest、operation、binding、test-access | ADR-0010 | 重切 | pod 四状态、config 记录、无四类文件、无 Design 交接 |
+| D24 到 D28 | 双宿主 Pod 模型、manifest、operation、binding、test-access | ADR-0010 | 重切 | pod 四状态由回执派生、config 记录、无四类文件、无 Design 交接（已落地 2026-09-10，gate-log §13.92） |
 | D29 | keep-live 记录与锁 | 无 | 放弃 | 能力卡 10 Q1 |
 | D30 | Claude window-locators | 能力卡 2、6 | 重切 | 互斥语义留在工作声明，坐标由 Agent 观察 |
 | D31 | Claude assets、activity-monitor、temp | 能力卡 9、10 | 重切 | statusline 保留为资产；monitor 与 temp 放弃 |

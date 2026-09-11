@@ -33,7 +33,8 @@ export type WakeflowWorkspaceHostId =
 
 export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
   "windowIdentity",
-  "podEvidence",
+  "podReceipts",
+  "worktree",
   "keepLive",
   "windowLocator",
   "settingsIntegration",
@@ -62,9 +63,34 @@ export interface WakeflowWorkspaceHostStatuslineAsset {
   readonly fileName: WakeflowWorkspaceHostResourceComponent;
 }
 
+export const WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES = Object.freeze([
+  "claude-worktree-flag",
+  "codex-worktree-thread",
+] as const);
+export type WakeflowWorkspaceHostWorktreeLaunch =
+  (typeof WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES)[number];
+
+export const WAKEFLOW_WORKSPACE_HOST_ATTACHED_DIRECTORY_MODES = Object.freeze([
+  "add-dir-flag",
+  "prompt-path",
+] as const);
+export type WakeflowWorkspaceHostAttachedDirectoryMode =
+  (typeof WAKEFLOW_WORKSPACE_HOST_ATTACHED_DIRECTORY_MODES)[number];
+
+/**
+ * worktree pod 的宿主意图模板（ADR-0010 D4 后果）：产品窗口如何得到自己的 worktree，
+ * Test 窗口如何读到它。只是静态值；命令行与参数由端点切片按模板渲染。
+ */
+export interface WakeflowWorkspaceHostWorktreeTemplate {
+  readonly launch: WakeflowWorkspaceHostWorktreeLaunch;
+  readonly attachedDirectories: WakeflowWorkspaceHostAttachedDirectoryMode;
+}
+
 export interface WakeflowWorkspaceHostResourceSurfaces {
   readonly windowIdentity: boolean;
-  readonly podEvidence: boolean;
+  /** pod 回执目录 `hosts/<host>/pods/`：worktree 回执与关闭观察（ADR-0010 D6）。 */
+  readonly podReceipts: boolean;
+  readonly worktree: Readonly<WakeflowWorkspaceHostWorktreeTemplate>;
   readonly keepLive: boolean;
   readonly windowLocator: boolean;
   readonly settingsIntegration:
@@ -134,6 +160,11 @@ const SURFACE_FIELDS = new Set<string>(
   WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES,
 );
 const SETTINGS_INTEGRATION_FIELDS = new Set(["portablePath", "localPath"]);
+const WORKTREE_FIELDS = new Set(["launch", "attachedDirectories"]);
+const WORKTREE_LAUNCH_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES);
+const ATTACHED_DIRECTORY_MODE_SET = new Set<string>(
+  WAKEFLOW_WORKSPACE_HOST_ATTACHED_DIRECTORY_MODES,
+);
 const STATUSLINE_ASSET_FIELDS = new Set(["fileName"]);
 
 function fail(
@@ -241,6 +272,27 @@ function parseStatuslineAsset(
   });
 }
 
+function parseWorktreeTemplate(
+  value: unknown,
+): Readonly<WakeflowWorkspaceHostWorktreeTemplate> {
+  const record = plainRecord(value, "$/surfaces/worktree");
+  assertExactFields(record, WORKTREE_FIELDS, "$/surfaces/worktree");
+  const { launch, attachedDirectories } = record;
+  if (typeof launch !== "string" || !WORKTREE_LAUNCH_SET.has(launch)) {
+    fail("surface", "$/surfaces/worktree/launch");
+  }
+  if (
+    typeof attachedDirectories !== "string"
+    || !ATTACHED_DIRECTORY_MODE_SET.has(attachedDirectories)
+  ) {
+    fail("surface", "$/surfaces/worktree/attachedDirectories");
+  }
+  return Object.freeze({
+    launch: launch as WakeflowWorkspaceHostWorktreeLaunch,
+    attachedDirectories: attachedDirectories as WakeflowWorkspaceHostAttachedDirectoryMode,
+  });
+}
+
 function surfaceBoolean(
   value: unknown,
   name: WakeflowWorkspaceHostResourceSurfaceName,
@@ -269,7 +321,8 @@ function parseSurfaces(
   }
   return Object.freeze({
     windowIdentity: surfaceBoolean(record.windowIdentity, "windowIdentity"),
-    podEvidence: surfaceBoolean(record.podEvidence, "podEvidence"),
+    podReceipts: surfaceBoolean(record.podReceipts, "podReceipts"),
+    worktree: parseWorktreeTemplate(record.worktree),
     keepLive: surfaceBoolean(record.keepLive, "keepLive"),
     windowLocator: surfaceBoolean(record.windowLocator, "windowLocator"),
     settingsIntegration,

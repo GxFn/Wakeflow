@@ -248,17 +248,12 @@ export function createWakeflowWorkspaceHostResourceCatalog(
       ),
     );
   }
-  if (profile.surfaces.podEvidence) {
+  if (profile.surfaces.podReceipts) {
     declarations.push(
       privateDirectoryDeclaration(
-        `${prefix}.evidence-root`,
-        "host-runtime-layout",
-        hostRuntimeRef(profile, "evidence"),
-      ),
-      privateDirectoryDeclaration(
-        `${prefix}.pod-evidence-root`,
-        "pod-evidence",
-        hostRuntimeRef(profile, "evidence/pods"),
+        `${prefix}.pod-receipts-root`,
+        "pod-receipts",
+        hostRuntimeRef(profile, "pods"),
       ),
     );
   }

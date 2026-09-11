@@ -192,10 +192,30 @@
         "launchIntent": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["intentDigest", "displayTitle", "root", "execution"],
+          "required": [
+            "intentDigest",
+            "podId",
+            "podName",
+            "podPlacement",
+            "displayTitle",
+            "root",
+            "worktree",
+            "attachedWorktrees",
+            "execution"
+          ],
           "properties": {
             "intentDigest": {
               "$ref": "#/$defs/sha256Digest"
+            },
+            "podId": {
+              "$ref": "#/$defs/podId"
+            },
+            "podName": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,31}$"
+            },
+            "podPlacement": {
+              "enum": ["primary", "worktree"]
             },
             "displayTitle": {
               "type": "string",
@@ -217,6 +237,23 @@
                   "type": "string",
                   "maxLength": 1024
                 }
+              }
+            },
+            "worktree": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/worktreeIntent"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "attachedWorktrees": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "$ref": "#/$defs/attachedWorktree"
               }
             },
             "execution": {
@@ -346,6 +383,7 @@
         "operation",
         "disposition",
         "binding",
+        "worktree",
         "verification",
         "claim",
         "projection",
@@ -377,6 +415,16 @@
           "oneOf": [
             {
               "$ref": "#/$defs/bindingSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "worktree": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/worktreeSummary"
             },
             {
               "type": "null"
@@ -427,6 +475,75 @@
         },
         "next": {
           "$ref": "#/$defs/next"
+        }
+      }
+    },
+    "podId": {
+      "type": "string",
+      "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "worktreeIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryId", "suggestedName", "basePolicy"],
+      "description": "Worktree intent attached to the product window of a worktree pod: the host creates the checkout from the local HEAD under the suggested name; the actual path and branch come back in the registration receipt.",
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "suggestedName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "basePolicy": {
+          "const": "local-head"
+        }
+      }
+    },
+    "attachedWorktree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryId", "productWindowId"],
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "productWindowId": {
+          "$ref": "#/$defs/windowId"
+        }
+      }
+    },
+    "worktreeSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "branch", "detached", "locked"],
+      "description": "The admitted worktree receipt without its path: HEAD, branch (null when detached), and lock state.",
+      "properties": {
+        "head": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "branch": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detached": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
         }
       }
     }

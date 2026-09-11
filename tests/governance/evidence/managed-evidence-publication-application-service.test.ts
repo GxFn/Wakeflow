@@ -36,7 +36,8 @@ import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
   EVIDENCE_CAPTURED_AT,
-  EVIDENCE_REPOSITORY_ID,
+  fileSelection,
+  readyCapturePlan,
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
 } from "./managed-evidence-capture-planning-service.fixture.js";
 
@@ -105,27 +106,12 @@ function changePresentationLanguage(
 async function createTransaction(
   fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
 ) {
-  const capturePlan = await new ManagedEvidenceCapturePlanningService(
-    fixture.publication.workspaceRoot,
-  ).preview(
-    fixture.demandId,
-    {
-      evidenceType: "test-output",
-      source: {
-        root: {
-          kind: "repository",
-          repositoryId: EVIDENCE_REPOSITORY_ID,
-        },
-        path: "artifacts/test-run/logs/report.txt",
-        resourceType: "file",
-      },
-      sensitivity: "internal",
-      opaqueContentPolicy: "reject",
-    },
-    {
-      uuidFactory: () => "d5555555-5555-4555-8555-555555555555",
-      clock: () => EVIDENCE_CAPTURED_AT,
-    },
+  const capturePlan = readyCapturePlan(
+    await new ManagedEvidenceCapturePlanningService(fixture.publication.workspaceRoot).preview(
+      fixture.demandId,
+      fileSelection("artifacts/test-run/logs/report.txt"),
+      { clock: () => EVIDENCE_CAPTURED_AT },
+    ),
   );
   const transaction = createManagedEvidencePublicationTransaction({
     capturePlan,

@@ -31,8 +31,13 @@ export interface DeliveryPromptIdentity {
 }
 
 export interface DeliveryPromptReadingOrder {
-  /** 从窗口根到工作区根的相对路径，例如 `../..`；程序根窗口为 `.`。 */
+  /** 从窗口根到工作区根的相对路径，例如 `../..`；程序根窗口为 `.`；worktree 检出按回执路径计算。 */
   readonly workspaceRootFromWindow: string;
+  /** worktree pod 的测试任务：每仓库一条从本窗口根到 worktree 检出的相对路径（ADR-0010 D4）。 */
+  readonly attachedWorktrees: readonly Readonly<{
+    readonly repositoryId: string;
+    readonly pathFromWindow: string;
+  }>[];
   readonly taskPackageRef: PortableResourcePath;
   readonly requirementSections: readonly string[];
   readonly workspaceInstructionFile: string;
@@ -106,6 +111,7 @@ type Labels = Readonly<
     | "binding"
     | "demand"
     | "workspaceRoot"
+    | "worktrees"
     | "returnInstruction"
     | "noWrite",
     string
@@ -134,6 +140,7 @@ const LABELS: Readonly<Record<WakeflowPresentationLanguage, Labels>> = Object.fr
     binding: "binding",
     demand: "demand",
     workspaceRoot: "workspace root (relative to this window's root)",
+    worktrees: "pod worktrees to read (relative to this window's root)",
     returnInstruction:
       "Import the result with the MCP tool below; do not write result files. Delivery is not acceptance.",
     noWrite: "Never send this prompt onward to another window.",
@@ -159,6 +166,7 @@ const LABELS: Readonly<Record<WakeflowPresentationLanguage, Labels>> = Object.fr
     binding: "绑定",
     demand: "demand",
     workspaceRoot: "工作区根（相对本窗口根）",
+    worktrees: "要读取的 pod worktree（相对本窗口根）",
     returnInstruction: "用下面的 MCP 工具导入结果，不写本地结果文件；投递成功不等于验收。",
     noWrite: "不得把本 prompt 转发给其他窗口。",
   }),
@@ -187,6 +195,15 @@ function readingLines(input: RenderDeliveryPromptInput): readonly string[] {
   if (order.repositoryInstructionFile !== null) lines.push(`4. ${order.repositoryInstructionFile}`);
   lines.push(`${lines.length + 1}. ${root}/${order.stateRootRef}`);
   return lines;
+}
+
+function worktreeLines(input: RenderDeliveryPromptInput, labels: Labels): readonly string[] {
+  const attached = input.readingOrder.attachedWorktrees;
+  if (attached.length === 0) return [];
+  return section(
+    labels.worktrees,
+    attached.map((entry) => `- ${entry.repositoryId}: ${entry.pathFromWindow}`),
+  );
 }
 
 function identityLines(input: RenderDeliveryPromptInput, labels: Labels): readonly string[] {
@@ -287,6 +304,7 @@ export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromp
     ...reworkLines(input, labels),
     ...remediationLines(input, labels),
     ...section(labels.reading, readingLines(input)),
+    ...worktreeLines(input, labels),
     ...section(
       labels.skills,
       DELIVERY_REQUIRED_SKILLS[workType].map((skill) => `- ${skill}`),

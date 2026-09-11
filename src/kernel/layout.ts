@@ -2,6 +2,7 @@ import {
   parsePortableResourcePath,
   type PortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
+import { parseWakeflowDurableIdOfKind } from "../contracts/identity/wakeflow-durable-id.js";
 import { isWakeflowHostId, type WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
 import { fail } from "./error.js";
 
@@ -110,6 +111,32 @@ export function hostRuntimeRootRef(hostId: WakeflowHostId): PortableResourcePath
 /** 宿主 hook 观察记录目录：`.wakeflow-local/runtime/hosts/<host>/observations/hooks`。 */
 export function hostHookObservationsRootRef(hostId: WakeflowHostId): PortableResourcePath {
   return parsePortableResourcePath(`${hostRuntimeRootRef(hostId)}/observations/hooks`, "$layout");
+}
+
+/** pod 回执根：`.wakeflow-local/runtime/hosts/<host>/pods`（ADR-0010 D6：回执放本地运行时目录）。 */
+export function hostPodReceiptsRootRef(hostId: WakeflowHostId): PortableResourcePath {
+  return parsePortableResourcePath(`${hostRuntimeRootRef(hostId)}/pods`, "$layout");
+}
+
+/** 一个 pod 的回执目录：`.wakeflow-local/runtime/hosts/<host>/pods/<podId>`。 */
+export function podReceiptRootRef(hostId: WakeflowHostId, podId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${hostPodReceiptsRootRef(hostId)}/${parseWakeflowDurableIdOfKind(podId, "pod", "$podId")}`,
+    "$layout",
+  );
+}
+
+/** 一个 pod 内某仓库的 worktree 回执：`.../pods/<podId>/worktrees/<repositoryId>.json`。 */
+export function podWorktreeReceiptRef(
+  hostId: WakeflowHostId,
+  podId: string,
+  repositoryId: string,
+): PortableResourcePath {
+  const repository = parseWakeflowDurableIdOfKind(repositoryId, "repository", "$repositoryId");
+  return parsePortableResourcePath(
+    `${podReceiptRootRef(hostId, podId)}/worktrees/${repository}.json`,
+    "$layout",
+  );
 }
 
 /** 共享协调根下的窗口工作声明目录：`.wakeflow-local/runtime/shared/coordination/window-work-claims`。 */

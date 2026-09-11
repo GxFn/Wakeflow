@@ -26,7 +26,6 @@ const RETIRED_DURABLE_ID_KINDS = [
   "delivery-run",
   "dispatch-group",
   "dispatch-packet",
-  "pod",
   "pod-design-handoff",
   "pod-design-request",
   "preservation",

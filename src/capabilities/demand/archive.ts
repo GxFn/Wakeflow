@@ -227,9 +227,12 @@ export interface ArchiveManifestBasis {
   }>;
   readonly archivedAt: string;
   readonly controllerWindowId: string;
+  readonly podId: string;
   readonly package: DemandArchiveManifest["package"];
   readonly verify: DemandArchiveManifest["verify"];
   readonly payload: DemandArchiveManifest["payload"];
+  /** worktree 来源成员（ADR-0010 D7）：primary pod 为 null，只含标识、建议名称、分支与 HEAD。 */
+  readonly worktree: DemandArchiveManifest["worktree"];
 }
 
 function parseArchiveManifest(value: unknown, path = "$manifest"): DemandArchiveManifest {
@@ -259,7 +262,6 @@ export function createArchiveManifest(
     kind: "WakeflowDemandArchiveManifest",
     schemaVersion: 1,
     ...basis,
-    worktree: null,
   };
   return parseArchiveManifest({
     ...body,

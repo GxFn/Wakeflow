@@ -125,7 +125,7 @@ async function fixture() {
     completionDefinition: "Command、append、看板认领与 recovery 闭合",
     demandType: "requirement",
     source: requirementLineageOf(loaded),
-    executionPlacement: { mode: "main" },
+    podId: "pod_99999999-9999-4999-8999-999999999999",
   }, { clock: () => CREATED_AT });
   const authority = createDemandAuthority(identity, {
     authorityRefs,

@@ -85,12 +85,12 @@ test("Host capability layout creates only profile-applicable empty directories",
     codexWorkspaceHostResourceProfile,
     { recoveringFreshLayout: false },
   );
-  equal(created.createdDirectoryCount, 5);
+  equal(created.createdDirectoryCount, 4);
   const codexHost = path.join(
     codex.absolutePath,
     ".wakeflow-local/runtime/hosts/codex",
   );
-  equal(readdirSync(path.join(codexHost, "evidence", "pods")).length, 0);
+  equal(readdirSync(path.join(codexHost, "pods")).length, 0);
   equal(readdirSync(path.join(
     codexHost,
     "operations",
@@ -117,7 +117,7 @@ test("Host capability layout creates only profile-applicable empty directories",
     claudeCodeWorkspaceHostResourceProfile,
     { recoveringFreshLayout: false },
   );
-  equal(claudeCreated.createdDirectoryCount, 10);
+  equal(claudeCreated.createdDirectoryCount, 9);
   const claudeHost = path.join(
     claude.absolutePath,
     ".wakeflow-local/runtime/hosts/claude-code",
@@ -151,7 +151,7 @@ test("Host capability recovery fills an exact prefix and preserves foreign resou
   );
   equal(recovered.createdDirectoryCount, 1);
 
-  const foreign = path.join(hostRoot, "evidence", "pods", "foreign.json");
+  const foreign = path.join(hostRoot, "pods", "foreign.json");
   writeFileSync(foreign, "{}\n", { mode: 0o600 });
   await expectLayoutError(
     () => materializeWakeflowHostCapabilityLayout(

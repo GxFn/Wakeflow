@@ -37,6 +37,16 @@ test("Fresh selection allocates typed IDs and resolves request-local roots", () 
     `window_${UUIDS[6]}`,
     `window_${UUIDS[7]}`,
   ]);
+  deepEqual(compiled.allocations.pods, [{ selectionKey: "main", id: `pod_${UUIDS[8]}` }]);
+  deepEqual(JSON.parse(JSON.stringify(compiled.config.pods)), [{
+    podId: `pod_${UUIDS[8]}`,
+    name: "main",
+    placement: "primary",
+    lifecycle: "open",
+    worktrees: [],
+    closing: null,
+  }]);
+  equal(compiled.config.topology.windows.every((entry) => entry.podId === `pod_${UUIDS[8]}`), true);
   const product = compiled.config.topology.windows.find((entry) => (
     entry.role === "product"
   ));
@@ -111,7 +121,7 @@ test("Fresh selection snapshots all data and validates before ID allocation", ()
   const compiled = compileWakeflowFreshConfigSelection(mutable, {
     uuidFactory: mutatingFactory,
   });
-  equal(calls, 8);
+  equal(calls, 9);
   deepEqual(compiled, baseline);
 
   const unresolved = createMinimalWakeflowFreshConfigSelection();

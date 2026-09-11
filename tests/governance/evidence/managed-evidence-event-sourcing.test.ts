@@ -93,14 +93,14 @@ function createManifest(
       programId: PROGRAM_ID,
       demandId: DEMAND_ID,
       demandAuthorityDigest,
-      evidenceType: "test-output",
+      kind: "test-output",
       recordedBy: { windowId: WINDOW_ID, configDigest: CONFIG_DIGEST },
       source: {
+        kind: "managed-path" as const,
         root: { kind: "repository", repositoryId: REPOSITORY_ID },
         path: "artifacts/result.txt",
         resourceType: "file",
       },
-      sensitivity: "internal",
       payload: {
         artifactDigest: computeCanonicalJsonSha256Digest(treeManifest),
         treeManifest,
@@ -108,6 +108,7 @@ function createManifest(
       contentReview: {
         disposition: "not-required",
         opaqueFileRefs: [],
+      privacyFindings: [],
       },
     },
     { clock: () => CAPTURED_AT },
@@ -140,12 +141,14 @@ test("Managed Evidence Event保存完整Manifest，Aggregate只投影稳定selec
   deepEqual(state.managedEvidence, [
     {
       evidenceId: manifest.evidenceId,
+      kind: "test-output",
       manifestDigest: manifest.manifestDigest,
       payloadArtifactDigest: manifest.payload.artifactDigest,
     },
   ]);
   deepEqual(Object.keys(state.managedEvidence?.[0] ?? {}).sort(), [
     "evidenceId",
+    "kind",
     "manifestDigest",
     "payloadArtifactDigest",
   ]);

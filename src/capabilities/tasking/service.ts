@@ -291,6 +291,7 @@ async function buildImplementationPackage(
       config: authority.config,
       repositoryId: requested.assignment.repositoryId,
       windowId: requested.assignment.windowId,
+      podId: identity.podId,
     }),
     ...deriveSectionAnchorBlockers(
       requested.sectionAnchors,
@@ -399,10 +400,12 @@ async function buildTestPackage(
     lineage: requested.lineage,
   });
   if (planningBlockers.length > 0) rejectWith(planningBlockers, "$request.taskPackage");
-  const testWindow = authority.config.indexes.testWindow;
-  if (testWindow.role !== "test") {
-    rejectWith([`window-role:${testWindow.role}`], "$request.taskPackage");
-  }
+  // 测试任务派给 Demand 所在 pod 的 Test 窗口（ADR-0010 D2）。
+  const podScope = Object.hasOwn(authority.config.indexes.podScopes, identity.podId)
+    ? authority.config.indexes.podScopes[identity.podId]
+    : undefined;
+  if (podScope === undefined) rejectWith([`pod-unknown:${identity.podId}`], "$request.taskPackage");
+  const testWindow = podScope.testWindow;
   const environment = testEnvironmentOf(context);
   const loaded = await loadRequirementPackage(context);
   const steps = requested.testContract.steps.map((step, index) =>

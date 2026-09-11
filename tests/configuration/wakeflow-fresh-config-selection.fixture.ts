@@ -11,6 +11,7 @@ export const MINIMAL_WAKEFLOW_FRESH_SELECTION_UUIDS = Object.freeze([
   "66666666-6666-4666-8666-666666666666",
   "77777777-7777-4777-8777-777777777777",
   "88888888-8888-4888-8888-888888888888",
+  "99999999-9999-4999-8999-999999999999",
 ]);
 
 /** 从最小 Config fixture 去除 durable IDs，生成公共 Fresh selection。 */
@@ -38,7 +39,7 @@ export function createMinimalWakeflowFreshConfigSelection() {
   });
   const windows = topology.windows.map((entry, index) => {
     const root = entry.root as Record<string, unknown>;
-    const { windowId: _windowId, ...rest } = entry;
+    const { windowId: _windowId, podId: _podId, ...rest } = entry;
     return {
       selectionKey: `window-${index + 1}`,
       ...rest,

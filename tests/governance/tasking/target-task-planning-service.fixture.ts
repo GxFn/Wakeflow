@@ -54,6 +54,11 @@ export const PLANNING_DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_22222222-2222-4222-8222-222222222222",
   "demand",
 );
+/** 最小配置夹具里 fresh-initialize 生成的 primary pod。 */
+export const PLANNING_POD_ID = parseWakeflowDurableIdOfKind(
+  "pod_99999999-9999-4999-8999-999999999999",
+  "pod",
+);
 export const PLANNING_REPOSITORY_ID = parseWakeflowDurableIdOfKind(
   "repository_22222222-2222-4222-8222-222222222222",
   "repository",
@@ -100,7 +105,6 @@ export interface TargetTaskPlanningWorkspaceFixture {
 
 export interface TargetTaskPlanningWorkspaceFixtureOptions {
   readonly testingMode?: Exclude<DemandTestingMode, "not-applicable">;
-  readonly executionPlacement?: "main" | "isolated";
   /** 需求包头部的任务清单审阅要求；user 时切片要求请求带 planReview。 */
   readonly taskPlanReview?: "controller" | "user";
 }
@@ -123,7 +127,6 @@ export async function createTargetTaskPlanningWorkspaceFixture(
   options: TargetTaskPlanningWorkspaceFixtureOptions = {},
 ): Promise<Readonly<TargetTaskPlanningWorkspaceFixture>> {
   const testingMode = options.testingMode ?? "controller-only";
-  const executionPlacement = options.executionPlacement ?? "main";
   const fixtureRoot = mkdtempSync(
     path.join(os.tmpdir(), "wakeflow-target-task-planning-"),
   );
@@ -165,12 +168,6 @@ export async function createTargetTaskPlanningWorkspaceFixture(
       createLedgerAuthorityMemberReference(loaded, document.path),
     ),
   );
-  const placementAuthority = authorityRefs.find(
-    (reference) => reference.role === "requirement",
-  );
-  if (placementAuthority === undefined) {
-    throw new Error("Expected requirement member fixture.");
-  }
   await placePendingClaimState(workspaceRoot, loaded);
 
   const identity = createDemandIdentity(
@@ -182,13 +179,7 @@ export async function createTargetTaskPlanningWorkspaceFixture(
       completionDefinition: "事件提交并生成严格可重建投影",
       demandType: "requirement",
       source: requirementLineageOf(loaded),
-      executionPlacement:
-        executionPlacement === "main"
-          ? { mode: "main" as const }
-          : {
-              mode: "isolated" as const,
-              authorizationRef: placementAuthority,
-            },
+      podId: PLANNING_POD_ID,
     },
     { clock: () => PLANNING_RECORDED_AT },
   );

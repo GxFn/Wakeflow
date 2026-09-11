@@ -19,7 +19,8 @@ import {
   WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
   WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/delivery/contract.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/governance/evidence/managed-evidence-public-contract.js";
+import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
+import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "../../src/capabilities/pod/contract.js";
 import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
@@ -169,12 +170,15 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     "step failure classifications gate the decision",
     "remediation authorization",
   ]),
-  expectedTool(
-    WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
-    "managed-evidence-publication",
-    ADDITIVE,
-    ["payload bytes"],
-  ),
+  expectedTool(WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, "record-evidence", ADDITIVE, [
+    "closed vocabulary",
+    "already-recorded",
+    "Credential findings always block",
+  ]),
+  expectedTool(WAKEFLOW_POD_PUBLIC_TOOL_NAME, "pod", DESTRUCTIVE, [
+    "one config transaction",
+    "close is two-phase",
+  ]),
   expectedTool(
     WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
     "record-delivery-outcome",
@@ -203,7 +207,8 @@ function validPublicServerOptions(): PublicServerOptions {
     completeDemand: unavailableExecutor,
     continueDemand: unavailableExecutor,
     createDemand: unavailableExecutor,
-    recordManagedEvidence: unavailableExecutor,
+    recordEvidence: unavailableExecutor,
+    managePod: unavailableExecutor,
     publishRequirement: unavailableExecutor,
     executeMaintenance: unavailableExecutor,
     importTargetResult: unavailableExecutor,
@@ -226,7 +231,8 @@ const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
   "completeDemand",
   "continueDemand",
   "createDemand",
-  "recordManagedEvidence",
+  "recordEvidence",
+  "managePod",
   "publishRequirement",
   "registerWindowHostBinding",
   "inspectDemandRoute",

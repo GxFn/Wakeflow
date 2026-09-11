@@ -51,7 +51,8 @@ import {
   createManagedEvidenceCapturePlanningWorkspaceFixture,
   EVIDENCE_CAPTURED_AT,
   EVIDENCE_DEMAND_ID,
-  EVIDENCE_REPOSITORY_ID,
+  fileSelection,
+  readyCapturePlan,
 } from "./managed-evidence-capture-planning-service.fixture.js";
 import {
   createManagedEvidencePublicationTransactionFixture,
@@ -221,27 +222,12 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
   let demandRoot: RootedDirectory | undefined;
   let ledgerRoot: RootedDirectory | undefined;
   try {
-    const capturePlan = await new ManagedEvidenceCapturePlanningService(
-      fixture.publication.workspaceRoot,
-    ).preview(
-      EVIDENCE_DEMAND_ID,
-      {
-        evidenceType: "test-output",
-        source: {
-          root: {
-            kind: "repository",
-            repositoryId: EVIDENCE_REPOSITORY_ID,
-          },
-          path: "artifacts/test-run/logs/report.txt",
-          resourceType: "file",
-        },
-        sensitivity: "internal",
-        opaqueContentPolicy: "reject",
-      },
-      {
-        uuidFactory: () => "99999999-9999-4999-8999-999999999999",
-        clock: () => EVIDENCE_CAPTURED_AT,
-      },
+    const capturePlan = readyCapturePlan(
+      await new ManagedEvidenceCapturePlanningService(fixture.publication.workspaceRoot).preview(
+        EVIDENCE_DEMAND_ID,
+        fileSelection("artifacts/test-run/logs/report.txt"),
+        { clock: () => EVIDENCE_CAPTURED_AT },
+      ),
     );
     const transaction = createManagedEvidencePublicationTransaction({
       capturePlan,
@@ -383,10 +369,9 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
         programId: IDS.otherProgram,
         demandId: capturePlan.manifest.demandId,
         demandAuthorityDigest: capturePlan.manifest.demandAuthorityDigest,
-        evidenceType: capturePlan.manifest.evidenceType,
+        kind: capturePlan.manifest.kind,
         recordedBy: capturePlan.manifest.recordedBy,
         source: capturePlan.manifest.source,
-        sensitivity: capturePlan.manifest.sensitivity,
         payload: capturePlan.manifest.payload,
         contentReview: capturePlan.manifest.contentReview,
       },

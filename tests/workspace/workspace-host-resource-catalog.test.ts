@@ -119,17 +119,9 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
         processing: "transaction-artifact:exclusive-create+exact-retire",
       },
       {
-        declarationId: "host-runtime.codex.evidence-root",
-        ownerId: "host-runtime-layout",
-        relativePath: ".wakeflow-local/runtime/hosts/codex/evidence",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
-        declarationId: "host-runtime.codex.pod-evidence-root",
-        ownerId: "pod-evidence",
-        relativePath: ".wakeflow-local/runtime/hosts/codex/evidence/pods",
+        declarationId: "host-runtime.codex.pod-receipts-root",
+        ownerId: "pod-receipts",
+        relativePath: ".wakeflow-local/runtime/hosts/codex/pods",
         tracking: "ignored:runtime-private",
         mode: "0700",
         processing: "directory-container:materialize-directory",
@@ -160,7 +152,7 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
       },
     ],
   );
-  equal(catalog.length, 13);
+  equal(catalog.length, 12);
   equal(
     catalog.every((entry) =>
       entry.family === "host-runtime"
@@ -270,17 +262,9 @@ test("optional Host resources are compiled from profile values without host bran
         processing: "transaction-artifact:exclusive-create+exact-retire",
       },
       {
-        declarationId: "host-runtime.claude-code.evidence-root",
-        ownerId: "host-runtime-layout",
-        relativePath: ".wakeflow-local/runtime/hosts/claude-code/evidence",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
-        declarationId: "host-runtime.claude-code.pod-evidence-root",
-        ownerId: "pod-evidence",
-        relativePath: ".wakeflow-local/runtime/hosts/claude-code/evidence/pods",
+        declarationId: "host-runtime.claude-code.pod-receipts-root",
+        ownerId: "pod-receipts",
+        relativePath: ".wakeflow-local/runtime/hosts/claude-code/pods",
         tracking: "ignored:runtime-private",
         mode: "0700",
         processing: "directory-container:materialize-directory",
@@ -375,8 +359,8 @@ test("optional Host resources are compiled from profile values without host bran
       },
     ],
   );
-  equal(catalog.length, 21);
-  const statusline = catalog[17];
+  equal(catalog.length, 20);
+  const statusline = catalog[16];
   equal(statusline?.nodePolicy.kind, "file");
   if (statusline?.nodePolicy.kind === "file") {
     equal(statusline.nodePolicy.executablePolicy, "forbidden");
@@ -402,7 +386,11 @@ test("optional Host resources are compiled from profile values without host bran
       instructionFileName: "CUSTOM.md",
       surfaces: {
         windowIdentity: false,
-        podEvidence: false,
+        podReceipts: false,
+        worktree: {
+          launch: "codex-worktree-thread",
+          attachedDirectories: "prompt-path",
+        },
         keepLive: false,
         windowLocator: true,
         settingsIntegration: {

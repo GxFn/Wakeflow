@@ -19,7 +19,11 @@ test("Claude Code host owns one exact matrix-shaping resource profile", () => {
     instructionFileName: "CLAUDE.md",
     surfaces: {
       windowIdentity: true,
-      podEvidence: true,
+      podReceipts: true,
+      worktree: {
+        launch: "claude-worktree-flag",
+        attachedDirectories: "add-dir-flag",
+      },
       keepLive: true,
       windowLocator: true,
       settingsIntegration: {

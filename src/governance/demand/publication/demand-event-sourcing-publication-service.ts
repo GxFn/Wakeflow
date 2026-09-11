@@ -451,14 +451,12 @@ export async function publishDemandFromPackage(
     );
     if (exactClaimedPackage(initialPackage, transaction) === null) {
       assertPendingPackage(initialPackage, transaction);
-      // ADR-0011 D7 在 apply 再查一次：两个 ready 计划不能各自造出一个活动 Demand。
+      // ADR-0011 D7 按 ADR-0010 D3 收窄到 pod，apply 再查一次：两个 ready 计划不能在同一
+      // pod 上各自造出一个活动 Demand。
       try {
-        await assertNoActiveDemand(root, signal);
+        await assertNoActiveDemand(root, signal, null, transaction.identity.podId);
       } catch (error: unknown) {
-        if (
-          error instanceof WakeflowError &&
-          error.reason === "active-demand-exists"
-        ) {
+        if (error instanceof WakeflowError && error.reason === "pod-busy") {
           fail("conflict", "$board");
         }
         throw error;

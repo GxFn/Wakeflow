@@ -15,6 +15,9 @@ export type WakeflowUtcInstantText = string
  * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。
  */
 export type WakeflowPortableResourcePathText = string
+/**
+ * Controller 显式确认过的内容：含控制字符的 opaque 成员与非凭证类隐私命中；凭证类命中永远不能进入记录。
+ */
 export type ContentReview = ({
 [k: string]: unknown | undefined
 } & {
@@ -23,6 +26,10 @@ disposition: ("controller-confirmed" | "not-required")
  * @maxItems 4095
  */
 opaqueFileRefs: WakeflowPortableResourcePathText[]
+/**
+ * @maxItems 64
+ */
+privacyFindings: PrivacyFinding[]
 })
 
 /**
@@ -32,7 +39,7 @@ export interface WakeflowManagedEvidenceRecordedEventDataV1 {
 manifest: WakeflowManagedEvidenceManifest
 }
 /**
- * Wakeflow从已配置本地资源根捕获的一份不可变managed evidence内容与provenance清单。
+ * Wakeflow 记录的一份不可变受管证据的内容与来源清单：从配置根复制的文件或目录树，或对宿主 hook 观察记录、https 链接、git 提交的引用投影。
  */
 export interface WakeflowManagedEvidenceManifest {
 artifactKind: "wakeflow-managed-evidence-manifest"
@@ -42,13 +49,12 @@ programId: string
 demandId: string
 demandAuthorityDigest: WakeflowSha256DigestText
 /**
- * 用于审阅和检索的领域标签；未知标签不得被消费者解释为权限、充分性或验收策略。
+ * 闭集种类；未知种类不得被消费者解释为权限、充分性或验收策略。
  */
-evidenceType: string
+kind: ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")
 capturedAt: WakeflowUtcInstantText
 recordedBy: RecordedBy
-source: Source
-sensitivity: ("internal" | "public")
+source: (ManagedPathSource | ObservationSource | LinkSource | CommitSource)
 payload: Payload
 contentReview: ContentReview
 manifestDigest: WakeflowSha256DigestText
@@ -57,8 +63,9 @@ export interface RecordedBy {
 windowId: string
 configDigest: WakeflowSha256DigestText
 }
-export interface Source {
-root: (RepositoryRoot | SupportSurfaceRoot)
+export interface ManagedPathSource {
+kind: "managed-path"
+root: (RepositoryRoot | SupportSurfaceRoot | PodWorktreeRoot)
 path: WakeflowPortableResourcePathText
 resourceType: ("file" | "tree")
 }
@@ -69,6 +76,39 @@ repositoryId: string
 export interface SupportSurfaceRoot {
 kind: "support-surface"
 surfaceId: string
+}
+/**
+ * The git worktree checkout a worktree pod's product window registered for one repository; resolved through the pod's worktree receipt.
+ */
+export interface PodWorktreeRoot {
+kind: "pod-worktree"
+podId: string
+repositoryId: string
+}
+/**
+ * 宿主 hook 观察记录的脱敏投影：不含原始会话句柄与工作目录；transcript 只记有无。
+ */
+export interface ObservationSource {
+kind: "observation"
+hostId: ("codex" | "claude-code")
+recordId: string
+event: ("session-start" | "user-prompt-submit" | "stop" | "session-end" | "turn-complete")
+recordedAt: WakeflowUtcInstantText
+turnId: (null | string)
+promptDigest: (null | WakeflowSha256DigestText)
+lastAssistantMessageDigest: (null | WakeflowSha256DigestText)
+transcript: ("present" | "absent")
+recordDigest: WakeflowSha256DigestText
+}
+export interface LinkSource {
+kind: "link"
+url: string
+digest: (null | WakeflowSha256DigestText)
+}
+export interface CommitSource {
+kind: "commit"
+repositoryId: string
+commitOid: string
 }
 export interface Payload {
 artifactDigest: WakeflowSha256DigestText
@@ -93,6 +133,11 @@ bytes: number
 digest: WakeflowSha256DigestText
 executable: boolean
 ref: WakeflowPortableResourcePathText
+}
+export interface PrivacyFinding {
+ref: WakeflowPortableResourcePathText
+line: number
+kind: ("unlisted-absolute-path" | "bare-uuid")
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

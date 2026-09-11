@@ -1,4 +1,4 @@
-import type { EvidenceLocatorKind } from "../../contracts/vocabulary/evidence-locator-kinds.js";
+import type { EvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 
@@ -12,7 +12,7 @@ import type { PortableResourcePath } from "../../foundation/filesystem/portable-
 export type TargetResultOutcome = "completed" | "blocked" | "needs-review";
 
 export interface TargetResultEvidenceLocator {
-  readonly kind: EvidenceLocatorKind;
+  readonly kind: EvidenceKind;
   readonly ref: PortableResourcePath;
   readonly digest: Sha256Digest;
 }

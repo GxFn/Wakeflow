@@ -100,7 +100,11 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
     instructionFileName: "CLAUDE.md",
     surfaces: {
       windowIdentity: false,
-      podEvidence: false,
+      podReceipts: false,
+      worktree: {
+        launch: "claude-worktree-flag",
+        attachedDirectories: "add-dir-flag",
+      },
       keepLive: false,
       windowLocator: false,
       settingsIntegration: {
@@ -182,7 +186,11 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
     instructionFileName: "CLAUDE.md",
     surfaces: {
       windowIdentity: false,
-      podEvidence: false,
+      podReceipts: false,
+      worktree: {
+        launch: "claude-worktree-flag",
+        attachedDirectories: "add-dir-flag",
+      },
       keepLive: false,
       windowLocator: false,
       settingsIntegration: {

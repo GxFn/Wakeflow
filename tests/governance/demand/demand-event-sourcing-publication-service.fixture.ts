@@ -129,14 +129,11 @@ export async function cleanupDemandEventSourcingPublicationWorkspaceFixture(
   rmSync(fixture.fixtureRoot, { recursive: true, force: true });
 }
 
-export function demandEventSourcingPublicationAuthoredDemand<
-  const ExecutionPlacement,
->(executionPlacement: ExecutionPlacement) {
+export function demandEventSourcingPublicationAuthoredDemand() {
   return {
     title: "Demand Event Sourcing Publication",
     goal: "从看板上的需求包与Ledger生成完整revision 1计划",
     completionDefinition: "计划可精确Apply并支持前向Recovery",
-    executionPlacement,
   };
 }
 

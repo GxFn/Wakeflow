@@ -94,12 +94,13 @@ function treeDraft(): ManagedEvidenceManifestDraft {
     programId: IDS.program,
     demandId: IDS.demand,
     demandAuthorityDigest: AUTHORITY_DIGEST,
-    evidenceType: "test-output",
+    kind: "test-output",
     recordedBy: Object.freeze({
       windowId: IDS.window,
       configDigest: CONFIG_DIGEST,
     }),
     source: Object.freeze({
+      kind: "managed-path" as const,
       root: Object.freeze({
         kind: "repository" as const,
         repositoryId: IDS.repository,
@@ -107,7 +108,6 @@ function treeDraft(): ManagedEvidenceManifestDraft {
       path: "artifacts/test-run",
       resourceType: "tree" as const,
     }),
-    sensitivity: "internal" as const,
     payload: Object.freeze({
       artifactDigest: computeCanonicalJsonSha256Digest(manifest),
       treeManifest: manifest,
@@ -115,8 +115,9 @@ function treeDraft(): ManagedEvidenceManifestDraft {
     contentReview: Object.freeze({
       disposition: "controller-confirmed" as const,
       opaqueFileRefs: Object.freeze(["screenshots/result.png"]),
+      privacyFindings: Object.freeze([]),
     }),
-  }) as ManagedEvidenceManifestDraft;
+  }) as unknown as ManagedEvidenceManifestDraft;
 }
 
 function expectManifestError(
@@ -168,6 +169,7 @@ test("file来源只接纳规范化为单一content文件的payload", () => {
     {
       ...treeDraft(),
       source: {
+        kind: "managed-path" as const,
         root: { kind: "support-surface", surfaceId: IDS.surface },
         path: "reports/result.txt",
         resourceType: "file",
@@ -179,11 +181,12 @@ test("file来源只接纳规范化为单一content文件的payload", () => {
       contentReview: {
         disposition: "not-required",
         opaqueFileRefs: [],
+        privacyFindings: [],
       },
     },
     { clock: () => CAPTURED_AT },
   );
-  equal(manifest.source.resourceType, "file");
+  equal(manifest.source.kind === "managed-path" ? manifest.source.resourceType : null, "file");
   equal(manifest.payload.treeManifest.files[0]?.ref, "content");
 
   expectManifestError(
@@ -224,6 +227,7 @@ test("payload digest与opaque review必须闭合完整tree manifest", () => {
           contentReview: {
             disposition: "controller-confirmed",
             opaqueFileRefs: ["missing.bin"],
+          privacyFindings: [],
           },
         },
         { clock: () => CAPTURED_AT },
@@ -239,6 +243,7 @@ test("payload digest与opaque review必须闭合完整tree manifest", () => {
           contentReview: {
             disposition: "controller-confirmed",
             opaqueFileRefs: ["screenshots/result.png", "logs/report.txt"],
+          privacyFindings: [],
           },
         },
         { clock: () => CAPTURED_AT },
@@ -298,5 +303,79 @@ test("Manifest草稿在读取wall clock之前拒绝开放或行为输入", () =>
       ),
     "schema",
     "$/evidenceId",
+  );
+});
+
+test("kind 与来源绑定，隐私命中必须指向 payload 成员且有序，确认处置与命中集合闭合", () => {
+  expectManifestError(
+    () => createManagedEvidenceManifest({ ...treeDraft(), kind: "link" }, { clock: () => CAPTURED_AT }),
+    "kind",
+    "$/kind",
+  );
+  const reviewed = createManagedEvidenceManifest(
+    {
+      ...treeDraft(),
+      contentReview: {
+        disposition: "controller-confirmed",
+        opaqueFileRefs: ["screenshots/result.png"],
+        privacyFindings: [
+          { ref: "logs/report.txt", line: 2, kind: "unlisted-absolute-path" },
+          { ref: "logs/report.txt", line: 7, kind: "bare-uuid" },
+        ],
+      },
+    },
+    { clock: () => CAPTURED_AT },
+  );
+  equal(reviewed.contentReview.privacyFindings.length, 2);
+  expectManifestError(
+    () =>
+      createManagedEvidenceManifest(
+        {
+          ...treeDraft(),
+          contentReview: {
+            disposition: "controller-confirmed",
+            opaqueFileRefs: [],
+            privacyFindings: [{ ref: "missing.txt", line: 1, kind: "bare-uuid" }],
+          },
+        },
+        { clock: () => CAPTURED_AT },
+      ),
+    "content-review",
+    "$/contentReview/privacyFindings/0/ref",
+  );
+  expectManifestError(
+    () =>
+      createManagedEvidenceManifest(
+        {
+          ...treeDraft(),
+          contentReview: {
+            disposition: "controller-confirmed",
+            opaqueFileRefs: [],
+            privacyFindings: [
+              { ref: "logs/report.txt", line: 7, kind: "bare-uuid" },
+              { ref: "logs/report.txt", line: 2, kind: "unlisted-absolute-path" },
+            ],
+          },
+        },
+        { clock: () => CAPTURED_AT },
+      ),
+    "ordering",
+    "$/contentReview/privacyFindings/1",
+  );
+  expectManifestError(
+    () =>
+      createManagedEvidenceManifest(
+        {
+          ...treeDraft(),
+          contentReview: {
+            disposition: "not-required",
+            opaqueFileRefs: [],
+            privacyFindings: [{ ref: "logs/report.txt", line: 2, kind: "bare-uuid" }],
+          },
+        },
+        { clock: () => CAPTURED_AT },
+      ),
+    "schema",
+    "$/contentReview/privacyFindings",
   );
 });

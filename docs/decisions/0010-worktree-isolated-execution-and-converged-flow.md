@@ -1,6 +1,7 @@
 # ADR-0010 Pod 隔离执行与流程收敛
 
 > 状态：`accepted`
+> 落地记录：2026-09-10 L1 pod 切片 9 落地 D1 到 D7：配置 `pods[]` 与窗口 `podId`（main 为 primary）、`wakeflow_pod`（create 与两段 close 走配置事务，recover 对账回执）、worktree 回执经握手准入、Demand 身份 `podId` 与一 pod 一 Demand、投递与回调按 pod、结果导入的分支规则、`pod-worktree` 证据根、归档 worktree 成员；状态与已接受未合并分支的投影随观察切片；gate-log §13.91、§13.92
 > 提出日期：2026-09-04
 > 裁决日期：2026-09-04。用户先确认"git worktree 完全隔离的一组独立会话来进行任务，完全不影响主线"，随后给出完整模型："初始化建立的整套环境默认是 main；开发者要求开启 pod 时，新建一套 Design、Test、Controller 与仓库窗口，记录为 pod，配套宿主新建的 worktree 分支"，并统一确认下列五项：main 作为 `primary` 的 pod 纳入同一模型；一个 pod 同一时刻只推进一个 Demand；worktree 归产品窗口所有并用宿主原生能力创建；取消 Design 跨 pod 交接；只有 main 的 Controller 创建和关闭 pod
 > 基线提交：`c0098e2`

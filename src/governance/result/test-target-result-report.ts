@@ -36,7 +36,7 @@ import {
   UtcWallClockError,
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
-import { isEvidenceLocatorKind } from "../../contracts/vocabulary/evidence-locator-kinds.js";
+import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import {
   isTestFailureClassification,
   isTestFailureOwner,
@@ -244,7 +244,7 @@ function evidenceLocators(
   const locators = value.map((entry, index) => {
     const path = `$/evidenceLocators/${index}`;
     const record = exactRecord(entry, ["digest", "kind", "ref"], path);
-    if (!isEvidenceLocatorKind(record.kind)) fail("text", `${path}/kind`);
+    if (!isEvidenceKind(record.kind)) fail("text", `${path}/kind`);
     return Object.freeze({
       kind: record.kind,
       ref: resourcePath(record.ref, `${path}/ref`),

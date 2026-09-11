@@ -270,7 +270,7 @@ algorithm: "sha256"
 value: string
 }
 export interface EvidenceLocator {
-kind: ("test-output" | "diff" | "document" | "transcript" | "commit")
+kind: ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")
 ref: WakeflowPortableResourcePathText
 digest: WakeflowSha256DigestText
 }
@@ -287,7 +287,7 @@ ref: WakeflowPortableResourcePathText
 digest: WakeflowSha256DigestText
 }
 export interface EvidenceLocator1 {
-kind: ("test-output" | "diff" | "document" | "transcript" | "commit")
+kind: ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")
 ref: WakeflowPortableResourcePathText
 digest: WakeflowSha256DigestText
 }

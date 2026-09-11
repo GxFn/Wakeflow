@@ -332,7 +332,24 @@ test("测试规划准入：真实环境、全部实现已接受、单一未终�
       config: { indexes: { repositoryById: {}, windowById: {} } } as never,
       repositoryId: "r",
       windowId: "w",
+      podId: "p",
     }),
     ["repository-unknown", "window-unknown"],
+  );
+  deepEqual(
+    deriveTopologyBlockers({
+      config: {
+        indexes: {
+          repositoryById: { r: {} },
+          windowById: {
+            w: { role: "product", root: { kind: "repository", repositoryId: "r" }, podId: "other" },
+          },
+        },
+      } as never,
+      repositoryId: "r",
+      windowId: "w",
+      podId: "p",
+    }),
+    ["assignment-window-pod-mismatch:other"],
   );
 });

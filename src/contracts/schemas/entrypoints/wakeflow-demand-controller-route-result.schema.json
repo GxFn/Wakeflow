@@ -211,48 +211,9 @@
             "properties": {
               "disposition": {
                 "const": "blocked"
-              },
-              "blockers": {
-                "type": "array",
-                "contains": {
-                  "type": "object",
-                  "properties": {
-                    "kind": {
-                      "const": "isolated-test-planning-not-implemented"
-                    }
-                  },
-                  "required": ["kind"]
-                }
               }
             },
-            "required": ["disposition", "blockers"]
-          },
-          "then": {
-            "required": ["postAcceptanceRouteDigest"]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "disposition": {
-                "const": "blocked"
-              },
-              "blockers": {
-                "type": "array",
-                "not": {
-                  "contains": {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "const": "isolated-test-planning-not-implemented"
-                      }
-                    },
-                    "required": ["kind"]
-                  }
-                }
-              }
-            },
-            "required": ["disposition", "blockers"]
+            "required": ["disposition"]
           },
           "then": {
             "properties": {
@@ -950,19 +911,6 @@
             },
             "owner": {
               "const": "demand-lifecycle"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kind", "owner"],
-          "properties": {
-            "kind": {
-              "const": "isolated-test-planning-not-implemented"
-            },
-            "owner": {
-              "const": "test-task-planning"
             }
           }
         },

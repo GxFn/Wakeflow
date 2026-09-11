@@ -19,7 +19,11 @@ test("Codex host owns one exact matrix-shaping resource profile", () => {
     instructionFileName: "AGENTS.md",
     surfaces: {
       windowIdentity: true,
-      podEvidence: true,
+      podReceipts: true,
+      worktree: {
+        launch: "codex-worktree-thread",
+        attachedDirectories: "prompt-path",
+      },
       keepLive: true,
       windowLocator: false,
       settingsIntegration: null,

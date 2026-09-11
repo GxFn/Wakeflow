@@ -23,7 +23,7 @@
 
 **不变量**：最终根只创建一次；stage 与最终根不可共存；负载字节与清单逐项复验含内容类别。
 
-**现 TS 状态**：`wakeflow_record_evidence` 已公开，Managed Evidence 有清单、捕获规划、发布事务、结算、读取器共 21 个文件；隐私扫描沿用。
+**现 TS 状态**：`wakeflow_record_evidence` 已公开，Managed Evidence 有清单、捕获规划、发布事务、结算、读取器共 21 个文件；隐私扫描沿用。（切片 8 落地：改走内核效果型外壳，四种来源与闭集种类，文本负载经内核隐私扫描；见文末落地记录。）
 
 **实现判断**：按 ADR-0010，来源根增加 `pod-worktree{podId, repositoryId}`，让 pod worktree 里的文件可作证据；宿主 hook 观察记录作为新的定位符来源 `observation{observationId, digest}` 不复制负载；`sensitivity` 删除；`privacyScan` 常量槽位删除；`findings` 与 `blockers` 两个恒空字段删除；两套隐私引擎合并为一套并在导入与归档使用同一词汇。
 
@@ -119,3 +119,15 @@
 | Q5 归档前置 | 增加"该 Demand 无未释放工作声明"，未释放的暴露给操作者 | 归档 preview 阻塞项 |
 | Q6 保留工具 | 不保留独立 preserve；归档封存，清理删除 | 工具面 |
 | Q7 清理范围 | 扩展到已关闭 pod 的 worktree 检出；只在 pod closed 且 hook 记录证明会话结束后删检出，不删 git 对象 | 清理 preview 阻塞项 |
+
+## 落地记录（2026-09-10，L1 evidence 切片 8）
+
+按 [gate-log §13.89](../../progress/consolidation-gate-log.md) 六项裁决（D1 到 D6，用户于 2026-09-10 确认）落地，实现与验收记录见 §13.90。
+
+| 节 | 落地 |
+| --- | --- |
+| 8.1 受管证据 | `wakeflow_record_evidence` 改走内核 `PublicationTransaction`：preview `{root, demandId, selection}` 零写返回计划投影与 `planDigest`，apply 用同一选择重算计划、内容摘要相符才执行，recover 凭 demandId 完成中断的发布。Evidence、Event、Commit 身份从 Demand、来源键与负载摘要派生，同一内容再次 apply 为 `already-recorded`。来源四种：`managed-path`（配置根下文件或目录树，复制字节）、`observation`（本工作区 hook 记录的脱敏投影，不含会话句柄与工作目录）、`link`（https，调用方可给摘要，不抓取）、`commit`（配置内仓库的对象 id，不读 git）；引用类来源的 `payload/content` 是来源投影文档。Q2：`kind` 闭集 `hook-observation \| transcript \| test-output \| diff \| document \| link \| commit` 与来源绑定，与结果定位符共用一张表。Q3：`transcript` 只引用带 transcript 的 hook 记录。Q1：文本成员经内核 `scanPrivacy`，白名单为工作区根、ledger 根与配置根；凭证类命中永远阻塞，opaque 成员与非凭证类命中只在 `contentReview: controller-confirmed` 下进入 Manifest 的 `contentReview.privacyFindings`。`sensitivity`、`privacyScan` 与恒空槽位不存在。`pod-worktree{podId, repositoryId}` 根已于 2026-09-10（pod 切片 9）进表：按配置的 worktree 意图与宿主回执路径打开，Demand 所在 pod 的回执路径进入隐私白名单 |
+| 8.2 业务归档 | demand 切片已落地（Q4 删除活动根；Q5 verify 门 `work-claims-released`）；本片不改归档内容，归档负载的隐私门仍只拒凭证类 |
+| 8.3 审计保留 | 按 Q6 不实现 |
+| 8.4 运行时清理 | 2026-09-10 pod 切片 9：并入 `wakeflow_pod` 关闭第二段，检出仍在时 `worktree-present:<repositoryId>` 阻塞并由 Agent 以宿主手段处置，closed 时 Wakeflow 只删自己的回执目录；Q7 的"删检出"由此变为"处置后才 closed"，对账只报告（观察切片）。归档清单增加 `podId` 与 `worktree{podId, name, placement, repositories[]{repositoryId, suggestedName, branch, head}} \| null` |
+| 工具面 | 公共工具 18 不变；公共协调器删除（0 个）；wire Schema 改名 `wakeflow-record-evidence-{request, result}` |

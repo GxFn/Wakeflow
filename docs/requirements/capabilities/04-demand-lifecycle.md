@@ -58,7 +58,7 @@
 - complete：评审 idle、零租约、每个目标任务 accepted 或 superseded 且 accepted 的选中一个 current 非 blocked 结果、任务包与测试卡全部 closed 或 superseded；只有 research 允许零目标完成；完成事件 `changedArtifacts: []`；不做 TODO 归档、不写工件、不关 Pod、不做业务归档。`:390-437`。
 - 生命周期失败闭合：同一锁下判定"什么都没写"或"事件已提交则向前完成租约释放"，否则 recovery-required；首次 apply 重建整份计划比对，漂移即 stale-plan。`:816-893`。
 
-**现 TS 状态**（2026-09-04 L1 demand 切片，`src/capabilities/demand/`）：`create_demand` 的计划由需求包与看板认领状态确定性派生（demandId、事件与提交标识不含随机与时间），根先建后在看板 CAS 认领，已有活动 Demand 时 preview 报 `active-demand-exists`；`complete_demand` 完成即归档：preview 内嵌八道 verify 门，apply 一个事务写终态事件、封 `<ledger>/archives/<demandId>/<修订号>/`、置需求包 `archived`、删活动根，步骤日志在 `.wakeflow-active/current/lifecycle/`，recover 按日志重放；`cancel_demand` 同一事务，需求包置 `withdrawn`，释放本 Demand 的窗口工作声明，有待评审结果时拒绝；`continue_demand` 从归档重开（`demand-continued`，需求包回到 `claimed`，路由先要求新任务包，同一仓库允许再次规划）并承载 `record-decision`；`inspect_demand_route` 对已归档 Demand 返回归档回执。research 完成与实现重设计仍有 blocker。
+**现 TS 状态**（2026-09-04 L1 demand 切片，`src/capabilities/demand/`）：`create_demand` 的计划由需求包与看板认领状态确定性派生（demandId、事件与提交标识不含随机与时间），根先建后在看板 CAS 认领，同一 pod 已有活动 Demand 时 preview 报 `pod-busy:<demandId>`（2026-09-10 由全局 `active-demand-exists` 收窄到 pod）；`complete_demand` 完成即归档：preview 内嵌八道 verify 门，apply 一个事务写终态事件、封 `<ledger>/archives/<demandId>/<修订号>/`、置需求包 `archived`、删活动根，步骤日志在 `.wakeflow-active/current/lifecycle/`，recover 按日志重放；`cancel_demand` 同一事务，需求包置 `withdrawn`，释放本 Demand 的窗口工作声明，有待评审结果时拒绝；`continue_demand` 从归档重开（`demand-continued`，需求包回到 `claimed`，路由先要求新任务包，同一仓库允许再次规划）并承载 `record-decision`；`inspect_demand_route` 对已归档 Demand 返回归档回执。research 完成与实现重设计仍有 blocker。
 
 **实现判断**：create 的"根先于认领"顺序与四种结果状态保留；cancel 与 continue 在 L1 补公共入口；stale-plan 检测保留。
 
@@ -78,7 +78,7 @@
 - Pod 状态机 11 个阶段，窗口状态 4 种，四个工具 17 个操作；Pod 事件从不改变 Demand 业务状态；Pod 证据根在 `.wakeflow-local/runtime/hosts/<host>/evidence/pods/<podId>`。`:257-269`、`:1861-1972`。
 - 宿主效果：创建会话、`claude --worktree`、关闭会话、删除 worktree、探测 pane 的 cwd 与 git 事实，核心只做计划与记录。
 
-**现 TS 状态**：Demand identity 有 `executionPlacement.mode: isolated` 与授权引用；没有 Pod 状态、工具或证据根；isolated 的测试规划有 blocker。
+**现 TS 状态**（2026-09-10 pod 切片 9）：Demand 身份记 `podId`，`executionPlacement` 与隔离授权引用已删除；`create_demand` 请求可带 `podId`（缺省 primary），阻塞 `pod-unknown`、`pod-closing`、`pod-busy:<demandId>`；`wakeflow_pod` 创建与关闭 pod，状态由配置记录、绑定与 worktree 回执派生；Route 的 isolated 阻塞项已删除；归档清单带 `podId` 与 worktree 来源成员。见 gate-log §13.92。
 
 **实现判断**：由 ADR-0010 取代。pod 是唯一的执行环境抽象，main 是 `primary` 的 pod；Demand 身份记 `podId`，`executionPlacement` 与隔离授权引用删除；一个 pod 同一时刻只推进一个 Demand；worktree 归 pod 的产品窗口，由宿主原生能力创建，Wakeflow 只签发意图并准入 git 事实回执；不重建 11 阶段 Pod 状态机；pod 记录在配置的 `pods[]`，证据放在 Demand 根下而不是宿主目录。
 

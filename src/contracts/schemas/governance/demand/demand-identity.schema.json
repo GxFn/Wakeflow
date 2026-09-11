@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_IDENTITY_SCHEMA",
   "title": "WakeflowDemandIdentity",
   "description": "Demand Event Sourcing Aggregate 创建后不可变的 identity authority。",
-  "$comment": "需求包谱系、isolated placement authorization 和 typed identity 的跨记录解析由 Demand identity codec 继续校验。",
+  "$comment": "需求包谱系、pod 存在性（配置 pods[]）和 typed identity 的跨记录解析由 Demand identity codec 与 demand 切片继续校验。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,7 @@
     "completionDefinition",
     "demandType",
     "source",
-    "executionPlacement"
+    "podId"
   ],
   "properties": {
     "artifactKind": {
@@ -51,15 +51,9 @@
     "source": {
       "$ref": "urn:wakeflow:governance:ledger:requirement-lineage:v1"
     },
-    "executionPlacement": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/mainPlacement"
-        },
-        {
-          "$ref": "#/$defs/isolatedPlacement"
-        }
-      ]
+    "podId": {
+      "$ref": "#/$defs/podId",
+      "description": "The pod this Demand advances in (ADR-0010 D3); one pod advances one Demand at a time."
     }
   },
   "$defs": {
@@ -77,28 +71,9 @@
       "maxLength": 16384,
       "pattern": "^(?!\\s)[\\s\\S]*\\S$"
     },
-    "mainPlacement": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["mode"],
-      "properties": {
-        "mode": {
-          "const": "main"
-        }
-      }
-    },
-    "isolatedPlacement": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["mode", "authorizationRef"],
-      "properties": {
-        "mode": {
-          "const": "isolated"
-        },
-        "authorizationRef": {
-          "$ref": "urn:wakeflow:governance:ledger:authority-member-reference:v1"
-        }
-      }
+    "podId": {
+      "type": "string",
+      "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     }
   }
 }

@@ -4,10 +4,11 @@ import {
 } from "../capabilities/workspace/maintain-workspace.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-request.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-managed-evidence-publication-result.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../governance/evidence/managed-evidence-public-contract.js";
-import type { ManagedEvidencePublicResult } from "../governance/evidence/managed-evidence-public-coordinator.js";
+import {
+  RECORD_EVIDENCE_TOOL_REGISTRATION,
+  type RecordEvidenceResult,
+} from "../capabilities/evidence/contract.js";
+import { POD_TOOL_REGISTRATION, type PodResult } from "../capabilities/pod/contract.js";
 import {
   IMPLEMENTATION_REVIEW_DECISION_TOOL_REGISTRATION,
   TARGET_RESULT_IMPORT_TOOL_REGISTRATION,
@@ -76,6 +77,7 @@ export interface WakeflowPublicMcpExecutors {
   readonly importTargetResult: WakeflowPublicMcpExecutor<TargetResultImportResult>;
   readonly inspectDemandRoute: WakeflowPublicMcpExecutor<DemandRouteInspectionResult>;
   readonly inspectTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewInspectionResult>;
+  readonly managePod: WakeflowPublicMcpExecutor<PodResult>;
   readonly planTargetTask: WakeflowPublicMcpExecutor<TargetTaskPlanningResult>;
   readonly prepareDelivery: WakeflowPublicMcpExecutor<PrepareDeliveryResult>;
   readonly publishRequirement: WakeflowPublicMcpExecutor<RequirementPublicationResult>;
@@ -83,7 +85,7 @@ export interface WakeflowPublicMcpExecutors {
   readonly rearmDelivery: WakeflowPublicMcpExecutor<RearmDeliveryResult>;
   readonly recordImplementationReviewDecision: WakeflowPublicMcpExecutor<ImplementationReviewDecisionResult>;
   readonly recordTestReviewDecision: WakeflowPublicMcpExecutor<TestReviewDecisionResult>;
-  readonly recordManagedEvidence: WakeflowPublicMcpExecutor<ManagedEvidencePublicResult>;
+  readonly recordEvidence: WakeflowPublicMcpExecutor<RecordEvidenceResult>;
   readonly recordDeliveryOutcome: WakeflowPublicMcpExecutor<RecordDeliveryOutcomeResult>;
   readonly registerWindowHostBinding: WakeflowPublicMcpExecutor<WindowBindingResult>;
 }
@@ -95,13 +97,6 @@ type Registration = Readonly<
     readonly executor: WakeflowPublicMcpExecutorField;
   }
 >;
-
-const ADDITIVE = Object.freeze({
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false as const,
-});
 
 const REGISTRATIONS: readonly Registration[] = Object.freeze([
   {
@@ -129,18 +124,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
   DEMAND_COMPLETION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_CANCELLATION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_CONTINUATION_TOOL_REGISTRATION satisfies Registration,
-  {
-    name: WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME,
-    slice: "evidence",
-    shape: "effect",
-    executor: "recordManagedEvidence",
-    title: "Record Wakeflow Managed Evidence",
-    description:
-      "Preview, apply, or recover one immutable local Managed Evidence publication for an existing Demand from a configured repository or support-surface source selection; Wakeflow derives Evidence, Event, and Commit identities, capture time, source digest, Manifest, record tree, and CAS expectations, and apply takes the exact preview plan and digest. Results carry typed IDs, digests, and cursors only, never a source path, Manifest body, payload bytes, private node, or host identity.",
-    requestSchema: WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_REQUEST_SCHEMA,
-    resultSchema: WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_RESULT_SCHEMA,
-    annotations: ADDITIVE,
-  },
+  RECORD_EVIDENCE_TOOL_REGISTRATION satisfies Registration,
   TARGET_TASK_PLANNING_TOOL_REGISTRATION satisfies Registration,
   PREPARE_DELIVERY_TOOL_REGISTRATION satisfies Registration,
   RECORD_DELIVERY_OUTCOME_TOOL_REGISTRATION satisfies Registration,
@@ -149,6 +133,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
   TARGET_RESULT_REVIEW_INSPECTION_TOOL_REGISTRATION satisfies Registration,
   IMPLEMENTATION_REVIEW_DECISION_TOOL_REGISTRATION satisfies Registration,
   TEST_REVIEW_DECISION_TOOL_REGISTRATION satisfies Registration,
+  POD_TOOL_REGISTRATION satisfies Registration,
 ]);
 
 /** 全部公共工具的登记表；组合根按它生成目录。 */

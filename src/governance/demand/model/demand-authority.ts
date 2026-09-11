@@ -118,7 +118,6 @@ export type DemandAuthorityErrorReason =
   | "identity"
   | "role"
   | "testing"
-  | "placement"
   | "resolution"
   | "aborted"
   | "representation";
@@ -135,7 +134,6 @@ const ERROR_MESSAGES = {
   "identity": "Demand authority does not bind its exact immutable identity.",
   "role": "Demand authority does not contain its required role closure.",
   "testing": "Demand authority testing decision is inconsistent.",
-  "placement": "Demand authority does not prove execution placement.",
   "resolution": "Demand authority reference cannot be resolved exactly.",
   "aborted": "Demand authority admission was aborted.",
   "representation": "Demand authority bytes are not its deterministic domain representation.",
@@ -199,22 +197,6 @@ function referenceLocationKey(
   ].join("\u0000");
 }
 
-function sameReference(
-  left: Readonly<LedgerAuthorityMemberReference>,
-  right: Readonly<LedgerAuthorityMemberReference>,
-): boolean {
-  return left.artifactKind === right.artifactKind
-    && left.schemaVersion === right.schemaVersion
-    && left.family === right.family
-    && left.recordId === right.recordId
-    && left.recordRef === right.recordRef
-    && left.recordDigest === right.recordDigest
-    && left.memberPath === right.memberPath
-    && left.memberRef === right.memberRef
-    && left.memberDigest === right.memberDigest
-    && left.role === right.role
-    && left.mediaType === right.mediaType;
-}
 
 function parseReferences(
   values: readonly DemandAuthorityWire["authorityRefs"][number][],
@@ -311,14 +293,6 @@ function assertIdentityRelations(
   }
   if (authority.testingDecision.environmentMemberRef !== null) {
     fail("testing", "$/testingDecision/environmentMemberRef");
-  }
-  if (identity.executionPlacement.mode === "isolated") {
-    const expected = identity.executionPlacement.authorizationRef;
-    if (
-      !authority.authorityRefs.some((entry) => sameReference(entry, expected))
-    ) {
-      fail("placement", "$/authorityRefs");
-    }
   }
 }
 

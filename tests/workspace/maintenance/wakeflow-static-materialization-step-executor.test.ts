@@ -120,7 +120,6 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
         "runtime",
         "hosts",
         "codex",
-        "evidence",
         "pods",
       ),
     ),

@@ -149,9 +149,14 @@ test("阻塞项派生：完成看路由与门，取消看待评审，continue �
       archiveOutcome: "cancelled",
       demandId: "demand_00000000-0000-4000-8000-000000000000",
       claim: null,
-      otherActiveDemand: true,
+      otherActiveDemandId: "demand_11111111-1111-4111-8111-111111111111",
     }),
-    ["demand-root-present", "archive-outcome:cancelled", "package-unknown", "active-demand-exists"],
+    [
+      "demand-root-present",
+      "archive-outcome:cancelled",
+      "package-unknown",
+      "pod-busy:demand_11111111-1111-4111-8111-111111111111",
+    ],
   );
   deepEqual(
     deriveDecisionBlockers({ rootPresent: true, lifecycle: "active", awaitingDecision: false }),
@@ -164,10 +169,31 @@ test("阻塞项派生：完成看路由与门，取消看待评审，continue �
       >[0]["claim"],
       programMatches: false,
       recordMatches: true,
-      activeDemandExists: true,
-      placementMode: "isolated",
+      pod: {
+        podId: "pod_99999999-9999-4999-8999-999999999999",
+        lifecycle: "closing",
+        activeDemandId: "demand_11111111-1111-4111-8111-111111111111",
+      },
+      requestedPodId: "pod_99999999-9999-4999-8999-999999999999",
     }),
-    ["package-claim:parked", "package-program", "active-demand-exists", "placement:isolated"],
+    [
+      "package-claim:parked",
+      "package-program",
+      "pod-closing:pod_99999999-9999-4999-8999-999999999999",
+      "pod-busy:demand_11111111-1111-4111-8111-111111111111",
+    ],
+  );
+  deepEqual(
+    deriveCreationBlockers({
+      claim: { status: "pending" } as unknown as Parameters<
+        typeof deriveCreationBlockers
+      >[0]["claim"],
+      programMatches: true,
+      recordMatches: true,
+      pod: null,
+      requestedPodId: "pod_00000000-0000-4000-8000-000000000000",
+    }),
+    ["pod-unknown:pod_00000000-0000-4000-8000-000000000000"],
   );
 });
 

@@ -15,12 +15,22 @@ export type WakeflowSha256DigestText = string
  */
 export type WakeflowUtcInstantText = string
 export type WindowId = string
+export type Source = (ManagedPathSource | ObservationSource | LinkSource | CommitSource)
 export type RepositoryId = string
 export type SurfaceId = string
+export type PodId = string
 /**
  * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。
  */
 export type WakeflowPortableResourcePathText = string
+export type HostId = ("codex" | "claude-code")
+export type RecordId = string
+export type HookEvent = ("session-start" | "user-prompt-submit" | "stop" | "session-end" | "turn-complete")
+export type HttpsUrl = string
+export type CommitOid = string
+/**
+ * Controller 显式确认过的内容：含控制字符的 opaque 成员与非凭证类隐私命中；凭证类命中永远不能进入记录。
+ */
 export type ContentReview = ({
 [k: string]: unknown | undefined
 } & {
@@ -29,10 +39,14 @@ disposition: ("controller-confirmed" | "not-required")
  * @maxItems 4095
  */
 opaqueFileRefs: WakeflowPortableResourcePathText[]
+/**
+ * @maxItems 64
+ */
+privacyFindings: PrivacyFinding[]
 })
 
 /**
- * Wakeflow从已配置本地资源根捕获的一份不可变managed evidence内容与provenance清单。
+ * Wakeflow 记录的一份不可变受管证据的内容与来源清单：从配置根复制的文件或目录树，或对宿主 hook 观察记录、https 链接、git 提交的引用投影。
  */
 export interface WakeflowManagedEvidenceManifest {
 artifactKind: "wakeflow-managed-evidence-manifest"
@@ -42,13 +56,12 @@ programId: ProgramId
 demandId: DemandId
 demandAuthorityDigest: WakeflowSha256DigestText
 /**
- * 用于审阅和检索的领域标签；未知标签不得被消费者解释为权限、充分性或验收策略。
+ * 闭集种类；未知种类不得被消费者解释为权限、充分性或验收策略。
  */
-evidenceType: string
+kind: ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")
 capturedAt: WakeflowUtcInstantText
 recordedBy: RecordedBy
 source: Source
-sensitivity: ("internal" | "public")
 payload: Payload
 contentReview: ContentReview
 manifestDigest: WakeflowSha256DigestText
@@ -57,8 +70,9 @@ export interface RecordedBy {
 windowId: WindowId
 configDigest: WakeflowSha256DigestText
 }
-export interface Source {
-root: (RepositoryRoot | SupportSurfaceRoot)
+export interface ManagedPathSource {
+kind: "managed-path"
+root: (RepositoryRoot | SupportSurfaceRoot | PodWorktreeRoot)
 path: WakeflowPortableResourcePathText
 resourceType: ("file" | "tree")
 }
@@ -69,6 +83,39 @@ repositoryId: RepositoryId
 export interface SupportSurfaceRoot {
 kind: "support-surface"
 surfaceId: SurfaceId
+}
+/**
+ * The git worktree checkout a worktree pod's product window registered for one repository; resolved through the pod's worktree receipt.
+ */
+export interface PodWorktreeRoot {
+kind: "pod-worktree"
+podId: PodId
+repositoryId: RepositoryId
+}
+/**
+ * 宿主 hook 观察记录的脱敏投影：不含原始会话句柄与工作目录；transcript 只记有无。
+ */
+export interface ObservationSource {
+kind: "observation"
+hostId: HostId
+recordId: RecordId
+event: HookEvent
+recordedAt: WakeflowUtcInstantText
+turnId: (null | string)
+promptDigest: (null | WakeflowSha256DigestText)
+lastAssistantMessageDigest: (null | WakeflowSha256DigestText)
+transcript: ("present" | "absent")
+recordDigest: WakeflowSha256DigestText
+}
+export interface LinkSource {
+kind: "link"
+url: HttpsUrl
+digest: (null | WakeflowSha256DigestText)
+}
+export interface CommitSource {
+kind: "commit"
+repositoryId: RepositoryId
+commitOid: CommitOid
 }
 export interface Payload {
 artifactDigest: WakeflowSha256DigestText
@@ -94,6 +141,11 @@ digest: WakeflowSha256DigestText
 executable: boolean
 ref: WakeflowPortableResourcePathText
 }
+export interface PrivacyFinding {
+ref: WakeflowPortableResourcePathText
+line: number
+kind: ("unlisted-absolute-path" | "bare-uuid")
+}
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
 function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
@@ -116,4 +168,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:evidence:managed-evidence-manifest:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA\",\"title\":\"WakeflowManagedEvidenceManifest\",\"description\":\"Wakeflow从已配置本地资源根捕获的一份不可变managed evidence内容与provenance清单。\",\"$comment\":\"本Schema闭合portable manifest shape。typed ID、真实UTC、NFC、payload artifactDigest、file-source单文件映射、opaque ref子集/顺序、为final record的manifest.json与payload/前缀预留的容量，以及manifestDigest由governance/evidence/managed-evidence-manifest运行时codec复验。Manifest不包含payload字节、外部URL/Git locator、Event位置、Controller acceptance或隐含privacy scan结论。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"evidenceId\",\"programId\",\"demandId\",\"demandAuthorityDigest\",\"evidenceType\",\"capturedAt\",\"recordedBy\",\"source\",\"sensitivity\",\"payload\",\"contentReview\",\"manifestDigest\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-managed-evidence-manifest\"},\"schemaVersion\":{\"const\":1},\"evidenceId\":{\"$ref\":\"#/$defs/evidenceId\"},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"demandAuthorityDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"evidenceType\":{\"$ref\":\"#/$defs/token\",\"description\":\"用于审阅和检索的领域标签；未知标签不得被消费者解释为权限、充分性或验收策略。\"},\"capturedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"recordedBy\":{\"$ref\":\"#/$defs/recordedBy\"},\"source\":{\"$ref\":\"#/$defs/source\"},\"sensitivity\":{\"enum\":[\"internal\",\"public\"]},\"payload\":{\"$ref\":\"#/$defs/payload\"},\"contentReview\":{\"$ref\":\"#/$defs/contentReview\"},\"manifestDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}},\"$defs\":{\"evidenceId\":{\"type\":\"string\",\"pattern\":\"^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"repositoryId\":{\"type\":\"string\",\"pattern\":\"^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"surfaceId\":{\"type\":\"string\",\"pattern\":\"^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"token\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"recordedBy\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"windowId\",\"configDigest\"],\"properties\":{\"windowId\":{\"$ref\":\"#/$defs/windowId\"},\"configDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}}},\"source\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"path\",\"resourceType\"],\"properties\":{\"root\":{\"oneOf\":[{\"$ref\":\"#/$defs/repositoryRoot\"},{\"$ref\":\"#/$defs/supportSurfaceRoot\"}]},\"path\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"resourceType\":{\"enum\":[\"file\",\"tree\"]}}},\"repositoryRoot\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"repositoryId\"],\"properties\":{\"kind\":{\"const\":\"repository\"},\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"}}},\"supportSurfaceRoot\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"surfaceId\"],\"properties\":{\"kind\":{\"const\":\"support-surface\"},\"surfaceId\":{\"$ref\":\"#/$defs/surfaceId\"}}},\"payload\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactDigest\",\"treeManifest\"],\"properties\":{\"artifactDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"treeManifest\":{\"$ref\":\"urn:wakeflow:foundation:artifact:loaded-artifact-tree-manifest:v1\"}}},\"contentReview\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"disposition\",\"opaqueFileRefs\"],\"properties\":{\"disposition\":{\"enum\":[\"controller-confirmed\",\"not-required\"]},\"opaqueFileRefs\":{\"type\":\"array\",\"maxItems\":4095,\"uniqueItems\":true,\"items\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"}}},\"allOf\":[{\"if\":{\"properties\":{\"disposition\":{\"const\":\"not-required\"}},\"required\":[\"disposition\"]},\"then\":{\"properties\":{\"opaqueFileRefs\":{\"type\":\"array\",\"maxItems\":0}}},\"else\":{\"properties\":{\"opaqueFileRefs\":{\"type\":\"array\",\"minItems\":1}}}}]}}}");
+export const WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:evidence:managed-evidence-manifest:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA\",\"title\":\"WakeflowManagedEvidenceManifest\",\"description\":\"Wakeflow 记录的一份不可变受管证据的内容与来源清单：从配置根复制的文件或目录树，或对宿主 hook 观察记录、https 链接、git 提交的引用投影。\",\"$comment\":\"本 Schema 闭合 portable manifest shape。typed ID、真实 UTC、NFC、payload artifactDigest、非目录树来源的单一 content 文件映射、kind 与来源的关系、opaque ref 与隐私命中的子集与顺序、为 final record 的 manifest.json 与 payload/ 前缀预留的容量，以及 manifestDigest 由 governance/evidence/managed-evidence-manifest 运行时 codec 复验。Manifest 不包含 payload 字节、原始宿主句柄、会话工作目录、Event 位置或 Controller acceptance。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"evidenceId\",\"programId\",\"demandId\",\"demandAuthorityDigest\",\"kind\",\"capturedAt\",\"recordedBy\",\"source\",\"payload\",\"contentReview\",\"manifestDigest\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-managed-evidence-manifest\"},\"schemaVersion\":{\"const\":1},\"evidenceId\":{\"$ref\":\"#/$defs/evidenceId\"},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"demandAuthorityDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"kind\":{\"$ref\":\"#/$defs/evidenceKind\",\"description\":\"闭集种类；未知种类不得被消费者解释为权限、充分性或验收策略。\"},\"capturedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"recordedBy\":{\"$ref\":\"#/$defs/recordedBy\"},\"source\":{\"$ref\":\"#/$defs/source\"},\"payload\":{\"$ref\":\"#/$defs/payload\"},\"contentReview\":{\"$ref\":\"#/$defs/contentReview\"},\"manifestDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}},\"$defs\":{\"evidenceId\":{\"type\":\"string\",\"pattern\":\"^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"repositoryId\":{\"type\":\"string\",\"pattern\":\"^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"surfaceId\":{\"type\":\"string\",\"pattern\":\"^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"evidenceKind\":{\"enum\":[\"hook-observation\",\"transcript\",\"test-output\",\"diff\",\"document\",\"link\",\"commit\"]},\"hostId\":{\"enum\":[\"codex\",\"claude-code\"]},\"recordId\":{\"type\":\"string\",\"pattern\":\"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"hookEvent\":{\"enum\":[\"session-start\",\"user-prompt-submit\",\"stop\",\"session-end\",\"turn-complete\"]},\"commitOid\":{\"type\":\"string\",\"pattern\":\"^(?:[0-9a-f]{40}|[0-9a-f]{64})$\"},\"httpsUrl\":{\"type\":\"string\",\"minLength\":9,\"maxLength\":2048,\"pattern\":\"^https://[^\\\\s\\\"'`<>]+$\"},\"recordedBy\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"windowId\",\"configDigest\"],\"properties\":{\"windowId\":{\"$ref\":\"#/$defs/windowId\"},\"configDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}}},\"source\":{\"oneOf\":[{\"$ref\":\"#/$defs/managedPathSource\"},{\"$ref\":\"#/$defs/observationSource\"},{\"$ref\":\"#/$defs/linkSource\"},{\"$ref\":\"#/$defs/commitSource\"}]},\"managedPathSource\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"root\",\"path\",\"resourceType\"],\"properties\":{\"kind\":{\"const\":\"managed-path\"},\"root\":{\"oneOf\":[{\"$ref\":\"#/$defs/repositoryRoot\"},{\"$ref\":\"#/$defs/supportSurfaceRoot\"},{\"$ref\":\"#/$defs/podWorktreeRoot\"}]},\"path\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"resourceType\":{\"enum\":[\"file\",\"tree\"]}}},\"observationSource\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"hostId\",\"recordId\",\"event\",\"recordedAt\",\"turnId\",\"promptDigest\",\"lastAssistantMessageDigest\",\"transcript\",\"recordDigest\"],\"description\":\"宿主 hook 观察记录的脱敏投影：不含原始会话句柄与工作目录；transcript 只记有无。\",\"properties\":{\"kind\":{\"const\":\"observation\"},\"hostId\":{\"$ref\":\"#/$defs/hostId\"},\"recordId\":{\"$ref\":\"#/$defs/recordId\"},\"event\":{\"$ref\":\"#/$defs/hookEvent\"},\"recordedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"turnId\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\",\"minLength\":1,\"maxLength\":256,\"pattern\":\"^[A-Za-z0-9._:-]{1,256}$\"}]},\"promptDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}]},\"lastAssistantMessageDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}]},\"transcript\":{\"enum\":[\"present\",\"absent\"]},\"recordDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}}},\"linkSource\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"url\",\"digest\"],\"properties\":{\"kind\":{\"const\":\"link\"},\"url\":{\"$ref\":\"#/$defs/httpsUrl\"},\"digest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}]}}},\"commitSource\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"repositoryId\",\"commitOid\"],\"properties\":{\"kind\":{\"const\":\"commit\"},\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"commitOid\":{\"$ref\":\"#/$defs/commitOid\"}}},\"repositoryRoot\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"repositoryId\"],\"properties\":{\"kind\":{\"const\":\"repository\"},\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"}}},\"supportSurfaceRoot\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"surfaceId\"],\"properties\":{\"kind\":{\"const\":\"support-surface\"},\"surfaceId\":{\"$ref\":\"#/$defs/surfaceId\"}}},\"payload\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactDigest\",\"treeManifest\"],\"properties\":{\"artifactDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"treeManifest\":{\"$ref\":\"urn:wakeflow:foundation:artifact:loaded-artifact-tree-manifest:v1\"}}},\"privacyFinding\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"ref\",\"line\",\"kind\"],\"properties\":{\"ref\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"line\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"kind\":{\"enum\":[\"unlisted-absolute-path\",\"bare-uuid\"]}}},\"contentReview\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"disposition\",\"opaqueFileRefs\",\"privacyFindings\"],\"description\":\"Controller 显式确认过的内容：含控制字符的 opaque 成员与非凭证类隐私命中；凭证类命中永远不能进入记录。\",\"properties\":{\"disposition\":{\"enum\":[\"controller-confirmed\",\"not-required\"]},\"opaqueFileRefs\":{\"type\":\"array\",\"maxItems\":4095,\"uniqueItems\":true,\"items\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"}},\"privacyFindings\":{\"type\":\"array\",\"maxItems\":64,\"items\":{\"$ref\":\"#/$defs/privacyFinding\"}}},\"allOf\":[{\"if\":{\"properties\":{\"disposition\":{\"const\":\"not-required\"}},\"required\":[\"disposition\"]},\"then\":{\"properties\":{\"opaqueFileRefs\":{\"type\":\"array\",\"maxItems\":0},\"privacyFindings\":{\"type\":\"array\",\"maxItems\":0}}}}]},\"podId\":{\"type\":\"string\",\"pattern\":\"^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"podWorktreeRoot\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"podId\",\"repositoryId\"],\"description\":\"The git worktree checkout a worktree pod's product window registered for one repository; resolved through the pod's worktree receipt.\",\"properties\":{\"kind\":{\"const\":\"pod-worktree\"},\"podId\":{\"$ref\":\"#/$defs/podId\"},\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"}}}}}");

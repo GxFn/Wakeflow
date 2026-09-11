@@ -209,10 +209,11 @@ export interface ContinueBlockerInput {
   readonly archiveOutcome: "completed" | "cancelled" | null;
   readonly demandId: string;
   readonly claim: Readonly<RequirementClaimState> | null;
-  readonly otherActiveDemand: boolean;
+  /** 该 Demand 所在 pod 上另一个活动 Demand 的标识；没有即 null。 */
+  readonly otherActiveDemandId: string | null;
 }
 
-/** continue 只对已归档的完成 Demand 开放，且需求包仍由它归档、总控没有别的活动 Demand。 */
+/** continue 只对已归档的完成 Demand 开放，且需求包仍由它归档、所在 pod 没有别的活动 Demand。 */
 export function deriveContinueBlockers(input: Readonly<ContinueBlockerInput>): readonly string[] {
   const blockers: string[] = [];
   if (input.rootPresent) blockers.push("demand-root-present");
@@ -223,7 +224,7 @@ export function deriveContinueBlockers(input: Readonly<ContinueBlockerInput>): r
   else if (input.claim.status !== "archived" || input.claim.archive?.demandId !== input.demandId) {
     blockers.push(`package-claim:${input.claim.status}`);
   }
-  if (input.otherActiveDemand) blockers.push("active-demand-exists");
+  if (input.otherActiveDemandId !== null) blockers.push(`pod-busy:${input.otherActiveDemandId}`);
   return Object.freeze(blockers);
 }
 
@@ -246,18 +247,29 @@ export interface CreationBlockerInput {
   readonly claim: Readonly<RequirementClaimState> | null;
   readonly programMatches: boolean;
   readonly recordMatches: boolean;
-  readonly activeDemandExists: boolean;
-  readonly placementMode: string;
+  /** 目标 pod：配置里不存在为 null；存在时带 lifecycle 与它当前的活动 Demand。 */
+  readonly pod: Readonly<{
+    readonly podId: string;
+    readonly lifecycle: "open" | "closing";
+    readonly activeDemandId: string | null;
+  }> | null;
+  readonly requestedPodId: string;
 }
 
-/** 认领前置：包 pending、记录属于本程序且与看板绑定同一记录、没有别的活动 Demand。 */
+/**
+ * 认领前置：包 pending、记录属于本程序且与看板绑定同一记录、目标 pod 存在且未在关闭、
+ * 该 pod 没有别的活动 Demand（ADR-0010 D3：一 pod 一 Demand）。
+ */
 export function deriveCreationBlockers(input: Readonly<CreationBlockerInput>): readonly string[] {
   const blockers: string[] = [];
   if (input.claim === null) blockers.push("package-unknown");
   else if (input.claim.status !== "pending") blockers.push(`package-claim:${input.claim.status}`);
   if (input.claim !== null && !input.programMatches) blockers.push("package-program");
   if (input.claim !== null && !input.recordMatches) blockers.push("package-record-drift");
-  if (input.activeDemandExists) blockers.push("active-demand-exists");
-  if (input.placementMode !== "main") blockers.push(`placement:${input.placementMode}`);
+  if (input.pod === null) blockers.push(`pod-unknown:${input.requestedPodId}`);
+  else {
+    if (input.pod.lifecycle !== "open") blockers.push(`pod-closing:${input.pod.podId}`);
+    if (input.pod.activeDemandId !== null) blockers.push(`pod-busy:${input.pod.activeDemandId}`);
+  }
   return Object.freeze(blockers);
 }

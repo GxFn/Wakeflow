@@ -16,7 +16,11 @@ export const claudeCodeWorkspaceHostResourceProfile =
     instructionFileName: "CLAUDE.md",
     surfaces: {
       windowIdentity: true,
-      podEvidence: true,
+      podReceipts: true,
+      worktree: {
+        launch: "claude-worktree-flag",
+        attachedDirectories: "add-dir-flag",
+      },
       keepLive: true,
       windowLocator: true,
       settingsIntegration: {

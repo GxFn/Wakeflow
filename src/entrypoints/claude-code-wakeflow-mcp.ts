@@ -7,6 +7,7 @@ import {
   executeRecordDeliveryOutcomeRequest,
 } from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
+import { executePodRequest } from "../capabilities/pod/service.js";
 import {
   executeImplementationReviewDecisionRequest,
   executeTargetResultImportRequest,
@@ -45,6 +46,7 @@ export function createClaudeCodeWakeflowMcpServer(serverVersion: string): McpSer
     executeMaintenance: executeClaudeCodeWakeflowMaintenance,
     registerWindowHostBinding: (value: unknown) =>
       executeWindowBindingRequest(CLAUDE_CODE_HOST_FACADE, value),
+    managePod: (value: unknown) => executePodRequest(CLAUDE_CODE_HOST_FACADE, value),
     prepareDelivery: (value: unknown) =>
       executePrepareDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
     recordDeliveryOutcome: (value: unknown) =>

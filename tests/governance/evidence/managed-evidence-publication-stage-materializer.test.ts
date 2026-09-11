@@ -249,19 +249,19 @@ function createTreeTransaction(fixture: MaterializerFixture) {
       programId: ids.program,
       demandId: ids.demand,
       demandAuthorityDigest: digests.authority,
-      evidenceType: "tree-output",
+      kind: "test-output",
       recordedBy: { windowId: ids.window, configDigest: digests.config },
       source: {
+        kind: "managed-path" as const,
         root: { kind: "repository", repositoryId: ids.repository },
         path: "tree",
         resourceType: "tree",
       },
-      sensitivity: "internal",
       payload: {
         artifactDigest: computeCanonicalJsonSha256Digest(treeManifest),
         treeManifest,
       },
-      contentReview: { disposition: "not-required", opaqueFileRefs: [] },
+      contentReview: { disposition: "not-required", opaqueFileRefs: [], privacyFindings: [] },
     },
     { clock: () => MANAGED_EVIDENCE_PUBLICATION_TEST_CAPTURED_AT },
   );

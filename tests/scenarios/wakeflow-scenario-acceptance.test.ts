@@ -1,4 +1,5 @@
 import { equal } from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -31,7 +32,8 @@ import { computeDeliveryPromptDigest } from "../../src/governance/delivery/deliv
 import { workClaimRef } from "../../src/kernel/layout.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/governance/evidence/managed-evidence-public-contract.js";
+import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
+import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "../../src/capabilities/pod/contract.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
 import {
@@ -47,7 +49,10 @@ import {
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
-import { writeHostHookObservation } from "../../src/kernel/hook-observations.js";
+import {
+  readHostHookObservations,
+  writeHostHookObservation,
+} from "../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {
   FIXTURE_LANDING_MARKDOWN,
@@ -68,11 +73,12 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 十四个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
- * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 结果导入与评审检查 → 回调落地 →
+ * 十六个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
+ * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 四种来源的受管证据 → 结果导入与评审检查 → 回调落地 →
  * 升级、用户回答与带 resumption 的接受 → 实现接受后规划测试合同、投递测试并由 Controller 审查接受 →
- * 完成即归档 → 续接与取消。所有调用都经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内，
- * 宿主 hook 记录由场景代替宿主写入。
+ * 完成即归档 → 续接与取消 → pod 创建、握手、一 pod 一 Demand、worktree 投递与结果、两段关闭。所有调用都
+ * 经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内，宿主 hook 记录由场景代替宿主写入，
+ * worktree 由场景用真实 git 造出。
  */
 
 interface ScenarioContext {
@@ -101,6 +107,8 @@ interface ScenarioContext {
   controllerWindowId?: string;
   controllerHandle?: string;
   evidence?: ScenarioEvidence;
+  /** card-08 登记的支撑面目录树证据（kind document）：card-07 用它证明种类不一致被拒。 */
+  documentEvidence?: ScenarioEvidence;
   callback?: CallbackPermit;
 }
 
@@ -558,7 +566,6 @@ async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
       title: "Scenario acceptance demand",
       goal: "Implement the confirmed requirement through the new TS chain.",
       completionDefinition: "The confirmed implementation and focused checks are accepted.",
-      executionPlacement: { mode: "main" },
     },
   };
   const demandPreview = await call(context, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, {
@@ -1020,28 +1027,25 @@ async function registerControllerWindow(context: ScenarioContext): Promise<void>
   context.controllerHandle = handle;
 }
 
-/** 报告引用的证据必须先成为本 Demand 的受管证据记录（§13.87 D3）；这里从产品仓库登记一份。 */
-async function recordEvidence(context: ScenarioContext): Promise<ScenarioEvidence> {
-  const root = context.workspace.workspacePath;
-  if (!context.demandId || !context.repositoryId) {
-    throw new Error("scenario ordering: create-demand must run first");
-  }
-  const relativePath = "artifacts/review/verification.txt";
-  const content = "verification passed\n";
-  const filePath = path.join(context.workspace.productPath, ...relativePath.split("/"));
-  mkdirSync(path.dirname(filePath), { recursive: true });
-  writeFileSync(filePath, content);
-  const selection = {
-    evidenceType: "test-output",
-    source: {
-      root: { kind: "repository", repositoryId: context.repositoryId },
-      path: relativePath,
-      resourceType: "file",
-    },
-    sensitivity: "internal",
-    opaqueContentPolicy: "reject",
+interface EvidenceRecording {
+  readonly disposition: string;
+  readonly evidenceId: string;
+  readonly planDigest: string;
+  readonly plan: {
+    readonly kind: string;
+    readonly recorded: boolean;
+    readonly contentReview: { readonly disposition: string; readonly opaqueFileCount: number };
   };
-  const preview = await call(context, WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME, {
+}
+
+/** 经公共工具 preview 再 apply 一份受管证据；preview 阻塞是断言失败而不是分支。 */
+async function recordEvidenceSelection(
+  context: ScenarioContext,
+  selection: Readonly<Record<string, unknown>>,
+): Promise<EvidenceRecording> {
+  const root = context.workspace.workspacePath;
+  if (!context.demandId) throw new Error("scenario ordering: create-demand must run first");
+  const preview = await call(context, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, {
     root,
     mode: "preview",
     demandId: context.demandId,
@@ -1049,25 +1053,83 @@ async function recordEvidence(context: ScenarioContext): Promise<ScenarioEvidenc
   });
   assertNoPrivatePath(context, preview);
   const previewed = preview.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
     readonly planDigest: string | null;
-    readonly plan: unknown;
+    readonly plan: EvidenceRecording["plan"] | null;
   };
-  if (previewed.planDigest === null) throw new Error("managed evidence preview is not ready");
-  const applied = await call(context, WAKEFLOW_MANAGED_EVIDENCE_PUBLIC_TOOL_NAME, {
+  if (previewed.planDigest === null || previewed.plan === null) {
+    throw new Error(`evidence preview is not ready: ${previewed.blockers.join(",")}`);
+  }
+  const applied = await call(context, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, {
     root,
     mode: "apply",
     demandId: context.demandId,
-    plan: previewed.plan,
+    selection,
     planDigest: previewed.planDigest,
   });
   assertNoPrivatePath(context, applied);
-  const evidenceId = (
-    applied.structuredContent as { readonly publication: { readonly evidenceId: string } }
-  ).publication.evidenceId;
+  const mutation = applied.structuredContent as {
+    readonly disposition: string;
+    readonly publication: { readonly evidenceId: string } | null;
+  };
+  if (mutation.publication === null) throw new Error("evidence apply returned no publication");
   return {
-    evidenceId,
-    ref: `artifacts/managed-evidence/${evidenceId}/payload/content`,
-    digest: computeSha256Digest(encodeUtf8(content)),
+    disposition: mutation.disposition,
+    evidenceId: mutation.publication.evidenceId,
+    planDigest: previewed.planDigest,
+    plan: previewed.plan,
+  };
+}
+
+/** 只 preview，返回阻塞项；用于断言内容审阅拒绝。 */
+async function previewEvidenceBlockers(
+  context: ScenarioContext,
+  selection: Readonly<Record<string, unknown>>,
+): Promise<readonly string[]> {
+  const preview = await call(context, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    mode: "preview",
+    demandId: context.demandId,
+    selection,
+  });
+  const previewed = preview.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+  };
+  equal(previewed.status, "blocked");
+  return previewed.blockers;
+}
+
+const EVIDENCE_FILE_PATH = "artifacts/review/verification.txt";
+const EVIDENCE_FILE_CONTENT = "verification passed\n";
+
+function productFileSelection(context: ScenarioContext) {
+  return {
+    kind: "test-output",
+    source: {
+      kind: "managed-path",
+      root: { kind: "repository", repositoryId: context.repositoryId },
+      path: EVIDENCE_FILE_PATH,
+      resourceType: "file",
+    },
+    contentReview: "reject",
+  };
+}
+
+/** 报告引用的证据必须先成为本 Demand 的受管证据记录（§13.87 D3）；这里从产品仓库登记一份。 */
+async function recordEvidence(context: ScenarioContext): Promise<ScenarioEvidence> {
+  if (!context.demandId || !context.repositoryId) {
+    throw new Error("scenario ordering: create-demand must run first");
+  }
+  const filePath = path.join(context.workspace.productPath, ...EVIDENCE_FILE_PATH.split("/"));
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, EVIDENCE_FILE_CONTENT);
+  const recording = await recordEvidenceSelection(context, productFileSelection(context));
+  return {
+    evidenceId: recording.evidenceId,
+    ref: `artifacts/managed-evidence/${recording.evidenceId}/payload/content`,
+    digest: computeSha256Digest(encodeUtf8(EVIDENCE_FILE_CONTENT)),
   };
 }
 
@@ -1147,6 +1209,107 @@ function implementationDecisionRequest(
 }
 
 /**
+ * 卡 8：受管证据的四种来源、内容审阅与同内容幂等。产品仓库文件成为 card-07 引用的证据；
+ * 支撑面目录树、产品会话的 hook 记录、https 链接与提交引用各成一份记录，结果不含句柄与路径。
+ */
+async function scenarioRecordEvidence(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (
+    !context.demandId ||
+    !context.repositoryId ||
+    !context.designSurfaceId ||
+    !context.designPath ||
+    !context.productHandle
+  ) {
+    throw new Error("scenario ordering: ambiguous-resolution must run first");
+  }
+  const file = await recordEvidence(context);
+  context.evidence = file;
+  const replay = await recordEvidenceSelection(context, productFileSelection(context));
+  equal(replay.disposition, "already-recorded");
+  equal(replay.evidenceId, file.evidenceId);
+  equal(replay.plan.recorded, true);
+
+  mkdirSync(path.join(context.designPath, "reviews"), { recursive: true });
+  writeFileSync(path.join(context.designPath, "reviews", "notes.md"), "design reviewed\n");
+  writeFileSync(
+    path.join(context.designPath, "reviews", "shot.bin"),
+    Uint8Array.from([0x00, 0xff, 0x01, 0x02]),
+  );
+  const treeSelection = (contentReview: string) => ({
+    kind: "document",
+    source: {
+      kind: "managed-path",
+      root: { kind: "support-surface", surfaceId: context.designSurfaceId },
+      path: "reviews",
+      resourceType: "tree",
+    },
+    contentReview,
+  });
+  const opaqueBlockers = await previewEvidenceBlockers(context, treeSelection("reject"));
+  equal(opaqueBlockers.includes("opaque-content:shot.bin"), true);
+  const tree = await recordEvidenceSelection(context, treeSelection("controller-confirmed"));
+  equal(tree.disposition, "recorded");
+  equal(tree.plan.contentReview.disposition, "controller-confirmed");
+  equal(tree.plan.contentReview.opaqueFileCount, 1);
+  context.documentEvidence = {
+    evidenceId: tree.evidenceId,
+    ref: `artifacts/managed-evidence/${tree.evidenceId}/payload/notes.md`,
+    digest: computeSha256Digest(encodeUtf8("design reviewed\n")),
+  };
+
+  writeFileSync(
+    path.join(context.workspace.productPath, "artifacts", "review", "secret.txt"),
+    "token = abcdefghijklmnop\n",
+  );
+  const credentialBlockers = await previewEvidenceBlockers(context, {
+    ...productFileSelection(context),
+    source: { ...productFileSelection(context).source, path: "artifacts/review/secret.txt" },
+    contentReview: "controller-confirmed",
+  });
+  equal(credentialBlockers.includes("privacy:credential-assignment:content:1"), true);
+
+  const workspaceRoot = await RootedDirectory.open(root);
+  let recordId: string;
+  try {
+    const records = await readHostHookObservations(workspaceRoot, "codex", {
+      sessionId: context.productHandle,
+      event: "user-prompt-submit",
+    });
+    const record = records.records[0];
+    if (record === undefined) throw new Error("expected a product session prompt record");
+    recordId = record.recordId;
+  } finally {
+    await workspaceRoot.close();
+  }
+  const observation = await recordEvidenceSelection(context, {
+    kind: "hook-observation",
+    source: { kind: "observation", hostId: "codex", recordId },
+    contentReview: "reject",
+  });
+  equal(observation.disposition, "recorded");
+  equal(observation.plan.kind, "hook-observation");
+  const link = await recordEvidenceSelection(context, {
+    kind: "link",
+    source: { kind: "link", url: "https://example.com/ci/runs/42" },
+    contentReview: "reject",
+  });
+  const commit = await recordEvidenceSelection(context, {
+    kind: "commit",
+    source: { kind: "commit", repositoryId: context.repositoryId, commitOid: "c".repeat(40) },
+    contentReview: "reject",
+  });
+  const recovered = await call(context, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "recover",
+    demandId: context.demandId,
+  });
+  const recovery = recovered.structuredContent as { readonly disposition: string };
+  equal(recovery.disposition, "healthy");
+  return `file=${file.evidenceId.slice(0, 17)}…; replay=${replay.disposition}; opaque-reject=blocked; tree=${tree.disposition}(confirmed); credential=blocked; observation=${observation.disposition}; link=${link.disposition}; commit=${commit.disposition}; recover=${recovery.disposition}`;
+}
+
+/**
  * 卡 7：导入只接受同 Demand 受管证据里能复验摘要的定位符，拒绝泄露隐私的报告文本；导入落账即释放
  * 声明并签发回调许可，重放幂等；完成证据到达前 accept 不在允许集合内，也会被记录工具拒绝。
  */
@@ -1163,7 +1326,7 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
     throw new Error("scenario ordering: ambiguous-resolution must run first");
   }
   await registerControllerWindow(context);
-  const evidence = await recordEvidence(context);
+  const evidence = context.evidence ?? (await recordEvidence(context));
   context.evidence = evidence;
   const taskPackage = await loadTaskPackage(context, context.taskPackageId);
   const content = createImplementationTargetResultReportContentFixture(taskPackage, evidence);
@@ -1194,6 +1357,29 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
   });
   equal(leaking.isError, true, "a report carrying an unlisted absolute path must be rejected");
   equal(scenarioToolText(leaking).includes("privacy:unlisted-absolute-path"), true);
+  if (context.documentEvidence !== undefined) {
+    // 定位符种类必须等于记录种类（切片 8 D5）：把 document 记录当 test-output 引用被拒。
+    const mismatched = await context.connection.client.callTool({
+      name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+      arguments: importRequest(context, permit, "scenario-import-kind-mismatch", revision, {
+        ...content,
+        evidenceLocators: [
+          ...content.evidenceLocators,
+          {
+            kind: "test-output",
+            ref: context.documentEvidence.ref,
+            digest: context.documentEvidence.digest,
+          },
+        ],
+      }),
+    });
+    equal(
+      mismatched.isError,
+      true,
+      "a locator whose kind differs from the record must be rejected",
+    );
+    equal(scenarioToolText(mismatched).includes("evidence-kind-mismatch"), true);
+  }
   equal(
     existsSync(path.join(root, ...workClaimRef(context.productWindowId).split("/"))),
     true,
@@ -1260,7 +1446,7 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
     generation: importResult.callback.permit.generation,
     issuedAt: importResult.callback.permit.issuedAt,
   };
-  return `wrong-digest=rejected; private-path=rejected; import=${importResult.status}; replay=${replay.status}; claim=released; callback=${pending.reviewUnit.callback.status}; completion=${pending.reviewUnit.targetCompletion.status}->${confirmed.reviewUnit.targetCompletion.status}; accept-before-stop=rejected; allowed=${confirmed.reviewUnit.allowedDecisions.join("|")}`;
+  return `wrong-digest=rejected; private-path=rejected; kind-mismatch=${context.documentEvidence === undefined ? "skipped" : "rejected"}; import=${importResult.status}; replay=${replay.status}; claim=released; callback=${pending.reviewUnit.callback.status}; completion=${pending.reviewUnit.targetCompletion.status}->${confirmed.reviewUnit.targetCompletion.status}; accept-before-stop=rejected; allowed=${confirmed.reviewUnit.allowedDecisions.join("|")}`;
 }
 
 /**
@@ -1800,6 +1986,560 @@ async function scenarioCompleteAndContinue(context: ScenarioContext): Promise<st
   return `continue=${continued.disposition}; route=${reopened.route?.disposition}; cancel=${cancellation.disposition}; package=${cancellation.package.status}; continue-after-cancel=blocked`;
 }
 
+// ---- card-10/pod-lifecycle（ADR-0010，§13.91 D7） --------------------------------------------
+
+interface PodMutation {
+  readonly disposition: string;
+  readonly pod: { readonly podId: string; readonly name: string; readonly state: string } | null;
+  readonly windows: readonly {
+    readonly windowId: string;
+    readonly role: string;
+    readonly bound: boolean;
+  }[];
+  readonly worktrees: readonly { readonly repositoryId: string; readonly receipt: string }[];
+  readonly retiredReceipts: number;
+  readonly next: { readonly frontier: string | null; readonly blockers: readonly string[] };
+}
+
+interface PodPreview {
+  readonly status: string;
+  readonly blockers: readonly string[];
+  readonly planDigest: string | null;
+  readonly plan: { readonly kind: string; readonly pod: { readonly state: string } } | null;
+  readonly next: { readonly frontier: string | null };
+}
+
+function gitInProduct(context: ScenarioContext, ...args: readonly string[]): string {
+  const result = spawnSync("git", [...args], {
+    cwd: context.workspace.productPath,
+    encoding: "utf8",
+    shell: false,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "scenario",
+      GIT_AUTHOR_EMAIL: "scenario@example.invalid",
+      GIT_COMMITTER_NAME: "scenario",
+      GIT_COMMITTER_EMAIL: "scenario@example.invalid",
+    },
+  });
+  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
+  return result.stdout;
+}
+
+async function podPreview(context: ScenarioContext, intent: Readonly<Record<string, unknown>>) {
+  const result = await call(context, WAKEFLOW_POD_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    mode: "preview",
+    intent,
+  });
+  assertNoPrivatePath(context, result);
+  return result.structuredContent as PodPreview;
+}
+
+async function podApply(context: ScenarioContext, intent: Readonly<Record<string, unknown>>) {
+  const previewed = await podPreview(context, intent);
+  if (previewed.planDigest === null) {
+    throw new Error(`pod preview is not ready: ${previewed.blockers.join(",")}`);
+  }
+  const result = await call(context, WAKEFLOW_POD_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    mode: "apply",
+    intent,
+    planDigest: previewed.planDigest,
+  });
+  assertNoPrivatePath(context, result);
+  return result.structuredContent as PodMutation;
+}
+
+/** 再发布一个需求包：同一份草稿、不同标题得到不同的需求标识。 */
+async function publishScenarioPackage(context: ScenarioContext, title: string) {
+  const root = context.workspace.workspacePath;
+  if (!context.designSurfaceId || !context.designWindowId) {
+    throw new Error("scenario ordering: requirement-package must run first");
+  }
+  const packageInput = {
+    designSurfaceId: context.designSurfaceId,
+    title,
+    demandType: "requirement",
+    priority: "P2",
+    originWindowId: context.designWindowId,
+    testingDecision: { mode: "controller-only", summary: "Controller validates focused checks." },
+    requirementPath: "drafts/requirement.md",
+    landingPath: "drafts/landing.md",
+    confirmation: { confirmedAt: new Date().toISOString() },
+  };
+  const ready = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: packageInput,
+  });
+  const readyPreview = ready.structuredContent as PublicationPreview;
+  if (readyPreview.planDigest === null) throw new Error("package preview is not ready");
+  const applied = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    action: "publish",
+    package: packageInput,
+    planDigest: readyPreview.planDigest,
+  });
+  const mutation = applied.structuredContent as {
+    readonly package: { readonly requirementId: string };
+  };
+  const board = await call(context, WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, {
+    root,
+    view: "package",
+    requirementId: mutation.package.requirementId,
+  });
+  const view = board.structuredContent as { readonly package: { readonly recordDigest: string } };
+  const requirementId = mutation.package.requirementId;
+  return {
+    requirementId,
+    recordDigest: view.package.recordDigest,
+    memberRefs: [
+      `requirements/${requirementId}/requirement.md`,
+      `requirements/${requirementId}/landing.md`,
+    ],
+  };
+}
+
+async function previewDemandOn(context: ScenarioContext, requirementId: string, podId?: string) {
+  const preview = await call(context, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    mode: "preview",
+    requirementId,
+    ...(podId === undefined ? {} : { podId }),
+    demand: {
+      title: "Pod scenario demand",
+      goal: "Advance one requirement inside a worktree pod.",
+      completionDefinition: "The implementation result is imported from the pod's worktree.",
+    },
+  });
+  assertNoPrivatePath(context, preview);
+  return preview.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+}
+
+/** pod 窗口握手：返回绑定，供退役用；产品窗口另带 worktree 观察。 */
+async function registerPodWindow(
+  context: ScenarioContext,
+  windowId: string,
+  handleValue: string,
+  cwd: string,
+  worktree?: { readonly porcelain: string; readonly commonDir: string },
+) {
+  const root = context.workspace.workspacePath;
+  const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "inspect",
+    windowId,
+  });
+  assertNoPrivatePath(context, inspected);
+  const inspection = inspected.structuredContent as {
+    readonly launchIntent: { readonly intentDigest: string; readonly podName: string };
+  };
+  const rooted = await RootedDirectory.open(root);
+  try {
+    await writeHostHookObservation(rooted, {
+      hostId: "codex",
+      event: "session-start",
+      sessionId: handleValue,
+      cwd,
+      recordedAt: parseUtcInstant(new Date().toISOString()),
+    });
+  } finally {
+    await rooted.close();
+  }
+  const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root,
+    operation: "register",
+    windowId,
+    observation: {
+      handle: { kind: "codex-thread", value: handleValue },
+      launchIntentDigest: inspection.launchIntent.intentDigest,
+      observedAt: new Date().toISOString(),
+      ...(worktree === undefined ? {} : { worktree }),
+    },
+  });
+  assertNoPrivatePath(context, registered);
+  const mutation = registered.structuredContent as BindingMutation & {
+    readonly worktree: { readonly branch: string | null } | null;
+  };
+  equal(mutation.disposition, "registered");
+  if (mutation.binding === null) throw new Error("pod window binding missing");
+  return {
+    binding: mutation.binding,
+    worktree: mutation.worktree,
+    podName: inspection.launchIntent.podName,
+  };
+}
+
+async function decommissionPodWindow(
+  context: ScenarioContext,
+  windowId: string,
+  binding: { readonly bindingId: string; readonly bindingDigest: string },
+) {
+  const result = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    operation: "decommission",
+    windowId,
+    expectedBindingId: binding.bindingId,
+    expectedBindingDigest: binding.bindingDigest,
+    closure: {
+      preClose: { kind: "codex-thread", status: "active" },
+      closeResult: { status: "closed" },
+      postClose: { kind: "codex-thread", status: "archived" },
+    },
+  });
+  equal((result.structuredContent as BindingMutation).disposition, "decommissioned");
+}
+
+async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.repositoryId || !context.productWindowId) {
+    throw new Error("scenario ordering: fresh-initialize must run first");
+  }
+  const configPath = path.join(root, "wakeflow.config.json");
+  const before = readFileSync(configPath, "utf8");
+  const createIntent = { kind: "create", name: "feature-pod", idempotencyKey: "scenario-pod-1" };
+  const previewed = await podPreview(context, createIntent);
+  equal(previewed.status, "ready", previewed.blockers.join(","));
+  equal(previewed.plan?.kind, "create");
+  equal(previewed.next.frontier, "pod-create-apply");
+  equal(readFileSync(configPath, "utf8"), before, "pod preview wrote the config");
+  const created = await podApply(context, createIntent);
+  equal(created.disposition, "created");
+  equal(created.pod?.state, "creating");
+  equal(created.next.frontier, "pod-window-registration");
+  const replayed = await podApply(context, createIntent);
+  equal(replayed.disposition, "already-created");
+  const taken = await podPreview(context, { ...createIntent, idempotencyKey: "scenario-pod-2" });
+  equal(taken.status, "blocked");
+  equal(taken.blockers.includes("name-taken"), true, "name-taken blocker");
+  const config = parseWakeflowConfigV3(JSON.parse(readFileSync(configPath, "utf8")));
+  equal(config.pods.length, 2);
+  equal(config.topology.windows.length, 8);
+  if (created.pod === null) throw new Error("created pod missing");
+  const podId = created.pod.podId;
+  const windowOf = (role: string) => {
+    const window = created.windows.find((entry) => entry.role === role);
+    if (window === undefined) throw new Error(`pod window ${role} missing`);
+    return window.windowId;
+  };
+
+  // 握手：controller、design、test 按各自根登记；产品窗口在真实 worktree 里登记并交回 git 事实。
+  const controllerBinding = await registerPodWindow(
+    context,
+    windowOf("controller"),
+    "codex-host-owned-thread:pod-controller",
+    root,
+  );
+  equal(controllerBinding.podName, "feature-pod");
+  const designBinding = await registerPodWindow(
+    context,
+    windowOf("design"),
+    "codex-host-owned-thread:pod-design",
+    path.join(root, "Design"),
+  );
+  const testBinding = await registerPodWindow(
+    context,
+    windowOf("test"),
+    "codex-host-owned-thread:pod-test",
+    path.join(root, "Test"),
+  );
+  const missingWorktree = await context.connection.client.callTool({
+    name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    arguments: {
+      root,
+      operation: "register",
+      windowId: windowOf("product"),
+      observation: {
+        handle: { kind: "codex-thread", value: "codex-host-owned-thread:pod-product-nowt" },
+        launchIntentDigest: `sha256:${"0".repeat(64)}`,
+        observedAt: new Date().toISOString(),
+      },
+    },
+  });
+  equal(missingWorktree.isError, true, "a worktree pod product window needs git facts");
+  const checkout = path.join(context.workspace.fixtureRoot, "wt-feature-pod");
+  gitInProduct(context, "commit", "--quiet", "--allow-empty", "-m", "pod baseline");
+  gitInProduct(context, "worktree", "add", "--quiet", checkout, "-b", "wakeflow-feature-pod");
+  const worktree = {
+    porcelain: gitInProduct(context, "-C", checkout, "worktree", "list", "--porcelain"),
+    commonDir: gitInProduct(context, "-C", checkout, "rev-parse", "--git-common-dir").trim(),
+  };
+  const productHandle = "codex-host-owned-thread:pod-product";
+  const productBinding = await registerPodWindow(
+    context,
+    windowOf("product"),
+    productHandle,
+    checkout,
+    worktree,
+  );
+  equal(productBinding.worktree?.branch, "wakeflow-feature-pod");
+  const readyState = await call(context, WAKEFLOW_POD_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "recover",
+    podId,
+  });
+  assertNoPrivatePath(context, readyState);
+  const ready = readyState.structuredContent as PodMutation;
+  equal(ready.disposition, "healthy");
+  equal(ready.pod?.state, "ready");
+  equal(ready.worktrees[0]?.receipt, "present");
+
+  // 一 pod 一 Demand：第二个包在同一 pod 上被拒，primary 上仍可创建。
+  const first = await publishScenarioPackage(context, "Pod scenario requirement");
+  const second = await publishScenarioPackage(context, "Pod scenario second requirement");
+  const demandPreview = await previewDemandOn(context, first.requirementId, podId);
+  equal(demandPreview.status, "ready", demandPreview.blockers.join(","));
+  const demandApplied = await call(context, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    requirementId: first.requirementId,
+    podId,
+    demand: {
+      title: "Pod scenario demand",
+      goal: "Advance one requirement inside a worktree pod.",
+      completionDefinition: "The implementation result is imported from the pod's worktree.",
+    },
+    planDigest: demandPreview.planDigest,
+  });
+  const podDemandId = (
+    demandApplied.structuredContent as { readonly publication: { readonly demandId: string } }
+  ).publication.demandId;
+  const busy = await previewDemandOn(context, second.requirementId, podId);
+  equal(busy.status, "blocked");
+  equal(busy.blockers.includes(`pod-busy:${podDemandId}`), true, busy.blockers.join(","));
+  const primaryFree = await previewDemandOn(context, second.requirementId);
+  equal(primaryFree.status, "ready", primaryFree.blockers.join(","));
+
+  // 任务只能派给本 pod 的产品窗口；投递 prompt 带 pod 名与相对 worktree 的工作区根。
+  context.demandId = podDemandId;
+  const planRequest = {
+    root,
+    demandId: podDemandId,
+    idempotencyKey: "scenario-pod-plan-1",
+    expectedStreamRevision: 1,
+    taskPackage: {
+      assignment: { repositoryId: context.repositoryId, windowId: windowOf("product") },
+      workType: "implementation",
+      objective: "在 pod 的 worktree 里实现最小切片",
+      confirmedContext: ["Demand 权威已发布"],
+      selectedAuthorityMemberRefs: first.memberRefs,
+      boundaries: { inScope: ["最小切片"], outOfScope: ["合并回主线"], forbidden: ["动主检出"] },
+      completionExpectations: ["聚焦检查通过"],
+      commitExpectation: "leave-uncommitted",
+      acceptanceAnchors: [
+        {
+          anchorId: "pod-slice",
+          claim: "最小切片满足需求设计",
+          probe: "运行聚焦检查",
+          expected: "检查通过",
+          requirementRef: {
+            recordDigest: first.recordDigest,
+            sectionAnchor: "acceptance-criteria",
+            itemId: "ac-1",
+          },
+        },
+      ],
+      lineage: null,
+      sectionAnchors: ["goal"],
+    },
+  };
+  const mismatched = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      ...planRequest,
+      idempotencyKey: "scenario-pod-plan-mismatch",
+      taskPackage: {
+        ...planRequest.taskPackage,
+        assignment: { repositoryId: context.repositoryId, windowId: context.productWindowId },
+      },
+    },
+  });
+  equal(mismatched.isError, true, "a primary product window cannot serve a pod Demand");
+  equal(
+    scenarioToolText(mismatched).includes("assignment-window-pod-mismatch"),
+    true,
+    `pod mismatch rejection: ${scenarioToolText(mismatched).slice(0, 180)}`,
+  );
+  const planned = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, planRequest);
+  const plannedResult = planned.structuredContent as {
+    readonly targetTask: { readonly targetTaskId: string; readonly taskPackageId: string };
+  };
+  const targetTaskId = plannedResult.targetTask.targetTaskId;
+  const prepared = await prepareDelivery(
+    context,
+    "scenario-pod-prepare-1",
+    await currentStreamRevision(context),
+    targetTaskId,
+  );
+  equal(prepared.permit.prompt.includes(`feature-pod (${podId})`), true, "prompt names the pod");
+  equal(prepared.permit.prompt.includes("../Workspace/"), true, "worktree-relative workspace root");
+  equal(
+    prepared.permit.prompt.includes(context.workspace.fixtureRoot),
+    false,
+    "prompt leaked a private path",
+  );
+  await recordSessionEvent(
+    context,
+    windowOf("product"),
+    productHandle,
+    "user-prompt-submit",
+    prepared.permit.prompt,
+  );
+  const outcome = await recordOutcome(context, prepared.permit, "scenario-pod-outcome-1");
+  equal(outcome.outcome.disposition, "accepted");
+
+  // worktree pod 的实现结果必须带分支（Codex 的 detached HEAD 规则）；回调落到 pod 的 Controller。
+  mkdirSync(path.join(checkout, "artifacts", "pod"), { recursive: true });
+  writeFileSync(path.join(checkout, "artifacts", "pod", "verification.txt"), "pod checks passed\n");
+  const podEvidence = await recordEvidenceSelection(context, {
+    kind: "test-output",
+    source: {
+      kind: "managed-path",
+      root: { kind: "pod-worktree", podId, repositoryId: context.repositoryId },
+      path: "artifacts/pod/verification.txt",
+      resourceType: "file",
+    },
+    contentReview: "reject",
+  });
+  equal(podEvidence.disposition, "recorded");
+  const evidence = {
+    ref: `artifacts/managed-evidence/${podEvidence.evidenceId}/payload/content`,
+    digest: computeSha256Digest(encodeUtf8("pod checks passed\n")),
+  };
+  const taskPackage = await loadTaskPackage(context, plannedResult.targetTask.taskPackageId);
+  const content = createImplementationTargetResultReportContentFixture(taskPackage, evidence);
+  const revision = await currentStreamRevision(context);
+  const detached = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    arguments: importRequest(
+      context,
+      prepared.permit,
+      "scenario-pod-import-detached",
+      revision,
+      content,
+    ),
+  });
+  equal(detached.isError, true, "a worktree pod result without a branch must be rejected");
+  equal(
+    scenarioToolText(detached).includes("worktree-branch-required"),
+    true,
+    `detached rejection: ${scenarioToolText(detached).slice(0, 180)}`,
+  );
+  const imported = await call(
+    context,
+    WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    importRequest(context, prepared.permit, "scenario-pod-import-1", revision, {
+      ...content,
+      repositoryChange: { ...content.repositoryChange, branch: "wakeflow-feature-pod" },
+    }),
+  );
+  const importResult = imported.structuredContent as ImportResult;
+  equal(importResult.status, "committed");
+  equal(importResult.callback.permit.hostAction.windowId, windowOf("controller"));
+  equal(
+    importResult.callback.permit.prompt.includes("feature-pod"),
+    true,
+    "callback names the pod",
+  );
+
+  // 取消前先把待评审的结果评掉（F5.5）：返工决定不需要完成证据。
+  const pendingReview = await inspectReview(context, targetTaskId);
+  equal(pendingReview.reviewUnit.allowedDecisions.includes("rework"), true, "rework allowed");
+  const reworked = await call(
+    context,
+    WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    implementationDecisionRequest(
+      context,
+      pendingReview,
+      "rework",
+      "scenario-pod-rework",
+      await currentStreamRevision(context),
+    ),
+  );
+  equal((reworked.structuredContent as DecisionResult).decision.decision, "rework");
+
+  // 关闭第一段：Demand 仍活动 → 阻塞；取消归档后带分支处置 → closing。
+  const closeIntent = (branches: readonly unknown[]) => ({ kind: "close", podId, branches });
+  const active = await podPreview(context, closeIntent([]));
+  equal(active.status, "blocked");
+  equal(active.blockers.includes(`demand-active:${podDemandId}`), true, active.blockers.join(","));
+  const reason = "Pod scenario cancels its Demand before closing the pod.";
+  const cancelPreview = await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    demandId: podDemandId,
+    reason,
+  });
+  const cancelPlanned = cancelPreview.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(cancelPlanned.status, "ready", cancelPlanned.blockers.join(","));
+  const cancelled = await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: podDemandId,
+    reason,
+    planDigest: cancelPlanned.planDigest,
+  });
+  equal((cancelled.structuredContent as { readonly disposition: string }).disposition, "cancelled");
+  const missingDisposition = await podPreview(context, closeIntent([]));
+  equal(
+    missingDisposition.blockers.includes(`branch-disposition-missing:${context.repositoryId}`),
+    true,
+    "branch disposition required",
+  );
+  const closing = await podApply(
+    context,
+    closeIntent([{ repositoryId: context.repositoryId, disposition: "abandoned" }]),
+  );
+  equal(closing.disposition, "closing");
+  equal(closing.pod?.state, "closing");
+  equal(closing.next.frontier, "pod-window-decommission");
+
+  // 关闭第二段：退役四个窗口、处置检出，然后 closed；配置与回执目录都不再有该 pod。
+  const boundBlocked = await podPreview(context, closeIntent([]));
+  equal(boundBlocked.blockers.filter((entry) => entry.startsWith("window-bound:")).length, 4);
+  for (const [role, binding] of [
+    ["product", productBinding.binding],
+    ["controller", controllerBinding.binding],
+    ["design", designBinding.binding],
+    ["test", testBinding.binding],
+  ] as const) {
+    await decommissionPodWindow(context, windowOf(role), binding);
+  }
+  const disposal = await podPreview(context, closeIntent([]));
+  equal(
+    disposal.blockers.includes(`worktree-present:${context.repositoryId}`),
+    true,
+    "checkout still present",
+  );
+  gitInProduct(context, "worktree", "remove", "--force", checkout);
+  const closed = await podApply(context, closeIntent([]));
+  equal(closed.disposition, "closed");
+  equal(closed.pod, null);
+  equal(closed.retiredReceipts, 1);
+  const finalConfig = parseWakeflowConfigV3(JSON.parse(readFileSync(configPath, "utf8")));
+  equal(finalConfig.pods.length, 1);
+  equal(finalConfig.topology.windows.length, 4);
+  equal(
+    existsSync(path.join(root, ".wakeflow-local", "runtime", "hosts", "codex", "pods", podId)),
+    false,
+    "receipt directory survived pod closure",
+  );
+  const unknown = await podPreview(context, closeIntent([]));
+  equal(unknown.blockers.includes(`pod-unknown:${podId}`), true, "pod removed from config");
+  return `create=${created.disposition}; replay=${replayed.disposition}; ready; pod-busy; plan-mismatch=rejected; prompt=worktree-relative; import=branch-required→${importResult.status}; close=${closing.disposition}→${closed.disposition}`;
+}
+
 const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Promise<string>>> =
   Object.freeze({
     "card-01/fresh-initialize": scenarioFreshInitialize,
@@ -1810,15 +2550,17 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-05/plan-implementation-task": scenarioPlanImplementationTask,
     "card-06/delivery-chain": scenarioDeliveryChain,
     "card-06/ambiguous-resolution": scenarioAmbiguousResolution,
+    "card-08/evidence": scenarioRecordEvidence,
     "card-07/import-and-review": scenarioImportAndReview,
     "card-06/wake-controller": scenarioWakeController,
     "card-07/escalate-and-resume": scenarioEscalateAndResume,
     "card-05/test-contract": scenarioTestContract,
     "card-08/complete-and-archive": scenarioCompleteAndArchive,
     "card-04/complete-and-continue": scenarioCompleteAndContinue,
+    "card-10/pod-lifecycle": scenarioPodLifecycle,
   });
 
-test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、投递、结果导入与评审、回调、升级续审、测试合同、完成即归档、续接与取消并报告结论", async () => {
+test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、投递、结果导入与评审、回调、升级续审、测试合同、完成即归档、续接与取消、pod 生命周期并报告结论", async () => {
   const workspace = createScenarioWorkspace();
   const connection = await connectWakeflowMcpServerForTest(
     createCodexWakeflowMcpServer("1.0.0-scenario"),

@@ -47,7 +47,7 @@ const WAKEFLOW_FRESH_SELECTION_KEY_PATTERN =
 const WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES = 256;
 
 interface WakeflowFreshConfigSelectionAllocation<
-  Kind extends "repository" | "surface" | "window",
+  Kind extends "repository" | "surface" | "window" | "pod",
 > {
   readonly selectionKey: string;
   readonly id: WakeflowDurableId<Kind>;
@@ -65,6 +65,9 @@ export interface WakeflowFreshConfigCompilation {
       readonly Readonly<WakeflowFreshConfigSelectionAllocation<"surface">>[];
     readonly windows:
       readonly Readonly<WakeflowFreshConfigSelectionAllocation<"window">>[];
+    /** fresh-initialize 只生成 primary pod `main`（ADR-0010 D1，能力卡 1 Q12）。 */
+    readonly pods:
+      readonly Readonly<WakeflowFreshConfigSelectionAllocation<"pod">>[];
   }>;
 }
 
@@ -222,12 +225,14 @@ function optionalProperty(
 }
 
 const FRESH_SELECTION_ID_NAMESPACE = "wakeflow-fresh-config-selection";
+/** 初始化生成的 primary pod 名称；worktree pod 不得复用（配置 codec 保证名称唯一）。 */
+export const WAKEFLOW_PRIMARY_POD_NAME = "main" as const;
 
 /**
  * 分配 typed ID。没有注入 factory 时，ID 由 selection 的规范摘要、种类与 selection key
  * 确定性派生：同一 selection 在 preview 与 apply 重算出同一 Config，摘要才可能相符。
  */
-function allocateId<Kind extends "program" | "repository" | "surface" | "window">(
+function allocateId<Kind extends "program" | "repository" | "surface" | "window" | "pod">(
   kind: Kind,
   options: Readonly<ParsedOptions>,
   seenUuid: Set<string>,
@@ -248,7 +253,7 @@ function allocateId<Kind extends "program" | "repository" | "surface" | "window"
   return createWakeflowDurableId(kind, uuid);
 }
 
-function sortedAllocations<Kind extends "repository" | "surface" | "window">(
+function sortedAllocations<Kind extends "repository" | "surface" | "window" | "pod">(
   values: readonly Readonly<WakeflowFreshConfigSelectionAllocation<Kind>>[],
 ): readonly Readonly<WakeflowFreshConfigSelectionAllocation<Kind>>[] {
   return Object.freeze([...values].sort((left, right) => (
@@ -421,7 +426,7 @@ export function compileWakeflowFreshConfigSelection(
   });
 
   const windowAllocations: WakeflowFreshConfigSelectionAllocation<"window">[] = [];
-  const windows = windowSelections.map(({ key, path, root, value }) => {
+  const windowDrafts = windowSelections.map(({ key, path, root, value }) => {
     const windowId = allocateId("window", options, seenUuid, seed, key);
     windowAllocations.push(Object.freeze({ selectionKey: key, id: windowId }));
     let resolvedRoot: Readonly<Record<string, unknown>>;
@@ -446,6 +451,25 @@ export function compileWakeflowFreshConfigSelection(
       root: resolvedRoot,
     };
   });
+  const mainPodId = allocateId("pod", options, seenUuid, seed, WAKEFLOW_PRIMARY_POD_NAME);
+  const windows = windowDrafts.map(({ windowId, role, displayName, root, ...rest }) => ({
+    windowId,
+    podId: mainPodId,
+    role,
+    displayName,
+    ...rest,
+    root,
+  }));
+  const pods = [
+    {
+      podId: mainPodId,
+      name: WAKEFLOW_PRIMARY_POD_NAME,
+      placement: "primary",
+      lifecycle: "open",
+      worktrees: [],
+      closing: null,
+    },
+  ];
 
   const normalizedSelection = Object.freeze({
     program,
@@ -474,6 +498,7 @@ export function compileWakeflowFreshConfigSelection(
       },
       presentation: normalizedSelection.presentation,
       topology: { repositories, supportSurfaces, windows },
+      pods,
       storage,
       governance,
       hosts,
@@ -491,6 +516,9 @@ export function compileWakeflowFreshConfigSelection(
       repositories: sortedAllocations(repositoryAllocations),
       supportSurfaces: sortedAllocations(surfaceAllocations),
       windows: sortedAllocations(windowAllocations),
+      pods: Object.freeze([
+        Object.freeze({ selectionKey: WAKEFLOW_PRIMARY_POD_NAME, id: mainPodId }),
+      ]),
     }),
   });
 }

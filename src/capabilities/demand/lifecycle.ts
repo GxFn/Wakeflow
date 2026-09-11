@@ -18,6 +18,7 @@ import type { PortableResourcePath } from "../../foundation/filesystem/portable-
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
+import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
 import { inspectWorkClaim, releaseWorkClaim } from "../../kernel/work-claims.js";
 import {
   DemandEventSourcingCommandHandlerError,
@@ -117,7 +118,7 @@ import {
   payloadPrivacyBlockers,
   pendingReviewTargets,
 } from "./decide.js";
-import { activeDemandExists } from "./service.js";
+import { activeDemandOnPod } from "./service.js";
 import { evaluateVerifyGates, type VerifyReport } from "./verify.js";
 
 /**
@@ -622,6 +623,45 @@ async function terminalEvent(
 }
 
 /** 步骤 2：封归档包；负载是写入终态事件之后的活动根。 */
+/** Demand 所在 pod 的作用域；配置里已没有该 pod 时是 `precondition-failed/pod-unknown`。 */
+function demandPodScope(context: DemandSliceContext, handle: DemandHandle) {
+  const podId = handle.loaded.identity.podId;
+  const scope = Object.hasOwn(context.snapshot.indexes.podScopes, podId)
+    ? context.snapshot.indexes.podScopes[podId]
+    : undefined;
+  if (scope === undefined) {
+    fail("precondition-failed", "pod-unknown", "$demandRoot", { details: { podId } });
+  }
+  return scope;
+}
+
+/** worktree 来源成员：配置里的 worktree 意图加各宿主回执里的分支与 HEAD；从不含路径。 */
+async function worktreeMember(
+  context: DemandSliceContext,
+  scope: ReturnType<typeof demandPodScope>,
+): Promise<DemandArchiveManifest["worktree"]> {
+  if (scope.pod.placement !== "worktree") return null;
+  const receipts = await listPodWorktreeReceiptsAnyHost(
+    context.root,
+    scope.pod.podId,
+    signalOptions(context.signal),
+  );
+  return {
+    podId: scope.pod.podId,
+    name: scope.pod.name,
+    placement: "worktree",
+    repositories: scope.pod.worktrees.map((worktree) => {
+      const receipt = receipts.find((entry) => entry.repositoryId === worktree.repositoryId);
+      return {
+        repositoryId: worktree.repositoryId,
+        suggestedName: worktree.suggestedName,
+        branch: receipt?.branch ?? null,
+        head: receipt?.head ?? null,
+      };
+    }),
+  };
+}
+
 async function sealArchive(
   context: DemandSliceContext,
   handle: DemandHandle,
@@ -629,6 +669,8 @@ async function sealArchive(
   receipt: EventReceipt,
   verify: VerifyReport,
 ): Promise<ArchiveReceipt> {
+  const podScope = demandPodScope(context, handle);
+  const worktree = await worktreeMember(context, podScope);
   const rootSnapshot = await readDemandRootSnapshot(handle.demandRoot, context.signal);
   const payload = await readPayloadFiles(handle.demandRoot, rootSnapshot.payload, context.signal);
   const archivedAt = now(context);
@@ -648,7 +690,8 @@ async function sealArchive(
           outcome: plan.action === "complete" ? "completed" : "cancelled",
           terminalEvent: receipt,
           archivedAt,
-          controllerWindowId: context.snapshot.indexes.controllerWindow.windowId,
+          controllerWindowId: podScope.controllerWindow.windowId,
+          podId: handle.loaded.identity.podId,
           package: {
             requirementId: plan.package.requirementId,
             recordRef: plan.package.recordRef,
@@ -662,6 +705,7 @@ async function sealArchive(
             failedCount: verify.gates.filter((gate) => gate.status !== "pass").length,
           },
           payload: payloadSummary,
+          worktree,
         }),
     },
     context.signal,
@@ -1041,7 +1085,8 @@ async function planContinue(
     archiveOutcome: archive?.manifest.outcome ?? null,
     demandId,
     claim: claim?.state ?? null,
-    otherActiveDemand: await activeDemandExists(context, demandId),
+    otherActiveDemandId:
+      archive === null ? null : await activeDemandOnPod(context, archive.manifest.podId, demandId),
   });
   if (blockers.length > 0 || archive === null || claim === null) return blockedPlan(blockers);
   const ids = deriveLifecycleIds(

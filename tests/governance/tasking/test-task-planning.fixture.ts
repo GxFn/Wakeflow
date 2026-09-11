@@ -35,7 +35,6 @@ export interface TestTaskPlanningWorkspaceFixture extends AcceptedDemandCompleti
 
 export interface TestTaskPlanningWorkspaceFixtureOptions {
   readonly maxAttempts?: number;
-  readonly executionPlacement?: "main" | "isolated";
 }
 
 export function createTestContractRequestFixture(
@@ -105,9 +104,6 @@ export async function createTestTaskPlanningWorkspaceFixture(
 ): Promise<Readonly<TestTaskPlanningWorkspaceFixture>> {
   const fixture = await createAcceptedDemandCompletionWorkspaceFixture({
     testingMode: "real-environment",
-    ...(options.executionPlacement === undefined
-      ? {}
-      : { executionPlacement: options.executionPlacement }),
   });
   const taskPackage = createTestTaskPackageRequestFixture(fixture, options);
   return Object.freeze({

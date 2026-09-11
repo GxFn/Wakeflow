@@ -189,10 +189,21 @@
     "managedEvidenceSummary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["evidenceId", "manifestDigest", "payloadArtifactDigest"],
+      "required": ["evidenceId", "kind", "manifestDigest", "payloadArtifactDigest"],
       "properties": {
         "evidenceId": {
           "$ref": "#/$defs/evidenceId"
+        },
+        "kind": {
+          "enum": [
+            "hook-observation",
+            "transcript",
+            "test-output",
+            "diff",
+            "document",
+            "link",
+            "commit"
+          ]
         },
         "manifestDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"

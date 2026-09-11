@@ -52,7 +52,7 @@ test("public v3 model preserves one explicit presentation language and builds ty
 
   equal(
     computeWakeflowConfigV3Digest(model),
-    "sha256:54a5976cbac7c3f7e14ac76e405d04f8e534fd820f8bf1ce16768d6514db7007",
+    "sha256:dfd856d7f09bac7e9d299a7d78eecd57d45f626ac91fc79887fb09f6114008b7",
   );
   equal(WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE, "en");
   equal(model.presentation.language, "en");
@@ -184,6 +184,7 @@ test("typed indexes group product windows in one topology pass", () => {
   });
   topology(value).windows.push({
     windowId: "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    podId: "pod_99999999-9999-4999-8999-999999999999",
     role: "product",
     displayName: "Product A 2",
     root: {
@@ -192,6 +193,7 @@ test("typed indexes group product windows in one topology pass", () => {
     },
   }, {
     windowId: "window_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    podId: "pod_99999999-9999-4999-8999-999999999999",
     role: "product",
     displayName: "Product B",
     root: {

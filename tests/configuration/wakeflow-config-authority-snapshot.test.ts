@@ -69,14 +69,14 @@ test("snapshot binds the current source/config digests to one stable workspace r
     const snapshot = await readWakeflowConfigAuthoritySnapshot(root);
     equal(snapshot.workspaceRoot, fixture.workspaceRoot);
     equal(snapshot.source.resourcePath, "wakeflow.config.json");
-    equal(snapshot.source.byteCount, 2205);
+    equal(snapshot.source.byteCount, 2661);
     equal(
       snapshot.source.digest,
-      "sha256:8e748fa509edba5b33796f3a4609cd9d2d514f7dac31d315f97c54987bba44ea",
+      "sha256:33be2f16f1ddc3af74595affbd689812e73cbd805e82a5ecd6d18bd32fd21b5f",
     );
     equal(
       snapshot.configDigest,
-      "sha256:54a5976cbac7c3f7e14ac76e405d04f8e534fd820f8bf1ce16768d6514db7007",
+      "sha256:dfd856d7f09bac7e9d299a7d78eecd57d45f626ac91fc79887fb09f6114008b7",
     );
     equal(snapshot.indexes.controllerWindow.role, "controller");
     equal(snapshot.ledgerRoot, path.join(fixture.temporaryRoot, "wakeflow-ledger"));

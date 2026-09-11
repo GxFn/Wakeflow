@@ -24,6 +24,7 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
+import { readStableFile, StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { deriveUuidV4 } from "../foundation/identity/uuid-v4.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../foundation/time/utc-instant.js";
@@ -40,7 +41,7 @@ import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
  * 不进入任何公共结果。
  */
 
-const HOST_HOOK_EVENTS = Object.freeze([
+export const HOST_HOOK_EVENTS = Object.freeze([
   "session-start",
   "user-prompt-submit",
   "stop",
@@ -416,4 +417,45 @@ export async function readHostHookObservations(
     }
   }
   return Object.freeze({ records: Object.freeze(records), skipped });
+}
+
+export interface HostHookObservationRecordRead {
+  readonly record: Readonly<HostHookObservation>;
+  /** 记录文件字节的摘要：受管证据以它引用记录，不复制记录本身。 */
+  readonly digest: Sha256Digest;
+  readonly byteCount: number;
+}
+
+/** 按记录标识读取一个宿主的一条记录；目录或记录不存在、内容不可用都返回 `null`。 */
+export async function readHostHookObservationRecord(
+  root: RootedDirectory,
+  hostIdValue: WakeflowHostId,
+  recordId: string,
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<Readonly<HostHookObservationRecordRead> | null> {
+  const hostId = parseWakeflowHostId(hostIdValue);
+  const signal = options.signal === undefined ? {} : { signal: options.signal };
+  const listed = await listObservationCandidates(root, hostId, {}, signal);
+  if (listed === null) return null;
+  const candidate = listed.candidates.find((entry) => {
+    const match = FILE_NAME_PATTERN.exec(entry.entry.name);
+    return match !== null && match[3] === recordId;
+  });
+  if (candidate === undefined) return null;
+  const record = await readCandidateRecord(root, hostId, candidate, signal);
+  if (record === null || record.recordId !== recordId) return null;
+  try {
+    const read = await readStableFile(root, candidate.entry.resourcePath, {
+      maximumBytes: RECORD_MAXIMUM_BYTES,
+      expectedNode: candidate.entry.node,
+      ...signal,
+    });
+    return Object.freeze({ record, digest: read.digest, byteCount: Number(read.byteCount) });
+  } catch (error: unknown) {
+    if (error instanceof StableFileReadError) {
+      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+      return null;
+    }
+    throw error;
+  }
 }

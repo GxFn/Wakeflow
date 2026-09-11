@@ -90,11 +90,8 @@ export function compileWakeflowHostCapabilityLayoutAuthority(
   }
   const prefix = `host-runtime.${profile.hostId}`;
   const declarationIds: string[] = [];
-  if (profile.surfaces.podEvidence) {
-    declarationIds.push(
-      `${prefix}.evidence-root`,
-      `${prefix}.pod-evidence-root`,
-    );
+  if (profile.surfaces.podReceipts) {
+    declarationIds.push(`${prefix}.pod-receipts-root`);
   }
   if (operationSurfaceIsPresent(profile)) {
     declarationIds.push(`${prefix}.operations-root`);

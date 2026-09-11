@@ -104,6 +104,7 @@ interface CreatePlan {
     readonly goal: string;
     readonly completionDefinition: string;
   }>;
+  readonly podId: string;
   readonly configDigest: Sha256Digest;
 }
 
@@ -157,18 +158,33 @@ async function loadPackage(
   }
 }
 
-/** ADR-0011 D7：总控只能有一个活动 Demand；`excluding` 让 continue 忽略自己。 */
-export async function activeDemandExists(
+/**
+ * ADR-0011 D7 按 ADR-0010 D3 收窄：一个 pod 同一时刻只推进一个 Demand。返回该 pod 上
+ * 另一个活动 Demand 的标识，没有即 null；`excluding` 让 continue 忽略自己。
+ */
+export async function activeDemandOnPod(
   context: DemandSliceContext,
+  podId: string,
   excluding: string | null,
-): Promise<boolean> {
+): Promise<string | null> {
   try {
-    await assertNoActiveDemand(context.root, context.signal, excluding);
-    return false;
+    await assertNoActiveDemand(context.root, context.signal, excluding, podId);
+    return null;
   } catch (error: unknown) {
-    if (error instanceof WakeflowError && error.reason === "active-demand-exists") return true;
+    if (error instanceof WakeflowError && error.reason === "pod-busy") {
+      return error.details?.demandId ?? "unknown";
+    }
     throw error;
   }
+}
+
+/** 请求缺省指向 primary pod；配置里不存在的 podId 在阻塞项里报出，不在这里抛。 */
+function requestedPod(context: DemandSliceContext, podId: string | undefined) {
+  const requestedPodId = podId ?? context.snapshot.indexes.primaryPod.pod.podId;
+  const pod = Object.hasOwn(context.snapshot.indexes.podById, requestedPodId)
+    ? context.snapshot.indexes.podById[requestedPodId as WakeflowDurableId<"pod">]
+    : undefined;
+  return Object.freeze({ requestedPodId, pod: pod ?? null });
 }
 
 function buildIdentityAndAuthority(
@@ -177,6 +193,7 @@ function buildIdentityAndAuthority(
   loaded: LoadedPackage,
   demandId: string,
   createdAt: UtcInstant,
+  podId: string,
 ) {
   try {
     const lineage = parseRequirementLineageReference({
@@ -195,7 +212,7 @@ function buildIdentityAndAuthority(
         completionDefinition: demand.completionDefinition,
         demandType: loaded.record.demandType,
         source: lineage,
-        executionPlacement: { mode: "main" },
+        podId,
       },
       { clock: () => createdAt },
     );
@@ -249,6 +266,7 @@ async function planCreate(
   const claim = await readRequirementClaimState(context.root, input.requirementId, context.signal);
   const loaded = claim === null ? null : await loadPackage(context, input.requirementId);
   const programId = context.snapshot.model.program.programId;
+  const { requestedPodId, pod } = requestedPod(context, input.podId);
   const blockers = [
     ...deriveCreationBlockers({
       claim: claim?.state ?? null,
@@ -258,8 +276,15 @@ async function planCreate(
         claim !== null &&
         loaded.recordDigest === claim.state.recordDigest &&
         loaded.record.programId === claim.state.programId,
-      activeDemandExists: await activeDemandExists(context, null),
-      placementMode: input.demand.executionPlacement.mode,
+      pod:
+        pod === null
+          ? null
+          : {
+              podId: pod.podId,
+              lifecycle: pod.lifecycle,
+              activeDemandId: await activeDemandOnPod(context, pod.podId, null),
+            },
+      requestedPodId,
     }),
   ];
   if (claim === null || loaded === null) return blocked(blockers);
@@ -271,7 +296,7 @@ async function planCreate(
     completionDefinition: input.demand.completionDefinition,
   });
   try {
-    buildIdentityAndAuthority(context, demand, loaded, ids.demandId, DRAFT_INSTANT);
+    buildIdentityAndAuthority(context, demand, loaded, ids.demandId, DRAFT_INSTANT, requestedPodId);
   } catch (error: unknown) {
     if (error instanceof WakeflowError) blockers.push(error.reason);
     else throw error;
@@ -287,6 +312,7 @@ async function planCreate(
     eventId: ids.eventId,
     commitId: ids.commitId,
     demand,
+    podId: requestedPodId,
     configDigest: context.snapshot.configDigest,
   });
   return Object.freeze({
@@ -371,6 +397,7 @@ async function applyCreate(context: DemandSliceContext, plan: CreatePlan): Promi
     loaded,
     plan.demandId,
     at,
+    plan.podId,
   );
   const transactionInput = {
     identity,

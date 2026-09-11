@@ -5,6 +5,7 @@ import {
 } from "../foundation/data/json-value.js";
 import {
   parseWakeflowConfigV3,
+  type WakeflowConfigPod,
   type WakeflowConfigProgram,
   type WakeflowConfigRepository,
   type WakeflowConfigSupportSurface,
@@ -89,10 +90,35 @@ function windowRepresentation(window: WakeflowConfigWindow) {
         };
   return {
     windowId: window.windowId,
+    podId: window.podId,
     role: window.role,
     displayName: window.displayName,
     ...optionalField("description", window.description),
     root,
+  };
+}
+
+function podRepresentation(pod: WakeflowConfigPod) {
+  return {
+    podId: pod.podId,
+    name: pod.name,
+    placement: pod.placement,
+    lifecycle: pod.lifecycle,
+    worktrees: pod.worktrees.map((worktree) => ({
+      repositoryId: worktree.repositoryId,
+      windowId: worktree.windowId,
+      suggestedName: worktree.suggestedName,
+    })),
+    closing: pod.closing === null
+      ? null
+      : {
+          requestedAt: pod.closing.requestedAt,
+          branches: pod.closing.branches.map((branch) => ({
+            repositoryId: branch.repositoryId,
+            branch: branch.branch,
+            disposition: branch.disposition,
+          })),
+        },
   };
 }
 
@@ -222,6 +248,7 @@ function configRepresentation(model: WakeflowConfigV3Model) {
       ),
       windows: model.topology.windows.map(windowRepresentation),
     },
+    pods: model.pods.map(podRepresentation),
     storage: { ledgerRoot: model.storage.ledgerRoot },
     governance: governanceRepresentation(model.governance),
     hosts: hostsRepresentation(model.hosts),

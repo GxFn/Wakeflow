@@ -234,7 +234,6 @@ interface CommandOutcome {
   >;
 }
 
-const CALLBACK_POD_ID = "primary";
 const REPORT_PRIVACY_POLICY = Object.freeze({
   allowedPathRoots: Object.freeze([]),
   allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
@@ -363,6 +362,31 @@ function assertFreshRevision(context: SliceContext, binding: Readonly<AppendComm
     fail("concurrency-conflict", "stream-revision", "$request.expectedStreamRevision", {
       details: { observed: String(context.authority.loaded.aggregate.streamRevision) },
     });
+  }
+}
+
+/** Demand 所在 pod 的作用域：回调落到该 pod 的 Controller（ADR-0010 D2）。 */
+function demandPodScope(context: SliceContext) {
+  const podId = context.authority.loaded.identity.podId;
+  const scope = Object.hasOwn(context.authority.config.indexes.podScopes, podId)
+    ? context.authority.config.indexes.podScopes[podId]
+    : undefined;
+  if (scope === undefined) {
+    fail("precondition-failed", "pod-unknown", "$request.demandId", { details: { podId } });
+  }
+  return scope;
+}
+
+/** worktree pod 的实现结果必须报分支：Codex 的 worktree 线程从 detached HEAD 起步（ADR-0010 D4）。 */
+function assertWorktreeBranch(context: SliceContext, result: Readonly<TargetResult>): void {
+  if (result.workType !== "implementation") return;
+  if (demandPodScope(context).pod.placement !== "worktree") return;
+  if (result.report.repositoryChange.branch === null) {
+    fail(
+      "precondition-failed",
+      "worktree-branch-required",
+      "$request.report.content.repositoryChange.branch",
+    );
   }
 }
 
@@ -627,15 +651,20 @@ async function resolveEvidence(
     ),
   );
   const unresolved: number[] = [];
+  const mismatched: number[] = [];
   const resolutions: Readonly<TargetResultEvidenceResolution>[] = [];
   for (const [index, reference] of references.entries()) {
     const resolved = await resolveEvidenceReference(context, reference, recorded);
     if (resolved === null) unresolved.push(index);
+    else if (resolved === "kind-mismatch") mismatched.push(index);
     else resolutions.push(resolved);
   }
-  if (unresolved.length > 0) {
+  if (unresolved.length > 0 || mismatched.length > 0) {
     rejectWith(
-      unresolved.slice(0, 2).map((index) => `evidence-unresolved:${index}`),
+      [
+        ...unresolved.slice(0, 2).map((index) => `evidence-unresolved:${index}`),
+        ...mismatched.slice(0, 2).map((index) => `evidence-kind-mismatch:${index}`),
+      ],
       "$request.report",
     );
   }
@@ -682,18 +711,23 @@ async function resolveEvidenceReference(
   context: SliceContext,
   reference: Readonly<EvidenceReference>,
   recorded: ReadonlySet<string>,
-): Promise<Readonly<TargetResultEvidenceResolution> | null> {
+): Promise<Readonly<TargetResultEvidenceResolution> | "kind-mismatch" | null> {
   const plan = planEvidenceLocator(reference.ref);
   if (plan === null || !recorded.has(plan.evidenceId)) return null;
   try {
     const ref = parsePortableResourcePath(reference.ref, "$ref");
     const digest = parseSha256Digest(reference.digest, "$digest");
-    const facts = await readEvidenceMember(
-      context.authority.demandRoot,
-      plan,
-      signalOptions(context.options.signal),
-    );
+    const signal = signalOptions(context.options.signal);
+    const facts = await readEvidenceMember(context.authority.demandRoot, plan, signal);
     if (facts.digest !== digest) return null;
+    if (reference.kind !== null) {
+      const record = await loadManagedEvidenceRecord(
+        context.authority.demandRoot,
+        plan.evidenceId,
+        signal,
+      );
+      if (record.manifest.kind !== reference.kind) return "kind-mismatch";
+    }
     return Object.freeze({ ref, digest, evidenceId: plan.evidenceId, bytes: facts.bytes });
   } catch (error: unknown) {
     return unresolvedOrRethrow(error);
@@ -753,13 +787,14 @@ async function issueCallback(
 ): Promise<
   Readonly<{ readonly callback: Readonly<TargetResultCallbackRecord>; readonly window: WindowView }>
 > {
-  const controllerWindowId = context.authority.config.indexes.controllerWindow.windowId;
+  const scope = demandPodScope(context);
+  const controllerWindowId = scope.controllerWindow.windowId;
   const window = await loadWindow(context, controllerWindowId);
   const summary = summarizeResultForCallback(result);
   const prompt = renderWakeControllerPrompt({
     language: context.authority.config.model.presentation.language,
     demandId: result.demandId,
-    podId: CALLBACK_POD_ID,
+    podId: `${scope.pod.name} (${scope.pod.podId})`,
     target: {
       targetTaskId: result.targetTaskId,
       taskPackageId: taskPackage.taskPackageId,
@@ -886,6 +921,7 @@ async function executeImport(
     collectEvidenceReferences(input.report.content),
   );
   const result = buildResult(input, target, envelope, taskPackage, options);
+  assertWorktreeBranch(context, result);
   const now = nowFrom(options);
   const issued = await issueCallback(
     context,

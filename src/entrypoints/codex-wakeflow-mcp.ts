@@ -7,6 +7,7 @@ import {
   executeRecordDeliveryOutcomeRequest,
 } from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
+import { executePodRequest } from "../capabilities/pod/service.js";
 import {
   executeImplementationReviewDecisionRequest,
   executeTargetResultImportRequest,
@@ -45,6 +46,7 @@ export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
     executeMaintenance: executeCodexWakeflowMaintenance,
     registerWindowHostBinding: (value: unknown) =>
       executeWindowBindingRequest(CODEX_HOST_FACADE, value),
+    managePod: (value: unknown) => executePodRequest(CODEX_HOST_FACADE, value),
     prepareDelivery: (value: unknown) => executePrepareDeliveryRequest(CODEX_HOST_FACADE, value),
     recordDeliveryOutcome: (value: unknown) =>
       executeRecordDeliveryOutcomeRequest(CODEX_HOST_FACADE, value),

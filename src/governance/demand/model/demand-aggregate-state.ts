@@ -36,6 +36,7 @@ import {
   UtcInstantError,
   type UtcInstant,
 } from "../../../foundation/time/utc-instant.js";
+import { isEvidenceKind, type EvidenceKind } from "../../../contracts/vocabulary/evidence-kinds.js";
 import {
   parseManagedEvidenceManifest,
   ManagedEvidenceManifestError,
@@ -464,6 +465,7 @@ export interface DemandContinuationState {
 
 export interface DemandManagedEvidenceSummary {
   readonly evidenceId: WakeflowDurableId<"evidence">;
+  readonly kind: EvidenceKind;
   readonly manifestDigest: Sha256Digest;
   readonly payloadArtifactDigest: Sha256Digest;
 }
@@ -892,9 +894,11 @@ function parseManagedEvidenceSummaries(
       fail("relation", path);
     }
     previousEvidenceId = evidenceId;
+    if (!isEvidenceKind(value.kind)) fail("schema", `${path}/kind`);
     result.push(
       Object.freeze({
         evidenceId,
+        kind: value.kind,
         manifestDigest: parseDigest(
           value.manifestDigest,
           `${path}/manifestDigest`,
@@ -2702,6 +2706,7 @@ export function recordManagedEvidenceInDemandAggregateState(
       ...recorded,
       {
         evidenceId: manifest.evidenceId,
+        kind: manifest.kind,
         manifestDigest: manifest.manifestDigest,
         payloadArtifactDigest: manifest.payload.artifactDigest,
       },

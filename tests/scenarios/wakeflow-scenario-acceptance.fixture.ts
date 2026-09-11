@@ -78,6 +78,12 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
       "目标会话的 user-prompt-submit 记录到达后，再次记录结局即 accepted，Route 前进到结果导入",
   },
   {
+    scenarioId: "card-08/evidence",
+    card: "08-evidence-and-archive",
+    title:
+      "受管证据四种来源各成一份记录：同内容再记为 already-recorded，opaque 成员在 reject 下阻塞、确认后进入记录，凭证命中永远阻塞，hook 记录投影不含句柄与路径，recover 为 healthy",
+  },
+  {
     scenarioId: "card-07/import-and-review",
     card: "07-results-and-review",
     title:
@@ -111,6 +117,12 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     scenarioId: "card-04/complete-and-continue",
     card: "04-demand-lifecycle",
     title: "continue 从归档重开并要求先规划，cancel 撤回需求包并再次归档，取消后不能 continue",
+  },
+  {
+    scenarioId: "card-10/pod-lifecycle",
+    card: "ADR-0010",
+    title:
+      "pod 创建 preview 零写、apply 一次配置事务、同键重放与重名被拒；pod 窗口握手（产品窗口带 worktree 回执）后 ready；一 pod 一 Demand；任务只派本 pod 窗口，prompt 带 pod 名与相对 worktree 路径；无分支的结果被拒；关闭两段：归档与分支处置后 closing，退役与检出处置后 closed",
   },
 ]);
 

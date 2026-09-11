@@ -4,11 +4,7 @@ import { test } from "node:test";
 
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import type { WakeflowDemandControllerRouteResultV1 as RouteResultWire } from "../../../src/contracts/generated/entrypoints/wakeflow-demand-controller-route-result.generated.js";
-import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA } from "../../../src/contracts/generated/entrypoints/wakeflow-demand-controller-route-result.generated.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
-import { createRuntimeJsonSchemaValidator } from "../../../src/foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   buildDemandControllerRoute,
@@ -257,60 +253,6 @@ test("Controller Route只映射Post-Acceptance Test责任而不复制其领域�
     equal(testDeliveryPlanning.frontiers[0]?.kind, "test-delivery-planning");
     equal(testDeliveryPlanning.frontiers[0]?.owner, "test-delivery-preparation");
     equal(JSON.stringify(testDeliveryPlanning).includes("landing.md"), false);
-  } finally {
-    await cleanupTestTaskPlanningWorkspaceFixture(fixture);
-  }
-});
-
-test("Controller Route不会把尚未支持的isolated Test Planning声明为可执行", async () => {
-  const fixture = await createTestTaskPlanningWorkspaceFixture({
-    executionPlacement: "isolated",
-  });
-  try {
-    const route = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.demandId,
-    );
-    equal(route.disposition, "blocked");
-    equal(route.frontiers[0]?.kind, "test-task-planning");
-    deepEqual(route.blockers, [
-      {
-        kind: "isolated-test-planning-not-implemented",
-        owner: "test-task-planning",
-      },
-    ]);
-    equal(Object.hasOwn(route, "postAcceptanceRouteDigest"), true);
-    const { routeDigest, ...basis } = route;
-    equal(routeDigest, computeCanonicalJsonSha256Digest(basis));
-    const validateResult = createRuntimeJsonSchemaValidator<RouteResultWire>(
-      WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA,
-    );
-    const result = {
-      kind: "WakeflowDemandRouteInspection",
-      schemaVersion: 1,
-      tool: "wakeflow_inspect_demand_route",
-      status: "current",
-      route,
-      next: deriveNextProjection(route),
-    };
-    equal(validateResult(result).ok, true);
-    const missingSource = structuredClone(result) as typeof result & {
-      route: { postAcceptanceRouteDigest?: string };
-    };
-    delete missingSource.route.postAcceptanceRouteDigest;
-    equal(validateResult(missingSource).ok, false);
-    const falsePostAcceptanceBlocker = structuredClone(result) as unknown as {
-      route: {
-        blockers: Array<{ kind: string; owner: string }>;
-      };
-    };
-    falsePostAcceptanceBlocker.route.blockers = [
-      {
-        kind: "research-completion-not-implemented",
-        owner: "demand-lifecycle",
-      },
-    ];
-    equal(validateResult(falsePostAcceptanceBlocker).ok, false);
   } finally {
     await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }

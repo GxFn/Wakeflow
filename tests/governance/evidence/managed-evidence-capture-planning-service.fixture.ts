@@ -2,6 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import type { ManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
+import type { ManagedEvidenceCapturePreview } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
 import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
@@ -41,7 +43,7 @@ export async function createManagedEvidenceCapturePlanningWorkspaceFixture(): Pr
     const demandRequest = {
       root: publication.workspacePath,
       requirementId: PUBLICATION_REQUIREMENT_ID,
-      demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
+      demand: demandEventSourcingPublicationAuthoredDemand(),
     };
     const preview = await executeDemandCreationRequest(
       { ...demandRequest, mode: "preview" },
@@ -102,4 +104,31 @@ export async function cleanupManagedEvidenceCapturePlanningWorkspaceFixture(
   await cleanupDemandEventSourcingPublicationWorkspaceFixture(
     fixture.publication,
   );
+}
+
+/** 机制测试只关心就绪计划；阻塞是断言失败而不是分支。 */
+export function readyCapturePlan(
+  preview: ManagedEvidenceCapturePreview,
+): Readonly<ManagedEvidenceCapturePlan> {
+  if (preview.status !== "ready") {
+    throw new Error(`Expected a ready capture plan, blocked by ${preview.blockers.join(",")}.`);
+  }
+  return preview.plan;
+}
+
+/** 复制类文件来源的缺省选择：`kind` 与 `contentReview` 由调用方按场景覆盖。 */
+export function fileSelection(
+  path: string,
+  contentReview: "reject" | "controller-confirmed" = "reject",
+) {
+  return {
+    kind: "test-output" as const,
+    source: {
+      kind: "managed-path" as const,
+      root: { kind: "repository" as const, repositoryId: EVIDENCE_REPOSITORY_ID },
+      path,
+      resourceType: "file" as const,
+    },
+    contentReview,
+  };
 }

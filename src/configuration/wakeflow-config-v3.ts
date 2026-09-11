@@ -5,6 +5,10 @@ import {
   type ExternalOwnedSurface as ExternalOwnedSurfaceWire,
   type Governance as GovernanceWire,
   type Hosts as HostsWire,
+  type Pod as PodWire,
+  type PodClosing as PodClosingWire,
+  type PodClosingBranch as PodClosingBranchWire,
+  type PodWorktree as PodWorktreeWire,
   type ProductWindow as ProductWindowWire,
   type Program as ProgramWire,
   type Presentation as PresentationWire,
@@ -34,7 +38,9 @@ import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-j
  *
  * JSON Schema 2020-12 与 Ajv 严格校验器负责限制字段集合、值域、基数和词法。本模块
  * 只补充 Schema 无法表达的类型化标识全局冲突、实体引用、能力匹配、每个 Repository
- * 的 Product 职责所有者和重复残留路径。输入先转换为无副作用、与源容器解除引用关系
+ * 的 Product 职责所有者、重复残留路径，以及 pod 作用域的窗口基数（ADR-0010 D1、D2：
+ * 每个 pod 恰好一个 controller、design、test；primary pod 每仓库至少一个 product，
+ * worktree pod 每仓库恰好一个 product 且每个 product 窗口恰好一条 worktree 意图）。输入先转换为无副作用、与源容器解除引用关系
  * 并递归冻结的 JSON 树，因此校验器不会执行访问器、代理陷阱或自定义行为。
  *
  * 本层不读取文件、不解析工作区位置的物理状态、不缓存当前配置，也不注入宿主
@@ -116,38 +122,42 @@ export type WakeflowConfigSupportSurface =
   | WakeflowExternalSupportSurface;
 
 export type WakeflowControllerWindow = DeepReadonly<
-  Omit<ControllerWindowWire, "windowId"> & {
+  Omit<ControllerWindowWire, "windowId" | "podId"> & {
     readonly windowId: WakeflowDurableId<"window">;
+    readonly podId: WakeflowDurableId<"pod">;
   }
 >;
 
 export type WakeflowDesignWindow = DeepReadonly<
-  Omit<DesignWindowWire, "root" | "windowId"> & {
+  Omit<DesignWindowWire, "root" | "windowId" | "podId"> & {
     readonly root: {
       readonly kind: "support-surface";
       readonly surfaceId: WakeflowDurableId<"surface">;
     };
     readonly windowId: WakeflowDurableId<"window">;
+    readonly podId: WakeflowDurableId<"pod">;
   }
 >;
 
 export type WakeflowTestWindow = DeepReadonly<
-  Omit<TestWindowWire, "root" | "windowId"> & {
+  Omit<TestWindowWire, "root" | "windowId" | "podId"> & {
     readonly root: {
       readonly kind: "support-surface";
       readonly surfaceId: WakeflowDurableId<"surface">;
     };
     readonly windowId: WakeflowDurableId<"window">;
+    readonly podId: WakeflowDurableId<"pod">;
   }
 >;
 
 export type WakeflowProductWindow = DeepReadonly<
-  Omit<ProductWindowWire, "root" | "windowId"> & {
+  Omit<ProductWindowWire, "root" | "windowId" | "podId"> & {
     readonly root: {
       readonly kind: "repository";
       readonly repositoryId: WakeflowDurableId<"repository">;
     };
     readonly windowId: WakeflowDurableId<"window">;
+    readonly podId: WakeflowDurableId<"pod">;
   }
 >;
 
@@ -156,6 +166,34 @@ export type WakeflowConfigWindow =
   | WakeflowDesignWindow
   | WakeflowTestWindow
   | WakeflowProductWindow;
+
+export type WakeflowConfigPodWorktree = DeepReadonly<
+  Omit<PodWorktreeWire, "repositoryId" | "windowId"> & {
+    readonly repositoryId: WakeflowDurableId<"repository">;
+    readonly windowId: WakeflowDurableId<"window">;
+  }
+>;
+
+export type WakeflowConfigPodClosingBranch = DeepReadonly<
+  Omit<PodClosingBranchWire, "repositoryId"> & {
+    readonly repositoryId: WakeflowDurableId<"repository">;
+  }
+>;
+
+export type WakeflowConfigPodClosing = DeepReadonly<
+  Omit<PodClosingWire, "branches"> & {
+    readonly branches: readonly WakeflowConfigPodClosingBranch[];
+  }
+>;
+
+/** 一个 pod 的持久记录；creating / ready / closed 由回执派生，不在这里。 */
+export type WakeflowConfigPod = DeepReadonly<
+  Omit<PodWire, "podId" | "worktrees" | "closing"> & {
+    readonly podId: WakeflowDurableId<"pod">;
+    readonly worktrees: readonly WakeflowConfigPodWorktree[];
+    readonly closing: WakeflowConfigPodClosing | null;
+  }
+>;
 
 export type WakeflowConfigStorage = DeepReadonly<
   Omit<StorageWire, "ledgerRoot"> & {
@@ -169,6 +207,7 @@ export type WakeflowConfigV3Model = DeepReadonly<
     WakeflowConfigV3Wire,
     | "governance"
     | "hosts"
+    | "pods"
     | "presentation"
     | "program"
     | "storage"
@@ -193,11 +232,26 @@ export type WakeflowConfigV3Model = DeepReadonly<
         ...WakeflowConfigWindow[],
       ];
     };
+    readonly pods: readonly [WakeflowConfigPod, ...WakeflowConfigPod[]];
     readonly storage: WakeflowConfigStorage;
     readonly governance: DeepReadonly<GovernanceWire>;
     readonly hosts: DeepReadonly<HostsWire>;
   }
 >;
+
+/** 一个 pod 作用域内的窗口索引：角色单例、产品窗口与按仓库分组。 */
+export interface WakeflowConfigPodScope {
+  readonly pod: WakeflowConfigPod;
+  readonly windows: readonly WakeflowConfigWindow[];
+  readonly controllerWindow: WakeflowControllerWindow;
+  readonly designWindow: WakeflowDesignWindow;
+  readonly testWindow: WakeflowTestWindow;
+  readonly productWindows: readonly WakeflowProductWindow[];
+  readonly windowsByRepositoryId: Readonly<Record<
+    WakeflowDurableId<"repository">,
+    readonly WakeflowProductWindow[]
+  >>;
+}
 
 export interface WakeflowConfigV3Indexes {
   readonly repositoryById: Readonly<Record<
@@ -212,10 +266,15 @@ export interface WakeflowConfigV3Indexes {
     WakeflowDurableId<"window">,
     WakeflowConfigWindow
   >>;
-  readonly windowsByRepositoryId: Readonly<Record<
-    WakeflowDurableId<"repository">,
-    readonly WakeflowProductWindow[]
+  readonly podById: Readonly<Record<WakeflowDurableId<"pod">, WakeflowConfigPod>>;
+  readonly podIdByWindowId: Readonly<Record<
+    WakeflowDurableId<"window">,
+    WakeflowDurableId<"pod">
   >>;
+  readonly podScopes: Readonly<Record<WakeflowDurableId<"pod">, WakeflowConfigPodScope>>;
+  readonly primaryPod: WakeflowConfigPodScope;
+  /** 以下五项是 primary pod 作用域的别名；pod 内消费者必须按 Demand 的 podId 取 `podScopes`。 */
+  readonly windowsByRepositoryId: WakeflowConfigPodScope["windowsByRepositoryId"];
   readonly controllerWindow: WakeflowControllerWindow;
   readonly designWindow: WakeflowDesignWindow;
   readonly testWindow: WakeflowTestWindow;
@@ -307,7 +366,9 @@ export function parseWakeflowConfigPlacement(
   return parsePlacement(value, path);
 }
 
-function parseIdentity<K extends "program" | "repository" | "surface" | "window">(
+type ConfigIdentityKind = "program" | "repository" | "surface" | "window" | "pod";
+
+function parseIdentity<K extends ConfigIdentityKind>(
   value: string,
   kind: K,
   path: string,
@@ -322,7 +383,7 @@ function parseIdentity<K extends "program" | "repository" | "surface" | "window"
 
 function registerIdentity(
   value: string,
-  kind: "program" | "repository" | "surface" | "window",
+  kind: ConfigIdentityKind,
   path: string,
   uuids: Set<string>,
 ): void {
@@ -397,7 +458,7 @@ function validateTopology(model: WakeflowConfigV3Wire): void {
     surfaces.set(surface.surfaceId, surface);
   }
 
-  const repositoriesWithProductWindow = new Set<string>();
+  const pods = validatePodRecords(model, uuids);
   for (const [index, window] of model.topology.windows.entries()) {
     registerIdentity(
       window.windowId,
@@ -405,6 +466,8 @@ function validateTopology(model: WakeflowConfigV3Wire): void {
       `$/topology/windows/${index}/windowId`,
       uuids,
     );
+    const podAt = `$/topology/windows/${index}/podId`;
+    if (!pods.has(parseIdentity(window.podId, "pod", podAt))) fail("reference", podAt);
     if (window.role === "design" || window.role === "test") {
       const at = `$/topology/windows/${index}/root/surfaceId`;
       const ref = parseIdentity(window.root.surfaceId, "surface", at);
@@ -415,15 +478,116 @@ function validateTopology(model: WakeflowConfigV3Wire): void {
       const at = `$/topology/windows/${index}/root/repositoryId`;
       const ref = parseIdentity(window.root.repositoryId, "repository", at);
       if (!repositories.has(ref)) fail("reference", at);
-      repositoriesWithProductWindow.add(ref);
     }
   }
-  for (const [index, repository] of model.topology.repositories.entries()) {
-    if (!repositoriesWithProductWindow.has(repository.repositoryId)) {
-      fail("topology", `$/topology/repositories/${index}/repositoryId`);
-    }
-  }
+  validatePodScopes(model, repositories);
   validateResidueUniqueness(model);
+}
+
+const POD_SINGLETON_ROLES = Object.freeze(["controller", "design", "test"] as const);
+
+/** pod 记录本身：标识、名称唯一、恰好一个 primary、primary 不带 worktree 与 closing。 */
+function validatePodRecords(model: WakeflowConfigV3Wire, uuids: Set<string>): Set<string> {
+  const pods = new Set<string>();
+  const names = new Set<string>();
+  let primaryCount = 0;
+  for (const [index, pod] of model.pods.entries()) {
+    const at = `$/pods/${index}`;
+    registerIdentity(pod.podId, "pod", `${at}/podId`, uuids);
+    pods.add(pod.podId);
+    if (names.has(pod.name)) fail("identifier-collision", `${at}/name`);
+    names.add(pod.name);
+    if ((pod.closing === null) !== (pod.lifecycle === "open")) fail("topology", `${at}/closing`);
+    if (pod.placement === "primary") {
+      primaryCount += 1;
+      if (pod.lifecycle !== "open") fail("topology", `${at}/lifecycle`);
+      if (pod.worktrees.length > 0) fail("topology", `${at}/worktrees`);
+    }
+  }
+  if (primaryCount !== 1) fail("topology", "$/pods");
+  return pods;
+}
+
+interface PodWindowCensus {
+  readonly roles: Map<string, number>;
+  readonly productByRepository: Map<string, ProductWindowWire[]>;
+  readonly productWindowIds: Map<string, ProductWindowWire>;
+}
+
+function podWindowCensus(model: WakeflowConfigV3Wire): Map<string, PodWindowCensus> {
+  const census = new Map<string, PodWindowCensus>();
+  for (const pod of model.pods) {
+    census.set(pod.podId, {
+      roles: new Map(),
+      productByRepository: new Map(),
+      productWindowIds: new Map(),
+    });
+  }
+  for (const window of model.topology.windows) {
+    const entry = census.get(window.podId);
+    if (entry === undefined) continue;
+    entry.roles.set(window.role, (entry.roles.get(window.role) ?? 0) + 1);
+    if (window.role !== "product") continue;
+    const members = entry.productByRepository.get(window.root.repositoryId) ?? [];
+    members.push(window);
+    entry.productByRepository.set(window.root.repositoryId, members);
+    entry.productWindowIds.set(window.windowId, window);
+  }
+  return census;
+}
+
+/** worktree pod 的每条 worktree 意图指向本 pod 内该仓库唯一的产品窗口，且每个产品窗口恰好一条。 */
+function validatePodWorktrees(
+  pod: PodWire,
+  index: number,
+  entry: PodWindowCensus,
+  repositories: ReadonlySet<string>,
+): void {
+  const seen = new Set<string>();
+  for (const [worktreeIndex, worktree] of pod.worktrees.entries()) {
+    const at = `$/pods/${index}/worktrees/${worktreeIndex}`;
+    if (!repositories.has(worktree.repositoryId)) fail("reference", `${at}/repositoryId`);
+    if (seen.has(worktree.repositoryId)) fail("topology", `${at}/repositoryId`);
+    seen.add(worktree.repositoryId);
+    const window = entry.productWindowIds.get(worktree.windowId);
+    if (window === undefined) fail("reference", `${at}/windowId`);
+    if (window.root.repositoryId !== worktree.repositoryId) fail("topology", `${at}/windowId`);
+  }
+  if (pod.placement === "worktree" && seen.size !== entry.productWindowIds.size) {
+    fail("topology", `$/pods/${index}/worktrees`);
+  }
+  if (pod.closing !== null) {
+    const branches = new Set<string>();
+    for (const [branchIndex, branch] of pod.closing.branches.entries()) {
+      const at = `$/pods/${index}/closing/branches/${branchIndex}/repositoryId`;
+      if (!seen.has(branch.repositoryId) || branches.has(branch.repositoryId)) {
+        fail("topology", at);
+      }
+      branches.add(branch.repositoryId);
+    }
+  }
+}
+
+/** 每个 pod：controller、design、test 各恰好一个；primary 每仓库至少一个 product，worktree 每仓库恰好一个。 */
+function validatePodScopes(
+  model: WakeflowConfigV3Wire,
+  repositories: ReadonlyMap<string, RepositoryWire>,
+): void {
+  const census = podWindowCensus(model);
+  const repositoryIds = new Set(repositories.keys());
+  for (const [index, pod] of model.pods.entries()) {
+    const entry = census.get(pod.podId);
+    if (entry === undefined) fail("topology", `$/pods/${index}/podId`);
+    for (const role of POD_SINGLETON_ROLES) {
+      if ((entry.roles.get(role) ?? 0) !== 1) fail("topology", `$/pods/${index}/podId`);
+    }
+    for (const repositoryId of repositoryIds) {
+      const count = entry.productByRepository.get(repositoryId)?.length ?? 0;
+      const valid = pod.placement === "primary" ? count >= 1 : count === 1;
+      if (!valid) fail("topology", `$/pods/${index}/podId`);
+    }
+    validatePodWorktrees(pod, index, entry, repositoryIds);
+  }
 }
 
 /** 把任意内存值解析为严格、递归冻结的公开 v3 配置领域模型。 */
@@ -473,20 +637,49 @@ export function buildWakeflowConfigV3Indexes(
       surface,
     ] as const),
   );
-  const productWindows: WakeflowProductWindow[] = [];
-  const windowsByRepository = new Map<
-    WakeflowDurableId<"repository">,
-    WakeflowProductWindow[]
-  >(model.topology.repositories.map((repository) => [
-    repository.repositoryId,
-    [],
-  ]));
   const windowEntries: Array<readonly [string, WakeflowConfigWindow]> = [];
+  const podIdEntries: Array<readonly [string, WakeflowDurableId<"pod">]> = [];
+  for (const window of model.topology.windows) {
+    windowEntries.push([window.windowId, window] as const);
+    podIdEntries.push([window.windowId, window.podId] as const);
+  }
+  const scopeEntries = model.pods.map(
+    (pod) => [pod.podId, buildPodScope(model, pod)] as const,
+  );
+  const primary = scopeEntries.find(([, scope]) => scope.pod.placement === "primary");
+  if (primary === undefined) fail("topology", "$/pods");
+  const primaryPod = primary[1];
+  return Object.freeze({
+    repositoryById: repositoryById as WakeflowConfigV3Indexes["repositoryById"],
+    surfaceById: surfaceById as WakeflowConfigV3Indexes["surfaceById"],
+    windowById: frozenRecord(windowEntries) as WakeflowConfigV3Indexes["windowById"],
+    podById: frozenRecord(
+      model.pods.map((pod) => [pod.podId, pod] as const),
+    ) as WakeflowConfigV3Indexes["podById"],
+    podIdByWindowId: frozenRecord(podIdEntries) as WakeflowConfigV3Indexes["podIdByWindowId"],
+    podScopes: frozenRecord(scopeEntries) as WakeflowConfigV3Indexes["podScopes"],
+    primaryPod,
+    windowsByRepositoryId: primaryPod.windowsByRepositoryId,
+    controllerWindow: primaryPod.controllerWindow,
+    designWindow: primaryPod.designWindow,
+    testWindow: primaryPod.testWindow,
+    productWindows: primaryPod.productWindows,
+  });
+}
+
+function buildPodScope(
+  model: WakeflowConfigV3Model,
+  pod: WakeflowConfigPod,
+): Readonly<WakeflowConfigPodScope> {
+  const windows = model.topology.windows.filter((window) => window.podId === pod.podId);
+  const productWindows: WakeflowProductWindow[] = [];
+  const windowsByRepository = new Map<WakeflowDurableId<"repository">, WakeflowProductWindow[]>(
+    model.topology.repositories.map((repository) => [repository.repositoryId, []]),
+  );
   let controllerWindow: WakeflowControllerWindow | undefined;
   let designWindow: WakeflowDesignWindow | undefined;
   let testWindow: WakeflowTestWindow | undefined;
-  for (const window of model.topology.windows) {
-    windowEntries.push([window.windowId, window] as const);
+  for (const window of windows) {
     if (window.role === "controller") {
       controllerWindow = window;
     } else if (window.role === "design") {
@@ -500,28 +693,25 @@ export function buildWakeflowConfigV3Indexes(
       members.push(window);
     }
   }
-  const windowById = frozenRecord(windowEntries);
-  const windowsByRepositoryId = frozenRecord(
-    model.topology.repositories.map((repository) => [
-      repository.repositoryId,
-      Object.freeze(windowsByRepository.get(repository.repositoryId) ?? []),
-    ] as const),
-  );
   if (
     controllerWindow === undefined
     || designWindow === undefined
     || testWindow === undefined
   ) {
-    fail("topology", "$/topology/windows");
+    fail("topology", "$/pods");
   }
   return Object.freeze({
-    repositoryById: repositoryById as WakeflowConfigV3Indexes["repositoryById"],
-    surfaceById: surfaceById as WakeflowConfigV3Indexes["surfaceById"],
-    windowById: windowById as WakeflowConfigV3Indexes["windowById"],
-    windowsByRepositoryId: windowsByRepositoryId as WakeflowConfigV3Indexes["windowsByRepositoryId"],
+    pod,
+    windows: Object.freeze(windows),
     controllerWindow,
     designWindow,
     testWindow,
     productWindows: Object.freeze(productWindows),
+    windowsByRepositoryId: frozenRecord(
+      model.topology.repositories.map((repository) => [
+        repository.repositoryId,
+        Object.freeze(windowsByRepository.get(repository.repositoryId) ?? []),
+      ] as const),
+    ) as WakeflowConfigPodScope["windowsByRepositoryId"],
   });
 }

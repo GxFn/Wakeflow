@@ -33,7 +33,10 @@ goal: NonEmptyText
 completionDefinition: NonEmptyText
 demandType: ("requirement" | "bug" | "supplement" | "research")
 source: WakeflowRequirementLineageReference
-executionPlacement: (MainPlacement | IsolatedPlacement)
+/**
+ * The pod this Demand advances in (ADR-0010 D3); one pod advances one Demand at a time.
+ */
+podId: string
 }
 /**
  * 跨 Aggregate 绑定一份不可变需求包记录的可移植 ref/digest；Demand 身份以此记录来源需求包。
@@ -44,29 +47,6 @@ schemaVersion: 1
 requirementId: string
 recordRef: WakeflowPortableResourcePathText
 recordDigest: WakeflowSha256DigestText
-}
-export interface MainPlacement {
-mode: "main"
-}
-export interface IsolatedPlacement {
-mode: "isolated"
-authorizationRef: WakeflowLedgerAuthorityMemberReference
-}
-/**
- * 跨领域只读消费一份已验证需求包成员的完整 ref/digest 关系；成员角色为 requirement、landing 或 attachment。
- */
-export interface WakeflowLedgerAuthorityMemberReference {
-artifactKind: "wakeflow-ledger-authority-member-reference"
-schemaVersion: 1
-family: "requirement"
-recordId: string
-recordRef: WakeflowPortableResourcePathText
-recordDigest: WakeflowSha256DigestText
-memberPath: WakeflowPortableResourcePathText
-memberRef: WakeflowPortableResourcePathText
-memberDigest: WakeflowSha256DigestText
-role: ("requirement" | "landing" | "attachment")
-mediaType: string
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -90,4 +70,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_DEMAND_IDENTITY_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:demand:identity:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_IDENTITY_SCHEMA\",\"title\":\"WakeflowDemandIdentity\",\"description\":\"Demand Event Sourcing Aggregate 创建后不可变的 identity authority。\",\"$comment\":\"需求包谱系、isolated placement authorization 和 typed identity 的跨记录解析由 Demand identity codec 继续校验。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"programId\",\"demandId\",\"createdAt\",\"title\",\"goal\",\"completionDefinition\",\"demandType\",\"source\",\"executionPlacement\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-demand-identity\"},\"schemaVersion\":{\"const\":1},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"createdAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"title\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"goal\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"completionDefinition\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"demandType\":{\"enum\":[\"requirement\",\"bug\",\"supplement\",\"research\"]},\"source\":{\"$ref\":\"urn:wakeflow:governance:ledger:requirement-lineage:v1\"},\"executionPlacement\":{\"oneOf\":[{\"$ref\":\"#/$defs/mainPlacement\"},{\"$ref\":\"#/$defs/isolatedPlacement\"}]}},\"$defs\":{\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"nonEmptyText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":16384,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"mainPlacement\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\"],\"properties\":{\"mode\":{\"const\":\"main\"}}},\"isolatedPlacement\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\",\"authorizationRef\"],\"properties\":{\"mode\":{\"const\":\"isolated\"},\"authorizationRef\":{\"$ref\":\"urn:wakeflow:governance:ledger:authority-member-reference:v1\"}}}}}");
+export const WAKEFLOW_DEMAND_IDENTITY_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:demand:identity:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_IDENTITY_SCHEMA\",\"title\":\"WakeflowDemandIdentity\",\"description\":\"Demand Event Sourcing Aggregate 创建后不可变的 identity authority。\",\"$comment\":\"需求包谱系、pod 存在性（配置 pods[]）和 typed identity 的跨记录解析由 Demand identity codec 与 demand 切片继续校验。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"programId\",\"demandId\",\"createdAt\",\"title\",\"goal\",\"completionDefinition\",\"demandType\",\"source\",\"podId\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-demand-identity\"},\"schemaVersion\":{\"const\":1},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"createdAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"title\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"goal\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"completionDefinition\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"demandType\":{\"enum\":[\"requirement\",\"bug\",\"supplement\",\"research\"]},\"source\":{\"$ref\":\"urn:wakeflow:governance:ledger:requirement-lineage:v1\"},\"podId\":{\"$ref\":\"#/$defs/podId\",\"description\":\"The pod this Demand advances in (ADR-0010 D3); one pod advances one Demand at a time.\"}},\"$defs\":{\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"nonEmptyText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":16384,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"podId\":{\"type\":\"string\",\"pattern\":\"^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"}}}");

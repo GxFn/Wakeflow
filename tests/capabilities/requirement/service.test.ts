@@ -495,7 +495,6 @@ test("parked 包激活后被认领：create_demand 根先建后 CAS 认领，回
     title: "从激活的包创建",
     goal: "验证认领修订链。",
     completionDefinition: "回执带修订 3。",
-    executionPlacement: { mode: "main" },
   };
   const demandPreview = await executeDemandCreationRequest({
     root,
@@ -557,9 +556,13 @@ test("parked 包激活后被认领：create_demand 根先建后 CAS 认领，回
   if (secondDemandPreview.kind !== "WakeflowDemandCreationPreview")
     throw new Error("Expected a preview.");
   equal(secondDemandPreview.status, "blocked");
-  equal(secondDemandPreview.blockers.includes("active-demand-exists"), true);
+  equal(
+    secondDemandPreview.blockers.some((blocker) => blocker.startsWith("pod-busy:demand_")),
+    true,
+    secondDemandPreview.blockers.join(","),
+  );
   await rejects(
-    Promise.reject(new WakeflowError("precondition-failed", "active-demand-exists", "$board")),
-    (error: unknown) => error instanceof WakeflowError && error.reason === "active-demand-exists",
+    Promise.reject(new WakeflowError("precondition-failed", "pod-busy", "$board")),
+    (error: unknown) => error instanceof WakeflowError && error.reason === "pod-busy",
   );
 });

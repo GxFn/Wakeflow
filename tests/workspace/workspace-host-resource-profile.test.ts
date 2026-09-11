@@ -44,7 +44,11 @@ function codexProfile(
     instructionFileName: "AGENTS.md",
     surfaces: {
       windowIdentity: true,
-      podEvidence: true,
+      podReceipts: true,
+      worktree: {
+        launch: "codex-worktree-thread",
+        attachedDirectories: "prompt-path",
+      },
       keepLive: true,
       windowLocator: false,
       settingsIntegration: null,
@@ -59,7 +63,8 @@ function codexProfile(
 test("host resource profile keeps only matrix-shaping static surfaces", () => {
   deepEqual(WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES, [
     "windowIdentity",
-    "podEvidence",
+    "podReceipts",
+    "worktree",
     "keepLive",
     "windowLocator",
     "settingsIntegration",
@@ -75,7 +80,11 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
     instructionFileName: "AGENTS.md",
     surfaces: {
       windowIdentity: true,
-      podEvidence: true,
+      podReceipts: true,
+      worktree: {
+        launch: "codex-worktree-thread",
+        attachedDirectories: "prompt-path",
+      },
       keepLive: true,
       windowLocator: false,
       settingsIntegration: null,
@@ -100,7 +109,11 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
     instructionFileName: "CLAUDE.md",
     surfaces: {
       windowIdentity: true,
-      podEvidence: true,
+      podReceipts: true,
+      worktree: {
+        launch: "claude-worktree-flag",
+        attachedDirectories: "add-dir-flag",
+      },
       keepLive: true,
       windowLocator: true,
       settingsIntegration: {
@@ -143,7 +156,11 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
     () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
       surfaces: {
         windowIdentity: true,
-        podEvidence: true,
+        podReceipts: true,
+        worktree: {
+          launch: "codex-worktree-thread",
+          attachedDirectories: "prompt-path",
+        },
         keepLive: true,
         windowLocator: false,
         settingsIntegration: null,
@@ -174,7 +191,11 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
     () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
       surfaces: {
         windowIdentity: true,
-        podEvidence: true,
+        podReceipts: true,
+        worktree: {
+          launch: "codex-worktree-thread",
+          attachedDirectories: "prompt-path",
+        },
         keepLive: true,
         windowLocator: true,
         settingsIntegration: {
@@ -193,7 +214,11 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
     () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
       surfaces: {
         windowIdentity: true,
-        podEvidence: true,
+        podReceipts: true,
+        worktree: {
+          launch: "codex-worktree-thread",
+          attachedDirectories: "prompt-path",
+        },
         keepLive: true,
         windowLocator: true,
         settingsIntegration: {
@@ -213,7 +238,11 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
     () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
       surfaces: {
         windowIdentity: true,
-        podEvidence: true,
+        podReceipts: true,
+        worktree: {
+          launch: "codex-worktree-thread",
+          attachedDirectories: "prompt-path",
+        },
         keepLive: true,
         windowLocator: true,
         settingsIntegration: {
@@ -271,7 +300,11 @@ test("host resource profile closes relations without encoding host capability br
     () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
       surfaces: {
         windowIdentity: true,
-        podEvidence: true,
+        podReceipts: true,
+        worktree: {
+          launch: "claude-worktree-flag",
+          attachedDirectories: "add-dir-flag",
+        },
         keepLive: true,
         windowLocator: true,
         settingsIntegration: {
@@ -290,7 +323,11 @@ test("host resource profile closes relations without encoding host capability br
     () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
       surfaces: {
         windowIdentity: true,
-        podEvidence: true,
+        podReceipts: true,
+        worktree: {
+          launch: "codex-worktree-thread",
+          attachedDirectories: "prompt-path",
+        },
         keepLive: true,
         windowLocator: false,
         settingsIntegration: null,
@@ -309,7 +346,11 @@ test("host resource profile closes relations without encoding host capability br
     parseWakeflowWorkspaceHostResourceProfile(codexProfile({
       surfaces: {
         windowIdentity: false,
-        podEvidence: false,
+        podReceipts: false,
+        worktree: {
+          launch: "codex-worktree-thread",
+          attachedDirectories: "prompt-path",
+        },
         keepLive: false,
         windowLocator: true,
         settingsIntegration: {

@@ -71,17 +71,17 @@ function draft(tree: Readonly<LoadedArtifactTreeManifest>) {
     programId: IDS.program,
     demandId: IDS.demand,
     demandAuthorityDigest: AUTHORITY_DIGEST,
-    evidenceType: "test-output",
+    kind: "test-output",
     recordedBy: {
       windowId: IDS.window,
       configDigest: CONFIG_DIGEST,
     },
     source: {
+      kind: "managed-path" as const,
       root: { kind: "repository" as const, repositoryId: IDS.repository },
       path: "artifacts/test-output",
       resourceType: "tree" as const,
     },
-    sensitivity: "internal" as const,
     payload: {
       artifactDigest: computeCanonicalJsonSha256Digest(tree),
       treeManifest: tree,
@@ -89,6 +89,7 @@ function draft(tree: Readonly<LoadedArtifactTreeManifest>) {
     contentReview: {
       disposition: "not-required" as const,
       opaqueFileRefs: [] as const,
+    privacyFindings: [],
     },
   };
 }

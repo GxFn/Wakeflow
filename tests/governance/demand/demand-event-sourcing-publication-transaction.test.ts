@@ -84,7 +84,7 @@ test("Demand Event Sourcing publication transaction 自包含 initial command �
       recordRef: `requirements/${REQUIREMENT_ID}/record.json`,
       recordDigest: DIGEST,
     }),
-    executionPlacement: { mode: "main" },
+    podId: "pod_99999999-9999-4999-8999-999999999999",
   }, { clock: () => CREATED_AT });
   const authority = createDemandAuthority(identity, {
     authorityRefs: PACKAGE_MEMBERS.map(authorityReference),

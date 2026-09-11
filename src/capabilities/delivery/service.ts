@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -45,6 +47,10 @@ import {
   type DemandOperationAuthorityContext,
 } from "../../governance/demand/demand-operation-authority-context.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import {
+  listPodWorktreeReceipts,
+  readPodWorktreeReceipt,
+} from "../../kernel/pod-worktree-receipts.js";
 import {
   DemandEventSourcingCommandHandlerError,
   executeDemandEventSourcingCommand,
@@ -117,7 +123,10 @@ import {
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
-import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
+import {
+  compileWakeflowWindowLaunchIntents,
+  type WakeflowWindowLaunchIntent,
+} from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import {
   admitPrepareDeliveryResult,
@@ -183,6 +192,11 @@ interface WindowRoute {
   readonly handleDigest: Sha256Digest;
   readonly displayTitle: string;
   readonly configuredPlacement: string;
+  readonly podId: string;
+  readonly podName: string;
+  readonly podPlacement: "primary" | "worktree";
+  /** worktree pod 产品窗口的检出 realpath（来自回执，只在内存里，从不进入 prompt 或结果）。 */
+  readonly worktreePath: string | null;
 }
 
 interface CommandOutcome {
@@ -428,7 +442,61 @@ async function loadRoute(context: SliceContext, windowId: string): Promise<Windo
     handleDigest: computeSha256Digest(encodeUtf8(binding.handle.value, "$handle"), "$handle"),
     displayTitle: intent.displayTitle,
     configuredPlacement: intent.root.configuredPlacement,
+    podId: intent.podId,
+    podName: intent.podName,
+    podPlacement: intent.podPlacement,
+    worktreePath: await worktreePathFor(context, intent, binding),
   });
+}
+
+/** worktree pod 的产品窗口：投递准备要求 worktree 回执存在且与当前绑定同代（能力卡 6，ADR-0010）。 */
+async function worktreePathFor(
+  context: SliceContext,
+  intent: Readonly<WakeflowWindowLaunchIntent>,
+  binding: Readonly<WakeflowWindowHostBinding>,
+): Promise<string | null> {
+  if (intent.worktree === null) return null;
+  const receipt = await readPodWorktreeReceipt(
+    context.workspaceRoot,
+    context.facade.hostId,
+    intent.podId,
+    intent.worktree.repositoryId,
+    signalOptions(context.options.signal),
+  );
+  if (receipt === null) {
+    fail("precondition-failed", "worktree-receipt-missing", "$request.targetTaskId");
+  }
+  if (receipt.bindingId !== binding.bindingId) {
+    fail("precondition-failed", "worktree-receipt-stale", "$request.targetTaskId");
+  }
+  return receipt.path;
+}
+
+/** Test 窗口以附加目录方式读 pod 的 worktree：每仓库一条相对本窗口根的路径（ADR-0010 D4）。 */
+async function attachedWorktreesFor(
+  context: SliceContext,
+  taskPackage: Readonly<TaskPackage>,
+  route: Readonly<WindowRoute>,
+): Promise<
+  readonly Readonly<{ readonly repositoryId: string; readonly pathFromWindow: string }>[]
+> {
+  if (taskPackage.workType !== "test" || route.podPlacement !== "worktree")
+    return Object.freeze([]);
+  const receipts = await listPodWorktreeReceipts(
+    context.workspaceRoot,
+    context.facade.hostId,
+    route.podId,
+    signalOptions(context.options.signal),
+  );
+  const windowRoot = path.resolve(context.workspaceRoot.absolutePath, route.configuredPlacement);
+  return Object.freeze(
+    receipts.map((receipt) =>
+      Object.freeze({
+        repositoryId: receipt.repositoryId,
+        pathFromWindow: path.relative(windowRoot, receipt.path),
+      }),
+    ),
+  );
 }
 
 // ---- 事件流 -------------------------------------------------------------------
@@ -753,6 +821,10 @@ function testContractSection(
 interface PromptSources {
   readonly taskPackage: Readonly<TaskPackage>;
   readonly route: Readonly<WindowRoute>;
+  readonly attachedWorktrees: readonly Readonly<{
+    readonly repositoryId: string;
+    readonly pathFromWindow: string;
+  }>[];
   readonly rework: ReturnType<typeof createTargetDeliveryReworkContext> | null;
   readonly remediation: ReturnType<
     typeof createTargetDeliveryProductDefectRemediationContext
@@ -786,13 +858,17 @@ function renderPrompt(
     },
     identity: {
       demandId: taskPackage.demandId,
-      podId: "primary",
+      podId: `${route.podName} (${route.podId})`,
       windowId: route.binding.windowId,
       repositoryId,
       bindingId: route.binding.bindingId,
     },
     readingOrder: {
-      workspaceRootFromWindow: relativeWorkspaceRoot(route.configuredPlacement),
+      workspaceRootFromWindow:
+        route.worktreePath === null
+          ? relativeWorkspaceRoot(route.configuredPlacement)
+          : path.relative(route.worktreePath, context.workspaceRoot.absolutePath),
+      attachedWorktrees: sources.attachedWorktrees,
       taskPackageRef: deliveryTaskPackageRef(taskPackage.demandId, taskPackage.taskPackageId),
       requirementSections:
         taskPackage.workType === "implementation" ? taskPackage.sectionAnchors : [],
@@ -955,6 +1031,7 @@ async function prepareSources(
   binding: Readonly<AppendCommandBinding>,
 ): Promise<PrepareSources> {
   const signal = context.options.signal;
+  const attachedWorktrees = await attachedWorktreesFor(context, taskPackage, route);
   if (taskPackage.workType === "test") {
     const testAttemptId = deriveDurableId(
       "test-attempt",
@@ -967,6 +1044,7 @@ async function prepareSources(
       prompt: {
         taskPackage,
         route,
+        attachedWorktrees,
         rework: null,
         remediation: null,
         testContract: testContractSection(taskPackage, attempt),
@@ -981,7 +1059,14 @@ async function prepareSources(
       const reworkSource = await loadReworkSource(repository, target, signal);
       const rework = createTargetDeliveryReworkContext(reworkSource);
       return Object.freeze({
-        prompt: { taskPackage, route, rework, remediation: null, testContract: null },
+        prompt: {
+          taskPackage,
+          route,
+          attachedWorktrees,
+          rework,
+          remediation: null,
+          testContract: null,
+        },
         attempt: null,
         reworkSource,
         remediationSource: null,
@@ -991,7 +1076,14 @@ async function prepareSources(
       const remediationSource = await loadRemediationSource(repository, target, signal);
       const remediation = createTargetDeliveryProductDefectRemediationContext(remediationSource);
       return Object.freeze({
-        prompt: { taskPackage, route, rework: null, remediation, testContract: null },
+        prompt: {
+          taskPackage,
+          route,
+          attachedWorktrees,
+          rework: null,
+          remediation,
+          testContract: null,
+        },
         attempt: null,
         reworkSource: null,
         remediationSource,
@@ -1001,7 +1093,14 @@ async function prepareSources(
     mapRecordError(error, "$request.targetTaskId");
   }
   return Object.freeze({
-    prompt: { taskPackage, route, rework: null, remediation: null, testContract: null },
+    prompt: {
+      taskPackage,
+      route,
+      attachedWorktrees,
+      rework: null,
+      remediation: null,
+      testContract: null,
+    },
     attempt: null,
     reworkSource: null,
     remediationSource: null,

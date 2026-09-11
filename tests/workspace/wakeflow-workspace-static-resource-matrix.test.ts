@@ -50,8 +50,8 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
   // 共享目录相对 L0 的 43/51 变化：TODO 集合的 5 条声明（看板投影、集合锁、items、
   // 根、transactions）删除，需求看板加 2 条（`board/` 目录与 `board/index.md` 索引），
   // Ledger 的 `confirmations/` 根随 confirmation family 删除减 1；宿主目录不变。
-  equal(codex.declarations.length, 40);
-  equal(claude.declarations.length, 48);
+  equal(codex.declarations.length, 39);
+  equal(claude.declarations.length, 47);
 
   const expectedSharedIds = sorted(
     [
@@ -143,7 +143,11 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
     instructionFileName: "wakeflow.config.json",
     surfaces: {
       windowIdentity: false,
-      podEvidence: false,
+      podReceipts: false,
+      worktree: {
+        launch: "codex-worktree-thread",
+        attachedDirectories: "prompt-path",
+      },
       keepLive: false,
       windowLocator: false,
       settingsIntegration: null,

@@ -89,17 +89,17 @@ export function createManagedEvidenceCapturePlanFixture() {
       programId: ids.program,
       demandId: ids.demand,
       demandAuthorityDigest: digests.authority,
-      evidenceType: "test-output",
+      kind: "test-output",
       recordedBy: {
         windowId: ids.window,
         configDigest: digests.config,
       },
       source: {
+        kind: "managed-path" as const,
         root: { kind: "repository", repositoryId: ids.repository },
         path: "artifacts/result.txt",
         resourceType: "file",
       },
-      sensitivity: "internal",
       payload: {
         artifactDigest: computeCanonicalJsonSha256Digest(treeManifest),
         treeManifest,
@@ -107,6 +107,7 @@ export function createManagedEvidenceCapturePlanFixture() {
       contentReview: {
         disposition: "not-required",
         opaqueFileRefs: [],
+      privacyFindings: [],
       },
     },
     { clock: () => MANAGED_EVIDENCE_PUBLICATION_TEST_CAPTURED_AT },

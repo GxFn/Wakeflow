@@ -263,6 +263,7 @@ authorizedAt: WakeflowUtcInstantText
 }
 export interface ManagedEvidenceSummary {
 evidenceId: string
+kind: ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")
 manifestDigest: WakeflowSha256DigestText
 payloadArtifactDigest: WakeflowSha256DigestText
 }

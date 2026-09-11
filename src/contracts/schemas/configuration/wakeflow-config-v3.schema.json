@@ -13,6 +13,7 @@
     "program",
     "presentation",
     "topology",
+    "pods",
     "storage",
     "governance",
     "hosts"
@@ -43,6 +44,9 @@
     },
     "topology": {
       "$ref": "#/$defs/topology"
+    },
+    "pods": {
+      "$ref": "#/$defs/pods"
     },
     "storage": {
       "$ref": "#/$defs/storage"
@@ -192,7 +196,7 @@
       }
     },
     "topology": {
-      "description": "Durable product repositories, Design/Test support surfaces, and stable logical windows connected only through typed references.",
+      "description": "Durable product repositories, Design/Test support surfaces, and stable logical windows connected only through typed references; every window names its pod.",
       "examples": [
         {
           "repositories": [
@@ -222,6 +226,7 @@
           "windows": [
             {
               "windowId": "window_55555555-5555-4555-8555-555555555555",
+              "podId": "pod_99999999-9999-4999-8999-999999999999",
               "role": "controller",
               "displayName": "Controller",
               "root": {
@@ -230,6 +235,7 @@
             },
             {
               "windowId": "window_66666666-6666-4666-8666-666666666666",
+              "podId": "pod_99999999-9999-4999-8999-999999999999",
               "role": "design",
               "displayName": "Design",
               "root": {
@@ -239,6 +245,7 @@
             },
             {
               "windowId": "window_77777777-7777-4777-8777-777777777777",
+              "podId": "pod_99999999-9999-4999-8999-999999999999",
               "role": "test",
               "displayName": "Test",
               "root": {
@@ -248,6 +255,7 @@
             },
             {
               "windowId": "window_88888888-8888-4888-8888-888888888888",
+              "podId": "pod_99999999-9999-4999-8999-999999999999",
               "role": "product",
               "displayName": "Product A",
               "root": {
@@ -340,11 +348,12 @@
         "windows": {
           "type": "array",
           "minItems": 4,
-          "description": "Stable logical windows with exactly one controller, one Design, one Test, and at least one product window; dynamic Pod windows are excluded.",
+          "description": "Stable logical windows of every pod: per pod exactly one controller, one Design, one Test, and at least one product window (a worktree pod holds exactly one per repository); the strict loader validates the per-pod cardinality.",
           "examples": [
             [
               {
                 "windowId": "window_55555555-5555-4555-8555-555555555555",
+                "podId": "pod_99999999-9999-4999-8999-999999999999",
                 "role": "controller",
                 "displayName": "Controller",
                 "root": {
@@ -353,6 +362,7 @@
               },
               {
                 "windowId": "window_66666666-6666-4666-8666-666666666666",
+                "podId": "pod_99999999-9999-4999-8999-999999999999",
                 "role": "design",
                 "displayName": "Design",
                 "root": {
@@ -362,6 +372,7 @@
               },
               {
                 "windowId": "window_77777777-7777-4777-8777-777777777777",
+                "podId": "pod_99999999-9999-4999-8999-999999999999",
                 "role": "test",
                 "displayName": "Test",
                 "root": {
@@ -371,6 +382,7 @@
               },
               {
                 "windowId": "window_88888888-8888-4888-8888-888888888888",
+                "podId": "pod_99999999-9999-4999-8999-999999999999",
                 "role": "product",
                 "displayName": "Product A",
                 "root": {
@@ -385,7 +397,7 @@
           },
           "allOf": [
             {
-              "description": "Exactly one durable controller window is required.",
+              "description": "At least one durable controller window is required; exactly one per pod is a codec rule.",
               "contains": {
                 "type": "object",
                 "properties": {
@@ -395,11 +407,10 @@
                 },
                 "required": ["role"]
               },
-              "minContains": 1,
-              "maxContains": 1
+              "minContains": 1
             },
             {
-              "description": "Exactly one durable Design window is required.",
+              "description": "At least one durable design window is required; exactly one per pod is a codec rule.",
               "contains": {
                 "type": "object",
                 "properties": {
@@ -409,11 +420,10 @@
                 },
                 "required": ["role"]
               },
-              "minContains": 1,
-              "maxContains": 1
+              "minContains": 1
             },
             {
-              "description": "Exactly one durable Test window is required.",
+              "description": "At least one durable test window is required; exactly one per pod is a codec rule.",
               "contains": {
                 "type": "object",
                 "properties": {
@@ -423,11 +433,10 @@
                 },
                 "required": ["role"]
               },
-              "minContains": 1,
-              "maxContains": 1
+              "minContains": 1
             },
             {
-              "description": "At least one durable product window is required.",
+              "description": "At least one durable product window is required; exactly one per pod is a codec rule.",
               "contains": {
                 "type": "object",
                 "properties": {
@@ -693,10 +702,11 @@
       ]
     },
     "controllerWindow": {
-      "description": "The single durable Controller window rooted at the program boundary.",
+      "description": "One durable Controller window rooted at the program boundary; exactly one per pod.",
       "examples": [
         {
           "windowId": "window_55555555-5555-4555-8555-555555555555",
+          "podId": "pod_99999999-9999-4999-8999-999999999999",
           "role": "controller",
           "displayName": "Controller",
           "root": {
@@ -706,10 +716,14 @@
       ],
       "type": "object",
       "additionalProperties": false,
-      "required": ["windowId", "role", "displayName", "root"],
+      "required": ["windowId", "podId", "role", "displayName", "root"],
       "properties": {
         "windowId": {
           "$ref": "#/$defs/windowId"
+        },
+        "podId": {
+          "$ref": "#/$defs/podId",
+          "description": "The pod this window belongs to; every window is a member of exactly one pod (ADR-0010)."
         },
         "role": {
           "const": "controller",
@@ -732,10 +746,11 @@
       }
     },
     "designWindow": {
-      "description": "The single durable Design window, referencing a design-capable support surface by surfaceId.",
+      "description": "One durable Design window per pod, referencing a design-capable support surface by surfaceId.",
       "examples": [
         {
           "windowId": "window_66666666-6666-4666-8666-666666666666",
+          "podId": "pod_99999999-9999-4999-8999-999999999999",
           "role": "design",
           "displayName": "Design",
           "root": {
@@ -746,10 +761,14 @@
       ],
       "type": "object",
       "additionalProperties": false,
-      "required": ["windowId", "role", "displayName", "root"],
+      "required": ["windowId", "podId", "role", "displayName", "root"],
       "properties": {
         "windowId": {
           "$ref": "#/$defs/windowId"
+        },
+        "podId": {
+          "$ref": "#/$defs/podId",
+          "description": "The pod this window belongs to; every window is a member of exactly one pod (ADR-0010)."
         },
         "role": {
           "const": "design",
@@ -772,10 +791,11 @@
       }
     },
     "testWindow": {
-      "description": "The single durable Test window, referencing a test-capable support surface by surfaceId.",
+      "description": "One durable Test window per pod, referencing a test-capable support surface by surfaceId.",
       "examples": [
         {
           "windowId": "window_77777777-7777-4777-8777-777777777777",
+          "podId": "pod_99999999-9999-4999-8999-999999999999",
           "role": "test",
           "displayName": "Test",
           "root": {
@@ -786,10 +806,14 @@
       ],
       "type": "object",
       "additionalProperties": false,
-      "required": ["windowId", "role", "displayName", "root"],
+      "required": ["windowId", "podId", "role", "displayName", "root"],
       "properties": {
         "windowId": {
           "$ref": "#/$defs/windowId"
+        },
+        "podId": {
+          "$ref": "#/$defs/podId",
+          "description": "The pod this window belongs to; every window is a member of exactly one pod (ADR-0010)."
         },
         "role": {
           "const": "test",
@@ -812,10 +836,11 @@
       }
     },
     "productWindow": {
-      "description": "A durable product-responsibility window referencing one stable repository; multiple product windows may share that repository.",
+      "description": "A durable product-responsibility window referencing one stable repository; the primary pod may hold several per repository, a worktree pod holds exactly one per repository.",
       "examples": [
         {
           "windowId": "window_88888888-8888-4888-8888-888888888888",
+          "podId": "pod_99999999-9999-4999-8999-999999999999",
           "role": "product",
           "displayName": "Product A",
           "root": {
@@ -826,10 +851,14 @@
       ],
       "type": "object",
       "additionalProperties": false,
-      "required": ["windowId", "role", "displayName", "root"],
+      "required": ["windowId", "podId", "role", "displayName", "root"],
       "properties": {
         "windowId": {
           "$ref": "#/$defs/windowId"
+        },
+        "podId": {
+          "$ref": "#/$defs/podId",
+          "description": "The pod this window belongs to; every window is a member of exactly one pod (ADR-0010)."
         },
         "role": {
           "const": "product",
@@ -1329,6 +1358,185 @@
           "examples": ["wakeflow-example"]
         }
       }
+    },
+    "podId": {
+      "type": "string",
+      "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "Stable pod identity: the pod_ prefix followed by a lowercase UUID v4.",
+      "examples": ["pod_99999999-9999-4999-8999-999999999999"]
+    },
+    "podName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$",
+      "description": "Short host-safe pod name used for worktree naming and window labels; unique among live pods, never an identity key.",
+      "examples": ["main", "feature-cache"]
+    },
+    "worktreeName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$",
+      "description": "Suggested host worktree name (wakeflow-<pod name>); the host derives its branch and checkout path from it.",
+      "examples": ["wakeflow-feature-cache"]
+    },
+    "gitBranchName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$",
+      "description": "Git branch name as reported by the product window."
+    },
+    "utcInstant": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 30,
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$",
+      "description": "UTC instant in RFC 3339 form with a trailing Z."
+    },
+    "podWorktree": {
+      "description": "One product-window worktree intent of a worktree pod: the repository, the pod's product window that owns the checkout, and the suggested host worktree name. The actual path, HEAD and branch live in the host-local receipt, never here.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryId", "windowId", "suggestedName"],
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "suggestedName": {
+          "$ref": "#/$defs/worktreeName"
+        }
+      }
+    },
+    "podClosingBranch": {
+      "description": "The Controller's recorded disposition of one worktree branch when the pod entered closing.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryId", "branch", "disposition"],
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "branch": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/gitBranchName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Branch as known from the worktree receipt; null when the checkout was still detached."
+        },
+        "disposition": {
+          "enum": ["merged", "abandoned"]
+        }
+      }
+    },
+    "podClosing": {
+      "description": "Present only while lifecycle is closing: when closing was requested and how each worktree branch was disposed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestedAt", "branches"],
+      "properties": {
+        "requestedAt": {
+          "$ref": "#/$defs/utcInstant"
+        },
+        "branches": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/podClosingBranch"
+          }
+        }
+      }
+    },
+    "pod": {
+      "description": "One pod: the only execution-environment abstraction (ADR-0010). The primary pod runs in the main checkouts; a worktree pod runs each repository in its own git worktree. States creating/ready/closed are derived from receipts; only the Controller's open/closing decision is durable.",
+      "examples": [
+        {
+          "podId": "pod_99999999-9999-4999-8999-999999999999",
+          "name": "main",
+          "placement": "primary",
+          "lifecycle": "open",
+          "worktrees": [],
+          "closing": null
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["podId", "name", "placement", "lifecycle", "worktrees", "closing"],
+      "properties": {
+        "podId": {
+          "$ref": "#/$defs/podId"
+        },
+        "name": {
+          "$ref": "#/$defs/podName"
+        },
+        "placement": {
+          "enum": ["primary", "worktree"],
+          "description": "primary executes in the main checkouts and exists exactly once; worktree executes in per-repository git worktrees."
+        },
+        "lifecycle": {
+          "enum": ["open", "closing"],
+          "description": "open accepts Demands; closing accepts no new Demand and waits for window decommission and worktree disposal."
+        },
+        "worktrees": {
+          "type": "array",
+          "maxItems": 64,
+          "description": "Empty for the primary pod; one entry per repository for a worktree pod.",
+          "items": {
+            "$ref": "#/$defs/podWorktree"
+          }
+        },
+        "closing": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/podClosing"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "pods": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "description": "Live pods. Exactly one primary pod (generated by fresh-initialize as main); worktree pods are created and removed only through wakeflow_pod, never through reconfigure.",
+      "examples": [
+        [
+          {
+            "podId": "pod_99999999-9999-4999-8999-999999999999",
+            "name": "main",
+            "placement": "primary",
+            "lifecycle": "open",
+            "worktrees": [],
+            "closing": null
+          }
+        ]
+      ],
+      "items": {
+        "$ref": "#/$defs/pod"
+      },
+      "allOf": [
+        {
+          "description": "Exactly one primary pod is required.",
+          "contains": {
+            "type": "object",
+            "properties": {
+              "placement": {
+                "const": "primary"
+              }
+            },
+            "required": ["placement"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
     }
   }
 }

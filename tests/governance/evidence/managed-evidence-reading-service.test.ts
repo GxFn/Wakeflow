@@ -33,6 +33,7 @@ import {
   EVIDENCE_CAPTURED_AT,
   EVIDENCE_DEMAND_ID,
   EVIDENCE_REPOSITORY_ID,
+  readyCapturePlan,
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
 } from "./managed-evidence-capture-planning-service.fixture.js";
 
@@ -62,29 +63,23 @@ async function publishEvidence(
     readonly path: string;
     readonly resourceType: "file" | "tree";
   }>,
-  opaqueContentPolicy: "controller-confirmed" | "reject",
+  contentReview: "controller-confirmed" | "reject",
 ) {
-  const capturePlan = await new ManagedEvidenceCapturePlanningService(
-    fixture.publication.workspaceRoot,
-  ).preview(
-    EVIDENCE_DEMAND_ID,
-    {
-      evidenceType: "test-output",
-      source: {
-        root: {
-          kind: "repository",
-          repositoryId: EVIDENCE_REPOSITORY_ID,
+  const capturePlan = readyCapturePlan(
+    await new ManagedEvidenceCapturePlanningService(fixture.publication.workspaceRoot).preview(
+      EVIDENCE_DEMAND_ID,
+      {
+        kind: "test-output",
+        source: {
+          kind: "managed-path",
+          root: { kind: "repository", repositoryId: EVIDENCE_REPOSITORY_ID },
+          path: source.path,
+          resourceType: source.resourceType,
         },
-        path: source.path,
-        resourceType: source.resourceType,
+        contentReview,
       },
-      sensitivity: "internal",
-      opaqueContentPolicy,
-    },
-    {
-      uuidFactory: () => "e3333333-3333-4333-8333-333333333333",
-      clock: () => EVIDENCE_CAPTURED_AT,
-    },
+      { clock: () => EVIDENCE_CAPTURED_AT },
+    ),
   );
   const transaction = createManagedEvidencePublicationTransaction({
     capturePlan,

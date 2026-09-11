@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:governance:archive:demand-archive-manifest:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_ARCHIVE_MANIFEST_SCHEMA",
   "title": "WakeflowDemandArchiveManifest",
-  "description": "一个已完成或已取消 Demand 的归档包清单：谱系、终态事件回执、verify 摘要、负载树摘要（ADR-0012 D3，能力卡 8）。",
+  "description": "一个已完成或已取消 Demand 的归档包清单：谱系、终态事件回执、verify 摘要、负载树摘要、执行 pod 与 worktree 来源成员（ADR-0012 D3，能力卡 8，ADR-0010 D7）。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,6 +17,7 @@
     "terminalEvent",
     "archivedAt",
     "controllerWindowId",
+    "podId",
     "package",
     "verify",
     "payload",
@@ -74,6 +75,9 @@
     "controllerWindowId": {
       "type": "string",
       "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "podId": {
+      "$ref": "#/$defs/podId"
     },
     "package": {
       "type": "object",
@@ -148,10 +152,80 @@
       }
     },
     "worktree": {
-      "type": "null"
+      "description": "Worktree source member: null for the primary pod; for a worktree pod the pod identity and, per repository, the suggested name plus branch and HEAD from the registration receipt. Never a path.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["podId", "name", "placement", "repositories"],
+          "properties": {
+            "podId": {
+              "$ref": "#/$defs/podId"
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,31}$"
+            },
+            "placement": {
+              "const": "worktree"
+            },
+            "repositories": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["repositoryId", "suggestedName", "branch", "head"],
+                "properties": {
+                  "repositoryId": {
+                    "type": "string",
+                    "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                  },
+                  "suggestedName": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                  },
+                  "branch": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "head": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "manifestDigest": {
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "podId": {
+      "type": "string",
+      "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     }
   }
 }

@@ -45,7 +45,7 @@
 | 项 | Codex | Claude Code |
 | --- | --- | --- |
 | 指令文件 | `AGENTS.md` | `CLAUDE.md` |
-| 宿主运行目录 | `runtime/hosts/codex/`：window-bindings、window-runtime 投影、evidence/pods、keep-live | `runtime/hosts/claude-code/`：以上加 window-locators、assets/statusline.mjs、activity-monitor、temp/prompts |
+| 宿主运行目录 | `runtime/hosts/codex/`：window-bindings、window-runtime 投影、pods（worktree 回执，2026-09-10 pod 切片 9 取代 evidence/pods）、keep-live | `runtime/hosts/claude-code/`：以上加 window-locators、assets/statusline.mjs、activity-monitor、temp/prompts |
 | settings | 不适用 | `permissions.allow` 写 4 条：`mcp__plugin_wakeflow_wakeflow`、`Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`；`settings.local.json` 只写 statusLine 命令；`.claude/` 目录 0700 |
 | statusline | 不适用 | 安装 `statusline.mjs` 0600，命令带 base64url 编码的根路径；规划前做一次有界 smoke 并检查敏感内容 |
 | 激活范围 | 永远 `unknown`，无人值守 `forbidden`，Codex 没有安装覆盖范围 API | 按 settings 来源分 per-workspace、host-wide、unknown |
@@ -209,4 +209,4 @@
 | 问题 | 裁决 | 落点 |
 | --- | --- | --- |
 | Q11 工作区根与产品仓库根 | 必须是不同目录；同目录一律拒绝初始化，理由是产品 worktree 会带着 Controller 规则文件（ADR-0010 后果） | 1.1 不变量；fresh-initialize 拒绝规则 |
-| Q12 pods 拓扑 | `wakeflow.config.json` 增加 `pods[]`，初始化生成 `placement: primary` 的 `main`；pod 创建与关闭走配置事务（ADR-0010 D1、D6） | 1.2；config schema |
+| Q12 pods 拓扑 | `wakeflow.config.json` 增加 `pods[]`，初始化生成 `placement: primary` 的 `main`；pod 创建与关闭走配置事务（ADR-0010 D1、D6）。已落地 2026-09-10（pod 切片 9）：`pods[]{podId, name, placement, lifecycle: open \| closing, worktrees[], closing}`，每个窗口带 `podId`，codec 按 pod 分组校验基数，reconfigure 对 `pods` 差异报 `reconfigure-pods-change-unsupported`；gate-log §13.92 | 1.2；config schema |

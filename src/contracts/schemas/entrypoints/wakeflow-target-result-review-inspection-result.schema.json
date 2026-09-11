@@ -1882,7 +1882,15 @@
       "pattern": "^product-defect-remediation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "evidenceKind": {
-      "enum": ["test-output", "diff", "document", "transcript", "commit"]
+      "enum": [
+        "hook-observation",
+        "transcript",
+        "test-output",
+        "diff",
+        "document",
+        "link",
+        "commit"
+      ]
     },
     "branchName": {
       "type": "string",

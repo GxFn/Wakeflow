@@ -540,6 +540,10 @@ export async function previewWakeflowStaticMaterialization(
     ) {
       addBlocker(blockers, "reconfigure-layout-change-unsupported");
     }
+    // pod 记录只由 wakeflow_pod 的配置事务改写（ADR-0010 D6）。
+    if (!sameSemanticSection(current.model.pods, desired.pods)) {
+      addBlocker(blockers, "reconfigure-pods-change-unsupported");
+    }
   }
 
   let placements: Readonly<WakeflowConfigRootPlacementReport> | null = null;

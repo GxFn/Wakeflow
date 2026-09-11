@@ -19,7 +19,7 @@
 
 **不变量**：信封摘要覆盖除自身外的全部字段；prompt 逐字节贯穿 packet、信封、许可；一个投递只允许一次宿主效果，靠 `oneShot`、唯一的 claim 转换和"只有这个状态修订能跨越宿主效果边界"保证；多目标计划禁止任何成员已有 `currentDelivery`。
 
-**现 TS 状态**（2026-09-10，gate-log §13.84）：`wakeflow_prepare_delivery` 一次调用取得窗口工作声明（内核 `kernel/work-claims.ts`）、追加 `delivery.delivery-prepared.v1` 信封并返回一次性许可 `permit{prompt, hostAction{effect: send-prompt-to-window, hostId, windowId, displayTitle, bindingId, handleDigest}, fence{claimId, claimDigest, streamRevision}, issuedAt}`；实现与 test 目标共用；请求只带 `authored{goal, focus, boundary}`，prompt 骨架由 Wakeflow 渲染且只含相对路径；旧的 preview、apply、claim 三段与 Agent 窗口观察前置删除。
+**现 TS 状态**（2026-09-10，gate-log §13.84）：`wakeflow_prepare_delivery` 一次调用取得窗口工作声明（内核 `kernel/work-claims.ts`）、追加 `delivery.delivery-prepared.v1` 信封并返回一次性许可 `permit{prompt, hostAction{effect: send-prompt-to-window, hostId, windowId, displayTitle, bindingId, handleDigest}, fence{claimId, claimDigest, streamRevision}, issuedAt}`；实现与 test 目标共用；请求只带 `authored{goal, focus, boundary}`，prompt 骨架由 Wakeflow 渲染且只含相对路径；旧的 preview、apply、claim 三段与 Agent 窗口观察前置删除。2026-09-10 pod 切片 9：投递目标是任务包分配的 pod 窗口，worktree pod 的产品窗口要求 worktree 回执存在且与当前绑定同代（`worktree-receipt-missing | worktree-receipt-stale`）；prompt 身份段写 `pod: <name> (<podId>)`，工作区根按回执路径相对计算，测试任务 prompt 列出每仓库 worktree 的相对路径；回调落到 Demand 所在 pod 的 Controller。
 
 **实现判断**：按 ADR-0009，许可里增加围栏令牌，即声明摘要与事件流修订号，并进入信封与结果；`readbackPolicy.maxObservations = 1` 作为记录级常量保留；prompt 上限 65,536 字符进入记录合同；controller 系列操作按 6.4 处理。
 

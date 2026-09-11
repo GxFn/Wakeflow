@@ -52,7 +52,10 @@ goal: string
 completionDefinition: string
 demandType: ("requirement" | "bug" | "supplement" | "research")
 source: WakeflowRequirementLineageReference
-executionPlacement: (MainPlacement | IsolatedPlacement)
+/**
+ * The pod this Demand advances in (ADR-0010 D3); one pod advances one Demand at a time.
+ */
+podId: string
 }
 /**
  * 跨 Aggregate 绑定一份不可变需求包记录的可移植 ref/digest；Demand 身份以此记录来源需求包。
@@ -64,12 +67,20 @@ requirementId: string
 recordRef: WakeflowPortableResourcePathText
 recordDigest: WakeflowSha256DigestText
 }
-export interface MainPlacement {
-mode: "main"
-}
-export interface IsolatedPlacement {
-mode: "isolated"
-authorizationRef: WakeflowLedgerAuthorityMemberReference
+/**
+ * Demand publication 时必须存在并永久冻结的 Ledger authority closure。
+ */
+export interface WakeflowDemandAuthority {
+artifactKind: "wakeflow-demand-authority"
+schemaVersion: 1
+demandId: string
+identityDigest: WakeflowSha256DigestText
+/**
+ * @minItems 1
+ * @maxItems 32
+ */
+authorityRefs: [WakeflowLedgerAuthorityMemberReference, ...(WakeflowLedgerAuthorityMemberReference)[]]
+testingDecision: TestingDecision
 }
 /**
  * 跨领域只读消费一份已验证需求包成员的完整 ref/digest 关系；成员角色为 requirement、landing 或 attachment。
@@ -86,21 +97,6 @@ memberRef: WakeflowPortableResourcePathText
 memberDigest: WakeflowSha256DigestText
 role: ("requirement" | "landing" | "attachment")
 mediaType: string
-}
-/**
- * Demand publication 时必须存在并永久冻结的 Ledger authority closure。
- */
-export interface WakeflowDemandAuthority {
-artifactKind: "wakeflow-demand-authority"
-schemaVersion: 1
-demandId: string
-identityDigest: WakeflowSha256DigestText
-/**
- * @minItems 1
- * @maxItems 32
- */
-authorityRefs: [WakeflowLedgerAuthorityMemberReference, ...(WakeflowLedgerAuthorityMemberReference)[]]
-testingDecision: TestingDecision
 }
 export interface TestingDecision {
 mode: ("controller-only" | "real-environment" | "not-applicable")

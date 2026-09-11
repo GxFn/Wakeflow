@@ -12,7 +12,7 @@ import {
   executeDemandCreationRequest,
   executeDemandRouteInspectionRequest,
 } from "../capabilities/demand/service.js";
-import { executeManagedEvidencePublicRequest } from "../governance/evidence/managed-evidence-public-coordinator.js";
+import { executeRecordEvidenceRequest } from "../capabilities/evidence/service.js";
 import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.js";
 
 /**
@@ -30,7 +30,7 @@ export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
   inspectBoard: executeBoardInspectionRequest,
   planTargetTask: executeTargetTaskPlanningPublicRequest,
   publishRequirement: executeRequirementPublicationRequest,
-  recordManagedEvidence: executeManagedEvidencePublicRequest,
+  recordEvidence: executeRecordEvidenceRequest,
 }) satisfies Readonly<
   Pick<
     WakeflowPublicMcpExecutors,
@@ -42,6 +42,6 @@ export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
     | "inspectBoard"
     | "planTargetTask"
     | "publishRequirement"
-    | "recordManagedEvidence"
+    | "recordEvidence"
   >
 >;

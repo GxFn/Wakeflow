@@ -206,7 +206,15 @@
       }
     },
     "evidenceKind": {
-      "enum": ["test-output", "diff", "document", "transcript", "commit"]
+      "enum": [
+        "hook-observation",
+        "transcript",
+        "test-output",
+        "diff",
+        "document",
+        "link",
+        "commit"
+      ]
     },
     "branchName": {
       "type": "string",

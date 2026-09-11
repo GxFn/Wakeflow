@@ -16,8 +16,7 @@ test("Host capability authority selects only applicable empty directory surfaces
     codexWorkspaceHostResourceProfile,
   );
   deepEqual(codex.declarations.map((entry) => entry.declarationId), [
-    "host-runtime.codex.evidence-root",
-    "host-runtime.codex.pod-evidence-root",
+    "host-runtime.codex.pod-receipts-root",
     "host-runtime.codex.operations-root",
     "host-runtime.codex.keep-live-root",
     "host-runtime.codex.keep-live-leases-root",
@@ -32,8 +31,7 @@ test("Host capability authority selects only applicable empty directory surfaces
     claudeCodeWorkspaceHostResourceProfile,
   );
   deepEqual(claude.declarations.map((entry) => entry.declarationId), [
-    "host-runtime.claude-code.evidence-root",
-    "host-runtime.claude-code.pod-evidence-root",
+    "host-runtime.claude-code.pod-receipts-root",
     "host-runtime.claude-code.operations-root",
     "host-runtime.claude-code.keep-live-root",
     "host-runtime.claude-code.keep-live-leases-root",

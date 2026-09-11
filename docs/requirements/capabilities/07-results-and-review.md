@@ -23,7 +23,7 @@
 
 **宿主差异**：无。
 
-**现 TS 状态**：`wakeflow_import_target_result` 公开，事件 `result.target-result-recorded`；结果记录随 Demand 事件流。（切片 7 落地：导入解析并核验证据定位符、扫描报告文本、签发回调许可；见文末落地记录。）
+**现 TS 状态**：`wakeflow_import_target_result` 公开，事件 `result.target-result-recorded`；结果记录随 Demand 事件流。（切片 7 落地：导入解析并核验证据定位符、扫描报告文本、签发回调许可；见文末落地记录。2026-09-10 pod 切片 9：worktree pod 的实现结果 `repositoryChange.branch` 为空即 `precondition-failed/worktree-branch-required`，回调许可指向 pod 的 Controller。）
 
 **实现判断**：按 ADR-0010，结果记录增加 `branch` 与 `commit`，`repositoryChanges` 的 disposition 保留；结果导入必须引用宿主 Stop hook 记录（ADR-0009 调整一）；`supersedes` 与两种关系词汇保留。
 

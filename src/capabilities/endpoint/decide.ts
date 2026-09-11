@@ -27,6 +27,8 @@ export interface EndpointState {
   readonly windowKnown: boolean;
   readonly launchIntentDigest: string;
   readonly locatorProvider: EndpointLocatorProvider;
+  /** worktree pod 的产品窗口：登记与换代必须带 worktree 观察（ADR-0010 D4）。 */
+  readonly worktreeRequired: boolean;
   readonly binding: EndpointBindingState | null;
   readonly claim: EndpointClaimState | null;
   /** 句柄值到已绑定窗口的映射，用于跨窗口唯一性。 */
@@ -41,6 +43,7 @@ export interface EndpointCreationObservation {
   readonly handleValue: string;
   readonly launchIntentDigest: string;
   readonly hasTmuxCoordinates: boolean;
+  readonly hasWorktreeObservation: boolean;
 }
 
 export type ClosureLiveness =
@@ -119,6 +122,9 @@ function admitCreation(
   }
   if (state.locatorProvider === "tmux" && !observation.hasTmuxCoordinates) {
     return reject("invalid-request", "tmux-coordinates-required", "$request.observation.tmux");
+  }
+  if (state.worktreeRequired && !observation.hasWorktreeObservation) {
+    return reject("invalid-request", "worktree-receipt-required", "$request.observation.worktree");
   }
   if (!state.startedSessions.has(observation.handleValue)) {
     return reject("precondition-failed", "hook-evidence-missing", "$request.observation.handle");

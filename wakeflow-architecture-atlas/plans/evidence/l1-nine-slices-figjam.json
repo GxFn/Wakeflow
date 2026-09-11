@@ -1,0 +1,305 @@
+{
+  "verifiedAt": "2026-09-11T10:14:23.291Z",
+  "baselineCommit": "7ba1f38938a7387623b0ca588d9cfd54abda5760",
+  "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=16-489",
+  "canonicalSource": "maps/**/*.md",
+  "sourceDigestDefinition": "SHA-256 of the trimmed canonical Mermaid block",
+  "summaryOnly": true,
+  "diagramCount": 3,
+  "editableNodes": 29,
+  "connectors": 32,
+  "allEndpointsAndSourceEdgesVerified": true,
+  "visualReview": {
+    "method": "Figma Plugin API screenshots",
+    "nodes": [
+      "14:489",
+      "14:493",
+      "14:497",
+      "16:492"
+    ],
+    "checks": [
+      "Chinese titles and state explanations",
+      "numbered edges correspond to canonical evidence prefixes",
+      "no clipped branch label after container adjustment",
+      "progress table distinguishes implemented and planned stages"
+    ]
+  },
+  "progressTable": {
+    "nodeId": "16:492",
+    "rows": 6,
+    "columns": 3
+  },
+  "historicalSnapshot": {
+    "id": "9:329",
+    "hidden": true,
+    "topLevelChildren": 65
+  },
+  "diagrams": [
+    {
+      "title": "六层职责与当前过渡实现",
+      "source": "maps/01-overall-architecture/README.md",
+      "mermaidIndex": 0,
+      "sourceDigest": "sha256:bc5e8f9303f4c674ae91241d0a6383d2213483199a53d12f23c6d4cfe3f94ddd",
+      "sectionId": "14:489",
+      "groupId": "14:490",
+      "editableNodes": 8,
+      "connectors": 7,
+      "sourceEdgesVerified": true,
+      "evidencePrefix": "E-L1001",
+      "edges": [
+        {
+          "nodeId": "10:360",
+          "label": "01 宿主装配",
+          "sourceEvidenceId": "E-L1001-01",
+          "startNodeId": "10:336",
+          "endNodeId": "10:339"
+        },
+        {
+          "nodeId": "10:364",
+          "label": "02 注册能力",
+          "sourceEvidenceId": "E-L1001-02",
+          "startNodeId": "10:336",
+          "endNodeId": "10:342"
+        },
+        {
+          "nodeId": "10:368",
+          "label": "03 共用外壳",
+          "sourceEvidenceId": "E-L1001-03",
+          "startNodeId": "10:342",
+          "endNodeId": "10:345"
+        },
+        {
+          "nodeId": "10:372",
+          "label": "04 过渡实现复用",
+          "sourceEvidenceId": "E-L1001-04",
+          "startNodeId": "10:342",
+          "endNodeId": "10:354"
+        },
+        {
+          "nodeId": "10:376",
+          "label": "05 合同与词汇",
+          "sourceEvidenceId": "E-L1001-05",
+          "startNodeId": "10:345",
+          "endNodeId": "10:348"
+        },
+        {
+          "nodeId": "10:380",
+          "label": "06 根约束 I/O",
+          "sourceEvidenceId": "E-L1001-06",
+          "startNodeId": "10:345",
+          "endNodeId": "10:351"
+        },
+        {
+          "nodeId": "10:384",
+          "label": "07 尚无 status/verify",
+          "sourceEvidenceId": "E-L1001-07",
+          "startNodeId": "10:342",
+          "endNodeId": "10:357"
+        }
+      ]
+    },
+    {
+      "title": "九片业务主线",
+      "source": "maps/10-end-to-end-business-flow/README.md",
+      "mermaidIndex": 0,
+      "sourceDigest": "sha256:f806d62d7ba6b701e49af0821f3929f2529bcb0958c69f61b32e433307a170b3",
+      "sectionId": "14:493",
+      "groupId": "14:494",
+      "editableNodes": 11,
+      "connectors": 11,
+      "sourceEdgesVerified": true,
+      "evidencePrefix": "E-L1041",
+      "edges": [
+        {
+          "nodeId": "11:406",
+          "label": "01 具备 Design 工作面",
+          "sourceEvidenceId": "E-L1041-01",
+          "startNodeId": "11:373",
+          "endNodeId": "11:376"
+        },
+        {
+          "nodeId": "11:410",
+          "label": "02 不可变记录与 pending 看板",
+          "sourceEvidenceId": "E-L1041-02",
+          "startNodeId": "11:376",
+          "endNodeId": "11:379"
+        },
+        {
+          "nodeId": "11:414",
+          "label": "03 按 Pod 限定一个活动 Demand",
+          "sourceEvidenceId": "E-L1041-03",
+          "startNodeId": "11:379",
+          "endNodeId": "11:382"
+        },
+        {
+          "nodeId": "11:418",
+          "label": "04 单次追加与准备许可",
+          "sourceEvidenceId": "E-L1041-04",
+          "startNodeId": "11:382",
+          "endNodeId": "11:385"
+        },
+        {
+          "nodeId": "11:422",
+          "label": "05 观察后接受匹配结果",
+          "sourceEvidenceId": "E-L1041-05",
+          "startNodeId": "11:385",
+          "endNodeId": "11:388"
+        },
+        {
+          "nodeId": "11:426",
+          "label": "06 回调和只读评审单元",
+          "sourceEvidenceId": "E-L1041-06",
+          "startNodeId": "11:388",
+          "endNodeId": "11:391"
+        },
+        {
+          "nodeId": "11:430",
+          "label": "07 真实环境决策时执行冻结步骤",
+          "sourceEvidenceId": "E-L1041-07",
+          "startNodeId": "11:391",
+          "endNodeId": "11:394"
+        },
+        {
+          "nodeId": "11:434",
+          "label": "08 所需测试接受后再完成",
+          "sourceEvidenceId": "E-L1041-08",
+          "startNodeId": "11:394",
+          "endNodeId": "11:397"
+        },
+        {
+          "nodeId": "11:438",
+          "label": "09 controller-only 的完成门",
+          "sourceEvidenceId": "E-L1041-09",
+          "startNodeId": "11:391",
+          "endNodeId": "11:397"
+        },
+        {
+          "nodeId": "11:442",
+          "label": "10 分支处置、退役绑定、宿主处理检出",
+          "sourceEvidenceId": "E-L1041-10",
+          "startNodeId": "11:397",
+          "endNodeId": "11:400"
+        },
+        {
+          "nodeId": "11:446",
+          "label": "11 保留后续阶段边界",
+          "sourceEvidenceId": "E-L1041-11",
+          "startNodeId": "11:400",
+          "endNodeId": "11:403"
+        }
+      ]
+    },
+    {
+      "title": "实现目标状态与恢复",
+      "source": "maps/10-end-to-end-business-flow/state-and-recovery.md",
+      "mermaidIndex": 2,
+      "sourceDigest": "sha256:91519b7072fdf29a60d04ebd9c87991a47ceb3199f084e7cbd040978f36a78b4",
+      "sectionId": "14:497",
+      "groupId": "14:498",
+      "editableNodes": 10,
+      "connectors": 14,
+      "sourceEdgesVerified": true,
+      "evidencePrefix": "E-L1044",
+      "edges": [
+        {
+          "nodeId": "12:458",
+          "label": "01 准备投递",
+          "sourceEvidenceId": "E-L1044-01",
+          "startNodeId": "12:428",
+          "endNodeId": "12:431"
+        },
+        {
+          "nodeId": "12:462",
+          "label": "02 落地 accepted",
+          "sourceEvidenceId": "E-L1044-02",
+          "startNodeId": "12:431",
+          "endNodeId": "12:434"
+        },
+        {
+          "nodeId": "12:466",
+          "label": "03 发送未知",
+          "sourceEvidenceId": "E-L1044-03",
+          "startNodeId": "12:431",
+          "endNodeId": "12:437"
+        },
+        {
+          "nodeId": "12:470",
+          "label": "04 明确未发送",
+          "sourceEvidenceId": "E-L1044-04",
+          "startNodeId": "12:431",
+          "endNodeId": "12:440"
+        },
+        {
+          "nodeId": "12:474",
+          "label": "05 rearm 新代际",
+          "sourceEvidenceId": "E-L1044-05",
+          "startNodeId": "12:440",
+          "endNodeId": "12:431"
+        },
+        {
+          "nodeId": "12:478",
+          "label": "06 匹配结果",
+          "sourceEvidenceId": "E-L1044-06",
+          "startNodeId": "12:434",
+          "endNodeId": "12:443"
+        },
+        {
+          "nodeId": "12:482",
+          "label": "07 结果闭合 fence",
+          "sourceEvidenceId": "E-L1044-07",
+          "startNodeId": "12:437",
+          "endNodeId": "12:443"
+        },
+        {
+          "nodeId": "12:486",
+          "label": "08 accept",
+          "sourceEvidenceId": "E-L1044-08",
+          "startNodeId": "12:443",
+          "endNodeId": "12:446"
+        },
+        {
+          "nodeId": "12:490",
+          "label": "09 rework",
+          "sourceEvidenceId": "E-L1044-09",
+          "startNodeId": "12:443",
+          "endNodeId": "12:449"
+        },
+        {
+          "nodeId": "12:494",
+          "label": "10 同包再投递",
+          "sourceEvidenceId": "E-L1044-10",
+          "startNodeId": "12:449",
+          "endNodeId": "12:431"
+        },
+        {
+          "nodeId": "12:498",
+          "label": "11 外部条件阻塞",
+          "sourceEvidenceId": "E-L1044-11",
+          "startNodeId": "12:443",
+          "endNodeId": "12:452"
+        },
+        {
+          "nodeId": "12:502",
+          "label": "12 需求 / 方案升级",
+          "sourceEvidenceId": "E-L1044-12",
+          "startNodeId": "12:443",
+          "endNodeId": "12:455"
+        },
+        {
+          "nodeId": "12:506",
+          "label": "13 条件解除后恢复",
+          "sourceEvidenceId": "E-L1044-13",
+          "startNodeId": "12:452",
+          "endNodeId": "12:446"
+        },
+        {
+          "nodeId": "12:510",
+          "label": "14 升级答复后恢复",
+          "sourceEvidenceId": "E-L1044-14",
+          "startNodeId": "12:455",
+          "endNodeId": "12:446"
+        }
+      ]
+    }
+  ]
+}

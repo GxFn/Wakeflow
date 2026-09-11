@@ -1,137 +1,247 @@
 ---
 diagramId: ts-review-completion-file-f7
 viewType: file-dependency
-truthKind: stale
+truthKind: current-code
 reviewDepth: L3
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:b2fb77d6e677dd47b85eb174a423068e70aa60354582822d1d4b1e5a942c79f1
+verifiedAt: 2026-09-11
+baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
+sourceFingerprint: sha256:3caefc42b90f9e4d441fc09c6648c86d0c3e0abd4cb82c68c947160be1dbbd28
 audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Source Maintenance
+documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
-sourcePaths: [src/governance/review/**, src/governance/lifecycle/**, src/governance/testing/**, src/governance/result/**, src/governance/delivery/**]
-testPaths: [tests/governance/review/**, tests/governance/lifecycle/**, tests/governance/testing/**, tests/governance/result/**, tests/governance/delivery/**]
+sourcePaths:
+  - src/capabilities/demand/*.ts
+  - src/capabilities/demand/archive.ts
+  - src/capabilities/demand/lifecycle.ts
+  - src/capabilities/demand/verify.ts
+  - src/capabilities/result-review/*.ts
+  - src/capabilities/result-review/decide.ts
+  - src/capabilities/result-review/service.ts
+  - src/configuration/*.ts
+  - src/contracts/generated/configuration/*.ts
+  - src/contracts/generated/entrypoints/*.ts
+  - src/contracts/generated/foundation/*.ts
+  - src/contracts/generated/governance/archive/*.ts
+  - src/contracts/generated/governance/board/*.ts
+  - src/contracts/generated/governance/delivery/*.ts
+  - src/contracts/generated/governance/demand/*.ts
+  - src/contracts/generated/governance/evidence/*.ts
+  - src/contracts/generated/governance/ledger/*.ts
+  - src/contracts/generated/governance/lifecycle/*.ts
+  - src/contracts/generated/governance/result/*.ts
+  - src/contracts/generated/governance/review/*.ts
+  - src/contracts/generated/governance/tasking/*.ts
+  - src/contracts/generated/governance/testing/*.ts
+  - src/contracts/generated/identity/*.ts
+  - src/contracts/generated/workspace/*.ts
+  - src/contracts/identity/*.ts
+  - src/contracts/vocabulary/*.ts
+  - src/foundation/artifact/*.ts
+  - src/foundation/crypto/*.ts
+  - src/foundation/data/*.ts
+  - src/foundation/event-sourcing/*.ts
+  - src/foundation/filesystem/*.ts
+  - src/foundation/git/*.ts
+  - src/foundation/identity/*.ts
+  - src/foundation/node/*.ts
+  - src/foundation/numeric/*.ts
+  - src/foundation/resource/*.ts
+  - src/foundation/schema/*.ts
+  - src/foundation/text/*.ts
+  - src/foundation/time/*.ts
+  - src/governance/controller/*.ts
+  - src/governance/delivery/*.ts
+  - src/governance/demand/*.ts
+  - src/governance/demand/event-sourcing/*.ts
+  - src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts
+  - src/governance/demand/model/*.ts
+  - src/governance/demand/model/demand-aggregate-state.ts
+  - src/governance/demand/publication/*.ts
+  - src/governance/evidence/*.ts
+  - src/governance/ledger/*.ts
+  - src/governance/lifecycle/*.ts
+  - src/governance/result/*.ts
+  - src/governance/review/*.ts
+  - src/governance/review/controller-review-decision.ts
+  - src/governance/tasking/*.ts
+  - src/governance/testing/*.ts
+  - src/kernel/*.ts
+  - src/kernel/event-stream/*.ts
+  - src/kernel/requirement-board.ts
+  - src/kernel/work-claims.ts
+  - src/workspace/*.ts
+  - src/workspace/active/*.ts
+  - src/workspace/window-runtime/*.ts
+schemaPaths:
+  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-result.schema.json
+  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
+  - src/contracts/schemas/foundation/git-object-id.schema.json
+  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
+  - src/contracts/schemas/foundation/portable-resource-path.schema.json
+  - src/contracts/schemas/foundation/sha256-digest.schema.json
+  - src/contracts/schemas/foundation/utc-instant.schema.json
+  - src/contracts/schemas/governance/archive/demand-archive-manifest.schema.json
+  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
+  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
+  - src/contracts/schemas/governance/demand/demand-authority.schema.json
+  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-publication-transaction.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
+  - src/contracts/schemas/governance/demand/demand-identity.schema.json
+  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
+  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
+  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
+  - src/contracts/schemas/governance/result/target-result.schema.json
+  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
+  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
+  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
+  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
+  - src/contracts/schemas/governance/tasking/task-package.schema.json
+  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
+  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
+  - src/contracts/schemas/workspace/window-host-binding.schema.json
+testPaths:
+  - tests/capabilities/result-review/service.test.ts
+refreshTriggers:
+  - .dependency-cruiser.cjs
+  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
+  - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# Review返工与Completion：关键文件依赖
+# 评审和生命周期：文件直接导入
 
-## F7：Review路由与Completion骨干
+这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
+
+> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+
+## 评审和生命周期的精选直接导入
 
 ```mermaid
-flowchart LR
-  accTitle: Review返工blocked恢复与Demand Completion关键依赖
-  accDescr: Review Snapshot从Demand Repository审计历史；Implementation/Test Decision分别导入共享合同，共享Resume按workType恢复blocked。Product Defect Remediation Service从Test Decision、Route与Snapshot创建Authorization Event，Delivery Context把授权映射回原TaskPackage Intent。Completion允许当前accepted Test与历史product-defect Target并存。
-
-  subgraph ROOTS["Review"]
-    SNAPSHOT["[已实现][F-REV-11]\ndemand-result-review-snapshot.ts"]
-    DECIDE["[已实现][F-REV-12]\ncontroller-implementation-review-decision-service.ts"]
-    RESUME["[已实现][F-REV-13]\ncontroller-target-review-resume-service.ts"]
-    ROUTE["[已实现][F-REV-14]\ndemand-post-acceptance-route.ts"]
-    TEST_DECIDE["[已实现][F-REV-15]\ncontroller-test-review-decision.ts"]
-    COMMON_DECISION["[已实现][F-REV-16]\ncontroller-review-decision-contract.ts"]
-    TEST_SERVICE["[已实现][F-REV-17]\ncontroller-test-review-decision-service.ts"]
-    IMPL_DECISION["[已实现][F-REV-18]\ncontroller-implementation-review-decision.ts"]
-    REMEDIATION["[已实现][F-REV-19]\ncontroller-product-defect-remediation-authorization.ts"]
-    REMEDIATION_SERVICE["[已实现][F-REV-20]\ncontroller-product-defect-remediation-service.ts"]
-  end
-  subgraph SHARED_ENTRY["返工"]
-    REWORK["[已实现][F-DLV-11]\ntarget-delivery-rework-context.ts"]
-    INTENT["[已实现][F-DLV-12]\ntarget-delivery-intent.ts"]
-    REMEDIATION_CONTEXT["[已实现][F-DLV-13]\ntarget-delivery-product-defect-remediation-context.ts"]
-  end
-  subgraph DOMAIN["Completion"]
-    COMPLETION["[已实现][F-LIF-01]\ndemand-completion.ts"]
-    PLAN["[已实现][F-LIF-02]\ndemand-completion-plan.ts"]
-    AUTH["[已实现][F-LIF-03]\ndemand-completion-authority.ts"]
-    SERVICE["[已实现][F-LIF-04]\ndemand-completion-service.ts"]
-  end
-  subgraph HOST_IMPL["相邻权威"]
-    REPO["[外部] Demand Repository/Command Handler"]
-    TODO["[外部] TODO Authority"]
-    CLAIMS["[外部] WindowWorkClaim Store"]
-    PACKAGE["[外部] immutable TaskPackage"]
-  end
-  WIRE["[生成][F-GEN-07]\nCompletion与Review生成合同"]
-
-  SNAPSHOT -->|"E-F7-01 审计历史"| REPO
-  DECIDE -->|"E-F7-02 当前Snapshot"| SNAPSHOT
-  DECIDE -->|"E-F7-03 提交Decision"| REPO
-  DECIDE -->|"E-F7-19 Implementation判断合同"| IMPL_DECISION
-  IMPL_DECISION -->|"E-F7-25 共享审阅值合同"| COMMON_DECISION
-  REMEDIATION -->|"E-F7-26 精确Test Decision来源"| TEST_DECIDE
-  REMEDIATION -->|"E-F7-27 Authorization Schema"| WIRE
-  REMEDIATION_SERVICE -->|"E-F7-28 创建Authorization"| REMEDIATION
-  REMEDIATION_SERVICE -->|"E-F7-29 当前Route/Snapshot"| ROUTE
-  REMEDIATION_SERVICE -->|"E-F7-30 提交Authorization Event"| REPO
-  REMEDIATION_CONTEXT -->|"E-F7-31 解析Authorization"| REMEDIATION
-  REMEDIATION_CONTEXT -->|"E-F7-32 投影Intent上下文"| INTENT
-  TEST_DECIDE -->|"E-F7-20 Test判断矩阵"| COMMON_DECISION
-  TEST_DECIDE -->|"E-F7-21 Test Review Schema"| WIRE
-  TEST_SERVICE -->|"E-F7-22 Test判断合同"| TEST_DECIDE
-  TEST_SERVICE -->|"E-F7-23 提交shared Decision Event"| REPO
-  ROUTE -->|"E-F7-24 四类Test Review route"| SNAPSHOT
-  RESUME -->|"E-F7-04 blocked Snapshot"| SNAPSHOT
-  RESUME -->|"E-F7-05 提交Resume"| REPO
-  ROUTE -->|"E-F7-06 Authority/历史"| SNAPSHOT
-  REWORK -->|"E-F7-07 解析Implementation决定"| IMPL_DECISION
-  INTENT -->|"E-F7-08 同一TaskPackage"| PACKAGE
-  REWORK -->|"E-F7-09 复用Intent投影owner"| INTENT
-  AUTH -->|"E-F7-10 completion route"| ROUTE
-  AUTH -->|"E-F7-11 claimed TODO"| TODO
-  AUTH -->|"E-F7-12 无当前Claims"| CLAIMS
-  SERVICE -->|"E-F7-13 加载组合Authority"| AUTH
-  SERVICE -->|"E-F7-14 创建Completion"| COMPLETION
-  SERVICE -->|"E-F7-15 创建exact plan"| PLAN
-  SERVICE -->|"E-F7-16 提交completed Event"| REPO
-  COMPLETION -->|"E-F7-17 Completion Schema"| WIRE
-  PLAN -->|"E-F7-18 完整Completion"| COMPLETION
+flowchart TB
+  accTitle: 评审和生命周期的精选直接导入
+  accDescr: 评审和生命周期所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
+  f1["能力执行 service.ts"]
+  f2["纯决定 decide.ts"]
+  f3["源码模块 controller-review-decision.ts"]
+  f4["源码模块 demand-aggregate-state.ts"]
+  f5["源码模块 demand-event-sourcing-decider.ts"]
+  f6["源码模块 lifecycle.ts"]
+  f7["源码模块 archive.ts"]
+  f8["源码模块 verify.ts"]
+  f9["需求看板 requirement-board.ts"]
+  f10["工作声明 work-claims.ts"]
+  f1 -->|"E-L1030-01 直接导入"| f2
+  f1 -->|"E-L1030-02 直接导入"| f3
+  f1 -->|"E-L1030-03 直接导入"| f4
+  f1 -->|"E-L1030-04 直接导入"| f5
+  f1 -->|"E-L1030-05 直接导入"| f10
+  f2 -->|"E-L1030-06 直接导入"| f3
+  f4 -->|"E-L1030-07 直接导入"| f3
+  f5 -->|"E-L1030-08 直接导入"| f3
+  f5 -->|"E-L1030-09 直接导入"| f4
+  f6 -->|"E-L1030-10 直接导入"| f5
+  f6 -->|"E-L1030-11 直接导入"| f7
+  f6 -->|"E-L1030-12 直接导入"| f8
+  f6 -->|"E-L1030-13 直接导入"| f9
+  f6 -->|"E-L1030-14 直接导入"| f10
+  f8 -->|"E-L1030-15 直接导入"| f9
+  f8 -->|"E-L1030-16 直接导入"| f10
 ```
 
 ### 本图术语说明
 
-| 术语 | 解释 |
+| 术语 | 本图含义 |
 | --- | --- |
-| Rework Context | 从完整Review文字确定性压缩的有界投递输入，不复制Decision权威 |
-| completion route | Post-Acceptance Route明确允许进入成功终态的来源投影 |
-| Completion Plan | 绑定Authority、Completion、expected revision、commitId和eventId的preview产物 |
-| 无当前Claims | 与Demand相关的窗口不存在未释放WorkClaim |
+| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
 
-## 文件职责
+### 节点与实现定位
 
-| 范围 | 关键职责 |
-| --- | --- |
-| Review Snapshot/Decision/Resume | implementation/test完整历史读模型、来源专用决定Event与共享精确blocked恢复Event |
-| Test Review | Test conclusion、Evidence充分性、shared Decision Event和四类route；四类均有明确consumer或终态 |
-| Remediation Authorization/Service | 精确绑定Test Decision、失败检查和产品baseline，提交Event并重开原产品Target |
-| Remediation Delivery Context | 从Authorization投影原TaskPackage边界内的修复目标和required corrections |
-| Post-Acceptance Route | testing/completion/blocked的确定性下一owner选择 |
-| Rework Context/Intent | 同一TaskPackage的新投递generation |
-| Completion Authority | Route、Controller、TODO和Claims组合准入 |
-| Completion Service | preview/apply、幂等Commit和eventAuthority |
-
-## F7直接导入核验
-
-- `controller-implementation-review-decision-service.ts`直接导入来源专用Decision模型；共享值合同由
-  `controller-implementation-review-decision.ts`和`controller-test-review-decision.ts`分别导入。
-- `target-delivery-rework-context.ts`直接导入Implementation Decision、TargetResult及
-  `target-delivery-intent.ts`中的投影函数；它不导入Review Snapshot，完整历史由Preparation Authority先加载。
-- Completion只从Route投影`testingMode`进入Lifecycle；完整real-environment Test closure继续由Review拥有，
-  避免Lifecycle反向取得Review内部类型并形成循环。
-- Repository/Route以`currentTestCard`选择当前Test Target，历史`test-product-defect` Target继续保留原Card tuple。
-- `controller-product-defect-remediation-service.ts`从当前Route/Snapshot/History创建Authorization并提交Event；
-  `target-delivery-product-defect-remediation-context.ts`再把授权投影为同一TaskPackage的Delivery输入。
-
-## F7边级证据
-
-| 边编号 | 静态关系范围 | 核验结论 |
+| 节点 | 文件 / 符号 | 责任 |
 | --- | --- | --- |
-| `E-F7-01`–`E-F7-09` | Implementation Snapshot/Decision/Resume、Rework Context与Intent | Rework Context导入Decision/Result和Intent投影owner，不导入Snapshot |
-| `E-F7-10`–`E-F7-18` | Completion Authority/Service/Plan/合同 | Route、TODO与Claim准入后只提交一个completed Event |
-| `E-F7-19`–`E-F7-27` | 来源Decision、共享合同、Test Service/Route与Remediation Authorization | 来源专用判断和授权合同闭合 |
-| `E-F7-28`–`E-F7-32` | Remediation Service、Repository与Delivery Context | Authorization Event重开原Target并进入同Package返工Intent |
+| f1 | `src/capabilities/result-review/service.ts` | 能力执行 service.ts |
+| f2 | `src/capabilities/result-review/decide.ts` | 纯决定 decide.ts |
+| f3 | `src/governance/review/controller-review-decision.ts` | 源码模块 controller-review-decision.ts |
+| f4 | `src/governance/demand/model/demand-aggregate-state.ts` | 源码模块 demand-aggregate-state.ts |
+| f5 | `src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts` | 源码模块 demand-event-sourcing-decider.ts |
+| f6 | `src/capabilities/demand/lifecycle.ts` | 源码模块 lifecycle.ts |
+| f7 | `src/capabilities/demand/archive.ts` | 源码模块 archive.ts |
+| f8 | `src/capabilities/demand/verify.ts` | 源码模块 verify.ts |
+| f9 | `src/kernel/requirement-board.ts` | 需求看板 requirement-board.ts |
+| f10 | `src/kernel/work-claims.ts` | 工作声明 work-claims.ts |
 
-## 停止边界
+### 本图边级证据
 
-Review/Lifecycle/Remediation已提交。当前停止边界是Research Completion、Implementation Redesign以及
-Demand完成后的Evidence/Archive owner。
+| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- |
+| E-L1030-01 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-02 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-03 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-04 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-05 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-06 | `src/capabilities/result-review/decide.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-07 | `src/governance/demand/model/demand-aggregate-state.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-08 | `src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-09 | `src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-10 | `src/capabilities/demand/lifecycle.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-11 | `src/capabilities/demand/lifecycle.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-12 | `src/capabilities/demand/lifecycle.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-13 | `src/capabilities/demand/lifecycle.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-14 | `src/capabilities/demand/lifecycle.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-15 | `src/capabilities/demand/verify.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-16 | `src/capabilities/demand/verify.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+
+## 守卫、恢复与验证范围
+
+文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
+
+涉及的测试与核验入口：
+
+- `tests/capabilities/result-review/service.test.ts`。
+
+## 下钻与相关视图
+
+- [本专题总览](./README.md)
+- [图谱总索引](../README.md)
+- [核验与剩余范围](../01-diagram-review-ledger.md)

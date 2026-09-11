@@ -1,130 +1,227 @@
 ---
 diagramId: ts-real-testing-file-f8
 viewType: file-dependency
-truthKind: stale
+truthKind: current-code
 reviewDepth: L3
-verifiedAt: 2026-09-03
-snapshotObservedAt: 2026-09-03T03:13:56-07:00
-baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
-sourceFingerprint: sha256:0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853
+verifiedAt: 2026-09-11
+baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
+sourceFingerprint: sha256:c37393de3e5ae971af0c28b29958d7789db5f682f23a3503f7ef22e83950e412
 audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Source Maintenance
+documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
-sourcePaths: [src/governance/testing/**, src/governance/tasking/**, src/governance/delivery/**, src/governance/result/**, src/governance/review/**, src/governance/lifecycle/**, src/entrypoints/**]
-schemaPaths: [src/contracts/schemas/governance/testing/**, src/contracts/schemas/governance/tasking/**, src/contracts/schemas/governance/result/**, src/contracts/schemas/governance/review/**, src/contracts/schemas/governance/lifecycle/**, src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json]
-testPaths: [tests/governance/testing/**, tests/governance/tasking/**, tests/governance/delivery/**, tests/governance/result/**, tests/governance/review/**, tests/governance/lifecycle/**, tests/entrypoints/**]
+sourcePaths:
+  - src/capabilities/delivery/*.ts
+  - src/capabilities/delivery/service.ts
+  - src/capabilities/result-review/*.ts
+  - src/capabilities/result-review/decide.ts
+  - src/capabilities/result-review/service.ts
+  - src/capabilities/tasking/*.ts
+  - src/capabilities/tasking/decide.ts
+  - src/capabilities/tasking/service.ts
+  - src/configuration/*.ts
+  - src/contracts/generated/configuration/*.ts
+  - src/contracts/generated/entrypoints/*.ts
+  - src/contracts/generated/foundation/*.ts
+  - src/contracts/generated/governance/delivery/*.ts
+  - src/contracts/generated/governance/demand/*.ts
+  - src/contracts/generated/governance/evidence/*.ts
+  - src/contracts/generated/governance/ledger/*.ts
+  - src/contracts/generated/governance/lifecycle/*.ts
+  - src/contracts/generated/governance/result/*.ts
+  - src/contracts/generated/governance/review/*.ts
+  - src/contracts/generated/governance/tasking/*.ts
+  - src/contracts/generated/governance/testing/*.ts
+  - src/contracts/generated/identity/*.ts
+  - src/contracts/generated/workspace/*.ts
+  - src/contracts/identity/*.ts
+  - src/contracts/vocabulary/*.ts
+  - src/foundation/artifact/*.ts
+  - src/foundation/crypto/*.ts
+  - src/foundation/data/*.ts
+  - src/foundation/event-sourcing/*.ts
+  - src/foundation/filesystem/*.ts
+  - src/foundation/git/*.ts
+  - src/foundation/identity/*.ts
+  - src/foundation/node/*.ts
+  - src/foundation/numeric/*.ts
+  - src/foundation/resource/*.ts
+  - src/foundation/schema/*.ts
+  - src/foundation/text/*.ts
+  - src/foundation/time/*.ts
+  - src/governance/controller/*.ts
+  - src/governance/delivery/*.ts
+  - src/governance/delivery/delivery-envelope.ts
+  - src/governance/demand/*.ts
+  - src/governance/demand/event-sourcing/*.ts
+  - src/governance/demand/model/*.ts
+  - src/governance/demand/publication/*.ts
+  - src/governance/evidence/*.ts
+  - src/governance/ledger/*.ts
+  - src/governance/lifecycle/*.ts
+  - src/governance/result/*.ts
+  - src/governance/result/test-target-result-report.ts
+  - src/governance/review/*.ts
+  - src/governance/tasking/*.ts
+  - src/governance/tasking/task-package.ts
+  - src/governance/testing/*.ts
+  - src/kernel/*.ts
+  - src/kernel/event-stream/*.ts
+  - src/workspace/*.ts
+  - src/workspace/active/*.ts
+  - src/workspace/window-runtime/*.ts
+schemaPaths:
+  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-result.schema.json
+  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
+  - src/contracts/schemas/foundation/git-object-id.schema.json
+  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
+  - src/contracts/schemas/foundation/portable-resource-path.schema.json
+  - src/contracts/schemas/foundation/sha256-digest.schema.json
+  - src/contracts/schemas/foundation/utc-instant.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
+  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
+  - src/contracts/schemas/governance/demand/demand-authority.schema.json
+  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
+  - src/contracts/schemas/governance/demand/demand-identity.schema.json
+  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
+  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
+  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
+  - src/contracts/schemas/governance/result/target-result.schema.json
+  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
+  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
+  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
+  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
+  - src/contracts/schemas/governance/tasking/task-package.schema.json
+  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
+  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
+  - src/contracts/schemas/workspace/window-host-binding.schema.json
+testPaths:
+  - tests/capabilities/result-review/service.test.ts
+refreshTriggers:
+  - .dependency-cruiser.cjs
+  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
+  - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# 真实环境Testing：关键文件依赖
+# 测试合同与结果：文件直接导入
 
-## F8：Testing骨干依赖
+这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
+
+> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+
+## 测试合同与结果的精选直接导入
 
 ```mermaid
-flowchart LR
-  accTitle: TestCard Test Delivery与Dispatch关键文件依赖
-  accDescr: 公共TestCard Planning创建Card事件；同一公共Task Planning工具从Card派生test Package。Test Delivery Preparation组合Card、Package、initial或rerun Attempt与Authority并创建Intent；replacement只追加当前attempt授权。共享Claim/Outcome/Result记录宿主事实，Test Review提交Decision Event；accept、another、blocked与product-defect分别进入Completion、rerun、Resume或Remediation/retest。
-
-  subgraph ROOTS["TestCard"]
-    CARD["[已实现][F-TST-01]\ntest-card.ts"]
-    CARD_PLAN["[已实现][F-TST-02]\ntest-card-planning-service.ts"]
-    CARD_AUTH["[已实现][F-TST-03]\ntest-card-planning-authority.ts"]
-  end
-  subgraph SHARED_ENTRY["Test Task"]
-    TASK_PACKAGE["[已实现][F-TST-04]\ntest-task-package.ts"]
-    TASK_AUTH["[已实现][F-TST-05]\ntest-task-planning-authority.ts"]
-    ATTEMPT["[已实现][F-TST-06]\ntest-execution-attempt.ts"]
-  end
-  subgraph DOMAIN["Test Delivery"]
-    PREPARE["[已实现][F-TST-07]\ntest-delivery-preparation-service.ts"]
-    INTENT["[已实现][F-TST-08]\ntest-delivery-intent.ts"]
-    PREP_AUTH["[已实现][F-TST-09]\ntest-delivery-preparation-authority.ts"]
-  end
-  subgraph HOST_ENTRY["Dispatch投影"]
-    BRIEF["[已实现][F-TST-10]\ntest-dispatch-briefing.ts"]
-    PACKET["[已实现][F-TST-11]\ntest-dispatch-packet.ts"]
-    PROJECTION["[已实现][F-TST-12]\ntest-dispatch-projection-store.ts"]
-  end
-  subgraph HOST_IMPL["宿主效果"]
-    CLAIM_AUTH["[已实现][F-TST-13]\ntest-host-effect-claim-authority.ts"]
-    ACTION["[已实现][F-TST-14]\ntest-delivery-agent-host-action.ts"]
-    CLAIM_SERVICE["[已实现][F-DLV-21]\ntarget-host-effect-claim-service.ts"]
-    OUTCOME_SERVICE["[已实现][F-DLV-22]\ntarget-host-effect-outcome-service.ts"]
-    RESULT_REPORT["[已实现][F-RES-11]\ntest-target-result-report.ts"]
-    RESULT_IMPORT["[已实现][F-RES-12]\ntarget-result-import-service.ts"]
-    TEST_DECISION["[已实现][F-REV-21]\ncontroller-test-review-decision.ts"]
-    TEST_REVIEW["[已实现][F-REV-22]\ncontroller-test-review-decision-service.ts"]
-    REMEDIATION["[已实现][F-REV-23]\ncontroller-product-defect-remediation-service.ts"]
-    GENERATION["[已实现][F-TST-15]\ntest-card-generation-source.ts"]
-    REPO["[外部] Demand Repository/Command Handler"]
-  end
-  WIRE["[生成][F-GEN-08]\nTesting + Test Result/Review合同"]
-
-  CARD_PLAN -->|"E-F8-01 Authority"| CARD_AUTH
-  CARD_PLAN -->|"E-F8-02 创建TestCard"| CARD
-  CARD_PLAN -->|"E-F8-03 提交Card Event"| REPO
-  TASK_PACKAGE -->|"E-F8-04 从Card派生"| CARD
-  TASK_AUTH -->|"E-F8-05 Card Event/route"| REPO
-  TASK_AUTH -->|"E-F8-06 复验Test Package"| TASK_PACKAGE
-  ATTEMPT -->|"E-F8-07 setup来源"| CARD
-  PREPARE -->|"E-F8-08 Delivery Authority"| PREP_AUTH
-  PREPARE -->|"E-F8-09 创建Intent"| INTENT
-  PREPARE -->|"E-F8-10 提交prepared Event"| REPO
-  PREP_AUTH -->|"E-F8-30 initial/rerun lineage"| ATTEMPT
-  INTENT -->|"E-F8-11 Card/Package/Attempt"| ATTEMPT
-  PACKET -->|"E-F8-12 prepared Event来源"| INTENT
-  PACKET -->|"E-F8-13 briefing"| BRIEF
-  PROJECTION -->|"E-F8-14 派生Packet/Card"| PACKET
-  PROJECTION -->|"E-F8-15 审计事件"| REPO
-  CLAIM_AUTH -->|"E-F8-16 加载prepared Intent"| REPO
-  CLAIM_AUTH -->|"E-F8-17 Dispatch来源"| PACKET
-  CLAIM_SERVICE -->|"E-F8-18 首次Claim回执生成Action"| ACTION
-  CLAIM_SERVICE -->|"E-F8-19 加载Test Claim Authority"| CLAIM_AUTH
-  OUTCOME_SERVICE -->|"E-F8-31 提交observed Event"| REPO
-  CARD -->|"E-F8-20 TestCard Schema"| WIRE
-  INTENT -->|"E-F8-21 Intent Schema"| WIRE
-  ATTEMPT -->|"E-F8-22 Attempt Schema"| WIRE
-  PACKET -->|"E-F8-23 Packet Schema"| WIRE
-  RESULT_REPORT -->|"E-F8-24 Test Report Schema"| WIRE
-  RESULT_IMPORT -->|"E-F8-25 解析并闭合Report"| RESULT_REPORT
-  RESULT_IMPORT -->|"E-F8-26 提交shared Result Event"| REPO
-  TEST_DECISION -->|"E-F8-27 Test Review Schema"| WIRE
-  TEST_REVIEW -->|"E-F8-28 复验Test Decision"| TEST_DECISION
-  TEST_REVIEW -->|"E-F8-29 提交shared Decision Event"| REPO
-  REMEDIATION -->|"E-F8-32 product-defect授权Event"| REPO
-  CARD_AUTH -->|"E-F8-33 retest lineage"| GENERATION
+flowchart TB
+  accTitle: 测试合同与结果的精选直接导入
+  accDescr: 测试合同与结果所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
+  f1["能力执行 service.ts"]
+  f2["纯决定 decide.ts"]
+  f3["任务合同 task-package.ts"]
+  f4["能力执行 service.ts"]
+  f5["源码模块 delivery-envelope.ts"]
+  f6["源码模块 test-target-result-report.ts"]
+  f7["能力执行 service.ts"]
+  f8["纯决定 decide.ts"]
+  f1 -->|"E-L1035-01 直接导入"| f2
+  f1 -->|"E-L1035-02 直接导入"| f3
+  f2 -->|"E-L1035-03 直接导入"| f3
+  f4 -->|"E-L1035-04 直接导入"| f3
+  f4 -->|"E-L1035-05 直接导入"| f5
+  f5 -->|"E-L1035-06 直接导入"| f3
+  f7 -->|"E-L1035-07 直接导入"| f3
+  f7 -->|"E-L1035-08 直接导入"| f5
+  f7 -->|"E-L1035-09 直接导入"| f6
+  f7 -->|"E-L1035-10 直接导入"| f8
+  f8 -->|"E-L1035-11 直接导入"| f3
+  f8 -->|"E-L1035-12 直接导入"| f6
 ```
 
 ### 本图术语说明
 
-| 术语 | 解释 |
+| 术语 | 本图含义 |
 | --- | --- |
-| Test Delivery Authority | Card、Package、Attempt、Config、窗口和替换授权的组合准入 |
-| briefing | 面向目标测试窗口的有界中文/英文执行说明，不替代Card或Packet合同 |
-| Card Projection | 从TestCard Event物化的目标读取文件 |
-| prepared Intent | 已提交测试授权但尚未产生WorkClaim或宿主效果 |
-| Test Review | Test conclusion、Evidence充分性与四类Decision；四类均有明确consumer |
-| retest lineage | 新Card对旧Card、Test Decision和Remediation Authorization的精确来源 |
-| rerun lineage | 新attempt对直接前驱attempt、Result与request-another-attempt Decision的精确引用链 |
+| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
 
-## F8直接导入核验
+### 节点与实现定位
 
-| 边范围 | 核验结论 |
-| --- | --- |
-| `E-F8-01`–`E-F8-07` | Card、Test TaskPackage与Attempt的直接imports成立；公共Planning按Route消费test分支 |
-| `E-F8-08`–`E-F8-15`、`E-F8-30` | Preparation直接组合Authority/Intent，Authority读取initial/rerun lineage，Projection从Event派生Packet |
-| `E-F8-16`–`E-F8-19`、`E-F8-31` | 共享Claim Service导入Test Claim Authority与Action；Outcome Service提交observed Event，方向不是Action调用Service |
-| `E-F8-24`–`E-F8-29` | 共享Result Import导入Test Report；Test Review Service导入Test Decision并提交shared Event |
-| `E-F8-20`–`E-F8-23` | TestCard、Intent、Attempt与Dispatch Packet分别依赖自己的生成Schema合同 |
-| `E-F8-32`、`E-F8-33` | Remediation与TestCard generation source | 产品返工授权后新Card闭合retest lineage |
+| 节点 | 文件 / 符号 | 责任 |
+| --- | --- | --- |
+| f1 | `src/capabilities/tasking/service.ts` | 能力执行 service.ts |
+| f2 | `src/capabilities/tasking/decide.ts` | 纯决定 decide.ts |
+| f3 | `src/governance/tasking/task-package.ts` | 任务合同 task-package.ts |
+| f4 | `src/capabilities/delivery/service.ts` | 能力执行 service.ts |
+| f5 | `src/governance/delivery/delivery-envelope.ts` | 源码模块 delivery-envelope.ts |
+| f6 | `src/governance/result/test-target-result-report.ts` | 源码模块 test-target-result-report.ts |
+| f7 | `src/capabilities/result-review/service.ts` | 能力执行 service.ts |
+| f8 | `src/capabilities/result-review/decide.ts` | 纯决定 decide.ts |
 
-## 原始依赖快照
+### 本图边级证据
 
-| Testing生产模块 | 当前全仓受检模块 | 当前全仓依赖 | 违规 |
-| ---: | ---: | ---: | ---: |
-| 23 | 823 | 5817 | 0 |
+| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- |
+| E-L1035-01 | `src/capabilities/tasking/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-02 | `src/capabilities/tasking/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-03 | `src/capabilities/tasking/decide.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-04 | `src/capabilities/delivery/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-05 | `src/capabilities/delivery/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-06 | `src/governance/delivery/delivery-envelope.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-07 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-08 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-09 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-10 | `src/capabilities/result-review/service.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-11 | `src/capabilities/result-review/decide.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1035-12 | `src/capabilities/result-review/decide.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
 
-## 停止边界
+## 守卫、恢复与验证范围
 
-Testing已进入`d17602e`；rerun、real-environment Completion、blocked Resume和product-defect Remediation/retest
-均有真实consumer。真实宿主效果仍由Agent执行，MCP只签发Action并记录观察。
-A2-F1只收紧共享fixture的Ledger/TODO前置事实；本图23个Testing生产模块的直接import边已复核且没有变化。
+文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
+
+涉及的测试与核验入口：
+
+- `tests/capabilities/result-review/service.test.ts`。
+
+## 下钻与相关视图
+
+- [本专题总览](./README.md)
+- [图谱总索引](../README.md)
+- [核验与剩余范围](../01-diagram-review-ledger.md)

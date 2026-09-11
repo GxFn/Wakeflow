@@ -1,3 +1,4 @@
+import {statusLabel} from "./document-state";
 type ReviewFilter = "all" | "runtime" | "contracts" | "tests" | "docs";
 
 interface ReviewDashboardOptions {
@@ -31,7 +32,14 @@ export function mountReviewDashboard(
   const riskList = listAfterHeading(article, "当前风险");
   const anchor = [...article.querySelectorAll<HTMLHeadingElement>("h2")]
     .find((heading) => heading.textContent?.includes("D0：当前变更影响"));
-  if (impactTable === null || evidenceTable === null || riskList === null || anchor === undefined) return false;
+  if (impactTable === null || evidenceTable === null || riskList === null || anchor === undefined) {
+    const notice = document.createElement("p");
+    notice.className = "home-notice";
+    notice.setAttribute("role", "status");
+    notice.textContent = "此页的控制台证据表不完整，请阅读正文；未生成任何验收结论。";
+    article.prepend(notice);
+    return false;
+  }
 
   const impacts = parseImpactRows(impactTable);
   const evidence = parseEvidenceRows(evidenceTable);
@@ -45,8 +53,8 @@ export function mountReviewDashboard(
   const contractCount = countForFilter(impacts, "contracts");
   const testCount = countForFilter(impacts, "tests");
   const docsCount = countForFilter(impacts, "docs");
-  const closedTests = article.textContent?.match(/(\d+)项聚焦测试/u)?.[1] ?? "—";
-  const releaseGateOpen = evidence.some((row) => /未运行|未验证/u.test(row.result));
+  const closedTests = evidence.find((row) => /npm test|TypeScript/u.test(row.label))?.result.match(/(\d+)\s*项/u)?.[1] ?? "—";
+  const hasIncompleteEvidence = evidence.some((row) => /未运行|未验证|未执行|失败/u.test(row.result));
 
   const root = document.createElement("section");
   root.className = "review-dashboard";
@@ -54,19 +62,19 @@ export function mountReviewDashboard(
   root.innerHTML = `
     <header class="review-dashboard-header">
       <div>
-        <p class="review-dashboard-eyebrow">P2 · Review 控制台</p>
+        <p class="review-dashboard-eyebrow">核验快照 · Review 控制台</p>
         <h2>变更集、风险与验证证据</h2>
         <p>从本文快照自动提取路径分布、关闭证据和风险；筛选只改变阅读视图，不改变代码或权威状态。</p>
       </div>
-      <span class="review-decision ${releaseGateOpen ? "review-decision-blocked" : "review-decision-ready"}">
-        ${releaseGateOpen ? "可继续审阅 · 不可声明发布就绪" : "审阅门已闭合"}
+      <span class="review-decision ${hasIncompleteEvidence ? "review-decision-blocked" : "review-decision-ready"}">
+        ${hasIncompleteEvidence ? "包含未完成的验证范围" : "逐项核对下方证据"}
       </span>
     </header>
     <div class="review-metrics" aria-label="审阅摘要">
       <div><span>快照路径</span><strong>${total}</strong><small>源码、合同、测试与文档</small></div>
       <div><span>运行时源码</span><strong>${runtimeCount}</strong><small>治理、工作区与 Foundation</small></div>
       <div><span>合同变化</span><strong>${contractCount}</strong><small>Schema 与生成合同</small></div>
-      <div><span>最近关闭测试</span><strong>${closedTests}</strong><small>不覆盖关闭后的活跃增量</small></div>
+      <div><span>当前基线测试</span><strong>${closedTests}</strong><small>不覆盖关闭后的活跃增量</small></div>
     </div>
     <nav class="review-filters" aria-label="变更集筛选">
       <button type="button" class="active" data-review-filter="all">全部 ${total}</button>
@@ -246,7 +254,7 @@ function siblingAfterHeading<ElementType extends Element>(
 }
 
 function snapshotLabel(options: ReviewDashboardOptions): string {
-  const state = options.truthKind === "stale" ? "待复核快照" : "当前快照";
+  const state = statusLabel(options.truthKind) + "快照";
   const observed = options.snapshotObservedAt ?? options.verifiedAt ?? "时间未记录";
   return `${state} · 观测于 ${observed} · 本控制台不替代 Git diff、测试或权威记录。`;
 }

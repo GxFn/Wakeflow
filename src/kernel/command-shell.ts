@@ -65,7 +65,7 @@ function payloadWithoutRoot(json: JsonValue): JsonValue {
 }
 
 /**
- * 执行一个公共命令：`admit` 在打开根之前做形状特有的纯校验，`body` 在上下文里
+ * 执行一个公共命令：`admit` 在打开上下文之前做形状特有的纯校验，`body` 在上下文里
  * 执行并返回组装好的公共结果。任何异常都收敛为 `WakeflowError`。
  */
 export async function runCommandShell<

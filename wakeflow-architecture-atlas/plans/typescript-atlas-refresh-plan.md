@@ -1,4 +1,13 @@
+---
+truthKind: historical
+verifiedAt: 2026-09-04
+baselineCommit: 0ac416e0b0defb5d94c2a9793ee70f54a231894f
+---
+
 # TypeScript 架构图谱差异核对与流程图更新计划
+
+> **历史计划，2026-09-11 已按九片进度执行本轮更新。** 当前范围、已解决接缝与验证见 [九片更新记录](./l1-nine-slices-refresh.md)。下文保留 2026-09-04 的观察，不作为当前工具或实现清单。
+
 
 > 状态：建议方案；本轮完成审查、证据留存与过期标识，尚未重绘业务图。
 > 日期：2026-09-04（America/Los_Angeles）

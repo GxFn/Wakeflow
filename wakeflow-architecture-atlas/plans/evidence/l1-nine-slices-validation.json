@@ -1,0 +1,63 @@
+{
+  "verifiedAt": "2026-09-11T10:16:10.187371+00:00",
+  "baselineCommit": "7ba1f38938a7387623b0ca588d9cfd54abda5760",
+  "command": "npm run check",
+  "workingDirectory": "wakeflow-architecture-atlas",
+  "exitCode": 0,
+  "checkerTests": {
+    "tests": 8,
+    "passed": 8,
+    "failed": 0
+  },
+  "typecheck": "pass",
+  "structure": {
+    "ok": true,
+    "documents": 48,
+    "mermaidBlocks": 67,
+    "fingerprints": 46,
+    "allFingerprintsCurrent": true,
+    "staleFingerprints": [],
+    "directImportEdgesChecked": 164,
+    "adjacentEvidenceRowsChecked": 454,
+    "symbolReferencesChecked": 268,
+    "linksChecked": 226,
+    "mermaidRendering": "separate check:diagrams",
+    "semanticReview": "documented manual source review; not inferred from imports",
+    "isolation": {
+      "rootWorkspaceMember": false,
+      "rootScriptReference": false,
+      "integrationMentions": [],
+      "buildOutputIgnored": true,
+      "nestedDependenciesIgnored": true
+    },
+    "errors": []
+  },
+  "rendering": {
+    "method": "actual in-app browser run, then receipt validation",
+    "rendererVersion": "11.17.2",
+    "renderedAt": "2026-09-11T10:05:05.954Z",
+    "diagrams": 67,
+    "rendered": 67,
+    "receipt": "l1-nine-slices-render.json"
+  },
+  "build": {
+    "result": "pass",
+    "warning": "Existing large-chunk warning remains; budget was not relaxed."
+  },
+  "manualBrowserReview": [
+    "dark and light themes",
+    "diagram fullscreen and source evidence navigation",
+    "exact file paths for repeated basenames",
+    "heading anchors and document scroll reset",
+    "review dashboard counts 355 / 116 / 120 / 851",
+    "internal documentation and evidence asset links"
+  ],
+  "figjamEvidence": "l1-nine-slices-figjam.json",
+  "rootGateEvidence": "l1-nine-slices-facts.json",
+  "sourceWorktreeNote": "One concurrent comment-only edit in src/kernel/command-shell.ts was reviewed and included with the atlas commit so source fingerprints remain reproducible; no runtime statement changed.",
+  "notVerified": [
+    "real-host Codex/Claude Code delivery",
+    "L2 joint acceptance",
+    "L3/E4 artifact cutover"
+  ]
+}

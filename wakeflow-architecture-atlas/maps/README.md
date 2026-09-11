@@ -1,199 +1,49 @@
 # Wakeflow 架构与代码图谱
 
-> **2026-09-04 图谱审查：当前内容待复核。** 30 份来源指纹全部漂移，检查器发现 11 处已删除源码的图内引用。
-> 已将旧图和逐图台账标为 `stale`，保留旧核验日期、指纹及图正文；尚未完成重绘。
-> 当前更新范围、已实现与目标设计的区分、44 图逐项安排见 [图谱更新计划](../plans/typescript-atlas-refresh-plan.md)。以下旧快照数字不代表当前代码或已验证能力。
+> 核验基线 `7ba1f38`，2026-09-11。当前九个能力切片已落地，19 个公共工具、16 个一次性场景；observation、L2 与 L3/E4 为后续范围。
 
-> 本目录保存对当前 `src/` TypeScript 实现的可验证流程图。
-> 源码、JSON Schema 和测试是实现事实；这里的文档是阅读证据，不是新的状态权威、需求权威或执行指令。
-
-## 目标
-
-- 同时提供总体架构、领域/模块、文件依赖、符号调用、状态恢复和业务纵切视图。
-- 从基础能力开始，逐层解释配置、工作区、治理骨干、垂直切片和端到端业务。
-- 让每个图节点回到具体源码、符号、Schema 和测试，而不是只展示抽象概念。
-- 明确区分已实现、正在实现、尚未实现和历史参考，避免把目标设计写成现行代码。
-- 图标题、节点职责、连线关系、结论和图下说明使用中文；不可翻译的代码标识保留原文并附中文解释。
-
-开始新文档前，先读 [`00-agentic-diagram-standard.md`](./00-agentic-diagram-standard.md)。本轮逐图代码核对
-结果见[`01-diagram-review-ledger.md`](./01-diagram-review-ledger.md)。
-
-## 本轮历史核对范围
-
-本图集已交叉读取Wakeflow源码项目的活跃TS重构任务、同项目早期职责开发历史，以及上级插件项目的
-初始化/多窗口维护历史。历史提供“为什么这样设计”的背景，但不直接拥有当前事实；采用以下优先级：
-
-1. 当前工作树中的生产源码、Schema和测试；
-2. 当前文件审阅台账中的已关闭单元及验证记录；
-3. 活跃任务中尚未闭合的进行中边界；
-4. 旧JS与历史任务只作行为基线和反例。
-
-历史核对确认：初始化`wait_threads/ready`门禁已经撤销，窗口初始化只保留“宿主创建 → 真实ID登记 →
-标题复位”；TS重构采用文件级共同设计循环。提交`d17602e`闭合Delivery、Result、Implementation/Test
-Review、blocked Resume、Completion、real-environment Testing和Product Defect Remediation/retest，并通过902项
-TypeScript测试。随后A1–A4收敛MCP测试装配、22项Controller Route矩阵和跨owner测试归属。提交`f7c005d`又以
-author-owned输入、零写Planning、exact-plan Application和双宿主第18个MCP工具补齐Demand Publication Public；
-该切片提交时通过918项完整TypeScript门；提交`8811a3c`进一步建立Managed Evidence Manifest、真实
-`evidence` ID、本地source selection、零写capture Planning、Managed Evidence Event/Aggregate selector、资源路径/目录、
-完整record tree plan及Foundation candidate tree精确退休。其完整TypeScript门为948项全通过。后续提交继续新增不可变
-Publication Transaction、纯Capture Plan codec、严格Transaction Store、file/tree Payload/Stage Materializer、幂等Final Record
-Publisher、record-set Inventory、三类Demand Root phase、事务期/健康Root Authority闭包，以及内部Application/Recovery与不可逆
-Transaction Settlement、按需Record Reader/Reading Service及第19个metadata-only公共工具。随后TODO身份收敛为
-`todo_<UUIDv4>` shared durable kind；随后A2-F1把不可变Intake收敛为Program/Window/Readiness及完整Ledger member refs，
-TODO owner 52项与Demand Publication/Tasking直接consumer 31项通过。A2-F2a又实现activate/withdraw纯State转换；
-A2-F2b统一Collection活动计数与Board终态过滤；A2-F2c关闭五操作Transaction合同，完整TODO面57项通过。
-A2-F2d关闭Storage source→target、真实写入与崩溃恢复；A2-F2e补齐唯一Service入口，完整TODO面62项通过。
-整体复核又以Intake Readiness关闭精确State revision可达性，完整TODO面63项通过。A2内部手动生命周期关闭；
-Auto Claim consumer仍未实现。A3-S1已新增两个未来Ledger公共工具共用的author-owned输入codec；
-A3-S2进一步建立不携带成员字节的纯Publication Plan；A3-S3已从当前Config唯一Design surface稳定读取并二次复验Markdown，
-由owner分配ID/time并生成零写计划；A3-S4按exact Plan返回Store兼容的新鲜内存字节；A3-S5a把expected Intent守卫加入Store恢复；A3-S5b～S8闭合Apply/Recovery、双family wire/Coordinator与双宿主MCP。A4进一步公开TODO list/item Query与一致page token；A5公开owner-derived exact Intake并复用原Collection transaction；A6删除Demand caller authorityMembers，使Authority唯一来自Intake。公共工具现为23个，零到一MCP链已通过并提交于`cfc61f4`；统一Review随后把公共入口拆成四个静态注册组，完成1023项完整门并提交于`08334ab`。
-
-## HTML阅读页
-
-`wakeflow-architecture-atlas/`是独立、只读源码的仓库顶层图集子项目。本目录`maps/`拥有Markdown与Mermaid正典；
-同级`src/`阅读器只负责显示，构建输出进入仓库根被忽略的`.build/wakeflow-architecture-atlas/`。
-
-阅读器当前支持：
-
-- 中文首页、分层导航和全文文档搜索；
-- 深色/浅色主题；
-- Mermaid ELK分层布局、滚轮缩放、拖动、入口锚定“阅读”、全图、1:1和全屏；
-- 状态/权威/进行中/缺口的语义颜色，以及默认收起、按需展开的边证据编号；
-- 文件依赖页的Cytoscape.js + ELK入口概览、全图、搜索、关系筛选和上下游聚焦；
-- 点击图节点或关系，在全屏内查看审阅信息并定位本页证据表；
-- 变更影响页的Review控制台、变更集筛选、风险和关闭证据联动；
-- 右侧核验状态、来源指纹和页面目录；
-- `[当前]`、`[进行中]`、`[待复核]`和`[历史]`状态提示。
-
-本地启动：
-
-```text
-cd wakeflow-architecture-atlas
-npm run dev
-```
-
-类型与构建检查：
-
-```text
-cd wakeflow-architecture-atlas
-npm run check
-```
-
-HTML、搜索索引和渲染SVG均为可删除重建产物；禁止在`.build/`中手工修正文档。
-
-## 中文与术语
-
-**每张图必须在图后紧邻提供“本图术语说明”，不得只链接全局词汇表。**
-
-- 面向读者的标题、节点、连线标签和注释使用中文。
-- 文件路径、TypeScript符号、Schema字段、事件类型、协议名和工具名保持原始拼写。
-- 固定技术词首次出现时使用“中文名称（英文或代码词）”，后续优先使用中文名称。
-- 缩写必须在本图术语表中展开并解释它在当前图中的具体作用。
-- Mermaid图提供中文`accTitle`和`accDescr`，让无障碍描述与可见图含义一致。
-
-## 两条组织轴
-
-### 按审阅深度下钻
-
-| 深度 | 回答的问题 | 典型视图 |
+| 开发范围 | 当前状态 | 图谱处理 |
 | --- | --- | --- |
-| L0 总体架构 | Wakeflow TS由哪些技术层、领域所有者和宿主接缝组成？ | 能力全景图 |
-| L1 领域关系 | 一个领域拥有哪些权威、投影、端口和相邻消费者？ | 所有者/权威关系图 |
-| L2 垂直切片 | 一个用户结果如何跨领域完成？ | 时序图/纵切图 |
-| L3 文件依赖 | 哪些`.ts`文件直接导入哪些文件？是否越过架构边界？ | 自动生成的导入图 |
-| L4 符号调用 | 哪个入口调用哪个协调器、服务、编解码器或存储？ | 人工核实的调用流 |
-| L5 状态与证据 | 事件、守卫、恢复、测试和未实现边界如何证明？ | 状态/恢复/证据图 |
+| L0 共用机制与六层依赖 | 已建立，物理收敛仍有余项 | 当前机制图保留实际文件，未伪装为最终目录 |
+| L1 workspace / endpoint / requirement / demand / tasking / delivery / result-review / evidence / pod | 九片已落地 | 当前实现图与符号/Schema/测试核对 |
+| L1 observation | 未开始 | 只列全局 status、verify、活动投影和状态栏的停止边界 |
+| L2 场景联合、skills/commands 重写、双宿主真实投递 | 未开始 | 一次性场景不冒充真实宿主端到端验证 |
+| L3 新制品构建、E4 旧树切换 | 未开始 | 候选仍 releaseEligible:false，旧 0.9.6 插件仍是独立制品 |
 
-### 按能力与业务顺序展开
+## 按问题下钻
 
-| 顺序 | 建议文档包 | 主要内容 | 创建条件 |
-| ---: | --- | --- | --- |
-| 00 | `00-agentic-diagram-standard.md` | 双平面、多视图、文件级与 review 级绘图标准 | 已创建 |
-| 01 | `01-overall-architecture/` | TS总体分层、领域所有者、公共入口、依赖方向与宿主接缝 | 当前源码全局边界完成核对 |
-| 02 | `02-foundation/` | 防御性数据、JSON Schema、类型化身份、摘要、根目录文件系统、原子写入、锁、树清单和Git观察 | 基础能力（Foundation）定义、直接消费者和测试完成核对 |
-| 03 | `03-configuration-workspace/` | v3配置、资源矩阵、维护事务、静态物化、活动/本地布局和恢复边界 | 配置与工作区所有者关系完成核对 |
-| 04 | `04-governance-event-sourcing/` | TODO、台账、Demand权威、事件存储、聚合、快照和历史升级器 | 权威来源、写入顺序和重放路径完成核对 |
-| 05 | `05-tasking-slice/` | Demand发布到不可变`TaskPackage`、目标任务规划与查询投影 | 任务规划生产者、消费者和测试闭环稳定 |
-| 06 | `06-implementation-delivery-review/` | 投递准备、`WorkClaim`、智能体宿主效果、效果结果、`TargetResult`和Controller审阅 | 实现主链按当前代码核验 |
-| 07 | `07-review-rework-completion/` | 阻塞代际、恢复、同一`TaskPackage`返工、接受后路由和仅Controller完成 | 审阅/生命周期终态与恢复路径完成核对 |
-| 08 | `08-real-environment-testing/` | `TestCard`、测试`TaskPackage`、测试投递、尝试、结果、审阅与完成 | 测试纵切停止变化并形成验证证据 |
-| 09 | `09-public-mcp-host-seams/` | 官方MCP入口、公共工具、Codex/Claude组合、智能体宿主效果握手和隐私边界 | 只记录真实注册且有消费者的公共能力 |
-| 10 | `10-end-to-end-business-flow/` | 从需求进入到实现、返工、条件测试、完成、归档的业务总览 | 依赖的纵切文档均已核验；不提前补齐缺失能力 |
-
-表中的目录名是创建路线，不是空文档承诺。只有完成对应源码核验时才新增目录或文件。
-
-## 覆盖矩阵
-
-`—`表示尚未创建，`不适用`表示该视图不能为当前层提供额外证据。覆盖矩阵只描述文档完整度，
-不拥有产品或运行状态。
-
-| 文档包 | 总体/权威图 | 变更影响图 | 文件导入图 | 符号调用图 | 状态/恢复图 | 证据图 | 文档状态 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 00 绘图标准 | 已创建 | 不适用 | 不适用 | 不适用 | 不适用 | 已创建 | 当前 |
-| 01 总体架构 | 已创建 | 已创建 | 已创建 | 已创建 | 不适用 | 已创建 | 核实点：23工具、114 Schema；TODO79、A4-A6 48及专项7项通过 |
-| 02 基础能力 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 进行中：Loaded Artifact identity已有首个Manifest consumer，transfer仍冻结 |
-| 03 配置与工作区 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：维护事务、窗口身份和资源矩阵已提交 |
-| 04 治理与事件溯源 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 核实点：A2-A6闭合；Demand只消费Intake refs；Auto Claim仍后续 |
-| 05 任务规划纵切 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：implementation/test共用公共Planning |
-| 06 实现投递与审阅 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：Delivery/Result/Review公共纵切闭合 |
-| 07 返工与完成 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：普通返工、产品缺陷返工、Resume与Completion闭合 |
-| 08 真实环境测试 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：Card、Task、Delivery、Result、Review与retest闭合 |
-| 09 公共MCP与宿主接缝 | 已创建 | 不适用 | 复用01 | 已创建 | 按能力记录 | 嵌入各图 | 当前：23工具；TODO Inspection/Intake双宿主公开，Auto Claim不执行 |
-| 10 端到端业务 | 已创建 | 主图内记录边界 | 由下层提供 | 由下层提供 | 已创建 | 已创建 | 核实点：Ledger→TODO→Demand→Route公开；Archive/Research/Redesign仍缺口 |
-
-## 每个文档包的可选文件
-
-| 文件 | 职责 | 何时创建 |
-| --- | --- | --- |
-| `README.md` | 当前层或纵切的总体结论、主图和下钻入口 | 每个已核验文档包必需 |
-| `file-dependencies.md` | 直接导入图、架构层级与禁止依赖 | 存在多个关键文件或依赖边界时 |
-| `runtime-call-flow.md` | 入口到所有者/存储的符号级调用路径 | 导入图不足以解释真实行为时 |
-| `state-and-recovery.md` | 事件、聚合、守卫、CAS/锁、失败关闭和恢复 | 存在耐久状态或副作用时 |
-| `review-evidence.md` | 节点到 Schema、测试、负例和未实现边界的映射 | 纵切进入可审阅结论时 |
-| `change-impact.md` | Git差异到消费者、状态、公共合同和测试的影响 | 审阅未提交实现或重大重构时 |
-
-不适用的文件不创建，不用空文档维持目录对称。
-
-## 每份文档的固定合同
-
-| 部分 | 必须回答的问题 |
+| 入口 | 回答的问题 |
 | --- | --- |
-| 核验基线 | 核验日期、Git `HEAD`、工作树是否包含未提交实现，以及本次读取的源码范围 |
-| 当前结论 | 这条链已经提供什么用户或系统结果？ |
-| 主流程图 | 生产者、权威、消费者、事件/状态和外部宿主效果如何连接？ |
-| 本图术语说明 | 图中每个缩写、固定技术词、节点前缀和特殊连线分别表示什么？ |
-| 文件与符号映射 | 每个节点对应哪些文件、导出符号、直接调用方和被调用方？ |
-| 状态与恢复 | 正常转换、幂等、CAS/锁、失败关闭和恢复边界是什么？ |
-| 未实现边界 | 哪些相邻能力尚未存在，不能由图推断为已完成？ |
-| 验证证据 | 哪些聚焦测试、类型、Schema、架构或差异检查支撑结论？ |
+| [Wakeflow：九个切片的当前架构](./01-overall-architecture/README.md) | 六层职责与当前过渡实现 |
+| [Foundation：持久性与根约束](./02-foundation/README.md) | 基础原语与业务 owner 的边界 |
+| [工作区：配置、维护事务与静态资源](./03-configuration-workspace/README.md) | 工作区维护的权威与生成物 |
+| [Demand：不可变事实与可重建视图](./04-governance-event-sourcing/README.md) | 从需求包到 Demand 事件与视图 |
+| [任务规划：需求锚点、谱系与测试合同](./05-tasking-slice/README.md) | 一次追加生成任务合同 |
+| [投递：信封、工作声明与回交观察](./06-implementation-delivery-review/README.md) | 当前投递与目标结果的接力 |
+| [评审、升级与完成即归档](./07-review-rework-completion/README.md) | 评审决定与下一责任 |
+| [测试：任务合同、逐步记录与基线对比](./08-real-environment-testing/README.md) | 测试合同到 Controller 决定 |
+| [公共 MCP 与宿主接缝](./09-public-mcp-host-seams/README.md) | 内容与状态通道的分工 |
+| [业务主线：需求包到归档和 Pod 关闭](./10-end-to-end-business-flow/README.md) | 九个已落地切片的业务接力 |
+| [内核：可复用的调用与准入机制](./11-kernel/README.md) | 共同命令外壳与两种变更形状 |
+| [端点：逻辑窗口、绑定与 worktree 回执](./12-endpoint/README.md) | 端点登记与可验证的执行位置 |
+| [需求包：确认摘要、不可变记录与认领板](./13-requirement/README.md) | 需求内容、确认与认领的不同事实 |
+| [受管证据：来源、捕获、发布与读取](./14-evidence/README.md) | 受管证据从选择到结果消费 |
+| [Pod：完整窗口组与检出回执](./15-pod/README.md) | Pod 配置和端点事实形成执行环境 |
 
-## 状态词
+## 事实与阅读方式
 
-状态必须写进节点文字，不能只依赖颜色：
+先看业务总览，再进入能力的文件依赖、符号调用和恢复图。导入是静态关系，调用顺序需核对使用点；状态按 owner 分图，Agent 决定不画成机器强制转换。
 
-- `[已实现]`：存在真实生产者、消费者和验证证据。
-- `[进行中]`：当前工作树正在实现；不得描述为完成或公共能力。
-- `[未实现]`：只用于标记明确停止边界，不画出虚构内部步骤。
-- `[历史]`：仅用于解释旧 JS 或历史设计，必须与当前 TS 主图隔离。
+- `[当前]`：代码、合同、实际消费者和验证入口已对照，指纹匹配核验范围。
+- `[待复核]`：来源变化后保留原快照，不能继续当作当前操作依据。
+- `[进行中]`：有明确未提交实现边界；当前本轮代码基线没有这类页面。
+- `[目标设计]`：明确的设计依据，不能当成生产调用链；本轮未展开 observation 内部设计。
+- `[历史]`：旧提交的说明，不能进入当前能力统计。
 
-## 维护规则
+每张图均有本图术语说明、节点/符号定位和独立边证据表。文件依赖为 AST 精选图，完整路径写在节点表；同名 service.ts 通过完整路径区分。
 
-1. 先读真实定义、直接调用方/导入、Schema、写入者、消费者和聚焦测试，再画图。
-2. 静态导入、运行时调用、耐久状态转换和智能体自主选择使用不同视图。
-3. 图内可见文案使用中文，每张图后立即解释本图术语。
-4. 一份主图只回答一个问题；跨层关系通过稳定节点 ID 和下钻链接连接。
-5. 当前实现图与目标图分开；历史 JS 图不得复制成 TS 现状。
-6. 不写本机绝对路径、线程/会话 ID、raw handle、secret 或缓存路径。
-7. 不复制大段实现代码；节点映射使用仓库相对路径和稳定符号名。
-8. 活跃代码变化后，先重新核验来源和测试，再更新图与状态。
-9. 未运行的验证必须明确记录，不能用局部测试代替发布就绪结论。
+## 核验与后续
 
-## 第一批内容建议
+[当前逐图台账](./01-diagram-review-ledger.md) · [绘图标准](./00-agentic-diagram-standard.md) · [本轮范围和验证](../plans/l1-nine-slices-refresh.md)
 
-`01-overall-architecture/`至`10-end-to-end-business-flow/`已经建立首轮覆盖。下一步不是继续扩展
-抽象图，而是随真实源码变化刷新来源指纹、逐图验证并修正漂移。Demand Publication Public已提交；Managed
-Evidence已完成Manifest、零写capture Planning、Event/Aggregate selector、资源路径/record plan、不可变Transaction、严格
-Transaction Store、file/tree Payload/Stage Materializer、Final Record Publisher、Root Inventory/Authority闭包及内部
-Application/Recovery/Transaction Settlement、按需Record Reader/Reading Service及metadata-only Public。Research Completion、
-Implementation Redesign与Archive仍须等待真实生产者、消费者和测试后再建图。TODO A2-F1已经关闭不可变Intake合同，A2-F2a已关闭纯State转换；
-A2内部State、读模型、Transaction、Storage与Service已闭合并完成可达性复核；Public接线前仍不把activate/withdraw画成外部可调用主链。
+Schema 仍为 wire 权威；配置仍 v3 且已包含 Pod，最终切换不在本轮。全局 status/verify、完整活动投影与状态栏待 observation；skills/commands 重写与双宿主真实投递待 L2；可安装新制品与旧树删除待 L3/E4。

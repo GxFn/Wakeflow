@@ -8,11 +8,12 @@ import type {
   DependencyExplorerSelection,
 } from "./dependency-explorer";
 import "./styles.css";
+import {statusLabel, statusClass, fileNodePaths, GROUP_LABELS, type TruthKind} from "./document-state";
 
 interface FlowFrontmatter {
   readonly diagramId?: string;
   readonly viewType?: string;
-  readonly truthKind?: "current-code" | "in-progress-worktree" | "stale" | "historical";
+  readonly truthKind?: TruthKind;
   readonly reviewDepth?: string;
   readonly verifiedAt?: string;
   readonly snapshotObservedAt?: string;
@@ -60,10 +61,12 @@ interface DiagramEvidenceBinding {
 
 type DiagramFitMode = "read" | "all" | "actual";
 
-const rawModules = import.meta.glob("../maps/**/*.md", {
-  eager: true,
-  import: "default",
-  query: "?raw",
+const rawModules = {
+  ...import.meta.glob("../maps/**/*.md", {eager: true, import: "default", query: "?raw"}),
+  ...import.meta.glob("../plans/*.md", {eager: true, import: "default", query: "?raw"}),
+} as Record<string, string>;
+const evidenceAssets = import.meta.glob("../plans/evidence/*.json", {
+  eager: true, import: "default", query: "?url",
 }) as Record<string, string>;
 
 const article = requiredElement<HTMLElement>("article");
@@ -115,10 +118,10 @@ function parseDocument(raw: string): ParsedDocument {
 }
 
 function createDocument(modulePath: string, raw: string): FlowDocument {
-  const marker = "/maps/";
+  const marker = modulePath.includes("/plans/") ? "/plans/" : "/maps/";
   const markerIndex = modulePath.lastIndexOf(marker);
   if (markerIndex < 0) throw new Error(`Unexpected documentation path: ${modulePath}`);
-  const relativePath = modulePath.slice(markerIndex + marker.length);
+  const relativePath = (marker === "/plans/" ? "plans/" : "") + modulePath.slice(markerIndex + marker.length);
   const id = relativePath.replace(/\.md$/u, "");
   const parsed = parseDocument(raw);
   const title = parsed.body.match(/^#\s+(.+)$/mu)?.[1]?.trim() ?? id;
@@ -144,26 +147,6 @@ function compareDocuments(left: FlowDocument, right: FlowDocument): number {
     || left.id.localeCompare(right.id, "zh-CN", {numeric: true});
 }
 
-function statusLabel(truthKind: FlowFrontmatter["truthKind"]): string {
-  switch (truthKind) {
-    case "current-code": return "当前";
-    case "in-progress-worktree": return "进行中";
-    case "stale": return "待复核";
-    case "historical": return "历史";
-    default: return "指南";
-  }
-}
-
-function statusClass(truthKind: FlowFrontmatter["truthKind"]): string {
-  return truthKind === "stale"
-    ? "status-stale"
-    : truthKind === "current-code"
-      ? "status-current"
-      : truthKind === "in-progress-worktree"
-        ? "status-progress"
-        : "status-guide";
-}
-
 function documentRoute(id: string): string {
   return `#/doc/${id}`;
 }
@@ -187,9 +170,7 @@ function renderNavigation(): void {
     const section = document.createElement("section");
     section.className = "navigation-group";
     const heading = document.createElement("h2");
-    heading.textContent = groupName === "根目录"
-      ? "标准与总览"
-      : groupName.replace(/^\d+-/u, "").replaceAll("-", " ");
+    heading.textContent = GROUP_LABELS[groupName] ?? groupName;
     section.append(heading);
     for (const item of groupDocuments) {
       const link = document.createElement("a");
@@ -280,22 +261,26 @@ function renderHome(): void {
       <p class="eyebrow">本地可重建阅读层</p>
       <h1>Wakeflow TypeScript 流程图集</h1>
       <p class="home-lead">从总体架构下钻到文件、符号、状态与证据。Markdown和Mermaid是唯一文档正典；本页面只负责导航、缩放与阅读。</p>
-      <div class="home-notice" role="note">当前源码仍有另一个活跃开发任务。标记为“待复核”的页面保留精确历史快照，不能当作实时最终状态。</div>
+      <div class="home-notice" role="note">核验基线 ${documentById.get("01-overall-architecture/README")?.frontmatter.baselineCommit?.slice(0, 7) ?? "未记录"}。各页标签表示其来源快照；observation、真实宿主联合和新制品切换仍是后续范围。</div>
     </section>
     <section class="home-grid" aria-label="流程图入口">
-      ${homeCard("总体架构", "查看技术层、领域所有者、宿主接缝与公共MCP边界。", "01-overall-architecture/README", "待复核")}
-      ${homeCard("关键文件依赖", "用ELK正交布局搜索文件、聚焦1-hop与上下游，并按选择定位边级证据。", "01-overall-architecture/file-dependencies", "当前")}
-      ${homeCard("公共MCP调用时序", "区分官方SDK、固定组合、三个工具处理器和真实领域所有者。", "01-overall-architecture/runtime-call-flow", "当前")}
-      ${homeCard("变更影响与证据", "用Review控制台筛选变更集、风险、关闭证据和尚未执行的发布门。", "01-overall-architecture/review-evidence", "待复核")}
-      ${homeCard("Foundation能力", "下钻确定值、根作用域、稳定读取、原子提交、锁与恢复。", "02-foundation/README", "进行中")}
-      ${homeCard("配置与工作区", "查看Config权威、资源矩阵、Maintenance事务、Binding与投影恢复。", "03-configuration-workspace/README", "进行中")}
-      ${homeCard("Demand事件权威", "检查Command、Commit追加、Snapshot-tail重放与跨资源Publication。", "04-governance-event-sourcing/README", "进行中")}
-      ${homeCard("Tasking垂直切片", "从Demand权威下钻到不可变TaskPackage事件、preview/apply与文件投影。", "05-tasking-slice/README", "进行中")}
-      ${homeCard("实现投递与审阅", "追踪Delivery准备、WorkClaim、宿主效果、TargetResult与Controller决定。", "06-implementation-delivery-review/README", "进行中")}
-      ${homeCard("返工与Demand完成", "查看同TaskPackage返工、blocked恢复、接受后路由与成功终态。", "07-review-rework-completion/README", "进行中")}
-      ${homeCard("真实环境Testing", "追踪TestCard、Attempt、Delivery授权、Dispatch、宿主效果与Test Result。", "08-real-environment-testing/README", "进行中")}
-      ${homeCard("公共MCP与宿主接缝", "区分公开三工具、固定宿主组合、私有Binding与Agent宿主效果握手。", "09-public-mcp-host-seams/README", "进行中")}
-      ${homeCard("端到端业务总览", "组合需求、实现、返工、条件测试、完成与当前归档停止边界。", "10-end-to-end-business-flow/README", "进行中")}
+      ${homeCard("业务主线", "从需求包到归档、继续与 Pod 关闭。", "10-end-to-end-business-flow/README")}
+      ${homeCard("总体架构", "六层职责、九个切片及尚未接通的 observation。", "01-overall-architecture/README")}
+      ${homeCard("公共 MCP 调用", "登记表、固定宿主装配与真实能力执行器。", "01-overall-architecture/runtime-call-flow")}
+      ${homeCard("核验快照", "代码、场景、图谱和未运行验证各有范围。", "01-overall-architecture/review-evidence")}
+      ${homeCard("需求包与看板", "确认摘要、不可变记录、认领状态与恢复。", "13-requirement/README")}
+      ${homeCard("配置与工作区", "Config、资源矩阵与维护事务。", "03-configuration-workspace/README")}
+      ${homeCard("执行端点", "宿主观察、绑定代际和 worktree 回执。", "12-endpoint/README")}
+      ${homeCard("任务规划", "锚点、谱系、用户审阅门和测试合同。", "05-tasking-slice/README")}
+      ${homeCard("投递与回调", "许可、围栏、落地证据和固定 Controller 回调。", "06-implementation-delivery-review/README")}
+      ${homeCard("评审与归档", "独立检查、升级、完成即归档和继续。", "07-review-rework-completion/README")}
+      ${homeCard("测试合同", "逐步记录、失败分类和基线对比。", "08-real-environment-testing/README")}
+      ${homeCard("受管证据", "文件、观察、链接、提交和不可变发布。", "14-evidence/README")}
+      ${homeCard("Pod 执行环境", "完整窗口组、worktree 准入和两段关闭。", "15-pod/README")}
+      ${homeCard("应用内核", "调用形状、工作声明、观察和共享边界。", "11-kernel/README")}
+      ${homeCard("事件流", "提交批、快照加尾部和首次发布。", "04-governance-event-sourcing/README")}
+      ${homeCard("基础原语", "根约束、稳定读取、原子写入和恢复。", "02-foundation/README")}
+      ${homeCard("文件依赖", "完整路径区分同名文件；导入不等于运行调用。", "01-overall-architecture/file-dependencies")}
     </section>
     <section class="home-steps">
       <h2>阅读方式</h2>
@@ -318,18 +303,15 @@ function renderHome(): void {
       card.click();
     });
   });
-  mainContent.focus();
+  mainContent.focus({preventScroll: true});
+  window.scrollTo({top: 0, behavior: "instant"});
 }
 
-function homeCard(title: string, description: string, id: string, status: string): string {
-  const statusClassName = status === "待复核"
-    ? "status-stale"
-    : status === "进行中"
-      ? "status-progress"
-      : "status-current";
+function homeCard(title: string, description: string, id: string): string {
+  const truth = documentById.get(id)?.frontmatter.truthKind;
   return `
     <article class="home-card" role="link" tabindex="0" data-home-document="${id}">
-      <div class="home-card-heading"><h2>${title}</h2><span class="status-mark ${statusClassName}">${status}</span></div>
+      <div class="home-card-heading"><h2>${title}</h2><span class="status-mark ${statusClass(truth)}">${statusLabel(truth)}</span></div>
       <p>${description}</p>
       <strong>打开图与证据 →</strong>
     </article>
@@ -337,6 +319,8 @@ function homeCard(title: string, description: string, id: string, status: string
 }
 
 async function renderDocument(item: FlowDocument): Promise<void> {
+  const resetScroll = currentDocument?.id !== item.id;
+  const previousScroll = window.scrollY;
   destroyDependencyExplorer();
   currentDocument = item;
   setActiveNavigation(item.id);
@@ -345,7 +329,7 @@ async function renderDocument(item: FlowDocument): Promise<void> {
   const rendered = await marked.parse(item.body);
   if (generation !== renderGeneration) return;
   article.innerHTML = DOMPurify.sanitize(rendered, {USE_PROFILES: {html: true}});
-  if (item.frontmatter.viewType === "evidence") {
+  if (item.id === "01-overall-architecture/review-evidence" && item.frontmatter.viewType === "evidence") {
     const {mountReviewDashboard} = await import("./review-dashboard");
     if (generation !== renderGeneration) return;
     mountReviewDashboard(article, {
@@ -357,9 +341,11 @@ async function renderDocument(item: FlowDocument): Promise<void> {
   assignHeadingIds();
   renderMetadata(item);
   renderTableOfContents();
+  rewriteArticleLinks(item);
   bindArticleLinks();
   await renderMermaidDiagrams(generation);
-  mainContent.focus();
+  mainContent.focus({preventScroll: true});
+  window.scrollTo({top: resetScroll ? 0 : previousScroll, behavior: "instant"});
   closeMobileSidebar();
 }
 
@@ -420,6 +406,23 @@ function renderTableOfContents(): void {
   }
 }
 
+function rewriteArticleLinks(item: FlowDocument): void {
+  for (const anchor of article.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+    const href = anchor.getAttribute("href") ?? "";
+    if (/^[a-z]+:/iu.test(href) || href.startsWith("#")) continue;
+    const [file, fragment] = href.split("#", 2);
+    if (file?.endsWith(".md")) {
+      const id = resolveDocumentLink(item.id, file);
+      if (id !== null) anchor.href = documentRoute(id) + (fragment ? `?anchor=${encodeURIComponent(fragment)}` : "");
+    } else if (file?.endsWith(".json")) {
+      const base = item.id.startsWith("plans/") ? `/${item.id}` : `/maps/${item.id}`;
+      const resolved = new URL(file, `http://atlas.invalid${base}`).pathname;
+      const asset = evidenceAssets[`..${resolved}`];
+      if (asset) anchor.href = asset;
+    }
+  }
+}
+
 function bindArticleLinks(): void {
   if (articleLinksBound) return;
   articleLinksBound = true;
@@ -432,16 +435,17 @@ function bindArticleLinks(): void {
     if (anchor === null) return;
     const href = anchor.getAttribute("href");
     if (href === null) return;
+    if (href.startsWith("#/")) return;
     if (href.startsWith("#")) {
       event.preventDefault();
       document.getElementById(href.slice(1))?.scrollIntoView({behavior: "smooth"});
       return;
     }
     if (!href.endsWith(".md") && !href.includes(".md#")) return;
-    event.preventDefault();
     const [pathPart, anchorPart] = href.split("#", 2);
     const resolved = resolveDocumentLink(item.id, pathPart ?? "");
     if (resolved !== null) {
+      event.preventDefault();
       location.hash = documentRoute(resolved);
       if (anchorPart !== undefined) {
         setTimeout(() => document.getElementById(anchorPart)?.scrollIntoView(), 0);
@@ -451,15 +455,17 @@ function bindArticleLinks(): void {
 }
 
 function resolveDocumentLink(currentId: string, href: string): string | null {
-  const base = currentId.split("/");
+  const base = (currentId.startsWith("plans/") ? currentId : `maps/${currentId}`).split("/");
   base.pop();
   for (const segment of href.replace(/\.md$/u, "").split("/")) {
     if (segment === "." || segment === "") continue;
     if (segment === "..") base.pop();
     else base.push(segment);
   }
-  const id = base.join("/");
-  return documentById.has(id) ? id : null;
+  const physicalPath = base.join("/");
+  const id = physicalPath.startsWith("maps/") ? physicalPath.slice(5)
+    : physicalPath.startsWith("plans/") ? physicalPath : null;
+  return id !== null && documentById.has(id) ? id : null;
 }
 
 async function renderMermaidDiagrams(generation: number): Promise<void> {
@@ -476,6 +482,7 @@ async function renderMermaidDiagrams(generation: number): Promise<void> {
         const {mountDependencyExplorer} = await import("./dependency-explorer");
         const handle = await mountDependencyExplorer(host, {
           source,
+          filePaths: fileNodePaths(currentDocument?.body ?? ""),
           theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
           onSelection: setDependencySelection,
           onLocateEvidence: (token) => {
@@ -579,7 +586,7 @@ function createDiagramShell(source: string): {
       ? 1
       : mode === "all"
         ? Math.max(0.12, fullScale)
-        : Math.max(0.55, widthScale);
+        : Math.max(0.8, widthScale);
     const centeredX = (viewport.clientWidth - (diagramWidth + canvasPadding) * transform.scale) / 2;
     const centeredY = (viewport.clientHeight - (diagramHeight + canvasPadding) * transform.scale) / 2;
     const entryNode = entryNodeId === null
@@ -875,13 +882,15 @@ async function renderRoute(): Promise<void> {
     renderHome();
     return;
   }
-  const id = decodeURIComponent(route.slice(prefix.length));
+  const [pathPart, anchorPart] = route.slice(prefix.length).split("?anchor=", 2);
+  const id = decodeURIComponent(pathPart ?? "");
   const item = documentById.get(id);
   if (item === undefined) {
     article.innerHTML = "<h1>未找到文档</h1><p>该文档可能已移动或尚未生成。</p>";
     return;
   }
   await renderDocument(item);
+  if (anchorPart) document.getElementById(decodeURIComponent(anchorPart))?.scrollIntoView();
 }
 
 menuToggle.addEventListener("click", () => {

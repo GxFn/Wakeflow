@@ -1,217 +1,172 @@
 ---
 diagramId: ts-foundation-capability-b0
 viewType: architecture
-truthKind: stale
-reviewDepth: L1
-verifiedAt: 2026-09-03
-snapshotObservedAt: 2026-09-03T03:13:56-07:00
-baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
-sourceFingerprint: sha256:dbd7556c754c439d9f93d3760cab89655a7a60d8cf61cedaa66579ba9736225f
-audience:
-  - maintainer
-  - reviewer
-  - newcomer
-documentationOwner: Wakeflow Source Maintenance
-generatedBy: mixed
-refreshTriggers:
-  - src/foundation/**
-  - src/contracts/identity/**
-  - src/contracts/schemas/identity/**
-  - src/contracts/generated/identity/**
-  - src/contracts/schemas/foundation/**
-  - src/contracts/generated/foundation/**
-  - tests/contracts/identity/**
-  - tests/foundation/**
+truthKind: current-code
+reviewDepth: L0
+verifiedAt: 2026-09-11
+baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
+sourceFingerprint: sha256:fdc551b4c447ccad6291e9b9ff7bb638f7c47c39969c632718f9f8fa3883225d
+audience: [maintainer, reviewer]
+documentationOwner: Wakeflow Architecture Atlas
+generatedBy: manual-review
 sourcePaths:
-  - src/foundation/**
-  - src/contracts/identity/**
+  - src/capabilities/demand/*.ts
+  - src/capabilities/demand/archive.ts
+  - src/configuration/*.ts
+  - src/contracts/generated/configuration/*.ts
+  - src/contracts/generated/foundation/*.ts
+  - src/contracts/generated/governance/archive/*.ts
+  - src/contracts/generated/governance/board/*.ts
+  - src/contracts/generated/governance/delivery/*.ts
+  - src/contracts/generated/governance/demand/*.ts
+  - src/contracts/generated/governance/evidence/*.ts
+  - src/contracts/generated/governance/ledger/*.ts
+  - src/contracts/generated/governance/lifecycle/*.ts
+  - src/contracts/generated/governance/result/*.ts
+  - src/contracts/generated/governance/review/*.ts
+  - src/contracts/generated/governance/tasking/*.ts
+  - src/contracts/generated/governance/testing/*.ts
+  - src/contracts/generated/identity/*.ts
+  - src/contracts/generated/workspace/*.ts
+  - src/contracts/identity/*.ts
+  - src/contracts/vocabulary/*.ts
+  - src/foundation/artifact/*.ts
+  - src/foundation/crypto/*.ts
+  - src/foundation/data/*.ts
+  - src/foundation/filesystem/*.ts
+  - src/foundation/filesystem/durable-atomic-file-write.ts
+  - src/foundation/filesystem/rooted-directory.ts
+  - src/foundation/filesystem/rooted-exclusive-file-lock.ts
+  - src/foundation/filesystem/stable-file-read.ts
+  - src/foundation/git/*.ts
+  - src/foundation/identity/*.ts
+  - src/foundation/node/*.ts
+  - src/foundation/numeric/*.ts
+  - src/foundation/resource/*.ts
+  - src/foundation/schema/*.ts
+  - src/foundation/text/*.ts
+  - src/foundation/time/*.ts
+  - src/governance/delivery/*.ts
+  - src/governance/demand/event-sourcing/*.ts
+  - src/governance/demand/model/*.ts
+  - src/governance/demand/publication/*.ts
+  - src/governance/evidence/*.ts
+  - src/governance/ledger/*.ts
+  - src/governance/lifecycle/*.ts
+  - src/governance/result/*.ts
+  - src/governance/review/*.ts
+  - src/governance/tasking/*.ts
+  - src/governance/testing/*.ts
+  - src/kernel/*.ts
+  - src/kernel/requirement-board.ts
+  - src/workspace/*.ts
+  - src/workspace/active/*.ts
+  - src/workspace/window-runtime/*.ts
 schemaPaths:
-  - src/contracts/schemas/foundation/**
-  - src/contracts/schemas/identity/**
+  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
+  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
+  - src/contracts/schemas/foundation/git-object-id.schema.json
+  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
+  - src/contracts/schemas/foundation/portable-resource-path.schema.json
+  - src/contracts/schemas/foundation/sha256-digest.schema.json
+  - src/contracts/schemas/foundation/utc-instant.schema.json
+  - src/contracts/schemas/governance/archive/demand-archive-manifest.schema.json
+  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
+  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
+  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
+  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
+  - src/contracts/schemas/governance/result/target-result.schema.json
+  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
+  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
+  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
+  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
+  - src/contracts/schemas/governance/tasking/task-package.schema.json
+  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
+  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
+  - src/contracts/schemas/workspace/window-host-binding.schema.json
 testPaths:
-  - tests/foundation/**
-  - tests/contracts/identity/**
+  - tests/capabilities/demand/service.test.ts
+  - tests/capabilities/requirement/service.test.ts
+  - tests/foundation/filesystem/durable-atomic-file-write.test.ts
+refreshTriggers:
+  - .dependency-cruiser.cjs
+  - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# Foundation：确定性能力与安全边界
+# Foundation：持久性与根约束
 
-> 本文描述提交`d17602e`中的TypeScript Foundation。Foundation 是宿主中立的能力层，不拥有
-> Wakeflow 配置、工作区或治理业务状态。
->
-> Runtime JSON Schema、`utc-instant`、只创建确定性 JSON 资源和完整 Git object ID均已进入提交基线；
-> 当前源码中的Managed Evidence已真实消费Loaded Artifact transfer candidate、directory candidate退休、完整tree inspection和通用portable path连接；
-> A1又让真实TODO Intake/State/Transaction/Demand consumers进入共享`todo_<UUIDv4>` durable kind。
+基础层只解释字节、路径、节点和持久提交，不决定需求、验收或恢复授权。
 
-## 当前结论
+> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
-Foundation 把任意进程内输入逐步收窄为确定值，并把文件系统效果封装在根作用域、稳定观察、
-原子提交、耐久同步和恢复边界内。上层配置、工作区、治理、宿主与公共入口复用这些能力，但
-Foundation 不反向依赖任何产品领域。
-
-当前 `src/foundation/` 有 63 个生产模块；聚焦 dependency-cruiser 闭包包含 68 个模块、301 条依赖、
-0 条规则违规。文件系统占 36 个模块，是该层最大且最具状态/恢复语义的能力簇。
-
-## 核验快照
-
-| 项目 | 读取值 |
-| --- | --- |
-| 分支/提交 | `main`；当前核实点`08334ab9c1d8bd923966a976fdf7989bc56ac38c` |
-| 工作树 | 生产Foundation无未提交改动；Loaded Artifact transfer、directory candidate退休与portable path join已有Managed Evidence真实consumer |
-| 生产源码 | 63 个 `.ts` 模块 |
-| Foundation 测试 | 57 个 `*.test.ts`；另有 2 个测试支持文件 |
-| Foundation 合同 | 6 个 JSON Schema、6 个生成 TypeScript 合同 |
-| 依赖扫描 | 68 个闭包模块、301 条依赖、0 违规；SWC 解析器 |
-| 来源指纹 | `dbd7556c754c439d9f93d3760cab89655a7a60d8cf61cedaa66579ba9736225f` |
-
-## B0：Foundation 能力全景
+## 基础原语与业务 owner 的边界
 
 ```mermaid
 flowchart TB
-  accTitle: Wakeflow TypeScript Foundation确定性能力与安全边界
-  accDescr: 图从左到右分成输入与合同、确定性I/O主链、支撑与派生能力、上层消费四个区域。未知输入先进入确定值管线，再依次建立根作用域、稳定观察和耐久原子提交；时间与恢复从下方支撑写入，复合能力从主链派生并向产品领域提供能力。
-
-  subgraph INGRESS["① 输入与合同边界"]
-    direction LR
-    INPUT["[外部] 未知进程输入\n对象 / JSON / 字节 / 路径"]
-    SCHEMA["[Schema/生成] Foundation词法合同"]
-  end
-
-  subgraph CORE["② 确定性 I/O 主链"]
-    direction LR
-    DATA["[已实现] 确定值管线\n无副作用准入 → JSON/Schema → 规范化 → 摘要"]
-    ROOT["[已实现] 根作用域\n可移植路径 + RootedDirectory"]
-    READ["[已实现] 稳定观察\n文件 / 目录 / 严格文本 / 确定性JSON"]
-    ATOMIC["[已实现] 耐久原子提交\n创建 / 替换 / fsync / 回读"]
-  end
-
-  subgraph EXTENSIONS["③ 支撑与派生能力"]
-    direction LR
-    TIME_EVOLUTION["[已实现] 时间与演进\nUTC / 单调时间 / 事件版本"]
-    RECOVERY["[已实现] 互斥与恢复\n独占锁 + 自描述stage"]
-    CREATE_ONLY["[已实现] 只创建确定性JSON资源\n已由Test Dispatch投影消费"]
-    TREE_ARTIFACT["[已实现] 目录树与Artifact\n候选 / 摘要 / 精确退休 / 同根发布"]
-    GIT["[已实现] Git观察\n完整对象身份"]
-  end
-
-  subgraph USAGE["④ 上层消费边界"]
-    direction TB
-    CONSUMERS["[消费者] Configuration / Workspace / Governance\nHosts / Entrypoints / Contracts"]
-  end
-
-  INPUT -->|"E-B0-01 结构准入"| DATA
-  SCHEMA -->|"E-B0-02 词法来源"| DATA
-  SCHEMA -->|"E-B0-03 路径/时间/Git身份模式"| ROOT
-  DATA -->|"E-B0-04 确定策略与摘要"| ROOT
-  ROOT -->|"E-B0-05 前后复验"| READ
-  READ -->|"E-B0-06 签发完整前序事实"| ATOMIC
-  RECOVERY -->|"E-B0-07 保护临界区/写前恢复"| ATOMIC
-  READ -->|"E-B0-08 读取已有值"| CREATE_ONLY
-  ATOMIC -->|"E-B0-09 仅创建发布"| CREATE_ONLY
-  ROOT -->|"E-B0-10 约束树范围"| TREE_ARTIFACT
-  ATOMIC -->|"E-B0-11 发布原语"| TREE_ARTIFACT
-  DATA -->|"E-B0-12 候选摘要"| GIT
-  ROOT -->|"E-B0-13 仓库与隔离worktree"| GIT
-  TIME_EVOLUTION -->|"E-B0-14 超时/记录/历史升级"| RECOVERY
-
-  DATA ==>|"E-B0-15 向上层提供解析与摘要"| CONSUMERS
-  ROOT ==>|"E-B0-16 向上层提供根作用域读取"| CONSUMERS
-  ATOMIC ==>|"E-B0-17 向上层提供持久化与恢复"| CONSUMERS
-  TREE_ARTIFACT ==>|"E-B0-18 向上层提供复合能力"| CONSUMERS
+  accTitle: 基础原语与业务 owner 的边界
+  accDescr: 基础原语与业务 owner 的边界；箭头区分当前代码步骤、返回事实与明确的条件。
+  owner["业务 owner 的明确操作"]
+  root["固定根与节点身份"]
+  read["有界稳定读取"]
+  write["创建 / 精确替换"]
+  lock["独占短锁"]
+  receipt["持久提交回执"]
+  owner -->|"E-L1004-01 打开受约束目录"| root
+  root -->|"E-L1004-02 读回节点与完整字节"| read
+  owner -->|"E-L1004-03 按 owner 协调临界区"| lock
+  lock -->|"E-L1004-04 创建或比较来源后替换"| write
+  write -->|"E-L1004-05 同步与复验提交结果"| receipt
 ```
 
 ### 本图术语说明
 
-| 图中术语 | 解释 |
+| 术语 | 本图含义 |
 | --- | --- |
-| 无副作用自有数据读取 | 通过 Proxy 检测、原型和属性描述符读取数据，不触发 getter、`toJSON` 或调用方代码 |
-| 递归 JSON 值准入 | 把未知值转换为无源引用、递归冻结的 JSON 树，并拒绝循环、代理、隐藏字段和非法数值 |
-| RFC 8785 | JSON Canonicalization Scheme；为相同 JSON 值生成稳定字节表示 |
-| 可移植资源路径 | 只表达根目录内逻辑位置的 NFC 相对路径；不包含物理绝对根 |
-| 可移植路径连接 | `joinPortableResourcePath`重新验证父、子与组合结果，不猜测目录/文件角色 |
-| `RootedDirectory` | 持有真实目录句柄、规范路径和初始节点快照的一次操作范围能力 |
-| 稳定读取 | 打开前后复验根、路径和节点，并对内容施加容量、节点类型、摘要与取消边界 |
-| stage | 原子提交前的自描述暂存文件；提交或崩溃后必须可被有界恢复识别 |
-| Loaded Artifact Tree | 已闭合、可摘要、可同根发布的一棵制品候选目录树 |
-| candidate tree退休 | 逐文件精确unlink并按最深目录优先rmdir；恢复只允许原计划的安全子集 |
-| 单调时间 | 只用于持续时间和截止点，不与 UTC 墙上时间混用 |
-| 事件版本演进 | 按相邻版本逐步 upcast 持久事件数据，再由当前 codec 重新准入 |
+| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
+| commit | 一次不可变事件提交批；文件槽位以预期修订防止并发覆盖。 |
 
-## B0边级证据
+### 节点与实现定位
 
-| 边编号 | 代码证据 | 核验结论 |
+| 节点 | 文件 / 符号 | 责任 |
 | --- | --- | --- |
-| `E-B0-01`–`E-B0-06` | Data/Crypto、RootedDirectory、稳定读取与原子写入模块 | 未知输入按无副作用准入、根作用域、稳定观察和完整前序事实逐层收窄 |
-| `E-B0-07`–`E-B0-14` | 锁/stage恢复、create-only、目录树、Artifact、Git与时间模块 | 恢复和派生能力只组合Foundation原语，不取得领域状态权威 |
-| `E-B0-15`–`E-B0-18` | 全仓直接import扫描 | Configuration、Workspace、Governance、Hosts、Entrypoints与Contracts单向消费Foundation |
+| owner | `src/capabilities/demand/archive.ts#sealDemandArchive` | 业务 owner 的明确操作 |
+| root | `src/foundation/filesystem/rooted-directory.ts#RootedDirectory` | 固定根与节点身份 |
+| read | `src/foundation/filesystem/stable-file-read.ts` | 有界稳定读取 |
+| write | `src/foundation/filesystem/durable-atomic-file-write.ts` | 创建 / 精确替换 |
+| lock | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | 独占短锁 |
+| receipt | `src/foundation/filesystem/durable-atomic-file-write.ts` | 持久提交回执 |
 
-## 能力模块分布
+### 本图边级证据
 
-| 能力簇 | 生产模块数 | 主要职责 |
-| --- | ---: | --- |
-| `filesystem` | 36 | 根作用域、稳定读取、原子写入、锁、目录树候选、精确退休与发布 |
-| `time` | 5 | UTC 时刻、墙上时钟、单调时钟、时长和截止点 |
-| `artifact` | 4 | Loaded Artifact Tree身份、候选、计划和发布 |
-| `data` | 4 | 无副作用数据、JSON值、规范JSON和确定性JSON文档 |
-| `crypto` | 3 | SHA-256类型、流式hasher和规范JSON摘要 |
-| `git` | 3 | 当前/候选 `.gitignore` 观察与完整 object ID |
-| 其他 8 个能力簇 | 8 | UTF-8、字节数、UUID、Node错误、Schema、资源处理与事件版本演进 |
+| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- |
+| E-L1004-01 | `src/capabilities/demand/archive.ts#readDemandRootSnapshot` | `tests/capabilities/demand/service.test.ts` | 打开受约束目录 |
+| E-L1004-02 | `src/foundation/filesystem/stable-file-read.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 读回节点与完整字节 |
+| E-L1004-03 | `src/kernel/requirement-board.ts` | `tests/capabilities/requirement/service.test.ts` | 按 owner 协调临界区 |
+| E-L1004-04 | `src/kernel/requirement-board.ts#replaceRequirementClaimStateFile` | `tests/capabilities/requirement/service.test.ts` | 创建或比较来源后替换 |
+| E-L1004-05 | `src/foundation/filesystem/durable-atomic-file-write.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 同步与复验提交结果 |
 
-## 直接消费者
+## 守卫、恢复与验证范围
 
-聚焦扫描把 Foundation 与一层直接邻居一起读取；以下数量是直接导入 Foundation 的生产模块数，
-不是业务调用次数。
+当前源码仍保留细分原语文件。创建提交用 no-replace link，替换用 rename；显式 durability 选项服务于缓存等调用方，不能据此宣称权威写入无需持久化。
 
-| 消费层 | 直接消费者模块数 | 典型用途 |
-| --- | ---: | --- |
-| Governance | 173 | 事件存储、投影、任务包、Delivery/Review/Testing、完成与Managed Evidence骨干 |
-| Workspace | 78 | 维护事务、活动投影、窗口绑定、资源布局与静态物化 |
-| Configuration | 9 | v3配置读取、替换、锁、恢复和选择 |
-| Hosts | 7 | Claude Code可移植设置与两宿主维护执行能力 |
-| Entrypoints | 1 | 公共MCP结果的规范JSON表示 |
-| Contracts | 1 | 应用级身份合同复用Foundation UUID能力；当前durable kind已包含真实TODO身份 |
+涉及的测试与核验入口：
 
-## 状态、恢复与失败关闭
+- `tests/capabilities/demand/service.test.ts`。
+- `tests/capabilities/requirement/service.test.ts`。
+- `tests/foundation/filesystem/durable-atomic-file-write.test.ts`。
 
-- `RootedDirectory` 在打开、操作中和关闭前复验物理节点身份；根被替换、别名化或关闭后稳定失败。
-- 稳定读取不信任 `Dirent`、路径名或一次 `stat`；文件和目录都在读取前后复验。
-- 原子文件创建使用硬链接提交，替换使用重命名提交；成功前同步文件与父目录。
-- 自描述 stage 在写前和显式恢复时被扫描；未知或仍活动的 stage 不会被猜测删除。
-- `withRootedExclusiveFileLock` 只保护短生命周期临界区；锁记录不是业务权威，也不是跨宿主租约。
-- 目录树与 Loaded Artifact Tree 只在同一文件系统发布；跨设备移动明确失败。
-- directory candidate退休拒绝recursive删除；首次只接受完整candidate，journal恢复只续接原计划的安全子集。
-- 所有公共 Foundation 错误都暴露稳定 `code/reason/path`，不回显物理路径、令牌或底层异常。
+## 下钻与相关视图
 
-## 架构边界
-
-- Foundation 只能依赖更低 Foundation、Foundation 生成合同、Node 内建模块和声明的生产依赖。
-- Foundation 不得导入 Configuration、Workspace、Governance、Hosts 或 Entrypoints。
-- 上层宿主中立领域不得直接使用 `node:fs`；文件系统效果必须经过 Foundation。
-- 物理绝对路径和打开句柄只在进程内存在，不进入可移植记录、MCP结果或领域事件。
-- Foundation 提供机制，不决定业务资源所有权、状态转换、Controller权限或用户流程。
-
-## 当前边界
-
-- `runtime-json-schema.ts`安全支持无原型JSON对象的`uniqueItems`比较；
-- `utc-instant.ts`只在明确的UTC解析/比较边界使用，不拥有跨authority因果排序；
-- `create-only-deterministic-json-resource.ts`已由Test Dispatch等真实consumer使用；
-- Loaded Artifact tree identity与transfer candidate已由Managed Evidence Planning/Stage消费；transfer publication仍无生产consumer；
-- directory candidate retirement由Evidence Transaction Settlement在Event前stale恢复中消费；Event后路径禁止调用；
-- `git-object-id.ts`闭合完整SHA-1/SHA-256身份，不接受缩写。
-- TODO身份不再维护人工可读兼容词汇；`TodoItemId`只是共享`WakeflowDurableId<"todo">`的领域错误窄边界。
-
-Foundation继续只提供机制；任何领域owner、资源family或业务事务必须留在上层。
-
-## 验证证据
-
-| 证据 | 当前结果 | 能证明什么 |
-| --- | --- | --- |
-| Foundation dependency-cruiser | 68 模块、301 依赖、0 违规 | 当前读取范围没有循环、未解析依赖或跨层反向依赖 |
-| Foundation测试清单 | 57 个正式测试文件 | 新退休能力7项及相邻Foundation 19项通过；不等于本轮已重新执行全部测试 |
-| Schema/生成合同 | 6/6 | Artifact manifest新增冻结runtime Schema常量，词法和物理语义不变 |
-| 来源指纹 | 128 个源码/Schema/测试文件 | 本文绑定当前 Foundation 文件内容快照 |
-
-## 下钻入口
-
-- [Foundation关键文件依赖](./file-dependencies.md)
-- [Foundation稳定读取、原子写入与恢复调用流](./runtime-call-flow.md)
-- [返回总体架构](../01-overall-architecture/README.md)
+- [文件直接导入](./file-dependencies.md)
+- [运行调用与恢复](./runtime-call-flow.md)
+- [图谱总索引](../README.md)
+- [核验与剩余范围](../01-diagram-review-ledger.md)

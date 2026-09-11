@@ -1,201 +1,277 @@
 ---
 diagramId: ts-overall-architecture-a0
 viewType: architecture
-truthKind: stale
+truthKind: current-code
 reviewDepth: L0
-verifiedAt: 2026-09-03
-snapshotObservedAt: 2026-09-03T03:13:56-07:00
-baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
-sourceFingerprint: sha256:29a16787a76280ef72c6c4069e7d9ccf640363f77c44a3721db4120c3e6144dd
-audience:
-  - maintainer
-  - reviewer
-  - newcomer
-documentationOwner: Wakeflow Source Maintenance
-generatedBy: mixed
-refreshTriggers:
-  - src/**
-  - package.json
-  - .dependency-cruiser.cjs
+verifiedAt: 2026-09-11
+baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
+sourceFingerprint: sha256:355a69d9fda845c9dbc5001fd63f20cbdf5c314754f6dd312d66825cd7939267
+audience: [maintainer, reviewer]
+documentationOwner: Wakeflow Architecture Atlas
+generatedBy: manual-review
 sourcePaths:
-  - src/**
+  - src/capabilities/delivery/*.ts
+  - src/capabilities/demand/*.ts
+  - src/capabilities/demand/service.ts
+  - src/capabilities/endpoint/*.ts
+  - src/capabilities/evidence/*.ts
+  - src/capabilities/pod/*.ts
+  - src/capabilities/requirement/*.ts
+  - src/capabilities/result-review/*.ts
+  - src/capabilities/tasking/*.ts
+  - src/capabilities/tasking/service.ts
+  - src/capabilities/workspace/*.ts
+  - src/configuration/*.ts
+  - src/contracts/generated/configuration/*.ts
+  - src/contracts/generated/entrypoints/*.ts
+  - src/contracts/generated/foundation/*.ts
+  - src/contracts/generated/governance/archive/*.ts
+  - src/contracts/generated/governance/board/*.ts
+  - src/contracts/generated/governance/delivery/*.ts
+  - src/contracts/generated/governance/demand/*.ts
+  - src/contracts/generated/governance/evidence/*.ts
+  - src/contracts/generated/governance/ledger/*.ts
+  - src/contracts/generated/governance/lifecycle/*.ts
+  - src/contracts/generated/governance/result/*.ts
+  - src/contracts/generated/governance/review/*.ts
+  - src/contracts/generated/governance/tasking/*.ts
+  - src/contracts/generated/governance/testing/*.ts
+  - src/contracts/generated/identity/*.ts
+  - src/contracts/generated/workspace/*.ts
+  - src/contracts/identity/*.ts
+  - src/contracts/vocabulary/*.ts
+  - src/entrypoints/*.ts
+  - src/entrypoints/codex-wakeflow-mcp.ts
+  - src/entrypoints/wakeflow-public-mcp-catalog.ts
+  - src/entrypoints/wakeflow-public-mcp-server.ts
+  - src/foundation/artifact/*.ts
+  - src/foundation/crypto/*.ts
+  - src/foundation/data/*.ts
+  - src/foundation/event-sourcing/*.ts
+  - src/foundation/filesystem/*.ts
+  - src/foundation/filesystem/rooted-directory.ts
+  - src/foundation/git/*.ts
+  - src/foundation/identity/*.ts
+  - src/foundation/node/*.ts
+  - src/foundation/numeric/*.ts
+  - src/foundation/resource/*.ts
+  - src/foundation/schema/*.ts
+  - src/foundation/text/*.ts
+  - src/foundation/time/*.ts
+  - src/governance/controller/*.ts
+  - src/governance/delivery/*.ts
+  - src/governance/demand/*.ts
+  - src/governance/demand/event-sourcing/*.ts
+  - src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts
+  - src/governance/demand/model/*.ts
+  - src/governance/demand/publication/*.ts
+  - src/governance/evidence/*.ts
+  - src/governance/ledger/*.ts
+  - src/governance/lifecycle/*.ts
+  - src/governance/result/*.ts
+  - src/governance/review/*.ts
+  - src/governance/tasking/*.ts
+  - src/governance/tasking/task-package.ts
+  - src/governance/testing/*.ts
+  - src/hosts/claude-code/*.ts
+  - src/hosts/codex/*.ts
+  - src/kernel/*.ts
+  - src/kernel/command-shell.ts
+  - src/kernel/event-stream/*.ts
+  - src/kernel/requirement-board.ts
+  - src/kernel/work-claims.ts
+  - src/workspace/*.ts
+  - src/workspace/active/*.ts
+  - src/workspace/host-runtime/*.ts
+  - src/workspace/maintenance/*.ts
+  - src/workspace/managed-integration/*.ts
+  - src/workspace/support/*.ts
+  - src/workspace/window-runtime/*.ts
 schemaPaths:
-  - src/contracts/schemas/**
+  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-board-inspection-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-board-inspection-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-maintenance-public-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-maintenance-public-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-pod-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-pod-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-evidence-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-evidence-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-requirement-publication-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-requirement-publication-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-result.schema.json
+  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
+  - src/contracts/schemas/foundation/git-object-id.schema.json
+  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
+  - src/contracts/schemas/foundation/portable-resource-path.schema.json
+  - src/contracts/schemas/foundation/sha256-digest.schema.json
+  - src/contracts/schemas/foundation/utc-instant.schema.json
+  - src/contracts/schemas/governance/archive/demand-archive-manifest.schema.json
+  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
+  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
+  - src/contracts/schemas/governance/demand/demand-authority.schema.json
+  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-publication-transaction.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
+  - src/contracts/schemas/governance/demand/demand-identity.schema.json
+  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
+  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
+  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
+  - src/contracts/schemas/governance/result/target-result.schema.json
+  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
+  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
+  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
+  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
+  - src/contracts/schemas/governance/tasking/task-package.schema.json
+  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
+  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
+  - src/contracts/schemas/workspace/maintenance-execution-intent.schema.json
+  - src/contracts/schemas/workspace/maintenance-journal.schema.json
+  - src/contracts/schemas/workspace/window-host-binding.schema.json
+  - src/contracts/schemas/workspace/window-runtime-registered-projection.schema.json
+  - src/contracts/schemas/workspace/window-runtime-unregistered-projection.schema.json
 testPaths:
-  - tests/entrypoints/**
-  - tests/codegen/**
+  - tests/capabilities/demand/service.test.ts
+  - tests/capabilities/tasking/service.test.ts
+  - tests/entrypoints/wakeflow-public-mcp-catalog.test.ts
+  - tests/kernel/command-shell.test.ts
+  - tooling/architecture/check-dependencies.ts
+refreshTriggers:
+  - .dependency-cruiser.cjs
+  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
+  - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# Wakeflow TypeScript 总体架构
+# Wakeflow：九个切片的当前架构
 
-> 本文以提交`08334ab`为当前核实点：`cfc61f4`已闭合Managed Evidence Public、A2 TODO内部生命周期、A3 Ledger Authority Public、A4 Inspection Public、A5 Intake Public与A6 Demand Authority单源收敛；`08334ab`进一步提交统一技术Review、四个静态MCP注册组与测试解耦。双宿主候选仍明确`releaseEligible=false`。
+Wakeflow 提供权威账本、精确内容和证据准入。用户与 Agent 拥有需求与执行判断，宿主拥有会话动作。六层依赖约束已经生效；configuration、workspace、governance 中仍存在被新切片消费的实现，不能把目录尚未收敛解释为另一个控制器。
 
-## 当前结论
+> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
-当前TypeScript候选运行时由一套共享源码组成：基础能力、配置、工作区和治理领域保持宿主中立；
-Codex与Claude Code只在宿主实现和固定组合根分开。官方MCP SDK拥有协议、stdio和工具路由；
-Wakeflow公共适配层当前注册23个已有真实领域owner的工具；`wakeflow_publish_requirement`与
-`wakeflow_publish_confirmation`公开immutable Ledger Authority producer，`wakeflow_create_demand`公开TODO-backed Demand Publication，
-`wakeflow_record_evidence`公开metadata-only Managed Evidence记录。
-
-治理源码已经闭合TODO内部生命周期与Inspection/Intake Public、Demand Publication、Controller Route、implementation/test Tasking、Delivery、Host Effect事实记录、Result、
-Implementation/Test Review、blocked Resume、Product Defect Remediation/retest与Completion。Agent仍独占真实
-宿主效果执行；Research Completion、Implementation Redesign与Archive仍是明确缺口。内部Evidence Reader bytes仍未公开。`core/`、
-`plugins/`和安装缓存仍是旧JS对照/发布面，不属于本图描述的TS候选闭包。
-
-## 核验快照
-
-| 项目 | 读取值 |
-| --- | --- |
-| 分支 | `main`，相对本地`origin/main`领先6个提交 |
-| `HEAD` | `08334ab9c1d8bd923966a976fdf7989bc56ac38c` |
-| 工作树 | 生产TypeScript与测试无未提交改动；仅Architecture Atlas文档同步待提交 |
-| dependency-cruiser | 823个模块、5817条依赖、10个显式生产根、0条违规 |
-| 生产TS模块 | 413个手写模块 + 114个生成合同 |
-| 当前公共MCP工具 | 23个，双宿主名称与Schema集合一致 |
-| 当前验证 | 完整TypeScript门1023项全通过；entrypoint 12文件/25项与Demand input反向依赖18文件/80项通过；114 Schema、215 external refs；Architecture 0违规 |
-
-### 生产模块分布
-
-| 技术层 | 模块数 | 核心职责 |
-| --- | ---: | --- |
-| 基础能力 | 63 | 数据、加密、身份、时间、根目录文件系统、原子性、锁、树候选精确退休与Git观察 |
-| 配置 | 10 | v3配置、选择、放置与配置权威 |
-| 工作区 | 81 | 维护事务、资源矩阵、活动面、静态物化、宿主本地布局和窗口身份 |
-| 治理 | 213 | TODO生命周期/Inspection/Intake、台账、Ledger/Demand/Evidence Planning、Payload、Application、Public Contract/Coordinator、Controller Route、Tasking、Delivery、Result、Review、Lifecycle与Testing |
-| 宿主 | 11 | Codex/Claude Code资源Profile、身份Profile与宿主专用维护执行 |
-| 入口 | 34 | 两宿主固定组合、58行Public Server、四注册组、共享结果适配、固定host facade和stdio生命周期 |
-| 手写合同 | 1 | 应用级类型化身份解析边界 |
-| 生成合同 | 114 | 由JSON Schema派生的类型和运行时Schema常量 |
-
-## A0：总体架构与边界
+## 六层职责与当前过渡实现
 
 ```mermaid
 flowchart TB
-  accTitle: Wakeflow TypeScript总体架构与宿主边界
-  accDescr: JSON Schema生成类型合同，固定Codex或Claude Code组合根通过官方stdio和公共MCP适配接入宿主专用实现与宿主中立领域；领域复用基础能力，测试和工具只生成或验证生产闭包。
-
-  CLIENT["[外部] MCP宿主与客户端"]
-
-  subgraph ENTRY["① 入口与固定组合"]
-    direction LR
-    CODEX_ROOT["[源码] Codex组合根"]
-    CLAUDE_ROOT["[源码] Claude Code组合根"]
-    PUBLIC_MCP["[源码] 公共MCP适配层\n注册23个真实owner工具"]
-    STDIO["[源码] 官方stdio生命周期边界"]
-  end
-
-  subgraph HOSTS["② 宿主专用实现"]
-    direction LR
-    CODEX_HOST["[源码] Codex Profile与维护执行"]
-    CLAUDE_HOST["[源码] Claude Code Profile与维护执行"]
-  end
-
-  subgraph CORE["③ 宿主中立领域"]
-    direction LR
-    DOMAINS["[源码] 配置 / 工作区 / 治理"]
-  end
-
-  subgraph BASE["④ 基础与合同"]
-    direction LR
-    FOUNDATION["[源码] 基础能力"]
-    SCHEMA["[Schema] JSON Schema"]
-    GENERATED["[生成] TypeScript合同"]
-  end
-
-  subgraph DEV["旁路：开发与验证，不进入生产闭包"]
-    direction LR
-    TOOLING["[工具] codegen与架构检查"]
-    TESTS["[测试] 合同、纵切与恢复测试"]
-  end
-
-  SCHEMA -->|"E-A0-01 生成来源"| GENERATED
-  TOOLING -->|"E-A0-02 生成并检查"| GENERATED
-  TESTS -.->|"E-A0-03 验证"| PUBLIC_MCP
-  TESTS -.->|"E-A0-04 验证"| DOMAINS
-
-  CLIENT ==>|"E-A0-05 启动Codex制品"| CODEX_ROOT
-  CLIENT ==>|"E-A0-06 启动Claude Code制品"| CLAUDE_ROOT
-  CODEX_ROOT -->|"E-A0-07 使用官方stdio"| STDIO
-  CLAUDE_ROOT -->|"E-A0-08 使用官方stdio"| STDIO
-  CODEX_ROOT -->|"E-A0-09 固定组合"| PUBLIC_MCP
-  CLAUDE_ROOT -->|"E-A0-10 固定组合"| PUBLIC_MCP
-  CODEX_ROOT -->|"E-A0-11 注入宿主能力"| CODEX_HOST
-  CLAUDE_ROOT -->|"E-A0-12 注入宿主能力"| CLAUDE_HOST
-
-  PUBLIC_MCP -->|"E-A0-13 调用公共协调器"| DOMAINS
-  PUBLIC_MCP -->|"E-A0-14 使用wire合同"| GENERATED
-  CODEX_HOST -->|"E-A0-15 实现宿主端口"| DOMAINS
-  CLAUDE_HOST -->|"E-A0-16 实现宿主端口"| DOMAINS
-  DOMAINS -->|"E-A0-17 复用"| FOUNDATION
-  DOMAINS -->|"E-A0-18 解析生成合同"| GENERATED
+  accTitle: 六层职责与当前过渡实现
+  accDescr: 六层职责与当前过渡实现；箭头区分当前代码步骤、返回事实与明确的条件。
+  entry["公共 MCP 组合根"]
+  hosts["固定宿主数据与装配"]
+  caps["九个能力切片"]
+  kernel["内核：调用、声明、观察与投影"]
+  contracts["Schema 与词汇"]
+  foundation["确定性数据与持久 I/O"]
+  legacy["过渡领域实现"]
+  stop["未实现：全局 observation"]
+  entry -->|"E-L1001-01 注入宿主 facade"| hosts
+  entry -->|"E-L1001-02 绑定真实 executor"| caps
+  caps -->|"E-L1001-03 调用共用外壳"| kernel
+  caps -->|"E-L1001-04 复用事件、账本及维护 owner"| legacy
+  kernel -->|"E-L1001-05 消费合同与词汇"| contracts
+  kernel -->|"E-L1001-06 受根约束的物理能力"| foundation
+  caps -->|"E-L1001-07 目录尚无 status 与 verify"| stop
 ```
 
 ### 本图术语说明
 
-| 图中术语 | 解释 |
+| 术语 | 本图含义 |
 | --- | --- |
-| 固定组合根 | 在模块装载时绑定宿主Profile与执行端口的入口，不接受运行时宿主选择器 |
-| 公共MCP适配层 | 将官方MCP SDK调用转换为当前23个公共领域执行函数的薄层 |
-| 宿主中立领域 | 不直接导入Codex或Claude Code具体实现的配置、工作区和治理代码 |
-| 宿主专用实现 | 只在对应组合根注入的资源Profile、身份Profile或宿主维护执行 |
-| wire合同 | MCP输入/输出使用的自包含JSON Schema和生成TypeScript合同 |
-| 资源目录 | 由配置、工作区与治理能力共同声明的受管资源清单 |
-| 运行权威 | 业务或身份事实的耐久来源，不是Markdown或投影 |
-| 宿主端口 | 由宿主专用入口实现、供共享领域调用的有界Profile或执行能力 |
+| host | Codex 或 Claude Code；真实会话动作由 Agent 调用宿主完成。 |
+| Demand | 一个需求的不可变身份和事件流；当前执行环境由 podId 指定。 |
+| projection | 根据权威重建的视图，不反向决定事实。 |
 
-## 节点映射
+### 节点与实现定位
 
-| 节点 | 主要路径 | 代表符号/职责 |
+| 节点 | 文件 / 符号 | 责任 |
 | --- | --- | --- |
-| Codex组合根 | `src/entrypoints/codex-wakeflow-mcp.ts` | `createCodexWakeflowMcpServer`、`runCodexWakeflowMcpStdio` |
-| Claude Code组合根 | `src/entrypoints/claude-code-wakeflow-mcp.ts` | `createClaudeCodeWakeflowMcpServer`、`runClaudeCodeWakeflowMcpStdio` |
-| 公共MCP适配层 | `src/entrypoints/wakeflow-public-mcp-server.ts` | `createWakeflowPublicMcpServer` |
-| stdio边界 | `src/entrypoints/wakeflow-mcp-stdio.ts` | `runWakeflowMcpStdio` |
-| 配置 | `src/configuration/` | Config v3、authority snapshot、selection、placement |
-| 工作区 | `src/workspace/` | Maintenance、Active、Managed Integration、Window Runtime |
-| 治理 | `src/governance/` | TODO、Ledger、Demand、Tasking、Delivery、Result、Review、Testing |
-| 基础能力 | `src/foundation/` | 无产品语义的共享确定性能力 |
-| 生成合同 | `src/contracts/generated/` | Schema派生类型和冻结运行时Schema |
-| 宿主实现 | `src/hosts/codex/`、`src/hosts/claude-code/` | Profile与宿主专用执行 |
+| entry | `src/entrypoints/wakeflow-public-mcp-server.ts#createWakeflowPublicMcpServer` | 公共 MCP 组合根 |
+| hosts | `src/entrypoints/codex-wakeflow-mcp.ts#createCodexWakeflowMcpServer` | 固定宿主数据与装配 |
+| caps | `src/entrypoints/wakeflow-public-mcp-catalog.ts#WAKEFLOW_PUBLIC_TOOL_CATALOG` | 九个能力切片 |
+| kernel | `src/kernel/command-shell.ts#runCommandShell` | 内核：调用、声明、观察与投影 |
+| contracts | `src/governance/tasking/task-package.ts#TaskPackage` | Schema 与词汇 |
+| foundation | `src/foundation/filesystem/rooted-directory.ts#RootedDirectory` | 确定性数据与持久 I/O |
+| legacy | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts#DemandEventSourcingRepository` | 过渡领域实现 |
+| stop | `src/entrypoints/wakeflow-public-mcp-catalog.ts#WAKEFLOW_PUBLIC_TOOL_CATALOG` | 未实现：全局 observation |
 
-## 边级证据
+### 本图边级证据
 
-| 边编号 | 起点 | 终点 | 关系 | 代码证据 | 测试证据 |
-| --- | --- | --- | --- | --- | --- |
-| `E-A0-01` | JSON Schema | 生成合同 | 生成来源 | `tooling/codegen/schema-types.ts` | `tests/codegen/schema-types.test.ts` |
-| `E-A0-02` | 工具 | 生成合同 | 生成并检查 | `schema:build`、`schema:check`脚本 | codegen测试 |
-| `E-A0-03`、`E-A0-04` | 测试 | 公共MCP/领域 | 验证 | `tests/`直接导入`src/` | TypeScript source-manifest runner |
-| `E-A0-05`、`E-A0-06`、`E-A0-07`、`E-A0-08` | MCP宿主/组合根 | 固定制品/stdio | 启动与调用 | 两宿主`run*WakeflowMcpStdio` | 公共MCP官方Client测试 |
-| `E-A0-09`、`E-A0-10` | 组合根 | 公共Server | 固定组合 | 两宿主`create*WakeflowMcpServer` | 公共MCP与Window Binding入口测试 |
-| `E-A0-11`、`E-A0-12` | 组合根 | 宿主实现 | 固定注入 | 两宿主Maintenance/Binding入口 | 两宿主Maintenance入口测试 |
-| `E-A0-13`、`E-A0-14` | 公共MCP层 | 领域/合同 | 调用与Schema准入 | `createWakeflowPublicMcpServer` | 独立23工具catalog/双宿主测试及Ledger/TODO/Demand/Evidence真实MCP测试 |
-| `E-A0-15`、`E-A0-16` | 宿主实现 | 宿主中立领域 | 实现宿主端口 | `src/hosts/*`和宿主entrypoint facade | Maintenance与Binding纵切测试 |
-| `E-A0-17`、`E-A0-18` | 宿主中立领域 | 基础/生成合同 | 静态依赖 | dependency-cruiser快照 | 架构规则与0违规结果 |
+| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- |
+| E-L1001-01 | `src/entrypoints/codex-wakeflow-mcp.ts#createCodexWakeflowMcpServer` | `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts` | 注入宿主 facade |
+| E-L1001-02 | `src/entrypoints/wakeflow-public-mcp-server.ts#createWakeflowPublicMcpServer` | `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts` | 绑定真实 executor |
+| E-L1001-03 | `src/capabilities/tasking/service.ts#executeTargetTaskPlanningPublicRequest` | `tests/capabilities/tasking/service.test.ts` | 调用共用外壳 |
+| E-L1001-04 | `src/capabilities/demand/service.ts#executeDemandCreationRequest` | `tests/capabilities/demand/service.test.ts` | 复用事件、账本及维护 owner |
+| E-L1001-05 | `src/kernel/requirement-board.ts` | `tests/kernel/command-shell.test.ts` | 消费合同与词汇 |
+| E-L1001-06 | `src/kernel/work-claims.ts` | `tests/kernel/command-shell.test.ts` | 受根约束的物理能力 |
+| E-L1001-07 | `src/entrypoints/wakeflow-public-mcp-catalog.ts` | `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts` | 目录尚无 status 与 verify |
 
-## 架构硬边界
+## 守卫、恢复与验证范围
 
-- Foundation不得依赖配置、工作区、治理、宿主或入口。
-- 宿主中立运行时不得导入`src/hosts/`。
-- 普通运行时不得反向依赖`src/entrypoints/`。
-- Codex与Claude Code宿主实现不得互相导入。
-- 生产源码不得依赖测试、tooling、旧`core/`或`plugins/`实现。
-- 领域文件系统和进程效果必须经过Foundation封闭能力。
-- 生成合同由Schema/codegen拥有，不能手工维护。
+当前公共目录为 19 项，配置仍为 v3 且已包含 pods[]。九片场景验证不等于 L2 的两宿主真实投递，也不等于 L3 可安装新制品。Foundation 物理收敛、目录体积及全局观察仍按现行计划继续。
 
-## 当前停止边界
+涉及的测试与核验入口：
 
-- 当前公共MCP发布23个工具；Requirement/Confirmation、TODO Inspection/Intake、Demand与Managed Evidence均以明确业务工具进入各自owner。
-- Managed Evidence公共结果只含metadata receipt；内部deferred/member/complete Reader和payload bytes仍不公开。
-- A2 TODO内部生命周期、A4 Inspection Public和A5 Intake Public均已闭合；A6使Demand Authority只读取immutable Intake refs。Auto Claim仍只是Intake策略字段，没有执行consumer。
-- A3 Ledger producer已与A4/A5/A6形成公开`Ledger → TODO → Demand → Route`链；每一步仍是独立owner，不是跨根Saga。
-- 公共Target Task Planning支持完整implementation输入和最小`{workType:"test"}`派生请求。
-- Agent执行宿主效果，MCP只规划、验证并记录Wakeflow自己的权威。
-- 当前完整TypeScript门为1023项，覆盖提交`08334ab`；entrypoint 12文件/25项和Demand input反向依赖18文件/80项也独立通过。旧JS等价、双宿主plugin validator/smoke、真实宿主窗口与release gate仍未运行。
-- 本文必须在`src/**`或架构规则变化后重新核验。
+- `tests/capabilities/demand/service.test.ts`。
+- `tests/capabilities/tasking/service.test.ts`。
+- `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts`。
+- `tests/kernel/command-shell.test.ts`。
+- `tooling/architecture/check-dependencies.ts`。
 
-## 下钻入口
+## 下钻与相关视图
 
-- [关键文件依赖](./file-dependencies.md)
-- [公共MCP符号调用流](./runtime-call-flow.md)
-- [总体架构审阅证据与变更影响](./review-evidence.md)
+- [文件直接导入](./file-dependencies.md)
+- [运行调用与恢复](./runtime-call-flow.md)
+- [业务主线](../10-end-to-end-business-flow/README.md)
+- [内核](../11-kernel/README.md)
+- [图谱总索引](../README.md)
+- [核验与剩余范围](../01-diagram-review-ledger.md)

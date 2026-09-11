@@ -51,6 +51,7 @@ export interface DependencyExplorerSelection {
 
 export interface DependencyExplorerOptions {
   readonly source: string;
+  readonly filePaths?: Readonly<Record<string, string>>;
   readonly theme: ExplorerTheme;
   readonly onSelection: (selection: DependencyExplorerSelection | null) => void;
   readonly onLocateEvidence: (token: string) => void;
@@ -65,14 +66,14 @@ export async function mountDependencyExplorer(
   host: HTMLElement,
   options: DependencyExplorerOptions,
 ): Promise<DependencyExplorerHandle> {
-  const model = parseMermaidDependencyGraph(options.source);
+  const model = parseMermaidDependencyGraph(options.source, options.filePaths);
   if (model.nodes.length === 0) throw new Error("未从 Mermaid 源图中解析出文件节点。");
 
   host.className = "dependency-explorer";
   host.innerHTML = `
     <header class="dependency-explorer-header">
       <div>
-        <p class="dependency-eyebrow">文件级依赖探索 · P0/P1</p>
+        <p class="dependency-eyebrow">文件级依赖探索</p>
         <h3>交互式文件依赖图</h3>
         <p>默认隐藏证据编号；选择节点后聚焦关系，选择连线后再显示边语义与证据。</p>
       </div>
@@ -419,7 +420,7 @@ export async function mountDependencyExplorer(
   };
 }
 
-function parseMermaidDependencyGraph(source: string): DependencyGraphModel {
+function parseMermaidDependencyGraph(source: string, filePaths: Readonly<Record<string, string>> = {}): DependencyGraphModel {
   const groups = new Map<string, DependencyGroup>();
   const nodes = new Map<string, DependencyNode>();
   const edges: DependencyEdge[] = [];
@@ -461,12 +462,15 @@ function parseMermaidDependencyGraph(source: string): DependencyGraphModel {
     const [, id, rawLabel] = nodeMatch;
     if (id === undefined || rawLabel === undefined) continue;
     const label = rawLabel.replaceAll("\\n", "\n");
-    const path = label.split("\n").at(-1)?.trim() ?? label;
+    const path = filePaths[id] ?? label.split("\n").at(-1)?.trim() ?? label;
     const evidenceId = label.match(/\[(F-[A-Z0-9-]+)\]/u)?.[1];
     const sourceKind = label.match(/^\[([^\]]+)\]/u)?.[1] ?? "源码";
     const groupId = groupStack.at(-1);
     const group = groupId === undefined ? undefined : groups.get(groupId);
-    const kind = sourceKind === "生成" ? "generated" : group?.kind ?? "shared";
+    const kind: NodeKind = sourceKind === "生成" || path.includes("/contracts/generated/")
+      ? "generated" : group?.kind ?? (path.startsWith("src/entrypoints/") ? "host-entry"
+        : path.startsWith("src/hosts/") ? "host-impl"
+        : /src\/(capabilities|governance)\//u.test(path) ? "domain" : "shared");
     nodes.set(id, {
       id,
       label,
@@ -475,14 +479,14 @@ function parseMermaidDependencyGraph(source: string): DependencyGraphModel {
       evidenceId,
       sourceKind,
       groupId,
-      groupLabel: group?.label ?? "未分组",
+      groupLabel: group?.label ?? path.split("/").slice(1, 3).join(" / "),
       kind,
     });
   }
 
   return {
     groups: [...groups.values()],
-    nodes: [...nodes.values()],
+    nodes: [...nodes.values()].map((node) => ({...node, evidenceId: node.evidenceId ?? edges.find((edge) => edge.source === node.id || edge.target === node.id)?.evidenceId})),
     edges: edges.filter((edge) => nodes.has(edge.source) && nodes.has(edge.target)),
   };
 }
@@ -501,7 +505,8 @@ function shortenPath(path: string): string {
   const normalized = path.replace(/^src\//u, "");
   const segments = normalized.split("/");
   if (segments.at(-1) === "*") return segments.slice(-2).join("/");
-  return segments.at(-1) ?? normalized;
+  return /^(service|decide|contract|prompt)\.ts$/u.test(segments.at(-1) ?? "")
+    ? segments.slice(-2).join("/") : segments.at(-1) ?? normalized;
 }
 
 function createElements(model: DependencyGraphModel): cytoscape.ElementDefinition[] {

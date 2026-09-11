@@ -1,69 +1,39 @@
-# Wakeflow Architecture Atlas（架构与代码图谱）
+# Wakeflow Architecture Atlas
 
-> **2026-09-04 图谱审查：当前内容待复核。** 30 份来源指纹全部漂移，检查器发现 11 处已删除源码的图内引用。
-> 已将旧图和逐图台账标为 `stale`，保留旧核验日期、指纹及图正文；尚未完成重绘。
-> 当前更新范围、已实现与目标设计的区分、44 图逐项安排见 [图谱更新计划](./plans/typescript-atlas-refresh-plan.md)。以下旧快照数字不代表当前代码或已验证能力。
+独立的本地架构图谱，Markdown/Mermaid 是内容正典，阅读器只负责显示、搜索、缩放与证据定位。
 
-本目录是一个独立、只读Wakeflow源码的流程图子项目。它把可审阅Markdown/Mermaid、交互阅读器和
-结构验收收敛在同一package中，不拥有Wakeflow运行状态，也不进入插件制品或根发布门。
+本轮基线为 `7ba1f38`（2026-09-11 核验）：L1 九片已落地，当前 19 个公共工具、16 个一次性场景；observation、L2、L3/E4 仍是后续范围。
 
-## 目录
+## 阅读和维护
 
-```text
-wakeflow-architecture-atlas/
-├── AGENTS.md            AI维护图谱时的局部权威、证据与隔离规则
-├── CLAUDE.md            Claude Code入口，仅补充宿主注意事项
-├── maps/                 33份审阅文档与44张Mermaid图的正典
-├── plans/                差异审查、逐图更新计划与核验快照
-├── src/                  本地阅读器与文件依赖交互视图
-├── scripts/              只读结构、链接、指纹与路径检查
-├── package.json          独立依赖和命令
-└── vite.config.ts        仅允许读取本目录与maps，输出到根.build
-```
+- [图谱入口](./maps/README.md)
+- [逐图核验台账](./maps/01-diagram-review-ledger.md)
+- [本轮更新范围与验证](./plans/l1-nine-slices-refresh.md)
+- [上轮差异审查计划（历史）](./plans/typescript-atlas-refresh-plan.md)
 
-## 使用
+在本目录运行：
 
 ```text
-cd wakeflow-architecture-atlas
 npm install
 npm run dev
-npm run check:structure
 npm run check
 ```
 
-## 唯一 FigJam 派生视图
+`check` 依次执行检查器回归测试、阅读器类型、结构/指纹、实际浏览器渲染回执和 Vite 构建。改图后，在本地浏览器打开 `scripts/mermaid-validation.html`：它使用锁定 Mermaid 逐图解析与渲染，并通过仅本地同源的验证端点保存固定回执。`check:diagrams` 复验每张图的源码摘要、数量、渲染版本和成功结果；旧回执或缺失回执会失败，不把未渲染的新图当作通过。
 
-当前只维护一份可编辑的
-[Wakeflow Architecture Atlas FigJam](https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc)。
-它在新 Figma 账号下基于提交
-`08334ab9c1d8bd923966a976fdf7989bc56ac38c`重建旧板的业务主链与状态恢复内容，并增加当前公共组合架构。
-后续更新继续写入同一文件，不维护并行的Legacy/Current分支。
+## 结构与隔离
 
-该FigJam包含公共组合架构、端到端公共主链、业务状态与恢复三张摘要图。它只用于协作阅读；
-`maps/**/*.md`中的Markdown/Mermaid、来源指纹以及Wakeflow源码仍是事实正典。
+- `maps/`：当前图、术语、源/符号映射和证据表。
+- `plans/`：范围、历史审查与验证快照。
+- `src/`：阅读器与依赖探索。
+- `scripts/`：只读源码检查、独立测试和图形渲染验证。
 
-## 与Wakeflow主开发的边界
+本 package 不加入根 npm workspace、TypeScript references、dependency-cruiser、插件 core 同步或发布流程。构建输出在被忽略的根 `.build/wakeflow-architecture-atlas/`。图谱检查不修改 Wakeflow 源码。
 
-- 不属于根npm workspace，根`npm install`、`npm test`和release脚本不会执行本项目。
-- 不被根TypeScript project references、dependency-cruiser或插件core同步读取。
-- 读取`src/`、`tests/`和Schema只用于生成审阅证据；检查脚本不写这些目录。
-- 唯一构建输出是被忽略的`.build/wakeflow-architecture-atlas/`，可随时删除重建。
-- Markdown和来源指纹不是第二状态权威；源码变化后必须显式运行`npm run check`并刷新文档。
+## 派生视图
 
-`npm run check:structure`会机器验证这些隔离条件：根`package.json`没有workspace或script引用、根
-TypeScript/dependency-cruiser配置没有接入、本地依赖与构建输出均被忽略。它还验证33份文档、44张图、
-30份来源指纹、Markdown链接、897条边证据和图中242条可解析TypeScript直接导入。来源漂移只有在文档
-明确标为`stale`时通过结构门，并会列入`staleFingerprints`；`npm run check:current`与`npm run check`仍要求
-全部来源指纹当前。
+[当前 FigJam](https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=16-489) 已同步本轮三组摘要：当前组成、九片业务主线、实现目标状态与恢复；附进度表，旧图完整保留在折叠的历史区域。29 个可编辑节点和 32 条边已逐项对照本地 Mermaid，并经过截图检查，见 [同步记录](./plans/evidence/l1-nine-slices-figjam.json)。其余细节在本地 67 图中阅读。FigJam、HTML/SVG/截图均为派生视图，不拥有运行状态。
 
-## AI交互规则
+## 权威
 
-- 仓库根`AGENTS.md`/`CLAUDE.md`继续拥有源码维护、安全与发布规则。
-- 本目录[`AGENTS.md`](./AGENTS.md)只收窄图谱任务的事实优先级、编辑约束和隔离边界，是
-  Codex及其他支持`AGENTS.md`智能体的局部入口。
-- 本目录[`CLAUDE.md`](./CLAUDE.md)要求Claude Code先读取局部`AGENTS.md`，仅保留宿主差异，
-  避免两份完整规则随时间产生漂移。
-- 详细绘图方法仍由[`maps/00-agentic-diagram-standard.md`](./maps/00-agentic-diagram-standard.md)
-  负责，使用命令留在本README；规则文件不重复维护操作手册。
-
-图集内容与维护规则见[maps/README.md](./maps/README.md)。
+根规则继续适用；本目录 [AGENTS.md](./AGENTS.md) 规定局部边界，[CLAUDE.md](./CLAUDE.md) 引用该正典。具体绘图和核验方法见 [图谱标准](./maps/00-agentic-diagram-standard.md)。

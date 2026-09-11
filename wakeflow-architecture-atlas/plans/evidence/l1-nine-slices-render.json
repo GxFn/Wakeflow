@@ -1,0 +1,1082 @@
+{
+  "renderer": "mermaid",
+  "rendererVersion": "11.17.2",
+  "verifiedAt": "2026-09-11T10:05:05.954Z",
+  "ok": true,
+  "diagrams": 67,
+  "rendered": 67,
+  "results": [
+    {
+      "file": "maps/00-agentic-diagram-standard.md",
+      "diagram": 1,
+      "title": "流程图生成与人工审阅边界",
+      "sourceDigest": "sha256:c59a398b58af8ce25440abde1fb0ab5be7ffd9422d5020394ac3af8cf1d17ccc",
+      "status": "pass",
+      "width": 924,
+      "height": 606,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 908,
+        "height": 590
+      }
+    },
+    {
+      "file": "maps/01-overall-architecture/file-dependencies.md",
+      "diagram": 1,
+      "title": "公共组合根的精选直接导入",
+      "sourceDigest": "sha256:5a946d297548d769120385a0c97e0103376c5c00c8f23f6acd3b980ddd8a0c73",
+      "status": "pass",
+      "width": 1675,
+      "height": 694,
+      "visibleTextNodes": 25,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1659,
+        "height": 678
+      }
+    },
+    {
+      "file": "maps/01-overall-architecture/README.md",
+      "diagram": 1,
+      "title": "六层职责与当前过渡实现",
+      "sourceDigest": "sha256:3dcde27ae433ed00597ba24902aa840ad42fb17b35c71756775824a23301d801",
+      "status": "pass",
+      "width": 854,
+      "height": 528,
+      "visibleTextNodes": 15,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 838,
+        "height": 512
+      }
+    },
+    {
+      "file": "maps/01-overall-architecture/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "MCP 启动与单次工具调用",
+      "sourceDigest": "sha256:bc31805c2f219f9212a5831b0b1cfbcb5751e62e14bf03faf951709e7d93a318",
+      "status": "pass",
+      "width": 1044,
+      "height": 543,
+      "visibleTextNodes": 19,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 944,
+        "height": 522
+      }
+    },
+    {
+      "file": "maps/02-foundation/file-dependencies.md",
+      "diagram": 1,
+      "title": "Foundation的精选直接导入",
+      "sourceDigest": "sha256:31f1a0e18960d1452c3bf5a21262cab4ca741271060a1e4d4bb62f1330acbcbd",
+      "status": "pass",
+      "width": 1312,
+      "height": 659,
+      "visibleTextNodes": 21,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1296,
+        "height": 643
+      }
+    },
+    {
+      "file": "maps/02-foundation/README.md",
+      "diagram": 1,
+      "title": "基础原语与业务 owner 的边界",
+      "sourceDigest": "sha256:83d6c7dbdcc6073ff88a036f30d60da213baaa25dcf707348a7cdfb979770f70",
+      "status": "pass",
+      "width": 408,
+      "height": 510,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 392,
+        "height": 494
+      }
+    },
+    {
+      "file": "maps/02-foundation/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "稳定读取的节点与字节核对",
+      "sourceDigest": "sha256:d4c1f8b72d7465aa4e45406466a974f699a9886e030303092c31c800d8f64cf5",
+      "status": "pass",
+      "width": 859,
+      "height": 419,
+      "visibleTextNodes": 15,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 759,
+        "height": 398
+      }
+    },
+    {
+      "file": "maps/02-foundation/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "精确文件替换与提交边界",
+      "sourceDigest": "sha256:d8d255bf6bef2dad0a88bf240829acf02053a7696faeeb7d1cde76592f47008b",
+      "status": "pass",
+      "width": 883,
+      "height": 528,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 783,
+        "height": 507
+      }
+    },
+    {
+      "file": "maps/02-foundation/runtime-call-flow.md",
+      "diagram": 3,
+      "title": "具体 owner 的只创建记录幂等",
+      "sourceDigest": "sha256:84be862fae550a3f9bbbb1b3080fb8732dd9e53c5d075b59631b85bc60e7f389",
+      "status": "pass",
+      "width": 640,
+      "height": 405,
+      "visibleTextNodes": 12,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 540,
+        "height": 384
+      }
+    },
+    {
+      "file": "maps/03-configuration-workspace/file-dependencies.md",
+      "diagram": 1,
+      "title": "配置与维护的精选直接导入",
+      "sourceDigest": "sha256:01472807cf115624561453a5de3c5b4e19277fe443ac5fa2ee05d95716ca570d",
+      "status": "pass",
+      "width": 1479,
+      "height": 546,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1463,
+        "height": 530
+      }
+    },
+    {
+      "file": "maps/03-configuration-workspace/README.md",
+      "diagram": 1,
+      "title": "工作区维护的权威与生成物",
+      "sourceDigest": "sha256:0c11d4db77cbb979231523b636adc95cf450e7bd61f8cfe63be61b78385089d0",
+      "status": "pass",
+      "width": 226,
+      "height": 790,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 210,
+        "height": 774
+      }
+    },
+    {
+      "file": "maps/03-configuration-workspace/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "配置权威读取与 CAS",
+      "sourceDigest": "sha256:a4ceb3b866454f38d669065fedf1d311ae353ad92f16b610e75a9afb396a0c44",
+      "status": "pass",
+      "width": 883,
+      "height": 487,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 783,
+        "height": 466
+      }
+    },
+    {
+      "file": "maps/03-configuration-workspace/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "维护的 preview 和 apply",
+      "sourceDigest": "sha256:0e214b924ddb984f54b49bbeefb5fefe2ff801ec34330f7f440718516d4bc9d0",
+      "status": "pass",
+      "width": 861,
+      "height": 505,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 761,
+        "height": 484
+      }
+    },
+    {
+      "file": "maps/03-configuration-workspace/runtime-call-flow.md",
+      "diagram": 3,
+      "title": "维护中断的前向恢复",
+      "sourceDigest": "sha256:db0d1c927696dd9235cc713b69b1ccaf8a6ff83c499ad37e9185a44f59bc69ec",
+      "status": "pass",
+      "width": 873,
+      "height": 449,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 773,
+        "height": 428
+      }
+    },
+    {
+      "file": "maps/04-governance-event-sourcing/file-dependencies.md",
+      "diagram": 1,
+      "title": "事件与聚合的精选直接导入",
+      "sourceDigest": "sha256:9b1e1c8ebedadfaa2959eab909fed65609ecd145f1cbf1ced925d00c43745a9c",
+      "status": "pass",
+      "width": 1255,
+      "height": 1062,
+      "visibleTextNodes": 25,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1239,
+        "height": 1046
+      }
+    },
+    {
+      "file": "maps/04-governance-event-sourcing/README.md",
+      "diagram": 1,
+      "title": "从需求包到 Demand 事件与视图",
+      "sourceDigest": "sha256:17d011bda5580cbb91168bf74e7bc329b0ff0e6f67cfed81c715ccfbf1e33911",
+      "status": "pass",
+      "width": 457,
+      "height": 641,
+      "visibleTextNodes": 13,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 441,
+        "height": 625
+      }
+    },
+    {
+      "file": "maps/04-governance-event-sourcing/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "追加命令的幂等与 CAS",
+      "sourceDigest": "sha256:60f326c9f9b92e1ca655f86d9db0ff550e36861e5f5acd7683da697ee804bdf4",
+      "status": "pass",
+      "width": 1054,
+      "height": 482,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 954,
+        "height": 461
+      }
+    },
+    {
+      "file": "maps/04-governance-event-sourcing/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "快照加尾部和完整审计",
+      "sourceDigest": "sha256:1479ef13240f97290e5a675983daf3d9bc8b02a21111a30a50f2f531d2334bba",
+      "status": "pass",
+      "width": 859,
+      "height": 525,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 759,
+        "height": 504
+      }
+    },
+    {
+      "file": "maps/04-governance-event-sourcing/runtime-call-flow.md",
+      "diagram": 3,
+      "title": "根先发布后认领需求包",
+      "sourceDigest": "sha256:ab5d500ad7fd3b9c1a6f82cb0d25ab8b88464d58baea9d0008bce53609331100",
+      "status": "pass",
+      "width": 882,
+      "height": 528,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 782,
+        "height": 507
+      }
+    },
+    {
+      "file": "maps/05-tasking-slice/file-dependencies.md",
+      "diagram": 1,
+      "title": "任务规划的精选直接导入",
+      "sourceDigest": "sha256:dbd7daf2bf1daf2f9c614528e700ef972dd51802ddc2624a5a5b3c94f85d7bc8",
+      "status": "pass",
+      "width": 1582,
+      "height": 362,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1566,
+        "height": 346
+      }
+    },
+    {
+      "file": "maps/05-tasking-slice/README.md",
+      "diagram": 1,
+      "title": "一次追加生成任务合同",
+      "sourceDigest": "sha256:2802b158c844052be44223a71df3ed9f10a914b59cbc62ae49767f59df0b1bfb",
+      "status": "pass",
+      "width": 282,
+      "height": 825,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 266,
+        "height": 809
+      }
+    },
+    {
+      "file": "maps/05-tasking-slice/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "实现任务的一次追加",
+      "sourceDigest": "sha256:4e4daf8c453515619f05b4fa6d9f2a5b4df08292bb4fbc6d139eddbf3fd9b346",
+      "status": "pass",
+      "width": 1066,
+      "height": 487,
+      "visibleTextNodes": 18,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 966,
+        "height": 466
+      }
+    },
+    {
+      "file": "maps/05-tasking-slice/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "替换与继续的谱系约束",
+      "sourceDigest": "sha256:61a8dd854adf9630a0ff68930dce0f34f5279a626f2f306d1c948db0cc51cc2b",
+      "status": "pass",
+      "width": 664,
+      "height": 453,
+      "visibleTextNodes": 13,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 564,
+        "height": 432
+      }
+    },
+    {
+      "file": "maps/05-tasking-slice/runtime-call-flow.md",
+      "diagram": 3,
+      "title": "测试任务的合同准入",
+      "sourceDigest": "sha256:6a3d289240ff9c82e659d2c8bf1e103a5fa58238bfd8078ab95c8f190ea20ab0",
+      "status": "pass",
+      "width": 859,
+      "height": 370,
+      "visibleTextNodes": 13,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 759,
+        "height": 349
+      }
+    },
+    {
+      "file": "maps/06-implementation-delivery-review/file-dependencies.md",
+      "diagram": 1,
+      "title": "投递与结果的精选直接导入",
+      "sourceDigest": "sha256:32ba05f19d6935bf9e4108cca29a1f965e78d5e077907884fbc3fc16384a11b9",
+      "status": "pass",
+      "width": 2184,
+      "height": 606,
+      "visibleTextNodes": 29,
+      "bounds": {
+        "x": 52,
+        "y": 8,
+        "width": 2168,
+        "height": 590
+      }
+    },
+    {
+      "file": "maps/06-implementation-delivery-review/README.md",
+      "diagram": 1,
+      "title": "当前投递与目标结果的接力",
+      "sourceDigest": "sha256:fa4fce5da41f6c3cf6ae3047c66a4bf28db44e1c26778b48f4bce7e8e9508a64",
+      "status": "pass",
+      "width": 254,
+      "height": 843,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 238,
+        "height": 827
+      }
+    },
+    {
+      "file": "maps/06-implementation-delivery-review/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "准备信封与许可",
+      "sourceDigest": "sha256:773fe5ac8aa333366fefd86b012303955fd1ed4f0ef4c517df3e4b0f7c031184",
+      "status": "pass",
+      "width": 859,
+      "height": 558,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 759,
+        "height": 537
+      }
+    },
+    {
+      "file": "maps/06-implementation-delivery-review/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "落地证据与不确定结果",
+      "sourceDigest": "sha256:6a492ecb34f6ab3417312accb2593cf3b3899752fc66d9703b4f39f60b8f4392",
+      "status": "pass",
+      "width": 1054,
+      "height": 715,
+      "visibleTextNodes": 24,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 954,
+        "height": 694
+      }
+    },
+    {
+      "file": "maps/06-implementation-delivery-review/runtime-call-flow.md",
+      "diagram": 3,
+      "title": "原信封的 rearm 与回调重发",
+      "sourceDigest": "sha256:23fc2a6b78d6e0c6a1b515d89373d347d8426467cdeb988fbf4a0b47d2f27146",
+      "status": "pass",
+      "width": 835,
+      "height": 499,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 735,
+        "height": 478
+      }
+    },
+    {
+      "file": "maps/07-review-rework-completion/file-dependencies.md",
+      "diagram": 1,
+      "title": "评审和生命周期的精选直接导入",
+      "sourceDigest": "sha256:350815a6ebb9174393b7b7c79ce13590b26c5d19156aa9563f91245d14fa07d8",
+      "status": "pass",
+      "width": 1967,
+      "height": 528,
+      "visibleTextNodes": 26,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1951,
+        "height": 512
+      }
+    },
+    {
+      "file": "maps/07-review-rework-completion/README.md",
+      "diagram": 1,
+      "title": "评审决定与下一责任",
+      "sourceDigest": "sha256:b7da7721a82f3eba9bf6468392997619b4f3574ce926b6a70cb31168665b12fc",
+      "status": "pass",
+      "width": 724,
+      "height": 510,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 708,
+        "height": 494
+      }
+    },
+    {
+      "file": "maps/07-review-rework-completion/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "决定和升级后的返回",
+      "sourceDigest": "sha256:2abd6fec59fd04675f7302b1c10bf6fccb9240306f06ec50e1684718c7e2382d",
+      "status": "pass",
+      "width": 1055,
+      "height": 650,
+      "visibleTextNodes": 24,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 955,
+        "height": 629
+      }
+    },
+    {
+      "file": "maps/07-review-rework-completion/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "完成和取消的五步归档事务",
+      "sourceDigest": "sha256:9dc7a1937d8cc5d042cc93a281b574d4b9b54af24420c0be986bfe2a4f48063e",
+      "status": "pass",
+      "width": 1639,
+      "height": 764,
+      "visibleTextNodes": 30,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1539,
+        "height": 743
+      }
+    },
+    {
+      "file": "maps/07-review-rework-completion/runtime-call-flow.md",
+      "diagram": 3,
+      "title": "从归档继续同一 Demand",
+      "sourceDigest": "sha256:6489fdfd5abe6911548bcd89b7e266e7e387f4d670b1a41b1d8ea333ffb4a05f",
+      "status": "pass",
+      "width": 1058,
+      "height": 505,
+      "visibleTextNodes": 18,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 958,
+        "height": 484
+      }
+    },
+    {
+      "file": "maps/08-real-environment-testing/file-dependencies.md",
+      "diagram": 1,
+      "title": "测试合同与结果的精选直接导入",
+      "sourceDigest": "sha256:e85830ee2127ed696781cd95976424fef03fbc66630c0e9e702658066c8b18d9",
+      "status": "pass",
+      "width": 1560,
+      "height": 344,
+      "visibleTextNodes": 20,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1544,
+        "height": 328
+      }
+    },
+    {
+      "file": "maps/08-real-environment-testing/README.md",
+      "diagram": 1,
+      "title": "测试合同到 Controller 决定",
+      "sourceDigest": "sha256:b329faa2ef570d531b3fb43551e694e3c7041c57ae537ed7038c4a102392cc2d",
+      "status": "pass",
+      "width": 291,
+      "height": 843,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 275,
+        "height": 827
+      }
+    },
+    {
+      "file": "maps/08-real-environment-testing/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "测试规划与统一投递",
+      "sourceDigest": "sha256:d494871435cf72e4056383c3bdd892f8829084f553ec6f8973e3ad1abff5d584",
+      "status": "pass",
+      "width": 847,
+      "height": 517,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 747,
+        "height": 496
+      }
+    },
+    {
+      "file": "maps/08-real-environment-testing/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "逐步结果、分类与重跑",
+      "sourceDigest": "sha256:465f4bdf15700b27024519312723901c9d2af3fee81d13773dc8ade29ce37a13",
+      "status": "pass",
+      "width": 1078,
+      "height": 457,
+      "visibleTextNodes": 18,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 978,
+        "height": 436
+      }
+    },
+    {
+      "file": "maps/09-public-mcp-host-seams/host-effect-handshake.md",
+      "diagram": 1,
+      "title": "向目标窗口投递",
+      "sourceDigest": "sha256:012d67747dff89904c8a8980acdfc65817eea3f32c707ea6f6c830c663eb5984",
+      "status": "pass",
+      "width": 1056,
+      "height": 566,
+      "visibleTextNodes": 22,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 956,
+        "height": 545
+      }
+    },
+    {
+      "file": "maps/09-public-mcp-host-seams/host-effect-handshake.md",
+      "diagram": 2,
+      "title": "固定回调唤醒所在 Pod 的 Controller",
+      "sourceDigest": "sha256:4fa8b34a6fc017d74941e609e3dd55c18150ab7fc9ce7f9965d7024e7b0fee5e",
+      "status": "pass",
+      "width": 1078,
+      "height": 727,
+      "visibleTextNodes": 26,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 978,
+        "height": 706
+      }
+    },
+    {
+      "file": "maps/09-public-mcp-host-seams/README.md",
+      "diagram": 1,
+      "title": "内容与状态通道的分工",
+      "sourceDigest": "sha256:344f954f9ba662dfee1ce5d9e5fe1c179f2002409da60972d47c038c02bce921",
+      "status": "pass",
+      "width": 628,
+      "height": 790,
+      "visibleTextNodes": 14,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 612,
+        "height": 774
+      }
+    },
+    {
+      "file": "maps/10-end-to-end-business-flow/README.md",
+      "diagram": 1,
+      "title": "九个已落地切片的业务接力",
+      "sourceDigest": "sha256:2735da079324163f3046bc790e630d89c1bab2934f35c3fde7921e214344cf2b",
+      "status": "pass",
+      "width": 444,
+      "height": 1586,
+      "visibleTextNodes": 22,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 428,
+        "height": 1570
+      }
+    },
+    {
+      "file": "maps/10-end-to-end-business-flow/state-and-recovery.md",
+      "diagram": 1,
+      "title": "需求包认领状态",
+      "sourceDigest": "sha256:f88409e6ee59f11d6d3bdeb2fe0c3e3cac38044d4110065c608bb8483005afd4",
+      "status": "pass",
+      "width": 727,
+      "height": 412,
+      "visibleTextNodes": 12,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 711,
+        "height": 396
+      }
+    },
+    {
+      "file": "maps/10-end-to-end-business-flow/state-and-recovery.md",
+      "diagram": 2,
+      "title": "Demand lifecycle 与决定标记",
+      "sourceDigest": "sha256:0dd2b22369e90112ac5948ff498efae54be55f3b5512fd7f04152777bfdbb5cb",
+      "status": "pass",
+      "width": 508,
+      "height": 283,
+      "visibleTextNodes": 9,
+      "bounds": {
+        "x": 126,
+        "y": 8,
+        "width": 492,
+        "height": 267
+      }
+    },
+    {
+      "file": "maps/10-end-to-end-business-flow/state-and-recovery.md",
+      "diagram": 3,
+      "title": "实现目标的投递与评审阶段",
+      "sourceDigest": "sha256:95bfbdf46c0acec36df721d18125c40e549f3a5106d6a2a9df12c081913ba4cf",
+      "status": "pass",
+      "width": 1005,
+      "height": 679,
+      "visibleTextNodes": 24,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 989,
+        "height": 663
+      }
+    },
+    {
+      "file": "maps/10-end-to-end-business-flow/state-and-recovery.md",
+      "diagram": 4,
+      "title": "声明与提交失败的恢复边界",
+      "sourceDigest": "sha256:e2ca5d31438b5328145972c2a96c0f39a288d44c07eda53db9dd1b0f5daa2100",
+      "status": "pass",
+      "width": 849,
+      "height": 644,
+      "visibleTextNodes": 19,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 749,
+        "height": 623
+      }
+    },
+    {
+      "file": "maps/11-kernel/file-dependencies.md",
+      "diagram": 1,
+      "title": "内核的精选直接导入",
+      "sourceDigest": "sha256:a512e1ff689e7d71109cbf861d3f10e0f3497418d11a428c18e6624744274b7c",
+      "status": "pass",
+      "width": 2332,
+      "height": 362,
+      "visibleTextNodes": 21,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 2316,
+        "height": 346
+      }
+    },
+    {
+      "file": "maps/11-kernel/README.md",
+      "diagram": 1,
+      "title": "共同命令外壳与两种变更形状",
+      "sourceDigest": "sha256:f7f1d42fed3e392ec7e2997cdd577735e31aa47cd75049057a4220462684fb25",
+      "status": "pass",
+      "width": 373,
+      "height": 624,
+      "visibleTextNodes": 12,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 357,
+        "height": 608
+      }
+    },
+    {
+      "file": "maps/11-kernel/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "共有命令外壳",
+      "sourceDigest": "sha256:2135a60571c015a01decdd71bcc7b52009491bf1ea4ae62827e47c797883248c",
+      "status": "pass",
+      "width": 883,
+      "height": 434,
+      "visibleTextNodes": 15,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 783,
+        "height": 413
+      }
+    },
+    {
+      "file": "maps/11-kernel/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "追加外壳的身份绑定",
+      "sourceDigest": "sha256:d942b92ecdefee7e31ce8532ab8bb351ed56a92f0ff54a3d2ab7c1602f74c6ba",
+      "status": "pass",
+      "width": 836,
+      "height": 441,
+      "visibleTextNodes": 14,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 736,
+        "height": 420
+      }
+    },
+    {
+      "file": "maps/11-kernel/runtime-call-flow.md",
+      "diagram": 3,
+      "title": "效果外壳的计划重算",
+      "sourceDigest": "sha256:f37569218784dbee64926d5c5fd12afd2989cc4756910608cfb1322b9d435e99",
+      "status": "pass",
+      "width": 849,
+      "height": 490,
+      "visibleTextNodes": 20,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 749,
+        "height": 469
+      }
+    },
+    {
+      "file": "maps/12-endpoint/file-dependencies.md",
+      "diagram": 1,
+      "title": "执行端点的精选直接导入",
+      "sourceDigest": "sha256:871d6330a3b47c072282935a1ec52410a1285fa3f0f58e494377ea39b1a67b1e",
+      "status": "pass",
+      "width": 1856,
+      "height": 362,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1840,
+        "height": 346
+      }
+    },
+    {
+      "file": "maps/12-endpoint/README.md",
+      "diagram": 1,
+      "title": "端点登记与可验证的执行位置",
+      "sourceDigest": "sha256:989195eab045b9862030456b9435296f795ac30fd383494457a4c1d326363737",
+      "status": "pass",
+      "width": 301,
+      "height": 772,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 285,
+        "height": 756
+      }
+    },
+    {
+      "file": "maps/12-endpoint/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "登记与 worktree 回执核对",
+      "sourceDigest": "sha256:a3d0ab482c94a4f58b669c28765449336b3dff5fcad1e41b99b23509cfd9e1a1",
+      "status": "pass",
+      "width": 1030,
+      "height": 520,
+      "visibleTextNodes": 18,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 930,
+        "height": 499
+      }
+    },
+    {
+      "file": "maps/12-endpoint/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "替换、退役与声明恢复",
+      "sourceDigest": "sha256:b9746777a658e4d2a5be9d768eea2ce55daf723d9c59b328d1c3982645514df1",
+      "status": "pass",
+      "width": 883,
+      "height": 609,
+      "visibleTextNodes": 20,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 783,
+        "height": 588
+      }
+    },
+    {
+      "file": "maps/13-requirement/file-dependencies.md",
+      "diagram": 1,
+      "title": "需求包的精选直接导入",
+      "sourceDigest": "sha256:2614e962a25a82700767c100372321dcb615e021348e302c9596491c90b08a02",
+      "status": "pass",
+      "width": 1450,
+      "height": 344,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1434,
+        "height": 328
+      }
+    },
+    {
+      "file": "maps/13-requirement/README.md",
+      "diagram": 1,
+      "title": "需求内容、确认与认领的不同事实",
+      "sourceDigest": "sha256:bae18c6147344436b4b8e4d84720dd27da88e2dc3fa69b51156a452024a2f420",
+      "status": "pass",
+      "width": 269,
+      "height": 808,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 253,
+        "height": 792
+      }
+    },
+    {
+      "file": "maps/13-requirement/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "发布前确认和发布后上板",
+      "sourceDigest": "sha256:d10fae7c41904daea03f84f285c78f2559162e79f6cfe0e52b07f9be9ccf3efd",
+      "status": "pass",
+      "width": 1078,
+      "height": 508,
+      "visibleTextNodes": 19,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 978,
+        "height": 487
+      }
+    },
+    {
+      "file": "maps/13-requirement/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "重放、恢复与撤回",
+      "sourceDigest": "sha256:db3fc0a4d381193999f625025447e55473f7d6c9a7d79e3e648b0563ab51732e",
+      "status": "pass",
+      "width": 859,
+      "height": 484,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 759,
+        "height": 463
+      }
+    },
+    {
+      "file": "maps/14-evidence/file-dependencies.md",
+      "diagram": 1,
+      "title": "证据发布的精选直接导入",
+      "sourceDigest": "sha256:9a8b89f678c7f58d2da6d7c432ed11ded5ead9e78ff04de9f5241875057d6406",
+      "status": "pass",
+      "width": 1353,
+      "height": 712,
+      "visibleTextNodes": 20,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1337,
+        "height": 696
+      }
+    },
+    {
+      "file": "maps/14-evidence/README.md",
+      "diagram": 1,
+      "title": "受管证据从选择到结果消费",
+      "sourceDigest": "sha256:0354d7b7fd692e6d795e1a27693f01e66316dfa26c5ef4120f7b5094e6b69fd0",
+      "status": "pass",
+      "width": 282,
+      "height": 825,
+      "visibleTextNodes": 11,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 266,
+        "height": 809
+      }
+    },
+    {
+      "file": "maps/14-evidence/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "来源选择、隐私与发布",
+      "sourceDigest": "sha256:5ed587ea1cbf156bb8da4128bc9ff03e970d1900e40ae394e3fb7be7bc31b05a",
+      "status": "pass",
+      "width": 1067,
+      "height": 584,
+      "visibleTextNodes": 20,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 967,
+        "height": 563
+      }
+    },
+    {
+      "file": "maps/14-evidence/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "Evidence 事务的前向恢复",
+      "sourceDigest": "sha256:9494e23c3716f243634853470057d85dbb1414fed7885529eb187b79cc8a5c1e",
+      "status": "pass",
+      "width": 859,
+      "height": 532,
+      "visibleTextNodes": 17,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 759,
+        "height": 511
+      }
+    },
+    {
+      "file": "maps/15-pod/file-dependencies.md",
+      "diagram": 1,
+      "title": "Pod 与 worktree的精选直接导入",
+      "sourceDigest": "sha256:d4f2002bccf3e96e1dfba7e6472bbe8e83ad6e7d87b79aba7d9bcdb183dfa390",
+      "status": "pass",
+      "width": 1747,
+      "height": 528,
+      "visibleTextNodes": 24,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1731,
+        "height": 512
+      }
+    },
+    {
+      "file": "maps/15-pod/README.md",
+      "diagram": 1,
+      "title": "Pod 配置和端点事实形成执行环境",
+      "sourceDigest": "sha256:4c5cb9ef2ad8c2bf8cdd8a750c000996726967d05685c749dbc20d5bb59d57a3",
+      "status": "pass",
+      "width": 550,
+      "height": 808,
+      "visibleTextNodes": 13,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 534,
+        "height": 792
+      }
+    },
+    {
+      "file": "maps/15-pod/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "创建与 worktree 登记",
+      "sourceDigest": "sha256:319c72fea3fe3442eb44c29ecfef444a002f93b410cfa0df788088c4020fa6a2",
+      "status": "pass",
+      "width": 1060,
+      "height": 691,
+      "visibleTextNodes": 26,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 960,
+        "height": 670
+      }
+    },
+    {
+      "file": "maps/15-pod/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "归档后两段关闭",
+      "sourceDigest": "sha256:2851283e31c5444899f55a777ad0a95cddf9a3366459455ab0d84744f54894bc",
+      "status": "pass",
+      "width": 1075,
+      "height": 632,
+      "visibleTextNodes": 22,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 975,
+        "height": 611
+      }
+    }
+  ]
+}

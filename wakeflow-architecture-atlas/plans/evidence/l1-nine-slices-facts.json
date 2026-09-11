@@ -1,0 +1,144 @@
+{
+  "baselineCommit": "7ba1f38938a7387623b0ca588d9cfd54abda5760",
+  "verifiedAt": "2026-09-11",
+  "rootNpmTest": {
+    "exitCode": 0,
+    "tests": 851,
+    "passed": 851,
+    "failed": 0,
+    "durationMs": 182575.974
+  },
+  "architecture": {
+    "ok": true,
+    "parser": "swc",
+    "modules": 640,
+    "dependencies": 4324,
+    "productionRoots": 10
+  },
+  "schemaCount": 93,
+  "scenarioCount": 16,
+  "publicCatalog": {
+    "tools": [
+      {
+        "name": "wakeflow_maintain_workspace",
+        "slice": "workspace",
+        "shape": "effect"
+      },
+      {
+        "name": "wakeflow_register_window_binding",
+        "slice": "endpoint",
+        "shape": "append"
+      },
+      {
+        "name": "wakeflow_publish_requirement",
+        "slice": "requirement",
+        "shape": "effect"
+      },
+      {
+        "name": "wakeflow_inspect_board",
+        "slice": "requirement",
+        "shape": "read"
+      },
+      {
+        "name": "wakeflow_create_demand",
+        "slice": "demand",
+        "shape": "effect"
+      },
+      {
+        "name": "wakeflow_inspect_demand_route",
+        "slice": "demand",
+        "shape": "read"
+      },
+      {
+        "name": "wakeflow_complete_demand",
+        "slice": "demand",
+        "shape": "effect"
+      },
+      {
+        "name": "wakeflow_cancel_demand",
+        "slice": "demand",
+        "shape": "effect"
+      },
+      {
+        "name": "wakeflow_continue_demand",
+        "slice": "demand",
+        "shape": "effect"
+      },
+      {
+        "name": "wakeflow_record_evidence",
+        "slice": "evidence",
+        "shape": "effect"
+      },
+      {
+        "name": "wakeflow_plan_target_task",
+        "slice": "tasking",
+        "shape": "append"
+      },
+      {
+        "name": "wakeflow_prepare_delivery",
+        "slice": "delivery",
+        "shape": "append"
+      },
+      {
+        "name": "wakeflow_record_delivery_outcome",
+        "slice": "delivery",
+        "shape": "append"
+      },
+      {
+        "name": "wakeflow_rearm_delivery",
+        "slice": "delivery",
+        "shape": "append"
+      },
+      {
+        "name": "wakeflow_import_target_result",
+        "slice": "result-review",
+        "shape": "append"
+      },
+      {
+        "name": "wakeflow_inspect_target_result_review",
+        "slice": "result-review",
+        "shape": "read"
+      },
+      {
+        "name": "wakeflow_record_implementation_review_decision",
+        "slice": "result-review",
+        "shape": "append"
+      },
+      {
+        "name": "wakeflow_record_test_review_decision",
+        "slice": "result-review",
+        "shape": "append"
+      },
+      {
+        "name": "wakeflow_pod",
+        "slice": "pod",
+        "shape": "effect"
+      }
+    ],
+    "canonicalBytes": 90505
+  },
+  "notRun": [
+    "real-host Codex/Claude Code delivery",
+    "L2 scenario integration",
+    "L3 release artifact validation"
+  ],
+  "sourceComparison": {
+    "baseCommit": "ec341d4",
+    "headCommit": "7ba1f38938a7387623b0ca588d9cfd54abda5760",
+    "scope": [
+      "src",
+      "tests",
+      "tooling",
+      "docs"
+    ],
+    "pathCounts": {
+      "运行时源码": 116,
+      "Schema 与生成合同": 120,
+      "测试": 107,
+      "工具": 0,
+      "文档": 12
+    },
+    "total": 355
+  },
+  "figjamRefresh": "l1-nine-slices-figjam.json"
+}

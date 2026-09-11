@@ -1,133 +1,269 @@
 ---
 diagramId: ts-public-mcp-host-h0
 viewType: architecture
-truthKind: stale
-reviewDepth: L1
-verifiedAt: 2026-09-03
-snapshotObservedAt: 2026-09-03T03:13:56-07:00
-baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
-sourceFingerprint: sha256:6f3d1131cd3e8a9751992d13fdeb5515182d3ce4b17c39ef5ade750d68d9226a
-audience: [maintainer, reviewer, newcomer]
-documentationOwner: Wakeflow Source Maintenance
-generatedBy: mixed
-sourcePaths: [src/entrypoints/**, src/hosts/**, src/workspace/window-runtime/**, src/governance/**, src/contracts/generated/entrypoints/**]
-schemaPaths: [src/contracts/schemas/entrypoints/**]
-testPaths: [tests/entrypoints/**, tests/hosts/**, tests/workspace/window-runtime/**, tests/governance/**]
+truthKind: current-code
+reviewDepth: L0
+verifiedAt: 2026-09-11
+baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
+sourceFingerprint: sha256:013cd3fd4f59d90815ad6c2a4d21f24ca31d3c09c6be48ad9ab803d51cb1bfe0
+audience: [maintainer, reviewer]
+documentationOwner: Wakeflow Architecture Atlas
+generatedBy: manual-review
+sourcePaths:
+  - src/capabilities/delivery/*.ts
+  - src/capabilities/delivery/service.ts
+  - src/capabilities/demand/*.ts
+  - src/capabilities/endpoint/*.ts
+  - src/capabilities/evidence/*.ts
+  - src/capabilities/pod/*.ts
+  - src/capabilities/requirement/*.ts
+  - src/capabilities/result-review/*.ts
+  - src/capabilities/result-review/service.ts
+  - src/capabilities/tasking/*.ts
+  - src/capabilities/workspace/*.ts
+  - src/configuration/*.ts
+  - src/contracts/generated/configuration/*.ts
+  - src/contracts/generated/entrypoints/*.ts
+  - src/contracts/generated/foundation/*.ts
+  - src/contracts/generated/governance/archive/*.ts
+  - src/contracts/generated/governance/board/*.ts
+  - src/contracts/generated/governance/delivery/*.ts
+  - src/contracts/generated/governance/demand/*.ts
+  - src/contracts/generated/governance/evidence/*.ts
+  - src/contracts/generated/governance/ledger/*.ts
+  - src/contracts/generated/governance/lifecycle/*.ts
+  - src/contracts/generated/governance/result/*.ts
+  - src/contracts/generated/governance/review/*.ts
+  - src/contracts/generated/governance/tasking/*.ts
+  - src/contracts/generated/governance/testing/*.ts
+  - src/contracts/generated/identity/*.ts
+  - src/contracts/generated/workspace/*.ts
+  - src/contracts/identity/*.ts
+  - src/contracts/vocabulary/*.ts
+  - src/entrypoints/*.ts
+  - src/entrypoints/wakeflow-public-mcp-catalog.ts
+  - src/entrypoints/wakeflow-public-mcp-server.ts
+  - src/entrypoints/wakeflow-public-mcp-shared-executors.ts
+  - src/entrypoints/wakeflow-public-mcp-tool.ts
+  - src/foundation/artifact/*.ts
+  - src/foundation/crypto/*.ts
+  - src/foundation/data/*.ts
+  - src/foundation/event-sourcing/*.ts
+  - src/foundation/filesystem/*.ts
+  - src/foundation/git/*.ts
+  - src/foundation/identity/*.ts
+  - src/foundation/node/*.ts
+  - src/foundation/numeric/*.ts
+  - src/foundation/resource/*.ts
+  - src/foundation/schema/*.ts
+  - src/foundation/text/*.ts
+  - src/foundation/time/*.ts
+  - src/governance/controller/*.ts
+  - src/governance/delivery/*.ts
+  - src/governance/demand/*.ts
+  - src/governance/demand/event-sourcing/*.ts
+  - src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts
+  - src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts
+  - src/governance/demand/model/*.ts
+  - src/governance/demand/publication/*.ts
+  - src/governance/evidence/*.ts
+  - src/governance/ledger/*.ts
+  - src/governance/lifecycle/*.ts
+  - src/governance/result/*.ts
+  - src/governance/review/*.ts
+  - src/governance/tasking/*.ts
+  - src/governance/testing/*.ts
+  - src/kernel/*.ts
+  - src/kernel/event-stream/*.ts
+  - src/kernel/hook-observations.ts
+  - src/workspace/*.ts
+  - src/workspace/active/*.ts
+  - src/workspace/host-runtime/*.ts
+  - src/workspace/maintenance/*.ts
+  - src/workspace/managed-integration/*.ts
+  - src/workspace/support/*.ts
+  - src/workspace/window-runtime/*.ts
+schemaPaths:
+  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-board-inspection-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-board-inspection-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-maintenance-public-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-maintenance-public-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-pod-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-pod-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-evidence-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-evidence-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-requirement-publication-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-requirement-publication-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-result.schema.json
+  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
+  - src/contracts/schemas/foundation/git-object-id.schema.json
+  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
+  - src/contracts/schemas/foundation/portable-resource-path.schema.json
+  - src/contracts/schemas/foundation/sha256-digest.schema.json
+  - src/contracts/schemas/foundation/utc-instant.schema.json
+  - src/contracts/schemas/governance/archive/demand-archive-manifest.schema.json
+  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
+  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
+  - src/contracts/schemas/governance/demand/demand-authority.schema.json
+  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-publication-transaction.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
+  - src/contracts/schemas/governance/demand/demand-identity.schema.json
+  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
+  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
+  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
+  - src/contracts/schemas/governance/result/target-result.schema.json
+  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
+  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
+  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
+  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
+  - src/contracts/schemas/governance/tasking/task-package.schema.json
+  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
+  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
+  - src/contracts/schemas/workspace/maintenance-execution-intent.schema.json
+  - src/contracts/schemas/workspace/maintenance-journal.schema.json
+  - src/contracts/schemas/workspace/window-host-binding.schema.json
+  - src/contracts/schemas/workspace/window-runtime-unregistered-projection.schema.json
+testPaths:
+  - tests/capabilities/delivery/service.test.ts
+  - tests/capabilities/endpoint/service.test.ts
+  - tests/capabilities/result-review/service.test.ts
+  - tests/entrypoints/wakeflow-public-mcp-catalog.test.ts
+  - tests/governance/demand/demand-event-sourcing-command-handler.test.ts
+refreshTriggers:
+  - .dependency-cruiser.cjs
+  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
+  - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# 公共MCP与宿主接缝
+# 公共 MCP 与宿主接缝
 
-## 当前结论
+当前公开 19 个工具，由一个静态登记表绑定到双宿主组合根。宿主差异主要是画像、动作内容、观察形状与指令；实际创建会话、发送和 worktree 处置由 Agent 执行。
 
-当前公共MCP注册23个真实工具，覆盖Workspace Maintenance/Binding、Ledger、TODO Inspection/Intake、Demand/Managed Evidence Publication、Route、implementation/test
-Tasking、Delivery、Host Effect事实、Result、Review/Resume、Testing、Product Remediation和Completion。
-Codex和Claude Code各自拥有固定composition root；公共请求不能选择宿主，双宿主工具名称与Schema集合一致。
-Demand Publication及Completion的TODO字段使用共享`todo_<UUIDv4>` typed identity；A2-F1又在内部收紧Ledger-bound Intake，
-A2关闭State到Service/Recovery及Intake可达性；A4已公开有界list/item和一致page token，A5已公开exact Intake publication，A6使Demand只读取Intake refs。Auto Claim仍没有执行consumer。
-A3已把`wakeflow_publish_requirement`和`wakeflow_publish_confirmation`同时接入Public Server与双宿主组合根；它们发布immutable Ledger Authority及metadata refs，不创建TODO或Demand。
+> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
-统一技术Review把初始化时发送给模型的server instructions从逐工具手册收敛为五条跨工具关系：closed-world且不执行宿主效果、exact preview/apply、exact recovery、Demand变更后重查Route，以及Inspection/TargetResult不授予权限。各工具的具体输入、效果、恢复和披露边界仍由自己的description与自包含Schema拥有，避免两份说明漂移。
-
-公共入口现按Workspace、Authority、Execution、Review分为四个静态注册组；58行Public Server只负责配置准入、SDK实例和固定调用顺序。共享`registerWakeflowPublicMcpTool`只生成Canonical成功/错误结果，不保存动态registry或选择领域owner。拆分前后23项完整`tools/list`在去除transport产生的undefined字段后逐项一致。
-
-Managed Evidence现已由`wakeflow_record_evidence`公开`preview / apply / recover`，但Apply/Recover只返回typed ID、摘要和Event/Commit/Aggregate
-游标。Preview包含供确认的逻辑source ref；内部Reader与payload bytes不公开。工具不执行宿主效果，也不把可见性冒充Controller认证。
-
-Agent宿主效果采用“Wakeflow提交Intent/Claim事实 → 签发瞬时Action → Agent执行 → 回传Observation →
-Wakeflow记录Event”的握手。MCP不替Agent操作窗口。Window Binding注册请求会接收Agent观察到的
-opaque handle，但该值只进入0600私有Binding权威，不进入返回值、投影、业务Event或Host Action。
-
-## H0：双平面宿主接缝
+## 内容与状态通道的分工
 
 ```mermaid
 flowchart TB
-  accTitle: Wakeflow公共MCP控制平面与Agent宿主效果平面
-  accDescr: MCP客户端启动固定Codex或Claude组合根，官方stdio服务承载公共Server并注册二十三个真实owner工具。Ledger、TODO、Demand与Managed Evidence只读写Wakeflow本地权威，不执行宿主效果；TODO Inspection不选择next，Intake不执行Auto Claim。Binding注册请求接收Agent观察到的opaque handle并只写入0600私有权威。Delivery与Testing Claim工具可签发瞬时Action，Agent执行并回传Observation。
-
-  subgraph PUBLIC_PLANE["① 公共 MCP 控制平面"]
-    direction LR
-    CLIENT["[外部] MCP客户端/宿主"]
-    CODEX["[固定组合] Codex root"]
-    CLAUDE["[固定组合] Claude Code root"]
-    STDIO["[官方SDK] stdio生命周期"]
-    PUBLIC["[公共] Wakeflow MCP Server"]
-    GROUPS["[静态装配] 四个工具注册组\nWorkspace / Authority / Execution / Review"]
-    TOOLS["[公开23工具]\nWorkspace / Ledger / TODO / Demand / Evidence / Route / Tasking\nDelivery / Result / Review / Testing / Lifecycle"]
-    DOMAINS["[内部] Workspace / Governance owners"]
-  end
-
-  subgraph HOST_PLANE["② Agent 宿主效果平面"]
-    direction LR
-    PRIVATE["[私有] 0600 Binding authority\nopaque handle"]
-    CLAIM["[事件权威] Intent + WorkClaim + claimed Event"]
-    ACTION["[瞬时] Agent Host Action"]
-    AGENT["[执行者] Agent/宿主API"]
-    OBS["[输入] Host Effect Observation"]
-    EVENT["[事件权威] observed/result/review Events"]
-  end
-
-  CLIENT -->|"E-H0-01 启动Codex制品"| CODEX
-  CLIENT -->|"E-H0-02 启动Claude制品"| CLAUDE
-  CODEX -->|"E-H0-03 固定注入"| STDIO
-  CLAUDE -->|"E-H0-04 固定注入"| STDIO
-  STDIO -->|"E-H0-05 factory"| PUBLIC
-  PUBLIC -->|"E-H0-06 固定调用"| GROUPS
-  GROUPS -->|"E-H0-15 registerTool × 23"| TOOLS
-  TOOLS -->|"E-H0-07 调用真实owner"| DOMAINS
-  TOOLS -->|"E-H0-08 Binding注册"| PRIVATE
-
-  DOMAINS -->|"E-H0-09 提交准备/Claim"| CLAIM
-  CLAIM -->|"E-H0-10 首次回执签发"| ACTION
-  ACTION -->|"E-H0-11 执行宿主效果"| AGENT
-  AGENT -->|"E-H0-12 回传观察"| OBS
-  OBS -->|"E-H0-13 严格闭合并记录"| EVENT
-  PRIVATE -.->|"E-H0-14 仅进程内验证"| CLAIM
+  accTitle: 内容与状态通道的分工
+  accDescr: 内容与状态通道的分工；箭头区分当前代码步骤、返回事实与明确的条件。
+  agent["Agent 的工作流调用"]
+  mcp["19 工具的公共边界"]
+  caps["能力及领域 owner"]
+  local["本地权威与派生视图"]
+  permit["精确意图和许可"]
+  host["宿主效果"]
+  hook["宿主观察回交"]
+  agent -->|"E-L1038-01 调用对应能力"| mcp
+  mcp -->|"E-L1038-02 固定 executor 分派"| caps
+  caps -->|"E-L1038-03 准入后提交当前事实"| local
+  caps -->|"E-L1038-04 生成内容和 fenced permit"| permit
+  permit -->|"E-L1038-05 Agent 执行动作"| host
+  host -->|"E-L1038-06 宿主报告而非业务验收"| hook
+  hook -->|"E-L1038-07 由能力读取和核对观察"| caps
 ```
 
 ### 本图术语说明
 
-| 术语 | 解释 |
+| 术语 | 本图含义 |
 | --- | --- |
-| 固定composition root | 在模块装载时绑定宿主Profile与executor，不接受请求级宿主选择 |
-| 官方stdio生命周期 | MCP SDK拥有连接、`tools/list`、`tools/call`和Schema协议边界 |
-| 静态注册组 | 四个源码固定模块，分别拥有自己的Schema、description、annotations、executor与错误映射 |
-| raw handle | 宿主定位窗口的私有opaque值；只允许出现在注册请求的瞬时输入和0600 Binding authority，不进入输出、投影或业务事件 |
-| Agent Host Action | 已提交Claim后签发的一次性、非持久宿主执行指令 |
-| Observation | Agent对真实宿主效果的结构化观察，必须与Intent/Claim/Binding闭合 |
+| host | Codex 或 Claude Code；真实会话动作由 Agent 调用宿主完成。 |
+| permit | 供 Agent 使用的投递内容与围栏；重放不是新一次发送授权。 |
+| hook | 宿主回交的会话/提示提交/完成观察记录，保存在宿主本地根。 |
+| fence | claimId、claimDigest 与流修订构成的准入令牌。 |
 
-## 公共与内部边界
+### 节点与实现定位
 
-| 能力 | 当前公共MCP | 内部源码 | 宿主效果执行者 |
-| --- | --- | --- | --- |
-| Workspace Maintenance / Binding | 是 | 静态资源与私有窗口身份 | Agent执行launch intents并提供窗口观察 |
-| Requirement / Confirmation Ledger Authority | 是 | Design源稳定读取、exact Plan、immutable record tree及前向恢复 | 无宿主效果；只返回Plan或member-reference metadata |
-| TODO Inspection / Intake | 是 | strict JSON Collection、纯Query、existing append/recovery transaction | Inspection只观察；Intake不执行Auto Claim或创建Demand |
-| Demand Publication | 是 | typed TODO选择、零写Planning、exact-plan Application、sidecar/根/TODO前向事务 | 无宿主效果；成功后Agent继续调用Route |
-| Demand Route / Task Planning | 是 | 22类frontier；implementation/test判别规划 | 无直接宿主效果 |
-| Delivery / Host Effect / Result | 是 | Intent、Claim、Observation、TargetResult Event | Agent执行一次性Host Action |
-| Review / Resume / Remediation | 是 | Controller独立判断与产品返工授权 | Controller执行检查，Agent执行后续修复 |
-| TestCard / Test Delivery / Completion | 是 | 测试代际与Demand终态 | Test窗口执行真实环境动作 |
-| Managed Evidence记录 | 是 | preview/apply/recover、可恢复publication与metadata-only receipt | 内部Reader bytes不公开；无宿主效果 |
-
-## 安全边界
-
-- 公共结果使用稳定错误信封，不返回异常栈、绝对路径、锁token或raw handle。
-- Binding注册输入可携带当前宿主opaque handle；公共Coordinator必须在写入后校验返回结构不包含该私值。
-- stdout只承载MCP协议；稳定transport/shutdown摘要写stderr。
-- server instructions只表达跨工具关系，不重复23份工具description；catalog测试限制其UTF-8长度不超过1024字节。
-- Maintenance返回launch intent但不创建窗口。
-- Agent观察不能作为权限本身，必须与当前私有Binding和Config逻辑根闭合。
-
-## H0边级证据
-
-| 边编号 | 代码证据 | 核验结论 |
+| 节点 | 文件 / 符号 | 责任 |
 | --- | --- | --- |
-| `E-H0-01`–`E-H0-07`、`E-H0-15` | 两宿主composition root、stdio、Public Server与四注册组 | 独立catalog矩阵及拆分前后完整协议对比证明23工具同名同Schema/description/annotations |
-| `E-H0-08` | Window Binding request/Coordinator/Store | handle从请求进入0600 Binding，结果和registered projection不含原值 |
-| `E-H0-09`–`E-H0-14` | Delivery/Testing公共owners与Binding/Observation Authority | Claim/Outcome工具公开；Agent仍执行真实效果，Action/Event不携带原handle |
+| agent | Agent / 用户 / 外部效果或条件视图 | Agent 的工作流调用 |
+| mcp | `src/entrypoints/wakeflow-public-mcp-catalog.ts` | 19 工具的公共边界 |
+| caps | `src/entrypoints/wakeflow-public-mcp-shared-executors.ts` | 能力及领域 owner |
+| local | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts` | 本地权威与派生视图 |
+| permit | `src/capabilities/delivery/service.ts` | 精确意图和许可 |
+| host | Agent / 用户 / 外部效果或条件视图 | 宿主效果 |
+| hook | `src/kernel/hook-observations.ts` | 宿主观察回交 |
 
-## 下钻入口
+### 本图边级证据
 
-- [公共MCP调用时序](../01-overall-architecture/runtime-call-flow.md)
-- [固定组合文件依赖](../01-overall-architecture/file-dependencies.md)
-- [Agent宿主效果握手](./host-effect-handshake.md)
+| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- |
+| E-L1038-01 | `src/entrypoints/wakeflow-public-mcp-tool.ts#registerWakeflowPublicMcpCatalog` | `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts` | 调用对应能力 |
+| E-L1038-02 | `src/entrypoints/wakeflow-public-mcp-server.ts#createWakeflowPublicMcpServer` | `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts` | 固定 executor 分派 |
+| E-L1038-03 | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#executeDemandEventSourcingCommand` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 准入后提交当前事实 |
+| E-L1038-04 | `src/capabilities/delivery/service.ts#permitBody` | `tests/capabilities/delivery/service.test.ts` | 生成内容和 fenced permit |
+| E-L1038-05 | `src/capabilities/delivery/service.ts#permitBody` | `tests/capabilities/delivery/service.test.ts` | Agent 执行动作 |
+| E-L1038-06 | `src/kernel/hook-observations.ts#writeHostHookObservation` | `tests/capabilities/endpoint/service.test.ts` | 宿主报告而非业务验收 |
+| E-L1038-07 | `src/capabilities/result-review/service.ts#loadReviewEvidence` | `tests/capabilities/result-review/service.test.ts` | 由能力读取和核对观察 |
+
+## 守卫、恢复与验证范围
+
+wakeflow_status、独立 wakeflow_verify 尚未公开。内嵌完成 verify 已实现，不能把它视作全局观察能力。候选制品仍 releaseEligible:false；当前工具/场景通过不是最终插件发布。
+
+涉及的测试与核验入口：
+
+- `tests/capabilities/delivery/service.test.ts`。
+- `tests/capabilities/endpoint/service.test.ts`。
+- `tests/capabilities/result-review/service.test.ts`。
+- `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts`。
+- `tests/governance/demand/demand-event-sourcing-command-handler.test.ts`。
+
+## 下钻与相关视图
+
+- [发送与回调时序](./host-effect-handshake.md)
+- [执行环境](../15-pod/README.md)
+- [图谱总索引](../README.md)
+- [核验与剩余范围](../01-diagram-review-ledger.md)

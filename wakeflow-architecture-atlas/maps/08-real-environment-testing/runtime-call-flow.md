@@ -1,142 +1,251 @@
 ---
 diagramId: ts-real-testing-runtime-x1
-viewType: runtime-call-sequence
-truthKind: stale
+viewType: call-flow
+truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-03
-snapshotObservedAt: 2026-09-03T03:13:56-07:00
-baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
-sourceFingerprint: sha256:0ba83d869999fbc24d8af4ded3a90b59e3466795b2ea2b32428f5baf342c5853
+verifiedAt: 2026-09-11
+baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
+sourceFingerprint: sha256:27287a93862d882b1aab2855cce8210fb7f3761fc579ca3bcbf6222410b38b8a
 audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Source Maintenance
-generatedBy: manual
-sourcePaths: [src/governance/testing/**, src/governance/tasking/**, src/governance/delivery/**, src/governance/result/**, src/governance/review/**, src/governance/lifecycle/**, src/entrypoints/**]
-schemaPaths: [src/contracts/schemas/governance/testing/**, src/contracts/schemas/governance/tasking/**, src/contracts/schemas/governance/result/**, src/contracts/schemas/governance/review/**, src/contracts/schemas/governance/lifecycle/**, src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json]
-testPaths: [tests/governance/testing/**, tests/governance/tasking/**, tests/governance/delivery/**, tests/governance/result/**, tests/governance/review/**, tests/governance/lifecycle/**, tests/entrypoints/**]
+documentationOwner: Wakeflow Architecture Atlas
+generatedBy: manual-review
+sourcePaths:
+  - src/capabilities/delivery/*.ts
+  - src/capabilities/delivery/service.ts
+  - src/capabilities/result-review/*.ts
+  - src/capabilities/result-review/decide.ts
+  - src/capabilities/result-review/service.ts
+  - src/capabilities/tasking/*.ts
+  - src/capabilities/tasking/decide.ts
+  - src/capabilities/tasking/service.ts
+  - src/configuration/*.ts
+  - src/contracts/generated/configuration/*.ts
+  - src/contracts/generated/entrypoints/*.ts
+  - src/contracts/generated/foundation/*.ts
+  - src/contracts/generated/governance/delivery/*.ts
+  - src/contracts/generated/governance/demand/*.ts
+  - src/contracts/generated/governance/evidence/*.ts
+  - src/contracts/generated/governance/ledger/*.ts
+  - src/contracts/generated/governance/lifecycle/*.ts
+  - src/contracts/generated/governance/result/*.ts
+  - src/contracts/generated/governance/review/*.ts
+  - src/contracts/generated/governance/tasking/*.ts
+  - src/contracts/generated/governance/testing/*.ts
+  - src/contracts/generated/identity/*.ts
+  - src/contracts/generated/workspace/*.ts
+  - src/contracts/identity/*.ts
+  - src/contracts/vocabulary/*.ts
+  - src/foundation/artifact/*.ts
+  - src/foundation/crypto/*.ts
+  - src/foundation/data/*.ts
+  - src/foundation/event-sourcing/*.ts
+  - src/foundation/filesystem/*.ts
+  - src/foundation/git/*.ts
+  - src/foundation/identity/*.ts
+  - src/foundation/node/*.ts
+  - src/foundation/numeric/*.ts
+  - src/foundation/resource/*.ts
+  - src/foundation/schema/*.ts
+  - src/foundation/text/*.ts
+  - src/foundation/time/*.ts
+  - src/governance/controller/*.ts
+  - src/governance/delivery/*.ts
+  - src/governance/demand/*.ts
+  - src/governance/demand/event-sourcing/*.ts
+  - src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts
+  - src/governance/demand/model/*.ts
+  - src/governance/demand/publication/*.ts
+  - src/governance/evidence/*.ts
+  - src/governance/ledger/*.ts
+  - src/governance/lifecycle/*.ts
+  - src/governance/result/*.ts
+  - src/governance/review/*.ts
+  - src/governance/tasking/*.ts
+  - src/governance/testing/*.ts
+  - src/kernel/*.ts
+  - src/kernel/event-stream/*.ts
+  - src/workspace/*.ts
+  - src/workspace/active/*.ts
+  - src/workspace/window-runtime/*.ts
+schemaPaths:
+  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-request.schema.json
+  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-result.schema.json
+  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
+  - src/contracts/schemas/foundation/git-object-id.schema.json
+  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
+  - src/contracts/schemas/foundation/portable-resource-path.schema.json
+  - src/contracts/schemas/foundation/sha256-digest.schema.json
+  - src/contracts/schemas/foundation/utc-instant.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
+  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
+  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
+  - src/contracts/schemas/governance/demand/demand-authority.schema.json
+  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
+  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
+  - src/contracts/schemas/governance/demand/demand-identity.schema.json
+  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
+  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
+  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
+  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
+  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
+  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
+  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
+  - src/contracts/schemas/governance/result/target-result.schema.json
+  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
+  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
+  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
+  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
+  - src/contracts/schemas/governance/tasking/task-package.schema.json
+  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
+  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
+  - src/contracts/schemas/workspace/window-host-binding.schema.json
+testPaths:
+  - tests/capabilities/delivery/service.test.ts
+  - tests/capabilities/result-review/service.test.ts
+  - tests/capabilities/tasking/service.test.ts
+refreshTriggers:
+  - .dependency-cruiser.cjs
+  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
+  - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# 真实环境Testing：Card、Delivery与Result调用流
+# 测试：规划、尝试与失败子集
 
-## X1：TestCard、Test TaskPackage与Delivery授权
+测试合同和任务身份保持不可变，尝试与审阅决定保留谱系。
+
+> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+
+## 测试规划与统一投递
 
 ```mermaid
 sequenceDiagram
-  accTitle: TestCard规划Test TaskPackage和Test Delivery授权
-  accDescr: Controller按Route调用公共工具preview/apply创建TestCard事件。同一公共Task Planning工具从唯一Card事件派生Test TaskPackage。Test Delivery Preparation加载Card、Package和Config测试窗口：initial创建首个attempt，rerun绑定直接前驱Result与request-another-attempt Decision创建新attempt，replacement只为rejected当前attempt追加授权；随后提交prepared事件并物化Card与Dispatch Packet。
-
-  autonumber
-  participant CTRL as Controller / 公共MCP
-  participant CARD as TestCard Planning
-  participant REPO as Demand Repository
-  participant TASK as Test Task Planning
-  participant PREP as Test Delivery Preparation
-  participant PACKET as Dispatch Projection Store
-
-  CTRL->>CARD: E-X1-01 公共preview/apply authored TestCard
-  CARD->>REPO: E-X1-02 提交test-card-created Event
-  CTRL->>TASK: E-X1-03 最小workType:test选择
-  TASK->>REPO: 定位唯一Card Event并提交target-task-planned
-  CTRL->>PREP: E-X1-04 preview/apply Test Delivery
-  PREP->>REPO: E-X1-05 加载Card/Package与当前attempt
-  PREP->>PREP: initial / rerun新attempt，或replacement追加当前attempt授权
-  PREP->>REPO: E-X1-06 提交test-delivery-prepared Event
-  PREP->>PACKET: E-X1-07 从Event物化Card/Dispatch Packet
-  PACKET-->>CTRL: created/current投影摘要
+  accTitle: 测试规划与统一投递
+  accDescr: 测试规划与统一投递；箭头区分当前代码步骤、返回事实与明确的条件。
+  participant controller as Controller
+  participant tasking as 任务切片
+  participant delivery as 投递切片
+  participant test as Test Agent
+  controller->>tasking: E-L1036-01 给出 testContract 和需求步骤引用
+  tasking->>tasking: E-L1036-02 核对实现已接受与测试谱系
+  controller->>delivery: E-L1036-03 prepare 同一 test TaskPackage
+  delivery->>test: E-L1036-04 冻结步骤、attempt 与停止条件
 ```
 
 ### 本图术语说明
 
-| 术语 | 解释 |
+| 术语 | 本图含义 |
 | --- | --- |
-| authored TestCard | Controller提供目标、setup、通过条件等内容；系统分配Card/Event身份 |
-| initial attempt | TestCard的首个逻辑执行attempt，ordinal固定为1 |
-| rerun attempt | 新attempt，ordinal连续且绑定直接前驱Result和Controller request-another-attempt Decision |
-| environment setup | 按`reuse-existing / fresh-once / fresh-per-attempt`与attempt mode唯一派生的执行指令，不是环境已准备回执 |
-| authorization generation | 同一attempt中追加的第N份Test Delivery授权，最大32；replacement必须有精确rejected来源 |
+| testContract | 测试任务包内冻结的步骤、环境、技能、预算与停止条件。 |
+| TaskPackage | 目标任务的不可变合同，内容来自已发布需求包。 |
+| permit | 供 Agent 使用的投递内容与围栏；重放不是新一次发送授权。 |
 
-### X1边级证据
+### 节点与实现定位
 
-| 边编号 | 代码位置 | 核验结论 |
+| 节点 | 文件 / 符号 | 责任 |
 | --- | --- | --- |
-| `E-X1-01`、`E-X1-02` | TestCard Public Coordinator/Planning Service | Route准入后提交Card Event |
-| `E-X1-03` | Target Task Planning Public Coordinator/Test Planning Authority | 最小test选择由owner派生完整Package |
-| `E-X1-04`–`E-X1-06` | Test Delivery Preparation Input/Authority/Service | 三种mode严格分离；rerun与replacement不能互换 |
-| `E-X1-07` | Dispatch Projection Store | 只从Event历史物化Card和当前Packet |
+| controller | Agent / 用户 / 外部效果或条件视图 | Controller |
+| tasking | `src/capabilities/tasking/service.ts` | 任务切片 |
+| delivery | `src/capabilities/delivery/service.ts` | 投递切片 |
+| test | Agent / 用户 / 外部效果或条件视图 | Test Agent |
 
-## X2：Test Claim、真实执行与Result
+### 本图边级证据
+
+| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- |
+| E-L1036-01 | `src/capabilities/tasking/service.ts#buildTestPackage` | `tests/capabilities/tasking/service.test.ts` | 给出 testContract 和需求步骤引用 |
+| E-L1036-02 | `src/capabilities/tasking/decide.ts#deriveTestPlanningBlockers` | `tests/capabilities/tasking/service.test.ts` | 核对实现已接受与测试谱系 |
+| E-L1036-03 | `src/capabilities/delivery/service.ts#executePrepare` | `tests/capabilities/delivery/service.test.ts` | prepare 同一 test TaskPackage |
+| E-L1036-04 | `src/capabilities/delivery/service.ts#renderPrompt` | `tests/capabilities/delivery/service.test.ts` | 冻结步骤、attempt 与停止条件 |
+
+## 逐步结果、分类与重跑
 
 ```mermaid
 sequenceDiagram
-  accTitle: Test Dispatch Claim真实环境执行与Test Result
-  accDescr: Test目标窗口从投影读取Dispatch Packet。Claim Authority从完整事件历史定位prepared Intent并闭合Card、Package、Attempt、Binding和新鲜窗口观察；通用Claim Service创建WorkClaim并提交claimed事件后生成Test Agent Host Action。Outcome记录accepted、indeterminate或rejected；accepted后Test Report经共享Result Import提交TargetResult，独立Test Review再提交shared Decision Event并派生四类route；rejected-before-effect可显式回到同attempt替代授权，indeterminate停止。
-
-  autonumber
-  participant TARGET as Test目标窗口
-  participant PROJ as Dispatch Projection
-  participant CLAIM as Test Claim Authority/Service
-  participant AGENT as Agent/宿主
-  participant OUTCOME as Outcome Service
-  participant REPO as Demand Repository
-  participant RESULT as Test Result Import
-  participant REVIEW as Controller Test Review
-  participant RESUME as Shared Review Resume
-  participant REMEDIATION as Product Remediation
-
-  TARGET->>PROJ: E-X2-01 读取Card与Dispatch Packet
-  TARGET->>CLAIM: E-X2-02 packet + 新鲜窗口观察
-  CLAIM->>REPO: E-X2-03 定位prepared Intent与当前Test阶段
-  CLAIM->>CLAIM: 闭合Card/Package/Attempt/Binding并创建WorkClaim
-  CLAIM->>REPO: E-X2-04 提交host-effect-claimed Event
-  CLAIM-->>AGENT: E-X2-05 一次性Test Agent Host Action
-  AGENT->>OUTCOME: E-X2-06 回传accepted/indeterminate/rejected观察
-  OUTCOME->>REPO: E-X2-07 提交host-effect-observed Event
-  alt accepted
-    AGENT->>RESULT: E-X2-08 Test TargetResult Report + ordered step evidence
-    RESULT->>REPO: E-X2-09 闭合Card/attempt/packet并提交shared Result Event
-    RESULT->>CLAIM: E-X2-14 Result Event current后精确释放Claim
-    REPO-->>REVIEW: E-X2-10 test-result-review-planning
-    REVIEW->>REPO: E-X2-11 提交shared Test Decision Event
-    REPO-->>TARGET: completion-preflight / another-attempt-planning / product-defect / blocked
-    opt Test Decision为product-defect
-      REVIEW->>REMEDIATION: E-X2-18 精确Decision/route/failed checks
-      REMEDIATION->>REPO: E-X2-19 Authorization Event并重开产品Target
-    end
-    opt Test Decision为blocked
-      TARGET->>RESUME: E-X2-16 引用精确Decision/Result/generation
-      RESUME->>REPO: E-X2-17 提交Resume Event并回到test-result-reported
-    end
-  else rejected-before-effect + unavailable
-    OUTCOME->>CLAIM: E-X2-15 observed Event current后精确释放Claim
-    REPO-->>TARGET: E-X2-12 显式申请同attempt替代Delivery授权
-  else indeterminate
-    REPO-->>TARGET: E-X2-13 停止并保留Claim；禁止自动重发
-  end
+  accTitle: 逐步结果、分类与重跑
+  accDescr: 逐步结果、分类与重跑；箭头区分当前代码步骤、返回事实与明确的条件。
+  participant test as Test Agent
+  participant review as 结果评审切片
+  participant view as 步骤投影
+  participant controller as Controller
+  participant event as 决定事件
+  test->>review: E-L1037-01 导入每步观察与受管证据
+  review->>view: E-L1037-02 组合本次范围和已通过基线
+  view->>controller: E-L1037-03 显示 verdict 与允许决定
+  controller->>event: E-L1037-04 指定可重跑失败 stepIds 或分类升级
 ```
 
 ### 本图术语说明
 
-| 术语 | 解释 |
+| 术语 | 本图含义 |
 | --- | --- |
-| Test Agent Host Action | 从首次Claim Event生成、要求Agent执行真实测试环境动作的瞬时指令 |
-| Test Result Report | 测试Agent输出；只有闭合Event来源后才成为TargetResult |
-| 真实环境 | 实际宿主/工作区/依赖条件，不是纯单元测试模拟 |
-| ordered step evidence | 与TestCard approved plan逐项同序、索引连续且文字一致的测试执行事实 |
-| Test Decision | `accept / request-another-attempt / escalate-product-defect / blocked`；四类均有明确consumer |
+| verdict | 从逐步 expected/observed/evidence 记录派生的测试结论。 |
+| testContract | 测试任务包内冻结的步骤、环境、技能、预算与停止条件。 |
+| commit | 一次不可变事件提交批；文件槽位以预期修订防止并发覆盖。 |
 
-### X2边级证据
+### 节点与实现定位
 
-| 边编号 | 代码位置 | 核验结论 |
+| 节点 | 文件 / 符号 | 责任 |
 | --- | --- | --- |
-| `E-X2-01`–`E-X2-05` | Dispatch Projection、Test Claim Authority、共享Claim Service | Claim文件和claimed Event先于首次Action；没有公共dispatch入口 |
-| `E-X2-06`、`E-X2-07` | 共享Outcome Service | accepted/indeterminate保留Claim，rejected Event current后授权释放 |
-| `E-X2-08`–`E-X2-11`、`E-X2-14` | Test Report、共享Result Import与Test Review | Result Event current后释放Claim并进入独立Test Decision |
-| `E-X2-12`、`E-X2-15` | rejected replacement | 释放Claim后只允许同attempt replacement authorization |
-| `E-X2-13` | indeterminate | Claim保留且失败关闭 |
-| `E-X2-16`、`E-X2-17` | Test blocked Resume | 共享Resume Service复验workType与精确Decision/Result，不消耗attempt或创建Delivery |
-| `E-X2-18`、`E-X2-19` | Product Remediation Service | Test缺陷Decision映射到原产品Target并提交Authorization Event |
+| test | Agent / 用户 / 外部效果或条件视图 | Test Agent |
+| review | `src/capabilities/result-review/service.ts` | 结果评审切片 |
+| view | `src/capabilities/result-review/decide.ts` | 步骤投影 |
+| controller | Agent / 用户 / 外部效果或条件视图 | Controller |
+| event | `src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts` | 决定事件 |
 
-## 停止边界
+### 本图边级证据
 
-Testing与公共入口已提交；本文不声明某次真实宿主测试已经实际执行。Agent仍负责一次性宿主效果，
-Wakeflow公共工具负责Card/Task/Delivery/Result/Review/Remediation/Completion的确定性权威与路由。
-A2-F1真实fixture把唯一`test-environment` member ref同时绑定到TODO Intake与Demand Authority；生产Testing调用时序和owner边界不变。
+| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- |
+| E-L1037-01 | `src/capabilities/result-review/service.ts#executeImport` | `tests/capabilities/result-review/service.test.ts` | 导入每步观察与受管证据 |
+| E-L1037-02 | `src/capabilities/result-review/service.ts#testUnitView` | `tests/capabilities/result-review/service.test.ts` | 组合本次范围和已通过基线 |
+| E-L1037-03 | `src/capabilities/result-review/decide.ts#deriveUnionVerdict` | `tests/capabilities/result-review/service.test.ts` | 显示 verdict 与允许决定 |
+| E-L1037-04 | `src/capabilities/result-review/service.ts#executeTestDecision` | `tests/capabilities/result-review/service.test.ts` | 指定可重跑失败 stepIds 或分类升级 |
+
+## 守卫、恢复与验证范围
+
+接受需要 completed 与目标会话的完成记录。步骤通过是证据，不能自动替代 Controller 的验收判断；预算、范围和失效基线均在下一尝试准入中核对。
+
+涉及的测试与核验入口：
+
+- `tests/capabilities/delivery/service.test.ts`。
+- `tests/capabilities/result-review/service.test.ts`。
+- `tests/capabilities/tasking/service.test.ts`。
+
+## 下钻与相关视图
+
+- [本专题总览](./README.md)
+- [图谱总索引](../README.md)
+- [核验与剩余范围](../01-diagram-review-ledger.md)

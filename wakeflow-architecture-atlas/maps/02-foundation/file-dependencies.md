@@ -1,206 +1,132 @@
 ---
 diagramId: ts-foundation-file-dependency-f2
 viewType: file-dependency
-truthKind: stale
+truthKind: current-code
 reviewDepth: L3
-verifiedAt: 2026-09-03
-snapshotObservedAt: 2026-09-03T03:13:56-07:00
-baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
-sourceFingerprint: sha256:d7947083b55fb0bab4129c90753de8520d1e2d29d3d6b424ac7c54b6642e22e2
-audience:
-  - maintainer
-  - reviewer
-documentationOwner: Wakeflow Source Maintenance
+verifiedAt: 2026-09-11
+baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
+sourceFingerprint: sha256:2cebacc585ce9dceffe791b1c4b443857746790825ce9952ca6813d710b4e5ac
+audience: [maintainer, reviewer]
+documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
-refreshTriggers:
-  - src/foundation/**
-  - src/contracts/generated/foundation/**
 sourcePaths:
-  - src/foundation/**
+  - src/contracts/generated/foundation/*.ts
+  - src/contracts/generated/governance/board/*.ts
+  - src/contracts/generated/identity/*.ts
+  - src/contracts/identity/*.ts
+  - src/contracts/vocabulary/*.ts
+  - src/foundation/crypto/*.ts
+  - src/foundation/data/*.ts
+  - src/foundation/filesystem/*.ts
+  - src/foundation/filesystem/deterministic-json-file.ts
+  - src/foundation/filesystem/durable-atomic-file-write.ts
+  - src/foundation/filesystem/durable-directory-tree-publication.ts
+  - src/foundation/filesystem/rooted-directory.ts
+  - src/foundation/filesystem/rooted-exclusive-file-lock.ts
+  - src/foundation/filesystem/stable-file-read.ts
+  - src/foundation/identity/*.ts
+  - src/foundation/node/*.ts
+  - src/foundation/numeric/*.ts
+  - src/foundation/schema/*.ts
+  - src/foundation/text/*.ts
+  - src/foundation/time/*.ts
+  - src/kernel/*.ts
+  - src/kernel/requirement-board.ts
 schemaPaths:
-  - src/contracts/schemas/foundation/**
+  - src/contracts/schemas/foundation/portable-resource-path.schema.json
+  - src/contracts/schemas/foundation/sha256-digest.schema.json
+  - src/contracts/schemas/foundation/utc-instant.schema.json
+  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
+  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
 testPaths:
-  - tests/foundation/**
+  - tests/foundation/filesystem/durable-atomic-file-write.test.ts
+refreshTriggers:
+  - .dependency-cruiser.cjs
+  - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# Foundation：关键文件导入依赖
+# Foundation：文件直接导入
 
-> 本图从 63 个 Foundation 生产模块中选出 22 个审阅骨干文件。交互阅读页默认展示入口概览，
-> 可切换 ELK 全图、搜索文件、筛选关系并聚焦 1-hop/上游/下游。
->
-> 箭头只证明静态导入；真实操作顺序见[关键调用流](./runtime-call-flow.md)。
+这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
 
-## F2：Foundation关键文件依赖图
+> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+
+## Foundation的精选直接导入
 
 ```mermaid
-flowchart LR
-  accTitle: Wakeflow Foundation关键文件导入依赖
-  accDescr: 高层复合能力向低层确定性能力导入：未知数据经无副作用准入和JSON解析，根作用域读取复用路径与节点快照，原子写入、恢复和锁复用稳定读取，目录树、Artifact、Git、时间和事件版本能力继续向下依赖；生成合同只提供词法模式。
-
-  subgraph ROOTS["确定值与词法准入"]
-    PASSIVE["[源码][F-FDN-01]\npassive-own-data.ts"]
-    JSON["[源码][F-FDN-02]\njson-value.ts"]
-    CANONICAL["[源码][F-FDN-03]\ncanonical-json.ts"]
-    SHA["[源码][F-FDN-04]\nsha256.ts"]
-    CANONICAL_SHA["[源码][F-FDN-05]\ncanonical-json-sha256.ts"]
-  end
-
-  subgraph SHARED_ENTRY["根作用域观察"]
-    PATH["[源码][F-FS-01]\nportable-resource-path.ts"]
-    SNAPSHOT["[源码][F-FS-02]\nfile-node-snapshot.ts"]
-    ROOT["[源码][F-FS-03]\nrooted-directory.ts"]
-    STABLE_FILE["[源码][F-FS-04]\nstable-file-read.ts"]
-    STABLE_DIR["[源码][F-FS-05]\nstable-directory-read.ts"]
-  end
-
-  subgraph DOMAIN["耐久写入与互斥"]
-    ATOMIC["[源码][F-FS-06]\ndurable-atomic-file-write.ts"]
-    RECOVERY["[源码][F-FS-07]\ndurable-atomic-file-stage-recovery.ts"]
-    LOCK["[源码][F-FS-08]\nrooted-exclusive-file-lock.ts"]
-    CREATE_ONLY["[已实现][F-FS-09]\ncreate-only-deterministic-json-resource.ts"]
-  end
-
-  subgraph HOST_ENTRY["目录树与制品"]
-    TREE_PLAN["[源码][F-FS-10]\ndirectory-tree-candidate-plan.ts"]
-    TREE_PUB["[源码][F-FS-11]\ndurable-directory-tree-publication.ts"]
-    TREE_RETIRE["[进行中][F-FS-12]\ndurable-directory-tree-candidate-retirement.ts"]
-    ARTIFACT_PUB["[源码][F-ART-01]\nloaded-artifact-tree-transfer-publication.ts"]
-  end
-
-  subgraph HOST_IMPL["Git、时间与版本"]
-    GIT_CANDIDATE["[源码][F-GIT-01]\ngit-ignore-candidate-observation.ts"]
-    GIT_OID["[已实现][F-GIT-02]\ngit-object-id.ts"]
-    UTC["[已实现][F-TIME-01]\nutc-instant.ts"]
-    EVOLUTION["[源码][F-EVENT-01]\nevent-sourcing-version-evolution.ts"]
-  end
-
-  WIRE["[生成][F-GEN-02]\nsrc/contracts/generated/foundation/*"]
-
-  JSON -->|"E-F2-01 导入"| PASSIVE
-  CANONICAL -->|"E-F2-02 导入"| JSON
-  SHA -->|"E-F2-03 使用词法合同"| WIRE
-
-  PATH -->|"E-F2-04 使用词法合同"| WIRE
-  SNAPSHOT -->|"E-F2-05 导入"| PASSIVE
-  ROOT -->|"E-F2-06 路径准入"| PATH
-  ROOT -->|"E-F2-07 节点身份"| SNAPSHOT
-  STABLE_FILE -->|"E-F2-08 根作用域"| ROOT
-  STABLE_FILE -->|"E-F2-09 路径/节点"| PATH
-  STABLE_FILE -->|"E-F2-10 摘要"| SHA
-  STABLE_DIR -->|"E-F2-11 根作用域"| ROOT
-  STABLE_DIR -->|"E-F2-12 路径/节点"| PATH
-
-  ATOMIC -->|"E-F2-13 提交范围"| ROOT
-  ATOMIC -->|"E-F2-14 路径/节点"| PATH
-  RECOVERY -->|"E-F2-15 枚举stage"| STABLE_DIR
-  RECOVERY -->|"E-F2-16 复验stage"| STABLE_FILE
-  RECOVERY -->|"E-F2-17 根作用域"| ROOT
-  LOCK -->|"E-F2-18 原子创建/替换"| ATOMIC
-  LOCK -->|"E-F2-19 写前恢复"| RECOVERY
-  LOCK -->|"E-F2-20 稳定读取锁记录"| STABLE_FILE
-  CREATE_ONLY -->|"E-F2-21 仅创建"| ATOMIC
-  CREATE_ONLY -->|"E-F2-22 读取已有值"| STABLE_FILE
-  CREATE_ONLY -->|"E-F2-23 根作用域"| ROOT
-
-  TREE_PLAN -->|"E-F2-24 规范JSON摘要"| CANONICAL_SHA
-  TREE_PLAN -->|"E-F2-25 节点与路径"| SNAPSHOT
-  TREE_PLAN -->|"E-F2-43 通用路径连接"| PATH
-  TREE_PUB -->|"E-F2-26 根作用域"| ROOT
-  TREE_PUB -->|"E-F2-27 节点与路径"| SNAPSHOT
-  ARTIFACT_PUB -->|"E-F2-28 发布目录树"| TREE_PUB
-  ARTIFACT_PUB -->|"E-F2-29 根作用域"| ROOT
-  TREE_RETIRE -->|"E-F2-39 原计划与路径闭包"| TREE_PLAN
-  TREE_RETIRE -->|"E-F2-40 根作用域"| ROOT
-  TREE_RETIRE -->|"E-F2-41 文件摘要复验"| STABLE_FILE
-  TREE_RETIRE -->|"E-F2-42 节点身份"| SNAPSHOT
-
-  GIT_CANDIDATE -->|"E-F2-30 隔离worktree"| ROOT
-  GIT_CANDIDATE -->|"E-F2-31 候选摘要"| SHA
-  GIT_OID -->|"E-F2-32 运行时Schema"| WIRE
-  GIT_OID -->|"E-F2-33 JSON准入"| JSON
-  UTC -->|"E-F2-34 使用词法合同"| WIRE
-  EVOLUTION -->|"E-F2-35 版本数据准入"| JSON
-  EVOLUTION -->|"E-F2-36 无副作用定义读取"| PASSIVE
-  CANONICAL_SHA -->|"E-F2-37 规范表示"| CANONICAL
-  CANONICAL_SHA -->|"E-F2-38 摘要计算"| SHA
+flowchart TB
+  accTitle: Foundation的精选直接导入
+  accDescr: Foundation所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
+  f1["源码模块 rooted-directory.ts"]
+  f2["源码模块 stable-file-read.ts"]
+  f3["源码模块 durable-atomic-file-write.ts"]
+  f4["源码模块 rooted-exclusive-file-lock.ts"]
+  f5["源码模块 deterministic-json-file.ts"]
+  f6["需求看板 requirement-board.ts"]
+  f7["源码模块 durable-directory-tree-publication.ts"]
+  f2 -->|"E-L1005-01 直接导入"| f1
+  f3 -->|"E-L1005-02 直接导入"| f1
+  f4 -->|"E-L1005-03 直接导入"| f1
+  f4 -->|"E-L1005-04 直接导入"| f2
+  f4 -->|"E-L1005-05 直接导入"| f3
+  f4 -->|"E-L1005-06 直接导入"| f5
+  f5 -->|"E-L1005-07 直接导入"| f1
+  f5 -->|"E-L1005-08 直接导入"| f2
+  f6 -->|"E-L1005-09 直接导入"| f1
+  f6 -->|"E-L1005-10 直接导入"| f2
+  f6 -->|"E-L1005-11 直接导入"| f3
+  f6 -->|"E-L1005-12 直接导入"| f4
+  f6 -->|"E-L1005-13 直接导入"| f5
+  f7 -->|"E-L1005-14 直接导入"| f1
 ```
 
 ### 本图术语说明
 
-| 图中术语 | 解释 |
+| 术语 | 本图含义 |
 | --- | --- |
-| 词法准入 | 只确认字符串或结构外形满足 Schema 与附加 Unicode/范围规则，不拥有业务关系 |
-| 节点身份 | 设备号、inode、类型、大小和时间等冻结文件节点观察，用于前后复验 |
-| stage | 名称中携带操作、目标和摘要的原子写入暂存文件 |
-| 仅创建 | 目标不存在时创建；目标已存在时只接受完全相同的确定值，永不替换 |
-| 目录树候选 | 已按确定性计划检查、尚未发布到最终位置的完整树 |
-| 隔离 worktree | 为候选 `.gitignore` 临时建立、操作结束后精确删除的未注册工作树 |
-| 运行时 Schema | 由 JSON Schema 生成并在进程内用于结构准入的冻结常量 |
-| 上游/下游 | 在导入图中，上游是导入当前文件的模块，下游是当前文件导入的模块 |
+| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
 
-## 文件与符号映射
+### 节点与实现定位
 
-| 文件编号 | 相对路径 | 代表符号 | 状态 | 职责 |
-| --- | --- | --- | --- | --- |
-| `F-FDN-01` | `src/foundation/data/passive-own-data.ts` | `parsePlainRecord`、`parseDenseArray` | 已实现 | 不触发调用方行为地读取自有数据属性 |
-| `F-FDN-02` | `src/foundation/data/json-value.ts` | `parseJsonValue` | 已实现 | 创建递归冻结、无源引用的 JSON 数据树 |
-| `F-FDN-03` | `src/foundation/data/canonical-json.ts` | `canonicalizeJson` | 已实现 | 生成 RFC 8785 规范 JSON 与 UTF-8 字节 |
-| `F-FDN-04` | `src/foundation/crypto/sha256.ts` | `parseSha256Digest`、`computeSha256Digest` | 已实现 | 完整 SHA-256 摘要词法与计算 |
-| `F-FDN-05` | `src/foundation/crypto/canonical-json-sha256.ts` | `computeCanonicalJsonSha256Digest` | 已实现 | 组合规范 JSON 与 SHA-256 形成语义摘要 |
-| `F-FS-01` | `src/foundation/filesystem/portable-resource-path.ts` | `parse/split/joinPortableResourcePath` | 已实现 | 根目录内可移植NFC相对路径及重新准入的父子连接 |
-| `F-FS-02` | `src/foundation/filesystem/file-node-snapshot.ts` | `createFileNodeSnapshot`、`sameFileNodeSnapshot` | 已实现 | 文件节点身份与完整快照比较 |
-| `F-FS-03` | `src/foundation/filesystem/rooted-directory.ts` | `RootedDirectory` | 已实现 | 打开、复验并关闭一次操作范围的真实目录根 |
-| `F-FS-04` | `src/foundation/filesystem/stable-file-read.ts` | `readStableFile` | 已实现 | O_NOFOLLOW、有界精确读取、摘要和前后复验 |
-| `F-FS-05` | `src/foundation/filesystem/stable-directory-read.ts` | `readStableRootDirectory`、`readStableResourceDirectory` | 已实现 | 两次枚举/`lstat`并确定排序的一层目录观察 |
-| `F-FS-06` | `src/foundation/filesystem/durable-atomic-file-write.ts` | `createFileAtomically`、`replaceFileAtomically` | 已实现 | 单文件硬链接/重命名提交与耐久同步 |
-| `F-FS-07` | `src/foundation/filesystem/durable-atomic-file-stage-recovery.ts` | `recoverDurableAtomicFileStages*` | 已实现 | 有界扫描并退休安全、非活动的自描述 stage |
-| `F-FS-08` | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `withRootedExclusiveFileLock` | 已实现 | 有超时、token和残留恢复的短生命周期独占锁 |
-| `F-FS-09` | `src/foundation/filesystem/create-only-deterministic-json-resource.ts` | `materializeCreateOnlyDeterministicJsonResource` | 已实现 | 固定权限目录内的幂等只创建 JSON 物化 |
-| `F-FS-10` | `src/foundation/filesystem/directory-tree-candidate-plan.ts` | `planDirectoryTreeCandidate`、`parseDirectoryTreeCandidatePlan` | 已实现 | 规范化并摘要目录树候选计划 |
-| `F-FS-11` | `src/foundation/filesystem/durable-directory-tree-publication.ts` | `publishDirectoryTreeCandidateDurably` | 已实现 | 同根、同设备的目录树重命名发布 |
-| `F-FS-12` | `src/foundation/filesystem/durable-directory-tree-candidate-retirement.ts` | `retire/settleDirectoryTreeCandidate*` | 进行中 | 完整candidate首次退休与原计划安全子集恢复；拒绝recursive删除 |
-| `F-ART-01` | `src/foundation/artifact/loaded-artifact-tree-transfer-publication.ts` | `publishLoadedArtifactTreeTransferCandidate` | 已实现 | 幂等读取或发布已闭合 Loaded Artifact Tree |
-| `F-GIT-01` | `src/foundation/git/git-ignore-candidate-observation.ts` | `observeGitIgnoreCandidate` | 已实现 | 在隔离临时 worktree 中观察候选忽略语义 |
-| `F-GIT-02` | `src/foundation/git/git-object-id.ts` | `parseGitObjectId` | 已实现 | 解析带算法标签的完整 Git 对象身份 |
-| `F-TIME-01` | `src/foundation/time/utc-instant.ts` | `parseUtcInstant`、`compareUtcInstants` | 已实现 | 严格 UTC 文本、公历复验和纳秒时间线 |
-| `F-EVENT-01` | `src/foundation/event-sourcing/event-sourcing-version-evolution.ts` | `EventSourcingVersionEvolutionRegistry` | 已实现 | 相邻版本 codec/upcast 注册与演进 |
-| `F-GEN-02` | `src/contracts/generated/foundation/*` | `*_SCHEMA`、生成类型 | 混合 | 6 个 Foundation 词法/结构合同，其中 Git object ID 正在变化 |
+| 节点 | 文件 / 符号 | 责任 |
+| --- | --- | --- |
+| f1 | `src/foundation/filesystem/rooted-directory.ts` | 源码模块 rooted-directory.ts |
+| f2 | `src/foundation/filesystem/stable-file-read.ts` | 源码模块 stable-file-read.ts |
+| f3 | `src/foundation/filesystem/durable-atomic-file-write.ts` | 源码模块 durable-atomic-file-write.ts |
+| f4 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | 源码模块 rooted-exclusive-file-lock.ts |
+| f5 | `src/foundation/filesystem/deterministic-json-file.ts` | 源码模块 deterministic-json-file.ts |
+| f6 | `src/kernel/requirement-board.ts` | 需求看板 requirement-board.ts |
+| f7 | `src/foundation/filesystem/durable-directory-tree-publication.ts` | 源码模块 durable-directory-tree-publication.ts |
 
-## 原始依赖快照
+### 本图边级证据
 
-| 范围 | 模块数 | 依赖数 | 违规 |
-| --- | ---: | ---: | ---: |
-| `src/foundation/**`闭包 | 68 | 301 | 0 |
-| Foundation生产源码 | 63 | — | 0 |
+| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- |
+| E-L1005-01 | `src/foundation/filesystem/stable-file-read.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-02 | `src/foundation/filesystem/durable-atomic-file-write.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-03 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-04 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-05 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-06 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-07 | `src/foundation/filesystem/deterministic-json-file.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-08 | `src/foundation/filesystem/deterministic-json-file.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-09 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-10 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-11 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-12 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-13 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| E-L1005-14 | `src/foundation/filesystem/durable-directory-tree-publication.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
 
-最密集的内部依赖簇是 `filesystem → filesystem`（152 条）；其次是
-`filesystem → data`（27 条）、`artifact → filesystem`（17 条）、
-`filesystem → node`（17 条）和`filesystem → crypto`（14 条）。
+## 守卫、恢复与验证范围
 
-## 边级证据
+文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
 
-| 边编号 | 起点 | 终点 | 代码证据 | 测试证据 |
-| --- | --- | --- | --- | --- |
-| `E-F2-01`–`E-F2-03` | 数据/摘要 | 被依赖的准入与生成合同 | 文件顶部静态 imports | `tests/foundation/{data,crypto}/**` |
-| `E-F2-04`–`E-F2-12` | 路径、根与稳定读取 | 生成模式、节点、摘要和根作用域 | dependency-cruiser直接边 | `tests/foundation/filesystem/{portable-resource-path,rooted-directory,stable-*}.test.ts` |
-| `E-F2-13`–`E-F2-23` | 原子写入、恢复、锁与只创建 | 根、路径、稳定读取与提交门面 | 写入/恢复模块静态 imports | 原子写入、stage recovery、exclusive lock与create-only测试 |
-| `E-F2-24`–`E-F2-29`、`E-F2-37`–`E-F2-43` | 目录树、退休与Artifact发布 | 规范摘要、节点、通用路径连接、精确退休和发布能力 | plan/retirement/publication静态 imports | directory tree、retirement、portable path与loaded artifact tree测试 |
-| `E-F2-30`–`E-F2-36` | Git、UTC与事件演进 | 根、摘要、Schema和JSON准入 | 对应模块静态 imports | Git观察、Git object ID、UTC与版本演进测试 |
+涉及的测试与核验入口：
 
-## 折叠清单
+- `tests/foundation/filesystem/durable-atomic-file-write.test.ts`。
 
-本图有意折叠但未否认以下直接闭包：
+## 下钻与相关视图
 
-- UTF-8、字节数、UUID和 Node system error 等单职责原语；
-- 原子写入的 stage address、stage I/O、target I/O、settlement 与 unlink 子模块；
-- 目录物化、文件/目录 candidate、复制 candidate、tree scan 与稳定资源树读取；
-- Loaded Artifact Tree 的identity、candidate与transfer plan；Managed Evidence已消费identity及transfer candidate/plan，transfer publication仍无生产consumer；
-- 单调时钟、时长、截止点与墙上时钟；
-- 6 个 JSON Schema 到 6 个生成合同的逐文件映射。
-
-## 停止边界
-
-- 本图不证明调用顺序、提交点或失败恢复顺序。
-- Foundation机制不拥有配置、治理或宿主业务状态。
-- 当前提交基线包含63个Foundation生产模块；candidate retirement已有Managed Evidence恢复consumer，后续来源变化仍须复核。
-- 完整 63 模块导入图应由 dependency-cruiser数据按需查询，不应一次塞入文档主图。
+- [本专题总览](./README.md)
+- [图谱总索引](../README.md)
+- [核验与剩余范围](../01-diagram-review-ledger.md)

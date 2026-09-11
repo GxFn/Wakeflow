@@ -1,4 +1,13 @@
+---
+truthKind: historical
+verifiedAt: 2026-09-04
+baselineCommit: 0ac416e0b0defb5d94c2a9793ee70f54a231894f
+---
+
 # 44 张图的更新登记
+
+> **历史计划，2026-09-11 已按九片进度执行本轮更新。** 当前范围、已解决接缝与验证见 [九片更新记录](./l1-nine-slices-refresh.md)。下文保留 2026-09-04 的观察，不作为当前工具或实现清单。
+
 
 > 状态：逐图建议；不是重新验收通过记录。
 > 基线和观察范围见 [主计划](./typescript-atlas-refresh-plan.md)；图号使用本轮固定库存的 D01–D44。

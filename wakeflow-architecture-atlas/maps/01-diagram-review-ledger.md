@@ -1,94 +1,118 @@
 ---
 diagramId: ts-atlas-review-ledger
-viewType: review-ledger
-truthKind: stale
+viewType: evidence
+truthKind: current-code
 reviewDepth: L5
-verifiedAt: 2026-09-03
-snapshotObservedAt: 2026-09-03T03:13:56-07:00
-baselineCommit: 08334ab9c1d8bd923966a976fdf7989bc56ac38c
-audience:
-  - maintainer
-  - reviewer
-documentationOwner: Wakeflow Source Maintenance
+verifiedAt: 2026-09-11
+baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
+sourceFingerprint: sha256:42976c9d21e30a92c355fefaa9b3addd903270606f3a2b61982e2304bae521a5
+audience: [maintainer, reviewer]
+documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
+sourcePaths:
+  - src/**/*.ts
+  - tests/**/*.ts
+schemaPaths:
+  - src/contracts/schemas/**/*.schema.json
+testPaths:
+  - tests/entrypoints/wakeflow-public-mcp-catalog.test.ts
+  - tests/scenarios/wakeflow-scenario-acceptance.test.ts
+refreshTriggers:
+  - .dependency-cruiser.cjs
+  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
+  - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# 44张流程图逐图代码审阅台账
+# 当前图谱核验台账
 
-> 本台账记录图与当前TypeScript、Schema、直接调用方和测试之间的审阅结果。它不是运行状态权威。
-> 当前基线是统一技术Review提交`08334ab`；公共pre-Demand链提交`cfc61f4`保留为前一检查点。任何后续来源变化仍必须重新核验，
-> 不能只刷新摘要。
+> 核验：2026-09-11；代码基线 `7ba1f38938a7387623b0ca588d9cfd54abda5760`。本次重绘覆盖 L1 九片。旧图号、旧证据和过期审查仍可在 Git 与 plans/evidence 中追溯。
 
-## 审阅判定
+| 开发范围 | 当前状态 | 图谱处理 |
+| --- | --- | --- |
+| L0 共用机制与六层依赖 | 已建立，物理收敛仍有余项 | 当前机制图保留实际文件，未伪装为最终目录 |
+| L1 workspace / endpoint / requirement / demand / tasking / delivery / result-review / evidence / pod | 九片已落地 | 当前实现图与符号/Schema/测试核对 |
+| L1 observation | 未开始 | 只列全局 status、verify、活动投影和状态栏的停止边界 |
+| L2 场景联合、skills/commands 重写、双宿主真实投递 | 未开始 | 一次性场景不冒充真实宿主端到端验证 |
+| L3 新制品构建、E4 旧树切换 | 未开始 | 候选仍 releaseEligible:false，旧 0.9.6 插件仍是独立制品 |
 
-| 判定 | 含义 |
-| --- | --- |
-| 通过 | 图的关系类型、方向、状态和停止边界已按当前稳定来源核对 |
-| 已修正 | 已发现并修正文档语义或直接依赖错误；仍需在最终源码快照刷新指纹 |
-| 待收敛复核 | 来源正在变化或根门未闭合；不得签发“当前”状态 |
+## 本轮范围
 
-## 逐图结果
+| 文档 | 视图数 | 核验重点 |
+| --- | --- | --- |
+| [Wakeflow：九个切片的当前架构](./01-overall-architecture/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [公共组合根：文件直接导入](./01-overall-architecture/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [公共入口：登记表到能力执行器](./01-overall-architecture/runtime-call-flow.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [Foundation：持久性与根约束](./02-foundation/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [Foundation：文件直接导入](./02-foundation/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [Foundation：稳定读取、提交与恢复](./02-foundation/runtime-call-flow.md) | 3 | 真实 source / symbol / Schema / consumer / test |
+| [工作区：配置、维护事务与静态资源](./03-configuration-workspace/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [配置与维护：文件直接导入](./03-configuration-workspace/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [工作区维护：预览、应用与恢复](./03-configuration-workspace/runtime-call-flow.md) | 3 | 真实 source / symbol / Schema / consumer / test |
+| [Demand：不可变事实与可重建视图](./04-governance-event-sourcing/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [事件与聚合：文件直接导入](./04-governance-event-sourcing/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [Demand：命令、检查点与首次发布](./04-governance-event-sourcing/runtime-call-flow.md) | 3 | 真实 source / symbol / Schema / consumer / test |
+| [任务规划：需求锚点、谱系与测试合同](./05-tasking-slice/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [任务规划：文件直接导入](./05-tasking-slice/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [任务规划：追加、谱系与测试派生](./05-tasking-slice/runtime-call-flow.md) | 3 | 真实 source / symbol / Schema / consumer / test |
+| [投递：信封、工作声明与回交观察](./06-implementation-delivery-review/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [投递与结果：文件直接导入](./06-implementation-delivery-review/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [投递：准备、落地与重发恢复](./06-implementation-delivery-review/runtime-call-flow.md) | 3 | 真实 source / symbol / Schema / consumer / test |
+| [评审、升级与完成即归档](./07-review-rework-completion/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [评审和生命周期：文件直接导入](./07-review-rework-completion/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [评审和生命周期：决定、归档与继续](./07-review-rework-completion/runtime-call-flow.md) | 3 | 真实 source / symbol / Schema / consumer / test |
+| [测试：任务合同、逐步记录与基线对比](./08-real-environment-testing/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [测试合同与结果：文件直接导入](./08-real-environment-testing/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [测试：规划、尝试与失败子集](./08-real-environment-testing/runtime-call-flow.md) | 2 | 真实 source / symbol / Schema / consumer / test |
+| [公共 MCP 与宿主接缝](./09-public-mcp-host-seams/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [宿主握手：向下投递与向上回调](./09-public-mcp-host-seams/host-effect-handshake.md) | 2 | 真实 source / symbol / Schema / consumer / test |
+| [业务主线：需求包到归档和 Pod 关闭](./10-end-to-end-business-flow/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [状态索引：每个 owner 保持自己的事实](./10-end-to-end-business-flow/state-and-recovery.md) | 4 | 真实 source / symbol / Schema / consumer / test |
+| [内核：可复用的调用与准入机制](./11-kernel/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [内核：文件直接导入](./11-kernel/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [内核：命令外壳、追加与效果](./11-kernel/runtime-call-flow.md) | 3 | 真实 source / symbol / Schema / consumer / test |
+| [端点：逻辑窗口、绑定与 worktree 回执](./12-endpoint/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [执行端点：文件直接导入](./12-endpoint/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [端点：登记、替换与恢复](./12-endpoint/runtime-call-flow.md) | 2 | 真实 source / symbol / Schema / consumer / test |
+| [需求包：确认摘要、不可变记录与认领板](./13-requirement/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [需求包：文件直接导入](./13-requirement/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [需求包：发布与看板恢复](./13-requirement/runtime-call-flow.md) | 2 | 真实 source / symbol / Schema / consumer / test |
+| [受管证据：来源、捕获、发布与读取](./14-evidence/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [证据发布：文件直接导入](./14-evidence/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [证据：捕获、发布与崩溃结算](./14-evidence/runtime-call-flow.md) | 2 | 真实 source / symbol / Schema / consumer / test |
+| [Pod：完整窗口组与检出回执](./15-pod/README.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [Pod 与 worktree：文件直接导入](./15-pod/file-dependencies.md) | 1 | 真实 source / symbol / Schema / consumer / test |
+| [Pod：创建、就绪与两段关闭](./15-pod/runtime-call-flow.md) | 2 | 真实 source / symbol / Schema / consumer / test |
+| [核验快照与提交影响](./01-overall-architecture/review-evidence.md) | 0 | 真实 source / symbol / Schema / consumer / test |
+| [端到端证据：场景、机制与未执行面](./10-end-to-end-business-flow/review-evidence.md) | 0 | 真实 source / symbol / Schema / consumer / test |
 
-| 文档包 | 图 | 判定 | 本轮代码审阅结论 |
-| --- | --- | --- | --- |
-| 00 | 生成与人工审阅边界 | 通过 | 自动导入、人工调用、状态与测试证据仍应分面；新增直接import机器核验 |
-| 01 | A0 总体架构 | 已修正 | 公共面为23工具；当前823模块/5817依赖/10生产根、114 Schema；完整门1023项通过 |
-| 01 | F0 MCP组合根依赖 | 已修正 | 58行Server固定调用Workspace/Authority/Execution/Review四组；共享helper不形成registry |
-| 01 | D0 变更影响 | 已修正 | `cfc61f4`后完成安全依赖、MCP上下文、架构门、跨领域fixture及入口/测试解耦，并提交于`08334ab` |
-| 01 | V0 公共MCP调用流 | 已修正 | SDK调用分组handler；Ledger/TODO/Evidence仍采用分步owner，23工具不构成自动编排器 |
-| 02 | B0 Foundation全景 | 已修正 | transfer candidate、candidate retirement与portable join均已有Evidence真实consumer |
-| 02 | F2 Foundation依赖 | 已修正 | directory tree candidate join委托通用`joinPortableResourcePath`并重新准入父子路径 |
-| 02 | C0 稳定读取 | 通过 | 根/路径/handle前后复验、精确有界读取与摘要顺序符合源码 |
-| 02 | C1 原子替换与恢复 | 通过 | 写前stage恢复、rename提交点、fsync与最终回读顺序符合源码 |
-| 02 | C2 只创建JSON | 通过 | target-exists只转为current候选，完整重读不等即冲突且绝不覆盖 |
-| 03 | W0 Config/Workspace全景 | 通过 | Config、Maintenance intent/journal、Binding和投影权威保持分离 |
-| 03 | F3 Config/Workspace依赖 | 通过 | 38条可解析具体导入成立；共享协调与Agent观察保持内部能力 |
-| 03 | R0 Config CAS | 通过 | snapshot不是租约，替换在专属短锁内重读完整source |
-| 03 | R1 Maintenance事务 | 通过 | preview零写、exact confirmation、intent/journal及operation恢复顺序成立 |
-| 03 | R2 Binding注册 | 通过 | 私有Binding先提交，投影失败不回滚；Agent观察再与当前Binding闭合 |
-| 04 | G0 Demand事件权威 | 已修正 | TODO Inspection/Intake Public闭合；Demand Authority只从Intake refs派生 |
-| 04 | F4 Demand依赖 | 已修正 | 38个Demand模块中新增5个Public/Planning/Application边界，未复制Event Store或恢复状态机 |
-| 04 | E0 Command/Append | 通过 | 决策、Prepared Commit与固定sequence追加模型成立 |
-| 04 | E1 Snapshot/Audit | 已修正 | load可fallback，audit从Commit 1；Aggregate使用currentTestCard并保留历史缺陷Target |
-| 04 | E2 Demand Publication | 已修正 | author-owned preview→exact apply/recover→先发布根/revision 1后claim TODO |
-| 05 | T0 Task Planning纵切 | 已修正 | 公共路径支持implementation和owner派生的test变体 |
-| 05 | F5 Tasking依赖 | 已修正 | Test Planning Authority/Package/Card由同一Public Coordinator真实消费 |
-| 05 | T1 implementation preview | 通过 | Controller提供完整implementation package内容 |
-| 05 | T1B test派生分支 | 已修正 | 公共请求只提供`workType:test`，其余字段由当前TestCard派生 |
-| 05 | T2 apply/投影 | 已修正 | Command Handler只执行一次；此前图中预检和执行画成两次调用 |
-| 06 | D0 Delivery/Review主链 | 已修正 | Preparation、Claim/Outcome/Rearm、Result与Review均有公共owner |
-| 06 | F6 Delivery/Review依赖 | 已修正 | Preparation经Preparation Authority；Claim Service导入并生成Action，原箭头方向错误 |
-| 06 | D1 Claim/Action | 已修正 | Claim文件先于Event，只有首次committed回执签发Action |
-| 06 | D2 Outcome/Result | 已修正 | rejected在observed Event后释放Claim；accepted在Result Event后释放；indeterminate保留 |
-| 06 | D3 Implementation Review | 已修正 | Inspector、Decision、共享Resume和Route均已公开且保持Controller判断边界 |
-| 07 | L0 Rework/Completion | 已修正 | 普通返工、产品缺陷返工、两种Completion与双workType Resume闭合 |
-| 07 | F7 Review/Lifecycle依赖 | 已修正 | Authorization Event、Service、Delivery context与retest consumer均成立 |
-| 07 | L1 rework/resume | 已修正 | Preparation Authority从完整历史加载Decision/Result后创建context，不是Controller直接调用 |
-| 07 | L2 Completion | 已修正 | controller-only与real-environment均可完成；后者保留currentTestCard及历史Target lineage |
-| 08 | X0 Testing纵切 | 通过 | Publication公共化未改变Card、Task、Delivery、Result、Review或retest语义 |
-| 08 | F8 Testing依赖 | 通过 | 新工具只改变共享Server来源指纹，Testing直接依赖方向保持不变 |
-| 08 | X1 Card/Task/Delivery | 通过 | 新Demand进入相同Route后继续使用既有Test Planning边界 |
-| 08 | X2 Claim/Result/Review | 通过 | Claim、Result、Review、Resume与Remediation关系保持不变 |
-| 09 | H0 公共MCP/宿主平面 | 已修正 | 公共面为23工具；四静态注册组保持宿主中立，Inspection不选next，Intake不执行Auto Claim |
-| 09 | H1 Agent效果握手 | 已修正 | Claim/Outcome/Rearm公共工具记录Wakeflow事实；Agent仍独占宿主效果执行 |
-| 10 | Z0 端到端业务 | 已修正 | Ledger→TODO→Demand→Route及后续Completion链闭合；Research/Redesign/Archive仍停止 |
-| 10 | Z1 状态与恢复 | 已修正 | Managed Evidence已固定journal→stage→Event→final→journal退休及Event前stale回收 |
+## 旧图替代原则
 
-## 当前机器证据
+上轮 44 图中的方法图保留；其余按原文档地址重绘或移交专题。旧 E- 编号随关系退休，本轮采用独立 E-L1 编号；新编号不能被解释为旧边已自动复核。原证据快照与逐图计划保留在 plans，历史审查不再作为当前实现入口。
 
-- 具体文件节点之间已有242条直接import声明通过源码解析；77条目录、外部权威或折叠节点关系留给人工审阅。
-- 44张Mermaid图均包含`accTitle`、`accDescr`和紧邻术语说明；897条边均有邻接证据映射。
-- 30份来源指纹均按提交`08334ab`的当前来源快照重新计算，并由严格current门复验。
-- 当前architecture为823模块、5817依赖、10个显式生产根、0违规；Schema为114份、215条external refs且生成合同一致。
-- 当前完整TypeScript门为1023 pass；entrypoint 12文件/25项及Demand input反向依赖18文件/80项独立通过。
-- Foundation Candidate Retirement已有Evidence Transaction Settlement真实消费者，只在目标Event缺失且Demand/Config基线过期时退休safe candidate。
-- 双宿主候选为Codex 496、Claude Code 501个编译文件，scope为`typescript-public-technical-skeleton`且仍明确`releaseEligible=false`。
+## 核验结果与停止边界
 
-## 本轮明确停止边界
+- 根 npm test：851 通过，0 失败；公共场景 16 通过；Schema 93 份一致；架构门通过。
+- 本地结构门检查实际路径、AST 直接导入、符号存在、邻接唯一边证据和来源指纹；调用语义由本文所指的逐图源码核对承担。
+- 67 张 Mermaid 已在应用内浏览器实际渲染；暗/浅色、下钻、依赖图全屏和证据定位已检查。回执按源码摘要复验，不由 Vite build 推断。
+- observation、L2 真实宿主、L3/E4、在线 FigJam 不属于已完成实现。
+- 旧 23 工具、TODO/Confirmation 入口、四注册组、独立 TestCard/Resume/授权工具、独立完成后归档缺口已从当前图中移除。
 
-- 不修改Wakeflow运行时代码来配合图谱。
-- 不把测试/fixture对内部Service的直接调用描述成生产入口。
-- 不把尚无Public owner的Research Completion、Implementation Redesign或Archive画成可执行能力。
-- 不把Demand Publication的完整TS通过写成plugin release-ready或真实宿主效果已验证。
-- 不把第19工具的metadata receipt描述成按需Reader bytes已经公开。
-- 后续任何来源变化都必须重新触发严格指纹门；不得只改摘要而不复核图义。
+[总索引](./README.md) · [本轮范围与验证](../plans/l1-nine-slices-refresh.md)
+
+
+> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+
+## 守卫、恢复与验证范围
+
+图谱验收不替代运行时或发布验收。
+
+涉及的测试与核验入口：
+
+- `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts`。
+- `tests/scenarios/wakeflow-scenario-acceptance.test.ts`。
+
+## 下钻与相关视图
+
+- [图谱总索引](./README.md)
+- [图谱子项目](../README.md)
+- [本轮范围](../plans/l1-nine-slices-refresh.md)

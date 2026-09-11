@@ -133,7 +133,7 @@ Wakeflow 图集采用两个正交维度：
 | --- | --- | --- |
 | `[代码]` | 确定性代码、编解码器、服务、守卫 | 使用“必须”描述强制行为 |
 | `[智能体]` | 模型拥有选择权的步骤 | 使用“可选择”；不展示隐藏推理链 |
-| `[人工]` | 用户或Controller的判断 | 显示批准、拒绝、澄清与恢复入口 |
+| `[人工]` | 用户的判断；Controller 判断归智能体节点 | 显示批准、拒绝、澄清与恢复入口 |
 | `[权威]` | 持久业务或身份权威 | 标明唯一写入者与变更边界 |
 | `[计划]` | 冻结计划或意图 | 不是权威，也不证明效果发生 |
 | `[视图]` | 投影或读取模型 | 必须可从来源重新生成 |
@@ -162,6 +162,8 @@ Wakeflow 图集采用两个正交维度：
 | `[进行中]` | 工作树正在实现；图必须写明未提交和未闭环边界 |
 | `[未实现]` | 相邻能力缺失；只画停止节点，不画内部设计 |
 | `[历史]` | 旧 JS 或历史文档；与 TS 当前图物理分离 |
+| `[目标设计]` | accepted ADR 支持的独立设计图；不当作当前代码调用边 |
+| `[目标设计]` | accepted ADR 支持的独立设计图；不当作当前代码调用边 |
 | `[待复核]` | 来源路径在上次核验后变化；图不得继续作为当前事实 |
 
 颜色不能作为唯一编码。黑白输出或不支持样式的 Markdown renderer 中，文本标记仍必须完整表达状态。
@@ -190,7 +192,7 @@ Wakeflow 图集采用两个正交维度：
 ---
 diagramId: ts-<domain>-<view>
 viewType: architecture | authority | vertical-slice | file-dependency | call-flow | state | recovery | evidence
-truthKind: current-code | in-progress-worktree | stale | historical
+truthKind: current-code | in-progress-worktree | stale | historical | target-design | target-design
 reviewDepth: L0 | L1 | L2 | L3 | L4 | L5
 verifiedAt: YYYY-MM-DD
 baselineCommit: <git-commit>
@@ -214,7 +216,7 @@ testPaths:
 让读者误以为图完全来自已提交代码。
 
 来源触发路径在`verifiedAt`之后发生变化时，文档必须标为`[待复核]`或重新生成/核验。`sourceFingerprint`
-覆盖排序后的相对路径与文件内容；它用于发现陈旧，不替代源码本身。
+覆盖 sourcePaths、schemaPaths、testPaths 和 refreshTriggers 展开的排序相对路径与文件内容；它用于发现陈旧，不替代源码本身。
 
 ## 9. 审阅文档包
 
@@ -359,3 +361,10 @@ flowchart TB
 8. 为每张图添加中文`accTitle`、`accDescr`和紧邻的“本图术语说明”。
 9. 渲染所有Mermaid块，检查路径、符号和测试链接存在。
 10. 运行`git diff --check`，记录未执行的代码或发布验证。
+
+
+## 14. 本轮检查实现（2026-09-11）
+
+`check:current` 现在按 SWC AST 验证具体文件直接导入与符号存在，检查精确来源路径、刷新输入、唯一边证据和紧邻术语。文件节点的身份以完整路径表为准，不以 basename 猜测。本地验证页使用锁定 Mermaid 在浏览器中实际解析并渲染所有图；`check:diagrams` 复验该回执的源码摘要、数量和版本，图有变化即要求重渲染。两者均不自动证明运行时调用顺序或产品验收。
+
+当前覆盖以 15 个真实专题和对应阅读问题检查，不以图数下限作为质量证明。目标设计可以展开已接受的设计细节；当前图的未实现边界仍只画停止点。原始导入关系可以机械提取，业务主线和状态守卫必须逐图阅读实际 owner 与测试。

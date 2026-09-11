@@ -9,9 +9,11 @@
     "typecheck": "tsc -p tsconfig.json",
     "check:structure": "node scripts/check-atlas.mjs",
     "check:current": "node scripts/check-atlas.mjs --require-current",
-    "check": "npm run typecheck && npm run check:current && npm run build",
+    "check": "npm run test:checks && npm run typecheck && npm run check:current && npm run check:diagrams && npm run build",
     "build": "vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test:checks": "node --test scripts/*.test.mjs",
+    "check:diagrams": "node scripts/check-diagrams.mjs"
   },
   "dependencies": {
     "cytoscape": "3.34.2",
@@ -23,6 +25,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@swc/core": "1.16.1",
     "typescript": "7.0.2",
     "vite": "8.2.2"
   },

@@ -42,7 +42,7 @@
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     },
     "testingMode": {
-      "enum": ["controller-only", "real-environment"]
+      "enum": ["controller-only", "real-environment", "not-applicable"]
     },
     "postAcceptanceRouteDigest": {
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"

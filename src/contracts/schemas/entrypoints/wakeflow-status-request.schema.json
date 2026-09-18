@@ -1,16 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:entrypoints:demand-controller-route-request:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA",
-  "title": "WakeflowDemandControllerRouteRequestV1",
-  "description": "wakeflow_inspect_demand_route 的只读请求：一个 Demand 的当前 Controller Route；已归档的 Demand 返回归档回执。",
+  "$id": "urn:wakeflow:entrypoints:status-request:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_STATUS_REQUEST_SCHEMA",
+  "title": "WakeflowStatusRequestV1",
+  "description": "wakeflow_status 的只读请求：工作区定向投影；带 demandId 时附该 Demand 的当前 Controller Route，已归档的 Demand 返回归档回执。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["root", "demandId"],
+  "required": ["root"],
   "properties": {
     "root": {
       "type": "string",
       "minLength": 1,
+      "maxLength": 4096,
       "description": "Absolute path of the existing Wakeflow workspace root."
     },
     "demandId": {

@@ -61,16 +61,10 @@ import {
   WakeflowWorkspaceCoreLayoutInspectionError,
   type WakeflowWorkspaceCoreLayoutInspection,
 } from "./wakeflow-workspace-core-layout-inspection.js";
-import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../active/wakeflow-active-resource-catalog.js";
-import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../active/wakeflow-requirement-board-initialization.js";
-import {
-  createWakeflowActiveWorkspaceFreshProjectionAuthority,
-  WakeflowActiveWorkspaceFreshProjectionAuthorityError,
-} from "../active/wakeflow-active-workspace-fresh-projection-authority.js";
-import {
-  inspectWakeflowActiveWorkspaceProjection,
-  WakeflowActiveWorkspaceProjectionInspectionError,
-} from "../active/wakeflow-active-workspace-projection-inspection.js";
+import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../../kernel/requirement-board.js";
+import { WakeflowError } from "../../kernel/error.js";
+import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
+import { renderWakeflowFreshActiveProjection } from "../wakeflow-active-fresh-projection.js";
 import {
   WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION,
   WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION,
@@ -381,65 +375,37 @@ async function inspectSupportMemories(
   }
 }
 
-async function inspectActiveWorkspaceProjectionParticipant(
-  root: RootedDirectory,
+function planFreshActiveWorkspaceProjection(
   request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   desired: WakeflowConfigV3Model,
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
-): Promise<void> {
+): void {
   assertNotAborted(request.signal);
-  let authority;
+  // 只有 fresh 初始化写投影；之后的投影由观察切片按 Demand 与 pod 变更重算（§13.94 D5），
+  // reconfigure 与 reconcile 的 apply 结束后由工作区切片触发一次刷新，preview 不再检查它。
+  if (request.action !== "fresh-initialize") return;
+  let authorityDigest: Sha256Digest;
   try {
-    authority = createWakeflowActiveWorkspaceFreshProjectionAuthority(desired);
+    authorityDigest = renderWakeflowFreshActiveProjection(desired).authorityDigest;
   } catch (error: unknown) {
-    if (error instanceof WakeflowActiveWorkspaceFreshProjectionAuthorityError) {
+    if (error instanceof WakeflowError) {
       addBlocker(blockers, `active-workspace-projection-${error.reason}`);
       return;
     }
     throw error;
   }
-  if (request.action === "fresh-initialize") {
-    steps.push(
-      step({
-        stepId: "active:workspace-projection",
-        kind: "publish-fresh-active-workspace-projection",
-        ownerId: "active-workspace-projection",
-        targetKey: "active.workspace-projection",
-        sourceDigest: null,
-        targetDigest: authority.authorityDigest,
-        dependsOn: ["active:requirement-board"],
-      }),
-    );
-    return;
-  }
-  try {
-    const inspection = await inspectWakeflowActiveWorkspaceProjection(root, {
-      desiredConfig: desired,
-      expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desired),
-      ...(request.signal === undefined ? {} : { signal: request.signal }),
-    });
-    if (inspection.status === "publication-required") {
-      steps.push(
-        step({
-          stepId: "active:workspace-projection",
-          kind: "publish-fresh-active-workspace-projection",
-          ownerId: "active-workspace-projection",
-          targetKey: "active.workspace-projection",
-          sourceDigest: inspection.observationDigest,
-          targetDigest: authority.authorityDigest,
-          dependsOn: [],
-        }),
-      );
-    }
-  } catch (error: unknown) {
-    if (error instanceof WakeflowActiveWorkspaceProjectionInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      addBlocker(blockers, `active-workspace-projection-${error.reason}`);
-      return;
-    }
-    throw error;
-  }
+  steps.push(
+    step({
+      stepId: "active:workspace-projection",
+      kind: "publish-fresh-active-workspace-projection",
+      ownerId: "active-workspace-projection",
+      targetKey: "active.workspace-projection",
+      sourceDigest: null,
+      targetDigest: authorityDigest,
+      dependsOn: ["active:requirement-board"],
+    }),
+  );
 }
 
 /** 构建当前已实现静态 owner 的零写入物化预览。 */
@@ -550,13 +516,7 @@ export async function previewWakeflowStaticMaterialization(
   if (desired !== null) {
     placements = await desiredPlacements(rootValue, desired);
     if (placements === null) addBlocker(blockers, "desired-placement-invalid");
-    await inspectActiveWorkspaceProjectionParticipant(
-      rootValue,
-      request,
-      desired,
-      blockers,
-      steps,
-    );
+    planFreshActiveWorkspaceProjection(request, desired, blockers, steps);
   }
 
   if (request.action === "fresh-initialize") {

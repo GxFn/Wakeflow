@@ -1,3 +1,4 @@
+import type { NextProjection } from "../../kernel/next-projection.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
@@ -38,11 +39,8 @@ import {
   type LoadedLedgerAuthorityRecord,
 } from "../../governance/ledger/ledger-authority-store.js";
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
-import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
-import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
-import { runCommandShell } from "../../kernel/command-shell.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
-import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import {
   runPublicationTransaction,
   type PublicationTransactionEnvelope,
@@ -50,13 +48,10 @@ import {
   type PublicationTransactionPlan,
 } from "../../kernel/publication-transaction.js";
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
-import { findLatestDemandArchive } from "./archive.js";
 import {
-  archivedNext,
   closeSliceContext,
   nextAfterMutation,
   now,
-  openDemandHandle,
   openSliceContext,
   parseDemandId,
   previewNext,
@@ -66,16 +61,11 @@ import {
 } from "./context.js";
 import {
   admitDemandCreationResult,
-  admitDemandRouteInspectionResult,
   parseDemandCreationRequest,
-  parseDemandRouteInspectionRequest,
   WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION,
-  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
   type DemandCreationRequest,
   type DemandCreationResult,
-  type DemandRouteInspectionRequest,
-  type DemandRouteInspectionResult,
 } from "./contract.js";
 import { deriveCreationBlockers, deriveDemandCreationIds } from "./decide.js";
 
@@ -542,7 +532,8 @@ export async function executeDemandCreationRequest(
         if (input.mode === "recover") fail("unexpected", "plan-mode", "$request.mode");
         return planCreate(context, input, facts);
       },
-      apply: (context, _input, plan) => applyCreate(context, plan),
+      apply: (context, _input, plan) =>
+        afterMutationRefresh(context.root, context.signal, () => applyCreate(context, plan)),
       recover: (context, operationId) => recoverCreate(context, operationId),
       next: async (context, phase) =>
         phase.mode === "preview"
@@ -557,76 +548,5 @@ export async function executeDemandCreationRequest(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
-  );
-}
-
-async function inspectRoute(
-  context: DemandSliceContext,
-  request: DemandRouteInspectionRequest,
-): Promise<DemandRouteInspectionResult> {
-  const demandId = parseDemandId(request.demandId);
-  const base = {
-    kind: "WakeflowDemandRouteInspection",
-    schemaVersion: WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION,
-    tool: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-  };
-  const handle = await openDemandHandle(context, demandId);
-  if (handle !== null) {
-    const snapshot = await readDemandResultReviewSnapshot(
-      handle.demandRoot,
-      signalOptions(context.signal),
-    );
-    const route = buildDemandControllerRoute(handle.loaded, snapshot);
-    return admitDemandRouteInspectionResult({
-      ...base,
-      status: "current",
-      route,
-      next: deriveNextProjection(route),
-    });
-  }
-  const archive = await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal);
-  if (archive === null) fail("not-found", "demand-unknown", "$request.demandId");
-  return admitDemandRouteInspectionResult({
-    ...base,
-    status: "archived",
-    demandId,
-    archive: {
-      outcome: archive.manifest.outcome,
-      archiveRef: archive.archiveRef,
-      archivedAt: archive.manifest.archivedAt,
-      terminalEvent: {
-        eventId: archive.manifest.terminalEvent.eventId,
-        streamRevision: archive.manifest.terminalEvent.streamRevision,
-      },
-      manifestDigest: archive.manifest.manifestDigest,
-    },
-    next: archivedNext(archive),
-  });
-}
-
-/** 执行一次 `wakeflow_inspect_demand_route`。 */
-export async function executeDemandRouteInspectionRequest(
-  value: unknown,
-  options: DemandServiceOptions = {},
-): Promise<DemandRouteInspectionResult> {
-  return runCommandShell<
-    { readonly root: string },
-    DemandRouteInspectionRequest,
-    DemandSliceContext,
-    DemandRouteInspectionResult
-  >(
-    {
-      tool: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-      parseRequest: (raw) => {
-        const request = parseDemandRouteInspectionRequest(raw);
-        return { envelope: { root: request.root }, input: request };
-      },
-      open: (root) => openSliceContext(root, options),
-      close: closeSliceContext,
-      privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
-    },
-    value,
-    () => undefined,
-    (context, binding) => inspectRoute(context, binding.input),
   );
 }

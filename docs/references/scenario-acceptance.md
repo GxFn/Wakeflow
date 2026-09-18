@@ -26,6 +26,8 @@
 | `card-08/complete-and-archive` | 08 | 完成即归档 | 实现与测试评审都已接受（`card-05/test-contract`）后 Route 为 `demand-completion-preflight`，`testingClosure` 为 real-environment；`complete_demand` preview 零写、`ready` 且八道 verify 门全 `pass`；apply `completed`，需求包 `archived`，`next` 指向 continue；活动根已删除，`<ledger>/archives/<demandId>/<修订号>/manifest.json` 存在；Route 查询返回 `archived: completed`；recover 返回 `recovered` 且同一终态事件 | pass |
 | `card-04/complete-and-continue` | 04 | continue 与 cancel | `continue_demand` preview `ready`、apply `continued`，需求包回到 `claimed`，Route 为 `work-available` 且前沿为实现任务规划；`cancel_demand` preview `ready`、apply `cancelled`，需求包 `withdrawn`，活动根删除；取消后 continue 的 preview 为 `blocked` 并含 `archive-outcome:cancelled` | pass |
 | `card-10/pod-lifecycle` | ADR-0010 | pod 生命周期 | `wakeflow_pod` create preview `ready` 且零写、apply `created`（配置 2 pod 8 窗口）、同键 `already-created`、重名 `name-taken`；pod controller、design、test 握手，产品窗口无 worktree 观察被拒，真实 `git worktree add` 后携 porcelain 登记，`recover` 报 `ready`；同 pod 第二个 Demand `pod-busy`、primary 仍 `ready`；分配 primary 产品窗口 `assignment-window-pod-mismatch`；投递 prompt 含 pod 名与 `../Workspace/` 且无绝对路径；`pod-worktree` 根证据登记；`branch: null` 导入 `worktree-branch-required`，带分支导入回调落到 pod Controller；rework 后取消 Demand，close 两段 `closing` → `closed`，配置回到 1 pod 4 窗口，回执目录消失 | pass |
+| `card-09/status-and-verify` | 09 | 一次观察多域的 status 与十三门 verify | 在 card-10 之后的工作区上经公共工具重建观察对象（第二个 worktree pod、四次握手加真实 `git worktree add`、需求包、Demand、任务与投递）；`wakeflow_status`：`overall` 为 `active`，pod 段两项（worktree pod `ready`、回执 `present`），`windows[]` 7 已登记加恰好 primary design 一个未登记，pod 产品窗口持有声明，`board.counts` 与 `inspect_board` 一致，`claims[]` 与声明文件一致，`repositories[]` 报 HEAD、当前分支与登记的 worktree，`policy` 等于导出常量，`projection` 为 `current`，`nextActions` 头项为未登记窗口的登记、次项为活动 Demand 前沿，`next` 取头项；带活动 demandId 的 `route` 前沿等于 `next`；带已取消 demandId 的 `archive` 在场且 `route` 为 null；结果不含私有路径与句柄。`wakeflow_verify`：十三门按名字排序、`ok` 为 true、`summary{13, 0, 0}`、`repairsApplied` 为 false；带 demandId 时 Demand 门只有在飞投递的 `work-claims-released` 失败且不影响工作区 `ok`；观察目录放入非法文件名后 `host-hook-channel` fail（`codex:skipped-1`）、`ok` false、`summary{12, 1, 0}`、`overall` 为 `degraded`；删除后恢复 `13/0/0` | pass |
+| `card-09/active-projection` | 09 | 投影标记、手写不覆盖、pod 段 | 一次证据变更后四份文件（`index.md`、`current/workspace-current-status.md`、`projections/<demandId>/{index.md, developer-progress.md}`）存在且标记种类正确，工作区页共享一份指纹、Demand 页共享另一份，`status.projection` 为 `current`；去掉 `developer-progress.md` 的标记再变更，四份文件字节不变（整轮零写），`status.projection` 为 `unsafe/handwritten`、其余三份 `stale`，verify 的 `active-projection` 门 pass 且 code `handwritten,blocked:3`、`ok` true；恢复标记再变更即 `current` 且四份全部重写、门 code 为 null；`workspace-current-status.md` 的 pod 段两个 pod 各一行，worktree pod 行带活动 Demand 与 `present` 回执 | pass |
 
 ## 2. 待接线场景
 
@@ -35,8 +37,6 @@
 | --- | --- | --- | --- |
 | `card-01/reconfigure` | 01 | 重新配置拓扑，preview 零写，apply 只改声明差异 | maintenance reconfigure |
 | `card-01/reconcile-noop` | 01 | 健康工作区 reconcile 零步 `no-op` | maintenance reconcile |
-| `card-09/status-and-verify` | 09 | status 含 pod 段与 TODO 摘要；verify 门集合与 `unavailable` 计数 | 观察切片 |
-| `card-09/active-projection` | 09 | 投影标记、手写不覆盖、pod 段 | 活动投影切片 |
 | `card-10/release-consistency` | 10 | 五源一致、标签在 HEAD、Node 24 | L3 |
 
 ## 3. 未执行标注

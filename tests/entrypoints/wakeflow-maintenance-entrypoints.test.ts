@@ -131,7 +131,8 @@ test("Claude entrypoint contributes settings and its plan digest is rejected by 
     throw new Error("Expected a ready Claude plan.");
   }
   const plan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
-  equal(plan.hostContribution?.operations.length, 3);
+  // 三条 portable settings、一条状态栏资产、一条本地设置条目（§13.94 D6）。
+  equal(plan.hostContribution?.operations.length, 5);
 
   let caught: unknown;
   try {

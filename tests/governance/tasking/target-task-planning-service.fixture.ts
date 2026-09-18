@@ -31,7 +31,7 @@ import {
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
-import { materializeWakeflowActiveLayout } from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
 import type { WakeflowTargetTaskPlanningRequestV1 } from "../../../src/contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
 import {
   executeTargetTaskPlanningPublicRequest,
@@ -146,9 +146,7 @@ export async function createTargetTaskPlanningWorkspaceFixture(
     { mode: 0o644 },
   );
   const workspaceRoot = await RootedDirectory.open(workspacePath);
-  await materializeWakeflowActiveLayout(workspaceRoot, {
-    recoveringFreshLayout: false,
-  });
+  await materializeActiveLayout(workspaceRoot, { recovering: false });
   const testingSummary =
     testingMode === "real-environment"
       ? "在已确认Test环境中运行真实场景验证"

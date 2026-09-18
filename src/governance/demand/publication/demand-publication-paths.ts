@@ -6,9 +6,7 @@ import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
-import {
-  WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
-} from "../../../workspace/active/wakeflow-active-paths.js";
+import { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF } from "../../../kernel/layout.js";
 
 /**
  * Wakeflow Governance / Demand Publication：Workspace 内创建事务、暂存目录、逐 Demand

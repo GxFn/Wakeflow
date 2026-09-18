@@ -20,13 +20,28 @@ import {
   executeClaudeCodePortableSettingsOperation,
   ClaudeCodePortableSettingsOperationExecutionError,
 } from "./claude-code-portable-settings-operation-executor.js";
+import {
+  executeClaudeCodeStatuslineAssetOperation,
+  planClaudeCodeStatuslineAssetOperation,
+  CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND,
+  CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID,
+  ClaudeCodeStatuslineAssetOperationError,
+} from "./claude-code-statusline-asset-operation.js";
+import {
+  executeClaudeCodeStatuslineSettingsOperation,
+  planClaudeCodeStatuslineSettingsOperation,
+  CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER,
+  CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND,
+  CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID,
+  ClaudeCodeStatuslineSettingsOperationError,
+} from "./claude-code-statusline-settings-operation.js";
 
 /**
  * Wakeflow Host / Claude Code：当前 Claude 宿主维护 capability。
  *
- * 它把 portable settings 的多根只读计划转换成共享 contribution，并在唯一 Maintenance
- * Gate 内以闭合分派执行 exact operation。共享层不依赖本模块；未来新增 Claude 专属
- * 操作时也必须在这里显式扩展 operationKind，而不是注册动态 handler。
+ * 它把 portable settings 的多根只读计划、状态栏资产的字节核对与本地设置里状态栏条目的核对
+ * 转换成共享 contribution，并在唯一 Maintenance Gate 内以闭合分派执行 exact operation。
+ * 共享层不依赖本模块；三种 operationKind 都在这里显式分派，不注册动态 handler。
  */
 
 export const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID =
@@ -70,6 +85,34 @@ function fail(
   throw new ClaudeCodeMaintenanceCapabilityError(reason, path);
 }
 
+interface StatuslineSettingsPlan {
+  readonly operation: Awaited<ReturnType<typeof planClaudeCodeStatuslineSettingsOperation>>;
+  readonly blocker: string | null;
+}
+
+/** 本地设置读不出或不是 JSON 对象时不猜：整份贡献 blocked，不带该操作。 */
+async function planStatuslineSettings(
+  root: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<StatuslineSettingsPlan> {
+  try {
+    return {
+      operation: await planClaudeCodeStatuslineSettingsOperation(root, {
+        ...(signal === undefined ? {} : { signal }),
+      }),
+      blocker: null,
+    };
+  } catch (error: unknown) {
+    if (error instanceof ClaudeCodeStatuslineSettingsOperationError) {
+      if (error.reason === "settings-unreadable") {
+        return { operation: null, blocker: CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER };
+      }
+      fail("owner", error.path);
+    }
+    throw error;
+  }
+}
+
 async function planContribution(
   root: RootedDirectory,
   request: PlanWakeflowHostMaintenanceContributionRequest,
@@ -80,22 +123,84 @@ async function planContribution(
     profile: request.profile,
     ...(request.signal === undefined ? {} : { signal: request.signal }),
   });
+  const statusline = await planClaudeCodeStatuslineAssetOperation(root, {
+    ...(request.signal === undefined ? {} : { signal: request.signal }),
+  });
+  const settings = await planStatuslineSettings(root, request.signal);
   return createWakeflowHostMaintenanceContribution({
     hostId: "claude-code",
     capabilityId: CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID,
-    status: composition.status,
-    blockerCodes: composition.blockerCodes,
-    operations: composition.operations.map((operation) => ({
-      operationId: operation.operationId,
-      operationKind: "portable-settings",
-      ownerId: "claude-code-portable-settings",
-      targetKey:
-        `settings:${operation.root.rootKind}:${operation.root.rootId}`,
-      sourceDigest: operation.sourceDigest,
-      targetDigest: operation.targetDigest,
-      payload: operation,
-    })),
+    status: settings.blocker === null ? composition.status : "blocked",
+    blockerCodes: [
+      ...composition.blockerCodes,
+      ...(settings.blocker === null ? [] : [settings.blocker]),
+    ],
+    operations: [
+      ...composition.operations.map((operation) => ({
+        operationId: operation.operationId,
+        operationKind: "portable-settings",
+        ownerId: "claude-code-portable-settings",
+        targetKey:
+          `settings:${operation.root.rootKind}:${operation.root.rootId}`,
+        sourceDigest: operation.sourceDigest,
+        targetDigest: operation.targetDigest,
+        payload: operation,
+      })),
+      ...(statusline === null ? [] : [statusline]),
+      ...(settings.operation === null ? [] : [settings.operation]),
+    ],
   });
+}
+
+async function executeStatuslineOperation(
+  root: RootedDirectory,
+  request: ExecuteWakeflowHostMaintenanceOperationRequest,
+): Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>> {
+  try {
+    const executed = await executeClaudeCodeStatuslineAssetOperation(root, {
+      operation: request.operation.payload,
+      recoveringAffectedOperation: request.recoveringAffectedOperation,
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
+    if (
+      executed.operationId !== request.operation.operationId
+      || executed.targetDigest !== request.operation.targetDigest
+    ) {
+      fail("owner", "$operation");
+    }
+    return Object.freeze({
+      operationId: executed.operationId,
+      disposition: executed.disposition,
+      observationDigest: executed.targetDigest,
+    });
+  } catch (error: unknown) {
+    if (error instanceof ClaudeCodeStatuslineAssetOperationError) fail("owner", error.path);
+    throw error;
+  }
+}
+
+async function executeStatuslineSettingsOperation(
+  root: RootedDirectory,
+  request: ExecuteWakeflowHostMaintenanceOperationRequest,
+): Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>> {
+  try {
+    const executed = await executeClaudeCodeStatuslineSettingsOperation(root, {
+      operation: request.operation.payload,
+      sourceDigest: request.operation.sourceDigest,
+      targetDigest: request.operation.targetDigest,
+      recoveringAffectedOperation: request.recoveringAffectedOperation,
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
+    if (executed.operationId !== request.operation.operationId) fail("owner", "$operation");
+    return Object.freeze({
+      operationId: executed.operationId,
+      disposition: executed.disposition,
+      observationDigest: executed.targetDigest,
+    });
+  } catch (error: unknown) {
+    if (error instanceof ClaudeCodeStatuslineSettingsOperationError) fail("owner", error.path);
+    throw error;
+  }
 }
 
 async function executeOperation(
@@ -111,9 +216,21 @@ async function executeOperation(
     }
     throw error;
   }
+  if (request.profile.hostId !== "claude-code") fail("operation", "$operation");
   if (
-    request.profile.hostId !== "claude-code"
-    || request.operation.operationKind !== "portable-settings"
+    request.operation.operationKind === CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND
+    && request.operation.ownerId === CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID
+  ) {
+    return executeStatuslineOperation(root, request);
+  }
+  if (
+    request.operation.operationKind === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND
+    && request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID
+  ) {
+    return executeStatuslineSettingsOperation(root, request);
+  }
+  if (
+    request.operation.operationKind !== "portable-settings"
     || request.operation.ownerId !== "claude-code-portable-settings"
   ) {
     fail("operation", "$operation");

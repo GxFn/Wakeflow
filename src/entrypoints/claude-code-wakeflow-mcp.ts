@@ -7,6 +7,7 @@ import {
   executeRecordDeliveryOutcomeRequest,
 } from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
+import { executeStatusRequest, executeVerifyRequest } from "../capabilities/observation/service.js";
 import { executePodRequest } from "../capabilities/pod/service.js";
 import {
   executeImplementationReviewDecisionRequest,
@@ -14,8 +15,19 @@ import {
   executeTargetResultReviewInspectionRequest,
   executeTestReviewDecisionRequest,
 } from "../capabilities/result-review/service.js";
+import {
+  CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
+  CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+} from "../hosts/claude-code/claude-code-statusline-asset.js";
+import {
+  CLAUDE_CODE_LOCAL_SETTINGS_REF,
+  CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+  claudeCodeStatuslineSettingsEntry,
+} from "../hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeClaudeCodeWakeflowMaintenance } from "./claude-code-wakeflow-maintenance.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
@@ -37,6 +49,33 @@ const CLAUDE_CODE_HOST_FACADE = Object.freeze({
   identityProfile: claudeCodeWindowHostIdentityProfile,
 });
 
+/** 观察读两个宿主的绑定、hook 通道与资产：制品固定携带两份 profile（§13.94 D1）。 */
+const CLAUDE_CODE_OBSERVATION_FACADE = Object.freeze({
+  hostId: "claude-code" as const,
+  hosts: Object.freeze([
+    Object.freeze({
+      hostId: "claude-code" as const,
+      resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+      identityProfile: claudeCodeWindowHostIdentityProfile,
+      statuslineAsset: Object.freeze({
+        fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+        digest: CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
+        settings: Object.freeze({
+          path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+          key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+          expectedEntry: claudeCodeStatuslineSettingsEntry,
+        }),
+      }),
+    }),
+    Object.freeze({
+      hostId: "codex" as const,
+      resourceProfile: codexWorkspaceHostResourceProfile,
+      identityProfile: codexWindowHostIdentityProfile,
+      statuslineAsset: null,
+    }),
+  ]),
+});
+
 /** 创建按登记表发布全部公共工具的 Claude Code MCP server。 */
 export function createClaudeCodeWakeflowMcpServer(serverVersion: string): McpServer {
   return createWakeflowPublicMcpServer({
@@ -47,6 +86,9 @@ export function createClaudeCodeWakeflowMcpServer(serverVersion: string): McpSer
     registerWindowHostBinding: (value: unknown) =>
       executeWindowBindingRequest(CLAUDE_CODE_HOST_FACADE, value),
     managePod: (value: unknown) => executePodRequest(CLAUDE_CODE_HOST_FACADE, value),
+    inspectStatus: (value: unknown) => executeStatusRequest(CLAUDE_CODE_OBSERVATION_FACADE, value),
+    verifyWorkspace: (value: unknown) =>
+      executeVerifyRequest(CLAUDE_CODE_OBSERVATION_FACADE, value),
     prepareDelivery: (value: unknown) =>
       executePrepareDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
     recordDeliveryOutcome: (value: unknown) =>

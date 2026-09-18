@@ -1,3 +1,4 @@
+import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../governance/delivery/delivery-outcome.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
@@ -13,11 +14,11 @@ import type {
  * Wakeflow Capabilities / Delivery：投递切片的纯决定（能力卡 6，ADR-0009，ADR-0012 D2）。
  *
  * 这里没有 I/O：处置由证据派生，准备与 rearm 的阻塞项由状态派生，静默阈值只做时间比较。
- * 常量按 ADR-0012 未决数值先作常量（13.83 D7），进配置留给观察切片。
+ * 阈值按 ADR-0012 未决数值先作常量，由治理层 `delivery-outcome` 导出并进 status 的 policy 段（§13.94 D7）。
  */
 
-/** ambiguous 静默阈值：超过后 `next` 转给 Controller 并列出 landing-evidence-missing。 */
-export const DELIVERY_LANDING_SILENCE_MILLISECONDS = 10 * 60 * 1000;
+/** ambiguous 静默阈值：超过后 `next` 转给 Controller 并列出 landing-evidence-missing；值在治理层的策略表里。 */
+export { DELIVERY_LANDING_SILENCE_MILLISECONDS };
 
 /** 目标窗口必须加载的技能：宿主差异只在指令文件名，技能路径两宿主一致。 */
 export const DELIVERY_REQUIRED_SKILLS: Readonly<

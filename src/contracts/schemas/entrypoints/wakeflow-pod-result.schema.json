@@ -81,7 +81,7 @@
     "worktreeView": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repositoryId", "windowId", "suggestedName", "receipt"],
+      "required": ["repositoryId", "windowId", "suggestedName", "receipt", "disposal"],
       "properties": {
         "repositoryId": {
           "$ref": "#/$defs/repositoryId"
@@ -96,6 +96,31 @@
         "receipt": {
           "enum": ["absent", "present", "checkout-missing"],
           "description": "absent: no worktree receipt yet; present: receipt admitted and the checkout still exists; checkout-missing: receipt exists but the checkout directory is gone."
+        },
+        "disposal": {
+          "description": "Guidance for a checkout that is still present while the pod is closing; null otherwise. Wakeflow never removes worktrees itself.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["suggested", "alternative"],
+              "properties": {
+                "suggested": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "alternative": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                }
+              }
+            }
+          ]
         }
       }
     },

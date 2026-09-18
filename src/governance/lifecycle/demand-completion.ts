@@ -47,8 +47,9 @@ import {
 const COMPLETION_KIND = "WakeflowDemandCompletion" as const;
 const COMPLETION_SCHEMA_VERSION = 1 as const;
 
+/** `not-applicable` 只属于 research Demand：完成物是 document 类受管证据（§13.94 D8）。 */
 export type DemandCompletionTestingMode =
-  "controller-only" | "real-environment";
+  "controller-only" | "real-environment" | "not-applicable";
 
 /** 完成时看板上需求包的认领状态与其 Ledger 记录谱系。 */
 export interface DemandCompletionPackageSource {

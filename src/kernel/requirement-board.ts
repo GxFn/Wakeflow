@@ -583,6 +583,22 @@ export function renderRequirementBoardIndex(states: readonly RequirementClaimSta
   return `${lines.join("\n")}\n`;
 }
 
+/** 没有任何认领状态时的索引摘要；Fresh 初始化写入的就是这一份，初始化权威只绑定它的摘要。 */
+const REQUIREMENT_BOARD_EMPTY_INDEX_DIGEST: Sha256Digest = computeSha256Digest(
+  encodeUtf8(renderRequirementBoardIndex([]), "$boardIndex"),
+  "$boardIndex",
+);
+
+/** 看板初始化权威的摘要：布局引用加空索引摘要；维护计划用它做步骤目标。 */
+export const REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST: Sha256Digest =
+  computeCanonicalJsonSha256Digest({
+    kind: "WakeflowRequirementBoardInitializationAuthority",
+    schemaVersion: 1,
+    rootRef: REQUIREMENT_BOARD_ROOT_REF,
+    indexRef: REQUIREMENT_BOARD_INDEX_REF,
+    emptyIndexDigest: REQUIREMENT_BOARD_EMPTY_INDEX_DIGEST,
+  });
+
 /** 让磁盘上的索引等于当前状态的投影；已相等则不写。 */
 export async function publishRequirementBoardIndex(
   root: RootedDirectory,

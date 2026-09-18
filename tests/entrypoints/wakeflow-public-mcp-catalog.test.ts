@@ -12,7 +12,6 @@ import {
   WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/demand/contract.js";
 import {
   WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
@@ -20,6 +19,10 @@ import {
   WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/delivery/contract.js";
 import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
+import {
+  WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+  WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/observation/contract.js";
 import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "../../src/capabilities/pod/contract.js";
 import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
@@ -139,11 +142,8 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     "wake-controller callback permit",
     "never acceptance",
   ]),
-  expectedTool(
-    WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-    "demand-controller-route",
-    READ_ONLY,
-  ),
+  expectedTool(WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, "status", READ_ONLY),
+  expectedTool(WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, "verify", READ_ONLY),
   expectedTool(
     WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
     "target-result-review-inspection",
@@ -212,7 +212,8 @@ function validPublicServerOptions(): PublicServerOptions {
     publishRequirement: unavailableExecutor,
     executeMaintenance: unavailableExecutor,
     importTargetResult: unavailableExecutor,
-    inspectDemandRoute: unavailableExecutor,
+    inspectStatus: unavailableExecutor,
+    verifyWorkspace: unavailableExecutor,
     inspectTargetResultReview: unavailableExecutor,
     inspectBoard: unavailableExecutor,
     planTargetTask: unavailableExecutor,
@@ -235,7 +236,8 @@ const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
   "managePod",
   "publishRequirement",
   "registerWindowHostBinding",
-  "inspectDemandRoute",
+  "inspectStatus",
+  "verifyWorkspace",
   "planTargetTask",
   "prepareDelivery",
   "recordDeliveryOutcome",
@@ -286,7 +288,7 @@ test("官方MCP server只发布十八个闭合Schema工具", async (t) => {
   equal(typeof instructions, "string");
   equal(Buffer.byteLength(instructions ?? "", "utf8") <= 1_024, true);
   equal(instructions?.includes("never performs Agent host effects"), true);
-  equal(instructions?.includes(WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME), true);
+  equal(instructions?.includes(WAKEFLOW_STATUS_PUBLIC_TOOL_NAME), true);
   const listed = await client.listTools();
   const actualByName = new Map(listed.tools.map((tool) => [tool.name, tool] as const));
   deepEqual([...actualByName.keys()].sort(), PUBLIC_TOOL_CATALOG.map((tool) => tool.name).sort());

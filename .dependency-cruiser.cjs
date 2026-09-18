@@ -17,7 +17,7 @@ const WORKSPACE_GOVERNANCE_COMPOSITION_TARGETS =
   "^src/governance/(?:delivery/window-work-claim-resource-catalog|demand/demand-resource-catalog|ledger/(?:ledger-authority-(?:layout|store|storage-policy)|ledger-resource-catalog))\\.ts$";
 
 const GOVERNANCE_WORKSPACE_CONTRACT_TARGETS =
-  "^src/workspace/(?:active/(?:wakeflow-active-layout-inspection|wakeflow-active-paths)|window-runtime/(?:wakeflow-agent-host-window-observation-authority|wakeflow-window-host-binding(?:-id|-store-authority|-store)?|wakeflow-window-host-identity-profile)|workspace-(?:host-resource-profile|resource-declaration|shared-runtime-resource-catalog))\\.ts$";
+  "^src/workspace/(?:window-runtime/(?:wakeflow-agent-host-window-observation-authority|wakeflow-window-host-binding(?:-id|-store-authority|-store)?|wakeflow-window-host-identity-profile)|workspace-(?:host-resource-profile|resource-declaration|shared-runtime-resource-catalog))\\.ts$";
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {

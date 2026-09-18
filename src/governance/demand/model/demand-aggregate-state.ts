@@ -2544,7 +2544,7 @@ function normalizeState(
   if (
     wire.lifecycle === "completed" &&
     (pendingTestRetest !== undefined ||
-      liveImplementationTargets.length === 0 ||
+      // research（not-applicable）零实现目标也能 completed（§13.94 D8）；实现目标数量由完成转换按测试模式把关。
       liveImplementationTargets.some((target) => target.phase !== "accepted") ||
       (testTargets.length > 0 &&
         (openTestTargets.length !== 1 ||
@@ -2992,20 +2992,23 @@ export function completeDemandAggregateState(
   const openTestTargets = testTargets.filter(
     (target) => target.phase !== "test-product-defect",
   );
+  // research（not-applicable）没有测试环节，也允许零实现目标：完成物是受管证据（§13.94 D8）。
   const testingClosed =
-    completion.testingMode === "controller-only"
+    completion.testingMode === "controller-only" || completion.testingMode === "not-applicable"
       ? testTargets.length === 0
       : current.pendingTestRetest === undefined &&
         openTestTargets.length === 1 &&
         openTestTargets[0]?.phase === "test-accepted";
+  const targetsClosed =
+    (implementationTargets.length > 0 || completion.testingMode === "not-applicable") &&
+    implementationTargets.every((target) => target.phase === "accepted");
   if (
     current.lifecycle !== "active" ||
     completion.demandId !== current.demandId ||
     completion.authorityDigest !== current.authorityDigest ||
     completion.observedState.stateDigest !==
       computeDemandAggregateStateDigest(current) ||
-    implementationTargets.length === 0 ||
-    implementationTargets.some((target) => target.phase !== "accepted") ||
+    !targetsClosed ||
     current.awaitingDecision !== undefined ||
     current.continuation?.planningRequired === true ||
     !testingClosed

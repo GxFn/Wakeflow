@@ -32,7 +32,7 @@ programId: string
 demandId: string
 controllerWindowId: string
 authorityDigest: WakeflowSha256DigestText
-testingMode: ("controller-only" | "real-environment")
+testingMode: ("controller-only" | "real-environment" | "not-applicable")
 postAcceptanceRouteDigest: WakeflowSha256DigestText
 reviewSnapshotDigest: WakeflowSha256DigestText
 observedState: ObservedState

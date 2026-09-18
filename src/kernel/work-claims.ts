@@ -78,6 +78,8 @@ const HOLDER_FIELDS = Object.freeze([
 const BINDING_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 /** 声明代际上限；投递的 rearm 上限由它派生（`DELIVERY_REARM_LIMIT = MAXIMUM_WORK_CLAIM_GENERATION - 1`）。 */
 export const MAXIMUM_WORK_CLAIM_GENERATION = 4;
+/** 声明只作恢复门的时长：超过两小时且持有者消失时才允许强制释放（能力卡 2）。 */
+export const WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS = 2 * 60 * 60 * 1000;
 
 export interface WorkClaimHolder {
   readonly demandId: WakeflowDurableId<"demand">;

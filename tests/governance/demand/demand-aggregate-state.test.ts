@@ -359,18 +359,17 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   );
 });
 
-test("completed终态需要accepted目标，未实现业务域仍不能空占位", () => {
-  throws(
-    () =>
-      parseDemandAggregateState({
-        ...createInitialDemandAggregateState(
-          TASKING_DEMAND_ID,
-          TASKING_AUTHORITY_DIGEST,
-        ),
-        lifecycle: "completed",
-      }),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError && error.reason === "schema",
+test("completed终态允许零实现目标（research 的 not-applicable 闭合，§13.94 D8），未实现业务域仍不能空占位", () => {
+  // 目标数量由完成转换按测试模式把关：controller-only / real-environment 仍要求至少一个已接受目标。
+  equal(
+    parseDemandAggregateState({
+      ...createInitialDemandAggregateState(
+        TASKING_DEMAND_ID,
+        TASKING_AUTHORITY_DIGEST,
+      ),
+      lifecycle: "completed",
+    }).lifecycle,
+    "completed",
   );
   throws(
     () =>
@@ -463,17 +462,15 @@ test("replacement 谱系：旧目标进入 superseded，后续规划与 complete
       error instanceof DemandAggregateStateError &&
       error.reason === "transition",
   );
-  // completed 终态要求至少一个已接受的未被替代实现目标；只剩 superseded 目标不能是 completed。
+  // completed 终态要求每个未被替代的实现目标都已接受：替代目标仍是 planned 就不能是 completed
+  //（Schema 的逐目标相位约束先于关系规则拒绝，所以是 schema 而不是 relation）。
   throws(
     () =>
       parseDemandAggregateState({
         ...replaced,
         lifecycle: "completed",
-        targetTasks: [superseded],
       }),
     (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "relation" &&
-      error.path === "$/lifecycle",
+      error instanceof DemandAggregateStateError && error.reason === "schema",
   );
 });

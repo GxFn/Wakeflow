@@ -28,9 +28,12 @@ import {
   WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/demand/contract.js";
 import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
+import {
+  WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+  WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/observation/contract.js";
 import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "../../src/capabilities/pod/contract.js";
 import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
@@ -156,12 +159,27 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) =
     );
     equal(packageDocument.dependencies["@modelcontextprotocol/server"], "2.0.0");
 
+    // 对端宿主目录只准入两份纯数据 profile（资源与窗口宿主身份）；状态栏资产、维护与
+    // 设置等对端执行内容不得进入本宿主闭包（§13.94 D1 与制品隔离规则）。
     const peerDirectory =
       artifact.hostId === "codex" ? "lib/hosts/claude-code/" : "lib/hosts/codex/";
-    const admittedPeerProfile = `${peerDirectory}wakeflow-workspace-host-resource-profile.js`;
+    const peerIdentityProfile =
+      artifact.hostId === "codex"
+        ? `${peerDirectory}claude-code-window-host-identity-profile.js`
+        : `${peerDirectory}codex-window-host-identity-profile.js`;
+    const peerResourceProfile = `${peerDirectory}wakeflow-workspace-host-resource-profile.js`;
+    const peerFiles = manifest.files.filter((file) => file.path.startsWith(peerDirectory));
     deepEqual(
-      manifest.files.map((file) => file.path).filter((file) => file.startsWith(peerDirectory)),
-      [admittedPeerProfile],
+      peerFiles.map((file) => file.path),
+      [peerIdentityProfile, peerResourceProfile],
+    );
+    deepEqual(
+      peerFiles.map((file) => file.scope),
+      ["peer-profile", "peer-profile"],
+    );
+    equal(
+      manifest.files.some((file) => file.path.includes("statusline")),
+      artifact.hostId === "claude-code",
     );
   }
 });
@@ -194,8 +212,9 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
       deepEqual(
         listed.tools.map((tool) => tool.name).sort(),
         [
-          WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
           WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+          WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+          WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
           WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
           WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
           WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,

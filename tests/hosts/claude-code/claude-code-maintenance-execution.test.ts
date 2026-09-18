@@ -1,14 +1,6 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -29,6 +21,17 @@ import {
 import {
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import {
+  CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
+  CLAUDE_CODE_STATUSLINE_ASSET_REF,
+  claudeCodeStatuslineCommand,
+} from "../../../src/hosts/claude-code/claude-code-statusline-asset.js";
+import { CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_ID } from "../../../src/hosts/claude-code/claude-code-statusline-asset-operation.js";
+import {
+  CLAUDE_CODE_LOCAL_SETTINGS_REF,
+  CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
+} from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import {
   codexWorkspaceHostResourceProfile,
 } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -133,7 +136,7 @@ test("Claude aggregate preview preserves cancellation as an operation outcome", 
   );
 });
 
-test("Claude aggregate transaction publishes three portable settings before Config", async (t) => {
+test("Claude aggregate transaction publishes three portable settings, the statusline asset and its local settings entry before Config", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
@@ -142,11 +145,20 @@ test("Claude aggregate transaction publishes three portable settings before Conf
     input,
   );
   equal(plan.status, "ready");
-  equal(plan.hostContribution?.operations.length, 3);
+  // 三条 portable settings、一条状态栏资产、一条本地设置条目；按标识排序资产在倒数第二（§13.94 D6）。
+  equal(plan.hostContribution?.operations.length, 5);
+  const statusline = plan.hostContribution?.operations.at(-2);
+  const settings = plan.hostContribution?.operations.at(-1);
+  equal(settings?.operationId, CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID);
+  equal(settings?.operationKind, "statusline-settings");
+  equal(settings?.sourceDigest, null);
+  equal(statusline?.operationId, CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_ID);
+  equal(statusline?.operationKind, "statusline-asset");
+  equal(statusline?.targetDigest, CLAUDE_CODE_STATUSLINE_ASSET_DIGEST);
   equal(plan.steps.at(-1)?.stepId, "authority:config");
   equal(plan.steps.filter((entry) => (
     entry.boundary === "host-capability"
-  )).length, 3);
+  )).length, 5);
 
   const completed = await executeClaudeCodeMaintenanceExecution(
     workspace.root,
@@ -158,7 +170,25 @@ test("Claude aggregate transaction publishes three portable settings before Conf
   equal(completed.operationId, OPERATION_ID);
   equal(completed.stepReceipts.filter((entry) => (
     entry.boundary === "host-capability"
-  )).length, 3);
+  )).length, 5);
+  const assetPath = path.join(
+    workspace.absolutePath,
+    ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/"),
+  );
+  equal(statSync(assetPath).mode & 0o777, 0o600);
+  equal(computeSha256Digest(readFileSync(assetPath)), CLAUDE_CODE_STATUSLINE_ASSET_DIGEST);
+  // 本地设置只有 statusLine 一键，命令指向资产并带 base64url 的根；文件 0600（忽略的私有文件）。
+  const localSettingsPath = path.join(
+    workspace.absolutePath,
+    ...CLAUDE_CODE_LOCAL_SETTINGS_REF.split("/"),
+  );
+  equal(statSync(localSettingsPath).mode & 0o777, 0o600);
+  deepEqual(JSON.parse(readFileSync(localSettingsPath, "utf8")), {
+    statusLine: {
+      type: "command",
+      command: claudeCodeStatuslineCommand(workspace.root.absolutePath),
+    },
+  });
   for (const root of [workspace.absolutePath, "Design", "Test"].map((entry) => (
     path.isAbsolute(entry) ? entry : path.join(workspace.absolutePath, entry)
   ))) {
@@ -298,6 +328,16 @@ test("recovery replays only the affected Claude operation from the exact journal
   equal(recovered.stepReceipts[0]?.boundary, "host-capability");
   equal(recovered.stepReceipts[0]?.disposition, "current");
   equal(recovered.stepReceipts.at(-1)?.stepId, "authority:config");
+  equal(
+    existsSync(path.join(workspace.absolutePath, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/"))),
+    true,
+    "recovery installs the statusline asset after the interrupted settings operation",
+  );
+  equal(
+    existsSync(path.join(workspace.absolutePath, ...CLAUDE_CODE_LOCAL_SETTINGS_REF.split("/"))),
+    true,
+    "recovery installs the local settings entry too",
+  );
   equal(existsSync(path.join(
     workspace.absolutePath,
     "Design",

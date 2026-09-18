@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 
-import { WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME } from "../capabilities/demand/contract.js";
+import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../capabilities/observation/contract.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "./wakeflow-public-mcp-catalog.js";
 import {
   parseCreateWakeflowPublicMcpServerOptions,
@@ -33,7 +33,7 @@ export function createWakeflowPublicMcpServer(
       instructions: [
         "Wakeflow exposes local, closed-world workflow tools and never performs Agent host effects.",
         "For preview/apply capabilities, obtain a preview first and apply only with the exact plan or planDigest that preview returned; use recover only with the exact evidence that tool requires.",
-        `For an existing Demand, call ${WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME} after each successful state mutation to identify the next domain owner.`,
+        `Call ${WAKEFLOW_STATUS_PUBLIC_TOOL_NAME} (with demandId for one Demand's route) to identify the next owner; every mutation result also carries next.`,
         "Inspection results and TargetResults are evidence, not mutation authority or Controller acceptance.",
         "Each tool description and Schema defines its exact input, effect, recovery, and disclosure boundary.",
       ].join(" "),

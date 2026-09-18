@@ -22,11 +22,59 @@ const WAKEFLOW_LOCAL_RUNTIME_ROOT_REF = parsePortableResourcePath(
 const REQUIREMENT_ID_PATTERN =
   /^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
+/** 共享活动根：`.wakeflow-active`（0700）。 */
+export const WAKEFLOW_ACTIVE_ROOT_REF = parsePortableResourcePath(".wakeflow-active", "$layout");
+
 /** 共享活动根的当前段：`.wakeflow-active/current`。 */
 export const WAKEFLOW_ACTIVE_CURRENT_ROOT_REF = parsePortableResourcePath(
   ".wakeflow-active/current",
   "$layout",
 );
+
+/** 工作区级导航投影（人读，确定性重写）。 */
+export const WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF = parsePortableResourcePath(
+  `${WAKEFLOW_ACTIVE_ROOT_REF}/index.md`,
+  "$layout",
+);
+
+/** 工作区级当前状态投影（人读，确定性重写）。 */
+export const WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF = parsePortableResourcePath(
+  `${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/workspace-current-status.md`,
+  "$layout",
+);
+
+/** 投影器的短期互斥锁。 */
+export const WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF = parsePortableResourcePath(
+  `${WAKEFLOW_ACTIVE_ROOT_REF}/projector.lock`,
+  "$layout",
+);
+
+/**
+ * 每 Demand 一组人读页面所在的目录：`.wakeflow-active/projections/<demandId>/`。
+ * 页面不进 Demand 根：根是带负载摘要的权威树，派生页面不能改变它的摘要。
+ */
+export const WAKEFLOW_ACTIVE_PROJECTIONS_ROOT_REF = parsePortableResourcePath(
+  `${WAKEFLOW_ACTIVE_ROOT_REF}/projections`,
+  "$layout",
+);
+
+export function demandProjectionRootRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${WAKEFLOW_ACTIVE_PROJECTIONS_ROOT_REF}/${parseDemandIdText(demandId)}`,
+    "$layout",
+  );
+}
+
+export function demandProjectionIndexRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(`${demandProjectionRootRef(demandId)}/index.md`, "$layout");
+}
+
+export function demandProjectionProgressRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${demandProjectionRootRef(demandId)}/developer-progress.md`,
+    "$layout",
+  );
+}
 
 /** 需求包看板：认领状态文件与人读索引所在目录（0700）。 */
 export const REQUIREMENT_BOARD_ROOT_REF = parsePortableResourcePath(

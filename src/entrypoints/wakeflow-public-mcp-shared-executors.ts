@@ -8,10 +8,7 @@ import {
   executeDemandCompletionRequest,
   executeDemandContinuationRequest,
 } from "../capabilities/demand/lifecycle.js";
-import {
-  executeDemandCreationRequest,
-  executeDemandRouteInspectionRequest,
-} from "../capabilities/demand/service.js";
+import { executeDemandCreationRequest } from "../capabilities/demand/service.js";
 import { executeRecordEvidenceRequest } from "../capabilities/evidence/service.js";
 import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.js";
 
@@ -26,7 +23,6 @@ export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
   completeDemand: executeDemandCompletionRequest,
   continueDemand: executeDemandContinuationRequest,
   createDemand: executeDemandCreationRequest,
-  inspectDemandRoute: executeDemandRouteInspectionRequest,
   inspectBoard: executeBoardInspectionRequest,
   planTargetTask: executeTargetTaskPlanningPublicRequest,
   publishRequirement: executeRequirementPublicationRequest,
@@ -38,7 +34,6 @@ export const WAKEFLOW_SHARED_PUBLIC_EXECUTORS = Object.freeze({
     | "completeDemand"
     | "continueDemand"
     | "createDemand"
-    | "inspectDemandRoute"
     | "inspectBoard"
     | "planTargetTask"
     | "publishRequirement"

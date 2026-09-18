@@ -1,3 +1,4 @@
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   compileWakeflowFreshConfigSelection,
   WakeflowFreshConfigSelectionError,
@@ -486,10 +487,9 @@ export async function executeWakeflowMaintenancePublicRequest(
       plan: planMaintenance,
       apply: async (context, _input, plan) => {
         try {
-          return await context.facade.apply(
-            context.root,
-            plan.executionPlan,
-            plan.executionRequest,
+          // 维护 apply 之后刷新一次活动投影：reconfigure 换语言或配置摘要、reconcile 重建派生文件（§13.94 D5）。
+          return await afterMutationRefresh(context.root, undefined, () =>
+            context.facade.apply(context.root, plan.executionPlan, plan.executionRequest),
           );
         } catch (error: unknown) {
           mapTransactionError(error);

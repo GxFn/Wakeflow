@@ -407,7 +407,8 @@ test("placement-stable reconfigure updates derived memories before Config", asyn
     { uuidFactory: () => OTHER_UUID },
   );
   equal(reconfigured.status, "completed");
-  equal(reconfigured.stepReceipts.length, 5);
+  // reconfigure 不再规划投影步骤：投影在 apply 之后由观察切片刷新（§13.95 D5）。
+  equal(reconfigured.stepReceipts.length, 4);
   equal(reconfigured.stepReceipts.at(-1)?.stepId, "authority:config");
   equal(
     readFileSync(

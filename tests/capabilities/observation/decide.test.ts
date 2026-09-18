@@ -1,0 +1,617 @@
+import { deepEqual, equal } from "node:assert/strict";
+import { test } from "node:test";
+
+import {
+  deriveNextActions,
+  deriveWorkspaceGates,
+  nextFromActions,
+  projectionFreshness,
+  summarizeGates,
+  verifyNext,
+  type NextActionInput,
+  type VerifyGate,
+  type WorkspaceGateFacts,
+} from "../../../src/capabilities/observation/decide.js";
+import { WAKEFLOW_CONFIG_FILE_REF } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import type { Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import {
+  WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+  WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
+} from "../../../src/kernel/layout.js";
+
+/**
+ * 观察切片的纯决定（gate-log §13.94 D1、D3、D10）：下一步的排序、去重与上限；十三道工作区门
+ * 按名字排序，每门只看纯事实；汇总里 unavailable 算不通过但分开计数；verify 的 next 指向维护；
+ * 投影新鲜度取最坏目标。
+ */
+
+const DEMAND_A = "demand_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const DEMAND_B = "demand_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const WINDOW_A = "window_11111111-1111-4111-8111-111111111111";
+const WINDOW_B = "window_22222222-2222-4222-8222-222222222222";
+const WINDOW_C = "window_33333333-3333-4333-8333-333333333333";
+const POD_MAIN = "pod_99999999-9999-4999-8999-999999999999";
+const POD_FEATURE = "pod_88888888-8888-4888-8888-888888888888";
+const REPOSITORY = "repository_22222222-2222-4222-8222-222222222222";
+const GATE_NAMES = Object.freeze([
+  "active-projection",
+  "append-candidates-clear",
+  "board-consistency",
+  "config-authority",
+  "demand-root-audit",
+  "evidence-integrity",
+  "host-hook-channel",
+  "host-settings-assets",
+  "ledger-layout",
+  "local-layout",
+  "pod-execution-location",
+  "window-identity",
+  "work-claims",
+]);
+
+function digest(seed: string): Sha256Digest {
+  return computeCanonicalJsonSha256Digest({ seed });
+}
+
+function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGateFacts {
+  return {
+    configRecheck: "current",
+    configRef: WAKEFLOW_CONFIG_FILE_REF,
+    configDigest: digest("config"),
+    layout: "current",
+    local: { status: "ready", codes: [] },
+    ledger: "current",
+    board: { status: "observed", skipped: 0, indexCurrent: true, claimedWithoutRoot: [] },
+    demands: [
+      {
+        demandId: DEMAND_A,
+        status: "observed",
+        audit: "pass",
+        evidence: "pass",
+        appendCandidates: 0,
+      },
+    ],
+    strayJournals: [],
+    claims: [{ windowId: WINDOW_A, orphan: false }],
+    claimsUnreadable: 0,
+    hooks: [
+      { hostId: "codex", status: "observed", directory: "private", skipped: 0 },
+      { hostId: "claude-code", status: "observed", directory: "absent", skipped: 0 },
+    ],
+    windows: [
+      { windowId: WINDOW_A, identity: "registered" },
+      { windowId: WINDOW_B, identity: "registered" },
+    ],
+    pods: [
+      { podId: POD_MAIN, placement: "primary", lifecycle: "open", state: "ready", worktrees: [] },
+    ],
+    primaryCheckouts: true,
+    assets: [
+      { hostId: "codex", status: "not-applicable", settings: "not-applicable" },
+      { hostId: "claude-code", status: "not-applicable", settings: "not-applicable" },
+    ],
+    projection: {
+      status: "observed",
+      targets: [
+        {
+          resourcePath: WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+          status: "current",
+          reason: null,
+          digest: digest("index"),
+        },
+        {
+          resourcePath: WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
+          status: "current",
+          reason: null,
+          digest: digest("status"),
+        },
+      ],
+    },
+    ...overrides,
+  };
+}
+
+function gateOf(gates: readonly Readonly<VerifyGate>[], name: string): Readonly<VerifyGate> {
+  const found = gates.find((gate) => gate.name === name);
+  if (found === undefined) throw new Error(`gate ${name} missing`);
+  return found;
+}
+
+function verdictOf(
+  facts: WorkspaceGateFacts,
+  name: string,
+): readonly [VerifyGate["status"], string | null] {
+  const gate = gateOf(deriveWorkspaceGates(facts), name);
+  return [gate.status, gate.code];
+}
+
+function nextInput(overrides: Partial<NextActionInput> = {}): NextActionInput {
+  return {
+    maintenance: false,
+    unregisteredWindows: [],
+    demands: [],
+    pendingPackages: [],
+    ...overrides,
+  };
+}
+
+test("deriveNextActions：维护 > 活动 pod 的未登记窗口（按 windowId）> Demand 前沿（primary 先，再按 demandId）> 待认领需求包；终态与无前沿的 Demand 不进列表", () => {
+  const actions = deriveNextActions(
+    nextInput({
+      maintenance: true,
+      unregisteredWindows: [
+        { windowId: WINDOW_C, podId: POD_MAIN, placement: "primary", podActive: true },
+        { windowId: WINDOW_B, podId: POD_FEATURE, placement: "worktree", podActive: false },
+        { windowId: WINDOW_A, podId: POD_FEATURE, placement: "worktree", podActive: true },
+      ],
+      demands: [
+        {
+          demandId: DEMAND_A,
+          placement: "worktree",
+          disposition: "work-available",
+          frontier: "implementation-delivery-planning",
+          owner: "controller",
+          suggestedTool: "wakeflow_prepare_delivery",
+        },
+        {
+          demandId: DEMAND_B,
+          placement: "primary",
+          disposition: "blocked",
+          frontier: "implementation-result-import",
+          owner: "target",
+          suggestedTool: null,
+        },
+        {
+          demandId: "demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          placement: "primary",
+          disposition: "terminal",
+          frontier: "demand-continuation",
+          owner: "controller",
+          suggestedTool: "wakeflow_continue_demand",
+        },
+        {
+          demandId: "demand_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          placement: "primary",
+          disposition: "work-available",
+          frontier: null,
+          owner: "none",
+          suggestedTool: null,
+        },
+      ],
+      pendingPackages: [
+        { requirementId: "requirement_22222222-2222-4222-8222-222222222222" },
+        { requirementId: "requirement_11111111-1111-4111-8111-111111111111" },
+      ],
+    }),
+  );
+  deepEqual(
+    actions.map((action) => [action.owner, action.tool, action.reason, action.subject]),
+    [
+      ["controller", "wakeflow_maintain_workspace", "workspace-maintenance", null],
+      ["controller", "wakeflow_register_window_binding", "pod-window-registration", WINDOW_A],
+      ["controller", "wakeflow_register_window_binding", "pod-window-registration", WINDOW_C],
+      ["target", null, "implementation-result-import", DEMAND_B],
+      ["controller", "wakeflow_prepare_delivery", "implementation-delivery-planning", DEMAND_A],
+      [
+        "controller",
+        "wakeflow_create_demand",
+        "requirement-claim",
+        "requirement_11111111-1111-4111-8111-111111111111",
+      ],
+      [
+        "controller",
+        "wakeflow_create_demand",
+        "requirement-claim",
+        "requirement_22222222-2222-4222-8222-222222222222",
+      ],
+    ],
+  );
+  deepEqual(nextFromActions(actions), {
+    frontier: "workspace-maintenance",
+    owner: "controller",
+    suggestedTool: "wakeflow_maintain_workspace",
+    blockers: [],
+  });
+  deepEqual(nextFromActions([]), {
+    frontier: null,
+    owner: "none",
+    suggestedTool: null,
+    blockers: [],
+  });
+});
+
+test("deriveNextActions：同一动作去重，总数上限 64", () => {
+  const duplicated = deriveNextActions(
+    nextInput({
+      pendingPackages: [
+        { requirementId: "requirement_11111111-1111-4111-8111-111111111111" },
+        { requirementId: "requirement_11111111-1111-4111-8111-111111111111" },
+      ],
+    }),
+  );
+  equal(duplicated.length, 1);
+  const packages = Array.from({ length: 70 }, (_, index) => ({
+    requirementId: `requirement_${index.toString(16).padStart(8, "0")}-0000-4000-8000-000000000000`,
+  }));
+  const capped = deriveNextActions(nextInput({ maintenance: true, pendingPackages: packages }));
+  equal(capped.length, 64);
+  equal(capped[0]?.reason, "workspace-maintenance");
+  equal(capped[63]?.subject, packages[62]?.requirementId);
+});
+
+test("deriveWorkspaceGates：健康事实十三门全 pass、按名字排序；汇总 ok 且 next 无前沿", () => {
+  const gates = deriveWorkspaceGates(healthyFacts());
+  deepEqual(
+    gates.map((gate) => gate.name),
+    GATE_NAMES,
+  );
+  deepEqual(
+    gates.map((gate) => gate.status),
+    GATE_NAMES.map(() => "pass"),
+  );
+  equal(gateOf(gates, "host-settings-assets").code, "not-applicable");
+  equal(gateOf(gates, "window-identity").code, null);
+  deepEqual(gateOf(gates, "config-authority").evidence, [
+    { ref: WAKEFLOW_CONFIG_FILE_REF, digest: digest("config") },
+  ]);
+  deepEqual(
+    gateOf(gates, "active-projection").evidence.map((entry) => entry.ref),
+    [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF],
+  );
+  deepEqual(summarizeGates(gates), { ok: true, summary: { pass: 13, fail: 0, unavailable: 0 } });
+  deepEqual(verifyNext(gates), {
+    frontier: null,
+    owner: "none",
+    suggestedTool: null,
+    blockers: [],
+  });
+});
+
+test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带出原因码", () => {
+  deepEqual(verdictOf(healthyFacts({ configRecheck: "changed" }), "config-authority"), [
+    "fail",
+    "changed",
+  ]);
+  deepEqual(verdictOf(healthyFacts({ configRecheck: "unavailable" }), "config-authority"), [
+    "unavailable",
+    "unavailable",
+  ]);
+
+  // local-layout：静态资源矩阵的对账预览 ready 且无步骤（§13.94 D3）。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        local: {
+          status: "blocked",
+          codes: ["gitignore-git", "step:recompose-program-instruction"],
+        },
+      }),
+      "local-layout",
+    ),
+    ["fail", "local:blocked,gitignore-git,step:recompose-program-instruction"],
+  );
+  deepEqual(
+    verdictOf(healthyFacts({ local: { status: "unavailable", codes: [] } }), "local-layout"),
+    ["unavailable", "local:unavailable"],
+  );
+  deepEqual(verdictOf(healthyFacts({ layout: "absent" }), "local-layout"), [
+    "fail",
+    "active:absent",
+  ]);
+  deepEqual(verdictOf(healthyFacts({ layout: "unavailable" }), "local-layout"), [
+    "unavailable",
+    "active:unavailable",
+  ]);
+
+  deepEqual(verdictOf(healthyFacts({ ledger: "stale" }), "ledger-layout"), ["fail", "stale"]);
+  deepEqual(verdictOf(healthyFacts({ ledger: "unavailable" }), "ledger-layout"), [
+    "unavailable",
+    "unavailable",
+  ]);
+
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        board: {
+          status: "observed",
+          skipped: 1,
+          indexCurrent: false,
+          claimedWithoutRoot: [DEMAND_B],
+        },
+      }),
+      "board-consistency",
+    ),
+    ["fail", `skipped:1,index-stale,claimed-without-root:${DEMAND_B}`],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        board: { status: "unavailable", skipped: 0, indexCurrent: null, claimedWithoutRoot: [] },
+      }),
+      "board-consistency",
+    ),
+    ["unavailable", "unavailable"],
+  );
+
+  const failingDemand = healthyFacts({
+    demands: [
+      {
+        demandId: DEMAND_A,
+        status: "observed",
+        audit: "fail",
+        evidence: "fail",
+        appendCandidates: 2,
+      },
+      {
+        demandId: DEMAND_B,
+        status: "unavailable",
+        audit: "unavailable",
+        evidence: "unavailable",
+        appendCandidates: 0,
+      },
+    ],
+    strayJournals: ["demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
+  });
+  deepEqual(verdictOf(failingDemand, "demand-root-audit"), ["fail", `${DEMAND_A},${DEMAND_B}`]);
+  // 未通过的 Demand 全部列出：fail 与 unavailable 都不是 pass，状态取最坏的 fail。
+  deepEqual(verdictOf(failingDemand, "evidence-integrity"), ["fail", `${DEMAND_A},${DEMAND_B}`]);
+  deepEqual(verdictOf(failingDemand, "append-candidates-clear"), [
+    "fail",
+    "candidates:2,journal:demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  ]);
+  // 日志目录读不出：门 unavailable 而不是 pass（读失败不能变成通过）。
+  deepEqual(verdictOf(healthyFacts({ strayJournals: null }), "append-candidates-clear"), [
+    "unavailable",
+    "journals:unreadable",
+  ]);
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        demands: [
+          {
+            demandId: DEMAND_B,
+            status: "unavailable",
+            audit: "unavailable",
+            evidence: "unavailable",
+            appendCandidates: 0,
+          },
+        ],
+      }),
+      "demand-root-audit",
+    ),
+    ["unavailable", DEMAND_B],
+  );
+
+  deepEqual(
+    verdictOf(
+      healthyFacts({ claims: [{ windowId: WINDOW_A, orphan: true }], claimsUnreadable: 1 }),
+      "work-claims",
+    ),
+    ["fail", `orphan:${WINDOW_A},unreadable:1`],
+  );
+
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [
+          { hostId: "codex", status: "observed", directory: "private", skipped: 1 },
+          { hostId: "claude-code", status: "observed", directory: "mode", skipped: 0 },
+        ],
+      }),
+      "host-hook-channel",
+    ),
+    ["fail", "codex:skipped-1,claude-code:mode"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [{ hostId: "codex", status: "unavailable", directory: "absent", skipped: 0 }],
+      }),
+      "host-hook-channel",
+    ),
+    ["unavailable", "codex:unavailable"],
+  );
+
+  // 未登记不是损坏：pass 并在 code 报计数；未观察才 unavailable。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        windows: [
+          { windowId: WINDOW_A, identity: "registered" },
+          { windowId: WINDOW_B, identity: "unregistered" },
+        ],
+      }),
+      "window-identity",
+    ),
+    ["pass", "unregistered:1"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({ windows: [{ windowId: WINDOW_A, identity: "unobserved" }] }),
+      "window-identity",
+    ),
+    ["unavailable", "unobserved:1"],
+  );
+
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        assets: [
+          { hostId: "codex", status: "not-applicable", settings: "not-applicable" },
+          { hostId: "claude-code", status: "drift", settings: "current" },
+        ],
+      }),
+      "host-settings-assets",
+    ),
+    ["fail", "claude-code:drift"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        assets: [{ hostId: "claude-code", status: "unavailable", settings: "current" }],
+      }),
+      "host-settings-assets",
+    ),
+    ["unavailable", "claude-code:unavailable"],
+  );
+  // 本地设置条目各一票：缺文件与条目不等为 fail，不是 JSON 对象为 unavailable（§13.94 D6）。
+  deepEqual(
+    verdictOf(
+      healthyFacts({ assets: [{ hostId: "claude-code", status: "current", settings: "missing" }] }),
+      "host-settings-assets",
+    ),
+    ["fail", "claude-code:settings-missing"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({ assets: [{ hostId: "claude-code", status: "drift", settings: "drift" }] }),
+      "host-settings-assets",
+    ),
+    ["fail", "claude-code:drift,claude-code:settings-drift"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        assets: [{ hostId: "claude-code", status: "current", settings: "unreadable" }],
+      }),
+      "host-settings-assets",
+    ),
+    ["unavailable", "claude-code:settings-unreadable"],
+  );
+});
+
+test("pod-execution-location：open 的 worktree pod 缺回执或检出即 fail；closing 的 pod 检出仍在只报 disposal-pending；primary 仓库根未观察为 unavailable、不是主检出为 fail", () => {
+  const openMissing = healthyFacts({
+    pods: [
+      { podId: POD_MAIN, placement: "primary", lifecycle: "open", state: "ready", worktrees: [] },
+      {
+        podId: POD_FEATURE,
+        placement: "worktree",
+        lifecycle: "open",
+        state: "creating",
+        worktrees: [{ repositoryId: REPOSITORY, receipt: "absent" }],
+      },
+    ],
+  });
+  deepEqual(verdictOf(openMissing, "pod-execution-location"), [
+    "fail",
+    `${POD_FEATURE}:${REPOSITORY}:absent`,
+  ]);
+  const openLost = healthyFacts({
+    pods: [
+      {
+        podId: POD_FEATURE,
+        placement: "worktree",
+        lifecycle: "open",
+        state: "creating",
+        worktrees: [{ repositoryId: REPOSITORY, receipt: "checkout-missing" }],
+      },
+    ],
+  });
+  deepEqual(verdictOf(openLost, "pod-execution-location"), [
+    "fail",
+    `${POD_FEATURE}:${REPOSITORY}:checkout-missing`,
+  ]);
+  const closingPresent = healthyFacts({
+    pods: [
+      {
+        podId: POD_FEATURE,
+        placement: "worktree",
+        lifecycle: "closing",
+        state: "closing",
+        worktrees: [{ repositoryId: REPOSITORY, receipt: "present" }],
+      },
+    ],
+  });
+  deepEqual(verdictOf(closingPresent, "pod-execution-location"), [
+    "pass",
+    `${POD_FEATURE}:${REPOSITORY}:disposal-pending`,
+  ]);
+  deepEqual(verdictOf(healthyFacts({ primaryCheckouts: null }), "pod-execution-location"), [
+    "unavailable",
+    null,
+  ]);
+  deepEqual(verdictOf(healthyFacts({ primaryCheckouts: false }), "pod-execution-location"), [
+    "fail",
+    `${POD_MAIN}:main-checkout`,
+  ]);
+  const unobserved = healthyFacts({
+    pods: [
+      {
+        podId: POD_MAIN,
+        placement: "primary",
+        lifecycle: "open",
+        state: "unobserved",
+        worktrees: [],
+      },
+    ],
+  });
+  deepEqual(verdictOf(unobserved, "pod-execution-location"), ["unavailable", null]);
+});
+
+test("active-projection 门：stale 或 missing 为 fail，手写目标 pass 并报 handwritten（同轮被挡的兄弟计数在 code），其他 unsafe 为 fail，未观察为 unavailable", () => {
+  const target = (status: "current" | "missing" | "stale" | "unsafe", reason: string | null) => ({
+    resourcePath: WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+    status,
+    reason,
+    digest: status === "missing" ? null : digest(status),
+  });
+  const withTargets = (...targets: readonly ReturnType<typeof target>[]) =>
+    healthyFacts({ projection: { status: "observed", targets } });
+  deepEqual(
+    verdictOf(withTargets(target("stale", null), target("missing", null)), "active-projection"),
+    ["fail", "stale,missing"],
+  );
+  deepEqual(verdictOf(withTargets(target("unsafe", "handwritten")), "active-projection"), [
+    "pass",
+    "handwritten",
+  ]);
+  deepEqual(
+    verdictOf(
+      withTargets(target("unsafe", "handwritten"), target("stale", null)),
+      "active-projection",
+    ),
+    ["pass", "handwritten,blocked:1"],
+  );
+  deepEqual(verdictOf(withTargets(target("unsafe", "symlink")), "active-projection"), [
+    "fail",
+    "unsafe-symlink",
+  ]);
+  deepEqual(
+    verdictOf(
+      healthyFacts({ projection: { status: "unavailable", targets: [] } }),
+      "active-projection",
+    ),
+    ["unavailable", "unavailable"],
+  );
+  equal(
+    gateOf(deriveWorkspaceGates(withTargets(target("missing", null))), "active-projection").evidence
+      .length,
+    0,
+  );
+});
+
+test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计数；verifyNext 列出未通过的门并指向维护；projectionFreshness 取最坏目标", () => {
+  deepEqual(summarizeGates([]), { ok: false, summary: { pass: 0, fail: 0, unavailable: 0 } });
+  deepEqual(summarizeGates([{ status: "pass" }, { status: "unavailable" }, { status: "fail" }]), {
+    ok: false,
+    summary: { pass: 1, fail: 1, unavailable: 1 },
+  });
+  const gates = deriveWorkspaceGates(
+    healthyFacts({ configRecheck: "changed", ledger: "unavailable" }),
+  );
+  deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 11, fail: 1, unavailable: 1 } });
+  deepEqual(verifyNext(gates), {
+    frontier: "workspace-maintenance",
+    owner: "controller",
+    suggestedTool: "wakeflow_maintain_workspace",
+    blockers: ["config-authority:fail", "ledger-layout:unavailable"],
+  });
+
+  equal(projectionFreshness(null), "unavailable");
+  equal(projectionFreshness([]), "current");
+  equal(projectionFreshness([{ status: "current" }, { status: "stale" }]), "stale");
+  equal(projectionFreshness([{ status: "stale" }, { status: "missing" }]), "missing");
+  equal(projectionFreshness([{ status: "missing" }, { status: "unsafe" }]), "unsafe");
+});

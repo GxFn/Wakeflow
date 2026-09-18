@@ -8,6 +8,12 @@ import {
   RECORD_EVIDENCE_TOOL_REGISTRATION,
   type RecordEvidenceResult,
 } from "../capabilities/evidence/contract.js";
+import {
+  STATUS_TOOL_REGISTRATION,
+  VERIFY_TOOL_REGISTRATION,
+  type StatusResult,
+  type VerifyResult,
+} from "../capabilities/observation/contract.js";
 import { POD_TOOL_REGISTRATION, type PodResult } from "../capabilities/pod/contract.js";
 import {
   IMPLEMENTATION_REVIEW_DECISION_TOOL_REGISTRATION,
@@ -29,12 +35,10 @@ import {
   DEMAND_COMPLETION_TOOL_REGISTRATION,
   DEMAND_CONTINUATION_TOOL_REGISTRATION,
   DEMAND_CREATION_TOOL_REGISTRATION,
-  DEMAND_ROUTE_INSPECTION_TOOL_REGISTRATION,
   type DemandCancellationResult,
   type DemandCompletionResult,
   type DemandContinuationResult,
   type DemandCreationResult,
-  type DemandRouteInspectionResult,
 } from "../capabilities/demand/contract.js";
 import { WINDOW_BINDING_TOOL_REGISTRATION } from "../capabilities/endpoint/contract.js";
 import {
@@ -75,9 +79,10 @@ export interface WakeflowPublicMcpExecutors {
   readonly createDemand: WakeflowPublicMcpExecutor<DemandCreationResult>;
   readonly executeMaintenance: WakeflowPublicMcpExecutor<WakeflowMaintenancePublicResult>;
   readonly importTargetResult: WakeflowPublicMcpExecutor<TargetResultImportResult>;
-  readonly inspectDemandRoute: WakeflowPublicMcpExecutor<DemandRouteInspectionResult>;
   readonly inspectTargetResultReview: WakeflowPublicMcpExecutor<TargetResultReviewInspectionResult>;
   readonly managePod: WakeflowPublicMcpExecutor<PodResult>;
+  readonly inspectStatus: WakeflowPublicMcpExecutor<StatusResult>;
+  readonly verifyWorkspace: WakeflowPublicMcpExecutor<VerifyResult>;
   readonly planTargetTask: WakeflowPublicMcpExecutor<TargetTaskPlanningResult>;
   readonly prepareDelivery: WakeflowPublicMcpExecutor<PrepareDeliveryResult>;
   readonly publishRequirement: WakeflowPublicMcpExecutor<RequirementPublicationResult>;
@@ -120,7 +125,6 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
   REQUIREMENT_PUBLICATION_TOOL_REGISTRATION satisfies Registration,
   BOARD_INSPECTION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_CREATION_TOOL_REGISTRATION satisfies Registration,
-  DEMAND_ROUTE_INSPECTION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_COMPLETION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_CANCELLATION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_CONTINUATION_TOOL_REGISTRATION satisfies Registration,
@@ -134,6 +138,8 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
   IMPLEMENTATION_REVIEW_DECISION_TOOL_REGISTRATION satisfies Registration,
   TEST_REVIEW_DECISION_TOOL_REGISTRATION satisfies Registration,
   POD_TOOL_REGISTRATION satisfies Registration,
+  STATUS_TOOL_REGISTRATION satisfies Registration,
+  VERIFY_TOOL_REGISTRATION satisfies Registration,
 ]);
 
 /** 全部公共工具的登记表；组合根按它生成目录。 */

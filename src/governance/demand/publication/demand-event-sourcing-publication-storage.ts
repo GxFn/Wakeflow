@@ -63,10 +63,8 @@ import {
 import {
   DEMAND_PUBLICATION_MARKER_REF,
 } from "./demand-publication-paths.js";
-import {
-  assertWakeflowActiveLayoutCurrent,
-  WakeflowActiveLayoutInspectionError,
-} from "../../../workspace/active/wakeflow-active-layout-inspection.js";
+import { assertActiveLayoutCurrent } from "../../../kernel/active-projection.js";
+import { WakeflowError } from "../../../kernel/error.js";
 
 /** Demand 事件溯源发布流程的根作用域文件存储边界。 */
 
@@ -324,7 +322,7 @@ export async function initializePublicationStorage(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
-    await assertWakeflowActiveLayoutCurrent(root, signal);
+    await assertActiveLayoutCurrent(root, signal === undefined ? {} : { signal });
     for (const declaration of WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG) {
       const ref = declaration.placement.relativePath;
       if (ref === null) fail("operation-failure", "$catalog");
@@ -340,9 +338,9 @@ export async function initializePublicationStorage(
       );
     }
   } catch (error: unknown) {
-    if (error instanceof WakeflowActiveLayoutInspectionError) {
+    if (error instanceof WakeflowError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "active-layout-root-scope") fail("root-scope", "$root");
       fail("conflict", "$activeLayout");
     }
     if (error instanceof DurableDirectoryMaterializationError) {

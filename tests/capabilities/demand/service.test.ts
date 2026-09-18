@@ -8,7 +8,8 @@ import {
   executeDemandCompletionRequest,
   executeDemandContinuationRequest,
 } from "../../../src/capabilities/demand/lifecycle.js";
-import { executeDemandRouteInspectionRequest } from "../../../src/capabilities/demand/service.js";
+import { executeStatusRequest } from "../../../src/capabilities/observation/service.js";
+import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
 import { executeTargetTaskPlanningPublicRequest } from "../../../src/capabilities/tasking/service.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -107,8 +108,8 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     const ledgerArchives = path.join(fixture.fixtureRoot, "wakeflow-ledger", "archives", demandId);
 
     await escalate(fixture.workspaceRoot, root, demandId, fixture.targetTaskId);
-    const awaiting = await executeDemandRouteInspectionRequest({ root, demandId });
-    if (awaiting.status !== "current") throw new Error("Expected an active route.");
+    const awaiting = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root, demandId });
+    if (awaiting.route === null) throw new Error("Expected an active route.");
     equal(awaiting.route.disposition, "awaiting-decision");
     equal(awaiting.next.owner, "user");
     equal(awaiting.next.suggestedTool, "wakeflow_continue_demand");
@@ -200,8 +201,8 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     equal(claim?.state.status, "archived");
     equal(claim?.state.archive?.demandId, demandId);
 
-    const archivedRoute = await executeDemandRouteInspectionRequest({ root, demandId });
-    if (archivedRoute.status !== "archived") throw new Error("Expected an archived route.");
+    const archivedRoute = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root, demandId });
+    if (archivedRoute.archive === null) throw new Error("Expected an archived route.");
     equal(archivedRoute.archive.outcome, "completed");
 
     const recovered = await executeDemandCompletionRequest({
@@ -238,8 +239,8 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     equal(continued.package?.status, "claimed");
     equal(continued.next.frontier, "implementation-task-planning");
     equal(await demandRootExists(root, demandId), true);
-    const reopened = await executeDemandRouteInspectionRequest({ root, demandId });
-    if (reopened.status !== "current") throw new Error("Expected an active route.");
+    const reopened = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root, demandId });
+    if (reopened.route === null) throw new Error("Expected an active route.");
     equal(reopened.route.lifecycle, "active");
     equal(reopened.route.disposition, "work-available");
 

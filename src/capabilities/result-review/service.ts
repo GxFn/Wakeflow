@@ -121,6 +121,7 @@ import {
   type DemandTargetReviewHistoryEntry,
 } from "../../governance/review/demand-result-review-snapshot.js";
 import type { TaskPackage, TestTaskPackage } from "../../governance/tasking/task-package.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   runAppendCommand,
   type AppendCommandBinding,
@@ -1005,7 +1006,10 @@ export async function executeTargetResultImportRequest(
         openContext(workspaceRoot, envelope.demandId, facade, options, "append"),
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-      execute: executeImport,
+      execute: (context, input, binding) =>
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
+          executeImport(context, input, binding),
+        ),
       next,
       result: importResult,
     },
@@ -1701,7 +1705,10 @@ export async function executeImplementationReviewDecisionRequest(
         openContext(workspaceRoot, envelope.demandId, facade, options, "append"),
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-      execute: executeImplementationDecision,
+      execute: (context, input, binding) =>
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
+          executeImplementationDecision(context, input, binding),
+        ),
       next,
       result: implementationDecisionResult,
     },
@@ -1925,7 +1932,10 @@ export async function executeTestReviewDecisionRequest(
         openContext(workspaceRoot, envelope.demandId, facade, options, "append"),
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-      execute: executeTestDecision,
+      execute: (context, input, binding) =>
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
+          executeTestDecision(context, input, binding),
+        ),
       next,
       result: testDecisionResult,
     },

@@ -15,8 +15,10 @@ import {
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../governance/demand/demand-resource-catalog.js";
 import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../governance/ledger/ledger-resource-catalog.js";
-import { WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG } from "./active/wakeflow-active-resource-catalog.js";
-import { WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG } from "./active/wakeflow-requirement-board-initialization.js";
+import {
+  WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG,
+  WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,
+} from "./wakeflow-active-static-resource-catalog.js";
 import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "./managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "./workspace-host-resource-catalog.js";

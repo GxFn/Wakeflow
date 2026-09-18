@@ -45,7 +45,7 @@ test("登记表把十八个工具绑定到同名executor，且只公开请求Sch
   }
   registerWakeflowPublicMcpCatalog(server, WAKEFLOW_PUBLIC_TOOL_CATALOG, executors);
 
-  equal(WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length, 19);
+  equal(WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length, 20);
   deepEqual(
     [...captured.keys()],
     WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.map((tool) => tool.name),

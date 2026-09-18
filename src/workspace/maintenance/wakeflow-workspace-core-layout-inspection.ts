@@ -22,10 +22,8 @@ import {
   StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../foundation/filesystem/stable-directory-read.js";
-import {
-  inspectWakeflowActiveLayout,
-  WakeflowActiveLayoutInspectionError,
-} from "../active/wakeflow-active-layout-inspection.js";
+import { inspectActiveLayout } from "../../kernel/active-projection.js";
+import { WakeflowError } from "../../kernel/error.js";
 import {
   WAKEFLOW_LOCAL_ROOT_REF,
   WAKEFLOW_MAINTENANCE_GATE_REF,
@@ -246,7 +244,10 @@ async function inspectActive(
   readonly nodeDigest: Sha256Digest | null;
 }>> {
   try {
-    const inspection = await inspectWakeflowActiveLayout(root, signal);
+    const inspection = await inspectActiveLayout(
+      root,
+      signal === undefined ? {} : { signal },
+    );
     return Object.freeze({
       status: inspection.status === "absent"
         ? "absent" as const
@@ -258,9 +259,9 @@ async function inspectActive(
         : inspection.observationDigest,
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowActiveLayoutInspectionError) {
+    if (error instanceof WakeflowError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "active-layout-root-scope") fail("root-scope", "$root");
       fail("inspection", "$activeLayout");
     }
     throw error;

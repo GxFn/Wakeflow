@@ -660,8 +660,6 @@ export function parseDemandEventSourcingCommand(
     }
     if (
       authority.demandId !== completion.demandId ||
-      (authority.testingDecision.mode !== "controller-only" &&
-        authority.testingDecision.mode !== "real-environment") ||
       completion.testingMode !== authority.testingDecision.mode ||
       computeDemandAuthorityDigest(authority) !== completion.authorityDigest
     ) {

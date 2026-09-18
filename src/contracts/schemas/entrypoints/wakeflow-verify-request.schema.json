@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:verify-request:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_VERIFY_REQUEST_SCHEMA",
+  "title": "WakeflowVerifyRequestV1",
+  "description": "wakeflow_verify 的只读请求：工作区严格校验；带 demandId 时另评估该 Demand 的 verify 门。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["root"],
+  "properties": {
+    "root": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "Absolute path of the existing Wakeflow workspace root."
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    }
+  },
+  "$defs": {
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  }
+}

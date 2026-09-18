@@ -87,16 +87,13 @@ import {
   WakeflowFreshWindowRuntimePublicationError,
 } from "../window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import {
-  materializeWakeflowActiveLayout,
-  WakeflowActiveLayoutMaterializationError,
-} from "../active/wakeflow-active-layout-materialization.js";
-import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../active/wakeflow-active-resource-catalog.js";
-import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../active/wakeflow-requirement-board-initialization.js";
-import { createWakeflowActiveWorkspaceFreshProjectionAuthority } from "../active/wakeflow-active-workspace-fresh-projection-authority.js";
-import {
-  publishWakeflowActiveWorkspaceProjection,
-  WakeflowActiveWorkspaceProjectionPublicationError,
-} from "../active/wakeflow-active-workspace-projection-publication.js";
+  materializeActiveLayout,
+  publishActiveProjection,
+} from "../../kernel/active-projection.js";
+import { WakeflowError } from "../../kernel/error.js";
+import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../../kernel/requirement-board.js";
+import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
+import { renderWakeflowFreshActiveProjection } from "../wakeflow-active-fresh-projection.js";
 import {
   assertWakeflowMaintenanceGateContext,
   WakeflowMaintenanceGateError,
@@ -354,8 +351,8 @@ async function executeActiveLayout(
 ) {
   assertStepTarget(step, WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST);
   try {
-    const result = await materializeWakeflowActiveLayout(root, {
-      recoveringFreshLayout: recovering,
+    const result = await materializeActiveLayout(root, {
+      recovering,
       ...(signal === undefined ? {} : { signal }),
     });
     return receipt(step.stepId, result.disposition, {
@@ -368,12 +365,12 @@ async function executeActiveLayout(
       })),
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowActiveLayoutMaterializationError) {
-      if (error.reason === "strict-absent") {
+    if (error instanceof WakeflowError) {
+      if (error.reason === "active-layout-exists") {
         fail("strict-absent", "$activeLayout");
       }
       if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "active-layout-root-scope") fail("root-scope", "$root");
       fail("owner", "$activeLayout");
     }
     throw error;
@@ -485,33 +482,27 @@ async function executeActiveWorkspaceProjection(
   recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
-  const authority =
-    createWakeflowActiveWorkspaceFreshProjectionAuthority(desired);
-  assertStepTarget(step, authority.authorityDigest);
+  const projection = renderWakeflowFreshActiveProjection(desired);
+  assertStepTarget(step, projection.authorityDigest);
   try {
-    const result = await publishWakeflowActiveWorkspaceProjection(
-      root,
-      {
-        desiredConfig: desired,
-        expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desired),
-      },
-      {
-        recoveringAffectedPublication: recovering,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    const result = await publishActiveProjection(root, projection.files, {
+      recovering,
+      ...(signal === undefined ? {} : { signal }),
+    });
+    // fresh 工作区里的目标只能是缺失或本 owner 写过的；任何 unsafe 都是 owner 失败。
+    if (result.disposition === "unsafe") fail("owner", "$projection");
     return receipt(step.stepId, result.disposition, {
-      authorityDigest: result.inspection.authority.authorityDigest,
-      observationDigest: result.inspection.observationDigest,
-      files: result.inspection.targets.map((entry) => ({
+      authorityDigest: projection.authorityDigest,
+      observationDigest: result.observationDigest,
+      files: result.targets.map((entry) => ({
         resourcePath: entry.resourcePath,
         digest: entry.currentDigest,
       })),
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowActiveWorkspaceProjectionPublicationError) {
+    if (error instanceof WakeflowError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "projection-root-scope") fail("root-scope", "$root");
       fail("owner", "$projection");
     }
     throw error;

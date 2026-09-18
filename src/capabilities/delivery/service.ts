@@ -86,6 +86,7 @@ import {
   parseControllerImplementationReviewDecision,
 } from "../../governance/review/controller-implementation-review-decision.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   computeTaskPackageDigest,
   type TaskPackage,
@@ -1352,7 +1353,10 @@ export async function executePrepareDeliveryRequest(
       open: (workspaceRoot, envelope) => openContext(workspaceRoot, envelope, facade, options),
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-      execute: executePrepare,
+      execute: (context, input, binding) =>
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
+          executePrepare(context, input, binding),
+        ),
       next,
       result: prepareResult,
     },
@@ -1683,7 +1687,10 @@ export async function executeRecordDeliveryOutcomeRequest(
       open: (workspaceRoot, envelope) => openContext(workspaceRoot, envelope, facade, options),
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-      execute: executeOutcome,
+      execute: (context, input, binding) =>
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
+          executeOutcome(context, input, binding),
+        ),
       next,
       result: outcomeResult,
     },
@@ -1949,7 +1956,10 @@ export async function executeRearmDeliveryRequest(
       open: (workspaceRoot, envelope) => openContext(workspaceRoot, envelope, facade, options),
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-      execute: executeRearm,
+      execute: (context, input, binding) =>
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
+          executeRearm(context, input, binding),
+        ),
       next,
       result: rearmResult,
     },

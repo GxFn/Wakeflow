@@ -1,6 +1,6 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal, ok } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -13,7 +13,6 @@ import {
   WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/demand/contract.js";
 import {
   WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
@@ -29,10 +28,33 @@ import {
 import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
 import { computeDeliveryPromptDigest } from "../../src/governance/delivery/delivery-envelope.js";
-import { workClaimRef } from "../../src/kernel/layout.js";
+import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../src/governance/delivery/delivery-outcome.js";
+import { DELIVERY_REARM_LIMIT } from "../../src/governance/delivery/delivery-rearm.js";
+import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import {
+  TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
+  TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
+} from "../../src/governance/result/target-result-callback.js";
+import {
+  demandProjectionIndexRef,
+  demandProjectionProgressRef,
+  hostHookObservationsRootRef,
+  WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+  WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
+  WORK_CLAIMS_ROOT_REF,
+  workClaimRef,
+} from "../../src/kernel/layout.js";
+import {
+  MAXIMUM_WORK_CLAIM_GENERATION,
+  WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
+} from "../../src/kernel/work-claims.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
 import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
+import {
+  WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+  WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/observation/contract.js";
 import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "../../src/capabilities/pod/contract.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
@@ -73,10 +95,12 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 十六个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
+ * 十八个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
  * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 四种来源的受管证据 → 结果导入与评审检查 → 回调落地 →
  * 升级、用户回答与带 resumption 的接受 → 实现接受后规划测试合同、投递测试并由 Controller 审查接受 →
- * 完成即归档 → 续接与取消 → pod 创建、握手、一 pod 一 Demand、worktree 投递与结果、两段关闭。所有调用都
+ * 完成即归档 → 续接与取消 → pod 创建、握手、一 pod 一 Demand、worktree 投递与结果、两段关闭 →
+ * 状态与校验（再建一个 ready 的 worktree pod 与活动 Demand；status 全域、带 demandId 的路由与归档回执、
+ * 13 门与 hook 通道故障）→ 活动投影（Demand 变更后的四份文件、手写整轮零写、恢复后重建）。所有调用都
  * 经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内，宿主 hook 记录由场景代替宿主写入，
  * worktree 由场景用真实 git 造出。
  */
@@ -110,6 +134,8 @@ interface ScenarioContext {
   /** card-08 登记的支撑面目录树证据（kind document）：card-07 用它证明种类不一致被拒。 */
   documentEvidence?: ScenarioEvidence;
   callback?: CallbackPermit;
+  /** card-09 两条场景共用的观察对象：第二个 ready 的 worktree pod、其活动 Demand 与在飞投递。 */
+  observe?: ObservationScenarioState;
 }
 
 interface ScenarioEvidence {
@@ -620,7 +646,7 @@ async function scenarioCreateDemand(context: ScenarioContext): Promise<string> {
 }
 
 async function routeFrontiers(context: ScenarioContext) {
-  const routeCall = await call(context, WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME, {
+  const routeCall = await call(context, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, {
     root: context.workspace.workspacePath,
     demandId: context.demandId,
   });
@@ -761,19 +787,18 @@ async function scenarioPlanImplementationTask(context: ScenarioContext): Promise
 }
 
 interface RouteInspection {
-  readonly status: string;
-  readonly route?: {
+  readonly route: null | {
     readonly lifecycle: string;
     readonly disposition: string;
     readonly frontiers: readonly { readonly kind: string }[];
     readonly observedEventStream: { readonly streamRevision: number };
   };
-  readonly archive?: { readonly outcome: string; readonly archiveRef: string };
+  readonly archive: null | { readonly outcome: string; readonly archiveRef: string };
   readonly next: { readonly frontier: string | null; readonly suggestedTool: string | null };
 }
 
 async function inspectRoute(context: ScenarioContext): Promise<RouteInspection> {
-  const call_ = await call(context, WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME, {
+  const call_ = await call(context, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, {
     root: context.workspace.workspacePath,
     demandId: context.demandId,
   });
@@ -1878,7 +1903,7 @@ async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<str
   );
   equal(await boardPackageStatus(context), "archived");
   const archived = await inspectRoute(context);
-  equal(archived.status, "archived");
+  equal(archived.route, null);
   equal(archived.archive?.outcome, "completed");
   const recovered = await call(context, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, {
     root,
@@ -1929,7 +1954,7 @@ async function scenarioCompleteAndContinue(context: ScenarioContext): Promise<st
   equal(continued.package?.status, "claimed");
   equal(continued.next.frontier, "implementation-task-planning");
   const reopened = await inspectRoute(context);
-  equal(reopened.status, "current");
+  equal(reopened.archive, null);
   equal(reopened.route?.lifecycle, "active");
   equal(reopened.route?.disposition, "work-available");
 
@@ -2540,6 +2565,734 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
   return `create=${created.disposition}; replay=${replayed.disposition}; ready; pod-busy; plan-mismatch=rejected; prompt=worktree-relative; import=branch-required→${importResult.status}; close=${closing.disposition}→${closed.disposition}`;
 }
 
+// ---- card-09/status-and-verify 与 card-09/active-projection（能力卡 9，§13.94 D1、D3、D5） ----------
+
+/** 工作区级十三门，按名字排序（§13.94 D3）。 */
+const WORKSPACE_GATE_NAMES = Object.freeze([
+  "active-projection",
+  "append-candidates-clear",
+  "board-consistency",
+  "config-authority",
+  "demand-root-audit",
+  "evidence-integrity",
+  "host-hook-channel",
+  "host-settings-assets",
+  "ledger-layout",
+  "local-layout",
+  "pod-execution-location",
+  "window-identity",
+  "work-claims",
+]);
+
+/** 投影文件的标记（§13.94 D5）：工作区页带 active，Demand 页带 demand。 */
+const PROJECTION_MARKER_PATTERN =
+  /<!-- wakeflow:(active|demand)-projection:v1:(sha256:[0-9a-f]{64}) -->/u;
+
+interface StatusView {
+  readonly overall: string;
+  readonly config: { readonly windows: number };
+  readonly board: {
+    readonly counts: {
+      readonly pending: number;
+      readonly parked: number;
+      readonly claimed: number;
+      readonly withdrawn: number;
+      readonly archived: number;
+    };
+    readonly pending: readonly { readonly requirementId: string }[];
+  };
+  readonly demands: readonly {
+    readonly demandId: string;
+    readonly lifecycle: string | null;
+    readonly podId: string | null;
+  }[];
+  readonly windows: readonly {
+    readonly windowId: string;
+    readonly identity: string;
+    readonly bindingId: string | null;
+    readonly claim: {
+      readonly status: string;
+      readonly demandId: string | null;
+      readonly deliveryId: string | null;
+      readonly generation: number | null;
+    };
+  }[];
+  readonly claims: readonly {
+    readonly windowId: string;
+    readonly claimId: string;
+    readonly demandId: string;
+    readonly deliveryId: string;
+    readonly generation: number;
+    readonly orphan: boolean;
+  }[];
+  readonly pods: readonly {
+    readonly podId: string;
+    readonly placement: string;
+    readonly state: string;
+    readonly activeDemandId: string | null;
+    readonly worktrees: readonly {
+      readonly repositoryId: string;
+      readonly receipt: string;
+      readonly disposal: unknown;
+    }[];
+  }[];
+  readonly repositories: readonly {
+    readonly repositoryId: string;
+    readonly status: string;
+    readonly head: string | null;
+    readonly branch: string | null;
+    readonly detached: boolean;
+    readonly worktrees: readonly {
+      readonly name: string;
+      readonly branch: string | null;
+      readonly prunable: boolean;
+    }[];
+  }[];
+  readonly hooks: readonly {
+    readonly hostId: string;
+    readonly directory: string;
+    readonly skipped: number;
+  }[];
+  readonly unmergedAccepted: readonly unknown[];
+  readonly projection: {
+    readonly status: string;
+    readonly targets: readonly {
+      readonly resourcePath: string;
+      readonly status: string;
+      readonly reason: string | null;
+    }[];
+  };
+  readonly policy: Readonly<Record<string, number>>;
+  readonly route: null | {
+    readonly demandId: string;
+    readonly disposition: string;
+    readonly frontiers: readonly { readonly kind: string }[];
+  };
+  readonly archive: null | { readonly demandId: string; readonly outcome: string };
+  readonly next: { readonly frontier: string | null };
+  readonly nextActions: readonly { readonly reason: string; readonly subject: string | null }[];
+}
+
+interface VerifyGateView {
+  readonly name: string;
+  readonly status: string;
+  readonly code: string | null;
+}
+
+interface VerifyView {
+  readonly ok: boolean;
+  readonly summary: { readonly pass: number; readonly fail: number; readonly unavailable: number };
+  readonly gates: readonly VerifyGateView[];
+  readonly demand: null | {
+    readonly status: string;
+    readonly gates: readonly {
+      readonly gate: string;
+      readonly status: string;
+      readonly detail: string | null;
+    }[];
+  };
+  readonly repairsApplied: boolean;
+  readonly next: { readonly frontier: string | null; readonly blockers: readonly string[] };
+}
+
+interface ReadyPod {
+  readonly podId: string;
+  readonly name: string;
+  readonly branch: string;
+  readonly checkout: string;
+  readonly handles: readonly string[];
+  readonly windowOf: (role: string) => string;
+}
+
+interface ObservationScenarioState {
+  readonly pod: ReadyPod;
+  readonly demandId: string;
+  /** card-10 取消归档的 pod Demand：带它调用 status 得到归档回执。 */
+  readonly archivedDemandId: string;
+  readonly deliveryId: string;
+}
+
+async function readStatus(
+  context: ScenarioContext,
+  demandId?: string,
+): Promise<{ readonly view: StatusView; readonly json: string }> {
+  const result = await call(context, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    ...(demandId === undefined ? {} : { demandId }),
+  });
+  assertNoPrivatePath(context, result);
+  return {
+    view: result.structuredContent as StatusView,
+    json: JSON.stringify(result.structuredContent),
+  };
+}
+
+async function readVerify(context: ScenarioContext, demandId?: string): Promise<VerifyView> {
+  const result = await call(context, WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    ...(demandId === undefined ? {} : { demandId }),
+  });
+  assertNoPrivatePath(context, result);
+  return result.structuredContent as VerifyView;
+}
+
+function gateOf(view: VerifyView, name: string): VerifyGateView {
+  const gate = view.gates.find((entry) => entry.name === name);
+  if (gate === undefined) throw new Error(`verify lacks the ${name} gate`);
+  return gate;
+}
+
+function failingGatesText(view: VerifyView): string {
+  return view.gates
+    .filter((gate) => gate.status !== "pass")
+    .map((gate) => `${gate.name}:${gate.status}:${gate.code ?? ""}`)
+    .join(",");
+}
+
+function resourceAbsolutePath(context: ScenarioContext, ref: string): string {
+  return path.join(context.workspace.workspacePath, ...ref.split("/"));
+}
+
+/** 经公共工具建一个 worktree pod 并带到 ready：四个窗口握手，产品窗口在真实 worktree 里交回 git 事实。 */
+async function createReadyPod(
+  context: ScenarioContext,
+  spec: {
+    readonly name: string;
+    readonly idempotencyKey: string;
+    readonly checkoutName: string;
+    readonly branch: string;
+    readonly handlePrefix: string;
+  },
+): Promise<ReadyPod> {
+  const root = context.workspace.workspacePath;
+  const created = await podApply(context, {
+    kind: "create",
+    name: spec.name,
+    idempotencyKey: spec.idempotencyKey,
+  });
+  equal(created.disposition, "created");
+  if (created.pod === null) throw new Error("created pod missing");
+  const podId = created.pod.podId;
+  const windowOf = (role: string) => {
+    const window = created.windows.find((entry) => entry.role === role);
+    if (window === undefined) throw new Error(`pod window ${role} missing`);
+    return window.windowId;
+  };
+  const handleOf = (role: string) => `${spec.handlePrefix}-${role}`;
+  await registerPodWindow(context, windowOf("controller"), handleOf("controller"), root);
+  await registerPodWindow(
+    context,
+    windowOf("design"),
+    handleOf("design"),
+    path.join(root, "Design"),
+  );
+  await registerPodWindow(context, windowOf("test"), handleOf("test"), path.join(root, "Test"));
+  const checkout = path.join(context.workspace.fixtureRoot, spec.checkoutName);
+  gitInProduct(context, "worktree", "add", "--quiet", checkout, "-b", spec.branch);
+  await registerPodWindow(context, windowOf("product"), handleOf("product"), checkout, {
+    porcelain: gitInProduct(context, "-C", checkout, "worktree", "list", "--porcelain"),
+    commonDir: gitInProduct(context, "-C", checkout, "rev-parse", "--git-common-dir").trim(),
+  });
+  const recovered = await call(context, WAKEFLOW_POD_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "recover",
+    podId,
+  });
+  equal((recovered.structuredContent as PodMutation).pod?.state, "ready");
+  return {
+    podId,
+    name: spec.name,
+    branch: spec.branch,
+    checkout,
+    handles: ["controller", "design", "test", "product"].map(handleOf),
+    windowOf,
+  };
+}
+
+/** 在 pod 上认领一个新需求包、规划实现任务并准备投递：产品窗口由此持有一份工作声明。 */
+async function createObserveDemand(
+  context: ScenarioContext,
+  pod: ReadyPod,
+): Promise<{ readonly demandId: string; readonly deliveryId: string }> {
+  const root = context.workspace.workspacePath;
+  if (!context.repositoryId) throw new Error("scenario ordering: fresh-initialize must run first");
+  const requirement = await publishScenarioPackage(context, "Observation scenario requirement");
+  const preview = await previewDemandOn(context, requirement.requirementId, pod.podId);
+  equal(preview.status, "ready", preview.blockers.join(","));
+  const applied = await call(context, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    requirementId: requirement.requirementId,
+    podId: pod.podId,
+    demand: {
+      title: "Pod scenario demand",
+      goal: "Advance one requirement inside a worktree pod.",
+      completionDefinition: "The implementation result is imported from the pod's worktree.",
+    },
+    planDigest: preview.planDigest,
+  });
+  const demandId = (
+    applied.structuredContent as { readonly publication: { readonly demandId: string } }
+  ).publication.demandId;
+  context.demandId = demandId;
+  const planned = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, {
+    root,
+    demandId,
+    idempotencyKey: "scenario-observe-plan-1",
+    expectedStreamRevision: 1,
+    taskPackage: {
+      assignment: { repositoryId: context.repositoryId, windowId: pod.windowOf("product") },
+      workType: "implementation",
+      objective: "在观察场景的 pod worktree 里实现最小切片",
+      confirmedContext: ["Demand 权威已发布"],
+      selectedAuthorityMemberRefs: requirement.memberRefs,
+      boundaries: { inScope: ["最小切片"], outOfScope: ["合并回主线"], forbidden: ["动主检出"] },
+      completionExpectations: ["聚焦检查通过"],
+      commitExpectation: "leave-uncommitted",
+      acceptanceAnchors: [
+        {
+          anchorId: "observe-slice",
+          claim: "最小切片满足需求设计",
+          probe: "运行聚焦检查",
+          expected: "检查通过",
+          requirementRef: {
+            recordDigest: requirement.recordDigest,
+            sectionAnchor: "acceptance-criteria",
+            itemId: "ac-1",
+          },
+        },
+      ],
+      lineage: null,
+      sectionAnchors: ["goal"],
+    },
+  });
+  const targetTaskId = (
+    planned.structuredContent as { readonly targetTask: { readonly targetTaskId: string } }
+  ).targetTask.targetTaskId;
+  const prepared = await prepareDelivery(
+    context,
+    "scenario-observe-prepare-1",
+    await currentStreamRevision(context),
+    targetTaskId,
+  );
+  return { demandId, deliveryId: prepared.permit.deliveryId };
+}
+
+/** D1：overall、pod 段、窗口身份与声明、hook 通道、投影新鲜度、Demand 摘要与 next。 */
+function assertStatusWorkspace(
+  context: ScenarioContext,
+  view: StatusView,
+  state: ObservationScenarioState,
+): void {
+  const { pod, demandId, deliveryId } = state;
+  equal(view.overall, "active");
+  equal(view.route, null);
+  equal(view.archive, null);
+  // D1 顺序：活动 pod 的未登记窗口（primary 算活动）> 活动 Demand 前沿；不带 demandId 的 next 取头项。
+  deepEqual(view.nextActions[0], {
+    owner: "controller",
+    tool: "wakeflow_register_window_binding",
+    reason: "pod-window-registration",
+    subject: context.designWindowId,
+  });
+  equal(view.nextActions[1]?.reason, "implementation-host-effect-execution");
+  equal(view.nextActions[1]?.subject, demandId);
+  equal(view.next.frontier, "pod-window-registration");
+  equal(view.pods.length, 2);
+  const primary = view.pods.find((entry) => entry.placement === "primary");
+  const worktreePod = view.pods.find((entry) => entry.podId === pod.podId);
+  if (primary === undefined || worktreePod === undefined) throw new Error("status lacks a pod");
+  equal(primary.worktrees.length, 0, "primary pod runs in the main checkout");
+  equal(worktreePod.placement, "worktree");
+  equal(worktreePod.state, "ready");
+  equal(worktreePod.activeDemandId, demandId);
+  deepEqual(worktreePod.worktrees, [
+    { repositoryId: context.repositoryId, receipt: "present", disposal: null },
+  ]);
+  equal(view.windows.length, view.config.windows);
+  // primary 的 design 窗口从未握手：它是唯一的未登记窗口，其余七个都已登记。
+  deepEqual(
+    view.windows.filter((window) => window.identity === "unregistered").map((w) => w.windowId),
+    [context.designWindowId],
+  );
+  equal(view.windows.filter((window) => window.identity === "registered").length, 7);
+  const productWindow = view.windows.find((window) => window.windowId === pod.windowOf("product"));
+  equal(productWindow?.identity, "registered");
+  deepEqual(productWindow?.claim, { status: "held", demandId, deliveryId, generation: 1 });
+  equal(view.hooks.find((host) => host.hostId === "codex")?.directory, "private");
+  equal(
+    view.hooks.every((host) => host.skipped === 0),
+    true,
+    "hook channels are clean",
+  );
+  equal(view.projection.status, "current");
+  const demand = view.demands.find((entry) => entry.demandId === demandId);
+  equal(demand?.lifecycle, "active");
+  equal(demand?.podId, pod.podId);
+  equal(view.unmergedAccepted.length, 0);
+}
+
+/** D7：policy 段原样报告各自模块导出的常量；脱敏边界含每个绑定句柄。 */
+function assertStatusPolicyAndPrivacy(
+  context: ScenarioContext,
+  status: { readonly view: StatusView; readonly json: string },
+  state: ObservationScenarioState,
+): void {
+  deepEqual(status.view.policy, {
+    deliveryLandingSilenceMilliseconds: DELIVERY_LANDING_SILENCE_MILLISECONDS,
+    deliveryRearmLimit: DELIVERY_REARM_LIMIT,
+    workClaimGenerationLimit: MAXIMUM_WORK_CLAIM_GENERATION,
+    workClaimRecoveryWindowMilliseconds: WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
+    targetResultCallbackSilenceMilliseconds: TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
+    targetResultCallbackGenerationLimit: TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
+    demandReworkEscalationThreshold: DEMAND_REWORK_ESCALATION_THRESHOLD,
+  });
+  const handles = [
+    ...state.pod.handles,
+    context.productHandle,
+    context.testHandle,
+    context.controllerHandle,
+  ];
+  for (const handle of handles) {
+    if (handle !== undefined) equal(status.json.includes(handle), false, "status leaked a handle");
+  }
+  equal(status.json.includes(state.pod.checkout), false, "status leaked the worktree path");
+}
+
+/** 看板计数与待认领列表和 `wakeflow_inspect_board` 的 list 视图一致。 */
+async function assertStatusBoard(context: ScenarioContext, view: StatusView): Promise<void> {
+  const listed = await call(context, WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    view: "list",
+  });
+  const board = listed.structuredContent as {
+    readonly counts: StatusView["board"]["counts"];
+    readonly packages: readonly { readonly requirementId: string; readonly status: string }[];
+  };
+  deepEqual(view.board.counts, board.counts);
+  deepEqual(
+    view.board.pending.map((entry) => entry.requirementId).sort(),
+    board.packages
+      .filter((entry) => entry.status === "pending")
+      .map((entry) => entry.requirementId)
+      .sort(),
+  );
+  equal(view.board.counts.claimed >= 1 && view.board.counts.pending >= 1, true, "board has both");
+}
+
+/** claims[] 与 window-work-claims 目录下的声明文件逐项一致；唯一的声明由 pod 产品窗口持有。 */
+function assertStatusClaims(
+  context: ScenarioContext,
+  view: StatusView,
+  state: ObservationScenarioState,
+): void {
+  const directory = resourceAbsolutePath(context, WORK_CLAIMS_ROOT_REF);
+  const fromFiles = readdirSync(directory)
+    .filter((name) => name.endsWith(".json"))
+    .sort()
+    .map((name) => {
+      const claim = JSON.parse(readFileSync(path.join(directory, name), "utf8")) as {
+        readonly windowId: string;
+        readonly claimId: string;
+        readonly holder: {
+          readonly demandId: string;
+          readonly deliveryId: string;
+          readonly generation: number;
+        };
+      };
+      return `${claim.windowId}|${claim.claimId}|${claim.holder.demandId}|${claim.holder.deliveryId}|${claim.holder.generation}`;
+    });
+  const fromStatus = view.claims
+    .map((c) => `${c.windowId}|${c.claimId}|${c.demandId}|${c.deliveryId}|${c.generation}`)
+    .sort();
+  deepEqual(fromStatus, fromFiles, "claims[] must mirror the claim files");
+  equal(view.claims.length, 1);
+  equal(view.claims[0]?.windowId, state.pod.windowOf("product"));
+  equal(view.claims[0]?.demandId, state.demandId);
+  equal(view.claims[0]?.orphan, false);
+  equal(
+    existsSync(resourceAbsolutePath(context, workClaimRef(state.pod.windowOf("product")))),
+    true,
+  );
+}
+
+/** D2：仓库事实来自指针文件：HEAD、当前分支、登记的 worktree 与 prunable。 */
+function assertStatusRepositories(context: ScenarioContext, view: StatusView, pod: ReadyPod): void {
+  equal(view.repositories.length, 1);
+  const repository = view.repositories[0];
+  if (repository === undefined) throw new Error("status lacks the product repository");
+  equal(repository.repositoryId, context.repositoryId);
+  equal(repository.status, "observed");
+  equal(repository.head, gitInProduct(context, "rev-parse", "HEAD").trim());
+  equal(repository.branch, gitInProduct(context, "rev-parse", "--abbrev-ref", "HEAD").trim());
+  equal(repository.detached, false);
+  deepEqual(repository.worktrees, [
+    { name: path.basename(pod.checkout), branch: pod.branch, prunable: false },
+  ]);
+}
+
+/** 带 demandId：活动 Demand 附 Route，其首个前沿就是 nextActions 为它列出的前沿；归档 Demand 附归档回执。 */
+async function assertStatusRoutes(
+  context: ScenarioContext,
+  view: StatusView,
+  state: ObservationScenarioState,
+): Promise<string> {
+  const active = (await readStatus(context, state.demandId)).view;
+  if (active.route === null) throw new Error("active Demand has no route");
+  equal(active.route.demandId, state.demandId);
+  equal(active.route.disposition, "work-available");
+  equal(active.archive, null);
+  const frontier = active.route.frontiers[0]?.kind ?? null;
+  equal(frontier, "implementation-host-effect-execution");
+  equal(active.next.frontier, frontier);
+  const action = view.nextActions.find((entry) => entry.subject === state.demandId);
+  equal(action?.reason, frontier, "nextActions must list the Demand's first frontier");
+  const archived = (await readStatus(context, state.archivedDemandId)).view;
+  equal(archived.route, null);
+  equal(archived.archive?.demandId, state.archivedDemandId);
+  equal(archived.archive?.outcome, "cancelled");
+  equal(archived.next.frontier, null);
+  return `route=${frontier}; archive=${archived.archive?.outcome}`;
+}
+
+/** D3：13 门全 pass；hook 观察目录里的非法文件名只让 host-hook-channel fail，删除即恢复。 */
+async function assertVerifyGates(
+  context: ScenarioContext,
+  state: ObservationScenarioState,
+): Promise<string> {
+  const clean = await readVerify(context);
+  deepEqual(
+    clean.gates.map((gate) => gate.name),
+    WORKSPACE_GATE_NAMES,
+  );
+  equal(clean.ok, true, failingGatesText(clean));
+  deepEqual(clean.summary, { pass: 13, fail: 0, unavailable: 0 });
+  equal(clean.repairsApplied, false);
+  equal(clean.demand, null);
+  equal(clean.next.frontier, null);
+  equal(gateOf(clean, "host-settings-assets").code, "not-applicable", "Codex has no statusline");
+  equal(gateOf(clean, "window-identity").code, "unregistered:1", "unregistered is not damage");
+  // 带 demandId：demand.gates 原样复用 demand 切片的门（D3，不改名）。它们是完成预检的语义，
+  // 所以在飞投递让 work-claims-released 报出持有声明的窗口；这不影响工作区级的 ok。
+  const withDemand = await readVerify(context, state.demandId);
+  equal(withDemand.demand?.status, "current");
+  const demandGates = withDemand.demand?.gates ?? [];
+  deepEqual(
+    demandGates.filter((gate) => gate.status !== "pass"),
+    [{ gate: "work-claims-released", status: "fail", detail: state.pod.windowOf("product") }],
+    JSON.stringify(demandGates),
+  );
+  equal(withDemand.ok, true, "the Demand gates do not fold into the workspace ok");
+
+  const stray = path.join(
+    resourceAbsolutePath(context, hostHookObservationsRootRef("codex")),
+    "not-a-hook-record.json",
+  );
+  writeFileSync(stray, "{}\n", { mode: 0o600 });
+  const broken = await readVerify(context);
+  const hookGate = gateOf(broken, "host-hook-channel");
+  equal(hookGate.status, "fail");
+  equal(hookGate.code, "codex:skipped-1");
+  equal(broken.ok, false);
+  // §13.94：只有 hook 通道一门失败。投影指纹有意忽略本地运行时（D5），所以 active-projection 仍 pass。
+  deepEqual(
+    broken.gates.filter((gate) => gate.status !== "pass").map((gate) => [gate.name, gate.code]),
+    [["host-hook-channel", "codex:skipped-1"]],
+  );
+  deepEqual(broken.summary, { pass: 12, fail: 1, unavailable: 0 });
+  equal(broken.next.frontier, "workspace-maintenance");
+  deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
+  equal((await readStatus(context)).view.overall, "degraded", "skipped hook records degrade");
+  rmSync(stray);
+  const restored = await readVerify(context);
+  equal(restored.ok, true, failingGatesText(restored));
+  deepEqual(restored.summary, { pass: 13, fail: 0, unavailable: 0 });
+  return `verify=13/0/0; demand gates=work-claims-released fail only; hook-file→host-hook-channel=fail(${hookGate.code}) summary=12/1/0 overall=degraded; removed→13/0/0`;
+}
+
+async function scenarioStatusAndVerify(context: ScenarioContext): Promise<string> {
+  if (!context.demandId || !context.designWindowId) {
+    throw new Error("scenario ordering: pod-lifecycle must run first");
+  }
+  // card-10 结束时 feature-pod 已关闭、其 Demand 已取消归档（context.demandId）：这里按同一条公共工具路径
+  // 再建一个 ready 的 worktree pod，在其上认领、规划并准备投递，得到"两个 pod、活动 Demand、worktree 回执"。
+  const archivedDemandId = context.demandId;
+  const pod = await createReadyPod(context, {
+    name: "observe-pod",
+    idempotencyKey: "scenario-pod-observe",
+    checkoutName: "wt-observe-pod",
+    branch: "wakeflow-observe-pod",
+    handlePrefix: "codex-host-owned-thread:observe",
+  });
+  const demand = await createObserveDemand(context, pod);
+  const state: ObservationScenarioState = {
+    pod,
+    demandId: demand.demandId,
+    archivedDemandId,
+    deliveryId: demand.deliveryId,
+  };
+  context.observe = state;
+  const status = await readStatus(context);
+  assertStatusWorkspace(context, status.view, state);
+  assertStatusPolicyAndPrivacy(context, status, state);
+  await assertStatusBoard(context, status.view);
+  assertStatusClaims(context, status.view, state);
+  assertStatusRepositories(context, status.view, pod);
+  const routes = await assertStatusRoutes(context, status.view, state);
+  const verify = await assertVerifyGates(context, state);
+  return `overall=${status.view.overall}; pods=2 (${pod.name} ready/present); windows=7 registered+1 unregistered; claims=1=files; repository=head+worktree; policy=constants; ${routes}; ${verify}`;
+}
+
+interface ProjectionTarget {
+  readonly ref: string;
+  readonly kind: "active" | "demand";
+  readonly path: string;
+}
+
+function projectionTargetsOf(
+  context: ScenarioContext,
+  demandId: string,
+): readonly ProjectionTarget[] {
+  const refs: readonly { readonly ref: string; readonly kind: ProjectionTarget["kind"] }[] = [
+    { ref: WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, kind: "active" },
+    { ref: WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF, kind: "active" },
+    { ref: demandProjectionIndexRef(demandId), kind: "demand" },
+    { ref: demandProjectionProgressRef(demandId), kind: "demand" },
+  ];
+  return refs.map((target) => ({ ...target, path: resourceAbsolutePath(context, target.ref) }));
+}
+
+function projectionMarkerOf(
+  text: string,
+): { readonly kind: string; readonly fingerprint: string } | null {
+  const match = PROJECTION_MARKER_PATTERN.exec(text);
+  return match === null ? null : { kind: match[1] ?? "", fingerprint: match[2] ?? "" };
+}
+
+/** 每份目标都在、都带标记且种类正确；返回各自的指纹。 */
+function readProjectionFingerprints(targets: readonly ProjectionTarget[]): readonly string[] {
+  return targets.map((target) => {
+    equal(existsSync(target.path), true, `${target.ref} missing`);
+    const marker = projectionMarkerOf(readFileSync(target.path, "utf8"));
+    if (marker === null) throw new Error(`${target.ref} lacks the projection marker`);
+    equal(marker.kind, target.kind, target.ref);
+    return marker.fingerprint;
+  });
+}
+
+/** workspace-current-status.md 的 pod 段：配置里的两个 pod 各一行，worktree pod 带活动 Demand 与回执。 */
+function assertPodSection(context: ScenarioContext, state: ObservationScenarioState): void {
+  const config = parseWakeflowConfigV3(
+    JSON.parse(
+      readFileSync(path.join(context.workspace.workspacePath, "wakeflow.config.json"), "utf8"),
+    ),
+  );
+  equal(config.pods.length, 2);
+  const text = readFileSync(
+    resourceAbsolutePath(context, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF),
+    "utf8",
+  );
+  // D5 的 pod 段：每个 pod 一行，行里有名字、标识、位置与生命周期；worktree pod 的行还带活动 Demand 与回执。
+  const rows = text.split("\n").filter((line) => line.startsWith("| "));
+  for (const pod of config.pods) {
+    const row = rows.find((line) => line.includes(`\`${pod.podId}\``));
+    ok(row !== undefined, `pod row missing: ${pod.podId}`);
+    for (const cell of [pod.name, pod.placement, pod.lifecycle]) {
+      ok(row.includes(cell), `${pod.podId} row lacks ${cell}`);
+    }
+  }
+  const worktreeRow = rows.find((line) => line.includes(`\`${state.pod.podId}\``)) ?? "";
+  ok(worktreeRow.includes(`\`${state.demandId}\``), "worktree pod row lacks its active Demand");
+  ok(worktreeRow.includes(": present"), "worktree pod row lacks the receipt");
+}
+
+/** 一次 Demand 变更：在 pod worktree 里登记一份受管证据（evidence 事件触发投影刷新）。 */
+async function recordObserveEvidence(
+  context: ScenarioContext,
+  pod: ReadyPod,
+  fileName: string,
+  content: string,
+): Promise<void> {
+  if (!context.repositoryId) throw new Error("scenario ordering: fresh-initialize must run first");
+  const directory = path.join(pod.checkout, "artifacts", "observe");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(path.join(directory, fileName), content);
+  const recording = await recordEvidenceSelection(context, {
+    kind: "test-output",
+    source: {
+      kind: "managed-path",
+      root: { kind: "pod-worktree", podId: pod.podId, repositoryId: context.repositoryId },
+      path: `artifacts/observe/${fileName}`,
+      resourceType: "file",
+    },
+    contentReview: "reject",
+  });
+  equal(recording.disposition, "recorded");
+}
+
+async function scenarioActiveProjection(context: ScenarioContext): Promise<string> {
+  const state = context.observe;
+  if (state === undefined) throw new Error("scenario ordering: status-and-verify must run first");
+  const targets = projectionTargetsOf(context, state.demandId);
+  const progress = targets[3];
+  if (progress === undefined) throw new Error("projection targets incomplete");
+
+  // 变更后：四份文件在、标记种类正确，工作区两页共用一个指纹、Demand 两页共用一个指纹，status 报 current。
+  await recordObserveEvidence(context, state.pod, "round-1.txt", "observation round one\n");
+  const fingerprints = readProjectionFingerprints(targets);
+  equal(fingerprints[0], fingerprints[1], "workspace pages share the active fingerprint");
+  equal(fingerprints[2], fingerprints[3], "demand pages share the demand fingerprint");
+  const fresh = (await readStatus(context)).view;
+  equal(fresh.projection.status, "current");
+  deepEqual(
+    fresh.projection.targets.map((target) => target.resourcePath).sort(),
+    targets.map((target) => target.ref).sort(),
+  );
+  equal(
+    fresh.projection.targets.every((target) => target.status === "current"),
+    true,
+  );
+  assertPodSection(context, state);
+
+  // 手写（去掉进度页的标记）后再变更：整轮零写（D5），status 报 unsafe/handwritten；verify 的门 pass 且
+  // code 以 handwritten 开头，同轮被挡下的三份兄弟只在 code 里报出（D3）。
+  const original = readFileSync(progress.path);
+  writeFileSync(progress.path, original.toString("utf8").replace(PROJECTION_MARKER_PATTERN, ""));
+  equal(projectionMarkerOf(readFileSync(progress.path, "utf8")), null);
+  const before = new Map(targets.map((target) => [target.ref, readFileSync(target.path)] as const));
+  await recordObserveEvidence(context, state.pod, "round-2.txt", "observation round two\n");
+  for (const target of targets) {
+    equal(before.get(target.ref)?.equals(readFileSync(target.path)), true, `${target.ref} written`);
+  }
+  const unsafe = (await readStatus(context)).view;
+  equal(unsafe.projection.status, "unsafe");
+  deepEqual(
+    unsafe.projection.targets.find((target) => target.resourcePath === progress.ref),
+    { resourcePath: progress.ref, status: "unsafe", reason: "handwritten" },
+  );
+  equal(unsafe.projection.targets.filter((target) => target.status === "stale").length, 3);
+  const unsafeVerify = await readVerify(context);
+  const projectionGate = gateOf(unsafeVerify, "active-projection");
+  equal(projectionGate.status, "pass");
+  equal(projectionGate.code, "handwritten,blocked:3");
+  equal(unsafeVerify.ok, true, failingGatesText(unsafeVerify));
+
+  // 恢复标记后再变更：重建为 current，四份文件都换了字节。
+  writeFileSync(progress.path, original);
+  await recordObserveEvidence(context, state.pod, "round-3.txt", "observation round three\n");
+  const rebuilt = (await readStatus(context)).view;
+  equal(rebuilt.projection.status, "current");
+  readProjectionFingerprints(targets);
+  for (const target of targets) {
+    equal(before.get(target.ref)?.equals(readFileSync(target.path)), false, `${target.ref} stale`);
+  }
+  const currentVerify = await readVerify(context);
+  equal(gateOf(currentVerify, "active-projection").code, null);
+  equal(currentVerify.ok, true, failingGatesText(currentVerify));
+  assertPodSection(context, state);
+  return `evidence→4 files current; handwritten→zero-write, status=unsafe/handwritten, gate=pass(${projectionGate.code}); restored→current; pod section=2 pods`;
+}
+
 const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Promise<string>>> =
   Object.freeze({
     "card-01/fresh-initialize": scenarioFreshInitialize,
@@ -2558,9 +3311,11 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-08/complete-and-archive": scenarioCompleteAndArchive,
     "card-04/complete-and-continue": scenarioCompleteAndContinue,
     "card-10/pod-lifecycle": scenarioPodLifecycle,
+    "card-09/status-and-verify": scenarioStatusAndVerify,
+    "card-09/active-projection": scenarioActiveProjection,
   });
 
-test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、投递、结果导入与评审、回调、升级续审、测试合同、完成即归档、续接与取消、pod 生命周期并报告结论", async () => {
+test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、投递、结果导入与评审、回调、升级续审、测试合同、完成即归档、续接与取消、pod 生命周期、状态与校验、活动投影并报告结论", async () => {
   const workspace = createScenarioWorkspace();
   const connection = await connectWakeflowMcpServerForTest(
     createCodexWakeflowMcpServer("1.0.0-scenario"),

@@ -124,6 +124,18 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     title:
       "pod 创建 preview 零写、apply 一次配置事务、同键重放与重名被拒；pod 窗口握手（产品窗口带 worktree 回执）后 ready；一 pod 一 Demand；任务只派本 pod 窗口，prompt 带 pod 名与相对 worktree 路径；无分支的结果被拒；关闭两段：归档与分支处置后 closing，退役与检出处置后 closed",
   },
+  {
+    scenarioId: "card-09/status-and-verify",
+    card: "09-observation-and-verification",
+    title:
+      "status 一次观察多域：overall、两个 pod 的执行位置与回执、看板计数与 inspect_board 一致、已登记与未登记窗口、声明与声明文件一致、仓库 HEAD 与登记的 worktree、生效阈值等于导出常量、带 demandId 的路由与归档回执，结果不含句柄与路径；verify 13 门全 pass，hook 观察目录出现非法文件名即 host-hook-channel fail 且 ok false，删除后恢复",
+  },
+  {
+    scenarioId: "card-09/active-projection",
+    card: "09-observation-and-verification",
+    title:
+      "Demand 变更后四份投影文件存在且标记有效、status 报 current；去掉一份标记（手写）再变更即整轮零写、status 报 unsafe/handwritten、verify 的 active-projection 门 pass 且 code handwritten；恢复标记后重建为 current；workspace-current-status.md 含两个 pod 的 pod 段",
+  },
 ]);
 
 export interface ScenarioWorkspace {

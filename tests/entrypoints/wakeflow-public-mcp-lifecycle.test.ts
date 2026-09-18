@@ -6,10 +6,8 @@ import { test } from "node:test";
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
-import {
-  WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/demand/contract.js";
+import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/capabilities/demand/contract.js";
+import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../../src/capabilities/observation/contract.js";
 import {
   WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
   WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
@@ -78,7 +76,7 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
   const { client, close } = await connectWakeflowMcpServerForTest(server);
   try {
     const before = await client.callTool({
-      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
       arguments: { root: fixture.workspacePath, demandId: fixture.demandId },
     });
     equal(before.isError, undefined);
@@ -134,7 +132,7 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
     equal(existsSync(claimPath), true);
 
     const after = await client.callTool({
-      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
       arguments: { root: fixture.workspacePath, demandId: fixture.demandId },
     });
     equal(after.isError, undefined);
@@ -204,7 +202,7 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
     equal(textContent(outcomeCall).includes(fixture.route.rawHandle), false);
 
     const afterOutcome = await client.callTool({
-      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
       arguments: { root: fixture.workspacePath, demandId: fixture.demandId },
     });
     equal(afterOutcome.isError, undefined);
@@ -291,7 +289,7 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
     equal(textContent(importedCall).includes(fixture.route.rawHandle), false);
 
     const afterResult = await client.callTool({
-      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
       arguments: { root: fixture.workspacePath, demandId: fixture.demandId },
     });
     equal(afterResult.isError, undefined);
@@ -401,7 +399,7 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
     equal(textContent(decisionCall).includes(fixture.route.rawHandle), false);
 
     const afterDecision = await client.callTool({
-      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         demandId: fixture.demandId,
@@ -492,18 +490,19 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
     );
 
     const terminalRouteCall = await client.callTool({
-      name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+      name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
       arguments: {
         root: fixture.workspacePath,
         demandId: fixture.demandId,
       },
     });
     equal(terminalRouteCall.isError, undefined, textContent(terminalRouteCall));
+    // 已归档的 Demand：status 不再有路由，只附归档回执（§13.94 D1、D10）。
     const terminalRoute = terminalRouteCall.structuredContent as {
-      readonly status: string;
+      readonly route: unknown;
       readonly archive: { readonly outcome: string; readonly archiveRef: string };
     };
-    equal(terminalRoute.status, "archived");
+    equal(terminalRoute.route, null);
     equal(terminalRoute.archive.outcome, "completed");
     equal(terminalRoute.archive.archiveRef, completion.archive.archiveRef);
 

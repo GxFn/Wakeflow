@@ -12,6 +12,9 @@
     "claude-code-portable-settings-operation-executor.ts",
     "claude-code-portable-settings-publication.ts",
     "claude-code-portable-settings-transition.ts",
+    "claude-code-statusline-asset-operation.ts",
+    "claude-code-statusline-asset.ts",
+    "claude-code-statusline-settings-operation.ts",
     "claude-code-window-host-identity-profile.ts",
     "wakeflow-workspace-host-resource-profile.ts"
   ],

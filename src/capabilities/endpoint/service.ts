@@ -39,7 +39,12 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
-import { inspectWorkClaim, releaseWorkClaim, type WorkClaim } from "../../kernel/work-claims.js";
+import {
+  inspectWorkClaim,
+  releaseWorkClaim,
+  type WorkClaim,
+  WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
+} from "../../kernel/work-claims.js";
 import { runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
@@ -155,7 +160,7 @@ export interface ExecuteWindowBindingOptions {
 }
 
 /** 工作声明的恢复门阈值：固定两小时，只作强制释放的门槛，不自动清理（能力卡 2 Q5）。 */
-export const WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS = 2 * 60 * 60 * 1000;
+export { WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS };
 
 const BINDING_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$binding.maximumBytes");
 const BINDING_FILE_MODE = 0o600;

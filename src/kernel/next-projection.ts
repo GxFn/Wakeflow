@@ -99,7 +99,11 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
     owner: "controller",
     tool: "wakeflow_complete_demand",
   },
-  "research-completion-required": { owner: "user", tool: null },
+  // research Demand 的完成物是 document 类受管证据；有了证据就由 Controller 完成（§13.94 D8）。
+  "research-completion-required": {
+    owner: "controller",
+    tool: "wakeflow_complete_demand",
+  },
   "decision-required": { owner: "user", tool: "wakeflow_continue_demand" },
   "demand-continuation": {
     owner: "controller",

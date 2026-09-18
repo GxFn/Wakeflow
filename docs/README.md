@@ -41,23 +41,23 @@ docs/
 
 | 文档 | 职责 | 状态 |
 | --- | --- | --- |
-| [plan/typescript-reimplementation-plan.md](./plan/typescript-reimplementation-plan.md) | TypeScript 能力重构的阶段、约束 TSD-01 到 TSD-16、执行顺序 P0 与 L0 到 L3、完成定义 | E0 完成，E1/E2 进行中；P0 完成，ADR-0013 定了目标架构与切片顺序，进入 L0 基础做实 |
-| [decisions/README.md](./decisions/README.md) | 决策索引 | ADR-0001 到 ADR-0013 已接受；ADR-0003 于 09-03 修订；ADR-0009 两处调整、ADR-0010 的 pod 模型、ADR-0011 需求包均于 09-04 确认 |
+| [plan/typescript-reimplementation-plan.md](./plan/typescript-reimplementation-plan.md) | TypeScript 能力重构的阶段、约束 TSD-01 到 TSD-16、执行顺序 P0 与 L0 到 L3、完成定义 | E0 完成，E1/E2 进行中；L0 与 L1 十片已闭合（2026-09-18，gate-log §13.96），进入 L2 业务场景与联合 |
+| [decisions/README.md](./decisions/README.md) | 决策索引 | ADR-0001 到 ADR-0013 已接受；ADR-0003 于 09-03 修订；ADR-0009 两处调整、ADR-0010 的 pod 模型、ADR-0011 需求包均于 09-04 确认；ADR-0010 未决三项于 09-18 关闭 |
 | [requirements/capabilities/](./requirements/capabilities/) | 能力卡，按能力组逐项确认的场景、不变量、宿主差异与实现判断 | 第 1 到 10 组全部已确认（2026-09-04） |
 | [requirements/wakeflow-functions-and-scenarios.md](./requirements/wakeflow-functions-and-scenarios.md) | 自顶向下的功能与场景总览：定位、核心对象、主流程直线、F1 到 F11 功能清单、宿主差异、明确不做 | draft，待用户确认理解一致 |
 | [requirements/typescript-dual-artifact-build.md](./requirements/typescript-dual-artifact-build.md) | 单一源码、双宿主制品、轻量测试需求 | 已确认 |
 | [requirements/README.md](./requirements/README.md) | 需求锚点索引，含归档中仍被引用的 D1 到 D41 与 Pod 需求 | active |
 | [standards/resource-handling-standard.md](./standards/resource-handling-standard.md) | 资源处理归一标准与收敛矩阵 | 已确认，RH-1 到 RH-3 已实现 |
 | [standards/documentation-standard.md](./standards/documentation-standard.md) | 文档编写标准 | active |
-| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.64 |
+| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.96 |
 | [progress/file-review-ledger.md](./progress/file-review-ledger.md) | 逐文件审阅台账 | active |
 | [reviews/2026-09-03-typescript-checkpoint-review.md](./reviews/2026-09-03-typescript-checkpoint-review.md) | 关键节点架构与实现评估、缺口分析、建设计划建议 | 评估建议，待讨论 |
 | [reviews/2026-09-04-flow-optimization-analysis.md](./reviews/2026-09-04-flow-optimization-analysis.md) | 回传、调用形状、完成留痕、测试记录对比、重设计边界的旧代码事实、业界对照与设计建议 | 评估建议，已由 ADR-0012 接受 |
 | [reviews/2026-09-04-architecture-and-slice-design.md](./reviews/2026-09-04-architecture-and-slice-design.md) | 目标架构六层与端口、切片解剖、L0 基础能力收敛与新建、L1 十个切片、测试策略 | 评估建议，已由 ADR-0013 接受 |
 | [reviews/2026-09-11-l1-source-walkthrough-findings.md](./reviews/2026-09-11-l1-source-walkthrough-findings.md) | L1 九个切片落地后的逐文件走读：四类同族问题、正确性缺口、纪律一致性、测试缺口、文档漂移与排序建议 | §8.1 档已落地（gate-log 13.93），§8.2 / §8.3 待裁决 |
 | [references/legacy-js-scenario-closure-audit.md](./references/legacy-js-scenario-closure-audit.md) | 旧 JavaScript 产品全场景闭包审查 | 只读审计，E3 对比证据 |
-| [references/capability-map.md](./references/capability-map.md) | 能力映射矩阵：31 项旧工具、内部能力、宿主差异、D1 到 D41 与 I3 逐行判定 | active，重切 16、缺席 11、放弃 4 |
-| [references/scenario-acceptance.md](./references/scenario-acceptance.md) | 场景验收清单与骨架运行入口 `npm run scenario:acceptance` | active，3 个场景 pass |
+| [references/capability-map.md](./references/capability-map.md) | 能力映射矩阵：31 项旧工具、内部能力、宿主差异、D1 到 D41 与 I3 逐行判定 | active，重切或已落地 27、缺席 0、放弃 4（2026-09-18） |
+| [references/scenario-acceptance.md](./references/scenario-acceptance.md) | 场景验收清单与骨架运行入口 `npm run scenario:acceptance` | active，18 个场景 pass |
 | [archive/README.md](./archive/README.md) | 归档索引 | 16 份历史文档 |
 
 ## 4. 状态词汇

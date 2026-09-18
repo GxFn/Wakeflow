@@ -42,6 +42,7 @@ import {
   ManagedEvidencePublicationTransactionError,
 } from "../../governance/evidence/managed-evidence-publication-transaction.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail } from "../../kernel/error.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -497,7 +498,10 @@ export async function executeRecordEvidenceRequest(
       open: (root) => openContext(root, options),
       close: async () => {},
       plan: planEvidence,
-      apply: applyEvidence,
+      apply: (context, input, plan) =>
+        afterMutationRefresh(context.root, context.options.signal, () =>
+          applyEvidence(context, input, plan),
+        ),
       recover: recoverEvidence,
       next: async (context, phase) =>
         phase.mode === "preview"

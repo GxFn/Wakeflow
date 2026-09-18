@@ -10,9 +10,9 @@
 
 | # | 旧工具 | 能力组 | 新工具或内部 owner | 判定 | 落地层与备注 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `wakeflow_status` | 9 | `wakeflow_status`（带 demandId 即附路由） | 缺席 | L1；域集合按能力卡 9：增加 pod 段、待认领摘要、已接受未合并列表，删除 hostOperations（ADR-0012 D2） |
+| 1 | `wakeflow_status` | 9 | `wakeflow_status`（带 demandId 即附路由或归档回执） | 重切 | 2026-09-18 L1 observation 切片 10（gate-log §13.94、§13.96）：治理层一次观察多域，每域独立隔离失败；pod 段、待认领摘要、已接受未合并列表、`policy` 生效值、去重排序上限 64 的 `nextActions`；`wakeflow_inspect_demand_route` 并入；hostOperations 删除（ADR-0012 D2）；场景 `card-09/status-and-verify` |
 | 2 | `wakeflow_maintain_workspace` | 1 | `wakeflow_maintain_workspace` | 重切 | 已实现 fresh、reconfigure、reconcile 三动作；config 增加 `pods[]` 与窗口 `podId`（2026-09-10 pod 切片 9，fresh 生成 `main`，reconfigure 拒改 `pods`）；TSD-16 从 v1 起版未做 |
-| 3 | `wakeflow_replace_windows` | 2 | 窗口替换并入 `wakeflow_register_window_binding` 的替换操作 | 缺席 | L1；替换是新握手加旧声明退役，见 ADR-0009 |
+| 3 | `wakeflow_replace_windows` | 2 | 窗口替换并入 `wakeflow_register_window_binding` 的替换操作 | 重切 | 已实现：`replace` 以旧绑定摘要 CAS 换代并退役旧声明（L1 endpoint 切片 2，ADR-0009）；场景 `card-02/window-replace`（本行判定于 2026-09-18 补记） |
 | 4 | `wakeflow_register_window` | 2 | `wakeflow_register_window_binding` | 重切 | 已实现；窗口在配置里带 `podId`，worktree pod 的产品窗口握手带 worktree 回执（2026-09-10 pod 切片 9，gate-log §13.92） |
 | 5 | `wakeflow_create_demand` | 4 | `wakeflow_create_demand` | 重切 | 已实现（demand 切片，确定性计划）；身份记 `podId`（缺省 primary），同 pod 已有活动 Demand 时 `pod-busy`（2026-09-10 pod 切片 9） |
 | 6 | `wakeflow_add_task` | 5 | `wakeflow_plan_target_task` | 重切 | 已实现（tasking 切片）：追加型一次调用；锚点 `requirementRef` 指向需求包验收标准；谱系 `replacement`（旧目标 `superseded`）与 `continuation`；`taskPlanReview: user` 须回显 `planReview`；可选 `sectionAnchors`；字段集按能力卡 5 Q1 保持 |
@@ -40,9 +40,9 @@
 | 28 | `wakeflow_pod_bind` | 2 | `wakeflow_register_window_binding` | 已落地 | pod 窗口就是配置里带 `podId` 的窗口，握手同一工具；`next` 只列同 pod 未登记窗口 |
 | 29 | `wakeflow_pod_plan` | 2、4 | `wakeflow_pod` | 已落地 | create preview 给出窗口集与 worktree 意图，`inspect` 给出宿主执行说明与 Test 附加目录；design-request 与 test-access 放弃 |
 | 30 | `wakeflow_prune_runtime` | 8 | 并入 pod 关闭 | 已落地 | close 第二段要求检出已由 Agent 处置，Wakeflow 只删自己的回执目录；对账只报告（观察切片） |
-| 31 | `wakeflow_verify` | 9 | `wakeflow_verify` | 缺席 | L1；门集合按能力卡 9 重排，增加 host-hook-channel 与 pod-execution-location |
+| 31 | `wakeflow_verify` | 9 | `wakeflow_verify` | 重切 | 2026-09-18 L1 observation 切片 10：工作区 13 门按名字排序（含 host-hook-channel、pod-execution-location、host-settings-assets、active-projection），`ok` 要求全部 pass，`unavailable` 与 `fail` 分开计数；带 demandId 复用 demand 切片的门；场景 `card-09/status-and-verify` |
 
-统计：重切 15，缺席 12，放弃 4。缺席项全部落在 L1 切片；放弃项各有 ADR 或能力卡确认记录。
+统计（2026-09-18，L1 十片闭合）：重切或已落地 27，缺席 0，放弃 4。放弃项各有 ADR 或能力卡确认记录。
 
 ## 1.1 新公共工具清单（ADR-0013）
 
@@ -73,8 +73,8 @@
 
 | 旧能力 | 能力组 | 新 owner | 判定 | 依据 |
 | --- | --- | --- | --- | --- |
-| 活动投影 `index.md`、`workspace-current-status.md`、每 Demand `index.md` 与 `developer-progress.md` | 9 | 活动投影器 | 缺席 | 能力卡 9 Q7；标记与零写规则保留，增加 pod 段 |
-| Claude 状态栏资产 | 9 | Claude 宿主资产，由 Agent 按初始化计划安装 | 缺席 | 能力卡 9 Q6；label 改为 `<pod> · <window>` |
+| 活动投影 `index.md`、`workspace-current-status.md`、每 Demand `index.md` 与 `developer-progress.md` | 9 | 内核 `active-projection` 加治理层 `observation/active-projection-{facts, refresh}` | 重切 | 2026-09-18 切片 10：标记、指纹、四类目标分类、unsafe 整轮零写、投影锁内逐文件 CAS；每 Demand 页面在 `.wakeflow-active/projections/<demandId>/`；pod 段；Demand 变更、pod 创建与关闭、维护 apply 之后刷新；场景 `card-09/active-projection` |
+| Claude 状态栏资产 | 9 | `hosts/claude-code/claude-code-statusline-asset.ts` 精确字节与摘要；维护操作 `claude-statusline-asset:install` 安装 0600 资产、`claude-statusline-settings:install` 把 statusLine 命令写进 `.claude/settings.local.json`（只改一键，0600） | 重切 | 2026-09-18 切片 10：label `<model> · <pod> · <window>`，main 省略 pod（能力卡 9 Q6）；资产由仓库测试以 node 执行验收，Claude 宿主真实会话未验证 |
 | Claude 活动监视 | 10 | 无；宿主 hook 观察取代 | 放弃 | 能力卡 10 Q3、ADR-0009 |
 | 提示临时文件与清扫 | 10 | 无；Agent 自行选择粘贴方式 | 放弃 | 能力卡 10 Q4 |
 | keep-live | 10 | 无 | 放弃 | 能力卡 10 Q1、TSD-12 |

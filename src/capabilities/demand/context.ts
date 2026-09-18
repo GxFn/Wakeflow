@@ -241,7 +241,7 @@ async function activeNext(
 }
 
 /** 已归档 Demand 的 `next`：完成可 continue，取消到此为止。 */
-export function archivedNext(archive: LocatedArchive | null): NextProjection {
+function archivedNext(archive: LocatedArchive | null): NextProjection {
   if (archive !== null && archive.manifest.outcome === "completed") {
     return Object.freeze({
       frontier: "demand-continuation",

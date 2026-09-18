@@ -84,6 +84,10 @@ export type DemandPostAcceptanceTestingClosure =
       readonly mode: "controller-only";
     }>
   | Readonly<{
+      /** research Demand：没有测试，完成物是 document 类受管证据（§13.94 D8）。 */
+      readonly mode: "not-applicable";
+    }>
+  | Readonly<{
       readonly mode: "real-environment";
       readonly testReview: Readonly<DemandPostAcceptanceReviewedTest>;
     }>;
@@ -96,7 +100,7 @@ export type DemandPostAcceptanceNextStage =
         | "demand-completed"
         | "no-target-tasks"
         | "targets-not-accepted"
-        | "testing-not-applicable";
+        | "research-evidence-missing";
       readonly blockingTargets: readonly Readonly<DemandPostAcceptanceBlockingTarget>[];
     }>
   | Readonly<{
@@ -362,11 +366,7 @@ function nextStage(
     });
   }
   if (loaded.authority.testingDecision.mode === "not-applicable") {
-    return Object.freeze({
-      status: "not-ready" as const,
-      reason: "testing-not-applicable" as const,
-      blockingTargets,
-    });
+    return researchStage(loaded, blockingTargets);
   }
   if (
     snapshot.targets.every(
@@ -416,6 +416,37 @@ function nextStage(
  * `escalate{product-defect}` 同一提交落地（§13.87 D5），因此历史缺陷代际之后要么有待消费
  * 的复测，要么已被 retest 谱系消费；其他组合是不一致的事件流。
  */
+/**
+ * research Demand 没有测试环节：实现目标（若有）全部接受，且至少一条 document 类受管证据
+ * 之后进入完成预检，测试闭合记为 `not-applicable`（§13.94 D8）。
+ */
+function researchStage(
+  loaded: Readonly<LoadedDemandEventSourcingRootAuthority>,
+  blockingTargets: readonly Readonly<DemandPostAcceptanceBlockingTarget>[],
+): Readonly<DemandPostAcceptanceNextStage> {
+  if (blockingTargets.length > 0) {
+    return Object.freeze({
+      status: "not-ready" as const,
+      reason: "targets-not-accepted" as const,
+      blockingTargets,
+    });
+  }
+  const documents = (loaded.aggregate.state.managedEvidence ?? []).filter(
+    (summary) => summary.kind === "document",
+  );
+  if (documents.length === 0) {
+    return Object.freeze({
+      status: "not-ready" as const,
+      reason: "research-evidence-missing" as const,
+      blockingTargets,
+    });
+  }
+  return Object.freeze({
+    status: "completion-preflight" as const,
+    testingClosure: Object.freeze({ mode: "not-applicable" as const }),
+  });
+}
+
 function closedTestStage(
   loaded: Readonly<LoadedDemandEventSourcingRootAuthority>,
   testTargets: readonly Readonly<TestTargetState>[],

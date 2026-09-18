@@ -64,9 +64,7 @@ import {
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
 } from "../../../src/kernel/requirement-board.js";
-import {
-  materializeWakeflowActiveLayout,
-} from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
 import {
   FIXTURE_REQUIREMENT_ID,
   publishFixtureRequirement,
@@ -106,9 +104,7 @@ async function fixture() {
   mkdirSync(ledgerPath, { mode: 0o700 });
   const workspaceRoot = await RootedDirectory.open(workspacePath);
   const ledgerRoot = await RootedDirectory.open(ledgerPath);
-  await materializeWakeflowActiveLayout(workspaceRoot, {
-    recoveringFreshLayout: false,
-  });
+  await materializeActiveLayout(workspaceRoot, { recovering: false });
 
   const ledgerStore = new LedgerAuthorityStore(ledgerRoot);
   await ledgerStore.initialize({ freshLedger: true });

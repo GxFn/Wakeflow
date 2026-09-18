@@ -38,6 +38,7 @@ import {
   DemandPostAcceptanceRouteError,
 } from "../../governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import {
   DEMAND_LIFECYCLE_JOURNALS_ROOT_REF,
@@ -167,7 +168,7 @@ interface TerminalPlan {
   readonly completion: Readonly<{
     readonly routeDigest: Sha256Digest;
     readonly reviewSnapshotDigest: Sha256Digest;
-    readonly testingMode: "controller-only" | "real-environment";
+    readonly testingMode: "controller-only" | "real-environment" | "not-applicable";
   }> | null;
   readonly package: Readonly<{
     readonly requirementId: string;
@@ -991,7 +992,10 @@ async function executeTerminal<Request extends TerminalRequest, Result>(
       },
       apply: (context, _input, plan) => {
         if (facts.verify === null) fail("unexpected", "verify-missing", "$plan");
-        return applyTerminal(context, plan, facts.verify, "apply");
+        const verify = facts.verify;
+        return afterMutationRefresh(context.root, context.signal, () =>
+          applyTerminal(context, plan, verify, "apply"),
+        );
       },
       recover: (context, operationId) => recoverTerminal(context, action, operationId),
       next: async (context, phase) =>
@@ -1404,9 +1408,11 @@ export async function executeDemandContinuationRequest(
           : planDecision(context, input);
       },
       apply: (context, _input, plan) =>
-        plan.action === "continue"
-          ? applyContinue(context, plan, "apply")
-          : applyDecision(context, plan),
+        afterMutationRefresh(context.root, context.signal, () =>
+          plan.action === "continue"
+            ? applyContinue(context, plan, "apply")
+            : applyDecision(context, plan),
+        ),
       recover: (context, operationId) => recoverContinuation(context, operationId),
       next: async (context, phase) =>
         phase.mode === "preview"

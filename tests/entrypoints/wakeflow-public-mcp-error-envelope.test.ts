@@ -1,10 +1,8 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/demand/contract.js";
+import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/capabilities/demand/contract.js";
+import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../../src/capabilities/observation/contract.js";
 import { WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME } from "../../src/capabilities/delivery/contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WakeflowError } from "../../src/kernel/error.js";
@@ -71,13 +69,13 @@ test("Workspace注册组只公开合同错误字段", async (t) => {
 
 test("Authority注册组保留稳定cause且不回显root", async (t) => {
   const client = await connectWakeflowMcpTestClient(t, {
-    inspectDemandRoute: async () => {
+    inspectStatus: async () => {
       throw new WakeflowError("precondition-failed", "demand-authority-inventory", "$demandRoot");
     },
   });
   const root = "/workspace/private-demand-route";
   const result = await client.callTool({
-    name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+    name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
     arguments: { root, demandId: TASKING_DEMAND_ID },
   });
   equal(result.isError, true);
@@ -91,7 +89,7 @@ test("Authority注册组保留稳定cause且不回显root", async (t) => {
     kind: "WakeflowMcpError",
     schemaVersion: 1,
     status: "error",
-    tool: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+    tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
   });
   equal(wakeflowMcpTextContent(result).includes(root), false);
 });
@@ -160,12 +158,12 @@ test("Review注册组保留Completion event authority", async (t) => {
 test("未知异常统一脱敏且不返回stack", async (t) => {
   const privateMarker = "private-unexpected-error-marker";
   const client = await connectWakeflowMcpTestClient(t, {
-    inspectDemandRoute: async () => {
+    inspectStatus: async () => {
       throw new Error(privateMarker);
     },
   });
   const result = await client.callTool({
-    name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+    name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
     arguments: { root: "/workspace", demandId: TASKING_DEMAND_ID },
   });
   equal(result.isError, true);
@@ -177,7 +175,7 @@ test("未知异常统一脱敏且不返回stack", async (t) => {
     kind: "WakeflowMcpError",
     schemaVersion: 1,
     status: "error",
-    tool: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
+    tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
   });
   equal(wakeflowMcpTextContent(result).includes(privateMarker), false);
   equal(wakeflowMcpTextContent(result).includes("stack"), false);

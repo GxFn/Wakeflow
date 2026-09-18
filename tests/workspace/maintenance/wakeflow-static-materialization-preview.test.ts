@@ -34,7 +34,8 @@ import {
   previewWakeflowStaticMaterialization,
   WakeflowStaticMaterializationPreviewError,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
-import { publishWakeflowActiveWorkspaceProjection } from "../../../src/workspace/active/wakeflow-active-workspace-projection-publication.js";
+import { publishActiveProjection } from "../../../src/kernel/active-projection.js";
+import { renderWakeflowFreshActiveProjection } from "../../../src/workspace/wakeflow-active-fresh-projection.js";
 import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import { materializeWakeflowManagedSupportRoot } from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
 import { publishWakeflowSupportMemory } from "../../../src/workspace/support/wakeflow-support-memory-publication.js";
@@ -126,13 +127,9 @@ async function installCurrentStaticSurface(
   });
   await materializeRequirementBoardRoot(fixtureValue.root);
   await publishRequirementBoardIndex(fixtureValue.root, []);
-  await publishWakeflowActiveWorkspaceProjection(
+  await publishActiveProjection(
     fixtureValue.root,
-    {
-      desiredConfig: config,
-      expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(config),
-    },
-    { recoveringAffectedPublication: false },
+    renderWakeflowFreshActiveProjection(config).files,
   );
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(
     codexWorkspaceHostResourceProfile,
@@ -315,10 +312,10 @@ test("placement-stable reconfigure plans derived files before Config activation"
     request("reconfigure", desired),
   );
   equal(preview.status, "ready");
+  // 投影不再由 reconfigure 计划重写：它随观察切片按 Demand 与 pod 变更重算（§13.94 D5）。
   deepEqual(
     preview.steps.map((entry) => entry.kind),
     [
-      "publish-fresh-active-workspace-projection",
       "recompose-program-instruction",
       "publish-support-memory",
       "publish-support-memory",

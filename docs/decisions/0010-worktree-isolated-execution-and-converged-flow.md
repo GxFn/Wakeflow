@@ -85,9 +85,11 @@ ADR-0006 曾把 Pod 简化为"由 Confirmation 授权的隔离执行位置"；�
 
 ## 未决问题
 
-- 多仓库工作区里 pod 是否必须为每个仓库建 worktree，还是可以只隔离子集。
-- Codex 默认只保留 15 个受管 worktree，活动 pod 超过该数时的提示方式。
-- 已接受未合并分支的提醒阈值。
+三项已在 L1 关闭：
+
+- 多仓库工作区一律为每个仓库建 worktree，不做子集隔离（pod 切片 9 固定窗口集，gate-log §13.92）。
+- Codex 的 15 个受管 worktree 上限只进 skills 文本，机器侧不观察（gate-log §13.92）。
+- 已接受未合并分支不设提醒阈值：`wakeflow_status` 的 `unmergedAccepted[]` 全部列出，定义为已接受实现结果中分支引用仍在仓库、且尖端不等于仓库当前所在分支尖端的项（没有对象图不判祖先；正检出在该分支上或分离头时不判已合并；仓库指针未观察时保留并标 `repositoryObserved: false`），observation 切片 10，gate-log §13.94 D2、§13.96。
 
 ## 来源
 

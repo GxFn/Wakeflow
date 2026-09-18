@@ -175,7 +175,8 @@ export type DemandControllerRouteBlocker =
       readonly decisionDigest: Sha256Digest;
     }>
   | Readonly<{
-      readonly kind: "research-completion-not-implemented";
+      /** research Demand 还没有 document 类受管证据，不能完成（§13.94 D8）。 */
+      readonly kind: "research-evidence-missing";
       readonly owner: "demand-lifecycle";
     }>
   | Readonly<{
@@ -586,23 +587,23 @@ function routeBasis(
   );
   if (implementationTargets.length === 0) {
     if (loaded.identity.demandType === "research") {
-      if (
-        postAcceptanceRoute.nextStage.status !== "not-ready" ||
-        postAcceptanceRoute.nextStage.reason !== "testing-not-applicable"
-      ) {
+      const stage = postAcceptanceRoute.nextStage;
+      const frontiers = Object.freeze([
+        resolveDemandControllerDemandFrontierDescriptor("research-completion-required"),
+      ]);
+      if (stage.status === "completion-preflight" && stage.testingClosure.mode === "not-applicable") {
+        return { ...common, disposition: "work-available", frontiers, blockers: Object.freeze([]) };
+      }
+      if (stage.status !== "not-ready" || stage.reason !== "research-evidence-missing") {
         fail("relation");
       }
       return {
         ...common,
         disposition: "blocked",
-        frontiers: Object.freeze([
-          resolveDemandControllerDemandFrontierDescriptor(
-            "research-completion-required",
-          ),
-        ]),
+        frontiers,
         blockers: Object.freeze([
           Object.freeze({
-            kind: "research-completion-not-implemented" as const,
+            kind: "research-evidence-missing" as const,
             owner: "demand-lifecycle" as const,
           }),
         ]),

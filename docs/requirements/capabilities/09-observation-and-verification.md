@@ -21,7 +21,7 @@
 
 **不变量**：观察不写；同一次观察喂给 status 与 verify；投影里没有私有路径、会话句柄、摘要之外的内容。
 
-**现 TS 状态**：`wakeflow_status` 已公开；观察与投影的实现由 governance 层的 inspection 承担，域集合以 TS 为准待对照。
+**现 TS 状态**（2026-09-18 L1 observation 切片 10，`src/capabilities/observation/`）：`wakeflow_status{root, demandId?}` 走内核 `runCommandShell`；治理层 `observeWorkspace` 一次观察多域（活动布局、看板、活动 Demand、工作声明、每宿主绑定与 hook 通道、pod 回执、仓库指针文件、状态栏资产），每域独立隔离失败为 `unavailable` 加 issue；`overall` 取 maintenance > blocked > degraded > active > idle；`board` 只给计数与待认领行（Q2）；`pods[]` 列执行位置、活动 Demand 与 worktree 回执，closing pod 附处置引导；`repositories[]` 只读 `.git` 指针文件，不 spawn git（Q1 修订）；`unmergedAccepted[]` 列已接受实现结果中分支仍在且尖端不等于当前分支尖端的项（带 `acceptedAt` 与 `repositoryObserved`），不设阈值；`policy` 报生效常量（阈值不进配置，gate-log §13.94 D7）；`nextActions` 去重、确定性排序、上限 64；带 demandId 时附 Route 或归档回执，`wakeflow_inspect_demand_route` 删除。场景 `card-09/status-and-verify`。
 
 **实现判断**：保留"一次观察、多份投影、同一令牌"的模式；`nextActions` 的形状保留；域集合按 ADR-0010 改：`pods` 域改为列出 pod 与其执行位置，`leases` 域改为工作声明，`hostOperations` 域删除，因为 keep-live 没有生产调用方；增加 `unmergedAccepted` 列表，即已接受未合并的分支。
 
@@ -44,7 +44,7 @@
 
 **不变量**：`repairsApplied` 恒 false；`unavailable` 不是 pass，会让 `ok` 为 false；门的证据只有 ref 与摘要。
 
-**现 TS 状态**：内部有校验逻辑，无公共入口。ADR-0006 已定：保留为公共只读入口。
+**现 TS 状态**（2026-09-18 切片 10）：`wakeflow_verify{root, demandId?}` 公开；工作区 13 门按名字排序：config-authority、local-layout、ledger-layout、board-consistency、demand-root-audit、work-claims、append-candidates-clear、evidence-integrity、host-hook-channel、window-identity、pod-execution-location、host-settings-assets、active-projection；`ok` 要求全部 pass，`unavailable` 在 `summary` 里与 `fail` 分开计数（Q3）；带 demandId 时 `demand.gates` 复用 demand 切片的门（research Demand 加 `research-evidence`）；`repairsApplied` 恒 false。归档与 pod 关闭不以 verify 的 `observationDigest` 为前置（Q4 修订）。场景 `card-09/status-and-verify`。
 
 **实现判断**：门集合按新边界重排：删 pod-evidence 与 managed-drift 的旧形状，coordination-leases 改为 work-claims，新增 host-hook-channel（hook 记录目录可读且最近记录自洽）与 pod-execution-location（每个活动 pod 的 worktree 回执与 `git worktree list --porcelain` 一致）；`unavailable` 与 `fail` 在 `summary` 里分开计数的做法保留。
 
@@ -86,7 +86,7 @@
 
 **不变量**：手写文件永不被覆盖；投影只是导航，机器记录才是权威；状态栏输出不含路径、句柄与摘要。
 
-**现 TS 状态**：活动投影未实现；状态栏资产未实现。
+**现 TS 状态**（2026-09-18 切片 10）：活动投影由内核 `src/kernel/active-projection.ts`（文件格式、标记、指纹、四类目标分类、unsafe 整轮零写、投影锁内逐文件 CAS）与治理层 `observation/{active-projection-facts, active-projection-refresh}` 实现；每 Demand 页面在 `.wakeflow-active/projections/<demandId>/{index.md, developer-progress.md}`，不进 Demand 根；`workspace-current-status.md` 含 pod 段；Demand 变更、pod 创建与关闭、维护 apply 之后由各切片经 `afterMutationRefresh` 刷新，只吞 io-failure；`developer-progress.md` 渲染六个进度计数与最近事件标识。状态栏资产 `src/hosts/claude-code/claude-code-statusline-asset.ts` 给出精确字节与摘要，维护操作 `claude-statusline-asset:install` 装到 `runtime/hosts/claude-code/operations/assets/statusline.mjs`（0600）；维护操作 `claude-statusline-settings:install` 把 `statusLine` 命令写进 `.claude/settings.local.json`（只改这一键，0600）。场景 `card-09/active-projection`；资产由 `tests/hosts/claude-code/claude-code-statusline-asset.test.ts` 以 node 执行验收。
 
 **实现判断**：投影文件与标记规则保留，按 ADR-0010 在 workspace-current-status 里增加 pod 段（每个 pod 的执行位置、活动 Demand、已接受未合并分支）；触发矩阵保留，增加 pod 创建与关闭。状态栏资产保留，label 改为 `<pod> · <window>`，main 省略 pod 前缀；它是 Claude 宿主制品，由 Agent 按初始化计划安装，Wakeflow 只校验字节与模式。
 
@@ -117,3 +117,13 @@
 | Q5 result-trace 与 view | strict 形态并入评审 preview，diagnostic 删除；config 事实归 status，storage 事实归 verify | 评审 preview、status、verify |
 | Q6 状态栏 label | `<pod> · <window>`，main 省略前缀 | Claude 状态栏资产 |
 | Q7 developer-progress.md | 保留为每 Demand 一份，按能力卡 4 Q6 渲染 | 活动投影 |
+
+## 修订（2026-09-18，[gate-log §13.94](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| Q1 status 的 git 观察 | Wakeflow 不 spawn git（与 gate-log §13.91 D4 一致）：`repositories[]` 只读 `.git/HEAD`、`refs/heads/**`、`packed-refs` 与 `.git/worktrees/<name>/{gitdir, HEAD}`，报告 HEAD、当前分支、登记的 worktree 与 prunable；工作树是否干净不观察，Wakeflow 没有判定依赖它。`unmergedAccepted[]` 定义为已接受实现结果中分支引用仍在仓库、且尖端不等于仓库当前所在分支尖端的项（正检出在该分支上或分离头时不判已合并；仓库未观察时保留并标 `repositoryObserved: false`），全部列出不设阈值，ADR-0010 未决项"提醒阈值"就此关闭 |
+| Q4 verify 作为前置 | 归档不另设前置：完成即归档在 preview 内嵌 demand 切片的 verify 门；pod 关闭不要求最近一次 verify 的 `observationDigest`，`pod-execution-location` 门是对账的唯一出口 |
+| Q6 状态栏资产的安装 | 按 D6 落地为两条维护操作：`claude-statusline-asset:install` 安装并校验资产字节（0600、摘要），`claude-statusline-settings:install` 把 `statusLine` 命令写进 `.claude/settings.local.json`（只改这一键，其他键原位保留，0600；命令带 base64url 的根，所以只能进忽略的私有本地文件，不进可提交的 `settings.json`）；文件不是 JSON 对象时不猜，贡献 blocked（`claude-settings-local-unreadable`）；verify 的 `host-settings-assets` 门对资产与设置条目各投一票 |
+| Q7 developer-progress.md | 首版渲染当前状态、六个进度计数与最近事件标识；"最近十条事件"待 L2 场景需要再加 |
+| 阈值配置化（gate-log §13.83 D7 遗留） | 本片不进配置：静默 10 分钟、回调代际上限 4、第三次 rework 刹车、声明恢复窗口 2 小时由治理层一张 `policy` 表导出并在 status 原样报告；配置化记入 ADR-0012 未决项 |

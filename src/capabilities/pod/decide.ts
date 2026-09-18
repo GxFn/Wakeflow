@@ -6,6 +6,7 @@ import type {
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
+import type { PodState } from "../../governance/pod/pod-state.js";
 import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "./contract.js";
 
 /**
@@ -17,7 +18,7 @@ import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "./contract.js";
 const WAKEFLOW_PRIMARY_POD_RESERVED_NAME = "main" as const;
 const WAKEFLOW_WORKTREE_NAME_PREFIX = "wakeflow-" as const;
 
-export type PodState = "creating" | "ready" | "closing" | "closed";
+export { derivePodState, type PodState } from "../../governance/pod/pod-state.js";
 
 /** `podId` 由程序与客户端幂等键派生：同键重放同一 pod，不同键从不复用标识。 */
 export function derivePodId(programId: string, idempotencyKey: string): WakeflowDurableId<"pod"> {
@@ -123,44 +124,6 @@ export function deriveCreateBlockers(input: Readonly<CreateBlockerInput>): reado
   if (!input.replay && input.liveNames.includes(input.name)) blockers.push("name-taken");
   if (input.repositoryCount === 0) blockers.push("repository-unavailable");
   return Object.freeze(blockers);
-}
-
-export interface PodReceiptFact {
-  readonly repositoryId: string;
-  readonly windowId: string;
-  readonly bindingId: string;
-  readonly checkoutPresent: boolean;
-}
-
-export interface PodStateInput {
-  readonly pod: Readonly<Pick<WakeflowConfigPod, "placement" | "lifecycle" | "worktrees">>;
-  readonly windowIds: readonly string[];
-  /** 已登记窗口 → 当前绑定标识。 */
-  readonly bindingIdByWindowId: ReadonlyMap<string, string>;
-  readonly receipts: readonly PodReceiptFact[];
-}
-
-function worktreeReady(input: Readonly<PodStateInput>): boolean {
-  return input.pod.worktrees.every((worktree) => {
-    const receipt = input.receipts.find((entry) => entry.repositoryId === worktree.repositoryId);
-    return (
-      receipt?.checkoutPresent === true &&
-      receipt.bindingId === input.bindingIdByWindowId.get(worktree.windowId)
-    );
-  });
-}
-
-/**
- * 状态不落盘：open 且全部窗口已绑定、每个 worktree 回执与当前绑定同代且检出仍在即 ready，
- * 否则 creating；closing 且没有绑定、没有仍在的检出即 closed，否则 closing。
- */
-export function derivePodState(input: Readonly<PodStateInput>): PodState {
-  const bound = input.windowIds.filter((windowId) => input.bindingIdByWindowId.has(windowId));
-  if (input.pod.lifecycle === "closing") {
-    const checkouts = input.receipts.some((receipt) => receipt.checkoutPresent);
-    return bound.length === 0 && !checkouts ? "closed" : "closing";
-  }
-  return bound.length === input.windowIds.length && worktreeReady(input) ? "ready" : "creating";
 }
 
 export interface CloseRequestBlockerInput {

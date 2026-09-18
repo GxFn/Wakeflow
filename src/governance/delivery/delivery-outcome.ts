@@ -31,6 +31,9 @@ import type { DeliveryFenceReference } from "./delivery-envelope.js";
 const OUTCOME_KIND = "WakeflowDeliveryOutcome" as const;
 const OUTCOME_SCHEMA_VERSION = 1 as const;
 
+/** ambiguous 静默阈值：签发后十分钟无落地记录即 silent（ADR-0012 未决数值，先作常量；status 的 policy 段原样报告）。 */
+export const DELIVERY_LANDING_SILENCE_MILLISECONDS = 10 * 60 * 1000;
+
 export type DeliveryDisposition = "accepted" | "indeterminate" | "rejected-before-send";
 export type DeliveryEvidenceKind =
   | "hook-record"

@@ -10,8 +10,10 @@ import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflo
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../../src/governance/demand/demand-resource-catalog.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../../src/governance/ledger/ledger-resource-catalog.js";
 import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "../../src/workspace/wakeflow-shared-coordination-layout.js";
-import { WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/active/wakeflow-active-resource-catalog.js";
-import { WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG } from "../../src/workspace/active/wakeflow-requirement-board-initialization.js";
+import {
+  WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG,
+  WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,
+} from "../../src/workspace/wakeflow-active-static-resource-catalog.js";
 import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";

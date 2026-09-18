@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
@@ -26,6 +28,8 @@ import {
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { worktreeDisposalGuidance } from "../../governance/pod/worktree-disposal.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -654,6 +658,14 @@ async function currentViews(context: PodSliceContext, podId: string): Promise<Po
       suggestedName: worktree.suggestedName,
       receipt:
         entry === undefined ? "absent" : entry.checkoutPresent ? "present" : "checkout-missing",
+      // 关闭中仍在的检出：给 Agent 建议命令与宿主备选（§13.94 D10）；Wakeflow 自己不删。
+      disposal:
+        pod.lifecycle === "closing" && entry?.checkoutPresent === true
+          ? worktreeDisposalGuidance(
+              fresh.facade.hostId,
+              path.relative(fresh.root.absolutePath, entry.receipt.path) || ".",
+            )
+          : null,
     };
   });
   return Object.freeze({
@@ -705,6 +717,7 @@ async function previewViews(
         windowId: worktree.windowId,
         suggestedName: worktree.suggestedName,
         receipt: "absent",
+        disposal: null,
       })),
     };
   }
@@ -776,7 +789,10 @@ export async function executePodRequest(
       open: (root) => openContext(root, facade, options),
       close: async () => {},
       plan: planPod,
-      apply: applyPod,
+      apply: (context, input, plan) =>
+        afterMutationRefresh(context.root, context.options.signal, () =>
+          applyPod(context, input, plan),
+        ),
       recover: recoverPod,
       next: async (context, phase) => {
         const kind: PodPlanKind =

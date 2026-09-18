@@ -125,20 +125,11 @@ export function pendingReviewTargets(state: Readonly<DemandAggregateState>): rea
   );
 }
 
-/** 本 Demand 曾派工的全部窗口，去重排序；工作声明按窗口检查与释放。 */
-export function demandWindowIds(state: Readonly<DemandAggregateState>): readonly string[] {
-  return Object.freeze([...new Set(state.targetTasks.map((target) => target.windowId))].sort());
-}
-
-export interface VerifyGateOutcome {
-  readonly gate: string;
-  readonly status: "pass" | "fail" | "unavailable";
-  readonly detail: string | null;
-}
-
-export function computeVerifyObservationDigest(gates: readonly VerifyGateOutcome[]): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseJsonValue({ gates }, "$verify"));
-}
+export {
+  demandWindowIds,
+  type VerifyGateOutcome,
+} from "../../governance/demand/demand-verify-gates.js";
+import type { VerifyGateOutcome } from "../../governance/demand/demand-verify-gates.js";
 
 export interface TerminalBlockerInput {
   readonly action: "complete" | "cancel";

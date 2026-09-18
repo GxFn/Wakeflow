@@ -43,7 +43,12 @@ interface CandidateDefinition {
   readonly runExport: "runCodexWakeflowMcpStdio" | "runClaudeCodeWakeflowMcpStdio";
   readonly currentHostDirectory: string;
   readonly peerHostDirectory: string;
-  readonly admittedPeerProfile: string;
+  /**
+   * 对端宿主目录里唯一准入的纯数据模块：资源 profile 与窗口宿主身份 profile。观察
+   * 读每个宿主的绑定与 hook 通道需要它们（§13.94 D1）；对端的执行内容（维护、
+   * 设置、状态栏资产）一律不进本宿主制品。
+   */
+  readonly admittedPeerModules: readonly string[];
 }
 
 const CANDIDATES = Object.freeze([
@@ -55,7 +60,10 @@ const CANDIDATES = Object.freeze([
     runExport: "runCodexWakeflowMcpStdio",
     currentHostDirectory: "hosts/codex/",
     peerHostDirectory: "hosts/claude-code/",
-    admittedPeerProfile: "hosts/claude-code/wakeflow-workspace-host-resource-profile.js",
+    admittedPeerModules: Object.freeze([
+      "hosts/claude-code/claude-code-window-host-identity-profile.js",
+      "hosts/claude-code/wakeflow-workspace-host-resource-profile.js",
+    ]),
   }),
   Object.freeze({
     hostId: "claude-code",
@@ -65,7 +73,10 @@ const CANDIDATES = Object.freeze([
     runExport: "runClaudeCodeWakeflowMcpStdio",
     currentHostDirectory: "hosts/claude-code/",
     peerHostDirectory: "hosts/codex/",
-    admittedPeerProfile: "hosts/codex/wakeflow-workspace-host-resource-profile.js",
+    admittedPeerModules: Object.freeze([
+      "hosts/codex/codex-window-host-identity-profile.js",
+      "hosts/codex/wakeflow-workspace-host-resource-profile.js",
+    ]),
   }),
 ] as const satisfies readonly Readonly<CandidateDefinition>[]);
 
@@ -280,7 +291,7 @@ function compiledFileScope(
     return "current-host";
   }
   if (relative.startsWith(definition.peerHostDirectory)) {
-    if (relative !== definition.admittedPeerProfile) {
+    if (!definition.admittedPeerModules.includes(relative)) {
       fail(
         "wakeflow-artifact-host-isolation",
         `${definition.hostId} closure reached a peer-host execution module`,

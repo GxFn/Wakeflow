@@ -42,6 +42,7 @@ import {
   resolveDemandTestEnvironmentAuthority,
 } from "../../governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   computeTaskPackageDigest,
   createTaskPackage,
@@ -728,7 +729,10 @@ export async function executeTargetTaskPlanningPublicRequest(
         }
       },
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-      execute,
+      execute: (context, input, binding) =>
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
+          execute(context, input, binding),
+        ),
       next,
       result: assembleResult,
     },

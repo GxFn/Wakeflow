@@ -119,16 +119,25 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     );
   }
 
-  const routeRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json",
+  // 路由读取并入 wakeflow_status{demandId}（§13.94 D10）：两个读工具的请求与 status 结果共用同一 Demand 身份。
+  const statusRequest = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-status-request.schema.json",
   );
-  const routeResult = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json",
+  const statusResult = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-status-result.schema.json",
+  );
+  const verifyRequest = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-verify-request.schema.json",
   );
   deepEqual(
-    definition(routeRequest, "demandId"),
-    definition(routeResult, "demandId"),
-    "Demand Controller Route request/result demand identity must not drift",
+    definition(statusRequest, "demandId"),
+    definition(statusResult, "demandId"),
+    "status request/result demand identity must not drift",
+  );
+  deepEqual(
+    definition(verifyRequest, "demandId"),
+    definition(statusRequest, "demandId"),
+    "verify and status requests must share the demand identity",
   );
 
   const planningRequest = readSchema(

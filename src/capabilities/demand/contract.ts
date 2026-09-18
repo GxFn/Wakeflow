@@ -23,14 +23,6 @@ import {
   type WakeflowDemandContinuationResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-demand-continuation-result.generated.js";
 import {
-  WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA,
-  type WakeflowDemandControllerRouteRequestV1,
-} from "../../contracts/generated/entrypoints/wakeflow-demand-controller-route-request.generated.js";
-import {
-  WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA,
-  type WakeflowDemandControllerRouteResultV1,
-} from "../../contracts/generated/entrypoints/wakeflow-demand-controller-route-result.generated.js";
-import {
   WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA,
   type WakeflowDemandPublicationRequestV1,
 } from "../../contracts/generated/entrypoints/wakeflow-demand-publication-request.generated.js";
@@ -53,14 +45,12 @@ import type { WakeflowToolRegistration } from "../../kernel/tool-registry.js";
 /**
  * Wakeflow Capabilities / Demand：Demand 生命周期的公共合同（能力卡 4 与 8，ADR-0012）。
  *
- * 五个工具：`wakeflow_create_demand`（认领即创建）、`wakeflow_inspect_demand_route`（读）、
- * `wakeflow_complete_demand`（完成即归档）、`wakeflow_cancel_demand`（取消即归档并撤回需求包）、
- * `wakeflow_continue_demand`（从归档重开，或记录用户对一次升级的回答）。
+ * 四个工具：`wakeflow_create_demand`（认领即创建）、`wakeflow_complete_demand`（完成即归档）、
+ * `wakeflow_cancel_demand`（取消即归档并撤回需求包）、`wakeflow_continue_demand`（从归档重开，
+ * 或记录用户对一次升级的回答）。路由读取并入观察切片的 `wakeflow_status{demandId}`（§13.94）。
  */
 
 export const WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME = "wakeflow_create_demand" as const;
-export const WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME =
-  "wakeflow_inspect_demand_route" as const;
 export const WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME = "wakeflow_complete_demand" as const;
 export const WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME = "wakeflow_cancel_demand" as const;
 export const WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME = "wakeflow_continue_demand" as const;
@@ -68,8 +58,6 @@ export const WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION = 1 as const;
 
 export type DemandCreationRequest = Readonly<WakeflowDemandPublicationRequestV1>;
 export type DemandCreationResult = Readonly<WakeflowDemandPublicationResultV1>;
-export type DemandRouteInspectionRequest = Readonly<WakeflowDemandControllerRouteRequestV1>;
-export type DemandRouteInspectionResult = Readonly<WakeflowDemandControllerRouteResultV1>;
 export type DemandCompletionRequest = Readonly<WakeflowDemandCompletionRequestV1>;
 export type DemandCompletionResult = Readonly<WakeflowDemandCompletionResultV1>;
 export type DemandCancellationRequest = Readonly<WakeflowDemandCancellationRequestV1>;
@@ -116,16 +104,6 @@ export const admitDemandCreationResult = resultAdmitter(
     WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA,
   ),
 );
-export const parseDemandRouteInspectionRequest = requestParser(
-  createRuntimeJsonSchemaValidator<WakeflowDemandControllerRouteRequestV1>(
-    WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA,
-  ),
-);
-export const admitDemandRouteInspectionResult = resultAdmitter(
-  createRuntimeJsonSchemaValidator<WakeflowDemandControllerRouteResultV1>(
-    WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA,
-  ),
-);
 export const parseDemandCompletionRequest = requestParser(
   createRuntimeJsonSchemaValidator<WakeflowDemandCompletionRequestV1>(
     WAKEFLOW_DEMAND_COMPLETION_REQUEST_SCHEMA,
@@ -164,7 +142,7 @@ const EFFECT_ANNOTATIONS = Object.freeze({
   openWorldHint: false,
 });
 
-/** 本切片在公共工具登记表里的五个条目；目录只汇总。 */
+/** 本切片在公共工具登记表里的四个条目；目录只汇总。 */
 export const DEMAND_CREATION_TOOL_REGISTRATION = Object.freeze({
   name: WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
   slice: "demand",
@@ -176,24 +154,6 @@ export const DEMAND_CREATION_TOOL_REGISTRATION = Object.freeze({
   requestSchema: WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA,
   annotations: EFFECT_ANNOTATIONS,
-} as const) satisfies Readonly<WakeflowToolRegistration>;
-
-export const DEMAND_ROUTE_INSPECTION_TOOL_REGISTRATION = Object.freeze({
-  name: WAKEFLOW_DEMAND_ROUTE_INSPECTION_PUBLIC_TOOL_NAME,
-  slice: "demand",
-  shape: "read",
-  executor: "inspectDemandRoute",
-  title: "Inspect Wakeflow Demand Route",
-  description:
-    "Read one Demand's current controller route: disposition (work-available, blocked, awaiting-decision, terminal), the responsibility frontiers with their targets, blockers, and the next step with its suggested tool. An archived Demand returns its archive receipt and whether continue is possible. Reads only.",
-  requestSchema: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_REQUEST_SCHEMA,
-  resultSchema: WAKEFLOW_DEMAND_CONTROLLER_ROUTE_RESULT_SCHEMA,
-  annotations: {
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
 } as const) satisfies Readonly<WakeflowToolRegistration>;
 
 export const DEMAND_COMPLETION_TOOL_REGISTRATION = Object.freeze({

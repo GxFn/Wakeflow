@@ -85,13 +85,14 @@ MCP 工具是状态通道，指令文件与 skills 是程序通道，Agent 与�
 
 - 能力卡 2 按建议确认；卡 4 的隔离位置与卡 6 的派发在实现判断里收敛到本模型；旧 Pod 的 11 阶段状态机不再需要。
 - L1 的切片顺序改为：先做"执行端点登记与工作声明"和"宿主效果握手"两个共享机制，再让创建窗口、创建工作树、投递、关闭四种效果各自成为薄切片；每宿主的证据策略表与 hook 声明作为宿主 profile 数据。
-- 插件制品在 E4 需要产出 `hooks/hooks.json`（Claude）与 Codex 的 hook 或 `notify` 配置，以及一段观察脚本；这是 L3 的产物清单新增项。
+- 插件制品在 E4 需要产出 `hooks/hooks.json`（Claude）与 Codex 的 hook 或 `notify` 配置，以及一段观察脚本；这是 L3 的产物清单新增项。2026-09-18 调整（gate-log §13.94 D9）：观察脚本作为 entrypoint `src/entrypoints/wakeflow-hook-observer.ts`（写 `session-start | user-prompt-submit | stop | session-end` 四类记录）连同两宿主的 hook 配置片段提前到 L2 第一项，否则 L2 的"两宿主各完成一次真实投递并交回 hook 证据"退出门无法达成；L3 只负责打包。
 - 围栏令牌进入信封与结果 schema，事件流在结果准入时校验。
 
 ## 未决问题
 
 - Codex 当前版本的线程创建与标题工具名，L1 切片时核对。
 - hook 观察记录的保留与清理策略。
+- hook 观察记录的 `recordedAt` 由脚本本地时钟提供；同一宿主事件重复触发时的重试幂等边界，L2 起点随观察脚本定。
 - 是否把 tmux 控制模式写进 Claude 的 skills 作为推荐观察方式。
 
 ## 来源

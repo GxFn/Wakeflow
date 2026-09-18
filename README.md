@@ -32,7 +32,7 @@ controller-validated acceptance. The controller runs this as a closed loop — p
 ## Why Wakeflow
 
 Hand an agent fleet a real, multi-repository goal and come back later with the
-three questions that matter: **what was actually done, what supports the claim,
+four questions that matter: **what was actually done, what supports the claim,
 what did the controller validate, and what is still open?** Without a control layer the honest answer is a
 pile of scattered prompts, copied status tables, unclear ownership, and
 "looks done" — work that cannot be audited, resumed, or trusted.

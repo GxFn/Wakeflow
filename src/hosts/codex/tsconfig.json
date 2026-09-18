@@ -6,6 +6,7 @@
     "tsBuildInfoFile": "../../../.build/cache/hosts-codex.tsbuildinfo"
   },
   "files": [
+    "codex-hook-fragment.ts",
     "codex-maintenance-execution.ts",
     "codex-window-host-identity-profile.ts",
     "wakeflow-workspace-host-resource-profile.ts"

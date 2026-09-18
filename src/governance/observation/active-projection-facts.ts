@@ -5,6 +5,7 @@ import type { UtcInstant } from "../../foundation/time/utc-instant.js";
 import {
   inspectActiveProjectionTargets,
   renderActiveProjectionFiles,
+  type ActiveProjectionDemandEvidence,
   type ActiveProjectionDemandFacts,
   type ActiveProjectionFacts,
   type ActiveProjectionProgressFacts,
@@ -16,6 +17,7 @@ import { deriveNextProjection } from "../../kernel/next-projection.js";
 import type {
   ObservedDemand,
   ObservedDomain,
+  ObservedPod,
   WorkspaceObservation,
 } from "./workspace-observation.js";
 
@@ -186,16 +188,43 @@ function demandFacts(
 }
 
 /**
+ * pod 的"本地运行时"部分：由绑定派生的 `state`，以及检出目录此刻在不在磁盘上。两者都不受
+ * 任何 Wakeflow 变更控制——工作区外的一次 `git worktree remove` 就能改变 `checkoutPresent`，
+ * 而它不触发刷新，进了指纹就让投影永久 stale（§13.96 对 `overall` 与看板计数的同一裁决）。
+ * 投影只认回执本身是否存在；live 的检出状态由全作用域的 `wakeflow_status` 报告。
+ */
+function projectionScopePods(
+  observed: ObservedDomain<readonly Readonly<ObservedPod>[]>,
+): ObservedDomain<readonly Readonly<ObservedPod>[]> {
+  const pods = observed.value;
+  if (pods === null) return observed;
+  return Object.freeze({
+    ...observed,
+    value: Object.freeze(
+      pods.map((pod) =>
+        Object.freeze({
+          ...pod,
+          state: null,
+          receipts: Object.freeze(
+            pod.receipts.map((entry) => Object.freeze({ ...entry, checkoutPresent: true })),
+          ),
+        }),
+      ),
+    ),
+  });
+}
+
+/**
  * 投影事实只从 projection 作用域的域派生：变更之后的刷新只读这些域，而 status 与 verify 用
  * full 作用域观察；两边必须算出同一份指纹，否则每次 status 都会把投影判成 stale。宿主域
- * （绑定、hook 通道、资产、仓库指针）与由绑定派生的 pod 状态是"本地运行时"，指纹有意忽略
+ * （绑定、hook 通道、资产、仓库指针）与 pod 的本地运行时部分是"本地运行时"，指纹有意忽略
  * （§13.94 D5）。
  */
 function projectionScopeOf(
   observation: Readonly<WorkspaceObservation>,
 ): Readonly<WorkspaceObservation> {
-  if (observation.scope === "projection") return observation;
-  const pods = observation.pods.value;
+  const pods = projectionScopePods(observation.pods);
+  if (observation.scope === "projection") return Object.freeze({ ...observation, pods });
   return Object.freeze({
     ...observation,
     scope: "projection" as const,
@@ -207,13 +236,25 @@ function projectionScopeOf(
       issue: "scope:projection",
       value: null,
     }),
-    pods:
-      pods === null
-        ? observation.pods
-        : Object.freeze({
-            ...observation.pods,
-            value: Object.freeze(pods.map((pod) => Object.freeze({ ...pod, state: null }))),
-          }),
+    pods,
+  });
+}
+
+/**
+ * 退休证据：demands 域本身观察到、且其中每个 Demand 都读得出，这一轮才算把活动 Demand
+ * 看全。事实里的 `demands` 已经丢掉了读不出的 Demand，不能当活动集合用（读失败会让在用的
+ * 页面看起来"不活动"）。
+ */
+function demandEvidenceOf(
+  observation: Readonly<WorkspaceObservation>,
+): Readonly<ActiveProjectionDemandEvidence> {
+  const demands = observation.demands.value;
+  return Object.freeze({
+    observed:
+      observation.demands.status === "observed"
+      && demands !== null
+      && demands.every((demand) => demand.status === "observed"),
+    activeDemandIds: Object.freeze((demands ?? []).map((demand) => demand.demandId).sort()),
   });
 }
 
@@ -254,12 +295,8 @@ export function buildActiveProjectionFacts(
               return Object.freeze({
                 repositoryId: worktree.repositoryId,
                 repositoryName: repositoryNames.get(worktree.repositoryId) ?? worktree.repositoryId,
-                receipt:
-                  receipt === undefined
-                    ? ("absent" as const)
-                    : receipt.checkoutPresent
-                      ? ("present" as const)
-                      : ("checkout-missing" as const),
+                // 检出目录此刻在不在已由 projectionScopeOf 归一化掉：这里只看回执有没有。
+                receipt: receipt === undefined ? ("absent" as const) : ("present" as const),
               });
             }),
           ),
@@ -283,6 +320,7 @@ export function buildActiveProjectionFacts(
         .filter((facts): facts is Readonly<ActiveProjectionDemandFacts> => facts !== null)
         .sort((left, right) => left.demandId.localeCompare(right.demandId)),
     ),
+    activeDemands: demandEvidenceOf(observation),
   });
 }
 

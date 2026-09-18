@@ -10,16 +10,20 @@ import {
 } from "node:fs";
 import type { Stats } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { initSync, parse } from "es-module-lexer";
 
 /**
  * Wakeflow Tooling / Artifacts：TypeScript 技术骨干的双宿主候选制品装配器。
  *
- * 本工具以已编译宿主入口为唯一根，使用成熟ES module lexer求取真实静态依赖
- * 闭包，只把可达 JavaScript、精确 npm 依赖和最小 MCP 启动资产写入 `.build`。它不会
- * 读取旧 JS 运行时来补能力，也不会更新 `plugins/`、安装缓存或任何发布版本来源。
+ * 本工具以已编译宿主入口为根，使用成熟ES module lexer求取真实静态依赖闭包，
+ * 只把可达 JavaScript、精确 npm 依赖和最小启动资产写入 `.build`。每个候选有两个
+ * launcher（gate-log §13.97 D8）：`mcp/server.mjs`（宿主 MCP 入口）与 `hooks/observe.mjs`
+ * （hook 观察脚本，闭包必须全是 shared 范围）；闭包取两个根的并集，按路径去重后每个文件
+ * 只写一次。`hooks/hooks.json` 在运行时动态 import 该宿主编译后的 hook 片段模块渲染，并按
+ * 该模块导出的摘要核对渲染字节——tooling 对编译产物没有静态类型边。它不会读取旧 JS
+ * 运行时来补能力，也不会更新 `plugins/`、安装缓存或任何发布版本来源。
  *
  * 候选制品明确标记为不可发布；它只验证 TS 单一源码能够形成 Codex 与 Claude Code
  * 两个隔离闭包。完整 Skills、模板、业务工具和最终插件 manifest 留到整体切换阶段。
@@ -34,13 +38,32 @@ const CANDIDATE_SCOPE = "typescript-public-technical-skeleton";
 
 type CandidateHostId = "codex" | "claude-code";
 type CompiledFileScope = "shared" | "current-host" | "peer-profile";
+type LauncherKind = "mcp" | "hook-observer";
+type RuntimeEntrypointPath = "mcp/server.mjs" | "hooks/observe.mjs";
 
-interface CandidateDefinition {
-  readonly hostId: CandidateHostId;
-  readonly directoryName: "codex-wakeflow" | "claude-code-wakeflow";
-  readonly referencePackagePath: string;
+interface LauncherDefinition {
+  readonly kind: LauncherKind;
+  /** 制品根下的启动文件路径。 */
+  readonly runtimeEntrypoint: RuntimeEntrypointPath;
+  /** 编译根下的入口模块（闭包的根）。 */
   readonly entrypoint: string;
-  readonly runExport: "runCodexWakeflowMcpStdio" | "runClaudeCodeWakeflowMcpStdio";
+  readonly runExport: string;
+}
+
+interface HookFragmentDefinition {
+  /** 编译根下的宿主 hook 片段模块；只在运行时动态 import，不进任何闭包。 */
+  readonly module: string;
+  readonly renderExport: string;
+  /** 片段自己声明的渲染字节摘要；构建器写出 `hooks/hooks.json` 前按它核对（§13.97 D6）。 */
+  readonly digestExport: string;
+}
+
+/**
+ * 宿主隔离规则：一个候选制品里编译文件的范围只由这四项决定（§13.97 D8）。它与候选的其余
+ * 定义（launcher、片段、包元数据）分开，所以范围守卫可以被单独调用与回归。导出供回归测试。
+ */
+export interface CandidateHostIsolationRule {
+  readonly hostId: CandidateHostId;
   readonly currentHostDirectory: string;
   readonly peerHostDirectory: string;
   /**
@@ -51,13 +74,43 @@ interface CandidateDefinition {
   readonly admittedPeerModules: readonly string[];
 }
 
+interface CandidateDefinition extends CandidateHostIsolationRule {
+  readonly directoryName: "codex-wakeflow" | "claude-code-wakeflow";
+  readonly referencePackagePath: string;
+  /** 第一个是 MCP 入口（清单的 `runtimeEntrypoint` 仍指向它），第二个是 hook 观察脚本。 */
+  readonly launchers: readonly [
+    Readonly<LauncherDefinition & { readonly kind: "mcp" }>,
+    Readonly<LauncherDefinition & { readonly kind: "hook-observer" }>,
+  ];
+  readonly hookFragment: Readonly<HookFragmentDefinition>;
+}
+
+const HOOK_OBSERVER_LAUNCHER = Object.freeze({
+  kind: "hook-observer",
+  runtimeEntrypoint: "hooks/observe.mjs",
+  entrypoint: "entrypoints/wakeflow-hook-observer.js",
+  runExport: "main",
+} as const satisfies Readonly<LauncherDefinition>);
+
 const CANDIDATES = Object.freeze([
   Object.freeze({
     hostId: "codex",
     directoryName: "codex-wakeflow",
     referencePackagePath: "plugins/codex-wakeflow/package.json",
-    entrypoint: "entrypoints/codex-wakeflow-mcp.js",
-    runExport: "runCodexWakeflowMcpStdio",
+    launchers: Object.freeze([
+      Object.freeze({
+        kind: "mcp",
+        runtimeEntrypoint: "mcp/server.mjs",
+        entrypoint: "entrypoints/codex-wakeflow-mcp.js",
+        runExport: "runCodexWakeflowMcpStdio",
+      } as const),
+      HOOK_OBSERVER_LAUNCHER,
+    ] as const),
+    hookFragment: Object.freeze({
+      module: "hosts/codex/codex-hook-fragment.js",
+      renderExport: "renderCodexHooksJson",
+      digestExport: "CODEX_HOOK_FRAGMENT_DIGEST",
+    }),
     currentHostDirectory: "hosts/codex/",
     peerHostDirectory: "hosts/claude-code/",
     admittedPeerModules: Object.freeze([
@@ -69,8 +122,20 @@ const CANDIDATES = Object.freeze([
     hostId: "claude-code",
     directoryName: "claude-code-wakeflow",
     referencePackagePath: "plugins/claude-code-wakeflow/package.json",
-    entrypoint: "entrypoints/claude-code-wakeflow-mcp.js",
-    runExport: "runClaudeCodeWakeflowMcpStdio",
+    launchers: Object.freeze([
+      Object.freeze({
+        kind: "mcp",
+        runtimeEntrypoint: "mcp/server.mjs",
+        entrypoint: "entrypoints/claude-code-wakeflow-mcp.js",
+        runExport: "runClaudeCodeWakeflowMcpStdio",
+      } as const),
+      HOOK_OBSERVER_LAUNCHER,
+    ] as const),
+    hookFragment: Object.freeze({
+      module: "hosts/claude-code/claude-code-hook-fragment.js",
+      renderExport: "renderClaudeCodeHooksJson",
+      digestExport: "CLAUDE_CODE_HOOK_FRAGMENT_DIGEST",
+    }),
     currentHostDirectory: "hosts/claude-code/",
     peerHostDirectory: "hosts/codex/",
     admittedPeerModules: Object.freeze([
@@ -229,12 +294,13 @@ function packageRoot(specifier: string): string {
   return root;
 }
 
+/** 从若干根出发的静态依赖闭包；`visited` 按路径去重，多个根共享的模块只出现一次。 */
 function compiledModuleClosure(
   compiledRoot: string,
-  entrypoint: string,
+  entrypoints: readonly string[],
 ): Readonly<CompiledClosure> {
   initSync();
-  const pending = [entrypoint];
+  const pending = [...entrypoints];
   const visited = new Set<string>();
   const externalPackages = new Set<string>();
 
@@ -284,22 +350,55 @@ function compiledModuleClosure(
 }
 
 function compiledFileScope(
-  definition: Readonly<CandidateDefinition>,
+  rule: Readonly<CandidateHostIsolationRule>,
   relative: string,
 ): CompiledFileScope {
-  if (relative.startsWith(definition.currentHostDirectory)) {
+  if (relative.startsWith(rule.currentHostDirectory)) {
     return "current-host";
   }
-  if (relative.startsWith(definition.peerHostDirectory)) {
-    if (!definition.admittedPeerModules.includes(relative)) {
+  if (relative.startsWith(rule.peerHostDirectory)) {
+    if (!rule.admittedPeerModules.includes(relative)) {
       fail(
         "wakeflow-artifact-host-isolation",
-        `${definition.hostId} closure reached a peer-host execution module`,
+        `${rule.hostId} closure reached a peer-host execution module`,
       );
     }
     return "peer-profile";
   }
   return "shared";
+}
+
+/**
+ * hook 观察脚本的闭包限于 foundation 与 kernel（§13.97 D1）：任何宿主目录的模块——包括对端
+ * 准入的纯数据 profile——都不得进入，否则一份宿主中立的脚本会带着宿主实现进制品。只读文件
+ * 列表，导出供回归测试用手搭的闭包核对稳定错误码。
+ */
+export function assertSharedClosure(
+  rule: Readonly<CandidateHostIsolationRule>,
+  files: readonly string[],
+): void {
+  for (const relative of files) {
+    if (compiledFileScope(rule, relative) !== "shared") {
+      fail(
+        "wakeflow-artifact-hook-observer-scope",
+        `${rule.hostId} hook observer closure reached a host module`,
+      );
+    }
+  }
+}
+
+/** 两个 launcher 的闭包并集：文件按路径去重排序，外部包同样去重排序。 */
+function mergeClosures(closures: readonly Readonly<CompiledClosure>[]): Readonly<CompiledClosure> {
+  const files = new Set<string>();
+  const externalPackages = new Set<string>();
+  for (const closure of closures) {
+    for (const file of closure.files) files.add(file);
+    for (const name of closure.externalPackages) externalPackages.add(name);
+  }
+  return Object.freeze({
+    files: Object.freeze([...files].sort(compareCodeUnits)),
+    externalPackages: Object.freeze([...externalPackages].sort(compareCodeUnits)),
+  });
 }
 
 function directDependencyVersions(rootPackage: JsonRecord): Readonly<Record<string, string>> {
@@ -359,18 +458,162 @@ function compiledArtifactBytes(source: Buffer): Buffer {
   return Buffer.from(text, "utf8");
 }
 
-function launcherBytes(definition: Readonly<CandidateDefinition>): Buffer {
+const GENERATED_FILE_NOTICE = "// 此文件由 Wakeflow TypeScript 候选制品装配器生成，禁止手工修改。";
+
+function mcpLauncherBytes(launcher: Readonly<LauncherDefinition>): Buffer {
   return Buffer.from(
     [
       "#!/usr/bin/env node",
-      "// 此文件由 Wakeflow TypeScript 候选制品装配器生成，禁止手工修改。",
-      `import { ${definition.runExport} } from "../lib/${definition.entrypoint}";`,
+      GENERATED_FILE_NOTICE,
+      `import { ${launcher.runExport} } from "../lib/${launcher.entrypoint}";`,
       "",
-      `${definition.runExport}(${JSON.stringify(CANDIDATE_VERSION)});`,
+      `${launcher.runExport}(${JSON.stringify(CANDIDATE_VERSION)});`,
       "",
     ].join("\n"),
     "utf8",
   );
+}
+
+/**
+ * hook 观察脚本的 launcher（§13.97 D1）：动态 import 放在 try/catch 里，退出码钉在 0，任何失败——
+ * 模块缺失或入口缺 `main` 打 `launcher`，未捕获异常与未处理拒绝打 `internal`——只向 stderr 打一行
+ * 固定代码，从不打堆栈或路径。静态 import 失败会打出带绝对路径的堆栈并以 1 退出，被 Claude 显示
+ * 给用户，所以不用它。入口的 `main()` 登记自己的进程守卫，launcher 在调用它之前卸下自己的守卫：
+ * 任一时刻恰好一组守卫在位。报告固定代码本身也先卸下守卫——成功路径之外的失败（import 抛出、
+ * 守卫自己触发）之后守卫必须不在位，否则同一次运行的第二次故障会打出第二行，违反"一次故障恰好
+ * 一行"（D4）；卸下之后的故障落回 Node 默认处理，不可能再打出固定代码行。
+ */
+function hookObserverLauncherBytes(launcher: Readonly<LauncherDefinition>): Buffer {
+  const runExport = launcher.runExport;
+  return Buffer.from(
+    [
+      "#!/usr/bin/env node",
+      GENERATED_FILE_NOTICE,
+      "process.exitCode = 0;",
+      "let reported = false;",
+      "function launcherGuard() {",
+      '  reportFixedCode("internal");',
+      "}",
+      "function removeLauncherGuards() {",
+      '  process.off("uncaughtException", launcherGuard);',
+      '  process.off("unhandledRejection", launcherGuard);',
+      "}",
+      "// 只报一次，并且报完仍留着守卫：第二次故障不能落到 Node 默认处理器（会打出带路径的堆栈并以非 0 退出）。",
+      "function reportFixedCode(code) {",
+      "  if (reported) return;",
+      "  reported = true;",
+      "  try {",
+      '    process.stderr.write("wakeflow-hook-observer: " + code + "\\n");',
+      "  } catch {",
+      "    // stderr 不可用时也不改变退出码。",
+      "  }",
+      "  process.exitCode = 0;",
+      "}",
+      'process.on("uncaughtException", launcherGuard);',
+      'process.on("unhandledRejection", launcherGuard);',
+      "try {",
+      `  const observer = await import(${JSON.stringify(`../lib/${launcher.entrypoint}`)});`,
+      `  if (typeof observer.${runExport} !== "function") throw new TypeError(${JSON.stringify(runExport)});`,
+      "  removeLauncherGuards();",
+      `  await observer.${runExport}();`,
+      "} catch {",
+      '  reportFixedCode("launcher");',
+      "}",
+      "process.exitCode = 0;",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+}
+
+function launcherBytes(launcher: Readonly<LauncherDefinition>): Buffer {
+  return launcher.kind === "mcp" ? mcpLauncherBytes(launcher) : hookObserverLauncherBytes(launcher);
+}
+
+function isModuleNamespace(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null;
+}
+
+/** 动态 import 该宿主编译后的 hook 片段模块（§13.97 D8）：tooling 对编译产物没有静态类型边。 */
+async function importHookFragmentModule(
+  compiledRoot: string,
+  definition: Readonly<CandidateDefinition>,
+): Promise<Readonly<Record<string, unknown>>> {
+  const modulePath = path.resolve(compiledRoot, definition.hookFragment.module);
+  assertBelow(compiledRoot, modulePath, "wakeflow-artifact-module-scope");
+  readBoundedRegularFile(modulePath);
+  let loaded: unknown;
+  try {
+    loaded = await import(pathToFileURL(modulePath).href);
+  } catch {
+    fail("wakeflow-artifact-hook-fragment", "compiled hook fragment module could not be loaded");
+  }
+  if (!isModuleNamespace(loaded)) {
+    fail("wakeflow-artifact-hook-fragment", "compiled hook fragment module is not a namespace");
+  }
+  return loaded;
+}
+
+/**
+ * 调用片段的渲染函数并只核对形状（字符串、尾随换行、顶层 `hooks` 对象）：片段是纯数据，
+ * 渲染结果只由它决定，这里不复制片段的任何内容。
+ */
+function renderHookFragment(
+  namespace: Readonly<Record<string, unknown>>,
+  definition: Readonly<CandidateDefinition>,
+): string {
+  const render = namespace[definition.hookFragment.renderExport];
+  if (typeof render !== "function") {
+    fail("wakeflow-artifact-hook-fragment", "hook fragment module lacks its render export");
+  }
+  const rendered: unknown = render();
+  if (typeof rendered !== "string" || !rendered.endsWith("\n")) {
+    fail(
+      "wakeflow-artifact-hook-fragment",
+      "hook fragment render must return newline-terminated text",
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rendered);
+  } catch {
+    fail("wakeflow-artifact-hook-fragment", "hook fragment render is not valid JSON");
+  }
+  if (!isPlainRecord(parsed) || !isPlainRecord(parsed.hooks)) {
+    fail("wakeflow-artifact-hook-fragment", "hook fragment must render one hooks object");
+  }
+  return rendered;
+}
+
+/** 渲染字节与片段自己声明的摘要不一致时的稳定错误码。 */
+const HOOK_FRAGMENT_DIGEST_ERROR_CODE = "wakeflow-artifact-hook-fragment-digest";
+
+/**
+ * 写出 `hooks/hooks.json` 前核对渲染字节等于片段模块导出的摘要（§13.97 D6）：Codex 的信任按
+ * 定义哈希记录，摘要是片段对"这就是我渲染的字节"的声明；两者不一致说明片段的数据与摘要脱节，
+ * 构建器以稳定错误码失败，而不是把一份没有任何生产消费者核对过的字节写进制品。导出供回归测试。
+ */
+export function assertRenderedHookFragmentDigest(rendered: string, declared: unknown): void {
+  if (typeof declared !== "string") {
+    fail(HOOK_FRAGMENT_DIGEST_ERROR_CODE, "hook fragment module lacks its rendered-bytes digest");
+  }
+  if (declared !== sha256(Buffer.from(rendered, "utf8"))) {
+    fail(
+      HOOK_FRAGMENT_DIGEST_ERROR_CODE,
+      "hook fragment render disagrees with its declared digest",
+    );
+  }
+}
+
+/** `hooks/hooks.json` 的字节：片段渲染，经形状与自声明摘要两道核对后原样写出。 */
+async function hooksJsonBytes(
+  compiledRoot: string,
+  definition: Readonly<CandidateDefinition>,
+): Promise<Buffer> {
+  const namespace = await importHookFragmentModule(compiledRoot, definition);
+  const rendered = renderHookFragment(namespace, definition);
+  assertRenderedHookFragmentDigest(rendered, namespace[definition.hookFragment.digestExport]);
+  return Buffer.from(rendered, "utf8");
 }
 
 function mcpConfiguration(definition: Readonly<CandidateDefinition>): JsonRecord {
@@ -427,15 +670,63 @@ function packageMetadata(
   };
 }
 
-function assembleCandidate(
+interface GeneratedFile {
+  readonly path: string;
+  readonly bytes: Buffer;
+  readonly mode: 0o644 | 0o755;
+  readonly scope: CompiledFileScope | "entrypoint" | "metadata";
+}
+
+/** 两个 launcher 各自的闭包：hook 观察脚本的闭包必须全是 shared 范围，随后取并集写入。 */
+function candidateClosure(
+  compiledRoot: string,
+  definition: Readonly<CandidateDefinition>,
+): Readonly<CompiledClosure> {
+  const [mcp, hookObserver] = definition.launchers;
+  const hookObserverClosure = compiledModuleClosure(compiledRoot, [hookObserver.entrypoint]);
+  assertSharedClosure(definition, hookObserverClosure.files);
+  return mergeClosures([
+    compiledModuleClosure(compiledRoot, [mcp.entrypoint]),
+    hookObserverClosure,
+  ]);
+}
+
+function sourceEntrypoint(launcher: Readonly<LauncherDefinition>): string {
+  return `src/${launcher.entrypoint.replace(/\.js$/u, ".ts")}`;
+}
+
+interface ManifestRuntimeEntrypoint {
+  readonly kind: LauncherKind;
+  readonly runtimeEntrypoint: RuntimeEntrypointPath;
+  readonly sourceEntrypoint: string;
+}
+
+/** 清单的 `runtimeEntrypoints[]`：两个 launcher 按定义顺序，MCP 在前（§13.97 D8）。 */
+function manifestRuntimeEntrypoints(
+  definition: Readonly<CandidateDefinition>,
+): readonly Readonly<ManifestRuntimeEntrypoint>[] {
+  return Object.freeze(
+    definition.launchers.map((launcher) =>
+      Object.freeze({
+        kind: launcher.kind,
+        runtimeEntrypoint: launcher.runtimeEntrypoint,
+        sourceEntrypoint: sourceEntrypoint(launcher),
+      }),
+    ),
+  );
+}
+
+async function assembleCandidate(
   repositoryRoot: string,
   compiledRoot: string,
   stageRoot: string,
   definition: Readonly<CandidateDefinition>,
   directDependencies: Readonly<Record<string, string>>,
-): Readonly<TypescriptArtifactCandidateBuildRecord> {
-  const closure = compiledModuleClosure(compiledRoot, definition.entrypoint);
+): Promise<Readonly<TypescriptArtifactCandidateBuildRecord>> {
+  const closure = candidateClosure(compiledRoot, definition);
   const dependencies = dependenciesForClosure(closure, directDependencies);
+  const [mcpLauncher, hookObserverLauncher] = definition.launchers;
+  const hooksJson = await hooksJsonBytes(compiledRoot, definition);
   const referencePackage = readJsonRecord(
     path.join(repositoryRoot, definition.referencePackagePath),
   );
@@ -467,12 +758,29 @@ function assembleCandidate(
     );
   }
 
-  const generatedFiles = [
+  const generatedFiles: readonly Readonly<GeneratedFile>[] = [
     Object.freeze({
-      path: "mcp/server.mjs",
-      bytes: launcherBytes(definition),
+      path: mcpLauncher.runtimeEntrypoint,
+      bytes: launcherBytes(mcpLauncher),
       mode: 0o755 as const,
       scope: "entrypoint" as const,
+    }),
+    // hook 观察脚本是第二个 launcher（`runtimeEntrypoints[]` 如此列出），范围与 MCP launcher
+    // 同为 `entrypoint`：按 `entrypoint` 选 launcher 的消费者必须两个都看得见。它的闭包是不是
+    // shared 由 `assertSharedClosure` 断言，那是 `lib/` 下文件的范围，不是这份生成文件的范围。
+    Object.freeze({
+      path: hookObserverLauncher.runtimeEntrypoint,
+      bytes: launcherBytes(hookObserverLauncher),
+      mode: 0o755 as const,
+      scope: "entrypoint" as const,
+    }),
+    // `hooks/hooks.json` 与 `.mcp.json` 同类：由构建器生成、供宿主读取的该 launcher 的宿主
+    // 配置，字节随宿主不同（占位符与处理器形式），所以不是 `shared`，是 `metadata`。
+    Object.freeze({
+      path: "hooks/hooks.json",
+      bytes: hooksJson,
+      mode: 0o644 as const,
+      scope: "metadata" as const,
     }),
     Object.freeze({
       path: ".mcp.json",
@@ -509,8 +817,9 @@ function assembleCandidate(
     hostId: definition.hostId,
     candidateVersion: CANDIDATE_VERSION,
     referenceArtifactVersion: referencePackage.version,
-    sourceEntrypoint: `src/${definition.entrypoint.replace(/\.js$/u, ".ts")}`,
-    runtimeEntrypoint: "mcp/server.mjs",
+    sourceEntrypoint: sourceEntrypoint(mcpLauncher),
+    runtimeEntrypoint: mcpLauncher.runtimeEntrypoint,
+    runtimeEntrypoints: manifestRuntimeEntrypoints(definition),
     externalPackages: closure.externalPackages,
     files: payload,
   } as const;
@@ -559,11 +868,14 @@ function replaceOutputAtomically(repositoryRoot: string, stage: string, output: 
   assertBelow(repositoryRoot, output, "wakeflow-artifact-output-scope");
 }
 
-/** 从一次共享 TS 编译结果装配两份隔离、不可发布的宿主候选制品。 */
-export function buildTypescriptArtifactCandidates(
+/**
+ * 从一次共享 TS 编译结果装配两份隔离、不可发布的宿主候选制品。异步只因 `hooks/hooks.json`
+ * 要动态 import 编译后的片段模块（D8）；文件系统写入本身仍是同步且排他的。
+ */
+export async function buildTypescriptArtifactCandidates(
   repositoryRootInput: string,
   outputRootInput = DEFAULT_OUTPUT_ROOT,
-): Readonly<TypescriptArtifactCandidatesBuildResult> {
+): Promise<Readonly<TypescriptArtifactCandidatesBuildResult>> {
   const repositoryRoot = path.resolve(repositoryRootInput);
   assertRealDirectory(repositoryRoot, "repository root");
   const rootPackage = readJsonRecord(path.join(repositoryRoot, "package.json"));
@@ -592,7 +904,13 @@ export function buildTypescriptArtifactCandidates(
   try {
     for (const definition of CANDIDATES) {
       artifacts.push(
-        assembleCandidate(repositoryRoot, compiledRoot, stage, definition, directDependencies),
+        await assembleCandidate(
+          repositoryRoot,
+          compiledRoot,
+          stage,
+          definition,
+          directDependencies,
+        ),
       );
     }
     replaceOutputAtomically(repositoryRoot, stage, output);
@@ -615,9 +933,9 @@ function isMainModule(): boolean {
   return invoked !== undefined && path.resolve(invoked) === fileURLToPath(import.meta.url);
 }
 
-if (isMainModule()) {
+async function runAsMain(): Promise<void> {
   try {
-    const result = buildTypescriptArtifactCandidates(process.cwd());
+    const result = await buildTypescriptArtifactCandidates(process.cwd());
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } catch (error: unknown) {
     if (error instanceof TypescriptArtifactCandidateBuildError) {
@@ -628,3 +946,5 @@ if (isMainModule()) {
     process.exitCode = 1;
   }
 }
+
+if (isMainModule()) await runAsMain();

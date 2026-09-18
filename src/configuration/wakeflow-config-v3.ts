@@ -325,10 +325,13 @@ const validateWireConfig = createRuntimeJsonSchemaValidator<WakeflowConfigV3Wire
   WAKEFLOW_CONFIG_V3_SCHEMA,
 );
 
+/** 兄弟根放置至多一个前导 `..`：hook 观察脚本按"祖先或祖先的直接子目录"找回工作区（§13.97 D2e）。 */
+const SIBLING_PLACEMENT_MAXIMUM_PARENT_SEGMENTS = 1;
+
 function parsePlacement(
   value: string,
   path: string,
-  childOnly = false,
+  maximumParentSegments = Number.POSITIVE_INFINITY,
 ): WakeflowConfigPlacement {
   if (
     !value.isWellFormed()
@@ -342,7 +345,7 @@ function parsePlacement(
   const segments = value.split("/");
   let parentSegments = 0;
   while (segments[parentSegments] === "..") parentSegments += 1;
-  if (childOnly && parentSegments > 0) fail("placement", path);
+  if (parentSegments > maximumParentSegments) fail("placement", path);
   if (
     parentSegments === segments.length
     || segments.slice(parentSegments).some(
@@ -405,13 +408,14 @@ function validatePlacements(model: WakeflowConfigV3Wire): void {
     parsePlacement(
       repository.path,
       `$/topology/repositories/${index}/path`,
+      SIBLING_PLACEMENT_MAXIMUM_PARENT_SEGMENTS,
     );
     for (const [residueIndex, residue] of
       (repository.validation?.residueExceptions ?? []).entries()) {
       parsePlacement(
         residue.path,
         `$/topology/repositories/${index}/validation/residueExceptions/${residueIndex}/path`,
-        true,
+        0,
       );
     }
   }
@@ -419,6 +423,7 @@ function validatePlacements(model: WakeflowConfigV3Wire): void {
     parsePlacement(
       surface.path,
       `$/topology/supportSurfaces/${index}/path`,
+      SIBLING_PLACEMENT_MAXIMUM_PARENT_SEGMENTS,
     );
   }
 }

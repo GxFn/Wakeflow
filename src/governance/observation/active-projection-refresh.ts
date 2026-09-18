@@ -21,8 +21,11 @@ import { observeWorkspace } from "./workspace-observation.js";
  *
  * 触发方是各切片的变更执行器（Demand 事件提交、pod 创建与关闭、维护 apply）；它们在自己的
  * 事务提交之后调用一次。投影是自愈的派生物：刷新失败不能否定已经提交的事件，所以静默版本
- * 只吞 `io-failure`（锁争用、读写失败），其余错误照常上抛。宿主 profile 不参与：投影不含
- * 宿主域，status 单独报告 pod 的绑定状态。
+ * 吞掉一切带原因的 Wakeflow 失败，只有中止（调用方自己要求停下）与非 Wakeflow 的编程错误
+ * 上抛。只吞 `io-failure` 是不够的：刷新还会因 `precondition-failed`（ledger 放置一时探不
+ * 到）或 `capacity-exceeded`（渲染超过单文件上限）失败，那些失败一旦上抛就会让一个已经落
+ * 盘的事件报错返回，调用方于是重做一次已经记下的变更。投影下一次刷新或 `wakeflow_status`
+ * 自会重算。宿主 profile 不参与：投影不含宿主域，status 单独报告 pod 的绑定状态。
  */
 
 export interface RefreshActiveProjectionOptions {
@@ -73,14 +76,24 @@ export async function refreshActiveProjection(
       scope: "projection",
       ...signalOptions(options.signal),
     });
-    const files = renderActiveProjectionFiles(buildActiveProjectionFacts(observation));
-    return await publishActiveProjection(root, files, signalOptions(options.signal));
+    const facts = buildActiveProjectionFacts(observation);
+    const files = renderActiveProjectionFiles(facts);
+    // 退休证据与文件同出一轮观察：这一轮没看全活动 Demand 就一个页面目录都不删。
+    return await publishActiveProjection(root, files, {
+      activeDemands: facts.activeDemands,
+      ...signalOptions(options.signal),
+    });
   } finally {
     await ledgerRoot.close();
   }
 }
 
-/** 静默刷新：只吞 `io-failure`（争用、读写失败），其余上抛；中止也上抛。 */
+/**
+ * 静默刷新：吞掉已归类的 Wakeflow 失败（派生物不能否定已提交的事件）；中止、`unexpected`
+ * 与非 Wakeflow 错误上抛。`unexpected` 是"没人认领的错误"，也就是编程错误的出口，静默它
+ * 会让投影器自己的缺陷永远不被发现；已归类的失败（io-failure、precondition-failed、
+ * capacity-exceeded 等）都是环境事实，下一次刷新或 `wakeflow_status` 会自愈。
+ */
 export async function refreshActiveProjectionQuietly(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
@@ -88,10 +101,9 @@ export async function refreshActiveProjectionQuietly(
   try {
     await refreshActiveProjection(root, signalOptions(signal));
   } catch (error: unknown) {
-    if (error instanceof WakeflowError && error.code === "io-failure" && error.reason !== "aborted") {
-      return;
+    if (!(error instanceof WakeflowError) || error.reason === "aborted" || error.code === "unexpected") {
+      throw error;
     }
-    throw error;
   }
 }
 

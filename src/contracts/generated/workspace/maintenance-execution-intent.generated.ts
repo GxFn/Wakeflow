@@ -132,7 +132,7 @@ export interface Repository {
  */
 repositoryId: string
 /**
- * Canonical relative placement from the program root.
+ * Canonical relative placement from the program root: below it or exactly one ../ level up.
  */
 path: (string & string)
 /**
@@ -184,7 +184,7 @@ surfaceId: string
  */
 capability: ("design" | "test")
 /**
- * Canonical portable relative placement. A leading ../ chain may address a named sibling root; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.
+ * Canonical portable relative placement of a repository or support surface: below the program root or at most one ../ level up (a named sibling of the root). A deeper ../ chain is rejected so that a session working directory can always be traced back to its program root through an ancestor or an ancestor's direct child; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.
  */
 path: (string & string & string)
 /**
@@ -213,7 +213,7 @@ surfaceId: string
  */
 capability: ("design" | "test")
 /**
- * Canonical portable relative placement. A leading ../ chain may address a named sibling root; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.
+ * Canonical portable relative placement of a repository or support surface: below the program root or at most one ../ level up (a named sibling of the root). A deeper ../ chain is rejected so that a session working directory can always be traced back to its program root through an ancestor or an ancestor's direct child; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.
  */
 path: (string & string & string)
 /**
@@ -449,7 +449,7 @@ disposition: ("merged" | "abandoned")
  */
 export interface Storage {
 /**
- * Canonical portable relative placement. A leading ../ chain may address a named sibling root; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.
+ * Only configurable durable placement root; active and local roots are fixed protocol constants.
  */
 ledgerRoot: string
 }

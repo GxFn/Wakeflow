@@ -1,5 +1,9 @@
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import {
+  WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+  WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
+} from "../../kernel/layout.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 
 /**
@@ -106,6 +110,31 @@ export function deriveNextActions(
   );
 }
 
+/**
+ * status 列表的 wire 上限（见 wakeflow-status-result Schema）：目录列举与活动 Demand 数都可以
+ * 超过它们，越界只截断并报出略去的条数，不让整份结果被输出边界挡下。
+ */
+export const STATUS_LIST_MAXIMUMS = Object.freeze({
+  demands: 256,
+  windows: 512,
+  claims: 512,
+  pods: 64,
+  repositories: 64,
+  worktrees: 64,
+  unmergedAccepted: 256,
+});
+
+/** 截到上限并报出被略去的条数；调用方先做确定性排序，截断才是确定的。 */
+export function capStatusList<Entry>(
+  entries: readonly Entry[],
+  maximum: number,
+): Readonly<{ readonly entries: readonly Entry[]; readonly omitted: number }> {
+  return Object.freeze({
+    entries: Object.freeze(entries.slice(0, maximum)),
+    omitted: Math.max(0, entries.length - maximum),
+  });
+}
+
 /** 不带 demandId 的 `next`：头项动作；没有动作即无前沿。 */
 export function nextFromActions(
   actions: readonly Readonly<NextAction>[],
@@ -143,6 +172,24 @@ export interface VerifyGate {
 }
 
 export interface WorkspaceGateFacts {
+  /**
+   * 三个域的观察状态（§13.94 D1）：读不出时空列表不是"没有"，依赖它们的门只能 unavailable，
+   * 需要活动 Demand 集合的交叉检查（看板认领、孤儿声明）也不做。
+   */
+  readonly domains: Readonly<{
+    readonly demands: Readonly<{
+      readonly status: "observed" | "unavailable";
+      readonly issue: string | null;
+    }>;
+    readonly claims: Readonly<{
+      readonly status: "observed" | "unavailable";
+      readonly issue: string | null;
+    }>;
+    readonly pods: Readonly<{
+      readonly status: "observed" | "unavailable";
+      readonly issue: string | null;
+    }>;
+  }>;
   readonly configRecheck: "current" | "changed" | "unavailable";
   readonly configRef: PortableResourcePath;
   readonly configDigest: Sha256Digest;
@@ -170,10 +217,13 @@ export interface WorkspaceGateFacts {
   readonly strayJournals: readonly string[] | null;
   readonly claims: readonly Readonly<{ readonly windowId: string; readonly orphan: boolean }>[];
   readonly claimsUnreadable: number;
+  /** hook 通道：`current` 是当前制品的宿主，只有它的目录缺席或零记录值得报出来（§13.97 D10）。 */
   readonly hooks: readonly Readonly<{
     readonly hostId: string;
+    readonly current: boolean;
     readonly status: "observed" | "unavailable";
     readonly directory: "absent" | "private" | "mode";
+    readonly records: number;
     readonly skipped: number;
   }>[];
   readonly windows: readonly Readonly<{
@@ -211,10 +261,14 @@ export interface WorkspaceGateFacts {
 type Evidence = VerifyGate["evidence"];
 
 const CODE_MAXIMUM_LENGTH = 256;
-/** 为截断收尾 `,+<剩余数>` 预留的长度。 */
-const CODE_SUFFIX_RESERVE = 8;
+/**
+ * 截断收尾用 `more-<剩余数>`：wire 的 `code` 只收 `[A-Za-z0-9._:,/-]` 且首字符必须是字母数字，
+ * 所以收尾串既不能带 `+`，独占整个 code 时也要能自己起头。预留 `,more-` 六字符加六位数字。
+ */
+const CODE_TRUNCATION_PREFIX = "more-";
+const CODE_SUFFIX_RESERVE = 12;
 
-/** 把多个码连成一个 code（`,` 分隔）；超过 wire 上限时只保留放得下的前缀并以 `+<剩余数>` 收尾。 */
+/** 把多个码连成一个 code（`,` 分隔）；超过 wire 上限时只保留放得下的前缀并以 `more-<剩余数>` 收尾。 */
 function joinCodes(codes: readonly string[]): string | null {
   if (codes.length === 0) return null;
   const kept: string[] = [];
@@ -224,8 +278,13 @@ function joinCodes(codes: readonly string[]): string | null {
     kept.push(entry);
   }
   if (kept.length === codes.length) return kept.join(",");
-  const rest = `+${codes.length - kept.length}`;
+  const rest = `${CODE_TRUNCATION_PREFIX}${codes.length - kept.length}`;
   return kept.length === 0 ? rest : `${kept.join(",")},${rest}`;
+}
+
+/** 域读不出时相关门的原因码：观察记录的 issue 已经是 `<域>:<原因>`，缺失时退回 `<域>:unavailable`。 */
+function domainCode(name: string, domain: Readonly<{ readonly issue: string | null }>): string {
+  return domain.issue ?? `${name}:unavailable`;
 }
 
 function gate(
@@ -288,27 +347,45 @@ function layoutGates(facts: WorkspaceGateFacts): readonly Readonly<VerifyGate>[]
 
 function boardGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   const board = facts.board;
-  const consistent =
-    board.skipped === 0 && board.indexCurrent !== false && board.claimedWithoutRoot.length === 0;
-  const code =
-    board.status !== "observed"
-      ? "unavailable"
-      : consistent
-        ? null
-        : joinCodes([
-            ...(board.skipped > 0 ? [`skipped:${board.skipped}`] : []),
-            ...(board.indexCurrent === false ? ["index-stale"] : []),
-            ...board.claimedWithoutRoot.map((demandId) => `claimed-without-root:${demandId}`),
-          ]);
+  if (board.status !== "observed") {
+    return gate("board-consistency", "requirement-board", "unavailable", "unavailable");
+  }
+  const own = [
+    ...(board.skipped > 0 ? [`skipped:${board.skipped}`] : []),
+    ...(board.indexCurrent === false ? ["index-stale"] : []),
+  ];
+  // claimed 指向活动 Demand 的对账需要活动 Demand 集合；demands 域读不出就不做，也不假装通过。
+  const demands = facts.domains.demands;
+  if (demands.status !== "observed") {
+    return gate(
+      "board-consistency",
+      "requirement-board",
+      "unavailable",
+      joinCodes([...own, domainCode("demands", demands)]),
+    );
+  }
+  const codes = [
+    ...own,
+    ...board.claimedWithoutRoot.map((demandId) => `claimed-without-root:${demandId}`),
+  ];
   return gate(
     "board-consistency",
     "requirement-board",
-    verdict(consistent, board.status !== "observed"),
-    code,
+    codes.length === 0 ? "pass" : "fail",
+    joinCodes(codes),
   );
 }
 
 function demandGates(facts: WorkspaceGateFacts): readonly Readonly<VerifyGate>[] {
+  const domain = facts.domains.demands;
+  if (domain.status !== "observed") {
+    const code = domainCode("demands", domain);
+    return [
+      gate("demand-root-audit", "demand-stream", "unavailable", code),
+      gate("append-candidates-clear", "demand-stream", "unavailable", code),
+      gate("evidence-integrity", "managed-evidence", "unavailable", code),
+    ];
+  }
   const unavailable = facts.demands.filter((demand) => demand.status !== "observed");
   const audit = aggregate([
     ...facts.demands.map((demand) => demand.audit),
@@ -351,12 +428,42 @@ function demandGates(facts: WorkspaceGateFacts): readonly Readonly<VerifyGate>[]
 }
 
 function claimsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
+  const claims = facts.domains.claims;
+  if (claims.status !== "observed") {
+    return gate("work-claims", "work-claims", "unavailable", domainCode("claims", claims));
+  }
+  const unreadable = facts.claimsUnreadable > 0 ? [`unreadable:${facts.claimsUnreadable}`] : [];
+  // 孤儿判定要活动 Demand 集合；demands 域读不出就不把每份声明都算成孤儿。
+  const demands = facts.domains.demands;
+  if (demands.status !== "observed") {
+    return gate(
+      "work-claims",
+      "work-claims",
+      "unavailable",
+      joinCodes([...unreadable, domainCode("demands", demands)]),
+    );
+  }
   const orphans = facts.claims
     .filter((claim) => claim.orphan)
     .map((claim) => `orphan:${claim.windowId}`);
-  const unreadable = facts.claimsUnreadable > 0 ? [`unreadable:${facts.claimsUnreadable}`] : [];
   const code = [...orphans, ...unreadable];
   return gate("work-claims", "work-claims", code.length === 0 ? "pass" : "fail", joinCodes(code));
+}
+
+type HookGateFacts = WorkspaceGateFacts["hooks"][number];
+
+/**
+ * 一个宿主的 hook 通道码：不可用、模式不对、有读不出的记录是损坏；当前宿主的目录缺席或零记录
+ * 不是损坏但值得看见——"hook 从未触发"（未信任、`node` 不在 PATH、cwd 匹配失败）在 verify 里
+ * 以 `absent` / `records-0` 报出（§13.97 D10），同伴宿主的缺席保持沉默。
+ */
+function hookHostCode(host: HookGateFacts): string | null {
+  if (host.status !== "observed") return "unavailable";
+  if (host.directory === "mode") return "mode";
+  if (host.skipped > 0) return `skipped-${host.skipped}`;
+  if (!host.current) return null;
+  if (host.directory === "absent") return "absent";
+  return host.records === 0 ? "records-0" : null;
 }
 
 function hooksGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
@@ -364,12 +471,10 @@ function hooksGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
     verdict(host.directory !== "mode" && host.skipped === 0, host.status !== "observed"),
   );
   const status = aggregate(statuses);
-  const code = facts.hooks
-    .filter((host) => host.status !== "observed" || host.directory === "mode" || host.skipped > 0)
-    .map(
-      (host) =>
-        `${host.hostId}:${host.status !== "observed" ? "unavailable" : host.directory === "mode" ? "mode" : `skipped-${host.skipped}`}`,
-    );
+  const code = facts.hooks.flatMap((host) => {
+    const hostCode = hookHostCode(host);
+    return hostCode === null ? [] : [`${host.hostId}:${hostCode}`];
+  });
   return gate("host-hook-channel", "host-hooks", status, joinCodes(code));
 }
 
@@ -390,16 +495,26 @@ function windowsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
 
 type PodGateFacts = WorkspaceGateFacts["pods"][number];
 
-/** worktree pod：open 时每个仓库必须有仍在的检出；closing 时仍在的检出只是待处置，不算失败。 */
+/** code 里不算失败的两种过渡态：待登记（creating）与待处置（closing）。 */
+const PENDING_POD_CODE_SUFFIXES = Object.freeze([":pending-registration", ":disposal-pending"]);
+
+/**
+ * worktree pod：回执要求只落在 ready（与 closing 的检出处置）上（§13.94 D3）。creating 的 pod
+ * 还没登记窗口，回执缺席是过渡态——报 `pending-registration` 但不失败，否则 verify 会把只能靠
+ * 窗口登记解决的状态指向工作区维护。closing 时仍在的检出只是待处置，也不算失败。
+ */
 function worktreePodCodes(pod: PodGateFacts): readonly string[] {
   return pod.worktrees.flatMap((worktree) => {
-    if (pod.lifecycle === "open" && worktree.receipt !== "present") {
-      return [`${pod.podId}:${worktree.repositoryId}:${worktree.receipt}`];
+    if (pod.lifecycle === "closing") {
+      return worktree.receipt === "present"
+        ? [`${pod.podId}:${worktree.repositoryId}:disposal-pending`]
+        : [];
     }
-    if (pod.lifecycle === "closing" && worktree.receipt === "present") {
-      return [`${pod.podId}:${worktree.repositoryId}:disposal-pending`];
+    if (worktree.receipt === "present") return [];
+    if (pod.state === "creating") {
+      return [`${pod.podId}:${worktree.repositoryId}:pending-registration`];
     }
-    return [];
+    return [`${pod.podId}:${worktree.repositoryId}:${worktree.receipt}`];
   });
 }
 
@@ -413,6 +528,10 @@ function primaryPodCodes(
 }
 
 function podsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
+  const domain = facts.domains.pods;
+  if (domain.status !== "observed") {
+    return gate("pod-execution-location", "pod", "unavailable", domainCode("pods", domain));
+  }
   const codes: string[] = [];
   let unavailable = facts.pods.some((pod) => pod.state === "unobserved");
   for (const pod of facts.pods) {
@@ -424,7 +543,9 @@ function podsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
       codes.push(...worktreePodCodes(pod));
     }
   }
-  const failing = codes.some((code) => !code.endsWith(":disposal-pending"));
+  const failing = codes.some(
+    (code) => !PENDING_POD_CODE_SUFFIXES.some((suffix) => code.endsWith(suffix)),
+  );
   return gate(
     "pod-execution-location",
     "pod",
@@ -458,11 +579,21 @@ function assetsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   return gate("host-settings-assets", "host-assets", status, code);
 }
 
+/**
+ * 门证据只收两份工作区页：每个活动 Demand 另有两份投影页，32 个 Demand 就会越过 wire 的
+ * `evidence` 上限 64 而让整次 verify 变成 output-boundary。每 Demand 的页已经由
+ * `status.projection.targets` 逐项带摘要，门不必重复它们。
+ */
+const PROJECTION_EVIDENCE_REFS: readonly PortableResourcePath[] = Object.freeze([
+  WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+  WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
+]);
+
 function projectionGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   const targets = facts.projection.targets;
   const evidence = Object.freeze(
     targets.flatMap((target) =>
-      target.digest === null
+      target.digest === null || !PROJECTION_EVIDENCE_REFS.includes(target.resourcePath)
         ? []
         : [Object.freeze({ ref: target.resourcePath, digest: target.digest })],
     ),

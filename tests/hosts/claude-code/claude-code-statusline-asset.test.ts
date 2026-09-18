@@ -78,7 +78,7 @@ interface DecodedCommand {
   readonly encodedRoot: string;
 }
 
-/** 把 Agent 写进 settings 的命令行还原成 Claude Code 实际交给 node 的 argv。 */
+/** 把 `claude-statusline-settings:install` 写进 settings 的命令行还原成 Claude Code 交给 node 的 argv。 */
 function decodeCommand(command: string): DecodedCommand {
   const match = COMMAND_PATTERN.exec(command);
   const [, quotedAsset, marker, rootArgument, encodedRoot] = match ?? [];

@@ -65,11 +65,13 @@ import {
   type VerifyResult,
 } from "./contract.js";
 import {
+  capStatusList,
   deriveNextActions,
   deriveWorkspaceGates,
   disposalGuidance,
   nextFromActions,
   projectionFreshness,
+  STATUS_LIST_MAXIMUMS,
   summarizeGates,
   verifyNext,
   type NextActionInput,
@@ -128,6 +130,14 @@ function reasonOf(error: unknown): string | null {
   if (typeof error !== "object" || error === null) return null;
   const reason = (error as { readonly reason?: unknown }).reason;
   return typeof reason === "string" ? reason : null;
+}
+
+/**
+ * verify 的加读把"域读不出"降级成 unavailable，但中止不是域故障：和 openContext 一样收敛成
+ * `io-failure/aborted`，否则基础层的原始异常会在 MCP 信封里变成 `unexpected/unhandled`。
+ */
+function failIfAborted(error: unknown): void {
+  if (reasonOf(error) === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
 }
 
 // ---- 上下文 ----------------------------------------------------------------------
@@ -324,16 +334,29 @@ function windowViews(context: SliceContext) {
 
 function claimViews(observation: Readonly<WorkspaceObservation>) {
   const orphans = new Set(orphanWorkClaims(observation).map((claim) => claim.claimId));
-  return (observation.claims.value?.claims ?? []).map((claim) => ({
-    windowId: claim.windowId,
-    claimId: claim.claimId,
-    demandId: claim.holder.demandId,
-    targetTaskId: claim.holder.targetTaskId,
-    deliveryId: claim.holder.deliveryId,
-    generation: claim.holder.generation,
-    claimedAt: claim.claimedAt,
-    orphan: orphans.has(claim.claimId),
-  }));
+  const all = [...(observation.claims.value?.claims ?? [])]
+    .sort((left, right) => left.claimId.localeCompare(right.claimId))
+    .map((claim) => ({
+      windowId: claim.windowId,
+      claimId: claim.claimId,
+      demandId: claim.holder.demandId,
+      targetTaskId: claim.holder.targetTaskId,
+      deliveryId: claim.holder.deliveryId,
+      generation: claim.holder.generation,
+      claimedAt: claim.claimedAt,
+      orphan: orphans.has(claim.claimId),
+    }));
+  return capStatusList(all, STATUS_LIST_MAXIMUMS.claims);
+}
+
+function unmergedAcceptedViews(observation: Readonly<WorkspaceObservation>) {
+  const all = [...unmergedAcceptedFacts(observation)].sort((left, right) => {
+    const demand = left.demandId.localeCompare(right.demandId);
+    if (demand !== 0) return demand;
+    const target = left.targetTaskId.localeCompare(right.targetTaskId);
+    return target !== 0 ? target : left.repositoryId.localeCompare(right.repositoryId);
+  });
+  return capStatusList(all, STATUS_LIST_MAXIMUMS.unmergedAccepted);
 }
 
 function podViews(context: SliceContext) {
@@ -367,20 +390,37 @@ function podViews(context: SliceContext) {
 }
 
 function repositoryViews(observation: Readonly<WorkspaceObservation>) {
-  return (observation.repositories.value ?? []).map((repository) => ({
-    repositoryId: repository.repositoryId,
-    status: repository.status,
-    issue: repository.issue,
-    head: repository.head,
-    branch: repository.branch,
-    detached: repository.detached,
-    branches: repository.branches.length,
-    worktrees: repository.worktrees.map((worktree) => ({
-      name: worktree.name,
-      branch: worktree.branch,
-      prunable: worktree.prunable,
-    })),
-  }));
+  let omitted = 0;
+  const all = (observation.repositories.value ?? []).map((repository) => {
+    const worktrees = capStatusList(
+      [...repository.worktrees].sort((left, right) => left.name.localeCompare(right.name)),
+      STATUS_LIST_MAXIMUMS.worktrees,
+    );
+    omitted += worktrees.omitted;
+    return {
+      repositoryId: repository.repositoryId,
+      status: repository.status,
+      issue: repository.issue,
+      head: repository.head,
+      branch: repository.branch,
+      detached: repository.detached,
+      branches: repository.branches.length,
+      worktrees: worktrees.entries.map((worktree) => ({
+        name: worktree.name,
+        branch: worktree.branch,
+        prunable: worktree.prunable,
+      })),
+    };
+  });
+  // 仓库本身也有 wire 上限；两个略去计数分开报，读者才知道少的是仓库还是某个仓库的 worktree。
+  const capped = capStatusList(
+    [...all].sort((left, right) => left.repositoryId.localeCompare(right.repositoryId)),
+    STATUS_LIST_MAXIMUMS.repositories,
+  );
+  return Object.freeze({
+    entries: capped.entries,
+    omitted: Object.freeze({ repositories: capped.omitted, worktrees: omitted }),
+  });
 }
 
 function hookViews(observation: Readonly<WorkspaceObservation>) {
@@ -430,21 +470,26 @@ function nextActionInput(context: SliceContext): Readonly<NextActionInput> {
       },
     ];
   });
+  // pod 域读不出时 pods 是空列表，不是"没有 pod"：登记动作只在真的观察到 pod 时才排得出来。
+  const podsObserved = observation.pods.status === "observed";
   return Object.freeze({
     maintenance: overall === "maintenance",
-    unregisteredWindows: bindingsObserved
-      ? snapshot.model.topology.windows
-          .filter((window) => !bound.has(window.windowId))
-          .map((window) => {
-            const pod = pods.find((entry) => entry.pod.podId === window.podId);
-            return {
-              windowId: window.windowId,
-              podId: window.podId,
-              placement: pod?.pod.placement ?? "worktree",
-              podActive: pod?.pod.placement === "primary" || pod?.activeDemandId !== null,
-            };
-          })
-      : [],
+    unregisteredWindows:
+      bindingsObserved && podsObserved
+        ? snapshot.model.topology.windows
+            .filter((window) => !bound.has(window.windowId))
+            .map((window) => {
+              const pod = pods.find((entry) => entry.pod.podId === window.podId);
+              return {
+                windowId: window.windowId,
+                podId: window.podId,
+                placement: pod?.pod.placement ?? "worktree",
+                podActive:
+                  pod !== undefined &&
+                  (pod.pod.placement === "primary" || pod.activeDemandId !== null),
+              };
+            })
+        : [],
     demands,
     pendingPackages: (observation.board.value?.states ?? [])
       .filter((state) => state.status === "pending")
@@ -457,9 +502,12 @@ async function routeSection(
   demandId: string | undefined,
 ): Promise<Readonly<{ route: unknown; archive: unknown; next: Readonly<NextProjection> | null }>> {
   if (demandId === undefined) return Object.freeze({ route: null, archive: null, next: null });
-  const active = (context.observation.demands.value ?? []).find(
-    (demand) => demand.demandId === demandId,
-  );
+  // demands 域读不出时"不在活动集合里"不是事实：别让一个还活着的 Demand 显示成 not-found。
+  const domain = context.observation.demands;
+  if (domain.status !== "observed") {
+    fail("precondition-failed", "demands-unavailable", "$request.demandId");
+  }
+  const active = (domain.value ?? []).find((demand) => demand.demandId === demandId);
   if (active !== undefined) {
     if (active.route === null) {
       fail("precondition-failed", `demand-${active.issue ?? "unavailable"}`, "$request.demandId");
@@ -503,6 +551,17 @@ async function routeSection(
   });
 }
 
+/** 每个域的观察状态都要看得见（§13.94 D1）：空列表与"读不出"必须能分辨，而不是只有 overall 暗示。 */
+function domainViews(context: SliceContext) {
+  const { observation, projection } = context;
+  return {
+    demands: { status: observation.demands.status, issue: observation.demands.issue },
+    claims: { status: observation.claims.status, issue: observation.claims.issue },
+    pods: { status: observation.pods.status, issue: observation.pods.issue },
+    projection: { status: projection.status, issue: projection.issue },
+  };
+}
+
 async function assembleStatus(
   context: SliceContext,
   request: StatusRequest,
@@ -510,6 +569,18 @@ async function assembleStatus(
   const { observation, snapshot } = context;
   const actions = deriveNextActions(nextActionInput(context));
   const section = await routeSection(context, request.demandId);
+  const claims = claimViews(observation);
+  const repositories = repositoryViews(observation);
+  const unmergedAccepted = unmergedAcceptedViews(observation);
+  // 每个数组都有 wire 上限：越界的结果会被整份拒绝，所以先确定性排序再截断并报出略去的条数。
+  const demands = capStatusList(
+    [...(observation.demands.value ?? [])]
+      .sort((left, right) => left.demandId.localeCompare(right.demandId))
+      .map(demandView),
+    STATUS_LIST_MAXIMUMS.demands,
+  );
+  const windows = capStatusList(windowViews(context), STATUS_LIST_MAXIMUMS.windows);
+  const pods = capStatusList(podViews(context), STATUS_LIST_MAXIMUMS.pods);
   return admitStatusResult({
     kind: "WakeflowStatus",
     schemaVersion: WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION,
@@ -526,13 +597,23 @@ async function assembleStatus(
       repositories: snapshot.model.topology.repositories.length,
     },
     board: boardView(observation),
-    demands: (observation.demands.value ?? []).map(demandView),
-    windows: windowViews(context),
-    claims: claimViews(observation),
-    pods: podViews(context),
-    repositories: repositoryViews(observation),
+    demands: demands.entries,
+    windows: windows.entries,
+    claims: claims.entries,
+    pods: pods.entries,
+    repositories: repositories.entries,
     hooks: hookViews(observation),
-    unmergedAccepted: unmergedAcceptedFacts(observation),
+    unmergedAccepted: unmergedAccepted.entries,
+    domains: domainViews(context),
+    truncated: {
+      demands: demands.omitted,
+      windows: windows.omitted,
+      claims: claims.omitted,
+      pods: pods.omitted,
+      repositories: repositories.omitted.repositories,
+      worktrees: repositories.omitted.worktrees,
+      unmergedAccepted: unmergedAccepted.omitted,
+    },
     projection: projectionView(context.projection),
     policy: observation.policy,
     route: section.route,
@@ -575,7 +656,7 @@ async function configRecheck(context: SliceContext): Promise<WorkspaceGateFacts[
     );
     return current.configDigest === context.snapshot.configDigest ? "current" : "changed";
   } catch (error: unknown) {
-    if (reasonOf(error) === "aborted") throw error;
+    failIfAborted(error);
     return "unavailable";
   }
 }
@@ -610,7 +691,7 @@ async function localLayout(context: SliceContext): Promise<WorkspaceGateFacts["l
       ]),
     });
   } catch (error: unknown) {
-    if (reasonOf(error) === "aborted") throw error;
+    failIfAborted(error);
     return Object.freeze({ status: "unavailable" as const, codes: Object.freeze([]) });
   }
 }
@@ -619,7 +700,7 @@ async function ledgerLayout(context: SliceContext): Promise<string> {
   try {
     return (await inspectLedgerAuthorityLayout(context.ledgerRoot, context.options.signal)).status;
   } catch (error: unknown) {
-    if (reasonOf(error) === "aborted") throw error;
+    failIfAborted(error);
     return "unavailable";
   }
 }
@@ -664,7 +745,7 @@ async function strayJournals(
       .sort();
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError && error.reason === "not-found") return [];
-    if (reasonOf(error) === "aborted") throw error;
+    failIfAborted(error);
     return null;
   }
 }
@@ -703,7 +784,7 @@ async function demandGateReport(
       signal: context.options.signal,
     });
   } catch (error: unknown) {
-    if (reasonOf(error) === "aborted") throw error;
+    failIfAborted(error);
     return null;
   } finally {
     if (demandRoot !== null) await closeDemandOperationRoot(demandRoot);
@@ -729,7 +810,13 @@ async function gateFacts(
     observation.bindings.flatMap((host) => host.bindings.map((b) => b.windowId)),
   );
   const repositories = observation.repositories.value;
+  const demandsObserved = observation.demands.status === "observed";
   return Object.freeze({
+    domains: {
+      demands: { status: observation.demands.status, issue: observation.demands.issue },
+      claims: { status: observation.claims.status, issue: observation.claims.issue },
+      pods: { status: observation.pods.status, issue: observation.pods.issue },
+    },
     configRecheck: await configRecheck(context),
     configRef: WAKEFLOW_CONFIG_FILE_REF,
     configDigest: snapshot.configDigest,
@@ -740,14 +827,17 @@ async function gateFacts(
       status: observation.board.status,
       skipped: board?.skipped ?? 0,
       indexCurrent: board === null ? null : board.indexDigest === board.expectedIndexDigest,
-      claimedWithoutRoot: (board?.states ?? [])
-        .filter(
-          (state) =>
-            state.status === "claimed" &&
-            state.claim !== null &&
-            !activeIds.has(state.claim.demandId),
-        )
-        .map((state) => state.claim?.demandId ?? state.requirementId),
+      // 活动 Demand 集合读不出时这道对账无从做起；门自己会因 demands 域不可用而 unavailable。
+      claimedWithoutRoot: demandsObserved
+        ? (board?.states ?? [])
+            .filter(
+              (state) =>
+                state.status === "claimed" &&
+                state.claim !== null &&
+                !activeIds.has(state.claim.demandId),
+            )
+            .map((state) => state.claim?.demandId ?? state.requirementId)
+        : [],
     },
     demands: demands.map((demand) => {
       const report = reports.get(demand.demandId) ?? null;
@@ -767,8 +857,10 @@ async function gateFacts(
     claimsUnreadable: observation.claims.value?.unreadable ?? 0,
     hooks: observation.hooks.map((host) => ({
       hostId: host.hostId,
+      current: host.current,
       status: host.status,
       directory: host.directory,
+      records: host.records,
       skipped: host.skipped,
     })),
     windows: snapshot.model.topology.windows.map((window) => ({
@@ -829,13 +921,18 @@ async function assembleVerify(
   const { ok, summary } = summarizeGates(gates);
   let demandSection: unknown = null;
   if (request.demandId !== undefined) {
-    const report = reports.get(request.demandId);
-    if (report !== undefined && report !== null) {
+    // 活动集合本身读不出时不能替这个 Demand 下结论：它可能活着，只是这轮看不见（与 status 同一裁决）。
+    if (!reports.has(request.demandId) && context.observation.demands.status !== "observed") {
+      fail("precondition-failed", "demands-unavailable", "$request.demandId");
+    }
+    // 在活动集合里但读不出（报告为 null）仍然是 current：它不是归档，也不是未知，只是这轮没有门。
+    if (reports.has(request.demandId)) {
+      const report = reports.get(request.demandId) ?? null;
       demandSection = {
         demandId: request.demandId,
         status: "current",
-        gates: report.gates,
-        observationDigest: report.observationDigest,
+        gates: report?.gates ?? [],
+        observationDigest: report?.observationDigest ?? null,
       };
     } else {
       const archive = await locateLatestDemandArchive(

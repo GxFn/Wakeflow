@@ -47,7 +47,10 @@ import {
 } from "../../kernel/work-claims.js";
 import { runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
-import { readHostHookObservations } from "../../kernel/hook-observations.js";
+import {
+  HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
+  readHostHookObservations,
+} from "../../kernel/hook-observations.js";
 import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -470,10 +473,11 @@ async function loadHookSessions(
   const started = new Set<string>();
   const cwdBySession = new Map<string, string>();
   const ended = new Set<string>();
+  // 读取上限等于目录列举上限：让保留策略而不是读取上限决定可见集合（§13.97 D7d）。
   const startRecords = await readHostHookObservations(
     context.root,
     context.facade.hostId,
-    { event: "session-start" },
+    { event: "session-start", limit: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES },
     options,
   );
   for (const record of startRecords.records) {
@@ -484,7 +488,7 @@ async function loadHookSessions(
   const endRecords = await readHostHookObservations(
     context.root,
     context.facade.hostId,
-    { event: "session-end" },
+    { event: "session-end", limit: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES },
     options,
   );
   for (const record of endRecords.records) ended.add(record.sessionId);

@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:status-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_STATUS_RESULT_SCHEMA",
   "title": "WakeflowStatusResultV1",
-  "description": "wakeflow_status 的结果：一次观察派生的工作区定向投影——总体状态、配置摘要、看板摘要、活动 Demand、窗口与工作声明、pod、仓库指针事实、hook 通道、已接受但分支仍在的结果、投影目标、生效阈值与下一步；带 demandId 时附该 Demand 的 Controller Route 或归档回执。不含私有路径、句柄与摘要之外的内容。",
+  "description": "wakeflow_status 的结果：一次观察派生的工作区定向投影——总体状态、配置摘要、看板摘要、活动 Demand、窗口与工作声明、pod、仓库指针事实、hook 通道、已接受但分支仍在的结果、没有自带 status 的域的观察状态、被上限略去的条数、投影目标、生效阈值与下一步；带 demandId 时附该 Demand 的 Controller Route 或归档回执。不含私有路径、句柄与摘要之外的内容。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,6 +21,8 @@
     "repositories",
     "hooks",
     "unmergedAccepted",
+    "domains",
+    "truncated",
     "projection",
     "policy",
     "route",
@@ -187,6 +189,63 @@
         "$ref": "#/$defs/acceptedBranch"
       }
     },
+    "domains": {
+      "description": "没有自带 status/issue 的域的观察状态：读不出时空列表不是“没有”，issue 说明是哪一步失败。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["demands", "claims", "pods", "projection"],
+      "properties": {
+        "demands": {
+          "$ref": "#/$defs/observedDomain"
+        },
+        "claims": {
+          "$ref": "#/$defs/observedDomain"
+        },
+        "pods": {
+          "$ref": "#/$defs/observedDomain"
+        },
+        "projection": {
+          "$ref": "#/$defs/observedDomain"
+        }
+      }
+    },
+    "truncated": {
+      "description": "因越过本结果的数组上限而被略去的条数；全为 0 时列表是完整的。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "demands",
+        "windows",
+        "claims",
+        "pods",
+        "repositories",
+        "worktrees",
+        "unmergedAccepted"
+      ],
+      "properties": {
+        "demands": {
+          "$ref": "#/$defs/count"
+        },
+        "windows": {
+          "$ref": "#/$defs/count"
+        },
+        "claims": {
+          "$ref": "#/$defs/count"
+        },
+        "pods": {
+          "$ref": "#/$defs/count"
+        },
+        "repositories": {
+          "$ref": "#/$defs/count"
+        },
+        "worktrees": {
+          "$ref": "#/$defs/count"
+        },
+        "unmergedAccepted": {
+          "$ref": "#/$defs/count"
+        }
+      }
+    },
     "projection": {
       "type": "object",
       "additionalProperties": false,
@@ -227,7 +286,8 @@
         "workClaimRecoveryWindowMilliseconds",
         "targetResultCallbackSilenceMilliseconds",
         "targetResultCallbackGenerationLimit",
-        "demandReworkEscalationThreshold"
+        "demandReworkEscalationThreshold",
+        "hostHookRetentionMilliseconds"
       ],
       "properties": {
         "deliveryLandingSilenceMilliseconds": {
@@ -249,6 +309,9 @@
           "$ref": "#/$defs/count"
         },
         "demandReworkEscalationThreshold": {
+          "$ref": "#/$defs/count"
+        },
+        "hostHookRetentionMilliseconds": {
           "$ref": "#/$defs/count"
         }
       }
@@ -308,6 +371,19 @@
     },
     "domainStatus": {
       "enum": ["observed", "unavailable"]
+    },
+    "observedDomain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "issue"],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/domainStatus"
+        },
+        "issue": {
+          "$ref": "#/$defs/nullableCode"
+        }
+      }
     },
     "token": {
       "type": "string",
@@ -850,6 +926,7 @@
       }
     },
     "nullableBranch": {
+      "description": "仓库指针上观察到的分支名，按 git 自己的 ref 文法收：排除控制字符、空格、~ ^ : ? * [ 与反斜杠，排除首字符 '-' 与 '.'、'..'、'@{'、连续斜杠、以 '.' 开头的分段，以及以 '/'、'.' 或 '.lock' 结尾。",
       "oneOf": [
         {
           "type": "null"
@@ -858,7 +935,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 255,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$"
+          "pattern": "^(?![-./])(?!.*\\.\\.)(?!.*@\\{)(?!.*//)(?!.*/\\.)(?!.*\\.lock(?:/|$))(?!.*[/.]$)[^\\u0000-\\u0020\\u007F~^:?*\\[\\\\]+$"
         }
       ]
     },

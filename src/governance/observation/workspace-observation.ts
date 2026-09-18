@@ -31,7 +31,11 @@ import {
   type ActiveLayoutInspection,
 } from "../../kernel/active-projection.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
-import { readHostHookObservations, type HostHookEvent } from "../../kernel/hook-observations.js";
+import {
+  HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
+  readHostHookObservations,
+  type HostHookEvent,
+} from "../../kernel/hook-observations.js";
 import {
   hostHookObservationsRootRef,
   hostRuntimeRootRef,
@@ -145,6 +149,8 @@ export interface ObservedHostBindings {
 
 export interface ObservedHostHooks {
   readonly hostId: WakeflowHostId;
+  /** 是否当前制品的宿主：只有它的"目录缺席 / 零记录"值得 verify 报出来（§13.97 D10）。 */
+  readonly current: boolean;
   readonly status: "observed" | "unavailable";
   readonly issue: string | null;
   /** 观察目录：不存在、模式正确、或模式不对。 */
@@ -209,7 +215,8 @@ export interface ObserveWorkspaceOptions {
 export type WorkspaceOverallStatus = "maintenance" | "blocked" | "degraded" | "active" | "idle";
 
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
-const HOOK_RECORDS_MAXIMUM = 4096;
+/** 等于内核 hook 目录的列举上限：可见集合由保留策略而不是读取上限决定（§13.97 D7）。 */
+const HOOK_RECORDS_MAXIMUM = HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES;
 const ASSET_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$asset.maximumBytes");
 const SETTINGS_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$settings.maximumBytes");
 const INDEX_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$boardIndex.maximumBytes");
@@ -455,6 +462,7 @@ async function hookDirectoryState(
 async function observeHostHooks(
   root: RootedDirectory,
   hostId: WakeflowHostId,
+  current: boolean,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ObservedHostHooks>> {
   try {
@@ -477,6 +485,7 @@ async function observeHostHooks(
     }
     return Object.freeze({
       hostId,
+      current,
       status: "observed" as const,
       issue: null,
       directory,
@@ -493,6 +502,7 @@ async function observeHostHooks(
     }
     return Object.freeze({
       hostId,
+      current,
       status: "unavailable" as const,
       issue: reason,
       directory: "absent" as const,
@@ -720,7 +730,9 @@ export async function observeWorkspace(
   if (scope === "full") {
     for (const host of options.hosts) {
       bindings.push(await observeHostBindings(root, snapshot, host, signal));
-      hooks.push(await observeHostHooks(root, host.hostId, signal));
+      hooks.push(
+        await observeHostHooks(root, host.hostId, host.hostId === options.currentHostId, signal),
+      );
       assets.push(await observeHostAsset(root, host, options.currentHostId, signal));
     }
   }

@@ -9,6 +9,11 @@ import type { CallToolResult } from "@modelcontextprotocol/client";
 import { parseWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3.js";
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import {
+  runWakeflowHookObserver,
+  WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
+  WAKEFLOW_HOOK_OBSERVER_MARKER,
+} from "../../src/entrypoints/wakeflow-hook-observer.js";
+import {
   WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
@@ -27,7 +32,6 @@ import {
 } from "../../src/capabilities/result-review/contract.js";
 import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
-import { computeDeliveryPromptDigest } from "../../src/governance/delivery/delivery-envelope.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../src/governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../src/governance/delivery/delivery-rearm.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
@@ -70,10 +74,9 @@ import {
 } from "../../src/capabilities/requirement/contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
 import {
+  HOST_HOOK_RETENTION_MILLISECONDS,
   readHostHookObservations,
-  writeHostHookObservation,
 } from "../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {
@@ -325,20 +328,41 @@ interface BindingMutation {
   readonly next: { readonly frontier: string | null };
 }
 
-/** Agent 在宿主里启动窗口后，宿主 hook 会留下 session-start 记录；这里代替宿主写入。 */
+/**
+ * 代 Codex 触发一次宿主 hook：喂宿主形状的 payload 给观察入口（§13.97 D9），工作区由入口按声明
+ * 拓扑自己定位。场景因此端到端证明 Codex 的事件与字段映射，而不是绕开入口直接调内核写入器。
+ */
+async function observeCodexHook(
+  context: ScenarioContext,
+  event: "SessionStart" | "UserPromptSubmit" | "Stop" | "SessionEnd",
+  payload: { readonly sessionId: string; readonly cwd: string; readonly prompt?: string },
+): Promise<void> {
+  const outcome = await runWakeflowHookObserver({
+    argv: [WAKEFLOW_HOOK_OBSERVER_MARKER, WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT, "codex"],
+    env: {},
+    stdin: JSON.stringify({
+      session_id: payload.sessionId,
+      cwd: payload.cwd,
+      transcript_path: null,
+      hook_event_name: event,
+      ...(payload.prompt === undefined ? {} : { prompt: payload.prompt }),
+    }),
+  });
+  equal(outcome.code, null, `the hook observer refused ${event}`);
+  // D2：定位只认声明拓扑，所以场景工作区恰好被写中一次，临时目录里别的工作区不受牵连。
+  deepEqual(
+    outcome.written.map((record) => record.workspaceRoot),
+    [context.workspace.workspacePath],
+    `the hook observer wrote outside the scenario workspace for ${event}`,
+  );
+}
+
+/** Agent 在宿主里启动窗口后，宿主 hook 会留下 session-start 记录；这里代替宿主触发这一条。 */
 async function recordSessionStart(context: ScenarioContext, sessionId: string, placement: string) {
-  const root = await RootedDirectory.open(context.workspace.workspacePath);
-  try {
-    await writeHostHookObservation(root, {
-      hostId: "codex",
-      event: "session-start",
-      sessionId,
-      cwd: path.resolve(context.workspace.workspacePath, placement),
-      recordedAt: parseUtcInstant(new Date().toISOString()),
-    });
-  } finally {
-    await root.close();
-  }
+  await observeCodexHook(context, "SessionStart", {
+    sessionId,
+    cwd: path.resolve(context.workspace.workspacePath, placement),
+  });
 }
 
 async function scenarioWindowHandshake(context: ScenarioContext): Promise<string> {
@@ -876,7 +900,7 @@ async function prepareDelivery(
 }
 
 /**
- * 宿主 hook 在某个窗口的会话里留下一条记录；这里代替宿主写入。`user-prompt-submit` 证明 prompt 落地
+ * 宿主 hook 在某个窗口的会话里留下一条记录；这里代替宿主触发它。`user-prompt-submit` 证明 prompt 落地
  * （投递或回调），`stop` 证明目标会话在结果之后结束了本轮（accept 的完成证据，§13.87 D2）。
  */
 async function recordSessionEvent(
@@ -885,10 +909,22 @@ async function recordSessionEvent(
   handle: string | undefined,
   event: "user-prompt-submit" | "stop",
   prompt: string | null = null,
+  cwd?: string,
 ): Promise<void> {
   if (!windowId || !handle) {
     throw new Error("scenario ordering: the window handshake must run first");
   }
+  // D2 d：session-start 之后的事件只写进已持有该句柄绑定的工作区，所以窗口必须先握手。
+  // worktree pod 的产品窗口在宿主自选的检出里运行，调用方按实际检出路径给 cwd。
+  await observeCodexHook(context, event === "stop" ? "Stop" : "UserPromptSubmit", {
+    sessionId: handle,
+    cwd: cwd ?? (await windowPlacementPath(context, windowId)),
+    ...(prompt === null ? {} : { prompt }),
+  });
+}
+
+/** 窗口按配置声明的根：宿主会话的 cwd 在没有 worktree 检出时就是它。 */
+async function windowPlacementPath(context: ScenarioContext, windowId: string): Promise<string> {
   const inspected = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root: context.workspace.workspacePath,
     operation: "inspect",
@@ -899,19 +935,7 @@ async function recordSessionEvent(
       readonly launchIntent: { readonly root: { readonly configuredPlacement: string } };
     }
   ).launchIntent.root.configuredPlacement;
-  const root = await RootedDirectory.open(context.workspace.workspacePath);
-  try {
-    await writeHostHookObservation(root, {
-      hostId: "codex",
-      event,
-      sessionId: handle,
-      cwd: path.resolve(context.workspace.workspacePath, placement),
-      recordedAt: parseUtcInstant(new Date().toISOString()),
-      ...(prompt === null ? {} : { promptDigest: computeDeliveryPromptDigest(prompt) }),
-    });
-  } finally {
-    await root.close();
-  }
+  return path.resolve(context.workspace.workspacePath, placement);
 }
 
 /** 目标窗口收到 prompt 后，宿主 hook 会留下 user-prompt-submit 记录。 */
@@ -2166,18 +2190,9 @@ async function registerPodWindow(
   const inspection = inspected.structuredContent as {
     readonly launchIntent: { readonly intentDigest: string; readonly podName: string };
   };
-  const rooted = await RootedDirectory.open(root);
-  try {
-    await writeHostHookObservation(rooted, {
-      hostId: "codex",
-      event: "session-start",
-      sessionId: handleValue,
-      cwd,
-      recordedAt: parseUtcInstant(new Date().toISOString()),
-    });
-  } finally {
-    await rooted.close();
-  }
+  // 与另外两个辅助函数同一条路：session-start 由观察入口按 Codex payload 落地，不绕开入口直接写内核
+  // （§13.97 D9）。worktree pod 的产品窗口在宿主自选的检出里启动，cwd 就是调用方给的检出路径。
+  await observeCodexHook(context, "SessionStart", { sessionId: handleValue, cwd });
   const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root,
     operation: "register",
@@ -2410,12 +2425,14 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
     false,
     "prompt leaked a private path",
   );
+  // worktree pod 的产品会话在检出里运行，hook 的 cwd 是检出路径而不是仓库根（§13.97 D2）。
   await recordSessionEvent(
     context,
     windowOf("product"),
     productHandle,
     "user-prompt-submit",
     prepared.permit.prompt,
+    checkout,
   );
   const outcome = await recordOutcome(context, prepared.permit, "scenario-pod-outcome-1");
   equal(outcome.outcome.disposition, "accepted");
@@ -2946,6 +2963,8 @@ function assertStatusPolicyAndPrivacy(
     targetResultCallbackSilenceMilliseconds: TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
     targetResultCallbackGenerationLimit: TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
     demandReworkEscalationThreshold: DEMAND_REWORK_ESCALATION_THRESHOLD,
+    // §13.97 D7 e：hook 记录只按龄保留，保留天数由 policy 段原样报出。
+    hostHookRetentionMilliseconds: HOST_HOOK_RETENTION_MILLISECONDS,
   });
   const handles = [
     ...state.pod.handles,

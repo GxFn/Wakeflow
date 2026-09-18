@@ -42,6 +42,8 @@ import {
  * 它把 portable settings 的多根只读计划、状态栏资产的字节核对与本地设置里状态栏条目的核对
  * 转换成共享 contribution，并在唯一 Maintenance Gate 内以闭合分派执行 exact operation。
  * 共享层不依赖本模块；三种 operationKind 都在这里显式分派，不注册动态 handler。
+ * 资产字节或本地设置读不稳时贡献 blocked 并带稳定 blocker，不把未分类的宿主错误抛给
+ * 维护预览：读不出的宿主制品不能让整个工作区无法维护。
  */
 
 export const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID =
@@ -85,9 +87,41 @@ function fail(
   throw new ClaudeCodeMaintenanceCapabilityError(reason, path);
 }
 
+/** 资产读不出（目录、符号链接、超过 256 KiB、权限不足）时宿主贡献报出的 blocker。 */
+export const CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER =
+  "claude-statusline-asset-unreadable" as const;
+
+interface StatuslineAssetPlan {
+  readonly operation: Awaited<ReturnType<typeof planClaudeCodeStatuslineAssetOperation>>;
+  readonly blocker: string | null;
+}
+
 interface StatuslineSettingsPlan {
   readonly operation: Awaited<ReturnType<typeof planClaudeCodeStatuslineSettingsOperation>>;
   readonly blocker: string | null;
+}
+
+/** 资产字节读不稳时不猜：整份贡献 blocked，不带该操作，而不是抛出未分类的宿主错误。 */
+async function planStatuslineAsset(
+  root: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<StatuslineAssetPlan> {
+  try {
+    return {
+      operation: await planClaudeCodeStatuslineAssetOperation(root, {
+        ...(signal === undefined ? {} : { signal }),
+      }),
+      blocker: null,
+    };
+  } catch (error: unknown) {
+    if (error instanceof ClaudeCodeStatuslineAssetOperationError) {
+      if (error.reason === "read") {
+        return { operation: null, blocker: CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER };
+      }
+      fail("owner", error.path);
+    }
+    throw error;
+  }
 }
 
 /** 本地设置读不出或不是 JSON 对象时不猜：整份贡献 blocked，不带该操作。 */
@@ -123,18 +157,19 @@ async function planContribution(
     profile: request.profile,
     ...(request.signal === undefined ? {} : { signal: request.signal }),
   });
-  const statusline = await planClaudeCodeStatuslineAssetOperation(root, {
-    ...(request.signal === undefined ? {} : { signal: request.signal }),
-  });
+  const statusline = await planStatuslineAsset(root, request.signal);
   const settings = await planStatuslineSettings(root, request.signal);
+  // blocker 在边界内排序去重前必须互不相同：三个来源的前缀各不相同。
+  const blockerCodes = [
+    ...composition.blockerCodes,
+    ...(statusline.blocker === null ? [] : [statusline.blocker]),
+    ...(settings.blocker === null ? [] : [settings.blocker]),
+  ];
   return createWakeflowHostMaintenanceContribution({
     hostId: "claude-code",
     capabilityId: CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID,
-    status: settings.blocker === null ? composition.status : "blocked",
-    blockerCodes: [
-      ...composition.blockerCodes,
-      ...(settings.blocker === null ? [] : [settings.blocker]),
-    ],
+    status: blockerCodes.length === 0 ? "ready" : "blocked",
+    blockerCodes,
     operations: [
       ...composition.operations.map((operation) => ({
         operationId: operation.operationId,
@@ -146,7 +181,7 @@ async function planContribution(
         targetDigest: operation.targetDigest,
         payload: operation,
       })),
-      ...(statusline === null ? [] : [statusline]),
+      ...(statusline.operation === null ? [] : [statusline.operation]),
       ...(settings.operation === null ? [] : [settings.operation]),
     ],
   });

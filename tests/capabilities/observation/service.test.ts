@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   unlinkSync,
   writeFileSync,
@@ -21,6 +22,7 @@ import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/
 import {
   executeStatusRequest,
   executeVerifyRequest,
+  type ObservationHostFacade,
 } from "../../../src/capabilities/observation/service.js";
 import { executeRequirementPublicationRequest } from "../../../src/capabilities/requirement/service.js";
 import {
@@ -42,8 +44,16 @@ import {
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
-import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
-import { hostHookObservationsRootRef, WORK_CLAIMS_ROOT_REF } from "../../../src/kernel/layout.js";
+import {
+  HOST_HOOK_RETENTION_MILLISECONDS,
+  writeHostHookObservation,
+} from "../../../src/kernel/hook-observations.js";
+import {
+  hostHookObservationsRootRef,
+  podReceiptRootRef,
+  WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
+  WORK_CLAIMS_ROOT_REF,
+} from "../../../src/kernel/layout.js";
 import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
@@ -442,7 +452,10 @@ test("status 不带 demandId：overall、看板计数、Demand、窗口身份、
     targetResultCallbackSilenceMilliseconds: TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
     targetResultCallbackGenerationLimit: TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
     demandReworkEscalationThreshold: DEMAND_REWORK_ESCALATION_THRESHOLD,
+    // §13.97 D7e：hook 记录的保留期进 policy 段，等于内核导出的常量。
+    hostHookRetentionMilliseconds: HOST_HOOK_RETENTION_MILLISECONDS,
   });
+  equal(status.policy.hostHookRetentionMilliseconds, 30 * 24 * 60 * 60 * 1000);
 
   // next 取 nextActions 头项：primary pod 的未登记窗口先于 Demand 前沿。
   equal(status.route, null);
@@ -542,6 +555,8 @@ test("verify：健康工作区十三门全 pass；hook 观察目录出现非法�
   });
   equal(verified.gates.find((gate) => gate.name === "local-layout")?.code, null);
   equal(verified.gates.find((gate) => gate.name === "window-identity")?.code, "unregistered:3");
+  // §13.97 D10：当前宿主（codex）有记录，同伴宿主（claude-code）的目录缺席保持沉默——code 为 null。
+  equal(verified.gates.find((gate) => gate.name === "host-hook-channel")?.code, null);
   assertPrivate(verified, healthy.root, [CONTROLLER_HANDLE]);
 
   const hooksDirectory = path.join(
@@ -789,4 +804,297 @@ test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD �
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(planning);
   }
+});
+
+const FAKE_DEMAND_ID = "demand_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+
+function gateOf(gates: readonly Readonly<{ readonly name: string }>[], name: string) {
+  const found = gates.find((gate) => gate.name === name);
+  if (found === undefined) throw new Error(`gate ${name} missing`);
+  return found as Readonly<{
+    readonly name: string;
+    readonly status: string;
+    readonly code: string | null;
+  }>;
+}
+
+test("claims 域读不出：status 用 domains.claims 报出 unavailable 与 issue（空列表不是“没有声明”），verify 的 work-claims 门是 unavailable 而不是 pass", {
+  timeout: 120_000,
+}, async () => {
+  const claimsPath = path.join(healthy.root, ...WORK_CLAIMS_ROOT_REF.split("/"));
+  const aside = `${claimsPath}-aside`;
+  const existed = existsSync(claimsPath);
+  if (existed) renameSync(claimsPath, aside);
+  mkdirSync(path.dirname(claimsPath), { recursive: true });
+  writeFileSync(claimsPath, "");
+  try {
+    const status = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    deepEqual(plain(status.domains.claims), {
+      status: "unavailable",
+      issue: "claims:not-directory",
+    });
+    equal(status.domains.demands.status, "observed");
+    equal(status.domains.pods.status, "observed");
+    deepEqual(status.claims, []);
+    equal(status.overall, "degraded");
+
+    const verify = await executeVerifyRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    const claims = gateOf(verify.gates, "work-claims");
+    deepEqual([claims.status, claims.code], ["unavailable", "claims:not-directory"]);
+    equal(verify.ok, false);
+  } finally {
+    rmSync(claimsPath, { force: true });
+    if (existed) renameSync(aside, claimsPath);
+  }
+});
+
+test("demands 域读不出：status{demandId} 是 precondition-failed/demands-unavailable 而不是 not-found，verify 里依赖活动 Demand 集合的五道门都是 unavailable", {
+  timeout: 120_000,
+}, async () => {
+  const currentPath = path.join(healthy.root, ...WAKEFLOW_ACTIVE_CURRENT_ROOT_REF.split("/"));
+  const aside = `${currentPath}-aside`;
+  renameSync(currentPath, aside);
+  writeFileSync(currentPath, "");
+  try {
+    const status = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    deepEqual(plain(status.domains.demands), {
+      status: "unavailable",
+      issue: "demands:not-directory",
+    });
+    deepEqual(status.demands, []);
+
+    await rejects(
+      executeStatusRequest(
+        CODEX_OBSERVATION_FACADE,
+        { root: healthy.root, demandId: healthy.demandId },
+        CLOCK,
+      ),
+      (error: unknown) =>
+        error instanceof WakeflowError &&
+        error.code === "precondition-failed" &&
+        error.reason === "demands-unavailable",
+    );
+
+    const verify = await executeVerifyRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    for (const name of [
+      "demand-root-audit",
+      "append-candidates-clear",
+      "evidence-integrity",
+      "work-claims",
+    ]) {
+      const gate = gateOf(verify.gates, name);
+      deepEqual([gate.status, gate.code], ["unavailable", "demands:not-directory"], name);
+    }
+    // 看板根就在 `.wakeflow-active/current/board` 下，这一手同时让看板域读不出：
+    // board-consistency 报的是它自己的不可用，而不是转报 demands 的 issue。
+    equal(status.board.status, "unavailable");
+    const board = gateOf(verify.gates, "board-consistency");
+    deepEqual([board.status, board.code], ["unavailable", "unavailable"]);
+    equal(verify.ok, false);
+  } finally {
+    rmSync(currentPath, { force: true });
+    renameSync(aside, currentPath);
+  }
+});
+
+test("活动但读不出的 Demand：verify{demandId} 报 current、门为空、observationDigest 为 null，而不是把它当成归档或未知", {
+  timeout: 120_000,
+}, async () => {
+  const fakeRoot = path.join(
+    healthy.root,
+    ...WAKEFLOW_ACTIVE_CURRENT_ROOT_REF.split("/"),
+    FAKE_DEMAND_ID,
+  );
+  mkdirSync(fakeRoot, { recursive: true });
+  try {
+    const status = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    const summary = status.demands.find((demand) => demand.demandId === FAKE_DEMAND_ID);
+    if (summary === undefined) throw new Error("the unreadable Demand left the listing");
+    equal(summary.status, "unavailable");
+    notEqual(summary.issue, null);
+
+    const verify = await executeVerifyRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root, demandId: FAKE_DEMAND_ID },
+      CLOCK,
+    );
+    deepEqual(plain(verify.demand), {
+      demandId: FAKE_DEMAND_ID,
+      status: "current",
+      gates: [],
+      observationDigest: null,
+    });
+
+    // 归档定位仍然只服务真正不在活动集合里的 demandId。
+    const unknown = await executeVerifyRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root, demandId: UNKNOWN_DEMAND_ID },
+      CLOCK,
+    );
+    equal(unknown.demand?.status, "unknown");
+  } finally {
+    rmSync(fakeRoot, { recursive: true, force: true });
+  }
+});
+
+test("pods 域读不出：status 用 domains.pods 报出 issue，未登记窗口不再被当成活动 pod 的登记动作，verify 的 pod-execution-location 是 unavailable", {
+  timeout: 120_000,
+}, async () => {
+  const before = await executeStatusRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  const podId = before.pods[0]?.podId;
+  if (podId === undefined) throw new Error("the healthy workspace lost its pod");
+  equal(
+    before.nextActions.some((action) => action.reason === "pod-window-registration"),
+    true,
+    "the healthy workspace should still have registration actions",
+  );
+
+  const podRoot = path.join(healthy.root, ...podReceiptRootRef("codex", podId).split("/"));
+  const existed = existsSync(podRoot);
+  mkdirSync(podRoot, { recursive: true });
+  const worktreesPath = path.join(podRoot, "worktrees");
+  writeFileSync(worktreesPath, "");
+  try {
+    const status = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    deepEqual(plain(status.domains.pods), {
+      status: "unavailable",
+      issue: "pods:receipt-listing-not-directory",
+    });
+    deepEqual(status.pods, []);
+    deepEqual(
+      status.nextActions.filter((action) => action.reason === "pod-window-registration"),
+      [],
+    );
+
+    const verify = await executeVerifyRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    const pods = gateOf(verify.gates, "pod-execution-location");
+    deepEqual([pods.status, pods.code], ["unavailable", "pods:receipt-listing-not-directory"]);
+  } finally {
+    rmSync(worktreesPath, { force: true });
+    if (!existed) rmSync(podRoot, { recursive: true, force: true });
+  }
+});
+
+test("仓库指针的分支名按 git 的 ref 文法收：`release/2.0+hotfix` 照常报出，而不是让整次 status 被输出边界挡下", {
+  timeout: 120_000,
+}, async () => {
+  const branch = "release/2.0+hotfix";
+  git(healthy.product, "branch", branch);
+  git(healthy.product, "checkout", "--quiet", branch);
+  try {
+    const status = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    const repository = status.repositories[0];
+    if (repository === undefined) throw new Error("repository missing");
+    deepEqual(
+      [repository.status, repository.branch, repository.detached],
+      ["observed", branch, false],
+    );
+  } finally {
+    git(healthy.product, "checkout", "--quiet", "main");
+    git(healthy.product, "branch", "-D", branch);
+  }
+});
+
+test("仓库登记的 worktree 超过 wire 上限：截到 64 条并在 truncated.worktrees 报出略去的条数，而不是让整次 status 失败", {
+  timeout: 120_000,
+}, async () => {
+  const worktreesRoot = path.join(healthy.product, ".git", "worktrees");
+  const existed = existsSync(worktreesRoot);
+  mkdirSync(worktreesRoot, { recursive: true });
+  const created: string[] = [];
+  for (let index = 0; index < 65; index += 1) {
+    const directory = path.join(worktreesRoot, `wt-${String(index).padStart(3, "0")}`);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(path.join(directory, "HEAD"), "ref: refs/heads/main\n");
+    created.push(directory);
+  }
+  try {
+    const status = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    const repository = status.repositories[0];
+    if (repository === undefined) throw new Error("repository missing");
+    equal(repository.worktrees.length, 64);
+    equal(repository.worktrees[0]?.name, "wt-000");
+    equal(repository.worktrees[63]?.name, "wt-063");
+    // 每个有 wire 上限的数组都有自己的略去计数：这里只有 worktree 越界，其余为 0。
+    deepEqual(plain(status.truncated), {
+      demands: 0,
+      windows: 0,
+      claims: 0,
+      pods: 0,
+      repositories: 0,
+      worktrees: 1,
+      unmergedAccepted: 0,
+    });
+  } finally {
+    if (existed)
+      for (const directory of created) rmSync(directory, { recursive: true, force: true });
+    else rmSync(worktreesRoot, { recursive: true, force: true });
+  }
+});
+
+test("verify 的加读阶段被中止：错误收敛为 io-failure/aborted，而不是 unexpected/unhandled", {
+  timeout: 120_000,
+}, async () => {
+  const controller = new AbortController();
+  let reads = 0;
+  // facade.hosts 第一次被读是建观察上下文；之后再被读已经是 verify 的工作区加读
+  // （local-layout），在那一刻中止就落在加读的 catch 分支上。
+  const facade: Readonly<ObservationHostFacade> = {
+    hostId: CODEX_OBSERVATION_FACADE.hostId,
+    get hosts() {
+      reads += 1;
+      if (reads > 1) controller.abort();
+      return CODEX_OBSERVATION_FACADE.hosts;
+    },
+  };
+  await rejects(
+    executeVerifyRequest(
+      facade,
+      { root: healthy.root },
+      { clock: CLOCK.clock, signal: controller.signal },
+    ),
+    (error: unknown) =>
+      error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
+  );
+  equal(reads > 1, true, "the verify reads never reached the facade");
 });

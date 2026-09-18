@@ -9,6 +9,7 @@ import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-confi
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   claudeCodeMaintenanceCapability,
+  CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER,
 } from "../../../src/hosts/claude-code/claude-code-maintenance-capability.js";
 import {
   executeClaudeCodeMaintenanceExecution,
@@ -379,4 +380,43 @@ test("Claude aggregate execution rejects settings drift before acquiring the gat
   }
   equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), false);
   equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), false);
+});
+
+test("状态栏资产不是常规文件时贡献 blocked 并带稳定 blocker，工作区仍可维护", async (t) => {
+  const workspace = await fixture(t);
+  // 资产路径被一个目录占住（解压残留）：字节读不稳，但这不能让整个工作区无法维护。
+  mkdirSync(
+    path.join(workspace.absolutePath, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/")),
+    { recursive: true, mode: 0o700 },
+  );
+  const input = request(desiredConfig());
+  const plan = await previewClaudeCodeMaintenanceExecution(workspace.root, input);
+  equal(plan.status, "blocked");
+  equal(plan.hostContribution?.status, "blocked");
+  deepEqual(
+    plan.hostContribution?.blockerCodes,
+    [CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER],
+    "读不出的资产只报一条稳定 blocker",
+  );
+  equal(
+    plan.blockerCodes.includes(
+      `host:claude-code:claude-code-maintenance:${CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER}`,
+    ),
+    true,
+    "宿主 blocker 以贡献身份前缀进入计划",
+  );
+  equal(
+    plan.hostContribution?.operations.some((entry) => (
+      entry.operationKind === "statusline-asset"
+    )),
+    false,
+    "读不出的资产不带安装操作",
+  );
+  // 其他宿主操作仍在计划里：blocked 只丢掉读不出的那一条。
+  equal(
+    plan.hostContribution?.operations.some((entry) => (
+      entry.operationId === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID
+    )),
+    true,
+  );
 });

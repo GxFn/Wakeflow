@@ -178,3 +178,9 @@
 2026-09-04 用户纠正：Codex 的活性并非"不适用"，Agent 可有界轮询读取线程作观察，但网络卡顿会误判失败，采用乐观策略：读取失败只记 unobserved，不阻塞派发；详见能力卡 6 的修订节。
 
 本组的实现判断全部并入 ADR-0009 的三层拆分与握手模型：定位器分类器保留但输入改为 Agent 交回的 pane 行；互斥锁 owner 改为操作 id 加 Controller 绑定；投影在登记、替换、退役、投递准备与释放时刷新；`hostVerifiedAt`、`hostAvailability`、`hostDirName` 删除。
+
+## 修订（2026-09-18，[gate-log §13.97](../../progress/consolidation-gate-log.md) D3）
+
+| 项 | 修订后 |
+| --- | --- |
+| Q3 宿主 hook 记录的语义边界 | 记录由观察脚本 `src/entrypoints/wakeflow-hook-observer.ts` 写入，两宿主同名同形，但它证明的是"发生过"而不是"现在如何"，四条边界随之成立：被打断或 API 失败的回合不触发 `Stop`，所以没有 `stop` 记录只等于本轮未完成，消费者照旧把缺席当 pending，不得读成失败；Codex 的 `SessionEnd` 只在归档、删除、正常退出或空闲 30 分钟后触发，`session-end` 最迟滞后 30 分钟，只作退役的缺席证据，不是活性信号；hook 在会话**当前目录**运行，`cwd` 随 Agent 的 `cd` 移动而不钉在窗口根，所以登记准入仍以 `session-start` 的 `cwd` 等于窗口根为准，后续事件的 `cwd` 只是事实不是判据；同一处理器被插件与用户设置各注册一次会得到两条时间不同的记录，重复无害，消费者取首条匹配 |

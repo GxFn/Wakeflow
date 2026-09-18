@@ -1,3 +1,4 @@
+import { HOST_HOOK_RETENTION_MILLISECONDS } from "../../kernel/hook-observations.js";
 import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
@@ -25,6 +26,8 @@ export interface WakeflowObservationPolicy {
   readonly targetResultCallbackSilenceMilliseconds: number;
   readonly targetResultCallbackGenerationLimit: number;
   readonly demandReworkEscalationThreshold: number;
+  /** hook 记录只按龄保留的期限（§13.97 D7e）。 */
+  readonly hostHookRetentionMilliseconds: number;
 }
 
 export const WAKEFLOW_OBSERVATION_POLICY: Readonly<WakeflowObservationPolicy> = Object.freeze({
@@ -35,4 +38,5 @@ export const WAKEFLOW_OBSERVATION_POLICY: Readonly<WakeflowObservationPolicy> = 
   targetResultCallbackSilenceMilliseconds: TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
   targetResultCallbackGenerationLimit: TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
   demandReworkEscalationThreshold: DEMAND_REWORK_ESCALATION_THRESHOLD,
+  hostHookRetentionMilliseconds: HOST_HOOK_RETENTION_MILLISECONDS,
 });

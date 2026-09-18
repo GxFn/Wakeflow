@@ -6,6 +6,7 @@
 > 相关：[ADR-0003 修订](./0003-host-effect-layer-ownership.md)、[ADR-0007](./0007-rebuild-mandate-and-bottom-up-flow.md)、[能力卡 2](../requirements/capabilities/02-window-model.md)、[能力卡 4](../requirements/capabilities/04-demand-lifecycle.md)、[能力卡 5](../requirements/capabilities/05-task-planning.md)
 > 落地记录：2026-09-04 L1 endpoint 切片落地 `wakeflow_register_window_binding`（inspect、register、replace、decommission、release-claim），hook 观察记录进内核 `src/kernel/hook-observations.ts`，Claude 定位器与 pane 分类器进 `src/capabilities/endpoint/`；执行参数使用 Codex `create_thread` 与 `set_thread_title`、Claude `claude --session-id`；场景 `card-02/window-handshake` 与 `card-02/window-replace` 通过（进度日志 13.76）
 > 落地记录：2026-09-10 L1 delivery 切片 6a 落地五步握手中的准备、许可与结局三步：`wakeflow_prepare_delivery` 取得窗口工作声明（内核 `src/kernel/work-claims.ts`）并返回带围栏令牌的一次性许可，`wakeflow_record_delivery_outcome` 以目标会话的 `user-prompt-submit` hook 记录（Codex 另认发送返回）证明落地，`wakeflow_rearm_delivery` 同信封换代际；场景 `card-06/delivery-chain` 与 `card-06/ambiguous-resolution` 通过（进度日志 13.83、13.84）
+> 落地记录：2026-09-18 L2 第 1 项落地调整一的可执行部分：观察脚本 `src/entrypoints/wakeflow-hook-observer.ts` 把两宿主同名的 `SessionStart`、`UserPromptSubmit`、`Stop`、`SessionEnd` 写成四类记录，工作区按声明拓扑定位，永远退出 0、stdout 为空；两宿主的 hook 配置片段是 `src/hosts/codex/codex-hook-fragment.ts` 与 `src/hosts/claude-code/claude-code-hook-fragment.ts`，制品各多出 `hooks/observe.mjs` 与 `hooks/hooks.json`。状态为**已实现、宿主未验证**：两宿主各完成一次真实投递并交回 hook 证据尚未跑过（进度日志 13.97、13.98）
 
 ## 背景
 
@@ -91,9 +92,14 @@ MCP 工具是状态通道，指令文件与 skills 是程序通道，Agent 与�
 ## 未决问题
 
 - Codex 当前版本的线程创建与标题工具名，L1 切片时核对。
-- hook 观察记录的保留与清理策略。
-- hook 观察记录的 `recordedAt` 由脚本本地时钟提供；同一宿主事件重复触发时的重试幂等边界，L2 起点随观察脚本定。
 - 是否把 tmux 控制模式写进 Claude 的 skills 作为推荐观察方式。
+
+## 已关闭的未决问题
+
+下面两项已在 L2 第 1 项关闭（gate-log §13.97 D3、D7），保留结论供追溯；上面的"未决问题"只列仍然开放的项。
+
+- hook 观察记录的保留与清理：只按龄保留，不设数量上限。内核写入器在成功写入后 unlink 同一宿主目录里早于 30 天（`HOST_HOOK_RETENTION_MILLISECONDS`）的记录文件，`wakeflow_status` 的 `policy` 段原样报出该阈值。按数量修剪被否决：它让证据集合取决于机器整体活动而不是本工作区的历史，且与读取器竞态。这是 Wakeflow 的第一条自动 unlink 路径，只动符合记录命名的文件；无法识别的条目留给 verify 的 `host-hook-channel` 门，不由修剪删除。
+- `recordedAt` 与重试幂等边界：`recordedAt` 由观察脚本的本地时钟给出 ISO 毫秒形（内核要求恰好 3 位小数秒）。两宿主都不重试 hook，所以不引入去重键；同一处理器被插件与用户设置各注册一次时会得到两条时间不同的记录，消费者取首条匹配，重复无害。
 
 ## 来源
 

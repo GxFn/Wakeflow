@@ -18,7 +18,6 @@ import {
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
-  computeSha256Digest,
   parseSha256Digest,
   Sha256Error,
   type Sha256Digest,
@@ -39,7 +38,10 @@ import {
   type PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import {
+  computePromptDigest,
+  DELIVERY_PROMPT_MAXIMUM_CHARACTERS,
+} from "../../kernel/prompt-digest.js";
 import {
   parseUtcInstant,
   UtcInstantError,
@@ -215,8 +217,8 @@ const REWORK_CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const HOST_IDS = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const LANGUAGES = new Set<string>(WAKEFLOW_PRESENTATION_LANGUAGES);
-/** 投递 prompt 的字符上限：能力卡 6 的 65,536 进记录合同；渲染与摘要共用同一个上界。 */
-export const DELIVERY_PROMPT_MAXIMUM_CHARACTERS = 65_536;
+/** 投递 prompt 的字符上限：规则住在内核 `prompt-digest`（§13.97 D3），这里再导出给渲染侧。 */
+export { DELIVERY_PROMPT_MAXIMUM_CHARACTERS };
 const validateWire = createRuntimeJsonSchemaValidator<DeliveryEnvelopeWire>(
   WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA,
   [
@@ -942,13 +944,11 @@ export function deliveryPurpose(envelope: Readonly<DeliveryEnvelope>): DeliveryP
       : "initial";
 }
 
-/** prompt 摘要：去除首尾空白后的 UTF-8 字节的 SHA-256；宿主 hook 记录按同一规则比对。 */
+/** prompt 摘要：内核 `computePromptDigest` 的同一规则；空或超限在信封侧是错误（观察脚本记 null）。 */
 export function computeDeliveryPromptDigest(prompt: string): Sha256Digest {
-  const trimmed = prompt.trim();
-  if (trimmed.length === 0 || trimmed.length > DELIVERY_PROMPT_MAXIMUM_CHARACTERS) {
-    fail("prompt", "$prompt");
-  }
-  return computeSha256Digest(encodeUtf8(trimmed, "$prompt"), "$prompt");
+  const digest = computePromptDigest(prompt);
+  if (digest === null) fail("prompt", "$prompt");
+  return digest;
 }
 
 /** 复验信封只引用同一份不可变任务包：身份、摘要、投影路径与窗口一致，工作类型一致。 */

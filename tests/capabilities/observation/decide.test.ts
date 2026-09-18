@@ -2,10 +2,12 @@ import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  capStatusList,
   deriveNextActions,
   deriveWorkspaceGates,
   nextFromActions,
   projectionFreshness,
+  STATUS_LIST_MAXIMUMS,
   summarizeGates,
   verifyNext,
   type NextActionInput,
@@ -13,8 +15,10 @@ import {
   type WorkspaceGateFacts,
 } from "../../../src/capabilities/observation/decide.js";
 import { WAKEFLOW_CONFIG_FILE_REF } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
+import { WAKEFLOW_VERIFY_RESULT_SCHEMA } from "../../../src/contracts/generated/entrypoints/wakeflow-verify-result.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import {
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
@@ -54,8 +58,11 @@ function digest(seed: string): Sha256Digest {
   return computeCanonicalJsonSha256Digest({ seed });
 }
 
+const OBSERVED = Object.freeze({ status: "observed" as const, issue: null });
+
 function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGateFacts {
   return {
+    domains: { demands: OBSERVED, claims: OBSERVED, pods: OBSERVED },
     configRecheck: "current",
     configRef: WAKEFLOW_CONFIG_FILE_REF,
     configDigest: digest("config"),
@@ -76,8 +83,22 @@ function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGat
     claims: [{ windowId: WINDOW_A, orphan: false }],
     claimsUnreadable: 0,
     hooks: [
-      { hostId: "codex", status: "observed", directory: "private", skipped: 0 },
-      { hostId: "claude-code", status: "observed", directory: "absent", skipped: 0 },
+      {
+        hostId: "codex",
+        current: true,
+        status: "observed",
+        directory: "private",
+        records: 2,
+        skipped: 0,
+      },
+      {
+        hostId: "claude-code",
+        current: false,
+        status: "observed",
+        directory: "absent",
+        records: 0,
+        skipped: 0,
+      },
     ],
     windows: [
       { windowId: WINDOW_A, identity: "registered" },
@@ -395,8 +416,22 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
     verdictOf(
       healthyFacts({
         hooks: [
-          { hostId: "codex", status: "observed", directory: "private", skipped: 1 },
-          { hostId: "claude-code", status: "observed", directory: "mode", skipped: 0 },
+          {
+            hostId: "codex",
+            current: true,
+            status: "observed",
+            directory: "private",
+            records: 3,
+            skipped: 1,
+          },
+          {
+            hostId: "claude-code",
+            current: false,
+            status: "observed",
+            directory: "mode",
+            records: 0,
+            skipped: 0,
+          },
         ],
       }),
       "host-hook-channel",
@@ -406,11 +441,138 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
   deepEqual(
     verdictOf(
       healthyFacts({
-        hooks: [{ hostId: "codex", status: "unavailable", directory: "absent", skipped: 0 }],
+        hooks: [
+          {
+            hostId: "codex",
+            current: true,
+            status: "unavailable",
+            directory: "absent",
+            records: 0,
+            skipped: 0,
+          },
+        ],
       }),
       "host-hook-channel",
     ),
     ["unavailable", "codex:unavailable"],
+  );
+
+  // §13.97 D10：当前宿主的目录缺席或零记录不是损坏（pass），但 code 报出，让"hook 从未触发"
+  // 在 verify 里可见；同伴宿主的缺席与零记录保持沉默（它的记录由另一份制品写）。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [
+          {
+            hostId: "codex",
+            current: true,
+            status: "observed",
+            directory: "absent",
+            records: 0,
+            skipped: 0,
+          },
+          {
+            hostId: "claude-code",
+            current: false,
+            status: "observed",
+            directory: "absent",
+            records: 0,
+            skipped: 0,
+          },
+        ],
+      }),
+      "host-hook-channel",
+    ),
+    ["pass", "codex:absent"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [
+          {
+            hostId: "codex",
+            current: false,
+            status: "observed",
+            directory: "private",
+            records: 0,
+            skipped: 0,
+          },
+          {
+            hostId: "claude-code",
+            current: true,
+            status: "observed",
+            directory: "private",
+            records: 0,
+            skipped: 0,
+          },
+        ],
+      }),
+      "host-hook-channel",
+    ),
+    ["pass", "claude-code:records-0"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [
+          {
+            hostId: "codex",
+            current: true,
+            status: "observed",
+            directory: "private",
+            records: 1,
+            skipped: 0,
+          },
+          {
+            hostId: "claude-code",
+            current: false,
+            status: "observed",
+            directory: "private",
+            records: 0,
+            skipped: 0,
+          },
+        ],
+      }),
+      "host-hook-channel",
+    ),
+    ["pass", null],
+  );
+  // 损坏码优先于提示码：当前宿主模式不对或有读不出的记录时不再报 absent / records-0。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [
+          {
+            hostId: "codex",
+            current: true,
+            status: "observed",
+            directory: "mode",
+            records: 0,
+            skipped: 0,
+          },
+        ],
+      }),
+      "host-hook-channel",
+    ),
+    ["fail", "codex:mode"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [
+          {
+            hostId: "codex",
+            current: true,
+            status: "observed",
+            directory: "private",
+            records: 0,
+            skipped: 2,
+          },
+        ],
+      }),
+      "host-hook-channel",
+    ),
+    ["fail", "codex:skipped-2"],
   );
 
   // 未登记不是损坏：pass 并在 code 报计数；未观察才 unavailable。
@@ -481,8 +643,10 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
   );
 });
 
-test("pod-execution-location：open 的 worktree pod 缺回执或检出即 fail；closing 的 pod 检出仍在只报 disposal-pending；primary 仓库根未观察为 unavailable、不是主检出为 fail", () => {
-  const openMissing = healthyFacts({
+test("pod-execution-location：ready 的 worktree pod 缺回执或检出即 fail；creating 只报 pending-registration 且不失败；closing 的 pod 检出仍在只报 disposal-pending；primary 仓库根未观察为 unavailable、不是主检出为 fail", () => {
+  // §13.94 D3 把回执要求限定在 ready：creating 的 pod 还没登记窗口，回执缺席是过渡态，
+  // 只有窗口登记能解决，不该把 verify 的 next 指向工作区维护。
+  const creating = healthyFacts({
     pods: [
       { podId: POD_MAIN, placement: "primary", lifecycle: "open", state: "ready", worktrees: [] },
       {
@@ -490,6 +654,22 @@ test("pod-execution-location：open 的 worktree pod 缺回执或检出即 fail�
         placement: "worktree",
         lifecycle: "open",
         state: "creating",
+        worktrees: [{ repositoryId: REPOSITORY, receipt: "absent" }],
+      },
+    ],
+  });
+  deepEqual(verdictOf(creating, "pod-execution-location"), [
+    "pass",
+    `${POD_FEATURE}:${REPOSITORY}:pending-registration`,
+  ]);
+  const openMissing = healthyFacts({
+    pods: [
+      { podId: POD_MAIN, placement: "primary", lifecycle: "open", state: "ready", worktrees: [] },
+      {
+        podId: POD_FEATURE,
+        placement: "worktree",
+        lifecycle: "open",
+        state: "ready",
         worktrees: [{ repositoryId: REPOSITORY, receipt: "absent" }],
       },
     ],
@@ -504,7 +684,7 @@ test("pod-execution-location：open 的 worktree pod 缺回执或检出即 fail�
         podId: POD_FEATURE,
         placement: "worktree",
         lifecycle: "open",
-        state: "creating",
+        state: "ready",
         worktrees: [{ repositoryId: REPOSITORY, receipt: "checkout-missing" }],
       },
     ],
@@ -614,4 +794,170 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
   equal(projectionFreshness([{ status: "current" }, { status: "stale" }]), "stale");
   equal(projectionFreshness([{ status: "stale" }, { status: "missing" }]), "missing");
   equal(projectionFreshness([{ status: "missing" }, { status: "unsafe" }]), "unsafe");
+});
+
+/** wire 的 `code` 模式取自生成的 verify Schema，测试与 Schema 不各写一份。 */
+function schemaCodePattern(): RegExp {
+  const defs = WAKEFLOW_VERIFY_RESULT_SCHEMA.$defs;
+  const code = (defs as Readonly<Record<string, unknown>>).code;
+  const pattern = (code as Readonly<Record<string, unknown>>).pattern;
+  if (typeof pattern !== "string") throw new Error("verify Schema lacks $defs.code.pattern");
+  return new RegExp(pattern, "u");
+}
+
+const CODE_PATTERN = schemaCodePattern();
+
+function longDemandIds(count: number): readonly string[] {
+  return Array.from(
+    { length: count },
+    (_unused, index) => `demand_${index.toString(16).padStart(8, "0")}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+  );
+}
+
+test("code 截断：收尾串仍在 wire 的 code 字符集内，整串不超过 256，一条都放不下时也能自己起头", () => {
+  const [status, code] = verdictOf(
+    healthyFacts({
+      board: {
+        status: "observed",
+        skipped: 0,
+        indexCurrent: true,
+        claimedWithoutRoot: longDemandIds(6),
+      },
+    }),
+    "board-consistency",
+  );
+  equal(status, "fail");
+  if (code === null) throw new Error("board-consistency lost its code");
+  equal(code.length <= 256, true, `code is ${code.length} characters long`);
+  equal(CODE_PATTERN.test(code), true, `code ${code} is outside the wire pattern`);
+  equal(code.endsWith(",more-3"), true, code);
+
+  // 第一条就放不下：收尾串独占整个 code，首字符仍须是字母数字。
+  const [, only] = verdictOf(
+    healthyFacts({
+      board: {
+        status: "observed",
+        skipped: 0,
+        indexCurrent: true,
+        claimedWithoutRoot: [`demand_${"a".repeat(250)}`],
+      },
+    }),
+    "board-consistency",
+  );
+  equal(only, "more-1");
+  if (only === null) throw new Error("board-consistency lost its code");
+  equal(CODE_PATTERN.test(only), true, `code ${only} is outside the wire pattern`);
+});
+
+test("active-projection 门的证据只收两份工作区页：每 Demand 两份投影页不进证据，33 个活动 Demand 也不越过 wire 的 64 条上限", () => {
+  const workspacePages = [
+    {
+      resourcePath: WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+      status: "current" as const,
+      reason: null,
+      digest: digest("index"),
+    },
+    {
+      resourcePath: WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
+      status: "current" as const,
+      reason: null,
+      digest: digest("status"),
+    },
+  ];
+  const demandPages = longDemandIds(33).flatMap((demandId) =>
+    ["index.md", "developer-progress.md"].map((name) => ({
+      resourcePath: parsePortableResourcePath(
+        `.wakeflow-active/current/${demandId}/${name}`,
+        "$target",
+      ),
+      status: "current" as const,
+      reason: null,
+      digest: digest(`${demandId}/${name}`),
+    })),
+  );
+  const gates = deriveWorkspaceGates(
+    healthyFacts({
+      projection: { status: "observed", targets: [...workspacePages, ...demandPages] },
+    }),
+  );
+  const evidence = gateOf(gates, "active-projection").evidence;
+  equal(evidence.length <= 64, true, `evidence has ${evidence.length} entries`);
+  deepEqual(
+    evidence.map((entry) => entry.ref),
+    [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        projection: { status: "observed", targets: [...workspacePages, ...demandPages] },
+      }),
+      "active-projection",
+    ),
+    ["pass", null],
+  );
+});
+
+test("域读不出：demands、claims、pods 的空列表不当成事实，依赖它们的门是 unavailable 并带域 issue，需要活动 Demand 集合的交叉检查不做", () => {
+  const demandsDown = healthyFacts({
+    domains: {
+      demands: { status: "unavailable", issue: "demands:not-directory" },
+      claims: OBSERVED,
+      pods: OBSERVED,
+    },
+  });
+  for (const name of [
+    "demand-root-audit",
+    "append-candidates-clear",
+    "evidence-integrity",
+    "board-consistency",
+    "work-claims",
+  ]) {
+    deepEqual(verdictOf(demandsDown, name), ["unavailable", "demands:not-directory"], name);
+  }
+  equal(summarizeGates(deriveWorkspaceGates(demandsDown)).ok, false);
+
+  const claimsDown = healthyFacts({
+    domains: {
+      demands: OBSERVED,
+      claims: { status: "unavailable", issue: "claims:not-directory" },
+      pods: OBSERVED,
+    },
+    claims: [],
+  });
+  deepEqual(verdictOf(claimsDown, "work-claims"), ["unavailable", "claims:not-directory"]);
+
+  const podsDown = healthyFacts({
+    domains: {
+      demands: OBSERVED,
+      claims: OBSERVED,
+      pods: { status: "unavailable", issue: "pods:receipt-listing-not-directory" },
+    },
+    pods: [],
+  });
+  deepEqual(verdictOf(podsDown, "pod-execution-location"), [
+    "unavailable",
+    "pods:receipt-listing-not-directory",
+  ]);
+
+  // issue 缺失时仍给得出一个合法的 code。
+  const noIssue = healthyFacts({
+    domains: { demands: OBSERVED, claims: OBSERVED, pods: { status: "unavailable", issue: null } },
+    pods: [],
+  });
+  deepEqual(verdictOf(noIssue, "pod-execution-location"), ["unavailable", "pods:unavailable"]);
+});
+
+test("status 列表上限：超出上限的条目被确定性截断并报出略去的条数，未超出时原样保留", () => {
+  const maximum = STATUS_LIST_MAXIMUMS.unmergedAccepted;
+  const overflowing = Array.from({ length: maximum + 1 }, (_unused, index) => index);
+  const truncated = capStatusList(overflowing, maximum);
+  equal(truncated.entries.length, maximum);
+  equal(truncated.omitted, 1);
+  equal(truncated.entries[0], 0);
+  equal(truncated.entries[maximum - 1], maximum - 1);
+
+  const kept = capStatusList([1, 2, 3], maximum);
+  deepEqual([...kept.entries], [1, 2, 3]);
+  equal(kept.omitted, 0);
+  deepEqual([STATUS_LIST_MAXIMUMS.claims, STATUS_LIST_MAXIMUMS.worktrees], [512, 64]);
 });

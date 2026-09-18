@@ -1,14 +1,31 @@
 import { createHash } from "node:crypto";
-import { deepEqual, equal } from "node:assert/strict";
-import { lstatSync, opendirSync, readFileSync, rmSync } from "node:fs";
+import { deepEqual, doesNotMatch, equal, match, ok, throws } from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  opendirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import type { Dirent } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
-import { buildTypescriptArtifactCandidates } from "../../tooling/artifacts/build-typescript-artifact-candidates.js";
+import {
+  assertRenderedHookFragmentDigest,
+  assertSharedClosure,
+  buildTypescriptArtifactCandidates,
+  type CandidateHostIsolationRule,
+} from "../../tooling/artifacts/build-typescript-artifact-candidates.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
@@ -39,8 +56,60 @@ import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/requirement/contract.js";
+import { renderWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3-document.js";
+import {
+  WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
+  WAKEFLOW_HOOK_OBSERVER_MARKER,
+} from "../../src/entrypoints/wakeflow-hook-observer.js";
+import {
+  CLAUDE_CODE_HOOK_FRAGMENT_DIGEST,
+  renderClaudeCodeHooksJson,
+} from "../../src/hosts/claude-code/claude-code-hook-fragment.js";
+import {
+  CODEX_HOOK_FRAGMENT_DIGEST,
+  renderCodexHooksJson,
+} from "../../src/hosts/codex/codex-hook-fragment.js";
+import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
+import { createMinimalWakeflowConfigV3 } from "../configuration/wakeflow-config-v3.fixture.js";
 
 const OUTPUT_RELATIVE = ".build/test-artifacts/typescript-candidates";
+const HOOK_OBSERVER_LAUNCHER = "hooks/observe.mjs";
+const HOOKS_JSON = "hooks/hooks.json";
+const MCP_LAUNCHER = "mcp/server.mjs";
+const SESSION_IDS = Object.freeze({
+  codex: "019924aa-0000-7000-8000-00000000c0de",
+  "claude-code": "c1a0de00-1111-4222-8333-444455556666",
+});
+const RECORD_FILE_PATTERN =
+  /^\d{8}T\d{9}Z-session-start-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/u;
+/** 闭包范围：只有 `lib/` 下的编译文件才带这三个值之一。 */
+const CLOSURE_SCOPES: readonly string[] = ["shared", "current-host", "peer-profile"];
+const FIXED_CODE_PREFIX = "wakeflow-hook-observer: ";
+
+/** 手搭的隔离规则：守卫只看这四项，测试因此不必复制候选定义的其余部分。 */
+const CODEX_ISOLATION_RULE: Readonly<CandidateHostIsolationRule> = Object.freeze({
+  hostId: "codex",
+  currentHostDirectory: "hosts/codex/",
+  peerHostDirectory: "hosts/claude-code/",
+  admittedPeerModules: Object.freeze([
+    "hosts/claude-code/wakeflow-workspace-host-resource-profile.js",
+  ]),
+});
+
+/** 构建器的稳定工具错误：只暴露 name 与 code，测试按 code 断言而不按消息。 */
+function expectArtifactErrorCode(code: string): (error: unknown) => true {
+  return (error: unknown): true => {
+    ok(error instanceof Error, "抛出的必须是 Error");
+    equal(error.name, "TypescriptArtifactCandidateBuildError");
+    equal((error as { readonly code?: unknown }).code, code);
+    return true;
+  };
+}
+
+/** stderr 里固定代码形式的行；其余行（例如 Node 默认处理器的堆栈）不计入。 */
+function fixedCodeLines(stderr: string): readonly string[] {
+  return stderr.split("\n").filter((line) => line.startsWith(FIXED_CODE_PREFIX));
+}
 
 interface ManifestFile {
   readonly path: string;
@@ -50,11 +119,20 @@ interface ManifestFile {
   readonly scope: string;
 }
 
+interface ManifestRuntimeEntrypoint {
+  readonly kind: "mcp" | "hook-observer";
+  readonly runtimeEntrypoint: string;
+  readonly sourceEntrypoint: string;
+}
+
 interface CandidateManifest {
   readonly kind: "WakeflowTypescriptArtifactCandidateManifest";
   readonly releaseEligible: false;
   readonly scope: "typescript-public-technical-skeleton";
   readonly hostId: "codex" | "claude-code";
+  readonly sourceEntrypoint: string;
+  readonly runtimeEntrypoint: string;
+  readonly runtimeEntrypoints: readonly ManifestRuntimeEntrypoint[];
   readonly externalPackages: readonly string[];
   readonly files: readonly ManifestFile[];
 }
@@ -114,10 +192,92 @@ function outputFixture(t: TestContext): string {
   return output;
 }
 
-test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) => {
+/** 手搭的最小工作区：配置由渲染器写出，两个支持面目录存在；仓库 `../ProductA` 缺席不影响根匹配。 */
+function workspaceFixture(t: TestContext): string {
+  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-artifact-hook-")));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const workspace = path.join(base, "Wakeflow");
+  mkdirSync(path.join(workspace, "Design"), { recursive: true });
+  mkdirSync(path.join(workspace, "Test"), { recursive: true });
+  writeFileSync(
+    path.join(workspace, "wakeflow.config.json"),
+    renderWakeflowConfigV3(createMinimalWakeflowConfigV3()),
+    { mode: 0o644 },
+  );
+  return workspace;
+}
+
+function observationsDirectory(workspace: string, hostId: "codex" | "claude-code"): string {
+  return path.join(workspace, ...hostHookObservationsRootRef(hostId).split("/"));
+}
+
+interface SpawnedObserver {
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+/** 以宿主 hook 的方式启动制品 launcher：固定 argv、payload 走 stdin、不继承本进程的 hook 环境。 */
+function spawnHookObserver(
+  launcher: string,
+  hostId: "codex" | "claude-code",
+  workspace: string,
+): SpawnedObserver {
+  const payload = JSON.stringify({
+    session_id: SESSION_IDS[hostId],
+    cwd: workspace,
+    transcript_path: path.join(workspace, "transcript.jsonl"),
+    hook_event_name: "SessionStart",
+  });
+  const result = spawnSync(
+    process.execPath,
+    [launcher, WAKEFLOW_HOOK_OBSERVER_MARKER, WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT, hostId],
+    {
+      cwd: workspace,
+      input: payload,
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "" },
+      shell: false,
+      windowsHide: true,
+      timeout: 20_000,
+    },
+  );
+  if (result.error !== undefined) throw result.error;
+  return Object.freeze({ status: result.status, stdout: result.stdout, stderr: result.stderr });
+}
+
+/**
+ * 把制品的 launcher 原样搬进一个临时根，并在它期望的位置放一个"求值即抛出、但先排下一次
+ * 稍后故障"的假入口：launcher 会先走 catch 打出 `launcher`，随后那次故障才发生。守卫仍在位
+ * 时它会打出第二行 `internal`；守卫已卸下时它落回 Node 默认处理器，不可能再打出固定代码行。
+ * 真实制品的这条路径（模块缺失）之后没有任何待办，所以这个假入口只是把第二次故障做成可观察的。
+ */
+function launcherWithLateFaultFixture(t: TestContext, launcher: string): string {
+  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-artifact-guard-")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, "hooks"), { recursive: true });
+  mkdirSync(path.join(root, "lib", "entrypoints"), { recursive: true });
+  writeFileSync(path.join(root, "package.json"), '{ "type": "module" }\n', { mode: 0o644 });
+  writeFileSync(path.join(root, "hooks", "observe.mjs"), readFileSync(launcher), { mode: 0o755 });
+  writeFileSync(
+    path.join(root, "lib", "entrypoints", "wakeflow-hook-observer.js"),
+    [
+      "setTimeout(() => {",
+      '  throw new Error("late fault");',
+      "}, 25);",
+      'throw new Error("module evaluation failed");',
+      "",
+    ].join("\n"),
+    { mode: 0o644 },
+  );
+  return path.join(root, "hooks", "observe.mjs");
+}
+
+test("双宿主候选制品由确定性的闭合可达文件清单生成，含 hook 观察脚本 launcher 与宿主 hook 片段", async (t) => {
   const output = outputFixture(t);
-  const first = buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
-  const second = buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
+  const first = await buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
+  const second = await buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
+  // D8：两次构建字节相同——清单记录每个文件的 sha256，清单摘要相等即全部文件字节相等。
   deepEqual(second, first);
   equal(first.releaseEligible, false);
   equal(first.artifacts.length, 2);
@@ -159,6 +319,70 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) =
     );
     equal(packageDocument.dependencies["@modelcontextprotocol/server"], "2.0.0");
 
+    // D8：清单的 runtimeEntrypoint 仍指向 MCP，runtimeEntrypoints[] 列出两个 launcher（MCP 在前）。
+    const mcpSource =
+      artifact.hostId === "codex"
+        ? "src/entrypoints/codex-wakeflow-mcp.ts"
+        : "src/entrypoints/claude-code-wakeflow-mcp.ts";
+    equal(manifest.runtimeEntrypoint, MCP_LAUNCHER);
+    equal(manifest.sourceEntrypoint, mcpSource);
+    deepEqual(manifest.runtimeEntrypoints, [
+      { kind: "mcp", runtimeEntrypoint: MCP_LAUNCHER, sourceEntrypoint: mcpSource },
+      {
+        kind: "hook-observer",
+        runtimeEntrypoint: HOOK_OBSERVER_LAUNCHER,
+        sourceEntrypoint: "src/entrypoints/wakeflow-hook-observer.ts",
+      },
+    ]);
+
+    // D8：两个 hooks 文件在文件集合里，模式与范围固定；观察脚本的闭包根随并集进了 lib/。
+    const byPath = new Map(manifest.files.map((file) => [file.path, file]));
+    equal(byPath.get(MCP_LAUNCHER)?.mode, "0755");
+    equal(byPath.get(MCP_LAUNCHER)?.scope, "entrypoint");
+    equal(byPath.get(HOOK_OBSERVER_LAUNCHER)?.mode, "0755");
+    equal(byPath.get(HOOK_OBSERVER_LAUNCHER)?.scope, "entrypoint");
+    equal(byPath.get(HOOKS_JSON)?.mode, "0644");
+    equal(byPath.get(HOOKS_JSON)?.scope, "metadata");
+    equal(byPath.get("lib/entrypoints/wakeflow-hook-observer.js")?.scope, "shared");
+
+    // 范围陈述文件在制品里的层次：`lib/` 下的编译文件带闭包范围，其余是生成文件；两个
+    // launcher 都是 `entrypoint`，所以按范围选 launcher 的消费者两个都看得见（D8）。
+    for (const file of manifest.files) {
+      const compiled = file.path.startsWith("lib/");
+      equal(CLOSURE_SCOPES.includes(file.scope), compiled, file.path);
+      if (!compiled) ok(file.scope === "entrypoint" || file.scope === "metadata", file.path);
+    }
+    deepEqual(
+      manifest.files
+        .filter((file) => file.scope === "entrypoint")
+        .map((file) => file.path)
+        .sort(),
+      [...manifest.runtimeEntrypoints.map((entry) => entry.runtimeEntrypoint)].sort(),
+    );
+    // 片段模块只在构建时动态 import，不进任何闭包（D8）。
+    equal(byPath.has("lib/hosts/codex/codex-hook-fragment.js"), false);
+    equal(byPath.has("lib/hosts/claude-code/claude-code-hook-fragment.js"), false);
+
+    // D6：hooks.json 的字节就是该宿主片段模块渲染函数的输出，且等于片段自己导出的摘要——
+    // 构建器在写出前核对了这一点，清单里的 sha256 是同一事实的第三方记录。
+    equal(
+      readFileSync(path.join(artifactRoot, HOOKS_JSON), "utf8"),
+      artifact.hostId === "codex" ? renderCodexHooksJson() : renderClaudeCodeHooksJson(),
+    );
+    equal(
+      byPath.get(HOOKS_JSON)?.sha256,
+      artifact.hostId === "codex" ? CODEX_HOOK_FRAGMENT_DIGEST : CLAUDE_CODE_HOOK_FRAGMENT_DIGEST,
+    );
+
+    // D1：launcher 用动态 import 加 try/catch，登记两个进程守卫；不含静态 import。
+    const launcherText = readFileSync(path.join(artifactRoot, HOOK_OBSERVER_LAUNCHER), "utf8");
+    ok(launcherText.startsWith("#!/usr/bin/env node\n"));
+    ok(launcherText.includes('await import("../lib/entrypoints/wakeflow-hook-observer.js")'));
+    ok(launcherText.includes('"uncaughtException"'));
+    ok(launcherText.includes('"unhandledRejection"'));
+    doesNotMatch(launcherText, /^import\s/mu);
+    doesNotMatch(launcherText, /^export\s/mu);
+
     // 对端宿主目录只准入两份纯数据 profile（资源与窗口宿主身份）；状态栏资产、维护与
     // 设置等对端执行内容不得进入本宿主闭包（§13.94 D1 与制品隔离规则）。
     const peerDirectory =
@@ -188,13 +412,13 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
   timeout: 20_000,
 }, async (t) => {
   const output = outputFixture(t);
-  const built = buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
+  const built = await buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
 
   for (const artifact of built.artifacts) {
     const artifactRoot = path.join(output, artifact.outputDirectory);
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: [path.join(artifactRoot, "mcp/server.mjs")],
+      args: [path.join(artifactRoot, MCP_LAUNCHER)],
       cwd: artifactRoot,
       stderr: "pipe",
     });
@@ -239,4 +463,101 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
     }
     equal(stderr, "");
   }
+});
+
+test("两个候选的 hooks/observe.mjs 以宿主 SessionStart payload 把记录写进手搭工作区；观察目录被文件顶替时退出 0、stdout 空、stderr 恰好一行固定代码；报告固定代码后守卫已卸下，同一次运行的第二次故障不追加第二行", {
+  timeout: 60_000,
+}, async (t) => {
+  const output = outputFixture(t);
+  const built = await buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
+
+  for (const artifact of built.artifacts) {
+    const launcher = path.join(output, artifact.outputDirectory, HOOK_OBSERVER_LAUNCHER);
+    const workspace = workspaceFixture(t);
+    const directory = observationsDirectory(workspace, artifact.hostId);
+
+    // D4：成功路径退出 0、stdout 与 stderr 都为空；D8：记录落在该宿主的 hooks 观察目录。
+    const landed = spawnHookObserver(launcher, artifact.hostId, workspace);
+    equal(landed.status, 0, artifact.hostId);
+    equal(landed.stdout, "", artifact.hostId);
+    equal(landed.stderr, "", artifact.hostId);
+    const records = readdirSync(directory).filter((name) => name.endsWith(".json"));
+    equal(records.length, 1, artifact.hostId);
+    match(records[0] ?? "", RECORD_FILE_PATTERN);
+
+    // 观察目录的路径被普通文件顶替：内核的目录物化失败，launcher 仍退出 0、stdout 空，
+    // stderr 恰好一行固定代码（D4、D8）——整行相等即证明不含根、cwd、句柄与 transcript 路径。
+    rmSync(directory, { recursive: true, force: true });
+    writeFileSync(directory, "not a directory\n", { mode: 0o600 });
+    const failed = spawnHookObserver(launcher, artifact.hostId, workspace);
+    equal(failed.status, 0, artifact.hostId);
+    equal(failed.stdout, "", artifact.hostId);
+    equal(failed.stderr, "wakeflow-hook-observer: write-failed\n", artifact.hostId);
+
+    // D4：launcher 打出固定代码后卸下自己的进程守卫——同一次运行里随后再发生一次故障也
+    // 不会追加第二行固定代码。假入口先排一次稍后故障再在求值时抛出，故障必定发生在 catch
+    // 打出 `launcher` 之后（微任务先于定时器），所以这里不依赖机器快慢。
+    const isolated = launcherWithLateFaultFixture(t, launcher);
+    const guarded = spawnHookObserver(isolated, artifact.hostId, workspace);
+    equal(guarded.stdout, "", artifact.hostId);
+    deepEqual(fixedCodeLines(guarded.stderr), [`${FIXED_CODE_PREFIX}launcher`], artifact.hostId);
+  }
+});
+
+test("hooks.json 的渲染字节必须等于片段模块自己声明的摘要：不一致或缺席时构建器以稳定错误码失败", () => {
+  // 生产路径：构建器写出 hooks.json 前调用的就是这一道核对，两宿主的片段各自自洽。
+  assertRenderedHookFragmentDigest(renderCodexHooksJson(), CODEX_HOOK_FRAGMENT_DIGEST);
+  assertRenderedHookFragmentDigest(renderClaudeCodeHooksJson(), CLAUDE_CODE_HOOK_FRAGMENT_DIGEST);
+
+  // 摘要与渲染字节脱节（这里用另一宿主的摘要制造不一致）即失败，而不是把字节写进制品。
+  throws(
+    () =>
+      assertRenderedHookFragmentDigest(renderCodexHooksJson(), CLAUDE_CODE_HOOK_FRAGMENT_DIGEST),
+    expectArtifactErrorCode("wakeflow-artifact-hook-fragment-digest"),
+  );
+  throws(
+    () => assertRenderedHookFragmentDigest(renderClaudeCodeHooksJson(), CODEX_HOOK_FRAGMENT_DIGEST),
+    expectArtifactErrorCode("wakeflow-artifact-hook-fragment-digest"),
+  );
+  // 片段模块没有导出摘要：同一个错误码，不是 TypeError。
+  throws(
+    () => assertRenderedHookFragmentDigest(renderCodexHooksJson(), undefined),
+    expectArtifactErrorCode("wakeflow-artifact-hook-fragment-digest"),
+  );
+});
+
+test("宿主中立闭包守卫拒绝任何 hosts/ 模块：本宿主模块与对端准入 profile 都以稳定错误码失败，纯 foundation/kernel 闭包通过", () => {
+  // D1/D8：观察脚本的闭包只许 foundation 与 kernel。
+  assertSharedClosure(CODEX_ISOLATION_RULE, [
+    "entrypoints/wakeflow-hook-observer.js",
+    "foundation/crypto/sha256.js",
+    "kernel/hook-observations.js",
+    "kernel/layout.js",
+  ]);
+
+  // 本宿主的实现模块混进来：一份宿主中立的脚本会带着宿主实现进制品。
+  throws(
+    () =>
+      assertSharedClosure(CODEX_ISOLATION_RULE, [
+        "kernel/layout.js",
+        "hosts/codex/codex-hook-fragment.js",
+      ]),
+    expectArtifactErrorCode("wakeflow-artifact-hook-observer-scope"),
+  );
+  // 对端准入的纯数据 profile 是制品整体的准入，宿主中立的 launcher 仍然不许带上它。
+  throws(
+    () =>
+      assertSharedClosure(CODEX_ISOLATION_RULE, [
+        "hosts/claude-code/wakeflow-workspace-host-resource-profile.js",
+      ]),
+    expectArtifactErrorCode("wakeflow-artifact-hook-observer-scope"),
+  );
+  // 对端未准入的执行模块先被隔离规则拦下，错误码因此不同。
+  throws(
+    () =>
+      assertSharedClosure(CODEX_ISOLATION_RULE, [
+        "hosts/claude-code/claude-code-maintenance-execution.js",
+      ]),
+    expectArtifactErrorCode("wakeflow-artifact-host-isolation"),
+  );
 });

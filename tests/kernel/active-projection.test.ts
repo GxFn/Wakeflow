@@ -27,6 +27,7 @@ import {
   materializeActiveLayout,
   publishActiveProjection,
   renderActiveProjectionFiles,
+  type ActiveProjectionDemandEvidence,
   type ActiveProjectionDemandFacts,
   type ActiveProjectionFacts,
   type ActiveProjectionFile,
@@ -139,8 +140,14 @@ function facts(
     ],
     unmergedAccepted: [],
     demands,
+    activeDemands: observedDemands(...demands.map((demand) => demand.demandId)),
     ...overrides,
   };
+}
+
+/** 看全了活动 Demand 的一轮：退休遍历只在带着这份证据时进行。 */
+function observedDemands(...activeDemandIds: readonly string[]): ActiveProjectionDemandEvidence {
+  return { observed: true, activeDemandIds };
 }
 
 function markerOf(content: string): { readonly kind: string; readonly fingerprint: string } {
@@ -474,10 +481,13 @@ test("不安全目标：符号链接、0644、硬链接都让整轮零写并给�
 test("退休：不在事实里的 Demand 页面目录只在每个成员都带标记时退休，否则整目录留下并报 unsafe", async (t) => {
   const root = await fixture(t);
   await materializeActiveLayout(root, { recovering: false });
-  await publishActiveProjection(root, renderActiveProjectionFiles(facts()));
+  await publishActiveProjection(root, renderActiveProjectionFiles(facts()), {
+    activeDemands: observedDemands(DEMAND_A),
+  });
 
   const withoutDemands = renderActiveProjectionFiles(facts({}, []));
-  const retiredA = await publishActiveProjection(root, withoutDemands);
+  const evidence = { activeDemands: observedDemands() };
+  const retiredA = await publishActiveProjection(root, withoutDemands, evidence);
   equal(retiredA.disposition, "updated");
   deepEqual(retiredA.retired, [{ demandId: DEMAND_A, disposition: "retired" }]);
   equal(existsSync(absolute(root, demandProjectionRootRef(DEMAND_A))), false);
@@ -485,19 +495,58 @@ test("退休：不在事实里的 Demand 页面目录只在每个成员都带标
   await publishActiveProjection(
     root,
     renderActiveProjectionFiles(facts({}, [demandFacts(DEMAND_B)])),
+    { activeDemands: observedDemands(DEMAND_B) },
   );
   const directoryB = absolute(root, demandProjectionRootRef(DEMAND_B));
   writeFileSync(path.join(directoryB, "notes.md"), "kept by hand\n", { mode: 0o600 });
-  const kept = await publishActiveProjection(root, withoutDemands);
+  const kept = await publishActiveProjection(root, withoutDemands, evidence);
   deepEqual(kept.retired, [{ demandId: DEMAND_B, disposition: "unsafe" }]);
   equal(existsSync(path.join(directoryB, "index.md")), true);
   equal(existsSync(path.join(directoryB, "developer-progress.md")), true);
   equal(existsSync(path.join(directoryB, "notes.md")), true);
 
   unlinkSync(path.join(directoryB, "notes.md"));
-  const retiredB = await publishActiveProjection(root, withoutDemands);
+  const retiredB = await publishActiveProjection(root, withoutDemands, evidence);
   deepEqual(retiredB.retired, [{ demandId: DEMAND_B, disposition: "retired" }]);
   equal(existsSync(directoryB), false);
+});
+
+test("退休证据：没看全活动 Demand 的一轮一个页面目录都不删；看全且确认不活动才退休", async (t) => {
+  const root = await fixture(t);
+  await materializeActiveLayout(root, { recovering: false });
+  await publishActiveProjection(root, renderActiveProjectionFiles(facts()), {
+    activeDemands: observedDemands(DEMAND_A),
+  });
+  const directory = absolute(root, demandProjectionRootRef(DEMAND_A));
+  const pages = [demandProjectionIndexRef(DEMAND_A), demandProjectionProgressRef(DEMAND_A)];
+  const before = snapshot(root, pages);
+
+  // 一次瞬时读失败会让在用的 Demand 掉出事实：文件集本身分不清"不活动"与"没读出来"。
+  const withoutDemands = renderActiveProjectionFiles(facts({}, []));
+  const unobserved = await publishActiveProjection(root, withoutDemands, {
+    activeDemands: { observed: false, activeDemandIds: [] },
+  });
+  equal(unobserved.disposition, "updated", "工作区两页照常重写");
+  deepEqual(unobserved.retired, []);
+  deepEqual(snapshot(root, pages), before, "没看全的一轮不能删在用的 Demand 页面");
+
+  // 不带证据的发布（fresh 物化那条路）同样不退休。
+  deepEqual((await publishActiveProjection(root, withoutDemands)).retired, []);
+  deepEqual(snapshot(root, pages), before);
+
+  // 证据说它还活着：即便这一轮没渲染出它的页面，也不退休。
+  const stillActive = await publishActiveProjection(root, withoutDemands, {
+    activeDemands: observedDemands(DEMAND_A),
+  });
+  deepEqual(stillActive.retired, []);
+  deepEqual(snapshot(root, pages), before);
+
+  // 看全了、且证据里没有它：确实不活动，退休。
+  const retired = await publishActiveProjection(root, withoutDemands, {
+    activeDemands: observedDemands(),
+  });
+  deepEqual(retired.retired, [{ demandId: DEMAND_A, disposition: "retired" }]);
+  equal(existsSync(directory), false);
 });
 
 test("投影锁：活动持有者让发布以 projection-contended 失败（可重试）；recovering 退休失活的锁", {

@@ -10,6 +10,7 @@
     "claude-code-wakeflow-mcp.ts",
     "codex-wakeflow-maintenance.ts",
     "codex-wakeflow-mcp.ts",
+    "wakeflow-hook-observer.ts",
     "wakeflow-mcp-stdio.ts",
     "wakeflow-public-mcp-catalog.ts",
     "wakeflow-public-mcp-server.ts",

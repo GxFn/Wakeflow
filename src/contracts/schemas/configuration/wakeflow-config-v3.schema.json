@@ -86,6 +86,17 @@
       "description": "Canonical portable relative placement. A leading ../ chain may address a named sibling root; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.",
       "examples": ["Design", "../ProductA", "../wakeflow-ledger"]
     },
+    "siblingRelativePlacement": {
+      "type": "string",
+      "allOf": [
+        {
+          "$ref": "#/$defs/trimmedNonEmptyString"
+        }
+      ],
+      "pattern": "^(?![A-Za-z]:)(?:\\.\\./)?(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000\\r\\n]+(?:/(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000\\r\\n]+)*$",
+      "description": "Canonical portable relative placement of a repository or support surface: below the program root or at most one ../ level up (a named sibling of the root). A deeper ../ chain is rejected so that a session working directory can always be traced back to its program root through an ancestor or an ancestor's direct child; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.",
+      "examples": ["Design", "../ProductA"]
+    },
     "repositoryChildPath": {
       "type": "string",
       "allOf": [
@@ -470,8 +481,8 @@
           "$ref": "#/$defs/repositoryId"
         },
         "path": {
-          "$ref": "#/$defs/portableRelativePlacement",
-          "description": "Canonical relative placement from the program root."
+          "$ref": "#/$defs/siblingRelativePlacement",
+          "description": "Canonical relative placement from the program root: below it or exactly one ../ level up."
         },
         "displayName": {
           "$ref": "#/$defs/nonEmptyString",
@@ -599,7 +610,7 @@
           "examples": ["design"]
         },
         "path": {
-          "$ref": "#/$defs/portableRelativePlacement"
+          "$ref": "#/$defs/siblingRelativePlacement"
         },
         "displayName": {
           "$ref": "#/$defs/nonEmptyString",
@@ -650,7 +661,7 @@
           "examples": ["design"]
         },
         "path": {
-          "$ref": "#/$defs/portableRelativePlacement"
+          "$ref": "#/$defs/siblingRelativePlacement"
         },
         "displayName": {
           "$ref": "#/$defs/nonEmptyString",

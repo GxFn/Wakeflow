@@ -73,7 +73,8 @@ import {
  * 纯数据事实渲染，文件带 `<!-- wakeflow:…-projection:v1:sha256:<指纹> -->` 标记，0600，
  * 单文件上限 8 MiB。目标分四类：current、missing、stale（带标记但字节不同）、unsafe
  * （符号链接、非普通文件、硬链接数不为 1、不可读、超限或没有标记即手写）；任一目标 unsafe
- * 整轮零写。重写在投影短锁内逐文件 CAS；已不活动的 Demand 页面只在每个文件都带标记时退休。
+ * 整轮零写。重写在投影短锁内逐文件 CAS；已不活动的 Demand 页面只在调用方交来"这一轮确实
+ * 把活动 Demand 看全了"的证据、且该 id 不在证据里时退休，退休本身再要求每个成员都带标记。
  * 投影只是导航，机器记录才是权威；本模块不读配置、不读事件流，事实由调用方提供。
  */
 
@@ -311,7 +312,13 @@ export interface ActiveProjectionPodFacts {
   readonly worktrees: readonly Readonly<{
     readonly repositoryId: string;
     readonly repositoryName: string;
-    readonly receipt: "absent" | "present" | "checkout-missing";
+    /**
+     * 只区分"有没有 worktree 回执"：检出目录是否还在磁盘上是本地运行时状态，没有任何
+     * Wakeflow 变更控制它，进了指纹就会让投影在工作区外的 `git worktree remove` 之后
+     * 永久 stale（§13.96 对 `overall` 与看板计数的同一裁决）。live 的检出状态由
+     * `wakeflow_status` 这个全作用域出口报告。
+     */
+    readonly receipt: "absent" | "present";
   }>[];
 }
 
@@ -366,6 +373,21 @@ export interface ActiveProjectionUnmergedFacts {
   readonly commit: string;
 }
 
+/**
+ * 退休证据：这一轮是否真的把活动 Demand 看全了，以及看到的活动 Demand id。
+ *
+ * `demands` 只含渲染得出的 Demand，读不出的会被丢掉，所以它不能当"活动集合"用：
+ * 一次瞬时读失败会让活动 Demand 从 `demands` 里消失，按它退休就会删掉在用的页面。
+ * 证据独立回答"看没看全"，退休只在 `observed` 为真时进行。不参与渲染与指纹：它描述
+ * 这一轮观察的完整程度，不是投影内容。
+ */
+export interface ActiveProjectionDemandEvidence {
+  /** demands 域被观察到，且其中每个 Demand 都读得出（任一读不出为 false）。 */
+  readonly observed: boolean;
+  /** 观察到的活动 Demand id，含那些读得出但渲染不出的。 */
+  readonly activeDemandIds: readonly string[];
+}
+
 /** 渲染投影所需的全部事实；纯数据，不含路径、句柄或摘要之外的私有值。 */
 export interface ActiveProjectionFacts {
   readonly language: ActiveProjectionLanguage;
@@ -374,6 +396,8 @@ export interface ActiveProjectionFacts {
   readonly pods: readonly Readonly<ActiveProjectionPodFacts>[];
   readonly unmergedAccepted: readonly Readonly<ActiveProjectionUnmergedFacts>[];
   readonly demands: readonly Readonly<ActiveProjectionDemandFacts>[];
+  /** 退休证据；发布时交给 `publishActiveProjection`，渲染与指纹都不看它。 */
+  readonly activeDemands: Readonly<ActiveProjectionDemandEvidence>;
 }
 
 export interface ActiveProjectionFile {
@@ -825,6 +849,8 @@ export function freshActiveProjectionFacts(
     ),
     unmergedAccepted: Object.freeze([]),
     demands: Object.freeze([]),
+    // fresh 初始化只读 Config，没有观察过活动 Demand：没有证据就不退休任何页面目录。
+    activeDemands: Object.freeze({ observed: false, activeDemandIds: Object.freeze([]) }),
   });
 }
 
@@ -958,6 +984,11 @@ export interface PublishActiveProjectionOptions {
   readonly signal?: AbortSignal;
   /** 维护事务的 affected-step 恢复：先退休失活的锁与遗留暂存文件。 */
   readonly recovering?: boolean;
+  /**
+   * 活动 Demand 的观察证据（`ActiveProjectionFacts.activeDemands`）。缺席或 `observed`
+   * 为假的这一轮不退休任何页面目录：删除只在有"该 Demand 确实不再活动"的正面证据时进行。
+   */
+  readonly activeDemands?: Readonly<ActiveProjectionDemandEvidence>;
 }
 
 function mapWriteError(error: DurableAtomicFileWriteError): never {
@@ -1258,7 +1289,8 @@ function receiptOf(
 
 /**
  * 在投影锁内让磁盘等于渲染结果：任一目标 unsafe 整轮零写；否则缺失创建、过期 CAS 替换、
- * 当前不动；`files` 之外的 Demand 页面目录只在全部成员带标记时退休。
+ * 当前不动；`files` 之外的 Demand 页面目录只在 `activeDemands` 证明这一轮看全了活动
+ * Demand、且全部成员带标记时退休。
  */
 export async function publishActiveProjection(
   root: RootedDirectory,
@@ -1272,11 +1304,12 @@ export async function publishActiveProjection(
     await retireInactiveLock(root);
     await settleStages(root, files, signal);
   }
+  const evidence = options.activeDemands;
   try {
     return await withRootedExclusiveFileLock(
       root,
       WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF,
-      () => publishLocked(root, files, signal),
+      () => publishLocked(root, files, evidence, signal),
       { acquireTimeoutMilliseconds: LOCK_TIMEOUT_MILLISECONDS, ...signalOptions(signal) },
     );
   } catch (error: unknown) {
@@ -1302,14 +1335,22 @@ async function writeTargets(
   return disposition;
 }
 
+/**
+ * 退休遍历需要"不活动"的正面证据：没有证据、或这一轮没把活动 Demand 看全（域读不出、
+ * 或其中某个 Demand 读不出）就一个目录都不删——`files` 里缺一个 Demand 既可能是它真的
+ * 不活动，也可能只是这一轮没读出来，两者在 `files` 上无法区分。
+ */
 async function retireInactiveDemandProjections(
   root: RootedDirectory,
   files: readonly Readonly<ActiveProjectionFile>[],
+  evidence: Readonly<ActiveProjectionDemandEvidence> | undefined,
   signal: AbortSignal | undefined,
 ): Promise<readonly Readonly<ActiveProjectionRetiredDirectory>[]> {
-  const active = new Set(
-    files.flatMap((entry) => (entry.demandId === null ? [] : [entry.demandId])),
-  );
+  if (evidence === undefined || !evidence.observed) return Object.freeze([]);
+  const active = new Set(evidence.activeDemandIds);
+  for (const entry of files) {
+    if (entry.demandId !== null) active.add(entry.demandId);
+  }
   const retired: Readonly<ActiveProjectionRetiredDirectory>[] = [];
   for (const demandId of await listDemandProjectionDirectories(root, signal)) {
     if (active.has(demandId)) continue;
@@ -1321,6 +1362,7 @@ async function retireInactiveDemandProjections(
 async function publishLocked(
   root: RootedDirectory,
   files: readonly Readonly<ActiveProjectionFile>[],
+  evidence: Readonly<ActiveProjectionDemandEvidence> | undefined,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
   const before = await inspectActiveProjectionTargets(root, files, signalOptions(signal));
@@ -1329,7 +1371,7 @@ async function publishLocked(
   }
   await ensureProjectionDirectories(root, files, signal);
   const disposition = await writeTargets(root, files, before, signal);
-  const retired = await retireInactiveDemandProjections(root, files, signal);
+  const retired = await retireInactiveDemandProjections(root, files, evidence, signal);
   const after = await inspectActiveProjectionTargets(root, files, signalOptions(signal));
   if (after.some((target) => target.status !== "current")) {
     fail("io-failure", "projection-commit-uncertain", "$projection");

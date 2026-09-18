@@ -14,7 +14,9 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  * 打印恰好一行——main pod 为 `<model> · <window>`，其他 pod 为 `<model> · <pod> · <window>`，找不到
  * 只打印模型名；不含路径、句柄、摘要，stderr 为空。工作区根由命令行以 base64url 显式给出，
  * 从不从 cwd 推断。Wakeflow 只把字节写进自己的运行时目录并在 verify 里核对字节与模式，
- * 不 spawn node 做 smoke；`settings.local.json` 的 statusLine 条目由 Agent 按计划安装。
+ * 不 spawn node 做 smoke；`settings.local.json` 的 statusLine 条目由维护操作
+ * `claude-statusline-settings:install` 写入（§13.94 D6 否决了"由 Agent 按计划安装"那条路径，
+ * §13.96 记下落地机制），单键、CAS 与 0600 规则见 claude-code-statusline-settings-operation.ts。
  */
 
 export const CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME = "statusline.mjs" as const;
@@ -207,7 +209,12 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/gu, "'\\''")}'`;
 }
 
-/** Agent 写进 `settings.local.json` 的 `statusLine.command`：根以 base64url 显式传入。 */
+/**
+ * 维护操作 `claude-statusline-settings:install` 写进 `settings.local.json` 的
+ * `statusLine.command`：根以 base64url 显式传入。唯一调用方是
+ * claude-code-statusline-settings-operation.ts 的 `claudeCodeStatuslineSettingsEntry`，
+ * 那里定义只改 `statusLine` 一键、CAS 替换与 0600 的规则；改命令形状要同时改那条操作的目标摘要。
+ */
 export function claudeCodeStatuslineCommand(workspaceRoot: string): string {
   const asset = [workspaceRoot, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/")].join("/");
   const encodedRoot = Buffer.from(workspaceRoot, "utf8").toString("base64url");

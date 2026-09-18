@@ -3,9 +3,9 @@ diagramId: ts-evidence-runtime-call-flow
 viewType: call-flow
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:5b9e5a92563b9d0fcd976a01e6ac9978d0f809aa185540acf2fd2998138f7148
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:da04273f15ac5ae372f7f752bec2b1cad6eca3f0aeed641b288fafe4786a8b1c
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -63,7 +63,6 @@ sourcePaths:
   - src/kernel/*.ts
   - src/kernel/event-stream/*.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -128,7 +127,7 @@ refreshTriggers:
 
 效果型公开工具复用已有的耐久 Evidence 发布机制。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 来源选择、隐私与发布
 

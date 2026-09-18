@@ -3,9 +3,9 @@ diagramId: ts-review-completion-file-f7
 viewType: file-dependency
 truthKind: current-code
 reviewDepth: L3
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:3caefc42b90f9e4d441fc09c6648c86d0c3e0abd4cb82c68c947160be1dbbd28
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:6ac102dbb9544d7740a98cb4e4d3333c5b5239bd752e1f6dcc2706fb9dcaab48
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
@@ -52,6 +52,7 @@ sourcePaths:
   - src/governance/controller/*.ts
   - src/governance/delivery/*.ts
   - src/governance/demand/*.ts
+  - src/governance/demand/demand-verify-gates.ts
   - src/governance/demand/event-sourcing/*.ts
   - src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts
   - src/governance/demand/model/*.ts
@@ -70,7 +71,6 @@ sourcePaths:
   - src/kernel/requirement-board.ts
   - src/kernel/work-claims.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -80,8 +80,6 @@ schemaPaths:
   - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
@@ -154,7 +152,7 @@ refreshTriggers:
 
 这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 评审和生命周期的精选直接导入
 
@@ -172,6 +170,7 @@ flowchart TB
   f8["源码模块 verify.ts"]
   f9["需求看板 requirement-board.ts"]
   f10["工作声明 work-claims.ts"]
+  f11["Demand 核验门 demand-verify-gates.ts"]
   f1 -->|"E-L1030-01 直接导入"| f2
   f1 -->|"E-L1030-02 直接导入"| f3
   f1 -->|"E-L1030-03 直接导入"| f4
@@ -186,8 +185,9 @@ flowchart TB
   f6 -->|"E-L1030-12 直接导入"| f8
   f6 -->|"E-L1030-13 直接导入"| f9
   f6 -->|"E-L1030-14 直接导入"| f10
-  f8 -->|"E-L1030-15 直接导入"| f9
-  f8 -->|"E-L1030-16 直接导入"| f10
+  f8 -->|"E-L1030-15 直接导入"| f11
+  f11 -->|"E-L1030-16 直接导入"| f9
+  f11 -->|"E-L1030-17 直接导入"| f10
 ```
 
 ### 本图术语说明
@@ -210,6 +210,7 @@ flowchart TB
 | f8 | `src/capabilities/demand/verify.ts` | 源码模块 verify.ts |
 | f9 | `src/kernel/requirement-board.ts` | 需求看板 requirement-board.ts |
 | f10 | `src/kernel/work-claims.ts` | 工作声明 work-claims.ts |
+| f11 | `src/governance/demand/demand-verify-gates.ts` | Demand 核验门 demand-verify-gates.ts |
 
 ### 本图边级证据
 
@@ -230,11 +231,12 @@ flowchart TB
 | E-L1030-13 | `src/capabilities/demand/lifecycle.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
 | E-L1030-14 | `src/capabilities/demand/lifecycle.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
 | E-L1030-15 | `src/capabilities/demand/verify.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
-| E-L1030-16 | `src/capabilities/demand/verify.ts` | `tests/capabilities/result-review/service.test.ts` | 直接导入 |
+| E-L1030-16 | `src/governance/demand/demand-verify-gates.ts` | `tests/capabilities/demand/service.test.ts` | 直接导入 |
+| E-L1030-17 | `src/governance/demand/demand-verify-gates.ts` | `tests/capabilities/demand/service.test.ts` | 直接导入 |
 
 ## 守卫、恢复与验证范围
 
-文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
+文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。本基线起 `src/capabilities/demand/verify.ts` 只是再导出：门本身住在治理层 `demand-verify-gates.ts`，`wakeflow_verify{demandId}` 复用同一份。
 
 涉及的测试与核验入口：
 

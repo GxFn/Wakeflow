@@ -3,9 +3,9 @@ diagramId: ts-foundation-file-dependency-f2
 viewType: file-dependency
 truthKind: current-code
 reviewDepth: L3
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:2cebacc585ce9dceffe791b1c4b443857746790825ce9952ca6813d710b4e5ac
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:1d1c691dd8533e5dea44f1246046663f42127577e08442936bf721400794d5d4
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
@@ -49,7 +49,7 @@ refreshTriggers:
 
 这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## Foundation的精选直接导入
 

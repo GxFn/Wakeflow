@@ -3,9 +3,9 @@ diagramId: ts-endpoint-runtime-call-flow
 viewType: call-flow
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:ef8906fc6f526f1d5993aa29d98cc0ed13b9935e1cf7ecd990c7b18b8baa5236
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:bed0e6411472c4af71d894f394c49211e7d0424ed25b9b84a2dffafe9e4c15d7
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -60,7 +60,7 @@ refreshTriggers:
 
 各操作保持逻辑身份、宿主绑定代际与观察证据的区别。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 登记与 worktree 回执核对
 

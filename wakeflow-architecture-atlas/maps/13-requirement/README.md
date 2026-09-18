@@ -3,9 +3,9 @@ diagramId: ts-requirement-readme
 viewType: authority
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:0caf1d254ef0146b95eb2d4eb8e4b03e0cdbad05f8ecac961f362a75cb15df10
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:e2ff70e8e69bab3f8454763812c1031ec82fc482f6990a8a968a5293f13cf5d9
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -65,7 +65,7 @@ refreshTriggers:
 
 交接物为 requirement.md、landing.md 和可选文本附件。发布一次写入不可变 ledger 记录并上板；独立 Confirmation 和 TODO 摄入工具已经删除。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 需求内容、确认与认领的不同事实
 

@@ -3,9 +3,9 @@ diagramId: ts-pod-runtime-call-flow
 viewType: call-flow
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:c4936035bf41ad806c09fe01fd403101220d4ebf9d740607c658f15ab3c6da30
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:3081db1470e8627d0b955a68cd60b107345f5705b42d64bb6174fa08ed6043c8
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -55,6 +55,7 @@ sourcePaths:
   - src/governance/evidence/*.ts
   - src/governance/ledger/*.ts
   - src/governance/lifecycle/*.ts
+  - src/governance/pod/*.ts
   - src/governance/result/*.ts
   - src/governance/review/*.ts
   - src/governance/tasking/*.ts
@@ -63,7 +64,6 @@ sourcePaths:
   - src/kernel/event-stream/*.ts
   - src/kernel/pod-worktree-receipts.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -133,7 +133,7 @@ refreshTriggers:
 
 状态是派生结果，创建配置不代表实际窗口已经可用。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 创建与 worktree 登记
 
@@ -181,7 +181,7 @@ sequenceDiagram
 | E-L1065-03 | `src/capabilities/pod/service.ts#applyCreate` | `tests/capabilities/pod/service.test.ts` | 追加完整窗口组和 worktree 意图 |
 | E-L1065-04 | `src/capabilities/endpoint/service.ts#executeWindowBindingRequest` | `tests/capabilities/pod/service.test.ts` | 宿主创建后登记会话和 porcelain |
 | E-L1065-05 | `src/kernel/pod-worktree-receipts.ts#admitPodWorktreeObservation` | `tests/capabilities/pod/service.test.ts` | 非主检出、common-dir、双向 gitdir 与 HEAD 核对 |
-| E-L1065-06 | `src/capabilities/pod/decide.ts#derivePodState` | `tests/capabilities/pod/service.test.ts` | 由当前事实派生 creating / ready |
+| E-L1065-06 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/service.test.ts` | 由当前事实派生 creating / ready |
 
 ## 归档后两段关闭
 
@@ -235,7 +235,7 @@ sequenceDiagram
 
 ## 守卫、恢复与验证范围
 
-primary 不可关闭。有活动 Demand、未交代分支、剩余绑定或仍存在检出时阻塞。recover 只对账过期或孤儿回执；全局 Pod 状态视图和残留报告仍待 observation。
+primary 不可关闭。有活动 Demand、未交代分支、剩余绑定或仍存在检出时阻塞。recover 只对账过期或孤儿回执；全局 Pod 状态视图与残留报告已由 observation 的 `wakeflow_status` 读取，关闭结果另附 worktree 处置建议供 Agent 执行。
 
 涉及的测试与核验入口：
 
@@ -244,5 +244,6 @@ primary 不可关闭。有活动 Demand、未交代分支、剩余绑定或仍�
 ## 下钻与相关视图
 
 - [本专题总览](./README.md)
+- [只读观察与核验](../16-observation/README.md)
 - [图谱总索引](../README.md)
 - [核验与剩余范围](../01-diagram-review-ledger.md)

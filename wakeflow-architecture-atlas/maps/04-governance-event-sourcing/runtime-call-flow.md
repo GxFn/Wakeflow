@@ -3,9 +3,9 @@ diagramId: ts-governance-demand-runtime-e0
 viewType: call-flow
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:7a598195c4622f5d7a4c4263c305280307b6005de8bde8f4d0bc5a7cc5bc1f76
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:ff26c1614ceae4aa8f31d08a4bf8567be19b8125df26e823ea52cfdf2ec8a089
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -70,7 +70,6 @@ sourcePaths:
   - src/kernel/event-stream/*.ts
   - src/kernel/requirement-board.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -80,8 +79,6 @@ schemaPaths:
   - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json
@@ -150,7 +147,7 @@ refreshTriggers:
 
 事件流保留持久化事实，内核及切片提供追加型和效果型调用形状。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 追加命令的幂等与 CAS
 

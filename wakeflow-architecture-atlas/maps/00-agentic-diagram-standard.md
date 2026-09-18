@@ -240,9 +240,20 @@ testPaths:
 
 | 边编号 | 起点文件/符号 | 终点文件/符号 | 关系 | 代码证据 | 测试证据 |
 | --- | --- | --- | --- | --- | --- |
-| `E-01` | `path/a.ts#symbolA` | `path/b.ts#symbolB` | 调用 | 直接调用点 | 测试文件与测试名称 |
+| `E-01` | `path/a.ts#symbolA` | `path/b.ts#symbolB` | 调用 | 直接调用点 | `tests/kernel/active-projection.test.ts#publishActiveProjection` |
 
 图中省略实现细节时，证据表仍必须保留精确关系。没有证据行的箭头不能进入审阅结论。
+
+测试证据列与代码列同等对待，只有三种合法写法：
+
+| 写法 | 含义 | 检查 |
+| --- | --- | --- |
+| `tests/…/x.test.ts#symbol` | 该测试真的用到这个符号 | 文件必须存在，符号必须在该测试文件的 AST 里出现；只写在注释里不算 |
+| 间接覆盖：`tests/…/x.test.ts#symbol`（经哪个入口跑到） | 目标符号本身没有直接用例，只在别的入口下被走到 | 锚点同样解析，并且必须写出理由 |
+| 未覆盖：为什么没有 | 这条关系当前没有测试 | 不得再引任何 `tests/` 路径，必须写出理由 |
+
+只写测试文件名而不写符号，等于用同名推定覆盖，`check:structure` 在声明
+`testEvidence: anchored` 的文档里判为错误；尚未声明的文档把未锚定行计入报告的 `testEvidence.unanchored`，那个数字就是当前还没关上的缺口。
 
 ### 9.2 稳定定位
 

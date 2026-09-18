@@ -1,12 +1,12 @@
 # Wakeflow 架构与代码图谱
 
-> 核验基线 `7ba1f38`，2026-09-11。当前九个能力切片已落地，19 个公共工具、16 个一次性场景；observation、L2 与 L3/E4 为后续范围。
+> 核验基线 `1480271`，2026-09-18。当前十个能力切片已落地，20 个公共工具、18 个一次性场景；L2 与 L3/E4 为后续范围。工作树另有并行未提交改动（宿主 hook 通道等），不在本轮图中。
 
 | 开发范围 | 当前状态 | 图谱处理 |
 | --- | --- | --- |
 | L0 共用机制与六层依赖 | 已建立，物理收敛仍有余项 | 当前机制图保留实际文件，未伪装为最终目录 |
 | L1 workspace / endpoint / requirement / demand / tasking / delivery / result-review / evidence / pod | 九片已落地 | 当前实现图与符号/Schema/测试核对 |
-| L1 observation | 未开始 | 只列全局 status、verify、活动投影和状态栏的停止边界 |
+| L1 observation | 已落地 | 只读 status / verify、活动投影与 Claude 状态栏按当前实现成图 |
 | L2 场景联合、skills/commands 重写、双宿主真实投递 | 未开始 | 一次性场景不冒充真实宿主端到端验证 |
 | L3 新制品构建、E4 旧树切换 | 未开始 | 候选仍 releaseEligible:false，旧 0.9.6 插件仍是独立制品 |
 
@@ -14,7 +14,7 @@
 
 | 入口 | 回答的问题 |
 | --- | --- |
-| [Wakeflow：九个切片的当前架构](./01-overall-architecture/README.md) | 六层职责与当前过渡实现 |
+| [Wakeflow：十个切片的当前架构](./01-overall-architecture/README.md) | 六层职责与当前过渡实现 |
 | [Foundation：持久性与根约束](./02-foundation/README.md) | 基础原语与业务 owner 的边界 |
 | [工作区：配置、维护事务与静态资源](./03-configuration-workspace/README.md) | 工作区维护的权威与生成物 |
 | [Demand：不可变事实与可重建视图](./04-governance-event-sourcing/README.md) | 从需求包到 Demand 事件与视图 |
@@ -29,6 +29,7 @@
 | [需求包：确认摘要、不可变记录与认领板](./13-requirement/README.md) | 需求内容、确认与认领的不同事实 |
 | [受管证据：来源、捕获、发布与读取](./14-evidence/README.md) | 受管证据从选择到结果消费 |
 | [Pod：完整窗口组与检出回执](./15-pod/README.md) | Pod 配置和端点事实形成执行环境 |
+| [Observation：一次全局观察、核验门与活动投影](./16-observation/README.md) | 只读观察怎样派生状态、门与人读页面 |
 
 ## 事实与阅读方式
 
@@ -37,7 +38,7 @@
 - `[当前]`：代码、合同、实际消费者和验证入口已对照，指纹匹配核验范围。
 - `[待复核]`：来源变化后保留原快照，不能继续当作当前操作依据。
 - `[进行中]`：有明确未提交实现边界；当前本轮代码基线没有这类页面。
-- `[目标设计]`：明确的设计依据，不能当成生产调用链；本轮未展开 observation 内部设计。
+- `[目标设计]`：明确的设计依据，不能当成生产调用链；本轮没有这类页面。
 - `[历史]`：旧提交的说明，不能进入当前能力统计。
 
 每张图均有本图术语说明、节点/符号定位和独立边证据表。文件依赖为 AST 精选图，完整路径写在节点表；同名 service.ts 通过完整路径区分。
@@ -46,4 +47,4 @@
 
 [当前逐图台账](./01-diagram-review-ledger.md) · [绘图标准](./00-agentic-diagram-standard.md) · [本轮范围和验证](../plans/l1-nine-slices-refresh.md)
 
-Schema 仍为 wire 权威；配置仍 v3 且已包含 Pod，最终切换不在本轮。全局 status/verify、完整活动投影与状态栏待 observation；skills/commands 重写与双宿主真实投递待 L2；可安装新制品与旧树删除待 L3/E4。
+Schema 仍为 wire 权威；配置仍 v3 且已包含 Pod，最终切换不在本轮。全局 status/verify、活动投影与 Claude 状态栏已随 observation 落地，只读且不拥有业务权威；skills/commands 重写与双宿主真实投递待 L2；可安装新制品与旧树删除待 L3/E4。

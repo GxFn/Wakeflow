@@ -3,9 +3,9 @@ diagramId: ts-review-completion-runtime-l1
 viewType: call-flow
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:8ee0e887c7d808ba77d0b7b73fc8a0d66a5ffeeade39e03372611fc355ae7fca
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:5fa291f4b4bd0cedcf639689e18ba331c73e3144c8daf3ae738fb8489a355b44
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -51,6 +51,7 @@ sourcePaths:
   - src/governance/controller/*.ts
   - src/governance/delivery/*.ts
   - src/governance/demand/*.ts
+  - src/governance/demand/demand-verify-gates.ts
   - src/governance/demand/event-sourcing/*.ts
   - src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts
   - src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts
@@ -68,7 +69,6 @@ sourcePaths:
   - src/kernel/event-stream/*.ts
   - src/kernel/requirement-board.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -78,8 +78,6 @@ schemaPaths:
   - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
@@ -153,7 +151,7 @@ refreshTriggers:
 
 调用图将外部判断、事件变更和物理归档分开。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 决定和升级后的返回
 
@@ -244,7 +242,7 @@ sequenceDiagram
 | --- | --- | --- |
 | controller | Agent / 用户 / 外部效果或条件视图 | Controller |
 | slice | `src/capabilities/demand/lifecycle.ts` | 生命周期切片 |
-| verify | `src/capabilities/demand/verify.ts` | 内嵌只读门 |
+| verify | `src/governance/demand/demand-verify-gates.ts#evaluateVerifyGates` | 内嵌只读门 |
 | event | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts` | Demand 事件流 |
 | archive | `src/capabilities/demand/archive.ts` | 不可变归档包 |
 | board | `src/kernel/requirement-board.ts` | 看板认领状态 |
@@ -256,7 +254,7 @@ sequenceDiagram
 | 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
 | --- | --- | --- | --- |
 | E-L1032-01 | `src/capabilities/demand/lifecycle.ts#executeDemandCompletionRequest` | `tests/capabilities/demand/service.test.ts` | preview 后按摘要 apply |
-| E-L1032-02 | `src/capabilities/demand/verify.ts#evaluateVerifyGates` | `tests/capabilities/demand/service.test.ts` | 配置、审计、声明、证据和隐私门 |
+| E-L1032-02 | `src/governance/demand/demand-verify-gates.ts#evaluateVerifyGates` | `tests/capabilities/demand/service.test.ts` | 配置、审计、声明、证据和隐私门 |
 | E-L1032-03 | `src/capabilities/demand/lifecycle.ts#applyTerminal` | `tests/capabilities/demand/service.test.ts` | 先保存活动根外 journal |
 | E-L1032-04 | `src/capabilities/demand/lifecycle.ts#terminalEvent` | `tests/capabilities/demand/service.test.ts` | 一：提交 completed 或 cancelled |
 | E-L1032-05 | `src/capabilities/demand/lifecycle.ts#sealArchive` | `tests/capabilities/demand/service.test.ts` | 二：封 payload、verify 报告与 worktree 来源 |

@@ -3,9 +3,9 @@ diagramId: ts-overall-public-mcp-call-flow-v0
 viewType: call-flow
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:5c250fe708eef78aeda133165c545745e59ab3618baa4129682acdf05236e148
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:6ea3973e3bff90651abacf228ad38102084ef7eeaa1b820f707ee6fb3959f941
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -76,7 +76,6 @@ sourcePaths:
   - src/kernel/command-shell.ts
   - src/kernel/event-stream/*.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/host-runtime/*.ts
   - src/workspace/maintenance/*.ts
   - src/workspace/managed-integration/*.ts
@@ -92,8 +91,6 @@ schemaPaths:
   - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
@@ -189,7 +186,7 @@ refreshTriggers:
 
 两个宿主共用登记表与通用 executor；需要宿主身份的能力由对应组合根固定注入。工具目录是静态数据，不保存工作区运行状态。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## MCP 启动与单次工具调用
 

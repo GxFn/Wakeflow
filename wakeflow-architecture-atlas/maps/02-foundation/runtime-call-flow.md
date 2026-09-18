@@ -3,9 +3,9 @@ diagramId: ts-foundation-runtime-c0
 viewType: call-flow
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:cea71f2d47e9620d67f45090ee4ca382cf47d4f1a6fdb117c37d6d30e3222a71
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:34ae75e76a433c4e4c8dfda9b864bedebd0ef0b840629cc5b2691a47c2d682d9
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -53,7 +53,7 @@ refreshTriggers:
 
 三张图分别描述读取、替换和只创建资源；跨调用业务恢复由拥有 journal 的领域负责。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 稳定读取的节点与字节核对
 

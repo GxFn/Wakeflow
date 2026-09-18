@@ -3,9 +3,9 @@ diagramId: ts-end-to-end-business-z0
 viewType: vertical-slice
 truthKind: current-code
 reviewDepth: L2
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:77924681dd99dc5b54bbed39802eaec0bacb3c7933699176845daf76e445e42d
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:4f9f009c93cbb8318167cbcb1a1e238daaaa7276ca8f987d97849195e85540df
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -77,7 +77,6 @@ sourcePaths:
   - src/kernel/*.ts
   - src/kernel/event-stream/*.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/host-runtime/*.ts
   - src/workspace/maintenance/*.ts
   - src/workspace/managed-integration/*.ts
@@ -93,8 +92,6 @@ schemaPaths:
   - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
@@ -189,7 +186,7 @@ refreshTriggers:
 
 本图表达跨角色的工作顺序，各个耐久对象的状态在下钻页分开。主线现已覆盖完成归档、继续和 Pod；全局观察、L2 双宿主真实投递和 L3/E4 切换仍是后续工作。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 九个已落地切片的业务接力
 
@@ -207,7 +204,7 @@ flowchart TB
   testing["按需测试与失败分类"]
   archive["完成 / 取消即归档"]
   pod["按需 Pod 两段关闭"]
-  stop["后续：observation、L2、L3/E4"]
+  stop["后续：L2、L3/E4"]
   workspace -->|"E-L1041-01 具备 Design 工作面"| design
   design -->|"E-L1041-02 不可变记录与 pending 看板"| claim
   claim -->|"E-L1041-03 按 Pod 限定一个活动 Demand"| task
@@ -245,7 +242,7 @@ flowchart TB
 | testing | `src/capabilities/result-review/service.ts` | 按需测试与失败分类 |
 | archive | `src/capabilities/demand/lifecycle.ts` | 完成 / 取消即归档 |
 | pod | `src/capabilities/pod/service.ts` | 按需 Pod 两段关闭 |
-| stop | `src/entrypoints/wakeflow-public-mcp-catalog.ts` | 后续：observation、L2、L3/E4 |
+| stop | `src/entrypoints/wakeflow-public-mcp-catalog.ts` | 后续：L2、L3/E4 |
 
 ### 本图边级证据
 
@@ -276,5 +273,6 @@ flowchart TB
 
 - [按 owner 分开的状态与恢复](./state-and-recovery.md)
 - [场景与验证矩阵](./review-evidence.md)
+- [只读观察与核验](../16-observation/README.md)
 - [图谱总索引](../README.md)
 - [核验与剩余范围](../01-diagram-review-ledger.md)

@@ -261,11 +261,11 @@ function renderHome(): void {
       <p class="eyebrow">本地可重建阅读层</p>
       <h1>Wakeflow TypeScript 流程图集</h1>
       <p class="home-lead">从总体架构下钻到文件、符号、状态与证据。Markdown和Mermaid是唯一文档正典；本页面只负责导航、缩放与阅读。</p>
-      <div class="home-notice" role="note">核验基线 ${documentById.get("01-overall-architecture/README")?.frontmatter.baselineCommit?.slice(0, 7) ?? "未记录"}。各页标签表示其来源快照；observation、真实宿主联合和新制品切换仍是后续范围。</div>
+      <div class="home-notice" role="note">核验基线 ${documentById.get("01-overall-architecture/README")?.frontmatter.baselineCommit?.slice(0, 7) ?? "未记录"}。各页标签表示其来源快照；真实宿主联合和新制品切换仍是后续范围。</div>
     </section>
     <section class="home-grid" aria-label="流程图入口">
       ${homeCard("业务主线", "从需求包到归档、继续与 Pod 关闭。", "10-end-to-end-business-flow/README")}
-      ${homeCard("总体架构", "六层职责、九个切片及尚未接通的 observation。", "01-overall-architecture/README")}
+      ${homeCard("总体架构", "六层职责、十个切片与只读观察边界。", "01-overall-architecture/README")}
       ${homeCard("公共 MCP 调用", "登记表、固定宿主装配与真实能力执行器。", "01-overall-architecture/runtime-call-flow")}
       ${homeCard("核验快照", "代码、场景、图谱和未运行验证各有范围。", "01-overall-architecture/review-evidence")}
       ${homeCard("需求包与看板", "确认摘要、不可变记录、认领状态与恢复。", "13-requirement/README")}
@@ -277,6 +277,7 @@ function renderHome(): void {
       ${homeCard("测试合同", "逐步记录、失败分类和基线对比。", "08-real-environment-testing/README")}
       ${homeCard("受管证据", "文件、观察、链接、提交和不可变发布。", "14-evidence/README")}
       ${homeCard("Pod 执行环境", "完整窗口组、worktree 准入和两段关闭。", "15-pod/README")}
+      ${homeCard("只读观察与核验", "一次观察派生总体状态、核验门与活动投影。", "16-observation/README")}
       ${homeCard("应用内核", "调用形状、工作声明、观察和共享边界。", "11-kernel/README")}
       ${homeCard("事件流", "提交批、快照加尾部和首次发布。", "04-governance-event-sourcing/README")}
       ${homeCard("基础原语", "根约束、稳定读取、原子写入和恢复。", "02-foundation/README")}

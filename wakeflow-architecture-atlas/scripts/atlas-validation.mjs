@@ -26,6 +26,30 @@ export function parseSource(source, filename) {
   visit(ast);
   return {imports: [...imports].sort(), symbols};
 }
+/** Identifiers a file really uses: imports, calls, types and `Owner.method` pairs. Comments are not in the AST, so a symbol that only appears in prose does not count as coverage. */
+export function referencedSymbols(source, filename) {
+  const ast = parseSync(source, {syntax: 'typescript', tsx: filename.endsWith('.tsx'), target: 'es2022'});
+  const symbols = new Set();
+  function visit(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const item of node) visit(item); return; }
+    if (node.type === 'Identifier' && typeof node.value === 'string') symbols.add(node.value);
+    for (const [left, right] of [[node.object, node.property], [node.left, node.right]]) {
+      if (left?.type === 'Identifier' && right?.type === 'Identifier') symbols.add(left.value + '.' + right.value);
+    }
+    for (const [key, value] of Object.entries(node)) if (key !== 'span') visit(value);
+  }
+  visit(ast);
+  return symbols;
+}
+/** Test files are indexed by used identifiers, not declarations: a test backs a symbol by exercising it. */
+export function testIndex(repositoryRoot) {
+  const modules = new Map();
+  for (const file of globSync('tests/**/*.ts', {cwd: repositoryRoot}).sort()) {
+    modules.set(file, {imports: new Set(), symbols: referencedSymbols(fs.readFileSync(path.join(repositoryRoot, file), 'utf8'), file)});
+  }
+  return modules;
+}
 export function sourceIndex(repositoryRoot) {
   const files = globSync('src/**/*.ts', {cwd: repositoryRoot}).sort();
   const set = new Set(files);
@@ -96,15 +120,66 @@ export function validateImports(body, modules) {
   }
   return {count, errors};
 }
-export function validateReferences(raw, repositoryRoot, modules) {
-  const errors = []; let symbols = 0;
+/** Source and test anchors are checked the same way: the file must exist and must really carry the symbol. */
+export function validateReferences(raw, repositoryRoot, modules, tests = new Map()) {
+  const errors = []; let symbols = 0, testSymbols = 0;
   for (const m of raw.matchAll(/`((?:src|tests|tooling|docs)\/[A-Za-z0-9_./*-]+\.(?:ts|json|md))(?:#([A-Za-z_$][A-Za-z0-9_.$]*))?`/gu)) {
     const [_, file, symbol] = m;
     const matches = globSync(file, {cwd: repositoryRoot});
     if (!matches.length) {errors.push('missing reference ' + file);continue;}
-    if (symbol) {symbols++; if (!modules.get(file)?.symbols.has(symbol)) errors.push('missing symbol ' + file + '#' + symbol);}
+    if (!symbol) continue;
+    const isTest = file.startsWith('tests/');
+    symbols++; if (isTest) testSymbols++;
+    if (!(isTest ? tests : modules).get(file)?.symbols.has(symbol)) errors.push('missing symbol ' + file + '#' + symbol);
   }
-  return {symbols, errors};
+  return {symbols, testSymbols, errors};
+}
+export const evidenceCoverageMarkers = new Set(['未覆盖', '间接覆盖']);
+/** Reads every `| 编号 | … | 测试 … |` table, keyed on the header cell, so four- and six-column evidence tables both resolve the right column. */
+export function evidenceTestCells(body) {
+  const cells = []; let testColumn = -1, idColumn = -1;
+  for (const line of body.split('\n')) {
+    const row = line.trim();
+    if (!row.startsWith('|') || !row.endsWith('|')) {testColumn = -1; idColumn = -1; continue;}
+    const values = row.slice(1, -1).split('|').map(value => value.trim());
+    if (values.every(value => /^:?-{3,}:?$/u.test(value))) continue;
+    const header = values.findIndex(value => /测试/u.test(value));
+    if (header >= 0 && values.some(value => /编号/u.test(value))) {
+      testColumn = header; idColumn = values.findIndex(value => /编号/u.test(value)); continue;
+    }
+    if (testColumn < 0 || idColumn < 0) continue;
+    const id = values[idColumn]?.replace(/`/gu, '');
+    if (id && /^E-[A-Z0-9]+-\d{2}$/u.test(id)) cells.push({id, cell: values[testColumn] ?? ''});
+  }
+  return cells;
+}
+export function classifyTestEvidence(cell) {
+  const text = cell.trim();
+  const anchors = [...text.matchAll(/`(tests\/[A-Za-z0-9_./-]+\.ts)#([A-Za-z_$][A-Za-z0-9_.$]*)`/gu)].map(m => m[1] + '#' + m[2]);
+  const bare = [...text.matchAll(/`(tests\/[A-Za-z0-9_./-]+\.ts)`/gu)].map(m => m[1]);
+  const marked = /^(未覆盖|间接覆盖)[：:]\s*(.*)$/su.exec(text);
+  // A citation is not a reason: the prose left after removing every code span has to say something.
+  const reason = (marked?.[2] ?? '').replace(/`[^`]*`/gu, '').replace(/[\s（）()，,。、；;：:]/gu, '');
+  return {anchors, bare, marker: marked?.[1] ?? null, reason};
+}
+/** In a document that declares `testEvidence: anchored`, a row either anchors a real test symbol or says plainly that it is indirect or uncovered. */
+export function validateTestEvidence(body, strict) {
+  const errors = []; const counts = {rows: 0, anchored: 0, marked: 0, unanchored: 0};
+  for (const {id, cell} of evidenceTestCells(body)) {
+    const {anchors, bare, marker, reason} = classifyTestEvidence(cell);
+    counts.rows++;
+    if (marker) counts.marked++; else if (anchors.length) counts.anchored++; else counts.unanchored++;
+    if (!strict) continue;
+    if (marker === '未覆盖') {
+      if (anchors.length || bare.length) errors.push(id + ': 未覆盖 row must not cite a test file');
+      if (reason.length < 4) errors.push(id + ': 未覆盖 row needs a reason');
+      continue;
+    }
+    if (bare.length) errors.push(id + ': test cited without a #symbol anchor: ' + bare.join(', '));
+    if (!anchors.length) errors.push(id + ': test column needs an anchored test symbol or a 未覆盖/间接覆盖 marker');
+    if (marker === '间接覆盖' && reason.length < 4) errors.push(id + ': 间接覆盖 row needs a reason');
+  }
+  return {counts, errors};
 }
 export function validateLinks(raw, directory) {
   const errors = []; let count = 0;

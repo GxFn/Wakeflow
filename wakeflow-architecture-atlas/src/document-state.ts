@@ -45,4 +45,5 @@ export const GROUP_LABELS: Readonly<Record<string, string>> = {
   '13-requirement': '需求包与看板',
   '14-evidence': '受管证据',
   '15-pod': 'Pod 执行环境',
+  '16-observation': '只读观察与核验',
 };

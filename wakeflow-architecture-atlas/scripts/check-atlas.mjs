@@ -1,14 +1,16 @@
 import fs, {globSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {documentParts, diagramBlocks, fingerprintInputs, sourceIndex, truthKinds, validateEdges, validateImports, validateLinks, validateReferences} from './atlas-validation.mjs';
+import {documentParts, diagramBlocks, fingerprintInputs, sourceIndex, testIndex, truthKinds, validateEdges, validateImports, validateLinks, validateReferences, validateTestEvidence} from './atlas-validation.mjs';
 const atlasRoot = fileURLToPath(new URL('..', import.meta.url));
 const repositoryRoot = path.dirname(atlasRoot.replace(/\/$/u, ''));
 const requireCurrent = process.argv.includes('--require-current');
 const modules = sourceIndex(repositoryRoot);
-const errors = [], staleFingerprints = [], documents = [];
+const tests = testIndex(repositoryRoot);
+const errors = [], staleFingerprints = [], documents = [], anchoredDocuments = [];
 const ids = new Set();
-let diagrams = 0, fingerprints = 0, importEdges = 0, evidenceEdges = 0, symbolReferences = 0, links = 0;
+let diagrams = 0, fingerprints = 0, importEdges = 0, evidenceEdges = 0, symbolReferences = 0, testSymbolReferences = 0, links = 0;
+const evidenceRows = {rows: 0, anchored: 0, marked: 0, unanchored: 0};
 for (const relative of globSync('maps/**/*.md', {cwd: atlasRoot}).sort()) {
   const absolute = path.join(atlasRoot, relative);
   const raw = fs.readFileSync(absolute, 'utf8');
@@ -24,7 +26,13 @@ for (const relative of globSync('maps/**/*.md', {cwd: atlasRoot}).sort()) {
   diagrams += blocks.length;
   for (const block of blocks) {const e=validateEdges(block);evidenceEdges+=e.ids.length;errors.push(...e.errors.map(x=>relative+'#'+block.index+': '+x));}
   if (relative.endsWith('/file-dependencies.md')) {const r=validateImports(body,modules);importEdges+=r.count;errors.push(...r.errors.map(x=>relative+': '+x));}
-  const refs=validateReferences(raw,repositoryRoot,modules);symbolReferences+=refs.symbols;errors.push(...refs.errors.map(x=>relative+': '+x));
+  const refs=validateReferences(raw,repositoryRoot,modules,tests);symbolReferences+=refs.symbols;testSymbolReferences+=refs.testSymbols;errors.push(...refs.errors.map(x=>relative+': '+x));
+  if (metadata.testEvidence !== undefined && metadata.testEvidence !== 'anchored') errors.push(relative+': invalid testEvidence');
+  const anchored = metadata.testEvidence === 'anchored';
+  if (anchored) anchoredDocuments.push(relative);
+  const evidence=validateTestEvidence(body,anchored);
+  for (const key of Object.keys(evidenceRows)) evidenceRows[key]+=evidence.counts[key];
+  errors.push(...evidence.errors.map(x=>relative+': '+x));
   const link=validateLinks(raw,path.dirname(absolute));links+=link.count;errors.push(...link.errors.map(x=>relative+': '+x));
   if (metadata.sourceFingerprint !== undefined) {
     fingerprints++;
@@ -43,8 +51,8 @@ if(isolation.rootWorkspaceMember||isolation.rootScriptReference||isolation.integ
 for(const f of ['AGENTS.md','CLAUDE.md'])if(!fs.existsSync(path.join(atlasRoot,f)))errors.push('missing '+f);
 if(!fs.readFileSync(path.join(atlasRoot,'CLAUDE.md'),'utf8').includes('AGENTS.md'))errors.push('CLAUDE must reference AGENTS');
 // Coverage is tied to reader questions and real owners, not a minimum diagram count.
-const required=['01-overall-architecture','02-foundation','03-configuration-workspace','04-governance-event-sourcing','05-tasking-slice','06-implementation-delivery-review','07-review-rework-completion','08-real-environment-testing','09-public-mcp-host-seams','10-end-to-end-business-flow','11-kernel','12-endpoint','13-requirement','14-evidence','15-pod'];
+const required=['01-overall-architecture','02-foundation','03-configuration-workspace','04-governance-event-sourcing','05-tasking-slice','06-implementation-delivery-review','07-review-rework-completion','08-real-environment-testing','09-public-mcp-host-seams','10-end-to-end-business-flow','11-kernel','12-endpoint','13-requirement','14-evidence','15-pod','16-observation'];
 for(const area of required)if(!documents.some(d=>d.path==='maps/'+area+'/README.md'&&d.diagrams.length))errors.push('missing capability overview '+area);
-const report={ok:errors.length===0,documents:documents.length,mermaidBlocks:diagrams,fingerprints,allFingerprintsCurrent:staleFingerprints.length===0,staleFingerprints,directImportEdgesChecked:importEdges,adjacentEvidenceRowsChecked:evidenceEdges,symbolReferencesChecked:symbolReferences,linksChecked:links,mermaidRendering:'separate check:diagrams',semanticReview:'documented manual source review; not inferred from imports',isolation,errors};
+const report={ok:errors.length===0,documents:documents.length,mermaidBlocks:diagrams,fingerprints,allFingerprintsCurrent:staleFingerprints.length===0,staleFingerprints,directImportEdgesChecked:importEdges,adjacentEvidenceRowsChecked:evidenceEdges,symbolReferencesChecked:symbolReferences,testSymbolReferencesChecked:testSymbolReferences,testEvidence:{mode:'anchor-or-explicit-marker',anchoredDocuments,...evidenceRows},linksChecked:links,mermaidRendering:'separate check:diagrams',semanticReview:'documented manual source review; not inferred from imports',isolation,errors};
 process.stdout.write(JSON.stringify(report,null,2)+'\n');
 if(errors.length)process.exitCode=1;

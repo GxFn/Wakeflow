@@ -2,14 +2,15 @@
 
 独立的本地架构图谱，Markdown/Mermaid 是内容正典，阅读器只负责显示、搜索、缩放与证据定位。
 
-本轮基线为 `7ba1f38`（2026-09-11 核验）：L1 九片已落地，当前 19 个公共工具、16 个一次性场景；observation、L2、L3/E4 仍是后续范围。
+本轮基线为 `1480271`（2026-09-18 核验）：L1 十片已落地（含 observation），当前 20 个公共工具、18 个一次性场景；L2、L3/E4 仍是后续范围。工作树另有并行未提交改动（宿主 hook 通道等），不在本轮图中。
 
 ## 阅读和维护
 
 - [图谱入口](./maps/README.md)
 - [逐图核验台账](./maps/01-diagram-review-ledger.md)
-- [本轮更新范围与验证](./plans/l1-nine-slices-refresh.md)
-- [上轮差异审查计划（历史）](./plans/typescript-atlas-refresh-plan.md)
+- [本轮更新范围与验证](./plans/l1-observation-refresh.md)
+- [上轮九片更新记录（历史）](./plans/l1-nine-slices-refresh.md)
+- [更早的差异审查计划（历史）](./plans/typescript-atlas-refresh-plan.md)
 
 在本目录运行：
 
@@ -32,7 +33,7 @@ npm run check
 
 ## 派生视图
 
-[当前 FigJam](https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=16-489) 已同步本轮三组摘要：当前组成、九片业务主线、实现目标状态与恢复；附进度表，旧图完整保留在折叠的历史区域。29 个可编辑节点和 32 条边已逐项对照本地 Mermaid，并经过截图检查，见 [同步记录](./plans/evidence/l1-nine-slices-figjam.json)。其余细节在本地 67 图中阅读。FigJam、HTML/SVG/截图均为派生视图，不拥有运行状态。
+[FigJam](https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=16-489) 已同步上一轮（九片）三组摘要：当前组成、九片业务主线、实现目标状态与恢复；附进度表，旧图完整保留在折叠的历史区域。29 个可编辑节点和 32 条边已逐项对照本地 Mermaid，并经过截图检查，见 [同步记录](./plans/evidence/l1-nine-slices-figjam.json)。observation 一轮未再同步该派生视图，其余细节在本地 Mermaid 图中阅读。FigJam、HTML/SVG/截图均为派生视图，不拥有运行状态。
 
 ## 权威
 

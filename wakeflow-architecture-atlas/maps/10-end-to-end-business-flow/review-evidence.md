@@ -3,9 +3,9 @@ diagramId: ts-end-to-end-evidence-z2
 viewType: evidence
 truthKind: current-code
 reviewDepth: L5
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:aade6492a2e7f041a2499f8f195704aebe11053c45fbf30d621cce9d3d01eb50
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:6abe292c8b87ab0e0e85aeda8d109f038baf057dce05b771a27ec5d25f413243
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -24,7 +24,7 @@ refreshTriggers:
 
 # 端到端证据：场景、机制与未执行面
 
-当前 16 个场景在一次性工作区通过。场景代码包含宿主 hook fixture 与实际临时 Git worktree；真实会话仍属于 L2。
+场景登记表当前有 18 条，全部在一次性工作区通过公共 MCP 执行。场景代码包含宿主 hook fixture 与实际临时 Git worktree；真实会话仍属于 L2。下表按 `tests/scenarios/wakeflow-scenario-acceptance.test.ts` 的登记表清点：本轮图谱未复跑场景套件，通过结果来自各自落地提交的记录。
 
 | 场景 | 当前证明 | 尚不证明 |
 | --- | --- | --- |
@@ -44,13 +44,15 @@ refreshTriggers:
 | card-08/complete-and-archive | 当前公共 MCP 场景通过 | 真实宿主会话、最终插件发布 |
 | card-04/complete-and-continue | 当前公共 MCP 场景通过 | 真实宿主会话、最终插件发布 |
 | card-10/pod-lifecycle | 当前公共 MCP 场景通过 | 真实宿主会话、最终插件发布 |
+| card-09/status-and-verify | 已登记，落地提交记录为通过 | 真实宿主会话、最终插件发布；本轮未复跑 |
+| card-09/active-projection | 已登记，落地提交记录为通过 | 真实宿主会话、最终插件发布；本轮未复跑 |
 
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 守卫、恢复与验证范围
 
-单元/服务测试负责拒绝、幂等、并发及恢复分支；场景负责串接公共入口。测试数量下降不等于能力回退，旧 TestCard/协调器测试已经随新切片替换。
+单元/服务测试负责拒绝、幂等、并发及恢复分支；场景负责串接公共入口。测试数量变化不等于能力变化，旧 TestCard/协调器测试已经随新切片替换。本轮图谱只清点登记表，没有运行根 npm test 或场景套件。
 
 涉及的测试与核验入口：
 

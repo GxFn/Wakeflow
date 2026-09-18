@@ -3,9 +3,9 @@ diagramId: ts-public-mcp-host-h0
 viewType: architecture
 truthKind: current-code
 reviewDepth: L0
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:013cd3fd4f59d90815ad6c2a4d21f24ca31d3c09c6be48ad9ab803d51cb1bfe0
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:abd4b68b2fd77663f42afe208628541a3a43feec64052490f25439f37e83ac3e
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -15,6 +15,7 @@ sourcePaths:
   - src/capabilities/demand/*.ts
   - src/capabilities/endpoint/*.ts
   - src/capabilities/evidence/*.ts
+  - src/capabilities/observation/*.ts
   - src/capabilities/pod/*.ts
   - src/capabilities/requirement/*.ts
   - src/capabilities/result-review/*.ts
@@ -73,11 +74,11 @@ sourcePaths:
   - src/governance/review/*.ts
   - src/governance/tasking/*.ts
   - src/governance/testing/*.ts
+  - src/hosts/claude-code/*.ts
   - src/kernel/*.ts
   - src/kernel/event-stream/*.ts
   - src/kernel/hook-observations.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/host-runtime/*.ts
   - src/workspace/maintenance/*.ts
   - src/workspace/managed-integration/*.ts
@@ -93,8 +94,6 @@ schemaPaths:
   - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
@@ -179,9 +178,11 @@ schemaPaths:
 testPaths:
   - tests/capabilities/delivery/service.test.ts
   - tests/capabilities/endpoint/service.test.ts
+  - tests/capabilities/observation/service.test.ts
   - tests/capabilities/result-review/service.test.ts
   - tests/entrypoints/wakeflow-public-mcp-catalog.test.ts
   - tests/governance/demand/demand-event-sourcing-command-handler.test.ts
+  - tests/hosts/claude-code/claude-code-statusline-asset.test.ts
 refreshTriggers:
   - .dependency-cruiser.cjs
   - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
@@ -190,9 +191,9 @@ refreshTriggers:
 
 # 公共 MCP 与宿主接缝
 
-当前公开 19 个工具，由一个静态登记表绑定到双宿主组合根。宿主差异主要是画像、动作内容、观察形状与指令；实际创建会话、发送和 worktree 处置由 Agent 执行。
+当前公开 20 个工具，由一个静态登记表绑定到双宿主组合根。其中 status 与 verify 只读。宿主差异主要是画像、动作内容、观察形状、维护操作与指令；实际创建会话、发送和 worktree 处置由 Agent 执行。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 内容与状态通道的分工
 
@@ -201,12 +202,13 @@ flowchart TB
   accTitle: 内容与状态通道的分工
   accDescr: 内容与状态通道的分工；箭头区分当前代码步骤、返回事实与明确的条件。
   agent["Agent 的工作流调用"]
-  mcp["19 工具的公共边界"]
+  mcp["20 工具的公共边界"]
   caps["能力及领域 owner"]
   local["本地权威与派生视图"]
   permit["精确意图和许可"]
   host["宿主效果"]
   hook["宿主观察回交"]
+  read["只读 status 与 verify"]
   agent -->|"E-L1038-01 调用对应能力"| mcp
   mcp -->|"E-L1038-02 固定 executor 分派"| caps
   caps -->|"E-L1038-03 准入后提交当前事实"| local
@@ -214,6 +216,7 @@ flowchart TB
   permit -->|"E-L1038-05 Agent 执行动作"| host
   host -->|"E-L1038-06 宿主报告而非业务验收"| hook
   hook -->|"E-L1038-07 由能力读取和核对观察"| caps
+  caps -->|"E-L1038-08 只读工具按登记表观察同一批事实"| read
 ```
 
 ### 本图术语说明
@@ -230,12 +233,13 @@ flowchart TB
 | 节点 | 文件 / 符号 | 责任 |
 | --- | --- | --- |
 | agent | Agent / 用户 / 外部效果或条件视图 | Agent 的工作流调用 |
-| mcp | `src/entrypoints/wakeflow-public-mcp-catalog.ts` | 19 工具的公共边界 |
+| mcp | `src/entrypoints/wakeflow-public-mcp-catalog.ts` | 20 工具的公共边界 |
 | caps | `src/entrypoints/wakeflow-public-mcp-shared-executors.ts` | 能力及领域 owner |
 | local | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts` | 本地权威与派生视图 |
 | permit | `src/capabilities/delivery/service.ts` | 精确意图和许可 |
 | host | Agent / 用户 / 外部效果或条件视图 | 宿主效果 |
 | hook | `src/kernel/hook-observations.ts` | 宿主观察回交 |
+| read | `src/capabilities/observation/contract.ts#VERIFY_TOOL_REGISTRATION` | 只读 status 与 verify |
 
 ### 本图边级证据
 
@@ -248,16 +252,22 @@ flowchart TB
 | E-L1038-05 | `src/capabilities/delivery/service.ts#permitBody` | `tests/capabilities/delivery/service.test.ts` | Agent 执行动作 |
 | E-L1038-06 | `src/kernel/hook-observations.ts#writeHostHookObservation` | `tests/capabilities/endpoint/service.test.ts` | 宿主报告而非业务验收 |
 | E-L1038-07 | `src/capabilities/result-review/service.ts#loadReviewEvidence` | `tests/capabilities/result-review/service.test.ts` | 由能力读取和核对观察 |
+| E-L1038-08 | `src/capabilities/observation/service.ts#executeVerifyRequest` | `tests/capabilities/observation/service.test.ts` | 只读工具按登记表观察同一批事实 |
+
+## 宿主专属的维护操作
+
+Claude Code 多出两个状态栏维护操作：`claude-statusline-asset:install` 写入 0600 的状态栏资产，`claude-statusline-settings:install` 只改 `.claude/settings.local.json` 的单个键并保留其它键，设置读不出时该项贡献被阻塞。Codex 侧没有对应资产。两者都由维护事务执行，不属于公共工具目录。
 
 ## 守卫、恢复与验证范围
 
-wakeflow_status、独立 wakeflow_verify 尚未公开。内嵌完成 verify 已实现，不能把它视作全局观察能力。候选制品仍 releaseEligible:false；当前工具/场景通过不是最终插件发布。
+`wakeflow_status` 与 `wakeflow_verify` 已登记，二者只读：不追加事件、不改配置、不创建会话，也不代表 Controller 验收；旧的 `wakeflow_inspect_demand_route` 随 status 带 demandId 的 Route 段删除。候选制品仍 releaseEligible:false；当前工具/场景通过不是最终插件发布。
 
 涉及的测试与核验入口：
 
 - `tests/capabilities/delivery/service.test.ts`。
 - `tests/capabilities/endpoint/service.test.ts`。
 - `tests/capabilities/result-review/service.test.ts`。
+- `tests/capabilities/observation/service.test.ts`。
 - `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts`。
 - `tests/governance/demand/demand-event-sourcing-command-handler.test.ts`。
 
@@ -265,5 +275,6 @@ wakeflow_status、独立 wakeflow_verify 尚未公开。内嵌完成 verify 已�
 
 - [发送与回调时序](./host-effect-handshake.md)
 - [执行环境](../15-pod/README.md)
+- [只读观察与核验](../16-observation/README.md)
 - [图谱总索引](../README.md)
 - [核验与剩余范围](../01-diagram-review-ledger.md)

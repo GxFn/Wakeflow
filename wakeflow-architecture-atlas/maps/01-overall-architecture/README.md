@@ -3,9 +3,9 @@ diagramId: ts-overall-architecture-a0
 viewType: architecture
 truthKind: current-code
 reviewDepth: L0
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:355a69d9fda845c9dbc5001fd63f20cbdf5c314754f6dd312d66825cd7939267
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:ca09c7462c870390f5522ef8a7b16c4936a5f85edc5490a98955b69dd3fc4caf
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -15,6 +15,7 @@ sourcePaths:
   - src/capabilities/demand/service.ts
   - src/capabilities/endpoint/*.ts
   - src/capabilities/evidence/*.ts
+  - src/capabilities/observation/*.ts
   - src/capabilities/pod/*.ts
   - src/capabilities/requirement/*.ts
   - src/capabilities/result-review/*.ts
@@ -68,6 +69,8 @@ sourcePaths:
   - src/governance/evidence/*.ts
   - src/governance/ledger/*.ts
   - src/governance/lifecycle/*.ts
+  - src/governance/observation/*.ts
+  - src/governance/pod/*.ts
   - src/governance/result/*.ts
   - src/governance/review/*.ts
   - src/governance/tasking/*.ts
@@ -81,7 +84,6 @@ sourcePaths:
   - src/kernel/requirement-board.ts
   - src/kernel/work-claims.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/host-runtime/*.ts
   - src/workspace/maintenance/*.ts
   - src/workspace/managed-integration/*.ts
@@ -97,8 +99,6 @@ schemaPaths:
   - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-controller-route-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
@@ -183,6 +183,7 @@ schemaPaths:
   - src/contracts/schemas/workspace/window-runtime-unregistered-projection.schema.json
 testPaths:
   - tests/capabilities/demand/service.test.ts
+  - tests/capabilities/observation/service.test.ts
   - tests/capabilities/tasking/service.test.ts
   - tests/entrypoints/wakeflow-public-mcp-catalog.test.ts
   - tests/kernel/command-shell.test.ts
@@ -193,11 +194,11 @@ refreshTriggers:
   - docs/decisions/0013-target-architecture-and-slice-plan.md
 ---
 
-# Wakeflow：九个切片的当前架构
+# Wakeflow：十个切片的当前架构
 
-Wakeflow 提供权威账本、精确内容和证据准入。用户与 Agent 拥有需求与执行判断，宿主拥有会话动作。六层依赖约束已经生效；configuration、workspace、governance 中仍存在被新切片消费的实现，不能把目录尚未收敛解释为另一个控制器。
+Wakeflow 提供权威账本、精确内容和证据准入。observation 是第十片，只读派生视图。用户与 Agent 拥有需求与执行判断，宿主拥有会话动作。六层依赖约束已经生效；configuration、workspace、governance 中仍存在被新切片消费的实现，不能把目录尚未收敛解释为另一个控制器。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 六层职责与当前过渡实现
 
@@ -207,19 +208,19 @@ flowchart TB
   accDescr: 六层职责与当前过渡实现；箭头区分当前代码步骤、返回事实与明确的条件。
   entry["公共 MCP 组合根"]
   hosts["固定宿主数据与装配"]
-  caps["九个能力切片"]
+  caps["十个能力切片"]
   kernel["内核：调用、声明、观察与投影"]
   contracts["Schema 与词汇"]
   foundation["确定性数据与持久 I/O"]
   legacy["过渡领域实现"]
-  stop["未实现：全局 observation"]
+  observation["只读观察与核验"]
   entry -->|"E-L1001-01 注入宿主 facade"| hosts
   entry -->|"E-L1001-02 绑定真实 executor"| caps
   caps -->|"E-L1001-03 调用共用外壳"| kernel
   caps -->|"E-L1001-04 复用事件、账本及维护 owner"| legacy
   kernel -->|"E-L1001-05 消费合同与词汇"| contracts
   kernel -->|"E-L1001-06 受根约束的物理能力"| foundation
-  caps -->|"E-L1001-07 目录尚无 status 与 verify"| stop
+  caps -->|"E-L1001-07 只读观察与核验两个工具"| observation
 ```
 
 ### 本图术语说明
@@ -236,12 +237,12 @@ flowchart TB
 | --- | --- | --- |
 | entry | `src/entrypoints/wakeflow-public-mcp-server.ts#createWakeflowPublicMcpServer` | 公共 MCP 组合根 |
 | hosts | `src/entrypoints/codex-wakeflow-mcp.ts#createCodexWakeflowMcpServer` | 固定宿主数据与装配 |
-| caps | `src/entrypoints/wakeflow-public-mcp-catalog.ts#WAKEFLOW_PUBLIC_TOOL_CATALOG` | 九个能力切片 |
+| caps | `src/entrypoints/wakeflow-public-mcp-catalog.ts#WAKEFLOW_PUBLIC_TOOL_CATALOG` | 十个能力切片 |
 | kernel | `src/kernel/command-shell.ts#runCommandShell` | 内核：调用、声明、观察与投影 |
 | contracts | `src/governance/tasking/task-package.ts#TaskPackage` | Schema 与词汇 |
 | foundation | `src/foundation/filesystem/rooted-directory.ts#RootedDirectory` | 确定性数据与持久 I/O |
 | legacy | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts#DemandEventSourcingRepository` | 过渡领域实现 |
-| stop | `src/entrypoints/wakeflow-public-mcp-catalog.ts#WAKEFLOW_PUBLIC_TOOL_CATALOG` | 未实现：全局 observation |
+| observation | `src/capabilities/observation/service.ts#executeStatusRequest` | 只读观察与核验 |
 
 ### 本图边级证据
 
@@ -253,15 +254,16 @@ flowchart TB
 | E-L1001-04 | `src/capabilities/demand/service.ts#executeDemandCreationRequest` | `tests/capabilities/demand/service.test.ts` | 复用事件、账本及维护 owner |
 | E-L1001-05 | `src/kernel/requirement-board.ts` | `tests/kernel/command-shell.test.ts` | 消费合同与词汇 |
 | E-L1001-06 | `src/kernel/work-claims.ts` | `tests/kernel/command-shell.test.ts` | 受根约束的物理能力 |
-| E-L1001-07 | `src/entrypoints/wakeflow-public-mcp-catalog.ts` | `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts` | 目录尚无 status 与 verify |
+| E-L1001-07 | `src/capabilities/observation/service.ts#executeStatusRequest` | `tests/capabilities/observation/service.test.ts` | 只读观察与核验两个工具 |
 
 ## 守卫、恢复与验证范围
 
-当前公共目录为 19 项，配置仍为 v3 且已包含 pods[]。九片场景验证不等于 L2 的两宿主真实投递，也不等于 L3 可安装新制品。Foundation 物理收敛、目录体积及全局观察仍按现行计划继续。
+当前公共目录为 20 项，配置仍为 v3 且已包含 pods[]。observation 只读，不新增业务权威；十片场景验证不等于 L2 的两宿主真实投递，也不等于 L3 可安装新制品。Foundation 物理收敛与目录体积仍按现行计划继续。
 
 涉及的测试与核验入口：
 
 - `tests/capabilities/demand/service.test.ts`。
+- `tests/capabilities/observation/service.test.ts`。
 - `tests/capabilities/tasking/service.test.ts`。
 - `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts`。
 - `tests/kernel/command-shell.test.ts`。
@@ -273,5 +275,6 @@ flowchart TB
 - [运行调用与恢复](./runtime-call-flow.md)
 - [业务主线](../10-end-to-end-business-flow/README.md)
 - [内核](../11-kernel/README.md)
+- [只读观察与核验](../16-observation/README.md)
 - [图谱总索引](../README.md)
 - [核验与剩余范围](../01-diagram-review-ledger.md)

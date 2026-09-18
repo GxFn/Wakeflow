@@ -3,9 +3,9 @@ diagramId: ts-real-testing-x0
 viewType: vertical-slice
 truthKind: current-code
 reviewDepth: L2
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:8273d3a807fcae3a83384e938e120c108eab6031e5486f5cbf30b8556a2aa866
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:0d8a547181fedfbcd359bc4674d04ed1b31079e0a757bbd976027c4fd9f4eb36
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -63,7 +63,6 @@ sourcePaths:
   - src/kernel/*.ts
   - src/kernel/event-stream/*.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -142,7 +141,7 @@ refreshTriggers:
 
 testContract 已替代独立 TestCard。Test 执行冻结步骤并记录观察，Controller 决定接受、重跑、阻塞或升级；真实宿主实跑仍未纳入本轮声明。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 测试合同到 Controller 决定
 

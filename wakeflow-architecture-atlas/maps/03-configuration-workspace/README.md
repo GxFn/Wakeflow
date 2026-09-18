@@ -3,9 +3,9 @@ diagramId: ts-configuration-workspace-w0
 viewType: architecture
 truthKind: current-code
 reviewDepth: L0
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:1450cc778816e819a49cd81294d867fd92e8f809f7c8811bcef6b464e772eae6
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:d7cb8c1ffe0a53bcf4ba7cad9f60f2feed5b596e91309bc94419898e5bc75d09
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -46,7 +46,6 @@ sourcePaths:
   - src/kernel/event-stream/*.ts
   - src/kernel/publication-transaction.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/host-runtime/*.ts
   - src/workspace/maintenance/*.ts
   - src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts
@@ -86,7 +85,7 @@ refreshTriggers:
 
 初始化产生 primary Pod、逻辑窗口和托管资源；创建真实宿主会话是随后由 Agent 执行的动作。配置仍由严格 v3 codec 校验。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 工作区维护的权威与生成物
 
@@ -138,7 +137,7 @@ flowchart TB
 
 ## 守卫、恢复与验证范围
 
-reconfigure 对 pods 的改变仍报告 unsupported，Pod 生命周期由专属工具处理。局部活动投影已存在；全局 status/verify、完整活动进度与状态栏属于未开始的 observation。
+reconfigure 对 pods 的改变仍报告 unsupported，Pod 生命周期由专属工具处理。全局 status/verify、活动投影与 Claude 状态栏已随 observation 落地：维护事务仍拥有布局与静态资源，投影页面由内核渲染、由变更后刷新重写，不反向决定配置。
 
 涉及的测试与核验入口：
 

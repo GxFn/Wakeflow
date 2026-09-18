@@ -3,9 +3,9 @@ diagramId: ts-evidence-readme
 viewType: authority
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:d13a029ca68340000cfa4090fcd5e4126c8468d060ccc38080b41c943204833f
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:68b1d8197a6823c632e2d5c0fa418b3b15d452f1b628ba4f6065b11991c22125
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -65,7 +65,6 @@ sourcePaths:
   - src/kernel/*.ts
   - src/kernel/event-stream/*.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -139,7 +138,7 @@ refreshTriggers:
 
 四类来源为 managed-path、observation、https link 和 commit。证据种类与来源绑定，结果导入只接受本 Demand 内可解析且摘要一致的受管定位符。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 受管证据从选择到结果消费
 

@@ -1,8 +1,9 @@
 import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import {parseSource,validateEdges,validateImports,validateReferences,fingerprintInputs,truthKinds} from './atlas-validation.mjs';
+import {parseSource,validateEdges,validateImports,validateReferences,fingerprintInputs,truthKinds,sourceIndex,testIndex,evidenceTestCells,classifyTestEvidence,validateTestEvidence} from './atlas-validation.mjs';
 
 test('AST ignores fake imports in text and comments, preserves real imports and symbols',()=>{
  const r=parseSource('// from "./fake.js"\nconst text="from fake"; import {f} from "./real.js"; export function start() {} class Store { async apply() {} }','sample.ts');
@@ -43,4 +44,38 @@ test('browser receipt rejects source drift, version drift, duplicates and unrend
  assert(validateRenderReceipt({...receipt,results:[row,row]},expected,'11.17.2').length);
  assert(validateRenderReceipt({...receipt,results:[{...row,status:'fail'}]},expected,'11.17.2').length);
  assert(validateRenderReceipt({...receipt,results:[{...row,width:0}]},expected,'11.17.2').length);
+});
+
+test('测试锚点与来源锚点同样校验：文件要存在，符号要真的被那个测试用到',t=>{
+ const base=fs.mkdtempSync(path.join(os.tmpdir(),'atlas-test-anchor-'));
+ t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
+ fs.mkdirSync(path.join(base,'tests'),{recursive:true});fs.mkdirSync(path.join(base,'src'),{recursive:true});
+ fs.writeFileSync(path.join(base,'src','a.ts'),'export function realThing(){return 1;}\n');
+ fs.writeFileSync(path.join(base,'tests','sample.test.ts'),'// fakeThing 只出现在注释里\nimport {realThing} from "../src/a.js";\nrealThing();\n');
+ const modules=sourceIndex(base);const tests=testIndex(base);
+ assert.deepEqual(validateReferences('`tests/sample.test.ts#realThing`',base,modules,tests).errors,[]);
+ assert.equal(validateReferences('`tests/sample.test.ts#realThing`',base,modules,tests).testSymbols,1);
+ assert(validateReferences('`tests/sample.test.ts#fakeThing`',base,modules,tests).errors.some(x=>x.includes('missing symbol')));
+ assert(validateReferences('`tests/absent.test.ts#realThing`',base,modules,tests).errors.some(x=>x.includes('missing reference')));
+});
+test('anchored 文档的测试列：光有文件名不算覆盖，未覆盖的行不得再引测试文件',()=>{
+ const table=cell=>'| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |\n| --- | --- | --- | --- |\n| E-TST-01 | `src/a.ts#realThing` | '+cell+' | 调用 |\n';
+ const errorsOf=cell=>validateTestEvidence(table(cell),true).errors;
+ assert(errorsOf('`tests/sample.test.ts`').some(x=>x.includes('#symbol')));
+ assert.deepEqual(errorsOf('`tests/sample.test.ts#realThing`'),[]);
+ assert.deepEqual(errorsOf('间接覆盖：`tests/sample.test.ts#realThing`（只在这条链路里被跑到）'),[]);
+ assert.deepEqual(errorsOf('未覆盖：刷新失败这条路径没有用例'),[]);
+ assert(errorsOf('未覆盖：`tests/sample.test.ts#realThing`').some(x=>x.includes('must not cite')));
+ assert(errorsOf('间接覆盖：`tests/sample.test.ts#realThing`').some(x=>x.includes('reason')));
+ assert.deepEqual(validateTestEvidence(table('`tests/sample.test.ts`'),false).errors,[]);
+ assert.equal(validateTestEvidence(table('`tests/sample.test.ts`'),false).counts.unanchored,1);
+ assert.equal(validateTestEvidence(table('`tests/sample.test.ts#realThing`'),false).counts.anchored,1);
+ assert.equal(validateTestEvidence(table('未覆盖：没有用例'),false).counts.marked,1);
+});
+test('证据表的测试列按表头定位：六列表与四列表都取“测试”那一列',()=>{
+ const six='| 边编号 | 起点文件/符号 | 终点文件/符号 | 关系 | 代码证据 | 测试证据 |\n| --- | --- | --- | --- | --- | --- |\n| E-TST-01 | `src/a.ts#x` | `src/b.ts#y` | 调用 | 直接调用点 | `tests/sample.test.ts#realThing` |\n';
+ assert.deepEqual(evidenceTestCells(six).map(row=>row.id),['E-TST-01']);
+ assert.equal(classifyTestEvidence(evidenceTestCells(six)[0].cell).anchors[0],'tests/sample.test.ts#realThing');
+ assert.deepEqual(validateTestEvidence(six,true).errors,[]);
+ assert.deepEqual(evidenceTestCells('| 节点 | 文件 / 符号 | 责任 |\n| --- | --- | --- |\n| f1 | `src/a.ts` | 甲 |\n'),[]);
 });

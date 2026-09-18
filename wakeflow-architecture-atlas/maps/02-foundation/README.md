@@ -3,9 +3,9 @@ diagramId: ts-foundation-capability-b0
 viewType: architecture
 truthKind: current-code
 reviewDepth: L0
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:fdc551b4c447ccad6291e9b9ff7bb638f7c47c39969c632718f9f8fa3883225d
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:1f930b87af494f8c1f290fdd87cdb2acb7cc69638a5be3a526413c98110db467
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -60,7 +60,6 @@ sourcePaths:
   - src/kernel/*.ts
   - src/kernel/requirement-board.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -105,7 +104,7 @@ refreshTriggers:
 
 基础层只解释字节、路径、节点和持久提交，不决定需求、验收或恢复授权。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 基础原语与业务 owner 的边界
 

@@ -1,10 +1,10 @@
 {
   "renderer": "mermaid",
   "rendererVersion": "11.17.2",
-  "verifiedAt": "2026-09-11T10:05:05.954Z",
+  "verifiedAt": "2026-09-18T18:07:31.651Z",
   "ok": true,
-  "diagrams": 67,
-  "rendered": 67,
+  "diagrams": 72,
+  "rendered": 72,
   "results": [
     {
       "file": "maps/00-agentic-diagram-standard.md",
@@ -42,15 +42,15 @@
       "file": "maps/01-overall-architecture/README.md",
       "diagram": 1,
       "title": "六层职责与当前过渡实现",
-      "sourceDigest": "sha256:3dcde27ae433ed00597ba24902aa840ad42fb17b35c71756775824a23301d801",
+      "sourceDigest": "sha256:d3ef6a9c3b9f241d4f89fbbfe96b543213331cfeed0aeb0fe57a6726e5be3642",
       "status": "pass",
-      "width": 854,
+      "width": 786,
       "height": 528,
       "visibleTextNodes": 15,
       "bounds": {
         "x": 8,
         "y": 8,
-        "width": 838,
+        "width": 770,
         "height": 512
       }
     },
@@ -474,15 +474,15 @@
       "file": "maps/07-review-rework-completion/file-dependencies.md",
       "diagram": 1,
       "title": "评审和生命周期的精选直接导入",
-      "sourceDigest": "sha256:350815a6ebb9174393b7b7c79ce13590b26c5d19156aa9563f91245d14fa07d8",
+      "sourceDigest": "sha256:0dd2f6e4ba686b617d8f1ab70f034b8bd50e305df29f1bea9aaaa04c4053d3f7",
       "status": "pass",
-      "width": 1967,
+      "width": 1860,
       "height": 528,
-      "visibleTextNodes": 26,
+      "visibleTextNodes": 28,
       "bounds": {
         "x": 8,
         "y": 8,
-        "width": 1951,
+        "width": 1844,
         "height": 512
       }
     },
@@ -650,23 +650,23 @@
       "file": "maps/09-public-mcp-host-seams/README.md",
       "diagram": 1,
       "title": "内容与状态通道的分工",
-      "sourceDigest": "sha256:344f954f9ba662dfee1ce5d9e5fe1c179f2002409da60972d47c038c02bce921",
+      "sourceDigest": "sha256:249fad62e988f6378d10ce4fad2735c8e2ab473d89210c3cc5fb131f188a5fde",
       "status": "pass",
-      "width": 628,
-      "height": 790,
-      "visibleTextNodes": 14,
+      "width": 790,
+      "height": 808,
+      "visibleTextNodes": 16,
       "bounds": {
         "x": 8,
         "y": 8,
-        "width": 612,
-        "height": 774
+        "width": 774,
+        "height": 792
       }
     },
     {
       "file": "maps/10-end-to-end-business-flow/README.md",
       "diagram": 1,
       "title": "九个已落地切片的业务接力",
-      "sourceDigest": "sha256:2735da079324163f3046bc790e630d89c1bab2934f35c3fde7921e214344cf2b",
+      "sourceDigest": "sha256:266a52ccb1f6165d53a5d3fb22c5ca832b59d32da9f358187ec44a5b774f6f8b",
       "status": "pass",
       "width": 444,
       "height": 1586,
@@ -762,16 +762,16 @@
       "file": "maps/11-kernel/README.md",
       "diagram": 1,
       "title": "共同命令外壳与两种变更形状",
-      "sourceDigest": "sha256:f7f1d42fed3e392ec7e2997cdd577735e31aa47cd75049057a4220462684fb25",
+      "sourceDigest": "sha256:ae9e86ad1945a0d94d1b497b3980b46752f880727d8c0abf01dffa2c05f8ff4f",
       "status": "pass",
-      "width": 373,
-      "height": 624,
-      "visibleTextNodes": 12,
+      "width": 416,
+      "height": 641,
+      "visibleTextNodes": 14,
       "bounds": {
         "x": 8,
         "y": 8,
-        "width": 357,
-        "height": 608
+        "width": 400,
+        "height": 625
       }
     },
     {
@@ -1076,6 +1076,86 @@
         "y": 0,
         "width": 975,
         "height": 611
+      }
+    },
+    {
+      "file": "maps/16-observation/file-dependencies.md",
+      "diagram": 1,
+      "title": "Observation 的精选直接导入",
+      "sourceDigest": "sha256:8627fa2d0fd15969871e513a40f28178eddd5c2bf3d595d1167474e40a05ad8e",
+      "status": "pass",
+      "width": 2582,
+      "height": 546,
+      "visibleTextNodes": 30,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 2566,
+        "height": 530
+      }
+    },
+    {
+      "file": "maps/16-observation/README.md",
+      "diagram": 1,
+      "title": "一次观察如何派生状态、门与投影",
+      "sourceDigest": "sha256:7b573701a17f9530f03d35fc530065f3dadebdc5ba7243e709494974ff3f4acc",
+      "status": "pass",
+      "width": 1088,
+      "height": 712,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1072,
+        "height": 696
+      }
+    },
+    {
+      "file": "maps/16-observation/runtime-call-flow.md",
+      "diagram": 1,
+      "title": "status 的一次观察",
+      "sourceDigest": "sha256:57d1ab9a9cc95c0dea4316a4115db7ced230c382593b7ec5fff82a14f39ce5b7",
+      "status": "pass",
+      "width": 1292,
+      "height": 656,
+      "visibleTextNodes": 25,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 635
+      }
+    },
+    {
+      "file": "maps/16-observation/runtime-call-flow.md",
+      "diagram": 2,
+      "title": "verify 的门与汇总",
+      "sourceDigest": "sha256:058dde29f2355d57c0197cc4c7d3898f88ee632c7039dd4d18a47af612fc48db",
+      "status": "pass",
+      "width": 1068,
+      "height": 622,
+      "visibleTextNodes": 21,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 968,
+        "height": 601
+      }
+    },
+    {
+      "file": "maps/16-observation/runtime-call-flow.md",
+      "diagram": 3,
+      "title": "活动投影的刷新与零写保护",
+      "sourceDigest": "sha256:30ac687908c4cdf17dabcaa1ddf00e92318f13f3f391f3bd3908568145482127",
+      "status": "pass",
+      "width": 1055,
+      "height": 693,
+      "visibleTextNodes": 22,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 954,
+        "height": 672
       }
     }
   ]

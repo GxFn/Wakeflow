@@ -1,0 +1,48 @@
+{
+  "baselineCommit": "1480271ecc8a6c17bb9042321644402bd6cbda56",
+  "verifiedAt": "2026-09-18",
+  "scope": "wakeflow-architecture-atlas only; root npm test, scenario suite and release checks were not run",
+  "workingTree": "contains unrelated uncommitted changes from concurrent tasks; fingerprints cover the working tree",
+  "structureGate": {
+    "ok": true,
+    "documents": 51,
+    "mermaidBlocks": 72,
+    "fingerprints": 49,
+    "allFingerprintsCurrent": true,
+    "staleFingerprints": [],
+    "directImportEdgesChecked": 182,
+    "adjacentEvidenceRowsChecked": 502,
+    "symbolReferencesChecked": 327,
+    "linksChecked": 252,
+    "mermaidRendering": "separate check:diagrams",
+    "semanticReview": "documented manual source review; not inferred from imports",
+    "isolation": {
+      "rootWorkspaceMember": false,
+      "rootScriptReference": false,
+      "integrationMentions": [],
+      "buildOutputIgnored": true,
+      "nestedDependenciesIgnored": true
+    },
+    "errors": []
+  },
+  "diagramGate": {
+    "ok": true,
+    "mode": "verified-browser-receipt",
+    "rendererVersion": "11.17.2",
+    "verifiedAt": "2026-09-18T18:07:31.651Z",
+    "diagrams": 72,
+    "errors": []
+  },
+  "countsFromSource": {
+    "publicTools": 20,
+    "schemaFiles": 95,
+    "registeredScenarios": 18
+  },
+  "notRun": [
+    "root npm test",
+    "scenario acceptance suite",
+    "architecture dependency gate",
+    "real host session",
+    "statusline in a live session"
+  ]
+}

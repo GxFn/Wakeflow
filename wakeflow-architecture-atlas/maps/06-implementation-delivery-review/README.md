@@ -3,9 +3,9 @@ diagramId: ts-delivery-review-vertical-d0
 viewType: vertical-slice
 truthKind: current-code
 reviewDepth: L2
-verifiedAt: 2026-09-11
-baselineCommit: 7ba1f38938a7387623b0ca588d9cfd54abda5760
-sourceFingerprint: sha256:4303489a2eaf82fa5d846bdd828fb02a4fb48093b6c38aadc2789ebf96ae5184
+verifiedAt: 2026-09-18
+baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
+sourceFingerprint: sha256:2e0e6d9de3f64a1f34986ad726c68a63de80be5c562dfd059d60ddb92e4aa36b
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
@@ -63,7 +63,6 @@ sourcePaths:
   - src/kernel/*.ts
   - src/kernel/event-stream/*.ts
   - src/workspace/*.ts
-  - src/workspace/active/*.ts
   - src/workspace/window-runtime/*.ts
 schemaPaths:
   - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
@@ -141,7 +140,7 @@ refreshTriggers:
 
 prepare_delivery 一次创建声明和信封并返回许可；实际发送由 Agent 执行。目标投递的 accepted、indeterminate、rejected-before-send 是证据派生的结果，不由回读超时直接判失败。
 
-> 核验基线：`7ba1f38`；核验时实现代码均已提交，本轮图谱更新另列。开发阶段为 L1 九片已落地，observation 尚未开始。本文说明实现事实，未宣称双宿主真实会话已经验证。
+> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
 
 ## 当前投递与目标结果的接力
 

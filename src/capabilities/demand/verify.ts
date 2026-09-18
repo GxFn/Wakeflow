@@ -60,6 +60,8 @@ async function guarded(
       typeof error.reason === "string"
         ? error.reason
         : "error";
+    // 中止不是门的失败：照常上抛，剩下的门也不再白跑。
+    if (reason === "aborted") throw error;
     return gate(name, "unavailable", reason);
   }
 }

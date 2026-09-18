@@ -54,6 +54,7 @@ docs/
 | [reviews/2026-09-03-typescript-checkpoint-review.md](./reviews/2026-09-03-typescript-checkpoint-review.md) | 关键节点架构与实现评估、缺口分析、建设计划建议 | 评估建议，待讨论 |
 | [reviews/2026-09-04-flow-optimization-analysis.md](./reviews/2026-09-04-flow-optimization-analysis.md) | 回传、调用形状、完成留痕、测试记录对比、重设计边界的旧代码事实、业界对照与设计建议 | 评估建议，已由 ADR-0012 接受 |
 | [reviews/2026-09-04-architecture-and-slice-design.md](./reviews/2026-09-04-architecture-and-slice-design.md) | 目标架构六层与端口、切片解剖、L0 基础能力收敛与新建、L1 十个切片、测试策略 | 评估建议，已由 ADR-0013 接受 |
+| [reviews/2026-09-11-l1-source-walkthrough-findings.md](./reviews/2026-09-11-l1-source-walkthrough-findings.md) | L1 九个切片落地后的逐文件走读：四类同族问题、正确性缺口、纪律一致性、测试缺口、文档漂移与排序建议 | §8.1 档已落地（gate-log 13.93），§8.2 / §8.3 待裁决 |
 | [references/legacy-js-scenario-closure-audit.md](./references/legacy-js-scenario-closure-audit.md) | 旧 JavaScript 产品全场景闭包审查 | 只读审计，E3 对比证据 |
 | [references/capability-map.md](./references/capability-map.md) | 能力映射矩阵：31 项旧工具、内部能力、宿主差异、D1 到 D41 与 I3 逐行判定 | active，重切 16、缺席 11、放弃 4 |
 | [references/scenario-acceptance.md](./references/scenario-acceptance.md) | 场景验收清单与骨架运行入口 `npm run scenario:acceptance` | active，3 个场景 pass |

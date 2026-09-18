@@ -4,7 +4,11 @@ import { parseJsonValue } from "../../foundation/data/json-value.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import type { DemandAggregateState } from "../../governance/demand/model/demand-aggregate-state.js";
 import { deriveDurableId } from "../../kernel/ids.js";
-import { DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy } from "../../kernel/privacy-scan.js";
+import {
+  CREDENTIAL_PRIVACY_FINDING_KINDS,
+  DEFAULT_ALLOWED_ID_PREFIXES,
+  scanPrivacy,
+} from "../../kernel/privacy-scan.js";
 import type { RequirementClaimState } from "../../kernel/requirement-board.js";
 
 /**
@@ -89,11 +93,6 @@ export function computePayloadTreeDigest(files: readonly PayloadFileDigest[]): S
   );
 }
 
-const CREDENTIAL_KINDS: readonly string[] = Object.freeze([
-  "private-key",
-  "provider-credential",
-  "credential-assignment",
-]);
 const PRIVACY_POLICY = Object.freeze({
   allowedPathRoots: Object.freeze([]),
   allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
@@ -107,7 +106,7 @@ export function payloadPrivacyBlockers(
   const blockers: string[] = [];
   for (const file of files) {
     for (const finding of scanPrivacy(file.text, PRIVACY_POLICY)) {
-      if (!CREDENTIAL_KINDS.includes(finding.kind)) continue;
+      if (!CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind)) continue;
       blockers.push(`payload-privacy:${file.resourcePath}:${finding.line}:${finding.kind}`);
       if (blockers.length >= PAYLOAD_PRIVACY_BLOCKER_MAXIMUM) return Object.freeze(blockers);
     }

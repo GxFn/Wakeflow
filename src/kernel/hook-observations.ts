@@ -91,7 +91,10 @@ export interface HostHookObservationFilter {
 
 export interface HostHookObservationInventory {
   readonly records: readonly Readonly<HostHookObservation>[];
-  /** 目录里存在但无法作为记录读入的条目数；调用方据此判断证据通道是否可信。 */
+  /**
+   * 目录里存在但无法作为记录读入的条目数：文件名不合法，或内容不可用、与文件名不符。
+   * 被 `event` / `since` / `sessionId` 过滤掉的记录不计入。调用方据此判断证据通道是否可信。
+   */
   readonly skipped: number;
 }
 
@@ -342,7 +345,8 @@ async function listObservationCandidates(
   signal: { readonly signal?: AbortSignal },
 ): Promise<Readonly<{
   readonly candidates: readonly ObservationCandidate[];
-  readonly total: number;
+  /** 文件名不符合记录命名的条目数；调用方的过滤条件不影响它。 */
+  readonly unrecognized: number;
 }> | null> {
   let listing: Awaited<ReturnType<typeof readStableResourceDirectory>>;
   try {
@@ -358,12 +362,17 @@ async function listObservationCandidates(
     throw error;
   }
   const candidates: ObservationCandidate[] = [];
+  let unrecognized = 0;
   for (const entry of listing.entries) {
+    if (FILE_NAME_PATTERN.exec(entry.name) === null) {
+      unrecognized += 1;
+      continue;
+    }
     const prefilter = namePrefilter(entry.name, filter);
     if (prefilter !== null) candidates.push({ entry, event: prefilter.event });
   }
   candidates.sort((left, right) => left.entry.name.localeCompare(right.entry.name));
-  return Object.freeze({ candidates, total: listing.entries.length });
+  return Object.freeze({ candidates, unrecognized });
 }
 
 /** 读取一个候选文件；内容不可用、宿主不符或文件名与记录不一致都返回 `null`。 */
@@ -406,7 +415,7 @@ export async function readHostHookObservations(
   const listed = await listObservationCandidates(root, hostId, filter, signal);
   if (listed === null) return Object.freeze({ records: Object.freeze([]), skipped: 0 });
   const records: Readonly<HostHookObservation>[] = [];
-  let skipped = listed.total - listed.candidates.length;
+  let skipped = listed.unrecognized;
   for (const candidate of listed.candidates) {
     if (records.length >= limit) break;
     const record = await readCandidateRecord(root, hostId, candidate, signal);

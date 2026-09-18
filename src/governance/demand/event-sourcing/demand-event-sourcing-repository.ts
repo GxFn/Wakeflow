@@ -1509,6 +1509,8 @@ export class DemandEventSourcingRepository {
       }
     } catch (error: unknown) {
       if (!(error instanceof DemandFileEventSnapshotStoreError)) throw error;
+      // 退休失败只计数，但中止不是失败：照常上抛。
+      if (error.reason === "aborted") fail("aborted", "$signal");
     }
     return Object.freeze({ snapshot: receipt.disposition, retiredSnapshots });
   }

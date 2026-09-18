@@ -38,7 +38,6 @@ import {
   type DemandEventSourcingCommandResult,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import {
-  computeDemandEventSourcingCommandDigest,
   parseDemandEventSourcingCommand,
   type DemandEventSourcingCommand,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
@@ -132,7 +131,7 @@ import { fail } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../kernel/privacy-scan.js";
-import { inspectWorkClaim, releaseWorkClaim } from "../../kernel/work-claims.js";
+import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
   WakeflowWindowHostBindingStoreError,
@@ -521,7 +520,6 @@ async function appendCommand(
   binding: Readonly<AppendCommandBinding>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandEventSourcingCommandResult>> {
-  computeDemandEventSourcingCommandDigest(command);
   try {
     return await executeDemandEventSourcingCommand(repository, command, {
       commitId: binding.commitId,
@@ -829,22 +827,18 @@ async function issueCallback(
   }
 }
 
-/** 结果事件之后释放围栏声明；缺失即已释放，别的声明占着窗口则拒绝。 */
+/** 结果事件之后释放围栏声明；缺失或已易主都不是错误——事件已经提交，清理找不到目标不能否定它。 */
 async function releaseFence(
   context: SliceContext,
   windowId: string,
   fence: Readonly<{ readonly claimId: string; readonly claimDigest: string }>,
 ): Promise<void> {
-  const signal = signalOptions(context.options.signal);
-  const inspected = await inspectWorkClaim(context.workspaceRoot, windowId, signal);
-  if (inspected.claim === null) return;
-  if (
-    inspected.claim.claimId !== fence.claimId ||
-    inspected.claim.claimDigest !== fence.claimDigest
-  ) {
-    fail("precondition-failed", "claim-foreign", "$request.deliveryId");
-  }
-  await releaseWorkClaim(context.workspaceRoot, inspected.claim, signal);
+  await releaseWorkClaimIfHeld(
+    context.workspaceRoot,
+    windowId,
+    fence,
+    signalOptions(context.options.signal),
+  );
 }
 
 type ReplayableCommandResult = Readonly<
@@ -1157,8 +1151,10 @@ function testResultView(
     targetTaskId: result.targetTaskId,
     attemptOrdinal: result.testExecution.ordinal,
     steps: result.report.steps,
-    expectedByStepId: new Map(
-      source.taskPackage.testContract.steps.map((step) => [step.stepId, step.then] as const),
+    itemIdByStepId: new Map(
+      source.taskPackage.testContract.steps.map(
+        (step) => [step.stepId, step.requirementRef.itemId] as const,
+      ),
     ),
   });
 }

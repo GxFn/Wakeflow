@@ -188,6 +188,22 @@ test("mandatory Demand authority resolves complete package roles and rejects leg
       (error: unknown) =>
         error instanceof DemandAuthorityError && error.reason === "role",
     );
+    // 同一角色两个成员同样违反“恰好一个”：下游按角色 `.find` 不能在两个成员之间猜。
+    const landing = refs.find((reference) => reference.role === "landing");
+    if (landing === undefined) throw new Error("fixture must publish a landing member");
+    const duplicateLanding = {
+      ...landing,
+      memberPath: landing.memberPath.replace(/landing\.md$/u, "landing-copy.md"),
+      memberRef: landing.memberRef.replace(/landing\.md$/u, "landing-copy.md"),
+    };
+    throws(
+      () => createDemandAuthority(identity, {
+        authorityRefs: [duplicateLanding, ...refs],
+        testingDecision: authority.testingDecision,
+      }),
+      (error: unknown) =>
+        error instanceof DemandAuthorityError && error.reason === "role",
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

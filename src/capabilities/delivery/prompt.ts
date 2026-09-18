@@ -1,8 +1,9 @@
 import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config-v3.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
-import type {
-  TargetDeliveryProductDefectRemediationContext,
-  TargetDeliveryReworkContext,
+import {
+  DELIVERY_PROMPT_MAXIMUM_CHARACTERS,
+  type TargetDeliveryProductDefectRemediationContext,
+  type TargetDeliveryReworkContext,
 } from "../../governance/delivery/delivery-envelope.js";
 import type { TaskPackage } from "../../governance/tasking/task-package.js";
 import { fail } from "../../kernel/error.js";
@@ -86,7 +87,6 @@ export interface RenderDeliveryPromptInput {
 }
 
 const MAXIMUM_ANCHORS = 4;
-const MAXIMUM_PORTABLE_CHARACTERS = 60_000;
 const RETURN_TOOL = "wakeflow_import_target_result";
 
 type Labels = Readonly<
@@ -325,7 +325,7 @@ export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromp
     ]),
   ];
   const prompt = lines.join("\n");
-  if (prompt.length > MAXIMUM_PORTABLE_CHARACTERS) {
+  if (prompt.length > DELIVERY_PROMPT_MAXIMUM_CHARACTERS) {
     fail("capacity-exceeded", "prompt-capacity", "$prompt");
   }
   return prompt;

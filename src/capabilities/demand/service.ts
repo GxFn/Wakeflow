@@ -172,7 +172,9 @@ export async function activeDemandOnPod(
     return null;
   } catch (error: unknown) {
     if (error instanceof WakeflowError && error.reason === "pod-busy") {
-      return error.details?.demandId ?? "unknown";
+      // 守卫保证 details 带占用者；没有就不是这里能解释的错误，原样上抛。
+      const demandId = error.details?.demandId;
+      if (demandId !== undefined) return demandId;
     }
     throw error;
   }

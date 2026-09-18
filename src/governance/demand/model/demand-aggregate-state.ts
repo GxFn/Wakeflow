@@ -349,6 +349,11 @@ export type DemandTestAttemptLineage = readonly [
   ...Readonly<DemandTestAttemptState>[],
 ];
 
+/** 谱系是非空元组，最后一项必然存在；`Array.prototype.at` 不做元组推断，所以在这里收窄一次。 */
+function lastTestAttempt(lineage: DemandTestAttemptLineage): Readonly<DemandTestAttemptState> {
+  return lineage[lineage.length - 1] ?? lineage[0];
+}
+
 export interface DemandTestCurrentDeliveryBase extends DemandCurrentDeliveryBase {
   readonly testAttemptId: WakeflowDurableId<"test-attempt">;
 }
@@ -1239,7 +1244,7 @@ function parseTargetTasks(
         common,
         `${path}/testAttempts`,
       );
-      const attemptState = testAttempts.at(-1)!;
+      const attemptState = lastTestAttempt(testAttempts);
       if (
         attemptState.attempt.targetTaskId !== common.targetTaskId ||
         currentDelivery.testAttemptId !== attemptState.attempt.testAttemptId ||
@@ -1652,7 +1657,7 @@ export function prepareDeliveryInDemandAggregateState(
     if (target.phase !== "test-another-attempt-requested") {
       fail("transition", "$/targetTasks");
     }
-    const previousAttempt = target.testAttempts.at(-1)!;
+    const previousAttempt = lastTestAttempt(target.testAttempts);
     try {
       assertRerunTestExecutionAttemptFollows(
         envelope.attempt,
@@ -2744,8 +2749,8 @@ export function createInitialDemandAggregateState(
   });
 }
 
-/** 可被替代的实现目标 phase：没有在飞的宿主效果，也没有待评审的结果。 */
-const REPLACEABLE_PHASES: readonly DemandTargetTaskState["phase"][] = Object.freeze([
+/** 可被替代的实现目标 phase：没有在飞的宿主效果，也没有待评审的结果。tasking 的谱系期望共用这一份。 */
+export const REPLACEABLE_PHASES: readonly DemandTargetTaskState["phase"][] = Object.freeze([
   "planned",
   "delivery-prepared",
   "host-effect-rejected",

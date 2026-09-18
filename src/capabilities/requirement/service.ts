@@ -40,7 +40,7 @@ import {
   type LoadedLedgerAuthorityRecord,
 } from "../../governance/ledger/ledger-authority-store.js";
 import { runCommandShell } from "../../kernel/command-shell.js";
-import { fail } from "../../kernel/error.js";
+import { fail, WakeflowError } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   runPublicationTransaction,
@@ -702,6 +702,15 @@ async function pendingCount(context: RequirementContext): Promise<number> {
   return listing.states.filter((state) => state.status === "pending").length;
 }
 
+/** 索引是自愈的投影：权威状态已提交，与并发写者的争用不能让本次调用报失败。 */
+async function refreshBoardIndexQuietly(context: RequirementContext): Promise<void> {
+  try {
+    await refreshRequirementBoardIndex(context.root, context.signal);
+  } catch (error: unknown) {
+    if (!(error instanceof WakeflowError) || error.reason !== "board-index-contended") throw error;
+  }
+}
+
 async function applyPublish(context: RequirementContext, plan: PublishPlan): Promise<Outcome> {
   const { loaded, wrote } = await ensureRecord(context, plan);
   const source = await ensureClaimState(context, loaded);
@@ -711,7 +720,7 @@ async function applyPublish(context: RequirementContext, plan: PublishPlan): Pro
     plan.requirementId,
     parseUtcInstant(source.state.publishedAt, "$claimState.publishedAt"),
   );
-  await refreshRequirementBoardIndex(context.root, context.signal);
+  await refreshBoardIndexQuietly(context);
   return Object.freeze({
     disposition: wrote ? "published" : "current",
     package: receiptOf(loaded, source),
@@ -737,7 +746,7 @@ async function applyClaimTransition(
       ? activateRequirementClaim(source.state, at)
       : withdrawRequirementClaim(source.state, plan.reason ?? "withdrawn", at);
   await replaceRequirementClaimStateFile(context.root, source, next, context.signal);
-  await refreshRequirementBoardIndex(context.root, context.signal);
+  await refreshBoardIndexQuietly(context);
   const reread = await readRequirementClaimState(context.root, plan.requirementId, context.signal);
   if (reread === null) fail("recovery-required", "claim-state-vanished", "$board");
   const loaded = await loadExistingRecord(context, plan.requirementId);
@@ -770,7 +779,7 @@ async function recoverPublish(
     requirementId,
     parseUtcInstant(source.state.publishedAt, "$claimState.publishedAt"),
   );
-  await refreshRequirementBoardIndex(context.root, context.signal);
+  await refreshBoardIndexQuietly(context);
   return Object.freeze({
     disposition: "recovered",
     package: receiptOf(loaded, source),

@@ -63,7 +63,7 @@ import {
  * Wakeflow Governance / Demand Model：事件溯源聚合发布所需的必需权威关系验证。
  *
  * 权威关系记录只保存可解析的需求包成员引用、身份语义摘要和测试决定。四类
- * Demand 都要求 `requirement` 与 `landing` 两个成员（ADR-0011 D3）；测试环境不再
+ * Demand 都要求 `requirement` 与 `landing` 各恰好一个成员（ADR-0011 D3）；测试环境不再
  * 由 Ledger 成员证明，`environmentMemberRef` 恒为 `null`。本模块不写入 Ledger 或
  * Demand 文件，也不追加事件流。
  */
@@ -278,11 +278,13 @@ function assertIdentityRelations(
   ) {
     fail("identity", "$authority");
   }
-  const roles = new Set<string>(
-    authority.authorityRefs.map((entry) => entry.role),
-  );
+  // 每个必需角色恰好一个成员：下游按角色 `.find` 环境权威，不允许两个成员争同一角色。
+  const roleCounts = new Map<string, number>();
+  for (const entry of authority.authorityRefs) {
+    roleCounts.set(entry.role, (roleCounts.get(entry.role) ?? 0) + 1);
+  }
   for (const role of REQUIRED_ROLES[identity.demandType]) {
-    if (!roles.has(role)) fail("role", "$/authorityRefs");
+    if (roleCounts.get(role) !== 1) fail("role", "$/authorityRefs");
   }
   if (
     identity.demandType === "research"

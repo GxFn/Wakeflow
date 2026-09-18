@@ -267,7 +267,11 @@ function contractStep(stepId: string, then: string): TestContractStep {
     given: "given",
     when: "when",
     then,
-    requirementRef: { recordDigest: DIGEST, sectionAnchor: "acceptance-criteria", itemId: "ac-1" },
+    requirementRef: {
+      recordDigest: DIGEST,
+      sectionAnchor: "acceptance-criteria",
+      itemId: `ac-${stepId.slice("ts-".length)}`,
+    },
   };
 }
 
@@ -295,7 +299,7 @@ function step(
       };
 }
 
-test("逐步视图：范围外步骤沿用同目标更早尝试或 retest 链里 then 相同步骤的通过记录；并集判定按合同全集", () => {
+test("逐步视图：范围外步骤沿用同目标更早尝试或 retest 链里引用同一需求条目的步骤的通过记录；并集判定按合同全集", () => {
   const contract = [
     contractStep("ts-1", "A"),
     contractStep("ts-2", "B"),
@@ -309,17 +313,18 @@ test("逐步视图：范围外步骤沿用同目标更早尝试或 retest 链里
       step("ts-2", "fail", "flaky"),
       step("ts-3", "fail", "product-defect"),
     ],
-    expectedByStepId: new Map([
-      ["ts-1", "A"],
-      ["ts-2", "B"],
-      ["ts-3", "C"],
+    itemIdByStepId: new Map([
+      ["ts-1", "ac-1"],
+      ["ts-2", "ac-2"],
+      ["ts-3", "ac-3"],
     ]),
   };
   const retested = {
     targetTaskId: TARGET_B,
     attemptOrdinal: 1,
     steps: [step("ts-7", "pass")],
-    expectedByStepId: new Map([["ts-7", "C"]]),
+    // 复测合同的 ts-7 引用与上一代 ts-3 相同的验收条目；措辞可以不同。
+    itemIdByStepId: new Map([["ts-7", "ac-3"]]),
   };
   const views = deriveStepViews(
     contract,

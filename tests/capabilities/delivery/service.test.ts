@@ -6,7 +6,9 @@ import { test } from "node:test";
 import { executeRearmDeliveryRequest } from "../../../src/capabilities/delivery/service.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
+import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { workClaimRef } from "../../../src/kernel/layout.js";
 import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
 import {
@@ -187,6 +189,27 @@ test("record_delivery_outcome：围栏不符被拒；无落地证据为 indeterm
         idempotencyKey: "fixture-outcome-resolve-missing",
         expectedStreamRevision: silent.event.streamRevision,
         resolution: { disposition: "accepted", hookRecordId: "missing", rationale: "看到了。" },
+      }),
+      rejectedWith("resolution-evidence-missing"),
+    );
+    // 显式解决只认落地记录：同一会话的 stop 记录即使带着相同提示摘要也不是落地证据。
+    const stopRecord = await writeHostHookObservation(fixture.workspaceRoot, {
+      hostId: "codex",
+      event: "stop",
+      sessionId: fixture.route.rawHandle,
+      cwd: fixture.route.windowPath,
+      recordedAt: parseUtcInstant("2026-08-29T12:16:00.000Z"),
+      promptDigest: computeDeliveryPromptDigest(prepared.permit.prompt),
+    });
+    await rejects(
+      recordFixtureDeliveryOutcome(fixture, prepared, {
+        idempotencyKey: "fixture-outcome-resolve-stop-record",
+        expectedStreamRevision: silent.event.streamRevision,
+        resolution: {
+          disposition: "accepted",
+          hookRecordId: stopRecord.record.recordId,
+          rationale: "看到了。",
+        },
       }),
       rejectedWith("resolution-evidence-missing"),
     );

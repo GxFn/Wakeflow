@@ -17,10 +17,7 @@ import {
   openDemandOperationAuthorityContext,
   type DemandOperationAuthorityContext,
 } from "../../governance/demand/demand-operation-authority-context.js";
-import {
-  computeDemandEventSourcingCommandDigest,
-  parseDemandEventSourcingCommand,
-} from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import { parseDemandEventSourcingCommand } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   DemandEventSourcingCommandHandlerError,
   executeDemandEventSourcingCommand,
@@ -574,7 +571,6 @@ async function execute(
     ),
     taskPackage: drafted,
   });
-  computeDemandEventSourcingCommandDigest(command);
   let commandResult: Readonly<DemandEventSourcingCommandResult>;
   try {
     commandResult = await executeDemandEventSourcingCommand(repository, command, {

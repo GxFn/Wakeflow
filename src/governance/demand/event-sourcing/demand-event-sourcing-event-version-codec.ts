@@ -82,10 +82,10 @@ export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
   "review.product-defect-remediation-authorized",
   "review.target-result-decided",
   "tasking.target-task-planned",
-] as const);
+] as const satisfies readonly DemandEventSourcingCurrentEventType[]);
 
-type DemandEventSourcingCurrentEventType =
-  (typeof DEMAND_EVENT_SOURCING_EVENT_TYPES)[number];
+/** 当前事件类型就是归约器事件联合的类型标签：类型数组、版本表与注册表都以它为穷尽性来源。 */
+type DemandEventSourcingCurrentEventType = DemandUncommittedEvent["eventType"];
 
 export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
   "delivery.delivery-outcome-recorded": 1,

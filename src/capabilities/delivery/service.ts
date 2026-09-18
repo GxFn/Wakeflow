@@ -57,7 +57,6 @@ import {
   type DemandEventSourcingCommandResult,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import {
-  computeDemandEventSourcingCommandDigest,
   parseDemandEventSourcingCommand,
   type DemandEventSourcingCommand,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
@@ -113,6 +112,7 @@ import {
   deriveWorkClaimId,
   inspectWorkClaim,
   releaseWorkClaim,
+  releaseWorkClaimIfHeld,
   takeWorkClaim,
   type WorkClaim,
 } from "../../kernel/work-claims.js";
@@ -522,7 +522,6 @@ async function appendCommand(
   binding: Readonly<AppendCommandBinding>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandEventSourcingCommandResult>> {
-  computeDemandEventSourcingCommandDigest(command);
   try {
     return await executeDemandEventSourcingCommand(repository, command, {
       commitId: binding.commitId,
@@ -1484,6 +1483,7 @@ function decideOutcome(
   currentlyIndeterminate: boolean,
 ): ReturnType<typeof deriveDeliveryDisposition> {
   const resolution = input.resolution;
+  const landing = records.filter((record) => record.event === "user-prompt-submit");
   return deriveDeliveryDisposition({
     hostId: context.facade.hostId,
     attempt: {
@@ -1494,7 +1494,7 @@ function decideOutcome(
       status: input.readback?.status ?? "unavailable",
       evidenceDigest: (input.readback?.evidenceDigest ?? null) as Sha256Digest | null,
     },
-    landingRecords: records.filter((record) => record.event === "user-prompt-submit"),
+    landingRecords: landing,
     expectedPromptDigest: envelope.promptDigest,
     resolution:
       resolution === undefined
@@ -1504,9 +1504,10 @@ function decideOutcome(
             hookRecordId: resolution.hookRecordId ?? null,
             rationale: resolution.rationale,
           },
+    // 显式解决引用的证据必须是落地记录本身，与自动判定同一标准。
     resolutionRecordFound:
       resolution?.hookRecordId !== undefined &&
-      records.some((record) => record.recordId === resolution.hookRecordId),
+      landing.some((record) => record.recordId === resolution.hookRecordId),
     currentlyIndeterminate,
   });
 }
@@ -1520,7 +1521,14 @@ async function executeOutcome(
   const repository = new DemandEventSourcingRepository(authority.demandRoot);
   const target = deliveryTargetOf(context, input.deliveryId);
   const bound = await boundCommit(repository, binding, options.signal);
-  if (bound !== null) return replayOutcome(context, target, bound, binding);
+  if (bound !== null) {
+    const replayed = replayOutcome(context, target, bound, binding);
+    // 追加已提交而释放未完成的裂缝由重放路径补做；助手对缺失或已易主的声明无事可做。
+    if (replayed.outcome.claimHandling === "release-authorized") {
+      await releaseClaimFor(context, target.windowId, replayed.outcome.fence);
+    }
+    return replayed;
+  }
   assertFreshRevision(context, binding);
   const currentlyIndeterminate = assertOutcomeRecordable(target, input.claimDigest);
   const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
@@ -1551,8 +1559,8 @@ async function executeOutcome(
   });
   const commandResult = await appendCommand(repository, command, binding, options.signal);
   const committed = committedEvent(commandResult, "delivery.delivery-outcome-recorded");
-  if (commandResult.disposition === "committed" && outcome.claimHandling === "release-authorized") {
-    await releaseClaimFor(context, route.binding.windowId, outcome.fence.claimId);
+  if (outcome.claimHandling === "release-authorized") {
+    await releaseClaimFor(context, route.binding.windowId, outcome.fence);
   }
   return Object.freeze({
     commandResult,
@@ -1563,15 +1571,18 @@ async function executeOutcome(
   });
 }
 
+/** 只释放仍属于本次投递的声明；缺失或已易主（例如已被 rearm 重取）都不是错误。 */
 async function releaseClaimFor(
   context: SliceContext,
   windowId: string,
-  claimId: string,
+  fence: Readonly<{ readonly claimId: string; readonly claimDigest: string }>,
 ): Promise<void> {
-  const signal = signalOptions(context.options.signal);
-  const inspected = await inspectWorkClaim(context.workspaceRoot, windowId, signal);
-  if (inspected.claim === null || inspected.claim.claimId !== claimId) return;
-  await releaseWorkClaim(context.workspaceRoot, inspected.claim, signal);
+  await releaseWorkClaimIfHeld(
+    context.workspaceRoot,
+    windowId,
+    fence,
+    signalOptions(context.options.signal),
+  );
 }
 
 async function silenceExceededFor(

@@ -92,11 +92,14 @@ test("hook 观察记录：确定性标识、私有文件、按事件与会话有
   });
   equal(starts.records.length, 1);
   equal(starts.records[0]?.cwd, `${workspace}/product`);
+  // 被过滤掉的记录不算 skipped：计数只反映证据通道里读不出来的条目。
+  equal(starts.skipped, 2);
   const late = await readHostHookObservations(root, "claude-code", { since: AT(5) });
   deepEqual(
     late.records.map((record) => record.event),
     ["stop", "session-start"],
   );
+  equal(late.skipped, 2);
   const limited = await readHostHookObservations(root, "claude-code", { limit: 1 });
   equal(limited.records.length, 1);
   const codex = await readHostHookObservations(root, "codex");

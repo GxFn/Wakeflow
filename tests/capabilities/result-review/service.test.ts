@@ -9,10 +9,16 @@ import {
   executeTestReviewDecisionRequest,
   type ExecuteResultReviewOptions,
 } from "../../../src/capabilities/result-review/service.js";
+import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
-import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
+import {
+  createWorkClaim,
+  inspectWorkClaim,
+  releaseWorkClaim,
+  takeWorkClaim,
+} from "../../../src/kernel/work-claims.js";
 import {
   CODEX_DELIVERY_FACADE,
   deliverFixtureTarget,
@@ -374,12 +380,31 @@ test("rework 之后再投递、再导入形成新的评审单元并保留历史�
       2,
     );
     equal(redelivered.recorded.outcome.disposition, "accepted");
+    // 导入前窗口声明已易主（例如被更高代际重取）：结果事件照常提交，清理既不否定它也不动别人的声明。
+    const heldBefore = (await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId))
+      .claim;
+    if (heldBefore === null) throw new Error("a delivered target must hold the window claim");
+    await releaseWorkClaim(fixture.workspaceRoot, heldBefore);
+    const foreign = createWorkClaim({
+      claimId: createWakeflowDurableId("work-claim"),
+      hostId: heldBefore.hostId,
+      windowId: heldBefore.windowId,
+      bindingId: heldBefore.bindingId,
+      holder: { ...heldBefore.holder, generation: heldBefore.holder.generation + 1 },
+      claimedAt: at("12:19:00"),
+    });
+    await takeWorkClaim(fixture.workspaceRoot, foreign);
     const reimported = await importFixtureImplementationResult(fixture, redelivered, {
       idempotencyKey: "fixture-import-2",
       evidence: fixture.evidence,
       reportedAt: at("12:20:00"),
     });
     equal(reimported.status, "committed");
+    equal(
+      (await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId)).claim?.claimId,
+      foreign.claimId,
+      "a foreign claim survives the import cleanup",
+    );
     equal(reimported.callback.permit.generation, 1);
     equal(reimported.callback.callbackId === fixture.imported.callback.callbackId, false);
     const before = await inspectFixtureReview(fixture, fixture.targetTaskId, {

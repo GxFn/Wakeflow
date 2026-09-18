@@ -19,6 +19,13 @@ const PRIVACY_FINDING_KINDS = Object.freeze([
 
 type PrivacyFindingKind = (typeof PRIVACY_FINDING_KINDS)[number];
 
+/** 凭证类命中：无条件阻塞，任何内容审阅策略都不能放行；证据捕获门与归档门共用这一份定义。 */
+export const CREDENTIAL_PRIVACY_FINDING_KINDS: readonly PrivacyFindingKind[] = Object.freeze([
+  "private-key",
+  "provider-credential",
+  "credential-assignment",
+] as const);
+
 export interface PrivacyFinding {
   readonly kind: PrivacyFindingKind;
   /** 从 1 开始的行号。 */

@@ -2785,3 +2785,25 @@ tasking 切片已提交（`0cf1962`）。按 ADR-0013 G 序，下一片是 deliv
 - 过程记录：场景测试文件曾被一次正则改写误伤（跨行替换），按 HEAD 版本加会话记录里切片 8 的三段编辑脚本重放、再叠加本片改动重建，16 场景全部通过后才继续；教训是对大文件只做锚定精确的替换。
 - 残余：Wakeflow 不 spawn git，回执核对只用指针文件；status 的 pod 段、`pod-execution-location` 门与已接受未合并分支列表随观察切片；Codex 的 15 个受管 worktree 上限不观察；回执按宿主目录存放，无宿主身份的消费者取第一个有回执的宿主；`wakeflow_pod` 不核对调用方身份（与其他工具一致，skills 文本规则）；Claude 宿主真实会话未运行（按 CLAUDE.md 记为未验证）。
 - 门：全量 `npm test` 通过：typecheck，架构门 640 模块 ok（生产根 10 不变），Biome 0 错误（3 处旧树警告不变），格式检查通过，knip 无发现，851 测试通过，Schema 漂移检查 ok（93）；`git diff --check` 干净。本切片未提交，等待用户决定。
+
+### 13.93 L1 走读 §8.1 档落地：十二项小改动与六份回归（2026-09-17）
+
+按 `docs/reviews/2026-09-11-l1-source-walkthrough-findings.md` §8.1 的排序，把"小改动、明确收益"一档作为独立一批落地，不混入切片 10。十三项里十二项完成；第 13 项（§7 给 `pod-worktree-disposal` 前沿加建议命令）留给切片 10 设计，因为 `NextProjection` 没有自由文本槽，加字段要改 Schema。所有改动都是锚定精确替换（每处断言命中次数），没有正则批改。
+
+- 3.1 + 3.2（声明释放）：内核 `work-claims` 新增 `releaseWorkClaimIfHeld(root, windowId, fence)`，返回 `released | absent | foreign`，不抛错。delivery 的 `releaseClaimFor` 与 result-review 的 `releaseFence` 都改为调用它：delivery 的释放从"仅 committed 分支"改为首次与重放路径共用（追加已提交而释放未完成的裂缝由重放补做）；result-review 删除 `precondition-failed/claim-foreign` 硬失败——结果事件已经提交，清理找不到目标不能否定它，也不动别人的声明。
+- 3.4（中止被吞）：`DemandEventSourcingRepository.refreshCheckpoints` 退休快照的失败里 `aborted` 照常上抛；`capabilities/demand/verify.ts` 的 `guarded` 对 `aborted` 上抛而不是记成 `unavailable`。
+- 3.10（`pod-busy:unknown`）：`assertNoActiveDemand` 先收窄 `claimed && claim !== null`，`details.demandId` 总在；`activeDemandOnPod` 删掉 `?? "unknown"`，缺 details 原样上抛。
+- 3.5（复测基线连接键）：`PriorTestResultView.expectedByStepId`（then 文本）改为 `itemIdByStepId`（`requirementRef.itemId`），`deriveStepViews` 按需求验收条目匹配前代步骤，`testResultView` 同步。
+- 3.6（显式解决的证据）：`decideOutcome` 的 `resolutionRecordFound` 复用 `user-prompt-submit` 过滤后的 `landing` 数组，Controller 引用的 `hookRecordId` 只认落地记录，与自动判定同一标准。
+- 2.1（常量归位）：`MAXIMUM_WORK_CLAIM_GENERATION` 从内核导出，`DELIVERY_REARM_LIMIT = MAXIMUM_WORK_CLAIM_GENERATION - 1`；`CREDENTIAL_PRIVACY_FINDING_KINDS` 进 `kernel/privacy-scan`，证据捕获规划与 demand decide 共用；`REPLACEABLE_PHASES` 从聚合状态导出，tasking decide 删本地副本。
+- 2.2（穷尽性）：`evolveDemandEventSourcingState` 尾部显式判 `lifecycle.demand-cancelled` 后落到 `unhandledEvent(event: never)`；`assertEventCommitBoundary` 改为 `eventCommitBoundaryRevision` 的穷尽 switch（4 类绑定、11 类显式 `null`、`default` 走 `never`）；`DEMAND_EVENT_SOURCING_EVENT_TYPES` 以 `satisfies readonly DemandUncommittedEvent["eventType"][]` 绑定归约器的事件联合。
+- F6：tasking、delivery、result-review 三处丢弃返回值的 `computeDemandEventSourcingCommandDigest(command)` 删除，导入随之清理。
+- 4.3（角色唯一性）：`assertIdentityRelations` 按角色计数，必需角色恰好一个成员（原来只查存在）。
+- 4.6：`lastTestAttempt(lineage)` 替换聚合状态里仅有的两个 `.at(-1)!`。
+- 4.5（索引刷新移出失败路径）：`applyTerminal` 顺序改为 `retireDemandRoot → deleteJournal → refreshBoardIndexQuietly`，后者只吞 `board-index-contended`；`requirement/service.ts` 的三处刷新同样改为静默版本。
+- F1 / H3（`skipped` 语义）：`listObservationCandidates` 改返回 `unrecognized`（文件名不合法的条目数），`skipped = unrecognized + 读不出的候选`，被 `event / since / sessionId` 过滤掉的记录不再计入；接口注释按此改写。
+- H1 / H2（注释与上限）：`delivery-envelope` 模块头、`DELIVERY_PROMPT_MAXIMUM_CHARACTERS` 与 `computeDeliveryPromptDigest` 注释删去"最终 prompt 由可移植 prompt 加工作区根派生"的两阶段说法；`prompt.ts` 的 `MAXIMUM_PORTABLE_CHARACTERS = 60_000` 删除，渲染改用 `DELIVERY_PROMPT_MAXIMUM_CHARACTERS`（65,536）；`archive.ts` 的"唯一的递归删除点"改为"唯一一处递归删除用户内容"。
+- 验收：新增 `tests/kernel/work-claims.test.ts` 2 项（条件释放的三种处置与重复释放；rearm 上限由代际上限派生）；`hook-observations.test.ts` 对过滤读取断言 `skipped` 不变；`demand-identity-authority.test.ts` 加同角色两个成员被拒；`delivery/service.test.ts` 加"同会话 stop 记录（带相同 prompt 摘要）不能作为显式解决证据"；`result-review/service.test.ts` 在再导入前把窗口声明换成更高代际的外来声明，导入仍提交且外来声明不被动；`result-review/decide.test.ts` 改为按条目号匹配（合同步骤各引用不同条目，复测合同 `ts-7` 引用上一代 `ts-3` 的条目 `ac-3`）。
+- 度量：测试 851 → 853；公共工具 19、Schema 93 不变；架构门 640 → 641 模块（新增的测试模块进图，生产根 10 不变）；工作树相对 `5341306`：`src/` 25 文件 +230/−142，已跟踪测试 5 文件 +80/−8，新增测试 72 行；文档：走读记录加 §10 处理记录、README 行状态更新、本节。
+- 门：全量 `npm test` 通过：typecheck，架构门 641 模块 ok（生产根 10 不变），Biome 0 错误（3 处旧树警告不变），格式检查通过，knip 无发现，853 测试通过（16 场景全部通过），Schema 漂移检查 ok（93）；`git diff --check` 干净。
+- 残余：§8.1 第 13 项随切片 10；§8.2 / §8.3 未动，待裁决；Claude 宿主真实会话未运行（按 CLAUDE.md 记为未验证）。本批未提交，等待用户决定。

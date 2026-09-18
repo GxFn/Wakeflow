@@ -76,7 +76,8 @@ const HOLDER_FIELDS = Object.freeze([
   "targetTaskId",
 ] as const);
 const BINDING_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
-const MAXIMUM_GENERATION = 4;
+/** 声明代际上限；投递的 rearm 上限由它派生（`DELIVERY_REARM_LIMIT = MAXIMUM_WORK_CLAIM_GENERATION - 1`）。 */
+export const MAXIMUM_WORK_CLAIM_GENERATION = 4;
 
 export interface WorkClaimHolder {
   readonly demandId: WakeflowDurableId<"demand">;
@@ -187,7 +188,7 @@ function parseWorkClaim(value: unknown, path = "$claim"): Readonly<WorkClaim> {
     typeof generation !== "number" ||
     !Number.isSafeInteger(generation) ||
     generation < 1 ||
-    generation > MAXIMUM_GENERATION
+    generation > MAXIMUM_WORK_CLAIM_GENERATION
   ) {
     fail("invalid-request", "claim-generation", `${path}/holder/generation`);
   }
@@ -414,4 +415,31 @@ export async function releaseWorkClaim(
     throw error;
   }
   return Object.freeze({ disposition: "released" as const, claim: inspected.claim });
+}
+
+export interface ReleaseWorkClaimIfHeldResult {
+  readonly disposition: "released" | "absent" | "foreign";
+}
+
+/**
+ * 释放仍由指定围栏持有的声明。缺失或已换成别的声明都不是错误，只报告 `absent` / `foreign`：
+ * 供事件提交之后的清理步骤在首次与重放路径共用，清理找不到目标不能否定已经落地的事件。
+ */
+export async function releaseWorkClaimIfHeld(
+  root: RootedDirectory,
+  windowIdValue: string,
+  fence: Readonly<{ readonly claimId: string; readonly claimDigest: string }>,
+  options: Signal = {},
+): Promise<Readonly<ReleaseWorkClaimIfHeldResult>> {
+  const signal = signalOptions(options.signal);
+  const inspected = await inspectWorkClaim(root, windowIdValue, signal);
+  if (inspected.claim === null) return Object.freeze({ disposition: "absent" as const });
+  if (
+    inspected.claim.claimId !== fence.claimId ||
+    inspected.claim.claimDigest !== fence.claimDigest
+  ) {
+    return Object.freeze({ disposition: "foreign" as const });
+  }
+  await releaseWorkClaim(root, inspected.claim, signal);
+  return Object.freeze({ disposition: "released" as const });
 }

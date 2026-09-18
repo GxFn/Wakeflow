@@ -1815,12 +1815,20 @@ export function evolveDemandEventSourcingState(
       throw error;
     }
   }
-  try {
-    return cancelDemandAggregateState(state);
-  } catch (error: unknown) {
-    if (error instanceof DemandAggregateStateError) {
-      fail("transition", "$state/lifecycle");
+  if (event.eventType === "lifecycle.demand-cancelled") {
+    try {
+      return cancelDemandAggregateState(state);
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/lifecycle");
+      }
+      throw error;
     }
-    throw error;
   }
+  return unhandledEvent(event);
+}
+
+/** 穷尽性守卫：事件联合多出成员时这里编译不过，新事件不会落进任何兜底分支。 */
+function unhandledEvent(_event: never): never {
+  fail("event", "$/eventType");
 }

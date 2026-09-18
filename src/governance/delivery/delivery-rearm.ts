@@ -17,6 +17,7 @@ import { parseSha256Digest, Sha256Error, type Sha256Digest } from "../../foundat
 import { parseJsonValue, JsonValueError, type JsonValue } from "../../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, type UtcInstant } from "../../foundation/time/utc-instant.js";
+import { MAXIMUM_WORK_CLAIM_GENERATION } from "../../kernel/work-claims.js";
 import type { DeliveryFence, DeliveryFenceReference } from "./delivery-envelope.js";
 
 /**
@@ -29,8 +30,8 @@ import type { DeliveryFence, DeliveryFenceReference } from "./delivery-envelope.
 const REARM_KIND = "WakeflowDeliveryRearm" as const;
 const REARM_SCHEMA_VERSION = 1 as const;
 
-/** 同一信封允许的最多 rearm 次数；超过必须重新准备新信封。 */
-export const DELIVERY_REARM_LIMIT = 3;
+/** 同一信封允许的最多 rearm 次数；超过必须重新准备新信封。由内核的声明代际上限派生：代际 1 加三次 rearm。 */
+export const DELIVERY_REARM_LIMIT = MAXIMUM_WORK_CLAIM_GENERATION - 1;
 
 export interface DeliveryRearm {
   readonly kind: typeof REARM_KIND;

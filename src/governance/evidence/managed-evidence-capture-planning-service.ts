@@ -36,6 +36,7 @@ import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { readHostHookObservationRecord } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import {
+  CREDENTIAL_PRIVACY_FINDING_KINDS,
   DEFAULT_ALLOWED_ID_PREFIXES,
   scanPrivacy,
   type PrivacyFinding,
@@ -195,11 +196,6 @@ const CONTENT_CLASSIFICATION_CONCURRENCY = 4;
 const MAXIMUM_FILE_BYTES = parseByteCount(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes);
 const CAPTURED_FILE_REF = parsePortableResourcePath("content");
 const NON_TEXT_CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u;
-const CREDENTIAL_FINDING_KINDS: readonly PrivacyFinding["kind"][] = Object.freeze([
-  "private-key",
-  "provider-credential",
-  "credential-assignment",
-]);
 const BLOCKER_LIMIT = 16;
 
 function ownString(value: unknown, key: string): string | null {
@@ -375,10 +371,10 @@ function reviewOf(
       classified.filter((entry) => entry.content.opaque).map((entry) => entry.ref),
     ),
     privacyFindings: Object.freeze(
-      findings.filter((finding) => !CREDENTIAL_FINDING_KINDS.includes(finding.kind)),
+      findings.filter((finding) => !CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind)),
     ),
     credentialFindings: Object.freeze(
-      findings.filter((finding) => CREDENTIAL_FINDING_KINDS.includes(finding.kind)),
+      findings.filter((finding) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind)),
     ),
   });
 }

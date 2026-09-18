@@ -458,39 +458,52 @@ function parsePrepareInput(value: unknown): Readonly<{
   });
 }
 
+/**
+ * 每类事件要么声明它绑定的流位置，要么显式声明不绑定；事件联合多出成员时这里编译不过。
+ * 结果与回调的提交由追加命令的幂等键派生（ADR-0013 决定 C），不绑流位置；缺陷修复授权经决定
+ * 传递绑定（决策器核对 `source.streamRevision` 等于决定的流位置加一）；其余事件的载荷不含流位置。
+ */
+function eventCommitBoundaryRevision(event: Readonly<DemandUncommittedEvent>): number | null {
+  switch (event.eventType) {
+    case "lifecycle.demand-completed":
+      return event.data.completion.observedState.streamRevision;
+    // 围栏令牌的期望修订必须等于本次提交的期望修订：信封与新代际都绑定它们被追加时的流位置。
+    case "delivery.delivery-prepared":
+      return event.data.envelope.fence.expectedStreamRevision;
+    case "delivery.delivery-rearmed":
+      return event.data.rearm.fence.expectedStreamRevision;
+    // 决定绑定它审查时的流位置。
+    case "review.target-result-decided":
+      return event.data.decision.reviewed.streamRevision;
+    case "publication.demand-published":
+    case "lifecycle.demand-cancelled":
+    case "lifecycle.demand-escalated":
+    case "lifecycle.decision-recorded":
+    case "lifecycle.demand-continued":
+    case "evidence.managed-evidence-recorded":
+    case "tasking.target-task-planned":
+    case "delivery.delivery-outcome-recorded":
+    case "result.target-result-recorded":
+    case "result.callback-reissued":
+    case "review.product-defect-remediation-authorized":
+      return null;
+    default:
+      return unhandledEvent(event);
+  }
+}
+
+function unhandledEvent(_event: never): never {
+  fail("relation", "$/eventType");
+}
+
 /** 复验事件自身声明的提交边界，避免恢复身份与实际 Commit 脱节。 */
 function assertEventCommitBoundary(
   event: Readonly<DemandUncommittedEvent>,
   expectedStreamRevision: number,
   path: string,
 ): void {
-  if (
-    event.eventType === "lifecycle.demand-completed" &&
-    event.data.completion.observedState.streamRevision !==
-      expectedStreamRevision
-  ) {
-    fail("relation", path);
-  }
-  // 围栏令牌的期望修订必须等于本次提交的期望修订：信封与新代际都绑定它们被追加时的流位置。
-  if (
-    event.eventType === "delivery.delivery-prepared" &&
-    event.data.envelope.fence.expectedStreamRevision !== expectedStreamRevision
-  ) {
-    fail("relation", path);
-  }
-  if (
-    event.eventType === "delivery.delivery-rearmed" &&
-    event.data.rearm.fence.expectedStreamRevision !== expectedStreamRevision
-  ) {
-    fail("relation", path);
-  }
-  // 结果与决定的提交由追加命令的幂等键派生（ADR-0013 决定 C）；决定仍绑定它审查时的流位置。
-  if (
-    event.eventType === "review.target-result-decided" &&
-    event.data.decision.reviewed.streamRevision !== expectedStreamRevision
-  ) {
-    fail("relation", path);
-  }
+  const bound = eventCommitBoundaryRevision(event);
+  if (bound !== null && bound !== expectedStreamRevision) fail("relation", path);
 }
 
 /**

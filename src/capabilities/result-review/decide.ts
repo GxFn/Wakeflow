@@ -316,8 +316,8 @@ export interface PriorTestResultView {
   readonly targetTaskId: WakeflowDurableId<"target-task">;
   readonly attemptOrdinal: number;
   readonly steps: readonly Readonly<TestTargetResultStep>[];
-  /** 该结果所属合同的步骤 then 文本，按 stepId；retest 链按相同文本匹配。 */
-  readonly expectedByStepId: ReadonlyMap<string, string>;
+  /** 该结果所属合同每一步引用的需求验收条目，按 stepId；retest 链按相同条目匹配（条目号跨代际稳定，措辞不是）。 */
+  readonly itemIdByStepId: ReadonlyMap<string, string>;
 }
 
 function passedStep(
@@ -340,8 +340,8 @@ function passedStep(
 }
 
 /**
- * approved 基线：先看同目标更早的尝试（同 stepId），再看 retest 链里的前代目标（then 文本
- * 相同的步骤）；只有通过的步骤才是基线，最近一次优先。
+ * approved 基线：先看同目标更早的尝试（同 stepId），再看 retest 链里的前代目标（引用同一
+ * 需求验收条目的步骤）；只有通过的步骤才是基线，最近一次优先。
  */
 export function deriveStepViews(
   contractSteps: readonly Readonly<TestContractStep>[],
@@ -376,8 +376,8 @@ export function deriveStepViews(
       const baseline =
         passedStep(attempts, () => contractStep.stepId) ??
         passedStep(retested, (result) => {
-          const match = [...result.expectedByStepId.entries()].find(
-            ([, expected]) => expected === contractStep.then,
+          const match = [...result.itemIdByStepId.entries()].find(
+            ([, itemId]) => itemId === contractStep.requirementRef.itemId,
           );
           return match === undefined ? null : match[0];
         });

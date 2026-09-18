@@ -578,7 +578,8 @@ export async function restoreDemandRoot(
 
 /**
  * 删除活动根：只在根内负载摘要等于已封归档的负载摘要、且树里只有普通文件与目录时执行。
- * 这是本仓库唯一的递归删除点；归档已经是这些字节的权威副本。
+ * 这是本仓库唯一一处递归删除用户内容的地方（其余递归删除只清理本进程自建的候选目录与回执）；
+ * 归档已经是这些字节的权威副本。
  */
 export async function retireDemandRoot(
   workspaceRoot: RootedDirectory,

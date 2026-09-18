@@ -38,7 +38,7 @@ import {
   DemandPostAcceptanceRouteError,
 } from "../../governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
-import { fail } from "../../kernel/error.js";
+import { fail, WakeflowError } from "../../kernel/error.js";
 import {
   DEMAND_LIFECYCLE_JOURNALS_ROOT_REF,
   demandArchiveRef,
@@ -329,6 +329,15 @@ async function deleteJournal(context: DemandSliceContext, demandId: string): Pro
       typeof error === "object" && error !== null && "reason" in error ? error.reason : null;
     if (reason === "not-found" || reason === "resource-not-found") return;
     mapFoundationError(error, "journal-delete", "$journal");
+  }
+}
+
+/** 索引是自愈的投影：五步都已提交，与并发写者的争用不能让终态事务报失败。 */
+async function refreshBoardIndexQuietly(context: DemandSliceContext): Promise<void> {
+  try {
+    await refreshRequirementBoardIndex(context.root, context.signal);
+  } catch (error: unknown) {
+    if (!(error instanceof WakeflowError) || error.reason !== "board-index-contended") throw error;
   }
 }
 
@@ -817,8 +826,8 @@ async function applyTerminal(
   const releasedClaims = await releaseClaims(context, plan);
   await releaseDemandHandle(context);
   await retireDemandRoot(context.root, plan.demandId, archive.payloadTreeDigest, context.signal);
-  await refreshRequirementBoardIndex(context.root, context.signal);
   await deleteJournal(context, plan.demandId);
+  await refreshBoardIndexQuietly(context);
   return Object.freeze({
     disposition:
       disposition === "recover"

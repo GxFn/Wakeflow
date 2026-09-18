@@ -1,8 +1,9 @@
 import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
-import type {
-  DemandAcceptedTargetTaskState,
-  DemandAggregateState,
+import {
+  type DemandAcceptedTargetTaskState,
+  type DemandAggregateState,
+  REPLACEABLE_PHASES,
 } from "../../governance/demand/model/demand-aggregate-state.js";
 import type {
   TaskPackageAcceptanceAnchor,
@@ -118,16 +119,6 @@ export type LineageExpectation =
       readonly replaceable: boolean;
     }>
   | Readonly<{ readonly kind: "continuation"; readonly targetTaskIds: readonly string[] }>;
-
-const REPLACEABLE_PHASES: readonly string[] = Object.freeze([
-  "planned",
-  "delivery-prepared",
-  "host-effect-rejected",
-  "rework-requested",
-  "product-defect-rework-requested",
-  "escalated",
-  "review-blocked",
-]);
 
 /** 仓库里的谱系头：有未接受且未被替代的目标就必须替代它；只剩已接受目标就必须续接。 */
 export function deriveLineageExpectation(

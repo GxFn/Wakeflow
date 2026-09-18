@@ -72,10 +72,10 @@ import {
 /**
  * Wakeflow Governance / Delivery：一次投递的不可变信封（能力卡 6 修订、ADR-0009）。
  *
- * 信封冻结任务包入口、当前绑定代际、可移植 prompt、最终 prompt 摘要与围栏令牌；
+ * 信封冻结任务包入口、当前绑定代际、可移植 prompt、prompt 摘要与围栏令牌；
  * 实现包另带返工或缺陷修复投影，test 包另带测试卡元组与逻辑尝试。它不含原始句柄、
- * 发送结果或验收判断；最终 prompt 由可移植 prompt 加工作区根派生，摘要覆盖去除首尾
- * 空白后的文本，宿主 `user-prompt-submit` 记录以此为落地证据。
+ * 发送结果或验收判断。prompt 只含相对于窗口根的可移植路径，没有第二阶段派生；摘要覆盖
+ * 去除首尾空白后的文本，宿主 `user-prompt-submit` 记录以此为落地证据。
  */
 
 export interface TargetDeliveryRequiredCorrection {
@@ -215,7 +215,7 @@ const REWORK_CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const HOST_IDS = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const LANGUAGES = new Set<string>(WAKEFLOW_PRESENTATION_LANGUAGES);
-/** 最终 prompt（含工作区根行）的上限：能力卡 6 的 65,536 字符进记录合同。 */
+/** 投递 prompt 的字符上限：能力卡 6 的 65,536 进记录合同；渲染与摘要共用同一个上界。 */
 export const DELIVERY_PROMPT_MAXIMUM_CHARACTERS = 65_536;
 const validateWire = createRuntimeJsonSchemaValidator<DeliveryEnvelopeWire>(
   WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA,
@@ -942,9 +942,9 @@ export function deliveryPurpose(envelope: Readonly<DeliveryEnvelope>): DeliveryP
       : "initial";
 }
 
-/** 最终 prompt 摘要：去除首尾空白后的 UTF-8 字节的 SHA-256；宿主 hook 记录按同一规则比对。 */
-export function computeDeliveryPromptDigest(finalPrompt: string): Sha256Digest {
-  const trimmed = finalPrompt.trim();
+/** prompt 摘要：去除首尾空白后的 UTF-8 字节的 SHA-256；宿主 hook 记录按同一规则比对。 */
+export function computeDeliveryPromptDigest(prompt: string): Sha256Digest {
+  const trimmed = prompt.trim();
   if (trimmed.length === 0 || trimmed.length > DELIVERY_PROMPT_MAXIMUM_CHARACTERS) {
     fail("prompt", "$prompt");
   }

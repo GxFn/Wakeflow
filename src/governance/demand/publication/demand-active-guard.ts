@@ -151,11 +151,12 @@ export async function assertNoActiveDemand(
 ): Promise<void> {
   const states = (await listRequirementClaimStates(root, signal)).states;
   for (const state of states) {
-    if (state.status !== "claimed") continue;
-    if (state.claim !== null && state.claim.demandId === excluding) continue;
+    // 看板关系保证 claimed 必有 claim；这里收窄一次，让 details 的 demandId 总是存在。
+    if (state.status !== "claimed" || state.claim === null) continue;
+    if (state.claim.demandId === excluding) continue;
     if (await demandIsActive(root, state, signal, podId)) {
       fail("precondition-failed", "pod-busy", "$board", {
-        details: state.claim === null ? {} : { demandId: state.claim.demandId },
+        details: { demandId: state.claim.demandId },
       });
     }
   }

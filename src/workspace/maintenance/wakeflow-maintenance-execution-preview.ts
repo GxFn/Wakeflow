@@ -4,7 +4,7 @@ import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import type { WakeflowConfigV3Model } from "../../configuration/wakeflow-config-v3.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   RootedDirectory,
@@ -94,7 +94,7 @@ async function resolveDesiredConfig(
   root: RootedDirectory,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
   expectedDigest: Sha256Digest | null,
-): Promise<WakeflowConfigV3Model | null> {
+): Promise<WakeflowConfigModel | null> {
   if (request.desiredConfig !== null) return request.desiredConfig;
   assertNotAborted(request.signal);
   let snapshot;

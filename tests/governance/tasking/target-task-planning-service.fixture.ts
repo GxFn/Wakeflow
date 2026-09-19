@@ -1,8 +1,8 @@
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
-import { renderWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3-document.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -31,7 +31,7 @@ import {
   type ExecuteTargetTaskPlanningOptions,
 } from "../../../src/capabilities/tasking/service.js";
 import type { TargetTaskPlanningResult } from "../../../src/capabilities/tasking/contract.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import {
   createPreparedWorkspaceStore,
   DISPOSABLE_ROOT_OPTIONS,
@@ -154,10 +154,10 @@ async function buildTargetTaskPlanningWorkspace(
   for (const relative of [".wakeflow-local", "Design", "Test"]) {
     mkdirSync(path.join(workspacePath, relative), { mode: 0o755 });
   }
-  const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   writeFileSync(
     path.join(workspacePath, "wakeflow.config.json"),
-    renderWakeflowConfigV3(config),
+    renderWakeflowConfig(config),
     { mode: 0o644 },
   );
   const workspaceRoot = await RootedDirectory.open(

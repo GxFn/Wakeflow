@@ -20,9 +20,9 @@ import {
 } from "../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import {
-  createMinimalWakeflowConfigV3,
-  serializeWakeflowConfigV3Fixture,
-} from "./wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+  serializeWakeflowConfigFixture,
+} from "./wakeflow-config.fixture.js";
 
 interface WorkspaceFixture {
   readonly temporaryRoot: string;
@@ -30,7 +30,7 @@ interface WorkspaceFixture {
   readonly configPath: string;
 }
 
-function createWorkspace(value: unknown = createMinimalWakeflowConfigV3()): WorkspaceFixture {
+function createWorkspace(value: unknown = createMinimalWakeflowConfig()): WorkspaceFixture {
   const temporaryRoot = realpathSync(
     mkdtempSync(path.join(os.tmpdir(), "wakeflow-config-authority-ts-")),
   );
@@ -39,7 +39,7 @@ function createWorkspace(value: unknown = createMinimalWakeflowConfigV3()): Work
   mkdirSync(path.join(temporaryRoot, "ProductA"));
   mkdirSync(path.join(temporaryRoot, "wakeflow-ledger"));
   const configPath = path.join(workspaceRoot, "wakeflow.config.json");
-  writeFileSync(configPath, serializeWakeflowConfigV3Fixture(value), {
+  writeFileSync(configPath, serializeWakeflowConfigFixture(value), {
     mode: 0o644,
   });
   return { temporaryRoot, workspaceRoot, configPath };
@@ -69,14 +69,14 @@ test("snapshot binds the current source/config digests to one stable workspace r
     const snapshot = await readWakeflowConfigAuthoritySnapshot(root);
     equal(snapshot.workspaceRoot, fixture.workspaceRoot);
     equal(snapshot.source.resourcePath, "wakeflow.config.json");
-    equal(snapshot.source.byteCount, 2661);
+    equal(snapshot.source.byteCount, 2590);
     equal(
       snapshot.source.digest,
-      "sha256:33be2f16f1ddc3af74595affbd689812e73cbd805e82a5ecd6d18bd32fd21b5f",
+      "sha256:7326c4cccdc5ad5bdd5e76007ca8db5c93ef6333616da5540f4c67c27052ab55",
     );
     equal(
       snapshot.configDigest,
-      "sha256:dfd856d7f09bac7e9d299a7d78eecd57d45f626ac91fc79887fb09f6114008b7",
+      "sha256:7509f2f4551d162aa9ecdbc55553895bdc5d91d49f2d8177c3acfdf59a59c15e",
     );
     equal(snapshot.indexes.controllerWindow.role, "controller");
     equal(snapshot.ledgerRoot, path.join(fixture.temporaryRoot, "wakeflow-ledger"));
@@ -93,7 +93,7 @@ test("snapshot binds the current source/config digests to one stable workspace r
 });
 
 test("domain field-order drift is rejected instead of becoming another config representation", async () => {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   const fixture = createWorkspace(value);
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
@@ -134,8 +134,8 @@ test("encoding, JSON, Schema and source node policy remain distinct failures", a
       reason: "config",
       prepare: (fixture) => writeFileSync(
         fixture.configPath,
-        serializeWakeflowConfigV3Fixture({
-          ...createMinimalWakeflowConfigV3(),
+        serializeWakeflowConfigFixture({
+          ...createMinimalWakeflowConfig(),
           unknown: true,
         }),
       ),
@@ -171,7 +171,7 @@ test("config symlink and hard-link aliases cannot become authority", async () =>
   try {
     const target = path.join(linked.temporaryRoot, "config-target.json");
     rmSync(linked.configPath);
-    writeFileSync(target, serializeWakeflowConfigV3Fixture(createMinimalWakeflowConfigV3()));
+    writeFileSync(target, serializeWakeflowConfigFixture(createMinimalWakeflowConfig()));
     symlinkSync(target, linked.configPath);
     await expectSnapshotError(
       () => readWakeflowConfigAuthoritySnapshot(linkedRoot),
@@ -187,7 +187,7 @@ test("config symlink and hard-link aliases cannot become authority", async () =>
   try {
     const target = path.join(hardlinked.temporaryRoot, "config-hardlink.json");
     rmSync(hardlinked.configPath);
-    writeFileSync(target, serializeWakeflowConfigV3Fixture(createMinimalWakeflowConfigV3()));
+    writeFileSync(target, serializeWakeflowConfigFixture(createMinimalWakeflowConfig()));
     linkSync(target, hardlinked.configPath);
     await expectSnapshotError(
       () => readWakeflowConfigAuthoritySnapshot(hardlinkedRoot),
@@ -200,7 +200,7 @@ test("config symlink and hard-link aliases cannot become authority", async () =>
 });
 
 test("overlapping and symlinked configured roots fail before snapshot publication", async () => {
-  const overlapValue = createMinimalWakeflowConfigV3();
+  const overlapValue = createMinimalWakeflowConfig();
   (overlapValue.storage as Record<string, unknown>).ledgerRoot = ".wakeflow-active";
   const overlap = createWorkspace(overlapValue);
   const overlapRoot = await RootedDirectory.open(overlap.workspaceRoot);

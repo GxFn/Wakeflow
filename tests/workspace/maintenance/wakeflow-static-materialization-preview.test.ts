@@ -14,9 +14,9 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import { publishWakeflowConfigAuthority } from "../../../src/configuration/wakeflow-config-authority-publication.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
@@ -39,7 +39,7 @@ import { renderWakeflowFreshActiveProjection } from "../../../src/workspace/wake
 import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import { materializeWakeflowManagedSupportRoot } from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
 import { publishWakeflowSupportMemory } from "../../../src/workspace/support/wakeflow-support-memory-publication.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
@@ -70,10 +70,10 @@ async function fixture(t: TestContext) {
 }
 
 function desiredConfig(language: "en" | "zh-Hans" = "en") {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.presentation as Record<string, unknown>).language = language;
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  return parseWakeflowConfigV3(value);
+  return parseWakeflowConfig(value);
 }
 
 function request(
@@ -154,7 +154,7 @@ async function installCurrentStaticSurface(
     if (surface.ownership !== "wakeflow-managed") continue;
     await materializeWakeflowManagedSupportRoot(fixtureValue.root, {
       config,
-      expectedConfigDigest: computeWakeflowConfigV3Digest(config),
+      expectedConfigDigest: computeWakeflowConfigDigest(config),
       profile: codexWorkspaceHostResourceProfile,
       expectedCatalogDigest: catalog.catalogDigest,
       surfaceId: surface.surfaceId,
@@ -169,7 +169,7 @@ async function installCurrentStaticSurface(
         currentConfig: null,
         expectedCurrentConfigDigest: null,
         desiredConfig: config,
-        expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(config),
+        expectedDesiredConfigDigest: computeWakeflowConfigDigest(config),
         profile: codexWorkspaceHostResourceProfile,
         expectedCatalogDigest: catalog.catalogDigest,
         surfaceId: surface.surfaceId,
@@ -190,7 +190,7 @@ async function installCurrentStaticSurface(
     currentConfig: null,
     expectedCurrentConfigDigest: null,
     desiredConfig: config,
-    expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(config),
+    expectedDesiredConfigDigest: computeWakeflowConfigDigest(config),
   });
   await publishWakeflowConfigAuthority(fixtureValue.root, config);
 }
@@ -337,7 +337,7 @@ test("placement-stable reconfigure plans derived files before Config activation"
   deepEqual(reconciled.steps, []);
   equal(reconciled.currentConfigDigest, reconciled.desiredConfigDigest);
 
-  const moved = createMinimalWakeflowConfigV3();
+  const moved = createMinimalWakeflowConfig();
   (moved.storage as Record<string, unknown>).ledgerRoot = "Ledger";
   const design = (
     moved.topology as {
@@ -348,7 +348,7 @@ test("placement-stable reconfigure plans derived files before Config activation"
   design.path = "DesignMoved";
   const blocked = await previewWakeflowStaticMaterialization(
     workspace.root,
-    request("reconfigure", parseWakeflowConfigV3(moved)),
+    request("reconfigure", parseWakeflowConfig(moved)),
   );
   equal(blocked.status, "blocked");
   equal(

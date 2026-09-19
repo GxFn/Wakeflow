@@ -1,12 +1,12 @@
 import { types } from "node:util";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
   type WakeflowConfigPlacement,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
@@ -156,7 +156,7 @@ export class ClaudeCodePortableSettingsCompositionError extends Error {
 
 interface ParsedRequest {
   readonly action: ClaudeCodePortableSettingsCompositionAction;
-  readonly model: WakeflowConfigV3Model;
+  readonly model: WakeflowConfigModel;
   readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile> & {
     readonly hostId: "claude-code";
   };
@@ -201,11 +201,11 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   ) {
     fail("input", "$request");
   }
-  let model: WakeflowConfigV3Model;
+  let model: WakeflowConfigModel;
   try {
-    model = parseWakeflowConfigV3(record.config);
+    model = parseWakeflowConfig(record.config);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
   let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
@@ -235,7 +235,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
 }
 
 export function compileClaudeCodePortableSettingsRootAuthority(
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
 ): Readonly<ClaudeCodePortableSettingsRootAuthority> {
   const roots: ClaudeCodePortableSettingsRoot[] = [Object.freeze({
     rootKind: "program" as const,
@@ -260,7 +260,7 @@ export function compileClaudeCodePortableSettingsRootAuthority(
     schemaVersion: 1 as const,
     programId: model.program.programId,
     hostId: "claude-code" as const,
-    configDigest: computeWakeflowConfigV3Digest(model),
+    configDigest: computeWakeflowConfigDigest(model),
     roots: frozenRoots,
   };
   return Object.freeze({

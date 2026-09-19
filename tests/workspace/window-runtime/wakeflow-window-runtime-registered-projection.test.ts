@@ -33,10 +33,10 @@ import {
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 test("registered projection只公开Binding引用与代际ID并保留root blocker", () => {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const unregisteredSet =
     compileWakeflowWindowRuntimeUnregisteredProjectionSet(
       config,

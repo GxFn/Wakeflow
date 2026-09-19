@@ -1,4 +1,4 @@
-import type { WakeflowConfigPod } from "../../configuration/wakeflow-config-v3.js";
+import type { WakeflowConfigPod } from "../../configuration/wakeflow-config.js";
 
 /**
  * Wakeflow Governance / Pod：pod 状态的纯派生（ADR-0010 D6，gate-log §13.91 D3）。

@@ -6,7 +6,7 @@ import { test, type TestContext } from "node:test";
 
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import { executePodRequest, type PodHostFacade } from "../../../src/capabilities/pod/service.js";
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -104,7 +104,7 @@ async function fixture(t: TestContext): Promise<Fixture> {
 }
 
 function readConfig(fixture: Fixture) {
-  return parseWakeflowConfigV3(
+  return parseWakeflowConfig(
     JSON.parse(readFileSync(path.join(fixture.root, "wakeflow.config.json"), "utf8")),
   );
 }

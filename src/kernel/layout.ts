@@ -6,6 +6,12 @@ import { parseWakeflowDurableIdOfKind } from "../contracts/identity/wakeflow-dur
 import { isWakeflowHostId, type WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
 import { fail } from "./error.js";
 
+// 配置文件的身份由词汇层拥有；内核在布局这一处转发，闭包只许到 kernel 的轻读者从这里取。
+export {
+  WAKEFLOW_CONFIG_KIND,
+  WAKEFLOW_CONFIG_SCHEMA_VERSION,
+} from "../contracts/vocabulary/wakeflow-config-identity.js";
+
 /**
  * Wakeflow Kernel / Layout：工作区内私有运行时根的固定布局。
  *

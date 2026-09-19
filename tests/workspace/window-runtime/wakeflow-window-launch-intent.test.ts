@@ -2,8 +2,8 @@ import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import {
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
@@ -14,11 +14,11 @@ import {
   compileWakeflowWindowLaunchIntents,
 } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 test("launch intents resolve Config roots without host handles", () => {
-  const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const set = compileWakeflowWindowLaunchIntents(
     config,
     codexWorkspaceHostResourceProfile,
@@ -79,7 +79,7 @@ test("launch intents resolve Config roots without host handles", () => {
 });
 
 test("launch intent set binds the current host profile without changing logical windows", () => {
-  const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const codex = compileWakeflowWindowLaunchIntents(
     config,
     codexWorkspaceHostResourceProfile,

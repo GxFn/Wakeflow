@@ -24,15 +24,15 @@ import {
   type UuidV4Factory,
 } from "../foundation/identity/uuid-v4.js";
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WAKEFLOW_CONFIG_V3_KIND,
-  WAKEFLOW_CONFIG_V3_SCHEMA_ID,
-  WAKEFLOW_CONFIG_V3_VERSION,
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WAKEFLOW_CONFIG_KIND,
+  WAKEFLOW_CONFIG_SCHEMA_ID,
+  WAKEFLOW_CONFIG_SCHEMA_VERSION,
   WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "./wakeflow-config-v3.js";
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "./wakeflow-config.js";
 
 /**
  * Wakeflow Configuration：Fresh用户选择到typed Config的纯编译边界。
@@ -55,7 +55,7 @@ interface WakeflowFreshConfigSelectionAllocation<
 
 export interface WakeflowFreshConfigCompilation {
   readonly selectionDigest: Sha256Digest;
-  readonly config: WakeflowConfigV3Model;
+  readonly config: WakeflowConfigModel;
   readonly configDigest: Sha256Digest;
   readonly allocations: Readonly<{
     readonly programId: WakeflowDurableId<"program">;
@@ -93,7 +93,7 @@ const ERROR_MESSAGES = {
   reference: "Wakeflow Fresh Config selection contains an unresolved logical reference.",
   "id-source": "Wakeflow Fresh Config durable identity source failed.",
   "id-collision": "Wakeflow Fresh Config generated duplicate UUID identities.",
-  config: "Wakeflow Fresh Config selection does not form a valid Config v3 model.",
+  config: "Wakeflow Fresh Config selection does not form a valid Config model.",
 } as const satisfies Readonly<Record<
   WakeflowFreshConfigSelectionErrorReason,
   string
@@ -485,12 +485,12 @@ export function compileWakeflowFreshConfigSelection(
     governance,
     hosts,
   });
-  let config: WakeflowConfigV3Model;
+  let config: WakeflowConfigModel;
   try {
-    config = parseWakeflowConfigV3({
-      $schema: WAKEFLOW_CONFIG_V3_SCHEMA_ID,
-      kind: WAKEFLOW_CONFIG_V3_KIND,
-      schemaVersion: WAKEFLOW_CONFIG_V3_VERSION,
+    config = parseWakeflowConfig({
+      $schema: WAKEFLOW_CONFIG_SCHEMA_ID,
+      kind: WAKEFLOW_CONFIG_KIND,
+      schemaVersion: WAKEFLOW_CONFIG_SCHEMA_VERSION,
       program: {
         programId,
         displayName: program.displayName,
@@ -504,13 +504,13 @@ export function compileWakeflowFreshConfigSelection(
       hosts,
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
   return Object.freeze({
     selectionDigest: computeCanonicalJsonSha256Digest(normalizedSelection),
     config,
-    configDigest: computeWakeflowConfigV3Digest(config),
+    configDigest: computeWakeflowConfigDigest(config),
     allocations: Object.freeze({
       programId,
       repositories: sortedAllocations(repositoryAllocations),

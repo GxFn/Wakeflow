@@ -2,10 +2,10 @@ import { types } from "node:util";
 
 import {
   parseWakeflowConfigPlacement,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
@@ -120,7 +120,7 @@ export class ClaudeCodePortableSettingsOperationExecutionError extends Error {
 }
 
 interface ParsedRequest {
-  readonly model: WakeflowConfigV3Model;
+  readonly model: WakeflowConfigModel;
   readonly profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   readonly operation: Readonly<ClaudeCodePortableSettingsOperation>;
   readonly recoveringAffectedOperation: boolean;
@@ -207,7 +207,7 @@ function operationRoot(value: unknown): Readonly<ClaudeCodePortableSettingsRoot>
       "$operation.root.configuredPlacement",
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) {
+    if (error instanceof WakeflowConfigError) {
       fail("operation", "$operation.root.configuredPlacement");
     }
     throw error;
@@ -308,11 +308,11 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   ) {
     fail("input", "$request");
   }
-  let model: WakeflowConfigV3Model;
+  let model: WakeflowConfigModel;
   try {
-    model = parseWakeflowConfigV3(record.config);
+    model = parseWakeflowConfig(record.config);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
   let profile;

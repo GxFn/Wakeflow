@@ -13,11 +13,11 @@ import {
   podPreviewNext,
 } from "../../../src/capabilities/pod/decide.js";
 import {
-  buildWakeflowConfigV3Indexes,
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  buildWakeflowConfigIndexes,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 /**
  * pod 切片的纯决定（§13.91 D1 到 D3、D6）：身份与窗口集派生、状态派生、创建与两段关闭的阻塞项、next。
@@ -30,8 +30,8 @@ const REPOSITORY_ID = parseWakeflowDurableIdOfKind(
 );
 
 function primaryScope() {
-  const model = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
-  return { model, indexes: buildWakeflowConfigV3Indexes(model) };
+  const model = parseWakeflowConfig(createMinimalWakeflowConfig());
+  return { model, indexes: buildWakeflowConfigIndexes(model) };
 }
 
 test("podId 由程序与幂等键派生；窗口集从 primary 模板派生且显示名带 pod 名前缀", () => {

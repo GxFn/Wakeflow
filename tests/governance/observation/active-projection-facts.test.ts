@@ -16,8 +16,8 @@ import {
   readWakeflowConfigAuthoritySnapshot,
   type WakeflowConfigAuthoritySnapshot,
 } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
-import { renderWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3-document.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { buildActiveProjectionFacts } from "../../../src/governance/observation/active-projection-facts.js";
@@ -40,7 +40,7 @@ import { WakeflowError } from "../../../src/kernel/error.js";
 import { WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF } from "../../../src/kernel/layout.js";
 import { createPodWorktreeReceipt } from "../../../src/kernel/pod-worktree-receipts.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 /**
  * 观察 → 投影事实 → 刷新（gate-log §13.94 D5、§13.96）：worktree 检出目录此刻在不在是本地
@@ -66,7 +66,7 @@ interface Fixture {
 
 /** 最小公开配置加一个 worktree pod（自带 controller / design / test / product 四个窗口）。 */
 function configWithWorktreePod(): Record<string, unknown> {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const topology = config.topology as Record<string, unknown>;
   const windows = topology.windows as Record<string, unknown>[];
   windows.push(
@@ -129,7 +129,7 @@ async function fixture(t: TestContext, options: { readonly ledger: boolean } = {
   }
   writeFileSync(
     path.join(workspacePath, "wakeflow.config.json"),
-    renderWakeflowConfigV3(parseWakeflowConfigV3(configWithWorktreePod())),
+    renderWakeflowConfig(parseWakeflowConfig(configWithWorktreePod())),
     { mode: 0o644 },
   );
   const workspaceRoot = await RootedDirectory.open(workspacePath);

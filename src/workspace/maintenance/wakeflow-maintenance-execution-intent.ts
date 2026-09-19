@@ -1,6 +1,6 @@
 import {
-  WAKEFLOW_CONFIG_V3_SCHEMA,
-} from "../../contracts/generated/configuration/wakeflow-config-v3.generated.js";
+  WAKEFLOW_CONFIG_SCHEMA,
+} from "../../contracts/generated/configuration/wakeflow-config.generated.js";
 import {
   WAKEFLOW_SHA256_DIGEST_SCHEMA,
 } from "../../contracts/generated/foundation/sha256-digest.generated.js";
@@ -9,14 +9,14 @@ import {
   type WakeflowMaintenanceExecutionIntent as WakeflowMaintenanceExecutionIntentWire,
 } from "../../contracts/generated/workspace/maintenance-execution-intent.generated.js";
 import {
-  createWakeflowConfigV3DocumentValue,
-} from "../../configuration/wakeflow-config-v3-document.js";
+  createWakeflowConfigDocumentValue,
+} from "../../configuration/wakeflow-config-document.js";
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -84,7 +84,7 @@ export interface WakeflowMaintenanceExecutionIntent {
   readonly schemaVersion:
     typeof WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA_VERSION;
   readonly operationId: WakeflowMaintenanceOperationId;
-  readonly desiredConfig: WakeflowConfigV3Model;
+  readonly desiredConfig: WakeflowConfigModel;
   readonly currentHostProfile:
     Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly hostProfiles: readonly [
@@ -143,7 +143,7 @@ export class WakeflowMaintenanceExecutionIntentError extends Error {
 const validateWire =
   createRuntimeJsonSchemaValidator<WakeflowMaintenanceExecutionIntentWire>(
     WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA,
-    [WAKEFLOW_CONFIG_V3_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
+    [WAKEFLOW_CONFIG_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
   );
 
 function fail(
@@ -153,11 +153,11 @@ function fail(
   throw new WakeflowMaintenanceExecutionIntentError(reason, path);
 }
 
-function normalizeConfig(value: unknown): WakeflowConfigV3Model {
+function normalizeConfig(value: unknown): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
 }
@@ -202,7 +202,7 @@ function normalizeContribution(
 
 function normalizedRequest(
   preview: Readonly<WakeflowStaticMaterializationPreview>,
-  desiredConfig: WakeflowConfigV3Model,
+  desiredConfig: WakeflowConfigModel,
   currentHostProfileValue: unknown,
   hostProfileValues: readonly unknown[],
 ) {
@@ -275,7 +275,7 @@ function normalize(
     || plan.steps.length === 0
     || plan.planDigest !== wire.planDigest
     || sharedPreview.desiredConfigDigest
-      !== computeWakeflowConfigV3Digest(desiredConfig)
+      !== computeWakeflowConfigDigest(desiredConfig)
   ) {
     fail("relation", "$intent");
   }
@@ -300,7 +300,7 @@ function intentRepresentation(
     artifactKind: intent.artifactKind,
     schemaVersion: intent.schemaVersion,
     operationId: intent.operationId,
-    desiredConfig: createWakeflowConfigV3DocumentValue(intent.desiredConfig),
+    desiredConfig: createWakeflowConfigDocumentValue(intent.desiredConfig),
     currentHostProfile: intent.currentHostProfile,
     hostProfiles: intent.hostProfiles,
     sharedPreview: intent.sharedPreview,
@@ -365,8 +365,8 @@ export function createWakeflowMaintenanceExecutionIntent(
     || (
       request.action !== "reconcile"
       && request.desiredConfig !== null
-      && computeWakeflowConfigV3Digest(request.desiredConfig)
-        !== computeWakeflowConfigV3Digest(desiredConfig)
+      && computeWakeflowConfigDigest(request.desiredConfig)
+        !== computeWakeflowConfigDigest(desiredConfig)
     )
   ) {
     fail("relation", "$request");
@@ -375,7 +375,7 @@ export function createWakeflowMaintenanceExecutionIntent(
     artifactKind: WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND,
     schemaVersion: WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA_VERSION,
     operationId: operationIdValue,
-    desiredConfig: createWakeflowConfigV3DocumentValue(desiredConfig),
+    desiredConfig: createWakeflowConfigDocumentValue(desiredConfig),
     currentHostProfile: request.currentHostProfile,
     hostProfiles: sortedProfiles(request.hostProfiles),
     sharedPreview: plan.sharedPreview,

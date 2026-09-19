@@ -1,3 +1,7 @@
+import {
+  WAKEFLOW_CONFIG_KIND,
+  WAKEFLOW_CONFIG_SCHEMA_VERSION,
+} from "../../contracts/vocabulary/wakeflow-config-identity.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parsePortableResourcePath,
@@ -103,7 +107,8 @@ const SCRIPT_LINES: readonly string[] = [
   "",
   "function readConfig(root) {",
   '  const parsed = readBoundedJson(path.join(root, "wakeflow.config.json"), MAX_CONFIG_BYTES);',
-  '  if (parsed === null || typeof parsed !== "object" || parsed.kind !== "WakeflowConfig" || parsed.schemaVersion !== 3) return null;',
+  // 配置身份来自词汇层：脚本文本在模块加载时定型，字节仍是确定的。
+  `  if (parsed === null || typeof parsed !== "object" || parsed.kind !== ${JSON.stringify(WAKEFLOW_CONFIG_KIND)} || parsed.schemaVersion !== ${WAKEFLOW_CONFIG_SCHEMA_VERSION}) return null;`,
   "  if (!Array.isArray(parsed.topology?.windows) || !Array.isArray(parsed.pods)) return null;",
   "  return parsed;",
   "}",

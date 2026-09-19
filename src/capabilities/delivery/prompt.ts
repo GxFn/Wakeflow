@@ -1,4 +1,4 @@
-import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config-v3.js";
+import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   DELIVERY_PROMPT_MAXIMUM_CHARACTERS,

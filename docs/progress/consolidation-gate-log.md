@@ -3042,7 +3042,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 | F9 | ADR-0008 开放项：插件名与 marketplace 条目是否沿用；版本起点 | ADR-0008 | **裁决 D3、D4**：沿用 `wakeflow` 与两份 marketplace；起点 `1.0.0`（能力卡 10 Q5 已建议） |
 | F10 | 治理测试墙钟 191.2 秒对 180 秒门 | §13.100 | **裁决 D10** |
 
-**阶段计划。** 每阶段一个退出门，一次提交；提交只在用户说"提交"时做。
+**阶段计划。** 每阶段一个退出门，一次提交。用户 2026-09-19 授权"开发各个阶段时，你可以视情况提交代码"，提交由实施者在退出门通过后自行执行；推送、打标签、发布与缓存刷新仍各自需要明确授权。
 
 | 阶段 | 内容 | 退出门 |
 | --- | --- | --- |
@@ -3065,4 +3065,16 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 - D9 `developer-progress.md` 不加"最近十条事件"（F5）；需要时随场景再开。
 - D10 墙钟门改为两条：场景验收单文件独占跑低于 90 秒，全量 TS 门低于 210 秒（§13.100 选项 b）。备选 (a) 切场景链、(c) 保留 180 秒记未达。
 - D11 根 README 按新制品全文改写（安装、初始化、第一个 Demand、工具面、信任步骤、仓库开发），双语；`docs/README.md` 权威顺序第 1 行去掉"旧基线 `core/`、`test/`"。
-- D12 提交节奏：A、B、C、D 各一次提交，都等用户说"提交"；D 阶段的删除与重生成在同一提交（plan §10.1 第 4–6 项）。
+- D12 提交节奏：A、B、C、D 各一次提交，退出门通过即提交（用户 2026-09-19 授权）；D 阶段的删除与重生成在同一提交（plan §10.1 第 4–6 项）。
+
+用户于 2026-09-19 回复"确认 继续"，D1 到 D12 按建议列全部执行。
+
+## 13.102 B1：配置从 v1 起版（TSD-16，ADR-0008 决定 5）（2026-09-19）
+
+**做了什么。** 配置文件的身份改为新序列：Schema `$id` 与文档 `$schema` 常量都是 `urn:wakeflow:config:v1`，`schemaVersion` 为 `1`，`kind` 保持 `WakeflowConfig`；`maintenance-execution-intent.schema.json` 对配置 Schema 的 `$ref` 随之改为 URN。旧值指向 `https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json`，E4 删除 `core/` 后它就是一个死链接。代码按 §13.101 D8 去掉版本后缀：模块 `wakeflow-config.ts`、`wakeflow-config-document.ts`、`wakeflow-config.schema.json`、`wakeflow-config.generated.ts` 与三份测试文件改名，符号 `WakeflowConfig*`、`parseWakeflowConfig`、`createMinimalWakeflowConfig`、`WAKEFLOW_CONFIG_SCHEMA`、`WAKEFLOW_CONFIG_SCHEMA_ID`、`WAKEFLOW_CONFIG_SCHEMA_VERSION`、`WAKEFLOW_CONFIG_KIND`；注释与消息里的 "v3 配置" 措辞一并去掉，文件的版本只由 `schemaVersion` 表达。生成目录由 `schema:build` 重生成（95 份 Schema、132 条外部引用边）。
+
+**两个不加载校验器的轻读者。** 第一次全量门红了 13 项，全部指向同一处：hook 观察脚本按声明拓扑定位工作区时（§13.97 D2）和 Claude 状态栏资产脚本读配置时，各自把 `schemaVersion !== 3` 写成了字面量，改名脚本按符号替换够不到它们。处置是给身份一个唯一权威：`src/contracts/vocabulary/wakeflow-config-identity.ts` 持有 `WAKEFLOW_CONFIG_KIND`、`WAKEFLOW_CONFIG_SCHEMA_VERSION`、`WAKEFLOW_CONFIG_SCHEMA_ID`，配置模块转发；观察脚本的闭包只许到 kernel（D1 的回归只看入口的直接 import），所以由 `kernel/layout.ts` 转发前两个；状态栏资产在模块加载时把它们插进脚本文本，字节仍然确定。以后再 bump 版本，这两个读者跟着常量走。
+
+**不变的部分。** 配置的字段集、拓扑、存储、治理与宿主段一个字节没动；fresh-initialize 与 reconfigure 仍是仅有的两个生产入口；TS 之前的任何工作区仍然只会被拒绝并列出标记（ADR-0008 决定 1）。
+
+**验证。** 96 个文件改动、行数 +1,349/−1,350；`typecheck`、`check:architecture`（677 模块）、`schema:check`、Biome lint 与 format、knip 干净；配置切片聚焦测试 14/14，其中两处钉死的旧值（最小配置的规范摘要与文件字节数 2,661 → 2,590、文件摘要）按新身份更新；hook 观察、状态栏、制品与场景验收聚焦 25/25。能力映射矩阵行 2 与 D13 的"TSD-16 从 v1 起版未做"改为已做。

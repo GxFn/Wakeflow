@@ -2,7 +2,7 @@ import type {
   WakeflowConfigPod,
   WakeflowConfigPodScope,
   WakeflowConfigWindow,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import type { NextProjection } from "../../kernel/next-projection.js";

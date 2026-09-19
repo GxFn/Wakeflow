@@ -15,7 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -45,7 +45,7 @@ import {
 import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { executeWakeflowStaticMaterializationStep } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
 import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
@@ -92,13 +92,13 @@ function request(
 }
 
 function configValue(): Record<string, unknown> {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
   return value;
 }
 
 function desiredConfig() {
-  return parseWakeflowConfigV3(configValue());
+  return parseWakeflowConfig(configValue());
 }
 
 function sharedExecutionPlan(preview: unknown) {
@@ -390,7 +390,7 @@ test("placement-stable reconfigure updates derived memories before Config", asyn
 
   const changed = configValue();
   (changed.presentation as Record<string, unknown>).language = "zh-Hans";
-  const desired = parseWakeflowConfigV3(changed);
+  const desired = parseWakeflowConfig(changed);
   const reconfigureInput = request(desired, "reconfigure");
   const reconfigurePreview = await previewWakeflowStaticMaterialization(
     workspace.root,

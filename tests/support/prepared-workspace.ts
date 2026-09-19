@@ -17,7 +17,7 @@ import type {
 } from "../../src/foundation/filesystem/rooted-directory.js";
 
 /**
- * 共享预备工作区基线（plan §11：“共享一个 v3 基线 fixture 按需复制”）。
+ * 共享预备工作区基线（plan §11：“共享一个配置基线 fixture 按需复制”）。
  *
  * 同一测试进程里，同一个 key 的初始化链只跑一次，结果留在一个只作复制源的基线目录里；
  * 之后每个测试用 `fs.cp` 递归复制得到自己的隔离目录。副本仍是公共工具接受的真实文件系统

@@ -1,9 +1,9 @@
 import { types } from "node:util";
 
 import {
-  computeWakeflowConfigV3Digest,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
@@ -147,7 +147,7 @@ async function currentSnapshot(
 
 async function desiredPlacements(
   root: RootedDirectory,
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
 ): Promise<Readonly<WakeflowConfigRootPlacementReport> | null> {
   try {
     return await validateWakeflowConfigRootPlacements(root, model);
@@ -262,8 +262,8 @@ async function inspectLedgerParticipant(
 async function inspectSupportMemories(
   root: RootedDirectory,
   request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
-  current: WakeflowConfigV3Model | null,
-  desired: WakeflowConfigV3Model,
+  current: WakeflowConfigModel | null,
+  desired: WakeflowConfigModel,
   report: Readonly<WakeflowConfigRootPlacementReport>,
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
@@ -337,9 +337,9 @@ async function inspectSupportMemories(
       const inspected = await inspectWakeflowSupportMemory(root, supportRoot, {
         currentConfig: current,
         expectedCurrentConfigDigest:
-          current === null ? null : computeWakeflowConfigV3Digest(current),
+          current === null ? null : computeWakeflowConfigDigest(current),
         desiredConfig: desired,
-        expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desired),
+        expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
         profile: request.currentHostProfile,
         expectedCatalogDigest: catalog.catalogDigest,
         surfaceId: surface.surfaceId,
@@ -377,7 +377,7 @@ async function inspectSupportMemories(
 
 function planFreshActiveWorkspaceProjection(
   request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
-  desired: WakeflowConfigV3Model,
+  desired: WakeflowConfigModel,
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): void {
@@ -713,7 +713,7 @@ export async function previewWakeflowStaticMaterialization(
         currentConfig: current?.model ?? null,
         expectedCurrentConfigDigest: current?.configDigest ?? null,
         desiredConfig: desired,
-        expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desired),
+        expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
       if (program.status === "recompose-required") {
@@ -738,7 +738,7 @@ export async function previewWakeflowStaticMaterialization(
       }
     }
 
-    const desiredConfigDigest = computeWakeflowConfigV3Digest(desired);
+    const desiredConfigDigest = computeWakeflowConfigDigest(desired);
     const configChanged = current?.configDigest !== desiredConfigDigest;
     if (request.action !== "reconcile" && configChanged) {
       const prerequisiteSteps = steps.map((entry) => entry.stepId);
@@ -800,7 +800,7 @@ export async function previewWakeflowStaticMaterialization(
   );
   const currentConfigDigest = current?.configDigest ?? null;
   const desiredConfigDigest =
-    desired === null ? null : computeWakeflowConfigV3Digest(desired);
+    desired === null ? null : computeWakeflowConfigDigest(desired);
   assertNotAborted(request.signal);
   const plan = {
     kind: "WakeflowStaticMaterializationPreview" as const,

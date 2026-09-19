@@ -32,8 +32,8 @@ import {
   publishFreshWakeflowWindowRuntime,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 async function fixture(
   t: TestContext,
@@ -51,7 +51,7 @@ async function fixture(
   );
   await publishFreshWakeflowWindowRuntime(
     root,
-    createMinimalWakeflowConfigV3(),
+    createMinimalWakeflowConfig(),
     profile,
     { recoveringFreshPublication: false },
   );

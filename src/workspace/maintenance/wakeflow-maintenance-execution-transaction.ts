@@ -1,9 +1,9 @@
 import { types } from "node:util";
 
 import {
-  computeWakeflowConfigV3Digest,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
@@ -451,8 +451,8 @@ async function assertTerminalConfig(
 
 function desiredConfigForExecution(
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  sourceConfig: WakeflowConfigV3Model | null,
-): WakeflowConfigV3Model {
+  sourceConfig: WakeflowConfigModel | null,
+): WakeflowConfigModel {
   const config = request.action === "reconcile"
     ? sourceConfig
     : request.desiredConfig;
@@ -479,7 +479,7 @@ async function executeStep(
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
   requestValue: WakeflowStaticMaterializationPreviewRequest,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  sourceConfig: WakeflowConfigV3Model | null,
+  sourceConfig: WakeflowConfigModel | null,
   capability: Readonly<WakeflowHostMaintenanceCapability> | undefined,
   stepId: string,
   recoveringAffectedOperation: boolean,
@@ -561,7 +561,7 @@ async function advanceJournal(
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
   requestValue: WakeflowStaticMaterializationPreviewRequest,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  sourceConfig: WakeflowConfigV3Model | null,
+  sourceConfig: WakeflowConfigModel | null,
   capability: Readonly<WakeflowHostMaintenanceCapability> | undefined,
   recovery: boolean,
   signal: AbortSignal | undefined,
@@ -758,7 +758,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
     : request.desiredConfig;
   if (
     desiredConfig === null
-    || computeWakeflowConfigV3Digest(desiredConfig)
+    || computeWakeflowConfigDigest(desiredConfig)
       !== plan.sharedPreview.desiredConfigDigest
   ) {
     fail("source-config", "$config");
@@ -951,7 +951,7 @@ function assertRecoveryConfigState(
   journal: Readonly<WakeflowMaintenanceJournalSource> | null,
   current: Readonly<WakeflowConfigAuthoritySnapshot> | null,
   operationId: WakeflowMaintenanceOperationId,
-): WakeflowConfigV3Model | null {
+): WakeflowConfigModel | null {
   if (journal === null) {
     if (
       (current?.configDigest ?? null)

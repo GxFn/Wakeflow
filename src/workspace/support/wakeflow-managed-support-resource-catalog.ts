@@ -1,11 +1,11 @@
 import {
-  buildWakeflowConfigV3Indexes,
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
+  buildWakeflowConfigIndexes,
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
   type WakeflowManagedSupportSurface,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -85,11 +85,11 @@ function fail(
   throw new WakeflowManagedSupportResourceCatalogError(reason, path);
 }
 
-function parseConfig(value: unknown): WakeflowConfigV3Model {
+function parseConfig(value: unknown): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
 }
@@ -200,7 +200,7 @@ export function createWakeflowManagedSupportResourceCatalog(
 ): Readonly<WakeflowManagedSupportResourceCatalog> {
   const config = parseConfig(configValue);
   const profile = parseProfile(profileValue);
-  const indexes = buildWakeflowConfigV3Indexes(config);
+  const indexes = buildWakeflowConfigIndexes(config);
   const declarations: Readonly<WakeflowWorkspaceResourceDeclaration>[] = [];
   for (const surface of config.topology.supportSurfaces) {
     if (surface.ownership !== "wakeflow-managed") continue;
@@ -216,7 +216,7 @@ export function createWakeflowManagedSupportResourceCatalog(
     );
   }
   const sorted = Object.freeze([...declarations].sort(compareDeclarations));
-  const configDigest = computeWakeflowConfigV3Digest(config);
+  const configDigest = computeWakeflowConfigDigest(config);
   const catalogDigest = computeCanonicalJsonSha256Digest({
     kind: "WakeflowManagedSupportResourceCatalogDigestBasis",
     configDigest,

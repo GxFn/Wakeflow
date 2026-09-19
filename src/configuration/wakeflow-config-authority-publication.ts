@@ -31,15 +31,15 @@ import {
   WakeflowConfigRootPlacementError,
 } from "./wakeflow-config-root-placement.js";
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "./wakeflow-config-v3.js";
-import { renderWakeflowConfigV3 } from "./wakeflow-config-v3-document.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "./wakeflow-config.js";
+import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 
 /**
- * Wakeflow Configuration：严格 v3 Config 权威记录的仅限首次创建持久发布。
+ * Wakeflow Configuration：严格 Config 权威记录的仅限首次创建持久发布。
  *
  * 本模块只负责首次创建单个 Config 资源。它先准入无副作用的选项数据，验证 POSIX
  * 根目录所有者、严格模型、1 MiB 确定性字节和全部配置根目录位置，再复用 Foundation
@@ -78,7 +78,7 @@ const ERROR_MESSAGES = {
   "unsupported-platform": "Wakeflow config authority publication requires reliable local POSIX ownership semantics.",
   "root-scope": "Wakeflow config authority publication lost its workspace root scope.",
   "root-policy": "Wakeflow config authority publication requires a current-user workspace root.",
-  "config": "Wakeflow config authority publication requires one strict v3 model.",
+  "config": "Wakeflow config authority publication requires one strict model.",
   "capacity": "Wakeflow config authority publication exceeds its recoverable byte limit.",
   "placement": "Wakeflow config authority publication declares an unsafe root placement.",
   "target-exists": "Wakeflow config authority already exists.",
@@ -180,22 +180,22 @@ async function assertCurrentUserRoot(
   }
 }
 
-function parseModel(value: unknown): WakeflowConfigV3Model {
+function parseModel(value: unknown): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     fail("config", "$config");
   }
 }
 
-function renderModelBytes(model: WakeflowConfigV3Model): Uint8Array {
+function renderModelBytes(model: WakeflowConfigModel): Uint8Array {
   let bytes: Uint8Array;
   try {
-    bytes = encodeUtf8(renderWakeflowConfigV3(model), "$config");
+    bytes = encodeUtf8(renderWakeflowConfig(model), "$config");
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowConfigV3Error
+      error instanceof WakeflowConfigError
       || error instanceof Utf8Error
     ) {
       fail("config", "$config");
@@ -210,7 +210,7 @@ function renderModelBytes(model: WakeflowConfigV3Model): Uint8Array {
 
 async function assertPlacements(
   root: RootedDirectory,
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
 ): Promise<void> {
   try {
     await validateWakeflowConfigRootPlacements(root, model);
@@ -224,9 +224,9 @@ async function assertPlacements(
   }
 }
 
-function computeModelDigest(model: WakeflowConfigV3Model): Sha256Digest {
+function computeModelDigest(model: WakeflowConfigModel): Sha256Digest {
   try {
-    return computeWakeflowConfigV3Digest(model);
+    return computeWakeflowConfigDigest(model);
   } catch {
     fail("config", "$config");
   }
@@ -310,7 +310,7 @@ function assertReadback(
 }
 
 /**
- * 从严格 v3 模型持久创建此前不存在的 `wakeflow.config.json`。
+ * 从严格模型持久创建此前不存在的 `wakeflow.config.json`。
  *
  * 只有 Foundation 已同步文件与父目录，且 Config Snapshot 回读同一物理节点和语义
  * 权威事实后，函数才返回成功。任意现存目标一律拒绝；本入口不提供确保存在、替换

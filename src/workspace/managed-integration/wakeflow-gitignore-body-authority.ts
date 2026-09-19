@@ -1,7 +1,7 @@
 import {
   WAKEFLOW_ACTIVE_ROOT,
   WAKEFLOW_LOCAL_ROOT,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";

@@ -25,8 +25,8 @@ import {
   parseWakeflowWindowRuntimeUnregisteredProjectionDocument,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 async function fixture(t: TestContext) {
   const absolutePath = mkdtempSync(path.join(
@@ -65,7 +65,7 @@ async function expectPublicationError(
 
 test("Fresh Window Runtime publishes exact empty identity and unregistered projections", async (t) => {
   const value = await fixture(t);
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const created = await publishFreshWakeflowWindowRuntime(
     value.root,
     config,
@@ -119,7 +119,7 @@ test("Fresh Window Runtime publishes exact empty identity and unregistered proje
 
 test("Fresh Window Runtime recovery fills missing exact files and rejects foreign identity", async (t) => {
   const value = await fixture(t);
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   await publishFreshWakeflowWindowRuntime(
     value.root,
     config,

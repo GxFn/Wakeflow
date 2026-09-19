@@ -29,17 +29,17 @@ import {
   type WakeflowConfigRootPlacementReport,
 } from "./wakeflow-config-root-placement.js";
 import {
-  buildWakeflowConfigV3Indexes,
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Indexes,
-  type WakeflowConfigV3Model,
-} from "./wakeflow-config-v3.js";
-import { renderWakeflowConfigV3 } from "./wakeflow-config-v3-document.js";
+  buildWakeflowConfigIndexes,
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigIndexes,
+  type WakeflowConfigModel,
+} from "./wakeflow-config.js";
+import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 
 /**
- * Wakeflow Configuration：单次操作范围内的 v3 配置权威快照。
+ * Wakeflow Configuration：单次操作范围内的 配置权威快照。
  *
  * 本文件从调用方已经打开的 RootedDirectory 固定读取 `wakeflow.config.json`，绑定
  * 同一次稳定读取的节点、字节数和源摘要，再完成严格 UTF-8/JSON、公开 Schema、
@@ -66,8 +66,8 @@ interface WakeflowConfigAuthoritySource {
 export interface WakeflowConfigAuthoritySnapshot {
   readonly workspaceRoot: string;
   readonly source: Readonly<WakeflowConfigAuthoritySource>;
-  readonly model: WakeflowConfigV3Model;
-  readonly indexes: Readonly<WakeflowConfigV3Indexes>;
+  readonly model: WakeflowConfigModel;
+  readonly indexes: Readonly<WakeflowConfigIndexes>;
   readonly configDigest: Sha256Digest;
   readonly placements: Readonly<WakeflowConfigRootPlacementReport>;
   readonly ledgerRoot: string;
@@ -100,7 +100,7 @@ const ERROR_MESSAGES = {
   "encoding": "Wakeflow canonical config is not strict UTF-8 text.",
   "json": "Wakeflow canonical config is not valid JSON.",
   "representation": "Wakeflow canonical config does not use its deterministic domain representation.",
-  "config": "Wakeflow canonical config is not the strict public v3 authority.",
+  "config": "Wakeflow canonical config is not the strict public authority.",
   "placement": "Wakeflow canonical config declares unsafe root placements.",
   "aborted": "Wakeflow config authority snapshot loading was aborted.",
   "load-failure": "Wakeflow config authority snapshot failed closed.",
@@ -239,18 +239,18 @@ function assertSourcePolicy(node: Readonly<FileNodeSnapshot>): void {
   }
 }
 
-function parseConfigModel(value: unknown): WakeflowConfigV3Model {
+function parseConfigModel(value: unknown): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
 }
 
 async function validatePlacements(
   root: RootedDirectory,
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
 ): Promise<Readonly<WakeflowConfigRootPlacementReport>> {
   try {
     return await validateWakeflowConfigRootPlacements(root, model);
@@ -278,10 +278,10 @@ async function loadSnapshot(
   const read = await readConfigSource(root, options.signal);
   assertSourcePolicy(read.node);
   const model = parseConfigModel(read.value);
-  if (renderWakeflowConfigV3(model) !== read.text) {
+  if (renderWakeflowConfig(model) !== read.text) {
     fail("representation", "$document");
   }
-  const configDigest = computeWakeflowConfigV3Digest(model);
+  const configDigest = computeWakeflowConfigDigest(model);
   const placements = await validatePlacements(root, model);
   return Object.freeze({
     workspaceRoot: root.absolutePath,
@@ -292,14 +292,14 @@ async function loadSnapshot(
       digest: read.digest,
     }),
     model,
-    indexes: buildWakeflowConfigV3Indexes(model),
+    indexes: buildWakeflowConfigIndexes(model),
     configDigest,
     placements,
     ledgerRoot: requiredLedgerRoot(placements),
   });
 }
 
-/** 从已经打开的 Workspace 根目录读取并构造完整的 v3 配置权威快照。 */
+/** 从已经打开的 Workspace 根目录读取并构造完整的 配置权威快照。 */
 export async function readWakeflowConfigAuthoritySnapshot(
   root: RootedDirectory,
   options?: WakeflowConfigAuthoritySnapshotOptions,

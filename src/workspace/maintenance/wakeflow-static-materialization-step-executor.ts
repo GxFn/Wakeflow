@@ -1,11 +1,11 @@
 import { types } from "node:util";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   publishWakeflowConfigAuthority,
   WakeflowConfigAuthorityPublicationError,
@@ -128,7 +128,7 @@ import {
  */
 
 export interface WakeflowStaticMaterializationStepExecutionOptions {
-  readonly sourceConfig: WakeflowConfigV3Model | null;
+  readonly sourceConfig: WakeflowConfigModel | null;
   readonly recoveringAffectedStep: boolean;
   readonly signal?: AbortSignal;
 }
@@ -192,7 +192,7 @@ function fail(
 }
 
 interface ParsedStepExecutionOptions {
-  readonly sourceConfig: WakeflowConfigV3Model | null;
+  readonly sourceConfig: WakeflowConfigModel | null;
   readonly recoveringAffectedStep: boolean;
   readonly signal: AbortSignal | undefined;
 }
@@ -225,14 +225,14 @@ function parseExecutionOptions(
   ) {
     fail("input", "$options");
   }
-  let sourceConfig: WakeflowConfigV3Model | null;
+  let sourceConfig: WakeflowConfigModel | null;
   if (record.sourceConfig === null) {
     sourceConfig = null;
   } else {
     try {
-      sourceConfig = parseWakeflowConfigV3(record.sourceConfig);
+      sourceConfig = parseWakeflowConfig(record.sourceConfig);
     } catch (error: unknown) {
-      if (error instanceof WakeflowConfigV3Error) {
+      if (error instanceof WakeflowConfigError) {
         fail("source-config", "$options.sourceConfig");
       }
       throw error;
@@ -265,8 +265,8 @@ function receipt(
 
 function desiredConfig(
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  sourceConfig: WakeflowConfigV3Model | null,
-): WakeflowConfigV3Model {
+  sourceConfig: WakeflowConfigModel | null,
+): WakeflowConfigModel {
   const desired =
     request.action === "reconcile" ? sourceConfig : request.desiredConfig;
   if (desired === null) fail("source-config", "$options.sourceConfig");
@@ -478,7 +478,7 @@ async function executeRequirementBoardInitialization(
 async function executeActiveWorkspaceProjection(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  desired: WakeflowConfigV3Model,
+  desired: WakeflowConfigModel,
   recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
@@ -513,7 +513,7 @@ async function executeLedgerLayout(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  desired: WakeflowConfigV3Model,
+  desired: WakeflowConfigModel,
   recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
@@ -622,7 +622,7 @@ async function executeUnregisteredWindowRuntime(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  desired: WakeflowConfigV3Model,
+  desired: WakeflowConfigModel,
   recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
@@ -713,7 +713,7 @@ async function executeSupportRoot(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  desired: WakeflowConfigV3Model,
+  desired: WakeflowConfigModel,
   recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
@@ -729,7 +729,7 @@ async function executeSupportRoot(
   try {
     const result = await materializeWakeflowManagedSupportRoot(root, {
       config: desired,
-      expectedConfigDigest: computeWakeflowConfigV3Digest(desired),
+      expectedConfigDigest: computeWakeflowConfigDigest(desired),
       profile: request.currentHostProfile,
       expectedCatalogDigest: catalog.catalogDigest,
       surfaceId: step.targetKey,
@@ -800,8 +800,8 @@ async function executeProgramInstruction(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  sourceConfig: WakeflowConfigV3Model | null,
-  desired: WakeflowConfigV3Model,
+  sourceConfig: WakeflowConfigModel | null,
+  desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ) {
   const authority = createWakeflowProgramInstructionBodyAuthority(
@@ -823,9 +823,9 @@ async function executeProgramInstruction(
         expectedCurrentConfigDigest:
           sourceConfig === null
             ? null
-            : computeWakeflowConfigV3Digest(sourceConfig),
+            : computeWakeflowConfigDigest(sourceConfig),
         desiredConfig: desired,
-        expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desired),
+        expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
       },
       signal === undefined ? undefined : { signal },
     );
@@ -849,8 +849,8 @@ async function executeSupportMemory(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  sourceConfig: WakeflowConfigV3Model | null,
-  desired: WakeflowConfigV3Model,
+  sourceConfig: WakeflowConfigModel | null,
+  desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ) {
   const separator = step.targetKey.lastIndexOf(":");
@@ -905,9 +905,9 @@ async function executeSupportMemory(
         expectedCurrentConfigDigest:
           sourceConfig === null
             ? null
-            : computeWakeflowConfigV3Digest(sourceConfig),
+            : computeWakeflowConfigDigest(sourceConfig),
         desiredConfig: desired,
-        expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desired),
+        expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
         profile: request.currentHostProfile,
         expectedCatalogDigest: catalog.catalogDigest,
         surfaceId,
@@ -949,10 +949,10 @@ async function executeConfig(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
   preview: ReturnType<typeof parseWakeflowStaticMaterializationPreview>,
-  desired: WakeflowConfigV3Model,
+  desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ) {
-  const desiredDigest = computeWakeflowConfigV3Digest(desired);
+  const desiredDigest = computeWakeflowConfigDigest(desired);
   assertStepTarget(step, desiredDigest);
   const current = await optionalConfigSnapshot(root, signal);
   if (current?.configDigest === desiredDigest) {
@@ -1070,11 +1070,11 @@ export async function executeWakeflowStaticMaterializationStep(
     fail("plan", "$preview");
   }
   const desired = desiredConfig(request, sourceConfig);
-  if (preview.desiredConfigDigest !== computeWakeflowConfigV3Digest(desired)) {
+  if (preview.desiredConfigDigest !== computeWakeflowConfigDigest(desired)) {
     fail("plan", "$preview.desiredConfigDigest");
   }
   const sourceDigest =
-    sourceConfig === null ? null : computeWakeflowConfigV3Digest(sourceConfig);
+    sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig);
   if (
     step.kind !== "publish-config" &&
     sourceDigest !== preview.currentConfigDigest

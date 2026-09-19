@@ -1,12 +1,12 @@
 import {
-  buildWakeflowConfigV3Indexes,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
+  buildWakeflowConfigIndexes,
+  parseWakeflowConfig,
+  WakeflowConfigError,
   type WakeflowConfigPlacement,
-  type WakeflowConfigV3Model,
-  type WakeflowConfigV3Indexes,
+  type WakeflowConfigModel,
+  type WakeflowConfigIndexes,
   type WakeflowConfigWindow,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -116,8 +116,8 @@ function compareWindowId(
 }
 
 function desiredWindow(
-  model: WakeflowConfigV3Model,
-  indexes: Readonly<WakeflowConfigV3Indexes>,
+  model: WakeflowConfigModel,
+  indexes: Readonly<WakeflowConfigIndexes>,
   window: Readonly<WakeflowConfigWindow>,
 ): Readonly<WakeflowWindowRuntimeDesiredWindow> {
   let logicalRoot: WakeflowWindowRuntimeLogicalRoot;
@@ -169,11 +169,11 @@ export function compileWakeflowWindowRuntimeDesiredTopology(
   configValue: unknown,
   profileValue: unknown,
 ): Readonly<WakeflowWindowRuntimeDesiredTopology> {
-  let model: WakeflowConfigV3Model;
+  let model: WakeflowConfigModel;
   try {
-    model = parseWakeflowConfigV3(configValue);
+    model = parseWakeflowConfig(configValue);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
   let profile;
@@ -190,7 +190,7 @@ export function compileWakeflowWindowRuntimeDesiredTopology(
   ) {
     fail("capacity", "$/topology/windows");
   }
-  const indexes = buildWakeflowConfigV3Indexes(model);
+  const indexes = buildWakeflowConfigIndexes(model);
   const windows = Object.freeze(
     [...model.topology.windows]
       .sort(compareWindowId)

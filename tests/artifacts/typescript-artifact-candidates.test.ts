@@ -56,7 +56,7 @@ import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/requirement/contract.js";
-import { renderWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3-document.js";
+import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import {
   WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
   WAKEFLOW_HOOK_OBSERVER_MARKER,
@@ -70,7 +70,7 @@ import {
   renderCodexHooksJson,
 } from "../../src/hosts/codex/codex-hook-fragment.js";
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
-import { createMinimalWakeflowConfigV3 } from "../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 
 const OUTPUT_RELATIVE = ".build/test-artifacts/typescript-candidates";
 const HOOK_OBSERVER_LAUNCHER = "hooks/observe.mjs";
@@ -211,7 +211,7 @@ function workspaceFixture(t: TestContext): string {
   mkdirSync(path.join(workspace, "Test"), { recursive: true });
   writeFileSync(
     path.join(workspace, "wakeflow.config.json"),
-    renderWakeflowConfigV3(createMinimalWakeflowConfigV3()),
+    renderWakeflowConfig(createMinimalWakeflowConfig()),
     { mode: 0o644 },
   );
   return workspace;

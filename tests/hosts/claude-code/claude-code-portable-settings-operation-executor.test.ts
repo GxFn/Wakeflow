@@ -41,8 +41,8 @@ import {
   planClaudeCodePortableSettingsTransition,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 async function fixture(t: TestContext) {
   const absolutePath = mkdtempSync(path.join(
@@ -58,7 +58,7 @@ async function fixture(t: TestContext) {
 }
 
 function config() {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
   const repositories = (value.topology as {
     repositories: Record<string, unknown>[];

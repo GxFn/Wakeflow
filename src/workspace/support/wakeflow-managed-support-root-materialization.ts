@@ -1,11 +1,11 @@
 import { types } from "node:util";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
@@ -119,7 +119,7 @@ export class WakeflowManagedSupportRootMaterializationError extends Error {
 }
 
 interface ParsedRequest {
-  readonly config: WakeflowConfigV3Model;
+  readonly config: WakeflowConfigModel;
   readonly configDigest: Sha256Digest;
   readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly catalogDigest: Sha256Digest;
@@ -176,18 +176,18 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   ) {
     fail("input", "$request");
   }
-  let config: WakeflowConfigV3Model;
+  let config: WakeflowConfigModel;
   try {
-    config = parseWakeflowConfigV3(record.config);
+    config = parseWakeflowConfig(record.config);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
   const configDigest = parseDigest(
     record.expectedConfigDigest,
     "$request.expectedConfigDigest",
   );
-  if (computeWakeflowConfigV3Digest(config) !== configDigest) {
+  if (computeWakeflowConfigDigest(config) !== configDigest) {
     fail("config", "$request.expectedConfigDigest");
   }
   let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;

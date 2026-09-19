@@ -9,7 +9,7 @@ import {
 import type {
   WakeflowConfigPod,
   WakeflowConfigWindow,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";

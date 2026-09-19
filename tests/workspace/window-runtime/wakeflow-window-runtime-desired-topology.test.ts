@@ -2,8 +2,8 @@ import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import {
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
@@ -14,11 +14,11 @@ import {
   compileWakeflowWindowRuntimeDesiredTopology,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-desired-topology.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 function config() {
-  return parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
+  return parseWakeflowConfig(createMinimalWakeflowConfig());
 }
 
 test("Window Runtime desired topology compiles only stable logical facts", () => {
@@ -57,13 +57,13 @@ test("Window Runtime desired topology compiles only stable logical facts", () =>
 });
 
 test("desired topology ignores presentation and display text but tracks placement and host", () => {
-  const baselineValue = createMinimalWakeflowConfigV3();
+  const baselineValue = createMinimalWakeflowConfig();
   const baseline = compileWakeflowWindowRuntimeDesiredTopology(
     baselineValue,
     codexWorkspaceHostResourceProfile,
   );
 
-  const presentationChanged = createMinimalWakeflowConfigV3();
+  const presentationChanged = createMinimalWakeflowConfig();
   (presentationChanged.presentation as Record<string, unknown>).language =
     "zh-Hans";
   const windows = (presentationChanged.topology as {
@@ -78,7 +78,7 @@ test("desired topology ignores presentation and display text but tracks placemen
   );
   equal(textChanged.desiredTopologyDigest, baseline.desiredTopologyDigest);
 
-  const placementChanged = createMinimalWakeflowConfigV3();
+  const placementChanged = createMinimalWakeflowConfig();
   const surfaces = (placementChanged.topology as {
     supportSurfaces: Record<string, unknown>[];
   }).supportSurfaces;

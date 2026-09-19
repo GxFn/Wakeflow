@@ -14,11 +14,11 @@ import {
   WAKEFLOW_ACTIVE_ROOT,
   WAKEFLOW_LOCAL_ROOT,
   type WakeflowConfigPlacement,
-  type WakeflowConfigV3Model,
-} from "./wakeflow-config-v3.js";
+  type WakeflowConfigModel,
+} from "./wakeflow-config.js";
 
 /**
- * Wakeflow Configuration：v3 配置声明根目录的词法与物理位置准入。
+ * Wakeflow Configuration：配置声明根目录的词法与物理位置准入。
  *
  * 本模块把固定的 Active、Local 根目录与配置中的 Ledger、Support、Repository 根目录
  * 编译成一组绝对路径。它先按可移植NFC/case-fold比较拒绝词法重叠，再复用
@@ -112,13 +112,13 @@ function portableComparisonPath(value: string): string {
 }
 
 function asPlacement(value: string): WakeflowConfigPlacement {
-  // 固定协议根由本模块常量提供；配置字段已由 WakeflowConfigV3Model parser 授予品牌。
+  // 固定协议根由本模块常量提供；配置字段已由 WakeflowConfigModel parser 授予品牌。
   return value as WakeflowConfigPlacement;
 }
 
 function planRoots(
   workspaceRoot: string,
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
 ): readonly Readonly<PlannedRoot>[] {
   const values = [
     { key: "active.root", configuredPath: asPlacement(WAKEFLOW_ACTIVE_ROOT) },
@@ -209,7 +209,7 @@ async function assertCurrentRoot(root: RootedDirectory): Promise<void> {
 /** 验证配置声明根目录的确定性词法拓扑和当前物理位置。 */
 export async function validateWakeflowConfigRootPlacements(
   root: RootedDirectory,
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
 ): Promise<Readonly<WakeflowConfigRootPlacementReport>> {
   assertRoot(root);
   await assertCurrentRoot(root);

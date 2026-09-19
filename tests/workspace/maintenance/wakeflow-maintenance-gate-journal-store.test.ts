@@ -14,9 +14,9 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import {
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
@@ -76,14 +76,14 @@ import {
   inspectWakeflowWorkspaceCoreLayout,
 } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 const UUID = "11111111-1111-4111-8111-111111111111";
 const OPERATION_ID = `maintenance_operation_${UUID}`;
 const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
-const DESIRED_CONFIG = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
-const DESIRED_CONFIG_DIGEST = computeWakeflowConfigV3Digest(DESIRED_CONFIG);
+const DESIRED_CONFIG = parseWakeflowConfig(createMinimalWakeflowConfig());
+const DESIRED_CONFIG_DIGEST = computeWakeflowConfigDigest(DESIRED_CONFIG);
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostResourceProfile,

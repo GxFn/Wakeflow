@@ -12,9 +12,9 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   codexWorkspaceHostResourceProfile,
@@ -28,8 +28,8 @@ import {
   type WakeflowManagedSupportRootMaterializationErrorReason,
 } from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 
@@ -49,14 +49,14 @@ async function fixture(t: TestContext) {
 }
 
 function request(configValue: unknown) {
-  const config = parseWakeflowConfigV3(configValue);
+  const config = parseWakeflowConfig(configValue);
   const catalog = createWakeflowManagedSupportResourceCatalog(
     config,
     codexWorkspaceHostResourceProfile,
   );
   return Object.freeze({
     config,
-    expectedConfigDigest: computeWakeflowConfigV3Digest(config),
+    expectedConfigDigest: computeWakeflowConfigDigest(config),
     profile: codexWorkspaceHostResourceProfile,
     expectedCatalogDigest: catalog.catalogDigest,
     surfaceId: DESIGN_ID,
@@ -84,7 +84,7 @@ async function expectRootError(
 
 test("managed Support root materializes child and sibling Config placements", async (t) => {
   const childFixture = await fixture(t);
-  const childConfig = createMinimalWakeflowConfigV3();
+  const childConfig = createMinimalWakeflowConfig();
   const created = await materializeWakeflowManagedSupportRoot(
     childFixture.root,
     request(childConfig),
@@ -98,7 +98,7 @@ test("managed Support root materializes child and sibling Config placements", as
   equal(current.disposition, "existing");
 
   const siblingFixture = await fixture(t);
-  const siblingConfig = createMinimalWakeflowConfigV3();
+  const siblingConfig = createMinimalWakeflowConfig();
   const surfaces = (siblingConfig.topology as {
     supportSurfaces: Record<string, unknown>[];
   }).supportSurfaces;
@@ -115,14 +115,14 @@ test("managed Support root materializes child and sibling Config placements", as
 
 test("managed Support root rejects external ownership and existing mode drift", async (t) => {
   const externalFixture = await fixture(t);
-  const external = createMinimalWakeflowConfigV3();
+  const external = createMinimalWakeflowConfig();
   const externalSurface = (external.topology as {
     supportSurfaces: Record<string, unknown>[];
   }).supportSurfaces[0];
   if (externalSurface === undefined) throw new Error("Expected surface.");
   externalSurface.ownership = "external-owned";
   externalSurface.instructionManagement = "managed-block";
-  const externalModel = parseWakeflowConfigV3(external);
+  const externalModel = parseWakeflowConfig(external);
   const emptyCatalog = createWakeflowManagedSupportResourceCatalog(
     externalModel,
     codexWorkspaceHostResourceProfile,
@@ -130,7 +130,7 @@ test("managed Support root rejects external ownership and existing mode drift", 
   await expectRootError(
     () => materializeWakeflowManagedSupportRoot(externalFixture.root, {
       config: externalModel,
-      expectedConfigDigest: computeWakeflowConfigV3Digest(externalModel),
+      expectedConfigDigest: computeWakeflowConfigDigest(externalModel),
       profile: codexWorkspaceHostResourceProfile,
       expectedCatalogDigest: emptyCatalog.catalogDigest,
       surfaceId: DESIGN_ID,
@@ -145,7 +145,7 @@ test("managed Support root rejects external ownership and existing mode drift", 
   await expectRootError(
     () => materializeWakeflowManagedSupportRoot(
       driftFixture.root,
-      request(createMinimalWakeflowConfigV3()),
+      request(createMinimalWakeflowConfig()),
     ),
     "root-policy",
     "$root",

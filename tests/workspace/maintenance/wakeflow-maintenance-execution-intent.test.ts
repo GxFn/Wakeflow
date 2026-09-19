@@ -2,9 +2,9 @@ import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import {
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
@@ -39,8 +39,8 @@ import {
   createWakeflowWorkspaceStaticResourceMatrix,
 } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 const OPERATION_ID =
   "maintenance_operation_11111111-1111-4111-8111-111111111111";
@@ -50,8 +50,8 @@ const PROFILES = Object.freeze([
 ]);
 
 function fixture() {
-  const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
-  const desiredDigest = computeWakeflowConfigV3Digest(config);
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
+  const desiredDigest = computeWakeflowConfigDigest(config);
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(
     codexWorkspaceHostResourceProfile,
   );
@@ -117,10 +117,10 @@ test("compact intent reconstructs the exact plan and request after restart", () 
   const recoveredRequest = reconstructed.request;
   equal(recoveredRequest.action, "fresh-initialize");
   equal(
-    computeWakeflowConfigV3Digest(
-      parseWakeflowConfigV3(recoveredRequest.desiredConfig),
+    computeWakeflowConfigDigest(
+      parseWakeflowConfig(recoveredRequest.desiredConfig),
     ),
-    computeWakeflowConfigV3Digest(value.config),
+    computeWakeflowConfigDigest(value.config),
   );
 
   const text = renderWakeflowMaintenanceExecutionIntent(intent);
@@ -205,7 +205,7 @@ test("intent persistence budget rejects an oversized host payload", () => {
       ownerId: "example-owner",
       targetKey: "example.target",
       sourceDigest: null,
-      targetDigest: computeWakeflowConfigV3Digest(value.config),
+      targetDigest: computeWakeflowConfigDigest(value.config),
       payload: { value: "x".repeat(2 * 1024 * 1024) },
     }],
   });

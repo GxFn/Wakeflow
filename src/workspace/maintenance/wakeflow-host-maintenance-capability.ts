@@ -1,6 +1,6 @@
 import { types } from "node:util";
 
-import type { WakeflowConfigV3Model } from "../../configuration/wakeflow-config-v3.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parsePlainRecord,
@@ -29,13 +29,13 @@ import type {
 
 export interface PlanWakeflowHostMaintenanceContributionRequest {
   readonly action: WakeflowStaticMaterializationAction;
-  readonly config: WakeflowConfigV3Model;
+  readonly config: WakeflowConfigModel;
   readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly signal?: AbortSignal;
 }
 
 export interface ExecuteWakeflowHostMaintenanceOperationRequest {
-  readonly config: WakeflowConfigV3Model;
+  readonly config: WakeflowConfigModel;
   readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly operation: Readonly<WakeflowHostMaintenanceOperation>;
   readonly recoveringAffectedOperation: boolean;

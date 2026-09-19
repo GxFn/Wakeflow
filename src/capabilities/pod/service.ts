@@ -9,13 +9,13 @@ import {
   replaceWakeflowConfigAuthority,
   WakeflowConfigAuthorityReplacementError,
 } from "../../configuration/wakeflow-config-authority-replacement.js";
-import { createWakeflowConfigV3DocumentValue } from "../../configuration/wakeflow-config-v3-document.js";
+import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-config-document.js";
 import {
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
+  parseWakeflowConfig,
+  WakeflowConfigError,
   type WakeflowConfigPod,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -439,14 +439,14 @@ function mapReplacementError(error: unknown): never {
     }
     fail("precondition-failed", `config-${error.reason}`, "$request.root", { cause: error });
   }
-  if (error instanceof WakeflowConfigV3Error) {
+  if (error instanceof WakeflowConfigError) {
     fail("precondition-failed", `config-${error.reason}`, "$request.root", { cause: error });
   }
   throw error;
 }
 
-function documentOf(model: WakeflowConfigV3Model): JsonObject {
-  const value = createWakeflowConfigV3DocumentValue(model);
+function documentOf(model: WakeflowConfigModel): JsonObject {
+  const value = createWakeflowConfigDocumentValue(model);
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail("unexpected", "config-document", "$config");
   }
@@ -455,7 +455,7 @@ function documentOf(model: WakeflowConfigV3Model): JsonObject {
 
 async function replaceConfig(context: PodSliceContext, desired: JsonValue): Promise<void> {
   try {
-    const model = parseWakeflowConfigV3(desired);
+    const model = parseWakeflowConfig(desired);
     await replaceWakeflowConfigAuthority(
       context.root,
       model,

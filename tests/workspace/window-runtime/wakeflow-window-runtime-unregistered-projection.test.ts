@@ -20,8 +20,8 @@ import {
   compileWakeflowFreshWindowRuntimeAuthority,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-authority.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 function expectRecordError(
   action: () => unknown,
@@ -43,7 +43,7 @@ function expectRecordError(
 }
 
 test("fresh Window Runtime projections are deterministic and explicitly unregistered", () => {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const left = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
     config,
     codexWorkspaceHostResourceProfile,
@@ -114,12 +114,12 @@ test("fresh Window Runtime projections are deterministic and explicitly unregist
 });
 
 test("projection set changes only with runtime topology or current host", () => {
-  const baselineValue = createMinimalWakeflowConfigV3();
+  const baselineValue = createMinimalWakeflowConfig();
   const baseline = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
     baselineValue,
     codexWorkspaceHostResourceProfile,
   );
-  const textChanged = createMinimalWakeflowConfigV3();
+  const textChanged = createMinimalWakeflowConfig();
   (textChanged.presentation as Record<string, unknown>).language = "zh-Hans";
   const windows = (textChanged.topology as {
     windows: Record<string, unknown>[];
@@ -133,7 +133,7 @@ test("projection set changes only with runtime topology or current host", () => 
   );
   equal(sameRuntime.projectionSetDigest, baseline.projectionSetDigest);
 
-  const movedValue = createMinimalWakeflowConfigV3();
+  const movedValue = createMinimalWakeflowConfig();
   const surfaces = (movedValue.topology as {
     supportSurfaces: Record<string, unknown>[];
   }).supportSurfaces;
@@ -159,7 +159,7 @@ test("projection set changes only with runtime topology or current host", () => 
 
 test("persisted unregistered projection rejects relation, digest, and representation drift", () => {
   const set = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
-    createMinimalWakeflowConfigV3(),
+    createMinimalWakeflowConfig(),
     codexWorkspaceHostResourceProfile,
   );
   const entry = set.entries[0];

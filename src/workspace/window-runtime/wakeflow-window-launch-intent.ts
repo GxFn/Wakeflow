@@ -1,14 +1,14 @@
 import {
-  buildWakeflowConfigV3Indexes,
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
+  buildWakeflowConfigIndexes,
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
   type WakeflowConfigPlacement,
   type WakeflowConfigPod,
-  type WakeflowConfigV3Model,
-  type WakeflowConfigV3Indexes,
+  type WakeflowConfigModel,
+  type WakeflowConfigIndexes,
   type WakeflowConfigWindow,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -140,11 +140,11 @@ function fail(
   throw new WakeflowWindowLaunchIntentError(reason, path);
 }
 
-function parseConfig(value: unknown): WakeflowConfigV3Model {
+function parseConfig(value: unknown): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
 }
@@ -163,8 +163,8 @@ function parseProfile(
 }
 
 function rootForWindow(
-  model: WakeflowConfigV3Model,
-  indexes: Readonly<WakeflowConfigV3Indexes>,
+  model: WakeflowConfigModel,
+  indexes: Readonly<WakeflowConfigIndexes>,
   window: WakeflowConfigWindow,
 ): WakeflowWindowLaunchRoot {
   if (window.root.kind === "program") {
@@ -219,11 +219,11 @@ function attachedWorktreesForWindow(
 }
 
 function createIntent(
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   configDigest: Sha256Digest,
   profileDigest: Sha256Digest,
-  indexes: Readonly<WakeflowConfigV3Indexes>,
+  indexes: Readonly<WakeflowConfigIndexes>,
   window: WakeflowConfigWindow,
 ): Readonly<WakeflowWindowLaunchIntent> {
   const pod = indexes.podById[window.podId];
@@ -274,8 +274,8 @@ export function compileWakeflowWindowLaunchIntents(
   ) {
     fail("capacity", "$/topology/windows");
   }
-  const indexes = buildWakeflowConfigV3Indexes(model);
-  const configDigest = computeWakeflowConfigV3Digest(model);
+  const indexes = buildWakeflowConfigIndexes(model);
+  const configDigest = computeWakeflowConfigDigest(model);
   const profileDigest = computeCanonicalJsonSha256Digest(profile);
   const intents = Object.freeze([...model.topology.windows]
     .sort((left, right) => (

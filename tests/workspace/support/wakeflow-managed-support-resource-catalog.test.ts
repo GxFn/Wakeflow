@@ -12,8 +12,8 @@ import {
   WakeflowManagedSupportResourceCatalogError,
 } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -39,7 +39,7 @@ function summary(catalog: ReturnType<
 }
 
 test("managed Support catalog binds two topology surfaces to the current host", () => {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const codex = createWakeflowManagedSupportResourceCatalog(
     config,
     codexWorkspaceHostResourceProfile,
@@ -131,7 +131,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
 });
 
 test("managed Support catalog excludes every external-owned surface", () => {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const surfaces = (config.topology as {
     supportSurfaces: Record<string, unknown>[];
   }).supportSurfaces;
@@ -149,7 +149,7 @@ test("managed Support catalog excludes every external-owned surface", () => {
   assertDeepFrozen(catalog);
 
   let trapCalls = 0;
-  const proxy = new Proxy(createMinimalWakeflowConfigV3(), {
+  const proxy = new Proxy(createMinimalWakeflowConfig(), {
     ownKeys: () => {
       trapCalls += 1;
       return [];

@@ -15,9 +15,9 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
@@ -49,8 +49,8 @@ import {
   recoverWakeflowSupportMemory,
 } from "../../../src/workspace/support/wakeflow-support-memory-recovery.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 
@@ -69,7 +69,7 @@ async function fixture(t: TestContext) {
   );
   await materializeWakeflowManagedSupportRoot(workspaceRoot, {
     config: desired,
-    expectedConfigDigest: computeWakeflowConfigV3Digest(desired),
+    expectedConfigDigest: computeWakeflowConfigDigest(desired),
     profile: codexWorkspaceHostResourceProfile,
     expectedCatalogDigest: catalog.catalogDigest,
     surfaceId: DESIGN_ID,
@@ -91,9 +91,9 @@ async function fixture(t: TestContext) {
 }
 
 function config(language: "en" | "zh-Hans") {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.presentation as Record<string, unknown>).language = language;
-  return parseWakeflowConfigV3(value);
+  return parseWakeflowConfig(value);
 }
 
 function request(
@@ -108,9 +108,9 @@ function request(
     currentConfig,
     expectedCurrentConfigDigest: currentConfig === null
       ? null
-      : computeWakeflowConfigV3Digest(currentConfig),
+      : computeWakeflowConfigDigest(currentConfig),
     desiredConfig,
-    expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desiredConfig),
+    expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
     profile: codexWorkspaceHostResourceProfile,
     expectedCatalogDigest: catalog.catalogDigest,
     surfaceId: DESIGN_ID,

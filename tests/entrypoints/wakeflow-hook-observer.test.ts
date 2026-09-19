@@ -15,7 +15,7 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { renderWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3-document.js";
+import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import {
   type HookObserverCode,
   type HookObserverOutcome,
@@ -39,7 +39,7 @@ import {
 } from "../../src/kernel/hook-observations.js";
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
 import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
-import { createMinimalWakeflowConfigV3 } from "../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 
 /**
  * hook 观察脚本（gate-log §13.97 D1–D4、D9）：进程内经 `runWakeflowHookObserver` 覆盖定位、映射、
@@ -102,7 +102,7 @@ function createWorkspace(base: string, name: string): string {
   mkdirSync(path.join(workspace, "Test"), { recursive: true });
   writeFileSync(
     path.join(workspace, "wakeflow.config.json"),
-    renderWakeflowConfigV3(createMinimalWakeflowConfigV3()),
+    renderWakeflowConfig(createMinimalWakeflowConfig()),
     { mode: 0o644 },
   );
   return workspace;

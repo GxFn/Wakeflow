@@ -1,13 +1,13 @@
 import {
-  buildWakeflowConfigV3Indexes,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
+  buildWakeflowConfigIndexes,
+  parseWakeflowConfig,
+  WakeflowConfigError,
   WAKEFLOW_ACTIVE_ROOT,
   WAKEFLOW_LOCAL_ROOT,
   WAKEFLOW_PRESENTATION_LANGUAGES,
-  type WakeflowConfigV3Model,
+  type WakeflowConfigModel,
   type WakeflowPresentationLanguage,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -135,11 +135,11 @@ function fail(
   throw new WakeflowProgramInstructionBodyAuthorityError(reason, path);
 }
 
-function parseConfig(value: unknown): WakeflowConfigV3Model {
+function parseConfig(value: unknown): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) {
+    if (error instanceof WakeflowConfigError) {
       fail("config", error.path);
     }
     throw error;
@@ -171,7 +171,7 @@ function markdownDataLiteral(value: string, path: string): string {
 }
 
 function englishBody(
-  config: WakeflowConfigV3Model,
+  config: WakeflowConfigModel,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   controllerWindowId: WakeflowDurableId<"window">,
 ): string {
@@ -217,7 +217,7 @@ function englishBody(
 }
 
 function simplifiedChineseBody(
-  config: WakeflowConfigV3Model,
+  config: WakeflowConfigModel,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   controllerWindowId: WakeflowDurableId<"window">,
 ): string {
@@ -263,7 +263,7 @@ function simplifiedChineseBody(
 }
 
 function renderBody(
-  config: WakeflowConfigV3Model,
+  config: WakeflowConfigModel,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   controllerWindowId: WakeflowDurableId<"window">,
 ): string {
@@ -312,7 +312,7 @@ export function createWakeflowProgramInstructionBodyAuthority(
 ): Readonly<WakeflowProgramInstructionBodyAuthority> {
   const config = parseConfig(configValue);
   const profile = parseProfile(profileValue);
-  const controllerWindowId = buildWakeflowConfigV3Indexes(config)
+  const controllerWindowId = buildWakeflowConfigIndexes(config)
     .controllerWindow.windowId;
   const body = renderBody(config, profile, controllerWindowId);
   let bodyDigest: Sha256Digest;

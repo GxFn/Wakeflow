@@ -1,7 +1,7 @@
 import {
   parseWakeflowConfigPlacement,
-  WakeflowConfigV3Error,
-} from "../../configuration/wakeflow-config-v3.js";
+  WakeflowConfigError,
+} from "../../configuration/wakeflow-config.js";
 import {
   WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA,
   type WakeflowWindowRuntimeUnregisteredProjection as WindowRuntimeProjectionWire,
@@ -258,7 +258,7 @@ function configuredPlacement(
   try {
     return parseWakeflowConfigPlacement(value, "$/configuredPlacement");
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) {
+    if (error instanceof WakeflowConfigError) {
       failRecord("placement", "$/configuredPlacement");
     }
     throw error;

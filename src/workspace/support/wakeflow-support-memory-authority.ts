@@ -1,13 +1,13 @@
 import {
-  buildWakeflowConfigV3Indexes,
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
+  buildWakeflowConfigIndexes,
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
   WAKEFLOW_PRESENTATION_LANGUAGES,
-  type WakeflowConfigV3Model,
+  type WakeflowConfigModel,
   type WakeflowManagedSupportSurface,
   type WakeflowPresentationLanguage,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -125,11 +125,11 @@ function fail(
   throw new WakeflowSupportMemoryAuthorityError(reason, path);
 }
 
-function parseConfig(value: unknown): WakeflowConfigV3Model {
+function parseConfig(value: unknown): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
 }
@@ -176,7 +176,7 @@ function optionalDescription(
 }
 
 function englishBody(
-  config: WakeflowConfigV3Model,
+  config: WakeflowConfigModel,
   surface: WakeflowManagedSupportSurface,
   windowId: WakeflowDurableId<"window">,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
@@ -231,7 +231,7 @@ function englishBody(
 }
 
 function simplifiedChineseBody(
-  config: WakeflowConfigV3Model,
+  config: WakeflowConfigModel,
   surface: WakeflowManagedSupportSurface,
   windowId: WakeflowDurableId<"window">,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
@@ -347,7 +347,7 @@ export function createWakeflowSupportMemoryAuthority(
   const config = parseConfig(configValue);
   const profile = parseProfile(profileValue);
   const surfaceId = parseSurfaceId(surfaceIdValue);
-  const indexes = buildWakeflowConfigV3Indexes(config);
+  const indexes = buildWakeflowConfigIndexes(config);
   const surface = indexes.surfaceById[surfaceId];
   if (surface === undefined || surface.ownership !== "wakeflow-managed") {
     fail("surface", "$surfaceId");
@@ -370,7 +370,7 @@ export function createWakeflowSupportMemoryAuthority(
     if (error instanceof Utf8Error) fail("text", error.path);
     throw error;
   }
-  const configDigest = computeWakeflowConfigV3Digest(config);
+  const configDigest = computeWakeflowConfigDigest(config);
   const role = surface.capability;
   const authorityDigest = computeCanonicalJsonSha256Digest(digestBasis(
     configDigest,

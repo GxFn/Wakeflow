@@ -12,9 +12,9 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import {
   codexWorkspaceHostResourceProfile,
 } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -38,8 +38,8 @@ import {
   createWakeflowWorkspaceStaticResourceMatrix,
 } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 async function fixture(
   t: TestContext,
@@ -66,9 +66,9 @@ async function fixture(
 }
 
 function config(language: "en" | "zh-Hans") {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.presentation as Record<string, unknown>).language = language;
-  return parseWakeflowConfigV3(value);
+  return parseWakeflowConfig(value);
 }
 
 function request(
@@ -85,9 +85,9 @@ function request(
     currentConfig,
     expectedCurrentConfigDigest: currentConfig === null
       ? null
-      : computeWakeflowConfigV3Digest(currentConfig),
+      : computeWakeflowConfigDigest(currentConfig),
     desiredConfig,
-    expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desiredConfig),
+    expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
   });
 }
 

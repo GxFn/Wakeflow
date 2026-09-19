@@ -1,4 +1,4 @@
-import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config-v3.js";
+import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config.js";
 import { fail } from "../../kernel/error.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "./contract.js";
 

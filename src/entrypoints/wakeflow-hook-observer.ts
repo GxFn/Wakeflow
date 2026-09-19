@@ -18,7 +18,12 @@ import {
   type HostHookObservationInput,
   writeHostHookObservation,
 } from "../kernel/hook-observations.js";
-import { hostRuntimeRootRef, parseWakeflowHostId } from "../kernel/layout.js";
+import {
+  hostRuntimeRootRef,
+  parseWakeflowHostId,
+  WAKEFLOW_CONFIG_KIND,
+  WAKEFLOW_CONFIG_SCHEMA_VERSION,
+} from "../kernel/layout.js";
 import { computePromptDigest } from "../kernel/prompt-digest.js";
 
 /**
@@ -536,8 +541,8 @@ async function readWorkspaceDeclaration(root: string): Promise<WorkspaceDeclarat
   );
   if (
     !isRecord(config) ||
-    config.kind !== "WakeflowConfig" ||
-    config.schemaVersion !== 3 ||
+    config.kind !== WAKEFLOW_CONFIG_KIND ||
+    config.schemaVersion !== WAKEFLOW_CONFIG_SCHEMA_VERSION ||
     !isRecord(config.topology)
   ) {
     return null;

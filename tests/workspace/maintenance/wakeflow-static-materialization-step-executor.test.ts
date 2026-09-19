@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -16,7 +16,7 @@ import {
   WakeflowStaticMaterializationStepExecutionError,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
 import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
@@ -54,9 +54,9 @@ function request(desiredConfig: unknown) {
 }
 
 function desiredConfig() {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  return parseWakeflowConfigV3(value);
+  return parseWakeflowConfig(value);
 }
 
 test("closed dispatcher executes the fresh preview in Config-last order", async (t) => {

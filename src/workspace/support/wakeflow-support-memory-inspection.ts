@@ -1,11 +1,11 @@
 import { types } from "node:util";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
@@ -157,9 +157,9 @@ export class WakeflowSupportMemoryInspectionError extends Error {
 }
 
 export interface ParsedWakeflowSupportMemoryInspectionRequest {
-  readonly currentConfig: WakeflowConfigV3Model | null;
+  readonly currentConfig: WakeflowConfigModel | null;
   readonly currentConfigDigest: Sha256Digest | null;
-  readonly desiredConfig: WakeflowConfigV3Model;
+  readonly desiredConfig: WakeflowConfigModel;
   readonly desiredConfigDigest: Sha256Digest;
   readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly catalog: Readonly<WakeflowManagedSupportResourceCatalog>;
@@ -190,11 +190,11 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-function parseConfig(value: unknown, path: string): WakeflowConfigV3Model {
+function parseConfig(value: unknown, path: string): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("config", path);
+    if (error instanceof WakeflowConfigError) fail("config", path);
     throw error;
   }
 }
@@ -235,10 +235,10 @@ export function parseWakeflowSupportMemoryInspectionRequest(
     record.expectedDesiredConfigDigest,
     "$request.expectedDesiredConfigDigest",
   );
-  if (computeWakeflowConfigV3Digest(desiredConfig) !== desiredConfigDigest) {
+  if (computeWakeflowConfigDigest(desiredConfig) !== desiredConfigDigest) {
     fail("config", "$request.expectedDesiredConfigDigest");
   }
-  let currentConfig: WakeflowConfigV3Model | null;
+  let currentConfig: WakeflowConfigModel | null;
   let currentConfigDigest: Sha256Digest | null;
   if (record.currentConfig === null) {
     if (record.expectedCurrentConfigDigest !== null) {
@@ -252,7 +252,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(
       record.expectedCurrentConfigDigest,
       "$request.expectedCurrentConfigDigest",
     );
-    if (computeWakeflowConfigV3Digest(currentConfig) !== currentConfigDigest) {
+    if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
       fail("config", "$request.expectedCurrentConfigDigest");
     }
     if (currentConfig.program.programId !== desiredConfig.program.programId) {

@@ -1,28 +1,28 @@
 import { equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import { renderWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3-document.js";
+import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../src/configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../src/configuration/wakeflow-config.js";
 import { parseDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
 import {
-  createMinimalWakeflowConfigV3,
-  serializeWakeflowConfigV3Fixture,
-} from "./wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+  serializeWakeflowConfigFixture,
+} from "./wakeflow-config.fixture.js";
 
 test("minimal config renders in its one explicit domain field order", () => {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   const reordered = Object.fromEntries(Object.entries(value).reverse());
   equal(
-    renderWakeflowConfigV3(reordered),
-    serializeWakeflowConfigV3Fixture(value),
+    renderWakeflowConfig(reordered),
+    serializeWakeflowConfigFixture(value),
   );
 });
 
 test("optional nested fields survive representation normalization", () => {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   const program = value.program as Record<string, unknown>;
   program.description = "Program description";
   const topology = value.topology as {
@@ -66,13 +66,13 @@ test("optional nested fields survive representation normalization", () => {
     },
   };
 
-  const rendered = renderWakeflowConfigV3(value);
+  const rendered = renderWakeflowConfig(value);
   const parsed = parseDeterministicJsonDocument(rendered);
-  const model = parseWakeflowConfigV3(parsed);
-  equal(renderWakeflowConfigV3(model), rendered);
+  const model = parseWakeflowConfig(parsed);
+  equal(renderWakeflowConfig(model), rendered);
   equal(
-    computeWakeflowConfigV3Digest(model),
-    computeWakeflowConfigV3Digest(parseWakeflowConfigV3(value)),
+    computeWakeflowConfigDigest(model),
+    computeWakeflowConfigDigest(parseWakeflowConfig(value)),
   );
   for (const expected of [
     "Program description",

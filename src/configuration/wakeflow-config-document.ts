@@ -4,20 +4,20 @@ import {
   type JsonValue,
 } from "../foundation/data/json-value.js";
 import {
-  parseWakeflowConfigV3,
+  parseWakeflowConfig,
   type WakeflowConfigPod,
   type WakeflowConfigProgram,
   type WakeflowConfigRepository,
   type WakeflowConfigSupportSurface,
-  type WakeflowConfigV3Model,
+  type WakeflowConfigModel,
   type WakeflowConfigWindow,
-} from "./wakeflow-config-v3.js";
+} from "./wakeflow-config.js";
 
 /**
- * Wakeflow Configuration：公开 v3 配置的唯一确定性格式化 JSON 表示。
+ * Wakeflow Configuration：公开配置的唯一确定性格式化 JSON 表示。
  *
  * 本模块只重建领域字段顺序并渲染文本。Schema、类型化引用和跨实体关系继续由
- * `wakeflow-config-v3` 负责，物理读取和源资源事实由 Config 权威快照组合。字段顺序
+ * `wakeflow-config` 负责，物理读取和源资源事实由 Config 权威快照组合。字段顺序
  * 在此显式维护，不从 JSON Schema 的 `properties` 或输入文本推断。
  */
 
@@ -37,7 +37,7 @@ function programRepresentation(program: WakeflowConfigProgram) {
 }
 
 function presentationRepresentation(
-  presentation: WakeflowConfigV3Model["presentation"],
+  presentation: WakeflowConfigModel["presentation"],
 ) {
   return { language: presentation.language };
 }
@@ -164,7 +164,7 @@ function launchRepresentation(value: LaunchRepresentationInput) {
   };
 }
 
-function governanceRepresentation(governance: WakeflowConfigV3Model["governance"]) {
+function governanceRepresentation(governance: WakeflowConfigModel["governance"]) {
   return {
     ...optionalField(
       "audit",
@@ -188,7 +188,7 @@ function governanceRepresentation(governance: WakeflowConfigV3Model["governance"
   };
 }
 
-function hostsRepresentation(hosts: WakeflowConfigV3Model["hosts"]) {
+function hostsRepresentation(hosts: WakeflowConfigModel["hosts"]) {
   return {
     ...optionalField(
       "codex",
@@ -234,7 +234,7 @@ function hostsRepresentation(hosts: WakeflowConfigV3Model["hosts"]) {
   };
 }
 
-function configRepresentation(model: WakeflowConfigV3Model) {
+function configRepresentation(model: WakeflowConfigModel) {
   return {
     $schema: model.$schema,
     kind: model.kind,
@@ -261,19 +261,19 @@ function configRepresentation(model: WakeflowConfigV3Model) {
  * 该值供需要嵌入 Config 快照的私有恢复意图复用；它不携带文件路径、节点身份或
  * 写入授权，也不会保留调用方对象引用。
  */
-export function createWakeflowConfigV3DocumentValue(
+export function createWakeflowConfigDocumentValue(
   value: unknown,
 ): JsonValue {
   return parseJsonValue(
-    configRepresentation(parseWakeflowConfigV3(value)),
+    configRepresentation(parseWakeflowConfig(value)),
     "$config",
   );
 }
 
 /** 从严格 v3 领域模型生成唯一 deterministic pretty JSON 表示。 */
-export function renderWakeflowConfigV3(value: unknown): string {
+export function renderWakeflowConfig(value: unknown): string {
   return renderDeterministicJsonDocument(
-    createWakeflowConfigV3DocumentValue(value),
+    createWakeflowConfigDocumentValue(value),
     "$config",
   );
 }

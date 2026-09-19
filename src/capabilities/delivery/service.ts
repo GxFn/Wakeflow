@@ -16,7 +16,7 @@ import {
   type UtcInstant,
 } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
-import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config-v3.js";
+import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import {
   computeDeliveryPromptDigest,

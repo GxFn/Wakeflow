@@ -11,8 +11,8 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import {
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import {
   RootedDirectory,
 } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -27,8 +27,8 @@ import {
   codexWorkspaceHostResourceProfile,
 } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
@@ -56,9 +56,9 @@ async function fixture(t: TestContext) {
 }
 
 function desiredConfig() {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  return parseWakeflowConfigV3(value);
+  return parseWakeflowConfig(value);
 }
 
 test("Codex fixed composition executes shared maintenance without a host capability", async (t) => {

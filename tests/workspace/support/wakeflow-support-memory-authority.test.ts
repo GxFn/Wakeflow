@@ -18,8 +18,8 @@ import {
   WakeflowSupportMemoryAuthorityError,
 } from "../../../src/workspace/support/wakeflow-support-memory-authority.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 const TEST_ID = "surface_44444444-4444-4444-8444-444444444444";
@@ -31,7 +31,7 @@ function assertDeepFrozen(value: unknown): void {
 }
 
 test("Design whole-file memory is a thin English identity and role contract", () => {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const surface = (config.topology as {
     supportSurfaces: Record<string, unknown>[];
   }).supportSurfaces[0];
@@ -91,7 +91,7 @@ test("Design whole-file memory is a thin English identity and role contract", ()
 });
 
 test("Test whole-file memory uses persisted Simplified Chinese and Test boundaries", () => {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   (config.presentation as Record<string, unknown>).language = "zh-Hans";
   const chinese = createWakeflowSupportMemoryAuthority(
     config,
@@ -99,7 +99,7 @@ test("Test whole-file memory uses persisted Simplified Chinese and Test boundari
     TEST_ID,
   );
   const english = createWakeflowSupportMemoryAuthority(
-    createMinimalWakeflowConfigV3(),
+    createMinimalWakeflowConfig(),
     claudeCodeWorkspaceHostResourceProfile,
     TEST_ID,
   );
@@ -118,7 +118,7 @@ test("Test whole-file memory uses persisted Simplified Chinese and Test boundari
 });
 
 test("whole-file memory encodes user text and rejects external or forged authority", () => {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const surface = (config.topology as {
     supportSurfaces: Record<string, unknown>[];
   }).supportSurfaces[0];
@@ -133,7 +133,7 @@ test("whole-file memory encodes user text and rejects external or forged authori
   equal(authority.body.includes("<!-- marker"), false);
   equal(authority.body.includes("\\u003c!-- marker --\\u003e"), true);
 
-  const external = createMinimalWakeflowConfigV3();
+  const external = createMinimalWakeflowConfig();
   const externalSurface = (external.topology as {
     supportSurfaces: Record<string, unknown>[];
   }).supportSurfaces[0];

@@ -14,9 +14,9 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
@@ -37,8 +37,8 @@ import {
   type WakeflowSupportMemoryInspectionErrorReason,
 } from "../../../src/workspace/support/wakeflow-support-memory-inspection.js";
 import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "../../configuration/wakeflow-config.fixture.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 
@@ -50,14 +50,14 @@ async function fixture(t: TestContext) {
   const workspacePath = path.join(container, "Workspace");
   mkdirSync(workspacePath, { mode: 0o755 });
   const workspaceRoot = await RootedDirectory.open(workspacePath);
-  const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const catalog = createWakeflowManagedSupportResourceCatalog(
     config,
     codexWorkspaceHostResourceProfile,
   );
   await materializeWakeflowManagedSupportRoot(workspaceRoot, {
     config,
-    expectedConfigDigest: computeWakeflowConfigV3Digest(config),
+    expectedConfigDigest: computeWakeflowConfigDigest(config),
     profile: codexWorkspaceHostResourceProfile,
     expectedCatalogDigest: catalog.catalogDigest,
     surfaceId: DESIGN_ID,
@@ -79,9 +79,9 @@ async function fixture(t: TestContext) {
 }
 
 function config(language: "en" | "zh-Hans") {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.presentation as Record<string, unknown>).language = language;
-  return parseWakeflowConfigV3(value);
+  return parseWakeflowConfig(value);
 }
 
 function request(
@@ -96,9 +96,9 @@ function request(
     currentConfig,
     expectedCurrentConfigDigest: currentConfig === null
       ? null
-      : computeWakeflowConfigV3Digest(currentConfig),
+      : computeWakeflowConfigDigest(currentConfig),
     desiredConfig,
-    expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desiredConfig),
+    expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
     profile: codexWorkspaceHostResourceProfile,
     expectedCatalogDigest: catalog.catalogDigest,
     surfaceId: DESIGN_ID,

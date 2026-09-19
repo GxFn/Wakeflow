@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
-import { renderWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3-document.js";
+import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -39,7 +39,7 @@ import {
 } from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 /**
  * Claude 状态栏资产（能力卡 9 Q6，gate-log §13.94 D6）：资产由仓库测试用 node 直接执行，
@@ -108,7 +108,7 @@ function base64url(value: string): string {
 
 /** 主 pod 之外再加一个 worktree pod：四个窗口与一条 worktree 意图，名字用于状态栏标签。 */
 function configWithFeaturePod(): Record<string, unknown> {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   const topology = value.topology as { windows: Record<string, unknown>[] };
   const featureWindows = topology.windows.map((window) => ({
     ...window,
@@ -145,7 +145,7 @@ function temporaryDirectory(t: TestContext, prefix: string): string {
 function createWorkspace(t: TestContext, config: Record<string, unknown> | null): string {
   const workspace = temporaryDirectory(t, "wakeflow-claude-statusline-");
   if (config !== null) {
-    writeFileSync(path.join(workspace, "wakeflow.config.json"), renderWakeflowConfigV3(config), {
+    writeFileSync(path.join(workspace, "wakeflow.config.json"), renderWakeflowConfig(config), {
       mode: 0o644,
     });
   }

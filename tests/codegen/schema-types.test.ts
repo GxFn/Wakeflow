@@ -19,7 +19,7 @@ const utcInstantGeneratedRelativePath = "foundation/utc-instant.generated.ts";
 const portableResourcePathSchemaRelativePath = "foundation/portable-resource-path.schema.json";
 const portableResourcePathGeneratedRelativePath = "foundation/portable-resource-path.generated.ts";
 const artifactSchemaRelativePath = "foundation/loaded-artifact-tree-manifest.schema.json";
-const configSchemaRelativePath = "configuration/wakeflow-config-v3.schema.json";
+const configSchemaRelativePath = "configuration/wakeflow-config.schema.json";
 
 function generatedFiles(root: string): readonly string[] {
   const files: string[] = [];
@@ -142,8 +142,8 @@ test("Schema generation emits portable runtime contracts under .build", async ()
       path.join(absolute, configSchemaRelativePath.replace(/\.schema\.json$/u, ".generated.ts")),
       "utf8",
     );
-    match(configGenerated, /export const WAKEFLOW_CONFIG_V3_SCHEMA/u);
-    match(configGenerated, /export interface WakeflowConfigV3/u);
+    match(configGenerated, /export const WAKEFLOW_CONFIG_SCHEMA/u);
+    match(configGenerated, /export interface WakeflowConfig/u);
     match(configGenerated, /restoreGeneratedSchema/u);
 
     const combined = files.map((file) => readFileSync(file, "utf8")).join("\n");

@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import type { CallToolResult } from "@modelcontextprotocol/client";
 
-import { parseWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import {
   runWakeflowHookObserver,
@@ -293,7 +293,7 @@ async function scenarioFreshInitialize(context: ScenarioContext): Promise<string
   equal(existsSync(path.join(root, "wakeflow.config.json")), true);
   equal(existsSync(path.join(root, ".wakeflow-active")), true);
 
-  const config = parseWakeflowConfigV3(
+  const config = parseWakeflowConfig(
     JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")),
   );
   const design = config.topology.supportSurfaces.find((surface) => surface.capability === "design");
@@ -2485,7 +2485,7 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
   const taken = await podPreview(context, { ...createIntent, idempotencyKey: "scenario-pod-2" });
   equal(taken.status, "blocked");
   equal(taken.blockers.includes("name-taken"), true, "name-taken blocker");
-  const config = parseWakeflowConfigV3(JSON.parse(readFileSync(configPath, "utf8")));
+  const config = parseWakeflowConfig(JSON.parse(readFileSync(configPath, "utf8")));
   equal(config.pods.length, 2);
   equal(config.topology.windows.length, 8);
   if (created.pod === null) throw new Error("created pod missing");
@@ -2795,7 +2795,7 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
   equal(closed.disposition, "closed");
   equal(closed.pod, null);
   equal(closed.retiredReceipts, 1);
-  const finalConfig = parseWakeflowConfigV3(JSON.parse(readFileSync(configPath, "utf8")));
+  const finalConfig = parseWakeflowConfig(JSON.parse(readFileSync(configPath, "utf8")));
   equal(finalConfig.pods.length, 1);
   equal(finalConfig.topology.windows.length, 4);
   equal(
@@ -3427,7 +3427,7 @@ function readProjectionFingerprints(targets: readonly ProjectionTarget[]): reado
 
 /** workspace-current-status.md 的 pod 段：配置里的两个 pod 各一行，worktree pod 带活动 Demand 与回执。 */
 function assertPodSection(context: ScenarioContext, state: ObservationScenarioState): void {
-  const config = parseWakeflowConfigV3(
+  const config = parseWakeflowConfig(
     JSON.parse(
       readFileSync(path.join(context.workspace.workspacePath, "wakeflow.config.json"), "utf8"),
     ),

@@ -1,5 +1,5 @@
 import {
-  WAKEFLOW_CONFIG_V3_SCHEMA,
+  WAKEFLOW_CONFIG_SCHEMA,
   type ControllerWindow as ControllerWindowWire,
   type DesignWindow as DesignWindowWire,
   type ExternalOwnedSurface as ExternalOwnedSurfaceWire,
@@ -15,9 +15,9 @@ import {
   type Repository as RepositoryWire,
   type Storage as StorageWire,
   type TestWindow as TestWindowWire,
-  type WakeflowConfigV3 as WakeflowConfigV3Wire,
+  type WakeflowConfig as WakeflowConfigWire,
   type WakeflowManagedSurface as WakeflowManagedSurfaceWire,
-} from "../contracts/generated/configuration/wakeflow-config-v3.generated.js";
+} from "../contracts/generated/configuration/wakeflow-config.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import {
@@ -34,7 +34,7 @@ import {
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 
 /**
- * Wakeflow Configuration：公开 v3 配置的 Schema 准入与跨字段领域模型。
+ * Wakeflow Configuration：公开配置的 Schema 准入与跨字段领域模型。
  *
  * JSON Schema 2020-12 与 Ajv 严格校验器负责限制字段集合、值域、基数和词法。本模块
  * 只补充 Schema 无法表达的类型化标识全局冲突、实体引用、能力匹配、每个 Repository
@@ -48,10 +48,12 @@ import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-j
  * 写入和比较并交换仍属于后续 Config 职责所有者。
  */
 
-export const WAKEFLOW_CONFIG_V3_SCHEMA_ID =
-  "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json" as const;
-export const WAKEFLOW_CONFIG_V3_KIND = "WakeflowConfig" as const;
-export const WAKEFLOW_CONFIG_V3_VERSION = 3 as const;
+// 配置身份三元组归词汇层所有（两个不加载校验器的轻读者也要认它），这里只转发。
+export {
+  WAKEFLOW_CONFIG_KIND,
+  WAKEFLOW_CONFIG_SCHEMA_ID,
+  WAKEFLOW_CONFIG_SCHEMA_VERSION,
+} from "../contracts/vocabulary/wakeflow-config-identity.js";
 export const WAKEFLOW_ACTIVE_ROOT = ".wakeflow-active" as const;
 export const WAKEFLOW_LOCAL_ROOT = ".wakeflow-local" as const;
 export const WAKEFLOW_PRESENTATION_LANGUAGES = Object.freeze([
@@ -202,9 +204,9 @@ export type WakeflowConfigStorage = DeepReadonly<
 >;
 
 /** Schema、类型化引用与跨实体关系均已验证的递归冻结配置模型。 */
-export type WakeflowConfigV3Model = DeepReadonly<
+export type WakeflowConfigModel = DeepReadonly<
   Omit<
-    WakeflowConfigV3Wire,
+    WakeflowConfigWire,
     | "governance"
     | "hosts"
     | "pods"
@@ -253,7 +255,7 @@ export interface WakeflowConfigPodScope {
   >>;
 }
 
-export interface WakeflowConfigV3Indexes {
+export interface WakeflowConfigIndexes {
   readonly repositoryById: Readonly<Record<
     WakeflowDurableId<"repository">,
     WakeflowConfigRepository
@@ -281,7 +283,7 @@ export interface WakeflowConfigV3Indexes {
   readonly productWindows: readonly WakeflowProductWindow[];
 }
 
-export type WakeflowConfigV3ErrorReason =
+export type WakeflowConfigErrorReason =
   | "json-value"
   | "schema"
   | "identifier"
@@ -292,22 +294,22 @@ export type WakeflowConfigV3ErrorReason =
 
 const ERROR_MESSAGES = {
   "json-value": "Wakeflow config input is not passive JSON data.",
-  "schema": "Wakeflow config does not satisfy the public v3 Schema.",
+  "schema": "Wakeflow config does not satisfy the public Schema.",
   "identifier": "Wakeflow config contains an invalid typed identifier.",
   "identifier-collision": "Wakeflow config durable identifiers collide.",
   "reference": "Wakeflow config contains an unresolved typed reference.",
   "topology": "Wakeflow config topology relationships are inconsistent.",
   "placement": "Wakeflow config contains a non-canonical placement.",
-} as const satisfies Readonly<Record<WakeflowConfigV3ErrorReason, string>>;
+} as const satisfies Readonly<Record<WakeflowConfigErrorReason, string>>;
 
 /** 配置内存模型失败的稳定、脱敏错误。 */
-export class WakeflowConfigV3Error extends Error {
-  override readonly name = "WakeflowConfigV3Error";
-  readonly code = "wakeflow-config-v3" as const;
-  readonly reason: WakeflowConfigV3ErrorReason;
+export class WakeflowConfigError extends Error {
+  override readonly name = "WakeflowConfigError";
+  readonly code = "wakeflow-config" as const;
+  readonly reason: WakeflowConfigErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowConfigV3ErrorReason, path: string) {
+  constructor(reason: WakeflowConfigErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -317,12 +319,12 @@ export class WakeflowConfigV3Error extends Error {
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:/u;
 
-function fail(reason: WakeflowConfigV3ErrorReason, path: string): never {
-  throw new WakeflowConfigV3Error(reason, path);
+function fail(reason: WakeflowConfigErrorReason, path: string): never {
+  throw new WakeflowConfigError(reason, path);
 }
 
-const validateWireConfig = createRuntimeJsonSchemaValidator<WakeflowConfigV3Wire>(
-  WAKEFLOW_CONFIG_V3_SCHEMA,
+const validateWireConfig = createRuntimeJsonSchemaValidator<WakeflowConfigWire>(
+  WAKEFLOW_CONFIG_SCHEMA,
 );
 
 /** 兄弟根放置至多一个前导 `..`：hook 观察脚本按"祖先或祖先的直接子目录"找回工作区（§13.97 D2e）。 */
@@ -402,7 +404,7 @@ function registerIdentity(
   uuids.add(uuid);
 }
 
-function validatePlacements(model: WakeflowConfigV3Wire): void {
+function validatePlacements(model: WakeflowConfigWire): void {
   parsePlacement(model.storage.ledgerRoot, "$/storage/ledgerRoot");
   for (const [index, repository] of model.topology.repositories.entries()) {
     parsePlacement(
@@ -428,7 +430,7 @@ function validatePlacements(model: WakeflowConfigV3Wire): void {
   }
 }
 
-function validateResidueUniqueness(model: WakeflowConfigV3Wire): void {
+function validateResidueUniqueness(model: WakeflowConfigWire): void {
   for (const [repositoryIndex, repository] of
     model.topology.repositories.entries()) {
     const seen = new Set<string>();
@@ -445,7 +447,7 @@ function validateResidueUniqueness(model: WakeflowConfigV3Wire): void {
   }
 }
 
-function validateTopology(model: WakeflowConfigV3Wire): void {
+function validateTopology(model: WakeflowConfigWire): void {
   const uuids = new Set<string>();
   registerIdentity(model.program.programId, "program", "$/program/programId", uuids);
 
@@ -492,7 +494,7 @@ function validateTopology(model: WakeflowConfigV3Wire): void {
 const POD_SINGLETON_ROLES = Object.freeze(["controller", "design", "test"] as const);
 
 /** pod 记录本身：标识、名称唯一、恰好一个 primary、primary 不带 worktree 与 closing。 */
-function validatePodRecords(model: WakeflowConfigV3Wire, uuids: Set<string>): Set<string> {
+function validatePodRecords(model: WakeflowConfigWire, uuids: Set<string>): Set<string> {
   const pods = new Set<string>();
   const names = new Set<string>();
   let primaryCount = 0;
@@ -519,7 +521,7 @@ interface PodWindowCensus {
   readonly productWindowIds: Map<string, ProductWindowWire>;
 }
 
-function podWindowCensus(model: WakeflowConfigV3Wire): Map<string, PodWindowCensus> {
+function podWindowCensus(model: WakeflowConfigWire): Map<string, PodWindowCensus> {
   const census = new Map<string, PodWindowCensus>();
   for (const pod of model.pods) {
     census.set(pod.podId, {
@@ -575,7 +577,7 @@ function validatePodWorktrees(
 
 /** 每个 pod：controller、design、test 各恰好一个；primary 每仓库至少一个 product，worktree 每仓库恰好一个。 */
 function validatePodScopes(
-  model: WakeflowConfigV3Wire,
+  model: WakeflowConfigWire,
   repositories: ReadonlyMap<string, RepositoryWire>,
 ): void {
   const census = podWindowCensus(model);
@@ -595,8 +597,8 @@ function validatePodScopes(
   }
 }
 
-/** 把任意内存值解析为严格、递归冻结的公开 v3 配置领域模型。 */
-export function parseWakeflowConfigV3(value: unknown): WakeflowConfigV3Model {
+/** 把任意内存值解析为严格、递归冻结的公开配置领域模型。 */
+export function parseWakeflowConfig(value: unknown): WakeflowConfigModel {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$config");
@@ -610,12 +612,12 @@ export function parseWakeflowConfigV3(value: unknown): WakeflowConfigV3Model {
   validateTopology(result.value);
 
   // Ajv、位置和类型化引用校验已经恢复 Schema 无法表达的领域类型品牌。
-  return result.value as unknown as WakeflowConfigV3Model;
+  return result.value as unknown as WakeflowConfigModel;
 }
 
 /** 基于规范化 JSON 语义计算配置时效性摘要，不绑定空白或键顺序。 */
-export function computeWakeflowConfigV3Digest(
-  model: WakeflowConfigV3Model,
+export function computeWakeflowConfigDigest(
+  model: WakeflowConfigModel,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(model as unknown as JsonValue);
 }
@@ -627,9 +629,9 @@ function frozenRecord<Value>(
 }
 
 /** 为已验证模型建立冻结的常用实体索引；索引不会反向成为配置权威事实。 */
-export function buildWakeflowConfigV3Indexes(
-  model: WakeflowConfigV3Model,
-): Readonly<WakeflowConfigV3Indexes> {
+export function buildWakeflowConfigIndexes(
+  model: WakeflowConfigModel,
+): Readonly<WakeflowConfigIndexes> {
   const repositoryById = frozenRecord(
     model.topology.repositories.map((repository) => [
       repository.repositoryId,
@@ -655,14 +657,14 @@ export function buildWakeflowConfigV3Indexes(
   if (primary === undefined) fail("topology", "$/pods");
   const primaryPod = primary[1];
   return Object.freeze({
-    repositoryById: repositoryById as WakeflowConfigV3Indexes["repositoryById"],
-    surfaceById: surfaceById as WakeflowConfigV3Indexes["surfaceById"],
-    windowById: frozenRecord(windowEntries) as WakeflowConfigV3Indexes["windowById"],
+    repositoryById: repositoryById as WakeflowConfigIndexes["repositoryById"],
+    surfaceById: surfaceById as WakeflowConfigIndexes["surfaceById"],
+    windowById: frozenRecord(windowEntries) as WakeflowConfigIndexes["windowById"],
     podById: frozenRecord(
       model.pods.map((pod) => [pod.podId, pod] as const),
-    ) as WakeflowConfigV3Indexes["podById"],
-    podIdByWindowId: frozenRecord(podIdEntries) as WakeflowConfigV3Indexes["podIdByWindowId"],
-    podScopes: frozenRecord(scopeEntries) as WakeflowConfigV3Indexes["podScopes"],
+    ) as WakeflowConfigIndexes["podById"],
+    podIdByWindowId: frozenRecord(podIdEntries) as WakeflowConfigIndexes["podIdByWindowId"],
+    podScopes: frozenRecord(scopeEntries) as WakeflowConfigIndexes["podScopes"],
     primaryPod,
     windowsByRepositoryId: primaryPod.windowsByRepositoryId,
     controllerWindow: primaryPod.controllerWindow,
@@ -673,7 +675,7 @@ export function buildWakeflowConfigV3Indexes(
 }
 
 function buildPodScope(
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
   pod: WakeflowConfigPod,
 ): Readonly<WakeflowConfigPodScope> {
   const windows = model.topology.windows.filter((window) => window.podId === pod.podId);

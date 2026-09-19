@@ -10,8 +10,8 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
-import { renderWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3-document.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
@@ -96,11 +96,11 @@ function changePresentationLanguage(
     string,
     unknown
   >;
-  const changed = parseWakeflowConfigV3({
+  const changed = parseWakeflowConfig({
     ...current,
     presentation: { language: "zh-Hans" },
   });
-  writeFileSync(configPath, renderWakeflowConfigV3(changed));
+  writeFileSync(configPath, renderWakeflowConfig(changed));
 }
 
 async function createTransaction(

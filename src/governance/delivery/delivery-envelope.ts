@@ -1,7 +1,7 @@
 import {
   WAKEFLOW_PRESENTATION_LANGUAGES,
   type WakeflowPresentationLanguage,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import type { WakeflowDeliveryEnvelope as DeliveryEnvelopeWire } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
 import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
 import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";

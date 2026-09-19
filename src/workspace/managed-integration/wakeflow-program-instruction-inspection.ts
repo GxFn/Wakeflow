@@ -1,11 +1,11 @@
 import { types } from "node:util";
 
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   parseSha256Digest,
   Sha256Error,
@@ -153,9 +153,9 @@ export interface ParsedWakeflowProgramInstructionInspectionRequest {
   readonly matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
   readonly expectedMatrixDigest: Sha256Digest;
   readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  readonly currentConfig: WakeflowConfigV3Model | null;
+  readonly currentConfig: WakeflowConfigModel | null;
   readonly currentConfigDigest: Sha256Digest | null;
-  readonly desiredConfig: WakeflowConfigV3Model;
+  readonly desiredConfig: WakeflowConfigModel;
   readonly desiredConfigDigest: Sha256Digest;
   readonly signal: AbortSignal | undefined;
 }
@@ -176,11 +176,11 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-function parseConfig(value: unknown, path: string): WakeflowConfigV3Model {
+function parseConfig(value: unknown, path: string): WakeflowConfigModel {
   try {
-    return parseWakeflowConfigV3(value);
+    return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) fail("input", path);
+    if (error instanceof WakeflowConfigError) fail("input", path);
     throw error;
   }
 }
@@ -264,10 +264,10 @@ export function parseWakeflowProgramInstructionInspectionRequest(
     record.expectedDesiredConfigDigest,
     "$request.expectedDesiredConfigDigest",
   );
-  if (computeWakeflowConfigV3Digest(desiredConfig) !== desiredConfigDigest) {
+  if (computeWakeflowConfigDigest(desiredConfig) !== desiredConfigDigest) {
     fail("input", "$request.expectedDesiredConfigDigest");
   }
-  let currentConfig: WakeflowConfigV3Model | null;
+  let currentConfig: WakeflowConfigModel | null;
   let currentConfigDigest: Sha256Digest | null;
   if (record.currentConfig === null) {
     if (record.expectedCurrentConfigDigest !== null) {
@@ -285,7 +285,7 @@ export function parseWakeflowProgramInstructionInspectionRequest(
       "$request.expectedCurrentConfigDigest",
     );
     if (
-      computeWakeflowConfigV3Digest(currentConfig) !== currentConfigDigest
+      computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest
     ) {
       fail("input", "$request.expectedCurrentConfigDigest");
     }
@@ -410,7 +410,7 @@ async function revalidateSource(
 }
 
 function createAuthority(
-  config: WakeflowConfigV3Model,
+  config: WakeflowConfigModel,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowProgramInstructionBodyAuthority> {
   try {

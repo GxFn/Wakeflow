@@ -22,13 +22,13 @@ import {
   type WakeflowConfigAuthorityPublicationErrorReason,
 } from "../../src/configuration/wakeflow-config-authority-publication.js";
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../src/configuration/wakeflow-config-v3.js";
-import { renderWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3-document.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../src/configuration/wakeflow-config.js";
+import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { sameFileNodeSnapshot } from "../../src/foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { createMinimalWakeflowConfigV3 } from "./wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
 interface WorkspaceFixture {
   readonly temporaryRoot: string;
@@ -72,11 +72,11 @@ async function expectPublicationError(
 test("Config authority publication 持久创建0644文件并由Snapshot readback闭合", async () => {
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   try {
     const receipt = await publishWakeflowConfigAuthority(root, value);
-    const expectedModel = parseWakeflowConfigV3(value);
-    const expectedText = renderWakeflowConfigV3(expectedModel);
+    const expectedModel = parseWakeflowConfig(value);
+    const expectedText = renderWakeflowConfig(expectedModel);
 
     equal(receipt.publication.publication, "created");
     equal(receipt.publication.resourcePath, "wakeflow.config.json");
@@ -94,7 +94,7 @@ test("Config authority publication 持久创建0644文件并由Snapshot readback
     );
     equal(
       receipt.authority.configDigest,
-      computeWakeflowConfigV3Digest(expectedModel),
+      computeWakeflowConfigDigest(expectedModel),
     );
     equal(readFileSync(fixture.configPath, "utf8"), expectedText);
     equal(statSync(fixture.configPath).mode & 0o777, 0o644);
@@ -117,10 +117,10 @@ test("Config authority publication 是absent-only且不覆盖任何现存目标"
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
-    const original = createMinimalWakeflowConfigV3();
+    const original = createMinimalWakeflowConfig();
     await publishWakeflowConfigAuthority(root, original);
     const before = readFileSync(fixture.configPath, "utf8");
-    const changed = createMinimalWakeflowConfigV3();
+    const changed = createMinimalWakeflowConfig();
     (changed.program as Record<string, unknown>).displayName = "Changed";
 
     await expectPublicationError(
@@ -142,7 +142,7 @@ test("Config authority publication 是absent-only且不覆盖任何现存目标"
     await expectPublicationError(
       () => publishWakeflowConfigAuthority(
         unknownRoot,
-        createMinimalWakeflowConfigV3(),
+        createMinimalWakeflowConfig(),
       ),
       "target-exists",
     );
@@ -162,7 +162,7 @@ test("Config authority publication 在非法、超限或取消输入下保持零
   try {
     await expectPublicationError(
       () => publishWakeflowConfigAuthority(invalidRoot, {
-        ...createMinimalWakeflowConfigV3(),
+        ...createMinimalWakeflowConfig(),
         kind: "WrongConfig",
       }),
       "config",
@@ -178,7 +178,7 @@ test("Config authority publication 在非法、超限或取消输入下保持零
     placementFixture.workspaceRoot,
   );
   try {
-    const value = createMinimalWakeflowConfigV3();
+    const value = createMinimalWakeflowConfig();
     (value.storage as Record<string, unknown>).ledgerRoot = ".wakeflow-active";
     await expectPublicationError(
       () => publishWakeflowConfigAuthority(placementRoot, value),
@@ -193,7 +193,7 @@ test("Config authority publication 在非法、超限或取消输入下保持零
   const capacityFixture = createWorkspace();
   const capacityRoot = await RootedDirectory.open(capacityFixture.workspaceRoot);
   try {
-    const value = createMinimalWakeflowConfigV3();
+    const value = createMinimalWakeflowConfig();
     (value.program as Record<string, unknown>).description = "x".repeat(
       1024 * 1024,
     );
@@ -215,7 +215,7 @@ test("Config authority publication 在非法、超限或取消输入下保持零
     await expectPublicationError(
       () => publishWakeflowConfigAuthority(
         abortedRoot,
-        createMinimalWakeflowConfigV3(),
+        createMinimalWakeflowConfig(),
         { signal: controller.signal },
       ),
       "aborted",
@@ -234,7 +234,7 @@ test("Config authority publication 在非法、超限或取消输入下保持零
     await expectPublicationError(
       () => publishWakeflowConfigAuthority(
         abortedRoot,
-        createMinimalWakeflowConfigV3(),
+        createMinimalWakeflowConfig(),
         decorated as never,
       ),
       "input",

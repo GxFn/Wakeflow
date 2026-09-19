@@ -5,10 +5,10 @@ import {
   type WakeflowFreshConfigCompilation,
 } from "../../configuration/wakeflow-fresh-config-selection.js";
 import {
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import {
   WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA,
   type WakeflowMaintenancePublicRequestV1,
@@ -163,7 +163,7 @@ function admitHostFacade(
 }
 
 function desiredConfigFor(input: Extract<SliceInput, { readonly kind: "effect" }>): Readonly<{
-  readonly desiredConfig: WakeflowConfigV3Model | null;
+  readonly desiredConfig: WakeflowConfigModel | null;
   readonly compilation: Readonly<WakeflowFreshConfigCompilation> | null;
 }> {
   try {
@@ -173,7 +173,7 @@ function desiredConfigFor(input: Extract<SliceInput, { readonly kind: "effect" }
     }
     if (input.action === "reconfigure") {
       return Object.freeze({
-        desiredConfig: parseWakeflowConfigV3(input.body.desiredConfig),
+        desiredConfig: parseWakeflowConfig(input.body.desiredConfig),
         compilation: null,
       });
     }
@@ -184,7 +184,7 @@ function desiredConfigFor(input: Extract<SliceInput, { readonly kind: "effect" }
         cause: error,
       });
     }
-    if (error instanceof WakeflowConfigV3Error) {
+    if (error instanceof WakeflowConfigError) {
       fail("invalid-request", "desired-config", "$request.request.desiredConfig", {
         cause: error,
       });

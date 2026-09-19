@@ -1,7 +1,7 @@
 import {
-  computeWakeflowConfigV3Digest,
-  type WakeflowConfigV3Model,
-} from "../configuration/wakeflow-config-v3.js";
+  computeWakeflowConfigDigest,
+  type WakeflowConfigModel,
+} from "../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import {
   computeActiveProjectionSetDigest,
@@ -24,7 +24,7 @@ export interface WakeflowFreshActiveProjection {
 
 /** 从 desired Config 渲染 fresh 工作区的投影文件集与其确定性摘要。 */
 export function renderWakeflowFreshActiveProjection(
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
 ): Readonly<WakeflowFreshActiveProjection> {
   const repositoryNames = new Map<string, string>();
   for (const repository of model.topology.repositories) {
@@ -37,7 +37,7 @@ export function renderWakeflowFreshActiveProjection(
         programId: model.program.programId,
         displayName: model.program.displayName,
       },
-      configDigest: computeWakeflowConfigV3Digest(model),
+      configDigest: computeWakeflowConfigDigest(model),
       pods: model.pods.map((pod) => ({
         podId: pod.podId,
         name: pod.name,

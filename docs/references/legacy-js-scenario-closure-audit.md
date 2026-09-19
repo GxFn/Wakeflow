@@ -366,7 +366,7 @@ Wakeflow 无权限且不得自行执行 create/send/read/close/worktree/session�
 | --- | --- | --- |
 | Foundation Data/Crypto/Identity/Time | 完成 | 保留，按 consumer 补缺口 |
 | Rooted Filesystem/atomic/tree/Git | 完成较多 | 保留；禁止继续水平扩张 |
-| Config v3 | 完成 | 保留；reconfigure move/decommission 后置 |
+| Config | 完成 | 保留；reconfigure move/decommission 后置 |
 | TODO | append/claim/archive + JSON authority/projection | 保留新模型，不迁移旧 Markdown authority |
 | Ledger Requirement/Confirmation | 完成 | 保留；BusinessArchive 后续扩展 |
 | Demand Event Store | publication/cancel、snapshot、upcaster；Aggregate已收敛为identity+lifecycle | 保留技术方向；Tasking进入时重新决定state-model version |

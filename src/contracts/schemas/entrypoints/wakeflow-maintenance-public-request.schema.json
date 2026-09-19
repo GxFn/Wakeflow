@@ -79,7 +79,7 @@
       "properties": {
         "selection": {
           "$ref": "#/$defs/jsonValue",
-          "description": "Fresh user selection compiled by the Configuration owner into a typed Config v3 model."
+          "description": "Fresh user selection compiled by the Configuration owner into a typed Config model."
         }
       }
     },

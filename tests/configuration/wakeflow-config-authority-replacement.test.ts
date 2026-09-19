@@ -32,10 +32,10 @@ import {
   WAKEFLOW_CONFIG_FILE_REF,
 } from "../../src/configuration/wakeflow-config-authority-snapshot.js";
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-} from "../../src/configuration/wakeflow-config-v3.js";
-import { renderWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3-document.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../src/configuration/wakeflow-config.js";
+import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import {
   createFileCandidateDurably,
@@ -49,7 +49,7 @@ import { rootedExclusiveFileLockRecordTextForTest } from "../foundation/filesyst
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
-import { createMinimalWakeflowConfigV3 } from "./wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
 interface WorkspaceFixture {
   readonly temporaryRoot: string;
@@ -76,7 +76,7 @@ function createWorkspace(): WorkspaceFixture {
 }
 
 function changedConfig(displayName: string): Record<string, unknown> {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   (value.program as Record<string, unknown>).displayName = displayName;
   return value;
 }
@@ -110,7 +110,7 @@ test("Config authority replacement 在exact source下替换并支持旧请求幂
   try {
     const source = await publishWakeflowConfigAuthority(
       root,
-      createMinimalWakeflowConfigV3(),
+      createMinimalWakeflowConfig(),
     );
     const desired = changedConfig("Changed Program");
     const replaced = await replaceWakeflowConfigAuthority(
@@ -124,7 +124,7 @@ test("Config authority replacement 在exact source下替换并支持旧请求幂
     equal(replaced.source.configDigest, source.authority.configDigest);
     equal(
       replaced.authority.configDigest,
-      computeWakeflowConfigV3Digest(parseWakeflowConfigV3(desired)),
+      computeWakeflowConfigDigest(parseWakeflowConfig(desired)),
     );
     equal(replaced.authority.source.node.permissionBits, 0o644);
     equal(replaced.authority.source.node.linkCount, 1n);
@@ -153,11 +153,11 @@ test("Config authority replacement 拒绝stale、跨root与program identity变�
   try {
     const firstSource = await publishWakeflowConfigAuthority(
       firstRoot,
-      createMinimalWakeflowConfigV3(),
+      createMinimalWakeflowConfig(),
     );
     const secondSource = await publishWakeflowConfigAuthority(
       secondRoot,
-      createMinimalWakeflowConfigV3(),
+      createMinimalWakeflowConfig(),
     );
     const firstDesired = changedConfig("First replacement");
     await replaceWakeflowConfigAuthority(
@@ -214,7 +214,7 @@ test("Config authority replacement 通过专属锁串行并发writer", async () 
   try {
     const source = await publishWakeflowConfigAuthority(
       root,
-      createMinimalWakeflowConfigV3(),
+      createMinimalWakeflowConfig(),
     );
     const first = changedConfig("Concurrent A");
     const second = changedConfig("Concurrent B");
@@ -245,8 +245,8 @@ test("Config authority replacement 通过专属锁串行并发writer", async () 
     const current = await readWakeflowConfigAuthoritySnapshot(root);
     equal(
       new Set([
-        computeWakeflowConfigV3Digest(parseWakeflowConfigV3(first)),
-        computeWakeflowConfigV3Digest(parseWakeflowConfigV3(second)),
+        computeWakeflowConfigDigest(parseWakeflowConfig(first)),
+        computeWakeflowConfigDigest(parseWakeflowConfig(second)),
       ]).has(current.configDigest),
       true,
     );
@@ -263,7 +263,7 @@ test("Config authority replacement 拒绝不满足P1的current source", async ()
   try {
     const source = await publishWakeflowConfigAuthority(
       root,
-      createMinimalWakeflowConfigV3(),
+      createMinimalWakeflowConfig(),
     );
     chmodSync(fixture.configPath, 0o600);
     const before = readFileSync(fixture.configPath, "utf8");
@@ -289,10 +289,10 @@ test("Config replacement recovery 只接纳同一desired stage并前向完成", 
   try {
     const source = await publishWakeflowConfigAuthority(
       root,
-      createMinimalWakeflowConfigV3(),
+      createMinimalWakeflowConfig(),
     );
     const desired = changedConfig("Recovered replacement");
-    const desiredBytes = encodeUtf8(renderWakeflowConfigV3(desired));
+    const desiredBytes = encodeUtf8(renderWakeflowConfig(desired));
     const address = issueDurableAtomicFileStageAddress(
       "replace",
       WAKEFLOW_CONFIG_FILE_REF,
@@ -325,7 +325,7 @@ test("Config replacement recovery 只接纳同一desired stage并前向完成", 
     );
     equal(
       recovered.authority.configDigest,
-      computeWakeflowConfigV3Digest(parseWakeflowConfigV3(desired)),
+      computeWakeflowConfigDigest(parseWakeflowConfig(desired)),
     );
   } finally {
     await root.close();
@@ -339,10 +339,10 @@ test("Config replacement recovery 保留不同desired的lock与stage现场", asy
   try {
     const source = await publishWakeflowConfigAuthority(
       root,
-      createMinimalWakeflowConfigV3(),
+      createMinimalWakeflowConfig(),
     );
     const desired = changedConfig("Requested replacement");
-    const otherBytes = encodeUtf8(renderWakeflowConfigV3(
+    const otherBytes = encodeUtf8(renderWakeflowConfig(
       changedConfig("Other replacement"),
     ));
     const address = issueDurableAtomicFileStageAddress(
@@ -379,7 +379,7 @@ test("Config replacement recovery 保留不同desired的lock与stage现场", asy
     );
     equal(
       readFileSync(fixture.configPath, "utf8"),
-      renderWakeflowConfigV3(createMinimalWakeflowConfigV3()),
+      renderWakeflowConfig(createMinimalWakeflowConfig()),
     );
   } finally {
     await root.close();
@@ -398,7 +398,7 @@ test("Config replacement recovery 区分无残留与active lock", async () => {
   try {
     const source = await publishWakeflowConfigAuthority(
       root,
-      createMinimalWakeflowConfigV3(),
+      createMinimalWakeflowConfig(),
     );
     const desired = changedConfig("Recovery state distinction");
     await expectReplacementError(

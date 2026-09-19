@@ -1,10 +1,10 @@
 import { types } from "node:util";
 
 import {
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "../../configuration/wakeflow-config-v3.js";
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
@@ -126,7 +126,7 @@ export class WakeflowStaticMaterializationPreviewError extends Error {
 
 export interface ParsedWakeflowStaticMaterializationPreviewRequest {
   readonly action: WakeflowStaticMaterializationAction;
-  readonly desiredConfig: WakeflowConfigV3Model | null;
+  readonly desiredConfig: WakeflowConfigModel | null;
   readonly currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
   readonly signal: AbortSignal | undefined;
@@ -189,12 +189,12 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
   ) {
     failWakeflowStaticMaterializationPreview("input", "$request.desiredConfig");
   }
-  let desiredConfig: WakeflowConfigV3Model | null = null;
+  let desiredConfig: WakeflowConfigModel | null = null;
   if (record.desiredConfig !== null) {
     try {
-      desiredConfig = parseWakeflowConfigV3(record.desiredConfig);
+      desiredConfig = parseWakeflowConfig(record.desiredConfig);
     } catch (error: unknown) {
-      if (error instanceof WakeflowConfigV3Error) {
+      if (error instanceof WakeflowConfigError) {
         failWakeflowStaticMaterializationPreview("config", error.path);
       }
       throw error;

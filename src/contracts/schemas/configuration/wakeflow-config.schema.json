@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json",
-  "x-wakeflow-runtime-export": "WAKEFLOW_CONFIG_V3_SCHEMA",
-  "title": "Wakeflow Config v3",
+  "$id": "urn:wakeflow:config:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_CONFIG_SCHEMA",
+  "title": "Wakeflow Config",
   "description": "Strict public schema for Wakeflow durable program intent. Runtime facts, host handles, fixed protocol roots, derived paths, and migration history are intentionally excluded.",
   "type": "object",
   "additionalProperties": false,
@@ -20,11 +20,9 @@
   ],
   "properties": {
     "$schema": {
-      "const": "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json",
+      "const": "urn:wakeflow:config:v1",
       "description": "Canonical public schema URL for the tracked durable configuration.",
-      "examples": [
-        "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json"
-      ]
+      "examples": ["urn:wakeflow:config:v1"]
     },
     "kind": {
       "const": "WakeflowConfig",
@@ -32,9 +30,9 @@
       "examples": ["WakeflowConfig"]
     },
     "schemaVersion": {
-      "const": 3,
+      "const": 1,
       "description": "Durable configuration schema version.",
-      "examples": [3]
+      "examples": [1]
     },
     "program": {
       "$ref": "#/$defs/program"

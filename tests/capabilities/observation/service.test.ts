@@ -29,7 +29,7 @@ import {
   executeImplementationReviewDecisionRequest,
   executeTargetResultImportRequest,
 } from "../../../src/capabilities/result-review/service.js";
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -60,7 +60,7 @@ import {
 } from "../../../src/kernel/work-claims.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {
   deliverFixtureTarget,
@@ -185,7 +185,7 @@ async function createHealthyWorkspace(): Promise<HealthyWorkspace> {
     request: { selection },
     planDigest: fresh.planDigest,
   });
-  const config = parseWakeflowConfigV3(
+  const config = parseWakeflowConfig(
     JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")),
   );
   const design = config.topology.supportSurfaces.find((surface) => surface.capability === "design");
@@ -699,7 +699,7 @@ test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD �
     mkdirSync(path.join(planning.workspacePath, ".wakeflow-local", "runtime"), { mode: 0o700 });
     await publishFreshWakeflowWindowRuntime(
       planning.workspaceRoot,
-      parseWakeflowConfigV3(createMinimalWakeflowConfigV3()),
+      parseWakeflowConfig(createMinimalWakeflowConfig()),
       codexWorkspaceHostResourceProfile,
       { recoveringFreshPublication: false },
     );

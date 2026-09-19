@@ -8,9 +8,9 @@ import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "../../src/configuration/wakeflow-config-root-placement.js";
-import { parseWakeflowConfigV3 } from "../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { createMinimalWakeflowConfigV3 } from "./wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
 async function fixture(t: TestContext): Promise<Readonly<{
   root: RootedDirectory;
@@ -29,7 +29,7 @@ async function fixture(t: TestContext): Promise<Readonly<{
 }
 
 function placementModel(overlap = false) {
-  const value = createMinimalWakeflowConfigV3();
+  const value = createMinimalWakeflowConfig();
   const topology = value.topology as {
     repositories: Record<string, unknown>[];
     supportSurfaces: Record<string, unknown>[];
@@ -40,7 +40,7 @@ function placementModel(overlap = false) {
   topology.supportSurfaces[1]!.path = overlap
     ? "shared/child"
     : "Support/Test";
-  return parseWakeflowConfigV3(value);
+  return parseWakeflowConfig(value);
 }
 
 test("Config root placement records one stable ancestor for missing roots", async (t) => {

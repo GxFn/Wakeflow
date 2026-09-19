@@ -1,6 +1,6 @@
 import {
   WAKEFLOW_LOCAL_ROOT,
-} from "../../configuration/wakeflow-config-v3.js";
+} from "../../configuration/wakeflow-config.js";
 import {
   parsePortableResourcePath,
   type PortableResourcePath,

@@ -1,5 +1,5 @@
 import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import type { WakeflowConfigPod } from "../../configuration/wakeflow-config-v3.js";
+import type { WakeflowConfigPod } from "../../configuration/wakeflow-config.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";

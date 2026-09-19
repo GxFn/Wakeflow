@@ -1,6 +1,6 @@
 import {
-  createMinimalWakeflowConfigV3,
-} from "./wakeflow-config-v3.fixture.js";
+  createMinimalWakeflowConfig,
+} from "./wakeflow-config.fixture.js";
 
 export const MINIMAL_WAKEFLOW_FRESH_SELECTION_UUIDS = Object.freeze([
   "11111111-1111-4111-8111-111111111111",
@@ -16,7 +16,7 @@ export const MINIMAL_WAKEFLOW_FRESH_SELECTION_UUIDS = Object.freeze([
 
 /** 从最小 Config fixture 去除 durable IDs，生成公共 Fresh selection。 */
 export function createMinimalWakeflowFreshConfigSelection() {
-  const config = createMinimalWakeflowConfigV3();
+  const config = createMinimalWakeflowConfig();
   const program = config.program as Record<string, unknown>;
   const topology = config.topology as {
     repositories: Record<string, unknown>[];

@@ -16,7 +16,7 @@ import {
   executeBoardInspectionRequest,
   executeRequirementPublicationRequest,
 } from "../../../src/capabilities/requirement/service.js";
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -79,7 +79,7 @@ const requirementWorkspaceStore = createPreparedWorkspaceStore<undefined, Readon
         request: { selection },
         planDigest: preview.planDigest,
       });
-      const config = parseWakeflowConfigV3(
+      const config = parseWakeflowConfig(
         JSON.parse(readFileSync(path.join(fixtureRoot, "wakeflow.config.json"), "utf8")),
       );
       const design = config.topology.supportSurfaces.find(

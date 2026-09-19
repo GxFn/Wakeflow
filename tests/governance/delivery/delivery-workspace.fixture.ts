@@ -12,7 +12,7 @@ import {
   type ExecuteDeliveryOptions,
 } from "../../../src/capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
-import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
@@ -31,7 +31,7 @@ import {
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
-import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import {
   createPreparedWorkspaceStore,
   DISPOSABLE_ROOT_OPTIONS,
@@ -141,7 +141,7 @@ export async function registerFixtureWindowRoute(
   windowId: string,
   handle: Readonly<{ readonly value: string; readonly uuid: string; readonly observedAt: UtcInstant; readonly registeredAt: UtcInstant }>,
 ): Promise<Readonly<DeliveryWindowRoute>> {
-  const config = parseWakeflowConfigV3(createMinimalWakeflowConfigV3());
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const launchIntent = compileWakeflowWindowLaunchIntents(
     config,
     codexWorkspaceHostResourceProfile,
@@ -209,7 +209,7 @@ async function buildDeliveryWorkspace(
     mkdirSync(path.join(fixture.workspacePath, ".wakeflow-local", "runtime"), { mode: 0o700 });
     await publishFreshWakeflowWindowRuntime(
       fixture.workspaceRoot,
-      parseWakeflowConfigV3(createMinimalWakeflowConfigV3()),
+      parseWakeflowConfig(createMinimalWakeflowConfig()),
       codexWorkspaceHostResourceProfile,
       { recoveringFreshPublication: false },
     );

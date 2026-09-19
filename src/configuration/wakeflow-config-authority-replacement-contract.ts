@@ -51,12 +51,12 @@ import {
   WakeflowConfigRootPlacementError,
 } from "./wakeflow-config-root-placement.js";
 import {
-  computeWakeflowConfigV3Digest,
-  parseWakeflowConfigV3,
-  WakeflowConfigV3Error,
-  type WakeflowConfigV3Model,
-} from "./wakeflow-config-v3.js";
-import { renderWakeflowConfigV3 } from "./wakeflow-config-v3-document.js";
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "./wakeflow-config.js";
+import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 
 /**
  * Config 替换流程的领域合同、无副作用输入准入，以及共享的源资源和目标事实。
@@ -113,7 +113,7 @@ const ERROR_MESSAGES = {
   "unsupported-platform": "Wakeflow config authority replacement requires reliable local POSIX ownership semantics.",
   "root-scope": "Wakeflow config authority replacement lost its workspace root scope.",
   "root-policy": "Wakeflow config authority replacement requires a current-user workspace root.",
-  "config": "Wakeflow config authority replacement requires one strict v3 desired model.",
+  "config": "Wakeflow config authority replacement requires one strict desired model.",
   "capacity": "Wakeflow config authority replacement exceeds its recoverable byte limit.",
   "placement": "Wakeflow config authority replacement declares an unsafe root placement.",
   "source-invalid": "Current Wakeflow config authority cannot be loaded strictly.",
@@ -167,7 +167,7 @@ export interface ParsedWakeflowConfigAuthorityExpectation {
 }
 
 export interface PreparedWakeflowConfigAuthorityDesired {
-  readonly model: WakeflowConfigV3Model;
+  readonly model: WakeflowConfigModel;
   readonly bytes: Uint8Array;
   readonly sourceDigest: Sha256Digest;
   readonly configDigest: Sha256Digest;
@@ -407,20 +407,20 @@ export function parseWakeflowConfigAuthorityExpectation(
 export function prepareWakeflowConfigAuthorityDesired(
   value: unknown,
 ): Readonly<PreparedWakeflowConfigAuthorityDesired> {
-  let model: WakeflowConfigV3Model;
+  let model: WakeflowConfigModel;
   try {
-    model = parseWakeflowConfigV3(value);
+    model = parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error) {
+    if (error instanceof WakeflowConfigError) {
       failWakeflowConfigAuthorityReplacement("config", error.path);
     }
     failWakeflowConfigAuthorityReplacement("config", "$config");
   }
   let bytes: Uint8Array;
   try {
-    bytes = encodeUtf8(renderWakeflowConfigV3(model), "$config");
+    bytes = encodeUtf8(renderWakeflowConfig(model), "$config");
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigV3Error || error instanceof Utf8Error) {
+    if (error instanceof WakeflowConfigError || error instanceof Utf8Error) {
       failWakeflowConfigAuthorityReplacement("config", "$config");
     }
     failWakeflowConfigAuthorityReplacement("config", "$config");
@@ -433,7 +433,7 @@ export function prepareWakeflowConfigAuthorityDesired(
       model,
       bytes,
       sourceDigest: computeSha256Digest(bytes, "$config"),
-      configDigest: computeWakeflowConfigV3Digest(model),
+      configDigest: computeWakeflowConfigDigest(model),
     });
   } catch {
     failWakeflowConfigAuthorityReplacement("config", "$config");
@@ -442,7 +442,7 @@ export function prepareWakeflowConfigAuthorityDesired(
 
 export async function assertWakeflowConfigAuthorityDesiredPlacements(
   root: RootedDirectory,
-  model: WakeflowConfigV3Model,
+  model: WakeflowConfigModel,
 ): Promise<void> {
   try {
     await validateWakeflowConfigRootPlacements(root, model);

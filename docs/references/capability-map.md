@@ -11,7 +11,7 @@
 | # | 旧工具 | 能力组 | 新工具或内部 owner | 判定 | 落地层与备注 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `wakeflow_status` | 9 | `wakeflow_status`（带 demandId 即附路由或归档回执） | 重切 | 2026-09-18 L1 observation 切片 10（gate-log §13.94、§13.96）：治理层一次观察多域，每域独立隔离失败；pod 段、待认领摘要、已接受未合并列表、`policy` 生效值、去重排序上限 64 的 `nextActions`；`wakeflow_inspect_demand_route` 并入；hostOperations 删除（ADR-0012 D2）；场景 `card-09/status-and-verify` |
-| 2 | `wakeflow_maintain_workspace` | 1 | `wakeflow_maintain_workspace` | 重切 | 已实现 fresh、reconfigure、reconcile 三动作；config 增加 `pods[]` 与窗口 `podId`（2026-09-10 pod 切片 9，fresh 生成 `main`，reconfigure 拒改 `pods`）；TSD-16 从 v1 起版未做 |
+| 2 | `wakeflow_maintain_workspace` | 1 | `wakeflow_maintain_workspace` | 重切 | 已实现 fresh、reconfigure、reconcile 三动作；config 增加 `pods[]` 与窗口 `podId`（2026-09-10 pod 切片 9，fresh 生成 `main`，reconfigure 拒改 `pods`）；TSD-16 从 v1 起版已做（2026-09-19，gate-log §13.102） |
 | 3 | `wakeflow_replace_windows` | 2 | 窗口替换并入 `wakeflow_register_window_binding` 的替换操作 | 重切 | 已实现：`replace` 以旧绑定摘要 CAS 换代并退役旧声明（L1 endpoint 切片 2，ADR-0009）；场景 `card-02/window-replace`（本行判定于 2026-09-18 补记） |
 | 4 | `wakeflow_register_window` | 2 | `wakeflow_register_window_binding` | 重切 | 已实现；窗口在配置里带 `podId`，worktree pod 的产品窗口握手带 worktree 回执（2026-09-10 pod 切片 9，gate-log §13.92） |
 | 5 | `wakeflow_create_demand` | 4 | `wakeflow_create_demand` | 重切 | 已实现（demand 切片，确定性计划）；身份记 `podId`（缺省 primary），同 pod 已有活动 Demand 时 `pod-busy`（2026-09-10 pod 切片 9） |
@@ -113,7 +113,7 @@
 | D10 | reset 与 reconcile 职责 | 能力卡 1 | 保留 | maintenance reconcile 已实现 |
 | D11 | 多窗口共享同一产品仓库 | 能力卡 2 | 保留 | 在 pod 作用域内（primary 每仓库至少一个，worktree pod 恰好一个；已落地 2026-09-10） |
 | D12 | 离线定向、配置解释、存储视图、运行状态 | 能力卡 9 | 重切 | view 放弃，status 与 verify 承接 |
-| D13 | config 分区与字段 | 能力卡 1 | 重切 | 增加 `pods[]` 与窗口 `podId`（已落地 2026-09-10）；TSD-16 从 v1 起版未做 |
+| D13 | config 分区与字段 | 能力卡 1 | 重切 | 增加 `pods[]` 与窗口 `podId`（已落地 2026-09-10）；TSD-16 从 v1 起版已做（2026-09-19，gate-log §13.102） |
 | D14 | local 语义分区 | 能力卡 1 | 保留 | `runtime/shared`、`runtime/hosts/<host>`；`audit` 随 preserve 放弃缩减 |
 | D15 | TargetResult 单一正典 | 能力卡 7 | 保留 | 状态根是唯一结果正典 |
 | D16 | host identity 单一权威 | 能力卡 2 | 保留 | 绑定唯一持有真实句柄 |

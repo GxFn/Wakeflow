@@ -1,11 +1,4 @@
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import os from "node:os";
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
@@ -39,6 +32,11 @@ import {
 } from "../../../src/capabilities/tasking/service.js";
 import type { TargetTaskPlanningResult } from "../../../src/capabilities/tasking/contract.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
+import {
+  createPreparedWorkspaceStore,
+  DISPOSABLE_ROOT_OPTIONS,
+  DISPOSABLE_WORKSPACE_DURABILITY,
+} from "../../support/prepared-workspace.js";
 import {
   claimFixtureRequirement,
   placePendingClaimState,
@@ -107,6 +105,25 @@ export interface TargetTaskPlanningWorkspaceFixtureOptions {
   readonly testingMode?: Exclude<DemandTestingMode, "not-applicable">;
   /** 需求包头部的任务清单审阅要求；user 时切片要求请求带 planReview。 */
   readonly taskPlanReview?: "controller" | "user";
+  /**
+   * 退出共享预备基线，重跑一遍初始化链。需要不同拓扑（例如另行改写基线里的文件）
+   * 的测试用它，其余测试共享按 `testingMode` / `taskPlanReview` 分档的基线副本。
+   */
+  readonly freshBaseline?: boolean;
+}
+
+/** 基线里与路径无关的事实：同一档基线的所有副本共享同一份身份值与记录摘要。 */
+export interface TargetTaskPlanningWorkspaceFacts {
+  readonly recordDigest: string;
+  readonly taskPackage: WakeflowTargetTaskPlanningRequestV1["taskPackage"];
+}
+
+/** 共享基线分档：同档选项共用一棵预备工作区；`freshBaseline` 退出共享。 */
+export function targetTaskPlanningWorkspaceBaselineKey(
+  options: TargetTaskPlanningWorkspaceFixtureOptions,
+): string | null {
+  if (options.freshBaseline === true) return null;
+  return `${options.testingMode ?? "controller-only"}|${options.taskPlanReview ?? "controller"}`;
 }
 
 export function planningUuidFactory(): () => string {
@@ -120,16 +137,14 @@ export function planningUuidFactory(): () => string {
 }
 
 /**
- * 创建一份已发布并被 `PLANNING_DEMAND_ID` 认领的需求包、Demand 根与修订 1 事件流，
- * 供 tasking、delivery、review、lifecycle 等测试直接进入后续阶段。
+ * 在一个空目录里建出已发布并被 `PLANNING_DEMAND_ID` 认领的需求包、Demand 根与修订 1
+ * 事件流。这是共享预备基线的初始化链；测试拿到的是它的副本。
  */
-export async function createTargetTaskPlanningWorkspaceFixture(
-  options: TargetTaskPlanningWorkspaceFixtureOptions = {},
-): Promise<Readonly<TargetTaskPlanningWorkspaceFixture>> {
+async function buildTargetTaskPlanningWorkspace(
+  fixtureRoot: string,
+  options: TargetTaskPlanningWorkspaceFixtureOptions,
+): Promise<Readonly<TargetTaskPlanningWorkspaceFacts>> {
   const testingMode = options.testingMode ?? "controller-only";
-  const fixtureRoot = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-target-task-planning-"),
-  );
   const workspacePath = path.join(fixtureRoot, "Workspace");
   const ledgerPath = path.join(fixtureRoot, "wakeflow-ledger");
   const productPath = path.join(fixtureRoot, "ProductA");
@@ -145,14 +160,18 @@ export async function createTargetTaskPlanningWorkspaceFixture(
     renderWakeflowConfigV3(config),
     { mode: 0o644 },
   );
-  const workspaceRoot = await RootedDirectory.open(workspacePath);
+  const workspaceRoot = await RootedDirectory.open(
+    workspacePath,
+    "$root",
+    DISPOSABLE_ROOT_OPTIONS,
+  );
   await materializeActiveLayout(workspaceRoot, { recovering: false });
   const testingSummary =
     testingMode === "real-environment"
       ? "在已确认Test环境中运行真实场景验证"
       : "运行新增 TypeScript 聚焦测试";
 
-  const ledgerRoot = await RootedDirectory.open(ledgerPath);
+  const ledgerRoot = await RootedDirectory.open(ledgerPath, "$root", DISPOSABLE_ROOT_OPTIONS);
   const ledgerStore = new LedgerAuthorityStore(ledgerRoot);
   await ledgerStore.initialize({ freshLedger: true });
   const loaded = await publishFixtureRequirement(ledgerStore, {
@@ -202,7 +221,11 @@ export async function createTargetTaskPlanningWorkspaceFixture(
   );
   mkdirSync(demandRootPath, { mode: 0o700 });
   chmodSync(demandRootPath, 0o700);
-  const demandRoot = await RootedDirectory.open(demandRootPath);
+  const demandRoot = await RootedDirectory.open(
+    demandRootPath,
+    "$root",
+    DISPOSABLE_ROOT_OPTIONS,
+  );
   try {
     const eventStore = new DemandFileEventStore(demandRoot);
     await eventStore.initialize();
@@ -279,13 +302,55 @@ export async function createTargetTaskPlanningWorkspaceFixture(
         lineage: null,
         sectionAnchors: [],
   };
+  await workspaceRoot.close();
+  return Object.freeze({ recordDigest: loaded.recordDigest, taskPackage });
+}
+
+const targetTaskPlanningWorkspaceStore = createPreparedWorkspaceStore<
+  TargetTaskPlanningWorkspaceFixtureOptions,
+  Readonly<TargetTaskPlanningWorkspaceFacts>
+>({
+  prefix: "wakeflow-target-task-planning-",
+  keyOf: targetTaskPlanningWorkspaceBaselineKey,
+  build: buildTargetTaskPlanningWorkspace,
+});
+
+/** 把一棵已建好（或刚复制好）的工作区树打开成夹具。 */
+export async function openTargetTaskPlanningWorkspaceFixture(
+  fixtureRoot: string,
+  facts: Readonly<TargetTaskPlanningWorkspaceFacts>,
+): Promise<Readonly<TargetTaskPlanningWorkspaceFixture>> {
+  const workspacePath = path.join(fixtureRoot, "Workspace");
   return Object.freeze({
     fixtureRoot,
     workspacePath,
-    workspaceRoot,
-    recordDigest: loaded.recordDigest,
-    request: Object.freeze({ demandId: PLANNING_DEMAND_ID, taskPackage }),
+    workspaceRoot: await RootedDirectory.open(workspacePath, "$root", DISPOSABLE_ROOT_OPTIONS),
+    recordDigest: facts.recordDigest,
+    request: Object.freeze({ demandId: PLANNING_DEMAND_ID, taskPackage: facts.taskPackage }),
   });
+}
+
+/**
+ * 创建一份已发布并被 `PLANNING_DEMAND_ID` 认领的需求包、Demand 根与修订 1 事件流，
+ * 供 tasking、delivery、review、lifecycle 等测试直接进入后续阶段。
+ *
+ * 同一测试进程里同档选项只初始化一次，之后每次调用复制一份隔离副本；因此同档副本的
+ * `recordDigest` 与任务包草稿是同一组稳定值（它们本来就由固定输入决定）。
+ */
+export async function createTargetTaskPlanningWorkspaceFixture(
+  options: TargetTaskPlanningWorkspaceFixtureOptions = {},
+): Promise<Readonly<TargetTaskPlanningWorkspaceFixture>> {
+  const prepared = await targetTaskPlanningWorkspaceStore.materialize(options);
+  return openTargetTaskPlanningWorkspaceFixture(prepared.fixtureRoot, prepared.facts);
+}
+
+/** 供更上层基线在本基线之上继续初始化：复制进已存在的目录并打开。 */
+export async function materializeTargetTaskPlanningWorkspaceFixture(
+  fixtureRoot: string,
+  options: TargetTaskPlanningWorkspaceFixtureOptions,
+): Promise<Readonly<TargetTaskPlanningWorkspaceFixture>> {
+  const facts = await targetTaskPlanningWorkspaceStore.materializeInto(fixtureRoot, options);
+  return openTargetTaskPlanningWorkspaceFixture(fixtureRoot, facts);
 }
 
 /** 经切片追加一份任务包；同一 fixture 同一键重放得同一结果。 */
@@ -311,7 +376,8 @@ export async function planFixtureTargetTask(
       taskPackage: overrides.taskPackage ?? fixture.request.taskPackage,
       ...(overrides.planReview === undefined ? {} : { planReview: overrides.planReview }),
     },
-    options,
+    // 一次性工作区：调用方仍可显式覆盖级别，但默认不为将被删掉的目录付 fsync。
+    { durability: DISPOSABLE_WORKSPACE_DURABILITY, ...options },
   );
 }
 

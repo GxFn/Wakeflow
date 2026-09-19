@@ -426,7 +426,9 @@ const TEXT = Object.freeze({
     pods: "Pods",
     podHeader: "| Pod | Placement | Lifecycle | Active demand | Worktrees |",
     demandHeader: "| Demand | Title | Type | Pod | Disposition | Frontier | Owner |",
-    unmerged: "Accepted results whose branch still exists",
+    unmerged: "Accepted implementation results with a recorded branch",
+    unmergedNote:
+      "Branch and commit are what the accepted result recorded. The projection cannot read repository pointers, so a branch listed here may already be merged or deleted; wakeflow_status reports the merge state.",
     unmergedHeader: "| Demand | Target | Repository | Branch | Commit |",
     none: "none",
     back: "Active workspace index",
@@ -466,7 +468,9 @@ const TEXT = Object.freeze({
     pods: "Pod",
     podHeader: "| Pod | 位置 | 生命周期 | 活动 Demand | Worktree |",
     demandHeader: "| Demand | 标题 | 类型 | Pod | 处置 | 前沿 | 责任方 |",
-    unmerged: "已接受但分支仍在的结果",
+    unmerged: "已接受且记录了分支的实现结果",
+    unmergedNote:
+      "分支与提交是被接受的结果当时记下的。投影读不到仓库指针，这里列出的分支可能已经合并或删除；合并状态由 wakeflow_status 报告。",
     unmergedHeader: "| Demand | 目标 | 仓库 | 分支 | 提交 |",
     none: "无",
     back: "活动工作区索引",
@@ -648,7 +652,11 @@ function renderStatus(facts: Readonly<ActiveProjectionFacts>, fingerprint: Sha25
       ? [text.noDemands]
       : [text.demandHeader, "| --- | --- | --- | --- | --- | --- | --- |", ...demands]),
     "",
+    // 投影按 projection 作用域派生，仓库域被有意置空（§13.94 D5），这一段因此只能说出它
+    // 真正有的东西：接受时记下的分支；分支还在不在、合没合并由 wakeflow_status 核对仓库指针。
     `## ${text.unmerged}`,
+    "",
+    `> ${text.unmergedNote}`,
     "",
     ...(unmerged.length === 0
       ? [text.none]
@@ -982,14 +990,37 @@ export interface ActiveProjectionPublicationReceipt {
 
 export interface PublishActiveProjectionOptions {
   readonly signal?: AbortSignal;
-  /** 维护事务的 affected-step 恢复：先退休失活的锁与遗留暂存文件。 */
+  /** 维护事务的 affected-step 恢复：先退休失活的锁，再结算遗留暂存文件。 */
   readonly recovering?: boolean;
   /**
    * 活动 Demand 的观察证据（`ActiveProjectionFacts.activeDemands`）。缺席或 `observed`
    * 为假的这一轮不退休任何页面目录：删除只在有"该 Demand 确实不再活动"的正面证据时进行。
+   * 锁内渲染时由 `ActiveProjectionRendering.activeDemands` 给出，它优先于这里。
    */
   readonly activeDemands?: Readonly<ActiveProjectionDemandEvidence>;
+  /**
+   * 取锁等待上限，默认 10 s。调用方要更快得到可重试的 `projection-contended`（而不是把
+   * 一个已经提交的事件挂在锁上等）时缩短它；语义与等待时长无关。
+   */
+  readonly acquireTimeoutMilliseconds?: number;
 }
+
+/** 锁内渲染的产物：目标文件，以及与它们同出一轮观察的退休证据。 */
+export interface ActiveProjectionRendering {
+  readonly files: readonly Readonly<ActiveProjectionFile>[];
+  readonly activeDemands?: Readonly<ActiveProjectionDemandEvidence>;
+}
+
+/**
+ * 要发布的东西：已经渲染好的一组文件，或一个在投影锁内才执行的渲染闭包。
+ *
+ * 闭包形式是并发正确的那一个：观察 → 事实 → 渲染 → 落盘全程在锁内，两轮刷新因此不能按
+ * 与各自观察相反的顺序落盘（CAS 只核对锁内那一刻的字节，不带任何先后）。数组形式给已经
+ * 定好内容的发布方（维护事务的 fresh/recover），它们没有这个窗口。
+ */
+export type ActiveProjectionRender =
+  | readonly Readonly<ActiveProjectionFile>[]
+  | (() => Promise<Readonly<ActiveProjectionRendering>>);
 
 function mapWriteError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
@@ -1195,7 +1226,12 @@ async function retireInactiveLock(root: RootedDirectory): Promise<void> {
   }
   if (lock.status !== "held" || lock.ownerState !== "inactive") return;
   try {
-    await retireRootedExclusiveFileLockResidue(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, lock);
+    // 退休先在锁的父目录内做 stage 恢复，集合外的 stage 一律拒绝。工作区索引与锁同住
+    // `.wakeflow-active/`，崩溃留下的索引 stage 因此必须一起声明：否则恢复恰好在它存在的
+    // 那一轮（也就是恢复存在的理由）以 residue-changed 失败，失活的锁再也退不掉。
+    await retireRootedExclusiveFileLockResidue(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, lock, {
+      relatedTargetResourcePaths: [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF],
+    });
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) {
       fail("io-failure", "projection-lock", "$projection", { cause: error });
@@ -1291,31 +1327,48 @@ function receiptOf(
  * 在投影锁内让磁盘等于渲染结果：任一目标 unsafe 整轮零写；否则缺失创建、过期 CAS 替换、
  * 当前不动；`files` 之外的 Demand 页面目录只在 `activeDemands` 证明这一轮看全了活动
  * Demand、且全部成员带标记时退休。
+ *
+ * `render` 是闭包时先取锁再渲染：观察与落盘之间没有第二个发布方插队的窗口。恢复语义里
+ * 退休失活的锁必须发生在取锁之前（不然谁也取不到），暂存结算则挪进锁内——它读的是同一批
+ * 目标所在的目录，锁内读才不会撞上另一个发布方正在写的活动 stage。
  */
 export async function publishActiveProjection(
   root: RootedDirectory,
-  files: readonly Readonly<ActiveProjectionFile>[],
+  render: ActiveProjectionRender,
   options: PublishActiveProjectionOptions = {},
 ): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
   assertRoot(root);
   const signal = options.signal;
   if (signal?.aborted === true) fail("io-failure", "aborted", "$signal");
-  if (options.recovering === true) {
-    await retireInactiveLock(root);
-    await settleStages(root, files, signal);
-  }
-  const evidence = options.activeDemands;
+  if (options.recovering === true) await retireInactiveLock(root);
   try {
     return await withRootedExclusiveFileLock(
       root,
       WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF,
-      () => publishLocked(root, files, evidence, signal),
-      { acquireTimeoutMilliseconds: LOCK_TIMEOUT_MILLISECONDS, ...signalOptions(signal) },
+      () => renderAndPublishLocked(root, render, options),
+      {
+        acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds ?? LOCK_TIMEOUT_MILLISECONDS,
+        ...signalOptions(signal),
+      },
     );
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) mapLockError(error);
     throw error;
   }
+}
+
+/** 锁内的一轮：渲染（或接过已渲染的文件）、按需结算暂存、再发布。 */
+async function renderAndPublishLocked(
+  root: RootedDirectory,
+  render: ActiveProjectionRender,
+  options: PublishActiveProjectionOptions,
+): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
+  const signal = options.signal;
+  const rendering: Readonly<ActiveProjectionRendering> =
+    typeof render === "function" ? await render() : { files: render };
+  const evidence = rendering.activeDemands ?? options.activeDemands;
+  if (options.recovering === true) await settleStages(root, rendering.files, signal);
+  return publishLocked(root, rendering.files, evidence, signal);
 }
 
 async function writeTargets(

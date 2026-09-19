@@ -4,6 +4,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -22,7 +23,10 @@ import { initSync, parse } from "es-module-lexer";
  * launcher（gate-log §13.97 D8）：`mcp/server.mjs`（宿主 MCP 入口）与 `hooks/observe.mjs`
  * （hook 观察脚本，闭包必须全是 shared 范围）；闭包取两个根的并集，按路径去重后每个文件
  * 只写一次。`hooks/hooks.json` 在运行时动态 import 该宿主编译后的 hook 片段模块渲染，并按
- * 该模块导出的摘要核对渲染字节——tooling 对编译产物没有静态类型边。它不会读取旧 JS
+ * 该模块导出的摘要核对渲染字节——tooling 对编译产物没有静态类型边。agent 面文本
+ * （gate-log §13.99 D3、D9）同样走这条缝：唯一的 Markdown 源根 `assets/agent-text/` 按该
+ * 宿主文本 profile 的取值表做一次封闭替换后逐文件写出，`commands/` 只进声明了命令面的候选，
+ * 清单以 `agentText[]` 索引这批文本。它不会读取旧 JS
  * 运行时来补能力，也不会更新 `plugins/`、安装缓存或任何发布版本来源。
  *
  * 候选制品明确标记为不可发布；它只验证 TS 单一源码能够形成 Codex 与 Claude Code
@@ -36,6 +40,19 @@ const MAXIMUM_COMPILED_MODULES = 1024;
 const CANDIDATE_VERSION = "0.0.0-technical-skeleton";
 const CANDIDATE_SCOPE = "typescript-public-technical-skeleton";
 
+/**
+ * agent 面文本（gate-log §13.99 D3、D9）：一份仓库相对的 Markdown 源根，渲染进每个候选。
+ * 它是非 TS 出厂资产，不进 tsconfig、不进闭包；宿主差异全部由宿主文本 profile 的取值表提供。
+ */
+const AGENT_TEXT_SOURCE_ROOT = "assets/agent-text";
+const AGENT_TEXT_MAXIMUM_FILES = 64;
+/** 只有这一份中文源（D6：技能与命令只发英文，README 双语）。 */
+const AGENT_TEXT_CHINESE_SUFFIX = ".zh-CN.md";
+/** 命令面是 Claude 独有（D2）；是否随本候选发出由宿主 profile 声明。 */
+const AGENT_TEXT_COMMAND_PREFIX = "commands/";
+const AGENT_TEXT_PLACEHOLDER_PATTERN = /\{\{([A-Za-z]+)\}\}/gu;
+const AGENT_TEXT_ERROR_CODE = "wakeflow-artifact-agent-text";
+
 type CandidateHostId = "codex" | "claude-code";
 type CompiledFileScope = "shared" | "current-host" | "peer-profile";
 type LauncherKind = "mcp" | "hook-observer";
@@ -48,6 +65,22 @@ interface LauncherDefinition {
   /** 编译根下的入口模块（闭包的根）。 */
   readonly entrypoint: string;
   readonly runExport: string;
+}
+
+type AgentTextLanguage = "en" | "zh";
+
+/** 制品内一份文件的范围陈述：`lib/` 下是闭包范围，其余是生成文件、宿主配置或出厂文本。 */
+type ArtifactFileScope = CompiledFileScope | "entrypoint" | "metadata" | "agent-text";
+
+/**
+ * 宿主文本 profile 模块（§13.99 D9）：与 hook 片段同一条缝，只在运行时动态 import，不进任何
+ * 闭包。构建器从它取三样东西：取值表（做占位符闭合核对）、渲染函数、命令面是否随本候选发出。
+ */
+interface AgentTextDefinition {
+  readonly module: string;
+  readonly renderExport: string;
+  readonly placeholdersExport: string;
+  readonly commandsIncludedExport: string;
 }
 
 interface HookFragmentDefinition {
@@ -83,6 +116,7 @@ interface CandidateDefinition extends CandidateHostIsolationRule {
     Readonly<LauncherDefinition & { readonly kind: "hook-observer" }>,
   ];
   readonly hookFragment: Readonly<HookFragmentDefinition>;
+  readonly agentText: Readonly<AgentTextDefinition>;
 }
 
 const HOOK_OBSERVER_LAUNCHER = Object.freeze({
@@ -111,6 +145,12 @@ const CANDIDATES = Object.freeze([
       renderExport: "renderCodexHooksJson",
       digestExport: "CODEX_HOOK_FRAGMENT_DIGEST",
     }),
+    agentText: Object.freeze({
+      module: "hosts/codex/codex-agent-text-profile.js",
+      renderExport: "renderCodexAgentText",
+      placeholdersExport: "CODEX_AGENT_TEXT_PLACEHOLDERS",
+      commandsIncludedExport: "CODEX_AGENT_TEXT_COMMANDS_INCLUDED",
+    }),
     currentHostDirectory: "hosts/codex/",
     peerHostDirectory: "hosts/claude-code/",
     admittedPeerModules: Object.freeze([
@@ -135,6 +175,12 @@ const CANDIDATES = Object.freeze([
       module: "hosts/claude-code/claude-code-hook-fragment.js",
       renderExport: "renderClaudeCodeHooksJson",
       digestExport: "CLAUDE_CODE_HOOK_FRAGMENT_DIGEST",
+    }),
+    agentText: Object.freeze({
+      module: "hosts/claude-code/claude-code-agent-text-profile.js",
+      renderExport: "renderClaudeCodeAgentText",
+      placeholdersExport: "CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS",
+      commandsIncludedExport: "CLAUDE_CODE_AGENT_TEXT_COMMANDS_INCLUDED",
     }),
     currentHostDirectory: "hosts/claude-code/",
     peerHostDirectory: "hosts/codex/",
@@ -534,22 +580,26 @@ function isModuleNamespace(value: unknown): value is Readonly<Record<string, unk
   return typeof value === "object" && value !== null;
 }
 
-/** 动态 import 该宿主编译后的 hook 片段模块（§13.97 D8）：tooling 对编译产物没有静态类型边。 */
-async function importHookFragmentModule(
+/**
+ * 动态 import 一个编译后的宿主 profile 模块（§13.97 D8、§13.99 D9）：tooling 对编译产物
+ * 没有静态类型边，所以只按路径加载并核对命名空间形状，调用方各自核对自己要的导出。
+ */
+async function importCompiledHostModule(
   compiledRoot: string,
-  definition: Readonly<CandidateDefinition>,
+  relativeModule: string,
+  code: string,
 ): Promise<Readonly<Record<string, unknown>>> {
-  const modulePath = path.resolve(compiledRoot, definition.hookFragment.module);
+  const modulePath = path.resolve(compiledRoot, relativeModule);
   assertBelow(compiledRoot, modulePath, "wakeflow-artifact-module-scope");
   readBoundedRegularFile(modulePath);
   let loaded: unknown;
   try {
     loaded = await import(pathToFileURL(modulePath).href);
   } catch {
-    fail("wakeflow-artifact-hook-fragment", "compiled hook fragment module could not be loaded");
+    fail(code, `compiled host module could not be loaded: ${relativeModule}`);
   }
   if (!isModuleNamespace(loaded)) {
-    fail("wakeflow-artifact-hook-fragment", "compiled hook fragment module is not a namespace");
+    fail(code, `compiled host module is not a namespace: ${relativeModule}`);
   }
   return loaded;
 }
@@ -610,10 +660,204 @@ async function hooksJsonBytes(
   compiledRoot: string,
   definition: Readonly<CandidateDefinition>,
 ): Promise<Buffer> {
-  const namespace = await importHookFragmentModule(compiledRoot, definition);
+  const namespace = await importCompiledHostModule(
+    compiledRoot,
+    definition.hookFragment.module,
+    "wakeflow-artifact-hook-fragment",
+  );
   const rendered = renderHookFragment(namespace, definition);
   assertRenderedHookFragmentDigest(rendered, namespace[definition.hookFragment.digestExport]);
   return Buffer.from(rendered, "utf8");
+}
+
+/**
+ * agent 面文本的一份源文件（§13.99 D3）：源根下的相对路径就是制品内路径，所以代码里点名的
+ * 技能路径（`DELIVERY_REQUIRED_SKILLS`）在制品里逐字成立。语言只由文件名决定（D6）。
+ */
+interface AgentTextSourceFile {
+  readonly path: string;
+  readonly language: AgentTextLanguage;
+  readonly text: string;
+}
+
+/** 某个占位符在源目录里被哪几种语言的文件用到；两面都要有用户，否则取值是死的。 */
+interface AgentTextPlaceholderUsage {
+  readonly en: boolean;
+  readonly zh: boolean;
+}
+
+interface AgentTextPlaceholderValue {
+  readonly en: string;
+  readonly zh?: string;
+}
+
+interface AgentTextRenderedFile {
+  readonly path: string;
+  readonly bytes: Buffer;
+}
+
+/** 确定性收集：只收普通 Markdown 文件，符号链接与其他扩展名一律失败，按路径码元排序。 */
+function collectAgentTextSources(root: string): readonly Readonly<AgentTextSourceFile>[] {
+  const files: AgentTextSourceFile[] = [];
+  const pending: string[] = [""];
+  while (pending.length > 0) {
+    const directory = pending.pop() ?? "";
+    for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
+      // 隐藏项从不是出厂文本（`.DS_Store` 之类的宿主残留），跳过它们比让构建红灯更诚实；
+      // 其余任何非 Markdown 或非普通文件都以稳定错误码失败。
+      if (entry.name.startsWith(".")) continue;
+      const relative = directory === "" ? entry.name : `${directory}/${entry.name}`;
+      if (entry.isDirectory()) {
+        pending.push(relative);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".md")) {
+        fail(AGENT_TEXT_ERROR_CODE, `agent text source must be Markdown files only: ${relative}`);
+      }
+      const absolute = path.join(root, relative);
+      assertBelow(root, absolute, "wakeflow-artifact-agent-text-scope");
+      files.push(
+        Object.freeze({
+          path: relative,
+          language: entry.name.endsWith(AGENT_TEXT_CHINESE_SUFFIX) ? "zh" : "en",
+          text: readBoundedRegularFile(absolute).toString("utf8"),
+        }),
+      );
+    }
+  }
+  if (files.length === 0 || files.length > AGENT_TEXT_MAXIMUM_FILES) {
+    fail(AGENT_TEXT_ERROR_CODE, "agent text source tree is empty or oversized");
+  }
+  files.sort((left, right) => compareCodeUnits(left.path, right.path));
+  return Object.freeze(files);
+}
+
+function scanAgentTextPlaceholders(
+  sources: readonly Readonly<AgentTextSourceFile>[],
+): ReadonlyMap<string, Readonly<AgentTextPlaceholderUsage>> {
+  const usage = new Map<string, Readonly<AgentTextPlaceholderUsage>>();
+  for (const source of sources) {
+    for (const match of source.text.matchAll(AGENT_TEXT_PLACEHOLDER_PATTERN)) {
+      const key = match[1] ?? "";
+      const previous = usage.get(key);
+      usage.set(
+        key,
+        Object.freeze({
+          en: (previous?.en ?? false) || source.language === "en",
+          zh: (previous?.zh ?? false) || source.language === "zh",
+        }),
+      );
+    }
+  }
+  return usage;
+}
+
+/** 宿主取值表的形状核对：每个键至少有非空 `en`，`zh` 可缺席但不可为空。 */
+function parseAgentTextPlaceholderTable(
+  value: unknown,
+): ReadonlyMap<string, Readonly<AgentTextPlaceholderValue>> {
+  if (!isPlainRecord(value)) {
+    fail(AGENT_TEXT_ERROR_CODE, "agent text profile lacks its placeholder table");
+  }
+  const table = new Map<string, Readonly<AgentTextPlaceholderValue>>();
+  for (const [key, entry] of Object.entries(value)) {
+    if (!isPlainRecord(entry) || typeof entry.en !== "string" || entry.en.length === 0) {
+      fail(AGENT_TEXT_ERROR_CODE, `agent text value is not one non-empty English text: ${key}`);
+    }
+    if (entry.zh !== undefined && (typeof entry.zh !== "string" || entry.zh.length === 0)) {
+      fail(AGENT_TEXT_ERROR_CODE, `agent text Chinese value is not one non-empty text: ${key}`);
+    }
+    table.set(
+      key,
+      Object.freeze(
+        typeof entry.zh === "string" ? { en: entry.en, zh: entry.zh } : { en: entry.en },
+      ),
+    );
+  }
+  return table;
+}
+
+/**
+ * 封闭性（D3）：源里出现未登记的占位符，或取值表里有没被任何源文件用到的取值面，构建即失败。
+ * `en` 面在"只被中文文件用到且该键另有 `zh` 面"时才算没有用户——否则它就是中文文件的回退值。
+ */
+function assertAgentTextClosure(
+  usage: ReadonlyMap<string, Readonly<AgentTextPlaceholderUsage>>,
+  table: ReadonlyMap<string, Readonly<AgentTextPlaceholderValue>>,
+): void {
+  for (const key of usage.keys()) {
+    if (!table.has(key)) {
+      fail(AGENT_TEXT_ERROR_CODE, `agent text source uses an unregistered placeholder: ${key}`);
+    }
+  }
+  for (const [key, value] of table) {
+    const used = usage.get(key);
+    if (used === undefined) {
+      fail(AGENT_TEXT_ERROR_CODE, `agent text value has no user: ${key}`);
+    }
+    if (value.zh !== undefined && !used.zh) {
+      fail(AGENT_TEXT_ERROR_CODE, `agent text Chinese value has no user: ${key}`);
+    }
+    if (!used.en && value.zh !== undefined) {
+      fail(AGENT_TEXT_ERROR_CODE, `agent text English value has no user: ${key}`);
+    }
+  }
+}
+
+function renderAgentTextFiles(
+  sources: readonly Readonly<AgentTextSourceFile>[],
+  render: (text: string, language: AgentTextLanguage) => unknown,
+  commandsIncluded: boolean,
+): readonly Readonly<AgentTextRenderedFile>[] {
+  const rendered: AgentTextRenderedFile[] = [];
+  for (const source of sources) {
+    if (!commandsIncluded && source.path.startsWith(AGENT_TEXT_COMMAND_PREFIX)) continue;
+    const text: unknown = render(source.text, source.language);
+    if (typeof text !== "string" || text.length === 0) {
+      fail(AGENT_TEXT_ERROR_CODE, `agent text render returned no text: ${source.path}`);
+    }
+    if (text.includes("{{")) {
+      fail(AGENT_TEXT_ERROR_CODE, `agent text render left a placeholder behind: ${source.path}`);
+    }
+    rendered.push(Object.freeze({ path: source.path, bytes: Buffer.from(text, "utf8") }));
+  }
+  if (rendered.length === 0) {
+    fail(AGENT_TEXT_ERROR_CODE, "agent text render produced no file");
+  }
+  return Object.freeze(rendered);
+}
+
+/**
+ * 整棵源目录按该宿主的取值表渲染（§13.99 D3、D9）：一次封闭替换，`commands/` 只进声明了
+ * 命令面的候选。渲染字节只由源文本与取值表决定，所以两次构建字节一致。
+ */
+async function agentTextFiles(
+  repositoryRoot: string,
+  compiledRoot: string,
+  definition: Readonly<CandidateDefinition>,
+): Promise<readonly Readonly<AgentTextRenderedFile>[]> {
+  const root = path.join(repositoryRoot, AGENT_TEXT_SOURCE_ROOT);
+  assertRealDirectory(root, AGENT_TEXT_SOURCE_ROOT);
+  const sources = collectAgentTextSources(root);
+  const namespace = await importCompiledHostModule(
+    compiledRoot,
+    definition.agentText.module,
+    AGENT_TEXT_ERROR_CODE,
+  );
+  const render = namespace[definition.agentText.renderExport];
+  const commandsIncluded = namespace[definition.agentText.commandsIncludedExport];
+  if (typeof render !== "function" || typeof commandsIncluded !== "boolean") {
+    fail(AGENT_TEXT_ERROR_CODE, "agent text profile lacks its render or command-surface export");
+  }
+  assertAgentTextClosure(
+    scanAgentTextPlaceholders(sources),
+    parseAgentTextPlaceholderTable(namespace[definition.agentText.placeholdersExport]),
+  );
+  return renderAgentTextFiles(
+    sources,
+    render as (text: string, language: AgentTextLanguage) => unknown,
+    commandsIncluded,
+  );
 }
 
 function mcpConfiguration(definition: Readonly<CandidateDefinition>): JsonRecord {
@@ -674,7 +918,7 @@ interface GeneratedFile {
   readonly path: string;
   readonly bytes: Buffer;
   readonly mode: 0o644 | 0o755;
-  readonly scope: CompiledFileScope | "entrypoint" | "metadata";
+  readonly scope: ArtifactFileScope;
 }
 
 /** 两个 launcher 各自的闭包：hook 观察脚本的闭包必须全是 shared 范围，随后取并集写入。 */
@@ -739,9 +983,10 @@ async function assembleCandidate(
       bytes: number;
       sha256: string;
       mode: "0644" | "0755";
-      scope: CompiledFileScope | "entrypoint" | "metadata";
+      scope: ArtifactFileScope;
     }>
   > = [];
+  const agentText: Array<Readonly<{ path: string; bytes: number; sha256: string }>> = [];
 
   for (const relative of closure.files) {
     const bytes = compiledArtifactBytes(readBoundedRegularFile(path.join(compiledRoot, relative)));
@@ -808,6 +1053,17 @@ async function assembleCandidate(
     );
   }
 
+  for (const file of await agentTextFiles(repositoryRoot, compiledRoot, definition)) {
+    writeExclusive(candidateRoot, file.path, file.bytes);
+    const entry = Object.freeze({
+      path: file.path,
+      bytes: file.bytes.byteLength,
+      sha256: sha256(file.bytes),
+    });
+    payload.push(Object.freeze({ ...entry, mode: "0644" as const, scope: "agent-text" as const }));
+    agentText.push(entry);
+  }
+
   payload.sort((left, right) => compareCodeUnits(left.path, right.path));
   const manifest = {
     kind: "WakeflowTypescriptArtifactCandidateManifest",
@@ -821,6 +1077,9 @@ async function assembleCandidate(
     runtimeEntrypoint: mcpLauncher.runtimeEntrypoint,
     runtimeEntrypoints: manifestRuntimeEntrypoints(definition),
     externalPackages: closure.externalPackages,
+    // D9：出厂文本面的独立索引。`files` 仍是制品的完整文件清册（文本以 `agent-text` 范围
+    // 列在其中），`agentText[]` 让只关心文本的消费者不必按范围过滤，两者的摘要必须相等。
+    agentText: Object.freeze(agentText),
     files: payload,
   } as const;
   const manifestBytes = jsonBytes(manifest);

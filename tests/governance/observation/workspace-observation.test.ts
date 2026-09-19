@@ -1,7 +1,6 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
@@ -29,6 +28,7 @@ import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.
 import { createWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observation-facade.fixture.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
@@ -77,35 +77,57 @@ async function openLedger(snapshot: Readonly<WakeflowConfigAuthoritySnapshot>) {
   return RootedDirectory.open(placement.absolutePath);
 }
 
-/** 经公共维护工具（Codex 制品）初始化的一次性工作区，兄弟产品仓库带一个提交。 */
+interface ObservationWorkspaceFacts {
+  readonly headCommit: string;
+}
+
+/**
+ * 经公共维护工具（Codex 制品）初始化的工作区基线，兄弟产品仓库带一个提交。
+ *
+ * 初始化链只跑一次：前三个测试之前各跑一遍 `git init` 与 `fresh-initialize` 的 preview
+ * 与 apply，现在链留在基线里，每个测试按需复制一份自己的真实文件系统副本。配置权威快照
+ * 与 Ledger 句柄仍在副本上现开，因为它们记的是这一份副本的绝对路径。
+ */
+const observationWorkspaceStore = createPreparedWorkspaceStore<
+  undefined,
+  Readonly<ObservationWorkspaceFacts>
+>({
+  prefix: "wakeflow-observation-",
+  keyOf: () => "maintained",
+  build: async (base) => {
+    const root = path.join(base, "Workspace");
+    const product = path.join(base, "ProductA");
+    mkdirSync(root);
+    mkdirSync(product);
+    git(root, "init", "--quiet");
+    git(product, "init", "--quiet", "--initial-branch=main");
+    git(product, "commit", "--quiet", "--allow-empty", "-m", "init");
+    const selection = createMinimalWakeflowFreshConfigSelection();
+    (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+    const preview = await executeCodexWakeflowMaintenance({
+      root,
+      action: "fresh-initialize",
+      mode: "preview",
+      request: { selection },
+    });
+    if (preview.mode !== "preview" || preview.planDigest === null) {
+      throw new Error("Expected a ready Fresh plan.");
+    }
+    await executeCodexWakeflowMaintenance({
+      root,
+      action: "fresh-initialize",
+      mode: "apply",
+      request: { selection },
+      planDigest: preview.planDigest,
+    });
+    return Object.freeze({ headCommit: git(product, "rev-parse", "HEAD") });
+  },
+});
+
 async function maintainedWorkspace(t: TestContext): Promise<Workspace> {
-  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-observation-")));
-  t.after(() => rmSync(base, { recursive: true, force: true }));
-  const root = path.join(base, "Workspace");
-  const product = path.join(base, "ProductA");
-  mkdirSync(root);
-  mkdirSync(product);
-  git(root, "init", "--quiet");
-  git(product, "init", "--quiet", "--initial-branch=main");
-  git(product, "commit", "--quiet", "--allow-empty", "-m", "init");
-  const selection = createMinimalWakeflowFreshConfigSelection();
-  (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  const preview = await executeCodexWakeflowMaintenance({
-    root,
-    action: "fresh-initialize",
-    mode: "preview",
-    request: { selection },
-  });
-  if (preview.mode !== "preview" || preview.planDigest === null) {
-    throw new Error("Expected a ready Fresh plan.");
-  }
-  await executeCodexWakeflowMaintenance({
-    root,
-    action: "fresh-initialize",
-    mode: "apply",
-    request: { selection },
-    planDigest: preview.planDigest,
-  });
+  const prepared = await observationWorkspaceStore.materialize(undefined);
+  t.after(() => rmSync(prepared.fixtureRoot, { recursive: true, force: true }));
+  const root = path.join(realpathSync(prepared.fixtureRoot), "Workspace");
   const rooted = await RootedDirectory.open(root);
   const snapshot = await readWakeflowConfigAuthoritySnapshot(rooted);
   const ledgerRoot = await openLedger(snapshot);
@@ -113,7 +135,7 @@ async function maintainedWorkspace(t: TestContext): Promise<Workspace> {
     await ledgerRoot.close();
     await rooted.close();
   });
-  return { root, rooted, snapshot, ledgerRoot, headCommit: git(product, "rev-parse", "HEAD") };
+  return { root, rooted, snapshot, ledgerRoot, headCommit: prepared.facts.headCommit };
 }
 
 async function observe(

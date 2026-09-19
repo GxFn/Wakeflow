@@ -11,6 +11,7 @@ import {
   publishActiveProjection,
   renderActiveProjectionFiles,
   type ActiveProjectionPublicationReceipt,
+  type ActiveProjectionRendering,
 } from "../../kernel/active-projection.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { buildActiveProjectionFacts } from "./active-projection-facts.js";
@@ -30,6 +31,8 @@ import { observeWorkspace } from "./workspace-observation.js";
 
 export interface RefreshActiveProjectionOptions {
   readonly signal?: AbortSignal;
+  /** 取投影锁的预算，透传给内核；缺省是内核的 10 秒。测试用它把争用变成快速可观察的失败。 */
+  readonly acquireTimeoutMilliseconds?: number;
 }
 
 function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
@@ -37,6 +40,7 @@ function signalOptions(signal: AbortSignal | undefined): { readonly signal?: Abo
 }
 
 async function openLedgerRoot(
+  root: RootedDirectory,
   snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
 ): Promise<RootedDirectory> {
   const placement = snapshot.placements.roots.find((entry) => entry.key === "ledger.root");
@@ -44,7 +48,9 @@ async function openLedgerRoot(
     fail("precondition-failed", "ledger-root-missing", "$request.root");
   }
   try {
-    return await RootedDirectory.open(placement.absolutePath, "$ledgerRoot");
+    return await RootedDirectory.open(placement.absolutePath, "$ledgerRoot", {
+      durability: root.durability,
+    });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", "ledger-root", "$request.root", { cause: error });
@@ -53,14 +59,12 @@ async function openLedgerRoot(
   }
 }
 
-/** 观察、渲染、发布；返回发布回执（`unsafe` 表示手写文件让整轮零写）。 */
-export async function refreshActiveProjection(
+async function readSnapshot(
   root: RootedDirectory,
-  options: RefreshActiveProjectionOptions = {},
-): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
-  let snapshot: Readonly<WakeflowConfigAuthoritySnapshot>;
+  signal: AbortSignal | undefined,
+): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
   try {
-    snapshot = await readWakeflowConfigAuthoritySnapshot(root, signalOptions(options.signal));
+    return await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal));
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
       if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
@@ -68,20 +72,46 @@ export async function refreshActiveProjection(
     }
     throw error;
   }
-  const ledgerRoot = await openLedgerRoot(snapshot);
+}
+
+/** 锁内的一轮：观察、压成事实、渲染；退休证据与文件同出这一轮观察。 */
+async function renderRound(
+  root: RootedDirectory,
+  snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
+  ledgerRoot: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<ActiveProjectionRendering>> {
+  const observation = await observeWorkspace(root, snapshot, ledgerRoot, {
+    hosts: [],
+    currentHostId: null,
+    scope: "projection",
+    ...signalOptions(signal),
+  });
+  const facts = buildActiveProjectionFacts(observation);
+  // 这一轮没看全活动 Demand 就一个页面目录都不删。
+  return { files: renderActiveProjectionFiles(facts), activeDemands: facts.activeDemands };
+}
+
+/**
+ * 观察、渲染、发布；返回发布回执（`unsafe` 表示手写文件让整轮零写）。
+ *
+ * 观察、事实与渲染都在投影锁内：发布只按锁内那一刻的字节做 CAS，本身不带先后，所以在锁外
+ * 观察的两轮并发刷新可以按与各自观察相反的顺序落盘，把旧状态写在新状态上，一直留到下一次
+ * 变更才自愈。取锁在观察之前，这一轮读到的工作区就是它写回去的那一个。配置快照与账本根仍在
+ * 锁外取得：它们决定这次刷新有没有可读的工作区，读不出就该以自己的原因失败，而不是先去占锁。
+ */
+export async function refreshActiveProjection(
+  root: RootedDirectory,
+  options: RefreshActiveProjectionOptions = {},
+): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
+  const snapshot = await readSnapshot(root, options.signal);
+  const ledgerRoot = await openLedgerRoot(root, snapshot);
   try {
-    const observation = await observeWorkspace(root, snapshot, ledgerRoot, {
-      hosts: [],
-      currentHostId: null,
-      scope: "projection",
+    return await publishActiveProjection(root, () => renderRound(root, snapshot, ledgerRoot, options.signal), {
       ...signalOptions(options.signal),
-    });
-    const facts = buildActiveProjectionFacts(observation);
-    const files = renderActiveProjectionFiles(facts);
-    // 退休证据与文件同出一轮观察：这一轮没看全活动 Demand 就一个页面目录都不删。
-    return await publishActiveProjection(root, files, {
-      activeDemands: facts.activeDemands,
-      ...signalOptions(options.signal),
+      ...(options.acquireTimeoutMilliseconds === undefined
+        ? {}
+        : { acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds }),
     });
   } finally {
     await ledgerRoot.close();

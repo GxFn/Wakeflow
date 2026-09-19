@@ -8,9 +8,13 @@
 
 ## 1. 已接线场景
 
+已接线 20 个场景，骨架一次运行全部 `pass`（`card-10/release-consistency` 属 L3，仍在 §2）。
+
 | 场景编号 | 能力卡 | 场景 | 断言 | 当前结论 |
 | --- | --- | --- | --- | --- |
 | `card-01/fresh-initialize` | 01 | 一次性工作区初始化 | preview 零写且 `ready`；apply `completed`；`wakeflow.config.json` 与 `.wakeflow-active` 存在；结果不含私有路径 | pass |
+| `card-01/reconcile-noop` | 01 | 健康工作区 reconcile 零步 no-op | 刚初始化的工作区上 preview `ready`、零阻塞、计划零步、零 launchIntent 且整树零写；apply 为 `no-op`、`operationId` 为 null、零回执、`next` 为 `{null, none, null, []}` 且整树零写；结果不含私有路径 | pass |
+| `card-01/reconfigure` | 01 | 重新配置：拓扑、存储与 pods 的改动被拒，可改项 preview 零写且 apply 只改声明差异 | `storage.ledgerRoot` 改动被拒（`blocked`，`planDigest` 与 `plan` 为 null，blockerCodes 为 `ledger-root-missing, reconfigure-layout-change-unsupported`）；`pods[]` 改名被拒（`blocked`，blockerCodes 恰为 `reconfigure-pods-change-unsupported`）；只加 `program.description` 这一条声明差异时 preview `ready`、零阻塞、计划恰为 `recompose-program-instruction` 与 `publish-config` 两步且整树零写；apply `completed`、两条回执，整树只有 `AGENTS.md`、`wakeflow.config.json` 与变更后统一刷新的两份活动投影发生变化，配置里 topology、storage、pods、hosts、presentation、governance 六段逐字节不变；结果不含私有路径 | pass |
 | `card-03/requirement-package` | 03 | 需求包 preview 摘要、章节校验、发布即上板 | 缺用户确认时 preview `blocked` 且返回摘要；带 `confirmedAt` 后 `ready` 且零写；apply `published` 上板 `pending`，`next` 指向认领；`inspect_board` 列出 1 个 pending；ledger 记录目录存在；结果不含私有路径 | pass |
 | `card-04/create-demand` | 04 | 认领需求包即创建 Demand | `create_demand(requirementId)` 返回 `claim.stateRevision` 2；看板 package 视图为 `claimed` 且指向该 Demand；Route 为 `work-available` 且前沿含实现任务规划 | pass |
 | `card-02/window-handshake` | 02 | 窗口握手：启动意图、Agent 回执、绑定登记 | inspect 为 `unregistered` 且执行参数为 Codex `create_thread`；写入 `session-start` hook 记录后 register 为 `registered`；同一回执重放 `replayed`；结果与投影不含原始句柄与私有路径 | pass |
@@ -35,8 +39,6 @@
 
 | 场景编号 | 能力卡 | 场景 | 依赖切片 |
 | --- | --- | --- | --- |
-| `card-01/reconfigure` | 01 | 重新配置拓扑，preview 零写，apply 只改声明差异 | maintenance reconfigure |
-| `card-01/reconcile-noop` | 01 | 健康工作区 reconcile 零步 `no-op` | maintenance reconcile |
 | `card-10/release-consistency` | 10 | 五源一致、标签在 HEAD、Node 24 | L3 |
 
 ## 3. 未执行标注

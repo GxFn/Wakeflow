@@ -13,7 +13,10 @@ import {
   parsePortableResourcePath,
   PortableResourcePathError,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type {
+  RootedDirectory,
+  RootedDirectoryDurability,
+} from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
   StableFileReadError,
@@ -127,7 +130,7 @@ import {
   type AppendCommandBinding,
   type AppendCommandEnvelope,
 } from "../../kernel/append-command.js";
-import { runCommandShell } from "../../kernel/command-shell.js";
+import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
@@ -209,6 +212,8 @@ export interface ResultReviewHostFacade {
 }
 
 export interface ExecuteResultReviewOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
   readonly uuidFactory?: UuidV4Factory;
@@ -1014,6 +1019,7 @@ export async function executeTargetResultImportRequest(
       result: importResult,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }
 
@@ -1405,6 +1411,7 @@ export async function executeTargetResultReviewInspectionRequest(
     value,
     () => undefined,
     (context, binding) => inspectReview(context, binding.input),
+    commandShellExecutionOptions(options.durability),
   );
 }
 
@@ -1713,6 +1720,7 @@ export async function executeImplementationReviewDecisionRequest(
       result: implementationDecisionResult,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }
 
@@ -1940,5 +1948,6 @@ export async function executeTestReviewDecisionRequest(
       result: testDecisionResult,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }

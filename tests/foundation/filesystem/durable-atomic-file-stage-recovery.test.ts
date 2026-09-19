@@ -41,7 +41,9 @@ test("atomic stage recovery 回滚 inactive single-link partial stage", async ()
     "wakeflow-atomic-stage-rollback-",
   ));
   mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
-  const root = await RootedDirectory.open(rootPath);
+  const root = await RootedDirectory.open(rootPath, "$root", {
+    durability: "fsync",
+  });
   const targetRef = parsePortableResourcePath("records/record.json");
   const intendedBytes = encodeUtf8("complete-payload");
   const address = issueDurableAtomicFileStageAddress(
@@ -84,7 +86,9 @@ test("atomic stage recovery 前向结算 exact two-link create publication", asy
     "wakeflow-atomic-stage-forward-",
   ));
   mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
-  const root = await RootedDirectory.open(rootPath);
+  const root = await RootedDirectory.open(rootPath, "$root", {
+    durability: "fsync",
+  });
   const targetRef = parsePortableResourcePath("records/record.json");
   const bytes = encodeUtf8("complete-payload");
   const address = issueDurableAtomicFileStageAddress(
@@ -125,7 +129,9 @@ test("atomic stage recovery 保留 active stage 并拒绝 malformed reserved nam
     "wakeflow-atomic-stage-active-",
   ));
   mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
-  const root = await RootedDirectory.open(rootPath);
+  const root = await RootedDirectory.open(rootPath, "$root", {
+    durability: "fsync",
+  });
   const targetRef = parsePortableResourcePath("records/record.json");
   const bytes = encodeUtf8("payload");
   const address = issueDurableAtomicFileStageAddress(
@@ -179,7 +185,9 @@ test("target-scoped atomic stage recovery rejects foreign stages before mutation
     "wakeflow-atomic-stage-target-scope-",
   ));
   mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
-  const root = await RootedDirectory.open(rootPath);
+  const root = await RootedDirectory.open(rootPath, "$root", {
+    durability: "fsync",
+  });
   const firstTarget = parsePortableResourcePath("records/first.json");
   const secondTarget = parsePortableResourcePath("records/second.json");
   const bytes = encodeUtf8("candidate");

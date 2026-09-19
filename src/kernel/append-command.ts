@@ -1,6 +1,6 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import { runCommandShell } from "./command-shell.js";
+import { runCommandShell, type CommandShellExecutionOptions } from "./command-shell.js";
 import { fail } from "./error.js";
 import { deriveDemandCommitId, parseIdempotencyKey } from "./ids.js";
 import type { NextProjection } from "./next-projection.js";
@@ -68,10 +68,11 @@ const NO_NEXT: Readonly<NextProjection> = Object.freeze({
   blockers: Object.freeze([]),
 });
 
-/** 执行一个追加型公共命令。 */
+/** 执行一个追加型公共命令；`options` 是注入的执行选项，不是请求的一部分。 */
 export async function runAppendCommand<Input, Context, Outcome, Result>(
   spec: Readonly<AppendCommandSpec<Input, Context, Outcome, Result>>,
   value: unknown,
+  options: Readonly<CommandShellExecutionOptions> = {},
 ): Promise<Result> {
   return runCommandShell<AppendCommandEnvelope, Input, Context, Result>(
     spec,
@@ -101,5 +102,6 @@ export async function runAppendCommand<Input, Context, Outcome, Result>(
       const next = spec.next === undefined ? NO_NEXT : await spec.next(context, outcome);
       return spec.result(envelope, outcome, next);
     },
+    options,
   );
 }

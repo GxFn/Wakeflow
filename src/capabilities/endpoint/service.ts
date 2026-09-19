@@ -32,7 +32,10 @@ import {
   parsePortableResourcePath,
   type PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type {
+  RootedDirectory,
+  RootedDirectoryDurability,
+} from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
@@ -45,7 +48,7 @@ import {
   type WorkClaim,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
 } from "../../kernel/work-claims.js";
-import { runCommandShell } from "../../kernel/command-shell.js";
+import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import {
   HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
@@ -156,6 +159,8 @@ export interface WindowBindingHostFacade {
 }
 
 export interface ExecuteWindowBindingOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   /** 测试接缝：固定新绑定的标识；生产不传。 */
   readonly uuidFactory?: UuidV4Factory;
@@ -1392,5 +1397,6 @@ export async function executeWindowBindingRequest(
     value,
     () => {},
     (context, binding) => executeOperation(context, binding.input),
+    commandShellExecutionOptions(options.durability),
   );
 }

@@ -62,6 +62,59 @@ test("a canonical real directory opens as a handle-backed root", async () => {
   }
 });
 
+test("持久化级别是打开时固定的根属性，缺省与显式 fsync 等价", async (t) => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-rooted-dir-durability-"));
+  t.after(() => rmSync(rootPath, { recursive: true, force: true }));
+
+  const inherited = await RootedDirectory.open(rootPath);
+  const explicitDurable = await RootedDirectory.open(rootPath, "$root", {
+    durability: "fsync",
+  });
+  const disposable = await RootedDirectory.open(rootPath, "$root", {
+    durability: "none",
+  });
+  try {
+    equal(inherited.durability, "fsync");
+    equal(explicitDurable.durability, "fsync");
+    equal(disposable.durability, "none");
+    // 缺省与空选项都必须落在 fsync，绝不能因为传了一个空对象就悄悄降档。
+    const emptyOptions = await RootedDirectory.open(rootPath, "$root", {});
+    try {
+      equal(emptyOptions.durability, "fsync");
+    } finally {
+      await emptyOptions.close();
+    }
+  } finally {
+    await inherited.close();
+    await explicitDurable.close();
+    await disposable.close();
+  }
+});
+
+test("非法的持久化级别与未知选项键按 root-input 拒绝", async (t) => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-rooted-dir-durability-input-"));
+  t.after(() => rmSync(rootPath, { recursive: true, force: true }));
+
+  for (const options of [
+    { durability: "fsync-ish" },
+    { durability: null },
+    { durability: "fsync", unknown: true },
+    { unknown: true },
+    "fsync",
+    42,
+    // 数组也是 object：选项形状必须按普通记录判定，不能只看 typeof。
+    [],
+    ["fsync"],
+    Object.assign([], { durability: "none" }),
+  ] as const) {
+    await expectRootedDirectoryError(
+      () => RootedDirectory.open(rootPath, "$.root", options as never),
+      "root-input",
+      "$.root",
+    );
+  }
+});
+
 test("root input must be normalized, absolute, non-root, and present", async () => {
   for (const value of [
     "relative/root",

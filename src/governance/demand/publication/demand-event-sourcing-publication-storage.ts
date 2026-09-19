@@ -387,6 +387,8 @@ export async function openDemandPublicationRoot(
   try {
     opened = await RootedDirectory.open(
       publicationPhysicalPath(workspaceRoot, ref),
+      undefined,
+      { durability: workspaceRoot.durability },
     );
     const current = await opened.assertCurrent("$demandRoot");
     if (

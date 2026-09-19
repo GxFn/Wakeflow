@@ -1,7 +1,10 @@
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
-import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type {
+  RootedDirectory,
+  RootedDirectoryDurability,
+} from "../../foundation/filesystem/rooted-directory.js";
 import { readStrictTextFile } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
@@ -61,6 +64,7 @@ import {
   type AppendCommandBinding,
   type AppendCommandEnvelope,
 } from "../../kernel/append-command.js";
+import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError } from "../../kernel/error.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
@@ -96,6 +100,8 @@ import {
  */
 
 export interface ExecuteTargetTaskPlanningOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
 }
@@ -737,5 +743,6 @@ export async function executeTargetTaskPlanningPublicRequest(
       result: assembleResult,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }

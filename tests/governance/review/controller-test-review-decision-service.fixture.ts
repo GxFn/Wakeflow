@@ -10,6 +10,7 @@ import {
   type ExecuteResultReviewOptions,
 } from "../../../src/capabilities/result-review/service.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { DISPOSABLE_WORKSPACE_DURABILITY } from "../../support/prepared-workspace.js";
 import type { DeliveryEnvelope } from "../../../src/governance/delivery/delivery-envelope.js";
 import type { DeliveredTarget } from "../delivery/delivery-workspace.fixture.js";
 import {
@@ -151,7 +152,10 @@ export async function importFixtureTestResult(
         content: testResultReportContent(steps, fixture.evidence, options.outcome),
       },
     },
-    { clock: () => options.reportedAt ?? TEST_RESULT_REPORTED_AT },
+    {
+      clock: () => options.reportedAt ?? TEST_RESULT_REPORTED_AT,
+      durability: DISPOSABLE_WORKSPACE_DURABILITY,
+    },
   );
 }
 
@@ -200,7 +204,7 @@ export async function decideFixtureTest(
   return executeTestReviewDecisionRequest(
     CODEX_REVIEW_FACADE,
     { ...fixture.testDecisionRequest, ...overrides },
-    options,
+    { durability: DISPOSABLE_WORKSPACE_DURABILITY, ...options },
   );
 }
 

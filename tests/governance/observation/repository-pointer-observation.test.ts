@@ -1,18 +1,31 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { observeRepositoryPointers } from "../../../src/governance/observation/repository-pointer-observation.js";
+import {
+  observeRepositoryPointers,
+  repositoryBranchesComplete,
+} from "../../../src/governance/observation/repository-pointer-observation.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 
 /**
  * 仓库指针事实（gate-log §13.94 D2）：只读 `.git/HEAD`、`refs/heads/**`、`packed-refs` 与
  * `.git/worktrees/<name>/{gitdir, HEAD}`；报告 HEAD、当前分支、分支尖端、登记的 worktree 与
  * prunable；`.git` 或 HEAD 读不出才整仓 unavailable；从不 spawn git。夹具用真实 git 造出。
+ * 分支清单另有第三种结果：读得出但看不全——引用来源读不出时 `issue` 为 `branches-incomplete`，
+ * 因为"branches 里没有它"与"仓库里没有它"必须能分辨。
  */
 
 const REPOSITORY_ID = "repository_22222222-2222-4222-8222-222222222222";
@@ -132,6 +145,63 @@ test("不可用：没有 .git、根是 worktree 检出、HEAD 读不出、根打
   equal(headless.status, "unavailable");
   equal(headless.issue, "head-unreadable");
   deepEqual(headless.branches, []);
+});
+
+test("分支清单：引用来源读不出仍是 observed 但带 branches-incomplete，来源本来就不存在不报", { timeout: 60_000 }, async (t) => {
+  const { repository } = fixture(t);
+  git(repository, "commit", "--quiet", "--allow-empty", "-m", "c1");
+  const c1 = git(repository, "rev-parse", "HEAD");
+  git(repository, "branch", "feature/x");
+  git(repository, "pack-refs", "--all");
+  const heads = path.join(repository, ".git", "refs", "heads");
+  const packed = path.join(repository, ".git", "packed-refs");
+
+  const baseline = await observe(repository);
+  equal(baseline.issue, null);
+  equal(repositoryBranchesComplete(baseline), true);
+  deepEqual(baseline.branches, [
+    { name: "feature/x", tip: c1 },
+    { name: "main", tip: c1 },
+  ]);
+
+  // refs/heads 列不出（这里是"不是目录"，与符号链接、超出条目上限、io 失败同一类）：
+  // 读得到的事实照常报告，但缺席的分支只是没看见，必须说出来。
+  rmSync(heads, { recursive: true, force: true });
+  writeFileSync(heads, "not a directory\n", { mode: 0o600 });
+  const looseUnreadable = await observe(repository);
+  equal(looseUnreadable.status, "observed");
+  equal(looseUnreadable.issue, "branches-incomplete");
+  equal(repositoryBranchesComplete(looseUnreadable), false);
+  equal(looseUnreadable.head, c1);
+  equal(looseUnreadable.branch, "main");
+  deepEqual(looseUnreadable.branches, baseline.branches);
+
+  // 目录本来就不存在：这是读全了的"没有松散引用"，不是读不出。
+  rmSync(heads, { force: true });
+  const looseAbsent = await observe(repository);
+  equal(looseAbsent.status, "observed");
+  equal(looseAbsent.issue, null);
+  deepEqual(looseAbsent.branches, baseline.branches);
+
+  // packed-refs 是唯一的打包来源：读不出时一个分支都报不出，HEAD 尖端也解析不出来。
+  rmSync(packed, { force: true });
+  mkdirSync(packed);
+  const packedUnreadable = await observe(repository);
+  equal(packedUnreadable.status, "observed");
+  equal(packedUnreadable.issue, "branches-incomplete");
+  equal(repositoryBranchesComplete(packedUnreadable), false);
+  deepEqual(packedUnreadable.branches, []);
+  equal(packedUnreadable.head, null);
+  equal(packedUnreadable.branch, "main");
+
+  // packed-refs 不存在是常态（分支全是松散引用），不能报成读不出。
+  rmSync(packed, { recursive: true, force: true });
+  mkdirSync(heads, { recursive: true });
+  writeFileSync(path.join(heads, "main"), `${c1}\n`, { mode: 0o600 });
+  const packedAbsent = await observe(repository);
+  equal(packedAbsent.status, "observed");
+  equal(packedAbsent.issue, null);
+  deepEqual(packedAbsent.branches, [{ name: "main", tip: c1 }]);
 });
 
 test("观察从不 spawn git：模块不引用子进程，中止信号照常上抛", async (t) => {

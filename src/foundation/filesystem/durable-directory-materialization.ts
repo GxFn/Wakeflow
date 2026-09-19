@@ -451,10 +451,14 @@ async function performAtomicCreate(
     ) {
       fail("commit-uncertain", "$resourcePath");
     }
-    try {
-      await targetHandle.sync();
-    } catch {
-      fail("durability-failure", "$resourcePath");
+    // 新目录 inode 与父目录条目的同步由根的持久化级别决定；`none` 只省掉这两次
+    // `fsync`，`mkdir`、权限收紧与提交后复验都照常执行。
+    if (root.durability === "fsync") {
+      try {
+        await targetHandle.sync();
+      } catch {
+        fail("durability-failure", "$resourcePath");
+      }
     }
     await syncParent(parent);
     await assertParentCurrent(parent);

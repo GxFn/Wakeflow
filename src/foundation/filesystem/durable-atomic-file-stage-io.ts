@@ -34,7 +34,10 @@ import {
   type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import type { RootedDirectory } from "./rooted-directory.js";
+import type {
+  RootedDirectory,
+  RootedDirectoryDurability,
+} from "./rooted-directory.js";
 import type { RootedResourceParentHandle } from "./rooted-resource-parent-handle.js";
 
 /** 耐久原子写入中，自描述暂存文件的 I/O 生命周期。 */
@@ -250,7 +253,7 @@ export async function prepareDurableAtomicFileStage(
   input: Readonly<DurableAtomicFileInputBytes>,
   mode: number,
   signal: AbortSignal | undefined,
-  durability: "fsync" | "none" = "fsync",
+  durability: RootedDirectoryDurability,
 ): Promise<Readonly<PreparedDurableAtomicFileStage>> {
   await writeExactBytes(exclusive.handle, input.bytes, signal);
   assertDurableAtomicFileNotAborted(signal);

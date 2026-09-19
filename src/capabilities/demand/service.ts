@@ -40,6 +40,7 @@ import {
 } from "../../governance/ledger/ledger-authority-store.js";
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import {
   runPublicationTransaction,
@@ -548,5 +549,6 @@ export async function executeDemandCreationRequest(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }

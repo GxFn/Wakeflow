@@ -41,7 +41,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
 | 需求包 | 唯一交接物：ledger 里不可变记录（`requirement.md`、`landing.md`、附件）加板上认领状态 | Design 发布，一次调用完成记录与上板 | 记录在 ledger 根，tracked；认领状态在 `.wakeflow-active` | 记录永不改；认领状态 pending、parked、claimed、withdrawn、archived |
 | Demand | 一个目标、一条事件流、一个状态根；身份记执行环境、类型、来源需求包、权威章节 | Controller 认领需求包即创建 | `.wakeflow-active/current/<demandId>/` | 身份与权威冻结；状态由事件重放 |
 | 任务包 | 一个目标任务的不可变合同：分配、目标、边界、完成期望、验收锚点、评审输入合同 | Controller 规划 | Demand 根 | 与目标任务 1:1；替换或继续才有新包 |
-| 测试卡 | real-environment 测试的冻结合同：批准计划、允许技能、尝试预算、边界门 | Controller 建卡 | Demand 根 | 冻结；尝试最多 10 次 |
+| 测试合同 | real-environment 测试的冻结合同：批准计划、允许技能、尝试预算、边界门；由测试任务包携带，不是独立对象 | Controller 规划测试任务包时撰写 | Demand 根（测试任务包内） | 随任务包冻结；尝试最多 10 次 |
 | 投递 | group、packet、envelope、run 四层记录加一次性发送许可 | Controller 准备与声明 | Demand 事件流 | 只创建；run 追加不分叉 |
 | 工作声明 | 对端点注意力与仓库工作树的互斥声明，带围栏令牌 | 投递准备 apply 获取 | 共享协调根 | 过期只开恢复门 |
 | 结果记录 | 目标或 Test 窗口交回的不可变记录：结论、分支与提交、证据定位符、锚点映射 | 目标窗口导入 | Demand 根 | 只创建；current 或 historical |
@@ -57,7 +57,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
                                                                                                               │
       ┌───────────────────────────────────────────────────────────────────────────────────────────────────────┘
       ▼
-[5] Controller 认领需求包即创建 Demand ──► [6] 规划任务包 / 测试卡 ──► [7] 准备投递并声明 ──► [8] Agent 投递并交回回读
+[5] Controller 认领需求包即创建 Demand ──► [6] 规划实现任务包 / 测试任务包 ──► [7] 准备投递并声明 ──► [8] Agent 投递并交回回读
       ▲                                                                                          │
       │ 返工：同任务新投递；继续：同 Demand 新任务；补充：新 Demand；并发：新 pod                    ▼
       └──────────── [11] 评审决定 ◄── [10] 评审投影 ◄── [9] 目标窗口执行并导入结果 ◄──────────────┘
@@ -76,7 +76,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
 | 3 | 需求成文 | `publish_requirement` preview：章节齐全、隐私、摘要，返回一页摘要 | Design 把摘要给用户，用户确认（确认点 1） | 无状态变化 |
 | 4 | 用户确认 | `publish_requirement` apply：写 ledger 记录并上板 | Design 调用 | 需求包 pending |
 | 5 | Controller 巡板或用户说"开始下一个" | 板查询、`create_demand(requirementId)`：根先建后认领，总控已有活动 Demand 则拒绝 | Controller 调用 | Demand 事件流 revision 1；需求包 claimed |
-| 6 | Route 指向规划 | `plan_target_task`、`plan_test_card`：角色门、每仓库一条活动谱系、依赖已 accepted | Controller 撰写目标、边界、锚点；需求包标 `taskPlanReview: user` 时把任务清单交用户过目（确认点 2） | 任务包与测试卡；任务 planned |
+| 6 | Route 指向规划 | `plan_target_task`：实现任务包与测试任务包由同一件工具追加（测试包携带 Controller 撰写的测试合同）；角色门、每仓库一条活动谱系、依赖已 accepted | Controller 撰写目标、边界、锚点；需求包标 `taskPlanReview: user` 时把任务清单交用户过目（确认点 2） | 实现任务包与测试任务包；任务 planned |
 | 7 | 任务已规划 | `prepare_delivery` 一次调用：生成 packet、信封、prompt 骨架，获取工作声明，签发一次性许可与围栏令牌 | Controller 写三段人话 | 投递 send-claimed |
 | 8 | 许可在手 | `record_delivery_outcome` 准入回读，或由 hook 记录自动完成 | Claude 粘贴加回车再 capture 一次；Codex 发线程消息，可有界轮询读取 | accepted 的落地证据是目标会话的 UserPromptSubmit hook 记录（prompt 摘要匹配）或 Codex 发送调用的成功返回；回读失败不降级；只有发送调用明确失败才 rejected-before-send；完成证据 Stop 或 turn-complete 在结果导入时要求 |
 | 9 | 目标窗口收到 prompt | `import_target_result`：谱系闭合、锚点覆盖、证据定位符解析核摘要、隐私扫描、围栏令牌 | 目标窗口按 target 与 craft 技能执行，在 worktree 或主检出内完成，导入结果，再把 Wakeflow 生成的回调送进 Controller 窗口 | 结果 current；任务 review-ready；声明释放；回调落地由 Controller 会话的 UserPromptSubmit 记录证明 |

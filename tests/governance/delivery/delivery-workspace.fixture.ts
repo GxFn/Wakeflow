@@ -33,9 +33,17 @@ import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 import {
+  createPreparedWorkspaceStore,
+  DISPOSABLE_ROOT_OPTIONS,
+  DISPOSABLE_WORKSPACE_DURABILITY,
+} from "../../support/prepared-workspace.js";
+import {
   cleanupTargetTaskPlanningWorkspaceFixture,
-  createTargetTaskPlanningWorkspaceFixture,
+  materializeTargetTaskPlanningWorkspaceFixture,
+  openTargetTaskPlanningWorkspaceFixture,
   planFixtureTargetTask,
+  targetTaskPlanningWorkspaceBaselineKey,
+  type TargetTaskPlanningWorkspaceFacts,
   type TargetTaskPlanningWorkspaceFixture,
   type TargetTaskPlanningWorkspaceFixtureOptions,
 } from "../tasking/target-task-planning-service.fixture.js";
@@ -93,6 +101,8 @@ export async function withFixtureDemandRoot<Result>(
 ): Promise<Result> {
   const root = await RootedDirectory.open(
     path.join(fixture.workspacePath, ...demandFinalRootRef(fixture.demandId).split("/")),
+    "$root",
+    DISPOSABLE_ROOT_OPTIONS,
   );
   try {
     return await use(root);
@@ -157,7 +167,11 @@ export async function registerFixtureWindowRoute(
         observedAt: handle.observedAt,
       },
     },
-    { uuidFactory: () => handle.uuid, clock: () => handle.registeredAt },
+    {
+      uuidFactory: () => handle.uuid,
+      clock: () => handle.registeredAt,
+      durability: DISPOSABLE_WORKSPACE_DURABILITY,
+    },
   );
   if (registration.kind !== "WakeflowWindowBindingMutation" || registration.binding === null) {
     throw new Error("Expected a registered Binding fixture.");
@@ -170,10 +184,23 @@ export async function registerFixtureWindowRoute(
   });
 }
 
-export async function createDeliveryWorkspaceFixture(
-  options: TargetTaskPlanningWorkspaceFixtureOptions = {},
-): Promise<Readonly<DeliveryWorkspaceFixture>> {
-  const fixture = await createTargetTaskPlanningWorkspaceFixture(options);
+/** 基线事实：规划事实加上这一档基线里已规划目标的身份值。 */
+interface DeliveryWorkspaceFacts extends TargetTaskPlanningWorkspaceFacts {
+  readonly targetTaskId: string;
+  readonly taskPackageId: string;
+  readonly windowId: string;
+}
+
+/**
+ * 投递基线的初始化链：在规划基线之上规划一个 implementation 目标并发布窗口运行时。
+ * 到此为止树里还没有任何宿主 hook 记录，因此整棵树不含绝对路径，可以按需复制。
+ * 绑定登记留在每个副本里做：它写入的 hook 记录带绝对 `cwd`，不能跨目录复制。
+ */
+async function buildDeliveryWorkspace(
+  fixtureRoot: string,
+  options: TargetTaskPlanningWorkspaceFixtureOptions,
+): Promise<Readonly<DeliveryWorkspaceFacts>> {
+  const fixture = await materializeTargetTaskPlanningWorkspaceFixture(fixtureRoot, options);
   try {
     const planned = await planFixtureTargetTask(fixture);
     if (planned.targetTask.workType !== "implementation") {
@@ -186,7 +213,42 @@ export async function createDeliveryWorkspaceFixture(
       codexWorkspaceHostResourceProfile,
       { recoveringFreshPublication: false },
     );
-    const route = await registerFixtureWindowRoute(fixture, planned.targetTask.windowId, {
+    return Object.freeze({
+      recordDigest: fixture.recordDigest,
+      taskPackage: fixture.request.taskPackage,
+      targetTaskId: planned.targetTask.targetTaskId,
+      taskPackageId: planned.targetTask.taskPackageId,
+      windowId: planned.targetTask.windowId,
+    });
+  } finally {
+    await fixture.workspaceRoot.close();
+  }
+}
+
+const deliveryWorkspaceStore = createPreparedWorkspaceStore<
+  TargetTaskPlanningWorkspaceFixtureOptions,
+  Readonly<DeliveryWorkspaceFacts>
+>({
+  prefix: "wakeflow-delivery-workspace-",
+  keyOf: targetTaskPlanningWorkspaceBaselineKey,
+  build: buildDeliveryWorkspace,
+});
+
+/**
+ * 同一测试进程里同档选项只跑一次规划与运行时发布，之后每次调用复制一份隔离副本，
+ * 再在副本里登记本次的窗口绑定。因此同档副本共享同一个 `targetTaskId` / `taskPackageId`
+ * （它们本来就由固定输入与固定时钟决定），而目录、事件流与 hook 记录仍各自独立。
+ */
+export async function createDeliveryWorkspaceFixture(
+  options: TargetTaskPlanningWorkspaceFixtureOptions = {},
+): Promise<Readonly<DeliveryWorkspaceFixture>> {
+  const prepared = await deliveryWorkspaceStore.materialize(options);
+  const fixture = await openTargetTaskPlanningWorkspaceFixture(
+    prepared.fixtureRoot,
+    prepared.facts,
+  );
+  try {
+    const route = await registerFixtureWindowRoute(fixture, prepared.facts.windowId, {
       value: RAW_HANDLE,
       uuid: BINDING_UUID,
       observedAt: BINDING_OBSERVED_AT,
@@ -202,8 +264,8 @@ export async function createDeliveryWorkspaceFixture(
     return Object.freeze({
       ...fixture,
       demandId: fixture.request.demandId,
-      targetTaskId: planned.targetTask.targetTaskId,
-      taskPackageId: planned.targetTask.taskPackageId,
+      targetTaskId: prepared.facts.targetTaskId,
+      taskPackageId: prepared.facts.taskPackageId,
       route,
       bindingRootPath,
     });
@@ -248,7 +310,7 @@ export async function prepareFixtureDelivery(
       authored: overrides.authored ?? DELIVERY_AUTHORED,
       language: overrides.language ?? "zh-Hans",
     },
-    options,
+    { durability: DISPOSABLE_WORKSPACE_DURABILITY, ...options },
   );
 }
 
@@ -306,7 +368,7 @@ export async function recordFixtureDeliveryOutcome(
       ...(overrides.resolution === undefined ? {} : { resolution: overrides.resolution }),
       observedAt: overrides.observedAt ?? DELIVERY_OUTCOME_AT,
     },
-    options,
+    { durability: DISPOSABLE_WORKSPACE_DURABILITY, ...options },
   );
 }
 

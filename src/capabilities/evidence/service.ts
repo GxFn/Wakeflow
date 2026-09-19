@@ -10,7 +10,10 @@ import {
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
-import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type {
+  RootedDirectory,
+  RootedDirectoryDurability,
+} from "../../foundation/filesystem/rooted-directory.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import {
@@ -51,6 +54,7 @@ import {
   type PublicationTransactionPhase,
   type PublicationTransactionPlan,
 } from "../../kernel/publication-transaction.js";
+import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import {
   admitRecordEvidenceResult,
   parseRecordEvidenceRequest,
@@ -75,6 +79,8 @@ import {
  */
 
 export interface ExecuteEvidenceOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
 }
@@ -511,5 +517,6 @@ export async function executeRecordEvidenceRequest(
       privateValues,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }

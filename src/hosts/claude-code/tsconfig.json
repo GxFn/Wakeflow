@@ -6,6 +6,7 @@
     "tsBuildInfoFile": "../../../.build/cache/hosts-claude-code.tsbuildinfo"
   },
   "files": [
+    "claude-code-agent-text-profile.ts",
     "claude-code-hook-fragment.ts",
     "claude-code-maintenance-capability.ts",
     "claude-code-maintenance-execution.ts",

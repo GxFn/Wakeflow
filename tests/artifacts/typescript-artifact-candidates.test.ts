@@ -84,6 +84,8 @@ const RECORD_FILE_PATTERN =
   /^\d{8}T\d{9}Z-session-start-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/u;
 /** 闭包范围：只有 `lib/` 下的编译文件才带这三个值之一。 */
 const CLOSURE_SCOPES: readonly string[] = ["shared", "current-host", "peer-profile"];
+/** `lib/` 之外的文件只有三种：两个 launcher、宿主配置元数据，以及出厂文本（§13.99 D9）。 */
+const GENERATED_SCOPES: readonly string[] = ["entrypoint", "metadata", "agent-text"];
 const FIXED_CODE_PREFIX = "wakeflow-hook-observer: ";
 
 /** 手搭的隔离规则：守卫只看这四项，测试因此不必复制候选定义的其余部分。 */
@@ -119,6 +121,13 @@ interface ManifestFile {
   readonly scope: string;
 }
 
+/** 清单里出厂文本面的独立索引条目（§13.99 D9）。 */
+interface ManifestAgentTextFile {
+  readonly path: string;
+  readonly bytes: number;
+  readonly sha256: string;
+}
+
 interface ManifestRuntimeEntrypoint {
   readonly kind: "mcp" | "hook-observer";
   readonly runtimeEntrypoint: string;
@@ -134,6 +143,7 @@ interface CandidateManifest {
   readonly runtimeEntrypoint: string;
   readonly runtimeEntrypoints: readonly ManifestRuntimeEntrypoint[];
   readonly externalPackages: readonly string[];
+  readonly agentText: readonly ManifestAgentTextFile[];
   readonly files: readonly ManifestFile[];
 }
 
@@ -350,7 +360,7 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成，含 h
     for (const file of manifest.files) {
       const compiled = file.path.startsWith("lib/");
       equal(CLOSURE_SCOPES.includes(file.scope), compiled, file.path);
-      if (!compiled) ok(file.scope === "entrypoint" || file.scope === "metadata", file.path);
+      if (!compiled) ok(GENERATED_SCOPES.includes(file.scope), file.path);
     }
     deepEqual(
       manifest.files
@@ -405,6 +415,42 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成，含 h
       manifest.files.some((file) => file.path.includes("statusline")),
       artifact.hostId === "claude-code",
     );
+
+    // §13.99 D3、D9：整棵 `assets/agent-text/` 按该宿主的取值表渲染进候选。`agentText[]` 是
+    // 这批文本的独立索引，与 `files` 里同名条目逐字节相等；渲染后不留占位符；`commands/`
+    // 只进 Claude 候选（D2）；共享文本里只出现本宿主的指令文件名，不出现对端的。
+    const agentTextPaths = manifest.agentText.map((file) => file.path);
+    deepEqual([...agentTextPaths].sort(compareCodeUnits), agentTextPaths);
+    for (const relative of [
+      "README.md",
+      "README.zh-CN.md",
+      "skills/wakeflow-controller/SKILL.md",
+    ]) {
+      ok(agentTextPaths.includes(relative), relative);
+    }
+    for (const entry of manifest.agentText) {
+      const listed = byPath.get(entry.path);
+      equal(listed?.scope, "agent-text", entry.path);
+      equal(listed?.mode, "0644", entry.path);
+      equal(listed?.sha256, entry.sha256, entry.path);
+      equal(listed?.bytes, entry.bytes, entry.path);
+      const rendered = readFileSync(path.join(artifactRoot, entry.path), "utf8");
+      equal(rendered.includes("{{"), false, entry.path);
+      equal(Buffer.byteLength(rendered, "utf8"), entry.bytes, entry.path);
+    }
+    const agentTextCorpus = manifest.agentText
+      .map((entry) => readFileSync(path.join(artifactRoot, entry.path), "utf8"))
+      .join("\n");
+    const isCodex = artifact.hostId === "codex";
+    ok(agentTextCorpus.includes(isCodex ? "AGENTS.md" : "CLAUDE.md"));
+    equal(agentTextCorpus.includes(isCodex ? "CLAUDE.md" : "AGENTS.md"), false);
+    equal(
+      agentTextPaths.some((file) => file.startsWith("commands/")),
+      artifact.hostId === "claude-code",
+    );
+    // 文本 profile 与 hook 片段同类：只在构建时动态 import，不进任何闭包。
+    equal(byPath.has("lib/hosts/codex/codex-agent-text-profile.js"), false);
+    equal(byPath.has("lib/hosts/claude-code/claude-code-agent-text-profile.js"), false);
   }
 });
 

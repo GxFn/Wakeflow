@@ -63,7 +63,9 @@ test("exact linked target settlement 同步 file 与 destination parent", async 
   const candidatePath = path.join(rootPath, "candidates", "candidate.json");
   writeFileSync(candidatePath, "payload", { mode: 0o600 });
   linkSync(candidatePath, path.join(rootPath, "commits", "commit.json"));
-  const root = await RootedDirectory.open(rootPath);
+  const root = await RootedDirectory.open(rootPath, "$root", {
+    durability: "fsync",
+  });
   try {
     const ref = parsePortableResourcePath("commits/commit.json");
     const expected = await root.inspectExistingResource(ref);

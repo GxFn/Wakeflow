@@ -11,6 +11,7 @@ import {
 import {
   RootedDirectory,
   RootedDirectoryError,
+  type RootedDirectoryDurability,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readUtcWallClock,
@@ -48,6 +49,8 @@ import { WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME } from "./contract.js";
  */
 
 export interface DemandServiceOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
 }
@@ -113,7 +116,9 @@ export async function openSliceContext(
   }
   let ledgerRoot: RootedDirectory;
   try {
-    ledgerRoot = await RootedDirectory.open(placement.absolutePath, "$ledgerRoot");
+    ledgerRoot = await RootedDirectory.open(placement.absolutePath, "$ledgerRoot", {
+      durability: root.durability,
+    });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       fail("precondition-failed", "ledger-root", "$request.root", { cause: error });

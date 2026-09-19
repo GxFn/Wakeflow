@@ -98,7 +98,8 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 十八个场景在同一个一次性工作区上顺序运行：初始化 → 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
+ * 二十个场景在同一个一次性工作区上顺序运行：初始化 → 健康工作区对账零步 → 重新配置一条声明差异 →
+ * 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
  * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 四种来源的受管证据 → 结果导入与评审检查 → 回调落地 →
  * 升级、用户回答与带 resumption 的接受 → 实现接受后规划测试合同、投递测试并由 Controller 审查接受 →
  * 完成即归档 → 续接与取消 → pod 创建、握手、一 pod 一 Demand、worktree 投递与结果、两段关闭 →
@@ -319,6 +320,231 @@ async function scenarioFreshInitialize(context: ScenarioContext): Promise<string
   context.repositoryId = repository.repositoryId;
   context.designPath = path.join(root, design.path);
   return `status=${result.status}; launchIntents=${previewed.launchIntents.length}; config+active present`;
+}
+
+interface MaintenancePreviewResult {
+  readonly status: string;
+  readonly blockerCodes: readonly string[];
+  readonly planDigest: string | null;
+  readonly plan: { readonly steps: readonly { readonly stepKind?: string }[] } | null;
+  readonly launchIntents: readonly unknown[];
+}
+
+interface MaintenanceMutationResult {
+  readonly status: string;
+  readonly operationId: string | null;
+  readonly stepReceipts: readonly unknown[];
+  readonly next: {
+    readonly frontier: string | null;
+    readonly owner: string;
+    readonly suggestedTool: string | null;
+    readonly blockers: readonly string[];
+  };
+}
+
+/** 维护工具的一次公共调用；root 永远是本场景的一次性工作区。 */
+async function maintain(
+  context: ScenarioContext,
+  request: Readonly<Record<string, unknown>>,
+): Promise<CallToolResult> {
+  return await call(context, WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    ...request,
+  });
+}
+
+/** 计划里的写步骤种类，按计划顺序；preview 零步时为空数组。 */
+function planStepKinds(previewed: MaintenancePreviewResult): readonly string[] {
+  return (previewed.plan?.steps ?? []).map((step) => step.stepKind ?? "<host-step>");
+}
+
+/**
+ * 工作区整树字节快照：相对路径到字节。判定"preview 零写"与"apply 只改声明差异"都靠它，
+ * 因此不能只看目录项。排除的只有两类：Git 自身，以及维护协议记录自己这一次执行的地方
+ * （事务日志与维护闸）——那是执行机制的痕迹，每次 apply 都会变，与"改了哪些声明"无关。
+ * `.wakeflow-local` 的其余部分（窗口绑定、工作声明、hook 记录、pod 回执、活动投影）都留在
+ * 快照里：它们是运行时状态，一次 preview 动了它们同样是写。
+ */
+const WORKSPACE_SNAPSHOT_SKIPPED_PREFIXES: readonly string[] = Object.freeze([
+  ".git",
+  ".wakeflow-local/runtime/maintenance",
+]);
+
+function snapshotWorkspaceBytes(
+  root: string,
+  skipPrefixes: readonly string[],
+): Map<string, Buffer> {
+  const files = new Map<string, Buffer>();
+  const skipped = (relative: string): boolean =>
+    skipPrefixes.some((prefix) => relative === prefix || relative.startsWith(`${prefix}/`));
+  const walk = (directory: string, prefix: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      if (skipped(relative)) continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(absolute, relative);
+      else if (entry.isFile()) files.set(relative, readFileSync(absolute));
+    }
+  };
+  walk(root, "");
+  return files;
+}
+
+function workspaceBytes(root: string): Map<string, Buffer> {
+  return snapshotWorkspaceBytes(root, WORKSPACE_SNAPSHOT_SKIPPED_PREFIXES);
+}
+
+/** 两次快照之间字节不同、新增或消失的相对路径，排序后返回。 */
+function changedWorkspacePaths(
+  before: ReadonlyMap<string, Buffer>,
+  after: ReadonlyMap<string, Buffer>,
+): readonly string[] {
+  const changed = new Set<string>();
+  for (const [relative, bytes] of before) {
+    const now = after.get(relative);
+    if (now === undefined || !now.equals(bytes)) changed.add(relative);
+  }
+  for (const relative of after.keys()) if (!before.has(relative)) changed.add(relative);
+  return [...changed].sort();
+}
+
+function readConfigDocument(root: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")) as Record<
+    string,
+    unknown
+  >;
+}
+
+function cloneConfigDocument(document: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(document)) as Record<string, unknown>;
+}
+
+function configSection(document: Record<string, unknown>, key: string): string {
+  return JSON.stringify(document[key]);
+}
+
+/**
+ * card-01/reconcile-noop（能力卡 1.4）：刚初始化完成的工作区是健康的，对账因此既无步骤也无写入。
+ * apply 走的是同一条 preview→planDigest 通道，回执为 `no-op`，不开事务、不留操作标识。
+ */
+async function scenarioReconcileNoop(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.repositoryId) throw new Error("scenario ordering: fresh-initialize must run first");
+  const before = workspaceBytes(root);
+  const preview = await maintain(context, { action: "reconcile", mode: "preview", request: {} });
+  assertNoPrivatePath(context, preview);
+  const previewed = preview.structuredContent as MaintenancePreviewResult;
+  equal(previewed.status, "ready");
+  deepEqual([...previewed.blockerCodes], []);
+  deepEqual([...planStepKinds(previewed)], []);
+  equal(previewed.launchIntents.length, 0);
+  deepEqual(changedWorkspacePaths(before, workspaceBytes(root)), [], "reconcile preview wrote");
+  const applied = await maintain(context, {
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: previewed.planDigest,
+  });
+  assertNoPrivatePath(context, applied);
+  const mutation = applied.structuredContent as MaintenanceMutationResult;
+  equal(mutation.status, "no-op");
+  equal(mutation.operationId, null);
+  deepEqual([...mutation.stepReceipts], []);
+  deepEqual(
+    { ...mutation.next },
+    { frontier: null, owner: "none", suggestedTool: null, blockers: [] },
+  );
+  deepEqual(changedWorkspacePaths(before, workspaceBytes(root)), [], "reconcile apply wrote");
+  return "preview=ready, 0 steps, zero-write; apply=no-op, 0 receipts, operationId=null, zero-write";
+}
+
+/**
+ * card-01/reconfigure（能力卡 1.3）：改一条声明差异（`program.description`），preview 零写且
+ * 只报这条差异带出的两步，apply 只改这两处；`storage.ledgerRoot` 与 `pods[]` 的差异被拒。
+ */
+async function scenarioReconfigure(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.repositoryId) throw new Error("scenario ordering: fresh-initialize must run first");
+  const current = readConfigDocument(root);
+  const rejections = await assertReconfigureRejections(context, current);
+  const described = cloneConfigDocument(current);
+  (described.program as Record<string, unknown>).description = "Scenario acceptance description";
+  const before = workspaceBytes(root);
+  const preview = await maintain(context, {
+    action: "reconfigure",
+    mode: "preview",
+    request: { desiredConfig: described },
+  });
+  assertNoPrivatePath(context, preview);
+  const previewed = preview.structuredContent as MaintenancePreviewResult;
+  equal(previewed.status, "ready");
+  deepEqual([...previewed.blockerCodes], []);
+  const kinds = planStepKinds(previewed);
+  deepEqual([...kinds], ["recompose-program-instruction", "publish-config"]);
+  deepEqual(changedWorkspacePaths(before, workspaceBytes(root)), [], "reconfigure preview wrote");
+  const applied = await maintain(context, {
+    action: "reconfigure",
+    mode: "apply",
+    request: { desiredConfig: described },
+    planDigest: previewed.planDigest,
+  });
+  assertNoPrivatePath(context, applied);
+  const mutation = applied.structuredContent as MaintenanceMutationResult;
+  equal(mutation.status, "completed");
+  equal(mutation.stepReceipts.length, kinds.length);
+  const changed = changedWorkspacePaths(before, workspaceBytes(root));
+  // 计划声明的两处写入，外加每次变更后统一刷新的两份活动投影（派生物，不在计划里）。
+  const declared: readonly string[] = ["AGENTS.md", "wakeflow.config.json"];
+  const refreshed: readonly string[] = [
+    WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+    WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
+  ];
+  deepEqual([...changed], [...declared, ...refreshed].sort());
+  const after = readConfigDocument(root);
+  equal((after.program as Record<string, unknown>).description, "Scenario acceptance description");
+  for (const section of ["topology", "storage", "pods", "hosts", "presentation", "governance"]) {
+    equal(configSection(after, section), configSection(current, section), `${section} changed`);
+  }
+  return `ledgerRoot+pods refused(${rejections}); preview=ready, ${kinds.join("+")}, zero-write; apply=completed, declared writes ${declared.join("+")} plus the refreshed active projection`;
+}
+
+/** reconfigure 的两条不可变规则：ledgerRoot 初始化后不可改，pods[] 只由 wakeflow_pod 改。 */
+async function assertReconfigureRejections(
+  context: ScenarioContext,
+  current: Record<string, unknown>,
+): Promise<string> {
+  const movedLedger = cloneConfigDocument(current);
+  (movedLedger.storage as Record<string, unknown>).ledgerRoot = "Ledger-moved";
+  const ledger = await maintain(context, {
+    action: "reconfigure",
+    mode: "preview",
+    request: { desiredConfig: movedLedger },
+  });
+  assertNoPrivatePath(context, ledger);
+  const ledgerPreview = ledger.structuredContent as MaintenancePreviewResult;
+  equal(ledgerPreview.status, "blocked");
+  equal(ledgerPreview.planDigest, null);
+  equal(ledgerPreview.plan, null);
+  deepEqual(
+    [...ledgerPreview.blockerCodes],
+    ["ledger-root-missing", "reconfigure-layout-change-unsupported"],
+  );
+  const renamedPod = cloneConfigDocument(current);
+  const pods = renamedPod.pods as Record<string, unknown>[];
+  const primary = pods[0];
+  if (primary === undefined) throw new Error("current config lacks the primary pod");
+  primary.name = "renamed";
+  const pod = await maintain(context, {
+    action: "reconfigure",
+    mode: "preview",
+    request: { desiredConfig: renamedPod },
+  });
+  assertNoPrivatePath(context, pod);
+  const podPreview = pod.structuredContent as MaintenancePreviewResult;
+  equal(podPreview.status, "blocked");
+  equal(podPreview.planDigest, null);
+  deepEqual([...podPreview.blockerCodes], ["reconfigure-pods-change-unsupported"]);
+  return `${ledgerPreview.blockerCodes.join(",")}|${podPreview.blockerCodes.join(",")}`;
 }
 
 interface BindingMutation {
@@ -3315,6 +3541,8 @@ async function scenarioActiveProjection(context: ScenarioContext): Promise<strin
 const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Promise<string>>> =
   Object.freeze({
     "card-01/fresh-initialize": scenarioFreshInitialize,
+    "card-01/reconcile-noop": scenarioReconcileNoop,
+    "card-01/reconfigure": scenarioReconfigure,
     "card-02/window-handshake": scenarioWindowHandshake,
     "card-02/window-replace": scenarioWindowReplace,
     "card-03/requirement-package": scenarioRequirementPackage,
@@ -3334,7 +3562,7 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-09/active-projection": scenarioActiveProjection,
   });
 
-test("场景验收骨架在一次性工作区上运行初始化、创建 Demand、规划任务、投递、结果导入与评审、回调、升级续审、测试合同、完成即归档、续接与取消、pod 生命周期、状态与校验、活动投影并报告结论", async () => {
+test("场景验收骨架在一次性工作区上运行初始化、对账与重新配置、创建 Demand、规划任务、投递、结果导入与评审、回调、升级续审、测试合同、完成即归档、续接与取消、pod 生命周期、状态与校验、活动投影并报告结论", async () => {
   const workspace = createScenarioWorkspace();
   const connection = await connectWakeflowMcpServerForTest(
     createCodexWakeflowMcpServer("1.0.0-scenario"),

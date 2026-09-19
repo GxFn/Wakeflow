@@ -28,6 +28,7 @@ import type { TaskPackage } from "../../../src/governance/tasking/task-package.j
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
+import { DISPOSABLE_WORKSPACE_DURABILITY } from "../../support/prepared-workspace.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
@@ -155,7 +156,7 @@ export async function recordFixtureEvidence(
   } as const;
   const preview = await executeRecordEvidenceRequest(
     { root: fixture.workspacePath, mode: "preview", demandId: fixture.demandId, selection },
-    { clock: () => capturedAt },
+    { clock: () => capturedAt, durability: DISPOSABLE_WORKSPACE_DURABILITY },
   );
   if (preview.kind !== "WakeflowRecordEvidencePreview" || preview.planDigest === null) {
     throw new Error(`Expected a ready evidence plan: ${preview.kind === "WakeflowRecordEvidencePreview" ? preview.blockers.join(",") : preview.kind}`);
@@ -168,7 +169,7 @@ export async function recordFixtureEvidence(
       selection,
       planDigest: preview.planDigest,
     },
-    { clock: () => capturedAt },
+    { clock: () => capturedAt, durability: DISPOSABLE_WORKSPACE_DURABILITY },
   );
   if (applied.kind !== "WakeflowRecordEvidenceMutation" || applied.publication === null) {
     throw new Error("Expected a recorded evidence publication.");
@@ -216,7 +217,10 @@ export async function importFixtureImplementationResult(
       claimDigest: delivered.prepared.permit.fence.claimDigest,
       report: { workType: "implementation", content },
     },
-    { clock: () => options.reportedAt ?? REVIEW_FIXTURE_REPORTED_AT },
+    {
+      clock: () => options.reportedAt ?? REVIEW_FIXTURE_REPORTED_AT,
+      durability: DISPOSABLE_WORKSPACE_DURABILITY,
+    },
   );
 }
 
@@ -254,7 +258,7 @@ export async function inspectFixtureReview(
   return executeTargetResultReviewInspectionRequest(
     CODEX_REVIEW_FACADE,
     { root: fixture.workspacePath, demandId: fixture.demandId, targetTaskId },
-    options,
+    { durability: DISPOSABLE_WORKSPACE_DURABILITY, ...options },
   );
 }
 
@@ -289,7 +293,7 @@ export async function decideFixtureImplementation(
   return executeImplementationReviewDecisionRequest(
     CODEX_REVIEW_FACADE,
     { ...fixture.decisionRequest, ...overrides },
-    options,
+    { durability: DISPOSABLE_WORKSPACE_DURABILITY, ...options },
   );
 }
 

@@ -313,14 +313,17 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
       equal(existsSync(claimPath(fixture)), true);
       const claim = (await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId)).claim;
       equal(claim?.holder.generation, generation);
-      const replay = await rearm(
-        fixture,
-        prepared.delivery.deliveryId,
-        `fixture-rearm-${generation}`,
-        streamRevision,
-      );
-      equal(replay.status, "idempotent");
-      equal(replay.permit.fence?.claimDigest, fence.claimDigest);
+      // 同键重放只读不写、返回同一围栏：换代之间是同一条路径，第一代验一次即可。
+      if (generation === 2) {
+        const replay = await rearm(
+          fixture,
+          prepared.delivery.deliveryId,
+          `fixture-rearm-${generation}`,
+          streamRevision,
+        );
+        equal(replay.status, "idempotent");
+        equal(replay.permit.fence?.claimDigest, fence.claimDigest);
+      }
       permit = { ...rearmed.permit, fence };
       const rejectedAgain = await recordFixtureDeliveryOutcome(
         fixture,

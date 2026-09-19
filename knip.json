@@ -10,6 +10,8 @@
         "src/entrypoints/wakeflow-hook-observer.ts",
         "src/hosts/codex/codex-hook-fragment.ts",
         "src/hosts/claude-code/claude-code-hook-fragment.ts",
+        "src/hosts/codex/codex-agent-text-profile.ts",
+        "src/hosts/claude-code/claude-code-agent-text-profile.ts",
         "tooling/architecture/check-dependencies.ts",
         "tooling/codegen/schema-types.ts",
         "tooling/testing/run-typescript-tests.ts",

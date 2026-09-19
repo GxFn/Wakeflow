@@ -683,7 +683,7 @@ test("归档 Demand：完成即归档后带 demandId 的 status 给归档回执�
   }
 });
 
-test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD 尖端才列出并带 acceptedAt；仓库未观察时保留且 repositoryObserved 为 false；正检出在该分支上时不判已合并（§13.94 D2）", {
+test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD 尖端才列出并带 acceptedAt；仓库未观察或引用读不出时保留且 repositoryObserved 为 false；正检出在该分支上时不判已合并（§13.94 D2）", {
   timeout: 120_000,
 }, async () => {
   // 投递夹具的任务包固定 leave-uncommitted，而带提交的报告要求 commit 期望：这里自行规划任务包。
@@ -796,6 +796,28 @@ test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD �
     equal(checkedOut.repositories[0]?.branch, "feature/result");
     deepEqual(plain(checkedOut.unmergedAccepted), [{ ...expected, repositoryObserved: true }]);
     git(product, "checkout", "--quiet", "main");
+
+    // 引用读不出：分支还在，只是这一轮没看见。仓库仍 observed 但带 branches-incomplete，
+    // 条目保留且 repositoryObserved 为 false——读不出引用绝不能把未合并的分支悄悄抹掉。
+    const heads = path.join(product, ".git", "refs", "heads");
+    const savedMain = readFileSync(path.join(heads, "main"), "utf8");
+    const savedFeature = readFileSync(path.join(heads, "feature", "result"), "utf8");
+    rmSync(heads, { recursive: true, force: true });
+    writeFileSync(heads, "not a directory\n", { mode: 0o600 });
+    const unreadable = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK);
+    equal(unreadable.repositories[0]?.status, "observed");
+    equal(unreadable.repositories[0]?.issue, "branches-incomplete");
+    equal(unreadable.repositories[0]?.branches, 0);
+    deepEqual(plain(unreadable.unmergedAccepted), [{ ...expected, repositoryObserved: false }]);
+
+    // 恢复引用：同一份事实又看得见了，核对照常。
+    rmSync(heads, { force: true });
+    mkdirSync(path.join(heads, "feature"), { recursive: true, mode: 0o700 });
+    writeFileSync(path.join(heads, "main"), savedMain, { mode: 0o600 });
+    writeFileSync(path.join(heads, "feature", "result"), savedFeature, { mode: 0o600 });
+    const restored = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK);
+    equal(restored.repositories[0]?.issue, null);
+    deepEqual(plain(restored.unmergedAccepted), [{ ...expected, repositoryObserved: true }]);
 
     // 分支删除：引用不在，不列出。
     git(product, "branch", "-D", "feature/result");

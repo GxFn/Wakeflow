@@ -1,6 +1,10 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import { runCommandShell, type CommandShellBinding } from "./command-shell.js";
+import {
+  runCommandShell,
+  type CommandShellBinding,
+  type CommandShellExecutionOptions,
+} from "./command-shell.js";
 import { fail } from "./error.js";
 import type { NextProjection } from "./next-projection.js";
 
@@ -110,10 +114,11 @@ function admitEnvelope(
   }
 }
 
-/** 执行一个效果型公共命令。 */
+/** 执行一个效果型公共命令；`options` 是注入的执行选项，不是请求的一部分。 */
 export async function runPublicationTransaction<Input, Context, Plan, Outcome, Result>(
   spec: Readonly<PublicationTransactionSpec<Input, Context, Plan, Outcome, Result>>,
   value: unknown,
+  options: Readonly<CommandShellExecutionOptions> = {},
 ): Promise<Result> {
   return runCommandShell<PublicationTransactionEnvelope, Input, Context, Result>(
     spec,
@@ -125,6 +130,7 @@ export async function runPublicationTransaction<Input, Context, Plan, Outcome, R
       const next = spec.next === undefined ? NO_NEXT : await spec.next(context, phase);
       return spec.result(envelope, input, phase, next);
     },
+    options,
   );
 }
 

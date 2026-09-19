@@ -11,6 +11,7 @@ import {
 import type { Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { DISPOSABLE_ROOT_OPTIONS } from "../../support/prepared-workspace.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
@@ -55,7 +56,7 @@ export async function publishPendingPackage(
     readonly claim: Readonly<RequirementClaimStateFixture>;
   }>
 > {
-  const ledgerRoot = await RootedDirectory.open(ledgerPath);
+  const ledgerRoot = await RootedDirectory.open(ledgerPath, "$root", DISPOSABLE_ROOT_OPTIONS);
   try {
     const loaded = await publishFixtureRequirement(
       new LedgerAuthorityStore(ledgerRoot),
@@ -90,10 +91,14 @@ export async function createDemandEventSourcingPublicationWorkspaceFixture(): Pr
     renderWakeflowConfigV3(config),
     { mode: 0o644 },
   );
-  const workspaceRoot = await RootedDirectory.open(workspacePath);
+  const workspaceRoot = await RootedDirectory.open(
+    workspacePath,
+    "$root",
+    DISPOSABLE_ROOT_OPTIONS,
+  );
   try {
     await materializeActiveLayout(workspaceRoot, { recovering: false });
-    const ledgerRoot = await RootedDirectory.open(ledgerPath);
+    const ledgerRoot = await RootedDirectory.open(ledgerPath, "$root", DISPOSABLE_ROOT_OPTIONS);
     try {
       await new LedgerAuthorityStore(ledgerRoot).initialize({ freshLedger: true });
     } finally {

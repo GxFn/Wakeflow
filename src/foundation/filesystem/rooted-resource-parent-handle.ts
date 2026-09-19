@@ -411,14 +411,21 @@ export class RootedResourceParentHandle {
     return target;
   }
 
-  /** 同步父目录项元数据，并在同步前后复验父目录身份。 */
+  /**
+   * 同步父目录项元数据，并在同步前后复验父目录身份。
+   *
+   * 持久化级别由父目录所属的根决定。根为 `none` 时只跳过 `fsync` 系统调用本身，
+   * 同步前后的身份复验、返回的节点事实与失败分类都与 `fsync` 完全一致。
+   */
   async sync(): Promise<Readonly<FileNodeSnapshot>> {
     this.#assertOpen();
     await this.assertCurrent();
-    try {
-      await this.#handle.sync();
-    } catch {
-      fail("sync-failure", this.#errorPath);
+    if (this.#root.durability === "fsync") {
+      try {
+        await this.#handle.sync();
+      } catch {
+        fail("sync-failure", this.#errorPath);
+      }
     }
     return this.assertCurrent();
   }

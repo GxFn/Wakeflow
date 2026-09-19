@@ -128,6 +128,8 @@ export async function openDemandOperationRoot(
     demandRoot = await RootedDirectory.open(
       observation.physicalPath,
       "$demandRoot",
+      // 派生根继承来源根的持久化级别：同一次调用打开的多个根不得对耐久性有分歧。
+      { durability: workspaceRoot.durability },
     );
     const current = await demandRoot.assertCurrent("$demandRoot");
     if (!sameFileNodeIdentity(observation.node, current)) fail("root");
@@ -179,7 +181,10 @@ async function openDemandAuthorityContext(
   let ledgerRoot: RootedDirectory | undefined;
   let demandRoot: RootedDirectory | undefined;
   try {
-    ledgerRoot = await RootedDirectory.open(config.ledgerRoot, "$ledgerRoot");
+    ledgerRoot = await RootedDirectory.open(config.ledgerRoot, "$ledgerRoot", {
+      // Ledger 根同样由工作区根派生，级别随来源根走。
+      durability: workspaceRoot.durability,
+    });
     demandRoot = await openDemandOperationRoot(workspaceRoot, demandId);
     const loaded = await loadDemandEventSourcingRootAuthority(
       demandRoot,

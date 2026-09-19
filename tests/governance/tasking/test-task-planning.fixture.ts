@@ -5,6 +5,7 @@ import {
 } from "../../../src/capabilities/tasking/service.js";
 import type { WakeflowTargetTaskPlanningRequestV1 } from "../../../src/contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { DISPOSABLE_WORKSPACE_DURABILITY } from "../../support/prepared-workspace.js";
 import {
   cleanupAcceptedDemandCompletionWorkspaceFixture,
   createAcceptedDemandCompletionWorkspaceFixture,
@@ -136,7 +137,7 @@ export async function planFixtureTestTask(
       expectedStreamRevision,
       taskPackage: { ...fixture.testTaskRequest.taskPackage, ...overrides.taskPackage },
     },
-    options,
+    { durability: DISPOSABLE_WORKSPACE_DURABILITY, ...options },
   );
 }
 

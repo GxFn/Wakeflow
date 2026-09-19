@@ -22,6 +22,10 @@ import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import {
+  closeDemandOperationRoot,
+  openDemandOperationRoot,
+} from "../../../src/governance/demand/demand-operation-authority-context.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -547,6 +551,36 @@ test("unresolved Authority has no publication effects", async () => {
       value.workspacePath,
       `.wakeflow-active/current/${DEMAND_ID}`,
     )), false);
+  } finally {
+    await cleanup(value);
+  }
+});
+
+/**
+ * 派生根的持久化级别来自来源根，而不是某个常量：同一个已发布的 Demand，从 `none` 的工作区根
+ * 派生出的操作根是 `none`，从默认根派生出的是 `fsync`（§13.99 同批确认的可选持久化级别）。
+ */
+test("Demand 操作根继承来源工作区根的持久化级别", async () => {
+  const value = await fixture();
+  try {
+    await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, publishInput(value));
+    for (const expected of ["none", "fsync"] as const) {
+      const source = await RootedDirectory.open(
+        value.workspaceRoot.absolutePath,
+        "$root",
+        { durability: expected },
+      );
+      try {
+        const derived = await openDemandOperationRoot(source, DEMAND_ID);
+        try {
+          equal(derived.durability, expected);
+        } finally {
+          await closeDemandOperationRoot(derived);
+        }
+      } finally {
+        await source.close();
+      }
+    }
   } finally {
     await cleanup(value);
   }

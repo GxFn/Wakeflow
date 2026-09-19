@@ -14,6 +14,7 @@ import {
 } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
+import { repositoryBranchesComplete } from "./repository-pointer-observation.js";
 import type {
   ObservedDemand,
   ObservedDomain,
@@ -41,6 +42,8 @@ export interface RepositoryBranchTips {
   /** HEAD 所在分支；分离头为 null。 */
   readonly branch: string | null;
   readonly tips: ReadonlyMap<string, string>;
+  /** 分支清单是否读全；为 false 时 `tips` 里的缺席不等于"分支已不在仓库里"。 */
+  readonly branchesComplete: boolean;
 }
 
 function progressOf(targets: readonly Readonly<DemandTargetTaskState>[]): ActiveProjectionProgressFacts {
@@ -70,9 +73,26 @@ function mergedIntoCurrentBranch(
 }
 
 /**
+ * 仓库已观察时该条目是否已经了结。分支清单读不全就什么都不能断定：缺席不等于删除，而在场的
+ * 尖端也可能是 `packed-refs` 里的过期备份（松散引用才是权威，而它正是读不出的那一个），拿它
+ * 判"已合并"会把未合并的分支悄悄删掉。读全之后，分支不在即已删除，分支还在就看尖端是否等于
+ * 当前分支尖端。
+ */
+function resolvedAway(
+  repository: Readonly<RepositoryBranchTips>,
+  branch: string,
+  tip: string | undefined,
+): boolean {
+  if (!repository.branchesComplete) return false;
+  if (tip === undefined) return true;
+  return mergedIntoCurrentBranch(repository, branch, tip);
+}
+
+/**
  * 已接受实现结果里带分支与提交、且分支仍未合并的条目（§13.94 D2）：分支引用仍在仓库，且尖端
  * 不等于仓库当前所在分支的尖端。没有对象图不能判祖先，"尖端等于当前分支尖端"是唯一可用的已合并
- * 判定；分支已删除即不再列出。仓库未观察时无法核对，条目保留且 `repositoryObserved` 为 false。
+ * 判定；分支已删除即不再列出。仓库未观察、或分支清单读不全时都无法核对，条目保留且
+ * `repositoryObserved` 为 false——读不出引用绝不能让未合并的分支悄悄消失。
  */
 export function acceptedBranchFacts(
   demandId: string,
@@ -89,12 +109,7 @@ export function acceptedBranchFacts(
     if (change.branch === null || commit === undefined) continue;
     const repository = repositories?.get(change.repositoryId);
     const tip = repository?.tips.get(change.branch);
-    if (
-      repository !== undefined
-      && (tip === undefined || mergedIntoCurrentBranch(repository, change.branch, tip))
-    ) {
-      continue;
-    }
+    if (repository !== undefined && resolvedAway(repository, change.branch, tip)) continue;
     facts.push(
       Object.freeze({
         demandId,
@@ -103,7 +118,9 @@ export function acceptedBranchFacts(
         branch: change.branch,
         commit: commit.value,
         acceptedAt: target.reviewDecision.decidedAt,
-        repositoryObserved: repository !== undefined,
+        // 核对过 = 分支清单读全了，并且在里面真的看见了这个分支尖端。
+        repositoryObserved:
+          repository !== undefined && repository.branchesComplete && tip !== undefined,
       }),
     );
   }
@@ -125,6 +142,7 @@ function repositoryBranchTips(
         head: repository.head,
         branch: repository.branch,
         tips: new Map(repository.branches.map((branch) => [branch.name, branch.tip] as const)),
+        branchesComplete: repositoryBranchesComplete(repository),
       }),
     );
   }

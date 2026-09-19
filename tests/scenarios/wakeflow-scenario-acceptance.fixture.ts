@@ -41,6 +41,17 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     title: "一次性工作区上 preview 零写、apply 生成配置与固定协议根",
   },
   {
+    scenarioId: "card-01/reconcile-noop",
+    card: "01-workspace-and-configuration",
+    title: "健康工作区上的对账 preview 零写零步，apply 是不开事务的 no-op 回执",
+  },
+  {
+    scenarioId: "card-01/reconfigure",
+    card: "01-workspace-and-configuration",
+    title:
+      "重新配置只改一条声明差异：preview 零写且只报这条差异带出的两步，apply 只改这两处；ledgerRoot 与 pods[] 的差异被拒",
+  },
+  {
     scenarioId: "card-02/window-handshake",
     card: "02-window-endpoints",
     title: "inspect 给出启动意图与执行参数，Agent 回执经 hook 证据登记为私有绑定，重放幂等",

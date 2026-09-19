@@ -420,14 +420,21 @@ export class RootedExactResourceHandle {
     return pathResource.node;
   }
 
-  /** 同步已打开的 inode，并返回同步后的句柄快照；不要求原路径名仍然存在。 */
+  /**
+   * 同步已打开的 inode，并返回同步后的句柄快照；不要求原路径名仍然存在。
+   *
+   * 持久化级别由资源所属的根决定。根为 `none` 时只跳过 `fsync` 系统调用本身，
+   * 同步前后的观察、返回的节点事实与失败分类都与 `fsync` 完全一致。
+   */
   async syncOpenedNode(): Promise<Readonly<FileNodeSnapshot>> {
     this.#assertOpen();
     await this.inspectOpenedNode();
-    try {
-      await this.#handle.sync();
-    } catch {
-      fail("sync-failure", this.#errorPath);
+    if (this.#root.durability === "fsync") {
+      try {
+        await this.#handle.sync();
+      } catch {
+        fail("sync-failure", this.#errorPath);
+      }
     }
     return this.inspectOpenedNode();
   }

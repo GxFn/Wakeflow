@@ -45,6 +45,7 @@ import {
   demandArchiveRef,
   demandLifecycleJournalRef,
 } from "../../kernel/layout.js";
+import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   runPublicationTransaction,
@@ -1007,6 +1008,7 @@ async function executeTerminal<Request extends TerminalRequest, Result>(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }
 
@@ -1427,5 +1429,6 @@ export async function executeDemandContinuationRequest(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }

@@ -1,5 +1,14 @@
 import { deepEqual, equal, ok, throws } from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
@@ -42,6 +51,7 @@ import { readDemandResultReviewSnapshot } from "../../../src/governance/review/d
 import { createTaskPackage } from "../../../src/governance/tasking/task-package.js";
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
 import { readRequirementClaimState } from "../../../src/kernel/requirement-board.js";
+import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
@@ -59,7 +69,6 @@ import {
   planFixtureTestTask,
 } from "../tasking/test-task-planning.fixture.js";
 import {
-  cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,
   type DemandEventSourcingPublicationWorkspaceFixture,
 } from "./demand-event-sourcing-publication-service.fixture.js";
@@ -125,17 +134,22 @@ const BASE_GATES = Object.freeze([
   "evidence-integrity",
 ]);
 
+interface ResearchDemandFacts {
+  readonly demandId: string;
+}
+
 interface ResearchDemandFixture {
-  readonly publication: Readonly<DemandEventSourcingPublicationWorkspaceFixture>;
+  readonly fixtureRoot: string;
   readonly root: string;
+  readonly ledgerPath: string;
   readonly workspaceRoot: RootedDirectory;
   readonly demandId: string;
 }
 
 /** 一份 research 类需求包（testingDecision not-applicable）经公共 create_demand 认领成 Demand。 */
-async function createResearchDemandFixture(t: TestContext): Promise<ResearchDemandFixture> {
-  const publication = await createDemandEventSourcingPublicationWorkspaceFixture();
-  t.after(() => cleanupDemandEventSourcingPublicationWorkspaceFixture(publication));
+async function authorResearchDemand(
+  publication: Readonly<DemandEventSourcingPublicationWorkspaceFixture>,
+): Promise<string> {
   const ledgerRoot = await RootedDirectory.open(publication.ledgerPath);
   try {
     const loaded = await publishFixtureRequirement(new LedgerAuthorityStore(ledgerRoot), {
@@ -175,16 +189,93 @@ async function createResearchDemandFixture(t: TestContext): Promise<ResearchDema
     "# 研究结论\n\n证据通道可行：hook 记录可投影为受管证据。\n",
     { mode: 0o644 },
   );
-  return Object.freeze({
-    publication,
-    root: publication.workspacePath,
-    workspaceRoot: publication.workspaceRoot,
-    demandId: created.publication.demandId,
+  return created.publication.demandId;
+}
+
+/**
+ * research 基线的初始化链（plan §11 的共享预置工作区）：同一进程里只跑一次，之后每个用例
+ * 复制一份自己的隔离工作区。公共发布夹具建在它自己的临时目录里，这里把整棵树逐项 `rename`
+ * 进基线目录——移动保留原样的权限位，不经过一次会按 umask 放宽目录权限的复制；两个目录都在
+ * `os.tmpdir()` 下，同一文件系统。句柄在 `finally` 里关掉，POSIX 的 rename 不受打开的 fd 影响。
+ */
+async function buildResearchDemandWorkspace(
+  fixtureRoot: string,
+): Promise<Readonly<ResearchDemandFacts>> {
+  const publication = await createDemandEventSourcingPublicationWorkspaceFixture();
+  try {
+    const demandId = await authorResearchDemand(publication);
+    for (const entry of readdirSync(publication.fixtureRoot)) {
+      renameSync(path.join(publication.fixtureRoot, entry), path.join(fixtureRoot, entry));
+    }
+    return Object.freeze({ demandId });
+  } finally {
+    await publication.workspaceRoot.close();
+    rmSync(publication.fixtureRoot, { recursive: true, force: true });
+  }
+}
+
+const researchDemandStore = createPreparedWorkspaceStore<undefined, Readonly<ResearchDemandFacts>>({
+  prefix: "wakeflow-research-demand-",
+  keyOf: () => "research",
+  build: (fixtureRoot) => buildResearchDemandWorkspace(fixtureRoot),
+});
+
+/** 证据在场的那一档基线：在 research 基线之上再记一条 document 证据，同样只跑一次。 */
+const researchDemandWithEvidenceStore = createPreparedWorkspaceStore<
+  undefined,
+  Readonly<ResearchDemandFacts>
+>({
+  prefix: "wakeflow-research-demand-evidence-",
+  keyOf: () => "research-with-evidence",
+  build: async (fixtureRoot) => {
+    const facts = await researchDemandStore.materializeInto(fixtureRoot, undefined);
+    await recordDocumentEvidenceAt(path.join(fixtureRoot, "Workspace"), facts.demandId);
+    return facts;
+  },
+});
+
+async function openResearchDemandFixture(
+  t: TestContext,
+  store: Readonly<{
+    materialize: (
+      options: undefined,
+    ) => Promise<Readonly<{ fixtureRoot: string; facts: Readonly<ResearchDemandFacts> }>>;
+  }>,
+): Promise<ResearchDemandFixture> {
+  const prepared = await store.materialize(undefined);
+  const root = path.join(prepared.fixtureRoot, "Workspace");
+  const workspaceRoot = await RootedDirectory.open(root);
+  t.after(async () => {
+    await workspaceRoot.close();
+    rmSync(prepared.fixtureRoot, { recursive: true, force: true });
   });
+  return Object.freeze({
+    fixtureRoot: prepared.fixtureRoot,
+    root,
+    ledgerPath: path.join(prepared.fixtureRoot, "wakeflow-ledger"),
+    workspaceRoot,
+    demandId: prepared.facts.demandId,
+  });
+}
+
+/** 还没有 document 证据的那一档副本。 */
+async function createResearchDemandFixture(t: TestContext): Promise<ResearchDemandFixture> {
+  return openResearchDemandFixture(t, researchDemandStore);
+}
+
+/** 已记下 document 证据的那一档副本：证据的记录过程本身不是这些用例的断言对象。 */
+async function createResearchDemandFixtureWithEvidence(
+  t: TestContext,
+): Promise<ResearchDemandFixture> {
+  return openResearchDemandFixture(t, researchDemandWithEvidenceStore);
 }
 
 /** 经公共 record_evidence 记录一条 document 类证据（Design 支撑面上的 markdown）。 */
 async function recordDocumentEvidence(fixture: ResearchDemandFixture) {
+  return recordDocumentEvidenceAt(fixture.root, fixture.demandId);
+}
+
+async function recordDocumentEvidenceAt(root: string, demandId: string) {
   const selection = {
     kind: "document",
     source: {
@@ -195,7 +286,7 @@ async function recordDocumentEvidence(fixture: ResearchDemandFixture) {
     },
     contentReview: "reject",
   };
-  const base = { root: fixture.root, demandId: fixture.demandId, selection };
+  const base = { root, demandId, selection };
   const previewed = await executeRecordEvidenceRequest({ ...base, mode: "preview" }, CLOCK);
   if (previewed.kind !== "WakeflowRecordEvidencePreview" || previewed.planDigest === null) {
     throw new Error(`Expected a ready evidence plan: ${JSON.stringify(previewed)}`);
@@ -323,8 +414,7 @@ test("research Demand 路由：无 document 证据为 not-ready/research-evidenc
 });
 
 test("research Demand 带未接受的实现目标：证据在场也先 targets-not-accepted，完成预检被路由阻塞", async (t) => {
-  const fixture = await createResearchDemandFixture(t);
-  await recordDocumentEvidence(fixture);
+  const fixture = await createResearchDemandFixtureWithEvidence(t);
 
   // 不变量：路由与聚合完成对"每个未被替代的实现目标都已接受"的要求一致，research 也不例外。
   // tasking 切片拒绝给 research Demand 规划实现包（research-demand-has-no-implementation），
@@ -428,8 +518,7 @@ test("verify 门：非 research Demand 不设 research-evidence 门", async (t) 
 });
 
 test("research Demand 完成：有 document 证据即完成并归档，终态记 not-applicable，归档 verify 报告带 research-evidence 门", async (t) => {
-  const fixture = await createResearchDemandFixture(t);
-  await recordDocumentEvidence(fixture);
+  const fixture = await createResearchDemandFixtureWithEvidence(t);
   const preview = await previewCompletion(fixture);
   if (preview.planDigest === null) throw new Error(preview.blockers.join(","));
 
@@ -450,7 +539,7 @@ test("research Demand 完成：有 document 证据即完成并归档，终态记
   equal(claim?.state.archive?.demandId, fixture.demandId);
 
   const archiveDirectory = path.join(
-    fixture.publication.ledgerPath,
+    fixture.ledgerPath,
     ...completed.archive.archiveRef.split("/"),
   );
   const report = JSON.parse(readFileSync(path.join(archiveDirectory, "verify-report.json"), "utf8")) as {

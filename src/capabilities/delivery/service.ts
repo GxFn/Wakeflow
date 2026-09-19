@@ -5,7 +5,10 @@ import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
-import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type {
+  RootedDirectory,
+  RootedDirectoryDurability,
+} from "../../foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   parseUtcInstant,
@@ -103,6 +106,7 @@ import {
   type AppendCommandBinding,
   type AppendCommandEnvelope,
 } from "../../kernel/append-command.js";
+import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import { fail } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
@@ -171,6 +175,8 @@ export interface DeliveryHostFacade {
 }
 
 export interface ExecuteDeliveryOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
 }
@@ -1361,6 +1367,7 @@ export async function executePrepareDeliveryRequest(
       result: prepareResult,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }
 
@@ -1695,6 +1702,7 @@ export async function executeRecordDeliveryOutcomeRequest(
       result: outcomeResult,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }
 
@@ -1964,5 +1972,6 @@ export async function executeRearmDeliveryRequest(
       result: rearmResult,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }

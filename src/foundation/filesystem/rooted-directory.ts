@@ -11,6 +11,10 @@ import {
 import nodePath from "node:path";
 
 import {
+  parsePlainRecord,
+  PassiveOwnDataError,
+} from "../data/passive-own-data.js";
+import {
   createFileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeIdentity,
@@ -34,6 +38,13 @@ import { readNodeSystemErrorCode } from "../node/node-system-error.js";
  * Node.js 未暴露 `openat` 或 `openat2`，因此子节点检查仍是基于路径名的尽力验证。
  * 本能力用于防范受信任单用户工作区中的意外路径、并发 Wakeflow 写入和符号链接，
  * 不能充当抵抗同权限恶意进程持续交换目录项的操作系统沙箱。
+ *
+ * 持久化级别是这次打开的属性，不是逐次调用的参数，也不是进程级开关：经由同一个根
+ * 执行的每一次耐久写入都读取该根的 `durability`。生产组合根、内核、治理与能力层
+ * 都不传这个选项，因此生产工作区始终是 `fsync`，崩溃语义与既往完全一致。
+ * `none` 只跳过 `fsync` 系统调用本身（文件与父目录），暂存、原子重命名、权限位、
+ * 链接检查、CAS 预期与错误分类都保持不变；它只能用于可随时丢弃、崩溃后不需要幸存
+ * 的一次性测试工作区，绝不能用于任何权威事实。
  */
 
 /** 根目录内一个已有资源的运行时物理观察；不得写入可移植记录。 */
@@ -41,6 +52,19 @@ export interface RootedResourceSnapshot {
   readonly resourcePath: PortableResourcePath;
   readonly physicalPath: string;
   readonly node: Readonly<FileNodeSnapshot>;
+}
+
+/**
+ * 一次打开范围内的持久化级别。
+ *
+ * `fsync`：文件与父目录都同步到持久介质，是缺省值，也是生产唯一使用的取值；
+ * `none`：跳过 `fsync` 本身，其余写入语义不变，只用于可丢弃的测试工作区。
+ */
+export type RootedDirectoryDurability = "fsync" | "none";
+
+/** 打开根目录的可选项；省略与显式 `{ durability: "fsync" }` 完全等价。 */
+export interface RootedDirectoryOpenOptions {
+  readonly durability?: RootedDirectoryDurability;
 }
 
 /** 根目录打开、复验或资源检查失败的稳定分类。 */
@@ -132,6 +156,33 @@ function normalizeRootPath(value: unknown, errorPath: string): string {
     fail("root-input", errorPath);
   }
   return value;
+}
+
+/**
+ * 打开选项与本文件族其余解析器走同一条准入：`parsePlainRecord` 负责拒绝代理、
+ * 非普通原型（数组正是靠这一条被拒）、符号键与访问器，这里只判定本能力的字段。
+ */
+function normalizeDurability(
+  value: unknown,
+  errorPath: string,
+): RootedDirectoryDurability {
+  if (value === undefined) return "fsync";
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value, errorPath);
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("root-input", errorPath);
+    throw error;
+  }
+  if (Object.keys(record).some((key) => key !== "durability")) {
+    fail("root-input", errorPath);
+  }
+  const durability = record.durability;
+  if (durability === undefined) return "fsync";
+  if (durability !== "fsync" && durability !== "none") {
+    fail("root-input", errorPath);
+  }
+  return durability;
 }
 
 function requiredOpenFlags(errorPath: string): number {
@@ -238,16 +289,19 @@ export class RootedDirectory {
   readonly #absolutePath: string;
   readonly #initialSnapshot: Readonly<FileNodeSnapshot>;
   readonly #handle: FileHandle;
+  readonly #durability: RootedDirectoryDurability;
   #closed = false;
 
   private constructor(
     absolutePath: string,
     initialSnapshot: Readonly<FileNodeSnapshot>,
     handle: FileHandle,
+    durability: RootedDirectoryDurability,
   ) {
     this.#absolutePath = absolutePath;
     this.#initialSnapshot = initialSnapshot;
     this.#handle = handle;
+    this.#durability = durability;
   }
 
   /**
@@ -255,12 +309,17 @@ export class RootedDirectory {
    *
    * 根节点本身不能是符号链接；受信任路径拼写中的祖先别名会先固定为规范真实路径。
    * 成功前同时核对原始路径拼写、规范路径名、`FileHandle` 与再次观察到的节点身份。
+   *
+   * 省略 `options` 与传入 `{ durability: "fsync" }` 完全等价；非法的选项形状与
+   * 非法根路径一样按 `root-input` 拒绝，不引入第二套准入分类。
    */
   static async open(
     value: unknown,
     errorPath?: string,
+    options?: Readonly<RootedDirectoryOpenOptions>,
   ): Promise<RootedDirectory> {
     const path = normalizeErrorPath(errorPath, "$root");
+    const durability = normalizeDurability(options, path);
     const absolutePath = normalizeRootPath(value, path);
     const before = await inspectPathNode(absolutePath, path, "root-not-found");
     if (before.kind === "symbolic-link") fail("root-symlink", path);
@@ -318,7 +377,7 @@ export class RootedDirectory {
       ) {
         fail("root-changed", path);
       }
-      return new RootedDirectory(canonicalRootPath, after, handle);
+      return new RootedDirectory(canonicalRootPath, after, handle, durability);
     } catch (error: unknown) {
       try {
         await handle.close();
@@ -332,6 +391,15 @@ export class RootedDirectory {
   /** 进程内规范绝对根目录；调用方不得把它写入可移植数据。 */
   get absolutePath(): string {
     return this.#absolutePath;
+  }
+
+  /**
+   * 本次打开范围内的持久化级别；经由本根执行的耐久写入都读取它。
+   *
+   * 该值在打开时固定，之后不可变更，测试可据此断言自己拿到的是哪一档。
+   */
+  get durability(): RootedDirectoryDurability {
+    return this.#durability;
   }
 
   #assertOpen(errorPath: string): void {

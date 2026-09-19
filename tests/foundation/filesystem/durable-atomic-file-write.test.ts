@@ -42,6 +42,7 @@ import {
 } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
+import { countFsyncs } from "./fsync-count-probe.js";
 
 async function expectAtomicWriteError(
   action: () => unknown | Promise<unknown>,
@@ -111,6 +112,162 @@ test("atomic create publishes exact bytes, mode, digest, and no stage residue", 
   }
 });
 
+test("none 级别的根不执行任何 fsync，字节与回执与 fsync 级别完全一致", {
+  concurrency: false,
+}, async (t) => {
+  const durablePath = mkdtempSync(path.join(
+    os.tmpdir(),
+    "wakeflow-atomic-durability-fsync-",
+  ));
+  const disposablePath = mkdtempSync(path.join(
+    os.tmpdir(),
+    "wakeflow-atomic-durability-none-",
+  ));
+  t.after(() => {
+    rmSync(durablePath, { recursive: true, force: true });
+    rmSync(disposablePath, { recursive: true, force: true });
+  });
+
+  const durableRoot = await RootedDirectory.open(durablePath, "$root", {
+    durability: "fsync",
+  });
+  const disposableRoot = await RootedDirectory.open(disposablePath, "$root", {
+    durability: "none",
+  });
+  const resourcePath = parsePortableResourcePath("state.bin");
+  const bytes = Buffer.from("durability-level\n", "utf8");
+
+  function writeCountingSyncs(root: RootedDirectory) {
+    return countFsyncs(() =>
+      createFileAtomically(root, resourcePath, bytes, { mode: 0o640 }),
+    );
+  }
+
+  try {
+    const durable = await writeCountingSyncs(durableRoot);
+    const disposable = await writeCountingSyncs(disposableRoot);
+
+    equal(disposable.syncCount, 0);
+    equal(durable.syncCount > 0, true);
+    // 字节、权限位与提交后残留都必须与 fsync 级别一模一样：`none` 只省掉同步调用。
+    deepEqual(readFileSync(path.join(disposablePath, resourcePath)), bytes);
+    deepEqual(
+      readFileSync(path.join(disposablePath, resourcePath)),
+      readFileSync(path.join(durablePath, resourcePath)),
+    );
+    equal(
+      statSync(path.join(disposablePath, resourcePath)).mode & 0o777,
+      statSync(path.join(durablePath, resourcePath)).mode & 0o777,
+    );
+    deepEqual(directoryNames(disposablePath), []);
+    deepEqual(directoryNames(durablePath), []);
+    // 回执形状不随级别变化：同样的键集合、同样的冻结、同样的事实字段。
+    deepEqual(
+      Object.keys(disposable.result).sort(),
+      Object.keys(durable.result).sort(),
+    );
+    equal(Object.isFrozen(disposable.result), true);
+    equal(disposable.result.publication, durable.result.publication);
+    equal(disposable.result.resourcePath, durable.result.resourcePath);
+    equal(disposable.result.byteCount, durable.result.byteCount);
+    equal(disposable.result.digest, durable.result.digest);
+    equal(disposable.result.node.kind, durable.result.node.kind);
+    equal(disposable.result.node.linkCount, durable.result.node.linkCount);
+    equal(
+      disposable.result.node.permissionBits,
+      durable.result.node.permissionBits,
+    );
+    equal(disposable.result.node.byteCount, durable.result.node.byteCount);
+  } finally {
+    await durableRoot.close();
+    await disposableRoot.close();
+  }
+});
+
+test("替换没有逐次持久化豁免：选项里的 durability 被拒，级别只由根决定", {
+  concurrency: false,
+}, async (t) => {
+  const durablePath = mkdtempSync(path.join(
+    os.tmpdir(),
+    "wakeflow-atomic-replace-durability-fsync-",
+  ));
+  const disposablePath = mkdtempSync(path.join(
+    os.tmpdir(),
+    "wakeflow-atomic-replace-durability-none-",
+  ));
+  t.after(() => {
+    rmSync(durablePath, { recursive: true, force: true });
+    rmSync(disposablePath, { recursive: true, force: true });
+  });
+  writeFileSync(path.join(durablePath, "state"), "before", { mode: 0o600 });
+  writeFileSync(path.join(disposablePath, "state"), "before", { mode: 0o600 });
+
+  const durableRoot = await RootedDirectory.open(durablePath, "$root", {
+    durability: "fsync",
+  });
+  const disposableRoot = await RootedDirectory.open(disposablePath, "$root", {
+    durability: "none",
+  });
+  const resourcePath = parsePortableResourcePath("state");
+  const bytes = Buffer.from("after-state", "utf8");
+
+  async function replaceCountingSyncs(root: RootedDirectory) {
+    const expected = await readStableFileDigest(root, resourcePath, {
+      maximumBytes: parseByteCount(1024),
+    });
+    return countFsyncs(() =>
+      replaceFileAtomically(root, resourcePath, bytes, {
+        mode: 0o600,
+        expected,
+      }),
+    );
+  }
+
+  try {
+    // 替换选项没有 `durability` 这一档：带上它就是非法选项形状，而不是一次悄悄的降档。
+    const expected = await readStableFileDigest(durableRoot, resourcePath, {
+      maximumBytes: parseByteCount(1024),
+    });
+    for (const durability of ["none", "fsync"] as const) {
+      await expectAtomicWriteError(
+        () => replaceFileAtomically(
+          durableRoot,
+          resourcePath,
+          bytes,
+          asReplaceOptions({ mode: 0o600, expected, durability }),
+        ),
+        "input",
+        "$options",
+      );
+    }
+    equal(readFileSync(path.join(durablePath, "state"), "utf8"), "before");
+
+    const durable = await replaceCountingSyncs(durableRoot);
+    const disposable = await replaceCountingSyncs(disposableRoot);
+
+    // 同一条替换：fsync 级别的根照常同步，none 级别的根一次都不同步。
+    equal(durable.syncCount > 0, true);
+    equal(disposable.syncCount, 0);
+    equal(durable.result.publication, "replaced");
+    equal(disposable.result.publication, "replaced");
+    deepEqual(readFileSync(path.join(disposablePath, "state")), bytes);
+    deepEqual(
+      readFileSync(path.join(disposablePath, "state")),
+      readFileSync(path.join(durablePath, "state")),
+    );
+    equal(
+      statSync(path.join(disposablePath, "state")).mode & 0o777,
+      statSync(path.join(durablePath, "state")).mode & 0o777,
+    );
+    equal(disposable.result.digest, durable.result.digest);
+    deepEqual(directoryNames(disposablePath), []);
+    deepEqual(directoryNames(durablePath), []);
+  } finally {
+    await durableRoot.close();
+    await disposableRoot.close();
+  }
+});
+
 test("atomic create 在 stage cleanup 前后分别同步 target parent", {
   concurrency: false,
 }, async () => {
@@ -118,7 +275,9 @@ test("atomic create 在 stage cleanup 前后分别同步 target parent", {
     os.tmpdir(),
     "wakeflow-atomic-create-sync-order-",
   ));
-  const root = await RootedDirectory.open(rootPath);
+  const root = await RootedDirectory.open(rootPath, "$root", {
+    durability: "fsync",
+  });
   const resourcePath = parsePortableResourcePath("state");
   const resourceAbsolutePath = path.join(root.absolutePath, resourcePath);
   const originalSync = RootedResourceParentHandle.prototype.sync;
@@ -190,7 +349,9 @@ test("atomic create never replaces an existing file", async () => {
 
 test("concurrent creates use OS no-replace publication", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-race-"));
-  const root = await RootedDirectory.open(rootPath);
+  const root = await RootedDirectory.open(rootPath, "$root", {
+    durability: "fsync",
+  });
   try {
     const resourcePath = parsePortableResourcePath("winner");
     const attempts = await Promise.allSettled([

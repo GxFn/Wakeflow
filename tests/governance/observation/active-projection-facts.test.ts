@@ -1,5 +1,13 @@
 import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -24,9 +32,14 @@ import type {
   ObservedPod,
   WorkspaceObservation,
 } from "../../../src/governance/observation/workspace-observation.js";
-import { renderActiveProjectionFiles } from "../../../src/kernel/active-projection.js";
+import {
+  materializeActiveLayout,
+  renderActiveProjectionFiles,
+} from "../../../src/kernel/active-projection.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
+import { WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF } from "../../../src/kernel/layout.js";
 import { createPodWorktreeReceipt } from "../../../src/kernel/pod-worktree-receipts.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 
 /**
@@ -284,5 +297,41 @@ test("刷新是派生物：非 io 的 Wakeflow 失败被静默吞下，已经提
   await rejects(
     afterMutationRefresh(workspace.workspaceRoot, AbortSignal.abort(), async () => "committed"),
     (error: unknown) => error instanceof WakeflowError && error.reason === "aborted",
+  );
+});
+
+test("刷新这条路也在锁内：锁被别人持有时这一轮以 projection-contended 失败，一个字节都不写", async (t) => {
+  // §13.98 F3：内核测试证明渲染闭包在锁内执行；这里证明 refreshActiveProjection 走的就是那条路，
+  // 而不是在锁外渲染完再去发布——锁被占住时它必须失败，且不得留下任何投影字节。
+  const workspace = await fixture(t);
+  const root = workspace.workspaceRoot;
+  await materializeActiveLayout(root, { recovering: false });
+  const activeRoot = path.join(root.absolutePath, ".wakeflow-active");
+  const lockPath = path.join(root.absolutePath, ...WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF.split("/"));
+  writeFileSync(
+    lockPath,
+    rootedExclusiveFileLockRecordTextForTest({
+      pid: process.ppid,
+      tokenUuid: "11111111-1111-4111-8111-111111111111",
+    }),
+    { mode: 0o600 },
+  );
+  // 锁种下之后再取快照：比较的是"这一轮有没有写投影"，不是我们自己种的锁。
+  const before = readdirSync(activeRoot).sort();
+
+  await rejects(
+    refreshActiveProjection(root, { acquireTimeoutMilliseconds: 50 }),
+    (error: unknown) =>
+      error instanceof WakeflowError
+      && error.code === "io-failure"
+      && error.reason === "projection-contended"
+      && error.retryable,
+  );
+
+  deepEqual(readdirSync(activeRoot).sort(), before, "争用的一轮不得新建任何投影文件");
+  equal(
+    readFileSync(lockPath, "utf8").length > 0,
+    true,
+    "争用的一轮不得夺走别人的锁",
   );
 });

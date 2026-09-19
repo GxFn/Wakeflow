@@ -1,15 +1,6 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  statSync,
-} from "node:fs";
-import os from "node:os";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
@@ -24,6 +15,7 @@ import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wake
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 
 /**
  * pod 切片效果（§13.91 D1 到 D7）：create preview 零写、apply 一次配置事务、同键重放、重名阻塞；
@@ -63,37 +55,52 @@ interface Fixture {
   readonly rooted: RootedDirectory;
 }
 
+/**
+ * Fresh 初始化链只跑一次：两个测试都从同一个"工作区已初始化、产品仓已有首提交"的树出发，
+ * 之前每个测试各跑一遍 `git init` 与 `fresh-initialize` 的 preview 与 apply。链留在基线里，
+ * 每个测试仍按需复制一份自己的真实文件系统副本，并在 `t.after` 里删掉它。
+ */
+const podWorkspaceStore = createPreparedWorkspaceStore<undefined, null>({
+  prefix: "wakeflow-pod-slice-",
+  keyOf: () => "fresh",
+  build: async (base) => {
+    const root = path.join(base, "Workspace");
+    const product = path.join(base, "ProductA");
+    mkdirSync(root);
+    mkdirSync(product);
+    git(root, "init", "--quiet");
+    git(product, "init", "--quiet");
+    git(product, "commit", "--quiet", "--allow-empty", "-m", "init");
+    const selection = createMinimalWakeflowFreshConfigSelection();
+    (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+    const preview = await executeCodexWakeflowMaintenance({
+      root,
+      action: "fresh-initialize",
+      mode: "preview",
+      request: { selection },
+    });
+    if (preview.mode !== "preview" || preview.planDigest === null) {
+      throw new Error("Expected a ready Fresh plan.");
+    }
+    await executeCodexWakeflowMaintenance({
+      root,
+      action: "fresh-initialize",
+      mode: "apply",
+      request: { selection },
+      planDigest: preview.planDigest,
+    });
+    return null;
+  },
+});
+
 async function fixture(t: TestContext): Promise<Fixture> {
-  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-pod-slice-")));
-  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const prepared = await podWorkspaceStore.materialize(undefined);
+  t.after(() => rmSync(prepared.fixtureRoot, { recursive: true, force: true }));
+  const base = realpathSync(prepared.fixtureRoot);
   const root = path.join(base, "Workspace");
-  const product = path.join(base, "ProductA");
-  mkdirSync(root);
-  mkdirSync(product);
-  git(root, "init", "--quiet");
-  git(product, "init", "--quiet");
-  git(product, "commit", "--quiet", "--allow-empty", "-m", "init");
-  const selection = createMinimalWakeflowFreshConfigSelection();
-  (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  const preview = await executeCodexWakeflowMaintenance({
-    root,
-    action: "fresh-initialize",
-    mode: "preview",
-    request: { selection },
-  });
-  if (preview.mode !== "preview" || preview.planDigest === null) {
-    throw new Error("Expected a ready Fresh plan.");
-  }
-  await executeCodexWakeflowMaintenance({
-    root,
-    action: "fresh-initialize",
-    mode: "apply",
-    request: { selection },
-    planDigest: preview.planDigest,
-  });
   const rooted = await RootedDirectory.open(root);
   t.after(() => rooted.close());
-  return { base, root, product, rooted };
+  return { base, root, product: path.join(base, "ProductA"), rooted };
 }
 
 function readConfig(fixture: Fixture) {
@@ -333,6 +340,7 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
     detached: false,
     locked: false,
   });
+  // 运行期泄露由这条看住；基线构建期烘进去的路径由 assertRelocatable 在基线落成时挡下。
   equal(JSON.stringify(productRegistered).includes(fx.base), false, "result leaked a path");
   const receiptFile = path.join(
     fx.root,

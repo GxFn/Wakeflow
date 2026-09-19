@@ -58,6 +58,11 @@ import { RootedDirectory } from "./rooted-directory.js";
  * 创建操作在双链接状态下先同步目标父目录，再退休暂存文件并进行第二次同步。替换
  * 操作在源资源预期完全一致时执行重命名，随后同步文件和父目录。本层不创建父目录、
  * 不解释业务权威事实，也不替代领域互斥锁或恢复意图记录。
+ *
+ * 是否真正执行 `fsync` 的权威是根的持久化级别：`root.durability` 为 `none` 时，
+ * 经由该根的创建与替换都不同步。创建选项上的 `durability` 仍是既有的窄豁免，
+ * 供可重建派生检查点单独放弃同步；两者取更弱的一档，逐次选项无法把一个 `none`
+ * 的根抬回 `fsync`。
  */
 
 async function performWrite<
@@ -70,8 +75,10 @@ async function performWrite<
   signal: AbortSignal | undefined,
   publication: Publication,
   expected: Readonly<DurableAtomicFileExpectation> | null,
-  durability: DurableAtomicFileDurability = "fsync",
+  requested: DurableAtomicFileDurability,
 ): Promise<Readonly<DurableAtomicFileWriteResult<Publication>>> {
+  const durability: DurableAtomicFileDurability =
+    root.durability === "none" ? "none" : requested;
   const parent = await openDurableAtomicFileTargetParent(root, resourcePath);
   let openStage: Readonly<OpenDurableAtomicFileStage> | undefined;
   let stage: Readonly<PreparedDurableAtomicFileStage> | undefined;
@@ -341,6 +348,8 @@ export async function replaceFileAtomically(
     parsed.signal,
     "replaced",
     parsed.expected,
+    // 替换永远按 `fsync` 请求，级别只由根收窄；这里没有可转发的逐次豁免。
+    "fsync",
   );
   return Object.freeze({ ...result, previous: parsed.expected });
 }

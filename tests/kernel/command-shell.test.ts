@@ -132,3 +132,41 @@ test("command shell 在边界拒绝私有路径、私有句柄、无效根，并
     (error: unknown) => isWakeflowError(error) && error.code === "invalid-request",
   );
 });
+
+/**
+ * 持久化级别是注入值，不是线上字段。这两条回归各盯一半：外壳按注入值打开工作区根，
+ * 缺省就是生产的 `fsync`；请求里哪怕出现同名字段也不改变级别，公共 Schema 里也没有它。
+ */
+test("持久化级别只由注入的执行选项决定，缺省是 fsync，请求里的同名字段不起作用", async (t) => {
+  const root = fixture(t);
+  const trace: string[] = [];
+  const levels: string[] = [];
+  const observe = {
+    ...spec(trace),
+    open: async (workspaceRoot: RootedDirectory): Promise<Context> => {
+      levels.push(workspaceRoot.durability);
+      return { workspaceRoot, closed: false };
+    },
+  };
+  const body = async () => ({});
+  await runCommandShell<Envelope, string, Context, unknown>(
+    observe,
+    { root, note: "a" },
+    () => {},
+    body,
+  );
+  await runCommandShell<Envelope, string, Context, unknown>(
+    observe,
+    { root, note: "b", durability: "none" },
+    () => {},
+    body,
+  );
+  await runCommandShell<Envelope, string, Context, unknown>(
+    observe,
+    { root, note: "c" },
+    () => {},
+    body,
+    { durability: "none" },
+  );
+  deepEqual(levels, ["fsync", "fsync", "none"]);
+});

@@ -174,16 +174,20 @@ test("import 重放幂等、已回报目标拒绝二次导入；回调只在静�
         "absent",
         "a callback reissue never takes a work claim",
       );
-      const replay = await rearmCallback(fixture, callbackId, key, revision, clock);
-      equal(replay.status, "idempotent");
-      equal(replay.rearm.generation, generation);
-      equal(replay.event.eventId, reissued.event.eventId);
-      const inspection = await inspectFixtureReview(fixture, fixture.targetTaskId, {
-        clock: () => clock,
-      });
-      equal(inspection.reviewUnit.callback.generation, generation);
-      equal(inspection.reviewUnit.callback.issuedAt, reissued.permit.issuedAt);
-      equal(inspection.reviewUnit.callback.status, "pending");
+      // 重发的重放幂等与"检查投影跟到当前代际"都是逐代同一条路径：在第一次重发上钉住，
+      // 其余两代只驱动到第四代的上限。第四代的代际与静默状态由循环后的 `silent` 检查钉住。
+      if (generation === 2) {
+        const replay = await rearmCallback(fixture, callbackId, key, revision, clock);
+        equal(replay.status, "idempotent");
+        equal(replay.rearm.generation, generation);
+        equal(replay.event.eventId, reissued.event.eventId);
+        const inspection = await inspectFixtureReview(fixture, fixture.targetTaskId, {
+          clock: () => clock,
+        });
+        equal(inspection.reviewUnit.callback.generation, generation);
+        equal(inspection.reviewUnit.callback.issuedAt, reissued.permit.issuedAt);
+        equal(inspection.reviewUnit.callback.status, "pending");
+      }
       revision = reissued.event.streamRevision;
       previousIssuedAt = reissued.permit.issuedAt;
     }

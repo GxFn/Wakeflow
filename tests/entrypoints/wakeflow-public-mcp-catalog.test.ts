@@ -332,3 +332,14 @@ test("Codex与Claude Code composition root发布同一十八工具集合", async
   deepEqual(listedNames[0], listedNames[1]);
   deepEqual(listedNames[0], PUBLIC_TOOL_CATALOG.map((tool) => tool.name).sort());
 });
+
+/** 持久化级别是注入值：它不属于线格式，任何公共工具的请求 Schema 都不得出现它（§13.99 同批确认）。 */
+test("公共工具的请求 Schema 里没有持久化级别字段", () => {
+  for (const tool of WAKEFLOW_PUBLIC_TOOL_CATALOG.tools) {
+    equal(
+      JSON.stringify(tool.requestSchema).includes("durability"),
+      false,
+      `${tool.name} 的请求 Schema 泄露了持久化级别`,
+    );
+  }
+});

@@ -3,14 +3,12 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
@@ -28,6 +26,7 @@ import {
   FIXTURE_LANDING_MARKDOWN,
   FIXTURE_REQUIREMENT_MARKDOWN,
 } from "../../governance/ledger/requirement-package.fixture.js";
+import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 
 /**
  * requirement 切片测试：一次性工作区经 Fresh 初始化后，走两段 preview、apply、重放、
@@ -41,46 +40,73 @@ interface Workspace {
   readonly designWindowId: string;
 }
 
+interface WorkspaceFacts {
+  readonly designSurfaceId: string;
+  readonly designRelativePath: string;
+  readonly designWindowId: string;
+}
+
+/**
+ * Fresh 初始化链只跑一次：本文件四个测试都从同一个"已初始化、草稿目录已建好"的工作区出发，
+ * 之前每个测试各跑一遍 `fresh-initialize` 的 preview 与 apply。链留在基线里，每个测试仍然
+ * 按需复制到自己的临时目录，仍是真实文件系统工作区，仍在 `t.after` 里删掉自己的副本。
+ */
+const requirementWorkspaceStore = createPreparedWorkspaceStore<undefined, Readonly<WorkspaceFacts>>(
+  {
+    prefix: "wakeflow-requirement-slice-",
+    keyOf: () => "fresh",
+    build: async (fixtureRoot) => {
+      const initialized = spawnSync("git", ["init", "--quiet"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        shell: false,
+      });
+      if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
+      const selection = createMinimalWakeflowFreshConfigSelection();
+      (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+      const preview = await executeCodexWakeflowMaintenance({
+        root: fixtureRoot,
+        action: "fresh-initialize",
+        mode: "preview",
+        request: { selection },
+      });
+      if (preview.mode !== "preview" || preview.planDigest === null)
+        throw new Error("Expected a ready Fresh plan.");
+      await executeCodexWakeflowMaintenance({
+        root: fixtureRoot,
+        action: "fresh-initialize",
+        mode: "apply",
+        request: { selection },
+        planDigest: preview.planDigest,
+      });
+      const config = parseWakeflowConfigV3(
+        JSON.parse(readFileSync(path.join(fixtureRoot, "wakeflow.config.json"), "utf8")),
+      );
+      const design = config.topology.supportSurfaces.find(
+        (surface) => surface.capability === "design",
+      );
+      const designWindow = config.topology.windows.find((window) => window.role === "design");
+      if (design === undefined || designWindow === undefined)
+        throw new Error("Fresh config lacks a design surface.");
+      mkdirSync(path.join(fixtureRoot, design.path, "drafts"), { recursive: true });
+      return Object.freeze({
+        designSurfaceId: design.surfaceId,
+        designRelativePath: design.path,
+        designWindowId: designWindow.windowId,
+      });
+    },
+  },
+);
+
 async function fixture(t: TestContext): Promise<Workspace> {
-  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-requirement-slice-")));
-  const initialized = spawnSync("git", ["init", "--quiet"], {
-    cwd: root,
-    encoding: "utf8",
-    shell: false,
-  });
-  if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const selection = createMinimalWakeflowFreshConfigSelection();
-  (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  const preview = await executeCodexWakeflowMaintenance({
-    root,
-    action: "fresh-initialize",
-    mode: "preview",
-    request: { selection },
-  });
-  if (preview.mode !== "preview" || preview.planDigest === null)
-    throw new Error("Expected a ready Fresh plan.");
-  await executeCodexWakeflowMaintenance({
-    root,
-    action: "fresh-initialize",
-    mode: "apply",
-    request: { selection },
-    planDigest: preview.planDigest,
-  });
-  const config = parseWakeflowConfigV3(
-    JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")),
-  );
-  const design = config.topology.supportSurfaces.find((surface) => surface.capability === "design");
-  const designWindow = config.topology.windows.find((window) => window.role === "design");
-  if (design === undefined || designWindow === undefined)
-    throw new Error("Fresh config lacks a design surface.");
-  const designPath = path.join(root, design.path);
-  mkdirSync(path.join(designPath, "drafts"), { recursive: true });
+  const prepared = await requirementWorkspaceStore.materialize(undefined);
+  t.after(() => rmSync(prepared.fixtureRoot, { recursive: true, force: true }));
+  const root = realpathSync(prepared.fixtureRoot);
   return {
     root,
-    designSurfaceId: design.surfaceId,
-    designPath,
-    designWindowId: designWindow.windowId,
+    designSurfaceId: prepared.facts.designSurfaceId,
+    designPath: path.join(root, prepared.facts.designRelativePath),
+    designWindowId: prepared.facts.designWindowId,
   };
 }
 

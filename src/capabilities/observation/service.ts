@@ -11,6 +11,7 @@ import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id
 import {
   RootedDirectory,
   RootedDirectoryError,
+  type RootedDirectoryDurability,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
@@ -45,7 +46,7 @@ import {
   type WorkspaceObservation,
 } from "../../governance/observation/workspace-observation.js";
 import type { ActiveProjectionTargetInspection } from "../../kernel/active-projection.js";
-import { runCommandShell } from "../../kernel/command-shell.js";
+import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
@@ -94,6 +95,8 @@ export interface ObservationHostFacade {
 }
 
 export interface ExecuteObservationOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
 }
@@ -158,6 +161,7 @@ async function readSnapshot(
 }
 
 async function openLedgerRoot(
+  root: RootedDirectory,
   snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
 ): Promise<RootedDirectory> {
   const placement = snapshot.placements.roots.find((entry) => entry.key === "ledger.root");
@@ -165,7 +169,9 @@ async function openLedgerRoot(
     fail("precondition-failed", "ledger-root-missing", "$request.root");
   }
   try {
-    return await RootedDirectory.open(placement.absolutePath, "$ledgerRoot");
+    return await RootedDirectory.open(placement.absolutePath, "$ledgerRoot", {
+      durability: root.durability,
+    });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       fail("precondition-failed", "ledger-root", "$request.root", { cause: error });
@@ -180,7 +186,7 @@ async function openContext(
   options: ExecuteObservationOptions,
 ): Promise<SliceContext> {
   const snapshot = await readSnapshot(root, options.signal);
-  const ledgerRoot = await openLedgerRoot(snapshot);
+  const ledgerRoot = await openLedgerRoot(root, snapshot);
   try {
     const observation = await observeWorkspace(root, snapshot, ledgerRoot, {
       hosts: facade.hosts,
@@ -643,6 +649,7 @@ export async function executeStatusRequest(
     value,
     () => undefined,
     (context, binding) => assembleStatus(context, binding.input),
+    commandShellExecutionOptions(options.durability),
   );
 }
 
@@ -997,5 +1004,6 @@ export async function executeVerifyRequest(
     value,
     () => undefined,
     (context, binding) => assembleVerify(context, binding.input),
+    commandShellExecutionOptions(options.durability),
   );
 }

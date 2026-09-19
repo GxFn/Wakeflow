@@ -479,10 +479,14 @@ export async function createFileCandidateDurably(
     ) {
       fail("candidate-changed", "$candidate");
     }
-    try {
-      await handle.sync();
-    } catch {
-      fail("sync-failure", "$candidate");
+    // 内容同步同样由根的持久化级别决定；`content-only` 只放弃父目录条目的同步，
+    // 而根为 `none` 时连内容同步一起跳过，其余复验完全不变。
+    if (root.durability === "fsync") {
+      try {
+        await handle.sync();
+      } catch {
+        fail("sync-failure", "$candidate");
+      }
     }
     prepared = await verifyBytes(handle, input, options.signal);
     await assertParentCurrent(parent, "candidate-changed", "$candidate");

@@ -2957,3 +2957,112 @@ L2 的第一项（13.94 D9，plan §8.1 L2 行）。依据 ADR-0009 调整一（
 **过程。** 并发上限由用户于本日解除，纪律不变：共用一个工作树、文件所有权互斥、所有编译与测试经一把 `mkdir` 锁串行。本轮同时跑到 10 个代理。两次工作流因代理停滞被中止，原因都是单次命令太长（一个内核测试写 16,384 条过期记录，修剪要做同样多次精确 unlink，单文件 112 秒；场景文件 3,300 行被整读）。锁脚本因此改为有界等待并周期性打印进度，超时以 75 退出让调用方重试；任务文本也改为"每次命令控制在 90 秒内、不整读大文件"。教训：审阅者的 `approved: false` 必须逐条核对再决定，本轮 24 条里有 3 条经核对不成立；代理报告的计数要以仓库自己的 runner 为准。
 
 **残余。** 时钟持续跑偏的宿主仍按它自己的时间线修剪（钳制只挡住单次未来写入）；`readHostHookObservationsInterleaved` 是为并发不变量留的内核测试缝，没有生产调用方；图谱来源指纹与 495 行证据的符号覆盖；测试墙钟计划；真实宿主八项核对。
+
+### 13.99 L2 第 2 项：skills 与 commands 文本按新公共面重写（设计定案）
+
+L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"）。依据 [ADR-0002](../decisions/0002-public-tool-surface.md)（公共工具面按单一 owner 重切，后果表写明"旧 skills 与 commands 文本在 E4 制品阶段随新面重写"）、[ADR-0006](../decisions/0006-legacy-capability-retention.md)（`view` 维持放弃、legacy 迁移放弃、窗口租约与 `replace_windows` 重切）、[ADR-0013](../decisions/0013-target-architecture-and-slice-plan.md)（六层与 20 个公共工具）、TSD-12（宿主差异只进 hosts profile 数据与 skills 文本）、[需求总览 §3 主流程](../requirements/wakeflow-functions-and-scenarios.md)与[场景验收清单](../references/scenario-acceptance.md)的 18 条已接线场景，以及 13.94 D6 与 13.97 D6、D10 留给 README 与 skills 的两个宿主信任步骤。本节先定案，用户确认后按 13.98 的方式实现。
+
+**核对到的现状（决定形状的部分）。** 旧文本面共三处：两份制品各 30 份技能 Markdown（`plugins/codex-wakeflow/skills/` 4,267 行、`plugins/claude-code-wakeflow/skills/` 4,334 行，两树 11 份文件已分叉，分叉内容全是几句宿主差异）、7 个 Claude 命令（`plugins/claude-code-wakeflow/commands/` 共 201 行）、四份 README（2,221 行）。技能是六份：`wakeflow-controller`（583 行）、`wakeflow-design`（108）、`wakeflow-governance`（176）、`wakeflow-target`（184）、`wakeflow-target-craft`（271）、`wakeflow-test`（152），另有 `references/` 与 `assets/` 若干（最大一份 667 行）。这三处点名的 `wakeflow_*` 工具记号各自都是 31 个，且是同一个集合；其中只有 9 个在今天的目录里存在（`maintain_workspace`、`create_demand`、`complete_demand`、`cancel_demand`、`continue_demand`、`prepare_delivery`、`record_evidence`、`status`、`verify`），另外 22 个已随旧体系消失（`wakeflow_view` 按 ADR-0006 放弃却仍被 `commands/check.md` 教；`wakeflow_deliver` 按 TSD-12 放弃；`wakeflow_pod_open/bind/plan/record` 四件被 `wakeflow_pod` 一件取代；`wakeflow_next_work`、`wakeflow_claim_next`、`wakeflow_add_task`、`wakeflow_review_pack`、`wakeflow_decide_review`、`wakeflow_record_target_result`、`wakeflow_reduce_results`、`wakeflow_intake_test_card`、`wakeflow_archive`、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_replace_windows`、`wakeflow_release_window_lock`、`wakeflow_register_window`、`wakeflow_record_delivery`、`wakeflow_recover_state_transition` 等）。反向缺口更大：20 个在册工具里有 11 个在任何文本里都没有被教过（`register_window_binding`、`publish_requirement`、`inspect_board`、`plan_target_task`、`record_delivery_outcome`、`rearm_delivery`、`import_target_result`、`inspect_target_result_review`、`record_implementation_review_decision`、`record_test_review_decision`、`pod`）。代码已经点名技能路径：`src/capabilities/delivery/decide.ts` 的 `DELIVERY_REQUIRED_SKILLS` 把 `skills/wakeflow-target/SKILL.md` 与 `skills/wakeflow-target-craft/SKILL.md` 写进投递 prompt，技能改名即改这条常量。README 两份都没有 Codex 的 `/hooks` 信任步骤与 Claude 的工作区信任对话。
+
+**范围。** 一份 agent 面文本源（四个技能、其 references、四个 Claude 命令、两语言 README）、每宿主一份文本取值模块、制品构建器的渲染与清单条目、一份诚实性检查测试、`DELIVERY_REQUIRED_SKILLS` 随技能集合收缩的一行改动、三处文档回写。不做：删除旧制品树（属于 L3 原子切换）、真实宿主会话验证（13.97 D9 的八项仍未验证）、模板与宿主记忆文件（L3 打包）、任何公共工具形状变更。
+
+**形状。** 源目录 `assets/agent-text/`（仓库相对，纯 Markdown，不出现宿主名）；取值 `src/hosts/<host>/<host>-agent-text-profile.ts`（纯数据加确定性渲染，与 `<host>-hook-fragment.ts` 同一模式，登记为显式生产根，只有 tooling 消费）；渲染在 `tooling/artifacts/build-typescript-artifact-candidates.ts`；检查在 `tests/artifacts/`。共享代码里没有一处按宿主分支。
+
+- D1 技能按窗口角色切成四份，深度内容下沉 `references/`。建议保留 `wakeflow-controller`、`wakeflow-design`、`wakeflow-target`、`wakeflow-test` 四个目录，每份 `SKILL.md` 只写立即目标、边界期望、阅读顺序、身份与返回指针；`wakeflow-governance` 的工作区初始化与维护步骤并入 controller（主流程第 0、1 步就发生在 Controller 窗口），其余章节（`AGENTS.md` 分层、TODO 收口、脚本流水线、阶段路由图）随旧体系一起放弃；`wakeflow-target-craft` 的方法内容降级为 `skills/wakeflow-target/references/craft.md`，按需加载。理由：Wakeflow 只登记四种窗口角色（`controller | design | test | product`，见 `src/contracts/generated/workspace/window-runtime-*-projection.generated.ts`），技能集合与角色集合一一对应，投递 prompt 的"必需技能"才是工种的函数而不是一张要人维护的表；`DELIVERY_REQUIRED_SKILLS` 相应改为按工种取：implementation 从两条路径（target 加 target-craft）缩到一条（target），test 仍是两条（target 加 test，因为测试窗口要先懂目标任务的交付形状再读测试合同）。技能名沿用 `wakeflow-target` 而不是改成角色词 `product`：工具面的对象词本来就是 target（`plan_target_task`、`import_target_result`、`inspect_target_result_review`），技能里用一句话点明"product 窗口执行 target 任务"即可，改名反而要动上面那条常量与全部 prompt 逐字断言。备选：按十张能力卡各出一份技能——Agent 不按能力挑技能，一次投递要列四五条必需技能，且十份文件是十处工具名漂移点。
+- D2 命令面维持 Claude 独有，从 7 个减到 4 个，且不得承载技能没有的步骤。建议 `/wakeflow-init`、`/wakeflow-status`、`/wakeflow-next`、`/wakeflow-pod` 四个：它们对应用户真正开口的四句（"初始化"、"看看状态"、"继续下一步"、"开或关 pod"）。删除 `dispatch`、`review`、`windows`（都是 Controller 经 `next` 到达的循环中段，不是用户开口的第一句，技能里已有完整步骤）、`unattended`（TSD-12 已放弃 unattended 与 keep-live，重写等于把放弃项复活）、`check`（并入 `/wakeflow-status`；它现在教的 `wakeflow_view` 已按 ADR-0006 放弃）。不给 Codex 造等价命令面：Codex 插件不发 slash 命令（能力映射矩阵 §3 第 10 行），两宿主的共享形状是技能文本。硬约束：命令正文只能是"一句意图加第一次工具调用加指向某技能某一节的指针"，命令里出现的每个工具名必须同时出现在它所指的技能里（D4 e），否则 Codex 侧会丢步骤。备选：完全不发命令——Claude 用户失去唯一显式入口，且工作区还不存在时 `/wakeflow-init` 是唯一能被发现的入口。
+- D3 文本只有一份源，宿主差异用封闭占位符表。建议 `assets/agent-text/` 下放 `skills/<name>/SKILL.md`、`skills/<name>/references/*.md`、`commands/<name>.md`、`README.md`、`README.zh-CN.md`，源文件里不出现任何宿主名与宿主专有词；宿主差异写成封闭占位符（`{{instructionFile}}`、`{{windowLaunch}}`、`{{deliveryAction}}`、`{{worktreeLaunch}}`、`{{commandSurface}}`、`{{hostTrustSteps}}`），取值放在每宿主的文本 profile 模块；构建器把整棵源目录渲染进每个候选，`commands/` 只进 Claude 候选。渲染是一次封闭替换：源里出现未登记的占位符，或某宿主的取值表里有没被任何源文件用到的键，构建即失败。理由：今天两份技能树已经因为几句宿主差异分叉了 11 份文件，而 TSD-12 要求宿主差异只进 hosts profile 数据与 skills 文本——占位符表正好把"数据"与"文本"缝在宿主边界上。备选 A：两套 Markdown 各维护一份（今天的状态，已经漂移）；备选 B：文本编成 TS 字符串常量放进 `src/hosts/`（像状态栏资产）——技能是给人和 Agent 读的 Markdown，进 TS 后审阅与 diff 都退化，且共享文本本就不该住在宿主目录；备选 C：放 `tooling/artifacts/agent-text/`——它是出厂内容不是构建工具，放 tooling 会让"产品文本"与"构建脚本"共用一个所有权边界。
+- D4 诚实性检查（五条，都是仓库自己的测试，不是审阅意见）。(a) 正向白名单：源目录里所有 `wakeflow_[a-z_]+` 记号必须出现在 `WAKEFLOW_PUBLIC_TOOL_CATALOG.tools` 的名字集合里；按最长记号匹配，`wakeflow_pod_open` 不会被 `wakeflow_pod` 放行，`wakeflow_register_window` 不会被 `wakeflow_register_window_binding` 放行。(b) 反向覆盖：20 个公共工具每一个至少被一份 `SKILL.md` 或其 references 正文点名，今天那 11 个无人教的工具就此清零。(c) 退役词汇黑名单：白名单只看 `wakeflow_*` 记号，旧的操作词与旧对象名不匹配它，所以另立一张退役词表（`operation=group`、`operation=target-preview`、`dispatch group`、`review pack`、`TODO row`、`window lease`、`next work`、`keep-live`、`unattended`），出现即失败。黑名单只收已经消失的工具名、对象名与操作词：仍在册的操作词一律不进表——`inspect` 是 `wakeflow_register_window_binding` 与 `wakeflow_pod` 今天的操作，把它列进去会与 (b) 的"每个工具都要被教到"直接相撞，两条检查同时写成测试就无法一起通过。(d) 技能路径闭合：代码里点名的技能路径（`DELIVERY_REQUIRED_SKILLS`）必须在源目录里存在，源目录里的每个技能必须被"工种到技能"表或 Controller/Design 入口表引用到，不留孤儿。(e) 命令闭合：每个命令正文里的工具名必须同时出现在它所指的技能里。理由：文本是唯一没有编译器的公共面，工具一改名它就静默说谎，今天 31 个记号里 22 个说谎就是证据；这五条把说谎变成红灯。备选：靠评审读一遍——不可重复，且 ADR-0002 决定重切工具面时就已经预见了这次重写，工具面在 L2 还会继续动。
+- D5 主流程步骤的唯一归属。建议四份技能合起来恰好覆盖需求总览 §3 主流程的 0 到 13 步，每步一个 owner：controller 归 0、1、5、6、7、8、10、11、12、13；design 归 2、3、4；target 归 9（实现）；test 归 9（测试）。检查写成测试里的"步到工具"表（表取自 §3 那张表），断言每步的 owner 技能点名该步的工具，且步集合的并集是 0 到 13、除第 9 步外两两不相交。理由：旧 controller 技能 583 行里同时讲派发、评审、pod、存储卫生与停止条件，没有任何机制能证明它覆盖了主流程；覆盖写成表，流程一变表就红。备选：在 `SKILL.md` frontmatter 里加 `wakeflow-steps` 字段让测试直接读——两宿主的 frontmatter 只承诺 `name` 与 `description`，加字段有被宿主拒绝的风险。
+- D6 语言：技能与命令只发英文，README 保持双语。建议 `SKILL.md`、`references/*.md`、`commands/*.md` 各只有英文一份；README 保持 `README.md` 与 `README.zh-CN.md` 两份，共用同一套占位符。理由：两宿主都没有"按语言选技能"的机制，发两份会两份都被发现、两份都被加载，诚实性检查也要跑两遍；面向用户的工作区生成文本（`src/workspace/support/wakeflow-support-memory-authority.ts` 的支撑面记忆、活动投影、投递 prompt）已经有 `presentation.language` 开关，不受本项影响。备选：技能也双语——见上。
+- D7 体积与优先级预算。建议每份 `SKILL.md` 不超过 200 行且不超过 12 KB，`description` frontmatter 不超过 1,024 字符（Claude 的上限，Codex 无上限但取同一值以免分叉），每份 `references/*.md` 不超过 400 行，命令正文不超过 40 行；技能不复述任何工具的 Schema 与拒绝码——边界归工具描述与 server instructions（ADR-0004），技能只讲顺序、身份、以及工具做不到的人类动作。上限写成断言。理由：仓库规则要求 prompts 分优先级且轻，任务包持有完整任务上下文，需求锚点持有背景；旧 controller 技能 583 行里大半是 Schema 复述与已放弃能力。备选：不设上限——今天的 4,267 行就是不设上限的结果。
+- D8 README 的宿主一次性动作节。建议 README 新增一节"安装后的一次性宿主动作"，正文由 `{{hostTrustSteps}}` 从宿主文本 profile 取：Codex 一侧——用户必须在 `/hooks` 里按定义哈希审阅并信任 Wakeflow 的四个 hook，信任前四个 hook 全部被跳过，插件更新后若 hook 定义字节变化需要重新信任，正常情况下更新后 `/hooks` 里不应出现待审阅的 Wakeflow 条目（13.97 D6、D9 第八项）；Claude 一侧——首次在工作区目录启动时必须接受工作区信任对话，否则插件 hook 与状态栏都不运行，状态栏命令由 `wakeflow_maintain_workspace` 写进 `settings.local.json` 的托管块，用户自行改写 statusLine 会在对账里报差异（13.94 D6）。两宿主共同项：`node` 必须在 PATH 上（与 `.mcp.json` 同一假设）；`wakeflow_verify` 的 `host-hook-channel` 门报 `absent` 或 `records-0` 时（码的实际形状是 `records-0`，与既有的 `skipped-<n>` 同一风格），第一排查项就是这两个信任动作（13.97 D10）。理由：13.97 D6 明确把这两步留给 README 与 skills，本项就是那个 owner；它们是"投递看起来成功却拿不到 hook 证据"的唯一根因，不写进 README 用户无从自查。备选：只写进技能——装插件时读 README 的是用户，读技能的是 Agent。
+- D9 制品构建器与准入。建议候选定义增加 `agentTextRoot`（仓库相对路径）与每宿主的文本 profile 模块；构建器像 13.97 D8 取 hook 片段那样动态 `import` 编译后的文本 profile，渲染后逐文件 `writeExclusive`；清单增加 `agentText[]` 条目（制品内路径与字节摘要）；两次构建字节一致（取值表是纯数据，渲染不含版本号与构建标识）。两份文本 profile 模块登记进架构门的 `ADMITTED_PRODUCTION_ROOTS` 与 knip entry；`assets/agent-text/` 是非 TS 资产，不进 tsconfig、不进架构图，由制品测试与诚实性测试守。理由：与 hook 片段同一条缝，不新开机制。备选：把文本当普通静态文件直接复制进候选而不走取值表——占位符就失去了唯一替换点，宿主差异会重新散进 Markdown，正是 D3 要消除的分叉来源。
+- D10 删除与文档回写。建议旧 `plugins/*/skills/`、`plugins/claude-code-wakeflow/commands/` 与四份旧 README 属于旧 JavaScript 制品，按 §8.1 的分层规则留到 L3 原子切换时随 `core/`、`tools/`、`test/` 一次删除，本项不动它们，新文本在 `assets/agent-text/` 里另起。回写：能力映射矩阵 §3 第 10 行"7 个 slash 命令随场景重写"改为"4 个命令，且命令不承载技能之外的步骤"；plan §8.1 L2 行的"skills 与 commands 文本随场景重写"在本项落地后标为已实现；ADR-0002 后果表"旧 skills 与 commands 文本在 E4 制品阶段随新面重写"改为"文本在 L2 重写并带诚实性门，E4 只删旧树"。理由：旧树是旧 JavaScript 制品的一部分，单独删它会让旧体系在 L3 之前就处于半可用状态，而 §8.1 的分层规则要求整体原子切换；新文本另起一根，两套文本在 L2 到 L3 之间并存不冲突（构建器只读新根）。备选：本项就地覆盖旧目录——旧制品仍是 `test:legacy` 的不变量来源，覆盖会让旧门失去它自己的文本。
+
+**验收。** `tests/artifacts/agent-text-honesty.test.ts` 一份文件覆盖 D4 的五条、D5 的步到工具表与 D7 的体积上限；用例形如"文本点名的每个工具都在公共目录里"、"公共目录的每个工具都至少被一份技能教到"、"退役词汇不出现在任何源文件里"、"代码点名的技能路径存在且没有孤儿技能"、"命令不引入技能之外的工具"、"主流程每一步的 owner 技能点名该步的工具"、"每份 SKILL.md 在行数与字节上限内"；纯文件读取，无夹具、无网络、无编译，目标墙钟低于 1 秒（L2 退出门要求治理测试墙钟低于 3 分钟，本项不得吃掉预算）。`tests/artifacts/typescript-artifact-candidates.test.ts` 追加：渲染结果里不残留 `{{`、`commands/` 只出现在 Claude 候选、Codex 候选的共享文本里不出现 `CLAUDE.md` 而 Claude 候选里不出现 `AGENTS.md`、两次构建字节一致、清单 `agentText[]` 摘要稳定。投递侧现有测试断言 `DELIVERY_REQUIRED_SKILLS` 收缩后 prompt 的必需技能节逐字稳定。场景不新增编号：18 条场景不读技能文本，D4(b) 的反向覆盖由目录常量而不是场景保证。
+
+**度量目标。** 文本源从两制品各 30 份 Markdown（8,601 行）加 7 个命令（201 行）加四份 README（2,221 行）收成一份源目录：4 份 `SKILL.md`（合计不超过 800 行）、约 6 份 references（不超过 1,600 行）、4 份命令（不超过 160 行）、2 份 README；渲染后每个制品各得一份，不再有分叉文件。文本点名的 `wakeflow_*` 记号从 31 个（其中 22 个已不存在）变成恰好 20 个且全部在册，无人教的工具从 11 个变成 0 个。新增约 2,600 行 Markdown 与约 300 行 TS（两份文本 profile 与构建器改动），新增 1 份测试文件约 12 条用例、制品测试追加约 5 条，总测试数以仓库 runner 为准。架构门生产根 13 → 15；`tools/list` 不变（技能不是工具）；每个候选制品增加约 60 KB 文本。
+
+**待用户确认的项。** D1（六个技能并成四个，`wakeflow-governance` 的多数章节放弃、`wakeflow-target-craft` 降级为 references，`DELIVERY_REQUIRED_SKILLS` 每工种只剩一条路径）、D2（命令 7 → 4 并删掉 `unattended`、`dispatch`、`review`、`windows`、`check`，与能力映射矩阵 §3 第 10 行"7 个 slash 命令随场景重写"相抵）、D3（文本源落在 `src/` 之外的新根 `assets/agent-text/`，并新增两份宿主文本 profile 生产根；ADR-0013 的六层只覆盖 TS 模块，不覆盖非 TS 出厂资产）、D4(b)（强制 20 个工具每个都有文本教，等于给文本定了下限）、D6（技能与命令只发英文，与工作区生成文本的双语开关不对称）五项是取舍或与既有裁决相抵；D8（13.97 D6 原文把两个宿主信任步骤留给"L3 的 README 与 skills"，本项把它们提前到 L2 并指定 README 为 owner）与 D10（要改写一份已接受 ADR 的后果条目）是把既有决定的时点或文字挪动了的两项，也请一并裁决；D5、D7、D9 是按既有边界落地的形状选择。用户于 2026-09-18 回复"确认 继续"，按建议列全部执行；同批确认的还有两项：墙钟按"可选持久化级别"做（给持久写一个显式的持久化级别，一次性测试工作区不再付 fsync），以及对测试总工作量做优化剪枝。
+
+## 13.100 L2 第二项：可选持久化级别的落地、测试总工作量剪枝与墙钟实测（2026-09-18）
+
+**做了什么。** 三轮并行实现把 §13.99 同批确认的两件事落到代码里。
+
+- 可选持久化级别。`RootedDirectory.open` 收一个 `{ durability: "fsync" | "none" }`，级别记在根上，写路径按根上的级别决定是否 fsync。它与 `clock` 同类：只能由进程内调用方注入，公共请求、信封与线格式里都没有、也不会有这个字段。三种调用形状各多一个可选的尾参 `CommandShellExecutionOptions`，九个能力片（tasking、delivery、endpoint、evidence、observation、pod、requirement、result-review、demand）的执行选项各多一个可选字段，切片用 `commandShellExecutionOptions(options.durability)` 把它收窄后交给外壳。
+- 派生根继承。同一次调用里从工作区根派生出来的根一律随来源根：Demand 操作根、Demand 发布根（stage 与 final）、权威上下文的 ledger 根、Demand 片的 ledger 根、观察片与活动投影刷新的 ledger 根。这条不变量现在有直接回归（`Demand 操作根继承来源工作区根的持久化级别`，两侧各断言一次），注入边界也有直接回归（缺省 `fsync`、请求里的同名字段不起作用、任何公共工具的请求 Schema 里都没有 `durability`）。
+- 测试剪枝。共享预置工作区基线扩到 requirement、pod、workspace-observation 三处，`tests/support/prepared-workspace.ts` 的 `assertRelocatable` 保证基线字节里不含它自己的根路径（运行期泄露仍由各测试原有的断言看住）。一次性夹具通过 `DISPOSABLE_ROOT_OPTIONS` 采用 `none`。五个被改文件合计 134.1 秒降到 95.1 秒（−29.1%），对照文件同段时间只动 −0.6%。
+
+**墙钟的账。** 本机 8 个逻辑核，`node --test` 每个文件一个子进程。
+
+| 度量 | 值 |
+| --- | --- |
+| 全量 TS 门，旧调度表（`npm test` 里 runner 自报 `duration_ms`） | 209.3 秒，963 项全过 |
+| 全量 TS 门，刷新调度表后（同一命令，本片最终态） | 191.2 秒，966 项全过 |
+| 逐文件计时（同一棵树，8 路池，每文件一个进程） | 墙钟 189.0 秒，逐文件求和 1,355 秒，打包率 90% |
+| 完美打包下限（1,355 / 8） | 169 秒 |
+| 关键路径 | `tests/scenarios/wakeflow-scenario-acceptance.test.ts` 单文件 189.0 秒，独占跑 82.5 秒 |
+
+关键路径就是墙钟本身：场景验收是一条二十个场景、同一个一次性工作区上的顺序链，写在一个文件里，`node --test` 只能给它一个进程，它从 0 秒开始一直跑到最后一秒。它独占 82.5 秒，八路并发下被拉长到 189 秒。链内没有单点热点，最贵的六个场景合计 53 秒，其余十四个每个不到 5 秒。
+
+**两项否定性实测。** 都是把编译产物临时改掉跑一遍、跑完还原，仓库源码未改。
+
+- 把外壳的缺省级别强制成 `none`（等于所有测试调用都注入 `none`）：全量门 209.3 → 195.0 秒，只有 −6.8%。所以"把 170 处执行器调用点逐个加上 `durability`"买不到退出门，代价却是 170 处改动加一档削弱的 fsync 覆盖，本片不做。
+- 场景验收单文件在 `none` 下 82.5 → 73.2 秒（−11%）。场景链走的是真实 Codex 组合根，注入缝在组合根之外；为它开一个测试专用旋钮等于把测试开关放进生产组合根，本片拒绝。
+
+**结论：L2 的"治理测试墙钟低于 3 分钟"退出门本片未达，差 11 秒（191.2 对 180），需要用户裁决。** 不是剪枝没做够：下限已经是 169 秒，而关键路径的那一个文件就要 189 秒；刷新调度表已经把 runner 自己浪费的 18 秒收回，剩下的差额全在那一条链上。在场景链保持"一个文件、一条顺序链"的前提下，180 秒不可达。三个选项：(a) 把场景链按工作区检查点切成 3 到 4 个可并行文件，关键路径降到 50 到 65 秒，墙钟随下限走（新工作，且验收证据从"一条链"变成"几条接力链"）；(b) 按测试数从 844 涨到 963 重新裁这条门的数值；(c) 保留 180 秒并把本项记为未达。
+
+**其余处置。** 本轮三个并行桶的评审提出的应修项已修：投递必需技能收缩后 `tests/capabilities/delivery/decide.test.ts` 的断言同步（此项曾让门变红）；`docs/requirements/wakeflow-functions-and-scenarios.md` §2 与 §3 里残留的退役对象词"测试卡"改为"测试合同（由测试任务包携带）"；`demand-operation-authority-context.ts` 的注释不再宣称一条全工作区不变量，改为这条缝自己成立的陈述；`tests/support/prepared-workspace.ts` 里两个字面 NUL 分隔符改成 `\u0000` 转义，文件不再是二进制。`tooling/testing/test-durations.json` 按本次逐文件实测整表刷新（旧表是并发争用下的 1,617 秒旧数，把最慢文件排错了位）。
+
+## 13.101 L2 收口后的推进计划：功能补齐、L3 制品完整化与 E4 原子切换（2026-09-19）
+
+**目标。** 用户 2026-09-18 晚定下的方向：以"新 TS 版本完整实现功能与代码逻辑、准备好新旧切换、清理旧代码"为目标，按阶段一步一个脚印推进，不遗漏功能与代码逻辑；本轮不用 ultracode，单人推进。本节先盘点现状与仍然开放的功能项，再给阶段计划与需要裁决的项。
+
+**现状盘点（代码与文档实测）。**
+
+- 公共面：20 个公共工具、95 份 wire Schema，Controller Route 无 not-implemented blocker；能力映射矩阵 31 项旧工具重切或已落地 27、放弃 4、缺席 0，D1–D41 与 I3 逐行有判定；十张能力卡全部 `confirmed`。
+- 场景验收：20 个场景一条链全部 `pass`；待接线只剩 `card-10/release-consistency`（L3）。
+- 全量 TS 门：966 项全过，runner 墙钟 191.2 秒（§13.100）。
+- 候选制品（`.build/artifacts/<host>/`）已有：`lib/` 编译闭包（Claude 430 文件、Codex 418 文件）、`mcp/server.mjs`、`hooks/observe.mjs` 与 `hooks/hooks.json`、`skills/`、Claude 的 `commands/`、双语 README、`.mcp.json`、`package.json`（`0.0.0-technical-skeleton`、`private`）、`artifact-manifest.json`（`releaseEligible: false`）。**还没有**：插件 manifest（`.codex-plugin/plugin.json`、`.claude-plugin/plugin.json`）、LICENSE、品牌 SVG、运行时依赖闭包、真实版本号、`releaseEligible` 的真实路径。
+- 运行时依赖闭包实测：`@modelcontextprotocol/server` 2.0.0 → `@modelcontextprotocol/core` → `zod`；`ajv` → `fast-deep-equal`、`fast-uri`、`json-schema-traverse`、`require-from-string`；`p-limit` → `yocto-queue`；`canonicalize`、`jsonc-parser`。12 个包，整包 17.2 MB；去掉 `.d.ts`、source map、Markdown、`src/`、测试目录后约 5.3 MB。候选制品今天能在仓库内跑，只因为 Node 从 `.build/` 向上找到了仓库根的 `node_modules/`——装到宿主缓存目录后会立刻找不到依赖。这是 L3 必须解决的第一件事。
+- 旧体系待删：`core/` 186 文件 165K 行、`tools/` 9 文件、`test/` 7,260 文件 829K 行（含 48 MB fixture 语料）、两个插件里的 `scripts/`（100/106 文件、150K/161K 行）、`lib/`、`schemas/`、`templates/`、`bin/`、`wakeflow.config*.json`、插件根 `AGENTS.md`/`CLAUDE.md`；根 `package.json` 的 `workspaces` 与 `sync:core`、`check:core`、`validate*`、`smoke*`、`mcp*`、`test:wakeflow`、`test:legacy` 脚本；`knip.json` 的 `test/**` 忽略；根 README（描述旧安装与旧工具面）。
+
+**功能完整性清单（仍然开放、不得遗漏的项）。** 逐项给出处置，"放弃"都指向既有裁决。
+
+| # | 项 | 来源 | 处置 |
+| --- | --- | --- | --- |
+| F1 | TSD-16 配置从 v1 起版未做：`WAKEFLOW_CONFIG_V3_VERSION = 3`，`$id` 仍指向 `https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json`（E4 删 `core/` 后失效），代码 92 个文件带 `V3` 字样 | ADR-0008 决定 5；能力映射矩阵行 2、D13 | **B1 做**：`$id` 改 `urn:wakeflow:config:v1`、`schemaVersion: 1`、`kind` 保持 `WakeflowConfig`；符号去掉版本后缀（`WakeflowConfig`、`parseWakeflowConfig`、`wakeflow-config.ts`），文件版本只由 `schemaVersion` 表达 |
+| F2 | `card-10/release-consistency`：五源一致、标签在 HEAD、Node 24 | 场景清单 §2；能力卡 10 Q5–Q7 | **C 做**：`release:check` 重写为 `tooling/release/`，场景以 tooling 测试形式接线（它不经 MCP） |
+| F3 | 制品校验器与冒烟 | 能力卡 10 Q8、矩阵 §2 | **C 做**：TS 校验器（文件清单闭合、manifest 与 marketplace、MCP 接线、工具数量由导出派生、技能面、文本面、hooks 摘要、无绝对路径）与冒烟五幕（fresh preview 零写与 apply、目标树复核、reconcile no-op、一次观察 status/verify、pod create preview 零写），冒烟从**仓库外的临时副本**启动制品以证明依赖闭包 |
+| F4 | 两宿主各完成一次真实投递并交回 hook 证据；Claude 状态栏真实会话 | L2 退出门；§13.97 D9 八项 | 只有用户能做；记 `已实现、宿主未验证` 直到跑过（plan §14 第 12、13 项允许明确报告未执行） |
+| F5 | `developer-progress.md` 最近十条事件 | 能力卡 9 Q7"待 L2 场景需要再加" | 场景没有需要它；**裁决 D9**：默认不加 |
+| F6 | `config.valueSources`、阈值配置化 | §13.94 D7 | 观察切片已裁决不进配置；关闭 |
+| F7 | ADR-0009 开放项：Codex 线程创建工具名核对；tmux 控制模式是否写进 Claude skills | ADR-0009 | 前者已在 endpoint 切片核对（场景断言 `create_thread`）；后者已写进技能文本（"可选强观察"）；D 阶段回写 ADR 关闭 |
+| F8 | ADR-0013 开放项：目录名；`idempotency-store` 位置 | ADR-0013 | 目录名已由实现固定（kernel、capabilities、governance、workspace 并存）；幂等由追加命令的请求键落地，没有独立 store；D 阶段回写关闭 |
+| F9 | ADR-0008 开放项：插件名与 marketplace 条目是否沿用；版本起点 | ADR-0008 | **裁决 D3、D4**：沿用 `wakeflow` 与两份 marketplace；起点 `1.0.0`（能力卡 10 Q5 已建议） |
+| F10 | 治理测试墙钟 191.2 秒对 180 秒门 | §13.100 | **裁决 D10** |
+
+**阶段计划。** 每阶段一个退出门，一次提交；提交只在用户说"提交"时做。
+
+| 阶段 | 内容 | 退出门 |
+| --- | --- | --- |
+| A L2 收口 | 提交 §13.96–§13.100 的未提交工作（79 个路径）；D10 定墙钟门 | `npm test` 绿、`git diff --check` 干净 |
+| B 功能补齐 | B1 TSD-16 配置 v1（F1）；B2 按 D9 决定是否加最近十条事件 | 全量门绿；场景 20 项 pass；矩阵行 2、D13 改"已做" |
+| C L3 制品完整化 | C1 构建器补齐：manifest、LICENSE、品牌 SVG、依赖闭包（D5）、真实 `package.json`、版本源、`releaseEligible` 真实路径、两次构建逐字节一致；C2 TS 校验器与冒烟（F3）、`build:check`；C3 `release:check` TS 重写与 `card-10` 接线（F2）；C4 制品测试扩展 | 候选制品在仓库外临时副本上通过冒烟五幕；`build:check` 对候选连跑两次一致；全量门绿 |
+| D E4 原子切换 | D1 用构建器重生成两个 committed 制品（覆盖式替换旧内容）；D2 删除 `core/`、`tools/`、`test/`、插件旧内容、根脚本、`workspaces`、knip 忽略；D3 根 README/AGENTS.md/CLAUDE.md 与 `docs/README.md` 改写为新权威；D4 五源版本 `1.0.0`；D5 回写 plan §8.1/§13/§14、矩阵 §2、场景清单、ADR-0008/0009/0013 开放项 | `npm test` 绿；`build:check` 一致；`release:check` 除标签外全过；`git diff --check` 干净；一次提交 |
+| E 只有用户能做 | `WakeWorkspace` 真实初始化、删除重建、reconfigure/reconcile；两宿主真实投递与 hook 证据；打标签、发布、缓存刷新 | plan §14 第 10、12、13、15 项 |
+
+**需要裁决的项（按建议列执行即回复"确认 继续"）。**
+
+- D1 制品组成（闭合清单）。保留：`.codex-plugin/plugin.json` 或 `.claude-plugin/plugin.json`、`.mcp.json`、`package.json`、`artifact-manifest.json`、LICENSE、`README.md`、`README.zh-CN.md`、`assets/wakeflow-logo.svg` 与 `wakeflow-mark.svg`（源移到仓库 `assets/brand/`，两宿主同一份）、`lib/`、`mcp/`、`hooks/`、`skills/`、Claude 的 `commands/`、`node_modules/`（见 D5）。不再发出：`bin/`（shell 启动器；`.mcp.json` 已直接用 `node`）、`scripts/`、旧 `lib/`、`schemas/`（wire Schema 已编进 `lib/`）、`templates/`（投影模板是代码）、`wakeflow.config*.json`、插件根 `AGENTS.md`/`CLAUDE.md`（宿主不加载插件根记忆文件；信任步骤与入口说明由 README 承担，§13.99 D8）。与 plan §8.1 L3 行列出的"templates、宿主记忆、setup 与 validate 与 smoke 脚本"相抵：这三类在新制品里没有消费者，setup 就是 `wakeflow_maintain_workspace`，validate 与 smoke 是仓库门（tooling）而不是制品内容。
+- D2 `plugins/<host>/` 变为纯生成物：构建器直接写 committed 目录，`build:check` 以临时重建对比 committed 字节；任何手工编辑都会在门上被拒。旧制品树在 D 阶段一次删除（ADR-0008 决定 4）。
+- D3 插件名沿用 `wakeflow`；两份 marketplace 条目沿用，描述与关键字改写（去掉 `unattended`）；Codex manifest 保留 `interface` 段（`defaultPrompt` 按新工具面改写）。
+- D4 版本序列起点 `1.0.0`，五源同时改；Codex marketplace 保持无版本；插件 `engines` 与仓库统一 `>=24.19.0 <25`。
+- D5 运行时依赖闭包随制品提交：构建器按根 `package-lock.json` 的精确版本把 12 个包复制进 `<制品>/node_modules/`，剪掉 `.d.ts`、source map、Markdown、`src/`、测试目录（每制品约 5.3 MB，两份约 10.6 MB），清单记录每个文件摘要，两次构建逐字节一致。不用 bundler（需求文档 §5 非目标"不通过 bundling 隐藏领域依赖或宿主边界"），不要求用户装完插件再跑 `npm install`（两个宿主都不会替插件跑安装脚本）。备选：整包复制（每份 17 MB）——多出的全是类型与文档，没有运行时消费者。
+- D6 `artifact-manifest.json` 随制品发出并成为校验器的闭合依据：`releaseEligible` 在版本属于新序列、依赖闭包完整、hooks 摘要相符、文本占位符闭合、两次构建一致时才为 true；校验器拒绝 committed 制品与清单不一致或存在清单外文件。
+- D7 校验器与冒烟放在 `tooling/artifacts/`，入口 `npm run build:check`（临时重建对比 committed）、`npm run smoke:artifacts`（仓库外临时副本启动）；`release:check` 放在 `tooling/release/`，仍要求 main、干净树、标签在 HEAD、本地 `origin/main` 同一提交，另加 Node 24 引擎核对；`test:legacy` 及其五个子脚本随旧树删除。
+- D8 配置 v1 的符号命名去掉版本后缀（F1）。备选：改成 `V1` 后缀——下次 bump 又要全仓改名。
+- D9 `developer-progress.md` 不加"最近十条事件"（F5）；需要时随场景再开。
+- D10 墙钟门改为两条：场景验收单文件独占跑低于 90 秒，全量 TS 门低于 210 秒（§13.100 选项 b）。备选 (a) 切场景链、(c) 保留 180 秒记未达。
+- D11 根 README 按新制品全文改写（安装、初始化、第一个 Demand、工具面、信任步骤、仓库开发），双语；`docs/README.md` 权威顺序第 1 行去掉"旧基线 `core/`、`test/`"。
+- D12 提交节奏：A、B、C、D 各一次提交，都等用户说"提交"；D 阶段的删除与重生成在同一提交（plan §10.1 第 4–6 项）。

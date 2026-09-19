@@ -41,6 +41,12 @@ export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(
  */
 export type DurableAtomicFileDurability = "fsync" | "none";
 
+/**
+ * 逐次写入的 `durability` 只是“这一条派生检查点放弃同步”的窄豁免，
+ * 不是持久化级别的权威：级别由根决定（见 `rooted-directory.ts`）。
+ * 两者取更弱的一档——根为 `none` 时整棵树都不同步，根为 `fsync` 时仍允许
+ * 单次写入按可重建性放弃同步。
+ */
 export interface DurableAtomicFileCreateOptions {
   readonly mode: number;
   readonly durability?: DurableAtomicFileDurability;
@@ -146,14 +152,22 @@ export class DurableAtomicFileWriteError extends Error {
   }
 }
 
-interface ParsedDurableAtomicFileCreateOptions {
+interface ParsedDurableAtomicFileWriteOptions {
   readonly mode: number;
-  readonly durability: DurableAtomicFileDurability;
   readonly signal: AbortSignal | undefined;
 }
 
+interface ParsedDurableAtomicFileCreateOptions
+  extends ParsedDurableAtomicFileWriteOptions {
+  readonly durability: DurableAtomicFileDurability;
+}
+
+/**
+ * 替换没有逐次豁免：解析结果里根本不带 `durability`，调用方也就无从转发一个
+ * 恰好等于 `fsync` 的常量。替换的持久化级别只由根决定。
+ */
 interface ParsedDurableAtomicFileReplaceOptions
-  extends ParsedDurableAtomicFileCreateOptions {
+  extends ParsedDurableAtomicFileWriteOptions {
   readonly expected: Readonly<DurableAtomicFileExpectation>;
 }
 
@@ -358,7 +372,6 @@ export function parseDurableAtomicFileReplaceOptions(
   const record = parseOptionRecord(value, ["expected", "mode"]);
   return Object.freeze({
     mode: parseMode(record.mode),
-    durability: "fsync" as const,
     expected: parseExpectation(record.expected),
     signal: parseSignal(record.signal),
   });

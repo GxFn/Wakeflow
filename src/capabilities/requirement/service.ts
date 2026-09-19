@@ -18,6 +18,7 @@ import {
 import {
   RootedDirectory,
   RootedDirectoryError,
+  type RootedDirectoryDurability,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import {
@@ -39,7 +40,7 @@ import {
   LedgerAuthorityStoreError,
   type LoadedLedgerAuthorityRecord,
 } from "../../governance/ledger/ledger-authority-store.js";
-import { runCommandShell } from "../../kernel/command-shell.js";
+import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -102,6 +103,8 @@ import {
  */
 
 export interface RequirementServiceOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
 }
@@ -907,6 +910,7 @@ export async function executeRequirementPublicationRequest(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }
 
@@ -1025,5 +1029,6 @@ export async function executeBoardInspectionRequest(
     value,
     () => {},
     (context, binding) => inspectBoard(context, binding.input),
+    commandShellExecutionOptions(options.durability),
   );
 }

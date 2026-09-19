@@ -254,10 +254,7 @@ test("窗口声明：他人持有即阻塞，同目标的孤儿声明可回收",
 });
 
 test("目标窗口必须加载的技能路径按 workType 固定", () => {
-  deepEqual(DELIVERY_REQUIRED_SKILLS.implementation, [
-    "skills/wakeflow-target/SKILL.md",
-    "skills/wakeflow-target-craft/SKILL.md",
-  ]);
+  deepEqual(DELIVERY_REQUIRED_SKILLS.implementation, ["skills/wakeflow-target/SKILL.md"]);
   deepEqual(DELIVERY_REQUIRED_SKILLS.test, [
     "skills/wakeflow-target/SKILL.md",
     "skills/wakeflow-test/SKILL.md",

@@ -19,8 +19,13 @@ import { test, type TestContext } from "node:test";
 
 import { computeCanonicalJsonSha256Digest } from "../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../src/foundation/crypto/sha256.js";
+import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import type { PortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
 import {
   inspectActiveLayout,
   inspectActiveProjectionTargets,
@@ -43,6 +48,7 @@ import {
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
 } from "../../src/kernel/layout.js";
+import { durableAtomicFileStageRefForTest } from "../foundation/filesystem/durable-atomic-file-test-support.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
 /**
@@ -549,22 +555,21 @@ test("退休证据：没看全活动 Demand 的一轮一个页面目录都不删
   equal(existsSync(directory), false);
 });
 
-test("投影锁：活动持有者让发布以 projection-contended 失败（可重试）；recovering 退休失活的锁", {
-  timeout: 60_000,
-}, async (t) => {
+test("投影锁：活动持有者让发布以 projection-contended 失败（可重试）；recovering 退休失活的锁", async (t) => {
   const root = await fixture(t);
   await materializeActiveLayout(root, { recovering: false });
   const files = renderActiveProjectionFiles(facts());
   const lockPath = absolute(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF);
 
-  // 父进程仍在：持有者活动，等到超时也拿不到锁。
+  // 父进程仍在：持有者活动，等到超时也拿不到锁。争用的语义与等待多久无关，取锁上限因此
+  // 由调用方给出（默认 10 s），这一轮只等 50 ms。
   writeFileSync(
     lockPath,
     rootedExclusiveFileLockRecordTextForTest({ pid: process.ppid, tokenUuid: LOCK_TOKEN_UUID }),
     { mode: 0o600 },
   );
   await rejects(
-    publishActiveProjection(root, files),
+    publishActiveProjection(root, files, { acquireTimeoutMilliseconds: 50 }),
     (error: unknown) =>
       error instanceof WakeflowError &&
       error.code === "io-failure" &&
@@ -585,4 +590,108 @@ test("投影锁：活动持有者让发布以 projection-contended 失败（可�
   equal(receipt.disposition, "created");
   equal(existsSync(lockPath), false, "the lock is released after the round");
   equal(existsSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF)), true);
+});
+
+test("锁内渲染：渲染时投影锁已在，同一轮里的第二次发布撞上 projection-contended；回执仍来自这一轮渲染", async (t) => {
+  const root = await fixture(t);
+  await materializeActiveLayout(root, { recovering: false });
+  const lockPath = absolute(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF);
+  let lockedWhileRendering: boolean | null = null;
+  let contender: unknown = null;
+
+  const receipt = await publishActiveProjection(root, async () => {
+    lockedWhileRendering = existsSync(lockPath);
+    // 观察与落盘之间没有插队窗口：此刻别人拿不到锁，两轮刷新因此不能按与观察相反的顺序落盘。
+    contender = await publishActiveProjection(root, renderActiveProjectionFiles(facts()), {
+      acquireTimeoutMilliseconds: 50,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    return {
+      files: renderActiveProjectionFiles(facts()),
+      activeDemands: observedDemands(DEMAND_A),
+    };
+  });
+
+  equal(lockedWhileRendering, true, "the render thunk must run while the projector lock is held");
+  equal(
+    contender instanceof WakeflowError &&
+      contender.code === "io-failure" &&
+      contender.reason === "projection-contended" &&
+      contender.retryable,
+    true,
+  );
+  equal(receipt.disposition, "created");
+  equal(existsSync(lockPath), false, "the lock is released after the round");
+  equal(
+    markerOf(readFileSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF), "utf8")).kind,
+    "active",
+  );
+  // 锁内渲染交回的退休证据就是这一轮的证据：活动 Demand 的页面目录留下。
+  equal(existsSync(absolute(root, demandProjectionIndexRef(DEMAND_A))), true);
+});
+
+test("恢复：失活的锁与同目录的工作区索引暂存残留一起退休，recovering 因此在它存在的那一轮也能发布", async (t) => {
+  const root = await fixture(t);
+  await materializeActiveLayout(root, { recovering: false });
+  const files = renderActiveProjectionFiles(facts());
+  const lockPath = absolute(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF);
+  writeFileSync(
+    lockPath,
+    rootedExclusiveFileLockRecordTextForTest({ pid: 2_147_483_647, tokenUuid: LOCK_TOKEN_UUID }),
+    { mode: 0o600 },
+  );
+
+  // 崩溃残留：写工作区索引写到一半的暂存文件，与 projector.lock 同住 .wakeflow-active/。
+  const partial = encodeUtf8("partial");
+  const address = issueDurableAtomicFileStageAddress(
+    "create",
+    WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
+    computeSha256Digest(partial),
+    0o600,
+  );
+  const stageRef = durableAtomicFileStageRefForTest(WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, address);
+  writeFileSync(absolute(root, stageRef), partial, { mode: 0o600 });
+  releaseDurableAtomicFileStageAddress(address);
+
+  const receipt = await publishActiveProjection(root, files, { recovering: true });
+  equal(receipt.disposition, "created");
+  equal(existsSync(lockPath), false, "the dead lock must be retired");
+  equal(existsSync(absolute(root, stageRef)), false, "the sibling residue stage goes with it");
+  equal(existsSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF)), true);
+});
+
+test("状态页：已接受分支段只声称投影真看得到的东西（§13.94 D5：投影作用域没有仓库指针）", () => {
+  const unmergedAccepted = [
+    {
+      demandId: DEMAND_A,
+      targetTaskId: "target-task_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      repositoryId: REPOSITORY_ID,
+      branch: "wakeflow/demand-a",
+      commit: "1111111111111111111111111111111111111111",
+    },
+  ];
+  const en = renderActiveProjectionFiles(facts({ unmergedAccepted }))[1]?.content ?? "";
+  const zh =
+    renderActiveProjectionFiles(facts({ unmergedAccepted, language: "zh-Hans" }))[1]?.content ?? "";
+
+  equal(/^## Accepted implementation results with a recorded branch$/mu.test(en), true);
+  equal(/^## 已接受且记录了分支的实现结果$/mu.test(zh), true);
+  // 旧标题声称分支仍在，而投影根本核对不了仓库指针。
+  equal(en.includes("Accepted results whose branch still exists"), false);
+  equal(zh.includes("已接受但分支仍在的结果"), false);
+  equal(en.includes("may already be merged or deleted"), true);
+  equal(en.includes("wakeflow_status reports the merge state"), true);
+  equal(zh.includes("这里列出的分支可能已经合并或删除"), true);
+  equal(zh.includes("合并状态由 wakeflow_status 报告"), true);
+  // 行本身不变：段落改的是说法，不是内容。
+  for (const content of [en, zh]) {
+    equal(
+      content.includes(
+        "| `demand_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa` | `target-task_cccccccc-cccc-4ccc-8ccc-cccccccccccc` | `repository_22222222-2222-4222-8222-222222222222` | `wakeflow/demand-a` | `1111111111111111111111111111111111111111` |",
+      ),
+      true,
+    );
+  }
 });

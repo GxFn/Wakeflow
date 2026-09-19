@@ -627,10 +627,14 @@ export async function copyFileToCandidateDurably(
     ) {
       fail("candidate-changed", "$candidate");
     }
-    try {
-      await candidateHandle.sync();
-    } catch {
-      fail("candidate-sync-failure", "$candidate");
+    // 候选内容的同步由目的地根的持久化级别决定；`none` 只省掉这次 `fsync`，
+    // 复制、权限收紧与逐次复验都照常执行。
+    if (destinationRootValue.durability === "fsync") {
+      try {
+        await candidateHandle.sync();
+      } catch {
+        fail("candidate-sync-failure", "$candidate");
+      }
     }
     candidateNode = await verifyCandidate(
       candidateHandle,

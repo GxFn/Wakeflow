@@ -20,14 +20,18 @@ import type {
 /** ambiguous 静默阈值：超过后 `next` 转给 Controller 并列出 landing-evidence-missing；值在治理层的策略表里。 */
 export { DELIVERY_LANDING_SILENCE_MILLISECONDS };
 
-/** 目标窗口必须加载的技能：宿主差异只在指令文件名，技能路径两宿主一致。 */
+/**
+ * 目标窗口必须加载的技能：宿主差异只在指令文件名，技能路径两宿主一致。
+ *
+ * 技能集合按窗口角色切成四份后（gate-log §13.99 D1），实现目标只剩 target 一条——旧的
+ * `wakeflow-target-craft` 已降级为 `skills/wakeflow-target/references/craft.md`，由 target
+ * 技能按需加载，不再是投递 prompt 里的一条必需技能。测试目标仍是两条：测试窗口要先按 target
+ * 懂交付形状，再读测试合同。路径以制品根为基准，与 `assets/agent-text/` 渲染出的路径逐字相同。
+ */
 export const DELIVERY_REQUIRED_SKILLS: Readonly<
   Record<"implementation" | "test", readonly string[]>
 > = Object.freeze({
-  implementation: Object.freeze([
-    "skills/wakeflow-target/SKILL.md",
-    "skills/wakeflow-target-craft/SKILL.md",
-  ]),
+  implementation: Object.freeze(["skills/wakeflow-target/SKILL.md"]),
   test: Object.freeze(["skills/wakeflow-target/SKILL.md", "skills/wakeflow-test/SKILL.md"]),
 });
 

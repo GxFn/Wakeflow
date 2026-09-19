@@ -25,7 +25,10 @@ import {
   type JsonObject,
   type JsonValue,
 } from "../../foundation/data/json-value.js";
-import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type {
+  RootedDirectory,
+  RootedDirectoryDurability,
+} from "../../foundation/filesystem/rooted-directory.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
@@ -45,6 +48,7 @@ import {
   type PublicationTransactionPhase,
   type PublicationTransactionPlan,
 } from "../../kernel/publication-transaction.js";
+import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
@@ -93,6 +97,8 @@ export interface PodHostFacade {
 }
 
 export interface ExecutePodOptions {
+  /** 本次调用打开工作区根用的持久化级别；与 `clock` 同类的注入值，生产不传。 */
+  readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
 }
@@ -811,5 +817,6 @@ export async function executePodRequest(
       privateValues,
     },
     value,
+    commandShellExecutionOptions(options.durability),
   );
 }

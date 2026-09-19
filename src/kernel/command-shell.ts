@@ -6,6 +6,8 @@ import { JsonValueError, parseJsonValue, type JsonValue } from "../foundation/da
 import {
   RootedDirectory,
   RootedDirectoryError,
+  type RootedDirectoryDurability,
+  type RootedDirectoryOpenOptions,
 } from "../foundation/filesystem/rooted-directory.js";
 import { fail, toWakeflowError } from "./error.js";
 import { assertWithinByteLimit } from "./limits.js";
@@ -35,6 +37,36 @@ export interface CommandShellSpec<Envelope extends { readonly root: string }, In
   readonly close: (context: Context) => Promise<void>;
   /** 除工作区根与 home 之外还必须脱敏的值，例如 ledger 根与宿主句柄。 */
   readonly privateValues?: (context: Context) => Iterable<string>;
+}
+
+/**
+ * 三种调用形状共用的注入执行选项。
+ *
+ * 这些值与 `clock` 同类：只能由进程内的调用方注入，永远不来自请求、信封或任何
+ * 线格式；公共请求里没有、也不会有 `durability` 字段。生产组合根一个都不传，
+ * 因此工作区根始终是 `fsync`，工作区下派生出的根也一路继承同一档。
+ */
+export interface CommandShellExecutionOptions {
+  /** 工作区根这次打开的持久化级别；只有一次性测试工作区才会传 `none`。 */
+  readonly durability?: RootedDirectoryDurability;
+}
+
+function rootOpenOptions(
+  options: Readonly<CommandShellExecutionOptions>,
+): Readonly<RootedDirectoryOpenOptions> | undefined {
+  return options.durability === undefined ? undefined : { durability: options.durability };
+}
+
+/**
+ * 切片把自己的执行选项收窄成调用形状接受的形状。
+ *
+ * 切片的执行选项还带 `clock`、`signal` 等与内核无关的注入值；这里只取出持久化级别，
+ * 缺省就什么都不传，使外壳与生产组合根看到的是同一个"未指定"。
+ */
+export function commandShellExecutionOptions(
+  durability: RootedDirectoryDurability | undefined,
+): Readonly<CommandShellExecutionOptions> {
+  return durability === undefined ? Object.freeze({}) : Object.freeze({ durability });
 }
 
 export interface CommandShellBinding<Envelope, Input> {
@@ -82,6 +114,7 @@ export async function runCommandShell<
     binding: Readonly<CommandShellBinding<Envelope, Input>>,
     boundary: Readonly<RedactionBoundary>,
   ) => Promise<Result>,
+  options: Readonly<CommandShellExecutionOptions> = {},
 ): Promise<Result> {
   const json = requestJson(value);
   assertWithinByteLimit(json, "publicRequestBytes", "$request");
@@ -91,7 +124,11 @@ export async function runCommandShell<
 
   let workspaceRoot: RootedDirectory;
   try {
-    workspaceRoot = await RootedDirectory.open(envelope.root, "$request.root");
+    workspaceRoot = await RootedDirectory.open(
+      envelope.root,
+      "$request.root",
+      rootOpenOptions(options),
+    );
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       fail("root-invalid", error.reason, "$request.root", { cause: error });

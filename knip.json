@@ -19,6 +19,7 @@
         "tooling/artifacts/smoke-plugin-artifacts.ts",
         "tooling/release/check-release-consistency.ts",
         "tests/**/*.test.ts",
+        "tests/**/*.manual.ts",
         "tests/scenarios/*.ts"
       ],
       "project": ["src/**/*.ts", "tooling/**/*.ts", "tests/**/*.ts"],

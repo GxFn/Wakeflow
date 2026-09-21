@@ -3120,3 +3120,13 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **未做，按 plan §14 第 12 项明确报告。** 第 10 项（真实 `WakeWorkspace` 初始化、删除重建、reconfigure/reconcile）、第 13 项（两宿主各一次真实投递并交回 hook 证据）、Claude 状态栏与两宿主 hook 的真实会话核对；打标签 `v1.0.0`、推送、发布、插件缓存刷新。冒烟在仓库外一次性目录里完成的初始化、对账、观察与 hook 落地不是用户授权的真实工作区，不冒充第 10 项。
 
 **残余。** `check:unused` 的 `--no-gitignore` 在 `test/` 删除后已不再必要，保留它是因为分析对象本来就显式；`tooling/testing/test-durations.json` 的多数条目仍是 §13.100 的实测，新文件按本次实测补入；旧 `docs/archive/` 与 `file-review-ledger.md` 里对 `core/`、`tools/`、`test/` 的引用是历史证据，不改。
+
+## 13.105 切换后：墙钟处置 (a)、旧版本参考副本与功能对齐审计的开始（2026-09-20）
+
+**用户裁决。** 2026-09-20 回复"确认 继续，按 (a) 把冒烟测试移出 npm test"，并要求：把 Wakeflow 项目复制一份本地副本，继续推进直到新 TS 版本完全功能、删除全部旧项目文件，后续对齐功能与代码时到那份旧版本副本里找代码逻辑。
+
+**(a) 落地。** `tests/artifacts/plugin-artifact-smoke.test.ts` 改名为 `plugin-artifact-smoke.manual.ts`：runner 只收 `.test.ts`，所以它不再进 `npm test`；新入口 `npm run smoke:candidate`（对一次新鲜的候选构建跑同一条冒烟，21 秒），committed 冒烟仍是交付前必跑的 `smoke:artifacts`。knip 入口加 `tests/**/*.manual.ts`，调度表去掉该条，plan §11 门表与根 `AGENTS.md`/`CLAUDE.md` 的验证条款同步。
+
+**旧版本参考副本。** 以 `git archive 629e79c5`（删除旧树之前的最后一个提交，仍含 `core/` 185 文件、`tools/`、`test/` 7,260 文件与两份旧制品）导出到仓库旁的 `Wakeflow-legacy-reference/`，加一份 `LEGACY-REFERENCE.md` 说明它是只读参考，不是工作区、不是构建输入、不受任何仓库跟踪；绝对路径只记在本机记忆里，不进仓库。
+
+**功能对齐审计（下一阶段）。** 能力映射矩阵是按 31 项旧工具与 D1–D41 锚点判定的；用户要求的是代码逻辑层面的对齐，粒度要到旧模块。审计对象：旧 `core/scripts/lib/` 86 个模块、5 个入口脚本、`core/lib/` 2 个、`core/mcp/server.cjs`、Claude 独有 12 个与 Codex 独有 6 个宿主模块、19 份旧技能文本。每个模块一行：旧职责（按它的能力导航注释与导出）、新 owner（`src/` 路径）、判定（`covered`、`recut`、`dropped`（指向 ADR 或能力卡）、`gap`）、gap 的处置。台账放在 `docs/references/legacy-alignment-ledger.md`；每发现一个 gap 就修在代码里并加回归，按模块组分批提交。

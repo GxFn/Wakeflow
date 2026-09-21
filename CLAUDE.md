@@ -88,7 +88,9 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   against the committed artifacts. Run it before declaring a change complete.
 - After a change that reaches the artifacts (runtime, skills, commands,
   READMEs, hooks, metadata), run `npm run build:artifacts:committed` before
-  `npm test`, and `npm run smoke:artifacts` before handoff.
+  `npm test`, and `npm run smoke:artifacts` before handoff. The smoke is not
+  part of `npm test` on purpose; `npm run smoke:candidate` runs it against a
+  fresh candidate build without touching `plugins/`.
 - Run `git diff --check` before handoff and report any test that could not be
   run. Do not present an unavailable real-host session as a passing test.
 - Claude Code account or login availability may limit a real session test, but

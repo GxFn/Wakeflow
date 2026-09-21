@@ -12,6 +12,7 @@
     "build:artifacts:committed": "tsc -b tooling/tsconfig.json src/entrypoints/tsconfig.json --pretty false && node .build/tooling/artifacts/build-plugin-artifacts.js --committed",
     "build:check": "tsc -b tooling/tsconfig.json src/entrypoints/tsconfig.json --pretty false && node .build/tooling/artifacts/check-plugin-artifacts.js",
     "smoke:artifacts": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/artifacts/smoke-plugin-artifacts.js",
+    "smoke:candidate": "tsc -b tooling/tsconfig.json tests/tsconfig.json --pretty false && node --test .build/tests/artifacts/plugin-artifact-smoke.manual.js",
     "test:tooling": "node --test .build/tests/codegen/schema-types.test.js",
     "test:typescript": "tsc -b tooling/tsconfig.json tests/tsconfig.json --pretty false && node .build/tooling/testing/run-typescript-tests.js",
     "test:typescript:focused": "tsc -b tooling/tsconfig.json tests/tsconfig.json --pretty false && node .build/tooling/testing/run-typescript-tests.js --focused",

@@ -4,7 +4,6 @@
   "durationsMs": {
     "tests/artifacts/agent-text-honesty.test.ts": 749,
     "tests/artifacts/plugin-artifact-check.test.ts": 2996,
-    "tests/artifacts/plugin-artifact-smoke.test.ts": 42782,
     "tests/artifacts/plugin-artifacts.test.ts": 8442,
     "tests/artifacts/plugin-dependency-closure.test.ts": 175,
     "tests/capabilities/delivery/decide.test.ts": 224,

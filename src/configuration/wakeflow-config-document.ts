@@ -1,15 +1,15 @@
 import { renderDeterministicJsonDocument } from "../foundation/data/deterministic-json-document.js";
 import {
-  parseJsonValue,
   type JsonValue,
+  parseJsonValue,
 } from "../foundation/data/json-value.js";
 import {
   parseWakeflowConfig,
+  type WakeflowConfigModel,
   type WakeflowConfigPod,
   type WakeflowConfigProgram,
   type WakeflowConfigRepository,
   type WakeflowConfigSupportSurface,
-  type WakeflowConfigModel,
   type WakeflowConfigWindow,
 } from "./wakeflow-config.js";
 
@@ -49,16 +49,6 @@ function repositoryRepresentation(repository: WakeflowConfigRepository) {
     displayName: repository.displayName,
     ...optionalField("description", repository.description),
     instructionManagement: repository.instructionManagement,
-    ...optionalField(
-      "validation",
-      repository.validation === undefined
-        ? undefined
-        : {
-            residueExceptions: repository.validation.residueExceptions.map(
-              (residue) => ({ path: residue.path, reason: residue.reason }),
-            ),
-          },
-    ),
   };
 }
 
@@ -164,30 +154,6 @@ function launchRepresentation(value: LaunchRepresentationInput) {
   };
 }
 
-function governanceRepresentation(governance: WakeflowConfigModel["governance"]) {
-  return {
-    ...optionalField(
-      "audit",
-      governance.audit === undefined
-        ? undefined
-        : { preservedReviewAfterDays: governance.audit.preservedReviewAfterDays },
-    ),
-    ...optionalField(
-      "validation",
-      governance.validation === undefined
-        ? undefined
-        : {
-            runtimeResidue: {
-              label: governance.validation.runtimeResidue.label,
-              matchers: governance.validation.runtimeResidue.matchers.map(
-                (matcher) => ({ kind: matcher.kind, value: matcher.value }),
-              ),
-            },
-          },
-    ),
-  };
-}
-
 function hostsRepresentation(hosts: WakeflowConfigModel["hosts"]) {
   return {
     ...optionalField(
@@ -250,7 +216,8 @@ function configRepresentation(model: WakeflowConfigModel) {
     },
     pods: model.pods.map(podRepresentation),
     storage: { ledgerRoot: model.storage.ledgerRoot },
-    governance: governanceRepresentation(model.governance),
+    // 保留字段：本版本没有任何治理词汇（2026-09-21 裁决删除审阅期与运行残留），只能是空对象。
+    governance: {},
     hosts: hostsRepresentation(model.hosts),
   };
 }

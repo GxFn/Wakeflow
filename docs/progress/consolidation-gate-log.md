@@ -3287,3 +3287,20 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `git diff --check` 干净；`npm test` 与 smoke 沿用 §13.111（997/997，两宿主七幕全过）。
 
 **残余（第二轮结束时的全集）。** 三条无消费者的配置词汇（`governance.audit.preservedReviewAfterDays`、`governance.validation.runtimeResidue`、`repositories[].validation.residueExceptions`）待裁决；外部指令 inspection / recomposition 与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞；§13.110 D1 的投递 prepare 预览裁决项；被关闭 pod 的窗口投影文件留在磁盘（§13.111 D5）；用户侧待做：真实 `WakeWorkspace` 初始化 / 删除重建 / reconfigure / reconcile、每宿主一次真实投递并取回 hook 证据、真实 Claude 会话的状态栏、`git push`、tag `v1.0.0`、发布与本地缓存刷新（plan §14 第 12 项）。
+
+## 13.113 配置词汇裁决：删除三条无消费者的治理与残留字段（2026-09-21）
+
+**用户裁决。** 2026-09-21 回复"确认 继续"，采纳 §13.112 之后提出的三条建议：D1 删除 `governance.audit.preservedReviewAfterDays`、`governance.validation.runtimeResidue`、`repositories[].validation.residueExceptions`；D2 `wakeflow_prepare_delivery` 不加 preview 模式，维持按客户端幂等键重放；D3 三项内部整理做成一批（外部指令模块并入通用托管块文件 owner、维护协议根缺失时 reconcile 不再阻塞、被关闭 pod 的窗口投影文件退役），记 §13.114。本节只做 D1，D2 无代码。
+
+**改动。** Schema `wakeflow-config.schema.json`：`governance` 改为保留的空对象（`additionalProperties: false`、无属性），`repository` 去掉 `validation`，连同只有它们引用的定义一起删除（`auditGovernance`、`validationGovernance`、`runtimeResidue`、`runtimeMatcher`、`substringRuntimeMatcher`、`regexRuntimeMatcher`、`regexPattern`、`repositoryValidation`、`residueException`、`repositoryChildPath`），`npm run schema:build` 重生成类型；解析器去掉残留路径的 placement 校验与去重；文档渲染器 `governance` 固定渲染 `{}`、仓库表示去掉 `validation`。带旧字段的配置读取时按未知字段拒绝（Schema 封闭字段集），没有 upcaster（ADR-0008）：现存工作区只能重新初始化，目前只有测试与冒烟工作区受影响，真实 `WakeWorkspace` 尚未初始化过新版。
+
+**决定。**
+
+- D1 `governance` 不整体删除：它是顶层必填字段，删掉会改变每份配置文档与所有钉死的配置摘要；保留为空对象既是最小改动，也是将来治理词汇的扩展点。
+- D2 三条词汇的旧消费者（preservation、legacy transform、residue 计数）全部已随 ADR-0006 / ADR-0008 放弃，删除不损失任何行为分支；对齐台账 §3 B 组该行由 covered 改 dropped。
+
+**回归。** `wakeflow-config.test.ts`：Schema 用例改为"带治理词汇或仓库 validation 即未知字段"，去掉 regex 编译与残留去重两个用例；`wakeflow-config-document.test.ts`：去掉两类字段，改断言 `"governance": {}` 与仓库描述照常渲染；配置焦点集 15/15。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 997/997（含 `build:check`），`test:typescript` 313.9 s、整门 324 s；`npm run smoke:artifacts` 两宿主七幕全过（20 s）；`git diff --check` 干净。
+
+**文档写回。** 能力卡 1 §1.2 现 TS 状态（schema 路径与词汇删除）、能力卡 8 现 TS 状态、对齐台账 §3 B 组行、本节。

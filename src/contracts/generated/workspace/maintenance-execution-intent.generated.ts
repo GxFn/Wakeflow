@@ -147,29 +147,6 @@ description?: string
  * owner-managed leaves instructions entirely to the repository owner; managed-block permits only Wakeflow's bounded managed block.
  */
 instructionManagement: ("owner-managed" | "managed-block")
-validation?: RepositoryValidation
-}
-/**
- * Repository-scoped validation exceptions with explicit owner reasons.
- */
-export interface RepositoryValidation {
-/**
- * Exact repository-child paths allowed as intentional residue; duplicate paths are rejected by the shared loader.
- */
-residueExceptions: ResidueException[]
-}
-/**
- * One exact repository-child residue exception and its non-empty owner justification.
- */
-export interface ResidueException {
-/**
- * Canonical repository-relative child path.
- */
-path: (string & string)
-/**
- * Human-readable repository-owner justification; it grants only the exact path above.
- */
-reason: string
 }
 /**
  * A built-in Design/Test surface whose generated memory and scaffold are wholly owned by Wakeflow; instructionManagement is forbidden.
@@ -454,67 +431,10 @@ export interface Storage {
 ledgerRoot: string
 }
 /**
- * Optional cross-run audit and validation intent; it contains no current process, lease, delivery, or demand observations. Omitting audit configures no preservation-review policy, so preservation planning fails closed instead of inventing a default.
+ * Reserved cross-run governance object. This version defines no governance fields (the audit-review and runtime-residue vocabularies were removed on 2026-09-21 because nothing consumed them), so the object must be empty.
  */
 export interface Governance {
-audit?: AuditGovernance
-validation?: ValidationGovernance
-}
-/**
- * Audit-review policy. Review age never grants automatic deletion authority.
- */
-export interface AuditGovernance {
-/**
- * Whole-day age from 1 through 36500 for review eligibility only; never deletion authority.
- */
-preservedReviewAfterDays: number
-}
-/**
- * Persistent user validation intent for runtime residue; observations and PIDs remain outside config.
- */
-export interface ValidationGovernance {
-runtimeResidue: RuntimeResidue
-}
-/**
- * Named collection of one or more typed process-command matchers used only by validation.
- */
-export interface RuntimeResidue {
-/**
- * Human-facing label used when reporting matched runtime residue.
- */
-label: string
-/**
- * One or more typed substring/regex matchers; each regex is compiled during strict loading.
- *
- * @minItems 1
- */
-matchers: [(SubstringRuntimeMatcher | RegexRuntimeMatcher), ...((SubstringRuntimeMatcher | RegexRuntimeMatcher))[]]
-}
-/**
- * Strict literal substring matcher for runtime-residue validation.
- */
-export interface SubstringRuntimeMatcher {
-/**
- * Selects literal substring matching without regular-expression interpretation.
- */
-kind: "substring"
-/**
- * A non-empty string whose first and last characters are not whitespace; this mirrors the strict loader's trim check.
- */
-value: string
-}
-/**
- * Strict regular-expression matcher for runtime-residue validation.
- */
-export interface RegexRuntimeMatcher {
-/**
- * Selects a validated ECMAScript regular-expression source.
- */
-kind: "regex"
-/**
- * Validated Unicode ECMAScript regular-expression source.
- */
-value: (string & string)
+
 }
 /**
  * Optional durable launch/container preferences for the two supported hosts. Omission inherits the tested host profile and never means disabled, registered, or live.

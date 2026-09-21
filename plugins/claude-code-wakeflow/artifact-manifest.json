@@ -584,8 +584,8 @@
     },
     {
       "path": "lib/configuration/wakeflow-config-document.js",
-      "bytes": 7343,
-      "sha256": "sha256:7f21f23da4e7719076c87fe8a342c8bb30e743b74bb522cad6a554184da355d8",
+      "bytes": 6522,
+      "sha256": "sha256:d8e918304d33ae6002d9fc1b72fad2d4b058034c5e26bbfa0360d4c2320175f6",
       "mode": "0644",
       "scope": "shared"
     },
@@ -605,8 +605,8 @@
     },
     {
       "path": "lib/configuration/wakeflow-config.js",
-      "bytes": 17206,
-      "sha256": "sha256:99ee70e5055b5651aec39c1bc4a8001d16b721e3238f70f6317bb5df062b9253",
+      "bytes": 16385,
+      "sha256": "sha256:47b2653389d2d8f4d2881ed439ca1004d925f19fe01b70319f05a0ce441a61ed",
       "mode": "0644",
       "scope": "shared"
     },
@@ -619,8 +619,8 @@
     },
     {
       "path": "lib/contracts/generated/configuration/wakeflow-config.generated.js",
-      "bytes": 42032,
-      "sha256": "sha256:4154ebf024cc00f43227dc5913ea30351bcbc9e07480d57ee5fae7025604c606",
+      "bytes": 36227,
+      "sha256": "sha256:f6b11fc7aa35b1d34a7700d1b08ba460be7616b905d7f3ad236b06a381d44dcc",
       "mode": "0644",
       "scope": "shared"
     },

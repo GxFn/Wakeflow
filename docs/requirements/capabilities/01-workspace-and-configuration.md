@@ -88,7 +88,7 @@
 
 **宿主差异**：只体现在 `hosts` 两个键；键顺序固定 codex 先 claude-code 后。
 
-**现 TS 状态**：schema 位于 `src/contracts/schemas/configuration/wakeflow-config-v3.schema.json`，唯一结构差异是 `program.interfaceLanguage` 改为 `presentation.language: en | zh-Hans`，没有 `auto`，没有迁移；`$id` 仍指向 `core/schemas/`；权威快照与替换已实现并加锁；快照读取器与过渡权威的严格度已统一。
+**现 TS 状态**：schema 位于 `src/contracts/schemas/configuration/wakeflow-config.schema.json`，结构差异：`program.interfaceLanguage` 改为 `presentation.language: en | zh-Hans`，没有 `auto`，没有迁移；2026-09-21 起 `governance` 是保留的空对象——`governance.audit.preservedReviewAfterDays`、`governance.validation.runtimeResidue` 与 `repositories[].validation.residueExceptions` 三条词汇在新旧实现里都没有行为消费者，按用户裁决连同只有它们引用的定义一起删除（gate-log §13.113）；带这些字段的旧配置读取时按未知字段拒绝，只能重新初始化；`$id` 仍指向 `core/schemas/`；权威快照与替换已实现并加锁；快照读取器与过渡权威的严格度已统一。
 
 **实现判断**：按 TSD-16，schema `$id` 为 `urn:wakeflow:config:v1`，`schemaVersion` 从 1 起，代码去掉 `v3` 字样；不写任何旧版本读取器或 upcaster；配置读取严格度统一为属主、0644、规范字节；`sourceDigest` 与 `configDigest` 两个摘要保留；物理产物不进配置，永远由当前运行版本按描述符重新推导。
 

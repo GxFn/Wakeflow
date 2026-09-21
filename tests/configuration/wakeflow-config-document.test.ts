@@ -1,11 +1,10 @@
 import { equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../src/configuration/wakeflow-config.js";
+import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { parseDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
 import {
   createMinimalWakeflowConfig,
@@ -31,25 +30,10 @@ test("optional nested fields survive representation normalization", () => {
     windows: Record<string, unknown>[];
   };
   topology.repositories[0]!.description = "Repository description";
-  topology.repositories[0]!.validation = {
-    residueExceptions: [{ path: "generated/cache", reason: "Owned cache" }],
-  };
   topology.supportSurfaces[0]!.description = "Design description";
   topology.supportSurfaces[1]!.ownership = "external-owned";
   topology.supportSurfaces[1]!.instructionManagement = "managed-block";
   topology.windows[0]!.description = "Controller description";
-  value.governance = {
-    audit: { preservedReviewAfterDays: 30 },
-    validation: {
-      runtimeResidue: {
-        label: "runtime",
-        matchers: [
-          { kind: "substring", value: "node server.mjs" },
-          { kind: "regex", value: "node\\s+server\\.mjs" },
-        ],
-      },
-    },
-  };
   value.hosts = {
     codex: {
       launch: {
@@ -76,9 +60,9 @@ test("optional nested fields survive representation normalization", () => {
   );
   for (const expected of [
     "Program description",
-    "generated/cache",
+    "Repository description",
     "external-owned",
-    "preservedReviewAfterDays",
+    '"governance": {}',
     "gpt-5-mini",
     "acceptEdits",
     "wakeflow-socket",

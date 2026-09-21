@@ -1,7 +1,5 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import { WAKEFLOW_CONFIG_SCHEMA } from "../../src/contracts/generated/configuration/wakeflow-config.generated.js";
 import {
   buildWakeflowConfigIndexes,
   computeWakeflowConfigDigest,
@@ -11,6 +9,7 @@ import {
   WakeflowConfigError,
   type WakeflowConfigErrorReason,
 } from "../../src/configuration/wakeflow-config.js";
+import { WAKEFLOW_CONFIG_SCHEMA } from "../../src/contracts/generated/configuration/wakeflow-config.generated.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
 function expectConfigError(
@@ -95,7 +94,7 @@ test("presentation language is explicit, closed and never inferred", () => {
   );
 });
 
-test("Schema owns closed shape, cardinality, ownership, host and regex constraints", () => {
+test("Schema owns closed shape, cardinality, ownership, host constraints and the reserved governance object", () => {
   const cases: Array<(value: Record<string, unknown>) => void> = [
     (value) => { value.unknown = true; },
     (value) => { topology(value).windows.pop(); },
@@ -103,15 +102,10 @@ test("Schema owns closed shape, cardinality, ownership, host and regex constrain
       topology(value).supportSurfaces[0]!.instructionManagement = "managed-block";
     },
     (value) => { value.hosts = { github: {} }; },
+    // governance 是保留的空对象：任何治理词汇都是未知字段（2026-09-21 裁决删除审阅期与运行残留）。
+    (value) => { value.governance = { audit: { preservedReviewAfterDays: 30 } }; },
     (value) => {
-      value.governance = {
-        validation: {
-          runtimeResidue: {
-            label: "runtime",
-            matchers: [{ kind: "regex", value: "[" }],
-          },
-        },
-      };
+      topology(value).repositories[0]!.validation = { residueExceptions: [] };
     },
   ];
   for (const mutate of cases) {
@@ -149,15 +143,6 @@ test("typed identity, references and topology relationships are validated togeth
     instructionManagement: "owner-managed",
   });
   expectConfigError(() => parseWakeflowConfig(unownedRepository), "topology");
-
-  const duplicateResidue = createMinimalWakeflowConfig();
-  topology(duplicateResidue).repositories[0]!.validation = {
-    residueExceptions: [
-      { path: ".cursor/skills", reason: "first" },
-      { path: ".cursor/skills", reason: "second" },
-    ],
-  };
-  expectConfigError(() => parseWakeflowConfig(duplicateResidue), "topology");
 });
 
 test("placement adds Unicode and per-segment canonicality beyond the public Schema", () => {

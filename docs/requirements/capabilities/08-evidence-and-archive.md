@@ -69,7 +69,7 @@
 - `preservedReviewAfterDays` 1 到 36500，只决定审阅资格，从不授权删除；释放还要 `explicit-release`。
 - `manager.lock` 单行记录，O_EXCL 创建；不匹配即失败。
 
-**现 TS 状态**：没有保留能力。
+**现 TS 状态**：没有保留能力；配置里的 `governance.audit.preservedReviewAfterDays` 已于 2026-09-21 随之删除（gate-log §13.113）。
 
 **实现判断**：按 ADR-0008 丢弃历史版本后，五个 legacy 根不存在，旧保留工具的可保留集合为空。保留能力改为通用的"封存一棵不活跃树"，对象限定为 Demand 归档后的运行时残留与 worktree 检出，审阅资格与显式释放的语义保留。
 

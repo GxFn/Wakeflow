@@ -1,14 +1,14 @@
 import { WAKEFLOW_CONFIG_SCHEMA, } from "../contracts/generated/configuration/wakeflow-config.generated.js";
+import { parseWakeflowDurableId, parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { JsonValueError, parseJsonValue, } from "../foundation/data/json-value.js";
-import { parseWakeflowDurableId, parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 /**
  * Wakeflow Configuration：公开配置的 Schema 准入与跨字段领域模型。
  *
  * JSON Schema 2020-12 与 Ajv 严格校验器负责限制字段集合、值域、基数和词法。本模块
  * 只补充 Schema 无法表达的类型化标识全局冲突、实体引用、能力匹配、每个 Repository
- * 的 Product 职责所有者、重复残留路径，以及 pod 作用域的窗口基数（ADR-0010 D1、D2：
+ * 的 Product 职责所有者，以及 pod 作用域的窗口基数（ADR-0010 D1、D2：
  * 每个 pod 恰好一个 controller、design、test；primary pod 每仓库至少一个 product，
  * worktree pod 每仓库恰好一个 product 且每个 product 窗口恰好一条 worktree 意图）。输入先转换为无副作用、与源容器解除引用关系
  * 并递归冻结的 JSON 树，因此校验器不会执行访问器、代理陷阱或自定义行为。
@@ -117,23 +117,9 @@ function validatePlacements(model) {
     parsePlacement(model.storage.ledgerRoot, "$/storage/ledgerRoot");
     for (const [index, repository] of model.topology.repositories.entries()) {
         parsePlacement(repository.path, `$/topology/repositories/${index}/path`, SIBLING_PLACEMENT_MAXIMUM_PARENT_SEGMENTS);
-        for (const [residueIndex, residue] of (repository.validation?.residueExceptions ?? []).entries()) {
-            parsePlacement(residue.path, `$/topology/repositories/${index}/validation/residueExceptions/${residueIndex}/path`, 0);
-        }
     }
     for (const [index, surface] of model.topology.supportSurfaces.entries()) {
         parsePlacement(surface.path, `$/topology/supportSurfaces/${index}/path`, SIBLING_PLACEMENT_MAXIMUM_PARENT_SEGMENTS);
-    }
-}
-function validateResidueUniqueness(model) {
-    for (const [repositoryIndex, repository] of model.topology.repositories.entries()) {
-        const seen = new Set();
-        for (const [residueIndex, residue] of (repository.validation?.residueExceptions ?? []).entries()) {
-            if (seen.has(residue.path)) {
-                fail("topology", `$/topology/repositories/${repositoryIndex}/validation/residueExceptions/${residueIndex}/path`);
-            }
-            seen.add(residue.path);
-        }
     }
 }
 function validateTopology(model) {
@@ -174,7 +160,6 @@ function validateTopology(model) {
         }
     }
     validatePodScopes(model, repositories);
-    validateResidueUniqueness(model);
 }
 const POD_SINGLETON_ROLES = Object.freeze(["controller", "design", "test"]);
 /** pod 记录本身：标识、名称唯一、恰好一个 primary、primary 不带 worktree 与 closing。 */

@@ -3077,4 +3077,21 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **不变的部分。** 配置的字段集、拓扑、存储、治理与宿主段一个字节没动；fresh-initialize 与 reconfigure 仍是仅有的两个生产入口；TS 之前的任何工作区仍然只会被拒绝并列出标记（ADR-0008 决定 1）。
 
-**验证。** 96 个文件改动、行数 +1,349/−1,350；`typecheck`、`check:architecture`（677 模块）、`schema:check`、Biome lint 与 format、knip 干净；配置切片聚焦测试 14/14，其中两处钉死的旧值（最小配置的规范摘要与文件字节数 2,661 → 2,590、文件摘要）按新身份更新；hook 观察、状态栏、制品与场景验收聚焦 25/25。能力映射矩阵行 2 与 D13 的"TSD-16 从 v1 起版未做"改为已做。
+**验证。** 96 个文件改动、行数 +1,349/−1,350；`typecheck`、`check:architecture`（677 模块）、`schema:check`、Biome lint 与 format、knip 干净；配置切片聚焦测试 14/14，其中两处钉死的旧值（最小配置的规范摘要与文件字节数 2,661 → 2,590、文件摘要）按新身份更新；hook 观察、状态栏、制品与场景验收聚焦 25/25。能力映射矩阵行 2 与 D13 的"TSD-16 从 v1 起版未做"改为已做。全量 `npm test` 966/966，提交 `595878b1`。
+
+## 13.103 C：L3 制品完整化——构建器、依赖闭包、校验器、冒烟与发布门（2026-09-20）
+
+**做了什么。** 按 §13.101 D1–D7 把"技术骨干候选"构建器变成插件制品构建器，并补上切换前必须有的三道门。
+
+- 构建器 `tooling/artifacts/build-plugin-artifacts.ts`（替换 `build-typescript-artifact-candidates.ts`）。每个制品现在有：`lib/` 编译闭包、两个 launcher、`hooks/hooks.json`、`.mcp.json`、插件清单（`.codex-plugin/plugin.json` 或 `.claude-plugin/plugin.json`）、真实 `package.json`（不再 `private`，运行时依赖按锁文件精确版本声明，引擎 `>=24.19.0 <25`）、`LICENSE`（根文件逐字节）、`assets/wakeflow-{logo,mark}.svg`（源在 `assets/brand/`）、`skills/`、Claude 的 `commands/`、双语 README，以及 `node_modules/` 运行时依赖闭包。版本只有一个输入 `assets/release/version.json`（`1.0.0`），盖进 `package.json`、插件清单与 MCP launcher 交给组合根的版本号。清单改为 `WakeflowPluginArtifactManifest`：`version`、`releaseEligible`（版本属于新序列且本次构建的每道核对都通过）、`dependencies[]`（名字、精确版本、锁文件 SRI 完整性、依赖名）、每个文件的字节数、sha256、模式与范围（新增 `license`、`brand`、`dependency` 三个范围）。输出根两个：`.build/` 之下的候选，或恰好 `plugins/`（`--committed`，E4 切换时用）。不再读旧 `plugins/*/package.json` 作为参考——那是循环输入。
+- 依赖闭包 `tooling/artifacts/plugin-dependency-closure.ts`（D5）。从编译闭包记下的直接外部包出发，沿根 `package-lock.json`（v3）逐级取 `dependencies`、`peerDependencies` 与已装的 `optionalDependencies`，每级核对锁版本等于 `node_modules/` 实装版本；锁里标为 `dev`、`link`（工作区符号链接）或嵌套安装的包一律失败，闭包上限 64 个包。文件按扩展名剪掉 `.ts`/`.mts`/`.cts`/`.map`/`.md`/`.markdown` 与隐藏文件，其余原样复制，模式一律 0644。实测：Claude 制品 12 个包，Codex 11 个——`jsonc-parser` 只被 Claude 的可移植设置模块引用，闭包按真实 import 求得而不是照抄根 `package.json`。
+- 元数据 `tooling/artifacts/plugin-metadata.ts`（D3、D4）。插件名沿用 `wakeflow`；Codex 清单声明 `skills`、`mcpServers` 与 `interface`（`defaultPrompt` 三条按新工具面改写），Claude 清单只声明 `mcpServers`（技能、命令与 hook 靠目录发现）；描述与关键字去掉 `unattended`；两份 marketplace 条目的期望形状也在这里，供校验器与发布门核对。
+- 校验器 `tooling/artifacts/check-plugin-artifacts.ts`，入口 `npm run build:check`（D2、D6、D7）。临时重建到 `.build/artifacts-check/`，先按 committed 制品自己的清单核对每个文件的字节、摘要与模式且不得有清单外文件，再核对 committed 清单与新清单字节相等，最后核对两份 marketplace 的 `wakeflow` 条目与元数据结构相等（键序无关）。错误码 `wakeflow-artifact-check-{drift,extra,missing,marketplace,…}`。
+- 冒烟 `tooling/artifacts/smoke-plugin-artifacts.ts`，入口 `npm run smoke:artifacts`（能力卡 10 Q8 的五幕加一幕）。制品搬到仓库之外的临时目录再启动——Node 从那里向上找不到仓库根的 `node_modules/`，闭包不自足就起不来。六幕：列出的工具恰好是制品自己的公共目录（不硬编码数量）；fresh-initialize preview 零写、apply `completed`；reconcile preview 零步、apply `no-op`，两者零写；`wakeflow_status` 有总体状态、`wakeflow_verify` 全部通过；pod create preview `ready` 且零写；`hooks/observe.mjs` 落一条 SessionStart 记录。临时树总被删除，清理失败把成功降为失败。
+- 发布门 `tooling/release/check-release-consistency.ts`，入口 `npm run release:check`（能力卡 10 Q5–Q7）。五个版本源等于版本输入、主版本号不低于 1、两个插件与仓库根引擎相同且本次运行的 Node 在范围内、两份清单 `releaseEligible`；Git 门按标志逐项：main、干净树、标签 `v<version>` 指向 HEAD、本地 `origin/main` 与 HEAD 同一提交。`card-10/release-consistency` 由此以 tooling 测试接线（`tests/release/check-release-consistency.test.ts`：一次性 Git 仓库里全部门通过一次，再逐道门制造不一致断言九个错误码）；待接线场景清零。
+
+**测试。** `tests/artifacts/plugin-artifacts.test.ts`（6 条：两次构建逐字节一致与清单闭合、制品搬到仓库外后两个入口经官方 stdio Client 发布 20 个工具、hook launcher 三种结局、片段摘要、闭包守卫、依赖闭包的传递求解与三种拒绝）、`plugin-artifact-check.test.ts`（3 条：一致通过；改字节/多文件/缺文件/marketplace 落后四种拒绝；结构相等的边界）、`plugin-artifact-smoke.test.ts`（1 条，对候选跑整条冒烟）、`tests/release/check-release-consistency.test.ts`（3 条）。
+
+**没做的与残余。** `plugins/` 仍是旧制品，两份 marketplace 仍写 `0.9.6`，`build:check` 因此还不能进 `npm test`——这三件是 D 阶段同一提交的事。`tools/check-release-consistency.mjs` 只是不再被 `package.json` 引用，文件随 `tools/` 在 D 阶段删除。
+
+**knip 从 12 分钟回到 3 秒。** 全量门这轮在 `check:unused` 上卡了 12 分 5 秒，`knip --performance` 把 99% 记在 `findAndParseGitignores`：它爬整棵树收集每一份 `.gitignore`，`test/fixtures/` 里有 291 份历史工作区的忽略文件，其中每一条否定模式都让它把累计的几千条模式重新编译成一个 picomatch 匹配器，代价随文件数平方增长；根 `.gitignore` 挡不住这次爬取，因为 `plugins/*` 两个工作区都在 `ignoreWorkspaces` 里，爬取没有可剪枝的"相关目录"。处置：`check:unused` 改为 `knip --no-progress --no-gitignore`，`knip.json` 的 `ignore` 显式加上 `.build/**`（否则 `package.json` 脚本里指向 `.build/` 的编译产物会被当作入口分析）。分析对象本来就由 `project` 与 `entry` 显式给出，不依赖 `.gitignore`。D 阶段删掉 `test/` 后这份开销本身也就没了。

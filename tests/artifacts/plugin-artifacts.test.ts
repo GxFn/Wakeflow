@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { deepEqual, doesNotMatch, equal, match, ok, throws } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
+  cpSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -23,39 +24,12 @@ import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import {
   assertRenderedHookFragmentDigest,
   assertSharedClosure,
-  buildTypescriptArtifactCandidates,
+  buildWakeflowPluginArtifacts,
   type CandidateHostIsolationRule,
-} from "../../tooling/artifacts/build-typescript-artifact-candidates.js";
-import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
-import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
-import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
-import {
-  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
-  WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
-  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/delivery/contract.js";
-import {
-  WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
-  WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/result-review/contract.js";
-import {
-  WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/demand/contract.js";
-import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
-import {
-  WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
-  WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/observation/contract.js";
-import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "../../src/capabilities/pod/contract.js";
-import {
-  WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/requirement/contract.js";
+} from "../../tooling/artifacts/build-plugin-artifacts.js";
+import { resolveRuntimeDependencyClosure } from "../../tooling/artifacts/plugin-dependency-closure.js";
+import { pluginManifestPath, readReleaseVersion } from "../../tooling/artifacts/plugin-metadata.js";
+import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import {
   WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
@@ -72,7 +46,7 @@ import {
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 
-const OUTPUT_RELATIVE = ".build/test-artifacts/typescript-candidates";
+const OUTPUT_RELATIVE = ".build/test-artifacts/plugin-artifacts";
 const HOOK_OBSERVER_LAUNCHER = "hooks/observe.mjs";
 const HOOKS_JSON = "hooks/hooks.json";
 const MCP_LAUNCHER = "mcp/server.mjs";
@@ -84,9 +58,37 @@ const RECORD_FILE_PATTERN =
   /^\d{8}T\d{9}Z-session-start-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/u;
 /** 闭包范围：只有 `lib/` 下的编译文件才带这三个值之一。 */
 const CLOSURE_SCOPES: readonly string[] = ["shared", "current-host", "peer-profile"];
-/** `lib/` 之外的文件只有三种：两个 launcher、宿主配置元数据，以及出厂文本（§13.99 D9）。 */
-const GENERATED_SCOPES: readonly string[] = ["entrypoint", "metadata", "agent-text"];
+/** `lib/` 之外的文件：两个 launcher、宿主配置与元数据、出厂文本、许可证、品牌资产、运行时依赖。 */
+const GENERATED_SCOPES: readonly string[] = [
+  "entrypoint",
+  "metadata",
+  "agent-text",
+  "license",
+  "brand",
+  "dependency",
+];
 const FIXED_CODE_PREFIX = "wakeflow-hook-observer: ";
+/**
+ * 运行时依赖闭包：直接包加它们在锁文件里的传递依赖（§13.101 现状盘点实测）。`jsonc-parser`
+ * 只被 Claude 的可移植设置模块引用，所以只进 Claude 制品——闭包按真实 import 求得，不按根
+ * `package.json` 照抄。
+ */
+function expectedDependencyPackages(hostId: "codex" | "claude-code"): readonly string[] {
+  return [
+    "@modelcontextprotocol/core",
+    "@modelcontextprotocol/server",
+    "ajv",
+    "canonicalize",
+    "fast-deep-equal",
+    "fast-uri",
+    "json-schema-traverse",
+    ...(hostId === "claude-code" ? ["jsonc-parser"] : []),
+    "p-limit",
+    "require-from-string",
+    "yocto-queue",
+    "zod",
+  ];
+}
 
 /** 手搭的隔离规则：守卫只看这四项，测试因此不必复制候选定义的其余部分。 */
 const CODEX_ISOLATION_RULE: Readonly<CandidateHostIsolationRule> = Object.freeze({
@@ -98,15 +100,19 @@ const CODEX_ISOLATION_RULE: Readonly<CandidateHostIsolationRule> = Object.freeze
   ]),
 });
 
-/** 构建器的稳定工具错误：只暴露 name 与 code，测试按 code 断言而不按消息。 */
-function expectArtifactErrorCode(code: string): (error: unknown) => true {
+/** 稳定工具错误：只暴露 name 与 code，测试按 code 断言而不按消息。 */
+function expectErrorCode(name: string, code: string): (error: unknown) => true {
   return (error: unknown): true => {
     ok(error instanceof Error, "抛出的必须是 Error");
-    equal(error.name, "TypescriptArtifactCandidateBuildError");
+    equal(error.name, name);
     equal((error as { readonly code?: unknown }).code, code);
     return true;
   };
 }
+
+const expectArtifactErrorCode = (code: string) => expectErrorCode("PluginArtifactBuildError", code);
+const expectClosureErrorCode = (code: string) =>
+  expectErrorCode("PluginDependencyClosureError", code);
 
 /** stderr 里固定代码形式的行；其余行（例如 Node 默认处理器的堆栈）不计入。 */
 function fixedCodeLines(stderr: string): readonly string[] {
@@ -134,15 +140,27 @@ interface ManifestRuntimeEntrypoint {
   readonly sourceEntrypoint: string;
 }
 
-interface CandidateManifest {
-  readonly kind: "WakeflowTypescriptArtifactCandidateManifest";
-  readonly releaseEligible: false;
-  readonly scope: "typescript-public-technical-skeleton";
+interface ManifestDependency {
+  readonly name: string;
+  readonly version: string;
+  readonly integrity: string;
+  readonly dependencies: readonly string[];
+}
+
+interface PluginManifest {
+  readonly kind: "WakeflowPluginArtifactManifest";
+  readonly schemaVersion: 1;
   readonly hostId: "codex" | "claude-code";
+  readonly pluginName: string;
+  readonly packageName: string;
+  readonly version: string;
+  readonly releaseEligible: boolean;
+  readonly generator: string;
   readonly sourceEntrypoint: string;
   readonly runtimeEntrypoint: string;
   readonly runtimeEntrypoints: readonly ManifestRuntimeEntrypoint[];
   readonly externalPackages: readonly string[];
+  readonly dependencies: readonly ManifestDependency[];
   readonly agentText: readonly ManifestAgentTextFile[];
   readonly files: readonly ManifestFile[];
 }
@@ -173,7 +191,7 @@ function collectFiles(root: string): readonly string[] {
     for (const entry of entries) {
       const absolute = path.join(directory, entry.name);
       if (entry.isSymbolicLink()) {
-        throw new Error("Candidate artifact cannot contain symbolic links.");
+        throw new Error("Plugin artifact cannot contain symbolic links.");
       }
       if (entry.isDirectory()) {
         visit(absolute);
@@ -200,6 +218,10 @@ function outputFixture(t: TestContext): string {
     }
   });
   return output;
+}
+
+async function buildCandidates() {
+  return buildWakeflowPluginArtifacts(process.cwd(), { outputRoot: OUTPUT_RELATIVE });
 }
 
 /** 手搭的最小工作区：配置由渲染器写出，两个支持面目录存在；仓库 `../ProductA` 缺席不影响根匹配。 */
@@ -283,25 +305,43 @@ function launcherWithLateFaultFixture(t: TestContext, launcher: string): string 
   return path.join(root, "hooks", "observe.mjs");
 }
 
-test("双宿主候选制品由确定性的闭合可达文件清单生成，含 hook 观察脚本 launcher 与宿主 hook 片段", async (t) => {
+/** 制品在仓库之外的一份副本：Node 从这里向上找不到仓库根的 `node_modules/`，闭包必须自足。 */
+function outsideRepositoryCopy(t: TestContext, artifactRoot: string): string {
+  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-artifact-install-")));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const copy = path.join(base, path.basename(artifactRoot));
+  cpSync(artifactRoot, copy, { recursive: true, errorOnExist: true, force: false });
+  equal(path.relative(process.cwd(), copy).startsWith(".."), true, "副本必须在仓库之外");
+  return copy;
+}
+
+test("双宿主插件制品由确定性的闭合文件清单生成：编译闭包、两个 launcher、宿主配置、元数据、出厂文本、许可证、品牌资产与运行时依赖闭包", async (t) => {
   const output = outputFixture(t);
-  const first = await buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
-  const second = await buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
-  // D8：两次构建字节相同——清单记录每个文件的 sha256，清单摘要相等即全部文件字节相等。
+  const first = await buildCandidates();
+  const second = await buildCandidates();
+  // 两次构建字节相同——清单记录每个文件的 sha256，清单摘要相等即全部文件字节相等（D6）。
   deepEqual(second, first);
-  equal(first.releaseEligible, false);
+  const release = readReleaseVersion(process.cwd());
+  equal(first.version, release.version);
+  equal(first.releaseEligible, true);
   equal(first.artifacts.length, 2);
+  const rootLicense = readFileSync(path.join(process.cwd(), "LICENSE"));
 
   for (const artifact of first.artifacts) {
     const artifactRoot = path.join(output, artifact.outputDirectory);
     const manifestPath = path.join(artifactRoot, "artifact-manifest.json");
-    const manifest = parseJsonFile<CandidateManifest>(manifestPath);
-    equal(manifest.kind, "WakeflowTypescriptArtifactCandidateManifest");
-    equal(manifest.releaseEligible, false);
-    equal(manifest.scope, "typescript-public-technical-skeleton");
+    const manifest = parseJsonFile<PluginManifest>(manifestPath);
+    equal(manifest.kind, "WakeflowPluginArtifactManifest");
+    equal(manifest.schemaVersion, 1);
+    equal(manifest.releaseEligible, true);
+    equal(manifest.version, release.version);
+    equal(manifest.pluginName, "wakeflow");
+    equal(manifest.packageName, artifact.hostId === "codex" ? "wakeflow" : "claude-code-wakeflow");
     equal(manifest.hostId, artifact.hostId);
+    equal(manifest.generator, "tooling/artifacts/build-plugin-artifacts.ts");
     equal(digest(manifestPath), artifact.manifestDigest);
     deepEqual(manifest.externalPackages, artifact.externalPackages);
+    equal(manifest.dependencies.length, artifact.dependencyPackageCount);
 
     const expectedFiles = [
       ...manifest.files.map((file) => file.path),
@@ -313,21 +353,91 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成，含 h
       equal(readFileSync(absolute).byteLength, file.bytes);
       equal(digest(absolute), file.sha256);
       equal(lstatSync(absolute).mode & 0o777, file.mode === "0755" ? 0o755 : 0o644);
-      equal(/\.(?:ts|cts|mts|map)$/u.test(file.path), false);
+      equal(/\.(?:ts|cts|mts|map)$/u.test(file.path), false, file.path);
     }
+    const byPath = new Map(manifest.files.map((file) => [file.path, file]));
 
+    // 元数据（D3、D4）：`package.json` 不再是 private 的骨干候选，版本来自唯一输入，运行时依赖
+    // 按锁文件精确版本声明；插件清单在宿主各自的位置，名字沿用 `wakeflow`。
     const packageDocument = parseJsonFile<{
-      readonly private: boolean;
+      readonly name: string;
       readonly version: string;
+      readonly private?: boolean;
+      readonly engines: { readonly node: string };
       readonly dependencies: Readonly<Record<string, string>>;
     }>(path.join(artifactRoot, "package.json"));
-    equal(packageDocument.private, true);
-    equal(packageDocument.version, "0.0.0-technical-skeleton");
+    equal(packageDocument.private, undefined);
+    equal(packageDocument.name, manifest.packageName);
+    equal(packageDocument.version, release.version);
+    equal(packageDocument.engines.node, ">=24.19.0 <25");
     deepEqual(
       Object.keys(packageDocument.dependencies).sort(),
       [...manifest.externalPackages].sort(),
     );
     equal(packageDocument.dependencies["@modelcontextprotocol/server"], "2.0.0");
+    const manifestFile = pluginManifestPath(artifact.hostId);
+    equal(byPath.get(manifestFile)?.scope, "metadata");
+    const pluginManifest = parseJsonFile<{
+      readonly name: string;
+      readonly version: string;
+      readonly mcpServers: string;
+      readonly skills?: string;
+      readonly interface?: { readonly defaultPrompt: readonly string[] };
+    }>(path.join(artifactRoot, manifestFile));
+    equal(pluginManifest.name, "wakeflow");
+    equal(pluginManifest.version, release.version);
+    equal(pluginManifest.mcpServers, "./.mcp.json");
+    if (artifact.hostId === "codex") {
+      equal(pluginManifest.skills, "./skills/");
+      equal(pluginManifest.interface?.defaultPrompt.length, 3);
+      ok(pluginManifest.interface?.defaultPrompt.every((prompt) => prompt.length <= 128));
+    } else {
+      equal(pluginManifest.skills, undefined);
+      equal(pluginManifest.interface, undefined);
+    }
+
+    // 静态资产：LICENSE 与根文件逐字节相同，品牌 SVG 来自 `assets/brand/`。
+    equal(byPath.get("LICENSE")?.scope, "license");
+    ok(readFileSync(path.join(artifactRoot, "LICENSE")).equals(rootLicense));
+    for (const name of ["wakeflow-logo.svg", "wakeflow-mark.svg"]) {
+      equal(byPath.get(`assets/${name}`)?.scope, "brand", name);
+      ok(
+        readFileSync(path.join(artifactRoot, "assets", name)).equals(
+          readFileSync(path.join(process.cwd(), "assets", "brand", name)),
+        ),
+        name,
+      );
+    }
+
+    // D5：运行时依赖闭包随制品发出。闭包是闭合的（每个包声明的依赖都在闭包里），每个包的
+    // `package.json` 在制品里且版本等于清单版本，完整性值来自锁文件；类型、source map 与
+    // Markdown 不进制品。
+    deepEqual(
+      manifest.dependencies.map((entry) => entry.name),
+      expectedDependencyPackages(artifact.hostId),
+    );
+    const dependencyNames = new Set(manifest.dependencies.map((entry) => entry.name));
+    for (const entry of manifest.dependencies) {
+      match(entry.integrity, /^sha512-/u);
+      for (const dependency of entry.dependencies) ok(dependencyNames.has(dependency), dependency);
+      const vendoredPackage = byPath.get(`node_modules/${entry.name}/package.json`);
+      equal(vendoredPackage?.scope, "dependency", entry.name);
+      equal(
+        parseJsonFile<{ readonly version: string }>(
+          path.join(artifactRoot, "node_modules", entry.name, "package.json"),
+        ).version,
+        entry.version,
+        entry.name,
+      );
+    }
+    for (const name of manifest.externalPackages) ok(dependencyNames.has(name), name);
+    for (const file of manifest.files) {
+      if (!file.path.startsWith("node_modules/")) continue;
+      equal(file.scope, "dependency", file.path);
+      equal(file.mode, "0644", file.path);
+      doesNotMatch(file.path, /\.(?:md|markdown)$/u);
+      equal(/\/\.[^/]+$/u.test(file.path), false, file.path);
+    }
 
     // D8：清单的 runtimeEntrypoint 仍指向 MCP，runtimeEntrypoints[] 列出两个 launcher（MCP 在前）。
     const mcpSource =
@@ -344,9 +454,14 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成，含 h
         sourceEntrypoint: "src/entrypoints/wakeflow-hook-observer.ts",
       },
     ]);
+    // MCP launcher 把发布版本交给组合根。
+    ok(
+      readFileSync(path.join(artifactRoot, MCP_LAUNCHER), "utf8").includes(
+        `(${JSON.stringify(release.version)});`,
+      ),
+    );
 
     // D8：两个 hooks 文件在文件集合里，模式与范围固定；观察脚本的闭包根随并集进了 lib/。
-    const byPath = new Map(manifest.files.map((file) => [file.path, file]));
     equal(byPath.get(MCP_LAUNCHER)?.mode, "0755");
     equal(byPath.get(MCP_LAUNCHER)?.scope, "entrypoint");
     equal(byPath.get(HOOK_OBSERVER_LAUNCHER)?.mode, "0755");
@@ -355,8 +470,8 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成，含 h
     equal(byPath.get(HOOKS_JSON)?.scope, "metadata");
     equal(byPath.get("lib/entrypoints/wakeflow-hook-observer.js")?.scope, "shared");
 
-    // 范围陈述文件在制品里的层次：`lib/` 下的编译文件带闭包范围，其余是生成文件；两个
-    // launcher 都是 `entrypoint`，所以按范围选 launcher 的消费者两个都看得见（D8）。
+    // 范围陈述文件在制品里的层次：`lib/` 下的编译文件带闭包范围，其余是生成文件、静态资产
+    // 与依赖；两个 launcher 都是 `entrypoint`，所以按范围选 launcher 的消费者两个都看得见（D8）。
     for (const file of manifest.files) {
       const compiled = file.path.startsWith("lib/");
       equal(CLOSURE_SCOPES.includes(file.scope), compiled, file.path);
@@ -416,9 +531,9 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成，含 h
       artifact.hostId === "claude-code",
     );
 
-    // §13.99 D3、D9：整棵 `assets/agent-text/` 按该宿主的取值表渲染进候选。`agentText[]` 是
+    // §13.99 D3、D9：整棵 `assets/agent-text/` 按该宿主的取值表渲染进制品。`agentText[]` 是
     // 这批文本的独立索引，与 `files` 里同名条目逐字节相等；渲染后不留占位符；`commands/`
-    // 只进 Claude 候选（D2）；共享文本里只出现本宿主的指令文件名，不出现对端的。
+    // 只进 Claude 制品（D2）；共享文本里只出现本宿主的指令文件名，不出现对端的。
     const agentTextPaths = manifest.agentText.map((file) => file.path);
     deepEqual([...agentTextPaths].sort(compareCodeUnits), agentTextPaths);
     for (const relative of [
@@ -454,18 +569,20 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成，含 h
   }
 });
 
-test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工具", {
-  timeout: 20_000,
+test("制品搬到仓库之外后，两个 MCP 入口仍经官方 stdio Client 发布公共目录的全部工具：依赖闭包自足（D5）", {
+  timeout: 40_000,
 }, async (t) => {
   const output = outputFixture(t);
-  const built = await buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
+  const built = await buildCandidates();
+  const expectedTools = WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.map((tool) => tool.name).sort();
 
   for (const artifact of built.artifacts) {
-    const artifactRoot = path.join(output, artifact.outputDirectory);
+    const installed = outsideRepositoryCopy(t, path.join(output, artifact.outputDirectory));
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: [path.join(artifactRoot, MCP_LAUNCHER)],
-      cwd: artifactRoot,
+      args: [path.join(installed, MCP_LAUNCHER)],
+      cwd: installed,
+      env: { PATH: process.env.PATH ?? "" },
       stderr: "pipe",
     });
     let stderr = "";
@@ -479,43 +596,20 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
     try {
       await client.connect(transport);
       const listed = await client.listTools();
-      deepEqual(
-        listed.tools.map((tool) => tool.name).sort(),
-        [
-          WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
-          WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
-          WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
-          WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
-          WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
-          WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME,
-          WAKEFLOW_POD_PUBLIC_TOOL_NAME,
-          WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
-          WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
-        ].sort(),
-      );
+      deepEqual(listed.tools.map((tool) => tool.name).sort(), expectedTools);
+      equal(listed.tools.length, 20);
     } finally {
       await Promise.allSettled([client.close(), transport.close()]);
     }
-    equal(stderr, "");
+    equal(stderr, "", artifact.hostId);
   }
 });
 
-test("两个候选的 hooks/observe.mjs 以宿主 SessionStart payload 把记录写进手搭工作区；观察目录被文件顶替时退出 0、stdout 空、stderr 恰好一行固定代码；报告固定代码后守卫已卸下，同一次运行的第二次故障不追加第二行", {
+test("两个制品的 hooks/observe.mjs 以宿主 SessionStart payload 把记录写进手搭工作区；观察目录被文件顶替时退出 0、stdout 空、stderr 恰好一行固定代码；报告固定代码后守卫已卸下，同一次运行的第二次故障不追加第二行", {
   timeout: 60_000,
 }, async (t) => {
   const output = outputFixture(t);
-  const built = await buildTypescriptArtifactCandidates(process.cwd(), OUTPUT_RELATIVE);
+  const built = await buildCandidates();
 
   for (const artifact of built.artifacts) {
     const launcher = path.join(output, artifact.outputDirectory, HOOK_OBSERVER_LAUNCHER);
@@ -605,5 +699,36 @@ test("宿主中立闭包守卫拒绝任何 hosts/ 模块：本宿主模块与对
         "hosts/claude-code/claude-code-maintenance-execution.js",
       ]),
     expectArtifactErrorCode("wakeflow-artifact-host-isolation"),
+  );
+});
+
+test("运行时依赖闭包按锁文件求传递闭包：直接包展开为已排序的精确版本集合；未安装、开发依赖与工作区链接各以稳定错误码拒绝", () => {
+  const closure = resolveRuntimeDependencyClosure(process.cwd(), ["ajv"]);
+  deepEqual(
+    closure.map((entry) => entry.name),
+    ["ajv", "fast-deep-equal", "fast-uri", "json-schema-traverse", "require-from-string"],
+  );
+  const ajv = closure.find((entry) => entry.name === "ajv");
+  equal(ajv?.version, "8.20.0");
+  deepEqual(ajv?.dependencies, [
+    "fast-deep-equal",
+    "fast-uri",
+    "json-schema-traverse",
+    "require-from-string",
+  ]);
+  for (const entry of closure) match(entry.integrity, /^sha512-/u);
+
+  // 锁文件里没有的包、只在开发时安装的包、npm 工作区的符号链接，都不能成为运行时闭包。
+  throws(
+    () => resolveRuntimeDependencyClosure(process.cwd(), ["wakeflow-not-installed"]),
+    expectClosureErrorCode("wakeflow-artifact-dependency-missing"),
+  );
+  throws(
+    () => resolveRuntimeDependencyClosure(process.cwd(), ["typescript"]),
+    expectClosureErrorCode("wakeflow-artifact-dependency-dev"),
+  );
+  throws(
+    () => resolveRuntimeDependencyClosure(process.cwd(), ["wakeflow"]),
+    expectClosureErrorCode("wakeflow-artifact-dependency-link"),
   );
 });

@@ -284,12 +284,14 @@ P0 必须核实并记录的事项：
 | `typecheck` | project references、strict flags、source boundary |
 | `test:focus` | 当前能力的 exact compiled tests |
 | `check:fast` | 全量 typecheck、Schema/codegen、shared domain、双 host contract |
-| `build:check` | 最终阶段的双 artifact 临时重建与 committed diff |
+| `build:artifacts` | 从一次共享编译装配两份候选制品到 `.build/artifacts/`（`build:artifacts:committed` 写 `plugins/`，只在 E4 切换与之后的重建使用） |
+| `build:check` | 双 artifact 临时重建与 committed 逐字节对比，加清单闭合与 marketplace 条目核对；E4 切换后进入 `npm test` |
+| `smoke:artifacts` | committed 制品搬到仓库外跑五幕加 hook 一幕（工具目录、fresh、reconcile、status/verify、pod 预览零写、hook 落地） |
 | `npm test` | 新 TS 门：typecheck、架构规则、TS 测试、Schema 漂移检查 |
 | `scenario:acceptance` | 场景验收骨架，聚焦运行 `tests/scenarios/` |
 | `test:legacy` | 已退役的旧门：`sync-core` 检查、双 validator、双 smoke、旧回归测试；只手动运行，E4 删除 |
 | `test:workspace` | 明确授权的 `WakeWorkspace` 初始化/维护验收 |
-| `release:check` | 版本/tag/remote/clean-tree/package closure；仅发布流程使用 |
+| `release:check` | 五源版本一致、新序列、Node 24 引擎、清单可发布、main、干净树、标签在 HEAD、本地 origin/main 同步；仅发布流程使用 |
 
 <a id="ts-dev-safety"></a>
 ## 12. 环境、安全与变更纪律

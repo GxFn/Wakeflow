@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Wakeflow logo">
+  <rect width="512" height="512" rx="112" fill="#0F172A"/>
+  <g transform="translate(256 256) rotate(45) scale(1.55) translate(-256 -256)">
+    <path d="M172 256a84 84 0 1 1 136 64" fill="none" stroke="#5EEAD4" stroke-width="40" stroke-linecap="round"/>
+    <path d="M308 320 368 328 328 276Z" fill="#5EEAD4"/>
+    <circle cx="256" cy="256" r="40" fill="#F8FAFC"/>
+    <circle cx="256" cy="256" r="16" fill="#0F172A"/>
+  </g>
+</svg>

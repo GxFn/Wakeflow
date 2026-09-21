@@ -12,7 +12,10 @@
   "scripts": {
     "typecheck": "tsc -b --pretty false",
     "check:architecture": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/architecture/check-dependencies.js",
-    "build:typescript-artifact-candidates": "tsc -b tooling/tsconfig.json src/entrypoints/tsconfig.json --pretty false && node .build/tooling/artifacts/build-typescript-artifact-candidates.js",
+    "build:artifacts": "tsc -b tooling/tsconfig.json src/entrypoints/tsconfig.json --pretty false && node .build/tooling/artifacts/build-plugin-artifacts.js",
+    "build:artifacts:committed": "tsc -b tooling/tsconfig.json src/entrypoints/tsconfig.json --pretty false && node .build/tooling/artifacts/build-plugin-artifacts.js --committed",
+    "build:check": "tsc -b tooling/tsconfig.json src/entrypoints/tsconfig.json --pretty false && node .build/tooling/artifacts/check-plugin-artifacts.js",
+    "smoke:artifacts": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/artifacts/smoke-plugin-artifacts.js",
     "test:tooling": "node --test .build/tests/codegen/schema-types.test.js",
     "test:typescript": "tsc -b tooling/tsconfig.json tests/tsconfig.json --pretty false && node .build/tooling/testing/run-typescript-tests.js",
     "test:typescript:focused": "tsc -b tooling/tsconfig.json tests/tsconfig.json --pretty false && node .build/tooling/testing/run-typescript-tests.js --focused",
@@ -25,7 +28,7 @@
     "validate:claude": "npm --workspace claude-code-wakeflow run validate",
     "smoke": "npm --workspace wakeflow run smoke",
     "smoke:claude": "npm --workspace claude-code-wakeflow run smoke",
-    "release:check": "node tools/check-release-consistency.mjs --require-main --require-clean --require-tag --require-remote",
+    "release:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/release/check-release-consistency.js --require-main --require-clean --require-tag --require-remote",
     "mcp": "npm --workspace wakeflow run mcp",
     "mcp:claude": "npm --workspace claude-code-wakeflow run mcp",
     "test:wakeflow": "node --test test/*.test.mjs",
@@ -36,7 +39,7 @@
     "lint:fix": "biome lint --write src tests tooling",
     "format": "biome format --write src tests tooling",
     "format:check": "biome format src tests tooling",
-    "check:unused": "knip --no-progress"
+    "check:unused": "knip --no-progress --no-gitignore"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",

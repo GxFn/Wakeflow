@@ -15,12 +15,16 @@
         "tooling/architecture/check-dependencies.ts",
         "tooling/codegen/schema-types.ts",
         "tooling/testing/run-typescript-tests.ts",
-        "tooling/artifacts/build-typescript-artifact-candidates.ts",
+        "tooling/artifacts/build-plugin-artifacts.ts",
+        "tooling/artifacts/check-plugin-artifacts.ts",
+        "tooling/artifacts/smoke-plugin-artifacts.ts",
+        "tooling/release/check-release-consistency.ts",
         "tests/**/*.test.ts",
         "tests/scenarios/*.ts"
       ],
       "project": ["src/**/*.ts", "tooling/**/*.ts", "tests/**/*.ts"],
       "ignore": [
+        ".build/**",
         "src/contracts/generated/**",
         "src/configuration/**",
         "src/workspace/**",

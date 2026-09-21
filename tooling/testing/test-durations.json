@@ -3,7 +3,10 @@
   "measuredAt": "2026-09-18",
   "durationsMs": {
     "tests/artifacts/agent-text-honesty.test.ts": 749,
-    "tests/artifacts/typescript-artifact-candidates.test.ts": 6346,
+    "tests/artifacts/plugin-artifact-check.test.ts": 17000,
+    "tests/artifacts/plugin-artifact-smoke.test.ts": 29000,
+    "tests/artifacts/plugin-artifacts.test.ts": 12000,
+    "tests/release/check-release-consistency.test.ts": 5600,
     "tests/capabilities/delivery/decide.test.ts": 224,
     "tests/capabilities/delivery/service.test.ts": 34843,
     "tests/capabilities/demand/decide.test.ts": 892,

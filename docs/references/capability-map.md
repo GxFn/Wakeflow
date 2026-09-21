@@ -83,8 +83,8 @@
 | 窗口租约 2 小时 | 2 | 工作声明加围栏令牌，过期只开恢复 | 重切 | ADR-0009 |
 | 隔离执行位置授权 | 4 | pod 模型 | 重切 | ADR-0010 |
 | sync-core 双制品同步 | 10 | TS 构建器产出双制品 | 重切 | requirements/typescript-dual-artifact-build.md |
-| 校验器 17 类、冒烟四幕 | 10 | L3 制品校验器与冒烟 | 重切 | 能力卡 10 Q8；工具数量与退役路径由导出派生 |
-| 五源版本一致与 `release:check` | 10 | 保留机制，起点 `1.0.0` | 重切 | 能力卡 10 Q5 到 Q7 |
+| 校验器 17 类、冒烟四幕 | 10 | `tooling/artifacts/check-plugin-artifacts.ts`（`build:check`：临时重建逐字节对比 committed 制品、清单闭合、marketplace 条目）与 `tooling/artifacts/smoke-plugin-artifacts.ts`（`smoke:artifacts`：制品搬到仓库外跑五幕加 hook 一幕） | 已落地 | 2026-09-20 L3（gate-log §13.103）：工具数量来自制品自己的公共目录，不硬编码；候选合同导出集校验按能力卡 10 Q8 删除 |
+| 五源版本一致与 `release:check` | 10 | `tooling/release/check-release-consistency.ts`，版本唯一输入 `assets/release/version.json`，起点 `1.0.0` | 已落地 | 2026-09-20 L3：五源、新序列、Node 24 引擎实跑核对、清单可发布、main、干净树、标签在 HEAD、本地 origin/main 同步；场景 `card-10/release-consistency` 以 tooling 测试接线 |
 
 ## 3. 宿主差异
 

@@ -8,7 +8,7 @@
 
 ## 1. 已接线场景
 
-已接线 20 个场景，骨架一次运行全部 `pass`（`card-10/release-consistency` 属 L3，仍在 §2）。
+已接线 20 个场景，骨架一次运行全部 `pass`。`card-10/release-consistency` 不经 MCP，2026-09-20 以 tooling 测试接线（见 §2）。
 
 | 场景编号 | 能力卡 | 场景 | 断言 | 当前结论 |
 | --- | --- | --- | --- | --- |
@@ -33,13 +33,13 @@
 | `card-09/status-and-verify` | 09 | 一次观察多域的 status 与十三门 verify | 在 card-10 之后的工作区上经公共工具重建观察对象（第二个 worktree pod、四次握手加真实 `git worktree add`、需求包、Demand、任务与投递）；`wakeflow_status`：`overall` 为 `active`，pod 段两项（worktree pod `ready`、回执 `present`），`windows[]` 7 已登记加恰好 primary design 一个未登记，pod 产品窗口持有声明，`board.counts` 与 `inspect_board` 一致，`claims[]` 与声明文件一致，`repositories[]` 报 HEAD、当前分支与登记的 worktree，`policy` 等于导出常量，`projection` 为 `current`，`nextActions` 头项为未登记窗口的登记、次项为活动 Demand 前沿，`next` 取头项；带活动 demandId 的 `route` 前沿等于 `next`；带已取消 demandId 的 `archive` 在场且 `route` 为 null；结果不含私有路径与句柄。`wakeflow_verify`：十三门按名字排序、`ok` 为 true、`summary{13, 0, 0}`、`repairsApplied` 为 false；带 demandId 时 Demand 门只有在飞投递的 `work-claims-released` 失败且不影响工作区 `ok`；观察目录放入非法文件名后 `host-hook-channel` fail（`codex:skipped-1`）、`ok` false、`summary{12, 1, 0}`、`overall` 为 `degraded`；删除后恢复 `13/0/0` | pass |
 | `card-09/active-projection` | 09 | 投影标记、手写不覆盖、pod 段 | 一次证据变更后四份文件（`index.md`、`current/workspace-current-status.md`、`projections/<demandId>/{index.md, developer-progress.md}`）存在且标记种类正确，工作区页共享一份指纹、Demand 页共享另一份，`status.projection` 为 `current`；去掉 `developer-progress.md` 的标记再变更，四份文件字节不变（整轮零写），`status.projection` 为 `unsafe/handwritten`、其余三份 `stale`，verify 的 `active-projection` 门 pass 且 code `handwritten,blocked:3`、`ok` true；恢复标记再变更即 `current` 且四份全部重写、门 code 为 null；`workspace-current-status.md` 的 pod 段两个 pod 各一行，worktree pod 行带活动 Demand 与 `present` 回执 | pass |
 
-## 2. 待接线场景
+## 2. 不经 MCP 的场景
 
-按能力卡场景块列出，随 L1 切片闭合逐个接线。接线前记 `not-run`。
+| 场景编号 | 能力卡 | 场景 | 接线 | 当前结论 |
+| --- | --- | --- | --- | --- |
+| `card-10/release-consistency` | 10 | 五源一致、新序列、Node 24 引擎、清单可发布、main、干净树、标签在 HEAD、本地 origin/main 同步 | `tests/release/check-release-consistency.test.ts`：在一次性 Git 仓库里摆出五个版本源，全部门通过一次，再逐道门制造不一致并断言稳定错误码（`wakeflow-release-version-drift`、`-series`、`-engines`、`-node`、`-manifest`、`-branch`、`-dirty`、`-tag`、`-remote`）；门本身是 `tooling/release/check-release-consistency.ts`，入口 `npm run release:check` | pass |
 
-| 场景编号 | 能力卡 | 场景 | 依赖切片 |
-| --- | --- | --- | --- |
-| `card-10/release-consistency` | 10 | 五源一致、标签在 HEAD、Node 24 | L3 |
+待接线场景已清零。
 
 ## 3. 未执行标注
 

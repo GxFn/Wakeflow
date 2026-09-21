@@ -48,7 +48,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
 | 评审决定 | Controller 的验收事件：accept、rework、redesign、blocked；Test 另有 verdict 与尝试决定 | Controller | Demand 事件流 | 事件 |
 | 证据 | 从 worktree、支撑面、链接、提交或 hook 观察固化的记录，带隐私扫描 | Controller | Demand 根 | 不可变 |
 | 归档包 | Demand 全部权威、事件、工件、证据、传输摘要、TODO 谱系、worktree 来源 | Controller 归档 | ledger `workspace/archive/` | 不可变；活动根删除 |
-| 投影 | `index.md`、`workspace-current-status.md`、每 Demand 进度页、ledger 索引、Claude 状态栏 | Wakeflow | 各根 | 确定性重写；手写即不覆盖 |
+| 投影 | `index.md`、`workspace-current-status.md`、每 Demand 进度页、需求看板索引、Claude 状态栏 | Wakeflow | 各根 | 确定性重写；手写即不覆盖；ledger 记录不带 Markdown 索引（能力卡 3 §3.5） |
 
 ## 3. 主流程：一条直线
 

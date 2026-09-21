@@ -8,51 +8,47 @@ import {
 } from "../../configuration/wakeflow-config.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  readStableFile,
-  StableFileReadError,
-  type StableFileSource,
-} from "../../foundation/filesystem/stable-file-read.js";
+import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 import {
   createWakeflowExternalInstructionBodyAuthority,
   listWakeflowExternalInstructionTargets,
   parseWakeflowExternalInstructionTarget,
-  wakeflowExternalInstructionTargetKey,
-  WakeflowExternalInstructionBodyAuthorityError,
   type WakeflowExternalInstructionBodyAuthority,
+  WakeflowExternalInstructionBodyAuthorityError,
   type WakeflowExternalInstructionTarget,
+  wakeflowExternalInstructionTargetKey,
 } from "./wakeflow-external-instruction-body-authority.js";
 import {
-  planWakeflowManagedTextAuthorityTransition,
-  WakeflowManagedTextAuthorityTransitionError,
-  type WakeflowManagedTextAuthorityTransition,
-} from "./wakeflow-managed-text-authority-transition.js";
+  inspectWakeflowManagedBlockFile,
+  WakeflowManagedBlockFileError,
+  type WakeflowManagedBlockFileInspection,
+  type WakeflowManagedBlockFileRequest,
+} from "./wakeflow-managed-block-file.js";
+import type { WakeflowManagedTextAuthorityTransition } from "./wakeflow-managed-text-authority-transition.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：外部根托管块的只读文件检查。
  *
  * 根是产品仓库或 external-owned 支撑面的根目录，由调用方按 Config placement 打开；
- * 本模块只读取其中当前宿主的指令文件，把 current/desired Config 各自推导出的正文权威
- * 与 Managed Text current→desired 转换组合为零写入候选。current Config 里该 target
- * 不是 managed-block 时没有可准入的前序正文，等价于 fresh 的空 current。
- *
- * 文件由外部所有者拥有：权限位不做要求，但必须是当前用户拥有的单链接普通文件。合法
- * marker 但正文未知时拒绝，绝不覆盖用户在受管区域内的改动。本模块不取得锁、不发布，
- * 也不把传入 Config 证明成已提交的 workspace authority。
+ * 本模块只推导 current/desired Config 各自的正文权威，把文件的机械部分（当前用户拥有的
+ * 单链接普通文件、权限位不限、current→desired 转换、合法 marker 但正文未知即拒绝）交给
+ * 通用托管块文件 owner `wakeflow-managed-block-file.ts`（§13.114 D1）。current Config 里
+ * 该 target 不是 managed-block 时没有可准入的前序正文，等价于 fresh 的空 current。
+ * 本模块不取得锁、不发布，也不把传入 Config 证明成已提交的 workspace authority。
  */
 
 export const WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(
@@ -141,6 +137,13 @@ export interface ParsedWakeflowExternalInstructionInspectionRequest {
   readonly desiredConfig: WakeflowConfigModel;
   readonly desiredConfigDigest: Sha256Digest;
   readonly signal: AbortSignal | undefined;
+}
+
+/** 从 current / desired Config 推导出的两份正文权威；current 里没有该 target 时为 null。 */
+export interface WakeflowExternalInstructionAuthorities {
+  readonly currentAuthority:
+    Readonly<WakeflowExternalInstructionBodyAuthority> | null;
+  readonly desiredAuthority: Readonly<WakeflowExternalInstructionBodyAuthority>;
 }
 
 function fail(
@@ -291,90 +294,6 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
   }
 }
 
-function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("unsupported-platform", "$root");
-  }
-  return BigInt(process.geteuid());
-}
-
-async function readSource(
-  root: RootedDirectory,
-  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
-  expectedUserId: bigint,
-): Promise<Readonly<{
-  readonly facts: Readonly<StableFileSource>;
-  readonly bytes: Uint8Array;
-}> | null> {
-  try {
-    const read = await readStableFile(root, request.profile.instructionFileName, {
-      maximumBytes: WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES,
-      ...(request.signal === undefined ? {} : { signal: request.signal }),
-    });
-    if (
-      read.node.kind !== "file"
-      || read.node.linkCount !== 1n
-      || read.node.userId !== expectedUserId
-    ) {
-      fail("source-policy", "$source");
-    }
-    return Object.freeze({
-      facts: Object.freeze({
-        resourcePath: read.resourcePath,
-        node: read.node,
-        byteCount: read.byteCount,
-        digest: read.digest,
-      }),
-      bytes: read.bytes,
-    });
-  } catch (error: unknown) {
-    if (error instanceof WakeflowExternalInstructionInspectionError) throw error;
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "symlink" || error.reason === "not-file") {
-        fail("source-policy", "$source");
-      }
-      if (error.reason === "too-large") fail("source-capacity", "$source");
-      fail("source", "$source");
-    }
-    throw error;
-  }
-}
-
-async function revalidateSource(
-  root: RootedDirectory,
-  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
-  initial: Awaited<ReturnType<typeof readSource>>,
-): Promise<void> {
-  try {
-    const current = await readStableFile(
-      root,
-      request.profile.instructionFileName,
-      {
-        maximumBytes: WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES,
-        ...(initial === null ? {} : { expectedNode: initial.facts.node }),
-        ...(request.signal === undefined ? {} : { signal: request.signal }),
-      },
-    );
-    if (
-      initial === null
-      || current.digest !== initial.facts.digest
-      || current.byteCount !== initial.facts.byteCount
-    ) {
-      fail("source", "$source");
-    }
-  } catch (error: unknown) {
-    if (error instanceof WakeflowExternalInstructionInspectionError) throw error;
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (initial === null && error.reason === "not-found") return;
-      fail("source", "$source");
-    }
-    throw error;
-  }
-}
-
 function createAuthority(
   config: WakeflowConfigModel,
   request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
@@ -393,6 +312,73 @@ function createAuthority(
   }
 }
 
+/** 推导两份正文权威：current Config 里该 target 不是 managed-block 时没有前序正文。 */
+export function deriveWakeflowExternalInstructionAuthorities(
+  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
+): Readonly<WakeflowExternalInstructionAuthorities> {
+  return Object.freeze({
+    currentAuthority:
+      request.currentConfig !== null && hasTarget(request.currentConfig, request.target)
+        ? createAuthority(request.currentConfig, request)
+        : null,
+    desiredAuthority: createAuthority(request.desiredConfig, request),
+  });
+}
+
+/** 通用托管块文件 owner 的请求：当前宿主的指令文件、两份 envelope target、2 MiB 上限。 */
+export function wakeflowExternalInstructionManagedBlockFileRequest(
+  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
+  authorities: Readonly<WakeflowExternalInstructionAuthorities>,
+  signal: AbortSignal | undefined,
+): WakeflowManagedBlockFileRequest {
+  return {
+    resourcePath: request.profile.instructionFileName,
+    currentTargets: authorities.currentAuthority === null
+      ? []
+      : [authorities.currentAuthority.envelopeTarget],
+    desiredTarget: authorities.desiredAuthority.envelopeTarget,
+    maximumBytes: WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES,
+    ...(signal === undefined ? {} : { signal }),
+  };
+}
+
+/** 把通用 owner 的检查结果套回外部指令的合同：加 target、Config 摘要与两份权威。 */
+export function wakeflowExternalInstructionInspectionOf(
+  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
+  authorities: Readonly<WakeflowExternalInstructionAuthorities>,
+  inspection: Readonly<WakeflowManagedBlockFileInspection>,
+): Readonly<WakeflowExternalInstructionInspection> {
+  return Object.freeze({
+    status: inspection.status,
+    target: request.target,
+    currentConfigDigest: request.currentConfigDigest,
+    desiredConfigDigest: request.desiredConfigDigest,
+    currentAuthority: authorities.currentAuthority,
+    desiredAuthority: authorities.desiredAuthority,
+    source: inspection.source,
+    transition: inspection.transition,
+  });
+}
+
+/** 通用 owner 的只读失败映射回外部指令检查的词汇；写入类原因在只读路径上不会出现。 */
+function mapManagedBlockFileError(error: WakeflowManagedBlockFileError): never {
+  switch (error.reason) {
+    case "input":
+      return fail("input", error.path);
+    case "unsupported-platform":
+    case "source":
+    case "source-capacity":
+    case "source-policy":
+    case "envelope":
+    case "unknown-managed-body":
+    case "target-capacity":
+    case "aborted":
+      return fail(error.reason, error.path);
+    default:
+      return fail("source", "$source");
+  }
+}
+
 /** 稳定检查一个外部根里当前宿主的指令文件并生成零写入的 current 或重组候选。 */
 export async function inspectWakeflowExternalInstruction(
   rootValue: unknown,
@@ -401,52 +387,16 @@ export async function inspectWakeflowExternalInstruction(
   assertRoot(rootValue);
   const request = parseWakeflowExternalInstructionInspectionRequest(requestValue);
   if (request.signal?.aborted === true) fail("aborted", "$signal");
-  const currentAuthority =
-    request.currentConfig !== null && hasTarget(request.currentConfig, request.target)
-      ? createAuthority(request.currentConfig, request)
-      : null;
-  const desiredAuthority = createAuthority(request.desiredConfig, request);
-  const read = await readSource(rootValue, request, currentUserId());
-  let transition: Readonly<WakeflowManagedTextAuthorityTransition>;
+  const authorities = deriveWakeflowExternalInstructionAuthorities(request);
+  let inspection: Readonly<WakeflowManagedBlockFileInspection>;
   try {
-    transition = planWakeflowManagedTextAuthorityTransition(
-      read?.bytes ?? new Uint8Array(),
-      {
-        currentTargets: currentAuthority === null
-          ? []
-          : [currentAuthority.envelopeTarget],
-        desiredTarget: desiredAuthority.envelopeTarget,
-      },
+    inspection = await inspectWakeflowManagedBlockFile(
+      rootValue,
+      wakeflowExternalInstructionManagedBlockFileRequest(request, authorities, request.signal),
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
-      if (error.reason === "unadmitted-source") {
-        fail("unknown-managed-body", "$source");
-      }
-      if (error.reason === "relation" || error.reason === "envelope") {
-        fail("envelope", "$source");
-      }
-      fail("authority", error.path);
-    }
+    if (error instanceof WakeflowManagedBlockFileError) mapManagedBlockFileError(error);
     throw error;
   }
-  if (
-    transition.target !== null
-    && transition.target.byteCount > WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES
-  ) {
-    fail("target-capacity", "$target");
-  }
-  await revalidateSource(rootValue, request, read);
-  return Object.freeze({
-    status: transition.disposition === "current"
-      ? "managed-current"
-      : "recompose-required",
-    target: request.target,
-    currentConfigDigest: request.currentConfigDigest,
-    desiredConfigDigest: request.desiredConfigDigest,
-    currentAuthority,
-    desiredAuthority,
-    source: read?.facts ?? null,
-    transition,
-  });
+  return wakeflowExternalInstructionInspectionOf(request, authorities, inspection);
 }

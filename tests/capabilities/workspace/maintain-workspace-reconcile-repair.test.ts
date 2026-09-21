@@ -346,7 +346,7 @@ test("maintain_workspace reconcile rebuilds a missing or stale registered window
   });
 });
 
-test("maintain_workspace reconcile rebuilds a missing ledger root but only reports a missing host runtime root", async (t) => {
+test("maintain_workspace reconcile rebuilds a missing ledger root, a missing host runtime root, a missing maintenance protocol root and a deleted .wakeflow-local", async (t) => {
   const root = await fixture(t);
   const fresh = { root, action: "fresh-initialize", request: { selection: selection() } } as const;
   const preview = await executeCodexWakeflowMaintenance({ ...fresh, mode: "preview" });
@@ -372,9 +372,71 @@ test("maintain_workspace reconcile rebuilds a missing ledger root but only repor
     equal(statSync(path.join(root, "Ledger", container)).isDirectory(), true);
   }
 
-  rmSync(path.join(root, ".wakeflow-local", "runtime", "hosts"), { recursive: true });
+  // 宿主运行时根整个缺失由对账重建（§13.114 D2）：先补目录骨架与未登记投影，再补 capability 目录。
+  const hostsRoot = path.join(root, ".wakeflow-local", "runtime", "hosts");
+  rmSync(hostsRoot, { recursive: true });
   const missingRuntime = await reconcilePreview(root);
-  equal(missingRuntime.status, "blocked");
-  equal(missingRuntime.next.blockers.includes("window-runtime-missing"), true);
-  equal(existsSync(path.join(root, ".wakeflow-local", "runtime", "hosts")), false);
+  equal(missingRuntime.status, "ready", JSON.stringify(missingRuntime.next.blockers));
+  deepEqual(stepKinds(missingRuntime), [
+    "publish-unregistered-window-runtime",
+    "materialize-host-capability-layout",
+  ]);
+  equal(existsSync(hostsRoot), false, "preview must not write");
+  const runtimeRebuilt = await executeCodexWakeflowMaintenance({
+    root,
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: missingRuntime.planDigest as string,
+  });
+  equal(runtimeRebuilt.status, "completed");
+  const projectionsRoot = path.join(hostsRoot, "codex", "projections", "window-runtime");
+  for (const intent of preview.launchIntents as unknown as readonly { windowId: string }[]) {
+    equal(existsSync(path.join(projectionsRoot, `${intent.windowId}.json`)), true);
+  }
+  equal(
+    statSync(path.join(hostsRoot, "codex", "operations", "keep-live", "leases")).isDirectory(),
+    true,
+  );
+  deepEqual(stepKinds(await reconcilePreview(root)), []);
+
+  // 维护协议根缺失而其他 Wakeflow 目录仍在：gate 以 repair 模式引导，预览只剩协议步骤。
+  const protocolRoot = path.join(root, ".wakeflow-local", "runtime", "maintenance");
+  rmSync(protocolRoot, { recursive: true });
+  const missingProtocol = await reconcilePreview(root);
+  equal(missingProtocol.status, "ready", JSON.stringify(missingProtocol.next.blockers));
+  deepEqual(stepKinds(missingProtocol), ["materialize-local-protocol"]);
+  const protocolRebuilt = await executeCodexWakeflowMaintenance({
+    root,
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: missingProtocol.planDigest as string,
+  });
+  equal(protocolRebuilt.status, "completed");
+  equal(statSync(path.join(protocolRoot, "transactions")).isDirectory(), true);
+  deepEqual(stepKinds(await reconcilePreview(root)), []);
+
+  // 整个 .wakeflow-local 缺失：一次对账重建协议根、共享协调目录、宿主运行时骨架与 capability 目录。
+  rmSync(path.join(root, ".wakeflow-local"), { recursive: true });
+  const missingLocal = await reconcilePreview(root);
+  equal(missingLocal.status, "ready", JSON.stringify(missingLocal.next.blockers));
+  for (const kind of [
+    "materialize-local-protocol",
+    "publish-unregistered-window-runtime",
+    "materialize-host-capability-layout",
+  ]) {
+    equal(stepKinds(missingLocal).includes(kind), true, `${kind} missing from the plan`);
+  }
+  const localRebuilt = await executeCodexWakeflowMaintenance({
+    root,
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: missingLocal.planDigest as string,
+  });
+  equal(localRebuilt.status, "completed");
+  equal(statSync(path.join(protocolRoot, "transactions")).isDirectory(), true);
+  equal(statSync(projectionsRoot).isDirectory(), true);
+  deepEqual(stepKinds(await reconcilePreview(root)), []);
 });

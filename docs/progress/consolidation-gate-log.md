@@ -3304,3 +3304,25 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `npm run build:artifacts:committed` 后 `npm test` 997/997（含 `build:check`），`test:typescript` 313.9 s、整门 324 s；`npm run smoke:artifacts` 两宿主七幕全过（20 s）；`git diff --check` 干净。
 
 **文档写回。** 能力卡 1 §1.2 现 TS 状态（schema 路径与词汇删除）、能力卡 8 现 TS 状态、对齐台账 §3 B 组行、本节。
+
+## 13.114 内部整理一批：外部指令并入通用托管块 owner、对账重建 `.wakeflow-local`、退役关闭 pod 的投影（2026-09-21）
+
+**用户裁决。** §13.113 记录的 D3：三项内部整理做成一批。
+
+**D1 外部指令模块并入通用托管块文件 owner。** `wakeflow-external-instruction-inspection.ts` 与 `-recomposition.ts` 曾各自实现稳定读取、双读复验、current→desired 转换、原子创建 / CAS 替换与读回闭合，与 §13.107 G3 的通用 `wakeflow-managed-block-file.ts` 重复。现在两者只做领域部分——请求准入、从 current / desired Config 推导两份正文权威、把结果套回外部指令的合同——机械部分交给通用 owner（2 MiB 上限、新建 0644、替换保留权限位）。错误词汇按调用方钉死的形状映射（只读：同名；重组：读取类统一 `source-invalid`、容量统一 `capacity`），预览的 `external-instruction-<reason>` blocker 与场景 `card-01/external-managed-blocks` 不变。重组模块 380 行降到 250 行，只读模块去掉全部 I/O。
+
+**D2 对账重建 `.wakeflow-local`。** 旧 reconcile 自动修复 `.wakeflow-local` 静态目录（§13.107 G4 只补了 capability 目录，宿主运行时根与维护协议根仍只报告）。现在：
+
+- 维护协议根缺失（`absent`）或只剩空前缀（`bootstrap-prefix`）：预览为非 fresh 动作也出 `materialize-local-protocol` 步骤；维护 gate 加 `bootstrap: "fresh" | "repair"` 选项，事务按动作传入——repair 模式接受协议根缺失而其他 Wakeflow 目录仍在（fresh-compatible 不再是前提），busy / recovery-required / conflict 两种模式都拒绝；物理创建仍由 gate 引导，步骤只核对结果。
+- 宿主运行时根缺失（`prerequisite-missing`）：预览为非 fresh 动作出 `publish-unregistered-window-runtime` 步骤，`materialize-host-capability-layout` 依赖它。执行器在非 fresh 时不再走 fresh 发布（它要求 inventory 为空），改调 `ensureWakeflowWindowRuntimeSkeleton`：幂等补齐 fresh 同一组六个 0700 目录，只发布缺失的未登记投影，已有投影一律不动。仍有 Binding 的窗口由宿主 capability 的逐窗口操作在同一事务里重建 registered 投影：`planWakeflowWindowRuntimeProjectionMaintenance` 在运行时根缺失时按 `projectionRootRequired: false` 重算期望，只为已登记窗口出操作。
+- 整个 `.wakeflow-local` 被删也是同一条路：协议根、共享协调目录、运行时骨架与 capability 目录在一次对账里全部重建，第二次预览零步。
+
+**D3 退役关闭 pod 的投影文件。** pod close-complete 把窗口移出配置后，本宿主按被移除的 windowId 精确删除投影文件（`retireWakeflowWindowRuntimeProjections`，`unlinkRegularFileExactly` 钉住节点，不枚举投影目录）；与 §13.111 D5 的刷新同一裁决：失败不让配置事务失败，中止上抛。同伴宿主根里的同名文件留给该宿主的 close 路径（它没有跑过）——记为残余。
+
+**回归。** 外部指令三份测试原样通过（错误词汇、disposition、权限位）；`maintain-workspace-reconcile-repair.test.ts` 第三个用例改写：ledger 根 → 宿主运行时根（骨架 + capability 两步、投影全数复原、keep-live 目录在）→ 维护协议根（只剩协议一步）→ 整个 `.wakeflow-local`（协议、骨架、capability 齐出）各自重建后零步；静态预览测试的运行时根缺失用例从 blocker 改为步骤（骨架排在 capability 之前，dependsOn 指向它）；`pod/service.test.ts` 生命周期用例断言关闭后四个窗口投影文件消失、primary 的四个仍在。焦点集 47/47。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 997/997（含 `build:check`），`test:typescript` 299.0 s、整门 313 s；`npm run smoke:artifacts` 两宿主七幕全过（19 s）；`git diff --check` 第一遍抓到 Biome 整理导入时把两个 `requirement-board` 导入合并成带尾随空白的一行（执行器第 55 行），手工拆回两行后干净，制品重建后 `build:check` 仍过。
+
+**文档写回。** 能力卡 1 §1.4 现 TS 状态（对账修复集与只报告集）；场景清单 `card-01/reconcile-repair` 行；Controller 技能工作区参考的 reconcile 条目；对齐台账 §3 B 组 reconcile 行与 F 组 pod 关闭行；制品重建。
+
+**残余。** 同伴宿主根里被关闭 pod 的投影文件；部分缺失（只删 identity 或 projections 子目录）走同一骨架路径但未单独测试；用户侧待做项不变（真实 WakeWorkspace、真实投递、Claude 状态栏、push / tag / 发布 / 缓存）。

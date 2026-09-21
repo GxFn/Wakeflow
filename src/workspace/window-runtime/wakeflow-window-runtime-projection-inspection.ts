@@ -201,11 +201,20 @@ async function resourcePresent(
   }
 }
 
+export interface ResolveWakeflowWindowRuntimeProjectionExpectedEntriesOptions {
+  /**
+   * 投影根未发布时默认整组 `runtime-missing`；对账在同一事务里先补目录骨架再逐窗口重建时
+   * 传 false，把根缺失当成每份文档缺失（§13.114 D2）。
+   */
+  readonly projectionRootRequired?: boolean;
+}
+
 /** 每个配置窗口的期望文档：有 Binding 即 registered，否则 unregistered；尚无 Binding 目录的宿主只有未登记投影。 */
 export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
   root: RootedDirectory,
   inputs: WakeflowWindowRuntimeProjectionInputs,
   signal: AbortSignal | undefined,
+  options: ResolveWakeflowWindowRuntimeProjectionExpectedEntriesOptions = {},
 ): Promise<WakeflowWindowRuntimeProjectionExpectedEntries> {
   const { config, resourceProfile, identityProfile } = inputs;
   let unregistered;
@@ -226,7 +235,10 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
     }
     throw error;
   }
-  if (!(await resourcePresent(root, unregistered.projectionRootRef, "$projectionRoot"))) {
+  if (
+    options.projectionRootRequired !== false
+    && !(await resourcePresent(root, unregistered.projectionRootRef, "$projectionRoot"))
+  ) {
     return Object.freeze({ kind: "runtime-missing" as const });
   }
   let inventory: Readonly<{ readonly bindings: readonly Readonly<WakeflowWindowHostBinding>[] }>;

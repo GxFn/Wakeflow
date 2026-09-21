@@ -37,11 +37,12 @@ current. Read it back through a tool.
   missing active layout or board, missing ledger containers, missing host
   capability directories, a missing support surface root or its `drafts/`,
   `harnesses/` and `fixtures/` scaffold, Wakeflow's managed blocks and memory
-  files, and a missing or stale window runtime projection (recomputed from the
-  config and the window's current binding). A hand-edited block, a foreign
-  file sitting where a Wakeflow directory belongs, an unreadable projection,
-  or a missing host runtime root is reported as a blocker and never
-  overwritten.
+  files, a missing or stale window runtime projection (recomputed from the
+  config and the window's current binding), and a missing host runtime or
+  maintenance protocol root, even when the whole `.wakeflow-local` directory
+  is gone. A hand-edited block, a foreign file sitting where a Wakeflow
+  directory belongs, or an unreadable projection is reported as a blocker and
+  never overwritten.
 
 Procedure, every time:
 

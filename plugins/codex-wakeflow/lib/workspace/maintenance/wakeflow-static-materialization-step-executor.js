@@ -5,42 +5,42 @@ import { replaceWakeflowConfigAuthority, WakeflowConfigAuthorityReplacementError
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { materializeAbsoluteDirectoryPlacement, AbsoluteDirectoryMaterializationError, } from "../../foundation/filesystem/absolute-directory-materialization.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { AbsoluteDirectoryMaterializationError, materializeAbsoluteDirectoryPlacement, } from "../../foundation/filesystem/absolute-directory-materialization.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { LEDGER_AUTHORITY_LAYOUT_DIGEST } from "../../governance/ledger/ledger-authority-layout.js";
-import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
 import { LEDGER_DURABLE_DIRECTORY_MODE } from "../../governance/ledger/ledger-authority-storage-policy.js";
-import { isWakeflowError } from "../../kernel/error.js";
+import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
+import { materializeActiveLayout, publishActiveProjection, } from "../../kernel/active-projection.js";
+import { isWakeflowError, WakeflowError } from "../../kernel/error.js";
 import { REQUIREMENT_BOARD_ROOT_REF } from "../../kernel/layout.js";
-import { listRequirementClaimStates, materializeRequirementBoardRoot, publishRequirementBoardIndex, } from "../../kernel/requirement-board.js";
-import { createWakeflowExternalInstructionBodyAuthority, listWakeflowExternalInstructionTargets, wakeflowExternalInstructionPlacementKey, wakeflowExternalInstructionTargetKey, WakeflowExternalInstructionBodyAuthorityError, } from "../managed-integration/wakeflow-external-instruction-body-authority.js";
+import { listRequirementClaimStates, materializeRequirementBoardRoot, publishRequirementBoardIndex, REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST, } from "../../kernel/requirement-board.js";
+import { compileWakeflowHostCapabilityLayoutAuthority } from "../host-runtime/wakeflow-host-capability-layout-authority.js";
+import { ensureWakeflowHostCapabilityLayout, materializeWakeflowHostCapabilityLayout, WakeflowHostCapabilityLayoutMaterializationError, } from "../host-runtime/wakeflow-host-capability-layout-materialization.js";
+import { createWakeflowExternalInstructionBodyAuthority, listWakeflowExternalInstructionTargets, WakeflowExternalInstructionBodyAuthorityError, wakeflowExternalInstructionPlacementKey, wakeflowExternalInstructionTargetKey, } from "../managed-integration/wakeflow-external-instruction-body-authority.js";
 import { recomposeWakeflowExternalInstruction, WakeflowExternalInstructionRecompositionError, } from "../managed-integration/wakeflow-external-instruction-recomposition.js";
 import { createWakeflowGitignoreBodyAuthority } from "../managed-integration/wakeflow-gitignore-body-authority.js";
-import { recomposeWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "../managed-integration/wakeflow-managed-block-file.js";
-import { createWakeflowSupportGitignoreBodyAuthority, WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME, } from "../managed-integration/wakeflow-support-gitignore-body-authority.js";
 import { recomposeWakeflowWorkspaceGitignore, WakeflowGitignoreRecompositionError, } from "../managed-integration/wakeflow-gitignore-recomposition.js";
+import { recomposeWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "../managed-integration/wakeflow-managed-block-file.js";
 import { createWakeflowProgramInstructionBodyAuthority } from "../managed-integration/wakeflow-program-instruction-body-authority.js";
 import { recomposeWakeflowProgramInstruction, WakeflowProgramInstructionRecompositionError, } from "../managed-integration/wakeflow-program-instruction-recomposition.js";
+import { createWakeflowSupportGitignoreBodyAuthority, WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME, } from "../managed-integration/wakeflow-support-gitignore-body-authority.js";
 import { createWakeflowManagedSupportResourceCatalog } from "../support/wakeflow-managed-support-resource-catalog.js";
 import { materializeWakeflowManagedSupportRoot, WakeflowManagedSupportRootMaterializationError, } from "../support/wakeflow-managed-support-root-materialization.js";
 import { createWakeflowSupportMemoryAuthority } from "../support/wakeflow-support-memory-authority.js";
 import { publishWakeflowSupportMemory, WakeflowSupportMemoryPublicationError, } from "../support/wakeflow-support-memory-publication.js";
-import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
+import { renderWakeflowFreshActiveProjection } from "../wakeflow-active-fresh-projection.js";
+import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
 import { materializeWakeflowSharedCoordinationLayout, WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST, WakeflowSharedCoordinationLayoutError, } from "../wakeflow-shared-coordination-layout.js";
-import { compileWakeflowHostCapabilityLayoutAuthority } from "../host-runtime/wakeflow-host-capability-layout-authority.js";
-import { ensureWakeflowHostCapabilityLayout, materializeWakeflowHostCapabilityLayout, WakeflowHostCapabilityLayoutMaterializationError, } from "../host-runtime/wakeflow-host-capability-layout-materialization.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import { compileWakeflowFreshWindowRuntimeAuthority } from "../window-runtime/wakeflow-window-runtime-fresh-authority.js";
 import { publishFreshWakeflowWindowRuntime, WakeflowFreshWindowRuntimePublicationError, } from "../window-runtime/wakeflow-window-runtime-fresh-publication.js";
-import { materializeActiveLayout, publishActiveProjection, } from "../../kernel/active-projection.js";
-import { WakeflowError } from "../../kernel/error.js";
-import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../../kernel/requirement-board.js";
-import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
-import { renderWakeflowFreshActiveProjection } from "../wakeflow-active-fresh-projection.js";
+import { WakeflowWindowRuntimeProjectionError } from "../window-runtime/wakeflow-window-runtime-projection-inspection.js";
+import { ensureWakeflowWindowRuntimeSkeleton } from "../window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
 import { WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION, WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./wakeflow-maintenance-resource-catalog.js";
-import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
 import { parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
+import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
 /**
  * Wakeflow Workspace / Maintenance：静态物化计划的闭合 step dispatcher。
  *
@@ -425,12 +425,34 @@ async function executeLedgerLayout(root, step, request, desired, recovering, sig
     });
 }
 async function executeUnregisteredWindowRuntime(root, step, request, desired, recovering, signal) {
-    if (request.action !== "fresh-initialize" ||
-        step.targetKey !== request.currentHostProfile.hostId) {
+    if (step.targetKey !== request.currentHostProfile.hostId) {
         fail("plan", "$windowRuntime");
     }
     const authority = compileWakeflowFreshWindowRuntimeAuthority(desired, request.currentHostProfile);
     assertStepTarget(step, authority.authorityDigest);
+    if (request.action !== "fresh-initialize") {
+        // 对账 / 重配置：只补齐缺失的目录骨架与未登记投影，已有投影不动（§13.114 D2）。
+        try {
+            const ensured = await ensureWakeflowWindowRuntimeSkeleton(root, {
+                config: desired,
+                resourceProfile: request.currentHostProfile,
+                ...(signal === undefined ? {} : { signal }),
+            });
+            return receipt(step.stepId, ensured.created ? "created" : "current", {
+                authorityDigest: authority.authorityDigest,
+                directoriesCreated: ensured.directoriesCreated,
+                projectionsPublished: ensured.projectionsPublished,
+            });
+        }
+        catch (error) {
+            if (error instanceof WakeflowWindowRuntimeProjectionError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
+                fail("owner", "$windowRuntime");
+            }
+            throw error;
+        }
+    }
     try {
         const result = await publishFreshWakeflowWindowRuntime(root, desired, request.currentHostProfile, {
             recoveringFreshPublication: recovering,

@@ -6,50 +6,30 @@ import {
 } from "../../configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
   type WakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
+  retireRootedExclusiveFileLockResidue,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import {
-  withExistingWakeflowMaintenanceGate,
-  withWakeflowMaintenanceGate,
-  WakeflowMaintenanceGateError,
-  type WakeflowMaintenanceGateContext,
-} from "./wakeflow-maintenance-gate.js";
+  createWakeflowWorkspaceStaticResourceMatrix,
+} from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   assertWakeflowHostMaintenanceCapability,
   assertWakeflowHostMaintenanceContributionCapability,
-  WakeflowHostMaintenanceCapabilityError,
   type WakeflowHostMaintenanceCapability,
+  WakeflowHostMaintenanceCapabilityError,
 } from "./wakeflow-host-maintenance-capability.js";
-import {
-  beginWakeflowMaintenanceJournalStep,
-  completeWakeflowMaintenanceJournalStep,
-  terminalizeWakeflowMaintenanceJournal,
-} from "./wakeflow-maintenance-journal.js";
-import {
-  assertWakeflowMaintenanceJournalIsOnlyTransaction,
-  assertWakeflowPreparedMaintenanceJournalCapacity,
-  checkpointWakeflowMaintenanceJournal,
-  publishPreparedWakeflowMaintenanceJournal,
-  readWakeflowMaintenanceJournal,
-  readWakeflowMaintenanceJournalOrNull,
-  recoverWakeflowMaintenanceJournalStages,
-  retireTerminalWakeflowMaintenanceJournal,
-  WakeflowMaintenanceJournalStoreError,
-  type WakeflowMaintenanceJournalSource,
-} from "./wakeflow-maintenance-journal-store.js";
 import {
   computeWakeflowMaintenanceExecutionIntentDigest,
   createWakeflowMaintenanceExecutionIntent,
@@ -65,8 +45,8 @@ import {
   readWakeflowMaintenanceExecutionIntentOrNull,
   recoverWakeflowMaintenanceExecutionIntentStages,
   retireWakeflowMaintenanceExecutionIntent,
-  WakeflowMaintenanceExecutionIntentStoreError,
   type WakeflowMaintenanceExecutionIntentSource,
+  WakeflowMaintenanceExecutionIntentStoreError,
 } from "./wakeflow-maintenance-execution-intent-store.js";
 import {
   parseWakeflowMaintenanceExecutionPlan,
@@ -78,24 +58,44 @@ import {
   WakeflowMaintenanceExecutionPreviewError,
 } from "./wakeflow-maintenance-execution-preview.js";
 import {
+  type WakeflowMaintenanceGateContext,
+  WakeflowMaintenanceGateError,
+  withExistingWakeflowMaintenanceGate,
+  withWakeflowMaintenanceGate,
+} from "./wakeflow-maintenance-gate.js";
+import {
+  beginWakeflowMaintenanceJournalStep,
+  completeWakeflowMaintenanceJournalStep,
+  terminalizeWakeflowMaintenanceJournal,
+} from "./wakeflow-maintenance-journal.js";
+import {
+  assertWakeflowMaintenanceJournalIsOnlyTransaction,
+  assertWakeflowPreparedMaintenanceJournalCapacity,
+  checkpointWakeflowMaintenanceJournal,
+  publishPreparedWakeflowMaintenanceJournal,
+  readWakeflowMaintenanceJournal,
+  readWakeflowMaintenanceJournalOrNull,
+  recoverWakeflowMaintenanceJournalStages,
+  retireTerminalWakeflowMaintenanceJournal,
+  type WakeflowMaintenanceJournalSource,
+  WakeflowMaintenanceJournalStoreError,
+} from "./wakeflow-maintenance-journal-store.js";
+import {
   createWakeflowMaintenanceOperationId,
   parseWakeflowMaintenanceOperationId,
+  type WakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceOperationUuid,
-  type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
-import {
-  executeWakeflowStaticMaterializationStep,
-  WakeflowStaticMaterializationStepExecutionError,
-} from "./wakeflow-static-materialization-step-executor.js";
 import {
   parseWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";
 import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../wakeflow-workspace-static-resource-matrix.js";
+  executeWakeflowStaticMaterializationStep,
+  WakeflowStaticMaterializationStepExecutionError,
+} from "./wakeflow-static-materialization-step-executor.js";
 
 /**
  * Wakeflow Workspace / Maintenance：唯一 maintenance execution transaction。
@@ -805,6 +805,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
         expectedCoreLayoutInspectionDigest:
           plan.sharedPreview.coreLayoutInspectionDigest,
         operationId,
+        bootstrap: request.action === "fresh-initialize" ? "fresh" : "repair",
         ...gateOptions(options, signal),
       },
       async (context) => {

@@ -17,7 +17,7 @@ import { runPublicationTransaction, } from "../../kernel/publication-transaction
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
-import { refreshWakeflowWindowRuntimeProjections } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import { refreshWakeflowWindowRuntimeProjections, retireWakeflowWindowRuntimeProjections, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { admitPodResult, parsePodRequest, WAKEFLOW_POD_PUBLIC_SCHEMA_VERSION, WAKEFLOW_POD_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveCloseCompleteBlockers, deriveCloseRequestBlockers, deriveCreateBlockers, derivePodId, derivePodState, derivePodWindows, derivePodWorktrees, podMutationNext, podPreviewNext, } from "./decide.js";
 function signalOptions(signal) {
@@ -261,6 +261,29 @@ async function replaceConfig(context, desired) {
     await refreshWindowProjectionsQuietly(context, model);
 }
 /**
+ * 窗口离开配置（pod 关闭完成）后退役本宿主的投影文件（§13.114 D3）：只按已知 windowId 精确
+ * 删除，不枚举投影目录；与刷新同一裁决——失败不让配置事务失败，中止仍上抛。
+ */
+async function retireProjectionsQuietly(context, windowIds) {
+    if (windowIds.length === 0)
+        return;
+    try {
+        await retireWakeflowWindowRuntimeProjections(context.root, {
+            resourceProfile: context.facade.resourceProfile,
+            windowIds,
+            ...signalOptions(context.options.signal),
+        });
+    }
+    catch (error) {
+        if (error instanceof WakeflowWindowRuntimeProjectionError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            return;
+        }
+        throw error;
+    }
+}
+/**
  * 窗口集或 pod 集变了：把本宿主的窗口运行投影收敛到新 Config（G6，§13.111 D5）。投影是派生物：
  * 收敛失败不让已经落盘的配置事务失败，留给 verify 的 window-runtime-projection 门报出；中止仍上抛。
  */
@@ -348,6 +371,9 @@ async function applyCloseRequest(context, plan) {
 async function applyCloseComplete(context, plan) {
     const document = documentOf(context.snapshot.model);
     const topology = document.topology;
+    const removedWindowIds = context.snapshot.model.topology.windows
+        .filter((window) => window.podId === plan.podId)
+        .map((window) => window.windowId);
     const desired = {
         ...document,
         topology: {
@@ -357,6 +383,7 @@ async function applyCloseComplete(context, plan) {
         pods: document.pods.filter((pod) => pod.podId !== plan.podId),
     };
     await replaceConfig(context, desired);
+    await retireProjectionsQuietly(context, removedWindowIds);
     const receiptCount = (await listPodWorktreeReceipts(context.root, context.facade.hostId, plan.podId)).length;
     await retirePodReceipts(context.root, context.facade.hostId, plan.podId);
     return Object.freeze({ disposition: "closed", podId: plan.podId, retiredReceipts: receiptCount });

@@ -1,42 +1,37 @@
 import { types } from "node:util";
 
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  createFileAtomically,
-  replaceFileAtomically,
-  DurableAtomicFileWriteError,
-  type DurableAtomicFileReplaceResult,
-  type DurableAtomicFileWriteResult,
-} from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
-import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "../../foundation/filesystem/rooted-directory.js";
-import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
-import {
-  inspectWakeflowExternalInstruction,
-  parseWakeflowExternalInstructionInspectionRequest,
-  WakeflowExternalInstructionInspectionError,
-  WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE,
+  deriveWakeflowExternalInstructionAuthorities,
   type ParsedWakeflowExternalInstructionInspectionRequest,
+  parseWakeflowExternalInstructionInspectionRequest,
+  WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE,
+  type WakeflowExternalInstructionAuthorities,
   type WakeflowExternalInstructionInspection,
+  WakeflowExternalInstructionInspectionError,
   type WakeflowExternalInstructionInspectionRequest,
+  wakeflowExternalInstructionInspectionOf,
+  wakeflowExternalInstructionManagedBlockFileRequest,
 } from "./wakeflow-external-instruction-inspection.js";
+import {
+  recomposeWakeflowManagedBlockFile,
+  type WakeflowManagedBlockFileEffect,
+  WakeflowManagedBlockFileError,
+  type WakeflowManagedBlockFileReceipt,
+} from "./wakeflow-managed-block-file.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：外部根托管块的 CAS owner。
  *
- * 本模块在调用方已经持有的维护事务内重新执行完整只读 inspection：目标不存在时以
- * 0644 原子创建，只含托管块；目标存在时以完整 StableFileSource 执行 CAS 替换并保留
- * 所有者原有的权限位。外部根不属于 Wakeflow 静态矩阵，所以这里没有宿主专属短锁与
- * 恢复 owner；并发写入由 CAS 拒绝（`conflict`），未知暂存残留按 `recovery-required` 报告。
- *
- * 提交后重新读取并重推导 desired authority。只有节点、摘要、权限、envelope 与 Config
- * 摘要全部闭合才返回成功。
+ * 本模块在调用方已经持有的维护事务内推导两份正文权威，然后把机械部分交给通用托管块
+ * 文件 owner（§13.114 D1）：目标不存在时以 0644 原子创建只含托管块的文件，存在时以完整
+ * StableFileSource 做 CAS 替换并保留所有者原有的权限位，提交后读回闭合。外部根不属于
+ * Wakeflow 静态矩阵，所以这里没有宿主专属短锁与恢复 owner；并发写入由 CAS 拒绝
+ * （`conflict`），未知暂存残留按 `recovery-required` 报告。
  */
 
 export type WakeflowExternalInstructionRecompositionRequest = Omit<
@@ -49,8 +44,7 @@ export interface WakeflowExternalInstructionRecompositionOptions {
 }
 
 export type WakeflowExternalInstructionRecompositionEffect =
-  | Readonly<DurableAtomicFileWriteResult<"created">>
-  | Readonly<DurableAtomicFileReplaceResult>;
+  WakeflowManagedBlockFileEffect;
 
 export interface WakeflowExternalInstructionRecompositionReceipt {
   readonly disposition: "current" | "created" | "replaced";
@@ -183,183 +177,39 @@ function parseRequest(
   }
 }
 
-function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("unsupported-platform", "$root");
-  }
-  return BigInt(process.geteuid());
-}
-
-async function assertCurrentUserRoot(
-  root: RootedDirectory,
-  expectedUserId: bigint,
-): Promise<void> {
-  let userId: bigint;
+function deriveAuthorities(
+  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
+): Readonly<WakeflowExternalInstructionAuthorities> {
   try {
-    userId = (await root.assertCurrent("$root")).userId;
+    return deriveWakeflowExternalInstructionAuthorities(request);
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof WakeflowExternalInstructionInspectionError) {
+      fail("input", error.path);
+    }
     throw error;
   }
-  if (userId !== expectedUserId) fail("root-policy", "$root");
 }
 
-function inspectionRequest(
-  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
-  signal: AbortSignal | undefined,
-): WakeflowExternalInstructionInspectionRequest {
-  return {
-    profile: request.profile,
-    target: request.target,
-    currentConfig: request.currentConfig,
-    expectedCurrentConfigDigest: request.currentConfigDigest,
-    desiredConfig: request.desiredConfig,
-    expectedDesiredConfigDigest: request.desiredConfigDigest,
-    ...(signal === undefined ? {} : { signal }),
-  };
-}
-
-async function inspectCurrent(
-  root: RootedDirectory,
-  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
-  signal: AbortSignal | undefined,
-  afterCommit: boolean,
-): Promise<Readonly<WakeflowExternalInstructionInspection>> {
-  try {
-    return await inspectWakeflowExternalInstruction(
-      root,
-      inspectionRequest(request, afterCommit ? undefined : signal),
-    );
-  } catch (error: unknown) {
-    if (afterCommit) fail("commit-uncertain", "$resourcePath");
-    if (error instanceof WakeflowExternalInstructionInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "unsupported-platform") {
-        fail("unsupported-platform", "$root");
-      }
-      if (error.reason === "target-capacity") fail("capacity", "$target");
-      if (error.reason === "source-capacity") fail("capacity", "$source");
-      if (error.reason === "input" || error.reason === "authority") {
-        fail("input", error.path);
-      }
-      fail("source-invalid", "$source");
-    }
-    fail("source-invalid", "$source");
-  }
-}
-
-function mapAtomicError(error: DurableAtomicFileWriteError): never {
-  if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
-  if (error.reason === "capacity") fail("capacity", "$target");
-  if (
-    error.reason === "target-exists"
-    || error.reason === "expectation-changed"
-    || error.reason === "expectation-read-failure"
-  ) {
-    fail("conflict", "$source");
-  }
-  if (error.reason === "root-scope" || error.reason === "parent-changed") {
-    fail("root-scope", "$root");
-  }
-  if (error.reason === "stage-recovery-required") {
-    fail("recovery-required", "$resourcePath");
-  }
-  if (
-    error.reason === "commit-uncertain"
-    || error.reason === "durability-failure"
-    || error.reason === "stage-cleanup-failure"
-    || error.reason === "close-failure"
-  ) {
-    fail("commit-uncertain", "$resourcePath");
-  }
-  fail("effect-failure", "$resourcePath");
-}
-
-async function publishTarget(
-  root: RootedDirectory,
-  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
-  inspection: Readonly<WakeflowExternalInstructionInspection>,
-  signal: AbortSignal | undefined,
-): Promise<Readonly<WakeflowExternalInstructionRecompositionEffect>> {
-  const target = inspection.transition.target;
-  if (inspection.status !== "recompose-required" || target === null) {
-    fail("source-invalid", "$target");
-  }
-  const resourcePath = request.profile.instructionFileName;
-  try {
-    if (inspection.source === null) {
-      return await createFileAtomically(root, resourcePath, target.bytes, {
-        mode: WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE,
-        ...(signal === undefined ? {} : { signal }),
-      });
-    }
-    return await replaceFileAtomically(root, resourcePath, target.bytes, {
-      mode: inspection.source.node.permissionBits,
-      expected: inspection.source,
-      ...(signal === undefined ? {} : { signal }),
-    });
-  } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
-    fail("effect-failure", "$resourcePath");
-  }
-}
-
-function sameSource(
-  left: Readonly<StableFileSource>,
-  right: Readonly<StableFileSource>,
-): boolean {
-  return left.resourcePath === right.resourcePath
-    && left.byteCount === right.byteCount
-    && left.digest === right.digest
-    && sameFileNodeSnapshot(left.node, right.node);
-}
-
-function assertReadback(
-  request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
-  before: Readonly<WakeflowExternalInstructionInspection>,
-  effect: Readonly<WakeflowExternalInstructionRecompositionEffect>,
-  after: Readonly<WakeflowExternalInstructionInspection>,
-  expectedUserId: bigint,
-): void {
-  const target = before.transition.target;
-  const source = after.source;
-  const expectedMode = before.source === null
-    ? WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE
-    : before.source.node.permissionBits;
-  if (
-    before.status !== "recompose-required"
-    || target === null
-    || source === null
-    || after.status !== "managed-current"
-    || after.transition.sourceAuthority !== "desired"
-    || after.transition.target !== null
-    || after.currentConfigDigest !== before.currentConfigDigest
-    || after.desiredConfigDigest !== before.desiredConfigDigest
-    || after.desiredAuthority.authorityDigest
-      !== before.desiredAuthority.authorityDigest
-    || after.desiredAuthority.bodyDigest !== before.desiredAuthority.bodyDigest
-    || effect.resourcePath !== request.profile.instructionFileName
-    || effect.digest !== target.digest
-    || effect.byteCount !== target.byteCount
-    || effect.node.kind !== "file"
-    || effect.node.permissionBits !== expectedMode
-    || effect.node.linkCount !== 1n
-    || effect.node.userId !== expectedUserId
-    || source.resourcePath !== effect.resourcePath
-    || source.digest !== effect.digest
-    || source.byteCount !== effect.byteCount
-    || !sameFileNodeSnapshot(source.node, effect.node)
-  ) {
-    fail("commit-uncertain", "$resourcePath");
-  }
-  if (effect.publication === "created") {
-    if (before.source !== null) fail("commit-uncertain", "$resourcePath");
-  } else if (
-    before.source === null
-    || !sameSource(effect.previous, before.source)
-  ) {
-    fail("commit-uncertain", "$resourcePath");
+/** 通用 owner 的失败映射回外部指令重组的词汇：读取类问题统一为 source-invalid，容量统一为 capacity。 */
+function mapManagedBlockFileError(error: WakeflowManagedBlockFileError): never {
+  switch (error.reason) {
+    case "input":
+      return fail("input", error.path);
+    case "unsupported-platform":
+    case "root-scope":
+    case "root-policy":
+    case "conflict":
+    case "recovery-required":
+    case "aborted":
+    case "effect-failure":
+    case "commit-uncertain":
+      return fail(error.reason, error.path);
+    case "source-capacity":
+      return fail("capacity", "$source");
+    case "target-capacity":
+      return fail("capacity", "$target");
+    default:
+      return fail("source-invalid", "$source");
   }
 }
 
@@ -375,24 +225,25 @@ export async function recomposeWakeflowExternalInstruction(
   const signal = parseOptions(optionsValue);
   assertNotAborted(signal);
   const request = parseRequest(requestValue, signal);
-  const expectedUserId = currentUserId();
-  await assertCurrentUserRoot(rootValue, expectedUserId);
-  const before = await inspectCurrent(rootValue, request, signal, false);
-  if (before.status !== "recompose-required") {
-    return Object.freeze({
-      disposition: "current",
-      effect: null,
-      inspection: before,
-    });
+  const authorities = deriveAuthorities(request);
+  let receipt: Readonly<WakeflowManagedBlockFileReceipt>;
+  try {
+    receipt = await recomposeWakeflowManagedBlockFile(
+      rootValue,
+      wakeflowExternalInstructionManagedBlockFileRequest(request, authorities, signal),
+      { createMode: WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE },
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowManagedBlockFileError) mapManagedBlockFileError(error);
+    throw error;
   }
-  await assertCurrentUserRoot(rootValue, expectedUserId);
-  assertNotAborted(signal);
-  const effect = await publishTarget(rootValue, request, before, signal);
-  const after = await inspectCurrent(rootValue, request, signal, true);
-  assertReadback(request, before, effect, after, expectedUserId);
   return Object.freeze({
-    disposition: effect.publication,
-    effect,
-    inspection: after,
+    disposition: receipt.disposition,
+    effect: receipt.effect,
+    inspection: wakeflowExternalInstructionInspectionOf(
+      request,
+      authorities,
+      receipt.inspection,
+    ),
   });
 }

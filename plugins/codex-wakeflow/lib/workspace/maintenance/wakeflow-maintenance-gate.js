@@ -1,10 +1,10 @@
 import { types } from "node:util";
 import { threadId } from "node:worker_threads";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, withRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, WAKEFLOW_RUNTIME_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
@@ -82,6 +82,7 @@ function parseOptions(value) {
     }
     const allowed = new Set([
         "acquireTimeoutMilliseconds",
+        "bootstrap",
         "expectedCoreLayoutInspectionDigest",
         "operationId",
         "retryDelayMilliseconds",
@@ -101,6 +102,11 @@ function parseOptions(value) {
         || (record.operationId !== undefined && record.uuidFactory !== undefined)) {
         fail("input", "$options");
     }
+    if (record.bootstrap !== undefined
+        && record.bootstrap !== "fresh"
+        && record.bootstrap !== "repair") {
+        fail("input", "$options.bootstrap");
+    }
     let expectedCoreLayoutInspectionDigest;
     try {
         expectedCoreLayoutInspectionDigest = parseSha256Digest(record.expectedCoreLayoutInspectionDigest, "$options.expectedCoreLayoutInspectionDigest");
@@ -113,6 +119,7 @@ function parseOptions(value) {
     }
     return Object.freeze({
         expectedCoreLayoutInspectionDigest,
+        bootstrap: record.bootstrap === "repair" ? "repair" : "fresh",
         acquireTimeoutMilliseconds: positiveMilliseconds(record.acquireTimeoutMilliseconds, "$options.acquireTimeoutMilliseconds"),
         retryDelayMilliseconds: positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
         signal: record.signal,
@@ -350,7 +357,8 @@ export async function withWakeflowMaintenanceGate(rootValue, optionsValue, opera
                 : "bootstrap-conflict", "$bootstrap");
     }
     if (inspection.local.status !== "idle"
-        && !inspection.local.freshCompatible) {
+        && !inspection.local.freshCompatible
+        && options.bootstrap !== "repair") {
         fail("bootstrap-conflict", "$bootstrap");
     }
     await materialize(rootValue, WAKEFLOW_RUNTIME_ROOT_REF, options.signal);

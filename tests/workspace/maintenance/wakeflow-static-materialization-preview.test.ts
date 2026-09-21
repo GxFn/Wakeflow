@@ -3,15 +3,15 @@ import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   realpathSync,
   rmSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   computeWakeflowConfigDigest,
@@ -20,32 +20,32 @@ import {
 import { publishWakeflowConfigAuthority } from "../../../src/configuration/wakeflow-config-authority-publication.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { publishActiveProjection } from "../../../src/kernel/active-projection.js";
 import {
   materializeRequirementBoardRoot,
   publishRequirementBoardIndex,
 } from "../../../src/kernel/requirement-board.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { recomposeWakeflowWorkspaceGitignore } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
-import { recomposeWakeflowManagedBlockFile } from "../../../src/workspace/managed-integration/wakeflow-managed-block-file.js";
-import {
-  createWakeflowSupportGitignoreBodyAuthority,
-  WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
-} from "../../../src/workspace/managed-integration/wakeflow-support-gitignore-body-authority.js";
-import { recomposeWakeflowProgramInstruction } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition.js";
-import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
-import { materializeWakeflowSharedCoordinationLayout } from "../../../src/workspace/wakeflow-shared-coordination-layout.js";
 import { materializeWakeflowHostCapabilityLayout } from "../../../src/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js";
-import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import {
   previewWakeflowStaticMaterialization,
   WakeflowStaticMaterializationPreviewError,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
-import { publishActiveProjection } from "../../../src/kernel/active-projection.js";
-import { renderWakeflowFreshActiveProjection } from "../../../src/workspace/wakeflow-active-fresh-projection.js";
+import { recomposeWakeflowWorkspaceGitignore } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
+import { recomposeWakeflowManagedBlockFile } from "../../../src/workspace/managed-integration/wakeflow-managed-block-file.js";
+import { recomposeWakeflowProgramInstruction } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition.js";
+import {
+  createWakeflowSupportGitignoreBodyAuthority,
+  WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
+} from "../../../src/workspace/managed-integration/wakeflow-support-gitignore-body-authority.js";
 import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import { materializeWakeflowManagedSupportRoot } from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
 import { publishWakeflowSupportMemory } from "../../../src/workspace/support/wakeflow-support-memory-publication.js";
+import { renderWakeflowFreshActiveProjection } from "../../../src/workspace/wakeflow-active-fresh-projection.js";
+import { materializeWakeflowSharedCoordinationLayout } from "../../../src/workspace/wakeflow-shared-coordination-layout.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const PROFILES = Object.freeze([
@@ -464,7 +464,7 @@ test("placement-stable reconfigure plans derived files before Config activation"
     ["core:active-layout"],
   );
 
-  // 宿主运行时根整个缺失只报告：投影不由对账重建（能力卡 1 §1.4 实现判断）。
+  // 宿主运行时根整个缺失由对账重建（§13.114 D2）：先补目录骨架与未登记投影，capability 目录依赖它。
   rmSync(path.join(workspace.absolutePath, ".wakeflow-local", "runtime", "hosts"), {
     recursive: true,
   });
@@ -472,6 +472,22 @@ test("placement-stable reconfigure plans derived files before Config activation"
     workspace.root,
     request("reconcile", null),
   );
-  equal(missingRuntime.status, "blocked");
-  equal(missingRuntime.blockerCodes.includes("window-runtime-missing"), true);
+  equal(missingRuntime.status, "ready", missingRuntime.blockerCodes.join(","));
+  // 前面删掉的静态目录仍未修复（预览零写），所以修复步骤集合只是多出运行时骨架一步，按 rank 排在 capability 目录之前。
+  deepEqual(
+    missingRuntime.steps.map((entry) => entry.kind),
+    [
+      "materialize-active-layout",
+      "initialize-requirement-board",
+      "materialize-ledger-layout",
+      "publish-unregistered-window-runtime",
+      "materialize-host-capability-layout",
+      "materialize-support-root",
+    ],
+  );
+  deepEqual(
+    missingRuntime.steps.find((entry) => entry.kind === "materialize-host-capability-layout")
+      ?.dependsOn,
+    ["host:window-runtime"],
+  );
 });

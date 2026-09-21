@@ -83,7 +83,7 @@ async function resourcePresent(root, resourceRef, path) {
     }
 }
 /** 每个配置窗口的期望文档：有 Binding 即 registered，否则 unregistered；尚无 Binding 目录的宿主只有未登记投影。 */
-export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(root, inputs, signal) {
+export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(root, inputs, signal, options = {}) {
     const { config, resourceProfile, identityProfile } = inputs;
     let unregistered;
     let authority;
@@ -98,7 +98,8 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(root
         }
         throw error;
     }
-    if (!(await resourcePresent(root, unregistered.projectionRootRef, "$projectionRoot"))) {
+    if (options.projectionRootRequired !== false
+        && !(await resourcePresent(root, unregistered.projectionRootRef, "$projectionRoot"))) {
         return Object.freeze({ kind: "runtime-missing" });
     }
     let inventory;

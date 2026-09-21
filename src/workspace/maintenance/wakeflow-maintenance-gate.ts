@@ -3,30 +3,30 @@ import { threadId } from "node:worker_threads";
 
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
 import {
-  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  withRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
+  withRootedExclusiveFileLock,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import {
   createWakeflowMaintenanceOperationId,
   parseWakeflowMaintenanceOperationId,
+  type WakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceOperationUuid,
-  type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
 import {
   WAKEFLOW_MAINTENANCE_GATE_REF,
@@ -35,8 +35,8 @@ import {
 } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
-  WakeflowWorkspaceCoreLayoutInspectionError,
   type WakeflowWorkspaceCoreLayoutInspection,
+  WakeflowWorkspaceCoreLayoutInspectionError,
 } from "./wakeflow-workspace-core-layout-inspection.js";
 
 /**
@@ -64,6 +64,11 @@ export interface WakeflowMaintenanceGateOptions {
   readonly uuidFactory?: UuidV4Factory;
   /** prepared transaction 的继续/取消路径必须重用原operation ID。 */
   readonly operationId?: WakeflowMaintenanceOperationId;
+  /**
+   * fresh 只接受空的或 fresh-compatible 的协议前缀；repair（reconcile / reconfigure）还接受协议根缺失
+   * 而其他 Wakeflow 目录仍在（§13.114 D2）。busy / recovery-required / conflict 两种模式都拒绝。
+   */
+  readonly bootstrap?: "fresh" | "repair";
 }
 
 export interface WakeflowExistingMaintenanceGateOptions {
@@ -115,6 +120,7 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
   readonly uuidFactory: UuidV4Factory | undefined;
   readonly operationId: WakeflowMaintenanceOperationId | undefined;
+  readonly bootstrap: "fresh" | "repair";
 }
 
 const ACTIVE_CONTEXTS = new WeakSet<object>();
@@ -180,6 +186,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   const allowed = new Set([
     "acquireTimeoutMilliseconds",
+    "bootstrap",
     "expectedCoreLayoutInspectionDigest",
     "operationId",
     "retryDelayMilliseconds",
@@ -209,6 +216,13 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   ) {
     fail("input", "$options");
   }
+  if (
+    record.bootstrap !== undefined
+    && record.bootstrap !== "fresh"
+    && record.bootstrap !== "repair"
+  ) {
+    fail("input", "$options.bootstrap");
+  }
   let expectedCoreLayoutInspectionDigest: Sha256Digest;
   try {
     expectedCoreLayoutInspectionDigest = parseSha256Digest(
@@ -223,6 +237,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   return Object.freeze({
     expectedCoreLayoutInspectionDigest,
+    bootstrap: record.bootstrap === "repair" ? ("repair" as const) : ("fresh" as const),
     acquireTimeoutMilliseconds: positiveMilliseconds(
       record.acquireTimeoutMilliseconds,
       "$options.acquireTimeoutMilliseconds",
@@ -561,6 +576,7 @@ export async function withWakeflowMaintenanceGate<Result>(
   if (
     inspection.local.status !== "idle"
     && !inspection.local.freshCompatible
+    && options.bootstrap !== "repair"
   ) {
     fail("bootstrap-conflict", "$bootstrap");
   }

@@ -495,6 +495,21 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
   equal(finalConfig.pods.length, 1);
   equal(finalConfig.topology.windows.length, 4);
   equal(existsSync(path.dirname(path.dirname(receiptFile))), false, "receipt directory survived");
+  // 被关闭 pod 的四个窗口投影文件随配置事务退役（§13.114 D3）；primary pod 的四个仍在。
+  const projectionsRoot = path.join(
+    fx.root,
+    ".wakeflow-local/runtime/hosts/codex/projections/window-runtime",
+  );
+  for (const window of [product, controller, design, testWindow]) {
+    equal(
+      existsSync(path.join(projectionsRoot, `${window.windowId}.json`)),
+      false,
+      `projection of ${window.windowId} survived the pod close`,
+    );
+  }
+  for (const window of finalConfig.topology.windows) {
+    equal(existsSync(path.join(projectionsRoot, `${window.windowId}.json`)), true);
+  }
   const unknown = await pod(fx, {
     mode: "preview",
     intent: { kind: "close", podId, branches: [] },

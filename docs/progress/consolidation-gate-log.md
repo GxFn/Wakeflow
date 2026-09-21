@@ -3205,3 +3205,23 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **文档写回。** 对齐台账 §1 第二轮小结、§2 三行 owner 改正与 C 组两行备注、§3 C 组函数级表；能力卡 1 §1.4 窗口投影修复/报告集；场景清单 `card-01/reconcile-repair` 行；Controller 技能工作区参考的 reconcile 条目；制品重建。
 
 **残余。** G6（观察侧窗口投影新鲜度）待 F 组；三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞。
+
+## 13.109 第二轮对齐 D 组：Demand、结果、评审与证据的函数级核对（2026-09-21）
+
+**核对结论（D 组 13 个模块、约 90 个导出函数，逐函数表在对齐台账 §3）。** 没有新的 gap。分域小结：
+
+- 制品 codec 与服务：六类旧制品里任务包、结果、测试合同各有 owner（`governance/tasking`、`governance/result`、测试合同并入 test 任务包与后验收路线的测试环境 authority）；Pod Design 请求 / 交付按 ADR-0010 放弃；ReviewCandidate 不再是制品，决定针对从历史重建的评审快照。写入意图、按 ref 读取、六类库存分别落在发布 / 证据事务、任务包投影 store 与证据记录 reader、根库存与 verify 门 `demand-root-audit`。
+- 核心记录与单根事务：五类核心记录对应身份、authority、聚合状态、事件（含版本 codec 与 upcaster）与 append candidate；`validateDemandCoreStack` 的跨记录闭合由仓库加载（快照还原加事件重放加 `stateDigest`）承担；旧 journal → 制品 → 事件 → 快照 → 闭包检查的固定次序压成 `kernel/append-command.ts` 加事件流 commit，闭包检查改到 verify 门；owner 专用的提交 / 恢复缝对应聚合状态的各转换函数；Pod 转换放弃；`freezeDemandAuthority` 随发布 stage 一起写（认领即创建）。
+- 生命周期与发布：complete / cancel 的准入、原子提交、恢复在 C 组已核；本组补核旧"终态提交后删除 exact lease"分支——新实现取消时释放本 Demand 的窗口工作声明，完成时要求 verify 门 `work-claims-released` 先过（结果导入提交后即 `releaseWorkClaimIfHeld`，残留由 endpoint `release-claim` 处理），判 recut。初次发布的固定锁序、幂等确认与无 journal 零写入恢复对应 `publishDemandFromPackage` 与 `recoverDemandPublication`。
+- 结果评审：导入后释放投递声明保留；dispatch group、候选制品与 Controller-return transport 按 ADR-0012 重切为按目标评审与随导入签发的回调（回调记录、代际上限、静默窗、落地证据、重发），投递侧分支留 E 组核。
+- 证据：三个旧模块的来源捕获、隐私拒绝、stage / final 树、残留拒绝、exact replay、恢复 authority、成员严格读取与库存分类在 `governance/evidence/*` 十九个模块里逐项对应，来源种类是超集（managed-path、observation、link、commit）。
+
+**决定。**
+
+- D1 完成不再自动删 lease：门加显式释放比旧的隐式删除更保守（一个仍被持有的工作声明说明有投递尚未收口），不算缺失分支。
+- D2 dispatch group、ReviewCandidate 制品、Controller-return transport 三者是同一条旧链路的三个形状，新实现的按目标回调覆盖同一业务分支（导入 → 通知 Controller → 决定），不单列 gap。
+- D3 本批只有文档：台账 §1 小结、§2 生命周期行 owner 改正（仓库里没有 `governance/demand/lifecycle/*`）、§3 D 组表。没有代码或制品改动，不重跑 `npm test` 与 smoke，只跑 `git diff --check`。
+
+**门。** `git diff --check` 干净；`npm test` 与 smoke 沿用 §13.108（996/996，两宿主七幕全过），本批无代码改动。
+
+**残余。** 同 §13.108：G6（观察侧窗口投影新鲜度，F 组）；三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞。下一组 E（投递、窗口、租约与宿主激活）。

@@ -1,23 +1,26 @@
-import { deepEqual, equal, ok, rejects } from "node:assert/strict";
+import { deepEqual, equal, ok, throws } from "node:assert/strict";
 import {
   appendFileSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { after, test, type TestContext } from "node:test";
 
 import { buildWakeflowPluginArtifacts } from "../../tooling/artifacts/build-plugin-artifacts.js";
 import {
+  checkMarketplaces,
   checkWakeflowPluginArtifacts,
   CLAUDE_MARKETPLACE_PATH,
   CODEX_MARKETPLACE_PATH,
   jsonStructurallyEqual,
+  verifyArtifactAgainstManifest,
 } from "../../tooling/artifacts/check-plugin-artifacts.js";
 import {
   expectedClaudeMarketplaceEntry,
@@ -36,15 +39,19 @@ function removeBuildDirectory(relative: string): void {
   }
 }
 
-/** 一份"已提交"的制品：用构建器写到 `.build/` 下的一个根，模拟 `plugins/`。 */
-async function committedFixture(t: TestContext): Promise<string> {
-  t.after(() => {
-    removeBuildDirectory(COMMITTED_RELATIVE);
-    removeBuildDirectory(CANDIDATE_RELATIVE);
-  });
-  await buildWakeflowPluginArtifacts(process.cwd(), { outputRoot: COMMITTED_RELATIVE });
-  return path.join(process.cwd(), COMMITTED_RELATIVE);
+/** 一份"已提交"的制品：用构建器写到 `.build/` 下的一个根，模拟 `plugins/`；本文件只构建一次。 */
+let committedBuild: Promise<string> | undefined;
+function committedFixture(): Promise<string> {
+  committedBuild ??= buildWakeflowPluginArtifacts(process.cwd(), {
+    outputRoot: COMMITTED_RELATIVE,
+  }).then(() => path.join(process.cwd(), COMMITTED_RELATIVE));
+  return committedBuild;
 }
+
+after(() => {
+  removeBuildDirectory(COMMITTED_RELATIVE);
+  removeBuildDirectory(CANDIDATE_RELATIVE);
+});
 
 /** 两份 marketplace 文件的手写外壳：目录元数据加恰好一个 `wakeflow` 条目，键序故意与元数据不同。 */
 function marketplaceFixture(t: TestContext, claudeVersion: string): string {
@@ -91,18 +98,14 @@ function expectCheckErrorCode(code: string): (error: unknown) => true {
   };
 }
 
-async function check(marketplaceRoot: string) {
-  return checkWakeflowPluginArtifacts(process.cwd(), {
+test("committed 制品与源码重建逐字节一致、marketplace 条目与元数据结构相等时校验通过（D2、D6）", async (t) => {
+  await committedFixture();
+  const release = readReleaseVersion(process.cwd());
+  const result = await checkWakeflowPluginArtifacts(process.cwd(), {
     committedRoot: COMMITTED_RELATIVE,
     candidateRoot: CANDIDATE_RELATIVE,
-    marketplaceRoot,
+    marketplaceRoot: marketplaceFixture(t, release.version),
   });
-}
-
-test("committed 制品与源码重建逐字节一致、marketplace 条目与元数据结构相等时校验通过（D2、D6）", async (t) => {
-  await committedFixture(t);
-  const release = readReleaseVersion(process.cwd());
-  const result = await check(marketplaceFixture(t, release.version));
   equal(result.kind, "WakeflowPluginArtifactsCheckResult");
   equal(result.version, release.version);
   equal(result.releaseEligible, true);
@@ -114,25 +117,46 @@ test("committed 制品与源码重建逐字节一致、marketplace 条目与元�
   deepEqual(result.marketplaces, { claude: "ok", codex: "ok" });
 });
 
-test("committed 制品的任何手工改动都被拒绝：改字节是 drift，清单外文件是 extra，缺文件是 missing；marketplace 版本落后是 marketplace", async (t) => {
+test("committed 制品的任何手工改动都被清单核对拒绝：改字节是 drift，清单外文件是 extra，缺文件是 missing；每种改动复原后再次通过", async () => {
+  const committed = await committedFixture();
+  const codex = path.join(committed, "codex-wakeflow");
+  const claude = path.join(committed, "claude-code-wakeflow");
+  const readme = path.join(codex, "README.md");
+  const license = path.join(codex, "LICENSE");
+  const originalReadme = readFileSync(readme);
+  const originalLicense = readFileSync(license);
+
+  appendFileSync(readme, "\n<!-- edited -->\n");
+  throws(
+    () => verifyArtifactAgainstManifest(codex),
+    expectCheckErrorCode("wakeflow-artifact-check-drift"),
+  );
+  writeFileSync(readme, originalReadme);
+  verifyArtifactAgainstManifest(codex);
+
+  const stray = path.join(claude, "extra.txt");
+  writeFileSync(stray, "stray\n");
+  throws(
+    () => verifyArtifactAgainstManifest(claude),
+    expectCheckErrorCode("wakeflow-artifact-check-extra"),
+  );
+  unlinkSync(stray);
+  verifyArtifactAgainstManifest(claude);
+
+  unlinkSync(license);
+  throws(
+    () => verifyArtifactAgainstManifest(codex),
+    expectCheckErrorCode("wakeflow-artifact-check-missing"),
+  );
+  writeFileSync(license, originalLicense, { mode: 0o644 });
+  verifyArtifactAgainstManifest(codex);
+});
+
+test("marketplace 条目落后于版本输入、缺席或不止一条时以 marketplace 错误码拒绝", (t) => {
   const release = readReleaseVersion(process.cwd());
-  const marketplaceRoot = marketplaceFixture(t, release.version);
-
-  const committed = await committedFixture(t);
-  appendFileSync(path.join(committed, "codex-wakeflow", "README.md"), "\n<!-- edited -->\n");
-  await rejects(check(marketplaceRoot), expectCheckErrorCode("wakeflow-artifact-check-drift"));
-
-  await buildWakeflowPluginArtifacts(process.cwd(), { outputRoot: COMMITTED_RELATIVE });
-  writeFileSync(path.join(committed, "claude-code-wakeflow", "extra.txt"), "stray\n");
-  await rejects(check(marketplaceRoot), expectCheckErrorCode("wakeflow-artifact-check-extra"));
-
-  await buildWakeflowPluginArtifacts(process.cwd(), { outputRoot: COMMITTED_RELATIVE });
-  unlinkSync(path.join(committed, "codex-wakeflow", "LICENSE"));
-  await rejects(check(marketplaceRoot), expectCheckErrorCode("wakeflow-artifact-check-missing"));
-
-  await buildWakeflowPluginArtifacts(process.cwd(), { outputRoot: COMMITTED_RELATIVE });
-  await rejects(
-    check(marketplaceFixture(t, "0.9.6")),
+  checkMarketplaces(marketplaceFixture(t, release.version), release.version);
+  throws(
+    () => checkMarketplaces(marketplaceFixture(t, "0.9.6"), release.version),
     expectCheckErrorCode("wakeflow-artifact-check-marketplace"),
   );
 });

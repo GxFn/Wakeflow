@@ -1,184 +1,84 @@
 ---
 name: wakeflow-target
-description: Use when a target Codex window receives an exact Wakeflow v3 delivery, executes only its assigned TaskPackage, records a transport-bound TargetResult, or performs an authorized Controller return without taking controller authority.
+description: Use in a product window that has just received a Wakeflow delivery prompt for an implementation target - read the immutable task package, do the work inside the assigned repository checkout only, then import the report and send the returned wake-controller callback back to the Controller window. Use it together with the test skill when the delivery is a test target. Also use when a delivery prompt arrives but the assigned work is unclear, over-broad, or blocked, so the blocker is reported instead of guessed at.
 ---
 
 # Wakeflow Target
 
-Use this skill only inside the target window named by the current delivery.
-Workspace and repository `AGENTS.md` files remain hard boundaries. The prompt
-orients; the immutable TaskPackage owns complete task context; anchored
-requirement documents own background; listed Skills own execution procedure.
+## Identity
 
-## Prompt Shape
+You are the product window named by the delivery you just received. A product
+window executes target tasks - the object word throughout the tool surface is
+"target", and this skill covers both implementation targets and, together with
+the test skill, test targets.
 
-Target wakeups stay task-first and compact:
+You own main-flow step 9 for implementation targets: execute, import the
+report, return the callback. You own no other step and no Controller authority.
 
-```text
-Continue current window task: <currentWindow> / <taskId>.
+## Reading order
 
-Current objective (the task package is authoritative):
-- <one-line objective>
+1. This file, top to bottom.
+2. The task package the delivery names. It is the immutable contract and it
+   wins over the prompt, over this file, and over your memory of a similar
+   task. The prompt only orients; the package holds the complete task context.
+3. The requirement anchors the package points at, for background.
+4. `references/craft.md` before you change code. It holds the working method:
+   how to diagnose before changing, how far a fix may reach, and what makes a
+   change reviewable.
+5. `wakeflow_status` if you are unsure which Demand and window you are in.
 
-Completion focus (up to two; full criteria are in the task package):
-- <bounded observable result>
-- <optional second bounded observable result>
+## Bounded expectations
 
-- Priority context: <highest-priority confirmed fact>
-- Critical boundary [forbidden|outOfScope|inScope]: <highest-priority boundary>
+- Work only inside the repository checkout the package assigns you. If the
+  delivery came with a worktree, that checkout is your only working tree; the
+  main checkout and every other repository are off limits.
+- Do the assigned task and nothing adjacent. A needed change outside the
+  package's boundary is reported in the result, not made.
+- Never take Controller actions: do not plan a task, prepare a delivery, record
+  an evidence record, decide a review, or complete a Demand. You produce a
+  report; the Controller accepts or rejects it.
+- Never invent a result. If you could not run something, say so; "unverified"
+  is an acceptable report and a false pass is not.
+- Every acceptance anchor in the package must be answered in your report -
+  satisfied, not satisfied, or blocked, each with what you actually observed.
+- Evidence you cite must already be a managed evidence record of this Demand,
+  referenced by the locator and digest you were given. Do not paste absolute
+  local paths, private handles, tokens or credentials into the report; the
+  import scan refuses them.
+- Workspace and repository `AGENTS.md` files bind you, and a
+  repository's own rules outrank both this skill and the prompt's phrasing.
 
-Key acceptance anchors (full probes and expectations are in the task package):
-- <anchor id>: <claim>
+## Step 9 - Execute and import
 
-Read before execution, in order:
-- Task package (complete task context): <absolute package path>
-- Requirement background entry: <document#section>
-- Workspace instructions (only when distinct from repository instructions): <workspace>/AGENTS.md
-- Repository instructions: <repository>/AGENTS.md
-- Current state root: <absolute state-root path>
+1. Read the package, then the anchors. Restate the goal to yourself in one
+   sentence. If that sentence does not match the prompt, trust the package.
+2. Diagnose against the current code before changing it
+   (`references/craft.md`). Prefer the smallest coherent change.
+3. Run the checks the package expects and keep what they printed.
+4. Write the report: outcome, what you changed and why, branch and commit, the
+   per-anchor answers, the evidence locators, and everything you could not
+   verify.
+5. Call `wakeflow_import_target_result` with the delivery identity and fence
+   from the prompt. Wakeflow resolves each evidence locator and checks its
+   digest, scans the report for privacy problems, appends the result, and
+   releases your work claim. A refusal means the report is not yet importable -
+   fix what it named and import again; it is not a reason to stop working.
+6. The import returns a wake-controller callback permit. Send its prompt to the
+   Controller window as the permit directs. That send is the last thing you do
+   for this target.
 
-Required execution Skills (execution-process authority):
-- skills/wakeflow-target/SKILL.md
-- <other package-selected Skill>
+Then end your turn. Do not start the next task, do not poll for a reply, and
+do not re-send a callback that has already landed.
 
-Identity (full boundaries are in the task package):
-- Current responsibility window: <window>
-- Only working repository: <absolute repository path>
+## What you must return
 
-Before coding: map every `acceptanceAnchors` entry to a RED test or probe; return
-needs-review instead of inventing a requirement when an anchor cannot be tested.
+The report is the deliverable, so write it for a reviewer who did not watch you
+work: the outcome, the evidence, the per-anchor answers, the boundary you did
+not cross, and the residual risk in one honest paragraph.
 
-Return requirement:
-- Execute only this TaskPackage and record a TargetResult with reproducible,
-  target-authored review inputs. It is never controller acceptance.
-- Test execution contract: <dispatch packet path>#testContract.executionContract
+## Stop conditions
 
-Dispatch record (routing and trace only):
-- taskId: <taskId>
-- taskPackageId: <package>
-- stateRoot: <path>
-- stateRevision: <revision>
-- dispatchGroup: <group>
-```
-
-The prompt may omit conditional lines. It does not repeat the complete
-requirement, boundary lists, probes, Test policy, commit policy, or result
-contract. Read the TaskPackage first and treat prompt routing fields only as
-freshness/navigation anchors.
-
-## Target Flow
-
-1. Confirm identity and authority.
-   - Arrival proves only transport, not authorization beyond the exact
-     envelope/TaskPackage.
-   - Confirm the typed target window, task, demand, dispatch group, packet, and
-     current delivery lineage. A title, cwd, or prompt assertion is not identity.
-   - Read the listed workspace/repository `AGENTS.md` files and declare the one
-     repository responsibility before changing anything.
-2. Read the complete task.
-   - Read the exact TaskPackage, ordered requirement refs, and every listed
-     execution Skill.
-   - Follow the packet's ordered `taskBriefing.requiredSkills`. Non-Test packets
-     load `skills/wakeflow-target-craft/SKILL.md` and map each package anchor to
-     a RED probe; Test packets load `skills/wakeflow-test/SKILL.md`.
-   - If the packet carries `testContract`, pass the Test Alignment Gate below first.
-3. Execute within the one assigned repository.
-   - Do not claim another target, Test role, controller role, or repository.
-   - If another repository or a product decision is required, stop and return a
-     concrete blocker instead of widening scope.
-4. Produce reviewable inputs.
-   - Name changed files, diffs/commits, commands and outcomes, logs, reports,
-     runtime observations, screenshots, and residual risks as applicable.
-   - Prose alone is not completion evidence.
-5. Import the TargetResult.
-   - Call `wakeflow_record_target_result` with `operation: "import"`, the typed
-     `demandId`, and `request:{artifact,transition}`. The transition is exactly
-     `{eventId,createdAt,reason,decisionSummary}`. Do not write a local result
-     file, inject an expected state selector, or choose an envelope by mtime.
-   - The owner accepts only the strict current group → packet → target envelope
-     → accepted/ambiguous run → settlement lineage. A first result for a new
-     envelope is a new round, not a correction. Same-envelope correction must
-     use the exact supersedes tuple selected by the owner.
-   - Report `outcome` as `completed`, `blocked`, or `needs-review` honestly,
-     with a non-empty summary, exact `repositoryChanges`, `evidenceLocators`,
-     verification outcomes, risks, and `craftMapping`.
-6. Perform a Controller return only when the strict current snapshot allows it.
-   - Call `wakeflow_review_pack operation=group` for this demand/group. It is a
-     read-only snapshot, not permission to inspect another group or decide
-     acceptance.
-   - When the current return unit is eligible, call
-     `wakeflow_prepare_delivery operation=controller-preview`, inspect the exact
-     result-set/review/binding digests, then call `controller-apply` with the
-     confirmed plan. Immediately before the host effect call
-     `controller-pre-send` and require its current redacted read model.
-   - Send the stored prompt through the Codex host tool under its operation
-     fence and make at most one bounded readback. Do not read a raw handle from
-     `.wakeflow-local`; the host seam resolves it from the typed binding.
-   - Record the observed fact with `wakeflow_record_delivery
-     operation=controller-outcome`. This call is not the effect fence and a
-     Controller return never acquires the target work lease.
-   - An accepted, ambiguous, or sent-unconfirmed current result set is
-     deduplicated and must not be resent. Rejected-before-send requires an
-     explicit later rearm authority; do not invent retry state.
-
-Target-to-target next-hop delivery is forbidden. Result import, review
-inspection, Controller-return preparation, host effect, and outcome recording
-remain separate operations.
-
-## Test Alignment Gate
-
-**TEST MUST NOT INVENT A TEST GOAL, GATE, OR METHOD OUTSIDE THE CONFIRMED
-REQUIREMENT GOAL AND APPROVED TEST PLAN.**
-
-For a dispatch packet with `testContract.executionContract`:
-
-1. Explore only the assigned real-environment/diagnostic boundary; do not
-   assume ownership of the controller's earlier validation.
-2. Treat `requirementGoal` and `approvedPlan` as authority.
-3. Map every operational step to one approved-plan item before execution.
-4. Use only `allowedSkills`; unlisted methods, including PCV, are forbidden.
-5. Follow the exact mode/setup policy. Restart/rebuild only when explicitly
-   authorized with its reason.
-6. Return an unmapped or unavailable step as blocked/needs-review before
-   executing it.
-
-A completed Test result maps each approved item exactly once with
-`{kind:"test-step", planIndex, step, ref}`. The controller alone decides
-whether evidence changes the verdict or Test plan.
-
-## Stop Conditions
-
-Stop and return a blocker when identity/lineage is missing or inconsistent,
-required inputs are unavailable, the task crosses repository/role scope, an
-acceptance anchor cannot be tested, a Test method is unapproved, or the next
-repair would change a product decision. Never treat a bare prompt, stale
-envelope, old result, or legacy local runtime as current authority.
-
-## Result Contract
-
-Every result is a strict `artifactKind:"wakeflow-target-result"` record. It
-binds the immutable demand, `targetTaskId`, exact
-`taskPackage:{taskPackageId,ref,digest}`, `assignment`,
-`observedState:{revision,eventId,eventDigest}`, and exact
-`transport:{group:{id,ref,digest},envelope:{id,ref,digest}}`. It also includes:
-
-- `outcome` and a non-empty `summary`;
-- for a product target, `repositoryChanges` containing exactly one
-  `{repositoryId,disposition,commits}` entry matching the
-  assigned repository; for Test, an empty `repositoryChanges` array;
-- typed `evidenceLocators` entries `{kind,ref,digest}`, reproducible `verification`, and
-  honest `risks`;
-- for completed non-Test work, exactly one
-  `{kind:"acceptance-anchor",anchorId,evidenceRefs:[{ref,digest}]}` mapping per
-  package anchor, using only declared locator tuples;
-- for completed Test work, exactly one
-  `{kind:"test-step",planIndex,step,ref}` mapping per approved plan item, in
-  plan order and pointing to one declared locator.
-
-A same-envelope correction adds the exact `supersedes` result tuple selected by
-the owner. A first result or new delivery-envelope round must not invent one.
-
-Structural completeness makes a result eligible for controller review. It
-does not verify claims and is never automatic acceptance. Do not place raw
-thread handles, private absolute paths, or machine-specific cache paths in the
-result.
+Stop and report a blocker, without changing code, when the package's goal
+contradicts the repository's rules, when the assigned checkout is missing or
+not the one described, when the work would require leaving the boundary, or
+when a required piece of evidence cannot be produced.

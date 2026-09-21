@@ -5,10 +5,10 @@ Code plugin artifacts. Work here maintains Wakeflow itself; it is not an
 installed controller workspace and it does not own the product repositories
 used to test Wakeflow.
 
-Nested `AGENTS.md` files inside plugin artifacts describe the behavior shipped
-to installed controller workspaces. They remain product inputs and test
-surfaces. Do not mistake their controller-role restrictions for a prohibition
-on authorized Wakeflow source maintenance in this repository.
+The generated plugin artifacts under `plugins/` carry the skills, commands and
+READMEs shipped to installed controller workspaces. They describe an installed
+workspace's rules, not this repository's. Do not mistake their controller-role
+restrictions for a prohibition on authorized Wakeflow source maintenance here.
 
 ## Scope And Safety
 
@@ -29,19 +29,29 @@ on authorized Wakeflow source maintenance in this repository.
 
 ## Source Ownership
 
-- `core/` is the canonical source for host-neutral runtime files shared by both
-  plugin artifacts.
-- Make shared changes in `core/`, then run `node tools/sync-core.mjs`. Do not
-  directly maintain the generated copies under `plugins/codex-wakeflow/` or
-  `plugins/claude-code-wakeflow/`.
-- After synchronization, run `node tools/sync-core.mjs --check` and inspect the
-  resulting diff in both artifacts.
-- Host-specific files stay in their artifact. This includes host profiles,
-  host artifact checks, host send adapters, manifests, host memory files,
-  READMEs, skills, and template bundles. Do not add a host branch to `core/`
-  when the difference belongs at a host seam.
-- Shared code may consume values supplied by a host profile; it must not infer
-  Codex-versus-Claude behavior through ad hoc host checks.
+- `src/`, `tooling/` and `tests/` are the only hand-written code. `src/` is
+  the runtime in six layers — `foundation` → `contracts` → `kernel` →
+  `capabilities` / `governance` / `configuration` / `workspace` → `hosts` →
+  `entrypoints` — and `npm run check:architecture` enforces the direction.
+- `plugins/codex-wakeflow/` and `plugins/claude-code-wakeflow/` are generated
+  by `tooling/artifacts/build-plugin-artifacts.ts`. Never edit them by hand:
+  change the source, run `npm run build:artifacts:committed`, and let
+  `npm run build:check` prove the committed bytes match a fresh build.
+- `assets/agent-text/` is the single source of the skills, commands and READMEs
+  in both artifacts. Host differences are the six placeholders filled by
+  `src/hosts/<host>/<host>-agent-text-profile.ts`; the build fails on an
+  unregistered placeholder or an unused value.
+- Host-specific behavior lives only in `src/hosts/<host>/`: profiles, the hook
+  fragment, the agent-text value table, maintenance execution, Claude's
+  settings and status-line assets. Shared code consumes values a host profile
+  supplies; it must not infer Codex-versus-Claude behavior through ad hoc host
+  checks.
+- `src/contracts/schemas/` holds the portable JSON Schemas;
+  `src/contracts/generated/` is derived by `npm run schema:build` and checked
+  for drift by `npm run schema:check`. Do not hand-edit generated files.
+- `assets/release/version.json` is the only version input. The two plugin
+  `package.json` files, the two plugin manifests and the Claude marketplace
+  entry must agree with it.
 - Treat plugin cache directories as installed outputs, never as source. Modify
   this checkout first and refresh a cache only from a validated plugin artifact
   when the user asks for it.
@@ -55,15 +65,14 @@ on authorized Wakeflow source maintenance in this repository.
   express the requirement.
 - Preserve agent flexibility while keeping identity, state transitions,
   evidence, isolation, and append-only history deterministic.
-- Runtime behavior belongs in code, schemas, tests, and the installed plugin
-  instructions or skills that own it. Repository-maintenance rules belong in
-  this file. The documentation system and its authority order are defined in
-  `docs/README.md`; `docs/archive/` holds historical evidence, not current
-  command authority.
-- When changing a public MCP tool, state shape, task package, prompt, template,
-  or installed rule, update every real producer and consumer plus focused
-  regression coverage. Do not make documentation claim an unimplemented
-  capability.
+- Runtime behavior belongs in code, schemas, tests, and the shipped skills that
+  own it. Repository-maintenance rules belong in this file. The documentation
+  system and its authority order are defined in `docs/README.md`;
+  `docs/archive/` holds historical evidence, not current command authority.
+- When changing a public MCP tool, state shape, task package, prompt, skill
+  text, or installed rule, update every real producer and consumer plus focused
+  regression coverage, then rebuild the artifacts. Do not make documentation
+  claim an unimplemented capability.
 - Keep prompts prioritized and lightweight: prompts state the immediate goal,
   bounded expectations, reading order, required skills, identity, and return
   pointer; task packages hold complete task context; requirement anchors hold
@@ -71,41 +80,50 @@ on authorized Wakeflow source maintenance in this repository.
 
 ## Verification
 
-- Run focused tests for the changed behavior while iterating.
-- For any shared-core change, run `npm run sync:core` followed by
-  `npm run check:core`.
-- Run the affected host validators and smoke tests for host-specific changes:
-  `npm run validate` / `npm run smoke` for Codex and
-  `npm run validate:claude` / `npm run smoke:claude` for Claude Code.
-- Run `npm test` before declaring a change complete. Since 2026-09-03 it is
-  the TypeScript gate only: typecheck, architecture rules, lint and format
-  checks (Biome), unused-code check (knip), TypeScript tests, and the Schema
-  drift check (ADR-0008). The retired JavaScript gate, that is
-  shared-core parity, both artifact validators, both smoke suites, and the old
-  regression tests, stays runnable as `npm run test:legacy` until E4 deletes
-  the old tree; run it only when a change touches `core/` or `plugins/`.
+- Run focused tests for the changed behavior while iterating:
+  `npm run test:typescript:focused -- <test files>`.
+- `npm test` is the gate: typecheck, architecture rules, lint and format
+  checks (Biome), unused-code check (knip), the TypeScript tests including the
+  twenty end-to-end scenarios, the Schema drift check, and `build:check`
+  against the committed artifacts. Run it before declaring a change complete.
+- After a change that reaches the artifacts (runtime, skills, commands,
+  READMEs, hooks, metadata), run `npm run build:artifacts:committed` before
+  `npm test`, and `npm run smoke:artifacts` before handoff.
 - Run `git diff --check` before handoff and report any test that could not be
   run. Do not present an unavailable real-host session as a passing test.
-- Claude Code account or login availability may limit a real session test, but
-  it does not justify skipping static validation, unit tests, artifact checks,
-  or the Claude Code smoke surface.
+- Host account or login availability may limit a real session test, but it
+  does not justify skipping static validation, unit tests, artifact checks, or
+  the smoke.
 
 ## Version And Release Integrity
 
 - The repository root package remains private at version `0.0.0`; it is not a
   release-version source.
-- A release version must agree in exactly the five current release sources:
-  both plugin `package.json` files, both plugin manifests, and the Claude
-  marketplace plugin entry.
-- A version bump, commit, push to `main`, tag, publication, and local cache
-  refresh are separate operations. Perform only the operations the user asked
-  for and preserve their order explicitly.
+- A release version must agree in `assets/release/version.json` and the five
+  release sources: both plugin `package.json` files, both plugin manifests, and
+  the Claude marketplace plugin entry. The Codex marketplace entry carries no
+  version.
+- A version bump, artifact rebuild, commit, push to `main`, tag, publication,
+  and local cache refresh are separate operations. Perform only the operations
+  the user asked for and preserve their order explicitly.
 - `npm run release:check` is a strict post-commit release consistency gate. It
-  expects `main`, a clean tree, the matching tag at `HEAD`, and local
-  `origin/main` at the same commit; do not weaken it to make an incomplete
-  release appear valid.
+  expects `main`, a clean tree, the matching tag at `HEAD`, local
+  `origin/main` at the same commit, release-eligible artifact manifests and a
+  Node 24 runtime; do not weaken it to make an incomplete release appear valid.
 - Never claim a release or cache refresh succeeded without verifying the exact
   artifact version and commit that the host will load.
+
+## Host Boundary
+
+- A host's thread or session transport is a host adapter, not a second
+  Wakeflow state authority. Keep session creation, delivery, readback, and
+  activity observations separate from controller acceptance.
+- Do not infer that a delivery landed merely because a send call returned or
+  text was pasted. Landing is proven by the target session's hook observation
+  record, or for Codex by the thread send's own successful return.
+- Do not make repository correctness depend on a logged-in host account. Keep
+  dependency-free and non-login checks runnable; label any omitted live host
+  test as unverified.
 
 ## Handoff
 

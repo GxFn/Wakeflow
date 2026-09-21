@@ -1,0 +1,113 @@
+import { inspectDirectoryTreeCandidateProgress, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { ledgerRecordPublicationIntentRefForIdentity, ledgerRecordPublicationLockRefForIdentity, } from "./ledger-authority-paths.js";
+import { throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
+import { existingLedgerRecordPublicationIntentOrNull, inspectLedgerRecordPublicationResidues, ledgerPublicationResourceNodeOrNull, loadExactPublishedLedgerRecord, prepareLedgerRecordPublicationLockRecovery, publishLedgerRecordStage, recoverLedgerIntentAtomicStages, retireLedgerRecordPublicationIntent, settleCommittedLedgerIntent, withLedgerRecordPublicationLock, } from "./ledger-record-publication-storage.js";
+import { parseLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, LedgerRecordPublicationIntentError, } from "./ledger-record-publication-intent.js";
+/** Wakeflow Governance / Ledger：由精简发布意图记录驱动的单记录前向恢复。 */
+function parseRecordIdentity(recordIdValue) {
+    try {
+        return parseWakeflowDurableIdOfKind(recordIdValue, "requirement", "$recordId");
+    }
+    catch (error) {
+        if (error instanceof WakeflowDurableIdError)
+            fail("input", "$recordId");
+        throw error;
+    }
+}
+function parseExpectedIntent(value) {
+    try {
+        return parseLedgerRecordPublicationIntent(value);
+    }
+    catch (error) {
+        if (error instanceof LedgerRecordPublicationIntentError) {
+            fail("input", "$expectedIntent");
+        }
+        throw error;
+    }
+}
+async function recoverPublication(root, recordId, expectedIntent, signal) {
+    const intentRef = ledgerRecordPublicationIntentRefForIdentity(recordId);
+    const lockRef = ledgerRecordPublicationLockRefForIdentity(recordId);
+    await recoverLedgerIntentAtomicStages(root, intentRef, signal);
+    const observed = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
+    if (observed === null)
+        fail("not-found", "$intent");
+    if (observed.intent.record.requirementId !== recordId
+        || observed.intent.lockRef !== lockRef
+        || (expectedIntent !== null
+            && !sameLedgerRecordPublicationIntent(observed.intent, expectedIntent))) {
+        fail("conflict", "$intent");
+    }
+    await prepareLedgerRecordPublicationLockRecovery(root, lockRef);
+    return withLedgerRecordPublicationLock(root, lockRef, signal, async () => {
+        await recoverLedgerIntentAtomicStages(root, intentRef, signal);
+        const stored = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
+        if (stored === null
+            || !sameLedgerRecordPublicationIntent(stored.intent, observed.intent)
+            || (expectedIntent !== null
+                && !sameLedgerRecordPublicationIntent(stored.intent, expectedIntent))) {
+            fail("conflict", "$intent");
+        }
+        if (stored.intent.record.requirementId !== recordId
+            || stored.intent.lockRef !== lockRef) {
+            fail("conflict", "$intent");
+        }
+        const residues = await inspectLedgerRecordPublicationResidues(root, stored.intent, signal);
+        if (await ledgerPublicationResourceNodeOrNull(root, stored.intent.finalRootRef) !== null) {
+            const loaded = await settleCommittedLedgerIntent(root, stored, residues, signal);
+            return Object.freeze({ wroteAuthority: false, loaded });
+        }
+        if (residues.stageNode === null) {
+            fail("recovery-input-required", "$stage");
+        }
+        let progress;
+        try {
+            progress = await inspectDirectoryTreeCandidateProgress(root, stored.intent.stageRef, stored.intent.treePlan, {
+                expectedRootNode: residues.stageNode,
+                ...(signal === undefined ? {} : { signal }),
+            });
+        }
+        catch (error) {
+            if (error instanceof DurableDirectoryTreeCandidateError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
+                fail("conflict", "$stage");
+            }
+            throw error;
+        }
+        if (progress.status !== "complete") {
+            fail("recovery-input-required", "$stage");
+        }
+        const candidate = Object.freeze({
+            candidateRootPath: progress.candidateRootPath,
+            plan: progress.plan,
+            rootNode: progress.rootNode,
+        });
+        await publishLedgerRecordStage(root, stored.intent, candidate, signal);
+        const loaded = await loadExactPublishedLedgerRecord(root, stored.intent, signal);
+        const freshStored = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
+        if (freshStored === null
+            || !sameLedgerRecordPublicationIntent(freshStored.intent, stored.intent)) {
+            fail("recovery-required", "$intent");
+        }
+        await retireLedgerRecordPublicationIntent(root, freshStored, signal);
+        return Object.freeze({ wroteAuthority: true, loaded });
+    });
+}
+/**
+ * 本函数只依据精简发布意图记录以及现有暂存目录、最终目录状态恢复一次记录发布。
+ * 如果暂存目录缺少成员字节，函数会明确要求调用方使用原始发布输入重试，而不会
+ * 根据摘要虚构缺失内容。
+ */
+export async function recoverLedgerAuthorityRecordPublication(root, recordIdValue, signal) {
+    return recoverPublication(root, parseRecordIdentity(recordIdValue), null, signal);
+}
+/**
+ * 只恢复与调用方exact intent逐字段一致的发布；锁前和锁内都重新复验。
+ */
+export async function recoverExactLedgerAuthorityRecordPublication(root, expectedIntentValue, signal) {
+    const expectedIntent = parseExpectedIntent(expectedIntentValue);
+    return recoverPublication(root, expectedIntent.record.requirementId, expectedIntent, signal);
+}

@@ -1,0 +1,213 @@
+import { WAKEFLOW_DEMAND_IDENTITY_SCHEMA, } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import { computeCanonicalJsonSha256Digest, } from "../../../foundation/crypto/canonical-json-sha256.js";
+import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
+import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
+import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { createRuntimeJsonSchemaValidator, } from "../../../foundation/schema/runtime-json-schema.js";
+import { parseUtcInstant, UtcInstantError, } from "../../../foundation/time/utc-instant.js";
+import { readUtcWallClock, UtcWallClockError, } from "../../../foundation/time/wall-clock.js";
+import { parseRequirementLineageReference, RequirementLineageError, } from "./requirement-lineage.js";
+/**
+ * Wakeflow Governance / Demand Model：事件溯源聚合的不可变身份记录。
+ *
+ * 身份记录固定 Demand 的目标、类型、需求包谱系引用和所属 pod（ADR-0010 D3）；它不是
+ * 事件、快照或可变状态。pod 的存在性由 demand 切片按当前配置校验，身份只记标识。所有正常 Demand 必须在发布时与必需的权威关系记录一起创建，之后
+ * 不能被事件存储替换。
+ */
+const DEMAND_IDENTITY_ARTIFACT_KIND = "wakeflow-demand-identity";
+const DEMAND_IDENTITY_SCHEMA_VERSION = 1;
+const ERROR_MESSAGES = {
+    "input": "Demand identity input is invalid.",
+    "json": "Demand identity is not passive JSON data.",
+    "schema": "Demand identity does not satisfy its portable Schema.",
+    "identifier": "Demand identity contains an invalid typed identity.",
+    "time": "Demand identity contains an invalid creation time.",
+    "text": "Demand identity contains non-canonical text.",
+    "source": "Demand identity requirement lineage is invalid.",
+    "representation": "Demand identity bytes are not its deterministic domain representation.",
+};
+export class DemandIdentityError extends Error {
+    name = "DemandIdentityError";
+    code = "wakeflow-demand-identity";
+    reason;
+    path;
+    constructor(reason, path) {
+        super(ERROR_MESSAGES[reason]);
+        this.reason = reason;
+        this.path = path;
+    }
+}
+const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_IDENTITY_SCHEMA, [
+    WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
+    WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA,
+    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
+]);
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const DRAFT_FIELDS = Object.freeze([
+    "completionDefinition",
+    "demandId",
+    "demandType",
+    "goal",
+    "podId",
+    "programId",
+    "source",
+    "title",
+]);
+const DRAFT_VALIDATION_INSTANT = parseUtcInstant("1970-01-01T00:00:00.000Z", "$draftValidationInstant");
+function fail(reason, path) {
+    throw new DemandIdentityError(reason, path);
+}
+function parseCanonicalText(value, path) {
+    if (!value.isWellFormed()
+        || value.normalize("NFC") !== value
+        || CONTROL_EXCEPT_LF_PATTERN.test(value)) {
+        fail("text", path);
+    }
+    return value;
+}
+function parseId(value, kind, path) {
+    try {
+        return parseWakeflowDurableIdOfKind(value, kind, path);
+    }
+    catch (error) {
+        if (error instanceof WakeflowDurableIdError)
+            fail("identifier", path);
+        throw error;
+    }
+}
+function normalizeWire(wire) {
+    let source;
+    try {
+        source = parseRequirementLineageReference(wire.source);
+    }
+    catch (error) {
+        if (error instanceof RequirementLineageError)
+            fail("source", "$/source");
+        throw error;
+    }
+    let createdAt;
+    try {
+        createdAt = parseUtcInstant(wire.createdAt, "$/createdAt");
+    }
+    catch (error) {
+        if (error instanceof UtcInstantError)
+            fail("time", "$/createdAt");
+        throw error;
+    }
+    return Object.freeze({
+        artifactKind: DEMAND_IDENTITY_ARTIFACT_KIND,
+        schemaVersion: DEMAND_IDENTITY_SCHEMA_VERSION,
+        programId: parseId(wire.programId, "program", "$/programId"),
+        demandId: parseId(wire.demandId, "demand", "$/demandId"),
+        createdAt,
+        title: parseCanonicalText(wire.title, "$/title"),
+        goal: parseCanonicalText(wire.goal, "$/goal"),
+        completionDefinition: parseCanonicalText(wire.completionDefinition, "$/completionDefinition"),
+        demandType: wire.demandType,
+        source,
+        podId: parseId(wire.podId, "pod", "$/podId"),
+    });
+}
+/** 把任意内存值解析为不可变 `DemandIdentity`。 */
+export function parseDemandIdentity(value) {
+    let json;
+    try {
+        json = parseJsonValue(value, "$identity");
+    }
+    catch (error) {
+        if (error instanceof JsonValueError)
+            fail("json", error.path);
+        throw error;
+    }
+    const result = validateWire(json);
+    if (!result.ok)
+        fail("schema", result.path);
+    return normalizeWire(result.value);
+}
+function readCreationTime(options) {
+    let record;
+    try {
+        record = parsePlainRecord(options, "$options");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$options");
+        throw error;
+    }
+    if (Object.keys(record).some((key) => key !== "clock")) {
+        fail("input", "$options");
+    }
+    try {
+        return readUtcWallClock(record.clock);
+    }
+    catch (error) {
+        if (error instanceof UtcWallClockError)
+            fail("time", "$options/clock");
+        throw error;
+    }
+}
+/** 从不含协议头和时间、字段集合严格受限的草稿创建 `DemandIdentity`。 */
+export function createDemandIdentity(draft, options = {}) {
+    let record;
+    try {
+        record = parsePlainRecord(draft, "$draft");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$draft");
+        throw error;
+    }
+    const keys = Object.keys(record).sort();
+    if (keys.length !== DRAFT_FIELDS.length
+        || keys.some((key, index) => key !== DRAFT_FIELDS[index])) {
+        fail("input", "$draft");
+    }
+    const admitted = parseDemandIdentity({
+        artifactKind: DEMAND_IDENTITY_ARTIFACT_KIND,
+        schemaVersion: DEMAND_IDENTITY_SCHEMA_VERSION,
+        programId: record.programId,
+        demandId: record.demandId,
+        createdAt: DRAFT_VALIDATION_INSTANT,
+        title: record.title,
+        goal: record.goal,
+        completionDefinition: record.completionDefinition,
+        demandType: record.demandType,
+        source: record.source,
+        podId: record.podId,
+    });
+    return Object.freeze({
+        ...admitted,
+        createdAt: readCreationTime(options),
+    });
+}
+export function renderDemandIdentity(value) {
+    return renderDeterministicJsonDocument(parseDemandIdentity(value), "$identity");
+}
+export function parseDemandIdentityDocument(text) {
+    let json;
+    try {
+        json = parseDeterministicJsonDocument(text, "$identity");
+    }
+    catch (error) {
+        if (error instanceof DeterministicJsonDocumentError) {
+            fail("representation", error.path);
+        }
+        throw error;
+    }
+    const identity = parseDemandIdentity(json);
+    if (renderDemandIdentity(identity) !== text) {
+        fail("representation", "$identity");
+    }
+    return identity;
+}
+export function computeDemandIdentityDigest(value) {
+    return computeCanonicalJsonSha256Digest(parseDemandIdentity(value));
+}

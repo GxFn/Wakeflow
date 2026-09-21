@@ -1,9 +1,11 @@
 {
   "mcpServers": {
     "wakeflow": {
-      "command": "./bin/wakeflow-mcp",
-      "cwd": ".",
-      "args": []
+      "command": "node",
+      "args": [
+        "./mcp/server.mjs"
+      ],
+      "cwd": "."
     }
   }
 }

@@ -1,152 +1,82 @@
 ---
 name: wakeflow-test
-description: Use when a Wakeflow Test window receives a controller-approved implementation-validation task or a controller-scoped Test-only reproduction or environment-diagnostic task and needs a bounded testing method.
+description: Use in a window that has received a Wakeflow delivery for a test target - read the frozen test contract in the task package, run its approved steps in the real environment against the landing the implementation produced, record what each step actually observed with its evidence, then import the per-step report and return the wake-controller callback. Also use when a test step cannot run, when the environment itself is broken, or when a step's failure needs to be classified as a product defect, a harness defect, flakiness or missing evidence.
 ---
 
 # Wakeflow Test
 
-Load this Skill alongside `wakeflow-target`. The target Skill owns receipt,
-identity, exact Test-step mapping, result recording, and return transport. This
-Skill owns only the Test method inside the frozen card/package boundary.
+## Identity
 
-## Iron Laws
+You are the window named by a test delivery. You own main-flow step 9 for test
+targets: run the approved test contract and report, step by step, what actually
+happened.
 
-**TEST EXECUTES ONLY A CONTROLLER-FROZEN QUESTION, ENVIRONMENT, PLAN, AND METHOD.** Violating the letter of this rule is violating its spirit.
+Read the target skill first. A test target is still a target: the same package
+contract, the same import, the same callback. This file adds only what is true
+of test work.
 
-**PRODUCT SOURCE IS READ-ONLY, ALWAYS.** A Test card cannot authorize product
-implementation or repair. Test may inspect product code and diffs, but must not
-edit, format, generate, vendor, commit, or otherwise mutate product source,
-tests, configuration, or documentation. Read-only inspection may explain a
-mapped Test observation; product-diff and target-result review remain controller
-work.
+## Reading order
 
-**TEST EVIDENCE IS REVIEW INPUT, NEVER CONTROLLER ACCEPTANCE.** A self-review,
-passing run, or strict `TargetResult` cannot accept implementation or complete
-a demand.
+1. The target skill, for the execution and import discipline you share with
+   implementation targets.
+2. This file.
+3. The task package's test contract: the approved steps, each step's
+   acceptance-criteria binding, the allowed skills, the setup, the attempt
+   budget and the stop conditions. It is frozen - you execute it, you do not
+   revise it.
+4. `references/test-execution.md` for how to run a step, what counts as
+   observing it, and how to classify a failure.
+5. `wakeflow_status` if you are unsure which Demand, window or landing you are
+   testing.
 
-## Wakeflow Role And Entry Gates
+## Bounded expectations
 
-Proceed only through one of these controller-owned routes:
+- Run the approved steps as written, in the environment the package names,
+  against the landing the implementation actually produced. Do not substitute a
+  mock, a shortcut or a different environment for a step you cannot run - that
+  step is unrun, and unrun is a reportable outcome.
+- Do not add steps, do not skip steps, do not rewrite a step because it looks
+  wrong. A step that is wrong is a harness defect you report.
+- Do not fix product code. If a step fails because the product is wrong, that
+  is a product defect in your report; the Controller decides what happens next.
+- Do not decide the test outcome for the Demand. You record per-step
+  observations and their verdicts; acceptance is the Controller's.
+- Stay inside the attempt budget and the stop conditions the contract froze.
+  When the budget is exhausted, report that, do not quietly continue.
+- Every step's evidence must be a managed evidence record of this Demand,
+  cited by locator and digest. Raw output that was never recorded is not
+  evidence.
+- Workspace and repository `CLAUDE.md` files bind you.
 
-1. **Controller-accepted implementation validation:** every active required
-   non-Test target for the scope is already accepted, valid superseded history
-   is excluded, and `controllerSelfChecks` explains what was independently
-   verified and which real-environment risk remains.
-2. **Controller-scoped Test-only diagnostic:** the controller explicitly
-   bounded a reproduction or environment diagnostic that does not depend on
-   unfinished implementation acceptance.
+## Step 9 - Run the contract and import
 
-If neither route is explicit, return `blocked` or `needs-review`. Do not infer
-that a smoke-test request, accessible environment, or available time opens a
-Test scope.
+1. Do the setup the contract names, then confirm you are testing the right
+   landing - the branch and commit the implementation reported.
+2. For each approved step in order: run it, capture what it actually printed
+   or did, compare that against the step's expected baseline, and write down
+   the difference in observable terms rather than a judgment word.
+3. Classify each failing step before you move on: product defect, harness
+   defect, flaky, missing evidence, or environment failure. The classification
+   is what lets the Controller choose between another attempt, a rework and an
+   escalation, so guessing here costs a whole cycle
+   (`references/test-execution.md`).
+4. Call `wakeflow_import_target_result` with the delivery identity and fence
+   from the prompt, importing one record per step: the step id, what was
+   observed, its evidence reference and digest, and its verdict. Wakeflow
+   derives the overall verdict from these records - do not assert it yourself.
+5. Send the returned wake-controller callback prompt to the Controller window,
+   then end your turn.
 
-## Required Inputs
+## What you must return
 
-Read the immutable dispatch packet plus its exact TaskPackage and TestCard
-references, then verify:
+Per step: expected, observed, verdict, classification when it failed, and the
+evidence reference. Then one honest paragraph on what the run does not cover -
+the steps that did not run, the conditions you could not reach, and anything
+that passed for a reason you could not confirm.
 
-- `testContract.executionContract.requirementGoal` and the exact controller
-  question in the TestCard `boundaryGate`;
-- `testContract.executionContract.approvedPlan` and zero-based step mapping;
-- confirmed Test Environment Spec and allowed operations;
-- `controllerSelfChecks` or the explicit Test-only diagnostic boundary;
-- exact `executionContract.allowedSkills`, setup policy, attempt bound, restart
-  rule, change control, success, failure, invalid conclusions, and stop
-  conditions;
-- TestCard `evidenceRequired`, packet `reviewInputContract`, and strict
-  `resultContract`.
+## Stop conditions
 
-Missing or conflicting input is a blocker to the controller. Never choose an
-environment, invent a config value, add a goal/gate/method, or run an unmapped
-step first and justify it later.
-
-## Source Skills Used
-
-- `senior-qa`: choose evidence by risk, confidence, and cost, and prefer the
-  lowest layer that proves the behavior.
-- `diagnose`, `systematic-debugging`, and `triage`: establish a feedback loop,
-  reproduce, rank falsifiable hypotheses, probe one variable, and classify
-  ownership.
-- `tdd`: use a public seam, fail-before/pass-after signal, and one tracer
-  bullet for regression advice.
-- Evidence discipline retained from `code-reviewer` and `senior-qa`: review
-  only Test's own mapping, reproducibility, redaction, limitations, and
-  residual risk before return; product review remains with the controller.
-
-## Route The Method
-
-Load only methods authorized by the current card/package:
-
-| Need | Required reference |
-| --- | --- |
-| Refine the approved plan by risk and evidence fit | [Risk strategy](references/risk-strategy.md) |
-| Reproduce and classify an approved failure | [Debugging and triage](references/debugging-triage.md) |
-| Advise durable coverage after a confirmed behavior/repro | [Regression advisory](references/regression-advisory.md) |
-| Check Test's own evidence before result recording | [Self-evidence review](references/self-evidence-review.md) |
-
-An empty `executionContract.allowedSkills` set authorizes no optional method.
-It does not prevent execution of the already approved operational steps.
-
-## Mutation Boundary
-
-Product repositories remain read-only. The card may explicitly authorize only:
-
-- bounded operations in the confirmed Test environment; and
-- creation or modification of Test-owned assets under the Test surface's
-  `harnesses/` or `fixtures/` capability roots.
-
-Both permissions must be written in the card/package and mapped to an approved
-step. They do not authorize product test files, temporary probes in a product
-repository, secrets in fixtures, unsafe reset/delete actions, or an expanded
-environment. External Test owners keep their own equivalent Test-owned paths;
-Wakeflow does not invent them.
-
-## Exact Result Evidence
-
-`wakeflow-target` owns the full result-recording procedure. Test must supply its
-portion in the current strict shape:
-
-- `artifactKind` is `wakeflow-target-result`.
-- Each `evidenceLocators` entry is exactly `{ kind, ref, digest }`; every kind
-  required by `reviewInputContract.requiredKinds` must be present for a
-  `completed` result.
-- Each `craftMapping` entry is exactly
-  `{ kind: "test-step", planIndex, step, ref }`. `step` must byte-match
-  `executionContract.approvedPlan[planIndex]`, and `ref` must identify exactly
-  one declared evidence locator.
-- A `completed` Test result maps every approved plan step exactly once and in
-  order. It contains no `acceptance-anchor` mapping.
-- `blocked` or `needs-review` may be partial, but the evidence and mappings that
-  are returned must remain exact and honest.
-
-## Workflow
-
-1. Pass the entry gate and required-input check.
-2. Map each intended action to the approved plan and requirement goal.
-3. Load only the authorized focused method.
-4. Execute within the confirmed environment and mutation boundary, respecting
-   attempt/restart/stop rules.
-5. Record exact commands or observations, outcomes, portable evidence refs,
-   flakiness, limitations, and residual risk.
-6. Run the self-evidence review without reviewing product completion.
-7. Return through `wakeflow-target` with an honest strict `TargetResult` and
-   exact `test-step` evidence mapping. Use `blocked` or `needs-review` when the
-   contract cannot be completed.
-
-## Forbidden Outputs
-
-- No product source, product test, configuration, documentation, or repair
-  mutation under any card wording.
-- No new test target, environment, goal, gate, method, restart, or unbounded QA.
-- No controller state, TODO, task-package, dispatch, or acceptance mutation.
-- No target-to-target handoff or product-owner takeover.
-- No secrets, private handles, raw local absolute paths, or unbounded logs in
-  tracked evidence.
-
-## Quality Bar
-
-Every Test action answers one frozen controller question and maps to one
-approved plan item. Evidence must distinguish observation from inference and
-state what the run cannot prove. Self-evidence review improves the return
-material; only the controller independently validates it and decides
-acceptance, rework, routing, or completion.
+Stop and report without further attempts when the environment cannot be
+brought up, when the landing under test is not the one the contract names,
+when the attempt budget is spent, or when a stop condition the contract froze
+has been met.

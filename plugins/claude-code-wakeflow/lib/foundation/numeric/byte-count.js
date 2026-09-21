@@ -1,0 +1,90 @@
+/**
+ * Wakeflow Foundation / Numeric：可由 JavaScript `number` 精确表示的字节数量。
+ *
+ * 本模块只表示 `0` 至 `Number.MAX_SAFE_INTEGER` 范围内的整数字节数，并提供从
+ * `number`、`bigint` 准入以及不会静默越界的加法。它不定义任何文件、目录树
+ * 或协议的容量上限，也不把字节数解释为偏移量、索引或权限。
+ *
+ * Node.js `bigint` Stats 必须先通过 `byteCountFromBigInt`，才能进入基于 `number`
+ * 的范围和容量计算。`ByteCount` 不证明内存或单个 Buffer 可分配；领域职责所有者
+ * 仍须设置更严格的容量预算，并遵守具体 Node.js API 和运行平台的资源上限。
+ */
+/** `ByteCount` 可表达的最大值；它不是 Wakeflow 的领域容量默认值。 */
+export const MAX_SAFE_BYTE_COUNT = Number.MAX_SAFE_INTEGER;
+const ERROR_MESSAGES = {
+    "number-range": "Byte count must be a non-negative safe integer number.",
+    "bigint-range": "BigInt byte count must fit a non-negative safe integer number.",
+    "addition-overflow": "Byte count addition exceeds the safe integer range.",
+};
+/**
+ * 字节数准入或运算失败时返回的稳定错误。
+ *
+ * 错误只暴露能力代码、失败分类和调用方路径，不回显输入数量、文件大小、累计值
+ * 或领域容量，避免诊断文本意外携带敏感结构信息。
+ */
+export class ByteCountError extends Error {
+    name = "ByteCountError";
+    code = "wakeflow-byte-count";
+    reason;
+    path;
+    constructor(reason, path) {
+        super(ERROR_MESSAGES[reason]);
+        this.reason = reason;
+        this.path = path;
+    }
+}
+function normalizeErrorPath(path) {
+    return typeof path === "string" && path.length > 0 ? path : "$";
+}
+function memberPath(basePath, member) {
+    return basePath === "$" ? `$${member}` : `${basePath}.${member}`;
+}
+function fail(reason, path) {
+    throw new ByteCountError(reason, path);
+}
+function parseNumberByteCount(value, path) {
+    if (typeof value !== "number"
+        || !Number.isSafeInteger(value)
+        || value < 0) {
+        fail("number-range", path);
+    }
+    return value;
+}
+/**
+ * 从未知值严格解析字节数，不接受 `bigint`、字符串或数值强制转换。
+ *
+ * `Number.MAX_SAFE_INTEGER` 是合法值；具体文件或目录树通常应由领域职责所有者
+ * 使用更小的上限。
+ */
+export function parseByteCount(value, errorPath) {
+    return parseNumberByteCount(value, normalizeErrorPath(errorPath));
+}
+/**
+ * 把 Node.js `bigint` Stats 等来源转换为可安全使用的 `number` 字节数。
+ *
+ * 只有非负且不超过 `Number.MAX_SAFE_INTEGER` 的 `bigint` 才会转换，因此不会丢失
+ * 整数精度。`number` 输入必须显式使用 `parseByteCount`，避免混淆数据来源。
+ */
+export function byteCountFromBigInt(value, errorPath) {
+    const path = normalizeErrorPath(errorPath);
+    if (typeof value !== "bigint"
+        || value < 0n
+        || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+        fail("bigint-range", path);
+    }
+    return Number(value);
+}
+/**
+ * 精确相加两个字节数；任何伪造的品牌类型输入都会先重新准入。
+ *
+ * 溢出在执行加法前判断，不允许超过安全整数范围的近似 Number 进入结果。
+ */
+export function addByteCounts(left, right, errorPath) {
+    const path = normalizeErrorPath(errorPath);
+    const admittedLeft = parseNumberByteCount(left, memberPath(path, "left"));
+    const admittedRight = parseNumberByteCount(right, memberPath(path, "right"));
+    if (admittedRight > MAX_SAFE_BYTE_COUNT - admittedLeft) {
+        fail("addition-overflow", path);
+    }
+    return (admittedLeft + admittedRight);
+}

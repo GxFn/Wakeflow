@@ -1,6 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreWorkspaces": ["plugins/codex-wakeflow", "plugins/claude-code-wakeflow"],
   "ignoreExportsUsedInFile": { "interface": true, "type": true },
   "workspaces": {
     ".": {
@@ -32,8 +31,7 @@
         "src/foundation/**",
         "src/hosts/**",
         "tests/governance/**",
-        "tests/foundation/**",
-        "test/**"
+        "tests/foundation/**"
       ],
       "ignoreDependencies": ["@swc/core"]
     }

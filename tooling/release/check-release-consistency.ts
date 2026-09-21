@@ -227,6 +227,9 @@ function checkManifests(repositoryRoot: string, committedRoot: string, version: 
   }
 }
 
+/** 一次切换提交前后的 `git status` 可以有上万行，缓冲区按此上限给足；超出即当作 Git 失败。 */
+const MAXIMUM_GIT_OUTPUT_BYTES = 64 * 1024 * 1024;
+
 function git(repositoryRoot: string, args: readonly string[]): string | null {
   const result = spawnSync("git", [...args], {
     cwd: repositoryRoot,
@@ -235,6 +238,7 @@ function git(repositoryRoot: string, args: readonly string[]): string | null {
     shell: false,
     windowsHide: true,
     timeout: 60_000,
+    maxBuffer: MAXIMUM_GIT_OUTPUT_BYTES,
   });
   if (result.error !== undefined || result.status !== 0) return null;
   return result.stdout;

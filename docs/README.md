@@ -12,7 +12,7 @@
 
 | 顺序 | 权威 | 位置 | 说明 |
 | --- | --- | --- | --- |
-| 1 | 代码、Schema、测试 | `src/`、`tooling/`、`tests/`，旧基线 `core/`、`test/` | 运行时行为的唯一事实 |
+| 1 | 代码、Schema、测试 | `src/`、`tooling/`、`tests/`；`plugins/` 是构建器的纯生成物 | 运行时行为的唯一事实 |
 | 2 | 仓库维护规则 | 根目录 `CLAUDE.md`、`AGENTS.md` | 范围、安全、源码归属、验证、发布纪律 |
 | 3 | 开发计划 | [plan/](./plan/) | 阶段边界、已确认约束、完成定义 |
 | 4 | 决策记录 | [decisions/](./decisions/) | 每个影响架构或范围的决定及其理由 |
@@ -41,7 +41,7 @@ docs/
 
 | 文档 | 职责 | 状态 |
 | --- | --- | --- |
-| [plan/typescript-reimplementation-plan.md](./plan/typescript-reimplementation-plan.md) | TypeScript 能力重构的阶段、约束 TSD-01 到 TSD-16、执行顺序 P0 与 L0 到 L3、完成定义 | E0 完成，E1/E2 进行中；L0 与 L1 十片已闭合（2026-09-18，gate-log §13.96），进入 L2 业务场景与联合 |
+| [plan/typescript-reimplementation-plan.md](./plan/typescript-reimplementation-plan.md) | TypeScript 能力重构的阶段、约束 TSD-01 到 TSD-16、执行顺序 P0 与 L0 到 L3、完成定义 | E0 到 E4 全部 `complete`（2026-09-20，gate-log §13.104）；剩余的是只有用户能做的真实宿主与真实工作区验收，以及打标签与发布 |
 | [decisions/README.md](./decisions/README.md) | 决策索引 | ADR-0001 到 ADR-0013 已接受；ADR-0003 于 09-03 修订；ADR-0009 两处调整、ADR-0010 的 pod 模型、ADR-0011 需求包均于 09-04 确认；ADR-0010 未决三项于 09-18 关闭 |
 | [requirements/capabilities/](./requirements/capabilities/) | 能力卡，按能力组逐项确认的场景、不变量、宿主差异与实现判断 | 第 1 到 10 组全部已确认（2026-09-04） |
 | [requirements/wakeflow-functions-and-scenarios.md](./requirements/wakeflow-functions-and-scenarios.md) | 自顶向下的功能与场景总览：定位、核心对象、主流程直线、F1 到 F11 功能清单、宿主差异、明确不做 | draft，待用户确认理解一致 |

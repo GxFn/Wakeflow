@@ -1,0 +1,236 @@
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
+import { WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA } from "../../../contracts/generated/governance/demand/demand-aggregate-state.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
+import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
+import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
+import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
+import { computeDemandAggregateStateDigest, parseDemandAggregateState, DemandAggregateStateError, } from "../model/demand-aggregate-state.js";
+import { computeDemandEventStreamCommitDigest, parseDemandEventStreamCommit, DemandEventStreamCommitError, } from "./demand-event-stream-commit.js";
+import { parseDemandEventSourcingAggregate, DemandEventSourcingAggregateError, } from "./demand-event-sourcing-aggregate.js";
+import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
+import { parseDemandEventCommitSequence, parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "./demand-event-stream-position.js";
+import { computeDemandEventSourcingVersionCompatibilityDigest } from "./demand-event-sourcing-version-compatibility.js";
+/**
+ * Wakeflow Governance / Demand Event Sourcing：不可变、带版本的快照。
+ *
+ * 快照只在完整提交边界创建，并绑定提交摘要、事件流尾部和聚合状态。它是可以删除、
+ * 可以重建的优化，不是事件权威事实。快照不兼容或损坏时，仓储会选择更早的快照，
+ * 或从提交 1 完整重放；正常加载不会在读取路径中改写快照。
+ */
+const DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND = "wakeflow-demand-event-sourcing-snapshot";
+const DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION = 1;
+const ERROR_MESSAGES = {
+    input: "Demand Event Sourcing snapshot input is invalid.",
+    json: "Demand Event Sourcing snapshot is not passive JSON data.",
+    schema: "Demand Event Sourcing snapshot does not satisfy its Schema.",
+    identifier: "Demand Event Sourcing snapshot contains an invalid identity.",
+    position: "Demand Event Sourcing snapshot contains an invalid stream position.",
+    digest: "Demand Event Sourcing snapshot contains an invalid digest.",
+    state: "Demand Event Sourcing snapshot contains an invalid aggregate state.",
+    aggregate: "Demand Event Sourcing snapshot requires a valid aggregate.",
+    commit: "Demand Event Sourcing snapshot requires a valid anchor commit.",
+    mismatch: "Demand Event Sourcing snapshot does not match its commit boundary.",
+    representation: "Demand Event Sourcing snapshot bytes are not deterministic.",
+};
+export class DemandEventSourcingSnapshotError extends Error {
+    name = "DemandEventSourcingSnapshotError";
+    code = "wakeflow-demand-event-sourcing-snapshot";
+    reason;
+    path;
+    constructor(reason, path) {
+        super(ERROR_MESSAGES[reason]);
+        this.reason = reason;
+        this.path = path;
+    }
+}
+const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA, [
+    WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA,
+    WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
+    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
+]);
+function fail(reason, path) {
+    throw new DemandEventSourcingSnapshotError(reason, path);
+}
+function parseDigest(value, path) {
+    try {
+        return parseSha256Digest(value, path);
+    }
+    catch (error) {
+        if (error instanceof Sha256Error)
+            fail("digest", path);
+        throw error;
+    }
+}
+export function parseDemandEventSourcingSnapshot(value) {
+    let json;
+    try {
+        json = parseJsonValue(value, "$snapshot");
+    }
+    catch (error) {
+        if (error instanceof JsonValueError)
+            fail("json", error.path);
+        throw error;
+    }
+    const result = validateWire(json);
+    if (!result.ok)
+        fail("schema", result.path);
+    const wire = result.value;
+    let demandId;
+    let lastEventId;
+    try {
+        demandId = parseWakeflowDurableIdOfKind(wire.demandId, "demand", "$/demandId");
+        lastEventId = parseWakeflowDurableIdOfKind(wire.lastEventId, "demand-event", "$/lastEventId");
+    }
+    catch (error) {
+        if (error instanceof WakeflowDurableIdError) {
+            fail("identifier", error.path);
+        }
+        throw error;
+    }
+    let state;
+    try {
+        state = parseDemandAggregateState(wire.state);
+    }
+    catch (error) {
+        if (error instanceof DemandAggregateStateError)
+            fail("state", "$/state");
+        throw error;
+    }
+    const stateDigest = parseDigest(wire.stateDigest, "$/stateDigest");
+    const versionCompatibilityDigest = parseDigest(wire.versionCompatibilityDigest, "$/versionCompatibilityDigest");
+    let commitSequence;
+    let streamRevision;
+    try {
+        commitSequence = parseDemandEventCommitSequence(wire.commitSequence, "$/commitSequence");
+        streamRevision = parseDemandEventStreamRevision(wire.streamRevision, "$/streamRevision");
+    }
+    catch (error) {
+        if (error instanceof DemandEventStreamPositionError) {
+            fail("position", error.path);
+        }
+        throw error;
+    }
+    if (state.demandId !== demandId ||
+        commitSequence > streamRevision ||
+        computeDemandAggregateStateDigest(state) !== stateDigest ||
+        versionCompatibilityDigest !==
+            computeDemandEventSourcingVersionCompatibilityDigest()) {
+        fail("mismatch", "$snapshot");
+    }
+    return Object.freeze({
+        artifactKind: DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND,
+        schemaVersion: DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION,
+        versionCompatibilityDigest,
+        demandId,
+        commitSequence,
+        streamRevision,
+        lastCommitDigest: parseDigest(wire.lastCommitDigest, "$/lastCommitDigest"),
+        lastEventId,
+        lastEventDigest: parseDigest(wire.lastEventDigest, "$/lastEventDigest"),
+        state,
+        stateDigest,
+    });
+}
+export function createDemandEventSourcingSnapshot(aggregateValue) {
+    let aggregate;
+    try {
+        aggregate = parseDemandEventSourcingAggregate(aggregateValue);
+    }
+    catch (error) {
+        if (error instanceof DemandEventSourcingAggregateError) {
+            fail("aggregate", "$aggregate");
+        }
+        throw error;
+    }
+    return parseDemandEventSourcingSnapshot({
+        artifactKind: DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND,
+        schemaVersion: DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION,
+        versionCompatibilityDigest: computeDemandEventSourcingVersionCompatibilityDigest(),
+        demandId: aggregate.demandId,
+        commitSequence: aggregate.commitSequence,
+        streamRevision: aggregate.streamRevision,
+        lastCommitDigest: aggregate.lastCommitDigest,
+        lastEventId: aggregate.lastEvent.eventId,
+        lastEventDigest: aggregate.lastEventDigest,
+        state: aggregate.state,
+        stateDigest: aggregate.stateDigest,
+    });
+}
+/** 从快照及其指定锚定提交恢复轻量聚合游标和状态。 */
+export function restoreDemandEventSourcingSnapshot(snapshotValue, anchorCommitValue) {
+    const snapshot = parseDemandEventSourcingSnapshot(snapshotValue);
+    let anchor;
+    try {
+        anchor = parseDemandEventStreamCommit(anchorCommitValue);
+    }
+    catch (error) {
+        if (error instanceof DemandEventStreamCommitError)
+            fail("commit", "$commit");
+        throw error;
+    }
+    const lastEvent = anchor.events.at(-1);
+    if (lastEvent === undefined ||
+        anchor.demandId !== snapshot.demandId ||
+        anchor.commitSequence !== snapshot.commitSequence ||
+        anchor.lastStreamRevision !== snapshot.streamRevision ||
+        computeDemandEventStreamCommitDigest(anchor) !==
+            snapshot.lastCommitDigest ||
+        lastEvent.eventId !== snapshot.lastEventId ||
+        computeDemandEventSourcingStoredEventDigest(lastEvent) !==
+            snapshot.lastEventDigest ||
+        lastEvent.resultingStateDigest !== snapshot.stateDigest) {
+        fail("mismatch", "$snapshot");
+    }
+    try {
+        return parseDemandEventSourcingAggregate({
+            demandId: snapshot.demandId,
+            commitSequence: snapshot.commitSequence,
+            streamRevision: snapshot.streamRevision,
+            lastCommitDigest: snapshot.lastCommitDigest,
+            lastEvent,
+            lastEventDigest: snapshot.lastEventDigest,
+            state: snapshot.state,
+            stateDigest: snapshot.stateDigest,
+        });
+    }
+    catch (error) {
+        if (error instanceof DemandEventSourcingAggregateError) {
+            fail("mismatch", "$snapshot");
+        }
+        throw error;
+    }
+}
+export function renderDemandEventSourcingSnapshot(value) {
+    return renderDeterministicJsonDocument(parseDemandEventSourcingSnapshot(value), "$snapshot");
+}
+export function parseDemandEventSourcingSnapshotDocument(text) {
+    let json;
+    try {
+        json = parseDeterministicJsonDocument(text, "$snapshot");
+    }
+    catch (error) {
+        if (error instanceof DeterministicJsonDocumentError) {
+            fail("representation", "$snapshot");
+        }
+        throw error;
+    }
+    const snapshot = parseDemandEventSourcingSnapshot(json);
+    if (renderDemandEventSourcingSnapshot(snapshot) !== text) {
+        fail("representation", "$snapshot");
+    }
+    return snapshot;
+}
+/** 快照自身的语义摘要；它与快照中的聚合 `stateDigest` 明确不同。 */
+export function computeDemandEventSourcingSnapshotDigest(value) {
+    return computeCanonicalJsonSha256Digest(parseDemandEventSourcingSnapshot(value));
+}

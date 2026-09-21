@@ -29,5 +29,4 @@ P0 结束，能力卡与总览已确认。进入 L0 与 L1 前需要固定代码
 
 ## 未决问题
 
-- kernel 与 capabilities 的目录名是否沿用 workspace 与 governance 两个旧名以减少迁移噪音。
-- `idempotency-store` 的保存位置与清理周期。
+两项已由实现固定（2026-09-20 记录，gate-log §13.101 F8）：`kernel/` 与 `capabilities/` 是新目录，`governance/`、`workspace/`、`configuration/` 保留为既有领域的目录，六层方向由架构门强制；幂等由追加命令的请求键与既有事件流承担，没有独立的 `idempotency-store`。

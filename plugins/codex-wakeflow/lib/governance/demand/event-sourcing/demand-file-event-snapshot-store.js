@@ -1,0 +1,439 @@
+import { types } from "node:util";
+import pLimit from "p-limit";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../../foundation/filesystem/durable-atomic-file-write.js";
+import { recoverDurableAtomicFileStagesInDirectory, DurableAtomicFileStageRecoveryError, } from "../../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
+import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "../../../foundation/filesystem/exact-regular-file-unlink.js";
+import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
+import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
+import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
+import { sameFileNodeSnapshot, } from "../../../foundation/filesystem/file-node-snapshot.js";
+import { RootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
+import { readStableResourceDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
+import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
+import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../../foundation/resource/resource-processing-contract.js";
+import { encodeUtf8 } from "../../../foundation/text/utf8.js";
+import { createDemandEventSourcingSnapshotResourceDeclaration, } from "../demand-resource-catalog.js";
+import { parseDemandEventCommitSequence, } from "./demand-event-stream-position.js";
+import { parseDemandEventSourcingSnapshot, parseDemandEventSourcingSnapshotDocument, computeDemandEventSourcingSnapshotDigest, renderDemandEventSourcingSnapshot, DemandEventSourcingSnapshotError, } from "./demand-event-sourcing-snapshot.js";
+import { demandEventSourcingSnapshotRef, parseDemandEventStreamCommitFileName, DemandEventSourcingPathError, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, } from "./demand-event-sourcing-paths.js";
+import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE, DEMAND_FILE_EVENT_STORE_FILE_MODE, } from "./demand-file-event-store.js";
+/**
+ * Wakeflow Governance / Demand Event Sourcing：不可变快照文件存储。
+ *
+ * 快照存储只观察、读取和不替换目标地发布按 `commitSequence` 命名的检查点。损坏快照
+ * 是可以回退的观察结果，不会修改提交事件流；遇到未知资源、符号链接或错误权限位时，
+ * 存储会保守拒绝。正常读取不修复、不覆盖或删除快照。
+ */
+const DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_FILES = 10_000;
+const DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$demandEventSourcingSnapshot.maximumBytes");
+const SNAPSHOT_READ_CONCURRENCY = 4;
+const ERROR_MESSAGES = {
+    "input": "Demand Event Sourcing Snapshot Store input is invalid.",
+    "root-scope": "Demand Event Sourcing Snapshot Store root changed.",
+    "not-initialized": "Demand Event Sourcing snapshots directory is not initialized.",
+    "node-policy": "Demand Event Sourcing snapshot resource violates private node policy.",
+    "capacity": "Demand Event Sourcing snapshot inventory exceeds its capacity.",
+    "inventory": "Demand Event Sourcing snapshot inventory contains an unknown resource.",
+    "stream-changed": "Demand Event Sourcing snapshot inventory changed during observation.",
+    "conflict": "Demand Event Sourcing snapshot sequence already contains different bytes.",
+    "recovery-required": "Demand Event Sourcing snapshot publication stage requires recovery.",
+    "aborted": "Demand Event Sourcing snapshot operation was aborted.",
+    "operation-failure": "Demand Event Sourcing snapshot operation failed.",
+};
+export class DemandFileEventSnapshotStoreError extends Error {
+    name = "DemandFileEventSnapshotStoreError";
+    code = "wakeflow-demand-file-event-snapshot-store";
+    reason;
+    path;
+    constructor(reason, path) {
+        super(ERROR_MESSAGES[reason]);
+        this.reason = reason;
+        this.path = path;
+    }
+}
+function fail(reason, path) {
+    throw new DemandFileEventSnapshotStoreError(reason, path);
+}
+function assertRoot(value) {
+    if (typeof value !== "object"
+        || value === null
+        || types.isProxy(value)
+        || !(value instanceof RootedDirectory)) {
+        fail("input", "$root");
+    }
+}
+function parseOptions(value) {
+    let record;
+    try {
+        record = parsePlainRecord(value === undefined ? {} : value, "$options");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$options");
+        throw error;
+    }
+    if (Object.keys(record).some((key) => key !== "signal")
+        || (record.signal !== undefined
+            && (typeof record.signal !== "object"
+                || record.signal === null
+                || types.isProxy(record.signal)
+                || !(record.signal instanceof AbortSignal)))) {
+        fail("input", "$options");
+    }
+    return Object.freeze({ signal: record.signal });
+}
+function currentUserId() {
+    return typeof process.geteuid === "function"
+        ? BigInt(process.geteuid())
+        : null;
+}
+function assertPrivateDirectory(node) {
+    if (node.kind !== "directory"
+        || node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE
+        || (currentUserId() !== null && node.userId !== currentUserId())) {
+        fail("node-policy", "$snapshots");
+    }
+}
+function assertPrivateFile(node, path) {
+    if (node.kind !== "file"
+        || node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE
+        || node.linkCount !== 1n
+        || (currentUserId() !== null && node.userId !== currentUserId())) {
+        fail("node-policy", path);
+    }
+}
+function sameDirectoryRead(left, right) {
+    return sameFileNodeSnapshot(left.directoryNode, right.directoryNode)
+        && left.entries.length === right.entries.length
+        && left.entries.every((entry, index) => {
+            const other = right.entries[index];
+            return other !== undefined
+                && entry.name === other.name
+                && entry.resourcePath === other.resourcePath
+                && sameFileNodeSnapshot(entry.node, other.node);
+        });
+}
+async function readDirectory(root, signal, expectedNode) {
+    try {
+        const result = await readStableResourceDirectory(root, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, {
+            maximumEntries: DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_FILES + 64,
+            ...(expectedNode === undefined ? {} : { expectedNode }),
+            ...(signal === undefined ? {} : { signal }),
+        });
+        assertPrivateDirectory(result.directoryNode);
+        return result;
+    }
+    catch (error) {
+        if (error instanceof DemandFileEventSnapshotStoreError)
+            throw error;
+        if (error instanceof StableDirectoryReadError) {
+            if (error.reason === "not-found")
+                fail("not-initialized", "$snapshots");
+            if (error.reason === "too-many-entries")
+                fail("capacity", "$snapshots");
+            if (error.reason === "aborted")
+                fail("aborted", "$signal");
+            if (error.reason === "root-scope")
+                fail("root-scope", "$root");
+            fail("stream-changed", "$snapshots");
+        }
+        throw error;
+    }
+}
+async function readSnapshotAt(root, resourcePath, sequence, node, signal) {
+    assertPrivateFile(node, "$snapshot");
+    try {
+        const read = await readDeterministicJsonFile(root, resourcePath, {
+            maximumBytes: DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_BYTES,
+            expectedNode: node,
+            ...(signal === undefined ? {} : { signal }),
+        });
+        const snapshot = parseDemandEventSourcingSnapshotDocument(read.text);
+        if (snapshot.commitSequence !== sequence) {
+            return Object.freeze({
+                status: "invalid",
+                commitSequence: sequence,
+                snapshot: null,
+                node: read.node,
+            });
+        }
+        return Object.freeze({
+            status: "valid",
+            commitSequence: sequence,
+            snapshot,
+            node: read.node,
+        });
+    }
+    catch (error) {
+        if (error instanceof DemandFileEventSnapshotStoreError)
+            throw error;
+        if (error instanceof DemandEventSourcingSnapshotError) {
+            return Object.freeze({
+                status: "invalid",
+                commitSequence: sequence,
+                snapshot: null,
+                node,
+            });
+        }
+        if (error instanceof StableFileReadError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal");
+            if (error.reason === "root-scope"
+                || error.reason === "unsupported-platform") {
+                fail("root-scope", "$root");
+            }
+            if (error.reason === "not-found"
+                || error.reason === "expectation-changed"
+                || error.reason === "source-changed") {
+                fail("stream-changed", "$snapshots");
+            }
+            if (error.reason !== "too-large") {
+                fail("operation-failure", "$snapshot");
+            }
+        }
+        else if (!(error instanceof StrictTextFileError)
+            && !(error instanceof DeterministicJsonDocumentError)) {
+            throw error;
+        }
+        // 可重建快照的容量、编码、文本或 JSON 损坏时，聚合仓储可以回退。
+        return Object.freeze({
+            status: "invalid",
+            commitSequence: sequence,
+            snapshot: null,
+            node,
+        });
+    }
+}
+export class DemandFileEventSnapshotStore {
+    #root;
+    constructor(root) {
+        assertRoot(root);
+        this.#root = root;
+    }
+    /** 稳定读取所有快照观察结果，并按 `commitSequence` 升序返回。 */
+    async readSnapshots(options) {
+        const { signal } = parseOptions(options);
+        const before = await readDirectory(this.#root, signal);
+        const snapshotEntries = [];
+        for (const [index, entry] of before.entries.entries()) {
+            let parsed;
+            try {
+                parsed = parseDemandEventStreamCommitFileName(entry.name);
+            }
+            catch (error) {
+                if (error instanceof DemandEventSourcingPathError) {
+                    fail("inventory", `$snapshots/${index}`);
+                }
+                throw error;
+            }
+            snapshotEntries.push(Object.freeze({
+                resourcePath: entry.resourcePath,
+                sequence: parsed.commitSequence,
+                node: entry.node,
+            }));
+        }
+        if (snapshotEntries.length > DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_FILES) {
+            fail("capacity", "$snapshots");
+        }
+        const limit = pLimit(SNAPSHOT_READ_CONCURRENCY);
+        const settled = await Promise.allSettled(snapshotEntries.map((entry) => (limit(() => readSnapshotAt(this.#root, entry.resourcePath, entry.sequence, entry.node, signal)))));
+        const snapshots = [];
+        for (const result of settled) {
+            if (result.status === "rejected")
+                throw result.reason;
+            snapshots.push(result.value);
+        }
+        const after = await readDirectory(this.#root, signal, before.directoryNode);
+        if (!sameDirectoryRead(before, after))
+            fail("stream-changed", "$snapshots");
+        return Object.freeze({
+            snapshots: Object.freeze(snapshots),
+        });
+    }
+    /** 显式恢复快照父目录中不再活动的原子发布暂存文件。 */
+    async recoverPublicationStages(options) {
+        const parsed = parseOptions(options);
+        try {
+            const receipt = await recoverDurableAtomicFileStagesInDirectory(this.#root, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, parsed.signal === undefined ? undefined : { signal: parsed.signal });
+            if (receipt.activeStageCount !== 0
+                || receipt.unknownStageCount !== 0) {
+                fail("recovery-required", "$snapshots");
+            }
+            return receipt;
+        }
+        catch (error) {
+            if (error instanceof DemandFileEventSnapshotStoreError)
+                throw error;
+            if (error instanceof DurableAtomicFileStageRecoveryError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
+                fail("recovery-required", "$snapshots");
+            }
+            throw error;
+        }
+    }
+    /** 按 `commitSequence` 不替换目标地发布一个可重建快照。 */
+    /** 直接退休一个序号的快照；不存在或失败返回 `false`。 */
+    async retireSnapshotAt(sequence, options) {
+        const { signal } = parseOptions(options);
+        if (!Number.isSafeInteger(sequence) || sequence < 1)
+            return false;
+        const ref = demandEventSourcingSnapshotRef(parseDemandEventCommitSequence(sequence, "$sequence"));
+        let node;
+        try {
+            node = (await this.#root.inspectExistingResource(ref)).node;
+        }
+        catch (error) {
+            if (error instanceof RootedDirectoryError)
+                return false;
+            throw error;
+        }
+        if (node.kind !== "file")
+            return false;
+        try {
+            await unlinkRegularFileExactly(this.#root, ref, {
+                expectedNode: node,
+                durability: "none",
+                ...(signal === undefined ? {} : { signal }),
+            });
+            return true;
+        }
+        catch (error) {
+            if (error instanceof ExactRegularFileUnlinkError)
+                return false;
+            throw error;
+        }
+    }
+    /**
+     * 退休序号小于 `keepFromSequence` 的快照；快照是可删除的检查点，退休失败只计数。
+     */
+    async retireSnapshotsBefore(keepFromSequence, options) {
+        const { signal } = parseOptions(options);
+        if (!Number.isSafeInteger(keepFromSequence) || keepFromSequence < 1) {
+            fail("input", "$keepFromSequence");
+        }
+        let read;
+        try {
+            read = await readDirectory(this.#root, signal);
+        }
+        catch (error) {
+            if (error instanceof DemandFileEventSnapshotStoreError) {
+                return Object.freeze({ retired: 0, failed: 0 });
+            }
+            throw error;
+        }
+        let retired = 0;
+        let failed = 0;
+        for (const entry of read.entries) {
+            let sequence;
+            try {
+                sequence = parseDemandEventStreamCommitFileName(entry.name).commitSequence;
+            }
+            catch (error) {
+                if (error instanceof DemandEventSourcingPathError)
+                    continue;
+                throw error;
+            }
+            if (sequence >= keepFromSequence || entry.node.kind !== "file")
+                continue;
+            try {
+                await unlinkRegularFileExactly(this.#root, entry.resourcePath, {
+                    expectedNode: entry.node,
+                    durability: "none",
+                    ...(signal === undefined ? {} : { signal }),
+                });
+                retired += 1;
+            }
+            catch (error) {
+                if (error instanceof ExactRegularFileUnlinkError) {
+                    failed += 1;
+                    continue;
+                }
+                throw error;
+            }
+        }
+        return Object.freeze({ retired, failed });
+    }
+    async publish(snapshotValue, options) {
+        let snapshot;
+        try {
+            snapshot = parseDemandEventSourcingSnapshot(snapshotValue);
+        }
+        catch (error) {
+            if (error instanceof DemandEventSourcingSnapshotError) {
+                fail("input", "$snapshot");
+            }
+            throw error;
+        }
+        const { signal } = parseOptions(options);
+        const declaration = createDemandEventSourcingSnapshotResourceDeclaration(snapshot.demandId, snapshot.commitSequence);
+        try {
+            admitWakeflowResourceOperation(declaration.processing, "exclusive-create");
+        }
+        catch (error) {
+            if (error instanceof WakeflowResourceProcessingContractError) {
+                fail("operation-failure", "$catalog");
+            }
+            throw error;
+        }
+        const ref = demandEventSourcingSnapshotRef(snapshot.commitSequence);
+        const text = renderDemandEventSourcingSnapshot(snapshot);
+        const bytes = encodeUtf8(text);
+        if (bytes.byteLength > DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_BYTES) {
+            fail("capacity", "$snapshot");
+        }
+        try {
+            await createFileAtomically(this.#root, ref, bytes, {
+                mode: DEMAND_FILE_EVENT_STORE_FILE_MODE,
+                durability: "none",
+                ...(signal === undefined ? {} : { signal }),
+            });
+            return Object.freeze({
+                disposition: "published",
+                commitSequence: snapshot.commitSequence,
+                snapshotDigest: computeDemandEventSourcingSnapshotDigest(snapshot),
+            });
+        }
+        catch (error) {
+            if (!(error instanceof DurableAtomicFileWriteError))
+                throw error;
+            if (error.reason === "aborted")
+                fail("aborted", "$signal");
+            if (error.reason === "capacity")
+                fail("capacity", "$snapshot");
+            if (error.reason === "root-scope")
+                fail("root-scope", "$root");
+            if (error.reason === "commit-uncertain"
+                || error.reason === "durability-failure"
+                || error.reason === "stage-cleanup-failure"
+                || error.reason === "stage-recovery-required"
+                || error.reason === "close-failure") {
+                fail("recovery-required", "$snapshot");
+            }
+            if (error.reason !== "target-exists") {
+                fail("operation-failure", "$snapshot");
+            }
+        }
+        let resource;
+        try {
+            resource = await this.#root.inspectExistingResource(ref);
+        }
+        catch (error) {
+            if (error instanceof RootedDirectoryError)
+                fail("root-scope", "$root");
+            throw error;
+        }
+        const existing = await readSnapshotAt(this.#root, ref, snapshot.commitSequence, resource.node, signal);
+        if (existing.status !== "valid"
+            || renderDemandEventSourcingSnapshot(existing.snapshot) !== text) {
+            fail("conflict", "$snapshot");
+        }
+        return Object.freeze({
+            disposition: "idempotent",
+            commitSequence: snapshot.commitSequence,
+            snapshotDigest: computeDemandEventSourcingSnapshotDigest(snapshot),
+        });
+    }
+}

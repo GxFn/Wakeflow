@@ -3,7 +3,7 @@
 > 原路径：`docs/wakeflow-typescript-dual-artifact-build-requirement-2026-08-24.md`，2026-09-03 迁入开发文档系统；目录职责与权威顺序见 [docs/README.md](../README.md)。
 
 > 创建日期：2026-08-24
-> 当前状态：`requirement-confirmed / capability-reimplementation-design-pending`
+> 当前状态：`requirement-confirmed / implemented`（2026-09-20 E4 切换完成，gate-log §13.104；§6.1 末尾关于 `core/`、`tools/`、`test/` 与切换前规则的条目是历史陈述，旧树已删除）
 > 适用范围：Wakeflow 仓库内全部手写 Node.js 运行时代码、构建工具、测试代码、Schema 派生代码，以及 Codex / Claude Code 两份可安装插件制品
 > 行为基线：[初始化生成文件需求 D1-D41](../archive/wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-decision-register)、[D38 全局职责闭环](../archive/wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-d38-global-contract)、[初始化 v3 当前实现](../archive/wakeflow-initialization-v3-development-plan-2026-08-06.md#dev-progress)
 > 架构关联：[D9 source ownership](../archive/wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-d09-source-ownership)、[全局基础服务需求](../archive/wakeflow-foundation-services-requirement-2026-08-11.md#foundation-document-role)、[基础服务实施分界](../archive/wakeflow-foundation-services-requirement-2026-08-11.md#foundation-review-implementation-separation)

@@ -1,7 +1,7 @@
 {
   "name": "wakeflow",
-  "version": "0.9.6",
-  "description": "A disciplined control loop for multi-window Codex workspaces, aligned with Wakeflow's Claude Code edition: a controller window plans, dispatches scoped task packages, collects immutable target results, obtains independent Test validation, reviews the evidence, and decides the next step. Explicit state roots keep the run auditable; evidence alone does not close a task.",
+  "version": "1.0.0",
+  "description": "A disciplined control loop for multi-window agent work across a fleet of Codex threads: a Controller window claims requirement packages, plans task packages, prepares deliveries, imports immutable target results, obtains independent Test validation and reviews the evidence before completing and archiving a Demand. Explicit on-disk state roots keep every step auditable; Agents perform the host actions, Wakeflow owns the content and the verification.",
   "category": "workflow",
   "author": {
     "name": "gaoxuefeng",
@@ -12,18 +12,18 @@
   "license": "MIT",
   "keywords": [
     "agent-workflow",
-    "unattended",
     "control-plane",
     "multi-window",
     "local-first",
-    "evidence-review"
+    "evidence-review",
+    "mcp"
   ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Wakeflow",
     "shortDescription": "Dual-host control loops for agent work",
-    "longDescription": "Wakeflow ships Codex and Claude Code editions for the same local-first control model. This Codex artifact packages controller state roots, task packages, Design/Test intake, delivery envelopes, immutable TargetResult records, review reducers, controller-return envelopes, two localized demand-progress assets, verification scripts, and controller/target skills for Codex workspaces. It coordinates unattended workflows without secretly sending prompts or replacing independent Test validation or controller judgment, and can share demand state with the Claude Code edition in dual-host workspaces.",
+    "longDescription": "Wakeflow ships Codex and Claude Code editions of the same local-first control model. This Codex edition packages the controller state roots, requirement board, Demand event stream, task packages, delivery envelopes with hook-observed landing evidence, immutable target results, review decisions, managed evidence, pods with worktree execution, status and verify projections, and the Controller, Design, Target and Test skills for Codex workspaces. It never sends prompts or performs host actions by itself.",
     "developerName": "GxFn",
     "category": "Productivity",
     "capabilities": [
@@ -33,9 +33,9 @@
     ],
     "websiteURL": "https://github.com/GxFn/Wakeflow#readme",
     "defaultPrompt": [
-      "Initialize the current workspace with Wakeflow",
-      "Create a Wakeflow task package",
-      "Review Wakeflow target results"
+      "Initialize this directory as a Wakeflow controller workspace",
+      "Show the Wakeflow workspace status",
+      "Claim the next requirement package and create a Demand"
     ],
     "brandColor": "#0F766E",
     "composerIcon": "./assets/wakeflow-mark.svg",

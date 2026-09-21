@@ -91,8 +91,7 @@ MCP 工具是状态通道，指令文件与 skills 是程序通道，Agent 与�
 
 ## 未决问题
 
-- Codex 当前版本的线程创建与标题工具名，L1 切片时核对。
-- 是否把 tmux 控制模式写进 Claude 的 skills 作为推荐观察方式。
+两项已关闭（2026-09-20 记录，gate-log §13.101 F7）：Codex 线程创建在 L1 endpoint 切片核对为 `create_thread`，场景 `card-02/window-handshake` 断言启动意图的执行参数；tmux 控制模式写进了 Claude 的技能文本，作为可选的强观察方式而不是必需步骤。
 
 ## 已关闭的未决问题
 

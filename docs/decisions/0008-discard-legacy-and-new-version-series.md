@@ -31,5 +31,4 @@
 
 ## 未决问题
 
-- 插件名称与 marketplace 条目是否沿用，E4 决定。
-- 新版本序列的起始号，E4 首个发布时决定。
+两项已于 2026-09-20 E4 关闭（gate-log §13.101 D3、D4）：插件名沿用 `wakeflow`，两份 marketplace 条目沿用（描述与关键字按新工具面改写，去掉 `unattended`）；新版本序列起点 `1.0.0`，唯一输入 `assets/release/version.json`，五个版本源由 `release:check` 核对。

@@ -1,0 +1,867 @@
+import { realpath } from "node:fs/promises";
+import path from "node:path";
+import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { parseJsonValue } from "../../foundation/data/json-value.js";
+import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
+import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { parseUtcInstant } from "../../foundation/time/utc-instant.js";
+import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
+import { inspectWorkClaim, releaseWorkClaim, WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS, } from "../../kernel/work-claims.js";
+import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
+import { fail } from "../../kernel/error.js";
+import { HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES, readHostHookObservations, } from "../../kernel/hook-observations.js";
+import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
+import { admitPodWorktreeObservation, candidateWorktreePaths, createPodWorktreeReceipt, listPodWorktreeReceipts, writePodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
+import { createWakeflowWindowHostBinding, renderWakeflowWindowHostBinding, } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
+import { createWakeflowWindowHostBindingId } from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { createWakeflowWindowHostBindingInStore, inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, withWakeflowWindowHostBindingStore, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
+import { parseWakeflowWindowHostHandle, parseWakeflowWindowHostIdentityProfile, WakeflowWindowHostIdentityProfileError, } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
+import { compileWakeflowWindowLaunchIntents, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
+import { compileWakeflowWindowRuntimeDesiredTopology, } from "../../workspace/window-runtime/wakeflow-window-runtime-desired-topology.js";
+import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRef, wakeflowWindowHostBindingRootRef, } from "../../workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "../../workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
+import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, } from "../../workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
+import { parseWakeflowWorkspaceHostResourceProfile, } from "../../workspace/workspace-host-resource-profile.js";
+import { admitWindowBindingResult, parseWindowBindingRequest, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, } from "./contract.js";
+import { decideEndpointCommand, } from "./decide.js";
+import { createWindowLocatorRecord, readWindowLocator, retireWindowLocator, toTmuxLocator, writeWindowLocator, } from "./locator-store.js";
+import { classifyTmuxPanes } from "./pane-classification.js";
+import { deriveEndpointNext, publishProjectionDocument, } from "./projection.js";
+/** 工作声明的恢复门阈值：固定两小时，只作强制释放的门槛，不自动清理（能力卡 2 Q5）。 */
+export { WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS };
+const BINDING_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$binding.maximumBytes");
+const BINDING_FILE_MODE = 0o600;
+const RECEIPT_DIRECTORY_MODE = 0o700;
+function signalOptions(signal) {
+    return signal === undefined ? {} : { signal };
+}
+function admitFacade(facade) {
+    try {
+        const resourceProfile = parseWakeflowWorkspaceHostResourceProfile(facade.resourceProfile);
+        const identityProfile = parseWakeflowWindowHostIdentityProfile(facade.identityProfile);
+        const hostId = parseWakeflowHostId(facade.hostId, "$facade.hostId");
+        if (resourceProfile.hostId !== hostId ||
+            identityProfile.hostId !== hostId ||
+            !resourceProfile.surfaces.windowIdentity) {
+            fail("unexpected", "host-facade", "$facade");
+        }
+        return Object.freeze({ hostId, resourceProfile, identityProfile });
+    }
+    catch (error) {
+        if (error instanceof WakeflowWindowHostIdentityProfileError) {
+            fail("unexpected", "host-facade", "$facade", { cause: error });
+        }
+        throw error;
+    }
+}
+function locatorProvider(hostId) {
+    return hostId === "claude-code" ? "tmux" : "none";
+}
+function bindingDigestOf(binding) {
+    return computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding"));
+}
+function mapBindingStoreError(error) {
+    if (error instanceof WakeflowWindowHostBindingStoreError) {
+        if (error.reason === "lock") {
+            fail("concurrency-conflict", "binding-lock", "$request.windowId", {
+                cause: error,
+                retryable: true,
+            });
+        }
+        if (error.reason === "recovery-required") {
+            fail("recovery-required", "binding-store", "$request.windowId", { cause: error });
+        }
+        if (error.reason === "aborted")
+            fail("io-failure", "aborted", "$signal", { cause: error });
+        fail("io-failure", `binding-${error.reason}`, "$request.windowId", { cause: error });
+    }
+    throw error;
+}
+async function readConfigSnapshot(root, signal) {
+    try {
+        return await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal));
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            fail("precondition-failed", "config-authority", "$request.root", { cause: error });
+        }
+        throw error;
+    }
+}
+async function openContext(root, facade, envelope, options) {
+    const snapshot = await readConfigSnapshot(root, options.signal);
+    const topology = compileWakeflowWindowRuntimeDesiredTopology(snapshot.model, facade.resourceProfile);
+    const intents = compileWakeflowWindowLaunchIntents(snapshot.model, facade.resourceProfile);
+    const unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(snapshot.model, facade.resourceProfile);
+    const { windowId } = envelope;
+    const intent = intents.intents.find((entry) => entry.windowId === windowId) ?? null;
+    const pod = intent === null ? null : (snapshot.indexes.podById[intent.podId] ?? null);
+    const scope = pod === null ? null : (snapshot.indexes.podScopes[pod.podId] ?? null);
+    return Object.freeze({
+        root,
+        facade,
+        snapshot,
+        windows: topology.windows,
+        programId: topology.programId,
+        window: topology.windows.find((entry) => entry.windowId === windowId) ?? null,
+        intent,
+        unregisteredEntry: unregistered.entries.find((entry) => entry.windowId === windowId) ?? null,
+        pod,
+        podWindowIds: new Set(scope === null ? [] : scope.windows.map((entry) => entry.windowId)),
+        repositoryRoot: intent === null ? null : worktreeRepositoryRoot(snapshot, intent),
+        authority: Object.freeze({
+            programId: topology.programId,
+            resourceProfile: facade.resourceProfile,
+            identityProfile: facade.identityProfile,
+            bindingRefs: topology.windows.map((entry) => wakeflowWindowHostBindingRef(facade.resourceProfile, entry.windowId)),
+            bindingRootRef: wakeflowWindowHostBindingRootRef(facade.resourceProfile),
+            lockRef: wakeflowWindowHostBindingMutationLockRef(facade.resourceProfile),
+        }),
+        signal: options.signal,
+        clock: options.clock,
+        uuidFactory: options.uuidFactory,
+    });
+}
+/** worktree pod 产品窗口的仓库主检出：配置位置报告里的绝对路径；不是 worktree 窗口即 null。 */
+function worktreeRepositoryRoot(snapshot, intent) {
+    if (intent.worktree === null)
+        return null;
+    const placement = snapshot.placements.roots.find((entry) => entry.key === `repository.${intent.worktree?.repositoryId}.root`);
+    return placement?.absolutePath ?? null;
+}
+async function loadBindings(context) {
+    try {
+        const inventory = await inspectWakeflowWindowHostBindingInventory(context.root, context.authority, signalOptions(context.signal));
+        return inventory.bindings;
+    }
+    catch (error) {
+        mapBindingStoreError(error);
+    }
+}
+async function loadClaim(context, windowId) {
+    // 声明根尚未建立（还没有任何投递）意味着没有声明，内核返回 absent 而不是布局故障。
+    return (await inspectWorkClaim(context.root, windowId, signalOptions(context.signal))).claim;
+}
+/**
+ * 宿主 hook 报告的 cwd 可能是符号链接路径（例如 macOS 的临时目录），而工作区根是
+ * 规范路径；先按字面比较，再按 realpath 比较，目录已不存在时视为不匹配。
+ */
+async function isWindowRoot(cwd, expectedRoot) {
+    const literal = path.resolve(cwd);
+    if (literal === expectedRoot)
+        return true;
+    try {
+        return (await realpath(literal)) === expectedRoot;
+    }
+    catch {
+        return false;
+    }
+}
+async function realpathOrNull(candidate) {
+    try {
+        return await realpath(path.resolve(candidate));
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * `session-start` 记录属于本窗口的判据：普通窗口按配置根；worktree pod 的产品窗口按
+ * 观察里 porcelain 列出的非主检出（登记与换代），没有观察时按已有回执的检出路径。
+ */
+async function sessionRootMatcher(context, window, observation, receipts) {
+    if (context.intent?.worktree === null ||
+        context.intent === null ||
+        context.repositoryRoot === null) {
+        const expectedRoot = path.resolve(context.root.absolutePath, window.configuredPlacement);
+        return (cwd) => isWindowRoot(cwd, expectedRoot);
+    }
+    const candidates = new Set(observation?.worktree === undefined
+        ? receipts
+            .filter((receipt) => receipt.windowId === window.windowId)
+            .map((receipt) => receipt.path)
+        : await candidateWorktreePaths(observation.worktree.porcelain, context.repositoryRoot));
+    // 主检出里的会话也算"这个窗口的会话"，好让准入报 main-checkout 而不是缺 hook 证据。
+    const repositoryReal = await realpathOrNull(context.repositoryRoot);
+    if (observation?.worktree !== undefined && repositoryReal !== null)
+        candidates.add(repositoryReal);
+    return async (cwd) => {
+        const real = await realpathOrNull(cwd);
+        return real !== null && candidates.has(real);
+    };
+}
+/** hook 观察是端点的会话证据：`session-start` 按窗口根匹配，`session-end` 按会话汇总。 */
+async function loadHookSessions(context, window, observation, receipts) {
+    const matches = await sessionRootMatcher(context, window, observation, receipts);
+    const options = signalOptions(context.signal);
+    const started = new Set();
+    const cwdBySession = new Map();
+    const ended = new Set();
+    // 读取上限等于目录列举上限：让保留策略而不是读取上限决定可见集合（§13.97 D7d）。
+    const startRecords = await readHostHookObservations(context.root, context.facade.hostId, { event: "session-start", limit: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES }, options);
+    for (const record of startRecords.records) {
+        if (!(await matches(record.cwd)))
+            continue;
+        started.add(record.sessionId);
+        cwdBySession.set(record.sessionId, record.cwd);
+    }
+    const endRecords = await readHostHookObservations(context.root, context.facade.hostId, { event: "session-end", limit: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES }, options);
+    for (const record of endRecords.records)
+        ended.add(record.sessionId);
+    return Object.freeze({ started, ended, cwdBySession });
+}
+async function loadWorktreeReceipts(context) {
+    if (context.pod === null || context.pod.placement !== "worktree")
+        return Object.freeze([]);
+    return listPodWorktreeReceipts(context.root, context.facade.hostId, context.pod.podId, signalOptions(context.signal));
+}
+function claimExpiredAt(claim, now) {
+    return Date.parse(claim.claimedAt) + WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS <= Date.parse(now);
+}
+async function loadState(context, observation) {
+    const bindings = await loadBindings(context);
+    const now = readUtcWallClock(context.clock);
+    const window = context.window;
+    if (window === null) {
+        return Object.freeze({
+            bindings,
+            binding: null,
+            bindingDigest: null,
+            claim: null,
+            claimExpired: false,
+            locator: null,
+            sessions: Object.freeze({
+                started: new Set(),
+                ended: new Set(),
+                cwdBySession: new Map(),
+            }),
+            worktreeReceipts: Object.freeze([]),
+            now,
+        });
+    }
+    const worktreeReceipts = await loadWorktreeReceipts(context);
+    const binding = bindings.find((entry) => entry.windowId === window.windowId) ?? null;
+    const claim = await loadClaim(context, window.windowId);
+    const locator = locatorProvider(context.facade.hostId) === "tmux"
+        ? await readWindowLocator(context.root, context.facade.hostId, window.windowId, context.signal)
+        : null;
+    return Object.freeze({
+        bindings,
+        binding,
+        bindingDigest: binding === null ? null : bindingDigestOf(binding),
+        claim,
+        claimExpired: claim !== null && claimExpiredAt(claim, now),
+        locator,
+        sessions: await loadHookSessions(context, window, observation, worktreeReceipts),
+        worktreeReceipts,
+        now,
+    });
+}
+function endpointState(context, loaded) {
+    const handleOwners = new Map();
+    for (const binding of loaded.bindings)
+        handleOwners.set(binding.handle.value, binding.windowId);
+    return Object.freeze({
+        windowKnown: context.window !== null && context.intent !== null,
+        launchIntentDigest: context.intent?.intentDigest ?? "",
+        locatorProvider: locatorProvider(context.facade.hostId),
+        worktreeRequired: context.intent !== null && context.intent.worktree !== null,
+        binding: loaded.binding === null || loaded.bindingDigest === null
+            ? null
+            : Object.freeze({
+                bindingId: loaded.binding.bindingId,
+                bindingDigest: loaded.bindingDigest,
+                handleValue: loaded.binding.handle.value,
+                launchIntentDigest: loaded.binding.source.launchIntentDigest,
+            }),
+        claim: loaded.claim === null
+            ? null
+            : Object.freeze({
+                claimId: loaded.claim.claimId,
+                claimDigest: loaded.claim.claimDigest,
+                expired: loaded.claimExpired,
+            }),
+        handleOwners,
+        startedSessions: loaded.sessions.started,
+        endedSessions: loaded.sessions.ended,
+    });
+}
+function admitHandle(context, observation) {
+    try {
+        return parseWakeflowWindowHostHandle(context.facade.identityProfile, observation.handle);
+    }
+    catch (error) {
+        if (error instanceof WakeflowWindowHostIdentityProfileError) {
+            fail("invalid-request", "handle", "$request.observation.handle", { cause: error });
+        }
+        throw error;
+    }
+}
+function classifyLiveness(context, loaded, observation) {
+    if (observation.kind === "tmux-panes") {
+        if (loaded.locator === null || loaded.binding === null) {
+            return Object.freeze({ kind: "tmux-panes", status: "no-locator" });
+        }
+        const socketName = context.snapshot.model.hosts?.["claude-code"]?.tmux?.socketName ?? null;
+        const status = classifyTmuxPanes(toTmuxLocator(loaded.locator), { bindingId: loaded.binding.bindingId, socketName }, observation.panes);
+        return Object.freeze({ kind: "tmux-panes", status });
+    }
+    if (observation.kind === "codex-thread") {
+        return Object.freeze({ kind: "codex-thread", status: observation.status });
+    }
+    return Object.freeze({ kind: "unobserved" });
+}
+function creationCommand(observation) {
+    return Object.freeze({
+        handleValue: observation.handle.value,
+        launchIntentDigest: observation.launchIntentDigest,
+        hasTmuxCoordinates: observation.tmux !== undefined,
+        hasWorktreeObservation: observation.worktree !== undefined,
+    });
+}
+function toCommand(context, loaded, request) {
+    switch (request.operation) {
+        case "register":
+            return Object.freeze({
+                operation: "register",
+                observation: creationCommand(request.observation),
+            });
+        case "replace":
+            return Object.freeze({
+                operation: "replace",
+                observation: creationCommand(request.observation),
+                expectedBindingId: request.expectedBindingId,
+                expectedBindingDigest: request.expectedBindingDigest,
+            });
+        case "decommission":
+            return Object.freeze({
+                operation: "decommission",
+                expectedBindingId: request.expectedBindingId,
+                expectedBindingDigest: request.expectedBindingDigest,
+                preClose: classifyLiveness(context, loaded, request.closure.preClose),
+                closeResult: request.closure.closeResult.status,
+                postClose: classifyLiveness(context, loaded, request.closure.postClose),
+            });
+        case "release-claim":
+            return Object.freeze({
+                operation: "release-claim",
+                expectedClaimDigest: request.expectedClaimDigest,
+                liveness: classifyLiveness(context, loaded, request.evidence.liveness),
+            });
+    }
+}
+/** Test 窗口要读的 worktree：有回执的给相对工作区根的路径，没有的只报缺失。 */
+function attachedWorktreeViews(context, intent, receipts) {
+    return intent.attachedWorktrees.map((attached) => {
+        const receipt = receipts.find((entry) => entry.repositoryId === attached.repositoryId);
+        return Object.freeze({
+            repositoryId: attached.repositoryId,
+            status: receipt === undefined ? "receipt-missing" : "receipt-present",
+            pathFromWorkspaceRoot: receipt === undefined ? null : path.relative(context.root.absolutePath, receipt.path),
+        });
+    });
+}
+/** worktree 意图在执行说明里的投影：建议名称、基线策略与宿主动作，从不含路径。 */
+function worktreeInstructions(context, intent) {
+    if (intent.worktree === null)
+        return null;
+    const template = context.facade.resourceProfile.surfaces.worktree;
+    const shared = {
+        repositoryId: intent.worktree.repositoryId,
+        suggestedName: intent.worktree.suggestedName,
+        basePolicy: intent.worktree.basePolicy,
+        registration: "after the session starts inside the worktree, report the handle plus the verbatim output of `git worktree list --porcelain` and `git rev-parse --git-common-dir` run in the session cwd",
+    };
+    if (template.launch === "claude-worktree-flag") {
+        return {
+            ...shared,
+            launch: template.launch,
+            hostBranch: `worktree-${intent.worktree.suggestedName}`,
+            note: "claude --worktree creates the checkout under .claude/worktrees/<name> from the local HEAD; the session cwd is that checkout",
+        };
+    }
+    return {
+        ...shared,
+        launch: template.launch,
+        hostBranch: null,
+        note: `create_thread with a worktree environment starts on a detached HEAD; run git switch -c ${intent.worktree.suggestedName} before the first result import`,
+    };
+}
+function claudeAddDirArguments(intent, attached) {
+    const arguments_ = [];
+    if (intent.root.configuredPlacement !== ".")
+        arguments_.push("--add-dir", "<workspace root>");
+    for (const view of attached) {
+        if (view.pathFromWorkspaceRoot !== null) {
+            arguments_.push("--add-dir", `<workspace root>/${view.pathFromWorkspaceRoot}`);
+        }
+    }
+    return arguments_;
+}
+/** Agent 执行启动意图所需的参数：只含配置声明与占位符，绝不含绝对路径或宿主句柄。 */
+function executionInstructions(context, intent, receipts) {
+    const model = context.snapshot.model;
+    const hostId = context.facade.hostId;
+    const role = intent.role;
+    const attached = attachedWorktreeViews(context, intent, receipts);
+    const worktree = worktreeInstructions(context, intent);
+    if (hostId === "claude-code") {
+        const host = model.hosts?.["claude-code"];
+        const launch = host?.launch;
+        const effort = launch?.reasoningEffortByRole?.[role] ??
+            launch?.reasoningEffortByRole?.default ??
+            (role === "controller" ? "max" : "xhigh");
+        const modelName = launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null;
+        const permissionMode = launch?.permissionMode ?? "acceptEdits";
+        return {
+            kind: "claude-code",
+            tmux: {
+                socketName: host?.tmux?.socketName ?? null,
+                sessionName: host?.tmux?.sessionName ?? "wakeflow",
+                windowName: intent.displayTitle,
+                cwd: intent.root.configuredPlacement,
+            },
+            command: "claude",
+            arguments: [
+                ...(intent.worktree === null ? [] : ["--worktree", intent.worktree.suggestedName]),
+                "--session-id",
+                "<uuid-v4 generated by the Agent>",
+                "--permission-mode",
+                permissionMode,
+                "--effort",
+                effort,
+                ...(modelName === null ? [] : ["--model", modelName]),
+                ...claudeAddDirArguments(intent, attached),
+            ],
+            sessionIdPolicy: "agent-generates-uuid-v4",
+            registration: "report handle kind claude-session with the generated session id plus the tmux socket, session, window, and pane",
+            worktree,
+            attachedWorktrees: attached,
+        };
+    }
+    const launch = model.hosts?.codex?.launch;
+    return {
+        kind: "codex",
+        tool: "create_thread",
+        title: intent.displayTitle,
+        cwd: intent.root.configuredPlacement,
+        environment: intent.worktree === null ? "local" : "worktree",
+        model: launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null,
+        reasoningEffort: launch?.reasoningEffortByRole?.[role] ?? launch?.reasoningEffortByRole?.default ?? null,
+        followUp: "set_thread_title",
+        registration: "report handle kind codex-thread with the created thread id",
+        worktree,
+        attachedWorktrees: attached,
+    };
+}
+function nextFor(context, bindings, registered, claim, claimExpired) {
+    const bound = new Set(bindings.map((entry) => entry.windowId));
+    const unregisteredWindowIds = context.windows
+        .filter((entry) => context.podWindowIds.has(entry.windowId) &&
+        !bound.has(entry.windowId) &&
+        entry.windowId !== context.window?.windowId)
+        .map((entry) => entry.windowId);
+    return deriveEndpointNext({
+        registered,
+        claimHeld: claim !== null,
+        claimExpired,
+        unregisteredWindowIds,
+    });
+}
+function bindingSummary(binding) {
+    return {
+        bindingId: binding.bindingId,
+        bindingDigest: bindingDigestOf(binding),
+        registeredAt: binding.registeredAt,
+        launchIntentDigest: binding.source.launchIntentDigest,
+    };
+}
+function claimSummary(claim, expired) {
+    if (claim === null)
+        return { status: "absent" };
+    return {
+        status: "held",
+        claimId: claim.claimId,
+        claimDigest: claim.claimDigest,
+        demandId: claim.holder.demandId,
+        claimedAt: claim.claimedAt,
+        expiresAt: new Date(Date.parse(claim.claimedAt) + WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS).toISOString(),
+        expired,
+    };
+}
+function inspectionResult(context, loaded) {
+    if (context.window === null || context.intent === null) {
+        fail("not-found", "window-unknown", "$request.windowId");
+    }
+    return admitWindowBindingResult({
+        kind: "WakeflowWindowBindingInspection",
+        schemaVersion: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION,
+        tool: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+        hostId: context.facade.hostId,
+        windowId: context.window.windowId,
+        role: context.window.role,
+        launchIntent: {
+            intentDigest: context.intent.intentDigest,
+            podId: context.intent.podId,
+            podName: context.intent.podName,
+            podPlacement: context.intent.podPlacement,
+            displayTitle: context.intent.displayTitle,
+            root: {
+                kind: context.intent.root.kind,
+                rootId: context.intent.root.rootId,
+                configuredPlacement: context.intent.root.configuredPlacement,
+            },
+            worktree: context.intent.worktree,
+            attachedWorktrees: context.intent.attachedWorktrees,
+            execution: executionInstructions(context, context.intent, loaded.worktreeReceipts),
+        },
+        binding: loaded.binding === null
+            ? { status: "unregistered" }
+            : { status: "registered", ...bindingSummary(loaded.binding) },
+        claim: claimSummary(loaded.claim, loaded.claimExpired),
+        locator: locatorProvider(context.facade.hostId) === "none"
+            ? { status: "not-applicable" }
+            : { status: loaded.locator === null ? "absent" : "present" },
+        next: nextFor(context, loaded.bindings, loaded.binding !== null, loaded.claim, loaded.claimExpired),
+    });
+}
+async function readBindingSource(context, ref) {
+    try {
+        return await readDeterministicJsonFile(context.root, ref, {
+            maximumBytes: BINDING_MAXIMUM_BYTES,
+            ...signalOptions(context.signal),
+        });
+    }
+    catch (error) {
+        if (error instanceof StableFileReadError) {
+            fail("concurrency-conflict", "binding-changed", "$request.windowId", {
+                cause: error,
+                retryable: true,
+            });
+        }
+        throw error;
+    }
+}
+async function refreshLocator(context, window, binding, observation) {
+    if (locatorProvider(context.facade.hostId) !== "tmux")
+        return;
+    if (binding === null || observation?.tmux === undefined) {
+        await retireWindowLocator(context.root, context.facade.hostId, window.windowId, context.signal);
+        return;
+    }
+    await writeWindowLocator(context.root, createWindowLocatorRecord({
+        programId: context.programId,
+        hostId: context.facade.hostId,
+        windowId: binding.windowId,
+        bindingId: binding.bindingId,
+        tmux: {
+            socketName: observation.tmux.socketName,
+            sessionName: observation.tmux.sessionName,
+            windowId: observation.tmux.windowId,
+            paneId: observation.tmux.paneId,
+        },
+        registeredAt: binding.registeredAt,
+    }), context.signal);
+}
+async function refreshProjection(context, entry, binding) {
+    const target = binding === null
+        ? entry
+        : compileWakeflowWindowRuntimeRegisteredProjectionEntry(context.facade.resourceProfile, context.facade.identityProfile, entry.projection, binding);
+    return publishProjectionDocument(context.root, {
+        resourceRef: target.resourceRef,
+        document: target.document,
+        documentDigest: target.documentDigest,
+        projectionDigest: target.projection.projectionDigest,
+    }, context.signal);
+}
+/** worktree pod 产品窗口：准入观察里的 git 事实（文件系统核对），返回可写进回执的检出。 */
+async function admitWorktree(context, loaded, observation) {
+    if (context.intent?.worktree === null || context.intent === null)
+        return null;
+    if (observation.worktree === undefined) {
+        fail("invalid-request", "worktree-receipt-required", "$request.observation.worktree");
+    }
+    if (context.repositoryRoot === null) {
+        fail("precondition-failed", "worktree-repository-unavailable", "$request.observation.worktree");
+    }
+    const sessionCwd = loaded.sessions.cwdBySession.get(observation.handle.value);
+    if (sessionCwd === undefined) {
+        fail("precondition-failed", "hook-evidence-missing", "$request.observation.handle");
+    }
+    return admitPodWorktreeObservation({
+        observation: observation.worktree,
+        sessionCwd,
+        repositoryRoot: context.repositoryRoot,
+    });
+}
+async function recordWorktree(context, binding, worktree, observedAt) {
+    if (worktree === null || context.intent?.worktree === null || context.intent === null)
+        return null;
+    await writePodWorktreeReceipt(context.root, createPodWorktreeReceipt({
+        hostId: context.facade.hostId,
+        podId: context.intent.podId,
+        windowId: binding.windowId,
+        repositoryId: context.intent.worktree.repositoryId,
+        bindingId: binding.bindingId,
+        worktree,
+        observedAt: parseUtcInstant(observedAt, "$request.observation.observedAt"),
+    }), signalOptions(context.signal));
+    return Object.freeze({
+        head: worktree.head,
+        branch: worktree.branch,
+        detached: worktree.branch === null,
+        locked: worktree.locked,
+    });
+}
+async function applyRegister(context, store, window, current, request, replayed, loaded) {
+    const observation = request.observation;
+    const worktree = await admitWorktree(context, loaded, observation);
+    if (replayed) {
+        // 同句柄重放：绑定不动；worktree 回执缺失或换过检出时按当前观察补写，保持幂等。
+        const summary = current === null
+            ? null
+            : await recordWorktree(context, current, worktree, observation.observedAt);
+        return Object.freeze({ disposition: "replayed", binding: current, worktree: summary });
+    }
+    const binding = await createWakeflowWindowHostBindingInStore(context.root, {
+        ...context.authority,
+        windowId: window.windowId,
+        bindingRef: wakeflowWindowHostBindingRef(context.facade.resourceProfile, window.windowId),
+        launchIntentDigest: observation.launchIntentDigest,
+        handle: admitHandle(context, observation),
+        observedAt: parseUtcInstant(observation.observedAt, "$request.observation.observedAt"),
+    }, store);
+    const summary = await recordWorktree(context, binding, worktree, observation.observedAt);
+    return Object.freeze({ disposition: "registered", binding, worktree: summary });
+}
+async function applyReplace(context, store, window, current, request, loaded) {
+    if (current === null)
+        fail("not-found", "binding-absent", "$request.windowId");
+    const worktree = await admitWorktree(context, loaded, request.observation);
+    const bindingRef = wakeflowWindowHostBindingRef(context.facade.resourceProfile, window.windowId);
+    const source = await readBindingSource(context, bindingRef);
+    const registeredAt = readUtcWallClock(store.wallClock);
+    if (Date.parse(registeredAt) <= Date.parse(current.registeredAt)) {
+        fail("precondition-failed", "registered-at-not-monotonic", "$request.observation.observedAt");
+    }
+    const observation = request.observation;
+    const replacement = createWakeflowWindowHostBinding({
+        programId: current.programId,
+        hostId: current.hostId,
+        windowId: current.windowId,
+        bindingId: createWakeflowWindowHostBindingId(store.uuidFactory),
+        handle: admitHandle(context, observation),
+        launchIntentDigest: observation.launchIntentDigest,
+        observedAt: parseUtcInstant(observation.observedAt, "$request.observation.observedAt"),
+        registeredAt,
+    }, context.facade.identityProfile);
+    try {
+        await replaceFileAtomically(context.root, bindingRef, encodeUtf8(renderWakeflowWindowHostBinding(replacement, context.facade.identityProfile), "$binding"), {
+            mode: BINDING_FILE_MODE,
+            expected: {
+                resourcePath: source.resourcePath,
+                node: source.node,
+                byteCount: source.byteCount,
+                digest: source.digest,
+            },
+            ...signalOptions(context.signal),
+        });
+    }
+    catch (error) {
+        if (error instanceof DurableAtomicFileWriteError) {
+            fail("io-failure", `binding-replace-${error.reason}`, "$request.windowId", { cause: error });
+        }
+        throw error;
+    }
+    const summary = await recordWorktree(context, replacement, worktree, observation.observedAt);
+    return Object.freeze({
+        disposition: "replaced",
+        binding: replacement,
+        worktree: summary,
+    });
+}
+async function applyDecommission(context, window, current) {
+    if (current === null)
+        fail("not-found", "binding-absent", "$request.windowId");
+    const bindingRef = wakeflowWindowHostBindingRef(context.facade.resourceProfile, window.windowId);
+    const source = await readBindingSource(context, bindingRef);
+    try {
+        await unlinkRegularFileExactly(context.root, bindingRef, {
+            expectedNode: source.node,
+            ...signalOptions(context.signal),
+        });
+    }
+    catch (error) {
+        if (error instanceof ExactRegularFileUnlinkError) {
+            fail("io-failure", `binding-retire-${error.reason}`, "$request.windowId", { cause: error });
+        }
+        throw error;
+    }
+    return Object.freeze({ disposition: "decommissioned", binding: null, worktree: null });
+}
+async function applyMutation(context, store, window, current, request, decision, loaded) {
+    switch (request.operation) {
+        case "register":
+            return applyRegister(context, store, window, current, request, decision.disposition === "replayed", loaded);
+        case "replace":
+            return applyReplace(context, store, window, current, request, loaded);
+        case "decommission":
+            return applyDecommission(context, window, current);
+    }
+}
+async function mutateBinding(context, loaded, request, decision) {
+    const window = context.window;
+    const entry = context.unregisteredEntry;
+    if (window === null || entry === null)
+        fail("not-found", "window-unknown", "$request.windowId");
+    const storeOptions = {
+        ...signalOptions(context.signal),
+        ...(context.clock === undefined ? {} : { wallClock: context.clock }),
+        ...(context.uuidFactory === undefined ? {} : { uuidFactory: context.uuidFactory }),
+    };
+    try {
+        return await withWakeflowWindowHostBindingStore(context.root, context.authority, storeOptions, async (store) => {
+            const current = store.inventory.bindings.find((candidate) => candidate.windowId === window.windowId) ??
+                null;
+            const currentDigest = current === null ? null : bindingDigestOf(current);
+            if (currentDigest !== loaded.bindingDigest) {
+                fail("concurrency-conflict", "binding-changed", "$request.windowId", { retryable: true });
+            }
+            const applied = await applyMutation(context, store, window, current, request, decision, loaded);
+            const observation = request.operation === "decommission" ? null : request.observation;
+            await refreshLocator(context, window, applied.binding, observation);
+            const projection = await refreshProjection(context, entry, applied.binding);
+            const bindings = store.inventory.bindings
+                .filter((candidate) => candidate.windowId !== window.windowId)
+                .concat(applied.binding === null ? [] : [applied.binding]);
+            return Object.freeze({
+                disposition: applied.disposition,
+                binding: applied.binding,
+                bindings,
+                worktree: applied.worktree,
+                verification: decision.operation === "decommission" ? decision.verification : null,
+                projection,
+            });
+        });
+    }
+    catch (error) {
+        mapBindingStoreError(error);
+    }
+}
+async function writeClaimReleaseReceipt(context, claim, loaded, request) {
+    const receipt = {
+        kind: "WakeflowWorkClaimForcedRelease",
+        schemaVersion: 1,
+        hostId: context.facade.hostId,
+        windowId: claim.windowId,
+        claimId: claim.claimId,
+        claimDigest: claim.claimDigest,
+        demandId: claim.holder.demandId,
+        releasedAt: loaded.now,
+        evidence: request.evidence.liveness.kind,
+        claimExpired: loaded.claimExpired,
+    };
+    const options = signalOptions(context.signal);
+    const directory = `${hostRuntimeRootRef(context.facade.hostId)}/observations/claim-releases`;
+    try {
+        await materializeDirectoryPath(context.root, parsePortableResourcePath(directory, "$claimRelease"), {
+            mode: RECEIPT_DIRECTORY_MODE,
+            ...options,
+        });
+        await createFileAtomically(context.root, parsePortableResourcePath(`${directory}/${claim.claimId}.json`, "$claimRelease"), encodeUtf8(`${JSON.stringify(receipt, null, 2)}\n`, "$claimRelease"), { mode: BINDING_FILE_MODE, ...options });
+    }
+    catch (error) {
+        if (error instanceof DurableAtomicFileWriteError && error.reason === "target-exists")
+            return;
+        if (error instanceof DurableAtomicFileWriteError ||
+            error instanceof DurableDirectoryMaterializationError) {
+            fail("io-failure", `claim-release-receipt-${error.reason}`, "$request.windowId", {
+                cause: error,
+            });
+        }
+        throw error;
+    }
+}
+async function releaseClaim(context, loaded, request) {
+    const claim = loaded.claim;
+    if (claim === null)
+        fail("not-found", "claim-absent", "$request.windowId");
+    await releaseWorkClaim(context.root, claim, signalOptions(context.signal));
+    await writeClaimReleaseReceipt(context, claim, loaded, request);
+    return Object.freeze({ claimId: claim.claimId, claimDigest: claim.claimDigest });
+}
+function mutationResult(context, request, outcome) {
+    return admitWindowBindingResult({
+        kind: "WakeflowWindowBindingMutation",
+        schemaVersion: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION,
+        tool: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+        hostId: context.facade.hostId,
+        windowId: request.windowId,
+        operation: request.operation,
+        disposition: outcome.disposition,
+        binding: outcome.binding === null ? null : bindingSummary(outcome.binding),
+        worktree: outcome.worktree,
+        verification: outcome.verification,
+        claim: outcome.claim,
+        projection: outcome.projection,
+        next: outcome.next,
+    });
+}
+async function executeOperation(context, request) {
+    const loaded = await loadState(context, request.operation === "register" || request.operation === "replace"
+        ? request.observation
+        : null);
+    if (request.operation === "inspect")
+        return inspectionResult(context, loaded);
+    const decision = decideEndpointCommand(request.windowId, endpointState(context, loaded), toCommand(context, loaded, request));
+    if (!decision.accepted)
+        fail(decision.code, decision.reason, decision.path);
+    if (decision.operation === "release-claim") {
+        const claim = await releaseClaim(context, loaded, request);
+        return mutationResult(context, request, {
+            disposition: "claim-released",
+            binding: loaded.binding,
+            worktree: null,
+            verification: null,
+            claim,
+            projection: null,
+            next: nextFor(context, loaded.bindings, loaded.binding !== null, null, false),
+        });
+    }
+    const outcome = await mutateBinding(context, loaded, request, decision);
+    return mutationResult(context, request, {
+        disposition: outcome.disposition,
+        binding: outcome.binding,
+        worktree: outcome.worktree,
+        verification: outcome.verification,
+        claim: null,
+        projection: outcome.projection,
+        next: nextFor(context, outcome.bindings, outcome.binding !== null, loaded.claim, loaded.claimExpired),
+    });
+}
+/** 执行一次公共窗口绑定操作。 */
+export async function executeWindowBindingRequest(facadeValue, value, options = {}) {
+    const facade = admitFacade(facadeValue);
+    return runCommandShell({
+        tool: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+        parseRequest: (raw) => {
+            const parsed = parseWindowBindingRequest(raw);
+            return {
+                envelope: { root: parsed.root, operation: parsed.operation, windowId: parsed.windowId },
+                input: parsed,
+            };
+        },
+        open: (root, envelope) => openContext(root, facade, envelope, options),
+        close: async () => { },
+        privateValues: (context) => [context.snapshot.ledgerRoot],
+    }, value, () => { }, (context, binding) => executeOperation(context, binding.input), commandShellExecutionOptions(options.durability));
+}

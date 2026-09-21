@@ -1,7 +1,7 @@
 {
   "name": "wakeflow",
-  "version": "0.9.6",
-  "description": "A disciplined control loop for multi-window Claude Code work: a controller window dispatches scoped task packages across a tmux-resident fleet, collects immutable target results, obtains independent Test validation, reviews the evidence, and decides the next step. Explicit on-disk state roots keep the run auditable; evidence alone does not close a task. Includes state roots, task packages, delivery envelopes, evidence review, and Design/Test intake.",
+  "version": "1.0.0",
+  "description": "A disciplined control loop for multi-window agent work across a tmux-resident fleet of Claude Code sessions: a Controller window claims requirement packages, plans task packages, prepares deliveries, imports immutable target results, obtains independent Test validation and reviews the evidence before completing and archiving a Demand. Explicit on-disk state roots keep every step auditable; Agents perform the host actions, Wakeflow owns the content and the verification.",
   "author": {
     "name": "gaoxuefeng",
     "url": "https://github.com/GxFn"
@@ -11,11 +11,11 @@
   "license": "MIT",
   "keywords": [
     "agent-workflow",
-    "unattended",
     "control-plane",
     "multi-window",
     "local-first",
-    "evidence-review"
+    "evidence-review",
+    "mcp"
   ],
   "mcpServers": "./.mcp.json"
 }

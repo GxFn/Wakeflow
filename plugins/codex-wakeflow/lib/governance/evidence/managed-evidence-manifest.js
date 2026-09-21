@@ -1,0 +1,392 @@
+import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
+import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
+import { encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
+import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
+import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
+import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { LOADED_ARTIFACT_TREE_IDENTITY_LIMITS, validateLoadedArtifactTreeManifest, LoadedArtifactTreeIdentityError, } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
+import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
+import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
+import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
+import { assertManagedEvidenceKindMatchesSource, parseManagedEvidenceSourceDescriptor, ManagedEvidenceSourceSelectionError, } from "./managed-evidence-source-selection.js";
+/**
+ * Wakeflow Governance / Evidence：本地managed evidence的不可变内容与来源清单。
+ *
+ * Manifest把一份已捕获payload的完整Foundation tree identity绑定到Program、Demand、
+ * immutable Demand Authority、配置中的逻辑来源和记录窗口。它只描述已经捕获的内容事实：
+ * 不保存payload字节，不读取源文件，不提交Event，也不判断Evidence是否真实、充分或可接受。
+ *
+ * `contentReview`记录 Controller 显式确认过的内容：含控制字符的 opaque 成员与非凭证类隐私
+ * 命中（能力卡 8 Q1）；凭证类命中永远不能进入记录，它也不冒充内容真实性证明。`kind` 是闭集
+ * 词汇（Q2），与来源绑定；`observation`、`link`、`commit` 是只做定位的引用来源，其 payload
+ * 是来源投影文档。
+ */
+export const MANAGED_EVIDENCE_MANIFEST_KIND = "wakeflow-managed-evidence-manifest";
+export const MANAGED_EVIDENCE_MANIFEST_VERSION = 1;
+export const MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES = 1024 * 1024;
+/**
+ * final record还包含一个Manifest文件和`payload/`目录前缀，因此Managed Evidence
+ * payload必须在Loaded Artifact硬上限内预留一个文件、两个entry、一个路径层级、
+ * `payload/`的8个UTF-8字节，以及最多1 MiB的Manifest文档容量。
+ */
+export const MANAGED_EVIDENCE_PAYLOAD_LIMITS = Object.freeze({
+    maxDepth: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth - 1,
+    maxEntries: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxEntries - 2,
+    maxFileBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFileBytes,
+    maxFiles: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFiles - 1,
+    maxRefBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxRefBytes - 8,
+    maxTotalBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes -
+        MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+});
+export const MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT = 64;
+const ERROR_MESSAGES = {
+    input: "Managed evidence manifest input is invalid.",
+    json: "Managed evidence manifest is not passive JSON data.",
+    capacity: "Managed evidence manifest exceeds its metadata capacity.",
+    schema: "Managed evidence manifest does not satisfy its portable Schema.",
+    identifier: "Managed evidence manifest contains an invalid typed identity.",
+    digest: "Managed evidence manifest contains an invalid digest.",
+    time: "Managed evidence manifest contains an invalid capture time.",
+    source: "Managed evidence manifest contains an invalid source.",
+    kind: "Managed evidence manifest kind does not match its source.",
+    payload: "Managed evidence manifest payload identity is inconsistent.",
+    "content-review": "Managed evidence manifest content review is inconsistent.",
+    ordering: "Managed evidence manifest paths are not in canonical order.",
+    representation: "Managed evidence manifest bytes are not its deterministic representation.",
+};
+export class ManagedEvidenceManifestError extends Error {
+    name = "ManagedEvidenceManifestError";
+    code = "wakeflow-managed-evidence-manifest";
+    reason;
+    path;
+    constructor(reason, path) {
+        super(ERROR_MESSAGES[reason]);
+        this.reason = reason;
+        this.path = path;
+    }
+}
+const DRAFT_VALIDATION_INSTANT = parseUtcInstant("1970-01-01T00:00:00.000Z");
+const DRAFT_FIELDS = Object.freeze([
+    "contentReview",
+    "demandAuthorityDigest",
+    "demandId",
+    "evidenceId",
+    "kind",
+    "payload",
+    "programId",
+    "recordedBy",
+    "source",
+]);
+const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA, [
+    WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA,
+    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
+]);
+function fail(reason, path) {
+    throw new ManagedEvidenceManifestError(reason, path);
+}
+function compareText(left, right) {
+    return left < right ? -1 : left > right ? 1 : 0;
+}
+function parseId(value, kind, path) {
+    try {
+        return parseWakeflowDurableIdOfKind(value, kind, path);
+    }
+    catch (error) {
+        if (error instanceof WakeflowDurableIdError)
+            fail("identifier", path);
+        throw error;
+    }
+}
+function parseDigest(value, path) {
+    try {
+        return parseSha256Digest(value, path);
+    }
+    catch (error) {
+        if (error instanceof Sha256Error)
+            fail("digest", path);
+        throw error;
+    }
+}
+function parseTime(value, path) {
+    try {
+        return parseUtcInstant(value, path);
+    }
+    catch (error) {
+        if (error instanceof UtcInstantError)
+            fail("time", path);
+        throw error;
+    }
+}
+function parseKind(value) {
+    if (!isEvidenceKind(value))
+        fail("schema", "$/kind");
+    return value;
+}
+function parsePrivacyFindings(value, payloadRefs) {
+    return Object.freeze(value.map((finding, index) => {
+        const path = `$/contentReview/privacyFindings/${index}`;
+        let ref;
+        try {
+            ref = parsePortableResourcePath(finding.ref, `${path}/ref`);
+        }
+        catch (error) {
+            if (error instanceof PortableResourcePathError)
+                fail("content-review", `${path}/ref`);
+            throw error;
+        }
+        if (!payloadRefs.has(ref))
+            fail("content-review", `${path}/ref`);
+        const previous = value[index - 1];
+        if (previous !== undefined &&
+            (compareText(previous.ref, ref) > 0 ||
+                (previous.ref === ref && previous.line >= finding.line))) {
+            fail("ordering", path);
+        }
+        return Object.freeze({ ref, line: finding.line, kind: finding.kind });
+    }));
+}
+function parsePayload(value) {
+    let treeManifest;
+    try {
+        treeManifest = validateLoadedArtifactTreeManifest(value.treeManifest, {
+            limits: MANAGED_EVIDENCE_PAYLOAD_LIMITS,
+        });
+    }
+    catch (error) {
+        if (error instanceof LoadedArtifactTreeIdentityError) {
+            if (error.reason === "entry-limit" ||
+                error.reason === "depth-limit" ||
+                error.reason === "file-count" ||
+                error.reason === "file-bytes" ||
+                error.reason === "total-bytes" ||
+                error.reason === "ref-bytes") {
+                fail("capacity", "$/payload/treeManifest");
+            }
+            fail("payload", "$/payload/treeManifest");
+        }
+        throw error;
+    }
+    const artifactDigest = parseDigest(value.artifactDigest, "$/payload/artifactDigest");
+    if (computeCanonicalJsonSha256Digest(treeManifest, "$/payload/treeManifest") !==
+        artifactDigest) {
+        fail("payload", "$/payload/artifactDigest");
+    }
+    return Object.freeze({ artifactDigest, treeManifest });
+}
+function parseContentReview(value, payload) {
+    const payloadRefs = new Set(payload.treeManifest.files.map((file) => file.ref));
+    const opaqueFileRefs = value.opaqueFileRefs.map((entry, index) => {
+        let ref;
+        try {
+            ref = parsePortableResourcePath(entry, `$/contentReview/opaqueFileRefs/${index}`);
+        }
+        catch (error) {
+            if (error instanceof PortableResourcePathError) {
+                fail("content-review", `$/contentReview/opaqueFileRefs/${index}`);
+            }
+            throw error;
+        }
+        if (!payloadRefs.has(ref)) {
+            fail("content-review", `$/contentReview/opaqueFileRefs/${index}`);
+        }
+        if (index > 0 &&
+            compareText(value.opaqueFileRefs[index - 1] ?? "", ref) >= 0) {
+            fail("ordering", `$/contentReview/opaqueFileRefs/${index}`);
+        }
+        return ref;
+    });
+    const privacyFindings = parsePrivacyFindings(value.privacyFindings, payloadRefs);
+    if ((opaqueFileRefs.length === 0 && privacyFindings.length === 0) !==
+        (value.disposition === "not-required")) {
+        fail("content-review", "$/contentReview");
+    }
+    return Object.freeze({
+        disposition: value.disposition,
+        opaqueFileRefs: Object.freeze(opaqueFileRefs),
+        privacyFindings,
+    });
+}
+function manifestBasis(wire) {
+    const payload = parsePayload(wire.payload);
+    let source;
+    try {
+        source = parseManagedEvidenceSourceDescriptor(wire.source);
+    }
+    catch (error) {
+        if (error instanceof ManagedEvidenceSourceSelectionError) {
+            fail("source", error.path);
+        }
+        throw error;
+    }
+    const kind = parseKind(wire.kind);
+    try {
+        assertManagedEvidenceKindMatchesSource(kind, source);
+    }
+    catch (error) {
+        if (error instanceof ManagedEvidenceSourceSelectionError)
+            fail("kind", "$/kind");
+        throw error;
+    }
+    // 目录树之外的来源（单文件与三种引用投影）都规范化为单一 `content` 成员。
+    const singleContent = source.kind !== "managed-path" || source.resourceType === "file";
+    if (singleContent &&
+        (payload.treeManifest.fileCount !== 1 ||
+            payload.treeManifest.files[0]?.ref !== "content")) {
+        fail("payload", "$/payload/treeManifest/files");
+    }
+    return Object.freeze({
+        artifactKind: MANAGED_EVIDENCE_MANIFEST_KIND,
+        schemaVersion: MANAGED_EVIDENCE_MANIFEST_VERSION,
+        evidenceId: parseId(wire.evidenceId, "evidence", "$/evidenceId"),
+        programId: parseId(wire.programId, "program", "$/programId"),
+        demandId: parseId(wire.demandId, "demand", "$/demandId"),
+        demandAuthorityDigest: parseDigest(wire.demandAuthorityDigest, "$/demandAuthorityDigest"),
+        kind,
+        capturedAt: parseTime(wire.capturedAt, "$/capturedAt"),
+        recordedBy: Object.freeze({
+            windowId: parseId(wire.recordedBy.windowId, "window", "$/recordedBy/windowId"),
+            configDigest: parseDigest(wire.recordedBy.configDigest, "$/recordedBy/configDigest"),
+        }),
+        source,
+        payload,
+        contentReview: parseContentReview(wire.contentReview, payload),
+    });
+}
+/** 解析并递归冻结一份关系闭合的managed evidence manifest。 */
+export function parseManagedEvidenceManifest(value) {
+    let json;
+    try {
+        json = parseJsonValue(value, "$manifest");
+    }
+    catch (error) {
+        if (error instanceof JsonValueError)
+            fail("json", error.path);
+        throw error;
+    }
+    if (encodeCanonicalJson(json, "$manifest").byteLength + 1 >
+        MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES) {
+        fail("capacity", "$manifest");
+    }
+    const result = validateWire(json);
+    if (!result.ok)
+        fail("schema", result.path);
+    const basis = manifestBasis(result.value);
+    const manifestDigest = parseDigest(result.value.manifestDigest, "$/manifestDigest");
+    if (computeCanonicalJsonSha256Digest(basis, "$manifest") !== manifestDigest) {
+        fail("digest", "$/manifestDigest");
+    }
+    return Object.freeze({ ...basis, manifestDigest });
+}
+function exactDraftRecord(value) {
+    let record;
+    try {
+        record = parsePlainRecord(value, "$draft");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$draft");
+        throw error;
+    }
+    const keys = Object.keys(record).sort(compareText);
+    if (keys.length !== DRAFT_FIELDS.length ||
+        keys.some((key, index) => key !== DRAFT_FIELDS[index])) {
+        fail("input", "$draft");
+    }
+    return record;
+}
+function candidateManifest(record, capturedAt) {
+    const basis = {
+        artifactKind: MANAGED_EVIDENCE_MANIFEST_KIND,
+        schemaVersion: MANAGED_EVIDENCE_MANIFEST_VERSION,
+        evidenceId: record.evidenceId,
+        programId: record.programId,
+        demandId: record.demandId,
+        demandAuthorityDigest: record.demandAuthorityDigest,
+        kind: record.kind,
+        capturedAt,
+        recordedBy: record.recordedBy,
+        source: record.source,
+        payload: record.payload,
+        contentReview: record.contentReview,
+    };
+    let json;
+    try {
+        json = parseJsonValue(basis, "$draft");
+    }
+    catch (error) {
+        if (error instanceof JsonValueError)
+            fail("input", error.path);
+        throw error;
+    }
+    if (json === null || Array.isArray(json) || typeof json !== "object") {
+        fail("input", "$draft");
+    }
+    return Object.freeze({
+        ...json,
+        manifestDigest: computeCanonicalJsonSha256Digest(json, "$draft"),
+    });
+}
+function readCaptureTime(options) {
+    let record;
+    try {
+        record = parsePlainRecord(options, "$options");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$options");
+        throw error;
+    }
+    if (Object.keys(record).some((key) => key !== "clock")) {
+        fail("input", "$options");
+    }
+    try {
+        return readUtcWallClock(record.clock);
+    }
+    catch (error) {
+        if (error instanceof UtcWallClockError)
+            fail("time", "$options/clock");
+        throw error;
+    }
+}
+/** 从关闭草稿创建Manifest；草稿关系在读取wall clock之前完成复验。 */
+export function createManagedEvidenceManifest(draft, options = {}) {
+    const record = exactDraftRecord(draft);
+    parseManagedEvidenceManifest(candidateManifest(record, DRAFT_VALIDATION_INSTANT));
+    return parseManagedEvidenceManifest(candidateManifest(record, readCaptureTime(options)));
+}
+/** 渲染managed evidence manifest的唯一确定性JSON文件表示。 */
+export function renderManagedEvidenceManifest(value) {
+    return renderDeterministicJsonDocument(parseManagedEvidenceManifest(value), "$manifest");
+}
+/** 只接受与领域确定性表示逐字节相同的Manifest文档。 */
+export function parseManagedEvidenceManifestDocument(text) {
+    let json;
+    try {
+        json = parseDeterministicJsonDocument(text, "$manifest");
+    }
+    catch (error) {
+        if (error instanceof DeterministicJsonDocumentError) {
+            fail("representation", "$manifest");
+        }
+        throw error;
+    }
+    const manifest = parseManagedEvidenceManifest(json);
+    if (renderManagedEvidenceManifest(manifest) !== text) {
+        fail("representation", "$manifest");
+    }
+    return manifest;
+}
+/** 返回已经由codec验证并绑定完整Manifest basis的领域摘要。 */
+export function computeManagedEvidenceManifestDigest(value) {
+    return parseManagedEvidenceManifest(value).manifestDigest;
+}

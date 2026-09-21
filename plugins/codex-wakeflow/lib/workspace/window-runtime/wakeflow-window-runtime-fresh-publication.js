@@ -1,0 +1,416 @@
+import { types } from "node:util";
+import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { hasDurableAtomicFileStagePrefix, } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import { recoverDurableAtomicFileStagesForTargets, DurableAtomicFileStageRecoveryError, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
+import { sameFileNodeIdentity, } from "../../foundation/filesystem/file-node-snapshot.js";
+import { splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
+import { readStrictTextFile, StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { WAKEFLOW_RUNTIME_ROOT_REF, } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
+import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
+import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF, wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "../workspace-host-runtime-paths.js";
+import { compileWakeflowFreshWindowRuntimeAuthority, WakeflowFreshWindowRuntimeAuthorityError, } from "./wakeflow-window-runtime-fresh-authority.js";
+import { WakeflowWindowRuntimeDesiredTopologyError, } from "./wakeflow-window-runtime-desired-topology.js";
+import { wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRootRef, } from "./wakeflow-window-runtime-paths.js";
+import { parseWakeflowWindowRuntimeUnregisteredProjectionDocument, WakeflowWindowRuntimeUnregisteredProjectionRecordError, } from "./wakeflow-window-runtime-unregistered-projection.js";
+const ERROR_MESSAGES = {
+    input: "Fresh Window Runtime publication input is invalid.",
+    authority: "Fresh Window Runtime publication authority is invalid.",
+    "strict-absent": "Fresh Window Runtime host root already exists.",
+    "prefix-conflict": "Fresh Window Runtime recovery prefix is not exact.",
+    capacity: "Fresh Window Runtime projection exceeds its byte budget.",
+    "recovery-required": "Fresh Window Runtime projection stage requires recovery.",
+    "root-scope": "Fresh Window Runtime publication lost workspace scope.",
+    aborted: "Fresh Window Runtime publication was aborted.",
+    "operation-failure": "Fresh Window Runtime publication failed.",
+};
+/** Fresh Window Runtime 发布失败的稳定、脱敏错误。 */
+export class WakeflowFreshWindowRuntimePublicationError extends Error {
+    name = "WakeflowFreshWindowRuntimePublicationError";
+    code = "wakeflow-fresh-window-runtime-publication";
+    reason;
+    path;
+    constructor(reason, path) {
+        super(ERROR_MESSAGES[reason]);
+        this.reason = reason;
+        this.path = path;
+    }
+}
+const MAXIMUM_PROJECTION_BYTES = parseByteCount(512 * 1024);
+function fail(reason, path) {
+    throw new WakeflowFreshWindowRuntimePublicationError(reason, path);
+}
+function admitAuthorityOperations(authority) {
+    try {
+        for (const declaration of authority.layoutDeclarations) {
+            admitWakeflowResourceOperation(declaration.processing, "materialize-directory");
+        }
+        for (const declaration of authority.projectionDeclarations) {
+            admitWakeflowResourceOperation(declaration.processing, "deterministic-rewrite");
+        }
+    }
+    catch (error) {
+        if (error instanceof WakeflowResourceProcessingContractError) {
+            fail("authority", "$resourceDeclarations");
+        }
+        throw error;
+    }
+}
+function parseOptions(value) {
+    let record;
+    try {
+        record = parsePlainRecord(value, "$options");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$options");
+        throw error;
+    }
+    if (!Object.hasOwn(record, "recoveringFreshPublication")
+        || Object.keys(record).some((key) => (key !== "recoveringFreshPublication" && key !== "signal"))
+        || typeof record.recoveringFreshPublication !== "boolean"
+        || (record.signal !== undefined
+            && (typeof record.signal !== "object"
+                || record.signal === null
+                || types.isProxy(record.signal)
+                || !(record.signal instanceof AbortSignal)))) {
+        fail("input", "$options");
+    }
+    return Object.freeze({
+        recoveringFreshPublication: record.recoveringFreshPublication,
+        signal: record.signal,
+    });
+}
+function currentUserId() {
+    return typeof process.geteuid === "function"
+        ? BigInt(process.geteuid())
+        : null;
+}
+function assertPrivateNode(node, kind, path) {
+    if (node.kind !== kind
+        || node.permissionBits !== (kind === "directory" ? 0o700 : 0o600)
+        || (kind === "file" && node.linkCount !== 1n)
+        || (currentUserId() !== null && node.userId !== currentUserId())) {
+        fail("prefix-conflict", path);
+    }
+}
+async function assertRuntimeParent(root) {
+    try {
+        const parent = await root.inspectExistingResource(WAKEFLOW_RUNTIME_ROOT_REF);
+        assertPrivateNode(parent.node, "directory", "$runtimeRoot");
+    }
+    catch (error) {
+        if (error instanceof WakeflowFreshWindowRuntimePublicationError)
+            throw error;
+        if (error instanceof RootedDirectoryError)
+            fail("root-scope", "$runtimeRoot");
+        throw error;
+    }
+}
+async function ensureDirectory(root, resourcePath, recovering, signal) {
+    try {
+        const existing = await root.inspectExistingResource(resourcePath);
+        assertPrivateNode(existing.node, "directory", `$layout/${resourcePath}`);
+        if (!recovering)
+            fail("strict-absent", `$layout/${resourcePath}`);
+        return Object.freeze({
+            resourcePath,
+            disposition: "current",
+            node: existing.node,
+        });
+    }
+    catch (error) {
+        if (error instanceof RootedDirectoryError
+            && error.reason === "resource-not-found") {
+            try {
+                const created = await createDirectoryAtomically(root, resourcePath, {
+                    mode: 0o700,
+                    ...(signal === undefined ? {} : { signal }),
+                });
+                assertPrivateNode(created.node, "directory", `$layout/${resourcePath}`);
+                return Object.freeze({
+                    resourcePath,
+                    disposition: "created",
+                    node: created.node,
+                });
+            }
+            catch (createError) {
+                if (createError instanceof DurableDirectoryMaterializationError) {
+                    if (createError.reason === "aborted")
+                        fail("aborted", "$signal");
+                    fail("operation-failure", `$layout/${resourcePath}`);
+                }
+                throw createError;
+            }
+        }
+        if (error instanceof WakeflowFreshWindowRuntimePublicationError)
+            throw error;
+        if (error instanceof RootedDirectoryError)
+            fail("root-scope", "$root");
+        throw error;
+    }
+}
+async function readPrivateDirectory(root, resourcePath, maximumEntries, signal) {
+    try {
+        const read = await readStableResourceDirectory(root, resourcePath, {
+            maximumEntries,
+            ...(signal === undefined ? {} : { signal }),
+        });
+        assertPrivateNode(read.directoryNode, "directory", `$inventory/${resourcePath}`);
+        return read;
+    }
+    catch (error) {
+        if (error instanceof WakeflowFreshWindowRuntimePublicationError)
+            throw error;
+        if (error instanceof StableDirectoryReadError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal");
+            if (error.reason === "root-scope")
+                fail("root-scope", "$root");
+            fail("prefix-conflict", `$inventory/${resourcePath}`);
+        }
+        throw error;
+    }
+}
+async function assertBindingsEmpty(root, bindingRoot, signal) {
+    const read = await readPrivateDirectory(root, bindingRoot, 1, signal);
+    if (read.entries.length !== 0)
+        fail("prefix-conflict", "$bindingInventory");
+    return read.directoryNode;
+}
+async function assertExactDirectoryChildren(root, resourcePath, expectedNames, signal) {
+    const read = await readPrivateDirectory(root, resourcePath, expectedNames.length + 1, signal);
+    const expected = new Set(expectedNames);
+    if (read.entries.length !== expected.size
+        || read.entries.some((entry) => !expected.has(entry.name))) {
+        fail("prefix-conflict", `$layout/${resourcePath}`);
+    }
+}
+function expectedFileName(entry) {
+    return splitPortableResourcePath(entry.resourceRef).at(-1) ?? "";
+}
+async function recoverProjectionStages(root, authority, signal) {
+    try {
+        const receipt = await recoverDurableAtomicFileStagesForTargets(root, authority.projectionSet.entries.map((entry) => entry.resourceRef), signal === undefined ? undefined : { signal });
+        if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
+            fail("prefix-conflict", "$projectionStages");
+        }
+    }
+    catch (error) {
+        if (error instanceof WakeflowFreshWindowRuntimePublicationError)
+            throw error;
+        if (error instanceof DurableAtomicFileStageRecoveryError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal");
+            if (error.reason === "root-scope")
+                fail("root-scope", "$root");
+            fail("prefix-conflict", "$projectionStages");
+        }
+        throw error;
+    }
+}
+async function assertProjectionNamespaceNames(root, authority, signal) {
+    const expected = new Set(authority.projectionSet.entries.map(expectedFileName));
+    const inventory = await readPrivateDirectory(root, authority.projectionSet.projectionRootRef, (expected.size * 2) + 1, signal);
+    if (inventory.entries.some((entry) => (!expected.has(entry.name)
+        && !hasDurableAtomicFileStagePrefix(entry.name)))) {
+        fail("prefix-conflict", "$projectionInventory");
+    }
+}
+async function inspectProjectionInventory(root, authority, signal) {
+    const expected = new Map(authority.projectionSet.entries.map((entry) => [expectedFileName(entry), entry]));
+    if (expected.has(""))
+        fail("authority", "$projectionSet");
+    const read = await readPrivateDirectory(root, authority.projectionSet.projectionRootRef, expected.size + 1, signal);
+    const current = new Map();
+    for (const directoryEntry of read.entries) {
+        const entry = expected.get(directoryEntry.name);
+        if (entry === undefined)
+            fail("prefix-conflict", "$projectionInventory");
+        assertPrivateNode(directoryEntry.node, "file", `$projectionInventory/${directoryEntry.name}`);
+        let source;
+        try {
+            source = await readStrictTextFile(root, entry.resourceRef, {
+                maximumBytes: MAXIMUM_PROJECTION_BYTES,
+                expectedNode: directoryEntry.node,
+                ...(signal === undefined ? {} : { signal }),
+            });
+            parseWakeflowWindowRuntimeUnregisteredProjectionDocument(source.text);
+        }
+        catch (error) {
+            if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError) {
+                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`);
+            }
+            if (error instanceof StrictTextFileError) {
+                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`);
+            }
+            if (error instanceof StableFileReadError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
+                if (error.reason === "root-scope")
+                    fail("root-scope", "$root");
+                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`);
+            }
+            throw error;
+        }
+        if (source.text !== entry.document || source.digest !== entry.documentDigest) {
+            fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`);
+        }
+        current.set(directoryEntry.name, source.digest);
+    }
+    return Object.freeze({ read, current });
+}
+async function createMissingProjections(root, authority, current, signal) {
+    let created = 0;
+    for (const entry of authority.projectionSet.entries) {
+        if (current.has(expectedFileName(entry)))
+            continue;
+        const bytes = encodeUtf8(entry.document, "$projection");
+        if (bytes.byteLength > MAXIMUM_PROJECTION_BYTES) {
+            fail("capacity", "$projectionWrite");
+        }
+        try {
+            await createFileAtomically(root, entry.resourceRef, bytes, {
+                mode: 0o600,
+                ...(signal === undefined ? {} : { signal }),
+            });
+            created += 1;
+        }
+        catch (error) {
+            if (error instanceof DurableAtomicFileWriteError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
+                if (error.reason === "capacity")
+                    fail("capacity", "$projectionWrite");
+                if (error.reason === "root-scope")
+                    fail("root-scope", "$root");
+                if (error.reason === "commit-uncertain"
+                    || error.reason === "durability-failure"
+                    || error.reason === "stage-cleanup-failure"
+                    || error.reason === "stage-recovery-required"
+                    || error.reason === "close-failure") {
+                    fail("recovery-required", "$projectionWrite");
+                }
+                fail("operation-failure", "$projectionWrite");
+            }
+            throw error;
+        }
+    }
+    return created;
+}
+/** 独占发布 Fresh host-local Window Runtime，或恢复同一 exact 未注册集合。 */
+export async function publishFreshWakeflowWindowRuntime(rootValue, configValue, profileValue, optionsValue) {
+    if (typeof rootValue !== "object"
+        || rootValue === null
+        || types.isProxy(rootValue)
+        || !(rootValue instanceof RootedDirectory)) {
+        fail("input", "$root");
+    }
+    const options = parseOptions(optionsValue);
+    if (options.signal?.aborted === true)
+        fail("aborted", "$signal");
+    let authority;
+    try {
+        authority = compileWakeflowFreshWindowRuntimeAuthority(configValue, profileValue);
+    }
+    catch (error) {
+        if (error instanceof WakeflowFreshWindowRuntimeAuthorityError
+            || error instanceof WakeflowWindowRuntimeDesiredTopologyError
+            || error instanceof WakeflowWorkspaceHostResourceProfileError
+            || error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError) {
+            fail("authority", error.path);
+        }
+        throw error;
+    }
+    admitAuthorityOperations(authority);
+    const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
+    await assertRuntimeParent(rootValue);
+    const directoryPaths = [
+        WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
+        wakeflowHostRuntimeRootRef(profile),
+        wakeflowHostIdentityRootRef(profile),
+        wakeflowHostProjectionsRootRef(profile),
+        wakeflowWindowHostBindingRootRef(profile),
+        wakeflowWindowRuntimeProjectionRootRef(profile),
+    ];
+    const directoryEffects = [];
+    for (const resourcePath of directoryPaths) {
+        directoryEffects.push(await ensureDirectory(rootValue, resourcePath, options.recoveringFreshPublication, options.signal));
+    }
+    const declaredLayoutPaths = authority.layoutDeclarations.map((entry) => (entry.placement.relativePath));
+    if (declaredLayoutPaths.length !== directoryPaths.length
+        || declaredLayoutPaths.some((resourcePath, index) => (resourcePath !== directoryPaths[index]))) {
+        fail("authority", "$layoutDeclarations");
+    }
+    await assertExactDirectoryChildren(rootValue, WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF, [profile.runtimeDirectoryName], options.signal);
+    await assertExactDirectoryChildren(rootValue, wakeflowHostRuntimeRootRef(profile), ["identity", "projections"], options.signal);
+    await assertExactDirectoryChildren(rootValue, wakeflowHostIdentityRootRef(profile), ["window-bindings"], options.signal);
+    await assertExactDirectoryChildren(rootValue, wakeflowHostProjectionsRootRef(profile), ["window-runtime"], options.signal);
+    const bindingNode = await assertBindingsEmpty(rootValue, wakeflowWindowHostBindingRootRef(profile), options.signal);
+    await assertProjectionNamespaceNames(rootValue, authority, options.signal);
+    await recoverProjectionStages(rootValue, authority, options.signal);
+    const before = await inspectProjectionInventory(rootValue, authority, options.signal);
+    const createdProjectionCount = await createMissingProjections(rootValue, authority, before.current, options.signal);
+    const after = await inspectProjectionInventory(rootValue, authority, options.signal);
+    if (after.current.size !== authority.projectionSet.entries.length) {
+        fail("operation-failure", "$projectionReadback");
+    }
+    const finalBindingNode = await assertBindingsEmpty(rootValue, wakeflowWindowHostBindingRootRef(profile), options.signal);
+    if (!sameFileNodeIdentity(bindingNode, finalBindingNode)) {
+        fail("prefix-conflict", "$bindingInventory");
+    }
+    for (const effect of directoryEffects) {
+        let current;
+        try {
+            current = await rootValue.inspectExistingResource(effect.resourcePath);
+        }
+        catch (error) {
+            if (error instanceof RootedDirectoryError) {
+                fail("root-scope", "$root");
+            }
+            throw error;
+        }
+        assertPrivateNode(current.node, "directory", `$layout/${effect.resourcePath}`);
+        if (!sameFileNodeIdentity(effect.node, current.node)) {
+            fail("prefix-conflict", `$layout/${effect.resourcePath}`);
+        }
+    }
+    const createdDirectoryCount = directoryEffects.filter((entry) => (entry.disposition === "created")).length;
+    const observationBasis = {
+        kind: "WakeflowFreshWindowRuntimePublicationObservation",
+        authorityDigest: authority.authorityDigest,
+        bindingRoot: {
+            deviceId: bindingNode.deviceId.toString(),
+            inodeId: bindingNode.inodeId.toString(),
+        },
+        directories: directoryEffects.map((entry) => ({
+            resourcePath: entry.resourcePath,
+            deviceId: entry.node.deviceId.toString(),
+            inodeId: entry.node.inodeId.toString(),
+        })),
+        projections: authority.projectionSet.entries.map((entry) => {
+            const documentDigest = after.current.get(expectedFileName(entry));
+            if (documentDigest === undefined)
+                fail("operation-failure", "$projectionReadback");
+            return { windowId: entry.windowId, documentDigest };
+        }),
+    };
+    return Object.freeze({
+        disposition: createdDirectoryCount === 0 && createdProjectionCount === 0
+            ? "current"
+            : "created",
+        authorityDigest: authority.authorityDigest,
+        projectionSetDigest: authority.projectionSet.projectionSetDigest,
+        createdDirectoryCount,
+        createdProjectionCount,
+        observationDigest: computeCanonicalJsonSha256Digest(observationBasis),
+    });
+}

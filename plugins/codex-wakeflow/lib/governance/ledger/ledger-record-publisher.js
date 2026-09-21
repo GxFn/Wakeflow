@@ -1,0 +1,178 @@
+import { types } from "node:util";
+import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
+import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { createDirectoryTreeCandidateDurably, planDirectoryTreeCandidate, settleDirectoryTreeCandidateDurably, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { parseLedgerAuthorityRecord, renderLedgerAuthorityRecord, LedgerAuthorityRecordError, } from "./ledger-authority-record.js";
+import { throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
+import { createLedgerRecordPublicationIntent, renderLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, LedgerRecordPublicationIntentError, } from "./ledger-record-publication-intent.js";
+import { ensureLedgerRecordPublicationIntent, existingLedgerRecordPublicationIntentOrNull, inspectLedgerRecordPublicationResidues, ledgerPublicationResourceNodeOrNull, loadExactPublishedLedgerRecord, prepareLedgerRecordPublicationLockRecovery, publishLedgerRecordStage, recoverLedgerIntentAtomicStages, retireLedgerRecordPublicationIntent, settleCommittedLedgerIntent, withLedgerRecordPublicationLock, } from "./ledger-record-publication-storage.js";
+import { LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS, LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH, LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES, LEDGER_AUTHORITY_MAXIMUM_TREE_FILES, LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES, LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES, LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_DURABLE_FILE_MODE, LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES, } from "./ledger-authority-storage-policy.js";
+function parseMembers(value, record) {
+    let entries;
+    try {
+        entries = parseDenseArray(value, LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS, "$members");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$members");
+        throw error;
+    }
+    if (entries.length !== record.documents.length)
+        fail("member", "$members");
+    const parsed = entries.map((entry, index) => {
+        let input;
+        try {
+            input = parsePlainRecord(entry, `$members/${index}`);
+        }
+        catch (error) {
+            if (error instanceof PassiveOwnDataError)
+                fail("input", `$members/${index}`);
+            throw error;
+        }
+        const keys = Object.keys(input).sort();
+        const inputBytes = input.bytes;
+        if (keys.length !== 2
+            || keys[0] !== "bytes"
+            || keys[1] !== "path"
+            || typeof input.path !== "string"
+            || !ArrayBuffer.isView(inputBytes)
+            || !(inputBytes instanceof Uint8Array)
+            || types.isProxy(inputBytes)
+            || inputBytes.byteLength > LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES) {
+            fail("input", `$members/${index}`);
+        }
+        const bytes = new Uint8Array(inputBytes);
+        const digest = computeSha256Digest(bytes, `$members/${index}/bytes`);
+        const declared = record.documents[index];
+        if (declared === undefined
+            || input.path !== declared.path
+            || digest !== declared.digest) {
+            fail("member", `$members/${index}`);
+        }
+        return Object.freeze({ path: declared.path, bytes, digest });
+    });
+    return Object.freeze(parsed);
+}
+function candidateOptions(signal) {
+    return Object.freeze({
+        directoryMode: LEDGER_DURABLE_DIRECTORY_MODE,
+        maximumDepth: LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH,
+        maximumEntries: LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES,
+        maximumFileBytes: LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES,
+        maximumFiles: LEDGER_AUTHORITY_MAXIMUM_TREE_FILES,
+        maximumTotalBytes: LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
+        ...(signal === undefined ? {} : { signal }),
+    });
+}
+function preparePublication(recordValue, membersValue, signal) {
+    let record;
+    try {
+        record = parseLedgerAuthorityRecord(recordValue);
+    }
+    catch (error) {
+        if (error instanceof LedgerAuthorityRecordError)
+            fail("input", "$record");
+        throw error;
+    }
+    const members = parseMembers(membersValue, record);
+    const recordBytes = encodeUtf8(renderLedgerAuthorityRecord(record));
+    if (recordBytes.byteLength > LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES) {
+        fail("capacity", "$record");
+    }
+    const totalBytes = members.reduce((total, member) => total + member.bytes.byteLength, recordBytes.byteLength);
+    if (totalBytes > LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES) {
+        fail("capacity", "$members");
+    }
+    const candidateFiles = Object.freeze([{
+            path: "record.json",
+            bytes: recordBytes,
+            mode: LEDGER_DURABLE_FILE_MODE,
+        }, ...members.map((member) => ({
+            path: member.path,
+            bytes: member.bytes,
+            mode: LEDGER_DURABLE_FILE_MODE,
+        }))].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)));
+    try {
+        const plan = planDirectoryTreeCandidate(candidateFiles, candidateOptions(signal));
+        const intent = createLedgerRecordPublicationIntent(record, plan);
+        if (encodeUtf8(renderLedgerRecordPublicationIntent(intent)).byteLength
+            > LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES) {
+            fail("capacity", "$intent");
+        }
+        return Object.freeze({
+            record,
+            candidateFiles,
+            intent,
+        });
+    }
+    catch (error) {
+        if (error instanceof DurableDirectoryTreeCandidateError) {
+            if (error.reason === "capacity")
+                fail("capacity", "$members");
+            fail("member", "$members");
+        }
+        if (error instanceof LedgerRecordPublicationIntentError) {
+            fail("conflict", "$intent");
+        }
+        throw error;
+    }
+}
+async function createOrSettleStage(root, prepared, stageNodePresent, signal) {
+    try {
+        return stageNodePresent
+            ? await settleDirectoryTreeCandidateDurably(root, prepared.intent.stageRef, prepared.candidateFiles, candidateOptions(signal))
+            : await createDirectoryTreeCandidateDurably(root, prepared.intent.stageRef, prepared.candidateFiles, candidateOptions(signal));
+    }
+    catch (error) {
+        if (error instanceof DurableDirectoryTreeCandidateError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal");
+            if (error.reason === "capacity")
+                fail("capacity", "$stage");
+            fail("conflict", "$stage");
+        }
+        throw error;
+    }
+}
+/** 在记录标识级互斥锁内整体发布目录树，或幂等复用完全一致的不可变权威记录。 */
+export async function publishLedgerAuthorityRecord(root, recordValue, membersValue, signal) {
+    const prepared = preparePublication(recordValue, membersValue, signal);
+    await prepareLedgerRecordPublicationLockRecovery(root, prepared.intent.lockRef);
+    return withLedgerRecordPublicationLock(root, prepared.intent.lockRef, signal, async () => {
+        await recoverLedgerIntentAtomicStages(root, prepared.intent.intentRef, signal);
+        const storedBefore = await existingLedgerRecordPublicationIntentOrNull(root, prepared.intent.intentRef, signal);
+        if (storedBefore !== null
+            && !sameLedgerRecordPublicationIntent(storedBefore.intent, prepared.intent)) {
+            fail("conflict", "$intent");
+        }
+        const residuesBefore = await inspectLedgerRecordPublicationResidues(root, prepared.intent, signal);
+        const finalNode = await ledgerPublicationResourceNodeOrNull(root, prepared.intent.finalRootRef);
+        if (finalNode !== null) {
+            if (storedBefore !== null) {
+                const loaded = await settleCommittedLedgerIntent(root, storedBefore, residuesBefore, signal);
+                return Object.freeze({ wroteAuthority: false, loaded });
+            }
+            if (residuesBefore.stageNode !== null) {
+                fail("recovery-required", "$stage");
+            }
+            const loaded = await loadExactPublishedLedgerRecord(root, prepared.intent, signal);
+            return Object.freeze({ wroteAuthority: false, loaded });
+        }
+        if (storedBefore === null && residuesBefore.stageNode !== null) {
+            fail("recovery-required", "$stage");
+        }
+        const stored = storedBefore ?? await ensureLedgerRecordPublicationIntent(root, prepared.intent, signal);
+        const candidate = await createOrSettleStage(root, prepared, residuesBefore.stageNode !== null, signal);
+        await publishLedgerRecordStage(root, prepared.intent, candidate, signal);
+        const loaded = await loadExactPublishedLedgerRecord(root, prepared.intent, signal);
+        const freshStored = await existingLedgerRecordPublicationIntentOrNull(root, prepared.intent.intentRef, signal);
+        if (freshStored === null
+            || !sameLedgerRecordPublicationIntent(freshStored.intent, stored.intent)) {
+            fail("recovery-required", "$intent");
+        }
+        await retireLedgerRecordPublicationIntent(root, freshStored, signal);
+        return Object.freeze({ wroteAuthority: true, loaded });
+    });
+}

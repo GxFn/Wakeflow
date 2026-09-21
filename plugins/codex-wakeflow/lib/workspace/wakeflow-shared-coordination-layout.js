@@ -1,0 +1,216 @@
+import { types } from "node:util";
+import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
+import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
+import { parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
+import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../foundation/filesystem/durable-directory-materialization.js";
+import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
+import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../foundation/resource/resource-processing-contract.js";
+import { WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION, WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./workspace-shared-runtime-resource-catalog.js";
+import { parseWakeflowWorkspaceResourceDeclaration, } from "./workspace-resource-declaration.js";
+/** Wakeflow Workspace：shared/coordination/工作声明静态目录链的唯一物化 owner。 */
+/** 窗口工作声明目录：路径由内核 `layout.ts` 定义，物化与静态矩阵由本模块声明。 */
+export const WORK_CLAIMS_ROOT_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
+    kind: "WakeflowWorkspaceResourceDeclaration",
+    declarationId: "coordination.window-work-claims-root",
+    family: "coordination",
+    ownerId: "shared-runtime-layout",
+    scope: "host-neutral",
+    placement: {
+        root: { kind: "workspace" },
+        relativePath: WORK_CLAIMS_ROOT_REF,
+    },
+    tracking: { disposition: "ignored", privacy: "runtime-private" },
+    nodePolicy: {
+        kind: "directory",
+        mode: "0700",
+        symlinkPolicy: "reject",
+        existingModePolicy: "observe-without-change",
+    },
+    processing: {
+        kind: "directory-container",
+        materializationRecipe: "materialize-directory",
+        existingDirectoryPolicy: "observe-without-mode-change",
+        collisionPolicy: "reject-non-directory",
+        descendantAuthority: "separate-declaration-required",
+        recoveryStrategy: "report-only",
+    },
+});
+export const WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS = Object.freeze([
+    WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION,
+    WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION,
+    WORK_CLAIMS_ROOT_RESOURCE_DECLARATION,
+]);
+export const WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST = computeCanonicalJsonSha256Digest({
+    kind: "WakeflowSharedCoordinationLayoutAuthority",
+    schemaVersion: 1,
+    declarations: WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS,
+});
+const ERROR_MESSAGES = {
+    input: "Shared Coordination Layout input is invalid.",
+    authority: "Shared Coordination Layout declarations are invalid.",
+    "strict-absent": "Fresh Shared Coordination Layout target already exists.",
+    layout: "Shared Coordination Layout contains an unsafe directory.",
+    "root-scope": "Shared Coordination Layout lost workspace scope.",
+    aborted: "Shared Coordination Layout operation was aborted.",
+    "operation-failure": "Shared Coordination Layout materialization failed.",
+};
+/** Shared Coordination Layout检查或物化失败时的稳定错误。 */
+export class WakeflowSharedCoordinationLayoutError extends Error {
+    name = "WakeflowSharedCoordinationLayoutError";
+    code = "wakeflow-shared-coordination-layout";
+    reason;
+    path;
+    constructor(reason, path) {
+        super(ERROR_MESSAGES[reason]);
+        this.reason = reason;
+        this.path = path;
+    }
+}
+function fail(reason, path) {
+    throw new WakeflowSharedCoordinationLayoutError(reason, path);
+}
+function currentUserId() {
+    return typeof process.geteuid === "function"
+        ? BigInt(process.geteuid())
+        : null;
+}
+function assertDirectory(node, path) {
+    if (node.kind !== "directory" ||
+        node.permissionBits !== 0o700 ||
+        (currentUserId() !== null && node.userId !== currentUserId())) {
+        fail("layout", path);
+    }
+}
+function assertRoot(value) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
+        fail("input", "$root");
+    }
+}
+function parseOptions(value) {
+    let record;
+    try {
+        record = parsePlainRecord(value, "$options");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$options");
+        throw error;
+    }
+    if (!Object.hasOwn(record, "mode") ||
+        Object.keys(record).some((key) => key !== "mode" && key !== "signal") ||
+        !new Set(["fresh", "recover", "ensure"]).has(record.mode) ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
+        fail("input", "$options");
+    }
+    if (record.signal?.aborted === true) {
+        fail("aborted", "$signal");
+    }
+    return Object.freeze({
+        mode: record.mode,
+        ...(record.signal === undefined
+            ? {}
+            : { signal: record.signal }),
+    });
+}
+async function optionalDirectory(root, declaration) {
+    const ref = declaration.placement.relativePath;
+    if (ref === null)
+        fail("authority", "$declarations");
+    try {
+        const observation = await root.inspectExistingResource(ref, "$layout");
+        assertDirectory(observation.node, `$layout/${ref}`);
+        return true;
+    }
+    catch (error) {
+        if (error instanceof RootedDirectoryError &&
+            error.reason === "resource-not-found") {
+            return false;
+        }
+        if (error instanceof WakeflowSharedCoordinationLayoutError)
+            throw error;
+        if (error instanceof RootedDirectoryError)
+            fail("root-scope", "$root");
+        throw error;
+    }
+}
+/** 零写入检查三层共享协调目录是否缺失、部分存在或完整。 */
+export async function inspectWakeflowSharedCoordinationLayout(root) {
+    assertRoot(root);
+    let existingDirectoryCount = 0;
+    for (const declaration of WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS) {
+        if (await optionalDirectory(root, declaration))
+            existingDirectoryCount += 1;
+    }
+    const status = existingDirectoryCount === 0
+        ? "missing"
+        : existingDirectoryCount ===
+            WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS.length
+            ? "current"
+            : "partial";
+    const basis = {
+        kind: "WakeflowSharedCoordinationLayoutObservation",
+        status,
+        existingDirectoryCount,
+        authorityDigest: WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
+    };
+    return Object.freeze({
+        status,
+        existingDirectoryCount,
+        authorityDigest: WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
+        observationDigest: computeCanonicalJsonSha256Digest(basis),
+    });
+}
+/** 按fresh/recover/ensure语义耐久物化三层共享协调目录。 */
+export async function materializeWakeflowSharedCoordinationLayout(root, optionsValue) {
+    assertRoot(root);
+    const options = parseOptions(optionsValue);
+    const before = await inspectWakeflowSharedCoordinationLayout(root);
+    if (options.mode === "fresh" && before.status !== "missing") {
+        fail("strict-absent", "$layout");
+    }
+    let createdDirectoryCount = 0;
+    for (const declaration of WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS) {
+        const ref = declaration.placement.relativePath;
+        if (ref === null)
+            fail("authority", "$declarations");
+        try {
+            admitWakeflowResourceOperation(declaration.processing, "materialize-directory");
+            const result = await materializeDirectoryPath(root, ref, {
+                mode: 0o700,
+                ...(options.signal === undefined ? {} : { signal: options.signal }),
+            });
+            const target = result.segments.find((entry) => entry.resourcePath === ref);
+            if (target?.disposition === "created")
+                createdDirectoryCount += 1;
+        }
+        catch (error) {
+            if (error instanceof WakeflowResourceProcessingContractError) {
+                fail("authority", "$declarations");
+            }
+            if (error instanceof DurableDirectoryMaterializationError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
+                if (error.reason === "root-scope")
+                    fail("root-scope", "$root");
+                fail("operation-failure", `$layout/${ref}`);
+            }
+            throw error;
+        }
+    }
+    const after = await inspectWakeflowSharedCoordinationLayout(root);
+    if (after.status !== "current")
+        fail("operation-failure", "$layout");
+    return Object.freeze({
+        disposition: createdDirectoryCount === 0 ? "current" : "created",
+        createdDirectoryCount,
+        authorityDigest: WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
+        observationDigest: after.observationDigest,
+    });
+}

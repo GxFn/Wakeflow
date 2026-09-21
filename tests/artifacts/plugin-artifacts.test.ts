@@ -16,7 +16,7 @@ import {
 import type { Dirent } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { after, test, type TestContext } from "node:test";
 
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
@@ -208,21 +208,25 @@ function digest(file: string): string {
   return `sha256:${createHash("sha256").update(readFileSync(file)).digest("hex")}`;
 }
 
-function outputFixture(t: TestContext): string {
-  const repositoryRoot = process.cwd();
-  const output = path.join(repositoryRoot, OUTPUT_RELATIVE);
-  t.after(() => {
-    const stat = lstatSync(output, { throwIfNoEntry: false });
-    if (stat !== undefined && !stat.isSymbolicLink() && stat.isDirectory()) {
-      rmSync(output, { recursive: true, force: false });
-    }
-  });
-  return output;
-}
+const OUTPUT_ROOT = path.join(process.cwd(), OUTPUT_RELATIVE);
 
 async function buildCandidates() {
   return buildWakeflowPluginArtifacts(process.cwd(), { outputRoot: OUTPUT_RELATIVE });
 }
+
+/** 本文件的测试共用一次构建（确定性一条另建第二次）；输出目录在文件结束时删除。 */
+let sharedCandidates: ReturnType<typeof buildCandidates> | undefined;
+function sharedBuild(): ReturnType<typeof buildCandidates> {
+  sharedCandidates ??= buildCandidates();
+  return sharedCandidates;
+}
+
+after(() => {
+  const stat = lstatSync(OUTPUT_ROOT, { throwIfNoEntry: false });
+  if (stat !== undefined && !stat.isSymbolicLink() && stat.isDirectory()) {
+    rmSync(OUTPUT_ROOT, { recursive: true, force: false });
+  }
+});
 
 /** 手搭的最小工作区：配置由渲染器写出，两个支持面目录存在；仓库 `../ProductA` 缺席不影响根匹配。 */
 function workspaceFixture(t: TestContext): string {
@@ -315,9 +319,9 @@ function outsideRepositoryCopy(t: TestContext, artifactRoot: string): string {
   return copy;
 }
 
-test("双宿主插件制品由确定性的闭合文件清单生成：编译闭包、两个 launcher、宿主配置、元数据、出厂文本、许可证、品牌资产与运行时依赖闭包", async (t) => {
-  const output = outputFixture(t);
-  const first = await buildCandidates();
+test("双宿主插件制品由确定性的闭合文件清单生成：编译闭包、两个 launcher、宿主配置、元数据、出厂文本、许可证、品牌资产与运行时依赖闭包", async () => {
+  const output = OUTPUT_ROOT;
+  const first = await sharedBuild();
   const second = await buildCandidates();
   // 两次构建字节相同——清单记录每个文件的 sha256，清单摘要相等即全部文件字节相等（D6）。
   deepEqual(second, first);
@@ -572,8 +576,8 @@ test("双宿主插件制品由确定性的闭合文件清单生成：编译闭�
 test("制品搬到仓库之外后，两个 MCP 入口仍经官方 stdio Client 发布公共目录的全部工具：依赖闭包自足（D5）", {
   timeout: 40_000,
 }, async (t) => {
-  const output = outputFixture(t);
-  const built = await buildCandidates();
+  const output = OUTPUT_ROOT;
+  const built = await sharedBuild();
   const expectedTools = WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.map((tool) => tool.name).sort();
 
   for (const artifact of built.artifacts) {
@@ -608,8 +612,8 @@ test("制品搬到仓库之外后，两个 MCP 入口仍经官方 stdio Client �
 test("两个制品的 hooks/observe.mjs 以宿主 SessionStart payload 把记录写进手搭工作区；观察目录被文件顶替时退出 0、stdout 空、stderr 恰好一行固定代码；报告固定代码后守卫已卸下，同一次运行的第二次故障不追加第二行", {
   timeout: 60_000,
 }, async (t) => {
-  const output = outputFixture(t);
-  const built = await buildCandidates();
+  const output = OUTPUT_ROOT;
+  const built = await sharedBuild();
 
   for (const artifact of built.artifacts) {
     const launcher = path.join(output, artifact.outputDirectory, HOOK_OBSERVER_LAUNCHER);
@@ -702,7 +706,7 @@ test("宿主中立闭包守卫拒绝任何 hosts/ 模块：本宿主模块与对
   );
 });
 
-test("运行时依赖闭包按锁文件求传递闭包：直接包展开为已排序的精确版本集合；未安装、开发依赖与工作区链接各以稳定错误码拒绝", () => {
+test("真实仓库的运行时依赖闭包：ajv 展开为它在锁文件里的四个传递依赖；未安装与开发依赖被拒绝（其余拒绝见 plugin-dependency-closure.test.ts）", () => {
   const closure = resolveRuntimeDependencyClosure(process.cwd(), ["ajv"]);
   deepEqual(
     closure.map((entry) => entry.name),
@@ -718,7 +722,7 @@ test("运行时依赖闭包按锁文件求传递闭包：直接包展开为已�
   ]);
   for (const entry of closure) match(entry.integrity, /^sha512-/u);
 
-  // 锁文件里没有的包、只在开发时安装的包、npm 工作区的符号链接，都不能成为运行时闭包。
+  // 锁文件里没有的包与只在开发时安装的包都不能成为运行时闭包。
   throws(
     () => resolveRuntimeDependencyClosure(process.cwd(), ["wakeflow-not-installed"]),
     expectClosureErrorCode("wakeflow-artifact-dependency-missing"),
@@ -726,9 +730,5 @@ test("运行时依赖闭包按锁文件求传递闭包：直接包展开为已�
   throws(
     () => resolveRuntimeDependencyClosure(process.cwd(), ["typescript"]),
     expectClosureErrorCode("wakeflow-artifact-dependency-dev"),
-  );
-  throws(
-    () => resolveRuntimeDependencyClosure(process.cwd(), ["wakeflow"]),
-    expectClosureErrorCode("wakeflow-artifact-dependency-link"),
   );
 });

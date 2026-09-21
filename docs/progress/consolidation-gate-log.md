@@ -3094,4 +3094,29 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **没做的与残余。** `plugins/` 仍是旧制品，两份 marketplace 仍写 `0.9.6`，`build:check` 因此还不能进 `npm test`——这三件是 D 阶段同一提交的事。`tools/check-release-consistency.mjs` 只是不再被 `package.json` 引用，文件随 `tools/` 在 D 阶段删除。
 
-**knip 从 12 分钟回到 3 秒。** 全量门这轮在 `check:unused` 上卡了 12 分 5 秒，`knip --performance` 把 99% 记在 `findAndParseGitignores`：它爬整棵树收集每一份 `.gitignore`，`test/fixtures/` 里有 291 份历史工作区的忽略文件，其中每一条否定模式都让它把累计的几千条模式重新编译成一个 picomatch 匹配器，代价随文件数平方增长；根 `.gitignore` 挡不住这次爬取，因为 `plugins/*` 两个工作区都在 `ignoreWorkspaces` 里，爬取没有可剪枝的"相关目录"。处置：`check:unused` 改为 `knip --no-progress --no-gitignore`，`knip.json` 的 `ignore` 显式加上 `.build/**`（否则 `package.json` 脚本里指向 `.build/` 的编译产物会被当作入口分析）。分析对象本来就由 `project` 与 `entry` 显式给出，不依赖 `.gitignore`。D 阶段删掉 `test/` 后这份开销本身也就没了。
+**knip 从 12 分钟回到 3 秒。** 全量门这轮在 `check:unused` 上卡了 12 分 5 秒，`knip --performance` 把 99% 记在 `findAndParseGitignores`：它爬整棵树收集每一份 `.gitignore`，`test/fixtures/` 里有 291 份历史工作区的忽略文件，其中每一条否定模式都让它把累计的几千条模式重新编译成一个 picomatch 匹配器，代价随文件数平方增长；根 `.gitignore` 挡不住这次爬取，因为 `plugins/*` 两个工作区都在 `ignoreWorkspaces` 里，爬取没有可剪枝的"相关目录"。处置：`check:unused` 改为 `knip --no-progress --no-gitignore`，`knip.json` 的 `ignore` 显式加上 `.build/**`（否则 `package.json` 脚本里指向 `.build/` 的编译产物会被当作入口分析）。分析对象本来就由 `project` 与 `entry` 显式给出，不依赖 `.gitignore`。D 阶段删掉 `test/` 后这份开销本身也就没了。全量门 974/974，提交 `629e79c5`。
+
+## 13.104 D：E4 原子切换——`plugins/` 重生成、旧体系删除、版本 1.0.0（2026-09-20）
+
+**做了什么。** plan §10.1 的八项在一次提交里完成（第 8 项的打标签除外）。
+
+- 制品：`npm run build:artifacts:committed` 把两个插件从源码重生成到 `plugins/`，整目录 stage-then-rename 替换旧内容。Codex 893 个文件、Claude 918 个，各约 10 MB，其中运行时依赖闭包 `node_modules/` 各 11 与 12 个包。根 `.gitignore` 的 `node_modules/` 原本会把这两份闭包整个忽略——`git check-ignore` 证实——加了两条否定规则 `!/plugins/<host>/node_modules/` 之后 1,899 个依赖文件才进得了提交；这是切换里唯一一个会让制品静默残缺的坑。
+- 删除：`core/`（186 文件）、`tools/`（9 文件，含 `sync-core.mjs` 与旧 `check-release-consistency.mjs`）、`test/`（7,260 文件，含 48 MB 历史 fixture 语料）、旧制品的全部内容（`scripts/`、`lib/`、`schemas/`、`templates/`、`bin/`、`wakeflow.config*.json`、插件根 `AGENTS.md`/`CLAUDE.md`），共 7,862 个路径；根 `package.json` 去掉 npm `workspaces` 与 `sync:core`、`check:core`、`validate*`、`smoke*`、`mcp*`、`test:wakeflow`、`test:legacy`，`npm install` 后 `package-lock.json` 少了两条工作区链接；`knip.json` 不再忽略 `test/**` 与两个工作区。
+- 门：`check:typescript` 末尾加 `build:check`，任何对 `plugins/` 的手改或改源码不重建都在门上红。Claude marketplace 条目按元数据重写为 `1.0.0`（Codex 条目本来就相符）。
+- 文档：根 `README.md` 与 `README.zh-CN.md` 按新制品全文改写（安装、一次性宿主动作、初始化产物、二十个工具、两宿主差异、仓库开发、发布）；`AGENTS.md` 与 `CLAUDE.md` 把 `core/`、`sync-core` 规则换成"生成物、唯一版本输入、`build:check`"规则；plan §5.1、§8.1 L3 行、§11 门表、§13 四行、§14 状态段、§15；`docs/README.md` 权威行与现行文档行；能力映射矩阵 sync-core 行；ADR-0008、ADR-0009、ADR-0013 的未决问题关闭；双制品需求文档标 `implemented`。
+- 测试：依赖闭包的拒绝路径改在一次性合成锁文件上核对（`plugin-dependency-closure.test.ts`：未安装、开发依赖、工作区链接、版本漂移、嵌套安装、文件剪裁），因为真实锁文件里不再有工作区链接；`plugin-artifacts` 与 `plugin-artifact-check` 每个文件只构建一次而不是每条用例各建一次。
+
+**验证。**
+
+| 门 | 结果 |
+| --- | --- |
+| `npm test`（含 `build:check`） | 978/978，runner 265.5 秒，整条门 274 秒；committed 与重建逐字节一致（Codex 892 / Claude 917 个清单文件），两份 marketplace 条目 ok |
+| `npm run smoke:artifacts`（committed 制品搬到仓库外） | 两宿主六幕全过：工具 20、fresh `completed`、reconcile `no-op`、status `idle`、verify ok、pod 预览 `ready`、hook `landed`；16 秒 |
+| `release:check`（不带 Git 标志） | 五源 `1.0.0` 一致、引擎 `>=24.19.0 <25`、两份清单 `releaseEligible`；带 `--require-main` 时分支 `main`；带 `--require-clean` 在提交前如实报 `wakeflow-release-dirty`（顺手修了一处：`git status` 输出超过 spawnSync 默认 1 MB 缓冲时被误报为 Git 失败，缓冲上限改为 64 MB） |
+| `git diff --check`、绝对路径与临时路径泄露扫描 | 干净 |
+
+**墙钟（§13.101 D10 的第二条未达）。** 切换后安静机器上逐文件计时：8 路池墙钟 231 秒，逐文件求和 1,690 秒，完美打包下限 211 秒；关键路径仍是场景验收单文件（231 秒，独占跑约 82 秒）。D10 定的"全量 TS 门低于 210 秒"这条没有达到：门里的 runner 265.5 秒。多出来的工作有两块：新制品测试本身约 59 秒（冒烟 42.8、制品 8.4、校验 3.0、发布门 3.5、闭包 0.2），以及它们制造的磁盘争用让重文件普遍慢了一到两成（result-review 150 → 182 秒、maintenance-execution 126 → 147 秒）。两个可选处置，留给用户：(a) 把 `plugin-artifact-smoke.test.ts` 移出 `npm test`——committed 冒烟已由 `smoke:artifacts` 在交付前独立跑，门里的这条是对候选的重复——预计少 40 到 60 秒；(b) 把 D10 的第二个数按 978 项重裁到 270 秒。本片不擅自动门，也不擅自减测试。
+
+**未做，按 plan §14 第 12 项明确报告。** 第 10 项（真实 `WakeWorkspace` 初始化、删除重建、reconfigure/reconcile）、第 13 项（两宿主各一次真实投递并交回 hook 证据）、Claude 状态栏与两宿主 hook 的真实会话核对；打标签 `v1.0.0`、推送、发布、插件缓存刷新。冒烟在仓库外一次性目录里完成的初始化、对账、观察与 hook 落地不是用户授权的真实工作区，不冒充第 10 项。
+
+**残余。** `check:unused` 的 `--no-gitignore` 在 `test/` 删除后已不再必要，保留它是因为分析对象本来就显式；`tooling/testing/test-durations.json` 的多数条目仍是 §13.100 的实测，新文件按本次实测补入；旧 `docs/archive/` 与 `file-review-ledger.md` 里对 `core/`、`tools/`、`test/` 的引用是历史证据，不改。

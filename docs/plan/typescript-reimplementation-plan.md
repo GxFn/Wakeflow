@@ -84,13 +84,7 @@
 
 ### 5.1 旧基线
 
-在最终切换前：
-
-- `core/` 继续是当前共享源码权威；
-- `tools/` 与 `test/` 继续执行现有维护和回归职责；
-- `plugins/codex-wakeflow/` 与 `plugins/claude-code-wakeflow/` 继续是当前正式制品；
-- 根 `AGENTS.md` 的 `core/` 与 `sync-core` 规则对旧树的维护继续有效；旧 validator、smoke 与回归测试以 `npm run test:legacy` 手动运行，不再进入 `npm test`；
-- 对旧基线的行为修复只有在用户另行要求时进行，不能夹带到 TS 重构中。
+2026-09-20 E4 原子切换（gate-log §13.104）之后旧基线不再存在：`core/`、`tools/`、`test/`（含全部历史 fixture）与旧制品树已在同一提交删除，`sync-core`、`test:legacy` 与旧 validator、smoke 脚本随之退出 `package.json`；`plugins/codex-wakeflow/` 与 `plugins/claude-code-wakeflow/` 自此是 `tooling/artifacts/build-plugin-artifacts.ts` 的纯生成物，`npm run build:check` 逐字节核对。切换前的边界原文见 Git 历史与 [archive/](../archive/)；本节只留结论。
 
 ### 5.2 新项目
 
@@ -209,7 +203,7 @@ E1 全局退出门继续约束 public、host、artifact 和 cutover；但一个 
 | L0 基础做实 | 底层基础能力做实，落地 TSD-13、TSD-14 与 [ADR-0013](../decisions/0013-target-architecture-and-slice-plan.md) | 六层形状 foundation、contracts、kernel、capabilities、hosts、entrypoints；foundation 收敛到 14 个原语；kernel 新建 13 个模块：demand-stream、append-command、publication-transaction、idempotency-store、next-projection、privacy-scan 与 redaction 与 limits、error、config-authority、layout、hook-observations、work-claim、receipts、tool-registry（职责见 [reviews/2026-09-04-architecture-and-slice-design.md §3](../reviews/2026-09-04-architecture-and-slice-design.md)）；事件与前沿词汇表改为 contracts 数据表加 never 守卫；codegen 预编译校验器惰性加载；dependency-cruiser 改为六层方向规则加切片隔离；ESLint 或 Biome、Prettier、knip、复杂度上限 | 22 个协调器；301 个错误类与 306 张消息表；13 份脱敏签名与 8 种上限；43 份 assertRoot、30 份 isAbortSignal、40 份 assertNotAborted、55 份 parseOptions；filesystem 36 文件合并为 8；6 份 uuidFrom；event store reader 全量读路径；Decider 两条 if 链；重复的 catch 映射测试 | 协调器总行数降 40% 以上；治理层 catch 行占比低于 5%；一次写命令只读一次事件流；100 个 commit 下 append 低于 50 毫秒；组合根热启动低于 500 毫秒；`tools/list` 低于 60 KB；lint 门为绿；foundation 文件数不高于 20；kernel 每模块有直接测试 |
 | L1 功能垂类切片 | 每个能力按 ADR-0013 的切片解剖闭合 | 十个切片按序：workspace、endpoint、requirement、demand、tasking、delivery、result-review、evidence、pod、observation；范围、工具、事件与删除对象见 [reviews/2026-09-04-architecture-and-slice-design.md §4](../reviews/2026-09-04-architecture-and-slice-design.md)；宿主差异只进 hosts profile 数据与 skills 文本（TSD-12）；配置 schema 按 TSD-16 从 v1 起版 | 各切片列出的被替代旧形状：window-runtime 21、managed-integration 13、ledger 20、todo 24、demand 38、lifecycle 6、controller 3、tasking 9、testing 23、delivery 31、result 11、review 27、evidence 21、active 7 文件 | 每片 decide 测试加一条场景验收通过，被替代物同一提交删除；十片完成后公共工具恰为 20 个 |
 | L2 业务场景与联合 | 从初始化到归档的端到端场景跑通 | 第一项是 hook 观察脚本 `src/entrypoints/wakeflow-hook-observer.ts` 与两宿主的 hook 配置片段（2026-09-18 gate-log §13.94 D9 从 L3 提前，L3 只打包），状态**已实现、宿主未验证**（gate-log §13.97 定案、§13.98 实现记录）；场景联合：初始化、窗口、TODO、Demand、派发、结果、评审、完成、归档；场景验收全量运行；skills 与 commands 文本按新公共面重写，状态**已实现**（gate-log §13.99 定案：`assets/agent-text/` 一份源、每宿主一份文本取值表、`tests/artifacts/agent-text-honesty.test.ts` 诚实性门；旧制品树留到 L3 原子切换时删除）；Agent 执行的派发在两宿主完成一次投递并交回回读证据 | 无场景价值的旧测试 | Controller Route 不再返回任何 not-implemented blocker；矩阵每行都有 TS owner 或放弃记录；场景验收覆盖全部保留场景；两宿主各完成一次真实投递并交回 hook 证据（记未验证直到跑过）；治理测试墙钟低于 3 分钟 |
-| L3 制品、对比与切换 | 对应 E3 与 E4 | 候选构建器产出完整插件：manifest、skills、commands、templates、README、宿主记忆、setup 与 validate 与 smoke 脚本、assets、marketplace 条目，两次构建逐字节一致；`releaseEligible` 有真实路径；插件 engines 升到 Node 24；全量场景验收；双 validator 与双 smoke 对候选制品运行；新版本序列起始；原子切换并删除旧体系与全部历史 fixture | 旧 `core/`、`tools/`、`test/` | 第 14 节完成定义全部满足 |
+| L3 制品、对比与切换 | 对应 E3 与 E4 | 候选构建器产出完整插件：manifest、skills、commands、templates、README、宿主记忆、setup 与 validate 与 smoke 脚本、assets、marketplace 条目，两次构建逐字节一致；`releaseEligible` 有真实路径；插件 engines 升到 Node 24；全量场景验收；双 validator 与双 smoke 对候选制品运行；新版本序列起始；原子切换并删除旧体系与全部历史 fixture。**2026-09-20 已完成**（gate-log §13.103、§13.104）：templates、插件根记忆文件与制品内 setup/validate/smoke 脚本按 §13.101 D1 不再发出，validate 与 smoke 是仓库门 `build:check`、`smoke:artifacts` | 旧 `core/`、`tools/`、`test/`（已删除） | 第 14 节完成定义：第 1–9、11、14、15 项满足；第 10、12、13 项按第 12 项明确报告未执行 |
 
 P0 必须核实并记录的事项：
 
@@ -312,12 +306,12 @@ P0 必须核实并记录的事项：
 | 阶段 | 状态 | 当前事实 |
 | --- | --- | --- |
 | E0 工程底座 | `complete` | Node 24、TS project references、Schema codegen、架构门和轻量 TS 测试门已建立 |
-| E1 能力地图与等级 | `in-progress` | BFS-01～BFS-11 已重新映射；资源处理归一标准已确认；2026-09-03 接受 ADR-0002 到 ADR-0008，形成 TSD-12 到 TSD-16；P0 能力卡讨论进行中，第 1 组工作区与配置已确认；下一步继续能力卡并建立场景验收骨架，不新增业务能力 |
-| E2 能力重新实现 | `in-progress` | L0 基础做实与 L1 十个切片（workspace、endpoint、requirement、demand、tasking、delivery、result-review、evidence、pod、observation）已按 ADR-0013 闭合，2026-09-18 observation 切片 10 收口：公共工具恰为 20 个，wire Schema 95 份，Controller Route 不再返回 not-implemented blocker，被替代的旧形状随各切片同一提交删除（记录见 [consolidation-gate-log §13.75 到 §13.96](../progress/consolidation-gate-log.md)）；2026-09-11 源码走读的 §8.1 档已落地（gate-log §13.93）。下一步 L2：hook 观察脚本与两宿主 hook 配置片段先行，再做场景联合与 skills、commands 文本 |
-| E3 能力覆盖与场景验收 | `in-progress` | 按 ADR-0008 从新旧对比改为能力覆盖与场景验收；场景验收骨架随每个纵切运行，2026-09-18 达 20 个场景全部 pass（[references/scenario-acceptance.md](../references/scenario-acceptance.md)）；能力映射矩阵 31 项旧工具无一"缺席"（重切或已落地 27、放弃 4）；旧实现只读保留，旧门已退出 `npm test` |
-| E4 制品切换与清理 | `pending` | 未授权、未开始；候选构建器目前只产出编译闭包、`mcp/server.mjs`、`.mcp.json` 与 `package.json`，尚不能产出可安装插件，补齐工作列入 §8.1 的 P5 |
+| E1 能力地图与等级 | `complete` | 2026-09-03 接受 ADR-0002 到 ADR-0008 形成 TSD-12 到 TSD-16；2026-09-04 十张能力卡全部 `confirmed`，[references/capability-map.md](../references/capability-map.md) 31 项旧工具逐行有 owner 或放弃记录，D1–D41 与 I3 逐行判定；ADR-0009 到 ADR-0013 陆续接受 |
+| E2 能力重新实现 | `complete` | L0 基础做实、L1 十个切片（gate-log §13.75 到 §13.96）、L2 hook 观察脚本与两宿主 hook 片段（§13.97、§13.98）、skills 与 commands 文本（§13.99）、可选持久化级别与测试剪枝（§13.100）、配置从 v1 起版（§13.102）均已闭合：公共工具恰为 20 个，wire Schema 95 份，Controller Route 无 not-implemented blocker。L2 的两项真实宿主验证（两宿主各一次真实投递交回 hook 证据、Claude 状态栏真实会话）记 `已实现、宿主未验证`；治理测试墙钟门按 §13.101 D10 改为两条 |
+| E3 能力覆盖与场景验收 | `complete` | 20 个场景经公共 MCP 在一次性工作区一条链全部 pass，`card-10/release-consistency` 以 tooling 测试接线（[references/scenario-acceptance.md](../references/scenario-acceptance.md)，待接线清零）；能力映射矩阵无"缺席"（重切或已落地 27、放弃 4，放弃项各有 ADR 或能力卡记录）；真实 `WakeWorkspace` 验收未执行，按 §14 第 12 项明确报告 |
+| E4 制品切换与清理 | `complete` | 2026-09-20 一次提交完成原子切换（gate-log §13.103、§13.104）：构建器产出完整插件（清单、`package.json`、LICENSE、品牌资产、skills、commands、README、hooks、运行时依赖闭包），`plugins/` 重生成为纯生成物，`core/`、`tools/`、`test/`、旧制品内容、`sync-core` 与 `test:legacy` 同一提交删除；版本输入 `assets/release/version.json` 为 `1.0.0`，五源一致；`npm test` 含 `build:check`，`smoke:artifacts` 与 `release:check` 为独立门。打标签、发布与缓存刷新未执行，等用户授权 |
 
-旧门最后一次记录：在 Node 24.19.0 下为 `1,821` 个测试（`1,820` 通过、`1` 跳过）。自 2026-09-03 起旧门不再进入 `npm test`，只作为不变量来源以 `test:legacy` 手动运行。
+旧门最后一次记录（历史）：2026-09-03 在 Node 24.19.0 下为 `1,821` 个测试（`1,820` 通过、`1` 跳过）；旧门与旧树已于 2026-09-20 删除。
 
 <a id="ts-dev-final-acceptance"></a>
 ## 14. 最终完成定义
@@ -340,6 +334,8 @@ P0 必须核实并记录的事项：
 14. `tools/list` 总载荷低于 60 KB，MCP 组合根热启动低于 500 毫秒（TSD-13 与 §8.1 L0 退出门）；
 15. 插件版本号从新版本序列起始，`release:check` 的五个版本源一致（TSD-16）。
 
+2026-09-20 状态（gate-log §13.104）：第 1 到 9、11、14、15 项满足。第 10 项（`WakeWorkspace` 真实初始化、删除重建、reconfigure/reconcile）、第 13 项（两宿主各一次真实投递并交回回读证据）与随之的真实会话核对未执行，按第 12 项明确报告：制品冒烟在仓库外的一次性目录里完成了 fresh-initialize、reconcile、status、verify 与 hook 落地，但那不是用户授权的真实工作区，也没有真实宿主会话。
+
 <a id="ts-dev-change-log"></a>
 ## 15. 更新记录
 
@@ -358,3 +354,4 @@ P0 必须核实并记录的事项：
 - 2026-09-04：用户接受 [ADR-0012](../decisions/0012-flow-convergence-callback-calls-testing-redesign.md)（回传固定效果、三种调用形状、完成即归档、测试记录对比与失败分类、删除 redesign 改为 escalate）。回写：能力卡 4 到 7 追加修订节；能力映射矩阵行 1、7、8、10、12、13、20、21、30 更新，统计改为重切 15、缺席 12、放弃 4；功能与场景总览主流程第 7 到 13 步与 F5 到 F10 同步；场景清单四行重命名；L1 缺席项清单改写。下一步进入架构与切片设计。
 - 2026-09-04：用户接受 [ADR-0013](../decisions/0013-target-architecture-and-slice-plan.md)：六层目标架构、切片解剖、三种调用形状的内核实现、单一错误模型、foundation 收敛、20 个公共工具、L1 十个切片顺序。回写：§8.1 L0 与 L1 两行改写；§11 增加 decide 测试与场景验收规则及 `scenario:acceptance` 门；能力映射矩阵新增 §1.1 新工具清单。P0 结束，进入 L0。
 - 2026-09-18：L1 observation 切片 10 闭合，L1 十片完成（gate-log §13.94 到 §13.96）。回写：§8.1 L2 行把 hook 观察脚本与两宿主 hook 配置片段列为第一项（§13.94 D9，从 L3 提前）；§13 的 E2 与 E3 行改为当前事实；能力映射矩阵四行"缺席"改"重切"并写场景编号；场景清单 18 项；能力卡 9 追加修订节（Q1 不 spawn git、Q4 不设 verify 前置、Q6 两条维护操作、Q7 首版渲染范围、阈值不进配置）；ADR-0010 未决三项关闭；ADR-0009 与 ADR-0012 未决项追记。
+- 2026-09-20：E4 原子切换完成（gate-log §13.101 裁决、§13.102 配置 v1、§13.103 制品完整化、§13.104 切换）。回写：§5.1 旧基线改为结论；§8.1 L3 行记完成与 D1 偏离；§11 门表加 `build:artifacts`、`build:check`、`smoke:artifacts` 并改写 `release:check`；§13 四行改为 `complete` 与当前事实；§14 加 2026-09-20 状态段。

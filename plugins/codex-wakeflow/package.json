@@ -1,8 +1,8 @@
 {
   "name": "wakeflow",
-  "version": "0.9.6",
+  "version": "1.0.0",
   "type": "module",
-  "description": "Unattended control loops for Codex workspaces, aligned with Wakeflow's Claude Code edition.",
+  "description": "A disciplined control loop for multi-window agent work across a fleet of Codex threads: a Controller window claims requirement packages, plans task packages, prepares deliveries, imports immutable target results, obtains independent Test validation and reviews the evidence before completing and archiving a Demand. Explicit on-disk state roots keep every step auditable; Agents perform the host actions, Wakeflow owns the content and the verification.",
   "license": "MIT",
   "homepage": "https://github.com/GxFn/Wakeflow#readme",
   "repository": {
@@ -11,40 +11,25 @@
   },
   "keywords": [
     "agent-workflow",
-    "unattended",
     "control-plane",
     "multi-window",
     "local-first",
-    "evidence-review"
+    "evidence-review",
+    "mcp"
   ],
   "bin": {
-    "wakeflow-mcp": "./mcp/server.cjs"
+    "wakeflow-mcp": "./mcp/server.mjs"
   },
-  "files": [
-    ".codex-plugin/",
-    ".mcp.json",
-    "AGENTS.md",
-    "LICENSE",
-    "README.md",
-    "README.zh-CN.md",
-    "assets/",
-    "bin/",
-    "lib/",
-    "mcp/",
-    "schemas/",
-    "scripts/",
-    "skills/",
-    "templates/",
-    "wakeflow.config.example.json",
-    "wakeflow.config.json"
-  ],
   "scripts": {
-    "validate": "node scripts/wakeflow-validate.mjs",
-    "smoke": "node scripts/wakeflow-smoke.mjs",
-    "mcp": "node ./mcp/server.cjs",
-    "test": "npm run validate && npm run smoke"
+    "mcp": "node ./mcp/server.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24.19.0 <25"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "ajv": "8.20.0",
+    "canonicalize": "4.0.0",
+    "p-limit": "7.3.1"
   }
 }

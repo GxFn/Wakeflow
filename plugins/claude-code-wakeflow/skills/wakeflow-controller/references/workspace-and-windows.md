@@ -36,10 +36,12 @@ current. Read it back through a tool.
   thing to run when you are unsure. It repairs only what Wakeflow owns: a
   missing active layout or board, missing ledger containers, missing host
   capability directories, a missing support surface root or its `drafts/`,
-  `harnesses/` and `fixtures/` scaffold, and Wakeflow's managed blocks and
-  memory files. A hand-edited block, a foreign file sitting where a Wakeflow
-  directory belongs, or a missing host runtime root is reported as a blocker
-  and never overwritten.
+  `harnesses/` and `fixtures/` scaffold, Wakeflow's managed blocks and memory
+  files, and a missing or stale window runtime projection (recomputed from the
+  config and the window's current binding). A hand-edited block, a foreign
+  file sitting where a Wakeflow directory belongs, an unreadable projection,
+  or a missing host runtime root is reported as a blocker and never
+  overwritten.
 
 Procedure, every time:
 

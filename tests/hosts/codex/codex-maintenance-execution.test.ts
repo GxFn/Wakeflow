@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   parseWakeflowConfig,
@@ -61,7 +61,7 @@ function desiredConfig() {
   return parseWakeflowConfig(value);
 }
 
-test("Codex fixed composition executes shared maintenance without a host capability", async (t) => {
+test("Codex fixed composition executes shared maintenance with an empty projection contribution on fresh", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const request = Object.freeze({
@@ -73,7 +73,11 @@ test("Codex fixed composition executes shared maintenance without a host capabil
   const plan = await previewCodexMaintenanceExecution(workspace.root, request);
 
   equal(plan.status, "ready");
-  equal(plan.hostContribution, null);
+  // Codex 的唯一宿主贡献是对账时重建窗口运行投影；fresh 由共享步骤发布投影，贡献为空。
+  equal(plan.hostContribution?.hostId, "codex");
+  equal(plan.hostContribution?.capabilityId, "codex-maintenance");
+  equal(plan.hostContribution?.status, "ready");
+  deepEqual([...(plan.hostContribution?.operations ?? [{}])], []);
   equal(plan.steps.some((entry) => entry.boundary === "host-capability"), false);
 
   const receipt = await executeCodexMaintenanceExecution(

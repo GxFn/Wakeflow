@@ -135,8 +135,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 8275,
-      "sha256": "sha256:bb98b184b0955356e7bb1627e3fc11c86126196e12cef99c6059d7dcd2a428d6"
+      "bytes": 8413,
+      "sha256": "sha256:01e0648f342afaf78499ff3fed94f3e73bb562a8d972dbdb316002063af3be61"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -340,8 +340,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/projection.js",
-      "bytes": 3979,
-      "sha256": "sha256:be282665de53fcec87bdbcb75f48b78563bc90b82a517b83f345cfdc7b6cfe81",
+      "bytes": 1829,
+      "sha256": "sha256:ee6dc8193efcd9d619e988ec39be5b2c6ee0c85d1794608600a0ea38ad6a9c87",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2467,9 +2467,16 @@
       "scope": "peer-profile"
     },
     {
+      "path": "lib/hosts/codex/codex-maintenance-capability.js",
+      "bytes": 4489,
+      "sha256": "sha256:fc28ac971e0d5a4f6fc90a55489d81b71681e3a98b17fd2560f6c5003dff01a9",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
       "path": "lib/hosts/codex/codex-maintenance-execution.js",
-      "bytes": 1381,
-      "sha256": "sha256:1a89b5a3cf381c19cb50b21364386b68fd2bd4e43b1bccbf4f5bc59789365a59",
+      "bytes": 1636,
+      "sha256": "sha256:bd86757bd4ed7f37ab27d3b01bbde4f44d8dec84c589961e24158812324a2497",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -3009,6 +3016,20 @@
       "path": "lib/workspace/window-runtime/wakeflow-window-runtime-paths.js",
       "bytes": 1796,
       "sha256": "sha256:cc06df2ee6c3f20bfcce5b77b286a7b3e91aaaf8e503e1563aeacea3f1f66221",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/workspace/window-runtime/wakeflow-window-runtime-projection-document.js",
+      "bytes": 5309,
+      "sha256": "sha256:163f3f6212c754d7b6a4cf393f1a17f780a8b9bdfc535c413fa191d1a4091f8f",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js",
+      "bytes": 11490,
+      "sha256": "sha256:d6fa087ffdd6369db662e8634c16b119a693a2107f0e9ed4e555fd7e00a08f77",
       "mode": "0644",
       "scope": "shared"
     },
@@ -6402,8 +6423,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 8275,
-      "sha256": "sha256:bb98b184b0955356e7bb1627e3fc11c86126196e12cef99c6059d7dcd2a428d6",
+      "bytes": 8413,
+      "sha256": "sha256:01e0648f342afaf78499ff3fed94f3e73bb562a8d972dbdb316002063af3be61",
       "mode": "0644",
       "scope": "agent-text"
     },

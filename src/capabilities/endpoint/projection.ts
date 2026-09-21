@@ -1,28 +1,17 @@
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
-import {
-  createFileAtomically,
-  DurableAtomicFileWriteError,
-  replaceFileAtomically,
-} from "../../foundation/filesystem/durable-atomic-file-write.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
-import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { fail } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
+import { publishWakeflowWindowRuntimeProjectionDocument } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-document.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "./contract.js";
 
 /**
  * Wakeflow Capabilities / Endpoint：窗口运行投影的写入与 `next` 派生。
  *
  * 投影是派生数据：登记、替换、退役都用当前权威重算一份文档并整体替换；
- * 文档由旧投影模块编译，本模块只负责落盘与下一步。
+ * 文档由投影模块编译，落盘由 workspace 的投影文档 owner 完成（对账重建复用同一 owner），
+ * 本模块只负责端点的回执形状与下一步。
  */
-
-const PROJECTION_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$projection.maximumBytes");
-const FILE_MODE = 0o600;
 
 export interface ProjectionDocument {
   readonly resourceRef: PortableResourcePath;
@@ -43,47 +32,11 @@ export async function publishProjectionDocument(
   target: Readonly<ProjectionDocument>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ProjectionReceipt>> {
-  const options = signal === undefined ? {} : { signal };
-  let current: Awaited<ReturnType<typeof readDeterministicJsonFile>> | null = null;
-  try {
-    current = await readDeterministicJsonFile(root, target.resourceRef, {
-      maximumBytes: PROJECTION_MAXIMUM_BYTES,
-      ...options,
-    });
-  } catch (error: unknown) {
-    if (!(error instanceof StableFileReadError && error.reason === "not-found")) {
-      if (error instanceof StableFileReadError) {
-        fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
-      }
-      throw error;
-    }
-  }
-  const bytes = encodeUtf8(target.document, "$projection");
-  try {
-    if (current === null) {
-      await createFileAtomically(root, target.resourceRef, bytes, { mode: FILE_MODE, ...options });
-    } else if (current.text !== target.document) {
-      await replaceFileAtomically(root, target.resourceRef, bytes, {
-        mode: FILE_MODE,
-        expected: {
-          resourcePath: current.resourcePath,
-          node: current.node,
-          byteCount: current.byteCount,
-          digest: current.digest,
-        },
-        ...options,
-      });
-    }
-  } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      fail("io-failure", `projection-write-${error.reason}`, "$projection", { cause: error });
-    }
-    throw error;
-  }
+  const receipt = await publishWakeflowWindowRuntimeProjectionDocument(root, target, signal);
   return Object.freeze({
-    resourceRef: target.resourceRef,
-    projectionDigest: target.projectionDigest,
-    documentDigest: target.documentDigest,
+    resourceRef: receipt.resourceRef,
+    projectionDigest: receipt.projectionDigest,
+    documentDigest: receipt.documentDigest,
   });
 }
 

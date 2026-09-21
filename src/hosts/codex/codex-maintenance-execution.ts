@@ -10,20 +10,22 @@ import {
 import type {
   WakeflowStaticMaterializationPreviewRequest,
 } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
+import { codexMaintenanceCapability } from "./codex-maintenance-capability.js";
 
 /**
  * Wakeflow Host / Codex：Codex 维护执行的固定 composition root。
  *
- * Codex 当前没有静态 workspace 文件贡献，因此只组合共享 Maintenance owner。调用方
- * 无法注入或选择 host capability；将来新增 Codex 专属能力时，也只能在本文件固定接入。
+ * Codex 没有 settings 或 statusline 这类宿主文件；它唯一的宿主贡献是对账时重建缺失或过期
+ * 的窗口运行投影（`codex-maintenance-capability.ts`）。调用方无法注入或选择 host
+ * capability；将来新增 Codex 专属能力时，也只能在本文件固定接入。
  */
 
-/** 构建仅包含共享静态资源的零写入 Codex 聚合计划。 */
+/** 构建共享静态资源加 Codex 窗口运行投影对账贡献的零写入聚合计划。 */
 export async function previewCodexMaintenanceExecution(
   root: RootedDirectory,
   request: WakeflowStaticMaterializationPreviewRequest,
 ) {
-  return previewWakeflowMaintenanceExecution(root, request);
+  return previewWakeflowMaintenanceExecution(root, request, codexMaintenanceCapability);
 }
 
 /** 执行已经确认且重新验证后的 Codex 聚合维护计划。 */
@@ -37,7 +39,7 @@ export async function executeCodexMaintenanceExecution(
     root,
     plan,
     request,
-    undefined,
+    codexMaintenanceCapability,
     options,
   );
 }
@@ -51,7 +53,7 @@ export async function recoverCodexMaintenanceExecution(
   return recoverWakeflowMaintenanceExecutionTransaction(
     root,
     operationId,
-    undefined,
+    codexMaintenanceCapability,
     options,
   );
 }

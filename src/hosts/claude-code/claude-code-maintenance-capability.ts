@@ -1,12 +1,4 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  assertWakeflowMaintenanceGateContext,
-  WakeflowMaintenanceGateError,
-  type WakeflowMaintenanceGateContext,
-} from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  createWakeflowHostMaintenanceContribution,
-} from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import type {
   ExecuteWakeflowHostMaintenanceOperationRequest,
   PlanWakeflowHostMaintenanceContributionRequest,
@@ -14,27 +6,43 @@ import type {
   WakeflowHostMaintenanceOperationReceipt,
 } from "../../workspace/maintenance/wakeflow-host-maintenance-capability.js";
 import {
+  createWakeflowHostMaintenanceContribution,
+} from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
+import {
+  assertWakeflowMaintenanceGateContext,
+  type WakeflowMaintenanceGateContext,
+  WakeflowMaintenanceGateError,
+} from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
+import {
+  executeWakeflowWindowRuntimeProjectionOperation,
+  planWakeflowWindowRuntimeProjectionMaintenance,
+  WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND,
+  WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID,
+  WakeflowWindowRuntimeProjectionMaintenanceError,
+} from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import {
   planClaudeCodePortableSettingsComposition,
 } from "./claude-code-portable-settings-composition.js";
 import {
-  executeClaudeCodePortableSettingsOperation,
   ClaudeCodePortableSettingsOperationExecutionError,
+  executeClaudeCodePortableSettingsOperation,
 } from "./claude-code-portable-settings-operation-executor.js";
 import {
-  executeClaudeCodeStatuslineAssetOperation,
-  planClaudeCodeStatuslineAssetOperation,
   CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND,
   CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID,
   ClaudeCodeStatuslineAssetOperationError,
+  executeClaudeCodeStatuslineAssetOperation,
+  planClaudeCodeStatuslineAssetOperation,
 } from "./claude-code-statusline-asset-operation.js";
 import {
-  executeClaudeCodeStatuslineSettingsOperation,
-  planClaudeCodeStatuslineSettingsOperation,
   CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER,
   CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND,
   CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID,
   ClaudeCodeStatuslineSettingsOperationError,
+  executeClaudeCodeStatuslineSettingsOperation,
+  planClaudeCodeStatuslineSettingsOperation,
 } from "./claude-code-statusline-settings-operation.js";
+import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-identity-profile.js";
 
 /**
  * Wakeflow Host / Claude Code：当前 Claude 宿主维护 capability。
@@ -159,11 +167,13 @@ async function planContribution(
   });
   const statusline = await planStatuslineAsset(root, request.signal);
   const settings = await planStatuslineSettings(root, request.signal);
-  // blocker 在边界内排序去重前必须互不相同：三个来源的前缀各不相同。
+  const projections = await planProjections(root, request);
+  // blocker 在边界内排序去重前必须互不相同：四个来源的前缀各不相同。
   const blockerCodes = [
     ...composition.blockerCodes,
     ...(statusline.blocker === null ? [] : [statusline.blocker]),
     ...(settings.blocker === null ? [] : [settings.blocker]),
+    ...projections.blockerCodes,
   ];
   return createWakeflowHostMaintenanceContribution({
     hostId: "claude-code",
@@ -183,8 +193,52 @@ async function planContribution(
       })),
       ...(statusline.operation === null ? [] : [statusline.operation]),
       ...(settings.operation === null ? [] : [settings.operation]),
+      ...projections.operations,
     ],
   });
+}
+
+/** 对账时缺失或过期的窗口运行投影：与 Codex 共用同一 workspace owner，只换 identity profile。 */
+async function planProjections(
+  root: RootedDirectory,
+  request: PlanWakeflowHostMaintenanceContributionRequest,
+) {
+  try {
+    return await planWakeflowWindowRuntimeProjectionMaintenance(root, {
+      action: request.action,
+      config: request.config,
+      resourceProfile: request.profile,
+      identityProfile: claudeCodeWindowHostIdentityProfile,
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+      fail("owner", error.path);
+    }
+    throw error;
+  }
+}
+
+async function executeProjectionOperation(
+  root: RootedDirectory,
+  request: ExecuteWakeflowHostMaintenanceOperationRequest,
+): Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>> {
+  try {
+    return await executeWakeflowWindowRuntimeProjectionOperation(root, {
+      config: request.config,
+      resourceProfile: request.profile,
+      identityProfile: claudeCodeWindowHostIdentityProfile,
+      operationId: request.operation.operationId,
+      targetKey: request.operation.targetKey,
+      targetDigest: request.operation.targetDigest,
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+      fail("owner", error.path);
+    }
+    throw error;
+  }
 }
 
 async function executeStatuslineOperation(
@@ -263,6 +317,12 @@ async function executeOperation(
     && request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID
   ) {
     return executeStatuslineSettingsOperation(root, request);
+  }
+  if (
+    request.operation.operationKind === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND
+    && request.operation.ownerId === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID
+  ) {
+    return executeProjectionOperation(root, request);
   }
   if (
     request.operation.operationKind !== "portable-settings"

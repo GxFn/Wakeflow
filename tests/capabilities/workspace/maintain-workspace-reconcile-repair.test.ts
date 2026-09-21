@@ -11,9 +11,15 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
+import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 
 /**
@@ -43,8 +49,8 @@ function selection() {
   return value;
 }
 
-function stepKinds(result: { plan?: unknown }): readonly string[] {
-  const plan = result.plan as { steps?: readonly { stepKind?: string }[] } | null;
+function stepKinds(result: unknown): readonly string[] {
+  const plan = (result as { plan?: { steps?: readonly { stepKind?: string }[] } | null }).plan;
   return (plan?.steps ?? []).map((step) => step.stepKind ?? "<host-step>");
 }
 
@@ -180,6 +186,125 @@ test("maintain_workspace reconcile repairs missing Wakeflow-owned static directo
   equal(conflict.status, "blocked");
   equal(conflict.next.blockers.includes("support-root-conflict"), true);
   equal(readFileSync(drafts, "utf8"), "not a directory\n");
+});
+
+const CODEX_FACADE = {
+  hostId: "codex",
+  resourceProfile: codexWorkspaceHostResourceProfile,
+  identityProfile: codexWindowHostIdentityProfile,
+} as const;
+
+function projectionSteps(result: unknown): readonly string[] {
+  const plan = (
+    result as {
+      plan?: { steps?: readonly { operationKind?: string; targetKey?: string }[] } | null;
+    }
+  ).plan;
+  return (plan?.steps ?? [])
+    .filter((step) => step.operationKind === "window-runtime-projection")
+    .map((step) => step.targetKey ?? "");
+}
+
+test("maintain_workspace reconcile rebuilds a missing or stale registered window projection and only reports an unsafe one", async (t) => {
+  const root = await fixture(t);
+  const fresh = { root, action: "fresh-initialize", request: { selection: selection() } } as const;
+  const preview = await executeCodexWakeflowMaintenance({ ...fresh, mode: "preview" });
+  await executeCodexWakeflowMaintenance({
+    ...fresh,
+    mode: "apply",
+    planDigest: preview.planDigest as string,
+  });
+  const intent = (
+    preview.launchIntents as unknown as readonly {
+      windowId: string;
+      intentDigest: string;
+      root: { configuredPlacement: string };
+    }[]
+  )[0];
+  if (intent === undefined) throw new Error("Expected a launch intent.");
+  const rooted = await RootedDirectory.open(root);
+  t.after(() => rooted.close());
+  const handle = { kind: "codex-thread", value: "codex-host-owned-thread:opaque-repair" };
+  await writeHostHookObservation(rooted, {
+    hostId: "codex",
+    event: "session-start",
+    sessionId: handle.value,
+    cwd: path.resolve(root, intent.root.configuredPlacement),
+    recordedAt: parseUtcInstant("2026-09-21T09:58:00.000Z"),
+  });
+  const registered = await executeWindowBindingRequest(
+    CODEX_FACADE,
+    {
+      root,
+      operation: "register",
+      windowId: intent.windowId,
+      observation: {
+        handle,
+        launchIntentDigest: intent.intentDigest,
+        observedAt: "2026-09-21T09:59:00.000Z",
+      },
+    },
+    {
+      clock: () => parseUtcInstant("2026-09-21T10:00:00.000Z"),
+      uuidFactory: () => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  );
+  if (registered.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
+  equal(registered.disposition, "registered");
+  const projectionPath = path.join(
+    root,
+    ".wakeflow-local/runtime/hosts/codex/projections/window-runtime",
+    `${intent.windowId}.json`,
+  );
+  const registeredDocument = readFileSync(projectionPath, "utf8");
+  equal(registeredDocument.includes('"registered"'), true);
+
+  // 登记后的健康工作区：零步。
+  const healthy = await reconcilePreview(root);
+  equal(healthy.status, "ready");
+  deepEqual(stepKinds(healthy), []);
+
+  // 投影缺失：一条宿主操作，apply 后逐字节复原为 registered 投影。
+  rmSync(projectionPath);
+  const missing = await reconcilePreview(root);
+  equal(missing.status, "ready");
+  deepEqual(projectionSteps(missing), [intent.windowId]);
+  equal(existsSync(projectionPath), false, "preview must not write");
+  const restored = await executeCodexWakeflowMaintenance({
+    root,
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: missing.planDigest as string,
+  });
+  equal(restored.status, "completed");
+  equal(readFileSync(projectionPath, "utf8"), registeredDocument);
+  equal(statSync(projectionPath).mode & 0o777, 0o600);
+
+  // 投影过期（合法 JSON、内容不同）：同样重建。
+  writeFileSync(projectionPath, registeredDocument.replace('"registered"', '"unregistered"'));
+  const stale = await reconcilePreview(root);
+  deepEqual(projectionSteps(stale), [intent.windowId]);
+  const refreshed = await executeCodexWakeflowMaintenance({
+    root,
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: stale.planDigest as string,
+  });
+  equal(refreshed.status, "completed");
+  equal(readFileSync(projectionPath, "utf8"), registeredDocument);
+  deepEqual(stepKinds(await reconcilePreview(root)), []);
+
+  // 投影读不出：只报告，不覆盖。
+  writeFileSync(projectionPath, "not a projection\n");
+  const unsafe = await reconcilePreview(root);
+  equal(unsafe.status, "blocked");
+  equal(
+    unsafe.next.blockers.includes("host:codex:codex-maintenance:window-runtime-projection-unsafe"),
+    true,
+  );
+  equal(readFileSync(projectionPath, "utf8"), "not a projection\n");
 });
 
 test("maintain_workspace reconcile rebuilds a missing ledger root but only reports a missing host runtime root", async (t) => {

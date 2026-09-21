@@ -3184,3 +3184,24 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **文档写回。** 对齐台账 §1 第二轮小结与 §3 B 组函数级表；能力卡 1 §1.1 物化步骤十五种与 §1.4 对账修复/报告集；场景清单；Controller 技能工作区参考的 reconcile 条目；制品重建。
 
 **残余。** 三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；窗口投影 stale/missing 报告（F 组）；维护协议根缺失时 reconcile 仍阻塞。
+
+## 13.108 第二轮对齐 C 组：活动投影、账本、TODO 与归档的函数级核对与 G5（2026-09-21）
+
+**核对结论（C 组 11 个模块，逐导出函数表在对齐台账 §3）。** 无 gap 的部分：活动投影的零写入检查与重建（三诊断轴归 `observeProjectionTargets` 与 `projectionFreshness`，unsafe 整轮零写归内核；旧公共 runtime 每个公共操作后的 rebuild 对应 `afterMutationRefresh` 在维护 apply 与九个 capability 收尾的调用）；ledger 记录的严格加载、幂等发布、异字节 conflict、成员引用与发布锁（归档包不加锁，靠候选目录 rename 的 `destination-exists` 判竞态）；归档服务的四个入口（plan → `planTerminal` 九门加隐私加包 claim 加 `archive-conflict`；commit → `applyTerminal` 的 journal → 终态事件 → 封包 → 结包 → 释放声明 → 退役活动根；recover → journal 重放或按已在归档收敛；inspect → status/verify 带 demandId 的归档回执）；TODO 服务的认领 CAS、归档消费与恢复 seam 在看板 claim state 链上逐条对应，TODO 摄入、行级 codec、ledger 四个 Markdown 索引、迁移归档共存按 ADR-0011 与首轮判定继续 dropped。台账 §2 三行 owner 引用改正：仓库里没有 `governance/archive/*` 与 `governance/demand/lifecycle/*` 目录，归档 owner 是 `capabilities/demand/archive.ts`、`demand-archive-manifest.schema.json` 与 `capabilities/demand/decide.ts`。
+
+**G5 reconcile 重建窗口运行投影。** 旧 `rebuildWindowRuntimeProjections` 在运行时事务里把 missing/stale 的窗口运行投影收敛到当前派生结果、unsafe 原样保留；旧 reconcile 经 `inspectWindowRuntimeProjectionsForLayout` 盘点后把重建放进维护计划。新实现只在登记/换代/退役后重写该窗口的投影，reconcile 对已登记窗口的缺失或过期投影既不修也不报（§13.107 D8 记为"留 F 组"）。修复：新增 `workspace/window-runtime/wakeflow-window-runtime-projection-document.ts`（单个投影文档的只读检查 current / stale / missing / unsafe 与 0600 发布，`publishProjectionDocument` 改为委托它）与 `wakeflow-window-runtime-projection-maintenance.ts`（从 config、宿主资源 profile 与 binding 清单重算每个窗口的期望投影，缺失或过期出一条 `window-runtime-projection:<windowId>` 宿主操作，sourceDigest 与 targetDigest 钉住，执行时重算不符即 `plan` 失败；读不出的投影出 blocker `window-runtime-projection-unsafe`；binding 清单读不出出 `window-runtime-projection-unavailable`；fresh 与宿主运行时根缺失时贡献为空）。两宿主接线：Claude 的维护 capability 把投影操作并入贡献并在 portable settings 之前分派；Codex 新增第一个宿主 capability `codex-maintenance`（`hosts/codex/codex-maintenance-capability.ts`），fresh 时贡献为空，`codex-maintenance-execution.ts` 把它交给共享预览、执行与恢复。
+
+**决定。**
+
+- D1 投影按旧行为自动修复，不按能力卡 1 §1.4 原"实现判断"只报告：投影是从 config 与 binding 权威确定性重算的派生数据，重建不会掩盖任何用户内容；读不出（unsafe）仍只报告。能力卡 1 §1.4 现 TS 状态同步。
+- D2 重建走宿主 maintenance capability 端口而不是共享静态预览：窗口宿主身份 profile（`codexWindowHostIdentityProfile` / `claudeCodeWindowHostIdentityProfile`）住在 `hosts/<host>/`，共享层不能推断宿主；共享逻辑放在 `workspace/window-runtime/`，两宿主各自只做接线。Codex 因此第一次有了自己的 capability，`codex-maintenance-execution.test.ts` 的 fresh 断言从"无宿主贡献"改为"空贡献"。
+- D3 G6：旧 `wakeflow_status` / `wakeflow_verify` 有 `window-runtime` 域（health 与 `window-runtime-projection-not-current`），新观察只报 binding 身份、没有 window-runtime 门。它是观察模块的分支，按 D2 顺序留到 F 组（观察）一并处置，台账 §3 记 `gap`，模块级判定不变。
+- D4 §13.107 D7 的通用托管块文件 owner 合并（外部指令 inspection/recomposition）继续延后，本批不做。
+
+**回归。** 新增 `tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts`（缺失与过期修复、unsafe 只报告、fresh 空贡献）；`maintain-workspace-reconcile-repair.test.ts` 新增"登记一个窗口后删掉或改坏其 registered 投影，reconcile 恰一条 `window-runtime-projection` 宿主操作并逐字节复原，投影读不出只报 `host:codex:codex-maintenance:window-runtime-projection-unsafe`"；`codex-maintenance-execution.test.ts` 改为断言空 Codex 贡献。相关焦点集（endpoint service、Claude 维护执行、静态预览与执行器、Codex 维护执行、对账修复、投影维护）21/21。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 996/996（含 `build:check`），`test:typescript` 347.6 s；`npm run smoke:artifacts` 两宿主七幕全过（17 s）；`git diff --check` 干净。lint 只有 `rooted-exclusive-file-lock.ts:724` 一条既有 warning（本批未改该文件，自 0d9d2a57 起存在），不阻门。
+
+**文档写回。** 对齐台账 §1 第二轮小结、§2 三行 owner 改正与 C 组两行备注、§3 C 组函数级表；能力卡 1 §1.4 窗口投影修复/报告集；场景清单 `card-01/reconcile-repair` 行；Controller 技能工作区参考的 reconcile 条目；制品重建。
+
+**残余。** G6（观察侧窗口投影新鲜度）待 F 组；三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞。

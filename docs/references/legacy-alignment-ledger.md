@@ -18,7 +18,7 @@
 
 首轮唯一的 `gap` G1（仓库与 external-owned 支撑面的托管块，B 组 `wakeflow-managed-content.mjs` 与 `wakeflow-rule-model.mjs`）已于 2026-09-21 修在代码里并加回归（gate-log §13.106），两行改判 `recut`。
 
-第二轮（导出函数级，§3）B 组核出并修完三处首轮漏判的 gap：G2 支撑面 scaffold 目录、G3 支撑面 `.gitignore` 托管块、G4 对账自动修复范围（gate-log §13.107）。
+第二轮（导出函数级，§3）B 组核出并修完三处首轮漏判的 gap：G2 支撑面 scaffold 目录、G3 支撑面 `.gitignore` 托管块、G4 对账自动修复范围（gate-log §13.107）。C 组核出 G5（reconcile 重建缺失或过期的窗口运行投影，已修，gate-log §13.108）与 G6（`wakeflow_status`/`wakeflow_verify` 不报窗口运行投影新鲜度；观察域归 F 组，留到 F 组一并处置）。模块级判定不变；函数级 gap 计 1（G6）。
 
 ## 2. 逐模块台账
 
@@ -74,13 +74,13 @@
 | `wakeflow-active-projector.mjs` | 2430 | 活动投影：index、current status、每 Demand 页 | `kernel/active-projection.ts`、`governance/observation/active-projection-{facts,refresh}.ts` | recut | 标记、指纹、unsafe 整轮零写、pod 段（§13.94–§13.96） |
 | `wakeflow-ledger-materialization.mjs` | 1127 | ledger 五个目录与四个投影的维护适配 | `governance/ledger/ledger-authority-store.ts`（initialize）、`ledger-authority-layout.ts` | recut | 四个 Markdown 索引投影放弃，见下一行 |
 | `wakeflow-ledger-projector.mjs` | 845 | ledger 四个 Markdown 索引的确定性投影 | 无；看板索引 `board/index.md` 由内核重写，活动投影链接看板 | dropped | 能力卡 3 §3.5 现 TS 状态与实现判断；`docs/requirements/wakeflow-functions-and-scenarios.md` §2 投影行仍列"ledger 索引"，本轮改正 |
-| `wakeflow-ledger-records.mjs` | 1964 | requirement/confirmation/archive 三类不可变记录与成员引用 | `governance/ledger/ledger-authority-record.ts`、`ledger-record-publisher.ts`、`ledger-record-publication-*.ts`、`governance/archive/*` | recut | confirmation 家族取消（ADR-0011） |
-| `wakeflow-window-runtime-projector.mjs` | 2164 | 窗口运行投影的检查与维护 | `workspace/window-runtime/wakeflow-window-runtime-{registered,unregistered}-projection.ts`、`*-fresh-publication.ts`、`*-desired-topology.ts` | recut |  |
+| `wakeflow-ledger-records.mjs` | 1964 | requirement/confirmation/archive 三类不可变记录与成员引用 | `governance/ledger/ledger-authority-record.ts`、`ledger-record-publisher.ts`、`ledger-record-publication-*.ts`、`capabilities/demand/archive.ts`（归档包）、`governance/observation/demand-archive-locator.ts` | recut | confirmation 家族取消（ADR-0011）；函数级见 §3 C 组 |
+| `wakeflow-window-runtime-projector.mjs` | 2164 | 窗口运行投影的检查与维护 | `workspace/window-runtime/wakeflow-window-runtime-{registered,unregistered}-projection.ts`、`*-fresh-publication.ts`、`*-desired-topology.ts`、`*-projection-document.ts`、`*-projection-maintenance.ts`（G5） | recut | reconcile 重建 missing/stale 投影（G5，gate-log §13.108）；观察侧新鲜度报告 G6 待 F 组 |
 | `wakeflow-window-runtime-records.mjs` | 797 | 窗口运行投影记录 codec | 同上加 `wakeflow-window-host-binding*.ts` | recut |  |
 | `wakeflow-todo-service.mjs` | 1413 | 全局 TODO 表：13 列、claim/archive CAS、lineage | `kernel/requirement-board.ts`、`capabilities/requirement/*`（需求包看板） | dropped | ADR-0011：需求包成为唯一交接物，TODO 摄入取消；认领 CAS 保留在看板 |
 | `wakeflow-todo-table.mjs` | 101 | TODO 行级 Markdown codec | 无 | dropped | 同上 |
-| `wakeflow-business-archive-records.mjs` | 1556 | 归档四类记录合同与隐私准入 | `governance/archive/*`、`kernel/privacy-scan.ts` | recut |  |
-| `wakeflow-business-archive-service.mjs` | 3561 | 整需求归档编排：双锁内重建终态、可恢复事务、ledger 发布、TODO 消费、tombstone 脱离 | `capabilities/demand/lifecycle.ts`（完成即归档一个事务）、`governance/archive/*`、`governance/demand/lifecycle/*` | recut | ADR-0012 D3；场景 `card-08/complete-and-archive` |
+| `wakeflow-business-archive-records.mjs` | 1556 | 归档四类记录合同与隐私准入 | `contracts/schemas/governance/archive/demand-archive-manifest.schema.json`、`capabilities/demand/decide.ts`（`payloadPrivacyBlockers`）、`kernel/privacy-scan.ts` | recut | 四类记录并成一份清单；隐私准入只拒凭证类（能力卡 8） |
+| `wakeflow-business-archive-service.mjs` | 3561 | 整需求归档编排：双锁内重建终态、可恢复事务、ledger 发布、TODO 消费、tombstone 脱离 | `capabilities/demand/lifecycle.ts`（完成/取消各是一个发布事务）、`capabilities/demand/archive.ts`、`governance/demand/demand-verify-gates.ts` | recut | ADR-0012 D3；场景 `card-08/complete-and-archive` |
 
 ### D Demand、结果、评审与证据
 
@@ -240,3 +240,47 @@
 | 同上 | `planWakeflowHostSettingsAssetsOwner`、participant | portable settings 多根、statusline 资产、local settings、仓库授权 | `hosts/claude-code/claude-code-maintenance-capability.ts` contribution 与 executor | recut | 仓库根 settings 授权不实现 |
 | `wakeflow-host-capability.mjs` | `normalizeWakeflowHostCapabilities`、`normalizeWakeflowHostCapabilityProfile` | 能力窄视图 | `workspace-host-resource-profile.ts` 与两份宿主 profile | recut |  |
 | `wakeflow-rule-model.mjs` | 三个 render | 程序/仓库/支撑角色记忆正文 | 程序指令、外部指令（仓库与外部支撑面）、支撑面记忆 | recut | G1 |
+
+### C 活动投影、账本、TODO 与归档（2026-09-21，gate-log §13.108）
+
+| 旧模块 | 导出函数 | 行为分支 | 新 owner | 判定 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| `wakeflow-active-foundation.mjs` | `planWakeflowActiveFoundation`、`validate`、`project` | 活动根、current、全局 TODO 板三资源的 current / create-managed / blocked 与 aggregate 投影 | 静态资源矩阵（活动根与 current 由 `materialize-active-layout`），看板由 `initialize-requirement-board`；reconcile 缺失修复见 G4 | recut | TODO 板放弃（ADR-0011） |
+| 同上 | `inspectWakeflowFreshTodoTransitionAuthority` | fresh 事务里 TODO 权威的 absent / strict / committed-pair 阶段 | 无；看板初始化用 foundation 原子写自恢复 | dropped |  |
+| 同上 | `createWakeflowActiveFoundationMutationParticipant` | ready plan 绑定 action/config 重建私有字节，提交交 tracked materialization | 执行器 `executeActiveLayout`、`executeRequirementBoardInitialization` 与 journal 恢复 | recut |  |
+| `wakeflow-active-projector.mjs` | `planWakeflowActiveProjectionMaintenance`、`validate`、`project`、participant | 维护聚合里投影文件集合的 create / update / current；confirmed operation 逐项覆盖；missing、unsafe 不接受 | fresh：`publish-fresh-active-workspace-projection`（`wakeflow-active-fresh-projection.ts`）；之后每个维护 apply 与九个 capability 的变更事务收尾 `afterMutationRefresh` 重算（`governance/observation/active-projection-refresh.ts`） | recut |  |
+| 同上 | `inspectWakeflowActiveProjection` | 零写入，三诊断轴（sourceHealth / storageHealth / projectionStatus），来源损坏只返回脱敏轴 | `observeProjectionTargets` + `projectionFreshness`（`wakeflow_status.projection`，verify 门 `active-projection`） | covered |  |
+| 同上 | `rebuildWakeflowActiveProjection` | 只重建已证明 managed 的目标，authority 与未知字节不动，unsafe 零写 | `kernel/active-projection.ts`（unsafe 整轮零写，§13.94–§13.96）；旧公共 runtime 在每个公共操作后调用 rebuild 的位置对应 `afterMutationRefresh` 的消费者 | covered |  |
+| `wakeflow-ledger-materialization.mjs` | `planWakeflowLedgerMaterialization`、`validate`、`project`、participant | 五目录 current / create-managed / resolve-conflict；四个 Markdown 投影 update-managed（重建） | `governance/ledger/ledger-authority-layout.ts` + `ledger-authority-store.ts` initialize；fresh `materialize-ledger-layout`；reconcile 缺失容器或整根重建（G4 D6），mode 漂移 `ledger-layout-conflict` 只报告 | recut | Markdown 投影放弃，见下一行 |
+| `wakeflow-ledger-projector.mjs` | `buildEmptyLedgerProjection`、`inspectLedgerProjectionSource`、`buildLedgerProjection`、`writeLedgerProjection` | 四个 ledger Markdown 索引的确定性投影 | 无；看板索引 `board/index.md` 由内核 `renderRequirementBoardIndex` / `publishRequirementBoardIndex` / `refreshRequirementBoardIndex` 重写 | dropped | 能力卡 3 §3.5 |
+| 同上 | `commitLedgerRecordAndProject` | 记录提交后重投影 | `ledger-record-publisher.ts` 发布 + 需求发布/终态收尾 `refreshBoardIndexQuietly` | recut |  |
+| `wakeflow-ledger-records.mjs` | `validateLedgerRecord` | 三家族闭合、成员 / source / transport / typed ID 跨字段关系 | contracts JSON Schema：需求记录与 `demand-archive-manifest` | recut | confirmation 家族取消 |
+| 同上 | `ledgerRecordRelativeRoot` | 由已验证身份推导相对根，不接受自报 family | `ledger-authority-paths.ts`（需求记录）、`demandArchiveRef` / `demandArchivesRootRef`（归档包） | covered |  |
+| 同上 | `ledgerMutationLockPath` | ledger 外侧短时互斥，串行本机物理发布 | `ledgerRecordPublicationLockRef`（`transactions/<recordId>.lock`，`withRootedExclusiveFileLock`）；归档包不加锁，靠候选目录 rename 的 `destination-exists` 竞态判定 | recut |  |
+| 同上 | `loadLedgerRecord` | 严格加载：未知 residue、路径别名、mode / owner / link 漂移、读取竞态 | `ledger-authority-reader.ts`（记录）；`readArchiveManifest` / `readArchivePayload`（归档：清单加负载逐文件摘要复核） | recut |  |
+| 同上 | `findDemandArchiveRecord` | 锁内扫描完整 archive authority，按 demand（可选 archiveId）定位唯一记录，冲突失败关闭 | `findLatestDemandArchive`（`capabilities/demand/archive.ts`）、`locateLatestDemandArchive`（观察）：归档包按 stream revision 命名取最新；同 Demand 多个归档包是合法历史（continue 后再次完成），不再是冲突 | recut |  |
+| 同上 | `loadLedgerMemberBytes` | 先闭包再取一个成员并复核摘要 | `readArchivePayload` | covered |  |
+| 同上 | `createLedgerRecord` | 创建或幂等读取；异 stage 或同身份异字节阻断 | `ledger-record-publisher.ts`（意图 / 存储 / 恢复三段；同字节幂等、异字节 conflict）；归档 `sealDemandArchive`（同负载摘要 `current`，异负载 `archive-conflict`） | covered |  |
+| 同上 | `createLedgerMigrationArchiveRecord` | 迁移 owner 的 legacy archive 根共存 | 无 | dropped | G 组迁移放弃 |
+| 同上 | `createLedgerMemberReference`、`resolveLedgerMemberReference` | 无绝对路径的成员引用；解析时复核 record / member 摘要、family、role | 需求记录引用 `recordRef` + `recordDigest`（claim state、Demand 身份、归档清单 `package`）；归档成员没有独立引用，清单 `manifestDigest` 钉住整包 | recut |  |
+| `wakeflow-window-runtime-projector.mjs` | `inspectWindowRuntimeProjections` | 从落盘 config 与宿主 binding authority 只读盘点 current / stale / missing / unsafe | `planWakeflowWindowRuntimeProjectionMaintenance`（只读，产出操作与 blocker）+ `inspectWakeflowWindowRuntimeProjectionDocument`（G5） | recut |  |
+| 同上 | `inspectWindowRuntimeProjectionsForLayout` | 维护候选模型（fresh / reconfigure / reconcile）与观察的 layout 视角盘点；旧 `wakeflow_status` / `wakeflow_verify` 的 `window-runtime` 域（health、`window-runtime-projection-not-current`）由它供数 | 维护：fresh `publish-unregistered-window-runtime`，reconcile G5；观察：`wakeflow_status` 只报 binding 身份，`wakeflow_verify` 没有 window-runtime 门 | gap | **G6**：观察域归 F 组，留到 F 组处置 |
+| 同上 | `planWindowRuntimeProjectionMaintenance`、`validate`、`project`、participant | portable 计划（不含 workspaceRoot）、confirmed 覆盖、aggregate 投影 | fresh：`wakeflow-window-runtime-fresh-publication.ts`；reconcile：宿主 capability 操作 `window-runtime-projection:<windowId>`（sourceDigest / targetDigest 钉住，执行时重算不符即 `plan` 失败） | recut |  |
+| 同上 | `rebuildWindowRuntimeProjections` | 运行时事务里把 missing / stale 收敛到当前派生结果；unsafe 原样；部分提交后 source 变化只在可证明安全时释放 | 登记 / 换代 / 退役后 `publishProjectionDocument`（endpoint service）；reconcile G5（本轮修）；source 竞态由维护 gate 的 config 摘要与操作 targetDigest 拒绝 | recut | 本轮 G5 前 reconcile 不重建 |
+| `wakeflow-window-runtime-records.mjs` | `createWindowRuntimeProjection`、`validateWindowRuntimeProjection` | 域字段闭合、kind / schemaVersion、projectionDigest 覆盖自身以外 | `wakeflow-window-runtime-{registered,unregistered}-projection.ts`（`compile*ProjectionEntry`，projectionDigest 同法） | covered |  |
+| 同上 | `windowRuntimeProjectionCanonicalBytes`、`windowRuntimeProjectionDigest` | canonical JSON 加 LF、字节 CAS | `documentDigest`（文档字节）与 `projectionDigest` | covered |  |
+| 同上 | `windowRuntimeProjectionRef` | 只接受协议宿主目录名加 typed windowId | `wakeflow-window-runtime-paths.ts`（resourceRef 由宿主 profile 派生） | covered |  |
+| `wakeflow-todo-service.mjs` | `createTodoBoardIfAbsent`、`inspectTodoBoard`、`renderTodoBoard`、`scanTodoBoard` | 唯一空板、锁内读取、13 列 codec | `materializeRequirementBoardRoot`、`listRequirementClaimStates`、`renderRequirementBoardIndex` / `publish` / `refresh`（索引是派生投影，不是权威） | recut | ADR-0011 |
+| 同上 | `appendTodoRow` | 摄入 pending / parked 行 | `capabilities/requirement/*` 发布需求包即上板（`createRequirementClaimState` pending / parked） | recut |  |
+| 同上 | `planTodoClaim`、`inspectTodoClaim`、`claimTodoRow` | 以 intake 快照 first-commit CAS 挂载到一个 Demand | `claimRequirementPackage` + `replaceRequirementClaimStateFile`（revision / previousStateDigest CAS）；Demand create 的 `deriveCreationBlockers` | recut |  |
+| 同上 | `inspectTodoClaimForRecovery`、`recoverTodoRowClaim` | 跨资源恢复 seam | Demand create 发布事务的 journal 恢复 | recut |  |
+| 同上 | `inspectTodoArchiveLineage` | 从 claimed 行逆推 intake lineage | claim state 链（`previousStateDigest`）与归档清单 `package.recordRef` / `recordDigest` | recut |  |
+| 同上 | `archiveTodoRow`、`recoverTodoRowArchive` | 归档回执后删除行、前向恢复 | `archiveRequirementClaim`（`settlePackage`，已到位即 current）；取消走 `withdrawRequirementClaim` | recut |  |
+| `wakeflow-todo-table.mjs` | `parseMarkdownRow`、`formatTodoRow` | TODO 行级 Markdown codec | 无（看板索引只渲染不回读） | dropped |  |
+| `wakeflow-business-archive-records.mjs` | `validateBusinessArchiveSummary`、`TransportSummary`、`TodoHistory`、`Plan`、`Transaction` | 四类记录闭合、跨记录身份、terminalAdmission / archiveTransition | `demand-archive-manifest.schema.json`（terminalEvent、package、verify、payload、worktree、manifestDigest）；transport 汇总与 TODO 历史不再是独立记录：投递回执随负载整树归档，需求包 lineage 在清单 `package` | recut |  |
+| 同上 | `businessArchiveCanonicalBytes`、`businessArchiveDigest`、`businessArchiveByteDigest` | canonical 字节与摘要 | `renderJson` + `computeCanonicalJsonSha256Digest`（`manifestDigest`、payload `treeDigest`） | covered |  |
+| 同上 | `assertBusinessArchivePortable` | 拒绝式隐私准入：凭证、裸 UUID、绝对路径；结构字段豁免 | `payloadPrivacyBlockers`（`capabilities/demand/decide.ts`）：只拒凭证类（`CREDENTIAL_PRIVACY_FINDING_KINDS`），路径与标识由负载自带（能力卡 8）；verify 门 `payload-privacy` | recut |  |
+| `wakeflow-business-archive-service.mjs` | `planDemandBusinessArchive` | 双锁内零写入重建终态闭包：artifact / evidence 元组、test card 权威、生命周期事件链、pod 归档门、transport 交叉闭包 | `planTerminal`（`capabilities/demand/lifecycle.ts`）：后验收路线 `completion-preflight`、`evaluateVerifyGates`（config-authority、ledger-layout、demand-root-audit、board-claim、work-claims-released、append-candidates-clear、evidence-integrity、payload-privacy、research-evidence）、包 claim、`archive-conflict`；一 pod 一 Demand 在 `deriveCreationBlockers` / `deriveContinueBlockers` | recut |  |
+| 同上 | `commitDemandBusinessArchive` | 终态 CAS 加归档身份提交：持久化事务、ledger 发布、TODO 消费、sidecar / tombstone 脱离 current | `applyTerminal`：journal → 终态事件（`expectedStreamRevision` / `expectedStateDigest`）→ `sealDemandArchive`（候选整树 rename，同负载 `current`）→ `settlePackage` → `releaseClaims`（取消）→ `retireDemandRoot`（负载摘要相等才删）→ 删 journal → 刷新看板索引 | recut | tombstone 前缀放弃：活动根在归档后直接退役 |
+| 同上 | `recoverDemandBusinessArchive` | 不接受新决定，按已持久化事务或 authority 前向收敛 | `recoverTerminal`：有 journal 重放；无 journal 而归档已在即 recovered；活动根仍在而无 journal 报 `journal-absent` | covered |  |
+| 同上 | `inspectDemandBusinessArchive` | 只读加载 exact authority 并复验业务、transport 与定位投影 | `wakeflow_status` / `wakeflow_verify` 带 demandId：`locateLatestDemandArchive` 的归档回执（outcome、archiveRef、terminalEvent、manifestDigest） | recut | 旧 transport retention 对它的消费在 E 组核 |

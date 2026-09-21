@@ -8,6 +8,7 @@
   "files": [
     "codex-agent-text-profile.ts",
     "codex-hook-fragment.ts",
+    "codex-maintenance-capability.ts",
     "codex-maintenance-execution.ts",
     "codex-window-host-identity-profile.ts",
     "wakeflow-workspace-host-resource-profile.ts"

@@ -31,6 +31,8 @@ interface FixtureOverrides {
   readonly marketplaceVersion?: string;
   readonly pluginEngines?: string;
   readonly releaseEligible?: boolean;
+  /** 清单里额外列出、但不写进磁盘也不进 Git 的路径。 */
+  readonly untrackedManifestPath?: string;
 }
 
 function json(value: unknown): string {
@@ -87,7 +89,17 @@ function writeSources(root: string, overrides: FixtureOverrides): void {
         schemaVersion: 1,
         version,
         releaseEligible: overrides.releaseEligible ?? true,
-        files: [],
+        files:
+          overrides.untrackedManifestPath === undefined
+            ? []
+            : [
+                {
+                  path: overrides.untrackedManifestPath,
+                  bytes: 0,
+                  sha256: "sha256:0",
+                  mode: "0644",
+                },
+              ],
       }),
     );
   }
@@ -177,6 +189,14 @@ test("任一版本源漂移、主版本号为 0、引擎不一致、运行时不
   throws(
     () => checkWakeflowReleaseConsistency(repositoryFixture(t, { releaseEligible: false })),
     expectReleaseErrorCode("wakeflow-release-manifest"),
+  );
+  // 清单列出的路径没进 Git（被忽略或忘了 add）：干净树证明不了这一点，所以单独一道门。
+  throws(
+    () =>
+      checkWakeflowReleaseConsistency(
+        repositoryFixture(t, { untrackedManifestPath: "node_modules/ghost/dist/index.js" }),
+      ),
+    expectReleaseErrorCode("wakeflow-release-untracked"),
   );
 });
 

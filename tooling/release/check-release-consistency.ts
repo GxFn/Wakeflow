@@ -227,6 +227,33 @@ function checkManifests(repositoryRoot: string, committedRoot: string, version: 
   }
 }
 
+/**
+ * 清单里的每个路径都必须被 Git 跟踪。`build:check` 对比的是工作树，抓不到"文件在磁盘上却没进
+ * Git"——2026-09-20 切换时根 `.gitignore` 的 `dist/` 就漏掉了 314 个运行时依赖文件；干净树也证明
+ * 不了这一点，因为被忽略的文件既不算未跟踪也不算已跟踪。
+ */
+function checkArtifactTracking(repositoryRoot: string, committedRoot: string): void {
+  for (const hostId of ["codex", "claude-code"] as const) {
+    const directory = `${path.relative(repositoryRoot, committedRoot).split(path.sep).join("/")}/${pluginDirectoryName(hostId)}`;
+    const listed = git(repositoryRoot, ["ls-files", "-z", "--", directory]);
+    if (listed === null) fail("wakeflow-release-git", `git ls-files failed for ${directory}`);
+    const tracked = new Set(listed.split("\0").filter((entry) => entry.length > 0));
+    const manifest = readJsonFile(repositoryRoot, `${directory}/${MANIFEST_FILE}`);
+    const files = Array.isArray(manifest.files) ? manifest.files : [];
+    for (const relative of [
+      MANIFEST_FILE,
+      ...files.map((entry: unknown) => (isPlainRecord(entry) ? entry.path : undefined)),
+    ]) {
+      if (typeof relative !== "string" || !tracked.has(`${directory}/${relative}`)) {
+        fail(
+          "wakeflow-release-untracked",
+          `${directory}/${String(relative)} is listed in the manifest but not tracked by Git`,
+        );
+      }
+    }
+  }
+}
+
 /** 一次切换提交前后的 `git status` 可以有上万行，缓冲区按此上限给足；超出即当作 Git 失败。 */
 const MAXIMUM_GIT_OUTPUT_BYTES = 64 * 1024 * 1024;
 
@@ -307,6 +334,7 @@ export function checkWakeflowReleaseConsistency(
   checkEngines(repositoryRoot, committedRoot, options.nodeVersion ?? process.versions.node);
   checkManifests(repositoryRoot, committedRoot, release.version);
   const gitFacts = checkGit(repositoryRoot, release.version, options);
+  checkArtifactTracking(repositoryRoot, committedRoot);
   return Object.freeze({
     kind: "WakeflowReleaseCheckResult",
     schemaVersion: 1,

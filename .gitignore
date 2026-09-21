@@ -4,7 +4,7 @@
 node_modules/
 !/plugins/codex-wakeflow/node_modules/
 !/plugins/claude-code-wakeflow/node_modules/
-.build/
-coverage/
-dist/
+/.build/
+/coverage/
+/dist/
 *.log

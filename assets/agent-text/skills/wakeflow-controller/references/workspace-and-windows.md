@@ -33,7 +33,13 @@ current. Read it back through a tool.
   not advisory - route the user to the right operation instead of retrying.
 - **reconcile** - bring a workspace back to what its descriptor implies. On a
   healthy workspace this is a no-op that writes nothing, which makes it a safe
-  thing to run when you are unsure.
+  thing to run when you are unsure. It repairs only what Wakeflow owns: a
+  missing active layout or board, missing ledger containers, missing host
+  capability directories, a missing support surface root or its `drafts/`,
+  `harnesses/` and `fixtures/` scaffold, and Wakeflow's managed blocks and
+  memory files. A hand-edited block, a foreign file sitting where a Wakeflow
+  directory belongs, or a missing host runtime root is reported as a blocker
+  and never overwritten.
 
 Procedure, every time:
 

@@ -90,7 +90,17 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
       return values;
     },
   );
-  equal(receipts.length, 15);
+  // 十七步：核心与共享布局、活动布局与看板、投影、ledger、窗口运行时、宿主 capability、
+  // 两个支撑面根、工作区与两个支撑面的 .gitignore、程序指令、两份支撑面记忆、配置。
+  equal(receipts.length, 17);
+  equal(
+    existsSync(path.join(workspace.absolutePath, "Design", ".gitignore")),
+    true,
+  );
+  equal(
+    existsSync(path.join(workspace.absolutePath, "Design", "drafts")),
+    true,
+  );
   equal(receipts.at(-1)?.stepId, "authority:config");
   equal(
     existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),

@@ -65,6 +65,14 @@ function rootRule(resourcePath, directory) {
         fail("path", "$path");
     return `/${escaped}${directory ? "/" : ""}`;
 }
+/** 把一条根锚定的字面资源路径渲染为 Gitignore 规则；支撑面的 ignore 权威复用同一词法。 */
+export function renderWakeflowGitignoreRootRule(resourcePath, directory) {
+    return rootRule(resourcePath, directory);
+}
+/** 准入一个完整、无重复的宿主画像集合，按协议宿主顺序返回。 */
+export function parseWakeflowGitignoreHostProfileSet(value) {
+    return parseProfiles(value);
+}
 function isLiteralRootRule(value) {
     if (!value.startsWith("/") || value === "/")
         return false;

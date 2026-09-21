@@ -51,7 +51,7 @@
 | 激活范围 | 永远 `unknown`，无人值守 `forbidden`，Codex 没有安装覆盖范围 API | 按 settings 来源分 per-workspace、host-wide、unknown |
 | 窗口创建 | `create_thread`，Agent 原生工具 | `wakeflow-claude-host launch-window`，旧为 CLI，新边界下由 Agent 执行 tmux |
 
-**现 TS 状态**：`wakeflow_maintain_workspace` 三个 action 与 preview、apply、recover 齐全；apply 为同一 `action` 与 `request` 加 `planDigest`，服务端重算计划并比对摘要，漂移以 `precondition-failed/plan-drift` 拒绝（2026-09-04 L0.4 试点，切片 `src/capabilities/workspace/maintain-workspace.ts`；ADR-0004 的 `planRef` 在初始化场景退化为原请求本身，因为初始化前没有可写的 Wakeflow 根，preview 必须零写）；结果带 `plan`、`planDigest` 与 `next`；fresh selection 的 ID 分配改为由 selection 摘要确定性派生，apply 重发同一 selection 才能重算出同一摘要；`selection` 领域合同在 `src/configuration/wakeflow-fresh-config-selection.ts`；物化步骤为 active、local-protocol、ledger、support-root、shared-coordination、host-capability 六类；宿主 profile 编译为空目录声明；Claude settings 写入把三条 Bash 规则标为 `WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES`，只保留 MCP 规则；statusline 资产只声明文件名，没有写入；根指令文件采用 managed-block；`instructionManagement: managed-block` 的产品仓库与 external-owned managed-block 支撑面在各自根的宿主指令文件里得到同一机制的托管块（`workspace/managed-integration/wakeflow-external-instruction-*`，物化步骤 `recompose-external-instruction`，2026-09-21，gate-log §13.106）；没有 setup、cli、bootstrap 入口。
+**现 TS 状态**：`wakeflow_maintain_workspace` 三个 action 与 preview、apply、recover 齐全；apply 为同一 `action` 与 `request` 加 `planDigest`，服务端重算计划并比对摘要，漂移以 `precondition-failed/plan-drift` 拒绝（2026-09-04 L0.4 试点，切片 `src/capabilities/workspace/maintain-workspace.ts`；ADR-0004 的 `planRef` 在初始化场景退化为原请求本身，因为初始化前没有可写的 Wakeflow 根，preview 必须零写）；结果带 `plan`、`planDigest` 与 `next`；fresh selection 的 ID 分配改为由 selection 摘要确定性派生，apply 重发同一 selection 才能重算出同一摘要；`selection` 领域合同在 `src/configuration/wakeflow-fresh-config-selection.ts`；物化步骤十五种：local-protocol、shared-coordination、active-layout、requirement-board、fresh 活动投影、ledger、窗口运行时、host-capability、support-root（含 Design `drafts/`、Test `harnesses/` 与 `fixtures/` scaffold，2026-09-21）、工作区 `.gitignore`、支撑面 `.gitignore`（各宿主本机设置路径，2026-09-21）、程序指令、外部指令、支撑面记忆、config；宿主 profile 编译为空目录声明；Claude settings 写入把三条 Bash 规则标为 `WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES`，只保留 MCP 规则；statusline 资产只声明文件名，没有写入；根指令文件采用 managed-block；`instructionManagement: managed-block` 的产品仓库与 external-owned managed-block 支撑面在各自根的宿主指令文件里得到同一机制的托管块（`workspace/managed-integration/wakeflow-external-instruction-*`，物化步骤 `recompose-external-instruction`，2026-09-21，gate-log §13.106）；没有 setup、cli、bootstrap 入口。
 
 **实现判断**：
 
@@ -137,7 +137,7 @@
 
 **宿主差异**：Claude 多出 settings 与 statusline 的对账。
 
-**现 TS 状态**：reconcile preview 存在；只读 verify 与 view 没有公共入口，ADR-0006 已决定 verify 保留、view 放弃；6 个恢复 owner 中只有 maintenance 自身可达。
+**现 TS 状态**：reconcile preview 存在；只读 verify 与 view 没有公共入口，ADR-0006 已决定 verify 保留、view 放弃；6 个恢复 owner 中只有 maintenance 自身可达。2026-09-21（gate-log §13.107）起自动修复集与旧实现对齐：活动布局与需求看板、ledger 根与固定容器、当前宿主 capability 目录、支撑面根与 scaffold、支撑面与工作区 `.gitignore` 托管块、程序与外部指令托管块、支撑面记忆、共享协调布局；只报告不修复：宿主运行时根缺失（`window-runtime-missing`）、节点政策冲突（`*-conflict`）、托管块手改（`*-envelope` / `*-unknown-managed-body`）、维护协议根异常（`maintenance-protocol-*`）。窗口投影 stale/missing 的显式报告仍未接线（留给 F 组核对）。
 
 **实现判断**：stale 与 missing 的窗口投影作为 blocker 显式报告；host-settings-assets 因上游阻塞未评估时报 `not-evaluated` 而不是 `missing`；verify 作为独立只读工具复用对账的检测部分但零写。
 

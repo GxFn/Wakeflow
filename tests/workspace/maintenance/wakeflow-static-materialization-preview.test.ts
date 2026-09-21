@@ -27,9 +27,16 @@ import {
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { recomposeWakeflowWorkspaceGitignore } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
+import { recomposeWakeflowManagedBlockFile } from "../../../src/workspace/managed-integration/wakeflow-managed-block-file.js";
+import {
+  createWakeflowSupportGitignoreBodyAuthority,
+  WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
+} from "../../../src/workspace/managed-integration/wakeflow-support-gitignore-body-authority.js";
 import { recomposeWakeflowProgramInstruction } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { materializeWakeflowSharedCoordinationLayout } from "../../../src/workspace/wakeflow-shared-coordination-layout.js";
+import { materializeWakeflowHostCapabilityLayout } from "../../../src/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js";
+import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import {
   previewWakeflowStaticMaterialization,
   WakeflowStaticMaterializationPreviewError,
@@ -131,6 +138,17 @@ async function installCurrentStaticSurface(
     fixtureValue.root,
     renderWakeflowFreshActiveProjection(config).files,
   );
+  await publishFreshWakeflowWindowRuntime(
+    fixtureValue.root,
+    config,
+    codexWorkspaceHostResourceProfile,
+    { recoveringFreshPublication: false },
+  );
+  await materializeWakeflowHostCapabilityLayout(
+    fixtureValue.root,
+    codexWorkspaceHostResourceProfile,
+    { recoveringFreshLayout: false },
+  );
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(
     codexWorkspaceHostResourceProfile,
   );
@@ -174,6 +192,18 @@ async function installCurrentStaticSurface(
         expectedCatalogDigest: catalog.catalogDigest,
         surfaceId: surface.surfaceId,
       });
+      const supportIgnore = createWakeflowSupportGitignoreBodyAuthority(PROFILES);
+      if (supportIgnore !== null) {
+        await recomposeWakeflowManagedBlockFile(
+          supportRoot,
+          {
+            resourcePath: WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
+            currentTargets: [supportIgnore.envelopeTarget],
+            desiredTarget: supportIgnore.envelopeTarget,
+          },
+          { createMode: 0o644 },
+        );
+      }
     } finally {
       await supportRoot.close();
     }
@@ -221,6 +251,8 @@ test("fresh static preview is deterministic, ordered and strictly read-only", as
       "materialize-support-root",
       "materialize-support-root",
       "recompose-gitignore",
+      "recompose-support-gitignore",
+      "recompose-support-gitignore",
       "recompose-program-instruction",
       "publish-support-memory",
       "publish-support-memory",
@@ -233,7 +265,7 @@ test("fresh static preview is deterministic, ordered and strictly read-only", as
   );
   deepEqual(activeProjectionStep?.dependsOn, ["active:requirement-board"]);
   equal(configStep?.kind, "publish-config");
-  equal(configStep?.dependsOn.length, 14);
+  equal(configStep?.dependsOn.length, 16);
   equal(/^sha256:[0-9a-f]{64}$/u.test(preview.planDigest), true);
   deepEqual(
     await previewWakeflowStaticMaterialization(
@@ -365,6 +397,20 @@ test("placement-stable reconfigure plans derived files before Config activation"
   equal(driftedLedger.blockerCodes.includes("ledger-layout-conflict"), true);
   chmodSync(path.join(workspace.absolutePath, "Ledger", "transactions"), 0o700);
 
+  // 固定容器缺失与整个 ledger 根缺失都是 reconcile 的自动修复项（能力卡 1 §1.4）。
+  rmSync(path.join(workspace.absolutePath, "Ledger", "archives"), {
+    recursive: true,
+    force: true,
+  });
+  const incompleteLedger = await previewWakeflowStaticMaterialization(
+    workspace.root,
+    request("reconcile", null),
+  );
+  equal(incompleteLedger.status, "ready");
+  deepEqual(
+    incompleteLedger.steps.map((entry) => entry.kind),
+    ["materialize-ledger-layout"],
+  );
   rmSync(path.join(workspace.absolutePath, "Ledger"), {
     recursive: true,
     force: true,
@@ -373,6 +419,59 @@ test("placement-stable reconfigure plans derived files before Config activation"
     workspace.root,
     request("reconcile", null),
   );
-  equal(missingLedger.status, "blocked");
-  equal(missingLedger.blockerCodes.includes("ledger-root-missing"), true);
+  equal(missingLedger.status, "ready");
+  deepEqual(
+    missingLedger.steps.map((entry) => entry.kind),
+    ["materialize-ledger-layout"],
+  );
+
+  // 支撑面 scaffold、宿主 capability 目录、活动布局与看板缺失同样只补齐，不阻塞。
+  rmSync(path.join(workspace.absolutePath, "Design", "drafts"), { recursive: true });
+  rmSync(
+    path.join(
+      workspace.absolutePath,
+      ".wakeflow-local",
+      "runtime",
+      "hosts",
+      "codex",
+      "operations",
+      "keep-live",
+      "leases",
+    ),
+    { recursive: true },
+  );
+  rmSync(path.join(workspace.absolutePath, ".wakeflow-active", "current"), {
+    recursive: true,
+  });
+  const repairs = await previewWakeflowStaticMaterialization(
+    workspace.root,
+    request("reconcile", null),
+  );
+  equal(repairs.status, "ready");
+  deepEqual(
+    repairs.steps.map((entry) => entry.kind),
+    [
+      "materialize-active-layout",
+      "initialize-requirement-board",
+      "materialize-ledger-layout",
+      "materialize-host-capability-layout",
+      "materialize-support-root",
+    ],
+  );
+  deepEqual(
+    repairs.steps.find((entry) => entry.kind === "initialize-requirement-board")
+      ?.dependsOn,
+    ["core:active-layout"],
+  );
+
+  // 宿主运行时根整个缺失只报告：投影不由对账重建（能力卡 1 §1.4 实现判断）。
+  rmSync(path.join(workspace.absolutePath, ".wakeflow-local", "runtime", "hosts"), {
+    recursive: true,
+  });
+  const missingRuntime = await previewWakeflowStaticMaterialization(
+    workspace.root,
+    request("reconcile", null),
+  );
+  equal(missingRuntime.status, "blocked");
+  equal(missingRuntime.blockerCodes.includes("window-runtime-missing"), true);
 });

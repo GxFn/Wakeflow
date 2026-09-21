@@ -11,6 +11,7 @@ import {
 } from "../../foundation/data/passive-own-data.js";
 import {
   createDirectoryAtomically,
+  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
@@ -333,6 +334,179 @@ async function ensureDirectory(
     }
     throw error;
   }
+}
+
+export interface WakeflowHostCapabilityLayoutInspection {
+  readonly kind: "WakeflowHostCapabilityLayoutInspection";
+  /**
+   * `prerequisite-missing`：宿主 root/identity/projections 尚不存在（窗口运行时未发布）；
+   * `incomplete`：缺少 capability 目录，可以 ensure 补齐；`conflict`：某个声明位置不是
+   * 当前用户的 0700 目录，只报告。运行中的工作区里这些目录装着租约、回执与定位器，
+   * 所以检查与 ensure 都只看声明的目录本身，不枚举内容。
+   */
+  readonly status: "current" | "incomplete" | "prerequisite-missing" | "conflict";
+  readonly authorityDigest: Sha256Digest;
+  readonly missingDirectoryCount: number;
+  readonly observationDigest: Sha256Digest;
+}
+
+function parseProfileAndAuthority(profileValue: unknown) {
+  try {
+    const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
+    return {
+      profile,
+      authority: compileWakeflowHostCapabilityLayoutAuthority(profile),
+    };
+  } catch (error: unknown) {
+    if (
+      error instanceof WakeflowWorkspaceHostResourceProfileError
+      || error instanceof WakeflowHostCapabilityLayoutAuthorityError
+    ) {
+      fail("authority", error.path);
+    }
+    throw error;
+  }
+}
+
+async function prerequisitesPresent(
+  root: RootedDirectory,
+  profile: Readonly<ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>>,
+): Promise<boolean> {
+  return await optionalDirectory(root, wakeflowHostRuntimeRootRef(profile)) !== null
+    && await optionalDirectory(root, wakeflowHostIdentityRootRef(profile)) !== null
+    && await optionalDirectory(root, wakeflowHostProjectionsRootRef(profile)) !== null;
+}
+
+function declarationPath(
+  declaration: Readonly<WakeflowHostCapabilityLayoutAuthority>["declarations"][number],
+): PortableResourcePath {
+  const resourcePath = declaration.placement.relativePath;
+  if (resourcePath === null) fail("authority", "$declarations");
+  return resourcePath;
+}
+
+/** 零写入检查当前 Host Profile 的 capability 目录是否齐全且各自是当前用户的 0700 目录。 */
+export async function inspectWakeflowHostCapabilityLayout(
+  rootValue: RootedDirectory,
+  profileValue: unknown,
+  optionsValue: Readonly<{ readonly signal?: AbortSignal }> = {},
+): Promise<Readonly<WakeflowHostCapabilityLayoutInspection>> {
+  if (
+    typeof rootValue !== "object"
+    || rootValue === null
+    || types.isProxy(rootValue)
+    || !(rootValue instanceof RootedDirectory)
+  ) {
+    fail("input", "$root");
+  }
+  if (optionsValue.signal?.aborted === true) fail("aborted", "$signal");
+  const { profile, authority } = parseProfileAndAuthority(profileValue);
+  let status: WakeflowHostCapabilityLayoutInspection["status"] = "current";
+  let missingDirectoryCount = 0;
+  try {
+    if (!(await prerequisitesPresent(rootValue, profile))) {
+      status = "prerequisite-missing";
+    } else {
+      for (const declaration of authority.declarations) {
+        if (await optionalDirectory(rootValue, declarationPath(declaration)) === null) {
+          missingDirectoryCount += 1;
+        }
+      }
+      if (missingDirectoryCount > 0) status = "incomplete";
+    }
+  } catch (error: unknown) {
+    if (
+      error instanceof WakeflowHostCapabilityLayoutMaterializationError
+      && error.reason === "prefix-conflict"
+    ) {
+      status = "conflict";
+    } else {
+      throw error;
+    }
+  }
+  const basis = {
+    kind: "WakeflowHostCapabilityLayoutInspection" as const,
+    status,
+    authorityDigest: authority.authorityDigest,
+    missingDirectoryCount,
+  };
+  return Object.freeze({
+    ...basis,
+    observationDigest: computeCanonicalJsonSha256Digest(basis),
+  });
+}
+
+/**
+ * 在已发布窗口运行时的工作区里补齐缺失的 capability 目录（reconcile/reconfigure 修复）。
+ * 已有目录只核对节点政策、不枚举内容；缺失的中间段与目标以 0700 创建。
+ */
+export async function ensureWakeflowHostCapabilityLayout(
+  rootValue: RootedDirectory,
+  profileValue: unknown,
+  optionsValue: Readonly<{ readonly signal?: AbortSignal }> = {},
+): Promise<Readonly<WakeflowHostCapabilityLayoutMaterializationResult>> {
+  if (
+    typeof rootValue !== "object"
+    || rootValue === null
+    || types.isProxy(rootValue)
+    || !(rootValue instanceof RootedDirectory)
+  ) {
+    fail("input", "$root");
+  }
+  const signal = optionsValue.signal;
+  if (signal?.aborted === true) fail("aborted", "$signal");
+  const { profile, authority } = parseProfileAndAuthority(profileValue);
+  if (!(await prerequisitesPresent(rootValue, profile))) {
+    fail("prerequisite", "$hostLayout");
+  }
+  const effects: Readonly<DirectoryEffect>[] = [];
+  for (const declaration of authority.declarations) {
+    const resourcePath = declarationPath(declaration);
+    const existing = await optionalDirectory(rootValue, resourcePath);
+    if (existing !== null) {
+      effects.push(Object.freeze({ resourcePath, disposition: "current" as const, node: existing }));
+      continue;
+    }
+    let materialized;
+    try {
+      materialized = await materializeDirectoryPath(rootValue, resourcePath, {
+        mode: 0o700,
+        ...(signal === undefined ? {} : { signal }),
+      });
+    } catch (error: unknown) {
+      if (error instanceof DurableDirectoryMaterializationError) {
+        if (error.reason === "aborted") fail("aborted", "$signal");
+        fail("operation-failure", `$layout/${resourcePath}`);
+      }
+      throw error;
+    }
+    for (const segment of materialized.segments) {
+      assertPrivateDirectory(segment.node, `$layout/${segment.resourcePath}`);
+    }
+    effects.push(Object.freeze({
+      resourcePath,
+      disposition: "created" as const,
+      node: materialized.node,
+    }));
+  }
+  const createdDirectoryCount = effects.filter((entry) => entry.disposition === "created").length;
+  const observationBasis = {
+    kind: "WakeflowHostCapabilityLayoutObservation",
+    authorityDigest: authority.authorityDigest,
+    directories: effects.map((entry) => ({
+      resourcePath: entry.resourcePath,
+      deviceId: entry.node.deviceId.toString(),
+      inodeId: entry.node.inodeId.toString(),
+    })),
+  };
+  return Object.freeze({
+    disposition: createdDirectoryCount === 0 ? "current" : "created",
+    authorityDigest: authority.authorityDigest,
+    createdDirectoryCount,
+    observationDigest: computeCanonicalJsonSha256Digest(
+      observationBasis as unknown as JsonValue,
+    ),
+  });
 }
 
 /** 按当前 Host Profile 物化空 capability 父目录，或恢复同一 exact 前缀。 */

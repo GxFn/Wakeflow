@@ -18,6 +18,8 @@
 
 首轮唯一的 `gap` G1（仓库与 external-owned 支撑面的托管块，B 组 `wakeflow-managed-content.mjs` 与 `wakeflow-rule-model.mjs`）已于 2026-09-21 修在代码里并加回归（gate-log §13.106），两行改判 `recut`。
 
+第二轮（导出函数级，§3）B 组核出并修完三处首轮漏判的 gap：G2 支撑面 scaffold 目录、G3 支撑面 `.gitignore` 托管块、G4 对账自动修复范围（gate-log §13.107）。
+
 ## 2. 逐模块台账
 
 ### A 基础原语与锁
@@ -192,3 +194,49 @@
 | `skills/` |  | 旧技能文本（design、governance、target-craft、test 等） | `assets/agent-text/`：四份技能、六份 references、四个命令 | recut | §13.99 D1；诚实性门 `tests/artifacts/agent-text-honesty.test.ts` |
 | `template-sources/` |  | Demand 进度页模板源 | 投影模板是代码 | dropped | §13.101 D1 |
 
+
+## 3. 第二轮：导出函数级核对
+
+> 2026-09-21 起按用户裁决（gate-log §13.107 D1–D4）逐模块核对**导出函数**：粒度到函数、先核仍在运行时路径上的组、错误形状/磁盘布局/消息文本差异不算 gap（TSD-03）、每个模块组一批提交。判定词汇同 §1；`gap` 修完改判并记处置。
+
+### B 配置、布局与维护（2026-09-21，gate-log §13.107）
+
+| 旧模块 | 导出函数 | 行为分支 | 新 owner | 判定 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| `wakeflow-config-v3.mjs` | `parseWakeflowConfigV3` | 封闭字段集、typed id、引用与基数、residue 去重与 childOnly、tmux 名称长度与控制字符、socket 名词法、regex 编译、role map 键 | `configuration/wakeflow-config.ts` 加 JSON Schema | recut | `interfaceLanguage: auto` 放弃（`presentation.language`）；`pods[]` 新增 |
+| 同上 | `readWakeflowConfigV3` | 便利文件读取 | 无 | dropped | 快照是唯一读取路径 |
+| 同上 | `serializeWakeflowConfigV3`、`wakeflowConfigV3Digest` | 固定字段顺序两空格缩进、规范 JSON 摘要 | `wakeflow-config-document.ts`、`computeWakeflowConfigDigest` | covered |  |
+| 同上 | `buildWakeflowConfigV3Indexes` | by-id 索引、角色单例、`resolveWindowRoot`、`hostPreferences`、`ledgerPlacement` | `buildWakeflowConfigIndexes`（加 pod 作用域）；窗口根解析在 `wakeflow-window-launch-intent.ts`；宿主偏好由 `capabilities/endpoint/service.ts` 的执行说明直接读 `hosts`；ledger 放置由 root placement 报告 | recut |  |
+| 同上 | `explainWakeflowConfigV3` | 诊断视图 | `wakeflow_status.config`（programId、displayName、language、configDigest、pods/windows/repositories 计数） | recut | `fixedProtocolRoots` 与 source 标注放弃 |
+| 同上 | 配置词汇 | `governance.audit.preservedReviewAfterDays`、`governance.validation.runtimeResidue`、`repositories[].validation.residueExceptions` | schema 与解析器保留，两个实现里都没有行为消费者（旧消费者 preservation/legacy transform 已放弃；runtimeResidue 旧实现亦无消费者；residueExceptions 旧只做计数） | covered | 非 gap；是否删词汇留待用户裁决 |
+| `wakeflow-config-v3-snapshot.mjs` | `loadWakeflowConfigV3Snapshot` | 稳定 no-follow 读取、单链接、1 MiB、UTF-8/JSON/严格解析、placement、源摘要与语义摘要、ledger 绝对根 | `wakeflow-config-authority-snapshot.ts`（另加 0644 与 euid 政策） | covered |  |
+| `wakeflow-config-v3-owner.mjs` | `inspect/plan/validate` fresh、`createWakeflowConfigV3OwnerMutationParticipant` | absent-only、0644、1 MiB、canonical bytes、stage 命名空间分类（prepared/committed/existing/unsafe）、hard-link 不覆盖发布、terminal closure 逐字节核对 | `wakeflow-config-authority-publication.ts`（不替换创建 + 读回）；预览 `fresh-config-present`；prepared/committed 残留由 foundation 原子写自恢复，未知残留 `stage-recovery-required` | recut |  |
+| 同上 | `inspect/plan/validate` reconfigure、`createWakeflowConfigV3ReconfigureMutationParticipant` | current/ready-update 判定、predecessor hard link + rename、source identity 指纹、恢复态准入、program 身份不变 | `wakeflow-config-authority-replacement.ts`（锁内 CAS、幂等 current、`program-identity`、读回）、`-recovery.ts`（非活动锁退役、stage 归属核对） | recut | predecessor 链接放弃：journal 前向恢复替代 |
+| `wakeflow-layout-descriptor.mjs` | `createWakeflowLayoutDescriptor` | 静态表面全集（工作区、active、local、shared、宿主运行时、ledger、支撑面、仓库） | 静态资源矩阵、各 resource catalog、host capability layout authority；逐项核对见 gate-log §13.107 | recut | 本轮补 **G2**（支撑面 `drafts/`、`harnesses/`、`fixtures/`）与 **G3**（支撑面 `.gitignore` 托管块）；`audit/preserved`、`temp`/`activity` 目录按宿主 profile 开关；仓库 `.gitignore`/settings 授权按能力卡 1 不实现 |
+| 同上 | `wakeflowLayoutEntry`、`eventOnlyWakeflowLayoutEntries`、`freshWakeflowLayoutEntries` | 查询 | 直接在矩阵上过滤 | dropped |  |
+| 同上 | `validateWakeflowLayoutPlacements`、`validateWakeflowConfigRootPlacements` | 词法重叠、realpath 重叠、逐段 symlink 拒绝、缺失根保留 | `wakeflow-config-root-placement.ts` | covered |  |
+| `wakeflow-local-layout.mjs` | `planWakeflowLocalLayout` | `.wakeflow-local` 静态分区 | 矩阵加 `kernel/layout.ts` | recut |  |
+| `wakeflow-local-layout-realization.mjs` | `planWakeflowLocalLayoutRealization`、participant | fresh 创建；reconcile 静态目录缺失/模式漂移修复 | 本轮 **G4**：`inspectWakeflowHostCapabilityLayout` + `ensureWakeflowHostCapabilityLayout`（只看声明目录，不枚举运行内容）；共享协调布局 ensure 已有 | recut | 维护协议根缺失仍阻塞（gate 依赖）；模式漂移只报告（`*-conflict`） |
+| 同上 | `projectWakeflowLocalLayoutStorage`、`verifyWakeflowLocalLayoutInspection` | storage 视图 | 无 | dropped | ADR-0006 |
+| `wakeflow-fresh-initialize.mjs` | `createWakeflowFreshDesiredModel` | selection → config | `wakeflow-fresh-config-selection.ts`（ID 由 selection 摘要派生） | recut |  |
+| 同上 | `inspectWakeflowFreshLocalEligibility` | 十种 local footprint 分类 | core layout `freshCompatible` + `fresh-local-not-bootstrap-prefix` 等 | recut | 分类粒度放弃，都阻塞 |
+| 同上 | `planWakeflowFreshInitializeBackbone` | fresh 主干 | 预览 fresh 分支（17 步） | recut |  |
+| 同上 | `planWakeflowMigrationMaterializationBackbone` | 迁移 | 无 | dropped | ADR-0008 |
+| `wakeflow-reconcile.mjs` | `planWakeflowReconcileBackbone` | 自动修复：local 静态目录、支撑面目录、ledger 目录与索引、`.gitignore` 与记忆托管块、active 布局与 TODO 板、投影、窗口投影、Claude settings；只报告：窗口投影 unsafe/unavailable、配置非 current、托管块手改 | 本轮 **G4** 后：活动布局与看板、ledger 根与容器、宿主 capability 目录、支撑面根与 scaffold、支撑面与工作区 `.gitignore`、程序/外部指令、支撑面记忆、共享协调布局；Claude settings/statusline 由宿主 contribution；只报告：`window-runtime-missing`、`*-conflict`、`*-envelope`、`maintenance-protocol-*` | recut | 窗口投影 stale/missing 的显式报告未接线，留给 F 组 |
+| `wakeflow-reconfigure.mjs` | `diffWakeflowConfigV3Topology` | 拓扑差异 | 预览 `sameSemanticSection`：topology/storage/hosts/pods 任一变化即 `reconfigure-layout-change-unsupported` | recut | 旧版允许支撑面移动等；新版按能力卡 1 全部拒绝 |
+| 同上 | `planWakeflowReconfigureBackbone` | reconfigure 主干 | 预览 reconfigure 分支 + 权威替换 | recut | `ledger-root-requires-explicit-migration` 放弃 |
+| `wakeflow-maintenance-action-composition.mjs` | `validate/createWakeflowConfirmedActionPlan`、`assertWakeflowMaintenanceLocalTransitionScope`、participant | 确认计划摘要、锁内范围复验、组合 participant | 执行 intent `planDigest`、gate 重验、执行事务 | recut |  |
+| `wakeflow-maintenance-action-runtime.mjs` | `create/loadWakeflowMaintenanceActionHandlers` | 动态 handler 装载、bundle/language | 步骤执行器闭合分派 + 宿主 capability | recut | 模板 bundle 放弃（§13.101 D1） |
+| `wakeflow-maintenance-coordinator.mjs` | `validateWakeflowMaintenanceRequest`、`createWakeflowMaintenanceCoordinator` | action/mode/planDigest/上限校验、preview/apply/recover | `capabilities/workspace/maintain-workspace.ts` | recut |  |
+| `wakeflow-maintenance-plan.mjs` | `create/validate/digest/isApplicable` | 计划形状、排序、blocker、preserved/deferred/authorization | 执行计划与 intent（排序、blockerCodes、planDigest） | recut | preserved/deferred/authorization 段放弃 |
+| `wakeflow-managed-content.mjs` | `planWakeflowManagedContent` | 程序记忆托管块、仓库记忆托管块、支撑面记忆整文件/托管块、程序 ignore、支撑面 ignore、仓库 ignore（授权）、用户改动即 blocked、`remove-managed-block` | 程序指令、外部指令（G1）、支撑面记忆、工作区 `.gitignore`、支撑面 `.gitignore`（**G3** 本轮） | recut | 仓库 ignore 授权列表固定为空；`remove-managed-block` 不需要（reconfigure 拒绝 topology 变化） |
+| 同上 | `validate/project/participant` | 计划校验与投影 | 预览步骤与执行器 | recut |  |
+| `wakeflow-support-materialization.mjs` | `planWakeflowSupportMaterialization` | 整文件记忆、`drafts/`/`harnesses/`/`fixtures/` ensure、external managed-block 组件 | support catalog（含 scaffold，**G2**）、support memory authority、外部指令（G1） | recut |  |
+| `wakeflow-support-surface-owner.mjs` | `plan/validate/project/participant` | 根 fresh 严格不存在、reconcile 目录修复、mode drift/unsafe 报告 | catalog + `inspectWakeflowManagedSupportRoot`/`materializeWakeflowManagedSupportRoot` + 预览步骤 | recut |  |
+| `wakeflow-tracked-materialization.mjs` | `createWakeflowTrackedMaterializationParticipant` | stage→commit→cleanup 与恢复 | foundation durable directory/atomic file 物化 | recut |  |
+| `wakeflow-workspace-mutation.mjs` | `inspectWakeflowMaintenancePersistenceBudget` | journal 字节预算预检 | 无独立预检：预览合同 256 步上限与原子写入字节上限隐含 | dropped |  |
+| 同上 | `assertWakeflowMutationContext`、`inspectWakeflowWorkspaceMutation`、`withWakeflowRuntimeMutation`、`runWakeflowMaintenanceMutation`、`recoverWakeflowWorkspaceMutation` | gate、journal、恢复代际 | maintenance gate、journal store、执行事务、`mode: recover` | recut | ADR-0013 |
+| `wakeflow-host-settings-assets-owner.mjs` | `loadWakeflowHostSettingsAssetsAdapter` | 动态 adapter 装载 | 无 | dropped | 宿主 capability 编译期固定 |
+| 同上 | `planWakeflowHostSettingsAssetsOwner`、participant | portable settings 多根、statusline 资产、local settings、仓库授权 | `hosts/claude-code/claude-code-maintenance-capability.ts` contribution 与 executor | recut | 仓库根 settings 授权不实现 |
+| `wakeflow-host-capability.mjs` | `normalizeWakeflowHostCapabilities`、`normalizeWakeflowHostCapabilityProfile` | 能力窄视图 | `workspace-host-resource-profile.ts` 与两份宿主 profile | recut |  |
+| `wakeflow-rule-model.mjs` | 三个 render | 程序/仓库/支撑角色记忆正文 | 程序指令、外部指令（仓库与外部支撑面）、支撑面记忆 | recut | G1 |

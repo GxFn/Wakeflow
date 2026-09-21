@@ -25,10 +25,12 @@ import {
 /**
  * Wakeflow Workspace / Support：Config topology 驱动的受管 Support 资源目录。
  *
- * 本目录只为 `ownership: wakeflow-managed` 的 Design/Test surface 生成两个长期声明：
- * host-neutral surface 根目录与当前宿主的 whole-file instruction memory。external-owned
- * surface 不进入本目录：owner-managed 时 Wakeflow 不写任何东西，managed-block 时由
- * `managed-integration/wakeflow-external-instruction-*` 在它的根里维护一个托管块。
+ * 本目录只为 `ownership: wakeflow-managed` 的 Design/Test surface 生成长期声明：
+ * host-neutral surface 根目录、当前宿主的 whole-file instruction memory，以及角色
+ * scaffold 目录（Design 的 `drafts/`，Test 的 `harnesses/` 与 `fixtures/`；能力卡 1
+ * §1 产物表、能力卡 3 Q7）。external-owned surface 不进入本目录：owner-managed 时
+ * Wakeflow 不写任何东西，managed-block 时由 `managed-integration/wakeflow-external-instruction-*`
+ * 在它的根里维护一个托管块。
  *
  * 声明以 Config 语义摘要和 Host Profile 绑定，不读取物理目录、不创建 scaffold、不生成
  * memory 字节，也不把动态实例注册进全局静态 Matrix。
@@ -152,6 +154,44 @@ function rootDeclaration(
   });
 }
 
+/** 每个角色在自己的 surface 根下拥有的 scaffold 目录；内容归角色，Wakeflow 只保证目录存在。 */
+export const WAKEFLOW_MANAGED_SUPPORT_SCAFFOLD_DIRECTORIES = Object.freeze({
+  design: Object.freeze(["drafts"] as const),
+  test: Object.freeze(["harnesses", "fixtures"] as const),
+});
+
+function scaffoldDeclaration(
+  surface: WakeflowManagedSupportSurface,
+  relativePath: string,
+): Readonly<WakeflowWorkspaceResourceDeclaration> {
+  return declaration({
+    kind: "WakeflowWorkspaceResourceDeclaration",
+    declarationId: `support.${surface.surfaceId}.${relativePath}`,
+    family: "support",
+    ownerId: "support-surface-layout",
+    scope: "host-neutral",
+    placement: {
+      root: { kind: "support-surface", surfaceId: surface.surfaceId },
+      relativePath,
+    },
+    tracking: { disposition: "tracked", privacy: "shareable" },
+    nodePolicy: {
+      kind: "directory",
+      mode: "0755",
+      symlinkPolicy: "reject",
+      existingModePolicy: "observe-without-change",
+    },
+    processing: {
+      kind: "directory-container",
+      materializationRecipe: "materialize-directory",
+      existingDirectoryPolicy: "observe-without-mode-change",
+      collisionPolicy: "reject-non-directory",
+      descendantAuthority: "separate-declaration-required",
+      recoveryStrategy: "report-only",
+    },
+  });
+}
+
 function memoryDeclaration(
   surface: WakeflowManagedSupportSurface,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
@@ -214,6 +254,9 @@ export function createWakeflowManagedSupportResourceCatalog(
     declarations.push(
       rootDeclaration(surface),
       memoryDeclaration(surface, profile),
+      ...WAKEFLOW_MANAGED_SUPPORT_SCAFFOLD_DIRECTORIES[surface.capability].map(
+        (relativePath) => scaffoldDeclaration(surface, relativePath),
+      ),
     );
   }
   const sorted = Object.freeze([...declarations].sort(compareDeclarations));

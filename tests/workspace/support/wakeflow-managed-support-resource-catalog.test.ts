@@ -47,6 +47,21 @@ test("managed Support catalog binds two topology surfaces to the current host", 
   deepEqual(summary(codex), [
     {
       declarationId:
+        "support.surface_33333333-3333-4333-8333-333333333333.drafts",
+      ownerId: "support-surface-layout",
+      scope: "host-neutral",
+      placement: {
+        root: {
+          kind: "support-surface",
+          surfaceId: "surface_33333333-3333-4333-8333-333333333333",
+        },
+        relativePath: "drafts",
+      },
+      mode: "0755",
+      processing: "materialize-directory",
+    },
+    {
+      declarationId:
         "support.surface_33333333-3333-4333-8333-333333333333.instruction.codex",
       ownerId: "support-memory",
       scope: "current-host",
@@ -71,6 +86,36 @@ test("managed Support catalog binds two topology surfaces to the current host", 
           surfaceId: "surface_33333333-3333-4333-8333-333333333333",
         },
         relativePath: null,
+      },
+      mode: "0755",
+      processing: "materialize-directory",
+    },
+    {
+      declarationId:
+        "support.surface_44444444-4444-4444-8444-444444444444.fixtures",
+      ownerId: "support-surface-layout",
+      scope: "host-neutral",
+      placement: {
+        root: {
+          kind: "support-surface",
+          surfaceId: "surface_44444444-4444-4444-8444-444444444444",
+        },
+        relativePath: "fixtures",
+      },
+      mode: "0755",
+      processing: "materialize-directory",
+    },
+    {
+      declarationId:
+        "support.surface_44444444-4444-4444-8444-444444444444.harnesses",
+      ownerId: "support-surface-layout",
+      scope: "host-neutral",
+      placement: {
+        root: {
+          kind: "support-surface",
+          surfaceId: "surface_44444444-4444-4444-8444-444444444444",
+        },
+        relativePath: "harnesses",
       },
       mode: "0755",
       processing: "materialize-directory",

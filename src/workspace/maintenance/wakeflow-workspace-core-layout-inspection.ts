@@ -44,7 +44,8 @@ import {
  * 被 fresh 采用，但在完整 maintenance protocol 为 idle 时不构成运行期冲突。
  */
 
-type WakeflowActiveRootStatus = "absent" | "present" | "conflict";
+/** `incomplete`：`.wakeflow-active` 在而 `current/` 不在，可由维护 ensure 补齐；`conflict` 只报告。 */
+type WakeflowActiveRootStatus = "absent" | "present" | "incomplete" | "conflict";
 type WakeflowLocalProtocolStatus =
   | "absent"
   | "bootstrap-prefix"
@@ -253,7 +254,9 @@ async function inspectActive(
         ? "absent" as const
         : inspection.status === "current"
           ? "present" as const
-          : "conflict" as const,
+          : inspection.status === "incomplete"
+            ? "incomplete" as const
+            : "conflict" as const,
       nodeDigest: inspection.status === "absent"
         ? null
         : inspection.observationDigest,
@@ -483,6 +486,7 @@ export async function inspectWakeflowWorkspaceCoreLayout(
   assertNotAborted(signal);
   const issueCodes: string[] = [];
   const active = await inspectActive(rootValue, signal);
+  // `incomplete` 是维护可补齐的状态，不是 issue：gate 要求 issueCodes 为空才放行修复。
   if (active.status === "conflict") issueCodes.push("active-layout-node-policy");
   const local = await inspectLocal(rootValue, signal, issueCodes);
   assertNotAborted(signal);

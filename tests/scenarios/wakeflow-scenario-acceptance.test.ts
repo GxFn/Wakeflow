@@ -525,10 +525,7 @@ async function assertReconfigureRejections(
   equal(ledgerPreview.status, "blocked");
   equal(ledgerPreview.planDigest, null);
   equal(ledgerPreview.plan, null);
-  deepEqual(
-    [...ledgerPreview.blockerCodes],
-    ["ledger-root-missing", "reconfigure-layout-change-unsupported"],
-  );
+  deepEqual([...ledgerPreview.blockerCodes], ["reconfigure-layout-change-unsupported"]);
   const renamedPod = cloneConfigDocument(current);
   const pods = renamedPod.pods as Record<string, unknown>[];
   const primary = pods[0];

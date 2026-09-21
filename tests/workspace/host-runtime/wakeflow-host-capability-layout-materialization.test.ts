@@ -1,9 +1,12 @@
 import { equal } from "node:assert/strict";
 import {
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   rmdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -24,6 +27,8 @@ import {
   codexWorkspaceHostResourceProfile,
 } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
+  ensureWakeflowHostCapabilityLayout,
+  inspectWakeflowHostCapabilityLayout,
   materializeWakeflowHostCapabilityLayout,
   WakeflowHostCapabilityLayoutMaterializationError,
   type WakeflowHostCapabilityLayoutMaterializationErrorReason,
@@ -162,4 +167,72 @@ test("Host capability recovery fills an exact prefix and preserves foreign resou
     "prefix-conflict",
   );
   equal(readdirSync(path.dirname(foreign)).includes("foreign.json"), true);
+});
+
+test("Host capability inspection and ensure ignore live contents and only repair missing directories", async (t) => {
+  const value = await fixture(t, codexWorkspaceHostResourceProfile);
+  await materializeWakeflowHostCapabilityLayout(
+    value.root,
+    codexWorkspaceHostResourceProfile,
+    { recoveringFreshLayout: false },
+  );
+  const codexHost = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
+  const leases = path.join(codexHost, "operations", "keep-live", "leases");
+  // 运行中的工作区：租约文件与 pod 回执目录都不是冲突。
+  writeFileSync(path.join(leases, "lease.json"), "{}\n", { mode: 0o600 });
+  mkdirSync(path.join(codexHost, "pods", "pod_x"), { mode: 0o700 });
+  const live = await inspectWakeflowHostCapabilityLayout(
+    value.root,
+    codexWorkspaceHostResourceProfile,
+  );
+  equal(live.status, "current");
+  equal(live.missingDirectoryCount, 0);
+  equal(
+    (await ensureWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile))
+      .disposition,
+    "current",
+  );
+
+  rmSync(path.join(codexHost, "operations", "keep-live"), { recursive: true });
+  const incomplete = await inspectWakeflowHostCapabilityLayout(
+    value.root,
+    codexWorkspaceHostResourceProfile,
+  );
+  equal(incomplete.status, "incomplete");
+  equal(incomplete.missingDirectoryCount, 2);
+  const ensured = await ensureWakeflowHostCapabilityLayout(
+    value.root,
+    codexWorkspaceHostResourceProfile,
+  );
+  equal(ensured.disposition, "created");
+  equal(ensured.createdDirectoryCount, 2);
+  equal(statSync(leases).mode & 0o777, 0o700);
+  equal(existsSync(path.join(codexHost, "pods", "pod_x")), true, "ensure must not touch siblings");
+  equal(
+    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile)).status,
+    "current",
+  );
+
+  // 声明位置被普通文件占用：只报告，ensure 拒绝。
+  rmSync(path.join(codexHost, "operations", "keep-live"), { recursive: true });
+  writeFileSync(path.join(codexHost, "operations", "keep-live"), "not a directory\n");
+  equal(
+    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile)).status,
+    "conflict",
+  );
+  await expectLayoutError(
+    () => ensureWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile),
+    "prefix-conflict",
+  );
+
+  // 宿主运行时根缺失：只报告前置缺失，ensure 拒绝。
+  rmSync(codexHost, { recursive: true });
+  equal(
+    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile)).status,
+    "prerequisite-missing",
+  );
+  await expectLayoutError(
+    () => ensureWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile),
+    "prerequisite",
+  );
 });

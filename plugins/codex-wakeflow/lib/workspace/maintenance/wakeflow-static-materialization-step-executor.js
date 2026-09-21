@@ -17,6 +17,8 @@ import { listRequirementClaimStates, materializeRequirementBoardRoot, publishReq
 import { createWakeflowExternalInstructionBodyAuthority, listWakeflowExternalInstructionTargets, wakeflowExternalInstructionPlacementKey, wakeflowExternalInstructionTargetKey, WakeflowExternalInstructionBodyAuthorityError, } from "../managed-integration/wakeflow-external-instruction-body-authority.js";
 import { recomposeWakeflowExternalInstruction, WakeflowExternalInstructionRecompositionError, } from "../managed-integration/wakeflow-external-instruction-recomposition.js";
 import { createWakeflowGitignoreBodyAuthority } from "../managed-integration/wakeflow-gitignore-body-authority.js";
+import { recomposeWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "../managed-integration/wakeflow-managed-block-file.js";
+import { createWakeflowSupportGitignoreBodyAuthority, WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME, } from "../managed-integration/wakeflow-support-gitignore-body-authority.js";
 import { recomposeWakeflowWorkspaceGitignore, WakeflowGitignoreRecompositionError, } from "../managed-integration/wakeflow-gitignore-recomposition.js";
 import { createWakeflowProgramInstructionBodyAuthority } from "../managed-integration/wakeflow-program-instruction-body-authority.js";
 import { recomposeWakeflowProgramInstruction, WakeflowProgramInstructionRecompositionError, } from "../managed-integration/wakeflow-program-instruction-recomposition.js";
@@ -27,7 +29,7 @@ import { publishWakeflowSupportMemory, WakeflowSupportMemoryPublicationError, } 
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import { materializeWakeflowSharedCoordinationLayout, WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST, WakeflowSharedCoordinationLayoutError, } from "../wakeflow-shared-coordination-layout.js";
 import { compileWakeflowHostCapabilityLayoutAuthority } from "../host-runtime/wakeflow-host-capability-layout-authority.js";
-import { materializeWakeflowHostCapabilityLayout, WakeflowHostCapabilityLayoutMaterializationError, } from "../host-runtime/wakeflow-host-capability-layout-materialization.js";
+import { ensureWakeflowHostCapabilityLayout, materializeWakeflowHostCapabilityLayout, WakeflowHostCapabilityLayoutMaterializationError, } from "../host-runtime/wakeflow-host-capability-layout-materialization.js";
 import { compileWakeflowFreshWindowRuntimeAuthority } from "../window-runtime/wakeflow-window-runtime-fresh-authority.js";
 import { publishFreshWakeflowWindowRuntime, WakeflowFreshWindowRuntimePublicationError, } from "../window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { materializeActiveLayout, publishActiveProjection, } from "../../kernel/active-projection.js";
@@ -39,6 +41,16 @@ import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } f
 import { WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION, WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./wakeflow-maintenance-resource-catalog.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
 import { parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
+/**
+ * Wakeflow Workspace / Maintenance：静态物化计划的闭合 step dispatcher。
+ *
+ * 每个 step 都从同一 preview/request 重算领域 authority，并只调用已经存在的 owner。
+ * dispatcher 不更新 journal、不排序 step、不取得 gate，也不开放自定义 handler registry。
+ * `recoveringAffectedStep` 只允许 fresh whole-owned目录接受 exact existing；普通执行仍要求
+ * strict absent create。
+ */
+/** 新建的支撑面 `.gitignore` 与工作区根的一样是可分享的 tracked 文件。 */
+const WAKEFLOW_SUPPORT_GITIGNORE_FILE_MODE = 0o644;
 const ERROR_MESSAGES = {
     input: "Wakeflow static materialization step input is invalid.",
     gate: "Wakeflow static materialization step requires the active gate.",
@@ -260,12 +272,11 @@ async function requirementBoardRootExists(root) {
  * Fresh 初始化把需求看板目录与空索引交给内核 owner。普通执行要求看板目录严格不存在；
  * affected-step 恢复只接受没有任何认领状态与未知条目的空看板，索引由内核确定性重写。
  */
-async function executeRequirementBoardInitialization(root, step, request, recovering, signal) {
-    if (request.action !== "fresh-initialize" ||
-        step.targetKey !== "active.board") {
+async function executeRequirementBoardInitialization(root, step, recovering, signal) {
+    if (step.targetKey !== "active.board")
         fail("plan", "$board");
-    }
     assertStepTarget(step, REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST);
+    // 非 fresh 动作只在预览观察到看板缺失时才计划本步；apply 时看板已出现即为漂移。
     const existed = await requirementBoardRootExists(root);
     if (existed && !recovering)
         fail("strict-absent", "$board");
@@ -329,11 +340,11 @@ async function executeActiveWorkspaceProjection(root, step, desired, recovering,
     }
 }
 async function executeLedgerLayout(root, step, request, desired, recovering, signal) {
-    if (request.action !== "fresh-initialize" ||
-        step.targetKey !== "ledger.root") {
+    if (step.targetKey !== "ledger.root")
         fail("plan", "$ledgerRoot");
-    }
     assertStepTarget(step, LEDGER_AUTHORITY_LAYOUT_DIGEST);
+    // fresh 要求根严格不存在；reconcile/reconfigure 的修复接受已有根并只补齐缺失容器。
+    const ensure = recovering || request.action !== "fresh-initialize";
     let placements;
     try {
         placements = await validateWakeflowConfigRootPlacements(root, desired);
@@ -364,7 +375,7 @@ async function executeLedgerLayout(root, step, request, desired, recovering, sig
     }
     const finalSegment = materialized.segments.at(-1);
     if (finalSegment === undefined ||
-        (!recovering && finalSegment.disposition !== "created") ||
+        (!ensure && finalSegment.disposition !== "created") ||
         materialized.node.kind !== "directory" ||
         materialized.node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE) {
         fail("strict-absent", "$ledgerRoot");
@@ -446,17 +457,20 @@ async function executeUnregisteredWindowRuntime(root, step, request, desired, re
     }
 }
 async function executeHostCapabilityLayout(root, step, request, recovering, signal) {
-    if (request.action !== "fresh-initialize" ||
-        step.targetKey !== request.currentHostProfile.hostId) {
+    if (step.targetKey !== request.currentHostProfile.hostId) {
         fail("plan", "$hostCapabilityLayout");
     }
     const authority = compileWakeflowHostCapabilityLayoutAuthority(request.currentHostProfile);
     assertStepTarget(step, authority.authorityDigest);
     try {
-        const result = await materializeWakeflowHostCapabilityLayout(root, request.currentHostProfile, {
-            recoveringFreshLayout: recovering,
-            ...(signal === undefined ? {} : { signal }),
-        });
+        // fresh 要求全部目标不存在（恢复时接受 exact 空前缀）；reconcile/reconfigure 的修复只补齐
+        // 缺失目录、不枚举运行中的内容。
+        const result = request.action === "fresh-initialize"
+            ? await materializeWakeflowHostCapabilityLayout(root, request.currentHostProfile, {
+                recoveringFreshLayout: recovering,
+                ...(signal === undefined ? {} : { signal }),
+            })
+            : await ensureWakeflowHostCapabilityLayout(root, request.currentHostProfile, signal === undefined ? {} : { signal });
         return receipt(step.stepId, result.disposition, {
             authorityDigest: result.authorityDigest,
             createdDirectoryCount: result.createdDirectoryCount,
@@ -492,7 +506,10 @@ async function executeSupportRoot(root, step, request, desired, recovering, sign
             surfaceId: step.targetKey,
             ...(signal === undefined ? {} : { signal }),
         });
-        if (result.disposition === "existing" && !recovering) {
+        // fresh 要求根严格不存在；reconcile/reconfigure 的修复接受已有根并只补齐 scaffold。
+        if (result.disposition === "existing" &&
+            !recovering &&
+            request.action === "fresh-initialize") {
             fail("strict-absent", "$supportRoot");
         }
         return receipt(step.stepId, result.disposition === "created" ? "created" : "current", {
@@ -636,6 +653,72 @@ async function executeExternalInstruction(root, step, request, sourceConfig, des
     }
     return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
         authorityDigest: result.inspection.desiredAuthority.authorityDigest,
+        sourceDigest: result.inspection.source?.digest ?? null,
+    });
+}
+async function executeSupportGitignore(root, step, request, desired, signal) {
+    const authority = createWakeflowSupportGitignoreBodyAuthority(request.hostProfiles);
+    if (authority === null)
+        fail("plan", "$step.kind");
+    assertStepTarget(step, authority.authorityDigest);
+    const surface = desired.topology.supportSurfaces.find((entry) => entry.surfaceId === step.targetKey &&
+        entry.ownership === "wakeflow-managed");
+    if (surface === undefined)
+        fail("plan", "$step.targetKey");
+    let placements;
+    try {
+        placements = await validateWakeflowConfigRootPlacements(root, desired);
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigRootPlacementError) {
+            fail("root-scope", "$supportRoot");
+        }
+        throw error;
+    }
+    const placement = placements.roots.find((entry) => entry.key === `support.${surface.surfaceId}.root`);
+    if (placement?.state !== "present")
+        fail("root-scope", "$supportRoot");
+    let supportRoot;
+    try {
+        supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot", { durability: root.durability });
+    }
+    catch (error) {
+        if (error instanceof RootedDirectoryError) {
+            fail("root-scope", "$supportRoot");
+        }
+        throw error;
+    }
+    let result;
+    let primaryError;
+    try {
+        result = await recomposeWakeflowManagedBlockFile(supportRoot, {
+            resourcePath: WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
+            currentTargets: [authority.envelopeTarget],
+            desiredTarget: authority.envelopeTarget,
+            ...(signal === undefined ? {} : { signal }),
+        }, { createMode: WAKEFLOW_SUPPORT_GITIGNORE_FILE_MODE });
+    }
+    catch (error) {
+        primaryError = error;
+    }
+    let closeError;
+    try {
+        await supportRoot.close();
+    }
+    catch (error) {
+        closeError = error;
+    }
+    if (primaryError !== undefined) {
+        if (primaryError instanceof WakeflowManagedBlockFileError) {
+            fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$supportGitignore");
+        }
+        throw primaryError;
+    }
+    if (closeError !== undefined || result === undefined) {
+        fail("owner", "$supportRoot");
+    }
+    return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+        authorityDigest: authority.authorityDigest,
         sourceDigest: result.inspection.source?.digest ?? null,
     });
 }
@@ -822,10 +905,11 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
         return executeSharedCoordinationLayout(root, step, request.action, recovering, signal);
     }
     if (step.kind === "materialize-active-layout") {
-        return executeActiveLayout(root, step, recovering, signal);
+        // reconcile/reconfigure 的活动布局修复以幂等 ensure 执行；fresh 仍要求严格不存在。
+        return executeActiveLayout(root, step, recovering || request.action !== "fresh-initialize", signal);
     }
     if (step.kind === "initialize-requirement-board") {
-        return executeRequirementBoardInitialization(root, step, request, recovering, signal);
+        return executeRequirementBoardInitialization(root, step, recovering, signal);
     }
     if (step.kind === "publish-fresh-active-workspace-projection") {
         return executeActiveWorkspaceProjection(root, step, desired, recovering, signal);
@@ -844,6 +928,9 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
     }
     if (step.kind === "recompose-gitignore") {
         return executeGitignore(root, step, request, signal);
+    }
+    if (step.kind === "recompose-support-gitignore") {
+        return executeSupportGitignore(root, step, request, desired, signal);
     }
     if (step.kind === "recompose-program-instruction") {
         return executeProgramInstruction(root, step, request, sourceConfig, desired, signal);

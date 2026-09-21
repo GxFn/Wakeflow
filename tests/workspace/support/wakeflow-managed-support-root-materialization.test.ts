@@ -1,11 +1,13 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   realpathSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -23,6 +25,7 @@ import {
   createWakeflowManagedSupportResourceCatalog,
 } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import {
+  inspectWakeflowManagedSupportRoot,
   materializeWakeflowManagedSupportRoot,
   WakeflowManagedSupportRootMaterializationError,
   type WakeflowManagedSupportRootMaterializationErrorReason,
@@ -85,17 +88,76 @@ async function expectRootError(
 test("managed Support root materializes child and sibling Config placements", async (t) => {
   const childFixture = await fixture(t);
   const childConfig = createMinimalWakeflowConfig();
+  const absent = await inspectWakeflowManagedSupportRoot(
+    childFixture.root,
+    request(childConfig),
+  );
+  equal(absent.status, "absent");
+  equal(absent.placementState, "missing");
+  deepEqual(absent.scaffold, [{ relativePath: "drafts", status: "absent" }]);
+  equal(existsSync(path.join(childFixture.workspacePath, "Design")), false, "inspection must not write");
+
   const created = await materializeWakeflowManagedSupportRoot(
     childFixture.root,
     request(childConfig),
   );
   equal(created.disposition, "created");
+  deepEqual(created.scaffold, [{ relativePath: "drafts", disposition: "created" }]);
   equal(statSync(path.join(childFixture.workspacePath, "Design")).mode & 0o777, 0o755);
+  equal(statSync(path.join(childFixture.workspacePath, "Design", "drafts")).mode & 0o777, 0o755);
   const current = await materializeWakeflowManagedSupportRoot(
     childFixture.root,
     request(childConfig),
   );
   equal(current.disposition, "existing");
+  deepEqual(current.scaffold, [{ relativePath: "drafts", disposition: "existing" }]);
+  equal(
+    (await inspectWakeflowManagedSupportRoot(childFixture.root, request(childConfig))).status,
+    "current",
+  );
+
+  // scaffold 目录被删：检查报 incomplete，物化只补目录并保留其余内容。
+  writeFileSync(path.join(childFixture.workspacePath, "Design", "notes.md"), "keep\n");
+  rmSync(path.join(childFixture.workspacePath, "Design", "drafts"), { recursive: true });
+  const incomplete = await inspectWakeflowManagedSupportRoot(
+    childFixture.root,
+    request(childConfig),
+  );
+  equal(incomplete.status, "incomplete");
+  deepEqual(incomplete.scaffold, [{ relativePath: "drafts", status: "absent" }]);
+  const repaired = await materializeWakeflowManagedSupportRoot(
+    childFixture.root,
+    request(childConfig),
+  );
+  equal(repaired.disposition, "created");
+  deepEqual(repaired.scaffold, [{ relativePath: "drafts", disposition: "created" }]);
+  equal(existsSync(path.join(childFixture.workspacePath, "Design", "notes.md")), true);
+
+  // scaffold 位置被普通文件占用：检查报 conflict，物化拒绝而不是覆盖。
+  rmSync(path.join(childFixture.workspacePath, "Design", "drafts"), { recursive: true });
+  writeFileSync(path.join(childFixture.workspacePath, "Design", "drafts"), "not a directory\n");
+  equal(
+    (await inspectWakeflowManagedSupportRoot(childFixture.root, request(childConfig))).status,
+    "conflict",
+  );
+  await expectRootError(
+    () => materializeWakeflowManagedSupportRoot(childFixture.root, request(childConfig)),
+    "effect",
+    "$supportRoot/drafts",
+  );
+
+  const testConfig = createMinimalWakeflowConfig();
+  const testFixture = await fixture(t);
+  const testRoot = await materializeWakeflowManagedSupportRoot(testFixture.root, {
+    ...request(testConfig),
+    surfaceId: "surface_44444444-4444-4444-8444-444444444444",
+  });
+  deepEqual(testRoot.scaffold, [
+    { relativePath: "fixtures", disposition: "created" },
+    { relativePath: "harnesses", disposition: "created" },
+  ]);
+  equal(existsSync(path.join(testFixture.workspacePath, "Test", "harnesses")), true);
+  equal(existsSync(path.join(testFixture.workspacePath, "Test", "fixtures")), true);
 
   const siblingFixture = await fixture(t);
   const siblingConfig = createMinimalWakeflowConfig();

@@ -137,7 +137,9 @@ async function inspectActive(root, signal) {
                 ? "absent"
                 : inspection.status === "current"
                     ? "present"
-                    : "conflict",
+                    : inspection.status === "incomplete"
+                        ? "incomplete"
+                        : "conflict",
             nodeDigest: inspection.status === "absent"
                 ? null
                 : inspection.observationDigest,
@@ -349,6 +351,7 @@ export async function inspectWakeflowWorkspaceCoreLayout(rootValue, optionsValue
     assertNotAborted(signal);
     const issueCodes = [];
     const active = await inspectActive(rootValue, signal);
+    // `incomplete` 是维护可补齐的状态，不是 issue：gate 要求 issueCodes 为空才放行修复。
     if (active.status === "conflict")
         issueCodes.push("active-layout-node-policy");
     const local = await inspectLocal(rootValue, signal, issueCodes);

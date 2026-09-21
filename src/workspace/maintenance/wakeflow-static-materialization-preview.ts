@@ -37,6 +37,14 @@ import {
   WakeflowHostCapabilityLayoutAuthorityError,
 } from "../host-runtime/wakeflow-host-capability-layout-authority.js";
 import {
+  inspectWakeflowHostCapabilityLayout,
+  WakeflowHostCapabilityLayoutMaterializationError,
+} from "../host-runtime/wakeflow-host-capability-layout-materialization.js";
+import {
+  inspectWakeflowManagedSupportRoot,
+  WakeflowManagedSupportRootMaterializationError,
+} from "../support/wakeflow-managed-support-root-materialization.js";
+import {
   listWakeflowExternalInstructionTargets,
   wakeflowExternalInstructionPlacementKey,
   wakeflowExternalInstructionTargetKey,
@@ -49,6 +57,14 @@ import {
   inspectWakeflowWorkspaceGitignore,
   WakeflowGitignoreInspectionError,
 } from "../managed-integration/wakeflow-gitignore-inspection.js";
+import {
+  inspectWakeflowManagedBlockFile,
+  WakeflowManagedBlockFileError,
+} from "../managed-integration/wakeflow-managed-block-file.js";
+import {
+  createWakeflowSupportGitignoreBodyAuthority,
+  WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
+} from "../managed-integration/wakeflow-support-gitignore-body-authority.js";
 import {
   inspectWakeflowProgramInstruction,
   WakeflowProgramInstructionInspectionError,
@@ -70,6 +86,7 @@ import {
   WakeflowWorkspaceCoreLayoutInspectionError,
   type WakeflowWorkspaceCoreLayoutInspection,
 } from "./wakeflow-workspace-core-layout-inspection.js";
+import { REQUIREMENT_BOARD_ROOT_REF } from "../../kernel/layout.js";
 import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../../kernel/requirement-board.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
@@ -234,8 +251,19 @@ async function inspectLedgerParticipant(
     );
     return;
   }
+  // ledger 根或它的固定容器缺失时由维护补齐（能力卡 1 §1.4 的 ledger 目录修复）；冲突只报告。
+  const repairStep = (sourceDigest: Sha256Digest | null) =>
+    step({
+      stepId: "ledger:layout",
+      kind: "materialize-ledger-layout",
+      ownerId: "ledger-layout",
+      targetKey: "ledger.root",
+      sourceDigest,
+      targetDigest: LEDGER_AUTHORITY_LAYOUT_DIGEST,
+      dependsOn: [],
+    });
   if (placement.state !== "present") {
-    addBlocker(blockers, "ledger-root-missing");
+    steps.push(repairStep(null));
     return;
   }
   let root: RootedDirectory;
@@ -249,7 +277,9 @@ async function inspectLedgerParticipant(
     const inspection = await new LedgerAuthorityStore(root).inspectLayout(
       request.signal === undefined ? undefined : { signal: request.signal },
     );
-    if (inspection.status !== "current") {
+    if (inspection.status === "incomplete") {
+      steps.push(repairStep(inspection.observationDigest));
+    } else if (inspection.status !== "current") {
       addBlocker(blockers, `ledger-layout-${inspection.status}`);
     }
   } catch (error: unknown) {
@@ -268,6 +298,60 @@ async function inspectLedgerParticipant(
   }
 }
 
+function supportGitignoreStep(
+  surfaceId: string,
+  authority: NonNullable<ReturnType<typeof createWakeflowSupportGitignoreBodyAuthority>>,
+  sourceDigest: Sha256Digest | null,
+  dependsOn: readonly string[],
+): Readonly<WakeflowStaticMaterializationStep> {
+  return step({
+    stepId: `support-gitignore:${surfaceId}`,
+    kind: "recompose-support-gitignore",
+    ownerId: "workspace-ignore-integration",
+    targetKey: surfaceId,
+    sourceDigest,
+    targetDigest: authority.authorityDigest,
+    dependsOn: [...dependsOn],
+  });
+}
+
+/** 支撑面根里 `.gitignore` 托管块的只读检查；用户改动或未知正文只报告。 */
+async function inspectSupportGitignore(
+  supportRoot: RootedDirectory,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  authority: NonNullable<ReturnType<typeof createWakeflowSupportGitignoreBodyAuthority>>,
+  surfaceId: string,
+  dependsOn: readonly string[],
+  blockers: Set<string>,
+  steps: WakeflowStaticMaterializationStep[],
+): Promise<void> {
+  try {
+    const inspected = await inspectWakeflowManagedBlockFile(supportRoot, {
+      resourcePath: WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
+      currentTargets: [authority.envelopeTarget],
+      desiredTarget: authority.envelopeTarget,
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
+    if (inspected.status === "recompose-required") {
+      steps.push(
+        supportGitignoreStep(
+          surfaceId,
+          authority,
+          inspected.source?.digest ?? null,
+          dependsOn,
+        ),
+      );
+    }
+  } catch (error: unknown) {
+    if (error instanceof WakeflowManagedBlockFileError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      addBlocker(blockers, `support-gitignore-${error.reason}`);
+    } else {
+      throw error;
+    }
+  }
+}
+
 async function inspectSupportMemories(
   root: RootedDirectory,
   request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
@@ -280,6 +364,9 @@ async function inspectSupportMemories(
   const catalog = createWakeflowManagedSupportResourceCatalog(
     desired,
     request.currentHostProfile,
+  );
+  const supportIgnore = createWakeflowSupportGitignoreBodyAuthority(
+    request.hostProfiles,
   );
   for (const surface of desired.topology.supportSurfaces) {
     assertNotAborted(request.signal);
@@ -329,10 +416,80 @@ async function inspectSupportMemories(
           dependsOn: [rootStepId],
         }),
       );
+      if (supportIgnore !== null) {
+        steps.push(
+          supportGitignoreStep(surface.surfaceId, supportIgnore, null, [rootStepId]),
+        );
+      }
       continue;
     }
-    if (placement.state !== "present") {
-      addBlocker(blockers, "support-root-missing");
+    // 根缺失或 scaffold 目录缺失时由维护补齐（能力卡 1 §1.4 的支撑面目录修复）；冲突只报告。
+    let rootInspection;
+    try {
+      rootInspection = await inspectWakeflowManagedSupportRoot(root, {
+        config: desired,
+        expectedConfigDigest: computeWakeflowConfigDigest(desired),
+        profile: request.currentHostProfile,
+        expectedCatalogDigest: catalog.catalogDigest,
+        surfaceId: surface.surfaceId,
+        ...(request.signal === undefined ? {} : { signal: request.signal }),
+      });
+    } catch (error: unknown) {
+      if (error instanceof WakeflowManagedSupportRootMaterializationError) {
+        if (error.reason === "aborted") fail("aborted", "$signal");
+        addBlocker(blockers, "support-root-unavailable");
+        continue;
+      }
+      throw error;
+    }
+    if (rootInspection.status === "conflict") {
+      addBlocker(blockers, "support-root-conflict");
+      continue;
+    }
+    const rootStepIds: string[] = [];
+    if (rootInspection.status !== "current") {
+      rootStepIds.push(rootStepId);
+      const declaration = catalog.declarations.find(
+        (entry) => entry.declarationId === `support.${surface.surfaceId}.root`,
+      );
+      if (declaration === undefined) {
+        addBlocker(blockers, "support-catalog-incomplete");
+        continue;
+      }
+      steps.push(
+        step({
+          stepId: rootStepId,
+          kind: "materialize-support-root",
+          ownerId: "support-surface-layout",
+          targetKey: surface.surfaceId,
+          sourceDigest: rootInspection.observationDigest,
+          targetDigest: resourceDigest(declaration),
+          dependsOn: [],
+        }),
+      );
+    }
+    if (rootInspection.status === "absent") {
+      const authority = createWakeflowSupportMemoryAuthority(
+        desired,
+        request.currentHostProfile,
+        surface.surfaceId,
+      );
+      steps.push(
+        step({
+          stepId: `support-memory:${surface.surfaceId}`,
+          kind: "publish-support-memory",
+          ownerId: "support-memory",
+          targetKey: `${surface.surfaceId}:${request.currentHostProfile.hostId}`,
+          sourceDigest: null,
+          targetDigest: authority.authorityDigest,
+          dependsOn: rootStepIds,
+        }),
+      );
+      if (supportIgnore !== null) {
+        steps.push(
+          supportGitignoreStep(surface.surfaceId, supportIgnore, null, rootStepIds),
+        );
+      }
       continue;
     }
     let supportRoot: RootedDirectory;
@@ -363,8 +520,19 @@ async function inspectSupportMemories(
             targetKey: `${surface.surfaceId}:${request.currentHostProfile.hostId}`,
             sourceDigest: inspected.source?.digest ?? null,
             targetDigest: inspected.desiredAuthority.authorityDigest,
-            dependsOn: [],
+            dependsOn: rootStepIds,
           }),
+        );
+      }
+      if (supportIgnore !== null) {
+        await inspectSupportGitignore(
+          supportRoot,
+          request,
+          supportIgnore,
+          surface.surfaceId,
+          rootStepIds,
+          blockers,
+          steps,
         );
       }
     } catch (error: unknown) {
@@ -460,6 +628,111 @@ async function inspectExternalInstructions(
       }
     }
   }
+}
+
+async function requirementBoardRootAbsent(
+  root: RootedDirectory,
+): Promise<boolean> {
+  try {
+    await root.inspectExistingResource(REQUIREMENT_BOARD_ROOT_REF, "$board");
+    return false;
+  } catch (error: unknown) {
+    if (
+      error instanceof RootedDirectoryError &&
+      error.reason === "resource-not-found"
+    ) {
+      return true;
+    }
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    throw error;
+  }
+}
+
+/** 需求看板目录缺失时由维护重建空看板（能力卡 1 §1.4 的 TODO 板修复）；存在即不触碰。 */
+async function planRequirementBoardRepair(
+  root: RootedDirectory,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  blockers: Set<string>,
+  steps: WakeflowStaticMaterializationStep[],
+): Promise<void> {
+  assertNotAborted(request.signal);
+  if (blockers.has("active-layout-unavailable")) return;
+  if (!(await requirementBoardRootAbsent(root))) return;
+  steps.push(
+    step({
+      stepId: "active:requirement-board",
+      kind: "initialize-requirement-board",
+      ownerId: "requirement-board",
+      targetKey: "active.board",
+      sourceDigest: null,
+      targetDigest: REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
+      dependsOn: steps.some((entry) => entry.stepId === "core:active-layout")
+        ? ["core:active-layout"]
+        : [],
+    }),
+  );
+}
+
+/**
+ * 当前宿主 capability 目录缺失时由维护 ensure 补齐；宿主运行时根尚未发布或前缀冲突时
+ * 只报告（能力卡 1 §1.4：窗口投影 stale 与 missing 作为 blocker 显式报告）。
+ */
+async function planHostCapabilityLayoutRepair(
+  root: RootedDirectory,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  blockers: Set<string>,
+  steps: WakeflowStaticMaterializationStep[],
+): Promise<void> {
+  assertNotAborted(request.signal);
+  let authorityDigest: Sha256Digest;
+  try {
+    const authority = compileWakeflowHostCapabilityLayoutAuthority(
+      request.currentHostProfile,
+    );
+    if (authority.declarations.length === 0) return;
+    authorityDigest = authority.authorityDigest;
+  } catch (error: unknown) {
+    if (error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
+      addBlocker(blockers, `host-capability-layout-${error.reason}`);
+      return;
+    }
+    throw error;
+  }
+  let inspection;
+  try {
+    inspection = await inspectWakeflowHostCapabilityLayout(
+      root,
+      request.currentHostProfile,
+      request.signal === undefined ? {} : { signal: request.signal },
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      addBlocker(blockers, `host-capability-layout-${error.reason}`);
+      return;
+    }
+    throw error;
+  }
+  if (inspection.status === "current") return;
+  if (inspection.status === "prerequisite-missing") {
+    addBlocker(blockers, "window-runtime-missing");
+    return;
+  }
+  if (inspection.status === "conflict") {
+    addBlocker(blockers, "host-capability-layout-conflict");
+    return;
+  }
+  steps.push(
+    step({
+      stepId: "host:capability-layout",
+      kind: "materialize-host-capability-layout",
+      ownerId: "host-capability-layout",
+      targetKey: request.currentHostProfile.hostId,
+      sourceDigest: inspection.observationDigest,
+      targetDigest: authorityDigest,
+      dependsOn: [],
+    }),
+  );
 }
 
 function planFreshActiveWorkspaceProjection(
@@ -568,7 +841,20 @@ export async function previewWakeflowStaticMaterialization(
     }
   } else {
     if (current === null) addBlocker(blockers, "current-config-unavailable");
-    if (core.active.status !== "present") {
+    // 活动布局缺失或不完整由维护 ensure 补齐（能力卡 1 §1.4 自动修复）；节点政策冲突只报告。
+    if (core.active.status === "absent" || core.active.status === "incomplete") {
+      steps.push(
+        step({
+          stepId: "core:active-layout",
+          kind: "materialize-active-layout",
+          ownerId: "active-layout",
+          targetKey: "active.layout",
+          sourceDigest: core.active.nodeDigest,
+          targetDigest: WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST,
+          dependsOn: [],
+        }),
+      );
+    } else if (core.active.status !== "present") {
       addBlocker(blockers, "active-layout-unavailable");
     }
     if (core.local.status !== "idle") {
@@ -701,6 +987,8 @@ export async function previewWakeflowStaticMaterialization(
         throw error;
       }
     }
+    await planRequirementBoardRepair(rootValue, request, blockers, steps);
+    await planHostCapabilityLayoutRepair(rootValue, request, blockers, steps);
   }
 
   if (desired !== null && placements !== null) {
@@ -864,10 +1152,11 @@ export async function previewWakeflowStaticMaterialization(
     ["materialize-host-capability-layout", 7],
     ["materialize-support-root", 8],
     ["recompose-gitignore", 9],
-    ["recompose-program-instruction", 10],
-    ["recompose-external-instruction", 11],
-    ["publish-support-memory", 12],
-    ["publish-config", 13],
+    ["recompose-support-gitignore", 10],
+    ["recompose-program-instruction", 11],
+    ["recompose-external-instruction", 12],
+    ["publish-support-memory", 13],
+    ["publish-config", 14],
   ]);
   const sortedBlockers = Object.freeze([...blockers].sort());
   const orderedSteps = [...steps].sort((left, right) => {

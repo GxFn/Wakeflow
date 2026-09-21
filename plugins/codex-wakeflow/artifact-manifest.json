@@ -135,8 +135,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 7834,
-      "sha256": "sha256:96394636ad5932e28a13cef4126cdc0b9728687551b8d3bf92afb6e1f8e920b5"
+      "bytes": 8275,
+      "sha256": "sha256:bb98b184b0955356e7bb1627e3fc11c86126196e12cef99c6059d7dcd2a428d6"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -2629,8 +2629,8 @@
     },
     {
       "path": "lib/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js",
-      "bytes": 11461,
-      "sha256": "sha256:313761c97849d91188b371af66b4859f36596d14c5e45fca83c28026760b88bd",
+      "bytes": 17007,
+      "sha256": "sha256:fb1846d8f50dff81f8281d56ccb4e7a9378c93342fd344efeec8fb8ea3e962ca",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2720,29 +2720,29 @@
     },
     {
       "path": "lib/workspace/maintenance/wakeflow-static-materialization-preview-contract.js",
-      "bytes": 14491,
-      "sha256": "sha256:0bede0a91ba5310e5a00eee57270f88e3349ffe9fe31b891fd696ebfac50c388",
+      "bytes": 14526,
+      "sha256": "sha256:51d3209486eb1bb3b46919551f3e4964cc6bb5d0abe091da33d5ef81dab0e6f8",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/workspace/maintenance/wakeflow-static-materialization-preview.js",
-      "bytes": 31802,
-      "sha256": "sha256:1d5605af4b685bc23d9514db015af1230ea8eec19b3e17c79f2f8e347dcaf51d",
+      "bytes": 41637,
+      "sha256": "sha256:cdc13f743913f5c8061ef7793fa670a486849875e5d6331f62c3949af2152ad8",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/workspace/maintenance/wakeflow-static-materialization-step-executor.js",
-      "bytes": 38374,
-      "sha256": "sha256:2b52cce57335463028b71b4c872930d9283a72de217f24ec465e38c838bc5ee1",
+      "bytes": 42764,
+      "sha256": "sha256:18ad77880b1f2edc34c9b3cd12221fe891235bbfcf481885d72218ecc634ecf8",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js",
-      "bytes": 14344,
-      "sha256": "sha256:71640bca1f8573a0926fb136a2f16d96b10944712bee2eefd92ff3dc68acc5a4",
+      "bytes": 14557,
+      "sha256": "sha256:964ec4dfda5a9184891b5d149881b37029660d2d3271cf942c7a6019038640ee",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2769,8 +2769,8 @@
     },
     {
       "path": "lib/workspace/managed-integration/wakeflow-gitignore-body-authority.js",
-      "bytes": 13999,
-      "sha256": "sha256:c00c7452f1d3ac34b1961b43c3833e3f9db4b98b478bdf88e51083b7e3ef7014",
+      "bytes": 14434,
+      "sha256": "sha256:ae7cc374f1527a8fc9c206e43c3b2f9465e28051f9a0353587252b89c9f4b440",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2792,6 +2792,13 @@
       "path": "lib/workspace/managed-integration/wakeflow-gitignore-recomposition.js",
       "bytes": 9718,
       "sha256": "sha256:0bd6f91bdcf57faf50de62190260e6f36720285d59cf281f81e198649996c8cc",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/workspace/managed-integration/wakeflow-managed-block-file.js",
+      "bytes": 14395,
+      "sha256": "sha256:1130c38ee19befb1f2210a550b2c1896ad20ec130987c20bb62fb3c5030f3243",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2845,16 +2852,23 @@
       "scope": "shared"
     },
     {
+      "path": "lib/workspace/managed-integration/wakeflow-support-gitignore-body-authority.js",
+      "bytes": 3161,
+      "sha256": "sha256:4156ac47c71bcc9ade28b40b7dfb46ae2b6b04e7a2552d8f181fb5aa33f9e2e8",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
       "path": "lib/workspace/support/wakeflow-managed-support-resource-catalog.js",
-      "bytes": 6623,
-      "sha256": "sha256:b751008a35f296b84e20ef7b307bb70e1ed80c45834228c2785fa36c151bcede",
+      "bytes": 8268,
+      "sha256": "sha256:6de0f17b3d46fb3fa4a7c910afbc6f0a40792bc5009afa98f5eea5e41edd8b7f",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/workspace/support/wakeflow-managed-support-root-materialization.js",
-      "bytes": 9623,
-      "sha256": "sha256:a1034c9671736374732751bd42b9745f62b347e49413072dfc97b670c908b149",
+      "bytes": 16268,
+      "sha256": "sha256:6c73bf270a0acc5de16637bf75dc99a4472d42213c4dd3215d62d89951489b3d",
       "mode": "0644",
       "scope": "shared"
     },
@@ -6388,8 +6402,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 7834,
-      "sha256": "sha256:96394636ad5932e28a13cef4126cdc0b9728687551b8d3bf92afb6e1f8e920b5",
+      "bytes": 8275,
+      "sha256": "sha256:bb98b184b0955356e7bb1627e3fc11c86126196e12cef99c6059d7dcd2a428d6",
       "mode": "0644",
       "scope": "agent-text"
     },

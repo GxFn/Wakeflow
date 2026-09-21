@@ -3157,3 +3157,30 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **文档写回。** 对齐台账（gap 0、recut 73，三行改判并记处置）、能力卡 1 现 TS 状态、能力映射矩阵行 2、场景清单 §2、agent-text README（EN/zh）与 Controller 技能的工作区参考（托管块的仓库与外部面选择入口）、支撑资源目录的注释改为指向真实 consumer。
 
 **残余。** 外部根的暂存残留没有恢复 owner（程序指令的恢复 owner 也尚未接线到公共 recover，两者一起处理）；真实 WakeWorkspace 上的托管块写入未执行（用户项）。
+
+## 13.107 第二轮对齐 B 组：导出函数级核对与三处修复（2026-09-21）
+
+**用户裁决。** 2026-09-21 回复"确认 继续"，采纳第二轮对齐的四条建议：D1 按旧模块的导出函数核对；D2 先核仍在运行时路径上的组（配置/布局/维护 → 治理 → 观察 → 宿主 → 技能文本）；D3 错误形状、磁盘布局与消息文本差异不算 gap，只有缺失的行为分支才算（TSD-03）；D4 每个模块组一批提交、一节 gate-log。
+
+**核对结论（B 组 25 个模块，逐导出函数表在对齐台账 §3）。** 无 gap 的部分：配置解析器全部校验分支（字段集、typed id、引用与基数、residue 去重、tmux 名称、socket 词法、regex 编译）由 JSON Schema 与 `wakeflow-config.ts` 承担；快照、首次发布、锁内替换与恢复覆盖旧 owner 的 absent-only、0644、1 MiB、canonical bytes、program 身份不变与读回闭合（predecessor hard link 由 journal 前向恢复替代）；宿主启动偏好（`modelByRole`、`reasoningEffortByRole`、Claude `permissionMode` 与 tmux 名）在 `capabilities/endpoint/service.ts` 的执行说明里被消费；布局描述符的静态表面逐项对应到矩阵与各 catalog。三条配置词汇（`governance.audit.preservedReviewAfterDays`、`governance.validation.runtimeResidue`、`repositories[].validation.residueExceptions`）在两个实现里都没有行为消费者，记为"保留词汇、无行为"，是否删除留待用户裁决。
+
+**三处首轮漏判的 gap。**
+
+- G2 支撑面 scaffold 目录。旧 `wakeflow-support-materialization.mjs` 为 Design 面 ensure `drafts/`、为 Test 面 ensure `harnesses/` 与 `fixtures/`；能力卡 1 §1 产物表、能力卡 3 Q7、需求表与 Design 技能都要求它们，而新目录只声明根与记忆文件，场景测试自己 `mkdir drafts` 掩盖了缺失。修复：`wakeflow-managed-support-resource-catalog.ts` 为每个 wakeflow-managed 面加 scaffold 声明（0755，tracked），`materializeWakeflowManagedSupportRoot` 在根下 ensure 它们并在回执报 `scaffold[]`，新增只读 `inspectWakeflowManagedSupportRoot`（absent / current / incomplete / conflict）。
+- G3 支撑面 `.gitignore` 托管块。旧 `ignoreSpecs` 为每个 Wakeflow 管理的支撑面写一个只含宿主本机设置路径（Claude `.claude/settings.local.json`）的托管块；工作区根 `.gitignore` 的规则是根锚定的，覆盖不到支撑面子目录，而新实现会把 portable settings 写进支撑面，宿主随后生成的本机设置文件会变成未跟踪噪音。修复：`wakeflow-support-gitignore-body-authority.ts`（从完整宿主画像集合取本机设置路径，没有则为 null）与通用的 `wakeflow-managed-block-file.ts`（任意根里一个文件的托管块检查与 CAS 重组：单链接、当前用户拥有、权限位不限；新建 0644、替换保留权限位、读回闭合），步骤种类 `recompose-support-gitignore`（rank 10，在工作区 `.gitignore` 之后、程序指令之前）。
+- G4 对账自动修复范围。旧 reconcile 自动修复 `.wakeflow-local` 静态目录、支撑面目录、ledger 目录、active 布局与 TODO 板等（能力卡 1 §1.4），新预览对这些一律 blocker（`active-layout-unavailable`、`ledger-root-missing`、`support-root-missing`），宿主 capability 目录甚至不检查。首轮台账把 `wakeflow-reconcile.mjs` 判成 covered 是按场景 `reconcile-noop` 判的，函数级才看见修复分支缺失。修复：非 fresh 动作下活动布局 absent/incomplete 出 `materialize-active-layout`（core inspection 新增 `incomplete` 状态且不算 issue）、看板目录缺失出 `initialize-requirement-board`、ledger 根或固定容器缺失出 `materialize-ledger-layout`、宿主 capability 目录缺失出 `materialize-host-capability-layout`（新增 `inspectWakeflowHostCapabilityLayout` 与 `ensureWakeflowHostCapabilityLayout`）、支撑面根或 scaffold 缺失出 `materialize-support-root`；执行器对非 fresh 动作放开严格不存在要求。只报告不修复：宿主运行时根缺失 `window-runtime-missing`（能力卡 1 §1.4 实现判断：投影不由对账重建）、节点政策冲突 `*-conflict`、托管块手改、维护协议根异常（gate 自身依赖它）。
+
+**决定。**
+
+- D5 检查与 ensure 只看声明的目录本身、不枚举运行内容：第一版 `inspectWakeflowHostCapabilityLayout` 复用了 fresh 恢复的整树核对，场景 `card-09/status-and-verify` 立刻把带租约文件与 pod 回执的活工作区判成 `host-capability-layout-conflict`；改为逐声明 `optionalDirectory` 与 `materializeDirectoryPath` 后场景恢复 20/20。
+- D6 整个 ledger 根缺失时 reconcile 重建空的三个容器（旧行为），不阻塞；`card-01/reconfigure` 的 `storage.ledgerRoot` 改动因此只剩 `reconfigure-layout-change-unsupported` 一个 blocker（场景与场景清单同步）。
+- D7 `wakeflow-managed-block-file.ts` 是新的通用托管块文件 owner；§13.106 的外部指令 inspection/recomposition 仍保留专用实现，合并到通用 owner 留作后续整理项，不在本批做。
+- D8 窗口投影 stale/missing 的显式报告（能力卡 1 §1.4 实现判断）未接线，留到 F 组核对投影模块时一起做。
+
+**回归。** 新增或改写：支撑目录与根物化测试（scaffold 声明顺序、创建/补齐/冲突、Test 面两目录）、宿主 capability 检查与 ensure（活内容不算冲突、缺失补齐不动兄弟、文件占位冲突、前置缺失）、支撑面 `.gitignore` 权威与通用托管块文件（新建 0644、追加保留 0664、current、手改 envelope、未知正文、取消）、预览（reconcile 修复步骤顺序与 `window-runtime-missing`、fresh 十七步）、执行器（十七回执）、核心布局 `incomplete`、能力级 `maintain-workspace-reconcile-repair.test.ts`（fresh 产物齐全 → 删七类 → 七步修复 → 再次零步 no-op → 手改与文件占位只报告；ledger 整根重建；宿主运行时根缺失只报告）。场景 20/20（`card-09` 在 D5 之后通过）。场景清单 §2 加 `card-01/reconcile-repair`。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 994/994（含 `build:check`），377.0 s 墙钟（浏览器等外部负载仍在，load 14–20；§13.106 为 315.7 s）；`npm run smoke:artifacts` 两宿主七幕全过；`git diff --check` 干净。首轮中 `card-09/status-and-verify` 因 D5 前的整树核对判 `host-capability-layout-conflict` 失败，修正后场景 20/20。
+
+**文档写回。** 对齐台账 §1 第二轮小结与 §3 B 组函数级表；能力卡 1 §1.1 物化步骤十五种与 §1.4 对账修复/报告集；场景清单；Controller 技能工作区参考的 reconcile 条目；制品重建。
+
+**残余。** 三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；窗口投影 stale/missing 报告（F 组）；维护协议根缺失时 reconcile 仍阻塞。

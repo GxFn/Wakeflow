@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
   mkdtempSync,
@@ -106,14 +106,12 @@ test("core layout separates installed resources from fresh-compatible prefix", a
 
   const partial = await fixture(t);
   mkdirSync(path.join(partial.absolutePath, ".wakeflow-active"), { mode: 0o700 });
+  // 根在而 current/ 不在是可由维护 ensure 补齐的 incomplete，不是节点政策冲突。
   const partialInspection = await inspectWakeflowWorkspaceCoreLayout(
     partial.root,
   );
-  equal(partialInspection.active.status, "conflict");
-  equal(
-    partialInspection.issueCodes.includes("active-layout-node-policy"),
-    true,
-  );
+  equal(partialInspection.active.status, "incomplete");
+  deepEqual([...partialInspection.issueCodes], []);
 });
 
 test("core layout distinguishes busy, recovery residue and conflicts", async (t) => {

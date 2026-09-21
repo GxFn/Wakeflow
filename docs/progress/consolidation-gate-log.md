@@ -3225,3 +3225,22 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `git diff --check` 干净；`npm test` 与 smoke 沿用 §13.108（996/996，两宿主七幕全过），本批无代码改动。
 
 **残余。** 同 §13.108：G6（观察侧窗口投影新鲜度，F 组）；三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞。下一组 E（投递、窗口、租约与宿主激活）。
+
+## 13.110 第二轮对齐 E 组：投递、窗口、租约与宿主激活的函数级核对（2026-09-21）
+
+**核对结论（E 组 13 个模块、约 100 个导出函数，逐函数表在对齐台账 §3）。** 没有新的 gap。分域小结：
+
+- 投递：旧五阶段（plan → apply → claim → outcome → rearm）对应 `prepare_delivery`（阻塞项派生、信封由任务包派生、工作声明独占创建即围栏、prepared 事件、失败回滚声明、按客户端幂等键重放许可）、`record_delivery_outcome`（处置由目标会话 hook 记录 / Codex 发送返回 / Controller 解决派生，只有 rejected-before-send 释放声明，静默超阈值把 next 转给 Controller）与 `rearm_delivery`（同信封新代际，上限由声明代际上限派生）。没有独立的零写入 plan 预览：prepare 本身幂等，判 recut 不判 gap。
+- transport 记录与 store：group / packet 不再存在（一次投递一个目标，任务包是合同来源）；envelope 与 run 成为 Demand 事件流里的事件（append candidate → commit），run 链的连续性由事件顺序与声明代际承担；strict inventory 与 layout 诊断由事件流读取与根库存承担；修剪并入完成 / 取消事务的 `retireDemandRoot` 与 pod close 的回执清理。
+- 窗口绑定与租约：记录 codec、inventory、注册 / 替换 / 退役、租约获取 / 释放逐条对应 `wakeflow-window-host-binding*.ts`、端点服务与 `kernel/work-claims.ts`；Pod owner 的窄缝改为同一端点工具带 pod 准入；宿主退役结果记录并入端点 decommission 的 closure 证据与 liveness 分类；私有 handle 不进公共结果（只带 handleDigest）。
+- keep-live 两模块与宿主激活两模块维持首轮 dropped（能力卡 10 Q1 / Q2、TSD-12、ADR-0008），函数级没有需要保留的分支。
+
+**决定。**
+
+- D1 投递 prepare 不补零写入预览：prepare 的写入（信封事件 + 声明）按客户端幂等键重放，重复调用不产生第二次宿主效果；一个只读 plan 的价值只剩"看阻塞项"，而阻塞项在 prepare 被拒时逐条返回。若用户希望有预览，加在 `prepare_delivery` 上是一个小改动，留待裁决。
+- D2 修剪不恢复为独立操作：旧 retention 的 eligible / blocked / source-absent 三分支在新实现里没有对象（归档时活动根已删，pod 回执随 close 删），D17 维持。
+- D3 本批只有文档：台账 §1 小结与 §3 E 组表；没有代码或制品改动，不重跑 `npm test` 与 smoke，只跑 `git diff --check`。
+
+**门。** `git diff --check` 干净；`npm test` 与 smoke 沿用 §13.108。
+
+**残余。** 同 §13.109，另加 D1 的预览裁决项。下一组 F（Pod、观察与公共运行时），其中含 G6。

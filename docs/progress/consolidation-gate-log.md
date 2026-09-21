@@ -3267,3 +3267,23 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **文档写回。** 能力卡 9 §现 TS 状态与实现判断（十四门、status 字段）；能力卡 1 §1.4 观察侧一句；能力映射矩阵行 31；场景清单 `card-09` 行；Controller 技能工作区参考（status 的窗口投影新鲜度、verify 点名与 reconcile 重建）；对齐台账 §1、§2 观察行、§3 F 组表；制品重建。
 
 **残余。** 三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞；§13.110 D1 的投递预览裁决项。函数级 gap 归零；剩余组 A（基础原语，首轮多为 covered）、G（迁移，dropped）、H（入口与 MCP）、I / J（宿主）、K（技能文本）。
+
+## 13.112 第二轮对齐收尾：A、G、H、I、J、K 组的函数级核对（2026-09-21）
+
+**核对结论（六组 46 个模块 / 文件，逐函数表在对齐台账 §3）。** 没有新的 gap；第二轮至此把 117 行、约 420 个导出函数全部核完，函数级 gap 归零（G1–G6 已修）。分组小结：
+
+- A 基础原语：原子写（stage、digest 期望、重验）、canonical JSON、typed id、制品树身份、投影锁逐条对应；路径安全从"路径函数"改为根作用域句柄；进程身份只保留 pid / 线程 / token 与 `process.kill(pid, 0)`，argv 与父进程比对维持 dropped（方向保守）；state 锁改为异步带超时的独占文件锁与各发布锁。
+- G 迁移：十个模块全部 dropped（ADR-0008 决定 1），fresh 发现 Wakeflow 标记只拒绝并列出。
+- H 入口与 MCP：输出脱敏（`command-shell.ts` 的 output-boundary / privacy-violation）、31 → 20 的工具路由、fresh / reconfigure / reconcile 的独立权限面、证据路由、工具 annotations（`tool-registry.ts` 校验 openWorldHint 恒 false、只读工具三项一致）都有 owner；手写 JSON-RPC 换官方 SDK；validate 的 17 类静态校验拆到 `check-plugin-artifacts.ts`、`tests/artifacts/*`、dependency-cruiser、knip 与 Biome；smoke 四幕变七幕；六个只读 git spawn 里 HEAD / 分支改为直接读 `.git`，工作树脏状态、upstream、ahead / behind 按能力卡 9 Q1 放弃。
+- I / J 宿主专属：locator 记录与 pane 分类（同一判定顺序）、settings 保守合并与 statusline 资产、退役证据、pod 会话物化各有 owner；活动监视、prompt 临时文件、transport 粘贴 / 回读、窗口标题与排列、宿主命令路由按 TSD-12 与 ADR-0009 交给 Agent 与 hook 记录；激活范围与迁移维持 dropped。
+- K 技能文本：Controller / Design / Target / Test 四份技能与六份参考承接旧文本的程序内容（澄清 / 选项 / 切片压进需求包分节，七项实践压进 craft，调试分类 / 风险 / 回归 / 自审压进测试执行）；治理技能与进度页模板 dropped（§13.99 D1、§13.101 D1）。
+
+**决定。**
+
+- D1 `probeWakeflowProcessSubject` 维持 dropped：可执行文件 / argv / 父进程比对只会让"锁仍活跃"的判断更激进，Wakeflow 的锁只允许保守错误。
+- D2 六个 git 查询里放弃的三项（脏状态、upstream、ahead / behind）不回补：能力卡 9 Q1 禁止观察 spawn git；直接解析 `.git` 拿不到工作树脏状态与 ahead / behind，upstream 只值得在需要时作为读 `.git/config` 的独立议题提出。
+- D3 本批只有文档：台账 §1 收尾小结与 §3 六组表；无代码或制品改动，不重跑 `npm test` 与 smoke，只跑 `git diff --check`。
+
+**门。** `git diff --check` 干净；`npm test` 与 smoke 沿用 §13.111（997/997，两宿主七幕全过）。
+
+**残余（第二轮结束时的全集）。** 三条无消费者的配置词汇（`governance.audit.preservedReviewAfterDays`、`governance.validation.runtimeResidue`、`repositories[].validation.residueExceptions`）待裁决；外部指令 inspection / recomposition 与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞；§13.110 D1 的投递 prepare 预览裁决项；被关闭 pod 的窗口投影文件留在磁盘（§13.111 D5）；用户侧待做：真实 `WakeWorkspace` 初始化 / 删除重建 / reconfigure / reconcile、每宿主一次真实投递并取回 hook 证据、真实 Claude 会话的状态栏、`git push`、tag `v1.0.0`、发布与本地缓存刷新（plan §14 第 12 项）。

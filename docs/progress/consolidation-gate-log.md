@@ -3130,3 +3130,30 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **旧版本参考副本。** 以 `git archive 629e79c5`（删除旧树之前的最后一个提交，仍含 `core/` 185 文件、`tools/`、`test/` 7,260 文件与两份旧制品）导出到仓库旁的 `Wakeflow-legacy-reference/`，加一份 `LEGACY-REFERENCE.md` 说明它是只读参考，不是工作区、不是构建输入、不受任何仓库跟踪；绝对路径只记在本机记忆里，不进仓库。
 
 **功能对齐审计（下一阶段）。** 能力映射矩阵是按 31 项旧工具与 D1–D41 锚点判定的；用户要求的是代码逻辑层面的对齐，粒度要到旧模块。审计对象：旧 `core/scripts/lib/` 86 个模块、5 个入口脚本、`core/lib/` 2 个、`core/mcp/server.cjs`、Claude 独有 12 个与 Codex 独有 6 个宿主模块、19 份旧技能文本。每个模块一行：旧职责（按它的能力导航注释与导出）、新 owner（`src/` 路径）、判定（`covered`、`recut`、`dropped`（指向 ADR 或能力卡）、`gap`）、gap 的处置。台账放在 `docs/references/legacy-alignment-ledger.md`；每发现一个 gap 就修在代码里并加回归，按模块组分批提交。
+
+## 13.106 对齐台账 G1：managed-block 仓库与 external-owned 支撑面的托管块（2026-09-21）
+
+**缺口。** 对齐台账（§13.105）首轮唯一的 `gap`：配置里 `repositories[].instructionManagement: managed-block` 与 external-owned 支撑面的 `instructionManagement: managed-block` 只进了 fresh selection 与 config document，没有写入器、没有对账消费者（`wakeflow-managed-support-resource-catalog.ts` 的注释说"由独立 consumer 处理"，但那个 consumer 不存在）。能力卡 1 §1 表第 29–30 行与需求 F1.5 都要求 managed-block 时写托管块。旧实现把仓库记忆与外部支撑面记忆当作 `managed-block` 组件，与程序记忆走同一套托管内容机制（参考副本 `core/scripts/lib/wakeflow-managed-content.mjs` `semanticMemorySpecs`，`wakeflow-rule-model.mjs` `renderRepositoryMemoryCandidate` 与 `renderSupportRoleMemoryCandidate` 的 external 分支）。
+
+**实现。** 三个新模块加一个步骤种类，全部沿用程序指令的托管块机制（envelope、current→desired 转换、原子创建或 CAS 替换、读回闭合）：
+
+- `src/workspace/managed-integration/wakeflow-external-instruction-body-authority.ts`：target 是 `repository` 或 `support-surface`；`listWakeflowExternalInstructionTargets` 按 Config 呈现顺序列出 managed-block 仓库与 external-owned managed-block 支撑面，owner-managed 与 wakeflow-managed 的根不产生 target；EN 与 zh-Hans 正文各两种（仓库：稳定身份、持久职责窗口、精确分配规则、仓库边界、安全边界；支撑面：稳定身份、权威边界、Design/Test 职责、支撑面边界、安全边界，角色段与 Wakeflow 管理面的整文件记忆相同）；envelope component `repository-instruction` / `support-instruction`，owner `host-instruction-integration`；摘要基础是程序 ID、targetKey、hostId、指令文件名、语言、windowIds 与正文摘要。
+- `wakeflow-external-instruction-inspection.ts`：在调用方按 placement 打开的外部根里读当前宿主的指令文件；源文件必须是当前 euid 拥有的单链接普通文件，权限位不限（文件归外部所有者）；current Config 里该 target 不是 managed-block 时没有前序渲染，等价于 fresh 的空 current；错误分类与程序指令一致（`source`、`source-policy`、`source-capacity`、`envelope`、`unknown-managed-body`、`target-capacity`、`aborted`）。
+- `wakeflow-external-instruction-recomposition.ts`：目标不存在时以 0644 原子创建、只含托管块；存在时以完整 StableFileSource 做 CAS 替换并保留所有者原有权限位；提交后重新检查并核对节点、摘要、权限与 envelope。
+- 预览：每个 target 一步 `integration:external-instruction:<id>`（kind `recompose-external-instruction`，targetKey `repository:<id>` / `support-surface:<id>`），rank 11，排在 `recompose-program-instruction`（10）之后、`publish-support-memory`（12）与 `publish-config`（13）之前；blocker `external-instruction-<inspection reason>`、`-placement-unavailable`、`-root-missing`、`-root-unavailable`、`-root-close-failure`。执行器：按 targetKey 在 desired Config 里找 target、重算 authority 并与 `targetDigest` 比对、按 placement 打开外部根（继承工作区根的 durability）、重组、回执 `current` 或 `updated`。
+
+**决定。**
+
+- D1 正文只引用 primary pod 的持久窗口。worktree pod 的产品窗口随 pod 生命周期出现和消失；如果列进正文，用户仓库里被 Git 跟踪的 `AGENTS.md`/`CLAUDE.md` 会随每次 pod 创建与关闭变脏并要求用户提交。摘要基础不含 Config 摘要，pod 记录的变化不触发重组；正文用一句话说明其他 pod 的窗口在各自 worktree 里遵循同样的规则。回归 `pod records outside the primary pod do not change the repository instruction authority`。
+- D2 外部根没有宿主专属短锁，也没有恢复 owner。外部根不在静态资源矩阵里，托管块的写入只在维护事务内发生，并发写入由 CAS 以 `conflict` 拒绝；未知暂存残留报 `recovery-required`（残余，见下）。
+- D3 managed-block 仓库的根必须已存在，否则 blocker `external-instruction-root-missing`；owner-managed 仓库照旧只是引用，不要求存在（能力测试第二例）。
+- D4 受管区域内的手改一律不覆盖：envelope 摘要失配按 `envelope` 拒绝（blocker `external-instruction-envelope`），自洽但不是任何已准入渲染的正文按 `unknown-managed-body` 拒绝。
+- D5 不实现旧版 `remove-managed-block`：reconfigure 拒绝任何 topology 变化（`reconfigure-layout-change-unsupported`），政策无法从 managed-block 改回 owner-managed，所以没有需要删块的路径；仓库级 `.gitignore` 与 settings 授权按能力卡 1 §1 表第 30 行（fresh 授权列表固定为空）仍不实现。
+
+**回归。** 新增 12 个测试，聚焦运行 12/12：正文权威 6（target 枚举与键、EN 仓库正文与摘要基础、pod 不变性、外部支撑面 Design 正文、zh-Hans、拒绝矩阵）；检查与重组 4（不存在即新建再 current、追加到所有者文本并保留 0664、准入的语言替换与手改/未知正文的拒绝、symlink/目录/外部 target/取消/支撑面新建）；能力级 2（`tests/capabilities/workspace/maintain-workspace-external-instruction.test.ts`：fresh preview 恰两步且顺序正确、外部根零写；apply 追加与新建、外部面无 scaffold；reconcile 零步与 `no-op`；删掉外部面文件后 reconcile 恰一步并原样重建；手改 `blocked`；仓库根缺失 `blocked`）。场景清单 §2 加 `card-01/external-managed-blocks`。
+
+**门。** `npm run build:artifacts:committed` 3.5 s，两份制品各多 3 个编译文件、README 与 Controller 技能参考同步。`npm run smoke:artifacts` 两宿主七幕全部通过，17 s。首轮 `npm test` 在负载 16–18 的机器上跑了 633 s：984 通过、4 个测试撞 runner 的 60/120 s 超时被 cancelled、1 个锁测试 `timeout`（endpoint、observation、requirement 三个服务测试与 `rooted-exclusive-file-lock`），都不在本次改动的路径上；这四个文件单独重跑 26/26 通过（38 s）。全量门重跑（同一台机器，浏览器等其他负载仍在）：989/989 通过、0 cancelled，含 `build:check`，315.7 s 墙钟（§13.101 D10 (a) 之后的基线 265.5 s；差额来自机器上的外部负载，runner 自身仍是 8 核上 7 个 worker）。
+
+**文档写回。** 对齐台账（gap 0、recut 73，三行改判并记处置）、能力卡 1 现 TS 状态、能力映射矩阵行 2、场景清单 §2、agent-text README（EN/zh）与 Controller 技能的工作区参考（托管块的仓库与外部面选择入口）、支撑资源目录的注释改为指向真实 consumer。
+
+**残余。** 外部根的暂存残留没有恢复 owner（程序指令的恢复 owner 也尚未接线到公共 recover，两者一起处理）；真实 WakeWorkspace 上的托管块写入未执行（用户项）。

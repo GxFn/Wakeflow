@@ -11,7 +11,11 @@ A Wakeflow workspace is a controller directory that must not be a product
 repository root. It holds the config, the active state, the local runtime, and
 the managed block inside `{{instructionFile}}`. The ledger is the durable
 record root; the Design and Test surfaces are where drafts and harnesses live.
-Everything else - the product repositories - Wakeflow only points at.
+Everything else - the product repositories - Wakeflow only points at. A
+repository or an externally owned surface whose config entry says
+`instructionManagement: managed-block` additionally carries a Wakeflow managed
+block in its own `{{instructionFile}}`; reconcile maintains that block and
+refuses to overwrite a block someone edited by hand.
 
 Config authority is total: `wakeflow.config.json` belongs to Wakeflow as a
 whole file. Do not hand-edit it, and do not treat a value you remember as

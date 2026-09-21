@@ -38,6 +38,7 @@
 | 场景编号 | 能力卡 | 场景 | 接线 | 当前结论 |
 | --- | --- | --- | --- | --- |
 | `card-10/release-consistency` | 10 | 五源一致、新序列、Node 24 引擎、清单可发布、main、干净树、标签在 HEAD、本地 origin/main 同步 | `tests/release/check-release-consistency.test.ts`：在一次性 Git 仓库里摆出五个版本源，全部门通过一次，再逐道门制造不一致并断言稳定错误码（`wakeflow-release-version-drift`、`-series`、`-engines`、`-node`、`-manifest`、`-branch`、`-dirty`、`-tag`、`-remote`）；门本身是 `tooling/release/check-release-consistency.ts`，入口 `npm run release:check` | pass |
+| `card-01/external-managed-blocks` | 01 | managed-block 产品仓库与 external-owned managed-block 支撑面的托管块（能力卡 1 §1 表第 29–30 行） | `tests/capabilities/workspace/maintain-workspace-external-instruction.test.ts`，经公共维护请求执行器（同 `wakeflow_maintain_workspace` 的请求与结果形状）：fresh preview 计划恰有两步 `recompose-external-instruction`，排在 `recompose-program-instruction` 之后、`publish-support-memory` 之前，且不写外部根；apply `completed` 后仓库 `AGENTS.md` 以所有者原文开头并追加 `repository-instruction` 托管块（0644 保留），外部 Design 面新建只含 `support-instruction` 托管块的 `AGENTS.md`，外部面无 scaffold；reconcile 零步、apply `no-op`；删除外部面文件后 reconcile 恰一步并原样重建；受管区域内的手改让 reconcile `blocked`（`external-instruction-envelope`）且文件不变；仓库根不存在时 fresh preview `blocked`（`external-instruction-root-missing`）；结果不含私有路径 | pass |
 
 待接线场景已清零。
 

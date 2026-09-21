@@ -49,7 +49,9 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
    不能是产品仓库根。
 
 Wakeflow 会在工作区的 `AGENTS.md` 里维护一个托管块。那个块归
-Wakeflow 所有，块以外的内容都是你的。
+Wakeflow 所有，块以外的内容都是你的。产品仓库或外部拥有的 Design/Test 支撑面
+只有在配置里以 `instructionManagement: managed-block` 明确选择时，才会在它自己
+的 `AGENTS.md` 里得到同样的托管块；否则 Wakeflow 绝不写入那里。
 
 ## 安装后的一次性宿主动作
 

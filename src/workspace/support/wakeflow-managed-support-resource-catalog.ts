@@ -27,7 +27,8 @@ import {
  *
  * 本目录只为 `ownership: wakeflow-managed` 的 Design/Test surface 生成两个长期声明：
  * host-neutral surface 根目录与当前宿主的 whole-file instruction memory。external-owned
- * surface 不进入本目录；它的 owner-managed 或 managed-block 政策由独立 consumer 处理。
+ * surface 不进入本目录：owner-managed 时 Wakeflow 不写任何东西，managed-block 时由
+ * `managed-integration/wakeflow-external-instruction-*` 在它的根里维护一个托管块。
  *
  * 声明以 Config 语义摘要和 Host Profile 绑定，不读取物理目录、不创建 scaffold、不生成
  * memory 字节，也不把动态实例注册进全局静态 Matrix。

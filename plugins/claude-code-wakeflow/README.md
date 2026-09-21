@@ -61,7 +61,10 @@ status", "keep going", "open a pod for this".
    repository root.
 
 Wakeflow keeps a managed block inside the workspace's `CLAUDE.md`.
-That block belongs to Wakeflow; everything outside it is yours.
+That block belongs to Wakeflow; everything outside it is yours. A product
+repository or an externally owned Design/Test surface gets the same kind of
+block in its own `CLAUDE.md` only when its config entry opts in with
+`instructionManagement: managed-block`; otherwise Wakeflow never writes there.
 
 ## One-time host actions after install
 

@@ -9,6 +9,8 @@ import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governan
 import { compileWakeflowFreshWindowRuntimeAuthority, WakeflowFreshWindowRuntimeAuthorityError, } from "../window-runtime/wakeflow-window-runtime-fresh-authority.js";
 import { WakeflowWindowRuntimeDesiredTopologyError } from "../window-runtime/wakeflow-window-runtime-desired-topology.js";
 import { compileWakeflowHostCapabilityLayoutAuthority, WakeflowHostCapabilityLayoutAuthorityError, } from "../host-runtime/wakeflow-host-capability-layout-authority.js";
+import { listWakeflowExternalInstructionTargets, wakeflowExternalInstructionPlacementKey, wakeflowExternalInstructionTargetKey, } from "../managed-integration/wakeflow-external-instruction-body-authority.js";
+import { inspectWakeflowExternalInstruction, WakeflowExternalInstructionInspectionError, } from "../managed-integration/wakeflow-external-instruction-inspection.js";
 import { inspectWakeflowWorkspaceGitignore, WakeflowGitignoreInspectionError, } from "../managed-integration/wakeflow-gitignore-inspection.js";
 import { inspectWakeflowProgramInstruction, WakeflowProgramInstructionInspectionError, } from "../managed-integration/wakeflow-program-instruction-inspection.js";
 import { createWakeflowManagedSupportResourceCatalog } from "../support/wakeflow-managed-support-resource-catalog.js";
@@ -245,6 +247,70 @@ async function inspectSupportMemories(root, request, current, desired, report, b
             }
             catch {
                 addBlocker(blockers, "support-root-close-failure");
+            }
+        }
+    }
+}
+async function inspectExternalInstructions(root, request, current, desired, report, blockers, steps) {
+    for (const target of listWakeflowExternalInstructionTargets(desired)) {
+        assertNotAborted(request.signal);
+        const placement = report.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target)) ?? null;
+        if (placement === null) {
+            addBlocker(blockers, "external-instruction-placement-unavailable");
+            continue;
+        }
+        // 外部根由所有者创建；Wakeflow 只在已存在的根里维护托管块。
+        if (placement.state !== "present") {
+            addBlocker(blockers, "external-instruction-root-missing");
+            continue;
+        }
+        let externalRoot;
+        try {
+            externalRoot = await RootedDirectory.open(placement.absolutePath, "$externalRoot", { durability: root.durability });
+        }
+        catch {
+            addBlocker(blockers, "external-instruction-root-unavailable");
+            continue;
+        }
+        try {
+            const inspected = await inspectWakeflowExternalInstruction(externalRoot, {
+                profile: request.currentHostProfile,
+                target,
+                currentConfig: current,
+                expectedCurrentConfigDigest: current === null ? null : computeWakeflowConfigDigest(current),
+                desiredConfig: desired,
+                expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
+                ...(request.signal === undefined ? {} : { signal: request.signal }),
+            });
+            if (inspected.status === "recompose-required") {
+                const targetId = target.kind === "repository" ? target.repositoryId : target.surfaceId;
+                steps.push(step({
+                    stepId: `integration:external-instruction:${targetId}`,
+                    kind: "recompose-external-instruction",
+                    ownerId: "host-instruction-integration",
+                    targetKey: wakeflowExternalInstructionTargetKey(target),
+                    sourceDigest: inspected.source?.digest ?? null,
+                    targetDigest: inspected.desiredAuthority.authorityDigest,
+                    dependsOn: [],
+                }));
+            }
+        }
+        catch (error) {
+            if (error instanceof WakeflowExternalInstructionInspectionError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
+                addBlocker(blockers, `external-instruction-${error.reason}`);
+            }
+            else {
+                throw error;
+            }
+        }
+        finally {
+            try {
+                await externalRoot.close();
+            }
+            catch {
+                addBlocker(blockers, "external-instruction-root-close-failure");
             }
         }
     }
@@ -562,6 +628,7 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
                 throw error;
             }
         }
+        await inspectExternalInstructions(rootValue, request, current?.model ?? null, desired, placements, blockers, steps);
         const desiredConfigDigest = computeWakeflowConfigDigest(desired);
         const configChanged = current?.configDigest !== desiredConfigDigest;
         if (request.action !== "reconcile" && configChanged) {
@@ -589,8 +656,9 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         ["materialize-support-root", 8],
         ["recompose-gitignore", 9],
         ["recompose-program-instruction", 10],
-        ["publish-support-memory", 11],
-        ["publish-config", 12],
+        ["recompose-external-instruction", 11],
+        ["publish-support-memory", 12],
+        ["publish-config", 13],
     ]);
     const sortedBlockers = Object.freeze([...blockers].sort());
     const orderedSteps = [...steps].sort((left, right) => {

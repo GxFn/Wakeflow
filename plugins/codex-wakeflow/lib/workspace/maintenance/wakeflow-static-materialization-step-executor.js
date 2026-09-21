@@ -14,6 +14,8 @@ import { LEDGER_DURABLE_DIRECTORY_MODE } from "../../governance/ledger/ledger-au
 import { isWakeflowError } from "../../kernel/error.js";
 import { REQUIREMENT_BOARD_ROOT_REF } from "../../kernel/layout.js";
 import { listRequirementClaimStates, materializeRequirementBoardRoot, publishRequirementBoardIndex, } from "../../kernel/requirement-board.js";
+import { createWakeflowExternalInstructionBodyAuthority, listWakeflowExternalInstructionTargets, wakeflowExternalInstructionPlacementKey, wakeflowExternalInstructionTargetKey, WakeflowExternalInstructionBodyAuthorityError, } from "../managed-integration/wakeflow-external-instruction-body-authority.js";
+import { recomposeWakeflowExternalInstruction, WakeflowExternalInstructionRecompositionError, } from "../managed-integration/wakeflow-external-instruction-recomposition.js";
 import { createWakeflowGitignoreBodyAuthority } from "../managed-integration/wakeflow-gitignore-body-authority.js";
 import { recomposeWakeflowWorkspaceGitignore, WakeflowGitignoreRecompositionError, } from "../managed-integration/wakeflow-gitignore-recomposition.js";
 import { createWakeflowProgramInstructionBodyAuthority } from "../managed-integration/wakeflow-program-instruction-body-authority.js";
@@ -561,6 +563,82 @@ async function executeProgramInstruction(root, step, request, sourceConfig, desi
         throw error;
     }
 }
+async function executeExternalInstruction(root, step, request, sourceConfig, desired, signal) {
+    const target = listWakeflowExternalInstructionTargets(desired).find((candidate) => wakeflowExternalInstructionTargetKey(candidate) === step.targetKey);
+    if (target === undefined)
+        fail("plan", "$step.targetKey");
+    let authorityDigest;
+    try {
+        authorityDigest = createWakeflowExternalInstructionBodyAuthority(desired, request.currentHostProfile, target).authorityDigest;
+    }
+    catch (error) {
+        if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
+            fail("owner", "$externalInstruction");
+        }
+        throw error;
+    }
+    assertStepTarget(step, authorityDigest);
+    let placements;
+    try {
+        placements = await validateWakeflowConfigRootPlacements(root, desired);
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigRootPlacementError) {
+            fail("root-scope", "$externalRoot");
+        }
+        throw error;
+    }
+    const placement = placements.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target));
+    if (placement?.state !== "present")
+        fail("root-scope", "$externalRoot");
+    let externalRoot;
+    try {
+        externalRoot = await RootedDirectory.open(placement.absolutePath, "$externalRoot", { durability: root.durability });
+    }
+    catch (error) {
+        if (error instanceof RootedDirectoryError) {
+            fail("root-scope", "$externalRoot");
+        }
+        throw error;
+    }
+    let result;
+    let primaryError;
+    try {
+        result = await recomposeWakeflowExternalInstruction(externalRoot, {
+            profile: request.currentHostProfile,
+            target,
+            currentConfig: sourceConfig,
+            expectedCurrentConfigDigest: sourceConfig === null
+                ? null
+                : computeWakeflowConfigDigest(sourceConfig),
+            desiredConfig: desired,
+            expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
+        }, signal === undefined ? undefined : { signal });
+    }
+    catch (error) {
+        primaryError = error;
+    }
+    let closeError;
+    try {
+        await externalRoot.close();
+    }
+    catch (error) {
+        closeError = error;
+    }
+    if (primaryError !== undefined) {
+        if (primaryError instanceof WakeflowExternalInstructionRecompositionError) {
+            fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$externalInstruction");
+        }
+        throw primaryError;
+    }
+    if (closeError !== undefined || result === undefined) {
+        fail("owner", "$externalRoot");
+    }
+    return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+        authorityDigest: result.inspection.desiredAuthority.authorityDigest,
+        sourceDigest: result.inspection.source?.digest ?? null,
+    });
+}
 async function executeSupportMemory(root, step, request, sourceConfig, desired, signal) {
     const separator = step.targetKey.lastIndexOf(":");
     if (separator <= 0)
@@ -769,6 +847,9 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
     }
     if (step.kind === "recompose-program-instruction") {
         return executeProgramInstruction(root, step, request, sourceConfig, desired, signal);
+    }
+    if (step.kind === "recompose-external-instruction") {
+        return executeExternalInstruction(root, step, request, sourceConfig, desired, signal);
     }
     if (step.kind === "publish-support-memory") {
         return executeSupportMemory(root, step, request, sourceConfig, desired, signal);

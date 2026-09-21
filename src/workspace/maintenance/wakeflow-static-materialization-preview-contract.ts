@@ -53,6 +53,7 @@ const WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS = Object.freeze([
   "materialize-support-root",
   "recompose-gitignore",
   "recompose-program-instruction",
+  "recompose-external-instruction",
   "publish-support-memory",
   "publish-config",
 ] as const);

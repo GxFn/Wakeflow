@@ -11,12 +11,12 @@
 2026-09-20 首轮核对完（117 行）：
 
 - covered：7
-- recut：71
+- recut：73
 - dropped：37
-- gap：2
+- gap：0
 - pending：0
 
-`gap` 只有一处：G1（仓库与 external-owned 支撑面的托管块，见 B 组 `wakeflow-managed-content.mjs` 与 `wakeflow-rule-model.mjs`）。
+首轮唯一的 `gap` G1（仓库与 external-owned 支撑面的托管块，B 组 `wakeflow-managed-content.mjs` 与 `wakeflow-rule-model.mjs`）已于 2026-09-21 修在代码里并加回归（gate-log §13.106），两行改判 `recut`。
 
 ## 2. 逐模块台账
 
@@ -53,15 +53,15 @@
 | `wakeflow-maintenance-action-runtime.mjs` | 809 | 维护动作运行时 | `workspace/maintenance/wakeflow-maintenance-execution-transaction.ts`、宿主 `*-maintenance-execution.ts` | recut |  |
 | `wakeflow-maintenance-coordinator.mjs` | 398 | 维护协调器：锁、journal、preview/apply/recover | `wakeflow-maintenance-execution-transaction.ts`、`wakeflow-maintenance-gate-journal-store.ts`、`wakeflow-maintenance-journal.ts` | recut | 22 个协调器压成一条事务（ADR-0013） |
 | `wakeflow-maintenance-plan.mjs` | 1250 | 维护计划形状与摘要 | `wakeflow-maintenance-execution-intent.ts`（`planDigest`） | recut |  |
-| `wakeflow-managed-content.mjs` | 2362 | `.gitignore` 与程序/仓库/Design/Test 记忆文件的 owner：托管块、整文件、用户改动即 blocked | 工作区根 `AGENTS.md`/`CLAUDE.md` 托管块与 `.gitignore`：`workspace/managed-integration/*`；Wakeflow 管理的支撑面整文件记忆：`workspace/support/wakeflow-support-memory-authority.ts` | gap | **G1**：`repositories[].instructionManagement: managed-block` 与 external-owned 支撑面的托管块在新代码里只进了配置（fresh selection、config document），没有任何写入器或对账消费者（`wakeflow-managed-support-resource-catalog.ts` 明说"由独立 consumer 处理"，但没有这个 consumer）。能力卡 1 §1 表第 29–30 行要求 managed-block 时写托管块。处置：按托管块机制为仓库根与 external-owned 支撑面各加一个 body authority 与对账/预览步骤，加回归与场景断言 |
+| `wakeflow-managed-content.mjs` | 2362 | `.gitignore` 与程序/仓库/Design/Test 记忆文件的 owner：托管块、整文件、用户改动即 blocked | 工作区根 `AGENTS.md`/`CLAUDE.md` 托管块与 `.gitignore`：`workspace/managed-integration/*`；Wakeflow 管理的支撑面整文件记忆：`workspace/support/wakeflow-support-memory-authority.ts`；managed-block 仓库与 external-owned managed-block 支撑面的托管块：`workspace/managed-integration/wakeflow-external-instruction-{body-authority,inspection,recomposition}.ts`，预览与执行器的 `recompose-external-instruction` 步骤 | recut | 曾为 **G1**（2026-09-20 首轮）：这两类托管块在新代码里只进了配置，没有写入器或对账消费者。2026-09-21 修复（gate-log §13.106）：同一托管块机制（envelope、current→desired 转换、CAS 替换、用户改动即 blocked），正文只引用 primary pod 的持久窗口，所以 pod 生命周期不会让用户仓库里的受管文件变脏；旧版的仓库级 `.gitignore` 与 settings 授权（fresh 授权列表固定为空）仍按能力卡 1 §1 表第 30 行不实现；旧版 `remove-managed-block`（政策改回 owner-managed 时删块）不需要，因为 reconfigure 拒绝任何 topology 变化 |
 | `wakeflow-support-materialization.mjs` | 393 | Wakeflow 管理的支撑面目录与记忆文件物化 | 静态资源矩阵加 `wakeflow-support-memory-authority.ts` | recut |  |
-| `wakeflow-support-surface-owner.mjs` | 852 | 支撑面 owner | `workspace/support/wakeflow-managed-support-resource-catalog.ts` | recut | external-owned 面见 G1 |
+| `wakeflow-support-surface-owner.mjs` | 852 | 支撑面 owner | `workspace/support/wakeflow-managed-support-resource-catalog.ts` | recut | external-owned 面的托管块由 `workspace/managed-integration/wakeflow-external-instruction-*` 处理（原 G1，2026-09-21 落地） |
 | `wakeflow-tracked-materialization.mjs` | 901 | 已确认步骤到目录/staged 文件的物化适配器与恢复 | `foundation/filesystem/durable-directory-materialization.ts`、`durable-directory-tree-{candidate,publication,candidate-retirement}.ts` | recut |  |
 | `wakeflow-workspace-mutation.mjs` | 6482 | 唯一 M3 工作区事务 | `workspace/maintenance/wakeflow-maintenance-execution-transaction.ts`（journal 先于步骤、锁不自动打破、同 operationId 只向前） | recut |  |
 | `wakeflow-host-settings-assets-owner.mjs` | 642 | Claude settings 与资产 owner | `hosts/claude-code/claude-code-portable-settings-*.ts`、`claude-code-statusline-*.ts` | recut | 只写 MCP 允许规则与 statusLine 一键（能力卡 1 F1.6、§13.94 D6） |
 | `wakeflow-host-profile.mjs` | 74 | 开发态 Codex 宿主画像 | 无 | dropped | TSD-12：宿主 profile 只在 `src/hosts/<host>/`，没有开发态假画像 |
 | `wakeflow-host-capability.mjs` | 324 | 宿主能力的共享窄视图 | `hosts/*/wakeflow-workspace-host-resource-profile.ts`、`*-window-host-identity-profile.ts`，经宿主 facade 消费 | recut |  |
-| `wakeflow-rule-model.mjs` | 524 | 渲染程序/仓库/支撑角色记忆候选文本 | 程序记忆：`wakeflow-program-instruction-body-authority.ts`；支撑角色记忆：`wakeflow-support-memory-authority.ts`；仓库记忆：无 | gap | 并入 G1（仓库托管块的正文渲染） |
+| `wakeflow-rule-model.mjs` | 524 | 渲染程序/仓库/支撑角色记忆候选文本 | 程序记忆：`wakeflow-program-instruction-body-authority.ts`；支撑角色记忆：`wakeflow-support-memory-authority.ts`；仓库记忆与 external-owned 支撑面记忆：`wakeflow-external-instruction-body-authority.ts` | recut | 原并入 G1；2026-09-21 落地。仓库正文保留旧版结构（稳定身份、持久职责窗口、精确分配规则、仓库边界、安全边界），不再列 active index/status 与 ledger record map 路径（新实现没有这些投影） |
 | `wakeflow-template-renderer.mjs` | 413 | 安装资产 bundle 加载与模板替换（Demand 进度页） | 投影模板是代码：`kernel/active-projection.ts` | dropped | §13.101 D1：不再发出 `templates/` |
 
 ### C 活动投影、账本、TODO 与归档

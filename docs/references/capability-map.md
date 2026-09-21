@@ -40,7 +40,7 @@
 | 28 | `wakeflow_pod_bind` | 2 | `wakeflow_register_window_binding` | 已落地 | pod 窗口就是配置里带 `podId` 的窗口，握手同一工具；`next` 只列同 pod 未登记窗口 |
 | 29 | `wakeflow_pod_plan` | 2、4 | `wakeflow_pod` | 已落地 | create preview 给出窗口集与 worktree 意图，`inspect` 给出宿主执行说明与 Test 附加目录；design-request 与 test-access 放弃 |
 | 30 | `wakeflow_prune_runtime` | 8 | 并入 pod 关闭 | 已落地 | close 第二段要求检出已由 Agent 处置，Wakeflow 只删自己的回执目录；对账只报告（观察切片） |
-| 31 | `wakeflow_verify` | 9 | `wakeflow_verify` | 重切 | 2026-09-18 L1 observation 切片 10：工作区 13 门按名字排序（含 host-hook-channel、pod-execution-location、host-settings-assets、active-projection），`ok` 要求全部 pass，`unavailable` 与 `fail` 分开计数；带 demandId 复用 demand 切片的门；场景 `card-09/status-and-verify` |
+| 31 | `wakeflow_verify` | 9 | `wakeflow_verify` | 重切 | 2026-09-18 L1 observation 切片 10：工作区 14 门按名字排序（含 host-hook-channel、pod-execution-location、host-settings-assets、active-projection，2026-09-21 补回 window-runtime-projection，gate-log §13.111），`ok` 要求全部 pass，`unavailable` 与 `fail` 分开计数；带 demandId 复用 demand 切片的门；场景 `card-09/status-and-verify` |
 
 统计（2026-09-18，L1 十片闭合）：重切或已落地 27，缺席 0，放弃 4。放弃项各有 ADR 或能力卡确认记录。
 

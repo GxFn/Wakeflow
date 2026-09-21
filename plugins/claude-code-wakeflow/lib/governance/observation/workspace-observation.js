@@ -17,6 +17,7 @@ import { listRequirementClaimStates, renderRequirementBoardIndex, } from "../../
 import { inspectWorkClaim } from "../../kernel/work-claims.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
+import { inspectWakeflowWindowRuntimeProjectionSet, WakeflowWindowRuntimeProjectionError, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { buildDemandControllerRoute } from "../controller/demand-controller-route.js";
 import { closeDemandOperationRoot, openDemandOperationRoot, } from "../demand/demand-operation-authority-context.js";
 import { loadDemandEventSourcingRootAuthority, } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
@@ -425,6 +426,65 @@ async function observeHostAsset(root, host, currentHostId, signal) {
     const settings = await observeSettingsEntry(root, host.statuslineAsset.settings, signal);
     return Object.freeze({ hostId: host.hostId, status: asset.status, settings, issue: asset.issue });
 }
+/**
+ * 一个宿主的窗口运行投影：与对账用同一份重算与判定，读不出只让本宿主这一组不可用。
+ * 同伴宿主的运行时根缺席与 hook 通道同一裁决（§13.97 D10）：不是本制品维护的东西，保持沉默。
+ */
+async function observeHostProjections(root, snapshot, host, current, signal) {
+    try {
+        const inspection = await inspectWakeflowWindowRuntimeProjectionSet(root, {
+            config: snapshot.model,
+            resourceProfile: host.resourceProfile,
+            identityProfile: host.identityProfile,
+            ...signalOptions(signal),
+        });
+        if (inspection.status === "runtime-missing" && !current) {
+            return Object.freeze({
+                hostId: host.hostId,
+                status: "observed",
+                issue: null,
+                runtime: "absent",
+                windows: Object.freeze([]),
+            });
+        }
+        if (inspection.status !== "observed") {
+            return Object.freeze({
+                hostId: host.hostId,
+                status: "unavailable",
+                issue: inspection.status,
+                runtime: inspection.status === "runtime-missing" ? "absent" : "present",
+                windows: Object.freeze([]),
+            });
+        }
+        return Object.freeze({
+            hostId: host.hostId,
+            status: "observed",
+            issue: null,
+            runtime: "present",
+            windows: Object.freeze(inspection.windows.map((window) => Object.freeze({
+                windowId: window.windowId,
+                registered: window.registered,
+                status: window.status,
+            }))),
+        });
+    }
+    catch (error) {
+        if (error instanceof WakeflowWindowRuntimeProjectionError &&
+            error.reason === "aborted") {
+            fail("io-failure", "aborted", "$signal", { cause: error });
+        }
+        const reason = reasonOf(error);
+        if (reason === null)
+            throw error;
+        return Object.freeze({
+            hostId: host.hostId,
+            status: "unavailable",
+            issue: reason,
+            runtime: "present",
+            windows: Object.freeze([]),
+        });
+    }
+}
 function observedAtOf(clock) {
     try {
         return readUtcWallClock(clock);
@@ -444,11 +504,13 @@ export async function observeWorkspace(root, snapshot, ledgerRoot, options) {
     const claims = await observeDomain("claims", () => observeClaims(root, signal));
     const bindings = [];
     const hooks = [];
+    const projections = [];
     const assets = [];
     if (scope === "full") {
         for (const host of options.hosts) {
             bindings.push(await observeHostBindings(root, snapshot, host, signal));
             hooks.push(await observeHostHooks(root, host.hostId, host.hostId === options.currentHostId, signal));
+            projections.push(await observeHostProjections(root, snapshot, host, host.hostId === options.currentHostId, signal));
             assets.push(await observeHostAsset(root, host, options.currentHostId, signal));
         }
     }
@@ -468,6 +530,7 @@ export async function observeWorkspace(root, snapshot, ledgerRoot, options) {
         claims,
         bindings: Object.freeze(bindings),
         hooks: Object.freeze(hooks),
+        projections: Object.freeze(projections),
         pods,
         repositories,
         assets: Object.freeze(assets),
@@ -500,7 +563,8 @@ export function deriveOverallStatus(observation) {
     const domainsUnavailable = [observation.board, observation.demands, observation.claims, observation.pods].some((domain) => domain.status !== "observed") ||
         (observation.scope === "full" && observation.repositories.status !== "observed") ||
         observation.bindings.some((host) => host.status !== "observed") ||
-        observation.hooks.some((host) => host.status !== "observed");
+        observation.hooks.some((host) => host.status !== "observed") ||
+        observation.projections.some((host) => host.status !== "observed");
     const degraded = domainsUnavailable ||
         demands.some((demand) => demand.status !== "observed") ||
         observation.hooks.some((host) => host.skipped > 0) ||

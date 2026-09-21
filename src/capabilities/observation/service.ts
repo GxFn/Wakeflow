@@ -3,21 +3,21 @@ import path from "node:path";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WAKEFLOW_CONFIG_FILE_REF,
-  WakeflowConfigAuthoritySnapshotError,
   type WakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   RootedDirectory,
-  RootedDirectoryError,
   type RootedDirectoryDurability,
+  RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
-import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import {
   closeDemandOperationRoot,
@@ -38,11 +38,11 @@ import {
 import { locateLatestDemandArchive } from "../../governance/observation/demand-archive-locator.js";
 import {
   deriveOverallStatus,
-  observeWorkspace,
-  orphanWorkClaims,
   type ObservationHost,
   type ObservedDemand,
   type ObservedDomain,
+  observeWorkspace,
+  orphanWorkClaims,
   type WorkspaceObservation,
 } from "../../governance/observation/workspace-observation.js";
 import type { ActiveProjectionTargetInspection } from "../../kernel/active-projection.js";
@@ -57,26 +57,26 @@ import {
   admitVerifyResult,
   parseStatusRequest,
   parseVerifyRequest,
-  WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION,
-  WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
-  WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
   type StatusRequest,
   type StatusResult,
   type VerifyRequest,
   type VerifyResult,
+  WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION,
+  WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+  WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
 } from "./contract.js";
 import {
   capStatusList,
   deriveNextActions,
   deriveWorkspaceGates,
   disposalGuidance,
+  type NextActionInput,
   nextFromActions,
   projectionFreshness,
   STATUS_LIST_MAXIMUMS,
   summarizeGates,
-  verifyNext,
-  type NextActionInput,
   type VerifyGateStatus,
+  verifyNext,
   type WorkspaceGateFacts,
 } from "./decide.js";
 
@@ -320,6 +320,38 @@ function claimViewOf(observation: Readonly<WorkspaceObservation>, windowId: stri
       };
 }
 
+/**
+ * 一个窗口的运行投影新鲜度（G6，§13.111）：每个宿主各有一份，取最差的一份；任一宿主的投影组
+ * 读不出即 unavailable（空列表不是"都新鲜"）。
+ */
+function windowProjectionOf(
+  observation: Readonly<WorkspaceObservation>,
+  windowId: string,
+): "current" | "stale" | "missing" | "unsafe" | "unavailable" {
+  if (observation.projections.some((host) => host.status !== "observed")) return "unavailable";
+  const statuses = observation.projections.flatMap((host) =>
+    host.windows.filter((window) => window.windowId === windowId),
+  );
+  return statuses.length === 0 ? "unavailable" : projectionFreshness(statuses);
+}
+
+/** reconcile 能修的投影缺陷：缺失或过期；unsafe 只由 verify 报出。 */
+function projectionsNeedRepair(observation: Readonly<WorkspaceObservation>): boolean {
+  return observation.projections.some((host) =>
+    host.windows.some((window) => window.status === "stale" || window.status === "missing"),
+  );
+}
+
+function windowRuntimeDomainView(observation: Readonly<WorkspaceObservation>) {
+  const unavailable = observation.projections.find((host) => host.status !== "observed");
+  return unavailable === undefined
+    ? { status: "observed" as const, issue: null }
+    : {
+        status: "unavailable" as const,
+        issue: `${unavailable.hostId}:${unavailable.issue ?? "unavailable"}`,
+      };
+}
+
 function windowViews(context: SliceContext) {
   const { observation, snapshot } = context;
   const bindingsObserved = observation.bindings.every((host) => host.status === "observed");
@@ -334,6 +366,7 @@ function windowViews(context: SliceContext) {
       bindingId: binding?.bindingId ?? null,
       claim: claimViewOf(observation, window.windowId),
       lastObservation: lastObservationOf(observation, binding),
+      projection: windowProjectionOf(observation, window.windowId),
     };
   });
 }
@@ -479,7 +512,8 @@ function nextActionInput(context: SliceContext): Readonly<NextActionInput> {
   // pod 域读不出时 pods 是空列表，不是"没有 pod"：登记动作只在真的观察到 pod 时才排得出来。
   const podsObserved = observation.pods.status === "observed";
   return Object.freeze({
-    maintenance: overall === "maintenance",
+    // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
+    maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
     unregisteredWindows:
       bindingsObserved && podsObserved
         ? snapshot.model.topology.windows
@@ -565,6 +599,7 @@ function domainViews(context: SliceContext) {
     claims: { status: observation.claims.status, issue: observation.claims.issue },
     pods: { status: observation.pods.status, issue: observation.pods.issue },
     projection: { status: projection.status, issue: projection.issue },
+    windowRuntime: windowRuntimeDomainView(observation),
   };
 }
 
@@ -877,6 +912,15 @@ async function gateFacts(
         : bindingsObserved
           ? ("unregistered" as const)
           : ("unobserved" as const),
+    })),
+    windowRuntime: observation.projections.map((host) => ({
+      hostId: host.hostId,
+      status: host.status,
+      issue: host.issue,
+      windows: host.windows.map((window) => ({
+        windowId: window.windowId,
+        status: window.status,
+      })),
     })),
     pods: (observation.pods.value ?? []).map((pod) => ({
       podId: pod.pod.podId,

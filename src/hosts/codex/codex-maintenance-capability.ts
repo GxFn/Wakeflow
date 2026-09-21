@@ -10,12 +10,12 @@ import {
   type WakeflowMaintenanceGateContext,
   WakeflowMaintenanceGateError,
 } from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
+import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import {
   executeWakeflowWindowRuntimeProjectionOperation,
   planWakeflowWindowRuntimeProjectionMaintenance,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID,
-  WakeflowWindowRuntimeProjectionMaintenanceError,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { codexWindowHostIdentityProfile } from "./codex-window-host-identity-profile.js";
 
@@ -75,7 +75,7 @@ export const codexMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapabil
           ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
       } catch (error: unknown) {
-        if (error instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+        if (error instanceof WakeflowWindowRuntimeProjectionError) {
           fail("owner", error.path);
         }
         throw error;
@@ -117,7 +117,7 @@ export const codexMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapabil
           ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
       } catch (error: unknown) {
-        if (error instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+        if (error instanceof WakeflowWindowRuntimeProjectionError) {
           fail("owner", error.path);
         }
         throw error;

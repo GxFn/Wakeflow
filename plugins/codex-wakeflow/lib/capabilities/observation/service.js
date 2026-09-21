@@ -1,8 +1,8 @@
 import path from "node:path";
 import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_FILE_REF, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
-import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { closeDemandOperationRoot, openDemandOperationRoot, } from "../../governance/demand/demand-operation-authority-context.js";
 import { demandWindowIds, evaluateVerifyGates, } from "../../governance/demand/demand-verify-gates.js";
 import { loadDemandEventSourcingRootAuthority } from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
@@ -195,6 +195,29 @@ function claimViewOf(observation, windowId) {
             generation: claim.holder.generation,
         };
 }
+/**
+ * 一个窗口的运行投影新鲜度（G6，§13.111）：每个宿主各有一份，取最差的一份；任一宿主的投影组
+ * 读不出即 unavailable（空列表不是"都新鲜"）。
+ */
+function windowProjectionOf(observation, windowId) {
+    if (observation.projections.some((host) => host.status !== "observed"))
+        return "unavailable";
+    const statuses = observation.projections.flatMap((host) => host.windows.filter((window) => window.windowId === windowId));
+    return statuses.length === 0 ? "unavailable" : projectionFreshness(statuses);
+}
+/** reconcile 能修的投影缺陷：缺失或过期；unsafe 只由 verify 报出。 */
+function projectionsNeedRepair(observation) {
+    return observation.projections.some((host) => host.windows.some((window) => window.status === "stale" || window.status === "missing"));
+}
+function windowRuntimeDomainView(observation) {
+    const unavailable = observation.projections.find((host) => host.status !== "observed");
+    return unavailable === undefined
+        ? { status: "observed", issue: null }
+        : {
+            status: "unavailable",
+            issue: `${unavailable.hostId}:${unavailable.issue ?? "unavailable"}`,
+        };
+}
 function windowViews(context) {
     const { observation, snapshot } = context;
     const bindingsObserved = observation.bindings.every((host) => host.status === "observed");
@@ -209,6 +232,7 @@ function windowViews(context) {
             bindingId: binding?.bindingId ?? null,
             claim: claimViewOf(observation, window.windowId),
             lastObservation: lastObservationOf(observation, binding),
+            projection: windowProjectionOf(observation, window.windowId),
         };
     });
 }
@@ -334,7 +358,8 @@ function nextActionInput(context) {
     // pod 域读不出时 pods 是空列表，不是"没有 pod"：登记动作只在真的观察到 pod 时才排得出来。
     const podsObserved = observation.pods.status === "observed";
     return Object.freeze({
-        maintenance: overall === "maintenance",
+        // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
+        maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
         unregisteredWindows: bindingsObserved && podsObserved
             ? snapshot.model.topology.windows
                 .filter((window) => !bound.has(window.windowId))
@@ -410,6 +435,7 @@ function domainViews(context) {
         claims: { status: observation.claims.status, issue: observation.claims.issue },
         pods: { status: observation.pods.status, issue: observation.pods.issue },
         projection: { status: projection.status, issue: projection.issue },
+        windowRuntime: windowRuntimeDomainView(observation),
     };
 }
 async function assembleStatus(context, request) {
@@ -668,6 +694,15 @@ async function gateFacts(context, reports) {
                 : bindingsObserved
                     ? "unregistered"
                     : "unobserved",
+        })),
+        windowRuntime: observation.projections.map((host) => ({
+            hostId: host.hostId,
+            status: host.status,
+            issue: host.issue,
+            windows: host.windows.map((window) => ({
+                windowId: window.windowId,
+                status: window.status,
+            })),
         })),
         pods: (observation.pods.value ?? []).map((pod) => ({
             podId: pod.pod.podId,

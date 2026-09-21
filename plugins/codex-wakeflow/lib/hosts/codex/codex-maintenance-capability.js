@@ -1,6 +1,7 @@
 import { createWakeflowHostMaintenanceContribution } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
-import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, WakeflowWindowRuntimeProjectionMaintenanceError, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
+import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { codexWindowHostIdentityProfile } from "./codex-window-host-identity-profile.js";
 /**
  * Wakeflow Host / Codex：当前 Codex 宿主维护 capability。
@@ -47,7 +48,7 @@ export const codexMaintenanceCapability = Object.freeze({
             });
         }
         catch (error) {
-            if (error instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+            if (error instanceof WakeflowWindowRuntimeProjectionError) {
                 fail("owner", error.path);
             }
             throw error;
@@ -86,7 +87,7 @@ export const codexMaintenanceCapability = Object.freeze({
             });
         }
         catch (error) {
-            if (error instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+            if (error instanceof WakeflowWindowRuntimeProjectionError) {
                 fail("owner", error.path);
             }
             throw error;

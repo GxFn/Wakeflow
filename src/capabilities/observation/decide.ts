@@ -230,6 +230,16 @@ export interface WorkspaceGateFacts {
     readonly windowId: string;
     readonly identity: "registered" | "unregistered" | "unobserved";
   }>[];
+  /** 每个宿主的窗口运行投影与当前 Config 加 Binding 重算的比对（G6，§13.111）；宿主读不出即 unavailable。 */
+  readonly windowRuntime: readonly Readonly<{
+    readonly hostId: string;
+    readonly status: "observed" | "unavailable";
+    readonly issue: string | null;
+    readonly windows: readonly Readonly<{
+      readonly windowId: string;
+      readonly status: "current" | "stale" | "missing" | "unsafe";
+    }>[];
+  }>[];
   readonly pods: readonly Readonly<{
     readonly podId: string;
     readonly placement: "primary" | "worktree";
@@ -493,6 +503,30 @@ function windowsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   );
 }
 
+/**
+ * window-runtime-projection：每个宿主对每个配置窗口的运行投影都等于当前 Config 与 Binding 的
+ * 重算才 pass；stale / missing / unsafe 逐窗口报出（reconcile 修前两种，unsafe 只报告）；
+ * 宿主运行时根未发布或 inventory 读不出即 unavailable（G6，§13.111）。
+ */
+function windowRuntimeGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
+  const status = aggregate(
+    facts.windowRuntime.map((host) =>
+      verdict(
+        host.windows.every((window) => window.status === "current"),
+        host.status !== "observed",
+      ),
+    ),
+  );
+  const codes = facts.windowRuntime.flatMap((host) =>
+    host.status !== "observed"
+      ? [`${host.hostId}:${host.issue ?? "unavailable"}`]
+      : host.windows
+          .filter((window) => window.status !== "current")
+          .map((window) => `${host.hostId}:${window.windowId}:${window.status}`),
+  );
+  return gate("window-runtime-projection", "window-runtime", status, joinCodes(codes));
+}
+
 type PodGateFacts = WorkspaceGateFacts["pods"][number];
 
 /** code 里不算失败的两种过渡态：待登记（creating）与待处置（closing）。 */
@@ -635,7 +669,7 @@ function projectionGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   return gate("active-projection", "active-projection", "pass", null, evidence);
 }
 
-/** 十三道工作区门，按名字排序；每门只看纯事实。 */
+/** 十四道工作区门，按名字排序；每门只看纯事实。 */
 export function deriveWorkspaceGates(
   facts: Readonly<WorkspaceGateFacts>,
 ): readonly Readonly<VerifyGate>[] {
@@ -647,6 +681,7 @@ export function deriveWorkspaceGates(
     claimsGate(facts),
     hooksGate(facts),
     windowsGate(facts),
+    windowRuntimeGate(facts),
     podsGate(facts),
     assetsGate(facts),
     projectionGate(facts),

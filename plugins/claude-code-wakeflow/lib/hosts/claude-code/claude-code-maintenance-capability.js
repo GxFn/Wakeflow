@@ -1,6 +1,7 @@
 import { createWakeflowHostMaintenanceContribution, } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
-import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, WakeflowWindowRuntimeProjectionMaintenanceError, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
+import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { planClaudeCodePortableSettingsComposition, } from "./claude-code-portable-settings-composition.js";
 import { ClaudeCodePortableSettingsOperationExecutionError, executeClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-operation-executor.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID, ClaudeCodeStatuslineAssetOperationError, executeClaudeCodeStatuslineAssetOperation, planClaudeCodeStatuslineAssetOperation, } from "./claude-code-statusline-asset-operation.js";
@@ -128,7 +129,7 @@ async function planProjections(root, request) {
         });
     }
     catch (error) {
-        if (error instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+        if (error instanceof WakeflowWindowRuntimeProjectionError) {
             fail("owner", error.path);
         }
         throw error;
@@ -147,7 +148,7 @@ async function executeProjectionOperation(root, request) {
         });
     }
     catch (error) {
-        if (error instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+        if (error instanceof WakeflowWindowRuntimeProjectionError) {
             fail("owner", error.path);
         }
         throw error;

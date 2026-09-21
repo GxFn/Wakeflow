@@ -1,8 +1,8 @@
 import path from "node:path";
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import { replaceWakeflowConfigAuthority, WakeflowConfigAuthorityReplacementError, } from "../../configuration/wakeflow-config-authority-replacement.js";
-import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-config-document.js";
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
+import { replaceWakeflowConfigAuthority, WakeflowConfigAuthorityReplacementError, } from "../../configuration/wakeflow-config-authority-replacement.js";
+import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-config-document.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue, } from "../../foundation/data/json-value.js";
@@ -10,12 +10,14 @@ import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { worktreeDisposalGuidance } from "../../governance/pod/worktree-disposal.js";
+import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { listPodWorktreeReceipts, retirePodReceipts, retirePodWorktreeReceipt, worktreeCheckoutPresent, } from "../../kernel/pod-worktree-receipts.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
-import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
+import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
+import { refreshWakeflowWindowRuntimeProjections } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { admitPodResult, parsePodRequest, WAKEFLOW_POD_PUBLIC_SCHEMA_VERSION, WAKEFLOW_POD_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveCloseCompleteBlockers, deriveCloseRequestBlockers, deriveCreateBlockers, derivePodId, derivePodState, derivePodWindows, derivePodWorktrees, podMutationNext, podPreviewNext, } from "./decide.js";
 function signalOptions(signal) {
@@ -248,12 +250,36 @@ function documentOf(model) {
     return value;
 }
 async function replaceConfig(context, desired) {
+    let model;
     try {
-        const model = parseWakeflowConfig(desired);
+        model = parseWakeflowConfig(desired);
         await replaceWakeflowConfigAuthority(context.root, model, context.snapshot, signalOptions(context.options.signal));
     }
     catch (error) {
         mapReplacementError(error);
+    }
+    await refreshWindowProjectionsQuietly(context, model);
+}
+/**
+ * 窗口集或 pod 集变了：把本宿主的窗口运行投影收敛到新 Config（G6，§13.111 D5）。投影是派生物：
+ * 收敛失败不让已经落盘的配置事务失败，留给 verify 的 window-runtime-projection 门报出；中止仍上抛。
+ */
+async function refreshWindowProjectionsQuietly(context, model) {
+    try {
+        await refreshWakeflowWindowRuntimeProjections(context.root, {
+            config: model,
+            resourceProfile: context.facade.resourceProfile,
+            identityProfile: context.facade.identityProfile,
+            ...signalOptions(context.options.signal),
+        });
+    }
+    catch (error) {
+        if (error instanceof WakeflowWindowRuntimeProjectionError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            return;
+        }
+        throw error;
     }
 }
 function windowDocument(window) {

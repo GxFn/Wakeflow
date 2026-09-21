@@ -2,7 +2,7 @@ import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import { executePodRequest, type PodHostFacade } from "../../../src/capabilities/pod/service.js";
@@ -14,6 +14,7 @@ import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-w
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
+import { inspectWakeflowWindowRuntimeProjectionSet } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 
@@ -230,6 +231,23 @@ test("create：preview 零写、apply 一次配置事务派生四个窗口与一
   equal(config.topology.windows.length, 8);
   equal(config.pods[1]?.name, "feature-x");
   equal(config.pods[1]?.worktrees[0]?.suggestedName, "wakeflow-feature-x");
+  // 窗口集变了：本宿主的窗口运行投影随配置事务收敛（G6，§13.111 D5）——四个新窗口有未登记投影，
+  // 原有四个窗口的投影不因拓扑指纹变化而过期。
+  const rooted = await RootedDirectory.open(fx.root);
+  try {
+    const projections = await inspectWakeflowWindowRuntimeProjectionSet(rooted, {
+      config,
+      resourceProfile: codexWorkspaceHostResourceProfile,
+      identityProfile: codexWindowHostIdentityProfile,
+    });
+    if (projections.status !== "observed") throw new Error(`projections ${projections.status}`);
+    deepEqual(
+      projections.windows.map((window) => window.status),
+      Array.from({ length: 8 }, () => "current"),
+    );
+  } finally {
+    await rooted.close();
+  }
 
   const replayPreview = await pod(fx, {
     mode: "preview",

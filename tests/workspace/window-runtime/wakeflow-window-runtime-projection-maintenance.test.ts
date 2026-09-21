@@ -18,10 +18,10 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
+import { WakeflowWindowRuntimeProjectionError } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import {
   executeWakeflowWindowRuntimeProjectionOperation,
   planWakeflowWindowRuntimeProjectionMaintenance,
-  WakeflowWindowRuntimeProjectionMaintenanceError,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
@@ -169,8 +169,8 @@ test("window runtime projection maintenance repairs missing and stale projection
   } catch (error: unknown) {
     caught = error;
   }
-  equal(caught instanceof WakeflowWindowRuntimeProjectionMaintenanceError, true);
-  if (caught instanceof WakeflowWindowRuntimeProjectionMaintenanceError) {
+  equal(caught instanceof WakeflowWindowRuntimeProjectionError, true);
+  if (caught instanceof WakeflowWindowRuntimeProjectionError) {
     equal(caught.reason, "plan");
   }
 });

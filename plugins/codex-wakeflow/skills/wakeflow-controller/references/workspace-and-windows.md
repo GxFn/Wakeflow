@@ -139,8 +139,9 @@ Controller run two Demands.
 
 `wakeflow_status` is one observation across every domain: overall state, board
 counts, active Demands with their route and frontier, windows with their
-identity and claims, pods with their execution location, repository pointer
-facts, hook channels, projection freshness and the next actions. Pass a Demand
+identity, claims and runtime projection freshness, pods with their execution
+location, repository pointer facts, hook channels, active projection freshness
+and the next actions. Pass a Demand
 to attach that Demand's route, or its archive receipt if it is finished. Treat
 its `next actions` as the authoritative answer to "what now" - it is derived
 from state, and your memory of the conversation is not.
@@ -155,4 +156,7 @@ one-time host actions that fix it.
 
 Projections are deterministic rewrites. If a projection file has been edited by
 hand, Wakeflow stops overwriting it and reports it rather than destroying the
-edit. That is not a failure to repair; it is the edit being respected.
+edit. That is not a failure to repair; it is the edit being respected. A
+window's runtime projection that is missing or stale is different: verify names
+the window in its `window-runtime-projection` gate and reconcile rebuilds it;
+only an unreadable one stays reported.

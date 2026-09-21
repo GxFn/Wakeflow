@@ -3244,3 +3244,26 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `git diff --check` 干净；`npm test` 与 smoke 沿用 §13.108。
 
 **残余。** 同 §13.109，另加 D1 的预览裁决项。下一组 F（Pod、观察与公共运行时），其中含 G6。
+
+## 13.111 第二轮对齐 F 组：Pod、观察与公共运行时的函数级核对与 G6（2026-09-21）
+
+**核对结论（F 组 6 个模块、约 55 个导出函数，逐函数表在对齐台账 §3）。** 一处 gap（G6，C 组核出、本组修）；其余：pod 记录与服务的窗口物化链、Design 交接、Test access、close intent / receipt 分别重切为配置 `pods[]` 加 worktree 回执、端点登记与退役证据、两段关闭（ADR-0010），Test access 与 Design 交接放弃（矩阵行 29）；观察的一次采集多域与 status / verify 投影对应 `observeWorkspace` 与 `assembleStatus` / `assembleVerify`；旧 verify 十七门映射为十四门（合并 owner-contract / layout-manager / managed-drift 进 local-layout，active-authority / transport-authority 进 demand-stream 两门，repository-roots / repository-owner 进 pod-execution-location，coordination-leases 改 work-claims；config-service、maintenance-gate、storage-inventory 放弃）；preservation 与 legacy 分类目录维持 dropped；公共 runtime 的 29 个处理器对应 20 个工具（能力映射矩阵）加 `afterMutationRefresh`。
+
+**G6 观察侧窗口运行投影新鲜度。** 旧 `wakeflow_status` 有 `windowRuntime` 域（health、projectionStatus），旧 `wakeflow_verify` 有 `window-runtime-projection` 门（`window-runtime-projection-not-current`），都由 `inspectWindowRuntimeProjectionsForLayout` 供数；新实现的观察只报 binding 身份。修复：`wakeflow-window-runtime-projection-maintenance.ts` 抽出零写入的 `inspectWakeflowWindowRuntimeProjectionSet`（与 G5 对账共用同一份重算与判定；尚无 Binding 目录的宿主只有未登记投影，不算 inventory 读不出），`workspace-observation.ts` 为每个宿主加 `projections` 域，`wakeflow_status.windows[].projection` 逐窗口报各宿主里最差的一份（current / stale / missing / unsafe / unavailable），`domains.windowRuntime` 报域可用性，缺失或过期把 next 指向维护（reconcile 重建，G5），`wakeflow_verify` 补回 `window-runtime-projection` 门（owner `window-runtime`，code `<host>:<windowId>:<status>`，宿主读不出 `<host>:<issue>`）。status 结果 Schema 加 `windows[].projection` 与 `domains.windowRuntime`（`npm run schema:build`）。
+
+**决定。**
+
+- D1 同伴宿主的运行时根缺席保持沉默：Codex 初始化的工作区没有 Claude 的运行时根（hook 通道 §13.97 D10 已按同一事实裁决），所以只有当前宿主的根缺席算 `runtime-missing` 读不出；同伴宿主记 `runtime: absent`、观察为空。第一版把它算成 unavailable，`status` 的 overall 变 degraded、verify 十四门不再全过，场景与服务测试立刻暴露。
+- D2 门的聚合沿用既有规则：fail 压过 unavailable（一个宿主有过期窗口、另一个读不出时报 fail 并把两者都写进 code）。
+- D3 unsafe（读不出或不是确定性 JSON 的投影）只报告：status 报 unsafe、verify fail，但 next 不指向维护，因为 reconcile 修不了它（G5 D1）。
+- D4 `deriveOverallStatus` 把任一宿主的投影域不可用算作 degraded，与其他域一致；stale / missing 不影响 overall，由 verify 与 next 承担。
+- D5 pod 的配置事务收尾收敛本宿主的窗口投影：每份投影的 `sourceFingerprints.desiredTopologyDigest` 覆盖整个期望拓扑，pod 创建 / 关闭增减窗口后其余窗口的投影全部过期，G6 的门一接上，场景 `card-09` 的 next 就从 `pod-window-registration` 变成了 `workspace-maintenance`。修复：`refreshWakeflowWindowRuntimeProjections`（缺失或过期即重发布，unsafe 原样，根未发布不写）在 pod create / close-request / close-complete 的 `replaceConfig` 之后调用，失败只由 verify 报出、中止仍上抛（与活动投影刷新同一裁决）。不改投影指纹：那是 ADR 级的合同变更。被关闭 pod 的窗口投影文件留在磁盘上不再被观察（不枚举投影目录），记为残余。
+- D6 依赖规则 `transitional-governance-uses-only-workspace-contract-seams` 拒绝观察直接取维护模块：把重算与逐窗口比对抽成只读缝 `wakeflow-window-runtime-projection-inspection.ts`（列入 `GOVERNANCE_WORKSPACE_CONTRACT_TARGETS`，与 binding store 同级），维护模块只剩 plan / execute / refresh；错误类随之改名 `WakeflowWindowRuntimeProjectionError`（两宿主 capability 与测试同步）。
+
+**回归。** `decide.test.ts`：十四门全 pass、新门的 pass / fail / unavailable 与 code 组合；`service.test.ts`：十四门；场景 `card-09` 门清单加一；`maintain-workspace-reconcile-repair.test.ts` 的投影用例在每一步加观察断言（健康 current / pass / next 不指维护 → 缺失 missing / fail 点名 / next 指维护 → 修复后 current / pass → 过期同 → unsafe / fail / next 不指维护）；`active-projection-facts.test.ts` 的观察 fixture 加 `projections`；`pod/service.test.ts` 的 create 用例断言八个窗口的投影在配置事务后全部 current（D5）；场景 `card-09` 的三处汇总 13 → 14。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 997/997（含 `build:check`），`test:typescript` 319.3 s、整门 330 s；`npm run smoke:artifacts` 两宿主七幕全过（19 s）；`git diff --check` 干净。三轮：第一轮架构检查拒绝观察取维护模块（D6）；第二轮 `card-09` 的 next 变成 `workspace-maintenance`（D5 的根因，pod 创建后其余窗口投影过期）；第三轮只剩场景里钉死的 13 门计数，改 14 后全绿。lint 仍只有 `rooted-exclusive-file-lock.ts:724` 一条既有 warning。
+
+**文档写回。** 能力卡 9 §现 TS 状态与实现判断（十四门、status 字段）；能力卡 1 §1.4 观察侧一句；能力映射矩阵行 31；场景清单 `card-09` 行；Controller 技能工作区参考（status 的窗口投影新鲜度、verify 点名与 reconcile 重建）；对齐台账 §1、§2 观察行、§3 F 组表；制品重建。
+
+**残余。** 三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞；§13.110 D1 的投递预览裁决项。函数级 gap 归零；剩余组 A（基础原语，首轮多为 covered）、G（迁移，dropped）、H（入口与 MCP）、I / J（宿主）、K（技能文本）。

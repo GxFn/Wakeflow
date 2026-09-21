@@ -2,21 +2,20 @@ import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
+import { type TestContext, test } from "node:test";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   type WakeflowConfigAuthoritySnapshot,
 } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
-import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -39,8 +38,8 @@ import {
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF } from "../../../src/kernel/layout.js";
 import { createPodWorktreeReceipt } from "../../../src/kernel/pod-worktree-receipts.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
 /**
  * 观察 → 投影事实 → 刷新（gate-log §13.94 D5、§13.96）：worktree 检出目录此刻在不在是本地
@@ -206,6 +205,7 @@ function observationOf(
     claims: unavailable(),
     bindings: Object.freeze([]),
     hooks: Object.freeze([]),
+    projections: Object.freeze([]),
     pods: Object.freeze({ status: "observed" as const, issue: null, value: pods }),
     repositories: unavailable(),
     assets: Object.freeze([]),

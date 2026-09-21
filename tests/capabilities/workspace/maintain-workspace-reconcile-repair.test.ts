@@ -14,6 +14,10 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
+import {
+  executeStatusRequest,
+  executeVerifyRequest,
+} from "../../../src/capabilities/observation/service.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -21,6 +25,7 @@ import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-w
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
 
 /**
  * 能力级 given-when-then（能力卡 1 §1.4 自动修复）：fresh 之后删掉 Wakeflow 拥有的静态目录
@@ -61,6 +66,21 @@ async function reconcilePreview(root: string) {
     mode: "preview",
     request: {},
   });
+}
+
+/** 观察侧（G6）：status 里该窗口的投影新鲜度，verify 里 window-runtime-projection 门的 [status, code]。 */
+async function observeProjection(root: string, windowId: string) {
+  const status = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root });
+  const verify = await executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root });
+  const gate = verify.gates.find((entry) => entry.name === "window-runtime-projection");
+  return {
+    window: status.windows.find((entry) => entry.windowId === windowId)?.projection ?? null,
+    domain: status.domains.windowRuntime.status,
+    maintenanceNext: status.nextActions.some(
+      (action) => action.tool === "wakeflow_maintain_workspace",
+    ),
+    gate: [gate?.status ?? null, gate?.code ?? null] as const,
+  };
 }
 
 test("maintain_workspace reconcile repairs missing Wakeflow-owned static directories and stays no-op afterwards", async (t) => {
@@ -259,17 +279,30 @@ test("maintain_workspace reconcile rebuilds a missing or stale registered window
   const registeredDocument = readFileSync(projectionPath, "utf8");
   equal(registeredDocument.includes('"registered"'), true);
 
-  // 登记后的健康工作区：零步。
+  // 登记后的健康工作区：零步；观察侧投影 current、门 pass、下一步不指向维护。
   const healthy = await reconcilePreview(root);
   equal(healthy.status, "ready");
   deepEqual(stepKinds(healthy), []);
+  deepEqual(await observeProjection(root, intent.windowId), {
+    window: "current",
+    domain: "observed",
+    maintenanceNext: false,
+    gate: ["pass", null],
+  });
 
-  // 投影缺失：一条宿主操作，apply 后逐字节复原为 registered 投影。
+  // 投影缺失：一条宿主操作，apply 后逐字节复原为 registered 投影；
+  // 观察侧（G6，§13.111）逐窗口报 missing、门 fail 点名窗口、下一步指向维护。
   rmSync(projectionPath);
   const missing = await reconcilePreview(root);
   equal(missing.status, "ready");
   deepEqual(projectionSteps(missing), [intent.windowId]);
   equal(existsSync(projectionPath), false, "preview must not write");
+  deepEqual(await observeProjection(root, intent.windowId), {
+    window: "missing",
+    domain: "observed",
+    maintenanceNext: true,
+    gate: ["fail", `codex:${intent.windowId}:missing`],
+  });
   const restored = await executeCodexWakeflowMaintenance({
     root,
     action: "reconcile",
@@ -296,7 +329,7 @@ test("maintain_workspace reconcile rebuilds a missing or stale registered window
   equal(readFileSync(projectionPath, "utf8"), registeredDocument);
   deepEqual(stepKinds(await reconcilePreview(root)), []);
 
-  // 投影读不出：只报告，不覆盖。
+  // 投影读不出：只报告，不覆盖；观察侧报 unsafe、门 fail，但下一步不指向维护（reconcile 修不了）。
   writeFileSync(projectionPath, "not a projection\n");
   const unsafe = await reconcilePreview(root);
   equal(unsafe.status, "blocked");
@@ -305,6 +338,12 @@ test("maintain_workspace reconcile rebuilds a missing or stale registered window
     true,
   );
   equal(readFileSync(projectionPath, "utf8"), "not a projection\n");
+  deepEqual(await observeProjection(root, intent.windowId), {
+    window: "unsafe",
+    domain: "observed",
+    maintenanceNext: false,
+    gate: ["fail", `codex:${intent.windowId}:unsafe`],
+  });
 });
 
 test("maintain_workspace reconcile rebuilds a missing ledger root but only reports a missing host runtime root", async (t) => {

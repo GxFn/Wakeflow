@@ -5,7 +5,36 @@ import path from "node:path";
 import { test } from "node:test";
 
 import type { CallToolResult } from "@modelcontextprotocol/client";
-
+import {
+  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/delivery/contract.js";
+import {
+  WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/demand/contract.js";
+import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
+import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
+import {
+  WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+  WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/observation/contract.js";
+import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "../../src/capabilities/pod/contract.js";
+import {
+  WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/requirement/contract.js";
+import {
+  WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/result-review/contract.js";
+import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
+import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import {
@@ -13,32 +42,23 @@ import {
   WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
   WAKEFLOW_HOOK_OBSERVER_MARKER,
 } from "../../src/entrypoints/wakeflow-hook-observer.js";
-import {
-  WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/demand/contract.js";
-import {
-  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
-  WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
-  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/delivery/contract.js";
-import {
-  WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
-  WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/result-review/contract.js";
 import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
+import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../src/governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../src/governance/delivery/delivery-rearm.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
   TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
 } from "../../src/governance/result/target-result-callback.js";
+import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
+import {
+  HOST_HOOK_RETENTION_MILLISECONDS,
+  readHostHookObservations,
+} from "../../src/kernel/hook-observations.js";
 import {
   demandProjectionIndexRef,
   demandProjectionProgressRef,
@@ -52,49 +72,28 @@ import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
 } from "../../src/kernel/work-claims.js";
-import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
-import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
+import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {
-  WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
-  WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/observation/contract.js";
-import { WAKEFLOW_POD_PUBLIC_TOOL_NAME } from "../../src/capabilities/pod/contract.js";
-import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
+  type ConnectedWakeflowMcpTestClient,
+  connectWakeflowMcpServerForTest,
+} from "../entrypoints/wakeflow-public-mcp-server.fixture.js";
+import {
+  FIXTURE_LANDING_MARKDOWN,
+  FIXTURE_REQUIREMENT_MARKDOWN,
+} from "../governance/ledger/requirement-package.fixture.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
 import {
   ESCALATION_OPTIONS,
   implementationReviewJudgmentWire,
 } from "../governance/review/controller-implementation-review-decision.fixture.js";
-import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
-import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
-import {
-  WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/requirement/contract.js";
-import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import {
-  HOST_HOOK_RETENTION_MILLISECONDS,
-  readHostHookObservations,
-} from "../../src/kernel/hook-observations.js";
-import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
-import {
-  FIXTURE_LANDING_MARKDOWN,
-  FIXTURE_REQUIREMENT_MARKDOWN,
-} from "../governance/ledger/requirement-package.fixture.js";
-import {
-  connectWakeflowMcpServerForTest,
-  type ConnectedWakeflowMcpTestClient,
-} from "../entrypoints/wakeflow-public-mcp-server.fixture.js";
 import {
   cleanupScenarioWorkspace,
   createScenarioWorkspace,
   renderScenarioReport,
   SCENARIO_CATALOG,
-  scenarioToolText,
   type ScenarioOutcome,
   type ScenarioWorkspace,
+  scenarioToolText,
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
@@ -2807,7 +2806,7 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
 
 // ---- card-09/status-and-verify 与 card-09/active-projection（能力卡 9，§13.94 D1、D3、D5） ----------
 
-/** 工作区级十三门，按名字排序（§13.94 D3）。 */
+/** 工作区级十四门，按名字排序（§13.94 D3；window-runtime-projection 见 §13.111）。 */
 const WORKSPACE_GATE_NAMES = Object.freeze([
   "active-projection",
   "append-candidates-clear",
@@ -2821,6 +2820,7 @@ const WORKSPACE_GATE_NAMES = Object.freeze([
   "local-layout",
   "pod-execution-location",
   "window-identity",
+  "window-runtime-projection",
   "work-claims",
 ]);
 
@@ -3308,7 +3308,7 @@ async function assertVerifyGates(
     WORKSPACE_GATE_NAMES,
   );
   equal(clean.ok, true, failingGatesText(clean));
-  deepEqual(clean.summary, { pass: 13, fail: 0, unavailable: 0 });
+  deepEqual(clean.summary, { pass: 14, fail: 0, unavailable: 0 });
   equal(clean.repairsApplied, false);
   equal(clean.demand, null);
   equal(clean.next.frontier, null);
@@ -3341,15 +3341,15 @@ async function assertVerifyGates(
     broken.gates.filter((gate) => gate.status !== "pass").map((gate) => [gate.name, gate.code]),
     [["host-hook-channel", "codex:skipped-1"]],
   );
-  deepEqual(broken.summary, { pass: 12, fail: 1, unavailable: 0 });
+  deepEqual(broken.summary, { pass: 13, fail: 1, unavailable: 0 });
   equal(broken.next.frontier, "workspace-maintenance");
   deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
   equal((await readStatus(context)).view.overall, "degraded", "skipped hook records degrade");
   rmSync(stray);
   const restored = await readVerify(context);
   equal(restored.ok, true, failingGatesText(restored));
-  deepEqual(restored.summary, { pass: 13, fail: 0, unavailable: 0 });
-  return `verify=13/0/0; demand gates=work-claims-released fail only; hook-file→host-hook-channel=fail(${hookGate.code}) summary=12/1/0 overall=degraded; removed→13/0/0`;
+  deepEqual(restored.summary, { pass: 14, fail: 0, unavailable: 0 });
+  return `verify=14/0/0; demand gates=work-claims-released fail only; hook-file→host-hook-channel=fail(${hookGate.code}) summary=13/1/0 overall=degraded; removed→14/0/0`;
 }
 
 async function scenarioStatusAndVerify(context: ScenarioContext): Promise<string> {

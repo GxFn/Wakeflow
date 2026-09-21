@@ -193,7 +193,7 @@
       "description": "没有自带 status/issue 的域的观察状态：读不出时空列表不是“没有”，issue 说明是哪一步失败。",
       "type": "object",
       "additionalProperties": false,
-      "required": ["demands", "claims", "pods", "projection"],
+      "required": ["demands", "claims", "pods", "projection", "windowRuntime"],
       "properties": {
         "demands": {
           "$ref": "#/$defs/observedDomain"
@@ -205,6 +205,9 @@
           "$ref": "#/$defs/observedDomain"
         },
         "projection": {
+          "$ref": "#/$defs/observedDomain"
+        },
+        "windowRuntime": {
           "$ref": "#/$defs/observedDomain"
         }
       }
@@ -621,7 +624,8 @@
         "hostId",
         "bindingId",
         "claim",
-        "lastObservation"
+        "lastObservation",
+        "projection"
       ],
       "properties": {
         "windowId": {
@@ -635,6 +639,10 @@
         },
         "identity": {
           "enum": ["registered", "unregistered", "unobserved"]
+        },
+        "projection": {
+          "description": "该窗口的运行投影与当前 Config 加 Binding 重算的比对，取各宿主里最差的一份；缺失或过期由 reconcile 重建，unsafe 只报告。",
+          "enum": ["current", "stale", "missing", "unsafe", "unavailable"]
         },
         "hostId": {
           "oneOf": [

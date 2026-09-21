@@ -44,9 +44,9 @@
 
 **不变量**：`repairsApplied` 恒 false；`unavailable` 不是 pass，会让 `ok` 为 false；门的证据只有 ref 与摘要。
 
-**现 TS 状态**（2026-09-18 切片 10）：`wakeflow_verify{root, demandId?}` 公开；工作区 13 门按名字排序：config-authority、local-layout、ledger-layout、board-consistency、demand-root-audit、work-claims、append-candidates-clear、evidence-integrity、host-hook-channel、window-identity、pod-execution-location、host-settings-assets、active-projection；`ok` 要求全部 pass，`unavailable` 在 `summary` 里与 `fail` 分开计数（Q3）；带 demandId 时 `demand.gates` 复用 demand 切片的门（research Demand 加 `research-evidence`）；`repairsApplied` 恒 false。归档与 pod 关闭不以 verify 的 `observationDigest` 为前置（Q4 修订）。场景 `card-09/status-and-verify`。
+**现 TS 状态**（2026-09-18 切片 10）：`wakeflow_verify{root, demandId?}` 公开；工作区 14 门按名字排序：config-authority、local-layout、ledger-layout、board-consistency、demand-root-audit、work-claims、append-candidates-clear、evidence-integrity、host-hook-channel、window-identity、window-runtime-projection（每个宿主对每个配置窗口的运行投影都等于当前 Config 加 Binding 的重算；同伴宿主的运行时根缺席与 hook 通道同一裁决保持沉默；2026-09-21 G6，gate-log §13.111）、pod-execution-location、host-settings-assets、active-projection；`ok` 要求全部 pass，`unavailable` 在 `summary` 里与 `fail` 分开计数（Q3）；带 demandId 时 `demand.gates` 复用 demand 切片的门（research Demand 加 `research-evidence`）；`repairsApplied` 恒 false。归档与 pod 关闭不以 verify 的 `observationDigest` 为前置（Q4 修订）。场景 `card-09/status-and-verify`。
 
-**实现判断**：门集合按新边界重排：删 pod-evidence 与 managed-drift 的旧形状，coordination-leases 改为 work-claims，新增 host-hook-channel（hook 记录目录可读且最近记录自洽）与 pod-execution-location（每个活动 pod 的 worktree 回执与 `git worktree list --porcelain` 一致）；`unavailable` 与 `fail` 在 `summary` 里分开计数的做法保留。
+**实现判断**：门集合按新边界重排：删 pod-evidence 与 managed-drift 的旧形状，coordination-leases 改为 work-claims，新增 host-hook-channel（hook 记录目录可读且最近记录自洽）与 pod-execution-location（每个活动 pod 的 worktree 回执与 `git worktree list --porcelain` 一致）；`unavailable` 与 `fail` 在 `summary` 里分开计数的做法保留。旧 verify 的同名门 window-runtime-projection 在第二轮对齐时补回（G6）：`wakeflow_status.windows[].projection` 逐窗口报新鲜度（各宿主里最差的一份：current / stale / missing / unsafe / unavailable），`domains.windowRuntime` 报域可用性，缺失或过期把 `next` 指向维护（reconcile 重建，G5），unsafe 只报告。
 
 **待确认**：
 

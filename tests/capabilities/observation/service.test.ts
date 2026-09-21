@@ -63,9 +63,9 @@ import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {
+  type DeliveryWorkspaceFixture,
   deliverFixtureTarget,
   registerFixtureWindowRoute,
-  type DeliveryWorkspaceFixture,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
   FIXTURE_LANDING_MARKDOWN,
@@ -83,11 +83,11 @@ import {
   inspectFixtureReview,
   landFixtureTargetCompletion,
   loadFixtureTaskPackage,
-  recordFixtureEvidence,
-  registerFixtureControllerWindow,
   REVIEW_DECIDED_AT,
   REVIEW_DECISION_UUID,
   REVIEW_FIXTURE_REPORTED_AT,
+  recordFixtureEvidence,
+  registerFixtureControllerWindow,
 } from "../../governance/review/controller-implementation-review-decision-service.fixture.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
@@ -99,7 +99,7 @@ import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";
 
 /**
  * 两个读工具的读路径（gate-log §13.94 D1、D2、D3、D4）：status 一次观察多域并给出下一步；
- * 带 demandId 附路由或归档回执；verify 十三门与汇总；hook 观察目录出现非法文件名即
+ * 带 demandId 附路由或归档回执；verify 十四门与汇总；hook 观察目录出现非法文件名即
  * host-hook-channel fail；结果不含私有路径与句柄。健康工作区经公共维护工具初始化。
  */
 
@@ -118,6 +118,7 @@ const GATE_NAMES = Object.freeze([
   "local-layout",
   "pod-execution-location",
   "window-identity",
+  "window-runtime-projection",
   "work-claims",
 ]);
 const CODEX_ENDPOINT_FACADE = Object.freeze({
@@ -525,7 +526,7 @@ test("status 带 demandId：附当前 Route，next 来自 Route 且与 nextActio
   );
 });
 
-test("verify：健康工作区十三门全 pass；hook 观察目录出现非法文件名即 host-hook-channel fail、ok false；删除后恢复；带 demandId 给出 Demand 门", {
+test("verify：健康工作区十四门全 pass；hook 观察目录出现非法文件名即 host-hook-channel fail、ok false；删除后恢复；带 demandId 给出 Demand 门", {
   timeout: 120_000,
 }, async () => {
   const verified = await executeVerifyRequest(
@@ -543,7 +544,7 @@ test("verify：健康工作区十三门全 pass；hook 观察目录出现非法�
     GATE_NAMES.map(() => "pass"),
   );
   equal(verified.ok, true);
-  deepEqual(plain(verified.summary), { pass: 13, fail: 0, unavailable: 0 });
+  deepEqual(plain(verified.summary), { pass: 14, fail: 0, unavailable: 0 });
   equal(verified.repairsApplied, false);
   equal(verified.demand, null);
   equal(/^sha256:[0-9a-f]{64}$/u.test(verified.observationDigest), true);
@@ -574,7 +575,7 @@ test("verify：健康工作区十三门全 pass；hook 观察目录出现非法�
     const channel = broken.gates.find((gate) => gate.name === "host-hook-channel");
     deepEqual([channel?.status, channel?.code], ["fail", "codex:skipped-1"]);
     equal(broken.ok, false);
-    deepEqual(plain(broken.summary), { pass: 12, fail: 1, unavailable: 0 });
+    deepEqual(plain(broken.summary), { pass: 13, fail: 1, unavailable: 0 });
     deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
     equal(broken.next.suggestedTool, "wakeflow_maintain_workspace");
     notEqual(broken.observationDigest, verified.observationDigest);

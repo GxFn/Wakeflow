@@ -5,13 +5,13 @@ import {
   capStatusList,
   deriveNextActions,
   deriveWorkspaceGates,
+  type NextActionInput,
   nextFromActions,
   projectionFreshness,
   STATUS_LIST_MAXIMUMS,
   summarizeGates,
-  verifyNext,
-  type NextActionInput,
   type VerifyGate,
+  verifyNext,
   type WorkspaceGateFacts,
 } from "../../../src/capabilities/observation/decide.js";
 import { WAKEFLOW_CONFIG_FILE_REF } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
@@ -25,7 +25,7 @@ import {
 } from "../../../src/kernel/layout.js";
 
 /**
- * 观察切片的纯决定（gate-log §13.94 D1、D3、D10）：下一步的排序、去重与上限；十三道工作区门
+ * 观察切片的纯决定（gate-log §13.94 D1、D3、D10）：下一步的排序、去重与上限；十四道工作区门
  * 按名字排序，每门只看纯事实；汇总里 unavailable 算不通过但分开计数；verify 的 next 指向维护；
  * 投影新鲜度取最坏目标。
  */
@@ -51,6 +51,7 @@ const GATE_NAMES = Object.freeze([
   "local-layout",
   "pod-execution-location",
   "window-identity",
+  "window-runtime-projection",
   "work-claims",
 ]);
 
@@ -103,6 +104,26 @@ function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGat
     windows: [
       { windowId: WINDOW_A, identity: "registered" },
       { windowId: WINDOW_B, identity: "registered" },
+    ],
+    windowRuntime: [
+      {
+        hostId: "codex",
+        status: "observed",
+        issue: null,
+        windows: [
+          { windowId: WINDOW_A, status: "current" },
+          { windowId: WINDOW_B, status: "current" },
+        ],
+      },
+      {
+        hostId: "claude-code",
+        status: "observed",
+        issue: null,
+        windows: [
+          { windowId: WINDOW_A, status: "current" },
+          { windowId: WINDOW_B, status: "current" },
+        ],
+      },
     ],
     pods: [
       { podId: POD_MAIN, placement: "primary", lifecycle: "open", state: "ready", worktrees: [] },
@@ -261,7 +282,7 @@ test("deriveNextActions：同一动作去重，总数上限 64", () => {
   equal(capped[63]?.subject, packages[62]?.requirementId);
 });
 
-test("deriveWorkspaceGates：健康事实十三门全 pass、按名字排序；汇总 ok 且 next 无前沿", () => {
+test("deriveWorkspaceGates：健康事实十四门全 pass、按名字排序；汇总 ok 且 next 无前沿", () => {
   const gates = deriveWorkspaceGates(healthyFacts());
   deepEqual(
     gates.map((gate) => gate.name),
@@ -280,7 +301,7 @@ test("deriveWorkspaceGates：健康事实十三门全 pass、按名字排序；�
     gateOf(gates, "active-projection").evidence.map((entry) => entry.ref),
     [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF],
   );
-  deepEqual(summarizeGates(gates), { ok: true, summary: { pass: 13, fail: 0, unavailable: 0 } });
+  deepEqual(summarizeGates(gates), { ok: true, summary: { pass: 14, fail: 0, unavailable: 0 } });
   deepEqual(verifyNext(gates), {
     frontier: null,
     owner: "none",
@@ -781,7 +802,7 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
   const gates = deriveWorkspaceGates(
     healthyFacts({ configRecheck: "changed", ledger: "unavailable" }),
   );
-  deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 11, fail: 1, unavailable: 1 } });
+  deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 12, fail: 1, unavailable: 1 } });
   deepEqual(verifyNext(gates), {
     frontier: "workspace-maintenance",
     owner: "controller",
@@ -960,4 +981,61 @@ test("status 列表上限：超出上限的条目被确定性截断并报出略�
   deepEqual([...kept.entries], [1, 2, 3]);
   equal(kept.omitted, 0);
   deepEqual([STATUS_LIST_MAXIMUMS.claims, STATUS_LIST_MAXIMUMS.worktrees], [512, 64]);
+});
+
+test("window-runtime-projection：每个宿主的每个窗口投影都与重算一致才 pass；stale / missing / unsafe 逐窗口报出，宿主读不出即 unavailable（G6，§13.111）", () => {
+  deepEqual(verdictOf(healthyFacts(), "window-runtime-projection"), ["pass", null]);
+  const drifted = healthyFacts({
+    windowRuntime: [
+      {
+        hostId: "codex",
+        status: "observed",
+        issue: null,
+        windows: [
+          { windowId: WINDOW_A, status: "stale" },
+          { windowId: WINDOW_B, status: "current" },
+        ],
+      },
+      {
+        hostId: "claude-code",
+        status: "observed",
+        issue: null,
+        windows: [
+          { windowId: WINDOW_A, status: "missing" },
+          { windowId: WINDOW_B, status: "unsafe" },
+        ],
+      },
+    ],
+  });
+  deepEqual(verdictOf(drifted, "window-runtime-projection"), [
+    "fail",
+    `codex:${WINDOW_A}:stale,claude-code:${WINDOW_A}:missing,claude-code:${WINDOW_B}:unsafe`,
+  ]);
+  // 一个宿主读不出而另一个宿主有过期窗口：fail 压过 unavailable（同其他门的聚合规则），两者都在 code 里。
+  const unavailable = healthyFacts({
+    windowRuntime: [
+      {
+        hostId: "codex",
+        status: "observed",
+        issue: null,
+        windows: [{ windowId: WINDOW_A, status: "stale" }],
+      },
+      { hostId: "claude-code", status: "unavailable", issue: "runtime-missing", windows: [] },
+    ],
+  });
+  deepEqual(verdictOf(unavailable, "window-runtime-projection"), [
+    "fail",
+    `codex:${WINDOW_A}:stale,claude-code:runtime-missing`,
+  ]);
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        windowRuntime: [
+          { hostId: "claude-code", status: "unavailable", issue: "runtime-missing", windows: [] },
+        ],
+      }),
+      "window-runtime-projection",
+    ),
+    ["unavailable", "claude-code:runtime-missing"],
+  );
 });

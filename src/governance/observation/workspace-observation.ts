@@ -1,17 +1,17 @@
-import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowConfigPod } from "../../configuration/wakeflow-config.js";
+import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { JsonValueError, parseJsonValue, type JsonValue } from "../../foundation/data/json-value.js";
+import { type JsonValue, JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectoryError,
   type RootedDirectory,
+  RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
@@ -27,14 +27,14 @@ import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import {
-  inspectActiveLayout,
   type ActiveLayoutInspection,
+  inspectActiveLayout,
 } from "../../kernel/active-projection.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import {
   HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
-  readHostHookObservations,
   type HostHookEvent,
+  readHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import {
   hostHookObservationsRootRef,
@@ -45,13 +45,13 @@ import {
 } from "../../kernel/layout.js";
 import {
   listPodWorktreeReceiptsAnyHost,
-  worktreeCheckoutPresent,
   type PodWorktreeReceipt,
+  worktreeCheckoutPresent,
 } from "../../kernel/pod-worktree-receipts.js";
 import {
   listRequirementClaimStates,
-  renderRequirementBoardIndex,
   type RequirementClaimState,
+  renderRequirementBoardIndex,
 } from "../../kernel/requirement-board.js";
 import { inspectWorkClaim, type WorkClaim } from "../../kernel/work-claims.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
@@ -61,6 +61,10 @@ import {
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
+import {
+  inspectWakeflowWindowRuntimeProjectionSet,
+  WakeflowWindowRuntimeProjectionError,
+} from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import { buildDemandControllerRoute, type DemandControllerRoute } from "../controller/demand-controller-route.js";
 import {
@@ -68,14 +72,14 @@ import {
   openDemandOperationRoot,
 } from "../demand/demand-operation-authority-context.js";
 import {
-  loadDemandEventSourcingRootAuthority,
   type LoadedDemandEventSourcingRootAuthority,
+  loadDemandEventSourcingRootAuthority,
 } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { derivePodState, type PodState } from "../pod/pod-state.js";
 import {
-  readDemandResultReviewSnapshot,
   type DemandResultReviewSnapshot,
+  readDemandResultReviewSnapshot,
 } from "../review/demand-result-review-snapshot.js";
 import { WAKEFLOW_OBSERVATION_POLICY, type WakeflowObservationPolicy } from "./observation-policy.js";
 import {
@@ -89,7 +93,7 @@ import {
  * 每个域独立读取并隔离失败：读不出只让该域 `unavailable` 并带 issue，其他域照常；中止一律上抛。
  * status、verify 与活动投影都从同一份观察记录派生。`projection` 作用域只读投影需要的域
  * （配置、看板、Demand、pod 回执），不需要宿主 profile；`full` 作用域另读绑定、hook 通道、
- * 仓库指针、状态栏资产与投影目标。观察不写任何东西。
+ * 仓库指针、状态栏资产、每个宿主的窗口运行投影与投影目标。观察不写任何东西。
  */
 
 export interface ObservationHost {
@@ -186,6 +190,23 @@ export interface ObservedHostAsset {
   readonly issue: string | null;
 }
 
+/**
+ * 一个宿主的窗口运行投影（G6，§13.111）：每个配置窗口一份，期望文档由当前 Config 与该宿主的
+ * Binding 重算；宿主运行时根未发布或 Binding inventory 读不出时整组 `unavailable`。
+ */
+export interface ObservedHostProjections {
+  readonly hostId: WakeflowHostId;
+  readonly status: "observed" | "unavailable";
+  readonly issue: string | null;
+  /** 宿主运行时根是否已发布：同伴宿主的根缺席是常态（它由该宿主的制品维护），只有当前宿主的缺席算读不出。 */
+  readonly runtime: "present" | "absent";
+  readonly windows: readonly Readonly<{
+    readonly windowId: string;
+    readonly registered: boolean;
+    readonly status: "current" | "stale" | "missing" | "unsafe";
+  }>[];
+}
+
 export interface WorkspaceObservation {
   readonly observedAt: UtcInstant;
   readonly scope: "projection" | "full";
@@ -198,6 +219,7 @@ export interface WorkspaceObservation {
   readonly claims: ObservedDomain<Readonly<ObservedClaims>>;
   readonly bindings: readonly Readonly<ObservedHostBindings>[];
   readonly hooks: readonly Readonly<ObservedHostHooks>[];
+  readonly projections: readonly Readonly<ObservedHostProjections>[];
   readonly pods: ObservedDomain<readonly Readonly<ObservedPod>[]>;
   readonly repositories: ObservedDomain<readonly Readonly<RepositoryPointerObservation>[]>;
   readonly assets: readonly Readonly<ObservedHostAsset>[];
@@ -701,6 +723,76 @@ async function observeHostAsset(
   return Object.freeze({ hostId: host.hostId, status: asset.status, settings, issue: asset.issue });
 }
 
+/**
+ * 一个宿主的窗口运行投影：与对账用同一份重算与判定，读不出只让本宿主这一组不可用。
+ * 同伴宿主的运行时根缺席与 hook 通道同一裁决（§13.97 D10）：不是本制品维护的东西，保持沉默。
+ */
+async function observeHostProjections(
+  root: RootedDirectory,
+  snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
+  host: Readonly<ObservationHost>,
+  current: boolean,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<ObservedHostProjections>> {
+  try {
+    const inspection = await inspectWakeflowWindowRuntimeProjectionSet(root, {
+      config: snapshot.model,
+      resourceProfile: host.resourceProfile,
+      identityProfile: host.identityProfile,
+      ...signalOptions(signal),
+    });
+    if (inspection.status === "runtime-missing" && !current) {
+      return Object.freeze({
+        hostId: host.hostId,
+        status: "observed" as const,
+        issue: null,
+        runtime: "absent" as const,
+        windows: Object.freeze([]),
+      });
+    }
+    if (inspection.status !== "observed") {
+      return Object.freeze({
+        hostId: host.hostId,
+        status: "unavailable" as const,
+        issue: inspection.status,
+        runtime: inspection.status === "runtime-missing" ? ("absent" as const) : ("present" as const),
+        windows: Object.freeze([]),
+      });
+    }
+    return Object.freeze({
+      hostId: host.hostId,
+      status: "observed" as const,
+      issue: null,
+      runtime: "present" as const,
+      windows: Object.freeze(
+        inspection.windows.map((window) =>
+          Object.freeze({
+            windowId: window.windowId,
+            registered: window.registered,
+            status: window.status,
+          }),
+        ),
+      ),
+    });
+  } catch (error: unknown) {
+    if (
+      error instanceof WakeflowWindowRuntimeProjectionError &&
+      error.reason === "aborted"
+    ) {
+      fail("io-failure", "aborted", "$signal", { cause: error });
+    }
+    const reason = reasonOf(error);
+    if (reason === null) throw error;
+    return Object.freeze({
+      hostId: host.hostId,
+      status: "unavailable" as const,
+      issue: reason,
+      runtime: "present" as const,
+      windows: Object.freeze([]),
+    });
+  }
+}
+
 function observedAtOf(clock: UtcWallClock | undefined): UtcInstant {
   try {
     return readUtcWallClock(clock);
@@ -726,12 +818,22 @@ export async function observeWorkspace(
   const claims = await observeDomain("claims", () => observeClaims(root, signal));
   const bindings: Readonly<ObservedHostBindings>[] = [];
   const hooks: Readonly<ObservedHostHooks>[] = [];
+  const projections: Readonly<ObservedHostProjections>[] = [];
   const assets: Readonly<ObservedHostAsset>[] = [];
   if (scope === "full") {
     for (const host of options.hosts) {
       bindings.push(await observeHostBindings(root, snapshot, host, signal));
       hooks.push(
         await observeHostHooks(root, host.hostId, host.hostId === options.currentHostId, signal),
+      );
+      projections.push(
+        await observeHostProjections(
+          root,
+          snapshot,
+          host,
+          host.hostId === options.currentHostId,
+          signal,
+        ),
       );
       assets.push(await observeHostAsset(root, host, options.currentHostId, signal));
     }
@@ -755,6 +857,7 @@ export async function observeWorkspace(
     claims,
     bindings: Object.freeze(bindings),
     hooks: Object.freeze(hooks),
+    projections: Object.freeze(projections),
     pods,
     repositories,
     assets: Object.freeze(assets),
@@ -808,7 +911,8 @@ export function deriveOverallStatus(
     ) ||
     (observation.scope === "full" && observation.repositories.status !== "observed") ||
     observation.bindings.some((host) => host.status !== "observed") ||
-    observation.hooks.some((host) => host.status !== "observed");
+    observation.hooks.some((host) => host.status !== "observed") ||
+    observation.projections.some((host) => host.status !== "observed");
   const degraded =
     domainsUnavailable ||
     demands.some((demand) => demand.status !== "observed") ||

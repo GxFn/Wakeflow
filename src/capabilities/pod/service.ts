@@ -1,29 +1,28 @@
 import path from "node:path";
-
 import {
-  readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
-  type WakeflowConfigAuthoritySnapshot,
-} from "../../configuration/wakeflow-config-authority-snapshot.js";
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+  type WakeflowConfigPod,
+} from "../../configuration/wakeflow-config.js";
 import {
   replaceWakeflowConfigAuthority,
   WakeflowConfigAuthorityReplacementError,
 } from "../../configuration/wakeflow-config-authority-replacement.js";
-import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-config-document.js";
 import {
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigPod,
-  type WakeflowConfigModel,
-} from "../../configuration/wakeflow-config.js";
+  readWakeflowConfigAuthoritySnapshot,
+  type WakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
+} from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-config-document.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
 import {
-  parseJsonValue,
   type JsonObject,
   type JsonValue,
+  parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import type {
   RootedDirectory,
@@ -33,22 +32,22 @@ import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { worktreeDisposalGuidance } from "../../governance/pod/worktree-disposal.js";
+import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   listPodWorktreeReceipts,
+  type PodWorktreeReceipt,
   retirePodReceipts,
   retirePodWorktreeReceipt,
   worktreeCheckoutPresent,
-  type PodWorktreeReceipt,
 } from "../../kernel/pod-worktree-receipts.js";
 import {
-  runPublicationTransaction,
   type PublicationTransactionEnvelope,
   type PublicationTransactionPhase,
   type PublicationTransactionPlan,
+  runPublicationTransaction,
 } from "../../kernel/publication-transaction.js";
-import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
@@ -56,16 +55,20 @@ import {
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
+import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
+import { refreshWakeflowWindowRuntimeProjections } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import {
   admitPodResult,
+  type PodRequest,
+  type PodResult,
   parsePodRequest,
   WAKEFLOW_POD_PUBLIC_SCHEMA_VERSION,
   WAKEFLOW_POD_PUBLIC_TOOL_NAME,
-  type PodRequest,
-  type PodResult,
 } from "./contract.js";
 import {
+  type DerivedPodWindow,
+  type DerivedPodWorktree,
   deriveCloseCompleteBlockers,
   deriveCloseRequestBlockers,
   deriveCreateBlockers,
@@ -73,12 +76,10 @@ import {
   derivePodState,
   derivePodWindows,
   derivePodWorktrees,
-  podMutationNext,
-  podPreviewNext,
-  type DerivedPodWindow,
-  type DerivedPodWorktree,
   type PodPlanKind,
   type PodState,
+  podMutationNext,
+  podPreviewNext,
 } from "./decide.js";
 
 /**
@@ -454,8 +455,9 @@ function documentOf(model: WakeflowConfigModel): JsonObject {
 }
 
 async function replaceConfig(context: PodSliceContext, desired: JsonValue): Promise<void> {
+  let model: WakeflowConfigModel;
   try {
-    const model = parseWakeflowConfig(desired);
+    model = parseWakeflowConfig(desired);
     await replaceWakeflowConfigAuthority(
       context.root,
       model,
@@ -464,6 +466,31 @@ async function replaceConfig(context: PodSliceContext, desired: JsonValue): Prom
     );
   } catch (error: unknown) {
     mapReplacementError(error);
+  }
+  await refreshWindowProjectionsQuietly(context, model);
+}
+
+/**
+ * 窗口集或 pod 集变了：把本宿主的窗口运行投影收敛到新 Config（G6，§13.111 D5）。投影是派生物：
+ * 收敛失败不让已经落盘的配置事务失败，留给 verify 的 window-runtime-projection 门报出；中止仍上抛。
+ */
+async function refreshWindowProjectionsQuietly(
+  context: PodSliceContext,
+  model: WakeflowConfigModel,
+): Promise<void> {
+  try {
+    await refreshWakeflowWindowRuntimeProjections(context.root, {
+      config: model,
+      resourceProfile: context.facade.resourceProfile,
+      identityProfile: context.facade.identityProfile,
+      ...signalOptions(context.options.signal),
+    });
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowRuntimeProjectionError) {
+      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+      return;
+    }
+    throw error;
   }
 }
 

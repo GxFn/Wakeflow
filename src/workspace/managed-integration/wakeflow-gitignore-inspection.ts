@@ -2,27 +2,16 @@ import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
 import {
-  GitIgnoreCandidateObservationError,
-  observeGitIgnoreCandidate,
-} from "../../foundation/git/git-ignore-candidate-observation.js";
-import {
-  GitIgnoreObservationError,
-  observeGitIgnorePaths,
-  type GitIgnorePathObservation,
-} from "../../foundation/git/git-ignore-observation.js";
-import {
-  parseByteCount,
-} from "../../foundation/numeric/byte-count.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
+  RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
@@ -30,22 +19,34 @@ import {
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
 import {
+  GitIgnoreCandidateObservationError,
+  observeGitIgnoreCandidate,
+} from "../../foundation/git/git-ignore-candidate-observation.js";
+import {
+  GitIgnoreObservationError,
+  type GitIgnorePathObservation,
+  observeGitIgnorePaths,
+} from "../../foundation/git/git-ignore-observation.js";
+import {
+  parseByteCount,
+} from "../../foundation/numeric/byte-count.js";
+import {
   decodeUtf8,
   Utf8Error,
 } from "../../foundation/text/utf8.js";
-import {
-  createWakeflowWorkspaceStaticResourceOperationContext,
-  WakeflowWorkspaceStaticResourceOperationContextError,
-  type WakeflowWorkspaceStaticResourceOperationContext,
-} from "../wakeflow-workspace-static-resource-operation-context.js";
 import type {
   WakeflowWorkspaceStaticResourceMatrix,
 } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
+  createWakeflowWorkspaceStaticResourceOperationContext,
+  type WakeflowWorkspaceStaticResourceOperationContext,
+  WakeflowWorkspaceStaticResourceOperationContextError,
+} from "../wakeflow-workspace-static-resource-operation-context.js";
+import {
   classifyWakeflowGitignoreExactOutsideRules,
   createWakeflowGitignoreBodyAuthority,
-  WakeflowGitignoreBodyAuthorityError,
   type WakeflowGitignoreBodyAuthority,
+  WakeflowGitignoreBodyAuthorityError,
   type WakeflowGitignoreExactOutsideClassification,
   type WakeflowGitignoreRule,
 } from "./wakeflow-gitignore-body-authority.js";
@@ -111,6 +112,7 @@ export type WakeflowGitignoreInspectionErrorReason =
   | "unknown-managed-body"
   | "target-capacity"
   | "candidate-semantics"
+  | "git-repository"
   | "git"
   | "aborted";
 
@@ -128,6 +130,8 @@ const ERROR_MESSAGES = {
   "target-capacity": "Wakeflow Gitignore candidate exceeds its byte budget.",
   "candidate-semantics":
     "Wakeflow Gitignore candidate does not provide its required Git semantics.",
+  "git-repository":
+    "Wakeflow workspace root is not a Git repository; the managed .gitignore block is verified through Git, so run `git init` there first.",
   git: "Wakeflow Gitignore semantics could not be verified by Git.",
   aborted: "Wakeflow Gitignore inspection was aborted.",
 } as const satisfies Readonly<Record<
@@ -461,6 +465,24 @@ function inspectEnvelope(bytes: Uint8Array) {
 }
 
 /** 稳定检查当前 `.gitignore` 并生成零写入的下一操作候选。 */
+const GIT_METADATA_RESOURCE_PATH = parsePortableResourcePath(".git");
+
+/**
+ * 工作区根必须是 Git 仓库（`.git` 目录或 worktree / submodule 的 `.git` 文件）：托管的 `.gitignore`
+ * 块靠 Git 自己判定，没有仓库时 Git 只会以 128 退出，之前被统一报成 `git`，用户看不出该做什么。
+ * 2026-09-21 在真实工作区上初始化时暴露（gate-log §13.115）。
+ */
+async function assertGitRepositoryRoot(root: RootedDirectory): Promise<void> {
+  try {
+    await root.inspectExistingResource(GIT_METADATA_RESOURCE_PATH, "$git");
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
+      fail("git-repository", "$git");
+    }
+    throw error;
+  }
+}
+
 export async function inspectWakeflowWorkspaceGitignore(
   rootValue: unknown,
   requestValue: unknown,
@@ -494,6 +516,7 @@ export async function inspectWakeflowWorkspaceGitignore(
     }
     throw error;
   }
+  await assertGitRepositoryRoot(rootValue);
   const read = await readSource(rootValue, request.signal, expectedUserId);
   const bytes = read?.bytes ?? new Uint8Array();
   const envelope = inspectEnvelope(bytes);

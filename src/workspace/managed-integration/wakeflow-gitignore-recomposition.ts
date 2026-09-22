@@ -1,19 +1,19 @@
 import {
   createFileAtomically,
-  replaceFileAtomically,
   DurableAtomicFileWriteError,
+  replaceFileAtomically,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  withRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
+  withRootedExclusiveFileLock,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
 import {
   inspectWakeflowWorkspaceGitignore,
-  WakeflowGitignoreInspectionError,
   type WakeflowGitignoreInspection,
+  WakeflowGitignoreInspectionError,
 } from "./wakeflow-gitignore-inspection.js";
 import {
   admitWakeflowGitignoreRecompositionLockOperations,
@@ -23,18 +23,18 @@ import {
   currentWakeflowGitignoreRecompositionUserId,
   failWakeflowGitignoreRecomposition as fail,
   mapWakeflowGitignoreRecompositionLockError,
-  parseWakeflowGitignoreRecompositionOptions,
-  parseWakeflowGitignoreRecompositionRequest,
-  wakeflowGitignoreInspectionRequest,
-  wakeflowGitignoreRecompositionLockOptions,
-  WakeflowGitignoreRecompositionError,
-  WAKEFLOW_GITIGNORE_FILE_MODE,
   type ParsedWakeflowGitignoreRecompositionOptions,
   type ParsedWakeflowGitignoreRecompositionRequest,
+  parseWakeflowGitignoreRecompositionOptions,
+  parseWakeflowGitignoreRecompositionRequest,
+  WAKEFLOW_GITIGNORE_FILE_MODE,
   type WakeflowGitignoreRecompositionEffect,
+  WakeflowGitignoreRecompositionError,
   type WakeflowGitignoreRecompositionOptions,
   type WakeflowGitignoreRecompositionReceipt,
   type WakeflowGitignoreRecompositionRequest,
+  wakeflowGitignoreInspectionRequest,
+  wakeflowGitignoreRecompositionLockOptions,
 } from "./wakeflow-gitignore-recomposition-contract.js";
 import {
   WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
@@ -80,7 +80,7 @@ async function inspectCurrent(
       ) {
         fail("input", error.path);
       }
-      if (error.reason === "git") {
+      if (error.reason === "git" || error.reason === "git-repository") {
         fail("observation-failure", "$git");
       }
       fail("source-invalid", "$source");
@@ -297,10 +297,10 @@ export async function recomposeWakeflowWorkspaceGitignore(
 }
 
 export {
-  WakeflowGitignoreRecompositionError,
   WAKEFLOW_GITIGNORE_FILE_MODE,
   WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS,
   type WakeflowGitignoreRecompositionEffect,
+  WakeflowGitignoreRecompositionError,
   type WakeflowGitignoreRecompositionErrorReason,
   type WakeflowGitignoreRecompositionOptions,
   type WakeflowGitignoreRecompositionReceipt,

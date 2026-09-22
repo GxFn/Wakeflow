@@ -46,7 +46,8 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
    它时会静默失败。
 3. 完成下面这一节的一次性宿主动作。
 4. 在你想作为工作区的目录里打开 Agent，说"初始化一个 Wakeflow 工作区"。该目录
-   不能是产品仓库根。
+   本身必须是一个 Git 仓库（先在那里 `git init`；Wakeflow 靠 Git 判定它维护的
+   `.gitignore` 块，否则会报 `gitignore-git-repository`），且不能是产品仓库根。
 
 Wakeflow 会在工作区的 `{{instructionFile}}` 里维护一个托管块。那个块归
 Wakeflow 所有，块以外的内容都是你的。产品仓库或外部拥有的 Design/Test 支撑面

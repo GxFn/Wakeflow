@@ -1,11 +1,11 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { GitIgnoreCandidateObservationError, observeGitIgnoreCandidate, } from "../../foundation/git/git-ignore-candidate-observation.js";
 import { GitIgnoreObservationError, observeGitIgnorePaths, } from "../../foundation/git/git-ignore-observation.js";
 import { parseByteCount, } from "../../foundation/numeric/byte-count.js";
-import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
-import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { decodeUtf8, Utf8Error, } from "../../foundation/text/utf8.js";
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { classifyWakeflowGitignoreExactOutsideRules, createWakeflowGitignoreBodyAuthority, WakeflowGitignoreBodyAuthorityError, } from "./wakeflow-gitignore-body-authority.js";
@@ -31,6 +31,7 @@ const ERROR_MESSAGES = {
     "unknown-managed-body": "Wakeflow Gitignore managed body is not an admitted render.",
     "target-capacity": "Wakeflow Gitignore candidate exceeds its byte budget.",
     "candidate-semantics": "Wakeflow Gitignore candidate does not provide its required Git semantics.",
+    "git-repository": "Wakeflow workspace root is not a Git repository; the managed .gitignore block is verified through Git, so run `git init` there first.",
     git: "Wakeflow Gitignore semantics could not be verified by Git.",
     aborted: "Wakeflow Gitignore inspection was aborted.",
 };
@@ -288,6 +289,23 @@ function inspectEnvelope(bytes) {
     }
 }
 /** 稳定检查当前 `.gitignore` 并生成零写入的下一操作候选。 */
+const GIT_METADATA_RESOURCE_PATH = parsePortableResourcePath(".git");
+/**
+ * 工作区根必须是 Git 仓库（`.git` 目录或 worktree / submodule 的 `.git` 文件）：托管的 `.gitignore`
+ * 块靠 Git 自己判定，没有仓库时 Git 只会以 128 退出，之前被统一报成 `git`，用户看不出该做什么。
+ * 2026-09-21 在真实工作区上初始化时暴露（gate-log §13.115）。
+ */
+async function assertGitRepositoryRoot(root) {
+    try {
+        await root.inspectExistingResource(GIT_METADATA_RESOURCE_PATH, "$git");
+    }
+    catch (error) {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
+            fail("git-repository", "$git");
+        }
+        throw error;
+    }
+}
 export async function inspectWakeflowWorkspaceGitignore(rootValue, requestValue) {
     assertRoot(rootValue);
     const request = parseRequest(requestValue);
@@ -318,6 +336,7 @@ export async function inspectWakeflowWorkspaceGitignore(rootValue, requestValue)
         }
         throw error;
     }
+    await assertGitRepositoryRoot(rootValue);
     const read = await readSource(rootValue, request.signal, expectedUserId);
     const bytes = read?.bytes ?? new Uint8Array();
     const envelope = inspectEnvelope(bytes);

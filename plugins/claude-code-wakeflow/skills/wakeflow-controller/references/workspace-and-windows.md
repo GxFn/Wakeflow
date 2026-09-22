@@ -26,7 +26,8 @@ current. Read it back through a tool.
 `wakeflow_maintain_workspace` runs one transaction in one of three intents:
 
 - **fresh-initialize** - a new workspace in an empty or non-workspace
-  directory.
+  directory that is itself a Git repository (`git init` first; the preview
+  reports `gitignore-git-repository` until it is).
 - **reconfigure** - a declared difference against an existing config. Layout
   identity is immutable: the program id and the ledger root cannot move, and a
   change to the pod set is not a reconfigure. Those refusals are structural,

@@ -491,3 +491,22 @@ test("placement-stable reconfigure plans derived files before Config activation"
     ["host:window-runtime"],
   );
 });
+
+test("fresh preview on a root that is not a Git repository blocks with gitignore-git-repository and writes nothing（§13.115）", async (t) => {
+  const absolutePath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-static-materialization-preview-nogit-")),
+  );
+  const root = await RootedDirectory.open(absolutePath);
+  t.after(async () => {
+    await root.close();
+    rmSync(absolutePath, { recursive: true, force: true });
+  });
+  const preview = await previewWakeflowStaticMaterialization(
+    root,
+    request("fresh-initialize", desiredConfig()),
+  );
+  equal(preview.status, "blocked");
+  equal(preview.blockerCodes.includes("gitignore-git-repository"), true, preview.blockerCodes.join(","));
+  equal(preview.blockerCodes.includes("gitignore-git"), false);
+  deepEqual(readdirSync(absolutePath), []);
+});

@@ -12,7 +12,9 @@ maintain the workspace" section; the depth is in its
 First tool call: `wakeflow_maintain_workspace` in preview, after you have asked
 the user for the choices the intent needs (program identity, repositories,
 surfaces, storage root) - on an existing workspace, preview the reconcile
-intent instead and report what it found.
+intent instead and report what it found. The directory must already be a Git
+repository of its own; if the preview reports `gitignore-git-repository`, ask
+the user to run `git init` there and preview again.
 
 Preview writes nothing. Show the user the plan and every blocker it returned,
 apply only with exactly what that preview returned, and only after they say to.

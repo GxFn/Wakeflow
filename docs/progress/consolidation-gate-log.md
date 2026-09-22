@@ -3326,3 +3326,31 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **文档写回。** 能力卡 1 §1.4 现 TS 状态（对账修复集与只报告集）；场景清单 `card-01/reconcile-repair` 行；Controller 技能工作区参考的 reconcile 条目；对齐台账 §3 B 组 reconcile 行与 F 组 pod 关闭行；制品重建。
 
 **残余。** 同伴宿主根里被关闭 pod 的投影文件；部分缺失（只删 identity 或 projections 子目录）走同一骨架路径但未单独测试；用户侧待做项不变（真实 WakeWorkspace、真实投递、Claude 状态栏、push / tag / 发布 / 缓存）。
+
+## 13.115 真实工作区验证：`WakeflowTestWorkspace` 两宿主七幕加对账修复与重配置；工作区根须是 Git 仓库（2026-09-21）
+
+**用户环境。** 用户新建 `WakeflowTestWorkspace`（与 `Wakeflow` 仓库同级）作为一次性验证环境：根目录里是五个产品仓库副本（Alembic、AlembicAgent、AlembicCore、AlembicDashboard、AlembicPlugin，各自是干净的 Git 仓库，`main`），根本身不是 Git 仓库，没有任何 Wakeflow 标记。验证用一个临时驱动脚本（会话 scratchpad，不进仓库）把 committed 制品复制到仓库外，按 smoke 同一方式经 stdio 起 MCP 服务并逐工具调用；selection 为五个 owner-managed 仓库（各一个 product 窗口）、Design / Test 两个 wakeflow-managed 面、`Ledger`、`zh-Hans`。
+
+**过程与结果。**
+
+1. fresh preview（Codex）在未 `git init` 的根上零写，唯一 blocker `gitignore-git`：Wakeflow 靠 Git 自己判定托管 `.gitignore` 块，根不是仓库时 Git 以 128 退出。这条前提在 README、init 命令与 Controller 技能里都没写，blocker 也分不清"不是仓库"与"Git 失败"。在根上 `git init` 后继续。
+2. fresh preview 就绪：17 步、8 条启动意图，零写；apply 完成，根下出现 `.gitignore`、`.wakeflow-active`、`.wakeflow-local`、`AGENTS.md`、`Design/`（含 `drafts/`）、`Ledger/`（三容器）、`Test/`（含 `harnesses/`、`fixtures/`）、`wakeflow.config.json`；五个产品仓库无任何改动（owner-managed）。
+3. reconcile preview 零步、apply `no-op`。`wakeflow_status`：overall `idle`，8 窗口 unregistered 且投影 current，1 primary pod creating，5 仓库 observed 各带 HEAD 与分支，next 指向窗口登记；`wakeflow_verify` 14/14（`host-hook-channel` 报 `codex:absent` 直到 hook 记录落地）。
+4. `wakeflow_pod` create preview 就绪：8 窗口、5 条 worktree 意图，零写。Codex hook observer 以 SessionStart 载荷落一条记录，随后 verify 14/14 无 code。
+5. 删掉整个 `.wakeflow-local` 后 reconcile preview 出四步（协议根、共享协调目录、宿主运行时骨架、capability 目录），apply 完成，再预览零步——§13.114 D2 在真实目录上成立。
+6. Claude Code 制品对同一工作区 reconcile：骨架与 capability 目录、`CLAUDE.md` 托管块、两个支撑面记忆、三份 portable settings、statusline 资产与本地设置条目共十步，apply 完成；Claude 视角 status / verify 14/14（`host-settings-assets=pass`），Claude hook observer 落地一条记录。
+7. reconfigure（改 displayName）：preview 四步（程序指令、两份支撑面记忆、config），apply 完成，status 显示新名字、8 个投影仍 current、verify 14/14；随后 reconcile 零步。
+
+未执行、留给用户：真实宿主会话（开窗口、登记、投递取回 hook 证据、Claude 状态栏显示）。
+
+**决定。**
+
+- D1 工作区根必须是 Git 仓库是前提而不是缺陷：托管 `.gitignore` 块只有在 Git 仓库里才有意义。补三处文本（README 两语、init 命令、Controller 技能工作区参考）让 Agent 在预览前说清并让用户 `git init`。
+- D2 `.gitignore` 检查在读源文件前先看根下 `.git`（目录或 worktree / submodule 的文件）是否存在，缺席报新原因 `git-repository`，预览 blocker 为 `gitignore-git-repository`；重组 owner 把它与 `git` 一样映射为 `observation-failure`。不改 Git 失败的其他分类。
+- D3 驱动脚本不进仓库：它只是 smoke 的临时变体，smoke 已覆盖同一路径；真实目录验证的证据记在本节。
+
+**回归。** `wakeflow-gitignore-inspection.test.ts` 的"non Git root"改断言 `git-repository`；静态预览测试新增"非 Git 根 fresh preview 只报 `gitignore-git-repository` 且零写"；焦点集 45/45。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 998/998（含 `build:check`），`test:typescript` 406.7 s、整门 421 s（机器负载比上一轮高）；`npm run smoke:artifacts` 两宿主七幕全过（21 s）；`git diff --check` 干净。
+
+**文档写回。** README 两语第 4 步、init 命令、Controller 技能工作区参考 Step 0、能力卡 1 §1.1 现 TS 状态、plan 环境边界；制品重建。

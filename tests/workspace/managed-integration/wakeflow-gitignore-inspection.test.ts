@@ -1,10 +1,10 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-  existsSync,
   chmodSync,
-  mkdtempSync,
+  existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -12,27 +12,26 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
+import { type TestContext, test } from "node:test";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
   codexWorkspaceHostResourceProfile,
 } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   createWakeflowGitignoreBodyAuthority,
 } from "../../../src/workspace/managed-integration/wakeflow-gitignore-body-authority.js";
-import {
-  inspectWakeflowManagedTextEnvelope,
-  recomposeWakeflowManagedTextEnvelope,
-} from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import {
   inspectWakeflowWorkspaceGitignore,
   WakeflowGitignoreInspectionError,
   type WakeflowGitignoreInspectionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-gitignore-inspection.js";
+import {
+  inspectWakeflowManagedTextEnvelope,
+  recomposeWakeflowManagedTextEnvelope,
+} from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import {
   createWakeflowWorkspaceStaticResourceMatrix,
 } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
@@ -270,10 +269,11 @@ test("Gitignore inspection rejects unsafe or semantically conflicting sources", 
   });
 
   await t.test("non Git root", async (subtest) => {
+    // 根不是 Git 仓库有自己的原因码（§13.115）：调用方能据此让用户 `git init`，而不是笼统的 Git 失败。
     const current = await fixture(subtest, undefined, false);
     await expectInspectionError(
       () => inspectWakeflowWorkspaceGitignore(current.root, request()),
-      "git",
+      "git-repository",
       "$git",
     );
   });

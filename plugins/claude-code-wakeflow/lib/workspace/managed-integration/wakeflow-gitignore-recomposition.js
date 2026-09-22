@@ -1,9 +1,9 @@
-import { createFileAtomically, replaceFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { inspectWakeflowWorkspaceGitignore, WakeflowGitignoreInspectionError, } from "./wakeflow-gitignore-inspection.js";
-import { admitWakeflowGitignoreRecompositionLockOperations, assertCurrentUserWakeflowGitignoreRecompositionRoot, assertWakeflowGitignoreRecompositionNotAborted, assertWakeflowGitignoreRecompositionRoot, currentWakeflowGitignoreRecompositionUserId, failWakeflowGitignoreRecomposition as fail, mapWakeflowGitignoreRecompositionLockError, parseWakeflowGitignoreRecompositionOptions, parseWakeflowGitignoreRecompositionRequest, wakeflowGitignoreInspectionRequest, wakeflowGitignoreRecompositionLockOptions, WakeflowGitignoreRecompositionError, WAKEFLOW_GITIGNORE_FILE_MODE, } from "./wakeflow-gitignore-recomposition-contract.js";
+import { admitWakeflowGitignoreRecompositionLockOperations, assertCurrentUserWakeflowGitignoreRecompositionRoot, assertWakeflowGitignoreRecompositionNotAborted, assertWakeflowGitignoreRecompositionRoot, currentWakeflowGitignoreRecompositionUserId, failWakeflowGitignoreRecomposition as fail, mapWakeflowGitignoreRecompositionLockError, parseWakeflowGitignoreRecompositionOptions, parseWakeflowGitignoreRecompositionRequest, WAKEFLOW_GITIGNORE_FILE_MODE, WakeflowGitignoreRecompositionError, wakeflowGitignoreInspectionRequest, wakeflowGitignoreRecompositionLockOptions, } from "./wakeflow-gitignore-recomposition-contract.js";
 import { WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF, WAKEFLOW_GITIGNORE_REF, } from "./wakeflow-managed-integration-resource-catalog.js";
 /**
  * Wakeflow Workspace / Managed Integration：根 `.gitignore` 的锁内精确重组 owner。
@@ -34,7 +34,7 @@ async function inspectCurrent(root, request, signal, afterCommit) {
                 || error.reason === "authority") {
                 fail("input", error.path);
             }
-            if (error.reason === "git") {
+            if (error.reason === "git" || error.reason === "git-repository") {
                 fail("observation-failure", "$git");
             }
             fail("source-invalid", "$source");
@@ -187,4 +187,4 @@ export async function recomposeWakeflowWorkspaceGitignore(rootValue, requestValu
         fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath");
     }
 }
-export { WakeflowGitignoreRecompositionError, WAKEFLOW_GITIGNORE_FILE_MODE, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS, } from "./wakeflow-gitignore-recomposition-contract.js";
+export { WAKEFLOW_GITIGNORE_FILE_MODE, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS, WakeflowGitignoreRecompositionError, } from "./wakeflow-gitignore-recomposition-contract.js";

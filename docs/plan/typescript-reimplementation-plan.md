@@ -9,7 +9,7 @@
 > 基础服务边界：[全局基础服务需求](../archive/wakeflow-foundation-services-requirement-2026-08-11.md#foundation-document-role)、[review 与实施分界](../archive/wakeflow-foundation-services-requirement-2026-08-11.md#foundation-review-implementation-separation)
 > 资源处理标准：[TypeScript 资源处理归一标准与收敛矩阵](../standards/resource-handling-standard.md)
 > 决策记录：[docs/decisions/README.md](../decisions/README.md)；ADR-0002 到 ADR-0006 于 2026-09-03 接受并回写本文 §3、§7、§8.1、§9、§10、§13、§14
-> 环境边界：源码只修改 Wakeflow 仓库；真实初始化验收只使用用户指定的可丢弃 `WakeWorkspace`；`AlembicWorkspace` 完全排除
+> 环境边界：源码只修改 Wakeflow 仓库；真实初始化验收只使用用户指定的可丢弃 `WakeWorkspace`，以及 2026-09-21 用户另行指定的 `WakeflowTestWorkspace`（五个产品仓库副本，gate-log §13.115）；`AlembicWorkspace` 完全排除
 > 授权边界：本文是开发上下文和阶段门，不因创建本文自动授权真实工作区操作、commit、version、tag、push、publish 或插件缓存刷新
 
 <a id="ts-dev-document-role"></a>
@@ -53,7 +53,7 @@
 | `TSD-03` | 旧 JavaScript 实现是场景与需求证据，不是行为基线 | 只有能力卡确认的场景、不变量与失败恢复语义必须在新体系实现；磁盘布局、文件名、事件形状、工具名称与信封都不要求等价；authority 语义由能力卡逐项确认。2026-09-03 先按 [ADR-0002](../decisions/0002-public-tool-surface.md) 放宽公共面，再按 [ADR-0008](../decisions/0008-discard-legacy-and-new-version-series.md) 改为证据定位 |
 | `TSD-04` | 测试同步轻量化 | 不一对一翻译旧测试；按能力不变量确定新的 evidence owner |
 | `TSD-05` | JSON Schema 是 wire contract 权威 | TypeScript 类型和必要的运行时 validator 单向派生 |
-| `TSD-07` | 仅 `WakeWorkspace` 可作真实初始化环境 | `AlembicWorkspace` 不读、不写、不扫描、不初始化 |
+| `TSD-07` | 仅 `WakeWorkspace` 与用户 2026-09-21 指定的 `WakeflowTestWorkspace` 可作真实初始化环境 | `AlembicWorkspace` 不读、不写、不扫描、不初始化 |
 | `TSD-09` | 最低运行时升级为 Node 24 LTS | 不保留 Node 20 fallback；根和双插件最终同步升级 |
 | `TSD-10` | 完全新建源码体系 | 使用 `src/`、`tooling/`、`tests/`，不在旧目录原地改后缀 |
 | `TSD-11` | 旧代码只读保留到 E4 一次删除 | 旧 `core/`、`tools/`、`test/` 与两个插件制品不逐文件迁移或删除；自 2026-09-03 起旧门退出 `npm test`，以 `npm run test:legacy` 手动运行；能力卡全部确认后旧代码只剩阅读价值，E4 统一删除。按 [ADR-0008](../decisions/0008-discard-legacy-and-new-version-series.md) 修订 |
@@ -228,7 +228,7 @@ P0 必须核实并记录的事项：
 | 安全与隔离 | path/symlink fence、redaction、tracked/ignored、host-private 信息边界保持 |
 | 制品 | 两份候选 artifact 可独立构建、验证、smoke，且不依赖旧源码或 TS runtime loader |
 | 测试 | 新 evidence owner 覆盖能力卡中的有效不变量，重复证据已删除 |
-| 真实环境 | 经授权后在可丢弃 `WakeWorkspace` fresh initialize、删除重建、reconfigure/reconcile |
+| 真实环境 | 经授权后在可丢弃 `WakeWorkspace` fresh initialize、删除重建、reconfigure/reconcile；2026-09-21 已在 `WakeflowTestWorkspace` 上经两宿主制品跑通 fresh、reconcile、status/verify、pod 预览、hook 落地、`.wakeflow-local` 删除重建与 reconfigure（gate-log §13.115），真实宿主会话仍待用户 |
 
 验收结论必须区分：通过、有意放弃、待用户决定、新实现缺陷。没有明确分类的项不能进入最终切换。
 

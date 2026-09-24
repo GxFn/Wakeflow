@@ -113,6 +113,11 @@ Reading it is what acknowledges the callback. Then do the work it cannot do:
 3. Notice what is missing. An anchor answered with a confident sentence and no
    evidence is the most common failure you will see.
 
+The callback is sent before the target window's turn ends, so a unit read
+seconds after the callback may still show the target's completion record as
+pending. That is timing, not a missing record: read the unit again after the
+window goes idle instead of deciding around it.
+
 If the set of allowed decisions does not contain what you want to record, the
 reason is in the unit: the target's completion evidence has not arrived yet, or
 the Demand is waiting on a decision. Fix the cause; do not look for another

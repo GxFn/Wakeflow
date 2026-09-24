@@ -352,13 +352,13 @@
     "reworkMethodSummary": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 128,
+      "maxLength": 512,
       "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
     },
     "reworkObservationSummary": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 256,
+      "maxLength": 1024,
       "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
     },
     "remediationSummary": {

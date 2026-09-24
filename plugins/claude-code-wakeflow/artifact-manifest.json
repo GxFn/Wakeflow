@@ -152,8 +152,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 8592,
-      "sha256": "sha256:13ef9b5c72eb03d6aecf4dc2fcea72b4ab4abd4bc3d40178b7e4afcd2c0bd33d"
+      "bytes": 8868,
+      "sha256": "sha256:880b159f2d6e2f359c9d17bd0d1df61326b380194b82cd84bf3c790616f295bb"
     },
     {
       "path": "skills/wakeflow-controller/references/evidence.md",
@@ -962,8 +962,8 @@
     },
     {
       "path": "lib/contracts/generated/governance/delivery/delivery-envelope.generated.js",
-      "bytes": 10181,
-      "sha256": "sha256:e1a30b731a374685dc1650ffe65cc39ed12cac735ada8e30db328f2c94dc2ad0",
+      "bytes": 10182,
+      "sha256": "sha256:d5050385053d25b467de100ec32a57a47f3f724aa0a73c76a93a40f3b62bee76",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1830,8 +1830,8 @@
     },
     {
       "path": "lib/governance/delivery/delivery-envelope.js",
-      "bytes": 26929,
-      "sha256": "sha256:6c5c605555470d1529f493b1e37f7477d830c20308e12912d404b0bf4acafde5",
+      "bytes": 27060,
+      "sha256": "sha256:eb70d1368c5d27c0f29988ebe6568a792e1ddd717b9badeda554bbd45be4a966",
       "mode": "0644",
       "scope": "shared"
     },
@@ -6632,8 +6632,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 8592,
-      "sha256": "sha256:13ef9b5c72eb03d6aecf4dc2fcea72b4ab4abd4bc3d40178b7e4afcd2c0bd33d",
+      "bytes": 8868,
+      "sha256": "sha256:880b159f2d6e2f359c9d17bd0d1df61326b380194b82cd84bf3c790616f295bb",
       "mode": "0644",
       "scope": "agent-text"
     },

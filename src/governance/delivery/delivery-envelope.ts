@@ -211,8 +211,9 @@ export class DeliveryEnvelopeError extends Error {
 }
 
 const MAXIMUM_REWORK_RATIONALE_CODE_POINTS = 1_024;
-const MAXIMUM_REWORK_METHOD_CODE_POINTS = 128;
-const MAXIMUM_REWORK_OBSERVATION_CODE_POINTS = 256;
+// 返工整改项要装得下证据 ref 与摘要（§13.120 第二轮：256 个码点把第一条证据 ref 截在半路）。
+const MAXIMUM_REWORK_METHOD_CODE_POINTS = 512;
+const MAXIMUM_REWORK_OBSERVATION_CODE_POINTS = 1_024;
 const REWORK_CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const HOST_IDS = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);

@@ -3477,3 +3477,38 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **勘误。** §13.119 与 §13.120 写"hook 从安装缓存运行、制品变了必须刷新缓存"，本节按进程表核实：八个窗口和本会话的 MCP 服务器都运行在 marketplace 的源目录（本仓库 `plugins/claude-code-wakeflow/mcp/server.mjs`），`${CLAUDE_PLUGIN_ROOT}` 对本地目录 marketplace 解析到源目录本身，安装缓存只是 `claude plugin` 的安装记录；hook 用同一占位符，当时两份代码一致、无法从摘要区分，应当同样来自源目录。结论不变：制品重建后 hook 立即生效，MCP 服务器与技能要重启窗口；刷新缓存无害但不是必要条件。
 
 **残留。** 整门在机器繁忙时（第三方进程 `yyb_mac` 长时间占 160% CPU）连续三次各有一个计时敏感用例超时——锁串行用例（默认 2 s 等待，本节改为显式 30 s，断言的是串行与残留清理）、端点 register/decommission 用例（单跑 31 s，整套并行时超过 60 s 上限，未改）——单跑均通过；这是负载问题不是回归，但说明整门的计时余量在繁忙机器上偏紧。其余：Controller 的探针文件继续留在 `Test/evidence/`；Codex 宿主仍未做真实会话测试（未执行）。
+
+## 13.122 逐模块对齐第一轮：投递与落地——旧实现的已验证行为对照与两处移植（2026-09-24）
+
+**背景。** 用户设定下一阶段："逐个文件 review 本地旧项目代码和模块，在新 TS 项目里逐个 review 对齐模块和功能逻辑，学习理解旧项目的已经成熟的方案与实现，然后进行多轮次的完善优化新 TS 项目，并多轮次的验证真实测试"，并指定从"投递与落地"开始。参考副本 `Wakeflow-legacy-reference` 核实为 `629e79c5`（E4 切换提交 `a8d0b4bb` 的父提交）的逐字节导出，无更新的分支或标签，版本正确。本轮的对照单位是旧实现的**测试名**——那是旧项目里已被验证的行为清单——对应的模块：`wakeflow-delivery-orchestration.mjs`（3780 行）、`wakeflow-transport-{records,store,retention}.mjs`、`wakeflow-window-lease-{records,service}.mjs`、Claude 宿主的 `wakeflow-claude-transport.mjs` 与 `wakeflow-claude-locator.mjs`，以及它们的七个测试文件。
+
+**行为对照。** 状态：同形 = 新实现以不同结构实现同一可观察行为；放弃 = 有裁决依据的有意放弃；移植 = 本轮补上。
+
+| 旧实现已验证的行为（测试名摘要） | 新实现 | 状态 |
+|---|---|---|
+| plan → apply → claim → outcome → rearm 五段链；planDigest 不授权发送 | `prepare_delivery` 一次追加即取声明并签发许可（fence + handleDigest）；`record_delivery_outcome`；`rearm_delivery` | 同形 |
+| 竞争的 pre-send claim 只有一人得到 send permit | 工作声明独占创建，同字节重放 current，他人持有即阻塞 | 同形 |
+| 过期 apply 在发布传输记录或租约前拒绝并释放门 | `expectedStreamRevision` 乐观并发，冲突不写 | 同形 |
+| 只有 rejected-before-send 释放租约，accepted / ambiguous 保留租约等结果闭包 | `deliveryClaimHandling`：只有 rejected-before-send 释放；indeterminate 保留、不重发 | 同形 |
+| readback 只观察一次、只存摘要、不轮询推断完成 | 助手一次 `capture-pane`，只存摘要 | 同形 |
+| 粘贴不确定只记一次 ambiguous、保留租约、从不重发；区分 load 失败与 Enter 不确定 | `attempt.status` 三值：failed-before-send（load 前）、unknown（paste / Enter 失败）、sent；处置由证据派生 | 同形 |
+| 发送前拒绝：死 pane、非 claude 进程、重复匹配的 pane、定位器代际漂移、缺少 live 元数据 | 原助手只查坐标精确匹配与元数据；缺"非 claude 进程"、"重复 pane"、"坐标过期"三项 | **移植** |
+| 一个 delivery 只能持一把目标租约；过期租约不按时间清理，直到精确释放 | 声明代际上限是内核常量；孤儿声明按绑定事实回收，不看时间 | 同形 |
+| Controller return 与目标投递同一物理围栏；rejected return 记 rearm 权威 | 回调许可同一助手 `deliver`；`rearm_delivery` 覆盖回调静默 | 同形 |
+| Test attempt 由 TestCard 策略派生；Test rearm 保持同一逻辑尝试；多目标 group 的替换保留未发送成员 | 测试尝试代际与 `request-another-attempt`；投递按目标而非 group（ADR-0002 重切） | 同形 / 有依据的重切 |
+| 传输四类不可变记录（group / packet / envelope / run）、run lineage 连续不可分叉、store 的 0700 / 0600 / no-follow 严格库存 | Demand 事件流事件 + 声明代际；`demand-root-audit` 门 | 同形（结构不同） |
+| 归档门控的整需求传输修剪，无时间启发式 | complete 事务内 `retireDemandRoot` | 同形 |
+| journal 恢复：run-first / lease-first / claim journal 前向恢复 | 单事务追加命令，无中间 journal | 放弃（事件流模型无此状态） |
+| keep-live（caffeinate）与活动监视器 | 无；宿主 hook 观察取代 | 放弃（能力卡 10 Q1/Q3，ADR-0009） |
+
+**移植一：助手 `deliver` 的送前 pane authority。** 与定位器按坐标或标识相关的 pane 必须恰好一个（多于一个 `duplicate-pane`）、活着（`pane-dead`）、标识对（`metadata-mismatch`）、坐标对（`locator-stale`，提示重新登记）、跑的是 claude（`wrong-process`，带观察到的进程名），任一不满足都是 `failed-before-send`，不碰缓冲区。进程名沿用 §13.119 的进程表解析（原生安装的 claude 二进制名是版本号）。
+
+**移植二：落地观察进助手。** `deliver` 在回车后等目标会话的 `user-prompt-submit` hook 记录（`--wait-landing`，默认 3 秒，0 关闭），摘要按内核规则（去首尾空白后 UTF-8 的 SHA-256，观察脚本已剥掉粘贴外壳），输出新增 `landing: observed{recordId, recordedAt} | pending{promptDigest} | unavailable`。这不是新的判定源——`record_delivery_outcome` 仍自己读记录——而是把 Controller 前三轮手工做的"查目标会话的 prompt 提交记录"收进助手。顺带核实了一个宿主事实：Claude Code 对**中途排队**的 prompt 也在回车时就触发 UserPromptSubmit hook（第三轮里排在 `/wakeflow:next` 之后的那条消息 5 秒后就有记录，摘要相符），所以"目标窗口忙"不影响落地证据；Controller 技能第 8 步据此写明 `landing` 的读法与"pending 通常意味着窗口不对或已死"。旧实现的活动监视器不是为此设计的，本轮不引入忙碌门控。
+
+**回归。** 助手测试的 deliver 用例新增：重复 pane、非 claude 进程（观察值 `zsh`）、坐标过期各拒一次且不碰 tmux 缓冲区；`--wait-landing 0` 得 pending，写入目标会话的 prompt 提交记录后得 observed（recordId 与 recordedAt 原样返回），`--wait-landing 999` 拒。制品文本（`deliveryAction` 取值）与 Controller 技能第 8 步同步。焦点集 23/23（助手、制品诚实性、制品布局）。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 全链通过（`test:typescript` 1013/1013，整门 384 s），`npm run smoke:artifacts` 两宿主全过，`git diff --check` 干净；提交 `66d6697e`。
+
+**第四轮现场。** 先用新制品 reconcile 测试工作区（计划恰为一步 `asset:claude-code:tmux`，助手摘要 `32f4dbcd…`），只重启 Controller 窗口，Design 发布 `requirement`（28 字节的 `docs/wakeflow-smoke-round4.md`，七条验收标准），Controller `/wakeflow:next` 认领成 `demand_44a2bab7…` 后一句话跑完：规划 `target-task_5ca723b0…`（七个锚点）→ 投递经助手，助手输出第一次带 `landing`——`attempt: sent`、`readback: pending`、`landing: observed`（记录 `ca06c334…`，23:11:26Z）；`record_delivery_outcome` 自己查到同一条记录判 accepted，`hookRecordId` 相同 → 目标 `needs-review` 导入 → 回调经助手送进 Controller，目标会话里的助手输出同样 `landing: observed`（`533c1829…`），评审单元的回调落地记录一致 → 登记证据 → 带 `anchorEvidence` 的 accept（D7 第二次现场）→ 严格校验 14/14 → complete 归档修订 12。外部核对：归档 `0000000012` 27 个文件，第 4 号提交的投递结果 `accepted` 且 attempt 摘要与助手输出一致；`wakeflow_status` idle、board archived 4、无声明，`wakeflow_verify` 14/14；AlembicPlugin HEAD 仍 `7b2c53a`，四个冒烟文件都是未跟踪。前三轮目标会话里的 deliver 输出都没有 `landing`，本轮是第一次；两次回读仍是 pending（Claude Code 的 TUI 不回显粘贴原文），落地一律由 hook 记录证明。
+
+**残留。** 回读在 Claude Code 上从未 confirmed（首行子串永远看不到），它现在只是"屏幕摘要"这一条证据，是否改成识别 TUI 的粘贴指示或干脆只保留摘要，留到窗口与宿主那一轮；隐私扫描把探针转录里的两个裸 UUID（hook 记录 id）拦下（`privacy:bare-uuid`），Controller 删掉后重登记——按设计工作，但技能文本可以提醒"证据文件里不要写 hook 记录 id"；旧实现的多目标 group 替换、journal 前向恢复与 keep-live 三项按既有裁决不移植；Codex 宿主仍未做真实会话测试（未执行）。

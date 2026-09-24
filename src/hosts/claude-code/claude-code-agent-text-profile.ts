@@ -68,7 +68,9 @@ const WINDOW_BOOTSTRAP =
   "moves to the next one) and to tell you when that is done; only then register each window " +
   "from the observations you kept, run `mark --all`, and tell the user to continue in the tmux " +
   "Controller and close this session. The user never sets tmux up by hand: you do it and tell " +
-  "them the one thing to run or press.";
+  "them the one thing to run or press. If a bootstrap has to be redone before any window was " +
+  "registered, `teardown` kills that tmux session; with registered windows it refuses unless " +
+  "`--force`.";
 
 const DELIVERY_ACTION =
   "pipe the permit's prompt into the tmux helper, run from the workspace root: " +

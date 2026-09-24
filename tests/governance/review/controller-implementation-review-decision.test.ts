@@ -55,6 +55,14 @@ test("四类Controller决定：accept 要求完成证据，escalate 当且仅当
     equal(decision.decision, decisionType);
     equal(decision.escalation !== null, decisionType === "escalate");
   }
+  // rework 的实现质量是 Controller 的判断：改动没问题只是报告要重做记 satisfactory，无法核实记 unverified（§13.120 D6）。
+  for (const quality of ["satisfactory", "unverified", "defective"] as const) {
+    const decision = createDecision({
+      ...controllerImplementationReviewDecisionInput("rework"),
+      assessment: { requirementAlignment: "aligned", implementationQuality: quality },
+    });
+    equal(decision.assessment.implementationQuality, quality);
+  }
   throws(
     () =>
       createDecision({

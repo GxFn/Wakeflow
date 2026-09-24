@@ -352,6 +352,19 @@ async function inspectSupportGitignore(
   }
 }
 
+/**
+ * 对等宿主的 profile。任一宿主的维护事务在对方宿主的程序指令块、外部指令块与支撑面记忆文件
+ * 已存在且正文是准入的当前渲染（transition.sourceAuthority = admitted-current）时一并保持其为当前渲染，缺席、未受管或已是目标渲染时不动——与对等宿主运行时根的规则同形
+ * （§13.97 D10、§13.111 D1；§13.120 D2）。制品固定携带两份 profile，正文只依赖 Config 与 profile。
+ */
+function peerHostProfiles(
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+): ParsedWakeflowStaticMaterializationPreviewRequest["hostProfiles"] {
+  return request.hostProfiles.filter(
+    (profile) => profile.hostId !== request.currentHostProfile.hostId,
+  );
+}
+
 async function inspectSupportMemories(
   root: RootedDirectory,
   request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
@@ -524,6 +537,46 @@ async function inspectSupportMemories(
           }),
         );
       }
+      for (const peer of peerHostProfiles(request)) {
+        assertNotAborted(request.signal);
+        try {
+          const peerCatalog = createWakeflowManagedSupportResourceCatalog(desired, peer);
+          const peerMemory = await inspectWakeflowSupportMemory(root, supportRoot, {
+            currentConfig: current,
+            expectedCurrentConfigDigest:
+              current === null ? null : computeWakeflowConfigDigest(current),
+            desiredConfig: desired,
+            expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
+            profile: peer,
+            expectedCatalogDigest: peerCatalog.catalogDigest,
+            surfaceId: surface.surfaceId,
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+          });
+          if (
+            peerMemory.transition.sourceAuthority === "admitted-current" &&
+            peerMemory.status === "publication-required"
+          ) {
+            steps.push(
+              step({
+                stepId: `support-memory:${surface.surfaceId}:${peer.hostId}`,
+                kind: "publish-support-memory",
+                ownerId: "support-memory",
+                targetKey: `${surface.surfaceId}:${peer.hostId}`,
+                sourceDigest: peerMemory.source?.digest ?? null,
+                targetDigest: peerMemory.desiredAuthority.authorityDigest,
+                dependsOn: rootStepIds,
+              }),
+            );
+          }
+        } catch (error: unknown) {
+          if (error instanceof WakeflowSupportMemoryInspectionError) {
+            if (error.reason === "aborted") fail("aborted", "$signal");
+            addBlocker(blockers, `peer-support-memory-${error.reason}`);
+          } else {
+            throw error;
+          }
+        }
+      }
       if (supportIgnore !== null) {
         await inspectSupportGitignore(
           supportRoot,
@@ -612,6 +665,46 @@ async function inspectExternalInstructions(
             dependsOn: [],
           }),
         );
+      }
+      for (const peer of peerHostProfiles(request)) {
+        assertNotAborted(request.signal);
+        try {
+          const peerInspected = await inspectWakeflowExternalInstruction(externalRoot, {
+            profile: peer,
+            target,
+            currentConfig: current,
+            expectedCurrentConfigDigest:
+              current === null ? null : computeWakeflowConfigDigest(current),
+            desiredConfig: desired,
+            expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+          });
+          if (
+            peerInspected.transition.sourceAuthority === "admitted-current" &&
+            peerInspected.status === "recompose-required"
+          ) {
+            const targetId =
+              target.kind === "repository" ? target.repositoryId : target.surfaceId;
+            steps.push(
+              step({
+                stepId: `integration:external-instruction:${targetId}:${peer.hostId}`,
+                kind: "recompose-external-instruction",
+                ownerId: "host-instruction-integration",
+                targetKey: `${wakeflowExternalInstructionTargetKey(target)}:${peer.hostId}`,
+                sourceDigest: peerInspected.source?.digest ?? null,
+                targetDigest: peerInspected.desiredAuthority.authorityDigest,
+                dependsOn: [],
+              }),
+            );
+          }
+        } catch (error: unknown) {
+          if (error instanceof WakeflowExternalInstructionInspectionError) {
+            if (error.reason === "aborted") fail("aborted", "$signal");
+            addBlocker(blockers, `peer-external-instruction-${error.reason}`);
+          } else {
+            throw error;
+          }
+        }
       }
     } catch (error: unknown) {
       if (error instanceof WakeflowExternalInstructionInspectionError) {
@@ -1138,6 +1231,45 @@ export async function previewWakeflowStaticMaterialization(
         addBlocker(blockers, `program-instruction-${error.reason}`);
       } else {
         throw error;
+      }
+    }
+    for (const peer of peerHostProfiles(request)) {
+      assertNotAborted(request.signal);
+      try {
+        const peerMatrix = createWakeflowWorkspaceStaticResourceMatrix(peer);
+        const peerProgram = await inspectWakeflowProgramInstruction(rootValue, {
+          matrix: peerMatrix,
+          expectedMatrixDigest: peerMatrix.matrixDigest,
+          profile: peer,
+          currentConfig: current?.model ?? null,
+          expectedCurrentConfigDigest: current?.configDigest ?? null,
+          desiredConfig: desired,
+          expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
+          ...(request.signal === undefined ? {} : { signal: request.signal }),
+        });
+        if (
+          peerProgram.transition.sourceAuthority === "admitted-current" &&
+          peerProgram.status === "recompose-required"
+        ) {
+          steps.push(
+            step({
+              stepId: `integration:program-instruction:${peer.hostId}`,
+              kind: "recompose-program-instruction",
+              ownerId: "host-instruction-integration",
+              targetKey: peer.hostId,
+              sourceDigest: peerProgram.source?.digest ?? null,
+              targetDigest: peerProgram.desiredAuthority.authorityDigest,
+              dependsOn: [],
+            }),
+          );
+        }
+      } catch (error: unknown) {
+        if (error instanceof WakeflowProgramInstructionInspectionError) {
+          if (error.reason === "aborted") fail("aborted", "$signal");
+          addBlocker(blockers, `peer-program-instruction-${error.reason}`);
+        } else {
+          throw error;
+        }
       }
     }
 

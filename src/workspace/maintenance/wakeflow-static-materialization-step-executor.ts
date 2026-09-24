@@ -840,6 +840,16 @@ async function executeGitignore(
   }
 }
 
+/** 步骤 targetKey 点名的宿主：当前宿主或制品携带的对等宿主 profile（§13.120 D2）。 */
+function hostProfileFor(
+  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  hostId: string,
+) {
+  const profile = request.hostProfiles.find((entry) => entry.hostId === hostId);
+  if (profile === undefined) fail("plan", "$step.targetKey");
+  return profile;
+}
+
 async function executeProgramInstruction(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
@@ -848,21 +858,17 @@ async function executeProgramInstruction(
   desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ) {
-  const authority = createWakeflowProgramInstructionBodyAuthority(
-    desired,
-    request.currentHostProfile,
-  );
+  const profile = hostProfileFor(request, step.targetKey);
+  const authority = createWakeflowProgramInstructionBodyAuthority(desired, profile);
   assertStepTarget(step, authority.authorityDigest);
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    request.currentHostProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(profile);
   try {
     const result = await recomposeWakeflowProgramInstruction(
       root,
       {
         matrix,
         expectedMatrixDigest: matrix.matrixDigest,
-        profile: request.currentHostProfile,
+        profile,
         currentConfig: sourceConfig,
         expectedCurrentConfigDigest:
           sourceConfig === null
@@ -897,16 +903,27 @@ async function executeExternalInstruction(
   desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ) {
-  const target = listWakeflowExternalInstructionTargets(desired).find(
-    (candidate) =>
-      wakeflowExternalInstructionTargetKey(candidate) === step.targetKey,
+  // 当前宿主的 targetKey 就是 target 键；对等宿主的 targetKey 以 `:<hostId>` 结尾（§13.120 D2）。
+  const targets = listWakeflowExternalInstructionTargets(desired);
+  let target = targets.find(
+    (candidate) => wakeflowExternalInstructionTargetKey(candidate) === step.targetKey,
   );
+  let profile = request.currentHostProfile;
+  if (target === undefined) {
+    const separator = step.targetKey.lastIndexOf(":");
+    if (separator <= 0) fail("plan", "$step.targetKey");
+    const baseKey = step.targetKey.slice(0, separator);
+    target = targets.find(
+      (candidate) => wakeflowExternalInstructionTargetKey(candidate) === baseKey,
+    );
+    profile = hostProfileFor(request, step.targetKey.slice(separator + 1));
+  }
   if (target === undefined) fail("plan", "$step.targetKey");
   let authorityDigest: Sha256Digest;
   try {
     authorityDigest = createWakeflowExternalInstructionBodyAuthority(
       desired,
-      request.currentHostProfile,
+      profile,
       target,
     ).authorityDigest;
   } catch (error: unknown) {
@@ -950,7 +967,7 @@ async function executeExternalInstruction(
     result = await recomposeWakeflowExternalInstruction(
       externalRoot,
       {
-        profile: request.currentHostProfile,
+        profile,
         target,
         currentConfig: sourceConfig,
         expectedCurrentConfigDigest:
@@ -1094,16 +1111,8 @@ async function executeSupportMemory(
   const separator = step.targetKey.lastIndexOf(":");
   if (separator <= 0) fail("plan", "$step.targetKey");
   const surfaceId = step.targetKey.slice(0, separator);
-  if (
-    step.targetKey.slice(separator + 1) !== request.currentHostProfile.hostId
-  ) {
-    fail("plan", "$step.targetKey");
-  }
-  const authority = createWakeflowSupportMemoryAuthority(
-    desired,
-    request.currentHostProfile,
-    surfaceId,
-  );
+  const profile = hostProfileFor(request, step.targetKey.slice(separator + 1));
+  const authority = createWakeflowSupportMemoryAuthority(desired, profile, surfaceId);
   assertStepTarget(step, authority.authorityDigest);
   let placements;
   try {
@@ -1131,10 +1140,7 @@ async function executeSupportMemory(
     Awaited<ReturnType<typeof publishWakeflowSupportMemory>> | undefined;
   let primaryError: unknown;
   try {
-    const catalog = createWakeflowManagedSupportResourceCatalog(
-      desired,
-      request.currentHostProfile,
-    );
+    const catalog = createWakeflowManagedSupportResourceCatalog(desired, profile);
     result = await publishWakeflowSupportMemory(
       root,
       supportRoot,
@@ -1146,7 +1152,7 @@ async function executeSupportMemory(
             : computeWakeflowConfigDigest(sourceConfig),
         desiredConfig: desired,
         expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
-        profile: request.currentHostProfile,
+        profile,
         expectedCatalogDigest: catalog.catalogDigest,
         surfaceId,
       },

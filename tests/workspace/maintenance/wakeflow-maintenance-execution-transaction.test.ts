@@ -53,6 +53,7 @@ const PROFILES = Object.freeze([
 ]);
 const UUID = "11111111-1111-4111-8111-111111111111";
 const OTHER_UUID = "22222222-2222-4222-8222-222222222222";
+const THIRD_UUID = "33333333-3333-4333-8333-333333333333";
 const OPERATION_ID = parseWakeflowMaintenanceOperationId(
   `maintenance_operation_${UUID}`,
 );
@@ -82,11 +83,12 @@ async function fixture(t: TestContext) {
 function request(
   desiredConfig: unknown,
   action: "fresh-initialize" | "reconfigure" | "reconcile" = "fresh-initialize",
+  currentHostProfile: (typeof PROFILES)[number] = codexWorkspaceHostResourceProfile,
 ) {
   return Object.freeze({
     action,
     desiredConfig: action === "reconcile" ? null : desiredConfig,
-    currentHostProfile: codexWorkspaceHostResourceProfile,
+    currentHostProfile,
     hostProfiles: PROFILES,
   });
 }
@@ -101,12 +103,17 @@ function desiredConfig() {
   return parseWakeflowConfig(configValue());
 }
 
-function sharedExecutionPlan(preview: unknown) {
-  return createWakeflowMaintenanceExecutionPlan(
-    preview,
-    codexWorkspaceHostResourceProfile,
-    null,
-  );
+function desiredConfigWithLanguage(language: "en" | "zh-Hans") {
+  const value = configValue();
+  (value.presentation as Record<string, unknown>).language = language;
+  return parseWakeflowConfig(value);
+}
+
+function sharedExecutionPlan(
+  preview: unknown,
+  currentHostProfile: (typeof PROFILES)[number] = codexWorkspaceHostResourceProfile,
+) {
+  return createWakeflowMaintenanceExecutionPlan(preview, currentHostProfile, null);
 }
 
 async function executeSharedMaintenanceTransaction(
@@ -117,7 +124,7 @@ async function executeSharedMaintenanceTransaction(
 ) {
   return executeWakeflowMaintenanceExecutionTransaction(
     root,
-    sharedExecutionPlan(preview),
+    sharedExecutionPlan(preview, input.currentHostProfile),
     input,
     undefined,
     options,
@@ -430,6 +437,85 @@ test("placement-stable reconfigure updates derived memories before Config", asyn
     }).ino === beforeConfig.ino,
     false,
   );
+});
+
+test("对等宿主的指令与记忆文件已存在时随本宿主的 reconfigure 保持当前渲染，缺席时保持缺席（§13.120 D2）", async (t) => {
+  const workspace = await fixture(t);
+  const current = desiredConfig();
+  const freshInput = request(current);
+  const freshPreview = await previewWakeflowStaticMaterialization(workspace.root, freshInput);
+  await executeSharedMaintenanceTransaction(workspace.root, freshPreview, freshInput, {
+    uuidFactory: () => UUID,
+  });
+  // 只有 Codex 的文件时，Codex 的 reconfigure 不为缺席的 Claude 文件规划任何步骤（上一个用例的 4 步）。
+  const absentPeer = await previewWakeflowStaticMaterialization(
+    workspace.root,
+    request(desiredConfigWithLanguage("zh-Hans"), "reconfigure"),
+  );
+  equal(absentPeer.status, "ready");
+  deepEqual(
+    absentPeer.steps.filter((entry) => entry.stepId.endsWith(":claude-code")),
+    [],
+  );
+
+  // Claude 宿主加入：它的 reconcile 只写自己的三份文件。
+  const joinInput = request(null, "reconcile", claudeCodeWorkspaceHostResourceProfile);
+  const joinPreview = await previewWakeflowStaticMaterialization(workspace.root, joinInput);
+  equal(joinPreview.status, "ready", joinPreview.blockerCodes.join(","));
+  const joined = await executeSharedMaintenanceTransaction(workspace.root, joinPreview, joinInput, {
+    uuidFactory: () => OTHER_UUID,
+  });
+  equal(joined.status, "completed");
+  equal(existsSync(path.join(workspace.absolutePath, "CLAUDE.md")), true);
+  equal(existsSync(path.join(workspace.absolutePath, "Design", "CLAUDE.md")), true);
+
+  // Codex 的 reconfigure 现在把 Claude 已存在的文件一并带到新渲染。
+  const desired = desiredConfigWithLanguage("zh-Hans");
+  const reconfigureInput = request(desired, "reconfigure");
+  const reconfigurePreview = await previewWakeflowStaticMaterialization(
+    workspace.root,
+    reconfigureInput,
+  );
+  equal(reconfigurePreview.status, "ready", reconfigurePreview.blockerCodes.join(","));
+  const surfaceIds = desired.topology.supportSurfaces.map((surface) => surface.surfaceId);
+  deepEqual(
+    reconfigurePreview.steps
+      .map((entry) => entry.stepId)
+      .filter((stepId) => stepId.endsWith(":claude-code"))
+      .sort(),
+    [
+      "integration:program-instruction:claude-code",
+      ...surfaceIds.map((surfaceId) => `support-memory:${surfaceId}:claude-code`),
+    ].sort(),
+  );
+  const reconfigured = await executeSharedMaintenanceTransaction(
+    workspace.root,
+    reconfigurePreview,
+    reconfigureInput,
+    { uuidFactory: () => THIRD_UUID },
+  );
+  equal(reconfigured.status, "completed");
+  for (const file of ["AGENTS.md", "CLAUDE.md"]) {
+    equal(
+      readFileSync(path.join(workspace.absolutePath, file), "utf8").includes("Wakeflow 程序指令"),
+      true,
+      file,
+    );
+    equal(
+      readFileSync(path.join(workspace.absolutePath, "Design", file), "utf8").includes(
+        "Wakeflow Design 支持窗口",
+      ),
+      true,
+      file,
+    );
+  }
+  // Claude 宿主随后的 reconcile 无事可做：它的文件没有过期。
+  const after = await previewWakeflowStaticMaterialization(
+    workspace.root,
+    request(null, "reconcile", claudeCodeWorkspaceHostResourceProfile),
+  );
+  equal(after.status, "ready", after.blockerCodes.join(","));
+  deepEqual(after.steps, []);
 });
 
 test("recovery replays an affected whole-owned root after effect-before-checkpoint", async (t) => {

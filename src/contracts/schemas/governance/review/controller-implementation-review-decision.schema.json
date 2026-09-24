@@ -224,9 +224,6 @@
             "properties": {
               "requirementAlignment": {
                 "const": "aligned"
-              },
-              "implementationQuality": {
-                "const": "defective"
               }
             }
           },

@@ -131,7 +131,10 @@ rework whose checks all passed is refused when recorded - it could never be
 delivered. When the work is right but the report is not - a `needs-review`
 result whose anchors are not tied to managed evidence is the common case -
 record the evidence first, then fail the check that names the report gap and
-ask for a `completed` re-import citing that evidence.
+ask for a `completed` re-import citing that evidence. Rework's
+`implementationQuality` says what you found: `satisfactory` when the change is
+right and only the report is redone, `unverified` when you could not verify it,
+`defective` when the change itself is wrong. Accept stays `satisfactory` only.
 
 Test results take `accept`, `request-another-attempt`, `blocked` or `escalate`
 through `wakeflow_record_test_review_decision`. The step classifications gate

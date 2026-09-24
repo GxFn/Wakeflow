@@ -217,7 +217,7 @@ export const IMPLEMENTATION_REVIEW_DECISION_TOOL_REGISTRATION = Object.freeze({
   executor: "recordImplementationReviewDecision",
   title: "Record Wakeflow Implementation Review Decision",
   description:
-    "Record the Controller's independently formed accept, rework, blocked, or escalate decision for one inspected implementation TargetResult against the inspected snapshot and review-unit digests. Accept requires a completed outcome and the target session's completion record; rework requires at least one failed independent check, and those failed checks are the corrections the target receives; escalate carries the issue, options, and recommendation and appends the Demand escalation in the same commit; a decision after blocked or escalated carries resumption. Same idempotency key and body replays the first result.",
+    "Record the Controller's accept, rework, blocked, or escalate decision for one inspected implementation TargetResult against the inspected snapshot and review-unit digests. Accept requires a completed outcome and the target session's completion record. Rework requires at least one failed independent check (those checks become the target's corrections); its implementation quality is the Controller's judgment. Escalate carries the issue, options, and recommendation and appends the Demand escalation in the same commit; a decision after blocked or escalated carries resumption. Same idempotency key and body replays the first result.",
   requestSchema: WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_RESULT_SCHEMA,
   annotations: APPEND_ANNOTATIONS,

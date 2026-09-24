@@ -55,6 +55,10 @@ The scan runs on every record and the outcomes are not symmetric:
   confirmation is a decision you are making on the user's behalf about what
   leaves their machine, so make it deliberately: look at what the preview
   listed, and confirm only the members you actually understand.
+- A bare UUID is a non-credential finding of the same kind: it can be confirmed,
+  but the cleaner path is not to write hook record ids, session ids or other
+  bare UUIDs into a file you intend to record. Typed ids such as `evidence_…`
+  or `target-delivery_…` are admitted; cite those instead.
 
 Never confirm a tree you have not looked at because the preview was long.
 

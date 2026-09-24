@@ -77,7 +77,9 @@ const DELIVERY_ACTION =
   `\`${TMUX_HELPER} deliver --window <windowId> --handle-digest <the permit's handleDigest>\`. ` +
   "It checks the pane against the locator and the handle digest, pastes the prompt, presses " +
   "Return once and captures the pane once, then prints the `attempt` and `readback` to " +
-  "record verbatim.";
+  "record verbatim. From a product or surface window, prefix the helper path with the " +
+  "workspace root you were given with `--add-dir` instead of running from the root; the " +
+  "helper finds the workspace from its own location.";
 
 const WORKTREE_LAUNCH =
   "run `git worktree add` yourself at the path the intent names, or let the host make " +
@@ -85,13 +87,15 @@ const WORKTREE_LAUNCH =
   "on branch `worktree-<name>`.";
 
 const COMMAND_SURFACE_EN =
-  "`/wakeflow-init` sets up or repairs the workspace, `/wakeflow-status` reports where " +
-  "it stands, `/wakeflow-next` takes the next step on the active Demand, and " +
-  "`/wakeflow-pod` creates or closes a pod.";
+  "`/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where " +
+  "it stands, `/wakeflow:next` takes the next step on the active Demand, and " +
+  "`/wakeflow:pod` creates or closes a pod. Claude Code always namespaces plugin commands, so " +
+  "the `wakeflow:` prefix is part of the name.";
 
 const COMMAND_SURFACE_ZH =
-  "`/wakeflow-init` 初始化或修复工作区，`/wakeflow-status` 报告当前状态，" +
-  "`/wakeflow-next` 在活动 Demand 上推进一步，`/wakeflow-pod` 创建或关闭 pod。";
+  "`/wakeflow:init` 初始化或修复工作区，`/wakeflow:status` 报告当前状态，" +
+  "`/wakeflow:next` 在活动 Demand 上推进一步，`/wakeflow:pod` 创建或关闭 pod。" +
+  "Claude Code 的插件命令一律带插件名前缀，`wakeflow:` 是命令名的一部分。";
 
 const HOST_TRUST_STEPS_EN = [
   "The first time you start Claude Code in the workspace directory, accept the",
@@ -102,7 +106,7 @@ const HOST_TRUST_STEPS_EN = [
   "yourself is reported as a difference the next time the workspace is reconciled.",
   "",
   "You never set tmux up by hand. Start `claude` in the workspace directory and run",
-  "`/wakeflow-init`: the Controller creates the tmux session and every window itself through",
+  "`/wakeflow:init`: the Controller creates the tmux session and every window itself through",
   "the helper maintenance installs at",
   "`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact",
   "`tmux attach` command once the windows are up, and which trust dialogs to accept. It",
@@ -117,7 +121,7 @@ const HOST_TRUST_STEPS_ZH = [
   "`wakeflow_maintain_workspace` 写进 `settings.local.json` 的托管块；那个块归 Wakeflow",
   "所有，你自己改写 `statusLine` 会在下一次对账里被报成差异。",
   "",
-  "你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow-init`：Controller 会通过",
+  "你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow:init`：Controller 会通过",
   "维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己",
   "建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任",
   "对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写一条只放行",

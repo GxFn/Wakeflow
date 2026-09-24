@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
@@ -22,6 +22,7 @@ import {
   type HookObserverStderrCode,
   registerProcessGuards,
   runWakeflowHookObserver,
+  unwrapHostPrompt,
   WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
   WAKEFLOW_HOOK_OBSERVER_MARKER,
   WAKEFLOW_HOOK_OBSERVER_STDIN_MAXIMUM_BYTES,
@@ -928,5 +929,46 @@ test("入口的闭包限于 foundation 与 kernel（D1）：编译产物只引�
   // stdout 的三种写法一起拦：直接写流、console 的任一方法、按文件描述符 1 同步写。
   for (const forbidden of ["child_process", "process.stdout", "console.", "writeSync(1"]) {
     equal(source.includes(forbidden), false, forbidden);
+  }
+});
+
+test("Claude Code 的传输外壳不进摘要：粘贴块与跨会话消息剥壳后与信封 prompt 同摘要，Codex 原样计算（§13.119）", async (t) => {
+  const fixture = createFixture(t);
+  const cwd = path.join(fixture.repository, "src");
+  const pasted = `\n\n<pasted_content id="976a">\n${PROMPT}\n</pasted_content>\n`;
+  const crossSession = `<cross-session-message from="uds:/tmp/cc-socks/1.sock" from-name="alembicplugin-11" from-mode="bypass">\n${PROMPT}\n</cross-session-message>`;
+  equal(unwrapHostPrompt("claude-code", pasted), PROMPT.trim());
+  equal(unwrapHostPrompt("claude-code", crossSession), PROMPT.trim());
+  equal(unwrapHostPrompt("claude-code", PROMPT), PROMPT.trim());
+  equal(unwrapHostPrompt("codex", pasted), pasted);
+  for (const host of HOSTS) {
+    const sessionId = SESSION_IDS[host];
+    // 先落 session-start（建观察目录），再登记绑定，后两条 prompt 事件才会写入。
+    equal(
+      (await observe(host, hookPayload("SessionStart", sessionId, cwd, fixture.transcriptPath)))
+        .code,
+      null,
+    );
+    writeBinding(fixture.workspace, host, sessionId);
+    // 固定时钟下记录标识由 turnId 区分：同一毫秒的两条 prompt 记录各带自己的 turn_id。
+    for (const [index, prompt] of [pasted, crossSession].entries()) {
+      const outcome = await observe(
+        host,
+        hookPayload("UserPromptSubmit", sessionId, cwd, fixture.transcriptPath, {
+          prompt,
+          turn_id: `turn-${index}`,
+        }),
+      );
+      equal(outcome.code, null, host);
+    }
+    const digests = (await readBack(fixture.workspace, host)).records
+      .filter((record) => record.event === "user-prompt-submit")
+      .map((record) => record.promptDigest)
+      .sort();
+    const expected =
+      host === "claude-code"
+        ? [computeDeliveryPromptDigest(PROMPT), computeDeliveryPromptDigest(PROMPT)]
+        : [computeDeliveryPromptDigest(pasted), computeDeliveryPromptDigest(crossSession)].sort();
+    deepEqual(digests, expected, host);
   }
 });

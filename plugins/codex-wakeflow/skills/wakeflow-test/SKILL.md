@@ -64,8 +64,9 @@ of test work.
    from the prompt, importing one record per step: the step id, what was
    observed, its evidence reference and digest, and its verdict. Wakeflow
    derives the overall verdict from these records - do not assert it yourself.
-5. Send the returned wake-controller callback prompt to the Controller window,
-   then end your turn.
+5. Send the returned wake-controller callback prompt to the Controller window
+   by the host's own means: send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. No other transport counts as a
+   send. Then end your turn.
 
 ## What you must return
 

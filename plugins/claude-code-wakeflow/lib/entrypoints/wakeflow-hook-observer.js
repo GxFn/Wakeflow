@@ -1,5 +1,5 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { lstat, open as openFileHandle, opendir, realpath, } from "node:fs/promises";
+import { lstat, opendir, open as openFileHandle, realpath, } from "node:fs/promises";
 import nodePath from "node:path";
 import { computeSha256Digest } from "../foundation/crypto/sha256.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
@@ -149,11 +149,33 @@ function textDigest(text) {
         return null;
     }
 }
-function promptDigest(prompt) {
+/**
+ * Claude Code 把粘贴进来的 prompt 包成 `<pasted_content id="…">…</pasted_content>`、把跨会话消息包成
+ * `<cross-session-message …>…</cross-session-message>` 再交给 hook（2026-09-24 真实宿主实测，
+ * gate-log §13.119）。落地判定比的是信封 prompt 的摘要，所以先剥掉宿主的传输外壳再算；外壳只是
+ * 宿主怎么送进来的痕迹，不是用户或 Controller 写的字。Codex 没有这种外壳，原样计算。
+ */
+const CLAUDE_CODE_PROMPT_WRAPPERS = [
+    /^<pasted_content id="[^"\n]*">\n?([\s\S]*?)\n?<\/pasted_content>$/u,
+    /^<cross-session-message [^>\n]*>\n?([\s\S]*?)\n?<\/cross-session-message>$/u,
+];
+export function unwrapHostPrompt(hostId, prompt) {
+    if (hostId !== "claude-code")
+        return prompt;
+    let text = prompt.trim();
+    for (let depth = 0; depth < 2; depth += 1) {
+        const match = CLAUDE_CODE_PROMPT_WRAPPERS.map((pattern) => pattern.exec(text)).find((entry) => entry !== null);
+        if (match === undefined || match === null)
+            break;
+        text = (match[1] ?? "").trim();
+    }
+    return text;
+}
+function promptDigest(hostId, prompt) {
     if (prompt === null)
         return null;
     try {
-        return computePromptDigest(prompt);
+        return computePromptDigest(unwrapHostPrompt(hostId, prompt));
     }
     catch {
         return null;
@@ -204,7 +226,7 @@ function recordInput(hostId, payload, event, clock) {
     return Object.freeze({
         ...required,
         turnId: degradeToKernel(required, "turnId", payload.turnId),
-        promptDigest: event === "user-prompt-submit" ? promptDigest(payload.prompt) : null,
+        promptDigest: event === "user-prompt-submit" ? promptDigest(hostId, payload.prompt) : null,
         lastAssistantMessageDigest: event === "stop" ? textDigest(payload.lastAssistantMessage) : null,
         transcriptRef: degradeToKernel(required, "transcriptRef", payload.transcriptPath),
     });

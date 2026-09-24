@@ -62,10 +62,17 @@ report, return the callback. You own no other step and no Controller authority.
    from the prompt. Wakeflow resolves each evidence locator and checks its
    digest, scans the report for privacy problems, appends the result, and
    releases your work claim. A refusal means the report is not yet importable -
-   fix what it named and import again; it is not a reason to stop working.
+   fix what it named and import again; it is not a reason to stop working. A
+   `completed` outcome is accepted only when every acceptance anchor is tied to
+   managed evidence the Controller recorded for this Demand; when none exists
+   yet, import the report as `needs-review` - recording evidence is the
+   Controller's step, not yours, and the rule is here, not in Wakeflow's source.
 6. The import returns a wake-controller callback permit. Send its prompt to the
-   Controller window as the permit directs. That send is the last thing you do
-   for this target.
+   Controller window the permit's host action names, by the host's own means:
+   {{deliveryAction}} That is the only transport for this send - not a
+   cross-session messaging tool, not a file, not another window - because
+   landing is proven by the hook record of a prompt submitted in that window.
+   That send is the last thing you do for this target.
 
 Then end your turn. Do not start the next task, do not poll for a reply, and
 do not re-send a callback that has already landed.

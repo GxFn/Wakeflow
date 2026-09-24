@@ -94,7 +94,7 @@
 | 6 投递执行与 hook 证据通道 | 线程发送；hook 片段 `src/hosts/codex/codex-hook-fragment.ts` 渲染命令串加 `${PLUGIN_ROOT}`，用户在 `/hooks` 按定义哈希信任后生效；`notify` 插件发不了 | 粘贴与回车，控制模式为可选强观察；hook 片段 `src/hosts/claude-code/claude-code-hook-fragment.ts` 渲染 exec 形式加 `${CLAUDE_PLUGIN_ROOT}` | 信封、outcome、回读摘要、ambiguous 解决；hook 通道**已落地**：观察脚本 `src/entrypoints/wakeflow-hook-observer.ts` 把两宿主同名的四个事件写成同形记录，制品的 `hooks/observe.mjs` 与 `hooks/hooks.json` 由构建器渲染（2026-09-18 gate-log §13.97，已实现、宿主未验证） |
 | ADR-0010 worktree | Worktree 线程，detached HEAD，结果导入前需建分支，默认保留 15 个 | `claude --worktree <name>`，分支 `worktree-<name>`，退出无改动自动清理 | porcelain 回执、pod 四状态、关闭先于会话归档 |
 | 9 状态栏 | 无 | statusline 与 tmux 助手两份资产、`settings.local.json` | 无 |
-| 10 命令面 | 无 slash 命令 | 4 个命令（`/wakeflow-init`、`/wakeflow-status`、`/wakeflow-next`、`/wakeflow-pod`），且命令不承载技能之外的步骤 | skills 文本 |
+| 10 命令面 | 无 slash 命令 | 4 个命令（`/wakeflow:init`、`/wakeflow:status`、`/wakeflow:next`、`/wakeflow:pod`；Claude Code 的插件命令一律带插件名前缀，2026-09-24 联合测试确认裸名 `/wakeflow-next` 不可解析，§13.119），且命令不承载技能之外的步骤 | skills 文本 |
 | 10 制品 | manifest 含 `interface` 与 `skills` 路径，marketplace 无版本 | manifest 靠目录发现，MCP 项禁止 cwd 与 env，marketplace 有版本 | 五源版本一致 |
 
 ## 4. 需求锚点 D1 到 D41 与 I3

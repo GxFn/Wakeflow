@@ -46,7 +46,7 @@ you did not confirm.
 
 ## Entry points
 
-`/wakeflow-init` sets up or repairs the workspace, `/wakeflow-status` reports where it stands, `/wakeflow-next` takes the next step on the active Demand, and `/wakeflow-pod` creates or closes a pod.
+`/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where it stands, `/wakeflow:next` takes the next step on the active Demand, and `/wakeflow:pod` creates or closes a pod. Claude Code always namespaces plugin commands, so the `wakeflow:` prefix is part of the name.
 
 Plain language works everywhere: "initialize a workspace here", "what is the
 status", "keep going", "open a pod for this".
@@ -80,7 +80,7 @@ run, so no session is observed and no delivery can be shown to have landed.
 yourself is reported as a difference the next time the workspace is reconciled.
 
 You never set tmux up by hand. Start `claude` in the workspace directory and run
-`/wakeflow-init`: the Controller creates the tmux session and every window itself through
+`/wakeflow:init`: the Controller creates the tmux session and every window itself through
 the helper maintenance installs at
 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact
 `tmux attach` command once the windows are up, and which trust dialogs to accept. It

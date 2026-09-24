@@ -34,7 +34,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 
 ## 入口
 
-`/wakeflow-init` 初始化或修复工作区，`/wakeflow-status` 报告当前状态，`/wakeflow-next` 在活动 Demand 上推进一步，`/wakeflow-pod` 创建或关闭 pod。
+`/wakeflow:init` 初始化或修复工作区，`/wakeflow:status` 报告当前状态，`/wakeflow:next` 在活动 Demand 上推进一步，`/wakeflow:pod` 创建或关闭 pod。Claude Code 的插件命令一律带插件名前缀，`wakeflow:` 是命令名的一部分。
 
 任何时候直接说人话都可以："在这里初始化工作区"、"现在什么状态"、"继续"、
 "开一个 pod"。
@@ -61,7 +61,7 @@ Wakeflow 所有，块以外的内容都是你的。产品仓库或外部拥有�
 `wakeflow_maintain_workspace` 写进 `settings.local.json` 的托管块；那个块归 Wakeflow
 所有，你自己改写 `statusLine` 会在下一次对账里被报成差异。
 
-你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow-init`：Controller 会通过
+你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow:init`：Controller 会通过
 维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己
 建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任
 对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写一条只放行

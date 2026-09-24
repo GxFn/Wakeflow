@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
 import { deepEqual, equal, ok } from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -310,12 +310,7 @@ test("源目录恰好是四份技能、四个命令与两份 README，且只有�
   ]);
   deepEqual(
     sourcesUnder(COMMANDS_PREFIX).map((source) => source.path),
-    [
-      "commands/wakeflow-init.md",
-      "commands/wakeflow-next.md",
-      "commands/wakeflow-pod.md",
-      "commands/wakeflow-status.md",
-    ],
+    ["commands/init.md", "commands/next.md", "commands/pod.md", "commands/status.md"],
   );
   for (const source of SOURCES) {
     if (source.path === "README.zh-CN.md") continue;

@@ -67,6 +67,8 @@ report, return the callback. You own no other step and no Controller authority.
    managed evidence the Controller recorded for this Demand; when none exists
    yet, import the report as `needs-review` - recording evidence is the
    Controller's step, not yours, and the rule is here, not in Wakeflow's source.
+   A `needs-review` import is then a normal ending: the Controller records the
+   evidence, verifies every anchor itself and accepts your report directly.
 6. The import returns a wake-controller callback permit. Send its prompt to the
    Controller window the permit's host action names, by the host's own means:
    {{deliveryAction}} That is the only transport for this send - not a

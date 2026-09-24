@@ -66,7 +66,7 @@
 
 **待确认**：
 
-- Q3 `accept` 是否必须 `outcome === completed`？建议必须，`needs-review` 只能 rework 或 blocked。
+- Q3 `accept` 是否必须 `outcome === completed`？建议必须，`needs-review` 只能 rework 或 blocked。2026-09-24 修订（gate-log §13.121 D7）：`needs-review` 结果也可 accept，前提是 Controller 在决定里用 `anchorEvidence` 把每个验收锚点绑到本 Demand 已登记的托管证据；零证据的机械接受仍不允许。
 - Q4 决定是否继续分为实现与测试两类（TS 现状），还是合并为一个决定加 `workType` 字段？建议保持两类，因为测试决定要处理尝试代际。
 
 ## 7.4 测试判定与尝试
@@ -123,7 +123,7 @@
 | --- | --- | --- |
 | Q1 证据定位符 | 导入时由 Wakeflow 解析并核摘要，限定在 pod 的 worktree 与 Demand 根内；缺失或不符即拒绝 | 结果导入准入 |
 | Q2 结果隐私扫描 | 导入时做与证据相同的隐私扫描（与能力卡 8 Q1 的扫描范围联动） | 结果导入准入 |
-| Q3 accept 前提 | `accept` 必须 `outcome === completed`；`needs-review` 只能 rework 或 blocked | 评审决定命令 |
+| Q3 accept 前提 | `accept` 必须 `outcome === completed`；`needs-review` 只能 rework 或 blocked（§13.121 D7 修订：`needs-review` 加 Controller 的 `anchorEvidence` 全锚点绑定也可 accept） | 评审决定命令 |
 | Q4 决定分类 | 保持实现决定与测试决定两类，不合并 | 评审决定 schema |
 | Q5 Test `verdict` | 增加机器字段 `verdict` | Test 结果 schema |
 
@@ -133,9 +133,9 @@
 | --- | --- |
 | 7.1 结果记录 | Test 结果增加逐步记录 `steps[]{stepId, expected, observed, evidence{ref, digest}, verdict}`，整体 `verdict ∈ pass \| fail \| blocked \| cannot-conclude` 由步骤派生；失败步骤必带 `classification ∈ product-defect \| harness-defect \| environment \| flaky \| missing-evidence \| out-of-scope \| needs-decision`、`likelyOwner`、`recommendedAction`。通过步骤的 observed 成为该步的 approved 基线，后续尝试并列对比。导入成功返回回调内容与许可（能力卡 6 修订） |
 | 7.2 评审投影 | 评审两次调用：`inspect_target_result_review` 读投影，一次决定；投影里附基线对比 |
-| 7.3 实现决定 | 词汇 `accept \| rework \| blocked \| escalate`，删除 `redesign`；`rework` 只用于验收锚点内的代码缺陷；`escalate` 是类型化事件，Demand 进入 `awaiting-decision`，字段：问题、需求章节引用、证据引用、备选方案（含影响，最多 4 个）、建议，由 Wakeflow 渲染给用户。回流：用户直接回答记 `decision-recorded` 事件；或 Design 发布补充需求包，Controller 认领后规划替换包 |
+| 7.3 实现决定 | 词汇 `accept \| rework \| blocked \| escalate`，删除 `redesign`；`rework` 只用于验收锚点内的代码缺陷；`escalate` 是类型化事件，Demand 进入 `awaiting-decision`，字段：问题、需求章节引用、证据引用、备选方案（含影响，最多 4 个）、建议，由 Wakeflow 渲染给用户。回流：用户直接回答记 `decision-recorded` 事件；或 Design 发布补充需求包，Controller 认领后规划替换包；§13.121 D7：`needs-review` 结果可凭 Controller 的 `anchorEvidence` 全锚点绑定 accept |
 | 7.4 测试决定 | 词汇 `accept \| request-another-attempt（附 stepIds）\| escalate（附分类）`；`product-defect` 走授权返工（现有 `authorize_product_defect_remediation` 并入此路由），`needs-decision` 走用户决策；`blocked` 决定让任务 `blocked`，只有 rework 与授权返工重开尝试 |
-| Q3 | 保持：`accept` 必须 `outcome === completed` 且锚点全映射 |
+| Q3 | 修订（§13.121 D7）：`accept` 接受 `completed`（报告锚点全映射）或 `needs-review` 加 Controller `anchorEvidence` 全锚点绑定；accept 的其余前提不变 |
 | Q4 | 保持两类决定 |
 | Q5 | `verdict` 落成逐步与整体两级 |
 | 工具面 | `resume_target_result_review` 并入 escalate 的回流 |

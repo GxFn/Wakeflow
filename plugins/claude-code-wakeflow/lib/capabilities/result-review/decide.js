@@ -136,15 +136,49 @@ export function deriveResumptionBlockers(source, resumption) {
     return Object.freeze(blockers);
 }
 /**
- * 实现决定的机器阻塞项：accept 要求 completed 且完成证据已确认；rework 在给出独立检查时至少
- * 一条 failed——failed 的检查就是返工投递交给目标的整改项，全部 passed 的 rework 永远投不出去，
- * 所以在记录时就拒绝；其余由 Controller 判断。
+ * needs-review 结果的 accept 依据（§13.121 D7）：Controller 把每个验收锚点绑到本 Demand 已登记的
+ * 托管证据。未给出绑定（允许集推导）时只看证据是否存在；给出时逐锚点、逐证据核对。
  */
-export function deriveImplementationDecisionBlockers(decision, view, independentChecks) {
+function deriveAnchorEvidenceBlockers(view, anchorEvidence) {
+    if (view.managedEvidenceIds.length === 0)
+        return ["anchor-evidence:no-managed-evidence"];
+    if (anchorEvidence === undefined)
+        return [];
+    if (anchorEvidence === null || anchorEvidence.length === 0)
+        return ["anchor-evidence:missing"];
+    const blockers = [];
+    const claimed = new Set(anchorEvidence.map((entry) => entry.anchorId));
+    for (const anchorId of view.acceptanceAnchorIds) {
+        if (!claimed.has(anchorId))
+            blockers.push(`anchor-evidence:uncovered:${anchorId}`);
+    }
+    const known = new Set(view.managedEvidenceIds);
+    for (const entry of anchorEvidence) {
+        if (!view.acceptanceAnchorIds.includes(entry.anchorId)) {
+            blockers.push(`anchor-evidence:unknown-anchor:${entry.anchorId}`);
+        }
+        for (const evidenceId of entry.evidenceIds) {
+            if (!known.has(evidenceId))
+                blockers.push(`anchor-evidence:unknown-evidence:${evidenceId}`);
+        }
+    }
+    return blockers;
+}
+/**
+ * 实现决定的机器阻塞项：accept 要求完成证据已确认，且结果是 completed，或是 needs-review 而
+ * Controller 的 anchorEvidence 把每个验收锚点绑到本 Demand 已登记的托管证据（§13.121 D7）；rework
+ * 在给出独立检查时至少一条 failed——failed 的检查就是返工投递交给目标的整改项，全部 passed 的
+ * rework 永远投不出去，所以在记录时就拒绝；其余由 Controller 判断。
+ */
+export function deriveImplementationDecisionBlockers(decision, view, independentChecks, anchorEvidence) {
     const blockers = [];
     if (decision === "accept") {
-        if (view.outcome !== "completed")
+        if (view.outcome === "needs-review") {
+            blockers.push(...deriveAnchorEvidenceBlockers(view, anchorEvidence));
+        }
+        else if (view.outcome !== "completed") {
             blockers.push(`outcome:${view.outcome}`);
+        }
         if (view.targetCompletion.status !== "confirmed")
             blockers.push("target-completion-pending");
     }

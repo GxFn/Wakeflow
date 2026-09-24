@@ -538,8 +538,9 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     Object.keys(implementationDecisionRequest.properties as Record<string, unknown>)
       .filter((field) => !appendEnvelopeFields.includes(field))
       .sort(),
-    judgmentFields,
-    "Public Implementation Decision request carries exactly the Controller judgment plus escalation and resumption",
+    // anchorEvidence：needs-review 结果 accept 时的锚点→托管证据绑定，只属于实现决定（§13.121 D7）。
+    [...judgmentFields, "anchorEvidence"].sort(),
+    "Public Implementation Decision request carries exactly the Controller judgment plus anchor evidence, escalation and resumption",
   );
   deepEqual((implementationDecisionRequest.properties as JsonObject).decision, {
     enum: ["accept", "rework", "blocked", "escalate"],

@@ -188,7 +188,8 @@ export interface ImportFixtureImplementationOptions {
   readonly expectedStreamRevision?: number;
   readonly reportedAt?: UtcInstant;
   readonly evidence?: Readonly<FixtureEvidence>;
-  readonly content?: ReturnType<typeof createImplementationTargetResultReportContentFixture>;
+  /** 报告内容原样进入导入请求（请求参数本身是 unknown，由切片解析）；用于 needs-review 等变体。 */
+  readonly content?: unknown;
 }
 
 /** 经切片导入实现结果：报告内容按当前任务包与受管证据生成，围栏取自 accepted 结局。 */

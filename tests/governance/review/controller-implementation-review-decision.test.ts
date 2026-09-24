@@ -1,7 +1,9 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+} from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   controllerImplementationReviewDecisionEventId,
   createControllerImplementationReviewDecision,
@@ -55,6 +57,38 @@ test("四类Controller决定：accept 要求完成证据，escalate 当且仅当
     equal(decision.decision, decisionType);
     equal(decision.escalation !== null, decisionType === "escalate");
   }
+  // needs-review 结果的 accept 必须带锚点→托管证据绑定；绑定只属于 accept（§13.121 D7）。
+  const evidenceId = parseWakeflowDurableIdOfKind(
+    "evidence_11111111-1111-4111-8111-111111111111",
+    "evidence",
+    "$evidence",
+  );
+  const acceptInput = controllerImplementationReviewDecisionInput("accept");
+  const needsReviewInput = {
+    ...acceptInput,
+    reviewed: { ...acceptInput.reviewed, targetResultOutcome: "needs-review" as const },
+  };
+  throws(
+    () => createDecision(needsReviewInput),
+    (error: unknown) =>
+      error instanceof ControllerImplementationReviewDecisionError &&
+      (error.reason === "schema" || error.reason === "relation"),
+  );
+  const bound = createDecision({
+    ...needsReviewInput,
+    anchorEvidence: [{ anchorId: "ac-1", evidenceIds: [evidenceId] }],
+  });
+  equal(bound.anchorEvidence?.length, 1);
+  equal(bound.reviewed.targetResultOutcome, "needs-review");
+  throws(
+    () =>
+      createDecision({
+        ...controllerImplementationReviewDecisionInput("rework"),
+        anchorEvidence: [{ anchorId: "ac-1", evidenceIds: [evidenceId] }],
+      }),
+    (error: unknown) =>
+      error instanceof ControllerImplementationReviewDecisionError && error.reason === "relation",
+  );
   // rework 的实现质量是 Controller 的判断：改动没问题只是报告要重做记 satisfactory，无法核实记 unverified（§13.120 D6）。
   for (const quality of ["satisfactory", "unverified", "defective"] as const) {
     const decision = createDecision({

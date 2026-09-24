@@ -162,8 +162,30 @@ function decisionBasis(value) {
         resumption: value.resumption,
         callbackLanding: value.callbackLanding,
         targetCompletion: value.targetCompletion,
+        ...(value.anchorEvidence === null ? {} : { anchorEvidence: value.anchorEvidence }),
         decidedAt: value.decidedAt,
     };
+}
+function anchorEvidenceOf(value) {
+    if (value === undefined || value === null)
+        return null;
+    const entries = value.map((entry, index) => {
+        const evidenceIds = entry.evidenceIds.map((evidenceId, position) => id(evidenceId, "evidence", `$/anchorEvidence/${index}/evidenceIds/${position}`));
+        const [first, ...rest] = evidenceIds;
+        if (first === undefined)
+            fail("schema", `$/anchorEvidence/${index}/evidenceIds`);
+        if (new Set(evidenceIds).size !== evidenceIds.length) {
+            fail("relation", `$/anchorEvidence/${index}/evidenceIds`);
+        }
+        return Object.freeze({
+            anchorId: checkId(entry.anchorId, `$/anchorEvidence/${index}/anchorId`),
+            evidenceIds: Object.freeze([first, ...rest]),
+        });
+    });
+    if (new Set(entries.map((entry) => entry.anchorId)).size !== entries.length) {
+        fail("relation", "$/anchorEvidence");
+    }
+    return Object.freeze(entries);
 }
 function reviewedOf(wire) {
     return Object.freeze({
@@ -207,6 +229,7 @@ export function parseControllerImplementationReviewDecision(value) {
     if (firstCheck === undefined)
         fail("schema", "$/independentChecks");
     const targetCompletion = normalizeControllerReviewTargetCompletion(wire.targetCompletion, "$/targetCompletion", fail);
+    const anchorEvidence = anchorEvidenceOf(wire.anchorEvidence);
     const judgment = {
         decision: wire.decision,
         assessment: Object.freeze({
@@ -237,13 +260,21 @@ export function parseControllerImplementationReviewDecision(value) {
         ...judgment,
         callbackLanding: normalizeControllerReviewCallbackLanding(wire.callbackLanding, "$/callbackLanding", fail),
         targetCompletion,
+        anchorEvidence,
         decidedAt: instant(wire.decidedAt, "$/decidedAt"),
     });
+    // 锚点绑定只属于 accept；needs-review 结果的 accept 没有绑定就没有依据（§13.121 D7）。
+    if ((anchorEvidence !== null && basis.decision !== "accept") ||
+        (basis.decision === "accept" &&
+            basis.reviewed.targetResultOutcome === "needs-review" &&
+            anchorEvidence === null)) {
+        fail("relation", "$/anchorEvidence");
+    }
     const decisionDigest = digest(wire.decisionDigest, "$/decisionDigest");
     if (computeCanonicalJsonSha256Digest(basis) !== decisionDigest) {
         fail("digest", "$/decisionDigest");
     }
-    return Object.freeze({ ...basis, decisionDigest });
+    return Object.freeze({ ...basis, anchorEvidence, decisionDigest });
 }
 /** 从Controller陈述、墙上时钟和单个新UUID创建审查决定。 */
 export function createControllerImplementationReviewDecision(input, options = {}) {
@@ -289,6 +320,7 @@ export function createControllerImplementationReviewDecision(input, options = {}
         resumption: input.resumption,
         callbackLanding: input.callbackLanding,
         targetCompletion: input.targetCompletion,
+        anchorEvidence: input.anchorEvidence,
         decidedAt,
     });
     return parseControllerImplementationReviewDecision({

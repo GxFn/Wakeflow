@@ -105,6 +105,18 @@ export interface ControllerImplementationReviewJudgment {
   readonly resumption: Readonly<ControllerReviewResumption> | null;
 }
 
+/**
+ * Controller 自己把一个验收锚点绑到本 Demand 已登记的托管证据上：needs-review 结果被 accept 的依据
+ * （§13.121 D7）。覆盖全部锚点、证据存在于本 Demand 由切片核对；这里只保证形状与去重。
+ */
+export interface ControllerReviewAnchorEvidence {
+  readonly anchorId: string;
+  readonly evidenceIds: readonly [
+    WakeflowDurableId<"evidence">,
+    ...WakeflowDurableId<"evidence">[],
+  ];
+}
+
 export interface ControllerImplementationReviewDecision extends ControllerImplementationReviewJudgment {
   readonly kind: typeof DECISION_KIND;
   readonly schemaVersion: typeof DECISION_SCHEMA_VERSION;
@@ -118,6 +130,8 @@ export interface ControllerImplementationReviewDecision extends ControllerImplem
   readonly callbackLanding: Readonly<ControllerReviewCallbackLanding> | null;
   /** 目标会话在结果之后的 Stop/turn-complete 记录；accept 必须具备。 */
   readonly targetCompletion: Readonly<ControllerReviewTargetCompletion> | null;
+  /** accept 一个 needs-review 结果时 Controller 的锚点→托管证据绑定；其它情形为 null（§13.121 D7）。 */
+  readonly anchorEvidence: readonly Readonly<ControllerReviewAnchorEvidence>[] | null;
   readonly decidedAt: UtcInstant;
   readonly decisionDigest: Sha256Digest;
 }
@@ -209,7 +223,8 @@ function id<
     | "target-task"
     | "window"
     | "task-package"
-    | "target-result",
+    | "target-result"
+    | "evidence",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
@@ -303,9 +318,17 @@ export function assertControllerImplementationReviewJudgment(
   }
 }
 
+/** 摘要依据：`anchorEvidence` 只在非 null 时进入，存量决定的摘要不变（§13.121 D7）。 */
+type DecisionBasis = Omit<
+  ControllerImplementationReviewDecision,
+  "decisionDigest" | "anchorEvidence"
+> & {
+  readonly anchorEvidence?: readonly Readonly<ControllerReviewAnchorEvidence>[];
+};
+
 function decisionBasis(
   value: Omit<ControllerImplementationReviewDecision, "decisionDigest">,
-): Omit<ControllerImplementationReviewDecision, "decisionDigest"> {
+): DecisionBasis {
   return {
     kind: DECISION_KIND,
     schemaVersion: DECISION_SCHEMA_VERSION,
@@ -325,8 +348,33 @@ function decisionBasis(
     resumption: value.resumption,
     callbackLanding: value.callbackLanding,
     targetCompletion: value.targetCompletion,
+    ...(value.anchorEvidence === null ? {} : { anchorEvidence: value.anchorEvidence }),
     decidedAt: value.decidedAt,
   };
+}
+
+function anchorEvidenceOf(
+  value: DecisionWire["anchorEvidence"],
+): readonly Readonly<ControllerReviewAnchorEvidence>[] | null {
+  if (value === undefined || value === null) return null;
+  const entries = value.map((entry, index) => {
+    const evidenceIds = entry.evidenceIds.map((evidenceId, position) =>
+      id(evidenceId, "evidence", `$/anchorEvidence/${index}/evidenceIds/${position}`),
+    );
+    const [first, ...rest] = evidenceIds;
+    if (first === undefined) fail("schema", `$/anchorEvidence/${index}/evidenceIds`);
+    if (new Set(evidenceIds).size !== evidenceIds.length) {
+      fail("relation", `$/anchorEvidence/${index}/evidenceIds`);
+    }
+    return Object.freeze({
+      anchorId: checkId(entry.anchorId, `$/anchorEvidence/${index}/anchorId`),
+      evidenceIds: Object.freeze([first, ...rest] as const),
+    });
+  });
+  if (new Set(entries.map((entry) => entry.anchorId)).size !== entries.length) {
+    fail("relation", "$/anchorEvidence");
+  }
+  return Object.freeze(entries);
 }
 
 function reviewedOf(wire: DecisionWire["reviewed"]): Readonly<ControllerReviewedTargetResult> {
@@ -382,6 +430,7 @@ export function parseControllerImplementationReviewDecision(
     "$/targetCompletion",
     fail,
   );
+  const anchorEvidence = anchorEvidenceOf(wire.anchorEvidence);
   const judgment: ControllerImplementationReviewJudgment = {
     decision: wire.decision,
     assessment: Object.freeze({
@@ -426,13 +475,23 @@ export function parseControllerImplementationReviewDecision(
       fail,
     ),
     targetCompletion,
+    anchorEvidence,
     decidedAt: instant(wire.decidedAt, "$/decidedAt"),
   });
+  // 锚点绑定只属于 accept；needs-review 结果的 accept 没有绑定就没有依据（§13.121 D7）。
+  if (
+    (anchorEvidence !== null && basis.decision !== "accept") ||
+    (basis.decision === "accept" &&
+      basis.reviewed.targetResultOutcome === "needs-review" &&
+      anchorEvidence === null)
+  ) {
+    fail("relation", "$/anchorEvidence");
+  }
   const decisionDigest = digest(wire.decisionDigest, "$/decisionDigest");
   if (computeCanonicalJsonSha256Digest(basis) !== decisionDigest) {
     fail("digest", "$/decisionDigest");
   }
-  return Object.freeze({ ...basis, decisionDigest });
+  return Object.freeze({ ...basis, anchorEvidence, decisionDigest });
 }
 
 /** 从Controller陈述、墙上时钟和单个新UUID创建审查决定。 */
@@ -484,6 +543,7 @@ export function createControllerImplementationReviewDecision(
     resumption: input.resumption,
     callbackLanding: input.callbackLanding,
     targetCompletion: input.targetCompletion,
+    anchorEvidence: input.anchorEvidence,
     decidedAt,
   });
   return parseControllerImplementationReviewDecision({

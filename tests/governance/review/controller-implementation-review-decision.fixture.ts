@@ -183,6 +183,7 @@ export function controllerImplementationReviewDecisionInput(
     resumption: null,
     callbackLanding: null,
     targetCompletion: decision === "accept" ? controllerReviewTargetCompletionFixture() : null,
+    anchorEvidence: null,
   });
 }
 

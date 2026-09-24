@@ -126,17 +126,22 @@ tool.
 ## Step 11 - Recording a decision
 
 Implementation results take `accept`, `rework`, `blocked` or `escalate`
-through `wakeflow_record_implementation_review_decision`. Accept requires a
-completed outcome and the target session's own completion record - you cannot
-accept work whose window never finished its turn.
+through `wakeflow_record_implementation_review_decision`. Accept requires the
+target session's own completion record - you cannot accept work whose window
+never finished its turn - and one of two groundings: a `completed` result,
+whose report already ties every anchor to managed evidence, or a
+`needs-review` result together with your own `anchorEvidence`, one entry per
+acceptance anchor naming the managed evidence you recorded for this Demand.
+An accept that leaves an anchor unbound, or names evidence this Demand does
+not hold, is refused.
 
 Rework names at least one `failed` independent check. The failed checks are
 exactly the corrections the target receives with the rework delivery, so a
 rework whose checks all passed is refused when recorded - it could never be
-delivered. When the work is right but the report is not - a `needs-review`
-result whose anchors are not tied to managed evidence is the common case -
-record the evidence first, then fail the check that names the report gap and
-ask for a `completed` re-import citing that evidence. Rework's
+delivered. Use rework when the change itself must be fixed. When the work is
+right and only the report lacks evidence - a `needs-review` result is the
+common case - do not send it back: record the evidence, verify each anchor
+yourself and accept with `anchorEvidence`. Rework's
 `implementationQuality` says what you found: `satisfactory` when the change is
 right and only the report is redone, `unverified` when you could not verify it,
 `defective` when the change itself is wrong. Accept stays `satisfactory` only.

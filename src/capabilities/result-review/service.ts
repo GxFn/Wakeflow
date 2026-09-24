@@ -97,6 +97,7 @@ import {
 } from "../../governance/result/test-target-result-report.js";
 import {
   createControllerImplementationReviewDecision,
+  type CreateControllerImplementationReviewDecisionInput,
   ControllerImplementationReviewDecisionError,
   type ControllerImplementationReviewDecision,
 } from "../../governance/review/controller-implementation-review-decision.js";
@@ -172,6 +173,7 @@ import {
   collectEvidenceReferences,
   deriveCallbackLanding,
   deriveImplementationAllowedDecisions,
+  type ImplementationAdmissionView,
   deriveImplementationDecisionBlockers,
   derivePrivacyRules,
   deriveResumptionBlockers,
@@ -1293,13 +1295,51 @@ function allowedDecisionsFor(
   testView: ReturnType<typeof testUnitView>,
   targetCompletion: ReviewEvidence["targetCompletion"],
   resumptionBasis: ReturnType<typeof resumptionBasisView>,
+  managedEvidenceIds: readonly string[],
 ) {
   if (resumptionBasis?.kind === "decision-recorded" && !resumptionBasis.answered) {
     return Object.freeze([]);
   }
   return testView === null
-    ? deriveImplementationAllowedDecisions({ outcome: unit.target.outcome, targetCompletion })
+    ? deriveImplementationAllowedDecisions(
+        implementationAdmissionView(unit, targetCompletion, managedEvidenceIds),
+      )
     : deriveTestAllowedDecisions(testView.admission);
+}
+
+/** 本 Demand 已登记的托管证据 id：needs-review 结果的 accept 只能绑定它们（§13.121 D7）。 */
+function managedEvidenceIdsOf(context: SliceContext): readonly string[] {
+  return Object.freeze(
+    (context.authority.loaded.aggregate.state.managedEvidence ?? []).map(
+      (entry) => entry.evidenceId,
+    ),
+  );
+}
+
+function implementationAdmissionView(
+  unit: ReviewUnit,
+  targetCompletion: ReviewEvidence["targetCompletion"],
+  managedEvidenceIds: readonly string[],
+): ImplementationAdmissionView {
+  return {
+    outcome: unit.target.outcome,
+    targetCompletion,
+    acceptanceAnchorIds: unit.target.taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId),
+    managedEvidenceIds,
+  };
+}
+
+function anchorEvidenceInputOf(
+  value: ImplementationReviewDecisionRequest["anchorEvidence"],
+): CreateControllerImplementationReviewDecisionInput["anchorEvidence"] {
+  if (value === undefined) return null;
+  return value.map((entry) => {
+    const [first, ...rest] = entry.evidenceIds.map(
+      (evidenceId) => evidenceId as WakeflowDurableId<"evidence">,
+    );
+    if (first === undefined) fail("invalid-request", "anchor-evidence", "$request.anchorEvidence");
+    return { anchorId: entry.anchorId, evidenceIds: [first, ...rest] as const };
+  });
 }
 
 async function inspectReview(
@@ -1378,6 +1418,7 @@ async function inspectReview(
         testView,
         evidence.targetCompletion,
         resumptionBasis,
+        managedEvidenceIdsOf(context),
       ),
       testSteps: testView === null ? null : testView.steps,
       attemptScope: testView === null ? null : testView.attemptScope,
@@ -1587,10 +1628,16 @@ async function executeImplementationDecision(
   assertFreshRevision(context, binding);
   const sources = await loadDecisionSources(context, request, "implementation");
   assertControllerAuthority(context, sources);
+  // 记录时未给绑定就是 null（缺失）；undefined 只留给允许集推导（§13.121 D7）。
   const blockers = deriveImplementationDecisionBlockers(
     request.decision,
-    { outcome: sources.unit.target.outcome, targetCompletion: sources.evidence.targetCompletion },
+    implementationAdmissionView(
+      sources.unit,
+      sources.evidence.targetCompletion,
+      managedEvidenceIdsOf(context),
+    ),
     request.independentChecks,
+    request.anchorEvidence ?? null,
   );
   if (blockers.length > 0) rejectWith(blockers, "$request.decision");
   let decision: Readonly<ControllerImplementationReviewDecision>;
@@ -1625,6 +1672,7 @@ async function executeImplementationDecision(
                 observedAt: sources.evidence.targetCompletion.observedAt,
               }
             : null,
+        anchorEvidence: anchorEvidenceInputOf(request.anchorEvidence),
       },
       decisionOptions(options),
     );

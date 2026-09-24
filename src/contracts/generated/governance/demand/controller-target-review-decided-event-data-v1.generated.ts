@@ -9,6 +9,7 @@
 export type WakeflowControllerImplementationReviewDecision = ({
 [k: string]: unknown | undefined
 } & {
+anchorEvidence?: (null | [AnchorEvidence, ...(AnchorEvidence)[]])
 kind: "WakeflowControllerImplementationReviewDecision"
 schemaVersion: 1
 targetReviewDecisionId: string
@@ -110,6 +111,14 @@ userDecision?: Escalation1
  */
 export interface WakeflowControllerTargetReviewDecidedEventDataV1 {
 decision: (WakeflowControllerImplementationReviewDecision | WakeflowControllerTestReviewDecision)
+}
+export interface AnchorEvidence {
+anchorId: string
+/**
+ * @minItems 1
+ * @maxItems 16
+ */
+evidenceIds: [string]|[string, string]|[string, string, string]|[string, string, string, string]|[string, string, string, string, string]|[string, string, string, string, string, string]|[string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]|[string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string]
 }
 export interface Reviewed {
 snapshotDigest: WakeflowSha256DigestText

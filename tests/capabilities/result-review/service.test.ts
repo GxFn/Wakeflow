@@ -21,6 +21,8 @@ import {
 } from "../../../src/kernel/work-claims.js";
 import {
   CODEX_DELIVERY_FACADE,
+  cleanupDeliveryWorkspaceFixture,
+  createDeliveryWorkspaceFixture,
   deliverFixtureTarget,
   withFixtureDemandRoot,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
@@ -31,8 +33,8 @@ import {
   type TestDeliveryWorkspaceFixture,
 } from "../../governance/delivery/test-delivery-workspace.fixture.js";
 import {
-  cleanupControllerImplementationReviewDecisionServiceFixture,
   CODEX_REVIEW_FACADE,
+  cleanupControllerImplementationReviewDecisionServiceFixture,
   createControllerImplementationReviewDecisionServiceFixture,
   currentFixtureStreamRevision,
   decideFixtureImplementation,
@@ -41,8 +43,13 @@ import {
   inspectFixtureReview,
   landFixtureCallback,
   landFixtureTargetCompletion,
+  loadFixtureTaskPackage,
+  readControllerImplementationReviewDecisionServiceSnapshot,
+  recordFixtureEvidence,
+  registerFixtureControllerWindow,
 } from "../../governance/review/controller-implementation-review-decision-service.fixture.js";
 import { implementationReviewJudgmentWire } from "../../governance/review/controller-implementation-review-decision.fixture.js";
+import { createImplementationTargetResultReportContentFixture } from "../../governance/result/implementation-target-result-report.fixture.js";
 import {
   cleanupControllerTestReviewDecisionServiceFixture,
   createControllerTestReviewDecisionServiceFixture,
@@ -888,5 +895,78 @@ test("product-defect 失败步骤只允许 escalate；escalate{product-defect} �
     });
   } finally {
     await cleanupTestDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+test("needs-review 结果在 Controller 把每个锚点绑到本 Demand 托管证据后可直接 accept；绑定缺失或不覆盖被拒（§13.121 D7）", async () => {
+  const workspace = await createDeliveryWorkspaceFixture();
+  try {
+    const controllerRoute = await registerFixtureControllerWindow(workspace);
+    const delivered = await deliverFixtureTarget(workspace);
+    const evidence = await recordFixtureEvidence(workspace);
+    const taskPackage = await loadFixtureTaskPackage(
+      workspace,
+      delivered.envelope.target.taskPackageId,
+    );
+    const anchorIds = taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId);
+    const needsReview = {
+      ...createImplementationTargetResultReportContentFixture(taskPackage, evidence),
+      outcome: "needs-review" as const,
+      anchorEvidence: [],
+      evidenceLocators: [],
+    };
+    const imported = await importFixtureImplementationResult(workspace, delivered, {
+      evidence,
+      content: needsReview,
+    });
+    await landFixtureTargetCompletion(workspace, workspace.route);
+    const inspection = await inspectFixtureReview(workspace, workspace.targetTaskId);
+    // 本 Demand 已有托管证据：评审单元把 accept 列进允许集，绑定在记录时核对。
+    deepEqual(inspection.reviewUnit.allowedDecisions, ["accept", "rework", "blocked", "escalate"]);
+    const fixture = Object.freeze({
+      ...workspace,
+      controllerRoute,
+      delivered,
+      envelope: delivered.envelope,
+      evidence,
+      imported,
+      inspection,
+      reviewSnapshot: await readControllerImplementationReviewDecisionServiceSnapshot(workspace),
+      decisionRequest: fixtureImplementationDecisionRequest(
+        workspace,
+        inspection,
+        imported.event.streamRevision,
+      ),
+    });
+    await rejects(
+      decideFixtureImplementation(fixture, {
+        idempotencyKey: "fixture-accept-needs-review-unbound",
+      }),
+      rejectedWith("anchor-evidence"),
+    );
+    await rejects(
+      decideFixtureImplementation(fixture, {
+        idempotencyKey: "fixture-accept-needs-review-wrong-anchor",
+        anchorEvidence: [{ anchorId: "ac-not-in-package", evidenceIds: [evidence.evidenceId] }],
+      }),
+      rejectedWith("anchor-evidence"),
+    );
+    const [firstAnchor, ...restAnchors] = anchorIds;
+    if (firstAnchor === undefined) throw new Error("fixture task package has no anchors");
+    const accepted = await decideFixtureImplementation(fixture, {
+      idempotencyKey: "fixture-accept-needs-review-bound",
+      anchorEvidence: [
+        { anchorId: firstAnchor, evidenceIds: [evidence.evidenceId] as [string] },
+        ...restAnchors.map((anchorId) => ({
+          anchorId,
+          evidenceIds: [evidence.evidenceId] as [string],
+        })),
+      ],
+    });
+    equal(accepted.status, "committed");
+    equal(accepted.decision.decision, "accept");
+    equal(accepted.target.phase, "accepted");
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(workspace);
   }
 });

@@ -56,6 +56,10 @@ test("concurrent async critical sections are serialized and lock residue is remo
         await new Promise<void>((resolve) => setTimeout(resolve, 2));
         completed += 1;
         active -= 1;
+      }, {
+        // 断言的是串行与残留清理，不是延迟：整套测试并行且机器繁忙时 2 s 默认等待会超时（§13.121）。
+        acquireTimeoutMilliseconds: 30_000,
+        retryDelayMilliseconds: 5,
       })
     )));
     equal(maximumActive, 1);

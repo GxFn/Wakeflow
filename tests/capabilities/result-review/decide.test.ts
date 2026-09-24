@@ -190,23 +190,31 @@ test("实现决定：accept 要求 completed 与完成证据；resumption 只接
     event: "stop" as const,
     observedAt: REPORTED_AT,
   };
-  deepEqual(
-    deriveImplementationAllowedDecisions({ outcome: "completed", targetCompletion: confirmed }),
-    ["accept", "rework", "blocked", "escalate"],
-  );
-  deepEqual(
-    deriveImplementationAllowedDecisions({
-      outcome: "completed",
-      targetCompletion: { status: "pending" },
-    }),
-    ["rework", "blocked", "escalate"],
-  );
-  deepEqual(
-    deriveImplementationAllowedDecisions({ outcome: "blocked", targetCompletion: confirmed }),
-    ["rework", "blocked", "escalate"],
-  );
+  const view = (
+    outcome: "completed" | "blocked" | "needs-review",
+    targetCompletion: Parameters<
+      typeof deriveImplementationAllowedDecisions
+    >[0]["targetCompletion"],
+    managedEvidenceIds: readonly string[] = [],
+  ) => ({ outcome, targetCompletion, acceptanceAnchorIds: ["ac-1", "ac-2"], managedEvidenceIds });
+  deepEqual(deriveImplementationAllowedDecisions(view("completed", confirmed)), [
+    "accept",
+    "rework",
+    "blocked",
+    "escalate",
+  ]);
+  deepEqual(deriveImplementationAllowedDecisions(view("completed", { status: "pending" })), [
+    "rework",
+    "blocked",
+    "escalate",
+  ]);
+  deepEqual(deriveImplementationAllowedDecisions(view("blocked", confirmed)), [
+    "rework",
+    "blocked",
+    "escalate",
+  ]);
   // rework 带上独立检查时至少一条 failed；不带检查（允许集推导）时不阻塞（§13.119）。
-  const needsReview = { outcome: "needs-review" as const, targetCompletion: confirmed };
+  const needsReview = view("needs-review", confirmed);
   deepEqual(deriveImplementationDecisionBlockers("rework", needsReview, [{ outcome: "passed" }]), [
     "rework-checks:no-failed",
   ]);
@@ -218,9 +226,49 @@ test("实现决定：accept 要求 completed 与完成证据；resumption 只接
     [],
   );
   deepEqual(deriveImplementationDecisionBlockers("rework", needsReview), []);
+  // needs-review 的 accept（§13.121 D7）：允许集只看本 Demand 有没有托管证据；记录时逐锚点核对绑定。
+  const E1 = "evidence_11111111-1111-4111-8111-111111111111";
+  const E2 = "evidence_22222222-2222-4222-8222-222222222222";
   deepEqual(deriveImplementationDecisionBlockers("accept", needsReview, [{ outcome: "passed" }]), [
-    "outcome:needs-review",
+    "anchor-evidence:no-managed-evidence",
   ]);
+  deepEqual(deriveImplementationAllowedDecisions(needsReview), ["rework", "blocked", "escalate"]);
+  const withEvidence = view("needs-review", confirmed, [E1]);
+  deepEqual(deriveImplementationAllowedDecisions(withEvidence), [
+    "accept",
+    "rework",
+    "blocked",
+    "escalate",
+  ]);
+  const passed = [{ outcome: "passed" as const }];
+  deepEqual(deriveImplementationDecisionBlockers("accept", withEvidence, passed, null), [
+    "anchor-evidence:missing",
+  ]);
+  deepEqual(
+    deriveImplementationDecisionBlockers("accept", withEvidence, passed, [
+      { anchorId: "ac-1", evidenceIds: [E1] },
+    ]),
+    ["anchor-evidence:uncovered:ac-2"],
+  );
+  deepEqual(
+    deriveImplementationDecisionBlockers("accept", withEvidence, passed, [
+      { anchorId: "ac-1", evidenceIds: [E1] },
+      { anchorId: "ac-2", evidenceIds: [E2] },
+      { anchorId: "ac-9", evidenceIds: [E1] },
+    ]),
+    [`anchor-evidence:unknown-evidence:${E2}`, "anchor-evidence:unknown-anchor:ac-9"],
+  );
+  deepEqual(
+    deriveImplementationDecisionBlockers("accept", withEvidence, passed, [
+      { anchorId: "ac-1", evidenceIds: [E1] },
+      { anchorId: "ac-2", evidenceIds: [E1] },
+    ]),
+    [],
+  );
+  deepEqual(
+    deriveImplementationDecisionBlockers("accept", view("blocked", confirmed, [E1]), passed),
+    ["outcome:blocked"],
+  );
   const reported = {
     status: "reported" as const,
     currentDecisionId: null,

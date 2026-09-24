@@ -3512,3 +3512,40 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **第四轮现场。** 先用新制品 reconcile 测试工作区（计划恰为一步 `asset:claude-code:tmux`，助手摘要 `32f4dbcd…`），只重启 Controller 窗口，Design 发布 `requirement`（28 字节的 `docs/wakeflow-smoke-round4.md`，七条验收标准），Controller `/wakeflow:next` 认领成 `demand_44a2bab7…` 后一句话跑完：规划 `target-task_5ca723b0…`（七个锚点）→ 投递经助手，助手输出第一次带 `landing`——`attempt: sent`、`readback: pending`、`landing: observed`（记录 `ca06c334…`，23:11:26Z）；`record_delivery_outcome` 自己查到同一条记录判 accepted，`hookRecordId` 相同 → 目标 `needs-review` 导入 → 回调经助手送进 Controller，目标会话里的助手输出同样 `landing: observed`（`533c1829…`），评审单元的回调落地记录一致 → 登记证据 → 带 `anchorEvidence` 的 accept（D7 第二次现场）→ 严格校验 14/14 → complete 归档修订 12。外部核对：归档 `0000000012` 27 个文件，第 4 号提交的投递结果 `accepted` 且 attempt 摘要与助手输出一致；`wakeflow_status` idle、board archived 4、无声明，`wakeflow_verify` 14/14；AlembicPlugin HEAD 仍 `7b2c53a`，四个冒烟文件都是未跟踪。前三轮目标会话里的 deliver 输出都没有 `landing`，本轮是第一次；两次回读仍是 pending（Claude Code 的 TUI 不回显粘贴原文），落地一律由 hook 记录证明。
 
 **残留。** 回读在 Claude Code 上从未 confirmed（首行子串永远看不到），它现在只是"屏幕摘要"这一条证据，是否改成识别 TUI 的粘贴指示或干脆只保留摘要，留到窗口与宿主那一轮；隐私扫描把探针转录里的两个裸 UUID（hook 记录 id）拦下（`privacy:bare-uuid`），Controller 删掉后重登记——按设计工作，但技能文本可以提醒"证据文件里不要写 hook 记录 id"；旧实现的多目标 group 替换、journal 前向恢复与 keep-live 三项按既有裁决不移植；Codex 宿主仍未做真实会话测试（未执行）。
+
+## 13.123 逐模块对齐第二轮：评审与证据——旧实现的已验证行为对照，一处技能文本补充，一次故意的失败路径现场（2026-09-24）
+
+**背景。** 第二轮按计划对照旧实现的评审、结果权威、证据与归档：`wakeflow-result-review-orchestration.mjs`（2428 行）、`wakeflow-target-result-authority.mjs`、`wakeflow-evidence-{importer,records,tree}.mjs`、`wakeflow-business-archive-{records,service}.mjs`，以及它们的九个测试文件（含 `evidence-mcp-surface`、`result-contract-invariants`、`pod-evidence`）。对照单位仍是旧测试名。新实现这一带在 §13.87–§13.90、§13.107、ADR-0012 已按函数级账本重切，本轮逐条核对可观察行为。
+
+**行为对照。**
+
+| 旧实现已验证的行为（测试名摘要） | 新实现 | 状态 |
+|---|---|---|
+| 导入已结算的 current 结果，最后释放精确租约，重放不加修订 | `import_target_result`：围栏 `claimDigest` 核对、导入即释放工作声明、幂等重放 | 同形 |
+| Test attempt 结果只能经精确 TestCard 授权导入 | 测试结果按任务包的 `testContract` 与 attempt 代际导入 | 同形 |
+| 创建精确 group 候选，Controller 验收作为独立评审事件提交 | 无候选制品：决定带评审单元摘要（`reviewUnitDigest`）与快照摘要，两个决定工具各一事件 | 有依据的重切（账本 338） |
+| rework 信封是新一轮；禁止跨轮 supersede；迟到结果留作历史 | rework → 新投递代际；另一把声明的围栏或 rejected 结局不能产生 TargetResult；历史决定进 `priorReviewHistory` | 同形 |
+| 多目标 redesign 决定与逐个替换包 | `redesign` 删除（ADR-0012），替换包走 `lineage: replacement` | 有依据的重切 |
+| group-ready 唤醒 Controller，不假装 group 评审完成 | 按目标回调，group 概念放弃 | 有依据的重切 |
+| Controller 回传：脱敏计划、一次不可变 run、rejected 停在 explicit-rearm-required、绑定替换后作废未发送信封 | 回调许可随导入返回；`rearm_delivery` 的回调重发按当前绑定重签（`executeCallbackReissue`）；旧绑定的许可被助手 `handle-mismatch` 拒 | 同形 |
+| TargetResult 权威：current 选择器、双向闭包、ready / blocked / missing / closed | `demand-result-review-snapshot.ts` + 评审单元 | 同形 |
+| 证据 preview 零写、完整可移植计划；apply 精确重放幂等；两进程一记录 | 捕获规划零写 + `planDigest`；发布事务 absent-only 创建；同内容再 apply 为 already-recorded | 同形 |
+| preview 拥有身份，一个证据 ID 不能被不同计划重绑 | 身份由内容派生（来源键 + 负载摘要），不同负载得到不同身份 | 同形（更强：同内容同身份） |
+| 来源区分 file / tree / HTTPS / Git locator | managed-path / observation / link / commit 四种来源；HTTPS 成为 `link`，Git 成为 `commit`，都是引用投影 | 有依据的重切 |
+| 根、中间、叶子符号链接、硬链接、特殊文件失败关闭 | 来源根与树成员：符号链接 `symlink`、特殊节点 `special-node` 失败关闭；硬链接不单独拒绝，改由两次树身份计算的 `source-changed` 漂移检测覆盖，发布阶段再核摘要 | 同形（链接政策换成漂移检测） |
+| 内容白名单、不透明审阅、隐私命中、固定上限拒绝且不泄露值 | 内容阻塞项：凭证永远阻塞，opaque 与非凭证命中在 reject 下阻塞、`controller-confirmed` 可确认；上限 256 文件 / 16 MiB 单文件 / 深度 16 与旧值同源 | 同形 |
+| 关系（≤ 256 条到 Demand 事件的引用） | 无独立关系记录：决定的 `anchorEvidence`（§13.121）与报告的锚点引用承担 | 有依据的重切 |
+| 恢复：journal / stage / root / event / state 前向完成，不回填缺失的 final root | 发布事务：journal、stage、Event、final 与健康闭包；Event 已提交后不重读 source，CAS 过期退休 partial stage | 同形 |
+| 篡改、孤儿根、重复身份阻断后续变更 | Root inventory 分类 journal / stage / final，健康权威要求 final 与 Event selector 一致 | 同形 |
+| 归档：TODO 行精确 CAS 删除；cancelled 可归档未取得目标的 Test card，completed 不可；隐私拒凭证、私有路径、裸 UUID，准入 typed ID | 完成 / 取消各是一个发布事务；完成要求实现目标全部 accepted（research 零目标除外）；归档负载隐私只拒凭证类，路径与 UUID 按白名单 | 同形 |
+| 归档恢复的各阶段边界收敛 | 单事务发布 + `recover` | 有依据的重切 |
+
+本轮没有发现需要移植的运行时行为。第四轮现场里隐私扫描把探针转录中的裸 UUID（hook 记录 id）拦下、Controller 删掉后重登记，是按设计工作；顺手在 Controller 的证据参考里加一句：裸 UUID 是可确认的非凭证命中，但更干净的做法是不要把 hook 记录 id、会话 id 写进要登记的文件，引用 typed id。
+
+**回归。** 只有技能文本改动；制品重建后 `agent-text-honesty`、`plugin-artifacts` 通过。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 全链通过（`test:typescript` 1013/1013，整门 302 s），`npm run smoke:artifacts` 两宿主全过，`git diff --check` 干净；提交 `7d19bdc8`。
+
+**第五轮现场（故意的失败路径）。** 为了让评审的非主路径也在真实宿主上跑一遍，第五轮是一次故意的失败路径：Design 按我的要求发布一份在当前仓库状态下自相矛盾的需求包（文件必须放进"已存在的" `docs/archive/`，同时禁止新建任何目录，而该目录并不存在；Design 如实把"目录不存在"写进了代码事实，并在落地方案里写了前置条件不成立就停下报告）。Controller `/wakeflow:next` 认领成 `demand_c59491c9…`、规划（任务包写明前置条件不成立时不建目录、以 blocked / no-changes 导入并照常回调）、投递 accepted（hook 记录 `7f23e79b…`，助手 `landing: observed`）→ 目标以 `blocked` 导入 `target-result_fd4a693b…`（`no-changes`），回调 landed，完成记录 confirmed → Controller 只读核对（目录确实不存在、全仓库没有新文件或新目录、基线四行未变）并把探针输出登记为证据 `evidence_eacb00fd…` → 记 **escalate**（`target-review-decision_baf2e28e…`，升级事件 `demand-event_212a0114…`，修订 7），Demand 进入 `decision-required`、owner 为 user、blocker `awaiting-decision`；Controller 给出四个选项并建议取消。我选 1：`wakeflow_continue_demand` 的 record-decision 把选项原文与我的话记入（修订 9）→ `wakeflow_cancel_demand` 预览 8 门全过（含 work-claims-released 与 payload-privacy）→ 应用为 `cancelled`（修订 10），归档 `archives/demand_c59491c9…/0000000010`（14 个文件，89,461 字节），需求包 `withdrawn`。外部核对：无活动 Demand、board archived 4 / withdrawn 1、无声明，`wakeflow_verify` 14/14，AlembicPlugin 未出现 `docs/archive/`，仍只有前四轮的四个未跟踪文件。至此评审的 accept、rework（satisfactory）、escalate + 用户决定、cancel 四条路径都在真实宿主上走过；blocked 决定与 continue_demand 重开尚未现场跑。
+
+**残留。** blocked 决定（带 resumption 的再决定）与 `continue_demand` 重开已完成的 Demand 两条路径只有切片测试，没有现场；证据的 `link` / `commit` / `observation` 三种引用来源与 `controller-confirmed` 内容审阅同样只有测试；旧实现的证据"关系"记录（≤ 256 条）按现行设计不移植；Codex 宿主仍未做真实会话测试（未执行）。

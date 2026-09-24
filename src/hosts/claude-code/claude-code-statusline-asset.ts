@@ -4,8 +4,8 @@ import {
 } from "../../contracts/vocabulary/wakeflow-config-identity.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { hostRuntimeRootRef } from "../../kernel/layout.js";

@@ -45,13 +45,13 @@
 | 项 | Codex | Claude Code |
 | --- | --- | --- |
 | 指令文件 | `AGENTS.md` | `CLAUDE.md` |
-| 宿主运行目录 | `runtime/hosts/codex/`：window-bindings、window-runtime 投影、pods（worktree 回执，2026-09-10 pod 切片 9 取代 evidence/pods）、keep-live | `runtime/hosts/claude-code/`：以上加 window-locators、assets/statusline.mjs、activity-monitor、temp/prompts |
+| 宿主运行目录 | `runtime/hosts/codex/`：window-bindings、window-runtime 投影、pods（worktree 回执，2026-09-10 pod 切片 9 取代 evidence/pods）、keep-live | `runtime/hosts/claude-code/`：以上加 window-locators、assets/statusline.mjs 与 assets/tmux.mjs（2026-09-24 §13.117 D4）、activity-monitor、temp/prompts |
 | settings | 不适用 | `permissions.allow` 写 4 条：`mcp__plugin_wakeflow_wakeflow`、`Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`；`settings.local.json` 只写 statusLine 命令；`.claude/` 目录 0700 |
 | statusline | 不适用 | 安装 `statusline.mjs` 0600，命令带 base64url 编码的根路径；规划前做一次有界 smoke 并检查敏感内容 |
 | 激活范围 | 永远 `unknown`，无人值守 `forbidden`，Codex 没有安装覆盖范围 API | 按 settings 来源分 per-workspace、host-wide、unknown |
-| 窗口创建 | `create_thread`，Agent 原生工具 | `wakeflow-claude-host launch-window`，旧为 CLI，新边界下由 Agent 执行 tmux |
+| 窗口创建 | `create_thread`，Agent 原生工具 | `wakeflow-claude-host launch-window`，旧为 CLI，新边界下由 Agent 调用维护发布的 tmux 助手资产执行（§13.117 D4） |
 
-**现 TS 状态**：`wakeflow_maintain_workspace` 三个 action 与 preview、apply、recover 齐全；apply 为同一 `action` 与 `request` 加 `planDigest`，服务端重算计划并比对摘要，漂移以 `precondition-failed/plan-drift` 拒绝（2026-09-04 L0.4 试点，切片 `src/capabilities/workspace/maintain-workspace.ts`；ADR-0004 的 `planRef` 在初始化场景退化为原请求本身，因为初始化前没有可写的 Wakeflow 根，preview 必须零写）；结果带 `plan`、`planDigest` 与 `next`；fresh selection 的 ID 分配改为由 selection 摘要确定性派生，apply 重发同一 selection 才能重算出同一摘要；`selection` 领域合同在 `src/configuration/wakeflow-fresh-config-selection.ts`；物化步骤十五种：local-protocol、shared-coordination、active-layout、requirement-board、fresh 活动投影、ledger、窗口运行时、host-capability、support-root（含 Design `drafts/`、Test `harnesses/` 与 `fixtures/` scaffold，2026-09-21）、工作区 `.gitignore`、支撑面 `.gitignore`（各宿主本机设置路径，2026-09-21）、程序指令、外部指令、支撑面记忆、config；宿主 profile 编译为空目录声明；Claude settings 写入把三条 Bash 规则标为 `WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES`，只保留 MCP 规则；statusline 资产只声明文件名，没有写入；根指令文件采用 managed-block；`instructionManagement: managed-block` 的产品仓库与 external-owned managed-block 支撑面在各自根的宿主指令文件里得到同一机制的托管块（`workspace/managed-integration/wakeflow-external-instruction-*`，物化步骤 `recompose-external-instruction`，2026-09-21，gate-log §13.106）；没有 setup、cli、bootstrap 入口；工作区根必须本身是 Git 仓库（托管 `.gitignore` 块靠 Git 判定），否则 preview 报 `gitignore-git-repository`——2026-09-21 在真实工作区 `WakeflowTestWorkspace` 上首次初始化时暴露，之前统一报成 `gitignore-git`（gate-log §13.115）。
+**现 TS 状态**：`wakeflow_maintain_workspace` 三个 action 与 preview、apply、recover 齐全；apply 为同一 `action` 与 `request` 加 `planDigest`，服务端重算计划并比对摘要，漂移以 `precondition-failed/plan-drift` 拒绝（2026-09-04 L0.4 试点，切片 `src/capabilities/workspace/maintain-workspace.ts`；ADR-0004 的 `planRef` 在初始化场景退化为原请求本身，因为初始化前没有可写的 Wakeflow 根，preview 必须零写）；结果带 `plan`、`planDigest` 与 `next`；fresh selection 的 ID 分配改为由 selection 摘要确定性派生，apply 重发同一 selection 才能重算出同一摘要；`selection` 领域合同在 `src/configuration/wakeflow-fresh-config-selection.ts`；物化步骤十五种：local-protocol、shared-coordination、active-layout、requirement-board、fresh 活动投影、ledger、窗口运行时、host-capability、support-root（含 Design `drafts/`、Test `harnesses/` 与 `fixtures/` scaffold，2026-09-21）、工作区 `.gitignore`、支撑面 `.gitignore`（各宿主本机设置路径，2026-09-21）、程序指令、外部指令、支撑面记忆、config；宿主 profile 编译为空目录声明；Claude settings 写入把三条 Bash 规则标为 `WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES`，只保留 MCP 规则，工作区根自 2026-09-24 起另加一条只放行 tmux 助手这一条调用的规则（§13.117 D5）；statusline 与 tmux 助手两份资产由维护写入 `operations/assets/`（0600，§13.94 D6、§13.117 D4）；根指令文件采用 managed-block；`instructionManagement: managed-block` 的产品仓库与 external-owned managed-block 支撑面在各自根的宿主指令文件里得到同一机制的托管块（`workspace/managed-integration/wakeflow-external-instruction-*`，物化步骤 `recompose-external-instruction`，2026-09-21，gate-log §13.106）；没有 setup、cli、bootstrap 入口；工作区根必须本身是 Git 仓库（托管 `.gitignore` 块靠 Git 判定），否则 preview 报 `gitignore-git-repository`——2026-09-21 在真实工作区 `WakeflowTestWorkspace` 上首次初始化时暴露，之前统一报成 `gitignore-git`（gate-log §13.115）。
 
 **实现判断**：
 
@@ -195,7 +195,7 @@
 | --- | --- | --- |
 | Q1 根指令文件 | 用户确认：工作区根不存在该文件时新建，存在时追加 Wakeflow 规则。实现为托管块；新建文件的内容即托管块本身 | 1.1 产物表；L1 managed-integration 切片 |
 | Q2 嵌套守卫 | 实施者判断：fresh-initialize 扫描祖先目录，发现上级 `wakeflow.config.json` 即拒绝 | 1.1 不变量 |
-| Q3 Claude 权限 | 用户确认：拒绝宽泛规则，只写 MCP 规则 `mcp__plugin_wakeflow_wakeflow`；tmux 权限由用户在 Claude Code 内自行授予，skills 文本提示 | 1.1 宿主差异；hosts/claude-code settings |
+| Q3 Claude 权限 | 用户确认：拒绝宽泛规则，只写 MCP 规则 `mcp__plugin_wakeflow_wakeflow`；tmux 权限由用户在 Claude Code 内自行授予，skills 文本提示。2026-09-24 §13.117 D5（用户确认）：tmux 操作改由维护发布的助手资产承担，工作区根另写一条只放行该助手这一条调用的规则 `Bash(node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs *)`；支撑面仍只有 MCP 一条，任何宽泛规则仍不写 | 1.1 宿主差异；hosts/claude-code settings |
 | Q4 statusline | 用户确认：保留，列入 L1 后期切片 | 1.1 宿主差异 |
 | Q5 呈现语言 | 用户确认：`en \| zh-Hans`，不保留 `auto`。旧值处理与 Q10 联动 | 1.2 |
 | Q6 ledgerRoot | 用户确认：初始化后不可变，reconfigure 直接拒绝 | 1.3 |

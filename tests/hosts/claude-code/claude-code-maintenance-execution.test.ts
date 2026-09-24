@@ -3,13 +3,14 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
-  claudeCodeMaintenanceCapability,
   CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER,
+  claudeCodeMaintenanceCapability,
 } from "../../../src/hosts/claude-code/claude-code-maintenance-capability.js";
 import {
   executeClaudeCodeMaintenanceExecution,
@@ -19,10 +20,6 @@ import {
 import {
   WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
   CLAUDE_CODE_STATUSLINE_ASSET_REF,
@@ -34,8 +31,29 @@ import {
   CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
 } from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import {
+  CLAUDE_CODE_TMUX_ASSET_DIGEST,
+  CLAUDE_CODE_TMUX_ASSET_REF,
+  WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
+} from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
+import { CLAUDE_CODE_TMUX_ASSET_OPERATION_ID } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
+import {
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
   codexWorkspaceHostResourceProfile,
 } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import {
+  createWakeflowMaintenanceExecutionIntent,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
+import {
+  publishWakeflowMaintenanceExecutionIntent,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
+import {
+  WakeflowMaintenanceExecutionPreviewError,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-preview.js";
+import {
+  WakeflowMaintenanceExecutionTransactionError,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import {
   withWakeflowMaintenanceGate,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
@@ -47,18 +65,6 @@ import {
   checkpointWakeflowMaintenanceJournal,
   publishPreparedWakeflowMaintenanceJournal,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
-import {
-  WakeflowMaintenanceExecutionPreviewError,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-preview.js";
-import {
-  createWakeflowMaintenanceExecutionIntent,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
-import {
-  publishWakeflowMaintenanceExecutionIntent,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
-import {
-  WakeflowMaintenanceExecutionTransactionError,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import {
   parseWakeflowMaintenanceOperationId,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
@@ -137,7 +143,7 @@ test("Claude aggregate preview preserves cancellation as an operation outcome", 
   );
 });
 
-test("Claude aggregate transaction publishes three portable settings, the statusline asset and its local settings entry before Config", async (t) => {
+test("Claude aggregate transaction publishes three portable settings, the two assets and the local settings entry before Config", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
@@ -146,20 +152,24 @@ test("Claude aggregate transaction publishes three portable settings, the status
     input,
   );
   equal(plan.status, "ready");
-  // 三条 portable settings、一条状态栏资产、一条本地设置条目；按标识排序资产在倒数第二（§13.94 D6）。
-  equal(plan.hostContribution?.operations.length, 5);
-  const statusline = plan.hostContribution?.operations.at(-2);
-  const settings = plan.hostContribution?.operations.at(-1);
+  // 三条 portable settings、状态栏资产、本地设置条目、tmux 助手资产；按标识排序（§13.94 D6，§13.117 D4）。
+  equal(plan.hostContribution?.operations.length, 6);
+  const statusline = plan.hostContribution?.operations.at(-3);
+  const settings = plan.hostContribution?.operations.at(-2);
+  const tmuxAsset = plan.hostContribution?.operations.at(-1);
   equal(settings?.operationId, CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID);
   equal(settings?.operationKind, "statusline-settings");
   equal(settings?.sourceDigest, null);
   equal(statusline?.operationId, CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_ID);
   equal(statusline?.operationKind, "statusline-asset");
   equal(statusline?.targetDigest, CLAUDE_CODE_STATUSLINE_ASSET_DIGEST);
+  equal(tmuxAsset?.operationId, CLAUDE_CODE_TMUX_ASSET_OPERATION_ID);
+  equal(tmuxAsset?.operationKind, "tmux-asset");
+  equal(tmuxAsset?.targetDigest, CLAUDE_CODE_TMUX_ASSET_DIGEST);
   equal(plan.steps.at(-1)?.stepId, "authority:config");
   equal(plan.steps.filter((entry) => (
     entry.boundary === "host-capability"
-  )).length, 5);
+  )).length, 6);
 
   const completed = await executeClaudeCodeMaintenanceExecution(
     workspace.root,
@@ -171,13 +181,19 @@ test("Claude aggregate transaction publishes three portable settings, the status
   equal(completed.operationId, OPERATION_ID);
   equal(completed.stepReceipts.filter((entry) => (
     entry.boundary === "host-capability"
-  )).length, 5);
+  )).length, 6);
   const assetPath = path.join(
     workspace.absolutePath,
     ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/"),
   );
   equal(statSync(assetPath).mode & 0o777, 0o600);
   equal(computeSha256Digest(readFileSync(assetPath)), CLAUDE_CODE_STATUSLINE_ASSET_DIGEST);
+  const tmuxAssetPath = path.join(
+    workspace.absolutePath,
+    ...CLAUDE_CODE_TMUX_ASSET_REF.split("/"),
+  );
+  equal(statSync(tmuxAssetPath).mode & 0o777, 0o600);
+  equal(computeSha256Digest(readFileSync(tmuxAssetPath)), CLAUDE_CODE_TMUX_ASSET_DIGEST);
   // 本地设置只有 statusLine 一键，命令指向资产并带 base64url 的根；文件 0600（忽略的私有文件）。
   const localSettingsPath = path.join(
     workspace.absolutePath,
@@ -190,9 +206,14 @@ test("Claude aggregate transaction publishes three portable settings, the status
       command: claudeCodeStatuslineCommand(workspace.root.absolutePath),
     },
   });
-  for (const root of [workspace.absolutePath, "Design", "Test"].map((entry) => (
-    path.isAbsolute(entry) ? entry : path.join(workspace.absolutePath, entry)
-  ))) {
+  // 工作区根多一条只放行 tmux 助手的规则（§13.117 D5）；支撑面仍只有 MCP 一条，且没有任何 Bash 规则。
+  deepEqual(settingsPermission(workspace.absolutePath), [
+    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+    WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
+  ]);
+  equal(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE.includes(" *)"), true);
+  equal(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE.startsWith("Bash(node .wakeflow-local/"), true);
+  for (const root of ["Design", "Test"].map((entry) => path.join(workspace.absolutePath, entry))) {
     deepEqual(settingsPermission(root), [
       WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
     ]);
@@ -333,6 +354,11 @@ test("recovery replays only the affected Claude operation from the exact journal
     existsSync(path.join(workspace.absolutePath, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/"))),
     true,
     "recovery installs the statusline asset after the interrupted settings operation",
+  );
+  equal(
+    existsSync(path.join(workspace.absolutePath, ...CLAUDE_CODE_TMUX_ASSET_REF.split("/"))),
+    true,
+    "recovery installs the tmux helper asset too",
   );
   equal(
     existsSync(path.join(workspace.absolutePath, ...CLAUDE_CODE_LOCAL_SETTINGS_REF.split("/"))),

@@ -2,10 +2,10 @@ import {
   applyEdits,
   findNodeAtLocation,
   getNodeValue,
-  modify,
-  parseTree,
   type Node as JsonNode,
+  modify,
   type ParseError,
+  parseTree,
 } from "jsonc-parser";
 
 import {
@@ -13,16 +13,18 @@ import {
   type Sha256Digest,
 } from "../../foundation/crypto/sha256.js";
 import {
-  parseJsonValue,
-  JsonValueError,
   type JsonObject,
+  JsonValueError,
+  parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "./claude-code-tmux-asset.js";
 
 /**
  * Wakeflow Host / Claude Code：`.claude/settings.json` 的权限最小编辑。
  *
- * 新 TS 只拥有 Wakeflow plugin MCP server 的一条 allow entry；不写入旧项目的
+ * 新 TS 只拥有 Wakeflow 自己的 allow entry：每个根都有 plugin MCP server 的一条，工作区根
+ * 另有精确到 tmux 助手这一条调用的一条（§13.117 D5）；不写入旧项目的
  * `Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`。本模块以严格 JSON 模式解析并拒绝
  * 注释、尾逗号、重复键和类型冲突，再用 `jsonc-parser` 只编辑
  * `permissions.allow`，保留其他用户字段及其原始表示。
@@ -36,6 +38,22 @@ export const WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES = Object.freeze([
   "Bash(tmux *)",
   "Bash(git *)",
 ] as const);
+
+const DEFAULT_RULES: readonly string[] = Object.freeze([
+  WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+]);
+
+/** 每种根拥有的 allow 规则：支撑面只有 MCP 一条，工作区根多一条 tmux 助手调用。 */
+export function claudeCodePortableSettingsRulesFor(
+  rootKind: "program" | "support-surface",
+): readonly string[] {
+  return rootKind === "program"
+    ? Object.freeze([
+        WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+        WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
+      ])
+    : DEFAULT_RULES;
+}
 
 export type ClaudeCodePortableSettingsTransitionStatus =
   | "current"
@@ -151,49 +169,69 @@ function sourceFormatting(text: string) {
   };
 }
 
-function managedAllowEntries(existing: readonly string[]): readonly string[] {
-  const firstManagedIndex = existing.indexOf(
-    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-  );
-  if (firstManagedIndex < 0) {
-    return Object.freeze([
-      ...existing,
-      WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-    ]);
-  }
+/** 用户条目原位保留；每条托管规则只留第一次出现，缺席的按规则顺序追加到末尾。 */
+function managedAllowEntries(
+  existing: readonly string[],
+  rules: readonly string[],
+): readonly string[] {
+  const managed = new Set(rules);
+  const emitted = new Set<string>();
   const result: string[] = [];
-  let emittedManaged = false;
   for (const entry of existing) {
-    if (entry !== WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE) {
+    if (!managed.has(entry)) {
       result.push(entry);
-    } else if (!emittedManaged) {
+    } else if (!emitted.has(entry)) {
       result.push(entry);
-      emittedManaged = true;
+      emitted.add(entry);
     }
+  }
+  for (const rule of rules) {
+    if (!emitted.has(rule)) result.push(rule);
   }
   return Object.freeze(result);
 }
 
-function desiredCreateText(): string {
+function desiredCreateText(rules: readonly string[]): string {
   return `${JSON.stringify({
     permissions: {
-      allow: [WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE],
+      allow: [...rules],
     },
   }, null, 2)}\n`;
+}
+
+function parseRules(value: unknown): readonly string[] {
+  if (value === undefined) return DEFAULT_RULES;
+  if (
+    !Array.isArray(value)
+    || value.length === 0
+    || value.some((entry) => typeof entry !== "string" || entry.length === 0)
+    || new Set(value).size !== value.length
+    || value.some((entry) => (
+      WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(
+        entry as (typeof WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES)[number],
+      )
+    ))
+  ) {
+    failInput("$rules");
+  }
+  return Object.freeze([...(value as readonly string[])]);
 }
 
 /**
  * 从 absent 或现有严格 JSON 文本计算最小 permissions.allow 变化。
  * `null` 明确表示目标文件不存在；空字符串是非法现有文件，不会被当成 absent。
+ * `rules` 是这个根拥有的托管规则，缺省只有 MCP 一条。
  */
 export function planClaudeCodePortableSettingsTransition(
   sourceTextValue: unknown,
+  rulesValue?: unknown,
 ): Readonly<ClaudeCodePortableSettingsTransition> {
   if (sourceTextValue !== null && typeof sourceTextValue !== "string") {
     failInput("$sourceText");
   }
+  const rules = parseRules(rulesValue);
   if (sourceTextValue === null) {
-    const desiredText = desiredCreateText();
+    const desiredText = desiredCreateText(rules);
     return Object.freeze({
       kind: "ClaudeCodePortableSettingsTransition",
       status: "create",
@@ -244,7 +282,7 @@ export function planClaudeCodePortableSettingsTransition(
   ))) {
     return blocked("legacy-broad-permission-present", sourceDigest);
   }
-  const desiredAllow = managedAllowEntries(existingAllow);
+  const desiredAllow = managedAllowEntries(existingAllow, rules);
   if (
     existingAllow.length === desiredAllow.length
     && existingAllow.every((entry, index) => entry === desiredAllow[index])

@@ -419,12 +419,28 @@ async function observeHostAsset(root, host, currentHostId, signal) {
             hostId: host.hostId,
             status: "not-applicable",
             settings: "not-applicable",
+            companion: null,
             issue: null,
         });
     }
     const asset = await observeAssetFile(root, host, host.statuslineAsset, signal);
     const settings = await observeSettingsEntry(root, host.statuslineAsset.settings, signal);
-    return Object.freeze({ hostId: host.hostId, status: asset.status, settings, issue: asset.issue });
+    let status = asset.status;
+    let issue = asset.issue;
+    let companion = null;
+    // 状态栏资产先判；它 current 时再按声明顺序看伴随资产，第一份不 current 的决定整票（§13.117 D4）。
+    if (status === "current") {
+        for (const entry of host.statuslineAsset.companions) {
+            const observed = await observeAssetFile(root, host, entry, signal);
+            if (observed.status === "current")
+                continue;
+            status = observed.status;
+            issue = observed.issue;
+            companion = entry.fileName;
+            break;
+        }
+    }
+    return Object.freeze({ hostId: host.hostId, status, settings, companion, issue });
 }
 /**
  * 一个宿主的窗口运行投影：与对账用同一份重算与判定，读不出只让本宿主这一组不可用。

@@ -8,6 +8,7 @@
   "files": [
     "claude-code-agent-text-profile.ts",
     "claude-code-hook-fragment.ts",
+    "claude-code-host-asset-operation.ts",
     "claude-code-maintenance-capability.ts",
     "claude-code-maintenance-execution.ts",
     "claude-code-portable-settings-composition.ts",
@@ -17,6 +18,8 @@
     "claude-code-statusline-asset-operation.ts",
     "claude-code-statusline-asset.ts",
     "claude-code-statusline-settings-operation.ts",
+    "claude-code-tmux-asset-operation.ts",
+    "claude-code-tmux-asset.ts",
     "claude-code-window-host-identity-profile.ts",
     "wakeflow-workspace-host-resource-profile.ts"
   ],

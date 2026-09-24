@@ -629,6 +629,18 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
     ),
     ["fail", "claude-code:drift"],
   );
+  // 伴随资产（tmux 助手）出问题时 code 带文件名，让人分得清是哪一份（§13.117 D4）。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        assets: [
+          { hostId: "claude-code", status: "missing", settings: "current", companion: "tmux.mjs" },
+        ],
+      }),
+      "host-settings-assets",
+    ),
+    ["fail", "claude-code:tmux.mjs:missing"],
+  );
   deepEqual(
     verdictOf(
       healthyFacts({

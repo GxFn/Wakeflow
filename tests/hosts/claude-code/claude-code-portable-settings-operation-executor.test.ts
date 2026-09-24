@@ -2,37 +2,32 @@ import { equal } from "node:assert/strict";
 import {
   existsSync,
   lstatSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { type TestContext, test } from "node:test";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
   planClaudeCodePortableSettingsComposition,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-composition.js";
 import {
-  executeClaudeCodePortableSettingsOperation,
   ClaudeCodePortableSettingsOperationExecutionError,
   type ClaudeCodePortableSettingsOperationExecutionErrorReason,
+  executeClaudeCodePortableSettingsOperation,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-operation-executor.js";
 import {
   CLAUDE_CODE_PORTABLE_SETTINGS_REF,
@@ -41,8 +36,12 @@ import {
   planClaudeCodePortableSettingsTransition,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
 import {
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
   createMinimalWakeflowConfig,
 } from "../../configuration/wakeflow-config.fixture.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 
 async function fixture(t: TestContext) {
   const absolutePath = mkdtempSync(path.join(

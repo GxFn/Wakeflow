@@ -1,3 +1,5 @@
+import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "./claude-code-tmux-asset.js";
+
 /**
  * Wakeflow Host / Claude Code：agent 面文本的宿主取值表（gate-log §13.99 D3、D9）。
  *
@@ -40,13 +42,27 @@ export const CLAUDE_CODE_AGENT_TEXT_COMMANDS_INCLUDED = true;
 
 const INSTRUCTION_FILE = "CLAUDE.md";
 
+/** 助手的调用前缀：从工作区根用 node 调用，与权限规则同一字符串（§13.117 D4、D5）。 */
+const TMUX_HELPER: string = CLAUDE_CODE_TMUX_ASSET_COMMAND;
+
 const WINDOW_LAUNCH =
-  "open a tmux window at the root the intent names, start `claude` in it with the " +
-  "parameters it lists, and let the session finish starting before you read its id.";
+  "pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect " +
+  "returns, or the maintenance result's entry for that window) into the tmux helper, run " +
+  `from the workspace root: \`${TMUX_HELPER} launch --window <windowId>\`. The helper opens ` +
+  "the tmux window at the intent's root, starts `claude` with the listed parameters and a " +
+  "fresh session id, waits for the session-start hook record, and prints the creation " +
+  "observation to register verbatim. Your own Controller window uses `self` instead of " +
+  "`launch`; it reads the pane and the session id from the environment Claude Code gives " +
+  "its shell. After each registration run `mark --window <windowId>` so the tmux window " +
+  "carries the five Wakeflow options; `panes` prints the tmux-panes observation, and " +
+  "`close --window <windowId>` prints the closure evidence a decommission needs.";
 
 const DELIVERY_ACTION =
-  "paste the permit's prompt into the target window's pane and press Return, once, " +
-  "then capture that pane a single time.";
+  "pipe the permit's prompt into the tmux helper, run from the workspace root: " +
+  `\`${TMUX_HELPER} deliver --window <windowId> --handle-digest <the permit's handleDigest>\`. ` +
+  "It checks the pane against the locator and the handle digest, pastes the prompt, presses " +
+  "Return once and captures the pane once, then prints the `attempt` and `readback` to " +
+  "record verbatim.";
 
 const WORKTREE_LAUNCH =
   "run `git worktree add` yourself at the path the intent names, or let the host make " +
@@ -69,6 +85,15 @@ const HOST_TRUST_STEPS_EN = [
   "`wakeflow_maintain_workspace` writes the status line command into a managed block in",
   "`settings.local.json`; that block belongs to Wakeflow, and a `statusLine` you rewrite",
   "yourself is reported as a difference the next time the workspace is reconciled.",
+  "",
+  "Start the Controller inside tmux: `tmux new-session -s wakeflow -c <workspace root>`,",
+  "then `claude` in that window. Maintenance installs a tmux helper at",
+  "`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`; the Controller",
+  "opens every other window through it, registers its own window from the pane and session",
+  "id Claude Code exports to its shell, and delivers prompts through it. Maintenance also",
+  "writes one precise allow rule for that helper into the workspace root's",
+  "`.claude/settings.json`, so the helper runs without a permission prompt; nothing",
+  "broader such as `Bash(tmux *)` is written.",
 ].join("\n");
 
 const HOST_TRUST_STEPS_ZH = [
@@ -76,6 +101,13 @@ const HOST_TRUST_STEPS_ZH = [
   "与状态栏都不运行：没有会话被观察到，投递也拿不到落地证据。状态栏命令由",
   "`wakeflow_maintain_workspace` 写进 `settings.local.json` 的托管块；那个块归 Wakeflow",
   "所有，你自己改写 `statusLine` 会在下一次对账里被报成差异。",
+  "",
+  "在 tmux 里启动 Controller：`tmux new-session -s wakeflow -c <工作区根>`，然后在那个窗口里",
+  "运行 `claude`。维护会把一个 tmux 助手装到",
+  "`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`；Controller 用它开",
+  "其他所有窗口、用 Claude Code 交给 shell 的 pane 与 session id 登记自己的窗口、也用它投递",
+  "prompt。维护还会往工作区根的 `.claude/settings.json` 写一条只放行这个助手的 allow 规则，",
+  "助手因此不弹权限；不会写 `Bash(tmux *)` 之类更宽的规则。",
 ].join("\n");
 
 /** 六个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致。 */

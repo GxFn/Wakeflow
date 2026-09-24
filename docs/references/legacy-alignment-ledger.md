@@ -167,13 +167,13 @@
 | `claude: wakeflow-claude-activity.mjs` | 2627 | tmux 活动监视与安全 prompt 临时文件 | 无；宿主 hook 观察取代 | dropped | 能力卡 10 Q3、Q4，ADR-0009 |
 | `claude: wakeflow-claude-decommission.mjs` | 662 | Claude 窗口退役计划与执行 | `wakeflow_register_window_binding` 的 `replace`；宿主关闭动作由 Agent 执行 | recut | TSD-12 |
 | `claude: wakeflow-claude-host.mjs` | 357 | Claude 宿主命令路由（target-delivery、controller-return） | 无；宿主动作由 Agent 按技能执行 | dropped | TSD-12 |
-| `claude: wakeflow-claude-lifecycle.mjs` | 1101 | tmux 窗口启动、恢复、改标题、排列 | 启动意图内容 `workspace/window-runtime/wakeflow-window-launch-intent.ts` 加 Claude 身份 profile；执行由 Agent | recut | TSD-12；技能文本 `{{windowLaunch}}` |
+| `claude: wakeflow-claude-lifecycle.mjs` | 1101 | tmux 窗口启动、恢复、改标题、排列 | 启动意图内容 `workspace/window-runtime/wakeflow-window-launch-intent.ts` 加 Claude 身份 profile；执行由 Agent 调用维护发布的 tmux 助手资产 `hosts/claude-code/claude-code-tmux-asset.ts`（`launch`/`self`/`mark`/`panes`/`close`，旧序列原样：has-session、new-session/new-window、automatic-rename off、五个窗口选项、list-panes、kill-window；§13.117 D4） | recut | TSD-12；技能文本 `{{windowLaunch}}`；resume、retitle、arrange 仍不提供 |
 | `claude: wakeflow-claude-locator.mjs` | 2030 | tmux 坐标 locator 与逐窗口宿主操作互斥 | 坐标随绑定由 Agent 观察交回；互斥语义在工作声明 `kernel/work-claims.ts` | recut | D23、D30 |
 | `claude: wakeflow-claude-migration-decommission.mjs` | 806 | 迁移退役 | 无 | dropped | ADR-0008 |
 | `claude: wakeflow-claude-migration-effect.mjs` | 659 | 迁移宿主效果 | 无 | dropped | ADR-0008 |
 | `claude: wakeflow-claude-pod-host.mjs` | 410 | Claude pod 会话物化适配 | `capabilities/pod/*`；`claude --worktree` 由 Agent 执行 | recut | ADR-0010 |
 | `claude: wakeflow-claude-settings.mjs` | 2662 | settings.json 允许规则与 statusline 资产 owner | `hosts/claude-code/claude-code-portable-settings-*.ts`、`claude-code-statusline-*.ts` | recut | 只写 MCP 允许规则与 statusLine 一键（能力卡 1 F1.6） |
-| `claude: wakeflow-claude-transport.mjs` | 1244 | 粘贴与回读的宿主 effect owner | 无；Agent 粘贴，落地由 hook 记录证明（`record_delivery_outcome`） | dropped | TSD-12、ADR-0009 |
+| `claude: wakeflow-claude-transport.mjs` | 1244 | 粘贴与回读的宿主 effect owner | tmux 助手资产的 `deliver` 子命令（先按定位器与许可的 `handleDigest` 核对 pane，再 load-buffer、paste-buffer -d -p、send-keys Enter、一次 capture-pane，输出 attempt 与 readback；§13.117 D4）；落地仍只由 hook 记录证明（`record_delivery_outcome`） | recut | TSD-12、ADR-0009；互斥锁与 run 记录不恢复 |
 | `claude: wakeflow-host-artifact-checks.mjs` | 150 | Claude 发布产物校验接缝 | `tooling/artifacts/check-plugin-artifacts.ts` | recut |  |
 
 ### J Codex 独有

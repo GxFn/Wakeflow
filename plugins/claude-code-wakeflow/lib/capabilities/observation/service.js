@@ -726,6 +726,7 @@ async function gateFacts(context, reports) {
             hostId: asset.hostId,
             status: asset.status,
             settings: asset.settings,
+            companion: asset.companion,
         })),
         projection: {
             status: context.projection.status,

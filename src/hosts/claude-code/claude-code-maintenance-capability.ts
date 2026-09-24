@@ -20,6 +20,7 @@ import {
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import { ClaudeCodeHostAssetOperationError } from "./claude-code-host-asset-operation.js";
 import {
   planClaudeCodePortableSettingsComposition,
 } from "./claude-code-portable-settings-composition.js";
@@ -30,7 +31,6 @@ import {
 import {
   CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND,
   CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID,
-  ClaudeCodeStatuslineAssetOperationError,
   executeClaudeCodeStatuslineAssetOperation,
   planClaudeCodeStatuslineAssetOperation,
 } from "./claude-code-statusline-asset-operation.js";
@@ -42,14 +42,21 @@ import {
   executeClaudeCodeStatuslineSettingsOperation,
   planClaudeCodeStatuslineSettingsOperation,
 } from "./claude-code-statusline-settings-operation.js";
+import {
+  CLAUDE_CODE_TMUX_ASSET_BLOCKER,
+  CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND,
+  CLAUDE_CODE_TMUX_ASSET_OWNER_ID,
+  executeClaudeCodeTmuxAssetOperation,
+  planClaudeCodeTmuxAssetOperation,
+} from "./claude-code-tmux-asset-operation.js";
 import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-identity-profile.js";
 
 /**
  * Wakeflow Host / Claude Code：当前 Claude 宿主维护 capability。
  *
- * 它把 portable settings 的多根只读计划、状态栏资产的字节核对与本地设置里状态栏条目的核对
- * 转换成共享 contribution，并在唯一 Maintenance Gate 内以闭合分派执行 exact operation。
- * 共享层不依赖本模块；三种 operationKind 都在这里显式分派，不注册动态 handler。
+ * 它把 portable settings 的多根只读计划、两份资产（状态栏、tmux 助手）的字节核对与本地设置里
+ * 状态栏条目的核对转换成共享 contribution，并在唯一 Maintenance Gate 内以闭合分派执行 exact
+ * operation。共享层不依赖本模块；每种 operationKind 都在这里显式分派，不注册动态 handler。
  * 资产字节或本地设置读不稳时贡献 blocked 并带稳定 blocker，不把未分类的宿主错误抛给
  * 维护预览：读不出的宿主制品不能让整个工作区无法维护。
  */
@@ -99,7 +106,7 @@ function fail(
 export const CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER =
   "claude-statusline-asset-unreadable" as const;
 
-interface StatuslineAssetPlan {
+interface HostAssetPlan {
   readonly operation: Awaited<ReturnType<typeof planClaudeCodeStatuslineAssetOperation>>;
   readonly blocker: string | null;
 }
@@ -110,22 +117,19 @@ interface StatuslineSettingsPlan {
 }
 
 /** 资产字节读不稳时不猜：整份贡献 blocked，不带该操作，而不是抛出未分类的宿主错误。 */
-async function planStatuslineAsset(
-  root: RootedDirectory,
+async function planHostAsset(
+  plan: (options: { readonly signal?: AbortSignal }) => Promise<HostAssetPlan["operation"]>,
+  blocker: string,
   signal: AbortSignal | undefined,
-): Promise<StatuslineAssetPlan> {
+): Promise<HostAssetPlan> {
   try {
     return {
-      operation: await planClaudeCodeStatuslineAssetOperation(root, {
-        ...(signal === undefined ? {} : { signal }),
-      }),
+      operation: await plan(signal === undefined ? {} : { signal }),
       blocker: null,
     };
   } catch (error: unknown) {
-    if (error instanceof ClaudeCodeStatuslineAssetOperationError) {
-      if (error.reason === "read") {
-        return { operation: null, blocker: CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER };
-      }
+    if (error instanceof ClaudeCodeHostAssetOperationError) {
+      if (error.reason === "read") return { operation: null, blocker };
       fail("owner", error.path);
     }
     throw error;
@@ -165,13 +169,23 @@ async function planContribution(
     profile: request.profile,
     ...(request.signal === undefined ? {} : { signal: request.signal }),
   });
-  const statusline = await planStatuslineAsset(root, request.signal);
+  const statusline = await planHostAsset(
+    (options) => planClaudeCodeStatuslineAssetOperation(root, options),
+    CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER,
+    request.signal,
+  );
+  const tmuxAsset = await planHostAsset(
+    (options) => planClaudeCodeTmuxAssetOperation(root, options),
+    CLAUDE_CODE_TMUX_ASSET_BLOCKER,
+    request.signal,
+  );
   const settings = await planStatuslineSettings(root, request.signal);
   const projections = await planProjections(root, request);
-  // blocker 在边界内排序去重前必须互不相同：四个来源的前缀各不相同。
+  // blocker 在边界内排序去重前必须互不相同：五个来源的前缀各不相同。
   const blockerCodes = [
     ...composition.blockerCodes,
     ...(statusline.blocker === null ? [] : [statusline.blocker]),
+    ...(tmuxAsset.blocker === null ? [] : [tmuxAsset.blocker]),
     ...(settings.blocker === null ? [] : [settings.blocker]),
     ...projections.blockerCodes,
   ];
@@ -192,6 +206,7 @@ async function planContribution(
         payload: operation,
       })),
       ...(statusline.operation === null ? [] : [statusline.operation]),
+      ...(tmuxAsset.operation === null ? [] : [tmuxAsset.operation]),
       ...(settings.operation === null ? [] : [settings.operation]),
       ...projections.operations,
     ],
@@ -241,12 +256,13 @@ async function executeProjectionOperation(
   }
 }
 
-async function executeStatuslineOperation(
+async function executeHostAssetOperation(
+  execute: typeof executeClaudeCodeStatuslineAssetOperation,
   root: RootedDirectory,
   request: ExecuteWakeflowHostMaintenanceOperationRequest,
 ): Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>> {
   try {
-    const executed = await executeClaudeCodeStatuslineAssetOperation(root, {
+    const executed = await execute(root, {
       operation: request.operation.payload,
       recoveringAffectedOperation: request.recoveringAffectedOperation,
       ...(request.signal === undefined ? {} : { signal: request.signal }),
@@ -263,7 +279,7 @@ async function executeStatuslineOperation(
       observationDigest: executed.targetDigest,
     });
   } catch (error: unknown) {
-    if (error instanceof ClaudeCodeStatuslineAssetOperationError) fail("owner", error.path);
+    if (error instanceof ClaudeCodeHostAssetOperationError) fail("owner", error.path);
     throw error;
   }
 }
@@ -310,7 +326,13 @@ async function executeOperation(
     request.operation.operationKind === CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND
     && request.operation.ownerId === CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID
   ) {
-    return executeStatuslineOperation(root, request);
+    return executeHostAssetOperation(executeClaudeCodeStatuslineAssetOperation, root, request);
+  }
+  if (
+    request.operation.operationKind === CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND
+    && request.operation.ownerId === CLAUDE_CODE_TMUX_ASSET_OWNER_ID
+  ) {
+    return executeHostAssetOperation(executeClaudeCodeTmuxAssetOperation, root, request);
   }
   if (
     request.operation.operationKind === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND

@@ -83,6 +83,7 @@
 - 目标文件分类 current、missing、stale、unsafe；unsafe 含符号链接、非文件、硬链接数不为 1、不可读、没有标记即手写；任一 unsafe 整轮零写。重建在投影锁内，前后 planSignature 不一致返回 `source-stale`；逐文件 CAS 写。`:1240-1298`、`:1482+`。
 - 触发矩阵 `ACTIVE_SOURCE_MUTATIONS`：TODO、窗口身份与运行时、传输、租约、保留与纯 Pod 观察都不触发写。`wakeflow-public-v3-runtime.mjs:203-220`。
 - Claude 状态栏资产装在 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/statusline.mjs`，0600；命令行以 base64url 传工作区根，从不从 cwd 推断；stdin 是 Claude 的 statusline JSON，上限 256 KiB，取 session_id 与模型名；读 `wakeflow.config.json` 与窗口绑定目录找 `claude-session` 句柄匹配的窗口；打印恰好一行 `<model> · <label>`。冒烟要求 stderr 为空、单行、无控制字符、不含工作区根。`wakeflow-claude-settings.mjs:85-253`、`:633-690`。
+- 2026-09-24 §13.117 D4：同目录另装 tmux 助手资产 `tmux.mjs`（0600，`claude-tmux-asset:install`），子命令 preflight / launch / self / mark / panes / deliver / close，从自身位置推导工作区根；`host-settings-assets` 门把它作为状态栏资产的伴随资产核对，字节、模式或缺席问题以 `claude-code:tmux.mjs:<status>` 报出。
 
 **不变量**：手写文件永不被覆盖；投影只是导航，机器记录才是权威；状态栏输出不含路径、句柄与摘要。
 
@@ -124,6 +125,6 @@
 | --- | --- |
 | Q1 status 的 git 观察 | Wakeflow 不 spawn git（与 gate-log §13.91 D4 一致）：`repositories[]` 只读 `.git/HEAD`、`refs/heads/**`、`packed-refs` 与 `.git/worktrees/<name>/{gitdir, HEAD}`，报告 HEAD、当前分支、登记的 worktree 与 prunable；工作树是否干净不观察，Wakeflow 没有判定依赖它。`unmergedAccepted[]` 定义为已接受实现结果中分支引用仍在仓库、且尖端不等于仓库当前所在分支尖端的项（正检出在该分支上或分离头时不判已合并；仓库未观察时保留并标 `repositoryObserved: false`），全部列出不设阈值，ADR-0010 未决项"提醒阈值"就此关闭 |
 | Q4 verify 作为前置 | 归档不另设前置：完成即归档在 preview 内嵌 demand 切片的 verify 门；pod 关闭不要求最近一次 verify 的 `observationDigest`，`pod-execution-location` 门是对账的唯一出口 |
-| Q6 状态栏资产的安装 | 按 D6 落地为两条维护操作：`claude-statusline-asset:install` 安装并校验资产字节（0600、摘要），`claude-statusline-settings:install` 把 `statusLine` 命令写进 `.claude/settings.local.json`（只改这一键，其他键原位保留，0600；命令带 base64url 的根，所以只能进忽略的私有本地文件，不进可提交的 `settings.json`）；文件不是 JSON 对象时不猜，贡献 blocked（`claude-settings-local-unreadable`）；verify 的 `host-settings-assets` 门对资产与设置条目各投一票 |
+| Q6 状态栏资产的安装 | 按 D6 落地为两条维护操作：`claude-statusline-asset:install` 安装并校验资产字节（0600、摘要），`claude-statusline-settings:install` 把 `statusLine` 命令写进 `.claude/settings.local.json`（只改这一键，其他键原位保留，0600；命令带 base64url 的根，所以只能进忽略的私有本地文件，不进可提交的 `settings.json`）；文件不是 JSON 对象时不猜，贡献 blocked（`claude-settings-local-unreadable`）；verify 的 `host-settings-assets` 门对资产与设置条目各投一票；2026-09-24 起同一票还核对伴随资产 `tmux.mjs`（`claude-tmux-asset:install`，§13.117 D4） |
 | Q7 developer-progress.md | 首版渲染当前状态、六个进度计数与最近事件标识；"最近十条事件"待 L2 场景需要再加 |
 | 阈值配置化（gate-log §13.83 D7 遗留） | 本片不进配置：静默 10 分钟、回调代际上限 4、第三次 rework 刹车、声明恢复窗口 2 小时由治理层一张 `policy` 表导出并在 status 原样报告；配置化记入 ADR-0012 未决项 |

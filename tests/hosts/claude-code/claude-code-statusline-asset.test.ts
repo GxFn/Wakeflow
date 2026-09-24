@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";

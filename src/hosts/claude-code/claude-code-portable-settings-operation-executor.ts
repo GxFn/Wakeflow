@@ -1,8 +1,8 @@
 import { types } from "node:util";
 
 import {
-  parseWakeflowConfigPlacement,
   parseWakeflowConfig,
+  parseWakeflowConfigPlacement,
   WakeflowConfigError,
   type WakeflowConfigModel,
 } from "../../configuration/wakeflow-config.js";
@@ -11,39 +11,40 @@ import {
   WakeflowConfigRootPlacementError,
 } from "../../configuration/wakeflow-config-root-placement.js";
 import {
+  parseWakeflowDurableIdOfKind,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
+import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
-import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
 } from "../../workspace/workspace-host-resource-profile.js";
 import {
-  compileClaudeCodePortableSettingsRootAuthority,
-  createClaudeCodePortableSettingsOperation,
   type ClaudeCodePortableSettingsOperation,
   type ClaudeCodePortableSettingsRoot,
+  compileClaudeCodePortableSettingsRootAuthority,
+  createClaudeCodePortableSettingsOperation,
 } from "./claude-code-portable-settings-composition.js";
 import {
   CLAUDE_CODE_PORTABLE_SETTINGS_REF,
+  ClaudeCodePortableSettingsPublicationError,
   inspectClaudeCodePortableSettings,
   publishClaudeCodePortableSettings,
   settleClaudeCodePortableSettingsPublicationStages,
-  ClaudeCodePortableSettingsPublicationError,
 } from "./claude-code-portable-settings-publication.js";
+import { claudeCodePortableSettingsRulesFor } from "./claude-code-portable-settings-transition.js";
 
 /**
  * Wakeflow Host / Claude Code：confirmed portable settings 的单 operation executor。
@@ -372,7 +373,10 @@ async function executeAtRoot(
   try {
     inspection = await inspectClaudeCodePortableSettings(
       root,
-      request.signal === undefined ? {} : { signal: request.signal },
+      {
+        rules: claudeCodePortableSettingsRulesFor(request.operation.root.rootKind),
+        ...(request.signal === undefined ? {} : { signal: request.signal }),
+      },
     );
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) {
@@ -414,7 +418,10 @@ async function executeAtRoot(
   try {
     published = await publishClaudeCodePortableSettings(
       root,
-      request.signal === undefined ? {} : { signal: request.signal },
+      {
+        rules: claudeCodePortableSettingsRulesFor(request.operation.root.rootKind),
+        ...(request.signal === undefined ? {} : { signal: request.signal }),
+      },
     );
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) {

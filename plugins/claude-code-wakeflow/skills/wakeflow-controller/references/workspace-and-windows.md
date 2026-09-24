@@ -86,7 +86,7 @@ Launching and registering:
 
 1. Take the launch intent from the maintenance or pod result: it names the
    role, the root and the launch parameters.
-2. Launch it by host means: open a tmux window at the root the intent names, start `claude` in it with the parameters it lists, and let the session finish starting before you read its id.
+2. Launch it by host means: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. Your own Controller window uses `self` instead of `launch`; it reads the pane and the session id from the environment Claude Code gives its shell. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs.
 3. Observe the handle the host reports for the window you just started.
 4. Call `wakeflow_register_window_binding` to register it. Registration
    requires a real `session-start` hook record for that session and that root.

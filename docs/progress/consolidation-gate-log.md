@@ -3377,3 +3377,25 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **文档写回。** 能力卡 1 §1.3 现 TS 状态、对账账本第 226 行、scenario-acceptance 的 card-01/reconfigure 行、Controller 技能工作区参考；两份制品重建（预览编译文件、技能参考、清单）。
 
 **未执行。** 真实宿主会话（安装插件、开窗口、登记、投递取回 hook 证据、Claude 状态栏）由用户在联合测试中操作；本机没有 `codex` CLI，Codex 侧真实会话仍未验证。
+
+## 13.117 tmux 助手资产与精确权限规则：Claude 宿主的 tmux 操作回到插件手里（2026-09-24）
+
+**背景。** 用户授权设置插件权限与使用 tmux，并要求"用 plugin 来处理 tmux 的设置相关"。旧项目（`plugins/claude-code-wakeflow/scripts/lib/wakeflow-claude-lifecycle.mjs`、`-transport.mjs`、`-activity.mjs`）把 tmux 完全放在进程内；TSD-12 与 ADR-0009（2026-09-10）把执行移交 Agent 之后，技能文本只用文字描述 tmux 步骤，五个窗口选项、坐标格式、UUID 生成与 Controller 自身的登记都靠 Agent 手工完成。本节按用户对 D4-A 与 D5 的确认落地，同时执行 D3（重置测试工作区）；D2（对方宿主文件的时效）按用户确认留到联合测试之后。插件已按授权从本仓库 marketplace（`gxfn`）以用户范围安装。
+
+**决定与落地。**
+
+- D4 tmux 助手资产：`src/hosts/claude-code/claude-code-tmux-asset.ts` 以状态栏资产同一机制发布 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`（0600，维护操作 `claude-tmux-asset:install`，owner `claude-code-tmux-asset`）。子命令 `preflight`、`launch`、`self`、`mark`、`panes`、`deliver`、`close`，序列原样取自旧 lifecycle 与 transport：has-session → new-session / new-window（`-d -n -c -P -F`）、automatic-rename off、五个 `@wakeflow_*` 窗口选项、list-panes -a 十字段、load-buffer → paste-buffer -d -p → send-keys Enter → 一次 capture-pane、kill-window；输出只有现有 MCP 工具已经要求的观察 JSON，不含绝对路径（worktree 观察按合同原样携带 porcelain 除外）。根从资产自身位置推导，不从 cwd 推断。spawn tmux 前剥离 `TMUX*` 与 `CLAUDE*` 环境变量——否则从 Controller 的 Bash 里首次启动的 tmux 服务器会把 `CLAUDECODE=1` 等交给每个新会话；`new-*` 以 `-e PATH=` 把当前 PATH 交给新窗口。`launch` 等目标会话的 `session-start` hook 记录（默认 20 s，`--wait` 可调），worktree 窗口据记录里的 cwd 读 `git worktree list --porcelain` 与 `rev-parse --git-common-dir`。`self` 用 Claude Code 交给 shell 的 `TMUX_PANE` 与 `CLAUDE_CODE_SESSION_ID`（本次在 Bash 工具环境里实测两者都在）让 Controller 登记自己的窗口，配置 socket 与当前 socket 不符即拒绝。`deliver` 先按定位器与许可的 `handleDigest` 核对 pane：缺席、pane-dead、元数据不符、load-buffer 失败都是 failed-before-send，粘贴或回车失败是 unknown；回读按首行 12–96 字符判 confirmed / pending，capture 失败为 unavailable。`claude-code-host-asset-operation.ts` 是从状态栏资产操作抽出的通用操作（只读计划、单文件 CAS、0600、affected 恢复），两份资产各只剩一个描述符。
+- D5 权限：`claudeCodePortableSettingsRulesFor(rootKind)`——工作区根 `.claude/settings.json` 写 `mcp__plugin_wakeflow_wakeflow` 与 `Bash(node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs *)` 两条，支撑面仍只有 MCP 一条；transition 按规则集去重、只追加缺的一条，宽泛规则照旧拒绝。取代能力卡 1 Q3 "只写 MCP 规则"的那一半。
+- 观察：`host-settings-assets` 门把 tmux 助手当作状态栏资产的伴随资产核对（`ObservationHost.statuslineAsset.companions`，状态栏先判，伴随资产按声明顺序第一份不 current 的决定整票），问题以 `claude-code:tmux.mjs:<status>` 报出。
+- 文本：Claude 宿主的 `windowLaunch`、`deliveryAction` 占位符改为调用助手（launch / self / mark / panes / close，deliver 带 `--handle-digest`）；README 一次性宿主动作补"在 tmux 会话 `wakeflow` 里启动 Controller"与权限规则说明。
+- D3 已执行：`WakeflowTestWorkspace` 根下 Wakeflow 生成的十项条目已删，保留空 `.git` 与五个仓库副本（五个仓库 `git status` 皆干净）。
+
+**过程中的发现。** 首次 `npm run typecheck` 时新文件尚未列入 `src/hosts/claude-code/tsconfig.json` 的显式 `files`，tsc 从 entrypoints 项目把它们当源文件编译并把 `.js` / `.d.ts` / `.js.map` 吐进了 `src/`；架构检查因此把两个新模块报成 unadmitted production roots（导入解析到了旁边的 `.js`）。删除杂散文件后检查通过；显式 `files` 列表是新宿主模块的必经登记。另：定位器实际写在 `identity/window-locators/`，而资源目录声明与能力卡 2 §2.3 的表写 `operations/window-locators/`，助手按实际位置读；两处不一致留作残余。
+
+**回归。** 新增 `claude-code-tmux-asset.test.ts`（tmux、claude、git 全是记录 argv 的桩：资产字节与操作、preflight、launch 的 new-session / new-window 与 worktree 观察、入参拒绝、self 与三种拒绝、panes / mark / close、deliver 的成功、pending、unavailable 与全部发送前拒绝、根不可解析）与 `claude-code-portable-settings-rules.test.ts`；维护执行、入口、composition、decide 测试按六条宿主操作与伴随资产更新。焦点集 139/139。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 1009/1009（新增 11；`test:typescript` 341.8 s，整门约 354 s），`npm run smoke:artifacts` 两宿主七幕全过（20 s），`git diff --check` 干净。
+
+**文档写回。** 能力卡 1 §1.1 宿主差异与现 TS 状态、Q3 记录；能力卡 2 §2.6、能力卡 6 §6.2、能力卡 9 §9.4 现 TS 状态；对账账本 lifecycle 与 transport 两行改 recut；capability-map 三行；README 两语（占位符）与 Controller 技能；制品重建。
+
+**未执行。** 真实 tmux 上的助手（开窗口、登记、投递、状态栏）留给联合测试；插件缓存刷新与联合测试在本节提交之后进行。

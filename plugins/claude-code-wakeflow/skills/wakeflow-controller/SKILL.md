@@ -61,7 +61,7 @@ its blockers to the user, and apply only after they confirm. Depth:
 ### Step 1 - Open windows and register their bindings
 
 Maintenance and pod creation return launch intents: a role, a root and the
-parameters to start with. For each one: open a tmux window at the root the intent names, start `claude` in it with the parameters it lists, and let the session finish starting before you read its id. Then register the
+parameters to start with. For each one: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. Your own Controller window uses `self` instead of `launch`; it reads the pane and the session id from the environment Claude Code gives its shell. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. Then register the
 handle you observed with `wakeflow_register_window_binding`. Registration needs
 a real `session-start` hook record for that session and root - if none exists,
 the window did not start where you think it did. Use the same tool to inspect a
@@ -93,7 +93,7 @@ one-shot permit.
 
 ### Step 8 - Perform the host effect and record the outcome
 
-Perform the host effect exactly once: paste the permit's prompt into the target window's pane and press Return, once, then capture that pane a single time. Then call
+Perform the host effect exactly once: pipe the permit's prompt into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest>`. It checks the pane against the locator and the handle digest, pastes the prompt, presses Return once and captures the pane once, then prints the `attempt` and `readback` to record verbatim. Then call
 `wakeflow_record_delivery_outcome` with the permit's delivery identity and
 fence. Wakeflow derives the disposition from evidence, not from your
 impression: an accepted delivery needs the target session's

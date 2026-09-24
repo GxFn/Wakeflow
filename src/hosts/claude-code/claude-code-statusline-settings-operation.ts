@@ -4,26 +4,26 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import { JsonValueError, parseJsonValue, type JsonValue } from "../../foundation/data/json-value.js";
+import { type JsonValue, JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
-import {
-  DurableDirectoryMaterializationError,
-  materializeDirectoryPath,
-} from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   replaceFileAtomically,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
-  parsePortableResourcePath,
+  DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
+} from "../../foundation/filesystem/durable-directory-materialization.js";
+import {
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {

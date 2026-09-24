@@ -111,6 +111,11 @@ export interface ObservationHost {
       /** 期望条目由工作区绝对根派生：命令行带 base64url 的根（§13.94 D6）。 */
       readonly expectedEntry: (workspaceRoot: string) => JsonValue;
     }>;
+    /** 同一资产目录里其他必须在场且字节精确的资产（tmux 助手，§13.117 D4）。 */
+    readonly companions: readonly Readonly<{
+      readonly fileName: string;
+      readonly digest: Sha256Digest;
+    }>[];
   }> | null;
 }
 
@@ -187,6 +192,8 @@ export interface ObservedHostAsset {
   readonly status: "current" | "missing" | "drift" | "mode" | "not-applicable" | "unavailable";
   /** 本地设置里的状态栏条目：缺文件 missing，键不等 drift，文件不是 JSON 对象或读不出 unreadable。 */
   readonly settings: "current" | "missing" | "drift" | "mode" | "unreadable" | "not-applicable";
+  /** `status` 不是 current 时出问题的伴随资产文件名；状态栏资产本身或全部 current 时为 null。 */
+  readonly companion: string | null;
   readonly issue: string | null;
 }
 
@@ -637,7 +644,7 @@ type SettingsEntryStatus = Exclude<ObservedHostAsset["settings"], "not-applicabl
 async function observeAssetFile(
   root: RootedDirectory,
   host: Readonly<ObservationHost>,
-  asset: NonNullable<ObservationHost["statuslineAsset"]>,
+  asset: Readonly<{ readonly fileName: string; readonly digest: Sha256Digest }>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<{ readonly status: AssetFileStatus; readonly issue: string | null }>> {
   const ref = parsePortableResourcePath(
@@ -715,12 +722,27 @@ async function observeHostAsset(
       hostId: host.hostId,
       status: "not-applicable" as const,
       settings: "not-applicable" as const,
+      companion: null,
       issue: null,
     });
   }
   const asset = await observeAssetFile(root, host, host.statuslineAsset, signal);
   const settings = await observeSettingsEntry(root, host.statuslineAsset.settings, signal);
-  return Object.freeze({ hostId: host.hostId, status: asset.status, settings, issue: asset.issue });
+  let status = asset.status;
+  let issue = asset.issue;
+  let companion: string | null = null;
+  // 状态栏资产先判；它 current 时再按声明顺序看伴随资产，第一份不 current 的决定整票（§13.117 D4）。
+  if (status === "current") {
+    for (const entry of host.statuslineAsset.companions) {
+      const observed = await observeAssetFile(root, host, entry, signal);
+      if (observed.status === "current") continue;
+      status = observed.status;
+      issue = observed.issue;
+      companion = entry.fileName;
+      break;
+    }
+  }
+  return Object.freeze({ hostId: host.hostId, status, settings, companion, issue });
 }
 
 /**

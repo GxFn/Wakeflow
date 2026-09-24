@@ -382,15 +382,15 @@
     },
     {
       "path": "lib/capabilities/observation/decide.js",
-      "bytes": 20252,
-      "sha256": "sha256:25426532be8d9e90b0be842403fa8ba135f09fcbb594aec7c61de612b3157196",
+      "bytes": 20386,
+      "sha256": "sha256:f5d8eadf78cd18fae081b5ace830dc48f3548f2ec8637245197174d437c49f00",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/observation/service.js",
-      "bytes": 36753,
-      "sha256": "sha256:511bca3def829f05d100f22f362721e18ae87effa376fa146a04a90252005c2b",
+      "bytes": 36793,
+      "sha256": "sha256:5b306de89e0239a9b3185f60ea41ca0bee10389e318749d3e94515c4332d5fd7",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2314,8 +2314,8 @@
     },
     {
       "path": "lib/governance/observation/workspace-observation.js",
-      "bytes": 26002,
-      "sha256": "sha256:fb99ec71c33c0155069cf9262616dcfcf3b94bb847adbcc3e7a3724aabda33d7",
+      "bytes": 26637,
+      "sha256": "sha256:201ca03ea5e5296c45664e44925f0798341c9e315f360dd9657d7344b69ae604",
       "mode": "0644",
       "scope": "shared"
     },

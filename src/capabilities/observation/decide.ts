@@ -256,6 +256,8 @@ export interface WorkspaceGateFacts {
     readonly hostId: string;
     readonly status: "current" | "missing" | "drift" | "mode" | "not-applicable" | "unavailable";
     readonly settings: "current" | "missing" | "drift" | "mode" | "unreadable" | "not-applicable";
+    /** 出问题的伴随资产文件名（tmux 助手）；缺省或 null 指状态栏资产本身。 */
+    readonly companion?: string | null;
   }>[];
   readonly projection: Readonly<{
     readonly status: "observed" | "unavailable";
@@ -604,7 +606,11 @@ function assetsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
         ? null
         : joinCodes(
             applicable.flatMap((asset) => [
-              ...(asset.status === "current" ? [] : [`${asset.hostId}:${asset.status}`]),
+              ...(asset.status === "current"
+                ? []
+                : [
+                    `${asset.hostId}:${asset.companion ? `${asset.companion}:` : ""}${asset.status}`,
+                  ]),
               ...(asset.settings === "current"
                 ? []
                 : [`${asset.hostId}:settings-${asset.settings}`]),

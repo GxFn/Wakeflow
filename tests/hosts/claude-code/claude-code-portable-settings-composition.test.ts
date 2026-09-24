@@ -1,26 +1,26 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
-  mkdtempSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
+import { type TestContext, test } from "node:test";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
   planClaudeCodePortableSettingsComposition,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-composition.js";
 import {
   publishClaudeCodePortableSettings,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
+import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
+import {
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
   createMinimalWakeflowConfig,
 } from "../../configuration/wakeflow-config.fixture.js";
@@ -105,7 +105,8 @@ test("composition reads present roots, excludes external Support, and never leak
   mkdirSync(path.join(value.absolutePath, "Test"), { mode: 0o755 });
   await publishClaudeCodePortableSettings(value.root);
   const source = path.join(value.absolutePath, ".claude", "settings.json");
-  const currentText = "{\n  \"secret-user-key\": \"do-not-project\",\n  \"permissions\": {\n    \"allow\": [\"mcp__plugin_wakeflow_wakeflow\"]\n  }\n}\n";
+  // 工作区根拥有两条规则（§13.117 D5）：两条都在时 program 根才是 current。
+  const currentText = `{\n  "secret-user-key": "do-not-project",\n  "permissions": {\n    "allow": ["mcp__plugin_wakeflow_wakeflow", ${JSON.stringify(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE)}]\n  }\n}\n`;
   writeFileSync(source, currentText, { mode: 0o644 });
 
   const valueWithExternal = config();

@@ -4,40 +4,41 @@ import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
   WakeflowConfigError,
-  type WakeflowConfigPlacement,
   type WakeflowConfigModel,
+  type WakeflowConfigPlacement,
 } from "../../configuration/wakeflow-config.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "../../configuration/wakeflow-config-root-placement.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../../workspace/workspace-host-resource-profile.js";
 import {
   CLAUDE_CODE_PORTABLE_SETTINGS_REF,
-  inspectClaudeCodePortableSettings,
   ClaudeCodePortableSettingsPublicationError,
+  inspectClaudeCodePortableSettings,
 } from "./claude-code-portable-settings-publication.js";
 import {
-  planClaudeCodePortableSettingsTransition,
   type ClaudeCodePortableSettingsTransitionReason,
+  claudeCodePortableSettingsRulesFor,
+  planClaudeCodePortableSettingsTransition,
 } from "./claude-code-portable-settings-transition.js";
 
 /**
@@ -371,7 +372,10 @@ export async function planClaudeCodePortableSettingsComposition(
       placementStatus = "present";
       transition = (await inspectClaudeCodePortableSettings(
         workspaceRootValue,
-        request.signal === undefined ? {} : { signal: request.signal },
+        {
+          rules: claudeCodePortableSettingsRulesFor("program"),
+          ...(request.signal === undefined ? {} : { signal: request.signal }),
+        },
       )).transition;
     } else {
       const placement = placements.roots.find((entry) => (

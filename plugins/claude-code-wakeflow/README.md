@@ -77,6 +77,15 @@ run, so no session is observed and no delivery can be shown to have landed.
 `settings.local.json`; that block belongs to Wakeflow, and a `statusLine` you rewrite
 yourself is reported as a difference the next time the workspace is reconciled.
 
+Start the Controller inside tmux: `tmux new-session -s wakeflow -c <workspace root>`,
+then `claude` in that window. Maintenance installs a tmux helper at
+`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`; the Controller
+opens every other window through it, registers its own window from the pane and session
+id Claude Code exports to its shell, and delivers prompts through it. Maintenance also
+writes one precise allow rule for that helper into the workspace root's
+`.claude/settings.json`, so the helper runs without a permission prompt; nothing
+broader such as `Bash(tmux *)` is written.
+
 Both hosts, and the usual reason something is silently missing:
 
 - `node` must be on the `PATH` your agent host launches with - the same

@@ -2,8 +2,8 @@ import { equal } from "node:assert/strict";
 import {
   chmodSync,
   lstatSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
@@ -11,13 +11,13 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
-  publishClaudeCodePortableSettings,
   ClaudeCodePortableSettingsPublicationError,
   type ClaudeCodePortableSettingsPublicationErrorReason,
+  publishClaudeCodePortableSettings,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
 import {
   WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,

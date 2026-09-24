@@ -61,6 +61,13 @@ Wakeflow 所有，块以外的内容都是你的。产品仓库或外部拥有�
 `wakeflow_maintain_workspace` 写进 `settings.local.json` 的托管块；那个块归 Wakeflow
 所有，你自己改写 `statusLine` 会在下一次对账里被报成差异。
 
+在 tmux 里启动 Controller：`tmux new-session -s wakeflow -c <工作区根>`，然后在那个窗口里
+运行 `claude`。维护会把一个 tmux 助手装到
+`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`；Controller 用它开
+其他所有窗口、用 Claude Code 交给 shell 的 pane 与 session id 登记自己的窗口、也用它投递
+prompt。维护还会往工作区根的 `.claude/settings.json` 写一条只放行这个助手的 allow 规则，
+助手因此不弹权限；不会写 `Bash(tmux *)` 之类更宽的规则。
+
 两个宿主共同的部分，以及"东西静默缺失"的常见原因：
 
 - `node` 必须在 Agent 宿主启动时所用的 `PATH` 上 —— 这与工具服务配置的假设是同

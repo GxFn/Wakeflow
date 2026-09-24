@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { deepEqual, doesNotMatch, equal, ok } from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 
 import {

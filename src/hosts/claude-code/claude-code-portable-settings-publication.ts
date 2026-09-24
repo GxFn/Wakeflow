@@ -2,17 +2,17 @@ import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
 import {
-  recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
+  recoverDurableAtomicFileStagesForTargets,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
   createFileAtomically,
-  replaceFileAtomically,
   DurableAtomicFileWriteError,
+  replaceFileAtomically,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   createDirectoryAtomically,
@@ -38,9 +38,9 @@ import {
   Utf8Error,
 } from "../../foundation/text/utf8.js";
 import {
-  planClaudeCodePortableSettingsTransition,
   type ClaudeCodePortableSettingsTransition,
   type ClaudeCodePortableSettingsTransitionReason,
+  planClaudeCodePortableSettingsTransition,
 } from "./claude-code-portable-settings-transition.js";
 
 /**
@@ -58,6 +58,8 @@ export const CLAUDE_CODE_PORTABLE_SETTINGS_REF =
 
 export interface ClaudeCodePortableSettingsPublicationOptions {
   readonly signal?: AbortSignal;
+  /** 这个根拥有的托管 allow 规则；缺省是 transition 的默认（只有 MCP 一条）。 */
+  readonly rules?: readonly string[];
 }
 
 export interface ClaudeCodePortableSettingsPublicationResult {
@@ -124,6 +126,7 @@ const MAXIMUM_SETTINGS_BYTES = parseByteCount(1024 * 1024);
 
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
+  readonly rules: readonly string[] | undefined;
 }
 
 interface SettingsSourceInspection {
@@ -154,7 +157,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
+    Object.keys(record).some((key) => key !== "signal" && key !== "rules")
     || (
       record.signal !== undefined
       && (
@@ -164,11 +167,21 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
         || !(record.signal instanceof AbortSignal)
       )
     )
+    || (
+      record.rules !== undefined
+      && (
+        !Array.isArray(record.rules)
+        || record.rules.some((entry) => typeof entry !== "string")
+      )
+    )
   ) {
     fail("input", "$options");
   }
   return Object.freeze({
     signal: record.signal as AbortSignal | undefined,
+    rules: record.rules === undefined
+      ? undefined
+      : Object.freeze([...(record.rules as readonly string[])]),
   });
 }
 
@@ -263,6 +276,7 @@ async function sourceOrNull(
 async function inspectSource(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
+  rules: readonly string[] | undefined,
 ): Promise<Readonly<SettingsSourceInspection>> {
   const directoryNode = await directoryNodeOrNull(root);
   const source = directoryNode === null
@@ -277,7 +291,7 @@ async function inspectSource(
       throw error;
     }
   }
-  const transition = planClaudeCodePortableSettingsTransition(sourceText);
+  const transition = planClaudeCodePortableSettingsTransition(sourceText, rules);
   return Object.freeze({ directoryNode, source, sourceText, transition });
 }
 
@@ -296,7 +310,7 @@ export async function inspectClaudeCodePortableSettings(
   }
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const inspection = await inspectSource(rootValue, options.signal);
+  const inspection = await inspectSource(rootValue, options.signal, options.rules);
   return Object.freeze({
     kind: "ClaudeCodePortableSettingsInspection",
     directoryStatus: inspection.directoryNode === null ? "absent" : "present",
@@ -410,7 +424,7 @@ export async function publishClaudeCodePortableSettings(
   }
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const before = await inspectSource(rootValue, options.signal);
+  const before = await inspectSource(rootValue, options.signal, options.rules);
   if (before.transition.status === "blocked") {
     fail("transition-blocked", "$transition", before.transition.reason);
   }
@@ -427,7 +441,7 @@ export async function publishClaudeCodePortableSettings(
   }
   await ensureSettingsDirectory(rootValue, before, options.signal);
   if (before.directoryNode === null) {
-    const afterDirectory = await inspectSource(rootValue, options.signal);
+    const afterDirectory = await inspectSource(rootValue, options.signal, options.rules);
     if (
       afterDirectory.source !== null
       || afterDirectory.transition.status !== "create"
@@ -436,7 +450,7 @@ export async function publishClaudeCodePortableSettings(
     }
   }
   await publishTransition(rootValue, before, options.signal);
-  const after = await inspectSource(rootValue, options.signal);
+  const after = await inspectSource(rootValue, options.signal, options.rules);
   if (
     after.transition.status !== "current"
     || before.transition.desiredDigest === null

@@ -132,7 +132,8 @@ test("Claude entrypoint contributes settings and its plan digest is rejected by 
   }
   const plan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
   // 三条 portable settings、一条状态栏资产、一条本地设置条目（§13.94 D6）。
-  equal(plan.hostContribution?.operations.length, 5);
+  // 三条 portable settings、状态栏资产、本地设置条目、tmux 助手资产（§13.117 D4）。
+  equal(plan.hostContribution?.operations.length, 6);
 
   let caught: unknown;
   try {

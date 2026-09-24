@@ -74,7 +74,7 @@
 | 旧能力 | 能力组 | 新 owner | 判定 | 依据 |
 | --- | --- | --- | --- | --- |
 | 活动投影 `index.md`、`workspace-current-status.md`、每 Demand `index.md` 与 `developer-progress.md` | 9 | 内核 `active-projection` 加治理层 `observation/active-projection-{facts, refresh}` | 重切 | 2026-09-18 切片 10：标记、指纹、四类目标分类、unsafe 整轮零写、投影锁内逐文件 CAS；每 Demand 页面在 `.wakeflow-active/projections/<demandId>/`；pod 段；Demand 变更、pod 创建与关闭、维护 apply 之后刷新；场景 `card-09/active-projection` |
-| Claude 状态栏资产 | 9 | `hosts/claude-code/claude-code-statusline-asset.ts` 精确字节与摘要；维护操作 `claude-statusline-asset:install` 安装 0600 资产、`claude-statusline-settings:install` 把 statusLine 命令写进 `.claude/settings.local.json`（只改一键，0600） | 重切 | 2026-09-18 切片 10：label `<model> · <pod> · <window>`，main 省略 pod（能力卡 9 Q6）；资产由仓库测试以 node 执行验收，Claude 宿主真实会话未验证 |
+| Claude 状态栏资产 | 9 | `hosts/claude-code/claude-code-statusline-asset.ts` 精确字节与摘要；维护操作 `claude-statusline-asset:install` 安装 0600 资产、`claude-statusline-settings:install` 把 statusLine 命令写进 `.claude/settings.local.json`（只改一键，0600） | 重切 | 2026-09-18 切片 10：label `<model> · <pod> · <window>`，main 省略 pod（能力卡 9 Q6）；资产由仓库测试以 node 执行验收，Claude 宿主真实会话未验证；2026-09-24 §13.117：同机制多一份 tmux 助手资产 `claude-code-tmux-asset.ts`（`claude-tmux-asset:install`，通用 `claude-code-host-asset-operation.ts`），工作区根 `settings.json` 多一条只放行该助手的 allow 规则 |
 | Claude 活动监视 | 10 | 无；宿主 hook 观察取代 | 放弃 | 能力卡 10 Q3、ADR-0009 |
 | 提示临时文件与清扫 | 10 | 无；Agent 自行选择粘贴方式 | 放弃 | 能力卡 10 Q4 |
 | keep-live | 10 | 无 | 放弃 | 能力卡 10 Q1、TSD-12 |
@@ -90,10 +90,10 @@
 
 | 能力组 | Codex | Claude Code | 共享形状 |
 | --- | --- | --- | --- |
-| 2 窗口握手 | Agent 用 Codex 线程能力开线程，回执为线程 id 与 cwd | Agent 用 tmux 开窗口并启动 `claude`，回执为会话 id 与 pane 坐标 | 端点、工作声明、围栏令牌、回执准入 |
+| 2 窗口握手 | Agent 用 Codex 线程能力开线程，回执为线程 id 与 cwd | Agent 调用 Wakeflow 发布的 tmux 助手开窗口并启动 `claude`，助手打印会话 id 与 pane 坐标的 observation（§13.117 D4） | 端点、工作声明、围栏令牌、回执准入 |
 | 6 投递执行与 hook 证据通道 | 线程发送；hook 片段 `src/hosts/codex/codex-hook-fragment.ts` 渲染命令串加 `${PLUGIN_ROOT}`，用户在 `/hooks` 按定义哈希信任后生效；`notify` 插件发不了 | 粘贴与回车，控制模式为可选强观察；hook 片段 `src/hosts/claude-code/claude-code-hook-fragment.ts` 渲染 exec 形式加 `${CLAUDE_PLUGIN_ROOT}` | 信封、outcome、回读摘要、ambiguous 解决；hook 通道**已落地**：观察脚本 `src/entrypoints/wakeflow-hook-observer.ts` 把两宿主同名的四个事件写成同形记录，制品的 `hooks/observe.mjs` 与 `hooks/hooks.json` 由构建器渲染（2026-09-18 gate-log §13.97，已实现、宿主未验证） |
 | ADR-0010 worktree | Worktree 线程，detached HEAD，结果导入前需建分支，默认保留 15 个 | `claude --worktree <name>`，分支 `worktree-<name>`，退出无改动自动清理 | porcelain 回执、pod 四状态、关闭先于会话归档 |
-| 9 状态栏 | 无 | statusline 资产与 `settings.local.json` | 无 |
+| 9 状态栏 | 无 | statusline 与 tmux 助手两份资产、`settings.local.json` | 无 |
 | 10 命令面 | 无 slash 命令 | 4 个命令（`/wakeflow-init`、`/wakeflow-status`、`/wakeflow-next`、`/wakeflow-pod`），且命令不承载技能之外的步骤 | skills 文本 |
 | 10 制品 | manifest 含 `interface` 与 `skills` 路径，marketplace 无版本 | manifest 靠目录发现，MCP 项禁止 cwd 与 env，marketplace 有版本 | 五源版本一致 |
 

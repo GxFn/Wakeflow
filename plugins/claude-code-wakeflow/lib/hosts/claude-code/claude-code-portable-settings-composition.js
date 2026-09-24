@@ -2,11 +2,11 @@ import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
 import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
-import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, inspectClaudeCodePortableSettings, ClaudeCodePortableSettingsPublicationError, } from "./claude-code-portable-settings-publication.js";
-import { planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
+import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, } from "./claude-code-portable-settings-publication.js";
+import { claudeCodePortableSettingsRulesFor, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
 /**
  * Wakeflow Host / Claude Code：portable settings 的多根只读 composition。
  *
@@ -212,7 +212,10 @@ export async function planClaudeCodePortableSettingsComposition(workspaceRootVal
         let transition;
         if (root.rootKind === "program") {
             placementStatus = "present";
-            transition = (await inspectClaudeCodePortableSettings(workspaceRootValue, request.signal === undefined ? {} : { signal: request.signal })).transition;
+            transition = (await inspectClaudeCodePortableSettings(workspaceRootValue, {
+                rules: claudeCodePortableSettingsRulesFor("program"),
+                ...(request.signal === undefined ? {} : { signal: request.signal }),
+            })).transition;
         }
         else {
             const placement = placements.roots.find((entry) => (entry.key === `support.${root.rootId}.root`));

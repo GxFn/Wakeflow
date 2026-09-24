@@ -1,7 +1,7 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { recoverDurableAtomicFileStagesForTargets, DurableAtomicFileStageRecoveryError, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { createFileAtomically, replaceFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
@@ -57,16 +57,22 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal")
+    if (Object.keys(record).some((key) => key !== "signal" && key !== "rules")
         || (record.signal !== undefined
             && (typeof record.signal !== "object"
                 || record.signal === null
                 || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+                || !(record.signal instanceof AbortSignal)))
+        || (record.rules !== undefined
+            && (!Array.isArray(record.rules)
+                || record.rules.some((entry) => typeof entry !== "string")))) {
         fail("input", "$options");
     }
     return Object.freeze({
         signal: record.signal,
+        rules: record.rules === undefined
+            ? undefined
+            : Object.freeze([...record.rules]),
     });
 }
 function currentUserId() {
@@ -143,7 +149,7 @@ async function sourceOrNull(root, signal) {
         throw error;
     }
 }
-async function inspectSource(root, signal) {
+async function inspectSource(root, signal, rules) {
     const directoryNode = await directoryNodeOrNull(root);
     const source = directoryNode === null
         ? null
@@ -159,7 +165,7 @@ async function inspectSource(root, signal) {
             throw error;
         }
     }
-    const transition = planClaudeCodePortableSettingsTransition(sourceText);
+    const transition = planClaudeCodePortableSettingsTransition(sourceText, rules);
     return Object.freeze({ directoryNode, source, sourceText, transition });
 }
 /** 只读检查一个已授权根的 portable settings，不返回用户源文本或节点身份。 */
@@ -173,7 +179,7 @@ export async function inspectClaudeCodePortableSettings(rootValue, optionsValue 
     const options = parseOptions(optionsValue);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
-    const inspection = await inspectSource(rootValue, options.signal);
+    const inspection = await inspectSource(rootValue, options.signal, options.rules);
     return Object.freeze({
         kind: "ClaudeCodePortableSettingsInspection",
         directoryStatus: inspection.directoryNode === null ? "absent" : "present",
@@ -266,7 +272,7 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
     const options = parseOptions(optionsValue);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
-    const before = await inspectSource(rootValue, options.signal);
+    const before = await inspectSource(rootValue, options.signal, options.rules);
     if (before.transition.status === "blocked") {
         fail("transition-blocked", "$transition", before.transition.reason);
     }
@@ -283,14 +289,14 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
     }
     await ensureSettingsDirectory(rootValue, before, options.signal);
     if (before.directoryNode === null) {
-        const afterDirectory = await inspectSource(rootValue, options.signal);
+        const afterDirectory = await inspectSource(rootValue, options.signal, options.rules);
         if (afterDirectory.source !== null
             || afterDirectory.transition.status !== "create") {
             fail("source-changed", "$settings");
         }
     }
     await publishTransition(rootValue, before, options.signal);
-    const after = await inspectSource(rootValue, options.signal);
+    const after = await inspectSource(rootValue, options.signal, options.rules);
     if (after.transition.status !== "current"
         || before.transition.desiredDigest === null
         || after.source?.digest !== before.transition.desiredDigest) {

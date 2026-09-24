@@ -24,6 +24,10 @@ import {
   CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
   claudeCodeStatuslineSettingsEntry,
 } from "../hosts/claude-code/claude-code-statusline-settings-operation.js";
+import {
+  CLAUDE_CODE_TMUX_ASSET_DIGEST,
+  CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
+} from "../hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
@@ -65,6 +69,13 @@ const CLAUDE_CODE_OBSERVATION_FACADE = Object.freeze({
           key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
           expectedEntry: claudeCodeStatuslineSettingsEntry,
         }),
+        // tmux 助手与状态栏同目录、同门核对（§13.117 D4）。
+        companions: Object.freeze([
+          Object.freeze({
+            fileName: CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
+            digest: CLAUDE_CODE_TMUX_ASSET_DIGEST,
+          }),
+        ]),
       }),
     }),
     Object.freeze({

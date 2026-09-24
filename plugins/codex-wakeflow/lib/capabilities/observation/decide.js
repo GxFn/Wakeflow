@@ -340,7 +340,11 @@ function assetsGate(facts) {
         : status === "pass"
             ? null
             : joinCodes(applicable.flatMap((asset) => [
-                ...(asset.status === "current" ? [] : [`${asset.hostId}:${asset.status}`]),
+                ...(asset.status === "current"
+                    ? []
+                    : [
+                        `${asset.hostId}:${asset.companion ? `${asset.companion}:` : ""}${asset.status}`,
+                    ]),
                 ...(asset.settings === "current"
                     ? []
                     : [`${asset.hostId}:settings-${asset.settings}`]),

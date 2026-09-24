@@ -1,13 +1,14 @@
 import { types } from "node:util";
-import { parseWakeflowConfigPlacement, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
+import { parseWakeflowConfig, parseWakeflowConfigPlacement, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
-import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { compileClaudeCodePortableSettingsRootAuthority, createClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-composition.js";
-import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, inspectClaudeCodePortableSettings, publishClaudeCodePortableSettings, settleClaudeCodePortableSettingsPublicationStages, ClaudeCodePortableSettingsPublicationError, } from "./claude-code-portable-settings-publication.js";
+import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, publishClaudeCodePortableSettings, settleClaudeCodePortableSettingsPublicationStages, } from "./claude-code-portable-settings-publication.js";
+import { claudeCodePortableSettingsRulesFor } from "./claude-code-portable-settings-transition.js";
 const ERROR_MESSAGES = {
     input: "Claude portable settings operation execution input is invalid.",
     config: "Claude portable settings operation Config is invalid.",
@@ -237,7 +238,10 @@ async function executeAtRoot(root, request) {
     }
     let inspection;
     try {
-        inspection = await inspectClaudeCodePortableSettings(root, request.signal === undefined ? {} : { signal: request.signal });
+        inspection = await inspectClaudeCodePortableSettings(root, {
+            rules: claudeCodePortableSettingsRulesFor(request.operation.root.rootKind),
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+        });
     }
     catch (error) {
         if (error instanceof ClaudeCodePortableSettingsPublicationError) {
@@ -270,7 +274,10 @@ async function executeAtRoot(root, request) {
     }
     let published;
     try {
-        published = await publishClaudeCodePortableSettings(root, request.signal === undefined ? {} : { signal: request.signal });
+        published = await publishClaudeCodePortableSettings(root, {
+            rules: claudeCodePortableSettingsRulesFor(request.operation.root.rootKind),
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+        });
     }
     catch (error) {
         if (error instanceof ClaudeCodePortableSettingsPublicationError) {

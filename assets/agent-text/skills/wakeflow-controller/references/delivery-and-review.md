@@ -85,6 +85,15 @@ Wakeflow derives the disposition itself:
 - **indeterminate** - everything else, including a readback that failed. The
   claim is retained and the delivery is never resent.
 
+On Claude Code the helper's `deliver` output carries that lookup for you as
+`landing`: `observed` with the record id means the prompt was submitted in the
+bound session and the outcome will be accepted; `pending` means no record
+appeared within the wait. A prompt pasted while the window is mid-turn is
+queued by Claude Code and still gets its record at once, so pending usually
+means the wrong or a dead window - record the outcome as the helper reported
+it and let Wakeflow decide. Readback is only screen text and never proves
+landing.
+
 An indeterminate delivery is not a dead end. When the landing evidence arrives
 later, call `wakeflow_record_delivery_outcome` again with a new idempotency
 key and the same delivery; it will accept then.

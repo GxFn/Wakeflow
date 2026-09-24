@@ -65,7 +65,7 @@ of test work.
    observed, its evidence reference and digest, and its verdict. Wakeflow
    derives the overall verdict from these records - do not assert it yourself.
 5. Send the returned wake-controller callback prompt to the Controller window
-   by the host's own means: pipe the permit's prompt into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest>`. It checks the pane against the locator and the handle digest, pastes the prompt, presses Return once and captures the pane once, then prints the `attempt` and `readback` to record verbatim. From a product or surface window, prefix the helper path with the workspace root you were given with `--add-dir` instead of running from the root; the helper finds the workspace from its own location. No other transport counts as a
+   by the host's own means: pipe the permit's prompt into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest>`. It checks the pane against the locator and the handle digest, pastes the prompt, presses Return once and captures the pane once, then waits a few seconds for the target session's prompt-submit hook record and prints the `attempt`, `readback` and `landing` to record verbatim. From a product or surface window, prefix the helper path with the workspace root you were given with `--add-dir` instead of running from the root; the helper finds the workspace from its own location. No other transport counts as a
    send. Then end your turn.
 
 ## What you must return

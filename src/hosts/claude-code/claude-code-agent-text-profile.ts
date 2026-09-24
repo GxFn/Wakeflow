@@ -76,7 +76,7 @@ const DELIVERY_ACTION =
   "pipe the permit's prompt into the tmux helper, run from the workspace root: " +
   `\`${TMUX_HELPER} deliver --window <windowId> --handle-digest <the permit's handleDigest>\`. ` +
   "It checks the pane against the locator and the handle digest, pastes the prompt, presses " +
-  "Return once and captures the pane once, then prints the `attempt` and `readback` to " +
+  "Return once and captures the pane once, then waits a few seconds for the target session's prompt-submit hook record and prints the `attempt`, `readback` and `landing` to " +
   "record verbatim. From a product or surface window, prefix the helper path with the " +
   "workspace root you were given with `--add-dir` instead of running from the root; the " +
   "helper finds the workspace from its own location.";

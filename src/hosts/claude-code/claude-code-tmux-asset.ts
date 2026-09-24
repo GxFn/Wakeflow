@@ -26,8 +26,10 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  *   `CLAUDE_CODE_SESSION_ID` 来自 Claude Code 交给 shell 的环境）。
  * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上。
  * - `panes`：`tmux list-panes -a` 转成 `tmux-panes` 观察。
- * - `deliver --window <windowId> [--handle-digest <sha256>]`：stdin 是许可里的 prompt；
- *   粘贴、回车一次、回读一次，打印 `wakeflow_record_delivery_outcome` 的 attempt 与 readback。
+ * - `deliver --window <windowId> [--handle-digest <sha256>] [--wait-landing <seconds>]`：stdin 是
+ *   许可里的 prompt；先核对 pane（与定位器相关的 pane 恰好一个、活着、跑的是 claude、标识与坐标都对），
+ *   粘贴、回车一次、回读一次，再等目标会话的 user-prompt-submit hook 记录（默认 3 秒），打印
+ *   `wakeflow_record_delivery_outcome` 的 attempt、readback 与 landing。
  * - `close --window <windowId>`：关闭前后各读一次 pane 清单，打印 decommission 的 closure。
  * - `teardown [--force]`：引导要重来时杀掉配置的 tmux 会话；有任何登记窗口时拒绝，除非 --force。
  *
@@ -101,6 +103,7 @@ const MAX_VERSION = 64;
 const MARKER_MINIMUM = 12;
 const MARKER_MAXIMUM = 96;
 const HOOK_POLL_MS = 500;
+const DEFAULT_LANDING_WAIT_SECONDS = 3;
 const DEFAULT_WAIT_SECONDS = 20;
 const MAX_WAIT_SECONDS = 120;
 const WINDOW_ID_PATTERN = /^window_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
@@ -319,7 +322,7 @@ function parseWindowId(value, name) {
 
 function parseArguments(argv) {
   const [command, ...rest] = argv;
-  const options = { window: null, all: false, force: false, wait: DEFAULT_WAIT_SECONDS, handleDigest: null };
+  const options = { window: null, all: false, force: false, wait: DEFAULT_WAIT_SECONDS, handleDigest: null, waitLanding: DEFAULT_LANDING_WAIT_SECONDS };
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index];
     if (argument === "--all") {
@@ -333,6 +336,11 @@ function parseArguments(argv) {
       const seconds = Number(rest[index + 1]);
       if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_WAIT_SECONDS) refuse("wait-invalid");
       options.wait = seconds;
+      index += 1;
+    } else if (argument === "--wait-landing") {
+      const seconds = Number(rest[index + 1]);
+      if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_WAIT_SECONDS) refuse("wait-landing-invalid");
+      options.waitLanding = seconds;
       index += 1;
     } else if (argument === "--handle-digest") {
       const digest = rest[index + 1];
@@ -725,22 +733,33 @@ function commandDeliver(config, options) {
   }
   const listed = listPanes(context);
   if (!listed.available) return beforeSend("panes-unavailable", windowId);
-  const row = listed.rows.find((entry) => (
+  const coordinatesMatch = (entry) => (
     entry.sessionName === locator.tmux.sessionName
     && entry.windowId === locator.tmux.windowId
     && entry.paneId === locator.tmux.paneId
-  ));
-  if (row === undefined) return beforeSend("pane-missing", windowId);
+  );
+  const metadataMatch = (entry) => (
+    entry.options.programId === locator.programId
+    && entry.options.hostId === HOST_ID
+    && entry.options.windowId === windowId
+    && entry.options.bindingId === locator.bindingId
+    && entry.options.locatorId === locator.locatorId
+  );
+  // 与旧实现的 pane authority 同形：按坐标或标识相关的 pane 必须恰好一个、活着、跑的是 claude，
+  // 标识与坐标都对才粘贴（gate-log §13.122）。
+  const related = listed.rows.filter((entry) => coordinatesMatch(entry) || metadataMatch(entry));
+  if (related.length === 0) return beforeSend("pane-missing", windowId);
+  if (related.length > 1) return beforeSend("duplicate-pane", windowId, { panes: related.map((entry) => entry.paneId) });
+  const row = related[0];
   if (row.paneDead) return beforeSend("pane-dead", windowId);
-  if (
-    row.options.programId !== locator.programId
-    || row.options.hostId !== HOST_ID
-    || row.options.windowId !== windowId
-    || row.options.bindingId !== locator.bindingId
-    || row.options.locatorId !== locator.locatorId
-  ) {
-    return beforeSend("metadata-mismatch", windowId, { hint: "run mark for this window first" });
+  if (!metadataMatch(row)) return beforeSend("metadata-mismatch", windowId, { hint: "run mark for this window first" });
+  if (!coordinatesMatch(row)) {
+    return beforeSend("locator-stale", windowId, {
+      hint: "the marked pane moved; register the window again",
+      observed: { windowId: row.windowId, paneId: row.paneId },
+    });
   }
+  if (row.currentCommand !== "claude") return beforeSend("wrong-process", windowId, { observed: row.currentCommand });
   const bufferName = "wakeflow-" + randomUUID();
   const loaded = tmux(context, ["load-buffer", "-b", bufferName, "-"], { input: prompt });
   if (!loaded.ok) return beforeSend("load-buffer-failed", windowId);
@@ -765,7 +784,43 @@ function commandDeliver(config, options) {
         status: marker !== null && captured.stdout.includes(marker) ? "confirmed" : "pending",
         evidenceDigest: sha256(captured.stdout),
       };
-  return { ok: true, command: "deliver", windowId, attempt: { status: "sent", evidenceDigest: attemptDigest }, readback };
+  const landing = observeLanding(windowId, prompt, options.waitLanding);
+  return { ok: true, command: "deliver", windowId, attempt: { status: "sent", evidenceDigest: attemptDigest }, readback, landing };
+}
+
+// 落地证据是目标会话的 user-prompt-submit hook 记录：摘要按内核规则取去首尾空白后 UTF-8 的 SHA-256；
+// 观察脚本已剥掉宿主的粘贴外壳，所以记录里的摘要就是这里算的值。只查已存在的记录，不推断。
+function promptSubmitRecord(sessionId, promptDigest) {
+  const directory = path.join(ROOT, ...HOOKS.split("/"));
+  const names = listJsonNames(directory).filter((name) => name.includes("-user-prompt-submit-")).reverse();
+  for (const name of names) {
+    const record = readBoundedJson(path.join(directory, name), MAX_RECORD_BYTES);
+    if (
+      record !== null && typeof record === "object"
+      && record.sessionId === sessionId && record.promptDigest === promptDigest
+    ) return record;
+  }
+  return null;
+}
+
+function observeLanding(windowId, prompt, seconds) {
+  const binding = readBoundedJson(path.join(ROOT, ...BINDINGS.split("/"), windowId + ".json"), MAX_RECORD_BYTES);
+  const sessionId = binding?.handle?.kind === HANDLE_KIND ? binding.handle.value : null;
+  if (typeof sessionId !== "string") return { status: "unavailable" };
+  const promptDigest = sha256(prompt.trim());
+  const deadline = Date.now() + seconds * 1000;
+  for (;;) {
+    const record = promptSubmitRecord(sessionId, promptDigest);
+    if (record !== null) {
+      return {
+        status: "observed",
+        recordId: typeof record.recordId === "string" ? record.recordId : null,
+        recordedAt: typeof record.recordedAt === "string" ? record.recordedAt : null,
+      };
+    }
+    if (Date.now() >= deadline) return { status: "pending", promptDigest };
+    sleep(HOOK_POLL_MS);
+  }
 }
 
 function commandClose(config, options) {

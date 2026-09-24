@@ -691,6 +691,56 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   deepEqual(enterFailed.json.attempt, { status: "unknown" });
   equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: "   \n" }).json.reason, "stdin-empty");
   equal(runHelper(current, ["deliver", "--window", CONTROLLER_WINDOW_ID], { input: prompt }).json.reason, "locator-missing");
+
+  // 与旧实现同形的送前 pane authority：重复 pane、跑的不是 claude、坐标过期都不粘贴（§13.122）。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${livePane}\n${paneRow({ window: "@6", pane: "%12", options: LIVE_OPTIONS })}\n`,
+  );
+  const duplicate = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt });
+  equal(duplicate.json.reason, "duplicate-pane");
+  deepEqual(duplicate.json.attempt, { status: "failed-before-send" });
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", command: "zsh", options: LIVE_OPTIONS })}\n`,
+  );
+  const wrongProcess = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt });
+  equal(wrongProcess.json.reason, "wrong-process");
+  equal(wrongProcess.json.observed, "zsh");
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@6", pane: "%12", options: LIVE_OPTIONS })}\n`,
+  );
+  equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json.reason, "locator-stale");
+  writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
+
+  // 落地观察：目标会话的 user-prompt-submit 记录摘要等于去首尾空白 prompt 的摘要时 observed，否则 pending。
+  const pendingLanding = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"], {
+    input: prompt,
+  });
+  equal((pendingLanding.json.landing as { status: string }).status, "pending");
+  const promptDigest = computeSha256Digest(encodeUtf8(prompt.trim(), "$prompt"), "$prompt");
+  const recordId = "11111111-2222-4333-8444-555555555555";
+  writeFileSync(
+    path.join(current.hooks, `20260924T010000000Z-user-prompt-submit-${recordId}.json`),
+    JSON.stringify({
+      kind: "WakeflowHostHookObservation",
+      event: "user-prompt-submit",
+      sessionId: SESSION_ID,
+      promptDigest,
+      recordId,
+      recordedAt: "2026-09-24T01:00:00.000Z",
+    }),
+  );
+  const observedLanding = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "1"], {
+    input: prompt,
+  });
+  deepEqual(observedLanding.json.landing, {
+    status: "observed",
+    recordId,
+    recordedAt: "2026-09-24T01:00:00.000Z",
+  });
+  equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "999"], { input: prompt }).json.reason, "wait-landing-invalid");
 });
 
 test("the helper resolves the workspace from its own location and refuses to run outside one", async (t) => {

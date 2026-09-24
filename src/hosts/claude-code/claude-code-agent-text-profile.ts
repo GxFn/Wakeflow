@@ -4,7 +4,7 @@ import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "./claude-code-tmux-asset.js";
  * Wakeflow Host / Claude Code：agent 面文本的宿主取值表（gate-log §13.99 D3、D9）。
  *
  * 本模块是纯数据加确定性渲染，与 `claude-code-hook-fragment.ts` 同一模式：文本只有一份源
- * （`assets/agent-text/`，仓库相对，不出现任何宿主名），宿主差异写成六个封闭占位符，取值
+ * （`assets/agent-text/`，仓库相对，不出现任何宿主名），宿主差异写成七个封闭占位符，取值
  * 住在这里。制品构建器动态 import 本模块，对源目录里的每份 Markdown 做一次封闭替换后写进
  * 候选制品——源里出现未登记的占位符，或表里有没被任何源文件用到的取值，构建即失败。
  *
@@ -16,13 +16,14 @@ import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "./claude-code-tmux-asset.js";
  * 回扫已替换的文本，所以取值里即便出现 `{{...}}` 也不会被二次展开。字节只由本表决定，不
  * 含版本号或构建标识，两次构建因此字节一致。
  *
- * 本模块不导入任何东西：取值是给人读的文本，没有运行时依赖，也不看对端宿主。
+ * 本模块只导入 tmux 助手的命令常量（与权限规则同源）；取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 六个封闭占位符（D3）；源目录里出现表外的占位符即构建失败。 */
+/** 七个封闭占位符（D3，§13.118 加 windowBootstrap）；源目录里出现表外的占位符即构建失败。 */
 export type ClaudeCodeAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
+  | "windowBootstrap"
   | "deliveryAction"
   | "worktreeLaunch"
   | "commandSurface"
@@ -51,11 +52,23 @@ const WINDOW_LAUNCH =
   `from the workspace root: \`${TMUX_HELPER} launch --window <windowId>\`. The helper opens ` +
   "the tmux window at the intent's root, starts `claude` with the listed parameters and a " +
   "fresh session id, waits for the session-start hook record, and prints the creation " +
-  "observation to register verbatim. Your own Controller window uses `self` instead of " +
-  "`launch`; it reads the pane and the session id from the environment Claude Code gives " +
-  "its shell. After each registration run `mark --window <windowId>` so the tmux window " +
+  "observation to register verbatim. After each registration run `mark --window <windowId>` " +
+  "so the tmux window " +
   "carries the five Wakeflow options; `panes` prints the tmux-panes observation, and " +
   "`close --window <windowId>` prints the closure evidence a decommission needs.";
+
+/** Controller 自己怎么进 tmux：用户是被引导者，从不自己配置 tmux（§13.118）。 */
+const WINDOW_BOOTSTRAP =
+  `run \`${TMUX_HELPER} preflight\` and read \`insideTmux\`. When it is true this session is ` +
+  "the Controller: register it with `self` (pipe your own window's inspect result in). When it " +
+  "is false this session only bootstraps and must not register itself: `launch` the Controller " +
+  "window's own intent too, so a fresh Controller starts inside the tmux session the helper " +
+  "creates, launch every other window with `--wait 0`, then give the user the exact `attach` " +
+  "command the helper printed, ask them to accept the trust dialog in every window (`Ctrl-b n` " +
+  "moves to the next one) and to tell you when that is done; only then register each window " +
+  "from the observations you kept, run `mark --all`, and tell the user to continue in the tmux " +
+  "Controller and close this session. The user never sets tmux up by hand: you do it and tell " +
+  "them the one thing to run or press.";
 
 const DELIVERY_ACTION =
   "pipe the permit's prompt into the tmux helper, run from the workspace root: " +
@@ -86,14 +99,14 @@ const HOST_TRUST_STEPS_EN = [
   "`settings.local.json`; that block belongs to Wakeflow, and a `statusLine` you rewrite",
   "yourself is reported as a difference the next time the workspace is reconciled.",
   "",
-  "Start the Controller inside tmux: `tmux new-session -s wakeflow -c <workspace root>`,",
-  "then `claude` in that window. Maintenance installs a tmux helper at",
-  "`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`; the Controller",
-  "opens every other window through it, registers its own window from the pane and session",
-  "id Claude Code exports to its shell, and delivers prompts through it. Maintenance also",
-  "writes one precise allow rule for that helper into the workspace root's",
-  "`.claude/settings.json`, so the helper runs without a permission prompt; nothing",
-  "broader such as `Bash(tmux *)` is written.",
+  "You never set tmux up by hand. Start `claude` in the workspace directory and run",
+  "`/wakeflow-init`: the Controller creates the tmux session and every window itself through",
+  "the helper maintenance installs at",
+  "`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact",
+  "`tmux attach` command once the windows are up, and which trust dialogs to accept. It",
+  "delivers prompts through the same helper. Maintenance also writes one precise allow rule",
+  "for that helper into the workspace root's `.claude/settings.json`, so the helper runs",
+  "without a permission prompt; nothing broader such as `Bash(tmux *)` is written.",
 ].join("\n");
 
 const HOST_TRUST_STEPS_ZH = [
@@ -102,20 +115,20 @@ const HOST_TRUST_STEPS_ZH = [
   "`wakeflow_maintain_workspace` 写进 `settings.local.json` 的托管块；那个块归 Wakeflow",
   "所有，你自己改写 `statusLine` 会在下一次对账里被报成差异。",
   "",
-  "在 tmux 里启动 Controller：`tmux new-session -s wakeflow -c <工作区根>`，然后在那个窗口里",
-  "运行 `claude`。维护会把一个 tmux 助手装到",
-  "`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`；Controller 用它开",
-  "其他所有窗口、用 Claude Code 交给 shell 的 pane 与 session id 登记自己的窗口、也用它投递",
-  "prompt。维护还会往工作区根的 `.claude/settings.json` 写一条只放行这个助手的 allow 规则，",
-  "助手因此不弹权限；不会写 `Bash(tmux *)` 之类更宽的规则。",
+  "你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow-init`：Controller 会通过",
+  "维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己",
+  "建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任",
+  "对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写一条只放行",
+  "这个助手的 allow 规则，助手因此不弹权限；不会写 `Bash(tmux *)` 之类更宽的规则。",
 ].join("\n");
 
-/** 六个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致。 */
+/** 七个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致。 */
 export const CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS: Readonly<
   Record<ClaudeCodeAgentTextPlaceholderKey, Readonly<ClaudeCodeAgentTextPlaceholderValue>>
 > = Object.freeze({
   instructionFile: Object.freeze({ en: INSTRUCTION_FILE }),
   windowLaunch: Object.freeze({ en: WINDOW_LAUNCH }),
+  windowBootstrap: Object.freeze({ en: WINDOW_BOOTSTRAP }),
   deliveryAction: Object.freeze({ en: DELIVERY_ACTION }),
   worktreeLaunch: Object.freeze({ en: WORKTREE_LAUNCH }),
   commandSurface: Object.freeze({ en: COMMAND_SURFACE_EN, zh: COMMAND_SURFACE_ZH }),

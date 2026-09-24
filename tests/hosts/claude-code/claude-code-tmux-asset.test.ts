@@ -358,7 +358,12 @@ test("preflight reports tmux, claude, the configured session and the shell conte
   equal(run.status, 0);
   deepEqual(run.json.tmux, { available: true, version: "tmux 3.6b" });
   deepEqual(run.json.claude, { available: true, version: "9.9.9 (Claude Code)" });
-  deepEqual(run.json.session, { socketName: null, sessionName: "wakeflow", present: false });
+  deepEqual(run.json.session, {
+    socketName: null,
+    sessionName: "wakeflow",
+    present: false,
+    attach: "tmux attach -t wakeflow",
+  });
   equal(run.json.insideTmux, false);
   equal(run.json.sessionIdVisible, false);
   deepEqual(tmuxLog(current).map((entry) => entry[0]), ["has-session", "-V"]);
@@ -388,6 +393,8 @@ test("launch opens the session or a window from the intent, freezes the title, w
   equal(observation.worktree, undefined);
   deepEqual(first.json.hook, { sessionStart: "observed" });
   deepEqual(first.json.window, { name: "Controller", cwd: ".", created: "new-session" });
+  // 新建会话时告诉 Agent 让用户执行的那一条 attach 命令；已有会话时不重复。
+  equal(first.json.attach, "tmux attach -t wakeflow");
 
   const log = tmuxLog(current);
   deepEqual(log[0], ["has-session", "-t", "=wakeflow"]);
@@ -417,6 +424,7 @@ test("launch opens the session or a window from the intent, freezes the title, w
   equal(second.status, 0, JSON.stringify(second.json));
   deepEqual(second.json.hook, { sessionStart: "pending" });
   deepEqual(second.json.window, { name: "Product A", cwd: "../ProductA", created: "new-window" });
+  equal(second.json.attach, undefined);
   deepEqual((second.json.observation as { readonly tmux: unknown }).tmux, {
     socketName: null,
     sessionName: "wakeflow",

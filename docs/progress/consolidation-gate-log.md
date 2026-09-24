@@ -3399,3 +3399,19 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **文档写回。** 能力卡 1 §1.1 宿主差异与现 TS 状态、Q3 记录；能力卡 2 §2.6、能力卡 6 §6.2、能力卡 9 §9.4 现 TS 状态；对账账本 lifecycle 与 transport 两行改 recut；capability-map 三行；README 两语（占位符）与 Controller 技能；制品重建。
 
 **未执行。** 真实 tmux 上的助手（开窗口、登记、投递、状态栏）留给联合测试；插件缓存刷新与联合测试在本节提交之后进行。
+
+## 13.118 用户是被引导者：Controller 自己把 tmux 建起来（2026-09-24）
+
+**背景。** 用户否决了 §13.117 之后我给出的联合测试步骤——那里让用户自己 `tmux new-session` 再在里面开 Controller。用户的模型是：在工作区里运行 `claude`，执行插件命令，其余由插件引导："你应该把 wakeflow 的用户当做被引导者，而不是让我来执行 tmux 命令"。这是对流程与文本的裁决，记为长期规则：用户自己做的只有启动 `claude` 与执行插件命令，其余宿主动作由 Controller 执行，只能由用户做的事（attach、信任对话、确认）由 Controller 当场告知。
+
+**决定与落地。**
+
+- D1 第七个占位符 `windowBootstrap`（两宿主各一份取值，Controller 技能 SKILL.md 第 1 步与工作区参考各用一次）。Claude 取值：先 `preflight` 看 `insideTmux`；在 tmux 里就用 `self` 登记自己；不在时本会话只做引导者且不登记自己——把 Controller 窗口自己的意图也 `launch`（助手新建 tmux 会话并在里面起一个新的 Controller），其余窗口以 `--wait 0` 全部 launch，把助手打印的 `attach` 命令原样交给用户、请其在每个窗口接受信任对话并回话，之后再逐个登记、`mark --all`，最后告诉用户到 tmux 里的 Controller 继续并关掉本会话。Codex 取值：Controller 就是当前线程，先登记自己。`windowLaunch` 里关于 `self` 的句子移入 `windowBootstrap`。
+- D2 助手 `preflight` 的 `session` 与新建会话时的 `launch` 输出都带 `attach`（`tmux [-L socket] attach -t <session>`）：Agent 只转述，不自己拼命令。
+- D3 README 两语：一次性宿主动作改为"你不需要自己配置 tmux……"；"四种窗口角色"与"主流程"第 1 步改为窗口由 Controller 里的 Agent 替用户启动、轮到用户的事当场告知。
+
+**回归。** tmux 助手测试的 preflight 与 launch 用例断言 `attach`；制品构建对七个占位符的"未登记 / 未使用"检查通过，两份制品都渲染了新取值且没有残留占位符。焦点集 61/61（hosts/claude-code 与 artifacts）。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 1009/1009（`test:typescript` 340.3 s，整门约 351 s），`npm run smoke:artifacts` 两宿主七幕全过（18 s），`git diff --check` 干净。
+
+**未执行。** 真实 tmux 上的引导流程（bootstrap、attach、信任对话、登记、投递）留给用户在 `WakeflowTestWorkspace` 里的联合测试；用户的动作只有在工作区里运行 `claude` 与 `/wakeflow-init`。

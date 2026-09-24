@@ -513,6 +513,10 @@ function promptMarker(prompt) {
   return line.length < MARKER_MINIMUM ? null : line.slice(0, MARKER_MAXIMUM);
 }
 
+function attachCommand(context) {
+  return (context.socketName === null ? "tmux" : "tmux -L " + context.socketName) + " attach -t " + context.sessionName;
+}
+
 function commandPreflight(config) {
   const context = tmuxContext(config);
   const session = tmux(context, ["has-session", "-t", "=" + context.sessionName]);
@@ -521,7 +525,7 @@ function commandPreflight(config) {
     command: "preflight",
     tmux: versionOf("tmux", ["-V"]),
     claude: versionOf("claude", ["--version"]),
-    session: { socketName: context.socketName, sessionName: context.sessionName, present: session.ok },
+    session: { socketName: context.socketName, sessionName: context.sessionName, present: session.ok, attach: attachCommand(context) },
     insideTmux: typeof process.env.TMUX_PANE === "string" && process.env.TMUX_PANE.length > 0,
     currentSocketName: currentSocketName(),
     sessionIdVisible: typeof process.env.CLAUDE_CODE_SESSION_ID === "string" && UUID_PATTERN.test(process.env.CLAUDE_CODE_SESSION_ID),
@@ -582,6 +586,7 @@ function commandLaunch(config, options) {
     }, worktree),
     hook: { sessionStart: hook.status },
     window: { name: windowName, cwd: placement.relative, created: exists ? "new-window" : "new-session" },
+    ...(exists ? {} : { attach: attachCommand(context) }),
     ...(worktreeRequested && worktree === null ? { worktreeObservation: "pending" } : {}),
   };
 }

@@ -61,7 +61,8 @@ its blockers to the user, and apply only after they confirm. Depth:
 ### Step 1 - Open windows and register their bindings
 
 Maintenance and pod creation return launch intents: a role, a root and the
-parameters to start with. For each one: open a new Codex thread rooted at the directory the intent names, started with the parameters it lists. Then register the
+parameters to start with. First: the Controller is the thread you are in: register it with its own thread id before opening anything else, then work through the remaining launch intents. For each one:
+open a new Codex thread rooted at the directory the intent names, started with the parameters it lists. Then register the
 handle you observed with `wakeflow_register_window_binding`. Registration needs
 a real `session-start` hook record for that session and root - if none exists,
 the window did not start where you think it did. Use the same tool to inspect a

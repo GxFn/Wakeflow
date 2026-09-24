@@ -15,8 +15,8 @@ repositories.
   repositories, holding the configuration, the active state and the durable
   ledger.
 - **Four window roles** - controller, design, test, and one product window per
-  repository. Each is an agent window you launch; Wakeflow records which is
-  which.
+  repository. Each is an agent window the Controller launches for you; Wakeflow
+  records which is which.
 - **Four skills** - `wakeflow-controller`, `wakeflow-design`,
   `wakeflow-target`, `wakeflow-test`. Each window loads the one for its role.
 - **Pods** - a second complete window set working in its own worktree, for
@@ -24,8 +24,10 @@ repositories.
 
 ## The flow
 
-1. In the Controller window, ask to initialize the workspace, then launch the
-   windows it asks for and let the agent register them.
+1. In the Controller window, ask to initialize the workspace. The agent opens
+   the other windows from the launch intents and registers them, and tells you
+   at each point the one thing only you can do (attach to tmux, accept a trust
+   dialog).
 2. In the Design window, work out the requirement with the agent. It reads your
    code read-only, drafts the package, and shows you a one-page summary. You
    confirm it, and it is published to the board.

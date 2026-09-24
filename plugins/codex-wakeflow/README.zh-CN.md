@@ -12,7 +12,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 - **一个工作区** —— 与产品仓库分开的控制器目录，存放配置、活动状态与持久
   ledger。
 - **四种窗口角色** —— controller、design、test，以及每个仓库一个 product 窗口。
-  窗口由你启动，Wakeflow 只记录哪个是哪个。
+  窗口由 Controller 里的 Agent 替你启动，Wakeflow 只记录哪个是哪个。
 - **四份技能** —— `wakeflow-controller`、`wakeflow-design`、`wakeflow-target`、
   `wakeflow-test`。每个窗口加载自己角色那一份。
 - **pod** —— 在自己的 worktree 里运行的第二套完整窗口集，用来并行推进两件事而
@@ -20,8 +20,8 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 
 ## 主流程
 
-1. 在 Controller 窗口说"初始化工作区"，然后按它给出的启动意图开窗口，让 Agent
-   登记它们。
+1. 在 Controller 窗口说"初始化工作区"，Agent 会按启动意图开好其他窗口并登记
+   它们；轮到你做的事（接管 tmux、接受信任对话）它会当场告诉你。
 2. 在 Design 窗口与 Agent 一起把需求讨论清楚。它只读地核实你的代码、写出需求
    包，并给你一页摘要。你确认后，需求包发布上板。
 3. 回到 Controller 窗口：认领需求包、规划任务、准备投递，并把它送进产品窗口。

@@ -61,7 +61,8 @@ its blockers to the user, and apply only after they confirm. Depth:
 ### Step 1 - Open windows and register their bindings
 
 Maintenance and pod creation return launch intents: a role, a root and the
-parameters to start with. For each one: {{windowLaunch}} Then register the
+parameters to start with. First: {{windowBootstrap}} For each one:
+{{windowLaunch}} Then register the
 handle you observed with `wakeflow_register_window_binding`. Registration needs
 a real `session-start` hook record for that session and root - if none exists,
 the window did not start where you think it did. Use the same tool to inspect a

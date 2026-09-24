@@ -2,7 +2,7 @@
  * Wakeflow Host / Codex：agent 面文本的宿主取值表（gate-log §13.99 D3、D9）。
  *
  * 本模块是纯数据加确定性渲染，与 `codex-hook-fragment.ts` 同一模式：文本只有一份源
- * （`assets/agent-text/`，仓库相对，不出现任何宿主名），宿主差异写成六个封闭占位符，取值
+ * （`assets/agent-text/`，仓库相对，不出现任何宿主名），宿主差异写成七个封闭占位符，取值
  * 住在这里。制品构建器动态 import 本模块，对源目录里的每份 Markdown 做一次封闭替换后写进
  * 候选制品——源里出现未登记的占位符，或表里有没被任何源文件用到的取值，构建即失败。
  *
@@ -17,10 +17,11 @@
  * 本模块不导入任何东西：取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 六个封闭占位符（D3）；源目录里出现表外的占位符即构建失败。 */
+/** 七个封闭占位符（D3，§13.118 加 windowBootstrap）；源目录里出现表外的占位符即构建失败。 */
 export type CodexAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
+  | "windowBootstrap"
   | "deliveryAction"
   | "worktreeLaunch"
   | "commandSurface"
@@ -43,6 +44,11 @@ const INSTRUCTION_FILE = "AGENTS.md";
 const WINDOW_LAUNCH =
   "open a new Codex thread rooted at the directory the intent names, started with " +
   "the parameters it lists.";
+
+/** Codex 没有 tmux：Controller 就是当前线程，先登记自己再开别的。 */
+const WINDOW_BOOTSTRAP =
+  "the Controller is the thread you are in: register it with its own thread id before " +
+  "opening anything else, then work through the remaining launch intents.";
 
 const DELIVERY_ACTION =
   "send the permit's prompt into the target window's thread with your Codex thread " +
@@ -73,12 +79,13 @@ const HOST_TRUST_STEPS_ZH = [
   "条目。",
 ].join("\n");
 
-/** 六个占位符的 Codex 取值；键序与 D3 列出的顺序一致。 */
+/** 七个占位符的 Codex 取值；键序与 D3 列出的顺序一致。 */
 export const CODEX_AGENT_TEXT_PLACEHOLDERS: Readonly<
   Record<CodexAgentTextPlaceholderKey, Readonly<CodexAgentTextPlaceholderValue>>
 > = Object.freeze({
   instructionFile: Object.freeze({ en: INSTRUCTION_FILE }),
   windowLaunch: Object.freeze({ en: WINDOW_LAUNCH }),
+  windowBootstrap: Object.freeze({ en: WINDOW_BOOTSTRAP }),
   deliveryAction: Object.freeze({ en: DELIVERY_ACTION }),
   worktreeLaunch: Object.freeze({ en: WORKTREE_LAUNCH }),
   commandSurface: Object.freeze({ en: COMMAND_SURFACE_EN, zh: COMMAND_SURFACE_ZH }),

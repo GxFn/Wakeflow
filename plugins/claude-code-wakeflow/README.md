@@ -15,8 +15,8 @@ repositories.
   repositories, holding the configuration, the active state and the durable
   ledger.
 - **Four window roles** - controller, design, test, and one product window per
-  repository. Each is an agent window you launch; Wakeflow records which is
-  which.
+  repository. Each is an agent window the Controller launches for you; Wakeflow
+  records which is which.
 - **Four skills** - `wakeflow-controller`, `wakeflow-design`,
   `wakeflow-target`, `wakeflow-test`. Each window loads the one for its role.
 - **Pods** - a second complete window set working in its own worktree, for
@@ -24,8 +24,10 @@ repositories.
 
 ## The flow
 
-1. In the Controller window, ask to initialize the workspace, then launch the
-   windows it asks for and let the agent register them.
+1. In the Controller window, ask to initialize the workspace. The agent opens
+   the other windows from the launch intents and registers them, and tells you
+   at each point the one thing only you can do (attach to tmux, accept a trust
+   dialog).
 2. In the Design window, work out the requirement with the agent. It reads your
    code read-only, drafts the package, and shows you a one-page summary. You
    confirm it, and it is published to the board.
@@ -77,14 +79,14 @@ run, so no session is observed and no delivery can be shown to have landed.
 `settings.local.json`; that block belongs to Wakeflow, and a `statusLine` you rewrite
 yourself is reported as a difference the next time the workspace is reconciled.
 
-Start the Controller inside tmux: `tmux new-session -s wakeflow -c <workspace root>`,
-then `claude` in that window. Maintenance installs a tmux helper at
-`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`; the Controller
-opens every other window through it, registers its own window from the pane and session
-id Claude Code exports to its shell, and delivers prompts through it. Maintenance also
-writes one precise allow rule for that helper into the workspace root's
-`.claude/settings.json`, so the helper runs without a permission prompt; nothing
-broader such as `Bash(tmux *)` is written.
+You never set tmux up by hand. Start `claude` in the workspace directory and run
+`/wakeflow-init`: the Controller creates the tmux session and every window itself through
+the helper maintenance installs at
+`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact
+`tmux attach` command once the windows are up, and which trust dialogs to accept. It
+delivers prompts through the same helper. Maintenance also writes one precise allow rule
+for that helper into the workspace root's `.claude/settings.json`, so the helper runs
+without a permission prompt; nothing broader such as `Bash(tmux *)` is written.
 
 Both hosts, and the usual reason something is silently missing:
 

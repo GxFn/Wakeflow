@@ -12,7 +12,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 - **一个工作区** —— 与产品仓库分开的控制器目录，存放配置、活动状态与持久
   ledger。
 - **四种窗口角色** —— controller、design、test，以及每个仓库一个 product 窗口。
-  窗口由你启动，Wakeflow 只记录哪个是哪个。
+  窗口由 Controller 里的 Agent 替你启动，Wakeflow 只记录哪个是哪个。
 - **四份技能** —— `wakeflow-controller`、`wakeflow-design`、`wakeflow-target`、
   `wakeflow-test`。每个窗口加载自己角色那一份。
 - **pod** —— 在自己的 worktree 里运行的第二套完整窗口集，用来并行推进两件事而
@@ -20,8 +20,8 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 
 ## 主流程
 
-1. 在 Controller 窗口说"初始化工作区"，然后按它给出的启动意图开窗口，让 Agent
-   登记它们。
+1. 在 Controller 窗口说"初始化工作区"，Agent 会按启动意图开好其他窗口并登记
+   它们；轮到你做的事（接管 tmux、接受信任对话）它会当场告诉你。
 2. 在 Design 窗口与 Agent 一起把需求讨论清楚。它只读地核实你的代码、写出需求
    包，并给你一页摘要。你确认后，需求包发布上板。
 3. 回到 Controller 窗口：认领需求包、规划任务、准备投递，并把它送进产品窗口。
@@ -61,12 +61,11 @@ Wakeflow 所有，块以外的内容都是你的。产品仓库或外部拥有�
 `wakeflow_maintain_workspace` 写进 `settings.local.json` 的托管块；那个块归 Wakeflow
 所有，你自己改写 `statusLine` 会在下一次对账里被报成差异。
 
-在 tmux 里启动 Controller：`tmux new-session -s wakeflow -c <工作区根>`，然后在那个窗口里
-运行 `claude`。维护会把一个 tmux 助手装到
-`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`；Controller 用它开
-其他所有窗口、用 Claude Code 交给 shell 的 pane 与 session id 登记自己的窗口、也用它投递
-prompt。维护还会往工作区根的 `.claude/settings.json` 写一条只放行这个助手的 allow 规则，
-助手因此不弹权限；不会写 `Bash(tmux *)` 之类更宽的规则。
+你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow-init`：Controller 会通过
+维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己
+建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任
+对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写一条只放行
+这个助手的 allow 规则，助手因此不弹权限；不会写 `Bash(tmux *)` 之类更宽的规则。
 
 两个宿主共同的部分，以及"东西静默缺失"的常见原因：
 

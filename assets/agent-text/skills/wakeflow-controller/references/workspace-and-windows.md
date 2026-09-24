@@ -82,6 +82,8 @@ A binding maps that logical window to the host handle you observed after
 launching it. Bindings live in the private local runtime and never appear in a
 public result.
 
+Before the first launch: {{windowBootstrap}}
+
 Launching and registering:
 
 1. Take the launch intent from the maintenance or pod result: it names the

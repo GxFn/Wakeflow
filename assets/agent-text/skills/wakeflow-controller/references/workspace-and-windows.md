@@ -29,9 +29,14 @@ current. Read it back through a tool.
   directory that is itself a Git repository (`git init` first; the preview
   reports `gitignore-git-repository` until it is).
 - **reconfigure** - a declared difference against an existing config. Layout
-  identity is immutable: the program id and the ledger root cannot move, and a
-  change to the pod set is not a reconfigure. Those refusals are structural,
-  not advisory - route the user to the right operation instead of retrying.
+  identity is immutable: the program id and the ledger root cannot move, the
+  topology (repositories, surfaces, windows) is refused as a layout change,
+  and a change to the pod set is not a reconfigure. Those refusals are
+  structural, not advisory - route the user to the right operation instead of
+  retrying. What does change here: the display name, description and
+  language, and the host launch preferences under `hosts` - the model,
+  reasoning effort and permission mode by role, and the tmux container names -
+  which the next launch intents pick up without touching any window.
 - **reconcile** - bring a workspace back to what its descriptor implies. On a
   healthy workspace this is a no-op that writes nothing, which makes it a safe
   thing to run when you are unsure. It repairs only what Wakeflow owns: a
@@ -49,7 +54,10 @@ Procedure, every time:
 
 1. Gather the user's choices in plain conversation first. Repositories, the
    surfaces, the storage root and the program's own description are decisions,
-   not defaults for you to pick.
+   not defaults for you to pick. A model, reasoning effort or permission mode
+   the user wants for a role belongs in the selection's `hosts` block, keyed
+   by host and role: `hosts.<host>.launch.modelByRole.<role or default>`,
+   `reasoningEffortByRole` likewise, and `permissionMode` for Claude Code.
 2. Preview. It writes nothing and returns the plan, its blockers and the launch
    intents the plan would produce.
 3. Show the user the plan and every blocker. A blocker is a fact about their

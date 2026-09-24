@@ -458,9 +458,12 @@ async function scenarioReconcileNoop(context: ScenarioContext): Promise<string> 
 }
 
 /**
- * card-01/reconfigure（能力卡 1.3）：改一条声明差异（`program.description`），preview 零写且
- * 只报这条差异带出的两步，apply 只改这两处；`storage.ledgerRoot` 与 `pods[]` 的差异被拒。
+ * card-01/reconfigure（能力卡 1.3）：改一条声明差异（`program.description`）并加一条宿主启动偏好
+ * （`hosts.codex.launch.modelByRole.default`），preview 零写且只报描述差异带出的两步，apply 只改这两处；
+ * `storage.ledgerRoot` 与 `pods[]` 的差异被拒。hosts 不是布局（§13.116 D1），偏好随后进入启动意图。
  */
+const SCENARIO_CODEX_MODEL = "scenario-codex-model";
+
 async function scenarioReconfigure(context: ScenarioContext): Promise<string> {
   const root = context.workspace.workspacePath;
   if (!context.repositoryId) throw new Error("scenario ordering: fresh-initialize must run first");
@@ -468,6 +471,7 @@ async function scenarioReconfigure(context: ScenarioContext): Promise<string> {
   const rejections = await assertReconfigureRejections(context, current);
   const described = cloneConfigDocument(current);
   (described.program as Record<string, unknown>).description = "Scenario acceptance description";
+  described.hosts = { codex: { launch: { modelByRole: { default: SCENARIO_CODEX_MODEL } } } };
   const before = workspaceBytes(root);
   const preview = await maintain(context, {
     action: "reconfigure",
@@ -501,10 +505,11 @@ async function scenarioReconfigure(context: ScenarioContext): Promise<string> {
   deepEqual([...changed], [...declared, ...refreshed].sort());
   const after = readConfigDocument(root);
   equal((after.program as Record<string, unknown>).description, "Scenario acceptance description");
-  for (const section of ["topology", "storage", "pods", "hosts", "presentation", "governance"]) {
+  for (const section of ["topology", "storage", "pods", "presentation", "governance"]) {
     equal(configSection(after, section), configSection(current, section), `${section} changed`);
   }
-  return `ledgerRoot+pods refused(${rejections}); preview=ready, ${kinds.join("+")}, zero-write; apply=completed, declared writes ${declared.join("+")} plus the refreshed active projection`;
+  equal(configSection(after, "hosts"), configSection(described, "hosts"), "hosts not applied");
+  return `ledgerRoot+pods refused(${rejections}); preview=ready, ${kinds.join("+")}, zero-write; apply=completed, declared writes ${declared.join("+")} plus the refreshed active projection; hosts.codex model preference applied`;
 }
 
 /** reconfigure 的两条不可变规则：ledgerRoot 初始化后不可改，pods[] 只由 wakeflow_pod 改。 */
@@ -602,13 +607,19 @@ async function scenarioWindowHandshake(context: ScenarioContext): Promise<string
     readonly launchIntent: {
       readonly intentDigest: string;
       readonly root: { readonly configuredPlacement: string };
-      readonly execution: { readonly kind: string; readonly tool: string };
+      readonly execution: {
+        readonly kind: string;
+        readonly tool: string;
+        readonly model: string | null;
+      };
     };
     readonly next: { readonly frontier: string | null };
   };
   equal(inspection.binding.status, "unregistered");
   equal(inspection.launchIntent.execution.kind, "codex");
   equal(inspection.launchIntent.execution.tool, "create_thread");
+  // card-01/reconfigure 写入的宿主启动偏好进入产品窗口的启动意图（§13.116 D1）。
+  equal(inspection.launchIntent.execution.model, SCENARIO_CODEX_MODEL);
   equal(inspection.next.frontier, "window-registration");
   const handle = { kind: "codex-thread", value: "codex-host-owned-thread:scenario-1" };
   await recordSessionStart(context, handle.value, inspection.launchIntent.root.configuredPlacement);

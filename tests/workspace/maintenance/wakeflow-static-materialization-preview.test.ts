@@ -388,6 +388,24 @@ test("placement-stable reconfigure plans derived files before Config activation"
     true,
   );
 
+  // hosts 是启动偏好而不是布局：只改 hosts 的 reconfigure 就绪，派生正文不依赖它，计划只剩 config 一步（§13.116 D1）。
+  const preferred = createMinimalWakeflowConfig();
+  (preferred.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+  preferred.hosts = {
+    "claude-code": {
+      launch: { modelByRole: { default: "opus" }, permissionMode: "acceptEdits" },
+    },
+  };
+  const hostsOnly = await previewWakeflowStaticMaterialization(
+    workspace.root,
+    request("reconfigure", parseWakeflowConfig(preferred)),
+  );
+  equal(hostsOnly.status, "ready");
+  deepEqual(
+    hostsOnly.steps.map((entry) => entry.kind),
+    ["publish-config"],
+  );
+
   chmodSync(path.join(workspace.absolutePath, "Ledger", "transactions"), 0o755);
   const driftedLedger = await previewWakeflowStaticMaterialization(
     workspace.root,

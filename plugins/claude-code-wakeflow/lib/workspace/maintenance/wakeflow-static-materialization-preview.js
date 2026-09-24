@@ -671,9 +671,10 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         if (current.model.program.programId !== desired.program.programId) {
             addBlocker(blockers, "reconfigure-program-identity-change");
         }
+        // 布局只含 topology 与 storage。`hosts` 是持久启动偏好（按角色的模型、effort、权限模式与 tmux
+        // 容器名），能力卡 1 §1.3 列为可改项；托管正文与窗口投影都不依赖它，改动只落到 config 一步（§13.116 D1）。
         if (!sameSemanticSection(current.model.topology, desired.topology) ||
-            !sameSemanticSection(current.model.storage, desired.storage) ||
-            !sameSemanticSection(current.model.hosts, desired.hosts)) {
+            !sameSemanticSection(current.model.storage, desired.storage)) {
             addBlocker(blockers, "reconfigure-layout-change-unsupported");
         }
         // pod 记录只由 wakeflow_pod 的配置事务改写（ADR-0010 D6）。

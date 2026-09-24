@@ -3354,3 +3354,26 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `npm run build:artifacts:committed` 后 `npm test` 998/998（含 `build:check`），`test:typescript` 406.7 s、整门 421 s（机器负载比上一轮高）；`npm run smoke:artifacts` 两宿主七幕全过（21 s）；`git diff --check` 干净。
 
 **文档写回。** README 两语第 4 步、init 命令、Controller 技能工作区参考 Step 0、能力卡 1 §1.1 现 TS 状态、plan 环境边界；制品重建。
+
+## 13.116 reconfigure 接受宿主启动偏好：`hosts` 不是布局；联合真实宿主测试前的准备（2026-09-24）
+
+**背景。** 用户要在 `WakeflowTestWorkspace` 上与 Claude 一起做真实宿主测试，且窗口要跑 Opus 模型。设 Opus 的正规途径是把 `hosts["claude-code"].launch.modelByRole.default` 写进配置，对已初始化的工作区只能走 reconfigure。用 Claude Code 制品（§13.115 提交后的重建副本）对该工作区做 reconfigure preview，被三个 blocker 挡住：`reconfigure-layout-change-unsupported`、`program-instruction-unknown-managed-body`、`support-memory-unadmitted-source`。
+
+**诊断。**
+
+1. 预览把 `hosts` 与 topology、storage 一起当作布局比较，任何 hosts 改动都报 layout-change。能力卡 1 §1.3 记录旧实现"自由可改：显示元数据、语言、governance、hosts、新增实体"，对账账本第 226 行把整段拒绝标为 recut，但没有任何裁决把 hosts 列为不可变；托管正文与窗口投影（`sourceFingerprints` 只含拓扑与根观察）都不依赖 hosts。这是对齐遗漏，不是设计。
+2. 工作区根的 `CLAUDE.md`、`Design/CLAUDE.md`、`Test/CLAUDE.md` 仍写着旧显示名 "Wakeflow Test Workspace"：§13.115 第 7 步的 displayName reconfigure 是用 Codex 制品做的，它只重写自己的三份 `AGENTS.md`。Claude 视角的检查只准入当前配置的渲染（`currentTargets = [render(current)]`），一代之前的 Wakeflow 渲染被当作 `unknown-managed-body` / `unadmitted-source` 报为 blocker，而 blocker 归 user，Claude 侧自己修不了。同一工作区交替使用两个宿主时，任一宿主的 reconfigure 都会把对方宿主的三份文件留在上一代并让对方卡死。
+
+**决定。**
+
+- D1 `hosts` 移出布局比较：reconfigure 只把 topology 与 storage 视为布局，`pods[]` 仍走 `reconfigure-pods-change-unsupported`。hosts 只改配置一步，不重写任何托管正文或投影，下一次启动意图即带上。Controller 技能工作区参考 Step 0 补写 reconfigure 的可改项，并在 fresh 的第 1 步说明模型 / effort / 权限模式落在 selection 的 `hosts.<host>.launch.*` 里——此前技能文本从未提到 hosts，Agent 无从把用户的模型要求写进配置。
+- D2 对方宿主文件的时效（待用户裁决）：建议任一宿主的维护事务在对方宿主的指令与记忆文件存在时一并保持其为当前渲染，缺席时保持缺席（与 §13.97 D10、§13.111 D1 对等宿主运行时根的规则同形）。本节不实现。
+- D3 测试工作区重置（待用户确认）：为让联合测试单宿主、干净起步，删除根下 Wakeflow 生成的条目，保留空 `.git` 与五个仓库副本，由用户在 Controller 里用 `/wakeflow-init` 走真实的 fresh 流程。本节不执行。
+
+**回归。** 静态预览测试在 placement-stable reconfigure 用例里新增"只改 hosts 的 reconfigure 就绪且计划恰为 `publish-config` 一步"；场景 `card-01/reconfigure` 的声明差异加上 `hosts.codex.launch.modelByRole.default`，五段逐字节不变而 hosts 等于声明值，`card-02/window-handshake` 断言产品窗口启动意图的 `execution.model` 等于该值。焦点集 7/7（含 20 场景）。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 998/998（`test:typescript` 331.8 s，整门约 345 s），`npm run smoke:artifacts` 两宿主七幕全过（19 s），`git diff --check` 干净。
+
+**文档写回。** 能力卡 1 §1.3 现 TS 状态、对账账本第 226 行、scenario-acceptance 的 card-01/reconfigure 行、Controller 技能工作区参考；两份制品重建（预览编译文件、技能参考、清单）。
+
+**未执行。** 真实宿主会话（安装插件、开窗口、登记、投递取回 hook 证据、Claude 状态栏）由用户在联合测试中操作；本机没有 `codex` CLI，Codex 侧真实会话仍未验证。

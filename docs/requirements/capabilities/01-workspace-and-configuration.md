@@ -113,7 +113,7 @@
 
 **宿主差异**：Claude settings adapter 不可用时整体阻塞 `reconfigure-host-settings-owner-unavailable`。
 
-**现 TS 状态**：reconfigure preview 接受 `desiredConfig`，权威替换在锁内以完整 StableFileSource 为前置。
+**现 TS 状态**：reconfigure preview 接受 `desiredConfig`，权威替换在锁内以完整 StableFileSource 为前置。布局（`topology`、`storage`）改动报 `reconfigure-layout-change-unsupported`，`pods[]` 改动报 `reconfigure-pods-change-unsupported`；显示元数据、语言、`governance` 与 `hosts` 启动偏好（按角色的模型、effort、权限模式、tmux 容器名）可改，且只落到 config 一步，下一次启动意图即带上（gate-log §13.116 D1；此前 `hosts` 曾被误并入布局检查）。
 
 **实现判断**：owner 证明矩阵保留为阻塞机制，但把 window-runtime 投影错误从空 catch 改为显式报告；`ledgerRoot` 的处理按 Q6 定。
 

@@ -240,14 +240,15 @@ function textDigest(text: string | null): Sha256Digest | null {
 }
 
 /**
- * Claude Code 把粘贴进来的 prompt 包成 `<pasted_content id="…">…</pasted_content>`、把跨会话消息包成
+ * Claude Code 把粘贴进来的 prompt 包成 `<pasted_content id="…">…</pasted_content id="…">`（闭合标签
+ * 重复属性）、把跨会话消息包成
  * `<cross-session-message …>…</cross-session-message>` 再交给 hook（2026-09-24 真实宿主实测，
  * gate-log §13.119）。落地判定比的是信封 prompt 的摘要，所以先剥掉宿主的传输外壳再算；外壳只是
  * 宿主怎么送进来的痕迹，不是用户或 Controller 写的字。Codex 没有这种外壳，原样计算。
  */
 const CLAUDE_CODE_PROMPT_WRAPPERS: readonly RegExp[] = [
-  /^<pasted_content id="[^"\n]*">\n?([\s\S]*?)\n?<\/pasted_content>$/u,
-  /^<cross-session-message [^>\n]*>\n?([\s\S]*?)\n?<\/cross-session-message>$/u,
+  /^<pasted_content\b[^>\n]*>\n?([\s\S]*?)\n?<\/pasted_content\b[^>\n]*>$/u,
+  /^<cross-session-message\b[^>\n]*>\n?([\s\S]*?)\n?<\/cross-session-message\b[^>\n]*>$/u,
 ];
 
 export function unwrapHostPrompt(hostId: HostId, prompt: string): string {

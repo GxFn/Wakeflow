@@ -135,15 +135,24 @@ export function deriveResumptionBlockers(source, resumption) {
     }
     return Object.freeze(blockers);
 }
-/** 实现决定的机器阻塞项：accept 要求 completed 且完成证据已确认；其余由 Controller 判断。 */
-export function deriveImplementationDecisionBlockers(decision, view) {
-    if (decision !== "accept")
-        return Object.freeze([]);
+/**
+ * 实现决定的机器阻塞项：accept 要求 completed 且完成证据已确认；rework 在给出独立检查时至少
+ * 一条 failed——failed 的检查就是返工投递交给目标的整改项，全部 passed 的 rework 永远投不出去，
+ * 所以在记录时就拒绝；其余由 Controller 判断。
+ */
+export function deriveImplementationDecisionBlockers(decision, view, independentChecks) {
     const blockers = [];
-    if (view.outcome !== "completed")
-        blockers.push(`outcome:${view.outcome}`);
-    if (view.targetCompletion.status !== "confirmed")
-        blockers.push("target-completion-pending");
+    if (decision === "accept") {
+        if (view.outcome !== "completed")
+            blockers.push(`outcome:${view.outcome}`);
+        if (view.targetCompletion.status !== "confirmed")
+            blockers.push("target-completion-pending");
+    }
+    if (decision === "rework" &&
+        independentChecks !== undefined &&
+        !independentChecks.some((check) => check.outcome === "failed")) {
+        blockers.push("rework-checks:no-failed");
+    }
     return Object.freeze(blockers);
 }
 export function deriveImplementationAllowedDecisions(view) {

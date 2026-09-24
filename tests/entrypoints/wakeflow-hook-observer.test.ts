@@ -935,9 +935,11 @@ test("入口的闭包限于 foundation 与 kernel（D1）：编译产物只引�
 test("Claude Code 的传输外壳不进摘要：粘贴块与跨会话消息剥壳后与信封 prompt 同摘要，Codex 原样计算（§13.119）", async (t) => {
   const fixture = createFixture(t);
   const cwd = path.join(fixture.repository, "src");
-  const pasted = `\n\n<pasted_content id="976a">\n${PROMPT}\n</pasted_content>\n`;
+  const pasted = `\n\n<pasted_content id="976a">\n${PROMPT}\n</pasted_content id="976a">\n`;
+  const pastedPlainClose = `<pasted_content id="1">\n${PROMPT}\n</pasted_content>`;
   const crossSession = `<cross-session-message from="uds:/tmp/cc-socks/1.sock" from-name="alembicplugin-11" from-mode="bypass">\n${PROMPT}\n</cross-session-message>`;
   equal(unwrapHostPrompt("claude-code", pasted), PROMPT.trim());
+  equal(unwrapHostPrompt("claude-code", pastedPlainClose), PROMPT.trim());
   equal(unwrapHostPrompt("claude-code", crossSession), PROMPT.trim());
   equal(unwrapHostPrompt("claude-code", PROMPT), PROMPT.trim());
   equal(unwrapHostPrompt("codex", pasted), pasted);

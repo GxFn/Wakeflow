@@ -125,6 +125,14 @@ through `wakeflow_record_implementation_review_decision`. Accept requires a
 completed outcome and the target session's own completion record - you cannot
 accept work whose window never finished its turn.
 
+Rework names at least one `failed` independent check. The failed checks are
+exactly the corrections the target receives with the rework delivery, so a
+rework whose checks all passed is refused when recorded - it could never be
+delivered. When the work is right but the report is not - a `needs-review`
+result whose anchors are not tied to managed evidence is the common case -
+record the evidence first, then fail the check that names the report gap and
+ask for a `completed` re-import citing that evidence.
+
 Test results take `accept`, `request-another-attempt`, `blocked` or `escalate`
 through `wakeflow_record_test_review_decision`. The step classifications gate
 the choice: another attempt only for harness defects, flakiness or missing

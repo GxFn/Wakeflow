@@ -369,6 +369,16 @@ test("落地后的回调不再重发；过期基线被拒；blocked 之后只有
 test("rework 之后再投递、再导入形成新的评审单元并保留历史；escalate 附带升级事件，用户回答前不能续审", async () => {
   const fixture = await createControllerImplementationReviewDecisionServiceFixture();
   try {
+    // 全部 passed 的 rework 在记录时就被拒：没有 failed 检查就没有整改项，投递投影也不会接受它（§13.119）。
+    const passedOnly = implementationReviewJudgmentWire("rework");
+    await rejects(
+      decideFixtureImplementation(fixture, {
+        ...passedOnly,
+        independentChecks: [{ ...passedOnly.independentChecks[0], outcome: "passed" as const }],
+        idempotencyKey: "fixture-decision-rework-passed-only",
+      }),
+      rejectedWith("rework-checks"),
+    );
     const rework = await decideFixtureImplementation(fixture, {
       ...implementationReviewJudgmentWire("rework"),
       idempotencyKey: "fixture-decision-rework",

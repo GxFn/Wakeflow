@@ -11,6 +11,7 @@ import {
   collectEvidenceReferences,
   deriveCallbackLanding,
   deriveImplementationAllowedDecisions,
+  deriveImplementationDecisionBlockers,
   derivePrivacyRules,
   deriveResumptionBlockers,
   deriveStepViews,
@@ -204,6 +205,22 @@ test("实现决定：accept 要求 completed 与完成证据；resumption 只接
     deriveImplementationAllowedDecisions({ outcome: "blocked", targetCompletion: confirmed }),
     ["rework", "blocked", "escalate"],
   );
+  // rework 带上独立检查时至少一条 failed；不带检查（允许集推导）时不阻塞（§13.119）。
+  const needsReview = { outcome: "needs-review" as const, targetCompletion: confirmed };
+  deepEqual(deriveImplementationDecisionBlockers("rework", needsReview, [{ outcome: "passed" }]), [
+    "rework-checks:no-failed",
+  ]);
+  deepEqual(
+    deriveImplementationDecisionBlockers("rework", needsReview, [
+      { outcome: "passed" },
+      { outcome: "failed" },
+    ]),
+    [],
+  );
+  deepEqual(deriveImplementationDecisionBlockers("rework", needsReview), []);
+  deepEqual(deriveImplementationDecisionBlockers("accept", needsReview, [{ outcome: "passed" }]), [
+    "outcome:needs-review",
+  ]);
   const reported = {
     status: "reported" as const,
     currentDecisionId: null,

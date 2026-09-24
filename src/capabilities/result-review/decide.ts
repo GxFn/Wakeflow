@@ -6,15 +6,16 @@ import {
 } from "../../contracts/vocabulary/test-step-vocabulary.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
-import type { TargetResultOutcome } from "../../governance/result/target-result-report-contract.js";
-import type { TestTargetResultStep } from "../../governance/result/test-target-result-report.js";
 import type {
   ImplementationTargetResult,
   TargetResult,
 } from "../../governance/result/target-result.js";
+import type { TargetResultOutcome } from "../../governance/result/target-result-report-contract.js";
+import type { TestTargetResultStep } from "../../governance/result/test-target-result-report.js";
 import type { ControllerReviewDecision } from "../../governance/review/controller-review-decision.js";
+import type { ControllerIndependentCheckOutcome } from "../../governance/review/controller-review-decision-contract.js";
 import type { TestContractStep } from "../../governance/tasking/task-package.js";
-import { scanPrivacy, type PrivacyScanPolicy } from "../../kernel/privacy-scan.js";
+import { type PrivacyScanPolicy, scanPrivacy } from "../../kernel/privacy-scan.js";
 
 /**
  * Wakeflow Capabilities / Result Review：结果导入与评审的纯决定（能力卡 7 修订，§13.87 D2 D3 D6 D7）。
@@ -269,15 +270,28 @@ export interface ImplementationAdmissionView {
   readonly targetCompletion: TargetCompletionView;
 }
 
-/** 实现决定的机器阻塞项：accept 要求 completed 且完成证据已确认；其余由 Controller 判断。 */
+/**
+ * 实现决定的机器阻塞项：accept 要求 completed 且完成证据已确认；rework 在给出独立检查时至少
+ * 一条 failed——failed 的检查就是返工投递交给目标的整改项，全部 passed 的 rework 永远投不出去，
+ * 所以在记录时就拒绝；其余由 Controller 判断。
+ */
 export function deriveImplementationDecisionBlockers(
   decision: ImplementationDecisionType,
   view: Readonly<ImplementationAdmissionView>,
+  independentChecks?: readonly Readonly<{ readonly outcome: ControllerIndependentCheckOutcome }>[],
 ): readonly string[] {
-  if (decision !== "accept") return Object.freeze([]);
   const blockers: string[] = [];
-  if (view.outcome !== "completed") blockers.push(`outcome:${view.outcome}`);
-  if (view.targetCompletion.status !== "confirmed") blockers.push("target-completion-pending");
+  if (decision === "accept") {
+    if (view.outcome !== "completed") blockers.push(`outcome:${view.outcome}`);
+    if (view.targetCompletion.status !== "confirmed") blockers.push("target-completion-pending");
+  }
+  if (
+    decision === "rework" &&
+    independentChecks !== undefined &&
+    !independentChecks.some((check) => check.outcome === "failed")
+  ) {
+    blockers.push("rework-checks:no-failed");
+  }
   return Object.freeze(blockers);
 }
 

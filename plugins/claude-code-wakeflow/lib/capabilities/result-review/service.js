@@ -993,10 +993,7 @@ async function executeImplementationDecision(context, input, binding) {
     assertFreshRevision(context, binding);
     const sources = await loadDecisionSources(context, request, "implementation");
     assertControllerAuthority(context, sources);
-    const blockers = deriveImplementationDecisionBlockers(request.decision, {
-        outcome: sources.unit.target.outcome,
-        targetCompletion: sources.evidence.targetCompletion,
-    });
+    const blockers = deriveImplementationDecisionBlockers(request.decision, { outcome: sources.unit.target.outcome, targetCompletion: sources.evidence.targetCompletion }, request.independentChecks);
     if (blockers.length > 0)
         rejectWith(blockers, "$request.decision");
     let decision;

@@ -3415,3 +3415,28 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `npm run build:artifacts:committed` 后 `npm test` 1009/1009（`test:typescript` 340.3 s，整门约 351 s），`npm run smoke:artifacts` 两宿主七幕全过（18 s），`git diff --check` 干净。
 
 **未执行。** 真实 tmux 上的引导流程（bootstrap、attach、信任对话、登记、投递）留给用户在 `WakeflowTestWorkspace` 里的联合测试；用户的动作只有在工作区里运行 `claude` 与 `/wakeflow-init`。
+
+## 13.119 联合真实宿主测试：Claude 的投递外壳、命令命名空间、回调传输与 rework 准入（2026-09-24）
+
+**背景。** §13.118 之后用户在 `WakeflowTestWorkspace` 里执行 `claude --model opus` 与 `/wakeflow-init`，接受了八个窗口的信任对话，然后授权我通过 tmux 直接驱动各窗口做端到端验证，并要求"对比旧的项目功能实现和代码，选取有价值和验证过的功能和代码"。本节记录 Controller（Opus 5.5）引导下的一轮完整需求闭环里证实的事实、发现的问题与修法。三次提交：`97854859`（助手在真实宿主上活下来）、`1f387a36`（观察脚本剥壳、命令改名、回调传输）与本节的提交（闭合标签属性、rework 准入）。
+
+**真实宿主上证实的事实。**
+
+- 引导流程按 §13.118 走通：fresh init 以 Opus 为默认模型、精确规则 `Bash(node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs *)` 写入程序根 settings；助手 `launch` 把八个窗口开进 tmux 会话 `wakeflow`；信任对话接受后每个窗口都有 session-start hook 记录；八个窗口经 MCP 登记，`wakeflow_verify` 14/14；Controller 自己通过助手 `close`/`launch` 加 `register_window_binding replace` 换代重启，`mark --all` 后状态栏显示 `Opus 5.5 · Controller`。
+- 主流程走通：Design 发布需求包 → Controller 认领 Demand、规划任务、准备投递、用助手粘贴进 AlembicPlugin 窗口 → 目标窗口新建 31 字节文件并导入结果 → 回调进 Controller 窗口 → Controller 登记两条受管证据（document 与 test-output）、决定、换代规划、再投递 → 目标以 `completed` 再导入并引用锚点证据 → 回调 → 评审、验收、complete。每一步的事件流修订号、结果与回调记录都在 `.wakeflow-active` 与 hook 观察记录里可对。
+- Claude Code 的宿主事实：本地目录 marketplace 下 hook 从安装缓存 `~/.claude/plugins/cache/<marketplace>/wakeflow/<version>/` 运行，不是仓库工作树——制品变了必须刷新缓存（uninstall + install，`installed_plugins.json` 记录安装时的 `gitCommitSha`）；插件命令只能以 `/wakeflow:<command>` 解析，裸 `/wakeflow-next` 是 Unknown command；hook 载荷的 `cwd` 会随目标会话 Bash 工具里的 `cd` 漂移（一条落地记录的 cwd 是 `.wakeflow-local/.../identity`），观察脚本按祖先目录定位工作区所以不受影响；tmux 3.6 会把 `list-panes`/`display-message` 输出里的制表符替换成 `_`；`pane_current_command` 是版本号（`2.1.281`），不是 `claude`。
+
+**发现与修法。**
+
+1. **粘贴外壳。** 助手 `deliver` 用 bracketed paste 送进去的 prompt，Claude Code 交给 UserPromptSubmit hook 时包成 `<pasted_content id="976a">…</pasted_content id="976a">`——闭合标签重复属性；跨会话消息包成 `<cross-session-message from=… from-name=… from-mode=…>…</cross-session-message>`。第一轮投递的 hook 摘要因此与信封不符，`record_delivery_outcome` 记为 `indeterminate`、回调 `pending`。修法（`1f387a36` + 本提交）：观察脚本 `unwrapHostPrompt` 只对 claude-code 剥去这两种传输外壳（至多两层，先 trim）再算共享摘要，Codex 原样计算；回归用真实闭合形式与无属性闭合形式各断言一次。事后核对：落地 prompt 原文摘要 `sha256:7a7efa44…` = hook 记录摘要，剥壳后 `sha256:950492…` = 信封 `promptDigest`；回调原文 `sha256:adff3e…` = 记录，剥壳后 `sha256:4e4857…` = 许可里 prompt 的摘要。本轮的记录仍由旧观察脚本写出（缓存刷新在回调之后），所以这一轮的投递与回调在事件流里保持 `indeterminate`/`unlanded`，验收不依赖它们；刷新后的缓存对之后的记录生效。
+2. **命令命名空间。** 四个命令文件改名为 `init.md`、`status.md`、`next.md`、`pod.md`，安装后是 `/wakeflow:init`、`/wakeflow:status`、`/wakeflow:next`、`/wakeflow:pod`；技能、README 与 `commandSurface` 取值同步。更正 `1f387a36` 提交说明里"沿用旧插件命名"的说法：旧插件的命令是 `init`、`status`、`check`、`dispatch`、`review`、`unattended`、`windows`，与现在一致的只有 `init` 与 `status`；`next` 与 `pod` 对应现在的命令面。
+3. **回调传输。** 第一轮目标窗口用 SendMessage 送回调（跨会话消息不落地成 prompt 提交），还去读 Wakeflow 源码才知道 `completed` 需要每个锚点绑定受管证据。目标与测试技能现在写明：回调只能经 `{{deliveryAction}}`（Claude 是助手 `deliver --handle-digest`，产品窗口在助手路径前加 `--add-dir` 给的工作区根），其它传输一律不算送达；`completed` 的证据规则直接写在技能里。第二轮目标用助手送回调（`attempt.status=sent`），Controller 收到的是 `<pasted_content>`。
+4. **rework 准入的死路。** Controller 登记证据后为了让目标以 `completed` 重报，记录了一条 `rework` 决定，五条独立检查全部 `passed`；决定被接受（修订 8），但 `prepare_delivery` 永远 `record-relation`——返工投递投影要求至少一条 `failed` 检查作为整改项（`target-delivery-rework-context.ts`）。两条规则分住两处，决定一旦记录不可更改。修法：`deriveImplementationDecisionBlockers` 接受请求里的独立检查，`rework` 没有 `failed` 检查时在记录时即拒（`precondition-failed`/`rework-checks`，blocker `rework-checks:no-failed`）；允许集推导不带检查，所以评审单元仍列出 rework；工具描述与 Controller 技能第 11 步写明"failed 的检查就是目标收到的整改项"，并给出 needs-review 结果的处理顺序（先登记证据，再以说明报告缺口的 failed 检查要求 `completed` 重报）。存量记录的解析不变：追加历史必须继续可重放，投递投影仍是后备。现场走的是内建出路：换代规划（lineage replacement，修订 9）→ 投递（10）→ 记录结果（11）→ 目标 `completed` 导入（12）→ 回调 → 验收。
+5. **乐观并发如预期。** Controller 在目标导入之后再显式 `record_delivery_outcome` 被 `stream-revision` 冲突拒绝——Demand 已被目标的导入推进，这是设计内的行为，不改。
+6. **助手在真实宿主上的修补**（`97854859`）：字段分隔符改为可打印的 `~|~`；session-start 记录按记录里的 `sessionId` 匹配而不是文件名；窗格进程经 `ps` 进程表解析出 `claude`；新增 `teardown`；`resolvePlacement` 允许仓库位于根旁边。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 全链通过（typecheck、架构规则、Biome、knip、`test:typescript` 1011/1011、schema 漂移、build:check 两份制品与 marketplace 均 ok；整门 362 s，测试套件单跑 311.5 s），`npm run smoke:artifacts` 两宿主七幕全过（hookObserver landed、verify ok），`git diff --check` 干净。焦点集：result-review decide/service 与 governance review 16/16，hook observer 14/14。安装缓存已从本制品刷新（uninstall + install）。
+
+**现场结果。** Controller 以换代任务包走完闭环：`target-task_4a129f93…` 替换 `target-task_f97c43a8…`（修订 9）、投递 `target-delivery_32b75460…`（10）、结果记录 `indeterminate`（11，旧观察脚本）、目标 `completed` 导入 `target-result_92033883…` 且四个锚点都引用证据 A/B（12）、回调经助手送达（记录里仍 `pending`，同因）、accept 决定 `target-review-decision_d9cfc495…`（13）、严格校验工作区 14/14 与 Demand 7/7、complete 预览 8/8 无阻塞后应用（14）。外部核对：`ledger/archives/demand_57056df4…/0000000014` 存在（含校验报告共 24 个文件、120,457 字节），`wakeflow_status` 为 idle、board archived 1、八个窗口 registered/current，`wakeflow_verify` 14/14；AlembicPlugin 里 `docs/wakeflow-smoke.md` 仍是唯一未跟踪改动，HEAD `7b2c53a` 未动。Controller 独立诊断出与我相同的两个原因（闭合标签带 `id`、hook 跑的是安装缓存）。
+
+**待裁决与残留。** D2（跨宿主指令/记忆文件的时效）留待用户裁决；rework 只能标 `implementationQuality: defective`，"产品改动没问题、只是报告要重做"没有专门词汇（本轮不改，记为 D6 待裁决）；locator 文件实际在 `identity/window-locators/`，目录目录与卡片 2 写的是 `operations/window-locators/`；owner 管理的产品仓库没有助手的 allow 规则，产品窗口调助手要么 bypassPermissions 要么弹一次确认；`<pasted_content>` 外壳可能让谨慎的会话犹豫。Codex 宿主本轮未做真实会话测试（未执行）。

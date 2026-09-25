@@ -168,6 +168,8 @@ export interface DemandContinuedUncommittedEvent {
   readonly eventType: "lifecycle.demand-continued";
   readonly data: Readonly<{
     readonly continuation: DemandContinuation;
+    /** 续接前已有的 test 目标；早期事件没有该字段，重放保持当时的状态。 */
+    readonly historicalTestTargetIds?: readonly WakeflowDurableId<"target-task">[];
   }>;
 }
 
@@ -368,6 +370,10 @@ const COMPLETED_DATA_FIELDS = Object.freeze(["completion"] as const);
 const ESCALATED_DATA_FIELDS = Object.freeze(["escalation"] as const);
 const DECISION_RECORDED_DATA_FIELDS = Object.freeze(["decision"] as const);
 const CONTINUED_DATA_FIELDS = Object.freeze(["continuation"] as const);
+const CONTINUED_WITH_HISTORY_DATA_FIELDS = Object.freeze([
+  "continuation",
+  "historicalTestTargetIds",
+] as const);
 const LIFECYCLE_DATA_REFERENCES = Object.freeze([
   WAKEFLOW_SHA256_DIGEST_SCHEMA,
   WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
@@ -457,7 +463,7 @@ function exactRecord(
   return record;
 }
 
-function parseId<Kind extends "demand" | "demand-event">(
+function parseId<Kind extends "demand" | "demand-event" | "target-task">(
   value: unknown,
   kind: Kind,
   path: string,
@@ -602,14 +608,34 @@ export function parseDemandUncommittedEvent(
   }
 
   if (record.eventType === "lifecycle.demand-continued") {
-    const data = exactRecord(record.data, CONTINUED_DATA_FIELDS, "$/data");
-    const continuation = lifecycleData(validateContinuedData, data, "$/data").continuation;
+    const withHistory =
+      typeof record.data === "object" &&
+      record.data !== null &&
+      Object.hasOwn(record.data, "historicalTestTargetIds");
+    const data = exactRecord(
+      record.data,
+      withHistory ? CONTINUED_WITH_HISTORY_DATA_FIELDS : CONTINUED_DATA_FIELDS,
+      "$/data",
+    );
+    const parsed = lifecycleData(validateContinuedData, data, "$/data");
+    const historical = parsed.historicalTestTargetIds;
     return Object.freeze({
       eventId,
       demandId,
       recordedAt,
       eventType: "lifecycle.demand-continued",
-      data: Object.freeze({ continuation: Object.freeze(continuation) }),
+      data: Object.freeze({
+        continuation: Object.freeze(parsed.continuation),
+        ...(historical === undefined
+          ? {}
+          : {
+              historicalTestTargetIds: Object.freeze(
+                historical.map((id, index) =>
+                  parseId(id, "target-task", `$/data/historicalTestTargetIds/${index}`),
+                ),
+              ),
+            }),
+      }),
     });
   }
 

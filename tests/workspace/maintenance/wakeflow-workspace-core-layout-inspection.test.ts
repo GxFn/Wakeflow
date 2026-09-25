@@ -201,3 +201,17 @@ test("transactions 里的残留按名字分类（§13.130）：合法的 intent 
     ],
   );
 });
+
+test("unsafe gate without maintenance/ is a conflict, not a bootstrap prefix", async (t) => {
+  const unsafe = await fixture(t);
+  materializeProtocol(unsafe.absolutePath, 2);
+  writeFileSync(
+    path.join(unsafe.absolutePath, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/")),
+    "{}\n",
+    { mode: 0o600 },
+  );
+  const inspected = await inspectWakeflowWorkspaceCoreLayout(unsafe.root);
+  equal(inspected.local.status, "conflict");
+  equal(inspected.local.freshCompatible, false);
+  equal(inspected.issueCodes.includes("maintenance-gate-unsafe"), true);
+});

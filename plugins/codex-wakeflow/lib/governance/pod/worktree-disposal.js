@@ -78,12 +78,21 @@ function removeCommand(relativePath, locked) {
     const shown = shellPathWord(relativePath, Math.floor((SUGGESTED_MAXIMUM_LENGTH - fixed) / 2));
     return `${UNLOCK_COMMAND_PREFIX}${shown}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${shown}`;
 }
-/** `locked` 是登记时回执记下的锁状态（`git worktree list --porcelain` 的 locked 行）。 */
-export function worktreeDisposalGuidance(hostId, relativeCheckoutPath, locked) {
+/**
+ * 宿主备选按宿主资源 Profile 的 worktree 启动方式选择（`surfaces.worktree.launch`），
+ * 共享代码不做宿主 id 判断。
+ */
+const HOST_ALTERNATIVES = Object.freeze({
+    "claude-worktree-flag": "End the Claude Code worktree session; Claude Code removes a worktree it created when the session ends, then run git worktree prune in the repository.",
+    "codex-worktree-thread": "Archive the Codex thread that owns the worktree environment, then run git worktree prune in the repository.",
+});
+/**
+ * `worktreeLaunch` 是当前宿主 Profile 的 `surfaces.worktree.launch`；
+ * `locked` 是登记时回执记下的锁状态（`git worktree list --porcelain` 的 locked 行）。
+ */
+export function worktreeDisposalGuidance(worktreeLaunch, relativeCheckoutPath, locked) {
     return Object.freeze({
         suggested: removeCommand(singleLinePath(relativeCheckoutPath), locked),
-        alternative: hostId === "claude-code"
-            ? "End the Claude Code worktree session; Claude Code removes a worktree it created when the session ends, then run git worktree prune in the repository."
-            : "Archive the Codex thread that owns the worktree environment, then run git worktree prune in the repository.",
+        alternative: HOST_ALTERNATIVES[worktreeLaunch],
     });
 }

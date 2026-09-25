@@ -252,6 +252,9 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
   equal(statSync(file).mode & 0o777, 0o600);
   equal(statSync(path.dirname(file)).mode & 0o777, 0o700);
   deepEqual(await readPodWorktreeReceipt(root, "codex", POD_ID, REPOSITORY_ID), receipt);
+  // 杂项条目（非回执 JSON、非 pod 标识的目录）被跳过，不进入任何列举。
+  writeFileSync(path.join(path.dirname(file), "notes.json"), "{}\n");
+  mkdirSync(path.join(workspacePath, ".wakeflow-local/runtime/hosts/codex/pods/pod_old"));
   deepEqual(await listPodWorktreeReceipts(root, "codex", POD_ID), [receipt]);
   deepEqual(await listPodWorktreeReceiptsAnyHost(root, POD_ID), [receipt]);
   deepEqual(await listPodReceiptDirectories(root, "codex"), [POD_ID]);

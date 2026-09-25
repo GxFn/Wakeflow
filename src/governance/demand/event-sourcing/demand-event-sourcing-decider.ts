@@ -29,6 +29,7 @@ import {
   completeDemandAggregateState,
   continueDemandAggregateState,
   createInitialDemandAggregateState,
+  historicalTestTargetIdsAtContinuation,
   decideTargetResultReviewInDemandAggregateState,
   escalateDemandAggregateState,
   recordDeliveryOutcomeInDemandAggregateState,
@@ -1403,11 +1404,14 @@ export function decideDemandEventSourcingCommand(
     );
   }
   if (command.commandType === "lifecycle.continue-demand") {
+    // 续接边界是决策事实：续接前已有的 test 目标随事件持久化，归约器只照抄事件携带的边界。
+    const historicalTestTargetIds = historicalTestTargetIdsAtContinuation(state);
     try {
       continueDemandAggregateState(
         state,
         command.continuation.kind,
         command.eventId,
+        historicalTestTargetIds,
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
@@ -1421,7 +1425,12 @@ export function decideDemandEventSourcingCommand(
         demandId: command.demandId,
         recordedAt: command.recordedAt,
         eventType: "lifecycle.demand-continued",
-        data: { continuation: command.continuation },
+        data: {
+          continuation: command.continuation,
+          ...(historicalTestTargetIds.length === 0
+            ? {}
+            : { historicalTestTargetIds }),
+        },
       }),
     );
   }
@@ -1794,6 +1803,7 @@ export function evolveDemandEventSourcingState(
         state,
         event.data.continuation.kind,
         event.eventId,
+        event.data.historicalTestTargetIds,
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {

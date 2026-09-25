@@ -21,13 +21,13 @@ import { computeDemandEventStreamCommitDigest } from "../../governance/demand/ev
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import { deriveTargetResultCallbackStatus, parseTargetResultCallbackReissue, TARGET_RESULT_CALLBACK_GENERATION_LIMIT, TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS, TargetResultCallbackError, } from "../../governance/result/target-result-callback.js";
 import { ControllerImplementationReviewDecisionError, parseControllerImplementationReviewDecision, } from "../../governance/review/controller-implementation-review-decision.js";
-import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+import { DemandResultReviewSnapshotError, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { computeTaskPackageDigest, } from "../../governance/tasking/task-package.js";
 import { createInitialTestExecutionAttempt, createRerunTestExecutionAttempt, TestExecutionAttemptError, } from "../../governance/testing/test-execution-attempt.js";
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
-import { fail } from "../../kernel/error.js";
+import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
@@ -36,7 +36,7 @@ import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingSto
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import { compileWakeflowWindowLaunchIntents, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitPrepareDeliveryResult, admitRearmDeliveryResult, admitRecordDeliveryOutcomeResult, parsePrepareDeliveryRequest, parseRearmDeliveryRequest, parseRecordDeliveryOutcomeRequest, WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION, WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { deriveClaimBlocker, deriveDeliveryDisposition, derivePrepareBlockers, deriveRearmBlockers, landingSilenceExceeded, } from "./decide.js";
+import { deriveClaimBlocker, deriveDeliveryDisposition, derivePrepareBlockers, deriveRearmBlockers, landingSilenceExceeded, sendReturnProvesLanding, } from "./decide.js";
 import { renderDeliveryPortablePrompt } from "./prompt.js";
 function isCallbackPermit(outcome) {
     return "kind" in outcome && outcome.kind === "callback";
@@ -54,15 +54,6 @@ const HANDLER_ERROR_TABLE = Object.freeze({
 });
 function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
-}
-/** 第一个阻塞项的前缀是错误原因；全部阻塞项按 `blocker`、`blocker2`… 进入公开 details。 */
-function rejectWith(blockers, path) {
-    const first = blockers[0];
-    if (first === undefined)
-        fail("unexpected", "empty-blockers", path);
-    fail("precondition-failed", first.split(":")[0] ?? first, path, {
-        details: Object.fromEntries(blockers.map((blocker, index) => [index === 0 ? "blocker" : `blocker${index + 1}`, blocker])),
-    });
 }
 function mapContextError(error) {
     if (error instanceof DemandOperationAuthorityContextError) {
@@ -167,7 +158,7 @@ function relativeWorkspaceRoot(placement) {
         .filter((segment) => segment.length > 0 && segment !== ".").length;
     return depth === 0 ? "." : Array.from({ length: depth }, () => "..").join("/");
 }
-async function loadRoute(context, windowId) {
+async function readBinding(context, windowId) {
     const { facade, authority } = context;
     let bindings;
     try {
@@ -188,12 +179,20 @@ async function loadRoute(context, windowId) {
     if (binding.hostId !== facade.hostId) {
         fail("precondition-failed", "binding-host", "$request.targetTaskId");
     }
+    return binding;
+}
+function digestBinding(binding) {
+    return computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding"));
+}
+async function loadRoute(context, windowId) {
+    const { facade, authority } = context;
+    const binding = await readBinding(context, windowId);
     const intent = compileWakeflowWindowLaunchIntents(authority.config.model, facade.resourceProfile).intents.find((entry) => entry.windowId === windowId);
     if (intent === undefined)
         fail("precondition-failed", "window-unknown", "$request.targetTaskId");
     return Object.freeze({
         binding,
-        bindingDigest: computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding")),
+        bindingDigest: digestBinding(binding),
         handleDigest: computeSha256Digest(encodeUtf8(binding.handle.value, "$handle"), "$handle"),
         displayTitle: intent.displayTitle,
         configuredPlacement: intent.root.configuredPlacement,
@@ -281,8 +280,22 @@ async function loadTaskPackage(repository, target, signal) {
         mapRepositoryError(error);
     }
 }
+/** 提交后读取复核快照；快照错误映射为稳定的 Wakeflow 错误，而不是 unexpected。 */
+async function readSnapshotForNext(context) {
+    try {
+        return await readDemandResultReviewSnapshot(context.authority.demandRoot, signalOptions(context.options.signal));
+    }
+    catch (error) {
+        if (error instanceof DemandResultReviewSnapshotError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            fail("io-failure", "result-review-snapshot", "$request.demandId", { cause: error });
+        }
+        throw error;
+    }
+}
 async function next(context, outcome) {
-    const snapshot = await readDemandResultReviewSnapshot(context.authority.demandRoot, signalOptions(context.options.signal));
+    const snapshot = await readSnapshotForNext(context);
     const route = buildDemandControllerRoute({ ...context.authority.loaded, aggregate: outcome.commandResult.aggregate }, snapshot);
     return deriveNextProjection(route);
 }
@@ -310,7 +323,20 @@ async function takeClaim(context, route, holder, claimId, now) {
         claimedAt: now,
     });
     const taken = await takeWorkClaim(context.workspaceRoot, claim, signal);
-    return Object.freeze({ claim: taken.claim, created: taken.disposition === "created" });
+    const created = taken.disposition === "created";
+    // 声明与绑定存储各自加锁：取得声明后复核绑定摘要，窗口在检查与声明之间被重绑时拒绝。
+    try {
+        const current = await readBinding(context, windowId);
+        if (digestBinding(current) !== route.bindingDigest) {
+            fail("precondition-failed", "binding-changed", "$request.targetTaskId");
+        }
+    }
+    catch (error) {
+        if (created)
+            await releaseQuietly(context, taken.claim);
+        throw error;
+    }
+    return Object.freeze({ claim: taken.claim, created });
 }
 async function releaseQuietly(context, claim) {
     try {
@@ -953,7 +979,7 @@ function decideOutcome(context, input, envelope, records, currentlyIndeterminate
     const resolution = input.resolution;
     const landing = records.filter((record) => record.event === "user-prompt-submit");
     return deriveDeliveryDisposition({
-        hostId: context.facade.hostId,
+        sendReturnProvesLanding: sendReturnProvesLanding(context.facade.resourceProfile),
         attempt: {
             status: input.attempt.status,
             evidenceDigest: (input.attempt.evidenceDigest ?? null),

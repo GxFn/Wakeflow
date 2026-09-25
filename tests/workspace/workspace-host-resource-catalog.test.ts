@@ -334,6 +334,14 @@ test("optional Host resources are compiled from profile values without host bran
         processing: "derived-projection:deterministic-rewrite",
       },
       {
+        declarationId: "host-runtime.claude-code.tmux-asset",
+        ownerId: "host-tmux",
+        relativePath: ".wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs",
+        tracking: "ignored:runtime-private",
+        mode: "0600",
+        processing: "derived-projection:deterministic-rewrite",
+      },
+      {
         declarationId: "host-runtime.claude-code.activity-monitor-root",
         ownerId: "activity-monitor",
         relativePath: ".wakeflow-local/runtime/hosts/claude-code/operations/activity-monitor",
@@ -359,7 +367,7 @@ test("optional Host resources are compiled from profile values without host bran
       },
     ],
   );
-  equal(catalog.length, 20);
+  equal(catalog.length, 21);
   const statusline = catalog[16];
   equal(statusline?.nodePolicy.kind, "file");
   if (statusline?.nodePolicy.kind === "file") {
@@ -398,9 +406,11 @@ test("optional Host resources are compiled from profile values without host bran
           localPath: ".tool/settings.local.json",
         },
         statuslineAsset: { fileName: "statusline.mjs" },
+        tmuxAsset: null,
         activityMonitor: true,
         temporaryPrompts: true,
       },
+      launch: { kind: "host-thread" },
     });
   deepEqual(
     createWakeflowWorkspaceHostResourceCatalog(

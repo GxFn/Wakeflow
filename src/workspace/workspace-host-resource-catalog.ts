@@ -181,6 +181,7 @@ export function hostProfileHasOperationSurface(
   return profile.surfaces.keepLive
     || profile.surfaces.windowLocator
     || profile.surfaces.statuslineAsset !== null
+    || profile.surfaces.tmuxAsset !== null
     || profile.surfaces.activityMonitor
     || profile.surfaces.temporaryPrompts;
 }
@@ -292,22 +293,32 @@ export function createWakeflowWorkspaceHostResourceCatalog(
       ),
     );
   }
-  if (profile.surfaces.statuslineAsset !== null) {
+  const { statuslineAsset, tmuxAsset } = profile.surfaces;
+  if (statuslineAsset !== null || tmuxAsset !== null) {
+    declarations.push(privateDirectoryDeclaration(
+      `${prefix}.statusline-assets-root`,
+      "host-statusline",
+      hostRuntimeRef(profile, "operations/assets"),
+    ));
+  }
+  if (statuslineAsset !== null) {
     declarations.push(
-      privateDirectoryDeclaration(
-        `${prefix}.statusline-assets-root`,
-        "host-statusline",
-        hostRuntimeRef(profile, "operations/assets"),
-      ),
       privateProjectionFileDeclaration(
         `${prefix}.statusline-asset`,
         "host-statusline",
         hostRuntimeRef(
           profile,
-          `operations/assets/${profile.surfaces.statuslineAsset.fileName}`,
+          `operations/assets/${statuslineAsset.fileName}`,
         ),
       ),
     );
+  }
+  if (tmuxAsset !== null) {
+    declarations.push(privateProjectionFileDeclaration(
+      `${prefix}.tmux-asset`,
+      "host-tmux",
+      hostRuntimeRef(profile, `operations/assets/${tmuxAsset.fileName}`),
+    ));
   }
   if (profile.surfaces.activityMonitor) {
     declarations.push(privateDirectoryDeclaration(

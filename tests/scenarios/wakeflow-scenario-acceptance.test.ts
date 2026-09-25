@@ -1929,6 +1929,131 @@ async function scenarioEscalateAndResume(context: ScenarioContext): Promise<stri
  * 卡 5 修订 5.2：实现接受后 Controller 撰写测试合同追加 test 任务包，Wakeflow 派生窗口、环境与基线；
  * 测试投递、逐步证据导入与 Controller 测试审查走同一批公共工具，接受后 Route 到完成预检。
  */
+/** 真实环境测试任务包：两步合同都绑定需求包的验收条目。 */
+function realEnvironmentTestTaskPackage(context: ScenarioContext) {
+  if (!context.memberRefs || !context.recordDigest) {
+    throw new Error("scenario ordering: create-demand must run first");
+  }
+  const recordDigest = context.recordDigest;
+  const requirementRef = (itemId: string) => ({
+    recordDigest,
+    sectionAnchor: "acceptance-criteria",
+    itemId,
+  });
+  return {
+    workType: "test",
+    objective: "在已确认真实环境中验证已接受实现",
+    confirmedContext: ["全部实现目标已被 Controller 接受", "测试环境由需求包 landing 成员描述"],
+    selectedAuthorityMemberRefs: [...context.memberRefs],
+    boundaries: {
+      inScope: ["执行测试合同的批准步骤"],
+      outOfScope: ["修改产品代码"],
+      forbidden: ["创建未批准环境或配置"],
+    },
+    completionExpectations: ["每一步都返回可复核证据"],
+    testContract: {
+      question: "已接受实现能否在真实环境中保持目标行为？",
+      objectBoundary: "只观察当前 Demand 的产品入口与已确认测试环境",
+      steps: [
+        {
+          given: "已确认的真实环境与冻结实现基线",
+          when: "发布需求包并查看看板",
+          // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+          then: "看板列出该包为 pending",
+          requirementRef: requirementRef("ac-1"),
+        },
+        {
+          given: "需求包已在看板",
+          when: "创建 Demand",
+          // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+          then: "看板状态变为 claimed",
+          requirementRef: requirementRef("ac-2"),
+        },
+      ],
+      allowedSkills: [],
+      setupPolicy: "reuse-existing",
+      maxAttempts: 1,
+      stopConditions: ["环境与冻结 Authority 不一致时立即停止"],
+    },
+    lineage: null,
+  };
+}
+
+/** test 目标的逐步报告导入、测试会话结束本轮，再由 Controller 接受。 */
+async function importAndAcceptTest(
+  context: ScenarioContext,
+  targetTaskId: string,
+  permit: DeliveryPermit,
+  keySuffix: string,
+): Promise<{ readonly importResult: ImportResult; readonly decision: DecisionResult }> {
+  const root = context.workspace.workspacePath;
+  const evidence = context.evidence;
+  if (!evidence) throw new Error("scenario ordering: import-and-review must run first");
+  const steps = ["ts-1", "ts-2"].map((stepId) => ({
+    stepId,
+    observed: `${stepId} 在已确认环境中观察到合同所述行为。`,
+    evidence: { ref: evidence.ref, digest: evidence.digest },
+    verdict: "pass",
+  }));
+  const imported = await call(context, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, {
+    root,
+    demandId: context.demandId,
+    idempotencyKey: `scenario-test-import-${keySuffix}`,
+    expectedStreamRevision: await currentStreamRevision(context),
+    deliveryId: permit.deliveryId,
+    claimDigest: permit.claimDigest,
+    report: {
+      workType: "test",
+      content: {
+        outcome: "completed",
+        summary: "已按测试合同执行两步并返回逐步证据。",
+        evidenceLocators: [{ kind: "test-output", ref: evidence.ref, digest: evidence.digest }],
+        verification: ["逐项复验 Evidence ref 与 digest。"],
+        risks: ["结果仍需 Controller 独立审查。"],
+        steps,
+      },
+    },
+  });
+  assertNoPrivatePath(context, imported);
+  const importResult = imported.structuredContent as ImportResult;
+  equal(importResult.status, "committed");
+  equal(importResult.callback.permit.hostAction.windowId, context.controllerWindowId);
+  // 测试会话留下 Stop 记录后，accept 才进入允许集合。
+  await recordSessionEvent(context, context.testWindowId, context.testHandle, "stop");
+  const inspection = await inspectReview(context, targetTaskId);
+  equal(inspection.reviewUnit.workType, "test");
+  equal(inspection.reviewUnit.testSteps?.length, 2);
+  equal(inspection.reviewUnit.allowedDecisions.includes("accept"), true);
+  const decided = await call(context, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, {
+    root,
+    demandId: context.demandId,
+    idempotencyKey: `scenario-test-decision-${keySuffix}`,
+    expectedStreamRevision: await currentStreamRevision(context),
+    targetResultId: inspection.reviewUnit.targetResult.targetResultId,
+    snapshotDigest: inspection.snapshotDigest,
+    reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
+    decision: "accept",
+    assessment: { conclusion: "satisfied", evidenceSufficiency: "sufficient" },
+    independentChecks: [
+      {
+        checkId: "controller-test-evidence",
+        method: "重新读取逐步 Evidence 并复验冻结测试问题。",
+        outcome: "passed",
+        observation: "全部合同步骤的 Evidence 闭合且未观察到产品缺陷。",
+      },
+    ],
+    rationale: "Controller 独立检查已关闭当前真实环境风险。",
+    blockingReasons: [],
+    residualRisks: ["该决定不替代后续 Demand completion 检查。"],
+  });
+  assertNoPrivatePath(context, decided);
+  const decision = decided.structuredContent as DecisionResult;
+  equal(decision.status, "committed");
+  equal(decision.target.phase, "test-accepted");
+  equal(decision.attached.productDefectRemediationId, null);
+  return { importResult, decision };
+}
+
 async function scenarioTestContract(context: ScenarioContext): Promise<string> {
   const root = context.workspace.workspacePath;
   if (
@@ -1941,7 +2066,6 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
     throw new Error("scenario ordering: create-demand and import-and-review must run first");
   }
   requireAcceptedImplementation(context);
-  const evidence = context.evidence;
   const afterAccept = await inspectRoute(context);
   equal(afterAccept.route?.frontiers[0]?.kind, "test-task-planning");
   await registerTestWindow(context);
@@ -1956,43 +2080,7 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
     demandId: context.demandId,
     idempotencyKey: "scenario-test-plan-1",
     expectedStreamRevision: revision,
-    taskPackage: {
-      workType: "test",
-      objective: "在已确认真实环境中验证已接受实现",
-      confirmedContext: ["全部实现目标已被 Controller 接受", "测试环境由需求包 landing 成员描述"],
-      selectedAuthorityMemberRefs: [...context.memberRefs],
-      boundaries: {
-        inScope: ["执行测试合同的批准步骤"],
-        outOfScope: ["修改产品代码"],
-        forbidden: ["创建未批准环境或配置"],
-      },
-      completionExpectations: ["每一步都返回可复核证据"],
-      testContract: {
-        question: "已接受实现能否在真实环境中保持目标行为？",
-        objectBoundary: "只观察当前 Demand 的产品入口与已确认测试环境",
-        steps: [
-          {
-            given: "已确认的真实环境与冻结实现基线",
-            when: "发布需求包并查看看板",
-            // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
-            then: "看板列出该包为 pending",
-            requirementRef: requirementRef("ac-1"),
-          },
-          {
-            given: "需求包已在看板",
-            when: "创建 Demand",
-            // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
-            then: "看板状态变为 claimed",
-            requirementRef: requirementRef("ac-2"),
-          },
-        ],
-        allowedSkills: [],
-        setupPolicy: "reuse-existing",
-        maxAttempts: 1,
-        stopConditions: ["环境与冻结 Authority 不一致时立即停止"],
-      },
-      lineage: null,
-    },
+    taskPackage: realEnvironmentTestTaskPackage(context),
   };
   const invented = await context.connection.client.callTool({
     name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
@@ -2064,68 +2152,12 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
   const accepted = await recordOutcome(context, prepared.permit, "scenario-test-outcome-1");
   equal(accepted.outcome.disposition, "accepted");
   equal(accepted.target.phase, "test-host-effect-accepted");
-  const steps = ["ts-1", "ts-2"].map((stepId) => ({
-    stepId,
-    observed: `${stepId} 在已确认环境中观察到合同所述行为。`,
-    evidence: { ref: evidence.ref, digest: evidence.digest },
-    verdict: "pass",
-  }));
-  const imported = await call(context, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, {
-    root,
-    demandId: context.demandId,
-    idempotencyKey: "scenario-test-import-1",
-    expectedStreamRevision: await currentStreamRevision(context),
-    deliveryId: prepared.permit.deliveryId,
-    claimDigest: prepared.permit.claimDigest,
-    report: {
-      workType: "test",
-      content: {
-        outcome: "completed",
-        summary: "已按测试合同执行两步并返回逐步证据。",
-        evidenceLocators: [{ kind: "test-output", ref: evidence.ref, digest: evidence.digest }],
-        verification: ["逐项复验 Evidence ref 与 digest。"],
-        risks: ["结果仍需 Controller 独立审查。"],
-        steps,
-      },
-    },
-  });
-  assertNoPrivatePath(context, imported);
-  const importResult = imported.structuredContent as ImportResult;
-  equal(importResult.status, "committed");
-  equal(importResult.callback.permit.hostAction.windowId, context.controllerWindowId);
-  // 测试会话留下 Stop 记录后，accept 才进入允许集合。
-  await recordSessionEvent(context, context.testWindowId, context.testHandle, "stop");
-  const inspection = await inspectReview(context, planned.targetTask.targetTaskId);
-  equal(inspection.reviewUnit.workType, "test");
-  equal(inspection.reviewUnit.testSteps?.length, 2);
-  equal(inspection.reviewUnit.allowedDecisions.includes("accept"), true);
-  const decided = await call(context, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, {
-    root,
-    demandId: context.demandId,
-    idempotencyKey: "scenario-test-decision-1",
-    expectedStreamRevision: await currentStreamRevision(context),
-    targetResultId: inspection.reviewUnit.targetResult.targetResultId,
-    snapshotDigest: inspection.snapshotDigest,
-    reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
-    decision: "accept",
-    assessment: { conclusion: "satisfied", evidenceSufficiency: "sufficient" },
-    independentChecks: [
-      {
-        checkId: "controller-test-evidence",
-        method: "重新读取逐步 Evidence 并复验冻结测试问题。",
-        outcome: "passed",
-        observation: "全部合同步骤的 Evidence 闭合且未观察到产品缺陷。",
-      },
-    ],
-    rationale: "Controller 独立检查已关闭当前真实环境风险。",
-    blockingReasons: [],
-    residualRisks: ["该决定不替代后续 Demand completion 检查。"],
-  });
-  assertNoPrivatePath(context, decided);
-  const decision = decided.structuredContent as DecisionResult;
-  equal(decision.status, "committed");
-  equal(decision.target.phase, "test-accepted");
-  equal(decision.attached.productDefectRemediationId, null);
+  const { importResult, decision } = await importAndAcceptTest(
+    context,
+    planned.targetTask.targetTaskId,
+    prepared.permit,
+    "1",
+  );
   const route = await inspectRoute(context);
   equal(route.route?.frontiers[0]?.kind, "demand-completion-preflight");
   return `invented-step=rejected; plan=${planned.status}; second-open=rejected; delivery=${accepted.outcome.disposition}; import=${importResult.status}; review=${decision.status}; next=${route.route?.frontiers[0]?.kind}`;
@@ -2202,10 +2234,123 @@ async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<str
   return `complete=${completed.disposition}; archive files=${completed.archive.fileCount}; package=${completed.package.status}; recover=${recovery.disposition}`;
 }
 
-async function scenarioCompleteAndContinue(context: ScenarioContext): Promise<string> {
+/**
+ * 真实环境 Demand 续接后仍能规划新的实现包：续接前已 test-accepted 的 test 目标是历史，
+ * 不算已存在或未终结的测试目标。
+ */
+async function planContinuationImplementation(
+  context: ScenarioContext,
+): Promise<{ readonly targetTaskId: string; readonly taskPackageId: string }> {
+  if (!context.demandId || !context.repositoryId || !context.productWindowId) {
+    throw new Error("scenario ordering: create-demand must run first");
+  }
+  if (!context.memberRefs || !context.recordDigest || !context.targetTaskId) {
+    throw new Error("scenario ordering: plan-implementation must run first");
+  }
+  const planned = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+    idempotencyKey: "scenario-continuation-plan-1",
+    expectedStreamRevision: await currentStreamRevision(context),
+    taskPackage: {
+      assignment: { repositoryId: context.repositoryId, windowId: context.productWindowId },
+      workType: "implementation",
+      objective: "收紧聚焦检查",
+      confirmedContext: ["上一轮已完成并归档", "续接只收紧聚焦检查"],
+      selectedAuthorityMemberRefs: [...context.memberRefs],
+      boundaries: { inScope: ["收紧聚焦检查"], outOfScope: ["投递"], forbidden: ["越界改动"] },
+      completionExpectations: ["聚焦检查通过"],
+      commitExpectation: "leave-uncommitted",
+      acceptanceAnchors: [
+        {
+          anchorId: "scenario-tightened",
+          claim: "聚焦检查已收紧",
+          probe: "运行聚焦检查",
+          expected: "检查通过",
+          requirementRef: {
+            recordDigest: context.recordDigest,
+            sectionAnchor: "acceptance-criteria",
+            itemId: "ac-1",
+          },
+        },
+      ],
+      lineage: { kind: "continuation", continuesTargetTaskId: context.targetTaskId },
+      sectionAnchors: ["goal"],
+    },
+  });
+  assertNoPrivatePath(context, planned);
+  const result = planned.structuredContent as {
+    readonly status: string;
+    readonly targetTask: {
+      readonly phase: string;
+      readonly targetTaskId: string;
+      readonly taskPackageId: string;
+    };
+    readonly next: { readonly frontier: string | null };
+  };
+  equal(result.status, "committed", JSON.stringify(planned.structuredContent));
+  equal(result.targetTask.phase, "planned");
+  equal(result.next.frontier, "implementation-delivery-planning");
+  return result.targetTask;
+}
+
+/** 续接轮次的实现目标：投递、落地、导入、目标会话结束本轮后接受；接受后路由进入测试规划。 */
+async function acceptContinuationImplementation(
+  context: ScenarioContext,
+  target: { readonly targetTaskId: string; readonly taskPackageId: string },
+): Promise<string> {
+  if (!context.evidence) throw new Error("scenario ordering: import-and-review must run first");
+  const prepared = await prepareDelivery(
+    context,
+    "scenario-continuation-prepare-1",
+    await currentStreamRevision(context),
+    target.targetTaskId,
+  );
+  equal(prepared.status, "committed");
+  await landPrompt(context, prepared.permit.prompt);
+  const outcome = await recordOutcome(context, prepared.permit, "scenario-continuation-outcome-1");
+  equal(outcome.outcome.disposition, "accepted");
+  const taskPackage = await loadTaskPackage(context, target.taskPackageId);
+  const imported = await call(
+    context,
+    WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    importRequest(
+      context,
+      prepared.permit,
+      "scenario-continuation-import-1",
+      await currentStreamRevision(context),
+      createImplementationTargetResultReportContentFixture(taskPackage, context.evidence),
+    ),
+  );
+  equal((imported.structuredContent as ImportResult).status, "committed");
+  await recordSessionEvent(context, context.productWindowId, context.productHandle, "stop");
+  const inspection = await inspectReview(context, target.targetTaskId);
+  equal(inspection.reviewUnit.allowedDecisions.includes("accept"), true);
+  const decided = await call(
+    context,
+    WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    implementationDecisionRequest(
+      context,
+      inspection,
+      "accept",
+      "scenario-continuation-accept-1",
+      await currentStreamRevision(context),
+    ),
+  );
+  const accepted = decided.structuredContent as DecisionResult;
+  equal(accepted.status, "committed");
+  equal(accepted.target.phase, "accepted");
+  // 续接前的 test 目标是历史：路由必须回到测试规划，而不是直接进入完成预检。
+  equal(accepted.next.frontier, "test-task-planning");
+  return accepted.target.phase;
+}
+
+/** 经公共工具 preview 再 apply 续接一个已完成的 Demand；续接后路由回到实现规划。 */
+async function continueDemand(
+  context: ScenarioContext,
+  continuation: Readonly<{ readonly kind: string; readonly summary: string }>,
+): Promise<string> {
   const root = context.workspace.workspacePath;
-  if (!context.demandId) throw new Error("scenario ordering: complete-and-archive must run first");
-  const continuation = { kind: "optimization", summary: "Tighten the focused checks." };
   const preview = await call(context, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, {
     root,
     mode: "preview",
@@ -2240,6 +2385,95 @@ async function scenarioCompleteAndContinue(context: ScenarioContext): Promise<st
   equal(reopened.archive, null);
   equal(reopened.route?.lifecycle, "active");
   equal(reopened.route?.disposition, "work-available");
+  return continued.disposition;
+}
+
+/** 完成预检通过后 apply：Demand 归档，下一步是续接。 */
+async function completeDemand(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  const preview = await call(context, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    demandId: context.demandId,
+  });
+  const previewed = preview.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(previewed.status, "ready", previewed.blockers.join(","));
+  const applied = await call(context, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: context.demandId,
+    planDigest: previewed.planDigest,
+  });
+  assertNoPrivatePath(context, applied);
+  const completed = applied.structuredContent as {
+    readonly disposition: string;
+    readonly next: { readonly frontier: string | null };
+  };
+  equal(completed.disposition, "completed");
+  equal(completed.next.frontier, "demand-continuation");
+  return completed.disposition;
+}
+
+/**
+ * 续接后的真实环境一整轮：规划实现、投递、接受，再规划新的 test 目标、投递、接受，最后完成。
+ * 续接前的 test 目标是历史，不阻塞新一轮测试，也不让路由跳过测试。
+ */
+async function runContinuedGeneration(context: ScenarioContext): Promise<string> {
+  const target = await planContinuationImplementation(context);
+  const implementation = await acceptContinuationImplementation(context, target);
+  const planned = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+    idempotencyKey: "scenario-continuation-test-plan-1",
+    expectedStreamRevision: await currentStreamRevision(context),
+    taskPackage: realEnvironmentTestTaskPackage(context),
+  });
+  const plannedResult = planned.structuredContent as {
+    readonly status: string;
+    readonly targetTask: { readonly targetTaskId: string };
+  };
+  equal(plannedResult.status, "committed");
+  const testTarget = plannedResult.targetTask.targetTaskId;
+  const prepared = await prepareDelivery(
+    context,
+    "scenario-continuation-test-prepare-1",
+    await currentStreamRevision(context),
+    testTarget,
+  );
+  equal(prepared.status, "committed");
+  await landPrompt(context, prepared.permit.prompt, context.testWindowId, context.testHandle);
+  const outcome = await recordOutcome(
+    context,
+    prepared.permit,
+    "scenario-continuation-test-outcome-1",
+  );
+  equal(outcome.outcome.disposition, "accepted");
+  const { decision } = await importAndAcceptTest(
+    context,
+    testTarget,
+    prepared.permit,
+    "continuation-1",
+  );
+  equal(decision.target.phase, "test-accepted");
+  const route = await inspectRoute(context);
+  equal(route.route?.frontiers[0]?.kind, "demand-completion-preflight");
+  const completed = await completeDemand(context);
+  return `implementation=${implementation}; test=${decision.target.phase}; complete=${completed}`;
+}
+
+async function scenarioCompleteAndContinue(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.demandId) throw new Error("scenario ordering: complete-and-archive must run first");
+  const continuation = { kind: "optimization", summary: "Tighten the focused checks." };
+  const firstContinue = await continueDemand(context, continuation);
+  const generation = await runContinuedGeneration(context);
+  const continued = { disposition: await continueDemand(context, continuation) };
+  const replanned = `${firstContinue}; ${generation}`;
+  const reopened = await inspectRoute(context);
 
   const reason = "Scenario acceptance cancels the continued Demand.";
   const cancelPreview = await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
@@ -2291,7 +2525,7 @@ async function scenarioCompleteAndContinue(context: ScenarioContext): Promise<st
   };
   equal(blocked.status, "blocked");
   equal(blocked.blockers.includes("archive-outcome:cancelled"), true);
-  return `continue=${continued.disposition}; route=${reopened.route?.disposition}; cancel=${cancellation.disposition}; package=${cancellation.package.status}; continue-after-cancel=blocked`;
+  return `continue=${continued.disposition}; route=${reopened.route?.disposition}; replan=${replanned}; cancel=${cancellation.disposition}; package=${cancellation.package.status}; continue-after-cancel=blocked`;
 }
 
 // ---- card-10/pod-lifecycle（ADR-0010，§13.91 D7） --------------------------------------------

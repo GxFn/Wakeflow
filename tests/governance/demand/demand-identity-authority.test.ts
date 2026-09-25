@@ -204,6 +204,21 @@ test("mandatory Demand authority resolves complete package roles and rejects leg
       (error: unknown) =>
         error instanceof DemandAuthorityError && error.reason === "role",
     );
+    // 成员的 recordDigest 与身份记录的需求包记录不一致：必须按身份关系拒绝。
+    const [firstRef, ...restRefs] = authority.authorityRefs;
+    if (firstRef === undefined) throw new Error("fixture must publish members");
+    const lastChar = firstRef.recordDigest.at(-1) === "0" ? "1" : "0";
+    const foreignDigest = `${firstRef.recordDigest.slice(0, -1)}${lastChar}`;
+    throws(
+      () => parseDemandAuthority({
+        ...authority,
+        authorityRefs: [{ ...firstRef, recordDigest: foreignDigest }, ...restRefs],
+      }, identity),
+      (error: unknown) =>
+        error instanceof DemandAuthorityError
+        && error.reason === "identity"
+        && error.path === "$/authorityRefs",
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

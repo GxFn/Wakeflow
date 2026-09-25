@@ -72,7 +72,7 @@ export function deriveDeliveryDisposition(input) {
         }
         return decided("rejected-before-send", "agent-declaration");
     }
-    if (input.hostId === "codex" &&
+    if (input.sendReturnProvesLanding &&
         input.attempt.status === "sent" &&
         input.attempt.evidenceDigest !== null) {
         return decided("accepted", "host-send-return");
@@ -81,6 +81,13 @@ export function deriveDeliveryDisposition(input) {
         return Object.freeze({ accepted: false, blocker: "landing-evidence-missing" });
     }
     return decided("indeterminate", "agent-declaration");
+}
+/**
+ * 宿主线程型启动（宿主工具自己建线程并同步投递）的发送返回即落地证据；
+ * tmux 会话型宿主只能以目标会话的 hook 记录证明落地。
+ */
+export function sendReturnProvesLanding(profile) {
+    return profile.launch.kind === "host-thread";
 }
 /** 静默是否超过阈值：以当前代际第一次 indeterminate 结局的记录时刻为起点。 */
 export function landingSilenceExceeded(silenceStartedAt, now, thresholdMilliseconds = DELIVERY_LANDING_SILENCE_MILLISECONDS) {

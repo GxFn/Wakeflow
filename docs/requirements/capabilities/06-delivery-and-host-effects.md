@@ -61,7 +61,7 @@
 - 投递的状态 journal 只能由投递编排自己的失败闭合恢复，通用 `recover_state_transition` 明确拒绝接管。
 - 目标窗口在投递中被替换：绑定不再 current 时预检失败，`send-claimed` 的投递既不能重发也不能 rearm，只能手工记 outcome 或释放租约。
 
-**现 TS 状态**（2026-09-10）：`wakeflow_record_delivery_outcome` 按证据派生 accepted、rejected-before-send、indeterminate（`delivery.delivery-outcome-recorded.v1`），rejected 立即释放声明、indeterminate 保留；ambiguous 出口是同工具再次调用（惰性重查 hook 记录）、静默 10 分钟后以 `landing-evidence-missing` 加 `landing-silence-exceeded` 交 Controller、显式 `resolution` 只在 indeterminate 允许（Q3）；`wakeflow_rearm_delivery` 同信封换新声明与代际，上限 3（Q4，`DELIVERY_REARM_LIMIT`）。
+**现 TS 状态**（2026-09-10）：`wakeflow_record_delivery_outcome` 按证据派生 accepted、rejected-before-send、indeterminate（`delivery.delivery-outcome-recorded.v1`），rejected 立即释放声明、indeterminate 保留；ambiguous 出口是同工具再次调用（惰性重查 hook 记录）、静默 10 分钟后以 `landing-evidence-missing` 加 `landing-silence-exceeded` 交 Controller、显式 `resolution` 只在 indeterminate 允许（Q3）；`wakeflow_rearm_delivery` 同信封换新声明与代际，上限 3（Q4，`DELIVERY_REARM_LIMIT`）。 2026-09-25 整体审查（gate-log §13.131）：一个信封至多三次 rearm，之后两种目标都由 `wakeflow_prepare_delivery` 重新准备（`rejected-before-send (rearm-exhausted)`）——实现目标保留被拒信封的返工或补救依据，测试目标重发同一次尝试；rearm 之后的导入认同一 deliveryId 任一已记录结果上的 claimDigest。
 
 **实现判断**：rejected-before-send 立即释放、ambiguous 保留的语义保留；投递 journal 的恢复继续由投递自己拥有，与 ADR-0006 放弃通用 recover 一致；outcome 的准入增加围栏令牌校验，过期令牌的结果拒绝。
 

@@ -32,7 +32,6 @@ import {
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import type { DemandAggregateState } from "../../governance/demand/model/demand-aggregate-state.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { ledgerAuthorityMemberRef } from "../../governance/ledger/ledger-authority-paths.js";
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
@@ -66,7 +65,7 @@ import {
   type AppendCommandEnvelope,
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
-import { fail, isWakeflowError } from "../../kernel/error.js";
+import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -80,6 +79,7 @@ import {
 import {
   deriveAnchorReferenceBlockers,
   deriveImplementationBaselines,
+  deriveImplementationPlanningBlockers,
   deriveLineageBlockers,
   deriveLineageExpectation,
   derivePlanReview,
@@ -136,37 +136,6 @@ const REQUIREMENT_MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$membe
 
 function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
   return signal === undefined ? {} : { signal };
-}
-
-const DETAIL_BLOCKER_LIMIT = 8;
-
-/**
- * 实现规划准入：聚合拒绝的条件在这里先说清楚——Demand 须活动，且测试一旦开始（待消费复测或
- * 已有 test 目标）就不再接受新的实现包。
- */
-export function deriveImplementationPlanningBlockers(
-  state: Readonly<DemandAggregateState>,
-): readonly string[] {
-  const blockers: string[] = [];
-  if (state.lifecycle !== "active") blockers.push(`demand-lifecycle:${state.lifecycle}`);
-  if (state.pendingTestRetest !== undefined) blockers.push("test-retest-pending");
-  for (const target of state.targetTasks) {
-    if (target.workType === "test") blockers.push(`test-target-present:${target.targetTaskId}`);
-  }
-  return Object.freeze(blockers);
-}
-
-/** 理由取首个阻塞项的种类（冒号前的 kebab-case 标记），阻塞项逐条进 details（至多八条）。 */
-function rejectWith(blockers: readonly string[], path: string): never {
-  const first = blockers[0];
-  if (first === undefined) fail("unexpected", "empty-blockers", path);
-  fail("precondition-failed", first.split(":")[0] ?? first, path, {
-    details: Object.fromEntries(
-      blockers
-        .slice(0, DETAIL_BLOCKER_LIMIT)
-        .map((blocker, index) => [index === 0 ? "blocker" : `blocker${index + 1}`, blocker]),
-    ),
-  });
 }
 
 function mapContextError(error: unknown): never {

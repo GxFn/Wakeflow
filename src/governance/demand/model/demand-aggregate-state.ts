@@ -466,6 +466,22 @@ export interface DemandContinuationState {
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly kind: DemandContinuationKind;
   readonly planningRequired: boolean;
+  /** 续接那一刻已存在的 test 目标：上一轮的历史，不再算未终结或当前的测试代际。 */
+  readonly historicalTestTargetIds?: readonly WakeflowDurableId<"target-task">[];
+}
+
+/** 当前测试代际的 test 目标：排除续接前留下的历史 test 目标。 */
+export function currentTestTargetsOf(
+  state: Readonly<{
+    readonly targetTasks: readonly Readonly<DemandTargetTaskState>[];
+    readonly continuation?: Readonly<DemandContinuationState> | undefined;
+  }>,
+): readonly Readonly<DemandTargetTaskState>[] {
+  const historical = state.continuation?.historicalTestTargetIds ?? [];
+  return state.targetTasks.filter(
+    (target) =>
+      target.workType === "test" && !historical.includes(target.targetTaskId),
+  );
 }
 
 export interface DemandManagedEvidenceSummary {
@@ -2537,9 +2553,6 @@ function normalizeState(
   const liveImplementationTargets = implementationTargets.filter(
     (target) => target.phase !== "superseded",
   );
-  const testTargets = targetTasks.filter(
-    (target) => target.workType === "test",
-  );
   const pendingTestRetest =
     wire.pendingTestRetest === undefined
       ? undefined
@@ -2551,7 +2564,8 @@ function normalizeState(
   const continuation =
     wire.continuation === undefined
       ? undefined
-      : parseContinuationState(wire.continuation);
+      : parseContinuationState(wire.continuation, targetTasks);
+  const testTargets = currentTestTargetsOf({ targetTasks, continuation });
   // 同一时间只有一个未终结的 test 目标（能力卡 5 Q4）；历史代际只能停在 test-product-defect。
   const openTestTargets = testTargets.filter(
     (target) => target.phase !== "test-product-defect",
@@ -2634,13 +2648,40 @@ function parseAwaitingDecision(
   });
 }
 
+/** 历史 test 目标必须是状态里已终结（test-accepted 或 test-product-defect）的 test 目标。 */
 function parseContinuationState(
   value: NonNullable<DemandAggregateStateWire["continuation"]>,
+  targetTasks: readonly Readonly<DemandTargetTaskState>[],
 ): Readonly<DemandContinuationState> {
+  const historical = value.historicalTestTargetIds;
+  if (
+    historical?.some((targetTaskId) => {
+      const target = targetTasks.find((entry) => entry.targetTaskId === targetTaskId);
+      return (
+        target === undefined ||
+        (target.phase !== "test-accepted" && target.phase !== "test-product-defect")
+      );
+    })
+  ) {
+    fail("relation", "$/continuation/historicalTestTargetIds");
+  }
   return Object.freeze({
     eventId: parseId(value.eventId, "demand-event", "$/continuation/eventId"),
     kind: value.kind,
     planningRequired: value.planningRequired,
+    ...(historical === undefined
+      ? {}
+      : {
+          historicalTestTargetIds: Object.freeze(
+            historical.map((targetTaskId, index) =>
+              parseId(
+                targetTaskId,
+                "target-task",
+                `$/continuation/historicalTestTargetIds/${index}`,
+              ),
+            ),
+          ),
+        }),
   });
 }
 
@@ -2702,11 +2743,24 @@ export function recordDecisionInDemandAggregateState(
   return parseDemandAggregateState(rest);
 }
 
-/** `lifecycle.demand-continued.v1`：已完成的 Demand 回到 active，并要求先规划新的任务包。 */
+/** 续接决策用：续接前状态里已有的 test 目标，随 `lifecycle.demand-continued` 事件持久化。 */
+export function historicalTestTargetIdsAtContinuation(
+  currentValue: unknown,
+): readonly WakeflowDurableId<"target-task">[] {
+  return parseDemandAggregateState(currentValue)
+    .targetTasks.filter((target) => target.workType === "test")
+    .map((target) => target.targetTaskId);
+}
+
+/**
+ * `lifecycle.demand-continued.v1`：已完成的 Demand 回到 active，并要求先规划新的任务包。
+ * 历史 test 目标只取自事件携带的边界；早期事件没有该字段，重放得到与当时完全相同的状态。
+ */
 export function continueDemandAggregateState(
   currentValue: unknown,
   kindValue: unknown,
   eventIdValue: unknown,
+  historicalTestTargetIdsValue?: readonly unknown[],
 ): Readonly<DemandAggregateState> {
   const current = parseDemandAggregateState(currentValue);
   const eventId = parseId(eventIdValue, "demand-event", "$eventId");
@@ -2719,10 +2773,26 @@ export function continueDemandAggregateState(
     fail("transition", "$state/lifecycle");
   }
   // 已接受的目标留在状态里作为历史；续接要求先规划新的任务包，同一仓库允许再次规划。
+  // 事件携带的 test 目标成为历史，新一轮真实环境测试从零开始；成员关系由状态解析校验。
+  const historicalTestTargetIds = historicalTestTargetIdsValue ?? [];
+  if (historicalTestTargetIdsValue !== undefined) {
+    const expected = historicalTestTargetIdsAtContinuation(current);
+    if (
+      historicalTestTargetIds.length !== expected.length ||
+      expected.some((id) => !historicalTestTargetIds.includes(id))
+    ) {
+      fail("relation", "$/continuation/historicalTestTargetIds");
+    }
+  }
   return parseDemandAggregateState({
     ...current,
     lifecycle: "active",
-    continuation: { eventId, kind: kindValue, planningRequired: true },
+    continuation: {
+      eventId,
+      kind: kindValue,
+      planningRequired: true,
+      ...(historicalTestTargetIds.length === 0 ? {} : { historicalTestTargetIds }),
+    },
   });
 }
 
@@ -2894,9 +2964,7 @@ export function planTargetTaskInDemandAggregateState(
     fail("transition", "$state/targetTasks");
   }
   if (taskPackage.workType === "test") {
-    const testTargets = current.targetTasks.filter(
-      (target) => target.workType === "test",
-    );
+    const testTargets = currentTestTargetsOf(current);
     const liveImplementationTargets = current.targetTasks.filter(
       (target) => target.workType !== "test" && target.phase !== "superseded",
     );
@@ -2966,7 +3034,7 @@ export function planTargetTaskInDemandAggregateState(
   }
   if (
     current.pendingTestRetest !== undefined ||
-    current.targetTasks.some((entry) => entry.workType === "test")
+    currentTestTargetsOf(current).length > 0
   ) {
     fail("transition", "$state/targetTasks");
   }
@@ -3031,9 +3099,7 @@ export function completeDemandAggregateState(
   const implementationTargets = current.targetTasks.filter(
     (target) => target.workType !== "test" && target.phase !== "superseded",
   );
-  const testTargets = current.targetTasks.filter(
-    (target) => target.workType === "test",
-  );
+  const testTargets = currentTestTargetsOf(current);
   const openTestTargets = testTargets.filter(
     (target) => target.phase !== "test-product-defect",
   );

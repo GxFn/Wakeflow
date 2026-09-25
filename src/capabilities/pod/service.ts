@@ -730,7 +730,7 @@ async function currentViews(context: PodSliceContext, podId: string): Promise<Po
       disposal:
         pod.lifecycle === "closing" && entry?.checkoutPresent === true
           ? worktreeDisposalGuidance(
-              fresh.facade.hostId,
+              fresh.facade.resourceProfile.surfaces.worktree.launch,
               path.relative(fresh.root.absolutePath, entry.receipt.path) || ".",
               entry.receipt.locked,
             )

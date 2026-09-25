@@ -12,6 +12,7 @@ import {
 import {
   cancelDemandAggregateState,
   computeDemandAggregateStateDigest,
+  continueDemandAggregateState,
   createInitialDemandAggregateState,
   decideTargetResultReviewInDemandAggregateState,
   prepareDeliveryInDemandAggregateState,
@@ -473,4 +474,51 @@ test("replacement 谱系：旧目标进入 superseded，后续规划与 complete
     (error: unknown) =>
       error instanceof DemandAggregateStateError && error.reason === "schema",
   );
+});
+
+test("续接把此刻的 test 目标记为历史：没有 test 目标时不写该字段，历史标识必须指向已终结的 test 目标", () => {
+  const eventId = "demand-event_16161616-1616-4616-8616-161616161616";
+  const completed = parseDemandAggregateState({
+    ...createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST),
+    lifecycle: "completed",
+  });
+  const continued = continueDemandAggregateState(completed, "optimization", eventId);
+  deepEqual(continued.continuation, {
+    eventId,
+    kind: "optimization",
+    planningRequired: true,
+  });
+  // 事件携带的边界必须恰好是续接前的 test 目标集合。
+  throws(
+    () => continueDemandAggregateState(completed, "optimization", eventId, [TARGET_TASK_ID]),
+    (error: unknown) =>
+      error instanceof DemandAggregateStateError &&
+      error.reason === "relation" &&
+      error.path === "$/continuation/historicalTestTargetIds",
+  );
+  const planned = planTargetTaskInDemandAggregateState(
+    createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST),
+    createTaskPackageFixture(),
+  );
+  for (const historicalTestTargetIds of [
+    [TARGET_TASK_ID],
+    ["target-task_17171717-1717-4717-8717-171717171717"],
+  ]) {
+    throws(
+      () =>
+        parseDemandAggregateState({
+          ...planned,
+          continuation: {
+            eventId,
+            kind: "optimization",
+            planningRequired: false,
+            historicalTestTargetIds,
+          },
+        }),
+      (error: unknown) =>
+        error instanceof DemandAggregateStateError &&
+        error.reason === "relation" &&
+        error.path === "$/continuation/historicalTestTargetIds",
+    );
+  }
 });

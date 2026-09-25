@@ -1,7 +1,13 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import { fail, isWakeflowError, toWakeflowError, WakeflowError } from "../../src/kernel/error.js";
+import {
+  fail,
+  failWithBlockers,
+  isWakeflowError,
+  toWakeflowError,
+  WakeflowError,
+} from "../../src/kernel/error.js";
 import {
   isWakeflowErrorCode,
   WAKEFLOW_ERROR_CODES,
@@ -70,5 +76,30 @@ test("WakeflowError details 只接受少量短标识并进入公共细节", () =
   throws(
     () => new WakeflowError("unexpected", "x", "$", { details: { note: "has space" } }),
     TypeError,
+  );
+});
+
+test("failWithBlockers：阻塞码是原因，details 至多 8 项，非标识阻塞项只留阻塞码（§13.131 审查）", () => {
+  const blockers = [
+    "section-anchor-unknown:性能约束",
+    ...Array.from({ length: 9 }, (_, index) => `step-uncovered:ts-${index + 1}`),
+  ];
+  throws(
+    () => failWithBlockers(blockers, "$request.sectionAnchors"),
+    (error: unknown) => {
+      if (!isWakeflowError(error)) return false;
+      const details = error.toPublicDetails();
+      equal(details.code, "precondition-failed");
+      equal(details.reason, "section-anchor-unknown");
+      equal(details.path, "$request.sectionAnchors");
+      equal(Object.keys(details.details ?? {}).length, 8);
+      equal(details.details?.blocker, "section-anchor-unknown");
+      equal(details.details?.blocker2, "step-uncovered:ts-1");
+      return true;
+    },
+  );
+  throws(
+    () => failWithBlockers([], "$"),
+    (error: unknown) => isWakeflowError(error) && error.reason === "empty-blockers",
   );
 });

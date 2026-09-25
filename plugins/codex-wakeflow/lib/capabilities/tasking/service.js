@@ -19,42 +19,14 @@ import { computeTaskPackageDigest, createTaskPackage, TaskPackageError, } from "
 import { TaskPackageProjectionStore, TaskPackageProjectionStoreError, } from "../../governance/tasking/task-package-projection-store.js";
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
-import { fail, isWakeflowError } from "../../kernel/error.js";
+import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { admitTargetTaskPlanningResult, parseTargetTaskPlanningRequest, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { deriveAnchorReferenceBlockers, deriveImplementationBaselines, deriveLineageBlockers, deriveLineageExpectation, derivePlanReview, deriveSectionAnchorBlockers, deriveTestPlanningBlockers, deriveTestStepReferenceBlockers, deriveTopologyBlockers, parseAcceptanceCriteria, } from "./decide.js";
+import { deriveAnchorReferenceBlockers, deriveImplementationBaselines, deriveImplementationPlanningBlockers, deriveLineageBlockers, deriveLineageExpectation, derivePlanReview, deriveSectionAnchorBlockers, deriveTestPlanningBlockers, deriveTestStepReferenceBlockers, deriveTopologyBlockers, parseAcceptanceCriteria, } from "./decide.js";
 const REQUIREMENT_MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
 function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
-}
-const DETAIL_BLOCKER_LIMIT = 8;
-/**
- * 实现规划准入：聚合拒绝的条件在这里先说清楚——Demand 须活动，且测试一旦开始（待消费复测或
- * 已有 test 目标）就不再接受新的实现包。
- */
-export function deriveImplementationPlanningBlockers(state) {
-    const blockers = [];
-    if (state.lifecycle !== "active")
-        blockers.push(`demand-lifecycle:${state.lifecycle}`);
-    if (state.pendingTestRetest !== undefined)
-        blockers.push("test-retest-pending");
-    for (const target of state.targetTasks) {
-        if (target.workType === "test")
-            blockers.push(`test-target-present:${target.targetTaskId}`);
-    }
-    return Object.freeze(blockers);
-}
-/** 理由取首个阻塞项的种类（冒号前的 kebab-case 标记），阻塞项逐条进 details（至多八条）。 */
-function rejectWith(blockers, path) {
-    const first = blockers[0];
-    if (first === undefined)
-        fail("unexpected", "empty-blockers", path);
-    fail("precondition-failed", first.split(":")[0] ?? first, path, {
-        details: Object.fromEntries(blockers
-            .slice(0, DETAIL_BLOCKER_LIMIT)
-            .map((blocker, index) => [index === 0 ? "blocker" : `blocker${index + 1}`, blocker])),
-    });
 }
 function mapContextError(error) {
     if (error instanceof DemandOperationAuthorityContextError) {

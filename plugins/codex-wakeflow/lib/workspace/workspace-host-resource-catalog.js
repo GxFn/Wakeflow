@@ -116,6 +116,7 @@ export function hostProfileHasOperationSurface(profile) {
     return profile.surfaces.keepLive
         || profile.surfaces.windowLocator
         || profile.surfaces.statuslineAsset !== null
+        || profile.surfaces.tmuxAsset !== null
         || profile.surfaces.activityMonitor
         || profile.surfaces.temporaryPrompts;
 }
@@ -149,8 +150,15 @@ export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
     if (profile.surfaces.settingsIntegration !== null) {
         declarations.push(integrationFileDeclaration(`${prefix}.settings-portable`, "host-settings-integration", profile.surfaces.settingsIntegration.portablePath, "tracked-shareable"), integrationFileDeclaration(`${prefix}.settings-local`, "host-settings-integration", profile.surfaces.settingsIntegration.localPath, "ignored-private"));
     }
-    if (profile.surfaces.statuslineAsset !== null) {
-        declarations.push(privateDirectoryDeclaration(`${prefix}.statusline-assets-root`, "host-statusline", hostRuntimeRef(profile, "operations/assets")), privateProjectionFileDeclaration(`${prefix}.statusline-asset`, "host-statusline", hostRuntimeRef(profile, `operations/assets/${profile.surfaces.statuslineAsset.fileName}`)));
+    const { statuslineAsset, tmuxAsset } = profile.surfaces;
+    if (statuslineAsset !== null || tmuxAsset !== null) {
+        declarations.push(privateDirectoryDeclaration(`${prefix}.statusline-assets-root`, "host-statusline", hostRuntimeRef(profile, "operations/assets")));
+    }
+    if (statuslineAsset !== null) {
+        declarations.push(privateProjectionFileDeclaration(`${prefix}.statusline-asset`, "host-statusline", hostRuntimeRef(profile, `operations/assets/${statuslineAsset.fileName}`)));
+    }
+    if (tmuxAsset !== null) {
+        declarations.push(privateProjectionFileDeclaration(`${prefix}.tmux-asset`, "host-tmux", hostRuntimeRef(profile, `operations/assets/${tmuxAsset.fileName}`)));
     }
     if (profile.surfaces.activityMonitor) {
         declarations.push(privateDirectoryDeclaration(`${prefix}.activity-monitor-root`, "activity-monitor", hostRuntimeRef(profile, "operations/activity-monitor")));

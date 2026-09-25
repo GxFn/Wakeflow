@@ -53,9 +53,11 @@ function codexProfile(
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
+      tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
     },
+    launch: { kind: "host-thread" },
     ...overrides,
   };
 }
@@ -69,6 +71,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
     "windowLocator",
     "settingsIntegration",
     "statuslineAsset",
+    "tmuxAsset",
     "activityMonitor",
     "temporaryPrompts",
   ]);
@@ -89,9 +92,11 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
+      tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
     },
+    launch: { kind: "host-thread" },
   };
   const codex = parseWakeflowWorkspaceHostResourceProfile(codexInput);
   deepEqual(codex, codexInput);
@@ -123,8 +128,18 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       statuslineAsset: {
         fileName: "statusline.mjs",
       },
+      tmuxAsset: {
+        fileName: "tmux.mjs",
+      },
       activityMonitor: true,
       temporaryPrompts: true,
+    },
+    launch: {
+      kind: "tmux-session",
+      controllerEffort: "max",
+      defaultEffort: "xhigh",
+      permissionMode: "acceptEdits",
+      sessionName: "wakeflow",
     },
   };
   const claude = parseWakeflowWorkspaceHostResourceProfile(claudeInput);
@@ -165,6 +180,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         windowLocator: false,
         settingsIntegration: null,
         statuslineAsset: null,
+        tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
         close: true,
@@ -203,9 +219,11 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
           localPath: ".host/settings.local.json",
         },
         statuslineAsset: null,
+        tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
       },
+      launch: { kind: "host-thread" },
     })),
     "path",
     "$/surfaces/settingsIntegration/portablePath",
@@ -227,9 +245,11 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
           realization: "current",
         },
         statuslineAsset: null,
+        tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
       },
+      launch: { kind: "host-thread" },
     })),
     "shape",
     "$/surfaces/settingsIntegration/realization",
@@ -253,9 +273,11 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
           fileName: "statusline.mjs",
           executable: true,
         },
+        tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
       },
+      launch: { kind: "host-thread" },
     })),
     "shape",
     "$/surfaces/statuslineAsset/executable",
@@ -312,9 +334,11 @@ test("host resource profile closes relations without encoding host capability br
           localPath: ".host/settings.json",
         },
         statuslineAsset: null,
+        tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
       },
+      launch: { kind: "host-thread" },
     })),
     "contradiction",
     "$/surfaces/settingsIntegration/localPath",
@@ -334,9 +358,13 @@ test("host resource profile closes relations without encoding host capability br
         statuslineAsset: {
           fileName: "statusline.mjs",
         },
+        tmuxAsset: {
+          fileName: "tmux.mjs",
+        },
         activityMonitor: false,
         temporaryPrompts: false,
       },
+      launch: { kind: "host-thread" },
     })),
     "contradiction",
     "$/surfaces/statuslineAsset",
@@ -360,9 +388,13 @@ test("host resource profile closes relations without encoding host capability br
         statuslineAsset: {
           fileName: "statusline.mjs",
         },
+        tmuxAsset: {
+          fileName: "tmux.mjs",
+        },
         activityMonitor: true,
         temporaryPrompts: true,
       },
+      launch: { kind: "host-thread" },
     }));
   equal(capabilityIndependentCodex.hostId, "codex");
   equal(capabilityIndependentCodex.surfaces.windowIdentity, false);
@@ -373,4 +405,31 @@ test("host resource profile closes relations without encoding host capability br
     portablePath: ".codex/settings.json",
     localPath: ".codex/settings.local.json",
   });
+});
+
+test("host resource profile admits launch templates and rejects a tmux launch without a window locator", () => {
+  const tmuxLaunch = {
+    kind: "tmux-session",
+    controllerEffort: "max",
+    defaultEffort: "xhigh",
+    permissionMode: "acceptEdits",
+    sessionName: "wakeflow",
+  };
+  expectHostResourceProfileError(
+    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({ launch: tmuxLaunch })),
+    "contradiction",
+    "$/launch",
+  );
+  expectHostResourceProfileError(
+    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({ launch: { kind: "shell" } })),
+    "surface",
+    "$/launch/kind",
+  );
+  expectHostResourceProfileError(
+    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
+      launch: { kind: "host-thread", sessionName: "wakeflow" },
+    })),
+    "shape",
+    "$/launch/sessionName",
+  );
 });

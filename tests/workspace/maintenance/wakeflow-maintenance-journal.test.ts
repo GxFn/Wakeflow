@@ -199,3 +199,21 @@ test("prepared journal rejects blocked, empty or forged plans", () => {
     }
   }
 });
+
+test("journal parser rejects a null desired config digest", () => {
+  const prepared = createPreparedWakeflowMaintenanceJournal(
+    OPERATION_ID,
+    OTHER_DIGEST,
+    plan(),
+  );
+  let caught: unknown;
+  try {
+    parseWakeflowMaintenanceJournal({ ...prepared, desiredConfigDigest: null });
+  } catch (error: unknown) {
+    caught = error;
+  }
+  equal(caught instanceof WakeflowMaintenanceJournalError, true);
+  if (caught instanceof WakeflowMaintenanceJournalError) {
+    equal(caught.reason, "schema");
+  }
+});

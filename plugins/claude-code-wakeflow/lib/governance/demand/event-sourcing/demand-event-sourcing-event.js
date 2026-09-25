@@ -69,6 +69,10 @@ const COMPLETED_DATA_FIELDS = Object.freeze(["completion"]);
 const ESCALATED_DATA_FIELDS = Object.freeze(["escalation"]);
 const DECISION_RECORDED_DATA_FIELDS = Object.freeze(["decision"]);
 const CONTINUED_DATA_FIELDS = Object.freeze(["continuation"]);
+const CONTINUED_WITH_HISTORY_DATA_FIELDS = Object.freeze([
+    "continuation",
+    "historicalTestTargetIds",
+]);
 const LIFECYCLE_DATA_REFERENCES = Object.freeze([
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
@@ -257,14 +261,25 @@ export function parseDemandUncommittedEvent(value) {
         });
     }
     if (record.eventType === "lifecycle.demand-continued") {
-        const data = exactRecord(record.data, CONTINUED_DATA_FIELDS, "$/data");
-        const continuation = lifecycleData(validateContinuedData, data, "$/data").continuation;
+        const withHistory = typeof record.data === "object" &&
+            record.data !== null &&
+            Object.hasOwn(record.data, "historicalTestTargetIds");
+        const data = exactRecord(record.data, withHistory ? CONTINUED_WITH_HISTORY_DATA_FIELDS : CONTINUED_DATA_FIELDS, "$/data");
+        const parsed = lifecycleData(validateContinuedData, data, "$/data");
+        const historical = parsed.historicalTestTargetIds;
         return Object.freeze({
             eventId,
             demandId,
             recordedAt,
             eventType: "lifecycle.demand-continued",
-            data: Object.freeze({ continuation: Object.freeze(continuation) }),
+            data: Object.freeze({
+                continuation: Object.freeze(parsed.continuation),
+                ...(historical === undefined
+                    ? {}
+                    : {
+                        historicalTestTargetIds: Object.freeze(historical.map((id, index) => parseId(id, "target-task", `$/data/historicalTestTargetIds/${index}`))),
+                    }),
+            }),
         });
     }
     if (record.eventType === "evidence.managed-evidence-recorded") {

@@ -6,6 +6,7 @@ import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from 
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { deriveUuidV4 } from "../../foundation/identity/uuid-v4.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -121,7 +122,9 @@ async function readLocatorSource(root, hostId, windowId, signal) {
             fail("io-failure", `locator-read-${error.reason}`, "$locator", { cause: error });
         }
         // 私有定位器文件损坏：归入记录形状失败，而不是让基础层错误以 unexpected 逃出。
-        if (error instanceof DeterministicJsonDocumentError || error instanceof UtcInstantError) {
+        if (error instanceof DeterministicJsonDocumentError ||
+            error instanceof UtcInstantError ||
+            error instanceof StrictTextFileError) {
             fail("invalid-request", "locator-record", "$locator", { cause: error });
         }
         throw error;

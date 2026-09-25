@@ -1,10 +1,13 @@
 import { inspectActiveProjectionTargets, renderActiveProjectionFiles, } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
+import { currentTestTargetsOf, } from "../demand/model/demand-aggregate-state.js";
 import { repositoryBranchesComplete } from "./repository-pointer-observation.js";
-function progressOf(targets) {
+/** 测试进度只数当前测试代际：续接前留下的 test 目标是上一轮的历史。 */
+function progressOf(state) {
+    const targets = state.targetTasks;
     const implementation = targets.filter((target) => target.workType !== "test" && target.phase !== "superseded");
-    const tests = targets.filter((target) => target.workType === "test");
+    const tests = currentTestTargetsOf(state);
     return Object.freeze({
         implementationTargets: implementation.length,
         implementationAccepted: implementation.filter((target) => target.phase === "accepted").length,
@@ -123,7 +126,7 @@ function demandFacts(demand, podName) {
             suggestedTool: next.suggestedTool,
             blockers: next.blockers,
         }),
-        progress: progressOf(state.targetTasks),
+        progress: progressOf(state),
         targets: Object.freeze(state.targetTasks.map((target) => Object.freeze({
             targetTaskId: target.targetTaskId,
             workType: target.workType === "test" ? "test" : "implementation",

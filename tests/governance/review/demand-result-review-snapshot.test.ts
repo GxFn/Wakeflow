@@ -10,6 +10,7 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
+  readArchivedDemandResultReviewSnapshot,
   readDemandResultReviewSnapshot,
   DemandResultReviewSnapshotError,
 } from "../../../src/governance/review/demand-result-review-snapshot.js";
@@ -140,6 +141,25 @@ test("Demand Result Review Snapshot拒绝非RootedDirectory和额外选项", asy
       (error: unknown) =>
         error instanceof DemandResultReviewSnapshotError &&
         error.reason === "input",
+    );
+  } finally {
+    await root.close();
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("归档评审快照把未初始化的事件存储归为operation-failure而不是stream", async () => {
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-archived-review-empty-"),
+  );
+  const root = await RootedDirectory.open(fixtureRoot);
+  try {
+    // 空的归档 payload 没有提交目录：存储报 not-initialized，不是事件流本身损坏。
+    await rejects(
+      readArchivedDemandResultReviewSnapshot(root),
+      (error: unknown) =>
+        error instanceof DemandResultReviewSnapshotError &&
+        error.reason === "operation-failure",
     );
   } finally {
     await root.close();

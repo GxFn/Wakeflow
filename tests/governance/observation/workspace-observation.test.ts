@@ -1,6 +1,6 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
@@ -13,6 +13,7 @@ import {
   parseWakeflowDurableIdOfKind,
 } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DemandControllerRoute } from "../../../src/governance/controller/demand-controller-route.js";
@@ -22,8 +23,18 @@ import {
   orphanWorkClaims,
   type WorkspaceObservation,
 } from "../../../src/governance/observation/workspace-observation.js";
+import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "../../../src/hosts/claude-code/claude-code-statusline-asset.js";
+import {
+  CLAUDE_CODE_LOCAL_SETTINGS_REF,
+  CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+  claudeCodeStatuslineSettingsEntry,
+} from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
-import { REQUIREMENT_BOARD_ROOT_REF, WORK_CLAIMS_ROOT_REF } from "../../../src/kernel/layout.js";
+import {
+  hostRuntimeRootRef,
+  REQUIREMENT_BOARD_ROOT_REF,
+  WORK_CLAIMS_ROOT_REF,
+} from "../../../src/kernel/layout.js";
 import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
 import { createWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observation-facade.fixture.js";
@@ -213,6 +224,44 @@ test("健康工作区：各域 observed；未物化的宿主运行时给出空�
   deepEqual(projection.repositories, { status: "unavailable", issue: "scope:projection", value: null });
   equal(projection.pods.value?.[0]?.state, null);
   equal(deriveOverallStatus(projection), "idle");
+});
+
+test("状态栏资产在场而本地设置是缺状态栏键的 JSON 对象：settings 为 drift 而不是 unreadable", { timeout: 120_000 }, async (t) => {
+  const workspace = await maintainedWorkspace(t);
+  const assetBytes = new TextEncoder().encode("#!/bin/sh\necho wakeflow\n");
+  const assetsDirectory = absolute(workspace.root, `${hostRuntimeRootRef("claude-code")}/operations/assets`);
+  mkdirSync(assetsDirectory, { recursive: true });
+  writeFileSync(path.join(assetsDirectory, CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME), assetBytes, { mode: 0o600 });
+  const settingsPath = absolute(workspace.root, CLAUDE_CODE_LOCAL_SETTINGS_REF);
+  mkdirSync(path.dirname(settingsPath), { recursive: true });
+  writeFileSync(settingsPath, `${JSON.stringify({ permissions: {} })}\n`, { mode: 0o600 });
+  chmodSync(settingsPath, 0o600);
+  const claudeHost = CODEX_OBSERVATION_FACADE.hosts.find((host) => host.hostId === "claude-code");
+  if (claudeHost === undefined) throw new Error("Expected a Claude Code observation host.");
+  const observation = await observeWorkspace(workspace.rooted, workspace.snapshot, workspace.ledgerRoot, {
+    hosts: [
+      {
+        ...claudeHost,
+        statuslineAsset: {
+          fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+          digest: computeSha256Digest(assetBytes),
+          settings: {
+            path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+            key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+            expectedEntry: claudeCodeStatuslineSettingsEntry,
+          },
+          companions: [],
+        },
+      },
+    ],
+    currentHostId: "claude-code",
+    scope: "full",
+    clock: () => OBSERVED_AT,
+  });
+  deepEqual(
+    observation.assets.map((asset) => [asset.hostId, asset.status, asset.settings, asset.companion, asset.issue]),
+    [["claude-code", "current", "drift", null, null]],
+  );
 });
 
 test("域隔离：看板目录被文件顶替只让 board 不可用；声明目录被文件顶替只让 claims 不可用；非法声明文件只计 unreadable", { timeout: 120_000 }, async (t) => {

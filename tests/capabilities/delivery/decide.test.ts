@@ -9,10 +9,13 @@ import {
   derivePrepareBlockers,
   deriveRearmBlockers,
   landingSilenceExceeded,
+  sendReturnProvesLanding,
   type DispositionInput,
 } from "../../../src/capabilities/delivery/decide.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 
 /**
  * delivery 切片纯决定：处置由证据派生（hook 记录优先、发送失败即拒绝、Codex 发送返回、其余
@@ -25,7 +28,7 @@ const ISSUED_AT = parseUtcInstant("2026-09-09T10:00:00.000Z");
 
 function input(overrides: Partial<DispositionInput> = {}): DispositionInput {
   return {
-    hostId: "claude-code",
+    sendReturnProvesLanding: false,
     attempt: { status: "sent", evidenceDigest: null },
     readback: { status: "pending", evidenceDigest: null },
     landingRecords: [],
@@ -81,18 +84,29 @@ test("处置派生：匹配的 hook 记录为 accepted，发送前失败为 reje
   equal(confirmedOnly.accepted && confirmedOnly.disposition, "indeterminate");
 });
 
-test("Codex 的发送返回摘要是 accepted 证据；Claude 的同样声明只是 indeterminate", () => {
+test("宿主线程型（Codex）的发送返回摘要是 accepted 证据；tmux 会话型（Claude）的同样声明只是 indeterminate", () => {
   const codex = deriveDeliveryDisposition(
-    input({ hostId: "codex", attempt: { status: "sent", evidenceDigest: OTHER_DIGEST } }),
+    input({
+      sendReturnProvesLanding: true,
+      attempt: { status: "sent", evidenceDigest: OTHER_DIGEST },
+    }),
   );
   equal(codex.accepted && codex.disposition, "accepted");
   equal(codex.accepted && codex.evidenceKind, "host-send-return");
   const claude = deriveDeliveryDisposition(
-    input({ hostId: "claude-code", attempt: { status: "sent", evidenceDigest: OTHER_DIGEST } }),
+    input({
+      sendReturnProvesLanding: false,
+      attempt: { status: "sent", evidenceDigest: OTHER_DIGEST },
+    }),
   );
   equal(claude.accepted && claude.disposition, "indeterminate");
-  const codexWithoutReturn = deriveDeliveryDisposition(input({ hostId: "codex" }));
+  const codexWithoutReturn = deriveDeliveryDisposition(input({ sendReturnProvesLanding: true }));
   equal(codexWithoutReturn.accepted && codexWithoutReturn.disposition, "indeterminate");
+});
+
+test("发送返回能否证明落地由宿主 Profile 的启动方式给出（§13.131 审查）", () => {
+  equal(sendReturnProvesLanding(codexWorkspaceHostResourceProfile), true);
+  equal(sendReturnProvesLanding(claudeCodeWorkspaceHostResourceProfile), false);
 });
 
 test("indeterminate 之后：再次无证据的记录被阻塞，显式解决只在此时允许且 accepted 需要真实记录", () => {

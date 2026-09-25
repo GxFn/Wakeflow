@@ -65,6 +65,20 @@ test("条件释放：只释放仍属于本围栏的声明，缺失与易主都�
   equal((await releaseWorkClaimIfHeld(root, windowId, held)).disposition, "absent");
 });
 
+test("条件释放：声明已被别处释放并换成新声明后，旧围栏报告易主且不动新声明", async (t) => {
+  const root = await fixture(t);
+  const windowId = createWakeflowDurableId("window");
+  const claim = claimFor(windowId, 1);
+  equal((await takeWorkClaim(root, claim)).disposition, "created");
+  const held = { claimId: claim.claimId, claimDigest: claim.claimDigest };
+  // 另一路径先释放并接管窗口，本路径的清理随后才执行。
+  equal((await releaseWorkClaimIfHeld(root, windowId, held)).disposition, "released");
+  const successor = claimFor(windowId, 2);
+  equal((await takeWorkClaim(root, successor)).disposition, "created");
+  equal((await releaseWorkClaimIfHeld(root, windowId, held)).disposition, "foreign");
+  equal((await inspectWorkClaim(root, windowId)).claim?.claimDigest, successor.claimDigest);
+});
+
 test("声明代际上限是内核常量，投递 rearm 上限由它派生", async () => {
   equal(MAXIMUM_WORK_CLAIM_GENERATION, 4);
   const { DELIVERY_REARM_LIMIT } = await import("../../src/governance/delivery/delivery-rearm.js");

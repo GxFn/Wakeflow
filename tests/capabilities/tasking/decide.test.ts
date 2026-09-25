@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   deriveAnchorReferenceBlockers,
   deriveImplementationBaselines,
+  deriveImplementationPlanningBlockers,
   deriveLineageBlockers,
   deriveLineageExpectation,
   derivePlanReview,
@@ -13,7 +14,6 @@ import {
   deriveTopologyBlockers,
   parseAcceptanceCriteria,
 } from "../../../src/capabilities/tasking/decide.js";
-import { deriveImplementationPlanningBlockers } from "../../../src/capabilities/tasking/service.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DemandAggregateState } from "../../../src/governance/demand/model/demand-aggregate-state.js";

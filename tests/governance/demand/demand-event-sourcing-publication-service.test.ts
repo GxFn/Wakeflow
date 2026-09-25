@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   mkdirSync,
@@ -29,6 +29,7 @@ import {
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { WakeflowError } from "../../../src/kernel/error.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
@@ -77,6 +78,7 @@ import {
   placePendingClaimState,
   requirementLineageOf,
 } from "./requirement-board.fixture.js";
+import { PUBLICATION_SECOND_REQUIREMENT_ID } from "./demand-event-sourcing-publication-service.fixture.js";
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -582,6 +584,58 @@ test("Demand 操作根继承来源工作区根的持久化级别", async () => {
         await source.close();
       }
     }
+  } finally {
+    await cleanup(value);
+  }
+});
+
+/** 同一 pod 上已有另一个活动 Demand 时，apply 原样抛出 pod-busy（带占用者），不改写成发布冲突。 */
+test("publication apply refuses a pod that already has another active Demand", async () => {
+  const value = await fixture();
+  try {
+    const other = await publishFixtureRequirement(value.ledgerStore, {
+      requirementId: PUBLICATION_SECOND_REQUIREMENT_ID,
+    });
+    const otherClaim = await placePendingClaimState(value.workspaceRoot, other);
+    const otherIdentity = createDemandIdentity({
+      programId: PROGRAM_ID,
+      demandId: OTHER_DEMAND_ID,
+      title: "Occupying Demand",
+      goal: "占用同一个 pod",
+      completionDefinition: "保持活动",
+      demandType: "requirement",
+      source: requirementLineageOf(other),
+      podId: value.identity.podId,
+    }, { clock: () => CREATED_AT });
+    await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, {
+      identity: otherIdentity,
+      authority: createDemandAuthority(otherIdentity, {
+        authorityRefs: other.documents.map((document) => (
+          createLedgerAuthorityMemberReference(other, document.path)
+        )),
+        testingDecision: value.authority.testingDecision,
+      }),
+      eventId: parseWakeflowDurableIdOfKind(
+        "demand-event_45454545-4545-4545-8545-454545454545",
+        "demand-event",
+      ),
+      commitId: parseWakeflowDurableIdOfKind(
+        "demand-event-commit_78787878-7878-4878-8878-787878787878",
+        "demand-event-commit",
+      ),
+      recordedAt: CREATED_AT,
+      expectedClaimStateDigest: otherClaim.digest,
+    });
+
+    await rejects(
+      publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, publishInput(value)),
+      (error: unknown) => (
+        error instanceof WakeflowError
+        && error.reason === "pod-busy"
+        && error.details?.["demandId"] === OTHER_DEMAND_ID
+      ),
+    );
+    equal(existsSync(workspaceFile(value, demandFinalRootRef(DEMAND_ID))), false);
   } finally {
     await cleanup(value);
   }

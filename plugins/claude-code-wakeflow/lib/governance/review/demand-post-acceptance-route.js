@@ -4,6 +4,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { closeDemandOperationAuthorityContext, openDemandOperationAuthorityContext, DemandOperationAuthorityContextError, } from "../demand/demand-operation-authority-context.js";
+import { currentTestTargetsOf, } from "../demand/model/demand-aggregate-state.js";
 import { TEST_ENVIRONMENT_AUTHORITY_ROLE, } from "../demand/model/demand-authority.js";
 import { readDemandResultReviewSnapshot, DemandResultReviewSnapshotError, } from "./demand-result-review-snapshot.js";
 /**
@@ -128,7 +129,8 @@ function nextStage(loaded, snapshot, blockingTargets) {
         });
     }
     const state = loaded.aggregate.state;
-    const testTargets = state.targetTasks.filter((target) => target.workType === "test");
+    // 续接前的 test 目标是上一轮的历史，只看当前测试代际。
+    const testTargets = currentTestTargetsOf(state).filter((target) => target.workType === "test");
     if (loaded.authority.testingDecision.mode === "controller-only") {
         if (testTargets.length > 0 || state.pendingTestRetest !== undefined) {
             fail("relation");

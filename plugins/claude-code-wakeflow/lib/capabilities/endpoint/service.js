@@ -423,19 +423,21 @@ function executionInstructions(context, intent, receipts) {
     const role = intent.role;
     const attached = attachedWorktreeViews(context, intent, receipts);
     const worktree = worktreeInstructions(context, intent);
-    if (hostId === "claude-code") {
+    // 启动模板与缺省值由宿主资源画像提供；这里只按模板渲染，不按 hostId 分支。
+    const template = context.facade.resourceProfile.launch;
+    if (template.kind === "tmux-session") {
         const host = model.hosts?.["claude-code"];
         const launch = host?.launch;
         const effort = launch?.reasoningEffortByRole?.[role] ??
             launch?.reasoningEffortByRole?.default ??
-            (role === "controller" ? "max" : "xhigh");
+            (role === "controller" ? template.controllerEffort : template.defaultEffort);
         const modelName = launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null;
-        const permissionMode = launch?.permissionMode ?? "acceptEdits";
+        const permissionMode = launch?.permissionMode ?? template.permissionMode;
         return {
-            kind: "claude-code",
+            kind: hostId,
             tmux: {
                 socketName: host?.tmux?.socketName ?? null,
-                sessionName: host?.tmux?.sessionName ?? "wakeflow",
+                sessionName: host?.tmux?.sessionName ?? template.sessionName,
                 windowName: intent.displayTitle,
                 cwd: intent.root.configuredPlacement,
             },
@@ -459,7 +461,7 @@ function executionInstructions(context, intent, receipts) {
     }
     const launch = model.hosts?.codex?.launch;
     return {
-        kind: "codex",
+        kind: hostId,
         tool: "create_thread",
         title: intent.displayTitle,
         cwd: intent.root.configuredPlacement,

@@ -1,7 +1,7 @@
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../governance/delivery/delivery-outcome.js";
-import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import { DELIVERY_REARM_LIMIT } from "../../governance/delivery/delivery-rearm.js";
 import type {
   DeliveryAttemptStatus,
@@ -56,7 +56,11 @@ export interface HookLandingRecord {
 }
 
 export interface DispositionInput {
-  readonly hostId: WakeflowHostId;
+  /**
+   * 宿主发送调用的返回摘要能否当作落地证据：由宿主资源 Profile 给出
+   * （`sendReturnProvesLanding(profile)`，即 `launch.kind === "host-thread"`），共享代码不按 hostId 推断。
+   */
+  readonly sendReturnProvesLanding: boolean;
   readonly attempt: Readonly<{
     readonly status: DeliveryAttemptStatus;
     readonly evidenceDigest: Sha256Digest | null;
@@ -142,7 +146,7 @@ export function deriveDeliveryDisposition(input: Readonly<DispositionInput>): Di
     return decided("rejected-before-send", "agent-declaration");
   }
   if (
-    input.hostId === "codex" &&
+    input.sendReturnProvesLanding &&
     input.attempt.status === "sent" &&
     input.attempt.evidenceDigest !== null
   ) {
@@ -152,6 +156,16 @@ export function deriveDeliveryDisposition(input: Readonly<DispositionInput>): Di
     return Object.freeze({ accepted: false as const, blocker: "landing-evidence-missing" });
   }
   return decided("indeterminate", "agent-declaration");
+}
+
+/**
+ * 宿主线程型启动（宿主工具自己建线程并同步投递）的发送返回即落地证据；
+ * tmux 会话型宿主只能以目标会话的 hook 记录证明落地。
+ */
+export function sendReturnProvesLanding(
+  profile: Readonly<Pick<WakeflowWorkspaceHostResourceProfile, "launch">>,
+): boolean {
+  return profile.launch.kind === "host-thread";
 }
 
 /** 静默是否超过阈值：以当前代际第一次 indeterminate 结局的记录时刻为起点。 */

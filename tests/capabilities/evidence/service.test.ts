@@ -1,5 +1,5 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -9,14 +9,15 @@ import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wa
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
 import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
 import { createManagedEvidencePublicationTransaction } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
 import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
 import { ManagedEvidenceReadingService } from "../../../src/governance/evidence/managed-evidence-reading-service.js";
+import { DemandResultReviewSnapshotError } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import {
@@ -370,5 +371,54 @@ test("recover 结局：留下的可完成 journal 前向发布为 recovered 并�
     equal(retired.publication, null);
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(stale);
+  }
+});
+
+/**
+ * 证据发布之后才报告 aborted 的信号：只有提交目录多了一份提交、且读取发生在变更后的复核快照
+ * 读取（`readSnapshotForNext`）之内时才中止，模拟调用方恰在证据提交之后取消。
+ */
+function abortAfterPublicationSignal(demandRoot: string): AbortSignal {
+  const controller = new AbortController();
+  const commitsPath = path.join(demandRoot, "event-sourcing", "commits");
+  const committedBefore = readdirSync(commitsPath).length;
+  const nativeAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
+  Object.defineProperty(controller.signal, "aborted", {
+    get: () => {
+      if (
+        readdirSync(commitsPath).length > committedBefore &&
+        new Error().stack?.includes("readSnapshotForNext") === true
+      ) {
+        controller.abort();
+      }
+      return nativeAborted?.call(controller.signal) === true;
+    },
+  });
+  return controller.signal;
+}
+
+test("证据提交之后才中止：apply 以 io-failure/aborted 于 $signal 失败而不是 unexpected，证据已落账", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const selection = fileSelection("artifacts/test-run/logs/report.txt");
+    const previewed = await preview(fixture, selection);
+    const signal = abortAfterPublicationSignal(demandRootPath(fixture));
+    await rejects(
+      executeRecordEvidenceRequest(
+        request(fixture, { mode: "apply", selection, planDigest: previewed.planDigest }),
+        { ...CLOCK, signal },
+      ),
+      (error: unknown) =>
+        isWakeflowError(error) &&
+        error.code === "io-failure" &&
+        error.reason === "aborted" &&
+        error.path === "$signal" &&
+        error.cause instanceof DemandResultReviewSnapshotError,
+    );
+    equal(signal.aborted, true);
+    const after = await preview(fixture, selection);
+    equal(after.plan?.recorded, true);
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
   }
 });

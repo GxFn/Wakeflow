@@ -112,9 +112,11 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
         localPath: ".claude/local[dev]*?.json",
       },
       statuslineAsset: null,
+      tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
     },
+    launch: { kind: "host-thread" },
   });
   const escaped = createWakeflowGitignoreBodyAuthority([
     syntheticClaude,
@@ -198,9 +200,11 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
         localPath: ".wakeflow-local",
       },
       statuslineAsset: null,
+      tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
     },
+    launch: { kind: "host-thread" },
   });
   expectAuthorityError(
     () => createWakeflowGitignoreBodyAuthority([

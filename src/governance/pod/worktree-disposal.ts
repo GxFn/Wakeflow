@@ -1,4 +1,4 @@
-import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostWorktreeLaunch } from "../../workspace/workspace-host-resource-profile.js";
 
 /**
  * Wakeflow Governance / Pod：closing pod 仍在的检出的处置引导（gate-log §13.94 D10）。
@@ -93,17 +93,29 @@ function removeCommand(relativePath: string, locked: boolean): string {
   return `${UNLOCK_COMMAND_PREFIX}${shown}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${shown}`;
 }
 
-/** `locked` 是登记时回执记下的锁状态（`git worktree list --porcelain` 的 locked 行）。 */
+/**
+ * 宿主备选按宿主资源 Profile 的 worktree 启动方式选择（`surfaces.worktree.launch`），
+ * 共享代码不做宿主 id 判断。
+ */
+const HOST_ALTERNATIVES: Readonly<Record<WakeflowWorkspaceHostWorktreeLaunch, string>> =
+  Object.freeze({
+    "claude-worktree-flag":
+      "End the Claude Code worktree session; Claude Code removes a worktree it created when the session ends, then run git worktree prune in the repository.",
+    "codex-worktree-thread":
+      "Archive the Codex thread that owns the worktree environment, then run git worktree prune in the repository.",
+  });
+
+/**
+ * `worktreeLaunch` 是当前宿主 Profile 的 `surfaces.worktree.launch`；
+ * `locked` 是登记时回执记下的锁状态（`git worktree list --porcelain` 的 locked 行）。
+ */
 export function worktreeDisposalGuidance(
-  hostId: WakeflowHostId,
+  worktreeLaunch: WakeflowWorkspaceHostWorktreeLaunch,
   relativeCheckoutPath: string,
   locked: boolean,
 ): Readonly<WorktreeDisposalGuidance> {
   return Object.freeze({
     suggested: removeCommand(singleLinePath(relativeCheckoutPath), locked),
-    alternative:
-      hostId === "claude-code"
-        ? "End the Claude Code worktree session; Claude Code removes a worktree it created when the session ends, then run git worktree prune in the repository."
-        : "Archive the Codex thread that owns the worktree environment, then run git worktree prune in the repository.",
+    alternative: HOST_ALTERNATIVES[worktreeLaunch],
   });
 }

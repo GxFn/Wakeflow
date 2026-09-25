@@ -28,9 +28,11 @@ test("Codex host owns one exact matrix-shaping resource profile", () => {
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
+      tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
     },
+    launch: { kind: "host-thread" },
   });
   assertDeepFrozen(codexWorkspaceHostResourceProfile);
 });

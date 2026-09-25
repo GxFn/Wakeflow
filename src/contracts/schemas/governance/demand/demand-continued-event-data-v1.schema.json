@@ -40,6 +40,16 @@
           "maximum": 9007199254740991
         }
       }
+    },
+    "historicalTestTargetIds": {
+      "description": "续接那一刻已存在的 test 目标，由续接决策从续接前状态算出并随事件持久化：它们是上一轮的历史，不再算作未终结或当前的测试代际。没有 test 目标时省略；早期写入的事件也没有该字段，重放时保持当时的状态不变。",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      }
     }
   }
 }

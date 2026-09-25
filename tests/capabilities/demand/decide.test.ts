@@ -158,6 +158,42 @@ test("阻塞项派生：完成看路由与门，取消看待评审，continue �
       "pod-busy:demand_11111111-1111-4111-8111-111111111111",
     ],
   );
+  const archivedClaim = {
+    status: "archived",
+    archive: { demandId: "demand_00000000-0000-4000-8000-000000000000" },
+  } as unknown as Parameters<typeof deriveContinueBlockers>[0]["claim"];
+  const archivedContinue = {
+    rootPresent: false,
+    archiveOutcome: "completed",
+    demandId: "demand_00000000-0000-4000-8000-000000000000",
+    claim: archivedClaim,
+    otherActiveDemandId: null,
+    archivedPodId: "pod_00000000-0000-4000-8000-000000000000",
+  } as const;
+  deepEqual(deriveContinueBlockers({ ...archivedContinue, pod: null }), [
+    "pod-unknown:pod_00000000-0000-4000-8000-000000000000",
+  ]);
+  deepEqual(
+    deriveContinueBlockers({
+      ...archivedContinue,
+      pod: { podId: "pod_00000000-0000-4000-8000-000000000000", lifecycle: "closing" },
+    }),
+    ["pod-closing:pod_00000000-0000-4000-8000-000000000000"],
+  );
+  deepEqual(
+    deriveContinueBlockers({
+      rootPresent: false,
+      archiveOutcome: "completed",
+      demandId: "demand_00000000-0000-4000-8000-000000000000",
+      claim: {
+        status: "archived",
+        demandType: "research",
+        archive: { demandId: "demand_00000000-0000-4000-8000-000000000000" },
+      } as unknown as Parameters<typeof deriveContinueBlockers>[0]["claim"],
+      otherActiveDemandId: null,
+    }),
+    ["demand-type:research"],
+  );
   deepEqual(
     deriveDecisionBlockers({ rootPresent: true, lifecycle: "active", awaitingDecision: false }),
     ["no-escalation-pending"],

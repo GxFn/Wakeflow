@@ -566,8 +566,15 @@ function unmergedAcceptedViews(observation: Readonly<WorkspaceObservation>) {
   return capStatusList(all, STATUS_LIST_MAXIMUMS.unmergedAccepted);
 }
 
+/** 当前宿主 Profile 的 worktree 启动方式；组合根缺当前宿主时为 null（不给处置引导）。 */
+function currentWorktreeLaunch(facade: Readonly<ObservationHostFacade>) {
+  const current = facade.hosts.find((host) => host.hostId === facade.hostId);
+  return current?.resourceProfile.surfaces.worktree.launch ?? null;
+}
+
 function podViews(context: SliceContext) {
   const { observation, root, facade } = context;
+  const worktreeLaunch = currentWorktreeLaunch(facade);
   return (observation.pods.value ?? []).map((pod) => ({
     podId: pod.pod.podId,
     name: pod.pod.name,
@@ -585,9 +592,12 @@ function podViews(context: SliceContext) {
         repositoryId: worktree.repositoryId,
         receipt: receipt === undefined ? "absent" : present ? "present" : "checkout-missing",
         disposal:
-          pod.pod.lifecycle === "closing" && present && receipt !== undefined
+          pod.pod.lifecycle === "closing" &&
+          present &&
+          receipt !== undefined &&
+          worktreeLaunch !== null
             ? disposalGuidance(
-                facade.hostId,
+                worktreeLaunch,
                 path.relative(root.absolutePath, receipt.receipt.path) || ".",
                 receipt.receipt.locked,
               )

@@ -30,7 +30,17 @@ export const claudeCodeWorkspaceHostResourceProfile =
       statuslineAsset: {
         fileName: "statusline.mjs",
       },
+      tmuxAsset: {
+        fileName: "tmux.mjs",
+      },
       activityMonitor: true,
       temporaryPrompts: true,
+    },
+    launch: {
+      kind: "tmux-session",
+      controllerEffort: "max",
+      defaultEffort: "xhigh",
+      permissionMode: "acceptEdits",
+      sessionName: "wakeflow",
     },
   });

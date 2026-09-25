@@ -46,7 +46,8 @@ export function compileWakeflowHostCapabilityLayoutAuthority(profileValue) {
     if (profile.surfaces.windowLocator) {
         declarationIds.push(`${prefix}.window-locators-root`);
     }
-    if (profile.surfaces.statuslineAsset !== null) {
+    if (profile.surfaces.statuslineAsset !== null
+        || profile.surfaces.tmuxAsset !== null) {
         declarationIds.push(`${prefix}.statusline-assets-root`);
     }
     if (profile.surfaces.activityMonitor) {

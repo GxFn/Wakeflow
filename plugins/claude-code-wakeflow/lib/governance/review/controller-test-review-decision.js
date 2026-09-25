@@ -102,7 +102,7 @@ function streamRevision(value, path) {
 function humanText(value, path) {
     if (typeof value !== "string" ||
         value.length === 0 ||
-        value.length > 8192 ||
+        Array.from(value).length > 8192 ||
         !value.isWellFormed() ||
         value.normalize("NFC") !== value ||
         value.trim() !== value ||

@@ -42,7 +42,7 @@ import {
   placePendingClaimState,
   requirementLineageOf,
 } from "../demand/requirement-board.fixture.js";
-import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
+import { fixtureDocuments, publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
 
 export const PLANNING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -110,6 +110,11 @@ export interface TargetTaskPlanningWorkspaceFixtureOptions {
    * 的测试用它，其余测试共享按 `testingMode` / `taskPlanReview` 分档的基线副本。
    */
   readonly freshBaseline?: boolean;
+  /**
+   * 替换需求包的 requirement.md 正文（例如追加自定义 Unicode 章节）。给出时退出共享
+   * 基线，保证这份正文真的被发布进需求包记录。
+   */
+  readonly requirementMarkdown?: string;
 }
 
 /** 基线里与路径无关的事实：同一档基线的所有副本共享同一份身份值与记录摘要。 */
@@ -122,7 +127,7 @@ export interface TargetTaskPlanningWorkspaceFacts {
 export function targetTaskPlanningWorkspaceBaselineKey(
   options: TargetTaskPlanningWorkspaceFixtureOptions,
 ): string | null {
-  if (options.freshBaseline === true) return null;
+  if (options.freshBaseline === true || options.requirementMarkdown !== undefined) return null;
   return `${options.testingMode ?? "controller-only"}|${options.taskPlanReview ?? "controller"}`;
 }
 
@@ -174,12 +179,18 @@ async function buildTargetTaskPlanningWorkspace(
   const ledgerRoot = await RootedDirectory.open(ledgerPath, "$root", DISPOSABLE_ROOT_OPTIONS);
   const ledgerStore = new LedgerAuthorityStore(ledgerRoot);
   await ledgerStore.initialize({ freshLedger: true });
-  const loaded = await publishFixtureRequirement(ledgerStore, {
-    requirementId: PLANNING_REQUIREMENT_ID,
-    title: "Target Task Planning requirement",
-    testingDecision: { mode: testingMode, summary: testingSummary },
-    taskPlanReview: options.taskPlanReview ?? "controller",
-  });
+  const loaded = await publishFixtureRequirement(
+    ledgerStore,
+    {
+      requirementId: PLANNING_REQUIREMENT_ID,
+      title: "Target Task Planning requirement",
+      testingDecision: { mode: testingMode, summary: testingSummary },
+      taskPlanReview: options.taskPlanReview ?? "controller",
+    },
+    options.requirementMarkdown === undefined
+      ? undefined
+      : fixtureDocuments({ requirement: options.requirementMarkdown }),
+  );
   const authorityRefs = Object.freeze(
     loaded.documents.map((document) =>
       createLedgerAuthorityMemberReference(loaded, document.path),

@@ -194,6 +194,21 @@ test("发明的锚点、错误的记录摘要、未知章节锚点、错误拓�
   }
 });
 
+test("Unicode 章节锚点（如 性能约束）通过请求 Schema，由需求包记录的 sections 判定，记录里没有时以 section-anchor-unknown 拒绝", async () => {
+  const fixture = await createTargetTaskPlanningWorkspaceFixture();
+  try {
+    const draft = implementationDraft(fixture);
+    const before = await commitCount(fixture);
+    await rejects(
+      planFixtureTargetTask(fixture, { taskPackage: { ...draft, sectionAnchors: ["性能约束"] } }),
+      rejectedWith("section-anchor-unknown"),
+    );
+    equal(await commitCount(fixture), before);
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
 test("同仓库第二个包必须声明 replacement：旧目标进入 superseded，路由只剩新目标", async () => {
   const fixture = await createTargetTaskPlanningWorkspaceFixture();
   try {

@@ -45,6 +45,11 @@ const DEMAND_AGGREGATE_STATE_SCHEMA_VERSION = 1;
 function lastTestAttempt(lineage) {
     return lineage[lineage.length - 1] ?? lineage[0];
 }
+/** 当前测试代际的 test 目标：排除续接前留下的历史 test 目标。 */
+export function currentTestTargetsOf(state) {
+    const historical = state.continuation?.historicalTestTargetIds ?? [];
+    return state.targetTasks.filter((target) => target.workType === "test" && !historical.includes(target.targetTaskId));
+}
 const ERROR_MESSAGES = {
     json: "Demand aggregate state is not passive JSON data.",
     schema: "Demand aggregate state does not satisfy its portable Schema.",
@@ -1538,7 +1543,6 @@ function normalizeState(wire) {
         : parseManagedEvidenceSummaries(wire.managedEvidence);
     const implementationTargets = targetTasks.filter((target) => target.workType !== "test");
     const liveImplementationTargets = implementationTargets.filter((target) => target.phase !== "superseded");
-    const testTargets = targetTasks.filter((target) => target.workType === "test");
     const pendingTestRetest = wire.pendingTestRetest === undefined
         ? undefined
         : parsePendingTestRetest(wire.pendingTestRetest);
@@ -1547,7 +1551,8 @@ function normalizeState(wire) {
         : parseAwaitingDecision(wire.awaitingDecision, wire.lifecycle);
     const continuation = wire.continuation === undefined
         ? undefined
-        : parseContinuationState(wire.continuation);
+        : parseContinuationState(wire.continuation, targetTasks);
+    const testTargets = currentTestTargetsOf({ targetTasks, continuation });
     // 同一时间只有一个未终结的 test 目标（能力卡 5 Q4）；历史代际只能停在 test-product-defect。
     const openTestTargets = testTargets.filter((target) => target.phase !== "test-product-defect");
     // 未终结的 test 目标只能站在全部已接受的实现基线上；缺陷代际之后的产品返工不受此限。
@@ -1607,11 +1612,25 @@ function parseAwaitingDecision(value, lifecycle) {
         source: Object.freeze({ ...value.source }),
     });
 }
-function parseContinuationState(value) {
+/** 历史 test 目标必须是状态里已终结（test-accepted 或 test-product-defect）的 test 目标。 */
+function parseContinuationState(value, targetTasks) {
+    const historical = value.historicalTestTargetIds;
+    if (historical?.some((targetTaskId) => {
+        const target = targetTasks.find((entry) => entry.targetTaskId === targetTaskId);
+        return (target === undefined ||
+            (target.phase !== "test-accepted" && target.phase !== "test-product-defect"));
+    })) {
+        fail("relation", "$/continuation/historicalTestTargetIds");
+    }
     return Object.freeze({
         eventId: parseId(value.eventId, "demand-event", "$/continuation/eventId"),
         kind: value.kind,
         planningRequired: value.planningRequired,
+        ...(historical === undefined
+            ? {}
+            : {
+                historicalTestTargetIds: Object.freeze(historical.map((targetTaskId, index) => parseId(targetTaskId, "target-task", `$/continuation/historicalTestTargetIds/${index}`))),
+            }),
     });
 }
 /** `lifecycle.demand-escalated.v1`：活动 Demand 进入等待决定；同一时刻只能有一个未回答的升级。 */
@@ -1644,8 +1663,17 @@ export function recordDecisionInDemandAggregateState(currentValue, escalationEve
     const { awaitingDecision: _awaitingDecision, ...rest } = current;
     return parseDemandAggregateState(rest);
 }
-/** `lifecycle.demand-continued.v1`：已完成的 Demand 回到 active，并要求先规划新的任务包。 */
-export function continueDemandAggregateState(currentValue, kindValue, eventIdValue) {
+/** 续接决策用：续接前状态里已有的 test 目标，随 `lifecycle.demand-continued` 事件持久化。 */
+export function historicalTestTargetIdsAtContinuation(currentValue) {
+    return parseDemandAggregateState(currentValue)
+        .targetTasks.filter((target) => target.workType === "test")
+        .map((target) => target.targetTaskId);
+}
+/**
+ * `lifecycle.demand-continued.v1`：已完成的 Demand 回到 active，并要求先规划新的任务包。
+ * 历史 test 目标只取自事件携带的边界；早期事件没有该字段，重放得到与当时完全相同的状态。
+ */
+export function continueDemandAggregateState(currentValue, kindValue, eventIdValue, historicalTestTargetIdsValue) {
     const current = parseDemandAggregateState(currentValue);
     const eventId = parseId(eventIdValue, "demand-event", "$eventId");
     if (current.lifecycle !== "completed" ||
@@ -1655,10 +1683,24 @@ export function continueDemandAggregateState(currentValue, kindValue, eventIdVal
         fail("transition", "$state/lifecycle");
     }
     // 已接受的目标留在状态里作为历史；续接要求先规划新的任务包，同一仓库允许再次规划。
+    // 事件携带的 test 目标成为历史，新一轮真实环境测试从零开始；成员关系由状态解析校验。
+    const historicalTestTargetIds = historicalTestTargetIdsValue ?? [];
+    if (historicalTestTargetIdsValue !== undefined) {
+        const expected = historicalTestTargetIdsAtContinuation(current);
+        if (historicalTestTargetIds.length !== expected.length ||
+            expected.some((id) => !historicalTestTargetIds.includes(id))) {
+            fail("relation", "$/continuation/historicalTestTargetIds");
+        }
+    }
     return parseDemandAggregateState({
         ...current,
         lifecycle: "active",
-        continuation: { eventId, kind: kindValue, planningRequired: true },
+        continuation: {
+            eventId,
+            kind: kindValue,
+            planningRequired: true,
+            ...(historicalTestTargetIds.length === 0 ? {} : { historicalTestTargetIds }),
+        },
     });
 }
 /** `evidence.managed-evidence-recorded.v1`使用的纯状态转换。 */
@@ -1800,7 +1842,7 @@ export function planTargetTaskInDemandAggregateState(currentValue, taskPackageVa
         fail("transition", "$state/targetTasks");
     }
     if (taskPackage.workType === "test") {
-        const testTargets = current.targetTasks.filter((target) => target.workType === "test");
+        const testTargets = currentTestTargetsOf(current);
         const liveImplementationTargets = current.targetTasks.filter((target) => target.workType !== "test" && target.phase !== "superseded");
         const baselineByTarget = new Map(taskPackage.implementationBaselines.map((baseline) => [baseline.targetTaskId, baseline]));
         const pendingTestRetest = current.pendingTestRetest;
@@ -1855,7 +1897,7 @@ export function planTargetTaskInDemandAggregateState(currentValue, taskPackageVa
         });
     }
     if (current.pendingTestRetest !== undefined ||
-        current.targetTasks.some((entry) => entry.workType === "test")) {
+        currentTestTargetsOf(current).length > 0) {
         fail("transition", "$state/targetTasks");
     }
     const superseded = applyLineage(current, taskPackage);
@@ -1908,7 +1950,7 @@ export function completeDemandAggregateState(currentValue, completionValue) {
         throw error;
     }
     const implementationTargets = current.targetTasks.filter((target) => target.workType !== "test" && target.phase !== "superseded");
-    const testTargets = current.targetTasks.filter((target) => target.workType === "test");
+    const testTargets = currentTestTargetsOf(current);
     const openTestTargets = testTargets.filter((target) => target.phase !== "test-product-defect");
     // research（not-applicable）没有测试环节，也允许零实现目标：完成物是受管证据（§13.94 D8）。
     const testingClosed = completion.testingMode === "controller-only" || completion.testingMode === "not-applicable"

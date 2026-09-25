@@ -1,6 +1,7 @@
 import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
 import {
+  currentTestTargetsOf,
   type DemandAcceptedTargetTaskState,
   type DemandAggregateState,
   REPLACEABLE_PHASES,
@@ -266,7 +267,8 @@ function testLineageBlockers(
   state: Readonly<DemandAggregateState>,
   lineage: TestPlanningInput["lineage"],
 ): readonly string[] {
-  const testTargets = state.targetTasks.filter((target) => target.workType === "test");
+  // 只看当前测试代际：续接前留下的 test 目标是历史，与聚合的规划转换同一口径。
+  const testTargets = currentTestTargetsOf(state);
   const openTestTargets = testTargets.filter((target) => target.phase !== "test-product-defect");
   const blockers = openTestTargets.map((target) => `test-target-open:${target.targetTaskId}`);
   const pending = state.pendingTestRetest;
@@ -280,6 +282,22 @@ function testLineageBlockers(
     blockers.push("test-retest-not-authorized");
   } else if (lineage !== null) {
     blockers.push("lineage-unexpected");
+  }
+  return Object.freeze(blockers);
+}
+
+/**
+ * 实现规划准入：聚合拒绝的条件在这里先说清楚——Demand 须活动，且测试一旦开始（待消费复测或
+ * 已有 test 目标）就不再接受新的实现包。
+ */
+export function deriveImplementationPlanningBlockers(
+  state: Readonly<DemandAggregateState>,
+): readonly string[] {
+  const blockers: string[] = [];
+  if (state.lifecycle !== "active") blockers.push(`demand-lifecycle:${state.lifecycle}`);
+  if (state.pendingTestRetest !== undefined) blockers.push("test-retest-pending");
+  for (const target of currentTestTargetsOf(state)) {
+    blockers.push(`test-target-present:${target.targetTaskId}`);
   }
   return Object.freeze(blockers);
 }

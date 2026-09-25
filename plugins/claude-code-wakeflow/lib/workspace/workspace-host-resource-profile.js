@@ -23,6 +23,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
     "windowLocator",
     "settingsIntegration",
     "statuslineAsset",
+    "tmuxAsset",
     "activityMonitor",
     "temporaryPrompts",
 ]);
@@ -62,7 +63,17 @@ const PROFILE_FIELDS = new Set([
     "runtimeDirectoryName",
     "instructionFileName",
     "surfaces",
+    "launch",
 ]);
+const TMUX_LAUNCH_FIELDS = new Set([
+    "kind",
+    "controllerEffort",
+    "defaultEffort",
+    "permissionMode",
+    "sessionName",
+]);
+const THREAD_LAUNCH_FIELDS = new Set(["kind"]);
+const LAUNCH_VALUE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const SURFACE_FIELDS = new Set(WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES);
 const SETTINGS_INTEGRATION_FIELDS = new Set(["portablePath", "localPath"]);
 const WORKTREE_FIELDS = new Set(["launch", "attachedDirectories"]);
@@ -140,6 +151,15 @@ function parseStatuslineAsset(value) {
         fileName: parseComponent(record.fileName, "$/surfaces/statuslineAsset/fileName"),
     });
 }
+function parseTmuxAsset(value) {
+    if (value === null)
+        return null;
+    const record = plainRecord(value, "$/surfaces/tmuxAsset");
+    assertExactFields(record, STATUSLINE_ASSET_FIELDS, "$/surfaces/tmuxAsset");
+    return Object.freeze({
+        fileName: parseComponent(record.fileName, "$/surfaces/tmuxAsset/fileName"),
+    });
+}
 function parseWorktreeTemplate(value) {
     const record = plainRecord(value, "$/surfaces/worktree");
     assertExactFields(record, WORKTREE_FIELDS, "$/surfaces/worktree");
@@ -181,8 +201,32 @@ function parseSurfaces(value) {
         windowLocator: surfaceBoolean(record.windowLocator, "windowLocator"),
         settingsIntegration,
         statuslineAsset,
+        tmuxAsset: parseTmuxAsset(record.tmuxAsset),
         activityMonitor: surfaceBoolean(record.activityMonitor, "activityMonitor"),
         temporaryPrompts: surfaceBoolean(record.temporaryPrompts, "temporaryPrompts"),
+    });
+}
+function launchValue(value, path) {
+    if (typeof value !== "string" || !LAUNCH_VALUE_PATTERN.test(value)) {
+        fail("surface", path);
+    }
+    return value;
+}
+function parseLaunchTemplate(value) {
+    const record = plainRecord(value, "$/launch");
+    if (record.kind === "host-thread") {
+        assertExactFields(record, THREAD_LAUNCH_FIELDS, "$/launch");
+        return Object.freeze({ kind: "host-thread" });
+    }
+    if (record.kind !== "tmux-session")
+        fail("surface", "$/launch/kind");
+    assertExactFields(record, TMUX_LAUNCH_FIELDS, "$/launch");
+    return Object.freeze({
+        kind: "tmux-session",
+        controllerEffort: launchValue(record.controllerEffort, "$/launch/controllerEffort"),
+        defaultEffort: launchValue(record.defaultEffort, "$/launch/defaultEffort"),
+        permissionMode: launchValue(record.permissionMode, "$/launch/permissionMode"),
+        sessionName: launchValue(record.sessionName, "$/launch/sessionName"),
     });
 }
 /** 把任意输入准入为解除别名、递归冻结的宿主资源画像。 */
@@ -197,11 +241,17 @@ export function parseWakeflowWorkspaceHostResourceProfile(value) {
     if (runtimeDirectoryName !== hostId) {
         fail("contradiction", "$/runtimeDirectoryName");
     }
+    const surfaces = parseSurfaces(record.surfaces);
+    const launch = parseLaunchTemplate(record.launch);
+    if (launch.kind === "tmux-session" && !surfaces.windowLocator) {
+        fail("contradiction", "$/launch");
+    }
     return Object.freeze({
         kind: WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND,
         hostId,
         runtimeDirectoryName,
         instructionFileName: parseComponent(record.instructionFileName, "$/instructionFileName"),
-        surfaces: parseSurfaces(record.surfaces),
+        surfaces,
+        launch,
     });
 }

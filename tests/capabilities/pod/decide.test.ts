@@ -109,7 +109,6 @@ test("状态派生：open 下全部绑定且回执同代检出仍在才 ready；
   ]);
   const receipt = {
     repositoryId: REPOSITORY_ID,
-    windowId: "w4",
     bindingId: "b4",
     checkoutPresent: true,
   };

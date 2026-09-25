@@ -86,7 +86,11 @@ Procedure, every time:
 2. Preview. It writes nothing and returns the plan, its blockers and the launch
    intents the plan would produce.
 3. Show the user the plan and every blocker. A blocker is a fact about their
-   directory, so quote it rather than paraphrasing it away.
+   directory, so quote it rather than paraphrasing it away. On Claude Code,
+   `settings-blocked:<root kind>:<root id>:<reason>` means that root's
+   `.claude/settings.json` could not be read or merged safely (for example it
+   is not mode 0644, is a link, or is larger than 1 MiB); the file is the
+   user's, so tell them what to change instead of editing it.
 4. Apply with exactly what that preview returned. If anything changed in
    between, preview again - a re-derived plan that no longer matches is refused
    on purpose.
@@ -138,7 +142,10 @@ Other actions on the same tool:
   Use replace only when the session itself is gone.
 - **decommission** retires a window with its pre-close, close-result and
   post-close evidence. Use it when a window is genuinely gone, not to silence
-  an inconvenient state.
+  an inconvenient state. On Claude Code the helper's `close` kills nothing
+  when the pane no longer carries its Wakeflow marks (for example after a
+  tmux server restart) and reports `closeResult: unknown`; decommission then
+  goes to the manual host gate.
 - **release-claim** force-releases an expired or orphaned work claim. Use it
   only when you have established that the holding window is gone. A live claim
   is protecting someone's work.

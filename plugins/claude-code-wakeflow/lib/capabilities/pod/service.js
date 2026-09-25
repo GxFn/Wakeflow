@@ -469,7 +469,7 @@ async function currentViews(context, podId) {
             receipt: entry === undefined ? "absent" : entry.checkoutPresent ? "present" : "checkout-missing",
             // 关闭中仍在的检出：给 Agent 建议命令与宿主备选（§13.94 D10）；Wakeflow 自己不删。
             disposal: pod.lifecycle === "closing" && entry?.checkoutPresent === true
-                ? worktreeDisposalGuidance(fresh.facade.hostId, path.relative(fresh.root.absolutePath, entry.receipt.path) || ".", entry.receipt.locked)
+                ? worktreeDisposalGuidance(fresh.facade.resourceProfile.surfaces.worktree.launch, path.relative(fresh.root.absolutePath, entry.receipt.path) || ".", entry.receipt.locked)
                 : null,
         };
     });

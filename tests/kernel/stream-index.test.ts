@@ -101,6 +101,30 @@ test("链接不上或身份重复的提交被拒绝，损坏文档解析失败",
   );
 });
 
+function failsAt(value: unknown, path: string): void {
+  throws(
+    () => parseStreamIndex(JSON.parse(JSON.stringify(value))),
+    (error: unknown) =>
+      isWakeflowError(error) &&
+      error.code === "invalid-request" &&
+      error.reason === "index-shape" &&
+      error.path === path,
+  );
+}
+
+test("byType 漏掉事件类型或列出不含该类型事件的提交时解析失败于 $.byType", () => {
+  const index = buildStreamIndex("demand_x", [FIRST, SECOND]);
+  failsAt({ ...index, byType: { "demand.published": [1] } }, "$.byType");
+  failsAt(
+    { ...index, byType: { "demand.published": [1, 2], "tasking.target-task-planned": [2] } },
+    "$.byType",
+  );
+});
+
+test("提交序号为 0 却带非空 lastCommitDigest 的索引解析失败于 $.lastCommitDigest", () => {
+  failsAt({ ...createStreamIndex("demand_x"), lastCommitDigest: DIGEST_A }, "$.lastCommitDigest");
+});
+
 test("索引以不可替换文件发布、读取最新可用者、退休旧文件", async () => {
   const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stream-index-"));
   const directory = parsePortableResourcePath("event-sourcing/index");

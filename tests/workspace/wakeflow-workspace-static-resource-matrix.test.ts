@@ -53,7 +53,7 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
   // 根、transactions）删除，需求看板加 2 条（`board/` 目录与 `board/index.md` 索引），
   // Ledger 的 `confirmations/` 根随 confirmation family 删除减 1；宿主目录不变。
   equal(codex.declarations.length, 39);
-  equal(claude.declarations.length, 47);
+  equal(claude.declarations.length, 48);
 
   const expectedSharedIds = sorted(
     [
@@ -154,9 +154,11 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
+      tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
     },
+    launch: { kind: "host-thread" },
   });
 
   let caught: unknown;

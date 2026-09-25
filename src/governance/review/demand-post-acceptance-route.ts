@@ -18,9 +18,10 @@ import {
   DemandOperationAuthorityContextError,
 } from "../demand/demand-operation-authority-context.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
-import type {
-  DemandPendingTestRetest,
-  DemandTargetTaskState,
+import {
+  currentTestTargetsOf,
+  type DemandPendingTestRetest,
+  type DemandTargetTaskState,
 } from "../demand/model/demand-aggregate-state.js";
 import {
   TEST_ENVIRONMENT_AUTHORITY_ROLE,
@@ -387,7 +388,8 @@ function nextStage(
     });
   }
   const state = loaded.aggregate.state;
-  const testTargets = state.targetTasks.filter(
+  // 续接前的 test 目标是上一轮的历史，只看当前测试代际。
+  const testTargets = currentTestTargetsOf(state).filter(
     (target): target is TestTargetState => target.workType === "test",
   );
   if (loaded.authority.testingDecision.mode === "controller-only") {

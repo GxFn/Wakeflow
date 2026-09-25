@@ -4,7 +4,7 @@ import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data
 import { createWakeflowDurableId, parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { deriveUuidV4, parseUuidV4, } from "../../../foundation/identity/uuid-v4.js";
 import { parseUtcInstant, UtcInstantError, } from "../../../foundation/time/utc-instant.js";
-import { cancelDemandAggregateState, authorizeProductDefectRemediationInDemandAggregateState, completeDemandAggregateState, continueDemandAggregateState, createInitialDemandAggregateState, decideTargetResultReviewInDemandAggregateState, escalateDemandAggregateState, recordDeliveryOutcomeInDemandAggregateState, prepareDeliveryInDemandAggregateState, rearmDeliveryInDemandAggregateState, recordDecisionInDemandAggregateState, recordManagedEvidenceInDemandAggregateState, recordTargetResultInDemandAggregateState, reissueCallbackInDemandAggregateState, planTargetTaskInDemandAggregateState, parseDemandAggregateState, DemandAggregateStateError, } from "../model/demand-aggregate-state.js";
+import { cancelDemandAggregateState, authorizeProductDefectRemediationInDemandAggregateState, completeDemandAggregateState, continueDemandAggregateState, createInitialDemandAggregateState, historicalTestTargetIdsAtContinuation, decideTargetResultReviewInDemandAggregateState, escalateDemandAggregateState, recordDeliveryOutcomeInDemandAggregateState, prepareDeliveryInDemandAggregateState, rearmDeliveryInDemandAggregateState, recordDecisionInDemandAggregateState, recordManagedEvidenceInDemandAggregateState, recordTargetResultInDemandAggregateState, reissueCallbackInDemandAggregateState, planTargetTaskInDemandAggregateState, parseDemandAggregateState, DemandAggregateStateError, } from "../model/demand-aggregate-state.js";
 import { computeDemandAuthorityDigest, parseDemandAuthority, DemandAuthorityError, } from "../model/demand-authority.js";
 import { parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
 import { assertDeliveryEnvelopeMatchesTaskPackage, DeliveryEnvelopeError, parseDeliveryEnvelope, } from "../../delivery/delivery-envelope.js";
@@ -982,8 +982,10 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }));
     }
     if (command.commandType === "lifecycle.continue-demand") {
+        // 续接边界是决策事实：续接前已有的 test 目标随事件持久化，归约器只照抄事件携带的边界。
+        const historicalTestTargetIds = historicalTestTargetIdsAtContinuation(state);
         try {
-            continueDemandAggregateState(state, command.continuation.kind, command.eventId);
+            continueDemandAggregateState(state, command.continuation.kind, command.eventId, historicalTestTargetIds);
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
@@ -996,7 +998,12 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
             demandId: command.demandId,
             recordedAt: command.recordedAt,
             eventType: "lifecycle.demand-continued",
-            data: { continuation: command.continuation },
+            data: {
+                continuation: command.continuation,
+                ...(historicalTestTargetIds.length === 0
+                    ? {}
+                    : { historicalTestTargetIds }),
+            },
         }));
     }
     if (state.lifecycle !== "active")
@@ -1313,7 +1320,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
     }
     if (event.eventType === "lifecycle.demand-continued") {
         try {
-            return continueDemandAggregateState(state, event.data.continuation.kind, event.eventId);
+            return continueDemandAggregateState(state, event.data.continuation.kind, event.eventId, event.data.historicalTestTargetIds);
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {

@@ -39,6 +39,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
   "windowLocator",
   "settingsIntegration",
   "statuslineAsset",
+  "tmuxAsset",
   "activityMonitor",
   "temporaryPrompts",
 ] as const);
@@ -60,6 +61,11 @@ export interface WakeflowWorkspaceHostSettingsIntegration {
 }
 
 export interface WakeflowWorkspaceHostStatuslineAsset {
+  readonly fileName: WakeflowWorkspaceHostResourceComponent;
+}
+
+/** 宿主运行时 `operations/assets/` 下的 tmux 会话/窗口助手资产。 */
+export interface WakeflowWorkspaceHostTmuxAsset {
   readonly fileName: WakeflowWorkspaceHostResourceComponent;
 }
 
@@ -97,9 +103,24 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
     Readonly<WakeflowWorkspaceHostSettingsIntegration> | null;
   readonly statuslineAsset:
     Readonly<WakeflowWorkspaceHostStatuslineAsset> | null;
+  readonly tmuxAsset: Readonly<WakeflowWorkspaceHostTmuxAsset> | null;
   readonly activityMonitor: boolean;
   readonly temporaryPrompts: boolean;
 }
+
+/**
+ * 宿主启动模板：端点切片按它渲染 Agent 的启动参数，不再按 hostId 分支。
+ * `tmux-session` 携带宿主自己的缺省值（配置未声明时使用）；`host-thread` 由宿主工具建线程。
+ */
+export type WakeflowWorkspaceHostLaunchTemplate =
+  | {
+    readonly kind: "tmux-session";
+    readonly controllerEffort: string;
+    readonly defaultEffort: string;
+    readonly permissionMode: string;
+    readonly sessionName: string;
+  }
+  | { readonly kind: "host-thread" };
 
 export interface WakeflowWorkspaceHostResourceProfile {
   readonly kind: typeof WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND;
@@ -107,6 +128,7 @@ export interface WakeflowWorkspaceHostResourceProfile {
   readonly runtimeDirectoryName: WakeflowWorkspaceHostResourceComponent;
   readonly instructionFileName: WakeflowWorkspaceHostResourceComponent;
   readonly surfaces: Readonly<WakeflowWorkspaceHostResourceSurfaces>;
+  readonly launch: Readonly<WakeflowWorkspaceHostLaunchTemplate>;
 }
 
 export type WakeflowWorkspaceHostResourceProfileErrorReason =
@@ -155,7 +177,17 @@ const PROFILE_FIELDS = new Set([
   "runtimeDirectoryName",
   "instructionFileName",
   "surfaces",
+  "launch",
 ]);
+const TMUX_LAUNCH_FIELDS = new Set([
+  "kind",
+  "controllerEffort",
+  "defaultEffort",
+  "permissionMode",
+  "sessionName",
+]);
+const THREAD_LAUNCH_FIELDS = new Set(["kind"]);
+const LAUNCH_VALUE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const SURFACE_FIELDS = new Set<string>(
   WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES,
 );
@@ -272,6 +304,17 @@ function parseStatuslineAsset(
   });
 }
 
+function parseTmuxAsset(
+  value: unknown,
+): Readonly<WakeflowWorkspaceHostTmuxAsset> | null {
+  if (value === null) return null;
+  const record = plainRecord(value, "$/surfaces/tmuxAsset");
+  assertExactFields(record, STATUSLINE_ASSET_FIELDS, "$/surfaces/tmuxAsset");
+  return Object.freeze({
+    fileName: parseComponent(record.fileName, "$/surfaces/tmuxAsset/fileName"),
+  });
+}
+
 function parseWorktreeTemplate(
   value: unknown,
 ): Readonly<WakeflowWorkspaceHostWorktreeTemplate> {
@@ -327,8 +370,35 @@ function parseSurfaces(
     windowLocator: surfaceBoolean(record.windowLocator, "windowLocator"),
     settingsIntegration,
     statuslineAsset,
+    tmuxAsset: parseTmuxAsset(record.tmuxAsset),
     activityMonitor: surfaceBoolean(record.activityMonitor, "activityMonitor"),
     temporaryPrompts: surfaceBoolean(record.temporaryPrompts, "temporaryPrompts"),
+  });
+}
+
+function launchValue(value: unknown, path: string): string {
+  if (typeof value !== "string" || !LAUNCH_VALUE_PATTERN.test(value)) {
+    fail("surface", path);
+  }
+  return value;
+}
+
+function parseLaunchTemplate(
+  value: unknown,
+): Readonly<WakeflowWorkspaceHostLaunchTemplate> {
+  const record = plainRecord(value, "$/launch");
+  if (record.kind === "host-thread") {
+    assertExactFields(record, THREAD_LAUNCH_FIELDS, "$/launch");
+    return Object.freeze({ kind: "host-thread" as const });
+  }
+  if (record.kind !== "tmux-session") fail("surface", "$/launch/kind");
+  assertExactFields(record, TMUX_LAUNCH_FIELDS, "$/launch");
+  return Object.freeze({
+    kind: "tmux-session" as const,
+    controllerEffort: launchValue(record.controllerEffort, "$/launch/controllerEffort"),
+    defaultEffort: launchValue(record.defaultEffort, "$/launch/defaultEffort"),
+    permissionMode: launchValue(record.permissionMode, "$/launch/permissionMode"),
+    sessionName: launchValue(record.sessionName, "$/launch/sessionName"),
   });
 }
 
@@ -349,6 +419,11 @@ export function parseWakeflowWorkspaceHostResourceProfile(
   if (runtimeDirectoryName !== hostId) {
     fail("contradiction", "$/runtimeDirectoryName");
   }
+  const surfaces = parseSurfaces(record.surfaces);
+  const launch = parseLaunchTemplate(record.launch);
+  if (launch.kind === "tmux-session" && !surfaces.windowLocator) {
+    fail("contradiction", "$/launch");
+  }
   return Object.freeze({
     kind: WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND,
     hostId,
@@ -357,6 +432,7 @@ export function parseWakeflowWorkspaceHostResourceProfile(
       record.instructionFileName,
       "$/instructionFileName",
     ),
-    surfaces: parseSurfaces(record.surfaces),
+    surfaces,
+    launch,
   });
 }

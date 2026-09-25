@@ -48,6 +48,12 @@ continuation?: {
 eventId: string
 kind: ("optimization" | "requirement-supplement" | "verified-bug")
 planningRequired: boolean
+/**
+ * 续接那一刻已存在的 test 目标：它们是上一轮的历史，不再算作未终结或当前的测试代际。空时省略。
+ *
+ * @minItems 1
+ */
+historicalTestTargetIds?: [string, ...(string)[]]
 }
 })
 export type TargetTask = ({

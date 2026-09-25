@@ -25,7 +25,9 @@ export const codexWorkspaceHostResourceProfile =
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
+      tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
     },
+    launch: { kind: "host-thread" },
   });

@@ -32,7 +32,7 @@ import { buildDemandResultReviewSnapshotFromHistory, computeReportedReviewUnitDi
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
-import { fail } from "../../kernel/error.js";
+import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../kernel/privacy-scan.js";
@@ -62,17 +62,6 @@ const HANDLER_ERROR_TABLE = Object.freeze({
 });
 function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
-}
-/** 第一个阻塞项的前缀是错误原因；全部阻塞项按 `blocker`、`blocker2`… 进入公开 details。 */
-function rejectWith(blockers, path) {
-    const first = blockers[0];
-    if (first === undefined)
-        fail("unexpected", "empty-blockers", path);
-    fail("precondition-failed", first.split(":")[0] ?? first, path, {
-        details: Object.fromEntries(blockers
-            .slice(0, 8)
-            .map((blocker, index) => [index === 0 ? "blocker" : `blocker${index + 1}`, blocker])),
-    });
 }
 function mapContextError(error) {
     if (error instanceof DemandOperationAuthorityContextError) {

@@ -1,4 +1,4 @@
-import { REPLACEABLE_PHASES, } from "../../governance/demand/model/demand-aggregate-state.js";
+import { currentTestTargetsOf, REPLACEABLE_PHASES, } from "../../governance/demand/model/demand-aggregate-state.js";
 import { parseMarkdownListItems, parseMarkdownSections } from "../../kernel/markdown-sections.js";
 import { resolveRequirementSectionAnchor } from "../../contracts/vocabulary/requirement-sections.js";
 /**
@@ -153,7 +153,8 @@ function implementationReadinessBlockers(state) {
 }
 /** 测试侧准入：至多一个未终结 test 目标；谱系必须对上待消费复测，缺陷代际未授权时不能开新合同。 */
 function testLineageBlockers(state, lineage) {
-    const testTargets = state.targetTasks.filter((target) => target.workType === "test");
+    // 只看当前测试代际：续接前留下的 test 目标是历史，与聚合的规划转换同一口径。
+    const testTargets = currentTestTargetsOf(state);
     const openTestTargets = testTargets.filter((target) => target.phase !== "test-product-defect");
     const blockers = openTestTargets.map((target) => `test-target-open:${target.targetTaskId}`);
     const pending = state.pendingTestRetest;
@@ -170,6 +171,21 @@ function testLineageBlockers(state, lineage) {
     }
     else if (lineage !== null) {
         blockers.push("lineage-unexpected");
+    }
+    return Object.freeze(blockers);
+}
+/**
+ * 实现规划准入：聚合拒绝的条件在这里先说清楚——Demand 须活动，且测试一旦开始（待消费复测或
+ * 已有 test 目标）就不再接受新的实现包。
+ */
+export function deriveImplementationPlanningBlockers(state) {
+    const blockers = [];
+    if (state.lifecycle !== "active")
+        blockers.push(`demand-lifecycle:${state.lifecycle}`);
+    if (state.pendingTestRetest !== undefined)
+        blockers.push("test-retest-pending");
+    for (const target of currentTestTargetsOf(state)) {
+        blockers.push(`test-target-present:${target.targetTaskId}`);
     }
     return Object.freeze(blockers);
 }

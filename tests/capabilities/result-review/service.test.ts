@@ -29,6 +29,7 @@ import {
   loadFixtureDeliveryEnvelope,
   prepareFixtureDelivery,
   recordFixtureDeliveryOutcome,
+  registerFixtureWindowRoute,
   withFixtureDemandRoot,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
@@ -67,6 +68,11 @@ import {
   TEST_REVIEW_INSPECTED_AT,
   TEST_TARGET_STOPPED_AT,
 } from "../../governance/review/controller-test-review-decision-service.fixture.js";
+import {
+  cleanupTestTaskPlanningWorkspaceFixture,
+  createTestTaskPlanningWorkspaceFixture,
+  planFixtureTestTask,
+} from "../../governance/tasking/test-task-planning.fixture.js";
 
 /**
  * result-review 切片效果（§13.87 D1–D8）：导入重放与二次导入；回调只在静默后重发、重放幂等、
@@ -1149,5 +1155,44 @@ test("rearm 用尽的测试投递换新信封：前沿回到准备，重发同�
     equal(after.attempt.testAttemptId, before.attempt.testAttemptId);
   } finally {
     await cleanupTestDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+test("测试合同步骤的 given/when/then 超过 8192 字符（至 16384）时，评审检查仍接纳并原样投影", async () => {
+  const fixture = await createTestTaskPlanningWorkspaceFixture();
+  try {
+    const long = (letter: string) => letter.repeat(16_384);
+    const contract = fixture.testTaskRequest.taskPackage.testContract;
+    const [first, ...rest] = contract.steps;
+    if (first === undefined) throw new Error("Expected a test contract step.");
+    // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+    const longStep = { ...first, given: long("g"), when: long("w"), then: long("t") };
+    const planned = await planFixtureTestTask(fixture, 7, {
+      taskPackage: { testContract: { ...contract, steps: [longStep, ...rest] } },
+    });
+    const testRoute = await registerFixtureWindowRoute(fixture, planned.targetTask.windowId, {
+      value: "codex-host-thread:long-step-fixture",
+      uuid: "a5a5a5a5-a5a5-45a5-85a5-a5a5a5a5a5a5",
+      observedAt: at("12:30:00"),
+      registeredAt: at("12:29:00"),
+    });
+    const delivery = Object.freeze({
+      ...fixture,
+      testTargetTaskId: planned.targetTask.targetTaskId,
+      testTaskPackageId: planned.targetTask.taskPackageId,
+      testRoute,
+    });
+    const delivered = await deliverFixtureTestTarget(delivery);
+    await importFixtureTestResult(delivery, delivered);
+    await landFixtureTargetCompletion(delivery, testRoute, TEST_TARGET_STOPPED_AT);
+    const inspection = await inspectFixtureReview(delivery, delivery.testTargetTaskId, {
+      clock: () => TEST_REVIEW_INSPECTED_AT,
+    });
+    const step = inspection.reviewUnit.testSteps?.find((entry) => entry.stepId === "ts-1");
+    equal(step?.given, long("g"));
+    equal(step?.when, long("w"));
+    equal(step?.expected, long("t"));
+  } finally {
+    await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }
 });

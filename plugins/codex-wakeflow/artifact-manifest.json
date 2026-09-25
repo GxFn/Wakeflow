@@ -135,8 +135,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 14244,
-      "sha256": "sha256:bc335ea86e8bbea51451458172b264e08547707f905a8710c5453882035e228e"
+      "bytes": 14778,
+      "sha256": "sha256:947196c4300da9f004751fb197e502cf52495fe79d132948404760a9cd3efd04"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -242,8 +242,8 @@
     },
     {
       "path": "lib/capabilities/delivery/decide.js",
-      "bytes": 6570,
-      "sha256": "sha256:09b8b3cde64257ef5cf9c617d5b7ca90f1ba8159506d410e29089fce76675619",
+      "bytes": 6867,
+      "sha256": "sha256:0fe3a61bed5dd837900a7626a545f016560bd02fa7103928fa109609fc834926",
       "mode": "0644",
       "scope": "shared"
     },
@@ -256,8 +256,8 @@
     },
     {
       "path": "lib/capabilities/delivery/service.js",
-      "bytes": 65234,
-      "sha256": "sha256:5129e4e6459b3d75ec871d5e0769efe2070335b4907f19a7c00bb905ff2ad856",
+      "bytes": 66209,
+      "sha256": "sha256:6e1355c96f1ef4fc3296442d488d2077063af1f99f0591724773dd94ad21cd2c",
       "mode": "0644",
       "scope": "shared"
     },
@@ -326,8 +326,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/locator-store.js",
-      "bytes": 8800,
-      "sha256": "sha256:9bab7de9ae322bee3eddf203ba1166004e173d245e9d61af7b3206f6b5f721f8",
+      "bytes": 8951,
+      "sha256": "sha256:6f65754cb7db65e6dfa084c09737bcc7f5485bea707e29268952515227690228",
       "mode": "0644",
       "scope": "shared"
     },
@@ -347,8 +347,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/service.js",
-      "bytes": 45358,
-      "sha256": "sha256:b8e4051284fc77537ac5a9720954809e7cc9db24a93bc5e677352164bf53826e",
+      "bytes": 45585,
+      "sha256": "sha256:ad2dbfa6f4d9872e3944912be13a1ae46bbb89b8a7270cfcffe3d310fe5d628c",
       "mode": "0644",
       "scope": "shared"
     },
@@ -389,8 +389,8 @@
     },
     {
       "path": "lib/capabilities/observation/service.js",
-      "bytes": 44395,
-      "sha256": "sha256:d89c167b06378d50946e9032c5646edc3482e1f272ed9d2c817f8b6493427e38",
+      "bytes": 44853,
+      "sha256": "sha256:e0b4eb80717f1674c29dc990600dbc0adf043980f0c4e799b1cd8c06a0c1c954",
       "mode": "0644",
       "scope": "shared"
     },
@@ -410,8 +410,8 @@
     },
     {
       "path": "lib/capabilities/pod/service.js",
-      "bytes": 26316,
-      "sha256": "sha256:4e8967aa7fedfd907f984c588a4c584c622a4b7dc067c807d07788d3e9602826",
+      "bytes": 26350,
+      "sha256": "sha256:3f3b796a35a99c8cfcd1994447d82d5d4a8d839d34b504b8b075a57773b9cf85",
       "mode": "0644",
       "scope": "shared"
     },
@@ -466,8 +466,8 @@
     },
     {
       "path": "lib/capabilities/result-review/service.js",
-      "bytes": 65375,
-      "sha256": "sha256:4f3e08150012c9fb88c156847dbad6d815ccaa19b7a1b5f6345ca5503ef2363e",
+      "bytes": 64887,
+      "sha256": "sha256:46d3e4f25e4d4a24a09cf18099601fb5d71c8c9032bc383a35e9f0e1df0e44fb",
       "mode": "0644",
       "scope": "shared"
     },
@@ -480,15 +480,15 @@
     },
     {
       "path": "lib/capabilities/tasking/decide.js",
-      "bytes": 10759,
-      "sha256": "sha256:19395f6619babedb82ced3b59b1ce8b70154a7d02508735d49c046cbb206eb90",
+      "bytes": 11509,
+      "sha256": "sha256:05683365d5be4841cea09b70317d59ffeaa8a8c1677e11c9194ab894f31ca0fb",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/tasking/service.js",
-      "bytes": 25401,
-      "sha256": "sha256:d82c4fe520b3095c7f0096f4dca09f899c5d1c683a339dd76f59b412b3b43de3",
+      "bytes": 24211,
+      "sha256": "sha256:2ce3787c87bcea3b50673dcc28148ab19e52dcfbedda5faefa227f68419b0d40",
       "mode": "0644",
       "scope": "shared"
     },
@@ -774,8 +774,8 @@
     },
     {
       "path": "lib/contracts/generated/entrypoints/wakeflow-target-result-import-result.generated.js",
-      "bytes": 17018,
-      "sha256": "sha256:b93429f30a6a9c84bd27e1f393e694e60bff8f5618fc650da449b44dd305f45e",
+      "bytes": 17033,
+      "sha256": "sha256:f6a9da262db2691f4dabd4f398369562fd20e7da5bb00fecab77a309fbc3a5dc",
       "mode": "0644",
       "scope": "shared"
     },
@@ -970,8 +970,8 @@
     },
     {
       "path": "lib/contracts/generated/governance/demand/demand-aggregate-state.generated.js",
-      "bytes": 27853,
-      "sha256": "sha256:46a9d8798ad9a609c70c74d4be1a27127d37f9ca5a2784c81b2b861d12b2d5a7",
+      "bytes": 28140,
+      "sha256": "sha256:dc48aaa8d7be83c5ee1a4ba8c6dd4bed8a781913780bb2eea8e156ae07386846",
       "mode": "0644",
       "scope": "shared"
     },
@@ -998,8 +998,8 @@
     },
     {
       "path": "lib/contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js",
-      "bytes": 2258,
-      "sha256": "sha256:7ea72d8bff4fbba185ee984fc9cf138f7fcacacf4e43425b05e527f09df04dc2",
+      "bytes": 2788,
+      "sha256": "sha256:be28513f8833e7444a29c323bf893de5428da199b527dc9948f81f1a6d7f205a",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1859,8 +1859,8 @@
     },
     {
       "path": "lib/governance/demand/event-sourcing/demand-event-sourcing-decider.js",
-      "bytes": 54102,
-      "sha256": "sha256:277ff31de07635089b69108179f9dec915c2265eae2033dc5becf82f80084129",
+      "bytes": 54586,
+      "sha256": "sha256:27ef3bc019fda7db7ceff053c724e289e583ac0181d492bcd214033d26eed264",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1873,8 +1873,8 @@
     },
     {
       "path": "lib/governance/demand/event-sourcing/demand-event-sourcing-event.js",
-      "bytes": 21109,
-      "sha256": "sha256:89be6d73236e83f5097109c808f7a341c54a1709ef17686a987a634c49c4ad62",
+      "bytes": 21800,
+      "sha256": "sha256:8f4153587da5cf4c7ee40db7fd3e13515231e1bea5414322384aefe8c481b225",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1992,8 +1992,8 @@
     },
     {
       "path": "lib/governance/demand/model/demand-aggregate-state.js",
-      "bytes": 92474,
-      "sha256": "sha256:03ee0ad6432ec41860224ac0b5a695b35b37e654bec4a8c8f4d8a5970e3d114a",
+      "bytes": 94732,
+      "sha256": "sha256:ccdd54ee8d4689cb7f58334f75092a7f40fdfb8b6eacb64b6c2bf5c6f4f942fc",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2293,8 +2293,8 @@
     },
     {
       "path": "lib/governance/observation/active-projection-facts.js",
-      "bytes": 13848,
-      "sha256": "sha256:e531f05e9a2283ba98ab2385ee6a558a0876f2ea476d4a142fbfaae85b9cfb83",
+      "bytes": 14030,
+      "sha256": "sha256:1e8bb04e632f816575fc1c48420637717a64bd2638848781047c2061e88c8abe",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2349,15 +2349,15 @@
     },
     {
       "path": "lib/governance/pod/worktree-disposal.js",
-      "bytes": 4715,
-      "sha256": "sha256:82e3d89b948fd30b01bb0c2026de0fedd076969ae80221d30f3be27117247c68",
+      "bytes": 5046,
+      "sha256": "sha256:c23e29ceb3e99ecb8ce500bc89a71dc0c39d67cfa3601f98b20525a5d200831b",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/result/implementation-target-result-report.js",
-      "bytes": 14823,
-      "sha256": "sha256:a41792d53fc8eecada7d2eeef7c70ec52bb9f900f8d05e883271b7047bdbe219",
+      "bytes": 14835,
+      "sha256": "sha256:02756bee6cff0e70350c0f37c83bd4832b46ae495e43e2b95b1f5cad036737a7",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2384,8 +2384,8 @@
     },
     {
       "path": "lib/governance/result/test-target-result-report.js",
-      "bytes": 13872,
-      "sha256": "sha256:96fda4e29d7bc83ef037828e8baf0e4e1b8b9ff89cd706a496eb9f7f2cf29c4a",
+      "bytes": 13884,
+      "sha256": "sha256:8faea7b65f7bd36b1fd6d4455a4d8491fbded0964d7c727401b0d80d71f5bdc5",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2398,15 +2398,15 @@
     },
     {
       "path": "lib/governance/review/controller-implementation-review-decision.js",
-      "bytes": 16350,
-      "sha256": "sha256:bba000571d03970f6365f38369fe4d5074d5581c11e2e0490c16a728c0ee57f7",
+      "bytes": 16362,
+      "sha256": "sha256:5c207f45dd488dd8dd18e658508459f8a632cdc71b33fd819f304c9359072a3d",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/review/controller-product-defect-remediation-authorization.js",
-      "bytes": 21632,
-      "sha256": "sha256:8e4de8684baaeefd8b13a39ac01daeb4165977ec0cd56a9065651f7f295d9583",
+      "bytes": 21644,
+      "sha256": "sha256:1a66dff490a8f6a5476193819a921bd4de3a0e308acde44e0aa8391b697343dc",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2426,15 +2426,15 @@
     },
     {
       "path": "lib/governance/review/controller-test-review-decision.js",
-      "bytes": 16514,
-      "sha256": "sha256:5c9dd423cffd38be8ffe2d56ec8730bfb774bc293012658a283a434e2f102da6",
+      "bytes": 16526,
+      "sha256": "sha256:ce058ae27096d37968fd735813a7f11bdafd79f72cdcba7835e7bee4e85cd0ac",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/review/demand-post-acceptance-route.js",
-      "bytes": 19596,
-      "sha256": "sha256:85269013e766b79c51180796ad59c111e96d83d6ba0dbb0c59ea34e977ef0cb0",
+      "bytes": 19772,
+      "sha256": "sha256:f416c70831c89428493853a14cefa549b68bd15053ecede0b449c37dc7f2408e",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2482,8 +2482,8 @@
     },
     {
       "path": "lib/hosts/claude-code/wakeflow-workspace-host-resource-profile.js",
-      "bytes": 1221,
-      "sha256": "sha256:4864e74289a87e24ad55681e28e458d5471dc2824f80f4f89b1941f5176c9fc2",
+      "bytes": 1475,
+      "sha256": "sha256:e9ecef50ab2d55ef3ecab1ebe4cce43ee319ab4b212f44bf29e9d220868629f6",
       "mode": "0644",
       "scope": "peer-profile"
     },
@@ -2510,8 +2510,8 @@
     },
     {
       "path": "lib/hosts/codex/wakeflow-workspace-host-resource-profile.js",
-      "bytes": 1040,
-      "sha256": "sha256:bf993e4d7c6821bb5b0baf4054f346b1ef3a968eb713e0468ce15831fb3fe0bf",
+      "bytes": 1102,
+      "sha256": "sha256:d9f827d63e48bb7a2fe727e466a40a00d78eb66a958dd642246adc04e4c260d6",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2538,8 +2538,8 @@
     },
     {
       "path": "lib/kernel/error.js",
-      "bytes": 4169,
-      "sha256": "sha256:fcee3035bc14f22a6aff9ebd287d60a2a321ee76111779526a472b6a87750e10",
+      "bytes": 5244,
+      "sha256": "sha256:95e385479ab7790b52c159421b0abc4a8cab0124f5bc2d7d593bb0b71c10243b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2650,8 +2650,8 @@
     },
     {
       "path": "lib/workspace/host-runtime/wakeflow-host-capability-layout-authority.js",
-      "bytes": 3215,
-      "sha256": "sha256:6c504b940d8fd54a66e8989ea04d155c609d38037d2afb95e102a7a51853608c",
+      "bytes": 3262,
+      "sha256": "sha256:8944c973645d433c37544b96574eb4a7f49dd4b1138b96452768a29354094ccb",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3091,15 +3091,15 @@
     },
     {
       "path": "lib/workspace/workspace-host-resource-catalog.js",
-      "bytes": 8595,
-      "sha256": "sha256:bd286ccfbf82bf164db5b0561d9b34fd36d4abc5a6a40517158a24178cce6855",
+      "bytes": 8962,
+      "sha256": "sha256:39592b822f18132a386419d9973b89970b16dc449d7343b9b3f2cef1abde8f25",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/workspace/workspace-host-resource-profile.js",
-      "bytes": 8482,
-      "sha256": "sha256:73473dab7da65831774113054cf3a2c528437947d55e2fd9135f9555d02c8c1c",
+      "bytes": 10348,
+      "sha256": "sha256:073fb72a6cae6093089fadaa213d0a4ef08fd33b8d2ae6fd5d8a44eaafed0fa4",
       "mode": "0644",
       "scope": "shared"
     },
@@ -6458,8 +6458,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 14244,
-      "sha256": "sha256:bc335ea86e8bbea51451458172b264e08547707f905a8710c5453882035e228e",
+      "bytes": 14778,
+      "sha256": "sha256:947196c4300da9f004751fb197e502cf52495fe79d132948404760a9cd3efd04",
       "mode": "0644",
       "scope": "agent-text"
     },

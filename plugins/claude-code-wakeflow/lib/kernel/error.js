@@ -93,6 +93,30 @@ export function fail(code, reason, path = "$", options = {}) {
     throw new WakeflowError(code, reason, path, options);
 }
 /**
+ * 以阻塞项拒绝：第一个阻塞项冒号前的阻塞码是原因，全部阻塞项按 `blocker`、`blocker2`… 进入公开
+ * details（至多 8 个）。details 的值只能是短标识，所以带别的字符的阻塞项（例如 Unicode 章节锚点
+ * `section-anchor-unknown:性能约束`）只留下阻塞码（§13.131 审查）。
+ */
+export function failWithBlockers(blockers, path) {
+    const first = blockers[0];
+    if (first === undefined)
+        fail("unexpected", "empty-blockers", path);
+    const identifier = (blocker) => {
+        if (DETAIL_VALUE_PATTERN.test(blocker))
+            return blocker;
+        const code = blocker.split(":")[0] ?? "";
+        return DETAIL_VALUE_PATTERN.test(code) ? code : "blocker";
+    };
+    fail("precondition-failed", first.split(":")[0] ?? first, path, {
+        details: Object.fromEntries(blockers
+            .slice(0, DETAIL_MAXIMUM_ENTRIES)
+            .map((blocker, index) => [
+            index === 0 ? "blocker" : `blocker${index + 1}`,
+            identifier(blocker),
+        ])),
+    });
+}
+/**
  * 把任意异常收敛为 `WakeflowError`：已是内核错误则原样返回，否则包成
  * `unexpected`，原始异常只作为 `cause` 保留，消息不复制。
  */

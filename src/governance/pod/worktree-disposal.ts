@@ -14,6 +14,12 @@ import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id
 /** 与 `wakeflow-status-result.schema.json` 的 `$defs.singleLineText.maxLength` 一致。 */
 const SUGGESTED_MAXIMUM_LENGTH = 512;
 const REMOVE_COMMAND_PREFIX = "git worktree remove ";
+/**
+ * 登记时已加锁的检出（Claude Code 给它用的检出加锁，会话结束后锁仍在）先解锁再删（§13.130）。
+ * 用 `;` 而不是 `&&`：锁在登记之后已被释放时 unlock 会失败，remove 仍要照做。
+ */
+const UNLOCK_COMMAND_PREFIX = "git worktree unlock ";
+const UNLOCK_SEPARATOR = "; ";
 const TRUNCATION_MARK = "…";
 
 export interface WorktreeDisposalGuidance {
@@ -40,25 +46,40 @@ function singleLinePath(value: string): string {
   return cleaned.length === 0 ? "." : cleaned;
 }
 
-/** 有界化：越界时按码位截断路径并加省略号，永不切断代理对，永不越过上界。 */
-function removeCommand(relativePath: string): string {
-  const command = `${REMOVE_COMMAND_PREFIX}${relativePath}`;
-  if (command.length <= SUGGESTED_MAXIMUM_LENGTH) return command;
-  const budget = SUGGESTED_MAXIMUM_LENGTH - REMOVE_COMMAND_PREFIX.length - TRUNCATION_MARK.length;
+/** 按码位截到预算内并加省略号，永不切断代理对；放得下就原样返回。 */
+function boundedPath(relativePath: string, budget: number): string {
+  if (relativePath.length <= budget) return relativePath;
+  const room = budget - TRUNCATION_MARK.length;
   let kept = "";
   for (const character of relativePath) {
-    if (kept.length + character.length > budget) break;
+    if (kept.length + character.length > room) break;
     kept += character;
   }
-  return `${REMOVE_COMMAND_PREFIX}${kept}${TRUNCATION_MARK}`;
+  return `${kept}${TRUNCATION_MARK}`;
 }
 
+/**
+ * 有界化：路径在命令里出现一次（remove）或两次（unlock 再 remove）；两处用同一个截断结果，
+ * 整条命令永不越过上界。
+ */
+function removeCommand(relativePath: string, locked: boolean): string {
+  if (!locked) {
+    const budget = SUGGESTED_MAXIMUM_LENGTH - REMOVE_COMMAND_PREFIX.length;
+    return `${REMOVE_COMMAND_PREFIX}${boundedPath(relativePath, budget)}`;
+  }
+  const fixed = UNLOCK_COMMAND_PREFIX.length + UNLOCK_SEPARATOR.length + REMOVE_COMMAND_PREFIX.length;
+  const shown = boundedPath(relativePath, Math.floor((SUGGESTED_MAXIMUM_LENGTH - fixed) / 2));
+  return `${UNLOCK_COMMAND_PREFIX}${shown}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${shown}`;
+}
+
+/** `locked` 是登记时回执记下的锁状态（`git worktree list --porcelain` 的 locked 行）。 */
 export function worktreeDisposalGuidance(
   hostId: WakeflowHostId,
   relativeCheckoutPath: string,
+  locked: boolean,
 ): Readonly<WorktreeDisposalGuidance> {
   return Object.freeze({
-    suggested: removeCommand(singleLinePath(relativeCheckoutPath)),
+    suggested: removeCommand(singleLinePath(relativeCheckoutPath), locked),
     alternative:
       hostId === "claude-code"
         ? "End the Claude Code worktree session; Claude Code removes a worktree it created when the session ends, then run git worktree prune in the repository."

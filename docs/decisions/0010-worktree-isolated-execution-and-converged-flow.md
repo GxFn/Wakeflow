@@ -87,6 +87,12 @@ ADR-0006 曾把 Pod 简化为"由 Confirmation 授权的隔离执行位置"；�
 
 第一个真实 pod 在 Claude Code 上拉起后核实了 D4 的宿主事实：`claude --worktree <name>` 把检出建在 `<仓库>/.claude/worktrees/<name>`、分支 `worktree-<name>`；仓库有远端时它从远端默认分支（origin/HEAD）建，不是本地 HEAD；若该路径上已有同名检出则复用（会话只加锁）。因此 `basePolicy: local-head` 的做法是先用 `git worktree add` 从本地 HEAD 在那条路径建好，再以 `--worktree <name>` 启动。这个版本的 Claude Code 不会把 `.claude/worktrees/` 写进仓库的排除规则，主检出会多出一行未跟踪目录；Controller 在每个仓库的 `.git/info/exclude` 加一行即可，不改被跟踪文件。Test 窗口的 `--add-dir` 来自产品窗口登记写的回执，所以 Test 窗口最后起。关闭时核实的另一件事：Claude Code 会给它使用的检出加锁，窗口退役后锁仍在，status 建议的 `git worktree remove` 会因锁失败，要先 `git worktree unlock`；建议命令不变（Wakeflow 不观察关闭时的锁状态），Controller 参考的关闭步骤写明这一步。
 
+## 补充（2026-09-25，§13.130）
+
+`basePolicy: local-head` 不再靠 Controller 手工执行配方：Claude 宿主的 tmux 助手在 `launch` 带 `local-head` worktree 意图与 `--worktree <name>` 时自己在仓库主检出里 `git worktree add -b worktree-<name> <仓库>/.claude/worktrees/<name> HEAD`（分支已存在则不带 `-b`，检出已存在则复用），并保证 `.git/info/exclude` 有 `.claude/worktrees/` 一行；结果里 `worktreePrepared: created | reused | not-requested`。关闭时的建议命令对加锁的检出改为 `git worktree unlock … && git worktree remove …`（回执里的 `locked`）。
+
+`unmergedAccepted[]` 跨过归档：全作用域的 status 还读仍在配置里的 worktree pod 的终态 Demand——完成归档的，以及取消而撤回（原因 `demand-cancelled:<demandId>`，取消同样封归档包）的——以 `source: archived` 列出它们接受过、仍未合并的分支，直到 pod 关闭记下处置；同一 Demand 又活动时只列活动的一份；primary pod 的归档不列。读取有两个上限，都按终态时间新的在前：归档清单至多读 1024 个（primary pod 的归档也占这一份），评审快照只对 worktree pod 的归档读、至多 64 个；两者截掉的条数计入 `truncated.archives`，所以"全部列出"以 `truncated.archives` 为 0 为前提。
+
 ## 未决问题
 
 三项已在 L1 关闭：

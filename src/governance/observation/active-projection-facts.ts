@@ -34,6 +34,11 @@ export interface AcceptedBranchFact extends ActiveProjectionUnmergedFacts {
   readonly acceptedAt: UtcInstant;
   /** 是否按仓库指针核对过（分支仍在且未合并）；仓库未观察时为 false，条目保留。 */
   readonly repositoryObserved: boolean;
+  /**
+   * 事实来自活动 Demand，还是仍在配置里的 worktree pod 的已归档 Demand（§13.130）。归档的
+   * 只在 full 作用域出现：投影读不到归档，页面与指纹因此不变。
+   */
+  readonly source: "active" | "archived";
 }
 
 /** 一个仓库的指针事实：当前 HEAD 解析到的提交与每个分支的尖端。 */
@@ -98,6 +103,7 @@ export function acceptedBranchFacts(
   demandId: string,
   snapshot: Readonly<DemandResultReviewSnapshot>,
   repositories: ReadonlyMap<string, Readonly<RepositoryBranchTips>> | null,
+  source: AcceptedBranchFact["source"],
 ): readonly Readonly<AcceptedBranchFact>[] {
   const facts: Readonly<AcceptedBranchFact>[] = [];
   for (const target of snapshot.targets) {
@@ -121,6 +127,7 @@ export function acceptedBranchFacts(
         // 核对过 = 分支清单读全了，并且在里面真的看见了这个分支尖端。
         repositoryObserved:
           repository !== undefined && repository.branchesComplete && tip !== undefined,
+        source,
       }),
     );
   }
@@ -149,18 +156,28 @@ function repositoryBranchTips(
   return map;
 }
 
-/** 全部活动 Demand 的未合并已接受分支：status 的 `unmergedAccepted` 与投影的同名段都取这一份。 */
+/**
+ * 未合并的已接受分支：status 的 `unmergedAccepted` 与投影的同名段都取这一份。活动 Demand 之外，
+ * full 作用域还带仍在配置里的 worktree pod 的已归档 Demand（§13.130）；投影作用域的归档域是
+ * unavailable，所以投影只有活动的那部分。
+ */
 export function unmergedAcceptedFacts(
   observation: Readonly<WorkspaceObservation>,
 ): readonly Readonly<AcceptedBranchFact>[] {
   const repositories = repositoryBranchTips(observation);
-  return Object.freeze(
-    (observation.demands.value ?? []).flatMap((demand) =>
-      demand.reviewSnapshot === null
-        ? []
-        : [...acceptedBranchFacts(demand.demandId, demand.reviewSnapshot, repositories)],
-    ),
+  const active = (observation.demands.value ?? []).flatMap((demand) =>
+    demand.reviewSnapshot === null
+      ? []
+      : [...acceptedBranchFacts(demand.demandId, demand.reviewSnapshot, repositories, "active")],
   );
+  // 同一 Demand 既活动又有归档（续做后重开）时只取活动的一份；不依赖看板状态（gate-log §13.130）。
+  const activeIds = new Set((observation.demands.value ?? []).map((demand) => demand.demandId));
+  const archived = (observation.archives.value?.demands ?? []).flatMap((demand) =>
+    activeIds.has(demand.demandId)
+      ? []
+      : [...acceptedBranchFacts(demand.demandId, demand.reviewSnapshot, repositories, "archived")],
+  );
+  return Object.freeze([...active, ...archived]);
 }
 
 function demandFacts(
@@ -242,18 +259,23 @@ function projectionScopeOf(
   observation: Readonly<WorkspaceObservation>,
 ): Readonly<WorkspaceObservation> {
   const pods = projectionScopePods(observation.pods);
-  if (observation.scope === "projection") return Object.freeze({ ...observation, pods });
+  const notInScope = Object.freeze({
+    status: "unavailable" as const,
+    issue: "scope:projection",
+    value: null,
+  });
+  // 归档域（§13.130）只属于 full 作用域：投影作用域的观察本来就不读它，这里也把它拿掉。
+  if (observation.scope === "projection") {
+    return Object.freeze({ ...observation, pods, archives: notInScope });
+  }
   return Object.freeze({
     ...observation,
     scope: "projection" as const,
     bindings: Object.freeze([]),
     hooks: Object.freeze([]),
     assets: Object.freeze([]),
-    repositories: Object.freeze({
-      status: "unavailable" as const,
-      issue: "scope:projection",
-      value: null,
-    }),
+    repositories: notInScope,
+    archives: notInScope,
     pods,
   });
 }

@@ -6,6 +6,7 @@ import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, } from ".
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { inspectActiveLayout } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
+import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_LOCAL_ROOT_REF, WAKEFLOW_MAINTENANCE_GATE_REF, WAKEFLOW_MAINTENANCE_ROOT_REF, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, WAKEFLOW_RUNTIME_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow workspace core layout inspection input is invalid.",
@@ -159,6 +160,31 @@ async function inspectActive(root, signal) {
 function entryNamed(read, name) {
     return read.entries.find((entry) => entry.name === name) ?? null;
 }
+const NO_MAINTENANCE_RESIDUES = Object.freeze([]);
+const RESIDUE_NAME_PATTERN = /^(.+)\.(intent|journal)\.json$/u;
+function maintenanceResidue(name) {
+    const match = RESIDUE_NAME_PATTERN.exec(name);
+    const candidate = match?.[1];
+    const kind = match?.[2];
+    if (candidate !== undefined && (kind === "intent" || kind === "journal")) {
+        try {
+            return Object.freeze({
+                name,
+                kind,
+                operationId: parseWakeflowMaintenanceOperationId(candidate),
+            });
+        }
+        catch (error) {
+            if (!(error instanceof WakeflowMaintenanceOperationIdError))
+                throw error;
+        }
+    }
+    return Object.freeze({ name, kind: "unknown", operationId: null });
+}
+/** 残留条目按名字排序分类；只看名字，不读内容。 */
+function maintenanceResidues(names) {
+    return Object.freeze([...names].sort().map(maintenanceResidue));
+}
 async function inspectLocal(root, signal, issueCodes) {
     const localResource = await optionalResource(root, WAKEFLOW_LOCAL_ROOT_REF);
     if (localResource === null) {
@@ -166,6 +192,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status: "absent",
             freshCompatible: true,
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: null,
             protocolDigest: null,
         });
@@ -177,6 +204,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status: "conflict",
             freshCompatible: false,
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: localNodeDigest,
             protocolDigest: null,
         });
@@ -189,6 +217,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status: local.entries.length === 0 ? "bootstrap-prefix" : "conflict",
             freshCompatible: local.entries.length === 0,
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: localNodeDigest,
             protocolDigest: directoryDigest(local),
         });
@@ -199,6 +228,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status: "conflict",
             freshCompatible: false,
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: localNodeDigest,
             protocolDigest: directoryDigest(local),
         });
@@ -252,6 +282,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status,
             freshCompatible: freshCompatible && status === "bootstrap-prefix",
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: localNodeDigest,
             protocolDigest: computeCanonicalJsonSha256Digest({
                 local: directoryDigest(local),
@@ -266,6 +297,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status: "conflict",
             freshCompatible: false,
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: localNodeDigest,
             protocolDigest: directoryDigest(runtime),
         });
@@ -277,6 +309,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status: "conflict",
             freshCompatible: false,
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: localNodeDigest,
             protocolDigest: directoryDigest(maintenance),
         });
@@ -292,6 +325,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status,
             freshCompatible: freshCompatible && status === "bootstrap-prefix",
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: localNodeDigest,
             protocolDigest: computeCanonicalJsonSha256Digest({
                 local: directoryDigest(local),
@@ -307,6 +341,7 @@ async function inspectLocal(root, signal, issueCodes) {
             status: "conflict",
             freshCompatible: false,
             protocolComplete: false,
+            residues: NO_MAINTENANCE_RESIDUES,
             nodeDigest: localNodeDigest,
             protocolDigest: directoryDigest(maintenance),
         });
@@ -328,6 +363,7 @@ async function inspectLocal(root, signal, issueCodes) {
         status,
         freshCompatible: freshCompatible && status === "idle",
         protocolComplete: true,
+        residues: maintenanceResidues(transactions.entries.map((entry) => entry.name)),
         nodeDigest: localNodeDigest,
         protocolDigest: computeCanonicalJsonSha256Digest({
             local: directoryDigest(local),

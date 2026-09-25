@@ -21,7 +21,11 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  * - `preflight`：tmux 与 claude 是否可用、配置的会话是否已存在、当前是否在 tmux 里。
  * - `launch --window <windowId>`：stdin 是 `wakeflow_register_window_binding` inspect 的结果
  *   （或其 `launchIntent`）。生成 session id，按启动意图开窗口并启动 `claude`，等目标会话的
- *   `session-start` hook 记录，打印登记用的 creation observation。
+ *   `session-start` hook 记录，打印登记用的 creation observation。意图带 `local-head` 的 worktree
+ *   意图且参数里有 `--worktree <name>` 时（§13.130 H4），先在意图根（仓库主检出）准备检出：
+ *   `<root>/.claude/worktrees/<name>` 不存在就 `git worktree add -b worktree-<name> <path> HEAD`
+ *   （分支已存在则不带 -b），存在就复用（`claude --worktree` 对已有检出只加锁），并保证仓库的
+ *   `.git/info/exclude` 有 `.claude/worktrees/` 一行；结果里 `worktreePrepared` 说明做了什么。
  * - `resume --window <windowId> [--wait N] [--force]`：stdin 同 launch；用绑定里的私有会话 id 以
  *   `claude --resume` 在新 pane 里续同一会话，等到新的 session-start 记录后打印 relocate 用的
  *   observation；定位器的 pane 还活着时拒绝（`--force` 跳过）。launch 对活着的 pane 同样拒绝。
@@ -36,7 +40,15 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  * - `deliver --window <windowId> [--handle-digest <sha256>] [--wait-landing <seconds>]`：stdin 是
  *   许可里的 prompt；先核对 pane（与定位器相关的 pane 恰好一个、活着、跑的是 claude、标识与坐标都对），
  *   粘贴、回车一次、回读一次，再等目标会话的 user-prompt-submit hook 记录（默认 3 秒），打印
- *   `wakeflow_record_delivery_outcome` 的 attempt、readback 与 landing。
+ *   `wakeflow_record_delivery_outcome` 的 attempt、readback 与 landing。回读（§13.130 H1）看两种
+ *   屏幕证据：prompt 首行子串，或 Claude Code 把粘贴折叠成的 `[Pasted text #N +M lines]` 指示且
+ *   M 与 prompt 行数一致；都看不到才是 pending。回读只是屏幕摘要，落地仍只看 hook 记录。
+ * - `nudge --window <windowId> [--text <phrase>]`（§13.130 H3）：被 "API Error: Connection lost
+ *   mid-response" 切断的一轮不会自己续上；按 deliver 的同一套 pane 核对定位后截屏一次，只在屏幕尾部
+ *   有 `API Error` 行且它是输入框上方最后一条对话行（之后没有回复、已渲染的用户消息或其他输出）、
+ *   没有工作中标记（"esc to interrupt"、"running … hooks"）且输入框为空时才粘贴一句
+ *   （默认 "Continue."）并回车一次，打印 status（nudged / not-needed / busy / pane-missing）、
+ *   匹配到的错误行与截屏摘要；一次调用最多推一次，看不到错误行绝不推。
  * - `close --window <windowId>`：关闭前后各读一次 pane 清单，打印 decommission 的 closure。
  * - `teardown [--force]`：引导要重来时杀掉配置的 tmux 会话；有任何登记窗口时拒绝，除非 --force。
  *
@@ -66,7 +78,7 @@ const SCRIPT = String.raw`#!/usr/bin/env node
 // wakeflow-tmux-helper-schema: 1
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, opendirSync, readSync, statSync } from "node:fs";
+import { appendFileSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, opendirSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -109,6 +121,21 @@ const MAX_LABEL = 128;
 const MAX_VERSION = 64;
 const MARKER_MINIMUM = 12;
 const MARKER_MAXIMUM = 96;
+const NUDGE_DEFAULT_TEXT = "Continue.";
+const NUDGE_TEXT_MAXIMUM = 256;
+const SCREEN_TAIL_LINES = 12;
+// Claude Code 自己渲染输入框时用的折叠指示模式（2.1.282）：带行数或不带。
+const PASTED_TEXT_INDICATOR = /\[Pasted text #[0-9]+(?: \+([0-9]+) lines)?\]/gu;
+const API_ERROR_PATTERN = /API Error/u;
+const BUSY_PATTERNS = Object.freeze([/esc to interrupt/iu, /running [A-Za-z]+ hooks/iu]);
+// 输入框那一行：新版 TUI 用 U+276F，旧版用 >；后面是已键入的文本或占位提示。
+const INPUT_LINE_PATTERN = /^[\u276f>]\s?(.*)$/u;
+const INPUT_PLACEHOLDER_PREFIX = "Try \"";
+// 输入框上下的边框线（只由横线组成）。
+const INPUT_BORDER_PATTERN = /^[\u2500\u2501\u2550-]+$/u;
+const WORKTREE_NAME_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
+const WORKTREE_EXCLUDE_LINE = ".claude/worktrees/";
+const WORKTREE_EXCLUDE_PATTERN = /^\/?\.claude\/worktrees\/?$/u;
 const HOOK_POLL_MS = 500;
 const DEFAULT_LANDING_WAIT_SECONDS = 3;
 const DEFAULT_WAIT_SECONDS = 20;
@@ -278,7 +305,7 @@ function hostEnvironment() {
 function run(command, args, options) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
-    env: hostEnvironment(),
+    env: options?.env ?? hostEnvironment(),
     maxBuffer: 8 * 1024 * 1024,
     ...(options?.input === undefined ? {} : { input: options.input }),
     ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
@@ -329,7 +356,7 @@ function parseWindowId(value, name) {
 
 function parseArguments(argv) {
   const [command, ...rest] = argv;
-  const options = { window: null, all: false, force: false, wait: DEFAULT_WAIT_SECONDS, handleDigest: null, waitLanding: DEFAULT_LANDING_WAIT_SECONDS };
+  const options = { window: null, all: false, force: false, wait: DEFAULT_WAIT_SECONDS, handleDigest: null, waitLanding: DEFAULT_LANDING_WAIT_SECONDS, text: null };
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index];
     if (argument === "--all") {
@@ -348,6 +375,19 @@ function parseArguments(argv) {
       const seconds = Number(rest[index + 1]);
       if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_WAIT_SECONDS) refuse("wait-landing-invalid");
       options.waitLanding = seconds;
+      index += 1;
+    } else if (argument === "--text") {
+      const text = rest[index + 1];
+      const characters = typeof text === "string" ? [...text] : [];
+      if (
+        characters.length === 0
+        || characters.length > NUDGE_TEXT_MAXIMUM
+        || text.trim().length === 0
+        || characters.some((character) => isControl(character.codePointAt(0) ?? 0))
+      ) {
+        refuse("text-invalid");
+      }
+      options.text = text;
       index += 1;
     } else if (argument === "--handle-digest") {
       const digest = rest[index + 1];
@@ -445,6 +485,83 @@ function observeWorktree(cwd) {
   const commonDir = run("git", ["rev-parse", "--git-common-dir"], { cwd });
   if (!porcelain.ok || !commonDir.ok || porcelain.stdout.length === 0 || commonDir.stdout.trim().length === 0) return null;
   return Object.freeze({ porcelain: porcelain.stdout, commonDir: commonDir.stdout.trim() });
+}
+
+function requestedWorktreeName(resolvedArguments) {
+  const index = resolvedArguments.indexOf("--worktree");
+  if (index === -1) return null;
+  const name = resolvedArguments[index + 1];
+  if (typeof name !== "string" || !WORKTREE_NAME_PATTERN.test(name)) refuse("intent-invalid", { field: "worktree-name" });
+  return name;
+}
+
+// 仓库的 .git/info/exclude 里保证有 ".claude/worktrees/" 一行，主检出的 status 才不会多出一行未跟踪目录；
+// 只碰这个非跟踪文件，从不改仓库里的任何跟踪文件。
+function ensureWorktreeExclude(gitDir) {
+  const infoDirectory = path.join(gitDir, "info");
+  const excludeFile = path.join(infoDirectory, "exclude");
+  let existing = "";
+  try {
+    existing = readFileSync(excludeFile, "utf8");
+  } catch (error) {
+    if (error?.code !== "ENOENT") refuse("worktree-exclude-failed", { operation: "read" });
+  }
+  if (existing.split("\n").some((line) => WORKTREE_EXCLUDE_PATTERN.test(line.trim()))) return "present";
+  try {
+    mkdirSync(infoDirectory, { recursive: true });
+    appendFileSync(excludeFile, (existing.length === 0 || existing.endsWith("\n") ? "" : "\n") + WORKTREE_EXCLUDE_LINE + "\n");
+  } catch {
+    refuse("worktree-exclude-failed", { operation: "write" });
+  }
+  return "appended";
+}
+
+// basePolicy local-head 的实现（§13.130 H4）：claude --worktree 对不存在的路径会从远端默认分支建检出、
+// 对已有检出只加锁复用，所以助手先在仓库主检出按本地 HEAD 把检出准备好，claude 随后复用它。
+// §13.130：git 调用去掉会把仓库重定向到别处的 GIT_* 变量，只认 cwd 所在的仓库。
+const GIT_REDIRECT_VARIABLES = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CEILING_DIRECTORIES"];
+
+function git(repositoryRoot, args) {
+  const env = hostEnvironment();
+  for (const name of GIT_REDIRECT_VARIABLES) delete env[name];
+  return run("git", args, { cwd: repositoryRoot, env });
+}
+
+function realpathOrNull(target) {
+  try {
+    return realpathSync(target);
+  } catch {
+    return null;
+  }
+}
+
+// 本仓库 git worktree list --porcelain 登记的检出路径（realpath）。
+function registeredWorktrees(repositoryRoot) {
+  const listed = git(repositoryRoot, ["worktree", "list", "--porcelain"]);
+  if (!listed.ok) refuse("worktree-list-failed");
+  return listed.stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => realpathOrNull(line.slice(9)) ?? line.slice(9));
+}
+
+function prepareWorktree(repositoryRoot, name) {
+  // §13.130：配置的落点必须就是仓库顶层，否则 git 会落到上层仓库；任何写入之前先核对。
+  const placement = realpathOrNull(repositoryRoot);
+  const toplevel = git(repositoryRoot, ["rev-parse", "--show-toplevel"]);
+  if (placement === null || !toplevel.ok || realpathOrNull(toplevel.stdout.trim()) !== placement) refuse("worktree-root-not-toplevel");
+  const commonDir = git(repositoryRoot, ["rev-parse", "--git-common-dir"]);
+  if (!commonDir.ok || commonDir.stdout.trim().length === 0) refuse("worktree-repository-invalid");
+  const checkout = path.join(repositoryRoot, ".claude", "worktrees", name);
+  const branch = "worktree-" + name;
+  if (existsSync(checkout)) {
+    // §13.130：只有本仓库登记的这条检出才算复用；其他占位目录拒绝，不写任何东西。
+    if (!registeredWorktrees(repositoryRoot).includes(realpathOrNull(checkout))) refuse("worktree-path-occupied", { branch });
+    return Object.freeze({ prepared: "reused", branch, exclude: ensureWorktreeExclude(path.resolve(repositoryRoot, commonDir.stdout.trim())) });
+  }
+  // §13.130：分支已存在而检出不在时不复用旧分支（它可能不在本地 HEAD 上），交给 Controller 问用户。
+  if (git(repositoryRoot, ["rev-parse", "--verify", "--quiet", "refs/heads/" + branch]).ok) refuse("worktree-branch-exists", { branch });
+  const exclude = ensureWorktreeExclude(path.resolve(repositoryRoot, commonDir.stdout.trim()));
+  const added = git(repositoryRoot, ["worktree", "add", "-b", branch, checkout, "HEAD"]);
+  if (!added.ok) refuse("worktree-add-failed", { branch, branchExisted: false, status: added.status });
+  return Object.freeze({ prepared: "created", branch, exclude });
 }
 
 function creationObservation(sessionId, launchIntentDigest, coordinates, worktree) {
@@ -749,9 +866,22 @@ function commandLaunch(config, options) {
   });
   if (!resolvedArguments.includes(sessionId)) refuse("intent-invalid", { field: "session-id-placeholder" });
   if (resolvedArguments.some((argument) => /^<[^>]*>$/u.test(argument))) refuse("placeholder-unresolved");
-  const opened = openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments);
-  const hook = waitForSessionStart(sessionId, options.wait);
-  if (hook.status === "pending") assertPaneAlive(context, "launch", opened.coordinates);
+  const worktreeName = requestedWorktreeName(resolvedArguments);
+  const prepared = worktreeName !== null && launchIntent.worktree?.basePolicy === "local-head"
+    ? prepareWorktree(resolvePlacement(launchIntent.root?.configuredPlacement).absolute, worktreeName)
+    : null;
+  // §13.130：检出准备好之后的失败仍带 worktreePrepared 与分支，Controller 才知道留下了一条检出。
+  let opened;
+  let hook;
+  try {
+    opened = openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments);
+    hook = waitForSessionStart(sessionId, options.wait);
+    if (hook.status === "pending") assertPaneAlive(context, "launch", opened.coordinates);
+  } catch (error) {
+    if (prepared === null) throw error;
+    const failure = error instanceof HelperFailure ? error : new HelperFailure("unexpected");
+    throw new HelperFailure(failure.reason, { ...failure.extra, worktreePrepared: prepared.prepared, worktreeBranch: prepared.branch });
+  }
   const worktreeRequested = resolvedArguments.includes("--worktree");
   const worktree = worktreeRequested && typeof hook.record?.cwd === "string" ? observeWorktree(hook.record.cwd) : null;
   return {
@@ -768,6 +898,8 @@ function commandLaunch(config, options) {
     window: { name: opened.windowName, cwd: opened.placement.relative, created: opened.exists ? "new-window" : "new-session" },
     ...(opened.exists ? {} : { attach: attachCommand(context) }),
     ...(worktreeRequested && worktree === null ? { worktreeObservation: "pending" } : {}),
+    worktreePrepared: prepared === null ? "not-requested" : prepared.prepared,
+    ...(prepared === null ? {} : { worktreeBranch: prepared.branch, worktreeExclude: prepared.exclude }),
   };
 }
 
@@ -840,21 +972,19 @@ function beforeSend(reason, windowId, extra) {
   return { ok: false, command: "deliver", windowId, reason, attempt: { status: "failed-before-send" }, ...(extra ?? {}) };
 }
 
-function commandDeliver(config, options) {
-  const context = tmuxContext(config);
-  if (options.window === null) refuse("window-required");
-  const windowId = options.window;
-  const prompt = readStdinText();
-  if (prompt.trim().length === 0) refuse("stdin-empty");
+// deliver 与 nudge 共用的送前 pane authority（与旧实现同形，§13.122）：定位器、可选的句柄摘要、按坐标或
+// 标识相关的 pane 恰好一个、活着、跑的是 claude、标识与坐标都对。失败只描述原因，由各命令决定输出形状。
+function locateDeliveryPane(context, windowId, handleDigest) {
+  const failure = (reason, extra) => Object.freeze({ ok: false, reason, extra: extra ?? {} });
   const locator = readLocator(windowId);
-  if (locator === null) return beforeSend("locator-missing", windowId);
-  if (options.handleDigest !== null) {
+  if (locator === null) return failure("locator-missing");
+  if (handleDigest !== null) {
     const binding = readBoundedJson(path.join(ROOT, ...BINDINGS.split("/"), windowId + ".json"), MAX_RECORD_BYTES);
     const value = binding?.handle?.kind === HANDLE_KIND ? binding.handle.value : null;
-    if (typeof value !== "string" || sha256(value) !== options.handleDigest) return beforeSend("handle-mismatch", windowId);
+    if (typeof value !== "string" || sha256(value) !== handleDigest) return failure("handle-mismatch");
   }
   const listed = listPanes(context);
-  if (!listed.available) return beforeSend("panes-unavailable", windowId);
+  if (!listed.available) return failure("panes-unavailable");
   const coordinatesMatch = (entry) => (
     entry.sessionName === locator.tmux.sessionName
     && entry.windowId === locator.tmux.windowId
@@ -870,18 +1000,73 @@ function commandDeliver(config, options) {
   // 与旧实现的 pane authority 同形：按坐标或标识相关的 pane 必须恰好一个、活着、跑的是 claude，
   // 标识与坐标都对才粘贴（gate-log §13.122）。
   const related = listed.rows.filter((entry) => coordinatesMatch(entry) || metadataMatch(entry));
-  if (related.length === 0) return beforeSend("pane-missing", windowId);
-  if (related.length > 1) return beforeSend("duplicate-pane", windowId, { panes: related.map((entry) => entry.paneId) });
+  if (related.length === 0) return failure("pane-missing");
+  if (related.length > 1) return failure("duplicate-pane", { panes: related.map((entry) => entry.paneId) });
   const row = related[0];
-  if (row.paneDead) return beforeSend("pane-dead", windowId);
-  if (!metadataMatch(row)) return beforeSend("metadata-mismatch", windowId, { hint: "run mark for this window first" });
+  if (row.paneDead) return failure("pane-dead");
+  if (!metadataMatch(row)) return failure("metadata-mismatch", { hint: "run mark for this window first" });
   if (!coordinatesMatch(row)) {
-    return beforeSend("locator-stale", windowId, {
+    return failure("locator-stale", {
       hint: "the marked pane moved; register the window again",
       observed: { windowId: row.windowId, paneId: row.paneId },
     });
   }
-  if (row.currentCommand !== "claude") return beforeSend("wrong-process", windowId, { observed: row.currentCommand });
+  if (row.currentCommand !== "claude") return failure("wrong-process", { observed: row.currentCommand });
+  return Object.freeze({ ok: true, locator, row });
+}
+
+// 粘贴并回车一次：tmux 缓冲区装文本、paste-buffer 进 pane、send-keys Enter。失败只报到哪一步。
+function pasteAndSubmit(context, paneId, text) {
+  const bufferName = "wakeflow-" + randomUUID();
+  const loaded = tmux(context, ["load-buffer", "-b", bufferName, "-"], { input: text });
+  if (!loaded.ok) return Object.freeze({ stage: "load-buffer" });
+  const pasted = tmux(context, ["paste-buffer", "-d", "-p", "-b", bufferName, "-t", paneId]);
+  if (!pasted.ok) {
+    tmux(context, ["delete-buffer", "-b", bufferName]);
+    return Object.freeze({ stage: "paste" });
+  }
+  const entered = tmux(context, ["send-keys", "-t", paneId, "Enter"]);
+  if (!entered.ok) return Object.freeze({ stage: "enter" });
+  return Object.freeze({ stage: null });
+}
+
+// 回读的两种屏幕证据（§13.130 H1）：prompt 首行子串，或 Claude Code 把整段粘贴折叠成的
+// "[Pasted text #N +M lines]" 指示。M 是它折叠的文本里的换行数：现场看到的是 prompt（去首尾空白后）
+// 的行数减一，按原样粘贴的换行数也认；一行的 prompt 只有不带计数的指示。
+// 只认输入框里的那一个指示（§13.130）：它必须在屏幕上最后一个输入框行里、且是全屏最后一个指示；
+// 对话区里更早投递留下的同形指示不算。
+function pastedIndicatorAgrees(prompt, screen) {
+  const trimmedLines = prompt.trim().split("\n").length;
+  const pastedBreaks = prompt.split("\n").length - 1;
+  const lines = screen.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  let inputIndex = -1;
+  lines.forEach((line, index) => {
+    if (INPUT_LINE_PATTERN.test(line)) inputIndex = index;
+  });
+  if (inputIndex < 0) return false;
+  if (lines.slice(inputIndex + 1).some((line) => [...line.matchAll(PASTED_TEXT_INDICATOR)].length > 0)) return false;
+  const found = [...lines[inputIndex].matchAll(PASTED_TEXT_INDICATOR)].at(-1);
+  if (found === undefined) return false;
+  if (found[1] === undefined) return trimmedLines === 1;
+  const count = Number(found[1]);
+  return count === trimmedLines - 1 || count === pastedBreaks;
+}
+
+function readbackObservation(prompt, screen) {
+  const marker = promptMarker(prompt);
+  const seen = (marker !== null && screen.includes(marker)) || pastedIndicatorAgrees(prompt, screen);
+  return { status: seen ? "confirmed" : "pending", evidenceDigest: sha256(screen) };
+}
+
+function commandDeliver(config, options) {
+  const context = tmuxContext(config);
+  if (options.window === null) refuse("window-required");
+  const windowId = options.window;
+  const prompt = readStdinText();
+  if (prompt.trim().length === 0) refuse("stdin-empty");
+  const located = locateDeliveryPane(context, windowId, options.handleDigest);
+  if (!located.ok) return beforeSend(located.reason, windowId, located.extra);
+  const locator = located.locator;
   // 幂等：同一段 prompt 已经在目标会话落地（有它的 user-prompt-submit 记录）就不再粘贴——被宿主
   // 中断的一轮重发时拿到的是落地证据而不是第二次投递；--force 才照发（§13.127）。
   const landed = landedRecord(windowId, prompt);
@@ -891,16 +1076,9 @@ function commandDeliver(config, options) {
       hint: "this prompt already landed in the bound session; record the outcome with this landing instead of sending again (--force sends anyway)",
     });
   }
-  const bufferName = "wakeflow-" + randomUUID();
-  const loaded = tmux(context, ["load-buffer", "-b", bufferName, "-"], { input: prompt });
-  if (!loaded.ok) return beforeSend("load-buffer-failed", windowId);
-  const pasted = tmux(context, ["paste-buffer", "-d", "-p", "-b", bufferName, "-t", locator.tmux.paneId]);
-  if (!pasted.ok) {
-    tmux(context, ["delete-buffer", "-b", bufferName]);
-    return { ok: false, command: "deliver", windowId, reason: "paste-failed", attempt: { status: "unknown" } };
-  }
-  const entered = tmux(context, ["send-keys", "-t", locator.tmux.paneId, "Enter"]);
-  if (!entered.ok) return { ok: false, command: "deliver", windowId, reason: "enter-failed", attempt: { status: "unknown" } };
+  const submitted = pasteAndSubmit(context, locator.tmux.paneId, prompt);
+  if (submitted.stage === "load-buffer") return beforeSend("load-buffer-failed", windowId);
+  if (submitted.stage !== null) return { ok: false, command: "deliver", windowId, reason: submitted.stage + "-failed", attempt: { status: "unknown" } };
   const attemptDigest = sha256(JSON.stringify({
     sessionName: locator.tmux.sessionName,
     windowId: locator.tmux.windowId,
@@ -908,13 +1086,7 @@ function commandDeliver(config, options) {
     promptDigest: sha256(prompt),
   }));
   const captured = tmux(context, ["capture-pane", "-p", "-t", locator.tmux.paneId]);
-  const marker = promptMarker(prompt);
-  const readback = !captured.ok
-    ? { status: "unavailable" }
-    : {
-        status: marker !== null && captured.stdout.includes(marker) ? "confirmed" : "pending",
-        evidenceDigest: sha256(captured.stdout),
-      };
+  const readback = captured.ok ? readbackObservation(prompt, captured.stdout) : { status: "unavailable" };
   const landing = observeLanding(windowId, prompt, options.waitLanding);
   return { ok: true, command: "deliver", windowId, attempt: { status: "sent", evidenceDigest: attemptDigest }, readback, landing };
 }
@@ -965,6 +1137,85 @@ function observeLanding(windowId, prompt, seconds) {
     if (Date.now() >= deadline) return { status: "pending", promptDigest };
     sleep(HOOK_POLL_MS);
   }
+}
+
+// 屏幕尾部（最后 SCREEN_TAIL_LINES 个非空行）：Claude Code 的错误行、工作中标记与输入框都在这里。
+function screenTail(screen) {
+  return screen.split("\n").map((line) => line.trim()).filter((line) => line.length > 0).slice(-SCREEN_TAIL_LINES);
+}
+
+// 输入框上方最后一条对话行：取尾部最后一个输入框行之前、跳过输入框边框线的最后一行。
+function lastTranscriptLine(tail) {
+  let inputIndex = -1;
+  tail.forEach((line, index) => {
+    if (INPUT_LINE_PATTERN.test(line)) inputIndex = index;
+  });
+  const above = tail.slice(0, inputIndex).filter((line) => !INPUT_BORDER_PATTERN.test(line));
+  return above.at(-1) ?? null;
+}
+
+// 只在"被切断且已闲置"时才推一句（§13.130 H3）：尾部有 API Error 行且它是输入框上方最后一条对话行、
+// 没有工作中标记、输入框可见且为空。
+function nudgeAssessment(screen) {
+  const tail = screenTail(screen);
+  const errorLine = tail.filter((line) => API_ERROR_PATTERN.test(line)).pop() ?? null;
+  if (errorLine === null) return Object.freeze({ status: "not-needed", observedError: null, observedBusy: null });
+  const observedError = cleanLabel(errorLine, "API Error", NUDGE_TEXT_MAXIMUM);
+  for (const line of tail) {
+    if (BUSY_PATTERNS.some((pattern) => pattern.test(line))) {
+      return Object.freeze({ status: "busy", observedError, observedBusy: cleanLabel(line, "working", NUDGE_TEXT_MAXIMUM) });
+    }
+  }
+  const inputLine = tail.map((line) => INPUT_LINE_PATTERN.exec(line)).filter((found) => found !== null).pop() ?? null;
+  if (inputLine === null) return Object.freeze({ status: "busy", observedError, observedBusy: "input-box-unseen" });
+  const typed = inputLine[1].trim();
+  if (typed.length > 0 && !typed.startsWith(INPUT_PLACEHOLDER_PREFIX)) {
+    return Object.freeze({ status: "busy", observedError, observedBusy: "input-not-empty" });
+  }
+  // 错误行必须是输入框上方最后一条对话行（§13.130）：之后有回复、完成行、已渲染的用户消息
+  // （例如上一次推过的 "Continue."）或任何输出，说明这一轮已经往下走了，不再粘贴。
+  if (lastTranscriptLine(tail) !== errorLine) return Object.freeze({ status: "not-needed", observedError, observedBusy: null });
+  return Object.freeze({ status: "nudged", observedError, observedBusy: null });
+}
+
+function commandNudge(config, options) {
+  const context = tmuxContext(config);
+  if (options.window === null) refuse("window-required");
+  const windowId = options.window;
+  const located = locateDeliveryPane(context, windowId, null);
+  if (!located.ok) {
+    return { ok: false, command: "nudge", windowId, status: "pane-missing", reason: located.reason, observedError: null, ...located.extra };
+  }
+  const paneId = located.locator.tmux.paneId;
+  const captured = tmux(context, ["capture-pane", "-p", "-t", paneId]);
+  if (!captured.ok) refuse("capture-failed");
+  const evidenceDigest = sha256(captured.stdout);
+  const assessed = nudgeAssessment(captured.stdout);
+  if (assessed.status !== "nudged") {
+    return {
+      ok: true,
+      command: "nudge",
+      windowId,
+      status: assessed.status,
+      observedError: assessed.observedError,
+      ...(assessed.observedBusy === null ? {} : { observedBusy: assessed.observedBusy }),
+      evidenceDigest,
+    };
+  }
+  const text = options.text ?? NUDGE_DEFAULT_TEXT;
+  const submitted = pasteAndSubmit(context, paneId, text);
+  if (submitted.stage !== null) {
+    return { ok: false, command: "nudge", windowId, reason: submitted.stage + "-failed", observedError: assessed.observedError, evidenceDigest };
+  }
+  return {
+    ok: true,
+    command: "nudge",
+    windowId,
+    status: "nudged",
+    observedError: assessed.observedError,
+    evidenceDigest,
+    textDigest: sha256(text.trim()),
+  };
 }
 
 function commandClose(config, options) {
@@ -1028,6 +1279,9 @@ function main() {
         break;
       case "deliver":
         result = commandDeliver(config, options);
+        break;
+      case "nudge":
+        result = commandNudge(config, options);
         break;
       case "close":
         result = commandClose(config, options);

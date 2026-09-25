@@ -101,14 +101,14 @@ enabled = true
 
 | 路径 | 归属 | 用途 |
 | --- | --- | --- |
-| `wakeflow.config.json` | Wakeflow，tracked | 程序身份、拓扑（仓库、支持面、窗口、pod）、ledger 根、治理、宿主偏好。只有 `fresh-initialize` 与 `reconfigure` 写它。 |
+| `wakeflow.config.json` | Wakeflow，tracked | 程序身份、拓扑（仓库、支持面、窗口、pod）、ledger 根、治理、宿主偏好。只有 `fresh-initialize`、`reconfigure`（也可以新增一个产品仓库）与 `wakeflow_pod` 写它。 |
 | `.wakeflow-active/` | Wakeflow，ignored | 活动状态：`index.md`、`current/workspace-current-status.md`、每个 Demand 的根与进度投影、需求看板。 |
 | `.wakeflow-local/` | Wakeflow，ignored | 宿主私有运行时：窗口绑定（真实会话或线程标识只住在这里）、hook 观察记录、pod 回执、维护日志。 |
 | `../wakeflow-ledger/`（可配置） | Wakeflow，tracked | 需求包记录与 Demand 归档。 |
 | `Design/`、`Test/` | Wakeflow 管理或外部拥有 | Design 与 Test 窗口工作的支持面。 |
 | `AGENTS.md` / `CLAUDE.md` | 你的，含一个托管块 | Wakeflow 只在工作区指令文件里维护一个托管块；块外全是你的。 |
 
-对账（`wakeflow_maintain_workspace` 的 `reconcile`）修复 Wakeflow 拥有的文件并报告漂移；它不改配置、不登记窗口、不删任何它不拥有的东西。
+对账（`wakeflow_maintain_workspace` 的 `reconcile`）修复 Wakeflow 拥有的文件并报告漂移；它不改配置、不登记窗口、不删任何它不拥有的东西。私有树（`.wakeflow-local`、`.wakeflow-active`）若只是被安全地放宽（例如 `chmod -R go+rX`），它的第一个计划就是把它们收回 0700 / 0600；别人拥有或可写的私有节点只报告。
 
 ## 工具面
 
@@ -138,7 +138,7 @@ enabled = true
 | 投递是 | 向目标线程发送一次 | 粘贴到目标 pane 并回车一次，再捕获一次 |
 | 落地证据 | 线程发送的返回，或目标会话的 `UserPromptSubmit` hook 记录 | 目标会话的 `UserPromptSubmit` hook 记录 |
 | Hook | `hooks/hooks.json`，在 `/hooks` 里信任一次 | `hooks/hooks.json`，工作区信任后运行 |
-| Pod 的 worktree | `git worktree add`，导入结果前先建分支 | `git worktree add` 或 `claude --worktree <name>` |
+| Pod 的 worktree | `git worktree add`，导入结果前先建分支 | tmux 助手的 `launch` 先从本地 HEAD 建检出，再在其中启动 `claude --worktree <name>` |
 | 额外 | — | 四个 slash 命令、一条状态栏 |
 
 ## 在本仓库开发

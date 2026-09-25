@@ -62,7 +62,10 @@ const WINDOW_LAUNCH =
   "binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. " +
   "`launch` and `resume` refuse while the located pane is still alive, and report " +
   "`resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session " +
-  "that never held a conversation cannot be resumed, so launch a fresh window instead.";
+  "that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait " +
+  "up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook: pending` with " +
+  "a live pane means the record is late, so keep the printed observation and register or " +
+  "relocate with it once the record exists, and pass a longer `--wait` next time.";
 
 /** Controller 自己怎么进 tmux：用户是被引导者，从不自己配置 tmux（§13.118）。 */
 const WINDOW_BOOTSTRAP =
@@ -84,18 +87,26 @@ const DELIVERY_ACTION =
   `\`${TMUX_HELPER} deliver --window <windowId> --handle-digest <the permit's handleDigest>\`. ` +
   "It checks the pane against the locator and the handle digest, pastes the prompt, presses " +
   "Return once and captures the pane once, then waits a few seconds for the target session's prompt-submit hook record and prints the `attempt`, `readback` and `landing` to " +
-  "record verbatim. From a product or surface window, prefix the helper path with the " +
+  "record verbatim. `readback: confirmed` only means the prompt's first line, or Claude " +
+  "Code's collapsed `[Pasted text #N +M lines]` indicator with the matching line count, was " +
+  "on screen; landing is proven by the hook record alone. From a product or surface window, prefix the helper path with the " +
   "workspace root you were given with `--add-dir` instead of running from the root; the " +
   "helper finds the workspace from its own location.";
 
 const WORKTREE_LAUNCH =
-  "create the checkout yourself from the local HEAD at the path Claude Code uses, " +
-  "`<repository>/.claude/worktrees/<name>` on branch `worktree-<name>`, then start that " +
-  "window with `claude --worktree <name>`: it reuses an existing checkout of that name. " +
-  "Started without one, `claude --worktree` creates the checkout from the remote default " +
-  "branch when the repository has a remote, not from the local HEAD. If the repository " +
-  "does not ignore `.claude/worktrees/`, add that line to its `.git/info/exclude` so " +
-  "the main checkout's status stays clean.";
+  "the helper's `launch` prepares it when it starts the product window with " +
+  "`claude --worktree <name>` from a `local-head` worktree intent: it creates " +
+  "`<repository>/.claude/worktrees/<name>` from the repository's local HEAD on branch " +
+  "`worktree-<name>`, reuses the checkout only when this repository's worktree list has it, " +
+  "and adds `.claude/worktrees/` to the repository's `.git/info/exclude`; its result says " +
+  "`worktreePrepared: created` or `reused`. It refuses without writing when the placement is " +
+  "not the repository top level (`worktree-root-not-toplevel`), when `worktree-<name>` exists " +
+  "without its checkout (`worktree-branch-exists`: ask the user whether to delete or rename it) " +
+  "or when another directory holds the path (`worktree-path-occupied`). A launch that fails " +
+  "after the checkout was prepared still reports `worktreePrepared` and `worktreeBranch`, so " +
+  "tell the user that checkout was left behind. Do not start such a window with a " +
+  "bare `claude --worktree`: without an existing checkout Claude Code creates it from the " +
+  "remote default branch, not from the local HEAD.";
 
 const COMMAND_SURFACE_EN =
   "`/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where " +

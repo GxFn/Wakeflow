@@ -144,7 +144,7 @@ appears:
 
 | Path | Owner | Purpose |
 | --- | --- | --- |
-| `wakeflow.config.json` | Wakeflow, tracked | Program identity, topology (repositories, support surfaces, windows, pods), ledger root, governance, host preferences. Only `fresh-initialize` and `reconfigure` write it. |
+| `wakeflow.config.json` | Wakeflow, tracked | Program identity, topology (repositories, support surfaces, windows, pods), ledger root, governance, host preferences. Only `fresh-initialize`, `reconfigure` (which can also add a product repository) and `wakeflow_pod` write it. |
 | `.wakeflow-active/` | Wakeflow, ignored | Active state: `index.md`, `current/workspace-current-status.md`, per-Demand roots and progress projections, the requirement board. |
 | `.wakeflow-local/` | Wakeflow, ignored | Host-private runtime: window bindings (the only place a real session or thread id lives), hook observations, pod receipts, maintenance journals. |
 | `../wakeflow-ledger/` (configurable) | Wakeflow, tracked | Requirement package records and Demand archives. |
@@ -153,7 +153,10 @@ appears:
 
 Reconcile (`wakeflow_maintain_workspace` with `reconcile`) repairs Wakeflow-owned
 files and reports drift; it never changes the configuration, registers a
-window, or deletes something it does not own.
+window, or deletes something it does not own. If the private trees
+(`.wakeflow-local`, `.wakeflow-active`) were opened up in a safe way - say by
+`chmod -R go+rX` - its first plan takes them back to 0700 / 0600; a private
+node someone else owns or can write is only reported.
 
 ## The tool surface
 
@@ -187,7 +190,7 @@ identical on both hosts. The differences are the host's own facts:
 | Delivery is | one send into the target thread | one paste into the target pane, then one capture |
 | Landing evidence | the thread send's return, or the target session's `UserPromptSubmit` hook record | the target session's `UserPromptSubmit` hook record |
 | Hooks | `hooks/hooks.json`, trusted once in `/hooks` | `hooks/hooks.json`, run after workspace trust |
-| Worktrees for pods | `git worktree add`, branch created before results are imported | `git worktree add` or `claude --worktree <name>` |
+| Worktrees for pods | `git worktree add`, branch created before results are imported | the tmux helper's `launch` creates the checkout from the local HEAD, then starts `claude --worktree <name>` in it |
 | Extras | — | four slash commands, a status line |
 
 ## Working in this repository

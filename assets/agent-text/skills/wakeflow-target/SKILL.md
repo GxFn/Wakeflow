@@ -44,7 +44,9 @@ report, return the callback. You own no other step and no Controller authority.
 - Evidence you cite must already be a managed evidence record of this Demand,
   referenced by the locator and digest you were given. Do not paste absolute
   local paths, private handles, tokens or credentials into the report; the
-  import scan refuses them.
+  import scan refuses them. Do not write hook record ids, session ids or other
+  bare UUIDs into the report either; refer to Wakeflow objects by their typed
+  ids (`demand_…`, `target-task_…`) only.
 - If a host error cuts your turn, look before you act again: `wakeflow_status`
   for this Demand tells you whether your import already landed. Replaying the
   import with the same delivery identity and fence returns the existing

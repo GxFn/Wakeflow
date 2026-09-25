@@ -30,13 +30,29 @@ current. Read it back through a tool.
   reports `gitignore-git-repository` until it is).
 - **reconfigure** - a declared difference against an existing config. Layout
   identity is immutable: the program id and the ledger root cannot move, the
-  topology (repositories, surfaces, windows) is refused as a layout change,
-  and a change to the pod set is not a reconfigure. Those refusals are
-  structural, not advisory - route the user to the right operation instead of
-  retrying. What does change here: the display name, description and
-  language, and the host launch preferences under `hosts` - the model,
-  reasoning effort and permission mode by role, and the tmux container names -
-  which the next launch intents pick up without touching any window.
+  support surfaces cannot change, and a change to the pod set is not a
+  reconfigure. Those refusals are structural, not advisory - route the user to
+  the right operation instead of retrying. What does change here: the display
+  name, description and language, the host launch preferences under `hosts` -
+  the model, reasoning effort and permission mode by role, and the tmux
+  container names - which the next launch intents pick up without touching any
+  window, and one kind of layout change: adding a product repository. Send the
+  current config with the new repository entry and one new `product` window
+  for it in the primary pod appended, each with a fresh id (`repository_` or
+  `window_` followed by a new lowercase UUID v4). The repository's root must
+  already exist and be its own Git repository: a linked worktree of another
+  repository is refused as `reconfigure-repository-root-worktree`, and a path
+  that is, contains or sits inside an already configured repository (a
+  symlink alias included) as `reconfigure-repository-root-duplicate`; more
+  than one new window for it is refused as
+  `reconfigure-window-addition-unsupported`. The apply writes the config, the new
+  window's runtime projection and the managed blocks in one transaction; then
+  launch and register the new window as in step 1. Removing or changing an
+  existing repository or window is refused, and so is adding a repository
+  while a worktree pod is open, because that pod would lack it. That last
+  refusal is an `invalid-request` error with reason `desired-config`,
+  `details.configReason: topology` and a path into the pod's entry - tell the
+  user to close the pod first rather than rewriting the config.
 - **reconcile** - bring a workspace back to what its descriptor implies. On a
   healthy workspace this is a no-op that writes nothing, which makes it a safe
   thing to run when you are unsure. It repairs only what Wakeflow owns: a
@@ -46,9 +62,18 @@ current. Read it back through a tool.
   files, a missing or stale window runtime projection (recomputed from the
   config and the window's current binding), and a missing host runtime or
   maintenance protocol root, even when the whole `.wakeflow-local` directory
-  is gone. A hand-edited block, a foreign file sitting where a Wakeflow
-  directory belongs, or an unreadable projection is reported as a blocker and
-  never overwritten.
+  is gone. It also takes back private modes: when a directory or file under
+  `.wakeflow-local` or `.wakeflow-active` has only drifted wider than 0700 /
+  0600 in a safe way - for example after a `chmod -R go+rX` - the reconcile
+  preview's plan is a `WakeflowPrivateModeConvergencePlan` (counts and the
+  areas involved) instead of the usual steps. Apply it, then preview
+  reconcile again. A private node another user owns, that group or others
+  can write, or that is a symlink is reported as `private-mode-unsafe:<area>`
+  and never touched, and the other intents refuse with `private-mode-drift`
+  until reconcile has run. `wakeflow_verify` names the same areas in its
+  `local-layout` gate. A hand-edited block, a foreign file sitting where a
+  Wakeflow directory belongs, or an unreadable projection is reported as a
+  blocker and never overwritten.
 
 Procedure, every time:
 
@@ -88,7 +113,7 @@ Launching and registering:
 
 1. Take the launch intent from the maintenance or pod result: it names the
    role, the root and the launch parameters.
-2. Launch it by host means: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive, and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead.
+2. Launch it by host means: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive, and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook: pending` with a live pane means the record is late, so keep the printed observation and register or relocate with it once the record exists, and pass a longer `--wait` next time.
 3. Observe the handle the host reports for the window you just started.
 4. Call `wakeflow_register_window_binding` to register it. Registration
    requires a real `session-start` hook record for that session and that root.
@@ -108,7 +133,7 @@ Other actions on the same tool:
 - **relocate** keeps the binding and records the pane a resumed session now
   lives in: the same handle, new tmux coordinates, the same CAS on the binding.
   It is the record for a window whose pane died while its session should go
-  on - the host resumes the session (on Claude Code, pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive, and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. names the
+  on - the host resumes the session (on Claude Code, pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive, and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook: pending` with a live pane means the record is late, so keep the printed observation and register or relocate with it once the record exists, and pass a longer `--wait` next time. names the
   helper's `resume`), you relocate with the observation it prints, then mark.
   A held work claim does not block it: the same session keeps its work. Use
   replace only when the session itself is gone.
@@ -131,7 +156,7 @@ artifact than the one serving the status), and `wakeflow_verify` fails the
 `runtime-artifact` gate with `windows-stale:<n>`, or with `server-outdated`
 when the artifact changed under this very window's server.
 
-- For every other stale window: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive, and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. names the helper's
+- For every other stale window: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive, and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook: pending` with a live pane means the record is late, so keep the printed observation and register or relocate with it once the record exists, and pass a longer `--wait` next time. names the helper's
   `resume`, which keeps the session; then relocate and mark. A session that
   never held a conversation cannot be resumed (`resume-exited`): close it,
   launch, replace.
@@ -152,7 +177,7 @@ main checkout; every other pod works in a worktree.
 1. Preview to derive the plan; it writes nothing.
 2. Apply with exactly what preview returned. One config transaction registers
    the pod, its window set, and one worktree intent per repository.
-3. Create each worktree by host means: create the checkout yourself from the local HEAD at the path Claude Code uses, `<repository>/.claude/worktrees/<name>` on branch `worktree-<name>`, then start that window with `claude --worktree <name>`: it reuses an existing checkout of that name. Started without one, `claude --worktree` creates the checkout from the remote default branch when the repository has a remote, not from the local HEAD. If the repository does not ignore `.claude/worktrees/`, add that line to its `.git/info/exclude` so the main checkout's status stays clean. Then launch that
+3. Create each worktree by host means: the helper's `launch` prepares it when it starts the product window with `claude --worktree <name>` from a `local-head` worktree intent: it creates `<repository>/.claude/worktrees/<name>` from the repository's local HEAD on branch `worktree-<name>`, reuses the checkout only when this repository's worktree list has it, and adds `.claude/worktrees/` to the repository's `.git/info/exclude`; its result says `worktreePrepared: created` or `reused`. It refuses without writing when the placement is not the repository top level (`worktree-root-not-toplevel`), when `worktree-<name>` exists without its checkout (`worktree-branch-exists`: ask the user whether to delete or rename it) or when another directory holds the path (`worktree-path-occupied`). A launch that fails after the checkout was prepared still reports `worktreePrepared` and `worktreeBranch`, so tell the user that checkout was left behind. Do not start such a window with a bare `claude --worktree`: without an existing checkout Claude Code creates it from the remote default branch, not from the local HEAD. Then launch that
    pod's windows in their worktree roots and register each binding as in
    step 1. A product window in a pod is refused registration until its worktree
    is actually there and observed, and a checkout another live pod already
@@ -160,13 +185,21 @@ main checkout; every other pod works in a worktree.
    its Controller and Design windows, then every product window with its
    worktree observation, and only then its Test window - the Test window's
    launch intent lists the worktrees as attached directories, and that list is
-   read from the receipts the product registrations wrote.
+   read from the receipts the product registrations wrote. The product windows
+   need not start one by one: launch them all without waiting (`--wait 0` on
+   Claude Code), keep each printed observation, and register them once their
+   session-start records exist.
 4. If receipts and config disagree after an interruption, reconcile with
    recover before doing anything else.
 
 While a pod is open, its Controller claims its own requirement package from the
 shared board. One Demand per pod Controller still holds; a pod does not let one
 Controller run two Demands.
+
+Between archiving a pod's Demand and closing the pod, `wakeflow_status` keeps
+listing the branches that Demand's accepted results left unmerged, with
+`source: archived`, so the user can see what still waits for a merge or an
+abandon decision.
 
 `wakeflow_pod` close, after the user has merged or abandoned the branch:
 

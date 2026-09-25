@@ -55,10 +55,11 @@ The scan runs on every record and the outcomes are not symmetric:
   confirmation is a decision you are making on the user's behalf about what
   leaves their machine, so make it deliberately: look at what the preview
   listed, and confirm only the members you actually understand.
-- A bare UUID is a non-credential finding of the same kind: it can be confirmed,
-  but the cleaner path is not to write hook record ids, session ids or other
-  bare UUIDs into a file you intend to record. Typed ids such as `evidence_…`
-  or `target-delivery_…` are admitted; cite those instead.
+- A bare UUID is a non-credential finding of the same kind and can be
+  confirmed, but do not plan on it: never write hook record ids, session ids
+  or other bare UUIDs into a file you intend to record, and refer to Wakeflow
+  objects by their typed ids (`demand_…`, `target-task_…`, `evidence_…`) only -
+  the scan admits those and reports a bare one as `bare-uuid`.
 
 Never confirm a tree you have not looked at because the preview was long.
 

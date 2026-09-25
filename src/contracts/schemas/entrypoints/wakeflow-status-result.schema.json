@@ -195,7 +195,7 @@
       "description": "没有自带 status/issue 的域的观察状态：读不出时空列表不是“没有”，issue 说明是哪一步失败。",
       "type": "object",
       "additionalProperties": false,
-      "required": ["demands", "claims", "pods", "projection", "windowRuntime"],
+      "required": ["demands", "claims", "pods", "projection", "windowRuntime", "archives"],
       "properties": {
         "demands": {
           "$ref": "#/$defs/observedDomain"
@@ -211,6 +211,10 @@
         },
         "windowRuntime": {
           "$ref": "#/$defs/observedDomain"
+        },
+        "archives": {
+          "description": "仍在配置里的 worktree pod 的终态 Demand（完成归档的与取消撤回的，§13.130），只为 unmergedAccepted 读：没有 worktree pod 时什么都不读；看板读不出时 unavailable；有归档读不出时仍 observed，issue 报出条数。",
+          "$ref": "#/$defs/observedDomain"
         }
       }
     },
@@ -225,7 +229,8 @@
         "pods",
         "repositories",
         "worktrees",
-        "unmergedAccepted"
+        "unmergedAccepted",
+        "archives"
       ],
       "properties": {
         "demands": {
@@ -247,6 +252,10 @@
           "$ref": "#/$defs/count"
         },
         "unmergedAccepted": {
+          "$ref": "#/$defs/count"
+        },
+        "archives": {
+          "description": "终态 Demand 的候选按终态时间新的在前，超过归档清单上限（1024，primary pod 的归档也计入）或 worktree pod 评审快照上限（64）而没读的条数（§13.130）。",
           "$ref": "#/$defs/count"
         }
       }
@@ -392,7 +401,7 @@
       "description": "维护协议的状态（§13.129），与维护工具的预览同一份核心布局检查：idle 才没有事情要做；busy 是另一次维护正在进行；recovery-required 是一次被打断的 apply 留下了事务残留，要用 recover 收尾；conflict 是锁不安全；absent 与 bootstrap-prefix 是协议根尚未建好，由对账重建。非 idle 时 overall 记 maintenance；检查本身读不出即 unavailable，protocol 为 unknown。",
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "protocol"],
+      "required": ["status", "protocol", "residues", "residuesOmitted"],
       "properties": {
         "status": {
           "$ref": "#/$defs/domainStatus"
@@ -407,6 +416,41 @@
             "bootstrap-prefix",
             "unknown"
           ]
+        },
+        "residues": {
+          "description": "transactions 目录里的条目（§13.130），按名字排序，至多 64 条：kind 按命名约定分 intent、journal 与 unknown；recoverable 为 true 时可以用 operationId 调维护 recover（recover 仍会核对内容）；protocol 为 busy 时条目属于正在进行的维护，一律为 false；名字不合约定的条目 recover 找不到，只能由人查看后删除。名字只保留可打印字符。",
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "kind", "operationId", "recoverable"],
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/singleLineText"
+              },
+              "kind": {
+                "enum": ["intent", "journal", "unknown"]
+              },
+              "operationId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^maintenance_operation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                  }
+                ]
+              },
+              "recoverable": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "residuesOmitted": {
+          "$ref": "#/$defs/count"
         }
       }
     }
@@ -1032,7 +1076,8 @@
         "branch",
         "commit",
         "acceptedAt",
-        "repositoryObserved"
+        "repositoryObserved",
+        "source"
       ],
       "properties": {
         "demandId": {
@@ -1059,6 +1104,10 @@
         },
         "repositoryObserved": {
           "type": "boolean"
+        },
+        "source": {
+          "description": "active：来自活动 Demand；archived：来自仍在配置里的 worktree pod 的终态 Demand（完成归档或取消撤回，§13.130），分支在 pod 关闭记下处置之前一直列出，同一 Demand 又活动时只列 active 的一份；primary pod 的归档不列，只占归档清单的读取上限。",
+          "enum": ["active", "archived"]
         }
       }
     },

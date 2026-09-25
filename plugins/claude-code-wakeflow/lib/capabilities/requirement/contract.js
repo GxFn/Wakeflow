@@ -59,7 +59,7 @@ export const REQUIREMENT_PUBLICATION_TOOL_REGISTRATION = Object.freeze({
     shape: "effect",
     executor: "publishRequirement",
     title: "Publish Wakeflow Requirement Package",
-    description: "Publish one requirement package as the single handoff: preview reads requirement.md, landing.md, and text attachments from the Design surface, checks the required sections for the demand type, scans privacy, and returns the one-page summary the user confirms (confirmation point 1); apply writes the immutable ledger record and puts a pending or parked row on the board in one call; activate and withdraw move a package on the board with CAS. Wakeflow never creates a Demand here.",
+    description: "Publish one requirement package as the single handoff. publish: preview reads requirement.md, landing.md, and text attachments from the Design surface, checks the required sections for the demand type, scans privacy, and returns the one-page summary the user confirms (confirmation point 1); apply writes the immutable ledger record and puts a pending or parked row on the board in one call; recover re-derives the board row from that record by operationId (the requirementId). activate and withdraw move a package on the board with CAS. Wakeflow never creates a Demand here.",
     requestSchema: WAKEFLOW_REQUIREMENT_PUBLICATION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_REQUIREMENT_PUBLICATION_RESULT_SCHEMA,
     annotations: {

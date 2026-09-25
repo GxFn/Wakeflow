@@ -37,7 +37,7 @@ function resolvedAway(repository, branch, tip) {
  * 判定；分支已删除即不再列出。仓库未观察、或分支清单读不全时都无法核对，条目保留且
  * `repositoryObserved` 为 false——读不出引用绝不能让未合并的分支悄悄消失。
  */
-export function acceptedBranchFacts(demandId, snapshot, repositories) {
+export function acceptedBranchFacts(demandId, snapshot, repositories, source) {
     const facts = [];
     for (const target of snapshot.targets) {
         if (target.status !== "review-decided" || target.phase !== "accepted")
@@ -62,6 +62,7 @@ export function acceptedBranchFacts(demandId, snapshot, repositories) {
             acceptedAt: target.reviewDecision.decidedAt,
             // 核对过 = 分支清单读全了，并且在里面真的看见了这个分支尖端。
             repositoryObserved: repository !== undefined && repository.branchesComplete && tip !== undefined,
+            source,
         }));
     }
     return Object.freeze(facts);
@@ -83,12 +84,22 @@ function repositoryBranchTips(observation) {
     }
     return map;
 }
-/** 全部活动 Demand 的未合并已接受分支：status 的 `unmergedAccepted` 与投影的同名段都取这一份。 */
+/**
+ * 未合并的已接受分支：status 的 `unmergedAccepted` 与投影的同名段都取这一份。活动 Demand 之外，
+ * full 作用域还带仍在配置里的 worktree pod 的已归档 Demand（§13.130）；投影作用域的归档域是
+ * unavailable，所以投影只有活动的那部分。
+ */
 export function unmergedAcceptedFacts(observation) {
     const repositories = repositoryBranchTips(observation);
-    return Object.freeze((observation.demands.value ?? []).flatMap((demand) => demand.reviewSnapshot === null
+    const active = (observation.demands.value ?? []).flatMap((demand) => demand.reviewSnapshot === null
         ? []
-        : [...acceptedBranchFacts(demand.demandId, demand.reviewSnapshot, repositories)]));
+        : [...acceptedBranchFacts(demand.demandId, demand.reviewSnapshot, repositories, "active")]);
+    // 同一 Demand 既活动又有归档（续做后重开）时只取活动的一份；不依赖看板状态（gate-log §13.130）。
+    const activeIds = new Set((observation.demands.value ?? []).map((demand) => demand.demandId));
+    const archived = (observation.archives.value?.demands ?? []).flatMap((demand) => activeIds.has(demand.demandId)
+        ? []
+        : [...acceptedBranchFacts(demand.demandId, demand.reviewSnapshot, repositories, "archived")]);
+    return Object.freeze([...active, ...archived]);
 }
 function demandFacts(demand, podName) {
     if (demand.loaded === null || demand.route === null || demand.reviewSnapshot === null)
@@ -152,19 +163,23 @@ function projectionScopePods(observed) {
  */
 function projectionScopeOf(observation) {
     const pods = projectionScopePods(observation.pods);
-    if (observation.scope === "projection")
-        return Object.freeze({ ...observation, pods });
+    const notInScope = Object.freeze({
+        status: "unavailable",
+        issue: "scope:projection",
+        value: null,
+    });
+    // 归档域（§13.130）只属于 full 作用域：投影作用域的观察本来就不读它，这里也把它拿掉。
+    if (observation.scope === "projection") {
+        return Object.freeze({ ...observation, pods, archives: notInScope });
+    }
     return Object.freeze({
         ...observation,
         scope: "projection",
         bindings: Object.freeze([]),
         hooks: Object.freeze([]),
         assets: Object.freeze([]),
-        repositories: Object.freeze({
-            status: "unavailable",
-            issue: "scope:projection",
-            value: null,
-        }),
+        repositories: notInScope,
+        archives: notInScope,
         pods,
     });
 }

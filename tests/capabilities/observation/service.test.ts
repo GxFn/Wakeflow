@@ -17,7 +17,10 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 
-import { executeDemandCompletionRequest } from "../../../src/capabilities/demand/lifecycle.js";
+import {
+  executeDemandCancellationRequest,
+  executeDemandCompletionRequest,
+} from "../../../src/capabilities/demand/lifecycle.js";
 import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import {
@@ -31,13 +34,27 @@ import {
   executeTargetResultImportRequest,
 } from "../../../src/capabilities/result-review/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
+import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../../src/governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../../src/governance/delivery/delivery-rearm.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import {
+  buildActiveProjectionFacts,
+  unmergedAcceptedFacts,
+} from "../../../src/governance/observation/active-projection-facts.js";
+import {
+  ARCHIVED_DEMAND_SCAN_MAXIMUM,
+  observeArchivedDemands,
+} from "../../../src/governance/observation/archived-demand-observation.js";
 import { WAKEFLOW_OBSERVATION_POLICY } from "../../../src/governance/observation/observation-policy.js";
+import {
+  type ObservedDemand,
+  observeWorkspace,
+} from "../../../src/governance/observation/workspace-observation.js";
 import {
   TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
   TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
@@ -94,6 +111,7 @@ import {
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
+  PLANNING_POD_ID,
   PLANNING_REPOSITORY_ID,
   planFixtureTargetTask,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
@@ -703,10 +721,19 @@ test("归档 Demand：完成即归档后带 demandId 的 status 给归档回执�
   }
 });
 
-test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD 尖端才列出并带 acceptedAt；仓库未观察或引用读不出时保留且 repositoryObserved 为 false；正检出在该分支上时不判已合并（§13.94 D2）", {
-  timeout: 120_000,
-}, async () => {
-  // 投递夹具的任务包固定 leave-uncommitted，而带提交的报告要求 commit 期望：这里自行规划任务包。
+interface AcceptedCommittedResult {
+  readonly planning: Awaited<ReturnType<typeof createTargetTaskPlanningWorkspaceFixture>>;
+  readonly fixture: Readonly<DeliveryWorkspaceFixture>;
+  readonly root: string;
+  readonly product: string;
+  readonly reportedCommit: string;
+}
+
+/**
+ * 一个已接受、带分支与提交（`feature/result`）的实现结果。投递夹具的任务包固定
+ * leave-uncommitted，而带提交的报告要求 commit 期望：这里自行规划任务包。调用方负责清理 planning。
+ */
+async function acceptCommittedResult(): Promise<AcceptedCommittedResult> {
   const planning = await createTargetTaskPlanningWorkspaceFixture();
   try {
     const draft = planning.request.taskPackage;
@@ -781,7 +808,51 @@ test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD �
       { clock: () => REVIEW_DECIDED_AT, uuidFactory: () => REVIEW_DECISION_UUID },
     );
     equal(accepted.target.phase, "accepted");
+    return { planning, fixture, root, product, reportedCommit };
+  } catch (error: unknown) {
+    await cleanupTargetTaskPlanningWorkspaceFixture(planning);
+    throw error;
+  }
+}
 
+/**
+ * 把夹具 Demand 所在的 pod 改成活着的 worktree pod（§13.130）：原 pod 连同它的四个窗口改为
+ * worktree、改名 feature，另立一个带四个新窗口的 primary pod。只改配置文件，账本不动。
+ */
+function turnFixturePodIntoWorktree(root: string): void {
+  const file = path.join(root, "wakeflow.config.json");
+  const config = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+  const topology = config.topology as { windows: Record<string, unknown>[] };
+  const pods = config.pods as Record<string, unknown>[];
+  const feature = pods.find((pod) => pod.podId === PLANNING_POD_ID);
+  const product = topology.windows.find(
+    (window) => window.podId === PLANNING_POD_ID && window.role === "product",
+  );
+  if (feature === undefined || product === undefined) throw new Error("fixture pod is missing");
+  const repositoryId = (product.root as { repositoryId: string }).repositoryId;
+  Object.assign(feature, {
+    name: "feature",
+    placement: "worktree",
+    worktrees: [{ repositoryId, windowId: product.windowId, suggestedName: "wakeflow-feature" }],
+  });
+  const mainPodId = "pod_f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0";
+  const copies = topology.windows
+    .filter((window) => window.podId === PLANNING_POD_ID)
+    .map((window, index) => ({
+      ...window,
+      windowId: `window_e${index}e${index}e${index}e${index}-e${index}e${index}-4e${index}e-8e${index}e-e${index}e${index}e${index}e${index}e${index}e${index}`,
+      podId: mainPodId,
+    }));
+  topology.windows.push(...copies);
+  pods.unshift({ ...feature, podId: mainPodId, name: "main", placement: "primary", worktrees: [] });
+  writeFileSync(file, renderWakeflowConfig(parseWakeflowConfig(config)));
+}
+
+test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD 尖端才列出并带 acceptedAt；仓库未观察或引用读不出时保留且 repositoryObserved 为 false；正检出在该分支上时不判已合并（§13.94 D2）", {
+  timeout: 120_000,
+}, async () => {
+  const { planning, fixture, product, reportedCommit, root } = await acceptCommittedResult();
+  try {
     const expected = {
       demandId: fixture.demandId,
       targetTaskId: fixture.targetTaskId,
@@ -789,6 +860,7 @@ test("unmergedAccepted：已接受结果的分支仍在且尖端不等于 HEAD �
       branch: "feature/result",
       commit: reportedCommit,
       acceptedAt: REVIEW_DECIDED_AT,
+      source: "active",
     };
     const unobserved = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK);
     equal(unobserved.repositories[0]?.status, "unavailable");
@@ -1106,6 +1178,7 @@ test("仓库登记的 worktree 超过 wire 上限：截到 64 条并在 truncate
       repositories: 0,
       worktrees: 1,
       unmergedAccepted: 0,
+      archives: 0,
     });
   } finally {
     if (existed)
@@ -1328,7 +1401,12 @@ test("被打断的维护事务（旧实现 maintenance-gate，§13.129）：tran
     { root: healthy.root },
     CLOCK,
   );
-  deepEqual(plain(before.maintenance), { status: "observed", protocol: "idle" });
+  deepEqual(plain(before.maintenance), {
+    status: "observed",
+    protocol: "idle",
+    residues: [],
+    residuesOmitted: 0,
+  });
   const transactions = path.join(
     healthy.root,
     ...WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF.split("/"),
@@ -1346,7 +1424,20 @@ test("被打断的维护事务（旧实现 maintenance-gate，§13.129）：tran
       CLOCK,
     );
     equal(status.overall, "maintenance");
-    deepEqual(plain(status.maintenance), { status: "observed", protocol: "recovery-required" });
+    // 名字不合 `maintenance_operation_<uuid>` 约定：recover 找不到它，status 如实说（§13.130）。
+    deepEqual(plain(status.maintenance), {
+      status: "observed",
+      protocol: "recovery-required",
+      residues: [
+        {
+          name: "operation_00000000-0000-4000-8000-000000000000.intent.json",
+          kind: "unknown",
+          operationId: null,
+          recoverable: false,
+        },
+      ],
+      residuesOmitted: 0,
+    });
     equal(status.next.frontier, "workspace-maintenance");
     equal(status.nextActions[0]?.reason, "workspace-maintenance");
     const verify = await executeVerifyRequest(
@@ -1363,11 +1454,251 @@ test("被打断的维护事务（旧实现 maintenance-gate，§13.129）：tran
   }
   const after = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root: healthy.root }, CLOCK);
   equal(after.overall, before.overall);
-  deepEqual(plain(after.maintenance), { status: "observed", protocol: "idle" });
+  deepEqual(plain(after.maintenance), {
+    status: "observed",
+    protocol: "idle",
+    residues: [],
+    residuesOmitted: 0,
+  });
   const verified = await executeVerifyRequest(
     CODEX_OBSERVATION_FACADE,
     { root: healthy.root },
     CLOCK,
   );
   equal(verified.gates.find((entry) => entry.name === "local-layout")?.status, "pass");
+});
+
+test("unmergedAccepted 跨过归档（§13.130）：worktree pod 的已归档 Demand 的已接受分支以 source archived 列出且投影不含；primary pod 的归档不读；扫描有上限", {
+  timeout: 180_000,
+}, async () => {
+  const { planning, fixture, product, reportedCommit, root } = await acceptCommittedResult();
+  const ledgerPath = path.join(planning.fixtureRoot, "wakeflow-ledger");
+  try {
+    git(product, "init", "--quiet", "--initial-branch=main");
+    git(product, "commit", "--quiet", "--allow-empty", "-m", "c1");
+    git(product, "checkout", "--quiet", "-b", "feature/result");
+    git(product, "commit", "--quiet", "--allow-empty", "-m", "c2");
+    git(product, "checkout", "--quiet", "main");
+
+    const preview = await executeDemandCompletionRequest({
+      root,
+      mode: "preview",
+      demandId: fixture.demandId,
+    });
+    if (preview.kind !== "WakeflowDemandCompletionPreview" || preview.planDigest === null) {
+      throw new Error(`Expected a ready completion plan: ${JSON.stringify(preview).slice(0, 600)}`);
+    }
+    await executeDemandCompletionRequest({
+      root,
+      mode: "apply",
+      demandId: fixture.demandId,
+      planDigest: preview.planDigest,
+    });
+
+    // 这个 Demand 在 primary pod：归档后它的已接受分支不再列出，归档域读得出且什么都没读。
+    const status = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK);
+    deepEqual(status.demands, []);
+    deepEqual(status.unmergedAccepted, []);
+    deepEqual(plain(status.domains.archives), { status: "observed", issue: null });
+    equal(status.truncated.archives, 0);
+
+    // 归档读取端到端：把它所在的 pod 当成活着的 worktree pod，真实的归档清单与 payload 读得出评审快照。
+    const ledgerRoot = await RootedDirectory.open(ledgerPath);
+    const workspaceRoot = await RootedDirectory.open(root);
+    try {
+      const candidate = { demandId: fixture.demandId, archivedAt: "2026-09-25T00:00:00.000Z" };
+      const archived = await observeArchivedDemands(
+        ledgerRoot,
+        [candidate],
+        new Set([PLANNING_POD_ID]),
+        undefined,
+      );
+      deepEqual([archived.scanned, archived.skipped, archived.unreadable], [1, 0, 0]);
+      deepEqual(
+        archived.demands.map((demand) => [demand.demandId, demand.podId]),
+        [[fixture.demandId, PLANNING_POD_ID]],
+      );
+      // 没有活着的 worktree pod：一个归档都不读。
+      deepEqual(
+        { ...(await observeArchivedDemands(ledgerRoot, [candidate], new Set(), undefined)) },
+        { demands: [], scanned: 0, skipped: 0, unreadable: 0 },
+      );
+
+      // 合并：带着这份归档域的 full 观察把分支以 source archived 列出；投影事实不含它。
+      const snapshot = await readWakeflowConfigAuthoritySnapshot(workspaceRoot);
+      const observation = await observeWorkspace(workspaceRoot, snapshot, ledgerRoot, {
+        hosts: CODEX_OBSERVATION_FACADE.hosts,
+        currentHostId: CODEX_OBSERVATION_FACADE.hostId,
+        scope: "full",
+      });
+      const withArchive = Object.freeze({
+        ...observation,
+        archives: Object.freeze({ status: "observed" as const, issue: null, value: archived }),
+      });
+      deepEqual(
+        unmergedAcceptedFacts(withArchive).map((fact) => ({ ...fact })),
+        [
+          {
+            demandId: fixture.demandId,
+            targetTaskId: fixture.targetTaskId,
+            repositoryId: PLANNING_REPOSITORY_ID,
+            branch: "feature/result",
+            commit: reportedCommit,
+            acceptedAt: REVIEW_DECIDED_AT,
+            repositoryObserved: true,
+            source: "archived",
+          },
+        ],
+      );
+      deepEqual(buildActiveProjectionFacts(withArchive).unmergedAccepted, []);
+      // 同一 Demand 又是活动的（续做后重开）：归档那一份不再列出，不看看板状态（§13.130）。
+      const reopened = Object.freeze({
+        ...withArchive,
+        demands: Object.freeze({
+          status: "observed" as const,
+          issue: null,
+          value: Object.freeze([
+            { demandId: fixture.demandId, reviewSnapshot: null } as unknown as ObservedDemand,
+          ]),
+        }),
+      });
+      deepEqual(unmergedAcceptedFacts(reopened), []);
+
+      // 分支合并掉（当前分支尖端等于它的尖端）之后，归档里的这一条也不再列出。
+      git(product, "merge", "--quiet", "--ff-only", "feature/result");
+      const merged = await observeWorkspace(workspaceRoot, snapshot, ledgerRoot, {
+        hosts: CODEX_OBSERVATION_FACADE.hosts,
+        currentHostId: CODEX_OBSERVATION_FACADE.hostId,
+        scope: "full",
+      });
+      deepEqual(
+        unmergedAcceptedFacts(
+          Object.freeze({
+            ...merged,
+            archives: Object.freeze({ status: "observed" as const, issue: null, value: archived }),
+          }),
+        ),
+        [],
+      );
+
+      // 扫描上限（§13.130）：候选按终态时间新到旧；清单上限截掉较旧的候选并计入 skipped，
+      // 找不到归档的候选不算读不出。
+      const newer = [1, 2].map((index) => ({
+        demandId: `demand_${String(index).padStart(8, "0")}-0000-4000-8000-000000000000`,
+        archivedAt: `2026-09-2${5 + index}T00:00:00.000Z`,
+      }));
+      const worktreeIds = new Set([PLANNING_POD_ID]);
+      const capped = await observeArchivedDemands(
+        ledgerRoot,
+        [candidate, ...newer],
+        worktreeIds,
+        undefined,
+        { manifests: 2, snapshots: ARCHIVED_DEMAND_SCAN_MAXIMUM },
+      );
+      deepEqual(
+        [capped.scanned, capped.skipped, capped.unreadable, capped.demands.length],
+        [0, 1, 0, 0],
+      );
+      const reached = await observeArchivedDemands(
+        ledgerRoot,
+        [...newer, candidate],
+        worktreeIds,
+        undefined,
+        { manifests: 3, snapshots: ARCHIVED_DEMAND_SCAN_MAXIMUM },
+      );
+      deepEqual(
+        reached.demands.map((demand) => demand.demandId),
+        [fixture.demandId],
+      );
+      // 快照上限只数 worktree pod 的归档：别的 pod 的归档（这里当作 primary）不占预算。
+      const noBudget = { manifests: 3, snapshots: 0 };
+      const overSnapshots = await observeArchivedDemands(
+        ledgerRoot,
+        [candidate],
+        worktreeIds,
+        undefined,
+        noBudget,
+      );
+      deepEqual([overSnapshots.scanned, overSnapshots.skipped], [0, 1]);
+      const otherPod = await observeArchivedDemands(
+        ledgerRoot,
+        [candidate],
+        new Set(["pod_f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0"]),
+        undefined,
+        noBudget,
+      );
+      deepEqual([otherPod.scanned, otherPod.skipped, otherPod.demands.length], [0, 0, 0]);
+    } finally {
+      await workspaceRoot.close();
+      await ledgerRoot.close();
+    }
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(planning);
+  }
+});
+
+test("unmergedAccepted 跨过取消（§13.130）：worktree pod 的 Demand 接受分支后取消，status 以 source archived 列出；归档 payload 坏了只计数", {
+  timeout: 180_000,
+}, async () => {
+  const { planning, fixture, product, reportedCommit, root } = await acceptCommittedResult();
+  try {
+    git(product, "init", "--quiet", "--initial-branch=main");
+    git(product, "commit", "--quiet", "--allow-empty", "-m", "c1");
+    git(product, "checkout", "--quiet", "-b", "feature/result");
+    git(product, "commit", "--quiet", "--allow-empty", "-m", "c2");
+    git(product, "checkout", "--quiet", "main");
+    const request = { root, demandId: fixture.demandId, reason: "No longer wanted." };
+    const preview = await executeDemandCancellationRequest({ ...request, mode: "preview" });
+    if (preview.kind !== "WakeflowDemandCancellationPreview" || preview.planDigest === null) {
+      throw new Error(
+        `Expected a ready cancellation plan: ${JSON.stringify(preview).slice(0, 600)}`,
+      );
+    }
+    await executeDemandCancellationRequest({
+      ...request,
+      mode: "apply",
+      planDigest: preview.planDigest,
+    });
+    turnFixturePodIntoWorktree(root);
+
+    // 端到端：配置里有活着的 worktree pod，取消归档的 Demand 的已接受分支经 schema 准入列出。
+    const status = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK);
+    deepEqual(status.demands, []);
+    deepEqual(plain(status.unmergedAccepted), [
+      {
+        demandId: fixture.demandId,
+        targetTaskId: fixture.targetTaskId,
+        repositoryId: PLANNING_REPOSITORY_ID,
+        branch: "feature/result",
+        commit: reportedCommit,
+        acceptedAt: REVIEW_DECIDED_AT,
+        repositoryObserved: true,
+        source: "archived",
+      },
+    ]);
+    deepEqual(plain(status.domains.archives), { status: "observed", issue: null });
+    equal(status.truncated.archives, 0);
+
+    // 归档 payload 坏了：status 照常返回，这一条不列出，归档域给出读不出的计数。
+    const archives = path.join(
+      planning.fixtureRoot,
+      "wakeflow-ledger",
+      "archives",
+      fixture.demandId,
+    );
+    for (const file of readdirSync(archives, { recursive: true, encoding: "utf8" })) {
+      const full = path.join(archives, file);
+      if (file.includes("payload") && file.endsWith(".json") && lstatSync(full).isFile()) {
+        writeFileSync(full, "{");
+      }
+    }
+    const corrupt = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK);
+    deepEqual(corrupt.unmergedAccepted, []);
+    deepEqual(plain(corrupt.domains.archives), {
+      status: "observed",
+      issue: "archives:unreadable-1",
+    });
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(planning);
+  }
 });

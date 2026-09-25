@@ -48,6 +48,14 @@ import {
 } from "../../workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import type { WakeflowMaintenancePublicHostFacade } from "../../workspace/maintenance/wakeflow-maintenance-public-host-facade.js";
 import {
+  convergeWakeflowPrivateModes,
+  inspectWakeflowPrivateModes,
+  wakeflowPrivateModeAreas,
+  WakeflowPrivateModeCensusError,
+  type WakeflowPrivateModeCensus,
+  type WakeflowPrivateModeConvergenceReceipt,
+} from "../../workspace/maintenance/wakeflow-private-mode-census.js";
+import {
   parseWakeflowStaticMaterializationPreviewRequest,
   WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationAction,
@@ -100,14 +108,48 @@ interface SliceContext {
   readonly profiles: Readonly<AdmittedHostProfiles>;
 }
 
-interface SlicePlan {
+interface MaterializationPlan {
+  readonly kind: "materialization";
   readonly executionPlan: Readonly<WakeflowMaintenanceExecutionPlan>;
   readonly executionRequest: WakeflowStaticMaterializationPreviewRequest;
   readonly compilation: Readonly<WakeflowFreshConfigCompilation> | null;
   readonly launchIntentSet: Readonly<WakeflowWindowLaunchIntentSet> | null;
 }
 
-type SliceOutcome = Readonly<WakeflowMaintenanceExecutionTransactionReceipt>;
+/**
+ * 私有模式收敛计划（gate-log §13.124 D8，§13.130）：reconcile 在私有树只有安全漂移时先收回
+ * 0700 / 0600，不进维护事务——它只收窄当前用户自己节点的权限，逐节点 CAS，可幂等重跑。
+ */
+interface PrivateModeConvergencePlan {
+  readonly kind: "private-mode-convergence";
+  readonly census: Readonly<WakeflowPrivateModeCensus>;
+  readonly view: Readonly<{
+    readonly kind: "WakeflowPrivateModeConvergencePlan";
+    readonly schemaVersion: 1;
+    readonly driftedDirectories: number;
+    readonly driftedFiles: number;
+    readonly areas: readonly string[];
+  }>;
+}
+
+type SlicePlan = Readonly<MaterializationPlan> | Readonly<PrivateModeConvergencePlan>;
+
+interface PrivateModeConvergenceOutcome {
+  readonly status: "completed";
+  readonly operationId: null;
+  readonly planDigest: Sha256Digest;
+  readonly stepReceipts: readonly [
+    Readonly<
+      {
+        readonly kind: "WakeflowPrivateModeConvergenceReceipt";
+      } & WakeflowPrivateModeConvergenceReceipt
+    >,
+  ];
+}
+
+type SliceOutcome =
+  | Readonly<WakeflowMaintenanceExecutionTransactionReceipt>
+  | Readonly<PrivateModeConvergenceOutcome>;
 
 /** 公共 Maintenance 请求由 wire Schema 解析；失败以 `invalid-request` 报出。 */
 function parseWakeflowMaintenancePublicRequest(value: unknown): WakeflowMaintenancePublicRequest {
@@ -190,9 +232,17 @@ function desiredConfigFor(input: Extract<SliceInput, { readonly kind: "effect" }
       });
     }
     if (error instanceof WakeflowConfigError) {
-      fail("invalid-request", "desired-config", "$request.request.desiredConfig", {
-        cause: error,
-      });
+      // 配置文法的拒绝点名到条目（§13.130 审查 D9-2）：路径指到 desiredConfig 里的那一处，
+      // details.configReason 是文法原因（topology、reference……），原因码保持 desired-config。
+      const detailed = `$request.request.desiredConfig${error.path.startsWith("$/") ? error.path.slice(1) : ""}`;
+      fail(
+        "invalid-request",
+        "desired-config",
+        detailed.length <= 256 && /^\$[A-Za-z0-9_.[\]$/-]*$/u.test(detailed)
+          ? detailed
+          : "$request.request.desiredConfig",
+        { cause: error, details: { configReason: error.reason } },
+      );
     }
     throw error;
   }
@@ -315,6 +365,90 @@ function deriveArtifactOverlapBlockers(
   return Object.freeze(blockers);
 }
 
+function blockedPlan(blockers: readonly string[]): Readonly<PublicationTransactionPlan<SlicePlan>> {
+  return Object.freeze({
+    status: "blocked",
+    blockers: Object.freeze(blockers),
+    plan: null,
+    digest: null,
+  });
+}
+
+function mapCensusError(error: unknown): never {
+  if (error instanceof WakeflowPrivateModeCensusError) {
+    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    if (error.reason === "input")
+      fail("unexpected", "private-mode-census", "$request.root", { cause: error });
+    fail("io-failure", "private-mode-convergence", "$request.root", { cause: error });
+  }
+  throw error;
+}
+
+/**
+ * 私有树的模式普查先于布局预览（§13.124 D8，§13.130）：只有安全漂移时，reconcile 的计划就是收敛
+ * 本身，摘要是普查摘要；其余意图以 `private-mode-drift` 阻塞（先 reconcile）。unsafe 节点一律
+ * 阻塞并按区域报出，只报告、从不修。普查读不出不遮蔽预览，由布局检查照常报告。
+ */
+async function privateModePlan(
+  context: SliceContext,
+  action: WakeflowStaticMaterializationAction,
+): Promise<Readonly<PublicationTransactionPlan<SlicePlan>> | null> {
+  let census: Readonly<WakeflowPrivateModeCensus>;
+  try {
+    census = await inspectWakeflowPrivateModes(context.root);
+  } catch (error: unknown) {
+    mapCensusError(error);
+  }
+  if (census.status === "current" || census.status === "unavailable") return null;
+  if (census.status === "unsafe") {
+    return blockedPlan(
+      wakeflowPrivateModeAreas(census.unsafe).map((area) =>
+        `private-mode-unsafe:${area}`.slice(0, 128),
+      ),
+    );
+  }
+  if (action !== "reconcile") return blockedPlan(["private-mode-drift"]);
+  const directories = census.drifted.filter((entry) => entry.node.kind === "directory").length;
+  const view = Object.freeze({
+    kind: "WakeflowPrivateModeConvergencePlan" as const,
+    schemaVersion: 1 as const,
+    driftedDirectories: directories,
+    driftedFiles: census.drifted.length - directories,
+    areas: wakeflowPrivateModeAreas(census.drifted.map((entry) => entry.resourcePath)),
+  });
+  return Object.freeze({
+    status: "ready",
+    blockers: Object.freeze([]),
+    plan: Object.freeze({ kind: "private-mode-convergence" as const, census, view }),
+    digest: census.censusDigest,
+  });
+}
+
+async function convergePrivateModes(
+  context: SliceContext,
+  plan: Readonly<PrivateModeConvergencePlan>,
+): Promise<SliceOutcome> {
+  let receipt: Readonly<WakeflowPrivateModeConvergenceReceipt>;
+  try {
+    receipt = await convergeWakeflowPrivateModes(context.root, plan.census);
+  } catch (error: unknown) {
+    mapCensusError(error);
+  }
+  return Object.freeze({
+    status: "completed",
+    operationId: null,
+    planDigest: plan.census.censusDigest,
+    stepReceipts: Object.freeze([
+      Object.freeze({
+        kind: "WakeflowPrivateModeConvergenceReceipt" as const,
+        converged: receipt.converged,
+        current: receipt.current,
+        changed: receipt.changed,
+      }),
+    ] as const),
+  });
+}
+
 async function planMaintenance(
   context: SliceContext,
   input: SliceInput,
@@ -328,9 +462,9 @@ async function planMaintenance(
     desiredConfig,
     context.facade.artifactRoot,
   );
-  if (overlap.length > 0) {
-    return Object.freeze({ status: "blocked", blockers: overlap, plan: null, digest: null });
-  }
+  if (overlap.length > 0) return blockedPlan(overlap);
+  const privateModes = await privateModePlan(context, input.action);
+  if (privateModes !== null) return privateModes;
   const executionRequest: WakeflowStaticMaterializationPreviewRequest = Object.freeze({
     action: input.action,
     desiredConfig,
@@ -350,7 +484,13 @@ async function planMaintenance(
     status: executionPlan.status,
     blockers: executionPlan.blockerCodes,
     plan: ready
-      ? Object.freeze({ executionPlan, executionRequest, compilation, launchIntentSet })
+      ? Object.freeze({
+          kind: "materialization" as const,
+          executionPlan,
+          executionRequest,
+          compilation,
+          launchIntentSet,
+        })
       : null,
     digest: ready ? executionPlan.planDigest : null,
   });
@@ -395,7 +535,18 @@ function deriveNext(
       blockers: Object.freeze([...phase.planned.blockers].slice(0, 32)),
     });
   }
-  if (phase.mode === "apply") return nextAfterLaunchIntents(phase.plan.launchIntentSet);
+  if (phase.mode === "apply") {
+    if (phase.plan.kind === "private-mode-convergence") {
+      // 模式收回之后布局检查才看得见其余问题：再预览一次 reconcile。
+      return Object.freeze({
+        frontier: "workspace-maintenance",
+        owner: "controller",
+        suggestedTool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+        blockers: Object.freeze([]),
+      });
+    }
+    return nextAfterLaunchIntents(phase.plan.launchIntentSet);
+  }
   return nextAfterLaunchIntents(null);
 }
 
@@ -417,6 +568,35 @@ function publicResult(value: unknown): WakeflowMaintenancePublicResult {
   return result.value;
 }
 
+function materializationOf(plan: SlicePlan | null): Readonly<MaterializationPlan> | null {
+  return plan?.kind === "materialization" ? plan : null;
+}
+
+/** preview 的 `plan`：物化计划公开执行计划，私有模式收敛公开它的视图（§13.130 D8）。 */
+function previewResultOf(
+  base: Readonly<Record<string, unknown>>,
+  action: WakeflowStaticMaterializationAction,
+  planned: Readonly<PublicationTransactionPlan<SlicePlan>>,
+): WakeflowMaintenancePublicResult {
+  const materialization = materializationOf(planned.plan);
+  const launchIntentSet = materialization?.launchIntentSet ?? null;
+  return publicResult({
+    kind: "WakeflowMaintenancePublicPreviewResult",
+    ...base,
+    mode: "preview",
+    action,
+    status: planned.status,
+    blockerCodes: planned.blockers,
+    planDigest: planned.digest,
+    plan:
+      materialization?.executionPlan ??
+      (planned.plan?.kind === "private-mode-convergence" ? planned.plan.view : null),
+    freshConfigCompilation: freshCompilationView(materialization?.compilation ?? null),
+    launchIntents: launchIntentSet?.intents ?? [],
+    launchSetDigest: launchIntentSet?.launchSetDigest ?? null,
+  });
+}
+
 function assembleResult(
   facade: Readonly<WakeflowMaintenancePublicHostFacade>,
   input: SliceInput,
@@ -431,25 +611,11 @@ function assembleResult(
   };
   if (phase.mode === "preview") {
     if (input.kind !== "effect") fail("unexpected", "phase-input", "$request");
-    const planned = phase.planned;
-    const launchIntentSet = planned.plan?.launchIntentSet ?? null;
-    return publicResult({
-      kind: "WakeflowMaintenancePublicPreviewResult",
-      ...base,
-      mode: "preview",
-      action: input.action,
-      status: planned.status,
-      blockerCodes: planned.blockers,
-      planDigest: planned.digest,
-      plan: planned.plan?.executionPlan ?? null,
-      freshConfigCompilation: freshCompilationView(planned.plan?.compilation ?? null),
-      launchIntents: launchIntentSet?.intents ?? [],
-      launchSetDigest: launchIntentSet?.launchSetDigest ?? null,
-    });
+    return previewResultOf(base, input.action, phase.planned);
   }
   if (phase.mode === "apply") {
     if (input.kind !== "effect") fail("unexpected", "phase-input", "$request");
-    const launchIntentSet = phase.plan.launchIntentSet;
+    const launchIntentSet = materializationOf(phase.plan)?.launchIntentSet ?? null;
     return publicResult({
       kind: "WakeflowMaintenancePublicMutationResult",
       ...base,
@@ -538,6 +704,7 @@ export async function executeWakeflowMaintenancePublicRequest(
       close: async () => {},
       plan: planMaintenance,
       apply: async (context, _input, plan) => {
+        if (plan.kind === "private-mode-convergence") return convergePrivateModes(context, plan);
         try {
           // 维护 apply 之后刷新一次活动投影：reconfigure 换语言或配置摘要、reconcile 重建派生文件（§13.94 D5）。
           return await afterMutationRefresh(context.root, undefined, () =>

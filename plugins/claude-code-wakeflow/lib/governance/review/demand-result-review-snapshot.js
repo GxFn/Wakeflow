@@ -3,6 +3,8 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../demand/event-sourcing/demand-event-sourcing-repository.js";
+import { DemandFileEventStoreError } from "../demand/event-sourcing/demand-file-event-store-contract.js";
+import { readAllDemandFileEventCommits } from "../demand/event-sourcing/demand-file-event-store-reader.js";
 /**
  * Wakeflow Governance / Review：从Demand Event Stream即时重建的结果审查读模型。
  *
@@ -229,6 +231,36 @@ export async function readDemandResultReviewSnapshot(rootValue, options) {
             if (error.reason === "stream" || error.reason === "not-found") {
                 fail("stream");
             }
+            fail("operation-failure");
+        }
+        throw error;
+    }
+    return buildDemandResultReviewSnapshotFromHistory(sources);
+}
+/**
+ * 从 ledger 归档包的 `payload/`（Demand 根的可移植副本）读评审快照（§13.130）：提交按归档节点政策
+ * 读出（不要求私有模式），摘要链与审计规则与活动根完全相同；失败码与 `readDemandResultReviewSnapshot`
+ * 同形。只读。
+ */
+export async function readArchivedDemandResultReviewSnapshot(payloadRootValue, options) {
+    assertRoot(payloadRootValue);
+    const signal = parseSignal(options);
+    let sources;
+    try {
+        const read = await readAllDemandFileEventCommits(payloadRootValue, signal, "archived");
+        sources = DemandEventSourcingRepository.auditTargetResultHistoryOfCommits(read.commits);
+    }
+    catch (error) {
+        if (error instanceof DemandFileEventStoreError) {
+            if (error.reason === "aborted")
+                fail("aborted");
+            if (error.reason === "input")
+                fail("input");
+            fail("stream");
+        }
+        if (error instanceof DemandEventSourcingRepositoryError) {
+            if (error.reason === "stream" || error.reason === "not-found")
+                fail("stream");
             fail("operation-failure");
         }
         throw error;

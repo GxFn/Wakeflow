@@ -25,6 +25,10 @@ import {
 import { inspectActiveLayout } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
 import {
+  parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
+} from "./wakeflow-maintenance-operation-id.js";
+import {
   WAKEFLOW_LOCAL_ROOT_REF,
   WAKEFLOW_MAINTENANCE_GATE_REF,
   WAKEFLOW_MAINTENANCE_ROOT_REF,
@@ -54,6 +58,18 @@ type WakeflowLocalProtocolStatus =
   | "recovery-required"
   | "conflict";
 
+/**
+ * `transactions` 目录里的一个条目（§13.130）：按 intent / journal 的命名约定
+ * （`<operationId>.intent.json`、`<operationId>.journal.json`）分类；名字不合约定、或
+ * operation ID 不是 `maintenance_operation_<uuid>` 的都是 `unknown`，维护 recover 按
+ * operation ID 找不到它们。本检查不读条目内容。
+ */
+export interface WakeflowMaintenanceResidue {
+  readonly name: string;
+  readonly kind: "intent" | "journal" | "unknown";
+  readonly operationId: string | null;
+}
+
 export interface WakeflowWorkspaceCoreLayoutInspection {
   readonly active: Readonly<{
     readonly status: WakeflowActiveRootStatus;
@@ -63,6 +79,8 @@ export interface WakeflowWorkspaceCoreLayoutInspection {
     readonly status: WakeflowLocalProtocolStatus;
     readonly freshCompatible: boolean;
     readonly protocolComplete: boolean;
+    /** `transactions` 目录里的条目，按名字排序；目录不在或没读到那一层时为空。 */
+    readonly residues: readonly Readonly<WakeflowMaintenanceResidue>[];
     readonly nodeDigest: Sha256Digest | null;
     readonly protocolDigest: Sha256Digest | null;
   }>;
@@ -278,6 +296,34 @@ function entryNamed(
   return read.entries.find((entry) => entry.name === name) ?? null;
 }
 
+const NO_MAINTENANCE_RESIDUES: readonly Readonly<WakeflowMaintenanceResidue>[] = Object.freeze([]);
+const RESIDUE_NAME_PATTERN = /^(.+)\.(intent|journal)\.json$/u;
+
+function maintenanceResidue(name: string): Readonly<WakeflowMaintenanceResidue> {
+  const match = RESIDUE_NAME_PATTERN.exec(name);
+  const candidate = match?.[1];
+  const kind = match?.[2];
+  if (candidate !== undefined && (kind === "intent" || kind === "journal")) {
+    try {
+      return Object.freeze({
+        name,
+        kind,
+        operationId: parseWakeflowMaintenanceOperationId(candidate),
+      });
+    } catch (error: unknown) {
+      if (!(error instanceof WakeflowMaintenanceOperationIdError)) throw error;
+    }
+  }
+  return Object.freeze({ name, kind: "unknown" as const, operationId: null });
+}
+
+/** 残留条目按名字排序分类；只看名字，不读内容。 */
+function maintenanceResidues(
+  names: readonly string[],
+): readonly Readonly<WakeflowMaintenanceResidue>[] {
+  return Object.freeze([...names].sort().map(maintenanceResidue));
+}
+
 async function inspectLocal(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
@@ -289,6 +335,7 @@ async function inspectLocal(
       status: "absent",
       freshCompatible: true,
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: null,
       protocolDigest: null,
     });
@@ -300,6 +347,7 @@ async function inspectLocal(
       status: "conflict",
       freshCompatible: false,
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: localNodeDigest,
       protocolDigest: null,
     });
@@ -312,6 +360,7 @@ async function inspectLocal(
       status: local.entries.length === 0 ? "bootstrap-prefix" : "conflict",
       freshCompatible: local.entries.length === 0,
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: localNodeDigest,
       protocolDigest: directoryDigest(local),
     });
@@ -322,6 +371,7 @@ async function inspectLocal(
       status: "conflict",
       freshCompatible: false,
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: localNodeDigest,
       protocolDigest: directoryDigest(local),
     });
@@ -373,6 +423,7 @@ async function inspectLocal(
       status,
       freshCompatible: freshCompatible && status === "bootstrap-prefix",
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: localNodeDigest,
       protocolDigest: computeCanonicalJsonSha256Digest({
         local: directoryDigest(local),
@@ -387,6 +438,7 @@ async function inspectLocal(
       status: "conflict",
       freshCompatible: false,
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: localNodeDigest,
       protocolDigest: directoryDigest(runtime),
     });
@@ -402,6 +454,7 @@ async function inspectLocal(
       status: "conflict",
       freshCompatible: false,
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: localNodeDigest,
       protocolDigest: directoryDigest(maintenance),
     });
@@ -417,6 +470,7 @@ async function inspectLocal(
       status,
       freshCompatible: freshCompatible && status === "bootstrap-prefix",
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: localNodeDigest,
       protocolDigest: computeCanonicalJsonSha256Digest({
         local: directoryDigest(local),
@@ -432,6 +486,7 @@ async function inspectLocal(
       status: "conflict",
       freshCompatible: false,
       protocolComplete: false,
+      residues: NO_MAINTENANCE_RESIDUES,
       nodeDigest: localNodeDigest,
       protocolDigest: directoryDigest(maintenance),
     });
@@ -457,6 +512,7 @@ async function inspectLocal(
     status,
     freshCompatible: freshCompatible && status === "idle",
     protocolComplete: true,
+    residues: maintenanceResidues(transactions.entries.map((entry) => entry.name)),
     nodeDigest: localNodeDigest,
     protocolDigest: computeCanonicalJsonSha256Digest({
       local: directoryDigest(local),

@@ -167,3 +167,37 @@ test("core layout distinguishes busy, recovery residue and conflicts", async (t)
   equal(conflicting.local.status, "conflict");
   equal(conflicting.issueCodes.includes("maintenance-root-unknown-entry"), true);
 });
+
+test("transactions 里的残留按名字分类（§13.130）：合法的 intent / journal 带 operationId，其余是 unknown；idle 时为空", async (t) => {
+  const idle = await fixture(t);
+  materializeProtocol(idle.absolutePath, 4);
+  deepEqual((await inspectWakeflowWorkspaceCoreLayout(idle.root)).local.residues, []);
+
+  const current = await fixture(t);
+  materializeProtocol(current.absolutePath, 4);
+  const { transactions } = protocolPaths(current.absolutePath);
+  const operationId = "maintenance_operation_22222222-2222-4222-8222-222222222222";
+  for (const name of [
+    `${operationId}.journal.json`,
+    `${operationId}.intent.json`,
+    "operation_00000000-0000-4000-8000-000000000000.intent.json",
+    "notes.txt",
+  ]) {
+    writeFileSync(path.join(transactions, name), "{}\n", { mode: 0o600 });
+  }
+  const inspected = await inspectWakeflowWorkspaceCoreLayout(current.root);
+  equal(inspected.local.status, "recovery-required");
+  deepEqual(
+    inspected.local.residues.map((residue) => ({ ...residue })),
+    [
+      { name: `${operationId}.intent.json`, kind: "intent", operationId },
+      { name: `${operationId}.journal.json`, kind: "journal", operationId },
+      { name: "notes.txt", kind: "unknown", operationId: null },
+      {
+        name: "operation_00000000-0000-4000-8000-000000000000.intent.json",
+        kind: "unknown",
+        operationId: null,
+      },
+    ],
+  );
+});

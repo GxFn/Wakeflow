@@ -110,6 +110,19 @@ landing - the case after a turn was cut between the send and recording its
 outcome. Record the outcome with that landing; `--force` is for a prompt you
 have established never reached the window.
 
+A delivered window's turn can also be cut by the host itself - on Claude Code
+an `API Error` line such as "Connection lost mid-response" in the pane - and a
+cut turn does not resume on its own. On Claude Code, when the landing was
+observed, no callback came and the window looks stopped, run the helper's
+`nudge --window <windowId>` once (add `--text <phrase>` to use the workspace
+language). It pastes one short continue phrase only when that error line is
+the last transcript line above the input box (no later reply, rendered user
+message such as an earlier "Continue.", or other output), the pane is idle and
+the input box is empty; otherwise it reports `not-needed` or `busy` and sends
+nothing. A nudge is not a second delivery - the task
+package is already in that session. If the window stays silent after it,
+follow the next action `wakeflow_status` names.
+
 ## Step 10 - Inspecting the review unit
 
 `wakeflow_inspect_target_result_review` is read-only and runs no checks. It

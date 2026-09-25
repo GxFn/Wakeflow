@@ -102,6 +102,7 @@ if [ -f "$WAKEFLOW_STUB_STATE/ps.txt" ]; then cat "$WAKEFLOW_STUB_STATE/ps.txt";
 `;
 
 const GIT_STUB = `#!/bin/bash
+if [ -n "\${WAKEFLOW_REAL_GIT:-}" ]; then exec "$WAKEFLOW_REAL_GIT" "$@"; fi
 case "$1 $2" in
   "worktree list") printf 'worktree %s\\nHEAD 0123456789abcdef0123456789abcdef01234567\\nbranch refs/heads/worktree-wakeflow-feature\\n\\n' "$PWD" ;;
   "rev-parse --git-common-dir") echo "/stub/common/.git" ;;
@@ -845,4 +846,260 @@ test("teardown kills the configured session only when nothing is registered, unl
   equal(refused.json.reason, "windows-registered");
   equal(refused.json.registered, 1);
   equal((runHelper(current, ["teardown", "--force"]).json as { status: string }).status, "killed");
+});
+
+test("deliver readback confirms Claude Code's collapsed paste indicator when its count agrees with the prompt（§13.130 H1）", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
+  // 去首尾空白后四行，尾随一个换行：折叠指示的 "+3 lines"（行数减一）与 "+4 lines"（原样粘贴的换行数）都认。
+  const prompt = "Implement the task package for Product A now.\n\nRead the package first; touch only ProductA.\nReport back.\n";
+  const readbackFor = (screen: string, input = prompt): { status: string; evidenceDigest?: string } => {
+    writeFileSync(path.join(current.state, "capture.txt"), screen);
+    const run = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"], { input });
+    equal(run.status, 0, JSON.stringify(run.json));
+    return run.json.readback as { status: string; evidenceDigest?: string };
+  };
+  const collapsed = "❯ [Pasted text #1 +3 lines]\n\n──────────\n";
+  deepEqual(readbackFor(collapsed), {
+    status: "confirmed",
+    evidenceDigest: computeSha256Digest(encodeUtf8(collapsed, "$screen"), "$screen"),
+  });
+  equal(readbackFor("❯ [Pasted text #1 +4 lines]\n").status, "confirmed");
+  // 行数对不上、或多行 prompt 只看到不带计数的指示：仍是 pending。
+  equal(readbackFor("❯ [Pasted text #1 +7 lines]\n").status, "pending");
+  equal(readbackFor("❯ [Pasted text #1]\n").status, "pending");
+  // 首行子串可见（未折叠的粘贴）：confirmed；什么都看不到：pending。
+  equal(readbackFor("> Implement the task package for Product A now.\n\nWorking...\n").status, "confirmed");
+  equal(readbackFor("✻ Worked for 2s · done 2:30 AM\n\n❯ \n").status, "pending");
+  // 一行的 prompt：不带计数的指示即 confirmed，带别的计数不算。
+  const oneLine = "Continue with the plan as written.\n";
+  equal(readbackFor("❯ [Pasted text #2]\n", oneLine).status, "confirmed");
+  equal(readbackFor("❯ [Pasted text #2 +4 lines]\n", oneLine).status, "pending");
+  // 对话区里更早投递留下的同形指示不算：输入框为空或输入框里是别的指示时仍是 pending（§13.130）。
+  equal(readbackFor("> [Pasted text #1 +3 lines]\n\n● Done.\n──────────\n❯ \n──────────\n").status, "pending");
+  equal(readbackFor("> [Pasted text #1 +3 lines]\n● Done.\n❯ [Pasted text #2 +7 lines]\n").status, "pending");
+  equal(readbackFor("> [Pasted text #1 +3 lines]\n\n● Done.\n──────────\n", oneLine).status, "pending");
+  equal(readbackFor("> old reply\n──────────\n❯ [Pasted text #3 +3 lines]\n──────────\n  footer\n").status, "confirmed");
+});
+
+test("nudge sends one phrase only when the pane shows an API error, is idle and has an empty input box（§13.130 H3）", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  const livePane = paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS });
+  writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
+  const errorLine = "  ⎿  API Error: Connection lost mid-response. The response above may be incomplete.";
+  const footer = ["──────────", "  Opus 5.5 · Product A", "  ⏵⏵ bypass permissions on (shift+tab to cycle)", ""];
+  const screen = (...lines: readonly string[]): string => [...lines, ...footer].join("\n");
+  const idle = screen("  Reading the task package first.", errorLine, "", "──────────", "❯ ");
+  const nudgeWith = (capture: string, args: readonly string[] = []): HelperRun => {
+    writeFileSync(path.join(current.state, "capture.txt"), capture);
+    resetLog(current);
+    return runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, ...args]);
+  };
+  // 错误行在尾部、没有工作中标记、输入框为空：粘贴默认的一句并回车一次。
+  const nudged = nudgeWith(idle);
+  equal(nudged.status, 0, JSON.stringify(nudged.json));
+  deepEqual(nudged.json, {
+    ok: true,
+    command: "nudge",
+    windowId: PRODUCT_WINDOW_ID,
+    status: "nudged",
+    observedError: "⎿ API Error: Connection lost mid-response. The response above may be incomplete.",
+    evidenceDigest: computeSha256Digest(encodeUtf8(idle, "$screen"), "$screen"),
+    textDigest: computeSha256Digest(encodeUtf8("Continue.", "$text"), "$text"),
+  });
+  equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), "Continue.");
+  const log = tmuxLog(current);
+  deepEqual(log.map((entry) => entry[0]), ["list-panes", "capture-pane", "load-buffer", "paste-buffer", "send-keys"]);
+  deepEqual(log[1], ["capture-pane", "-p", "-t", "%9"]);
+  deepEqual(log[3]?.slice(0, 4), ["paste-buffer", "-d", "-p", "-b"]);
+  deepEqual(log[4], ["send-keys", "-t", "%9", "Enter"]);
+  // 工作区语言的一句也行；输入框里的占位提示算空。
+  const chinese = nudgeWith(screen(errorLine, "❯ Try \"fix lint errors\""), ["--text", "继续"]);
+  equal(chinese.json.status, "nudged");
+  equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), "继续");
+  // 没有错误行：not-needed，不粘贴；错误行已滚出尾部（后面跟着十二个以上非空行）同样 not-needed。
+  const calm = nudgeWith(screen("  Done.", "✻ Worked for 3m 2s · done 2:30 AM", "──────────", "❯ "));
+  equal(calm.status, 0);
+  equal(calm.json.status, "not-needed");
+  equal(calm.json.observedError, null);
+  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  const scrolled = nudgeWith(screen(errorLine, ...Array.from({ length: 12 }, (_, index) => `  line ${index}`), "❯ "));
+  equal(scrolled.json.status, "not-needed");
+  // 错误行之后已有输出（续上的一轮已完成、已渲染的用户消息）：错误行不再是最后一条对话行，not-needed
+  // 且不粘贴（§13.130）。
+  const finished = nudgeWith(screen(errorLine, "● Done, the fix is in.", "✻ Worked for 9s · done 2:31 AM", "──────────", "❯ "));
+  equal(finished.json.status, "not-needed");
+  equal(finished.json.observedError, "⎿ API Error: Connection lost mid-response. The response above may be incomplete.");
+  equal(nudgeWith(screen(errorLine, "", "❯ Continue.", "──────────", "❯ ")).json.status, "not-needed");
+  equal(nudgeWith(screen(errorLine, "  some later output", "──────────", "❯ ")).json.status, "not-needed");
+  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  // 有错误行但还在工作、在跑 hook、输入框有字、看不到输入框：busy，不粘贴。
+  const spinner = nudgeWith(screen(errorLine, "✻ Cogitating… (esc to interrupt)", "❯ "));
+  equal(spinner.json.status, "busy");
+  equal(spinner.json.observedBusy, "✻ Cogitating… (esc to interrupt)");
+  equal(typeof spinner.json.observedError, "string");
+  equal(nudgeWith(screen(errorLine, "  running Stop hooks…", "❯ ")).json.status, "busy");
+  const typed = nudgeWith(screen(errorLine, "❯ continue please"));
+  equal(typed.json.status, "busy");
+  equal(typed.json.observedBusy, "input-not-empty");
+  const unseen = nudgeWith(screen(errorLine));
+  equal(unseen.json.status, "busy");
+  equal(unseen.json.observedBusy, "input-box-unseen");
+  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  // pane 定位失败：pane-missing 带具体原因，退出码 1，从不粘贴。
+  writeFileSync(path.join(current.state, "panes.txt"), "");
+  const missing = nudgeWith(idle);
+  equal(missing.status, 1);
+  equal(missing.json.status, "pane-missing");
+  equal(missing.json.reason, "pane-missing");
+  equal(missing.json.observedError, null);
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", command: "zsh", options: LIVE_OPTIONS })}\n`,
+  );
+  const wrongProcess = nudgeWith(idle);
+  equal(wrongProcess.json.status, "pane-missing");
+  equal(wrongProcess.json.reason, "wrong-process");
+  equal(tmuxLog(current).some((entry) => entry[0] === "capture-pane"), false);
+  writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
+  equal(runHelper(current, ["nudge", "--window", CONTROLLER_WINDOW_ID]).json.reason, "locator-missing");
+  // 截屏失败、粘贴失败与参数错误。
+  writeFileSync(path.join(current.state, "capture.txt"), idle);
+  const noCapture = runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID], { env: { WAKEFLOW_STUB_FAIL: "capture-pane" } });
+  equal(noCapture.status, 1);
+  equal(noCapture.json.reason, "capture-failed");
+  const pasteFailed = runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID], { env: { WAKEFLOW_STUB_FAIL: "paste-buffer" } });
+  equal(pasteFailed.status, 1);
+  equal(pasteFailed.json.reason, "paste-failed");
+  equal(pasteFailed.json.status, undefined);
+  equal(runHelper(current, ["nudge"]).json.reason, "window-required");
+  equal(runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", ""]).json.reason, "text-invalid");
+  equal(runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", "   "]).json.reason, "text-invalid");
+  equal(runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", "a\nb"]).json.reason, "text-invalid");
+});
+
+function realGitPath(): string {
+  const found = spawnSync("which", ["git"], { encoding: "utf8" }).stdout.trim();
+  ok(found.length > 0, "the worktree preparation tests need a real git on PATH");
+  return found;
+}
+
+test("launch prepares a local-head worktree itself: created from HEAD, reused only when registered, refusing a leftover branch or occupied path（§13.130 H4）", async (t) => {
+  const current = await fixture(t);
+  const gitPath = realGitPath();
+  const repository = path.join(current.parent, "ProductA");
+  // 真实的临时仓库；全局与系统配置都关掉，签名、模板与钩子设置不会漏进来。
+  const isolation = { HOME: current.parent, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
+  const gitEnvironment = {
+    PATH: process.env.PATH ?? "",
+    ...isolation,
+    GIT_AUTHOR_NAME: "Wakeflow",
+    GIT_AUTHOR_EMAIL: "wakeflow@example.invalid",
+    GIT_COMMITTER_NAME: "Wakeflow",
+    GIT_COMMITTER_EMAIL: "wakeflow@example.invalid",
+  };
+  const git = (args: readonly string[], cwd = repository, allowFailure = false): string => {
+    const result = spawnSync(gitPath, args, { cwd, encoding: "utf8", env: gitEnvironment });
+    if (!allowFailure) equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
+    return result.stdout;
+  };
+  git(["init", "-q", "-b", "main"]);
+  writeFileSync(path.join(repository, "README.md"), "product\n");
+  git(["add", "README.md"]);
+  git(["commit", "-q", "-m", "init"]);
+  const head = git(["rev-parse", "HEAD"]).trim();
+  const helperEnvironment = { WAKEFLOW_REAL_GIT: gitPath, WAKEFLOW_STUB_HOOKS: current.hooks, ...isolation };
+  const intentFor = (name: string, placement = "../ProductA"): string => {
+    const intent = launchIntent("Product A", placement, ["--worktree", name]);
+    intent.worktree = { repositoryId: "repository_12345678-1234-4123-8123-123456789abc", suggestedName: name, basePolicy: "local-head" };
+    return JSON.stringify(intent);
+  };
+  const launch = (name: string, extraEnvironment: Record<string, string> = {}, placement?: string): HelperRun =>
+    runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
+      input: intentFor(name, placement),
+      env: { ...helperEnvironment, ...extraEnvironment },
+      allowPaths: true,
+    });
+  const checkout = path.join(repository, ".claude", "worktrees", "feature-x");
+  const exclude = path.join(repository, ".git", "info", "exclude");
+  const excludeLines = (): number => readFileSync(exclude, "utf8").split("\n").filter((line) => line === ".claude/worktrees/").length;
+  // 创建：从本地 HEAD 建 worktree-feature-x 分支与检出，exclude 加一行，主检出的 status 保持干净。
+  const created = launch("feature-x");
+  equal(created.status, 0, JSON.stringify(created.json));
+  equal(created.json.worktreePrepared, "created");
+  equal(created.json.worktreeBranch, "worktree-feature-x");
+  equal(created.json.worktreeExclude, "appended");
+  equal(git(["rev-parse", "HEAD"], checkout).trim(), head);
+  equal(git(["rev-parse", "--abbrev-ref", "HEAD"], checkout).trim(), "worktree-feature-x");
+  equal(existsSync(path.join(checkout, "README.md")), true);
+  equal(excludeLines(), 1);
+  equal(git(["status", "--porcelain"]).trim(), "");
+  const observed = (created.json.observation as { readonly worktree?: { readonly porcelain: string } }).worktree;
+  equal(observed?.porcelain.includes("refs/heads/worktree-feature-x"), true, "the observation lists the prepared checkout");
+  // 复用：检出已在就不再 add；exclude 不重复。
+  const reused = launch("feature-x");
+  equal(reused.status, 0, JSON.stringify(reused.json));
+  equal(reused.json.worktreePrepared, "reused");
+  equal(reused.json.worktreeExclude, "present");
+  equal(excludeLines(), 1);
+  const opensWindow = (): boolean => tmuxLog(current).some((entry) => entry[0] === "new-window" || entry[0] === "new-session");
+  // 分支已在、检出不在：不复用旧分支（它不一定在本地 HEAD 上），拒绝且不写 git、不开窗口（§13.130）。
+  git(["worktree", "remove", "--force", checkout]);
+  resetLog(current);
+  const leftover = launch("feature-x");
+  equal(leftover.status, 1);
+  equal(leftover.json.reason, "worktree-branch-exists");
+  equal(leftover.json.branch, "worktree-feature-x");
+  equal(existsSync(checkout), false);
+  equal(opensWindow(), false);
+  // 检出路径被一个不是本仓库登记检出的目录占着：拒绝，不算复用。
+  mkdirSync(path.join(repository, ".claude", "worktrees", "feature-z"), { recursive: true });
+  const occupied = launch("feature-z");
+  equal(occupied.json.reason, "worktree-path-occupied");
+  equal(git(["rev-parse", "--verify", "--quiet", "refs/heads/worktree-feature-z"], repository, true), "");
+  equal(opensWindow(), false);
+  // 没有 worktree 意图：不准备，照常启动。
+  const plain = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
+    input: JSON.stringify(launchIntent("Product A", "../ProductA")),
+    env: helperEnvironment,
+    allowPaths: true,
+  });
+  equal(plain.status, 0, JSON.stringify(plain.json));
+  equal(plain.json.worktreePrepared, "not-requested");
+  equal(plain.json.worktreeBranch, undefined);
+  // 继承的 GIT_DIR / GIT_WORK_TREE 不会把 git 调用引到别处：仍按落点仓库创建（§13.130）。
+  const missingGitDir = path.join(current.parent, "missing.git");
+  const redirected = launch("feature-v", { GIT_DIR: missingGitDir, GIT_WORK_TREE: current.parent });
+  equal(redirected.status, 0, JSON.stringify(redirected.json));
+  equal(redirected.json.worktreePrepared, "created");
+  equal(existsSync(missingGitDir), false);
+  // 检出建好之后窗口开不出来：失败结果仍带 worktreePrepared 与分支，Controller 知道留下了检出（§13.130）。
+  const stranded = launch("feature-w", { WAKEFLOW_STUB_FAIL: "new-window" });
+  equal(stranded.status, 1);
+  equal(stranded.json.worktreePrepared, "created");
+  equal(stranded.json.worktreeBranch, "worktree-feature-w");
+  equal(existsSync(path.join(repository, ".claude", "worktrees", "feature-w")), true);
+  // 落点是仓库的子目录而不是顶层：任何 git 写入之前拒绝（§13.130）。
+  mkdirSync(path.join(repository, "sub"));
+  resetLog(current);
+  const nested = launch("feature-u", {}, "../ProductA/sub");
+  equal(nested.status, 1);
+  equal(nested.json.reason, "worktree-root-not-toplevel");
+  equal(git(["rev-parse", "--verify", "--quiet", "refs/heads/worktree-feature-u"], repository, true), "");
+  equal(existsSync(path.join(repository, "sub", ".claude")), false);
+  equal(opensWindow(), false);
+  // `git worktree add` 本身失败（一个 worktree-feature-t/x 分支占住了引用名空间）：开窗之前拒绝，
+  // 报 worktree-add-failed，分支原本不在（§13.130 审查之后这条路径的回归）。
+  git(["branch", "worktree-feature-t/x"]);
+  resetLog(current);
+  const refused = launch("feature-t");
+  equal(refused.status, 1);
+  equal(refused.json.reason, "worktree-add-failed");
+  equal(refused.json.branchExisted, false);
+  equal(existsSync(path.join(repository, ".claude", "worktrees", "feature-t")), false);
+  equal(opensWindow(), false);
 });

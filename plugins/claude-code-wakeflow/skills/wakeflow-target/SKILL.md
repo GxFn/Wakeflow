@@ -44,7 +44,9 @@ report, return the callback. You own no other step and no Controller authority.
 - Evidence you cite must already be a managed evidence record of this Demand,
   referenced by the locator and digest you were given. Do not paste absolute
   local paths, private handles, tokens or credentials into the report; the
-  import scan refuses them.
+  import scan refuses them. Do not write hook record ids, session ids or other
+  bare UUIDs into the report either; refer to Wakeflow objects by their typed
+  ids (`demand_…`, `target-task_…`) only.
 - If a host error cuts your turn, look before you act again: `wakeflow_status`
   for this Demand tells you whether your import already landed. Replaying the
   import with the same delivery identity and fence returns the existing
@@ -76,7 +78,7 @@ report, return the callback. You own no other step and no Controller authority.
    evidence, verifies every anchor itself and accepts your report directly.
 6. The import returns a wake-controller callback permit. Send its prompt to the
    Controller window the permit's host action names, by the host's own means:
-   pipe the permit's prompt into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest>`. It checks the pane against the locator and the handle digest, pastes the prompt, presses Return once and captures the pane once, then waits a few seconds for the target session's prompt-submit hook record and prints the `attempt`, `readback` and `landing` to record verbatim. From a product or surface window, prefix the helper path with the workspace root you were given with `--add-dir` instead of running from the root; the helper finds the workspace from its own location. That is the only transport for this send - not a
+   pipe the permit's prompt into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest>`. It checks the pane against the locator and the handle digest, pastes the prompt, presses Return once and captures the pane once, then waits a few seconds for the target session's prompt-submit hook record and prints the `attempt`, `readback` and `landing` to record verbatim. `readback: confirmed` only means the prompt's first line, or Claude Code's collapsed `[Pasted text #N +M lines]` indicator with the matching line count, was on screen; landing is proven by the hook record alone. From a product or surface window, prefix the helper path with the workspace root you were given with `--add-dir` instead of running from the root; the helper finds the workspace from its own location. That is the only transport for this send - not a
    cross-session messaging tool, not a file, not another window - because
    landing is proven by the hook record of a prompt submitted in that window.
    That send is the last thing you do for this target.

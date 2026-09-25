@@ -20,12 +20,12 @@ test("建议命令在 singleLineText 上界处原样保留，越界时截断回�
   const room = SINGLE_LINE_TEXT_MAXIMUM_LENGTH - REMOVE_COMMAND_PREFIX.length;
 
   const atBound = DEEP_RELATIVE_PATH.slice(0, room);
-  const at = worktreeDisposalGuidance("codex", atBound);
+  const at = worktreeDisposalGuidance("codex", atBound, false);
   equal(at.suggested, `${REMOVE_COMMAND_PREFIX}${atBound}`);
   equal(at.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH);
 
   const overBound = DEEP_RELATIVE_PATH.slice(0, room + 1);
-  const over = worktreeDisposalGuidance("codex", overBound);
+  const over = worktreeDisposalGuidance("codex", overBound, false);
   equal(over.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH);
   equal(over.suggested.startsWith(REMOVE_COMMAND_PREFIX), true);
   equal(over.suggested.endsWith("…"), true);
@@ -36,6 +36,7 @@ test("控制字符与换行被单行化，建议与备选都留在 singleLineTex
   const guidance = worktreeDisposalGuidance(
     "claude-code",
     "worktrees/product\nalpha\tbeta gamma",
+    false,
   );
 
   equal(guidance.suggested, `${REMOVE_COMMAND_PREFIX}worktrees/ product alpha beta gamma`);
@@ -46,7 +47,7 @@ test("控制字符与换行被单行化，建议与备选都留在 singleLineTex
 
 test("越界截断按码位进行：不切断代理对，也不越过上界", () => {
   const astral = "𝔞".repeat(300);
-  const guidance = worktreeDisposalGuidance("codex", astral);
+  const guidance = worktreeDisposalGuidance("codex", astral, false);
 
   equal(guidance.suggested.length <= SINGLE_LINE_TEXT_MAXIMUM_LENGTH, true);
   equal(guidance.suggested, `${REMOVE_COMMAND_PREFIX}${"𝔞".repeat(245)}…`);
@@ -60,8 +61,46 @@ test("越界截断按码位进行：不切断代理对，也不越过上界", ()
 });
 
 test("清洗后为空的检出路径回落到工作区根，不产生带控制字符的空建议", () => {
-  const guidance = worktreeDisposalGuidance("codex", "   \n\t  ");
+  const guidance = worktreeDisposalGuidance("codex", "   \n\t  ", false);
 
   equal(guidance.suggested, `${REMOVE_COMMAND_PREFIX}.`);
   equal(NO_CONTROL_CHARACTERS.test(guidance.suggested), true);
+});
+
+const UNLOCK_COMMAND_PREFIX = "git worktree unlock ";
+const UNLOCK_SEPARATOR = "; ";
+
+test("登记时加锁的检出先解锁再删（§13.130）：同一路径出现两次，用 ; 连接，未加锁仍是单条 remove", () => {
+  const checkout = "Alembic/.claude/worktrees/wakeflow-round7";
+  const locked = worktreeDisposalGuidance("claude-code", checkout, true);
+  equal(
+    locked.suggested,
+    `${UNLOCK_COMMAND_PREFIX}${checkout}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${checkout}`,
+  );
+  const unlocked = worktreeDisposalGuidance("claude-code", checkout, false);
+  equal(unlocked.suggested, `${REMOVE_COMMAND_PREFIX}${checkout}`);
+  equal(locked.alternative, unlocked.alternative);
+});
+
+test("加锁形式的越界截断：两处路径同一个截断结果，整条命令不越过上界", () => {
+  const fixed =
+    UNLOCK_COMMAND_PREFIX.length + UNLOCK_SEPARATOR.length + REMOVE_COMMAND_PREFIX.length;
+  const room = Math.floor((SINGLE_LINE_TEXT_MAXIMUM_LENGTH - fixed) / 2);
+
+  const atBound = DEEP_RELATIVE_PATH.slice(0, room);
+  const at = worktreeDisposalGuidance("claude-code", atBound, true);
+  equal(
+    at.suggested,
+    `${UNLOCK_COMMAND_PREFIX}${atBound}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${atBound}`,
+  );
+  equal(at.suggested.length <= SINGLE_LINE_TEXT_MAXIMUM_LENGTH, true);
+
+  const over = worktreeDisposalGuidance("claude-code", DEEP_RELATIVE_PATH, true);
+  equal(over.suggested.length <= SINGLE_LINE_TEXT_MAXIMUM_LENGTH, true);
+  const shown = `${DEEP_RELATIVE_PATH.slice(0, room - 1)}…`;
+  equal(
+    over.suggested,
+    `${UNLOCK_COMMAND_PREFIX}${shown}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${shown}`,
+  );
+  equal(NO_CONTROL_CHARACTERS.test(over.suggested), true);
 });

@@ -50,6 +50,8 @@
 
 2026-09-25 §13.129（对齐第八轮）：工具描述改为十五个门的完整清单（此前仍写 "thirteen gates"）。被打断的维护 apply 由 local-layout 门经预览的核心布局检查报 `maintenance-protocol-<状态>`；status 顶层新增 `maintenance{status, protocol}`（idle / busy / recovery-required / conflict / absent / bootstrap-prefix，读不出为 unknown），非 idle 即 `overall: maintenance`、next 指向 `workspace-maintenance`——旧实现的 maintenance 域与 maintenance-gate 门在新实现里的落点。切片测试补旧实现 T08 的三条不变量：status 与 verify 零写（目录树逐节点比对）且同时钟下逐字节确定；配置里的 tmux 会话名与 socket 名、句柄、一次性目录根不进结果；非工作区目录是 `precondition-failed / config-authority` 且零写。冒烟对每个工具结果扫一次性目录根（旧实现 T10 的私有路径门）。
 
+2026-09-25 §13.130（残留清理）：status 的 `unmergedAccepted` 另从仍在配置里的 worktree pod 的归档 Demand（完成与撤销）派生，条目带 `source: active | archived`，读不出的归档计入 `domains.archives`（`archives:unreadable-<n>`），扫描上限计入 `truncated.archives`，只在全作用域读；`maintenance` 新增 `residues[{name, kind, operationId, recoverable}]` 与 `residuesOmitted`，维护进行中（busy）的条目不标可恢复；verify 的 local-layout 门先做私有模式普查，按区域点名 `private-mode-drift-<n>:<区域>` / `private-mode-unsafe-<n>:<区域>`（区域是私有树里至多三段的最小覆盖，至多三个）。
+
 **实现判断**：门集合按新边界重排：删 pod-evidence 与 managed-drift 的旧形状，coordination-leases 改为 work-claims，新增 host-hook-channel（hook 记录目录可读且最近记录自洽）与 pod-execution-location（每个活动 pod 的 worktree 回执与 `git worktree list --porcelain` 一致）；`unavailable` 与 `fail` 在 `summary` 里分开计数的做法保留。旧 verify 的同名门 window-runtime-projection 在第二轮对齐时补回（G6）：`wakeflow_status.windows[].projection` 逐窗口报新鲜度（各宿主里最差的一份：current / stale / missing / unsafe / unavailable），`domains.windowRuntime` 报域可用性，缺失或过期把 `next` 指向维护（reconcile 重建，G5），unsafe 只报告。
 
 **待确认**：

@@ -30,13 +30,29 @@ current. Read it back through a tool.
   reports `gitignore-git-repository` until it is).
 - **reconfigure** - a declared difference against an existing config. Layout
   identity is immutable: the program id and the ledger root cannot move, the
-  topology (repositories, surfaces, windows) is refused as a layout change,
-  and a change to the pod set is not a reconfigure. Those refusals are
-  structural, not advisory - route the user to the right operation instead of
-  retrying. What does change here: the display name, description and
-  language, and the host launch preferences under `hosts` - the model,
-  reasoning effort and permission mode by role, and the tmux container names -
-  which the next launch intents pick up without touching any window.
+  support surfaces cannot change, and a change to the pod set is not a
+  reconfigure. Those refusals are structural, not advisory - route the user to
+  the right operation instead of retrying. What does change here: the display
+  name, description and language, the host launch preferences under `hosts` -
+  the model, reasoning effort and permission mode by role, and the tmux
+  container names - which the next launch intents pick up without touching any
+  window, and one kind of layout change: adding a product repository. Send the
+  current config with the new repository entry and one new `product` window
+  for it in the primary pod appended, each with a fresh id (`repository_` or
+  `window_` followed by a new lowercase UUID v4). The repository's root must
+  already exist and be its own Git repository: a linked worktree of another
+  repository is refused as `reconfigure-repository-root-worktree`, and a path
+  that is, contains or sits inside an already configured repository (a
+  symlink alias included) as `reconfigure-repository-root-duplicate`; more
+  than one new window for it is refused as
+  `reconfigure-window-addition-unsupported`. The apply writes the config, the new
+  window's runtime projection and the managed blocks in one transaction; then
+  launch and register the new window as in step 1. Removing or changing an
+  existing repository or window is refused, and so is adding a repository
+  while a worktree pod is open, because that pod would lack it. That last
+  refusal is an `invalid-request` error with reason `desired-config`,
+  `details.configReason: topology` and a path into the pod's entry - tell the
+  user to close the pod first rather than rewriting the config.
 - **reconcile** - bring a workspace back to what its descriptor implies. On a
   healthy workspace this is a no-op that writes nothing, which makes it a safe
   thing to run when you are unsure. It repairs only what Wakeflow owns: a
@@ -46,9 +62,18 @@ current. Read it back through a tool.
   files, a missing or stale window runtime projection (recomputed from the
   config and the window's current binding), and a missing host runtime or
   maintenance protocol root, even when the whole `.wakeflow-local` directory
-  is gone. A hand-edited block, a foreign file sitting where a Wakeflow
-  directory belongs, or an unreadable projection is reported as a blocker and
-  never overwritten.
+  is gone. It also takes back private modes: when a directory or file under
+  `.wakeflow-local` or `.wakeflow-active` has only drifted wider than 0700 /
+  0600 in a safe way - for example after a `chmod -R go+rX` - the reconcile
+  preview's plan is a `WakeflowPrivateModeConvergencePlan` (counts and the
+  areas involved) instead of the usual steps. Apply it, then preview
+  reconcile again. A private node another user owns, that group or others
+  can write, or that is a symlink is reported as `private-mode-unsafe:<area>`
+  and never touched, and the other intents refuse with `private-mode-drift`
+  until reconcile has run. `wakeflow_verify` names the same areas in its
+  `local-layout` gate. A hand-edited block, a foreign file sitting where a
+  Wakeflow directory belongs, or an unreadable projection is reported as a
+  blocker and never overwritten.
 
 Procedure, every time:
 
@@ -160,13 +185,21 @@ main checkout; every other pod works in a worktree.
    its Controller and Design windows, then every product window with its
    worktree observation, and only then its Test window - the Test window's
    launch intent lists the worktrees as attached directories, and that list is
-   read from the receipts the product registrations wrote.
+   read from the receipts the product registrations wrote. The product windows
+   need not start one by one: launch them all without waiting (`--wait 0` on
+   Claude Code), keep each printed observation, and register them once their
+   session-start records exist.
 4. If receipts and config disagree after an interruption, reconcile with
    recover before doing anything else.
 
 While a pod is open, its Controller claims its own requirement package from the
 shared board. One Demand per pod Controller still holds; a pod does not let one
 Controller run two Demands.
+
+Between archiving a pod's Demand and closing the pod, `wakeflow_status` keeps
+listing the branches that Demand's accepted results left unmerged, with
+`source: archived`, so the user can see what still waits for a merge or an
+abandon decision.
 
 `wakeflow_pod` close, after the user has merged or abandoned the branch:
 

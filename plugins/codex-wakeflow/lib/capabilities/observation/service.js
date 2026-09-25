@@ -16,10 +16,45 @@ import { fail } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
+import { inspectWakeflowPrivateModes, wakeflowPrivateModeAreas, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import { previewWakeflowStaticMaterialization } from "../../workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "../../workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import { admitStatusResult, admitVerifyResult, parseStatusRequest, parseVerifyRequest, WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { capStatusList, deriveNextActions, deriveWorkspaceGates, disposalGuidance, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
+/** status 的残留列表上限（wire 的 maxItems）；超出只报略去的条数。 */
+const MAINTENANCE_RESIDUES_MAXIMUM = 64;
+const RESIDUE_NAME_MAXIMUM = 128;
+/**
+ * 残留文件名进公共结果前单行化并有界（singleLineText 不收控制字符）：它是 Wakeflow 自有目录
+ * 里的一个名字，不是路径，但名字本身可以是任何字节，所以只保留可打印字符。
+ */
+function residueDisplayName(name) {
+    let cleaned = "";
+    for (const character of name) {
+        const codePoint = character.codePointAt(0) ?? 0;
+        cleaned += codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f) ? "?" : character;
+    }
+    const characters = [...cleaned];
+    const bounded = characters.length > RESIDUE_NAME_MAXIMUM
+        ? `${characters.slice(0, RESIDUE_NAME_MAXIMUM - 1).join("")}…`
+        : cleaned;
+    return bounded.trim().length === 0 ? "?" : bounded;
+}
+function maintenanceView(maintenance) {
+    const residues = capStatusList(maintenance.residues, MAINTENANCE_RESIDUES_MAXIMUM);
+    return {
+        status: maintenance.status,
+        protocol: maintenance.protocol,
+        residues: residues.entries.map((residue) => ({
+            name: residueDisplayName(residue.name),
+            kind: residue.kind,
+            operationId: residue.operationId,
+            // busy 时条目属于正在进行的维护，不是可恢复的残留（§13.130 审查 P1-7）。
+            recoverable: residue.operationId !== null && maintenance.protocol !== "busy",
+        })),
+        residuesOmitted: residues.omitted,
+    };
+}
 const PENDING_PACKAGES_MAXIMUM = 64;
 const PRIORITY_ORDER = Object.freeze({
     P0: 0,
@@ -81,13 +116,21 @@ async function openLedgerRoot(root, snapshot) {
 async function observeMaintenance(root, signal) {
     try {
         const core = await inspectWakeflowWorkspaceCoreLayout(root, signalOptions(signal));
-        return Object.freeze({ status: "observed", protocol: core.local.status });
+        return Object.freeze({
+            status: "observed",
+            protocol: core.local.status,
+            residues: core.local.residues,
+        });
     }
     catch (error) {
         if (!(error instanceof WakeflowWorkspaceCoreLayoutInspectionError))
             throw error;
         failIfAborted(error);
-        return Object.freeze({ status: "unavailable", protocol: "unknown" });
+        return Object.freeze({
+            status: "unavailable",
+            protocol: "unknown",
+            residues: Object.freeze([]),
+        });
     }
 }
 async function openContext(root, facade, options) {
@@ -347,7 +390,7 @@ function podViews(context) {
                 repositoryId: worktree.repositoryId,
                 receipt: receipt === undefined ? "absent" : present ? "present" : "checkout-missing",
                 disposal: pod.pod.lifecycle === "closing" && present && receipt !== undefined
-                    ? disposalGuidance(facade.hostId, path.relative(root.absolutePath, receipt.receipt.path) || ".")
+                    ? disposalGuidance(facade.hostId, path.relative(root.absolutePath, receipt.receipt.path) || ".", receipt.receipt.locked)
                     : null,
             };
         }),
@@ -506,6 +549,19 @@ function domainViews(context) {
         pods: { status: observation.pods.status, issue: observation.pods.issue },
         projection: { status: projection.status, issue: projection.issue },
         windowRuntime: windowRuntimeDomainView(observation),
+        archives: archivesDomainView(observation),
+    };
+}
+/**
+ * 归档域（§13.130）：读不出沿用观察的 issue；读得出但有归档读不出时仍是 observed，issue 报出
+ * 读不出的条数——那几个归档里的已接受分支这一轮看不见，不等于没有。
+ */
+function archivesDomainView(observation) {
+    const archives = observation.archives;
+    const unreadable = archives.value?.unreadable ?? 0;
+    return {
+        status: archives.status,
+        issue: archives.issue ?? (unreadable > 0 ? `archives:unreadable-${unreadable}` : null),
     };
 }
 async function assembleStatus(context, request) {
@@ -546,10 +602,7 @@ async function assembleStatus(context, request) {
         unmergedAccepted: unmergedAccepted.entries,
         domains: domainViews(context),
         runtime: runtimeView(context),
-        maintenance: {
-            status: context.maintenance.status,
-            protocol: context.maintenance.protocol,
-        },
+        maintenance: maintenanceView(context.maintenance),
         truncated: {
             demands: demands.omitted,
             windows: windows.omitted,
@@ -558,6 +611,7 @@ async function assembleStatus(context, request) {
             repositories: repositories.omitted.repositories,
             worktrees: repositories.omitted.worktrees,
             unmergedAccepted: unmergedAccepted.omitted,
+            archives: observation.archives.value?.skipped ?? 0,
         },
         projection: projectionView(context.projection),
         policy: observation.policy,
@@ -592,11 +646,39 @@ async function configRecheck(context) {
     }
 }
 /**
+ * 私有树的模式普查（§13.124 D8，§13.130）：安全漂移或不安全节点让 local-layout 门带数量与区域
+ * （前三段路径，至多三个）点名，例如 `private-mode-drift-12:.wakeflow-local/runtime`；安全漂移由
+ * reconcile 收回，不安全节点只报告。普查读不出不遮蔽布局预览。
+ */
+async function privateModeCodes(context) {
+    try {
+        const census = await inspectWakeflowPrivateModes(context.root, signalOptions(context.options.signal));
+        const named = (prefix, paths) => `${prefix}-${paths.length}:${wakeflowPrivateModeAreas(paths)
+            .map((area) => area.replace(/[^A-Za-z0-9./-]/gu, "-"))
+            .join(",")}`;
+        if (census.status === "unsafe")
+            return Object.freeze([named("private-mode-unsafe", census.unsafe)]);
+        if (census.status === "safe-drift") {
+            return Object.freeze([
+                named("private-mode-drift", census.drifted.map((entry) => entry.resourcePath)),
+            ]);
+        }
+        return Object.freeze([]);
+    }
+    catch (error) {
+        failIfAborted(error);
+        return Object.freeze([]);
+    }
+}
+/**
  * local-layout 门的事实（§13.94 D3）：静态资源矩阵经宿主中立的零写对账预览核对——当前配置、
  * 当前宿主 profile 与全部宿主 profile；ready 且没有计划步骤才是 ready，否则 blocked 并带阻塞码
  * 与步骤种类；预览本身抛错即 unavailable。
  */
 async function localLayout(context) {
+    const modes = await privateModeCodes(context);
+    if (modes.length > 0)
+        return Object.freeze({ status: "blocked", codes: modes });
     const current = context.facade.hosts.find((host) => host.hostId === context.facade.hostId);
     if (current === undefined) {
         return Object.freeze({

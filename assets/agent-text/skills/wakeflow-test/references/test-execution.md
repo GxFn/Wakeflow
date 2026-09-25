@@ -124,6 +124,11 @@ Keep the exact output rather than a summary, and keep it per step rather than
 one blob for the whole run - a reviewer comparing one step against its
 baseline should not have to search.
 
+Do not write hook record ids, session ids or other bare UUIDs into the output
+you record or the report you import - the import refuses them and evidence
+capture asks for confirmation - and refer to Wakeflow objects by their typed
+ids (`demand_…`, `target-task_…`) only.
+
 ## What the report has to say
 
 Per step: what was expected, what was observed, the verdict, the
@@ -147,8 +152,8 @@ Check your own records once, as the reviewer will:
 - every step that did not pass carries its classification, owner and
   recommended action;
 - an unrun step is `blocked` with the reason, not omitted;
-- no secret, private handle, absolute local path or unbounded log is in any
-  text you are about to import.
+- no secret, private handle, absolute local path, bare UUID or unbounded log
+  is in any text you are about to import.
 
 This review makes your own report honest; it is not the Controller's review
 and it does not accept anything.

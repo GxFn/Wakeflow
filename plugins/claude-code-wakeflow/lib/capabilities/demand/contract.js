@@ -101,7 +101,7 @@ export const DEMAND_CONTINUATION_TOOL_REGISTRATION = Object.freeze({
     shape: "effect",
     executor: "continueDemand",
     title: "Continue Wakeflow Demand",
-    description: "Two actions on one Demand. continue re-opens a completed Demand from its archive (optimization, requirement-supplement, or verified-bug lineage): the active root is restored, a continuation event is appended, the requirement package returns to claimed, and the route asks for a new task package first. record-decision answers an escalation so an awaiting-decision Demand can move again. Preview, apply with planDigest, recover with the demandId.",
+    description: "Two actions on one Demand. continue re-opens a completed Demand from its archive (optimization, requirement-supplement, or verified-bug lineage): the active root is restored, a continuation event is appended, the requirement package returns to claimed, and the route asks for a new task package first. record-decision answers an escalation so an awaiting-decision Demand can move again. Modes: preview derives the plan without writing, apply needs its planDigest, recover finishes an interrupted continue apply by operationId (the demandId).",
     requestSchema: WAKEFLOW_DEMAND_CONTINUATION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_DEMAND_CONTINUATION_RESULT_SCHEMA,
     annotations: EFFECT_ANNOTATIONS,

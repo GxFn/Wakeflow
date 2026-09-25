@@ -31,9 +31,12 @@ export interface LocatedDemandArchiveSummary {
   readonly archivedAt: UtcInstant;
   readonly terminalEvent: Readonly<{ readonly eventId: string; readonly streamRevision: number }>;
   readonly manifestDigest: Sha256Digest;
+  /** 归档时 Demand 所在的 pod（§13.130）；清单里没有合法值时为 null。 */
+  readonly podId: string | null;
 }
 
 const ARCHIVE_NAME_PATTERN = /^[0-9]{10}$/u;
+const POD_ID_PATTERN = /^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const MAXIMUM_ARCHIVES_PER_DEMAND = 4096;
 const MANIFEST_MAXIMUM_BYTES = parseByteCount(16 * 1024 * 1024, "$manifest.maximumBytes");
 const EVENT_ID_PATTERN =
@@ -88,6 +91,10 @@ function summarize(
       streamRevision: terminal.streamRevision as number,
     }),
     manifestDigest,
+    podId:
+      typeof manifest.podId === "string" && POD_ID_PATTERN.test(manifest.podId)
+        ? manifest.podId
+        : null,
   });
 }
 

@@ -472,8 +472,18 @@ export class DemandEventSourcingRepository {
     } catch (error: unknown) {
       mapStoreError(error);
     }
-    if (stream.commits.length === 0) fail("not-found", "$commits");
-    const aggregate = replayCommits(null, stream.commits);
+    return DemandEventSourcingRepository.auditTargetResultHistoryOfCommits(stream.commits);
+  }
+
+  /**
+   * 对一段已读出的完整提交序列做同一套历史审计（§13.130）。ledger 归档包里的提交由归档读取路径读出
+   * （节点是可移植模式，不走私有事件存储），审计规则只有这一份。
+   */
+  static auditTargetResultHistoryOfCommits(
+    commits: readonly Readonly<DemandEventStreamCommit>[],
+  ): Readonly<AuditedDemandTargetResultHistory> {
+    if (commits.length === 0) fail("not-found", "$commits");
+    const aggregate = replayCommits(null, commits);
     const taskPackages: Readonly<AuditedTargetTaskPackageSource>[] = [];
     const targetResults: Readonly<AuditedTargetResultSource>[] = [];
     const targetReviewDecisions: Readonly<AuditedControllerReviewDecisionSource>[] =
@@ -509,7 +519,7 @@ export class DemandEventSourcingRepository {
       Readonly<DemandEventSourcingStoredEvent>
     >();
 
-    for (const commit of stream.commits) {
+    for (const commit of commits) {
       for (const storedEvent of commit.events) {
         storedEventByRevision.set(storedEvent.streamRevision, storedEvent);
         let event;
@@ -1055,7 +1065,7 @@ export class DemandEventSourcingRepository {
       ),
       escalations: Object.freeze(escalations),
       decisionRecords: Object.freeze(decisionRecords),
-      replayedCommitCount: stream.commits.length,
+      replayedCommitCount: commits.length,
     });
   }
 

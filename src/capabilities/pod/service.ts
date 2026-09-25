@@ -728,6 +728,7 @@ async function currentViews(context: PodSliceContext, podId: string): Promise<Po
           ? worktreeDisposalGuidance(
               fresh.facade.hostId,
               path.relative(fresh.root.absolutePath, entry.receipt.path) || ".",
+              entry.receipt.locked,
             )
           : null,
     };

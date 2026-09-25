@@ -67,6 +67,38 @@ import {
 
 const COMMIT_READ_CONCURRENCY = 8;
 
+/**
+ * 节点政策：活动 Demand 根的事件存储是私有的（当前用户、0700 / 0600）；ledger 里的归档包是
+ * 可移植副本，模式与属主不作要求，只要求目录是目录、提交文件是只有一个链接的普通文件（§13.130）。
+ * 两种政策的提交文件名、序号、摘要链与容量检查完全相同。
+ */
+export type DemandFileEventNodePolicy = "private" | "archived";
+
+function assertDirectoryPolicy(
+  node: Readonly<FileNodeSnapshot>,
+  path: string,
+  policy: DemandFileEventNodePolicy,
+): void {
+  if (policy === "private") {
+    assertDemandFileEventStoreDirectory(node, path);
+  } else if (node.kind !== "directory") {
+    fail("node-policy", path);
+  }
+}
+
+function assertFilePolicy(
+  node: Readonly<FileNodeSnapshot>,
+  path: string,
+  policy: DemandFileEventNodePolicy,
+  admittedLinkCounts: readonly bigint[] = [1n],
+): void {
+  if (policy === "private") {
+    assertDemandFileEventStoreFile(node, path, admittedLinkCounts);
+  } else if (node.kind !== "file" || node.linkCount !== 1n) {
+    fail("node-policy", path);
+  }
+}
+
 export interface LoadedDemandFileEventCommit {
   readonly commit: Readonly<DemandEventStreamCommit>;
   readonly node: Readonly<FileNodeSnapshot>;
@@ -94,6 +126,7 @@ export async function readDemandFileEventDirectory(
   maximumEntries: number,
   signal: AbortSignal | undefined,
   expectedNode?: Readonly<FileNodeSnapshot>,
+  policy: DemandFileEventNodePolicy = "private",
 ): Promise<Readonly<StableDirectoryReadResult<PortableResourcePath>>> {
   try {
     const result = await readStableResourceDirectory(root, ref, {
@@ -101,7 +134,7 @@ export async function readDemandFileEventDirectory(
       ...(expectedNode === undefined ? {} : { expectedNode }),
       ...(signal === undefined ? {} : { signal }),
     });
-    assertDemandFileEventStoreDirectory(result.directoryNode, `$${ref}`);
+    assertDirectoryPolicy(result.directoryNode, `$${ref}`, policy);
     return result;
   } catch (error: unknown) {
     if (error instanceof DemandFileEventStoreError) throw error;
@@ -123,8 +156,9 @@ export async function readDemandFileEventCommit(
   signal: AbortSignal | undefined,
   path: string,
   admittedLinkCounts: readonly bigint[] = [1n],
+  policy: DemandFileEventNodePolicy = "private",
 ): Promise<Readonly<LoadedDemandFileEventCommit>> {
-  assertDemandFileEventStoreFile(expectedNode, path, admittedLinkCounts);
+  assertFilePolicy(expectedNode, path, policy, admittedLinkCounts);
   let read;
   try {
     read = await readDeterministicJsonFile(root, resourcePath, {
@@ -277,6 +311,7 @@ async function readCommitEntries(
   entries: readonly Readonly<StableDirectoryEntry>[],
   indexOffset: number,
   signal: AbortSignal | undefined,
+  policy: DemandFileEventNodePolicy = "private",
 ): Promise<readonly Readonly<LoadedDemandFileEventCommit>[]> {
   const limit = pLimit(COMMIT_READ_CONCURRENCY);
   const settled = await Promise.allSettled(entries.map((entry, index) => (
@@ -286,6 +321,8 @@ async function readCommitEntries(
       entry.node,
       signal,
       `$commits/${indexOffset + index}`,
+      [1n],
+      policy,
     ))
   )));
   const loaded: Readonly<LoadedDemandFileEventCommit>[] = [];
@@ -298,6 +335,7 @@ async function readCommitEntries(
 
 function assertInventoryNames(
   read: Readonly<StableDirectoryReadResult<PortableResourcePath>>,
+  policy: DemandFileEventNodePolicy = "private",
 ): void {
   let totalBytes = 0;
   read.entries.forEach((entry, index) => {
@@ -310,7 +348,7 @@ function assertInventoryNames(
       }
       throw error;
     }
-    assertDemandFileEventStoreFile(entry.node, `$commits/${index}`);
+    assertFilePolicy(entry.node, `$commits/${index}`, policy);
     if (parsed.commitSequence !== index + 1) {
       fail("stream-invalid", `$commits/${index}`);
     }
@@ -327,21 +365,25 @@ function assertInventoryNames(
 export async function readAllDemandFileEventCommits(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
+  policy: DemandFileEventNodePolicy = "private",
 ): Promise<Readonly<DemandFileEventStoreReadResult>> {
   const before = await readDemandFileEventDirectory(
     root,
     DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
     DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
     signal,
+    undefined,
+    policy,
   );
-  assertInventoryNames(before);
-  const loaded = await readCommitEntries(root, before.entries, 0, signal);
+  assertInventoryNames(before, policy);
+  const loaded = await readCommitEntries(root, before.entries, 0, signal, policy);
   const after = await readDemandFileEventDirectory(
     root,
     DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
     DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
     signal,
     before.directoryNode,
+    policy,
   );
   if (!sameDirectoryRead(before, after)) fail("stream-changed", "$commits");
   const commits = Object.freeze(loaded.map((entry) => entry.commit));

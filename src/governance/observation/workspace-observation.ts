@@ -81,6 +81,11 @@ import {
   type DemandResultReviewSnapshot,
   readDemandResultReviewSnapshot,
 } from "../review/demand-result-review-snapshot.js";
+import {
+  type ArchivedDemandCandidate,
+  type ObservedArchivedDemands,
+  observeArchivedDemands,
+} from "./archived-demand-observation.js";
 import { WAKEFLOW_OBSERVATION_POLICY, type WakeflowObservationPolicy } from "./observation-policy.js";
 import {
   observeRepositoryPointers,
@@ -231,6 +236,11 @@ export interface WorkspaceObservation {
   readonly projections: readonly Readonly<ObservedHostProjections>[];
   readonly pods: ObservedDomain<readonly Readonly<ObservedPod>[]>;
   readonly repositories: ObservedDomain<readonly Readonly<RepositoryPointerObservation>[]>;
+  /**
+   * 仍在配置里的 worktree pod 的已归档 Demand（§13.130）：只为 `unmergedAccepted` 读评审快照；
+   * 只在 full 作用域读，projection 作用域为 unavailable（投影不含它）。
+   */
+  readonly archives: ObservedDomain<Readonly<ObservedArchivedDemands>>;
   readonly assets: readonly Readonly<ObservedHostAsset>[];
 }
 
@@ -828,6 +838,52 @@ async function observeHostProjections(
   }
 }
 
+/**
+ * 已归档 Demand 的候选：看板上 archived 的需求包指向的 Demand，以及因取消而 withdrawn
+ * （原因 `demand-cancelled:<demandId>`，取消同样封归档包）的需求包指向的 Demand（gate-log
+ * §13.130）；去掉此刻又活动的（续做后重开）。看板读不出就不知道有哪些候选，这一域因此读不出，
+ * 而不是"没有"。
+ */
+function archivedDemandCandidates(
+  board: ObservedDomain<Readonly<ObservedBoard>>,
+  demands: ObservedDomain<readonly Readonly<ObservedDemand>[]>,
+): readonly Readonly<ArchivedDemandCandidate>[] {
+  if (board.value === null) fail("precondition-failed", "board-unavailable", "$archives");
+  const active = new Set((demands.value ?? []).map((demand) => demand.demandId));
+  return Object.freeze(
+    board.value.states.flatMap((state) => {
+      const candidate = terminalCandidateOf(state);
+      return candidate === null || active.has(candidate.demandId) ? [] : [candidate];
+    }),
+  );
+}
+
+function terminalCandidateOf(
+  state: RequirementClaimState,
+): Readonly<ArchivedDemandCandidate> | null {
+  if (state.status === "archived" && state.archive !== null) {
+    return Object.freeze({ demandId: state.archive.demandId, archivedAt: state.archive.archivedAt });
+  }
+  if (
+    state.status === "withdrawn" &&
+    state.withdrawal !== null &&
+    state.claim !== null &&
+    state.withdrawal.reason === `demand-cancelled:${state.claim.demandId}`
+  ) {
+    return Object.freeze({
+      demandId: state.claim.demandId,
+      archivedAt: state.withdrawal.withdrawnAt,
+    });
+  }
+  return null;
+}
+
+function worktreePodIdsOf(snapshot: Readonly<WakeflowConfigAuthoritySnapshot>): ReadonlySet<string> {
+  return new Set(
+    snapshot.model.pods.filter((pod) => pod.placement === "worktree").map((pod) => pod.podId),
+  );
+}
+
 function observedAtOf(clock: UtcWallClock | undefined): UtcInstant {
   try {
     return readUtcWallClock(clock);
@@ -880,6 +936,17 @@ export async function observeWorkspace(
     scope === "full"
       ? await observeDomain("repositories", () => observeRepositories(snapshot, signal))
       : Object.freeze({ status: "unavailable" as const, issue: "scope:projection", value: null });
+  const archives =
+    scope === "full"
+      ? await observeDomain("archives", () =>
+          observeArchivedDemands(
+            ledgerRoot,
+            archivedDemandCandidates(board, demands),
+            worktreePodIdsOf(snapshot),
+            signal,
+          ),
+        )
+      : Object.freeze({ status: "unavailable" as const, issue: "scope:projection", value: null });
   return Object.freeze({
     observedAt,
     scope,
@@ -895,6 +962,7 @@ export async function observeWorkspace(
     projections: Object.freeze(projections),
     pods,
     repositories,
+    archives,
     assets: Object.freeze(assets),
   });
 }

@@ -208,6 +208,7 @@ function observationOf(
     projections: Object.freeze([]),
     pods: Object.freeze({ status: "observed" as const, issue: null, value: pods }),
     repositories: unavailable(),
+    archives: unavailable(),
     assets: Object.freeze([]),
   });
 }

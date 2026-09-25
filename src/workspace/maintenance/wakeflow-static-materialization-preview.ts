@@ -1,8 +1,10 @@
+import nodePath from "node:path";
 import { types } from "node:util";
 
 import {
   computeWakeflowConfigDigest,
   type WakeflowConfigModel,
+  type WakeflowConfigRepository,
 } from "../../configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
@@ -124,8 +126,9 @@ import {
  * 已验证的pre-gate Core观察；其余所有owner仍执行真实只读inspection。
  *
  * fresh 强制 Config/Active/受管Support roots absent，只允许 exact Local bootstrap-prefix；
- * placement-stable reconfigure 暂只允许 program/presentation/governance 语义变化；reconcile
- * 使用当前 Config。所有写步骤按“布局 → integration → whole-file → Config激活”排序。
+ * reconfigure 允许 program/presentation/governance/hosts 语义变化，布局上只允许新增产品仓库
+ * （连同它在 primary pod 的产品窗口，§13.130 D9）；reconcile 使用当前 Config。所有写步骤按
+ * “布局 → integration → whole-file → Config激活”排序。
  */
 
 export interface WakeflowStaticMaterializationPreviewOptions {
@@ -180,6 +183,174 @@ async function desiredPlacements(
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) return null;
     throw error;
+  }
+}
+
+/**
+ * reconfigure 的拓扑变化（§13.130 D9）：只允许"新增"。已有仓库与窗口必须原样保留，新增窗口只能是
+ * 新增仓库在 primary pod 的产品窗口；删除与改动仍拒绝（删除要先退役窗口，那是另一件事）；storage
+ * 与 support surface 的任何改动沿用原来的 `reconfigure-layout-change-unsupported`。配置文法只保证每个
+ * pod 对每个仓库至少一个产品窗口（primary pod 可以有多个），所以"新仓库缺配对窗口"与"有 worktree
+ * pod 时只给 primary pod 加窗口"在这里之前就被拒绝（desired-config）；而"每个新仓库恰好一个新 primary
+ * pod 产品窗口"由这里检查（§13.130），两个及以上同样是 `reconfigure-window-addition-unsupported`。
+ * 返回阻塞码与新增的仓库（供根目录检查）。
+ */
+function reconfigureTopologyChange(
+  current: Readonly<WakeflowConfigModel>,
+  desired: Readonly<WakeflowConfigModel>,
+): Readonly<{
+  readonly blockers: readonly string[];
+  readonly addedRepositories: readonly Readonly<WakeflowConfigRepository>[];
+}> {
+  const blockers: string[] = [];
+  if (
+    !sameSemanticSection(current.storage, desired.storage) ||
+    !sameSemanticSection(current.topology.supportSurfaces, desired.topology.supportSurfaces)
+  ) {
+    blockers.push("reconfigure-layout-change-unsupported");
+  }
+  const desiredRepositories = new Map(
+    desired.topology.repositories.map((entry) => [entry.repositoryId, entry] as const),
+  );
+  const currentRepositoryIds = new Set(
+    current.topology.repositories.map((entry) => entry.repositoryId),
+  );
+  for (const repository of current.topology.repositories) {
+    const kept = desiredRepositories.get(repository.repositoryId);
+    if (kept === undefined) blockers.push("reconfigure-repository-removal-unsupported");
+    else if (!sameSemanticSection(repository, kept)) {
+      blockers.push("reconfigure-repository-change-unsupported");
+    }
+  }
+  const addedRepositories = desired.topology.repositories.filter(
+    (entry) => !currentRepositoryIds.has(entry.repositoryId),
+  );
+  const desiredWindows = new Map(
+    desired.topology.windows.map((entry) => [entry.windowId, entry] as const),
+  );
+  const currentWindowIds = new Set(current.topology.windows.map((entry) => entry.windowId));
+  for (const window of current.topology.windows) {
+    const kept = desiredWindows.get(window.windowId);
+    if (kept === undefined) blockers.push("reconfigure-window-removal-unsupported");
+    else if (!sameSemanticSection(window, kept)) {
+      blockers.push("reconfigure-window-change-unsupported");
+    }
+  }
+  const primaryPodId = current.pods.find((pod) => pod.placement === "primary")?.podId ?? null;
+  const addedRepositoryIds = new Set(addedRepositories.map((entry) => entry.repositoryId));
+  const addedWindowCounts = new Map<string, number>();
+  for (const window of desired.topology.windows) {
+    if (currentWindowIds.has(window.windowId)) continue;
+    const admitted =
+      window.role === "product" &&
+      window.podId === primaryPodId &&
+      window.root.kind === "repository" &&
+      addedRepositoryIds.has(window.root.repositoryId);
+    if (!admitted) blockers.push("reconfigure-window-addition-unsupported");
+    else if (window.root.kind === "repository") {
+      const repositoryId = window.root.repositoryId;
+      addedWindowCounts.set(repositoryId, (addedWindowCounts.get(repositoryId) ?? 0) + 1);
+    }
+  }
+  for (const repositoryId of addedRepositoryIds) {
+    if (addedWindowCounts.get(repositoryId) !== 1) {
+      blockers.push("reconfigure-window-addition-unsupported");
+    }
+  }
+  return Object.freeze({
+    blockers: Object.freeze([...new Set(blockers)]),
+    addedRepositories: Object.freeze(addedRepositories),
+  });
+}
+
+/**
+ * 新增仓库的根（§13.130 D9）：必须已经在，并且根下的 `.git` 是目录——`.git` 文件是链接 worktree
+ * 的指针，它与主仓库共用对象库与分支命名空间，拒为 `reconfigure-repository-root-worktree`。仓库的
+ * 物理身份取 `.git` 目录经规范化后的父目录（打开时解开中间的符号链接），与已配置仓库的根相等、
+ * 包含或被包含都拒为 `reconfigure-repository-root-duplicate`（§13.130）。Wakeflow 只指向仓库，从不
+ * 替用户创建或初始化它。只读，不 spawn git；不依赖放置报告，所以放置准入失败时照样给出具体原因。
+ */
+async function addedRepositoryRootBlockers(
+  workspaceRoot: string,
+  current: Readonly<WakeflowConfigModel>,
+  repositories: readonly Readonly<WakeflowConfigRepository>[],
+): Promise<readonly string[]> {
+  const blockers: string[] = [];
+  if (repositories.length === 0) return Object.freeze(blockers);
+  const existingRoots: string[] = [];
+  for (const repository of current.topology.repositories) {
+    const physical = await canonicalDirectoryPath(repositoryAbsolutePath(workspaceRoot, repository));
+    if (physical !== null) existingRoots.push(physical);
+  }
+  for (const repository of repositories) {
+    const absolute = repositoryAbsolutePath(workspaceRoot, repository);
+    const probe = await probeAddedRepositoryRoot(absolute);
+    if (typeof probe === "string") {
+      blockers.push(probe);
+      continue;
+    }
+    const overlaps = existingRoots.some(
+      (existing) =>
+        existing === probe.root ||
+        existing.startsWith(`${probe.root}${nodePath.sep}`) ||
+        probe.root.startsWith(`${existing}${nodePath.sep}`),
+    );
+    if (overlaps) blockers.push("reconfigure-repository-root-duplicate");
+  }
+  return Object.freeze([...new Set(blockers)]);
+}
+
+function repositoryAbsolutePath(
+  workspaceRoot: string,
+  repository: Readonly<WakeflowConfigRepository>,
+): string {
+  // 与配置放置准入同一解析（wakeflow-config-root-placement 的 planRoots）。
+  return nodePath.resolve(workspaceRoot, ...repository.path.split("/"));
+}
+
+/** 打开目录取规范物理路径；打不开（缺失、符号链接、不可读）为 null。进程内使用，不外泄。 */
+async function canonicalDirectoryPath(absolutePath: string): Promise<string | null> {
+  let directory: RootedDirectory | null = null;
+  try {
+    directory = await RootedDirectory.open(absolutePath, "$repositoryRoot");
+    return directory.absolutePath;
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryError) return null;
+    throw error;
+  } finally {
+    if (directory !== null) await directory.close();
+  }
+}
+
+/** 新增仓库根的探测：成功给出规范物理根，失败给出阻塞码。 */
+async function probeAddedRepositoryRoot(
+  absolutePath: string,
+): Promise<string | Readonly<{ readonly root: string }>> {
+  let gitDirectory: RootedDirectory | null = null;
+  try {
+    gitDirectory = await RootedDirectory.open(nodePath.join(absolutePath, ".git"), "$repositoryRoot");
+    return Object.freeze({ root: nodePath.dirname(gitDirectory.absolutePath) });
+  } catch (error: unknown) {
+    if (!(error instanceof RootedDirectoryError)) throw error;
+    if (error.reason === "root-type") return "reconfigure-repository-root-worktree";
+    if (error.reason !== "root-not-found" && error.reason !== "inspection-failure") {
+      return "reconfigure-repository-root-unreadable";
+    }
+  } finally {
+    if (gitDirectory !== null) await gitDirectory.close();
+  }
+  let root: RootedDirectory | null = null;
+  try {
+    root = await RootedDirectory.open(absolutePath, "$repositoryRoot");
+    return "reconfigure-repository-not-git";
+  } catch (error: unknown) {
+    if (!(error instanceof RootedDirectoryError)) throw error;
+    if (error.reason === "root-not-found") return "reconfigure-repository-root-missing";
+    return error.reason === "root-symlink"
+      ? "reconfigure-repository-not-git"
+      : "reconfigure-repository-root-unreadable";
+  } finally {
+    if (root !== null) await root.close();
   }
 }
 
@@ -1001,6 +1172,7 @@ export async function previewWakeflowStaticMaterialization(
   }
   if (request.action === "reconcile") desired = current?.model ?? null;
   if (desired === null) addBlocker(blockers, "desired-config-unavailable");
+  let addedRepositories: readonly Readonly<WakeflowConfigRepository>[] = Object.freeze([]);
 
   if (
     request.action === "reconfigure" &&
@@ -1012,12 +1184,11 @@ export async function previewWakeflowStaticMaterialization(
     }
     // 布局只含 topology 与 storage。`hosts` 是持久启动偏好（按角色的模型、effort、权限模式与 tmux
     // 容器名），能力卡 1 §1.3 列为可改项；托管正文与窗口投影都不依赖它，改动只落到 config 一步（§13.116 D1）。
-    if (
-      !sameSemanticSection(current.model.topology, desired.topology) ||
-      !sameSemanticSection(current.model.storage, desired.storage)
-    ) {
-      addBlocker(blockers, "reconfigure-layout-change-unsupported");
-    }
+    // 拓扑上只允许新增产品仓库与它的 primary pod 产品窗口（§13.130 D9）；新窗口的运行投影、仓库的
+    // 托管块与程序指令由后面按 desired 配置计算的步骤与宿主贡献一并写出。
+    const topology = reconfigureTopologyChange(current.model, desired);
+    for (const code of topology.blockers) addBlocker(blockers, code);
+    addedRepositories = topology.addedRepositories;
     // pod 记录只由 wakeflow_pod 的配置事务改写（ADR-0010 D6）。
     if (!sameSemanticSection(current.model.pods, desired.pods)) {
       addBlocker(blockers, "reconfigure-pods-change-unsupported");
@@ -1028,6 +1199,14 @@ export async function previewWakeflowStaticMaterialization(
   if (desired !== null) {
     placements = await desiredPlacements(rootValue, desired);
     if (placements === null) addBlocker(blockers, "desired-placement-invalid");
+    if (current !== null) {
+      const codes = await addedRepositoryRootBlockers(
+        rootValue.absolutePath,
+        current.model,
+        addedRepositories,
+      );
+      for (const code of codes) addBlocker(blockers, code);
+    }
     planFreshActiveWorkspaceProjection(request, desired, blockers, steps);
   }
 

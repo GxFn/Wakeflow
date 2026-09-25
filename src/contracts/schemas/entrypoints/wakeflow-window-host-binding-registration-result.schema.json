@@ -406,10 +406,17 @@
           "$ref": "#/$defs/windowId"
         },
         "operation": {
-          "enum": ["register", "replace", "decommission", "release-claim"]
+          "enum": ["register", "replace", "relocate", "decommission", "release-claim"]
         },
         "disposition": {
-          "enum": ["registered", "replayed", "replaced", "decommissioned", "claim-released"]
+          "enum": [
+            "registered",
+            "replayed",
+            "replaced",
+            "relocated",
+            "decommissioned",
+            "claim-released"
+          ]
         },
         "binding": {
           "oneOf": [

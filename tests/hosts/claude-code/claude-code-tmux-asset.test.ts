@@ -77,6 +77,10 @@ case "$cmd" in
       if [ -n "$sid" ]; then
         printf '{"kind":"stub","event":"session-start","sessionId":"%s","cwd":"%s"}\\n' "$sid" "$cwd" > "$WAKEFLOW_STUB_HOOKS/20260924T000000000Z-session-start-$sid.json"
       fi
+      rid=$(printf '%s' "$last" | sed -n "s/.*'--resume' '\\([^']*\\)'.*/\\1/p")
+      if [ -n "$rid" ]; then
+        printf '{"kind":"stub","event":"session-start","sessionId":"%s","cwd":"%s","source":"resume"}\\n' "$rid" "$cwd" > "$WAKEFLOW_STUB_HOOKS/20260924T000001000Z-session-start-resume-$rid.json"
+      fi
     fi
     printf '@%s~|~%%%s\\n' "$n" "$n" ;;
   set-option|paste-buffer|send-keys|delete-buffer) : ;;
@@ -426,6 +430,8 @@ test("launch opens the session or a window from the intent, freezes the title, w
   equal(log.length, 6);
 
   // 会话已存在：第二个窗口走 new-window；仓库在根旁边（../ProductA）也能作为 cwd。
+  // hook 还没到但新 pane 活着：待定，不是失败。
+  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@2", pane: "%2" })}\n`);
   resetLog(current);
   const second = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
     input: JSON.stringify(launchIntent("Product A", "../ProductA")),
@@ -741,6 +747,55 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
     recordedAt: "2026-09-24T01:00:00.000Z",
   });
   equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "999"], { input: prompt }).json.reason, "wait-landing-invalid");
+});
+
+test("resume restarts the bound session in a new pane and launch refuses while the located pane is alive（§13.125）", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  const intent = JSON.stringify(launchIntent("Product A", "../ProductA"));
+  const hooks = { WAKEFLOW_STUB_HOOKS: current.hooks };
+  // 定位器指向的 pane 还活着：launch 与 resume 都拒绝，--force 才继续。
+  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
+  const liveLaunch = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  equal(liveLaunch.status, 1);
+  equal(liveLaunch.json.reason, "locator-live");
+  const liveResume = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  equal(liveResume.json.reason, "locator-live");
+  // pane 已死：resume 用绑定里的会话 id 起 claude --resume，等到新的 session-start 记录。
+  writeFileSync(path.join(current.state, "panes.txt"), "");
+  resetLog(current);
+  const resumed = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "2"], { input: intent, env: hooks });
+  equal(resumed.status, 0, JSON.stringify(resumed.json));
+  equal(resumed.json.command, "resume");
+  equal(resumed.json.resumed, true);
+  const observation = resumed.json.observation as { handle: { value: string }; tmux: { paneId: string } };
+  equal(observation.handle.value, SESSION_ID);
+  deepEqual(resumed.json.hook, { sessionStart: "observed" });
+  const created = tmuxLog(current).find((entry) => entry[0] === "new-session" || entry[0] === "new-window");
+  if (created === undefined) throw new Error("resume must open a tmux window");
+  const command = created[created.length - 1] ?? "";
+  equal(command.includes(`'--resume' '${SESSION_ID}'`), true, command);
+  equal(command.includes("--session-id"), false, command);
+  // 没有绑定的窗口不能 resume。
+  equal(runHelper(current, ["resume", "--window", CONTROLLER_WINDOW_ID, "--wait", "0"], { input: JSON.stringify(launchIntent("Controller", ".")) }).json.reason, "binding-missing");
+  // SessionStart 没到但新 pane 还活着：待定，交给 Controller 稍后核对。
+  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@2", pane: "%2" })}\n`);
+  const pendingResume = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  equal(pendingResume.status, 0, JSON.stringify(pendingResume.json));
+  deepEqual(pendingResume.json.hook, { sessionStart: "pending" });
+  // claude 拒绝 --resume（会话从未有过对话）会直接退出：pane 消失或已死都是 resume-exited，不能当待定成功交给 relocate。
+  writeFileSync(path.join(current.state, "panes.txt"), "");
+  const exitedResume = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  equal(exitedResume.status, 1);
+  equal(exitedResume.json.reason, "resume-exited");
+  deepEqual(exitedResume.json.tmux, { windowId: "@3", paneId: "%3", pane: "absent" });
+  equal(typeof exitedResume.json.hint, "string");
+  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@4", pane: "%4", dead: true })}\n`);
+  const exitedLaunch = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  equal(exitedLaunch.status, 1);
+  equal(exitedLaunch.json.reason, "launch-exited");
+  deepEqual(exitedLaunch.json.tmux, { windowId: "@4", paneId: "%4", pane: "dead" });
 });
 
 test("the helper resolves the workspace from its own location and refuses to run outside one", async (t) => {

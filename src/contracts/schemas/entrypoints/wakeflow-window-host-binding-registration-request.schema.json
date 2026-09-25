@@ -16,6 +16,9 @@
       "$ref": "#/$defs/replaceRequest"
     },
     {
+      "$ref": "#/$defs/relocateRequest"
+    },
+    {
       "$ref": "#/$defs/decommissionRequest"
     },
     {
@@ -327,6 +330,38 @@
         },
         "operation": {
           "const": "replace"
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "observation": {
+          "$ref": "#/$defs/creationObservation"
+        },
+        "expectedBindingId": {
+          "$ref": "#/$defs/bindingId"
+        },
+        "expectedBindingDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "relocateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "operation",
+        "windowId",
+        "observation",
+        "expectedBindingId",
+        "expectedBindingDigest"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/root"
+        },
+        "operation": {
+          "const": "relocate"
         },
         "windowId": {
           "$ref": "#/$defs/windowId"

@@ -3590,3 +3590,38 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **现场。** 用仓库里的制品本身（`plugins/claude-code-wakeflow/mcp/server.mjs`）对两个根各做一次只读 reconcile 预览：以 Wakeflow 仓库根为工作区——正是这条护栏要防的场景——返回 `blocked`、阻塞项 `workspace-root-overlaps-artifact`，仓库工作树没有任何新文件；以 `WakeflowTestWorkspace` 为工作区返回 `ready`、零步，八个窗口与既有归档不受影响。这一轮没有再跑 Demand 闭环：改动只在维护入口的前置检查，不经过投递与评审。
 
 **残留。** D8 与 D9 待用户裁决（各建议单独一轮）；`wakeflow_verify` 门与 reconcile 阻塞码都只给代码不给路径，用户看到 `*-conflict` 时不知道是哪个节点——随 D8 一起处理；Codex 宿主仍未做真实会话测试（未执行）。
+
+## 13.125 逐模块对齐第四轮：窗口与宿主——对照、两处移植（resume / relocate；活 pane 守卫与退出探测）（2026-09-25）
+
+**背景。** 第四轮对照旧实现的窗口绑定与运行投影、宿主 profile 与能力合同、Claude 宿主的生命周期 / 定位器 / settings / 退役、Codex 宿主模块、进程边界与制品校验：`wakeflow-window-{binding-records,binding-service,runtime-projector,runtime-records}.mjs`、`wakeflow-host-{profile,capability}.mjs`、`wakeflow-process-identity.mjs`、Claude 的 `wakeflow-claude-{lifecycle,locator,settings,decommission,host}.mjs`、Codex 的 `wakeflow-codex-*.mjs`，以及十三个测试文件。
+
+**行为对照。**
+
+| 旧实现已验证的行为（测试名摘要） | 新实现 | 状态 |
+|---|---|---|
+| 绑定记录敏感、宿主 profile 拥有句柄种类、稳定 windowId 决定 ref；register 创建一次、同句柄重放字节稳定 | `wakeflow-window-host-binding*`：私有 0600 记录，同句柄 `replayed`，异句柄 `handle-conflict` | 同形 |
+| 普通登记不能替换或夹带写权限；替换与退役要求 bindingId + 摘要 CAS | `replace` / `decommission` 都带 `expectedBindingId` 与 `expectedBindingDigest` | 同形 |
+| 活跃租约阻塞绑定替换与退役 | `claim-held` 阻塞 replace 与 decommission | 同形 |
+| 重复句柄、遗留双权威失败关闭；不安全的库存零写；孤儿身份只库存不选为权威 | 句柄跨窗口唯一（`handleOwners`）；不安全记录只报告 | 同形 |
+| 运行投影：每个耐久窗口一次重建、字节确定；根观察在身份登记之后才开始；绑定创建或替换只让派生字节过期，从不暴露句柄；同一仓库的窗口共享一次根观察 | registered / unregistered 投影 + 投影维护（缺失或过期重算，读不出只报告） | 同形 |
+| Claude 生命周期：identity-first 启动、从不返回原始句柄；mutex 后配置漂移在物理创建前拒绝；不安全的 tmux 配置在宿主效果前拒绝 | 助手 `launch` 用 inspect 的启动意图（含 intentDigest），句柄只进私有绑定文件；register 核对 `launchIntentDigest` | 同形 |
+| **resume 消费精确私有句柄、保留绑定、创建新的定位器代际；resume 拒绝仍活着的定位器** | 无：pane 没了只能 close + launch + replace（新会话，丢上下文） | **移植** |
+| 定位器：观察核对 socket、session、window、pane、进程与 live 元数据；身份替换让旧定位器作废 | 定位器随 register / replace 重写；deliver 的 pane authority（§13.122） | 同形 |
+| 退役：Claude 精确关闭只在有界缺席后机器核实并保留身份与定位器；still-present 关闭阻塞；Codex 归档是人工门 | `decommission`：Claude 凭 pane 缺席与 session-end 证据机器核实，Codex 走人工宿主门 | 同形 |
+| settings：可移植合并保留用户键与顺序、只收敛受管条目；自定义状态栏保留、冲突阻塞；本地 settings 要有真实的 ignore 证据；授权按 repositoryId 精确 | portable settings transition / rules / statusline 操作同形；规则只在程序根（§13.117 D5） | 同形 |
+| 宿主能力合同：核心不含 Codex-versus-Claude 分支；capability 只描述适用性 | 宿主差异只在 `src/hosts/<host>/` 与 profile 数据（TSD-12） | 同形 |
+| 进程边界：只允许六种只读 git 观察与固定 ps 查询，无 shell | 观察层从不 spawn（hook 入口闭包只到 kernel）；spawn 只在 gitignore 观察与 tmux 助手 | 同形 |
+| 制品校验：marketplace 源绑定制品根；MCP 布线拒绝继承的工作区根环境默认值 | 制品测试与 §13.124 的制品重叠护栏；`root` 逐请求传入 | 同形 |
+| 激活范围、迁移退役、runtime-meta | 无 | 放弃（能力卡 10 Q2、ADR-0008） |
+
+**移植一：`relocate` 与助手 `resume`。** 旧实现的 `resumeClaudeWindow` 让一个 pane 已死的窗口在新 pane 里用同一个 Claude 会话续跑：绑定不变、只换定位器代际。新实现原来只有 close + launch + replace 一条路——新会话、丢掉上下文。现在：绑定端点新增第六种操作 `relocate`（请求形状同 replace；准入同 register 的意图摘要、tmux 坐标、hook 证据；句柄必须等于当前绑定的句柄，否则 `handle-changed`；只有 tmux 定位器的宿主可用，否则 `locator-provider`；持有的工作声明不阻塞——同一会话继续它的工作；结果 `relocated`，绑定与其摘要原样，定位器文件换成新坐标与新 locatorId，投影刷新）。Claude 助手新增 `resume --window <id> [--wait N] [--force]`：stdin 同 launch 的 inspect 结果，从绑定文件取私有会话 id，把启动参数里的 `--session-id <占位符>` 换成 `--resume <会话 id>`（模型、权限、`--add-dir` 照旧），在配置的 tmux 会话里开新 pane，等这个会话**新的** session-start 记录（Claude Code 对 `--resume` 也触发 SessionStart；"新"按记录文件名集合的差判定），打印 relocate 用的 observation。
+
+**移植二：活 pane 守卫与退出探测。** `launch` 与 `resume` 在定位器指向的 pane 还活着时拒绝（`locator-live`，带坐标与提示；`--force` 跳过）——旧实现 resume 的同一守卫，防的是给同一个逻辑窗口开出第二个物理窗口。现场又暴露一条旧实现没有覆盖的路径：Claude Code 拒绝 `--resume` 一个从未有过对话的会话（"No conversation found with session ID"），进程直接退出，tmux 随之关掉窗口；第一版 `resume` 只报 `hook.sessionStart: pending`，Controller 若照着 relocate 就把绑定指向一个不存在的 pane（现场就发生了：relocate `relocated`、随后 `mark` 报 `pane-missing`）。现在 `launch` 与 `resume` 等不到 hook 记录时再核对新 pane：已消失或已死就拒绝为 `launch-exited` / `resume-exited`（带坐标、`pane: absent | dead` 与提示），只有 pane 活着才是 `pending`；两条命令共用同一个开窗口函数。
+
+**回归。** 决定测试新增 relocate 六段（接受、持有声明不阻塞、句柄变了、Codex 宿主、CAS 漂移、缺坐标、无绑定）；切片测试新增 Claude relocate（绑定 id 与摘要不变、定位器换坐标与代际、异句柄拒）；助手测试新增 resume 与活 pane 守卫（launch / resume 各拒一次，pane 死后 resume 的 tmux 命令含 `--resume <id>` 且不含 `--session-id`，观察到新的 session-start，无绑定的窗口 `binding-missing`，hook 待定但 pane 活着仍是 `pending`，pane 消失 `resume-exited: absent`、pane 已死 `launch-exited: dead`）；MCP 目录测试要求描述里保留"never creates, inspects, or closes host windows"，描述压到恰好 640 字节。焦点集 25/25，退出探测补上后助手、维护执行与技能文本焦点集 23/23。Controller 技能与 `windowLaunch` 取值写明 resume → relocate → mark 的顺序。
+
+**门。** `npm test` 全绿：typecheck、architecture、Biome lint（714 文件）与 format（245 文件）、knip、TypeScript 测试 1017/1017（含二十个端到端场景）、schema 漂移检查、`build:check` 与已提交制品一致；`npm run smoke:artifacts` 通过；`git diff --check` 干净。
+
+**现场。** 仍是 WakeflowTestWorkspace 的八个窗口：用仓库制品的副本经 stdio 调 MCP，直接调工作区里的助手资产。先 reconcile 把重建的助手部署进去（预览只有 `asset:claude-code:tmux` 一步，apply completed）。AlembicPlugin（会话已有 47 轮对话）：定位器的 pane 还活着时 `resume` 拒 `locator-live`（坐标 %15）；`close` 后 `resume --wait 40` 在新 pane %22 里观察到这个会话新的 session-start（`hook.sessionStart: observed`），`relocate` 回 `relocated` 且 bindingId 不变，`mark` 成功，inspect 的定位器换成新坐标；新 pane 的屏幕上是这个会话上一轮的回答（关于 docs/archive 的追问），上下文确实续上了；status idle，verify 14/14。AlembicDashboard（刚 replace 出来、从未有过对话的新会话）：退出探测补上之前的那一版助手把 resume 报成 `pending`，relocate 通过，随后 `mark` 报 `pane-missing`——窗口 @19 已随 claude 退出被 tmux 关掉；在调试窗口里用 `WAKEFLOW_DEBUG_EXIT=1` 复现，claude 打印 "No conversation found with session ID"。补上探测并 reconcile 之后，同一场景 `resume` 拒 `resume-exited`（`pane: absent`，带提示），随后 close + launch + replace + mark 修复（新 pane %24，hook observed）。终态八个 pane 全活、都带 Wakeflow 窗口选项，board 不变（归档 4、撤回 1），verify 14/14。
+
+**残留。** D8 与 D9 仍待用户裁决。Claude Code 不能 resume 一个从未有过对话的会话，这是宿主行为：Wakeflow 只探测并提示改走 launch + replace；pane 已被 tmux 关掉时助手拿不到 claude 的退出输出，退出原因只能由提示推断（`remain-on-exit` 打开的会话里 pane 会留下、报 `dead`）。`resume` 在 pane 活着但 hook 记录迟到时仍报 `pending`，relocate 的准入照样要这条记录，所以 Controller 只能稍后再 relocate，不能凭 pending 登记。Codex 宿主没有 resume 路径（它的窗口由用户自己开），Codex 真实会话测试仍未执行。旧实现的激活范围、迁移退役与 runtime-meta 仍是放弃项。

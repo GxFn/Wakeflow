@@ -55,7 +55,14 @@ const WINDOW_LAUNCH =
   "observation to register verbatim. After each registration run `mark --window <windowId>` " +
   "so the tmux window " +
   "carries the five Wakeflow options; `panes` prints the tmux-panes observation, and " +
-  "`close --window <windowId>` prints the closure evidence a decommission needs.";
+  "`close --window <windowId>` prints the closure evidence a decommission needs. When a " +
+  "registered window's pane is gone but its session should continue (tmux restarted, pane " +
+  "closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts " +
+  "`claude --resume` with the bound session in a new pane and prints the observation for the " +
+  "binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. " +
+  "`launch` and `resume` refuse while the located pane is still alive, and report " +
+  "`resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session " +
+  "that never held a conversation cannot be resumed, so launch a fresh window instead.";
 
 /** Controller 自己怎么进 tmux：用户是被引导者，从不自己配置 tmux（§13.118）。 */
 const WINDOW_BOOTSTRAP =

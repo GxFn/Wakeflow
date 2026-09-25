@@ -143,6 +143,61 @@ test("replace：CAS 旧绑定、拒绝持有声明与未变句柄，接受新句
   equal(unchanged.accepted === false && unchanged.reason, "handle-unchanged");
 });
 
+test("relocate：同句柄换 pane，绑定 CAS，只有 tmux 定位器宿主，持有的声明不阻塞（§13.125）", () => {
+  const relocate = (handleValue: string, digest = BINDING.bindingDigest): EndpointCommand => ({
+    operation: "relocate",
+    observation: {
+      handleValue,
+      launchIntentDigest: INTENT,
+      hasTmuxCoordinates: true,
+      hasWorktreeObservation: false,
+    },
+    expectedBindingId: BINDING.bindingId,
+    expectedBindingDigest: digest,
+  });
+  const tmuxState = (overrides: Partial<EndpointState> = {}) =>
+    state({ binding: BINDING, locatorProvider: "tmux", ...overrides });
+  deepEqual(decideEndpointCommand(WINDOW, tmuxState(), relocate("session-a")), {
+    accepted: true,
+    operation: "relocate",
+    disposition: "relocated",
+  });
+  const held = decideEndpointCommand(
+    WINDOW,
+    tmuxState({ claim: { claimId: "c", claimDigest: "sha256:x", expired: false } }),
+    relocate("session-a"),
+  );
+  equal(held.accepted, true, "a held claim keeps working in the same session");
+  const changed = decideEndpointCommand(WINDOW, tmuxState(), relocate("session-b"));
+  equal(changed.accepted === false && changed.reason, "handle-changed");
+  const codex = decideEndpointCommand(WINDOW, state({ binding: BINDING }), relocate("session-a"));
+  equal(codex.accepted === false && codex.reason, "locator-provider");
+  const drift = decideEndpointCommand(
+    WINDOW,
+    tmuxState(),
+    relocate("session-a", `sha256:${"0".repeat(64)}`),
+  );
+  equal(drift.accepted === false && drift.reason, "binding-drift");
+  const noCoordinates = decideEndpointCommand(WINDOW, tmuxState(), {
+    operation: "relocate",
+    observation: {
+      handleValue: "session-a",
+      launchIntentDigest: INTENT,
+      hasTmuxCoordinates: false,
+      hasWorktreeObservation: false,
+    },
+    expectedBindingId: BINDING.bindingId,
+    expectedBindingDigest: BINDING.bindingDigest,
+  });
+  equal(noCoordinates.accepted === false && noCoordinates.reason, "tmux-coordinates-required");
+  const absent = decideEndpointCommand(
+    WINDOW,
+    state({ locatorProvider: "tmux" }),
+    relocate("session-a"),
+  );
+  equal(absent.accepted === false && absent.code, "not-found");
+});
+
 test("decommission：证据分级，声明持有与关闭失败拒绝", () => {
   const base = {
     operation: "decommission" as const,

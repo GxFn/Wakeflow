@@ -105,6 +105,13 @@ Other actions on the same tool:
   bound" without touching anything.
 - **replace** binds a new handle against the old binding. A stale digest is
   refused; re-inspect and replace against what is current.
+- **relocate** keeps the binding and records the pane a resumed session now
+  lives in: the same handle, new tmux coordinates, the same CAS on the binding.
+  It is the record for a window whose pane died while its session should go
+  on - the host resumes the session (on Claude Code, open a new Codex thread rooted at the directory the intent names, started with the parameters it lists. names the
+  helper's `resume`), you relocate with the observation it prints, then mark.
+  A held work claim does not block it: the same session keeps its work. Use
+  replace only when the session itself is gone.
 - **decommission** retires a window with its pre-close, close-result and
   post-close evidence. Use it when a window is genuinely gone, not to silence
   an inconvenient state.

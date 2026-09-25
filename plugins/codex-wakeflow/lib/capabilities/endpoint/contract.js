@@ -41,7 +41,7 @@ export const WINDOW_BINDING_TOOL_REGISTRATION = Object.freeze({
     shape: "append",
     executor: "registerWindowHostBinding",
     title: "Register Wakeflow Window Binding",
-    description: "Manage one logical window's execution endpoint. inspect returns the recomputed launch intent with binding, work-claim, and locator state; register binds the handle the Agent observed after executing that intent (a host SessionStart hook record for that session and root is required; Claude Code also supplies tmux coordinates); replace binds a new handle with CAS on the old binding; decommission retires it with pre-close, close-result, and post-close evidence; release-claim force-releases an expired or orphaned work claim. Wakeflow never creates, inspects, or closes host windows; raw handles never leave the private binding file.",
+    description: "Manage one logical window's execution endpoint. inspect returns the recomputed launch intent with binding, claim and locator state; register binds the observed handle (a SessionStart hook record is required; Claude Code also supplies tmux coordinates); replace binds a new handle with CAS on the old binding; relocate keeps the binding and records a resumed session's new tmux pane; decommission retires the window with pre-close, close-result and post-close evidence; release-claim force-releases an expired or orphaned work claim. Wakeflow never creates, inspects, or closes host windows; raw handles never leave the private binding file.",
     requestSchema: WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA,
     annotations: {

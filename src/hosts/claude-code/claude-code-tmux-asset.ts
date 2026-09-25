@@ -22,6 +22,11 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  * - `launch --window <windowId>`：stdin 是 `wakeflow_register_window_binding` inspect 的结果
  *   （或其 `launchIntent`）。生成 session id，按启动意图开窗口并启动 `claude`，等目标会话的
  *   `session-start` hook 记录，打印登记用的 creation observation。
+ * - `resume --window <windowId> [--wait N] [--force]`：stdin 同 launch；用绑定里的私有会话 id 以
+ *   `claude --resume` 在新 pane 里续同一会话，等到新的 session-start 记录后打印 relocate 用的
+ *   observation；定位器的 pane 还活着时拒绝（`--force` 跳过）。launch 对活着的 pane 同样拒绝。
+ *   两者等不到 hook 记录时再看新 pane：已消失或已死就报 `resume-exited` / `launch-exited`
+ *   （claude 拒绝 --resume 一个从未有过对话的会话时就是这样退出的），只有活着才是 `pending`。
  * - `self`：Controller 给自己的窗口出同一份 observation（`TMUX_PANE` 与
  *   `CLAUDE_CODE_SESSION_ID` 来自 Claude Code 交给 shell 的环境）。
  * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上。
@@ -590,28 +595,68 @@ function commandPreflight(config) {
   };
 }
 
-function commandLaunch(config, options) {
-  const context = tmuxContext(config);
-  const { windowId, launchIntent } = unwrapIntent(readStdinJson(), options);
-  const execution = launchIntent.execution;
-  if (
-    typeof execution !== "object"
-    || execution === null
-    || execution.kind !== HOST_ID
-    || execution.command !== "claude"
-    || !Array.isArray(execution.arguments)
-    || !execution.arguments.every((argument) => typeof argument === "string")
-  ) {
-    refuse("intent-invalid", { field: "execution" });
+// 定位器指向的 pane 还活着就不再开第二个物理窗口（旧实现 resume 的同一守卫，§13.125）。
+function assertLocatorNotLive(context, windowId, options) {
+  const locator = readLocator(windowId);
+  if (locator === null || options.force) return;
+  const listed = listPanes(context);
+  if (!listed.available) return;
+  const live = listed.rows.find((entry) => (
+    entry.sessionName === locator.tmux.sessionName
+    && entry.windowId === locator.tmux.windowId
+    && entry.paneId === locator.tmux.paneId
+    && !entry.paneDead
+  ));
+  if (live !== undefined) {
+    refuse("locator-live", { tmux: { windowId: live.windowId, paneId: live.paneId }, hint: "close the window first, or pass --force" });
   }
-  const sessionId = randomUUID();
-  const resolvedArguments = execution.arguments.map((argument) => {
-    if (argument === SESSION_ID_PLACEHOLDER) return sessionId;
-    if (argument.startsWith(WORKSPACE_ROOT_PLACEHOLDER)) return ROOT + argument.slice(WORKSPACE_ROOT_PLACEHOLDER.length);
-    return argument;
-  });
-  if (!resolvedArguments.includes(sessionId)) refuse("intent-invalid", { field: "session-id-placeholder" });
-  if (resolvedArguments.some((argument) => /^<[^>]*>$/u.test(argument))) refuse("placeholder-unresolved");
+}
+
+function sessionStartNames(sessionId) {
+  const directory = path.join(ROOT, ...HOOKS.split("/"));
+  const names = [];
+  for (const name of listJsonNames(directory)) {
+    if (!name.includes("-session-start-")) continue;
+    const record = readBoundedJson(path.join(directory, name), MAX_RECORD_BYTES);
+    if (record !== null && typeof record === "object" && record.sessionId === sessionId) names.push(name);
+  }
+  return names;
+}
+
+// resume 之后的证据是一条新的 session-start 记录（Claude Code 对 --resume 也触发 SessionStart）。
+function waitForNewSessionStart(sessionId, before, seconds) {
+  const deadline = Date.now() + seconds * 1000;
+  for (;;) {
+    const fresh = sessionStartNames(sessionId).filter((name) => !before.has(name));
+    if (fresh.length > 0) {
+      const directory = path.join(ROOT, ...HOOKS.split("/"));
+      const record = readBoundedJson(path.join(directory, fresh[fresh.length - 1]), MAX_RECORD_BYTES);
+      return Object.freeze({ status: "observed", record });
+    }
+    if (Date.now() >= deadline) return Object.freeze({ status: "pending", record: null });
+    sleep(HOOK_POLL_MS);
+  }
+}
+
+// SessionStart 没到时看新 pane 是否还活着：claude 拒绝 --resume（例如会话从未有过对话）会直接退出，
+// 这时不能把一个已死或已消失的 pane 当作"待定"交给 relocate。
+function assertPaneAlive(context, command, coordinates) {
+  const listed = listPanes(context);
+  if (!listed.available) return;
+  const pane = listed.rows.find((entry) => (
+    entry.sessionName === context.sessionName
+    && entry.windowId === coordinates.windowId
+    && entry.paneId === coordinates.paneId
+  ));
+  if (pane === undefined || pane.paneDead) {
+    refuse(command + "-exited", {
+      tmux: { windowId: coordinates.windowId, paneId: coordinates.paneId, pane: pane === undefined ? "absent" : "dead" },
+      hint: "claude exited before its SessionStart hook; a session that never held a conversation cannot be resumed, launch a fresh one instead",
+    });
+  }
+}
+
+function openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments) {
   const placement = resolvePlacement(execution.tmux?.cwd ?? launchIntent.root?.configuredPlacement);
   const windowName = cleanLabel(execution.tmux?.windowName ?? launchIntent.displayTitle, "window");
   const command = [claudeBinary(), ...resolvedArguments].map(shellQuote).join(" ");
@@ -629,7 +674,82 @@ function commandLaunch(config, options) {
   const coordinates = parseCreatedCoordinate(creation.stdout);
   freezeTitle(context, coordinates.windowId);
   setWindowOptions(context, coordinates.windowId, { programId: config.program.programId, hostId: HOST_ID, windowId });
+  return { coordinates, windowName, placement, exists };
+}
+
+function assertExecution(execution) {
+  if (
+    typeof execution !== "object"
+    || execution === null
+    || execution.kind !== HOST_ID
+    || execution.command !== "claude"
+    || !Array.isArray(execution.arguments)
+    || !execution.arguments.every((argument) => typeof argument === "string")
+  ) {
+    refuse("intent-invalid", { field: "execution" });
+  }
+}
+
+function commandResume(config, options) {
+  const context = tmuxContext(config);
+  const { windowId, launchIntent } = unwrapIntent(readStdinJson(), options);
+  const execution = launchIntent.execution;
+  assertExecution(execution);
+  const binding = readBoundedJson(path.join(ROOT, ...BINDINGS.split("/"), windowId + ".json"), MAX_RECORD_BYTES);
+  const sessionId = binding?.handle?.kind === HANDLE_KIND ? binding.handle.value : null;
+  if (typeof sessionId !== "string" || !UUID_PATTERN.test(sessionId)) refuse("binding-missing", { hint: "resume needs a registered window; launch a fresh one instead" });
+  assertLocatorNotLive(context, windowId, options);
+  // 去掉 --session-id <占位符>，改为 --resume <绑定里的会话 id>；其余参数（模型、权限、--add-dir）照旧。
+  const resolvedArguments = [];
+  for (let index = 0; index < execution.arguments.length; index += 1) {
+    const argument = execution.arguments[index];
+    if (argument === "--session-id" && execution.arguments[index + 1] === SESSION_ID_PLACEHOLDER) {
+      index += 1;
+      continue;
+    }
+    if (argument === SESSION_ID_PLACEHOLDER) continue;
+    resolvedArguments.push(argument.startsWith(WORKSPACE_ROOT_PLACEHOLDER) ? ROOT + argument.slice(WORKSPACE_ROOT_PLACEHOLDER.length) : argument);
+  }
+  if (resolvedArguments.some((argument) => /^<[^>]*>$/u.test(argument))) refuse("placeholder-unresolved");
+  resolvedArguments.push("--resume", sessionId);
+  const before = new Set(sessionStartNames(sessionId));
+  const opened = openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments);
+  const hook = waitForNewSessionStart(sessionId, before, options.wait);
+  if (hook.status === "pending") assertPaneAlive(context, "resume", opened.coordinates);
+  return {
+    ok: true,
+    command: "resume",
+    windowId,
+    resumed: true,
+    observation: creationObservation(sessionId, launchIntent.intentDigest, {
+      socketName: context.socketName,
+      sessionName: context.sessionName,
+      windowId: opened.coordinates.windowId,
+      paneId: opened.coordinates.paneId,
+    }, null),
+    hook: { sessionStart: hook.status },
+    window: { name: opened.windowName, cwd: opened.placement.relative, created: opened.exists ? "new-window" : "new-session" },
+    ...(opened.exists ? {} : { attach: attachCommand(context) }),
+  };
+}
+
+function commandLaunch(config, options) {
+  const context = tmuxContext(config);
+  const { windowId, launchIntent } = unwrapIntent(readStdinJson(), options);
+  const execution = launchIntent.execution;
+  assertLocatorNotLive(context, windowId, options);
+  assertExecution(execution);
+  const sessionId = randomUUID();
+  const resolvedArguments = execution.arguments.map((argument) => {
+    if (argument === SESSION_ID_PLACEHOLDER) return sessionId;
+    if (argument.startsWith(WORKSPACE_ROOT_PLACEHOLDER)) return ROOT + argument.slice(WORKSPACE_ROOT_PLACEHOLDER.length);
+    return argument;
+  });
+  if (!resolvedArguments.includes(sessionId)) refuse("intent-invalid", { field: "session-id-placeholder" });
+  if (resolvedArguments.some((argument) => /^<[^>]*>$/u.test(argument))) refuse("placeholder-unresolved");
+  const opened = openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments);
   const hook = waitForSessionStart(sessionId, options.wait);
+  if (hook.status === "pending") assertPaneAlive(context, "launch", opened.coordinates);
   const worktreeRequested = resolvedArguments.includes("--worktree");
   const worktree = worktreeRequested && typeof hook.record?.cwd === "string" ? observeWorktree(hook.record.cwd) : null;
   return {
@@ -639,12 +759,12 @@ function commandLaunch(config, options) {
     observation: creationObservation(sessionId, launchIntent.intentDigest, {
       socketName: context.socketName,
       sessionName: context.sessionName,
-      windowId: coordinates.windowId,
-      paneId: coordinates.paneId,
+      windowId: opened.coordinates.windowId,
+      paneId: opened.coordinates.paneId,
     }, worktree),
     hook: { sessionStart: hook.status },
-    window: { name: windowName, cwd: placement.relative, created: exists ? "new-window" : "new-session" },
-    ...(exists ? {} : { attach: attachCommand(context) }),
+    window: { name: opened.windowName, cwd: opened.placement.relative, created: opened.exists ? "new-window" : "new-session" },
+    ...(opened.exists ? {} : { attach: attachCommand(context) }),
     ...(worktreeRequested && worktree === null ? { worktreeObservation: "pending" } : {}),
   };
 }
@@ -866,6 +986,9 @@ function main() {
     switch (parsed.command) {
       case "preflight":
         result = commandPreflight(config);
+        break;
+      case "resume":
+        result = commandResume(config, options);
         break;
       case "launch":
         result = commandLaunch(config, options);

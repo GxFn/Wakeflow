@@ -102,6 +102,26 @@ function decideReplace(state, command, windowId) {
         return admission;
     return Object.freeze({ accepted: true, operation: "replace", disposition: "replaced" });
 }
+/**
+ * relocate：会话没变、pane 变了（宿主 resume 之后）。绑定 CAS 与 register 同样的准入（意图、坐标、
+ * hook 证据）之外，句柄必须与当前绑定相同，只有 tmux 定位器的宿主才有 pane 可换；持有中的工作声明
+ * 不阻塞——同一会话继续工作。
+ */
+function decideRelocate(state, command, windowId) {
+    const expectation = assertBindingExpectation(state, command.expectedBindingId, command.expectedBindingDigest);
+    if (expectation !== null)
+        return expectation;
+    if (state.locatorProvider !== "tmux") {
+        return reject("precondition-failed", "locator-provider", "$request.operation");
+    }
+    if (state.binding?.handleValue !== command.observation.handleValue) {
+        return reject("precondition-failed", "handle-changed", "$request.observation.handle");
+    }
+    const admission = admitCreation(state, command.observation, windowId);
+    if (admission !== null)
+        return admission;
+    return Object.freeze({ accepted: true, operation: "relocate", disposition: "relocated" });
+}
 /** 一个命令在当前端点状态下的结局。 */
 export function decideEndpointCommand(windowId, state, command) {
     if (!state.windowKnown)
@@ -109,6 +129,8 @@ export function decideEndpointCommand(windowId, state, command) {
     switch (command.operation) {
         case "register":
             return decideRegister(state, command, windowId);
+        case "relocate":
+            return decideRelocate(state, command, windowId);
         case "replace":
             return decideReplace(state, command, windowId);
         case "decommission":

@@ -176,16 +176,20 @@ const RECEIPT_DIRECTORY_MODE = 0o700;
 
 type RegisterRequest = Extract<WindowBindingRequest, { readonly operation: "register" }>;
 type ReplaceRequest = Extract<WindowBindingRequest, { readonly operation: "replace" }>;
+type RelocateRequest = Extract<WindowBindingRequest, { readonly operation: "relocate" }>;
 type DecommissionRequest = Extract<WindowBindingRequest, { readonly operation: "decommission" }>;
 type ReleaseClaimRequest = Extract<WindowBindingRequest, { readonly operation: "release-claim" }>;
-type MutationRequest = RegisterRequest | ReplaceRequest | DecommissionRequest;
+type MutationRequest = RegisterRequest | ReplaceRequest | RelocateRequest | DecommissionRequest;
 type CreationObservation = RegisterRequest["observation"];
 type LivenessObservation = DecommissionRequest["closure"]["preClose"];
 type MutationDecision = Extract<
   ReturnType<typeof decideEndpointCommand>,
-  { readonly accepted: true; readonly operation: "register" | "replace" | "decommission" }
+  {
+    readonly accepted: true;
+    readonly operation: "register" | "replace" | "relocate" | "decommission";
+  }
 >;
-type MutationDisposition = "registered" | "replayed" | "replaced" | "decommissioned";
+type MutationDisposition = "registered" | "replayed" | "replaced" | "relocated" | "decommissioned";
 
 interface Envelope {
   readonly root: string;
@@ -656,6 +660,13 @@ function toCommand(
     case "replace":
       return Object.freeze({
         operation: "replace" as const,
+        observation: creationCommand(request.observation),
+        expectedBindingId: request.expectedBindingId,
+        expectedBindingDigest: request.expectedBindingDigest,
+      });
+    case "relocate":
+      return Object.freeze({
+        operation: "relocate" as const,
         observation: creationCommand(request.observation),
         expectedBindingId: request.expectedBindingId,
         expectedBindingDigest: request.expectedBindingDigest,
@@ -1171,6 +1182,10 @@ async function applyMutation(
       );
     case "replace":
       return applyReplace(context, store, window, current, request, loaded);
+    case "relocate":
+      // 绑定不动：只有随后的 refreshLocator 用新坐标写新的定位器代际（§13.125）。
+      if (current === null) fail("not-found", "binding-absent", "$request.windowId");
+      return Object.freeze({ disposition: "relocated" as const, binding: current, worktree: null });
     case "decommission":
       return applyDecommission(context, window, current);
   }
@@ -1332,7 +1347,9 @@ async function executeOperation(
 ): Promise<WindowBindingResult> {
   const loaded = await loadState(
     context,
-    request.operation === "register" || request.operation === "replace"
+    request.operation === "register" ||
+      request.operation === "replace" ||
+      request.operation === "relocate"
       ? request.observation
       : null,
   );

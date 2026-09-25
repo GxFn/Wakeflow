@@ -342,6 +342,13 @@ function toCommand(context, loaded, request) {
                 expectedBindingId: request.expectedBindingId,
                 expectedBindingDigest: request.expectedBindingDigest,
             });
+        case "relocate":
+            return Object.freeze({
+                operation: "relocate",
+                observation: creationCommand(request.observation),
+                expectedBindingId: request.expectedBindingId,
+                expectedBindingDigest: request.expectedBindingDigest,
+            });
         case "decommission":
             return Object.freeze({
                 operation: "decommission",
@@ -714,6 +721,11 @@ async function applyMutation(context, store, window, current, request, decision,
             return applyRegister(context, store, window, current, request, decision.disposition === "replayed", loaded);
         case "replace":
             return applyReplace(context, store, window, current, request, loaded);
+        case "relocate":
+            // 绑定不动：只有随后的 refreshLocator 用新坐标写新的定位器代际（§13.125）。
+            if (current === null)
+                fail("not-found", "binding-absent", "$request.windowId");
+            return Object.freeze({ disposition: "relocated", binding: current, worktree: null });
         case "decommission":
             return applyDecommission(context, window, current);
     }
@@ -817,7 +829,9 @@ function mutationResult(context, request, outcome) {
     });
 }
 async function executeOperation(context, request) {
-    const loaded = await loadState(context, request.operation === "register" || request.operation === "replace"
+    const loaded = await loadState(context, request.operation === "register" ||
+        request.operation === "replace" ||
+        request.operation === "relocate"
         ? request.observation
         : null);
     if (request.operation === "inspect")

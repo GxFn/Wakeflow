@@ -703,3 +703,93 @@ test("Claude Code：register 需要 tmux 坐标并写定位器，decommission �
   equal(verified.verification, "machine-verified");
   equal(JSON.stringify(verified).includes(sessionId), false, "session id leaked");
 });
+
+test("Claude Code：relocate 保留绑定、换定位器代际，句柄变了或 Codex 宿主被拒（§13.125）", {
+  timeout: 60_000,
+}, async (t) => {
+  const { root, rooted, intents } = await fixture(t, executeClaudeCodeWakeflowMaintenance);
+  const intent = intents[0];
+  if (intent === undefined) throw new Error("Expected a launch intent.");
+  const clock = () => parseUtcInstant("2026-09-24T10:00:00.000Z");
+  const sessionId = "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f";
+  const handle = { kind: "claude-session", value: sessionId };
+  const base = {
+    handle,
+    launchIntentDigest: intent.intentDigest,
+    observedAt: "2026-09-24T09:59:00.000Z",
+  };
+  await sessionStart(
+    rooted,
+    "claude-code",
+    sessionId,
+    intent.root.configuredPlacement,
+    parseUtcInstant("2026-09-24T09:58:00.000Z"),
+  );
+  const tmux = { socketName: null, sessionName: "wakeflow", windowId: "@3", paneId: "%7" };
+  const registered = await executeWindowBindingRequest(
+    CLAUDE,
+    { root, operation: "register", windowId: intent.windowId, observation: { ...base, tmux } },
+    { clock },
+  );
+  if (registered.kind !== "WakeflowWindowBindingMutation" || registered.binding === null)
+    throw new Error("Expected a mutation.");
+  const locatorFile = path.join(
+    root,
+    ".wakeflow-local/runtime/hosts/claude-code/identity/window-locators",
+    `${intent.windowId}.json`,
+  );
+  const before = JSON.parse(readFileSync(locatorFile, "utf8")) as {
+    locatorId: string;
+    bindingId: string;
+  };
+  const moved = { ...tmux, windowId: "@9", paneId: "%21" };
+  const relocated = await executeWindowBindingRequest(
+    CLAUDE,
+    {
+      root,
+      operation: "relocate",
+      windowId: intent.windowId,
+      observation: { ...base, tmux: moved, observedAt: "2026-09-24T10:00:30.000Z" },
+      expectedBindingId: registered.binding.bindingId,
+      expectedBindingDigest: registered.binding.bindingDigest,
+    },
+    { clock },
+  );
+  if (relocated.kind !== "WakeflowWindowBindingMutation" || relocated.binding === null)
+    throw new Error("Expected a mutation.");
+  equal(relocated.disposition, "relocated");
+  equal(relocated.binding.bindingId, registered.binding.bindingId);
+  equal(relocated.binding.bindingDigest, registered.binding.bindingDigest);
+  const after = JSON.parse(readFileSync(locatorFile, "utf8")) as {
+    locatorId: string;
+    bindingId: string;
+    tmux: typeof tmux;
+  };
+  equal(after.bindingId, before.bindingId);
+  deepEqual(after.tmux, moved);
+  equal(
+    after.locatorId === before.locatorId,
+    false,
+    "the locator generation changes with the pane",
+  );
+  await expectFailure(
+    executeWindowBindingRequest(
+      CLAUDE,
+      {
+        root,
+        operation: "relocate",
+        windowId: intent.windowId,
+        observation: {
+          ...base,
+          handle: { kind: "claude-session", value: "1f1f1f1f-1f1f-4f1f-8f1f-1f1f1f1f1f1f" },
+          tmux: moved,
+        },
+        expectedBindingId: registered.binding.bindingId,
+        expectedBindingDigest: registered.binding.bindingDigest,
+      },
+      { clock },
+    ),
+    "precondition-failed",
+    "handle-changed",
+  );
+});

@@ -194,6 +194,7 @@ export function buildActiveProjectionFacts(input) {
     for (const pod of model.pods)
         podNames.set(pod.podId, pod.name);
     const pods = observation.pods.value ?? [];
+    const evidence = demandEvidenceOf(observation);
     return Object.freeze({
         language: model.presentation.language,
         program: Object.freeze({
@@ -231,7 +232,9 @@ export function buildActiveProjectionFacts(input) {
             .map((demand) => demandFacts(demand, podNames.get(demand.loaded?.identity.podId ?? "") ?? "?"))
             .filter((facts) => facts !== null)
             .sort((left, right) => left.demandId.localeCompare(right.demandId))),
-        activeDemands: demandEvidenceOf(observation),
+        // 读不出的 Demand 不进列表，但页面必须说出"可能缺项"，不能看起来像 idle（§13.129）。
+        demandCoverage: evidence.observed ? "complete" : "incomplete",
+        activeDemands: evidence,
     });
 }
 /**

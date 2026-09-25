@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import type { Dirent } from "node:fs";
 import {
   cpSync,
   existsSync,
@@ -12,7 +13,6 @@ import {
   realpathSync,
   rmSync,
 } from "node:fs";
-import type { Dirent } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -20,7 +20,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
-import { pluginDirectoryName, type PluginHostId } from "./plugin-metadata.js";
+import { type PluginHostId, pluginDirectoryName } from "./plugin-metadata.js";
 
 /**
  * Wakeflow Tooling / Artifacts：插件制品的冒烟，`npm run smoke:artifacts`（能力卡 10 Q8，gate-log
@@ -277,9 +277,15 @@ interface Connection {
   readonly client: Client;
   readonly transport: StdioClientTransport;
   readonly stderr: () => string;
+  /** 任何工具结果里都不得出现的私有文本：一次性目录的根（工作区、ledger 与产品仓库都在它下面）。 */
+  readonly forbidden: readonly string[];
 }
 
-async function connect(artifactRoot: string, hostId: PluginHostId): Promise<Connection> {
+async function connect(
+  artifactRoot: string,
+  hostId: PluginHostId,
+  forbidden: readonly string[],
+): Promise<Connection> {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [path.join(artifactRoot, MCP_LAUNCHER)],
@@ -293,7 +299,7 @@ async function connect(artifactRoot: string, hostId: PluginHostId): Promise<Conn
   });
   const client = new Client({ name: `wakeflow-${hostId}-smoke`, version: "1.0.0-smoke" });
   await client.connect(transport);
-  return Object.freeze({ client, transport, stderr: () => stderr });
+  return Object.freeze({ client, transport, stderr: () => stderr, forbidden });
 }
 
 async function callTool(
@@ -311,6 +317,13 @@ async function callTool(
   }
   if (!isPlainRecord(result.structuredContent)) {
     fail("wakeflow-smoke-tool", `${name} returned no structured content`);
+  }
+  // 旧实现 T10 的私有路径门：公共结果里出现一次性目录的根就是脱敏边界失守（§13.129）。
+  const encoded = JSON.stringify(result.structuredContent);
+  for (const text of connection.forbidden) {
+    if (encoded.includes(text)) {
+      fail("wakeflow-smoke-tool", `${name} returned a private path in its result`);
+    }
   }
   return result.structuredContent;
 }
@@ -510,7 +523,7 @@ async function smokeArtifact(
   const fixture = createFixture(repositoryRoot, artifactSource, directory);
   let acts: Readonly<PluginArtifactSmokeActs>;
   try {
-    const connection = await connect(fixture.artifactRoot, hostId);
+    const connection = await connect(fixture.artifactRoot, hostId, [fixture.base]);
     try {
       const tools = await actTools(connection, fixture.artifactRoot);
       const freshInitialize = await actFreshInitialize(connection, fixture.workspace);

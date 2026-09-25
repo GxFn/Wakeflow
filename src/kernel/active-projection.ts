@@ -5,11 +5,6 @@ import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical
 import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
 import type { JsonValue } from "../foundation/data/json-value.js";
 import {
-  createDirectoryAtomically,
-  DurableDirectoryMaterializationError,
-  materializeDirectoryPath,
-} from "../foundation/filesystem/durable-directory-materialization.js";
-import {
   DurableAtomicFileStageRecoveryError,
   recoverDurableAtomicFileStagesForTargets,
 } from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
@@ -19,13 +14,18 @@ import {
   replaceFileAtomically,
 } from "../foundation/filesystem/durable-atomic-file-write.js";
 import {
+  createDirectoryAtomically,
+  DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
+} from "../foundation/filesystem/durable-directory-materialization.js";
+import {
   ExactRegularFileUnlinkError,
   unlinkRegularFileExactly,
 } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
@@ -33,8 +33,8 @@ import {
 } from "../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
+  retireRootedExclusiveFileLockResidue,
   withRootedExclusiveFileLock,
 } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
@@ -396,9 +396,18 @@ export interface ActiveProjectionFacts {
   readonly pods: readonly Readonly<ActiveProjectionPodFacts>[];
   readonly unmergedAccepted: readonly Readonly<ActiveProjectionUnmergedFacts>[];
   readonly demands: readonly Readonly<ActiveProjectionDemandFacts>[];
-  /** 退休证据；发布时交给 `publishActiveProjection`，渲染与指纹都不看它。 */
+  /**
+   * 活动 Demand 的覆盖程度（§13.129，旧实现 T09 的"读不出不得投影成 idle"）：`complete` 是
+   * 这一轮把活动 Demand 看全了；`incomplete` 是至少一个读不出——两份工作区页在 Demand 列表前
+   * 加一条"可能缺项"的提示，并进工作区指纹；`unobserved` 是 fresh 初始化那条没有观察过的路，
+   * 不加提示、与 complete 同字节，所以初始化后的第一次 status 不会把页面判成 stale。
+   */
+  readonly demandCoverage: ActiveProjectionDemandCoverage;
+  /** 退休证据；发布时交给 `publishActiveProjection`，渲染与指纹都不看它（覆盖提示走 `demandCoverage`）。 */
   readonly activeDemands: Readonly<ActiveProjectionDemandEvidence>;
 }
+
+export type ActiveProjectionDemandCoverage = "complete" | "incomplete" | "unobserved";
 
 export interface ActiveProjectionFile {
   readonly resourcePath: PortableResourcePath;
@@ -422,6 +431,8 @@ const TEXT = Object.freeze({
     board: "Requirement board",
     demands: "Active demands",
     noDemands: "No active Demand.",
+    coverageIncomplete:
+      "Demand coverage is incomplete this round: at least one active Demand could not be read, so this list may be missing Demands; wakeflow_status names the unreadable ones.",
     source: "Projection source",
     pods: "Pods",
     podHeader: "| Pod | Placement | Lifecycle | Active demand | Worktrees |",
@@ -464,6 +475,8 @@ const TEXT = Object.freeze({
     board: "需求看板",
     demands: "活动 Demand",
     noDemands: "当前没有活动 Demand。",
+    coverageIncomplete:
+      "本轮活动 Demand 未看全：至少一个活动 Demand 读不出，此列表可能缺项；读不出的由 wakeflow_status 报告。",
     source: "投影来源",
     pods: "Pod",
     podHeader: "| Pod | 位置 | 生命周期 | 活动 Demand | Worktree |",
@@ -536,10 +549,19 @@ function fingerprintOf(basis: JsonValue): Sha256Digest {
   });
 }
 
+/** 覆盖不全时在 Demand 列表前加一条提示；complete 与 unobserved 都不加，字节因此相同。 */
+function coverageNotice(
+  facts: Readonly<ActiveProjectionFacts>,
+  text: Readonly<{ readonly coverageIncomplete: string }>,
+): readonly string[] {
+  return facts.demandCoverage === "incomplete" ? [`> ${text.coverageIncomplete}`, ""] : [];
+}
+
 function workspaceFingerprint(facts: Readonly<ActiveProjectionFacts>): Sha256Digest {
   return fingerprintOf({
     language: facts.language,
     configDigest: facts.configDigest,
+    demandCoverageIncomplete: facts.demandCoverage === "incomplete",
     pods: facts.pods.map((pod) => ({
       podId: pod.podId,
       name: pod.name,
@@ -606,6 +628,7 @@ function renderIndex(facts: Readonly<ActiveProjectionFacts>, fingerprint: Sha256
     "",
     `## ${text.demands}`,
     "",
+    ...coverageNotice(facts, text),
     ...demands,
   ].join("\n")}\n`;
 }
@@ -648,6 +671,7 @@ function renderStatus(facts: Readonly<ActiveProjectionFacts>, fingerprint: Sha25
     "",
     `## ${text.demands}`,
     "",
+    ...coverageNotice(facts, text),
     ...(demands.length === 0
       ? [text.noDemands]
       : [text.demandHeader, "| --- | --- | --- | --- | --- | --- | --- |", ...demands]),
@@ -857,7 +881,8 @@ export function freshActiveProjectionFacts(
     ),
     unmergedAccepted: Object.freeze([]),
     demands: Object.freeze([]),
-    // fresh 初始化只读 Config，没有观察过活动 Demand：没有证据就不退休任何页面目录。
+    // fresh 初始化只读 Config，没有观察过活动 Demand：不加覆盖提示，也没有证据退休任何页面目录。
+    demandCoverage: "unobserved" as const,
     activeDemands: Object.freeze({ observed: false, activeDemandIds: Object.freeze([]) }),
   });
 }

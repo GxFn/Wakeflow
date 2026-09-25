@@ -17,6 +17,7 @@ import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
 import { previewWakeflowStaticMaterialization } from "../../workspace/maintenance/wakeflow-static-materialization-preview.js";
+import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "../../workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import { admitStatusResult, admitVerifyResult, parseStatusRequest, parseVerifyRequest, WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { capStatusList, deriveNextActions, deriveWorkspaceGates, disposalGuidance, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
 const PENDING_PACKAGES_MAXIMUM = 64;
@@ -76,6 +77,19 @@ async function openLedgerRoot(root, snapshot) {
         throw error;
     }
 }
+/** 检查读不出即 unavailable（不猜 idle），中止照常上抛；检查本身零写。 */
+async function observeMaintenance(root, signal) {
+    try {
+        const core = await inspectWakeflowWorkspaceCoreLayout(root, signalOptions(signal));
+        return Object.freeze({ status: "observed", protocol: core.local.status });
+    }
+    catch (error) {
+        if (!(error instanceof WakeflowWorkspaceCoreLayoutInspectionError))
+            throw error;
+        failIfAborted(error);
+        return Object.freeze({ status: "unavailable", protocol: "unknown" });
+    }
+}
 async function openContext(root, facade, options) {
     const snapshot = await readSnapshot(root, options.signal);
     const ledgerRoot = await openLedgerRoot(root, snapshot);
@@ -88,12 +102,31 @@ async function openContext(root, facade, options) {
             ...(options.clock === undefined ? {} : { clock: options.clock }),
         });
         const projection = await observeProjectionTargets(root, observation, options.signal);
-        return Object.freeze({ root, snapshot, ledgerRoot, facade, options, observation, projection });
+        const maintenance = await observeMaintenance(root, options.signal);
+        return Object.freeze({
+            root,
+            snapshot,
+            ledgerRoot,
+            facade,
+            options,
+            observation,
+            projection,
+            maintenance,
+        });
     }
     catch (error) {
         await ledgerRoot.close();
         throw error;
     }
+}
+/** 非 idle 的维护协议压过其他一切（旧实现的 maintenance 状态）：先维护，再谈别的；读不出不算。 */
+function maintenancePending(maintenance) {
+    return maintenance.status === "observed" && maintenance.protocol !== "idle";
+}
+function overallOf(context) {
+    return maintenancePending(context.maintenance)
+        ? "maintenance"
+        : deriveOverallStatus(context.observation);
 }
 async function closeContext(context) {
     await context.ledgerRoot.close();
@@ -370,7 +403,7 @@ function projectionView(projection) {
 }
 function nextActionInput(context) {
     const { observation, snapshot } = context;
-    const overall = deriveOverallStatus(observation);
+    const overall = overallOf(context);
     const bound = new Set(observation.bindings.flatMap((host) => host.bindings.map((binding) => binding.windowId)));
     const bindingsObserved = observation.bindings.every((host) => host.status === "observed");
     const pods = observation.pods.value ?? [];
@@ -493,7 +526,7 @@ async function assembleStatus(context, request) {
         schemaVersion: WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION,
         tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
         observedAt: observation.observedAt,
-        overall: deriveOverallStatus(observation),
+        overall: overallOf(context),
         config: {
             programId: snapshot.model.program.programId,
             displayName: snapshot.model.program.displayName,
@@ -513,6 +546,10 @@ async function assembleStatus(context, request) {
         unmergedAccepted: unmergedAccepted.entries,
         domains: domainViews(context),
         runtime: runtimeView(context),
+        maintenance: {
+            status: context.maintenance.status,
+            protocol: context.maintenance.protocol,
+        },
         truncated: {
             demands: demands.omitted,
             windows: windows.omitted,

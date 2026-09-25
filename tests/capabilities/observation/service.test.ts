@@ -2,6 +2,7 @@ import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -58,6 +59,7 @@ import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
 } from "../../../src/kernel/work-claims.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
@@ -99,11 +101,14 @@ import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";
 
 /**
  * 两个读工具的读路径（gate-log §13.94 D1、D2、D3、D4）：status 一次观察多域并给出下一步；
- * 带 demandId 附路由或归档回执；verify 十四门与汇总；hook 观察目录出现非法文件名即
+ * 带 demandId 附路由或归档回执；verify 十五门与汇总；hook 观察目录出现非法文件名即
  * host-hook-channel fail；结果不含私有路径与句柄。健康工作区经公共维护工具初始化。
  */
 
 const CONTROLLER_HANDLE = "codex-host-thread:observation-controller";
+/** 配置里的 tmux 容器名（旧实现 T08 把它们当私有值断言）：任何公共结果都不得回显。 */
+const TMUX_SESSION_SECRET = "private-session-never-return-me";
+const TMUX_SOCKET_SECRET = "private-socket-never-return-me";
 const UNKNOWN_DEMAND_ID = "demand_ffffffff-ffff-4fff-8fff-ffffffffffff";
 const GATE_NAMES = Object.freeze([
   "active-projection",
@@ -171,6 +176,11 @@ async function createHealthyWorkspace(): Promise<HealthyWorkspace> {
   git(product, "commit", "--quiet", "--allow-empty", "-m", "init");
   const selection = createMinimalWakeflowFreshConfigSelection();
   (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+  (selection as Record<string, unknown>).hosts = {
+    "claude-code": {
+      tmux: { sessionName: TMUX_SESSION_SECRET, socketName: TMUX_SOCKET_SECRET },
+    },
+  };
   const fresh = await executeCodexWakeflowMaintenance({
     root,
     action: "fresh-initialize",
@@ -527,7 +537,7 @@ test("status 带 demandId：附当前 Route，next 来自 Route 且与 nextActio
   );
 });
 
-test("verify：健康工作区十四门全 pass；hook 观察目录出现非法文件名即 host-hook-channel fail、ok false；删除后恢复；带 demandId 给出 Demand 门", {
+test("verify：健康工作区十五门全 pass；hook 观察目录出现非法文件名即 host-hook-channel fail、ok false；删除后恢复；带 demandId 给出 Demand 门", {
   timeout: 120_000,
 }, async () => {
   const verified = await executeVerifyRequest(
@@ -662,10 +672,18 @@ test("归档 Demand：完成即归档后带 demandId 的 status 给归档回执�
     deepEqual(status.demands, []);
     equal(status.board.counts.archived, 1);
     equal(status.board.counts.claimed, 0);
-    // 归档后没有 Demand 前沿；剩下的只是 primary pod 未登记窗口的登记引导，next 仍来自归档回执。
+    // 归档后没有 Demand 前沿；剩下的只是 primary pod 未登记窗口的登记引导（这个手搭的夹具的
+    // `.wakeflow-local` 不是 0700，维护协议 conflict，所以 status 先指向维护，§13.129），next 仍来自归档回执。
     equal(
-      status.nextActions.every((action) => action.reason === "pod-window-registration"),
+      status.nextActions.every(
+        (action) =>
+          action.reason === "pod-window-registration" || action.reason === "workspace-maintenance",
+      ),
       true,
+    );
+    equal(
+      status.nextActions.some((action) => action.subject === fixture.demandId),
+      false,
     );
     assertPrivate(status, root, [fixture.route.rawHandle, fixture.bindingRootPath]);
 
@@ -1201,4 +1219,155 @@ test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；带
   const verified = await executeVerifyRequest(facadeWith(other), { root: healthy.root }, CLOCK);
   const gate = verified.gates.find((entry) => entry.name === "runtime-artifact");
   deepEqual([gate?.status, gate?.code], ["fail", "server-outdated,windows-stale:1"]);
+});
+
+/** 旧实现 T08 的零写断言：逐节点的类型、模式、大小与 mtime/ctime（不含 atime：只读也会更新它）。 */
+function snapshotTree(root: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const visit = (current: string, ref: string): void => {
+    const stat = lstatSync(current, { bigint: true });
+    const type = stat.isSymbolicLink()
+      ? "symlink"
+      : stat.isDirectory()
+        ? "directory"
+        : stat.isFile()
+          ? "file"
+          : "other";
+    result[ref] = [type, Number(stat.mode & 0o777n), stat.size, stat.mtimeNs, stat.ctimeNs].join(
+      ":",
+    );
+    if (type !== "directory") return;
+    for (const name of readdirSync(current).sort())
+      visit(path.join(current, name), `${ref}/${name}`);
+  };
+  visit(root, ".");
+  return result;
+}
+
+test("观察零写且确定（旧实现 T08）：status 与 verify 前后工作区与产品仓库逐节点相同；同一时钟下两次结果逐字节相同", {
+  timeout: 120_000,
+}, async () => {
+  const before = { root: snapshotTree(healthy.root), product: snapshotTree(healthy.product) };
+  const status = await executeStatusRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  const verify = await executeVerifyRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  deepEqual(snapshotTree(healthy.root), before.root, "status/verify wrote into the workspace");
+  deepEqual(
+    snapshotTree(healthy.product),
+    before.product,
+    "status/verify wrote into the product repository",
+  );
+  const statusAgain = await executeStatusRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  const verifyAgain = await executeVerifyRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  deepEqual(plain(statusAgain), plain(status));
+  deepEqual(plain(verifyAgain), plain(verify));
+  equal(verify.repairsApplied, false);
+});
+
+test("私有值不出结果（旧实现 T08）：配置里的 tmux 会话名与 socket 名、绑定句柄、一次性目录与工作区根都不进 status 与 verify", {
+  timeout: 120_000,
+}, async () => {
+  const config = readFileSync(path.join(healthy.root, "wakeflow.config.json"), "utf8");
+  equal(
+    config.includes(TMUX_SESSION_SECRET) && config.includes(TMUX_SOCKET_SECRET),
+    true,
+    "the fixture config must carry the tmux names for the assertion to mean anything",
+  );
+  const status = await executeStatusRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  const verify = await executeVerifyRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  const secrets = [CONTROLLER_HANDLE, TMUX_SESSION_SECRET, TMUX_SOCKET_SECRET, healthy.base];
+  assertPrivate(status, healthy.root, secrets);
+  assertPrivate(verify, healthy.root, secrets);
+});
+
+test("不是工作区的目录（旧实现 T08）：status 是 precondition-failed/config-authority，零写", async () => {
+  const empty = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-observation-empty-")));
+  try {
+    const before = snapshotTree(empty);
+    await rejects(
+      executeStatusRequest(CODEX_OBSERVATION_FACADE, { root: empty }, CLOCK),
+      (error: unknown) =>
+        error instanceof WakeflowError &&
+        error.code === "precondition-failed" &&
+        error.reason === "config-authority",
+    );
+    deepEqual(snapshotTree(empty), before);
+  } finally {
+    rmSync(empty, { recursive: true, force: true });
+  }
+});
+
+test("被打断的维护事务（旧实现 maintenance-gate，§13.129）：transactions 残留让 verify 的 local-layout 失败、status 记 maintenance 并指向维护；清掉后恢复", {
+  timeout: 120_000,
+}, async () => {
+  const before = await executeStatusRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  deepEqual(plain(before.maintenance), { status: "observed", protocol: "idle" });
+  const transactions = path.join(
+    healthy.root,
+    ...WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF.split("/"),
+  );
+  mkdirSync(transactions, { recursive: true, mode: 0o700 });
+  const residue = path.join(
+    transactions,
+    "operation_00000000-0000-4000-8000-000000000000.intent.json",
+  );
+  writeFileSync(residue, "{}\n", { mode: 0o600 });
+  try {
+    const status = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    equal(status.overall, "maintenance");
+    deepEqual(plain(status.maintenance), { status: "observed", protocol: "recovery-required" });
+    equal(status.next.frontier, "workspace-maintenance");
+    equal(status.nextActions[0]?.reason, "workspace-maintenance");
+    const verify = await executeVerifyRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    const gate = verify.gates.find((entry) => entry.name === "local-layout");
+    equal(gate?.status, "fail");
+    equal(gate?.code?.includes("maintenance-protocol-recovery-required"), true, gate?.code ?? "");
+    equal(verify.ok, false);
+  } finally {
+    unlinkSync(residue);
+  }
+  const after = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root: healthy.root }, CLOCK);
+  equal(after.overall, before.overall);
+  deepEqual(plain(after.maintenance), { status: "observed", protocol: "idle" });
+  const verified = await executeVerifyRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  equal(verified.gates.find((entry) => entry.name === "local-layout")?.status, "pass");
 });

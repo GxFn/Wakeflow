@@ -2,13 +2,13 @@ import { rmdir } from "node:fs/promises";
 import path from "node:path";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../foundation/crypto/sha256.js";
-import { createDirectoryAtomically, DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
 import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
+import { createDirectoryAtomically, DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError, } from "../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../foundation/filesystem/strict-text-file.js";
@@ -185,6 +185,7 @@ const TEXT = Object.freeze({
         board: "Requirement board",
         demands: "Active demands",
         noDemands: "No active Demand.",
+        coverageIncomplete: "Demand coverage is incomplete this round: at least one active Demand could not be read, so this list may be missing Demands; wakeflow_status names the unreadable ones.",
         source: "Projection source",
         pods: "Pods",
         podHeader: "| Pod | Placement | Lifecycle | Active demand | Worktrees |",
@@ -226,6 +227,7 @@ const TEXT = Object.freeze({
         board: "需求看板",
         demands: "活动 Demand",
         noDemands: "当前没有活动 Demand。",
+        coverageIncomplete: "本轮活动 Demand 未看全：至少一个活动 Demand 读不出，此列表可能缺项；读不出的由 wakeflow_status 报告。",
         source: "投影来源",
         pods: "Pod",
         podHeader: "| Pod | 位置 | 生命周期 | 活动 Demand | Worktree |",
@@ -289,10 +291,15 @@ function fingerprintOf(basis) {
         basis,
     });
 }
+/** 覆盖不全时在 Demand 列表前加一条提示；complete 与 unobserved 都不加，字节因此相同。 */
+function coverageNotice(facts, text) {
+    return facts.demandCoverage === "incomplete" ? [`> ${text.coverageIncomplete}`, ""] : [];
+}
 function workspaceFingerprint(facts) {
     return fingerprintOf({
         language: facts.language,
         configDigest: facts.configDigest,
+        demandCoverageIncomplete: facts.demandCoverage === "incomplete",
         pods: facts.pods.map((pod) => ({
             podId: pod.podId,
             name: pod.name,
@@ -349,6 +356,7 @@ function renderIndex(facts, fingerprint) {
         "",
         `## ${text.demands}`,
         "",
+        ...coverageNotice(facts, text),
         ...demands,
     ].join("\n")}\n`;
 }
@@ -379,6 +387,7 @@ function renderStatus(facts, fingerprint) {
         "",
         `## ${text.demands}`,
         "",
+        ...coverageNotice(facts, text),
         ...(demands.length === 0
             ? [text.noDemands]
             : [text.demandHeader, "| --- | --- | --- | --- | --- | --- | --- |", ...demands]),
@@ -510,7 +519,8 @@ export function freshActiveProjectionFacts(input) {
         }))),
         unmergedAccepted: Object.freeze([]),
         demands: Object.freeze([]),
-        // fresh 初始化只读 Config，没有观察过活动 Demand：没有证据就不退休任何页面目录。
+        // fresh 初始化只读 Config，没有观察过活动 Demand：不加覆盖提示，也没有证据退休任何页面目录。
+        demandCoverage: "unobserved",
         activeDemands: Object.freeze({ observed: false, activeDemandIds: Object.freeze([]) }),
     });
 }

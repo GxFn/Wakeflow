@@ -146,7 +146,10 @@ checkouts are gone. Depth: `references/workspace-and-windows.md`.
 actions. `wakeflow_verify` is the strict read: each gate passes, fails, or is
 unavailable, and it repairs nothing. Run `wakeflow_verify` when `status` looks
 wrong, before completing a Demand, and whenever a delivery looked sent but no
-evidence arrived.
+evidence arrived. An `overall` of `maintenance` with `maintenance.protocol`
+other than `idle` means a maintenance apply was interrupted or is still
+running: finish it with maintenance recover before anything else. An
+unavailable gate is unchecked, not passing; report it as such.
 
 ## What you must return to the user
 

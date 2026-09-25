@@ -45,6 +45,7 @@ import {
   observeWorkspace,
   orphanWorkClaims,
   type WorkspaceObservation,
+  type WorkspaceOverallStatus,
 } from "../../governance/observation/workspace-observation.js";
 import type { ActiveProjectionTargetInspection } from "../../kernel/active-projection.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
@@ -53,6 +54,11 @@ import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
 import { previewWakeflowStaticMaterialization } from "../../workspace/maintenance/wakeflow-static-materialization-preview.js";
+import {
+  inspectWakeflowWorkspaceCoreLayout,
+  type WakeflowWorkspaceCoreLayoutInspection,
+  WakeflowWorkspaceCoreLayoutInspectionError,
+} from "../../workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import {
   admitStatusResult,
   admitVerifyResult,
@@ -110,6 +116,19 @@ export interface ExecuteObservationOptions {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * 维护协议的状态（§13.129，旧实现的 maintenance 域与 maintenance-gate 门）：与维护工具的预览
+ * 同一份核心布局检查——`idle` 才没有事情要做，`busy` 是另一次维护正在进行，`recovery-required`
+ * 是一次被打断的 apply 留下了事务残留（intent、journal 或失活的锁），`conflict` 是锁不安全，
+ * `absent` / `bootstrap-prefix` 是协议根尚未建好。verify 的 local-layout 门经预览已经报它
+ * （`maintenance-protocol-<状态>`）；status 在这里把它变成 `overall: maintenance` 与下一步，
+ * 让 Controller 不必等到下一次维护才发现。
+ */
+interface MaintenanceObservation {
+  readonly status: "observed" | "unavailable";
+  readonly protocol: WakeflowWorkspaceCoreLayoutInspection["local"]["status"] | "unknown";
+}
+
 interface SliceContext {
   readonly root: RootedDirectory;
   readonly snapshot: Readonly<WakeflowConfigAuthoritySnapshot>;
@@ -119,6 +138,7 @@ interface SliceContext {
   readonly observation: Readonly<WorkspaceObservation>;
   /** 投影目标的分类，从同一份观察派生（观察之后单独一步，见 active-projection-facts）。 */
   readonly projection: ObservedDomain<readonly Readonly<ActiveProjectionTargetInspection>[]>;
+  readonly maintenance: Readonly<MaintenanceObservation>;
 }
 
 type Envelope = Readonly<{ readonly root: string; readonly demandId?: string }>;
@@ -189,6 +209,21 @@ async function openLedgerRoot(
   }
 }
 
+/** 检查读不出即 unavailable（不猜 idle），中止照常上抛；检查本身零写。 */
+async function observeMaintenance(
+  root: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<MaintenanceObservation>> {
+  try {
+    const core = await inspectWakeflowWorkspaceCoreLayout(root, signalOptions(signal));
+    return Object.freeze({ status: "observed" as const, protocol: core.local.status });
+  } catch (error: unknown) {
+    if (!(error instanceof WakeflowWorkspaceCoreLayoutInspectionError)) throw error;
+    failIfAborted(error);
+    return Object.freeze({ status: "unavailable" as const, protocol: "unknown" as const });
+  }
+}
+
 async function openContext(
   root: RootedDirectory,
   facade: Readonly<ObservationHostFacade>,
@@ -205,11 +240,32 @@ async function openContext(
       ...(options.clock === undefined ? {} : { clock: options.clock }),
     });
     const projection = await observeProjectionTargets(root, observation, options.signal);
-    return Object.freeze({ root, snapshot, ledgerRoot, facade, options, observation, projection });
+    const maintenance = await observeMaintenance(root, options.signal);
+    return Object.freeze({
+      root,
+      snapshot,
+      ledgerRoot,
+      facade,
+      options,
+      observation,
+      projection,
+      maintenance,
+    });
   } catch (error: unknown) {
     await ledgerRoot.close();
     throw error;
   }
+}
+
+/** 非 idle 的维护协议压过其他一切（旧实现的 maintenance 状态）：先维护，再谈别的；读不出不算。 */
+function maintenancePending(maintenance: Readonly<MaintenanceObservation>): boolean {
+  return maintenance.status === "observed" && maintenance.protocol !== "idle";
+}
+
+function overallOf(context: SliceContext): WorkspaceOverallStatus {
+  return maintenancePending(context.maintenance)
+    ? "maintenance"
+    : deriveOverallStatus(context.observation);
 }
 
 async function closeContext(context: SliceContext): Promise<void> {
@@ -539,7 +595,7 @@ function projectionView(projection: SliceContext["projection"]) {
 
 function nextActionInput(context: SliceContext): Readonly<NextActionInput> {
   const { observation, snapshot } = context;
-  const overall = deriveOverallStatus(observation);
+  const overall = overallOf(context);
   const bound = new Set(
     observation.bindings.flatMap((host) => host.bindings.map((binding) => binding.windowId)),
   );
@@ -681,7 +737,7 @@ async function assembleStatus(
     schemaVersion: WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION,
     tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
     observedAt: observation.observedAt,
-    overall: deriveOverallStatus(observation),
+    overall: overallOf(context),
     config: {
       programId: snapshot.model.program.programId,
       displayName: snapshot.model.program.displayName,
@@ -701,6 +757,10 @@ async function assembleStatus(
     unmergedAccepted: unmergedAccepted.entries,
     domains: domainViews(context),
     runtime: runtimeView(context),
+    maintenance: {
+      status: context.maintenance.status,
+      protocol: context.maintenance.protocol,
+    },
     truncated: {
       demands: demands.omitted,
       windows: windows.omitted,

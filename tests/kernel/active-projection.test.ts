@@ -6,8 +6,8 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
-  rmSync,
   rmdirSync,
+  rmSync,
   statSync,
   symlinkSync,
   unlinkSync,
@@ -15,7 +15,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { computeCanonicalJsonSha256Digest } from "../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../src/foundation/crypto/sha256.js";
@@ -27,15 +27,15 @@ import type { PortableResourcePath } from "../../src/foundation/filesystem/porta
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
 import {
+  type ActiveProjectionDemandEvidence,
+  type ActiveProjectionDemandFacts,
+  type ActiveProjectionFacts,
+  type ActiveProjectionFile,
   inspectActiveLayout,
   inspectActiveProjectionTargets,
   materializeActiveLayout,
   publishActiveProjection,
   renderActiveProjectionFiles,
-  type ActiveProjectionDemandEvidence,
-  type ActiveProjectionDemandFacts,
-  type ActiveProjectionFacts,
-  type ActiveProjectionFile,
 } from "../../src/kernel/active-projection.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import {
@@ -146,6 +146,7 @@ function facts(
     ],
     unmergedAccepted: [],
     demands,
+    demandCoverage: "complete",
     activeDemands: observedDemands(...demands.map((demand) => demand.demandId)),
     ...overrides,
   };
@@ -343,6 +344,7 @@ test("渲染：一个 Demand 得两份工作区页与两份 Demand 页，标记�
         ],
       }),
     ],
+    ["demandCoverage", facts({ demandCoverage: "incomplete" })],
   ];
   for (const [label, changed] of bound) {
     const rendered = renderActiveProjectionFiles(changed);
@@ -351,7 +353,7 @@ test("渲染：一个 Demand 得两份工作区页与两份 Demand 页，标记�
       workspace,
       `${label} must change the workspace fingerprint`,
     );
-    if (label !== "configDigest" && label !== "pods") {
+    if (label !== "configDigest" && label !== "pods" && label !== "demandCoverage") {
       notEqual(demandFingerprint(rendered), demand, `${label} must change the demand fingerprint`);
     }
   }
@@ -694,4 +696,31 @@ test("状态页：已接受分支段只声称投影真看得到的东西（§13.
       true,
     );
   }
+});
+
+test("覆盖提示（§13.129）：incomplete 在两份工作区页的 Demand 列表前加提示并改工作区指纹；complete 与 unobserved 同字节、不加提示", () => {
+  const complete = renderActiveProjectionFiles(facts());
+  const unobserved = renderActiveProjectionFiles(facts({ demandCoverage: "unobserved" }));
+  const incomplete = renderActiveProjectionFiles(facts({ demandCoverage: "incomplete" }));
+  deepEqual(
+    unobserved.map((entry) => entry.content),
+    complete.map((entry) => entry.content),
+    "fresh 初始化那条路与看全的一轮同字节，初始化后的第一次 status 才不会判 stale",
+  );
+  for (const entry of complete) {
+    equal(entry.content.includes("Demand coverage is incomplete"), false);
+  }
+  const pages = incomplete.filter((entry) => entry.kind === "workspace");
+  equal(pages.length, 2);
+  for (const entry of pages) {
+    const heading = entry.content.indexOf("## Active demands");
+    const notice = entry.content.indexOf("> Demand coverage is incomplete this round");
+    equal(heading !== -1 && notice > heading, true, "提示紧跟 Demand 标题、在列表之前");
+  }
+  // Demand 页不提覆盖：那是工作区一级的事实，Demand 页只说自己。
+  for (const entry of incomplete.filter((page) => page.kind === "demand")) {
+    equal(entry.content.includes("coverage"), false);
+  }
+  notEqual(workspaceFingerprint(incomplete), workspaceFingerprint(complete));
+  equal(demandFingerprint(incomplete), demandFingerprint(complete));
 });

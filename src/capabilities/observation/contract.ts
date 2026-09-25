@@ -113,7 +113,7 @@ export const VERIFY_TOOL_REGISTRATION = Object.freeze({
   executor: "verifyWorkspace",
   title: "Verify Wakeflow Workspace",
   description:
-    "Strictly verify the workspace without repairing anything: thirteen gates (config authority, local and ledger layout, board consistency, Demand root audit, work claims, append candidates, evidence integrity, host hook channel, window identity, pod execution location, host settings assets, active projection) each pass, fail, or unavailable; ok requires every gate to pass and unavailable counts separately from fail. Pass demandId to also evaluate that Demand's own gates. Reads only; repairsApplied is always false.",
+    "Strictly verify the workspace without repairing anything: fifteen gates (config authority, local layout, ledger layout, board consistency, Demand root audit, append candidates, evidence integrity, work claims, host hook channel, window identity, window runtime projection, pod execution location, host settings assets, active projection, runtime artifact) each pass, fail, or unavailable; ok requires every gate to pass and unavailable counts separately from fail. Pass demandId to also evaluate that Demand's own gates. Reads only; repairsApplied is always false.",
   requestSchema: WAKEFLOW_VERIFY_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_VERIFY_RESULT_SCHEMA,
   annotations: READ_ANNOTATIONS,

@@ -29,7 +29,8 @@
     "archive",
     "next",
     "nextActions",
-    "runtime"
+    "runtime",
+    "maintenance"
   ],
   "properties": {
     "kind": {
@@ -384,6 +385,28 @@
         },
         "artifactOnDisk": {
           "enum": ["same", "changed", "unknown"]
+        }
+      }
+    },
+    "maintenance": {
+      "description": "维护协议的状态（§13.129），与维护工具的预览同一份核心布局检查：idle 才没有事情要做；busy 是另一次维护正在进行；recovery-required 是一次被打断的 apply 留下了事务残留，要用 recover 收尾；conflict 是锁不安全；absent 与 bootstrap-prefix 是协议根尚未建好，由对账重建。非 idle 时 overall 记 maintenance；检查本身读不出即 unavailable，protocol 为 unknown。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "protocol"],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/domainStatus"
+        },
+        "protocol": {
+          "enum": [
+            "idle",
+            "busy",
+            "recovery-required",
+            "conflict",
+            "absent",
+            "bootstrap-prefix",
+            "unknown"
+          ]
         }
       }
     }

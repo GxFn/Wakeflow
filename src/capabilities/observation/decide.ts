@@ -353,7 +353,11 @@ function configGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   );
 }
 
-/** local-layout：静态资源矩阵的对账预览 ready 且无步骤，加活动布局 current（§13.94 D3）。 */
+/**
+ * local-layout：静态资源矩阵的对账预览 ready 且无步骤，加活动布局 current（§13.94 D3）。
+ * 预览走的核心布局检查已把维护协议的非 idle 状态（残留事务、活锁、冲突）报成
+ * `maintenance-protocol-<状态>` 阻塞码，所以被打断的维护 apply 在这里失败（§13.129）。
+ */
 function localLayoutGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   const local = facts.local;
   const pass = local.status === "ready" && facts.layout === "current";
@@ -719,7 +723,7 @@ function projectionGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   return gate("active-projection", "active-projection", "pass", null, evidence);
 }
 
-/** 十四道工作区门，按名字排序；每门只看纯事实。 */
+/** 十五道工作区门，按名字排序；每门只看纯事实。 */
 export function deriveWorkspaceGates(
   facts: Readonly<WorkspaceGateFacts>,
 ): readonly Readonly<VerifyGate>[] {

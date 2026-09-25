@@ -1,6 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
+import { VERIFY_TOOL_REGISTRATION } from "../../../src/capabilities/observation/contract.js";
 import {
   capStatusList,
   deriveNextActions,
@@ -286,7 +286,7 @@ test("deriveNextActions：同一动作去重，总数上限 64", () => {
   equal(capped[63]?.subject, packages[62]?.requirementId);
 });
 
-test("deriveWorkspaceGates：健康事实十四门全 pass、按名字排序；汇总 ok 且 next 无前沿", () => {
+test("deriveWorkspaceGates：健康事实十五门全 pass、按名字排序；汇总 ok 且 next 无前沿", () => {
   const gates = deriveWorkspaceGates(healthyFacts());
   deepEqual(
     gates.map((gate) => gate.name),
@@ -349,6 +349,16 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
     "unavailable",
     "active:unavailable",
   ]);
+  // 被打断的维护 apply（§13.129）：预览的核心布局检查把它报成 maintenance-protocol-<状态> 阻塞码。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        local: { status: "blocked", codes: ["maintenance-protocol-recovery-required"] },
+      }),
+      "local-layout",
+    ),
+    ["fail", "local:blocked,maintenance-protocol-recovery-required"],
+  );
 
   deepEqual(verdictOf(healthyFacts({ ledger: "stale" }), "ledger-layout"), ["fail", "stale"]);
   deepEqual(verdictOf(healthyFacts({ ledger: "unavailable" }), "ledger-layout"), [
@@ -1107,4 +1117,32 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
       ["controller", null, "window-artifact-stale", "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
     ],
   );
+});
+
+/** 门数的英文数词：描述里的门数必须跟实现走（§13.129：描述曾两轮停在 "thirteen"）。 */
+const GATE_COUNT_WORDS: Readonly<Record<number, string>> = Object.freeze({
+  13: "thirteen",
+  14: "fourteen",
+  15: "fifteen",
+  16: "sixteen",
+  17: "seventeen",
+  18: "eighteen",
+});
+
+test("verify 的公共描述与门集合同步：门数的数词与每个门的名字都在描述里（§13.129）", () => {
+  const gates = deriveWorkspaceGates(healthyFacts());
+  const word = GATE_COUNT_WORDS[gates.length];
+  equal(typeof word, "string", `no number word for ${gates.length} gates`);
+  const description = VERIFY_TOOL_REGISTRATION.description;
+  equal(description.includes(`${word} gates`), true, description);
+  // 门名是 kebab-case，描述用自然语言：逐门核对其词干都出现（config authority、runtime artifact …）。
+  for (const gate of gates) {
+    const words = gate.name.split("-").filter((part) => !["clear"].includes(part));
+    const phrase = words.join(" ").replace("demand root", "Demand root");
+    equal(
+      description.includes(phrase),
+      true,
+      `${gate.name} → "${phrase}" missing from description`,
+    );
+  }
 });

@@ -1,6 +1,6 @@
 import { types } from "node:util";
 
-import { parsePlainRecord, PassiveOwnDataError } from "../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import type { WakeflowToolCatalog } from "../kernel/tool-registry.js";
 import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.js";
 

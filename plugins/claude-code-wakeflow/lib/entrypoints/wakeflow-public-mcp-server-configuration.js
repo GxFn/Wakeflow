@@ -1,5 +1,5 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError } from "../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 const CONFIGURATION_ERROR_MESSAGES = {
     options: "Wakeflow MCP server options are invalid.",
     "server-name": "Wakeflow MCP server name is invalid.",

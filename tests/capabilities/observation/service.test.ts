@@ -117,6 +117,7 @@ const GATE_NAMES = Object.freeze([
   "ledger-layout",
   "local-layout",
   "pod-execution-location",
+  "runtime-artifact",
   "window-identity",
   "window-runtime-projection",
   "work-claims",
@@ -544,7 +545,7 @@ test("verify：健康工作区十四门全 pass；hook 观察目录出现非法�
     GATE_NAMES.map(() => "pass"),
   );
   equal(verified.ok, true);
-  deepEqual(plain(verified.summary), { pass: 14, fail: 0, unavailable: 0 });
+  deepEqual(plain(verified.summary), { pass: 15, fail: 0, unavailable: 0 });
   equal(verified.repairsApplied, false);
   equal(verified.demand, null);
   equal(/^sha256:[0-9a-f]{64}$/u.test(verified.observationDigest), true);
@@ -575,7 +576,7 @@ test("verify：健康工作区十四门全 pass；hook 观察目录出现非法�
     const channel = broken.gates.find((gate) => gate.name === "host-hook-channel");
     deepEqual([channel?.status, channel?.code], ["fail", "codex:skipped-1"]);
     equal(broken.ok, false);
-    deepEqual(plain(broken.summary), { pass: 13, fail: 1, unavailable: 0 });
+    deepEqual(plain(broken.summary), { pass: 14, fail: 1, unavailable: 0 });
     deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
     equal(broken.next.suggestedTool, "wakeflow_maintain_workspace");
     notEqual(broken.observationDigest, verified.observationDigest);
@@ -1120,4 +1121,84 @@ test("verify 的加读阶段被中止：错误收敛为 io-failure/aborted，而
       error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
   );
   equal(reads > 1, true, "the verify reads never reached the facade");
+});
+
+test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；带门面时窗口按 session-start 记录里的摘要判 current / stale，磁盘上的 manifest 变了报 changed，verify 与 nextActions 都能看到", {
+  timeout: 120_000,
+}, async () => {
+  const plainStatus = await executeStatusRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  deepEqual(plain(plainStatus.runtime), {
+    artifactManifestDigest: null,
+    artifactOnDisk: "unknown",
+  });
+  equal(
+    plainStatus.windows.every((window) => window.artifact === "unknown"),
+    true,
+  );
+  const current = `sha256:${"d".repeat(64)}`;
+  const other = `sha256:${"e".repeat(64)}`;
+  const facadeWith = (onDisk: string) =>
+    Object.freeze({
+      ...CODEX_OBSERVATION_FACADE,
+      artifact: Object.freeze({ manifestDigest: current, readCurrentManifestDigest: () => onDisk }),
+    }) as typeof CODEX_OBSERVATION_FACADE;
+  // 绑定会话在同一份制品下启动：current。
+  const rooted = await RootedDirectory.open(healthy.root);
+  try {
+    await writeHostHookObservation(rooted, {
+      hostId: "codex",
+      event: "session-start",
+      sessionId: CONTROLLER_HANDLE,
+      cwd: healthy.root,
+      recordedAt: parseUtcInstant("2026-09-18T08:59:30.000Z"),
+      artifactManifestDigest: current as never,
+    });
+  } finally {
+    await rooted.close();
+  }
+  const same = await executeStatusRequest(facadeWith(current), { root: healthy.root }, CLOCK);
+  deepEqual(plain(same.runtime), { artifactManifestDigest: current, artifactOnDisk: "same" });
+  const controller = same.windows.find((window) => window.role === "controller");
+  equal(controller?.artifact, "current");
+  equal(
+    same.nextActions.some((action) => action.reason === "window-artifact-stale"),
+    false,
+  );
+  // 更晚的 session-start 在另一份制品下：stale；磁盘上的 manifest 也换了：changed。
+  const rootedAgain = await RootedDirectory.open(healthy.root);
+  try {
+    await writeHostHookObservation(rootedAgain, {
+      hostId: "codex",
+      event: "session-start",
+      sessionId: CONTROLLER_HANDLE,
+      cwd: healthy.root,
+      recordedAt: parseUtcInstant("2026-09-18T08:59:45.000Z"),
+      artifactManifestDigest: other as never,
+    });
+  } finally {
+    await rootedAgain.close();
+  }
+  const stale = await executeStatusRequest(facadeWith(other), { root: healthy.root }, CLOCK);
+  deepEqual(plain(stale.runtime), { artifactManifestDigest: current, artifactOnDisk: "changed" });
+  equal(stale.windows.find((window) => window.role === "controller")?.artifact, "stale");
+  deepEqual(
+    stale.nextActions
+      .filter(
+        (action) =>
+          action.reason === "window-artifact-stale" ||
+          action.reason === "runtime-artifact-outdated",
+      )
+      .map((action) => [action.owner, action.reason, action.subject]),
+    [
+      ["user", "runtime-artifact-outdated", null],
+      ["controller", "window-artifact-stale", controller?.windowId ?? null],
+    ],
+  );
+  const verified = await executeVerifyRequest(facadeWith(other), { root: healthy.root }, CLOCK);
+  const gate = verified.gates.find((entry) => entry.name === "runtime-artifact");
+  deepEqual([gate?.status, gate?.code], ["fail", "server-outdated,windows-stale:1"]);
 });

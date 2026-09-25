@@ -1,8 +1,8 @@
-import { executeBoardInspectionRequest, executeRequirementPublicationRequest, } from "../capabilities/requirement/service.js";
-import { executeTargetTaskPlanningPublicRequest } from "../capabilities/tasking/service.js";
 import { executeDemandCancellationRequest, executeDemandCompletionRequest, executeDemandContinuationRequest, } from "../capabilities/demand/lifecycle.js";
 import { executeDemandCreationRequest } from "../capabilities/demand/service.js";
 import { executeRecordEvidenceRequest } from "../capabilities/evidence/service.js";
+import { executeBoardInspectionRequest, executeRequirementPublicationRequest, } from "../capabilities/requirement/service.js";
+import { executeTargetTaskPlanningPublicRequest } from "../capabilities/tasking/service.js";
 /**
  * Wakeflow Entrypoint / MCP：与宿主无关的公共 executor。
  *

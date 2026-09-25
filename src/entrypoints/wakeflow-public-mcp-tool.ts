@@ -1,16 +1,15 @@
+import os from "node:os";
 import {
-  fromJsonSchema,
   type CallToolResult,
+  fromJsonSchema,
   type JsonSchemaType,
   type JsonSchemaValidator,
   type jsonSchemaValidator,
   type McpServer,
 } from "@modelcontextprotocol/server";
 
-import os from "node:os";
-
 import { canonicalizeJson } from "../foundation/data/canonical-json.js";
-import { parseJsonValue, type JsonValue } from "../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 import { fail, isWakeflowError } from "../kernel/error.js";
 import { assertCanonicalTextWithinLimit } from "../kernel/limits.js";

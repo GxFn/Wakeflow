@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { executeWakeflowMaintenancePublicRequest } from "../capabilities/workspace/maintain-workspace.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
   executeCodexMaintenanceExecution,
@@ -8,7 +9,6 @@ import {
   recoverCodexMaintenanceExecution,
 } from "../hosts/codex/codex-maintenance-execution.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { executeWakeflowMaintenancePublicRequest } from "../capabilities/workspace/maintain-workspace.js";
 import type { WakeflowMaintenancePublicHostFacade } from "../workspace/maintenance/wakeflow-maintenance-public-host-facade.js";
 
 /**

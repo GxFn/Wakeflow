@@ -2,12 +2,11 @@ import pLimit from "p-limit";
 
 import type { WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
 import { parseSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
-import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import {
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
 } from "../foundation/data/deterministic-json-document.js";
-import { parseJsonValue, type JsonObject, type JsonValue } from "../foundation/data/json-value.js";
+import { type JsonObject, type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -19,20 +18,21 @@ import {
 } from "../foundation/filesystem/durable-directory-materialization.js";
 import { unlinkRegularFileExactly } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectoryError,
   type RootedDirectory,
+  RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
-  StableDirectoryReadError,
   type StableDirectoryEntry,
+  StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
 import { readStableFile, StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { deriveUuidV4 } from "../foundation/identity/uuid-v4.js";
+import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../foundation/time/utc-instant.js";
 import { fail } from "./error.js";
@@ -85,6 +85,11 @@ export interface HostHookObservation {
   readonly promptDigest: Sha256Digest | null;
   readonly lastAssistantMessageDigest: Sha256Digest | null;
   readonly transcriptRef: string | null;
+  /**
+   * 写记录的观察脚本所属制品的 manifest 摘要（§13.127）：一个窗口是在哪份制品下启动的。
+   * 早于本字段的记录没有它，读成 null。
+   */
+  readonly artifactManifestDigest: Sha256Digest | null;
 }
 
 export interface HostHookObservationInput {
@@ -97,6 +102,7 @@ export interface HostHookObservationInput {
   readonly promptDigest?: Sha256Digest | null;
   readonly lastAssistantMessageDigest?: Sha256Digest | null;
   readonly transcriptRef?: string | null;
+  readonly artifactManifestDigest?: Sha256Digest | null;
 }
 
 export interface HostHookObservationFilter {
@@ -162,6 +168,8 @@ const RECORD_KEYS = Object.freeze([
   "lastAssistantMessageDigest",
   "transcriptRef",
 ]);
+/** 后加的可选键：旧记录没有它也合法（§13.127）。 */
+const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest"]);
 
 function isHostHookEvent(value: unknown): value is HostHookEvent {
   return typeof value === "string" && (HOST_HOOK_EVENTS as readonly string[]).includes(value);
@@ -257,6 +265,10 @@ export function createHostHookObservation(
       "$observation.lastAssistantMessageDigest",
     ),
     transcriptRef: optionalText(input.transcriptRef, "$observation.transcriptRef"),
+    artifactManifestDigest: optionalDigest(
+      input.artifactManifestDigest,
+      "$observation.artifactManifestDigest",
+    ),
   };
   return Object.freeze({
     kind: RECORD_KIND,
@@ -273,7 +285,11 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
   }
   const object = value as JsonObject;
   const keys = Object.keys(object).sort();
-  if (keys.length !== RECORD_KEYS.length || keys.some((key) => !RECORD_KEYS.includes(key))) {
+  if (
+    keys.length < RECORD_KEYS.length ||
+    RECORD_KEYS.some((key) => !keys.includes(key)) ||
+    keys.some((key) => !RECORD_KEYS.includes(key) && !OPTIONAL_RECORD_KEYS.includes(key))
+  ) {
     fail("invalid-request", "hook-record", "$record");
   }
   if (object.kind !== RECORD_KIND || object.schemaVersion !== 1) {
@@ -289,6 +305,7 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
     promptDigest: object.promptDigest as Sha256Digest | null,
     lastAssistantMessageDigest: object.lastAssistantMessageDigest as Sha256Digest | null,
     transcriptRef: object.transcriptRef as string | null,
+    artifactManifestDigest: (object.artifactManifestDigest ?? null) as Sha256Digest | null,
   });
   if (record.recordId !== object.recordId) {
     fail("invalid-request", "hook-record-id", "$record.recordId");

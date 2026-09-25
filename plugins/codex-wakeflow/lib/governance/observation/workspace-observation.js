@@ -238,10 +238,19 @@ async function observeHostHooks(root, hostId, current, signal) {
         const directory = await hookDirectoryState(root, hostId);
         const inventory = await readHostHookObservations(root, hostId, { limit: HOOK_RECORDS_MAXIMUM }, signalOptions(signal));
         const latestBySession = new Map();
+        const artifactBySession = new Map();
+        const startedAt = new Map();
         for (const record of inventory.records) {
             const previous = latestBySession.get(record.sessionId);
             if (previous === undefined || previous.recordedAt <= record.recordedAt) {
                 latestBySession.set(record.sessionId, { event: record.event, recordedAt: record.recordedAt });
+            }
+            if (record.event === "session-start") {
+                const previousStart = startedAt.get(record.sessionId);
+                if (previousStart === undefined || previousStart <= record.recordedAt) {
+                    startedAt.set(record.sessionId, record.recordedAt);
+                    artifactBySession.set(record.sessionId, record.artifactManifestDigest);
+                }
             }
         }
         return Object.freeze({
@@ -253,6 +262,7 @@ async function observeHostHooks(root, hostId, current, signal) {
             records: inventory.records.length,
             skipped: inventory.skipped,
             latestBySession,
+            artifactBySession,
         });
     }
     catch (error) {
@@ -273,6 +283,7 @@ async function observeHostHooks(root, hostId, current, signal) {
             records: 0,
             skipped: 0,
             latestBySession: new Map(),
+            artifactBySession: new Map(),
         });
     }
 }

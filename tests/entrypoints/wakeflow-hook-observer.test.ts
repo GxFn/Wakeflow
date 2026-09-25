@@ -160,6 +160,7 @@ function argvFor(host: string): readonly string[] {
 interface ObserveOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly argv?: readonly string[];
+  readonly artifactManifestDigest?: string;
 }
 
 function observe(
@@ -172,6 +173,9 @@ function observe(
     env: options.env ?? {},
     stdin,
     clock: () => new Date(FIXED_INSTANT),
+    ...(options.artifactManifestDigest === undefined
+      ? {}
+      : { artifactManifestDigest: options.artifactManifestDigest as never }),
   });
 }
 
@@ -973,4 +977,30 @@ test("Claude Code 的传输外壳不进摘要：粘贴块与跨会话消息剥�
         : [computeDeliveryPromptDigest(pasted), computeDeliveryPromptDigest(crossSession)].sort();
     deepEqual(digests, expected, host);
   }
+});
+
+test("launcher 交来的制品 manifest 摘要原样进记录，没交时为 null（§13.127）", async (t) => {
+  const fixture = createFixture(t);
+  const host: HostId = "claude-code";
+  const sessionId = SESSION_IDS[host];
+  writeBinding(fixture.workspace, host, sessionId);
+  const artifact = `sha256:${"f".repeat(64)}`;
+  const started = await observe(
+    host,
+    hookPayload("SessionStart", sessionId, fixture.workspace, fixture.transcriptPath, {}),
+    { artifactManifestDigest: artifact },
+  );
+  equal(started.code, null);
+  const stopped = await observe(
+    host,
+    hookPayload("Stop", sessionId, fixture.workspace, fixture.transcriptPath, {
+      last_assistant_message: LAST_ASSISTANT_MESSAGE,
+      prompt_id: "prompt-0002",
+    }),
+  );
+  equal(stopped.code, null);
+  const inventory = await readBack(fixture.workspace, host);
+  const byEvent = new Map(inventory.records.map((record) => [record.event, record]));
+  equal(byEvent.get("session-start")?.artifactManifestDigest, artifact);
+  equal(byEvent.get("stop")?.artifactManifestDigest, null);
 });

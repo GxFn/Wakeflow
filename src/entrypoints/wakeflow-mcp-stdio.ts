@@ -1,5 +1,5 @@
 import type { McpServerFactory } from "@modelcontextprotocol/server";
-import { serveStdio, type StdioServerHandle } from "@modelcontextprotocol/server/stdio";
+import { type StdioServerHandle, serveStdio } from "@modelcontextprotocol/server/stdio";
 
 /**
  * Wakeflow Entrypoint / MCP：官方 SDK stdio transport 的进程生命周期边界。

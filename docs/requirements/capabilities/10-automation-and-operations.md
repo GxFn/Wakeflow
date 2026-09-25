@@ -87,6 +87,28 @@
 
 - Q8 校验器不再硬编码工具数量与退役路径列表，改由导出与 schema 派生，是否同意？建议同意。
 
+## 10.6 宿主中断与制品更新（2026-09-25，§13.127）
+
+**场景**：Agent 的一轮被宿主切断（Claude Code 的 "API Error: Connection lost mid-response"，会话重启，pane 消失），或插件在运行中的窗口脚下更新。第六轮联合运行里两次连接中断分别落在 Design 的 apply 与 Controller 的评审决定上，Controller 又在完成前撞上自己的服务进程早于制品更新。
+
+**规避方案**：Wakeflow 不试图阻止宿主中断，而是让每个效果在中断后可判定、可重放、不可重复：
+
+| 效果 | 盲目重试会怎样 | 规则 |
+|---|---|---|
+| `publish_requirement` apply | 同内容同 `planDigest` 回 `current`，不会有第二条记录 | 先看板，再用同一 planDigest 重放 |
+| activate / withdraw | 成功后再做即 `claim-state-drift` | drift 即已发生，inspect 后不再做 |
+| `create_demand` apply | 同意图回 current；第二个活动 Demand 被拒 | status 看 Demand 是否已在 |
+| `plan_target_task`、评审决定、`prepare_delivery` | 同 idempotencyKey 回同一记录 / 同一许可与围栏 | 用同一 key 重放；`expectedStreamRevision` 漂移就重读 |
+| 助手 `deliver` | **Wakeflow 唯一不能替你重放的效果**：再发即第二次投递 | 助手先查落地记录，已落地拒 `already-landed` 并交回记录；用它登记结果 |
+| `record_delivery_outcome` | 围栏绑定；证据后到时用新 key 再记 | 见能力卡 6 |
+| `import_target_result` | 结果 id 由声明围栏派生，重放回同一结果 | status 看导入是否已落 |
+| `record_evidence` | 内容派生 id，回 already-recorded | 同一 selection 再 apply 即可 |
+| `complete_demand` / `cancel_demand` | 同 planDigest；已归档的 Demand 重新 preview 即见 | status 看 archive 回执 |
+| pane 消失、会话仍在 | 无 | 助手 `resume` + `relocate`（§13.125）；从未有过对话的会话 `resume-exited` → launch + replace |
+| 插件更新后旧窗口继续跑 | 旧代码、旧 hook；verify 报资产 drift，reconcile 建议会用旧代码把资产改回去 | `runtime-artifact` 门与 status 的 `windows[].artifact` / `runtime.artifactOnDisk` 指名道姓；其他窗口 Controller 用助手 resume，本窗口由用户重连服务（Claude Code `/mcp`）或 resume 会话 |
+
+技能文本：四份技能各写一段"After an interruption"（先看再做，同 key / digest 重放，宿主发送先查落地），Controller 参考多一节"After a plugin update"。
+
 ## 旧行为疑点
 
 1. keep-live 约 2,400 行无调用方。

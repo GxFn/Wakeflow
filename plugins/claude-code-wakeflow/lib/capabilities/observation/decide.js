@@ -10,6 +10,17 @@ const CREATE_DEMAND_TOOL = "wakeflow_create_demand";
  */
 export function deriveNextActions(input) {
     const actions = [];
+    if (input.artifactServerOutdated) {
+        actions.push({ owner: "user", tool: null, reason: "runtime-artifact-outdated", subject: null });
+    }
+    for (const windowId of [...input.staleArtifactWindows].sort()) {
+        actions.push({
+            owner: "controller",
+            tool: null,
+            reason: "window-artifact-stale",
+            subject: windowId,
+        });
+    }
     if (input.maintenance) {
         actions.push({
             owner: "controller",
@@ -328,6 +339,21 @@ function podsGate(facts) {
     const failing = codes.some((code) => !PENDING_POD_CODE_SUFFIXES.some((suffix) => code.endsWith(suffix)));
     return gate("pod-execution-location", "pod", failing ? "fail" : unavailable ? "unavailable" : "pass", joinCodes(codes));
 }
+/**
+ * runtime-artifact（§13.127）：本进程启动时的制品 manifest 与磁盘上的一致（否则 server-outdated，
+ * 本窗口的服务进程要重连），且每个已登记窗口的会话都在同一份制品下启动（否则列出 stale 窗口，
+ * 由 Controller 用助手 resume）。没有 manifest 可比的运行记 not-applicable 而不是冒充一致。
+ */
+function runtimeArtifactGate(facts) {
+    const { manifestDigest, onDiskDigest, staleWindows } = facts.runtime;
+    if (manifestDigest === null)
+        return gate("runtime-artifact", "runtime", "pass", "not-applicable");
+    const codes = [
+        ...(onDiskDigest !== null && onDiskDigest !== manifestDigest ? ["server-outdated"] : []),
+        ...(staleWindows.length > 0 ? [`windows-stale:${staleWindows.length}`] : []),
+    ];
+    return gate("runtime-artifact", "runtime", codes.length === 0 ? "pass" : "fail", joinCodes(codes));
+}
 /** 资产字节与本地设置条目各一票：资产读不出、设置文件不是 JSON 对象算 unavailable。 */
 function assetsGate(facts) {
     const applicable = facts.assets.filter((asset) => asset.status !== "not-applicable");
@@ -394,6 +420,7 @@ export function deriveWorkspaceGates(facts) {
         podsGate(facts),
         assetsGate(facts),
         projectionGate(facts),
+        runtimeArtifactGate(facts),
     ];
     return Object.freeze([...gates].sort((left, right) => left.name.localeCompare(right.name)));
 }

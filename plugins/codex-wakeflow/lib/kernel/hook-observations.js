@@ -1,6 +1,5 @@
 import pLimit from "p-limit";
 import { parseSha256Digest } from "../foundation/crypto/sha256.js";
-import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
@@ -12,6 +11,7 @@ import { RootedDirectoryError, } from "../foundation/filesystem/rooted-directory
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
 import { readStableFile, StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { deriveUuidV4 } from "../foundation/identity/uuid-v4.js";
+import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { fail } from "./error.js";
@@ -87,6 +87,8 @@ const RECORD_KEYS = Object.freeze([
     "lastAssistantMessageDigest",
     "transcriptRef",
 ]);
+/** 后加的可选键：旧记录没有它也合法（§13.127）。 */
+const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest"]);
 function isHostHookEvent(value) {
     return typeof value === "string" && HOST_HOOK_EVENTS.includes(value);
 }
@@ -156,6 +158,7 @@ export function createHostHookObservation(input) {
         promptDigest: optionalDigest(input.promptDigest, "$observation.promptDigest"),
         lastAssistantMessageDigest: optionalDigest(input.lastAssistantMessageDigest, "$observation.lastAssistantMessageDigest"),
         transcriptRef: optionalText(input.transcriptRef, "$observation.transcriptRef"),
+        artifactManifestDigest: optionalDigest(input.artifactManifestDigest, "$observation.artifactManifestDigest"),
     };
     return Object.freeze({
         kind: RECORD_KIND,
@@ -171,7 +174,9 @@ function parseHostHookObservation(value) {
     }
     const object = value;
     const keys = Object.keys(object).sort();
-    if (keys.length !== RECORD_KEYS.length || keys.some((key) => !RECORD_KEYS.includes(key))) {
+    if (keys.length < RECORD_KEYS.length ||
+        RECORD_KEYS.some((key) => !keys.includes(key)) ||
+        keys.some((key) => !RECORD_KEYS.includes(key) && !OPTIONAL_RECORD_KEYS.includes(key))) {
         fail("invalid-request", "hook-record", "$record");
     }
     if (object.kind !== RECORD_KIND || object.schemaVersion !== 1) {
@@ -187,6 +192,7 @@ function parseHostHookObservation(value) {
         promptDigest: object.promptDigest,
         lastAssistantMessageDigest: object.lastAssistantMessageDigest,
         transcriptRef: object.transcriptRef,
+        artifactManifestDigest: (object.artifactManifestDigest ?? null),
     });
     if (record.recordId !== object.recordId) {
         fail("invalid-request", "hook-record-id", "$record.recordId");

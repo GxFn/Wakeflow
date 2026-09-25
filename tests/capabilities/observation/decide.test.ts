@@ -50,6 +50,7 @@ const GATE_NAMES = Object.freeze([
   "ledger-layout",
   "local-layout",
   "pod-execution-location",
+  "runtime-artifact",
   "window-identity",
   "window-runtime-projection",
   "work-claims",
@@ -63,6 +64,7 @@ const OBSERVED = Object.freeze({ status: "observed" as const, issue: null });
 
 function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGateFacts {
   return {
+    runtime: { manifestDigest: null, onDiskDigest: null, staleWindows: [] },
     domains: { demands: OBSERVED, claims: OBSERVED, pods: OBSERVED },
     configRecheck: "current",
     configRef: WAKEFLOW_CONFIG_FILE_REF,
@@ -174,6 +176,8 @@ function nextInput(overrides: Partial<NextActionInput> = {}): NextActionInput {
     unregisteredWindows: [],
     demands: [],
     pendingPackages: [],
+    staleArtifactWindows: [],
+    artifactServerOutdated: false,
     ...overrides,
   };
 }
@@ -301,7 +305,7 @@ test("deriveWorkspaceGates：健康事实十四门全 pass、按名字排序；�
     gateOf(gates, "active-projection").evidence.map((entry) => entry.ref),
     [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF],
   );
-  deepEqual(summarizeGates(gates), { ok: true, summary: { pass: 14, fail: 0, unavailable: 0 } });
+  deepEqual(summarizeGates(gates), { ok: true, summary: { pass: 15, fail: 0, unavailable: 0 } });
   deepEqual(verifyNext(gates), {
     frontier: null,
     owner: "none",
@@ -814,7 +818,7 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
   const gates = deriveWorkspaceGates(
     healthyFacts({ configRecheck: "changed", ledger: "unavailable" }),
   );
-  deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 12, fail: 1, unavailable: 1 } });
+  deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 13, fail: 1, unavailable: 1 } });
   deepEqual(verifyNext(gates), {
     frontier: "workspace-maintenance",
     owner: "controller",
@@ -1049,5 +1053,58 @@ test("window-runtime-projection：每个宿主的每个窗口投影都与重算�
       "window-runtime-projection",
     ),
     ["unavailable", "claude-code:runtime-missing"],
+  );
+});
+
+test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable 并 pass；磁盘上的 manifest 变了报 server-outdated；会话在旧制品下启动的窗口按数报 windows-stale", () => {
+  const same = digest("artifact-a");
+  deepEqual(verdictOf(healthyFacts(), "runtime-artifact"), ["pass", "not-applicable"]);
+  deepEqual(
+    verdictOf(
+      healthyFacts({ runtime: { manifestDigest: same, onDiskDigest: same, staleWindows: [] } }),
+      "runtime-artifact",
+    ),
+    ["pass", null],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        runtime: { manifestDigest: same, onDiskDigest: digest("artifact-b"), staleWindows: [] },
+      }),
+      "runtime-artifact",
+    ),
+    ["fail", "server-outdated"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        runtime: {
+          manifestDigest: same,
+          onDiskDigest: null,
+          staleWindows: [
+            "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          ],
+        },
+      }),
+      "runtime-artifact",
+    ),
+    ["fail", "windows-stale:2"],
+  );
+  deepEqual(
+    deriveNextActions(
+      nextInput({
+        artifactServerOutdated: true,
+        staleArtifactWindows: [
+          "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        ],
+      }),
+    ).map((action) => [action.owner, action.tool, action.reason, action.subject]),
+    [
+      ["user", null, "runtime-artifact-outdated", null],
+      ["controller", null, "window-artifact-stale", "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
+      ["controller", null, "window-artifact-stale", "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
+    ],
   );
 });

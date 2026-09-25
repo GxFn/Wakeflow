@@ -1,5 +1,5 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { lstat, opendir, open as openFileHandle, realpath, } from "node:fs/promises";
+import { lstat, opendir, open as openFileHandle, readFile, realpath, } from "node:fs/promises";
 import nodePath from "node:path";
 import { computeSha256Digest } from "../foundation/crypto/sha256.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
@@ -220,12 +220,13 @@ function degradeToKernel(required, field, value) {
     }
 }
 /** 必填字段不合合同即 null（stdin-invalid）；可选字段各自降级；写入阶段只剩 I/O 失败。 */
-function recordInput(hostId, payload, event, clock) {
+function recordInput(hostId, payload, event, clock, artifactManifestDigest) {
     const required = requiredInput(hostId, payload, event, clock);
     if (required === null)
         return null;
     return Object.freeze({
         ...required,
+        artifactManifestDigest: artifactManifestDigest ?? null,
         turnId: degradeToKernel(required, "turnId", payload.turnId),
         promptDigest: event === "user-prompt-submit" ? promptDigest(hostId, payload.prompt) : null,
         lastAssistantMessageDigest: event === "stop" ? textDigest(payload.lastAssistantMessage) : null,
@@ -545,7 +546,7 @@ async function observe(input, written) {
     if (payload.value.event === null)
         return outcome("event-unknown", written);
     const clock = typeof input.clock === "function" ? input.clock : defaultClock;
-    const record = recordInput(host.value, payload.value, payload.value.event, clock);
+    const record = recordInput(host.value, payload.value, payload.value.event, clock, input.artifactManifestDigest);
     if (record === null)
         return outcome("stdin-invalid", written);
     const subject = await resolveSubject(payload.value.cwd, isRecord(input.env) ? input.env : {});
@@ -621,6 +622,19 @@ async function readStandardInput() {
     return Buffer.concat(chunks);
 }
 /**
+ * 观察脚本所属制品的 manifest 摘要（§13.127）：制品根是 `lib/entrypoints/<本文件>` 的上两级；
+ * 测试构建没有 manifest，读成 null。用 URL 相对解析而不引入 node:url，保持入口闭包不变（D1）。
+ */
+async function artifactManifestDigestOf(importMetaUrl) {
+    try {
+        const bytes = await readFile(new URL("../../artifact-manifest.json", importMetaUrl));
+        return computeSha256Digest(new Uint8Array(bytes), "$artifactManifest");
+    }
+    catch {
+        return null;
+    }
+}
+/**
  * 进程入口：只在 code 非 null 时向 stderr 打恰好一行固定代码，从不写 stdout，退出码保持 0。
  * 制品 launcher 只调用它；守卫在这里登记，launcher 自己不再登记。
  */
@@ -633,6 +647,7 @@ export async function main() {
             argv: process.argv.slice(2),
             env: process.env,
             stdin,
+            artifactManifestDigest: await artifactManifestDigestOf(import.meta.url),
         });
         if (result.code !== null)
             writeStderrLine(result.code);

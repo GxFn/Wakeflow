@@ -103,7 +103,12 @@ delivery with a fresh claim and fence, at most three times per envelope. After
 that, prepare the target again for a new envelope.
 
 Never resend a prompt by hand because a window "looks idle". Duplicate work in
-a target window is expensive and invisible until the results disagree.
+a target window is expensive and invisible until the results disagree. The
+helper guards this for you: when the prompt's landing record already exists
+in the bound session, `deliver` refuses with `already-landed` and prints that
+landing - the case after a turn was cut between the send and recording its
+outcome. Record the outcome with that landing; `--force` is for a prompt you
+have established never reached the window.
 
 ## Step 10 - Inspecting the review unit
 

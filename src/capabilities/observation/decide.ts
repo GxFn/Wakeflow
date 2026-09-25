@@ -41,6 +41,10 @@ export interface NextActionInput {
     readonly suggestedTool: string | null;
   }>[];
   readonly pendingPackages: readonly Readonly<{ readonly requirementId: string }>[];
+  /** 会话在更早的制品下启动的已登记窗口：先 resume 它们，再让它们干活（§13.127）。 */
+  readonly staleArtifactWindows: readonly string[];
+  /** 本进程脚下的制品已更新：本窗口的服务进程要由用户重连（§13.127）。 */
+  readonly artifactServerOutdated: boolean;
 }
 
 const NEXT_ACTIONS_MAXIMUM = 64;
@@ -57,6 +61,17 @@ export function deriveNextActions(
   input: Readonly<NextActionInput>,
 ): readonly Readonly<NextAction>[] {
   const actions: NextAction[] = [];
+  if (input.artifactServerOutdated) {
+    actions.push({ owner: "user", tool: null, reason: "runtime-artifact-outdated", subject: null });
+  }
+  for (const windowId of [...input.staleArtifactWindows].sort()) {
+    actions.push({
+      owner: "controller",
+      tool: null,
+      reason: "window-artifact-stale",
+      subject: windowId,
+    });
+  }
   if (input.maintenance) {
     actions.push({
       owner: "controller",
@@ -172,6 +187,15 @@ export interface VerifyGate {
 }
 
 export interface WorkspaceGateFacts {
+  /**
+   * 制品身份（§13.127）：本进程启动时的 manifest 摘要、现在磁盘上的摘要，以及会话在别的制品下
+   * 启动的已登记窗口。没有 manifest 的运行（测试构建）两个摘要都是 null，门记 not-applicable。
+   */
+  readonly runtime: Readonly<{
+    readonly manifestDigest: Sha256Digest | null;
+    readonly onDiskDigest: Sha256Digest | null;
+    readonly staleWindows: readonly string[];
+  }>;
   /**
    * 三个域的观察状态（§13.94 D1）：读不出时空列表不是"没有"，依赖它们的门只能 unavailable，
    * 需要活动 Demand 集合的交叉检查（看板认领、孤儿声明）也不做。
@@ -590,6 +614,26 @@ function podsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   );
 }
 
+/**
+ * runtime-artifact（§13.127）：本进程启动时的制品 manifest 与磁盘上的一致（否则 server-outdated，
+ * 本窗口的服务进程要重连），且每个已登记窗口的会话都在同一份制品下启动（否则列出 stale 窗口，
+ * 由 Controller 用助手 resume）。没有 manifest 可比的运行记 not-applicable 而不是冒充一致。
+ */
+function runtimeArtifactGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
+  const { manifestDigest, onDiskDigest, staleWindows } = facts.runtime;
+  if (manifestDigest === null) return gate("runtime-artifact", "runtime", "pass", "not-applicable");
+  const codes = [
+    ...(onDiskDigest !== null && onDiskDigest !== manifestDigest ? ["server-outdated"] : []),
+    ...(staleWindows.length > 0 ? [`windows-stale:${staleWindows.length}`] : []),
+  ];
+  return gate(
+    "runtime-artifact",
+    "runtime",
+    codes.length === 0 ? "pass" : "fail",
+    joinCodes(codes),
+  );
+}
+
 /** 资产字节与本地设置条目各一票：资产读不出、设置文件不是 JSON 对象算 unavailable。 */
 function assetsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   const applicable = facts.assets.filter((asset) => asset.status !== "not-applicable");
@@ -691,6 +735,7 @@ export function deriveWorkspaceGates(
     podsGate(facts),
     assetsGate(facts),
     projectionGate(facts),
+    runtimeArtifactGate(facts),
   ];
   return Object.freeze([...gates].sort((left, right) => left.name.localeCompare(right.name)));
 }

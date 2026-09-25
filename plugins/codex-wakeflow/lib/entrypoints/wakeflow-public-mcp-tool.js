@@ -1,5 +1,5 @@
-import { fromJsonSchema, } from "@modelcontextprotocol/server";
 import os from "node:os";
+import { fromJsonSchema, } from "@modelcontextprotocol/server";
 import { canonicalizeJson } from "../foundation/data/canonical-json.js";
 import { parseJsonValue } from "../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";

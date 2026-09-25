@@ -40,6 +40,8 @@
 
 **现 TS 状态**（2026-09-10）：执行完全交给 Agent；落地证据是目标会话的 `user-prompt-submit` hook 记录（`promptDigest` 等于信封 prompt 摘要），Codex 另接受宿主发送调用的返回摘要；Q1、Q2 按此落地，回读只是补充观察。2026-09-24 §13.117 D4：Claude 的粘贴、回车与回读由 tmux 助手资产的 `deliver` 子命令执行：先按定位器与许可的 `handleDigest` 核对 pane（缺席、pane-dead、元数据不符都是 failed-before-send），再 `load-buffer` 读 stdin 的 prompt、`paste-buffer -d -p`、`send-keys Enter`、一次 `capture-pane`；输出就是 `wakeflow_record_delivery_outcome` 的 `attempt`（sent / failed-before-send / unknown）与 `readback`（confirmed / pending / unavailable）。2026-09-24 §13.122（对齐第一轮）：`deliver` 的送前核对补齐旧 Claude transport 的 pane authority——与定位器按坐标或标识相关的 pane 恰好一个（`duplicate-pane`）、活着、标识对、坐标对（`locator-stale`）、跑的是 claude（`wrong-process`），任一不满足都是 failed-before-send；回车后按内核 prompt 摘要规则等目标会话的 `user-prompt-submit` 记录（`--wait-landing`，默认 3 秒），输出 `landing: observed | pending | unavailable`，处置仍由 `record_delivery_outcome` 自己读记录派生。
 
+2026-09-25 §13.127（对齐第六轮，宿主中断）：Claude 助手 `deliver` 在粘贴前查目标会话的落地记录——同一段 prompt（去首尾空白后的摘要）已有 `user-prompt-submit` 记录即拒绝为 `already-landed`，并带回那条 `landing{recordId, recordedAt}` 与提示；`--force` 才照发。这是 Wakeflow 唯一不能替 Agent 重放的效果：被宿主中断（API 连接中途断开）的一轮重发时拿到的是证据而不是第二次投递。真实宿主上对同一 pane 连发两次：第一次 `sent` 且落地 observed，第二次 `already-landed`，hook 目录里只有一条记录。
+
 **实现判断**：按 ADR-0009，Claude 的粘贴、回车、`capture-pane` 与 Codex 的线程发送都成为 skills 步骤；旧的首行子串匹配放弃；回读改为 Agent 的结构化观察声明加宿主 hook 记录引用，Wakeflow 只做摘要与一致性；prompt 临时文件路径与 inspect、sweep 命令放弃；tmux 控制模式写进 Claude skills 作为可选的更强观察手段。
 
 **待确认**：

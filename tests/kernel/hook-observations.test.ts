@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -11,20 +12,19 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { type TestContext, test } from "node:test";
 import type { Sha256Digest } from "../../src/foundation/crypto/sha256.js";
+import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import type { UtcInstant } from "../../src/foundation/time/utc-instant.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import {
   createHostHookObservation,
   HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
   HOST_HOOK_RETENTION_MILLISECONDS,
+  type HostHookObservationInput,
   readHostHookObservations,
   readHostHookObservationsInterleaved,
   writeHostHookObservation,
-  type HostHookObservationInput,
 } from "../../src/kernel/hook-observations.js";
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
 
@@ -478,4 +478,44 @@ test("目录越过读取上限时读取整体拒绝；修剪路径的上限更�
   // 修剪永远不动无法识别的条目（它们留给 verify 的门），所以修剪之后 skipped 仍然恰好等于
   // 填充进去的那批文件数：少一个就说明修剪越界删掉了不属于它的东西，多一个就说明有记录读不出。
   equal(inventory.skipped, OVERSIZED_UNRECOGNIZED);
+});
+
+test("制品 manifest 摘要是后加的可选键：旧记录没有它读成 null，新记录原样往返（§13.127）", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const artifact = `sha256:${"c".repeat(64)}` as Sha256Digest;
+  const written = await writeHostHookObservation(
+    root,
+    observation(workspace, "2026-09-18T12:00:00.000Z" as UtcInstant, {
+      event: "session-start",
+      artifactManifestDigest: artifact,
+    }),
+  );
+  equal(written.record.artifactManifestDigest, artifact);
+  // 旧记录：恰好十二个键，没有 artifactManifestDigest——把内核自己写出的规范文件去掉这个键再放回去。
+  const legacy = await writeHostHookObservation(
+    root,
+    observation(workspace, "2026-09-18T11:00:00.000Z" as UtcInstant, { event: "session-start" }),
+  );
+  const legacyPath = path.join(hooksDirectory(workspace, "claude-code"), recordName(legacy));
+  const rendered = readFileSync(legacyPath, "utf8");
+  const parsed = JSON.parse(rendered) as Record<string, unknown>;
+  delete parsed.artifactManifestDigest;
+  const sorted = Object.fromEntries(
+    Object.entries(parsed).sort(([left], [right]) => (left < right ? -1 : 1)),
+  );
+  writeFileSync(
+    legacyPath,
+    rendered.startsWith("{\n")
+      ? `${JSON.stringify(sorted, null, 2)}\n`
+      : `${JSON.stringify(sorted)}\n`,
+  );
+  const inventory = await readHostHookObservations(root, "claude-code");
+  equal(inventory.skipped, 0);
+  deepEqual(
+    inventory.records.map((record) => [record.recordId, record.artifactManifestDigest]),
+    [
+      [legacy.record.recordId, null],
+      [written.record.recordId, artifact],
+    ],
+  );
 });

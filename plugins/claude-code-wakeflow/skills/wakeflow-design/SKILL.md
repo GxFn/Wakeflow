@@ -40,6 +40,11 @@ Nothing you write reaches an implementer except through it.
 - Never put a credential, a token, a private handle or an absolute local path
   into a package. The privacy scan will refuse it, and refusing late wastes the
   user's turn.
+- If a host error cuts your turn, look before you act again: inspect the
+  board for the package you were publishing. An apply that landed shows up
+  there; one that did not is replayed with the same `planDigest` and never
+  publishes twice. A `claim-state-drift` on activate or withdraw after an
+  interruption usually means it already happened.
 - Workspace and repository `CLAUDE.md` files bind you.
 
 ## Main flow

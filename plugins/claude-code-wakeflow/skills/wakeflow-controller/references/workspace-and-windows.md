@@ -122,6 +122,24 @@ Other actions on the same tool:
 Wakeflow never opens, inspects or closes a window. Every one of those actions
 is yours, and the binding tool only records what you observed.
 
+## After a plugin update
+
+A window runs the plugin that was installed when its session started; an
+update on disk does not reach a running session. `wakeflow_status` shows this
+per window as `artifact: stale` (its session-start record names an older
+artifact than the one serving the status), and `wakeflow_verify` fails the
+`runtime-artifact` gate with `windows-stale:<n>`, or with `server-outdated`
+when the artifact changed under this very window's server.
+
+- For every other stale window: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive, and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. names the helper's
+  `resume`, which keeps the session; then relocate and mark. A session that
+  never held a conversation cannot be resumed (`resume-exited`): close it,
+  launch, replace.
+- For this window: only the user can reconnect its Wakeflow server (in Claude
+  Code: `/mcp`, then reconnect `wakeflow`) or resume the session. Tell them,
+  and do not run maintenance from the outdated server - it would write the
+  older assets back over the newer ones.
+
 ## Pods
 
 A pod is the only execution-environment abstraction: a complete window set

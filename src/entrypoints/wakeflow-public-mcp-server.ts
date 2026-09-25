@@ -3,8 +3,8 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../capabilities/observation/contract.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "./wakeflow-public-mcp-catalog.js";
 import {
-  parseCreateWakeflowPublicMcpServerOptions,
   type CreateWakeflowPublicMcpServerOptions,
+  parseCreateWakeflowPublicMcpServerOptions,
 } from "./wakeflow-public-mcp-server-configuration.js";
 import {
   registerWakeflowPublicMcpCatalog,

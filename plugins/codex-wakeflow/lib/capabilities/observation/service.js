@@ -176,6 +176,40 @@ function windowBindingOf(observation, windowId) {
     return null;
 }
 /** 绑定会话最近一条 hook 记录；没有绑定或没有记录为 null。 */
+/**
+ * 窗口的制品状态（§13.127）：绑定会话最近一次 session-start 记录里的 manifest 摘要等于本进程的
+ * 即 current，不等即 stale；任一边不知道（没有记录、记录早于该字段、本进程没有 manifest）即 unknown。
+ */
+function artifactStateOf(context, binding) {
+    const own = context.facade.artifact?.manifestDigest ?? null;
+    if (binding === null || own === null)
+        return "unknown";
+    const started = context.observation.hooks
+        .find((entry) => entry.hostId === binding.hostId)
+        ?.artifactBySession.get(binding.handleValue);
+    if (started === undefined || started === null)
+        return "unknown";
+    return started === own ? "current" : "stale";
+}
+function staleArtifactWindowIds(context) {
+    return context.snapshot.model.topology.windows
+        .map((window) => window.windowId)
+        .filter((windowId) => artifactStateOf(context, windowBindingOf(context.observation, windowId)) === "stale");
+}
+/** 本进程脚下的制品是否已更新：启动时与现在磁盘上的 manifest 摘要不同。 */
+function runtimeView(context) {
+    const artifact = context.facade.artifact;
+    const manifestDigest = artifact?.manifestDigest ?? null;
+    const onDisk = artifact?.readCurrentManifestDigest() ?? null;
+    return {
+        artifactManifestDigest: manifestDigest,
+        artifactOnDisk: manifestDigest === null || onDisk === null
+            ? "unknown"
+            : onDisk === manifestDigest
+                ? "same"
+                : "changed",
+    };
+}
 function lastObservationOf(observation, binding) {
     if (binding === null)
         return null;
@@ -233,6 +267,7 @@ function windowViews(context) {
             claim: claimViewOf(observation, window.windowId),
             lastObservation: lastObservationOf(observation, binding),
             projection: windowProjectionOf(observation, window.windowId),
+            artifact: artifactStateOf(context, binding),
         };
     });
 }
@@ -358,6 +393,8 @@ function nextActionInput(context) {
     // pod 域读不出时 pods 是空列表，不是"没有 pod"：登记动作只在真的观察到 pod 时才排得出来。
     const podsObserved = observation.pods.status === "observed";
     return Object.freeze({
+        staleArtifactWindows: staleArtifactWindowIds(context),
+        artifactServerOutdated: runtimeView(context).artifactOnDisk === "changed",
         // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
         maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
         unregisteredWindows: bindingsObserved && podsObserved
@@ -475,6 +512,7 @@ async function assembleStatus(context, request) {
         hooks: hookViews(observation),
         unmergedAccepted: unmergedAccepted.entries,
         domains: domainViews(context),
+        runtime: runtimeView(context),
         truncated: {
             demands: demands.omitted,
             windows: windows.omitted,
@@ -638,7 +676,13 @@ async function gateFacts(context, reports) {
     const bound = new Set(observation.bindings.flatMap((host) => host.bindings.map((b) => b.windowId)));
     const repositories = observation.repositories.value;
     const demandsObserved = observation.demands.status === "observed";
+    const runtime = runtimeView(context);
     return Object.freeze({
+        runtime: {
+            manifestDigest: runtime.artifactManifestDigest,
+            onDiskDigest: context.facade.artifact?.readCurrentManifestDigest() ?? null,
+            staleWindows: staleArtifactWindowIds(context),
+        },
         domains: {
             demands: { status: observation.demands.status, issue: observation.demands.issue },
             claims: { status: observation.claims.status, issue: observation.claims.issue },

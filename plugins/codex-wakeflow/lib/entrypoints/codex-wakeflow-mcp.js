@@ -8,6 +8,7 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wak
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
+import { resolveWakeflowArtifactIdentity } from "./wakeflow-artifact-identity.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
 import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
@@ -31,6 +32,7 @@ const CODEX_HOST_FACADE = Object.freeze({
  */
 const CODEX_OBSERVATION_FACADE = Object.freeze({
     hostId: "codex",
+    artifact: resolveWakeflowArtifactIdentity(import.meta.url),
     hosts: Object.freeze([
         Object.freeze({
             hostId: "codex",

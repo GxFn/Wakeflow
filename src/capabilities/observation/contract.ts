@@ -15,9 +15,9 @@ import {
   type WakeflowVerifyResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-verify-result.generated.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
   createRuntimeJsonSchemaValidator,

@@ -1,35 +1,11 @@
 import {
-  WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
-  type WakeflowMaintenancePublicResult,
-} from "../capabilities/workspace/maintain-workspace.js";
-import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
-import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
-import {
-  RECORD_EVIDENCE_TOOL_REGISTRATION,
-  type RecordEvidenceResult,
-} from "../capabilities/evidence/contract.js";
-import {
-  STATUS_TOOL_REGISTRATION,
-  VERIFY_TOOL_REGISTRATION,
-  type StatusResult,
-  type VerifyResult,
-} from "../capabilities/observation/contract.js";
-import { POD_TOOL_REGISTRATION, type PodResult } from "../capabilities/pod/contract.js";
-import {
-  IMPLEMENTATION_REVIEW_DECISION_TOOL_REGISTRATION,
-  TARGET_RESULT_IMPORT_TOOL_REGISTRATION,
-  TARGET_RESULT_REVIEW_INSPECTION_TOOL_REGISTRATION,
-  TEST_REVIEW_DECISION_TOOL_REGISTRATION,
-  type ImplementationReviewDecisionResult,
-  type TargetResultImportResult,
-  type TargetResultReviewInspectionResult,
-  type TestReviewDecisionResult,
-} from "../capabilities/result-review/contract.js";
-import {
-  createWakeflowToolCatalog,
-  type WakeflowToolCatalog,
-  type WakeflowToolRegistration,
-} from "../kernel/tool-registry.js";
+  PREPARE_DELIVERY_TOOL_REGISTRATION,
+  type PrepareDeliveryResult,
+  REARM_DELIVERY_TOOL_REGISTRATION,
+  RECORD_DELIVERY_OUTCOME_TOOL_REGISTRATION,
+  type RearmDeliveryResult,
+  type RecordDeliveryOutcomeResult,
+} from "../capabilities/delivery/contract.js";
 import {
   DEMAND_CANCELLATION_TOOL_REGISTRATION,
   DEMAND_COMPLETION_TOOL_REGISTRATION,
@@ -40,26 +16,50 @@ import {
   type DemandContinuationResult,
   type DemandCreationResult,
 } from "../capabilities/demand/contract.js";
+import type { WindowBindingResult } from "../capabilities/endpoint/contract.js";
 import { WINDOW_BINDING_TOOL_REGISTRATION } from "../capabilities/endpoint/contract.js";
 import {
-  PREPARE_DELIVERY_TOOL_REGISTRATION,
-  REARM_DELIVERY_TOOL_REGISTRATION,
-  RECORD_DELIVERY_OUTCOME_TOOL_REGISTRATION,
-  type PrepareDeliveryResult,
-  type RearmDeliveryResult,
-  type RecordDeliveryOutcomeResult,
-} from "../capabilities/delivery/contract.js";
+  RECORD_EVIDENCE_TOOL_REGISTRATION,
+  type RecordEvidenceResult,
+} from "../capabilities/evidence/contract.js";
+import {
+  STATUS_TOOL_REGISTRATION,
+  type StatusResult,
+  VERIFY_TOOL_REGISTRATION,
+  type VerifyResult,
+} from "../capabilities/observation/contract.js";
+import { POD_TOOL_REGISTRATION, type PodResult } from "../capabilities/pod/contract.js";
+import {
+  BOARD_INSPECTION_TOOL_REGISTRATION,
+  type BoardInspectionResult,
+  REQUIREMENT_PUBLICATION_TOOL_REGISTRATION,
+  type RequirementPublicationResult,
+} from "../capabilities/requirement/contract.js";
+import {
+  IMPLEMENTATION_REVIEW_DECISION_TOOL_REGISTRATION,
+  type ImplementationReviewDecisionResult,
+  TARGET_RESULT_IMPORT_TOOL_REGISTRATION,
+  TARGET_RESULT_REVIEW_INSPECTION_TOOL_REGISTRATION,
+  type TargetResultImportResult,
+  type TargetResultReviewInspectionResult,
+  TEST_REVIEW_DECISION_TOOL_REGISTRATION,
+  type TestReviewDecisionResult,
+} from "../capabilities/result-review/contract.js";
 import {
   TARGET_TASK_PLANNING_TOOL_REGISTRATION,
   type TargetTaskPlanningResult,
 } from "../capabilities/tasking/contract.js";
 import {
-  BOARD_INSPECTION_TOOL_REGISTRATION,
-  REQUIREMENT_PUBLICATION_TOOL_REGISTRATION,
-  type BoardInspectionResult,
-  type RequirementPublicationResult,
-} from "../capabilities/requirement/contract.js";
-import type { WindowBindingResult } from "../capabilities/endpoint/contract.js";
+  WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+  type WakeflowMaintenancePublicResult,
+} from "../capabilities/workspace/maintain-workspace.js";
+import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
+import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
+import {
+  createWakeflowToolCatalog,
+  type WakeflowToolCatalog,
+  type WakeflowToolRegistration,
+} from "../kernel/tool-registry.js";
 import type { WakeflowPublicMcpExecutor } from "./wakeflow-public-mcp-tool.js";
 
 /**

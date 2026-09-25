@@ -21,6 +21,8 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  * - `resume --window <windowId> [--wait N] [--force]`：stdin 同 launch；用绑定里的私有会话 id 以
  *   `claude --resume` 在新 pane 里续同一会话，等到新的 session-start 记录后打印 relocate 用的
  *   observation；定位器的 pane 还活着时拒绝（`--force` 跳过）。launch 对活着的 pane 同样拒绝。
+ *   deliver 在粘贴前查目标会话的落地记录：同一段 prompt 已落地就拒绝为 `already-landed` 并
+ *   带上那条记录（宿主中断后的重发拿到证据而不是第二次投递），`--force` 才照发。
  *   两者等不到 hook 记录时再看新 pane：已消失或已死就报 `resume-exited` / `launch-exited`
  *   （claude 拒绝 --resume 一个从未有过对话的会话时就是这样退出的），只有活着才是 `pending`。
  * - `self`：Controller 给自己的窗口出同一份 observation（`TMUX_PANE` 与
@@ -867,6 +869,15 @@ function commandDeliver(config, options) {
     });
   }
   if (row.currentCommand !== "claude") return beforeSend("wrong-process", windowId, { observed: row.currentCommand });
+  // 幂等：同一段 prompt 已经在目标会话落地（有它的 user-prompt-submit 记录）就不再粘贴——被宿主
+  // 中断的一轮重发时拿到的是落地证据而不是第二次投递；--force 才照发（§13.127）。
+  const landed = landedRecord(windowId, prompt);
+  if (landed !== null && !options.force) {
+    return beforeSend("already-landed", windowId, {
+      landing: landed,
+      hint: "this prompt already landed in the bound session; record the outcome with this landing instead of sending again (--force sends anyway)",
+    });
+  }
   const bufferName = "wakeflow-" + randomUUID();
   const loaded = tmux(context, ["load-buffer", "-b", bufferName, "-"], { input: prompt });
   if (!loaded.ok) return beforeSend("load-buffer-failed", windowId);
@@ -908,6 +919,19 @@ function promptSubmitRecord(sessionId, promptDigest) {
     ) return record;
   }
   return null;
+}
+
+function landedRecord(windowId, prompt) {
+  const binding = readBoundedJson(path.join(ROOT, ...BINDINGS.split("/"), windowId + ".json"), MAX_RECORD_BYTES);
+  const sessionId = binding?.handle?.kind === HANDLE_KIND ? binding.handle.value : null;
+  if (typeof sessionId !== "string") return null;
+  const record = promptSubmitRecord(sessionId, sha256(prompt.trim()));
+  if (record === null) return null;
+  return {
+    status: "observed",
+    recordId: typeof record.recordId === "string" ? record.recordId : null,
+    recordedAt: typeof record.recordedAt === "string" ? record.recordedAt : null,
+  };
 }
 
 function observeLanding(windowId, prompt, seconds) {

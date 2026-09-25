@@ -157,6 +157,19 @@ evidence arrived.
 - What is next and who owns it.
 - Anything you could not verify, named as unverified.
 
+## After an interruption
+
+A host error can cut your turn at any point ("connection lost mid-response",
+a restarted session). Never repeat an effect call from memory of having made
+it. First look: `wakeflow_status` for the Demand, the tool's own inspect view
+for the record you were writing. Then either the effect already landed and you
+report it, or it did not and you replay the same call with the same
+idempotency key or plan digest - Wakeflow returns the existing record instead
+of a second one. A host send is the one effect Wakeflow cannot replay for you:
+before delivering again, the helper checks the target's landing record and
+refuses with `already-landed` when the prompt is already there; record that
+landing as the outcome instead of forcing a second send.
+
 ## Stop conditions
 
 Stop and ask the user when: a preview reports a blocker you cannot resolve

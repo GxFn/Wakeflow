@@ -53,6 +53,11 @@ of test work.
   `harnesses/` and `fixtures/` directories, and only when a contract step or
   its setup calls for it. Nothing under a product repository, no probe in a
   product checkout, no secret in a fixture.
+- If a host error cuts your turn, look before you act again: `wakeflow_status`
+  for this Demand shows whether your import landed, and an evidence record you
+  already applied replays as already-recorded when you apply the same
+  selection again. Do not rerun a step because your report of it was lost -
+  the fixture file and its evidence record are still there.
 - Workspace and repository `CLAUDE.md` files bind you.
 
 ## Step 9 - Run the contract and import

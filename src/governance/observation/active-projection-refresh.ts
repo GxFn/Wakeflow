@@ -1,17 +1,17 @@
 import {
   readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
   type WakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  publishActiveProjection,
-  renderActiveProjectionFiles,
   type ActiveProjectionPublicationReceipt,
   type ActiveProjectionRendering,
+  publishActiveProjection,
+  renderActiveProjectionFiles,
 } from "../../kernel/active-projection.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { buildActiveProjectionFacts } from "./active-projection-facts.js";

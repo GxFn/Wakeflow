@@ -738,9 +738,24 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
       recordedAt: "2026-09-24T01:00:00.000Z",
     }),
   );
-  const observedLanding = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "1"], {
+  // 幂等（§13.127）：这段 prompt 已在目标会话落地，再投递就拒绝并交回那条落地记录；--force 才照发。
+  resetLog(current);
+  const alreadyLanded = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "1"], {
     input: prompt,
   });
+  equal(alreadyLanded.status, 1);
+  equal(alreadyLanded.json.reason, "already-landed");
+  deepEqual(alreadyLanded.json.attempt, { status: "failed-before-send" });
+  deepEqual(alreadyLanded.json.landing, {
+    status: "observed",
+    recordId,
+    recordedAt: "2026-09-24T01:00:00.000Z",
+  });
+  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  const observedLanding = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "1", "--force"], {
+    input: prompt,
+  });
+  equal(observedLanding.status, 0, JSON.stringify(observedLanding.json));
   deepEqual(observedLanding.json.landing, {
     status: "observed",
     recordId,

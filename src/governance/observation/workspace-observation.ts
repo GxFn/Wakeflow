@@ -170,6 +170,8 @@ export interface ObservedHostHooks {
     string,
     Readonly<{ readonly event: HostHookEvent; readonly recordedAt: UtcInstant }>
   >;
+  /** 每个会话最近一条 session-start 记录里的制品 manifest 摘要；记录早于该字段时为 null（§13.127）。 */
+  readonly artifactBySession: ReadonlyMap<string, Sha256Digest | null>;
 }
 
 export interface ObservedPodReceipt {
@@ -506,10 +508,19 @@ async function observeHostHooks(
       string,
       Readonly<{ readonly event: HostHookEvent; readonly recordedAt: UtcInstant }>
     >();
+    const artifactBySession = new Map<string, Sha256Digest | null>();
+    const startedAt = new Map<string, UtcInstant>();
     for (const record of inventory.records) {
       const previous = latestBySession.get(record.sessionId);
       if (previous === undefined || previous.recordedAt <= record.recordedAt) {
         latestBySession.set(record.sessionId, { event: record.event, recordedAt: record.recordedAt });
+      }
+      if (record.event === "session-start") {
+        const previousStart = startedAt.get(record.sessionId);
+        if (previousStart === undefined || previousStart <= record.recordedAt) {
+          startedAt.set(record.sessionId, record.recordedAt);
+          artifactBySession.set(record.sessionId, record.artifactManifestDigest);
+        }
       }
     }
     return Object.freeze({
@@ -521,6 +532,7 @@ async function observeHostHooks(
       records: inventory.records.length,
       skipped: inventory.skipped,
       latestBySession,
+      artifactBySession,
     });
   } catch (error: unknown) {
     const reason = reasonOf(error);
@@ -538,6 +550,7 @@ async function observeHostHooks(
       records: 0,
       skipped: 0,
       latestBySession: new Map(),
+      artifactBySession: new Map(),
     });
   }
 }

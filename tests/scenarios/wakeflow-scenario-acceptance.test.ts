@@ -2830,6 +2830,7 @@ const WORKSPACE_GATE_NAMES = Object.freeze([
   "ledger-layout",
   "local-layout",
   "pod-execution-location",
+  "runtime-artifact",
   "window-identity",
   "window-runtime-projection",
   "work-claims",
@@ -3319,7 +3320,7 @@ async function assertVerifyGates(
     WORKSPACE_GATE_NAMES,
   );
   equal(clean.ok, true, failingGatesText(clean));
-  deepEqual(clean.summary, { pass: 14, fail: 0, unavailable: 0 });
+  deepEqual(clean.summary, { pass: 15, fail: 0, unavailable: 0 });
   equal(clean.repairsApplied, false);
   equal(clean.demand, null);
   equal(clean.next.frontier, null);
@@ -3352,15 +3353,15 @@ async function assertVerifyGates(
     broken.gates.filter((gate) => gate.status !== "pass").map((gate) => [gate.name, gate.code]),
     [["host-hook-channel", "codex:skipped-1"]],
   );
-  deepEqual(broken.summary, { pass: 13, fail: 1, unavailable: 0 });
+  deepEqual(broken.summary, { pass: 14, fail: 1, unavailable: 0 });
   equal(broken.next.frontier, "workspace-maintenance");
   deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
   equal((await readStatus(context)).view.overall, "degraded", "skipped hook records degrade");
   rmSync(stray);
   const restored = await readVerify(context);
   equal(restored.ok, true, failingGatesText(restored));
-  deepEqual(restored.summary, { pass: 14, fail: 0, unavailable: 0 });
-  return `verify=14/0/0; demand gates=work-claims-released fail only; hook-file→host-hook-channel=fail(${hookGate.code}) summary=13/1/0 overall=degraded; removed→14/0/0`;
+  deepEqual(restored.summary, { pass: 15, fail: 0, unavailable: 0 });
+  return `verify=15/0/0; demand gates=work-claims-released fail only; hook-file→host-hook-channel=fail(${hookGate.code}) summary=14/1/0 overall=degraded; removed→15/0/0`;
 }
 
 async function scenarioStatusAndVerify(context: ScenarioContext): Promise<string> {

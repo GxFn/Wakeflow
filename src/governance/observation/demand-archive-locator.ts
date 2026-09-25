@@ -1,9 +1,9 @@
-import { parseSha256Digest, Sha256Error, type Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -13,7 +13,7 @@ import {
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { parseUtcInstant, UtcInstantError, type UtcInstant } from "../../foundation/time/utc-instant.js";
+import { parseUtcInstant, type UtcInstant, UtcInstantError } from "../../foundation/time/utc-instant.js";
 import { fail } from "../../kernel/error.js";
 import { demandArchiveRef, demandArchivesRootRef } from "../../kernel/layout.js";
 

@@ -45,6 +45,11 @@ report, return the callback. You own no other step and no Controller authority.
   referenced by the locator and digest you were given. Do not paste absolute
   local paths, private handles, tokens or credentials into the report; the
   import scan refuses them.
+- If a host error cuts your turn, look before you act again: `wakeflow_status`
+  for this Demand tells you whether your import already landed. Replaying the
+  import with the same delivery identity and fence returns the existing
+  result; the callback send is guarded too - the helper refuses a prompt that
+  already landed in the Controller window with `already-landed`.
 - Workspace and repository `CLAUDE.md` files bind you, and a
   repository's own rules outrank both this skill and the prompt's phrasing.
 

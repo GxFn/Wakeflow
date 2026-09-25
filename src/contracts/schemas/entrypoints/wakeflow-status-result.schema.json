@@ -28,7 +28,8 @@
     "route",
     "archive",
     "next",
-    "nextActions"
+    "nextActions",
+    "runtime"
   ],
   "properties": {
     "kind": {
@@ -364,6 +365,27 @@
           }
         }
       }
+    },
+    "runtime": {
+      "description": "本 MCP 服务进程的制品身份：启动时的 manifest 摘要，以及磁盘上同一处 manifest 现在是否还是它（changed 即本窗口的服务进程要重连）。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifactManifestDigest", "artifactOnDisk"],
+      "properties": {
+        "artifactManifestDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          ]
+        },
+        "artifactOnDisk": {
+          "enum": ["same", "changed", "unknown"]
+        }
+      }
     }
   },
   "$defs": {
@@ -625,7 +647,8 @@
         "bindingId",
         "claim",
         "lastObservation",
-        "projection"
+        "projection",
+        "artifact"
       ],
       "properties": {
         "windowId": {
@@ -729,6 +752,10 @@
               }
             }
           ]
+        },
+        "artifact": {
+          "description": "绑定会话最近一次 session-start 记录里的制品 manifest 摘要与本进程的比对：stale 的窗口要 resume 才跑当前制品；unknown 是没有可比的记录或本进程没有 manifest。",
+          "enum": ["current", "stale", "unknown"]
         }
       }
     },

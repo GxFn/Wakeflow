@@ -11,6 +11,7 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wak
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeClaudeCodeWakeflowMaintenance } from "./claude-code-wakeflow-maintenance.js";
+import { resolveWakeflowArtifactIdentity } from "./wakeflow-artifact-identity.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
 import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
@@ -30,6 +31,8 @@ const CLAUDE_CODE_HOST_FACADE = Object.freeze({
 /** 观察读两个宿主的绑定、hook 通道与资产：制品固定携带两份 profile（§13.94 D1）。 */
 const CLAUDE_CODE_OBSERVATION_FACADE = Object.freeze({
     hostId: "claude-code",
+    // 本进程启动时固定的制品身份：status 用它判断窗口与磁盘上的制品是否还是同一份（§13.127）。
+    artifact: resolveWakeflowArtifactIdentity(import.meta.url),
     hosts: Object.freeze([
         Object.freeze({
             hostId: "claude-code",

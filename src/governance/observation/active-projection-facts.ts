@@ -1,19 +1,19 @@
-import type { DemandTargetTaskState } from "../demand/model/demand-aggregate-state.js";
-import type { DemandResultReviewSnapshot } from "../review/demand-result-review-snapshot.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
 import {
-  inspectActiveProjectionTargets,
-  renderActiveProjectionFiles,
   type ActiveProjectionDemandEvidence,
   type ActiveProjectionDemandFacts,
   type ActiveProjectionFacts,
   type ActiveProjectionProgressFacts,
   type ActiveProjectionTargetInspection,
   type ActiveProjectionUnmergedFacts,
+  inspectActiveProjectionTargets,
+  renderActiveProjectionFiles,
 } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
+import type { DemandTargetTaskState } from "../demand/model/demand-aggregate-state.js";
+import type { DemandResultReviewSnapshot } from "../review/demand-result-review-snapshot.js";
 import { repositoryBranchesComplete } from "./repository-pointer-observation.js";
 import type {
   ObservedDemand,

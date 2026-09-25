@@ -122,6 +122,24 @@ Other actions on the same tool:
 Wakeflow never opens, inspects or closes a window. Every one of those actions
 is yours, and the binding tool only records what you observed.
 
+## After a plugin update
+
+A window runs the plugin that was installed when its session started; an
+update on disk does not reach a running session. `wakeflow_status` shows this
+per window as `artifact: stale` (its session-start record names an older
+artifact than the one serving the status), and `wakeflow_verify` fails the
+`runtime-artifact` gate with `windows-stale:<n>`, or with `server-outdated`
+when the artifact changed under this very window's server.
+
+- For every other stale window: {{windowLaunch}} names the helper's
+  `resume`, which keeps the session; then relocate and mark. A session that
+  never held a conversation cannot be resumed (`resume-exited`): close it,
+  launch, replace.
+- For this window: only the user can reconnect its Wakeflow server (in Claude
+  Code: `/mcp`, then reconnect `wakeflow`) or resume the session. Tell them,
+  and do not run maintenance from the outdated server - it would write the
+  older assets back over the newer ones.
+
 ## Pods
 
 A pod is the only execution-environment abstraction: a complete window set

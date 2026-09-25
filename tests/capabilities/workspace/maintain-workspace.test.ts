@@ -1,11 +1,19 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
+import { executeWakeflowMaintenancePublicRequest } from "../../../src/capabilities/workspace/maintain-workspace.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  executeCodexMaintenanceExecution,
+  previewCodexMaintenanceExecution,
+  recoverCodexMaintenanceExecution,
+} from "../../../src/hosts/codex/codex-maintenance-execution.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 
@@ -148,4 +156,74 @@ test("maintain_workspace 在边界拒绝缺摘要的 apply、未知模式与含�
     (error: unknown) => isWakeflowError(error) && error.code === "root-invalid",
   );
   deepEqual(readdirSync(root).sort(), [".git"]);
+});
+
+test("maintain_workspace 拒绝包含已装载制品、位于制品之内或配置根与制品重叠的工作区（§13.124）", async (t) => {
+  const root = await fixture(t);
+  const facadeWith = (artifactRoot: string | null) =>
+    Object.freeze({
+      hostId: "codex" as const,
+      artifactRoot,
+      currentHostProfile: codexWorkspaceHostResourceProfile,
+      hostProfiles: Object.freeze([
+        codexWorkspaceHostResourceProfile,
+        claudeCodeWorkspaceHostResourceProfile,
+      ]),
+      preview: previewCodexMaintenanceExecution,
+      apply: executeCodexMaintenanceExecution,
+      recover: recoverCodexMaintenanceExecution,
+    });
+  const fresh = {
+    root,
+    action: "fresh-initialize",
+    mode: "preview",
+    request: { selection: selection() },
+  } as const;
+  const blockersOf = (result: unknown) =>
+    result as { readonly status: string; readonly next: { readonly blockers: readonly string[] } };
+
+  // 工作区根包含制品：把插件仓库当工作区的经典错误。
+  const inside = path.join(root, "plugins", "codex-wakeflow");
+  mkdirSync(inside, { recursive: true });
+  const contained = blockersOf(
+    await executeWakeflowMaintenancePublicRequest(facadeWith(inside), fresh),
+  );
+  equal(contained.status, "blocked");
+  deepEqual(contained.next.blockers, ["workspace-root-overlaps-artifact"]);
+  rmSync(path.join(root, "plugins"), { recursive: true, force: true });
+  // 工作区位于制品之内。
+  const parent = blockersOf(
+    await executeWakeflowMaintenancePublicRequest(facadeWith(path.dirname(root)), fresh),
+  );
+  equal(parent.status, "blocked");
+  // 上级目录同时包含 ../ProductA 与 Ledger 等配置根，所以两条阻塞都在。
+  deepEqual(parent.next.blockers, [
+    "workspace-root-overlaps-artifact",
+    "configured-root-overlaps-artifact",
+  ]);
+  // 配置根与制品重叠：制品就是待配置的 ledger 根目录。
+  const overlapping = blockersOf(
+    await executeWakeflowMaintenancePublicRequest(facadeWith(path.join(root, "Ledger")), fresh),
+  );
+  equal(overlapping.status, "blocked");
+  deepEqual(overlapping.next.blockers, [
+    "workspace-root-overlaps-artifact",
+    "configured-root-overlaps-artifact",
+  ]);
+  // 无关的制品根与未知制品根都不阻塞；reconcile 只查工作区根。
+  const unrelated = path.join(realpathSync(os.tmpdir()), "wakeflow-unrelated-artifact-root");
+  equal(
+    blockersOf(await executeWakeflowMaintenancePublicRequest(facadeWith(unrelated), fresh)).status,
+    "ready",
+  );
+  equal(
+    blockersOf(await executeWakeflowMaintenancePublicRequest(facadeWith(null), fresh)).status,
+    "ready",
+  );
+  const reconcile = { root, action: "reconcile", mode: "preview", request: {} } as const;
+  const reconcileBlocked = blockersOf(
+    await executeWakeflowMaintenancePublicRequest(facadeWith(path.dirname(root)), reconcile),
+  );
+  equal(reconcileBlocked.status, "blocked");
+  deepEqual(reconcileBlocked.next.blockers, ["workspace-root-overlaps-artifact"]);
 });

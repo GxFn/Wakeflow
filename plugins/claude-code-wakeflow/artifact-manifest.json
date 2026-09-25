@@ -549,8 +549,8 @@
     },
     {
       "path": "lib/capabilities/workspace/maintain-workspace.js",
-      "bytes": 16282,
-      "sha256": "sha256:a7892d4d933664e193dc45905e1b015a4288a523e6696731a9a57d03373ce1f7",
+      "bytes": 18294,
+      "sha256": "sha256:120636b97decffc476c5cc727cf1a4f3684543f1a3417ea99fd7c13835d625b7",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1333,8 +1333,8 @@
     },
     {
       "path": "lib/entrypoints/claude-code-wakeflow-maintenance.js",
-      "bytes": 1612,
-      "sha256": "sha256:66a2a12a53cbb80b43fcbde16b4508cd8e80f05dd9e290ba85ed39905700d751",
+      "bytes": 2063,
+      "sha256": "sha256:fe4eaddd0c141fc1a20fbf32b129ceadd0d15ff012b9a1c4d3e2108409faa1d4",
       "mode": "0644",
       "scope": "shared"
     },

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   compileWakeflowFreshConfigSelection,
@@ -137,7 +138,11 @@ function admitHostFacade(
       !Object.isFrozen(facade.hostProfiles) ||
       typeof facade.preview !== "function" ||
       typeof facade.apply !== "function" ||
-      typeof facade.recover !== "function"
+      typeof facade.recover !== "function" ||
+      !(
+        facade.artifactRoot === null ||
+        (typeof facade.artifactRoot === "string" && path.isAbsolute(facade.artifactRoot))
+      )
     ) {
       fail("unexpected", "host-facade", "$facade");
     }
@@ -271,6 +276,45 @@ function expectedLaunchIntents(
   return compileWakeflowWindowLaunchIntents(request.desiredConfig, profiles.currentHostProfile);
 }
 
+/** a 包含 b（或相等）：用规范化绝对路径的词法关系判断。 */
+function pathContains(container: string, candidate: string): boolean {
+  const relative = path.relative(container, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+/**
+ * 工作区不得包含已装载的制品、不得位于其中，配置根也不得与之重叠（旧实现 bootstrap 的两条护栏）：
+ * 否则维护会把受管文件写进插件自己的目录，或把插件目录当成产品仓库。reconcile 没有 desired
+ * Config，只查工作区根；fresh 与 reconfigure 连配置根一起查。
+ */
+function deriveArtifactOverlapBlockers(
+  rootPath: string,
+  desiredConfig: WakeflowConfigModel | null,
+  artifactRoot: string | null,
+): readonly string[] {
+  if (artifactRoot === null) return Object.freeze([]);
+  const blockers: string[] = [];
+  if (pathContains(rootPath, artifactRoot) || pathContains(artifactRoot, rootPath)) {
+    blockers.push("workspace-root-overlaps-artifact");
+  }
+  if (desiredConfig !== null) {
+    const placements = [
+      ...desiredConfig.topology.repositories.map((entry) => entry.path),
+      ...desiredConfig.topology.supportSurfaces.map((entry) => entry.path),
+      desiredConfig.storage.ledgerRoot,
+    ];
+    if (
+      placements.some((placement) => {
+        const resolved = path.resolve(rootPath, placement);
+        return pathContains(resolved, artifactRoot) || pathContains(artifactRoot, resolved);
+      })
+    ) {
+      blockers.push("configured-root-overlaps-artifact");
+    }
+  }
+  return Object.freeze(blockers);
+}
+
 async function planMaintenance(
   context: SliceContext,
   input: SliceInput,
@@ -279,6 +323,14 @@ async function planMaintenance(
     fail("invalid-request", "mode", "$request.mode");
   }
   const { desiredConfig, compilation } = desiredConfigFor(input);
+  const overlap = deriveArtifactOverlapBlockers(
+    context.root.absolutePath,
+    desiredConfig,
+    context.facade.artifactRoot,
+  );
+  if (overlap.length > 0) {
+    return Object.freeze({ status: "blocked", blockers: overlap, plan: null, digest: null });
+  }
   const executionRequest: WakeflowStaticMaterializationPreviewRequest = Object.freeze({
     action: input.action,
     desiredConfig,

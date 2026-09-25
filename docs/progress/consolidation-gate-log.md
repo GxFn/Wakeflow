@@ -3549,3 +3549,44 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **第五轮现场（故意的失败路径）。** 为了让评审的非主路径也在真实宿主上跑一遍，第五轮是一次故意的失败路径：Design 按我的要求发布一份在当前仓库状态下自相矛盾的需求包（文件必须放进"已存在的" `docs/archive/`，同时禁止新建任何目录，而该目录并不存在；Design 如实把"目录不存在"写进了代码事实，并在落地方案里写了前置条件不成立就停下报告）。Controller `/wakeflow:next` 认领成 `demand_c59491c9…`、规划（任务包写明前置条件不成立时不建目录、以 blocked / no-changes 导入并照常回调）、投递 accepted（hook 记录 `7f23e79b…`，助手 `landing: observed`）→ 目标以 `blocked` 导入 `target-result_fd4a693b…`（`no-changes`），回调 landed，完成记录 confirmed → Controller 只读核对（目录确实不存在、全仓库没有新文件或新目录、基线四行未变）并把探针输出登记为证据 `evidence_eacb00fd…` → 记 **escalate**（`target-review-decision_baf2e28e…`，升级事件 `demand-event_212a0114…`，修订 7），Demand 进入 `decision-required`、owner 为 user、blocker `awaiting-decision`；Controller 给出四个选项并建议取消。我选 1：`wakeflow_continue_demand` 的 record-decision 把选项原文与我的话记入（修订 9）→ `wakeflow_cancel_demand` 预览 8 门全过（含 work-claims-released 与 payload-privacy）→ 应用为 `cancelled`（修订 10），归档 `archives/demand_c59491c9…/0000000010`（14 个文件，89,461 字节），需求包 `withdrawn`。外部核对：无活动 Demand、board archived 4 / withdrawn 1、无声明，`wakeflow_verify` 14/14，AlembicPlugin 未出现 `docs/archive/`，仍只有前四轮的四个未跟踪文件。至此评审的 accept、rework（satisfactory）、escalate + 用户决定、cancel 四条路径都在真实宿主上走过；blocked 决定与 continue_demand 重开尚未现场跑。
 
 **残留。** blocked 决定（带 resumption 的再决定）与 `continue_demand` 重开已完成的 Demand 两条路径只有切片测试，没有现场；证据的 `link` / `commit` / `observation` 三种引用来源与 `controller-confirmed` 内容审阅同样只有测试；旧实现的证据"关系"记录（≤ 256 条）按现行设计不移植；Codex 宿主仍未做真实会话测试（未执行）。
+
+## 13.124 逐模块对齐第三轮：工作区维护与对账——对照、一处护栏移植、两项待裁决（2026-09-24）
+
+**背景。** 第三轮对照旧实现的初始化、对账、重配置、维护事务、本地布局、受管内容、支撑面与配置权威：`wakeflow-{fresh-initialize,reconcile,reconfigure}.mjs`、`wakeflow-maintenance-{plan,coordinator,action-composition,action-runtime}.mjs`、`wakeflow-local-layout{,-inspection,-realization}.mjs`、`wakeflow-managed-content.mjs`、`wakeflow-support-{materialization,surface-owner}.mjs`、`wakeflow-tracked-materialization.mjs`、`wakeflow-workspace-mutation.mjs`（6482 行）、`wakeflow-config-v3*.mjs`、`wakeflow-state-lock.mjs`，以及 `bootstrap` / `setup` / `validate` 入口，共二十余个测试文件、约两百条旧测试名。新实现这一带是 §13.94–§13.116 的重切主体，逐条核对可观察行为。
+
+**行为对照。**
+
+| 旧实现已验证的行为（测试名摘要） | 新实现 | 状态 |
+|---|---|---|
+| reconcile 推导精确当前配置、preview 零写、reconcile 输入封闭不接受 desired config | 同 | 同形 |
+| reconcile 规划缺失目录并补齐 | 对账自动修复集（活动布局、看板、ledger 根与容器、宿主 capability 目录、支撑面根与 scaffold、`.gitignore` 托管块、指令托管块、记忆文件、协议根、运行时根，§13.107 / §13.114） | 同形 |
+| reconcile 只做"安全的 mode 修复"：owner 有 rwx 且 group/other 无写权限的目录收敛到 0700，同 inode fchmod 后双重重验；不安全的 mode 只报告 | 新实现所有静态声明都是 `observe-without-change`，mode 漂移一律 `*-conflict` 只报告 | **差异，记为 D8** |
+| 派生投影漂移由 owner 修复；不安全的派生投影阻塞所有写入 | 窗口运行投影缺失或过期重算，读不出的只报告并继续（§13.108） | 同形（更宽） |
+| 另一宿主首次进入只物化自己的宿主面 | 对等宿主加入只写自己的文件（§13.120 D2 用例） | 同形 |
+| reconfigure：稳定 ID 拓扑差异（unchanged / metadata / add / remove / root / role）；host 偏好变化不算拓扑删除；移除的窗口由生命周期 owner 阻塞；只删精确过时的仓库托管块 | 新实现只接受位置稳定的 reconfigure：`topology` / `storage` / `pods` 改动报 `*-change-unsupported`；hosts、语言、显示元数据可改（§13.116 D1） | **差异，记为 D9** |
+| 配置 owner 拒绝过期身份、链接、符号链接、无关残留；prepare / commit / cleanup 崩溃边界恢复 | 配置权威替换：exact source、专属锁、stage 恢复 | 同形 |
+| 同模型 reconfigure 审计受管内容，当前即零步 | 同 | 同形 |
+| fresh 拒绝当前或过时的 Wakeflow 受管足迹 | fresh 阻塞既有受管支撑面根与 ledger 根 | 同形 |
+| 维护事务：journal 先于步骤、锁不自动打破、oversized 计划在门前拒绝、跨进程互斥、owner 效果先耐久检查点、恢复只从耐久记录续 | 维护 gate + journal store + intent + recovery 用例同形 | 同形 |
+| 受管内容：托管块手改即 blocked、重复 / 孤儿 / 倒置标记失败关闭、用户自己的 ignore 规则保留而矛盾规则阻塞、owner-managed 面零写 | 同 | 同形 |
+| 支撑面：两宿主与各种所有权组合、owner-managed 面无隐藏记忆 | 同 | 同形 |
+| 配置快照：符号链接与多链接文件失败关闭、读前读后 stat 比对、超限与非 v3 区分 | 同 | 同形 |
+| 文件锁：私有锁字节、悬空符号链接不无限重试、消失的持有者重试、过期只在 unlink 后报告、超大持有者记录不解析 | `rooted-exclusive-file-lock`：pid 活性、超时、inactive owner 退役、4 KiB 记录上限 | 同形 |
+| validate：插件面校验（MCP 配置、注解矩阵、技能 frontmatter、符号链接、包元数据、schema 面） | `build:check`、`release:check`、制品测试与目录测试 | 有依据的重切 |
+| bootstrap 拒绝包含已装载制品的工作区根、拒绝与制品重叠的配置根 | 无 | **移植** |
+| 迁移分支、preservation 保全、host activation | 无 | 放弃（ADR-0008，能力卡 8 Q6、10 Q2） |
+
+**移植：工作区不得与已装载制品重叠。** 两个维护入口在装载时从自身位置推导制品根（`lib/entrypoints/<x>.js` 的上两级，realpath；测试构建里是 `.build`）交给单宿主 facade（`artifactRoot`）。切片在规划前检查：工作区根包含制品或位于制品之内 → `workspace-root-overlaps-artifact`；fresh / reconfigure 的配置根（仓库、支撑面、`ledgerRoot`）与制品重叠 → `configured-root-overlaps-artifact`；任一命中预览即 blocked，不调宿主预览、不写任何东西。这是旧 bootstrap 的两条护栏，防的是把插件仓库自己初始化成工作区（受管文件写进插件目录）或把插件目录当产品仓库。回归：切片测试覆盖"制品在根内"、"根在制品内"（上级目录同时包含 `../ProductA` 与 `Ledger`，两条阻塞都在）、"配置根就是制品"、无关根与未知根不阻塞、reconcile 只查根。
+
+**待裁决。**
+
+- D8 安全 mode 修复。旧实现的对账会把私有目录（0700）上"owner 有 rwx 且 group/other 无写权限"的 mode 漂移收敛回 0700（同 inode fchmod、双重重验），不安全的 mode 只报告；新实现十几处 `permissionBits !== 0o700` 一律报冲突，工作区一旦被 `chmod -R` 过就只能手工修。建议移植，但它横跨约十个检查点与物化器，建议单独一轮：在 foundation 的目录物化器加一个 `converge-safe-mode` 策略，各私有目录声明启用，各检查把"安全漂移"从 conflict 里分出来计划成既有的 `materialize-*` 步。
+- D9 改拓扑的 reconfigure。旧实现支持增删仓库与窗口（移除的窗口须先退役，过时的仓库托管块被删）；新实现把 `topology` / `storage` / `pods` 改动整体拒绝。真实工作区里"往运行中的工作区加一个产品仓库"是常见需求。建议分两步：先做**新增**（仓库与窗口：登记后即可投递），删除仍阻塞到退役完成；也单独一轮。
+
+**回归。** 切片测试新增一条五段用例（制品在根内、根在制品内、配置根就是制品、无关根与未知根、reconcile 只查根）；维护入口测试与对账修复、外部指令用例照旧。焦点集 11/11。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 全链通过（`test:typescript` 1014/1014，整门 281 s），`npm run smoke:artifacts` 两宿主全过，`git diff --check` 干净。
+
+**现场。** 用仓库里的制品本身（`plugins/claude-code-wakeflow/mcp/server.mjs`）对两个根各做一次只读 reconcile 预览：以 Wakeflow 仓库根为工作区——正是这条护栏要防的场景——返回 `blocked`、阻塞项 `workspace-root-overlaps-artifact`，仓库工作树没有任何新文件；以 `WakeflowTestWorkspace` 为工作区返回 `ready`、零步，八个窗口与既有归档不受影响。这一轮没有再跑 Demand 闭环：改动只在维护入口的前置检查，不经过投递与评审。
+
+**残留。** D8 与 D9 待用户裁决（各建议单独一轮）；`wakeflow_verify` 门与 reconcile 阻塞码都只给代码不给路径，用户看到 `*-conflict` 时不知道是哪个节点——随 D8 一起处理；Codex 宿主仍未做真实会话测试（未执行）。

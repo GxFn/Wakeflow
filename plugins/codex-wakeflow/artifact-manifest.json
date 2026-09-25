@@ -494,8 +494,8 @@
     },
     {
       "path": "lib/capabilities/workspace/maintain-workspace.js",
-      "bytes": 16282,
-      "sha256": "sha256:a7892d4d933664e193dc45905e1b015a4288a523e6696731a9a57d03373ce1f7",
+      "bytes": 18294,
+      "sha256": "sha256:120636b97decffc476c5cc727cf1a4f3684543f1a3417ea99fd7c13835d625b7",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1278,8 +1278,8 @@
     },
     {
       "path": "lib/entrypoints/codex-wakeflow-maintenance.js",
-      "bytes": 1550,
-      "sha256": "sha256:7e1b5d0bc0ab253493ed63395b99a7c2eae83d4bd8fffd9dc13210085012aa15",
+      "bytes": 1989,
+      "sha256": "sha256:e7b104411cc20098c2c972ed2683cfd8fe6d620455990713bdc64d76f9eb99c4",
       "mode": "0644",
       "scope": "shared"
     },

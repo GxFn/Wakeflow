@@ -24,6 +24,11 @@ import type {
  */
 export interface WakeflowMaintenancePublicHostFacade {
   readonly hostId: WakeflowWorkspaceHostId;
+  /**
+   * 已装载制品的根（realpath）；入口在装载时从自身位置推导，无法解析时为 null。维护拒绝包含
+   * 该制品或位于其中的工作区根，以及与之重叠的配置根（旧实现 bootstrap 的同一护栏，§13.124）。
+   */
+  readonly artifactRoot: string | null;
   readonly currentHostProfile:
     Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly hostProfiles:

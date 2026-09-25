@@ -1,3 +1,6 @@
+import { realpathSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   executeClaudeCodeMaintenanceExecution,
   previewClaudeCodeMaintenanceExecution,
@@ -19,8 +22,18 @@ const CLAUDE_CODE_MAINTENANCE_HOST_PROFILES = Object.freeze([
   claudeCodeWorkspaceHostResourceProfile,
 ]);
 
+/** 制品根：lib/entrypoints/<this>.js 的上两级；测试构建里是 .build。 */
+const CLAUDE_CODE_ARTIFACT_ROOT: string | null = (() => {
+  try {
+    return realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".."));
+  } catch {
+    return null;
+  }
+})();
+
 const CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
   hostId: "claude-code",
+  artifactRoot: CLAUDE_CODE_ARTIFACT_ROOT,
   currentHostProfile: claudeCodeWorkspaceHostResourceProfile,
   hostProfiles: CLAUDE_CODE_MAINTENANCE_HOST_PROFILES,
   preview: previewClaudeCodeMaintenanceExecution,

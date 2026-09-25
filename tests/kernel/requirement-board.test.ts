@@ -2,7 +2,7 @@ import { deepEqual, equal, rejects, throws } from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
@@ -141,4 +141,48 @@ test("状态文件独占创建、CAS 替换、目录列出与索引重写", asyn
   equal(index.includes(`\`${DEMAND}\``), true);
   equal(index.split("\n").filter((line) => /^\| P[0-3] \|/u.test(line)).length, 2);
   equal(existsSync(stateFile), true);
+});
+
+// 旧实现的已验证行为（todo-service："concurrent claim attempts against one exact snapshot allow
+// exactly one commit"、"concurrent appenders serialize"）在新的每包锁加整文件 CAS 上同样成立。
+test("并发：两个 Demand 凭同一快照认领恰有一个成功，同一状态并发创建恰有一个 created（§13.126）", async (t) => {
+  const root = await fixture(t);
+  const first = pending();
+  const creations = await Promise.all([
+    createRequirementClaimStateFile(root, first),
+    createRequirementClaimStateFile(root, first),
+  ]);
+  deepEqual([...creations].sort(), ["created", "current"]);
+  const source = await readRequirementClaimState(root, REQUIREMENT);
+  if (source === null) throw new Error("expected a state");
+  const rival = "demand_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const outcomes = await Promise.allSettled([
+    replaceRequirementClaimStateFile(
+      root,
+      source,
+      claimRequirementPackage(source.state, DEMAND, LATER),
+    ),
+    replaceRequirementClaimStateFile(
+      root,
+      source,
+      claimRequirementPackage(source.state, rival, LATER),
+    ),
+  ]);
+  deepEqual(outcomes.map((outcome) => outcome.status).sort(), ["fulfilled", "rejected"]);
+  const rejected = outcomes.find((outcome) => outcome.status === "rejected");
+  const reason = rejected?.status === "rejected" ? rejected.reason : null;
+  equal(reason instanceof WakeflowError && reason.reason === "claim-state-changed", true);
+  const after = await readRequirementClaimState(root, REQUIREMENT);
+  equal(after?.state.status, "claimed");
+  equal(after?.state.revision, 2);
+  equal([DEMAND, rival].includes(after?.state.claim?.demandId ?? ""), true);
+  // 输者重读后看到的是赢者的认领，不能再凭旧快照认领。
+  await rejects(
+    replaceRequirementClaimStateFile(
+      root,
+      source,
+      claimRequirementPackage(source.state, rival, LATER),
+    ),
+    (error: unknown) => error instanceof WakeflowError && error.reason === "claim-state-changed",
+  );
 });

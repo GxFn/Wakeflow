@@ -72,6 +72,26 @@ moment the record never changes: a correction is a new package, not an edit.
 Tell the user the package is on the board and that the Controller claims it
 next. Then stop - claiming is not your step.
 
+### Correcting, parking and withdrawing
+
+A published record never changes, so every later move is a board action, and
+each one starts from `wakeflow_inspect_board` in the `package` view: it returns
+the package's `stateDigest`, which is the `expectedStateDigest` the action
+needs. A `claim-state-drift` blocker means the board moved; inspect again.
+
+- **Correction**: publish the corrected package with `supersedes` set to the
+  old `requirementId`. If the old package is still pending or parked, the same
+  apply withdraws it as `superseded-by`; a claimed package is the Controller's
+  and is not superseded from here.
+- **Parking**: a package that must wait for something is published with
+  `parked.trigger` - the condition that must become true. It lands `parked`
+  and the Controller does not claim it. When the trigger holds, run
+  `wakeflow_publish_requirement` with action `activate` (preview, then apply);
+  the package becomes pending.
+- **Withdrawing**: action `withdraw` with a reason retires a pending or parked
+  package the user no longer wants. A claimed package is withdrawn only by the
+  Controller cancelling its Demand.
+
 ## What you must return to the user
 
 - The one-page summary, verbatim, before publishing.

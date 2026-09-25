@@ -95,7 +95,7 @@
 - 投递前需要用户对目标、范围、非目标、完成证据、落地意图、测试决策、剩余决定的显式确认，再对提交本身单独确认；就绪状态六种。`references/design-handoff.md:39-58`。
 - 草稿到 ledger 记录的"提升"在旧体系不存在。
 
-**现 TS 状态**：`publish_requirement` 从设计面路径读取 `requirement.md`、`landing.md` 与附件发布记录；章节标题中英文别名表在 `src/contracts/vocabulary/requirement-sections.ts`；两份草稿模板尚未移入 skills（L3）。
+**现 TS 状态**：`publish_requirement` 从设计面路径读取 `requirement.md`、`landing.md` 与附件发布记录；章节标题中英文别名表在 `src/contracts/vocabulary/requirement-sections.ts`；两份草稿模板的替身是 `wakeflow-design/references/requirement-package.md` 里 `requirement.md` 与 `landing.md` 的骨架（2026-09-25 §13.126，对齐第五轮），同一轮把看板动作（supersedes / parked / activate / withdraw，凭 `inspect_board` 的 `stateDigest` 做 CAS）写进了 Design 技能正文。
 
 **实现判断**：模板资产改为 skills 内的内容，不再作为制品里的模板 bundle；`drafts/` 目录保留。
 

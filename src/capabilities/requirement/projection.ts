@@ -43,6 +43,8 @@ export interface BoardEntry {
   readonly supersedes: string | null;
   readonly claim: Readonly<{ readonly demandId: string }> | null;
   readonly parked: Readonly<{ readonly trigger: string }> | null;
+  /** 撤回原因与时间：`superseded-by:<requirementId>` 或撤回请求里的原因；未撤回为 null。 */
+  readonly withdrawal: Readonly<{ readonly reason: string; readonly withdrawnAt: string }> | null;
 }
 
 export function toBoardEntry(state: RequirementClaimState, digest?: Sha256Digest): BoardEntry {
@@ -60,6 +62,13 @@ export function toBoardEntry(state: RequirementClaimState, digest?: Sha256Digest
     supersedes: state.supersedes,
     claim: state.claim === null ? null : Object.freeze({ demandId: state.claim.demandId }),
     parked: state.parked === null ? null : Object.freeze({ trigger: state.parked.trigger }),
+    withdrawal:
+      state.withdrawal === null
+        ? null
+        : Object.freeze({
+            reason: state.withdrawal.reason,
+            withdrawnAt: state.withdrawal.withdrawnAt,
+          }),
   });
 }
 

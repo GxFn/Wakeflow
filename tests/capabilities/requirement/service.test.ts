@@ -10,14 +10,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
+import { type TestContext, test } from "node:test";
+import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import {
   executeBoardInspectionRequest,
   executeRequirementPublicationRequest,
 } from "../../../src/capabilities/requirement/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
-import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
@@ -468,6 +467,28 @@ test("parked 包 activate 回到 pending，withdraw 用 CAS，supersedes 撤回�
     throw new Error("Expected a mutation.");
   equal(withdrawn.disposition, "withdrawn");
   equal(withdrawn.next.frontier, null);
+  // 看板视图带撤回原因：被替代包是 superseded-by:<后继>，用户撤回的是请求里的原因（§13.126）。
+  const supersededView = await executeBoardInspectionRequest({
+    root,
+    view: "package",
+    requirementId: parked.package.requirementId,
+  });
+  if (supersededView.kind !== "WakeflowBoardPackage") throw new Error("Expected a package.");
+  deepEqual(
+    { ...supersededView.package.withdrawal },
+    {
+      reason: `superseded-by:${successor.package.requirementId}`,
+      withdrawnAt: "2026-09-04T12:00:00.000Z",
+    },
+  );
+  const withdrawnView = await executeBoardInspectionRequest({
+    root,
+    view: "package",
+    requirementId: successor.package.requirementId,
+  });
+  if (withdrawnView.kind !== "WakeflowBoardPackage") throw new Error("Expected a package.");
+  equal(withdrawnView.package.withdrawal?.reason, "范围合并");
+  equal(withdrawnView.package.status, "withdrawn");
   const index = readFileSync(path.join(root, ".wakeflow-active/current/board/index.md"), "utf8");
   equal(index.includes(successor.package.requirementId), false, "withdrawn package still listed");
 });

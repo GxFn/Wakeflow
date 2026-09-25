@@ -13,6 +13,20 @@ is immutable. A correction is a new package.
 Everything an implementer will ever learn from you is in here. Anything you
 only said in the conversation is lost.
 
+## Before you write
+
+The conversation is where the requirement becomes concrete; the package only
+records the result. While it is still fuzzy:
+
+- Repair an activity goal ("improve it", "continue") into an observable
+  outcome with an actor: who does what, and what they see afterwards.
+- Establish read-only facts from the code before asking the user for them.
+  Ask only questions whose answer changes the goal, the scope, the acceptance
+  criteria or the testing decision - one consequential question at a time,
+  with your recommended answer and its trade-off.
+- Keep verified facts, your recommendations, the user's decisions and open
+  questions apart. A recommendation the user has not confirmed is not scope.
+
 ## Sections
 
 Headings are matched by name, in either language, so write natural headings.
@@ -108,6 +122,53 @@ The scan refuses credentials outright and flags unlisted absolute local paths.
 Neither belongs in a package that will be read by other windows and archived
 forever. Refer to a file by its repository-relative path; refer to a service by
 its name, not by a token.
+
+## Skeletons
+
+Start from these when the drafts directory is empty. The headings are the
+ones preview recognizes; the prompts under them are what to replace. For a
+`bug`, `supplement` or `research` package swap in the headings its section
+list names above (`Reproduction`, `Scope`, `Fix plan`; `Requirement delta`;
+`Research question`, `Boundaries`, `Known facts`, `Method`).
+
+`requirement.md`:
+
+```markdown
+# <Title>
+
+## Goal
+What changes for whom, in the user's terms. One paragraph.
+
+## Completion definition
+What is observably true when this is done.
+
+## Non-goals
+- The adjacent work this package deliberately leaves alone.
+
+## Acceptance criteria
+1. One observable, singular, stable check.
+2. ...
+
+## User confirmation
+Who confirmed which summary, and when.
+```
+
+`landing.md`:
+
+```markdown
+# <Title> - landing
+
+## Code facts
+- `path/in/repository`: what it does today (from the file you opened).
+
+## Landing plan
+Which repository and area the change lands in, and what it touches.
+
+## Testing decision
+controller-only | real-environment | not-applicable - and for a real
+environment: which environment, what has to be exercised, what a pass and a
+fail mean.
+```
 
 ## Before you preview
 

@@ -108,7 +108,8 @@
         "recordDigest",
         "supersedes",
         "claim",
-        "parked"
+        "parked",
+        "withdrawal"
       ],
       "properties": {
         "requirementId": {
@@ -182,6 +183,27 @@
               "properties": {
                 "trigger": {
                   "$ref": "#/$defs/text"
+                }
+              }
+            }
+          ]
+        },
+        "withdrawal": {
+          "description": "Why and when a withdrawn package left the board: `superseded-by:<requirementId>` or the withdraw request's reason; null unless withdrawn.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reason", "withdrawnAt"],
+              "properties": {
+                "reason": {
+                  "$ref": "#/$defs/text"
+                },
+                "withdrawnAt": {
+                  "$ref": "#/$defs/utcInstant"
                 }
               }
             }

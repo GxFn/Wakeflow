@@ -21,6 +21,12 @@ export function toBoardEntry(state, digest) {
         supersedes: state.supersedes,
         claim: state.claim === null ? null : Object.freeze({ demandId: state.claim.demandId }),
         parked: state.parked === null ? null : Object.freeze({ trigger: state.parked.trigger }),
+        withdrawal: state.withdrawal === null
+            ? null
+            : Object.freeze({
+                reason: state.withdrawal.reason,
+                withdrawnAt: state.withdrawal.withdrawnAt,
+            }),
     });
 }
 /** 过滤并按优先级、发布时间、标识排序；`limit` 之外的条目只计数。 */

@@ -40,31 +40,61 @@ Never report a step you did not run. An unrun step is reported as unrun, with
 the reason. There is no situation where inferring a step's result from a
 neighboring step is acceptable.
 
+## Verdicts
+
+Each step gets exactly one verdict: `pass` when the observation matches the
+baseline; `fail` when it does not; `blocked` when the step could not run;
+`cannot-conclude` when it ran but the observation does not decide the step
+either way. Wakeflow derives the run's verdict from the steps - any `fail`
+makes it fail, otherwise any `blocked` makes it blocked, otherwise any
+`cannot-conclude`, otherwise pass - so a single mislabeled step misroutes the
+whole run.
+
 ## Classifying a failure
 
-Every failing step needs a classification, because the classification is what
-determines the Controller's next move. Getting it wrong costs a full cycle in
-the wrong direction.
+Every step that did not pass needs a classification, a likely owner
+(`implementation`, `test`, `environment` or `user`) and a recommended action,
+because the classification is what determines the Controller's next move.
+Getting it wrong costs a full cycle in the wrong direction.
 
-- **product defect** - the product behaves differently from what the
+- **`product-defect`** - the product behaves differently from what the
   acceptance criterion requires, and the step and the environment are sound.
   This is the classification that authorizes remediation on the
   implementation, so use it when you have actually established the product is
-  wrong, not when you suspect it.
-- **harness defect** - the step itself is wrong: it tests the wrong thing,
+  wrong, not when you suspect it. Owner: implementation.
+- **`harness-defect`** - the step itself is wrong: it tests the wrong thing,
   its baseline is stale, its setup is incomplete. Say precisely what is wrong
-  with it; the Controller cannot repair a step from "did not work".
-- **flaky** - the same step produced different results across runs with
+  with it; the Controller cannot repair a step from "did not work". Owner:
+  test.
+- **`flaky`** - the same step produced different results across runs with
   nothing else changed. Report how many times you ran it and what each run
   did. Do not report the passing run alone.
-- **missing evidence** - the step ran but you cannot produce the evidence that
-  shows what it did. Treat this as a failure, not a pass.
-- **environment failure** - the environment could not support the step at all.
+- **`missing-evidence`** - the step ran but you cannot produce the evidence
+  that shows what it did. Treat this as a failure, not a pass.
+- **`environment`** - the environment could not support the step at all.
   This blocks rather than reruns, and it is not the product's fault.
+- **`out-of-scope`** - what the step exposed is real but lies outside the
+  contract's object boundary. Report it; do not chase it.
+- **`needs-decision`** - the step cannot be judged without a decision only the
+  user can make (an ambiguous criterion, a conflicting instruction). Owner:
+  user. The Controller escalates it rather than guessing.
 
 Only harness defects, flakiness and missing evidence can justify another
 attempt, and only inside the attempt budget. That is the whole reason the
 classification matters.
+
+## Before you call a step a product defect
+
+A log line without a reproducible signal is an observation, not a diagnosis.
+Build the feedback loop first, in this order, using the first form that can
+observe the behavior: an existing targeted check at the public seam; a
+CLI, API or UI action with an explicit expected output; a replay of a bounded
+request, event or fixture; a Test-owned harness under the Test surface when
+the contract allows one; repeated runs when you suspect flakiness. Then form
+falsifiable hypotheses and probe one variable at a time. Never edit product
+source to create observability - if the behavior cannot be observed with what
+the contract gives you, that is `missing-evidence` or `environment`, reported
+to the Controller.
 
 ## Attempts and stop conditions
 
@@ -83,6 +113,13 @@ evidence record of this Demand by its locator and digest; raw output that was
 never recorded is not evidence, and an import that cannot resolve a locator or
 whose digest does not match is refused.
 
+You make that record yourself, because the Controller did not watch the run:
+write the step's exact output to a file under the Test surface (for example
+`fixtures/<demandId>/<stepId>.txt`), then call `wakeflow_record_evidence` for
+this Demand with kind `test-output` and a managed-path source naming that
+surface and file. Preview shows the privacy scan; apply returns the locator
+and digest. One record per step keeps the citation exact.
+
 Keep the exact output rather than a summary, and keep it per step rather than
 one blob for the whole run - a reviewer comparing one step against its
 baseline should not have to search.
@@ -98,3 +135,20 @@ Then one paragraph on coverage honesty: which steps did not run, which
 conditions you could not reach, and anything that passed for a reason you could
 not confirm. A test report whose value is "everything passed" and nothing else
 is the report that lets a defect through.
+
+## Before you import
+
+Check your own records once, as the reviewer will:
+
+- every step inside this attempt's scope appears exactly once, none is
+  invented and none is missing (a `completed` outcome requires all of them);
+- every evidence locator resolves to a managed record of this Demand and its
+  digest matches;
+- every step that did not pass carries its classification, owner and
+  recommended action;
+- an unrun step is `blocked` with the reason, not omitted;
+- no secret, private handle, absolute local path or unbounded log is in any
+  text you are about to import.
+
+This review makes your own report honest; it is not the Controller's review
+and it does not accept anything.

@@ -84,7 +84,11 @@ the result; citing it back as evidence of its own truth proves nothing.
 A target cites evidence by locator and digest inside its report. At import,
 Wakeflow resolves each locator inside this Demand's records and checks the
 digest; an unresolved locator or a mismatched digest refuses the import. A test
-step's observation is bound to its evidence the same way.
+step's observation is bound to its evidence the same way. Who records differs:
+an implementation target never records evidence - it imports `needs-review`
+and you record what you verified - while a test window records its own step
+outputs as `test-output` before it imports, because nobody else observed its
+run. Your independent checks on a test result are still yours to run.
 
 At completion, the evidence integrity gate reads these records again. Evidence
 that was recorded carelessly becomes a blocker at the least convenient moment,

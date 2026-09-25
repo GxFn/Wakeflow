@@ -44,8 +44,15 @@ of test work.
 - Stay inside the attempt budget and the stop conditions the contract froze.
   When the budget is exhausted, report that, do not quietly continue.
 - Every step's evidence must be a managed evidence record of this Demand,
-  cited by locator and digest. Raw output that was never recorded is not
-  evidence.
+  cited by locator and digest. Nobody else sees your run, so you record it:
+  save each step's exact output under the Test surface, then
+  `wakeflow_record_evidence` (kind `test-output`, a managed-path source under
+  that surface; preview, then apply) returns the locator and digest you cite.
+  Raw output that was never recorded is not evidence.
+- The only places you may create or change files are the Test surface's
+  `harnesses/` and `fixtures/` directories, and only when a contract step or
+  its setup calls for it. Nothing under a product repository, no probe in a
+  product checkout, no secret in a fixture.
 - Workspace and repository `CLAUDE.md` files bind you.
 
 ## Step 9 - Run the contract and import
@@ -55,16 +62,25 @@ of test work.
 2. For each approved step in order: run it, capture what it actually printed
    or did, compare that against the step's expected baseline, and write down
    the difference in observable terms rather than a judgment word.
-3. Classify each failing step before you move on: product defect, harness
-   defect, flaky, missing evidence, or environment failure. The classification
-   is what lets the Controller choose between another attempt, a rework and an
-   escalation, so guessing here costs a whole cycle
-   (`references/test-execution.md`).
-4. Call `wakeflow_import_target_result` with the delivery identity and fence
-   from the prompt, importing one record per step: the step id, what was
-   observed, its evidence reference and digest, and its verdict. Wakeflow
-   derives the overall verdict from these records - do not assert it yourself.
-5. Send the returned wake-controller callback prompt to the Controller window
+3. Record each step's captured output as evidence of this Demand:
+   `wakeflow_record_evidence` with kind `test-output` and the file you saved
+   under the Test surface as its source. The locator and digest it returns
+   are what the step's record cites.
+4. Give every step a verdict - `pass`, `fail`, `blocked` or
+   `cannot-conclude` - and classify every step that did not pass before you
+   move on: `product-defect`, `harness-defect`, `environment`, `flaky`,
+   `missing-evidence`, `out-of-scope` or `needs-decision`, with the likely
+   owner (`implementation`, `test`, `environment` or `user`) and the action
+   you recommend. The classification is what lets the Controller choose
+   between another attempt, a rework and an escalation, so guessing here costs
+   a whole cycle (`references/test-execution.md`).
+5. Call `wakeflow_import_target_result` with the delivery identity and fence
+   from the prompt, importing one record per step: the step id (`ts-1`,
+   `ts-2`, ... as the contract numbers them), what was observed, its evidence
+   reference and digest, its verdict and, unless it passed, its failure
+   classification. Wakeflow derives the overall verdict from these records -
+   do not assert it yourself.
+6. Send the returned wake-controller callback prompt to the Controller window
    by the host's own means: pipe the permit's prompt into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest>`. It checks the pane against the locator and the handle digest, pastes the prompt, presses Return once and captures the pane once, then waits a few seconds for the target session's prompt-submit hook record and prints the `attempt`, `readback` and `landing` to record verbatim. From a product or surface window, prefix the helper path with the workspace root you were given with `--add-dir` instead of running from the root; the helper finds the workspace from its own location. No other transport counts as a
    send. Then end your turn.
 

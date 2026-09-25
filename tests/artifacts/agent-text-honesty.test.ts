@@ -301,6 +301,51 @@ test("每份技能、reference 与命令都在行数、字节与 description 上
   }
 });
 
+/**
+ * 技能面闭合（§13.126，对齐第五轮移植自旧实现的 skill-surface 测试）：frontmatter 只有 name 与
+ * description，每份 reference 都被自己的 SKILL.md 点名，技能文本点名的每份 reference 都存在。
+ * 一份没人读的 reference 与一句指向不存在文件的话，都是文本在说谎。
+ */
+const REFERENCE_MENTION_PATTERN = /`references\/([a-z0-9-]+\.md)`/gu;
+
+test("每份 SKILL.md 的 frontmatter 恰好是 name 与 description，且 name 等于目录名", () => {
+  for (const skill of skillNames()) {
+    const source = SOURCES.find((entry) => entry.path === `${SKILLS_PREFIX}${skill}/SKILL.md`);
+    ok(source !== undefined, `${skill} must carry a SKILL.md`);
+    const match = /^---\n([\s\S]*?)\n---\n/u.exec(source?.text ?? "");
+    ok(match !== null, `${skill}/SKILL.md must open with one frontmatter block`);
+    const keys = (match?.[1] ?? "")
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => line.slice(0, line.indexOf(":")).trim());
+    deepEqual([...keys].sort(), ["description", "name"], `${skill}/SKILL.md frontmatter keys`);
+    equal(/^name:\s*(.*)$/mu.exec(match?.[1] ?? "")?.[1]?.trim(), skill);
+  }
+});
+
+test("每份 reference 都被自己的 SKILL.md 点名，技能文本点名的 reference 都存在（链接闭合，无孤儿）", () => {
+  for (const skill of skillNames()) {
+    const prefix = `${SKILLS_PREFIX}${skill}/`;
+    const files = sourcesUnder(prefix);
+    const references = files
+      .filter((source) => source.path.startsWith(`${prefix}references/`))
+      .map((source) => source.path.slice(`${prefix}references/`.length));
+    const present = new Set(references);
+    const entry = files.find((source) => source.path === `${prefix}SKILL.md`);
+    const mentionedByEntry = new Set(
+      [...(entry?.text ?? "").matchAll(REFERENCE_MENTION_PATTERN)].map((match) => match[1] ?? ""),
+    );
+    for (const reference of references) {
+      ok(mentionedByEntry.has(reference), `${skill}/SKILL.md never names references/${reference}`);
+    }
+    for (const source of files) {
+      for (const match of source.text.matchAll(REFERENCE_MENTION_PATTERN)) {
+        ok(present.has(match[1] ?? ""), `${source.path} names a missing reference: ${match[0]}`);
+      }
+    }
+  }
+});
+
 test("源目录恰好是四份技能、四个命令与两份 README，且只有中文 README 用中文（D3、D6）", () => {
   deepEqual(skillNames(), [
     "wakeflow-controller",

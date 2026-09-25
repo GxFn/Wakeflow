@@ -130,6 +130,25 @@ test("Git ignore observation returns one ordered decision for every probe", asyn
   equal(Object.isFrozen(observed.paths[0]?.decision), true);
 });
 
+test("Git ignore observation accepts a batch whose only matches are negated", async (t) => {
+  const current = await fixture(t, "/*.log\n!/keep.log\n");
+  const observed = await observeGitIgnorePaths(
+    current.root,
+    probes("keep.log", "other.txt"),
+  );
+
+  deepEqual(observed.paths.map((entry) => entry.ignored), [false, false]);
+  deepEqual(observed.paths.map((entry) => entry.decision), [
+    {
+      source: ".gitignore",
+      lineNumber: 2,
+      pattern: "!/keep.log",
+      negated: true,
+    },
+    null,
+  ]);
+});
+
 test("Git ignore observation exposes source facts without assigning business authority", async (t) => {
   const current = await fixture(t);
   const infoDirectory = path.join(current.absolutePath, ".git", "info");

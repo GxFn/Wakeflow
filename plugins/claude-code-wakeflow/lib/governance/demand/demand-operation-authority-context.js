@@ -96,7 +96,7 @@ export async function closeDemandOperationRoot(root) {
         fail("root", error);
     }
 }
-async function openDemandAuthorityContext(workspaceRoot, demandId, signal, audit) {
+async function openDemandAuthorityContext(workspaceRoot, demandId, signal) {
     let config;
     try {
         config = await readWakeflowConfigAuthoritySnapshot(workspaceRoot, signal === undefined ? undefined : { signal });
@@ -117,10 +117,7 @@ async function openDemandAuthorityContext(workspaceRoot, demandId, signal, audit
             durability: workspaceRoot.durability,
         });
         demandRoot = await openDemandOperationRoot(workspaceRoot, demandId);
-        const loaded = await loadDemandEventSourcingRootAuthority(demandRoot, new LedgerAuthorityStore(ledgerRoot), {
-            ...(audit ? { audit: true } : {}),
-            ...(signal === undefined ? {} : { signal }),
-        });
+        const loaded = await loadDemandEventSourcingRootAuthority(demandRoot, new LedgerAuthorityStore(ledgerRoot), signal === undefined ? {} : { signal });
         return Object.freeze({ config, demandRoot, ledgerRoot, loaded });
     }
     catch (error) {
@@ -158,14 +155,14 @@ async function openDemandAuthorityContext(workspaceRoot, demandId, signal, audit
  * 校验类入口应直接用仓储的 `audit` 从 Commit 1 完整审计。
  */
 export async function openDemandOperationAuthorityContext(workspaceRoot, demandId, signal) {
-    return openDemandAuthorityContext(workspaceRoot, demandId, signal, false);
+    return openDemandAuthorityContext(workspaceRoot, demandId, signal);
 }
 /**
  * 打开适合只读消费的Demand组合上下文；允许Root Authority使用Snapshot + tail，
  * 仍执行完整Inventory、Identity、Authority、Ledger、revision 1与当前Aggregate闭包。
  */
 export async function openDemandReadAuthorityContext(workspaceRoot, demandId, signal) {
-    return openDemandAuthorityContext(workspaceRoot, demandId, signal, false);
+    return openDemandAuthorityContext(workspaceRoot, demandId, signal);
 }
 /** 关闭组合上下文持有的Demand与Ledger根，首个关闭失败优先。 */
 export async function closeDemandOperationAuthorityContext(context) {

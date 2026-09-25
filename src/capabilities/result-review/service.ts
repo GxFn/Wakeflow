@@ -120,6 +120,7 @@ import {
 } from "../../governance/review/controller-test-review-decision.js";
 import {
   buildDemandResultReviewSnapshotFromHistory,
+  computeReportedReviewUnitDigest,
   readDemandResultReviewSnapshot,
   type DemandResultReviewTarget,
   type DemandTargetReviewHistoryEntry,
@@ -628,6 +629,30 @@ async function loadEnvelope(
   }
 }
 
+/**
+ * 重新武装不重渲染 prompt，窗口手里只有第一代的围栏摘要。重新武装只跟在一次可证明
+ * 从未到达会话的发送之后，所以同一 deliveryId 更早一代记录过的围栏同样认作本投递。
+ */
+async function assertEarlierGenerationFence(
+  repository: DemandEventSourcingRepository,
+  input: ImportInput,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  try {
+    const outcomes = await repository.findDeliveryOutcomeRecordedEvents(
+      input.deliveryId,
+      signalOptions(signal),
+    );
+    const known = outcomes.some(
+      (entry) => entry.event.data.outcome.fence.claimDigest === input.claimDigest,
+    );
+    if (known) return;
+  } catch (error: unknown) {
+    mapRepositoryError(error);
+  }
+  fail("precondition-failed", "fence-mismatch", "$request.claimDigest");
+}
+
 async function loadTaskPackage(
   repository: DemandEventSourcingRepository,
   taskPackageId: string,
@@ -680,9 +705,11 @@ async function resolveEvidence(
 interface EvidenceMemberFacts {
   readonly digest: Sha256Digest;
   readonly bytes: number;
+  /** payload 成员已加载记录时顺带给出的清单 kind；manifest 成员为 null。 */
+  readonly manifestKind: string | null;
 }
 
-/** 读取定位符指向的成员并返回它的摘要与字节数；manifest 走稳定读取，payload 成员经记录读取器核对。 */
+/** 读取定位符指向的成员并返回它的摘要、字节数与（已加载记录时的）清单 kind；manifest 走稳定读取，payload 成员经记录读取器核对。 */
 async function readEvidenceMember(
   root: RootedDirectory,
   plan: NonNullable<ReturnType<typeof planEvidenceLocator>>,
@@ -694,14 +721,22 @@ async function readEvidenceMember(
       managedEvidenceRecordAddress(plan.evidenceId).manifestRef,
       { maximumBytes: MANIFEST_READ_LIMIT, ...signal },
     );
-    return Object.freeze({ digest: read.digest, bytes: Number(read.byteCount) });
+    return Object.freeze({
+      digest: read.digest,
+      bytes: Number(read.byteCount),
+      manifestKind: null,
+    });
   }
   const record = await loadManagedEvidenceRecord(root, plan.evidenceId, signal);
   const member = await readManagedEvidencePayloadMember(root, record, plan.memberRef, {
     maximumBytes: PAYLOAD_READ_LIMIT,
     ...signal,
   });
-  return Object.freeze({ digest: member.member.digest, bytes: Number(member.member.bytes) });
+  return Object.freeze({
+    digest: member.member.digest,
+    bytes: Number(member.member.bytes),
+    manifestKind: record.manifest.kind,
+  });
 }
 
 function unresolvedOrRethrow(error: unknown): null {
@@ -727,12 +762,11 @@ async function resolveEvidenceReference(
     const facts = await readEvidenceMember(context.authority.demandRoot, plan, signal);
     if (facts.digest !== digest) return null;
     if (reference.kind !== null) {
-      const record = await loadManagedEvidenceRecord(
-        context.authority.demandRoot,
-        plan.evidenceId,
-        signal,
-      );
-      if (record.manifest.kind !== reference.kind) return "kind-mismatch";
+      const kind =
+        facts.manifestKind ??
+        (await loadManagedEvidenceRecord(context.authority.demandRoot, plan.evidenceId, signal))
+          .manifest.kind;
+      if (kind !== reference.kind) return "kind-mismatch";
     }
     return Object.freeze({ ref, digest, evidenceId: plan.evidenceId, bytes: facts.bytes });
   } catch (error: unknown) {
@@ -900,7 +934,7 @@ async function executeImport(
     fail("precondition-failed", "delivery-host", "$request.deliveryId");
   }
   if (target.currentDelivery.fence.claimDigest !== input.claimDigest) {
-    fail("precondition-failed", "fence-mismatch", "$request.claimDigest");
+    await assertEarlierGenerationFence(repository, input, options.signal);
   }
   const privacyRules = derivePrivacyRules(reportTexts(input.report.content), REPORT_PRIVACY_POLICY);
   if (privacyRules.length > 0) {
@@ -1084,19 +1118,17 @@ function reviewUnitOf(
     })),
     target.reviewDecision,
   );
-  const reviewUnitDigest = computeCanonicalJsonSha256Digest({
-    status: "reported",
-    targetTaskId: target.targetTaskId,
-    outcome: target.outcome,
-    taskPackageSourceEvent: target.taskPackageSourceEvent,
-    taskPackage: target.taskPackage,
-    targetResultSourceEvent: target.targetResultSourceEvent,
-    targetResult: target.targetResult,
-    priorReviewHistory: [
+  const reviewUnitDigest = computeReportedReviewUnitDigest(
+    target.targetTaskId,
+    target.taskPackageSourceEvent,
+    target.taskPackage,
+    target.targetResultSourceEvent,
+    target.targetResult,
+    [
       ...target.priorReviewHistory,
       { sourceEvent: target.reviewDecisionSourceEvent, decision: target.reviewDecision },
     ],
-  });
+  );
   return Object.freeze({
     status,
     target,
@@ -1647,7 +1679,7 @@ async function executeImplementationDecision(
         programId: sources.unit.target.taskPackage.programId,
         demandId: request.demandId as WakeflowDurableId<"demand">,
         targetTaskId: sources.unit.target.targetTaskId,
-        controllerWindowId: authority.config.indexes.controllerWindow.windowId,
+        controllerWindowId: demandPodScope(context).controllerWindow.windowId,
         reviewed: reviewedOf(sources, request),
         decision: request.decision,
         assessment: request.assessment,
@@ -1702,18 +1734,9 @@ function implementationDecisionResult(
   }
   const target = aggregateTargetOf(outcome);
   if (target.workType === "test") fail("unexpected", "target-kind", "$result");
-  const phase =
-    outcome.commandResult.disposition === "committed"
-      ? implementationPhaseForDecision(decision.decision)
-      : target.phase;
-  if (
-    phase !== "accepted" &&
-    phase !== "rework-requested" &&
-    phase !== "review-blocked" &&
-    phase !== "escalated"
-  ) {
-    fail("unexpected", "target-phase", "$result");
-  }
+  // 相位取自记录下的决定本身，重放时目标可能已前进（如返工投递已准备），当前相位不可用；
+  // reworkCount 反映当前聚合状态。
+  const phase = implementationPhaseForDecision(decision.decision);
   return admitImplementationReviewDecisionResult({
     kind: "WakeflowImplementationReviewDecisionResult",
     schemaVersion: WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION,
@@ -1863,7 +1886,7 @@ async function executeTestDecision(
         programId: sources.unit.target.taskPackage.programId,
         demandId: request.demandId as WakeflowDurableId<"demand">,
         targetTaskId: sources.unit.target.targetTaskId,
-        controllerWindowId: authority.config.indexes.controllerWindow.windowId,
+        controllerWindowId: demandPodScope(context).controllerWindow.windowId,
         reviewed: reviewedOf(sources, request),
         testExecution: {
           testAttemptId: sources.unit.target.targetResult.testExecution.testAttemptId,
@@ -1929,19 +1952,11 @@ function testDecisionResult(
   if (target.workType !== "test" || !("testAttempts" in target)) {
     fail("unexpected", "target-kind", "$result");
   }
-  const phase =
-    outcome.commandResult.disposition === "committed"
-      ? testPhaseForDecision(decision.decision, decision.escalation?.classification ?? null)
-      : target.phase;
-  if (
-    phase !== "test-accepted" &&
-    phase !== "test-another-attempt-requested" &&
-    phase !== "test-review-blocked" &&
-    phase !== "test-product-defect" &&
-    phase !== "test-escalated"
-  ) {
-    fail("unexpected", "target-phase", "$result");
-  }
+  // 相位取自记录下的决定本身（重放时目标可能已进入下一次尝试）；attemptCount 反映当前聚合状态。
+  const phase = testPhaseForDecision(
+    decision.decision,
+    decision.escalation?.classification ?? null,
+  );
   return admitTestReviewDecisionResult({
     kind: "WakeflowTestReviewDecisionResult",
     schemaVersion: WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION,

@@ -1,8 +1,11 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
+  existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -92,7 +95,9 @@ test("a zero-permission directory is hardened through its open handle", async ()
     equal(statSync(path.join(rootPath, "sealed")).mode & 0o777, 0);
   } finally {
     await root.close();
-    chmodSync(path.join(rootPath, "sealed"), 0o700);
+    if (existsSync(path.join(rootPath, "sealed"))) {
+      chmodSync(path.join(rootPath, "sealed"), 0o700);
+    }
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
@@ -219,6 +224,9 @@ test("file and symlink collisions fail without modifying the conflicting node", 
         "$resourcePath",
       );
     }
+    equal(readFileSync(path.join(rootPath, "file"), "utf8"), "value");
+    equal(lstatSync(path.join(rootPath, "link")).isSymbolicLink(), true);
+    equal(existsSync(path.join(outside, "child")), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

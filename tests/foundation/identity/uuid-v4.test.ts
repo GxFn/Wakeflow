@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   createUuidV4,
+  deriveUuidV4,
   parseUuidV4,
   UuidV4Error,
   type UuidV4,
@@ -156,4 +157,37 @@ test("errors normalize empty paths and do not disclose rejected values", () => {
 
   equal(error.message.includes(rejected), false);
   equal("cause" in error, false);
+});
+
+test("derivation is deterministic, distinct per input, and canonical", () => {
+  const first = deriveUuidV4("wakeflow-test", "a", "b");
+  equal(deriveUuidV4("wakeflow-test", "a", "b"), first);
+  equal(parseUuidV4(first), first);
+  equal(deriveUuidV4("wakeflow-test", "a", "c") === first, false);
+  equal(deriveUuidV4("wakeflow-test", "ab") === first, false);
+  equal(deriveUuidV4("wakeflow-other", "a", "b") === first, false);
+});
+
+test("derivation rejects NUL and ill-formed text at the failing input", () => {
+  expectUuidV4Error(() => deriveUuidV4(""), "derivation-input", "$namespace");
+  expectUuidV4Error(
+    () => deriveUuidV4("name\u0000space"),
+    "derivation-input",
+    "$namespace",
+  );
+  expectUuidV4Error(
+    () => deriveUuidV4("\uD800"),
+    "derivation-input",
+    "$namespace",
+  );
+  expectUuidV4Error(
+    () => deriveUuidV4("ns", "ok", "a\u0000b"),
+    "derivation-input",
+    "$parts/1",
+  );
+  expectUuidV4Error(
+    () => deriveUuidV4("ns", "\uDC00"),
+    "derivation-input",
+    "$parts/0",
+  );
 });

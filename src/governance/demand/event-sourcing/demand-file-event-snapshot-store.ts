@@ -434,8 +434,7 @@ export class DemandFileEventSnapshotStore {
     }
   }
 
-  /** 按 `commitSequence` 不替换目标地发布一个可重建快照。 */
-  /** 直接退休一个序号的快照；不存在或失败返回 `false`。 */
+  /** 直接退休一个序号的快照；不存在或失败返回 `false`，中止照常上抛。 */
   async retireSnapshotAt(
     sequence: number,
     options?: { readonly signal?: AbortSignal },
@@ -461,7 +460,10 @@ export class DemandFileEventSnapshotStore {
       });
       return true;
     } catch (error: unknown) {
-      if (error instanceof ExactRegularFileUnlinkError) return false;
+      if (error instanceof ExactRegularFileUnlinkError) {
+        if (error.reason === "aborted") fail("aborted", "$signal");
+        return false;
+      }
       throw error;
     }
   }
@@ -482,6 +484,7 @@ export class DemandFileEventSnapshotStore {
       read = await readDirectory(this.#root, signal);
     } catch (error: unknown) {
       if (error instanceof DemandFileEventSnapshotStoreError) {
+        if (error.reason === "aborted") throw error;
         return Object.freeze({ retired: 0, failed: 0 });
       }
       throw error;
@@ -506,6 +509,7 @@ export class DemandFileEventSnapshotStore {
         retired += 1;
       } catch (error: unknown) {
         if (error instanceof ExactRegularFileUnlinkError) {
+          if (error.reason === "aborted") fail("aborted", "$signal");
           failed += 1;
           continue;
         }
@@ -515,6 +519,7 @@ export class DemandFileEventSnapshotStore {
     return Object.freeze({ retired, failed });
   }
 
+  /** 按 `commitSequence` 不替换目标地发布一个可重建快照。 */
   async publish(
     snapshotValue: unknown,
     options?: { readonly signal?: AbortSignal },

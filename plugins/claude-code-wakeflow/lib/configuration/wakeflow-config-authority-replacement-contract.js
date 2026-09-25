@@ -1,13 +1,12 @@
 import { types } from "node:util";
-import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../foundation/crypto/sha256.js";
-import { parsePlainRecord, pickOwnDataProperties, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
-import { DurableAtomicFileWriteError, } from "../foundation/filesystem/durable-atomic-file-write.js";
+import { computeSha256Digest, parseSha256Digest, } from "../foundation/crypto/sha256.js";
+import { parsePlainRecord, pickOwnDataProperties, } from "../foundation/data/passive-own-data.js";
 import { parseDurableAtomicFileReplaceOptions, } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
-import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "../foundation/filesystem/file-node-snapshot.js";
+import { sameFileNodeSnapshot, } from "../foundation/filesystem/file-node-snapshot.js";
 import { parsePortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
 import { RootedExclusiveFileLockError, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../contracts/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind, } from "../contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, } from "./wakeflow-config-authority-snapshot.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
@@ -161,10 +160,7 @@ export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
         programProjected = pickOwnDataProperties(modelProjected.program, ["programId"], "$/expected/model/program");
         sourceProjected = pickOwnDataProperties(projected.source, ["byteCount", "digest", "node", "resourcePath"], "$/expected/source");
     }
-    catch (error) {
-        if (error instanceof PassiveOwnDataError) {
-            failWakeflowConfigAuthorityReplacement("input", "$expected");
-        }
+    catch {
         failWakeflowConfigAuthorityReplacement("input", "$expected");
     }
     if (typeof projected.workspaceRoot !== "string"
@@ -180,20 +176,14 @@ export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
     try {
         configDigest = parseSha256Digest(projected.configDigest, "$/expected/configDigest");
     }
-    catch (error) {
-        if (error instanceof Sha256Error) {
-            failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest");
-        }
+    catch {
         failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest");
     }
     let programId;
     try {
         programId = parseWakeflowDurableIdOfKind(programProjected.programId, "program", "$/expected/model/program/programId");
     }
-    catch (error) {
-        if (error instanceof WakeflowDurableIdError) {
-            failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId");
-        }
+    catch {
         failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId");
     }
     let source;
@@ -208,10 +198,7 @@ export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
             },
         }).expected;
     }
-    catch (error) {
-        if (error instanceof DurableAtomicFileWriteError) {
-            failWakeflowConfigAuthorityReplacement("input", "$expected");
-        }
+    catch {
         failWakeflowConfigAuthorityReplacement("input", "$expected");
     }
     if (source.resourcePath !== WAKEFLOW_CONFIG_FILE_REF
@@ -319,10 +306,7 @@ export function sameWakeflowConfigAuthoritySource(left, right) {
             && left.digest === right.digest
             && sameFileNodeSnapshot(left.node, right.node);
     }
-    catch (error) {
-        if (error instanceof FileNodeSnapshotError) {
-            failWakeflowConfigAuthorityReplacement("input", "$expected");
-        }
+    catch {
         failWakeflowConfigAuthorityReplacement("input", "$expected");
     }
 }

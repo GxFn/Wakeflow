@@ -101,12 +101,18 @@ function assertReportMatchesTaskPackage(
   }
 }
 
-/** 初代际的围栏必须就是信封里的围栏；后续代际的围栏由 rearm 事件与聚合转换证明。 */
+/**
+ * 只有 accepted 或 indeterminate 的投递代际能产生 Result；初代际的围栏必须就是信封里的围栏，
+ * 后续代际的围栏由 rearm 事件与聚合转换证明。
+ */
 export function assertDeliveryBindingFollowsEnvelope(
   envelope: Readonly<DeliveryEnvelope>,
   delivery: Readonly<TargetResultDeliveryBinding>,
 ): void {
+  const disposition: string = delivery.disposition;
   if (
+    (disposition !== "accepted" && disposition !== "indeterminate") ||
+    !Number.isSafeInteger(delivery.generation) ||
     delivery.generation < 1 ||
     (delivery.generation === 1 &&
       (delivery.fence.claimId !== envelope.fence.claimId ||

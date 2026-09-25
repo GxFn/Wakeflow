@@ -115,7 +115,7 @@ export class DemandFileEventStore {
         }
         this.#root = root;
     }
-    /** 幂等创建文件事件存储自身拥有的四个私有目录。 */
+    /** 幂等创建文件事件存储自身拥有的五个私有目录（事件溯源根及其四个子目录）。 */
     async initialize(options) {
         const { signal } = parseDemandFileEventStoreOptions(options);
         for (const ref of [
@@ -440,6 +440,8 @@ export class DemandFileEventStore {
                     if (error.reason === "destination-exists") {
                         fail("concurrency-conflict", "$commit");
                     }
+                    if (error.reason === "aborted")
+                        fail("aborted", "$signal");
                     fail("commit-uncertain", "$commit");
                 }
                 await this.#settleCommitTarget(commitRef, committed.node, undefined);

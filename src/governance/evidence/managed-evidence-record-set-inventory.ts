@@ -430,13 +430,12 @@ async function inspectRecords(
   const settled = await Promise.allSettled(
     entries.map((entry) => limit(() => inspectRecord(root, entry, signal))),
   );
+  const values: Readonly<ManagedEvidenceRecordInventoryEntry>[] = [];
   for (const result of settled) {
     if (result.status === "rejected") throw result.reason;
+    values.push(result.value);
   }
-  return Object.freeze(settled.map((result) => {
-    if (result.status !== "fulfilled") fail("operation-failure", "$record");
-    return result.value;
-  }));
+  return Object.freeze(values);
 }
 
 async function inspectStage(

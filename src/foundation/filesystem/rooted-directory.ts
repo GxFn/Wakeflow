@@ -340,12 +340,10 @@ export class RootedDirectory {
       fail("root-changed", path);
     }
 
+    const flags = requiredOpenFlags(path);
     let handle: FileHandle;
     try {
-      handle = await openFileHandle(
-        canonicalRootPath,
-        requiredOpenFlags(path),
-      );
+      handle = await openFileHandle(canonicalRootPath, flags);
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "ELOOP") fail("root-symlink", path);

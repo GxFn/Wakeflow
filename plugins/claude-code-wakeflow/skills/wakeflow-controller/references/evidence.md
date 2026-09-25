@@ -19,7 +19,8 @@ recorded before the decision, not described after it.
 Four sources, and nothing else:
 
 - A file or a directory tree under a root the config already knows about - a
-  product repository, a surface, the ledger.
+  product repository, a support surface (Design/Test), or a worktree pod's
+  registered checkout.
 - One host hook observation record, projected without its session handle.
 - An https link.
 - A commit reference.

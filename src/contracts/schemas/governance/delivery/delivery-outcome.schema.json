@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DELIVERY_OUTCOME_SCHEMA",
   "title": "WakeflowDeliveryOutcome",
   "description": "一次投递代际的宿主效果处置：由 Wakeflow 按证据派生，记录证据种类、宿主记录标识与声明处置。",
-  "$comment": "accepted 只来自目标会话的 user-prompt-submit hook 记录（prompt 摘要一致）、Codex 宿主发送调用的成功返回，或 Controller 对 indeterminate 的显式解决；rejected-before-send 只用于发送调用本身失败且未触碰目标会话；其余为 indeterminate 并保留声明。回读只是补充观察。",
+  "$comment": "accepted 只来自目标会话的 user-prompt-submit hook 记录（prompt 摘要一致）、Codex 宿主发送调用的成功返回，或 Controller 对 indeterminate 的显式解决；rejected-before-send 来自发送调用本身失败且未触碰目标会话，或 Controller 将 indeterminate 显式解决为未落地（二者都释放声明）；其余为 indeterminate 并保留声明。回读只是补充观察。",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -22,7 +22,11 @@ import {
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
-import { parseByteCount, type ByteCount } from "../../foundation/numeric/byte-count.js";
+import {
+  ByteCountError,
+  parseByteCount,
+  type ByteCount,
+} from "../../foundation/numeric/byte-count.js";
 import {
   planWakeflowManagedTextAuthorityTransition,
   WakeflowManagedTextAuthorityTransitionError,
@@ -185,13 +189,22 @@ function parseRequest(value: WakeflowManagedBlockFileRequest): Readonly<ParsedRe
     }
     throw error;
   }
+  let maximumBytes = DEFAULT_MAXIMUM_BYTES;
+  if (value.maximumBytes !== undefined) {
+    try {
+      maximumBytes = parseByteCount(value.maximumBytes, "$request.maximumBytes");
+    } catch (error: unknown) {
+      if (error instanceof ByteCountError) fail("input", "$request.maximumBytes");
+      throw error;
+    }
+  }
   return Object.freeze({
     resourcePath,
     currentTargets: Object.freeze(
       [...value.currentTargets] as Readonly<WakeflowManagedTextEnvelopeTarget>[],
     ),
     desiredTarget: value.desiredTarget as Readonly<WakeflowManagedTextEnvelopeTarget>,
-    maximumBytes: value.maximumBytes ?? DEFAULT_MAXIMUM_BYTES,
+    maximumBytes,
     signal: value.signal,
   });
 }

@@ -205,12 +205,12 @@ async function assertTerminalConfig(root, plan, operationId) {
         fail("terminal-closure", "$config", operationId);
     }
 }
-function desiredConfigForExecution(request, sourceConfig) {
+function desiredConfigForExecution(request, sourceConfig, operationId) {
     const config = request.action === "reconcile"
         ? sourceConfig
         : request.desiredConfig;
     if (config === null)
-        fail("source-config", "$config");
+        fail("source-config", "$config", operationId);
     return config;
 }
 function receipt(step, disposition, observationDigest) {
@@ -255,7 +255,7 @@ async function executeStep(root, context, plan, requestValue, request, sourceCon
     }
     try {
         const executed = await capability.executeOperation(root, context, {
-            config: desiredConfigForExecution(request, sourceConfig),
+            config: desiredConfigForExecution(request, sourceConfig, context.operationId),
             profile: request.currentHostProfile,
             operation,
             recoveringAffectedOperation,

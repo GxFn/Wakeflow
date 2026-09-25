@@ -41,12 +41,14 @@ preview before the user ever sees the package.
 
 **bug** - something is wrong:
 
-- `requirement.md`: reproduction, scope, non-goals, user confirmation.
+- `requirement.md`: reproduction, scope, non-goals, acceptance criteria
+  (required before the Controller can plan any task), user confirmation.
 - `landing.md`: code facts, fix plan, testing decision.
 
 **supplement** - an addition to work already done:
 
-- `requirement.md`: requirement delta, completion definition, user
+- `requirement.md`: requirement delta, completion definition, acceptance
+  criteria (required before the Controller can plan any task), user
   confirmation.
 - `landing.md`: code facts, landing plan, testing decision.
 
@@ -129,7 +131,9 @@ Start from these when the drafts directory is empty. The headings are the
 ones preview recognizes; the prompts under them are what to replace. For a
 `bug`, `supplement` or `research` package swap in the headings its section
 list names above (`Reproduction`, `Scope`, `Fix plan`; `Requirement delta`;
-`Research question`, `Boundaries`, `Known facts`, `Method`).
+`Research question`, `Boundaries`, `Known facts`, `Method`). Keep the
+`Acceptance criteria` heading for every type except `research`: planning cites
+its `ac-N` items, and a package without them cannot be planned.
 
 `requirement.md`:
 

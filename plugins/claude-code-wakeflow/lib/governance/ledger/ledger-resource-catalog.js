@@ -6,7 +6,8 @@ import { ledgerAuthorityMemberRef, ledgerAuthorityRecordRef, ledgerAuthorityRoot
 /**
  * Wakeflow Governance / Ledger：需求包记录职责所有者的资源目录。
  *
- * 静态目录登记可长期共享的 `requirements` 根目录和运行时私有的事务根目录。具体记录
+ * 静态目录登记可长期共享的 `requirements` 根目录、Demand 归档所有的 `archives` 根目录和
+ * 运行时私有的事务根目录。具体记录
  * 工厂为一条已验证记录登记最终聚合目录、记录清单、成员事实、精简发布意图记录和
  * 逐记录锁。私有暂存目录只在单次 `exact-directory-publish` 操作期间作为源资源存在，
  * 其归属由发布意图记录和目录树摘要证明，因此不会重复登记为长期资源。

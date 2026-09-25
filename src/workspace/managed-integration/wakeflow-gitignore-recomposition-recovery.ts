@@ -94,7 +94,9 @@ async function assertRecoverableCurrent(
     if (error instanceof WakeflowGitignoreInspectionError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "target-capacity") fail("capacity", "$target");
-      if (error.reason === "git") fail("observation-failure", "$git");
+      if (error.reason === "git" || error.reason === "git-repository") {
+        fail("observation-failure", "$git");
+      }
       if (
         error.reason === "input"
         || error.reason === "context"

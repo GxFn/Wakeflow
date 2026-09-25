@@ -214,7 +214,7 @@ export async function assertCurrentUserWakeflowGitignoreRecompositionRoot(root, 
         if (error instanceof RootedDirectoryError) {
             failWakeflowGitignoreRecomposition("root-scope", "$root");
         }
-        failWakeflowGitignoreRecomposition("root-scope", "$root");
+        throw error;
     }
 }
 export function admitWakeflowGitignoreRecompositionLockOperations(request) {

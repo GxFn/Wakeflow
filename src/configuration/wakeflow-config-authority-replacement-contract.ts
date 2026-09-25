@@ -3,23 +3,19 @@ import { types } from "node:util";
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
 } from "../foundation/crypto/sha256.js";
 import {
   parsePlainRecord,
   pickOwnDataProperties,
-  PassiveOwnDataError,
 } from "../foundation/data/passive-own-data.js";
-import {
-  DurableAtomicFileWriteError,
-  type DurableAtomicFileReplaceResult,
+import type {
+  DurableAtomicFileReplaceResult,
 } from "../foundation/filesystem/durable-atomic-file-write.js";
 import {
   parseDurableAtomicFileReplaceOptions,
 } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
 import {
-  FileNodeSnapshotError,
   sameFileNodeSnapshot,
 } from "../foundation/filesystem/file-node-snapshot.js";
 import { parsePortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
@@ -34,7 +30,6 @@ import {
 import type { StableFileSource } from "../foundation/filesystem/stable-file-read.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
 } from "../contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
@@ -329,10 +324,7 @@ export function parseWakeflowConfigAuthorityExpectation(
       ["byteCount", "digest", "node", "resourcePath"] as const,
       "$/expected/source",
     );
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      failWakeflowConfigAuthorityReplacement("input", "$expected");
-    }
+  } catch {
     failWakeflowConfigAuthorityReplacement("input", "$expected");
   }
   if (
@@ -352,10 +344,7 @@ export function parseWakeflowConfigAuthorityExpectation(
       projected.configDigest,
       "$/expected/configDigest",
     );
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) {
-      failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest");
-    }
+  } catch {
     failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest");
   }
   let programId: WakeflowDurableId<"program">;
@@ -365,10 +354,7 @@ export function parseWakeflowConfigAuthorityExpectation(
       "program",
       "$/expected/model/program/programId",
     );
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) {
-      failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId");
-    }
+  } catch {
     failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId");
   }
   let source: Readonly<StableFileSource>;
@@ -382,10 +368,7 @@ export function parseWakeflowConfigAuthorityExpectation(
         resourcePath: sourceProjected.resourcePath,
       },
     }).expected;
-  } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      failWakeflowConfigAuthorityReplacement("input", "$expected");
-    }
+  } catch {
     failWakeflowConfigAuthorityReplacement("input", "$expected");
   }
   if (
@@ -514,10 +497,7 @@ export function sameWakeflowConfigAuthoritySource(
       && left.byteCount === right.byteCount
       && left.digest === right.digest
       && sameFileNodeSnapshot(left.node, right.node);
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      failWakeflowConfigAuthorityReplacement("input", "$expected");
-    }
+  } catch {
     failWakeflowConfigAuthorityReplacement("input", "$expected");
   }
 }

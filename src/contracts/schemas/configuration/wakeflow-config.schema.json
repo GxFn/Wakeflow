@@ -423,7 +423,7 @@
               "minContains": 1
             },
             {
-              "description": "At least one durable product window is required; exactly one per pod is a codec rule.",
+              "description": "At least one durable product window is required; per-pod product cardinality (at least one per repository in the primary pod, exactly one per repository in a worktree pod) is a codec rule.",
               "contains": {
                 "type": "object",
                 "properties": {
@@ -601,6 +601,7 @@
       "examples": [
         {
           "windowId": "window_55555555-5555-4555-8555-555555555555",
+          "podId": "pod_99999999-9999-4999-8999-999999999999",
           "role": "controller",
           "displayName": "Controller",
           "root": {

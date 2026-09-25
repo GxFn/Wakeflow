@@ -9,7 +9,7 @@ import { WAKEFLOW_WORKSPACE_HOST_IDS, } from "../workspace-host-resource-profile
  */
 const WAKEFLOW_WINDOW_HOST_IDENTITY_PROFILE_KIND = "WakeflowWindowHostIdentityProfile";
 const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_RESERVED_VALUES = 64;
-const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_HANDLE_LENGTH = 4096;
+const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_HANDLE_LENGTH = 1024;
 const ERROR_MESSAGES = {
     input: "Window Host Identity Profile is not passive data.",
     shape: "Window Host Identity Profile has an invalid field set.",

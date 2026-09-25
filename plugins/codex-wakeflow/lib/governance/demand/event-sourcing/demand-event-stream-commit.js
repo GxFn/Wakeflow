@@ -375,7 +375,11 @@ export function applyDemandEventStreamCommit(currentValue, commitValue) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingUpcasterError) {
-                fail("event-version", `$/events/${index}/eventVersion`);
+                if (error.reason === "unsupported-version" ||
+                    error.reason === "unsupported-event-type") {
+                    fail("event-version", `$/events/${index}/eventVersion`);
+                }
+                fail("event", `$/events/${index}`);
             }
             throw error;
         }

@@ -288,7 +288,6 @@ function inspectEnvelope(bytes) {
         throw error;
     }
 }
-/** 稳定检查当前 `.gitignore` 并生成零写入的下一操作候选。 */
 const GIT_METADATA_RESOURCE_PATH = parsePortableResourcePath(".git");
 /**
  * 工作区根必须是 Git 仓库（`.git` 目录或 worktree / submodule 的 `.git` 文件）：托管的 `.gitignore`
@@ -303,9 +302,12 @@ async function assertGitRepositoryRoot(root) {
         if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             fail("git-repository", "$git");
         }
+        if (error instanceof RootedDirectoryError)
+            fail("source", "$git");
         throw error;
     }
 }
+/** 稳定检查当前 `.gitignore` 并生成零写入的下一操作候选。 */
 export async function inspectWakeflowWorkspaceGitignore(rootValue, requestValue) {
     assertRoot(rootValue);
     const request = parseRequest(requestValue);

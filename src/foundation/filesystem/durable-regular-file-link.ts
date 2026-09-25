@@ -250,6 +250,13 @@ function mapParentHandleError(
       fail("parent-open-failure", errorPath);
     }
   }
+  // 提交后的 inspect 与 sync 遇到父目录漂移时，不能读作干净的提交前拒绝。
+  if (
+    (operation === "inspect" && inspectionReason === "commit-uncertain")
+    || operation === "sync"
+  ) {
+    fail("commit-uncertain", errorPath);
+  }
   fail("parent-changed", errorPath);
 }
 
@@ -477,7 +484,7 @@ async function inspectLinkedPair(
     "commit-uncertain",
   );
   if (sourceNode === null) {
-    fail("commit-uncertain", "$destinationResourcePath");
+    fail("commit-uncertain", "$sourceResourcePath");
   }
   const destinationNode = await inspectParentTarget(
     destinationParent,

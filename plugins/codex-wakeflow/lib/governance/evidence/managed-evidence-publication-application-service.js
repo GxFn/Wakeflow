@@ -1,4 +1,5 @@
 import { types } from "node:util";
+import { WakeflowError } from "../../kernel/error.js";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
@@ -143,8 +144,6 @@ function mapContextError(error) {
     if (error.reason === "config" || error.reason === "stale-config") {
         fail("config", error);
     }
-    if (error.reason === "root")
-        fail("demand", error);
     fail("demand", error);
 }
 function mapStoreError(error) {
@@ -181,17 +180,19 @@ async function assertConfigCurrent(workspaceRoot, config, signal) {
     }
 }
 /** 引用类来源没有物理根：payload 是来源投影，由 Manifest 重建。 */
-async function openSourceRoot(workspaceRoot, config, transaction) {
+async function openSourceRoot(workspaceRoot, config, transaction, signal) {
     const source = transaction.manifest.source;
     if (source.kind !== "managed-path")
         return null;
     try {
-        return await openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source);
+        return await openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source, signal === undefined ? {} : { signal });
     }
     catch (error) {
         if (error instanceof ManagedEvidenceConfiguredSourceRootError) {
             fail("source-root", error);
         }
+        if (error instanceof WakeflowError && error.reason === "aborted")
+            fail("aborted", error);
         throw error;
     }
 }
@@ -343,7 +344,7 @@ export class ManagedEvidencePublicationApplicationService {
             }
             if (result === undefined) {
                 await assertConfigCurrent(this.#workspaceRoot, context.config, options.signal);
-                sourceRoot = await openSourceRoot(this.#workspaceRoot, context.config, transaction);
+                sourceRoot = await openSourceRoot(this.#workspaceRoot, context.config, transaction, options.signal);
                 let stored;
                 try {
                     stored = await createManagedEvidencePublicationTransactionJournal(context.demandRoot, transaction, options.signal === undefined
@@ -479,7 +480,7 @@ export class ManagedEvidencePublicationApplicationService {
                 }
                 else {
                     if (physicalState !== "stage-complete") {
-                        sourceRoot = await openSourceRoot(this.#workspaceRoot, roots.config, stored.transaction);
+                        sourceRoot = await openSourceRoot(this.#workspaceRoot, roots.config, stored.transaction, options.signal);
                         await materializeStage(sourceRoot, roots.demandRoot, stored.transaction, options.signal);
                         if (sourceRoot !== null)
                             await closeSourceRoot(sourceRoot);

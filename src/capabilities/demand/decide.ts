@@ -57,11 +57,11 @@ export function deriveLifecycleIds(
 }
 
 /** Demand 根内可重建的检查点与未成为事实的候选，不进归档负载。 */
-const ARCHIVE_EXCLUDED_PREFIXES: readonly string[] = Object.freeze([
+export const ARCHIVE_EXCLUDED_PREFIXES = Object.freeze([
   "event-sourcing/snapshots",
   "event-sourcing/index",
   "event-sourcing/append-candidates",
-]);
+] as const);
 
 export function isArchivePayloadPath(path: string): boolean {
   return !ARCHIVE_EXCLUDED_PREFIXES.some(
@@ -201,9 +201,21 @@ export interface ContinueBlockerInput {
   readonly claim: Readonly<RequirementClaimState> | null;
   /** 该 Demand 所在 pod 上另一个活动 Demand 的标识；没有即 null。 */
   readonly otherActiveDemandId: string | null;
+  /**
+   * 归档里记的 pod 与它在配置里的现状：配置里已不存在时 `pod` 为 null（pod 关闭完成会把它
+   * 从配置移除）。省略即不检查。
+   */
+  readonly archivedPodId?: string | null;
+  readonly pod?: Readonly<{
+    readonly podId: string;
+    readonly lifecycle: "open" | "closing";
+  }> | null;
 }
 
-/** continue 只对已归档的完成 Demand 开放，且需求包仍由它归档、所在 pod 没有别的活动 Demand。 */
+/**
+ * continue 只对已归档的完成 Demand 开放，且需求包仍由它归档、所在 pod 仍存在、未在关闭且没有别的活动 Demand。
+ * research Demand 不可继续：继续后的路线要求规划实现任务包，而 research 没有实现目标。
+ */
 export function deriveContinueBlockers(input: Readonly<ContinueBlockerInput>): readonly string[] {
   const blockers: string[] = [];
   if (input.rootPresent) blockers.push("demand-root-present");
@@ -214,6 +226,11 @@ export function deriveContinueBlockers(input: Readonly<ContinueBlockerInput>): r
   else if (input.claim.status !== "archived" || input.claim.archive?.demandId !== input.demandId) {
     blockers.push(`package-claim:${input.claim.status}`);
   }
+  if (input.claim?.demandType === "research") blockers.push("demand-type:research");
+  if (typeof input.archivedPodId === "string" && input.pod === null)
+    blockers.push(`pod-unknown:${input.archivedPodId}`);
+  else if (input.pod != null && input.pod.lifecycle !== "open")
+    blockers.push(`pod-closing:${input.pod.podId}`);
   if (input.otherActiveDemandId !== null) blockers.push(`pod-busy:${input.otherActiveDemandId}`);
   return Object.freeze(blockers);
 }

@@ -3,7 +3,7 @@ import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canon
 import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { LEDGER_ARCHIVES_ROOT_REF, LEDGER_REQUIREMENTS_ROOT_REF, LEDGER_TRANSACTIONS_ROOT_REF, } from "./ledger-authority-paths.js";
-import { LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_TRANSACTION_DIRECTORY_MODE, } from "./ledger-authority-storage-policy.js";
+import { currentUserId, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_TRANSACTION_DIRECTORY_MODE, } from "./ledger-authority-storage-policy.js";
 import { throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG, } from "./ledger-resource-catalog.js";
 /**
@@ -49,19 +49,15 @@ function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
-function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
-}
 async function inspectEntry(root, policy) {
     try {
         const resource = await root.inspectExistingResource(policy.resourcePath, `$layout/${policy.resourcePath}`);
+        const userId = currentUserId();
         const current = resource.node.kind === "directory"
             && resource.node.permissionBits === policy.mode
             && (!policy.requireCurrentUser
-                || currentUserId() === null
-                || resource.node.userId === currentUserId());
+                || userId === null
+                || resource.node.userId === userId);
         return Object.freeze({
             resourcePath: policy.resourcePath,
             expectedMode: policy.mode,
@@ -90,7 +86,7 @@ async function inspectEntry(root, policy) {
         throw error;
     }
 }
-/** 只读检查 Ledger 根内两个固定容器，不扫描不可变记录目录。 */
+/** 只读检查 Ledger 根内三个固定容器，不扫描不可变记录目录。 */
 export async function inspectLedgerAuthorityLayout(rootValue, signal) {
     assertRoot(rootValue);
     assertNotAborted(signal);

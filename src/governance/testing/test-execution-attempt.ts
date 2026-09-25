@@ -225,9 +225,6 @@ export function parseTestExecutionAttempt(
   if (wire.rerunSource === undefined) fail("schema", "$/rerunSource");
   const scopedStepIds =
     wire.rerunSource.stepIds === null ? null : Object.freeze([...wire.rerunSource.stepIds]);
-  if (scopedStepIds !== null && new Set(scopedStepIds).size !== scopedStepIds.length) {
-    fail("relation", "$/rerunSource/stepIds");
-  }
   const rerunSource = Object.freeze({
     stepIds: scopedStepIds,
     previousAttemptId: id(

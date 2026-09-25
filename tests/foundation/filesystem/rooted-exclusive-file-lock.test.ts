@@ -201,10 +201,36 @@ test("a held or crash-residue lock times out without automatic deletion", async 
       (hrtime.bigint() - longRetryStartedAt) / 1_000_000n,
     );
     equal(longRetryElapsedMilliseconds < 500, true);
+    equal((await inspectRootedExclusiveFileLock(root, lockPath)).status, "held");
     releaseHolder?.();
     await holder;
   } finally {
     releaseHolder?.();
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("a crash-residue lock times out and is not deleted on acquire", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-stale-"));
+  mkdirSync(path.join(rootPath, "state"));
+  const physicalLock = path.join(rootPath, "state", "board.lock");
+  writeFileSync(physicalLock, rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: "22222222-2222-4222-8222-222222222222",
+  }), { mode: 0o600 });
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    await expectLockError(
+      () => withRootedExclusiveFileLock(
+        root,
+        parsePortableResourcePath("state/board.lock"),
+        () => undefined,
+        { acquireTimeoutMilliseconds: 20, retryDelayMilliseconds: 5 },
+      ),
+      "timeout",
+    );
+    equal(existsSync(physicalLock), true);
+  } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }

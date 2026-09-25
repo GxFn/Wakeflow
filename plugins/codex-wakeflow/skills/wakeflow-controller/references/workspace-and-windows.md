@@ -130,13 +130,12 @@ Other actions on the same tool:
   bound" without touching anything.
 - **replace** binds a new handle against the old binding. A stale digest is
   refused; re-inspect and replace against what is current.
-- **relocate** keeps the binding and records the pane a resumed session now
-  lives in: the same handle, new tmux coordinates, the same CAS on the binding.
-  It is the record for a window whose pane died while its session should go
-  on - the host resumes the session (on Claude Code, open a new Codex thread rooted at the directory the intent names, started with the parameters it lists. names the
-  helper's `resume`), you relocate with the observation it prints, then mark.
-  A held work claim does not block it: the same session keeps its work. Use
-  replace only when the session itself is gone.
+- **relocate** keeps the binding and records where a resumed session now
+  lives: the same handle, new host coordinates, the same CAS on the binding.
+  It is the record for a window whose process died while its session should
+  go on. To bring such a window back: Codex has no relocate path - a thread is not moved into a new process. Open a new thread as the window's launch intent says and replace the binding with that thread's id.
+  A held work claim does not block relocate: the same session keeps its work.
+  Use replace only when the session itself is gone.
 - **decommission** retires a window with its pre-close, close-result and
   post-close evidence. Use it when a window is genuinely gone, not to silence
   an inconvenient state.
@@ -156,10 +155,7 @@ artifact than the one serving the status), and `wakeflow_verify` fails the
 `runtime-artifact` gate with `windows-stale:<n>`, or with `server-outdated`
 when the artifact changed under this very window's server.
 
-- For every other stale window: open a new Codex thread rooted at the directory the intent names, started with the parameters it lists. names the helper's
-  `resume`, which keeps the session; then relocate and mark. A session that
-  never held a conversation cannot be resumed (`resume-exited`): close it,
-  launch, replace.
+- For every other stale window: Codex has no relocate path - a thread is not moved into a new process. Open a new thread as the window's launch intent says and replace the binding with that thread's id.
 - For this window: only the user can reconnect its Wakeflow server (in Claude
   Code: `/mcp`, then reconnect `wakeflow`) or resume the session. Tell them,
   and do not run maintenance from the outdated server - it would write the
@@ -177,7 +173,7 @@ main checkout; every other pod works in a worktree.
 1. Preview to derive the plan; it writes nothing.
 2. Apply with exactly what preview returned. One config transaction registers
    the pod, its window set, and one worktree intent per repository.
-3. Create each worktree by host means: run `git worktree add` yourself at the path the intent names. The checkout starts on a detached HEAD, so the branch has to exist before any result is imported from it. Then launch that
+3. Create each worktree by host means: open the product window's thread with create_thread using a worktree environment for the repository the intent names. The checkout starts on a detached HEAD, so run `git switch -c <suggestedName>` in it before any result is imported from it. Then launch that
    pod's windows in their worktree roots and register each binding as in
    step 1. A product window in a pod is refused registration until its worktree
    is actually there and observed, and a checkout another live pod already

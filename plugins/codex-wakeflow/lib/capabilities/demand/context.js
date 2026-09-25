@@ -10,10 +10,25 @@ import { fail } from "../../kernel/error.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
-import { findLatestDemandArchive } from "./archive.js";
+import { findLatestDemandArchive, mapFoundationError, signalOptions, } from "./archive.js";
 import { WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME } from "./contract.js";
-export function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
+export { signalOptions };
+/** 三种 Demand 事务请求共用的发布事务信封：recover 带 operationId，apply 带 planDigest。 */
+export function publicationEnvelope(request) {
+    if (request.mode === "recover") {
+        return {
+            root: request.root,
+            mode: "recover",
+            planDigest: null,
+            operationId: request.operationId,
+        };
+    }
+    return {
+        root: request.root,
+        mode: request.mode,
+        planDigest: request.mode === "apply" ? (request.planDigest ?? null) : null,
+        operationId: null,
+    };
 }
 export function parseDemandId(value, path = "$request.demandId") {
     try {
@@ -111,9 +126,10 @@ export async function closeSliceContext(context) {
     if (failure !== undefined)
         throw failure;
 }
-async function demandRootExists(context, demandId) {
+/** Demand 活动根是否存在；不存在以外的检查失败是 io-failure。 */
+export async function demandRootExists(root, demandId) {
     try {
-        await context.root.inspectExistingResource(demandFinalRootRef(demandId), "$demandRoot");
+        await root.inspectExistingResource(demandFinalRootRef(demandId), "$demandRoot");
         return true;
     }
     catch (error) {
@@ -149,7 +165,7 @@ export async function openDemandHandle(context, demandId, options = {}) {
         }
         await releaseDemandHandle(context);
     }
-    if (!(await demandRootExists(context, demandId)))
+    if (!(await demandRootExists(context.root, demandId)))
         return null;
     let demandRoot;
     try {
@@ -173,7 +189,13 @@ export async function openDemandHandle(context, demandId, options = {}) {
 }
 /** 活动 Demand 的 `next` 直接来自当前路由；只读同源重算。 */
 async function activeNext(handle, signal) {
-    const snapshot = await readDemandResultReviewSnapshot(handle.demandRoot, signalOptions(signal));
+    let snapshot;
+    try {
+        snapshot = await readDemandResultReviewSnapshot(handle.demandRoot, signalOptions(signal));
+    }
+    catch (error) {
+        mapFoundationError(error, "review-snapshot", "$demandRoot");
+    }
     return deriveNextProjection(buildDemandControllerRoute(handle.loaded, snapshot));
 }
 /** 已归档 Demand 的 `next`：完成可 continue，取消到此为止。 */

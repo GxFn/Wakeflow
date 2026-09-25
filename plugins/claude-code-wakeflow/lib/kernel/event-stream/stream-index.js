@@ -157,8 +157,8 @@ function parseIndexCommits(header, commits, digests) {
     if (Object.keys(digests).length !== header.commitSequence) {
         fail("invalid-request", "index-shape", "$.digests");
     }
-    if (header.commitSequence > 0 &&
-        digests[String(header.commitSequence)] !== header.lastCommitDigest) {
+    const expectedLast = header.commitSequence === 0 ? null : digests[String(header.commitSequence)];
+    if (expectedLast !== header.lastCommitDigest) {
         fail("invalid-request", "index-shape", "$.lastCommitDigest");
     }
     return sequences;
@@ -218,6 +218,24 @@ function parseIndexByType(byType, sequences) {
     }
     return parsedByType;
 }
+/** byType 必须恰好是 events 按类型归并出的升序去重提交序号，查找才不会漏提交。 */
+function assertByTypeMatchesEvents(events, byType) {
+    const expected = new Map();
+    for (const event of Object.values(events)) {
+        const sequences = expected.get(event.type) ?? new Set();
+        sequences.add(event.sequence);
+        expected.set(event.type, sequences);
+    }
+    const types = Object.keys(byType);
+    const matches = types.length === expected.size &&
+        types.every((type) => {
+            const want = [...(expected.get(type) ?? [])].sort((left, right) => left - right);
+            const have = byType[type] ?? [];
+            return want.length === have.length && want.every((sequence, at) => sequence === have[at]);
+        });
+    if (!matches)
+        fail("invalid-request", "index-shape", "$.byType");
+}
 /** 严格解析一份索引文档；任何形状或一致性问题都以 `invalid-request` 失败。 */
 export function parseStreamIndex(value) {
     const root = record(value, "$");
@@ -228,6 +246,7 @@ export function parseStreamIndex(value) {
     const parsedEvents = parseIndexEvents(header, record(root.events ?? null, "$.events"), sequences);
     const parsedKeys = parseIndexKeys(record(root.keys ?? null, "$.keys"), sequences);
     const parsedByType = parseIndexByType(record(root.byType ?? null, "$.byType"), sequences);
+    assertByTypeMatchesEvents(parsedEvents, parsedByType);
     return Object.freeze({
         artifactKind: STREAM_INDEX_ARTIFACT_KIND,
         schemaVersion: STREAM_INDEX_SCHEMA_VERSION,

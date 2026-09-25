@@ -10,9 +10,10 @@ import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from 
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant, UtcInstantError, } from "../foundation/time/utc-instant.js";
-import { fail } from "./error.js";
+import { fail, isWakeflowError } from "./error.js";
 import { deriveDurableId } from "./ids.js";
 import { parseUuidV4 } from "../foundation/identity/uuid-v4.js";
 import { parseWakeflowHostId, WORK_CLAIMS_ROOT_REF, workClaimRef } from "./layout.js";
@@ -217,7 +218,9 @@ export async function inspectWorkClaim(root, windowIdValue, options = {}) {
         if (error instanceof StableFileReadError && error.reason === "aborted") {
             fail("io-failure", "aborted", "$signal", { cause: error });
         }
-        if (error instanceof StableFileReadError || error instanceof DeterministicJsonDocumentError) {
+        if (error instanceof StableFileReadError ||
+            error instanceof DeterministicJsonDocumentError ||
+            error instanceof StrictTextFileError) {
             fail("io-failure", "claim-read", "$claim", { cause: error });
         }
         throw error;
@@ -263,7 +266,7 @@ export async function takeWorkClaim(root, claimValue, options = {}) {
     }
     const inspected = await inspectWorkClaim(root, claim.windowId, signal);
     if (inspected.claim === null)
-        fail("io-failure", "claim-write", "$claim");
+        fail("io-failure", "claim-write", "$claim", { retryable: true });
     if (inspected.claim.claimDigest === claim.claimDigest) {
         return Object.freeze({ disposition: "current", claim: inspected.claim });
     }
@@ -322,6 +325,18 @@ export async function releaseWorkClaimIfHeld(root, windowIdValue, fence, options
         inspected.claim.claimDigest !== fence.claimDigest) {
         return Object.freeze({ disposition: "foreign" });
     }
-    await releaseWorkClaim(root, inspected.claim, signal);
+    try {
+        await releaseWorkClaim(root, inspected.claim, signal);
+    }
+    catch (error) {
+        // 两次读取之间声明被并发释放或替换：同样只报告，不否定已落地的事件。
+        if (isWakeflowError(error) && error.reason === "claim-absent") {
+            return Object.freeze({ disposition: "absent" });
+        }
+        if (isWakeflowError(error) && error.reason === "claim-drift") {
+            return Object.freeze({ disposition: "foreign" });
+        }
+        throw error;
+    }
     return Object.freeze({ disposition: "released" });
 }

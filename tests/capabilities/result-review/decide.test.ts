@@ -74,6 +74,26 @@ test("报告里的证据引用去重收集，自由文本按隐私规则只返�
   });
   equal(references.length, 2);
   equal(Object.isFrozen(references), true);
+  // 同一 {ref, digest} 的两个定位符种类不同：两个种类都要与所引记录比对。
+  const kinds = collectEvidenceReferences({
+    evidenceLocators: [
+      { ref, digest: DIGEST, kind: "test-output" },
+      { ref, digest: DIGEST, kind: "screenshot" },
+    ],
+    steps: [{ evidence: { ref, digest: DIGEST } }],
+  });
+  deepEqual(
+    kinds.map((entry) => entry.kind),
+    ["test-output", "screenshot"],
+  );
+  const typedLater = collectEvidenceReferences({
+    evidenceLocators: [{ ref, digest: DIGEST }],
+    steps: [{ evidence: { ref, digest: DIGEST, kind: "test-output" } }],
+  });
+  deepEqual(
+    typedLater.map((entry) => entry.kind),
+    ["test-output"],
+  );
   const texts = reportTexts({
     summary: "done",
     verification: ["node --test"],
@@ -486,7 +506,7 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
       { decision: "request-another-attempt", stepIds: ["ts-1"] },
       admission(flaky),
     ),
-    ["step-scope:ts-1"],
+    ["step-scope:ts-1", "step-uncovered:ts-2"],
   );
   deepEqual(
     deriveTestDecisionBlockers(
@@ -555,4 +575,31 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
   deepEqual(deriveTestDecisionBlockers({ decision: "blocked" }, admission(allPass)), [
     "blocked-basis",
   ]);
+  // completed 报告里 environment 分类本身就允许 blocked，不依赖 outcome: blocked。
+  equal(deriveTestAllowedDecisions(admission(environment)).includes("blocked"), true);
+  deepEqual(deriveTestDecisionBlockers({ decision: "blocked" }, admission(environment)), []);
+});
+
+test("限定范围的重跑必须覆盖全部失败步骤", () => {
+  const contract = [contractStep("ts-2", "A"), contractStep("ts-3", "B")];
+  const twoFailed = deriveStepViews(
+    contract,
+    { steps: [step("ts-2", "fail", "flaky"), step("ts-3", "fail", "flaky")], stepIds: null },
+    [],
+    [],
+  );
+  deepEqual(
+    deriveTestDecisionBlockers(
+      { decision: "request-another-attempt", stepIds: ["ts-3"] },
+      admission(twoFailed),
+    ),
+    ["step-uncovered:ts-2"],
+  );
+  deepEqual(
+    deriveTestDecisionBlockers(
+      { decision: "request-another-attempt", stepIds: ["ts-2", "ts-3"] },
+      admission(twoFailed),
+    ),
+    [],
+  );
 });

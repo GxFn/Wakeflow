@@ -185,6 +185,14 @@ function maintenanceResidue(name) {
 function maintenanceResidues(names) {
     return Object.freeze([...names].sort().map(maintenanceResidue));
 }
+// An unsafe gate is a conflict whether or not the maintenance directories exist.
+function prefixProtocolStatus(lockState, stagePresent) {
+    if (lockState === "unsafe")
+        return "conflict";
+    if (lockState === "active")
+        return "busy";
+    return lockState !== "absent" || stagePresent ? "recovery-required" : "bootstrap-prefix";
+}
 async function inspectLocal(root, signal, issueCodes) {
     const localResource = await optionalResource(root, WAKEFLOW_LOCAL_ROOT_REF);
     if (localResource === null) {
@@ -273,11 +281,7 @@ async function inspectLocal(root, signal, issueCodes) {
     if (lockState === "unsafe")
         issueCodes.push("maintenance-gate-unsafe");
     if (maintenanceEntry === null) {
-        const status = lockState === "active"
-            ? "busy"
-            : lockState !== "absent" || stagePresent
-                ? "recovery-required"
-                : "bootstrap-prefix";
+        const status = prefixProtocolStatus(lockState, stagePresent);
         return Object.freeze({
             status,
             freshCompatible: freshCompatible && status === "bootstrap-prefix",
@@ -316,11 +320,7 @@ async function inspectLocal(root, signal, issueCodes) {
     }
     const transactionsEntry = entryNamed(maintenance, "transactions");
     if (transactionsEntry === null) {
-        const status = lockState === "active"
-            ? "busy"
-            : lockState !== "absent" || stagePresent
-                ? "recovery-required"
-                : "bootstrap-prefix";
+        const status = prefixProtocolStatus(lockState, stagePresent);
         return Object.freeze({
             status,
             freshCompatible: freshCompatible && status === "bootstrap-prefix",

@@ -25,6 +25,7 @@ import {
   type PortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { countFsyncs } from "./fsync-count-probe.js";
 
 async function expectSettlementError(
   action: () => unknown | Promise<unknown>,
@@ -53,7 +54,7 @@ function asPortableResourcePath(value: unknown): PortableResourcePath {
   return value as PortableResourcePath;
 }
 
-test("exact linked target settlement 同步 file 与 destination parent", async () => {
+test("exact linked target settlement 同步 file 与 destination parent", { concurrency: false }, async () => {
   const rootPath = mkdtempSync(path.join(
     os.tmpdir(),
     "wakeflow-file-settlement-",
@@ -69,9 +70,10 @@ test("exact linked target settlement 同步 file 与 destination parent", async 
   try {
     const ref = parsePortableResourcePath("commits/commit.json");
     const expected = await root.inspectExistingResource(ref);
-    await settleRegularFileDurability(root, ref, {
+    const linked = await countFsyncs(() => settleRegularFileDurability(root, ref, {
       expectedNode: expected.node,
-    });
+    }));
+    equal(linked.syncCount, 2);
 
     const settled = await root.inspectExistingResource(ref);
     equal(settled.node.linkCount, 2n);
@@ -79,9 +81,10 @@ test("exact linked target settlement 同步 file 与 destination parent", async 
 
     rmSync(candidatePath);
     const singleLink = await root.inspectExistingResource(ref);
-    await settleRegularFileDurability(root, ref, {
+    const single = await countFsyncs(() => settleRegularFileDurability(root, ref, {
       expectedNode: singleLink.node,
-    });
+    }));
+    equal(single.syncCount, 2);
     const settledSingleLink = await root.inspectExistingResource(ref);
     equal(settledSingleLink.node.linkCount, 1n);
     equal(sameFileNodeSnapshot(settledSingleLink.node, singleLink.node), true);

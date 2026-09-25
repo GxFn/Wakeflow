@@ -24,7 +24,7 @@ import {
 
 export const CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND = "statusline-asset" as const;
 export const CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID = "claude-code-statusline-asset" as const;
-/** 操作标识按字典序排在三条 portable settings 之后：先写 settings，再装资产。 */
+/** 操作标识按字典序排在每一条 `claude-portable-settings:*` 操作之后：先写 settings，再装资产。 */
 export const CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_ID = "claude-statusline-asset:install" as const;
 
 const CLAUDE_CODE_STATUSLINE_ASSET_DESCRIPTOR: Readonly<ClaudeCodeHostAssetDescriptor> =

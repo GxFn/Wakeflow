@@ -379,3 +379,11 @@ test("kind 与来源绑定，隐私命中必须指向 payload 成员且有序，
     "$/contentReview/privacyFindings",
   );
 });
+
+test("Manifest容量按实际写入的缩进文档计量，而不是紧凑规范形式", () => {
+  const entries = Array.from({ length: 60_000 }, () => ({ ref: "x" }));
+  const candidate = { payload: { files: entries } };
+  equal(JSON.stringify(candidate).length < 1024 * 1024, true);
+  equal(JSON.stringify(candidate, null, 2).length > 1024 * 1024, true);
+  expectManifestError(() => parseManagedEvidenceManifest(candidate), "capacity", "$manifest");
+});

@@ -248,9 +248,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
   );
   if (
     matching === undefined ||
-    createWakeflowWorkspaceStaticResourceMatrix(matching).matrixDigest !==
-      createWakeflowWorkspaceStaticResourceMatrix(currentHostProfile)
-        .matrixDigest
+    !sameStaticResourceMatrix(matching, currentHostProfile)
   ) {
     failWakeflowStaticMaterializationPreview(
       "profile",
@@ -264,6 +262,25 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
     hostProfiles: Object.freeze(parsedProfiles),
     signal: record.signal as AbortSignal | undefined,
   });
+}
+
+// A current profile whose declarations do not compile is a profile mismatch,
+// never a raw matrix error.
+function sameStaticResourceMatrix(
+  matching: Parameters<typeof createWakeflowWorkspaceStaticResourceMatrix>[0],
+  current: Parameters<typeof createWakeflowWorkspaceStaticResourceMatrix>[0],
+): boolean {
+  try {
+    return (
+      createWakeflowWorkspaceStaticResourceMatrix(matching).matrixDigest ===
+      createWakeflowWorkspaceStaticResourceMatrix(current).matrixDigest
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 const STEP_KIND_SET = new Set<string>(

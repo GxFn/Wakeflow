@@ -2,7 +2,7 @@
  * Wakeflow Host / Codex：agent 面文本的宿主取值表（gate-log §13.99 D3、D9）。
  *
  * 本模块是纯数据加确定性渲染，与 `codex-hook-fragment.ts` 同一模式：文本只有一份源
- * （`assets/agent-text/`，仓库相对，不出现任何宿主名），宿主差异写成七个封闭占位符，取值
+ * （`assets/agent-text/`，仓库相对，不出现任何宿主名），宿主差异写成九个封闭占位符，取值
  * 住在这里。制品构建器动态 import 本模块，对源目录里的每份 Markdown 做一次封闭替换后写进
  * 候选制品——源里出现未登记的占位符，或表里有没被任何源文件用到的取值，构建即失败。
  *
@@ -17,7 +17,7 @@
  * 本模块不导入任何东西：取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 七个封闭占位符（D3，§13.118 加 windowBootstrap）；源目录里出现表外的占位符即构建失败。 */
+/** 九个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume）；源目录里出现表外的占位符即构建失败。 */
 export type CodexAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
@@ -25,7 +25,9 @@ export type CodexAgentTextPlaceholderKey =
   | "deliveryAction"
   | "worktreeLaunch"
   | "commandSurface"
-  | "hostTrustSteps";
+  | "hostTrustSteps"
+  | "windowResume"
+  | "resendGuard";
 
 /** 渲染语言：`zh` 只用于 `README.zh-CN.md`，其余源文件一律 `en`（D6）。 */
 export type CodexAgentTextLanguage = "en" | "zh";
@@ -55,8 +57,19 @@ const DELIVERY_ACTION =
   "tool, once, and keep exactly what that send call returned.";
 
 const WORKTREE_LAUNCH =
-  "run `git worktree add` yourself at the path the intent names. The checkout starts " +
-  "on a detached HEAD, so the branch has to exist before any result is imported from it.";
+  "open the product window's thread with create_thread using a worktree environment for " +
+  "the repository the intent names. The checkout starts on a detached HEAD, so run " +
+  "`git switch -c <suggestedName>` in it before any result is imported from it.";
+
+/** Codex 线程不会被挪进新进程：没有 relocate 这条路，只有新线程加 replace。 */
+const WINDOW_RESUME =
+  "Codex has no relocate path - a thread is not moved into a new process. Open a new " +
+  "thread as the window's launch intent says and replace the binding with that thread's id.";
+
+/** Codex 没有助手替你守重发：发送前自己看接收窗口的线程。 */
+const RESEND_GUARD =
+  "check the receiving window's thread before sending again; when the prompt already " +
+  "arrived there, record or report that landing instead of sending a second time.";
 
 const COMMAND_SURFACE_EN =
   "This host ships no slash commands. Say what you want in plain words; the skill " +
@@ -79,7 +92,7 @@ const HOST_TRUST_STEPS_ZH = [
   "条目。",
 ].join("\n");
 
-/** 七个占位符的 Codex 取值；键序与 D3 列出的顺序一致。 */
+/** 九个占位符的 Codex 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */
 export const CODEX_AGENT_TEXT_PLACEHOLDERS: Readonly<
   Record<CodexAgentTextPlaceholderKey, Readonly<CodexAgentTextPlaceholderValue>>
 > = Object.freeze({
@@ -90,6 +103,8 @@ export const CODEX_AGENT_TEXT_PLACEHOLDERS: Readonly<
   worktreeLaunch: Object.freeze({ en: WORKTREE_LAUNCH }),
   commandSurface: Object.freeze({ en: COMMAND_SURFACE_EN, zh: COMMAND_SURFACE_ZH }),
   hostTrustSteps: Object.freeze({ en: HOST_TRUST_STEPS_EN, zh: HOST_TRUST_STEPS_ZH }),
+  windowResume: Object.freeze({ en: WINDOW_RESUME }),
+  resendGuard: Object.freeze({ en: RESEND_GUARD }),
 });
 
 /** 未登记占位符的稳定错误码；构建器的预检先于它触发，本抛出是最后一道防线。 */

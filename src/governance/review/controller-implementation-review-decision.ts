@@ -29,7 +29,6 @@ import {
 } from "../../foundation/data/json-value.js";
 import {
   createUuidV4,
-  parseUuidV4,
   UuidV4Error,
   type UuidV4Factory,
 } from "../../foundation/identity/uuid-v4.js";
@@ -73,7 +72,6 @@ import {
 
 const DECISION_KIND = "WakeflowControllerImplementationReviewDecision" as const;
 const DECISION_SCHEMA_VERSION = 1 as const;
-const DECISION_ID_PREFIX = "target-review-decision_";
 const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
@@ -550,32 +548,6 @@ export function createControllerImplementationReviewDecision(
     ...basis,
     decisionDigest: computeCanonicalJsonSha256Digest(basis),
   });
-}
-
-function uuidFromDecisionId(value: string) {
-  return parseUuidV4(value.slice(DECISION_ID_PREFIX.length));
-}
-
-/** Decision Event与决定共享UUID，但保留独立typed namespace。 */
-export function controllerImplementationReviewDecisionEventId(
-  value: unknown,
-): WakeflowDurableId<"demand-event"> {
-  const decision = parseControllerImplementationReviewDecision(value);
-  return createWakeflowDurableId(
-    "demand-event",
-    uuidFromDecisionId(decision.targetReviewDecisionId),
-  );
-}
-
-/** Decision Commit与决定共享UUID，但保留独立typed namespace。 */
-export function controllerImplementationReviewDecisionCommitId(
-  value: unknown,
-): WakeflowDurableId<"demand-event-commit"> {
-  const decision = parseControllerImplementationReviewDecision(value);
-  return createWakeflowDurableId(
-    "demand-event-commit",
-    uuidFromDecisionId(decision.targetReviewDecisionId),
-  );
 }
 
 export function renderControllerImplementationReviewDecision(

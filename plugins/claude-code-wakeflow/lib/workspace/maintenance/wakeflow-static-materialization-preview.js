@@ -478,7 +478,7 @@ async function inspectSupportMemories(root, request, current, desired, report, b
         }
         let supportRoot;
         try {
-            supportRoot = await RootedDirectory.open(placement.absolutePath);
+            supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot");
         }
         catch {
             addBlocker(blockers, "support-root-unavailable");
@@ -703,10 +703,6 @@ async function planRequirementBoardRepair(root, request, blockers, steps) {
             : [],
     }));
 }
-/**
- * 当前宿主 capability 目录缺失时由维护 ensure 补齐；宿主运行时根尚未发布或前缀冲突时
- * 只报告（能力卡 1 §1.4：窗口投影 stale 与 missing 作为 blocker 显式报告）。
- */
 /** 维护协议根的四个目录：fresh 与对账修复共用同一步骤，物理创建由 gate 的引导完成。 */
 function localProtocolStep(core) {
     return step({
@@ -724,6 +720,10 @@ function localProtocolStep(core) {
         dependsOn: [],
     });
 }
+/**
+ * 当前宿主 capability 目录缺失时由维护 ensure 补齐；宿主运行时根尚未发布或前缀冲突时
+ * 只报告（能力卡 1 §1.4：窗口投影 stale 与 missing 作为 blocker 显式报告）。
+ */
 async function planHostCapabilityLayoutRepair(root, request, desired, blockers, steps) {
     assertNotAborted(request.signal);
     let authorityDigest;

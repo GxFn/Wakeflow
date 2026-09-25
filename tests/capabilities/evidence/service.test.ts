@@ -3,10 +3,19 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
+import { deriveEvidenceEventIdentity } from "../../../src/capabilities/evidence/decide.js";
 import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
+import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
+import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
+import { createManagedEvidencePublicationTransaction } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
 import { ManagedEvidenceReadingService } from "../../../src/governance/evidence/managed-evidence-reading-service.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
@@ -17,11 +26,12 @@ import {
   EVIDENCE_REPOSITORY_ID,
   fileSelection,
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
+  readyCapturePlan,
 } from "../../governance/evidence/managed-evidence-capture-planning-service.fixture.js";
 
 /**
  * evidence 切片效果（§13.89 D1 到 D3）：preview 零写、apply 重算并按内容摘要执行、同内容
- * `already-recorded`、源漂移 `plan-drift`、内容阻塞、四种来源各成一份记录、recover 结局。
+ * `already-recorded`、源漂移 `plan-drift`、内容阻塞、四种来源各成一份记录、recover 的 healthy、recovered 与 retired 结局。
  */
 
 const CLOCK = { clock: () => EVIDENCE_CAPTURED_AT };
@@ -273,5 +283,92 @@ test("observation、link、commit 各成一份记录：payload 是来源投影�
     );
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+/** 在 Demand 根下留一份发布 journal（可选物化 stage），身份按切片自己的派生规则。 */
+async function leaveJournal(
+  fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
+  stage: boolean,
+) {
+  const capturePlan = readyCapturePlan(
+    await new ManagedEvidenceCapturePlanningService(fixture.publication.workspaceRoot).preview(
+      fixture.demandId,
+      fileSelection("artifacts/test-run/logs/report.txt"),
+      CLOCK,
+    ),
+  );
+  const identity = deriveEvidenceEventIdentity(capturePlan.manifest.evidenceId);
+  const transaction = createManagedEvidencePublicationTransaction({ capturePlan, ...identity });
+  const demandRoot = await RootedDirectory.open(
+    path.join(fixture.publication.workspacePath, ".wakeflow-active", "current", fixture.demandId),
+  );
+  try {
+    await createManagedEvidencePublicationTransactionJournal(demandRoot, transaction);
+    if (stage) {
+      const sourceRoot = await RootedDirectory.open(fixture.repositoryRoot);
+      try {
+        await materializeManagedEvidencePublicationStage(sourceRoot, demandRoot, transaction);
+      } finally {
+        await sourceRoot.close();
+      }
+    } else {
+      await executeDemandEventSourcingCommand(
+        new DemandEventSourcingRepository(demandRoot),
+        {
+          commandType: "lifecycle.cancel-demand",
+          commandVersion: 1,
+          demandId: fixture.demandId,
+          eventId: STALE_EVENT_ID,
+          recordedAt: parseUtcInstant("2026-09-01T21:01:00.000Z"),
+          reason: "stale recovery",
+        },
+        {
+          commitId: STALE_COMMIT_ID,
+          expectedStreamRevision: transaction.demandEventSourcingAppend.expectedStreamRevision,
+        },
+      );
+    }
+  } finally {
+    await demandRoot.close();
+  }
+  return identity;
+}
+
+const STALE_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_d3333333-3333-4333-8333-333333333333",
+  "demand-event",
+);
+const STALE_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_d4444444-4444-4444-8444-444444444444",
+  "demand-event-commit",
+);
+
+async function recoverResult(fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>) {
+  const result = await executeRecordEvidenceRequest(request(fixture, { mode: "recover" }));
+  if (result.kind !== "WakeflowRecordEvidenceMutation") throw new Error("Expected a mutation.");
+  equal(result.mode, "recover");
+  return result;
+}
+
+test("recover 结局：留下的可完成 journal 前向发布为 recovered 并带发布回执；过期 journal 退休为 retired", async () => {
+  const completable = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const identity = await leaveJournal(completable, true);
+    const recovered = await recoverResult(completable);
+    equal(recovered.disposition, "recovered");
+    equal(recovered.publication?.event.eventId, identity.eventId);
+    equal(recovered.publication?.event.commitId, identity.commitId);
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(completable);
+  }
+  const stale = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    await leaveJournal(stale, false);
+    const retired = await recoverResult(stale);
+    equal(retired.disposition, "retired");
+    equal(retired.publication, null);
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(stale);
   }
 });

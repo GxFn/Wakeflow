@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import path from "node:path";
 
 import {
   type PortableResourcePath,
@@ -287,10 +288,12 @@ function resolveHead(
   });
 }
 
-async function checkoutPresent(gitdirText: string | null): Promise<boolean> {
+/** Git 可在 gitdir 中写相对路径（worktree.useRelativePaths），它相对该 worktree 管理目录解析。 */
+async function checkoutPresent(entryDirectory: string, gitdirText: string | null): Promise<boolean> {
   if (gitdirText === null) return false;
+  const gitdirPath = path.isAbsolute(gitdirText) ? gitdirText : path.resolve(entryDirectory, gitdirText);
   try {
-    return (await stat(gitdirText)).isFile();
+    return (await stat(gitdirPath)).isFile();
   } catch {
     return false;
   }
@@ -324,7 +327,7 @@ async function collectWorktrees(
         name: entry.name,
         head: resolved?.head ?? null,
         branch: resolved?.branch ?? null,
-        prunable: !(await checkoutPresent(gitdir)),
+        prunable: !(await checkoutPresent(path.join(root.absolutePath, entry.resourcePath), gitdir)),
       }),
     );
   }

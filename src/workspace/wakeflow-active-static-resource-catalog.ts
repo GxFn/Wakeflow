@@ -12,6 +12,7 @@ import {
 } from "../kernel/layout.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
+  privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "./workspace-resource-declaration.js";
 
@@ -32,28 +33,12 @@ function directoryDeclaration(
     | typeof WAKEFLOW_ACTIVE_CURRENT_ROOT_REF
     | typeof REQUIREMENT_BOARD_ROOT_REF,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  return parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
+  return privateWorkspaceDirectoryDeclaration({
     declarationId,
     family: "active",
     ownerId,
     scope: "host-neutral",
-    placement: { root: { kind: "workspace" }, relativePath },
-    tracking: { disposition: "ignored", privacy: "runtime-private" },
-    nodePolicy: {
-      kind: "directory",
-      mode: "0700",
-      symlinkPolicy: "reject",
-      existingModePolicy: "observe-without-change",
-    },
-    processing: {
-      kind: "directory-container",
-      materializationRecipe: "materialize-directory",
-      existingDirectoryPolicy: "observe-without-mode-change",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-    },
+    relativePath,
   });
 }
 

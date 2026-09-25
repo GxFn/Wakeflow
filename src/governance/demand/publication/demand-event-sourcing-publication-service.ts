@@ -52,7 +52,6 @@ import {
   exactClaimedPackage,
   inspectPackageForDemandPublication,
 } from "./demand-event-sourcing-publication-package.js";
-import { WakeflowError } from "../../../kernel/error.js";
 import { assertNoActiveDemand } from "./demand-active-guard.js";
 import {
   loadFinalDemandPublication,
@@ -73,15 +72,6 @@ import {
  * 公开入口。根作用域存储、认领关系验证和暂存根目录构建分别由相邻模块负责；纯事件
  * 追加不使用该流程锁或发布事务。
  */
-
-const PUBLISH_FIELDS = Object.freeze([
-  "authority",
-  "commitId",
-  "eventId",
-  "expectedClaimStateDigest",
-  "identity",
-  "recordedAt",
-] as const);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
@@ -126,24 +116,6 @@ function parseSignal(value: unknown): AbortSignal | undefined {
     fail("input", "$options");
   }
   return record.signal as AbortSignal | undefined;
-}
-
-function exactInput(value: unknown): Readonly<Record<string, unknown>> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$input");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$input");
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== PUBLISH_FIELDS.length
-    || keys.some((key, index) => key !== PUBLISH_FIELDS[index])
-  ) {
-    fail("input", "$input");
-  }
-  return record;
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {
@@ -410,9 +382,7 @@ export async function publishDemandFromPackage(
   try {
     signal = parseSignal(options);
     try {
-      transaction = createDemandEventSourcingPublicationTransaction(
-        exactInput(inputValue),
-      );
+      transaction = createDemandEventSourcingPublicationTransaction(inputValue);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingPublicationTransactionError) {
         fail("input", "$input");
@@ -451,16 +421,10 @@ export async function publishDemandFromPackage(
     );
     if (exactClaimedPackage(initialPackage, transaction) === null) {
       assertPendingPackage(initialPackage, transaction);
-      // ADR-0011 D7 按 ADR-0010 D3 收窄到 pod，apply 再查一次：两个 ready 计划不能在同一
-      // pod 上各自造出一个活动 Demand。
-      try {
-        await assertNoActiveDemand(root, signal, null, transaction.identity.podId);
-      } catch (error: unknown) {
-        if (error instanceof WakeflowError && error.reason === "pod-busy") {
-          fail("conflict", "$board");
-        }
-        throw error;
-      }
+      // ADR-0011 D7 按 ADR-0010 D3 收窄到 pod，apply 再查一次：这是尽力而为的复查，只缩小
+      // preview 到 apply 之间的窗口，不是互斥保证——锁按 demandId 取、守卫只看已 claimed
+      // 的包，真正的保证需要一把同时覆盖 claim 的 pod 级锁。pod-busy 原样上抛，带占用者。
+      await assertNoActiveDemand(root, signal, null, transaction.identity.podId);
     }
   } catch (error: unknown) {
     rethrowWithPublicationAuthority(error, "unchanged");

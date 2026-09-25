@@ -123,50 +123,20 @@ function declaration(
   }
 }
 
-function rootDeclaration(
-  surface: WakeflowManagedSupportSurface,
-): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  return declaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId: `support.${surface.surfaceId}.root`,
-    family: "support",
-    ownerId: "support-surface-layout",
-    scope: "host-neutral",
-    placement: {
-      root: { kind: "support-surface", surfaceId: surface.surfaceId },
-      relativePath: null,
-    },
-    tracking: { disposition: "tracked", privacy: "shareable" },
-    nodePolicy: {
-      kind: "directory",
-      mode: "0755",
-      symlinkPolicy: "reject",
-      existingModePolicy: "observe-without-change",
-    },
-    processing: {
-      kind: "directory-container",
-      materializationRecipe: "materialize-directory",
-      existingDirectoryPolicy: "observe-without-mode-change",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-    },
-  });
-}
-
 /** 每个角色在自己的 surface 根下拥有的 scaffold 目录；内容归角色，Wakeflow 只保证目录存在。 */
 export const WAKEFLOW_MANAGED_SUPPORT_SCAFFOLD_DIRECTORIES = Object.freeze({
   design: Object.freeze(["drafts"] as const),
   test: Object.freeze(["harnesses", "fixtures"] as const),
 });
 
-function scaffoldDeclaration(
+/** Support 根（relativePath 为 null）与其 scaffold 目录共用的目录声明。 */
+function directoryDeclaration(
   surface: WakeflowManagedSupportSurface,
-  relativePath: string,
+  relativePath: string | null,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
   return declaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId: `support.${surface.surfaceId}.${relativePath}`,
+    declarationId: `support.${surface.surfaceId}.${relativePath ?? "root"}`,
     family: "support",
     ownerId: "support-surface-layout",
     scope: "host-neutral",
@@ -252,10 +222,10 @@ export function createWakeflowManagedSupportResourceCatalog(
       fail("topology", `$/topology/supportSurfaces/${surface.surfaceId}`);
     }
     declarations.push(
-      rootDeclaration(surface),
+      directoryDeclaration(surface, null),
       memoryDeclaration(surface, profile),
       ...WAKEFLOW_MANAGED_SUPPORT_SCAFFOLD_DIRECTORIES[surface.capability].map(
-        (relativePath) => scaffoldDeclaration(surface, relativePath),
+        (relativePath) => directoryDeclaration(surface, relativePath),
       ),
     );
   }

@@ -19,7 +19,10 @@ import {
   TestTargetResultReportError,
   type TestTargetResultReport,
 } from "./test-target-result-report.js";
-import { assertDeliveryBindingFollowsEnvelope } from "./implementation-target-result.js";
+import {
+  assertDeliveryBindingFollowsEnvelope,
+  ImplementationTargetResultError,
+} from "./implementation-target-result.js";
 import {
   parseTargetResult,
   TargetResultError,
@@ -84,9 +87,9 @@ function assertReportMatchesContract(
   taskPackage: Readonly<TestTaskPackage>,
   scope: readonly string[] | null,
 ): void {
-  const contractIds = new Set(taskPackage.testContract.steps.map((step) => step.stepId));
-  if (scope?.some((stepId) => !contractIds.has(stepId))) fail("envelope");
-  const scopedIds = scope === null ? contractIds : new Set(scope);
+  // 重跑范围已由 assertTestExecutionAttemptMatchesPackage 证明属于合同。
+  const scopedIds =
+    scope === null ? new Set(taskPackage.testContract.steps.map((step) => step.stepId)) : new Set(scope);
   const seen = new Set<string>();
   for (const step of report.steps) {
     if (!scopedIds.has(step.stepId) || seen.has(step.stepId)) fail("relation");
@@ -132,8 +135,11 @@ export function createTestTargetResult(
   }
   try {
     assertDeliveryBindingFollowsEnvelope(envelope, input.delivery);
-  } catch {
-    fail("delivery");
+  } catch (error: unknown) {
+    if (error instanceof ImplementationTargetResultError && error.reason === "delivery") {
+      fail("delivery");
+    }
+    throw error;
   }
   const attempt = envelope.attempt;
   const stepIds = attempt.mode === "rerun" ? attempt.rerunSource.stepIds : null;

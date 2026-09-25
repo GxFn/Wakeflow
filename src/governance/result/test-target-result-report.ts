@@ -444,10 +444,7 @@ export function createTestTargetResultReport(
   const content = parseTestTargetResultReportContent(contentValue);
   let reportedAt: UtcInstant;
   try {
-    reportedAt =
-      options.clock === undefined
-        ? readUtcWallClock()
-        : readUtcWallClock(options.clock);
+    reportedAt = readUtcWallClock(options.clock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$clock");
     throw error;

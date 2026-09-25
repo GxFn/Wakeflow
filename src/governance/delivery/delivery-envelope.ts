@@ -886,6 +886,7 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
     },
     preparedAt: parseTime(wire.preparedAt, "$/preparedAt"),
   };
+  if (computePromptDigest(shared.portablePrompt) !== shared.promptDigest) fail("digest", "$/promptDigest");
   let basis: EnvelopeBasis;
   if (wire.workType === "test") {
     if (wire.attempt === undefined) fail("schema", "$/workType");

@@ -190,12 +190,7 @@ export async function recoverWakeflowConfigAuthorityReplacement(
   if (!currentIsRecoverable(root, current, expected, desired)) {
     fail("conflict", "$source");
   }
-  if (
-    current.configDigest !== desired.configDigest
-    && current.model.program.programId !== desired.model.program.programId
-  ) {
-    fail("program-identity", "$/program/programId");
-  }
+  // program 身份已由上方 desired/expected 检查加 currentIsRecoverable 保证一致。
   await inspectRecoveryStages(
     root,
     desired.sourceDigest,

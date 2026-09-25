@@ -91,6 +91,7 @@ test("维护进行中的条目不标可恢复，锁放开后才是可恢复的�
   } finally {
     release?.();
     await holder;
+    await rooted.close();
   }
   const after = await residuesOf(root);
   equal(after.protocol, "recovery-required");

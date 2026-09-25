@@ -57,8 +57,8 @@ import {
  * `wakeflow-window-runtime-projection-inspection.ts`，与 `wakeflow_status` / `wakeflow_verify`
  * 共用同一份判定）。磁盘文档缺失或过期（合法但内容不同）出一条宿主维护操作，由宿主 capability
  * 在维护事务内执行；读不出或不是确定性 JSON 的文档只报告 `window-runtime-projection-unsafe`，
- * 不覆盖。宿主运行时根尚未发布时本模块不出操作：共享预览已用 `window-runtime-missing` 报告它。
- * fresh 由共享步骤发布全部未登记投影。
+ * 不覆盖。宿主运行时根尚未发布时，共享骨架步骤发布目录骨架与全部未登记投影，本模块只为仍有
+ * Binding 的窗口出（已登记投影的）操作（§13.114 D2）。fresh 由共享步骤发布全部未登记投影。
  *
  * 目标文档需要宿主的 identity profile，所以本模块经宿主 capability 端口进入维护事务，
  * 而不是静态预览：共享层不能选择宿主身份。
@@ -317,8 +317,9 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     try {
       await rootValue.inspectExistingResource(resourceRef, "$skeleton");
     } catch (error: unknown) {
-      if (!(error instanceof RootedDirectoryError && error.reason === "resource-not-found")) {
-        throw error;
+      if (!(error instanceof RootedDirectoryError)) throw error;
+      if (error.reason !== "resource-not-found") {
+        failWindowRuntimeProjection("effect", `$skeleton/${resourceRef}`);
       }
       present = false;
     }
@@ -411,11 +412,10 @@ export async function retireWakeflowWindowRuntimeProjections(
     try {
       node = (await rootValue.inspectExistingResource(resourceRef, "$projection")).node;
     } catch (error: unknown) {
-      if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-        absent += 1;
-        continue;
-      }
-      throw error;
+      if (!(error instanceof RootedDirectoryError)) throw error;
+      if (error.reason !== "resource-not-found") failWindowRuntimeProjection("effect", "$projection");
+      absent += 1;
+      continue;
     }
     try {
       await unlinkRegularFileExactly(rootValue, resourceRef, {

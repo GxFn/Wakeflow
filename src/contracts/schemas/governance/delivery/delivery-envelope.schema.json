@@ -3,8 +3,8 @@
   "$id": "urn:wakeflow:governance:delivery:delivery-envelope:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA",
   "title": "WakeflowDeliveryEnvelope",
-  "description": "一次投递的不可变信封：任务包入口、当前绑定代际、可移植 prompt 与最终 prompt 摘要、围栏令牌；实现与 test 两类任务共用。",
-  "$comment": "事件流是权威。信封不含原始句柄、不含发送结果、不含验收判断；最终 prompt 由可移植 prompt 加工作区根派生，promptDigest 覆盖去除首尾空白后的最终文本，宿主 UserPromptSubmit 记录以此为落地证据。rework 与 productDefectRemediation 互斥且只属于实现包；attempt 只属于 test 包。",
+  "description": "一次投递的不可变信封：任务包入口、当前绑定代际、可移植 prompt 及其摘要、围栏令牌；实现与 test 两类任务共用。",
+  "$comment": "事件流是权威。信封不含原始句柄、不含发送结果、不含验收判断；投递的 prompt 就是可移植 prompt 本身（只含相对窗口根的路径，没有第二阶段派生），promptDigest 覆盖其去除首尾空白后的文本，宿主 UserPromptSubmit 记录以此为落地证据。rework 与 productDefectRemediation 互斥且只属于实现包；attempt 只属于 test 包。",
   "type": "object",
   "additionalProperties": false,
   "required": [

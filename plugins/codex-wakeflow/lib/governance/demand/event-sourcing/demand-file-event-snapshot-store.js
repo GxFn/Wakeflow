@@ -274,8 +274,7 @@ export class DemandFileEventSnapshotStore {
             throw error;
         }
     }
-    /** 按 `commitSequence` 不替换目标地发布一个可重建快照。 */
-    /** 直接退休一个序号的快照；不存在或失败返回 `false`。 */
+    /** 直接退休一个序号的快照；不存在或失败返回 `false`，中止照常上抛。 */
     async retireSnapshotAt(sequence, options) {
         const { signal } = parseOptions(options);
         if (!Number.isSafeInteger(sequence) || sequence < 1)
@@ -301,8 +300,11 @@ export class DemandFileEventSnapshotStore {
             return true;
         }
         catch (error) {
-            if (error instanceof ExactRegularFileUnlinkError)
+            if (error instanceof ExactRegularFileUnlinkError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
                 return false;
+            }
             throw error;
         }
     }
@@ -320,6 +322,8 @@ export class DemandFileEventSnapshotStore {
         }
         catch (error) {
             if (error instanceof DemandFileEventSnapshotStoreError) {
+                if (error.reason === "aborted")
+                    throw error;
                 return Object.freeze({ retired: 0, failed: 0 });
             }
             throw error;
@@ -348,6 +352,8 @@ export class DemandFileEventSnapshotStore {
             }
             catch (error) {
                 if (error instanceof ExactRegularFileUnlinkError) {
+                    if (error.reason === "aborted")
+                        fail("aborted", "$signal");
                     failed += 1;
                     continue;
                 }
@@ -356,6 +362,7 @@ export class DemandFileEventSnapshotStore {
         }
         return Object.freeze({ retired, failed });
     }
+    /** 按 `commitSequence` 不替换目标地发布一个可重建快照。 */
     async publish(snapshotValue, options) {
         let snapshot;
         try {

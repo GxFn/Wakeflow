@@ -173,9 +173,8 @@ function parseHostHookObservation(value) {
         fail("invalid-request", "hook-record", "$record");
     }
     const object = value;
-    const keys = Object.keys(object).sort();
-    if (keys.length < RECORD_KEYS.length ||
-        RECORD_KEYS.some((key) => !keys.includes(key)) ||
+    const keys = Object.keys(object);
+    if (RECORD_KEYS.some((key) => !keys.includes(key)) ||
         keys.some((key) => !RECORD_KEYS.includes(key) && !OPTIONAL_RECORD_KEYS.includes(key))) {
         fail("invalid-request", "hook-record", "$record");
     }

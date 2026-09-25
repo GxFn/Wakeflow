@@ -13,6 +13,7 @@ import {
   deriveTopologyBlockers,
   parseAcceptanceCriteria,
 } from "../../../src/capabilities/tasking/decide.js";
+import { deriveImplementationPlanningBlockers } from "../../../src/capabilities/tasking/service.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DemandAggregateState } from "../../../src/governance/demand/model/demand-aggregate-state.js";
@@ -145,7 +146,7 @@ test("仓库谱系：空仓库不得声明谱系，未接受目标必须替代�
     {
       workType: "implementation",
       repositoryId: REPO,
-      phase: "host-effect-claimed",
+      phase: "host-effect-accepted",
       targetTaskId: "t-live",
     },
   ]);
@@ -153,6 +154,19 @@ test("仓库谱系：空仓库不得声明谱系，未接受目标必须替代�
     kind: "replacement",
     targetTaskId: "t-live",
     replaceable: false,
+  });
+  const rejected = stateWith([
+    {
+      workType: "implementation",
+      repositoryId: REPO,
+      phase: "host-effect-rejected",
+      targetTaskId: "t-rejected",
+    },
+  ]);
+  deepEqual(deriveLineageExpectation(rejected, REPO), {
+    kind: "replacement",
+    targetTaskId: "t-rejected",
+    replaceable: true,
   });
   const accepted = stateWith([
     { workType: "implementation", repositoryId: REPO, phase: "accepted", targetTaskId: "t-done" },
@@ -351,5 +365,23 @@ test("测试规划准入：真实环境、全部实现已接受、单一未终�
       podId: "p",
     }),
     ["assignment-window-pod-mismatch:other"],
+  );
+});
+
+test("实现规划准入：非活动 Demand、待消费复测与已有 test 目标都在规划前说清楚", () => {
+  deepEqual(
+    deriveImplementationPlanningBlockers({
+      lifecycle: "active",
+      targetTasks: [{ workType: "implementation", targetTaskId: "t-impl" }],
+    } as unknown as Readonly<DemandAggregateState>),
+    [],
+  );
+  deepEqual(
+    deriveImplementationPlanningBlockers({
+      lifecycle: "completed",
+      pendingTestRetest: {},
+      targetTasks: [{ workType: "test", targetTaskId: "t-test" }],
+    } as unknown as Readonly<DemandAggregateState>),
+    ["demand-lifecycle:completed", "test-retest-pending", "test-target-present:t-test"],
   );
 });

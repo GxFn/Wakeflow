@@ -5,12 +5,11 @@ import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canon
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { parseDeterministicJsonDocument, renderDeterministicJsonDocument, DeterministicJsonDocumentError, } from "../../foundation/data/deterministic-json-document.js";
 import { parseJsonValue, JsonValueError, } from "../../foundation/data/json-value.js";
-import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator, } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { compileWakeflowWindowRuntimeDesiredTopology, WakeflowWindowRuntimeDesiredTopologyError, } from "./wakeflow-window-runtime-desired-topology.js";
-import { wakeflowWindowRuntimeProjectionRootRef, } from "./wakeflow-window-runtime-paths.js";
+import { wakeflowWindowRuntimeProjectionRef, wakeflowWindowRuntimeProjectionRootRef, } from "./wakeflow-window-runtime-paths.js";
 /**
  * Wakeflow Workspace / Window Runtime：Fresh 初始化的未注册窗口投影集合。
  *
@@ -262,16 +261,17 @@ function projectionFor(programId, hostId, desiredTopologyDigest, window) {
             rootObservationDigest: observation.observationDigest,
         }),
     };
+    const body = projectionBasis(basis);
     return parseWakeflowWindowRuntimeUnregisteredProjection({
-        ...projectionBasis(basis),
-        projectionDigest: computeCanonicalJsonSha256Digest(projectionBasis(basis)),
+        ...body,
+        projectionDigest: computeCanonicalJsonSha256Digest(body),
     });
 }
-function entryFor(projectionRootRef, projection) {
+function entryFor(profileValue, projection) {
     const document = renderDeterministicJsonDocument(projection, "$windowRuntimeProjection");
     return Object.freeze({
         windowId: projection.windowId,
-        resourceRef: parsePortableResourcePath(`${projectionRootRef}/${projection.windowId}.json`),
+        resourceRef: wakeflowWindowRuntimeProjectionRef(profileValue, projection.windowId),
         projection,
         document,
         documentDigest: computeSha256Digest(encodeUtf8(document, "$windowRuntimeProjection")),
@@ -290,7 +290,7 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(configValu
         throw error;
     }
     const projectionRootRef = wakeflowWindowRuntimeProjectionRootRef(profileValue);
-    const entries = Object.freeze(desired.windows.map((window) => entryFor(projectionRootRef, projectionFor(desired.programId, desired.hostId, desired.desiredTopologyDigest, window))));
+    const entries = Object.freeze(desired.windows.map((window) => entryFor(profileValue, projectionFor(desired.programId, desired.hostId, desired.desiredTopologyDigest, window))));
     const basis = {
         kind: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_SET_KIND,
         schemaVersion: 1,

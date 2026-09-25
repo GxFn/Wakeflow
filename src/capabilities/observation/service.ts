@@ -411,7 +411,6 @@ function windowBindingOf(
   return null;
 }
 
-/** 绑定会话最近一条 hook 记录；没有绑定或没有记录为 null。 */
 /**
  * 窗口的制品状态（§13.127）：绑定会话最近一次 session-start 记录里的 manifest 摘要等于本进程的
  * 即 current，不等即 stale；任一边不知道（没有记录、记录早于该字段、本进程没有 manifest）即 unknown。
@@ -438,22 +437,31 @@ function staleArtifactWindowIds(context: SliceContext): readonly string[] {
     );
 }
 
-/** 本进程脚下的制品是否已更新：启动时与现在磁盘上的 manifest 摘要不同。 */
-function runtimeView(context: SliceContext) {
+/**
+ * 本进程脚下的制品是否已更新：启动时与现在磁盘上的 manifest 摘要不同。一次调用只读一次磁盘，
+ * `view` 是 wire 上的 runtime 字段，`onDiskDigest` 供门使用。
+ */
+function readRuntime(context: SliceContext) {
   const artifact = context.facade.artifact;
   const manifestDigest = artifact?.manifestDigest ?? null;
   const onDisk = artifact?.readCurrentManifestDigest() ?? null;
   return {
-    artifactManifestDigest: manifestDigest,
-    artifactOnDisk:
-      manifestDigest === null || onDisk === null
-        ? ("unknown" as const)
-        : onDisk === manifestDigest
-          ? ("same" as const)
-          : ("changed" as const),
+    onDiskDigest: onDisk,
+    view: {
+      artifactManifestDigest: manifestDigest,
+      artifactOnDisk:
+        manifestDigest === null || onDisk === null
+          ? ("unknown" as const)
+          : onDisk === manifestDigest
+            ? ("same" as const)
+            : ("changed" as const),
+    },
   };
 }
 
+type RuntimeView = ReturnType<typeof readRuntime>["view"];
+
+/** 绑定会话最近一条 hook 记录；没有绑定或没有记录为 null。 */
 function lastObservationOf(
   observation: Readonly<WorkspaceObservation>,
   binding: WindowBindingView | null,
@@ -593,7 +601,10 @@ function repositoryViews(observation: Readonly<WorkspaceObservation>) {
   let omitted = 0;
   const all = (observation.repositories.value ?? []).map((repository) => {
     const worktrees = capStatusList(
-      [...repository.worktrees].sort((left, right) => left.name.localeCompare(right.name)),
+      // 码元比较：截断到上限时哪些条目留下不随 ICU 区域变化。
+      [...repository.worktrees].sort((left, right) =>
+        left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+      ),
       STATUS_LIST_MAXIMUMS.worktrees,
     );
     omitted += worktrees.omitted;
@@ -646,7 +657,10 @@ function projectionView(projection: SliceContext["projection"]) {
   };
 }
 
-function nextActionInput(context: SliceContext): Readonly<NextActionInput> {
+function nextActionInput(
+  context: SliceContext,
+  runtime: Readonly<RuntimeView>,
+): Readonly<NextActionInput> {
   const { observation, snapshot } = context;
   const overall = overallOf(context);
   const bound = new Set(
@@ -674,7 +688,7 @@ function nextActionInput(context: SliceContext): Readonly<NextActionInput> {
   const podsObserved = observation.pods.status === "observed";
   return Object.freeze({
     staleArtifactWindows: staleArtifactWindowIds(context),
-    artifactServerOutdated: runtimeView(context).artifactOnDisk === "changed",
+    artifactServerOutdated: runtime.artifactOnDisk === "changed",
     // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
     maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
     unregisteredWindows:
@@ -785,7 +799,8 @@ async function assembleStatus(
   request: StatusRequest,
 ): Promise<StatusResult> {
   const { observation, snapshot } = context;
-  const actions = deriveNextActions(nextActionInput(context));
+  const runtime = readRuntime(context).view;
+  const actions = deriveNextActions(nextActionInput(context, runtime));
   const section = await routeSection(context, request.demandId);
   const claims = claimViews(observation);
   const repositories = repositoryViews(observation);
@@ -823,7 +838,7 @@ async function assembleStatus(
     hooks: hookViews(observation),
     unmergedAccepted: unmergedAccepted.entries,
     domains: domainViews(context),
-    runtime: runtimeView(context),
+    runtime,
     maintenance: maintenanceView(context.maintenance),
     truncated: {
       demands: demands.omitted,
@@ -1067,11 +1082,11 @@ async function gateFacts(
   );
   const repositories = observation.repositories.value;
   const demandsObserved = observation.demands.status === "observed";
-  const runtime = runtimeView(context);
+  const runtime = readRuntime(context);
   return Object.freeze({
     runtime: {
-      manifestDigest: runtime.artifactManifestDigest,
-      onDiskDigest: context.facade.artifact?.readCurrentManifestDigest() ?? null,
+      manifestDigest: runtime.view.artifactManifestDigest,
+      onDiskDigest: runtime.onDiskDigest,
       staleWindows: staleArtifactWindowIds(context),
     },
     domains: {
@@ -1093,12 +1108,12 @@ async function gateFacts(
       claimedWithoutRoot: demandsObserved
         ? (board?.states ?? [])
             .filter(
-              (state) =>
+              (state): state is typeof state & { claim: NonNullable<typeof state.claim> } =>
                 state.status === "claimed" &&
                 state.claim !== null &&
                 !activeIds.has(state.claim.demandId),
             )
-            .map((state) => state.claim?.demandId ?? state.requirementId)
+            .map((state) => state.claim.demandId)
         : [],
     },
     demands: demands.map((demand) => {

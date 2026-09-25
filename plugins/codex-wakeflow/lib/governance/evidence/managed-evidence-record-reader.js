@@ -274,8 +274,6 @@ function mapManifestReadError(error) {
             error.reason === "expectation-changed") {
             fail("source-changed", "$record/manifest");
         }
-        if (error.reason === "too-large")
-            fail("capacity", "$record/manifest");
         fail("manifest", "$record/manifest");
     }
     if (error instanceof StrictTextFileError ||

@@ -8,7 +8,8 @@ import { hrtime } from "node:process";
  * 内用于计算经过时长和截止时刻。
  *
  * 单调时刻不得转换为 `UtcInstant`、写入 JSON、Schema 或日志，也不得跨进程比较。
- * 时长、截止时刻、超时策略和休眠调度属于后续独立能力或领域职责所有者。
+ * 时长和截止时刻由 monotonic-duration / monotonic-deadline 提供；超时策略和休眠调度
+ * 属于领域职责所有者。
  */
 
 /** 返回原始单调纳秒读数的同步来源。 */

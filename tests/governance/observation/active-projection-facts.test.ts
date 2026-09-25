@@ -309,14 +309,11 @@ test("刷新这条路也在锁内：锁被别人持有时这一轮以 projection
   await materializeActiveLayout(root, { recovering: false });
   const activeRoot = path.join(root.absolutePath, ".wakeflow-active");
   const lockPath = path.join(root.absolutePath, ...WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF.split("/"));
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({
-      pid: process.ppid,
-      tokenUuid: "11111111-1111-4111-8111-111111111111",
-    }),
-    { mode: 0o600 },
-  );
+  const plantedLock = rootedExclusiveFileLockRecordTextForTest({
+    pid: process.ppid,
+    tokenUuid: "11111111-1111-4111-8111-111111111111",
+  });
+  writeFileSync(lockPath, plantedLock, { mode: 0o600 });
   // 锁种下之后再取快照：比较的是"这一轮有没有写投影"，不是我们自己种的锁。
   const before = readdirSync(activeRoot).sort();
 
@@ -330,9 +327,5 @@ test("刷新这条路也在锁内：锁被别人持有时这一轮以 projection
   );
 
   deepEqual(readdirSync(activeRoot).sort(), before, "争用的一轮不得新建任何投影文件");
-  equal(
-    readFileSync(lockPath, "utf8").length > 0,
-    true,
-    "争用的一轮不得夺走别人的锁",
-  );
+  equal(readFileSync(lockPath, "utf8"), plantedLock, "争用的一轮不得夺走别人的锁");
 });

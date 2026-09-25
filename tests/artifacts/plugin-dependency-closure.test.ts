@@ -158,6 +158,8 @@ test("复制运行时文件：剪掉 .ts/.mts/.cts/.map/.md 与隐藏文件，�
       files: {
         "dist/index.js": "export {};\n",
         "dist/index.d.ts": "export {};\n",
+        "dist/index.d.mts": "export {};\n",
+        "dist/index.cts": "module.exports = {};\n",
         "dist/index.js.map": "{}\n",
         "dist/index.mjs": "export {};\n",
         "README.md": "# shaped\n",

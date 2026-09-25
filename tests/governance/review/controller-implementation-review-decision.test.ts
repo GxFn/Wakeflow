@@ -4,8 +4,8 @@ import { test } from "node:test";
 import {
   parseWakeflowDurableIdOfKind,
 } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
 import {
-  controllerImplementationReviewDecisionEventId,
   createControllerImplementationReviewDecision,
   parseControllerImplementationReviewDecision,
   parseControllerImplementationReviewDecisionDocument,
@@ -41,7 +41,7 @@ test("Controller Implementation Review Decision保存独立审查事实、完成
   equal(Object.isFrozen(decision.independentChecks), true);
   equal(Object.isFrozen(decision.independentChecks[0]), true);
   equal(
-    controllerImplementationReviewDecisionEventId(decision),
+    controllerReviewDecisionEventId(decision),
     `demand-event_${CONTROLLER_REVIEW_DECISION_UUID}`,
   );
   const rendered = renderControllerImplementationReviewDecision(decision);
@@ -86,8 +86,10 @@ test("四类Controller决定：accept 要求完成证据，escalate 当且仅当
         ...controllerImplementationReviewDecisionInput("rework"),
         anchorEvidence: [{ anchorId: "ac-1", evidenceIds: [evidenceId] }],
       }),
+    // The Schema itself now requires anchorEvidence null outside accept; the codec relation check backs it.
     (error: unknown) =>
-      error instanceof ControllerImplementationReviewDecisionError && error.reason === "relation",
+      error instanceof ControllerImplementationReviewDecisionError &&
+      (error.reason === "schema" || error.reason === "relation"),
   );
   // rework 的实现质量是 Controller 的判断：改动没问题只是报告要重做记 satisfactory，无法核实记 unverified（§13.120 D6）。
   for (const quality of ["satisfactory", "unverified", "defective"] as const) {

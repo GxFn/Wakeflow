@@ -126,6 +126,10 @@ function mapParentHandleError(error, operation) {
         && error.reason === "target-inspection-failure") {
         fail("commit-uncertain", "$resourcePath");
     }
+    // inspect 与 sync 只在 unlink 提交之后使用：此后的父目录漂移不能读作路径仍存在。
+    if (operation === "inspect" || operation === "sync") {
+        fail("commit-uncertain", "$resourcePath");
+    }
     if (operation === "open") {
         if (error.reason === "input")
             fail("input", "$resourcePath");
@@ -323,7 +327,6 @@ export async function unlinkRegularFileExactly(root, resourcePath, options) {
     assertNotAborted(parsed.signal);
     const parent = await openResourceParent(root, resourcePath);
     let source;
-    let committed = false;
     let primaryError;
     let result;
     try {
@@ -343,7 +346,6 @@ export async function unlinkRegularFileExactly(root, resourcePath, options) {
             }
             fail("unlink-failure", "$resourcePath");
         }
-        committed = true;
         const nodeBefore = source.initialNodeSnapshot;
         const remainingLinkCount = nodeBefore.linkCount - 1n;
         let replacementObserved = await observeSettlement(parent, nodeBefore, parsed.settlement);
@@ -382,7 +384,7 @@ export async function unlinkRegularFileExactly(root, resourcePath, options) {
     }
     if (primaryError !== undefined)
         throw primaryError;
-    if (committed !== true || result === undefined) {
+    if (result === undefined) {
         fail("commit-uncertain", "$resourcePath");
     }
     return result;

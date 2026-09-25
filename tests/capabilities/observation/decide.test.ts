@@ -25,9 +25,9 @@ import {
 } from "../../../src/kernel/layout.js";
 
 /**
- * 观察切片的纯决定（gate-log §13.94 D1、D3、D10）：下一步的排序、去重与上限；十四道工作区门
- * 按名字排序，每门只看纯事实；汇总里 unavailable 算不通过但分开计数；verify 的 next 指向维护；
- * 投影新鲜度取最坏目标。
+ * 观察切片的纯决定（gate-log §13.94 D1、D3、D10）：下一步的排序、去重与上限；十五道工作区门
+ * 按名字排序，每门只看纯事实；汇总里 unavailable 算不通过但分开计数；verify 的 next 指向维护
+ * （制品过期先指向用户或 resume）；投影新鲜度取最坏目标。
  */
 
 const DEMAND_A = "demand_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -775,6 +775,28 @@ test("pod-execution-location：ready 的 worktree pod 缺回执或检出即 fail
     ],
   });
   deepEqual(verdictOf(unobserved, "pod-execution-location"), ["unavailable", null]);
+  // 状态读不出的 worktree pod：缺席回执报 pending-registration 并随 unobserved 为 unavailable，
+  // 丢失的检出仍是失败。
+  const unobservedWorktree = (receipt: "absent" | "checkout-missing") =>
+    healthyFacts({
+      pods: [
+        {
+          podId: POD_FEATURE,
+          placement: "worktree",
+          lifecycle: "open",
+          state: "unobserved",
+          worktrees: [{ repositoryId: REPOSITORY, receipt }],
+        },
+      ],
+    });
+  deepEqual(verdictOf(unobservedWorktree("absent"), "pod-execution-location"), [
+    "unavailable",
+    `${POD_FEATURE}:${REPOSITORY}:pending-registration`,
+  ]);
+  deepEqual(verdictOf(unobservedWorktree("checkout-missing"), "pod-execution-location"), [
+    "fail",
+    `${POD_FEATURE}:${REPOSITORY}:checkout-missing`,
+  ]);
 });
 
 test("active-projection 门：stale 或 missing 为 fail，手写目标 pass 并报 handwritten（同轮被挡的兄弟计数在 code），其他 unsafe 为 fail，未观察为 unavailable", () => {
@@ -834,6 +856,25 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
     owner: "controller",
     suggestedTool: "wakeflow_maintain_workspace",
     blockers: ["config-authority:fail", "ledger-layout:unavailable"],
+  });
+  const artifactGate = (code: string): Readonly<VerifyGate> => ({
+    name: "runtime-artifact",
+    owner: "runtime",
+    status: "fail",
+    code,
+    evidence: [],
+  });
+  deepEqual(verifyNext([...gates, artifactGate("server-outdated,windows-stale:1")]), {
+    frontier: "runtime-artifact-outdated",
+    owner: "user",
+    suggestedTool: null,
+    blockers: ["config-authority:fail", "ledger-layout:unavailable", "runtime-artifact:fail"],
+  });
+  deepEqual(verifyNext([artifactGate("windows-stale:2")]), {
+    frontier: "window-artifact-stale",
+    owner: "controller",
+    suggestedTool: null,
+    blockers: ["runtime-artifact:fail"],
   });
 
   equal(projectionFreshness(null), "unavailable");

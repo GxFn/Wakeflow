@@ -27,7 +27,6 @@ import { computeDemandEventSourcingVersionCompatibilityDigest } from "./demand-e
 const DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND = "wakeflow-demand-event-sourcing-snapshot";
 const DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION = 1;
 const ERROR_MESSAGES = {
-    input: "Demand Event Sourcing snapshot input is invalid.",
     json: "Demand Event Sourcing snapshot is not passive JSON data.",
     schema: "Demand Event Sourcing snapshot does not satisfy its Schema.",
     identifier: "Demand Event Sourcing snapshot contains an invalid identity.",

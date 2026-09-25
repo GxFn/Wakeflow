@@ -374,11 +374,13 @@ async function executeLedgerLayout(root, step, request, desired, recovering, sig
         throw error;
     }
     const finalSegment = materialized.segments.at(-1);
+    if (!ensure && finalSegment?.disposition !== "created") {
+        fail("strict-absent", "$ledgerRoot");
+    }
     if (finalSegment === undefined ||
-        (!ensure && finalSegment.disposition !== "created") ||
         materialized.node.kind !== "directory" ||
         materialized.node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE) {
-        fail("strict-absent", "$ledgerRoot");
+        fail("owner", "$ledgerRoot");
     }
     let ledgerRoot;
     try {
@@ -529,7 +531,7 @@ async function executeSupportRoot(root, step, request, desired, recovering, sign
             ...(signal === undefined ? {} : { signal }),
         });
         // fresh 要求根严格不存在；reconcile/reconfigure 的修复接受已有根并只补齐 scaffold。
-        if (result.disposition === "existing" &&
+        if (result.rootDisposition === "existing" &&
             !recovering &&
             request.action === "fresh-initialize") {
             fail("strict-absent", "$supportRoot");
@@ -786,7 +788,7 @@ async function executeSupportMemory(root, step, request, sourceConfig, desired, 
         fail("root-scope", "$supportRoot");
     let supportRoot;
     try {
-        supportRoot = await RootedDirectory.open(placement.absolutePath);
+        supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot", { durability: root.durability });
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {

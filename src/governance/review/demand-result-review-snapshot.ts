@@ -225,6 +225,30 @@ function reportedTargetBasis(
   };
 }
 
+/**
+ * 一个已回报目标的评审单元摘要：与本快照核对下一决定 `reviewed.reviewUnitDigest` 时
+ * 用的是同一份基底，服务端复现已决单元时应调用它而不是手抄形状。
+ */
+export function computeReportedReviewUnitDigest(
+  targetTaskId: WakeflowDurableId<"target-task">,
+  taskPackageSourceEvent: Readonly<DemandTargetResultSourceEvent>,
+  taskPackage: Readonly<TaskPackage>,
+  targetResultSourceEvent: Readonly<DemandTargetResultSourceEvent>,
+  targetResult: Readonly<TargetResult>,
+  priorReviewHistory: readonly Readonly<DemandTargetReviewHistoryEntry>[],
+): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(
+    reportedTargetBasis(
+      targetTaskId,
+      taskPackageSourceEvent,
+      taskPackage,
+      targetResultSourceEvent,
+      targetResult,
+      priorReviewHistory,
+    ),
+  );
+}
+
 function priorReviewHistory(
   sources: Readonly<AuditedDemandTargetResultHistory>,
   targetTaskId: WakeflowDurableId<"target-task">,
@@ -470,6 +494,14 @@ export async function readDemandResultReviewSnapshot(
   return buildDemandResultReviewSnapshotFromHistory(sources);
 }
 
+/** 与仓库 mapStoreError 同一划分：只有这些存储失败说明事件流本身坏了。 */
+const ARCHIVED_STREAM_FAILURES: ReadonlySet<string> = new Set([
+  "stream-invalid",
+  "stream-changed",
+  "node-policy",
+  "capacity",
+]);
+
 /**
  * 从 ledger 归档包的 `payload/`（Demand 根的可移植副本）读评审快照（§13.130）：提交按归档节点政策
  * 读出（不要求私有模式），摘要链与审计规则与活动根完全相同；失败码与 `readDemandResultReviewSnapshot`
@@ -489,7 +521,8 @@ export async function readArchivedDemandResultReviewSnapshot(
     if (error instanceof DemandFileEventStoreError) {
       if (error.reason === "aborted") fail("aborted");
       if (error.reason === "input") fail("input");
-      fail("stream");
+      if (ARCHIVED_STREAM_FAILURES.has(error.reason)) fail("stream");
+      fail("operation-failure");
     }
     if (error instanceof DemandEventSourcingRepositoryError) {
       if (error.reason === "stream" || error.reason === "not-found") fail("stream");

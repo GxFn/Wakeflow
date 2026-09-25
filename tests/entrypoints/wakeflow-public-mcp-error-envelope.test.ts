@@ -1,4 +1,5 @@
 import { deepEqual, equal } from "node:assert/strict";
+import os from "node:os";
 import { test } from "node:test";
 
 import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/capabilities/demand/contract.js";
@@ -67,7 +68,7 @@ test("Workspace注册组只公开合同错误字段", async (t) => {
   equal(wakeflowMcpTextContent(result).includes("private-maintenance"), false);
 });
 
-test("Authority注册组保留稳定cause且不回显root", async (t) => {
+test("Authority注册组返回稳定code、reason与path且不回显root", async (t) => {
   const client = await connectWakeflowMcpTestClient(t, {
     inspectStatus: async () => {
       throw new WakeflowError("precondition-failed", "demand-authority-inventory", "$demandRoot");
@@ -124,7 +125,7 @@ test("Execution注册组把窗口占用作为稳定前置条件错误返回且�
   equal(wakeflowMcpTextContent(result).includes(request.root), false);
 });
 
-test("Review注册组保留Completion event authority", async (t) => {
+test("Review注册组返回稳定Completion前置条件错误且不回显root", async (t) => {
   const client = await connectWakeflowMcpTestClient(t, {
     completeDemand: async () => {
       throw new WakeflowError("precondition-failed", "completion-route", "$demandRoot");
@@ -179,4 +180,59 @@ test("未知异常统一脱敏且不返回stack", async (t) => {
   });
   equal(wakeflowMcpTextContent(result).includes(privateMarker), false);
   equal(wakeflowMcpTextContent(result).includes("stack"), false);
+});
+
+test("旧领域错误只投影自身稳定字符串字段，不回显消息", async (t) => {
+  const privateMarker = "private-legacy-error-marker";
+  const client = await connectWakeflowMcpTestClient(t, {
+    inspectStatus: async () => {
+      throw Object.assign(new Error(privateMarker), {
+        code: "legacy-conflict",
+        reason: "stream-moved",
+        causeCode: "event-store",
+        eventAuthority: "unknown",
+      });
+    },
+  });
+  const result = await client.callTool({
+    name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+    arguments: { root: "/workspace", demandId: TASKING_DEMAND_ID },
+  });
+  equal(result.isError, true);
+  deepEqual(JSON.parse(wakeflowMcpTextContent(result)), {
+    error: {
+      causeCode: "event-store",
+      code: "legacy-conflict",
+      eventAuthority: "unknown",
+      reason: "stream-moved",
+    },
+    kind: "WakeflowMcpError",
+    schemaVersion: 1,
+    status: "error",
+    tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+  });
+  equal(wakeflowMcpTextContent(result).includes(privateMarker), false);
+});
+
+test("旧领域错误字段含home路径时退回固定unexpected信封", async (t) => {
+  const homePath = `${os.homedir()}/private-legacy-path`;
+  const client = await connectWakeflowMcpTestClient(t, {
+    inspectStatus: async () => {
+      throw Object.assign(new Error("legacy"), {
+        code: "legacy-conflict",
+        reason: "stream-moved",
+        path: homePath,
+      });
+    },
+  });
+  const result = await client.callTool({
+    name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+    arguments: { root: "/workspace", demandId: TASKING_DEMAND_ID },
+  });
+  equal(result.isError, true);
+  deepEqual(JSON.parse(wakeflowMcpTextContent(result)).error, {
+    code: "wakeflow-unexpected",
+    reason: "unexpected",
+  });
+  equal(wakeflowMcpTextContent(result).includes(homePath), false);
 });

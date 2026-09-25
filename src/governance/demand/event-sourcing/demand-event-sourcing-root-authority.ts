@@ -67,7 +67,7 @@ import {
  * 的事务期根。只有需要完整Demand权威事实的上层才调用本文件。
  */
 
-const IDENTITY_MAXIMUM_BYTES = parseByteCount(512 * 1024);
+export const DEMAND_IDENTITY_MAXIMUM_BYTES = parseByteCount(512 * 1024);
 const AUTHORITY_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
 
 export interface LoadedDemandEventSourcingRootAuthority {
@@ -470,7 +470,7 @@ async function loadRootAuthority(
   const identityRead = await readRecord(
     root,
     DEMAND_EVENT_SOURCING_IDENTITY_REF,
-    IDENTITY_MAXIMUM_BYTES,
+    DEMAND_IDENTITY_MAXIMUM_BYTES,
     inventory.nodes.identity,
     signal,
     "identity",

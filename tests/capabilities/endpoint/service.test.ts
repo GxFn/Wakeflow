@@ -28,7 +28,7 @@ import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/w
 
 /**
  * 端点切片测试：一次性工作区经 Fresh 初始化后，走 inspect、register、replace、
- * decommission、release-claim 五种操作。宿主窗口本身从不被创建；会话证据由
+ * relocate、decommission、release-claim 六种操作。宿主窗口本身从不被创建；会话证据由
  * `session-start` / `session-end` hook 记录提供。
  */
 
@@ -584,6 +584,7 @@ test("Claude Code：register 需要 tmux 坐标并写定位器，decommission �
     bindingId: string;
     tmux: typeof tmux;
     locatorId: string;
+    programId: string;
   };
   equal(locator.bindingId, registered.binding.bindingId);
   deepEqual(locator.tmux, tmux);
@@ -603,10 +604,7 @@ test("Claude Code：register 需要 tmux 坐标并写定位器，decommission �
     paneDead: false,
     currentCommand: "claude",
     options: {
-      programId:
-        locator.locatorId.length > 0
-          ? (JSON.parse(readFileSync(locatorFile, "utf8")) as { programId: string }).programId
-          : "",
+      programId: locator.programId,
       hostId: "claude-code",
       windowId: intent.windowId,
       bindingId: registered.binding.bindingId,
@@ -704,7 +702,7 @@ test("Claude Code：register 需要 tmux 坐标并写定位器，decommission �
   equal(JSON.stringify(verified).includes(sessionId), false, "session id leaked");
 });
 
-test("Claude Code：relocate 保留绑定、换定位器代际，句柄变了或 Codex 宿主被拒（§13.125）", {
+test("Claude Code：relocate 保留绑定、换定位器代际，句柄变了被拒（Codex 的 locator-provider 拒绝由 decide 测试覆盖，§13.125）", {
   timeout: 60_000,
 }, async (t) => {
   const { root, rooted, intents } = await fixture(t, executeClaudeCodeWakeflowMaintenance);

@@ -414,7 +414,7 @@ test("placement-stable reconfigure updates derived memories before Config", asyn
     { uuidFactory: () => OTHER_UUID },
   );
   equal(reconfigured.status, "completed");
-  // reconfigure 不再规划投影步骤：投影在 apply 之后由观察切片刷新（§13.95 D5）。
+  // reconfigure 不再规划投影步骤：投影在 apply 之后由观察切片刷新（§13.94 D5）。
   equal(reconfigured.stepReceipts.length, 4);
   equal(reconfigured.stepReceipts.at(-1)?.stepId, "authority:config");
   equal(
@@ -1128,6 +1128,7 @@ test("recovery checkpoints an already-published Config without replacing it", as
             completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
+        throw new Error("Expected Config step.");
       },
     );
   } catch (error: unknown) {

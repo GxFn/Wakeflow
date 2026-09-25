@@ -28,7 +28,7 @@ import {
   createTargetResultCallbackFixture,
   createTargetResultFixture,
 } from "../result/target-result.fixture.js";
-import { controllerImplementationReviewDecisionEventId } from "../../../src/governance/review/controller-implementation-review-decision.js";
+import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
 import { createControllerImplementationReviewDecisionFixture } from "../review/controller-implementation-review-decision.fixture.js";
 
 const EVENT = Object.freeze({
@@ -310,7 +310,7 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
   const reviewDecision = createControllerImplementationReviewDecisionFixture();
   const decided = upcastDemandEventSourcingStoredEvent({
     ...EVENT,
-    eventId: controllerImplementationReviewDecisionEventId(reviewDecision),
+    eventId: controllerReviewDecisionEventId(reviewDecision),
     demandId: reviewDecision.demandId,
     streamRevision: reviewDecision.reviewed.streamRevision + 1,
     recordedAt: reviewDecision.decidedAt,

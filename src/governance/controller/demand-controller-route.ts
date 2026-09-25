@@ -3,6 +3,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandTargetTaskState } from "../demand/model/demand-aggregate-state.js";
+import { DELIVERY_REARM_LIMIT } from "../delivery/delivery-rearm.js";
 import {
   buildDemandPostAcceptanceRoute,
   DemandPostAcceptanceRouteError,
@@ -404,8 +405,12 @@ function implementationFrontier(
   readonly frontier: Readonly<DemandControllerRouteFrontier> | null;
   readonly blocker: Readonly<DemandControllerRouteBlocker> | null;
 }> {
+  // rearm 用尽的发送前拒绝只剩换新信封一条路：前沿回到准备，而不是指向会被拒的 rearm。
+  const rearmExhausted =
+    target.phase === "host-effect-rejected" &&
+    target.currentDelivery.generation > DELIVERY_REARM_LIMIT;
   const descriptor = resolveDemandControllerImplementationFrontierDescriptor(
-    target.phase,
+    rearmExhausted ? "planned" : target.phase,
   );
   if (descriptor === null) {
     return Object.freeze({ frontier: null, blocker: null });
@@ -459,8 +464,11 @@ function postAcceptanceFrontier(
 ): Readonly<DemandControllerRouteFrontier> {
   const stage = route.nextStage;
   if (stage.status === "not-ready") fail("relation");
+  const rearmExhausted =
+    stage.status === "test-delivery-rearm-planning" &&
+    stage.rejectedDelivery.generation > DELIVERY_REARM_LIMIT;
   const descriptor = resolveDemandControllerPostAcceptanceFrontierDescriptor(
-    stage.status,
+    rearmExhausted ? "test-delivery-planning" : stage.status,
   );
   if (descriptor.scope === "demand") {
     return descriptor;

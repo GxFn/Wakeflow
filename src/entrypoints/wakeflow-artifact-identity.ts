@@ -15,7 +15,7 @@ import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha
 const WAKEFLOW_ARTIFACT_MANIFEST_FILE_NAME = "artifact-manifest.json" as const;
 
 /** 入口文件的上两级；解析不出为 null。 */
-function resolveWakeflowArtifactRoot(importMetaUrl: string): string | null {
+export function resolveWakeflowArtifactRoot(importMetaUrl: string): string | null {
   try {
     return realpathSync(path.resolve(path.dirname(fileURLToPath(importMetaUrl)), "..", ".."));
   } catch {

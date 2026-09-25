@@ -191,6 +191,16 @@ test("两段关闭的阻塞项与 next：primary 不可关，活动 Demand 与�
     [],
   );
   deepEqual(
+    deriveCloseRequestBlockers({
+      placement: "worktree",
+      activeDemandId: null,
+      registeredRepositoryIds: [REPOSITORY_ID],
+      dispositions: [{ repositoryId: REPOSITORY_ID }, { repositoryId: REPOSITORY_ID }],
+      knownRepositoryIds: [REPOSITORY_ID],
+    }),
+    [`branch-disposition-duplicate:${REPOSITORY_ID}`],
+  );
+  deepEqual(
     deriveCloseCompleteBlockers({
       boundWindowIds: ["w1"],
       presentCheckoutRepositoryIds: [REPOSITORY_ID],
@@ -222,7 +232,7 @@ test("两段关闭的阻塞项与 next：primary 不可关，活动 Demand 与�
     frontier: "pod-window-registration",
     owner: "controller",
     suggestedTool: "wakeflow_register_window_binding",
-    blockers: ["w2", `worktree-receipt-missing:${REPOSITORY_ID}`],
+    blockers: ["window-unbound:w2", `worktree-receipt-missing:${REPOSITORY_ID}`],
   });
   equal(
     podMutationNext({
@@ -246,7 +256,7 @@ test("两段关闭的阻塞项与 next：primary 不可关，活动 Demand 与�
   );
   equal(
     podMutationNext({
-      state: "closing",
+      state: "closed",
       unboundWindowIds: [],
       boundWindowIds: [],
       missingReceiptRepositoryIds: [],

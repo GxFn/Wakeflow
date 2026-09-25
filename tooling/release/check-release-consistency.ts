@@ -281,11 +281,10 @@ function checkGit(
   let branch: string | null = null;
   if (options.requireMain === true) {
     branch = git(repositoryRoot, ["rev-parse", "--abbrev-ref", "HEAD"])?.trim() ?? null;
-    if (branch !== "main")
-      fail(
-        "wakeflow-release-branch",
-        `release must be checked on main, not ${branch ?? "<detached>"}`,
-      );
+    if (branch !== "main") {
+      const label = branch === null ? "<unreadable>" : branch === "HEAD" ? "<detached>" : branch;
+      fail("wakeflow-release-branch", `release must be checked on main, not ${label}`);
+    }
   }
   let clean: boolean | null = null;
   if (options.requireClean === true) {

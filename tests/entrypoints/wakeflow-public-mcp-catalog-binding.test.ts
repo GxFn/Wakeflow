@@ -19,7 +19,7 @@ interface CapturedRegistration {
   readonly configuration: Readonly<Record<string, unknown>>;
 }
 
-test("登记表把十八个工具绑定到同名executor，且只公开请求Schema", async () => {
+test("登记表把二十个工具绑定到同名executor，且只公开请求Schema", async () => {
   const captured = new Map<string, CapturedRegistration>();
   const server = new McpServer({ name: "catalog-binding-test", version: "1" });
   server.registerTool = ((

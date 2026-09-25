@@ -62,7 +62,12 @@ function git(cwd: string, ...args: readonly string[]): string {
 
 function gitFixture(t: TestContext) {
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-worktree-receipt-")));
-  t.after(() => rmSync(base, { recursive: true, force: true }));
+  // 打开在夹具目录里的根要先关、再删目录（先删后关会让清理挂住）。
+  const closers: (() => Promise<void>)[] = [];
+  t.after(async () => {
+    for (const close of closers) await close();
+    rmSync(base, { recursive: true, force: true });
+  });
   const main = path.join(base, "main");
   mkdirSync(main);
   git(main, "init", "--quiet");
@@ -73,6 +78,7 @@ function gitFixture(t: TestContext) {
   git(main, "worktree", "add", "--quiet", "--detach", detached);
   return {
     base,
+    closers,
     main,
     linked,
     detached,
@@ -224,7 +230,7 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
     recursive: true,
   });
   const root = await RootedDirectory.open(workspacePath);
-  t.after(() => root.close());
+  fixture.closers.push(() => root.close());
   const receipt = createPodWorktreeReceipt({
     hostId: "codex",
     podId: POD_ID,

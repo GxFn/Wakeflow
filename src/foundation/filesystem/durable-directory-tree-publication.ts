@@ -32,8 +32,8 @@ import { RootedDirectory } from "./rooted-directory.js";
  *
  * 本函数在提交前重新验证候选根目录的指定文件系统节点和精确清单，再通过具备崩溃
  * 持久性的资源重命名跨越唯一提交点。重命名完成后，函数从最终路径回读并再次验证
- * 完整计划。成功回执同时绑定源路径、目标路径、目录树摘要、最终根节点，以及源、
- * 目标父目录的同步结果。
+ * 完整计划。成功回执绑定源路径、目标路径、闭合计划（其中携带各项摘要），以及
+ * 持久重命名后再次验证的最终根节点。
  *
  * Node.js 未暴露 `renameat2(RENAME_NOREPLACE)`。目标路径不存在只是调用方持有领域锁
  * 时的协作式前置条件，不是能够约束非协作写入者的内核级比较并交换（CAS）。本层
@@ -185,12 +185,22 @@ function parseCandidate(
   ) {
     fail("input", "$candidate");
   }
+  const candidateRootPath = parsePath(
+    record.candidateRootPath,
+    "$candidate/candidateRootPath",
+  );
+  let plan: Readonly<DirectoryTreeCandidatePlan>;
+  try {
+    plan = parseDirectoryTreeCandidatePlan(record.plan);
+  } catch (error: unknown) {
+    if (error instanceof DurableDirectoryTreeCandidateError) {
+      fail("input", "$candidate/plan");
+    }
+    throw error;
+  }
   return Object.freeze({
-    candidateRootPath: parsePath(
-      record.candidateRootPath,
-      "$candidate/candidateRootPath",
-    ),
-    plan: parseDirectoryTreeCandidatePlan(record.plan),
+    candidateRootPath,
+    plan,
     rootNode: parseExpectedNode(record.rootNode),
   });
 }

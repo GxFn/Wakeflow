@@ -98,7 +98,7 @@ export async function connectWakeflowMcpTestClient(
 /** 读取Wakeflow公共工具返回的唯一文本内容块。 */
 export function wakeflowMcpTextContent(result: CallToolResult): string {
   const first = result.content[0];
-  if (first?.type !== "text") {
+  if (result.content.length !== 1 || first?.type !== "text") {
     throw new Error("Expected one MCP text content block.");
   }
   return first.text;

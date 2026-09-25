@@ -15,6 +15,7 @@ import {
   computeDemandEventSourcingCommandDigest,
   decideDemandEventSourcingCommand,
   type DemandEventSourcingCommand,
+  DemandEventSourcingDecisionError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import type { DemandEventSourcingAggregate } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.js";
 import {
@@ -24,6 +25,10 @@ import {
   type PreparedDemandEventStreamCommit,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
+import {
+  DemandAggregateStateError,
+  decideTargetResultReviewInDemandAggregateState,
+} from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import {
   createDeliveryEnvelopeFixture,
@@ -82,6 +87,10 @@ const RESULT_COMMIT_ID = parseWakeflowDurableIdOfKind(
 );
 const DECISION_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit_07070707-0707-4707-8707-070707070707",
+  "demand-event-commit",
+);
+const RESUMED_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b",
   "demand-event-commit",
 );
 const PUBLICATION_AT = parseUtcInstant("2026-08-29T09:00:00.000Z");
@@ -336,7 +345,7 @@ test("escalate 决定在同一提交附带升级事件；blocked 之后带 resum
   });
   equal(resumedEvents.length, 1);
   const resumedCommit = prepareDemandEventStreamCommit(blockedCommit.aggregate, {
-    commitId: RESULT_COMMIT_ID,
+    commitId: RESUMED_COMMIT_ID,
     commandDigest: parseSha256Digest(`sha256:${"7".repeat(64)}`),
     events: resumedEvents,
   });
@@ -346,12 +355,28 @@ test("escalate 决定在同一提交附带升级事件；blocked 之后带 resum
     "rework",
     blockedCommit.aggregate.streamRevision,
     result,
+    {},
+    "eaeaeaea-eaea-4aea-8aea-eaeaeaeaeaea",
   );
-  throws(() =>
-    decideDemandEventSourcingCommand(blockedCommit.aggregate.state, {
+  // 与已记录的 blocked 决定使用不同的 id，才能越过重复决定检查，真正命中 resumption 规则。
+  throws(
+    () => decideTargetResultReviewInDemandAggregateState(
+      blockedCommit.aggregate.state,
+      withoutResumption,
+    ),
+    (error: unknown) =>
+      error instanceof DemandAggregateStateError
+      && error.reason === "transition"
+      && error.path === "$/targetTasks/resumption",
+  );
+  throws(
+    () => decideDemandEventSourcingCommand(blockedCommit.aggregate.state, {
       commandType: "review.decide-target-result",
       commandVersion: 1,
       decision: withoutResumption,
     }),
+    (error: unknown) =>
+      error instanceof DemandEventSourcingDecisionError
+      && error.reason === "transition",
   );
 });

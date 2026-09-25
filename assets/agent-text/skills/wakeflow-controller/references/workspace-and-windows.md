@@ -130,13 +130,12 @@ Other actions on the same tool:
   bound" without touching anything.
 - **replace** binds a new handle against the old binding. A stale digest is
   refused; re-inspect and replace against what is current.
-- **relocate** keeps the binding and records the pane a resumed session now
-  lives in: the same handle, new tmux coordinates, the same CAS on the binding.
-  It is the record for a window whose pane died while its session should go
-  on - the host resumes the session (on Claude Code, {{windowLaunch}} names the
-  helper's `resume`), you relocate with the observation it prints, then mark.
-  A held work claim does not block it: the same session keeps its work. Use
-  replace only when the session itself is gone.
+- **relocate** keeps the binding and records where a resumed session now
+  lives: the same handle, new host coordinates, the same CAS on the binding.
+  It is the record for a window whose process died while its session should
+  go on. To bring such a window back: {{windowResume}}
+  A held work claim does not block relocate: the same session keeps its work.
+  Use replace only when the session itself is gone.
 - **decommission** retires a window with its pre-close, close-result and
   post-close evidence. Use it when a window is genuinely gone, not to silence
   an inconvenient state.
@@ -156,10 +155,7 @@ artifact than the one serving the status), and `wakeflow_verify` fails the
 `runtime-artifact` gate with `windows-stale:<n>`, or with `server-outdated`
 when the artifact changed under this very window's server.
 
-- For every other stale window: {{windowLaunch}} names the helper's
-  `resume`, which keeps the session; then relocate and mark. A session that
-  never held a conversation cannot be resumed (`resume-exited`): close it,
-  launch, replace.
+- For every other stale window: {{windowResume}}
 - For this window: only the user can reconnect its Wakeflow server (in Claude
   Code: `/mcp`, then reconnect `wakeflow`) or resume the session. Tell them,
   and do not run maintenance from the outdated server - it would write the

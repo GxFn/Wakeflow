@@ -118,7 +118,30 @@
             }
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "apply"
+              }
+            },
+            "required": ["mode"]
+          },
+          "then": {
+            "required": ["planDigest"],
+            "properties": {
+              "planDigest": true
+            }
+          },
+          "else": {
+            "properties": {
+              "planDigest": false
+            }
+          }
+        }
+      ]
     },
     "recoverRequest": {
       "type": "object",

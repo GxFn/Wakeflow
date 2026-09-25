@@ -171,7 +171,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   if (rejectedOutcome === undefined || acceptedOutcome === undefined) {
     throw new Error("Expected accepted and rejected outcome fixtures.");
   }
-  // accepted 之后不能再记录结局；indeterminate 才允许再次记录。
+  // accepted 之后不能再记录结局。
   throws(
     () => recordDeliveryOutcomeInDemandAggregateState(accepted, acceptedOutcome),
     (error: unknown) =>

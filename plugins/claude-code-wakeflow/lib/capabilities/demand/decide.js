@@ -20,7 +20,7 @@ export function deriveLifecycleIds(demandId, action, expectedStreamRevision) {
     });
 }
 /** Demand 根内可重建的检查点与未成为事实的候选，不进归档负载。 */
-const ARCHIVE_EXCLUDED_PREFIXES = Object.freeze([
+export const ARCHIVE_EXCLUDED_PREFIXES = Object.freeze([
     "event-sourcing/snapshots",
     "event-sourcing/index",
     "event-sourcing/append-candidates",
@@ -113,7 +113,10 @@ export function deriveTerminalBlockers(input) {
     ];
     return Object.freeze([...new Set(blockers)].slice(0, BLOCKERS_MAXIMUM));
 }
-/** continue 只对已归档的完成 Demand 开放，且需求包仍由它归档、所在 pod 没有别的活动 Demand。 */
+/**
+ * continue 只对已归档的完成 Demand 开放，且需求包仍由它归档、所在 pod 仍存在、未在关闭且没有别的活动 Demand。
+ * research Demand 不可继续：继续后的路线要求规划实现任务包，而 research 没有实现目标。
+ */
 export function deriveContinueBlockers(input) {
     const blockers = [];
     if (input.rootPresent)
@@ -127,6 +130,12 @@ export function deriveContinueBlockers(input) {
     else if (input.claim.status !== "archived" || input.claim.archive?.demandId !== input.demandId) {
         blockers.push(`package-claim:${input.claim.status}`);
     }
+    if (input.claim?.demandType === "research")
+        blockers.push("demand-type:research");
+    if (typeof input.archivedPodId === "string" && input.pod === null)
+        blockers.push(`pod-unknown:${input.archivedPodId}`);
+    else if (input.pod != null && input.pod.lifecycle !== "open")
+        blockers.push(`pod-closing:${input.pod.podId}`);
     if (input.otherActiveDemandId !== null)
         blockers.push(`pod-busy:${input.otherActiveDemandId}`);
     return Object.freeze(blockers);

@@ -3,10 +3,6 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
-import {
-  RootedDirectoryError,
-  type RootedDirectory,
-} from "../../foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
 import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import {
@@ -31,7 +27,6 @@ import {
   createDemandEventSourcingPublicationTransaction,
   DemandEventSourcingPublicationTransactionError,
 } from "../../governance/demand/publication/demand-event-sourcing-publication-transaction.js";
-import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import type { DemandEventSourcingPublicationResult } from "../../governance/demand/publication/demand-event-sourcing-publication-contract.js";
 import { createLedgerAuthorityMemberReference } from "../../governance/ledger/ledger-authority-reader.js";
 import {
@@ -51,11 +46,13 @@ import {
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
 import {
   closeSliceContext,
+  demandRootExists,
   nextAfterMutation,
   now,
   openSliceContext,
   parseDemandId,
   previewNext,
+  publicationEnvelope,
   signalOptions,
   type DemandServiceOptions,
   type DemandSliceContext,
@@ -71,7 +68,7 @@ import {
 import { deriveCreationBlockers, deriveDemandCreationIds } from "./decide.js";
 
 /**
- * Wakeflow Capabilities / Demand：认领即创建与路由查询。
+ * Wakeflow Capabilities / Demand：认领即创建。
  *
  * create 的计划由需求包与看板认领状态确定性派生：demandId、事件与提交标识都不含
  * 随机与时间；身份与权威在 apply 取钟后创建，根先建后认领（ADR-0011 D7），
@@ -228,20 +225,6 @@ function buildIdentityAndAuthority(
       error instanceof LedgerAuthorityStoreError
     ) {
       fail("precondition-failed", `authority-${error.reason}`, "$request.demand", { cause: error });
-    }
-    throw error;
-  }
-}
-
-async function demandRootExists(root: RootedDirectory, demandId: string): Promise<boolean> {
-  try {
-    await root.inspectExistingResource(demandFinalRootRef(demandId), "$demandRoot");
-    return true;
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
-      return false;
-    if (error instanceof RootedDirectoryError) {
-      fail("io-failure", `demand-root-${error.reason}`, "$demandRoot", { cause: error });
     }
     throw error;
   }
@@ -490,24 +473,6 @@ function assembleCreateResult(
   });
 }
 
-function creationEnvelope(request: DemandCreationRequest): PublicationTransactionEnvelope {
-  if (request.mode === "recover") {
-    return {
-      root: request.root,
-      mode: "recover",
-      planDigest: null,
-      operationId: request.operationId,
-    };
-  }
-  return {
-    root: request.root,
-    mode: request.mode,
-    planDigest:
-      request.mode === "apply" ? ((request.planDigest ?? null) as Sha256Digest | null) : null,
-    operationId: null,
-  };
-}
-
 /** 执行一次 `wakeflow_create_demand`。 */
 export async function executeDemandCreationRequest(
   value: unknown,
@@ -525,7 +490,7 @@ export async function executeDemandCreationRequest(
       tool: WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseDemandCreationRequest(raw);
-        return { envelope: creationEnvelope(request), input: request };
+        return { envelope: publicationEnvelope(request), input: request };
       },
       open: (root) => openSliceContext(root, options),
       close: closeSliceContext,

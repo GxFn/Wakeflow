@@ -11,13 +11,12 @@ export type PodState = "creating" | "ready" | "closing" | "closed";
 
 export interface PodReceiptFact {
   readonly repositoryId: string;
-  readonly windowId: string;
   readonly bindingId: string;
   readonly checkoutPresent: boolean;
 }
 
 export interface PodStateInput {
-  readonly pod: Readonly<Pick<WakeflowConfigPod, "placement" | "lifecycle" | "worktrees">>;
+  readonly pod: Readonly<Pick<WakeflowConfigPod, "lifecycle" | "worktrees">>;
   readonly windowIds: readonly string[];
   /** 已登记窗口 → 当前绑定标识。 */
   readonly bindingIdByWindowId: ReadonlyMap<string, string>;

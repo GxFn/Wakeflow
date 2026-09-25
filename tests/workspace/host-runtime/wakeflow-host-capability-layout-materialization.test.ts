@@ -236,3 +236,45 @@ test("Host capability inspection and ensure ignore live contents and only repair
     "prerequisite",
   );
 });
+
+test("Host capability layout maps an already-aborted signal to aborted", async (t) => {
+  const value = await fixture(t, codexWorkspaceHostResourceProfile);
+  const controller = new AbortController();
+  controller.abort();
+  const { signal } = controller;
+  await expectLayoutError(
+    () => materializeWakeflowHostCapabilityLayout(
+      value.root,
+      codexWorkspaceHostResourceProfile,
+      { recoveringFreshLayout: false, signal },
+    ),
+    "aborted",
+  );
+  await expectLayoutError(
+    () => ensureWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, { signal }),
+    "aborted",
+  );
+  await expectLayoutError(
+    () => inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, { signal }),
+    "aborted",
+  );
+  const codexHost = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
+  equal(existsSync(path.join(codexHost, "pods")), false, "an aborted run must not create directories");
+});
+
+test("Host capability fresh layout refuses a foreign entry under the host runtime root", async (t) => {
+  const value = await fixture(t, codexWorkspaceHostResourceProfile);
+  const codexHost = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
+  const foreign = path.join(codexHost, "foreign");
+  mkdirSync(foreign, { mode: 0o700 });
+  await expectLayoutError(
+    () => materializeWakeflowHostCapabilityLayout(
+      value.root,
+      codexWorkspaceHostResourceProfile,
+      { recoveringFreshLayout: false },
+    ),
+    "prefix-conflict",
+  );
+  equal(existsSync(foreign), true, "the foreign entry must be left untouched");
+  equal(existsSync(path.join(codexHost, "pods")), false);
+});

@@ -154,10 +154,15 @@ export function parseWakeflowHostId(value: unknown, path = "$hostId"): WakeflowH
   return value;
 }
 
+/** 所有宿主运行时命名空间的共享根：`.wakeflow-local/runtime/hosts`。 */
+export function hostRuntimeProfilesRootRef(): PortableResourcePath {
+  return parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/hosts`, "$layout");
+}
+
 /** `.wakeflow-local/runtime/hosts/<host>`。 */
 export function hostRuntimeRootRef(hostId: WakeflowHostId): PortableResourcePath {
   return parsePortableResourcePath(
-    `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/hosts/${parseWakeflowHostId(hostId)}`,
+    `${hostRuntimeProfilesRootRef()}/${parseWakeflowHostId(hostId)}`,
     "$layout",
   );
 }

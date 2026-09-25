@@ -44,10 +44,7 @@ import {
   type WakeflowWorkspaceHostResourceComponent,
   type WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
-import {
-  WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX,
-  type WakeflowManagedTextEnvelopeTarget,
-} from "./wakeflow-managed-text-envelope.js";
+import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的正文权威。
@@ -262,6 +259,20 @@ function simplifiedChineseBody(
   ].join("\n")}\n`;
 }
 
+/** 信封内任何版本的 marker 命名空间都视为 marker，与信封自身的检测一致。 */
+const MANAGED_MARKER_NAMESPACE_PREFIX = "<!-- wakeflow:managed-content:";
+
+/** 正文进入信封前的剖面：良构 NFC、无 BOM/CR、以单个换行结尾且不含 marker 命名空间。 */
+function isAdmissibleInstructionBody(body: string): boolean {
+  return body.isWellFormed()
+    && body.normalize("NFC") === body
+    && !body.startsWith("\ufeff")
+    && !body.includes("\r")
+    && body.endsWith("\n")
+    && !body.endsWith("\n\n")
+    && !body.includes(MANAGED_MARKER_NAMESPACE_PREFIX);
+}
+
 function renderBody(
   config: WakeflowConfigModel,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
@@ -270,15 +281,7 @@ function renderBody(
   const body = config.presentation.language === "en"
     ? englishBody(config, profile, controllerWindowId)
     : simplifiedChineseBody(config, profile, controllerWindowId);
-  if (
-    !body.isWellFormed()
-    || body.normalize("NFC") !== body
-    || body.startsWith("\ufeff")
-    || body.includes("\r")
-    || !body.endsWith("\n")
-    || body.endsWith("\n\n")
-    || body.includes(WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX)
-  ) {
+  if (!isAdmissibleInstructionBody(body)) {
     fail("text", "$body");
   }
   return body;
@@ -445,15 +448,7 @@ export function parseWakeflowProgramInstructionBodyAuthority(
   const instructionFileName = parseInstructionFileName(
     record.instructionFileName,
   );
-  if (
-    !record.body.isWellFormed()
-    || record.body.normalize("NFC") !== record.body
-    || record.body.startsWith("\ufeff")
-    || record.body.includes("\r")
-    || !record.body.endsWith("\n")
-    || record.body.endsWith("\n\n")
-    || record.body.includes(WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX)
-  ) {
+  if (!isAdmissibleInstructionBody(record.body)) {
     fail("authority", "$authority.body");
   }
   let bodyDigest: Sha256Digest;

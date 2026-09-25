@@ -175,15 +175,7 @@ export async function recoverWakeflowProgramInstructionRecomposition(
 
   const recomposition = await recomposeWakeflowProgramInstruction(
     rootValue,
-    {
-      matrix: request.matrix,
-      expectedMatrixDigest: request.expectedMatrixDigest,
-      profile: request.profile,
-      currentConfig: request.currentConfig,
-      expectedCurrentConfigDigest: request.currentConfigDigest,
-      desiredConfig: request.desiredConfig,
-      expectedDesiredConfigDigest: request.desiredConfigDigest,
-    },
+    wakeflowProgramInstructionInspectionRequest(request, undefined),
     options.signal === undefined ? undefined : { signal: options.signal },
   );
   return Object.freeze({

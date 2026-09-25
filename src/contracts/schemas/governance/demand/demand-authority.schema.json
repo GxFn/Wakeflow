@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_AUTHORITY_SCHEMA",
   "title": "WakeflowDemandAuthority",
   "description": "Demand publication 时必须存在并永久冻结的 Ledger authority closure。",
-  "$comment": "Demand type role completeness、identity digest、Ledger resolution、same-demand confirmation 和 testing relations 由 Demand authority codec 继续校验。",
+  "$comment": "Demand type role completeness、identity digest、requirement lineage binding、Ledger resolution 和 testing relations 由 Demand authority codec 继续校验。",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -60,10 +60,12 @@ what to achieve, where to focus, what not to touch. Do not restate the package
 - the target reads it - and do not put an absolute local path or a handle in
 them.
 
-A target is preparable when it is planned, when a rework was requested, when a
-product-defect rework was authorized, or when its re-arms are exhausted and it
-needs a fresh envelope. Anything else is refused because the target already
-has work in flight.
+A target is preparable when it is planned; for an implementation target, when
+a rework or a product-defect rework was requested; for a test target, when
+another attempt was requested; and for either, when its re-arms are exhausted
+and it needs a fresh envelope, which carries the rejected envelope's rework
+basis or resends the same test attempt. Anything else is refused because the
+target already has work in flight.
 
 Replaying the same preparation key returns the first permit and the same
 fence. That is the correct response to "did my last call go through" - replay,
@@ -100,15 +102,13 @@ key and the same delivery; it will accept then.
 
 `wakeflow_rearm_delivery` re-issues the permit for a rejected-before-send
 delivery with a fresh claim and fence, at most three times per envelope. After
-that, prepare the target again for a new envelope.
+that, prepare the target again for a new envelope. Given the callback delivery
+of a result-reported target instead, it re-issues the wake-controller callback
+permit against the current Controller binding, with no claim or fence.
 
 Never resend a prompt by hand because a window "looks idle". Duplicate work in
-a target window is expensive and invisible until the results disagree. The
-helper guards this for you: when the prompt's landing record already exists
-in the bound session, `deliver` refuses with `already-landed` and prints that
-landing - the case after a turn was cut between the send and recording its
-outcome. Record the outcome with that landing; `--force` is for a prompt you
-have established never reached the window.
+a target window is expensive and invisible until the results disagree. After
+a turn was cut between the send and recording its outcome, {{resendGuard}}
 
 A delivered window's turn can also be cut by the host itself - on Claude Code
 an `API Error` line such as "Connection lost mid-response" in the pane - and a

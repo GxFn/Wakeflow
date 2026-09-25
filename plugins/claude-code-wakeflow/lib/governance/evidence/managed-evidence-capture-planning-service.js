@@ -11,6 +11,7 @@ import { readStableFile, StableFileReadError } from "../../foundation/filesystem
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { readHostHookObservationRecord } from "../../kernel/hook-observations.js";
+import { WakeflowError } from "../../kernel/error.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { CREDENTIAL_PRIVACY_FINDING_KINDS, DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy, } from "../../kernel/privacy-scan.js";
 import { assertDemandOperationConfigCurrent, closeDemandOperationAuthorityContext, openDemandOperationAuthorityContext, DemandOperationAuthorityContextError, } from "../demand/demand-operation-authority-context.js";
@@ -136,6 +137,20 @@ function rethrowPlanningError(error) {
         mapArtifactError(error);
     throw error;
 }
+/** 内核读取（hook 观察记录、pod worktree 回执）的失败收敛为本模块的稳定错误。 */
+async function readKernelSource(read, signal) {
+    try {
+        return await read();
+    }
+    catch (error) {
+        if (error instanceof WakeflowError) {
+            if (error.reason === "aborted" || signal?.aborted === true)
+                fail("aborted", error);
+            fail("source", error);
+        }
+        throw error;
+    }
+}
 function mapStableFileError(error) {
     if (error.reason === "aborted")
         fail("aborted", error);
@@ -202,10 +217,18 @@ function classifyContent(bytes, ref, policy) {
 function compareFinding(left, right) {
     if (left.ref !== right.ref)
         return left.ref < right.ref ? -1 : 1;
-    return left.line - right.line;
+    if (left.line !== right.line)
+        return left.line - right.line;
+    if (left.kind === right.kind)
+        return 0;
+    return left.kind < right.kind ? -1 : 1;
+}
+/** 同一行同一种命中只保留一条；Manifest要求(ref, line, kind)严格递增。 */
+function uniqueFindings(sorted) {
+    return sorted.filter((finding, index) => index === 0 || compareFinding(sorted[index - 1], finding) !== 0);
 }
 function reviewOf(classified) {
-    const findings = classified.flatMap((entry) => entry.content.findings).sort(compareFinding);
+    const findings = uniqueFindings(classified.flatMap((entry) => entry.content.findings).sort(compareFinding));
     return Object.freeze({
         opaqueFileRefs: Object.freeze(classified.filter((entry) => entry.content.opaque).map((entry) => entry.ref)),
         privacyFindings: Object.freeze(findings.filter((finding) => !CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))),
@@ -379,11 +402,13 @@ async function captureTree(sourceRoot, source, expectedNode, policy, signal) {
 async function captureManagedPath(workspaceRoot, config, source, policy, signal) {
     let sourceRoot;
     try {
-        sourceRoot = await openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source);
+        sourceRoot = await openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source, signal === undefined ? {} : { signal });
     }
     catch (error) {
         if (error instanceof ManagedEvidenceConfiguredSourceRootError)
             fail("source-root", error);
+        if (error instanceof WakeflowError && error.reason === "aborted")
+            fail("aborted", error);
         throw error;
     }
     let result;
@@ -400,11 +425,9 @@ async function captureManagedPath(workspaceRoot, config, source, policy, signal)
         }
         if (observation.node.kind === "symbolic-link")
             fail("source");
-        if ((source.resourceType === "file") !== (observation.node.kind === "file")) {
-            if (source.resourceType !== "tree" || observation.node.kind !== "directory") {
-                fail("source-type");
-            }
-        }
+        const expectedKind = source.resourceType === "file" ? "file" : "directory";
+        if (observation.node.kind !== expectedKind)
+            fail("source-type");
         result =
             source.resourceType === "file"
                 ? await captureFile(sourceRoot, source, observation.node, policy, signal)
@@ -442,7 +465,7 @@ function captureProjection(source, policy) {
     });
 }
 async function captureObservation(workspaceRoot, selection, source, policy, signal) {
-    const read = await readHostHookObservationRecord(workspaceRoot, source.hostId, source.recordId, signal === undefined ? {} : { signal });
+    const read = await readKernelSource(() => readHostHookObservationRecord(workspaceRoot, source.hostId, source.recordId, signal === undefined ? {} : { signal }), signal);
     if (read === null)
         fail("source");
     const record = read.record;
@@ -600,7 +623,9 @@ export class ManagedEvidenceCapturePlanningService {
             }
             const expectedDemand = demandExpectation(context);
             // Demand 所在 pod 的 worktree 检出路径进入隐私白名单：测试输出里出现自己的检出不算泄露。
-            const worktreePaths = (await listPodWorktreeReceiptsAnyHost(this.#workspaceRoot, context.loaded.identity.podId, options.signal === undefined ? {} : { signal: options.signal })).map((receipt) => receipt.path);
+            const workspaceRoot = this.#workspaceRoot;
+            const podId = context.loaded.identity.podId;
+            const worktreePaths = (await readKernelSource(() => listPodWorktreeReceiptsAnyHost(workspaceRoot, podId, options.signal === undefined ? {} : { signal: options.signal }), options.signal)).map((receipt) => receipt.path);
             const captured = await captureSelectedSource(this.#workspaceRoot, context.config, selection, worktreePaths, options.signal);
             const blockers = deriveManagedEvidenceContentBlockers(captured.review, selection.contentReview);
             if (blockers.length > 0) {

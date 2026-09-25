@@ -394,6 +394,8 @@ export async function resolveLoadedLedgerAuthorityMemberReference(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "too-large") fail("capacity", "$reference");
       fail("conflict", "$reference");
     }
     throw error;

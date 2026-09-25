@@ -1,4 +1,5 @@
 import {
+  DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
@@ -26,7 +27,11 @@ import { StableFileReadError } from "../../foundation/filesystem/stable-file-rea
 import { deriveUuidV4 } from "../../foundation/identity/uuid-v4.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
+import {
+  parseUtcInstant,
+  type UtcInstant,
+  UtcInstantError,
+} from "../../foundation/time/utc-instant.js";
 import { fail } from "../../kernel/error.js";
 import { hostRuntimeRootRef } from "../../kernel/layout.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
@@ -102,7 +107,10 @@ function text(value: unknown, path: string): string {
   return value;
 }
 
-function parseWindowLocatorRecord(value: unknown): Readonly<WindowLocatorRecord> {
+function parseWindowLocatorRecord(
+  value: unknown,
+  hostId: WakeflowHostId,
+): Readonly<WindowLocatorRecord> {
   const json = parseJsonValue(value, "$locator");
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     fail("invalid-request", "locator-record", "$locator");
@@ -119,10 +127,13 @@ function parseWindowLocatorRecord(value: unknown): Readonly<WindowLocatorRecord>
   ) {
     fail("invalid-request", "locator-record", "$locator");
   }
+  if (record.hostId !== hostId) {
+    fail("invalid-request", "locator-record", "$locator.hostId");
+  }
   const coordinates = tmux as JsonObject;
   const parsed = createWindowLocatorRecord({
     programId: text(record.programId, "$locator.programId"),
-    hostId: record.hostId as WakeflowHostId,
+    hostId,
     windowId: text(record.windowId, "$locator.windowId"),
     bindingId: text(record.bindingId, "$locator.bindingId"),
     tmux: {
@@ -176,13 +187,20 @@ async function readLocatorSource(
       ...(signal === undefined ? {} : { signal }),
     });
     return {
-      record: parseWindowLocatorRecord(parseDeterministicJsonDocument(read.text, "$locator")),
+      record: parseWindowLocatorRecord(
+        parseDeterministicJsonDocument(read.text, "$locator"),
+        hostId,
+      ),
       read,
     };
   } catch (error: unknown) {
     if (error instanceof StableFileReadError && error.reason === "not-found") return null;
     if (error instanceof StableFileReadError) {
       fail("io-failure", `locator-read-${error.reason}`, "$locator", { cause: error });
+    }
+    // 私有定位器文件损坏：归入记录形状失败，而不是让基础层错误以 unexpected 逃出。
+    if (error instanceof DeterministicJsonDocumentError || error instanceof UtcInstantError) {
+      fail("invalid-request", "locator-record", "$locator", { cause: error });
     }
     throw error;
   }

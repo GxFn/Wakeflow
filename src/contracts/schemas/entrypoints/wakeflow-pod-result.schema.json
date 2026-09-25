@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_POD_RESULT_SCHEMA",
   "title": "WakeflowPodResultV1",
   "description": "Result of one wakeflow_pod call: the preview plan (pod identity, derived windows and worktree intents, blockers, planDigest) or the mutation disposition with the pod's derived state and next.",
-  "$comment": "Results carry typed IDs, names, roles and states only; never a worktree path, a host handle, or a workspace path.",
+  "$comment": "Results carry typed IDs, names, roles and states only; never a host handle or an absolute path. The one exception is disposal.suggested, whose suggested git worktree command carries the checkout path relative to the workspace root.",
   "type": "object",
   "oneOf": [
     {
@@ -109,6 +109,7 @@
               "required": ["suggested", "alternative"],
               "properties": {
                 "suggested": {
+                  "description": "Suggested git worktree command for the Agent; it carries the checkout path relative to the workspace root (for a sibling worktree a ../ chain), never an absolute path.",
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 512

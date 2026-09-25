@@ -26,7 +26,7 @@ import { demandFinalRootRef } from "../../governance/demand/publication/demand-p
 import { TASK_PACKAGE_PROJECTIONS_ROOT_REF } from "../../governance/tasking/task-package-projection-paths.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { demandArchiveRef, demandArchivesRootRef, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, } from "../../kernel/layout.js";
-import { computePayloadTreeDigest, isArchivePayloadPath } from "./decide.js";
+import { ARCHIVE_EXCLUDED_PREFIXES, computePayloadTreeDigest, isArchivePayloadPath, } from "./decide.js";
 const ARCHIVE_DIRECTORY_MODE = 0o755;
 const ARCHIVE_FILE_MODE = 0o644;
 const ACTIVE_DIRECTORY_MODE = 0o700;
@@ -72,7 +72,7 @@ export function mapFoundationError(error, label, path) {
     }
     fail("io-failure", `${label}-${reason}`, path, { cause: error });
 }
-function signalOptions(signal) {
+export function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
 }
 function isNotFound(error) {
@@ -229,19 +229,12 @@ export async function sealDemandArchive(ledgerRoot, input, signal) {
     const current = await existingArchive(ledgerRoot, archiveRef, payloadDigest, signal);
     if (current !== null)
         return current;
-    const reportBytes = renderJson(input.verifyReport, "$verify");
     const manifest = input.manifest(Object.freeze({
         treeDigest: payloadDigest,
         fileCount: input.payload.length,
         totalBytes: input.payload.reduce((total, file) => total + file.bytes.byteLength, 0),
-        excluded: [
-            "event-sourcing/snapshots",
-            "event-sourcing/index",
-            "event-sourcing/append-candidates",
-        ],
+        excluded: [...ARCHIVE_EXCLUDED_PREFIXES],
     }), computeCanonicalJsonSha256Digest(parseJsonValue(input.verifyReport, "$verify")));
-    if (reportBytes.byteLength === 0)
-        fail("unexpected", "verify-report-empty", "$verify");
     const parent = demandArchivesRootRef(input.demandId);
     const candidateRef = parsePortableResourcePath(`${parent}/.candidate-${String(input.streamRevision).padStart(10, "0")}-${randomUUID()}`, "$archive");
     try {
@@ -258,8 +251,10 @@ export async function sealDemandArchive(ledgerRoot, input, signal) {
             await publishDirectoryTreeCandidateDurably(ledgerRoot, candidate, archiveRef, signalOptions(signal));
         }
         catch (error) {
-            if (reasonOf(error) !== "destination-exists")
+            if (reasonOf(error) !== "destination-exists") {
+                await retireCandidateQuietly(ledgerRoot, candidate, signal);
                 throw error;
+            }
             await retireDirectoryTreeCandidateDurably(ledgerRoot, candidate, signalOptions(signal));
             const raced = await existingArchive(ledgerRoot, archiveRef, payloadDigest, signal);
             if (raced === null)
@@ -349,11 +344,33 @@ async function demandRootExists(workspaceRoot, demandId) {
         mapFoundationError(error, "demand-root-inspect", "$demandRoot");
     }
 }
+/** 发布失败后清理本进程自建的候选目录；清理本身失败不遮盖原错误。 */
+async function retireCandidateQuietly(root, candidate, signal) {
+    try {
+        await retireDirectoryTreeCandidateDurably(root, candidate, signalOptions(signal));
+    }
+    catch {
+        // 第一个错误优先；残留候选由下一次维护识别。
+    }
+}
+/** 补齐可重建的空目录；幂等，所以根已存在（含发布后中断的恢复）时同样执行。 */
+async function materializeRebuildableDirectories(workspaceRoot, destination, signal) {
+    try {
+        for (const directory of REBUILDABLE_DIRECTORIES) {
+            await materializeDirectoryPath(workspaceRoot, parsePortableResourcePath(`${destination}/${directory}`, "$demandRoot"), { mode: ACTIVE_DIRECTORY_MODE, ...signalOptions(signal) });
+        }
+    }
+    catch (error) {
+        mapFoundationError(error, "demand-root-restore", "$demandRoot");
+    }
+}
 /** 从归档负载恢复活动根（0700/0600），再补齐可重建的空目录；根已存在为 `current`。 */
 export async function restoreDemandRoot(workspaceRoot, demandId, payload, signal) {
-    if (await demandRootExists(workspaceRoot, demandId))
-        return "current";
     const destination = demandFinalRootRef(demandId);
+    if (await demandRootExists(workspaceRoot, demandId)) {
+        await materializeRebuildableDirectories(workspaceRoot, destination, signal);
+        return "current";
+    }
     const candidateRef = parsePortableResourcePath(`${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/.restore-${demandId}-${randomUUID()}`, "$demandRoot");
     try {
         const candidate = await createDirectoryTreeCandidateDurably(workspaceRoot, candidateRef, sortedByPath(payload.map((file) => ({
@@ -365,18 +382,19 @@ export async function restoreDemandRoot(workspaceRoot, demandId, payload, signal
             await publishDirectoryTreeCandidateDurably(workspaceRoot, candidate, destination, signalOptions(signal));
         }
         catch (error) {
-            if (reasonOf(error) !== "destination-exists")
+            if (reasonOf(error) !== "destination-exists") {
+                await retireCandidateQuietly(workspaceRoot, candidate, signal);
                 throw error;
+            }
             await retireDirectoryTreeCandidateDurably(workspaceRoot, candidate, signalOptions(signal));
+            await materializeRebuildableDirectories(workspaceRoot, destination, signal);
             return "current";
-        }
-        for (const directory of REBUILDABLE_DIRECTORIES) {
-            await materializeDirectoryPath(workspaceRoot, parsePortableResourcePath(`${destination}/${directory}`, "$demandRoot"), { mode: ACTIVE_DIRECTORY_MODE, ...signalOptions(signal) });
         }
     }
     catch (error) {
         mapFoundationError(error, "demand-root-restore", "$demandRoot");
     }
+    await materializeRebuildableDirectories(workspaceRoot, destination, signal);
     return "restored";
 }
 /**

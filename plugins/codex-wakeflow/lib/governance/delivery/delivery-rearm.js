@@ -131,11 +131,11 @@ export function parseDeliveryRearm(value) {
         },
         rearmedAt,
     });
-    if (basis.generation !== basis.previousGeneration + 1 ||
-        basis.generation > DELIVERY_REARM_LIMIT + 1 ||
-        basis.fence.claimId === basis.previousFence.claimId) {
+    if (basis.generation !== basis.previousGeneration + 1 || basis.generation > DELIVERY_REARM_LIMIT + 1) {
         fail("relation", "$/generation");
     }
+    if (basis.fence.claimId === basis.previousFence.claimId)
+        fail("relation", "$/fence/claimId");
     const rearmDigest = digest(wire.rearmDigest, "$/rearmDigest");
     if (computeCanonicalJsonSha256Digest(basis) !== rearmDigest)
         fail("digest", "$/rearmDigest");

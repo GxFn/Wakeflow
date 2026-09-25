@@ -190,11 +190,6 @@
       "type": "string",
       "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
-    "workspaceRoot": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Absolute path of the existing Wakeflow workspace root; never returned."
-    },
     "sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"

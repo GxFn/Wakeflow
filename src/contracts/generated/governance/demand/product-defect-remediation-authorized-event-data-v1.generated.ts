@@ -31,7 +31,7 @@ controllerWindowId: string
 source: Source
 /**
  * @minItems 1
- * @maxItems 10000
+ * @maxItems 32
  */
 affectedTargets: [AffectedTarget, ...(AffectedTarget)[]]
 boundary: "existing-task-packages-only"

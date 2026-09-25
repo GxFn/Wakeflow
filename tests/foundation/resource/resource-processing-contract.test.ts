@@ -196,6 +196,23 @@ test("resource processing contract rejects behavioral, open, and contradictory i
     );
   }
 
+  for (const [role, recipes, recoveryStrategy] of [
+    ["mutable-snapshot", ["exclusive-create"], "owner-forward-recovery"],
+    ["derived-checkpoint", ["exact-retire"], "rebuild-from-authority"],
+    ["immutable-fact", [], "exact-idempotent-retry"],
+  ] as const) {
+    expectResourceProcessingError(
+      () => parseWakeflowResourceProcessingContract({
+        kind: "resource",
+        role,
+        allowedMutationRecipes: recipes,
+        recoveryStrategy,
+      }),
+      "recipe",
+      "$/allowedMutationRecipes",
+    );
+  }
+
   expectResourceProcessingError(
     () => parseWakeflowResourceProcessingContract({
       kind: "resource",

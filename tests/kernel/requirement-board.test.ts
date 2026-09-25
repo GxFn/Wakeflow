@@ -95,7 +95,7 @@ test("状态文件独占创建、CAS 替换、目录列出与索引重写", asyn
   const first = pending();
   equal(await createRequirementClaimStateFile(root, first), "created");
   equal(await createRequirementClaimStateFile(root, first), "current");
-  // 同一记录重放（发布时间不同）仍是 current；另一份记录占同一标识才是冲突。
+  // 同一记录换元数据（这里是优先级）重放仍是 current；另一份记录占同一标识才是冲突。
   equal(await createRequirementClaimStateFile(root, pending(REQUIREMENT, "P0")), "current");
   await rejects(
     createRequirementClaimStateFile(root, pending(REQUIREMENT, "P1", `sha256:${"b".repeat(64)}`)),

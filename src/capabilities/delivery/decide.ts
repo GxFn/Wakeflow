@@ -35,7 +35,7 @@ export const DELIVERY_REQUIRED_SKILLS: Readonly<
   test: Object.freeze(["skills/wakeflow-target/SKILL.md", "skills/wakeflow-test/SKILL.md"]),
 });
 
-/** 可以准备投递的实现目标 phase；host-effect-rejected 只在 rearm 用尽后允许换新信封。 */
+/** 可以准备投递的目标 phase；两种发送前拒绝都只在 rearm 用尽后允许换新信封。 */
 const PREPARABLE_IMPLEMENTATION_PHASES: readonly string[] = Object.freeze([
   "planned",
   "rework-requested",
@@ -46,6 +46,7 @@ const PREPARABLE_IMPLEMENTATION_PHASES: readonly string[] = Object.freeze([
 const PREPARABLE_TEST_PHASES: readonly string[] = Object.freeze([
   "planned",
   "test-another-attempt-requested",
+  "test-host-effect-rejected",
 ]);
 
 export interface HookLandingRecord {
@@ -153,13 +154,13 @@ export function deriveDeliveryDisposition(input: Readonly<DispositionInput>): Di
   return decided("indeterminate", "agent-declaration");
 }
 
-/** 静默是否超过阈值：以许可签发时刻为起点。 */
+/** 静默是否超过阈值：以当前代际第一次 indeterminate 结局的记录时刻为起点。 */
 export function landingSilenceExceeded(
-  issuedAt: UtcInstant,
+  silenceStartedAt: UtcInstant,
   now: UtcInstant,
   thresholdMilliseconds = DELIVERY_LANDING_SILENCE_MILLISECONDS,
 ): boolean {
-  return Date.parse(now) - Date.parse(issuedAt) > thresholdMilliseconds;
+  return Date.parse(now) - Date.parse(silenceStartedAt) > thresholdMilliseconds;
 }
 
 export interface PrepareTargetView {
@@ -176,7 +177,7 @@ export function derivePrepareBlockers(target: Readonly<PrepareTargetView>): read
       : PREPARABLE_IMPLEMENTATION_PHASES.includes(target.phase);
   if (!admitted) return Object.freeze([`target-phase:${target.phase}`]);
   if (
-    target.phase === "host-effect-rejected" &&
+    (target.phase === "host-effect-rejected" || target.phase === "test-host-effect-rejected") &&
     target.generation !== null &&
     target.generation <= DELIVERY_REARM_LIMIT
   ) {

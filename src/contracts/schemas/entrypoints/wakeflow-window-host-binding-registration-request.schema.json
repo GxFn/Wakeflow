@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:window-host-binding-registration-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA",
   "title": "WakeflowWindowHostBindingRegistrationRequestV1",
-  "description": "Closed MCP input contract for one execution-endpoint operation on a logical window: inspect (launch intent and current binding, claim, and locator state), register (bind the handle the Agent observed), replace (bind a new handle with CAS on the old binding), decommission (release the binding with closure evidence), or release-claim (force-release an expired or orphaned work claim with liveness evidence).",
+  "description": "Closed MCP input contract for one execution-endpoint operation on a logical window: inspect (launch intent and current binding, claim, and locator state), register (bind the handle the Agent observed), replace (bind a new handle with CAS on the old binding), relocate (keep the binding and record a resumed session's new tmux pane, with CAS on the binding), decommission (release the binding with closure evidence), or release-claim (force-release an expired or orphaned work claim with liveness evidence).",
   "type": "object",
   "oneOf": [
     {

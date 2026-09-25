@@ -111,6 +111,7 @@ test("Ledger publication intent rejects a forged stage relation", () => {
     caught = error;
   }
   equal(caught instanceof LedgerRecordPublicationIntentError, true);
+  equal((caught as LedgerRecordPublicationIntentError).reason, "relation");
 });
 
 test("Ledger publication intent reapplies its owner byte budget", () => {

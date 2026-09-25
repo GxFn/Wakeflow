@@ -533,18 +533,6 @@ export async function retireWakeflowMaintenanceExecutionIntent(
     root,
     source,
   );
-  const current = await readWakeflowMaintenanceExecutionIntent(
-    root,
-    context.operationId,
-  );
-  if (
-    current.digest !== source.digest
-    || current.intentDigest !== source.intentDigest
-    || current.node.deviceId !== source.node.deviceId
-    || current.node.inodeId !== source.node.inodeId
-  ) {
-    fail("conflict", "$intent");
-  }
   let retirement: Readonly<ExactRegularFileUnlinkReceipt>;
   try {
     retirement = await unlinkRegularFileExactly(

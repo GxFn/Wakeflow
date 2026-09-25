@@ -75,7 +75,12 @@ export function deriveCloseRequestBlockers(input) {
         blockers.push("pod-primary");
     if (input.activeDemandId !== null)
         blockers.push(`demand-active:${input.activeDemandId}`);
-    const given = new Set(input.dispositions.map((entry) => entry.repositoryId));
+    const given = new Set();
+    for (const { repositoryId } of input.dispositions) {
+        if (given.has(repositoryId))
+            blockers.push(`branch-disposition-duplicate:${repositoryId}`);
+        given.add(repositoryId);
+    }
     for (const repositoryId of input.registeredRepositoryIds) {
         if (!given.has(repositoryId))
             blockers.push(`branch-disposition-missing:${repositoryId}`);
@@ -124,7 +129,8 @@ export function podMutationNext(input) {
         suggestedTool: null,
         blockers: Object.freeze([]),
     });
-    if (input.state === null || input.state === "closed" || input.state === "ready")
+    // "closed" 时 pod 仍在配置里，等待第二段 close apply；已移除的 pod 以 null 到达。
+    if (input.state === null || input.state === "ready")
         return done;
     if (input.state === "creating") {
         return Object.freeze({
@@ -132,7 +138,7 @@ export function podMutationNext(input) {
             owner: "controller",
             suggestedTool: "wakeflow_register_window_binding",
             blockers: Object.freeze([
-                ...input.unboundWindowIds,
+                ...input.unboundWindowIds.map((id) => `window-unbound:${id}`),
                 ...input.missingReceiptRepositoryIds.map((id) => `worktree-receipt-missing:${id}`),
             ].slice(0, 32)),
         });

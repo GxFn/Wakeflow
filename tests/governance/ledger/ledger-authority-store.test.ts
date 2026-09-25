@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -296,11 +297,18 @@ test("exact recovery rejects a different intent before lock or publication", asy
     const conflicting = publicationPlan(
       requirementRecord(REQUIREMENT_ID, "Conflicting recovery source"),
     );
+    // A foreign lock record proves the rejection happens before the lock is recovered or taken.
+    const lockPath = path.join(rootPath, ...publication.intent.lockRef.split("/"));
+    const foreignLock = rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "99999999-9999-4999-8999-999999999999",
+    });
+    writeFileSync(lockPath, foreignLock, { mode: 0o600 });
 
     await expectStoreError(
       () => store.recoverExactRecordPublication(conflicting.intent),
       "conflict",
     );
+    equal(readFileSync(lockPath, "utf8"), foreignLock);
     equal(
       existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))),
       true,
@@ -311,10 +319,6 @@ test("exact recovery rejects a different intent before lock or publication", asy
     );
     equal(
       existsSync(path.join(rootPath, ...publication.intent.finalRootRef.split("/"))),
-      false,
-    );
-    equal(
-      existsSync(path.join(rootPath, ...publication.intent.lockRef.split("/"))),
       false,
     );
   } finally {

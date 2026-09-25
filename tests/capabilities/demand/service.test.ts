@@ -1,5 +1,13 @@
-import { equal, rejects } from "node:assert/strict";
-import { existsSync, readdirSync } from "node:fs";
+import { deepEqual, equal, rejects } from "node:assert/strict";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -43,18 +51,29 @@ import {
  * 重开并要求先规划；取消释放声明并撤回需求包；取消后不能再 continue。
  */
 
+/** 每个条目的类型、权限、mtime 与文件内容：预览若改写任何已有文件，快照即不同。 */
+function snapshotTree(root: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const visit = (current: string, ref: string): void => {
+    const stat = lstatSync(current, { bigint: true });
+    const kind = stat.isDirectory() ? "directory" : stat.isFile() ? "file" : "other";
+    const content = kind === "file" ? readFileSync(current).toString("base64") : "";
+    result[ref] = [kind, Number(stat.mode & 0o777n), stat.mtimeNs, content].join(":");
+    if (kind !== "directory") return;
+    for (const name of readdirSync(current).sort())
+      visit(path.join(current, name), `${ref}/${name}`);
+  };
+  if (existsSync(root)) visit(root, ".");
+  return result;
+}
+
 const ESCALATED_AT = parseUtcInstant("2026-08-29T12:30:00.000Z");
 
-async function demandRootExists(workspacePath: string, demandId: string): Promise<boolean> {
+function demandRootExists(workspacePath: string, demandId: string): boolean {
   return existsSync(path.join(workspacePath, ...demandFinalRootRef(demandId).split("/")));
 }
 
-async function escalate(
-  workspaceRoot: RootedDirectory,
-  workspacePath: string,
-  demandId: string,
-  targetTaskId: string,
-) {
+async function escalate(workspacePath: string, demandId: string, targetTaskId: string) {
   const demandRoot = await RootedDirectory.open(
     path.join(workspacePath, ...demandFinalRootRef(demandId).split("/")),
   );
@@ -96,7 +115,6 @@ async function escalate(
     return eventId;
   } finally {
     await demandRoot.close();
-    void workspaceRoot;
   }
 }
 
@@ -107,7 +125,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     const demandId = fixture.demandId;
     const ledgerArchives = path.join(fixture.fixtureRoot, "wakeflow-ledger", "archives", demandId);
 
-    await escalate(fixture.workspaceRoot, root, demandId, fixture.targetTaskId);
+    await escalate(root, demandId, fixture.targetTaskId);
     const awaiting = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root, demandId });
     if (awaiting.route === null) throw new Error("Expected an active route.");
     equal(awaiting.route.disposition, "awaiting-decision");
@@ -149,7 +167,8 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     equal(decided.disposition, "decision-recorded");
     equal(decided.next.frontier, "demand-completion-preflight");
 
-    const beforeApply = readdirSync(root, { recursive: true }).length;
+    const ledgerRoot = path.join(fixture.fixtureRoot, "wakeflow-ledger");
+    const beforeApply = [snapshotTree(root), snapshotTree(ledgerRoot)];
     const preview = await executeDemandCompletionRequest({ root, mode: "preview", demandId });
     if (preview.kind !== "WakeflowDemandCompletionPreview") throw new Error("Expected a preview.");
     if (preview.planDigest === null) throw new Error(preview.blockers.join(","));
@@ -157,7 +176,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
       preview.verify?.gates.every((gate) => gate.status === "pass"),
       true,
     );
-    equal(readdirSync(root, { recursive: true }).length, beforeApply, "preview wrote");
+    deepEqual([snapshotTree(root), snapshotTree(ledgerRoot)], beforeApply, "preview wrote");
     equal(existsSync(ledgerArchives), false);
 
     await rejects(
@@ -181,7 +200,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     equal(completed.package.status, "archived");
     equal(completed.releasedClaims, 0);
     equal(completed.next.frontier, "demand-continuation");
-    equal(await demandRootExists(root, demandId), false, "active root survived");
+    equal(demandRootExists(root, demandId), false, "active root survived");
     equal(
       existsSync(path.join(root, ...demandLifecycleJournalRef(demandId).split("/"))),
       false,
@@ -238,7 +257,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     equal(continued.disposition, "continued");
     equal(continued.package?.status, "claimed");
     equal(continued.next.frontier, "implementation-task-planning");
-    equal(await demandRootExists(root, demandId), true);
+    equal(demandRootExists(root, demandId), true);
     const reopened = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root, demandId });
     if (reopened.route === null) throw new Error("Expected an active route.");
     equal(reopened.route.lifecycle, "active");
@@ -305,7 +324,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     equal(cancelled.disposition, "cancelled");
     equal(cancelled.package.status, "withdrawn");
     equal(cancelled.next.frontier, null);
-    equal(await demandRootExists(root, demandId), false);
+    equal(demandRootExists(root, demandId), false);
     equal(readdirSync(ledgerArchives).length, 2);
 
     const afterCancel = await executeDemandContinuationRequest({
@@ -376,8 +395,60 @@ test("未接受的目标让完成在 preview 阻塞；取消释放本 Demand 的
     equal(cancelled.releasedClaims, 1);
     equal(existsSync(claimPath), false, "claim survived cancellation");
     equal(cancelled.package.status, "withdrawn");
-    equal(await demandRootExists(root, demandId), false);
+    equal(demandRootExists(root, demandId), false);
   } finally {
     await cleanupDeliveryWorkspaceFixture(fixture);
   }
+});
+
+/**
+ * 在日志写下之后打断 apply：在该 Demand 的账本归档目录里，用普通文件预先占住每个可能的归档名。
+ * 计划推导只列出目录形态的归档，看不见这些占位；apply 写完日志后发布归档时撞上占位而失败。
+ * 清掉占位后 recover 按日志重放，结果与一次正常 apply 相同。
+ */
+async function interruptAndRecover(action: "complete" | "cancel"): Promise<void> {
+  const fixture = await createAcceptedDemandCompletionWorkspaceFixture();
+  try {
+    const root = fixture.workspacePath;
+    const demandId = fixture.demandId;
+    const journal = path.join(root, ...demandLifecycleJournalRef(demandId).split("/"));
+    const archives = path.join(fixture.fixtureRoot, "wakeflow-ledger", "archives");
+    const execute =
+      action === "complete" ? executeDemandCompletionRequest : executeDemandCancellationRequest;
+    const reason = action === "cancel" ? { reason: "Interrupted cancellation." } : {};
+    const preview = await execute({ root, mode: "preview", demandId, ...reason });
+    if (!("planDigest" in preview) || preview.planDigest === null)
+      throw new Error("Expected a plan.");
+    const occupied = path.join(archives, demandId);
+    const placeholders = Array.from({ length: 199 }, (_, index) =>
+      path.join(occupied, String(index + 2).padStart(10, "0")),
+    );
+    mkdirSync(occupied, { recursive: true });
+    for (const placeholder of placeholders) writeFileSync(placeholder, "occupied\n");
+    await rejects(
+      execute({ root, mode: "apply", demandId, ...reason, planDigest: preview.planDigest }),
+    );
+    equal(existsSync(journal), true, "journal missing after the interrupted apply");
+    equal(demandRootExists(root, demandId), true);
+    for (const placeholder of placeholders) rmSync(placeholder);
+
+    const recovered = await execute({ root, mode: "recover", operationId: demandId });
+    if (!("archive" in recovered)) throw new Error("Expected a mutation.");
+    equal(recovered.disposition, "recovered");
+    equal(readdirSync(occupied).length, 1);
+    equal(demandRootExists(root, demandId), false, "active root survived");
+    equal(existsSync(journal), false, "journal survived");
+    const claim = await readRequirementClaimState(fixture.workspaceRoot, PLANNING_REQUIREMENT_ID);
+    equal(claim?.state.status, action === "complete" ? "archived" : "withdrawn");
+  } finally {
+    await cleanupAcceptedDemandCompletionWorkspaceFixture(fixture);
+  }
+}
+
+test("完成的 apply 在日志之后中断：recover 按日志重放出与正常 apply 相同的归档与看板状态", async () => {
+  await interruptAndRecover("complete");
+});
+
+test("取消的 apply 在日志之后中断：recover 按日志重放出归档并撤回需求包", async () => {
+  await interruptAndRecover("cancel");
 });

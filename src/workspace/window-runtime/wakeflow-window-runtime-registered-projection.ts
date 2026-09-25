@@ -55,7 +55,8 @@ import {
 /**
  * Wakeflow Workspace / Window Runtime：已注册身份的脱敏派生投影。
  *
- * 编译输入只有当前 desired/unregistered 投影与私有 Binding authority。输出删除 raw
+ * 编译输入是宿主资源 profile、窗口 identity profile、当前 unregistered 投影与私有 Binding
+ * authority。输出删除 raw
  * handle，只携带Binding ref与代际ID。身份注册不会伪造configured root已被
  * 观察，因此 preflight 仍以 `root-unobserved` 明确阻断。
  */
@@ -237,11 +238,10 @@ function compileWakeflowWindowRuntimeRegisteredProjection(
     WakeflowWindowRuntimeRegisteredProjection,
     "projectionDigest"
   >;
+  const body = projectionBasis(basis);
   const projection = Object.freeze({
-    ...projectionBasis(basis),
-    projectionDigest: computeCanonicalJsonSha256Digest(
-      projectionBasis(basis),
-    ),
+    ...body,
+    projectionDigest: computeCanonicalJsonSha256Digest(body),
   });
   const validated = validateWire(
     parseJsonValue(projection, "$projection"),

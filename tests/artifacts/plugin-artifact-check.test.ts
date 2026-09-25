@@ -159,6 +159,36 @@ test("marketplace 条目落后于版本输入、缺席或不止一条时以 mark
     () => checkMarketplaces(marketplaceFixture(t, "0.9.6"), release.version),
     expectCheckErrorCode("wakeflow-artifact-check-marketplace"),
   );
+  type Document = { plugins?: unknown[] } & Record<string, unknown>;
+  const rewritten = (relative: string, change: (document: Document) => void): string => {
+    const root = marketplaceFixture(t, release.version);
+    const file = path.join(root, relative);
+    const document = JSON.parse(readFileSync(file, "utf8")) as Document;
+    change(document);
+    writeFileSync(file, `${JSON.stringify(document, null, 2)}\n`);
+    return root;
+  };
+  const rejected = [
+    rewritten(CLAUDE_MARKETPLACE_PATH, (document) => {
+      document.plugins = [];
+    }),
+    rewritten(CLAUDE_MARKETPLACE_PATH, (document) => {
+      document.plugins = [...(document.plugins ?? []), ...(document.plugins ?? [])];
+    }),
+    rewritten(CLAUDE_MARKETPLACE_PATH, (document) => {
+      delete document.plugins;
+    }),
+    rewritten(CODEX_MARKETPLACE_PATH, (document) => {
+      const [entry] = document.plugins ?? [];
+      document.plugins = [{ ...(entry as Record<string, unknown>), category: "changed" }];
+    }),
+  ];
+  for (const root of rejected) {
+    throws(
+      () => checkMarketplaces(root, release.version),
+      expectCheckErrorCode("wakeflow-artifact-check-marketplace"),
+    );
+  }
 });
 
 test("结构相等忽略键序但不忽略值、数组顺序或多余键", () => {

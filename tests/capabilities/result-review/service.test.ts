@@ -10,6 +10,7 @@ import {
   type ExecuteResultReviewOptions,
 } from "../../../src/capabilities/result-review/service.js";
 import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
@@ -24,6 +25,10 @@ import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
   deliverFixtureTarget,
+  landFixturePrompt,
+  loadFixtureDeliveryEnvelope,
+  prepareFixtureDelivery,
+  recordFixtureDeliveryOutcome,
   withFixtureDemandRoot,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
@@ -71,6 +76,7 @@ import {
 
 const OTHER_DECISION_ID = "target-review-decision_11111111-1111-4111-8111-111111111111";
 const OTHER_EVENT_ID = "demand-event_22222222-2222-4222-8222-222222222222";
+const STRANGER_CLAIM_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
 const SILENCE_PLUS_ONE_MINUTE = 11 * 60_000;
 
 /** 公开结果是冻结的无原型对象；结构比较前转成普通 JSON 值。 */
@@ -401,6 +407,14 @@ test("rework 之后再投递、再导入形成新的评审单元并保留历史�
       2,
     );
     equal(redelivered.recorded.outcome.disposition, "accepted");
+    // 返工投递已准备、目标已前进之后，重放同一决定仍回到第一次的结果与相位。
+    const reworkReplay = await decideFixtureImplementation(fixture, {
+      ...implementationReviewJudgmentWire("rework"),
+      idempotencyKey: "fixture-decision-rework",
+    });
+    equal(reworkReplay.status, "idempotent");
+    equal(reworkReplay.target.phase, "rework-requested");
+    equal(reworkReplay.event.eventId, rework.event.eventId);
     // 导入前窗口声明已易主（例如被更高代际重取）：结果事件照常提交，清理既不否定它也不动别人的声明。
     const heldBefore = (await inspectWorkClaim(fixture.workspaceRoot, fixture.route.windowId))
       .claim;
@@ -766,7 +780,7 @@ test("flaky 失败步骤只允许 request-another-attempt 与 escalate；重跑�
         },
         "c2c2c2c2-c2c2-4c2c-8c2c-c2c2c2c2c2c2",
       ),
-      (error: unknown) => isWakeflowError(error) && error.code === "precondition-failed",
+      rejectedWith("no-failed-step"),
     );
     const accepted = await testDecision(
       fixtureTestDecisionRequest(fixture, rerunInspection, rerunRevision, "fixture-test-accept-2"),
@@ -898,7 +912,7 @@ test("product-defect 失败步骤只允许 escalate；escalate{product-defect} �
   }
 });
 
-test("needs-review 结果在 Controller 把每个锚点绑到本 Demand 托管证据后可直接 accept；绑定缺失或不覆盖被拒（§13.121 D7）", async () => {
+test("needs-review 结果在 Controller 把每个锚点绑到本 Demand 托管证据后可直接 accept；绑定缺失或锚点不在包内被拒（§13.121 D7）", async () => {
   const workspace = await createDeliveryWorkspaceFixture();
   try {
     const controllerRoute = await registerFixtureControllerWindow(workspace);
@@ -968,5 +982,172 @@ test("needs-review 结果在 Controller 把每个锚点绑到本 Demand 托管�
     equal(accepted.target.phase, "accepted");
   } finally {
     await cleanupDeliveryWorkspaceFixture(workspace);
+  }
+});
+
+test("重新武装不重渲染 prompt：目标用 prompt 里第一代的 claimDigest 导入仍被接受，陌生摘要被拒", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    await registerFixtureControllerWindow(fixture);
+    const prepared = await prepareFixtureDelivery(fixture);
+    const rejected = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      attempt: { status: "failed-before-send" },
+      readback: { status: "unavailable" },
+    });
+    const rearmed = await rearmCallback(
+      fixture,
+      prepared.delivery.deliveryId,
+      "fixture-rearm-2",
+      rejected.event.streamRevision,
+      at("12:07:00"),
+    );
+    const fence = rearmed.permit.fence;
+    if (fence === null) throw new Error("Expected a target rearm fence.");
+    equal(fence.claimDigest === prepared.permit.fence.claimDigest, false);
+    const landed = await landFixturePrompt(
+      fixture,
+      fixture.route,
+      prepared.permit.prompt,
+      at("12:07:30"),
+    );
+    const recorded = await recordFixtureDeliveryOutcome(
+      fixture,
+      {
+        ...prepared,
+        permit: { ...rearmed.permit, fence },
+        event: rearmed.event,
+        delivery: { ...prepared.delivery, generation: rearmed.delivery.generation },
+      },
+      { idempotencyKey: "fixture-outcome-accepted-2", observedAt: at("12:08:00") },
+      { clock: () => at("12:08:00") },
+    );
+    equal(recorded.outcome.disposition, "accepted");
+    const envelope = await loadFixtureDeliveryEnvelope(fixture, prepared.delivery.deliveryId);
+    const delivered = { prepared, landed, recorded, envelope };
+    const evidence = await recordFixtureEvidence(fixture);
+    await rejects(
+      importFixtureImplementationResult(
+        fixture,
+        {
+          ...delivered,
+          prepared: {
+            ...prepared,
+            permit: {
+              ...prepared.permit,
+              fence: { ...prepared.permit.fence, claimDigest: STRANGER_CLAIM_DIGEST },
+            },
+          },
+        },
+        { idempotencyKey: "fixture-import-stranger", evidence },
+      ),
+      rejectedWith("fence-mismatch"),
+    );
+    const imported = await importFixtureImplementationResult(fixture, delivered, { evidence });
+    equal(imported.status, "committed");
+    equal(imported.result.delivery.generation, 2);
+    equal(imported.result.delivery.fence.claimDigest, fence.claimDigest);
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+/** 发送前失败，再 rearm 三次仍失败：返回第四代的拒绝结局，此后只能换新信封。 */
+async function exhaustRearms(
+  fixture: Readonly<{ readonly workspacePath: string; readonly demandId: string }>,
+  prepared: Awaited<ReturnType<typeof prepareFixtureDelivery>>,
+  prefix: string,
+) {
+  const failed = {
+    attempt: { status: "failed-before-send" as const },
+    readback: { status: "unavailable" as const },
+  };
+  let rejected = await recordFixtureDeliveryOutcome(fixture, prepared, {
+    ...failed,
+    idempotencyKey: `${prefix}-outcome-1`,
+  });
+  for (const generation of [2, 3, 4]) {
+    const rearmed = await rearmCallback(
+      fixture,
+      prepared.delivery.deliveryId,
+      `${prefix}-rearm-${generation}`,
+      rejected.event.streamRevision,
+      at("12:20:00"),
+    );
+    const fence = rearmed.permit.fence;
+    if (fence === null) throw new Error("Expected a target rearm fence.");
+    rejected = await recordFixtureDeliveryOutcome(
+      fixture,
+      {
+        ...prepared,
+        permit: { ...rearmed.permit, fence },
+        event: rearmed.event,
+        delivery: { ...prepared.delivery, generation },
+      },
+      { ...failed, idempotencyKey: `${prefix}-outcome-${generation}` },
+    );
+  }
+  return rejected;
+}
+
+test("rearm 用尽的返工投递换新信封：前沿回到准备，新信封原样带上被拒信封的返工依据", async () => {
+  const fixture = await createControllerImplementationReviewDecisionServiceFixture();
+  try {
+    const rework = await decideFixtureImplementation(fixture, {
+      ...implementationReviewJudgmentWire("rework"),
+      idempotencyKey: "fixture-decision-rework",
+    });
+    const prepared = await prepareFixtureDelivery(fixture, {
+      idempotencyKey: "fixture-prepare-rework",
+      expectedStreamRevision: rework.event.streamRevision,
+    });
+    const rejected = await exhaustRearms(fixture, prepared, "fixture-rework");
+    equal(rejected.target.phase, "host-effect-rejected");
+    equal(rejected.next.frontier, "implementation-delivery-planning");
+    const reprepared = await prepareFixtureDelivery(fixture, {
+      idempotencyKey: "fixture-prepare-rework-again",
+      expectedStreamRevision: rejected.event.streamRevision,
+    });
+    equal(reprepared.status, "committed");
+    const before = await loadFixtureDeliveryEnvelope(fixture, prepared.delivery.deliveryId);
+    const after = await loadFixtureDeliveryEnvelope(fixture, reprepared.delivery.deliveryId);
+    if (before.workType !== "implementation" || after.workType !== "implementation") {
+      throw new Error("Expected implementation envelopes.");
+    }
+    equal(before.rework === undefined, false);
+    deepEqual(plain(after.rework), plain(before.rework));
+  } finally {
+    await cleanupControllerImplementationReviewDecisionServiceFixture(fixture);
+  }
+});
+
+test("rearm 用尽的测试投递换新信封：前沿回到准备，重发同一次尝试而不是新增尝试", async () => {
+  const fixture = await createTestDeliveryWorkspaceFixture();
+  try {
+    const target = {
+      workspacePath: fixture.workspacePath,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.testTargetTaskId,
+    };
+    const prepared = await prepareFixtureDelivery(target, {
+      expectedStreamRevision: 8,
+      idempotencyKey: "fixture-test-prepare-1",
+    });
+    const rejected = await exhaustRearms(fixture, prepared, "fixture-test");
+    equal(rejected.target.phase, "test-host-effect-rejected");
+    equal(rejected.next.frontier, "test-delivery-planning");
+    const reprepared = await prepareFixtureDelivery(target, {
+      expectedStreamRevision: rejected.event.streamRevision,
+      idempotencyKey: "fixture-test-prepare-again",
+    });
+    equal(reprepared.status, "committed");
+    equal(reprepared.delivery.phase, "test-delivery-prepared");
+    const before = await loadFixtureDeliveryEnvelope(fixture, prepared.delivery.deliveryId);
+    const after = await loadFixtureDeliveryEnvelope(fixture, reprepared.delivery.deliveryId);
+    if (before.workType !== "test" || after.workType !== "test") {
+      throw new Error("Expected test envelopes.");
+    }
+    equal(after.attempt.testAttemptId, before.attempt.testAttemptId);
+  } finally {
+    await cleanupTestDeliveryWorkspaceFixture(fixture);
   }
 });

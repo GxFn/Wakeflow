@@ -114,11 +114,6 @@ const expectArtifactErrorCode = (code: string) => expectErrorCode("PluginArtifac
 const expectClosureErrorCode = (code: string) =>
   expectErrorCode("PluginDependencyClosureError", code);
 
-/** stderr 里固定代码形式的行；其余行（例如 Node 默认处理器的堆栈）不计入。 */
-function fixedCodeLines(stderr: string): readonly string[] {
-  return stderr.split("\n").filter((line) => line.startsWith(FIXED_CODE_PREFIX));
-}
-
 interface ManifestFile {
   readonly path: string;
   readonly bytes: number;
@@ -284,8 +279,9 @@ function spawnHookObserver(
 
 /**
  * 把制品的 launcher 原样搬进一个临时根，并在它期望的位置放一个"求值即抛出、但先排下一次
- * 稍后故障"的假入口：launcher 会先走 catch 打出 `launcher`，随后那次故障才发生。守卫仍在位
- * 时它会打出第二行 `internal`；守卫已卸下时它落回 Node 默认处理器，不可能再打出固定代码行。
+ * 稍后故障"的假入口：launcher 会先走 catch 打出 `launcher`，随后那次故障才发生。报告之后守卫
+ * 仍在位，`reported` 标志压掉第二行 `internal`；若守卫被卸下，故障会落回 Node 默认处理器，
+ * 打出带路径的堆栈并以 1 退出。
  * 真实制品的这条路径（模块缺失）之后没有任何待办，所以这个假入口只是把第二次故障做成可观察的。
  */
 function launcherWithLateFaultFixture(t: TestContext, launcher: string): string {
@@ -609,7 +605,7 @@ test("制品搬到仓库之外后，两个 MCP 入口仍经官方 stdio Client �
   }
 });
 
-test("两个制品的 hooks/observe.mjs 以宿主 SessionStart payload 把记录写进手搭工作区；观察目录被文件顶替时退出 0、stdout 空、stderr 恰好一行固定代码；报告固定代码后守卫已卸下，同一次运行的第二次故障不追加第二行", {
+test("两个制品的 hooks/observe.mjs 以宿主 SessionStart payload 把记录写进手搭工作区；观察目录被文件顶替时退出 0、stdout 空、stderr 恰好一行固定代码；报告固定代码后守卫仍在位，同一次运行的第二次故障既不追加第二行也不落到 Node 默认处理器", {
   timeout: 60_000,
 }, async (t) => {
   const output = OUTPUT_ROOT;
@@ -638,13 +634,14 @@ test("两个制品的 hooks/observe.mjs 以宿主 SessionStart payload 把记录
     equal(failed.stdout, "", artifact.hostId);
     equal(failed.stderr, "wakeflow-hook-observer: write-failed\n", artifact.hostId);
 
-    // D4：launcher 打出固定代码后卸下自己的进程守卫——同一次运行里随后再发生一次故障也
-    // 不会追加第二行固定代码。假入口先排一次稍后故障再在求值时抛出，故障必定发生在 catch
+    // D4：launcher 打出固定代码后仍留着自己的进程守卫，`reported` 压掉第二行——同一次运行里
+    // 随后再发生一次故障既不追加第二行，也不落到 Node 默认处理器（堆栈、非 0 退出）。假入口先排一次稍后故障再在求值时抛出，故障必定发生在 catch
     // 打出 `launcher` 之后（微任务先于定时器），所以这里不依赖机器快慢。
     const isolated = launcherWithLateFaultFixture(t, launcher);
     const guarded = spawnHookObserver(isolated, artifact.hostId, workspace);
     equal(guarded.stdout, "", artifact.hostId);
-    deepEqual(fixedCodeLines(guarded.stderr), [`${FIXED_CODE_PREFIX}launcher`], artifact.hostId);
+    equal(guarded.status, 0, artifact.hostId);
+    equal(guarded.stderr, `${FIXED_CODE_PREFIX}launcher\n`, artifact.hostId);
   }
 });
 

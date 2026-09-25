@@ -23,8 +23,8 @@ import { StrictTextFileError } from "./strict-text-file.js";
  * Wakeflow Foundation / Filesystem：根作用域内的短生命周期独占文件锁。
  *
  * 锁记录通过 `DurableAtomicFileCreate` 的操作系统不替换边界完整发布。竞争者只等待
- * 并复验已有目标是权限位 `0600` 的单链接普通文件；持有者可以跨 `await` 执行有界
- * 临界区，最后根据创建回执绑定的指定 inode 删除锁文件并同步父目录。
+ * 并复验已有目标是权限位 `0600` 的普通文件（单链接；创建暂存仍在时为两个链接）；
+ * 持有者可以跨 `await` 执行有界临界区，最后根据创建回执绑定的指定 inode 删除锁文件并同步父目录。
  *
  * 本层故意不自动打破失效锁。Node.js 没有暴露支持比较后删除的 `unlinkat` 或
  * `renameat2`；根据修改时间或进程号猜测后删除路径，可能在旧职责所有者释放锁、
@@ -338,6 +338,7 @@ export async function inspectRootedExclusiveFileLock(root, lockPath) {
         }
         throw error;
     }
+    // `createFileAtomically` 先 link(stage, target) 再 unlink stage，竞争者可能短暂看到两个链接。
     if (read.node.kind !== "file"
         || (read.node.linkCount !== 1n && read.node.linkCount !== 2n)
         || read.node.permissionBits !== 0o600

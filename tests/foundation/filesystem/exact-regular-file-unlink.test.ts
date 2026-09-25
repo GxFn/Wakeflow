@@ -24,6 +24,7 @@ import {
   type PortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { countFsyncs } from "./fsync-count-probe.js";
 
 async function expectUnlinkError(
   action: () => unknown | Promise<unknown>,
@@ -104,7 +105,47 @@ test("last pathname removal proves the exact 1 to 0 transition", async () => {
   }
 });
 
-test("stale expected node never removes the newer pathname", async () => {
+test("per-call durability none skips every sync with the same receipt", { concurrency: false }, async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-unlink-nosync-"));
+  writeFileSync(path.join(rootPath, "only"), "no-sync");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const resourcePath = parsePortableResourcePath("only");
+    const expected = await root.inspectExistingResource(resourcePath);
+    const counted = await countFsyncs(() => unlinkRegularFileExactly(root, resourcePath, {
+      expectedNode: expected.node,
+      durability: "none",
+    }));
+    equal(counted.syncCount, 0);
+    equal(counted.result.replacementObserved, false);
+    equal(counted.result.nodeAfterUnlink.linkCount, 0n);
+    equal(statSync(path.join(rootPath, "only"), { throwIfNoEntry: false }), undefined);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("replacement-allowed settlement without a successor observes no replacement", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-unlink-successor-"));
+  writeFileSync(path.join(rootPath, "only"), "lock");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const resourcePath = parsePortableResourcePath("only");
+    const expected = await root.inspectExistingResource(resourcePath);
+    const receipt = await unlinkRegularFileExactly(root, resourcePath, {
+      expectedNode: expected.node,
+      settlement: "replacement-allowed",
+    });
+    equal(receipt.replacementObserved, false);
+    equal(receipt.nodeAfterUnlink.linkCount, 0n);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("stale expected node never removes a changed file", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-unlink-stale-"));
   const target = path.join(rootPath, "file");
   writeFileSync(target, "before");

@@ -28,10 +28,7 @@ import {
   JsonValueError,
   type JsonValue,
 } from "../../foundation/data/json-value.js";
-import {
-  parsePortableResourcePath,
-  type PortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
@@ -49,6 +46,7 @@ import {
   type WakeflowWindowRuntimeLogicalRoot,
 } from "./wakeflow-window-runtime-desired-topology.js";
 import {
+  wakeflowWindowRuntimeProjectionRef,
   wakeflowWindowRuntimeProjectionRootRef,
 } from "./wakeflow-window-runtime-paths.js";
 
@@ -454,16 +452,15 @@ function projectionFor(
       rootObservationDigest: observation.observationDigest,
     }),
   };
+  const body = projectionBasis(basis);
   return parseWakeflowWindowRuntimeUnregisteredProjection({
-    ...projectionBasis(basis),
-    projectionDigest: computeCanonicalJsonSha256Digest(
-      projectionBasis(basis),
-    ),
+    ...body,
+    projectionDigest: computeCanonicalJsonSha256Digest(body),
   });
 }
 
 function entryFor(
-  projectionRootRef: PortableResourcePath,
+  profileValue: unknown,
   projection: Readonly<WakeflowWindowRuntimeUnregisteredProjection>,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry> {
   const document = renderDeterministicJsonDocument(
@@ -472,9 +469,7 @@ function entryFor(
   );
   return Object.freeze({
     windowId: projection.windowId,
-    resourceRef: parsePortableResourcePath(
-      `${projectionRootRef}/${projection.windowId}.json`,
-    ),
+    resourceRef: wakeflowWindowRuntimeProjectionRef(profileValue, projection.windowId),
     projection,
     document,
     documentDigest: computeSha256Digest(
@@ -502,7 +497,7 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
   }
   const projectionRootRef = wakeflowWindowRuntimeProjectionRootRef(profileValue);
   const entries = Object.freeze(desired.windows.map((window) => entryFor(
-    projectionRootRef,
+    profileValue,
     projectionFor(
       desired.programId,
       desired.hostId,

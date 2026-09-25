@@ -37,6 +37,10 @@ import {
   DemandFileEventStore,
   DemandFileEventStoreError,
 } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
+import {
+  DemandFileEventSnapshotStore,
+  DemandFileEventSnapshotStoreError,
+} from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -448,22 +452,113 @@ test("Demand File Event Store 在读取 payload 前执行 stream 总字节预算
   try {
     const store = new DemandFileEventStore(root);
     await store.initialize();
-    const oversized = path.join(
-      fixtureRoot,
-      "event-sourcing",
-      "commits",
-      "0000000000000001.json",
-    );
+    const commitsDirectory = path.join(fixtureRoot, "event-sourcing", "commits");
+    const oversized = path.join(commitsDirectory, "0000000000000001.json");
     writeFileSync(oversized, "", { mode: 0o600 });
     truncateSync(oversized, 65 * 1024 * 1024);
     await rejects(
       store.readCommits(),
       (error: unknown) =>
         error instanceof DemandFileEventStoreError &&
-        error.reason === "capacity",
+        error.reason === "capacity" &&
+        error.path === "$commits/0",
+    );
+    // 每个提交都低于单提交上限，但五个合计超过 stream 总字节预算。
+    for (let sequence = 1; sequence <= 5; sequence += 1) {
+      const commitPath = path.join(
+        commitsDirectory,
+        `${String(sequence).padStart(16, "0")}.json`,
+      );
+      writeFileSync(commitPath, "", { mode: 0o600 });
+      truncateSync(commitPath, 13 * 1024 * 1024);
+    }
+    await rejects(
+      store.readCommits(),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError &&
+        error.reason === "capacity" &&
+        error.path === "$commits",
     );
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
+
+test("Demand File Event Snapshot Store 退休快照时照常上抛中止", async () => {
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-demand-snapshot-retire-abort-"),
+  );
+  const root = await RootedDirectory.open(fixtureRoot);
+  try {
+    await new DemandFileEventStore(root).initialize();
+    const snapshotStore = new DemandFileEventSnapshotStore(root);
+    writeFileSync(
+      path.join(fixtureRoot, "event-sourcing", "snapshots", "0000000000000001.json"),
+      "{}",
+      { mode: 0o600 },
+    );
+    const controller = new AbortController();
+    controller.abort();
+    const isAborted = (error: unknown) =>
+      error instanceof DemandFileEventSnapshotStoreError &&
+      error.reason === "aborted";
+    await rejects(
+      snapshotStore.retireSnapshotsBefore(5, { signal: controller.signal }),
+      isAborted,
+    );
+    await rejects(
+      snapshotStore.retireSnapshotAt(1, { signal: controller.signal }),
+      isAborted,
+    );
+    equal(await snapshotStore.retireSnapshotAt(1), true);
+  } finally {
+    await root.close();
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test(
+  "Demand File Event Store 把 link 前的中止报告为 aborted 而非 commit-uncertain",
+  { concurrency: false },
+  async () => {
+    const fixtureRoot = mkdtempSync(
+      path.join(os.tmpdir(), "wakeflow-demand-append-link-abort-"),
+    );
+    const root = await RootedDirectory.open(fixtureRoot);
+    const originalOpen = RootedResourceParentHandle.open;
+    const first = prepared();
+    const commitRef = demandEventStreamCommitRef(first.commit.commitSequence);
+    const controller = new AbortController();
+    RootedResourceParentHandle.open = async function patchedOpen(
+      ...args: Parameters<typeof originalOpen>
+    ) {
+      if (args[1] === commitRef && args[2] === "$destinationResourcePath") {
+        controller.abort();
+      }
+      return originalOpen.apply(this, args);
+    };
+    try {
+      const store = new DemandFileEventStore(root);
+      await store.initialize();
+      await rejects(
+        store.append(first, { signal: controller.signal }),
+        (error: unknown) =>
+          error instanceof DemandFileEventStoreError &&
+          error.reason === "aborted",
+      );
+      equal(controller.signal.aborted, true);
+      equal((await store.readCommits()).commits.length, 0);
+      deepEqual(
+        readdirSync(
+          path.join(fixtureRoot, "event-sourcing", "append-candidates"),
+        ),
+        [],
+      );
+    } finally {
+      RootedResourceParentHandle.open = originalOpen;
+      await root.close();
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  },
+);

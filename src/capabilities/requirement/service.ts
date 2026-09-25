@@ -27,7 +27,11 @@ import {
 } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
+import {
+  parseUtcInstant,
+  type UtcInstant,
+  UtcInstantError,
+} from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import {
   createRequirementRecord,
@@ -166,6 +170,7 @@ interface PreviewFacts {
     readonly missingSections: PackageAnalysis["missing"];
   } | null;
   readonly requirementId: string | null;
+  readonly confirmationMissing: boolean;
 }
 
 const MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
@@ -263,6 +268,7 @@ async function readSurfaceDocument(
   role: RequirementDocumentRole,
   sourcePath: string,
   recordPath: string,
+  requestPath: string,
   signal: AbortSignal | undefined,
 ): Promise<PackageDocumentText> {
   try {
@@ -282,12 +288,19 @@ async function readSurfaceDocument(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError && error.reason === "not-found") {
-      fail("not-found", "package-document", `$request.package.${role}`, { cause: error });
+      fail("not-found", "package-document", requestPath, { cause: error });
+    }
+    if (error instanceof StableFileReadError && error.reason === "aborted") {
+      fail("io-failure", "aborted", "$signal", { cause: error });
+    }
+    if (
+      error instanceof StableFileReadError &&
+      (error.reason === "io-failure" || error.reason === "close-failure")
+    ) {
+      fail("io-failure", `package-document-${error.reason}`, requestPath, { cause: error });
     }
     if (error instanceof StableFileReadError || error instanceof StrictTextFileError) {
-      fail("invalid-request", `package-document-${error.reason}`, `$request.package.${role}`, {
-        cause: error,
-      });
+      fail("invalid-request", `package-document-${error.reason}`, requestPath, { cause: error });
     }
     throw error;
   }
@@ -340,9 +353,17 @@ async function readPackageDocuments(
         "requirement",
         input.requirementPath,
         "requirement.md",
+        "$request.package.requirementPath",
         context.signal,
       ),
-      await readSurfaceDocument(root, "landing", input.landingPath, "landing.md", context.signal),
+      await readSurfaceDocument(
+        root,
+        "landing",
+        input.landingPath,
+        "landing.md",
+        "$request.package.landingPath",
+        context.signal,
+      ),
     ];
     for (const attachment of [...attachments].sort()) {
       mediaTypeOf(attachment);
@@ -352,6 +373,7 @@ async function readPackageDocuments(
           "attachment",
           attachment,
           attachmentRecordPath(attachment),
+          "$request.package.attachments",
           context.signal,
         ),
       );
@@ -389,6 +411,7 @@ function recordDraft(
   input: PackageInput,
   documents: readonly PackageDocumentText[],
   analysis: PackageAnalysis,
+  confirmedAt: UtcInstant,
   confirmationSectionDigest: Sha256Digest,
 ): Omit<CreateRequirementRecordInput, "requirementId"> {
   return {
@@ -402,10 +425,7 @@ function recordDraft(
     supersedes: (input.supersedes ?? null) as WakeflowDurableId<"requirement"> | null,
     parked: input.parked === undefined ? null : { trigger: input.parked.trigger },
     confirmation: {
-      confirmedAt: parseUtcInstant(
-        input.confirmation?.confirmedAt ?? "",
-        "$request.package.confirmation",
-      ),
+      confirmedAt,
       sectionDigest: confirmationSectionDigest,
     },
     documents: sortedByPath(documents).map((document) => ({
@@ -419,7 +439,7 @@ function recordDraft(
 }
 
 async function loadExistingRecord(
-  context: RequirementContext,
+  context: Pick<RequirementContext, "store" | "signal">,
   requirementId: string,
 ): Promise<Readonly<LoadedLedgerAuthorityRecord<RequirementRecord>> | null> {
   try {
@@ -438,6 +458,20 @@ async function supersededState(
   if (requirementId === undefined) return null;
   const source = await readRequirementClaimState(context.root, requirementId, context.signal);
   return source === null ? "unknown" : source.state;
+}
+
+/** 词法合格但日历上不存在的时刻（如 2 月 31 日）是请求错误，不是未处理异常。 */
+function parseConfirmedAt(confirmedAt: string): UtcInstant {
+  try {
+    return parseUtcInstant(confirmedAt, "$request.package.confirmation.confirmedAt");
+  } catch (error: unknown) {
+    if (error instanceof UtcInstantError) {
+      fail("invalid-request", "confirmed-at", "$request.package.confirmation.confirmedAt", {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
 async function planPublish(
@@ -467,19 +501,25 @@ async function planPublish(
   // 隐私命中时不回显任何章节正文：阻塞项只说位置与类别。
   const privacyHit = blockers.some((blocker) => blocker.startsWith(PRIVACY_BLOCKER_PREFIX));
   facts.current = Object.freeze({
-    summary: Object.freeze({
-      title: input.title,
-      demandType: input.demandType,
-      priority: input.priority,
-      testingDecision: input.testingDecision,
-      sections: privacyHit ? [] : analysis.summary,
-      missingSections: analysis.missing,
-    }),
+    // 命中可能在标题或测试决策摘要里：整份摘要都不回显。
+    summary: privacyHit
+      ? null
+      : Object.freeze({
+          title: input.title,
+          demandType: input.demandType,
+          priority: input.priority,
+          testingDecision: input.testingDecision,
+          sections: analysis.summary,
+          missingSections: analysis.missing,
+        }),
     requirementId: null,
+    // 阻塞项有 64 项上限，确认缺失从输入直接判定，不依赖它是否留在列表里。
+    confirmationMissing: confirmedAt === null || analysis.confirmationSectionDigest === null,
   });
   if (blockers.length > 0 || analysis.confirmationSectionDigest === null || confirmedAt === null) {
     return Object.freeze({ status: "blocked", blockers, plan: null, digest: null });
   }
+  const confirmedInstant = parseConfirmedAt(confirmedAt);
   const requirementId = deriveRequirementId({
     programId: context.snapshot.model.program.programId,
     designSurfaceId: input.designSurfaceId,
@@ -507,7 +547,14 @@ async function planPublish(
   const plan: PublishPlan = Object.freeze({
     action: "publish",
     requirementId,
-    draft: recordDraft(context, input, documents, analysis, analysis.confirmationSectionDigest),
+    draft: recordDraft(
+      context,
+      input,
+      documents,
+      analysis,
+      confirmedInstant,
+      analysis.confirmationSectionDigest,
+    ),
     supersedes: input.supersedes ?? null,
   });
   // preview 就把记录过一遍编解码器：apply 写不进去的记录在这里就报阻塞。
@@ -793,10 +840,11 @@ async function recoverPublish(
 
 function nextOf(
   phase: PublicationTransactionPhase<RequirementPlan, Outcome>,
+  facts: PreviewFacts,
 ): Readonly<NextProjection> {
   if (phase.mode === "preview") {
     return deriveRequirementNext({
-      confirmationMissing: phase.planned.blockers.includes("user-confirmation-missing"),
+      confirmationMissing: phase.planned.status === "blocked" && facts.confirmationMissing,
       awaitingApply: phase.planned.status === "ready",
       pendingCount: 0,
     });
@@ -851,7 +899,13 @@ export async function executeRequirementPublicationRequest(
   value: unknown,
   options: RequirementServiceOptions = {},
 ): Promise<RequirementPublicationResult> {
-  const facts = { current: Object.freeze({ summary: null, requirementId: null }) as PreviewFacts };
+  const facts = {
+    current: Object.freeze({
+      summary: null,
+      requirementId: null,
+      confirmationMissing: false,
+    }) as PreviewFacts,
+  };
   return runPublicationTransaction<
     RequirementPublicationRequest,
     RequirementContext,
@@ -904,7 +958,7 @@ export async function executeRequirementPublicationRequest(
           ? applyPublish(context, plan)
           : applyClaimTransition(context, plan),
       recover: (context, operationId) => recoverPublish(context, operationId),
-      next: async (_context, phase) => nextOf(phase),
+      next: async (_context, phase) => nextOf(phase, facts.current),
       result: (envelope, input, phase, next) =>
         assembleResult(envelope, input, phase, next, facts.current),
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
@@ -980,10 +1034,7 @@ async function inspectBoard(
     context.signal,
   );
   if (source === null) fail("not-found", "package-unknown", "$request.requirementId");
-  const loaded = await loadExistingRecord(
-    context as unknown as RequirementContext,
-    request.requirementId,
-  );
+  const loaded = await loadExistingRecord(context, request.requirementId);
   if (loaded === null) fail("not-found", "record-absent", "$request.requirementId");
   return admitBoardInspectionResult({
     ...base,

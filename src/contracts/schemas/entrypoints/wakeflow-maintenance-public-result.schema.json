@@ -151,7 +151,7 @@
               "type": "null"
             }
           ],
-          "description": "The zero-write execution plan a ready preview derived; apply re-derives it and compares planDigest."
+          "description": "The zero-write plan a ready preview derived: the Maintenance execution plan, or, for a reconcile that finds only safe private-mode drift, the WakeflowPrivateModeConvergencePlan view whose digest is the census digest; apply re-derives it and compares planDigest."
         },
         "freshConfigCompilation": {
           "oneOf": [

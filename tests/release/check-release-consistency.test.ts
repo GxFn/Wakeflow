@@ -31,6 +31,8 @@ interface FixtureOverrides {
   readonly marketplaceVersion?: string;
   readonly pluginEngines?: string;
   readonly releaseEligible?: boolean;
+  /** 构建清单里记录的版本；缺省与发布版本一致。 */
+  readonly manifestVersion?: string;
   /** 清单里额外列出、但不写进磁盘也不进 Git 的路径。 */
   readonly untrackedManifestPath?: string;
 }
@@ -46,7 +48,12 @@ function git(root: string, ...args: readonly string[]): string {
     {
       cwd: root,
       encoding: "utf8",
-      env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" },
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: process.env.HOME ?? "",
+        GIT_CONFIG_GLOBAL: os.devNull,
+        GIT_CONFIG_NOSYSTEM: "1",
+      },
       shell: false,
       windowsHide: true,
       timeout: 30_000,
@@ -87,7 +94,7 @@ function writeSources(root: string, overrides: FixtureOverrides): void {
       json({
         kind: "WakeflowPluginArtifactManifest",
         schemaVersion: 1,
-        version,
+        version: overrides.manifestVersion ?? version,
         releaseEligible: overrides.releaseEligible ?? true,
         files:
           overrides.untrackedManifestPath === undefined
@@ -186,8 +193,19 @@ test("任一版本源漂移、主版本号为 0、引擎不一致、运行时不
     () => checkWakeflowReleaseConsistency(repositoryFixture(t), { nodeVersion: "25.0.0" }),
     expectReleaseErrorCode("wakeflow-release-node"),
   );
+  // 同一主版本里低于下限的次版本与补丁号也要拒绝，高于下限的放行。
+  throws(
+    () => checkWakeflowReleaseConsistency(repositoryFixture(t), { nodeVersion: "24.18.9" }),
+    expectReleaseErrorCode("wakeflow-release-node"),
+  );
+  checkWakeflowReleaseConsistency(repositoryFixture(t), { nodeVersion: "24.20.0" });
   throws(
     () => checkWakeflowReleaseConsistency(repositoryFixture(t, { releaseEligible: false })),
+    expectReleaseErrorCode("wakeflow-release-manifest"),
+  );
+  // 早先构建留下的旧清单：版本与发布版本不一致。
+  throws(
+    () => checkWakeflowReleaseConsistency(repositoryFixture(t, { manifestVersion: "0.9.9" })),
     expectReleaseErrorCode("wakeflow-release-manifest"),
   );
   // 清单列出的路径没进 Git（被忽略或忘了 add）：干净树证明不了这一点，所以单独一道门。
@@ -234,6 +252,11 @@ test("Git 门各自独立：非 main 分支、脏树、标签不在 HEAD、本�
   throws(
     () => checkWakeflowReleaseConsistency(behind, { requireRemote: true }),
     expectReleaseErrorCode("wakeflow-release-remote"),
+  );
+  // 标签还在第一次提交上：存在但不在 HEAD。
+  throws(
+    () => checkWakeflowReleaseConsistency(behind, { requireTag: true }),
+    expectReleaseErrorCode("wakeflow-release-tag"),
   );
   git(behind, "update-ref", "refs/remotes/origin/main", "HEAD");
   git(behind, "tag", "--force", `v${VERSION}`, "HEAD");

@@ -192,6 +192,18 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
         },
       },
     }),
+    // 无重复路径、拼写一致：只有“声明的祖先必须是目录容器”规则会拒绝文件 CUSTOM.md 之下的路径。
+    parseWakeflowWorkspaceHostResourceProfile({
+      ...collidingProfile,
+      instructionFileName: "CUSTOM.md",
+      surfaces: {
+        ...collidingProfile.surfaces,
+        settingsIntegration: {
+          portablePath: "CUSTOM.md/settings.json",
+          localPath: "CUSTOM.md/settings.local.json",
+        },
+      },
+    }),
   ];
   for (const profile of unsafeProfiles) {
     caught = undefined;

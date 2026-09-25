@@ -147,6 +147,7 @@ function parseRequest(value) {
         config,
         configDigest,
         profile,
+        catalog,
         catalogDigest,
         surfaceId,
         signal: record.signal,
@@ -168,8 +169,7 @@ function assertWorkspaceRoot(value) {
 }
 /** 目录里属于该 surface 根下的 scaffold 目录声明，按相对路径排序。 */
 function scaffoldPaths(request) {
-    const catalog = createWakeflowManagedSupportResourceCatalog(request.config, request.profile);
-    return Object.freeze(catalog.declarations
+    return Object.freeze(request.catalog.declarations
         .filter((entry) => entry.placement.root.kind === "support-surface"
         && entry.placement.root.surfaceId === request.surfaceId
         && entry.placement.relativePath !== null
@@ -296,7 +296,15 @@ export async function inspectWakeflowManagedSupportRoot(workspaceRootValue, requ
     })));
     if (placement.state === "present") {
         const observed = await withSupportRoot(workspaceRootValue, placement.absolutePath, async (supportRoot) => {
-            const rootNode = await supportRoot.assertCurrent("$supportRoot");
+            let rootNode;
+            try {
+                rootNode = await supportRoot.assertCurrent("$supportRoot");
+            }
+            catch (error) {
+                if (error instanceof RootedDirectoryError)
+                    fail("placement", "$root");
+                throw error;
+            }
             const entries = [];
             for (const relativePath of paths) {
                 entries.push(await observeScaffold(supportRoot, relativePath, expectedUserId));
@@ -385,12 +393,13 @@ export async function materializeWakeflowManagedSupportRoot(workspaceRootValue, 
         || finalPlacement.realPath !== materialized.absolutePath) {
         fail("placement", "$root");
     }
+    const rootCreated = materialized.segments.some((entry) => entry.disposition === "created");
     return Object.freeze({
         kind: "WakeflowManagedSupportRootMaterializationReceipt",
-        disposition: materialized.segments.some((entry) => entry.disposition === "created")
-            || scaffold.some((entry) => entry.disposition === "created")
+        disposition: rootCreated || scaffold.some((entry) => entry.disposition === "created")
             ? "created"
             : "existing",
+        rootDisposition: rootCreated ? "created" : "existing",
         configDigest: request.configDigest,
         catalogDigest: request.catalogDigest,
         surfaceId: request.surfaceId,

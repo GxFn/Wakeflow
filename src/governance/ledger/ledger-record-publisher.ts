@@ -109,9 +109,11 @@ function parseMembers(
       || !ArrayBuffer.isView(inputBytes)
       || !(inputBytes instanceof Uint8Array)
       || types.isProxy(inputBytes)
-      || inputBytes.byteLength > LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES
     ) {
       fail("input", `$members/${index}`);
+    }
+    if (inputBytes.byteLength > LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES) {
+      fail("capacity", `$members/${index}`);
     }
     const bytes = new Uint8Array(inputBytes);
     const digest = computeSha256Digest(bytes, `$members/${index}/bytes`);
@@ -198,7 +200,7 @@ function preparePublication(
       fail("member", "$members");
     }
     if (error instanceof LedgerRecordPublicationIntentError) {
-      fail("conflict", "$intent");
+      fail("operation-failure", "$intent");
     }
     throw error;
   }
@@ -267,7 +269,6 @@ export async function publishLedgerAuthorityRecord(
       const residuesBefore = await inspectLedgerRecordPublicationResidues(
         root,
         prepared.intent,
-        signal,
       );
       const finalNode = await ledgerPublicationResourceNodeOrNull(
         root,

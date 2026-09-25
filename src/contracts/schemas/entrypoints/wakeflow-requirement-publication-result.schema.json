@@ -170,7 +170,7 @@
         },
         "sections": {
           "type": "array",
-          "maxItems": 16,
+          "maxItems": 18,
           "items": {
             "type": "object",
             "additionalProperties": false,

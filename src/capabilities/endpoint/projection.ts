@@ -48,7 +48,7 @@ export interface EndpointNextInput {
   readonly unregisteredWindowIds: readonly string[];
 }
 
-/** 端点切片对 `next` 的贡献：先登记完所有窗口，再处理过期的工作声明。 */
+/** 端点切片对 `next` 的贡献：先登记本窗口，再恢复过期的工作声明，最后登记 pod 内其余窗口。 */
 export function deriveEndpointNext(input: Readonly<EndpointNextInput>): Readonly<NextProjection> {
   if (!input.registered) {
     return Object.freeze({

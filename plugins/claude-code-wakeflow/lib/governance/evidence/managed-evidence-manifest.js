@@ -6,7 +6,7 @@ import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundatio
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
 import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
@@ -132,6 +132,15 @@ function parseKind(value) {
         fail("schema", "$/kind");
     return value;
 }
+/** 同一行可有多种命中；顺序按(ref, line, kind)严格递增，重复项视为乱序。 */
+function findingFollows(previous, ref, finding) {
+    const byRef = compareText(previous.ref, ref);
+    if (byRef !== 0)
+        return byRef < 0;
+    if (previous.line !== finding.line)
+        return previous.line < finding.line;
+    return compareText(previous.kind, finding.kind) < 0;
+}
 function parsePrivacyFindings(value, payloadRefs) {
     return Object.freeze(value.map((finding, index) => {
         const path = `$/contentReview/privacyFindings/${index}`;
@@ -147,9 +156,7 @@ function parsePrivacyFindings(value, payloadRefs) {
         if (!payloadRefs.has(ref))
             fail("content-review", `${path}/ref`);
         const previous = value[index - 1];
-        if (previous !== undefined &&
-            (compareText(previous.ref, ref) > 0 ||
-                (previous.ref === ref && previous.line >= finding.line))) {
+        if (previous !== undefined && !findingFollows(previous, ref, finding)) {
             fail("ordering", path);
         }
         return Object.freeze({ ref, line: finding.line, kind: finding.kind });
@@ -273,8 +280,10 @@ export function parseManagedEvidenceManifest(value) {
             fail("json", error.path);
         throw error;
     }
-    if (encodeCanonicalJson(json, "$manifest").byteLength + 1 >
-        MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES) {
+    if (
+    // 容量按实际写入的确定性文档（缩进渲染加换行）计量，而不是紧凑规范形式。
+    encodeUtf8(renderDeterministicJsonDocument(json, "$manifest"), "$manifest")
+        .byteLength > MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES) {
         fail("capacity", "$manifest");
     }
     const result = validateWire(json);

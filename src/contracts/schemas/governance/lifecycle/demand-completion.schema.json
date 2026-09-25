@@ -87,7 +87,8 @@
       "properties": {
         "streamRevision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "stateDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
@@ -123,7 +124,8 @@
         },
         "claimStateRevision": {
           "type": "integer",
-          "minimum": 2
+          "minimum": 2,
+          "maximum": 9007199254740991
         },
         "claimStateDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"

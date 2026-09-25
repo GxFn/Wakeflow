@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_REARM_DELIVERY_RESULT_SCHEMA",
   "title": "WakeflowRearmDeliveryResultV1",
   "description": "Result of one delivery rearm: the new generation with its re-issued permit, the appended event, and next. A callback deliveryId (the wake-controller callback of a recorded result) re-issues the callback permit against the current Controller binding without a work claim (kind callback).",
-  "$comment": "The permit carries the same prompt as the original envelope with a new fence; sending remains the Agent host effect.",
+  "$comment": "A target rearm re-issues the original envelope's prompt with a new fence; a callback rearm re-issues the callback's portable prompt with a null fence (envelopeDigest then holds the result digest). Sending remains the Agent host effect.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -59,6 +59,30 @@
       "$ref": "#/$defs/next"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rearm": { "type": "object", "properties": { "kind": { "const": "callback" } } }
+        }
+      },
+      "then": {
+        "properties": {
+          "delivery": { "type": "object", "properties": { "workType": { "const": "callback" } } },
+          "permit": { "type": "object", "properties": { "fence": { "type": "null" } } }
+        }
+      },
+      "else": {
+        "properties": {
+          "delivery": {
+            "type": "object",
+            "properties": { "workType": { "enum": ["implementation", "test"] } }
+          },
+          "permit": { "type": "object", "properties": { "fence": { "type": "object" } } }
+        }
+      }
+    }
+  ],
   "$defs": {
     "demandId": {
       "type": "string",

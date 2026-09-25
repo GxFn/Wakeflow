@@ -59,7 +59,7 @@ export interface WakeflowMaintenanceJournal {
   readonly planDigest: Sha256Digest;
   readonly matrixDigest: Sha256Digest;
   readonly currentConfigDigest: Sha256Digest | null;
-  readonly desiredConfigDigest: Sha256Digest | null;
+  readonly desiredConfigDigest: Sha256Digest;
   readonly stepIds: readonly [string, ...string[]];
   readonly checkpoint: number;
   readonly affectedStepId: string | null;
@@ -172,7 +172,7 @@ export function createPreparedWakeflowMaintenanceJournal(
   });
 }
 
-/** 把任意内存值解析为严格、冻结的 prepared journal。 */
+/** 把任意内存值解析为严格、冻结的 maintenance journal（prepared、executing 或 terminal）。 */
 export function parseWakeflowMaintenanceJournal(
   value: unknown,
 ): Readonly<WakeflowMaintenanceJournal> {
@@ -234,7 +234,7 @@ export function parseWakeflowMaintenanceJournal(
       validated.value.currentConfigDigest,
       "$journal.currentConfigDigest",
     ),
-    desiredConfigDigest: nullableDigest(
+    desiredConfigDigest: digest(
       validated.value.desiredConfigDigest,
       "$journal.desiredConfigDigest",
     ),
@@ -364,7 +364,7 @@ export function isWakeflowMaintenanceJournalSuccessor(
     && proposed.affectedStepId === null;
 }
 
-/** 生成 prepared journal 的唯一 deterministic pretty JSON 表示。 */
+/** 生成 maintenance journal（prepared、executing 或 terminal）的唯一 deterministic pretty JSON 表示。 */
 export function renderWakeflowMaintenanceJournal(value: unknown): string {
   return renderDeterministicJsonDocument(
     journalRepresentation(parseWakeflowMaintenanceJournal(value)),

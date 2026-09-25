@@ -38,7 +38,7 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   change the source, run `npm run build:artifacts:committed`, and let
   `npm run build:check` prove the committed bytes match a fresh build.
 - `assets/agent-text/` is the single source of the skills, commands and READMEs
-  in both artifacts. Host differences are the six placeholders filled by
+  in both artifacts. Host differences are the nine placeholders filled by
   `src/hosts/<host>/<host>-agent-text-profile.ts`; the build fails on an
   unregistered placeholder or an unused value.
 - Host-specific behavior lives only in `src/hosts/<host>/`: profiles, the hook

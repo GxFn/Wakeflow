@@ -11,7 +11,8 @@ import path from "node:path";
  * 计数期间仍然转调原方法，被测代码走的还是同一条真实路径。
  *
  * `FileHandle` 没有公开构造器，只能从一个真实句柄取到原型；补丁是进程全局的，所以
- * 用它的测试必须串行（`{ concurrency: false }`），并且总在 `finally` 里还原。
+ * 安装期间同一进程里不得有其他会发出 `fsync` 的工作（例如并发的子测试）同时运行，
+ * 并且总在 `finally` 里还原。
  */
 
 interface FileHandleSyncPrototype {

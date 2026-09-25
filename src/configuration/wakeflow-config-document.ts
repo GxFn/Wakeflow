@@ -237,7 +237,7 @@ export function createWakeflowConfigDocumentValue(
   );
 }
 
-/** 从严格 v3 领域模型生成唯一 deterministic pretty JSON 表示。 */
+/** 从严格 Config 领域模型生成唯一 deterministic pretty JSON 表示。 */
 export function renderWakeflowConfig(value: unknown): string {
   return renderDeterministicJsonDocument(
     createWakeflowConfigDocumentValue(value),

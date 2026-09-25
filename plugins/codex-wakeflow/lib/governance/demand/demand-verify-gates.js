@@ -60,9 +60,11 @@ function boardGate(input) {
     const state = input.claim?.state;
     if (state === undefined)
         return gate("board-claim", "fail", "package-unknown");
-    return state.status === "claimed" && state.claim?.demandId === input.loaded.identity.demandId
+    if (state.status !== "claimed")
+        return gate("board-claim", "fail", state.status);
+    return state.claim?.demandId === input.loaded.identity.demandId
         ? gate("board-claim", "pass")
-        : gate("board-claim", "fail", state.status);
+        : gate("board-claim", "fail", "claimed-by-other-demand");
 }
 async function workClaimGate(input) {
     const held = [];

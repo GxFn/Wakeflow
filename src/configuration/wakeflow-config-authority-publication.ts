@@ -15,12 +15,10 @@ import {
 } from "../foundation/filesystem/file-node-snapshot.js";
 import {
   RootedDirectory,
-  RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
-import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
+import { encodeUtf8 } from "../foundation/text/utf8.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
   WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
   WAKEFLOW_CONFIG_FILE_REF,
   WAKEFLOW_CONFIG_MAXIMUM_BYTES,
@@ -175,7 +173,6 @@ async function assertCurrentUserRoot(
     if (node.userId !== expectedUserId) fail("root-policy", "$root");
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthorityPublicationError) throw error;
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     fail("root-scope", "$root");
   }
 }
@@ -193,13 +190,7 @@ function renderModelBytes(model: WakeflowConfigModel): Uint8Array {
   let bytes: Uint8Array;
   try {
     bytes = encodeUtf8(renderWakeflowConfig(model), "$config");
-  } catch (error: unknown) {
-    if (
-      error instanceof WakeflowConfigError
-      || error instanceof Utf8Error
-    ) {
-      fail("config", "$config");
-    }
+  } catch {
     fail("config", "$config");
   }
   if (bytes.byteLength > WAKEFLOW_CONFIG_MAXIMUM_BYTES) {
@@ -279,10 +270,7 @@ async function readBackCommittedAuthority(
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
   try {
     return await readWakeflowConfigAuthoritySnapshot(root);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      fail("commit-uncertain", "$resourcePath");
-    }
+  } catch {
     fail("commit-uncertain", "$resourcePath");
   }
 }

@@ -62,6 +62,10 @@ async function inspectInitialSource(root, resourcePath, expectation, maximumByte
             if (error.reason === "resource-path") {
                 fail("input", "$sourceResourcePath");
             }
+            if (error.reason === "resource-changed"
+                || error.reason === "resource-alias") {
+                fail("source-changed", "$source");
+            }
             fail("source-root-scope", "$sourceRoot");
         }
         throw error;
@@ -252,9 +256,6 @@ async function inspectFinalSource(root, resourcePath, sourceHandle, initial) {
     catch (error) {
         if (error instanceof DurableFileCopyCandidateError)
             throw error;
-        if (error instanceof RootedDirectoryError) {
-            fail("source-changed", "$source");
-        }
         fail("source-changed", "$source");
     }
     if (opened.kind !== "file"

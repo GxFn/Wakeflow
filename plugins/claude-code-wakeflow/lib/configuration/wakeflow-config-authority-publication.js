@@ -2,9 +2,9 @@ import { types } from "node:util";
 import { parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot, } from "../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
-import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, } from "./wakeflow-config-authority-snapshot.js";
+import { RootedDirectory, } from "../foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../foundation/text/utf8.js";
+import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, } from "./wakeflow-config-authority-snapshot.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "./wakeflow-config.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
@@ -87,8 +87,6 @@ async function assertCurrentUserRoot(root, expectedUserId) {
     catch (error) {
         if (error instanceof WakeflowConfigAuthorityPublicationError)
             throw error;
-        if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
         fail("root-scope", "$root");
     }
 }
@@ -107,11 +105,7 @@ function renderModelBytes(model) {
     try {
         bytes = encodeUtf8(renderWakeflowConfig(model), "$config");
     }
-    catch (error) {
-        if (error instanceof WakeflowConfigError
-            || error instanceof Utf8Error) {
-            fail("config", "$config");
-        }
+    catch {
         fail("config", "$config");
     }
     if (bytes.byteLength > WAKEFLOW_CONFIG_MAXIMUM_BYTES) {
@@ -182,10 +176,7 @@ async function readBackCommittedAuthority(root) {
     try {
         return await readWakeflowConfigAuthoritySnapshot(root);
     }
-    catch (error) {
-        if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-            fail("commit-uncertain", "$resourcePath");
-        }
+    catch {
         fail("commit-uncertain", "$resourcePath");
     }
 }

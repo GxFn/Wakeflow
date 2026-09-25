@@ -17,6 +17,7 @@ import {
   executeRequirementPublicationRequest,
 } from "../../../src/capabilities/requirement/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { REQUIREMENT_SUMMARY_ANCHORS } from "../../../src/contracts/vocabulary/requirement-sections.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
@@ -608,8 +609,93 @@ test("parked 包激活后被认领：create_demand 根先建后 CAS 认领，回
     true,
     secondDemandPreview.blockers.join(","),
   );
-  await rejects(
-    Promise.reject(new WakeflowError("precondition-failed", "pod-busy", "$board")),
-    (error: unknown) => error instanceof WakeflowError && error.reason === "pod-busy",
+});
+
+test("预览边界：日历上不存在的确认时刻是请求错误；头部隐私命中不回显摘要；长附件路径的阻塞项被截断", {
+  timeout: 60_000,
+}, async (t) => {
+  const workspace = await fixture(t);
+  const root = workspace.root;
+  writeDrafts(workspace);
+  await expectFailure(
+    executeRequirementPublicationRequest(
+      {
+        root,
+        mode: "preview",
+        action: "publish",
+        package: packageInput(workspace, {
+          confirmation: { confirmedAt: "2026-02-31T10:00:00Z" },
+        }),
+      },
+      { clock },
+    ),
+    "invalid-request",
+    "confirmed-at",
   );
+
+  const secret = "sk-ant-abcdefghijklmnopqrstuvwxyz0123456789";
+  const leaked = await executeRequirementPublicationRequest(
+    {
+      root,
+      mode: "preview",
+      action: "publish",
+      package: packageInput(workspace, {
+        confirmation: { confirmedAt: CONFIRMED_AT },
+        testingDecision: { mode: "controller-only", summary: `密钥 ${secret}` },
+      }),
+    },
+    { clock },
+  );
+  if (leaked.kind !== "WakeflowRequirementPublicationPreview")
+    throw new Error("Expected a preview.");
+  equal(leaked.status, "blocked");
+  equal(leaked.summary, null);
+  equal(JSON.stringify(leaked).includes(secret), false, "preview echoed a credential");
+
+  const name = `${"a".repeat(236)}.md`;
+  writeFileSync(
+    path.join(workspace.designPath, "drafts", name),
+    "## Notes\n\nx\n\n## Notes\n\ny\n",
+    {
+      mode: 0o644,
+    },
+  );
+  const long = await executeRequirementPublicationRequest(
+    {
+      root,
+      mode: "preview",
+      action: "publish",
+      package: packageInput(workspace, {
+        confirmation: { confirmedAt: CONFIRMED_AT },
+        attachments: [`drafts/${name}`],
+      }),
+    },
+    { clock },
+  );
+  if (long.kind !== "WakeflowRequirementPublicationPreview") throw new Error("Expected a preview.");
+  equal(long.status, "blocked");
+  const duplicate = long.blockers.find((blocker) => blocker.startsWith("duplicate-section:"));
+  equal(Array.from(duplicate ?? "").length, 256);
+  equal(duplicate?.endsWith("…"), true);
+});
+
+test("摘要章节上限跟随两份文档乘以摘要锚点数", () => {
+  const schema = JSON.parse(
+    readFileSync(
+      path.join(
+        process.cwd(),
+        "src/contracts/schemas/entrypoints/wakeflow-requirement-publication-result.schema.json",
+      ),
+      "utf8",
+    ),
+  ) as { readonly $defs: Record<string, unknown> };
+  const found: number[] = [];
+  JSON.stringify(schema, (key, value: unknown) => {
+    if (key === "sections" && typeof value === "object" && value !== null) {
+      const bound = (value as { readonly maxItems?: unknown }).maxItems;
+      if (typeof bound === "number") found.push(bound);
+    }
+    return value;
+  });
+  deepEqual(found, [2 * REQUIREMENT_SUMMARY_ANCHORS.length]);
 });

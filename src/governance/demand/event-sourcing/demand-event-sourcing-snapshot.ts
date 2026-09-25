@@ -82,7 +82,6 @@ export interface DemandEventSourcingSnapshot {
 }
 
 export type DemandEventSourcingSnapshotErrorReason =
-  | "input"
   | "json"
   | "schema"
   | "identifier"
@@ -95,7 +94,6 @@ export type DemandEventSourcingSnapshotErrorReason =
   | "representation";
 
 const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing snapshot input is invalid.",
   json: "Demand Event Sourcing snapshot is not passive JSON data.",
   schema: "Demand Event Sourcing snapshot does not satisfy its Schema.",
   identifier: "Demand Event Sourcing snapshot contains an invalid identity.",

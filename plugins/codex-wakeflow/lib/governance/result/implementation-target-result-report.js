@@ -317,10 +317,7 @@ export function createImplementationTargetResultReport(contentValue, options = {
     const content = parseImplementationTargetResultReportContent(contentValue);
     let reportedAt;
     try {
-        reportedAt =
-            options.clock === undefined
-                ? readUtcWallClock()
-                : readUtcWallClock(options.clock);
+        reportedAt = readUtcWallClock(options.clock);
     }
     catch (error) {
         if (error instanceof UtcWallClockError)

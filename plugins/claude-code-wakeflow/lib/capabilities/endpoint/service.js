@@ -62,8 +62,9 @@ function admitFacade(facade) {
         throw error;
     }
 }
-function locatorProvider(hostId) {
-    return hostId === "claude-code" ? "tmux" : "none";
+/** 定位器提供者取自宿主资源 Profile 的 windowLocator 表面，而不是比较宿主 id。 */
+function locatorProvider(facade) {
+    return facade.resourceProfile.surfaces.windowLocator ? "tmux" : "none";
 }
 function bindingDigestOf(binding) {
     return computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding"));
@@ -180,8 +181,8 @@ async function realpathOrNull(candidate) {
  * 观察里 porcelain 列出的非主检出（登记与换代），没有观察时按已有回执的检出路径。
  */
 async function sessionRootMatcher(context, window, observation, receipts) {
-    if (context.intent?.worktree === null ||
-        context.intent === null ||
+    if (context.intent === null ||
+        context.intent.worktree === null ||
         context.repositoryRoot === null) {
         const expectedRoot = path.resolve(context.root.absolutePath, window.configuredPlacement);
         return (cwd) => isWindowRoot(cwd, expectedRoot);
@@ -252,7 +253,7 @@ async function loadState(context, observation) {
     const worktreeReceipts = await loadWorktreeReceipts(context);
     const binding = bindings.find((entry) => entry.windowId === window.windowId) ?? null;
     const claim = await loadClaim(context, window.windowId);
-    const locator = locatorProvider(context.facade.hostId) === "tmux"
+    const locator = locatorProvider(context.facade) === "tmux"
         ? await readWindowLocator(context.root, context.facade.hostId, window.windowId, context.signal)
         : null;
     return Object.freeze({
@@ -274,7 +275,7 @@ function endpointState(context, loaded) {
     return Object.freeze({
         windowKnown: context.window !== null && context.intent !== null,
         launchIntentDigest: context.intent?.intentDigest ?? "",
-        locatorProvider: locatorProvider(context.facade.hostId),
+        locatorProvider: locatorProvider(context.facade),
         worktreeRequired: context.intent !== null && context.intent.worktree !== null,
         binding: loaded.binding === null || loaded.bindingDigest === null
             ? null
@@ -536,7 +537,7 @@ function inspectionResult(context, loaded) {
             ? { status: "unregistered" }
             : { status: "registered", ...bindingSummary(loaded.binding) },
         claim: claimSummary(loaded.claim, loaded.claimExpired),
-        locator: locatorProvider(context.facade.hostId) === "none"
+        locator: locatorProvider(context.facade) === "none"
             ? { status: "not-applicable" }
             : { status: loaded.locator === null ? "absent" : "present" },
         next: nextFor(context, loaded.bindings, loaded.binding !== null, loaded.claim, loaded.claimExpired),
@@ -560,7 +561,7 @@ async function readBindingSource(context, ref) {
     }
 }
 async function refreshLocator(context, window, binding, observation) {
-    if (locatorProvider(context.facade.hostId) !== "tmux")
+    if (locatorProvider(context.facade) !== "tmux")
         return;
     if (binding === null || observation?.tmux === undefined) {
         await retireWindowLocator(context.root, context.facade.hostId, window.windowId, context.signal);
@@ -593,7 +594,7 @@ async function refreshProjection(context, entry, binding) {
 }
 /** worktree pod 产品窗口：准入观察里的 git 事实（文件系统核对），返回可写进回执的检出。 */
 async function admitWorktree(context, loaded, observation) {
-    if (context.intent?.worktree === null || context.intent === null)
+    if (context.intent === null || context.intent.worktree === null)
         return null;
     if (observation.worktree === undefined) {
         fail("invalid-request", "worktree-receipt-required", "$request.observation.worktree");
@@ -620,7 +621,7 @@ async function admitWorktree(context, loaded, observation) {
     return admitted;
 }
 async function recordWorktree(context, binding, worktree, observedAt) {
-    if (worktree === null || context.intent?.worktree === null || context.intent === null)
+    if (worktree === null || context.intent === null || context.intent.worktree === null)
         return null;
     await writePodWorktreeReceipt(context.root, createPodWorktreeReceipt({
         hostId: context.facade.hostId,
@@ -739,6 +740,24 @@ async function applyMutation(context, store, window, current, request, decision,
             return applyDecommission(context, window, current);
     }
 }
+/** 锁内复核：绑定摘要与（replace / decommission 时）work claim 都必须与加载快照一致。 */
+async function assertUnchangedUnderLock(context, loaded, request, current) {
+    const currentDigest = current === null ? null : bindingDigestOf(current);
+    if (currentDigest !== loaded.bindingDigest) {
+        fail("concurrency-conflict", "binding-changed", "$request.windowId", { retryable: true });
+    }
+    // 在锁内重读 work claim：加载快照后被投递抢占的窗口不能被替换或撤除。完全互斥还需要
+    // 投递在取得 claim 后复核绑定摘要（或取得绑定锁）；这里只关闭本侧的窗口期。
+    if (request.operation !== "replace" && request.operation !== "decommission")
+        return;
+    const windowId = context.window?.windowId;
+    if (windowId === undefined)
+        fail("not-found", "window-unknown", "$request.windowId");
+    const claim = await loadClaim(context, windowId);
+    if ((claim?.claimDigest ?? null) !== (loaded.claim?.claimDigest ?? null)) {
+        fail("concurrency-conflict", "claim-changed", "$request.windowId", { retryable: true });
+    }
+}
 async function mutateBinding(context, loaded, request, decision) {
     const window = context.window;
     const entry = context.unregisteredEntry;
@@ -753,10 +772,7 @@ async function mutateBinding(context, loaded, request, decision) {
         return await withWakeflowWindowHostBindingStore(context.root, context.authority, storeOptions, async (store) => {
             const current = store.inventory.bindings.find((candidate) => candidate.windowId === window.windowId) ??
                 null;
-            const currentDigest = current === null ? null : bindingDigestOf(current);
-            if (currentDigest !== loaded.bindingDigest) {
-                fail("concurrency-conflict", "binding-changed", "$request.windowId", { retryable: true });
-            }
+            await assertUnchangedUnderLock(context, loaded, request, current);
             const applied = await applyMutation(context, store, window, current, request, decision, loaded);
             const observation = request.operation === "decommission" ? null : request.observation;
             await refreshLocator(context, window, applied.binding, observation);
@@ -816,8 +832,9 @@ async function releaseClaim(context, loaded, request) {
     const claim = loaded.claim;
     if (claim === null)
         fail("not-found", "claim-absent", "$request.windowId");
-    await releaseWorkClaim(context.root, claim, signalOptions(context.signal));
+    // 回执先于删除：回执写入失败时 claim 仍在，同一请求可重试；回执已存在视为幂等。
     await writeClaimReleaseReceipt(context, claim, loaded, request);
+    await releaseWorkClaim(context.root, claim, signalOptions(context.signal));
     return Object.freeze({ claimId: claim.claimId, claimDigest: claim.claimDigest });
 }
 function mutationResult(context, request, outcome) {

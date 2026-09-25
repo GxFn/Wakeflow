@@ -57,6 +57,10 @@ export interface ExecuteDemandEventSourcingCommandOptions {
 
 export interface DemandEventSourcingCommandResult {
   readonly disposition: "committed" | "idempotent";
+  /**
+   * 本次传入的命令。经幂等键命中得到的 `idempotent` 结果里，`command` 与
+   * `commandDigest` 描述的是传入请求；已提交命令的摘要是 `commit.commandDigest`。
+   */
   readonly command: Readonly<DemandEventSourcingCommand>;
   readonly commandDigest: Sha256Digest;
   readonly commit: Readonly<DemandEventStreamCommit>;

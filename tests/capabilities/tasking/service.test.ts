@@ -343,7 +343,7 @@ test("test 任务包：合同步骤引用验收标准，窗口、环境与基线
   }
 });
 
-test("controller-only 的 Demand 与尚未接受的实现目标都不能规划 test 任务包", async () => {
+test("controller-only 的 Demand 不能规划 test 任务包（testing-mode）", async () => {
   const fixture = await createTargetTaskPlanningWorkspaceFixture();
   try {
     await rejects(

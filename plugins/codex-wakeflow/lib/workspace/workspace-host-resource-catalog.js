@@ -1,6 +1,7 @@
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
+import { hostPodReceiptsRootRef } from "../kernel/layout.js";
 import { parseWakeflowWorkspaceHostResourceProfile, } from "./workspace-host-resource-profile.js";
-import { parseWakeflowWorkspaceResourceDeclaration, } from "./workspace-resource-declaration.js";
+import { parseWakeflowWorkspaceResourceDeclaration, privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
 import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRootRef, } from "./window-runtime/wakeflow-window-runtime-paths.js";
 import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "./workspace-host-runtime-paths.js";
 function hostRuntimeRef(profile, suffix) {
@@ -9,34 +10,12 @@ function hostRuntimeRef(profile, suffix) {
         : `${wakeflowHostRuntimeRootRef(profile)}/${suffix}`);
 }
 function privateDirectoryDeclaration(declarationId, ownerId, relativePath) {
-    return parseWakeflowWorkspaceResourceDeclaration({
-        kind: "WakeflowWorkspaceResourceDeclaration",
+    return privateWorkspaceDirectoryDeclaration({
         declarationId,
         family: "host-runtime",
         ownerId,
         scope: "current-host",
-        placement: {
-            root: { kind: "workspace" },
-            relativePath,
-        },
-        tracking: {
-            disposition: "ignored",
-            privacy: "runtime-private",
-        },
-        nodePolicy: {
-            kind: "directory",
-            mode: "0700",
-            symlinkPolicy: "reject",
-            existingModePolicy: "observe-without-change",
-        },
-        processing: {
-            kind: "directory-container",
-            materializationRecipe: "materialize-directory",
-            existingDirectoryPolicy: "observe-without-mode-change",
-            collisionPolicy: "reject-non-directory",
-            descendantAuthority: "separate-declaration-required",
-            recoveryStrategy: "report-only",
-        },
+        relativePath,
     });
 }
 function integrationFileDeclaration(declarationId, ownerId, relativePath, tracking) {
@@ -132,6 +111,14 @@ function privateProjectionFileDeclaration(declarationId, ownerId, relativePath) 
         },
     });
 }
+/** Profile 是否声明任一 `operations/` 下的表面；目录与布局 authority 共用此判定。 */
+export function hostProfileHasOperationSurface(profile) {
+    return profile.surfaces.keepLive
+        || profile.surfaces.windowLocator
+        || profile.surfaces.statuslineAsset !== null
+        || profile.surfaces.activityMonitor
+        || profile.surfaces.temporaryPrompts;
+}
 /** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
 export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
     const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
@@ -148,14 +135,9 @@ export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
         declarations.push(privateDirectoryDeclaration(`${prefix}.window-identity-root`, "window-host-binding", wakeflowWindowHostBindingRootRef(profile)), transactionFileDeclaration(`${prefix}.window-identity-lock`, "window-host-binding", wakeflowWindowHostBindingMutationLockRef(profile)));
     }
     if (profile.surfaces.podReceipts) {
-        declarations.push(privateDirectoryDeclaration(`${prefix}.pod-receipts-root`, "pod-receipts", hostRuntimeRef(profile, "pods")));
+        declarations.push(privateDirectoryDeclaration(`${prefix}.pod-receipts-root`, "pod-receipts", hostPodReceiptsRootRef(profile.hostId)));
     }
-    const hasOperationSurface = profile.surfaces.keepLive
-        || profile.surfaces.windowLocator
-        || profile.surfaces.statuslineAsset !== null
-        || profile.surfaces.activityMonitor
-        || profile.surfaces.temporaryPrompts;
-    if (hasOperationSurface) {
+    if (hostProfileHasOperationSurface(profile)) {
         declarations.push(privateDirectoryDeclaration(`${prefix}.operations-root`, "host-runtime-layout", hostRuntimeRef(profile, "operations")));
     }
     if (profile.surfaces.keepLive) {

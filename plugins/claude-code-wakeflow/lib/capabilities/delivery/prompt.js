@@ -144,7 +144,7 @@ function testLines(input, labels) {
         ...contract.stopConditions.map((condition) => `- stop when: ${condition}`),
     ]);
 }
-/** 确定性渲染可移植 prompt（不含工作区根）。 */
+/** 确定性渲染可移植 prompt（不含绝对路径；工作区根只以相对窗口根的路径出现）。 */
 export function renderDeliveryPortablePrompt(input) {
     const labels = LABELS[input.language];
     const taskPackage = input.taskPackage;

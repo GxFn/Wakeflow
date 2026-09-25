@@ -1,4 +1,5 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { DELIVERY_REARM_LIMIT } from "../delivery/delivery-rearm.js";
 import { buildDemandPostAcceptanceRoute, DemandPostAcceptanceRouteError, } from "../review/demand-post-acceptance-route.js";
 /**
  * Wakeflow Governance / Controller：从现有领域读模型组合出的当前责任前沿。
@@ -176,7 +177,10 @@ function testTargetReference(target) {
     });
 }
 function implementationFrontier(target) {
-    const descriptor = resolveDemandControllerImplementationFrontierDescriptor(target.phase);
+    // rearm 用尽的发送前拒绝只剩换新信封一条路：前沿回到准备，而不是指向会被拒的 rearm。
+    const rearmExhausted = target.phase === "host-effect-rejected" &&
+        target.currentDelivery.generation > DELIVERY_REARM_LIMIT;
+    const descriptor = resolveDemandControllerImplementationFrontierDescriptor(rearmExhausted ? "planned" : target.phase);
     if (descriptor === null) {
         return Object.freeze({ frontier: null, blocker: null });
     }
@@ -221,7 +225,9 @@ function postAcceptanceFrontier(loaded, route) {
     const stage = route.nextStage;
     if (stage.status === "not-ready")
         fail("relation");
-    const descriptor = resolveDemandControllerPostAcceptanceFrontierDescriptor(stage.status);
+    const rearmExhausted = stage.status === "test-delivery-rearm-planning" &&
+        stage.rejectedDelivery.generation > DELIVERY_REARM_LIMIT;
+    const descriptor = resolveDemandControllerPostAcceptanceFrontierDescriptor(rearmExhausted ? "test-delivery-planning" : stage.status);
     if (descriptor.scope === "demand") {
         return descriptor;
     }

@@ -216,6 +216,28 @@ test("非凭证类命中按工作区根白名单判断，只在 controller-confi
   }
 });
 
+test("同一行的多个非凭证命中按 kind 排序去重，confirm 下仍得到就绪计划", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    writeFileSync(
+      path.join(fixture.repositoryRoot, "artifacts/test-run/logs/paths.txt"),
+      "/Users/a/x /Users/b/y\n/tmp/x/123e4567-e89b-42d3-a456-426614174000/out.log\n",
+    );
+    const confirmed = readyCapturePlan(
+      await service(fixture).preview(fixture.demandId, treeSelection(), {
+        clock: () => EVIDENCE_CAPTURED_AT,
+      }),
+    );
+    deepEqual(confirmed.manifest.contentReview.privacyFindings, [
+      { ref: "logs/paths.txt", line: 1, kind: "unlisted-absolute-path" },
+      { ref: "logs/paths.txt", line: 2, kind: "bare-uuid" },
+      { ref: "logs/paths.txt", line: 2, kind: "unlisted-absolute-path" },
+    ]);
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
 test("observation 来源只保留 hook 记录的脱敏投影；link 与 commit 是引用投影", async () => {
   const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
   try {

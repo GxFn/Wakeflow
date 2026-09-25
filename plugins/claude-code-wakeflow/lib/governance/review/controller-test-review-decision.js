@@ -9,7 +9,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { createUuidV4, parseUuidV4, UuidV4Error, } from "../../foundation/identity/uuid-v4.js";
+import { createUuidV4, UuidV4Error, } from "../../foundation/identity/uuid-v4.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
@@ -25,7 +25,6 @@ import { normalizeControllerReviewCallbackLanding, normalizeControllerReviewResu
  */
 const DECISION_KIND = "WakeflowControllerTestReviewDecision";
 const DECISION_SCHEMA_VERSION = 1;
-const DECISION_ID_PREFIX = "target-review-decision_";
 const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const ERROR_MESSAGES = {
@@ -140,13 +139,13 @@ function stepIdList(values, path) {
  * product-defect 要求 defect-observed/sufficient 且有失败检查，needs-decision 不能是 satisfied；
  * blocked 要求阻塞原因。分类到决定的路由由切片按逐步记录判定。
  */
-export function assertControllerTestReviewJudgment(judgment, resultOutcome, targetCompletion = null) {
+export function assertControllerTestReviewJudgment(judgment, resultOutcome, targetCompletion) {
     const { decision, assessment, independentChecks: checks, blockingReasons, stepIds, escalation, } = judgment;
     const escalates = decision === "escalate";
     if (escalates !== (escalation !== null) ||
         (decision === "request-another-attempt") !== (stepIds !== null) ||
         (decision === "accept" &&
-            ((resultOutcome !== undefined && resultOutcome !== "completed") ||
+            (resultOutcome !== "completed" ||
                 targetCompletion === null ||
                 assessment.conclusion !== "satisfied" ||
                 assessment.evidenceSufficiency !== "sufficient" ||
@@ -336,17 +335,6 @@ export function createControllerTestReviewDecision(input, options = {}) {
         ...basis,
         decisionDigest: computeCanonicalJsonSha256Digest(basis),
     });
-}
-function uuidFromDecisionId(value) {
-    return parseUuidV4(value.slice(DECISION_ID_PREFIX.length));
-}
-export function controllerTestReviewDecisionEventId(value) {
-    const decision = parseControllerTestReviewDecision(value);
-    return createWakeflowDurableId("demand-event", uuidFromDecisionId(decision.targetReviewDecisionId));
-}
-export function controllerTestReviewDecisionCommitId(value) {
-    const decision = parseControllerTestReviewDecision(value);
-    return createWakeflowDurableId("demand-event-commit", uuidFromDecisionId(decision.targetReviewDecisionId));
 }
 export function renderControllerTestReviewDecision(value) {
     return renderDeterministicJsonDocument(parseControllerTestReviewDecision(value), "$decision");

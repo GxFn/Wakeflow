@@ -139,7 +139,7 @@ export const PREPARE_DELIVERY_TOOL_REGISTRATION = Object.freeze({
   executor: "prepareDelivery",
   title: "Prepare Wakeflow Delivery",
   description:
-    "Prepare one delivery for a planned, rework-requested, product-defect-rework-requested, or rearm-exhausted target in one call with the observed stream revision and a client idempotency key: Wakeflow takes the window work claim, renders the prompt skeleton around the Controller's goal, focus, and boundary, appends the envelope with its fence token, and returns the one-shot permit (prompt, host action, fence). Implementation and test targets share this tool. Sending is the Agent host effect; record it with wakeflow_record_delivery_outcome.",
+    "Prepare one delivery for a planned, rework-requested, product-defect-rework-requested, test-another-attempt-requested, or rejected-before-send (rearm-exhausted) target in one call with the observed stream revision and a client idempotency key: Wakeflow takes the window work claim, renders the prompt skeleton around the Controller's goal, focus, and boundary, appends the envelope with its fence token, and returns the one-shot permit (prompt, host action, fence). Implementation and test targets share this tool. Sending is the Agent host effect; record it with wakeflow_record_delivery_outcome.",
   requestSchema: WAKEFLOW_PREPARE_DELIVERY_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_PREPARE_DELIVERY_RESULT_SCHEMA,
   annotations: APPEND_ANNOTATIONS,
@@ -152,7 +152,7 @@ export const RECORD_DELIVERY_OUTCOME_TOOL_REGISTRATION = Object.freeze({
   executor: "recordDeliveryOutcome",
   title: "Record Wakeflow Delivery Outcome",
   description:
-    "Record the outcome of one delivery generation identified by deliveryId and its fence claimDigest. Wakeflow derives the disposition from evidence: accepted only from the target session's user-prompt-submit hook record with the envelope's prompt digest, a Codex host send-call return, or an explicit Controller resolution of an indeterminate delivery; rejected-before-send only when the send call itself failed without touching the session (the claim is released); everything else stays indeterminate with the claim retained. Call again with a new idempotency key when landing evidence arrives later.",
+    "Record the outcome of one delivery generation identified by deliveryId and its fence claimDigest. Wakeflow derives the disposition from evidence: accepted only from the target session's user-prompt-submit hook record with the envelope's prompt digest, a Codex host send-call return, or a Controller resolution of an indeterminate delivery; rejected-before-send only from a send call that failed without touching the session or a Controller resolution as not landed (the claim is released); everything else stays indeterminate with the claim retained. Call again with a new idempotency key when landing evidence arrives later.",
   requestSchema: WAKEFLOW_RECORD_DELIVERY_OUTCOME_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_RECORD_DELIVERY_OUTCOME_RESULT_SCHEMA,
   annotations: Object.freeze({
@@ -170,7 +170,7 @@ export const REARM_DELIVERY_TOOL_REGISTRATION = Object.freeze({
   executor: "rearmDelivery",
   title: "Rearm Wakeflow Delivery",
   description:
-    "Rearm one delivery whose current generation is rejected-before-send: the same envelope and prompt get a fresh window work claim and fence, the generation increases by one, and the permit is re-issued. At most three rearms per envelope; after that prepare the target again with a new envelope. Never performs the host effect.",
+    "Rearm one delivery. Target mode: a target deliveryId whose current generation is rejected-before-send keeps its envelope and prompt, gets a fresh window work claim and fence, the generation increases by one, and the permit is re-issued; at most three rearms per envelope, then prepare the target again. Callback mode: the callback deliveryId of a result-reported or test-result-reported target has its wake-controller callback permit re-issued against the current Controller binding, with no claim or fence. Never performs the host effect.",
   requestSchema: WAKEFLOW_REARM_DELIVERY_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_REARM_DELIVERY_RESULT_SCHEMA,
   annotations: APPEND_ANNOTATIONS,

@@ -18,11 +18,17 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
+import { isWakeflowError } from "../../../src/kernel/error.js";
+import { publishWakeflowWindowRuntimeProjectionDocument } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-document.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import {
   executeWakeflowWindowRuntimeProjectionOperation,
   planWakeflowWindowRuntimeProjectionMaintenance,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import {
+  compileWakeflowWindowRuntimeUnregisteredProjectionSet,
+  parseWakeflowWindowRuntimeUnregisteredProjectionDocument,
+} from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 /**
@@ -110,7 +116,7 @@ test("window runtime projection maintenance repairs missing and stale projection
     windowId: CONTROLLER_WINDOW_ID,
     resourceRef: `.wakeflow-local/runtime/hosts/codex/projections/window-runtime/${CONTROLLER_WINDOW_ID}.json`,
     registered: false,
-    projectionDigest: (operation.payload as { projectionDigest: string }).projectionDigest,
+    projectionDigest: parseWakeflowWindowRuntimeUnregisteredProjectionDocument(original).projectionDigest,
   });
   const created = await executeWakeflowWindowRuntimeProjectionOperation(workspace.root, {
     ...request("reconcile"),
@@ -173,4 +179,37 @@ test("window runtime projection maintenance repairs missing and stale projection
   if (caught instanceof WakeflowWindowRuntimeProjectionError) {
     equal(caught.reason, "plan");
   }
+});
+
+test("window runtime projection publish reports an abort as aborted, not as a read or write failure", async (t) => {
+  const workspace = await fixture(t);
+  await publishFreshWakeflowWindowRuntime(
+    workspace.root,
+    config(),
+    codexWorkspaceHostResourceProfile,
+    { recoveringFreshPublication: false },
+  );
+  const entry = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
+    config(),
+    codexWorkspaceHostResourceProfile,
+  ).entries[0];
+  if (entry === undefined) throw new Error("expected one projection entry");
+  const controller = new AbortController();
+  controller.abort();
+  let caught: unknown;
+  try {
+    await publishWakeflowWindowRuntimeProjectionDocument(
+      workspace.root,
+      {
+        resourceRef: entry.resourceRef,
+        document: entry.document,
+        documentDigest: entry.documentDigest,
+        projectionDigest: entry.projection.projectionDigest,
+      },
+      controller.signal,
+    );
+  } catch (error: unknown) {
+    caught = error;
+  }
+  equal(isWakeflowError(caught) && caught.reason, "aborted");
 });

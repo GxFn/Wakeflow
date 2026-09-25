@@ -4,7 +4,7 @@ import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../contracts/generated/foundation
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../contracts/generated/foundation/utc-instant.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../foundation/crypto/sha256.js";
-import { parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../foundation/data/deterministic-json-document.js";
+import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../foundation/data/json-value.js";
 import { readDeterministicJsonFile, } from "../foundation/filesystem/deterministic-json-file.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
@@ -105,9 +105,6 @@ function assertRelations(state) {
         state.claim !== null &&
         state.archive.demandId !== state.claim.demandId) {
         fail("invalid-request", "claim-state-archive", `${path}.archive.demandId`);
-    }
-    if (state.status === "parked" && state.revision !== 1 && state.previousStateDigest === null) {
-        fail("invalid-request", "claim-state-parked", `${path}.revision`);
     }
 }
 /** 准入一份认领状态：Schema 加关系。 */
@@ -222,6 +219,9 @@ async function readSource(root, ref, signal) {
             return null;
         if (error instanceof StableFileReadError) {
             fail("io-failure", `claim-state-read-${error.reason}`, "$claimState", { cause: error });
+        }
+        if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
+            fail("io-failure", "claim-state-read", "$claimState", { cause: error });
         }
         throw error;
     }

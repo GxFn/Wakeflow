@@ -398,7 +398,16 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
     const preview = (await pod(fx, { mode: "preview", intent })) as { readonly planDigest: string };
     return pod(fx, { mode: "apply", intent, planDigest: preview.planDigest });
   };
-  equal(((await closeRival()) as { readonly disposition: string }).disposition, "closing");
+  const rivalClosing = (await closeRival()) as {
+    readonly disposition: string;
+    readonly pod: { readonly state: string } | null;
+    readonly next: { readonly frontier: string | null; readonly owner: string };
+  };
+  equal(rivalClosing.disposition, "closing");
+  // 无绑定无检出即派生为 closed，但 pod 仍在配置里：next 必须指回第二段 close apply。
+  equal(rivalClosing.pod?.state, "closed");
+  equal(rivalClosing.next.frontier, "pod-close-apply");
+  equal(rivalClosing.next.owner, "controller");
   equal(((await closeRival()) as { readonly disposition: string }).disposition, "closed");
   equal(readConfig(fx).pods.length, 2);
   const receiptFile = path.join(
@@ -473,6 +482,14 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
       disposition: "abandoned",
     },
   ];
+  const duplicated = await pod(fx, {
+    mode: "preview",
+    intent: { kind: "close", podId, branches: [...branches, ...branches] },
+  });
+  if (duplicated.kind !== "WakeflowPodPreview") throw new Error("Expected preview.");
+  deepEqual(duplicated.blockers, [
+    `branch-disposition-duplicate:${productIntent.launchIntent.worktree?.repositoryId}`,
+  ]);
   const closeRequest = await pod(fx, {
     mode: "preview",
     intent: { kind: "close", podId, branches },

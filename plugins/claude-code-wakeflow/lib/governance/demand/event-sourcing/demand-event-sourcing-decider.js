@@ -256,7 +256,7 @@ function parseDigest(value, path) {
 function parseReason(value) {
     if (typeof value !== "string" ||
         value.length === 0 ||
-        value.length > 8192 ||
+        Array.from(value).length > 8192 ||
         !value.isWellFormed() ||
         value.normalize("NFC") !== value ||
         value.trim() !== value ||
@@ -1133,7 +1133,7 @@ function reworkBrakeEscalation(decided, decision, decidedEvent) {
         eventType: "lifecycle.demand-escalated",
         data: {
             escalation: {
-                issue: `Target task ${decision.targetTaskId} was sent back for rework ${reworkCount} times; the third rework brake requires a user decision before further delivery.`,
+                issue: `Target task ${decision.targetTaskId} was sent back for rework ${reworkCount} times; the rework brake (threshold ${DEMAND_REWORK_ESCALATION_THRESHOLD}) requires a user decision before further delivery.`,
                 requirementRefs: [],
                 evidence: [
                     {
@@ -1156,7 +1156,7 @@ function reworkBrakeEscalation(decided, decision, decidedEvent) {
                         impact: "Results and evidence are archived; the requirement package is withdrawn.",
                     },
                 ],
-                recommendation: "Review the three rework decisions before choosing; repeated rework usually means the task package or the requirement is under-specified.",
+                recommendation: `Review the ${reworkCount} rework decisions before choosing; repeated rework usually means the task package or the requirement is under-specified.`,
                 source: {
                     kind: "rework-brake",
                     targetTaskId: decision.targetTaskId,

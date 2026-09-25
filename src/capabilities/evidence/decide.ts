@@ -1,7 +1,6 @@
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { DemandManagedEvidenceSummary } from "../../governance/demand/model/demand-aggregate-state.js";
 import type { ManagedEvidenceCapturePlan } from "../../governance/evidence/managed-evidence-capture-plan.js";
 import type { ManagedEvidenceManifest } from "../../governance/evidence/managed-evidence-manifest.js";
 import { deriveDurableId } from "../../kernel/ids.js";
@@ -52,13 +51,6 @@ export function deriveEvidenceEventIdentity(
     eventId: deriveDurableId("demand-event", "managed-evidence-recorded", evidenceId),
     commitId: deriveDurableId("demand-event-commit", "managed-evidence-recorded", evidenceId),
   });
-}
-
-export function findRecordedEvidence(
-  summaries: readonly Readonly<DemandManagedEvidenceSummary>[] | undefined,
-  evidenceId: WakeflowDurableId<"evidence">,
-): Readonly<DemandManagedEvidenceSummary> | null {
-  return summaries?.find((entry) => entry.evidenceId === evidenceId) ?? null;
 }
 
 /** preview 结果里的计划投影：身份、来源投影、负载摘要与计数，不回显整棵 tree manifest。 */

@@ -5,6 +5,7 @@ import {
   Utf8Error,
 } from "../text/utf8.js";
 import {
+  hasPassiveJsonSerializationEnvironment,
   JsonValueError,
   parseJsonValue,
   type JsonValue,
@@ -56,19 +57,8 @@ function fail(reason: CanonicalJsonErrorReason, path: string): never {
   throw new CanonicalJsonError(reason, path);
 }
 
-/**
- * `JsonValue` 对象没有原型，但数组按合同保留标准数组原型。JCS 实现遵循
- * ECMAScript 语义读取继承的 `toJSON`，因此进入依赖前只检查原型身份和属性
- * 描述符；不读取属性值。非标准环境直接失败，避免已准入数据再次执行外部行为。
- */
 function assertNoInheritedArrayToJson(path: string): void {
-  const hasStandardPrototypeChain =
-    Object.getPrototypeOf(Array.prototype) === Object.prototype
-    && Object.getPrototypeOf(Object.prototype) === null;
-  const hasInheritedToJson =
-    Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") !== undefined
-    || Object.getOwnPropertyDescriptor(Object.prototype, "toJSON") !== undefined;
-  if (!hasStandardPrototypeChain || hasInheritedToJson) {
+  if (!hasPassiveJsonSerializationEnvironment()) {
     fail("canonicalizer-failure", path);
   }
 }

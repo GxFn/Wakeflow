@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, ok, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -18,9 +18,9 @@ import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wa
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { buildDemandControllerRoute } from "../../../src/governance/controller/demand-controller-route.js";
 import {
   DEMAND_REWORK_ESCALATION_THRESHOLD,
+  DemandEventSourcingDecisionError,
   decideDemandEventSourcingCommand,
   evolveDemandEventSourcingState,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
@@ -352,26 +352,32 @@ test("续接：已完成状态回到 active 并要求先规划；活动状态不
   const reopened = evolveDemandEventSourcingState(completedLike, continued);
   equal(reopened.lifecycle, "active");
   equal(reopened.continuation?.planningRequired, true);
-  let rejected = false;
-  try {
-    decideDemandEventSourcingCommand(reported, {
-      commandType: "lifecycle.continue-demand",
-      commandVersion: 1,
-      demandId: TASKING_DEMAND_ID,
-      eventId: eventId("77777777-7777-4777-8777-777777777777"),
-      recordedAt: AT,
-      continuation: {
-        kind: "verified-bug",
-        summary: "x",
-        archiveRef: "archives/demand_x/0000000009",
-        archiveManifestDigest: DIGEST_A,
-        previousStreamRevision: 9,
-      },
-    });
-  } catch {
-    rejected = true;
-  }
-  equal(rejected, true);
+  throws(
+    () =>
+      decideDemandEventSourcingCommand(reported, {
+        commandType: "lifecycle.continue-demand",
+        commandVersion: 1,
+        demandId: TASKING_DEMAND_ID,
+        eventId: eventId("77777777-7777-4777-8777-777777777777"),
+        recordedAt: AT,
+        continuation: {
+          kind: "verified-bug",
+          summary: "x",
+          archiveRef: "archives/demand_x/0000000009",
+          archiveManifestDigest: DIGEST_A,
+          previousStreamRevision: 9,
+        },
+      }),
+    (error: unknown) => {
+      ok(error instanceof DemandEventSourcingDecisionError);
+      equal(error.reason, "transition");
+      equal(error.path, "$state/lifecycle");
+      return true;
+    },
+  );
+});
+
+test("等待用户决策的路由把下一步交给用户并建议 wakeflow_continue_demand", () => {
   const next = deriveNextProjection({
     disposition: "awaiting-decision",
     frontiers: [{ kind: "decision-required" }],
@@ -379,5 +385,4 @@ test("续接：已完成状态回到 active 并要求先规划；活动状态不
   });
   equal(next.owner, "user");
   equal(next.suggestedTool, "wakeflow_continue_demand");
-  void buildDemandControllerRoute;
 });

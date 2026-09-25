@@ -29,7 +29,6 @@ import {
 } from "../../foundation/data/json-value.js";
 import {
   createUuidV4,
-  parseUuidV4,
   UuidV4Error,
   type UuidV4Factory,
 } from "../../foundation/identity/uuid-v4.js";
@@ -72,7 +71,6 @@ import {
 
 const DECISION_KIND = "WakeflowControllerTestReviewDecision" as const;
 const DECISION_SCHEMA_VERSION = 1 as const;
-const DECISION_ID_PREFIX = "target-review-decision_";
 const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
@@ -292,8 +290,8 @@ function stepIdList(
  */
 export function assertControllerTestReviewJudgment(
   judgment: Readonly<ControllerTestReviewJudgment>,
-  resultOutcome?: ControllerReviewedTargetResult["targetResultOutcome"],
-  targetCompletion: Readonly<ControllerReviewTargetCompletion> | null = null,
+  resultOutcome: ControllerReviewedTargetResult["targetResultOutcome"],
+  targetCompletion: Readonly<ControllerReviewTargetCompletion> | null,
 ): void {
   const {
     decision,
@@ -308,7 +306,7 @@ export function assertControllerTestReviewJudgment(
     escalates !== (escalation !== null) ||
     (decision === "request-another-attempt") !== (stepIds !== null) ||
     (decision === "accept" &&
-      ((resultOutcome !== undefined && resultOutcome !== "completed") ||
+      (resultOutcome !== "completed" ||
         targetCompletion === null ||
         assessment.conclusion !== "satisfied" ||
         assessment.evidenceSufficiency !== "sufficient" ||
@@ -545,30 +543,6 @@ export function createControllerTestReviewDecision(
     ...basis,
     decisionDigest: computeCanonicalJsonSha256Digest(basis),
   });
-}
-
-function uuidFromDecisionId(value: string) {
-  return parseUuidV4(value.slice(DECISION_ID_PREFIX.length));
-}
-
-export function controllerTestReviewDecisionEventId(
-  value: unknown,
-): WakeflowDurableId<"demand-event"> {
-  const decision = parseControllerTestReviewDecision(value);
-  return createWakeflowDurableId(
-    "demand-event",
-    uuidFromDecisionId(decision.targetReviewDecisionId),
-  );
-}
-
-export function controllerTestReviewDecisionCommitId(
-  value: unknown,
-): WakeflowDurableId<"demand-event-commit"> {
-  const decision = parseControllerTestReviewDecision(value);
-  return createWakeflowDurableId(
-    "demand-event-commit",
-    uuidFromDecisionId(decision.targetReviewDecisionId),
-  );
 }
 
 export function renderControllerTestReviewDecision(value: unknown): string {

@@ -67,11 +67,19 @@ export const MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT = encodeUtf8(
   "managed evidence\n",
 );
 
-export function createManagedEvidenceCapturePlanFixture() {
+type LoadedTreeManifestFixture = ReturnType<typeof validateLoadedArtifactTreeManifest>;
+
+/** 默认是单文件来源；树来源测试只覆盖 source 与 treeManifest。 */
+export function createManagedEvidenceCapturePlanFixture(
+  overrides: Readonly<{
+    source?: Readonly<{ path: string; resourceType: "file" | "tree" }>;
+    treeManifest?: LoadedTreeManifestFixture;
+  }> = {},
+) {
   const ids = MANAGED_EVIDENCE_PUBLICATION_TEST_IDS;
   const digests = MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS;
   const content = MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT;
-  const treeManifest = validateLoadedArtifactTreeManifest({
+  const treeManifest = overrides.treeManifest ?? validateLoadedArtifactTreeManifest({
     artifactKind: "wakeflow-loaded-artifact-tree",
     schemaVersion: 1,
     fileCount: 1,
@@ -97,8 +105,8 @@ export function createManagedEvidenceCapturePlanFixture() {
       source: {
         kind: "managed-path" as const,
         root: { kind: "repository", repositoryId: ids.repository },
-        path: "artifacts/result.txt",
-        resourceType: "file",
+        path: overrides.source?.path ?? "artifacts/result.txt",
+        resourceType: overrides.source?.resourceType ?? "file",
       },
       payload: {
         artifactDigest: computeCanonicalJsonSha256Digest(treeManifest),

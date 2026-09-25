@@ -3,7 +3,7 @@ import { parseTaskPackage, TaskPackageError, } from "../tasking/task-package.js"
 import { assertDeliveryEnvelopeMatchesTaskPackage, DeliveryEnvelopeError, parseDeliveryEnvelope, } from "../delivery/delivery-envelope.js";
 import { assertTestExecutionAttemptMatchesPackage, TestExecutionAttemptError, } from "../testing/test-execution-attempt.js";
 import { parseTestTargetResultReport, TestTargetResultReportError, } from "./test-target-result-report.js";
-import { assertDeliveryBindingFollowsEnvelope } from "./implementation-target-result.js";
+import { assertDeliveryBindingFollowsEnvelope, ImplementationTargetResultError, } from "./implementation-target-result.js";
 import { parseTargetResult, TargetResultError, targetResultIdForClaim, } from "./target-result.js";
 const ERROR_MESSAGES = {
     "task-package": "Test Target Result requires a valid Test TaskPackage.",
@@ -30,10 +30,8 @@ function fail(reason) {
  * `completed` 必须覆盖范围内的每个 stepId 恰一次。
  */
 function assertReportMatchesContract(report, taskPackage, scope) {
-    const contractIds = new Set(taskPackage.testContract.steps.map((step) => step.stepId));
-    if (scope?.some((stepId) => !contractIds.has(stepId)))
-        fail("envelope");
-    const scopedIds = scope === null ? contractIds : new Set(scope);
+    // 重跑范围已由 assertTestExecutionAttemptMatchesPackage 证明属于合同。
+    const scopedIds = scope === null ? new Set(taskPackage.testContract.steps.map((step) => step.stepId)) : new Set(scope);
     const seen = new Set();
     for (const step of report.steps) {
         if (!scopedIds.has(step.stepId) || seen.has(step.stepId))
@@ -88,8 +86,11 @@ export function createTestTargetResult(input) {
     try {
         assertDeliveryBindingFollowsEnvelope(envelope, input.delivery);
     }
-    catch {
-        fail("delivery");
+    catch (error) {
+        if (error instanceof ImplementationTargetResultError && error.reason === "delivery") {
+            fail("delivery");
+        }
+        throw error;
     }
     const attempt = envelope.attempt;
     const stepIds = attempt.mode === "rerun" ? attempt.rerunSource.stepIds : null;

@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA",
   "title": "WakeflowTestTargetResultReport",
   "description": "Test Agent 按测试合同逐步记录的执行结果陈述：每步 observed、证据、verdict 与失败分类；整体 verdict 由 Wakeflow 从步骤派生。",
-  "$comment": "Report 只陈述做了什么与证据在哪里；verdict 由步骤派生（含 fail 即 fail，否则含 blocked 即 blocked，否则含 cannot-conclude 即 cannot-conclude，否则 pass）；失败步骤必带 classification、likelyOwner、recommendedAction（ADR-0012 D4）。真伪仍由 Controller 判断。",
+  "$comment": "Report 只陈述做了什么与证据在哪里；verdict 由步骤派生（无步骤即 cannot-conclude，含 fail 即 fail，否则含 blocked 即 blocked，否则含 cannot-conclude 即 cannot-conclude，否则 pass）；非 pass 步骤必带 failure（classification、likelyOwner、recommendedAction）（ADR-0012 D4）。真伪仍由 Controller 判断。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -92,15 +92,36 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "blocked"
+          }
+        },
+        "required": ["outcome"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "verdict": {
+                  "not": {
+                    "const": "fail"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {
-    "token": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128,
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
-    },
     "humanText": {
       "type": "string",
       "minLength": 1,

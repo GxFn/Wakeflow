@@ -84,6 +84,11 @@ export function createUuidV4(uuidFactory = randomUUID) {
     }
     return value;
 }
+function isDerivationText(value) {
+    return typeof value === "string"
+        && !value.includes("\u0000")
+        && value.isWellFormed();
+}
 /**
  * 由命名空间与若干片段确定性派生一个 UUID v4 形状的值。
  *
@@ -91,11 +96,12 @@ export function createUuidV4(uuidFactory = randomUUID) {
  * 输出仍满足版本位与变体位，与随机分配的 UUID 共用同一词法合同。
  */
 export function deriveUuidV4(namespace, ...parts) {
-    if (typeof namespace !== "string"
-        || namespace.length === 0
-        || namespace.includes("\u0000")
-        || parts.some((part) => typeof part !== "string" || part.includes("\u0000"))) {
+    if (!isDerivationText(namespace) || namespace.length === 0) {
         fail("derivation-input", "$namespace");
+    }
+    for (const [index, part] of parts.entries()) {
+        if (!isDerivationText(part))
+            fail("derivation-input", `$parts/${index}`);
     }
     const hex = computeSha256Hex(encodeUtf8([namespace, ...parts].join("\u0000")));
     const digits = hex.slice(0, 32).split("");

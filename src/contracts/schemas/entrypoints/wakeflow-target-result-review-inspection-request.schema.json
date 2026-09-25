@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:target-result-review-inspection-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_REQUEST_SCHEMA",
   "title": "WakeflowTargetResultReviewInspectionRequestV1",
-  "description": "Closed read-only MCP request for inspecting one current reported or review-blocked TargetResult review unit.",
+  "description": "Closed read-only MCP request for inspecting one current reported, review-blocked, or escalated TargetResult review unit.",
   "type": "object",
   "additionalProperties": false,
   "required": ["root", "demandId", "targetTaskId"],

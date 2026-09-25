@@ -41,7 +41,8 @@
     "portableResourcePath": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 1024
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
     },
     "domainObject": {
       "type": "object",
@@ -107,34 +108,6 @@
         },
         "launchIntentDigest": {
           "$ref": "#/$defs/sha256Digest"
-        }
-      }
-    },
-    "claimSummary": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["claimId", "claimDigest", "demandId", "claimedAt", "expiresAt", "expired"],
-      "properties": {
-        "claimId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "claimDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "demandId": {
-          "type": "string",
-          "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        "claimedAt": {
-          "$ref": "#/$defs/utcInstant"
-        },
-        "expiresAt": {
-          "$ref": "#/$defs/utcInstant"
-        },
-        "expired": {
-          "type": "boolean"
         }
       }
     },

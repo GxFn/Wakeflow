@@ -138,7 +138,7 @@ test("parsing rejects malformed, unknown, non-durable, and invalid UUID values",
     { value: null, reason: "format" },
     { value: {}, reason: "format" },
     { value: FIXED_UUID_TEXT, reason: "format" },
-    { value: `_ ${FIXED_UUID_TEXT}`, reason: "format" },
+    { value: `_${FIXED_UUID_TEXT}`, reason: "format" },
     { value: `program__${FIXED_UUID_TEXT}`, reason: "format" },
     { value: `PROGRAM_${FIXED_UUID_TEXT}`, reason: "kind-unknown" },
     { value: `binding_${FIXED_UUID_TEXT}`, reason: "kind-unknown" },
@@ -212,7 +212,7 @@ test("default creation composes the official UUIDv4 source", () => {
   equal(parsed.uuid.length, FIXED_UUID_TEXT.length);
 
   const injectedUuid = createUuidV4(() => FIXED_UUID_TEXT);
-  equal(createWakeflowDurableId("archive", injectedUuid), `archive_${FIXED_UUID_TEXT}`);
+  equal(createWakeflowDurableId("evidence", injectedUuid), `evidence_${FIXED_UUID_TEXT}`);
 });
 
 test("errors normalize paths and do not disclose rejected identity material", () => {

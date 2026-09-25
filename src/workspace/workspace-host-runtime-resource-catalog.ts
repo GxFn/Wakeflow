@@ -1,5 +1,5 @@
 import {
-  parseWakeflowWorkspaceResourceDeclaration,
+  privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "./workspace-resource-declaration.js";
 import {
@@ -14,31 +14,12 @@ import {
  */
 
 export const WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_RESOURCE_DECLARATION =
-  parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
+  privateWorkspaceDirectoryDeclaration({
     declarationId: "host-runtime.profiles-root",
     family: "host-runtime",
     ownerId: "host-runtime-layout",
     scope: "host-neutral",
-    placement: {
-      root: { kind: "workspace" },
-      relativePath: WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
-    },
-    tracking: { disposition: "ignored", privacy: "runtime-private" },
-    nodePolicy: {
-      kind: "directory",
-      mode: "0700",
-      symlinkPolicy: "reject",
-      existingModePolicy: "observe-without-change",
-    },
-    processing: {
-      kind: "directory-container",
-      materializationRecipe: "materialize-directory",
-      existingDirectoryPolicy: "observe-without-mode-change",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-    },
+    relativePath: WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
   });
 
 export const WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG = Object.freeze([

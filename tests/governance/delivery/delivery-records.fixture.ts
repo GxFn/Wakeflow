@@ -52,6 +52,10 @@ export const THIRD_DELIVERY_CLAIM_ID = parseWakeflowDurableIdOfKind(
   "work-claim_33333333-3333-4333-8333-333333333333",
   "work-claim",
 );
+const FOURTH_DELIVERY_CLAIM_ID = parseWakeflowDurableIdOfKind(
+  "work-claim_44444444-4444-4444-8444-444444444444",
+  "work-claim",
+);
 export const DELIVERY_BINDING_ID = parseWakeflowWindowHostBindingId(
   "window_binding_99999999-9999-4999-8999-999999999999",
 );
@@ -212,7 +216,12 @@ export function createDeliveryRearmFixture(
   const newClaim =
     options.newClaim ??
     createWorkClaimFixture({
-      claimId: generation === 2 ? OTHER_DELIVERY_CLAIM_ID : THIRD_DELIVERY_CLAIM_ID,
+      claimId:
+        generation === 2
+          ? OTHER_DELIVERY_CLAIM_ID
+          : generation === 3
+            ? THIRD_DELIVERY_CLAIM_ID
+            : FOURTH_DELIVERY_CLAIM_ID,
       generation,
       deliveryId: envelope.deliveryId,
     });

@@ -58,7 +58,7 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_TASK_PACKAGE_SCHE
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const DRAFT_FIELDS = Object.freeze([
     "acceptanceAnchors",
     "assignment",
@@ -246,11 +246,7 @@ function parseAcceptanceAnchors(values) {
             claim: parseCanonicalText(value.claim, `${path}/claim`),
             probe: parseCanonicalText(value.probe, `${path}/probe`),
             expected: parseCanonicalText(value.expected, `${path}/expected`),
-            requirementRef: Object.freeze({
-                recordDigest: parseDigest(value.requirementRef.recordDigest, `${path}/requirementRef/recordDigest`),
-                sectionAnchor: value.requirementRef.sectionAnchor,
-                itemId: value.requirementRef.itemId,
-            }),
+            requirementRef: parseRequirementRef(value.requirementRef, `${path}/requirementRef`),
         }));
     }
     return Object.freeze(parsed);
@@ -338,7 +334,7 @@ function parseTestContract(value) {
     }
     catch (error) {
         if (error instanceof LedgerAuthorityStoreError)
-            fail("schema", "$/testContract/environment");
+            fail("reference", "$/testContract/environment");
         throw error;
     }
     const stopConditions = parseNonEmptyTextList(value.stopConditions, "$/testContract/stopConditions");

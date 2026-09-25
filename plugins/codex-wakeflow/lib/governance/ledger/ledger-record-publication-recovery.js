@@ -50,11 +50,7 @@ async function recoverPublication(root, recordId, expectedIntent, signal) {
                 && !sameLedgerRecordPublicationIntent(stored.intent, expectedIntent))) {
             fail("conflict", "$intent");
         }
-        if (stored.intent.record.requirementId !== recordId
-            || stored.intent.lockRef !== lockRef) {
-            fail("conflict", "$intent");
-        }
-        const residues = await inspectLedgerRecordPublicationResidues(root, stored.intent, signal);
+        const residues = await inspectLedgerRecordPublicationResidues(root, stored.intent);
         if (await ledgerPublicationResourceNodeOrNull(root, stored.intent.finalRootRef) !== null) {
             const loaded = await settleCommittedLedgerIntent(root, stored, residues, signal);
             return Object.freeze({ wroteAuthority: false, loaded });

@@ -16,12 +16,7 @@ import { computeLedgerAuthorityRecordDigest } from "./ledger-authority-record.js
 import { LedgerAuthorityStoreError, throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
 import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
 import { parseLedgerRecordPublicationIntentDocument, renderLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, LedgerRecordPublicationIntentError, } from "./ledger-record-publication-intent.js";
-import { LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES, LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_TRANSACTION_FILE_MODE, } from "./ledger-authority-storage-policy.js";
-function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
-}
+import { LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES, LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_TRANSACTION_FILE_MODE, currentUserId, } from "./ledger-authority-storage-policy.js";
 function admitLedgerResourceOperation(intent, resourcePath, recipe) {
     const declaration = createLedgerAuthorityResourceCatalog(intent.record).find((entry) => entry.placement.relativePath === resourcePath);
     if (declaration === undefined)
@@ -51,17 +46,19 @@ export async function ledgerPublicationResourceNodeOrNull(root, resourcePath) {
     }
 }
 function assertTransactionFileNode(node) {
+    const userId = currentUserId();
     if (node.kind !== "file"
         || node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE
         || node.linkCount !== 1n
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+        || (userId !== null && node.userId !== userId)) {
         fail("conflict", "$intent");
     }
 }
 function assertTransactionStageNode(node) {
+    const userId = currentUserId();
     if (node.kind !== "directory"
         || node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+        || (userId !== null && node.userId !== userId)) {
         fail("conflict", "$stage");
     }
 }
@@ -171,7 +168,7 @@ export async function retireLedgerRecordPublicationIntent(root, stored, signal) 
         throw error;
     }
 }
-export async function inspectLedgerRecordPublicationResidues(root, intent, _signal) {
+export async function inspectLedgerRecordPublicationResidues(root, intent) {
     const stageNode = await ledgerPublicationResourceNodeOrNull(root, intent.stageRef);
     if (stageNode !== null)
         assertTransactionStageNode(stageNode);

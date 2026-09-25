@@ -36,8 +36,8 @@ import { parseWakeflowWindowHostBindingId, WakeflowWindowHostBindingIdError, } f
  * 观察到产品缺陷的旧Test Target继续作为历史代际保留自己的attempt、Result与
  * Decision。`managedEvidence`只在首个Evidence Event后出现，且只保存Manifest与payload
  * 的精确selector；完整Manifest仍由Event拥有。`pendingTestRetest`只记录产品缺陷修复后
- * 尚待创建的一代复测，不复制完整Authorization或事件历史。尚未实现的Pod不使用
- * 空数组或null占位。
+ * 尚待创建的一代复测，不复制完整Authorization或事件历史。Pod归属记录在Demand身份
+ * （identity.podId）里，不在聚合状态里。
  */
 const DEMAND_AGGREGATE_STATE_ARTIFACT_KIND = "wakeflow-demand-aggregate-state";
 const DEMAND_AGGREGATE_STATE_SCHEMA_VERSION = 1;
@@ -83,6 +83,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_AGGREGATE_
 function fail(reason, path) {
     throw new DemandAggregateStateError(reason, path);
 }
+/** 一个测试目标的尝试上限，对应 test-execution-attempt Schema 的序号最大值。 */
+const TEST_ATTEMPT_LIMIT = 10;
 function parseId(value, kind, path) {
     try {
         return parseWakeflowDurableIdOfKind(value, kind, path);
@@ -106,10 +108,11 @@ function parseCurrentDeliveryBase(value, path) {
     }
     if (!Number.isSafeInteger(value.generation) ||
         value.generation < 1 ||
-        value.generation > DELIVERY_REARM_LIMIT + 1 ||
-        !Number.isSafeInteger(value.fence.streamRevision) ||
-        value.fence.streamRevision < 2) {
+        value.generation > DELIVERY_REARM_LIMIT + 1) {
         fail("relation", `${path}/generation`);
+    }
+    if (!Number.isSafeInteger(value.fence.streamRevision) || value.fence.streamRevision < 2) {
+        fail("relation", `${path}/fence/streamRevision`);
     }
     return Object.freeze({
         deliveryId: parseId(value.deliveryId, "target-delivery", `${path}/deliveryId`),
@@ -208,7 +211,8 @@ function parseCallbackSummary(value, targetResultId, path) {
         bindingId,
     });
 }
-function parseTargetReviewDecisionSummary(value, path) {
+/** 实现与测试审查决定摘要形状相同，只有 decision 的取值域不同。 */
+function parseReviewDecisionSummary(value, path) {
     let decidedAt;
     try {
         decidedAt = parseUtcInstant(value.decidedAt, `${path}/decidedAt`);
@@ -226,22 +230,24 @@ function parseTargetReviewDecisionSummary(value, path) {
         decidedAt,
     });
 }
-function parseTestReviewDecisionSummary(value, path) {
-    let decidedAt;
-    try {
-        decidedAt = parseUtcInstant(value.decidedAt, `${path}/decidedAt`);
-    }
-    catch (error) {
-        if (error instanceof UtcInstantError)
-            fail("relation", `${path}/decidedAt`);
-        throw error;
-    }
-    return Object.freeze({
-        targetReviewDecisionId: parseId(value.targetReviewDecisionId, "target-review-decision", `${path}/targetReviewDecisionId`),
-        decisionDigest: parseDigest(value.decisionDigest, `${path}/decisionDigest`),
-        decision: value.decision,
-        controllerWindowId: parseId(value.controllerWindowId, "window", `${path}/controllerWindowId`),
-        decidedAt,
+/** 状态里记录的审查决定摘要只取决定的身份、摘要、取值、窗口与时间。 */
+function reviewDecisionSummaryOf(decision) {
+    return {
+        targetReviewDecisionId: decision.targetReviewDecisionId,
+        decisionDigest: decision.decisionDigest,
+        decision: decision.decision,
+        controllerWindowId: decision.controllerWindowId,
+        decidedAt: decision.decidedAt,
+    };
+}
+/**
+ * 一个 TargetResult 身份只能被记录一次：任何阶段仍携带结果的目标（已报告、已审查、
+ * 返工、阻塞或升级）都占用它的 targetResultId。
+ */
+function targetResultIdInUse(targets, targetResultId) {
+    return targets.some((entry) => {
+        const delivery = entry.currentDelivery;
+        return delivery?.targetResult?.targetResultId === targetResultId;
     });
 }
 function reviewPhaseForDecision(decision) {
@@ -415,7 +421,7 @@ function parseTestAttemptState(value, path) {
     });
 }
 function parseTestAttemptLineage(values, target, path) {
-    if (values.length === 0 || values.length > 10)
+    if (values.length === 0 || values.length > TEST_ATTEMPT_LIMIT)
         fail("relation", path);
     const attempts = values.map((value, index) => parseTestAttemptState(value, `${path}/${index}`));
     const first = attempts[0];
@@ -521,8 +527,7 @@ function parseTargetTasks(values) {
                 value.phase !== "test-review-blocked" &&
                 value.phase !== "test-escalated") ||
                 value.currentDelivery === undefined ||
-                value.testAttempts === undefined ||
-                value.testAttempts.length > 10) {
+                value.testAttempts === undefined) {
                 fail("relation", path);
             }
             const currentDelivery = parseTestCurrentDelivery(value.currentDelivery, `${path}/currentDelivery`);
@@ -562,7 +567,7 @@ function parseTargetTasks(values) {
                     fail("relation", `${path}/currentDelivery`);
                 }
                 const targetResult = parseTargetResultSummary(reviewedDelivery.targetResult, `${path}/currentDelivery/targetResult`);
-                const reviewDecision = parseTestReviewDecisionSummary(reviewedDelivery.reviewDecision, `${path}/currentDelivery/reviewDecision`);
+                const reviewDecision = parseReviewDecisionSummary(reviewedDelivery.reviewDecision, `${path}/currentDelivery/reviewDecision`);
                 const expectedPhase = value.phase;
                 if (!testReviewPhasesForDecision(reviewDecision.decision).includes(expectedPhase)) {
                     fail("relation", `${path}/phase`);
@@ -715,7 +720,7 @@ function parseTargetTasks(values) {
         if (productCurrentDelivery.reviewDecision === undefined) {
             fail("relation", `${path}/currentDelivery/reviewDecision`);
         }
-        const reviewDecision = parseTargetReviewDecisionSummary(productCurrentDelivery.reviewDecision, `${path}/currentDelivery/reviewDecision`);
+        const reviewDecision = parseReviewDecisionSummary(productCurrentDelivery.reviewDecision, `${path}/currentDelivery/reviewDecision`);
         const reviewedDelivery = Object.freeze({
             ...resultDelivery,
             reviewDecision,
@@ -767,6 +772,33 @@ function assertClaimUnused(current, claimId) {
     }
 }
 /** `delivery.delivery-prepared.v1` 使用的纯状态转换：实现与 test 两类目标共用。 */
+/**
+ * rearm 用尽的测试投递换新信封：同一次尝试原样重发，只替换这次尝试的投递摘要；
+ * 被拒的投递从未到达会话，所以不产生新的尝试序号。
+ */
+function replaceRejectedTestAttemptDelivery(current, target, attempt, replacement) {
+    const rejected = lastTestAttempt(target.testAttempts);
+    if (target.currentDelivery.generation <= DELIVERY_REARM_LIMIT ||
+        rejected.delivery.deliveryId !== target.currentDelivery.deliveryId ||
+        computeCanonicalJsonSha256Digest(rejected.attempt) !==
+            computeCanonicalJsonSha256Digest(attempt)) {
+        fail("transition", "$/targetTasks");
+    }
+    return parseDemandAggregateState({
+        ...current,
+        targetTasks: current.targetTasks.map((entry) => entry.targetTaskId === target.targetTaskId
+            ? {
+                ...target,
+                phase: "test-delivery-prepared",
+                currentDelivery: replacement.currentDelivery,
+                testAttempts: [
+                    ...target.testAttempts.slice(0, -1),
+                    { attempt, delivery: replacement.attemptDelivery },
+                ],
+            }
+            : entry),
+    });
+}
 export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValue) {
     const current = parseDemandAggregateState(currentValue);
     let envelope;
@@ -807,6 +839,12 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
             ...currentDelivery,
             testAttemptId: envelope.attempt.testAttemptId,
         });
+        if (target.phase === "test-host-effect-rejected") {
+            return replaceRejectedTestAttemptDelivery(current, target, envelope.attempt, {
+                currentDelivery: testCurrentDelivery,
+                attemptDelivery,
+            });
+        }
         if (envelope.attempt.mode === "initial") {
             if (target.phase !== "planned")
                 fail("transition", "$/targetTasks");
@@ -836,7 +874,7 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
             throw error;
         }
         const rerunSource = envelope.attempt.rerunSource;
-        if (target.testAttempts.length >= 10 ||
+        if (target.testAttempts.length >= TEST_ATTEMPT_LIMIT ||
             target.testAttempts.some((entry) => entry.attempt.testAttemptId === envelope.attempt.testAttemptId) ||
             rerunSource.previousResult.targetResultId !==
                 target.currentDelivery.targetResult.targetResultId ||
@@ -868,12 +906,14 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
     if (target.workType === "test")
         fail("transition", "$/targetTasks");
     const purpose = deliveryPurpose(envelope);
-    if (target.phase === "planned" || target.phase === "host-effect-rejected") {
-        // 初次投递，或 rearm 用尽后换新信封重新准备。
+    if (target.phase === "planned") {
         if (purpose !== "initial")
             fail("transition", "$/targetTasks");
-        if (target.phase === "host-effect-rejected" &&
-            target.currentDelivery.generation <= DELIVERY_REARM_LIMIT) {
+    }
+    else if (target.phase === "host-effect-rejected") {
+        // rearm 用尽后换新信封重新准备。状态不保留被拒信封的返工依据，由切片从被拒信封
+        // 原样带过来，决策器校验依据与信封自洽；这里只守住代际上限。
+        if (target.currentDelivery.generation <= DELIVERY_REARM_LIMIT) {
             fail("transition", "$/targetTasks");
         }
     }
@@ -1122,10 +1162,7 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
                 result.delivery.disposition ||
             target.currentDelivery.outcome.readbackStatus !==
                 result.delivery.readbackStatus ||
-            current.targetTasks.some((entry) => (entry.phase === "result-reported" ||
-                entry.phase === "test-result-reported") &&
-                entry.currentDelivery.targetResult.targetResultId ===
-                    result.targetResultId)) {
+            targetResultIdInUse(current.targetTasks, result.targetResultId)) {
             fail("transition", "$/targetTasks");
         }
         return parseDemandAggregateState({
@@ -1183,9 +1220,7 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
         reportAnchorIds.some((anchorId) => !target.acceptanceAnchorIds.includes(anchorId)) ||
         !completedAnchorsClose ||
         !commitPolicyCloses ||
-        current.targetTasks.some((entry) => entry.phase === "result-reported" &&
-            entry.currentDelivery.targetResult.targetResultId ===
-                result.targetResultId)) {
+        targetResultIdInUse(current.targetTasks, result.targetResultId)) {
         fail("transition", "$/targetTasks");
     }
     return parseDemandAggregateState({
@@ -1342,13 +1377,7 @@ export function decideTargetResultReviewInDemandAggregateState(currentValue, dec
                     phase,
                     currentDelivery: {
                         ...target.currentDelivery,
-                        reviewDecision: {
-                            targetReviewDecisionId: decision.targetReviewDecisionId,
-                            decisionDigest: decision.decisionDigest,
-                            decision: decision.decision,
-                            controllerWindowId: decision.controllerWindowId,
-                            decidedAt: decision.decidedAt,
-                        },
+                        reviewDecision: reviewDecisionSummaryOf(decision),
                     },
                 }
                 : entry),
@@ -1390,13 +1419,7 @@ export function decideTargetResultReviewInDemandAggregateState(currentValue, dec
                 phase,
                 currentDelivery: {
                     ...target.currentDelivery,
-                    reviewDecision: {
-                        targetReviewDecisionId: decision.targetReviewDecisionId,
-                        decisionDigest: decision.decisionDigest,
-                        decision: decision.decision,
-                        controllerWindowId: decision.controllerWindowId,
-                        decidedAt: decision.decidedAt,
-                    },
+                    reviewDecision: reviewDecisionSummaryOf(decision),
                 },
             }
             : entry),

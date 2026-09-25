@@ -202,6 +202,19 @@ test("Git ignore candidate rejects capacity, cancellation, and invalid repositor
     equal(trapCalls, 0);
   });
 
+  await t.test("duplicate probes are input errors", async (subtest) => {
+    const current = await fixture(subtest);
+    await expectCandidateError(
+      () => observeGitIgnoreCandidate(
+        current.root,
+        Buffer.from("/safe/\n"),
+        probes("same/path", "same/path"),
+      ),
+      "input",
+      "$probePaths/1",
+    );
+  });
+
   await t.test("pre-aborted", async (subtest) => {
     const current = await fixture(subtest);
     const controller = new AbortController();

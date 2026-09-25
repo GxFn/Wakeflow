@@ -617,25 +617,30 @@ function generateDurableIdKindVocabulary(
     "/** 从同一 Schema 枚举派生的持久标识类别联合类型。 */",
     "export type WakeflowDurableIdKind =",
     `  (typeof ${DURABLE_ID_KINDS_EXPORT})[number];`,
+    ...runtimeSchemaModuleLines(record),
     "",
   ].join("\n");
 }
 
 /**
- * UTC 时刻的词法模式是可移植持久化表示权威；生成器只验证模式可编译并逐字投影，
- * 不在工具层解释日期、时区或纳秒语义。
+ * 已登记字符串词法 Schema（UTC 时刻、可移植资源路径、SHA-256 摘要）的共同准入：
+ * 标题与类型必须匹配，模式非空且可按 `u` 标志编译；生成器只逐字投影，不解释语义。
  */
-function parseUtcInstantPattern(record: SchemaCatalogRecord): string {
+function parseStringPatternSchema(
+  record: SchemaCatalogRecord,
+  expectedTitle: string,
+  label: string,
+): string {
   const pattern: unknown = record.schema.pattern;
   if (
-    record.schema.title !== UTC_INSTANT_SCHEMA_TITLE ||
+    record.schema.title !== expectedTitle ||
     record.schema.type !== "string" ||
     typeof pattern !== "string" ||
     pattern.length === 0
   ) {
     fail(
       "wakeflow-schema-runtime-pattern",
-      `${record.relativePath} is not the expected UTC instant string Schema`,
+      `${record.relativePath} is not the expected ${label} string Schema`,
     );
   }
   try {
@@ -643,15 +648,18 @@ function parseUtcInstantPattern(record: SchemaCatalogRecord): string {
   } catch {
     fail(
       "wakeflow-schema-runtime-pattern",
-      `${record.relativePath} contains an invalid UTC instant pattern`,
+      `${record.relativePath} contains an invalid ${label} pattern`,
     );
   }
   return pattern;
 }
 
-/** 为 UTC 时刻生成运行时正则源和对应的持久化字符串类型。 */
+/**
+ * 为 UTC 时刻生成运行时正则源和对应的持久化字符串类型；不在工具层解释日期、
+ * 时区或纳秒语义。
+ */
 function generateUtcInstantContract(record: SchemaCatalogRecord, bannerComment: string): string {
-  const pattern = parseUtcInstantPattern(record);
+  const pattern = parseStringPatternSchema(record, UTC_INSTANT_SCHEMA_TITLE, "UTC instant");
   return [
     bannerComment,
     "",
@@ -665,39 +673,18 @@ function generateUtcInstantContract(record: SchemaCatalogRecord, bannerComment: 
 }
 
 /**
- * 可移植资源路径的词法模式是持久化结构权威；NFC、Unicode 结构完整性和品牌准入
- * 仍由运行时解析器负责，工具层不解释文件系统语义。
+ * 为可移植资源路径生成运行时正则源和持久化字符串类型；NFC、Unicode 结构完整性和
+ * 品牌准入仍由运行时解析器负责，工具层不解释文件系统语义。
  */
-function parsePortableResourcePathPattern(record: SchemaCatalogRecord): string {
-  const pattern: unknown = record.schema.pattern;
-  if (
-    record.schema.title !== PORTABLE_RESOURCE_PATH_SCHEMA_TITLE ||
-    record.schema.type !== "string" ||
-    typeof pattern !== "string" ||
-    pattern.length === 0
-  ) {
-    fail(
-      "wakeflow-schema-runtime-pattern",
-      `${record.relativePath} is not the expected portable resource path string Schema`,
-    );
-  }
-  try {
-    new RegExp(pattern, "u");
-  } catch {
-    fail(
-      "wakeflow-schema-runtime-pattern",
-      `${record.relativePath} contains an invalid portable resource path pattern`,
-    );
-  }
-  return pattern;
-}
-
-/** 为可移植资源路径生成运行时正则源和持久化字符串类型。 */
 function generatePortableResourcePathContract(
   record: SchemaCatalogRecord,
   bannerComment: string,
 ): string {
-  const pattern = parsePortableResourcePathPattern(record);
+  const pattern = parseStringPatternSchema(
+    record,
+    PORTABLE_RESOURCE_PATH_SCHEMA_TITLE,
+    "portable resource path",
+  );
   return [
     bannerComment,
     "",
@@ -712,26 +699,7 @@ function generatePortableResourcePathContract(
 
 /** SHA-256 摘要的前缀、长度和小写词法由 Schema 单向投影。 */
 function generateSha256DigestContract(record: SchemaCatalogRecord, bannerComment: string): string {
-  const pattern: unknown = record.schema.pattern;
-  if (
-    record.schema.title !== SHA256_DIGEST_SCHEMA_TITLE ||
-    record.schema.type !== "string" ||
-    typeof pattern !== "string" ||
-    pattern.length === 0
-  ) {
-    fail(
-      "wakeflow-schema-runtime-pattern",
-      `${record.relativePath} is not the expected SHA-256 digest Schema`,
-    );
-  }
-  try {
-    new RegExp(pattern, "u");
-  } catch {
-    fail(
-      "wakeflow-schema-runtime-pattern",
-      `${record.relativePath} contains an invalid SHA-256 digest pattern`,
-    );
-  }
+  const pattern = parseStringPatternSchema(record, SHA256_DIGEST_SCHEMA_TITLE, "SHA-256 digest");
   return [
     bannerComment,
     "",

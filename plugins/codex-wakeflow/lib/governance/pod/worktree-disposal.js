@@ -6,7 +6,8 @@
  *
  * 建议命令会进入 status 结果的 `singleLineText` 字段（无控制字符、至多 512），所以路径在
  * 这里就按投影 `inline()` 的同一套规则单行化并有界化：异常路径只让这一条命令降级，
- * 绝不能让整份 status 结果被准入拒绝——恰恰是操作者最需要这条引导的时刻。
+ * 绝不能让整份 status 结果被准入拒绝——恰恰是操作者最需要这条引导的时刻。含 shell 元字符或
+ * 空白的路径按 POSIX 单引号引用，Agent 照原样执行时 git 只收到这一个路径参数。
  */
 /** 与 `wakeflow-status-result.schema.json` 的 `$defs.singleLineText.maxLength` 一致。 */
 const SUGGESTED_MAXIMUM_LENGTH = 512;
@@ -33,18 +34,36 @@ function singleLinePath(value) {
     const cleaned = stripped.replace(/\s+/gu, " ").trim();
     return cleaned.length === 0 ? "." : cleaned;
 }
-/** 按码位截到预算内并加省略号，永不切断代理对；放得下就原样返回。 */
-function boundedPath(relativePath, budget) {
-    if (relativePath.length <= budget)
-        return relativePath;
-    const room = budget - TRUNCATION_MARK.length;
+/**
+ * 需要 shell 引用的路径：含 [A-Za-z0-9._/@+-] 之外的 ASCII 字符（空格、`;`、`$`、反引号、引号……）。
+ * 非 ASCII 码位（含截断用的省略号）不是 shell 元字符，不触发引用。
+ */
+const SHELL_UNSAFE_PATH = /[^A-Za-z0-9._/@+\-\u0080-\u{10ffff}]/u;
+/** POSIX 单引号引用中一个码位的写法：`'` 写成 `'\''`。 */
+function quotedPiece(character) {
+    return character === "'" ? "'\\''" : character;
+}
+/**
+ * 按码位截到预算内并加省略号，永不切断代理对；需要引用时整体包进 POSIX 单引号，
+ * 引号与转义都计入预算，结果长度永不越过 `budget`。
+ */
+function shellPathWord(relativePath, budget) {
+    const quoted = SHELL_UNSAFE_PATH.test(relativePath);
+    const wrap = quoted ? 2 : 0;
+    const body = (value) => (quoted ? [...value].map(quotedPiece).join("") : value);
+    const whole = body(relativePath);
+    const word = (value) => (quoted ? `'${value}'` : value);
+    if (whole.length + wrap <= budget)
+        return word(whole);
+    const room = budget - wrap - TRUNCATION_MARK.length;
     let kept = "";
     for (const character of relativePath) {
-        if (kept.length + character.length > room)
+        const piece = quoted ? quotedPiece(character) : character;
+        if (kept.length + piece.length > room)
             break;
-        kept += character;
+        kept += piece;
     }
-    return `${kept}${TRUNCATION_MARK}`;
+    return word(`${kept}${TRUNCATION_MARK}`);
 }
 /**
  * 有界化：路径在命令里出现一次（remove）或两次（unlock 再 remove）；两处用同一个截断结果，
@@ -53,10 +72,10 @@ function boundedPath(relativePath, budget) {
 function removeCommand(relativePath, locked) {
     if (!locked) {
         const budget = SUGGESTED_MAXIMUM_LENGTH - REMOVE_COMMAND_PREFIX.length;
-        return `${REMOVE_COMMAND_PREFIX}${boundedPath(relativePath, budget)}`;
+        return `${REMOVE_COMMAND_PREFIX}${shellPathWord(relativePath, budget)}`;
     }
     const fixed = UNLOCK_COMMAND_PREFIX.length + UNLOCK_SEPARATOR.length + REMOVE_COMMAND_PREFIX.length;
-    const shown = boundedPath(relativePath, Math.floor((SUGGESTED_MAXIMUM_LENGTH - fixed) / 2));
+    const shown = shellPathWord(relativePath, Math.floor((SUGGESTED_MAXIMUM_LENGTH - fixed) / 2));
     return `${UNLOCK_COMMAND_PREFIX}${shown}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${shown}`;
 }
 /** `locked` 是登记时回执记下的锁状态（`git worktree list --porcelain` 的 locked 行）。 */

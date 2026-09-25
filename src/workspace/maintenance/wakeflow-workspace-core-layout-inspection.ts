@@ -324,6 +324,18 @@ function maintenanceResidues(
   return Object.freeze([...names].sort().map(maintenanceResidue));
 }
 
+type GateLockState = "absent" | "active" | "inactive-or-unknown" | "unsafe";
+
+// An unsafe gate is a conflict whether or not the maintenance directories exist.
+function prefixProtocolStatus(
+  lockState: GateLockState,
+  stagePresent: boolean,
+): WakeflowLocalProtocolStatus {
+  if (lockState === "unsafe") return "conflict";
+  if (lockState === "active") return "busy";
+  return lockState !== "absent" || stagePresent ? "recovery-required" : "bootstrap-prefix";
+}
+
 async function inspectLocal(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
@@ -385,8 +397,7 @@ async function inspectLocal(
   ));
   if (stagePresent) issueCodes.push("maintenance-gate-stage-residue");
   const maintenanceEntry = entryNamed(runtime, "maintenance");
-  let lockState: "absent" | "active" | "inactive-or-unknown" | "unsafe" =
-    "absent";
+  let lockState: GateLockState = "absent";
   try {
     const lock = await inspectRootedExclusiveFileLock(
       root,
@@ -414,11 +425,7 @@ async function inspectLocal(
   }
   if (lockState === "unsafe") issueCodes.push("maintenance-gate-unsafe");
   if (maintenanceEntry === null) {
-    const status: WakeflowLocalProtocolStatus = lockState === "active"
-      ? "busy"
-      : lockState !== "absent" || stagePresent
-        ? "recovery-required"
-        : "bootstrap-prefix";
+    const status = prefixProtocolStatus(lockState, stagePresent);
     return Object.freeze({
       status,
       freshCompatible: freshCompatible && status === "bootstrap-prefix",
@@ -461,11 +468,7 @@ async function inspectLocal(
   }
   const transactionsEntry = entryNamed(maintenance, "transactions");
   if (transactionsEntry === null) {
-    const status: WakeflowLocalProtocolStatus = lockState === "active"
-      ? "busy"
-      : lockState !== "absent" || stagePresent
-        ? "recovery-required"
-        : "bootstrap-prefix";
+    const status = prefixProtocolStatus(lockState, stagePresent);
     return Object.freeze({
       status,
       freshCompatible: freshCompatible && status === "bootstrap-prefix",

@@ -291,8 +291,9 @@ function admitFacade(facade: Readonly<WindowBindingHostFacade>): AdmittedFacade 
   }
 }
 
-function locatorProvider(hostId: WakeflowHostId): "tmux" | "none" {
-  return hostId === "claude-code" ? "tmux" : "none";
+/** 定位器提供者取自宿主资源 Profile 的 windowLocator 表面，而不是比较宿主 id。 */
+function locatorProvider(facade: AdmittedFacade): "tmux" | "none" {
+  return facade.resourceProfile.surfaces.windowLocator ? "tmux" : "none";
 }
 
 function bindingDigestOf(binding: Readonly<WakeflowWindowHostBinding>): Sha256Digest {
@@ -447,8 +448,8 @@ async function sessionRootMatcher(
   receipts: readonly Readonly<PodWorktreeReceipt>[],
 ): Promise<(cwd: string) => Promise<boolean>> {
   if (
-    context.intent?.worktree === null ||
     context.intent === null ||
+    context.intent.worktree === null ||
     context.repositoryRoot === null
   ) {
     const expectedRoot = path.resolve(context.root.absolutePath, window.configuredPlacement);
@@ -549,7 +550,7 @@ async function loadState(
   const binding = bindings.find((entry) => entry.windowId === window.windowId) ?? null;
   const claim = await loadClaim(context, window.windowId);
   const locator =
-    locatorProvider(context.facade.hostId) === "tmux"
+    locatorProvider(context.facade) === "tmux"
       ? await readWindowLocator(
           context.root,
           context.facade.hostId,
@@ -576,7 +577,7 @@ function endpointState(context: EndpointContext, loaded: LoadedState): EndpointS
   return Object.freeze({
     windowKnown: context.window !== null && context.intent !== null,
     launchIntentDigest: context.intent?.intentDigest ?? "",
-    locatorProvider: locatorProvider(context.facade.hostId),
+    locatorProvider: locatorProvider(context.facade),
     worktreeRequired: context.intent !== null && context.intent.worktree !== null,
     binding:
       loaded.binding === null || loaded.bindingDigest === null
@@ -902,7 +903,7 @@ function inspectionResult(context: EndpointContext, loaded: LoadedState): Window
         : { status: "registered", ...bindingSummary(loaded.binding) },
     claim: claimSummary(loaded.claim, loaded.claimExpired),
     locator:
-      locatorProvider(context.facade.hostId) === "none"
+      locatorProvider(context.facade) === "none"
         ? { status: "not-applicable" }
         : { status: loaded.locator === null ? "absent" : "present" },
     next: nextFor(
@@ -938,7 +939,7 @@ async function refreshLocator(
   binding: Readonly<WakeflowWindowHostBinding> | null,
   observation: CreationObservation | null,
 ): Promise<void> {
-  if (locatorProvider(context.facade.hostId) !== "tmux") return;
+  if (locatorProvider(context.facade) !== "tmux") return;
   if (binding === null || observation?.tmux === undefined) {
     await retireWindowLocator(context.root, context.facade.hostId, window.windowId, context.signal);
     return;
@@ -994,7 +995,7 @@ async function admitWorktree(
   loaded: LoadedState,
   observation: CreationObservation,
 ): Promise<Readonly<AdmittedPodWorktree> | null> {
-  if (context.intent?.worktree === null || context.intent === null) return null;
+  if (context.intent === null || context.intent.worktree === null) return null;
   if (observation.worktree === undefined) {
     fail("invalid-request", "worktree-receipt-required", "$request.observation.worktree");
   }
@@ -1032,8 +1033,7 @@ async function recordWorktree(
   worktree: Readonly<AdmittedPodWorktree> | null,
   observedAt: string,
 ): Promise<Readonly<WorktreeSummary> | null> {
-  if (worktree === null || context.intent?.worktree === null || context.intent === null)
-    return null;
+  if (worktree === null || context.intent === null || context.intent.worktree === null) return null;
   await writePodWorktreeReceipt(
     context.root,
     createPodWorktreeReceipt({
@@ -1206,6 +1206,28 @@ async function applyMutation(
   }
 }
 
+/** 锁内复核：绑定摘要与（replace / decommission 时）work claim 都必须与加载快照一致。 */
+async function assertUnchangedUnderLock(
+  context: EndpointContext,
+  loaded: LoadedState,
+  request: MutationRequest,
+  current: Readonly<WakeflowWindowHostBinding> | null,
+): Promise<void> {
+  const currentDigest = current === null ? null : bindingDigestOf(current);
+  if (currentDigest !== loaded.bindingDigest) {
+    fail("concurrency-conflict", "binding-changed", "$request.windowId", { retryable: true });
+  }
+  // 在锁内重读 work claim：加载快照后被投递抢占的窗口不能被替换或撤除。完全互斥还需要
+  // 投递在取得 claim 后复核绑定摘要（或取得绑定锁）；这里只关闭本侧的窗口期。
+  if (request.operation !== "replace" && request.operation !== "decommission") return;
+  const windowId = context.window?.windowId;
+  if (windowId === undefined) fail("not-found", "window-unknown", "$request.windowId");
+  const claim = await loadClaim(context, windowId);
+  if ((claim?.claimDigest ?? null) !== (loaded.claim?.claimDigest ?? null)) {
+    fail("concurrency-conflict", "claim-changed", "$request.windowId", { retryable: true });
+  }
+}
+
 async function mutateBinding(
   context: EndpointContext,
   loaded: LoadedState,
@@ -1229,10 +1251,7 @@ async function mutateBinding(
         const current =
           store.inventory.bindings.find((candidate) => candidate.windowId === window.windowId) ??
           null;
-        const currentDigest = current === null ? null : bindingDigestOf(current);
-        if (currentDigest !== loaded.bindingDigest) {
-          fail("concurrency-conflict", "binding-changed", "$request.windowId", { retryable: true });
-        }
+        await assertUnchangedUnderLock(context, loaded, request, current);
         const applied = await applyMutation(
           context,
           store,
@@ -1319,8 +1338,9 @@ async function releaseClaim(
 ): Promise<Readonly<{ readonly claimId: string; readonly claimDigest: Sha256Digest }>> {
   const claim = loaded.claim;
   if (claim === null) fail("not-found", "claim-absent", "$request.windowId");
-  await releaseWorkClaim(context.root, claim, signalOptions(context.signal));
+  // 回执先于删除：回执写入失败时 claim 仍在，同一请求可重试；回执已存在视为幂等。
   await writeClaimReleaseReceipt(context, claim, loaded, request);
+  await releaseWorkClaim(context.root, claim, signalOptions(context.signal));
   return Object.freeze({ claimId: claim.claimId, claimDigest: claim.claimDigest });
 }
 

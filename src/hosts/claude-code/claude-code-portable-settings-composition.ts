@@ -32,10 +32,12 @@ import {
 } from "../../workspace/workspace-host-resource-profile.js";
 import {
   CLAUDE_CODE_PORTABLE_SETTINGS_REF,
+  type ClaudeCodePortableSettingsPublicationOptions,
   ClaudeCodePortableSettingsPublicationError,
   inspectClaudeCodePortableSettings,
 } from "./claude-code-portable-settings-publication.js";
 import {
+  type ClaudeCodePortableSettingsTransition,
   type ClaudeCodePortableSettingsTransitionReason,
   claudeCodePortableSettingsRulesFor,
   planClaudeCodePortableSettingsTransition,
@@ -295,10 +297,45 @@ export function createClaudeCodePortableSettingsOperation(
   });
 }
 
+const BLOCKING_PUBLICATION_REASONS: ReadonlySet<string> = new Set([
+  "source-policy",
+  "directory-policy",
+  "root-scope",
+]);
+
+type RootSettingsInspection =
+  | { readonly transition: ClaudeCodePortableSettingsTransition }
+  | { readonly blockedReason: string };
+
+/**
+ * 只读检查一个根；用户 settings 节点不合 Wakeflow 的写入策略时降为 blocker，
+ * 不让整个 maintenance preview 失败。
+ */
+async function inspectRootSettings(
+  root: RootedDirectory,
+  options: ClaudeCodePortableSettingsPublicationOptions,
+): Promise<RootSettingsInspection> {
+  try {
+    return {
+      transition: (await inspectClaudeCodePortableSettings(root, options))
+        .transition,
+    };
+  } catch (error: unknown) {
+    if (!(error instanceof ClaudeCodePortableSettingsPublicationError)) {
+      throw error;
+    }
+    if (error.reason === "aborted") fail("aborted", "$signal");
+    if (BLOCKING_PUBLICATION_REASONS.has(error.reason)) {
+      return { blockedReason: error.reason };
+    }
+    fail("inspection", "$settings");
+  }
+}
+
 async function inspectPresentRoot(
   absolutePath: string,
   signal: AbortSignal | undefined,
-) {
+): Promise<RootSettingsInspection> {
   let root: RootedDirectory;
   try {
     root = await RootedDirectory.open(absolutePath, "$configuredRoot");
@@ -306,10 +343,10 @@ async function inspectPresentRoot(
     if (error instanceof RootedDirectoryError) fail("root-open", "$configuredRoot");
     throw error;
   }
-  let inspection;
+  let inspection: RootSettingsInspection | undefined;
   let primaryError: unknown;
   try {
-    inspection = await inspectClaudeCodePortableSettings(
+    inspection = await inspectRootSettings(
       root,
       signal === undefined ? {} : { signal },
     );
@@ -322,13 +359,7 @@ async function inspectPresentRoot(
   } catch (error: unknown) {
     closeError = error;
   }
-  if (primaryError !== undefined) {
-    if (primaryError instanceof ClaudeCodePortableSettingsPublicationError) {
-      if (primaryError.reason === "aborted") fail("aborted", "$signal");
-      fail("inspection", "$settings");
-    }
-    throw primaryError;
-  }
+  if (primaryError !== undefined) throw primaryError;
   if (closeError !== undefined) fail("close-failure", "$configuredRoot");
   if (inspection === undefined) fail("inspection", "$settings");
   return inspection;
@@ -367,16 +398,13 @@ export async function planClaudeCodePortableSettingsComposition(
   const blockerCodes = new Set<string>();
   for (const root of authority.roots) {
     let placementStatus: "present" | "planned-missing";
-    let transition;
+    let inspection: RootSettingsInspection;
     if (root.rootKind === "program") {
       placementStatus = "present";
-      transition = (await inspectClaudeCodePortableSettings(
-        workspaceRootValue,
-        {
-          rules: claudeCodePortableSettingsRulesFor("program"),
-          ...(request.signal === undefined ? {} : { signal: request.signal }),
-        },
-      )).transition;
+      inspection = await inspectRootSettings(workspaceRootValue, {
+        rules: claudeCodePortableSettingsRulesFor("program"),
+        ...(request.signal === undefined ? {} : { signal: request.signal }),
+      });
     } else {
       const placement = placements.roots.find((entry) => (
         entry.key === `support.${root.rootId}.root`
@@ -394,15 +422,30 @@ export async function planClaudeCodePortableSettingsComposition(
           continue;
         }
         placementStatus = "planned-missing";
-        transition = planClaudeCodePortableSettingsTransition(null);
+        inspection = {
+          transition: planClaudeCodePortableSettingsTransition(null),
+        };
       } else {
         placementStatus = "present";
-        transition = (await inspectPresentRoot(
+        inspection = await inspectPresentRoot(
           placement.absolutePath,
           request.signal,
-        )).transition;
+        );
       }
     }
+    if ("blockedReason" in inspection) {
+      blockerCodes.add(
+        `settings-blocked:${root.rootKind}:${root.rootId}:${inspection.blockedReason}`,
+      );
+      rootEntries.push(Object.freeze({
+        root,
+        placementStatus,
+        settingsStatus: "blocked",
+        transitionReason: null,
+      }));
+      continue;
+    }
+    const { transition } = inspection;
     if (transition.status === "blocked") {
       blockerCodes.add(
         `settings-blocked:${root.rootKind}:${root.rootId}:${transition.reason}`,

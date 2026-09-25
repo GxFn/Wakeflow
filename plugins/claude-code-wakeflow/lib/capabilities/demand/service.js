@@ -1,6 +1,5 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
-import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../foundation/time/utc-instant.js";
 import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { createDemandAuthority, DemandAuthorityError, } from "../../governance/demand/model/demand-authority.js";
@@ -10,7 +9,6 @@ import { assertNoActiveDemand } from "../../governance/demand/publication/demand
 import { DemandEventSourcingPublicationServiceError } from "../../governance/demand/publication/demand-event-sourcing-publication-contract.js";
 import { publishDemandFromPackage, recoverDemandPublication, } from "../../governance/demand/publication/demand-event-sourcing-publication-service.js";
 import { createDemandEventSourcingPublicationTransaction, DemandEventSourcingPublicationTransactionError, } from "../../governance/demand/publication/demand-event-sourcing-publication-transaction.js";
-import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { createLedgerAuthorityMemberReference } from "../../governance/ledger/ledger-authority-reader.js";
 import { LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
@@ -18,7 +16,7 @@ import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
-import { closeSliceContext, nextAfterMutation, now, openSliceContext, parseDemandId, previewNext, signalOptions, } from "./context.js";
+import { closeSliceContext, demandRootExists, nextAfterMutation, now, openSliceContext, parseDemandId, previewNext, publicationEnvelope, signalOptions, } from "./context.js";
 import { admitDemandCreationResult, parseDemandCreationRequest, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION, } from "./contract.js";
 import { deriveCreationBlockers, deriveDemandCreationIds } from "./decide.js";
 /** 预演身份与权威关系用的固定时间；不发布。 */
@@ -100,20 +98,6 @@ function buildIdentityAndAuthority(context, demand, loaded, demandId, createdAt,
             error instanceof RequirementLineageError ||
             error instanceof LedgerAuthorityStoreError) {
             fail("precondition-failed", `authority-${error.reason}`, "$request.demand", { cause: error });
-        }
-        throw error;
-    }
-}
-async function demandRootExists(root, demandId) {
-    try {
-        await root.inspectExistingResource(demandFinalRootRef(demandId), "$demandRoot");
-        return true;
-    }
-    catch (error) {
-        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
-            return false;
-        if (error instanceof RootedDirectoryError) {
-            fail("io-failure", `demand-root-${error.reason}`, "$demandRoot", { cause: error });
         }
         throw error;
     }
@@ -327,22 +311,6 @@ function assembleCreateResult(envelope, input, phase, next, facts) {
         publication: phase.outcome.publication,
     });
 }
-function creationEnvelope(request) {
-    if (request.mode === "recover") {
-        return {
-            root: request.root,
-            mode: "recover",
-            planDigest: null,
-            operationId: request.operationId,
-        };
-    }
-    return {
-        root: request.root,
-        mode: request.mode,
-        planDigest: request.mode === "apply" ? (request.planDigest ?? null) : null,
-        operationId: null,
-    };
-}
 /** 执行一次 `wakeflow_create_demand`。 */
 export async function executeDemandCreationRequest(value, options = {}) {
     const facts = { demandId: null };
@@ -350,7 +318,7 @@ export async function executeDemandCreationRequest(value, options = {}) {
         tool: WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseDemandCreationRequest(raw);
-            return { envelope: creationEnvelope(request), input: request };
+            return { envelope: publicationEnvelope(request), input: request };
         },
         open: (root) => openSliceContext(root, options),
         close: closeSliceContext,

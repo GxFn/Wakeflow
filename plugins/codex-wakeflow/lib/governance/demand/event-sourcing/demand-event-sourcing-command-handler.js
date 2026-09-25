@@ -236,7 +236,6 @@ export async function executeDemandEventSourcingCommand(repository, commandValue
         events = decideDemandEventSourcingCommand(current?.state ?? null, command);
     }
     catch (error) {
-        console.error("HANDLER-DIAG", error && error.name, error && error.reason, error && error.path, error && error.message);
         if (error instanceof DemandEventSourcingDecisionError) {
             fail("decision-rejected", "$command");
         }
@@ -254,7 +253,6 @@ export async function executeDemandEventSourcingCommand(repository, commandValue
         });
     }
     catch (error) {
-        console.error("PREPARE-DIAG", error && error.name, error && error.reason, error && error.path, error && error.message);
         if (error instanceof DemandEventStreamCommitError) {
             fail("decision-rejected", "$command");
         }

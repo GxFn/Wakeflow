@@ -213,7 +213,9 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
     equal(prefixOptimized?.replayedCommitCount, 0);
     await rejects(
       repository.audit(),
-      (error: unknown) => error instanceof Error,
+      (error: unknown) =>
+        error instanceof DemandEventSourcingRepositoryError &&
+        error.reason === "stream",
     );
   } finally {
     await root.close();

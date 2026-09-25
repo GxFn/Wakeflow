@@ -50,8 +50,7 @@ report, return the callback. You own no other step and no Controller authority.
 - If a host error cuts your turn, look before you act again: `wakeflow_status`
   for this Demand tells you whether your import already landed. Replaying the
   import with the same delivery identity and fence returns the existing
-  result; the callback send is guarded too - the helper refuses a prompt that
-  already landed in the Controller window with `already-landed`.
+  result; the callback send follows the same rule: {{resendGuard}}
 - Workspace and repository `{{instructionFile}}` files bind you, and a
   repository's own rules outrank both this skill and the prompt's phrasing.
 
@@ -73,7 +72,8 @@ report, return the callback. You own no other step and no Controller authority.
    `completed` outcome is accepted only when every acceptance anchor is tied to
    managed evidence the Controller recorded for this Demand; when none exists
    yet, import the report as `needs-review` - recording evidence is the
-   Controller's step, not yours, and the rule is here, not in Wakeflow's source.
+   Controller's step, not yours; Wakeflow refuses a `completed` import whose
+   acceptance anchors are not all bound.
    A `needs-review` import is then a normal ending: the Controller records the
    evidence, verifies every anchor itself and accepts your report directly.
 6. The import returns a wake-controller callback permit. Send its prompt to the

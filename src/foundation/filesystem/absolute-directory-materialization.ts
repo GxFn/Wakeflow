@@ -248,6 +248,8 @@ export async function materializeAbsoluteDirectoryPlacement(
     fail("alias", "$ancestor");
   }
   const ancestor = nearestAncestor.absolutePath;
+  // 先证明相对路径可移植，再打开句柄，避免 input 失败泄漏 root。
+  const resourcePath = relativeResourcePath(ancestor, absolutePath);
   assertNotAborted(options.signal);
   let root: RootedDirectory;
   try {
@@ -256,7 +258,6 @@ export async function materializeAbsoluteDirectoryPlacement(
     if (error instanceof RootedDirectoryError) fail("root-open", "$ancestor");
     throw error;
   }
-  const resourcePath = relativeResourcePath(ancestor, absolutePath);
   let materialized: Awaited<ReturnType<typeof materializeDirectoryPath>>
     | undefined;
   let primaryError: unknown;

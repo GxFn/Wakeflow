@@ -542,6 +542,7 @@ test("unresolved Authority has no publication effects", async () => {
     equal(caught instanceof DemandEventSourcingPublicationServiceError, true);
     if (caught instanceof DemandEventSourcingPublicationServiceError) {
       equal(caught.publicationAuthority, "unchanged");
+      equal(caught.reason, "authority");
     }
     equal(existsSync(path.join(
       value.workspacePath,

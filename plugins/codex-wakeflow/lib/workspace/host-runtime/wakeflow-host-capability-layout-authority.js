@@ -1,5 +1,5 @@
 import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { createWakeflowWorkspaceHostResourceCatalog, } from "../workspace-host-resource-catalog.js";
+import { createWakeflowWorkspaceHostResourceCatalog, hostProfileHasOperationSurface, } from "../workspace-host-resource-catalog.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 const ERROR_MESSAGES = {
     profile: "Host capability layout profile is invalid.",
@@ -20,13 +20,6 @@ export class WakeflowHostCapabilityLayoutAuthorityError extends Error {
 function fail(reason, path) {
     throw new WakeflowHostCapabilityLayoutAuthorityError(reason, path);
 }
-function operationSurfaceIsPresent(profile) {
-    return profile.surfaces.keepLive
-        || profile.surfaces.windowLocator
-        || profile.surfaces.statuslineAsset !== null
-        || profile.surfaces.activityMonitor
-        || profile.surfaces.temporaryPrompts;
-}
 /** 仅按 Profile capability 编译父目录声明；不按 hostId 分支。 */
 export function compileWakeflowHostCapabilityLayoutAuthority(profileValue) {
     let profile;
@@ -44,7 +37,7 @@ export function compileWakeflowHostCapabilityLayoutAuthority(profileValue) {
     if (profile.surfaces.podReceipts) {
         declarationIds.push(`${prefix}.pod-receipts-root`);
     }
-    if (operationSurfaceIsPresent(profile)) {
+    if (hostProfileHasOperationSurface(profile)) {
         declarationIds.push(`${prefix}.operations-root`);
     }
     if (profile.surfaces.keepLive) {

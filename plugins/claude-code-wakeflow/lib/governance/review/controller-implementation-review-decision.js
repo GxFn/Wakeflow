@@ -9,7 +9,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { createUuidV4, parseUuidV4, UuidV4Error, } from "../../foundation/identity/uuid-v4.js";
+import { createUuidV4, UuidV4Error, } from "../../foundation/identity/uuid-v4.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
@@ -25,7 +25,6 @@ import { normalizeControllerReviewCallbackLanding, normalizeControllerReviewEsca
  */
 const DECISION_KIND = "WakeflowControllerImplementationReviewDecision";
 const DECISION_SCHEMA_VERSION = 1;
-const DECISION_ID_PREFIX = "target-review-decision_";
 const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const ERROR_MESSAGES = {
@@ -327,19 +326,6 @@ export function createControllerImplementationReviewDecision(input, options = {}
         ...basis,
         decisionDigest: computeCanonicalJsonSha256Digest(basis),
     });
-}
-function uuidFromDecisionId(value) {
-    return parseUuidV4(value.slice(DECISION_ID_PREFIX.length));
-}
-/** Decision Event与决定共享UUID，但保留独立typed namespace。 */
-export function controllerImplementationReviewDecisionEventId(value) {
-    const decision = parseControllerImplementationReviewDecision(value);
-    return createWakeflowDurableId("demand-event", uuidFromDecisionId(decision.targetReviewDecisionId));
-}
-/** Decision Commit与决定共享UUID，但保留独立typed namespace。 */
-export function controllerImplementationReviewDecisionCommitId(value) {
-    const decision = parseControllerImplementationReviewDecision(value);
-    return createWakeflowDurableId("demand-event-commit", uuidFromDecisionId(decision.targetReviewDecisionId));
 }
 export function renderControllerImplementationReviewDecision(value) {
     return renderDeterministicJsonDocument(parseControllerImplementationReviewDecision(value), "$decision");

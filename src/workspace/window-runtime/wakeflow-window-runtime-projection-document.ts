@@ -129,7 +129,11 @@ export async function publishWakeflowWindowRuntimeProjectionDocument(
   } catch (error: unknown) {
     if (!(error instanceof StableFileReadError && error.reason === "not-found")) {
       if (error instanceof StableFileReadError) {
+        if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
         fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
+      }
+      if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
+        fail("io-failure", "projection-read-unsafe", "$projection", { cause: error });
       }
       throw error;
     }
@@ -153,6 +157,7 @@ export async function publishWakeflowWindowRuntimeProjectionDocument(
     }
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
+      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
       fail("io-failure", `projection-write-${error.reason}`, "$projection", { cause: error });
     }
     throw error;

@@ -3,6 +3,10 @@ import { test } from "node:test";
 
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import {
+  computeDemandEventSourcingCommandDigest,
+  parseDemandEventSourcingCommand,
+} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import {
   parseManagedEvidenceCapturePlan,
   ManagedEvidenceCapturePlanError,
 } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
@@ -155,6 +159,15 @@ test("Publication transaction拒绝capture、record与Event Sourcing关系被分
         demandEventSourcingAppend: {
           ...transaction.demandEventSourcingAppend,
           eventId: transaction.demandEventSourcingAppend.expectedLastEventId,
+          // 摘要随替换后的eventId重算，只让eventId等于前一Event的守卫失败。
+          commandDigest: computeDemandEventSourcingCommandDigest(
+            parseDemandEventSourcingCommand({
+              commandType: "evidence.record-managed-evidence",
+              commandVersion: 1,
+              eventId: transaction.demandEventSourcingAppend.expectedLastEventId,
+              manifest: transaction.manifest,
+            }),
+          ),
         },
       }),
     "relation",

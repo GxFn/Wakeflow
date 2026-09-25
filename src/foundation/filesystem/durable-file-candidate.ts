@@ -22,6 +22,9 @@ import {
   type ByteCount,
 } from "../numeric/byte-count.js";
 import {
+  DURABLE_ATOMIC_FILE_MAXIMUM_BYTES,
+} from "./durable-atomic-file-write-contract.js";
+import {
   createFileNodeSnapshot,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
@@ -126,10 +129,7 @@ interface InputBytes {
 }
 
 /** 与耐久原子单文件写入一致的Foundation单文件硬上限。 */
-const DURABLE_FILE_CANDIDATE_MAXIMUM_BYTES = parseByteCount(
-  64 * 1024 * 1024,
-  "$durableFileCandidate.maximumBytes",
-);
+const DURABLE_FILE_CANDIDATE_MAXIMUM_BYTES = DURABLE_ATOMIC_FILE_MAXIMUM_BYTES;
 
 function fail(reason: DurableFileCandidateErrorReason, path: string): never {
   throw new DurableFileCandidateError(reason, path);

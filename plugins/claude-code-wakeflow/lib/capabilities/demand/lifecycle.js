@@ -22,9 +22,9 @@ import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
 import { archiveRequirementClaim, readRequirementClaimState, reclaimRequirementPackage, refreshRequirementBoardIndex, replaceRequirementClaimStateFile, withdrawRequirementClaim, } from "../../kernel/requirement-board.js";
 import { createArchiveManifest, findLatestDemandArchive, manifestDigest, manifestPath, mapFoundationError, readArchivePayload, readDemandRootSnapshot, readPayloadFiles, restoreDemandRoot, retireDemandRoot, sealDemandArchive, payloadTexts, } from "./archive.js";
-import { closeSliceContext, nextAfterMutation, now, openDemandHandle, openSliceContext, parseDemandId, previewNext, releaseDemandHandle, signalOptions, } from "./context.js";
+import { closeSliceContext, nextAfterMutation, now, openDemandHandle, openSliceContext, parseDemandId, previewNext, publicationEnvelope, releaseDemandHandle, signalOptions, } from "./context.js";
 import { admitDemandCancellationResult, admitDemandCompletionResult, admitDemandContinuationResult, parseDemandCancellationRequest, parseDemandCompletionRequest, parseDemandContinuationRequest, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION, } from "./contract.js";
-import { demandWindowIds, deriveContinueBlockers, deriveDecisionBlockers, deriveLifecycleIds, deriveTerminalBlockers, payloadPrivacyBlockers, pendingReviewTargets, } from "./decide.js";
+import { computePayloadTreeDigest, demandWindowIds, deriveContinueBlockers, deriveDecisionBlockers, deriveLifecycleIds, deriveTerminalBlockers, payloadPrivacyBlockers, pendingReviewTargets, } from "./decide.js";
 import { activeDemandOnPod } from "./service.js";
 import { evaluateVerifyGates } from "./verify.js";
 /**
@@ -226,6 +226,16 @@ async function postAcceptanceStage(handle, signal) {
         mapFoundationError(error, "review-snapshot", "$demandRoot");
     }
 }
+/** complete 的完成依据：只在路由已到 completion-preflight 时存在。 */
+function completionOf(route) {
+    if (route === null || route.nextStage.status !== "completion-preflight")
+        return null;
+    return Object.freeze({
+        routeDigest: route.routeDigest,
+        reviewSnapshotDigest: route.reviewSnapshotDigest,
+        testingMode: route.nextStage.testingClosure.mode,
+    });
+}
 async function terminalBlockedWithoutRoot(context, demandId) {
     const archive = await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal);
     return blockedPlan(archive === null ? ["demand-root-absent"] : [`already-archived:${archive.manifest.outcome}`]);
@@ -270,10 +280,11 @@ async function planTerminal(context, input, facts) {
         payloadBlockers,
         archiveConflict: existingArchive !== null && existingArchive.archiveRef === archiveRef,
     });
-    if (blockers.length > 0 || claim === null || route === null)
+    // 只有 complete 依赖接受后路由；cancel 在路由不可用时照常进行（路由不可用对 complete 已是阻塞项）。
+    if (blockers.length > 0 || claim === null || (input.action === "complete" && route === null)) {
         return blockedPlan(blockers);
+    }
     const ids = deriveLifecycleIds(demandId, input.action, loaded.aggregate.streamRevision);
-    const stage = route.nextStage;
     return readyPlan(Object.freeze({
         action: input.action,
         demandId,
@@ -282,13 +293,7 @@ async function planTerminal(context, input, facts) {
         eventId: ids.eventId,
         commitId: ids.commitId,
         reason: input.reason,
-        completion: input.action === "complete" && stage.status === "completion-preflight"
-            ? Object.freeze({
-                routeDigest: route.routeDigest,
-                reviewSnapshotDigest: route.reviewSnapshotDigest,
-                testingMode: stage.testingClosure.mode,
-            })
-            : null,
+        completion: input.action === "complete" ? completionOf(route) : null,
         package: Object.freeze({
             requirementId: claim.state.requirementId,
             expectedClaimStateDigest: claim.digest,
@@ -315,7 +320,7 @@ async function completionCommand(context, handle, plan, claim, at) {
     }
     try {
         const completion = createDemandCompletion({
-            controllerWindowId: context.snapshot.indexes.controllerWindow.windowId,
+            controllerWindowId: demandPodScope(context, handle).controllerWindow.windowId,
             routeSource: {
                 status: "completion-preflight",
                 testingClosure: { mode: route.nextStage.testingClosure.mode },
@@ -378,7 +383,6 @@ async function terminalEvent(context, handle, plan, claim) {
         : cancellationCommand(plan, at);
     return appendLifecycleEvent(context, handle, command, plan.commitId, plan.expectedStreamRevision);
 }
-/** 步骤 2：封归档包；负载是写入终态事件之后的活动根。 */
 /** Demand 所在 pod 的作用域；配置里已没有该 pod 时是 `precondition-failed/pod-unknown`。 */
 function demandPodScope(context, handle) {
     const podId = handle.loaded.identity.podId;
@@ -410,6 +414,7 @@ async function worktreeMember(context, scope) {
         }),
     };
 }
+/** 步骤 2：封归档包；负载是写入终态事件之后的活动根。 */
 async function sealArchive(context, handle, plan, receipt, verify) {
     const podScope = demandPodScope(context, handle);
     const worktree = await worktreeMember(context, podScope);
@@ -591,22 +596,6 @@ async function recoverTerminal(context, action, operationId) {
         releasedClaims: 0,
     });
 }
-function terminalEnvelope(request) {
-    if (request.mode === "recover") {
-        return {
-            root: request.root,
-            mode: "recover",
-            planDigest: null,
-            operationId: request.operationId,
-        };
-    }
-    return {
-        root: request.root,
-        mode: request.mode,
-        planDigest: request.mode === "apply" ? (request.planDigest ?? null) : null,
-        operationId: null,
-    };
-}
 function assembleTerminalResult(action, envelope, input, phase, next, facts) {
     const complete = action === "complete";
     const base = {
@@ -651,7 +640,7 @@ async function executeTerminal(action, tool, parse, admit, value, options) {
         tool,
         parseRequest: (raw) => {
             const request = parse(raw);
-            return { envelope: terminalEnvelope(request), input: request };
+            return { envelope: publicationEnvelope(request), input: request };
         },
         open: (root) => openSliceContext(root, options),
         close: closeSliceContext,
@@ -682,6 +671,13 @@ export async function executeDemandCompletionRequest(value, options = {}) {
 export async function executeDemandCancellationRequest(value, options = {}) {
     return executeTerminal("cancel", WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, parseDemandCancellationRequest, admitDemandCancellationResult, value, options);
 }
+/** 配置里的 pod（只取 continue 需要的 id 与 lifecycle）；已不存在即 null。 */
+function configuredPod(context, podId) {
+    const pod = Object.hasOwn(context.snapshot.indexes.podById, podId)
+        ? context.snapshot.indexes.podById[podId]
+        : undefined;
+    return pod === undefined ? null : Object.freeze({ podId: pod.podId, lifecycle: pod.lifecycle });
+}
 async function planContinue(context, input) {
     const demandId = parseDemandId(input.demandId);
     const handle = await openDemandHandle(context, demandId);
@@ -693,6 +689,8 @@ async function planContinue(context, input) {
         demandId,
         claim: claim?.state ?? null,
         otherActiveDemandId: archive === null ? null : await activeDemandOnPod(context, archive.manifest.podId, demandId),
+        archivedPodId: archive?.manifest.podId ?? null,
+        pod: archive === null ? null : configuredPod(context, archive.manifest.podId),
     });
     if (blockers.length > 0 || archive === null || claim === null)
         return blockedPlan(blockers);
@@ -746,17 +744,11 @@ async function planDecision(context, input) {
 }
 async function restoredPayload(context, plan) {
     const payload = await readArchivePayload(context.ledgerRoot, plan.archiveRef, context.signal);
-    const digest = computeCanonicalJsonSha256Digest(parseJsonValue([...payload]
-        .sort((left, right) => left.resourcePath < right.resourcePath
-        ? -1
-        : left.resourcePath > right.resourcePath
-            ? 1
-            : 0)
-        .map((file) => ({
-        path: file.resourcePath,
-        bytes: file.bytes.byteLength,
+    const digest = computePayloadTreeDigest(payload.map((file) => ({
+        resourcePath: file.resourcePath,
+        byteCount: file.bytes.byteLength,
         digest: file.digest,
-    })), "$payload"));
+    })));
     if (digest !== plan.payloadTreeDigest)
         fail("precondition-failed", "archive-payload-drift", "$archive");
     return payload;
@@ -815,8 +807,8 @@ async function applyContinue(context, plan, disposition) {
         event = await findEventReceipt(context, handle, plan.commitId);
     }
     const packageState = await reclaimPackage(context, plan);
-    await refreshRequirementBoardIndex(context.root, context.signal);
     await deleteJournal(context, plan.demandId);
+    await refreshBoardIndexQuietly(context);
     return Object.freeze({
         disposition: disposition === "recover" ? "recovered" : committed ? "continued" : "current",
         action: "continue",
@@ -858,22 +850,6 @@ async function recoverContinuation(context, operationId) {
     }
     return applyContinue(context, journal.plan, "recover");
 }
-function continuationEnvelope(request) {
-    if (request.mode === "recover") {
-        return {
-            root: request.root,
-            mode: "recover",
-            planDigest: null,
-            operationId: request.operationId,
-        };
-    }
-    return {
-        root: request.root,
-        mode: request.mode,
-        planDigest: request.mode === "apply" ? (request.planDigest ?? null) : null,
-        operationId: null,
-    };
-}
 function assembleContinuationResult(envelope, input, phase, next) {
     const base = {
         schemaVersion: WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION,
@@ -911,7 +887,7 @@ export async function executeDemandContinuationRequest(value, options = {}) {
         tool: WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseDemandContinuationRequest(raw);
-            return { envelope: continuationEnvelope(request), input: request };
+            return { envelope: publicationEnvelope(request), input: request };
         },
         open: (root) => openSliceContext(root, options),
         close: closeSliceContext,

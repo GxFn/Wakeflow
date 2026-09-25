@@ -99,23 +99,31 @@ export interface ReportEvidenceView {
   readonly steps?: readonly Readonly<{ readonly evidence: Readonly<ReportEvidenceRef> }>[];
 }
 
-/** 报告里出现的每个 `{ref, digest}` 只解析一次；同一 ref 不同摘要视为两条（第二条必然不符）。 */
+/**
+ * 报告里出现的每个 `{ref, digest}` 只解析一次；同一 ref 不同摘要视为两条（第二条必然不符）。
+ * 同一 `{ref, digest}` 带了不同种类时每个种类各留一条，让每个种类都与所引记录比对：
+ * 两个不同种类至多一个相符，preview 必然阻塞，所以通过时仍是每个引用一条解析。
+ */
 export function collectEvidenceReferences(
   report: Readonly<ReportEvidenceView>,
 ): readonly Readonly<EvidenceReference>[] {
-  const seen = new Set<string>();
+  const indexesByKey = new Map<string, number[]>();
   const references: Readonly<EvidenceReference>[] = [];
   const add = (reference: Readonly<ReportEvidenceRef>) => {
     const key = `${reference.ref}\u0000${reference.digest}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    references.push(
-      Object.freeze({
-        ref: reference.ref,
-        digest: reference.digest,
-        kind: reference.kind ?? null,
-      }),
-    );
+    const kind = reference.kind ?? null;
+    const indexes = indexesByKey.get(key) ?? [];
+    if (indexes.some((index) => references[index]?.kind === kind)) return;
+    const untyped = indexes.find((index) => references[index]?.kind === null);
+    if (indexes.length > 0 && (kind === null || untyped !== undefined)) {
+      // 不带种类的引用由已有条目覆盖；已有条目不带种类时补上这个种类。
+      if (kind !== null && untyped !== undefined) {
+        references[untyped] = Object.freeze({ ref: reference.ref, digest: reference.digest, kind });
+      }
+      return;
+    }
+    indexesByKey.set(key, [...indexes, references.length]);
+    references.push(Object.freeze({ ref: reference.ref, digest: reference.digest, kind }));
   };
   for (const locator of report.evidenceLocators) add(locator);
   for (const anchor of report.anchorEvidence ?? []) {
@@ -512,11 +520,24 @@ function rerunBlockers(
       blockers.push(`flaky-repeat:${step.stepId}`);
     }
   }
-  const failedIds = new Set(failed.map((step) => step.stepId));
-  for (const stepId of request.stepIds ?? []) {
-    if (!failedIds.has(stepId)) blockers.push(`step-scope:${stepId}`);
-  }
+  blockers.push(...rerunScopeBlockers(request.stepIds, failed));
   return blockers;
+}
+
+/** 重跑范围只能点名失败步骤，且必须覆盖全部失败步骤：范围外的失败步骤下一轮没有判定，也就没有出路。 */
+function rerunScopeBlockers(
+  stepIds: readonly string[] | undefined,
+  failed: readonly Readonly<StepView>[],
+): readonly string[] {
+  if (stepIds === undefined) return [];
+  const failedIds = new Set(failed.map((step) => step.stepId));
+  const scoped = new Set(stepIds);
+  return [
+    ...stepIds.filter((stepId) => !failedIds.has(stepId)).map((stepId) => `step-scope:${stepId}`),
+    ...[...failedIds]
+      .filter((stepId) => !scoped.has(stepId))
+      .map((stepId) => `step-uncovered:${stepId}`),
+  ];
 }
 
 function escalateBlockers(

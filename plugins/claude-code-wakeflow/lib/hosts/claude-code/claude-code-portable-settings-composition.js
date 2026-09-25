@@ -143,6 +143,34 @@ export function createClaudeCodePortableSettingsOperation(authorityDigest, root,
         operationDigest: computeCanonicalJsonSha256Digest(basis),
     });
 }
+const BLOCKING_PUBLICATION_REASONS = new Set([
+    "source-policy",
+    "directory-policy",
+    "root-scope",
+]);
+/**
+ * 只读检查一个根；用户 settings 节点不合 Wakeflow 的写入策略时降为 blocker，
+ * 不让整个 maintenance preview 失败。
+ */
+async function inspectRootSettings(root, options) {
+    try {
+        return {
+            transition: (await inspectClaudeCodePortableSettings(root, options))
+                .transition,
+        };
+    }
+    catch (error) {
+        if (!(error instanceof ClaudeCodePortableSettingsPublicationError)) {
+            throw error;
+        }
+        if (error.reason === "aborted")
+            fail("aborted", "$signal");
+        if (BLOCKING_PUBLICATION_REASONS.has(error.reason)) {
+            return { blockedReason: error.reason };
+        }
+        fail("inspection", "$settings");
+    }
+}
 async function inspectPresentRoot(absolutePath, signal) {
     let root;
     try {
@@ -156,7 +184,7 @@ async function inspectPresentRoot(absolutePath, signal) {
     let inspection;
     let primaryError;
     try {
-        inspection = await inspectClaudeCodePortableSettings(root, signal === undefined ? {} : { signal });
+        inspection = await inspectRootSettings(root, signal === undefined ? {} : { signal });
     }
     catch (error) {
         primaryError = error;
@@ -168,14 +196,8 @@ async function inspectPresentRoot(absolutePath, signal) {
     catch (error) {
         closeError = error;
     }
-    if (primaryError !== undefined) {
-        if (primaryError instanceof ClaudeCodePortableSettingsPublicationError) {
-            if (primaryError.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("inspection", "$settings");
-        }
+    if (primaryError !== undefined)
         throw primaryError;
-    }
     if (closeError !== undefined)
         fail("close-failure", "$configuredRoot");
     if (inspection === undefined)
@@ -209,13 +231,13 @@ export async function planClaudeCodePortableSettingsComposition(workspaceRootVal
     const blockerCodes = new Set();
     for (const root of authority.roots) {
         let placementStatus;
-        let transition;
+        let inspection;
         if (root.rootKind === "program") {
             placementStatus = "present";
-            transition = (await inspectClaudeCodePortableSettings(workspaceRootValue, {
+            inspection = await inspectRootSettings(workspaceRootValue, {
                 rules: claudeCodePortableSettingsRulesFor("program"),
                 ...(request.signal === undefined ? {} : { signal: request.signal }),
-            })).transition;
+            });
         }
         else {
             const placement = placements.roots.find((entry) => (entry.key === `support.${root.rootId}.root`));
@@ -233,13 +255,26 @@ export async function planClaudeCodePortableSettingsComposition(workspaceRootVal
                     continue;
                 }
                 placementStatus = "planned-missing";
-                transition = planClaudeCodePortableSettingsTransition(null);
+                inspection = {
+                    transition: planClaudeCodePortableSettingsTransition(null),
+                };
             }
             else {
                 placementStatus = "present";
-                transition = (await inspectPresentRoot(placement.absolutePath, request.signal)).transition;
+                inspection = await inspectPresentRoot(placement.absolutePath, request.signal);
             }
         }
+        if ("blockedReason" in inspection) {
+            blockerCodes.add(`settings-blocked:${root.rootKind}:${root.rootId}:${inspection.blockedReason}`);
+            rootEntries.push(Object.freeze({
+                root,
+                placementStatus,
+                settingsStatus: "blocked",
+                transitionReason: null,
+            }));
+            continue;
+        }
+        const { transition } = inspection;
         if (transition.status === "blocked") {
             blockerCodes.add(`settings-blocked:${root.rootKind}:${root.rootId}:${transition.reason}`);
         }

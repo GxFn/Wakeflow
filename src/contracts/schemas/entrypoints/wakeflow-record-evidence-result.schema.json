@@ -15,11 +15,6 @@
     }
   ],
   "$defs": {
-    "workspaceRoot": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Absolute path of the existing Wakeflow workspace root."
-    },
     "demandId": {
       "type": "string",
       "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -121,7 +116,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "root", "path", "resourceType"],
-      "description": "Copy one file or one directory tree from a configured repository or support-surface root.",
+      "description": "Copy one file or one directory tree from a configured repository or support-surface root, or from a worktree pod's registered checkout.",
       "properties": {
         "kind": {
           "const": "managed-path"
@@ -144,23 +139,6 @@
         },
         "resourceType": {
           "enum": ["file", "tree"]
-        }
-      }
-    },
-    "linkSource": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "url"],
-      "description": "Reference an https resource by URL; Wakeflow never fetches it. The optional digest is caller-supplied.",
-      "properties": {
-        "kind": {
-          "const": "link"
-        },
-        "url": {
-          "$ref": "#/$defs/httpsUrl"
-        },
-        "digest": {
-          "$ref": "#/$defs/sha256Digest"
         }
       }
     },

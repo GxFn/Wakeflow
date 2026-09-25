@@ -55,14 +55,7 @@
       ]
     },
     "desiredConfigDigest": {
-      "anyOf": [
-        {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     },
     "stepIds": {
       "type": "array",

@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:demand-continuation-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_CONTINUATION_REQUEST_SCHEMA",
   "title": "WakeflowDemandContinuationRequestV1",
-  "description": "wakeflow_continue_demand 的请求：continue 从归档重开一个已完成的 Demand（续接谱系 optimization、requirement-supplement 或 verified-bug），record-decision 记录用户对一次升级的回答；preview 零写、apply 带 planDigest、recover 带 operationId（即 demandId）。",
+  "description": "wakeflow_continue_demand 的请求：continue 从归档重开一个已完成的 Demand（续接谱系 optimization、requirement-supplement 或 verified-bug），record-decision 记录用户对一次升级的回答；preview 零写、apply 带 planDigest；recover 带 operationId（即 demandId），只续做被中断的 continue apply。",
   "type": "object",
   "oneOf": [
     {

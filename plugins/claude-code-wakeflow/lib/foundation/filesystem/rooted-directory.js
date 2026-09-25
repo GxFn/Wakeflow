@@ -198,9 +198,10 @@ export class RootedDirectory {
             || !sameFileNodeIdentity(before, canonicalBefore)) {
             fail("root-changed", path);
         }
+        const flags = requiredOpenFlags(path);
         let handle;
         try {
-            handle = await openFileHandle(canonicalRootPath, requiredOpenFlags(path));
+            handle = await openFileHandle(canonicalRootPath, flags);
         }
         catch (error) {
             const code = readNodeSystemErrorCode(error);

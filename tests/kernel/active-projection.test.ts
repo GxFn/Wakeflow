@@ -716,6 +716,8 @@ test("覆盖提示（§13.129）：incomplete 在两份工作区页的 Demand �
     const heading = entry.content.indexOf("## Active demands");
     const notice = entry.content.indexOf("> Demand coverage is incomplete this round");
     equal(heading !== -1 && notice > heading, true, "提示紧跟 Demand 标题、在列表之前");
+    const between = entry.content.slice(entry.content.indexOf("\n", heading), notice);
+    equal(between.trim(), "", "标题与提示之间只有空行，列表不能插在前面");
   }
   // Demand 页不提覆盖：那是工作区一级的事实，Demand 页只说自己。
   for (const entry of incomplete.filter((page) => page.kind === "demand")) {

@@ -182,3 +182,30 @@ test("publication cancellation before commit preserves the complete candidate", 
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
+
+test("publication reports a malformed candidate plan as publication input", async () => {
+  const { rootPath, root } = await fixture();
+  try {
+    const sourceRef = "transactions/.malformed.stage";
+    const finalRef = "requirements/requirement_55555555-5555-4555-8555-555555555555";
+    const candidate = await createDirectoryTreeCandidateDurably(
+      root,
+      sourceRef,
+      FILES,
+      OPTIONS,
+    );
+    await expectPublicationError(
+      () => publishDirectoryTreeCandidateDurably(
+        root,
+        { ...candidate, plan: { unexpected: true } } as unknown as typeof candidate,
+        finalRef,
+      ),
+      "input",
+    );
+    equal(existsSync(path.join(rootPath, ...sourceRef.split("/"))), true);
+    equal(existsSync(path.join(rootPath, ...finalRef.split("/"))), false);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});

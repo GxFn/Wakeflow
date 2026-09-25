@@ -18,6 +18,7 @@ import {
   LEDGER_TRANSACTIONS_ROOT_REF,
 } from "./ledger-authority-paths.js";
 import {
+  currentUserId,
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_TRANSACTION_DIRECTORY_MODE,
 } from "./ledger-authority-storage-policy.js";
@@ -112,12 +113,6 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
-}
-
 async function inspectEntry(
   root: RootedDirectory,
   policy: Readonly<LedgerAuthorityLayoutEntryPolicy>,
@@ -127,12 +122,13 @@ async function inspectEntry(
       policy.resourcePath,
       `$layout/${policy.resourcePath}`,
     );
+    const userId = currentUserId();
     const current = resource.node.kind === "directory"
       && resource.node.permissionBits === policy.mode
       && (
         !policy.requireCurrentUser
-        || currentUserId() === null
-        || resource.node.userId === currentUserId()
+        || userId === null
+        || resource.node.userId === userId
       );
     return Object.freeze({
       resourcePath: policy.resourcePath,
@@ -163,7 +159,7 @@ async function inspectEntry(
   }
 }
 
-/** 只读检查 Ledger 根内两个固定容器，不扫描不可变记录目录。 */
+/** 只读检查 Ledger 根内三个固定容器，不扫描不可变记录目录。 */
 export async function inspectLedgerAuthorityLayout(
   rootValue: RootedDirectory,
   signal?: AbortSignal,

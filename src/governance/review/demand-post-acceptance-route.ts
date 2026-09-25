@@ -412,11 +412,6 @@ function nextStage(
 }
 
 /**
- * 没有未终结 test 目标：待消费复测或首个合同交给 test 任务规划。缺陷修复授权与
- * `escalate{product-defect}` 同一提交落地（§13.87 D5），因此历史缺陷代际之后要么有待消费
- * 的复测，要么已被 retest 谱系消费；其他组合是不一致的事件流。
- */
-/**
  * research Demand 没有测试环节：实现目标（若有）全部接受，且至少一条 document 类受管证据
  * 之后进入完成预检，测试闭合记为 `not-applicable`（§13.94 D8）。
  */
@@ -447,6 +442,11 @@ function researchStage(
   });
 }
 
+/**
+ * 没有未终结 test 目标：待消费复测或首个合同交给 test 任务规划。缺陷修复授权与
+ * `escalate{product-defect}` 同一提交落地（§13.87 D5），因此历史缺陷代际之后要么有待消费
+ * 的复测，要么已被 retest 谱系消费；其他组合是不一致的事件流。
+ */
 function closedTestStage(
   loaded: Readonly<LoadedDemandEventSourcingRootAuthority>,
   testTargets: readonly Readonly<TestTargetState>[],

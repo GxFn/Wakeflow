@@ -102,6 +102,7 @@ test("managed Support root materializes child and sibling Config placements", as
     request(childConfig),
   );
   equal(created.disposition, "created");
+  equal(created.rootDisposition, "created");
   deepEqual(created.scaffold, [{ relativePath: "drafts", disposition: "created" }]);
   equal(statSync(path.join(childFixture.workspacePath, "Design")).mode & 0o777, 0o755);
   equal(statSync(path.join(childFixture.workspacePath, "Design", "drafts")).mode & 0o777, 0o755);
@@ -110,6 +111,7 @@ test("managed Support root materializes child and sibling Config placements", as
     request(childConfig),
   );
   equal(current.disposition, "existing");
+  equal(current.rootDisposition, "existing");
   deepEqual(current.scaffold, [{ relativePath: "drafts", disposition: "existing" }]);
   equal(
     (await inspectWakeflowManagedSupportRoot(childFixture.root, request(childConfig))).status,
@@ -130,6 +132,8 @@ test("managed Support root materializes child and sibling Config placements", as
     request(childConfig),
   );
   equal(repaired.disposition, "created");
+  // 根已存在只补 scaffold：fresh-initialize 的严格不存在检查读的是 rootDisposition。
+  equal(repaired.rootDisposition, "existing");
   deepEqual(repaired.scaffold, [{ relativePath: "drafts", disposition: "created" }]);
   equal(existsSync(path.join(childFixture.workspacePath, "Design", "notes.md")), true);
 

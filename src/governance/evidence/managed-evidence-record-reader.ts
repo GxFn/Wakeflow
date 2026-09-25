@@ -452,7 +452,6 @@ function mapManifestReadError(error: unknown): never {
     ) {
       fail("source-changed", "$record/manifest");
     }
-    if (error.reason === "too-large") fail("capacity", "$record/manifest");
     fail("manifest", "$record/manifest");
   }
   if (

@@ -279,6 +279,7 @@ async function observeCandidate(
   } catch (error: unknown) {
     if (error instanceof GitIgnoreObservationError) {
       if (error.reason === "aborted") fail("aborted", "$options.signal");
+      if (error.reason === "input") fail("input", error.path);
       if (
         error.reason === "root-scope"
         && error.path === "$repositoryRoot"

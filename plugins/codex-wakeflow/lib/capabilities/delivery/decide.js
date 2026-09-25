@@ -20,7 +20,7 @@ export const DELIVERY_REQUIRED_SKILLS = Object.freeze({
     implementation: Object.freeze(["skills/wakeflow-target/SKILL.md"]),
     test: Object.freeze(["skills/wakeflow-target/SKILL.md", "skills/wakeflow-test/SKILL.md"]),
 });
-/** 可以准备投递的实现目标 phase；host-effect-rejected 只在 rearm 用尽后允许换新信封。 */
+/** 可以准备投递的目标 phase；两种发送前拒绝都只在 rearm 用尽后允许换新信封。 */
 const PREPARABLE_IMPLEMENTATION_PHASES = Object.freeze([
     "planned",
     "rework-requested",
@@ -30,6 +30,7 @@ const PREPARABLE_IMPLEMENTATION_PHASES = Object.freeze([
 const PREPARABLE_TEST_PHASES = Object.freeze([
     "planned",
     "test-another-attempt-requested",
+    "test-host-effect-rejected",
 ]);
 function decided(disposition, evidenceKind, hookRecordId = null, rationale = null) {
     return Object.freeze({
@@ -81,9 +82,9 @@ export function deriveDeliveryDisposition(input) {
     }
     return decided("indeterminate", "agent-declaration");
 }
-/** 静默是否超过阈值：以许可签发时刻为起点。 */
-export function landingSilenceExceeded(issuedAt, now, thresholdMilliseconds = DELIVERY_LANDING_SILENCE_MILLISECONDS) {
-    return Date.parse(now) - Date.parse(issuedAt) > thresholdMilliseconds;
+/** 静默是否超过阈值：以当前代际第一次 indeterminate 结局的记录时刻为起点。 */
+export function landingSilenceExceeded(silenceStartedAt, now, thresholdMilliseconds = DELIVERY_LANDING_SILENCE_MILLISECONDS) {
+    return Date.parse(now) - Date.parse(silenceStartedAt) > thresholdMilliseconds;
 }
 /** 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm。 */
 export function derivePrepareBlockers(target) {
@@ -92,7 +93,7 @@ export function derivePrepareBlockers(target) {
         : PREPARABLE_IMPLEMENTATION_PHASES.includes(target.phase);
     if (!admitted)
         return Object.freeze([`target-phase:${target.phase}`]);
-    if (target.phase === "host-effect-rejected" &&
+    if ((target.phase === "host-effect-rejected" || target.phase === "test-host-effect-rejected") &&
         target.generation !== null &&
         target.generation <= DELIVERY_REARM_LIMIT) {
         return Object.freeze([`rearm-available:${target.generation}`]);

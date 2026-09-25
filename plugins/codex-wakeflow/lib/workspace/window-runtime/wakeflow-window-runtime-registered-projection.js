@@ -106,9 +106,10 @@ function compileWakeflowWindowRuntimeRegisteredProjection(profileValue, identity
             rootObservationDigest: source.sourceFingerprints.rootObservationDigest,
         }),
     };
+    const body = projectionBasis(basis);
     const projection = Object.freeze({
-        ...projectionBasis(basis),
-        projectionDigest: computeCanonicalJsonSha256Digest(projectionBasis(basis)),
+        ...body,
+        projectionDigest: computeCanonicalJsonSha256Digest(body),
     });
     const validated = validateWire(parseJsonValue(projection, "$projection"));
     if (!validated.ok)

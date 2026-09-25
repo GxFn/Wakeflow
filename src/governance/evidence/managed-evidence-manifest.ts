@@ -15,7 +15,7 @@ import {
   Sha256Error,
   type Sha256Digest,
 } from "../../foundation/crypto/sha256.js";
-import { encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
@@ -270,6 +270,18 @@ function parseKind(value: unknown): EvidenceKind {
   return value;
 }
 
+/** 同一行可有多种命中；顺序按(ref, line, kind)严格递增，重复项视为乱序。 */
+function findingFollows(
+  previous: { readonly ref: string; readonly line: number; readonly kind: string },
+  ref: string,
+  finding: { readonly line: number; readonly kind: string },
+): boolean {
+  const byRef = compareText(previous.ref, ref);
+  if (byRef !== 0) return byRef < 0;
+  if (previous.line !== finding.line) return previous.line < finding.line;
+  return compareText(previous.kind, finding.kind) < 0;
+}
+
 function parsePrivacyFindings(
   value: ManagedEvidenceManifestWire["contentReview"]["privacyFindings"],
   payloadRefs: ReadonlySet<string>,
@@ -286,11 +298,7 @@ function parsePrivacyFindings(
       }
       if (!payloadRefs.has(ref)) fail("content-review", `${path}/ref`);
       const previous = value[index - 1];
-      if (
-        previous !== undefined &&
-        (compareText(previous.ref, ref) > 0 ||
-          (previous.ref === ref && previous.line >= finding.line))
-      ) {
+      if (previous !== undefined && !findingFollows(previous, ref, finding)) {
         fail("ordering", path);
       }
       return Object.freeze({ ref, line: finding.line, kind: finding.kind });
@@ -450,8 +458,9 @@ export function parseManagedEvidenceManifest(
     throw error;
   }
   if (
-    encodeCanonicalJson(json, "$manifest").byteLength + 1 >
-    MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES
+    // 容量按实际写入的确定性文档（缩进渲染加换行）计量，而不是紧凑规范形式。
+    encodeUtf8(renderDeterministicJsonDocument(json, "$manifest"), "$manifest")
+      .byteLength > MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES
   ) {
     fail("capacity", "$manifest");
   }

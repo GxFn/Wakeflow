@@ -3,7 +3,7 @@ import {
   type PortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import {
-  parseWakeflowWorkspaceResourceDeclaration,
+  privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "./workspace-resource-declaration.js";
 import { WAKEFLOW_RUNTIME_ROOT_REF } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
@@ -23,28 +23,12 @@ function directory(
   ownerId: string,
   relativePath: PortableResourcePath,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  return parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
+  return privateWorkspaceDirectoryDeclaration({
     declarationId,
     family,
     ownerId,
     scope: "host-neutral",
-    placement: { root: { kind: "workspace" }, relativePath },
-    tracking: { disposition: "ignored", privacy: "runtime-private" },
-    nodePolicy: {
-      kind: "directory",
-      mode: "0700",
-      symlinkPolicy: "reject",
-      existingModePolicy: "observe-without-change",
-    },
-    processing: {
-      kind: "directory-container",
-      materializationRecipe: "materialize-directory",
-      existingDirectoryPolicy: "observe-without-mode-change",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-    },
+    relativePath,
   });
 }
 

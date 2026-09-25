@@ -1,4 +1,4 @@
-import { equal, throws } from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -43,4 +43,21 @@ test("focused test runner拒绝tests根内的symlink祖先", (t) => {
     () => compiledTypeScriptTests(repositoryRoot, ["tests/linked/escaped.test.ts"]),
     /parent chain/u,
   );
+});
+
+test("full-mode test runner never executes a stale compiled output", (t) => {
+  const repositoryRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-typescript-test-runner-"));
+  t.after(() => rmSync(repositoryRoot, { recursive: true, force: true }));
+  mkdirSync(path.join(repositoryRoot, "tests"));
+  mkdirSync(path.join(repositoryRoot, ".build", "tests"), { recursive: true });
+  writeFileSync(path.join(repositoryRoot, "tests", "a.test.ts"), "");
+  writeFileSync(path.join(repositoryRoot, ".build", "tests", "a.test.js"), "");
+  writeFileSync(path.join(repositoryRoot, ".build", "tests", "stale.test.js"), "");
+
+  deepEqual(compiledTypeScriptTests(repositoryRoot), [
+    path.join(repositoryRoot, ".build", "tests", "a.test.js"),
+  ]);
+
+  writeFileSync(path.join(repositoryRoot, "tests", "b.test.ts"), "");
+  throws(() => compiledTypeScriptTests(repositoryRoot), /no regular compiled output/u);
 });

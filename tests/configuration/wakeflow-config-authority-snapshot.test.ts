@@ -42,6 +42,7 @@ function createWorkspace(value: unknown = createMinimalWakeflowConfig()): Worksp
   writeFileSync(configPath, serializeWakeflowConfigFixture(value), {
     mode: 0o644,
   });
+  chmodSync(configPath, 0o644);
   return { temporaryRoot, workspaceRoot, configPath };
 }
 
@@ -102,7 +103,6 @@ test("domain field-order drift is rejected instead of becoming another config re
     writeFileSync(
       fixture.configPath,
       `${JSON.stringify(reordered, null, 2)}\n`,
-      { mode: 0o600 },
     );
     await expectSnapshotError(
       () => readWakeflowConfigAuthoritySnapshot(root),
@@ -188,6 +188,7 @@ test("config symlink and hard-link aliases cannot become authority", async () =>
     const target = path.join(hardlinked.temporaryRoot, "config-hardlink.json");
     rmSync(hardlinked.configPath);
     writeFileSync(target, serializeWakeflowConfigFixture(createMinimalWakeflowConfig()));
+    chmodSync(target, 0o644);
     linkSync(target, hardlinked.configPath);
     await expectSnapshotError(
       () => readWakeflowConfigAuthoritySnapshot(hardlinkedRoot),

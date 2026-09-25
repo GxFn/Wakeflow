@@ -44,7 +44,10 @@ import {
   createManagedEvidencePublicationTransaction,
   ManagedEvidencePublicationTransactionError,
 } from "../../governance/evidence/managed-evidence-publication-transaction.js";
-import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+import {
+  DemandResultReviewSnapshotError,
+  readDemandResultReviewSnapshot,
+} from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail } from "../../kernel/error.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
@@ -261,12 +264,16 @@ async function withDemandContext<Result>(
   } catch (error: unknown) {
     failure = error;
   }
+  let closeFailure: unknown;
   try {
     await closeDemandOperationAuthorityContext(demand);
   } catch (error: unknown) {
-    if (failure === undefined) failure = error;
+    closeFailure = error;
   }
   if (failure !== undefined) throw failure;
+  if (closeFailure !== undefined) {
+    fail("io-failure", "demand-root-close", "$request.demandId", { cause: closeFailure });
+  }
   if (!succeeded) fail("unexpected", "demand-context", "$request.demandId");
   return result as Result;
 }
@@ -436,16 +443,32 @@ async function recoverEvidence(
   });
 }
 
+/** 提交后读取复核快照；快照错误映射为稳定的 Wakeflow 错误，而不是 unexpected。 */
+async function readSnapshotForNext(
+  context: EvidenceSliceContext,
+  demand: Readonly<DemandOperationAuthorityContext>,
+): ReturnType<typeof readDemandResultReviewSnapshot> {
+  try {
+    return await readDemandResultReviewSnapshot(
+      demand.demandRoot,
+      signalOptions(context.options.signal),
+    );
+  } catch (error: unknown) {
+    if (error instanceof DemandResultReviewSnapshotError) {
+      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+      fail("io-failure", "result-review-snapshot", "$request.demandId", { cause: error });
+    }
+    throw error;
+  }
+}
+
 /** 变更后的 `next` 直接来自当前 Controller 路由；证据记录本身不改变前沿。 */
 async function nextAfterMutation(
   context: EvidenceSliceContext,
   demandId: WakeflowDurableId<"demand">,
 ): Promise<NextProjection> {
   return withDemandContext(context, demandId, async (demand) => {
-    const snapshot = await readDemandResultReviewSnapshot(
-      demand.demandRoot,
-      signalOptions(context.options.signal),
-    );
+    const snapshot = await readSnapshotForNext(context, demand);
     return deriveNextProjection(buildDemandControllerRoute(demand.loaded, snapshot));
   });
 }

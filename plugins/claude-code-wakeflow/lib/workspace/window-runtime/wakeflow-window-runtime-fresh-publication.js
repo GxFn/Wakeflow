@@ -11,7 +11,6 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
-import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { WAKEFLOW_RUNTIME_ROOT_REF, } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
@@ -20,6 +19,7 @@ import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF, wakeflowHostIdentityRootRef, w
 import { compileWakeflowFreshWindowRuntimeAuthority, WakeflowFreshWindowRuntimeAuthorityError, } from "./wakeflow-window-runtime-fresh-authority.js";
 import { WakeflowWindowRuntimeDesiredTopologyError, } from "./wakeflow-window-runtime-desired-topology.js";
 import { wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRootRef, } from "./wakeflow-window-runtime-paths.js";
+import { WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES } from "./wakeflow-window-runtime-projection-document.js";
 import { parseWakeflowWindowRuntimeUnregisteredProjectionDocument, WakeflowWindowRuntimeUnregisteredProjectionRecordError, } from "./wakeflow-window-runtime-unregistered-projection.js";
 const ERROR_MESSAGES = {
     input: "Fresh Window Runtime publication input is invalid.",
@@ -44,7 +44,6 @@ export class WakeflowFreshWindowRuntimePublicationError extends Error {
         this.path = path;
     }
 }
-const MAXIMUM_PROJECTION_BYTES = parseByteCount(512 * 1024);
 function fail(reason, path) {
     throw new WakeflowFreshWindowRuntimePublicationError(reason, path);
 }
@@ -239,7 +238,7 @@ async function inspectProjectionInventory(root, authority, signal) {
         let source;
         try {
             source = await readStrictTextFile(root, entry.resourceRef, {
-                maximumBytes: MAXIMUM_PROJECTION_BYTES,
+                maximumBytes: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES,
                 expectedNode: directoryEntry.node,
                 ...(signal === undefined ? {} : { signal }),
             });
@@ -274,7 +273,7 @@ async function createMissingProjections(root, authority, current, signal) {
         if (current.has(expectedFileName(entry)))
             continue;
         const bytes = encodeUtf8(entry.document, "$projection");
-        if (bytes.byteLength > MAXIMUM_PROJECTION_BYTES) {
+        if (bytes.byteLength > WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES) {
             fail("capacity", "$projectionWrite");
         }
         try {

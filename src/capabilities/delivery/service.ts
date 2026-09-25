@@ -684,14 +684,26 @@ async function loadReworkSource(
 ): Promise<ReworkSource> {
   if (target.phase !== "rework-requested")
     fail("precondition-failed", "rework-phase", "$request.targetTaskId");
+  return loadReworkSourceById(
+    repository,
+    target.currentDelivery.reviewDecision.targetReviewDecisionId,
+    target.currentDelivery.targetResult.targetResultId,
+    signal,
+  );
+}
+
+async function loadReworkSourceById(
+  repository: DemandEventSourcingRepository,
+  targetReviewDecisionId: string,
+  targetResultId: string,
+  signal: AbortSignal | undefined,
+): Promise<ReworkSource> {
   const history = await loadHistory(repository, signal);
   const decisionSource = history.targetReviewDecisions.find(
-    (entry) =>
-      entry.decision.targetReviewDecisionId ===
-      target.currentDelivery.reviewDecision.targetReviewDecisionId,
+    (entry) => entry.decision.targetReviewDecisionId === targetReviewDecisionId,
   );
   const resultSource = history.targetResults.find(
-    (entry) => entry.result.targetResultId === target.currentDelivery.targetResult.targetResultId,
+    (entry) => entry.result.targetResultId === targetResultId,
   );
   if (decisionSource === undefined || resultSource === undefined) {
     fail("precondition-failed", "rework-history", "$request.targetTaskId");
@@ -717,14 +729,26 @@ async function loadRemediationSource(
   if (target.phase !== "product-defect-rework-requested") {
     fail("precondition-failed", "remediation-phase", "$request.targetTaskId");
   }
+  return loadRemediationSourceById(
+    repository,
+    target.productDefectRemediation.productDefectRemediationId,
+    target.currentDelivery.targetResult.targetResultId,
+    signal,
+  );
+}
+
+async function loadRemediationSourceById(
+  repository: DemandEventSourcingRepository,
+  productDefectRemediationId: string,
+  targetResultId: string,
+  signal: AbortSignal | undefined,
+) {
   const history = await loadHistory(repository, signal);
   const authorizationSource = history.productDefectRemediationAuthorizations.find(
-    (entry) =>
-      entry.authorization.productDefectRemediationId ===
-      target.productDefectRemediation.productDefectRemediationId,
+    (entry) => entry.authorization.productDefectRemediationId === productDefectRemediationId,
   );
   const resultSource = history.targetResults.find(
-    (entry) => entry.result.targetResultId === target.currentDelivery.targetResult.targetResultId,
+    (entry) => entry.result.targetResultId === targetResultId,
   );
   if (authorizationSource === undefined || resultSource === undefined) {
     fail("precondition-failed", "remediation-history", "$request.targetTaskId");
@@ -766,6 +790,13 @@ async function testAttemptFor(
     } catch (error: unknown) {
       mapRecordError(error, "$request.targetTaskId");
     }
+  }
+  // rearm 用尽后换新信封：被拒的尝试从未到达会话，原样重发同一次尝试。
+  if (target.phase === "test-host-effect-rejected") {
+    const rejected = target.testAttempts.at(-1);
+    if (rejected === undefined)
+      fail("precondition-failed", "rerun-history", "$request.targetTaskId");
+    return rejected.attempt;
   }
   if (target.phase !== "test-another-attempt-requested") {
     fail("precondition-failed", "rerun-phase", "$request.targetTaskId");
@@ -1060,57 +1091,75 @@ async function prepareSources(
       remediationSource: null,
     });
   }
+  const basis = await implementationBasis(repository, target, signal);
   try {
-    if (target.phase === "rework-requested") {
-      const reworkSource = await loadReworkSource(repository, target, signal);
-      const rework = createTargetDeliveryReworkContext(reworkSource);
-      return Object.freeze({
-        prompt: {
-          taskPackage,
-          route,
-          attachedWorktrees,
-          rework,
-          remediation: null,
-          testContract: null,
-        },
-        attempt: null,
-        reworkSource,
-        remediationSource: null,
-      });
-    }
-    if (target.phase === "product-defect-rework-requested") {
-      const remediationSource = await loadRemediationSource(repository, target, signal);
-      const remediation = createTargetDeliveryProductDefectRemediationContext(remediationSource);
-      return Object.freeze({
-        prompt: {
-          taskPackage,
-          route,
-          attachedWorktrees,
-          rework: null,
-          remediation,
-          testContract: null,
-        },
-        attempt: null,
-        reworkSource: null,
-        remediationSource,
-      });
-    }
+    return Object.freeze({
+      prompt: {
+        taskPackage,
+        route,
+        attachedWorktrees,
+        rework:
+          basis.reworkSource === null
+            ? null
+            : createTargetDeliveryReworkContext(basis.reworkSource),
+        remediation:
+          basis.remediationSource === null
+            ? null
+            : createTargetDeliveryProductDefectRemediationContext(basis.remediationSource),
+        testContract: null,
+      },
+      attempt: null,
+      ...basis,
+    });
   } catch (error: unknown) {
     mapRecordError(error, "$request.targetTaskId");
   }
-  return Object.freeze({
-    prompt: {
-      taskPackage,
-      route,
-      attachedWorktrees,
-      rework: null,
-      remediation: null,
-      testContract: null,
-    },
-    attempt: null,
-    reworkSource: null,
-    remediationSource: null,
-  });
+}
+
+type ImplementationBasis = Pick<PrepareSources, "reworkSource" | "remediationSource">;
+
+/**
+ * 实现投递的返工依据：返工与缺陷修复各从当前决定取；rearm 用尽后换新信封时从被拒信封
+ * 原样带过来，否则新 prompt 会丢掉评审决定与必改项，像一次全新的任务。
+ */
+async function implementationBasis(
+  repository: DemandEventSourcingRepository,
+  target: Readonly<DemandTargetTaskState>,
+  signal: AbortSignal | undefined,
+): Promise<ImplementationBasis> {
+  const none = { reworkSource: null, remediationSource: null };
+  if (target.phase === "rework-requested") {
+    return { ...none, reworkSource: await loadReworkSource(repository, target, signal) };
+  }
+  if (target.phase === "product-defect-rework-requested") {
+    return { ...none, remediationSource: await loadRemediationSource(repository, target, signal) };
+  }
+  if (target.phase !== "host-effect-rejected") return none;
+  const rejected = await loadEnvelope(repository, target.currentDelivery.deliveryId, signal);
+  if (rejected.workType !== "implementation") return none;
+  if (rejected.rework !== undefined) {
+    const { decision, previousResult } = rejected.rework;
+    return {
+      ...none,
+      reworkSource: await loadReworkSourceById(
+        repository,
+        decision.targetReviewDecisionId,
+        previousResult.targetResultId,
+        signal,
+      ),
+    };
+  }
+  const remediation = rejected.productDefectRemediation;
+  if (remediation === undefined) return none;
+  return {
+    ...none,
+    remediationSource: await loadRemediationSourceById(
+      repository,
+      remediation.authorization.productDefectRemediationId,
+      remediation.previousResult.targetResultId,
+      signal,
+    ),
+  };
 }
 
 function createEnvelope(
@@ -1442,7 +1491,7 @@ function outcomeDraft(
 
 function replayOutcome(
   context: SliceContext,
-  target: Readonly<DeliveryBearingTarget>,
+  envelope: Readonly<DeliveryEnvelope>,
   bound: NonNullable<Awaited<ReturnType<typeof boundCommit>>>,
   binding: Readonly<AppendCommandBinding>,
 ): OutcomeOutcome {
@@ -1460,8 +1509,8 @@ function replayOutcome(
       aggregate: context.authority.loaded.aggregate,
     }),
     outcome: event.data.outcome,
-    targetTaskId: target.targetTaskId,
-    workType: target.workType === "test" ? ("test" as const) : ("implementation" as const),
+    targetTaskId: envelope.target.targetTaskId,
+    workType: envelope.workType,
     eventId: stored.eventId,
   });
 }
@@ -1530,16 +1579,18 @@ async function executeOutcome(
 ): Promise<OutcomeOutcome> {
   const { authority, options } = context;
   const repository = new DemandEventSourcingRepository(authority.demandRoot);
-  const target = deliveryTargetOf(context, input.deliveryId);
   const bound = await boundCommit(repository, binding, options.signal);
   if (bound !== null) {
-    const replayed = replayOutcome(context, target, bound, binding);
+    // 重放不要求投递仍是当前投递：目标可能已换到更新的信封，身份从被重放投递的信封取。
+    const replayedEnvelope = await loadEnvelope(repository, input.deliveryId, options.signal);
+    const replayed = replayOutcome(context, replayedEnvelope, bound, binding);
     // 追加已提交而释放未完成的裂缝由重放路径补做；助手对缺失或已易主的声明无事可做。
     if (replayed.outcome.claimHandling === "release-authorized") {
-      await releaseClaimFor(context, target.windowId, replayed.outcome.fence);
+      await releaseClaimFor(context, replayedEnvelope.route.windowId, replayed.outcome.fence);
     }
     return replayed;
   }
+  const target = deliveryTargetOf(context, input.deliveryId);
   assertFreshRevision(context, binding);
   const currentlyIndeterminate = assertOutcomeRecordable(target, input.claimDigest);
   const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
@@ -1550,7 +1601,12 @@ async function executeOutcome(
     const blockers = [decision.blocker];
     if (
       decision.blocker === "landing-evidence-missing" &&
-      (await silenceExceededFor(repository, input.deliveryId, input.observedAt, options.signal))
+      (await silenceExceededFor(
+        repository,
+        { deliveryId: input.deliveryId, generation: target.currentDelivery.generation },
+        input.observedAt,
+        options.signal,
+      ))
     ) {
       blockers.push("landing-silence-exceeded");
     }
@@ -1598,23 +1654,32 @@ async function releaseClaimFor(
 
 async function silenceExceededFor(
   repository: DemandEventSourcingRepository,
-  deliveryId: string,
+  delivery: Readonly<{ readonly deliveryId: string; readonly generation: number }>,
   now: UtcInstant,
   signal: AbortSignal | undefined,
 ): Promise<boolean> {
   try {
     const outcomes = await repository.findDeliveryOutcomeRecordedEvents(
-      deliveryId,
+      delivery.deliveryId,
       signalOptions(signal),
     );
+    // 静默从本代第一次 indeterminate 起算；更早一代被解决并 rearm 之后不再计入。
     const first = outcomes.find(
-      (entry) => entry.event.data.outcome.disposition === "indeterminate",
+      (entry) =>
+        entry.event.data.outcome.generation === delivery.generation &&
+        entry.event.data.outcome.disposition === "indeterminate",
     );
     return first !== undefined && landingSilenceExceeded(first.event.recordedAt, now);
   } catch (error: unknown) {
     mapRepositoryError(error);
   }
 }
+
+const OUTCOME_PHASE_SUFFIX = Object.freeze({
+  accepted: "accepted",
+  indeterminate: "indeterminate",
+  "rejected-before-send": "rejected",
+} as const);
 
 function outcomeResult(
   envelope: Readonly<AppendCommandEnvelope>,
@@ -1624,10 +1689,8 @@ function outcomeResult(
   const { commandResult } = outcome;
   const stored = commandResult.commit.events[0];
   if (stored === undefined) fail("unexpected", "commit-empty", "$result");
-  const target = commandResult.aggregate.state.targetTasks.find(
-    (entry) => entry.targetTaskId === outcome.targetTaskId,
-  );
-  if (target === undefined) fail("unexpected", "target-missing", "$result");
+  // phase 取自结局本身：重放时目标可能已换到更新的信封，结果仍要与首次记录一致。
+  const phase = `${outcome.workType === "test" ? "test-" : ""}host-effect-${OUTCOME_PHASE_SUFFIX[outcome.outcome.disposition]}`;
   const blockers = [...nextProjection.blockers];
   if (outcome.outcome.disposition === "indeterminate") blockers.push("landing-evidence-missing");
   return admitRecordDeliveryOutcomeResult({
@@ -1646,7 +1709,7 @@ function outcomeResult(
       observedAt: outcome.outcome.observedAt,
       outcomeDigest: outcome.outcome.outcomeDigest,
     },
-    target: { targetTaskId: outcome.targetTaskId, workType: outcome.workType, phase: target.phase },
+    target: { targetTaskId: outcome.targetTaskId, workType: outcome.workType, phase },
     event: { eventId: outcome.eventId, streamRevision: stored.streamRevision },
     commit: {
       commitId: commandResult.commit.commitId,

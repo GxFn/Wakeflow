@@ -4,7 +4,6 @@
  */
 /** Wakeflow 持久类型化身份的 Schema 派生运行时词汇。 */
 export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
-    "archive",
     "demand",
     "demand-event",
     "demand-event-commit",

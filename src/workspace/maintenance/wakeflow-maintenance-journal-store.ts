@@ -75,7 +75,7 @@ import {
 } from "./wakeflow-maintenance-resource-catalog.js";
 
 /**
- * Wakeflow Workspace / Maintenance：prepared journal 的 gate-bound 物理 store。
+ * Wakeflow Workspace / Maintenance：maintenance journal（prepared、executing 或 terminal）的 gate-bound 物理 store。
  *
  * create 与 retire 只能在有效 MaintenanceGateContext 内执行；普通读取保持只读。
  * Journal只能在同operation immutable intent已经精确发布后创建；checkpoint期间目录
@@ -318,7 +318,7 @@ export async function assertWakeflowMaintenanceJournalIsOnlyTransaction(
   }
 }
 
-/** 读取并严格复验一个 prepared journal。 */
+/** 读取并严格复验一个 maintenance journal（prepared、executing 或 terminal）。 */
 export async function readWakeflowMaintenanceJournal(
   root: RootedDirectory,
   operationIdValue: unknown,
@@ -633,34 +633,23 @@ export async function checkpointWakeflowMaintenanceJournal(
   return source;
 }
 
-/** 在同一有效 gate scope 内退休尚未执行任何 step 的 exact prepared journal。 */
-export async function retirePreparedWakeflowMaintenanceJournal(
+/** exact-retire 的共同一段：唯一事务复验、CAS 重读、exact unlink 与提交后空事务复验。 */
+async function retireExactWakeflowMaintenanceJournal(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
-  sourceValue: Readonly<WakeflowMaintenanceJournalSource>,
-): Promise<Readonly<WakeflowPreparedMaintenanceJournalRetirementReceipt>> {
-  assertGate(root, context);
-  if (
-    typeof sourceValue !== "object"
-    || sourceValue === null
-    || !ISSUED_SOURCES.has(sourceValue)
-    || sourceValue.operationId !== context.operationId
-    || sourceValue.journal.checkpoint !== 0
-    || sourceValue.journal.state !== "prepared"
-  ) {
-    fail("input", "$source");
-  }
+  source: Readonly<WakeflowMaintenanceJournalSource>,
+): Promise<Readonly<ExactRegularFileUnlinkReceipt>> {
   admitOperation(context.operationId, "exact-retire");
-  await assertWakeflowMaintenanceJournalIsOnlyTransaction(root, sourceValue);
+  await assertWakeflowMaintenanceJournalIsOnlyTransaction(root, source);
   const current = await readWakeflowMaintenanceJournal(
     root,
     context.operationId,
   );
   if (
-    current.digest !== sourceValue.digest
-    || current.journalDigest !== sourceValue.journalDigest
-    || current.node.deviceId !== sourceValue.node.deviceId
-    || current.node.inodeId !== sourceValue.node.inodeId
+    current.digest !== source.digest
+    || current.journalDigest !== source.journalDigest
+    || current.node.deviceId !== source.node.deviceId
+    || current.node.inodeId !== source.node.inodeId
   ) {
     fail("conflict", "$journal");
   }
@@ -668,8 +657,8 @@ export async function retirePreparedWakeflowMaintenanceJournal(
   try {
     retirement = await unlinkRegularFileExactly(
       root,
-      sourceValue.resourcePath,
-      { expectedNode: sourceValue.node },
+      source.resourcePath,
+      { expectedNode: source.node },
     );
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
@@ -695,6 +684,31 @@ export async function retirePreparedWakeflowMaintenanceJournal(
   } catch {
     fail("commit-uncertain", "$journal");
   }
+  return retirement;
+}
+
+/** 在同一有效 gate scope 内退休尚未执行任何 step 的 exact prepared journal。 */
+export async function retirePreparedWakeflowMaintenanceJournal(
+  root: RootedDirectory,
+  context: Readonly<WakeflowMaintenanceGateContext>,
+  sourceValue: Readonly<WakeflowMaintenanceJournalSource>,
+): Promise<Readonly<WakeflowPreparedMaintenanceJournalRetirementReceipt>> {
+  assertGate(root, context);
+  if (
+    typeof sourceValue !== "object"
+    || sourceValue === null
+    || !ISSUED_SOURCES.has(sourceValue)
+    || sourceValue.operationId !== context.operationId
+    || sourceValue.journal.checkpoint !== 0
+    || sourceValue.journal.state !== "prepared"
+  ) {
+    fail("input", "$source");
+  }
+  const retirement = await retireExactWakeflowMaintenanceJournal(
+    root,
+    context,
+    sourceValue,
+  );
   return Object.freeze({
     disposition: "retired-prepared",
     operationId: context.operationId,
@@ -721,48 +735,5 @@ export async function retireTerminalWakeflowMaintenanceJournal(
   ) {
     fail("input", "$source");
   }
-  admitOperation(context.operationId, "exact-retire");
-  await assertWakeflowMaintenanceJournalIsOnlyTransaction(root, sourceValue);
-  const current = await readWakeflowMaintenanceJournal(
-    root,
-    context.operationId,
-  );
-  if (
-    current.digest !== sourceValue.digest
-    || current.journalDigest !== sourceValue.journalDigest
-    || current.node.deviceId !== sourceValue.node.deviceId
-    || current.node.inodeId !== sourceValue.node.inodeId
-  ) {
-    fail("conflict", "$journal");
-  }
-  try {
-    await unlinkRegularFileExactly(
-      root,
-      sourceValue.resourcePath,
-      { expectedNode: sourceValue.node },
-    );
-  } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      if (
-        error.reason === "source-changed"
-        || error.reason === "source-not-found"
-      ) {
-        fail("conflict", "$journal");
-      }
-      if (
-        error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "close-failure"
-      ) {
-        fail("commit-uncertain", "$journal");
-      }
-      fail("effect-failure", "$journal");
-    }
-    throw error;
-  }
-  try {
-    await assertTransactionsEmpty(root);
-  } catch {
-    fail("commit-uncertain", "$journal");
-  }
+  await retireExactWakeflowMaintenanceJournal(root, context, sourceValue);
 }

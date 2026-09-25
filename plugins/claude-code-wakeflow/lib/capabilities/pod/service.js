@@ -48,9 +48,13 @@ function envelopeOf(request) {
     return Object.freeze({ root: request.root, mode: request.mode, planDigest, operationId: null });
 }
 async function openContext(root, facade, options) {
+    const snapshot = await readSnapshot(root, options.signal);
+    return Object.freeze({ root, facade, snapshot, options });
+}
+/** 读配置权威快照，并把它的错误映射成工具错误（中止为 io-failure，其余为 config-authority）。 */
+async function readSnapshot(root, signal) {
     try {
-        const snapshot = await readWakeflowConfigAuthoritySnapshot(root, signalOptions(options.signal));
-        return Object.freeze({ root, facade, snapshot, options });
+        return await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal));
     }
     catch (error) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
@@ -107,7 +111,6 @@ async function loadPodFacts(context, pod) {
         bindingIdByWindowId,
         receipts: receipts.map((entry) => Object.freeze({
             repositoryId: entry.receipt.repositoryId,
-            windowId: entry.receipt.windowId,
             bindingId: entry.receipt.bindingId,
             checkoutPresent: entry.checkoutPresent,
         })),
@@ -432,7 +435,7 @@ async function recoverPod(context, operationId) {
     });
 }
 async function currentViews(context, podId) {
-    const snapshot = await readWakeflowConfigAuthoritySnapshot(context.root, signalOptions(context.options.signal));
+    const snapshot = await readSnapshot(context.root, context.options.signal);
     const fresh = Object.freeze({ ...context, snapshot });
     const pod = podOf(fresh, podId);
     if (pod === null) {
@@ -492,15 +495,23 @@ async function previewViews(context, planned) {
     if (plan === null)
         return null;
     if (plan.kind === "create") {
+        // 同键重放：pod 已在，窗口与检出取当前事实，而不是新推导的“未登记、回执缺席”。
+        const replayed = plan.replay ? await currentViews(context, plan.podId) : null;
+        if (replayed !== null && replayed.pod !== null) {
+            return {
+                kind: "create",
+                pod: replayed.pod,
+                windows: replayed.windows,
+                worktrees: replayed.worktrees,
+            };
+        }
         return {
             kind: "create",
             pod: {
                 podId: plan.podId,
                 name: plan.name,
                 placement: "worktree",
-                state: plan.replay
-                    ? ((await currentViews(context, plan.podId)).pod?.state ?? "creating")
-                    : "creating",
+                state: "creating",
             },
             windows: plan.windows.map((window) => ({
                 windowId: window.windowId,
@@ -522,13 +533,16 @@ async function previewViews(context, planned) {
         fail("unexpected", "pod-vanished", "$request.intent.podId");
     return { kind: plan.kind, pod: views.pod, windows: views.windows, worktrees: views.worktrees };
 }
-async function assembleResult(context, phase, next) {
+/** 组装结果与它的 next；变更结果只读一次当前事实，next 与视图出自同一份观察。 */
+async function assembleResult(context, phase) {
     const base = {
         schemaVersion: WAKEFLOW_POD_PUBLIC_SCHEMA_VERSION,
         tool: WAKEFLOW_POD_PUBLIC_TOOL_NAME,
     };
     if (phase.mode === "preview") {
-        return admitPodResult({
+        const kind = phase.planned.plan?.kind ?? "create";
+        const next = podPreviewNext(kind, phase.planned);
+        const result = admitPodResult({
             kind: "WakeflowPodPreview",
             ...base,
             mode: "preview",
@@ -538,9 +552,10 @@ async function assembleResult(context, phase, next) {
             plan: await previewViews(context, phase.planned),
             next,
         });
+        return { result, next };
     }
     const views = await currentViews(context, phase.outcome.podId);
-    return admitPodResult({
+    const result = admitPodResult({
         kind: "WakeflowPodMutation",
         ...base,
         mode: phase.mode,
@@ -551,6 +566,7 @@ async function assembleResult(context, phase, next) {
         retiredReceipts: phase.outcome.retiredReceipts,
         next: views.next,
     });
+    return { result, next: views.next };
 }
 function privateValues(context) {
     const values = new Set([context.snapshot.ledgerRoot]);
@@ -578,11 +594,8 @@ export async function executePodRequest(facade, value, options = {}) {
         apply: (context, input, plan) => afterMutationRefresh(context.root, context.options.signal, () => applyPod(context, input, plan)),
         recover: recoverPod,
         next: async (context, phase) => {
-            const kind = phase.mode === "preview" ? (phase.planned.plan?.kind ?? "create") : "create";
-            const next = phase.mode === "preview"
-                ? podPreviewNext(kind, phase.planned)
-                : (await currentViews(context, phase.outcome.podId)).next;
-            assembled = await assembleResult(context, phase, next);
+            const { result, next } = await assembleResult(context, phase);
+            assembled = result;
             return next;
         },
         result: () => {

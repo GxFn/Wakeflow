@@ -7,8 +7,8 @@ import type { MonotonicMoment } from "./monotonic-clock.js";
  * 无损转换为纳秒时长。它不读取时钟，也无法在运行时证明两个品牌时刻来自同一来源；
  * 调用方仍负责保证来源一致。
  *
- * 单调时长不得转换为 UTC 时间或持久化。截止时刻、剩余等待、舍入、休眠和超时策略
- * 由后续独立能力或领域职责所有者决定。
+ * 单调时长不得转换为 UTC 时间或持久化。截止时刻与剩余等待由 monotonic-deadline 提供；
+ * 舍入、休眠和超时策略由领域职责所有者决定。
  */
 
 const NANOSECONDS_PER_MILLISECOND = 1_000_000n;

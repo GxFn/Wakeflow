@@ -67,7 +67,8 @@ function findPrivateInObject(
   path: string,
 ): string | null {
   for (const key of Object.keys(record)) {
-    const keyHit = findPrivateString(key, boundary, `${path}.${key}`);
+    // 键本身含私有文本时只报告所在对象的路径，否则错误路径会回显私有值。
+    const keyHit = findPrivateString(key, boundary, path);
     if (keyHit !== null) return keyHit;
     const entry = record[key];
     if (entry === undefined) continue;

@@ -135,9 +135,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
     }
     const matching = parsedProfiles.find((profile) => profile.hostId === currentHostProfile.hostId);
     if (matching === undefined ||
-        createWakeflowWorkspaceStaticResourceMatrix(matching).matrixDigest !==
-            createWakeflowWorkspaceStaticResourceMatrix(currentHostProfile)
-                .matrixDigest) {
+        !sameStaticResourceMatrix(matching, currentHostProfile)) {
         failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile");
     }
     return Object.freeze({
@@ -147,6 +145,20 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
         hostProfiles: Object.freeze(parsedProfiles),
         signal: record.signal,
     });
+}
+// A current profile whose declarations do not compile is a profile mismatch,
+// never a raw matrix error.
+function sameStaticResourceMatrix(matching, current) {
+    try {
+        return (createWakeflowWorkspaceStaticResourceMatrix(matching).matrixDigest ===
+            createWakeflowWorkspaceStaticResourceMatrix(current).matrixDigest);
+    }
+    catch (error) {
+        if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
+            return false;
+        }
+        throw error;
+    }
 }
 const STEP_KIND_SET = new Set(WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS);
 const STEP_ID_PATTERN = /^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_:-]*$/u;

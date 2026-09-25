@@ -6,6 +6,7 @@ import {
 import {
   chmodSync,
   existsSync,
+  linkSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -218,6 +219,42 @@ test("TaskPackage projection is event-backed, idempotent, repairable, and never 
       ),
     );
     equal(readFileSync(projectionPath, "utf8"), conflictingText);
+  } finally {
+    await root.close();
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("a current projection held at two links by a settling publisher is re-read, not failed", async () => {
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-task-package-projection-retry-"),
+  );
+  chmodSync(fixtureRoot, 0o700);
+  const root = await RootedDirectory.open(fixtureRoot);
+  try {
+    const eventStore = new DemandFileEventStore(root);
+    await eventStore.initialize();
+    const repository = new DemandEventSourcingRepository(root);
+    const projections = new TaskPackageProjectionStore(root);
+    await appendPublication(repository);
+    await appendTaskPackage(repository);
+    equal((await projections.materialize(TASK_PACKAGE_ID)).disposition, "created");
+    const projectionPath = path.join(
+      fixtureRoot,
+      ...taskPackageProjectionRef(TASK_PACKAGE_ID).split("/"),
+    );
+    // 模拟并发胜者尚未退休 stage：目标暂时有两个硬链接。
+    const heldLink = path.join(fixtureRoot, "held-stage-link");
+    linkSync(projectionPath, heldLink);
+    const release = setTimeout(() => rmSync(heldLink), 20);
+    try {
+      const settled = await projections.materialize(TASK_PACKAGE_ID);
+      equal(settled.disposition, "current");
+      equal(settled.sourceEvent.eventId, PLANNED_EVENT_ID);
+    } finally {
+      clearTimeout(release);
+      rmSync(heldLink, { force: true });
+    }
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });

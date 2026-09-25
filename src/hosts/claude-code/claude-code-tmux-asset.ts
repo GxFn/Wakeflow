@@ -24,7 +24,8 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  *   `session-start` hook 记录，打印登记用的 creation observation。意图带 `local-head` 的 worktree
  *   意图且参数里有 `--worktree <name>` 时（§13.130 H4），先在意图根（仓库主检出）准备检出：
  *   `<root>/.claude/worktrees/<name>` 不存在就 `git worktree add -b worktree-<name> <path> HEAD`
- *   （分支已存在则不带 -b），存在就复用（`claude --worktree` 对已有检出只加锁），并保证仓库的
+ *   （分支已存在而检出不存在时拒绝为 `worktree-branch-exists`，由 Controller 询问用户），存在就复用
+ *   （`claude --worktree` 对已有检出只加锁），并保证仓库的
  *   `.git/info/exclude` 有 `.claude/worktrees/` 一行；结果里 `worktreePrepared` 说明做了什么。
  * - `resume --window <windowId> [--wait N] [--force]`：stdin 同 launch；用绑定里的私有会话 id 以
  *   `claude --resume` 在新 pane 里续同一会话，等到新的 session-start 记录后打印 relocate 用的
@@ -49,10 +50,12 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  *   没有工作中标记（"esc to interrupt"、"running … hooks"）且输入框为空时才粘贴一句
  *   （默认 "Continue."）并回车一次，打印 status（nudged / not-needed / busy / pane-missing）、
  *   匹配到的错误行与截屏摘要；一次调用最多推一次，看不到错误行绝不推。
- * - `close --window <windowId>`：关闭前后各读一次 pane 清单，打印 decommission 的 closure。
+ * - `close --window <windowId>`：关闭前后各读一次 pane 清单，打印 decommission 的 closure；只有恰好
+ *   一个 pane 同时对上定位器坐标与本窗口标识时才杀窗口，否则不杀并报 closeResult `unknown`。
  * - `teardown [--force]`：引导要重来时杀掉配置的 tmux 会话；有任何登记窗口时拒绝，除非 --force。
  *
- * 脚本从自身位置推导工作区根，从不从 cwd 推断；输出里不含绝对路径。
+ * 脚本从自身位置推导工作区根，从不从 cwd 推断；输出里不含绝对路径，唯一例外是 launch observation
+ * 里登记请求要求的 git worktree 原文事实（`git worktree list --porcelain` 与 `--git-common-dir`）。
  */
 
 export const CLAUDE_CODE_TMUX_ASSET_FILE_NAME = "tmux.mjs" as const;
@@ -560,7 +563,7 @@ function prepareWorktree(repositoryRoot, name) {
   if (git(repositoryRoot, ["rev-parse", "--verify", "--quiet", "refs/heads/" + branch]).ok) refuse("worktree-branch-exists", { branch });
   const exclude = ensureWorktreeExclude(path.resolve(repositoryRoot, commonDir.stdout.trim()));
   const added = git(repositoryRoot, ["worktree", "add", "-b", branch, checkout, "HEAD"]);
-  if (!added.ok) refuse("worktree-add-failed", { branch, branchExisted: false, status: added.status });
+  if (!added.ok) refuse("worktree-add-failed", { branch, status: added.status });
   return Object.freeze({ prepared: "created", branch, exclude });
 }
 
@@ -972,6 +975,22 @@ function beforeSend(reason, windowId, extra) {
   return { ok: false, command: "deliver", windowId, reason, attempt: { status: "failed-before-send" }, ...(extra ?? {}) };
 }
 
+// pane 行与定位器的坐标一致。
+function paneCoordinatesMatch(locator, entry) {
+  return entry.sessionName === locator.tmux.sessionName
+    && entry.windowId === locator.tmux.windowId
+    && entry.paneId === locator.tmux.paneId;
+}
+
+// pane 行带着这个窗口的五个 @wakeflow_* 标识。
+function paneMetadataMatch(locator, windowId, entry) {
+  return entry.options.programId === locator.programId
+    && entry.options.hostId === HOST_ID
+    && entry.options.windowId === windowId
+    && entry.options.bindingId === locator.bindingId
+    && entry.options.locatorId === locator.locatorId;
+}
+
 // deliver 与 nudge 共用的送前 pane authority（与旧实现同形，§13.122）：定位器、可选的句柄摘要、按坐标或
 // 标识相关的 pane 恰好一个、活着、跑的是 claude、标识与坐标都对。失败只描述原因，由各命令决定输出形状。
 function locateDeliveryPane(context, windowId, handleDigest) {
@@ -985,18 +1004,8 @@ function locateDeliveryPane(context, windowId, handleDigest) {
   }
   const listed = listPanes(context);
   if (!listed.available) return failure("panes-unavailable");
-  const coordinatesMatch = (entry) => (
-    entry.sessionName === locator.tmux.sessionName
-    && entry.windowId === locator.tmux.windowId
-    && entry.paneId === locator.tmux.paneId
-  );
-  const metadataMatch = (entry) => (
-    entry.options.programId === locator.programId
-    && entry.options.hostId === HOST_ID
-    && entry.options.windowId === windowId
-    && entry.options.bindingId === locator.bindingId
-    && entry.options.locatorId === locator.locatorId
-  );
+  const coordinatesMatch = (entry) => paneCoordinatesMatch(locator, entry);
+  const metadataMatch = (entry) => paneMetadataMatch(locator, windowId, entry);
   // 与旧实现的 pane authority 同形：按坐标或标识相关的 pane 必须恰好一个、活着、跑的是 claude，
   // 标识与坐标都对才粘贴（gate-log §13.122）。
   const related = listed.rows.filter((entry) => coordinatesMatch(entry) || metadataMatch(entry));
@@ -1069,8 +1078,8 @@ function commandDeliver(config, options) {
   const locator = located.locator;
   // 幂等：同一段 prompt 已经在目标会话落地（有它的 user-prompt-submit 记录）就不再粘贴——被宿主
   // 中断的一轮重发时拿到的是落地证据而不是第二次投递；--force 才照发（§13.127）。
-  const landed = landedRecord(windowId, prompt);
-  if (landed !== null && !options.force) {
+  const landed = observeLanding(windowId, prompt, 0);
+  if (landed.status === "observed" && !options.force) {
     return beforeSend("already-landed", windowId, {
       landing: landed,
       hint: "this prompt already landed in the bound session; record the outcome with this landing instead of sending again (--force sends anyway)",
@@ -1104,19 +1113,6 @@ function promptSubmitRecord(sessionId, promptDigest) {
     ) return record;
   }
   return null;
-}
-
-function landedRecord(windowId, prompt) {
-  const binding = readBoundedJson(path.join(ROOT, ...BINDINGS.split("/"), windowId + ".json"), MAX_RECORD_BYTES);
-  const sessionId = binding?.handle?.kind === HANDLE_KIND ? binding.handle.value : null;
-  if (typeof sessionId !== "string") return null;
-  const record = promptSubmitRecord(sessionId, sha256(prompt.trim()));
-  if (record === null) return null;
-  return {
-    status: "observed",
-    recordId: typeof record.recordId === "string" ? record.recordId : null,
-    recordedAt: typeof record.recordedAt === "string" ? record.recordedAt : null,
-  };
 }
 
 function observeLanding(windowId, prompt, seconds) {
@@ -1225,6 +1221,20 @@ function commandClose(config, options) {
   const locator = readLocator(windowId);
   if (locator === null) refuse("locator-missing");
   const preClose = panesObservation(context).observation;
+  // tmux 服务重启后窗口 @N 会复用：只在恰好一个 pane 同时对上坐标与本窗口标识时才杀，
+  // 否则不动任何窗口，报 unknown 交给人工宿主关口。
+  const listed = listPanes(context);
+  const owned = listed.available
+    ? listed.rows.filter((entry) => paneCoordinatesMatch(locator, entry) && paneMetadataMatch(locator, windowId, entry))
+    : [];
+  if (owned.length !== 1) {
+    return {
+      ok: true,
+      command: "close",
+      windowId,
+      closure: { preClose, closeResult: { status: "unknown" }, postClose: preClose },
+    };
+  }
   const killed = tmux(context, ["kill-window", "-t", locator.tmux.windowId]);
   const postClose = panesObservation(context).observation;
   return {

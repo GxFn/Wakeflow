@@ -32,13 +32,14 @@ import {
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import {
   parseUtcInstant,
   UtcInstantError,
   type UtcInstant,
 } from "../foundation/time/utc-instant.js";
-import { fail } from "./error.js";
+import { fail, isWakeflowError } from "./error.js";
 import { deriveDurableId } from "./ids.js";
 import type { WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
 import { parseUuidV4 } from "../foundation/identity/uuid-v4.js";
@@ -321,7 +322,11 @@ export async function inspectWorkClaim(
     if (error instanceof StableFileReadError && error.reason === "aborted") {
       fail("io-failure", "aborted", "$signal", { cause: error });
     }
-    if (error instanceof StableFileReadError || error instanceof DeterministicJsonDocumentError) {
+    if (
+      error instanceof StableFileReadError ||
+      error instanceof DeterministicJsonDocumentError ||
+      error instanceof StrictTextFileError
+    ) {
       fail("io-failure", "claim-read", "$claim", { cause: error });
     }
     throw error;
@@ -369,7 +374,7 @@ export async function takeWorkClaim(
     }
   }
   const inspected = await inspectWorkClaim(root, claim.windowId, signal);
-  if (inspected.claim === null) fail("io-failure", "claim-write", "$claim");
+  if (inspected.claim === null) fail("io-failure", "claim-write", "$claim", { retryable: true });
   if (inspected.claim.claimDigest === claim.claimDigest) {
     return Object.freeze({ disposition: "current" as const, claim: inspected.claim });
   }
@@ -442,6 +447,17 @@ export async function releaseWorkClaimIfHeld(
   ) {
     return Object.freeze({ disposition: "foreign" as const });
   }
-  await releaseWorkClaim(root, inspected.claim, signal);
+  try {
+    await releaseWorkClaim(root, inspected.claim, signal);
+  } catch (error: unknown) {
+    // 两次读取之间声明被并发释放或替换：同样只报告，不否定已落地的事件。
+    if (isWakeflowError(error) && error.reason === "claim-absent") {
+      return Object.freeze({ disposition: "absent" as const });
+    }
+    if (isWakeflowError(error) && error.reason === "claim-drift") {
+      return Object.freeze({ disposition: "foreign" as const });
+    }
+    throw error;
+  }
   return Object.freeze({ disposition: "released" as const });
 }

@@ -146,9 +146,13 @@ checkouts are gone. Depth: `references/workspace-and-windows.md`.
 actions. `wakeflow_verify` is the strict read: each gate passes, fails, or is
 unavailable, and it repairs nothing. Run `wakeflow_verify` when `status` looks
 wrong, before completing a Demand, and whenever a delivery looked sent but no
-evidence arrived. An `overall` of `maintenance` with `maintenance.protocol`
-other than `idle` means a maintenance apply was interrupted or is still
-running: finish it with maintenance recover before anything else. An
+evidence arrived. An `overall` of `maintenance` means `maintenance.protocol`
+is not `idle`; act on its value before anything else: `recovery-required` -
+an apply was interrupted, so run maintenance recover with the recoverable
+residue's operation; `busy` - another maintenance is running, so wait and read
+status again, never recover it; `absent` or `bootstrap-prefix` - the protocol
+root is not built yet, so preview a reconcile; `conflict` or `unknown` - stop
+and report it to the user. An
 unavailable gate is unchecked, not passing; report it as such.
 
 ## What you must return to the user
@@ -169,9 +173,7 @@ for the record you were writing. Then either the effect already landed and you
 report it, or it did not and you replay the same call with the same
 idempotency key or plan digest - Wakeflow returns the existing record instead
 of a second one. A host send is the one effect Wakeflow cannot replay for you:
-before delivering again, the helper checks the target's landing record and
-refuses with `already-landed` when the prompt is already there; record that
-landing as the outcome instead of forcing a second send. A turn cut in a
+check the receiving window's thread before sending again; when the prompt already arrived there, record or report that landing instead of sending a second time. A turn cut in a
 window you delivered to is a different case: see the nudge rule in
 `references/delivery-and-review.md`. When the host reports
 that its login expired, only the user can sign in again: tell them, and once

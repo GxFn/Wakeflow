@@ -314,4 +314,8 @@ test("Controller Route以十七项轻量矩阵完整映射frontier、owner与pha
     resolveDemandControllerImplementationFrontierDescriptor("accepted"),
     null,
   );
+  equal(
+    resolveDemandControllerImplementationFrontierDescriptor("superseded"),
+    null,
+  );
 });

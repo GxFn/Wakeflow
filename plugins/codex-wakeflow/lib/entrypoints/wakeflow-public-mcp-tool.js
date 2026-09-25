@@ -54,27 +54,38 @@ function legacyErrorDetails(error) {
     }
     return Object.freeze(details);
 }
-function errorEnvelope(tool, error) {
+const UNEXPECTED_ERROR_DETAILS = Object.freeze({
+    code: "wakeflow-unexpected",
+    reason: "unexpected",
+});
+function errorEnvelope(tool, details) {
     return Object.freeze({
         kind: "WakeflowMcpError",
         schemaVersion: 1,
         tool,
         status: "error",
-        error: isWakeflowError(error)
-            ? error.toPublicDetails()
-            : (legacyErrorDetails(error) ??
-                Object.freeze({
-                    code: "wakeflow-unexpected",
-                    reason: "unexpected",
-                })),
+        error: details,
     });
+}
+/** 错误信封与成功结果过同一进程脱敏边界；越界时退回固定的 unexpected 信封。 */
+function redactedErrorEnvelope(tool, error) {
+    const envelope = errorEnvelope(tool, isWakeflowError(error)
+        ? error.toPublicDetails()
+        : (legacyErrorDetails(error) ?? UNEXPECTED_ERROR_DETAILS));
+    try {
+        assertPublicJson(parseJsonValue(envelope, "$mcpError"), PROCESS_REDACTION_BOUNDARY, "$mcpError");
+        return envelope;
+    }
+    catch {
+        return errorEnvelope(tool, UNEXPECTED_ERROR_DETAILS);
+    }
 }
 function failedToolResult(tool, error) {
     return {
         content: [
             {
                 type: "text",
-                text: canonicalizeJson(errorEnvelope(tool, error), "$mcpError"),
+                text: canonicalizeJson(redactedErrorEnvelope(tool, error), "$mcpError"),
             },
         ],
         isError: true,

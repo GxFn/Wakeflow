@@ -29,6 +29,22 @@ function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
 }
 const DETAIL_BLOCKER_LIMIT = 8;
+/**
+ * 实现规划准入：聚合拒绝的条件在这里先说清楚——Demand 须活动，且测试一旦开始（待消费复测或
+ * 已有 test 目标）就不再接受新的实现包。
+ */
+export function deriveImplementationPlanningBlockers(state) {
+    const blockers = [];
+    if (state.lifecycle !== "active")
+        blockers.push(`demand-lifecycle:${state.lifecycle}`);
+    if (state.pendingTestRetest !== undefined)
+        blockers.push("test-retest-pending");
+    for (const target of state.targetTasks) {
+        if (target.workType === "test")
+            blockers.push(`test-target-present:${target.targetTaskId}`);
+    }
+    return Object.freeze(blockers);
+}
 /** 理由取首个阻塞项的种类（冒号前的 kebab-case 标记），阻塞项逐条进 details（至多八条）。 */
 function rejectWith(blockers, path) {
     const first = blockers[0];
@@ -147,6 +163,7 @@ async function buildImplementationPackage(context, input, requested, binding) {
         rejectWith([review.blocker ?? "task-plan-review-required"], "$request.planReview");
     }
     const blockers = [
+        ...deriveImplementationPlanningBlockers(authority.loaded.aggregate.state),
         ...deriveTopologyBlockers({
             config: authority.config,
             repositoryId: requested.assignment.repositoryId,

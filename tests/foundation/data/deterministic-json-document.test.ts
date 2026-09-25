@@ -71,13 +71,15 @@ test("all JSON top-level kinds use the same deterministic document profile", () 
   }
 });
 
-test("whitespace, indentation, key spelling order text, and final-LF drift are not repaired", () => {
+test("whitespace, indentation, key order, number spelling, and final-LF drift are not repaired", () => {
   for (const text of [
     '{"a":1}\n',
     '{\n    "a": 1\n}\n',
     '{\n  "a": 1\n}',
     '{\r\n  "a": 1\r\n}\r\n',
     '{\n  "a": 1\n}\n\n',
+    '{\n  "b": 1,\n  "1": 2\n}\n',
+    '{\n  "a": 1.0\n}\n',
   ]) {
     expectDocumentError(
       () => parseDeterministicJsonDocument(text),

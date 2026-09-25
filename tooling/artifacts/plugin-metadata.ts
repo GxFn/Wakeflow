@@ -234,7 +234,7 @@ export function expectedClaudeMarketplaceEntry(version: string): JsonRecord {
   };
 }
 
-/** Codex marketplace 条目无版本字段（能力卡 10 Q6）；只核对来源路径与类别。 */
+/** Codex marketplace 条目无版本字段（能力卡 10 Q6）；名称、来源路径、policy 与类别按结构核对。 */
 export function expectedCodexMarketplaceEntry(): JsonRecord {
   return {
     name: PLUGIN_NAME,

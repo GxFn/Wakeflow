@@ -54,6 +54,32 @@ function sharedDefinitions(left: JsonObject, right: JsonObject): readonly string
   );
 }
 
+/**
+ * 只比两边都携带的共享定义：请求 Schema 不再保留没被引用的定义（§13.130 审查），被引用的仍须在场，
+ * 两边都在的必须一字不差。
+ */
+function assertCarriedDefinitionsAgree(
+  left: JsonObject,
+  right: JsonObject,
+  names: readonly string[],
+  label: string,
+): void {
+  for (const name of names) {
+    for (const schema of [left, right]) {
+      if (JSON.stringify(schema).includes(`#/$defs/${name}"`)) definition(schema, name);
+    }
+    const carried = [left, right].every((schema) =>
+      Object.hasOwn((schema.$defs ?? {}) as JsonObject, name),
+    );
+    if (!carried) continue;
+    deepEqual(
+      definition(left, name),
+      definition(right, name),
+      `${label} wire definition ${name} must not drift`,
+    );
+  }
+}
+
 test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   const schemaRoot = path.join(process.cwd(), "src/contracts/schemas/entrypoints");
   const handle = opendirSync(schemaRoot);
@@ -300,13 +326,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     ["Prepare result and Outcome request", prepareResult, outcomeRequest],
     ["Outcome result and Rearm request", outcomeResult, rearmRequest],
   ] as const) {
-    for (const sharedDefinition of deliveryIdentityDefinitions) {
-      deepEqual(
-        definition(left, sharedDefinition),
-        definition(right, sharedDefinition),
-        `${label} wire definition ${sharedDefinition} must not drift`,
-      );
-    }
+    assertCarriedDefinitionsAgree(left, right, deliveryIdentityDefinitions, label);
   }
   for (const sharedDefinition of ["hostAction", "fence", "event", "commit", "next"]) {
     deepEqual(
@@ -535,12 +555,17 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "resumption",
   ];
   deepEqual(
-    Object.keys(implementationDecisionRequest.properties as Record<string, unknown>)
-      .filter((field) => !appendEnvelopeFields.includes(field))
-      .sort(),
+    Object.keys(implementationDecisionRequest.properties as Record<string, unknown>).sort(),
     // anchorEvidence：needs-review 结果 accept 时的锚点→托管证据绑定，只属于实现决定（§13.121 D7）。
-    [...judgmentFields, "anchorEvidence"].sort(),
+    [...appendEnvelopeFields, ...judgmentFields, "anchorEvidence"].sort(),
     "Public Implementation Decision request carries exactly the Controller judgment plus anchor evidence, escalation and resumption",
+  );
+  equal(
+    appendEnvelopeFields.every((field) =>
+      (implementationDecisionRequest.required as readonly string[]).includes(field),
+    ),
+    true,
+    "Implementation Decision request must require the whole append envelope",
   );
   deepEqual((implementationDecisionRequest.properties as JsonObject).decision, {
     enum: ["accept", "rework", "blocked", "escalate"],
@@ -560,11 +585,16 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     );
   }
   deepEqual(
-    Object.keys(testDecisionRequest.properties as Record<string, unknown>)
-      .filter((field) => !appendEnvelopeFields.includes(field))
-      .sort(),
-    [...judgmentFields, "stepIds"].sort(),
+    Object.keys(testDecisionRequest.properties as Record<string, unknown>).sort(),
+    [...appendEnvelopeFields, ...judgmentFields, "stepIds"].sort(),
     "Public Test Decision request adds the rerun step scope to the Controller judgment",
+  );
+  equal(
+    appendEnvelopeFields.every((field) =>
+      (testDecisionRequest.required as readonly string[]).includes(field),
+    ),
+    true,
+    "Test Decision request must require the whole append envelope",
   );
   deepEqual((testDecisionRequest.properties as JsonObject).decision, {
     enum: ["accept", "request-another-attempt", "blocked", "escalate"],
@@ -577,9 +607,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     ["product-defect", "needs-decision"],
   );
   deepEqual(
-    Object.keys((testDecisionResult.properties as JsonObject).attached as JsonObject)
-      .map((key) => key)
-      .sort(),
+    Object.keys((testDecisionResult.properties as JsonObject).attached as JsonObject).sort(),
     ["additionalProperties", "properties", "required", "type"],
   );
   deepEqual(
@@ -663,17 +691,9 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   });
 
   // 测试合同随 test 任务包进入规划请求：Controller 只写合同内容，环境与 stepId 由 Wakeflow 派生。
-  const contractDomainTaskPackage = readSchema(
-    "src/contracts/schemas/governance/tasking/task-package.schema.json",
-  );
-  const contractPlanningRequest = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
-  );
-  const domainTestContract = definition(contractDomainTaskPackage, "testContract");
+  const domainTestContract = definition(domainTaskPackage, "testContract");
   deepEqual(
-    Object.keys(
-      definition(contractPlanningRequest, "testContractRequest").properties as JsonObject,
-    ).sort(),
+    Object.keys(definition(planningRequest, "testContractRequest").properties as JsonObject).sort(),
     Object.keys(domainTestContract.properties as JsonObject)
       .filter((key) => key !== "environment")
       .sort(),
@@ -681,20 +701,16 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   );
   deepEqual(
     Object.keys(
-      definition(contractPlanningRequest, "testContractStepRequest").properties as JsonObject,
+      definition(planningRequest, "testContractStepRequest").properties as JsonObject,
     ).sort(),
-    Object.keys(definition(contractDomainTaskPackage, "testContractStep").properties as JsonObject)
+    Object.keys(definition(domainTaskPackage, "testContractStep").properties as JsonObject)
       .filter((key) => key !== "stepId")
       .sort(),
     "Controller-authored test step must mirror the domain step minus the derived stepId",
   );
-  const contractReviewInspection = readSchema(
-    "src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-result.schema.json",
-  );
   deepEqual(
     Object.keys(
-      definition(contractReviewInspection, "reviewTaskPackageTestContract")
-        .properties as JsonObject,
+      definition(reviewInspectionResult, "reviewTaskPackageTestContract").properties as JsonObject,
     ).sort(),
     Object.keys(domainTestContract.properties as JsonObject).sort(),
     "Review inspection test contract mirror must not drift from the domain contract",

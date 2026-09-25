@@ -452,11 +452,12 @@ async function assertTerminalConfig(
 function desiredConfigForExecution(
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
+  operationId: WakeflowMaintenanceOperationId,
 ): WakeflowConfigModel {
   const config = request.action === "reconcile"
     ? sourceConfig
     : request.desiredConfig;
-  if (config === null) fail("source-config", "$config");
+  if (config === null) fail("source-config", "$config", operationId);
   return config;
 }
 
@@ -531,7 +532,7 @@ async function executeStep(
   }
   try {
     const executed = await capability.executeOperation(root, context, {
-      config: desiredConfigForExecution(request, sourceConfig),
+      config: desiredConfigForExecution(request, sourceConfig, context.operationId),
       profile: request.currentHostProfile,
       operation,
       recoveringAffectedOperation,

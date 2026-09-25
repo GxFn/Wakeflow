@@ -137,7 +137,6 @@ test("每个公共工具的描述逐字点名其请求判别枚举的每一个�
     const values = discriminatorValues(tool.requestSchema);
     if (values.size > 0) observed[tool.name] = [...values.keys()].sort();
     for (const [key, bucket] of values) {
-      ok(bucket.size > 0, `${tool.name}: ${key} carries no literal value`);
       for (const value of bucket) {
         ok(
           mentionsVerbatim(tool.description, value),

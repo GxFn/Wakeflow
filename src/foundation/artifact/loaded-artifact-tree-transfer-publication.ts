@@ -234,7 +234,7 @@ async function readCurrentFinal(
     if (error instanceof DurableDirectoryTreeCandidateError) {
       mapTreeInspectionError(error);
     }
-    fail("destination-conflict", "$destinationResourcePath");
+    throw error;
   }
   return Object.freeze({
     tree,
@@ -363,7 +363,7 @@ export async function publishLoadedArtifactTreeTransferCandidate(
     if (error instanceof DurableDirectoryTreePublicationError) {
       mapPublicationError(error);
     }
-    fail("operation-failure", "$destinationResourcePath");
+    throw error;
   }
   const final = readPublishedFinal(
     publication,

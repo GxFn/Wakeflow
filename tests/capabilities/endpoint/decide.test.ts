@@ -61,10 +61,12 @@ test("register：无绑定登记、同句柄重放、异句柄冲突、意图漂
     operation: "register",
     disposition: "replayed",
   });
-  equal(
-    decideEndpointCommand(WINDOW, state({ binding: BINDING }), register("session-b")).accepted,
-    false,
+  const conflicting = decideEndpointCommand(
+    WINDOW,
+    state({ binding: BINDING }),
+    register("session-b"),
   );
+  equal(conflicting.accepted === false && conflicting.reason, "handle-conflict");
   const drift = decideEndpointCommand(WINDOW, state(), {
     operation: "register",
     observation: {

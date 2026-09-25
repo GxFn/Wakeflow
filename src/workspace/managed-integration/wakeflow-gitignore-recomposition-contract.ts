@@ -395,7 +395,7 @@ export async function assertCurrentUserWakeflowGitignoreRecompositionRoot(
     if (error instanceof RootedDirectoryError) {
       failWakeflowGitignoreRecomposition("root-scope", "$root");
     }
-    failWakeflowGitignoreRecomposition("root-scope", "$root");
+    throw error;
   }
 }
 

@@ -255,7 +255,10 @@ test("Managed Evidence payload预算为完整final record预留Foundation容量"
       MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
   );
 
-  const deepRef = Array.from({ length: 64 }, () => "a").join("/");
+  const deepRef = Array.from(
+    { length: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth },
+    () => "a",
+  ).join("/");
   const genericTree = validateLoadedArtifactTreeManifest({
     artifactKind: "wakeflow-loaded-artifact-tree",
     schemaVersion: 1,

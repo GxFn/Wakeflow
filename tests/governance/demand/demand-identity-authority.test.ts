@@ -221,7 +221,7 @@ test("real-environment testing no longer binds a Ledger environment member", asy
       authorityRefs: refs,
       testingDecision: {
         mode: "real-environment",
-        summary: "在已确认的真实环境中执行测试卡",
+        summary: "在已确认的真实环境中执行任务包内的测试合同",
         environmentMemberRef: null,
       },
     });

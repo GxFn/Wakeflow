@@ -257,7 +257,9 @@ test("loaded artifact transfer detects source drift during tree copy", {
     plan,
   );
   const mutateAfterCandidate = async (): Promise<boolean> => {
-    for (let attempt = 0; attempt < 2_000; attempt += 1) {
+    // 以墙钟截止时间而非轮次约束轮询：慢速机器上源树哈希可能跨越大量事件循环轮次。
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
       if (existsSync(candidateRoot)) {
         writeFileSync(
           path.join(current.sourcePath, "unexpected.txt"),

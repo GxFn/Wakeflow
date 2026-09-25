@@ -141,7 +141,23 @@ test("Fresh selection snapshots all data and validates before ID allocation", ()
     caught = error;
   }
   equal(caught instanceof WakeflowFreshConfigSelectionError, true);
+  if (caught instanceof WakeflowFreshConfigSelectionError) {
+    equal(caught.reason, "reference");
+  }
   equal(invalidFactoryCalls, 0);
+
+  // Config 的 repository 没有 validation 字段；选择层必须在形状检查时拒绝它。
+  const withValidation = createMinimalWakeflowFreshConfigSelection();
+  const validated = (withValidation.topology.repositories as Record<string, unknown>[])[0];
+  if (validated === undefined) throw new Error("Expected a repository selection.");
+  validated.validation = { commands: [] };
+  caught = undefined;
+  try {
+    compileWakeflowFreshConfigSelection(withValidation);
+  } catch (error: unknown) {
+    caught = error;
+  }
+  equal(caught instanceof WakeflowFreshConfigSelectionError, true);
 
   const overCapacity = createMinimalWakeflowFreshConfigSelection();
   const repositories = overCapacity.topology.repositories as

@@ -17,15 +17,10 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { validateLoadedArtifactTreeManifest } from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
-import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import { createManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
-import {
-  createManagedEvidenceManifest,
-  renderManagedEvidenceManifest,
-} from "../../../src/governance/evidence/managed-evidence-manifest.js";
+import { renderManagedEvidenceManifest } from "../../../src/governance/evidence/managed-evidence-manifest.js";
 import {
   materializeManagedEvidencePublicationStage,
   ManagedEvidencePublicationStageMaterializationError,
@@ -47,9 +42,7 @@ import {
 import {
   createManagedEvidenceCapturePlanFixture,
   createManagedEvidencePublicationTransactionFixture,
-  MANAGED_EVIDENCE_PUBLICATION_TEST_CAPTURED_AT,
   MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT,
-  MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS,
   MANAGED_EVIDENCE_PUBLICATION_TEST_IDS,
 } from "./managed-evidence-publication.fixture.js";
 
@@ -241,44 +234,13 @@ function createTreeTransaction(fixture: MaterializerFixture) {
     ],
     totalBytes: readme.byteLength + script.byteLength,
   });
-  const ids = MANAGED_EVIDENCE_PUBLICATION_TEST_IDS;
-  const digests = MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS;
-  const manifest = createManagedEvidenceManifest(
-    {
-      evidenceId: ids.evidence,
-      programId: ids.program,
-      demandId: ids.demand,
-      demandAuthorityDigest: digests.authority,
-      kind: "test-output",
-      recordedBy: { windowId: ids.window, configDigest: digests.config },
-      source: {
-        kind: "managed-path" as const,
-        root: { kind: "repository", repositoryId: ids.repository },
-        path: "tree",
-        resourceType: "tree",
-      },
-      payload: {
-        artifactDigest: computeCanonicalJsonSha256Digest(treeManifest),
-        treeManifest,
-      },
-      contentReview: { disposition: "not-required", opaqueFileRefs: [], privacyFindings: [] },
-    },
-    { clock: () => MANAGED_EVIDENCE_PUBLICATION_TEST_CAPTURED_AT },
-  );
-  const capturePlan = createManagedEvidenceCapturePlan({
-    configDigest: digests.config,
-    expectedDemand: {
-      streamRevision: 4,
-      stateDigest: digests.state,
-      lastEventId: ids.previousEvent,
-      lastEventDigest: digests.previousEvent,
-    },
-    manifest,
-  });
   return createManagedEvidencePublicationTransaction({
-    capturePlan,
-    eventId: ids.event,
-    commitId: ids.commit,
+    capturePlan: createManagedEvidenceCapturePlanFixture({
+      source: { path: "tree", resourceType: "tree" },
+      treeManifest,
+    }),
+    eventId: MANAGED_EVIDENCE_PUBLICATION_TEST_IDS.event,
+    commitId: MANAGED_EVIDENCE_PUBLICATION_TEST_IDS.commit,
   });
 }
 
@@ -362,12 +324,7 @@ test("缺失journal或source漂移时不会发布Manifest", async () => {
   const fixture = await createMaterializerFixture();
   try {
     const sourceFile = createFileSource(fixture);
-    const capturePlan = createManagedEvidenceCapturePlanFixture();
-    const transaction = createManagedEvidencePublicationTransaction({
-      capturePlan,
-      eventId: MANAGED_EVIDENCE_PUBLICATION_TEST_IDS.event,
-      commitId: MANAGED_EVIDENCE_PUBLICATION_TEST_IDS.commit,
-    });
+    const { transaction } = createManagedEvidencePublicationTransactionFixture();
     await expectMaterializationError(
       materializeManagedEvidencePublicationStage(
         fixture.sourceRoot,

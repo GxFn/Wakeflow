@@ -117,11 +117,7 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
     equal(Object.hasOwn(first, "allowedDecisions"), false);
     equal(Object.hasOwn(first, "reviewCandidate"), false);
     equal(Object.hasOwn(first, "nextAction"), false);
-    equal(after.commitCount, before.commitCount);
-    equal(after.snapshotCount, before.snapshotCount);
-    equal(after.artifactCount, before.artifactCount);
-    equal(after.transactionCount, before.transactionCount);
-    equal(after.appendCandidateCount, before.appendCandidateCount);
+    deepEqual(after, before);
   } finally {
     await cleanupDeliveryWorkspaceFixture(fixture);
   }

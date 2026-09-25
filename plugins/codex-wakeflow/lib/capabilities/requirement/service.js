@@ -7,7 +7,7 @@ import { StableFileReadError } from "../../foundation/filesystem/stable-file-rea
 import { readStrictTextFile, StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { parseUtcInstant } from "../../foundation/time/utc-instant.js";
+import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { createRequirementRecord, LedgerAuthorityRecordError, } from "../../governance/ledger/ledger-authority-record.js";
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
@@ -103,7 +103,7 @@ function mediaTypeOf(path) {
         fail("invalid-request", "attachment-media-type", "$request.package.attachments");
     return mediaType;
 }
-async function readSurfaceDocument(surface, role, sourcePath, recordPath, signal) {
+async function readSurfaceDocument(surface, role, sourcePath, recordPath, requestPath, signal) {
     try {
         const read = await readStrictTextFile(surface, parsePortableResourcePath(sourcePath, "$request.package"), {
             maximumBytes: MEMBER_MAXIMUM_BYTES,
@@ -118,12 +118,17 @@ async function readSurfaceDocument(surface, role, sourcePath, recordPath, signal
     }
     catch (error) {
         if (error instanceof StableFileReadError && error.reason === "not-found") {
-            fail("not-found", "package-document", `$request.package.${role}`, { cause: error });
+            fail("not-found", "package-document", requestPath, { cause: error });
+        }
+        if (error instanceof StableFileReadError && error.reason === "aborted") {
+            fail("io-failure", "aborted", "$signal", { cause: error });
+        }
+        if (error instanceof StableFileReadError &&
+            (error.reason === "io-failure" || error.reason === "close-failure")) {
+            fail("io-failure", `package-document-${error.reason}`, requestPath, { cause: error });
         }
         if (error instanceof StableFileReadError || error instanceof StrictTextFileError) {
-            fail("invalid-request", `package-document-${error.reason}`, `$request.package.${role}`, {
-                cause: error,
-            });
+            fail("invalid-request", `package-document-${error.reason}`, requestPath, { cause: error });
         }
         throw error;
     }
@@ -163,12 +168,12 @@ async function readPackageDocuments(context, input) {
             fail("invalid-request", "attachment-name-collision", "$request.package.attachments");
         }
         const documents = [
-            await readSurfaceDocument(root, "requirement", input.requirementPath, "requirement.md", context.signal),
-            await readSurfaceDocument(root, "landing", input.landingPath, "landing.md", context.signal),
+            await readSurfaceDocument(root, "requirement", input.requirementPath, "requirement.md", "$request.package.requirementPath", context.signal),
+            await readSurfaceDocument(root, "landing", input.landingPath, "landing.md", "$request.package.landingPath", context.signal),
         ];
         for (const attachment of [...attachments].sort()) {
             mediaTypeOf(attachment);
-            documents.push(await readSurfaceDocument(root, "attachment", attachment, attachmentRecordPath(attachment), context.signal));
+            documents.push(await readSurfaceDocument(root, "attachment", attachment, attachmentRecordPath(attachment), "$request.package.attachments", context.signal));
         }
         return Object.freeze(documents);
     }
@@ -189,7 +194,7 @@ function sortedByPath(documents) {
 function planDigestOf(plan) {
     return computeCanonicalJsonSha256Digest(parseJsonValue(plan, "$plan"));
 }
-function recordDraft(context, input, documents, analysis, confirmationSectionDigest) {
+function recordDraft(context, input, documents, analysis, confirmedAt, confirmationSectionDigest) {
     return {
         programId: context.snapshot.model.program.programId,
         title: input.title,
@@ -201,7 +206,7 @@ function recordDraft(context, input, documents, analysis, confirmationSectionDig
         supersedes: (input.supersedes ?? null),
         parked: input.parked === undefined ? null : { trigger: input.parked.trigger },
         confirmation: {
-            confirmedAt: parseUtcInstant(input.confirmation?.confirmedAt ?? "", "$request.package.confirmation"),
+            confirmedAt,
             sectionDigest: confirmationSectionDigest,
         },
         documents: sortedByPath(documents).map((document) => ({
@@ -230,6 +235,20 @@ async function supersededState(context, requirementId) {
     const source = await readRequirementClaimState(context.root, requirementId, context.signal);
     return source === null ? "unknown" : source.state;
 }
+/** 词法合格但日历上不存在的时刻（如 2 月 31 日）是请求错误，不是未处理异常。 */
+function parseConfirmedAt(confirmedAt) {
+    try {
+        return parseUtcInstant(confirmedAt, "$request.package.confirmation.confirmedAt");
+    }
+    catch (error) {
+        if (error instanceof UtcInstantError) {
+            fail("invalid-request", "confirmed-at", "$request.package.confirmation.confirmedAt", {
+                cause: error,
+            });
+        }
+        throw error;
+    }
+}
 async function planPublish(context, request, facts) {
     const input = request.package;
     assertOriginWindow(context, input);
@@ -253,19 +272,25 @@ async function planPublish(context, request, facts) {
     // 隐私命中时不回显任何章节正文：阻塞项只说位置与类别。
     const privacyHit = blockers.some((blocker) => blocker.startsWith(PRIVACY_BLOCKER_PREFIX));
     facts.current = Object.freeze({
-        summary: Object.freeze({
-            title: input.title,
-            demandType: input.demandType,
-            priority: input.priority,
-            testingDecision: input.testingDecision,
-            sections: privacyHit ? [] : analysis.summary,
-            missingSections: analysis.missing,
-        }),
+        // 命中可能在标题或测试决策摘要里：整份摘要都不回显。
+        summary: privacyHit
+            ? null
+            : Object.freeze({
+                title: input.title,
+                demandType: input.demandType,
+                priority: input.priority,
+                testingDecision: input.testingDecision,
+                sections: analysis.summary,
+                missingSections: analysis.missing,
+            }),
         requirementId: null,
+        // 阻塞项有 64 项上限，确认缺失从输入直接判定，不依赖它是否留在列表里。
+        confirmationMissing: confirmedAt === null || analysis.confirmationSectionDigest === null,
     });
     if (blockers.length > 0 || analysis.confirmationSectionDigest === null || confirmedAt === null) {
         return Object.freeze({ status: "blocked", blockers, plan: null, digest: null });
     }
+    const confirmedInstant = parseConfirmedAt(confirmedAt);
     const requirementId = deriveRequirementId({
         programId: context.snapshot.model.program.programId,
         designSurfaceId: input.designSurfaceId,
@@ -293,7 +318,7 @@ async function planPublish(context, request, facts) {
     const plan = Object.freeze({
         action: "publish",
         requirementId,
-        draft: recordDraft(context, input, documents, analysis, analysis.confirmationSectionDigest),
+        draft: recordDraft(context, input, documents, analysis, confirmedInstant, analysis.confirmationSectionDigest),
         supersedes: input.supersedes ?? null,
     });
     // preview 就把记录过一遍编解码器：apply 写不进去的记录在这里就报阻塞。
@@ -523,10 +548,10 @@ async function recoverPublish(context, requirementId) {
         pendingCount: await pendingCount(context),
     });
 }
-function nextOf(phase) {
+function nextOf(phase, facts) {
     if (phase.mode === "preview") {
         return deriveRequirementNext({
-            confirmationMissing: phase.planned.blockers.includes("user-confirmation-missing"),
+            confirmationMissing: phase.planned.status === "blocked" && facts.confirmationMissing,
             awaitingApply: phase.planned.status === "ready",
             pendingCount: 0,
         });
@@ -571,7 +596,13 @@ function assembleResult(envelope, input, phase, next, facts) {
 }
 /** 执行一次 `wakeflow_publish_requirement`。 */
 export async function executeRequirementPublicationRequest(value, options = {}) {
-    const facts = { current: Object.freeze({ summary: null, requirementId: null }) };
+    const facts = {
+        current: Object.freeze({
+            summary: null,
+            requirementId: null,
+            confirmationMissing: false,
+        }),
+    };
     return runPublicationTransaction({
         tool: WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
@@ -616,7 +647,7 @@ export async function executeRequirementPublicationRequest(value, options = {}) 
             ? applyPublish(context, plan)
             : applyClaimTransition(context, plan),
         recover: (context, operationId) => recoverPublish(context, operationId),
-        next: async (_context, phase) => nextOf(phase),
+        next: async (_context, phase) => nextOf(phase, facts.current),
         result: (envelope, input, phase, next) => assembleResult(envelope, input, phase, next, facts.current),
         privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     }, value, commandShellExecutionOptions(options.durability));

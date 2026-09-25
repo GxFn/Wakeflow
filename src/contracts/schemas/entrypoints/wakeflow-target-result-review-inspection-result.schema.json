@@ -776,8 +776,8 @@
         "sectionAnchor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 64,
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          "maxLength": 128,
+          "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]{0,127}$"
         },
         "itemId": {
           "type": "string",
@@ -852,8 +852,8 @@
       "items": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 64,
-        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        "maxLength": 128,
+        "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]{0,127}$"
       }
     },
     "reviewTaskPackage": {
@@ -2004,8 +2004,8 @@
               "sectionAnchor": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 64,
-                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                "maxLength": 128,
+                "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]{0,127}$"
               }
             }
           }
@@ -2290,7 +2290,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "generation", "issuedAt", "landedRecordId"],
-      "description": "wake-controller 回调的落地状态：由 Controller 会话的 user-prompt-submit 记录派生；silent 表示签发后超过静默阈值仍无记录。",
+      "description": "wake-controller 回调的落地状态：由 Controller 会话的 user-prompt-submit 记录派生；silent 表示签发后超过静默阈值仍无记录；acknowledged 表示该结果已记录评审决定，此时 landedRecordId 仍可能为 null。",
       "properties": {
         "status": {
           "enum": ["pending", "landed", "silent", "acknowledged"]
@@ -2367,13 +2367,13 @@
           "$ref": "#/$defs/stepId"
         },
         "given": {
-          "$ref": "#/$defs/humanText"
+          "$ref": "#/$defs/reviewTaskPackageHumanText"
         },
         "when": {
-          "$ref": "#/$defs/humanText"
+          "$ref": "#/$defs/reviewTaskPackageHumanText"
         },
         "expected": {
-          "$ref": "#/$defs/humanText"
+          "$ref": "#/$defs/reviewTaskPackageHumanText"
         },
         "observed": {
           "oneOf": [

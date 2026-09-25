@@ -124,7 +124,8 @@ function selectedTestSources(
     seen.add(source);
     return source;
   });
-  return Object.freeze(sources.sort(compareCodeUnits));
+  // Final order is decided only by orderTestSourcesByCost in compiledTypeScriptTests.
+  return Object.freeze(sources);
 }
 
 export const TEST_DURATION_TABLE_PATH = "tooling/testing/test-durations.json";

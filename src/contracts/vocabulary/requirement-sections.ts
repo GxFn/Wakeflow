@@ -40,7 +40,7 @@ export const REQUIREMENT_SECTION_ANCHORS = Object.freeze([
 ] as const);
 export type RequirementSectionAnchor = (typeof REQUIREMENT_SECTION_ANCHORS)[number];
 
-/** 标题别名，比较前做 trim、小写、NFKC 与空白折叠。 */
+/** 标题别名，比较前依次做 NFKC、小写、空白折叠与 trim。 */
 const REQUIREMENT_SECTION_ALIASES: Readonly<Record<RequirementSectionAnchor, readonly string[]>> =
   Object.freeze({
     goal: ["目标", "goal", "user goal", "confirmed goal"],
@@ -106,7 +106,10 @@ export const REQUIRED_REQUIREMENT_SECTIONS: Readonly<
   },
 });
 
-/** 确认点 1 摘要所列章节（ADR-0011 D4）：目标、完成定义、非目标、测试决策、范围。 */
+/**
+ * 确认点 1 摘要所列章节（ADR-0011 D4）：各 demandType 的目标类（goal / requirement-delta /
+ * research-question / reproduction）、完成定义、非目标、范围类（scope / boundaries）与测试决策。
+ */
 export const REQUIREMENT_SUMMARY_ANCHORS: readonly RequirementSectionAnchor[] = Object.freeze([
   "goal",
   "requirement-delta",
@@ -120,7 +123,7 @@ export const REQUIREMENT_SUMMARY_ANCHORS: readonly RequirementSectionAnchor[] = 
 ]);
 
 function normalizeHeading(value: string): string {
-  return value.trim().toLowerCase().normalize("NFKC").replace(/\s+/gu, " ");
+  return value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
 }
 
 const ALIAS_INDEX: ReadonlyMap<string, RequirementSectionAnchor> = new Map(

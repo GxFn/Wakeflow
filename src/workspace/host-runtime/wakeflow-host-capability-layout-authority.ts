@@ -5,6 +5,7 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
 import {
   createWakeflowWorkspaceHostResourceCatalog,
+  hostProfileHasOperationSurface,
 } from "../workspace-host-resource-catalog.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
@@ -65,16 +66,6 @@ function fail(
   throw new WakeflowHostCapabilityLayoutAuthorityError(reason, path);
 }
 
-function operationSurfaceIsPresent(
-  profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>,
-): boolean {
-  return profile.surfaces.keepLive
-    || profile.surfaces.windowLocator
-    || profile.surfaces.statuslineAsset !== null
-    || profile.surfaces.activityMonitor
-    || profile.surfaces.temporaryPrompts;
-}
-
 /** 仅按 Profile capability 编译父目录声明；不按 hostId 分支。 */
 export function compileWakeflowHostCapabilityLayoutAuthority(
   profileValue: unknown,
@@ -93,7 +84,7 @@ export function compileWakeflowHostCapabilityLayoutAuthority(
   if (profile.surfaces.podReceipts) {
     declarationIds.push(`${prefix}.pod-receipts-root`);
   }
-  if (operationSurfaceIsPresent(profile)) {
+  if (hostProfileHasOperationSurface(profile)) {
     declarationIds.push(`${prefix}.operations-root`);
   }
   if (profile.surfaces.keepLive) {

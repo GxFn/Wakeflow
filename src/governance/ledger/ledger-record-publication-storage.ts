@@ -64,6 +64,7 @@ import {
   LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_TRANSACTION_FILE_MODE,
+  currentUserId,
 } from "./ledger-authority-storage-policy.js";
 
 /**
@@ -80,12 +81,6 @@ export interface StoredLedgerRecordPublicationIntent {
 
 export interface LedgerRecordPublicationResidues {
   readonly stageNode: Readonly<FileNodeSnapshot> | null;
-}
-
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
 }
 
 function admitLedgerResourceOperation(
@@ -126,21 +121,23 @@ export async function ledgerPublicationResourceNodeOrNull(
 }
 
 function assertTransactionFileNode(node: Readonly<FileNodeSnapshot>): void {
+  const userId = currentUserId();
   if (
     node.kind !== "file"
     || node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE
     || node.linkCount !== 1n
-    || (currentUserId() !== null && node.userId !== currentUserId())
+    || (userId !== null && node.userId !== userId)
   ) {
     fail("conflict", "$intent");
   }
 }
 
 function assertTransactionStageNode(node: Readonly<FileNodeSnapshot>): void {
+  const userId = currentUserId();
   if (
     node.kind !== "directory"
     || node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE
-    || (currentUserId() !== null && node.userId !== currentUserId())
+    || (userId !== null && node.userId !== userId)
   ) {
     fail("conflict", "$stage");
   }
@@ -288,7 +285,6 @@ export async function retireLedgerRecordPublicationIntent(
 export async function inspectLedgerRecordPublicationResidues(
   root: RootedDirectory,
   intent: Readonly<LedgerRecordPublicationIntent>,
-  _signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerRecordPublicationResidues>> {
   const stageNode = await ledgerPublicationResourceNodeOrNull(
     root,

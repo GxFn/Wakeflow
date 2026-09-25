@@ -103,7 +103,7 @@ import {
  * 升级、用户回答与带 resumption 的接受 → 实现接受后规划测试合同、投递测试并由 Controller 审查接受 →
  * 完成即归档 → 续接与取消 → pod 创建、握手、一 pod 一 Demand、worktree 投递与结果、两段关闭 →
  * 状态与校验（再建一个 ready 的 worktree pod 与活动 Demand；status 全域、带 demandId 的路由与归档回执、
- * 13 门与 hook 通道故障）→ 活动投影（Demand 变更后的四份文件、手写整轮零写、恢复后重建）。所有调用都
+ * 15 门与 hook 通道故障）→ 活动投影（Demand 变更后的四份文件、手写整轮零写、恢复后重建）。所有调用都
  * 经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内，宿主 hook 记录由场景代替宿主写入，
  * worktree 由场景用真实 git 造出。
  */
@@ -700,6 +700,7 @@ async function scenarioWindowReplace(context: ScenarioContext): Promise<string> 
     },
   });
   equal(stale.isError, true, "stale binding expectation must be rejected");
+  equal(scenarioToolText(stale).includes("binding-drift"), true, scenarioToolText(stale));
   const replaced = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root,
     operation: "replace",
@@ -731,6 +732,19 @@ async function scenarioWindowReplace(context: ScenarioContext): Promise<string> 
   );
   equal(bindingFile.includes(handle.value), true);
   equal(bindingFile.includes("scenario-1"), false, "old generation still on disk");
+  const replacedText = JSON.stringify(replaced.structuredContent);
+  equal(replacedText.includes(handle.value), false, "replace result leaked the raw handle");
+  equal(replacedText.includes("scenario-1"), false, "replace result leaked the old handle");
+  const replacedProjection = readFileSync(
+    path.join(
+      root,
+      ".wakeflow-local/runtime/hosts/codex/projections/window-runtime",
+      `${context.productWindowId}.json`,
+    ),
+    "utf8",
+  );
+  equal(replacedProjection.includes(handle.value), false, "projection leaked the raw handle");
+  equal(replacedProjection.includes("scenario-1"), false, "projection kept the old generation");
   context.productBinding = mutation.binding;
   context.productHandle = handle.value;
   return `stale-cas=rejected; replace=${mutation.disposition}; generation changed`;
@@ -785,7 +799,7 @@ async function scenarioRequirementPackage(context: ScenarioContext): Promise<str
   equal(blockedPreview.next.frontier, "requirement-confirmation");
   equal((blockedPreview.summary?.sections.length ?? 0) > 0, true, "preview summary is empty");
   const confirmed = { ...packageInput, confirmation: { confirmedAt: new Date().toISOString() } };
-  const before = readdirSync(root).sort();
+  const before = workspaceBytes(root);
   const ready = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
     root,
     mode: "preview",
@@ -795,7 +809,7 @@ async function scenarioRequirementPackage(context: ScenarioContext): Promise<str
   const readyPreview = ready.structuredContent as PublicationPreview;
   equal(readyPreview.status, "ready");
   if (readyPreview.planDigest === null) throw new Error("ready preview lacks a plan digest");
-  equal(readdirSync(root).sort().join(","), before.join(","), "preview wrote");
+  deepEqual(changedWorkspacePaths(before, workspaceBytes(root)), [], "preview wrote");
   const applied = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
     root,
     mode: "apply",
@@ -990,6 +1004,11 @@ async function scenarioPlanImplementationTask(context: ScenarioContext): Promise
     },
   });
   equal(invented.isError, true, "an invented acceptance anchor must be rejected");
+  equal(
+    scenarioToolText(invented).includes("anchor-item-unknown"),
+    true,
+    scenarioToolText(invented),
+  );
   const committed = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, request);
   assertNoPrivatePath(context, committed);
   const result = committed.structuredContent as {
@@ -1571,6 +1590,11 @@ async function scenarioRecordEvidence(context: ScenarioContext): Promise<string>
   });
   equal(observation.disposition, "recorded");
   equal(observation.plan.kind, "hook-observation");
+  equal(
+    JSON.stringify(observation).includes(context.productHandle),
+    false,
+    "hook-observation evidence leaked the raw handle",
+  );
   const link = await recordEvidenceSelection(context, {
     kind: "link",
     source: { kind: "link", url: "https://example.com/ci/runs/42" },
@@ -1994,6 +2018,7 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
     true,
     "a test step bound to an invented acceptance item must be rejected",
   );
+  equal(scenarioToolText(invented).includes("step-item-unknown"), true, scenarioToolText(invented));
   const committed = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, request);
   assertNoPrivatePath(context, committed);
   const planned = committed.structuredContent as {
@@ -2024,6 +2049,7 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
     },
   });
   equal(second.isError, true, "a second open test target must be rejected");
+  equal(scenarioToolText(second).includes("test-target-open"), true, scenarioToolText(second));
 
   const prepared = await prepareDelivery(
     context,
@@ -2110,7 +2136,7 @@ async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<str
   requireAcceptedImplementation(context);
   const beforeCompletion = await inspectRoute(context);
   equal(beforeCompletion.route?.frontiers[0]?.kind, "demand-completion-preflight");
-  const before = readdirSync(root, { recursive: true }).length;
+  const before = workspaceBytes(root);
   const preview = await call(context, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, {
     root,
     mode: "preview",
@@ -2128,7 +2154,7 @@ async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<str
     previewed.verify?.gates.every((gate) => gate.status === "pass"),
     true,
   );
-  equal(readdirSync(root, { recursive: true }).length, before, "preview wrote");
+  deepEqual(changedWorkspacePaths(before, workspaceBytes(root)), [], "preview wrote");
   const applied = await call(context, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, {
     root,
     mode: "apply",
@@ -2523,6 +2549,14 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
     "codex-host-owned-thread:pod-test",
     path.join(root, "Test"),
   );
+  // 用真实意图摘要，让拒绝落在 worktree 检查而不是意图漂移上（worktree 检查先于会话检查）。
+  const productInspection = (
+    await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
+      root,
+      operation: "inspect",
+      windowId: windowOf("product"),
+    })
+  ).structuredContent as { readonly launchIntent: { readonly intentDigest: string } };
   const missingWorktree = await context.connection.client.callTool({
     name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
     arguments: {
@@ -2531,12 +2565,13 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
       windowId: windowOf("product"),
       observation: {
         handle: { kind: "codex-thread", value: "codex-host-owned-thread:pod-product-nowt" },
-        launchIntentDigest: `sha256:${"0".repeat(64)}`,
+        launchIntentDigest: productInspection.launchIntent.intentDigest,
         observedAt: new Date().toISOString(),
       },
     },
   });
   equal(missingWorktree.isError, true, "a worktree pod product window needs git facts");
+  equal(scenarioToolText(missingWorktree).includes("worktree-receipt-required"), true);
   const checkout = path.join(context.workspace.fixtureRoot, "wt-feature-pod");
   gitInProduct(context, "commit", "--quiet", "--allow-empty", "-m", "pod baseline");
   gitInProduct(context, "worktree", "add", "--quiet", checkout, "-b", "wakeflow-feature-pod");
@@ -2817,7 +2852,7 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
 
 // ---- card-09/status-and-verify 与 card-09/active-projection（能力卡 9，§13.94 D1、D3、D5） ----------
 
-/** 工作区级十四门，按名字排序（§13.94 D3；window-runtime-projection 见 §13.111）。 */
+/** 工作区级十五门，按名字排序（§13.94 D3；window-runtime-projection 见 §13.111）。 */
 const WORKSPACE_GATE_NAMES = Object.freeze([
   "active-projection",
   "append-candidates-clear",
@@ -3309,7 +3344,7 @@ async function assertStatusRoutes(
   return `route=${frontier}; archive=${archived.archive?.outcome}`;
 }
 
-/** D3：13 门全 pass；hook 观察目录里的非法文件名只让 host-hook-channel fail，删除即恢复。 */
+/** D3：15 门全 pass；hook 观察目录里的非法文件名只让 host-hook-channel fail，删除即恢复。 */
 async function assertVerifyGates(
   context: ScenarioContext,
   state: ObservationScenarioState,

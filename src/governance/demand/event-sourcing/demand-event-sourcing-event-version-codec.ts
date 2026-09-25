@@ -84,7 +84,10 @@ export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
   "tasking.target-task-planned",
 ] as const satisfies readonly DemandEventSourcingCurrentEventType[]);
 
-/** 当前事件类型就是归约器事件联合的类型标签：类型数组、版本表与注册表都以它为穷尽性来源。 */
+/**
+ * 当前事件类型就是归约器事件联合的类型标签：版本表与注册表以它为编译期穷尽性来源；
+ * 类型数组只保证是其子集，缺项由 state-version 快照测试发现。
+ */
 type DemandEventSourcingCurrentEventType = DemandUncommittedEvent["eventType"];
 
 export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({

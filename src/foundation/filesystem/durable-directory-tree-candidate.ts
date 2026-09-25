@@ -185,13 +185,9 @@ export async function settleDirectoryTreeCandidateDurably(
     }
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("tree-conflict", "$candidate");
+      mapDirectoryError(error, "candidate-member");
     }
-    if (error instanceof DurableFileCandidateError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("tree-conflict", "$candidate");
-    }
+    if (error instanceof DurableFileCandidateError) mapFileError(error);
     throw error;
   }
   return inspectDirectoryTreeCandidate(

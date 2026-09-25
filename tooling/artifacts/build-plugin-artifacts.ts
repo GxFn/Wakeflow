@@ -436,9 +436,9 @@ function compiledFileScope(
 }
 
 /**
- * hook 观察脚本的闭包限于 foundation 与 kernel（§13.97 D1）：任何宿主目录的模块——包括对端
- * 准入的纯数据 profile——都不得进入，否则一份宿主中立的脚本会带着宿主实现进制品。只读文件
- * 列表，导出供回归测试用手搭的闭包核对稳定错误码。
+ * hook 观察脚本的闭包不得含任何宿主目录的模块（§13.97 D1）——包括对端准入的纯数据
+ * profile——否则一份宿主中立的脚本会带着宿主实现进制品。本检查不强制层级上限（不限于
+ * foundation 与 kernel）。只读文件列表，导出供回归测试用手搭的闭包核对稳定错误码。
  */
 export function assertSharedClosure(
   rule: Readonly<CandidateHostIsolationRule>,
@@ -516,10 +516,10 @@ function mcpLauncherBytes(launcher: Readonly<LauncherDefinition>, version: strin
  * hook 观察脚本的 launcher（§13.97 D1）：动态 import 放在 try/catch 里，退出码钉在 0，任何失败——
  * 模块缺失或入口缺 `main` 打 `launcher`，未捕获异常与未处理拒绝打 `internal`——只向 stderr 打一行
  * 固定代码，从不打堆栈或路径。静态 import 失败会打出带绝对路径的堆栈并以 1 退出，被 Claude 显示
- * 给用户，所以不用它。入口的 `main()` 登记自己的进程守卫，launcher 在调用它之前卸下自己的守卫：
- * 任一时刻恰好一组守卫在位。报告固定代码本身也先卸下守卫——成功路径之外的失败（import 抛出、
- * 守卫自己触发）之后守卫必须不在位，否则同一次运行的第二次故障会打出第二行，违反"一次故障恰好
- * 一行"（D4）；卸下之后的故障落回 Node 默认处理，不可能再打出固定代码行。
+ * 给用户，所以不用它。入口的 `main()` 登记自己的进程守卫，launcher 只在调用它之前卸下自己的
+ * 守卫：任一时刻恰好一组守卫在位。报告固定代码之后守卫仍留着，`reported` 标志压掉第二行，所以
+ * 同一次运行的后续故障什么也不打（"一次故障恰好一行"，D4），也永远落不到 Node 默认处理器
+ * （那会打出带路径的堆栈并以非 0 退出）。
  */
 function hookObserverLauncherBytes(launcher: Readonly<LauncherDefinition>): Buffer {
   const runExport = launcher.runExport;
@@ -1132,6 +1132,7 @@ function removeRealDirectory(directory: string): void {
 }
 
 function replaceOutputAtomically(repositoryRoot: string, stage: string, output: string): void {
+  assertBelow(repositoryRoot, output, "wakeflow-artifact-output-scope");
   const backup = path.join(
     path.dirname(output),
     `.${path.basename(output)}.backup-${process.pid}-${randomUUID()}`,
@@ -1152,7 +1153,6 @@ function replaceOutputAtomically(repositoryRoot: string, stage: string, output: 
     throw error;
   }
   if (lstatOrNull(backup) !== null) removeRealDirectory(backup);
-  assertBelow(repositoryRoot, output, "wakeflow-artifact-output-scope");
 }
 
 /** 输出根只有两类合法值：`.build/` 之下，或恰好 committed 根 `plugins`。 */

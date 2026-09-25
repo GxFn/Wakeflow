@@ -33,7 +33,7 @@ export const REQUIREMENT_SECTION_ANCHORS = Object.freeze([
     "method",
     "fix-plan",
 ]);
-/** 标题别名，比较前做 trim、小写、NFKC 与空白折叠。 */
+/** 标题别名，比较前依次做 NFKC、小写、空白折叠与 trim。 */
 const REQUIREMENT_SECTION_ALIASES = Object.freeze({
     goal: ["目标", "goal", "user goal", "confirmed goal"],
     "completion-definition": ["完成定义", "completion definition", "definition of done"],
@@ -89,7 +89,10 @@ export const REQUIRED_REQUIREMENT_SECTIONS = Object.freeze({
         landing: ["known-facts", "method"],
     },
 });
-/** 确认点 1 摘要所列章节（ADR-0011 D4）：目标、完成定义、非目标、测试决策、范围。 */
+/**
+ * 确认点 1 摘要所列章节（ADR-0011 D4）：各 demandType 的目标类（goal / requirement-delta /
+ * research-question / reproduction）、完成定义、非目标、范围类（scope / boundaries）与测试决策。
+ */
 export const REQUIREMENT_SUMMARY_ANCHORS = Object.freeze([
     "goal",
     "requirement-delta",
@@ -102,7 +105,7 @@ export const REQUIREMENT_SUMMARY_ANCHORS = Object.freeze([
     "testing-decision",
 ]);
 function normalizeHeading(value) {
-    return value.trim().toLowerCase().normalize("NFKC").replace(/\s+/gu, " ");
+    return value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
 }
 const ALIAS_INDEX = new Map(REQUIREMENT_SECTION_ANCHORS.flatMap((anchor) => REQUIREMENT_SECTION_ALIASES[anchor].map((alias) => [normalizeHeading(alias), anchor])));
 /** 识别一个标题对应的章节锚点；不认识返回 `null`。 */

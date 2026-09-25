@@ -183,11 +183,11 @@ export interface TopologyInput {
   readonly podId: string;
 }
 
-/** 实现任务只派给本 pod 的 product 窗口，且窗口根仓库必须等于任务仓库（能力卡 5 角色门）。 */
 function lookup<Value>(record: Readonly<Record<string, Value>>, key: string): Value | undefined {
   return Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
+/** 实现任务只派给本 pod 的 product 窗口，且窗口根仓库必须等于任务仓库（能力卡 5 角色门）。 */
 export function deriveTopologyBlockers(input: Readonly<TopologyInput>): readonly string[] {
   const repository = lookup(input.config.indexes.repositoryById, input.repositoryId);
   const window = lookup(input.config.indexes.windowById, input.windowId);

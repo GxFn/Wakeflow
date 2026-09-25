@@ -31,7 +31,10 @@ import {
   deriveManagedEvidencePublicationEventSourcingCommand,
   deriveManagedEvidencePublicationRecordTreePlan,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
-import { MANAGED_EVIDENCE_ROOT_REF } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
+import {
+  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
+  MANAGED_EVIDENCE_ROOT_REF,
+} from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
 import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
@@ -153,11 +156,7 @@ test("Application按journal、stage、Event、final和健康闭包完成发布",
     );
     equal(
       existsSync(
-        path.join(
-          demandRootPath(fixture),
-          "transactions",
-          "managed-evidence-publication.json",
-        ),
+        physical(demandRootPath(fixture), MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF),
       ),
       false,
     );
@@ -351,11 +350,7 @@ test("Recovery在目标Event前CAS过期时退休partial stage与journal", async
     equal(existsSync(physical(rootPath, plan.candidateRootPath)), false);
     equal(
       existsSync(
-        path.join(
-          rootPath,
-          "transactions",
-          "managed-evidence-publication.json",
-        ),
+        physical(rootPath, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF),
       ),
       false,
     );

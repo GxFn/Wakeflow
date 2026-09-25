@@ -205,6 +205,9 @@ export function createControllerImplementationReviewDecisionForState(
   streamRevision = 8,
   targetResult = createTargetResultFixture(),
   overrides: Partial<CreateControllerImplementationReviewDecisionInput> = {},
+  decisionUuid = overrides.resumption === undefined
+    ? CONTROLLER_REVIEW_DECISION_UUID
+    : "dfdfdfdf-dfdf-4dfd-8dfd-dfdfdfdfdfdf",
 ) {
   const input = controllerImplementationReviewDecisionInput(decision);
   return createControllerImplementationReviewDecision(
@@ -228,7 +231,7 @@ export function createControllerImplementationReviewDecisionForState(
     },
     {
       clock: () => CONTROLLER_REVIEW_DECIDED_AT,
-      uuidFactory: () => overrides.resumption === undefined ? CONTROLLER_REVIEW_DECISION_UUID : "dfdfdfdf-dfdf-4dfd-8dfd-dfdfdfdfdfdf",
+      uuidFactory: () => decisionUuid,
     },
   );
 }

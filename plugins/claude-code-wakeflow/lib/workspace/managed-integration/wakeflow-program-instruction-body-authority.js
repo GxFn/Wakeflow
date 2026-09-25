@@ -7,7 +7,6 @@ import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../con
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { MarkdownJsonStringLiteralError, renderMarkdownJsonStringLiteral, } from "../../foundation/text/markdown-json-string-literal.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, WAKEFLOW_WORKSPACE_HOST_IDS, } from "../workspace-host-resource-profile.js";
-import { WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX, } from "./wakeflow-managed-text-envelope.js";
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的正文权威。
  *
@@ -158,17 +157,23 @@ function simplifiedChineseBody(config, profile, controllerWindowId) {
         "- 提交、推送、打标签、发布、发版、刷新缓存、破坏性清理和扩大范围都需要分别获得明确授权。",
     ].join("\n")}\n`;
 }
+/** 信封内任何版本的 marker 命名空间都视为 marker，与信封自身的检测一致。 */
+const MANAGED_MARKER_NAMESPACE_PREFIX = "<!-- wakeflow:managed-content:";
+/** 正文进入信封前的剖面：良构 NFC、无 BOM/CR、以单个换行结尾且不含 marker 命名空间。 */
+function isAdmissibleInstructionBody(body) {
+    return body.isWellFormed()
+        && body.normalize("NFC") === body
+        && !body.startsWith("\ufeff")
+        && !body.includes("\r")
+        && body.endsWith("\n")
+        && !body.endsWith("\n\n")
+        && !body.includes(MANAGED_MARKER_NAMESPACE_PREFIX);
+}
 function renderBody(config, profile, controllerWindowId) {
     const body = config.presentation.language === "en"
         ? englishBody(config, profile, controllerWindowId)
         : simplifiedChineseBody(config, profile, controllerWindowId);
-    if (!body.isWellFormed()
-        || body.normalize("NFC") !== body
-        || body.startsWith("\ufeff")
-        || body.includes("\r")
-        || !body.endsWith("\n")
-        || body.endsWith("\n\n")
-        || body.includes(WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX)) {
+    if (!isAdmissibleInstructionBody(body)) {
         fail("text", "$body");
     }
     return body;
@@ -289,13 +294,7 @@ export function parseWakeflowProgramInstructionBodyAuthority(value) {
     const hostId = record.hostId;
     const language = record.language;
     const instructionFileName = parseInstructionFileName(record.instructionFileName);
-    if (!record.body.isWellFormed()
-        || record.body.normalize("NFC") !== record.body
-        || record.body.startsWith("\ufeff")
-        || record.body.includes("\r")
-        || !record.body.endsWith("\n")
-        || record.body.endsWith("\n\n")
-        || record.body.includes(WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX)) {
+    if (!isAdmissibleInstructionBody(record.body)) {
         fail("authority", "$authority.body");
     }
     let bodyDigest;

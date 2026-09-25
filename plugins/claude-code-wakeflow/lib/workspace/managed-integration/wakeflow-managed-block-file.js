@@ -4,7 +4,7 @@ import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snap
 import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
-import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { ByteCountError, parseByteCount, } from "../../foundation/numeric/byte-count.js";
 import { planWakeflowManagedTextAuthorityTransition, WakeflowManagedTextAuthorityTransitionError, } from "./wakeflow-managed-text-authority-transition.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow managed block file input is invalid.",
@@ -84,11 +84,22 @@ function parseRequest(value) {
         }
         throw error;
     }
+    let maximumBytes = DEFAULT_MAXIMUM_BYTES;
+    if (value.maximumBytes !== undefined) {
+        try {
+            maximumBytes = parseByteCount(value.maximumBytes, "$request.maximumBytes");
+        }
+        catch (error) {
+            if (error instanceof ByteCountError)
+                fail("input", "$request.maximumBytes");
+            throw error;
+        }
+    }
     return Object.freeze({
         resourcePath,
         currentTargets: Object.freeze([...value.currentTargets]),
         desiredTarget: value.desiredTarget,
-        maximumBytes: value.maximumBytes ?? DEFAULT_MAXIMUM_BYTES,
+        maximumBytes,
         signal: value.signal,
     });
 }

@@ -24,8 +24,8 @@ import type { DeliveryFenceReference } from "./delivery-envelope.js";
  *
  * 处置由 Wakeflow 按证据派生，不由 Agent 自称：accepted 只来自目标会话的
  * `user-prompt-submit` hook 记录、Codex 宿主发送调用的成功返回或 Controller 对
- * indeterminate 的显式解决；rejected-before-send 只用于发送调用本身失败且未触碰目标会话，
- * 立即释放声明；其余为 indeterminate，保留声明。回读是补充观察，缺失或超时不降级。
+ * indeterminate 的显式解决；rejected-before-send 来自发送调用本身失败且未触碰目标会话，
+ * 或 Controller 将 indeterminate 显式解决为未落地，二者都立即释放声明；其余为 indeterminate，保留声明。回读是补充观察，缺失或超时不降级。
  */
 
 const OUTCOME_KIND = "WakeflowDeliveryOutcome" as const;

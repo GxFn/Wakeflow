@@ -23,7 +23,7 @@ interface Context {
   readonly workspaceRoot: RootedDirectory;
 }
 
-function spec(seen: AppendCommandBinding[]) {
+function spec(seen: AppendCommandBinding[], opened: string[] = []) {
   return {
     tool: "wakeflow_append_test",
     parseRequest: (value: unknown) => {
@@ -38,7 +38,10 @@ function spec(seen: AppendCommandBinding[]) {
         input: record.body,
       };
     },
-    open: async (workspaceRoot: RootedDirectory): Promise<Context> => ({ workspaceRoot }),
+    open: async (workspaceRoot: RootedDirectory): Promise<Context> => {
+      opened.push(workspaceRoot.absolutePath);
+      return { workspaceRoot };
+    },
     close: async () => {},
     execute: async (_context: Context, input: string, binding: AppendCommandBinding) => {
       seen.push(binding);
@@ -83,8 +86,8 @@ test("append command 由幂等键派生 commitId 并把 next 交给结果", asyn
   equal(seen[0]?.commitId, deriveDemandCommitId("demand-1", "append-1"));
   equal(seen[0]?.expectedStreamRevision, 3);
   equal(seen[0]?.idempotencyKey, "append-1");
-  // 同一请求再来一次得到同一 commitId；根不同不影响摘要与身份。
-  await runAppendCommand(spec(seen), request);
+  // 同一请求换一个根再来一次得到同一 commitId；根不同不影响摘要与身份。
+  await runAppendCommand(spec(seen), { ...request, root: fixture(t) });
   equal(seen[1]?.commitId, seen[0]?.commitId);
   equal(seen[1]?.requestDigest, seen[0]?.requestDigest);
 });
@@ -92,13 +95,14 @@ test("append command 由幂等键派生 commitId 并把 next 交给结果", asyn
 test("append command 在打开根之前拒绝非法幂等键与修订", async (t) => {
   const root = fixture(t);
   const seen: AppendCommandBinding[] = [];
+  const opened: string[] = [];
   for (const [patch, path] of [
     [{ idempotencyKey: "bad key" }, "$request.idempotencyKey"],
     [{ expectedStreamRevision: -1 }, "$request.expectedStreamRevision"],
     [{ expectedStreamRevision: 1.5 }, "$request.expectedStreamRevision"],
   ] as const) {
     await rejects(
-      runAppendCommand(spec(seen), {
+      runAppendCommand(spec(seen, opened), {
         root,
         demandId: "demand-1",
         idempotencyKey: "ok-1",
@@ -111,4 +115,5 @@ test("append command 在打开根之前拒绝非法幂等键与修订", async (t
     );
   }
   equal(seen.length, 0);
+  equal(opened.length, 0);
 });

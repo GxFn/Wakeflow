@@ -253,9 +253,8 @@ async function readInventory(root, authority, signal) {
 function mapLockError(error) {
     if (error.reason === "aborted")
         fail("aborted", "$signal");
-    if (error.reason === "timeout")
-        fail("lock", "$lock");
-    if (error.reason === "unsafe-lock" ||
+    if (error.reason === "timeout" ||
+        error.reason === "unsafe-lock" ||
         error.reason === "parent" ||
         error.reason === "root-scope") {
         fail("lock", "$lock");

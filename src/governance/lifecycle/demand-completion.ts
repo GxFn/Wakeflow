@@ -114,8 +114,7 @@ export type DemandCompletionErrorReason =
   | "position"
   | "time"
   | "route"
-  | "package"
-  | "relation";
+  | "package";
 
 const ERROR_MESSAGES = {
   json: "Demand Completion is not passive JSON data.",
@@ -127,7 +126,6 @@ const ERROR_MESSAGES = {
   time: "Demand Completion contains an invalid completion time.",
   route: "Demand Completion requires a valid completion-preflight route.",
   package: "Demand Completion requirement package source is invalid.",
-  relation: "Demand Completion sources are inconsistent.",
 } as const satisfies Readonly<Record<DemandCompletionErrorReason, string>>;
 
 /** Demand成功终态记录准入、创建或来源闭合失败时的稳定错误。 */

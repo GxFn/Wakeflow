@@ -146,6 +146,12 @@ function assertIdentityRelations(authority, identity) {
         || authority.identityDigest !== computeDemandIdentityDigest(identity)) {
         fail("identity", "$authority");
     }
+    // 每个成员都必须来自身份所记录的同一个需求包记录。
+    if (authority.authorityRefs.some((entry) => entry.recordId !== identity.source.requirementId
+        || entry.recordRef !== identity.source.recordRef
+        || entry.recordDigest !== identity.source.recordDigest)) {
+        fail("identity", "$/authorityRefs");
+    }
     // 每个必需角色恰好一个成员：下游按角色 `.find` 环境权威，不允许两个成员争同一角色。
     const roleCounts = new Map();
     for (const entry of authority.authorityRefs) {
@@ -262,8 +268,8 @@ export function createDemandAuthority(identityValue, draft) {
     }, identity);
 }
 /**
- * 通过 `LedgerAuthorityStore` 解析每个成员，并证明每个成员都属于同一 Program
- * 的需求包记录。
+ * 通过 `LedgerAuthorityStore` 解析每个成员，并证明每个成员都属于同一 Program；
+ * 成员与身份需求包记录的绑定由解析时的身份关系检查保证。
  */
 export async function admitDemandAuthority(identityValue, authorityValue, ledgerStore, options) {
     const identity = parseDemandIdentity(identityValue);

@@ -9,8 +9,9 @@ import { computeWakeflowConfigDigest, parseWakeflowConfig, WAKEFLOW_CONFIG_KIND,
  * Wakeflow Configuration：Fresh用户选择到typed Config的纯编译边界。
  *
  * Repository、Support Surface与Window使用仅在本请求内有效的selectionKey；编译器一次
- * 分配全部durable IDs并解析逻辑根引用。selectionKey不会进入Config，显示文本和路径
- * 不参与身份生成；省略presentation.language时显式持久化默认`en`。
+ * 分配全部durable IDs并解析逻辑根引用。selectionKey不会进入Config。未注入uuidFactory时，
+ * ID由整个选择的canonical digest加kind与selectionKey派生，因此选择的任何变化（含显示
+ * 文本和路径）都会得到新ID；省略presentation.language时显式持久化默认`en`。
  */
 const WAKEFLOW_FRESH_SELECTION_KEY_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
 const WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES = 256;
@@ -170,7 +171,7 @@ export function compileWakeflowFreshConfigSelection(selectionValue, optionsValue
     const repositorySelections = repositoryValues.map((entry, index) => {
         const path = `$/topology/repositories/${index}`;
         const value = record(entry, path);
-        assertFields(value, ["selectionKey", "path", "displayName", "instructionManagement"], ["description", "validation"], path);
+        assertFields(value, ["selectionKey", "path", "displayName", "instructionManagement"], ["description"], path);
         return Object.freeze({
             key: selectionKey(value.selectionKey, `${path}/selectionKey`, seenKeys),
             value,
@@ -234,7 +235,6 @@ export function compileWakeflowFreshConfigSelection(selectionValue, optionsValue
             displayName: value.displayName,
             ...optionalProperty(value, "description"),
             instructionManagement: value.instructionManagement,
-            ...optionalProperty(value, "validation"),
         };
     });
     const surfaceByKey = new Map();

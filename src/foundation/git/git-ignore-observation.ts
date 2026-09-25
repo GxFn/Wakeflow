@@ -476,8 +476,9 @@ function parseOutput(
       }),
     }));
   }
-  const anyIgnored = paths.some((entry) => entry.ignored);
-  if ((result.exitCode === 0) !== anyIgnored) {
+  // `--verbose` 下 Git 把否定的最后匹配模式也计为匹配并以 0 退出。
+  const anyMatched = paths.some((entry) => entry.decision !== null);
+  if ((result.exitCode === 0) !== anyMatched) {
     fail("protocol", "$git.stdout");
   }
   return Object.freeze({

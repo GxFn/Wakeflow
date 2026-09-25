@@ -74,7 +74,8 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
   {
     scenarioId: "card-05/plan-implementation-task",
     card: "05-task-planning",
-    title: "实现任务包 preview 零写、apply 提交且重放幂等，Route 前进到投递规划",
+    title:
+      "发明的验收锚点被拒；实现任务包追加 committed、同仓库替代、重放幂等，Route 前进到投递规划",
   },
   {
     scenarioId: "card-06/delivery-chain",
@@ -139,7 +140,7 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     scenarioId: "card-09/status-and-verify",
     card: "09-observation-and-verification",
     title:
-      "status 一次观察多域：overall、两个 pod 的执行位置与回执、看板计数与 inspect_board 一致、已登记与未登记窗口、声明与声明文件一致、仓库 HEAD 与登记的 worktree、生效阈值等于导出常量、带 demandId 的路由与归档回执，结果不含句柄与路径；verify 13 门全 pass，hook 观察目录出现非法文件名即 host-hook-channel fail 且 ok false，删除后恢复",
+      "status 一次观察多域：overall、两个 pod 的执行位置与回执、看板计数与 inspect_board 一致、已登记与未登记窗口、声明与声明文件一致、仓库 HEAD 与登记的 worktree、生效阈值等于导出常量、带 demandId 的路由与归档回执，结果不含句柄与路径；verify 15 门全 pass，hook 观察目录出现非法文件名即 host-hook-channel fail 且 ok false，删除后恢复",
   },
   {
     scenarioId: "card-09/active-projection",
@@ -193,12 +194,13 @@ export function scenarioToolText(result: CallToolResult): string {
 
 /** 渲染场景报告；只含场景编号、结论与证据摘要，从不包含临时路径。 */
 export function renderScenarioReport(outcomes: readonly ScenarioOutcome[]): string {
+  const cell = (text: string): string => text.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
   const lines = [
     "| 场景 | 能力卡 | 结论 | 证据 |",
     "| --- | --- | --- | --- |",
     ...outcomes.map(
       (outcome) =>
-        `| ${outcome.scenarioId} | ${outcome.card} | ${outcome.verdict} | ${outcome.evidence} |`,
+        `| ${outcome.scenarioId} | ${outcome.card} | ${outcome.verdict} | ${cell(outcome.evidence)} |`,
     ),
   ];
   const counts = new Map<ScenarioVerdict, number>();

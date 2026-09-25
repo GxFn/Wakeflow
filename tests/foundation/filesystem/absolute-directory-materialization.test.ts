@@ -1,7 +1,9 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -88,6 +90,7 @@ test("absolute directory materialization rejects unsafe paths without mutation",
     "symlink",
     "$absolutePath",
   );
+  equal(existsSync(path.join(real, "Design")), false);
 
   const file = path.join(root, "file");
   writeFileSync(file, "not a directory");
@@ -98,6 +101,7 @@ test("absolute directory materialization rejects unsafe paths without mutation",
     "not-directory",
     "$absolutePath",
   );
+  equal(readFileSync(file, "utf8"), "not a directory");
 
   const controller = new AbortController();
   controller.abort();
@@ -109,4 +113,5 @@ test("absolute directory materialization rejects unsafe paths without mutation",
     "aborted",
     "$signal",
   );
+  equal(existsSync(path.join(root, "aborted")), false);
 });

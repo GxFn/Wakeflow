@@ -108,7 +108,9 @@ function assertCopiedTree(source: string, destination: string): void {
   const expected = sortedEntryNames(source).join("\u0000");
   const actual = sortedEntryNames(destination).join("\u0000");
   if (expected !== actual) {
-    throw new Error(`Prepared workspace copy lost entries under ${destination}.`);
+    throw new Error(
+      `Prepared workspace copy entries differ from the baseline under ${destination}.`,
+    );
   }
   for (const name of sortedEntryNames(source)) {
     const from = lstatSync(path.join(source, name));
@@ -161,16 +163,12 @@ export function createPreparedWorkspaceStore<Options, Facts>(
     return mkdtempSync(path.join(os.tmpdir(), definition.prefix));
   }
 
-  async function buildAt(fixtureRoot: string, options: Options): Promise<Facts> {
-    return definition.build(fixtureRoot, options);
-  }
-
   function baselineFor(key: string, options: Options) {
     const existing = baselines.get(key);
     if (existing !== undefined) return existing;
     const root = newRoot();
     removePreparedRootOnExit(root);
-    const building = buildAt(root, options).then((facts) => {
+    const building = definition.build(root, options).then((facts) => {
       assertRelocatable(root);
       return Object.freeze({ root, facts });
     });
@@ -188,16 +186,25 @@ export function createPreparedWorkspaceStore<Options, Facts>(
     async materialize(options: Options) {
       const key = definition.keyOf(options);
       const fixtureRoot = newRoot();
-      if (key === null) {
-        return Object.freeze({ fixtureRoot, facts: await buildAt(fixtureRoot, options) });
+      try {
+        if (key === null) {
+          return Object.freeze({
+            fixtureRoot,
+            facts: await definition.build(fixtureRoot, options),
+          });
+        }
+        const prepared = await baselineFor(key, options);
+        copyPrepared(prepared.root, fixtureRoot);
+        return Object.freeze({ fixtureRoot, facts: prepared.facts });
+      } catch (error: unknown) {
+        // 调用方拿不到这个根就登记不了清理：失败时在这里删掉。
+        rmSync(fixtureRoot, { recursive: true, force: true });
+        throw error;
       }
-      const prepared = await baselineFor(key, options);
-      copyPrepared(prepared.root, fixtureRoot);
-      return Object.freeze({ fixtureRoot, facts: prepared.facts });
     },
     async materializeInto(fixtureRoot: string, options: Options) {
       const key = definition.keyOf(options);
-      if (key === null) return buildAt(fixtureRoot, options);
+      if (key === null) return definition.build(fixtureRoot, options);
       const prepared = await baselineFor(key, options);
       copyPrepared(prepared.root, fixtureRoot);
       return prepared.facts;

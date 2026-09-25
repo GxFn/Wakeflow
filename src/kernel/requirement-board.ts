@@ -8,6 +8,7 @@ import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../contracts/generated/foundation/u
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
 import {
+  DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
 } from "../foundation/data/deterministic-json-document.js";
@@ -173,9 +174,6 @@ function assertRelations(state: WakeflowRequirementClaimState): void {
     state.archive.demandId !== state.claim.demandId
   ) {
     fail("invalid-request", "claim-state-archive", `${path}.archive.demandId`);
-  }
-  if (state.status === "parked" && state.revision !== 1 && state.previousStateDigest === null) {
-    fail("invalid-request", "claim-state-parked", `${path}.revision`);
   }
 }
 
@@ -348,6 +346,9 @@ async function readSource(
     if (error instanceof StableFileReadError && error.reason === "not-found") return null;
     if (error instanceof StableFileReadError) {
       fail("io-failure", `claim-state-read-${error.reason}`, "$claimState", { cause: error });
+    }
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
+      fail("io-failure", "claim-state-read", "$claimState", { cause: error });
     }
     throw error;
   }

@@ -470,6 +470,8 @@ export function parseDeliveryEnvelope(value) {
         },
         preparedAt: parseTime(wire.preparedAt, "$/preparedAt"),
     };
+    if (computePromptDigest(shared.portablePrompt) !== shared.promptDigest)
+        fail("digest", "$/promptDigest");
     let basis;
     if (wire.workType === "test") {
         if (wire.attempt === undefined)

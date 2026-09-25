@@ -236,6 +236,21 @@ function parseValue(
 }
 
 /**
+ * `JsonValue` 对象没有原型，但数组按合同保留标准数组原型。序列化器（JCS 与
+ * `JSON.stringify`）会读取继承的 `toJSON`，因此这里只检查原型身份和属性描述符，
+ * 不读取属性值。返回 false 时调用方必须失败，避免已准入数据再次执行外部行为。
+ */
+export function hasPassiveJsonSerializationEnvironment(): boolean {
+  const hasStandardPrototypeChain =
+    Object.getPrototypeOf(Array.prototype) === Object.prototype
+    && Object.getPrototypeOf(Object.prototype) === null;
+  const hasInheritedToJson =
+    Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") !== undefined
+    || Object.getOwnPropertyDescriptor(Object.prototype, "toJSON") !== undefined;
+  return hasStandardPrototypeChain && !hasInheritedToJson;
+}
+
+/**
  * 将任意输入解析为独立、递归冻结的 JSON 值。
  *
  * 本函数不做字符串、数字或字段语义的隐式转换。共享引用按 JSON 值语义分别

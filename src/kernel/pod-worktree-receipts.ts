@@ -45,6 +45,7 @@ import {
   StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import {
@@ -171,9 +172,10 @@ interface MutablePorcelainEntry {
   prunable: boolean;
 }
 
-function porcelainFail(reason: string, line: number): never {
+/** `key` 为 `line`（1 起的行号）或 `entry`（0 起的条目序号）。 */
+function porcelainFail(reason: string, value: number, key: "line" | "entry" = "line"): never {
   fail("invalid-request", "worktree-porcelain", "$request.observation.worktree.porcelain", {
-    details: { check: reason, line: String(line) },
+    details: { check: reason, [key]: String(value) },
   });
 }
 
@@ -234,8 +236,9 @@ function startPorcelainEntry(
 
 function assertPorcelainEntries(entries: readonly MutablePorcelainEntry[]): void {
   for (const [index, entry] of entries.entries()) {
-    if (entry.branch !== null && entry.detached) porcelainFail("branch-and-detached", index);
-    if (!entry.bare && entry.head === null) porcelainFail("head-missing", index);
+    if (entry.branch !== null && entry.detached)
+      porcelainFail("branch-and-detached", index, "entry");
+    if (!entry.bare && entry.head === null) porcelainFail("head-missing", index, "entry");
   }
 }
 
@@ -404,6 +407,17 @@ function parseId<Kind extends "pod" | "window" | "repository">(
     if (error instanceof WakeflowDurableIdError) {
       fail("invalid-request", "receipt-identity", path, { cause: error });
     }
+    throw error;
+  }
+}
+
+/** 目录项名是否为该种类的持久标识；杂散项（`notes.json`、`pod_old`）跳过而不是抛出。 */
+function isDurableIdOfKind(value: string, kind: "pod" | "repository"): boolean {
+  try {
+    parseWakeflowDurableIdOfKind(value, kind, "$receipt");
+    return true;
+  } catch (error: unknown) {
+    if (error instanceof WakeflowDurableIdError) return false;
     throw error;
   }
 }
@@ -592,7 +606,11 @@ async function readReceiptSource(root: RootedDirectory, ref: PortableResourcePat
     if (error instanceof StableFileReadError && error.reason === "aborted") {
       fail("io-failure", "aborted", "$signal", { cause: error });
     }
-    if (error instanceof StableFileReadError || error instanceof DeterministicJsonDocumentError) {
+    if (
+      error instanceof StableFileReadError ||
+      error instanceof DeterministicJsonDocumentError ||
+      error instanceof StrictTextFileError
+    ) {
       fail("io-failure", "receipt-read", "$receipt", { cause: error });
     }
     if (error instanceof RootedDirectoryError) {
@@ -655,6 +673,7 @@ export async function listPodWorktreeReceipts(
   for (const entry of listing.entries) {
     if (!entry.name.endsWith(".json")) continue;
     const repositoryId = entry.name.slice(0, -".json".length);
+    if (!isDurableIdOfKind(repositoryId, "repository")) continue;
     const receipt = await readPodWorktreeReceipt(root, hostId, podId, repositoryId, options);
     if (receipt !== null) receipts.push(receipt);
   }
@@ -715,7 +734,7 @@ export async function listPodReceiptDirectories(
     });
     return Object.freeze(
       listing.entries
-        .filter((entry) => entry.node.kind === "directory" && entry.name.startsWith("pod_"))
+        .filter((entry) => entry.node.kind === "directory" && isDurableIdOfKind(entry.name, "pod"))
         .map((entry) => entry.name)
         .sort(),
     );
@@ -769,7 +788,11 @@ export async function retirePodReceipts(
   } catch {
     return false;
   }
-  await rm(absolute, { recursive: true, force: true });
+  try {
+    await rm(absolute, { recursive: true, force: true });
+  } catch (error: unknown) {
+    fail("io-failure", "receipt-retire-directory", "$receipt", { cause: error });
+  }
   return true;
 }
 

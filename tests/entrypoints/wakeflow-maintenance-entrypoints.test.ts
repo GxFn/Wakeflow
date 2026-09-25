@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
@@ -131,7 +131,6 @@ test("Claude entrypoint contributes settings and its plan digest is rejected by 
     throw new Error("Expected a ready Claude plan.");
   }
   const plan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
-  // 三条 portable settings、一条状态栏资产、一条本地设置条目（§13.94 D6）。
   // 三条 portable settings、状态栏资产、本地设置条目、tmux 助手资产（§13.117 D4）。
   equal(plan.hostContribution?.operations.length, 6);
 
@@ -182,28 +181,30 @@ test("Public recovery consumes only an operation ID and its private intent", asy
   const rooted = await RootedDirectory.open(absoluteRoot);
   const interrupted = new Error("intent-only test interruption");
   try {
-    await withWakeflowMaintenanceGate(
-      rooted,
-      {
-        expectedCoreLayoutInspectionDigest: executionPlan.sharedPreview.coreLayoutInspectionDigest,
-        operationId: RECOVERY_OPERATION_ID,
-      },
-      async (context) => {
-        await publishWakeflowMaintenanceExecutionIntent(
-          rooted,
-          context,
-          createWakeflowMaintenanceExecutionIntent(
-            context.operationId,
-            executionPlan,
-            executionRequest,
-            desiredConfig,
-          ),
-        );
-        throw interrupted;
-      },
+    await rejects(
+      withWakeflowMaintenanceGate(
+        rooted,
+        {
+          expectedCoreLayoutInspectionDigest:
+            executionPlan.sharedPreview.coreLayoutInspectionDigest,
+          operationId: RECOVERY_OPERATION_ID,
+        },
+        async (context) => {
+          await publishWakeflowMaintenanceExecutionIntent(
+            rooted,
+            context,
+            createWakeflowMaintenanceExecutionIntent(
+              context.operationId,
+              executionPlan,
+              executionRequest,
+              desiredConfig,
+            ),
+          );
+          throw interrupted;
+        },
+      ),
+      (error: unknown) => error === interrupted,
     );
-  } catch (error: unknown) {
-    equal(error, interrupted);
   } finally {
     await rooted.close();
   }

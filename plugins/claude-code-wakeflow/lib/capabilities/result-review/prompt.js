@@ -50,7 +50,8 @@ function section(title, lines) {
     return ["", `${title}:`, ...lines];
 }
 function clip(text) {
-    const codePoints = Array.from(text.trim());
+    // 目标撰写的文本压成单行，避免在 Result 段内伪造 Next 等结构行。
+    const codePoints = Array.from(text.trim().replace(/\s+/gu, " "));
     return codePoints.length <= MAXIMUM_SUMMARY_CODE_POINTS
         ? codePoints.join("")
         : `${codePoints.slice(0, MAXIMUM_SUMMARY_CODE_POINTS - 1).join("")}…`;

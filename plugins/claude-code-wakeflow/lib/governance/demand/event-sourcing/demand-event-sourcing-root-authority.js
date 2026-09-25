@@ -23,7 +23,7 @@ import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../ledger/l
  * 普通入口只接受无事务健康根；Managed Evidence专用入口接纳journal绑定且关系关闭
  * 的事务期根。只有需要完整Demand权威事实的上层才调用本文件。
  */
-const IDENTITY_MAXIMUM_BYTES = parseByteCount(512 * 1024);
+export const DEMAND_IDENTITY_MAXIMUM_BYTES = parseByteCount(512 * 1024);
 const AUTHORITY_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
 const ERROR_MESSAGES = {
     input: "Demand Event Sourcing root authority input is invalid.",
@@ -254,7 +254,7 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
         }
         throw error;
     }
-    const identityRead = await readRecord(root, DEMAND_EVENT_SOURCING_IDENTITY_REF, IDENTITY_MAXIMUM_BYTES, inventory.nodes.identity, signal, "identity");
+    const identityRead = await readRecord(root, DEMAND_EVENT_SOURCING_IDENTITY_REF, DEMAND_IDENTITY_MAXIMUM_BYTES, inventory.nodes.identity, signal, "identity");
     const authorityRead = await readRecord(root, DEMAND_EVENT_SOURCING_AUTHORITY_REF, AUTHORITY_MAXIMUM_BYTES, inventory.nodes.authority, signal, "authority");
     let identity;
     let authority;

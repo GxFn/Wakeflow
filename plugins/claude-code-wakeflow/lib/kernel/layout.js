@@ -78,9 +78,13 @@ export function parseWakeflowHostId(value, path = "$hostId") {
         fail("invalid-request", "host-id", path);
     return value;
 }
+/** 所有宿主运行时命名空间的共享根：`.wakeflow-local/runtime/hosts`。 */
+export function hostRuntimeProfilesRootRef() {
+    return parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/hosts`, "$layout");
+}
 /** `.wakeflow-local/runtime/hosts/<host>`。 */
 export function hostRuntimeRootRef(hostId) {
-    return parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/hosts/${parseWakeflowHostId(hostId)}`, "$layout");
+    return parsePortableResourcePath(`${hostRuntimeProfilesRootRef()}/${parseWakeflowHostId(hostId)}`, "$layout");
 }
 /** 宿主 hook 观察记录目录：`.wakeflow-local/runtime/hosts/<host>/observations/hooks`。 */
 export function hostHookObservationsRootRef(hostId) {

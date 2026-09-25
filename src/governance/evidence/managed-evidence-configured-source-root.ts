@@ -4,6 +4,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { WakeflowError } from "../../kernel/error.js";
 import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
 import type { ManagedEvidenceManagedPathSource } from "./managed-evidence-source-selection.js";
 
@@ -76,17 +77,37 @@ function sourcePlacement(
   return placement;
 }
 
+/** 回执读取失败归为placement；取消以内核 aborted 错误原样浮出，由调用方映射。 */
+async function listReceipts(
+  workspaceRoot: RootedDirectory,
+  podId: string,
+  signal: AbortSignal | undefined,
+): ReturnType<typeof listPodWorktreeReceiptsAnyHost> {
+  try {
+    return await listPodWorktreeReceiptsAnyHost(
+      workspaceRoot,
+      podId,
+      signal === undefined ? {} : { signal },
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowError && error.reason === "aborted") throw error;
+    if (signal?.aborted === true) throw error;
+    fail("placement");
+  }
+}
+
 /** worktree 检出：pod 与仓库都在配置里，回执存在，且打开后的根等于回执路径。 */
 async function openPodWorktreeRoot(
   workspaceRoot: RootedDirectory,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   root: Extract<ManagedEvidenceManagedPathSource["root"], { readonly kind: "pod-worktree" }>,
+  signal: AbortSignal | undefined,
 ): Promise<RootedDirectory> {
   const pod = config.indexes.podById[root.podId];
   if (pod === undefined || !pod.worktrees.some((entry) => entry.repositoryId === root.repositoryId)) {
     fail("placement");
   }
-  const receipt = (await listPodWorktreeReceiptsAnyHost(workspaceRoot, root.podId)).find(
+  const receipt = (await listReceipts(workspaceRoot, root.podId, signal)).find(
     (entry) => entry.repositoryId === root.repositoryId,
   );
   if (receipt === undefined) fail("placement");
@@ -114,9 +135,10 @@ export async function openConfiguredManagedEvidenceSourceRoot(
   workspaceRoot: RootedDirectory,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   source: Readonly<ManagedEvidenceManagedPathSource>,
+  options: Readonly<{ signal?: AbortSignal }> = {},
 ): Promise<RootedDirectory> {
   if (source.root.kind === "pod-worktree") {
-    return openPodWorktreeRoot(workspaceRoot, config, source.root);
+    return openPodWorktreeRoot(workspaceRoot, config, source.root, options.signal);
   }
   const placement = sourcePlacement(config, source.root);
   let root: RootedDirectory | undefined;

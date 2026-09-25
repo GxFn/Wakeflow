@@ -100,9 +100,20 @@ function parseCandidate(value) {
         || keys[2] !== "rootNode") {
         fail("input", "$candidate");
     }
+    const candidateRootPath = parsePath(record.candidateRootPath, "$candidate/candidateRootPath");
+    let plan;
+    try {
+        plan = parseDirectoryTreeCandidatePlan(record.plan);
+    }
+    catch (error) {
+        if (error instanceof DurableDirectoryTreeCandidateError) {
+            fail("input", "$candidate/plan");
+        }
+        throw error;
+    }
     return Object.freeze({
-        candidateRootPath: parsePath(record.candidateRootPath, "$candidate/candidateRootPath"),
-        plan: parseDirectoryTreeCandidatePlan(record.plan),
+        candidateRootPath,
+        plan,
         rootNode: parseExpectedNode(record.rootNode),
     });
 }

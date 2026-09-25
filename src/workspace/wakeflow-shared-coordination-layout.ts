@@ -25,7 +25,7 @@ import {
   WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION,
 } from "./workspace-shared-runtime-resource-catalog.js";
 import {
-  parseWakeflowWorkspaceResourceDeclaration,
+  privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "./workspace-resource-declaration.js";
 
@@ -33,31 +33,12 @@ import {
 
 /** 窗口工作声明目录：路径由内核 `layout.ts` 定义，物化与静态矩阵由本模块声明。 */
 export const WORK_CLAIMS_ROOT_RESOURCE_DECLARATION =
-  parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
+  privateWorkspaceDirectoryDeclaration({
     declarationId: "coordination.window-work-claims-root",
     family: "coordination",
     ownerId: "shared-runtime-layout",
     scope: "host-neutral",
-    placement: {
-      root: { kind: "workspace" },
-      relativePath: WORK_CLAIMS_ROOT_REF,
-    },
-    tracking: { disposition: "ignored", privacy: "runtime-private" },
-    nodePolicy: {
-      kind: "directory",
-      mode: "0700",
-      symlinkPolicy: "reject",
-      existingModePolicy: "observe-without-change",
-    },
-    processing: {
-      kind: "directory-container",
-      materializationRecipe: "materialize-directory",
-      existingDirectoryPolicy: "observe-without-mode-change",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-    },
+    relativePath: WORK_CLAIMS_ROOT_REF,
   });
 
 export const WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS = Object.freeze([

@@ -129,13 +129,13 @@ function generation(value, minimum, path) {
     return value;
 }
 /** 回调 prompt 的摘要覆盖去除首尾空白后的文本，与投递信封的最终 prompt 摘要同一算法。 */
-export function computeTargetResultCallbackPromptDigest(prompt) {
+export function computeTargetResultCallbackPromptDigest(prompt, path = "$callback/portablePrompt") {
     try {
         return computeDeliveryPromptDigest(prompt);
     }
     catch (error) {
         if (error instanceof DeliveryEnvelopeError)
-            fail("text", "$callback/portablePrompt");
+            fail("text", path);
         throw error;
     }
 }
@@ -148,10 +148,12 @@ export function parseTargetResultCallbackRecord(value, path = "$callback") {
     if (typeof record.portablePrompt !== "string")
         fail("text", `${path}/portablePrompt`);
     const promptDigest = digest(record.promptDigest, `${path}/promptDigest`);
-    if (computeTargetResultCallbackPromptDigest(record.portablePrompt) !== promptDigest ||
-        record.generation !== 1) {
+    if (computeTargetResultCallbackPromptDigest(record.portablePrompt, `${path}/portablePrompt`) !==
+        promptDigest) {
         fail("relation", `${path}/promptDigest`);
     }
+    if (record.generation !== 1)
+        fail("relation", `${path}/generation`);
     return Object.freeze({
         callbackId: id(record.callbackId, "target-delivery", `${path}/callbackId`),
         controllerWindowId: id(record.controllerWindowId, "window", `${path}/controllerWindowId`),

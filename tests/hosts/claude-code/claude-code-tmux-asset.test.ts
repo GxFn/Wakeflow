@@ -49,7 +49,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0
 const RUNTIME = ".wakeflow-local/runtime/hosts/claude-code";
 /** 助手与桩之间的 tmux 字段分隔符：真实 tmux 会把制表符改成下划线，助手因此用可打印串。 */
 const FIELDS = "~|~";
-const SEPARATOR = "";
+const SEPARATOR = "\u001f";
 
 const TMUX_STUB = `#!/bin/bash
 set -u
@@ -598,6 +598,19 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
   equal(unknown.status, 1);
   deepEqual(unknown.json.windows, [{ windowId: CONTROLLER_WINDOW_ID, status: "locator-missing" }]);
 
+  // 定位器的 @5 此刻是一个没有本窗口标识的窗口（例如 tmux 服务重启后 @N 被复用）：close 不杀它，
+  // 报 unknown 交给人工宿主关口。
+  resetLog(current);
+  const refusedClose = runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]);
+  equal(refusedClose.status, 0, JSON.stringify(refusedClose.json));
+  deepEqual((refusedClose.json.closure as { closeResult: unknown }).closeResult, { status: "unknown" });
+  equal(tmuxLog(current).some((entry) => entry[0] === "kill-window"), false);
+
+  writeFileSync(path.join(current.state, "panes.txt"), [
+    paneRow({ window: "@3", pane: "%7", command: "2.1.281", pid: 300, options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID } }),
+    paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500, options: LIVE_OPTIONS }),
+    "",
+  ].join("\n"));
   resetLog(current);
   const closed = runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]);
   equal(closed.status, 0, JSON.stringify(closed.json));
@@ -609,8 +622,8 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
   equal(closure.preClose.kind, "tmux-panes");
   deepEqual(closure.closeResult, { status: "closed" });
   equal(closure.postClose.kind, "tmux-panes");
-  deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes", "kill-window", "list-panes"]);
-  deepEqual(tmuxLog(current)[1], ["kill-window", "-t", "@5"]);
+  deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes", "list-panes", "kill-window", "list-panes"]);
+  deepEqual(tmuxLog(current)[2], ["kill-window", "-t", "@5"]);
   writeFileSync(path.join(current.state, "kill-fail"), "");
   deepEqual((runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]).json.closure as { closeResult: unknown }).closeResult, {
     status: "failed",
@@ -1099,7 +1112,7 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   const refused = launch("feature-t");
   equal(refused.status, 1);
   equal(refused.json.reason, "worktree-add-failed");
-  equal(refused.json.branchExisted, false);
+  equal(refused.json.branchExisted, undefined);
   equal(existsSync(path.join(repository, ".claude", "worktrees", "feature-t")), false);
   equal(opensWindow(), false);
 });

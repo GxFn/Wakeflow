@@ -42,6 +42,8 @@ import {
 } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
+  type WakeflowWorkspaceCoreLayoutInspection,
+  WakeflowWorkspaceCoreLayoutInspectionError,
 } from "./wakeflow-workspace-core-layout-inspection.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 
@@ -242,6 +244,18 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
     throw error;
   }
   assertNotAborted(parsedOptions.signal);
+  // Only a prepared checkpoint-0 journal may be cancelled; refuse any other
+  // before the old gate residue is touched.
+  if (
+    source !== null
+    && (
+      source.journal.state !== "prepared"
+      || source.journal.checkpoint !== 0
+      || source.journal.affectedStepId !== null
+    )
+  ) {
+    fail("journal", "$journal");
+  }
   let oldGate;
   try {
     oldGate = await inspectRootedExclusiveFileLock(
@@ -367,7 +381,15 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
     }
     throw error;
   }
-  const core = await inspectWakeflowWorkspaceCoreLayout(root);
+  let core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
+  try {
+    core = await inspectWakeflowWorkspaceCoreLayout(root);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
+      fail("recovery-required", "$coreLayout");
+    }
+    throw error;
+  }
   if (core.local.status !== "idle") {
     fail("recovery-required", "$coreLayout");
   }

@@ -133,7 +133,7 @@ function admitEvidenceRootMaterialization(transaction) {
         throw error;
     }
 }
-function mapDirectoryError(error) {
+function mapDirectoryError(error, path) {
     if (error.reason === "aborted")
         fail("aborted", "$signal");
     if (error.reason === "target-exists")
@@ -145,18 +145,18 @@ function mapDirectoryError(error) {
         error.reason === "target-not-directory" ||
         error.reason === "parent-symlink" ||
         error.reason === "parent-not-directory") {
-        fail("stage-conflict", "$stage");
+        fail("stage-conflict", path);
     }
     if (error.reason === "commit-uncertain" ||
         error.reason === "durability-failure" ||
         error.reason === "close-failure") {
-        fail("recovery-required", "$stage");
+        fail("recovery-required", path);
     }
-    fail("operation-failure", "$stage");
+    fail("operation-failure", path);
 }
 async function ensureEvidenceRoot(demandRoot, transaction, signal) {
     admitEvidenceRootMaterialization(transaction);
-    await ensureDirectory(demandRoot, MANAGED_EVIDENCE_ROOT_REF, signal);
+    await ensureDirectory(demandRoot, MANAGED_EVIDENCE_ROOT_REF, "$managedEvidenceRoot", signal);
     let observation;
     try {
         observation = await demandRoot.inspectExistingResource(MANAGED_EVIDENCE_ROOT_REF, "$managedEvidenceRoot");
@@ -169,7 +169,7 @@ async function ensureEvidenceRoot(demandRoot, transaction, signal) {
     }
     assertPrivateDirectory(observation.node, "$managedEvidenceRoot");
 }
-async function ensureDirectory(demandRoot, ref, signal) {
+async function ensureDirectory(demandRoot, ref, path, signal) {
     try {
         await createDirectoryAtomically(demandRoot, ref, {
             mode: MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
@@ -178,7 +178,7 @@ async function ensureDirectory(demandRoot, ref, signal) {
     }
     catch (error) {
         if (error instanceof DurableDirectoryMaterializationError) {
-            if (mapDirectoryError(error) === "existing")
+            if (mapDirectoryError(error, path) === "existing")
                 return;
         }
         throw error;
@@ -290,8 +290,6 @@ function mapManifestWriteError(error) {
     if (error.reason === "root-scope") {
         fail("destination-root-scope", "$demandRoot");
     }
-    if (error.reason === "target-exists")
-        fail("stage-conflict", "$manifest");
     if (error.reason === "commit-uncertain" ||
         error.reason === "durability-failure" ||
         error.reason === "stage-cleanup-failure" ||
@@ -335,7 +333,7 @@ export async function materializeManagedEvidencePublicationStage(sourceRootValue
     const stored = await loadExactJournal(demandRootValue, transaction, options.signal);
     const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
     await ensureEvidenceRoot(demandRootValue, transaction, options.signal);
-    await ensureDirectory(demandRootValue, plan.candidateRootPath, options.signal);
+    await ensureDirectory(demandRootValue, plan.candidateRootPath, "$stage", options.signal);
     await recoverManifestAtomicStages(demandRootValue, plan, options.signal);
     let progress = await inspectProgress(demandRootValue, plan, options.signal);
     if (progress.status === "complete") {

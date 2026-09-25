@@ -165,3 +165,57 @@ test("Event Sourcing version registry 区分 codec 与 upcast 失败", () => {
     ),
   );
 });
+
+test("Event Sourcing version registry 以 definition 拒绝畸形定义并给出精确路径", () => {
+  const codec = (version: number) => ({ version, parse: (value: unknown) => value });
+  const step = (fromVersion: number, toVersion: number) => ({
+    fromVersion,
+    toVersion,
+    upcast: (value: unknown) => value,
+  });
+  const cases: readonly (readonly [string, unknown, string])[] = [
+    ["duplicate codec version", {
+      currentVersion: 1, codecs: [codec(1), codec(1)], steps: [],
+    }, "$/codecs/1/version"],
+    ["codec above currentVersion", {
+      currentVersion: 1, codecs: [codec(1), codec(2)], steps: [],
+    }, "$/codecs/1/version"],
+    ["missing currentVersion codec", {
+      currentVersion: 2, codecs: [codec(1)], steps: [],
+    }, "$/currentVersion"],
+    ["non-consecutive step", {
+      currentVersion: 3, codecs: [codec(1), codec(3)], steps: [step(1, 3)],
+    }, "$/steps/0/toVersion"],
+    ["duplicate fromVersion", {
+      currentVersion: 2, codecs: [codec(1), codec(2)], steps: [step(1, 2), step(1, 2)],
+    }, "$/steps/1"],
+    ["step endpoint without codec", {
+      currentVersion: 3, codecs: [codec(2), codec(3)], steps: [step(1, 2), step(2, 3)],
+    }, "$/steps/0"],
+    ["extra codec field", {
+      currentVersion: 1, codecs: [{ ...codec(1), extra: true }], steps: [],
+    }, "$/codecs/0"],
+    ["extra definition field", {
+      currentVersion: 1, codecs: [codec(1)], steps: [], extra: true,
+    }, "$definition"],
+    ["empty codec list", {
+      currentVersion: 1, codecs: [], steps: [],
+    }, "$/codecs"],
+    ["non-function parse", {
+      currentVersion: 1, codecs: [{ version: 1, parse: "parse" }], steps: [],
+    }, "$/codecs/0/parse"],
+  ];
+  for (const [label, definition, path] of cases) {
+    throws(
+      () => new EventSourcingVersionEvolutionRegistry(
+        definition as ConstructorParameters<typeof EventSourcingVersionEvolutionRegistry>[0],
+      ),
+      (error: unknown) => (
+        error instanceof EventSourcingVersionEvolutionError
+        && error.reason === "definition"
+        && error.path === path
+      ),
+      label,
+    );
+  }
+});

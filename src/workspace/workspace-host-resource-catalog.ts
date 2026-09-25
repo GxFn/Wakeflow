@@ -2,12 +2,14 @@ import {
   parsePortableResourcePath,
   type PortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
+import { hostPodReceiptsRootRef } from "../kernel/layout.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostResourceProfile,
 } from "./workspace-host-resource-profile.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
+  privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "./workspace-resource-declaration.js";
 import {
@@ -49,34 +51,12 @@ function privateDirectoryDeclaration(
   ownerId: string,
   relativePath: PortableResourcePath,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  return parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
+  return privateWorkspaceDirectoryDeclaration({
     declarationId,
     family: "host-runtime",
     ownerId,
     scope: "current-host",
-    placement: {
-      root: { kind: "workspace" },
-      relativePath,
-    },
-    tracking: {
-      disposition: "ignored",
-      privacy: "runtime-private",
-    },
-    nodePolicy: {
-      kind: "directory",
-      mode: "0700",
-      symlinkPolicy: "reject",
-      existingModePolicy: "observe-without-change",
-    },
-    processing: {
-      kind: "directory-container",
-      materializationRecipe: "materialize-directory",
-      existingDirectoryPolicy: "observe-without-mode-change",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-    },
+    relativePath,
   });
 }
 
@@ -194,6 +174,17 @@ function privateProjectionFileDeclaration(
   });
 }
 
+/** Profile 是否声明任一 `operations/` 下的表面；目录与布局 authority 共用此判定。 */
+export function hostProfileHasOperationSurface(
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+): boolean {
+  return profile.surfaces.keepLive
+    || profile.surfaces.windowLocator
+    || profile.surfaces.statuslineAsset !== null
+    || profile.surfaces.activityMonitor
+    || profile.surfaces.temporaryPrompts;
+}
+
 /** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
 export function createWakeflowWorkspaceHostResourceCatalog(
   profileValue: unknown,
@@ -253,16 +244,11 @@ export function createWakeflowWorkspaceHostResourceCatalog(
       privateDirectoryDeclaration(
         `${prefix}.pod-receipts-root`,
         "pod-receipts",
-        hostRuntimeRef(profile, "pods"),
+        hostPodReceiptsRootRef(profile.hostId),
       ),
     );
   }
-  const hasOperationSurface = profile.surfaces.keepLive
-    || profile.surfaces.windowLocator
-    || profile.surfaces.statuslineAsset !== null
-    || profile.surfaces.activityMonitor
-    || profile.surfaces.temporaryPrompts;
-  if (hasOperationSurface) {
+  if (hostProfileHasOperationSurface(profile)) {
     declarations.push(privateDirectoryDeclaration(
       `${prefix}.operations-root`,
       "host-runtime-layout",

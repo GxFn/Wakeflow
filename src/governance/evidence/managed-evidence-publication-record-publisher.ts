@@ -52,7 +52,8 @@ import type { PortableResourcePath } from "../../foundation/filesystem/portable-
  * 复验journal和整树，提交不确定时根据stage/final实际状态识别同一并发winner。
  *
  * 本模块不追加或查询Event、不决定Event-before-final、不读取source、不物化stage、
- * 不退休journal，也不清理冲突资源。未来Application必须在Event已提交后调用本能力。
+ * 不退休journal，也不清理冲突资源。Application经由Settlement
+ * （managed-evidence-publication-transaction-settlement）只在Event已提交后调用本能力。
  */
 
 export interface ManagedEvidencePublicationRecordPublisherOptions {

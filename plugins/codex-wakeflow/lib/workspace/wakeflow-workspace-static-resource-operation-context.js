@@ -85,16 +85,7 @@ export function createWakeflowWorkspaceStaticResourceOperationContext(matrixValu
     if (request.expectedMatrixDigest !== matrix.matrixDigest) {
         fail("matrix-changed", "$request.expectedMatrixDigest");
     }
-    let selected;
-    try {
-        selected = findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, request.declarationId);
-    }
-    catch (error) {
-        if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-            fail("input", "$request.declarationId");
-        }
-        throw error;
-    }
+    const selected = findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, request.declarationId);
     if (selected === null) {
         fail("declaration-not-found", "$request.declarationId");
     }

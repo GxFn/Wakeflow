@@ -342,10 +342,11 @@ export async function checkWakeflowPluginArtifacts(
         committed.manifest,
         readJsonFile(candidateManifestPath, candidateManifestPath),
       );
-      fail(
-        "wakeflow-artifact-check-drift",
-        `${directory} differs from a fresh build: ${differing.slice(0, 8).join(", ")}${differing.length > 8 ? ", …" : ""}`,
-      );
+      const detail =
+        differing.length === 0
+          ? "manifest metadata differs"
+          : `${differing.slice(0, 8).join(", ")}${differing.length > 8 ? ", …" : ""}`;
+      fail("wakeflow-artifact-check-drift", `${directory} differs from a fresh build: ${detail}`);
     }
     artifacts.push(
       Object.freeze({

@@ -159,7 +159,7 @@ function configRepresentation(model) {
 export function createWakeflowConfigDocumentValue(value) {
     return parseJsonValue(configRepresentation(parseWakeflowConfig(value)), "$config");
 }
-/** 从严格 v3 领域模型生成唯一 deterministic pretty JSON 表示。 */
+/** 从严格 Config 领域模型生成唯一 deterministic pretty JSON 表示。 */
 export function renderWakeflowConfig(value) {
     return renderDeterministicJsonDocument(createWakeflowConfigDocumentValue(value), "$config");
 }

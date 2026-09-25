@@ -712,3 +712,39 @@ export function parseWakeflowWorkspaceResourceDeclaration(
     processing,
   });
 }
+
+/**
+ * 工作区私有目录容器的唯一声明主体：0700、拒绝符号链接、观察不改 mode、按需物化，
+ * 后代须另行声明，恢复只报告。各工作区层目录经此构造，政策只改一处。
+ */
+export function privateWorkspaceDirectoryDeclaration(input: {
+  readonly declarationId: string;
+  readonly family: WakeflowWorkspaceResourceFamily;
+  readonly ownerId: string;
+  readonly scope: WakeflowWorkspaceResourceScope;
+  readonly relativePath: PortableResourcePath;
+}): Readonly<WakeflowWorkspaceResourceDeclaration> {
+  return parseWakeflowWorkspaceResourceDeclaration({
+    kind: "WakeflowWorkspaceResourceDeclaration",
+    declarationId: input.declarationId,
+    family: input.family,
+    ownerId: input.ownerId,
+    scope: input.scope,
+    placement: { root: { kind: "workspace" }, relativePath: input.relativePath },
+    tracking: { disposition: "ignored", privacy: "runtime-private" },
+    nodePolicy: {
+      kind: "directory",
+      mode: "0700",
+      symlinkPolicy: "reject",
+      existingModePolicy: "observe-without-change",
+    },
+    processing: {
+      kind: "directory-container",
+      materializationRecipe: "materialize-directory",
+      existingDirectoryPolicy: "observe-without-mode-change",
+      collisionPolicy: "reject-non-directory",
+      descendantAuthority: "separate-declaration-required",
+      recoveryStrategy: "report-only",
+    },
+  });
+}

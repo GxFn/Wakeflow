@@ -6,7 +6,7 @@ import { fail } from "../../kernel/error.js";
 /**
  * Wakeflow Capabilities / Endpoint：`wakeflow_register_window_binding` 的公共合同（能力卡 2）。
  *
- * 一个工具五种操作：inspect、register、replace、decommission、release-claim。请求与
+ * 一个工具六种操作：inspect、register、replace、relocate、decommission、release-claim。请求与
  * 结果都由 wire Schema 准入；原始句柄、tmux 坐标与工作区路径永不出现在结果里。
  */
 export const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME = "wakeflow_register_window_binding";

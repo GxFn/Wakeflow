@@ -128,6 +128,12 @@ export function createUuidV4(
   return value as UuidV4;
 }
 
+function isDerivationText(value: unknown): value is string {
+  return typeof value === "string"
+    && !value.includes("\u0000")
+    && value.isWellFormed();
+}
+
 /**
  * 由命名空间与若干片段确定性派生一个 UUID v4 形状的值。
  *
@@ -138,13 +144,11 @@ export function deriveUuidV4(
   namespace: string,
   ...parts: readonly string[]
 ): UuidV4 {
-  if (
-    typeof namespace !== "string"
-    || namespace.length === 0
-    || namespace.includes("\u0000")
-    || parts.some((part) => typeof part !== "string" || part.includes("\u0000"))
-  ) {
+  if (!isDerivationText(namespace) || namespace.length === 0) {
     fail("derivation-input", "$namespace");
+  }
+  for (const [index, part] of parts.entries()) {
+    if (!isDerivationText(part)) fail("derivation-input", `$parts/${index}`);
   }
   const hex = computeSha256Hex(
     encodeUtf8([namespace, ...parts].join("\u0000")),

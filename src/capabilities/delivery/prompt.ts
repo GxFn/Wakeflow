@@ -280,7 +280,7 @@ function testLines(input: RenderDeliveryPromptInput, labels: Labels): readonly s
   ]);
 }
 
-/** 确定性渲染可移植 prompt（不含工作区根）。 */
+/** 确定性渲染可移植 prompt（不含绝对路径；工作区根只以相对窗口根的路径出现）。 */
 export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromptInput>): string {
   const labels = LABELS[input.language];
   const taskPackage = input.taskPackage;

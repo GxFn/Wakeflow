@@ -1,5 +1,5 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -96,6 +96,7 @@ test("publication transaction：preview 零写出摘要，apply 重算比对，r
     next: { frontier: null, owner: "none", suggestedTool: null, blockers: [] },
   });
   deepEqual(trace, ["plan", "close"]);
+  deepEqual(readdirSync(root), [], "preview 不在根下留下任何文件");
 
   const applied = await runPublicationTransaction(spec(trace), {
     root,

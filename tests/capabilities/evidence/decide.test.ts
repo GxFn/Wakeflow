@@ -6,14 +6,13 @@ import {
   deriveEvidencePlanDigest,
   evidencePlanSummary,
   evidencePreviewNext,
-  findRecordedEvidence,
 } from "../../../src/capabilities/evidence/decide.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
 import {
   deriveManagedEvidenceContentBlockers,
+  deriveManagedEvidenceId,
   type ManagedEvidenceCaptureReview,
 } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
 import { createManagedEvidenceManifest } from "../../../src/governance/evidence/managed-evidence-manifest.js";
@@ -35,7 +34,7 @@ const EVIDENCE_ID = parseWakeflowDurableIdOfKind(
   "evidence",
 );
 
-test("计划摘要只覆盖内容：同一 Manifest 换一个捕获时间摘要不变，负载变化摘要变化", () => {
+test("计划摘要只覆盖内容：同一 Manifest 换一个捕获时间摘要不变，Demand 权威变化摘要变化", () => {
   const plan = createManagedEvidenceCapturePlanFixture();
   const later = createManagedEvidenceCapturePlan({
     configDigest: plan.configDigest,
@@ -79,7 +78,7 @@ test("计划摘要只覆盖内容：同一 Manifest 换一个捕获时间摘要�
   equal(deriveEvidencePlanDigest(otherAuthority) === deriveEvidencePlanDigest(plan), false);
 });
 
-test("Event 与 Commit 身份从 Evidence 身份派生且稳定；已记录条目按身份查找", () => {
+test("Event 与 Commit 身份从 Evidence 身份派生且稳定", () => {
   const identity = deriveEvidenceEventIdentity(EVIDENCE_ID);
   deepEqual(deriveEvidenceEventIdentity(EVIDENCE_ID), identity);
   equal(identity.eventId.startsWith("demand-event_"), true);
@@ -89,14 +88,6 @@ test("Event 与 Commit 身份从 Evidence 身份派生且稳定；已记录条�
       identity.commitId.slice("demand-event-commit_".length),
     false,
   );
-  const summary = {
-    evidenceId: EVIDENCE_ID,
-    kind: "test-output" as const,
-    manifestDigest: parseSha256Digest(`sha256:${"1".repeat(64)}`),
-    payloadArtifactDigest: parseSha256Digest(`sha256:${"2".repeat(64)}`),
-  };
-  equal(findRecordedEvidence([summary], EVIDENCE_ID), summary);
-  equal(findRecordedEvidence(undefined, EVIDENCE_ID), null);
 });
 
 test("计划投影只带摘要与计数；preview 的 next 就绪指向 apply、阻塞列出阻塞项", () => {
@@ -178,5 +169,15 @@ test("来源键区分四种来源，同一来源不同负载得到不同身份",
         ? plan.manifest.source.root.repositoryId
         : ""
     }:file:artifacts/result.txt`,
+  );
+  const digests = MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS;
+  equal(
+    deriveManagedEvidenceId(plan.manifest.demandId, selection, digests.authority) ===
+      deriveManagedEvidenceId(plan.manifest.demandId, selection, digests.replacement),
+    false,
+  );
+  deepEqual(
+    deriveManagedEvidenceId(plan.manifest.demandId, selection, digests.authority),
+    deriveManagedEvidenceId(plan.manifest.demandId, selection, digests.authority),
   );
 });

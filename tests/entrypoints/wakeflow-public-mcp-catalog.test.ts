@@ -118,7 +118,7 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     "deletes the active root",
   ]),
   expectedTool(WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, "demand-publication", DESTRUCTIVE, [
-    "Only one active Demand per controller",
+    "Only one active Demand per pod (podId defaults to the primary pod)",
   ]),
   expectedTool(WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, "demand-cancellation", DESTRUCTIVE, [
     "withdraws the requirement package",
@@ -157,7 +157,7 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
   }),
   expectedTool(WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, "target-task-planning", ADDITIVE),
   expectedTool(WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, "rearm-delivery", ADDITIVE, [
-    "At most three rearms per envelope",
+    "at most three rearms per envelope",
     "Never performs the host effect",
   ]),
   expectedTool(
@@ -282,7 +282,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   );
 });
 
-test("官方MCP server只发布十八个闭合Schema工具", async (t) => {
+test("官方MCP server只发布二十个闭合Schema工具", async (t) => {
   const client = await connectWakeflowMcpTestClient(t);
   const instructions = client.getInstructions();
   equal(typeof instructions, "string");
@@ -318,7 +318,7 @@ test("官方MCP server只发布十八个闭合Schema工具", async (t) => {
   );
 });
 
-test("Codex与Claude Code composition root发布同一十八工具集合", async () => {
+test("Codex与Claude Code composition root发布同一二十工具集合", async () => {
   const listedNames: string[][] = [];
   for (const createServer of [createCodexWakeflowMcpServer, createClaudeCodeWakeflowMcpServer]) {
     const server = createServer("1.0.0-test");

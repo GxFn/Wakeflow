@@ -34,15 +34,22 @@ import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../../governance/ledger/ledger-authority-store.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { fail } from "../../kernel/error.js";
+import type { PublicationTransactionEnvelope } from "../../kernel/publication-transaction.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
-import { findLatestDemandArchive, type LocatedArchive } from "./archive.js";
+import {
+  findLatestDemandArchive,
+  type LocatedArchive,
+  mapFoundationError,
+  signalOptions,
+} from "./archive.js";
 import { WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME } from "./contract.js";
 
 /**
- * Wakeflow Capabilities / Demand：五个工具共用的上下文。
+ * Wakeflow Capabilities / Demand：四个工具共用的上下文。
  *
  * 配置快照与 Ledger 根在打开时就绪；Demand 根按需打开，根不存在不是错误（完成后
  * 活动根已删除，recover 与 continue 都要在没有根的情况下工作）。
@@ -70,8 +77,33 @@ export interface DemandSliceContext {
   readonly holder: { handle: DemandHandle | null };
 }
 
-export function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
+export { signalOptions };
+
+/** 三种 Demand 事务请求共用的发布事务信封：recover 带 operationId，apply 带 planDigest。 */
+export function publicationEnvelope(
+  request:
+    | Readonly<{ readonly root: string; readonly mode: "recover"; readonly operationId: string }>
+    | Readonly<{
+        readonly root: string;
+        readonly mode: "preview" | "apply";
+        readonly planDigest?: string;
+      }>,
+): PublicationTransactionEnvelope {
+  if (request.mode === "recover") {
+    return {
+      root: request.root,
+      mode: "recover",
+      planDigest: null,
+      operationId: request.operationId,
+    };
+  }
+  return {
+    root: request.root,
+    mode: request.mode,
+    planDigest:
+      request.mode === "apply" ? ((request.planDigest ?? null) as Sha256Digest | null) : null,
+    operationId: null,
+  };
 }
 
 export function parseDemandId(
@@ -169,9 +201,10 @@ export async function closeSliceContext(context: DemandSliceContext): Promise<vo
   if (failure !== undefined) throw failure;
 }
 
-async function demandRootExists(context: DemandSliceContext, demandId: string): Promise<boolean> {
+/** Demand 活动根是否存在；不存在以外的检查失败是 io-failure。 */
+export async function demandRootExists(root: RootedDirectory, demandId: string): Promise<boolean> {
   try {
-    await context.root.inspectExistingResource(demandFinalRootRef(demandId), "$demandRoot");
+    await root.inspectExistingResource(demandFinalRootRef(demandId), "$demandRoot");
     return true;
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
@@ -212,7 +245,7 @@ export async function openDemandHandle(
     }
     await releaseDemandHandle(context);
   }
-  if (!(await demandRootExists(context, demandId))) return null;
+  if (!(await demandRootExists(context.root, demandId))) return null;
   let demandRoot: RootedDirectory | undefined;
   try {
     demandRoot = await openDemandOperationRoot(context.root, demandId);
@@ -241,7 +274,12 @@ async function activeNext(
   handle: DemandHandle,
   signal: AbortSignal | undefined,
 ): Promise<NextProjection> {
-  const snapshot = await readDemandResultReviewSnapshot(handle.demandRoot, signalOptions(signal));
+  let snapshot: Awaited<ReturnType<typeof readDemandResultReviewSnapshot>>;
+  try {
+    snapshot = await readDemandResultReviewSnapshot(handle.demandRoot, signalOptions(signal));
+  } catch (error: unknown) {
+    mapFoundationError(error, "review-snapshot", "$demandRoot");
+  }
   return deriveNextProjection(buildDemandControllerRoute(handle.loaded, snapshot));
 }
 

@@ -212,6 +212,14 @@ test("准备与 rearm 的 phase 阻塞：rearm 未用尽的 rejected 目标必�
     }),
     [],
   );
+  deepEqual(
+    derivePrepareBlockers({ workType: "test", phase: "test-host-effect-rejected", generation: 2 }),
+    ["rearm-available:2"],
+  );
+  deepEqual(
+    derivePrepareBlockers({ workType: "test", phase: "test-host-effect-rejected", generation: 4 }),
+    [],
+  );
   deepEqual(derivePrepareBlockers({ workType: "test", phase: "rework-requested", generation: 1 }), [
     "target-phase:rework-requested",
   ]);

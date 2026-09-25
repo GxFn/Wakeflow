@@ -8,6 +8,7 @@ import {
   failWakeflowSupportMemoryPublication as fail,
   parseWakeflowSupportMemoryPublicationOptions,
   parseWakeflowSupportMemoryPublicationRequest,
+  wakeflowSupportMemoryInspectionRequest,
   type WakeflowSupportMemoryPublicationOptions,
   type WakeflowSupportMemoryPublicationRequest,
   type WakeflowSupportMemoryRecoveryReceipt,
@@ -55,15 +56,7 @@ export async function recoverWakeflowSupportMemory(
   const publication = await publishWakeflowSupportMemory(
     workspaceRoot,
     supportRoot,
-    {
-      currentConfig: request.currentConfig,
-      expectedCurrentConfigDigest: request.currentConfigDigest,
-      desiredConfig: request.desiredConfig,
-      expectedDesiredConfigDigest: request.desiredConfigDigest,
-      profile: request.profile,
-      expectedCatalogDigest: request.catalog.catalogDigest,
-      surfaceId: request.surfaceId,
-    },
+    wakeflowSupportMemoryInspectionRequest(request, undefined),
     options.signal === undefined ? undefined : { signal: options.signal },
   );
   return Object.freeze({

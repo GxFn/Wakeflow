@@ -1,5 +1,6 @@
 import { types } from "node:util";
 
+import { WakeflowError } from "../../kernel/error.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
@@ -324,7 +325,6 @@ function mapContextError(error: DemandOperationAuthorityContextError): never {
   if (error.reason === "config" || error.reason === "stale-config") {
     fail("config", error);
   }
-  if (error.reason === "root") fail("demand", error);
   fail("demand", error);
 }
 
@@ -388,15 +388,22 @@ async function openSourceRoot(
   workspaceRoot: RootedDirectory,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
+  signal: AbortSignal | undefined,
 ): Promise<RootedDirectory | null> {
   const source = transaction.manifest.source;
   if (source.kind !== "managed-path") return null;
   try {
-    return await openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source);
+    return await openConfiguredManagedEvidenceSourceRoot(
+      workspaceRoot,
+      config,
+      source,
+      signal === undefined ? {} : { signal },
+    );
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceConfiguredSourceRootError) {
       fail("source-root", error);
     }
+    if (error instanceof WakeflowError && error.reason === "aborted") fail("aborted", error);
     throw error;
   }
 }
@@ -587,7 +594,12 @@ export class ManagedEvidencePublicationApplicationService {
           context.config,
           options.signal,
         );
-        sourceRoot = await openSourceRoot(this.#workspaceRoot, context.config, transaction);
+        sourceRoot = await openSourceRoot(
+          this.#workspaceRoot,
+          context.config,
+          transaction,
+          options.signal,
+        );
         let stored: Readonly<StoredManagedEvidencePublicationTransaction>;
         try {
           stored = await createManagedEvidencePublicationTransactionJournal(
@@ -794,6 +806,7 @@ export class ManagedEvidencePublicationApplicationService {
               this.#workspaceRoot,
               roots.config,
               stored.transaction,
+              options.signal,
             );
             await materializeStage(
               sourceRoot,

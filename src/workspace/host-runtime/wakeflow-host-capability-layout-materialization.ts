@@ -368,6 +368,32 @@ function parseProfileAndAuthority(profileValue: unknown) {
   }
 }
 
+function layoutResult(
+  authority: Readonly<WakeflowHostCapabilityLayoutAuthority>,
+  effects: readonly Readonly<DirectoryEffect>[],
+): Readonly<WakeflowHostCapabilityLayoutMaterializationResult> {
+  const createdDirectoryCount = effects.filter((entry) => (
+    entry.disposition === "created"
+  )).length;
+  const observationBasis = {
+    kind: "WakeflowHostCapabilityLayoutObservation",
+    authorityDigest: authority.authorityDigest,
+    directories: effects.map((entry) => ({
+      resourcePath: entry.resourcePath,
+      deviceId: entry.node.deviceId.toString(),
+      inodeId: entry.node.inodeId.toString(),
+    })),
+  };
+  return Object.freeze({
+    disposition: createdDirectoryCount === 0 ? "current" : "created",
+    authorityDigest: authority.authorityDigest,
+    createdDirectoryCount,
+    observationDigest: computeCanonicalJsonSha256Digest(
+      observationBasis as unknown as JsonValue,
+    ),
+  });
+}
+
 async function prerequisitesPresent(
   root: RootedDirectory,
   profile: Readonly<ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>>,
@@ -489,24 +515,7 @@ export async function ensureWakeflowHostCapabilityLayout(
       node: materialized.node,
     }));
   }
-  const createdDirectoryCount = effects.filter((entry) => entry.disposition === "created").length;
-  const observationBasis = {
-    kind: "WakeflowHostCapabilityLayoutObservation",
-    authorityDigest: authority.authorityDigest,
-    directories: effects.map((entry) => ({
-      resourcePath: entry.resourcePath,
-      deviceId: entry.node.deviceId.toString(),
-      inodeId: entry.node.inodeId.toString(),
-    })),
-  };
-  return Object.freeze({
-    disposition: createdDirectoryCount === 0 ? "current" : "created",
-    authorityDigest: authority.authorityDigest,
-    createdDirectoryCount,
-    observationDigest: computeCanonicalJsonSha256Digest(
-      observationBasis as unknown as JsonValue,
-    ),
-  });
+  return layoutResult(authority, effects);
 }
 
 /** 按当前 Host Profile 物化空 capability 父目录，或恢复同一 exact 前缀。 */
@@ -525,20 +534,7 @@ export async function materializeWakeflowHostCapabilityLayout(
   }
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  let profile;
-  let authority: Readonly<WakeflowHostCapabilityLayoutAuthority>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-    authority = compileWakeflowHostCapabilityLayoutAuthority(profile);
-  } catch (error: unknown) {
-    if (
-      error instanceof WakeflowWorkspaceHostResourceProfileError
-      || error instanceof WakeflowHostCapabilityLayoutAuthorityError
-    ) {
-      fail("authority", error.path);
-    }
-    throw error;
-  }
+  const { profile, authority } = parseProfileAndAuthority(profileValue);
   const hostRoot = wakeflowHostRuntimeRootRef(profile);
   if (await optionalDirectory(rootValue, hostRoot) === null) {
     fail("prerequisite", "$hostRoot");
@@ -570,24 +566,5 @@ export async function materializeWakeflowHostCapabilityLayout(
     ));
   }
   await inspectPartialTree(rootValue, expected, options.signal, true);
-  const createdDirectoryCount = effects.filter((entry) => (
-    entry.disposition === "created"
-  )).length;
-  const observationBasis = {
-    kind: "WakeflowHostCapabilityLayoutObservation",
-    authorityDigest: authority.authorityDigest,
-    directories: effects.map((entry) => ({
-      resourcePath: entry.resourcePath,
-      deviceId: entry.node.deviceId.toString(),
-      inodeId: entry.node.inodeId.toString(),
-    })),
-  };
-  return Object.freeze({
-    disposition: createdDirectoryCount === 0 ? "current" : "created",
-    authorityDigest: authority.authorityDigest,
-    createdDirectoryCount,
-    observationDigest: computeCanonicalJsonSha256Digest(
-      observationBasis as unknown as JsonValue,
-    ),
-  });
+  return layoutResult(authority, effects);
 }

@@ -39,10 +39,21 @@ test("控制字符与换行被单行化，建议与备选都留在 singleLineTex
     false,
   );
 
-  equal(guidance.suggested, `${REMOVE_COMMAND_PREFIX}worktrees/ product alpha beta gamma`);
+  equal(guidance.suggested, `${REMOVE_COMMAND_PREFIX}'worktrees/ product alpha beta gamma'`);
   equal(NO_CONTROL_CHARACTERS.test(guidance.suggested), true);
   equal(NO_CONTROL_CHARACTERS.test(guidance.alternative), true);
   equal(guidance.alternative.length <= SINGLE_LINE_TEXT_MAXIMUM_LENGTH, true);
+});
+
+test("带空格或 shell 元字符的检出路径整体加单引号，加锁时 unlock 与 remove 用同一个引用（§13.130 审查）", () => {
+  equal(
+    worktreeDisposalGuidance("codex", "work trees/a b", false).suggested,
+    "git worktree remove 'work trees/a b'",
+  );
+  equal(
+    worktreeDisposalGuidance("codex", "x;rm -rf $(y)", true).suggested,
+    "git worktree unlock 'x;rm -rf $(y)'; git worktree remove 'x;rm -rf $(y)'",
+  );
 });
 
 test("越界截断按码位进行：不切断代理对，也不越过上界", () => {

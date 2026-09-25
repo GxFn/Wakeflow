@@ -1,6 +1,6 @@
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { REQUIREMENT_BOARD_INDEX_REF, REQUIREMENT_BOARD_ROOT_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, WAKEFLOW_ACTIVE_ROOT_REF, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF, } from "../kernel/layout.js";
-import { parseWakeflowWorkspaceResourceDeclaration, } from "./workspace-resource-declaration.js";
+import { parseWakeflowWorkspaceResourceDeclaration, privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
 /**
  * Wakeflow Workspace / Active：共享活动根的静态资源声明。
  *
@@ -10,28 +10,12 @@ import { parseWakeflowWorkspaceResourceDeclaration, } from "./workspace-resource
  * `requirement-board`；本模块只有声明与摘要。
  */
 function directoryDeclaration(declarationId, ownerId, relativePath) {
-    return parseWakeflowWorkspaceResourceDeclaration({
-        kind: "WakeflowWorkspaceResourceDeclaration",
+    return privateWorkspaceDirectoryDeclaration({
         declarationId,
         family: "active",
         ownerId,
         scope: "host-neutral",
-        placement: { root: { kind: "workspace" }, relativePath },
-        tracking: { disposition: "ignored", privacy: "runtime-private" },
-        nodePolicy: {
-            kind: "directory",
-            mode: "0700",
-            symlinkPolicy: "reject",
-            existingModePolicy: "observe-without-change",
-        },
-        processing: {
-            kind: "directory-container",
-            materializationRecipe: "materialize-directory",
-            existingDirectoryPolicy: "observe-without-mode-change",
-            collisionPolicy: "reject-non-directory",
-            descendantAuthority: "separate-declaration-required",
-            recoveryStrategy: "report-only",
-        },
+        relativePath,
     });
 }
 function projectionDeclaration(declarationId, ownerId, relativePath) {

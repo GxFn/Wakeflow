@@ -305,7 +305,7 @@ export async function assertCurrentUserWakeflowProgramInstructionRoot(
     if (error instanceof RootedDirectoryError) {
       failWakeflowProgramInstructionRecomposition("root-scope", "$root");
     }
-    failWakeflowProgramInstructionRecomposition("root-scope", "$root");
+    throw error;
   }
 }
 

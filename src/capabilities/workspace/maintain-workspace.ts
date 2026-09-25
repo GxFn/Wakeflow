@@ -39,6 +39,7 @@ import type { WakeflowMaintenanceExecutionPlan } from "../../workspace/maintenan
 import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import {
   WakeflowMaintenanceExecutionTransactionError,
+  type WakeflowMaintenanceExecutionTransactionErrorReason,
   type WakeflowMaintenanceExecutionTransactionReceipt,
 } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import {
@@ -271,8 +272,12 @@ function mapPreviewError(error: unknown): never {
   throw error;
 }
 
+// 穷尽表：事务新增 reason 时编译器要求在此显式决定其公开映射。
 const TRANSACTION_ERROR_TABLE: Readonly<
-  Record<string, readonly [WakeflowErrorCode, string | null, string]>
+  Record<
+    WakeflowMaintenanceExecutionTransactionErrorReason,
+    readonly [WakeflowErrorCode, string | null, string]
+  >
 > = Object.freeze({
   aborted: ["io-failure", "aborted", "$signal"],
   input: ["invalid-request", "transaction-input", "$request"],
@@ -285,15 +290,13 @@ const TRANSACTION_ERROR_TABLE: Readonly<
   intent: ["recovery-required", null, "$request.root"],
   journal: ["recovery-required", null, "$request.root"],
   "terminal-closure": ["recovery-required", null, "$request.root"],
+  transaction: ["io-failure", null, "$request.root"],
+  step: ["io-failure", null, "$request.root"],
 });
 
 function mapTransactionError(error: unknown): never {
   if (error instanceof WakeflowMaintenanceExecutionTransactionError) {
-    const [code, reason, path] = TRANSACTION_ERROR_TABLE[error.reason] ?? [
-      "io-failure",
-      null,
-      "$request.root",
-    ];
+    const [code, reason, path] = TRANSACTION_ERROR_TABLE[error.reason];
     // 事务已登记的操作标识随错误公开：中断后 Agent 只凭它调用 recover。
     const details =
       error.operationId === null || code === "invalid-request" || code === "precondition-failed"

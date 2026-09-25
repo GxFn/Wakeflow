@@ -88,7 +88,7 @@ export function createPreparedWakeflowMaintenanceJournal(operationIdValue, inten
         state: "prepared",
     });
 }
-/** 把任意内存值解析为严格、冻结的 prepared journal。 */
+/** 把任意内存值解析为严格、冻结的 maintenance journal（prepared、executing 或 terminal）。 */
 export function parseWakeflowMaintenanceJournal(value) {
     let json;
     try {
@@ -135,7 +135,7 @@ export function parseWakeflowMaintenanceJournal(value) {
         planDigest: digest(validated.value.planDigest, "$journal.planDigest"),
         matrixDigest: digest(validated.value.matrixDigest, "$journal.matrixDigest"),
         currentConfigDigest: nullableDigest(validated.value.currentConfigDigest, "$journal.currentConfigDigest"),
-        desiredConfigDigest: nullableDigest(validated.value.desiredConfigDigest, "$journal.desiredConfigDigest"),
+        desiredConfigDigest: digest(validated.value.desiredConfigDigest, "$journal.desiredConfigDigest"),
         stepIds,
         checkpoint,
         affectedStepId,
@@ -234,7 +234,7 @@ export function isWakeflowMaintenanceJournalSuccessor(currentValue, proposedValu
         && proposed.checkpoint === current.checkpoint
         && proposed.affectedStepId === null;
 }
-/** 生成 prepared journal 的唯一 deterministic pretty JSON 表示。 */
+/** 生成 maintenance journal（prepared、executing 或 terminal）的唯一 deterministic pretty JSON 表示。 */
 export function renderWakeflowMaintenanceJournal(value) {
     return renderDeterministicJsonDocument(journalRepresentation(parseWakeflowMaintenanceJournal(value)), "$journal");
 }

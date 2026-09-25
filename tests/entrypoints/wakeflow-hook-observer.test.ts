@@ -371,7 +371,7 @@ test("窗口位置：支持面、兄弟仓库、仓库子目录、嵌套检出�
   equal((await readBack(fixture.workspace, "claude-code")).records.length, positions.length + 1);
 });
 
-test("列举上限只截断收集、不作废结果：兄弟仓库的父目录与绑定目录塞满无关条目后，工作区仍被定位、stop 仍过绑定门", {
+test("非候选的无关条目不占列举预算：兄弟仓库的父目录与绑定目录塞满无关文件后，工作区仍被定位、stop 仍过绑定门", {
   timeout: 120_000,
 }, async (t) => {
   const fixture = createFixture(t);

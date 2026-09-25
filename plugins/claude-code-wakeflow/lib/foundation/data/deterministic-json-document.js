@@ -1,4 +1,4 @@
-import { JsonValueError, parseJsonValue, } from "./json-value.js";
+import { hasPassiveJsonSerializationEnvironment, JsonValueError, parseJsonValue, } from "./json-value.js";
 const ERROR_MESSAGES = {
     "input": "Deterministic JSON document input is invalid.",
     "json-syntax": "Deterministic JSON document syntax is invalid.",
@@ -35,19 +35,9 @@ export class DeterministicJsonDocumentError extends Error {
 function fail(reason, path) {
     throw new DeterministicJsonDocumentError(reason, path);
 }
-/**
- * `JsonValue` 对象没有原型，但数组按合同保留标准数组原型。`JSON.stringify` 会
- * 读取继承的 `toJSON`，因此这里只检查原型身份和属性描述符，不读取属性值。
- * 非标准环境直接失败，避免已准入数据在渲染阶段再次执行外部行为。
- */
 function assertNoInheritedArrayToJson(path) {
-    const hasStandardPrototypeChain = Object.getPrototypeOf(Array.prototype) === Object.prototype
-        && Object.getPrototypeOf(Object.prototype) === null;
-    const hasInheritedToJson = Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") !== undefined
-        || Object.getOwnPropertyDescriptor(Object.prototype, "toJSON") !== undefined;
-    if (!hasStandardPrototypeChain || hasInheritedToJson) {
+    if (!hasPassiveJsonSerializationEnvironment())
         fail("render-failure", path);
-    }
 }
 function normalizePath(value) {
     return typeof value === "string" && value.length > 0 ? value : "$document";

@@ -282,6 +282,7 @@ function admitEvidenceRootMaterialization(
 
 function mapDirectoryError(
   error: DurableDirectoryMaterializationError,
+  path: "$managedEvidenceRoot" | "$stage",
 ): "existing" | never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-exists") return "existing";
@@ -294,16 +295,16 @@ function mapDirectoryError(
     error.reason === "parent-symlink" ||
     error.reason === "parent-not-directory"
   ) {
-    fail("stage-conflict", "$stage");
+    fail("stage-conflict", path);
   }
   if (
     error.reason === "commit-uncertain" ||
     error.reason === "durability-failure" ||
     error.reason === "close-failure"
   ) {
-    fail("recovery-required", "$stage");
+    fail("recovery-required", path);
   }
-  fail("operation-failure", "$stage");
+  fail("operation-failure", path);
 }
 
 async function ensureEvidenceRoot(
@@ -312,7 +313,12 @@ async function ensureEvidenceRoot(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   admitEvidenceRootMaterialization(transaction);
-  await ensureDirectory(demandRoot, MANAGED_EVIDENCE_ROOT_REF, signal);
+  await ensureDirectory(
+    demandRoot,
+    MANAGED_EVIDENCE_ROOT_REF,
+    "$managedEvidenceRoot",
+    signal,
+  );
   let observation;
   try {
     observation = await demandRoot.inspectExistingResource(
@@ -331,6 +337,7 @@ async function ensureEvidenceRoot(
 async function ensureDirectory(
   demandRoot: RootedDirectory,
   ref: PortableResourcePath,
+  path: "$managedEvidenceRoot" | "$stage",
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
@@ -340,7 +347,7 @@ async function ensureDirectory(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (mapDirectoryError(error) === "existing") return;
+      if (mapDirectoryError(error, path) === "existing") return;
     }
     throw error;
   }
@@ -488,7 +495,6 @@ function mapManifestWriteError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "root-scope") {
     fail("destination-root-scope", "$demandRoot");
   }
-  if (error.reason === "target-exists") fail("stage-conflict", "$manifest");
   if (
     error.reason === "commit-uncertain" ||
     error.reason === "durability-failure" ||
@@ -559,6 +565,7 @@ export async function materializeManagedEvidencePublicationStage(
   await ensureDirectory(
     demandRootValue,
     plan.candidateRootPath,
+    "$stage",
     options.signal,
   );
   await recoverManifestAtomicStages(

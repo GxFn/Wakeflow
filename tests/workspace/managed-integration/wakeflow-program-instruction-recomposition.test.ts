@@ -273,6 +273,39 @@ test("Program Instruction recovery retires only an inactive safe lock", async (t
     "recovery-not-required",
     "$lock",
   );
+
+  // 锁仍由活着的持有者占用：恢复拒绝且不退役锁。
+  const active = await fixture(t);
+  let enter: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const entered = new Promise<void>((resolve) => { enter = resolve; });
+  const released = new Promise<void>((resolve) => { release = resolve; });
+  const holder = withRootedExclusiveFileLock(
+    active.root,
+    wakeflowProgramInstructionRecompositionLockRef(
+      codexWorkspaceHostResourceProfile,
+    ),
+    async () => {
+      enter?.();
+      await released;
+    },
+  );
+  await entered;
+  try {
+    await expectRecompositionError(
+      () => recoverWakeflowProgramInstructionRecomposition(
+        active.root,
+        operation,
+      ),
+      "recovery-required",
+      "$lock",
+    );
+    equal(existsSync(active.lockPath), true);
+  } finally {
+    release?.();
+    await holder;
+  }
+  equal(existsSync(active.lockPath), false);
 });
 
 test("Program Instruction recovery preserves unknown managed content", async (t) => {

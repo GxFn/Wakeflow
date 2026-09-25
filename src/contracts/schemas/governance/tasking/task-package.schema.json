@@ -309,8 +309,8 @@
         "sectionAnchor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 64,
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          "maxLength": 128,
+          "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]{0,127}$"
         },
         "itemId": {
           "type": "string",
@@ -385,8 +385,8 @@
       "items": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 64,
-        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        "maxLength": 128,
+        "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]{0,127}$"
       }
     },
     "stepId": {

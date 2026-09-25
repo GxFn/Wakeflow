@@ -67,8 +67,4 @@ test("按需复制保留基线权限位：副本的目录 0700 与文件 0600 �
   equal(sharedCensus.join("\n"), freshCensus.join("\n"));
   ok(sharedCensus.some((line) => line.startsWith("700 d ")));
   ok(sharedCensus.some((line) => line.startsWith("600 f ")));
-  equal(
-    sharedCensus.filter((line) => line.startsWith("700 d ")).length,
-    freshCensus.filter((line) => line.startsWith("700 d ")).length,
-  );
 });

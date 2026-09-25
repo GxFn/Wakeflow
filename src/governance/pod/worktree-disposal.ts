@@ -8,7 +8,8 @@ import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id
  *
  * 建议命令会进入 status 结果的 `singleLineText` 字段（无控制字符、至多 512），所以路径在
  * 这里就按投影 `inline()` 的同一套规则单行化并有界化：异常路径只让这一条命令降级，
- * 绝不能让整份 status 结果被准入拒绝——恰恰是操作者最需要这条引导的时刻。
+ * 绝不能让整份 status 结果被准入拒绝——恰恰是操作者最需要这条引导的时刻。含 shell 元字符或
+ * 空白的路径按 POSIX 单引号引用，Agent 照原样执行时 git 只收到这一个路径参数。
  */
 
 /** 与 `wakeflow-status-result.schema.json` 的 `$defs.singleLineText.maxLength` 一致。 */
@@ -46,16 +47,36 @@ function singleLinePath(value: string): string {
   return cleaned.length === 0 ? "." : cleaned;
 }
 
-/** 按码位截到预算内并加省略号，永不切断代理对；放得下就原样返回。 */
-function boundedPath(relativePath: string, budget: number): string {
-  if (relativePath.length <= budget) return relativePath;
-  const room = budget - TRUNCATION_MARK.length;
+/**
+ * 需要 shell 引用的路径：含 [A-Za-z0-9._/@+-] 之外的 ASCII 字符（空格、`;`、`$`、反引号、引号……）。
+ * 非 ASCII 码位（含截断用的省略号）不是 shell 元字符，不触发引用。
+ */
+const SHELL_UNSAFE_PATH = /[^A-Za-z0-9._/@+\-\u0080-\u{10ffff}]/u;
+
+/** POSIX 单引号引用中一个码位的写法：`'` 写成 `'\''`。 */
+function quotedPiece(character: string): string {
+  return character === "'" ? "'\\''" : character;
+}
+
+/**
+ * 按码位截到预算内并加省略号，永不切断代理对；需要引用时整体包进 POSIX 单引号，
+ * 引号与转义都计入预算，结果长度永不越过 `budget`。
+ */
+function shellPathWord(relativePath: string, budget: number): string {
+  const quoted = SHELL_UNSAFE_PATH.test(relativePath);
+  const wrap = quoted ? 2 : 0;
+  const body = (value: string): string => (quoted ? [...value].map(quotedPiece).join("") : value);
+  const whole = body(relativePath);
+  const word = (value: string): string => (quoted ? `'${value}'` : value);
+  if (whole.length + wrap <= budget) return word(whole);
+  const room = budget - wrap - TRUNCATION_MARK.length;
   let kept = "";
   for (const character of relativePath) {
-    if (kept.length + character.length > room) break;
-    kept += character;
+    const piece = quoted ? quotedPiece(character) : character;
+    if (kept.length + piece.length > room) break;
+    kept += piece;
   }
-  return `${kept}${TRUNCATION_MARK}`;
+  return word(`${kept}${TRUNCATION_MARK}`);
 }
 
 /**
@@ -65,10 +86,10 @@ function boundedPath(relativePath: string, budget: number): string {
 function removeCommand(relativePath: string, locked: boolean): string {
   if (!locked) {
     const budget = SUGGESTED_MAXIMUM_LENGTH - REMOVE_COMMAND_PREFIX.length;
-    return `${REMOVE_COMMAND_PREFIX}${boundedPath(relativePath, budget)}`;
+    return `${REMOVE_COMMAND_PREFIX}${shellPathWord(relativePath, budget)}`;
   }
   const fixed = UNLOCK_COMMAND_PREFIX.length + UNLOCK_SEPARATOR.length + REMOVE_COMMAND_PREFIX.length;
-  const shown = boundedPath(relativePath, Math.floor((SUGGESTED_MAXIMUM_LENGTH - fixed) / 2));
+  const shown = shellPathWord(relativePath, Math.floor((SUGGESTED_MAXIMUM_LENGTH - fixed) / 2));
   return `${UNLOCK_COMMAND_PREFIX}${shown}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${shown}`;
 }
 

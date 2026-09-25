@@ -703,7 +703,7 @@ export class DemandEventSourcingRepository {
         });
     }
     /**
-     * 完整审计事件流后，按不可变 TaskPackage 身份定位唯一规划事件。
+     * 从当前聚合（快照加尾部）与身份索引定位（索引不可用时退回完整读取），按不可变 TaskPackage 身份定位唯一规划事件。
      *
      * 本查询只为可重建投影提供权威来源；它不读取投影文件，也不把 Aggregate 摘要
      * 反向扩展成 TaskPackage 内容。
@@ -740,7 +740,7 @@ export class DemandEventSourcingRepository {
         }
         return located;
     }
-    /** 完整审计事件流后，按投递身份定位唯一 prepared 事件（信封）。 */
+    /** 从当前聚合（快照加尾部）与身份索引定位（索引不可用时退回完整读取），按投递身份定位唯一 prepared 事件（信封）。 */
     async findDeliveryPreparedEvent(deliveryIdValue, options) {
         const signal = parseSignal(options);
         let deliveryId;
@@ -775,7 +775,7 @@ export class DemandEventSourcingRepository {
         }
         return located;
     }
-    /** 完整审计事件流后，按投递身份收集全部 outcome 事件（按流修订号升序）。 */
+    /** 从当前聚合（快照加尾部）与身份索引定位（索引不可用时退回完整读取），按投递身份收集全部 outcome 事件（按流修订号升序）。 */
     async findDeliveryOutcomeRecordedEvents(deliveryIdValue, options) {
         const signal = parseSignal(options);
         let deliveryId;
@@ -812,7 +812,7 @@ export class DemandEventSourcingRepository {
         located.sort((left, right) => left.storedEvent.streamRevision - right.storedEvent.streamRevision);
         return Object.freeze(located);
     }
-    /** 完整审计事件流后，按Action/Claim身份定位唯一TargetResult Event。 */
+    /** 从当前聚合（快照加尾部）与身份索引定位（索引不可用时退回完整读取），按Action/Claim身份定位唯一TargetResult Event。 */
     async findTargetResultRecordedEvent(claimIdValue, options) {
         const signal = parseSignal(options);
         let claimId;
@@ -887,7 +887,10 @@ export class DemandEventSourcingRepository {
         catch (error) {
             mapStoreError(error);
         }
-        return Object.freeze(stream.commits.flatMap((commit) => commit.events.filter((storedEvent) => storedEvent.eventType === eventType)));
+        // 完整读取可能看到 load() 之后并发追加的提交；只保留聚合已覆盖的提交。
+        return Object.freeze(stream.commits
+            .filter((commit) => commit.commitSequence <= aggregate.commitSequence)
+            .flatMap((commit) => commit.events.filter((storedEvent) => storedEvent.eventType === eventType)));
     }
     /** 按类型与匹配条件定位唯一事件；匹配到多个即事件流不合法。 */
     async #findUniqueEvent(eventType, matches, signal) {

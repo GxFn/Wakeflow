@@ -415,8 +415,8 @@ async function readInventory(
 
 function mapLockError(error: RootedExclusiveFileLockError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
-  if (error.reason === "timeout") fail("lock", "$lock");
   if (
+    error.reason === "timeout" ||
     error.reason === "unsafe-lock" ||
     error.reason === "parent" ||
     error.reason === "root-scope"

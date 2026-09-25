@@ -356,6 +356,13 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
     equal(reprepared.delivery.deliveryId === prepared.delivery.deliveryId, false);
     equal(reprepared.delivery.generation, 1);
     equal(reprepared.delivery.phase, "delivery-prepared");
+    // 目标已换到新信封之后，重放第一代的结局仍返回幂等结果，而不是 delivery-unknown。
+    const replayedFirst = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      attempt: { status: "failed-before-send" },
+      readback: { status: "unavailable" },
+    });
+    equal(replayedFirst.status, "idempotent");
+    equal(replayedFirst.outcome.generation, 1);
 
     // Codex 宿主：发送调用的返回摘要就是 accepted 证据，无需等待 hook 记录。
     const sentReturn = await recordFixtureDeliveryOutcome(fixture, reprepared, {
@@ -395,6 +402,40 @@ test("Controller 解决：indeterminate 可被显式判为 rejected-before-send 
     );
     equal(rearmed.rearm.generation, 2);
     equal(JSON.stringify(rearmed).includes(fixture.workspacePath), false);
+    // 第二代的静默从它自己的第一次 indeterminate 起算，不沿用第一代的时刻。
+    const fence = rearmed.permit.fence;
+    if (fence === null) throw new Error("Expected a target rearm fence.");
+    const second = {
+      ...prepared,
+      permit: { ...rearmed.permit, fence },
+      event: rearmed.event,
+      delivery: { ...prepared.delivery, generation: 2 },
+    };
+    const secondAt = parseUtcInstant("2026-08-29T12:30:00.000Z");
+    const secondIndeterminate = await recordFixtureDeliveryOutcome(
+      fixture,
+      second,
+      { idempotencyKey: "fixture-outcome-2-indeterminate", observedAt: secondAt },
+      { clock: () => secondAt },
+    );
+    equal(secondIndeterminate.outcome.disposition, "indeterminate");
+    const retryAt = parseUtcInstant("2026-08-29T12:31:00.000Z");
+    await rejects(
+      recordFixtureDeliveryOutcome(
+        fixture,
+        second,
+        {
+          idempotencyKey: "fixture-outcome-2-retry",
+          expectedStreamRevision: secondIndeterminate.event.streamRevision,
+          observedAt: retryAt,
+        },
+        { clock: () => retryAt },
+      ),
+      (error: unknown) =>
+        isWakeflowError(error) &&
+        error.reason === "landing-evidence-missing" &&
+        error.details?.blocker2 === undefined,
+    );
   } finally {
     await cleanupDeliveryWorkspaceFixture(fixture);
   }

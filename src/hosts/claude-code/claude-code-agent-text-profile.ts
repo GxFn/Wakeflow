@@ -4,7 +4,7 @@ import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "./claude-code-tmux-asset.js";
  * Wakeflow Host / Claude Code：agent 面文本的宿主取值表（gate-log §13.99 D3、D9）。
  *
  * 本模块是纯数据加确定性渲染，与 `claude-code-hook-fragment.ts` 同一模式：文本只有一份源
- * （`assets/agent-text/`，仓库相对，不出现任何宿主名），宿主差异写成七个封闭占位符，取值
+ * （`assets/agent-text/`，仓库相对，不出现任何宿主名），宿主差异写成九个封闭占位符，取值
  * 住在这里。制品构建器动态 import 本模块，对源目录里的每份 Markdown 做一次封闭替换后写进
  * 候选制品——源里出现未登记的占位符，或表里有没被任何源文件用到的取值，构建即失败。
  *
@@ -19,7 +19,7 @@ import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "./claude-code-tmux-asset.js";
  * 本模块只导入 tmux 助手的命令常量（与权限规则同源）；取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 七个封闭占位符（D3，§13.118 加 windowBootstrap）；源目录里出现表外的占位符即构建失败。 */
+/** 九个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume）；源目录里出现表外的占位符即构建失败。 */
 export type ClaudeCodeAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
@@ -27,7 +27,9 @@ export type ClaudeCodeAgentTextPlaceholderKey =
   | "deliveryAction"
   | "worktreeLaunch"
   | "commandSurface"
-  | "hostTrustSteps";
+  | "hostTrustSteps"
+  | "windowResume"
+  | "resendGuard";
 
 /** 渲染语言：`zh` 只用于 `README.zh-CN.md`，其余源文件一律 `en`（D6）。 */
 export type ClaudeCodeAgentTextLanguage = "en" | "zh";
@@ -63,9 +65,23 @@ const WINDOW_LAUNCH =
   "`launch` and `resume` refuse while the located pane is still alive, and report " +
   "`resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session " +
   "that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait " +
-  "up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook: pending` with " +
+  "up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook.sessionStart: pending` with " +
   "a live pane means the record is late, so keep the printed observation and register or " +
   "relocate with it once the record exists, and pass a longer `--wait` next time.";
+
+/** 窗口进程没了而会话该继续：助手的 `resume` 保住会话，relocate 记录新窗格。 */
+const WINDOW_RESUME =
+  `pipe its inspect result into \`${TMUX_HELPER} resume --window <windowId>\`, which keeps ` +
+  "the session in a new pane; relocate with the observation it prints, then `mark`. A " +
+  "session that never held a conversation cannot be resumed (`resume-exited`): close it, " +
+  "launch, replace.";
+
+/** 重发守卫：助手发送前查接收窗口的落地记录（§13.127）。 */
+const RESEND_GUARD =
+  "the helper checks the receiving window's landing record before it sends and refuses " +
+  "with `already-landed`, printing that landing, when the prompt is already there; record " +
+  "or report that landing instead of forcing a second send (`--force` is only for a prompt " +
+  "you have established never reached the window).";
 
 /** Controller 自己怎么进 tmux：用户是被引导者，从不自己配置 tmux（§13.118）。 */
 const WINDOW_BOOTSTRAP =
@@ -150,7 +166,7 @@ const HOST_TRUST_STEPS_ZH = [
   "这个助手的 allow 规则，助手因此不弹权限；不会写 `Bash(tmux *)` 之类更宽的规则。",
 ].join("\n");
 
-/** 七个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致。 */
+/** 九个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */
 export const CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS: Readonly<
   Record<ClaudeCodeAgentTextPlaceholderKey, Readonly<ClaudeCodeAgentTextPlaceholderValue>>
 > = Object.freeze({
@@ -161,6 +177,8 @@ export const CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS: Readonly<
   worktreeLaunch: Object.freeze({ en: WORKTREE_LAUNCH }),
   commandSurface: Object.freeze({ en: COMMAND_SURFACE_EN, zh: COMMAND_SURFACE_ZH }),
   hostTrustSteps: Object.freeze({ en: HOST_TRUST_STEPS_EN, zh: HOST_TRUST_STEPS_ZH }),
+  windowResume: Object.freeze({ en: WINDOW_RESUME }),
+  resendGuard: Object.freeze({ en: RESEND_GUARD }),
 });
 
 /** 未登记占位符的稳定错误码；构建器的预检先于它触发，本抛出是最后一道防线。 */

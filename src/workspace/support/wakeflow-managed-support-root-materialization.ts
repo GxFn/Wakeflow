@@ -50,6 +50,7 @@ import {
 } from "../workspace-host-resource-profile.js";
 import {
   createWakeflowManagedSupportResourceCatalog,
+  type WakeflowManagedSupportResourceCatalog,
 } from "./wakeflow-managed-support-resource-catalog.js";
 
 /**
@@ -84,7 +85,10 @@ export interface WakeflowManagedSupportScaffoldEffect {
 
 export interface WakeflowManagedSupportRootMaterializationReceipt {
   readonly kind: "WakeflowManagedSupportRootMaterializationReceipt";
+  /** 根或任一 scaffold 目录被本次创建即为 created。 */
   readonly disposition: "created" | "existing";
+  /** 仅描述 Support 根本身：只有根目录段被本次创建才是 created。 */
+  readonly rootDisposition: "created" | "existing";
   readonly configDigest: Sha256Digest;
   readonly catalogDigest: Sha256Digest;
   readonly surfaceId: WakeflowDurableId<"surface">;
@@ -154,6 +158,7 @@ interface ParsedRequest {
   readonly config: WakeflowConfigModel;
   readonly configDigest: Sha256Digest;
   readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly catalog: Readonly<WakeflowManagedSupportResourceCatalog>;
   readonly catalogDigest: Sha256Digest;
   readonly surfaceId: WakeflowDurableId<"surface">;
   readonly signal: AbortSignal | undefined;
@@ -271,6 +276,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     config,
     configDigest,
     profile,
+    catalog,
     catalogDigest,
     surfaceId,
     signal: record.signal as AbortSignal | undefined,
@@ -299,12 +305,8 @@ function assertWorkspaceRoot(value: unknown): asserts value is RootedDirectory {
 function scaffoldPaths(
   request: Readonly<ParsedRequest>,
 ): readonly PortableResourcePath[] {
-  const catalog = createWakeflowManagedSupportResourceCatalog(
-    request.config,
-    request.profile,
-  );
   return Object.freeze(
-    catalog.declarations
+    request.catalog.declarations
       .filter(
         (entry) =>
           entry.placement.root.kind === "support-surface"
@@ -469,7 +471,13 @@ export async function inspectWakeflowManagedSupportRoot(
       workspaceRootValue,
       placement.absolutePath,
       async (supportRoot) => {
-        const rootNode = await supportRoot.assertCurrent("$supportRoot");
+        let rootNode: Readonly<FileNodeSnapshot>;
+        try {
+          rootNode = await supportRoot.assertCurrent("$supportRoot");
+        } catch (error: unknown) {
+          if (error instanceof RootedDirectoryError) fail("placement", "$root");
+          throw error;
+        }
         const entries = [];
         for (const relativePath of paths) {
           entries.push(await observeScaffold(supportRoot, relativePath, expectedUserId));
@@ -576,13 +584,16 @@ export async function materializeWakeflowManagedSupportRoot(
   ) {
     fail("placement", "$root");
   }
+  const rootCreated = materialized.segments.some(
+    (entry) => entry.disposition === "created",
+  );
   return Object.freeze({
     kind: "WakeflowManagedSupportRootMaterializationReceipt",
     disposition:
-      materialized.segments.some((entry) => entry.disposition === "created")
-      || scaffold.some((entry) => entry.disposition === "created")
+      rootCreated || scaffold.some((entry) => entry.disposition === "created")
         ? "created"
         : "existing",
+    rootDisposition: rootCreated ? "created" : "existing",
     configDigest: request.configDigest,
     catalogDigest: request.catalogDigest,
     surfaceId: request.surfaceId,

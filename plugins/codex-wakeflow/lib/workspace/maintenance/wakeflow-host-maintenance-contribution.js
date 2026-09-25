@@ -122,7 +122,7 @@ function contributionDigestBasis(value) {
 export function computeWakeflowHostMaintenanceContributionDigest(value) {
     return computeCanonicalJsonSha256Digest(contributionDigestBasis(value));
 }
-function assertOrderedOperations(operations) {
+function assertOrderedOperations(operations, basePath) {
     const targets = new Set();
     for (let index = 0; index < operations.length; index += 1) {
         const current = operations[index];
@@ -130,25 +130,30 @@ function assertOrderedOperations(operations) {
         if (current === undefined
             || (previous !== undefined
                 && previous.operationId >= current.operationId)) {
-            fail("order", `$contribution.operations/${index}.operationId`);
+            fail("order", `${basePath}.operations/${index}.operationId`);
         }
         const target = `${current.ownerId}\u0000${current.targetKey}`;
         if (targets.has(target)) {
-            fail("order", `$contribution.operations/${index}.targetKey`);
+            fail("order", `${basePath}.operations/${index}.targetKey`);
         }
         targets.add(target);
     }
 }
-function assertOrderedBlockers(blockerCodes) {
-    for (let index = 0; index < blockerCodes.length; index += 1) {
+function parseBlockerCode(entry, path) {
+    if (typeof entry !== "string"
+        || !BLOCKER_CODE_PATTERN.test(entry)
+        || entry.length > MAXIMUM_IDENTITY_LENGTH
+        || !entry.isWellFormed()) {
+        fail("identity", path);
+    }
+    return entry;
+}
+function assertOrderedBlockers(blockerCodes, basePath) {
+    for (let index = 1; index < blockerCodes.length; index += 1) {
         const current = blockerCodes[index];
         const previous = blockerCodes[index - 1];
-        if (current === undefined
-            || !BLOCKER_CODE_PATTERN.test(current)
-            || current.length > MAXIMUM_IDENTITY_LENGTH
-            || !current.isWellFormed()
-            || (previous !== undefined && previous >= current)) {
-            fail("order", `$contribution.blockerCodes/${index}`);
+        if (current === undefined || previous === undefined || previous >= current) {
+            fail("order", `${basePath}.blockerCodes/${index}`);
         }
     }
 }
@@ -178,13 +183,8 @@ export function createWakeflowHostMaintenanceContribution(requestValue) {
         || (record.status !== "ready" && record.status !== "blocked")) {
         fail("input", "$request");
     }
-    const blockerCodes = Object.freeze([...blockerValues].map((entry, index) => {
-        if (typeof entry !== "string") {
-            fail("identity", `$request.blockerCodes/${index}`);
-        }
-        return entry;
-    }).sort());
-    assertOrderedBlockers(blockerCodes);
+    const blockerCodes = Object.freeze([...blockerValues].map((entry, index) => (parseBlockerCode(entry, `$request.blockerCodes/${index}`))).sort());
+    assertOrderedBlockers(blockerCodes, "$request");
     if ((record.status === "ready") !== (blockerCodes.length === 0)) {
         fail("status", "$request.status");
     }
@@ -193,7 +193,7 @@ export function createWakeflowHostMaintenanceContribution(requestValue) {
         : left.operationId > right.operationId
             ? 1
             : 0)));
-    assertOrderedOperations(operations);
+    assertOrderedOperations(operations, "$request");
     const basis = Object.freeze({
         kind: "WakeflowHostMaintenanceContribution",
         schemaVersion: 1,
@@ -232,18 +232,13 @@ export function parseWakeflowHostMaintenanceContribution(value) {
         || (record.status !== "ready" && record.status !== "blocked")) {
         fail("input", "$contribution");
     }
-    const blockerCodes = Object.freeze(blockerValues.map((entry, index) => {
-        if (typeof entry !== "string") {
-            fail("identity", `$contribution.blockerCodes/${index}`);
-        }
-        return entry;
-    }));
-    assertOrderedBlockers(blockerCodes);
+    const blockerCodes = Object.freeze(blockerValues.map((entry, index) => (parseBlockerCode(entry, `$contribution.blockerCodes/${index}`))));
+    assertOrderedBlockers(blockerCodes, "$contribution");
     if ((record.status === "ready") !== (blockerCodes.length === 0)) {
         fail("status", "$contribution.status");
     }
     const operations = Object.freeze(operationValues.map((entry, index) => (parseOperation(entry, index, true, "$contribution.operations"))));
-    assertOrderedOperations(operations);
+    assertOrderedOperations(operations, "$contribution");
     const basis = Object.freeze({
         kind: "WakeflowHostMaintenanceContribution",
         schemaVersion: 1,

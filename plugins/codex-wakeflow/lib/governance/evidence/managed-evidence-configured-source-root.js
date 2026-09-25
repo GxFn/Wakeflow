@@ -1,4 +1,5 @@
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { WakeflowError } from "../../kernel/error.js";
 import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
 const ERROR_MESSAGES = {
     placement: "Managed evidence source root has no current Config placement.",
@@ -36,13 +37,26 @@ function sourcePlacement(config, root) {
     }
     return placement;
 }
+/** 回执读取失败归为placement；取消以内核 aborted 错误原样浮出，由调用方映射。 */
+async function listReceipts(workspaceRoot, podId, signal) {
+    try {
+        return await listPodWorktreeReceiptsAnyHost(workspaceRoot, podId, signal === undefined ? {} : { signal });
+    }
+    catch (error) {
+        if (error instanceof WakeflowError && error.reason === "aborted")
+            throw error;
+        if (signal?.aborted === true)
+            throw error;
+        fail("placement");
+    }
+}
 /** worktree 检出：pod 与仓库都在配置里，回执存在，且打开后的根等于回执路径。 */
-async function openPodWorktreeRoot(workspaceRoot, config, root) {
+async function openPodWorktreeRoot(workspaceRoot, config, root, signal) {
     const pod = config.indexes.podById[root.podId];
     if (pod === undefined || !pod.worktrees.some((entry) => entry.repositoryId === root.repositoryId)) {
         fail("placement");
     }
-    const receipt = (await listPodWorktreeReceiptsAnyHost(workspaceRoot, root.podId)).find((entry) => entry.repositoryId === root.repositoryId);
+    const receipt = (await listReceipts(workspaceRoot, root.podId, signal)).find((entry) => entry.repositoryId === root.repositoryId);
     if (receipt === undefined)
         fail("placement");
     let opened;
@@ -69,9 +83,9 @@ async function openPodWorktreeRoot(workspaceRoot, config, root) {
     }
 }
 /** 打开并持有Manifest逻辑source对应的当前Config物理根。 */
-export async function openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source) {
+export async function openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source, options = {}) {
     if (source.root.kind === "pod-worktree") {
-        return openPodWorktreeRoot(workspaceRoot, config, source.root);
+        return openPodWorktreeRoot(workspaceRoot, config, source.root, options.signal);
     }
     const placement = sourcePlacement(config, source.root);
     let root;

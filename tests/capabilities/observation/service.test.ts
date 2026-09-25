@@ -496,7 +496,7 @@ test("status 不带 demandId：overall、看板计数、Demand、窗口身份、
     [first.owner, first.tool, first.reason],
     ["controller", "wakeflow_register_window_binding", "pod-window-registration"],
   );
-  equal(first.subject, [...unregistered.map((window) => window.windowId)].sort()[0]);
+  equal(first.subject, unregistered.map((window) => window.windowId).sort()[0]);
   deepEqual(plain(status.next), {
     frontier: first.reason,
     owner: first.owner,
@@ -1237,6 +1237,26 @@ test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；带
       ...CODEX_OBSERVATION_FACADE,
       artifact: Object.freeze({ manifestDigest: current, readCurrentManifestDigest: () => onDisk }),
     }) as typeof CODEX_OBSERVATION_FACADE;
+  // 共享的 healthy 工作区：本测试新写的 session-start 记录在 finally 里删掉，不影响后续测试。
+  const hooksDirectory = path.join(
+    healthy.root,
+    ...hostHookObservationsRootRef("codex").split("/"),
+  );
+  const hookFilesBefore = new Set(readdirSync(hooksDirectory));
+  try {
+    await assertArtifactIdentity(facadeWith, current, other);
+  } finally {
+    for (const name of readdirSync(hooksDirectory)) {
+      if (!hookFilesBefore.has(name)) unlinkSync(path.join(hooksDirectory, name));
+    }
+  }
+});
+
+async function assertArtifactIdentity(
+  facadeWith: (onDisk: string) => typeof CODEX_OBSERVATION_FACADE,
+  current: string,
+  other: string,
+): Promise<void> {
   // 绑定会话在同一份制品下启动：current。
   const rooted = await RootedDirectory.open(healthy.root);
   try {
@@ -1292,7 +1312,7 @@ test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；带
   const verified = await executeVerifyRequest(facadeWith(other), { root: healthy.root }, CLOCK);
   const gate = verified.gates.find((entry) => entry.name === "runtime-artifact");
   deepEqual([gate?.status, gate?.code], ["fail", "server-outdated,windows-stale:1"]);
-});
+}
 
 /** 旧实现 T08 的零写断言：逐节点的类型、模式、大小与 mtime/ctime（不含 atime：只读也会更新它）。 */
 function snapshotTree(root: string): Record<string, string> {

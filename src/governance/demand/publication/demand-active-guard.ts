@@ -8,7 +8,7 @@ import {
   RootedDirectoryError,
 } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStrictTextFile, StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
-import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
+import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { fail } from "../../../kernel/error.js";
 import {
   listRequirementClaimStates,
@@ -16,6 +16,7 @@ import {
 } from "../../../kernel/requirement-board.js";
 import { DemandIdentityError, parseDemandIdentityDocument } from "../model/demand-identity.js";
 import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../event-sourcing/demand-event-sourcing-paths.js";
+import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "../event-sourcing/demand-event-sourcing-root-authority.js";
 import {
   closeDemandOperationRoot,
   DemandOperationAuthorityContextError,
@@ -30,7 +31,7 @@ import { demandFinalRootRef } from "./demand-publication-paths.js";
 /**
  * Wakeflow Governance / Demand：活动 Demand 守卫（ADR-0011 D7，按 ADR-0010 D3 收窄到 pod）。
  *
- * 一个 pod 同一时刻只推进一个 Demand：看板上 `claimed` 的包若其 Demand 根存在、身份记
+ * 一个 pod 同一时刻只推进一个 Demand：看板上 `claimed` 的包若其 Demand 根存在、身份记录
  * 的 pod 等于目标 pod 且聚合未到终态，即为该 pod 的活动 Demand。根无法证明终态时同样视为
  * 活动。preview 与 apply 都检查。
  */
@@ -56,20 +57,25 @@ async function resourceExists(
   }
 }
 
-const IDENTITY_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$identity.maximumBytes");
-
-/** 身份记录的 pod；读不到或不合法时返回 null，调用方把它当作活动（不能证明属于别的 pod）。 */
+/**
+ * 身份记录的 pod；读不到或不合法时返回 null，调用方把它当作活动（不能证明属于别的 pod）。
+ * 中止照常上抛。
+ */
 async function identityPodId(
   demandRoot: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<string | null> {
   try {
     const read = await readStrictTextFile(demandRoot, DEMAND_EVENT_SOURCING_IDENTITY_REF, {
-      maximumBytes: IDENTITY_MAXIMUM_BYTES,
+      maximumBytes: DEMAND_IDENTITY_MAXIMUM_BYTES,
       ...(signal === undefined ? {} : { signal }),
     });
     return parseDemandIdentityDocument(read.text).podId;
   } catch (error: unknown) {
+    if (error instanceof StableFileReadError) {
+      if (error.reason === "aborted") throw error;
+      return null;
+    }
     if (error instanceof StrictTextFileError || error instanceof DemandIdentityError) return null;
     throw error;
   }
@@ -116,7 +122,8 @@ export async function demandIsActive(
     }
   } catch (error: unknown) {
     if (
-      error instanceof DemandEventSourcingRepositoryError &&
+      (error instanceof DemandEventSourcingRepositoryError ||
+        error instanceof StableFileReadError) &&
       error.reason === "aborted"
     ) {
       failure = error;
@@ -128,7 +135,10 @@ export async function demandIsActive(
     if (failure === undefined) failure = error;
   }
   if (failure !== undefined) {
-    if (failure instanceof DemandEventSourcingRepositoryError) {
+    if (
+      failure instanceof DemandEventSourcingRepositoryError ||
+      failure instanceof StableFileReadError
+    ) {
       fail("io-failure", "aborted", "$signal", { cause: failure });
     }
     if (failure instanceof DemandOperationAuthorityContextError) {

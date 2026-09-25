@@ -169,7 +169,9 @@ async function observeClaims(root, signal) {
                 claims.push(inspected.claim);
         }
         catch (error) {
-            if (reasonOf(error) === "aborted")
+            // 没有原因的错误是缺陷，不能记成一份读不出的声明。
+            const reason = reasonOf(error);
+            if (reason === null || reason === "aborted")
                 throw error;
             unreadable += 1;
         }
@@ -313,7 +315,6 @@ async function observePods(root, snapshot, bindings, demands, scope, signal) {
                 bindingIdByWindowId,
                 receipts: receipts.map((entry) => Object.freeze({
                     repositoryId: entry.receipt.repositoryId,
-                    windowId: entry.receipt.windowId,
                     bindingId: entry.receipt.bindingId,
                     checkoutPresent: entry.checkoutPresent,
                 })),
@@ -383,18 +384,24 @@ async function observeAssetFile(root, host, asset, signal) {
         return Object.freeze({ status: "unavailable", issue: reason });
     }
 }
+/** 设置文件解析不出或不是 JSON 对象；与“对象里没有该键”（undefined）分开。 */
+const SETTINGS_NOT_OBJECT = Symbol("settings-not-object");
 function settingsEntryOf(bytes, key) {
     try {
         const document = JSON.parse(decodeUtf8(bytes, "$settings"));
-        if (typeof document !== "object" || document === null || Array.isArray(document))
-            return null;
-        return document[key] ?? null;
+        if (typeof document !== "object" || document === null || Array.isArray(document)) {
+            return SETTINGS_NOT_OBJECT;
+        }
+        return Object.hasOwn(document, key) ? document[key] : undefined;
     }
     catch {
-        return null;
+        return SETTINGS_NOT_OBJECT;
     }
 }
-/** 本地设置里的状态栏条目：只比较该键的规范 JSON，其他键不看；文件不是 JSON 对象即 unreadable。 */
+/**
+ * 本地设置里的状态栏条目：只比较该键的规范 JSON，其他键不看；文件不是 JSON 对象即 unreadable，
+ * 是对象但缺该键即 drift。
+ */
 async function observeSettingsEntry(root, settings, signal) {
     try {
         const read = await readStableFile(root, settings.path, {
@@ -402,10 +409,12 @@ async function observeSettingsEntry(root, settings, signal) {
             ...signalOptions(signal),
         });
         const entry = settingsEntryOf(read.bytes, settings.key);
-        if (entry === null)
+        if (entry === SETTINGS_NOT_OBJECT)
             return "unreadable";
         if (read.node.permissionBits !== 0o600)
             return "mode";
+        if (entry === undefined)
+            return "drift";
         const expected = settings.expectedEntry(root.absolutePath);
         return computeCanonicalJsonSha256Digest(parseJsonValue(entry, "$settings"))
             === computeCanonicalJsonSha256Digest(expected)

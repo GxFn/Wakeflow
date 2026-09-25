@@ -226,6 +226,10 @@ function mapParentHandleError(
   ) {
     fail("commit-uncertain", "$resourcePath");
   }
+  // inspect 与 sync 只在 unlink 提交之后使用：此后的父目录漂移不能读作路径仍存在。
+  if (operation === "inspect" || operation === "sync") {
+    fail("commit-uncertain", "$resourcePath");
+  }
   if (operation === "open") {
     if (error.reason === "input") fail("input", "$resourcePath");
     if (error.reason === "root-scope") fail("root-scope", "$resourcePath");
@@ -476,7 +480,6 @@ export async function unlinkRegularFileExactly(
 
   const parent = await openResourceParent(root, resourcePath);
   let source: RootedExactResourceHandle | undefined;
-  let committed = false;
   let primaryError: unknown;
   let result: Readonly<ExactRegularFileUnlinkReceipt> | undefined;
 
@@ -501,7 +504,6 @@ export async function unlinkRegularFileExactly(
       }
       fail("unlink-failure", "$resourcePath");
     }
-    committed = true;
 
     const nodeBefore = source.initialNodeSnapshot;
     const remainingLinkCount = nodeBefore.linkCount - 1n;
@@ -547,7 +549,7 @@ export async function unlinkRegularFileExactly(
   }
 
   if (primaryError !== undefined) throw primaryError;
-  if (committed !== true || result === undefined) {
+  if (result === undefined) {
     fail("commit-uncertain", "$resourcePath");
   }
   return result;

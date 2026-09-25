@@ -146,9 +146,11 @@ function assertNoOverlap<Entry>(
   roots: readonly Entry[],
   pathOf: (entry: Entry) => string,
   reason: "lexical-overlap" | "physical-overlap",
+  indexOf: (entry: Entry, position: number) => number = (_entry, position) => position,
 ): void {
   const indexByPath = new Map<string, number>();
-  for (const [index, root] of roots.entries()) {
+  for (const [position, root] of roots.entries()) {
+    const index = indexOf(root, position);
     const key = portableComparisonPath(pathOf(root));
     const duplicate = indexByPath.get(key);
     if (duplicate !== undefined) {
@@ -156,7 +158,8 @@ function assertNoOverlap<Entry>(
     }
     indexByPath.set(key, index);
   }
-  for (const [index, root] of roots.entries()) {
+  for (const [position, root] of roots.entries()) {
+    const index = indexOf(root, position);
     let current = portableComparisonPath(pathOf(root));
     while (true) {
       const parent = nodePath.dirname(current);
@@ -245,13 +248,14 @@ export async function validateWakeflowConfigRootPlacements(
   const physicallyPresent = planned.flatMap((entry, index) => {
     const observation = observed[index];
     return observation?.state === "present" && observation.realPath !== null
-      ? [Object.freeze({ ...entry, realPath: observation.realPath })]
+      ? [Object.freeze({ ...entry, index, realPath: observation.realPath })]
       : [];
   });
   assertNoOverlap(
     physicallyPresent,
     (entry) => entry.realPath,
     "physical-overlap",
+    (entry) => entry.index,
   );
   await assertCurrentRoot(root);
 

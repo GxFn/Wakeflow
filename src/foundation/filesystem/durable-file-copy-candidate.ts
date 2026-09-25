@@ -122,6 +122,12 @@ async function inspectInitialSource(
       if (error.reason === "resource-path") {
         fail("input", "$sourceResourcePath");
       }
+      if (
+        error.reason === "resource-changed"
+        || error.reason === "resource-alias"
+      ) {
+        fail("source-changed", "$source");
+      }
       fail("source-root-scope", "$sourceRoot");
     }
     throw error;
@@ -370,9 +376,6 @@ async function inspectFinalSource(
     )).node;
   } catch (error: unknown) {
     if (error instanceof DurableFileCopyCandidateError) throw error;
-    if (error instanceof RootedDirectoryError) {
-      fail("source-changed", "$source");
-    }
     fail("source-changed", "$source");
   }
   if (

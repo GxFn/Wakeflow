@@ -1,5 +1,5 @@
-import { deepEqual, equal, ok, throws } from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { deepEqual, ok, throws } from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -113,9 +113,8 @@ test("签入的耗时表可被加载，且每一条都是当前仓库相对测�
   for (const [key, value] of durations) {
     ok(key.startsWith("tests/") && key.endsWith(".test.ts"), key);
     ok(Number.isSafeInteger(value) && value >= 0, key);
+    ok(statSync(path.join(process.cwd(), key), { throwIfNoEntry: false })?.isFile() === true, key);
   }
-  // 最长的文件必须有记录，否则整个 longest-first 排程失去意义。
-  const longest = [...durations.entries()].sort((left, right) => right[1] - left[1])[0];
-  ok(longest !== undefined);
-  equal(typeof longest[0], "string");
+  // 最长的文件（端到端场景）必须有记录，否则整个 longest-first 排程失去意义。
+  ok(durations.has("tests/scenarios/wakeflow-scenario-acceptance.test.ts"));
 });

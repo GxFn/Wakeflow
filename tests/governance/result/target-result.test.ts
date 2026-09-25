@@ -7,6 +7,7 @@ import {
   targetResultIdForClaim,
   targetResultRecordedCommitIdFromResult,
   targetResultRecordedEventIdFromResult,
+  type TargetResultDeliveryBinding,
 } from "../../../src/governance/result/target-result.js";
 import {
   createImplementationTargetResult,
@@ -131,17 +132,21 @@ test("投递绑定必须跟随信封：另一把声明的围栏或 rejected 结�
       error instanceof ImplementationTargetResultError &&
       error.reason === "delivery",
   );
+  const rejected = {
+    ...deliveryBindingFromOutcome(createDeliveryOutcomeFixture({ claim, envelope })),
+    disposition: "rejected-before-send",
+  } as unknown as TargetResultDeliveryBinding;
   throws(
     () =>
-      deliveryBindingFromOutcome(
-        createDeliveryOutcomeFixture({
-          claim,
-          envelope,
-          disposition: "rejected-before-send",
-          readbackStatus: "unavailable",
-        }),
-      ),
-    (error: unknown) => error instanceof Error,
+      createImplementationTargetResult({
+        taskPackage: implementationTaskPackageFixture(),
+        envelope,
+        delivery: rejected,
+        report: createImplementationTargetResultReportFixture(),
+      }),
+    (error: unknown) =>
+      error instanceof ImplementationTargetResultError &&
+      error.reason === "delivery",
   );
 });
 

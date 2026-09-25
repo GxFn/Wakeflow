@@ -314,7 +314,7 @@ export function parseDemandEventStreamCommit(
   }
   const demandId = parseDemandId(wire.demandId, "$/demandId");
   const idempotency = parseIdempotency(
-    (wire as { readonly idempotency?: unknown }).idempotency,
+    wire.idempotency,
     "$/idempotency",
   );
   const events: DemandEventSourcingStoredEvent[] = [];
@@ -561,7 +561,13 @@ export function applyDemandEventStreamCommit(
       currentEvent = upcastDemandEventSourcingStoredEvent(storedEvent);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingUpcasterError) {
-        fail("event-version", `$/events/${index}/eventVersion`);
+        if (
+          error.reason === "unsupported-version" ||
+          error.reason === "unsupported-event-type"
+        ) {
+          fail("event-version", `$/events/${index}/eventVersion`);
+        }
+        fail("event", `$/events/${index}`);
       }
       throw error;
     }

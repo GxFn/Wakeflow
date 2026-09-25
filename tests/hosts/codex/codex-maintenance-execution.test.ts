@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -20,12 +20,21 @@ import {
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
+  CodexMaintenanceCapabilityError,
+  codexMaintenanceCapability,
+} from "../../../src/hosts/codex/codex-maintenance-capability.js";
+import {
   executeCodexMaintenanceExecution,
   previewCodexMaintenanceExecution,
 } from "../../../src/hosts/codex/codex-maintenance-execution.js";
 import {
   codexWorkspaceHostResourceProfile,
 } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import type { WakeflowHostMaintenanceOperation } from "../../../src/workspace/maintenance/wakeflow-host-maintenance-contribution.js";
+import {
+  type WakeflowMaintenanceGateContext,
+  withWakeflowMaintenanceGate,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
 import {
   createMinimalWakeflowConfig,
 } from "../../configuration/wakeflow-config.fixture.js";
@@ -91,4 +100,55 @@ test("Codex fixed composition executes shared maintenance with an empty projecti
     workspace.absolutePath,
     "wakeflow.config.json",
   )), true);
+});
+
+test("Codex maintenance capability maps a foreign gate context and a foreign operation to its own error", async (t) => {
+  const workspace = await fixture(t);
+  const desired = desiredConfig();
+  const plan = await previewCodexMaintenanceExecution(workspace.root, {
+    action: "fresh-initialize" as const,
+    desiredConfig: desired,
+    currentHostProfile: codexWorkspaceHostResourceProfile,
+    hostProfiles: PROFILES,
+  });
+  const foreignOperation = Object.freeze({
+    operationId: "claude-portable-settings:foreign",
+    operationKind: "foreign-kind",
+    ownerId: "foreign-owner",
+    targetKey: "foreign",
+    targetDigest: `sha256:${"0".repeat(64)}`,
+  }) as unknown as WakeflowHostMaintenanceOperation;
+  const failsWith = (reason: string, errorPath: string) => (error: unknown) => (
+    error instanceof CodexMaintenanceCapabilityError
+    && error.code === "wakeflow-codex-maintenance-capability"
+    && error.reason === reason
+    && error.path === errorPath
+  );
+  const forgedContext = Object.freeze({ operationId: "forged" }) as unknown as WakeflowMaintenanceGateContext;
+  await rejects(
+    codexMaintenanceCapability.executeOperation(workspace.root, forgedContext, {
+      config: desired,
+      profile: codexWorkspaceHostResourceProfile,
+      operation: foreignOperation,
+      recoveringAffectedOperation: false,
+    }),
+    failsWith("gate", "$context"),
+  );
+  await withWakeflowMaintenanceGate(
+    workspace.root,
+    { expectedCoreLayoutInspectionDigest: plan.sharedPreview.coreLayoutInspectionDigest },
+    async (context) => {
+      for (const profile of PROFILES) {
+        await rejects(
+          codexMaintenanceCapability.executeOperation(workspace.root, context, {
+            config: desired,
+            profile,
+            operation: foreignOperation,
+            recoveringAffectedOperation: false,
+          }),
+          failsWith("operation", "$operation"),
+        );
+      }
+    },
+  );
 });

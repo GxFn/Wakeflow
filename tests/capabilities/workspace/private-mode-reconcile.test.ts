@@ -180,7 +180,11 @@ test("reconcile 把 chmod -R go+rX 之后的私有树收回 0700 / 0600（§13.1
       request: {},
       planDigest: preview.planDigest,
     }),
-    (error: unknown) => isWakeflowError(error) && error.code === "precondition-failed",
+    (error: unknown) =>
+      isWakeflowError(error) &&
+      error.code === "precondition-failed" &&
+      error.reason === "plan-drift" &&
+      error.path === "$request.planDigest",
   );
   rmSync(stray);
 

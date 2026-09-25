@@ -7,7 +7,7 @@ import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } fr
 import { ManagedEvidenceCapturePlanningService, ManagedEvidenceCapturePlanningServiceError, } from "../../governance/evidence/managed-evidence-capture-planning-service.js";
 import { ManagedEvidencePublicationApplicationService, ManagedEvidencePublicationApplicationServiceError, } from "../../governance/evidence/managed-evidence-publication-application-service.js";
 import { computeManagedEvidencePublicationTransactionDigest, createManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionError, } from "../../governance/evidence/managed-evidence-publication-transaction.js";
-import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+import { DemandResultReviewSnapshotError, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail } from "../../kernel/error.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
@@ -152,15 +152,18 @@ async function withDemandContext(context, demandId, use) {
     catch (error) {
         failure = error;
     }
+    let closeFailure;
     try {
         await closeDemandOperationAuthorityContext(demand);
     }
     catch (error) {
-        if (failure === undefined)
-            failure = error;
+        closeFailure = error;
     }
     if (failure !== undefined)
         throw failure;
+    if (closeFailure !== undefined) {
+        fail("io-failure", "demand-root-close", "$request.demandId", { cause: closeFailure });
+    }
     if (!succeeded)
         fail("unexpected", "demand-context", "$request.demandId");
     return result;
@@ -296,10 +299,24 @@ async function recoverEvidence(context, operationId) {
         publication: null,
     });
 }
+/** 提交后读取复核快照；快照错误映射为稳定的 Wakeflow 错误，而不是 unexpected。 */
+async function readSnapshotForNext(context, demand) {
+    try {
+        return await readDemandResultReviewSnapshot(demand.demandRoot, signalOptions(context.options.signal));
+    }
+    catch (error) {
+        if (error instanceof DemandResultReviewSnapshotError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            fail("io-failure", "result-review-snapshot", "$request.demandId", { cause: error });
+        }
+        throw error;
+    }
+}
 /** 变更后的 `next` 直接来自当前 Controller 路由；证据记录本身不改变前沿。 */
 async function nextAfterMutation(context, demandId) {
     return withDemandContext(context, demandId, async (demand) => {
-        const snapshot = await readDemandResultReviewSnapshot(demand.demandRoot, signalOptions(context.options.signal));
+        const snapshot = await readSnapshotForNext(context, demand);
         return deriveNextProjection(buildDemandControllerRoute(demand.loaded, snapshot));
     });
 }

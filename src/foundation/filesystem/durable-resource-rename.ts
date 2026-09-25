@@ -224,7 +224,7 @@ function mapParentHandleError(
   inspectionReason?: "destination-inspection-failure" | "commit-uncertain",
 ): never {
   if (operation === "sync" && error.reason === "sync-failure") {
-    fail("durability-failure", "$destinationResourcePath");
+    fail("durability-failure", errorPath);
   }
   if (
     operation === "inspect"
@@ -247,6 +247,13 @@ function mapParentHandleError(
     if (error.reason === "parent-open-failure") {
       fail("parent-open-failure", errorPath);
     }
+  }
+  // 提交后的 inspect 与 sync 遇到父目录漂移时，不能读作干净的提交前拒绝。
+  if (
+    (operation === "inspect" && inspectionReason === "commit-uncertain")
+    || operation === "sync"
+  ) {
+    fail("commit-uncertain", errorPath);
   }
   fail("parent-changed", errorPath);
 }

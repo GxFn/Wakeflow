@@ -259,18 +259,24 @@ function createFixture(
   directory: string,
 ): SmokeFixture {
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-smoke-")));
-  if (!path.relative(repositoryRoot, base).startsWith("..")) {
-    fail("wakeflow-smoke-fixture", "the disposable directory must lie outside the repository");
+  try {
+    if (!path.relative(repositoryRoot, base).startsWith("..")) {
+      fail("wakeflow-smoke-fixture", "the disposable directory must lie outside the repository");
+    }
+    const artifactRoot = path.join(base, directory);
+    cpSync(artifactSource, artifactRoot, { recursive: true, errorOnExist: true, force: false });
+    const workspace = path.join(base, "WakeWorkspace", "Workspace");
+    const product = path.join(base, "WakeWorkspace", "ProductA");
+    mkdirSync(workspace, { recursive: true, mode: 0o755 });
+    mkdirSync(product, { recursive: true, mode: 0o755 });
+    git(workspace, "init", "--quiet");
+    git(product, "init", "--quiet");
+    return Object.freeze({ base, artifactRoot, workspace });
+  } catch (error: unknown) {
+    // 调用方的 finally 还没接手这个目录：失败时在这里删掉，一次性目录不留下。
+    rmSync(base, { recursive: true, force: true });
+    throw error;
   }
-  const artifactRoot = path.join(base, directory);
-  cpSync(artifactSource, artifactRoot, { recursive: true, errorOnExist: true, force: false });
-  const workspace = path.join(base, "WakeWorkspace", "Workspace");
-  const product = path.join(base, "WakeWorkspace", "ProductA");
-  mkdirSync(workspace, { recursive: true, mode: 0o755 });
-  mkdirSync(product, { recursive: true, mode: 0o755 });
-  git(workspace, "init", "--quiet");
-  git(product, "init", "--quiet");
-  return Object.freeze({ base, artifactRoot, workspace });
 }
 
 interface Connection {
@@ -407,8 +413,11 @@ async function actReconcile(connection: Connection, workspace: string): Promise<
     mode: "preview",
     request: {},
   });
-  const steps =
-    isPlainRecord(preview.plan) && Array.isArray(preview.plan.steps) ? preview.plan.steps : [];
+  // 没有计划或计划里没有 `steps` 数组时证明不了"零步"，按失败处理而不是当作空。
+  if (!isPlainRecord(preview.plan) || !Array.isArray(preview.plan.steps)) {
+    fail("wakeflow-smoke-reconcile", "reconcile preview carries no plan with a steps array");
+  }
+  const steps: readonly unknown[] = preview.plan.steps;
   if (preview.status !== "ready" || steps.length !== 0) {
     fail(
       "wakeflow-smoke-reconcile",

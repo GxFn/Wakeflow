@@ -100,16 +100,9 @@ async function recoverPublication(
     ) {
       fail("conflict", "$intent");
     }
-    if (
-      stored.intent.record.requirementId !== recordId
-      || stored.intent.lockRef !== lockRef
-    ) {
-      fail("conflict", "$intent");
-    }
     const residues = await inspectLedgerRecordPublicationResidues(
       root,
       stored.intent,
-      signal,
     );
     if (
       await ledgerPublicationResourceNodeOrNull(

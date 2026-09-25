@@ -111,6 +111,14 @@ export function analyzePackageDocuments(demandType, title, documents) {
         blockers: Object.freeze(blockers),
     });
 }
+const BLOCKER_TEXT_MAXIMUM = 256;
+/** 阻塞项带文档路径，路径可到 1024 码点；按结果 Schema 的 256 码点上限截断并加省略号。 */
+function boundedBlocker(blocker) {
+    const codePoints = Array.from(blocker);
+    return codePoints.length > BLOCKER_TEXT_MAXIMUM
+        ? `${codePoints.slice(0, BLOCKER_TEXT_MAXIMUM - 1).join("")}…`
+        : blocker;
+}
 /** 发布计划的阻塞项；空即 ready。总数有界，超出的只剩前 64 项。 */
 export function derivePublishBlockers(input) {
     const blockers = [
@@ -126,7 +134,7 @@ export function derivePublishBlockers(input) {
     }
     if (input.supersedes === "unknown")
         blockers.push("supersedes-unknown");
-    return Object.freeze([...new Set(blockers)].slice(0, BLOCKERS_MAXIMUM));
+    return Object.freeze([...new Set(blockers.map(boundedBlocker))].slice(0, BLOCKERS_MAXIMUM));
 }
 /** requirementId 由内容确定性派生：同内容同标识，改内容即新包。 */
 export function deriveRequirementId(input) {

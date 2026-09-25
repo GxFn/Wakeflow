@@ -1,5 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -157,4 +158,44 @@ test("one blocked managed Support source blocks composition without touching oth
     path.join(value.absolutePath, "Design", ".claude", "settings.json"),
     "utf8",
   ), legacy);
+});
+
+test("a settings.json outside the Wakeflow node policy becomes a blocker, not a failure", async (t) => {
+  const value = await fixture(t);
+  for (const directory of [".", "Design", "Test"]) {
+    mkdirSync(path.join(value.absolutePath, directory, ".claude"), {
+      mode: 0o755,
+      recursive: true,
+    });
+  }
+  const userText = "{\"permissions\":{\"allow\":[]}}\n";
+  for (const directory of [".", "Design"]) {
+    const source = path.join(value.absolutePath, directory, ".claude", "settings.json");
+    writeFileSync(source, userText);
+    chmodSync(source, 0o600);
+  }
+  const plan = await planClaudeCodePortableSettingsComposition(
+    value.root,
+    request("reconcile", config()),
+  );
+  equal(plan.status, "blocked");
+  const policyBlockers = plan.blockerCodes.filter((entry) => (
+    entry.endsWith(":source-policy")
+  ));
+  equal(policyBlockers.length, 2);
+  equal(policyBlockers.some((entry) => (
+    entry.startsWith("settings-blocked:program:")
+  )), true);
+  equal(policyBlockers.some((entry) => (
+    entry.startsWith("settings-blocked:support-surface:")
+  )), true);
+  deepEqual(plan.roots.map((entry) => entry.settingsStatus), [
+    "blocked",
+    "blocked",
+    "create",
+  ]);
+  equal(readFileSync(
+    path.join(value.absolutePath, ".claude", "settings.json"),
+    "utf8",
+  ), userText);
 });

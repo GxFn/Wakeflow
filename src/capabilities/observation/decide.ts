@@ -54,8 +54,8 @@ const REGISTRATION_TOOL = "wakeflow_register_window_binding" as const;
 const CREATE_DEMAND_TOOL = "wakeflow_create_demand" as const;
 
 /**
- * 顺序：维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿（primary 先，再按 demandId）>
- * 待认领需求包；去重，上限 64。
+ * 顺序：制品过期（用户）> 过期窗口 resume > 维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿
+ * （primary 先，再按 demandId）> 待认领需求包；去重，上限 64。
  */
 export function deriveNextActions(
   input: Readonly<NextActionInput>,
@@ -575,7 +575,8 @@ function worktreePodCodes(pod: PodGateFacts): readonly string[] {
         : [];
     }
     if (worktree.receipt === "present") return [];
-    if (pod.state === "creating") {
+    // 状态读不出的 pod 由 podsGate 的 unobserved 报 unavailable；缺席的回执不能冒充失败。
+    if (pod.state === "creating" || (pod.state === "unobserved" && worktree.receipt === "absent")) {
       return [`${pod.podId}:${worktree.repositoryId}:pending-registration`];
     }
     return [`${pod.podId}:${worktree.repositoryId}:${worktree.receipt}`];
@@ -766,7 +767,11 @@ export function summarizeGates(
   });
 }
 
-/** verify 的 next：不通过时指向维护，列出未通过的门。 */
+/**
+ * verify 的 next：不通过时列出未通过的门。runtime-artifact 失败先于维护：`server-outdated`
+ * 只能由用户重连服务（过期的服务跑维护会把旧资产写回），`windows-stale` 由 Controller 用助手
+ * resume；其余一律指向维护，与 status 的 nextActions 同序。
+ */
 export function verifyNext(gates: readonly Readonly<VerifyGate>[]): Readonly<NextProjection> {
   const failing = gates.filter((entry) => entry.status !== "pass");
   if (failing.length === 0) {
@@ -777,11 +782,30 @@ export function verifyNext(gates: readonly Readonly<VerifyGate>[]): Readonly<Nex
       blockers: Object.freeze([]),
     });
   }
+  const blockers = Object.freeze(failing.map((entry) => `${entry.name}:${entry.status}`));
+  const artifactCodes =
+    failing.find((entry) => entry.name === "runtime-artifact")?.code?.split(",") ?? [];
+  if (artifactCodes.includes("server-outdated")) {
+    return Object.freeze({
+      frontier: "runtime-artifact-outdated",
+      owner: "user",
+      suggestedTool: null,
+      blockers,
+    });
+  }
+  if (artifactCodes.some((code) => code.startsWith("windows-stale"))) {
+    return Object.freeze({
+      frontier: "window-artifact-stale",
+      owner: "controller",
+      suggestedTool: null,
+      blockers,
+    });
+  }
   return Object.freeze({
     frontier: WORKSPACE_MAINTENANCE_FRONTIER,
     owner: "controller",
     suggestedTool: MAINTENANCE_TOOL,
-    blockers: Object.freeze(failing.map((entry) => `${entry.name}:${entry.status}`)),
+    blockers,
   });
 }
 

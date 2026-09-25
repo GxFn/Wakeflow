@@ -18,10 +18,11 @@ import { fail } from "../../kernel/error.js";
 import { demandArchiveRef, demandArchivesRootRef } from "../../kernel/layout.js";
 
 /**
- * Wakeflow Governance / Observation：已归档 Demand 的回执摘要（`wakeflow_status{demandId}`）。
+ * Wakeflow Governance / Observation：已归档 Demand 的回执摘要（`wakeflow_status{demandId}`），
+ * 也供 `archived-demand-observation.ts` 的归档观察使用。
  *
- * 只读归档清单里公开的几个字段（结局、时间、终态事件、清单摘要），不解析整份清单；
- * 归档包本身由 demand 切片封装与读回。
+ * 只读归档清单里公开的几个字段（结局、时间、终态事件、清单摘要、pod），不解析整份清单；
+ * 归档观察用 podId 做 unmergedAccepted 扫描（§13.130）。归档包本身由 demand 切片封装与读回。
  */
 
 export interface LocatedDemandArchiveSummary {

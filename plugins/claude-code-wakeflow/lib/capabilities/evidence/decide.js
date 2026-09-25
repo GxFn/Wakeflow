@@ -21,9 +21,6 @@ export function deriveEvidenceEventIdentity(evidenceId) {
         commitId: deriveDurableId("demand-event-commit", "managed-evidence-recorded", evidenceId),
     });
 }
-export function findRecordedEvidence(summaries, evidenceId) {
-    return summaries?.find((entry) => entry.evidenceId === evidenceId) ?? null;
-}
 /** preview 结果里的计划投影：身份、来源投影、负载摘要与计数，不回显整棵 tree manifest。 */
 export function evidencePlanSummary(plan, recorded) {
     const manifest = plan.manifest;

@@ -119,15 +119,10 @@ export async function settleDirectoryTreeCandidateDurably(root, candidateRootPat
     }
     catch (error) {
         if (error instanceof DurableDirectoryMaterializationError) {
-            if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("tree-conflict", "$candidate");
+            mapDirectoryError(error, "candidate-member");
         }
-        if (error instanceof DurableFileCandidateError) {
-            if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("tree-conflict", "$candidate");
-        }
+        if (error instanceof DurableFileCandidateError)
+            mapFileError(error);
         throw error;
     }
     return inspectDirectoryTreeCandidate(root, candidateRootPath, prepared.plan, prepared.options.signal === undefined

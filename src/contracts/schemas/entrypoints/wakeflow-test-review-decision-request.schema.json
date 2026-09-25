@@ -227,7 +227,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 8192,
-          "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+          "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
         },
         "requirementRefs": {
           "type": "array",
@@ -243,8 +243,8 @@
               "sectionAnchor": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 64,
-                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                "maxLength": 128,
+                "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}-]{0,127}$"
               }
             }
           }
@@ -284,13 +284,13 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 1024,
-                "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+                "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
               },
               "impact": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 2048,
-                "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+                "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
               }
             }
           }
@@ -299,7 +299,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 4096,
-          "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+          "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
         }
       }
     },

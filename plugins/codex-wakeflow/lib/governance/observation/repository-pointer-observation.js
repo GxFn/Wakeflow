@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import path from "node:path";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
@@ -152,11 +153,13 @@ function resolveHead(text, branches) {
         detached: true,
     });
 }
-async function checkoutPresent(gitdirText) {
+/** Git 可在 gitdir 中写相对路径（worktree.useRelativePaths），它相对该 worktree 管理目录解析。 */
+async function checkoutPresent(entryDirectory, gitdirText) {
     if (gitdirText === null)
         return false;
+    const gitdirPath = path.isAbsolute(gitdirText) ? gitdirText : path.resolve(entryDirectory, gitdirText);
     try {
-        return (await stat(gitdirText)).isFile();
+        return (await stat(gitdirPath)).isFile();
     }
     catch {
         return false;
@@ -177,7 +180,7 @@ async function collectWorktrees(root, branches, signal) {
             name: entry.name,
             head: resolved?.head ?? null,
             branch: resolved?.branch ?? null,
-            prunable: !(await checkoutPresent(gitdir)),
+            prunable: !(await checkoutPresent(path.join(root.absolutePath, entry.resourcePath), gitdir)),
         }));
     }
     return Object.freeze(worktrees.sort((left, right) => left.name.localeCompare(right.name)));

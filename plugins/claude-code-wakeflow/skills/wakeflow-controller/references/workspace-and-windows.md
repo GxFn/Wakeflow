@@ -152,10 +152,15 @@ main checkout; every other pod works in a worktree.
 1. Preview to derive the plan; it writes nothing.
 2. Apply with exactly what preview returned. One config transaction registers
    the pod, its window set, and one worktree intent per repository.
-3. Create each worktree by host means: run `git worktree add` yourself at the path the intent names, or let the host make it by starting that window with `claude --worktree <name>`, which puts the checkout on branch `worktree-<name>`. Then launch that
+3. Create each worktree by host means: create the checkout yourself from the local HEAD at the path Claude Code uses, `<repository>/.claude/worktrees/<name>` on branch `worktree-<name>`, then start that window with `claude --worktree <name>`: it reuses an existing checkout of that name. Started without one, `claude --worktree` creates the checkout from the remote default branch when the repository has a remote, not from the local HEAD. If the repository does not ignore `.claude/worktrees/`, add that line to its `.git/info/exclude` so the main checkout's status stays clean. Then launch that
    pod's windows in their worktree roots and register each binding as in
    step 1. A product window in a pod is refused registration until its worktree
-   is actually there and observed.
+   is actually there and observed, and a checkout another live pod already
+   holds is refused as `worktree-occupied`. Bring the pod up in this order:
+   its Controller and Design windows, then every product window with its
+   worktree observation, and only then its Test window - the Test window's
+   launch intent lists the worktrees as attached directories, and that list is
+   read from the receipts the product registrations wrote.
 4. If receipts and config disagree after an interruption, reconcile with
    recover before doing anything else.
 
@@ -168,7 +173,11 @@ Controller run two Demands.
 1. The pod's Demand must already be archived.
 2. Record the branch dispositions. This is the phase that says what happened to
    the work - do not record "merged" for a branch you have not seen merged.
-3. Retire the pod's windows and remove its checkouts.
+3. Retire the pod's windows, then remove its checkouts with the
+   `git worktree remove` command the status suggests. A host may lock a
+   checkout while its session runs; once that window is retired the lock is
+   stale, so `git worktree unlock` it first, then remove and
+   `git worktree prune`. Wakeflow never removes a checkout itself.
 4. Remove the pod. Closing in this order is what keeps the config and the
    worktrees from disagreeing.
 

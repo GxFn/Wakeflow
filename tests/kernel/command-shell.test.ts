@@ -2,7 +2,7 @@ import { deepEqual, equal, rejects } from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import type { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { runCommandShell } from "../../src/kernel/command-shell.js";
@@ -169,4 +169,27 @@ test("持久化级别只由注入的执行选项决定，缺省是 fsync，请�
     { durability: "none" },
   );
   deepEqual(levels, ["fsync", "fsync", "none"]);
+});
+
+test("请求隐私扫描可按字段路径豁免（§13.128）：豁免字段里的根路径放行，别处的仍拒绝", async (t) => {
+  const root = fixture(t);
+  const run = (exempt: readonly string[], payload: Record<string, unknown>) =>
+    runCommandShell<Envelope, string, Context, { ok: true }>(
+      { ...spec([]), requestPrivacyExemptPaths: exempt },
+      { root, note: "n", ...payload },
+      () => {},
+      async () => ({ ok: true as const }),
+      { durability: "none" },
+    );
+  const leaking = { observation: { worktree: { porcelain: `worktree ${root}/x\nHEAD 0\n` } } };
+  deepEqual(await run(["observation.worktree"], leaking), { ok: true });
+  await rejects(
+    run([], leaking),
+    (error: unknown) => isWakeflowError(error) && error.code === "privacy-violation",
+  );
+  // 豁免只盖住那一个字段：同一路径之外的根路径照样拒绝。
+  await rejects(
+    run(["observation.worktree"], { ...leaking, note2: `${root}/elsewhere` }),
+    (error: unknown) => isWakeflowError(error) && error.code === "privacy-violation",
+  );
 });

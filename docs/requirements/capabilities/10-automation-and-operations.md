@@ -105,6 +105,7 @@
 | `record_evidence` | 内容派生 id，回 already-recorded | 同一 selection 再 apply 即可 |
 | `complete_demand` / `cancel_demand` | 同 planDigest；已归档的 Demand 重新 preview 即见 | status 看 archive 回执 |
 | pane 消失、会话仍在 | 无 | 助手 `resume` + `relocate`（§13.125）；从未有过对话的会话 `resume-exited` → launch + replace |
+| 登录过期（"Login expired · Please run /login"，§13.128） | 无：该轮停住，任何重放都发不出去 | 只有用户能 `/login`；登录成功后 Claude Code 自动续上被切断的那一轮，续上后仍先看再做；Controller 技能的中断一节写明 |
 | 插件更新后旧窗口继续跑 | 旧代码、旧 hook；verify 报资产 drift，reconcile 建议会用旧代码把资产改回去 | `runtime-artifact` 门与 status 的 `windows[].artifact` / `runtime.artifactOnDisk` 指名道姓；其他窗口 Controller 用助手 resume，本窗口由用户重连服务（Claude Code `/mcp`）或 resume 会话 |
 
 技能文本：四份技能各写一段"After an interruption"（先看再做，同 key / digest 重放，宿主发送先查落地），Controller 参考多一节"After a plugin update"。

@@ -83,6 +83,10 @@ ADR-0006 曾把 Pod 简化为"由 Confirmation 授权的隔离执行位置"；�
 - 宿主 profile 增加产品窗口的 worktree 意图模板与 Test 附加目录意图。
 - 计划：TSD-15 中"由 Confirmation 授权的隔离执行位置"改为本文的 pod 模型；L1 切片增加"pod 创建与关闭"。
 
+## 补充（2026-09-25，§13.128）
+
+第一个真实 pod 在 Claude Code 上拉起后核实了 D4 的宿主事实：`claude --worktree <name>` 把检出建在 `<仓库>/.claude/worktrees/<name>`、分支 `worktree-<name>`；仓库有远端时它从远端默认分支（origin/HEAD）建，不是本地 HEAD；若该路径上已有同名检出则复用（会话只加锁）。因此 `basePolicy: local-head` 的做法是先用 `git worktree add` 从本地 HEAD 在那条路径建好，再以 `--worktree <name>` 启动。这个版本的 Claude Code 不会把 `.claude/worktrees/` 写进仓库的排除规则，主检出会多出一行未跟踪目录；Controller 在每个仓库的 `.git/info/exclude` 加一行即可，不改被跟踪文件。Test 窗口的 `--add-dir` 来自产品窗口登记写的回执，所以 Test 窗口最后起。关闭时核实的另一件事：Claude Code 会给它使用的检出加锁，窗口退役后锁仍在，status 建议的 `git worktree remove` 会因锁失败，要先 `git worktree unlock`；建议命令不变（Wakeflow 不观察关闭时的锁状态），Controller 参考的关闭步骤写明这一步。
+
 ## 未决问题
 
 三项已在 L1 关闭：

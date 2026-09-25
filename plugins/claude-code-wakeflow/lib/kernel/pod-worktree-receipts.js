@@ -497,6 +497,22 @@ export async function listPodWorktreeReceiptsAnyHost(root, podId, options = {}) 
     }
     return Object.freeze([]);
 }
+/**
+ * 本宿主上除 `excludePodId` 之外、回执路径等于该检出的第一份回执（§13.128，旧实现 T03
+ * "rejects a worktree occupied by another current Pod"）：一个检出同一时刻只属于一个 pod。
+ */
+export async function findPodWorktreeReceiptByPath(root, hostId, checkoutPath, excludePodId, options = {}) {
+    const target = (await realpathOrNull(checkoutPath)) ?? checkoutPath;
+    for (const podId of await listPodReceiptDirectories(root, hostId, options)) {
+        if (podId === excludePodId)
+            continue;
+        for (const receipt of await listPodWorktreeReceipts(root, hostId, podId, options)) {
+            if (receipt.path === target)
+                return receipt;
+        }
+    }
+    return null;
+}
 /** 列出本宿主有回执目录的 pod 标识；recover 用它发现配置里已不存在的孤儿目录。 */
 export async function listPodReceiptDirectories(root, hostId, options = {}) {
     try {

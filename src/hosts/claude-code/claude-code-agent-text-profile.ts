@@ -89,9 +89,13 @@ const DELIVERY_ACTION =
   "helper finds the workspace from its own location.";
 
 const WORKTREE_LAUNCH =
-  "run `git worktree add` yourself at the path the intent names, or let the host make " +
-  "it by starting that window with `claude --worktree <name>`, which puts the checkout " +
-  "on branch `worktree-<name>`.";
+  "create the checkout yourself from the local HEAD at the path Claude Code uses, " +
+  "`<repository>/.claude/worktrees/<name>` on branch `worktree-<name>`, then start that " +
+  "window with `claude --worktree <name>`: it reuses an existing checkout of that name. " +
+  "Started without one, `claude --worktree` creates the checkout from the remote default " +
+  "branch when the repository has a remote, not from the local HEAD. If the repository " +
+  "does not ignore `.claude/worktrees/`, add that line to its `.git/info/exclude` so " +
+  "the main checkout's status stays clean.";
 
 const COMMAND_SURFACE_EN =
   "`/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where " +

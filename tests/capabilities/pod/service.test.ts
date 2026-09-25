@@ -5,6 +5,7 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
+import { executeVerifyRequest } from "../../../src/capabilities/observation/service.js";
 import { executePodRequest, type PodHostFacade } from "../../../src/capabilities/pod/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
@@ -17,6 +18,7 @@ import { writeHostHookObservation } from "../../../src/kernel/hook-observations.
 import { inspectWakeflowWindowRuntimeProjectionSet } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
+import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
 
 /**
  * pod 切片效果（§13.91 D1 到 D7）：create preview 零写、apply 一次配置事务、同键重放、重名阻塞；
@@ -329,7 +331,9 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
     register(fx, product.windowId, "codex-host-owned-thread:pod-product-nowt", fx.product),
     failsWith("invalid-request", "worktree-receipt-required"),
   );
-  const checkout = path.join(fx.base, "wt-feature-x");
+  // 真实宿主上检出在工作区根之下（Claude 建在仓库内的 .claude/worktrees/）：porcelain 含根路径，
+  // 靠请求隐私扫描对 observation.worktree 的豁免才能登记（§13.128）。
+  const checkout = path.join(fx.root, ".wakeflow-test-worktrees", "wt-feature-x");
   git(fx.product, "worktree", "add", "--quiet", checkout, "-b", "wakeflow-feature-x");
   const worktree = {
     porcelain: git(checkout, "worktree", "list", "--porcelain"),
@@ -360,6 +364,43 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
   });
   // 运行期泄露由这条看住；基线构建期烘进去的路径由 assertRelocatable 在基线落成时挡下。
   equal(JSON.stringify(productRegistered).includes(fx.base), false, "result leaked a path");
+  // 一个检出同一时刻只属于一个 pod（§13.128）：第二个 pod 的产品窗口拿同一检出登记被拒。
+  const rival = await pod(fx, {
+    mode: "apply",
+    intent: { kind: "create", name: "feature-y", idempotencyKey: "pod-2" },
+    planDigest: (
+      (await pod(fx, {
+        mode: "preview",
+        intent: { kind: "create", name: "feature-y", idempotencyKey: "pod-2" },
+      })) as { readonly planDigest: string }
+    ).planDigest,
+  });
+  if (rival.kind !== "WakeflowPodMutation") throw new Error("Expected rival pod.");
+  const rivalProduct = rival.windows.find((window) => window.role === "product");
+  if (!rivalProduct) throw new Error("Expected rival product window.");
+  await rejects(
+    register(
+      fx,
+      rivalProduct.windowId,
+      "codex-host-owned-thread:pod-product-rival",
+      checkout,
+      worktree,
+    ),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "precondition-failed" &&
+      error.reason === "worktree-occupied" &&
+      error.details?.podId === podId,
+  );
+  // 没有任何登记与回执的 pod 直接两段关闭：不需要分支处置，也没有要退役的窗口与检出。
+  const closeRival = async () => {
+    const intent = { kind: "close", podId: rival.pod?.podId ?? "", branches: [] };
+    const preview = (await pod(fx, { mode: "preview", intent })) as { readonly planDigest: string };
+    return pod(fx, { mode: "apply", intent, planDigest: preview.planDigest });
+  };
+  equal(((await closeRival()) as { readonly disposition: string }).disposition, "closing");
+  equal(((await closeRival()) as { readonly disposition: string }).disposition, "closed");
+  equal(readConfig(fx).pods.length, 2);
   const receiptFile = path.join(
     fx.root,
     ".wakeflow-local/runtime/hosts/codex/pods",
@@ -369,6 +410,15 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
   );
   equal(statSync(receiptFile).mode & 0o777, 0o600);
   equal(readFileSync(receiptFile, "utf8").includes(checkout), true);
+  // 登记写了 worktree 回执，pod 的投影事实变了：绑定变更提交后活动投影必须已重算（§13.128）。
+  const verifiedAfterRegister = await executeVerifyRequest(CODEX_OBSERVATION_FACADE, {
+    root: fx.root,
+  });
+  equal(
+    verifiedAfterRegister.gates.find((gate) => gate.name === "active-projection")?.status,
+    "pass",
+    JSON.stringify(verifiedAfterRegister.gates.filter((gate) => gate.status !== "pass")),
+  );
 
   const testIntent = await inspect(fx, testWindow.windowId);
   const attached = (

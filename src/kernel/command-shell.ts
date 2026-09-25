@@ -2,11 +2,11 @@ import os from "node:os";
 
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
-import { JsonValueError, parseJsonValue, type JsonValue } from "../foundation/data/json-value.js";
+import { type JsonValue, JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
 import {
   RootedDirectory,
-  RootedDirectoryError,
   type RootedDirectoryDurability,
+  RootedDirectoryError,
   type RootedDirectoryOpenOptions,
 } from "../foundation/filesystem/rooted-directory.js";
 import { fail, toWakeflowError } from "./error.js";
@@ -37,6 +37,12 @@ export interface CommandShellSpec<Envelope extends { readonly root: string }, In
   readonly close: (context: Context) => Promise<void>;
   /** 除工作区根与 home 之外还必须脱敏的值，例如 ledger 根与宿主句柄。 */
   readonly privateValues?: (context: Context) => Iterable<string>;
+  /**
+   * 请求隐私扫描跳过的顶层字段路径（点分，相对请求对象），例如 `observation.worktree`：
+   * 只给"内核准入要求原文、且只进私有回执、从不回到公共结果"的字段（§13.128）。结果侧的
+   * 公共边界不受影响，仍然逐值脱敏。
+   */
+  readonly requestPrivacyExemptPaths?: readonly string[];
 }
 
 /**
@@ -148,7 +154,11 @@ export async function runCommandShell<
   let failure: unknown;
   try {
     admit(binding);
-    assertRequestFreeOfPrivateText(payload, boundary, "$request");
+    assertRequestFreeOfPrivateText(
+      withoutExemptPaths(payload, spec.requestPrivacyExemptPaths ?? []),
+      boundary,
+      "$request",
+    );
     context = await spec.open(workspaceRoot, envelope);
     if (spec.privateValues !== undefined) {
       boundary = createRedactionBoundary([
@@ -168,6 +178,30 @@ export async function runCommandShell<
   if (failure !== undefined) throw failure;
   if (result === undefined) fail("unexpected", "no-result", "$result");
   return result;
+}
+
+/** 去掉请求里豁免扫描的字段（只走对象路径；路径不存在即原样；从不原地修改输入）。 */
+function withoutExemptPaths(payload: JsonValue, paths: readonly string[]): JsonValue {
+  let current = payload;
+  for (const dotted of paths) current = withoutPath(current, dotted.split("."));
+  return current;
+}
+
+function withoutPath(value: JsonValue, segments: readonly string[]): JsonValue {
+  const [head, ...rest] = segments;
+  if (head === undefined || typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+  if (!Object.hasOwn(value, head)) return value;
+  const copy: Record<string, JsonValue> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key !== head) {
+      copy[key] = entry;
+    } else if (rest.length > 0) {
+      copy[key] = withoutPath(entry, rest);
+    }
+  }
+  return copy;
 }
 
 /** 关闭上下文与根；主体失败优先，关闭失败只在主体成功时成为结局。 */

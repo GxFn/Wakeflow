@@ -13,12 +13,13 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
-import { inspectWorkClaim, releaseWorkClaim, WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS, } from "../../kernel/work-claims.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES, readHostHookObservations, } from "../../kernel/hook-observations.js";
 import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
-import { admitPodWorktreeObservation, candidateWorktreePaths, createPodWorktreeReceipt, listPodWorktreeReceipts, writePodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
+import { admitPodWorktreeObservation, candidateWorktreePaths, createPodWorktreeReceipt, findPodWorktreeReceiptByPath, listPodWorktreeReceipts, writePodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
+import { inspectWorkClaim, releaseWorkClaim, WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS, } from "../../kernel/work-claims.js";
 import { createWakeflowWindowHostBinding, renderWakeflowWindowHostBinding, } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import { createWakeflowWindowHostBindingId } from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { createWakeflowWindowHostBindingInStore, inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, withWakeflowWindowHostBindingStore, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
@@ -393,7 +394,7 @@ function worktreeInstructions(context, intent) {
             ...shared,
             launch: template.launch,
             hostBranch: `worktree-${intent.worktree.suggestedName}`,
-            note: "claude --worktree creates the checkout under .claude/worktrees/<name> from the local HEAD; the session cwd is that checkout",
+            note: "claude --worktree reuses an existing checkout at .claude/worktrees/<name> (create it from the local HEAD first for basePolicy local-head); without one it creates the checkout from the remote default branch when a remote exists; the session cwd is that checkout",
         };
     }
     return {
@@ -604,11 +605,19 @@ async function admitWorktree(context, loaded, observation) {
     if (sessionCwd === undefined) {
         fail("precondition-failed", "hook-evidence-missing", "$request.observation.handle");
     }
-    return admitPodWorktreeObservation({
+    const admitted = await admitPodWorktreeObservation({
         observation: observation.worktree,
         sessionCwd,
         repositoryRoot: context.repositoryRoot,
     });
+    // 一个检出同一时刻只属于一个 pod（§13.128）：另一 pod 的回执还指着它就拒绝，不覆盖那份归属。
+    const occupied = await findPodWorktreeReceiptByPath(context.root, context.facade.hostId, admitted.path, context.intent.podId, signalOptions(context.signal));
+    if (occupied !== null) {
+        fail("precondition-failed", "worktree-occupied", "$request.observation.worktree", {
+            details: { podId: occupied.podId },
+        });
+    }
+    return admitted;
 }
 async function recordWorktree(context, binding, worktree, observedAt) {
     if (worktree === null || context.intent?.worktree === null || context.intent === null)
@@ -840,7 +849,8 @@ async function executeOperation(context, request) {
     if (!decision.accepted)
         fail(decision.code, decision.reason, decision.path);
     if (decision.operation === "release-claim") {
-        const claim = await releaseClaim(context, loaded, request);
+        // 声明释放与绑定变更都改变活动投影的事实（pod 的 worktree 回执、窗口身份），提交后重算投影（§13.128）。
+        const claim = await afterMutationRefresh(context.root, context.signal, () => releaseClaim(context, loaded, request));
         return mutationResult(context, request, {
             disposition: "claim-released",
             binding: loaded.binding,
@@ -851,7 +861,7 @@ async function executeOperation(context, request) {
             next: nextFor(context, loaded.bindings, loaded.binding !== null, null, false),
         });
     }
-    const outcome = await mutateBinding(context, loaded, request, decision);
+    const outcome = await afterMutationRefresh(context.root, context.signal, () => mutateBinding(context, loaded, request, decision));
     return mutationResult(context, request, {
         disposition: outcome.disposition,
         binding: outcome.binding,
@@ -877,5 +887,8 @@ export async function executeWindowBindingRequest(facadeValue, value, options = 
         open: (root, envelope) => openContext(root, facade, envelope, options),
         close: async () => { },
         privateValues: (context) => [context.snapshot.ledgerRoot],
+        // worktree 观察是 git 原文，检出路径必然在工作区根或 home 之下；内核准入要原文，
+        // 回执是私有的，公共结果只回 head / branch / locked（§13.128）。
+        requestPrivacyExemptPaths: ["observation.worktree"],
     }, value, () => { }, (context, binding) => executeOperation(context, binding.input), commandShellExecutionOptions(options.durability));
 }

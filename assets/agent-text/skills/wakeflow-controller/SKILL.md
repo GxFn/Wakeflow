@@ -168,7 +168,10 @@ idempotency key or plan digest - Wakeflow returns the existing record instead
 of a second one. A host send is the one effect Wakeflow cannot replay for you:
 before delivering again, the helper checks the target's landing record and
 refuses with `already-landed` when the prompt is already there; record that
-landing as the outcome instead of forcing a second send.
+landing as the outcome instead of forcing a second send. When the host reports
+that its login expired, only the user can sign in again: tell them, and once
+they have, the host may resume the cut turn on its own - look before you act
+just the same.
 
 ## Stop conditions
 

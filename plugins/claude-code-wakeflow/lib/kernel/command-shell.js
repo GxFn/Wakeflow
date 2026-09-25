@@ -67,7 +67,7 @@ export async function runCommandShell(spec, value, admit, body, options = {}) {
     let failure;
     try {
         admit(binding);
-        assertRequestFreeOfPrivateText(payload, boundary, "$request");
+        assertRequestFreeOfPrivateText(withoutExemptPaths(payload, spec.requestPrivacyExemptPaths ?? []), boundary, "$request");
         context = await spec.open(workspaceRoot, envelope);
         if (spec.privateValues !== undefined) {
             boundary = createRedactionBoundary([
@@ -90,6 +90,31 @@ export async function runCommandShell(spec, value, admit, body, options = {}) {
     if (result === undefined)
         fail("unexpected", "no-result", "$result");
     return result;
+}
+/** 去掉请求里豁免扫描的字段（只走对象路径；路径不存在即原样；从不原地修改输入）。 */
+function withoutExemptPaths(payload, paths) {
+    let current = payload;
+    for (const dotted of paths)
+        current = withoutPath(current, dotted.split("."));
+    return current;
+}
+function withoutPath(value, segments) {
+    const [head, ...rest] = segments;
+    if (head === undefined || typeof value !== "object" || value === null || Array.isArray(value)) {
+        return value;
+    }
+    if (!Object.hasOwn(value, head))
+        return value;
+    const copy = {};
+    for (const [key, entry] of Object.entries(value)) {
+        if (key !== head) {
+            copy[key] = entry;
+        }
+        else if (rest.length > 0) {
+            copy[key] = withoutPath(entry, rest);
+        }
+    }
+    return copy;
 }
 /** 关闭上下文与根；主体失败优先，关闭失败只在主体成功时成为结局。 */
 async function releaseCommandShell(spec, context, workspaceRoot, failure) {

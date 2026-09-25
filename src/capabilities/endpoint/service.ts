@@ -1,19 +1,18 @@
 import { realpath } from "node:fs/promises";
 import path from "node:path";
-
-import {
-  readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
-  type WakeflowConfigAuthoritySnapshot,
-} from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type {
   WakeflowConfigPod,
   WakeflowConfigWindow,
 } from "../../configuration/wakeflow-config.js";
+import {
+  readWakeflowConfigAuthoritySnapshot,
+  type WakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
+} from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { parseJsonValue, type JsonObject } from "../../foundation/data/json-value.js";
+import { type JsonObject, parseJsonValue } from "../../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -29,8 +28,8 @@ import {
   unlinkRegularFileExactly,
 } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import type {
   RootedDirectory,
@@ -42,12 +41,7 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
-import {
-  inspectWorkClaim,
-  releaseWorkClaim,
-  type WorkClaim,
-  WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
-} from "../../kernel/work-claims.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import {
@@ -57,14 +51,21 @@ import {
 import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
+  type AdmittedPodWorktree,
   admitPodWorktreeObservation,
   candidateWorktreePaths,
   createPodWorktreeReceipt,
+  findPodWorktreeReceiptByPath,
   listPodWorktreeReceipts,
-  writePodWorktreeReceipt,
-  type AdmittedPodWorktree,
   type PodWorktreeReceipt,
+  writePodWorktreeReceipt,
 } from "../../kernel/pod-worktree-receipts.js";
+import {
+  inspectWorkClaim,
+  releaseWorkClaim,
+  WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
+  type WorkClaim,
+} from "../../kernel/work-claims.js";
 import {
   createWakeflowWindowHostBinding,
   renderWakeflowWindowHostBinding,
@@ -74,17 +75,17 @@ import { createWakeflowWindowHostBindingId } from "../../workspace/window-runtim
 import {
   createWakeflowWindowHostBindingInStore,
   inspectWakeflowWindowHostBindingInventory,
-  WakeflowWindowHostBindingStoreError,
-  withWakeflowWindowHostBindingStore,
   type WakeflowWindowHostBindingStoreAuthority,
   type WakeflowWindowHostBindingStoreContext,
+  WakeflowWindowHostBindingStoreError,
+  withWakeflowWindowHostBindingStore,
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import {
   parseWakeflowWindowHostHandle,
   parseWakeflowWindowHostIdentityProfile,
-  WakeflowWindowHostIdentityProfileError,
   type WakeflowWindowHostHandle,
   type WakeflowWindowHostIdentityProfile,
+  WakeflowWindowHostIdentityProfileError,
 } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
 import {
   compileWakeflowWindowLaunchIntents,
@@ -118,8 +119,8 @@ import {
   type WindowBindingResult,
 } from "./contract.js";
 import {
-  decideEndpointCommand,
   type ClosureLiveness,
+  decideEndpointCommand,
   type EndpointCommand,
   type EndpointState,
 } from "./decide.js";
@@ -128,14 +129,14 @@ import {
   readWindowLocator,
   retireWindowLocator,
   toTmuxLocator,
-  writeWindowLocator,
   type WindowLocatorRecord,
+  writeWindowLocator,
 } from "./locator-store.js";
 import { classifyTmuxPanes, type TmuxPaneObservation } from "./pane-classification.js";
 import {
   deriveEndpointNext,
-  publishProjectionDocument,
   type ProjectionReceipt,
+  publishProjectionDocument,
 } from "./projection.js";
 
 /**
@@ -732,7 +733,7 @@ function worktreeInstructions(
       ...shared,
       launch: template.launch,
       hostBranch: `worktree-${intent.worktree.suggestedName}`,
-      note: "claude --worktree creates the checkout under .claude/worktrees/<name> from the local HEAD; the session cwd is that checkout",
+      note: "claude --worktree reuses an existing checkout at .claude/worktrees/<name> (create it from the local HEAD first for basePolicy local-head); without one it creates the checkout from the remote default branch when a remote exists; the session cwd is that checkout",
     };
   }
   return {
@@ -1004,11 +1005,25 @@ async function admitWorktree(
   if (sessionCwd === undefined) {
     fail("precondition-failed", "hook-evidence-missing", "$request.observation.handle");
   }
-  return admitPodWorktreeObservation({
+  const admitted = await admitPodWorktreeObservation({
     observation: observation.worktree,
     sessionCwd,
     repositoryRoot: context.repositoryRoot,
   });
+  // 一个检出同一时刻只属于一个 pod（§13.128）：另一 pod 的回执还指着它就拒绝，不覆盖那份归属。
+  const occupied = await findPodWorktreeReceiptByPath(
+    context.root,
+    context.facade.hostId,
+    admitted.path,
+    context.intent.podId,
+    signalOptions(context.signal),
+  );
+  if (occupied !== null) {
+    fail("precondition-failed", "worktree-occupied", "$request.observation.worktree", {
+      details: { podId: occupied.podId },
+    });
+  }
+  return admitted;
 }
 
 async function recordWorktree(
@@ -1361,7 +1376,10 @@ async function executeOperation(
   );
   if (!decision.accepted) fail(decision.code, decision.reason, decision.path);
   if (decision.operation === "release-claim") {
-    const claim = await releaseClaim(context, loaded, request as ReleaseClaimRequest);
+    // 声明释放与绑定变更都改变活动投影的事实（pod 的 worktree 回执、窗口身份），提交后重算投影（§13.128）。
+    const claim = await afterMutationRefresh(context.root, context.signal, () =>
+      releaseClaim(context, loaded, request as ReleaseClaimRequest),
+    );
     return mutationResult(context, request, {
       disposition: "claim-released",
       binding: loaded.binding,
@@ -1372,7 +1390,9 @@ async function executeOperation(
       next: nextFor(context, loaded.bindings, loaded.binding !== null, null, false),
     });
   }
-  const outcome = await mutateBinding(context, loaded, request as MutationRequest, decision);
+  const outcome = await afterMutationRefresh(context.root, context.signal, () =>
+    mutateBinding(context, loaded, request as MutationRequest, decision),
+  );
   return mutationResult(context, request, {
     disposition: outcome.disposition,
     binding: outcome.binding,
@@ -1410,6 +1430,9 @@ export async function executeWindowBindingRequest(
       open: (root, envelope) => openContext(root, facade, envelope, options),
       close: async () => {},
       privateValues: (context) => [context.snapshot.ledgerRoot],
+      // worktree 观察是 git 原文，检出路径必然在工作区根或 home 之下；内核准入要原文，
+      // 回执是私有的，公共结果只回 head / branch / locked（§13.128）。
+      requestPrivacyExemptPaths: ["observation.worktree"],
     },
     value,
     () => {},

@@ -155,7 +155,12 @@ main checkout; every other pod works in a worktree.
 3. Create each worktree by host means: run `git worktree add` yourself at the path the intent names. The checkout starts on a detached HEAD, so the branch has to exist before any result is imported from it. Then launch that
    pod's windows in their worktree roots and register each binding as in
    step 1. A product window in a pod is refused registration until its worktree
-   is actually there and observed.
+   is actually there and observed, and a checkout another live pod already
+   holds is refused as `worktree-occupied`. Bring the pod up in this order:
+   its Controller and Design windows, then every product window with its
+   worktree observation, and only then its Test window - the Test window's
+   launch intent lists the worktrees as attached directories, and that list is
+   read from the receipts the product registrations wrote.
 4. If receipts and config disagree after an interruption, reconcile with
    recover before doing anything else.
 
@@ -168,7 +173,11 @@ Controller run two Demands.
 1. The pod's Demand must already be archived.
 2. Record the branch dispositions. This is the phase that says what happened to
    the work - do not record "merged" for a branch you have not seen merged.
-3. Retire the pod's windows and remove its checkouts.
+3. Retire the pod's windows, then remove its checkouts with the
+   `git worktree remove` command the status suggests. A host may lock a
+   checkout while its session runs; once that window is retired the lock is
+   stale, so `git worktree unlock` it first, then remove and
+   `git worktree prune`. Wakeflow never removes a checkout itself.
 4. Remove the pod. Closing in this order is what keeps the config and the
    worktrees from disagreeing.
 

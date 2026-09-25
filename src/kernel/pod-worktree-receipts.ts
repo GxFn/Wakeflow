@@ -3,21 +3,21 @@ import path from "node:path";
 
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../contracts/identity/wakeflow-durable-id.js";
 import {
   WAKEFLOW_HOST_IDS,
   type WakeflowHostId,
 } from "../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { parseSha256Digest, Sha256Error, type Sha256Digest } from "../foundation/crypto/sha256.js";
+import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
 } from "../foundation/data/deterministic-json-document.js";
-import { parseJsonValue, type JsonObject, type JsonValue } from "../foundation/data/json-value.js";
+import { type JsonObject, type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -33,12 +33,12 @@ import {
   unlinkRegularFileExactly,
 } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectoryError,
   type RootedDirectory,
+  RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
@@ -49,8 +49,8 @@ import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../foundation/time/utc-instant.js";
 import { fail } from "./error.js";
 import {
@@ -679,6 +679,27 @@ export async function listPodWorktreeReceiptsAnyHost(
     if (receipts.length > 0) return receipts;
   }
   return Object.freeze([]);
+}
+
+/**
+ * 本宿主上除 `excludePodId` 之外、回执路径等于该检出的第一份回执（§13.128，旧实现 T03
+ * "rejects a worktree occupied by another current Pod"）：一个检出同一时刻只属于一个 pod。
+ */
+export async function findPodWorktreeReceiptByPath(
+  root: RootedDirectory,
+  hostId: WakeflowHostId,
+  checkoutPath: string,
+  excludePodId: string,
+  options: Signal = {},
+): Promise<Readonly<PodWorktreeReceipt> | null> {
+  const target = (await realpathOrNull(checkoutPath)) ?? checkoutPath;
+  for (const podId of await listPodReceiptDirectories(root, hostId, options)) {
+    if (podId === excludePodId) continue;
+    for (const receipt of await listPodWorktreeReceipts(root, hostId, podId, options)) {
+      if (receipt.path === target) return receipt;
+    }
+  }
+  return null;
 }
 
 /** 列出本宿主有回执目录的 pod 标识；recover 用它发现配置里已不存在的孤儿目录。 */

@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
@@ -20,6 +20,7 @@ import {
   admitPodWorktreeObservation,
   candidateWorktreePaths,
   createPodWorktreeReceipt,
+  findPodWorktreeReceiptByPath,
   listPodReceiptDirectories,
   listPodWorktreeReceipts,
   listPodWorktreeReceiptsAnyHost,
@@ -249,6 +250,14 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
   deepEqual(await listPodWorktreeReceiptsAnyHost(root, POD_ID), [receipt]);
   deepEqual(await listPodReceiptDirectories(root, "codex"), [POD_ID]);
   equal(await worktreeCheckoutPresent(receipt), true);
+  // 占用查找（§13.128）：同一检出被另一个 pod 的回执指着即命中；排除自己的 pod；别的路径不命中。
+  const otherPod = "pod_ffffffff-ffff-4fff-8fff-ffffffffffff";
+  equal(
+    (await findPodWorktreeReceiptByPath(root, "codex", fixture.linked, otherPod))?.podId,
+    POD_ID,
+  );
+  equal(await findPodWorktreeReceiptByPath(root, "codex", fixture.linked, POD_ID), null);
+  equal(await findPodWorktreeReceiptByPath(root, "codex", fixture.detached, otherPod), null);
 
   const replaced = createPodWorktreeReceipt({
     hostId: "codex",

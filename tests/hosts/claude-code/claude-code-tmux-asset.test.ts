@@ -741,9 +741,9 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   match(readback.evidenceDigest, /^sha256:[0-9a-f]{64}$/u);
   equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), prompt);
   const log = tmuxLog(current);
-  // 送前截屏一次（看输入框），粘贴、回车，再回读一次。
+  // 送前带属性截屏一次（看输入框，暗色提示不算已打的字），粘贴、回车，再回读一次。
   deepEqual(log.map((entry) => entry[0]), ["list-panes", "capture-pane", "load-buffer", "paste-buffer", "send-keys", "capture-pane"]);
-  deepEqual(log[1], ["capture-pane", "-p", "-t", "%9"]);
+  deepEqual(log[1], ["capture-pane", "-e", "-p", "-t", "%9"]);
   const bufferName = log[2]?.[2] ?? "";
   match(bufferName, /^wakeflow-[0-9a-f-]{36}$/u);
   deepEqual(log[3], ["paste-buffer", "-d", "-p", "-b", bufferName, "-t", "%9"]);
@@ -940,6 +940,8 @@ test("deliver never pastes into a permission dialog or menu, even with --force, 
     `> 1. rename the helper\n● Renamed.\n──────────\n\u276f \n${footer}`,
     // 空输入框里只有占位提示。
     `● Done.\n──────────\n\u276f Try "fix lint errors"\n${footer}`,
+    // 回合结束后 Claude Code 在输入框里显示的暗色提示建议（SGR 2），不是用户打的字（§13.133 现场）。
+    `● Done.\n\u001b[38;5;244m──────────\u001b[39m\n\u001b[39m\u276f \u001b[2m确认，发布\u001b[0m\n${footer}`,
   ]) {
     const sent = deliverWith(screen);
     equal(sent.json.ok, true, JSON.stringify(sent.json));
@@ -1086,6 +1088,11 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
     return runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, ...args]);
   };
   // 错误行在尾部、没有工作中标记、输入框为空：粘贴默认的一句并回车一次。
+  // 输入框里的暗色提示建议不算已打的字：照样推一句（§13.133 现场）。
+  equal(
+    nudgeWith(screen("  Reading the task package first.", errorLine, "", "──────────", "❯ \u001b[2mcontinue\u001b[0m")).json.status,
+    "nudged",
+  );
   const nudged = nudgeWith(idle);
   equal(nudged.status, 0, JSON.stringify(nudged.json));
   deepEqual(nudged.json, {
@@ -1100,7 +1107,7 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
   equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), "Continue.");
   const log = tmuxLog(current);
   deepEqual(log.map((entry) => entry[0]), ["list-panes", "capture-pane", "load-buffer", "paste-buffer", "send-keys"]);
-  deepEqual(log[1], ["capture-pane", "-p", "-t", "%9"]);
+  deepEqual(log[1], ["capture-pane", "-e", "-p", "-t", "%9"]);
   deepEqual(log[3]?.slice(0, 4), ["paste-buffer", "-d", "-p", "-b"]);
   deepEqual(log[4], ["send-keys", "-t", "%9", "Enter"]);
   // 工作区语言的一句也行；输入框里的占位提示算空。

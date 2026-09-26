@@ -1114,7 +1114,7 @@ function commandDeliver(config, options) {
   }
   // 送前看一眼 pane：输入框不在（权限、信任对话框或选择菜单）就不粘贴——粘贴会被吞，回车会替用户选默认项。
   // 工作中的 pane 只要输入框可见仍照发（排队是正常的）。--force 不跳过这一步。
-  const before = tmux(context, ["capture-pane", "-p", "-t", locator.tmux.paneId]);
+  const before = tmux(context, ["capture-pane", "-e", "-p", "-t", locator.tmux.paneId]);
   if (!before.ok) return beforeSend("capture-failed", windowId);
   const prompted = promptAssessment(before.stdout);
   if (!prompted.atPrompt) {
@@ -1175,8 +1175,27 @@ function observeLanding(windowId, prompt, seconds) {
 }
 
 // 屏幕尾部（最后 SCREEN_TAIL_LINES 个非空行）：Claude Code 的错误行、工作中标记与输入框都在这里。
+// 屏幕可以带 SGR 属性（capture-pane -e）：结构判断看去掉属性后的文字；输入框里的暗色（SGR 2）段是
+// Claude Code 的占位提示或提示建议（§13.133 现场：回合结束后输入框里的灰色建议），不算用户打的字。
+const SGR_PATTERN = /\u001b\[[0-9;]*m/gu;
+const DIM_SEGMENT_PATTERN = /\u001b\[2m.*?(?:\u001b\[(?:0|22)m|$)/gu;
+
+function screenLines(screen) {
+  return screen
+    .split("\n")
+    .map((raw) => ({ raw, plain: raw.replace(SGR_PATTERN, "").trim() }))
+    .filter((line) => line.plain.length > 0)
+    .slice(-SCREEN_TAIL_LINES);
+}
+
 function screenTail(screen) {
-  return screen.split("\n").map((line) => line.trim()).filter((line) => line.length > 0).slice(-SCREEN_TAIL_LINES);
+  return screenLines(screen).map((line) => line.plain);
+}
+
+function typedInput(rawLine) {
+  const text = rawLine.replace(DIM_SEGMENT_PATTERN, "").replace(SGR_PATTERN, "").trim();
+  const found = INPUT_LINE_PATTERN.exec(text);
+  return (found === null ? text : found[1]).trim();
 }
 
 // 输入框上方最后一条对话行：取尾部最后一个输入框行之前、跳过输入框边框线的最后一行。
@@ -1195,7 +1214,8 @@ function lastTranscriptLine(tail) {
 // 不影响判断；输入框里已有别人打了一半的字也拒绝。observed 只报分类（menu-cursor、input-box-unseen 或
 // input-not-empty），不回显屏幕文字：权限选项里会出现命令与绝对目录。
 function promptAssessment(screen) {
-  const tail = screenTail(screen);
+  const lines = screenLines(screen);
+  const tail = lines.map((line) => line.plain);
   const borders = tail.map((line, index) => (INPUT_BORDER_PATTERN.test(line) ? index : -1)).filter((index) => index >= 0);
   const lower = borders.at(-1);
   const upper = borders.at(-2);
@@ -1204,8 +1224,8 @@ function promptAssessment(screen) {
     const menu = tail.some((line) => MENU_CURSOR_PATTERN.test(line));
     return Object.freeze({ atPrompt: false, observed: menu ? "menu-cursor" : "input-box-unseen" });
   }
-  // 输入框里已有文字（占位提示除外）：粘贴会接在别人打了一半的字后面、回车一起提交，同样拒绝。
-  const typed = INPUT_LINE_PATTERN.exec(inputLine)[1].trim();
+  // 输入框里已有文字（暗色的占位提示与提示建议除外）：粘贴会接在别人打了一半的字后面、回车一起提交，同样拒绝。
+  const typed = typedInput(lines[upper + 1].raw);
   if (typed.length > 0 && !typed.startsWith(INPUT_PLACEHOLDER_PREFIX)) {
     return Object.freeze({ atPrompt: false, observed: "input-not-empty" });
   }
@@ -1224,9 +1244,11 @@ function nudgeAssessment(screen) {
       return Object.freeze({ status: "busy", observedError, observedBusy: cleanLabel(line, "working", NUDGE_TEXT_MAXIMUM) });
     }
   }
-  const inputLine = tail.map((line) => INPUT_LINE_PATTERN.exec(line)).filter((found) => found !== null).pop() ?? null;
+  const lines = screenLines(screen);
+  const inputIndex = tail.findLastIndex((line) => INPUT_LINE_PATTERN.test(line));
+  const inputLine = inputIndex < 0 ? null : INPUT_LINE_PATTERN.exec(tail[inputIndex]);
   if (inputLine === null) return Object.freeze({ status: "busy", observedError, observedBusy: "input-box-unseen" });
-  const typed = inputLine[1].trim();
+  const typed = typedInput(lines[inputIndex].raw);
   if (typed.length > 0 && !typed.startsWith(INPUT_PLACEHOLDER_PREFIX)) {
     return Object.freeze({ status: "busy", observedError, observedBusy: "input-not-empty" });
   }
@@ -1245,7 +1267,7 @@ function commandNudge(config, options) {
     return { ok: false, command: "nudge", windowId, status: "pane-missing", reason: located.reason, observedError: null, ...located.extra };
   }
   const paneId = located.locator.tmux.paneId;
-  const captured = tmux(context, ["capture-pane", "-p", "-t", paneId]);
+  const captured = tmux(context, ["capture-pane", "-e", "-p", "-t", paneId]);
   if (!captured.ok) refuse("capture-failed");
   const evidenceDigest = sha256(captured.stdout);
   const assessed = nudgeAssessment(captured.stdout);

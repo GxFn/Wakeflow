@@ -1202,13 +1202,26 @@ function lastTranscriptLine(tail) {
   return above.at(-1) ?? null;
 }
 
-// deliver 送前的屏幕判断：尾部最后一个输入框形状的行存在且不是菜单光标行（"❯ 1. Yes"）才算停在输入框；
-// 对话记录里渲染过的 "> 1. …" 在真输入框之上，不影响判断。observed 只报分类（menu-cursor 或 input-box-unseen），
-// 不回显对话框文字：权限对话框的选项里会出现命令与绝对目录（§13.132 审查）。
+// deliver 送前的屏幕判断（§13.130 审查，§13.132 现场）：输入框是"边框线、输入行（及续行）、边框线"这一结构，
+// 取尾部最后一对边框线夹住的块，块的第一行必须是输入行且不是菜单光标行（"❯ 1. Yes"）。信任对话框的
+// "❯ No, exit"、权限与选择菜单都不在两条边框线之间，一律拒绝；对话记录里渲染过的 "> 1. …" 在输入框之上，
+// 不影响判断；输入框里已有别人打了一半的字也拒绝。observed 只报分类（menu-cursor、input-box-unseen 或
+// input-not-empty），不回显屏幕文字：权限选项里会出现命令与绝对目录。
 function promptAssessment(screen) {
-  const inputLine = screenTail(screen).filter((line) => INPUT_LINE_PATTERN.test(line)).at(-1);
-  if (inputLine === undefined) return Object.freeze({ atPrompt: false, observed: "input-box-unseen" });
-  if (MENU_CURSOR_PATTERN.test(inputLine)) return Object.freeze({ atPrompt: false, observed: "menu-cursor" });
+  const tail = screenTail(screen);
+  const borders = tail.map((line, index) => (INPUT_BORDER_PATTERN.test(line) ? index : -1)).filter((index) => index >= 0);
+  const lower = borders.at(-1);
+  const upper = borders.at(-2);
+  const inputLine = lower !== undefined && upper !== undefined && lower - upper >= 2 ? tail[upper + 1] : undefined;
+  if (inputLine === undefined || !INPUT_LINE_PATTERN.test(inputLine) || MENU_CURSOR_PATTERN.test(inputLine)) {
+    const menu = tail.some((line) => MENU_CURSOR_PATTERN.test(line));
+    return Object.freeze({ atPrompt: false, observed: menu ? "menu-cursor" : "input-box-unseen" });
+  }
+  // 输入框里已有文字（占位提示除外）：粘贴会接在别人打了一半的字后面、回车一起提交，同样拒绝。
+  const typed = INPUT_LINE_PATTERN.exec(inputLine)[1].trim();
+  if (typed.length > 0 && !typed.startsWith(INPUT_PLACEHOLDER_PREFIX)) {
+    return Object.freeze({ atPrompt: false, observed: "input-not-empty" });
+  }
   return Object.freeze({ atPrompt: true, observed: null });
 }
 

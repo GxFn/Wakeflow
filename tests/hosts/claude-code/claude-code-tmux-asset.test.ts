@@ -89,7 +89,7 @@ case "$cmd" in
   list-panes) if [ -f "$state/panes.txt" ]; then cat "$state/panes.txt"; fi ;;
   display-message) cat "$state/display.txt" ;;
   load-buffer) cat > "$state/buffer.txt" ;;
-  capture-pane) cat "$state/capture.txt" ;;
+  capture-pane) if [ -f "$state/capture-before.txt" ]; then cat "$state/capture-before.txt"; rm -f "$state/capture-before.txt"; else cat "$state/capture.txt"; fi ;;
   kill-window|kill-session) [ ! -e "$state/kill-fail" ] ;;
   *) echo "unknown tmux subcommand: $cmd" >&2; exit 2 ;;
 esac
@@ -725,7 +725,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   const livePane = paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS });
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
   const prompt = "Implement the task package for Product A now.\n\nRead the package first; touch only ProductA.\n";
-  writeFileSync(path.join(current.state, "capture.txt"), `> Implement the task package for Product A now.\n\nWorking...\n`);
+  writeFileSync(path.join(current.state, "capture.txt"), `> Implement the task package for Product A now.\n\nWorking...\n──────────\n❯ \n──────────\n`);
   const handleDigest = computeSha256Digest(encodeUtf8(SESSION_ID, "$handle"), "$handle");
 
   const sent = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--handle-digest", handleDigest], {
@@ -904,6 +904,33 @@ test("deliver never pastes into a permission dialog or menu, even with --force, 
   equal(unseen.json.reason, "target-not-at-prompt");
   equal(unseen.json.observed, "input-box-unseen");
   equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
+  // Claude Code 2.1.283 的真实信任对话框（§13.132 现场）：光标行 "❯ No, exit" 没有编号，也不在两条边框线之间；
+  // 粘贴后的回车会选中 "No, exit" 让会话退出，所以必须拒绝。
+  const trust = [
+    "──────────────────────────────",
+    " Accessing workspace:",
+    " ~/work/ProductA",
+    " Quick safety check: Is this a project you created or one you trust? (Like your",
+    " own code, a well-known open source project, or work from your team). If not,",
+    " take a moment to review what's in this folder first.",
+    " Claude Code'll be able to read, edit, and execute files here.",
+    " Security guide",
+    " \u276f No, exit",
+    "   Yes, I trust this folder",
+    " Enter to confirm · Esc to cancel",
+    "",
+  ].join("\n");
+  for (const args of [[], ["--force"]]) {
+    const refusedTrust = deliverWith(trust, args);
+    equal(refusedTrust.json.reason, "target-not-at-prompt", JSON.stringify(refusedTrust.json));
+    equal(refusedTrust.json.observed, "input-box-unseen");
+    equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
+  }
+  // 输入框里已有别人打了一半的字：粘贴会接在后面一起提交，拒绝（§13.132）。
+  const typed = deliverWith(`● Done.\n──────────\n\u276f half-typed question\n──────────\n  footer\n`);
+  equal(typed.json.reason, "target-not-at-prompt");
+  equal(typed.json.observed, "input-not-empty");
+  equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
   // 闲置的输入框与工作中但输入框可见的 pane（排队是正常的）都照发。
   const footer = "──────────\n  ⏵⏵ accept edits on (shift+tab to cycle)\n";
   for (const screen of [
@@ -911,6 +938,8 @@ test("deliver never pastes into a permission dialog or menu, even with --force, 
     `✻ Cogitating… (esc to interrupt)\n──────────\n\u276f \n${footer}`,
     // 对话记录里渲染过的编号用户消息在真输入框之上，不算菜单。
     `> 1. rename the helper\n● Renamed.\n──────────\n\u276f \n${footer}`,
+    // 空输入框里只有占位提示。
+    `● Done.\n──────────\n\u276f Try "fix lint errors"\n${footer}`,
   ]) {
     const sent = deliverWith(screen);
     equal(sent.json.ok, true, JSON.stringify(sent.json));
@@ -1011,6 +1040,8 @@ test("deliver readback confirms Claude Code's collapsed paste indicator when its
   // 去首尾空白后四行，尾随一个换行：折叠指示的 "+3 lines"（行数减一）与 "+4 lines"（原样粘贴的换行数）都认。
   const prompt = "Implement the task package for Product A now.\n\nRead the package first; touch only ProductA.\nReport back.\n";
   const readbackFor = (screen: string, input = prompt): { status: string; evidenceDigest?: string } => {
+    // 送前截屏看到的是空输入框，送后截屏才是被测的回读屏幕（桩的 capture-before 只用一次）。
+    writeFileSync(path.join(current.state, "capture-before.txt"), "● Ready.\n──────────\n❯ \n──────────\n");
     writeFileSync(path.join(current.state, "capture.txt"), screen);
     const run = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"], { input });
     equal(run.status, 0, JSON.stringify(run.json));

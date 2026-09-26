@@ -2607,8 +2607,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-tmux-asset.js",
-      "bytes": 65933,
-      "sha256": "sha256:b7da2aa233b6eabe2b9b89a1c25d0dbe4f7078836dbc7b00c0081d66b0c83164",
+      "bytes": 66874,
+      "sha256": "sha256:f7875ac08d0f95399d4e3ec04bb8461de7c54570fc182b60efe3e230a221cedf",
       "mode": "0644",
       "scope": "current-host"
     },

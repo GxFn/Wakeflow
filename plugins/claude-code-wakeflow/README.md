@@ -84,9 +84,12 @@ You never set tmux up by hand. Start `claude` in the workspace directory and run
 the helper maintenance installs at
 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact
 `tmux attach` command once the windows are up, and which trust dialogs to accept. It
-delivers prompts through the same helper. Maintenance also writes one precise allow rule
-for that helper into the workspace root's `.claude/settings.json`, so the helper runs
-without a permission prompt; nothing broader such as `Bash(tmux *)` is written.
+delivers prompts through the same helper. Maintenance also writes precise allow rules for
+that helper and the Wakeflow MCP tools into the workspace root's `.claude/settings.json`,
+and every window the helper launches or resumes is started with those two tools allowed,
+so product and test windows do not stop at a permission prompt for them either; nothing
+broader such as `Bash(tmux *)` is written, and prompts for any other tool follow your own
+permission mode.
 
 Both hosts, and the usual reason something is silently missing:
 

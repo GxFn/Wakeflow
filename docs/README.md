@@ -49,7 +49,7 @@ docs/
 | [requirements/README.md](./requirements/README.md) | 需求锚点索引，含归档中仍被引用的 D1 到 D41 与 Pod 需求 | active |
 | [standards/resource-handling-standard.md](./standards/resource-handling-standard.md) | 资源处理归一标准与收敛矩阵 | 已确认，RH-1 到 RH-3 已实现 |
 | [standards/documentation-standard.md](./standards/documentation-standard.md) | 文档编写标准 | active |
-| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.96 |
+| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.132 |
 | [progress/file-review-ledger.md](./progress/file-review-ledger.md) | 逐文件审阅台账 | active |
 | [reviews/2026-09-03-typescript-checkpoint-review.md](./reviews/2026-09-03-typescript-checkpoint-review.md) | 关键节点架构与实现评估、缺口分析、建设计划建议 | 评估建议，待讨论 |
 | [reviews/2026-09-04-flow-optimization-analysis.md](./reviews/2026-09-04-flow-optimization-analysis.md) | 回传、调用形状、完成留痕、测试记录对比、重设计边界的旧代码事实、业界对照与设计建议 | 评估建议，已由 ADR-0012 接受 |
@@ -57,7 +57,8 @@ docs/
 | [reviews/2026-09-11-l1-source-walkthrough-findings.md](./reviews/2026-09-11-l1-source-walkthrough-findings.md) | L1 九个切片落地后的逐文件走读：四类同族问题、正确性缺口、纪律一致性、测试缺口、文档漂移与排序建议 | §8.1 档已落地（gate-log 13.93），§8.2 / §8.3 待裁决 |
 | [references/legacy-js-scenario-closure-audit.md](./references/legacy-js-scenario-closure-audit.md) | 旧 JavaScript 产品全场景闭包审查 | 只读审计，E3 对比证据 |
 | [references/capability-map.md](./references/capability-map.md) | 能力映射矩阵：31 项旧工具、内部能力、宿主差异、D1 到 D41 与 I3 逐行判定 | active，重切或已落地 27、缺席 0、放弃 4（2026-09-18） |
-| [references/scenario-acceptance.md](./references/scenario-acceptance.md) | 场景验收清单与骨架运行入口 `npm run scenario:acceptance` | active，18 个场景 pass |
+| [references/scenario-acceptance.md](./references/scenario-acceptance.md) | 场景验收清单与骨架运行入口 `npm run scenario:acceptance` | active，二十个场景 pass |
+| [references/open-items.md](./references/open-items.md) | 未决问题登记：缺陷、风险、验证缺口与待裁决事项的唯一登记处，编号与 2026-09-26 深度分析一致 | active，106 项、12 项待裁决（gate-log §13.132） |
 | [archive/README.md](./archive/README.md) | 归档索引 | 16 份历史文档 |
 
 ## 4. 状态词汇

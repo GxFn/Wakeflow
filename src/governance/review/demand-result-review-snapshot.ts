@@ -40,6 +40,8 @@ import { readAllDemandFileEventCommits } from "../demand/event-sourcing/demand-f
 
 const SNAPSHOT_KIND = "WakeflowDemandResultReviewSnapshot" as const;
 const SNAPSHOT_SCHEMA_VERSION = 1 as const;
+const IMPLEMENTATION_DECISION_KIND =
+  "WakeflowControllerImplementationReviewDecision" as const;
 
 type AwaitingResultPhase = Exclude<
   DemandTargetTaskState["phase"],
@@ -249,6 +251,47 @@ export function computeReportedReviewUnitDigest(
   );
 }
 
+/**
+ * 已决单元的评审单元摘要按它被记录时的基底形状复现。§13.121 D7 之前，决定没有
+ * `anchorEvidence` 字段，当时历史条目里也就没有这个键；解析后它被归一为 null。先按
+ * 当前形状核对；不符且历史里没有任何非 null 的 anchorEvidence 时，再按 D7 前的形状
+ * （实现决定省略 null 的 anchorEvidence）核对。两者都不复现即 relation。
+ */
+function reproduceDecidedReviewUnitDigest(
+  basis: Omit<DemandResultReviewReportedTarget, "reviewUnitDigest">,
+  stored: Sha256Digest,
+): Sha256Digest {
+  if (computeCanonicalJsonSha256Digest(basis) === stored) return stored;
+  const history = basis.priorReviewHistory;
+  if (
+    history.some(
+      (entry) =>
+        entry.decision.kind === IMPLEMENTATION_DECISION_KIND &&
+        entry.decision.anchorEvidence !== null,
+    )
+  ) {
+    fail("relation");
+  }
+  const preAnchorEvidenceBasis = {
+    ...basis,
+    priorReviewHistory: history.map((entry) => ({
+      sourceEvent: entry.sourceEvent,
+      decision:
+        entry.decision.kind === IMPLEMENTATION_DECISION_KIND
+          ? Object.fromEntries(
+              Object.entries(entry.decision).filter(
+                ([key]) => key !== "anchorEvidence",
+              ),
+            )
+          : entry.decision,
+    })),
+  };
+  if (computeCanonicalJsonSha256Digest(preAnchorEvidenceBasis) !== stored) {
+    fail("relation");
+  }
+  return stored;
+}
+
 function priorReviewHistory(
   sources: Readonly<AuditedDemandTargetResultHistory>,
   targetTaskId: WakeflowDurableId<"target-task">,
@@ -411,12 +454,10 @@ function buildTargets(
         decisionSource.sourceEvent.streamRevision,
       ),
     );
-    const reviewUnitDigest = computeCanonicalJsonSha256Digest(reportedBasis);
-    if (
-      decisionSource.decision.reviewed.reviewUnitDigest !== reviewUnitDigest
-    ) {
-      fail("relation");
-    }
+    const reviewUnitDigest = reproduceDecidedReviewUnitDigest(
+      reportedBasis,
+      decisionSource.decision.reviewed.reviewUnitDigest,
+    );
     return Object.freeze({
       ...reportedBasis,
       status: "review-decided" as const,

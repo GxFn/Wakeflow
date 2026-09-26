@@ -18,10 +18,11 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  * 子命令（都从工作区根以 `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs
  * <子命令>` 调用，stdout 恰好一行 JSON）：
  *
- * - `preflight`：tmux 与 claude 是否可用、配置的会话是否已存在、当前是否在 tmux 里。
+ * - `preflight`：node、tmux 与 claude 是否可用及其版本、配置的会话是否已存在、当前是否在 tmux 里。
  * - `launch --window <windowId>`：stdin 是 `wakeflow_register_window_binding` inspect 的结果
  *   （或其 `launchIntent`）。生成 session id，按启动意图开窗口并启动 `claude`，等目标会话的
- *   `session-start` hook 记录，打印登记用的 creation observation。意图带 `local-head` 的 worktree
+ *   `session-start` hook 记录，打印登记用的 creation observation。launch 与 resume 都在意图参数之后加
+ *   `--allowedTools`：Wakeflow MCP 规则与按助手绝对路径的 `Bash(node <path> *)`（路径只进启动命令）。意图带 `local-head` 的 worktree
  *   意图且参数里有 `--worktree <name>` 时（§13.130 H4），先在意图根（仓库主检出）准备检出：
  *   `<root>/.claude/worktrees/<name>` 不存在就 `git worktree add -b worktree-<name> <path> HEAD`
  *   （分支已存在而检出不存在时拒绝为 `worktree-branch-exists`，由 Controller 询问用户），存在就复用
@@ -40,6 +41,8 @@ import { hostRuntimeRootRef } from "../../kernel/layout.js";
  * - `panes`：`tmux list-panes -a` 转成 `tmux-panes` 观察。
  * - `deliver --window <windowId> [--handle-digest <sha256>] [--wait-landing <seconds>]`：stdin 是
  *   许可里的 prompt；先核对 pane（与定位器相关的 pane 恰好一个、活着、跑的是 claude、标识与坐标都对），
+ *   粘贴前截屏一次：尾部看不到输入框（权限、信任对话框或选择菜单）就拒绝为 failed-before-send 的
+ *   `target-not-at-prompt`（`--force` 不跳过），截屏失败为 `capture-failed`；
  *   粘贴、回车一次、回读一次，再等目标会话的 user-prompt-submit hook 记录（默认 3 秒），打印
  *   `wakeflow_record_delivery_outcome` 的 attempt、readback 与 landing。回读（§13.130 H1）看两种
  *   屏幕证据：prompt 首行子串，或 Claude Code 把粘贴折叠成的 `[Pasted text #N +M lines]` 指示且
@@ -148,6 +151,29 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const TMUX_WINDOW_PATTERN = /^@[0-9]{1,9}$/u;
 const TMUX_PANE_PATTERN = /^%[0-9]{1,9}$/u;
+// spawn tmux / git 前的环境（§13.117 D4，§13.132）：剥掉 TMUX / TMUX_PANE 与全部 CLAUDE* 变量，只留下
+// 用户自己的 Claude 配置。从 Controller 的 Bash 里首次启动的 tmux 服务器会把环境交给每个新窗口：
+// CLAUDECODE=1 让新 claude 以为自己是嵌套会话，桌面应用与 SDK 注入的变量（CLAUDE_EFFORT、
+// CLAUDE_CODE_DISABLE_CRON、会话与消息通道标识……）会改变新会话的行为。宿主注入的名字随版本增减，
+// 所以按"用户配置白名单"放行，而不是按"会话变量黑名单"剥离；ANTHROPIC_* 等非 CLAUDE 变量照旧传下去。
+const USER_CLAUDE_ENVIRONMENT_NAMES = Object.freeze([
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+  "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+  "CLAUDE_CODE_API_KEY_HELPER_TTL_MS",
+  "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+  "CLAUDE_CODE_CLIENT_CERT",
+  "CLAUDE_CODE_CLIENT_KEY",
+  "CLAUDE_CODE_CLIENT_KEY_PASSPHRASE",
+]);
+// 选择模型提供方与跳过其认证的变量族（CLAUDE_CODE_USE_BEDROCK / _VERTEX / _FOUNDRY、CLAUDE_CODE_SKIP_*_AUTH）。
+const USER_CLAUDE_ENVIRONMENT_PREFIXES = Object.freeze(["CLAUDE_CODE_USE_", "CLAUDE_CODE_SKIP_"]);
+// 每个启动或续上的会话都带的两条 allow 规则（--allowedTools）：Wakeflow MCP 工具与按本助手绝对路径调用的
+// 助手本身。产品与测试窗口的根没有工作区根的 settings，助手又按绝对路径调用，相对规则对不上。
+// MCP 规则必须等于 WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE（测试核对）。
+const MCP_PERMISSION_RULE = "mcp__plugin_wakeflow_wakeflow";
+// 送前屏幕：选择菜单或权限、信任对话框的光标行（"❯ 1. Yes"），此时输入框不在，粘贴会被吞、回车会选默认项。
+const MENU_CURSOR_PATTERN = /^[❯>]\s?[0-9]+[.)]\s/u;
 
 const ASSET_PATH = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(ASSET_PATH), "..", "..", "..", "..", "..", "..");
@@ -299,7 +325,14 @@ function tmuxContext(config) {
 function hostEnvironment() {
   const environment = {};
   for (const [name, value] of Object.entries(process.env)) {
-    if (name === "TMUX" || name === "TMUX_PANE" || name.startsWith("CLAUDE")) continue;
+    if (name === "TMUX" || name === "TMUX_PANE") continue;
+    if (
+      name.startsWith("CLAUDE")
+      && !USER_CLAUDE_ENVIRONMENT_NAMES.includes(name)
+      && !USER_CLAUDE_ENVIRONMENT_PREFIXES.some((prefix) => name.startsWith(prefix))
+    ) {
+      continue;
+    }
     environment[name] = value;
   }
   return environment;
@@ -708,6 +741,7 @@ function commandPreflight(config) {
   return {
     ok: true,
     command: "preflight",
+    node: Object.freeze({ available: true, version: cleanLabel(process.version, "unknown", MAX_VERSION) }),
     tmux: versionOf("tmux", ["-V"]),
     claude: versionOf("claude", ["--version"]),
     session: { socketName: context.socketName, sessionName: context.sessionName, present: session.ok, attach: attachCommand(context) },
@@ -778,10 +812,16 @@ function assertPaneAlive(context, command, coordinates) {
   }
 }
 
+// 绝对路径只在助手进程里算出、只进 tmux 的启动命令，不进任何输出。
+function sessionPermissionRules() {
+  return [MCP_PERMISSION_RULE, "Bash(node " + ASSET_PATH + " *)"];
+}
+
 function openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments) {
   const placement = resolvePlacement(execution.tmux?.cwd ?? launchIntent.root?.configuredPlacement);
   const windowName = cleanLabel(execution.tmux?.windowName ?? launchIntent.displayTitle, "window");
-  const command = [claudeBinary(), ...resolvedArguments].map(shellQuote).join(" ");
+  // --allowedTools 是变长参数，必须放在意图自己的参数之后、作为最后一个选项，只加一次。
+  const command = [claudeBinary(), ...resolvedArguments, "--allowedTools", ...sessionPermissionRules()].map(shellQuote).join(" ");
   const environmentArguments = typeof process.env.PATH === "string" ? ["-e", "PATH=" + process.env.PATH] : [];
   const exists = tmux(context, ["has-session", "-t", "=" + context.sessionName]).ok;
   const creation = tmux(context, [
@@ -1085,6 +1125,18 @@ function commandDeliver(config, options) {
       hint: "this prompt already landed in the bound session; record the outcome with this landing instead of sending again (--force sends anyway)",
     });
   }
+  // 送前看一眼 pane：输入框不在（权限、信任对话框或选择菜单）就不粘贴——粘贴会被吞，回车会替用户选默认项。
+  // 工作中的 pane 只要输入框可见仍照发（排队是正常的）。--force 不跳过这一步。
+  const before = tmux(context, ["capture-pane", "-p", "-t", locator.tmux.paneId]);
+  if (!before.ok) return beforeSend("capture-failed", windowId);
+  const prompted = promptAssessment(before.stdout);
+  if (!prompted.atPrompt) {
+    return beforeSend("target-not-at-prompt", windowId, {
+      observed: prompted.observed,
+      evidenceDigest: sha256(before.stdout),
+      hint: "the target pane shows a dialog or menu instead of its input box; have the user answer it in that window, then rearm",
+    });
+  }
   const submitted = pasteAndSubmit(context, locator.tmux.paneId, prompt);
   if (submitted.stage === "load-buffer") return beforeSend("load-buffer-failed", windowId);
   if (submitted.stage !== null) return { ok: false, command: "deliver", windowId, reason: submitted.stage + "-failed", attempt: { status: "unknown" } };
@@ -1148,6 +1200,16 @@ function lastTranscriptLine(tail) {
   });
   const above = tail.slice(0, inputIndex).filter((line) => !INPUT_BORDER_PATTERN.test(line));
   return above.at(-1) ?? null;
+}
+
+// deliver 送前的屏幕判断：尾部最后一个输入框形状的行存在且不是菜单光标行（"❯ 1. Yes"）才算停在输入框；
+// 对话记录里渲染过的 "> 1. …" 在真输入框之上，不影响判断。observed 只报分类（menu-cursor 或 input-box-unseen），
+// 不回显对话框文字：权限对话框的选项里会出现命令与绝对目录（§13.132 审查）。
+function promptAssessment(screen) {
+  const inputLine = screenTail(screen).filter((line) => INPUT_LINE_PATTERN.test(line)).at(-1);
+  if (inputLine === undefined) return Object.freeze({ atPrompt: false, observed: "input-box-unseen" });
+  if (MENU_CURSOR_PATTERN.test(inputLine)) return Object.freeze({ atPrompt: false, observed: "menu-cursor" });
+  return Object.freeze({ atPrompt: true, observed: null });
 }
 
 // 只在"被切断且已闲置"时才推一句（§13.130 H3）：尾部有 API Error 行且它是输入框上方最后一条对话行、

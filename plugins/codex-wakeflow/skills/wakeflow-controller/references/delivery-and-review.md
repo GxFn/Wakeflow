@@ -90,11 +90,15 @@ Wakeflow derives the disposition itself:
 On Claude Code the helper's `deliver` output carries that lookup for you as
 `landing`: `observed` with the record id means the prompt was submitted in the
 bound session and the outcome will be accepted; `pending` means no record
-appeared within the wait. A prompt pasted while the window is mid-turn is
-queued by Claude Code and still gets its record at once, so pending usually
-means the wrong or a dead window - record the outcome as the helper reported
-it and let Wakeflow decide. Readback is only screen text and never proves
-landing.
+appeared within the wait after a real send - a late hook, or the wrong or a
+dead window; record the outcome as the helper reported it and let Wakeflow
+decide. Before it pastes, the helper captures the pane and refuses with
+`target-not-at-prompt` (a `failed-before-send` attempt whose `observed` is
+`menu-cursor` or `input-box-unseen`) when the window shows a dialog or menu
+instead of its input box; `--force` does not bypass this. Nothing was sent:
+ask the user to answer the dialog in that window - never send keys to it
+yourself - then record the outcome as reported and re-arm the delivery. Readback is only
+screen text and never proves landing.
 
 An indeterminate delivery is not a dead end. When the landing evidence arrives
 later, call `wakeflow_record_delivery_outcome` again with a new idempotency

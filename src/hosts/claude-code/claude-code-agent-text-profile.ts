@@ -101,7 +101,11 @@ const WINDOW_BOOTSTRAP =
 const DELIVERY_ACTION =
   "pipe the permit's prompt into the tmux helper, run from the workspace root: " +
   `\`${TMUX_HELPER} deliver --window <windowId> --handle-digest <the permit's handleDigest>\`. ` +
-  "It checks the pane against the locator and the handle digest, pastes the prompt, presses " +
+  "It checks the pane against the locator and the handle digest, refuses before sending with " +
+  "`target-not-at-prompt` when the pane shows a dialog or menu instead of its input box (nothing " +
+  "was sent: ask the user to answer it in that window, then send again - a target delivery recorded as " +
+  "`failed-before-send` is re-armed by the Controller, a callback is simply delivered again with the same " +
+  "permit; never send keys to that window yourself), pastes the prompt, presses " +
   "Return once and captures the pane once, then waits a few seconds for the target session's prompt-submit hook record and prints the `attempt`, `readback` and `landing` to " +
   "record verbatim. `readback: confirmed` only means the prompt's first line, or Claude " +
   "Code's collapsed `[Pasted text #N +M lines]` indicator with the matching line count, was " +
@@ -148,9 +152,12 @@ const HOST_TRUST_STEPS_EN = [
   "the helper maintenance installs at",
   "`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact",
   "`tmux attach` command once the windows are up, and which trust dialogs to accept. It",
-  "delivers prompts through the same helper. Maintenance also writes one precise allow rule",
-  "for that helper into the workspace root's `.claude/settings.json`, so the helper runs",
-  "without a permission prompt; nothing broader such as `Bash(tmux *)` is written.",
+  "delivers prompts through the same helper. Maintenance also writes precise allow rules for",
+  "that helper and the Wakeflow MCP tools into the workspace root's `.claude/settings.json`,",
+  "and every window the helper launches or resumes is started with those two tools allowed,",
+  "so product and test windows do not stop at a permission prompt for them either; nothing",
+  "broader such as `Bash(tmux *)` is written, and prompts for any other tool follow your own",
+  "permission mode.",
 ].join("\n");
 
 const HOST_TRUST_STEPS_ZH = [
@@ -162,8 +169,10 @@ const HOST_TRUST_STEPS_ZH = [
   "你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow:init`：Controller 会通过",
   "维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己",
   "建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任",
-  "对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写一条只放行",
-  "这个助手的 allow 规则，助手因此不弹权限；不会写 `Bash(tmux *)` 之类更宽的规则。",
+  "对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写只放行这个",
+  "助手和 Wakeflow MCP 工具的 allow 规则；助手启动或恢复的每个窗口也带着这两项放行启动，所以产品",
+  "窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则，其他工具是否弹权限",
+  "仍按你自己的权限模式。",
 ].join("\n");
 
 /** 九个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */

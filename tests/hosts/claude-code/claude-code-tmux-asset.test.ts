@@ -29,6 +29,7 @@ import {
   executeClaudeCodeTmuxAssetOperation,
   planClaudeCodeTmuxAssetOperation,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
+import { WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 /**
@@ -59,6 +60,7 @@ if [ "\${1:-}" = "-L" ]; then shift 2; fi
 cmd="\${1:-}"
 shift || true
 { printf '%s' "$cmd"; for arg in "$@"; do printf '\\x1f%s' "$arg"; done; printf '\\n'; } >> "$log"
+if [ -n "\${WAKEFLOW_STUB_ENV:-}" ]; then env > "$WAKEFLOW_STUB_ENV"; fi
 if [ "\${WAKEFLOW_STUB_FAIL:-}" = "$cmd" ]; then exit 1; fi
 case "$cmd" in
   -V) echo "tmux 3.6b" ;;
@@ -120,9 +122,9 @@ interface Fixture {
   readonly hooks: string;
 }
 
-async function fixture(t: TestContext): Promise<Fixture> {
+async function fixture(t: TestContext, prefix = "wakeflow-tmux-asset-"): Promise<Fixture> {
   // realpath：助手从自身位置推导根时经过 ESM 加载器的符号链接解析，断言要比同一形态的路径。
-  const parent = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-tmux-asset-")));
+  const parent = realpathSync(mkdtempSync(path.join(os.tmpdir(), prefix)));
   const root = path.join(parent, "workspace");
   mkdirSync(root, { recursive: true });
   mkdirSync(path.join(parent, "ProductA"), { recursive: true });
@@ -174,6 +176,24 @@ async function fixture(t: TestContext): Promise<Fixture> {
     log,
     hooks: path.join(root, ...RUNTIME.split("/"), "observations", "hooks"),
   });
+}
+
+/** 按 shell 规则拆开助手交给 tmux 的启动命令，核对引号之后的 argv。 */
+function shellWords(command: string): readonly string[] {
+  const result = spawnSync("bash", ["-c", 'eval "set -- $1"; printf "%s\\0" "$@"', "_", command], { encoding: "utf8" });
+  equal(result.status, 0, result.stderr);
+  return result.stdout.split("\0").slice(0, -1);
+}
+
+/** launch 与 resume 的启动命令以恰好一次 --allowedTools 和两条规则结尾（MCP 规则与助手的绝对路径规则）。 */
+function assertSessionPermissionRules(current: Fixture, command: string): void {
+  const words = shellWords(command);
+  deepEqual(words.slice(-3), [
+    "--allowedTools",
+    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+    `Bash(node ${current.assetPath} *)`,
+  ]);
+  equal(words.filter((word) => word === "--allowedTools").length, 1, command);
 }
 
 interface HelperRun {
@@ -366,10 +386,11 @@ test("tmux asset is a fixed 0600 file whose command and permission rule agree an
   }
 });
 
-test("preflight reports tmux, claude, the configured session and the shell context without touching anything", async (t) => {
+test("preflight reports node, tmux, claude, the configured session and the shell context without touching anything", async (t) => {
   const current = await fixture(t);
   const run = runHelper(current, ["preflight"]);
   equal(run.status, 0);
+  deepEqual(run.json.node, { available: true, version: process.version });
   deepEqual(run.json.tmux, { available: true, version: "tmux 3.6b" });
   deepEqual(run.json.claude, { available: true, version: "9.9.9 (Claude Code)" });
   deepEqual(run.json.session, {
@@ -381,6 +402,71 @@ test("preflight reports tmux, claude, the configured session and the shell conte
   equal(run.json.insideTmux, false);
   equal(run.json.sessionIdVisible, false);
   deepEqual(tmuxLog(current).map((entry) => entry[0]), ["has-session", "-V"]);
+});
+
+test("the helper strips every Claude session and host variable before running tmux and keeps only the user's Claude configuration（§13.132）", async (t) => {
+  const current = await fixture(t);
+  const dump = path.join(current.state, "env.txt");
+  const run = runHelper(current, ["preflight"], {
+    env: {
+      WAKEFLOW_STUB_ENV: dump,
+      CLAUDE_CONFIG_DIR: "claude-config",
+      CLAUDE_CODE_USE_BEDROCK: "1",
+      CLAUDE_CODE_USE_VERTEX: "1",
+      CLAUDECODE: "1",
+      CLAUDE_CODE_ENTRYPOINT: "cli",
+      CLAUDE_CODE_SSE_PORT: "12345",
+      CLAUDE_CODE_SESSION_ID: SESSION_ID,
+      CLAUDE_PROJECT_DIR: "project",
+      CLAUDE_ENV_FILE: "env-file",
+      CLAUDE_EFFORT: "max",
+      CLAUDE_CODE_DISABLE_CRON: "1",
+      CLAUDE_CODE_DESKTOP_APP_VERSION: "9.9.9",
+      CLAUDE_CODE_SKIP_BEDROCK_AUTH: "1",
+      CLAUDE_CODE_OAUTH_TOKEN: "user-token",
+      ANTHROPIC_BASE_URL: "https://example.invalid",
+      TMUX_PANE: "%3",
+    },
+  });
+  equal(run.status, 0, JSON.stringify(run.json));
+  const names = new Map(
+    readFileSync(dump, "utf8").split("\n").filter((line) => line.includes("=")).map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
+  );
+  equal(names.get("CLAUDE_CONFIG_DIR"), "claude-config");
+  equal(names.get("CLAUDE_CODE_USE_BEDROCK"), "1");
+  equal(names.get("CLAUDE_CODE_USE_VERTEX"), "1");
+  equal(names.get("CLAUDE_CODE_SKIP_BEDROCK_AUTH"), "1");
+  equal(names.get("CLAUDE_CODE_OAUTH_TOKEN"), "user-token");
+  equal(names.get("ANTHROPIC_BASE_URL"), "https://example.invalid");
+  for (const stripped of ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR", "CLAUDE_ENV_FILE", "CLAUDE_EFFORT", "CLAUDE_CODE_DISABLE_CRON", "CLAUDE_CODE_DESKTOP_APP_VERSION", "TMUX_PANE"]) {
+    equal(names.has(stripped), false, stripped);
+  }
+});
+
+test("launch and resume grant the Wakeflow MCP tools and the helper by its absolute path, quoted safely when the path has spaces", async (t) => {
+  const current = await fixture(t, "wakeflow tmux asset ");
+  ok(current.assetPath.includes(" "));
+  const hooks = { WAKEFLOW_STUB_HOOKS: current.hooks };
+  const launched = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
+    input: JSON.stringify({ windowId: PRODUCT_WINDOW_ID, launchIntent: launchIntent("Product A", "../ProductA") }),
+    env: hooks,
+  });
+  equal(launched.status, 0, JSON.stringify(launched.json));
+  const created = tmuxLog(current).filter((entry) => entry[0] === "new-session" || entry[0] === "new-window");
+  assertSessionPermissionRules(current, created.at(-1)?.at(-1) ?? "");
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  writeFileSync(path.join(current.state, "panes.txt"), "");
+  resetLog(current);
+  const resumed = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "2"], {
+    input: JSON.stringify(launchIntent("Product A", "../ProductA")),
+    env: hooks,
+  });
+  equal(resumed.status, 0, JSON.stringify(resumed.json));
+  const reopened = tmuxLog(current).filter((entry) => entry[0] === "new-session" || entry[0] === "new-window");
+  const command = reopened.at(-1)?.at(-1) ?? "";
+  assertSessionPermissionRules(current, command);
+  equal(shellWords(command).includes("--resume"), true);
 });
 
 test("launch opens the session or a window from the intent, freezes the title, writes the identity options and returns the observation", async (t) => {
@@ -424,6 +510,7 @@ test("launch opens the session or a window from the intent, freezes the title, w
   equal(command.includes("'--model' 'opus'"), true);
   equal(command.includes(SESSION_ID_PLACEHOLDER), false);
   equal(command.endsWith("'"), true);
+  assertSessionPermissionRules(current, command);
   deepEqual(log[2], ["set-option", "-w", "-t", "@1", "automatic-rename", "off"]);
   deepEqual(log[3], ["set-option", "-w", "-t", "@1", "@wakeflow_program_id", PROGRAM_ID]);
   deepEqual(log[4], ["set-option", "-w", "-t", "@1", "@wakeflow_host_id", "claude-code"]);
@@ -654,22 +741,27 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   match(readback.evidenceDigest, /^sha256:[0-9a-f]{64}$/u);
   equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), prompt);
   const log = tmuxLog(current);
-  deepEqual(log.map((entry) => entry[0]), ["list-panes", "load-buffer", "paste-buffer", "send-keys", "capture-pane"]);
-  const bufferName = log[1]?.[2] ?? "";
+  // 送前截屏一次（看输入框），粘贴、回车，再回读一次。
+  deepEqual(log.map((entry) => entry[0]), ["list-panes", "capture-pane", "load-buffer", "paste-buffer", "send-keys", "capture-pane"]);
+  deepEqual(log[1], ["capture-pane", "-p", "-t", "%9"]);
+  const bufferName = log[2]?.[2] ?? "";
   match(bufferName, /^wakeflow-[0-9a-f-]{36}$/u);
-  deepEqual(log[2], ["paste-buffer", "-d", "-p", "-b", bufferName, "-t", "%9"]);
-  deepEqual(log[3], ["send-keys", "-t", "%9", "Enter"]);
-  deepEqual(log[4], ["capture-pane", "-p", "-t", "%9"]);
+  deepEqual(log[3], ["paste-buffer", "-d", "-p", "-b", bufferName, "-t", "%9"]);
+  deepEqual(log[4], ["send-keys", "-t", "%9", "Enter"]);
+  deepEqual(log[5], ["capture-pane", "-p", "-t", "%9"]);
 
-  // 回读没看到首行：pending；回读失败：unavailable；两者都不影响 attempt=sent。
-  writeFileSync(path.join(current.state, "capture.txt"), "something else\n");
+  // 回读没看到首行：pending；不影响 attempt=sent。
+  writeFileSync(path.join(current.state, "capture.txt"), "something else\n──────────\n❯ \n──────────\n");
   equal((runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json.readback as { status: string }).status, "pending");
+  // 截屏失败时看不到输入框：送前拒绝，不粘贴。
+  resetLog(current);
   const noCapture = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], {
     input: prompt,
     env: { WAKEFLOW_STUB_FAIL: "capture-pane" },
   });
-  equal(noCapture.json.ok, true);
-  deepEqual(noCapture.json.readback, { status: "unavailable" });
+  equal(noCapture.json.reason, "capture-failed");
+  deepEqual(noCapture.json.attempt, { status: "failed-before-send" });
+  equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
 
   // 发送前的拒绝：句柄摘要不符、pane 不在、元数据不符、load-buffer 失败，都是 failed-before-send。
   const wrongHandle = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--handle-digest", `sha256:${"00".repeat(32)}`], {
@@ -778,6 +870,55 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "999"], { input: prompt }).json.reason, "wait-landing-invalid");
 });
 
+test("deliver never pastes into a permission dialog or menu, even with --force, but still delivers to an idle or working prompt", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
+  const prompt = "wake-controller: Product A finished its task package.\n";
+  const deliverWith = (screen: string, args: readonly string[] = []): HelperRun => {
+    writeFileSync(path.join(current.state, "capture.txt"), screen);
+    resetLog(current);
+    return runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0", ...args], { input: prompt });
+  };
+  const dialog = [
+    "● Bash(rm -rf build)",
+    " Bash command",
+    "   rm -rf build",
+    " Do you want to proceed?",
+    " \u276f 1. Yes",
+    "   2. No, and tell Claude what to do differently (esc)",
+    "",
+  ].join("\n");
+  for (const args of [[], ["--force"]]) {
+    const refused = deliverWith(dialog, args);
+    equal(refused.status, 1, JSON.stringify(refused.json));
+    equal(refused.json.reason, "target-not-at-prompt");
+    deepEqual(refused.json.attempt, { status: "failed-before-send" });
+    equal(refused.json.observed, "menu-cursor");
+    equal(refused.json.evidenceDigest, computeSha256Digest(encodeUtf8(dialog, "$screen"), "$screen"));
+    deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes", "capture-pane"]);
+  }
+  // 输入框不在尾部（例如信任对话框没有编号光标）：同样拒绝，observed 说明没看到输入框。
+  const unseen = deliverWith("Do you trust the files in this folder?\nEnter to confirm · Esc to exit\n");
+  equal(unseen.json.reason, "target-not-at-prompt");
+  equal(unseen.json.observed, "input-box-unseen");
+  equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
+  // 闲置的输入框与工作中但输入框可见的 pane（排队是正常的）都照发。
+  const footer = "──────────\n  ⏵⏵ accept edits on (shift+tab to cycle)\n";
+  for (const screen of [
+    `● Done.\n──────────\n\u276f \n${footer}`,
+    `✻ Cogitating… (esc to interrupt)\n──────────\n\u276f \n${footer}`,
+    // 对话记录里渲染过的编号用户消息在真输入框之上，不算菜单。
+    `> 1. rename the helper\n● Renamed.\n──────────\n\u276f \n${footer}`,
+  ]) {
+    const sent = deliverWith(screen);
+    equal(sent.json.ok, true, JSON.stringify(sent.json));
+    deepEqual(sent.json.attempt && (sent.json.attempt as { status: string }).status, "sent");
+    equal(tmuxLog(current).filter((entry) => entry[0] === "send-keys").length, 1);
+  }
+});
+
 test("resume restarts the bound session in a new pane and launch refuses while the located pane is alive（§13.125）", async (t) => {
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
@@ -806,6 +947,7 @@ test("resume restarts the bound session in a new pane and launch refuses while t
   const command = created[created.length - 1] ?? "";
   equal(command.includes(`'--resume' '${SESSION_ID}'`), true, command);
   equal(command.includes("--session-id"), false, command);
+  assertSessionPermissionRules(current, command);
   // 没有绑定的窗口不能 resume。
   equal(runHelper(current, ["resume", "--window", CONTROLLER_WINDOW_ID, "--wait", "0"], { input: JSON.stringify(launchIntent("Controller", ".")) }).json.reason, "binding-missing");
   // SessionStart 没到但新 pane 还活着：待定，交给 Controller 稍后核对。

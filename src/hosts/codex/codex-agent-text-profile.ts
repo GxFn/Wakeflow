@@ -43,9 +43,12 @@ export const CODEX_AGENT_TEXT_COMMANDS_INCLUDED = false;
 
 const INSTRUCTION_FILE = "AGENTS.md";
 
+/** Codex 线程不会被挪进新进程：relocate 在本宿主不适用，线程没了就开新线程再 replace（§13.134）。 */
 const WINDOW_LAUNCH =
   "open a new Codex thread rooted at the directory the intent names, started with " +
-  "the parameters it lists.";
+  "the parameters it lists. A thread is never moved into a new process, so relocate does " +
+  "not apply on this host: when a window's thread is gone, open a new one and replace the " +
+  "binding with its thread id.";
 
 /** Codex 没有 tmux：Controller 就是当前线程，先登记自己再开别的。 */
 const WINDOW_BOOTSTRAP =
@@ -61,10 +64,16 @@ const WORKTREE_LAUNCH =
   "the repository the intent names. The checkout starts on a detached HEAD, so run " +
   "`git switch -c <suggestedName>` in it before any result is imported from it.";
 
-/** Codex 线程不会被挪进新进程：没有 relocate 这条路，只有新线程加 replace。 */
+/**
+ * 插件更新后的窗口换代（§13.134）：本线程先换代——它的服务只有用户能重连，在那之前不跑维护、
+ * 也不换别的窗口（过期服务给的启动意图是旧的）；之后其他过期窗口开新线程加 replace。
+ */
 const WINDOW_RESUME =
-  "Codex has no relocate path - a thread is not moved into a new process. Open a new " +
-  "thread as the window's launch intent says and replace the binding with that thread's id.";
+  "first this thread, when it is stale or its server outdated: only the user can reconnect " +
+  "its Wakeflow server or resume the session - tell them, and wait until they have before you " +
+  "continue. Then, after that verify and any reconcile, the other stale windows: open a new " +
+  "thread for each as its launch intent says and replace the binding with that thread's id - " +
+  "a thread is never moved into a new process, so there is no relocate path.";
 
 /** Codex 没有助手替你守重发：发送前自己看接收窗口的线程。 */
 const RESEND_GUARD =

@@ -1,9 +1,9 @@
 # Workspace, windows and pods
 
 Read this when you are initializing or reconfiguring the workspace (step 0),
-launching or retiring a window (step 1), or creating or closing a pod
-(step 13). It is Controller depth; the immediate goal, the reading order and
-the boundaries are in `SKILL.md`.
+launching or retiring a window (step 1), refreshing windows after a plugin
+update, or creating or closing a pod (step 13). It is Controller depth; the
+immediate goal, the reading order and the boundaries are in `SKILL.md`.
 
 ## What the workspace is
 
@@ -26,17 +26,19 @@ current. Read it back through a tool.
 `wakeflow_maintain_workspace` runs one transaction in one of three intents:
 
 - **fresh-initialize** - a new workspace in an empty or non-workspace
-  directory that is itself a Git repository (`git init` first; the preview
-  reports `gitignore-git-repository` until it is).
+  directory that is itself a Git repository (when it is not, run `git init`
+  there yourself once the user agrees; the preview reports
+  `gitignore-git-repository` until it is).
 - **reconfigure** - a declared difference against an existing config. Layout
   identity is immutable: the program id and the ledger root cannot move, the
   support surfaces cannot change, and a change to the pod set is not a
   reconfigure. Those refusals are structural, not advisory - route the user to
   the right operation instead of retrying. What does change here: the display
   name, description and language, the host launch preferences under `hosts` -
-  the model, reasoning effort and permission mode by role, and the tmux
-  container names - which the next launch intents pick up without touching any
-  window, and one kind of layout change: adding a product repository. Send the
+  the model and reasoning effort by role, Claude Code's permission mode, and
+  the tmux container names - which the next launch intents pick up without
+  touching any window, and one kind of layout change: adding a product
+  repository. Send the
   current config with the new repository entry and one new `product` window
   for it in the primary pod appended, each with a fresh id (`repository_` or
   `window_` followed by a new lowercase UUID v4). The repository's root must
@@ -79,10 +81,18 @@ Procedure, every time:
 
 1. Gather the user's choices in plain conversation first. Repositories, the
    surfaces, the storage root and the program's own description are decisions,
-   not defaults for you to pick. A model, reasoning effort or permission mode
-   the user wants for a role belongs in the selection's `hosts` block, keyed
-   by host and role: `hosts.<host>.launch.modelByRole.<role or default>`,
-   `reasoningEffortByRole` likewise, and `permissionMode` for Claude Code.
+   not defaults for you to pick. A model or reasoning effort the user wants
+   for a role belongs in the selection's `hosts` block, keyed by host and
+   role: `hosts.<host>.launch.modelByRole.<role or default>`, and
+   `reasoningEffortByRole` likewise. Claude Code windows launch in Claude
+   Code's `auto` permission mode by default; one value,
+   `hosts.claude-code.launch.permissionMode`, covers every window. A window
+   may still ask a one-time question the first time, for example whether to
+   allow reads outside its working directories: tell the user which window is
+   asking and let them answer it there. When the user's account has no auto
+   mode, set that value to `acceptEdits` with a reconfigure; the next launch
+   intents carry it, and those windows then stop for permission prompts on
+   commands, which the user answers the same way.
 2. Preview. It writes nothing and returns the plan, its blockers and the launch
    intents the plan would produce.
 3. Show the user the plan and every blocker. A blocker is a fact about their
@@ -137,9 +147,9 @@ Other actions on the same tool:
 - **relocate** keeps the binding and records where a resumed session now
   lives: the same handle, new host coordinates, the same CAS on the binding.
   It is the record for a window whose process died while its session should
-  go on. To bring such a window back: {{windowResume}}
-  A held work claim does not block relocate: the same session keeps its work.
-  Use replace only when the session itself is gone.
+  go on; the launch step above says whether and how this host brings such a
+  session back. A held work claim does not block relocate: the same session
+  keeps its work. Use replace only when the session itself is gone.
 - **decommission** retires a window with its pre-close, close-result and
   post-close evidence. Use it when a window is genuinely gone, not to silence
   an inconvenient state. On Claude Code the helper's `close` kills nothing
@@ -160,13 +170,20 @@ update on disk does not reach a running session. `wakeflow_status` shows this
 per window as `artifact: stale` (its session-start record names an older
 artifact than the one serving the status), and `wakeflow_verify` fails the
 `runtime-artifact` gate with `windows-stale:<n>`, or with `server-outdated`
-when the artifact changed under this very window's server.
+when the artifact changed under this very window's server; in `next` they
+appear as `window-artifact-stale` and `runtime-artifact-outdated`. That is
+all these codes mean. This section is the remedy, so do not read the plugin's
+implementation to find another.
 
-- For every other stale window: {{windowResume}}
-- For this window: only the user can reconnect its Wakeflow server (in Claude
-  Code: `/mcp`, then reconnect `wakeflow`) or resume the session. Tell them,
-  and do not run maintenance from the outdated server - it would write the
-  older assets back over the newer ones.
+Never run maintenance from an outdated server - it would write the older
+assets back over the newer ones - and do not refresh another window from one
+either: the launch intents its `wakeflow_register_window_binding` inspect
+returns, which every refresh starts from, come from the older code too. So
+this window goes first. Once it runs the updated plugin, call
+`wakeflow_verify`; if a gate other than `runtime-artifact` fails -
+`host-settings-assets` does while the assets the older plugin installed are
+still in place - preview and apply a reconcile as in step 0. Only then
+refresh the other stale windows. On this host: {{windowResume}}
 
 ## Pods
 

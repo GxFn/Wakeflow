@@ -619,6 +619,39 @@ test("verify：健康工作区十五门全 pass；hook 观察目录出现非法�
   equal(restored.ok, true);
   equal(restored.observationDigest, verified.observationDigest);
 
+  // §13.134 B12：kill-window 在原子创建中途杀掉 hook，留下写入器自己那种暂存文件（create、0600，
+  // 所有者进程已不在）。它不是记录也不是损坏：host-hook-channel 照常 pass，观察摘要不变。
+  const stage = path.join(
+    hooksDirectory,
+    `.wakeflow-atomic-v1-create-${"a".repeat(64)}-${"b".repeat(64)}-m600__99999999-0-00000000-0000-4000-8000-000000000001.tmp`,
+  );
+  writeFileSync(stage, "{}\n", { mode: 0o600 });
+  try {
+    const withStage = await executeVerifyRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    const channel = withStage.gates.find((gate) => gate.name === "host-hook-channel");
+    deepEqual([channel?.status, channel?.code], ["pass", null]);
+    equal(withStage.ok, true);
+    equal(withStage.observationDigest, verified.observationDigest);
+    const status = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: healthy.root },
+      CLOCK,
+    );
+    deepEqual(
+      status.hooks.map((host) => [host.hostId, host.status, host.skipped]),
+      [
+        ["codex", "observed", 0],
+        ["claude-code", "observed", 0],
+      ],
+    );
+  } finally {
+    unlinkSync(stage);
+  }
+
   const withDemand = await executeVerifyRequest(
     CODEX_OBSERVATION_FACADE,
     { root: healthy.root, demandId: healthy.demandId },

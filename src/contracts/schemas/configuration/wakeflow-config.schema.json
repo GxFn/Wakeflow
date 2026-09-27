@@ -940,7 +940,7 @@
         {},
         {
           "launch": {
-            "permissionMode": "acceptEdits"
+            "permissionMode": "auto"
           },
           "tmux": {
             "sessionName": "wakeflow"
@@ -990,7 +990,7 @@
           "modelByRole": {
             "default": "claude-opus"
           },
-          "permissionMode": "acceptEdits"
+          "permissionMode": "auto"
         }
       ],
       "type": "object",
@@ -1003,9 +1003,9 @@
           "$ref": "#/$defs/reasoningEffortByRole"
         },
         "permissionMode": {
-          "enum": ["acceptEdits", "bypassPermissions"],
-          "description": "Persistent Claude permission preference. acceptEdits is the safe mode; bypassPermissions requires an explicit durable user choice.",
-          "examples": ["acceptEdits"]
+          "enum": ["auto", "acceptEdits", "bypassPermissions"],
+          "description": "Persistent Claude permission preference. auto is the default: Claude Code reviews each action itself, so the guided user is not asked to approve routine tool calls. acceptEdits is the conservative mode that stops for commands. bypassPermissions requires an explicit durable user choice.",
+          "examples": ["auto"]
         }
       }
     },

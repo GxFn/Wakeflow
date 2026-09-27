@@ -15,8 +15,8 @@ surfaces, storage root) - on an existing workspace, preview the reconcile
 intent instead and report what it found. When the user wants to add a product
 repository to an existing workspace, preview the reconfigure intent the
 reference describes for that. The directory must already be a Git repository
-of its own; if the preview reports `gitignore-git-repository`, ask the user to
-run `git init` there and preview again.
+of its own; if the preview reports `gitignore-git-repository`, tell the user,
+run `git init` there yourself once they agree, and preview again.
 
 Preview writes nothing. Show the user the plan and every blocker it returned,
 apply only with exactly what that preview returned, and only after they say to.

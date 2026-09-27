@@ -43,7 +43,7 @@ export const RECORD_EVIDENCE_TOOL_REGISTRATION = Object.freeze({
     shape: "effect",
     executor: "recordEvidence",
     title: "Record Wakeflow Evidence",
-    description: "Record one immutable managed evidence record for an active Demand: preview derives the plan without writing, apply recomputes it from the same selection when the plan digest matches, recover finishes an interrupted publication. Kinds are a closed vocabulary; a source is a file or tree under a configured root, one host hook observation record projected without its session handle, an https link, or a commit reference. Identity derives from content, so the same content replays as already-recorded. Credential findings always block; opaque members and unlisted paths need controller-confirmed.",
+    description: "Record one immutable managed evidence record for an active Demand: preview plans without writing, apply recomputes the plan from the same selection when its digest matches, recover finishes an interrupted publication. Kinds are a closed vocabulary tied to the source: managed-path takes test-output, diff or document; observation takes hook-observation or transcript; link takes link; commit takes commit. Same content replays as already-recorded. recordedBy is the recording authority (the Controller window), not the capturing window. Credential findings always block; opaque members and unlisted paths need controller-confirmed.",
     requestSchema: WAKEFLOW_RECORD_EVIDENCE_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_RECORD_EVIDENCE_RESULT_SCHEMA,
     annotations: {

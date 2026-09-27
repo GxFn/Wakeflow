@@ -49,7 +49,7 @@ test("Claude Code host owns one exact matrix-shaping resource profile", () => {
       kind: "tmux-session",
       controllerEffort: "max",
       defaultEffort: "xhigh",
-      permissionMode: "acceptEdits",
+      permissionMode: "auto",
       sessionName: "wakeflow",
     },
   });

@@ -36,7 +36,9 @@ export const claudeCodeWorkspaceHostResourceProfile = parseWakeflowWorkspaceHost
         kind: "tmux-session",
         controllerEffort: "max",
         defaultEffort: "xhigh",
-        permissionMode: "acceptEdits",
+        // 缺省 auto：由 Claude Code 自己审每个动作，被引导的用户不必逐条批准常规工具调用；
+        // 配置仍可显式选 acceptEdits 或 bypassPermissions（用户裁决 Q4，gate-log §13.134）。
+        permissionMode: "auto",
         sessionName: "wakeflow",
     },
 });

@@ -9,6 +9,13 @@ import {
 import { type JsonObject, type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import {
+  type DurableAtomicFileStageAddress,
+  DurableAtomicFileStageAddressError,
+  hasDurableAtomicFileStagePrefix,
+  parseDurableAtomicFileStageFileName,
+  readDurableAtomicFileStageOwnerState,
+} from "../foundation/filesystem/durable-atomic-file-stage-address.js";
+import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../foundation/filesystem/durable-atomic-file-write.js";
@@ -49,15 +56,27 @@ import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
  *
  * 保留策略（gate-log §13.97 D7）：`recordedAt` 恰好毫秒精度，文件名才能按时间预筛；写入器在
  * 新落地一条记录后只按龄修剪同一宿主目录里早于 `HOST_HOOK_RETENTION_MILLISECONDS` 的记录文件——
- * 这是 Wakeflow 第一条自动 unlink 路径，只动符合记录命名的普通文件。截止基准不直接取调用方交来的
- * `recordedAt`，而取它与"目录里除本条之外最新的记录命名条目"的较小者：宿主时钟跳到未来时，一次
- * 未来时间的写入只能修剪到与不跳变时相同的那批记录，D7b 的 30 天损失边界不会被一次写入越过；
- * 目录里没有别的记录命名条目时不修剪。幂等重写（`current`）没有新证据落地，跳过修剪，同步 hook
- * 不为重复触发付一次目录列举。修剪失败吞掉（记录已写成），中止不吞：内核各模块一律把中止上抛为
+ * 这是 Wakeflow 第一条自动 unlink 路径，只动符合记录命名的普通文件（与下文 §13.134 的暂存残留）。
+ * 截止基准不直接取调用方交来的 `recordedAt`，而取它与"目录里除本条之外最新的记录命名条目"的
+ * 较小者：宿主时钟跳到未来时，一次未来时间的写入只能修剪到与不跳变时相同的那批记录，D7b 的
+ * 30 天损失边界不会被一次写入越过；目录里没有别的记录命名条目时不修剪。幂等重写（`current`）
+ * 没有新证据落地，跳过修剪，同步 hook 不为重复触发付一次目录列举。修剪失败吞掉（记录已写成），
+ * 中止不吞：内核各模块一律把中止上抛为
  * `io-failure`/`aborted`，D7b 的"修剪失败吞掉"刻意不覆盖它——`writeHostHookObservation` 以
  * `aborted` 拒绝时记录可能已经 durable，调用方不能据此断定没写成。读取器把"列举后读取时已不存在"
  * 当作消失而不是 `skipped`：异步 hook 的修剪与 status 的读取并发时没有伪失败。所有消费者都只在
  * 有界窗口内读记录，被修剪的记录不再被引用。
+ *
+ * 暂存残留（gate-log §13.134 B12）：关闭窗口（helper close → tmux kill-window）会在耐久原子创建
+ * 中途杀掉宿主的 session-end hook，留下写入器自己那种命名（`create`、0600）的暂存文件；活着的
+ * 写入器的暂存文件也会被并发的读取短暂看到。读取器把这种命名的普通文件既不当记录、也不计
+ * `skipped`——它不是证据，否则 verify 的 host-hook-channel 门会永久失败或偶发伪失败。原子写入器
+ * 写前只恢复同一目标的暂存文件，而每条记录的目标名各不相同，残留等不到它。于是修剪在同一次
+ * 列举里顺带 unlink mtime 比刚落地的记录早过 `HOST_HOOK_ABANDONED_STAGE_MILLISECONDS`、名字里的
+ * 所有者进程也已不在的暂存文件，规则与记录修剪相同：精确命名、只动普通文件、不跟随符号链接、失败
+ * 吞掉、中止上抛；更新的、所有者仍在或无法判定的暂存文件可能属于仍在写的 hook，不动。其他形状的
+ * 暂存命名（`replace`、别的权限位、非普通文件）与名字对而节点不是 0600、链接数 1 或 2 的普通文件
+ * 都不是本写入器能留下的，仍计 `skipped`、永远不修剪。
  */
 
 export const HOST_HOOK_EVENTS = Object.freeze([
@@ -119,7 +138,8 @@ export interface HostHookObservationInventory {
   /**
    * 目录里存在但无法作为记录读入的条目数：文件名不合法，或内容不可用、与文件名不符。
    * 被 `event` / `since` / `sessionId` 过滤掉的记录不计入；列举后、读取前已被修剪掉的记录
-   * 也不计入（它已不在目录里）。调用方据此判断证据通道是否可信。
+   * 也不计入（它已不在目录里）；写入器自己的原子暂存文件不是记录也不是损坏，同样不计入
+   * （§13.134 B12）。调用方据此判断证据通道是否可信。
    */
   readonly skipped: number;
 }
@@ -149,6 +169,12 @@ const PRUNE_MAXIMUM_ENTRIES = 65536;
 const PRUNE_UNLINK_CONCURRENCY = 8;
 /** 记录只按龄保留：早于此值的记录文件在下一次成功写入后被 unlink（§13.97 D7b）。 */
 export const HOST_HOOK_RETENTION_MILLISECONDS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * 被遗弃的暂存文件的退休龄（§13.134 B12）：一次 hook 写入里暂存文件只活毫秒级，十分钟远在其上，
+ * 仍在写的 hook 的暂存文件不会被下一次写入的修剪抢走。
+ */
+export const HOST_HOOK_ABANDONED_STAGE_MILLISECONDS = 10 * 60 * 1000;
+const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
 /** ISO 毫秒形 `YYYY-MM-DDTHH:MM:SS.mmmZ` 的长度：文件名模式要求 9 位数字，其他精度永远读不出。 */
 const MILLISECOND_INSTANT_LENGTH = 24;
 const DEFAULT_LIMIT = 256;
@@ -170,6 +196,35 @@ const RECORD_KEYS = Object.freeze([
 ]);
 /** 后加的可选键：旧记录没有它也合法（§13.127）。 */
 const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest"]);
+
+/**
+ * 条目若是本写入器自己那种原子暂存文件（§13.134 B12），返回它的暂存地址，否则返回 `null`：普通
+ * 文件，名字精确符合 foundation 的暂存命名，且是 `create`、权限位 0600——`writeHostHookObservation`
+ * 只会留下这一种。节点也得是这个形状：实际权限位 0600、链接数 1（未发布）或 2（与已发布的记录
+ * 双链接）。名字对而节点不对的条目，foundation 的写前暂存清点会拒绝整个目录的写入，它必须计入
+ * `skipped` 让 verify 看见，也不许被修剪。先用保留前缀预筛：记录名以数字开头从不占用它，不为每个
+ * 记录名付一次解析异常。
+ */
+function hostHookStageAddress(
+  entry: Readonly<StableDirectoryEntry>,
+): Readonly<DurableAtomicFileStageAddress> | null {
+  const { node } = entry;
+  if (
+    node.kind !== "file" ||
+    node.permissionBits !== FILE_MODE ||
+    (node.linkCount !== 1n && node.linkCount !== 2n) ||
+    !hasDurableAtomicFileStagePrefix(entry.name)
+  ) {
+    return null;
+  }
+  try {
+    const address = parseDurableAtomicFileStageFileName(entry.name);
+    return address.operation === "create" && address.mode === FILE_MODE ? address : null;
+  } catch (error: unknown) {
+    if (error instanceof DurableAtomicFileStageAddressError) return null;
+    throw error;
+  }
+}
 
 function isHostHookEvent(value: unknown): value is HostHookEvent {
   return typeof value === "string" && (HOST_HOOK_EVENTS as readonly string[]).includes(value);
@@ -391,12 +446,50 @@ function isExpiredRecordEntry(entry: Readonly<StableDirectoryEntry>, cutoff: str
   return match !== null && entry.node.kind === "file" && (match[1] as string) < cutoff;
 }
 
+/** 按 D7b 的截止基准挑出过期记录；目录里没有别的记录命名条目或基准不可表示时一条都不挑。 */
+function expiredRecordEntries(
+  entries: readonly Readonly<StableDirectoryEntry>[],
+  record: Readonly<HostHookObservation>,
+  writtenName: string,
+): readonly Readonly<StableDirectoryEntry>[] {
+  const newestOther = newestOtherRecordCompact(entries, writtenName);
+  if (newestOther === null) return [];
+  const cutoff = retentionCutoffCompact(record.recordedAt, newestOther);
+  if (cutoff === null) return [];
+  return entries.filter((entry) => isExpiredRecordEntry(entry, cutoff));
+}
+
 /**
- * unlink 一个过期记录文件。修剪是尽力而为且幂等的：崩溃后重现的过期文件在下一次成功写入时
- * 再被修剪，所以不给每个文件付 inode 与父目录两次 fsync——同步 hook 只有几秒预算，越界目录
- * 一次要 unlink 上万个文件。单个文件的失败只影响它自己；中止上抛。
+ * 挑出被遗弃的暂存文件（§13.134 B12）：mtime 比刚落地的记录早过
+ * `HOST_HOOK_ABANDONED_STAGE_MILLISECONDS`，且 foundation 判定名字里的所有者进程已不在
+ * （`inactive`）。基准取刚落地记录文件的 mtime 而不是 `recordedAt`：两个时刻出自同一个文件系统
+ * 时钟，调用方交来的时间（可能跳到未来）左右不了哪些暂存文件算旧，内核也不必读墙钟。所有者仍在
+ * 或无法判定（机器休眠时挂在写入中途的 hook、进程号被复用）时不动——与 foundation 的暂存恢复同一条
+ * 规矩；读取器本来就不计暂存文件，留着只是晚一点退休。列举里找不到刚写入的那条记录时一个都不挑。
  */
-async function unlinkExpiredHostHookObservation(
+function abandonedStageEntries(
+  entries: readonly Readonly<StableDirectoryEntry>[],
+  writtenName: string,
+): readonly Readonly<StableDirectoryEntry>[] {
+  const written = entries.find((entry) => entry.name === writtenName);
+  if (written === undefined || written.node.kind !== "file") return [];
+  const cutoff =
+    written.node.modifiedAtNanoseconds -
+    BigInt(HOST_HOOK_ABANDONED_STAGE_MILLISECONDS) * NANOSECONDS_PER_MILLISECOND;
+  return entries.filter((entry) => {
+    if (entry.node.modifiedAtNanoseconds >= cutoff) return false;
+    const address = hostHookStageAddress(entry);
+    return address !== null && readDurableAtomicFileStageOwnerState(address) === "inactive";
+  });
+}
+
+/**
+ * unlink 一个过期记录文件或被遗弃的暂存文件。修剪是尽力而为且幂等的：崩溃后重现的过期文件在
+ * 下一次成功写入时再被修剪，所以不给每个文件付 inode 与父目录两次 fsync——同步 hook 只有几秒
+ * 预算，越界目录一次要 unlink 上万个文件。单个文件的失败只影响它自己；中止上抛。暂存文件若已与
+ * 目标记录双链接（创建在两次同步之间被杀），unlink 只让链接数减一，目标记录不受影响。
+ */
+async function unlinkPrunedHostHookEntry(
   root: RootedDirectory,
   entry: Readonly<StableDirectoryEntry>,
   signal: { readonly signal?: AbortSignal },
@@ -432,10 +525,12 @@ async function listPruneEntries(
 }
 
 /**
- * 按龄修剪同一宿主目录：只 unlink 符合记录命名、早于截止基准减保留期的普通文件；无法识别的条目
- * 留给 verify 的门，永远不被修剪。截止基准由目录里已有的记录钳住（见 `retentionCutoffCompact`），
- * 目录里除刚写入的这条之外没有记录命名条目时一条都不修剪。列举上限高于读取上限，目录越界后仍能
- * 恢复。每个失败只影响那一个文件；修剪整体失败被吞掉（记录已写成），中止不吞。
+ * 按龄修剪同一宿主目录：只 unlink 符合记录命名、早于截止基准减保留期的普通文件，以及同一次列举里
+ * 被遗弃的本写入器暂存文件（§13.134 B12，见 `abandonedStageEntries`）；无法识别的条目留给 verify
+ * 的门，永远不被修剪。截止基准由目录里已有的记录钳住（见 `retentionCutoffCompact`），目录里除刚
+ * 写入的这条之外没有记录命名条目时一条记录都不修剪——暂存文件的退休不受这一条约束，它的基准是刚
+ * 落地记录的 mtime。列举上限高于读取上限，目录越界后仍能恢复。每个失败只影响那一个文件；修剪整体
+ * 失败被吞掉（记录已写成），中止不吞。
  */
 async function pruneExpiredHostHookObservations(
   root: RootedDirectory,
@@ -444,15 +539,14 @@ async function pruneExpiredHostHookObservations(
 ): Promise<void> {
   const entries = await listPruneEntries(root, record.hostId, signal);
   if (entries === null) return;
-  const newestOther = newestOtherRecordCompact(entries, hostHookObservationFileName(record));
-  if (newestOther === null) return;
-  const cutoff = retentionCutoffCompact(record.recordedAt, newestOther);
-  if (cutoff === null) return;
+  const writtenName = hostHookObservationFileName(record);
+  const pruned = [
+    ...expiredRecordEntries(entries, record, writtenName),
+    ...abandonedStageEntries(entries, writtenName),
+  ];
   const limit = pLimit(PRUNE_UNLINK_CONCURRENCY);
   const settled = await Promise.allSettled(
-    entries
-      .filter((entry) => isExpiredRecordEntry(entry, cutoff))
-      .map((entry) => limit(unlinkExpiredHostHookObservation, root, entry, signal)),
+    pruned.map((entry) => limit(unlinkPrunedHostHookEntry, root, entry, signal)),
   );
   for (const result of settled) {
     if (result.status === "rejected") throw result.reason;
@@ -558,7 +652,7 @@ async function listObservationCandidates(
   signal: { readonly signal?: AbortSignal },
 ): Promise<Readonly<{
   readonly candidates: readonly ObservationCandidate[];
-  /** 文件名不符合记录命名的条目数；调用方的过滤条件不影响它。 */
+  /** 文件名不符合记录命名、也不是本写入器暂存文件的条目数；调用方的过滤条件不影响它。 */
   readonly unrecognized: number;
 }> | null> {
   let listing: Awaited<ReturnType<typeof readStableResourceDirectory>>;
@@ -578,7 +672,8 @@ async function listObservationCandidates(
   let unrecognized = 0;
   for (const entry of listing.entries) {
     if (FILE_NAME_PATTERN.exec(entry.name) === null) {
-      unrecognized += 1;
+      // 写入器自己的暂存文件（残留或正在写）既不是记录也不是损坏（§13.134 B12）。
+      if (hostHookStageAddress(entry) === null) unrecognized += 1;
       continue;
     }
     const prefilter = namePrefilter(entry.name, filter);

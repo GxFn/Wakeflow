@@ -41,7 +41,7 @@ import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingSto
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitImplementationReviewDecisionResult, admitTargetResultImportResult, admitTargetResultReviewInspectionResult, admitTestReviewDecisionResult, parseImplementationReviewDecisionRequest, parseTargetResultImportRequest, parseTargetResultReviewInspectionRequest, parseTestReviewDecisionRequest, WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME, WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { collectEvidenceReferences, deriveCallbackLanding, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, planEvidenceLocator, reportTexts, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
+import { collectEvidenceReferences, deriveCallbackLanding, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
 const REPORT_PRIVACY_POLICY = Object.freeze({
     allowedPathRoots: Object.freeze([]),
@@ -330,26 +330,26 @@ async function loadTaskPackage(repository, taskPackageId, signal) {
         mapRepositoryError(error);
     }
 }
-/** 定位符只在同 Demand 的受管证据记录内解析，逐条核 sha256（§13.87 D3）。 */
-async function resolveEvidence(context, references) {
+/**
+ * 定位符只在同 Demand 的受管证据记录内解析，逐条核 sha256（§13.87 D3）。拒绝点名报告里第一条
+ * 解析不了的引用：原因是它的原因类，路径指到它在报告里的位置，details 给出一共几条（§13.134）。
+ */
+async function resolveEvidence(context, report) {
     const recorded = new Set((context.authority.loaded.aggregate.state.managedEvidence ?? []).map((entry) => entry.evidenceId));
-    const unresolved = [];
-    const mismatched = [];
+    const failures = [];
     const resolutions = [];
-    for (const [index, reference] of references.entries()) {
+    for (const reference of collectEvidenceReferences(report)) {
         const resolved = await resolveEvidenceReference(context, reference, recorded);
-        if (resolved === null)
-            unresolved.push(index);
-        else if (resolved === "kind-mismatch")
-            mismatched.push(index);
+        if (typeof resolved === "string")
+            failures.push({ reference, reason: resolved });
         else
             resolutions.push(resolved);
     }
-    if (unresolved.length > 0 || mismatched.length > 0) {
-        rejectWith([
-            ...unresolved.slice(0, 2).map((index) => `evidence-unresolved:${index}`),
-            ...mismatched.slice(0, 2).map((index) => `evidence-kind-mismatch:${index}`),
-        ], "$request.report");
+    const first = failures[0];
+    if (first !== undefined) {
+        fail("precondition-failed", first.reason, locateEvidenceReference(report, first.reference), {
+            details: { unresolvedCitations: String(failures.length) },
+        });
     }
     return Object.freeze(resolutions);
 }
@@ -374,38 +374,46 @@ async function readEvidenceMember(root, plan, signal) {
         manifestKind: record.manifest.kind,
     });
 }
-function unresolvedOrRethrow(error) {
-    if (error instanceof PortableResourcePathError || error instanceof Sha256Error)
-        return null;
+function citationFailureOrRethrow(error) {
+    if (error instanceof PortableResourcePathError)
+        return "evidence-locator-invalid";
+    if (error instanceof Sha256Error)
+        return "evidence-digest-mismatch";
     if (error instanceof StableFileReadError || error instanceof ManagedEvidenceRecordReaderError) {
         if (error.reason === "aborted")
             fail("io-failure", "aborted", "$signal", { cause: error });
-        return null;
+        if (error.reason === "member-not-found")
+            return "evidence-member-missing";
+        if (error.reason === "input")
+            return "evidence-locator-invalid";
+        return "evidence-unreadable";
     }
     throw error;
 }
 async function resolveEvidenceReference(context, reference, recorded) {
     const plan = planEvidenceLocator(reference.ref);
-    if (plan === null || !recorded.has(plan.evidenceId))
-        return null;
+    if (plan === null)
+        return "evidence-locator-invalid";
+    if (!recorded.has(plan.evidenceId))
+        return "evidence-unknown";
     try {
         const ref = parsePortableResourcePath(reference.ref, "$ref");
         const digest = parseSha256Digest(reference.digest, "$digest");
         const signal = signalOptions(context.options.signal);
         const facts = await readEvidenceMember(context.authority.demandRoot, plan, signal);
         if (facts.digest !== digest)
-            return null;
+            return "evidence-digest-mismatch";
         if (reference.kind !== null) {
             const kind = facts.manifestKind ??
                 (await loadManagedEvidenceRecord(context.authority.demandRoot, plan.evidenceId, signal))
                     .manifest.kind;
             if (kind !== reference.kind)
-                return "kind-mismatch";
+                return "evidence-kind-mismatch";
         }
         return Object.freeze({ ref, digest, evidenceId: plan.evidenceId, bytes: facts.bytes });
     }
     catch (error) {
-        return unresolvedOrRethrow(error);
+        return citationFailureOrRethrow(error);
     }
 }
 function buildResult(input, target, envelope, taskPackage, options) {
@@ -540,7 +548,7 @@ async function executeImport(context, input, binding) {
         fail("precondition-failed", "work-type", "$request.report.workType");
     }
     const taskPackage = await loadTaskPackage(repository, envelope.target.taskPackageId, options.signal);
-    const evidenceResolution = await resolveEvidence(context, collectEvidenceReferences(input.report.content));
+    const evidenceResolution = await resolveEvidence(context, input.report.content);
     const result = buildResult(input, target, envelope, taskPackage, options);
     assertWorktreeBranch(context, result);
     const now = nowFrom(options);

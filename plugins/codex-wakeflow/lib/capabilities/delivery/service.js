@@ -37,7 +37,7 @@ import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/
 import { compileWakeflowWindowLaunchIntents, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitPrepareDeliveryResult, admitRearmDeliveryResult, admitRecordDeliveryOutcomeResult, parsePrepareDeliveryRequest, parseRearmDeliveryRequest, parseRecordDeliveryOutcomeRequest, WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION, WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveClaimBlocker, deriveDeliveryDisposition, derivePrepareBlockers, deriveRearmBlockers, landingSilenceExceeded, sendReturnProvesLanding, } from "./decide.js";
-import { renderDeliveryPortablePrompt } from "./prompt.js";
+import { deliveryPromptRequirementPackage, renderDeliveryPortablePrompt, } from "./prompt.js";
 function isCallbackPermit(outcome) {
     return "kind" in outcome && outcome.kind === "callback";
 }
@@ -152,11 +152,16 @@ function deliveryTargetOf(context, deliveryId) {
     }
     return target;
 }
-function relativeWorkspaceRoot(placement) {
-    const depth = placement
-        .split("/")
-        .filter((segment) => segment.length > 0 && segment !== ".").length;
-    return depth === 0 ? "." : Array.from({ length: depth }, () => "..").join("/");
+/**
+ * prompt 里从窗口根到工作区根的相对路径：worktree 检出按回执路径，其余窗口按配置位置在工作区根上
+ * 解析出窗口根。配置位置可以是工作区的兄弟目录（`../ProductA`），只数段数会把它算成 `../..`，
+ * 任务包与需求包路径就都解析到工作区之外（gate-log §13.134）。
+ */
+function workspaceRootFromWindow(context, route) {
+    const workspaceRoot = context.workspaceRoot.absolutePath;
+    const windowRoot = route.worktreePath ?? path.resolve(workspaceRoot, route.configuredPlacement);
+    const relative = path.relative(windowRoot, workspaceRoot);
+    return relative === "" ? "." : relative;
 }
 async function readBinding(context, windowId) {
     const { facade, authority } = context;
@@ -492,12 +497,11 @@ function renderPrompt(context, input, sources, pointer) {
             bindingId: route.binding.bindingId,
         },
         readingOrder: {
-            workspaceRootFromWindow: route.worktreePath === null
-                ? relativeWorkspaceRoot(route.configuredPlacement)
-                : path.relative(route.worktreePath, context.workspaceRoot.absolutePath),
+            workspaceRootFromWindow: workspaceRootFromWindow(context, route),
             attachedWorktrees: sources.attachedWorktrees,
             taskPackageRef: deliveryTaskPackageRef(taskPackage.demandId, taskPackage.taskPackageId),
             requirementSections: taskPackage.workType === "implementation" ? taskPackage.sectionAnchors : [],
+            requirementPackage: deliveryPromptRequirementPackage(context.authority.config.model.storage.ledgerRoot, context.authority.loaded.admittedAuthority.resolvedAuthority),
             workspaceInstructionFile: instructionFile,
             repositoryInstructionFile: repositoryId === null ? null : instructionFile,
             stateRootRef: demandFinalRootRef(taskPackage.demandId),

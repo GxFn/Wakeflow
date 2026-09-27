@@ -41,9 +41,15 @@ report, return the callback. You own no other step and no Controller authority.
   is an acceptable report and a false pass is not.
 - Every acceptance anchor in the package must be answered in your report -
   satisfied, not satisfied, or blocked, each with what you actually observed.
-- Evidence you cite must already be a managed evidence record of this Demand,
-  referenced by the locator and digest you were given. Do not paste absolute
-  local paths, private handles, tokens or credentials into the report; the
+- Evidence you cite must already be a managed evidence record of this Demand.
+  Cite a recorded file as `ref`
+  `artifacts/managed-evidence/<evidenceId>/payload/content` (a recorded
+  directory: `payload/<path inside it>`) with `digest` `sha256:` plus the
+  lowercase hex SHA-256 of that file's exact bytes - not the record's
+  `payloadArtifactDigest` or `manifestDigest`. List each pair once in
+  `evidenceLocators` with the record's kind; an anchor or a step cites the
+  same pair without the kind. Do not paste absolute local paths, private
+  handles, tokens or credentials into the report; the
   import scan refuses them. Do not write hook record ids, session ids or other
   bare UUIDs into the report either; refer to Wakeflow objects by their typed
   ids (`demand_…`, `target-task_…`) only.
@@ -68,7 +74,10 @@ report, return the callback. You own no other step and no Controller authority.
    from the prompt. Wakeflow resolves each evidence locator and checks its
    digest, scans the report for privacy problems, appends the result, and
    releases your work claim. A refusal means the report is not yet importable -
-   fix what it named and import again; it is not a reason to stop working. A
+   fix what it named and import again; it is not a reason to stop working. An
+   evidence refusal's `path` points at the first citation it could not
+   resolve, its `reason` says why (for example `evidence-digest-mismatch`), and
+   `details.unresolvedCitations` counts them all. A
    `completed` outcome is accepted only when every acceptance anchor is tied to
    managed evidence the Controller recorded for this Demand; when none exists
    yet, import the report as `needs-review` - recording evidence is the

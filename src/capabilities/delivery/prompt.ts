@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
@@ -5,6 +7,8 @@ import {
   type TargetDeliveryProductDefectRemediationContext,
   type TargetDeliveryReworkContext,
 } from "../../governance/delivery/delivery-envelope.js";
+import type { LedgerAuthorityMemberReference } from "../../governance/ledger/ledger-authority-store-contract.js";
+import type { RequirementSection } from "../../governance/ledger/ledger-authority-record.js";
 import type { TaskPackage } from "../../governance/tasking/task-package.js";
 import { fail } from "../../kernel/error.js";
 import { DELIVERY_REQUIRED_SKILLS } from "./decide.js";
@@ -15,6 +19,8 @@ import { DELIVERY_REQUIRED_SKILLS } from "./decide.js";
  * Controller 只写目标、完成焦点、边界三段；Wakeflow 渲染头行、验收锚点、阅读顺序、
  * 必需技能、身份块、交回指针与派发记录。prompt 只含可移植路径：工作区根以相对于窗口
  * 根的路径给出，绝对路径从不进入 prompt、事件或结果；摘要覆盖去除首尾空白后的文本。
+ * 阅读顺序按文档列出需求包成员：每份文档一条从窗口根可解析的 ledger 路径，任务包指向的
+ * 章节列在它所在的文档下（gate-log §13.134）。
  */
 
 export interface DeliveryPromptAuthored {
@@ -31,8 +37,21 @@ export interface DeliveryPromptIdentity {
   readonly bindingId: string;
 }
 
+/** 需求包的一份成员文档：ledger 内的 memberRef，以及需求包记录放在这份文档里的章节锚点。 */
+export interface DeliveryPromptRequirementDocument {
+  readonly role: LedgerAuthorityMemberReference["role"];
+  readonly memberRef: PortableResourcePath;
+  readonly sectionAnchors: readonly string[];
+}
+
+/** 阅读顺序里的需求包（§13.134）：ledger 根的配置位置（相对工作区根）与 Demand 权威引用的全部成员。 */
+export interface DeliveryPromptRequirementPackage {
+  readonly ledgerRootFromWorkspace: string;
+  readonly documents: readonly Readonly<DeliveryPromptRequirementDocument>[];
+}
+
 export interface DeliveryPromptReadingOrder {
-  /** 从窗口根到工作区根的相对路径，例如 `../..`；程序根窗口为 `.`；worktree 检出按回执路径计算。 */
+  /** 从窗口根到工作区根的相对路径，例如 `..` 或兄弟目录窗口的 `../Workspace`；程序根窗口为 `.`；worktree 检出按回执路径计算。 */
   readonly workspaceRootFromWindow: string;
   /** worktree pod 的测试任务：每仓库一条从本窗口根到 worktree 检出的相对路径（ADR-0010 D4）。 */
   readonly attachedWorktrees: readonly Readonly<{
@@ -40,10 +59,51 @@ export interface DeliveryPromptReadingOrder {
     readonly pathFromWindow: string;
   }>[];
   readonly taskPackageRef: PortableResourcePath;
+  /** 任务包指向的章节锚点（按任务包顺序）；渲染时归到需求包里各自所在的文档下。 */
   readonly requirementSections: readonly string[];
+  /** 需求包成员：每份文档在阅读顺序里各占一条从窗口根可解析的路径（§13.134，收 §13.133 I7）。 */
+  readonly requirementPackage: Readonly<DeliveryPromptRequirementPackage>;
   readonly workspaceInstructionFile: string;
   readonly repositoryInstructionFile: string | null;
   readonly stateRootRef: PortableResourcePath;
+}
+
+/** 从 Demand 权威引用读出的需求包成员视图；`ResolvedDemandAuthorityReference` 结构上满足它。 */
+export interface DeliveryPromptResolvedAuthorityMember {
+  readonly reference: Readonly<
+    Pick<LedgerAuthorityMemberReference, "role" | "memberPath" | "memberRef">
+  >;
+  readonly record: Readonly<{
+    readonly record: Readonly<{
+      readonly sections: readonly Readonly<Pick<RequirementSection, "path" | "anchor">>[];
+    }>;
+  }>;
+}
+
+/**
+ * 由 Demand 权威引用（`admittedAuthority.resolvedAuthority`）与配置的 ledger 位置得出阅读顺序里的
+ * 需求包：每个成员带上记录里落在该成员路径上的章节锚点（§13.134）。
+ */
+export function deliveryPromptRequirementPackage(
+  ledgerRootFromWorkspace: string,
+  members: readonly Readonly<DeliveryPromptResolvedAuthorityMember>[],
+): Readonly<DeliveryPromptRequirementPackage> {
+  return Object.freeze({
+    ledgerRootFromWorkspace,
+    documents: Object.freeze(
+      members.map(({ reference, record }) =>
+        Object.freeze({
+          role: reference.role,
+          memberRef: reference.memberRef,
+          sectionAnchors: Object.freeze(
+            record.record.sections
+              .filter((section) => section.path === reference.memberPath)
+              .map((section) => section.anchor),
+          ),
+        }),
+      ),
+    ),
+  });
 }
 
 export interface DeliveryPromptReturn {
@@ -112,6 +172,7 @@ type Labels = Readonly<
     | "demand"
     | "workspaceRoot"
     | "worktrees"
+    | "sections"
     | "returnInstruction"
     | "noWrite",
     string
@@ -141,6 +202,7 @@ const LABELS: Readonly<Record<WakeflowPresentationLanguage, Labels>> = Object.fr
     demand: "demand",
     workspaceRoot: "workspace root (relative to this window's root)",
     worktrees: "pod worktrees to read (relative to this window's root)",
+    sections: "sections",
     returnInstruction:
       "Import the result with the MCP tool below; do not write result files. Delivery is not acceptance.",
     noWrite: "Never send this prompt onward to another window.",
@@ -167,6 +229,7 @@ const LABELS: Readonly<Record<WakeflowPresentationLanguage, Labels>> = Object.fr
     demand: "demand",
     workspaceRoot: "工作区根（相对本窗口根）",
     worktrees: "要读取的 pod worktree（相对本窗口根）",
+    sections: "章节",
     returnInstruction: "用下面的 MCP 工具导入结果，不写本地结果文件；投递成功不等于验收。",
     noWrite: "不得把本 prompt 转发给其他窗口。",
   }),
@@ -182,19 +245,59 @@ function anchorLines(taskPackage: Readonly<TaskPackage>): readonly string[] {
     .map((anchor) => `- ${anchor.anchorId}: ${anchor.claim}`);
 }
 
-function readingLines(input: RenderDeliveryPromptInput): readonly string[] {
+interface ReadingEntry {
+  readonly target: string;
+  readonly sections: readonly string[];
+}
+
+/** requirement.md 先于 landing.md，附件随后按 memberRef 排序。 */
+const DOCUMENT_ROLE_ORDER: readonly string[] = Object.freeze(["requirement", "landing"]);
+
+function documentRank(document: Readonly<DeliveryPromptRequirementDocument>): number {
+  const rank = DOCUMENT_ROLE_ORDER.indexOf(document.role);
+  return rank === -1 ? DOCUMENT_ROLE_ORDER.length : rank;
+}
+
+function compareDocuments(
+  left: Readonly<DeliveryPromptRequirementDocument>,
+  right: Readonly<DeliveryPromptRequirementDocument>,
+): number {
+  const rank = documentRank(left) - documentRank(right);
+  if (rank !== 0) return rank;
+  return left.memberRef < right.memberRef ? -1 : left.memberRef > right.memberRef ? 1 : 0;
+}
+
+/** 每份需求包文档一条可解析路径：窗口根 → 工作区根 → ledger 根 → memberRef；章节归到所在文档（§13.134）。 */
+function requirementEntries(order: Readonly<DeliveryPromptReadingOrder>): readonly ReadingEntry[] {
+  const requirementPackage = order.requirementPackage;
+  const ledgerRoot = path.posix.join(
+    order.workspaceRootFromWindow,
+    requirementPackage.ledgerRootFromWorkspace,
+  );
+  return [...requirementPackage.documents].sort(compareDocuments).map((document) => ({
+    target: path.posix.join(ledgerRoot, document.memberRef),
+    sections: order.requirementSections.filter((anchor) =>
+      document.sectionAnchors.includes(anchor),
+    ),
+  }));
+}
+
+function readingLines(input: RenderDeliveryPromptInput, labels: Labels): readonly string[] {
   const order = input.readingOrder;
-  const sections =
-    order.requirementSections.length === 0 ? "" : ` (${order.requirementSections.join(", ")})`;
   const root = order.workspaceRootFromWindow;
-  const lines = [
-    `1. ${root}/${order.taskPackageRef}`,
-    `2. requirement.md${sections}`,
-    `3. ${root}/${order.workspaceInstructionFile}`,
+  const entries: ReadingEntry[] = [
+    { target: `${root}/${order.taskPackageRef}`, sections: [] },
+    ...requirementEntries(order),
+    { target: `${root}/${order.workspaceInstructionFile}`, sections: [] },
   ];
-  if (order.repositoryInstructionFile !== null) lines.push(`4. ${order.repositoryInstructionFile}`);
-  lines.push(`${lines.length + 1}. ${root}/${order.stateRootRef}`);
-  return lines;
+  if (order.repositoryInstructionFile !== null) {
+    entries.push({ target: order.repositoryInstructionFile, sections: [] });
+  }
+  entries.push({ target: `${root}/${order.stateRootRef}`, sections: [] });
+  return entries.flatMap((entry, index) => [
+    `${index + 1}. ${entry.target}`,
+    ...(entry.sections.length === 0 ? [] : [`   ${labels.sections}: ${entry.sections.join(", ")}`]),
+  ]);
 }
 
 function worktreeLines(input: RenderDeliveryPromptInput, labels: Labels): readonly string[] {
@@ -303,7 +406,7 @@ export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromp
     ...testLines(input, labels),
     ...reworkLines(input, labels),
     ...remediationLines(input, labels),
-    ...section(labels.reading, readingLines(input)),
+    ...section(labels.reading, readingLines(input, labels)),
     ...worktreeLines(input, labels),
     ...section(
       labels.skills,

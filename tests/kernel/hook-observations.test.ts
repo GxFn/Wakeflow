@@ -1,5 +1,8 @@
 import { deepEqual, equal, rejects, throws } from "node:assert/strict";
 import {
+  chmodSync,
+  existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -7,18 +10,22 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   unlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { type Sha256Digest, Sha256Error } from "../../src/foundation/crypto/sha256.js";
+import { parseDurableAtomicFileStageFileName } from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import type { UtcInstant } from "../../src/foundation/time/utc-instant.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import {
   createHostHookObservation,
+  HOST_HOOK_ABANDONED_STAGE_MILLISECONDS,
   HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
   HOST_HOOK_RETENTION_MILLISECONDS,
   type HostHookObservationInput,
@@ -521,4 +528,161 @@ test("制品 manifest 摘要是后加的可选键：旧记录没有它读成 nul
       [written.record.recordId, artifact],
     ],
   );
+});
+
+// ---- §13.134 B12：原子暂存残留 --------------------------------------------------------------
+
+const MINUTE = 60 * 1000;
+/** 远早于任何一次测试运行的 mtime：只用来造"被遗弃"的暂存文件，测试不读墙钟。 */
+const ANCIENT = new Date(Date.UTC(2020, 0, 1));
+/** 不可能存在的进程号：`kill(pid, 0)` 恒为 ESRCH，foundation 据此把所有者判定为 `inactive`。 */
+const DEAD_PID = 99_999_999;
+
+/**
+ * 与 foundation 签发的暂存名同形（`.wakeflow-atomic-v1-<操作>-<目标摘要>-<输入摘要>-m<权限位>__
+ * <pid>-<线程>-<尝试>.tmp`）；§13.133 现场留下的就是 `create`、`m600` 这一种，所有者是被杀掉的 hook。
+ */
+function stageName(
+  attempt: number,
+  options: {
+    readonly operation?: "create" | "replace";
+    readonly mode?: string;
+    readonly pid?: number;
+  } = {},
+): string {
+  const { operation = "create", mode = "600", pid = DEAD_PID } = options;
+  const uuid = `00000000-0000-4000-8000-${attempt.toString(16).padStart(12, "0")}`;
+  return `.wakeflow-atomic-v1-${operation}-${"a".repeat(64)}-${"b".repeat(64)}-m${mode}__${pid}-0-${uuid}.tmp`;
+}
+
+test("写入器自己的原子暂存文件既不是记录也不计 skipped；别的暂存形状与无法识别的名字照计（§13.134 B12）", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const directory = hooksDirectory(workspace, "claude-code");
+  // 测试造的名字必须是 foundation 认的暂存名，否则下面测到的只是"无法识别"那条路径。
+  const address = parseDurableAtomicFileStageFileName(stageName(1));
+  equal(address.operation, "create");
+  equal(address.mode, 0o600);
+  equal(address.pid, DEAD_PID);
+  const start = await writeHostHookObservation(
+    root,
+    observation(workspace, ago(0), { event: "session-start" }),
+  );
+  // §13.133 现场：kill-window 在原子创建中途杀掉 session-end hook，暂存文件里是一条完整记录。
+  // 仍在写的 hook 的暂存文件（所有者还活着）对并发读取同样可见，同样不计。
+  const content = readFileSync(path.join(directory, recordName(start)));
+  writeFileSync(path.join(directory, stageName(1)), content, { mode: 0o600 });
+  writeFileSync(path.join(directory, stageName(2, { pid: process.pid })), "partial", {
+    mode: 0o600,
+  });
+  const withStage = await readHostHookObservations(root, "claude-code");
+  deepEqual(
+    withStage.records.map((record) => record.recordId),
+    [start.record.recordId],
+  );
+  equal(withStage.skipped, 0);
+  // 本写入器留不下的暂存形状、前缀对但格式不对的名字、暂存命名的目录与符号链接、无法识别的名字：
+  // 都不是本写入器的暂存文件，照样计入 skipped，留给 verify 的门。
+  writeFileSync(path.join(directory, stageName(3, { operation: "replace" })), content, {
+    mode: 0o600,
+  });
+  writeFileSync(path.join(directory, stageName(4, { mode: "644" })), content, { mode: 0o600 });
+  writeFileSync(path.join(directory, ".wakeflow-atomic-v1-create-not-a-stage.tmp"), content, {
+    mode: 0o600,
+  });
+  mkdirSync(path.join(directory, stageName(5)));
+  symlinkSync(path.join(directory, recordName(start)), path.join(directory, stageName(6)));
+  writeFileSync(path.join(directory, "stray.txt"), "x\n", { mode: 0o600 });
+  // 名字是写入器形状、节点却不是：权限位不是 0600，或链接数超过 2（本写入器最多双链接）。
+  // foundation 的写前暂存清点会因它拒绝整个目录的写入，所以必须计入 skipped 让 verify 看见。
+  writeFileSync(path.join(directory, stageName(7)), content);
+  chmodSync(path.join(directory, stageName(7)), 0o644);
+  const spare = path.join(directory, "spare.bin");
+  writeFileSync(spare, content, { mode: 0o600 });
+  chmodSync(spare, 0o600);
+  linkSync(spare, path.join(directory, stageName(8)));
+  linkSync(spare, path.join(directory, stageName(9)));
+  equal(statSync(spare).nlink, 3);
+  const mixed = await readHostHookObservations(root, "claude-code");
+  deepEqual(
+    mixed.records.map((record) => record.recordId),
+    [start.record.recordId],
+  );
+  equal(mixed.skipped, 10);
+});
+
+test("被遗弃的暂存文件在下一次新落地记录时退休：只动够旧、所有者已不在的写入器形状普通暂存文件（§13.134 B12）", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const directory = hooksDirectory(workspace, "claude-code");
+  equal(HOST_HOOK_ABANDONED_STAGE_MILLISECONDS, 10 * MINUTE);
+  // 目录里只有一个被遗弃的暂存文件、没有别的记录：记录修剪因此不跑，暂存文件的退休照样跑。
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  writeFileSync(path.join(directory, stageName(1)), "partial", { mode: 0o600 });
+  utimesSync(path.join(directory, stageName(1)), ANCIENT, ANCIENT);
+  const first = await writeHostHookObservation(root, observation(workspace, ago(3)));
+  equal(first.disposition, "created");
+  deepEqual(readdirSync(directory), [recordName(first)]);
+
+  // 先落地第二条记录（稍后给它挂一个双链接的暂存文件），再摆放暂存文件，让下一次写入独自退休它们。
+  const linked = await writeHostHookObservation(
+    root,
+    observation(workspace, ago(2), { event: "session-end" }),
+  );
+  // 退休的基准是刚落地那条记录文件的 mtime，不是 recordedAt（这里的 recordedAt 都是合成时刻）。
+  // 以 linked 的 mtime 为参照摆放暂存文件：下一条记录的 mtime 只会更晚，差不到一分钟。
+  const reference = statSync(path.join(directory, recordName(linked))).mtimeMs;
+  const place = (name: string, mtime: Date | null): void => {
+    writeFileSync(path.join(directory, name), "partial", { mode: 0o600 });
+    if (mtime !== null) utimesSync(path.join(directory, name), mtime, mtime);
+  };
+  place(stageName(2), new Date(reference - 11 * MINUTE));
+  // 九分钟前的与刚创建的：可能属于仍在写的 hook，不动。
+  place(stageName(3), new Date(reference - 9 * MINUTE));
+  place(stageName(4), null);
+  // 够旧但所有者进程还活着（例如机器休眠时挂在写入中途的 hook）：不动。
+  place(stageName(5, { pid: process.ppid }), ANCIENT);
+  // 本写入器留不下的暂存形状与无法识别的名字：再旧也不修剪。暂存命名的目录与符号链接这里摆不了：
+  // foundation 的原子写入在写前清点同目录的全部暂存命名条目，见到非普通文件就拒绝写入。
+  place(stageName(6, { operation: "replace" }), ANCIENT);
+  place(stageName(7, { mode: "644" }), ANCIENT);
+  place("stray.txt", ANCIENT);
+  // 创建在两次同步之间被杀：暂存文件与已发布的记录双链接。退休它只让链接数减一，记录照读。
+  linkSync(path.join(directory, recordName(linked)), path.join(directory, stageName(8)));
+  utimesSync(path.join(directory, stageName(8)), ANCIENT, ANCIENT);
+  equal(statSync(path.join(directory, recordName(linked))).nlink, 2);
+
+  const next = await writeHostHookObservation(root, observation(workspace, ago(1)));
+  equal(next.disposition, "created");
+  deepEqual(
+    readdirSync(directory).sort(),
+    [
+      recordName(first),
+      recordName(linked),
+      recordName(next),
+      stageName(3),
+      stageName(4),
+      stageName(5, { pid: process.ppid }),
+      stageName(6, { operation: "replace" }),
+      stageName(7, { mode: "644" }),
+      "stray.txt",
+    ].sort(),
+  );
+  equal(statSync(path.join(directory, recordName(linked))).nlink, 1);
+  const inventory = await readHostHookObservations(root, "claude-code");
+  deepEqual(
+    inventory.records.map((record) => record.recordId),
+    [first.record.recordId, linked.record.recordId, next.record.recordId],
+  );
+  // 留下的三个写入器暂存文件不计；replace、m644、stray.txt 照计。
+  equal(inventory.skipped, 3);
+
+  // 幂等重写没有新证据落地，整条修剪路径跳过；下一次 created 才退休变旧的暂存文件。
+  utimesSync(path.join(directory, stageName(3)), ANCIENT, ANCIENT);
+  const again = await writeHostHookObservation(root, observation(workspace, ago(1)));
+  equal(again.disposition, "current");
+  equal(existsSync(path.join(directory, stageName(3))), true);
+  const latest = await writeHostHookObservation(root, observation(workspace, ago(0)));
+  equal(latest.disposition, "created");
+  equal(existsSync(path.join(directory, stageName(3))), false);
+  equal(existsSync(path.join(directory, stageName(4))), true);
+  equal(existsSync(path.join(directory, stageName(5, { pid: process.ppid }))), true);
 });

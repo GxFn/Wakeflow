@@ -60,9 +60,10 @@ status", "keep going", "open a pod for this".
 3. Complete the one-time host actions below.
 4. Open your agent in the directory you want as the workspace and say
    "initialize a Wakeflow workspace". The directory must be a Git repository
-   of its own (run `git init` there first; Wakeflow verifies its `.gitignore`
-   block through Git and reports `gitignore-git-repository` otherwise) and
-   must not be a product repository root.
+   of its own (when it is not, the agent offers to run `git init` there for
+   you; Wakeflow verifies its `.gitignore` block through Git and reports
+   `gitignore-git-repository` otherwise) and must not be a product repository
+   root.
 
 Wakeflow keeps a managed block inside the workspace's `AGENTS.md`.
 That block belongs to Wakeflow; everything outside it is yours. A product

@@ -59,6 +59,9 @@ payload: Payload
 contentReview: ContentReview
 manifestDigest: WakeflowSha256DigestText
 }
+/**
+ * 记录权威：恒为记录时配置的 Controller 窗口与配置摘要。MCP 服务不知道调用方是哪个窗口，发布按 Controller 窗口核对本字段；它不是采集来源的窗口，来源由 source 表达（gate-log §13.134）。
+ */
 export interface RecordedBy {
 windowId: string
 configDigest: WakeflowSha256DigestText

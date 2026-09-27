@@ -138,7 +138,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       kind: "tmux-session",
       controllerEffort: "max",
       defaultEffort: "xhigh",
-      permissionMode: "acceptEdits",
+      permissionMode: "auto",
       sessionName: "wakeflow",
     },
   };
@@ -412,7 +412,7 @@ test("host resource profile admits launch templates and rejects a tmux launch wi
     kind: "tmux-session",
     controllerEffort: "max",
     defaultEffort: "xhigh",
-    permissionMode: "acceptEdits",
+    permissionMode: "auto",
     sessionName: "wakeflow",
   };
   expectHostResourceProfileError(

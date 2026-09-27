@@ -73,6 +73,28 @@ export function collectEvidenceReferences(report) {
         add(step.evidence);
     return Object.freeze(references);
 }
+const REPORT_CONTENT_PATH = "$request.report.content";
+/**
+ * 一条收集后的证据引用在报告里第一次出现的位置，按收集顺序查找：定位符要连种类一起相同，
+ * 锚点与步骤引用不带种类。导入拒绝把路径指到这里，目标窗口据此改那一条（gate-log §13.134，
+ * 收 §13.133 I8）；形如 `$request.report.content.steps[2].evidence`。
+ */
+export function locateEvidenceReference(report, reference) {
+    const same = (candidate) => candidate.ref === reference.ref && candidate.digest === reference.digest;
+    const locatorIndex = report.evidenceLocators.findIndex((locator) => same(locator) && (locator.kind ?? null) === reference.kind);
+    if (locatorIndex !== -1)
+        return `${REPORT_CONTENT_PATH}.evidenceLocators[${locatorIndex}]`;
+    for (const [anchorIndex, anchor] of (report.anchorEvidence ?? []).entries()) {
+        const refIndex = anchor.evidenceRefs.findIndex(same);
+        if (refIndex !== -1) {
+            return `${REPORT_CONTENT_PATH}.anchorEvidence[${anchorIndex}].evidenceRefs[${refIndex}]`;
+        }
+    }
+    const stepIndex = (report.steps ?? []).findIndex((step) => same(step.evidence));
+    return stepIndex === -1
+        ? REPORT_CONTENT_PATH
+        : `${REPORT_CONTENT_PATH}.steps[${stepIndex}].evidence`;
+}
 /** 报告的自由文本：摘要、验证、风险、逐步观察与建议动作；锚点与定位符是引用不是文本。 */
 export function reportTexts(report) {
     return Object.freeze([

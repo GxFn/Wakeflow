@@ -30,6 +30,12 @@ later result may cite it as: citing a document record as though it were test
 output is refused, and that refusal is the point - it stops a plausible
 sentence from standing in for a run that never happened.
 
+The kind must fit the source: a file or tree is `test-output`, `diff` or
+`document`; a hook observation is `hook-observation`, or `transcript` when
+that record carries a transcript; a link is `link`; a commit is `commit`. Any
+other pairing is refused as `kind-source-mismatch` - change the kind, not the
+source.
+
 ## The procedure
 
 1. Preview. It derives the plan and writes nothing, and it tells you whether
@@ -43,6 +49,12 @@ Because identity derives from content, recording the same content twice is not
 a duplicate: the second call reports it as already recorded and returns the
 same record. Re-recording is therefore a safe thing to do when you are unsure,
 and a cheap way to confirm a file has not changed since you looked.
+
+Every record's `recordedBy` names the configured Controller window and the
+config digest under which Wakeflow admitted it - the recording authority, not
+the window that captured the source. A test window's own step outputs
+therefore show this window too; which window captured what is said by the
+report that cites them, not by the record.
 
 ## Privacy, and the two things you may confirm
 
@@ -83,9 +95,13 @@ the result; citing it back as evidence of its own truth proves nothing.
 
 ## How evidence is used downstream
 
-A target cites evidence by locator and digest inside its report. At import,
-Wakeflow resolves each locator inside this Demand's records and checks the
-digest; an unresolved locator or a mismatched digest refuses the import. A test
+A target cites evidence by locator and digest inside its report: a recorded
+file is `artifacts/managed-evidence/<evidenceId>/payload/content` with the
+`sha256:` digest of that file's bytes (a recorded directory: `payload/<path
+inside it>`). When you hand a target evidence to cite, give it in that form.
+At import, Wakeflow resolves each locator inside this Demand's records and
+checks the digest; an unresolved locator or a mismatched digest refuses the
+import. A test
 step's observation is bound to its evidence the same way. Who records differs:
 an implementation target never records evidence - it imports `needs-review`
 and you record what you verified - while a test window records its own step

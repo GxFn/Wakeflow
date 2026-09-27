@@ -43,6 +43,7 @@
       "pattern": "^(?!\\.\\.?(?:/|$))[^/\\u0000]+(?:/(?!\\.\\.?(?:/|$))[^/\\u0000]+)*$"
     },
     "evidenceKind": {
+      "description": "Closed kind vocabulary tied to the source kind: managed-path takes test-output, diff or document; observation takes hook-observation, or transcript only when the hook record carries one; link takes link; commit takes commit. Any other pairing is refused as kind-source-mismatch at $request.selection.kind.",
       "enum": [
         "hook-observation",
         "transcript",

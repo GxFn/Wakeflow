@@ -133,17 +133,17 @@
 **旧实现**：
 
 - `preflight` 探测 `tmux -V` 与 `claude --version`。`launch-window` 要求无绑定无定位器，自生成 session UUID，`has-session` 决定 `new-window` 还是 `new-session`，`-n <displayName> -c <cwd>`，然后 `set-option automatic-rename off`；`claude` 命令行为 `--session-id | --resume`、`--add-dir`（cwd 不等于工作区根时）、`--permission-mode`、可选 `--effort`、可选 `--model`；子进程环境剥离 `TMUX` 与 `TMUX_PANE`。`wakeflow-claude-lifecycle.mjs:596-656`、`:958-970`、`:1035-1055`。
-- 配置映射：`hosts.claude-code.tmux{socketName ?? null, sessionName ?? "wakeflow"}`；`permissionMode ?? acceptEdits`；effort 按角色回退到 default 再回退到宿主 profile 默认，controller 为 max，其余 xhigh；model 按角色回退到 default，没有则不传。`:269-287`。
+- 配置映射：`hosts.claude-code.tmux{socketName ?? null, sessionName ?? "wakeflow"}`；`permissionMode ?? auto`（§13.134 起；此前为 acceptEdits）；effort 按角色回退到 default 再回退到宿主 profile 默认，controller 为 max，其余 xhigh；model 按角色回退到 default，没有则不传。`:269-287`。
 - `resume-window` 要求定位器缺失或 pane-dead，复用旧句柄发新定位器代际；`retitle-window` 用 `rename-window`；`arrange-windows` 按 windowId 排序对每个窗口取互斥锁再 `move-window`。`:659-853`。
 - Codex 没有生命周期模块，Agent 自己 `create_thread` 再 `set_thread_title`。
 
-**现 TS 状态**：`inspect` 结果的 `launchIntent.execution` 给出执行参数：Claude 为 tmux socket、session、窗口名与 cwd、`claude` 命令行（`--session-id` 由 Agent 生成 UUID v4、`--permission-mode` 默认 acceptEdits、`--effort` 按角色回退再回退 controller max 其余 xhigh、可选 `--model`、cwd 不是工作区根时 `--add-dir`）；Codex 为 `create_thread` 的标题、cwd、model、effort 与后续 `set_thread_title`。Wakeflow 不 spawn 进程；retitle 与 arrange 未提供。2026-09-10 pod 切片 9：执行说明按宿主 profile 的 `surfaces.worktree` 模板给 worktree pod 的产品窗口加 Claude `--worktree wakeflow-<name>`（宿主分支 `worktree-wakeflow-<name>`）或 Codex `environment: worktree`（detached，第一次导入前 `git switch -c`），Test 窗口对已有回执的 worktree 加 `--add-dir`（Claude）或列相对路径（Codex）。2026-09-24 §13.117 D4：Claude 的执行由维护发布到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手承担——`launch` 读 inspect 的 `launchIntent`，生成 session id，`has-session` 决定 `new-session -d` 或 `new-window -d`，`-n <displayTitle> -c <root> -P -F` 启动 `claude`，`automatic-rename off`，写 `@wakeflow_program_id/host_id/window_id`，等 `session-start` hook 记录后打印 register 用的 observation；`self` 用 `TMUX_PANE` 与 `CLAUDE_CODE_SESSION_ID` 给 Controller 自己出 observation；`mark` 登记后从定位器补写 binding 与 locator 选项；`panes` 出 `tmux-panes` 观察；`close` 出 decommission 的 closure。Wakeflow 仍不 spawn 进程，助手是 Agent 调用的宿主资产。
+**现 TS 状态**：`inspect` 结果的 `launchIntent.execution` 给出执行参数：Claude 为 tmux socket、session、窗口名与 cwd、`claude` 命令行（`--session-id` 由 Agent 生成 UUID v4、`--permission-mode` 默认 auto（§13.134，Q4 裁决；此前为 acceptEdits）、`--effort` 按角色回退再回退 controller max 其余 xhigh、可选 `--model`、cwd 不是工作区根时 `--add-dir`）；Codex 为 `create_thread` 的标题、cwd、model、effort 与后续 `set_thread_title`。Wakeflow 不 spawn 进程；retitle 与 arrange 未提供。2026-09-10 pod 切片 9：执行说明按宿主 profile 的 `surfaces.worktree` 模板给 worktree pod 的产品窗口加 Claude `--worktree wakeflow-<name>`（宿主分支 `worktree-wakeflow-<name>`）或 Codex `environment: worktree`（detached，第一次导入前 `git switch -c`），Test 窗口对已有回执的 worktree 加 `--add-dir`（Claude）或列相对路径（Codex）。2026-09-24 §13.117 D4：Claude 的执行由维护发布到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手承担——`launch` 读 inspect 的 `launchIntent`，生成 session id，`has-session` 决定 `new-session -d` 或 `new-window -d`，`-n <displayTitle> -c <root> -P -F` 启动 `claude`，`automatic-rename off`，写 `@wakeflow_program_id/host_id/window_id`，等 `session-start` hook 记录后打印 register 用的 observation；`self` 用 `TMUX_PANE` 与 `CLAUDE_CODE_SESSION_ID` 给 Controller 自己出 observation；`mark` 登记后从定位器补写 binding 与 locator 选项；`panes` 出 `tmux-panes` 观察；`close` 出 decommission 的 closure。Wakeflow 仍不 spawn 进程，助手是 Agent 调用的宿主资产。
 
 **实现判断**：以上全部变为启动意图与操作意图里的"执行说明"内容，Wakeflow 不再 spawn 任何进程；`preflight` 变为 skills 里的自检步骤；`resume` 变为"同一逻辑窗口、新观察证据"的重新登记路径；session id 由 Agent 生成，Wakeflow 只验形状、占位符与唯一性。
 
 **待确认**：
 
-- Q7 Claude 的 `permissionMode` 是否保留 `acceptEdits | bypassPermissions` 两个值？建议保留，默认 acceptEdits。
+- Q7 Claude 的 `permissionMode` 是否保留 `acceptEdits | bypassPermissions` 两个值？建议保留，默认 acceptEdits。（2026-09-26 用户裁决后改为 `auto | acceptEdits | bypassPermissions`，默认 auto，见 open-items Q4 与 gate-log §13.134。）
 - Q8 `retitle` 与 `arrange` 是否保留为 Agent 指令内容？建议保留 retitle（displayName 变化时给出改名指令），放弃 arrange。
 
 ## 旧行为疑点
@@ -172,7 +172,7 @@
 | Q4 替换形状 | 两步：`inspect` 出启动意图，Agent 创建新窗口，replace 消费新句柄并对旧绑定 CAS | 宿主效果握手的"创建窗口"效果 |
 | Q5 租约时长 | v1 固定 2 小时不可配置，只作恢复门阈值 | 工作声明 |
 | Q6 过期租约出口 | 提供显式公共恢复操作：Agent 提供该窗口观察证据，Controller 确认后强制释放；不自动过期清理 | 工作声明恢复入口 |
-| Q7 permissionMode | 保留 `acceptEdits \| bypassPermissions`，默认 acceptEdits | 配置 schema；启动意图 |
+| Q7 permissionMode | `auto \| acceptEdits \| bypassPermissions`，默认 auto（§13.134；原裁决为保留两值、默认 acceptEdits） | 配置 schema；启动意图 |
 | Q8 retitle 与 arrange | 保留 retitle 作为 displayName 变化时的改名指令；放弃 arrange | 宿主程序层（skills） |
 
 2026-09-04 用户纠正：Codex 的活性并非"不适用"，Agent 可有界轮询读取线程作观察，但网络卡顿会误判失败，采用乐观策略：读取失败只记 unobserved，不阻塞派发；详见能力卡 6 的修订节。

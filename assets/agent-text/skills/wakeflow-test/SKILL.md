@@ -44,11 +44,13 @@ of test work.
 - Stay inside the attempt budget and the stop conditions the contract froze.
   When the budget is exhausted, report that, do not quietly continue.
 - Every step's evidence must be a managed evidence record of this Demand,
-  cited by locator and digest. Nobody else sees your run, so you record it:
-  save each step's exact output under the Test surface, then
+  cited by locator and digest (step 3). Nobody else sees your run, so you
+  record it: save each step's exact output under the Test surface, then
   `wakeflow_record_evidence` (kind `test-output`, a managed-path source under
-  that surface; preview, then apply) returns the locator and digest you cite.
-  Raw output that was never recorded is not evidence.
+  that surface; preview, then apply) returns its `evidenceId`. Raw output that
+  was never recorded is not evidence. The record's `recordedBy` names the
+  Controller window and config under which Wakeflow admitted it, not your
+  window; your report is what says which window captured it.
 - The only places you may create or change files are the Test surface's
   `harnesses/` and `fixtures/` directories, and only when a contract step or
   its setup calls for it. Nothing under a product repository, no probe in a
@@ -69,8 +71,18 @@ of test work.
    the difference in observable terms rather than a judgment word.
 3. Record each step's captured output as evidence of this Demand:
    `wakeflow_record_evidence` with kind `test-output` and the file you saved
-   under the Test surface as its source. The locator and digest it returns
-   are what the step's record cites.
+   under the Test surface as its source. Cite it with the `evidenceId` the
+   apply returned and the SHA-256 of the file you saved - the record holds
+   exactly those bytes; its `payloadArtifactDigest` and `manifestDigest` are
+   not what you cite:
+
+   ```json
+   { "ref": "artifacts/managed-evidence/evidence_<uuid>/payload/content",
+     "digest": "sha256:<64 lowercase hex of the saved file>" }
+   ```
+
+   That pair is the step's evidence reference; list it once more in
+   `evidenceLocators` with `"kind": "test-output"`.
 4. Give every step a verdict - `pass`, `fail`, `blocked` or
    `cannot-conclude` - and classify every step that did not pass before you
    move on: `product-defect`, `harness-defect`, `environment`, `flaky`,

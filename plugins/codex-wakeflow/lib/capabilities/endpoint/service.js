@@ -405,10 +405,14 @@ function worktreeInstructions(context, intent) {
         note: `create_thread with a worktree environment starts on a detached HEAD; run git switch -c ${intent.worktree.suggestedName} before the first result import`,
     };
 }
-function claudeAddDirArguments(intent, attached) {
+function claudeAddDirArguments(intent, attached, ledgerRoot) {
     const arguments_ = [];
     if (intent.root.configuredPlacement !== ".")
         arguments_.push("--add-dir", "<workspace root>");
+    // 账本在工作区之外（缺省的 `../wakeflow-ledger`）时每个窗口都要读需求包（投递提示词的阅读顺序列出
+    // requirement.md 与 landing.md），它不在任何一个允许目录里（§13.133 现场 F11，§13.134）。
+    if (ledgerRoot.startsWith("../"))
+        arguments_.push("--add-dir", `<workspace root>/${ledgerRoot}`);
     for (const view of attached) {
         if (view.pathFromWorkspaceRoot !== null) {
             arguments_.push("--add-dir", `<workspace root>/${view.pathFromWorkspaceRoot}`);
@@ -451,7 +455,7 @@ function executionInstructions(context, intent, receipts) {
                 "--effort",
                 effort,
                 ...(modelName === null ? [] : ["--model", modelName]),
-                ...claudeAddDirArguments(intent, attached),
+                ...claudeAddDirArguments(intent, attached, model.storage.ledgerRoot),
             ],
             sessionIdPolicy: "agent-generates-uuid-v4",
             registration: "report handle kind claude-session with the generated session id plus the tmux socket, session, window, and pane",

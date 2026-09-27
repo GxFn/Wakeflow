@@ -162,7 +162,11 @@ import {
   sendReturnProvesLanding,
   type HookLandingRecord,
 } from "./decide.js";
-import { renderDeliveryPortablePrompt, type DeliveryTestContractSection } from "./prompt.js";
+import {
+  deliveryPromptRequirementPackage,
+  renderDeliveryPortablePrompt,
+  type DeliveryTestContractSection,
+} from "./prompt.js";
 
 /**
  * Wakeflow Capabilities / Delivery：三个追加型执行器（能力卡 6，ADR-0009，ADR-0012 D1 D2）。
@@ -395,11 +399,16 @@ function deliveryTargetOf(
   return target;
 }
 
-function relativeWorkspaceRoot(placement: string): string {
-  const depth = placement
-    .split("/")
-    .filter((segment) => segment.length > 0 && segment !== ".").length;
-  return depth === 0 ? "." : Array.from({ length: depth }, () => "..").join("/");
+/**
+ * prompt 里从窗口根到工作区根的相对路径：worktree 检出按回执路径，其余窗口按配置位置在工作区根上
+ * 解析出窗口根。配置位置可以是工作区的兄弟目录（`../ProductA`），只数段数会把它算成 `../..`，
+ * 任务包与需求包路径就都解析到工作区之外（gate-log §13.134）。
+ */
+function workspaceRootFromWindow(context: SliceContext, route: Readonly<WindowRoute>): string {
+  const workspaceRoot = context.workspaceRoot.absolutePath;
+  const windowRoot = route.worktreePath ?? path.resolve(workspaceRoot, route.configuredPlacement);
+  const relative = path.relative(windowRoot, workspaceRoot);
+  return relative === "" ? "." : relative;
 }
 
 async function readBinding(
@@ -933,14 +942,15 @@ function renderPrompt(
       bindingId: route.binding.bindingId,
     },
     readingOrder: {
-      workspaceRootFromWindow:
-        route.worktreePath === null
-          ? relativeWorkspaceRoot(route.configuredPlacement)
-          : path.relative(route.worktreePath, context.workspaceRoot.absolutePath),
+      workspaceRootFromWindow: workspaceRootFromWindow(context, route),
       attachedWorktrees: sources.attachedWorktrees,
       taskPackageRef: deliveryTaskPackageRef(taskPackage.demandId, taskPackage.taskPackageId),
       requirementSections:
         taskPackage.workType === "implementation" ? taskPackage.sectionAnchors : [],
+      requirementPackage: deliveryPromptRequirementPackage(
+        context.authority.config.model.storage.ledgerRoot,
+        context.authority.loaded.admittedAuthority.resolvedAuthority,
+      ),
       workspaceInstructionFile: instructionFile,
       repositoryInstructionFile: repositoryId === null ? null : instructionFile,
       stateRootRef: demandFinalRootRef(taskPackage.demandId),

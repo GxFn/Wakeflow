@@ -42,6 +42,16 @@ function rejectedWith(reason: string, code = "precondition-failed") {
     isWakeflowError(error) && error.code === code && error.reason === reason;
 }
 
+/** kind 与来源不配：专门的原因，路径指到 kind 字段（§13.134，收 §13.133 G12）。 */
+function kindSourceMismatch(error: unknown): boolean {
+  return (
+    isWakeflowError(error) &&
+    error.code === "invalid-request" &&
+    error.reason === "kind-source-mismatch" &&
+    error.path === "$request.selection.kind"
+  );
+}
+
 function request(
   fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
   body: Readonly<Record<string, unknown>>,
@@ -272,7 +282,7 @@ test("observation、link、commit 各成一份记录：payload 是来源投影�
         source: { kind: "observation", hostId: "codex", recordId: written.record.recordId },
         contentReview: "reject",
       }),
-      rejectedWith("kind"),
+      kindSourceMismatch,
     );
     await rejects(
       preview(fixture, {
@@ -418,6 +428,42 @@ test("证据提交之后才中止：apply 以 io-failure/aborted 于 $signal 失
     equal(signal.aborted, true);
     const after = await preview(fixture, selection);
     equal(after.plan?.recorded, true);
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("选择里 kind 与来源不配（文件来源配 transcript、link、hook-observation 或 commit）报 kind-source-mismatch 并指到 kind 字段（§13.134）", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const file = fileSelection("artifacts/test-run/logs/report.txt");
+    for (const kind of ["transcript", "link", "hook-observation", "commit"]) {
+      for (const mode of ["preview", "apply"] as const) {
+        await rejects(
+          executeRecordEvidenceRequest(
+            request(fixture, {
+              mode,
+              selection: { ...file, kind },
+              ...(mode === "apply" ? { planDigest: `sha256:${"0".repeat(64)}` } : {}),
+            }),
+            CLOCK,
+          ),
+          kindSourceMismatch,
+          `${mode} ${kind}`,
+        );
+      }
+    }
+    await rejects(
+      preview(fixture, {
+        kind: "test-output",
+        source: { kind: "commit", repositoryId: EVIDENCE_REPOSITORY_ID, commitOid: "b".repeat(40) },
+        contentReview: "reject",
+      }),
+      kindSourceMismatch,
+    );
+    const matched = await preview(fixture, file);
+    equal(matched.status, "ready");
+    equal(matched.plan?.recorded, false);
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
   }

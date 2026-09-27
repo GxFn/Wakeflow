@@ -65,7 +65,7 @@ export const TARGET_TASK_PLANNING_TOOL_REGISTRATION = Object.freeze({
   executor: "planTargetTask",
   title: "Plan Wakeflow Target Task",
   description:
-    "Append one immutable task package to a Demand in one call with the observed stream revision and a client idempotency key: same key and body replays the first result; a stale revision or another body under a reused key is rejected. Implementation packages bind acceptance anchors to acceptance-criteria items and declare lineage when the repository has a target. Test packages carry the Controller-authored test contract (steps bound to acceptance-criteria items, skills, setup, attempts, stop conditions) and lineage=retest during remediation; Wakeflow derives window, environment, and baselines. Never delivers.",
+    "Append one immutable task package to a Demand with the observed stream revision and an idempotency key: same key and body replays the first result; a stale revision or a reused key with another body is rejected. selectedAuthorityMemberRefs are full ledger memberRefs like requirements/<requirementId>/landing.md, not bare file names. Implementation packages bind acceptance anchors to acceptance-criteria items and declare lineage when the repository has a target. Test packages carry the Controller-authored test contract and lineage=retest in remediation; Wakeflow derives window, environment and baselines. Never delivers.",
   requestSchema: WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_TARGET_TASK_PLANNING_RESULT_SCHEMA,
   annotations: {

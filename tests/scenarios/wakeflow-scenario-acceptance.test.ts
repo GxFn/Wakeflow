@@ -1653,7 +1653,11 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
     ),
   });
   equal(wrongDigest.isError, true, "a locator whose digest does not match must be rejected");
-  equal(scenarioToolText(wrongDigest).includes("evidence-unresolved"), true);
+  equal(scenarioToolText(wrongDigest).includes("evidence-digest-mismatch"), true);
+  equal(
+    scenarioToolText(wrongDigest).includes("$request.report.content.evidenceLocators[0]"),
+    true,
+  );
   const leaking = await context.connection.client.callTool({
     name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
     arguments: importRequest(context, permit, "scenario-import-private-path", revision, {

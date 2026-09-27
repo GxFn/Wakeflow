@@ -8,6 +8,7 @@ import {
   WakeflowDurableIdError,
   type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import {
   inspectLoadedArtifactTree,
   validateLoadedArtifactTreeManifest,
@@ -154,7 +155,7 @@ const ERROR_MESSAGES = {
   source: "Managed evidence capture planning source is unavailable or unsafe.",
   "source-type": "Managed evidence capture planning source type is inconsistent.",
   "source-changed": "Managed evidence capture planning source changed during observation.",
-  kind: "Managed evidence capture planning kind does not match the observed source.",
+  kind: "Managed evidence capture planning kind does not match its source.",
   capacity: "Managed evidence capture planning source exceeds its capacity.",
   identity: "Managed evidence capture planning identity derivation failed.",
   time: "Managed evidence capture planning capture time failed.",
@@ -256,11 +257,22 @@ function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {
   }
 }
 
+/**
+ * 选择里 kind 与来源种类不配（例如文件来源配 `transcript`）单独报 `kind`，与观察到的 hook 记录
+ * 不带 transcript 同一原因，调用方据此改 kind 而不是猜整份选择（gate-log §13.134，收 §13.133 G12）。
+ * 闭集之外的 kind 不是"不配"而是选择本身坏了，仍报 `input`：解析器对两者都给 `kind`，
+ * 但只有在选择已通过普通记录准入之后才会走到 kind 检查，所以这里读 `kind` 字段是安全的。
+ */
 function parseSelection(value: unknown): Readonly<ManagedEvidenceSourceSelection> {
   try {
     return parseManagedEvidenceSourceSelection(value);
   } catch (error: unknown) {
-    if (error instanceof ManagedEvidenceSourceSelectionError) fail("input", error);
+    if (error instanceof ManagedEvidenceSourceSelectionError) {
+      const mismatch =
+        error.reason === "kind"
+        && isEvidenceKind((value as { readonly kind?: unknown }).kind);
+      fail(mismatch ? "kind" : "input", error);
+    }
     throw error;
   }
 }

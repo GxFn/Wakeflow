@@ -155,7 +155,9 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
     destructiveHint: true,
     idempotentHint: false,
   }),
-  expectedTool(WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, "target-task-planning", ADDITIVE),
+  expectedTool(WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, "target-task-planning", ADDITIVE, [
+    "full ledger memberRefs like requirements/<requirementId>/landing.md",
+  ]),
   expectedTool(WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, "rearm-delivery", ADDITIVE, [
     "at most three rearms per envelope",
     "Never performs the host effect",
@@ -172,7 +174,10 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
   ]),
   expectedTool(WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, "record-evidence", ADDITIVE, [
     "closed vocabulary",
+    "managed-path takes test-output, diff or document",
+    "observation takes hook-observation or transcript",
     "already-recorded",
+    "recordedBy is the recording authority",
     "Credential findings always block",
   ]),
   expectedTool(WAKEFLOW_POD_PUBLIC_TOOL_NAME, "pod", DESTRUCTIVE, [

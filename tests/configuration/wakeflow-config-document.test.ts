@@ -1,8 +1,9 @@
-import { equal } from "node:assert/strict";
+import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
+  WakeflowConfigError,
 } from "../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { parseDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
@@ -68,5 +69,30 @@ test("optional nested fields survive representation normalization", () => {
     "wakeflow-socket",
   ]) {
     equal(rendered.includes(expected), true);
+  }
+});
+
+// 用户裁决 Q4（gate-log §13.134）：auto 成为 Claude 窗口的缺省权限模式；配置只接受
+// auto、acceptEdits、bypassPermissions，CLI 的其余模式（manual、dontAsk、plan）不是持久偏好。
+test("Claude permissionMode admits auto, acceptEdits and bypassPermissions only", () => {
+  for (const mode of ["auto", "acceptEdits", "bypassPermissions"]) {
+    const value = createMinimalWakeflowConfig();
+    value.hosts = { "claude-code": { launch: { permissionMode: mode } } };
+    const model = parseWakeflowConfig(value);
+    equal(model.hosts?.["claude-code"]?.launch?.permissionMode, mode);
+    const rendered = renderWakeflowConfig(model);
+    equal(rendered.includes(`"permissionMode": "${mode}"`), true);
+    equal(
+      renderWakeflowConfig(parseWakeflowConfig(parseDeterministicJsonDocument(rendered))),
+      rendered,
+    );
+  }
+  for (const mode of ["manual", "dontAsk", "plan", "default", "Auto"]) {
+    const value = createMinimalWakeflowConfig();
+    value.hosts = { "claude-code": { launch: { permissionMode: mode } } };
+    throws(
+      () => parseWakeflowConfig(value),
+      (error: unknown) => error instanceof WakeflowConfigError && error.reason === "schema",
+    );
   }
 });

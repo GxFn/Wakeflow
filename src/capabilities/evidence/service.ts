@@ -183,6 +183,10 @@ function privateValues(context: EvidenceSliceContext): Iterable<string> {
 
 type FailureRoute = readonly [WakeflowErrorCode, string, string];
 
+/**
+ * kind 与来源不配时路径指到 `kind` 字段：选择本身不配（文件来源配 `transcript`）与观察到的记录
+ * 不带 transcript 都是改 kind 就能过的请求问题（gate-log §13.134，收 §13.133 G12）。
+ */
 const PLANNING_FAILURE_TABLE: Readonly<Partial<Record<string, FailureRoute>>> = Object.freeze({
   input: ["invalid-request", "selection", "$request.selection"],
   aborted: ["io-failure", "aborted", "$signal"],
@@ -193,7 +197,7 @@ const PLANNING_FAILURE_TABLE: Readonly<Partial<Record<string, FailureRoute>>> = 
   "source-type": ["precondition-failed", "source-type", "$request.selection"],
   "source-changed": ["precondition-failed", "source-changed", "$request.selection"],
   capacity: ["precondition-failed", "capacity", "$request.selection"],
-  kind: ["precondition-failed", "kind", "$request.selection"],
+  kind: ["invalid-request", "kind-source-mismatch", "$request.selection.kind"],
 });
 
 function mapPlanningError(error: unknown): never {

@@ -520,9 +520,9 @@ export interface ClaudeLaunch {
 modelByRole?: ModelByRole
 reasoningEffortByRole?: ReasoningEffortByRole
 /**
- * Persistent Claude permission preference. acceptEdits is the safe mode; bypassPermissions requires an explicit durable user choice.
+ * Persistent Claude permission preference. auto is the default: Claude Code reviews each action itself, so the guided user is not asked to approve routine tool calls. acceptEdits is the conservative mode that stops for commands. bypassPermissions requires an explicit durable user choice.
  */
-permissionMode?: ("acceptEdits" | "bypassPermissions")
+permissionMode?: ("auto" | "acceptEdits" | "bypassPermissions")
 }
 /**
  * Desired Claude tmux container names only; actual live locator identity is intentionally excluded from durable config.

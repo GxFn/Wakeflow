@@ -80,7 +80,7 @@
 - `topology.windows[]` 至少 4：恰好一个 controller、一个 design、一个 test，每个仓库至少一个 product 窗口；`root` 为判别联合：program、support-surface、repository。
 - `storage.ledgerRoot` 是唯一可配置的持久根；`.wakeflow-active` 与 `.wakeflow-local` 是代码常量。
 - `governance.audit.preservedReviewAfterDays?`、`governance.validation.runtimeResidue?`；没有 testing-mode 字段。
-- `hosts.codex.launch{modelByRole, reasoningEffortByRole}`、`hosts.claude-code.launch{同上, permissionMode: acceptEdits | bypassPermissions}`、`hosts.claude-code.tmux{sessionName, socketName}`；缺省表示继承宿主默认，不表示禁用。
+- `hosts.codex.launch{modelByRole, reasoningEffortByRole}`、`hosts.claude-code.launch{同上, permissionMode: auto | acceptEdits | bypassPermissions，默认 auto（§13.134）}`、`hosts.claude-code.tmux{sessionName, socketName}`；缺省表示继承宿主默认，不表示禁用。
 - 序列化固定为两空格 pretty JSON 加换行；`sourceDigest` 是字节摘要，`configDigest` 是规范化语义摘要。`wakeflow-config-v3.mjs:696-703`。
 - 读取要求属主为 euid、模式 0644、单链接、不超过 1 MiB、前中后三次 stat 一致。`wakeflow-config-v3-transition-authority.mjs:184-218`。
 

@@ -3897,3 +3897,36 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** 两处补修各自：助手测试 16/16、typecheck、Biome lint（四条既有 warning）、`build:check`、`smoke:artifacts` 通过；整门（`npm test`）在现场的八个会话与第三方进程把负载推到 17–19 时分别有 4 与 5 个用例在 60 / 120 秒超时被取消、没有断言失败，涉及的四个测试文件（端点服务、需求服务、观察服务、工作区观察）单跑全部通过。
 
 **未执行。** 本轮现场没有覆盖：rework、rearm、blocked 后重新决策、continue 之后再次完成（§13.131 第三轮的续接修复仍未上现场）、经助手准备 worktree 的 pod 与加锁检出的关闭；`acceptEdits` 下产品与 Test 窗口导入与回调是否还停在确认上，因为改用 auto 而没有完整验证。
+
+## 13.134 修 §13.133 现场发现：就地换代、收养未登记窗口、auto 权限模式与七处文字和错误（2026-09-26）
+
+**范围。** 用户在 §13.133 汇报后说"可以，先修这些问题再继续现场测试"。本节修 §13.133 登记的现场问题（B12、C8、C16、I6、I7、I8、G12、F10、A9）并落实 Q4 裁决（auto 权限模式）；多代理执行：五个实现者按文件分桶（助手、Agent 文本、运行时文字与错误、hook 暂存、权限模式）并行，随后四个复核者逐桶对抗性复核并就地修复，主会话补了两处、改文档、跑整门。
+
+**助手（`claude-code-tmux-asset.ts`）。**
+- `resume --window <id> --in-place`（C8）：在定位器那个 pane 里用 `tmux respawn-pane -k` 以 `claude --resume <绑定的会话>` 与当前意图参数重启同一会话；tmux 坐标、定位器、绑定与窗口选项都不变，之后不用 relocate / mark。pane 按 deliver 的同一套核对定位；目标必须闲置（输入框可见且为空，整屏没有工作中标记），否则 `window-busy`（`--force` 不跳过）；会话在保留期内没有任何 prompt 记录（从未对话过，claude 不会 --resume）时不动窗口、拒绝为 `resume-never-conversed`（主会话补，§13.133 的四个产品窗口正是这种）。助手就跑在这个 pane 里时（Controller 重启自己）核对 `CLAUDE_CODE_SESSION_ID` 等于绑定会话（否则 `self-mismatch`），交给一个脱离的子进程两秒后 respawn、立即返回 `scheduled`；重启后的会话以固定 prompt "Wakeflow: this Controller session restarted in place to load the updated plugin. Call wakeflow_verify, then continue where you left off." 自己续上，同时它的 MCP 服务也换成新字节，不必 `/mcp`。复核者在一次性的 tmux 3.6b 服务器上用假 claude 端到端跑过自重启与非自身的就地重启（子进程 setsid、stdio 全忽略、argv 顺序正确、标识保留），并把闲置判断从"尾部 12 行"改为整屏（计时行下挂长待办清单时会被推出尾部，原判断会杀掉正在工作的窗口）。
+- `launch` 收养（I6）：窗口没有定位器、却已有一个带本程序、本宿主、本窗口标识且在跑 claude 的活 pane 时不开第二个窗口：从那个 claude 进程的 argv 取 `--session-id` / `--resume`（含 `=` 形式），有它的 session-start 记录作证才返回 `adopted: true` 的登记观察；拒绝 `adopt-unproven`、`window-ambiguous`、`window-present-not-claude`；已带 binding / locator 标识（登记过、定位器后来退役）的 pane 不算候选。
+- 工作中识别（A9）：2.1.283 的计时行（"✢ Computing… (23s · …)"）算工作中，完成行（"✻ Crunched for 3m 6s · done …"）不算；nudge 与就地重启共用。
+- `locator-live` 的提示改为指向 `resume --in-place`，收养被拒的提示改为只让用户做一件事（在多余窗口里 `/exit`、接受仍在显示的信任对话框）。
+
+**Agent 文本。**
+- SKILL.md 把 `server-outdated` / `windows-stale:<n>` 直接指到 "After a plugin update"，不许去读插件实现；每次 Bash 只调一次助手、参数写死（C16）。
+- "After a plugin update" 的顺序改为：本窗口先（过期的服务给出的启动意图是旧代码的，例如仍是 acceptEdits 缺省；维护也不能从它跑）→ 续上后 verify → 资产门失败时对账 → 再逐个就地重启其他过期窗口，每个一次 Bash；`window-busy` 的对话框、菜单与已键入文字要告诉用户是哪个窗口；`resume-never-conversed` / `resume-exited` 走 close、launch、replace、mark；旧助手以 `argument-unknown` 拒绝 `--in-place` 时请用户在本窗口 `/mcp` 重连一次、对账装上新助手、从头再来（C8）。主会话纠正了实现者最初"本窗口最后"的顺序。
+- 引导会话关早了：tmux 里的 Controller 用 `self` 登记自己，`launch` 收养其余仍在跑的窗口再登记，最后 `mark --all`；不在 tmux 里 teardown（I6）。
+- auto 权限模式：README（中英）与窗口参考写明缺省 auto、第一次可能有一次性提问由 Controller 指明窗口转告用户、账户没有 auto 时经维护改 acceptEdits。
+- Test 与 Target 技能写明证据引用的确切形式与例子（I8）；evidence.md 写明 kind 与来源的允许组合与 `kind-source-mismatch`；`recordedBy` 是登记权威而不是采集窗口（F10）。
+- 复核者另修：`init.md` 与 README 曾让用户自己跑 `git init`，改为 Agent 征得同意后自己跑，并加了一条"引导用户时 run 之后只允许斜杠命令"的全产物测试。
+
+**运行时。**
+- 投递提示词的阅读顺序（I7）：逐文档列出 requirement.md、landing.md（与附件）从窗口可解析的完整路径，任务包的节标在各自文档下；复核者发现并修了实现者留下的未接线（service 没传需求包，修复不生效），以及一个旧缺陷：兄弟位置（`../X`）的窗口把工作区根算成 `../..`，任务包、工作区指令、状态根与账本路径全都指到工作区之外；现按窗口根到工作区根的相对路径计算。
+- `record_evidence` 的 kind 与来源不符拒绝为 `invalid-request` / `kind-source-mismatch` / `$request.selection.kind`（词表外的 kind 仍按 input），工具说明写明允许组合；`plan_target_task` 说明写明 `selectedAuthorityMemberRefs` 是 `requirements/<requirementId>/landing.md` 这样的完整 memberRef（G12）。
+- 导入的证据引用拒绝按类别给 reason（`evidence-locator-invalid`、`evidence-unknown`、`evidence-member-missing`、`evidence-digest-mismatch`、`evidence-kind-mismatch`、`evidence-unreadable`），path 指向第一条出错的引用，`details.unresolvedCitations` 为总数；`evidence-unresolved` 退役（I8；能力卡 07 与场景验收表同步）。
+- manifest 的 `recordedBy` 描述与 `record_evidence` 说明写明它是登记权威（F10，按设计，不改归属）。
+- hook 暂存（B12）：读取方不把写入器自己的暂存（create、0600、链接数 1–2 的普通文件）计入 skipped；写入新记录后，比新记录早 10 分钟以上且属主进程已退出的暂存由同一条修剪路径退役；verify 级回归已加。复核中发现的基础层问题（任一形状不对的暂存会让之后所有 hook 写入失败）另登记 B13。
+- 权限模式（Q4）：`hosts.claude-code.launch.permissionMode` 枚举为 `auto | acceptEdits | bypassPermissions`，Claude 宿主画像缺省 `auto`；启动参数不进 intentDigest，已登记窗口不产生漂移。
+- 账本在工作区之外时（缺省 `../wakeflow-ledger`），Claude 启动意图给每个窗口加 `--add-dir <workspace root>/<账本>`（主会话补，§13.133 F11，登记 A10）。
+
+**登记表。** A9、B12、C16、G12、I7、I8 标为已修，C8、I6 标为已修待现场，F10 标为已解释，Q4 标为已实现；新登记 A10（已修）、B13、C17，共 117 项。能力卡 01、02、07 与场景验收表同步了 auto 缺省与新的拒绝 reason。
+
+**门。** `npm run schema:build`（95 个 Schema，无漂移）、`npm run build:artifacts:committed` 后 `npm test` 整门通过：typecheck、架构规则、Biome（lint 只有五条既有的 warning / info，都在本轮未改的文件里）、knip、TypeScript 测试 1153/1153（含二十个端到端场景）、schema:check、build:check；`npm run smoke:artifacts` 通过；`git diff --check` 干净。第一次整门只因主会话新加的端点测试没过 Biome 格式检查而停下，格式化后重跑全绿。
+
+**未执行。** 真实 Claude Code 里的就地重启（含 Controller 自重启与旧助手回退）、收养、auto 缺省启动与账本 `--add-dir`、新的阅读顺序与拒绝 reason 都还没上现场；下一步在 `WakeflowTestWorkspace2` 按技能文字走一遍插件更新换代，再继续 §13.133 未覆盖的 continue、rework、rearm、blocked 与 pod 场景。

@@ -379,6 +379,7 @@
     },
     "publication": {
       "type": "object",
+      "description": "Receipt of the recorded evidence. A TargetResult report cites it as ref artifacts/managed-evidence/<evidenceId>/payload/content (payload/<path> inside a tree source, or artifacts/managed-evidence/<evidenceId>/manifest.json) with digest sha256:<hex> of that member's bytes.",
       "additionalProperties": false,
       "required": [
         "evidenceId",

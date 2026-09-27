@@ -1,4 +1,4 @@
-import { equal, rejects } from "node:assert/strict";
+import { equal, ok, rejects } from "node:assert/strict";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -21,6 +21,14 @@ import {
   recordFixtureDeliveryOutcome,
   type DeliveryWorkspaceFixture,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
+import {
+  cleanupTestDeliveryWorkspaceFixture,
+  createTestDeliveryWorkspaceFixture,
+} from "../../governance/delivery/test-delivery-workspace.fixture.js";
+import {
+  PLANNING_REQUIREMENT_ID,
+  planFixtureTargetTask,
+} from "../../governance/tasking/target-task-planning-service.fixture.js";
 
 /**
  * delivery 切片效果：prepare 一次追加并返回可移植许可（声明、信封、围栏）；重放、异请求、
@@ -438,5 +446,136 @@ test("Controller 解决：indeterminate 可被显式判为 rejected-before-send 
     );
   } finally {
     await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+/** 阅读顺序段：从段头到下一个空行。 */
+function readingSection(prompt: string, header: string): readonly string[] {
+  const lines = prompt.split("\n");
+  const start = lines.indexOf(header);
+  if (start === -1) throw new Error(`prompt lacks ${header}`);
+  const end = lines.indexOf("", start);
+  return lines.slice(start + 1, end === -1 ? undefined : end);
+}
+
+/** 带编号的阅读条目：编号去掉后的路径，以及紧跟在它下面的章节行。 */
+function readingEntries(
+  lines: readonly string[],
+): readonly Readonly<{ target: string; sections: string | null }>[] {
+  const entries: { target: string; sections: string | null }[] = [];
+  for (const line of lines) {
+    const numbered = /^\d+\. (.+)$/u.exec(line);
+    if (numbered?.[1] !== undefined) entries.push({ target: numbered[1], sections: null });
+    else {
+      const last = entries.at(-1);
+      if (last === undefined) throw new Error(`section line before any entry: ${line}`);
+      last.sections = line.trim();
+    }
+  }
+  return entries;
+}
+
+/**
+ * 阅读顺序从窗口根解析（§13.134，收 §13.133 I7）：夹具的产品仓库是工作区的兄弟目录
+ * （`../ProductA`），ledger 也在工作区外（`../wakeflow-ledger`）。任务包、requirement.md、
+ * landing.md 与 Demand 状态根都必须从窗口根解析到真实存在的文件，章节列在所在文档下。
+ */
+function assertReadingOrderResolves(
+  prompt: string,
+  header: string,
+  sectionsLabel: string,
+  fixture: Readonly<{ readonly fixtureRoot: string }>,
+  windowPath: string,
+  expectedSections: Readonly<Record<"requirement" | "landing", string | null>>,
+): void {
+  const entries = readingEntries(readingSection(prompt, header));
+  const requirementRoot = path.join(
+    fixture.fixtureRoot,
+    "wakeflow-ledger",
+    "requirements",
+    PLANNING_REQUIREMENT_ID,
+  );
+  const resolved = entries.map((entry) => path.resolve(windowPath, entry.target));
+  const taskPackage = resolved[0];
+  ok(
+    taskPackage !== undefined && existsSync(taskPackage),
+    `task package path does not resolve from the window: ${entries[0]?.target}`,
+  );
+  for (const [index, role] of [
+    [1, "requirement"],
+    [2, "landing"],
+  ] as const) {
+    equal(resolved[index], path.join(requirementRoot, `${role}.md`), `${role}.md path`);
+    ok(existsSync(path.join(requirementRoot, `${role}.md`)));
+    equal(
+      entries[index]?.sections ?? null,
+      expectedSections[role] === null ? null : `${sectionsLabel}: ${expectedSections[role]}`,
+      `${role}.md sections`,
+    );
+  }
+  const stateRoot = resolved.at(-1);
+  ok(stateRoot !== undefined && existsSync(stateRoot), "state root does not resolve");
+  equal(/^\d+\. requirement\.md$/mu.test(prompt), false, "requirement.md must not be bare");
+  equal(prompt.includes("requirement.md ("), false, "sections must not hang on requirement.md");
+}
+
+test("投递 prompt 的阅读顺序按文档给出从窗口根可解析的需求包路径，章节在所在文档下（§13.134）", async () => {
+  for (const [language, header, label] of [
+    ["en", "Read in this order:", "sections"],
+    ["zh-Hans", "按序阅读:", "章节"],
+  ] as const) {
+    const fixture = await createDeliveryWorkspaceFixture();
+    try {
+      const draft = fixture.request.taskPackage;
+      if (draft.workType !== "implementation") throw new Error("Expected an implementation draft.");
+      const planned = await planFixtureTargetTask(fixture, {
+        idempotencyKey: "fixture-plan-sections",
+        expectedStreamRevision: 2,
+        taskPackage: {
+          ...draft,
+          sectionAnchors: ["landing-plan", "acceptance-criteria", "code-facts"],
+          lineage: { kind: "replacement", replacesTargetTaskId: fixture.targetTaskId },
+        },
+      });
+      const prepared = await prepareFixtureDelivery(fixture, {
+        targetTaskId: planned.targetTask.targetTaskId,
+        expectedStreamRevision: 3,
+        language,
+      });
+      assertReadingOrderResolves(
+        prepared.permit.prompt,
+        header,
+        label,
+        fixture,
+        fixture.route.windowPath,
+        { requirement: "acceptance-criteria", landing: "landing-plan, code-facts" },
+      );
+    } finally {
+      await cleanupDeliveryWorkspaceFixture(fixture);
+    }
+  }
+});
+
+test("测试投递的 prompt 同样从 Test 窗口根解析需求包文档，不带章节行（§13.134）", async () => {
+  const fixture = await createTestDeliveryWorkspaceFixture();
+  try {
+    const prepared = await prepareFixtureDelivery(
+      {
+        workspacePath: fixture.workspacePath,
+        demandId: fixture.demandId,
+        targetTaskId: fixture.testTargetTaskId,
+      },
+      { expectedStreamRevision: 8, idempotencyKey: "fixture-test-prepare-sections" },
+    );
+    assertReadingOrderResolves(
+      prepared.permit.prompt,
+      "按序阅读:",
+      "章节",
+      fixture,
+      fixture.testRoute.windowPath,
+      { requirement: null, landing: null },
+    );
+  } finally {
+    await cleanupTestDeliveryWorkspaceFixture(fixture);
   }
 });

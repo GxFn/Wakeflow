@@ -184,12 +184,14 @@ import {
   deriveTestDecisionBlockers,
   findReviewEscalationEventId,
   implementationPhaseForDecision,
+  locateEvidenceReference,
   planEvidenceLocator,
   reportTexts,
   summarizeResultForCallback,
   testPhaseForDecision,
   type EvidenceReference,
   type PriorTestResultView,
+  type ReportEvidenceView,
   type ResumptionSourceView,
   type ReviewUnitStatus,
   type SessionRecordView,
@@ -658,33 +660,46 @@ async function loadTaskPackage(
   }
 }
 
-/** 定位符只在同 Demand 的受管证据记录内解析，逐条核 sha256（§13.87 D3）。 */
+/**
+ * 证据引用解析失败的原因类（gate-log §13.134，收 §13.133 I8）：定位符形态不对、本 Demand 没有
+ * 这条证据、记录里没有这个成员、摘要不符、种类不符，其余读取失败归为不可读。
+ */
+type EvidenceCitationFailure =
+  | "evidence-locator-invalid"
+  | "evidence-unknown"
+  | "evidence-member-missing"
+  | "evidence-digest-mismatch"
+  | "evidence-kind-mismatch"
+  | "evidence-unreadable";
+
+/**
+ * 定位符只在同 Demand 的受管证据记录内解析，逐条核 sha256（§13.87 D3）。拒绝点名报告里第一条
+ * 解析不了的引用：原因是它的原因类，路径指到它在报告里的位置，details 给出一共几条（§13.134）。
+ */
 async function resolveEvidence(
   context: SliceContext,
-  references: readonly Readonly<EvidenceReference>[],
+  report: Readonly<ReportEvidenceView>,
 ): Promise<readonly Readonly<TargetResultEvidenceResolution>[]> {
   const recorded = new Set(
     (context.authority.loaded.aggregate.state.managedEvidence ?? []).map(
       (entry) => entry.evidenceId,
     ),
   );
-  const unresolved: number[] = [];
-  const mismatched: number[] = [];
+  const failures: Readonly<{
+    readonly reference: Readonly<EvidenceReference>;
+    readonly reason: EvidenceCitationFailure;
+  }>[] = [];
   const resolutions: Readonly<TargetResultEvidenceResolution>[] = [];
-  for (const [index, reference] of references.entries()) {
+  for (const reference of collectEvidenceReferences(report)) {
     const resolved = await resolveEvidenceReference(context, reference, recorded);
-    if (resolved === null) unresolved.push(index);
-    else if (resolved === "kind-mismatch") mismatched.push(index);
+    if (typeof resolved === "string") failures.push({ reference, reason: resolved });
     else resolutions.push(resolved);
   }
-  if (unresolved.length > 0 || mismatched.length > 0) {
-    rejectWith(
-      [
-        ...unresolved.slice(0, 2).map((index) => `evidence-unresolved:${index}`),
-        ...mismatched.slice(0, 2).map((index) => `evidence-kind-mismatch:${index}`),
-      ],
-      "$request.report",
-    );
+  const first = failures[0];
+  if (first !== undefined) {
+    fail("precondition-failed", first.reason, locateEvidenceReference(report, first.reference), {
+      details: { unresolvedCitations: String(failures.length) },
+    });
   }
   return Object.freeze(resolutions);
 }
@@ -726,11 +741,14 @@ async function readEvidenceMember(
   });
 }
 
-function unresolvedOrRethrow(error: unknown): null {
-  if (error instanceof PortableResourcePathError || error instanceof Sha256Error) return null;
+function citationFailureOrRethrow(error: unknown): EvidenceCitationFailure {
+  if (error instanceof PortableResourcePathError) return "evidence-locator-invalid";
+  if (error instanceof Sha256Error) return "evidence-digest-mismatch";
   if (error instanceof StableFileReadError || error instanceof ManagedEvidenceRecordReaderError) {
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-    return null;
+    if (error.reason === "member-not-found") return "evidence-member-missing";
+    if (error.reason === "input") return "evidence-locator-invalid";
+    return "evidence-unreadable";
   }
   throw error;
 }
@@ -739,25 +757,26 @@ async function resolveEvidenceReference(
   context: SliceContext,
   reference: Readonly<EvidenceReference>,
   recorded: ReadonlySet<string>,
-): Promise<Readonly<TargetResultEvidenceResolution> | "kind-mismatch" | null> {
+): Promise<Readonly<TargetResultEvidenceResolution> | EvidenceCitationFailure> {
   const plan = planEvidenceLocator(reference.ref);
-  if (plan === null || !recorded.has(plan.evidenceId)) return null;
+  if (plan === null) return "evidence-locator-invalid";
+  if (!recorded.has(plan.evidenceId)) return "evidence-unknown";
   try {
     const ref = parsePortableResourcePath(reference.ref, "$ref");
     const digest = parseSha256Digest(reference.digest, "$digest");
     const signal = signalOptions(context.options.signal);
     const facts = await readEvidenceMember(context.authority.demandRoot, plan, signal);
-    if (facts.digest !== digest) return null;
+    if (facts.digest !== digest) return "evidence-digest-mismatch";
     if (reference.kind !== null) {
       const kind =
         facts.manifestKind ??
         (await loadManagedEvidenceRecord(context.authority.demandRoot, plan.evidenceId, signal))
           .manifest.kind;
-      if (kind !== reference.kind) return "kind-mismatch";
+      if (kind !== reference.kind) return "evidence-kind-mismatch";
     }
     return Object.freeze({ ref, digest, evidenceId: plan.evidenceId, bytes: facts.bytes });
   } catch (error: unknown) {
-    return unresolvedOrRethrow(error);
+    return citationFailureOrRethrow(error);
   }
 }
 
@@ -939,10 +958,7 @@ async function executeImport(
     envelope.target.taskPackageId,
     options.signal,
   );
-  const evidenceResolution = await resolveEvidence(
-    context,
-    collectEvidenceReferences(input.report.content),
-  );
+  const evidenceResolution = await resolveEvidence(context, input.report.content);
   const result = buildResult(input, target, envelope, taskPackage, options);
   assertWorktreeBranch(context, result);
   const now = nowFrom(options);

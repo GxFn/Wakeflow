@@ -1,6 +1,23 @@
+import path from "node:path";
 import { DELIVERY_PROMPT_MAXIMUM_CHARACTERS, } from "../../governance/delivery/delivery-envelope.js";
 import { fail } from "../../kernel/error.js";
 import { DELIVERY_REQUIRED_SKILLS } from "./decide.js";
+/**
+ * 由 Demand 权威引用（`admittedAuthority.resolvedAuthority`）与配置的 ledger 位置得出阅读顺序里的
+ * 需求包：每个成员带上记录里落在该成员路径上的章节锚点（§13.134）。
+ */
+export function deliveryPromptRequirementPackage(ledgerRootFromWorkspace, members) {
+    return Object.freeze({
+        ledgerRootFromWorkspace,
+        documents: Object.freeze(members.map(({ reference, record }) => Object.freeze({
+            role: reference.role,
+            memberRef: reference.memberRef,
+            sectionAnchors: Object.freeze(record.record.sections
+                .filter((section) => section.path === reference.memberPath)
+                .map((section) => section.anchor)),
+        }))),
+    });
+}
 const MAXIMUM_ANCHORS = 4;
 const RETURN_TOOL = "wakeflow_import_target_result";
 const LABELS = Object.freeze({
@@ -26,6 +43,7 @@ const LABELS = Object.freeze({
         demand: "demand",
         workspaceRoot: "workspace root (relative to this window's root)",
         worktrees: "pod worktrees to read (relative to this window's root)",
+        sections: "sections",
         returnInstruction: "Import the result with the MCP tool below; do not write result files. Delivery is not acceptance.",
         noWrite: "Never send this prompt onward to another window.",
     }),
@@ -51,6 +69,7 @@ const LABELS = Object.freeze({
         demand: "demand",
         workspaceRoot: "工作区根（相对本窗口根）",
         worktrees: "要读取的 pod worktree（相对本窗口根）",
+        sections: "章节",
         returnInstruction: "用下面的 MCP 工具导入结果，不写本地结果文件；投递成功不等于验收。",
         noWrite: "不得把本 prompt 转发给其他窗口。",
     }),
@@ -63,19 +82,43 @@ function anchorLines(taskPackage) {
         .slice(0, MAXIMUM_ANCHORS)
         .map((anchor) => `- ${anchor.anchorId}: ${anchor.claim}`);
 }
-function readingLines(input) {
+/** requirement.md 先于 landing.md，附件随后按 memberRef 排序。 */
+const DOCUMENT_ROLE_ORDER = Object.freeze(["requirement", "landing"]);
+function documentRank(document) {
+    const rank = DOCUMENT_ROLE_ORDER.indexOf(document.role);
+    return rank === -1 ? DOCUMENT_ROLE_ORDER.length : rank;
+}
+function compareDocuments(left, right) {
+    const rank = documentRank(left) - documentRank(right);
+    if (rank !== 0)
+        return rank;
+    return left.memberRef < right.memberRef ? -1 : left.memberRef > right.memberRef ? 1 : 0;
+}
+/** 每份需求包文档一条可解析路径：窗口根 → 工作区根 → ledger 根 → memberRef；章节归到所在文档（§13.134）。 */
+function requirementEntries(order) {
+    const requirementPackage = order.requirementPackage;
+    const ledgerRoot = path.posix.join(order.workspaceRootFromWindow, requirementPackage.ledgerRootFromWorkspace);
+    return [...requirementPackage.documents].sort(compareDocuments).map((document) => ({
+        target: path.posix.join(ledgerRoot, document.memberRef),
+        sections: order.requirementSections.filter((anchor) => document.sectionAnchors.includes(anchor)),
+    }));
+}
+function readingLines(input, labels) {
     const order = input.readingOrder;
-    const sections = order.requirementSections.length === 0 ? "" : ` (${order.requirementSections.join(", ")})`;
     const root = order.workspaceRootFromWindow;
-    const lines = [
-        `1. ${root}/${order.taskPackageRef}`,
-        `2. requirement.md${sections}`,
-        `3. ${root}/${order.workspaceInstructionFile}`,
+    const entries = [
+        { target: `${root}/${order.taskPackageRef}`, sections: [] },
+        ...requirementEntries(order),
+        { target: `${root}/${order.workspaceInstructionFile}`, sections: [] },
     ];
-    if (order.repositoryInstructionFile !== null)
-        lines.push(`4. ${order.repositoryInstructionFile}`);
-    lines.push(`${lines.length + 1}. ${root}/${order.stateRootRef}`);
-    return lines;
+    if (order.repositoryInstructionFile !== null) {
+        entries.push({ target: order.repositoryInstructionFile, sections: [] });
+    }
+    entries.push({ target: `${root}/${order.stateRootRef}`, sections: [] });
+    return entries.flatMap((entry, index) => [
+        `${index + 1}. ${entry.target}`,
+        ...(entry.sections.length === 0 ? [] : [`   ${labels.sections}: ${entry.sections.join(", ")}`]),
+    ]);
 }
 function worktreeLines(input, labels) {
     const attached = input.readingOrder.attachedWorktrees;
@@ -164,7 +207,7 @@ export function renderDeliveryPortablePrompt(input) {
         ...testLines(input, labels),
         ...reworkLines(input, labels),
         ...remediationLines(input, labels),
-        ...section(labels.reading, readingLines(input)),
+        ...section(labels.reading, readingLines(input, labels)),
         ...worktreeLines(input, labels),
         ...section(labels.skills, DELIVERY_REQUIRED_SKILLS[workType].map((skill) => `- ${skill}`)),
         ...section(labels.identity, identityLines(input, labels)),

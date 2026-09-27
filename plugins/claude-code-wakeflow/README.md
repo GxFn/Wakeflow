@@ -60,9 +60,10 @@ status", "keep going", "open a pod for this".
 3. Complete the one-time host actions below.
 4. Open your agent in the directory you want as the workspace and say
    "initialize a Wakeflow workspace". The directory must be a Git repository
-   of its own (run `git init` there first; Wakeflow verifies its `.gitignore`
-   block through Git and reports `gitignore-git-repository` otherwise) and
-   must not be a product repository root.
+   of its own (when it is not, the agent offers to run `git init` there for
+   you; Wakeflow verifies its `.gitignore` block through Git and reports
+   `gitignore-git-repository` otherwise) and must not be a product repository
+   root.
 
 Wakeflow keeps a managed block inside the workspace's `CLAUDE.md`.
 That block belongs to Wakeflow; everything outside it is yours. A product
@@ -88,8 +89,15 @@ delivers prompts through the same helper. Maintenance also writes precise allow 
 that helper and the Wakeflow MCP tools into the workspace root's `.claude/settings.json`,
 and every window the helper launches or resumes is started with those two tools allowed,
 so product and test windows do not stop at a permission prompt for them either; nothing
-broader such as `Bash(tmux *)` is written, and prompts for any other tool follow your own
-permission mode.
+broader such as `Bash(tmux *)` is written.
+
+By default every window the helper launches runs in Claude Code's `auto` permission mode:
+Claude Code reviews routine actions itself instead of asking you. A window may still ask
+you a one-time question the first time, for example whether to allow reads outside its
+working directories; the Controller tells you which window is asking. If your account has
+no auto mode, ask the Controller to set `hosts.claude-code.launch.permissionMode` to
+`acceptEdits` through maintenance; the windows then stop for a permission prompt on
+commands.
 
 Both hosts, and the usual reason something is silently missing:
 

@@ -46,8 +46,9 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
    它时会静默失败。
 3. 完成下面这一节的一次性宿主动作。
 4. 在你想作为工作区的目录里打开 Agent，说"初始化一个 Wakeflow 工作区"。该目录
-   本身必须是一个 Git 仓库（先在那里 `git init`；Wakeflow 靠 Git 判定它维护的
-   `.gitignore` 块，否则会报 `gitignore-git-repository`），且不能是产品仓库根。
+   本身必须是一个 Git 仓库（不是时 Agent 会提出替你在那里 `git init`；Wakeflow 靠
+   Git 判定它维护的 `.gitignore` 块，否则会报 `gitignore-git-repository`），且不能是
+   产品仓库根。
 
 Wakeflow 会在工作区的 `CLAUDE.md` 里维护一个托管块。那个块归
 Wakeflow 所有，块以外的内容都是你的。产品仓库或外部拥有的 Design/Test 支撑面
@@ -66,8 +67,12 @@ Wakeflow 所有，块以外的内容都是你的。产品仓库或外部拥有�
 建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任
 对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写只放行这个
 助手和 Wakeflow MCP 工具的 allow 规则；助手启动或恢复的每个窗口也带着这两项放行启动，所以产品
-窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则，其他工具是否弹权限
-仍按你自己的权限模式。
+窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。
+
+助手启动的每个窗口缺省以 Claude Code 的 `auto` 权限模式运行：常规操作由 Claude Code 自己审，
+不再逐条问你。窗口第一次仍可能问你一个一次性的问题（例如是否允许读取工作目录之外的文件），
+Controller 会告诉你是哪个窗口在问。你的账号没有 auto 模式时，让 Controller 经维护把
+`hosts.claude-code.launch.permissionMode` 设为 `acceptEdits`；之后窗口执行命令时会弹权限确认。
 
 两个宿主共同的部分，以及"东西静默缺失"的常见原因：
 

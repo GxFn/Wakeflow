@@ -24,8 +24,8 @@ Entry points for the user: This host ships no slash commands. Say what you want 
    every turn here instead of guessing from the conversation.
 3. The step section below that matches what `status` named.
 4. `references/workspace-and-windows.md` - only when initializing or
-   reconfiguring the workspace, launching or retiring a window, or creating or
-   closing a pod.
+   reconfiguring the workspace, launching or retiring a window, creating or
+   closing a pod, or refreshing windows after a plugin update.
 5. `references/delivery-and-review.md` - only when planning a task, preparing
    a delivery, or deciding on a returned result.
 6. `references/evidence.md` - only before you record managed evidence.
@@ -62,7 +62,7 @@ its blockers to the user, and apply only after they confirm. Depth:
 
 Maintenance and pod creation return launch intents: a role, a root and the
 parameters to start with. First: the Controller is the thread you are in: register it with its own thread id before opening anything else, then work through the remaining launch intents. For each one:
-open a new Codex thread rooted at the directory the intent names, started with the parameters it lists. Then register the
+open a new Codex thread rooted at the directory the intent names, started with the parameters it lists. A thread is never moved into a new process, so relocate does not apply on this host: when a window's thread is gone, open a new one and replace the binding with its thread id. Then register the
 handle you observed with `wakeflow_register_window_binding`. Registration needs
 a real `session-start` hook record for that session and root - if none exists,
 the window did not start where you think it did. Use the same tool to inspect a
@@ -154,6 +154,12 @@ status again, never recover it; `absent` or `bootstrap-prefix` - the protocol
 root is not built yet, so preview a reconcile; `conflict` or `unknown` - stop
 and report it to the user. An
 unavailable gate is unchecked, not passing; report it as such.
+
+`server-outdated` and `windows-stale:<n>` (in `next`:
+`runtime-artifact-outdated` and `window-artifact-stale`) mean a plugin update
+has not reached a running session. Go straight to "After a plugin update" in
+`references/workspace-and-windows.md` and follow it; do not read the plugin's
+implementation to interpret these codes.
 
 ## What you must return to the user
 

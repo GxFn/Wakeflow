@@ -379,6 +379,32 @@ test("捕获规划拒绝未配置的根、资源类型漂移和预取消请求",
       () => service(fixture).preview(fixture.demandId, fileSelection("artifacts/missing.txt")),
       "source",
     );
+    // 选择本身 kind 与来源不配是 kind，不再混进 input（§13.134）；选择形状坏了仍是 input。
+    await expectPlanningError(
+      () =>
+        service(fixture).preview(fixture.demandId, {
+          ...fileSelection("artifacts/test-run/logs/report.txt"),
+          kind: "transcript",
+        }),
+      "kind",
+    );
+    await expectPlanningError(
+      () =>
+        service(fixture).preview(fixture.demandId, {
+          ...fileSelection("artifacts/test-run/logs/report.txt"),
+          contentReview: "maybe",
+        }),
+      "input",
+    );
+    // 闭集之外的 kind 是选择本身坏了，不是与来源不配。
+    await expectPlanningError(
+      () =>
+        service(fixture).preview(fixture.demandId, {
+          ...fileSelection("artifacts/test-run/logs/report.txt"),
+          kind: "screenshot",
+        }),
+      "input",
+    );
     const controller = new AbortController();
     controller.abort();
     await expectPlanningError(

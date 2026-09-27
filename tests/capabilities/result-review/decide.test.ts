@@ -466,7 +466,7 @@ function admission(
     attemptCount: 1,
     maxAttempts: 3,
     previouslyFlakyStepIds: [],
-    conditionCleared: false,
+    resumed: false,
     ...overrides,
   };
 }
@@ -579,7 +579,7 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
   // completed 报告里 environment 分类本身就允许 blocked，不依赖 outcome: blocked。
   equal(deriveTestAllowedDecisions(admission(environment)).includes("blocked"), true);
   deepEqual(deriveTestDecisionBlockers({ decision: "blocked" }, admission(environment)), []);
-  // environment 失败平时不能重跑；blocked 之后以 condition-cleared 恢复时可以（§13.134 现场），
+  // environment 失败平时不能重跑；blocked 之后以 condition-cleared、或已回答的 escalate 之后恢复时可以（§13.135 现场），
   // 容量与范围规则照旧。
   deepEqual(
     deriveTestDecisionBlockers(
@@ -588,7 +588,7 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
     ),
     ["classification:ts-2:environment"],
   );
-  const cleared = admission(environment, { conditionCleared: true });
+  const cleared = admission(environment, { resumed: true });
   deepEqual(deriveTestAllowedDecisions(cleared), [
     "request-another-attempt",
     "blocked",
@@ -601,7 +601,7 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
   deepEqual(
     deriveTestDecisionBlockers(
       { decision: "request-another-attempt", stepIds: ["ts-2"] },
-      admission(environment, { conditionCleared: true, attemptCount: 3 }),
+      admission(environment, { resumed: true, attemptCount: 3 }),
     ),
     ["attempt-capacity:3"],
   );
@@ -618,7 +618,7 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
   deepEqual(
     deriveTestDecisionBlockers(
       { decision: "request-another-attempt", stepIds: ["ts-1", "ts-2"] },
-      admission(mixed, { conditionCleared: true }),
+      admission(mixed, { resumed: true }),
     ),
     ["classification:ts-1:product-defect"],
   );

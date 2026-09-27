@@ -474,6 +474,7 @@ function testContractSection(taskPackage, attempt) {
         attemptOrdinal: attempt.ordinal,
         maxAttempts: contract.maxAttempts,
         stopConditions: contract.stopConditions,
+        rerunStepIds: attempt.mode === "rerun" ? attempt.rerunSource.stepIds : null,
     });
 }
 function renderPrompt(context, input, sources, pointer) {

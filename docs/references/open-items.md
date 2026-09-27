@@ -2,7 +2,7 @@
 
 状态：active。本表是项目未决问题、验证缺口与待裁决事项的唯一登记处；新发现追加到这里，关闭时写明提交与 gate-log 节。
 
-来源：2026-09-26 只读深度分析（gate-log §13.132）。10 个分析角度各配独立复核，外加完整性检查补查的 3 个方向；134 条报告中 132 条经复核保留（95 条原样确认、37 条修正了表述或严重度），按同一根因合并为下列 13 个主题、106 项（§13.133 现场追加 8 项、§13.134 追加 3 项、§13.135 追加 6 项，现为 123 项）。编号与分析报告页一致（问题 A1…M4，待裁决 Q1…Q12）；“计划阶段”指 §13.132 的路线图。严重度按用户影响计：高 / 中 / 低。
+来源：2026-09-26 只读深度分析（gate-log §13.132）。10 个分析角度各配独立复核，外加完整性检查补查的 3 个方向；134 条报告中 132 条经复核保留（95 条原样确认、37 条修正了表述或严重度），按同一根因合并为下列 13 个主题、106 项（§13.133 现场追加 8 项、§13.134 追加 3 项、§13.135 追加 6 项、§13.136 追加 1 项，现为 124 项）。编号与分析报告页一致（问题 A1…M4，待裁决 Q1…Q12）；“计划阶段”指 §13.132 的路线图。严重度按用户影响计：高 / 中 / 低。
 
 ## 待裁决（需要用户决定）
 
@@ -166,7 +166,7 @@
   - 说明：官方给出的补救办法（重新初始化）被 fresh-initialize 自己的拒绝规则挡住，唯一的出路是手工删除配置、.wakeflow-active、.wakeflow-local 和 ledger 根（包括归档和需求），board、活动 Demand、绑定和 pod 回执都会丢失。没有任何文字引导这个过程，违背了“由插件引导用户”的原则。发布后，第一次配置改动就会影响每一个用户。
   - 证据：wakeflow-config.schema.json:32-34：schemaVersion const 1，additionalProperties false；static-materialization-preview.ts:1152：配置无法解析时报 current-config-unavailable（currentSnapshot 返回 null，158-172）；fresh 被 fresh-config-present、fresh-active-not-absent、fresh-local-not-bootstrap-prefix（1143-1149）和 fresh-ledger-root-present（409）阻塞；gate-log 3295“只能重新初始化”；3746 没有配置时报 precondition-failed/config-authority
   - 建议：给配置自己的演进路径：对已删除字段宽容的读取器，或者一个按当前版本模型重写配置的 upgrade 维护动作。最低限度也要加类型化的 `config-version-unsupported` 错误，并提供保留 ledger 和活动根的 Controller 流程。
-- **C8** [中 / 缺陷] 插件更新后的窗口刷新流程走不通：resume 拒绝仍在运行的 pane（locator-live），/mcp 重连也不能让 Controller 自己变成 current（计划阶段 3；状态：已修（§13.134），部分现场（§13.135）：Controller 就地自重启已在现场跑通（同一 pane 与会话、新参数、带固定 prompt 自己续上，verify 15/15）；其他窗口的 `resume --in-place` 与 `resume-never-conversed` 尚待现场；旧助手以 `argument-unknown` 拒绝时回退为用户 /mcp 一次（现场按此走））
+- **C8** [中 / 缺陷] 插件更新后的窗口刷新流程走不通：resume 拒绝仍在运行的 pane（locator-live），/mcp 重连也不能让 Controller 自己变成 current（计划阶段 3；状态：已修并经现场（§13.134、§13.135、§13.136）：Controller 先就地自重启（同一 pane 与会话、新参数、固定 prompt 自己续上），verify 后对账装上新助手，再对有过对话的 4 个窗口 `resume --in-place`、对从未对话的 3 个窗口得到 `resume-never-conversed` 后 close、launch、replace、mark，verify 15/15，全程无需用户操作；旧助手以 `argument-unknown` 拒绝时回退为用户 /mcp 一次（§13.135 现场按此走））
   - 说明：每次插件更新后，Controller 照着参考文档操作，每个窗口都会得到 locator-live，文本里没有安全的顺序（等空闲、close、resume、relocate、mark）。--force 会在同一个会话上再起一个进程。Controller 自己的窗口走 /mcp 重连后永远清不掉 stale，verify 始终达不到全部通过。这些刷新路径都没有由 Agent 按 shipped 文本实际执行过。
   - 证据：workspace-and-windows.md:165 对每个 stale 窗口套用 {{windowResume}}（claude-code-agent-text-profile.ts:72-76，这段文字是为进程已退出的情况写的）；claude-code-tmux-asset.ts:721-734：pane 仍在运行时 resume/launch 报 locator-live，除非加 --force；agent 文本里没有出现 locator-live；observation/service.ts:418-429 按 session-start 记录判断产物，/mcp 重连不会重写这条记录，Controller 一直是 stale，verify 一直报 windows-stale；文本也提供了“或 resume 会话”这个可行的替代（w&w:166-167）；§13.127 残留说 /mcp 重连能否切换代码未经验证；§13.130 是用外部脚本 live-130.mjs 刷新窗口的
   - 建议：在 windowResume 和参考文档里写出明确的刷新顺序：确认空闲（没有持有的 claim、没有进行中的回合）→ close → resume → relocate → mark；点名 locator-live，禁止对活会话用 --force。对 Controller 自己的窗口，要么把“正在服务的 MCP server 产物相同”视为 current，要么只教 resume。然后按 skill 文本在现场跑一遍。
@@ -374,7 +374,7 @@
   - 说明：Controller 用 `transcript` 登记文件来源的证据被拒，只拿到 `invalid-request` 与 `selection`，不知道是 kind 与来源不匹配；规划时写裸文件名被拒为 `authority-reference-unknown`，说明里没有写要完整路径。两处都是靠试错过去的。
   - 证据：§13.133 现场，Controller 报告。
   - 建议：拒绝原因点名不匹配的字段与允许的组合；工具说明写明 memberRef 的形式并给一个例子。
-- **G13** [低 / 缺口] 三处 Controller 靠猜的规则：rework 带 `blockingReasons` 只报 `record-schema` / `$request.decision`；re-arm 后提示词里仍是第 1 代的 generation 与 claimDigest；仓库已有验收过的 target 时只能 continuation、不能 replacement（计划阶段 4；状态：部分（§13.135）：delivery-and-review.md 写明三条规则；rework 拒绝的 reason 仍是笼统的 record-schema）
+- **G13** [低 / 缺口] 三处 Controller 靠猜的规则：rework 带 `blockingReasons` 只报 `record-schema` / `$request.decision`；re-arm 后提示词里仍是第 1 代的 generation 与 claimDigest；仓库已有验收过的 target 时只能 continuation、不能 replacement（计划阶段 4；状态：部分（§13.135、§13.136）：delivery-and-review.md 写明 lineage、re-arm 围栏、rework 的 `blockingReasons` 与另一次尝试的检查要求；决定记录的 Schema / 关系拒绝仍只报 `record-schema` / `record-relation` 与 `$request.decision`，不点名字段）
   - 说明：§13.135 现场 Controller 第一次记 rework 被拒后猜是 `blockingReasons` 所致（Schema 的 rework 分支要求 `maxItems: 0`、`requirementAlignment: aligned`）；re-arm 后担心导入会因旧围栏被拒（导入按设计接受同一投递更早一代的围栏）；按文字选 replacement 被拒为 `lineage-continuation-required`。
   - 证据：`controller-implementation-review-decision.schema.json` 的 if/then 分支；`result-review/service.ts` 的 `assertEarlierGenerationFence`；`tasking/decide.ts` 的 `deriveLineageBlockers`。
   - 建议：（文字已补）决定记录的 Schema 拒绝在 path 里点名出错的字段（例如 `$request.decision.blockingReasons`）。
@@ -415,7 +415,7 @@
   - 说明：这条规则让用户保有控制权，每一步都读最新状态，这是合理的。代价是每一步都要一次人工 prompt、一次约 9 KB 的 status、在大上下文上跑一到多轮。对纯机械的 Controller 自有序列，它只增加了延迟，没有增加决策点。
   - 证据：assets/agent-text/commands/next.md：第一个工具调用是 wakeflow_status，做完那一步就停；80580357：/wakeflow:next 调用 11 次，status 调用 27 次（约 231-258 KB）；gate-log L3667 的 74 分钟里包含维护者等待的时间；验证者更正：launch/register/mark 本来就在第 1 步里一起完成；只有 prepare（第 7 步）和 send 加 record（第 8 步）之间的分界把一段机械序列拆开了
   - 建议：这需要产品决定：是否允许 /wakeflow:next 连续执行多个 Controller 自有步骤，直到 owner 变化或需要用户决策为止。无论怎么定，都在命令文本里写明其中的取舍。
-- **H9** [高 / 缺陷] 测试步骤以 environment 失败、记为 blocked 之后，条件解除也无路重跑：恢复后的审查单元仍只允许 blocked 与 escalate，Demand 原地打转（计划阶段 5；状态：已修（§13.135）：以 `condition-cleared` 恢复的审查单元里，environment 失败步骤可以按同一份冻结合同再来一次，容量与范围规则照旧；决定规则单测、Controller 文字与能力卡 07 同步；现场待续跑）
+- **H9** [高 / 缺陷] 测试步骤以 environment 失败、记为 blocked 之后，条件解除也无路重跑：恢复后的审查单元仍只允许 blocked 与 escalate，Demand 原地打转（计划阶段 5；状态：已修并经现场（§13.135、§13.136）：恢复中的审查单元（blocked 之后以 `condition-cleared`，或用户已回答的 escalate 之后以 `decision-recorded`）里，environment 失败步骤可以按同一份冻结合同再来一次，容量、范围与连续 flaky 规则照旧；重跑的测试 prompt 点明只跑哪些步骤；现场第 2 次尝试只跑 ts-5 并通过、Demand 完成归档）
   - 说明：§13.135 现场：测试期间有人在 AlembicDashboard 放了一个文件，ts-5 以 environment 失败；Controller 记 blocked，用户删掉文件后，`request-another-attempt` 仍因 `classification:ts-5:environment` 被拒，唯一可记的是再 blocked 或 escalate。D7 规则只允许 harness-defect、flaky、missing-evidence 重跑。
   - 证据：`result-review/decide.ts` 的 `rerunBlockers`；`test-step-vocabulary.ts` 的 `RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS`；聚合的恢复准入（`condition-cleared` 只接 blocked）本来就允许从 test-review-blocked 记任何决定。
   - 建议：（已做）见状态。
@@ -468,6 +468,10 @@
   - 说明：§13.135 现场第 5 条锚点（其余仓库保持基线）不在提示词里；实现窗口靠先读任务包才补上。
   - 证据：`delivery/prompt.ts` 的 `MAXIMUM_ANCHORS = 4`。
   - 建议：（已做）
+- **I11** [中 / 缺口] Controller 为找命令写法去读自己的 Claude Code 会话记录（`~/.claude/projects/<工作区>/<会话>.jsonl`）（计划阶段 7；状态：开放，§13.136 现场）
+  - 说明：插件更新后处理从未对话过的窗口（close、launch、replace、mark）时，Controller 用 node 一行脚本翻自己的会话记录，找上一次怎么写这几条命令，而不是按技能文字做。那是宿主的私有记录，不在 Wakeflow 的任何面上。
+  - 证据：§13.136 现场屏幕（"Finding the earlier close/launch/mark commands"）。
+  - 建议：技能把 close、`launch --wait`、register（operation replace）与 mark 的确切调用写在一处并给一个完整例子；SKILL.md 写明不读宿主的会话记录。
 
 ## J. 占用与退出路径：进得去，出不来
 

@@ -3957,3 +3957,20 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `npm run build:artifacts:committed` 后 `npm test` 整门通过：typecheck、架构规则、Biome（lint 只有本轮未改文件里的五条既有 warning / info）、knip、TypeScript 测试 1154/1154（含二十个端到端场景）、schema:check、build:check；`npm run smoke:artifacts` 通过；`git diff --check` 干净。
 
 **未执行。** 其他窗口的 `resume --in-place` 与 `resume-never-conversed`、就地自重启的新 prompt、H9 修复后的第 2 次测试尝试与完成、经助手准备 worktree 的 pod 与加锁检出的关闭、I6 收养，都还没上现场；下一步把本节构建交给现场：按 "After a plugin update" 换代（这次 Controller 已读过新参考，助手也已支持 `--in-place`），再在 `demand_8fe8072c…` 上以 `condition-cleared` 请求第 2 次尝试并完成。
+
+## 13.136 第二次插件更新换代全程无需用户、blocked 恢复后第 2 次尝试并完成；补修重跑范围与恢复路径（2026-09-27）
+
+**换代（C8 第一次按新写法完整上现场）。** §13.135 的构建（`d257ac7f`）写入 `plugins/` 后，用户只在 Controller 里运行 `/wakeflow:status`。Controller 先就地自重启，重启后 verify 13/15（`host-settings-assets` 报 `tmux.mjs:drift`，`runtime-artifact` 报 `windows-stale:7`），对账只换了 `tmux.mjs`；然后对有过对话的 Design、Test、AlembicPlugin、AlembicCore 各调用一次 `resume --window <id> --in-place`（都等到了 session-start），对从未对话的 Alembic、AlembicAgent、AlembicDashboard 得到 `resume-never-conversed`，按文字 close、launch、replace、mark；verify 15/15。全程没有要求用户做任何事。过程中 Controller 为找 close / launch / mark 的写法用 node 翻了自己的 Claude Code 会话记录（登记 I11）。
+
+**blocked 恢复与完成（H9 上现场）。** `demand_8fe8072c…` 的测试审查单元在旧插件下已经走成"escalate（needs-decision）后用户回答"，以 `decision-recorded` 恢复，§13.135 只放开了 `condition-cleared` 这一条，所以 Controller 先再记一次 blocked、重新只读核查（`evidence_e724ece0…`）、再以 `condition-cleared` 恢复并请求另一次尝试。途中两次被拒：`step-scope`（已通过的 ts-1…ts-4 不能重跑，范围只含失败步骤）与 `record-relation`（另一次尝试同样要至少一个 failed 或 inconclusive 的独立检查，拒绝没有点名）。第 2 次尝试的 prompt 列出全部 5 步、没写只跑 ts-5，Test 窗口靠 Controller 写在 goal 里的话只跑了 ts-5 并通过。Controller 自己把 5 步按合同全部重跑一遍（`evidence_5a09d508…`），等 Test 会话的 stop 记录到了才被允许 accept，完成预览干净，用户确认后归档 `0000000046`（78 个文件）。外部核对：idle、看板已归档 2、verify 15/15、hook skipped 0。至此 §13.133 列为未执行的 continue 再完成、rework、re-arm、blocked 后重新决策都已在现场走过。
+
+**补修（本节）。**
+- H9 扩展：`TestAdmissionView.resumed` 取代 `conditionCleared`：审查单元以 `condition-cleared`（blocked 之后）或 `decision-recorded`（用户已回答的 escalate 之后）恢复时，environment 失败步骤都可以再来一次；决定规则单测更新。
+- 重跑范围进测试 prompt：`DeliveryTestContractSection.rerunStepIds` 取自重跑尝试的 `rerunSource.stepIds`，测试合同段落在 attempt 行之后写 "run only: …（其余步骤沿用之前的通过结果，不要再跑）"，首次与整份重跑没有这一行；渲染回归已加。
+- 文字：delivery-and-review.md 写明两种恢复都能让 environment 步骤再来一次、另一次尝试只点名失败步骤、并与 rework 一样至少带一个 failed 或 inconclusive 的独立检查，结论 inconclusive 或证据 insufficient。
+
+**登记表。** C8、H9 标为已修并经现场；G13 更新为部分（决定记录的拒绝仍不点名字段）；新登记 I11，共 124 项。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 整门通过：typecheck、架构规则、Biome（lint 只有本轮未改文件里的五条既有 warning / info）、knip、TypeScript 测试 1155/1155（含二十个端到端场景）、schema:check、build:check；`npm run smoke:artifacts` 通过；`git diff --check` 干净。第一次整门只因新加的 prompt 测试触发 Biome 的 noThenProperty（Given/When/Then 步骤的 then 字段）而停下，按源码的同一条豁免改写后重跑全绿。
+
+**未执行。** 经助手准备 worktree 的 pod 与加锁检出的关闭、I6 收养未登记窗口、就地自重启的新 prompt（"先重新加载技能"）在下一次更新时才会走到；Codex 宿主仍未有真实会话（E 主题）。

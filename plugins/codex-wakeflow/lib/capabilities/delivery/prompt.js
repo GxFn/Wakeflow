@@ -184,6 +184,12 @@ function testLines(input, labels) {
         `- question: ${contract.question}`,
         `- object boundary: ${contract.objectBoundary}`,
         `- attempt: ${contract.attemptOrdinal} of ${contract.maxAttempts}`,
+        // 只跑失败子集时点明范围（§13.135 现场：第 2 次尝试的 prompt 列出全部步骤，没说只跑 ts-5）。
+        ...(contract.rerunStepIds === null
+            ? []
+            : [
+                `- run only: ${contract.rerunStepIds.join(", ")} (the other steps keep their earlier passing results; do not run them again)`,
+            ]),
         `- environment: ${contract.environmentMemberRef}`,
         `- setup: ${contract.setupDirective}`,
         ...contract.steps.map((step) => `- ${step.stepId}: given ${step.given}; when ${step.when}; then ${step.then}`),

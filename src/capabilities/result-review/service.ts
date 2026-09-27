@@ -1277,7 +1277,9 @@ function testUnitView(
           .filter((step) => step.failure?.classification === "flaky")
           .map((step) => step.stepId),
       ),
-      conditionCleared: unit.status === "review-blocked",
+      resumed:
+        unit.status === "review-blocked" ||
+        (unit.status === "escalated" && unit.escalationAnswered),
     }),
     attemptScope: Object.freeze({
       ordinal: result.testExecution.ordinal,

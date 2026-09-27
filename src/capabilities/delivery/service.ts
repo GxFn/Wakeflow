@@ -893,6 +893,7 @@ function testContractSection(
     attemptOrdinal: attempt.ordinal,
     maxAttempts: contract.maxAttempts,
     stopConditions: contract.stopConditions,
+    rerunStepIds: attempt.mode === "rerun" ? attempt.rerunSource.stepIds : null,
   });
 }
 

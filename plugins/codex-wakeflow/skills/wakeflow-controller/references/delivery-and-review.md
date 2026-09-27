@@ -191,9 +191,13 @@ the choice: another attempt only for harness defects, flakiness or missing
 evidence and only inside the attempt budget; blocked for environment failures;
 escalate with a product defect, which authorizes remediation on the affected
 implementation targets in the same commit. Once the user has cleared the
-condition a blocked environment failure waited on, the unit resumes with
-`condition-cleared` and those environment steps may take another attempt of
-the same frozen contract, still inside the budget.
+condition a blocked environment failure waited on (the unit resumes with
+`condition-cleared`), or has answered its escalation (`decision-recorded`),
+those environment steps may take another attempt of the same frozen contract,
+still inside the budget. Another attempt names exactly the failed steps -
+passed steps keep their results and are not rerun - and, like rework, carries
+at least one `failed` or `inconclusive` independent check with an
+`inconclusive` conclusion or `insufficient` evidence.
 
 Write the decision in your own words and make the reason checkable: name the
 anchor, the file, the evidence. "Looks good" is not a review.

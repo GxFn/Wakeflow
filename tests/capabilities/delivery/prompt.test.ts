@@ -229,3 +229,54 @@ test("验收锚点超过上限时点明其余条数，不静默略去（§13.134
   // 不超过上限时没有这一行。
   equal(render(readingOrder()).includes("more acceptance anchors"), false);
 });
+
+test("重跑只跑失败子集时测试合同点明范围，首次尝试没有这一行（§13.135 现场）", () => {
+  const withContract = (rerunStepIds: readonly string[] | null) =>
+    renderDeliveryPortablePrompt({
+      language: "en",
+      displayTitle: "Test",
+      taskPackage: TASK_PACKAGE,
+      authored: { goal: "goal", focus: ["focus"], boundary: "boundary" },
+      identity: {
+        demandId: TASK_PACKAGE.demandId,
+        podId: "main (pod-1)",
+        windowId: "window-1",
+        repositoryId: "repository-1",
+        bindingId: "binding-1",
+      },
+      readingOrder: readingOrder(),
+      returnPointer: {
+        deliveryId: "delivery-1",
+        claimDigest: `sha256:${"1".repeat(64)}`,
+        streamRevision: 7,
+        generation: 1,
+      },
+      rework: null,
+      productDefectRemediation: null,
+      testContract: {
+        question: "q",
+        objectBoundary: "b",
+        steps: ["ts-1", "ts-5"].map((stepId) => ({
+          stepId,
+          given: "g",
+          when: "w",
+          // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
+          then: "t",
+        })),
+        environmentMemberRef: "requirements/r/landing.md",
+        allowedSkills: [],
+        setupDirective: "reuse",
+        attemptOrdinal: rerunStepIds === null ? 1 : 2,
+        maxAttempts: 2,
+        stopConditions: [],
+        rerunStepIds,
+      },
+    });
+  const rerun = readingSection(withContract(["ts-5"]), "Test contract:");
+  equal(rerun[2], "- attempt: 2 of 2");
+  equal(
+    rerun[3],
+    "- run only: ts-5 (the other steps keep their earlier passing results; do not run them again)",
+  );
+  equal(withContract(null).includes("- run only:"), false);
+});

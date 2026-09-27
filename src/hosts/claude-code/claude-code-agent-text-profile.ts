@@ -89,8 +89,9 @@ const WINDOW_RESUME =
   `your own inspect result into \`${TMUX_HELPER} resume --window <this windowId> --in-place\` ` +
   "and end your turn. It returns at once (`self: true`, `scheduled: true`); about two seconds " +
   "later this session restarts with the updated plugin and a fresh Wakeflow server - no " +
-  "`/mcp` reconnect is needed - and resumes by itself with a prompt to call `wakeflow_verify` " +
-  "and continue where you left off. A helper installed before in-place restarts existed " +
+  "`/mcp` reconnect is needed - and resumes by itself with a prompt to load this skill again " +
+  "(the copy in your context predates the update), call `wakeflow_verify` and continue where " +
+  "you left off. A helper installed before in-place restarts existed " +
   "refuses `--in-place` as `argument-unknown`: then ask the user to run `/mcp` in this window " +
   "and reconnect `wakeflow`, run a reconcile as in step 0, which installs the current helper, " +
   "and start this section again. Then, after that verify and any reconcile, the other stale " +

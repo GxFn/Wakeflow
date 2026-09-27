@@ -509,6 +509,11 @@ export interface TestAdmissionView {
   readonly maxAttempts: number;
   /** 上一次尝试里分类为 flaky 的步骤：同一步连续两次 flaky 不能再重跑（D7）。 */
   readonly previouslyFlakyStepIds: readonly string[];
+  /**
+   * 审查单元此前以 blocked 暂停、这次以 condition-cleared 恢复：阻塞的环境条件已由用户解除，
+   * environment 失败步骤可以按同一份冻结合同重跑（§13.134 现场：否则只剩再 blocked 或 escalate，原地打转）。
+   */
+  readonly conditionCleared: boolean;
 }
 
 export interface TestDecisionRequestView {
@@ -540,10 +545,11 @@ function rerunBlockers(
   if (view.attemptCount >= view.maxAttempts) blockers.push(`attempt-capacity:${view.attemptCount}`);
   for (const step of failed) {
     const classification = step.failure?.classification;
-    if (
-      classification === undefined ||
-      !RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS.includes(classification)
-    ) {
+    const rerunnable =
+      classification !== undefined &&
+      (RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS.includes(classification) ||
+        (classification === "environment" && view.conditionCleared));
+    if (!rerunnable) {
       blockers.push(`classification:${step.stepId}:${classification ?? "none"}`);
     } else if (classification === "flaky" && view.previouslyFlakyStepIds.includes(step.stepId)) {
       blockers.push(`flaky-repeat:${step.stepId}`);
@@ -594,8 +600,8 @@ function escalateBlockers(
 
 /**
  * 分类到决定的机器规则（D7）：accept 要求并集 pass、completed 与完成证据；request-another-attempt
- * 要求失败步骤全部可重跑、容量未满、无连续 flaky、范围只含失败步骤；blocked 要求 environment
- * 失败或报告整体 blocked；escalate{product-defect} 要求存在 product-defect 步骤且映射只含这些步骤。
+ * 要求失败步骤全部可重跑（environment 只在 blocked 之后以 condition-cleared 恢复时可重跑，§13.134）、
+ * 容量未满、无连续 flaky、范围只含失败步骤；blocked 要求 environment 失败或报告整体 blocked；escalate{product-defect} 要求存在 product-defect 步骤且映射只含这些步骤。
  */
 export function deriveTestDecisionBlockers(
   request: Readonly<TestDecisionRequestView>,

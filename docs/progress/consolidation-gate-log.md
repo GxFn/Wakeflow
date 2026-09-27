@@ -3930,3 +3930,30 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `npm run schema:build`（95 个 Schema，无漂移）、`npm run build:artifacts:committed` 后 `npm test` 整门通过：typecheck、架构规则、Biome（lint 只有五条既有的 warning / info，都在本轮未改的文件里）、knip、TypeScript 测试 1153/1153（含二十个端到端场景）、schema:check、build:check；`npm run smoke:artifacts` 通过；`git diff --check` 干净。第一次整门只因主会话新加的端点测试没过 Biome 格式检查而停下，格式化后重跑全绿。
 
 **未执行。** 真实 Claude Code 里的就地重启（含 Controller 自重启与旧助手回退）、收养、auto 缺省启动与账本 `--add-dir`、新的阅读顺序与拒绝 reason 都还没上现场；下一步在 `WakeflowTestWorkspace2` 按技能文字走一遍插件更新换代，再继续 §13.133 未覆盖的 continue、rework、rearm、blocked 与 pod 场景。
+
+## 13.135 §13.134 之后的现场：插件更新换代、续接再完成、re-arm、rework、blocked 恢复；补修测试重跑死角与四处小缺口（2026-09-27）
+
+**环境。** 仍是 `WakeflowTestWorkspace2` 的 8 个窗口（tmux 会话 `wakeflow`，Claude Code CLI 2.1.283，auto 权限模式），插件从仓库的 `plugins/` 运行。维护者按被引导用户的身份在窗口里说话、答对话框，从外部只读核对（repo 构建的 status / verify、窗口屏幕、会话记录、进程参数）。
+
+**插件更新换代（§13.134 的 C8 / C16）。** `build:artifacts:committed` 之后在 Controller 里运行 `/wakeflow:status`：verify 报 `runtime-artifact` `server-outdated`（正确）。工作区里的助手还是 §13.134 之前的版本，Controller 请用户在本窗口 `/mcp` 重连一次（正确的回退）；重连后它对账（只换了 `tmux.mjs`），但其他 7 个窗口仍按上下文里旧技能的流程刷新（4 个从未对话的产品窗口 close / launch / replace，Design、AlembicPlugin、Test close / resume / relocate，全部 mark），轮到自己时让用户 `/exit`、`Ctrl-b c` 开 shell 粘贴助手命令——正是 §13.134 在文字里修掉的做法。原因：长寿会话按注入时的技能正文行事，没有再读参考（登记 I9）。用户回"不想自己开 tmux 窗口敲命令，请重新读 After a plugin update"之后，Controller 读了新参考、运行 `resume --window <自己> --in-place`：同一 pane `%15`、同一会话，进程参数换成 `--permission-mode auto`、`--add-dir <工作区>/../wakeflow-ledger`、`--resume <id> "<固定 prompt>"`、`--allowedTools` 在最后；两秒后自重启并凭固定 prompt 自己续上，verify 15/15。外部核对：idle、8 个窗口 current、hook 记录 76 条 skipped 0、没有 `.wakeflow-atomic-*` 残留（这次关了 7 个 pane）。另：绑定里的 `launchIntentDigest` relocate 后仍是旧值（登记 C18）。
+
+**续接再完成（§13.131 第三轮修复第一次上现场）。** 用户要求在已归档的 Demand 上追加一行：`continue_demand`（requirement-supplement）预览、确认、apply → 续接任务包 → 投递（hook 记录证明落地）→ AlembicPlugin 追加、以 needs-review 导入 → Controller 复核四个锚点、登记证据、验收 → 四步测试合同 → Test 第 1 次尝试 4/4，证据引用第一次导入就通过（§13.134 I8 生效）→ 验收 → 完成预览干净 → 归档 `0000000038`（72 个文件）。投递提示词的阅读顺序为 `../../wakeflow-ledger/requirements/<id>/requirement.md` 与 `landing.md`、各自的节在各自文档下（§13.134 I7 生效）。三个窗口都指出续接从不写回 requirement.md（登记 H10，与 Q7 同域）。
+
+**re-arm、rework、blocked 恢复（新 Demand `demand_8fe8072c…`，需求经 Design 发布，AlembicCore 新建一个 13 字节的文件）。**
+- re-arm：维护者先在 AlembicCore 的输入框里留了半句话。助手拒绝发送（`input-not-empty`），Wakeflow 记 `rejected-before-send` 并释放声明；Controller 告诉用户是哪个窗口、清空不要发送，自己从不向那个窗口发键；用户清空后 re-arm（第 2 代，3 次额度的第 1 次）并送达。re-arm 的许可按设计原样重发第 1 代的 prompt（落地按 prompt 摘要证明），导入按设计接受同一投递更早一代的围栏，现场导入成功；Controller 不知道这条规则（登记 G13，文字已补）。提示词只列前 4 条锚点、第 5 条被静默略去（登记 I10，已修）。
+- rework：用户的"先 rework 一次"在 Controller 审查中途排队，到回合结束才进去，accept 已提交；Controller 试 replacement 被拒（仓库已有验收过的 target，须 continuation；文字原写 replacement 用于 redesign 之后），改用续接任务包；结果回来后按用户要求记 rework（报告没有把 sha256 作为 ac2 证据），第一次被拒为 `record-schema`（rework 不能带 `blockingReasons`），改后记下；返工投递自动带上 Rework basis，AlembicCore 重写报告、以 completed 导入，验收。
+- blocked：实现验收后、测试合同冻结时，维护者在 AlembicDashboard 放了一个无关文件（模拟有人在测试期间动了仓库，正是 Design 事先提醒过的）。Test 窗口 ts-5 失败，按时间线把它归为 environment（likely owner user）、不动那个文件、请用户定夺；Controller 记 blocked（`test-review-blocked`），请用户选择处理方式；用户删除文件后，Controller 发现 `request-another-attempt` 仍被 `classification:ts-5:environment` 拒绝，只能再 blocked 或 escalate——死角（登记 H9，高）。Demand 停在 test-review-blocked，状态安全。
+
+**补修（本节）。**
+- H9：以 `condition-cleared` 恢复的审查单元里，environment 失败步骤可以按同一份冻结合同再来一次（容量、范围、连续 flaky 规则照旧；产品缺陷仍不能靠重跑绕过）；`TestAdmissionView.conditionCleared` 由审查单元的 `review-blocked` 状态得出；决定规则单测、Controller 文字、能力卡 07 同步。聚合的恢复准入本来就允许从 test-review-blocked 记任何决定，无需改动。
+- A9 延伸：助手的工作中标记加上 API 断连重试行（"Waiting for API response · will retry in 2m 25s"），nudge 与就地重启的闲置判断共用，回归已加。
+- I10：提示词锚点超过 4 条时列出"另有 N 条在任务包里"（中英），渲染回归已加。
+- I9（部分）：`/wakeflow:status` 命令在 status / verify 出现 runtime-artifact 相关的码时要求重新加载 Controller 技能并按 "After a plugin update" 现在的写法做；就地自重启的固定 prompt 改为先重新加载技能，再 verify、再继续。
+- G13（文字）：delivery-and-review.md 写明 replacement 只替换未验收的 target、已验收的仓库用 continuation；re-arm 的许可原样重发第 1 代 prompt 与围栏且导入接受；`blockingReasons` 只属于 blocked，rework 保持 `requirementAlignment: aligned`。
+- 助手在 §13.134 之后还补了 `resume-never-conversed`（本次现场里的 4 个产品窗口正是从未对话过的；这次 Controller 走的是旧流程，没有用到它）。
+
+**登记表。** A9、C8、I7、I8 更新状态（I7、I8 经现场）；新登记 C18、G13、H9（已修）、H10、I9（部分）、I10（已修），共 123 项。
+
+**门。** `npm run build:artifacts:committed` 后 `npm test` 整门通过：typecheck、架构规则、Biome（lint 只有本轮未改文件里的五条既有 warning / info）、knip、TypeScript 测试 1154/1154（含二十个端到端场景）、schema:check、build:check；`npm run smoke:artifacts` 通过；`git diff --check` 干净。
+
+**未执行。** 其他窗口的 `resume --in-place` 与 `resume-never-conversed`、就地自重启的新 prompt、H9 修复后的第 2 次测试尝试与完成、经助手准备 worktree 的 pod 与加锁检出的关闭、I6 收养，都还没上现场；下一步把本节构建交给现场：按 "After a plugin update" 换代（这次 Controller 已读过新参考，助手也已支持 `--in-place`），再在 `demand_8fe8072c…` 上以 `condition-cleared` 请求第 2 次尝试并完成。

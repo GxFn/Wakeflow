@@ -6,7 +6,10 @@ argument-hint: "[demand id]"
 Report where this Wakeflow workspace stands.
 
 Load the `wakeflow-controller` skill and follow its "Checking the workspace"
-section.
+section. When the status or verify names `runtime-artifact-outdated`,
+`window-artifact-stale`, `server-outdated` or `windows-stale`, the plugin was
+updated under this session: load the skill again even if it is already in your
+context, and follow its "After a plugin update" section as it reads now.
 
 First tool call: `wakeflow_status`, passing a Demand id if the user named one,
 to attach that Demand's route or its archive receipt.

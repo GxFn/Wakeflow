@@ -30,9 +30,11 @@ Lineage rules that decide which call you make:
 
 - First package for a repository in this Demand: no lineage.
 - After a redesign decision: a replacement package. The old target and package
-  become superseded.
-- Follow-up work on a finished Demand: a continuation package, reached through
-  `wakeflow_continue_demand` first.
+  become superseded. Only a target that was not accepted can be replaced.
+- Follow-up work on a repository whose target was accepted: a continuation
+  package - later in the same Demand, or on a finished Demand reached through
+  `wakeflow_continue_demand` first (`lineage-continuation-required` names the
+  target to continue).
 - Re-testing after remediation: a retest package.
 
 One active lineage per repository. A second unfinished target in the same
@@ -108,7 +110,11 @@ key and the same delivery; it will accept then.
 delivery with a fresh claim and fence, at most three times per envelope. After
 that, prepare the target again for a new envelope. Given the callback delivery
 of a result-reported target instead, it re-issues the wake-controller callback
-permit against the current Controller binding, with no claim or fence.
+permit against the current Controller binding, with no claim or fence. A
+re-armed target permit carries the first generation's prompt byte for byte -
+landing is proven by that prompt's digest - so its dispatch record still names
+generation 1 and that claim digest; the target imports with it, and Wakeflow
+accepts an earlier generation's fence of the same delivery.
 
 Never resend a prompt by hand because a window "looks idle". Duplicate work in
 a target window is expensive and invisible until the results disagree. After
@@ -166,7 +172,9 @@ acceptance anchor naming the managed evidence you recorded for this Demand.
 An accept that leaves an anchor unbound, or names evidence this Demand does
 not hold, is refused.
 
-Rework names at least one `failed` independent check. The failed checks are
+`blockingReasons` belong to `blocked` alone: accept and rework carry none, and
+rework keeps `requirementAlignment: aligned`. Rework names at least one
+`failed` independent check. The failed checks are
 exactly the corrections the target receives with the rework delivery, so a
 rework whose checks all passed is refused when recorded - it could never be
 delivered. Use rework when the change itself must be fixed. When the work is
@@ -182,7 +190,10 @@ through `wakeflow_record_test_review_decision`. The step classifications gate
 the choice: another attempt only for harness defects, flakiness or missing
 evidence and only inside the attempt budget; blocked for environment failures;
 escalate with a product defect, which authorizes remediation on the affected
-implementation targets in the same commit.
+implementation targets in the same commit. Once the user has cleared the
+condition a blocked environment failure waited on, the unit resumes with
+`condition-cleared` and those environment steps may take another attempt of
+the same frozen contract, still inside the budget.
 
 Write the decision in your own words and make the reason checkable: name the
 anchor, the file, the evidence. "Looks good" is not a review.

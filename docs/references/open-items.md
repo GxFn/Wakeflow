@@ -2,7 +2,7 @@
 
 状态：active。本表是项目未决问题、验证缺口与待裁决事项的唯一登记处；新发现追加到这里，关闭时写明提交与 gate-log 节。
 
-来源：2026-09-26 只读深度分析（gate-log §13.132）。10 个分析角度各配独立复核，外加完整性检查补查的 3 个方向；134 条报告中 132 条经复核保留（95 条原样确认、37 条修正了表述或严重度），按同一根因合并为下列 13 个主题、106 项（§13.133 现场追加 8 项、§13.134 追加 3 项，现为 117 项）。编号与分析报告页一致（问题 A1…M4，待裁决 Q1…Q12）；“计划阶段”指 §13.132 的路线图。严重度按用户影响计：高 / 中 / 低。
+来源：2026-09-26 只读深度分析（gate-log §13.132）。10 个分析角度各配独立复核，外加完整性检查补查的 3 个方向；134 条报告中 132 条经复核保留（95 条原样确认、37 条修正了表述或严重度），按同一根因合并为下列 13 个主题、106 项（§13.133 现场追加 8 项、§13.134 追加 3 项、§13.135 追加 6 项，现为 123 项）。编号与分析报告页一致（问题 A1…M4，待裁决 Q1…Q12）；“计划阶段”指 §13.132 的路线图。严重度按用户影响计：高 / 中 / 低。
 
 ## 待裁决（需要用户决定）
 
@@ -68,7 +68,7 @@
   - 说明：如果 Claude Code 更新后改了 worktree 目录或分支命名，就会再建一个基于远端默认分支的 checkout。receipt 照样接受会话报告的 cwd，产品工作悄悄从一个不同于 local-head 承诺的基线开始，唯一的症状是后来的合并出乎意料。
   - 证据：claude-code-tmux-asset.ts:25-29、522-568：预先创建 `<repo>/.claude/worktrees/<name>` 和分支 worktree-<name>，依赖 Claude Code 的内部命名约定；tmux-asset.ts:872-906：启动后观察 hook.record.cwd（L889），但不和准备好的 checkout 比较，照样报 worktreePrepared: created；gate-log §13.128：裸 `claude --worktree` 从 origin/main 建出 checkout，而本地 main 落后 12-38 个提交，是碰巧才发现的
   - 建议：在 launch 里，prepared 不为 null 且 hook 记录存在时，比较 realpath(hook.record.cwd) 和 realpath(checkout)，不一致就报 `worktree-cwd-mismatch` 并停止，不进入注册。
-- **A9** [低 / 风险] 助手的"工作中"识别与回读依赖 Claude Code 的屏幕文字：2.1.283 不再显示 "esc to interrupt"，回调的回读看不到折叠指示（计划阶段 1；状态：已修（§13.134）：助手把 2.1.283 的计时行（"… (23s"）认作工作中，nudge 与就地重启的闲置判断共用，另扫整屏而不只尾部，加了真实屏幕回归；回调的屏幕回读仍只作参考（F13 未改））
+- **A9** [低 / 风险] 助手的"工作中"识别与回读依赖 Claude Code 的屏幕文字：2.1.283 不再显示 "esc to interrupt"，回调的回读看不到折叠指示（计划阶段 1；状态：已修（§13.134、§13.135）：助手把 2.1.283 的计时行（"… (23s"）与 API 断连重试行（"Waiting for API response · will retry in …"，§13.135 现场）都认作工作中，nudge 与就地重启的闲置判断共用、扫整屏，加了真实屏幕回归；回调的屏幕回读仍只作参考（F13 未改））
   - 说明：2.1.283 的工作中状态是 "✢ Computing… (23s · ↓ 1.4k tokens · thinking with xhigh effort)"；助手 nudge 的 BUSY_PATTERNS 只认 "esc to interrupt"。nudge 仍安全只是因为 spinner 行成了最后一行对话。回调粘贴后 readback 一直 pending（hook 记录已证明落地）。
   - 证据：§13.133 现场（F3、F13）。
   - 建议：工作中识别改为"输入框上方最后一行含省略号的 spinner"这类结构判断，并在 preflight 报告 Claude Code 版本时提示未验证的版本；回读只作参考（已如此），但补一条 2.1.283 屏幕的回归。
@@ -166,7 +166,7 @@
   - 说明：官方给出的补救办法（重新初始化）被 fresh-initialize 自己的拒绝规则挡住，唯一的出路是手工删除配置、.wakeflow-active、.wakeflow-local 和 ledger 根（包括归档和需求），board、活动 Demand、绑定和 pod 回执都会丢失。没有任何文字引导这个过程，违背了“由插件引导用户”的原则。发布后，第一次配置改动就会影响每一个用户。
   - 证据：wakeflow-config.schema.json:32-34：schemaVersion const 1，additionalProperties false；static-materialization-preview.ts:1152：配置无法解析时报 current-config-unavailable（currentSnapshot 返回 null，158-172）；fresh 被 fresh-config-present、fresh-active-not-absent、fresh-local-not-bootstrap-prefix（1143-1149）和 fresh-ledger-root-present（409）阻塞；gate-log 3295“只能重新初始化”；3746 没有配置时报 precondition-failed/config-authority
   - 建议：给配置自己的演进路径：对已删除字段宽容的读取器，或者一个按当前版本模型重写配置的 upgrade 维护动作。最低限度也要加类型化的 `config-version-unsupported` 错误，并提供保留 ledger 和活动根的 Controller 流程。
-- **C8** [中 / 缺陷] 插件更新后的窗口刷新流程走不通：resume 拒绝仍在运行的 pane（locator-live），/mcp 重连也不能让 Controller 自己变成 current（计划阶段 3；状态：已修（§13.134），待现场：助手 `resume --in-place` 在原 pane 里以同一会话重启（坐标、绑定、标识不变，不用 relocate / mark），Controller 对自己用时两秒后自重启并以固定 prompt 续上（连带重启它的 MCP 服务，不必 /mcp）；从未对话过的会话拒绝为 `resume-never-conversed` 且不动窗口；技能写明顺序：本窗口先、verify、需要时对账、再逐个其他窗口；旧助手以 `argument-unknown` 拒绝 `--in-place` 时回退为用户 /mcp 一次）
+- **C8** [中 / 缺陷] 插件更新后的窗口刷新流程走不通：resume 拒绝仍在运行的 pane（locator-live），/mcp 重连也不能让 Controller 自己变成 current（计划阶段 3；状态：已修（§13.134），部分现场（§13.135）：Controller 就地自重启已在现场跑通（同一 pane 与会话、新参数、带固定 prompt 自己续上，verify 15/15）；其他窗口的 `resume --in-place` 与 `resume-never-conversed` 尚待现场；旧助手以 `argument-unknown` 拒绝时回退为用户 /mcp 一次（现场按此走））
   - 说明：每次插件更新后，Controller 照着参考文档操作，每个窗口都会得到 locator-live，文本里没有安全的顺序（等空闲、close、resume、relocate、mark）。--force 会在同一个会话上再起一个进程。Controller 自己的窗口走 /mcp 重连后永远清不掉 stale，verify 始终达不到全部通过。这些刷新路径都没有由 Agent 按 shipped 文本实际执行过。
   - 证据：workspace-and-windows.md:165 对每个 stale 窗口套用 {{windowResume}}（claude-code-agent-text-profile.ts:72-76，这段文字是为进程已退出的情况写的）；claude-code-tmux-asset.ts:721-734：pane 仍在运行时 resume/launch 报 locator-live，除非加 --force；agent 文本里没有出现 locator-live；observation/service.ts:418-429 按 session-start 记录判断产物，/mcp 重连不会重写这条记录，Controller 一直是 stale，verify 一直报 windows-stale；文本也提供了“或 resume 会话”这个可行的替代（w&w:166-167）；§13.127 残留说 /mcp 重连能否切换代码未经验证；§13.130 是用外部脚本 live-130.mjs 刷新窗口的
   - 建议：在 windowResume 和参考文档里写出明确的刷新顺序：确认空闲（没有持有的 claim、没有进行中的回合）→ close → resume → relocate → mark；点名 locator-live，禁止对活会话用 --force。对 Controller 自己的窗口，要么把“正在服务的 MCP server 产物相同”视为 current，要么只教 resume。然后按 skill 文本在现场跑一遍。
@@ -206,6 +206,10 @@
   - 说明：`observation/decide.ts` 的 `verifyNext` 与 status 的 nextActions 把 server-outdated 交给用户，注释也说只有用户能重连服务；§13.134 起 Claude 的 Controller 按技能用 `resume --in-place` 自己换代，只有旧助手时才需要用户 /mcp。技能文字已按宿主写对，next 的 owner 与注释是宿主中立代码里的过时说法。
   - 证据：`src/capabilities/observation/decide.ts` 的 `verifyNext`（`runtime-artifact-outdated` → owner `user`）。
   - 建议：owner 由宿主画像提供（Claude 为 controller，Codex 为 user），或改成中立的 owner 并把宿主差异只留在技能文字里。
+- **C18** [低 / 缺口] relocate 接受当前意图摘要的观察，但绑定里记的仍是登记时的 `launchIntentDigest`（计划阶段 3；状态：开放，§13.135 现场）
+  - 说明：§13.134 把 Claude 画像的缺省权限模式改成 auto，画像摘要进了意图摘要，所有窗口的意图摘要都变了；窗口按新意图 resume、relocate 之后，绑定里的来源摘要仍是旧值（现场 Design 为 `9a49…`，当前意图 `683d…`）。没有门比较它，只是历史值与实际启动参数对不上，审阅时会误读。
+  - 证据：§13.135 现场 Controller 报告；`endpoint/decide.ts` 的 relocate 只核对观察摘要等于当前意图，不改绑定的 `source.launchIntentDigest`。
+  - 建议：relocate 时把绑定的来源摘要更新为观察里的摘要（绑定 CAS 已在），或在 status 里把"绑定意图与当前意图不同"作为信息显示。
 
 ## D. 验证覆盖与现场证据的时效：gate 全绿证明的是源码，不是安装后的体验
 
@@ -370,6 +374,10 @@
   - 说明：Controller 用 `transcript` 登记文件来源的证据被拒，只拿到 `invalid-request` 与 `selection`，不知道是 kind 与来源不匹配；规划时写裸文件名被拒为 `authority-reference-unknown`，说明里没有写要完整路径。两处都是靠试错过去的。
   - 证据：§13.133 现场，Controller 报告。
   - 建议：拒绝原因点名不匹配的字段与允许的组合；工具说明写明 memberRef 的形式并给一个例子。
+- **G13** [低 / 缺口] 三处 Controller 靠猜的规则：rework 带 `blockingReasons` 只报 `record-schema` / `$request.decision`；re-arm 后提示词里仍是第 1 代的 generation 与 claimDigest；仓库已有验收过的 target 时只能 continuation、不能 replacement（计划阶段 4；状态：部分（§13.135）：delivery-and-review.md 写明三条规则；rework 拒绝的 reason 仍是笼统的 record-schema）
+  - 说明：§13.135 现场 Controller 第一次记 rework 被拒后猜是 `blockingReasons` 所致（Schema 的 rework 分支要求 `maxItems: 0`、`requirementAlignment: aligned`）；re-arm 后担心导入会因旧围栏被拒（导入按设计接受同一投递更早一代的围栏）；按文字选 replacement 被拒为 `lineage-continuation-required`。
+  - 证据：`controller-implementation-review-decision.schema.json` 的 if/then 分支；`result-review/service.ts` 的 `assertEarlierGenerationFence`；`tasking/decide.ts` 的 `deriveLineageBlockers`。
+  - 建议：（文字已补）决定记录的 Schema 拒绝在 path 里点名出错的字段（例如 `$request.decision.blockingReasons`）。
 
 ## H. Demand 流程中的死角与产品语义缺口
 
@@ -407,6 +415,14 @@
   - 说明：这条规则让用户保有控制权，每一步都读最新状态，这是合理的。代价是每一步都要一次人工 prompt、一次约 9 KB 的 status、在大上下文上跑一到多轮。对纯机械的 Controller 自有序列，它只增加了延迟，没有增加决策点。
   - 证据：assets/agent-text/commands/next.md：第一个工具调用是 wakeflow_status，做完那一步就停；80580357：/wakeflow:next 调用 11 次，status 调用 27 次（约 231-258 KB）；gate-log L3667 的 74 分钟里包含维护者等待的时间；验证者更正：launch/register/mark 本来就在第 1 步里一起完成；只有 prepare（第 7 步）和 send 加 record（第 8 步）之间的分界把一段机械序列拆开了
   - 建议：这需要产品决定：是否允许 /wakeflow:next 连续执行多个 Controller 自有步骤，直到 owner 变化或需要用户决策为止。无论怎么定，都在命令文本里写明其中的取舍。
+- **H9** [高 / 缺陷] 测试步骤以 environment 失败、记为 blocked 之后，条件解除也无路重跑：恢复后的审查单元仍只允许 blocked 与 escalate，Demand 原地打转（计划阶段 5；状态：已修（§13.135）：以 `condition-cleared` 恢复的审查单元里，environment 失败步骤可以按同一份冻结合同再来一次，容量与范围规则照旧；决定规则单测、Controller 文字与能力卡 07 同步；现场待续跑）
+  - 说明：§13.135 现场：测试期间有人在 AlembicDashboard 放了一个文件，ts-5 以 environment 失败；Controller 记 blocked，用户删掉文件后，`request-another-attempt` 仍因 `classification:ts-5:environment` 被拒，唯一可记的是再 blocked 或 escalate。D7 规则只允许 harness-defect、flaky、missing-evidence 重跑。
+  - 证据：`result-review/decide.ts` 的 `rerunBlockers`；`test-step-vocabulary.ts` 的 `RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS`；聚合的恢复准入（`condition-cleared` 只接 blocked）本来就允许从 test-review-blocked 记任何决定。
+  - 建议：（已做）见状态。
+- **H10** [中 / 缺口] requirement-supplement 续接从不写回需求包：归档里的 requirement.md 仍是补充前的定义，补充内容只在续接事件摘要与任务包里（计划阶段 5；状态：开放，§13.135 现场；与 Q7 同一问题域）
+  - 说明：§13.135 现场续接"在文件末尾加一行"：实现窗口、Test 与 Controller 都指出 requirement.md 仍写"只有一句话"，以后只看需求文档的人会以为结果与需求不符。
+  - 证据：§13.135 现场；`wakeflow_continue_demand` 只追加续接事件，需求包成员不可变。
+  - 建议：随 Q7 一并裁决：补充包作为新的需求包成员（或新包 supersedes 原包）进入归档，或者归档的 manifest 把续接摘要列为需求的一部分。
 
 ## I. 引导式体验与 Agent 文本：被引导的用户在关键时刻得不到指引
 
@@ -436,14 +452,22 @@
   - 说明：初始化的引导会话（tmux 之外）启动 8 个窗口后保存各窗口的启动观察，等用户接受信任对话框后才登记。用户接受完信任就关闭了引导会话，观察随会话丢失；tmux 里新开的 Controller 只能用 `self` 登记自己，其余窗口没有观察可登记，`launch` 又会开出重复窗口，`teardown` 在 tmux 里会连自己一起杀掉。唯一的出路是在 tmux 之外重开引导会话、`teardown` 后重做引导。
   - 证据：§13.133 现场；`claude-code-agent-text-profile.ts` 的 `WINDOW_BOOTSTRAP`（只在 tmux 之外的引导会话登记；重做引导要 `teardown`）；助手 `launch` 对没有定位器的逻辑窗口不检查已有窗口；窗口的 tmux 选项（`@wakeflow_window_id` 等）与进程参数里的 `--session-id` 足以重建观察。
   - 建议：助手 `launch` 发现同一程序、同一逻辑窗口、仍活着的 Wakeflow 窗口时，不开新窗口，而是从 tmux 选项、pane 坐标与 claude 进程的 `--session-id` 重建观察并标明 `adopted`，tmux 里的 Controller 就能直接登记；引导文字在交代"告诉我好了再关"之外，也写明关早了怎么办。
-- **I7** [中 / 缺陷] 投递提示词的阅读顺序写错文档：`code-facts` / `landing-plan` 标在 `requirement.md` 后面，`landing.md` 不在列，`requirement.md` 是从产品窗口解析不到的裸路径（计划阶段 7；状态：已修（§13.134）：阅读顺序逐文档列出 requirement.md 与 landing.md 从窗口可解析的完整路径，各自的节标在各自文档下；同时修了兄弟位置（`../X`）的窗口把工作区根算成 `../..` 的旧缺陷（任务包、工作区指令与账本路径都受影响））
+- **I7** [中 / 缺陷] 投递提示词的阅读顺序写错文档：`code-facts` / `landing-plan` 标在 `requirement.md` 后面，`landing.md` 不在列，`requirement.md` 是从产品窗口解析不到的裸路径（计划阶段 7；状态：已修并经现场（§13.134、§13.135）：阅读顺序逐文档列出 requirement.md 与 landing.md 从窗口可解析的完整路径（现场为 `../../wakeflow-ledger/requirements/<id>/…`），各自的节标在各自文档下；同时修了兄弟位置（`../X`）的窗口把工作区根算成 `../..` 的旧缺陷）
   - 说明：实现与测试两次投递都一样：提示词骨架的阅读顺序把 landing 里的两节写到 requirement.md 下面，漏了 landing.md 本身，而测试合同的环境依据恰恰在 landing.md；requirement.md 没有带 ledger 路径，产品窗口从自己的根目录找不到。目标 Agent 靠先读任务包 JSON 绕过去了。
   - 证据：§13.133 现场，Controller 两次报告；`src/capabilities/delivery/prompt.ts` 的阅读顺序渲染。
   - 建议：阅读顺序按文档列出 requirement.md 与 landing.md 两个完整的 ledger 路径，各自的节标在各自文档下；加一个渲染回归。
-- **I8** [中 / 缺口] Test 技能没教怎么引用已登记的证据：第一次导入以"证据引用无法解析"被拒，测试窗口去读插件源码才找到 `artifacts/managed-evidence/<evidenceId>/payload/content` 加 sha256 的写法（计划阶段 7；状态：已修（§13.134）：Test 与 Target 技能写明引用形式（`artifacts/managed-evidence/<evidenceId>/payload/content` 与其 sha256）并给例子；导入拒绝按类别给 reason（evidence-locator-invalid、evidence-unknown、evidence-member-missing、evidence-digest-mismatch、evidence-kind-mismatch、evidence-unreadable）并指向第一条出错的引用，`evidence-unresolved` 退役）
+- **I8** [中 / 缺口] Test 技能没教怎么引用已登记的证据：第一次导入以"证据引用无法解析"被拒，测试窗口去读插件源码才找到 `artifacts/managed-evidence/<evidenceId>/payload/content` 加 sha256 的写法（计划阶段 7；状态：已修并经现场（§13.134、§13.135）：Test 与 Target 技能写明引用形式并给例子，现场两次测试导入都一次通过；导入拒绝按类别给 reason 并指向第一条出错的引用，`evidence-unresolved` 退役）
   - 说明：测试窗口登记了四条 test-output 证据，报告里按自己的理解引用，导入被拒；它翻插件实现找到定位器的格式后第二次才成功。被引导的 Agent 不该需要读实现。
   - 证据：§13.133 现场，测试窗口报告。
   - 建议：Test 与 Target 技能写明证据引用的确切形式（或由 record_evidence 的结果直接给出可复制的引用），并让导入的拒绝原因点名哪条引用、缺什么。
+- **I9** [中 / 缺陷] 长寿会话按上下文里的旧技能文字行事：插件更新后 Controller 照旧流程刷新窗口、让用户开 tmux shell；Test 与 Controller 仍把 recordedBy 当缺陷报（计划阶段 7；状态：部分（§13.135）：`/wakeflow:status` 命令（每次从磁盘读）遇到 runtime-artifact 相关的码时要求重新加载 Controller 技能并按 "After a plugin update" 现在的写法做；就地自重启的固定 prompt 也要求先重新加载技能；产品与 Test 窗口仍只在下次加载技能时拿到新文字）
+  - 说明：§13.135 现场：/mcp 重连后 Controller 没有再读参考，按旧文字关窗、resume、relocate，最后让用户 `/exit`、`Ctrl-b c` 开 shell 粘贴助手命令；用户点明"重新读一下 After a plugin update"后它才走就地自重启。技能正文在会话里只注入一次，resume 也保留旧对话。
+  - 证据：§13.135 现场 L1、L2、L9。
+  - 建议：（已做部分）状态命令与自重启 prompt；另可让 verify 的 next 在 runtime-artifact 帧上带"重新加载技能"的提示，或给产品与 Test 窗口的投递 prompt 加一句按磁盘上的技能执行。
+- **I10** [低 / 缺陷] 投递提示词最多列 4 条验收锚点，多出来的静默略去（计划阶段 7；状态：已修（§13.135）：超出时列出"另有 N 条在任务包里"，中英两种语言，渲染回归已加）
+  - 说明：§13.135 现场第 5 条锚点（其余仓库保持基线）不在提示词里；实现窗口靠先读任务包才补上。
+  - 证据：`delivery/prompt.ts` 的 `MAXIMUM_ANCHORS = 4`。
+  - 建议：（已做）
 
 ## J. 占用与退出路径：进得去，出不来
 

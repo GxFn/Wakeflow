@@ -180,3 +180,52 @@ test("程序根窗口、没有章节的任务与中文 prompt：路径规整，�
   equal(section[1], `2. ../../../wakeflow-ledger/${REQUIREMENT_ROOT}/requirement.md`);
   equal(section[3], "   章节: landing-plan, code-facts");
 });
+
+test("验收锚点超过上限时点明其余条数，不静默略去（§13.134 现场）", () => {
+  const base = taskPackageDraft();
+  const [first] = base.acceptanceAnchors;
+  ok(first !== undefined);
+  const anchors = Array.from({ length: 6 }, (_, index) => ({
+    ...first,
+    anchorId: `anchor-${index + 1}`,
+    claim: `claim ${index + 1}`,
+  }));
+  const taskPackage = createTaskPackage(
+    { ...base, sectionAnchors: ["landing-plan"], acceptanceAnchors: anchors },
+    { clock: () => TASKING_CREATED_AT },
+  );
+  const prompt = (language: WakeflowPresentationLanguage) =>
+    renderDeliveryPortablePrompt({
+      language,
+      displayTitle: "ProductA",
+      taskPackage,
+      authored: { goal: "goal", focus: ["focus"], boundary: "boundary" },
+      identity: {
+        demandId: taskPackage.demandId,
+        podId: "main (pod-1)",
+        windowId: "window-1",
+        repositoryId: "repository-1",
+        bindingId: "binding-1",
+      },
+      readingOrder: readingOrder({ requirementSections: ["landing-plan"] }),
+      returnPointer: {
+        deliveryId: "delivery-1",
+        claimDigest: `sha256:${"1".repeat(64)}`,
+        streamRevision: 7,
+        generation: 1,
+      },
+      rework: null,
+      productDefectRemediation: null,
+      testContract: null,
+    });
+  deepEqual(readingSection(prompt("en"), "Acceptance anchors:"), [
+    "- anchor-1: claim 1",
+    "- anchor-2: claim 2",
+    "- anchor-3: claim 3",
+    "- anchor-4: claim 4",
+    "- … 2 more acceptance anchors are in the task package",
+  ]);
+  equal(readingSection(prompt("zh-Hans"), "验收锚点:").at(-1), "- … 2 条验收锚点在任务包里");
+  // 不超过上限时没有这一行。
+  equal(render(readingOrder()).includes("more acceptance anchors"), false);
+});

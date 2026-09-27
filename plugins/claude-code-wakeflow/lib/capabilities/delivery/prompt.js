@@ -44,6 +44,7 @@ const LABELS = Object.freeze({
         workspaceRoot: "workspace root (relative to this window's root)",
         worktrees: "pod worktrees to read (relative to this window's root)",
         sections: "sections",
+        moreAnchors: "more acceptance anchors are in the task package",
         returnInstruction: "Import the result with the MCP tool below; do not write result files. Delivery is not acceptance.",
         noWrite: "Never send this prompt onward to another window.",
     }),
@@ -70,6 +71,7 @@ const LABELS = Object.freeze({
         workspaceRoot: "工作区根（相对本窗口根）",
         worktrees: "要读取的 pod worktree（相对本窗口根）",
         sections: "章节",
+        moreAnchors: "条验收锚点在任务包里",
         returnInstruction: "用下面的 MCP 工具导入结果，不写本地结果文件；投递成功不等于验收。",
         noWrite: "不得把本 prompt 转发给其他窗口。",
     }),
@@ -77,10 +79,14 @@ const LABELS = Object.freeze({
 function section(title, lines) {
     return ["", `${title}:`, ...lines];
 }
-function anchorLines(taskPackage) {
-    return taskPackage.acceptanceAnchors
-        .slice(0, MAXIMUM_ANCHORS)
-        .map((anchor) => `- ${anchor.anchorId}: ${anchor.claim}`);
+// 提示词只列前 MAXIMUM_ANCHORS 条；多出来的点明条数，目标窗口才知道要去任务包里找（§13.134 现场：第 5 条被静默略去）。
+function anchorLines(taskPackage, labels) {
+    const anchors = taskPackage.acceptanceAnchors;
+    const hidden = anchors.length - MAXIMUM_ANCHORS;
+    return [
+        ...anchors.slice(0, MAXIMUM_ANCHORS).map((anchor) => `- ${anchor.anchorId}: ${anchor.claim}`),
+        ...(hidden > 0 ? [`- … ${hidden} ${labels.moreAnchors}`] : []),
+    ];
 }
 /** requirement.md 先于 landing.md，附件随后按 memberRef 排序。 */
 const DOCUMENT_ROLE_ORDER = Object.freeze(["requirement", "landing"]);
@@ -203,7 +209,9 @@ export function renderDeliveryPortablePrompt(input) {
                 ? []
                 : [`- forbidden: ${taskPackage.boundaries.forbidden[0]}`]),
         ]),
-        ...(workType === "implementation" ? section(labels.anchors, anchorLines(taskPackage)) : []),
+        ...(workType === "implementation"
+            ? section(labels.anchors, anchorLines(taskPackage, labels))
+            : []),
         ...testLines(input, labels),
         ...reworkLines(input, labels),
         ...remediationLines(input, labels),

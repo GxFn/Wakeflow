@@ -137,8 +137,11 @@ const PASTED_TEXT_INDICATOR = /\[Pasted text #[0-9]+(?: \+([0-9]+) lines)?\]/gu;
 const API_ERROR_PATTERN = /API Error/u;
 // 工作中标记。Claude Code 2.1.283 的计时行不再带 "esc to interrupt"（§13.134，§13.133 现场 A9）：
 // 省略号后紧跟已用时的括号，例如 "✢ Computing… (23s · ↓ 1.4k tokens · …)"、"… (1m 5s"、"… (2h 3m 4s"；
-// 回合结束的 "✻ Crunched for 3m 6s · done 4:10 PM" 没有省略号，不匹配。
+// 回合结束的 "✻ Crunched for 3m 6s · done 4:10 PM" 没有省略号，不匹配。API 断连重试时显示
+// "✻ Waiting for API response · will retry in 2m 25s"，回合还没结束却没有计时括号，也算工作中（§13.134 现场）。
 const BUSY_PATTERNS = Object.freeze([
+  /Waiting for API response/u,
+  /will retry in [0-9]/u,
   /esc to interrupt/iu,
   /running [A-Za-z]+ hooks/iu,
   /…\s*\((?:[0-9]+[hm]\s+)*[0-9]+[hms]\b/u,
@@ -186,7 +189,7 @@ const MENU_CURSOR_PATTERN = /^[❯>]\s?[0-9]+[.)]\s/u;
 // resume --in-place 重启助手自己所在的 pane 时（§13.134）：先打印结果，再由脱离的子进程隔几秒 respawn；
 // 重启后的会话以这一句作为首条 prompt，先 verify 再接着做。
 const SELF_RESTART_DELAY_SECONDS = 2;
-const SELF_RESTART_PROMPT = "Wakeflow: this Controller session restarted in place to load the updated plugin. Call wakeflow_verify, then continue where you left off.";
+const SELF_RESTART_PROMPT = "Wakeflow: this Controller session restarted in place to load the updated plugin. Load the wakeflow-controller skill again, since its text may have changed, then call wakeflow_verify and continue where you left off.";
 // 收养时读 claude 进程 argv 的上限（ps 的 args 列）。
 const MAX_PROCESS_ARGUMENTS = 8192;
 

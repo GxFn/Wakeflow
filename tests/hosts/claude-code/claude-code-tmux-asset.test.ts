@@ -1323,7 +1323,7 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
 
 /** Controller 在原 pane 里重启自己时，重启后的会话收到的固定首条 prompt（§13.134）。 */
 const SELF_RESTART_PROMPT =
-  "Wakeflow: this Controller session restarted in place to load the updated plugin. Call wakeflow_verify, then continue where you left off.";
+  "Wakeflow: this Controller session restarted in place to load the updated plugin. Load the wakeflow-controller skill again, since its text may have changed, then call wakeflow_verify and continue where you left off.";
 
 /** 脱离的子进程晚一点才调用 tmux：只看已写完整的日志行，等到某个子命令出现或超时。 */
 async function waitForTmuxCall(current: Fixture, command: string, timeoutMs: number): Promise<readonly string[]> {
@@ -1707,6 +1707,8 @@ test("nudge treats Claude Code 2.1.283's elapsed-time spinner as busy and its do
     "✢ Computing… (23s · ↓ 1.4k tokens · thinking with xhigh effort)",
     "✻ Churning… (1m 5s · ↑ 2.1k tokens)",
     "· Pondering… (2h 3m 4s · ↓ 88k tokens)",
+    // API 断连重试：回合没结束，却没有计时括号（§13.134 现场）。
+    "✻ Waiting for API response · will retry in 2m 25s · check your network",
   ]) {
     const busy = nudgeWith(screen(errorLine, spinner, "", "──────────", "❯ "));
     equal(busy.json.status, "busy", spinner);

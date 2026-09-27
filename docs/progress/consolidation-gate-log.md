@@ -3474,7 +3474,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **第三轮现场（D7 在真实宿主上走通）。** 只重启 Controller 窗口（助手 close → launch → replace，新会话装载了带 D7 的工作树制品），Design 发布 `requirement_f65ead47…`（28 字节的 `docs/wakeflow-smoke-round3.md`，六条验收标准），Controller `/wakeflow:next` 认领成 `demand_3a204abc…` 后一句话跑完：规划 `target-task_fe7197c9…`（六个锚点）→ 投递 `target-delivery_af058ee1…` 记录 accepted（目标 hook 记录 `0d8aa4bb…`）→ 目标 `needs-review` 导入 `target-result_90232bd2…`（报告锚点引用为空，符合约定）→ 回调 landed（`f4a6fabb…`），完成记录 confirmed → Controller 登记四条证据（三个文件与探针输出）→ 登记前评审单元的允许集只有 rework / blocked / escalate，登记后出现 accept → accept 决定 `target-review-decision_c01c4764…`，`anchorEvidence` 六个锚点各绑 1–2 条证据，返工 0 次 → 严格校验工作区 14/14、Demand 7/7 → complete 8/8 门通过，归档修订 11。外部核对：归档 `ledger/archives/demand_3a204abc…/0000000011`（24 个文件）里第 10 号提交的决定确实带着六条 `anchorEvidence`，第 5 号提交是 needs-review 的导入；`wakeflow_status` idle、board archived 3、无声明，`wakeflow_verify` 14/14；AlembicPlugin HEAD 仍 `7b2c53a`，三个冒烟文件都是未跟踪。与第二轮相比少了一整轮返工投递。
 
-**勘误。** §13.119 与 §13.120 写"hook 从安装缓存运行、制品变了必须刷新缓存"，本节按进程表核实：八个窗口和本会话的 MCP 服务器都运行在 marketplace 的源目录（本仓库 `plugins/claude-code-wakeflow/mcp/server.mjs`），`${CLAUDE_PLUGIN_ROOT}` 对本地目录 marketplace 解析到源目录本身，安装缓存只是 `claude plugin` 的安装记录；hook 用同一占位符，当时两份代码一致、无法从摘要区分，应当同样来自源目录。结论不变：制品重建后 hook 立即生效，MCP 服务器与技能要重启窗口；刷新缓存无害但不是必要条件。（2026-09-26 更正，见 §13.132：当前进程表显示 MCP 服务器运行在版本化安装缓存 `…/plugins/cache/<marketplace>/wakeflow/<版本>/` 里，这条勘误不再成立；每次重建之后都要刷新缓存并刷新窗口。）
+**勘误。** §13.119 与 §13.120 写"hook 从安装缓存运行、制品变了必须刷新缓存"，本节按进程表核实：八个窗口和本会话的 MCP 服务器都运行在 marketplace 的源目录（本仓库 `plugins/claude-code-wakeflow/mcp/server.mjs`），`${CLAUDE_PLUGIN_ROOT}` 对本地目录 marketplace 解析到源目录本身，安装缓存只是 `claude plugin` 的安装记录；hook 用同一占位符，当时两份代码一致、无法从摘要区分，应当同样来自源目录。结论不变：制品重建后 hook 立即生效，MCP 服务器与技能要重启窗口；刷新缓存无害但不是必要条件。（2026-09-26 补注，见 §13.132 与 §13.133：这条勘误对 `claude` CLI 会话成立——tmux 窗口从 marketplace 源目录运行；Claude 桌面应用内嵌的会话从版本化安装缓存运行。两种会话在重建后都要各自换代。）
 
 **残留。** 整门在机器繁忙时（第三方进程 `yyb_mac` 长时间占 160% CPU）连续三次各有一个计时敏感用例超时——锁串行用例（默认 2 s 等待，本节改为显式 30 s，断言的是串行与残留清理）、端点 register/decommission 用例（单跑 31 s，整套并行时超过 60 s 上限，未改）——单跑均通过；这是负载问题不是回归，但说明整门的计时余量在繁忙机器上偏紧。其余：Controller 的探针文件继续留在 `Test/evidence/`；Codex 宿主仍未做真实会话测试（未执行）。
 
@@ -3875,3 +3875,25 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **现场准备。** 用户选择新建第二个一次性测试工作区 `WakeflowTestWorkspace2`：根目录 `git init`，五个产品仓库从第一个工作区的副本本地克隆，并在克隆里删除旧插件留下的 `.claude/settings.json`（五份相同：`Bash(git|node|tmux *)`、MCP 规则与 `additionalDirectories: [".."]`，都受版本控制，所以以一次提交删除），权限模式保持默认 `acceptEdits`。第一个工作区与它的归档原样保留作回放数据。现场全流程在用户于 `WakeflowTestWorkspace2` 启动 `claude` 并运行 `/wakeflow:init` 之后进行；本节提交之后刷新插件缓存（uninstall + install）并核对安装记录的提交与 manifest。结果记在下一节。
 
 **残留。** A1 / A2 / A4 的修复只有助手与桩 tmux 的测试，默认安装下的真实效果（产品与 Test 窗口不再停在这两类权限确认、对话框时拒绝发送）要在现场核实；工作区路径带空格时，Agent 按加引号的绝对路径调用助手能否被 `Bash(node <路径> *)` 规则匹配未核实。A3 只做了版本报告，版本检测与固定仍开放。评审单元摘要的兼容分支是 Q3 的实例。其余 100 项与 12 项待裁决按 `docs/references/open-items.md` 跟踪。
+
+## 13.133 默认安装的第一次现场：新工作区从初始化到归档走完一轮，现场补修两处助手缺陷，改用 auto 权限模式（2026-09-26）
+
+**环境。** 用户选择新建第二个一次性工作区 `WakeflowTestWorkspace2`（§13.132）：根目录 `git init`，五个产品仓库从第一个工作区的副本本地克隆并在克隆里删掉旧插件的 `.claude/settings.json`，配置里不写宿主偏好（权限模式默认 `acceptEdits`），ledger 用默认的 `../wakeflow-ledger`。用户只做被引导者该做的事：在工作区启动 `claude`、运行 `/wakeflow:init`、接受信任对话框；之后用户授权维护者"直接操作 tmux 来辅助验证和测试"，Design 与 Controller 的对话、确认与权限对话框由维护者经 tmux 代为完成，每一步从外部只读核对（status / verify 经插件副本，窗口屏幕，会话记录）。
+
+**初始化与登记。** fresh-initialize 23 步完成；引导会话按技能启动 8 个窗口（产品与 Test 窗口的启动参数都带上了 §13.132 的 `--allowedTools`：MCP 规则与按绝对路径调用的助手），五个产品窗口停在"信任此文件夹"对话框上（每个产品仓库是独立的 Git 仓库，要单独信任；Design / Test 在已信任的根下）。用户接受信任后没有回到引导会话就把它关了，保存在会话里的启动观察随之丢失，tmux 里的 Controller 无法接手登记（登记表 I6）。按技能的"重做引导前可 teardown"：在 tmux 外重开引导会话，它先 reconcile（部署新助手），确认 8 个窗口都未登记后 `teardown`（不带 `--force`）旧会话、重新启动、登记、`mark --all`。
+
+**现场补修一：信任对话框（`0f259012`）。** 真实的 Claude Code 2.1.283 信任对话框里光标行是 `❯ No, exit`，没有编号；§13.132 的送前判断只把编号光标当菜单，会把它当成输入框——粘贴会被吞，回车选中 "No, exit" 让会话退出。输入框改为必须是尾部最后一对边框线夹住的块、首行是输入行；输入框里已有别人打了一半的字也拒绝（`input-not-empty`）。**现场补修二：提示建议（`23be1935`）。** 2.1.283 在回合结束后把一句灰色的提示建议放进输入框（`❯ ESC[2m确认，发布ESC[0m`）；`capture-pane -p` 丢掉了属性，上一条修补的 `input-not-empty` 会把它读成已打的字，从而拒绝之后每一次投递与回调。送前截屏与 nudge 改用 `capture-pane -e`，结构判断看去掉属性的文字，输入框行里的暗色段（占位提示与提示建议）不算已打的字。两处都带用截到的真实屏幕做的回归。
+
+**插件更新的现场。** 部署补修二要刷新缓存与窗口，于是现场走了一遍"After a plugin update"：Controller 的 `/wakeflow:status` 正确识别 `server-outdated`，但先去 grep 插件目录与运行时代码找处理办法（登记表 C16）；用户在它的窗口里 `/mcp` → Reconnect 之后，Controller 经维护部署新助手（`claude-tmux-asset:install`，`updated`），Design 用 `resume` + `relocate` + `mark`，五个产品窗口与 Test（从没对话过）逐个 close、launch、replace、mark——其中把助手调用写成带变量的 shell 循环，精确的 allow 规则匹配不上，要确认。Controller 自己仍是 `artifact: stale`（C8 现场证实）：它能给出的唯一办法是让用户 `/exit`、`Ctrl-b c` 开 shell 窗口、粘贴助手 `resume` 命令——违背被引导原则；本次由维护者代为执行（助手 `resume` 成功，新 pane，session-start 已观察到），Controller 随后 `relocate` 与 `mark` 自己。刷新中关掉的旧 AlembicCore 窗口，它的 session-end hook 在原子写中途被杀，留下 `.wakeflow-atomic-…tmp`，读取方算作跳过的记录，verify 的 `host-hook-channel` 永久失败（登记表 B12）；维护者删掉这一个暂存文件（留了副本）后恢复 15/15。
+
+**插件从哪里运行（更正 §13.132 的更正）。** 进程表显示：tmux 里的 `claude` CLI 2.1.283 会话（包括 `/mcp` 重连后的 Controller）从本地 marketplace 的源目录 `plugins/claude-code-wakeflow/` 运行 MCP 服务器，Claude 桌面应用内嵌的 2.1.281 会话从版本化安装缓存运行。所以 §13.121 的勘误对 CLI 会话成立，§13.132 的更正只对桌面会话成立；两种会话都要在重建后各自换代。另：ChatGPT 应用自带的 Codex app-server 正在运行 Wakeflow 的 Codex 插件（`~/.codex/plugins/cache/gxfn/wakeflow/1.0.0`），这台机器上其实有 Codex 宿主（`codex` 不在 PATH 上），登记表 E1 可以用它。
+
+**权限模式：改用 auto（用户裁决）。** `acceptEdits` 下每个窗口第一次读技能参考文档（插件目录在窗口根之外）、Controller 读工作区外的 ledger、Design 用一条带 `cd` 的 Bash 只读查看仓库、Controller 批量调用助手都要确认。用户裁决："就是用 auto 模式吧，不然很多权限需要人为确认"。现场把 8 个窗口都切到 auto（Shift+Tab 两次：accept edits → plan → auto），auto 模式第一次读工作区外文件时问的一次"是否一直允许"由用户选择"是"（写进用户设置）。产品侧待做：配置的 `permissionMode` 增加 `auto` 并作为启动默认值（登记表 Q4 已裁决）。
+
+**主流程。** Design 起草需求包（发现与 AlembicPlugin 的文档约定冲突并请用户确认），用户确认后发布 `requirement_1d8eca3d…`；Controller 认领为 `demand_7f71d80b…`，规划实现任务包（第一次因 `selectedAuthorityMemberRefs` 写了裸文件名被拒，改完整 memberRef 后提交），只投递一次，目标会话的 prompt-submit hook 记录证明落地；AlembicPlugin 新建 81 字节的 `docs/wakeflow-default-install.md`（未提交，按任务包），四个锚点自检通过，以 needs-review 导入并送回调（Controller 会话的 hook 记录证明回调落地，屏幕回读 pending）；Controller 自己重跑锚点、登记两条证据、验收，冻结四步只读的真实环境测试合同，投递给 Test；Test 窗口四步第 1 次尝试全过，每步输出登记为 test-output 证据，导入（第一次因证据引用写法被拒，登记表 I8），回调落地；Controller 独立补查（其它仓库的 HEAD 与被忽略文件）、登记证据、验收测试；完成预览 15 + 7 道门、8 道完成门全过，用户确认后归档 `archives/demand_7f71d80b…/0000000019`（37 个文件）。外部核对：整体 idle、看板 archived 1、verify 15/15。实现窗口与 Test 窗口在这次现场里没有停在权限确认上（auto 模式）。
+
+**新登记的问题。** B12（hook 暂存残留）、I6（引导会话关早了）、I7（提示词阅读顺序）、I8（Test 技能没教证据引用）、G12（record_evidence 与 selectedAuthorityMemberRefs 的错误与说明）、F10（证据 recordedBy 写成 Controller）、A9（2.1.283 的工作中文字与回读）、C16（更新时的过度排查与批量助手调用）；C8 标为现场证实；A2 记了两处现场补修。
+
+**门。** 两处补修各自：助手测试 16/16、typecheck、Biome lint（四条既有 warning）、`build:check`、`smoke:artifacts` 通过；整门（`npm test`）在现场的八个会话与第三方进程把负载推到 17–19 时分别有 4 与 5 个用例在 60 / 120 秒超时被取消、没有断言失败，涉及的四个测试文件（端点服务、需求服务、观察服务、工作区观察）单跑全部通过。
+
+**未执行。** 本轮现场没有覆盖：rework、rearm、blocked 后重新决策、continue 之后再次完成（§13.131 第三轮的续接修复仍未上现场）、经助手准备 worktree 的 pod 与加锁检出的关闭；`acceptEdits` 下产品与 Test 窗口导入与回调是否还停在确认上，因为改用 auto 而没有完整验证。

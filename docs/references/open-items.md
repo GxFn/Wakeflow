@@ -9,7 +9,7 @@
 - **Q1** Codex 版本怎么定位：发布前必须跑通一次真实会话；还是先以 experimental 或 preview 标注发布；还是在验证前暂不发布 codex-wakeflow 产物。
 - **Q2** 发布渠道和版本模型：只要 push 改动了 plugins/ 就 bump 补丁版本并打 tag；还是在开发分支上开发，main 只经过发布流程前进。另外，1.0.0 之前的构建是否改用 1.0.0-rc.N。
 - **Q3** 1.0 之后的持久格式策略：v1 冻结，改动一律靠新版本号加 upcaster；还是改变事件溯源的设计，不再持久化派生状态摘要，只校验事件摘要。前者要长期保留旧 reducer。
-- **Q4** 产品和 Test 窗口的权限怎么授予：启动时用 --allowedTools 或 --settings 注入；写进所有者管理的产品仓库；还是由 Controller 引导用户逐窗口批准一次。默认 permissionMode 是否作为 init 时的显式选择。
+- **Q4** 产品和 Test 窗口的权限怎么授予：启动时用 --allowedTools 或 --settings 注入；写进所有者管理的产品仓库；还是由 Controller 引导用户逐窗口批准一次。默认 permissionMode 是否作为 init 时的显式选择。（**已裁决 2026-09-26**：用 Claude Code 的 auto 权限模式——"就是用 auto 模式吧，不然很多权限需要人为确认"；配置的 permissionMode 增加 `auto` 并作为启动默认值。）
 - **Q5** 威胁模型的范围：是否把“被仓库内容注入的产品 Agent”当作对手来防。这决定调用者身份检查、--add-dir 的收窄、helper 完整性校验、hook 记录认证是否要做，以及做到什么程度。
 - **Q6** bug 和 supplement 需求包是否必须有验收标准（§13.131 待裁决），以及发布时是否强制至少有一个列表项。
 - **Q7** 后续工作由哪个机制负责：让 continue_demand 接受补充需求包；还是让 supplement 包带上父 Demand 或父需求的链接。升级后文档承诺的“补充包认领出口”是实现出来，还是改文档，说明实际路径是 record-decision 或取消后重新认领。
@@ -68,6 +68,10 @@
   - 说明：如果 Claude Code 更新后改了 worktree 目录或分支命名，就会再建一个基于远端默认分支的 checkout。receipt 照样接受会话报告的 cwd，产品工作悄悄从一个不同于 local-head 承诺的基线开始，唯一的症状是后来的合并出乎意料。
   - 证据：claude-code-tmux-asset.ts:25-29、522-568：预先创建 `<repo>/.claude/worktrees/<name>` 和分支 worktree-<name>，依赖 Claude Code 的内部命名约定；tmux-asset.ts:872-906：启动后观察 hook.record.cwd（L889），但不和准备好的 checkout 比较，照样报 worktreePrepared: created；gate-log §13.128：裸 `claude --worktree` 从 origin/main 建出 checkout，而本地 main 落后 12-38 个提交，是碰巧才发现的
   - 建议：在 launch 里，prepared 不为 null 且 hook 记录存在时，比较 realpath(hook.record.cwd) 和 realpath(checkout)，不一致就报 `worktree-cwd-mismatch` 并停止，不进入注册。
+- **A9** [低 / 风险] 助手的"工作中"识别与回读依赖 Claude Code 的屏幕文字：2.1.283 不再显示 "esc to interrupt"，回调的回读看不到折叠指示（计划阶段 1；状态：开放，§13.133 现场发现）
+  - 说明：2.1.283 的工作中状态是 "✢ Computing… (23s · ↓ 1.4k tokens · thinking with xhigh effort)"；助手 nudge 的 BUSY_PATTERNS 只认 "esc to interrupt"。nudge 仍安全只是因为 spinner 行成了最后一行对话。回调粘贴后 readback 一直 pending（hook 记录已证明落地）。
+  - 证据：§13.133 现场（F3、F13）。
+  - 建议：工作中识别改为"输入框上方最后一行含省略号的 spinner"这类结构判断，并在 preflight 报告 Claude Code 版本时提示未验证的版本；回读只作参考（已如此），但补一条 2.1.283 屏幕的回归。
 
 ## B. 并发、崩溃与长期运行：若干残留状态经公开入口无法恢复
 
@@ -117,6 +121,10 @@
   - 说明：在 NFS/SMB 上，或者工作区跨机器、跨容器共享时，kill(pid,0) 查的是错误的 PID 命名空间，远端还活着的持锁者会被当作 inactive 退役，或者反过来。Windows 会被早早拒绝，但用户文档没有写。需求文档还声称已经声明过。
   - 证据：plugins/*/package.json 没有 "os" 字段；README 里没有平台说明；docs/requirements/README.md:37 声称“制品与 README 明确声明不支持 Windows”，但实际没有；验证者更正：至少十个 geteuid helper 在 win32 下以 unsupported-platform 失败，fresh-initialize 第一次写配置时就能早早拒绝 Windows；网络文件系统只在源码注释里排除（rooted-exclusive-file-lock.ts:79），没有 statfs 检查
   - 建议：确定并写明支持的平台（macOS/Linux、本地文件系统），在两份 README 和 package.json 的 os 字段里声明，并修正 requirements/README.md:37。fresh-initialize 预览在非本地文件系统上以明确的码阻塞。
+- **B12** [高 / 缺陷] 关窗时 session-end hook 被杀在原子写中途，留下的 `.wakeflow-atomic-…tmp` 让 hook 通道门永久失败（计划阶段 2；状态：开放，§13.133 现场发现）
+  - 说明：助手 `close`（tmux kill-window）结束会话时，Claude Code 的 session-end hook 进程在原子创建的中途被杀，`observations/hooks/` 里留下一个暂存文件（内容是一条完整的 session-end 记录）。读取方把它算作无法识别的条目，`hooks.skipped=1`，verify 的 `host-hook-channel` 以 `claude-code:skipped-1` 失败，整体变 `degraded`；对账与观察者都不清理它，Controller 也无从知道原因。
+  - 证据：§13.133 现场（刷新窗口时关掉的 AlembicCore）；`src/kernel/hook-observations.ts` 的 `listed.unrecognized` 计入 `skipped`。
+  - 建议：把 `.wakeflow-atomic-*` 暂存文件从"无法识别"里分出来：超过一段时间的暂存残留由观察者或对账退役（它是 Wakeflow 自有私有目录里的中间文件），读取方不计入 skipped；另测一次"关窗时 hook 被杀"的回归。
 
 ## C. 持久格式演进、版本与发布：1.0.0 还没发布，但不兼容已经在累积
 
@@ -150,7 +158,7 @@
   - 说明：官方给出的补救办法（重新初始化）被 fresh-initialize 自己的拒绝规则挡住，唯一的出路是手工删除配置、.wakeflow-active、.wakeflow-local 和 ledger 根（包括归档和需求），board、活动 Demand、绑定和 pod 回执都会丢失。没有任何文字引导这个过程，违背了“由插件引导用户”的原则。发布后，第一次配置改动就会影响每一个用户。
   - 证据：wakeflow-config.schema.json:32-34：schemaVersion const 1，additionalProperties false；static-materialization-preview.ts:1152：配置无法解析时报 current-config-unavailable（currentSnapshot 返回 null，158-172）；fresh 被 fresh-config-present、fresh-active-not-absent、fresh-local-not-bootstrap-prefix（1143-1149）和 fresh-ledger-root-present（409）阻塞；gate-log 3295“只能重新初始化”；3746 没有配置时报 precondition-failed/config-authority
   - 建议：给配置自己的演进路径：对已删除字段宽容的读取器，或者一个按当前版本模型重写配置的 upgrade 维护动作。最低限度也要加类型化的 `config-version-unsupported` 错误，并提供保留 ledger 和活动根的 Controller 流程。
-- **C8** [中 / 缺陷] 插件更新后的窗口刷新流程走不通：resume 拒绝仍在运行的 pane（locator-live），/mcp 重连也不能让 Controller 自己变成 current（计划阶段 3；状态：开放）
+- **C8** [中 / 缺陷] 插件更新后的窗口刷新流程走不通：resume 拒绝仍在运行的 pane（locator-live），/mcp 重连也不能让 Controller 自己变成 current（计划阶段 3；状态：开放，§13.133 现场证实：/mcp 重连后 Controller 窗口仍是 stale，唯一出路是让用户 /exit、开 tmux shell 窗口粘贴助手 resume 命令（违背被引导原则）；本次由维护者代为执行后恢复 current）
   - 说明：每次插件更新后，Controller 照着参考文档操作，每个窗口都会得到 locator-live，文本里没有安全的顺序（等空闲、close、resume、relocate、mark）。--force 会在同一个会话上再起一个进程。Controller 自己的窗口走 /mcp 重连后永远清不掉 stale，verify 始终达不到全部通过。这些刷新路径都没有由 Agent 按 shipped 文本实际执行过。
   - 证据：workspace-and-windows.md:165 对每个 stale 窗口套用 {{windowResume}}（claude-code-agent-text-profile.ts:72-76，这段文字是为进程已退出的情况写的）；claude-code-tmux-asset.ts:721-734：pane 仍在运行时 resume/launch 报 locator-live，除非加 --force；agent 文本里没有出现 locator-live；observation/service.ts:418-429 按 session-start 记录判断产物，/mcp 重连不会重写这条记录，Controller 一直是 stale，verify 一直报 windows-stale；文本也提供了“或 resume 会话”这个可行的替代（w&w:166-167）；§13.127 残留说 /mcp 重连能否切换代码未经验证；§13.130 是用外部脚本 live-130.mjs 刷新窗口的
   - 建议：在 windowResume 和参考文档里写出明确的刷新顺序：确认空闲（没有持有的 claim、没有进行中的回合）→ close → resume → relocate → mark；点名 locator-live，禁止对活会话用 --force。对 Controller 自己的窗口，要么把“正在服务的 MCP server 产物相同”视为 current，要么只教 resume。然后按 skill 文本在现场跑一遍。
@@ -182,6 +190,10 @@
   - 说明：npm ci 之后被修改过的 node_modules（install script、本地调试时的改动）会原样进入提交的制品，build 和 build:check 都能通过。闭包很小且版本钉死，风险低，而且 integrity 数据已经现成。
   - 证据：plugin-dependency-closure.ts:183-190 只检查版本号和 sha512 字段是否存在，没有对字节做哈希校验；build:check 与同一份 node_modules 的新构建比较；只有 dev 依赖 @swc/core 带 install script；plugins/ 已提交，字节变化会出现在 git diff 里（部分缓解）
   - 建议：在 release:check 或 build:check 中按 lockfile 的 tarball integrity 校验每个复制的包（npm pack 重新取，或比对 cacache），或者在干净目录里用 npm ci --ignore-scripts 构建制品。
+- **C16** [中 / 缺口] 插件更新后刷新窗口时，Controller 用 shell 循环批量调用助手、读插件实现找 server-outdated 的处理办法（计划阶段 3；状态：开放，§13.133 现场发现）
+  - 说明：刷新 7 个窗口时 Controller 把 close / launch 写成带变量的 for 循环（不匹配精确的助手 allow 规则，acceptEdits 下要确认）；看到 server-outdated 时先去 grep 插件目录与运行时代码。SKILL.md 没有把 server-outdated / windows-stale 直接导向 "After a plugin update"。
+  - 证据：§13.133 现场（F5、F8）。
+  - 建议：SKILL.md 把这两个码直接指到那一节；技能要求一次 Bash 只调一次助手，或助手提供批量刷新命令。
 
 ## D. 验证覆盖与现场证据的时效：gate 全绿证明的是源码，不是安装后的体验
 
@@ -289,6 +301,10 @@
   - 说明：Web 产品的报告经常引用 API 路由和实体 id，导入因此被拒，Agent 就学会转述证据，评审质量随之下降；而真正像泄漏的路径形式反而漏掉了。
   - 证据：result-review/service.ts:244-247 REPORT_PRIVACY_POLICY 没有允许的根，result-review/decide.ts:161-170 不做 SYSTEM_PATH 过滤（requirement/decide.ts:79-99 有）；用同样的正则复现：'/api/orders' 被标记，而 'file://<本机路径>'、'cwd:<本机路径>'、'$HOME/…'、'C:\\Users\\…' 不被标记；bare-uuid（privacy-scan.ts:56-57）拒绝所有不带 Wakeflow 前缀的 UUID
   - 建议：报告也使用 requirement 那套 SYSTEM_PATH 过滤，或者把配置的根加入允许列表；让 lookbehind 把 file:// 和 ':' 前缀视为路径起点，并加上盘符模式；把 bare-uuid 换成对已知私有标识（绑定的会话 id、hook 记录 id）的精确值检查。
+- **F10** [中 / 缺陷] 测试窗口登记的证据，manifest 的 `recordedBy` 写成了 Controller 窗口（计划阶段 5；状态：开放，§13.133 现场发现）
+  - 说明：测试窗口自己调用 record_evidence 登记了四条 test-output 证据，归档后的 manifest 里 recordedBy 是 Controller 窗口。证据归属不跟随实际登记的窗口，审阅时无从分辨谁采集了什么。
+  - 证据：§13.133 现场，测试窗口与 Controller 各自发现。
+  - 建议：按调用方窗口（或其 work claim / 绑定）写 recordedBy，并加回归；若归属是有意按 Demand 的 Controller 计，就在技能与 Schema 描述里写明。
 
 ## G. 可诊断性：失败发生后，用户、Controller 和维护者都拿不到原因
 
@@ -338,6 +354,10 @@
   - 说明：每次真实环境验证都依赖一次性脚本，脚本本身的 bug 要在现场调试，经验也留不下来。对没验证过的 Codex 宿主，更是没有现成的驱动。
   - 证据：WAKEFLOW_DEBUG_EXIT=1 只出现在 gate-log（§13.125 L3625）；§13.130 L3830 用外部的 live-130.mjs 驱动；git ls-files 里没有 live-*；§13.128 L3734：维护者脚本把 `binding: {status: 'unregistered'}` 当成已绑定，发出了一次在 `$` 处被拒的 decommission；tooling/ 只有 architecture、artifacts、codegen、release、testing
   - 建议：在 tooling/ 下纳入一个只读诊断驱动（`npm run diagnose -- <workspace>`）：通过 stdio 对候选产物调用 status、verify、inspect，打印 incident 记录，路径脱敏。任何会修改状态的模式都放在显式开关后面，并且只用于指定的一次性工作区。
+- **G12** [中 / 缺口] `record_evidence` 的 kind 与来源不符时只报 `invalid-request/selection`；`plan_target_task` 的 `selectedAuthorityMemberRefs` 要完整 ledger memberRef 路径，工具说明没写（计划阶段 4；状态：开放，§13.133 现场发现）
+  - 说明：Controller 用 `transcript` 登记文件来源的证据被拒，只拿到 `invalid-request` 与 `selection`，不知道是 kind 与来源不匹配；规划时写裸文件名被拒为 `authority-reference-unknown`，说明里没有写要完整路径。两处都是靠试错过去的。
+  - 证据：§13.133 现场，Controller 报告。
+  - 建议：拒绝原因点名不匹配的字段与允许的组合；工具说明写明 memberRef 的形式并给一个例子。
 
 ## H. Demand 流程中的死角与产品语义缺口
 
@@ -404,6 +424,14 @@
   - 说明：初始化的引导会话（tmux 之外）启动 8 个窗口后保存各窗口的启动观察，等用户接受信任对话框后才登记。用户接受完信任就关闭了引导会话，观察随会话丢失；tmux 里新开的 Controller 只能用 `self` 登记自己，其余窗口没有观察可登记，`launch` 又会开出重复窗口，`teardown` 在 tmux 里会连自己一起杀掉。唯一的出路是在 tmux 之外重开引导会话、`teardown` 后重做引导。
   - 证据：§13.133 现场；`claude-code-agent-text-profile.ts` 的 `WINDOW_BOOTSTRAP`（只在 tmux 之外的引导会话登记；重做引导要 `teardown`）；助手 `launch` 对没有定位器的逻辑窗口不检查已有窗口；窗口的 tmux 选项（`@wakeflow_window_id` 等）与进程参数里的 `--session-id` 足以重建观察。
   - 建议：助手 `launch` 发现同一程序、同一逻辑窗口、仍活着的 Wakeflow 窗口时，不开新窗口，而是从 tmux 选项、pane 坐标与 claude 进程的 `--session-id` 重建观察并标明 `adopted`，tmux 里的 Controller 就能直接登记；引导文字在交代"告诉我好了再关"之外，也写明关早了怎么办。
+- **I7** [中 / 缺陷] 投递提示词的阅读顺序写错文档：`code-facts` / `landing-plan` 标在 `requirement.md` 后面，`landing.md` 不在列，`requirement.md` 是从产品窗口解析不到的裸路径（计划阶段 7；状态：开放，§13.133 现场发现）
+  - 说明：实现与测试两次投递都一样：提示词骨架的阅读顺序把 landing 里的两节写到 requirement.md 下面，漏了 landing.md 本身，而测试合同的环境依据恰恰在 landing.md；requirement.md 没有带 ledger 路径，产品窗口从自己的根目录找不到。目标 Agent 靠先读任务包 JSON 绕过去了。
+  - 证据：§13.133 现场，Controller 两次报告；`src/capabilities/delivery/prompt.ts` 的阅读顺序渲染。
+  - 建议：阅读顺序按文档列出 requirement.md 与 landing.md 两个完整的 ledger 路径，各自的节标在各自文档下；加一个渲染回归。
+- **I8** [中 / 缺口] Test 技能没教怎么引用已登记的证据：第一次导入以"证据引用无法解析"被拒，测试窗口去读插件源码才找到 `artifacts/managed-evidence/<evidenceId>/payload/content` 加 sha256 的写法（计划阶段 7；状态：开放，§13.133 现场发现）
+  - 说明：测试窗口登记了四条 test-output 证据，报告里按自己的理解引用，导入被拒；它翻插件实现找到定位器的格式后第二次才成功。被引导的 Agent 不该需要读实现。
+  - 证据：§13.133 现场，测试窗口报告。
+  - 建议：Test 与 Target 技能写明证据引用的确切形式（或由 record_evidence 的结果直接给出可复制的引用），并让导入的拒绝原因点名哪条引用、缺什么。
 
 ## J. 占用与退出路径：进得去，出不来
 

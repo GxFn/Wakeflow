@@ -1,286 +1,89 @@
 ---
-diagramId: ts-delivery-review-runtime-d1
-viewType: call-flow
-truthKind: current-code
-reviewDepth: L4
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:42254813ec2ec3a91fec0eab12dc0d3074a1ecf3eb552f4a4fc05bcf2326d17b
-audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Architecture Atlas
-generatedBy: manual-review
-sourcePaths:
-  - src/capabilities/delivery/*.ts
-  - src/capabilities/delivery/decide.ts
-  - src/capabilities/delivery/service.ts
-  - src/configuration/*.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/delivery/*.ts
-  - src/contracts/generated/governance/demand/*.ts
-  - src/contracts/generated/governance/evidence/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/governance/lifecycle/*.ts
-  - src/contracts/generated/governance/result/*.ts
-  - src/contracts/generated/governance/review/*.ts
-  - src/contracts/generated/governance/tasking/*.ts
-  - src/contracts/generated/governance/testing/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/generated/workspace/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/artifact/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/event-sourcing/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/git/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/controller/*.ts
-  - src/governance/delivery/*.ts
-  - src/governance/demand/*.ts
-  - src/governance/demand/event-sourcing/*.ts
-  - src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts
-  - src/governance/demand/model/*.ts
-  - src/governance/demand/publication/*.ts
-  - src/governance/evidence/*.ts
-  - src/governance/ledger/*.ts
-  - src/governance/lifecycle/*.ts
-  - src/governance/result/*.ts
-  - src/governance/review/*.ts
-  - src/governance/tasking/*.ts
-  - src/governance/testing/*.ts
-  - src/kernel/*.ts
-  - src/kernel/event-stream/*.ts
-  - src/kernel/hook-observations.ts
-  - src/kernel/work-claims.ts
-  - src/workspace/*.ts
-  - src/workspace/window-runtime/*.ts
-schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-prepare-delivery-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-rearm-delivery-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-record-delivery-outcome-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/git-object-id.schema.json
-  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
-  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
-  - src/contracts/schemas/governance/demand/demand-authority.schema.json
-  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
-  - src/contracts/schemas/governance/demand/demand-identity.schema.json
-  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
-  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
-  - src/contracts/schemas/governance/result/target-result.schema.json
-  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
-  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
-  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
-  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
-  - src/contracts/schemas/governance/tasking/task-package.schema.json
-  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-  - src/contracts/schemas/workspace/window-host-binding.schema.json
-testPaths:
-  - tests/capabilities/delivery/service.test.ts
-  - tests/capabilities/result-review/service.test.ts
-refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+diagramId: "ts-implementation-delivery-review-runtime-call-flow"
+viewType: "call-flow"
+truthKind: "in-progress-worktree"
+reviewDepth: "L4"
+verifiedAt: "2026-10-03"
+baselineCommit: "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c"
+sourceFingerprint: "sha256:bcd0d6678c5dc268508e30d5755f55f6d59845037f2b509942248967c597cc52"
+testEvidence: "anchored"
+audience: ["maintainer", "reviewer"]
+documentationOwner: "Wakeflow Architecture Atlas"
+generatedBy: "manual-review"
+sourcePaths: ["src/capabilities/delivery/decide.ts", "src/capabilities/delivery/service.ts", "src/governance/delivery/delivery-outcome.ts", "src/kernel/append-command.ts", "src/kernel/command-shell.ts", "src/kernel/hook-observations.ts", "src/kernel/work-claims.ts", "src/kernel/workspace-operation-scope.ts"]
+schemaPaths: []
+testPaths: ["tests/capabilities/delivery/decide.test.ts", "tests/capabilities/delivery/service.test.ts"]
+refreshTriggers: []
 ---
 
-# 投递：准备、落地与重发恢复
+# 投递结局：自动证据、显式解决与重武装
 
-当前三个追加工具为 prepare_delivery、record_delivery_outcome、rearm_delivery。
-
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## 准备信封与许可
+> 2026-10-03 当前工作树语义复核；含未提交实现。HEAD 只定位已提交基线，来源指纹覆盖本页实际引用的文件。图谱不拥有业务状态。本页的测试锚点表示已核对的覆盖入口，运行结果见本轮总台账。
 
 ```mermaid
-sequenceDiagram
-  accTitle: 准备信封与许可
-  accDescr: 准备信封与许可；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant controller as Controller
-  participant slice as 投递切片
-  participant claim as 工作声明
-  participant event as 事件命令
-  controller->>slice: E-L1026-01 任务与三段人话，加幂等键和修订
-  slice->>claim: E-L1026-02 匹配绑定与 worktree 回执后占用
-  slice->>slice: E-L1026-03 渲染可移植 prompt 和 fence
-  slice->>event: E-L1026-04 记录完整信封
-  slice-->>controller: E-L1026-05 返回许可与 next
+flowchart TB
+  accTitle: 记录投递结局的优先级
+  accDescr: 记录投递结局的优先级；每条关系由当前实现的调用或条件支持，错误停止与恢复保持显式。
+  A["[代码] 当前代际与 fence 相符"]
+  B["[代码] 显式解决 indeterminate"]
+  C["[代码] 匹配 user-prompt-submit 摘要"]
+  D["[代码] 发送前失败或宿主发送返回"]
+  F["[权威] accepted：保留声明"]
+  H["[权威] rejected-before-send：释放声明"]
+  I["[权威] indeterminate：保留声明"]
+  A -->|"E-DLV02-01 resolution 优先；必须处于 indeterminate"| B
+  B -->|"E-DLV02-02 accepted 必须引用已存在的落地记录"| F
+  B -->|"E-DLV02-03 Controller 显式声明未落地并说明理由"| H
+  A -->|"E-DLV02-04 无 resolution 时查 promptDigest 匹配"| C
+  C -->|"E-DLV02-05 目标会话落地记录可证明 accepted"| F
+  A -->|"E-DLV02-06 未匹配 hook 才检查发送声明与 Profile"| D
+  D -->|"E-DLV02-07 failed-before-send；不允许从 indeterminate 隐式降级"| H
+  D -->|"E-DLV02-08 project-thread 型发送成功且 evidenceDigest 非空"| F
+  D -->|"E-DLV02-09 其余首次记录不确定；后续缺证据则拒绝"| I
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| permit | 供 Agent 使用的投递内容与围栏；重放不是新一次发送授权。 |
-| fence | claimId、claimDigest 与流修订构成的准入令牌。 |
-| claim | 端点注意力及产品检出的工作声明，释放必须匹配当前令牌。 |
-| next | 根据当前事实派生的下一责任与建议工具。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| controller | Agent / 用户 / 外部效果或条件视图 | Controller |
-| slice | `src/capabilities/delivery/service.ts` | 投递切片 |
-| claim | `src/kernel/work-claims.ts` | 工作声明 |
-| event | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts` | 事件命令 |
+| [代码] | 确定性服务、守卫或纯决定；失败会拒绝转换。 |
+| [权威] | 持久事实；只能由指定写入者改变。 |
+| [视图] | 由权威派生的可重建数据，不授权写入。 |
+| resolution | Controller 对不确定结局的显式判断；仍受 phase/证据门约束。 |
+| Profile | 宿主适配注入的行为事实；共享代码不按 hostId 猜测。 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系与边界 |
 | --- | --- | --- | --- |
-| E-L1026-01 | `src/capabilities/delivery/service.ts#executePrepareDeliveryRequest` | `tests/capabilities/delivery/service.test.ts` | 任务与三段人话，加幂等键和修订 |
-| E-L1026-02 | `src/capabilities/delivery/service.ts#takeClaim` | `tests/capabilities/delivery/service.test.ts` | 匹配绑定与 worktree 回执后占用 |
-| E-L1026-03 | `src/capabilities/delivery/service.ts#renderPrompt` | `tests/capabilities/delivery/service.test.ts` | 渲染可移植 prompt 和 fence |
-| E-L1026-04 | `src/capabilities/delivery/service.ts#executePrepare` | `tests/capabilities/delivery/service.test.ts` | 记录完整信封 |
-| E-L1026-05 | `src/capabilities/delivery/service.ts#prepareResult` | `tests/capabilities/delivery/service.test.ts` | 返回许可与 next |
+| E-DLV02-01 | `src/capabilities/delivery/decide.ts#deriveDeliveryDisposition` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome`（经公共切片入口执行此内部关系） | resolution 优先；必须处于 indeterminate |
+| E-DLV02-02 | `src/capabilities/delivery/decide.ts#resolutionDecision` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome`（经公共切片入口执行此内部关系） | accepted 必须引用已存在的落地记录 |
+| E-DLV02-03 | `src/capabilities/delivery/decide.ts#resolutionDecision` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome`（经公共切片入口执行此内部关系） | Controller 显式声明未落地并说明理由 |
+| E-DLV02-04 | `src/capabilities/delivery/decide.ts#deriveDeliveryDisposition` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome`（经公共切片入口执行此内部关系） | 无 resolution 时查 promptDigest 匹配 |
+| E-DLV02-05 | `src/capabilities/delivery/decide.ts#deriveDeliveryDisposition` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#landFixturePrompt`（经公共切片入口执行此内部关系） | 目标会话落地记录可证明 accepted |
+| E-DLV02-06 | `src/capabilities/delivery/decide.ts#deriveDeliveryDisposition` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome`（经公共切片入口执行此内部关系） | 未匹配 hook 才检查发送声明与 Profile |
+| E-DLV02-07 | `src/capabilities/delivery/decide.ts#deriveDeliveryDisposition` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome`（经公共切片入口执行此内部关系） | failed-before-send；不允许从 indeterminate 隐式降级 |
+| E-DLV02-08 | `src/capabilities/delivery/decide.ts#sendReturnProvesLanding` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome`（经公共切片入口执行此内部关系） | project-thread 型发送成功且 evidenceDigest 非空 |
+| E-DLV02-09 | `src/capabilities/delivery/decide.ts#deriveDeliveryDisposition` | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome`（经公共切片入口执行此内部关系） | 其余首次记录不确定；后续缺证据则拒绝 |
 
-## 落地证据与不确定结果
+readback 状态与证据摘要被保留为观察，不能单独证明投递落地。静默从当前代际第一条 indeterminate 事件记录时间起算；超阈值增加 blocker，不自动判失败或自动重发。已提交 rejected 但声明释放失败时，同幂等键回放补释放，仅释放仍匹配该 fence 的声明。
 
-```mermaid
-sequenceDiagram
-  accTitle: 落地证据与不确定结果
-  accDescr: 落地证据与不确定结果；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant agent as Agent / 宿主
-  participant slice as 投递切片
-  participant hook as 宿主观察
-  participant decide as 处置决定
-  participant event as 事件流
-  agent->>slice: E-L1027-01 回交发送尝试和回读
-  slice->>hook: E-L1027-02 读取目标会话的 UserPromptSubmit
-  slice->>decide: E-L1027-03 核 prompt 摘要或 Codex 发送返回
-  slice->>event: E-L1027-04 追加 accepted / indeterminate / rejected
-  alt 明确 rejected-before-send
-  slice->>slice: E-L1027-05 提交观察后释放精确声明
-  end
-```
+## 外层观察读取的独立证据分支
 
-### 本图术语说明
+`src/capabilities/delivery/service.ts#observedOutcomeDecision` 包围上图纯决定：完整查询走通常优先级；只在 observation-query-incomplete / observation-query-unavailable 时用空 records 重算。重算结果必须 accepted=true 且 evidenceKind 为 host-send-return 或 controller-resolution 才继续。
 
-| 术语 | 本图含义 |
-| --- | --- |
-| hook | 宿主回交的会话/提示提交/完成观察记录，保存在宿主本地根。 |
-| claim | 端点注意力及产品检出的工作声明，释放必须匹配当前令牌。 |
-| commit | 一次不可变事件提交批；文件槽位以预期修订防止并发覆盖。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
+| hook 读取异常时的输入 | 当前结果 | 覆盖边界 |
 | --- | --- | --- |
-| agent | Agent / 用户 / 外部效果或条件视图 | Agent / 宿主 |
-| slice | `src/capabilities/delivery/service.ts` | 投递切片 |
-| hook | `src/kernel/hook-observations.ts` | 宿主观察 |
-| decide | `src/capabilities/delivery/decide.ts` | 处置决定 |
-| event | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts` | 事件流 |
+| project-thread、sent、evidenceDigest 非空 | 独立发送回执仍可记录 accepted | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome` 的 unavailable 通道回执用例 |
+| 当前 indeterminate，Controller 明确解决为 rejected-before-send | 记录拒发并释放声明 | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome` 的坏 hook 通道显式解决用例 |
+| 仅 failed-before-send 声明、unknown 或无独立依据 | 保留原查询错误，不追加结局 | 间接覆盖：`tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome` 的截断和不可用停止用例 |
+| resolution=accepted | 空 records 无法证明 hookRecordId，不能回退接受 | 未覆盖：本轮未确认专门的异常查询加 accepted resolution 服务负例；纯决定仍强制证据存在 |
+| aborted 或其他 I/O 错误 | 原样上抛，不使用回退 | 未覆盖：这张图未声明取消/其他错误的逐分支服务回归 |
 
-### 本图边级证据
+现有独立证据回退回归直接覆盖 unavailable，incomplete 只验证无独立证据时停止；两者共享同一生产分支，但不能据此把全部交叉组合标成已跑测试。
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1027-01 | `src/capabilities/delivery/service.ts#executeRecordDeliveryOutcomeRequest` | `tests/capabilities/delivery/service.test.ts` | 回交发送尝试和回读 |
-| E-L1027-02 | `src/capabilities/delivery/service.ts#sessionRecords` | `tests/capabilities/delivery/service.test.ts` | 读取目标会话的 UserPromptSubmit |
-| E-L1027-03 | `src/capabilities/delivery/decide.ts#deriveDeliveryDisposition` | `tests/capabilities/delivery/service.test.ts` | 核 prompt 摘要或 Codex 发送返回 |
-| E-L1027-04 | `src/capabilities/delivery/service.ts#executeOutcome` | `tests/capabilities/delivery/service.test.ts` | 追加 accepted / indeterminate / rejected |
-| E-L1027-05 | `src/capabilities/delivery/service.ts#releaseClaimFor` | `tests/capabilities/delivery/service.test.ts` | 提交观察后释放精确声明 |
+prepare、record-outcome 和 rearm 都通过共享工作区作用域进入；读取目标观察仍必须完整。工作区协议/维护保留错误在开业务上下文之前拒绝，不能误归类为“宿主拒绝发送”。request signal 现在参与准入等待。
 
-## 原信封的 rearm 与回调重发
+## 继续阅读
 
-```mermaid
-sequenceDiagram
-  accTitle: 原信封的 rearm 与回调重发
-  accDescr: 原信封的 rearm 与回调重发；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant controller as Controller
-  participant slice as 投递切片
-  participant decide as 阶段和上限检查
-  participant event as 事件流
-  controller->>slice: E-L1028-01 rearm 原 deliveryId
-  slice->>decide: E-L1028-02 仅 rejected 代际且上限未用尽
-  slice->>event: E-L1028-03 同 prompt，新代际与 fence
-  opt 回调静默且尚未送达
-  slice->>event: E-L1028-04 回调重发指向当前 Controller 绑定
-  end
-```
-
-### 本图术语说明
-
-| 术语 | 本图含义 |
-| --- | --- |
-| permit | 供 Agent 使用的投递内容与围栏；重放不是新一次发送授权。 |
-| fence | claimId、claimDigest 与流修订构成的准入令牌。 |
-| 回调 | 结果导入返回的 wake-controller 传输内容；送达不等于接受结果。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| controller | Agent / 用户 / 外部效果或条件视图 | Controller |
-| slice | `src/capabilities/delivery/service.ts` | 投递切片 |
-| decide | `src/capabilities/delivery/decide.ts` | 阶段和上限检查 |
-| event | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts` | 事件流 |
-
-### 本图边级证据
-
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1028-01 | `src/capabilities/delivery/service.ts#executeRearmDeliveryRequest` | `tests/capabilities/delivery/service.test.ts` | rearm 原 deliveryId |
-| E-L1028-02 | `src/capabilities/delivery/decide.ts#deriveRearmBlockers` | `tests/capabilities/delivery/service.test.ts` | 仅 rejected 代际且上限未用尽 |
-| E-L1028-03 | `src/capabilities/delivery/service.ts#executeRearm` | `tests/capabilities/delivery/service.test.ts` | 同 prompt，新代际与 fence |
-| E-L1028-04 | `src/capabilities/delivery/service.ts#executeCallbackReissue` | `tests/capabilities/result-review/service.test.ts` | 回调重发指向当前 Controller 绑定 |
-
-## 守卫、恢复与验证范围
-
-原信封最多三次 rearm，用尽后 prepare 新信封。回调重发另受落地、静默阈值及上限约束，不占用产品工作声明。
-
-涉及的测试与核验入口：
-
-- `tests/capabilities/delivery/service.test.ts`。
-- `tests/capabilities/result-review/service.test.ts`。
-
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[本专题总览](./README.md) · [文件导入](./file-dependencies.md) · [实际调用](./runtime-call-flow.md) · [逐文件审阅记录](../../plans/review-2026-10-03/demand-delivery.md) · [图谱入口](../README.md)

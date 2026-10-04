@@ -1,157 +1,127 @@
 ---
-diagramId: ts-observation-readme
-viewType: authority
-truthKind: current-code
-reviewDepth: L4
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:7695fb9e2fd4c0c914a9b8c01327e6433999669023d73bc3fc0ee02b16fd7683
-audience: [maintainer, reviewer]
+diagramId: ts-16-observation-overview
+viewType: vertical-slice
+truthKind: in-progress-worktree
+reviewDepth: L5
+verifiedAt: 2026-10-03
+baselineCommit: d8fafff33919c728e3a9b91ec04aa50ec5e07f0c
+testEvidence: anchored
+audience:
+  - maintainer
+  - reviewer
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
-testEvidence: anchored
 sourcePaths:
-  - src/capabilities/observation/contract.ts
   - src/capabilities/observation/decide.ts
   - src/capabilities/observation/service.ts
-  - src/entrypoints/claude-code-wakeflow-mcp.ts
-  - src/entrypoints/codex-wakeflow-mcp.ts
-  - src/entrypoints/wakeflow-public-mcp-catalog.ts
-  - src/governance/demand/demand-verify-gates.ts
-  - src/governance/observation/active-projection-facts.ts
-  - src/governance/observation/active-projection-refresh.ts
   - src/governance/observation/demand-archive-locator.ts
-  - src/governance/observation/observation-policy.ts
-  - src/governance/observation/repository-pointer-observation.ts
   - src/governance/observation/workspace-observation.ts
-  - src/governance/pod/pod-state.ts
-  - src/governance/pod/worktree-disposal.ts
-  - src/hosts/claude-code/claude-code-statusline-asset.ts
-  - src/hosts/claude-code/claude-code-statusline-asset-operation.ts
-  - src/hosts/claude-code/claude-code-statusline-settings-operation.ts
-  - src/kernel/active-projection.ts
-  - src/kernel/command-shell.ts
 schemaPaths:
-  - src/contracts/schemas/entrypoints/wakeflow-status-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-status-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-verify-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-verify-result.schema.json
 testPaths:
-  - tests/capabilities/observation/decide.test.ts
   - tests/capabilities/observation/service.test.ts
-  - tests/governance/observation/repository-pointer-observation.test.ts
-  - tests/governance/observation/workspace-observation.test.ts
-  - tests/hosts/claude-code/claude-code-statusline-asset.test.ts
-  - tests/kernel/active-projection.test.ts
-  - tests/scenarios/wakeflow-scenario-acceptance.test.ts
 refreshTriggers:
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
-  - docs/requirements/capabilities/09-observation-and-verification.md
+  - src/capabilities/observation/decide.ts
+  - src/capabilities/observation/service.ts
+  - src/governance/observation/demand-archive-locator.ts
+  - src/governance/observation/workspace-observation.ts
+sourceFingerprint: sha256:fd20a9aecfcb792b693e1e65e7654fac545626ba1bc7e9ce5b07e31246a0a2a5
 ---
 
-# Observation：一次全局观察、核验门与活动投影
+# Observation：一次观察、十五道门与知识边界
 
-observation 只读。两个公共工具 `wakeflow_status` 与 `wakeflow_verify` 走同一个内核命令外壳，对每个域各观察一次；总体状态、核验门、下一步动作和人读投影都是这次观察的派生结果，不新增任何业务权威。
+> 核验于 2026-10-03，基线 `d8fafff` 加当前未提交工作树。图表达实际源码分支，未提交实现标为进行中；不把开发阶段计划当作运行事实。来源与测试锚点按本文精确范围列出。
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
+Observation提供只读状态v2、严格核验v2和投影事实；请求仍为v1。一次工具调用只构造一份工作区观察，各域失败显式隔离；它不是跨目录原子快照，也不修改运行权威。status和verify各自读取，不共享跨调用token。
 
-## 一次观察如何派生状态、门与投影
+## 一次观察，多种只读输出
 
 ```mermaid
 flowchart TB
-  accTitle: 一次观察如何派生状态、门与投影
-  accDescr: 两个只读工具经内核外壳做一次逐域观察，再派生总体状态、核验门、下一步动作和人读投影；箭头区分当前代码步骤、返回事实与明确的条件。
-  tools["只读工具 status 与 verify"]
-  shell["内核命令外壳"]
-  observe["逐域一次观察"]
-  owners["各域读取器与耐久事实"]
-  overall["总体状态派生"]
-  gates["工作区核验门"]
-  actions["下一步动作投影"]
-  pages["活动投影页面"]
-  tools -->|"E-L1067-01 同一外壳解析、限根与脱敏"| shell
-  shell -->|"E-L1067-02 打开根与账本后只观察一次"| observe
-  observe -->|"E-L1067-03 逐域读取，失败隔离为 unavailable"| owners
-  observe -->|"E-L1067-04 maintenance 优先于 blocked、degraded、active、idle"| overall
-  observe -->|"E-L1067-05 事实转门：pass / fail / unavailable"| gates
-  observe -->|"E-L1067-06 动作去重、排序并上限 64"| actions
-  observe -->|"E-L1067-07 投影范围事实渲染人读页面"| pages
-  pages -->|"E-L1067-08 页面新鲜度回到门，不反向拥有事实"| gates
+  accTitle: 一次观察，多种只读输出
+  accDescr: 公共工具先打开配置和Ledger，再构造分域观察；状态输出和严格门集共享这次观察，verify仍做自己的只读复验。
+  a["status或verify公共执行器"]
+  c["Config快照＋Ledger根"]
+  o["observeWorkspace：full域观察"]
+  p["投影目标零写对比＋maintenance观察"]
+  s["status：公开视图、route、nextActions"]
+  v["verify：Config/layout/Demand门加读"]
+  g["15道工作区门＋汇总"]
+  n["repairsApplied固定false"]
+  a -->|"E-OBSMAIN-01 通用shell打开上下文"| c
+  c -->|"E-OBSMAIN-02 Config/ledger可打开才分域观察"| o
+  o -->|"E-OBSMAIN-03 同一事实渲染目标后只读比对"| p
+  p -->|"E-OBSMAIN-04 状态工具组装并限量"| s
+  p -->|"E-OBSMAIN-05 核验工具加读不写"| v
+  v -->|"E-OBSMAIN-06 压成纯gate facts"| g
+  g -->|"E-OBSMAIN-07 至少一门且全部pass才ok"| n
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| observation | 宿主或环境回传的事实；观察不等于验收，也不授权业务结论。 |
-| projection | 根据权威重建的视图，不反向决定事实。 |
-| gate | 核验门：对一项事实的只读复验结果，分 pass、fail、unavailable。 |
-| scope | 观察范围：`full` 含宿主与仓库指针，`projection` 只取渲染页面所需事实。 |
-| unavailable | 该域这次读不到；与 fail 分开计数，不冒充通过。 |
+| 分域观察 | observed/value与unavailable/issue分开；空列表不是缺席证明。 |
+| full | 含宿主Binding、hook、窗口投影、资产、仓库指针、归档评审。 |
+| projection | 省略瞬时宿主、仓库、归档事实；活动页面采用此范围。 |
+| 门 | pass/fail/unavailable；严格核验不实施修复。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| tools | `src/capabilities/observation/contract.ts#STATUS_TOOL_REGISTRATION` | 只读工具 status 与 verify |
-| shell | `src/kernel/command-shell.ts#runCommandShell` | 内核命令外壳 |
-| observe | `src/governance/observation/workspace-observation.ts#observeWorkspace` | 逐域一次观察 |
-| owners | `src/governance/observation/repository-pointer-observation.ts#observeRepositoryPointers` | 各域读取器与耐久事实 |
-| overall | `src/governance/observation/workspace-observation.ts#deriveOverallStatus` | 总体状态派生 |
-| gates | `src/capabilities/observation/decide.ts#deriveWorkspaceGates` | 工作区核验门 |
-| actions | `src/capabilities/observation/decide.ts#deriveNextActions` | 下一步动作投影 |
-| pages | `src/kernel/active-projection.ts#publishActiveProjection` | 活动投影页面 |
+| a | `src/capabilities/observation/service.ts#executeStatusRequest` | status或verify公共执行器 |
+| c | `src/capabilities/observation/service.ts#openContext` | Config快照＋Ledger根 |
+| o | `src/governance/observation/workspace-observation.ts#observeWorkspace` | observeWorkspace：full域观察 |
+| p | `src/capabilities/observation/service.ts#openContext` | 投影目标零写对比＋maintenance观察 |
+| s | `src/capabilities/observation/service.ts#assembleStatus` | status：公开视图、route、nextActions |
+| v | `src/capabilities/observation/service.ts#assembleVerify` | verify：Config/layout/Demand门加读 |
+| g | `src/capabilities/observation/decide.ts#deriveWorkspaceGates` | 15道工作区门＋汇总 |
+| n | `src/capabilities/observation/service.ts#assembleVerify` | repairsApplied固定false |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1067-01 | `src/capabilities/observation/service.ts#executeStatusRequest` | `tests/capabilities/observation/service.test.ts#executeStatusRequest` | 同一外壳解析、限根与脱敏 |
-| E-L1067-02 | `src/governance/observation/workspace-observation.ts#observeWorkspace` | `tests/governance/observation/workspace-observation.test.ts#observeWorkspace` | 打开根与账本后只观察一次 |
-| E-L1067-03 | `src/governance/observation/repository-pointer-observation.ts#observeRepositoryPointers` | `tests/governance/observation/repository-pointer-observation.test.ts#observeRepositoryPointers` | 逐域读取，失败隔离为 unavailable |
-| E-L1067-04 | `src/governance/observation/workspace-observation.ts#deriveOverallStatus` | `tests/governance/observation/workspace-observation.test.ts#deriveOverallStatus` | maintenance 优先于 blocked、degraded、active、idle |
-| E-L1067-05 | `src/capabilities/observation/decide.ts#deriveWorkspaceGates` | `tests/capabilities/observation/decide.test.ts#deriveWorkspaceGates` | 事实转门：pass / fail / unavailable |
-| E-L1067-06 | `src/capabilities/observation/decide.ts#deriveNextActions` | `tests/capabilities/observation/decide.test.ts#deriveNextActions` | 动作去重、排序并上限 64 |
-| E-L1067-07 | `src/governance/observation/active-projection-facts.ts#buildActiveProjectionFacts` | 间接覆盖：`tests/scenarios/wakeflow-scenario-acceptance.test.ts#scenarioActiveProjection`（没有测试直接导入 active-projection-facts.ts；渲染半段另见 `tests/kernel/active-projection.test.ts#renderActiveProjectionFiles`，事实由测试手工构造） | 投影范围事实渲染人读页面 |
-| E-L1067-08 | `src/capabilities/observation/decide.ts#projectionFreshness` | `tests/capabilities/observation/decide.test.ts#projectionFreshness` | 页面新鲜度回到门，不反向拥有事实 |
+| E-OBSMAIN-01 | `src/capabilities/observation/service.ts#executeStatusRequest` | `tests/capabilities/observation/service.test.ts#executeStatusRequest` | 通用shell打开上下文 |
+| E-OBSMAIN-02 | `src/capabilities/observation/service.ts#openContext` | `tests/capabilities/observation/service.test.ts#executeStatusRequest` | Config/ledger可打开才分域观察 |
+| E-OBSMAIN-03 | `src/capabilities/observation/service.ts#openContext` | `tests/capabilities/observation/service.test.ts#executeStatusRequest` | 同一事实渲染目标后只读比对 |
+| E-OBSMAIN-04 | `src/capabilities/observation/service.ts#assembleStatus` | `tests/capabilities/observation/service.test.ts#executeStatusRequest` | 状态工具组装并限量 |
+| E-OBSMAIN-05 | `src/capabilities/observation/service.ts#assembleVerify` | `tests/capabilities/observation/service.test.ts#executeVerifyRequest` | 核验工具加读不写 |
+| E-OBSMAIN-06 | `src/capabilities/observation/service.ts#assembleVerify` | `tests/capabilities/observation/service.test.ts#executeVerifyRequest` | 压成纯gate facts |
+| E-OBSMAIN-07 | `src/capabilities/observation/service.ts#assembleVerify` | `tests/capabilities/observation/service.test.ts#executeVerifyRequest` | 至少一门且全部pass才ok |
 
-## 权威、投影与观察的分责
+## 十五道工作区门的实际含义
 
-| 角色 | 本切片中的对象 | 边界 |
-| --- | --- | --- |
-| 权威 | 配置快照、Demand 事件流、需求看板、工作声明、绑定与回执 | observation 只读它们，任何一个都不由本切片写入 |
-| 投影 | `overall`、`nextActions`、核验门、`.wakeflow-active` 页面 | 全部可由权威重建；页面只是导航 |
-| 观察 | 宿主 hook 通道、仓库指针文件、宿主资产与设置 | 观察到位不等于验收，读不到记为 unavailable |
-| 策略 | `src/governance/observation/observation-policy.ts#WAKEFLOW_OBSERVATION_POLICY` | 结果回报生效常量本身，不在文档里另写一份 |
+| 门 | pass／fail／unavailable要点 |
+| --- | --- |
+| config-authority | 复读digest一致才pass；改变fail；读不出unavailable |
+| local-layout | 静态reconcile预览ready且无步骤，加active layout current；维护残留会阻塞 |
+| ledger-layout | requirements/transactions/archives固定容器current |
+| board-consistency | skipped、索引漂移、claimed无根为问题；Demand集合不可读则unavailable |
+| demand-root-audit | 活动Demand自身审计汇总；部分读不出不算健康 |
+| append-candidates-clear | append候选与非活动Demand生命周期日志必须清空 |
+| evidence-integrity | Demand验证提供的证据完整性结果；不因零记录绕过不可读域 |
+| work-claims | orphan或不可读声明失败；无Demand集合无法判断orphan |
+| host-hook-channel | 错模式/skipped失败、不可读unavailable；当前host目录缺席或0记录仅code提示 |
+| window-identity | 未登记是pass并提示数量；未观察才unavailable |
+| window-runtime-projection | Config＋Binding重算与每宿主文档一致；stale/missing/unsafe失败 |
+| pod-execution-location | creating待登记、closing待处置只提示；主仓库不可读unavailable |
+| host-settings-assets | 当前宿主资产精确字节与设置键一致；同伴宿主不适用 |
+| active-projection | stale/missing/非手写unsafe失败；手写目标阻止整轮重写但门pass/handwritten |
+| runtime-artifact | 当前服务启动/磁盘摘要不同fail；已注入adapter但任一摘要缺失，或已绑定窗口runtime无关联证据，均unavailable；无adapter且无已绑定窗口才not-applicable |
 
-“测试 / 核验”列按 `testEvidence: anchored` 约定书写：锚定的符号必须在该测试文件里真实出现，否则写明 `间接覆盖：` 或 `未覆盖：`。在本基线，`src/governance/observation/active-projection-facts.ts` 与 `src/governance/observation/active-projection-refresh.ts` 没有任何测试直接导入，只在场景套件里被跑到；工作树里并行任务正在补直接用例，落地后应重新锚定。
+门的pass不等于所有窗口已启动、所有页面可重写或真实宿主会话测试通过。具体分支见`src/capabilities/observation/decide.ts#deriveWorkspaceGates`及下钻。
 
-`wakeflow_status` 带 `demandId` 时附当前 Route 或归档回执，因此旧的 `wakeflow_inspect_demand_route` 已在本基线删除；`wakeflow_verify` 带 `demandId` 时复用 Demand 切片的同一份门。
+## 当前知识边界
 
-## 宿主接缝：Claude Code 状态栏
+Git观察仅读指针，不spawn Git；“已合并”只可推断为目标分支尖端等于另一当前分支HEAD，不能判断祖先提交。branches-incomplete保留未合并条目并标repositoryObserved=false。归档补读只针对仍在配置的worktree Pod，清单最多1024份、评审snapshot最多64份，skipped和unreadable分别可见。
 
-状态栏脚本的字节与摘要在 TypeScript 中生成，由两个维护操作安装：`claude-statusline-asset:install` 写入 0600 的资产，`claude-statusline-settings:install` 只改 `.claude/settings.local.json` 的单个键并保留其它键；设置读不出时该项贡献被阻塞而不是被覆盖。资产只打印一行“模型 · Pod · 窗口”，不打印工作区根或会话标识。Codex 没有对应资产。
+`src/governance/observation/demand-archive-locator.ts#locateLatestDemandArchive`只校验公开摘要字段，不是完整归档包验收器。入口Config或Ledger根打开失败会整体拒绝，不能声称所有错误都分域降级。
 
-## 守卫、恢复与验证范围
+[运行身份与观察器证据](./runtime-evidence.md) · [活动投影写入与恢复](./projection-recovery.md) · [Hook完整性](../11-kernel/hook-history.md)
 
-`status` 与 `verify` 不追加事件、不改配置、不创建会话，也不代表 Controller 验收。总体状态里 `maintenance` 表示布局本身需要维护，应先走维护事务再读其余结论；`blocked` 来自 Demand Route 处置或仍在 closing 的 Pod。活动投影是导航面：任一目标不安全时整轮零写，退休只针对每个文件都带标记的页目录。本轮图谱未复跑根测试与场景套件，实际宿主状态栏也未在真实会话中验证。
+## 继续阅读
 
-涉及的测试与核验入口：
-
-- `tests/capabilities/observation/decide.test.ts`。
-- `tests/capabilities/observation/service.test.ts`。
-- `tests/governance/observation/repository-pointer-observation.test.ts`。
-- `tests/governance/observation/workspace-observation.test.ts`。
-- `tests/hosts/claude-code/claude-code-statusline-asset.test.ts`。
-- `tests/kernel/active-projection.test.ts`。
-
-## 下钻与相关视图
-
-- [文件直接导入](./file-dependencies.md)
-- [运行调用与恢复](./runtime-call-flow.md)
-- [公共 MCP 与宿主接缝](../09-public-mcp-host-seams/README.md)
-- [内核](../11-kernel/README.md)
-- [Pod 执行环境](../15-pod/README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[文件导入](./file-dependencies.md) · [运行分支](./runtime-call-flow.md) · [本模块总览](./README.md) · [全局入口](../README.md) · [本轮增量审阅](../../plans/review-2026-10-03/coordination.md) · [前轮完整审阅](../../plans/review-2026-10-02/coordination-evidence.md)

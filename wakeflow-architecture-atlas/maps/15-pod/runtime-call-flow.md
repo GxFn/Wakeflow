@@ -1,249 +1,167 @@
 ---
-diagramId: ts-pod-runtime-call-flow
-viewType: call-flow
-truthKind: current-code
-reviewDepth: L4
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:3081db1470e8627d0b955a68cd60b107345f5705b42d64bb6174fa08ed6043c8
-audience: [maintainer, reviewer]
+diagramId: ts-15-pod-runtime-call-flow
+viewType: state
+truthKind: in-progress-worktree
+reviewDepth: L5
+verifiedAt: 2026-10-03
+baselineCommit: d8fafff33919c728e3a9b91ec04aa50ec5e07f0c
+testEvidence: anchored
+audience:
+  - maintainer
+  - reviewer
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
 sourcePaths:
-  - src/capabilities/endpoint/*.ts
-  - src/capabilities/endpoint/service.ts
-  - src/capabilities/pod/*.ts
   - src/capabilities/pod/decide.ts
   - src/capabilities/pod/service.ts
-  - src/configuration/*.ts
-  - src/configuration/wakeflow-config-authority-replacement.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/governance/delivery/*.ts
-  - src/contracts/generated/governance/demand/*.ts
-  - src/contracts/generated/governance/evidence/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/governance/lifecycle/*.ts
-  - src/contracts/generated/governance/result/*.ts
-  - src/contracts/generated/governance/review/*.ts
-  - src/contracts/generated/governance/tasking/*.ts
-  - src/contracts/generated/governance/testing/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/generated/workspace/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/artifact/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/event-sourcing/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/git/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/delivery/*.ts
-  - src/governance/demand/*.ts
-  - src/governance/demand/event-sourcing/*.ts
-  - src/governance/demand/model/*.ts
-  - src/governance/demand/publication/*.ts
-  - src/governance/evidence/*.ts
-  - src/governance/ledger/*.ts
-  - src/governance/lifecycle/*.ts
-  - src/governance/pod/*.ts
-  - src/governance/result/*.ts
-  - src/governance/review/*.ts
-  - src/governance/tasking/*.ts
-  - src/governance/testing/*.ts
-  - src/kernel/*.ts
-  - src/kernel/event-stream/*.ts
-  - src/kernel/pod-worktree-receipts.ts
-  - src/workspace/*.ts
-  - src/workspace/window-runtime/*.ts
+  - src/governance/observation/active-projection-refresh.ts
+  - src/governance/pod/pod-state.ts
+  - src/governance/pod/worktree-disposal.ts
+  - src/kernel/pod-mutation-lock.ts
 schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-pod-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-pod-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/git-object-id.schema.json
-  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
-  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
-  - src/contracts/schemas/governance/demand/demand-authority.schema.json
-  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
-  - src/contracts/schemas/governance/demand/demand-identity.schema.json
-  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
-  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
-  - src/contracts/schemas/governance/result/target-result.schema.json
-  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
-  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
-  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
-  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
-  - src/contracts/schemas/governance/tasking/task-package.schema.json
-  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-  - src/contracts/schemas/workspace/window-host-binding.schema.json
-  - src/contracts/schemas/workspace/window-runtime-registered-projection.schema.json
-  - src/contracts/schemas/workspace/window-runtime-unregistered-projection.schema.json
+  - src/contracts/schemas/configuration/wakeflow-config.schema.json
 testPaths:
+  - tests/capabilities/demand/pod-concurrency.test.ts
+  - tests/capabilities/pod/decide.test.ts
   - tests/capabilities/pod/service.test.ts
 refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+  - src/capabilities/pod/decide.ts
+  - src/capabilities/pod/service.ts
+  - src/governance/observation/active-projection-refresh.ts
+  - src/governance/pod/pod-state.ts
+  - src/governance/pod/worktree-disposal.ts
+  - src/kernel/pod-mutation-lock.ts
+sourceFingerprint: sha256:d670be080c0afb44c1be7da3db11e3232488dc57c5bf9b4c167f6a6e971a5228
 ---
 
-# Pod：创建、就绪与两段关闭
+# Pod：派生状态、两段关闭与Pod锁
 
-状态是派生结果，创建配置不代表实际窗口已经可用。
+> 核验于 2026-10-03，基线 `d8fafff` 加当前未提交工作树。图表达实际源码分支，未提交实现标为进行中；不把开发阶段计划当作运行事实。来源与测试锚点按本文精确范围列出。
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## 创建与 worktree 登记
+## 执行环境状态的纯派生
 
 ```mermaid
-sequenceDiagram
-  accTitle: 创建与 worktree 登记
-  accDescr: 创建与 worktree 登记；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant controller as main Controller / Agent
-  participant pod as Pod 切片
-  participant config as Config CAS
-  participant endpoint as 端点切片
-  participant receipt as worktree 回执
-  controller->>pod: E-L1065-01 create preview/name/idempotencyKey
-  controller->>pod: E-L1065-02 同意图与摘要 apply
-  pod->>config: E-L1065-03 追加完整窗口组和 worktree 意图
-  controller->>endpoint: E-L1065-04 宿主创建后登记会话和 porcelain
-  endpoint->>receipt: E-L1065-05 非主检出、common-dir、双向 gitdir 与 HEAD 核对
-  pod-->>controller: E-L1065-06 由当前事实派生 creating / ready
+flowchart TB
+  accTitle: 执行环境状态的纯派生
+  accDescr: open或closing配置与当前绑定、回执和检出事实计算四种视图状态，视图转换本身不写配置。
+  a["Config lifecycle"]
+  o["open：所有窗口已绑定"]
+  r["每worktree回执同binding代且检出在"]
+  ready["ready：可以接工作"]
+  creating["creating：等待登记或有效回执"]
+  cl["closing：是否仍有绑定或检出"]
+  busy["closing：等待外部处置"]
+  done["closed：视图已清空，配置仍待移除"]
+  a -->|"E-PODSTATE-01 lifecycle为open"| o
+  o -->|"E-PODSTATE-02 全部窗口绑定后检查回执"| r
+  r -->|"E-PODSTATE-03 全部条件满足"| ready
+  o -->|"E-PODSTATE-04 缺任一绑定"| creating
+  r -->|"E-PODSTATE-05 缺回执、代际不符或检出缺失"| creating
+  a -->|"E-PODSTATE-06 lifecycle为closing"| cl
+  cl -->|"E-PODSTATE-07 任一绑定或检出仍在"| busy
+  cl -->|"E-PODSTATE-08 两者都空"| done
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| Pod | 完整窗口组与每仓执行位置；main 是 primary Pod。 |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-| hook | 宿主回交的会话/提示提交/完成观察记录，保存在宿主本地根。 |
+| 派生 | 这些节点是视图分类，不是额外持久状态机。 |
+| 同代 | receipt.bindingId等于worktree目标窗口当前Binding。 |
+| closed | 还存在配置的closing Pod已经可进行第二段close；移除后结果pod为null。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| controller | Agent / 用户 / 外部效果或条件视图 | main Controller / Agent |
-| pod | `src/capabilities/pod/service.ts` | Pod 切片 |
-| config | `src/configuration/wakeflow-config-authority-replacement.ts` | Config CAS |
-| endpoint | `src/capabilities/endpoint/service.ts` | 端点切片 |
-| receipt | `src/kernel/pod-worktree-receipts.ts` | worktree 回执 |
+| a | `src/governance/pod/pod-state.ts#derivePodState` | Config lifecycle |
+| o | `src/governance/pod/pod-state.ts#derivePodState` | open：所有窗口已绑定 |
+| r | `src/governance/pod/pod-state.ts#worktreeReady` | 每worktree回执同binding代且检出在 |
+| ready | `src/governance/pod/pod-state.ts#derivePodState` | ready：可以接工作 |
+| creating | `src/governance/pod/pod-state.ts#derivePodState` | creating：等待登记或有效回执 |
+| cl | `src/governance/pod/pod-state.ts#derivePodState` | closing：是否仍有绑定或检出 |
+| busy | `src/governance/pod/pod-state.ts#derivePodState` | closing：等待外部处置 |
+| done | `src/governance/pod/pod-state.ts#derivePodState` | closed：视图已清空，配置仍待移除 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1065-01 | `src/capabilities/pod/service.ts#planCreate` | `tests/capabilities/pod/service.test.ts` | create preview/name/idempotencyKey |
-| E-L1065-02 | `src/capabilities/pod/service.ts#executePodRequest` | `tests/capabilities/pod/service.test.ts` | 同意图与摘要 apply |
-| E-L1065-03 | `src/capabilities/pod/service.ts#applyCreate` | `tests/capabilities/pod/service.test.ts` | 追加完整窗口组和 worktree 意图 |
-| E-L1065-04 | `src/capabilities/endpoint/service.ts#executeWindowBindingRequest` | `tests/capabilities/pod/service.test.ts` | 宿主创建后登记会话和 porcelain |
-| E-L1065-05 | `src/kernel/pod-worktree-receipts.ts#admitPodWorktreeObservation` | `tests/capabilities/pod/service.test.ts` | 非主检出、common-dir、双向 gitdir 与 HEAD 核对 |
-| E-L1065-06 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/service.test.ts` | 由当前事实派生 creating / ready |
+| E-PODSTATE-01 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/decide.test.ts#derivePodState` | lifecycle为open |
+| E-PODSTATE-02 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/decide.test.ts#derivePodState` | 全部窗口绑定后检查回执 |
+| E-PODSTATE-03 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/decide.test.ts#derivePodState` | 全部条件满足 |
+| E-PODSTATE-04 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/decide.test.ts#derivePodState` | 缺任一绑定 |
+| E-PODSTATE-05 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/decide.test.ts#derivePodState` | 缺回执、代际不符或检出缺失 |
+| E-PODSTATE-06 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/decide.test.ts#derivePodState` | lifecycle为closing |
+| E-PODSTATE-07 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/decide.test.ts#derivePodState` | 任一绑定或检出仍在 |
+| E-PODSTATE-08 | `src/governance/pod/pod-state.ts#derivePodState` | `tests/capabilities/pod/decide.test.ts#derivePodState` | 两者都空 |
 
-## 归档后两段关闭
+## 两段关闭与并发复验
 
 ```mermaid
-sequenceDiagram
-  accTitle: 归档后两段关闭
-  accDescr: 归档后两段关闭；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant controller as main Controller / Agent
-  participant pod as Pod 切片
-  participant config as 配置权威
-  participant host as 宿主会话与检出
-  participant endpoint as 绑定和回执
-  controller->>pod: E-L1066-01 close：已无活动 Demand，提交分支处置
-  pod->>config: E-L1066-02 第一段保存 closing
-  controller->>host: E-L1066-03 由宿主关闭会话并处置检出
-  controller->>endpoint: E-L1066-04 显式退役绑定
-  controller->>pod: E-L1066-05 同 close 意图再次 preview/apply
-  pod->>config: E-L1066-06 绑定与检出均消失后移除 Pod
-  pod->>endpoint: E-L1066-07 只退休 Wakeflow 自己的回执
+flowchart TB
+  accTitle: 两段关闭与并发复验
+  accDescr: 第一段只记录closing及分支处置，第二段要求窗口和检出全清；apply先进入工作区exclusive，再在Pod短锁内复验。
+  a["close intent→planClose"]
+  b["open：非primary、无活动Demand、处置齐全"]
+  c["closing：无绑定且回执检出不在"]
+  l["工作区exclusive内：applyPod短锁"]
+  v["重验Config与新计划digest"]
+  first["第一段：Config记closing＋branches"]
+  last["第二段：Config移除Pod与窗口"]
+  r["退役自有投影和回执目录"]
+  a -->|"E-PODCLOSE-01 尚未closing用第一段准入"| b
+  a -->|"E-PODCLOSE-02 已closing用第二段准入"| c
+  b -->|"E-PODCLOSE-03 ready计划允许apply"| l
+  c -->|"E-PODCLOSE-04 ready计划允许apply"| l
+  l -->|"E-PODCLOSE-05 锁内重读占用并重算计划"| v
+  v -->|"E-PODCLOSE-06 close-request分支"| first
+  v -->|"E-PODCLOSE-07 close-complete分支"| last
+  last -->|"E-PODCLOSE-08 只清Wakeflow自有记录"| r
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| Pod | 完整窗口组与每仓执行位置；main 是 primary Pod。 |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-| host | Codex 或 Claude Code；真实会话动作由 Agent 调用宿主完成。 |
+| 分支处置 | Controller报告merged或abandoned；不通过此工具执行Git合并。 |
+| 两段关闭 | 中间由Agent退役窗口并处置检出；不能把这个等待画成一次锁内操作。 |
+| 并发复验 | Pod配置变更的exclusive阻挡shared运行；内部Pod锁再复验占用，不代表跨Pod配置变更可绕过exclusive。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| controller | Agent / 用户 / 外部效果或条件视图 | main Controller / Agent |
-| pod | `src/capabilities/pod/service.ts` | Pod 切片 |
-| config | `src/configuration/wakeflow-config-authority-replacement.ts` | 配置权威 |
-| host | Agent / 用户 / 外部效果或条件视图 | 宿主会话与检出 |
-| endpoint | `src/capabilities/endpoint/service.ts` | 绑定和回执 |
+| a | `src/capabilities/pod/service.ts#planClose` | close intent→planClose |
+| b | `src/capabilities/pod/decide.ts#deriveCloseRequestBlockers` | open：非primary、无活动Demand、处置齐全 |
+| c | `src/capabilities/pod/decide.ts#deriveCloseCompleteBlockers` | closing：无绑定且回执检出不在 |
+| l | `src/capabilities/pod/service.ts#applyPod` | exclusive范围内的Pod短锁 |
+| v | `src/capabilities/pod/service.ts#applyPod` | 重验Config与新计划digest |
+| first | `src/capabilities/pod/service.ts#applyCloseRequest` | 第一段：Config记closing＋branches |
+| last | `src/capabilities/pod/service.ts#applyCloseComplete` | 第二段：Config移除Pod与窗口 |
+| r | `src/capabilities/pod/service.ts#applyCloseComplete` | 退役自有投影和回执目录 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1066-01 | `src/capabilities/pod/decide.ts#deriveCloseRequestBlockers` | `tests/capabilities/pod/service.test.ts` | close：已无活动 Demand，提交分支处置 |
-| E-L1066-02 | `src/capabilities/pod/service.ts#applyCloseRequest` | `tests/capabilities/pod/service.test.ts` | 第一段保存 closing |
-| E-L1066-03 | `src/capabilities/pod/service.ts#planClose` | `tests/capabilities/pod/service.test.ts` | 由宿主关闭会话并处置检出 |
-| E-L1066-04 | `src/capabilities/endpoint/service.ts#applyDecommission` | `tests/capabilities/pod/service.test.ts` | 显式退役绑定 |
-| E-L1066-05 | `src/capabilities/pod/service.ts#executePodRequest` | `tests/capabilities/pod/service.test.ts` | 同 close 意图再次 preview/apply |
-| E-L1066-06 | `src/capabilities/pod/service.ts#applyCloseComplete` | `tests/capabilities/pod/service.test.ts` | 绑定与检出均消失后移除 Pod |
-| E-L1066-07 | `src/kernel/pod-worktree-receipts.ts#retirePodReceipts` | `tests/capabilities/pod/service.test.ts` | 只退休 Wakeflow 自己的回执 |
+| E-PODCLOSE-01 | `src/capabilities/pod/service.ts#planClose` | `tests/capabilities/pod/service.test.ts#executePodRequest` | 尚未closing用第一段准入 |
+| E-PODCLOSE-02 | `src/capabilities/pod/service.ts#planClose` | `tests/capabilities/pod/service.test.ts#executePodRequest` | 已closing用第二段准入 |
+| E-PODCLOSE-03 | `src/capabilities/pod/service.ts#executePodRequest` | `tests/capabilities/pod/service.test.ts#executePodRequest` | ready计划允许apply |
+| E-PODCLOSE-04 | `src/capabilities/pod/service.ts#executePodRequest` | `tests/capabilities/pod/service.test.ts#executePodRequest` | ready计划允许apply |
+| E-PODCLOSE-05 | `src/capabilities/pod/service.ts#applyPod` | `tests/capabilities/demand/pod-concurrency.test.ts#executePodRequest` | 锁内重读占用并重算计划 |
+| E-PODCLOSE-06 | `src/capabilities/pod/service.ts#applyPodLocked` | `tests/capabilities/pod/service.test.ts#executePodRequest` | close-request分支 |
+| E-PODCLOSE-07 | `src/capabilities/pod/service.ts#applyPodLocked` | `tests/capabilities/pod/service.test.ts#executePodRequest` | close-complete分支 |
+| E-PODCLOSE-08 | `src/capabilities/pod/service.ts#applyCloseComplete` | `tests/capabilities/pod/service.test.ts#executePodRequest` | 只清Wakeflow自有记录 |
 
-## 守卫、恢复与验证范围
+## recover与残余边界
 
-primary 不可关闭。有活动 Demand、未交代分支、剩余绑定或仍存在检出时阻塞。recover 只对账过期或孤儿回执；全局 Pod 状态视图与残留报告已由 observation 的 `wakeflow_status` 读取，关闭结果另附 worktree 处置建议供 Agent 执行。
+`src/capabilities/pod/service.ts#recoverPod`只做回执对账：配置无Pod时清孤儿私有目录；仍有Pod时退休检出已消失或bindingId不同代的回执。它不恢复配置事务，不创建/删除实际worktree；recover外层现在也进入工作区exclusive，但仍没有额外包入`src/kernel/pod-mutation-lock.ts#withPodMutation`或`src/governance/observation/active-projection-refresh.ts#afterMutationRefresh`。图只对apply声明内层Pod短锁与活动投影刷新。
 
-涉及的测试与核验入口：
+`src/governance/pod/worktree-disposal.ts#worktreeDisposalGuidance`按宿主profile的worktree启动方式及登记时locked标记给unlock与remove建议，路径做POSIX引用和512字符限制。输出是建议文本；被截断的异常长路径需Agent从真实回执核对后执行。
 
-- `tests/capabilities/pod/service.test.ts`。
+并发测试区分两层：普通Demand创建使用shared并按Pod占用锁，同Pod竞争被pod-busy或plan-drift拒绝，不同Pod的Demand创建仍可并行；Pod工具改配置使用exclusive，需要等待在途shared操作。
 
-## 下钻与相关视图
+## 继续阅读
 
-- [本专题总览](./README.md)
-- [只读观察与核验](../16-observation/README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[文件导入](./file-dependencies.md) · [运行分支](./runtime-call-flow.md) · [本模块总览](./README.md) · [全局入口](../README.md) · [本轮增量审阅](../../plans/review-2026-10-03/coordination.md) · [前轮完整审阅](../../plans/review-2026-10-02/coordination-evidence.md)

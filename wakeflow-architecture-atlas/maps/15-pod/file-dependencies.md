@@ -1,225 +1,134 @@
 ---
-diagramId: ts-pod-file-dependencies
+diagramId: ts-15-pod-file-dependencies
 viewType: file-dependency
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L3
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:c183d75ab5fcfd3482374e4ddeb38c2aa58f0a24cbbc97443537dff661bce479
-audience: [maintainer, reviewer]
+verifiedAt: 2026-10-03
+baselineCommit: d8fafff33919c728e3a9b91ec04aa50ec5e07f0c
+testEvidence: anchored
+audience:
+  - maintainer
+  - reviewer
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
 sourcePaths:
-  - src/capabilities/endpoint/*.ts
-  - src/capabilities/endpoint/service.ts
-  - src/capabilities/pod/*.ts
+  - src/capabilities/pod/contract.ts
   - src/capabilities/pod/decide.ts
   - src/capabilities/pod/service.ts
-  - src/configuration/*.ts
   - src/configuration/wakeflow-config-authority-replacement.ts
-  - src/configuration/wakeflow-config-authority-snapshot.ts
-  - src/configuration/wakeflow-config-v3.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/governance/delivery/*.ts
-  - src/contracts/generated/governance/demand/*.ts
-  - src/contracts/generated/governance/evidence/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/governance/lifecycle/*.ts
-  - src/contracts/generated/governance/result/*.ts
-  - src/contracts/generated/governance/review/*.ts
-  - src/contracts/generated/governance/tasking/*.ts
-  - src/contracts/generated/governance/testing/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/generated/workspace/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/artifact/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/event-sourcing/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/git/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/delivery/*.ts
-  - src/governance/demand/*.ts
-  - src/governance/demand/event-sourcing/*.ts
-  - src/governance/demand/model/*.ts
-  - src/governance/demand/publication/*.ts
-  - src/governance/evidence/*.ts
-  - src/governance/ledger/*.ts
-  - src/governance/lifecycle/*.ts
-  - src/governance/result/*.ts
-  - src/governance/review/*.ts
-  - src/governance/tasking/*.ts
-  - src/governance/testing/*.ts
-  - src/kernel/*.ts
-  - src/kernel/event-stream/*.ts
-  - src/kernel/layout.ts
+  - src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts
+  - src/governance/demand/publication/demand-active-guard.ts
+  - src/governance/observation/active-projection-refresh.ts
+  - src/governance/pod/pod-state.ts
+  - src/governance/pod/worktree-disposal.ts
+  - src/kernel/pod-mutation-lock.ts
   - src/kernel/pod-worktree-receipts.ts
-  - src/kernel/work-claims.ts
-  - src/workspace/*.ts
-  - src/workspace/window-runtime/*.ts
+  - src/kernel/publication-transaction.ts
+  - tooling/codegen/schema-types.ts
 schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
+  - src/contracts/schemas/configuration/wakeflow-config.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-pod-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-pod-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/git-object-id.schema.json
-  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
-  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
-  - src/contracts/schemas/governance/demand/demand-authority.schema.json
-  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
-  - src/contracts/schemas/governance/demand/demand-identity.schema.json
-  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
-  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
-  - src/contracts/schemas/governance/result/target-result.schema.json
-  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
-  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
-  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
-  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
-  - src/contracts/schemas/governance/tasking/task-package.schema.json
-  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-  - src/contracts/schemas/workspace/window-host-binding.schema.json
-  - src/contracts/schemas/workspace/window-runtime-registered-projection.schema.json
-  - src/contracts/schemas/workspace/window-runtime-unregistered-projection.schema.json
-testPaths:
-  - tests/capabilities/pod/service.test.ts
+testPaths: []
 refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+  - src/capabilities/pod/contract.ts
+  - src/capabilities/pod/decide.ts
+  - src/capabilities/pod/service.ts
+  - src/configuration/wakeflow-config-authority-replacement.ts
+  - src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts
+  - src/governance/demand/publication/demand-active-guard.ts
+  - src/governance/observation/active-projection-refresh.ts
+  - src/governance/pod/pod-state.ts
+  - src/governance/pod/worktree-disposal.ts
+  - src/kernel/pod-mutation-lock.ts
+  - src/kernel/pod-worktree-receipts.ts
+  - src/kernel/publication-transaction.ts
+  - tooling/codegen/schema-types.ts
+sourceFingerprint: sha256:21d8f747106b9cef0f86cdd54cb76ed4ef9457778dc153d271f2120695a189c6
 ---
 
-# Pod 与 worktree：文件直接导入
+# Pod：配置事务、执行回执与短锁的静态依赖
 
-这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
+> 核验于 2026-10-03，基线 `d8fafff` 加当前未提交工作树。图表达实际源码分支，未提交实现标为进行中；不把开发阶段计划当作运行事实。来源与测试锚点按本文精确范围列出。
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
+本图是从当前TypeScript AST选出的直接导入子图；每条边再对照已读源码用途。它只证明耦合方向，不证明调用顺序、状态转移或Agent授权。
 
-## Pod 与 worktree的精选直接导入
+## Pod：配置事务、执行回执与短锁的静态依赖
 
 ```mermaid
-flowchart TB
-  accTitle: Pod 与 worktree的精选直接导入
-  accDescr: Pod 与 worktree所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
-  f1["能力执行 service.ts"]
-  f2["纯决定 decide.ts"]
-  f3["能力执行 service.ts"]
-  f4["源码模块 pod-worktree-receipts.ts"]
-  f5["源码模块 wakeflow-config-v3.ts"]
-  f6["源码模块 wakeflow-config-authority-snapshot.ts"]
-  f7["源码模块 wakeflow-config-authority-replacement.ts"]
-  f8["工作声明 work-claims.ts"]
-  f9["源码模块 layout.ts"]
-  f1 -->|"E-L1064-01 直接导入"| f2
-  f1 -->|"E-L1064-02 直接导入"| f4
-  f1 -->|"E-L1064-03 直接导入"| f5
-  f1 -->|"E-L1064-04 直接导入"| f6
-  f1 -->|"E-L1064-05 直接导入"| f7
-  f2 -->|"E-L1064-06 直接导入"| f5
-  f3 -->|"E-L1064-07 直接导入"| f4
-  f3 -->|"E-L1064-08 直接导入"| f5
-  f3 -->|"E-L1064-09 直接导入"| f6
-  f3 -->|"E-L1064-10 直接导入"| f8
-  f3 -->|"E-L1064-11 直接导入"| f9
-  f4 -->|"E-L1064-12 直接导入"| f9
-  f6 -->|"E-L1064-13 直接导入"| f5
-  f7 -->|"E-L1064-14 直接导入"| f6
-  f8 -->|"E-L1064-15 直接导入"| f9
+flowchart LR
+  accTitle: Pod：配置事务、执行回执与短锁的静态依赖
+  accDescr: 文件直接import关系的审阅精选视图，运行调用与状态分支在独立页面。
+  f0["公共Pod执行器<br/>service.ts"]
+  f1["计划与next<br/>decide.ts"]
+  f2["wire合同<br/>contract.ts"]
+  f3["状态纯派生<br/>pod-state.ts"]
+  f4["处置建议<br/>worktree-disposal.ts"]
+  f5["按Pod短锁<br/>pod-mutation-lock.ts"]
+  f6["私有回执<br/>pod-worktree-receipts.ts"]
+  f7["配置CAS<br/>wakeflow-config-authority-replacement.ts"]
+  f8["Pod占用守卫<br/>demand-active-guard.ts"]
+  f9["变更后投影<br/>active-projection-refresh.ts"]
+  f10["效果外壳<br/>publication-transaction.ts"]
+  f0 -->|"E-PF0-01 直接导入"| f1
+  f0 -->|"E-PF0-02 直接导入"| f2
+  f0 -->|"E-PF0-03 直接导入"| f4
+  f0 -->|"E-PF0-04 直接导入"| f5
+  f0 -->|"E-PF0-05 直接导入"| f6
+  f0 -->|"E-PF0-06 直接导入"| f7
+  f0 -->|"E-PF0-07 直接导入"| f8
+  f0 -->|"E-PF0-08 直接导入"| f9
+  f0 -->|"E-PF0-09 直接导入"| f10
+  f1 -->|"E-PF0-10 直接导入"| f2
+  f1 -->|"E-PF0-11 直接导入"| f3
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
+| 直接导入 | 包含实际import或显式re-export；类型依赖同样算结构依赖。 |
+| 精选范围 | 按模块入口裁剪；被省略的依赖仍在逐文件台账和全局导入数据中。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| f1 | `src/capabilities/pod/service.ts` | 能力执行 service.ts |
-| f2 | `src/capabilities/pod/decide.ts` | 纯决定 decide.ts |
-| f3 | `src/capabilities/endpoint/service.ts` | 能力执行 service.ts |
-| f4 | `src/kernel/pod-worktree-receipts.ts` | 源码模块 pod-worktree-receipts.ts |
-| f5 | `src/configuration/wakeflow-config-v3.ts` | 源码模块 wakeflow-config-v3.ts |
-| f6 | `src/configuration/wakeflow-config-authority-snapshot.ts` | 源码模块 wakeflow-config-authority-snapshot.ts |
-| f7 | `src/configuration/wakeflow-config-authority-replacement.ts` | 源码模块 wakeflow-config-authority-replacement.ts |
-| f8 | `src/kernel/work-claims.ts` | 工作声明 work-claims.ts |
-| f9 | `src/kernel/layout.ts` | 源码模块 layout.ts |
+| f0 | `src/capabilities/pod/service.ts` | 公共Pod执行器<br/>service.ts |
+| f1 | `src/capabilities/pod/decide.ts` | 计划与next<br/>decide.ts |
+| f2 | `src/capabilities/pod/contract.ts` | wire合同<br/>contract.ts |
+| f3 | `src/governance/pod/pod-state.ts` | 状态纯派生<br/>pod-state.ts |
+| f4 | `src/governance/pod/worktree-disposal.ts` | 处置建议<br/>worktree-disposal.ts |
+| f5 | `src/kernel/pod-mutation-lock.ts` | 按Pod短锁<br/>pod-mutation-lock.ts |
+| f6 | `src/kernel/pod-worktree-receipts.ts` | 私有回执<br/>pod-worktree-receipts.ts |
+| f7 | `src/configuration/wakeflow-config-authority-replacement.ts` | 配置CAS<br/>wakeflow-config-authority-replacement.ts |
+| f8 | `src/governance/demand/publication/demand-active-guard.ts` | Pod占用守卫<br/>demand-active-guard.ts |
+| f9 | `src/governance/observation/active-projection-refresh.ts` | 变更后投影<br/>active-projection-refresh.ts |
+| f10 | `src/kernel/publication-transaction.ts` | 效果外壳<br/>publication-transaction.ts |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1064-01 | `src/capabilities/pod/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-02 | `src/capabilities/pod/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-03 | `src/capabilities/pod/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-04 | `src/capabilities/pod/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-05 | `src/capabilities/pod/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-06 | `src/capabilities/pod/decide.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-07 | `src/capabilities/endpoint/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-08 | `src/capabilities/endpoint/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-09 | `src/capabilities/endpoint/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-10 | `src/capabilities/endpoint/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-11 | `src/capabilities/endpoint/service.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-12 | `src/kernel/pod-worktree-receipts.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-13 | `src/configuration/wakeflow-config-authority-snapshot.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-14 | `src/configuration/wakeflow-config-authority-replacement.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
-| E-L1064-15 | `src/kernel/work-claims.ts` | `tests/capabilities/pod/service.test.ts` | 直接导入 |
+| E-PF0-01 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-02 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-03 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-04 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-05 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-06 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-07 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-08 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-09 | `src/capabilities/pod/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-10 | `src/capabilities/pod/decide.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-PF0-11 | `src/capabilities/pod/decide.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
 
-## 守卫、恢复与验证范围
+`mutationScope: exclusive` 是 service 传给已有 `runPublicationTransaction` 的值；实际工作区范围导入在 command-shell，不虚构一条 service→workspace-operation-scope 的直接import。
 
-文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
+## 阅读边界
 
-涉及的测试与核验入口：
+Pod和observation共用governance/pod的状态规则，两个capability不互相依赖。短锁也是Demand占用入口的共用边界，静态边本身不证明锁覆盖recover。
 
-- `tests/capabilities/pod/service.test.ts`。
+Schema是可移植wire源；`tooling/codegen/schema-types.ts`生成`src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts`等派生合同。生成文件只核实来源与生成链，不计作手写文件语义审阅；`package.json`的schema:build/schema:check负责生成与漂移检测。
 
-## 下钻与相关视图
+## 继续阅读
 
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[文件导入](./file-dependencies.md) · [运行分支](./runtime-call-flow.md) · [本模块总览](./README.md) · [全局入口](../README.md) · [本轮增量审阅](../../plans/review-2026-10-03/coordination.md) · [前轮完整审阅](../../plans/review-2026-10-02/coordination-evidence.md)

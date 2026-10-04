@@ -1,228 +1,164 @@
 ---
-diagramId: ts-observation-runtime-call-flow
+diagramId: ts-16-observation-runtime-call-flow
 viewType: call-flow
-truthKind: current-code
-reviewDepth: L4
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:168cf79499410d25f4f9f806ff727c70b509599f8f9669aaf4643c61faf88e12
-audience: [maintainer, reviewer]
+truthKind: in-progress-worktree
+reviewDepth: L5
+verifiedAt: 2026-10-03
+baselineCommit: d8fafff33919c728e3a9b91ec04aa50ec5e07f0c
+testEvidence: anchored
+audience:
+  - maintainer
+  - reviewer
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: manual-review
-testEvidence: anchored
 sourcePaths:
-  - src/capabilities/observation/contract.ts
   - src/capabilities/observation/decide.ts
   - src/capabilities/observation/service.ts
-  - src/entrypoints/claude-code-wakeflow-mcp.ts
-  - src/entrypoints/wakeflow-public-mcp-catalog.ts
-  - src/governance/demand/demand-verify-gates.ts
-  - src/governance/observation/active-projection-facts.ts
-  - src/governance/observation/active-projection-refresh.ts
-  - src/governance/observation/demand-archive-locator.ts
   - src/governance/observation/workspace-observation.ts
-  - src/kernel/active-projection.ts
-  - src/kernel/command-shell.ts
 schemaPaths:
-  - src/contracts/schemas/entrypoints/wakeflow-status-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-status-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-verify-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-verify-result.schema.json
 testPaths:
   - tests/capabilities/observation/decide.test.ts
   - tests/capabilities/observation/service.test.ts
-  - tests/entrypoints/wakeflow-public-mcp-catalog-binding.test.ts
-  - tests/entrypoints/wakeflow-public-mcp-catalog.test.ts
-  - tests/governance/demand/demand-research-completion.test.ts
   - tests/governance/observation/workspace-observation.test.ts
-  - tests/kernel/active-projection.test.ts
-  - tests/scenarios/wakeflow-scenario-acceptance.test.ts
 refreshTriggers:
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/requirements/capabilities/09-observation-and-verification.md
+  - src/capabilities/observation/decide.ts
+  - src/capabilities/observation/service.ts
+  - src/governance/observation/workspace-observation.ts
+sourceFingerprint: sha256:436efab320e6db2c8850f456598e6f201e096fb482411e045b563822d413b6f4
 ---
 
-# Observation：status、verify 与活动投影刷新
+# Observation：域隔离、制品漂移与下一责任
 
-三条真实调用链：读一次工作区、把事实转成门、在每次变更后重写人读页面。三者都不写业务权威。
+> 核验于 2026-10-03，基线 `d8fafff` 加当前未提交工作树。图表达实际源码分支，未提交实现标为进行中；不把开发阶段计划当作运行事实。来源与测试锚点按本文精确范围列出。
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## status：一次观察出全部结论
+## 分域读取：完整性与局部失败
 
 ```mermaid
-sequenceDiagram
-  accTitle: status 的一次观察
-  accDescr: status 请求经组合根与内核外壳进入 observation 切片，只做一次逐域观察，再派生总体状态与下一步；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant agent as Agent / 用户
-  participant entry as 宿主组合根
-  participant shell as 内核命令外壳
-  participant service as observation 切片
-  participant observe as 逐域观察
-  participant archive as Route 与归档回执
-  agent->>entry: E-L1069-01 调用 wakeflow_status，可带 demandId
-  entry->>shell: E-L1069-02 按登记表绑定固定 executor
-  shell->>service: E-L1069-03 解析请求、限根并打开账本
-  service->>observe: E-L1069-04 一次 full 范围观察，逐域失败隔离
-  service->>archive: E-L1069-05 带 demandId 时取当前 Route 或归档回执
-  observe-->>service: E-L1069-06 孤儿声明与各域状态
-  service-->>agent: E-L1069-07 动作去重、排序并上限 64
+flowchart TB
+  accTitle: 分域读取：完整性与局部失败
+  accDescr: 每个可隔离领域捕获有reason错误为unavailable，取消和无reason编程错误继续上抛；hook局部聚合只有扫描完成才可公开。
+  a["observeWorkspace"]
+  b["observeDomain：布局／板／Demand／claims"]
+  h["full：Binding／hook／窗口投影／资产"]
+  r["full：repo pointers与归档评审"]
+  v["observed：有值但可含skipped或局部issue"]
+  u["unavailable：value=null＋issue"]
+  x["取消或无reason缺陷上抛"]
+  o["route/overall/next只派生"]
+  a -->|"E-OBSDOM-01 逐域读取，仍保留单次观察结构"| b
+  a -->|"E-OBSDOM-02 scope为full才读"| h
+  a -->|"E-OBSDOM-03 scope为full才读"| r
+  b -->|"E-OBSDOM-04 读取成功"| v
+  b -->|"E-OBSDOM-05 带reason环境失败隔离"| u
+  b -->|"E-OBSDOM-06 aborted或无reason不吞"| x
+  v -->|"E-OBSDOM-07 按优先级派生maintenance/blocked/degraded/active/idle"| o
+  u -->|"E-OBSDOM-08 不可读域不会当作健康空集合"| o
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| 组合根 | 固定宿主装配：注入宿主画像与 facade，再绑定公共工具执行器。 |
-| scope | 观察范围：`full` 含宿主与仓库指针，`projection` 只取渲染页面所需事实。 |
-| 孤儿声明 | 持有者不是活动 Demand，或窗口当前绑定不是声明记下的那一代。 |
-| Route | Demand 当前的下一责任派生视图，由治理层 Controller Route 生成。 |
+| issue | 说明本轮观察缺口；不是对业务状态的修改。 |
+| 局部聚合 | hook扫描中latestBySession先存在函数本地，失败返回空map并显式unavailable；不存在用hook推定目标runtime身份的artifactBySession。 |
+| overall | 综合朝向状态，不替代每道verify gate。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| agent | Agent / 用户 / 外部效果或条件视图 | Agent / 用户 |
-| entry | `src/entrypoints/claude-code-wakeflow-mcp.ts#createClaudeCodeWakeflowMcpServer` | 宿主组合根 |
-| shell | `src/kernel/command-shell.ts#runCommandShell` | 内核命令外壳 |
-| service | `src/capabilities/observation/service.ts#executeStatusRequest` | observation 切片 |
-| observe | `src/governance/observation/workspace-observation.ts#observeWorkspace` | 逐域观察 |
-| archive | `src/governance/observation/demand-archive-locator.ts#locateLatestDemandArchive` | Route 与归档回执 |
+| a | `src/governance/observation/workspace-observation.ts#observeWorkspace` | observeWorkspace |
+| b | `src/governance/observation/workspace-observation.ts#observeDomain` | observeDomain：布局／板／Demand／claims |
+| h | `src/governance/observation/workspace-observation.ts#observeWorkspace` | full：Binding／hook／窗口投影／资产 |
+| r | `src/governance/observation/workspace-observation.ts#observeWorkspace` | full：repo pointers与归档评审 |
+| v | `src/governance/observation/workspace-observation.ts#observeDomain` | observed：有值但可含skipped或局部issue |
+| u | `src/governance/observation/workspace-observation.ts#observeDomain` | unavailable：value=null＋issue |
+| x | `src/governance/observation/workspace-observation.ts#observeDomain` | 取消或无reason缺陷上抛 |
+| o | `src/governance/observation/workspace-observation.ts#deriveOverallStatus` | route/overall/next只派生 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1069-01 | `src/entrypoints/claude-code-wakeflow-mcp.ts#createClaudeCodeWakeflowMcpServer` | `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts#createClaudeCodeWakeflowMcpServer` | 调用 wakeflow_status，可带 demandId |
-| E-L1069-02 | `src/entrypoints/wakeflow-public-mcp-catalog.ts#WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS` | `tests/entrypoints/wakeflow-public-mcp-catalog-binding.test.ts#WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS` | 按登记表绑定固定 executor |
-| E-L1069-03 | `src/capabilities/observation/service.ts#executeStatusRequest` | `tests/capabilities/observation/service.test.ts#executeStatusRequest` | 解析请求、限根并打开账本 |
-| E-L1069-04 | `src/governance/observation/workspace-observation.ts#observeWorkspace` | `tests/governance/observation/workspace-observation.test.ts#observeWorkspace` | 一次 full 范围观察，逐域失败隔离 |
-| E-L1069-05 | `src/governance/observation/demand-archive-locator.ts#locateLatestDemandArchive` | 间接覆盖：`tests/capabilities/observation/service.test.ts#executeStatusRequest`（归档 Demand 用例经 status 走到定位器；定位器本身没有直接测试） | 带 demandId 时取当前 Route 或归档回执 |
-| E-L1069-06 | `src/governance/observation/workspace-observation.ts#orphanWorkClaims` | `tests/governance/observation/workspace-observation.test.ts#orphanWorkClaims` | 孤儿声明与各域状态 |
-| E-L1069-07 | `src/capabilities/observation/decide.ts#deriveNextActions` | `tests/capabilities/observation/decide.test.ts#deriveNextActions` | 动作去重、排序并上限 64 |
+| E-OBSDOM-01 | `src/governance/observation/workspace-observation.ts#observeWorkspace` | `tests/governance/observation/workspace-observation.test.ts#observeWorkspace` | 逐域读取，仍保留单次观察结构 |
+| E-OBSDOM-02 | `src/governance/observation/workspace-observation.ts#observeWorkspace` | `tests/governance/observation/workspace-observation.test.ts#observeWorkspace` | scope为full才读 |
+| E-OBSDOM-03 | `src/governance/observation/workspace-observation.ts#observeWorkspace` | `tests/capabilities/observation/service.test.ts#executeStatusRequest` | scope为full才读 |
+| E-OBSDOM-04 | `src/governance/observation/workspace-observation.ts#observeDomain` | `tests/governance/observation/workspace-observation.test.ts#observeWorkspace` | 读取成功 |
+| E-OBSDOM-05 | `src/governance/observation/workspace-observation.ts#observeDomain` | `tests/governance/observation/workspace-observation.test.ts#observeWorkspace` | 带reason环境失败隔离 |
+| E-OBSDOM-06 | `src/governance/observation/workspace-observation.ts#observeDomain` | `tests/governance/observation/workspace-observation.test.ts#observeWorkspace` | aborted或无reason不吞 |
+| E-OBSDOM-07 | `src/governance/observation/workspace-observation.ts#deriveOverallStatus` | `tests/governance/observation/workspace-observation.test.ts#deriveOverallStatus` | 按优先级派生maintenance/blocked/degraded/active/idle |
+| E-OBSDOM-08 | `src/governance/observation/workspace-observation.ts#deriveOverallStatus` | `tests/governance/observation/workspace-observation.test.ts#deriveOverallStatus` | 不可读域不会当作健康空集合 |
 
-`unmergedAccepted` 同在这次结果里：只列出已接受结果中分支仍在、且尖端与当前检出尖端不同的项，并带 `acceptedAt` 与 `repositoryObserved`；仓库未观察时不改判为已合并。证据见 `src/governance/observation/active-projection-facts.ts#unmergedAcceptedFacts` 与 `tests/capabilities/observation/service.test.ts#executeStatusRequest`（该用例直接断言 unmergedAccepted 与 repositoryObserved）。
-
-## verify：事实转成排序后的门
+## 制品身份分支：服务证据与未验证窗口
 
 ```mermaid
-sequenceDiagram
-  accTitle: verify 的门与汇总
-  accDescr: verify 重读工作区事实并按需复用 Demand 门，再排序汇总为 ok 与下一步；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant agent as Agent / 用户
-  participant service as observation 切片
-  participant facts as 工作区门事实
-  participant demand as Demand 门
-  participant gates as 排序后的门集合
-  agent->>service: E-L1070-01 调用 wakeflow_verify，可带 demandId
-  service->>facts: E-L1070-02 重读配置、布局预览、账本、声明与投影目标
-  service->>demand: E-L1070-03 带 demandId 时复用 Demand 切片同一份门
-  facts-->>gates: E-L1070-04 按门名排序，unavailable 与 fail 分开
-  gates-->>service: E-L1070-05 汇总 ok 与各类计数
-  service-->>agent: E-L1070-06 next 只由门结果投影
+flowchart TB
+  accTitle: 制品身份分支：服务证据与未验证窗口
+  accDescr: 服务启动与磁盘摘要属于本进程，已绑定窗口另计未验证；hook摘要不会把任何窗口变成current或stale，缺证据必须使严格核验不可用。
+  a["当前服务adapter与窗口绑定分别成facts"]
+  n["无adapter：不产服务故障code"]
+  d["有adapter：读取启动与磁盘摘要"]
+  u["任一摘要缺失：manifest-unavailable"]
+  c["两个摘要不同：server-outdated"]
+  w["绑定窗口：window-runtime-unverified"]
+  p["无换版且无缺证据code才pass"]
+  next["缺失/换版交user；只剩peer缺证据交Controller"]
+  a -->|"E-OBSART-01 服务未注入adapter时不冒充已验证安装"| n
+  a -->|"E-OBSART-02 存在adapter才比较服务制品"| d
+  d -->|"E-OBSART-03 任一digest为null记unavailable"| u
+  d -->|"E-OBSART-04 digest不同记fail"| c
+  a -->|"E-OBSART-05 独立统计已绑定窗口，不从hook推断"| w
+  a -->|"E-OBSART-06 无manifest缺失、换版或未验证窗口"| p
+  u -->|"E-OBSART-07 优先runtime-artifact-unavailable"| next
+  c -->|"E-OBSART-08 其次runtime-artifact-outdated"| next
+  w -->|"E-OBSART-09 仅此门不通过时无自动修复工具"| next
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| gate | 核验门：对一项事实的只读复验结果，分 pass、fail、unavailable。 |
-| unavailable | 该项这次读不到；与 fail 分开计数，不冒充通过。 |
-| 布局预览 | 静态物化的只读预览，用来判断本地布局门，不写任何文件。 |
+| 服务身份 | 组合根注入的当前MCP进程启动摘要；磁盘变化是这一进程的outdated，不是所有窗口的版本。 |
+| peer runtime | 其他绑定窗口真正使用的MCP服务和已加载指令；当前缺宿主实例关联证据，只能unverified。 |
+| hook观察器 | lastObservation.observerManifestDigest仅描述写hook的观察器；摘要相同或不同都不推出目标运行身份。 |
+| 优先级 | 服务换版fail优先于其他unavailable；verifyNext中manifest-unavailable优先于server-outdated，peer缺证据与其他问题共存时先建议维护可修项。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| agent | Agent / 用户 / 外部效果或条件视图 | Agent / 用户 |
-| service | `src/capabilities/observation/service.ts#executeVerifyRequest` | observation 切片 |
-| facts | `src/capabilities/observation/service.ts#gateFacts` | 工作区门事实 |
-| demand | `src/governance/demand/demand-verify-gates.ts#evaluateVerifyGates` | Demand 门 |
-| gates | `src/capabilities/observation/decide.ts#deriveWorkspaceGates` | 排序后的门集合 |
+| a | `src/capabilities/observation/service.ts#gateFacts` | 当前服务adapter与窗口绑定分别成facts |
+| n | `src/capabilities/observation/decide.ts#runtimeArtifactGate` | 无adapter：不产服务故障code |
+| d | `src/capabilities/observation/service.ts#readRuntime` | 有adapter：读取启动与磁盘摘要 |
+| u | `src/capabilities/observation/decide.ts#runtimeArtifactGate` | 任一摘要缺失：manifest-unavailable |
+| c | `src/capabilities/observation/decide.ts#runtimeArtifactGate` | 两个摘要不同：server-outdated |
+| w | `src/capabilities/observation/service.ts#unverifiedRuntimeWindowIds` | 绑定窗口：window-runtime-unverified |
+| p | `src/capabilities/observation/decide.ts#runtimeArtifactGate` | 无换版且无缺证据code才pass |
+| next | `src/capabilities/observation/decide.ts#verifyNext` | 缺失/换版交user；只剩peer缺证据交Controller |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1070-01 | `src/capabilities/observation/service.ts#executeVerifyRequest` | `tests/capabilities/observation/service.test.ts#executeVerifyRequest` | 调用 wakeflow_verify，可带 demandId |
-| E-L1070-02 | `src/capabilities/observation/service.ts#gateFacts` | 间接覆盖：`tests/capabilities/observation/service.test.ts#executeVerifyRequest`（gateFacts 是切片内未导出的取事实函数，只能经 verify 用例走到） | 重读配置、布局预览、账本、声明与投影目标 |
-| E-L1070-03 | `src/governance/demand/demand-verify-gates.ts#evaluateVerifyGates` | `tests/governance/demand/demand-research-completion.test.ts#evaluateVerifyGates` | 带 demandId 时复用 Demand 切片同一份门 |
-| E-L1070-04 | `src/capabilities/observation/decide.ts#deriveWorkspaceGates` | `tests/capabilities/observation/decide.test.ts#deriveWorkspaceGates` | 按门名排序，unavailable 与 fail 分开 |
-| E-L1070-05 | `src/capabilities/observation/decide.ts#summarizeGates` | `tests/capabilities/observation/decide.test.ts#summarizeGates` | 汇总 ok 与各类计数 |
-| E-L1070-06 | `src/capabilities/observation/decide.ts#verifyNext` | `tests/capabilities/observation/decide.test.ts#verifyNext` | next 只由门结果投影 |
+| E-OBSART-01 | `src/capabilities/observation/decide.ts#runtimeArtifactGate` | `tests/capabilities/observation/decide.test.ts#deriveWorkspaceGates` | 服务未注入adapter时不冒充已验证安装 |
+| E-OBSART-02 | `src/capabilities/observation/service.ts#readRuntime` | `tests/capabilities/observation/service.test.ts#executeStatusRequest` | 存在adapter才比较服务制品 |
+| E-OBSART-03 | `src/capabilities/observation/decide.ts#runtimeArtifactGate` | `tests/capabilities/observation/decide.test.ts#deriveWorkspaceGates` | 任一digest为null记unavailable |
+| E-OBSART-04 | `src/capabilities/observation/decide.ts#runtimeArtifactGate` | `tests/capabilities/observation/decide.test.ts#deriveWorkspaceGates` | digest不同记fail |
+| E-OBSART-05 | `src/capabilities/observation/service.ts#unverifiedRuntimeWindowIds` | `tests/capabilities/observation/service.test.ts#executeVerifyRequest` | 独立统计已绑定窗口，不从hook推断 |
+| E-OBSART-06 | `src/capabilities/observation/decide.ts#runtimeArtifactGate` | `tests/capabilities/observation/decide.test.ts#deriveWorkspaceGates` | 无manifest缺失、换版或未验证窗口 |
+| E-OBSART-07 | `src/capabilities/observation/decide.ts#verifyNext` | `tests/capabilities/observation/decide.test.ts#verifyNext` | 优先runtime-artifact-unavailable |
+| E-OBSART-08 | `src/capabilities/observation/decide.ts#verifyNext` | `tests/capabilities/observation/decide.test.ts#verifyNext` | 其次runtime-artifact-outdated |
+| E-OBSART-09 | `src/capabilities/observation/decide.ts#verifyNext` | 间接覆盖：`tests/capabilities/observation/decide.test.ts#verifyNext`；该专属peer-only分支当前无独立断言 | 仅此门不通过时无自动修复工具 |
 
-## 活动投影：每次变更后的重写与恢复
 
-```mermaid
-sequenceDiagram
-  accTitle: 活动投影的刷新与零写保护
-  accDescr: 变更提交成功后刷新人读投影，锁内逐文件 CAS，任一目标不安全则整轮零写，刷新失败不回滚变更；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant mutate as 变更切片
-  participant refresh as 刷新包装
-  participant observe as 投影范围观察
-  participant render as 事实与渲染
-  participant publish as 投影发布器
-  mutate->>refresh: E-L1071-01 提交成功后刷新一次
-  refresh->>observe: E-L1071-02 scope 为 projection 的一次观察
-  refresh->>render: E-L1071-03 由观察构建事实并渲染文件
-  render->>publish: E-L1071-04 投影短锁内逐文件 CAS
-  publish->>publish: E-L1071-05 任一目标 unsafe 则整轮零写
-  publish-->>refresh: E-L1071-06 回执与已退休的页目录
-  refresh-->>mutate: E-L1071-07 io-failure 静默吞下，变更结果照常返回
-```
+## 确定性降级与动作顺序
 
-### 本图术语说明
+status列表分别限量并报告略去条数：Demand256、窗口/claim512、Pod/仓库/worktree64、未合并结果256；不能以截断列表证明不存在。nextActions顺序为当前服务制品缺失/换版→维护→活动Pod未注册窗口→Demand前沿（primary先）→待认领包，去重且最多64条。
 
-| 术语 | 本图含义 |
-| --- | --- |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-| 标记 | 页面首行的 `wakeflow:…-projection:v1:sha256:<指纹>` 注释；没有标记即视为手写。 |
-| unsafe | 符号链接、非普通文件、多硬链接、模式或属主不符、超限、读失败或手写。 |
-| 退休 | 不再活动的 Demand 页目录，只有每个文件都带标记时才移除。 |
+带demandId时先要求活动Demand域可观察；活动项读不出不会自动变为归档或not-found。非活动才找最大修订归档；完成归档可建议continue，取消无续接前沿。verify的追加Demand门只是附加字段，工作区ok来自15道工作区门。
 
-### 节点与实现定位
+## 继续阅读
 
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| mutate | `src/capabilities/pod/service.ts`（八个调用文件之一，取作代表） | 变更切片 |
-| refresh | `src/governance/observation/active-projection-refresh.ts#afterMutationRefresh` | 刷新包装 |
-| observe | `src/governance/observation/active-projection-refresh.ts#refreshActiveProjection` | 投影范围观察 |
-| render | `src/kernel/active-projection.ts#renderActiveProjectionFiles` | 事实与渲染 |
-| publish | `src/kernel/active-projection.ts#publishActiveProjection` | 投影发布器 |
-
-本基线下 `afterMutationRefresh` 有八个调用文件：`src/capabilities/demand/service.ts`、`src/capabilities/demand/lifecycle.ts`、`src/capabilities/tasking/service.ts`、`src/capabilities/delivery/service.ts`、`src/capabilities/result-review/service.ts`、`src/capabilities/evidence/service.ts`、`src/capabilities/pod/service.ts` 与 `src/capabilities/workspace/maintain-workspace.ts`（共十三个调用点）。图中 mutate 只取 pod 切片作代表，不表示只有它在提交后刷新。
-
-### 本图边级证据
-
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1071-01 | `src/governance/observation/active-projection-refresh.ts#afterMutationRefresh` | 间接覆盖：`tests/scenarios/wakeflow-scenario-acceptance.test.ts#scenarioActiveProjection`（登记一份受管证据这次变更之后四份页面被重写；包装函数没有单元测试） | 提交成功后刷新一次 |
-| E-L1071-02 | `src/governance/observation/active-projection-refresh.ts#refreshActiveProjection` | 间接覆盖：`tests/governance/observation/workspace-observation.test.ts#observeWorkspace`（projection 作用域裁掉绑定、hook、资产与仓库指针在观察层直接断言；刷新入口本身没有直接测试） | scope 为 projection 的一次观察 |
-| E-L1071-03 | `src/governance/observation/active-projection-facts.ts#buildActiveProjectionFacts` | 间接覆盖：`tests/kernel/active-projection.test.ts#renderActiveProjectionFiles`（渲染半段用手工构造的事实直接断言；观察转事实这一段只在场景里跑到） | 由观察构建事实并渲染文件 |
-| E-L1071-04 | `src/kernel/active-projection.ts#publishActiveProjection` | `tests/kernel/active-projection.test.ts#publishActiveProjection` | 投影短锁内逐文件 CAS |
-| E-L1071-05 | `src/kernel/active-projection.ts#inspectActiveProjectionTargets` | `tests/kernel/active-projection.test.ts#inspectActiveProjectionTargets` | 任一目标 unsafe 则整轮零写 |
-| E-L1071-06 | `src/kernel/active-projection.ts#ActiveProjectionPublicationReceipt` | `tests/kernel/active-projection.test.ts#publishActiveProjection` | 回执与已退休的页目录 |
-| E-L1071-07 | `src/governance/observation/active-projection-refresh.ts#refreshActiveProjectionQuietly` | 未覆盖：没有任何用例让刷新以 io-failure 失败再检查变更结果照常返回；场景只覆盖 unsafe 整轮零写这条路径 | io-failure 静默吞下，变更结果照常返回 |
-
-## 守卫、恢复与验证范围
-
-投影刷新是变更之后的附加动作：它失败不回滚已提交的变更，也不把变更判为失败；中止与非 `io-failure` 错误仍然上抛。投影页面不是权威，机器记录才是；页面陈旧或缺失由 verify 的投影门报出，而不是由页面自己修正。`status` 与 `verify` 都不创建会话、不发送、不追加事件。本轮图谱未复跑根测试与场景套件。
-
-涉及的测试与核验入口：
-
-- `tests/capabilities/observation/decide.test.ts`。
-- `tests/capabilities/observation/service.test.ts`。
-- `tests/entrypoints/wakeflow-public-mcp-catalog.test.ts` 与 `tests/entrypoints/wakeflow-public-mcp-catalog-binding.test.ts`。
-- `tests/governance/demand/demand-research-completion.test.ts`。
-- `tests/governance/observation/workspace-observation.test.ts`。
-- `tests/kernel/active-projection.test.ts`。
-- `tests/scenarios/wakeflow-scenario-acceptance.test.ts`（场景套件；本轮未复跑）。
-
-本图的“测试 / 核验”列按 `testEvidence: anchored` 约定书写：要么锚定测试文件里真实出现的符号，要么写明 `间接覆盖：`（经哪个入口跑到）或 `未覆盖：`（为什么没有）。刷新包装、事实构建与静默吞下 io-failure 这三处在本基线没有直接单元测试，上表按实情标注，不按同名符号推定覆盖。核验时工作树里有并行任务正在为治理层的投影事实与归档定位补直接用例（尚未提交，不属于本基线）；它们落地后，上面几行间接覆盖应按实际断言重新锚定。
-
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [文件直接导入](./file-dependencies.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[文件导入](./file-dependencies.md) · [运行分支](./runtime-call-flow.md) · [本模块总览](./README.md) · [全局入口](../README.md) · [本轮增量审阅](../../plans/review-2026-10-03/coordination.md) · [前轮完整审阅](../../plans/review-2026-10-02/coordination-evidence.md)

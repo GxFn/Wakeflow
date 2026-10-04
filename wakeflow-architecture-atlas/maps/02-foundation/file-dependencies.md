@@ -1,132 +1,153 @@
 ---
-diagramId: ts-foundation-file-dependency-f2
-viewType: file-dependency
-truthKind: current-code
-reviewDepth: L3
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:1d1c691dd8533e5dea44f1246046663f42127577e08442936bf721400794d5d4
-audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Architecture Atlas
-generatedBy: mixed
-sourcePaths:
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/filesystem/deterministic-json-file.ts
-  - src/foundation/filesystem/durable-atomic-file-write.ts
-  - src/foundation/filesystem/durable-directory-tree-publication.ts
-  - src/foundation/filesystem/rooted-directory.ts
-  - src/foundation/filesystem/rooted-exclusive-file-lock.ts
-  - src/foundation/filesystem/stable-file-read.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/kernel/*.ts
-  - src/kernel/requirement-board.ts
-schemaPaths:
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-testPaths:
-  - tests/foundation/filesystem/durable-atomic-file-write.test.ts
-refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+diagramId: "ts-foundation-static-imports"
+viewType: "file-dependency"
+truthKind: "in-progress-worktree"
+reviewDepth: "L3"
+verifiedAt: "2026-10-02"
+baselineCommit: "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c"
+audience: ["maintainer","reviewer"]
+documentationOwner: "Wakeflow Architecture Atlas"
+generatedBy: "mixed"
+testEvidence: "anchored"
+sourcePaths: ["src/foundation/filesystem/stable-resource-tree-read.ts","src/foundation/filesystem/bounded-directory-tree-scan.ts","src/foundation/filesystem/stable-directory-read.ts","src/foundation/filesystem/stable-file-read.ts","src/foundation/crypto/sha256-hasher.ts","src/foundation/filesystem/rooted-directory.ts","src/foundation/filesystem/file-node-snapshot.ts","src/foundation/filesystem/durable-atomic-file-write.ts","src/foundation/filesystem/durable-atomic-file-write-contract.ts","src/foundation/filesystem/durable-atomic-file-stage-io.ts","src/foundation/filesystem/durable-atomic-file-stage-recovery.ts","src/foundation/filesystem/durable-atomic-file-target-io.ts","src/foundation/filesystem/rooted-resource-parent-handle.ts","src/foundation/filesystem/exact-regular-file-unlink.ts"]
+schemaPaths: []
+testPaths: []
+refreshTriggers: [".dependency-cruiser.cjs","tooling/architecture/check-dependencies.ts"]
+sourceFingerprint: "sha256:0eec8d7dad911500cac58a48ce806a355a578c4c8b7816a02fd81ba18c6255e4"
 ---
 
-# Foundation：文件直接导入
+# Foundation 实际导入：读取与写入分别下钻
 
-这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
+每条箭头都由当前TypeScript AST中的直接import或再导出核实，包含仅类型依赖。它不能证明运行时调用、分支顺序、测试覆盖或权限。以下是围绕问题选择的子图；省略的完整静态关系保存在[原始导入数据](../../plans/review-2026-10-02/import-graph.json)。
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## Foundation的精选直接导入
+## 稳定读取依赖
 
 ```mermaid
-flowchart TB
-  accTitle: Foundation的精选直接导入
-  accDescr: Foundation所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
-  f1["源码模块 rooted-directory.ts"]
-  f2["源码模块 stable-file-read.ts"]
-  f3["源码模块 durable-atomic-file-write.ts"]
-  f4["源码模块 rooted-exclusive-file-lock.ts"]
-  f5["源码模块 deterministic-json-file.ts"]
-  f6["需求看板 requirement-board.ts"]
-  f7["源码模块 durable-directory-tree-publication.ts"]
-  f2 -->|"E-L1005-01 直接导入"| f1
-  f3 -->|"E-L1005-02 直接导入"| f1
-  f4 -->|"E-L1005-03 直接导入"| f1
-  f4 -->|"E-L1005-04 直接导入"| f2
-  f4 -->|"E-L1005-05 直接导入"| f3
-  f4 -->|"E-L1005-06 直接导入"| f5
-  f5 -->|"E-L1005-07 直接导入"| f1
-  f5 -->|"E-L1005-08 直接导入"| f2
-  f6 -->|"E-L1005-09 直接导入"| f1
-  f6 -->|"E-L1005-10 直接导入"| f2
-  f6 -->|"E-L1005-11 直接导入"| f3
-  f6 -->|"E-L1005-12 直接导入"| f4
-  f6 -->|"E-L1005-13 直接导入"| f5
-  f7 -->|"E-L1005-14 直接导入"| f1
+flowchart LR
+  accTitle: 稳定读取依赖
+  accDescr: 当前代码精选的直接导入关系，完整文件身份在节点表，静态导入不等于运行时调用。
+  f1["完整树读取"]
+  f2["有界树扫描"]
+  f3["稳定目录与分页"]
+  f4["稳定文件读取"]
+  f5["增量摘要"]
+  f6["根作用域"]
+  f7["节点快照"]
+  f1 -->|"E-IMPF1-01 导入"| f2
+  f1 -->|"E-IMPF1-02 导入"| f4
+  f1 -->|"E-IMPF1-03 导入"| f6
+  f1 -->|"E-IMPF1-04 导入"| f7
+  f2 -->|"E-IMPF1-05 导入"| f3
+  f2 -->|"E-IMPF1-06 导入"| f6
+  f2 -->|"E-IMPF1-07 导入"| f7
+  f3 -->|"E-IMPF1-08 导入"| f6
+  f3 -->|"E-IMPF1-09 导入"| f7
+  f4 -->|"E-IMPF1-10 导入"| f5
+  f4 -->|"E-IMPF1-11 导入"| f6
+  f4 -->|"E-IMPF1-12 导入"| f7
+  f6 -->|"E-IMPF1-13 导入"| f7
 ```
 
 ### 本图术语说明
 
-| 术语 | 本图含义 |
+| 术语 | 含义 |
 | --- | --- |
-| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
+| 导入 | AST中存在的直接模块引用，可能仅供类型检查。 |
+| 精选 | 仅展示所选文件之间的边，不声称是完整传递闭包。 |
+| 文件节点 | 使用稳定节点ID与完整相对路径，避免同名service.ts混淆。 |
 
 ### 节点与实现定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| f1 | `src/foundation/filesystem/rooted-directory.ts` | 源码模块 rooted-directory.ts |
-| f2 | `src/foundation/filesystem/stable-file-read.ts` | 源码模块 stable-file-read.ts |
-| f3 | `src/foundation/filesystem/durable-atomic-file-write.ts` | 源码模块 durable-atomic-file-write.ts |
-| f4 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | 源码模块 rooted-exclusive-file-lock.ts |
-| f5 | `src/foundation/filesystem/deterministic-json-file.ts` | 源码模块 deterministic-json-file.ts |
-| f6 | `src/kernel/requirement-board.ts` | 需求看板 requirement-board.ts |
-| f7 | `src/foundation/filesystem/durable-directory-tree-publication.ts` | 源码模块 durable-directory-tree-publication.ts |
+| f1 | `src/foundation/filesystem/stable-resource-tree-read.ts` | 完整树读取 |
+| f2 | `src/foundation/filesystem/bounded-directory-tree-scan.ts` | 有界树扫描 |
+| f3 | `src/foundation/filesystem/stable-directory-read.ts` | 稳定目录与分页 |
+| f4 | `src/foundation/filesystem/stable-file-read.ts` | 稳定文件读取 |
+| f5 | `src/foundation/crypto/sha256-hasher.ts` | 增量摘要 |
+| f6 | `src/foundation/filesystem/rooted-directory.ts` | 根作用域 |
+| f7 | `src/foundation/filesystem/file-node-snapshot.ts` | 节点快照 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1005-01 | `src/foundation/filesystem/stable-file-read.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-02 | `src/foundation/filesystem/durable-atomic-file-write.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-03 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-04 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-05 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-06 | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-07 | `src/foundation/filesystem/deterministic-json-file.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-08 | `src/foundation/filesystem/deterministic-json-file.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-09 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-10 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-11 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-12 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-13 | `src/kernel/requirement-board.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
-| E-L1005-14 | `src/foundation/filesystem/durable-directory-tree-publication.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 直接导入 |
+| 编号 | 起点文件 | 终点文件 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- | --- |
+| E-IMPF1-01 | `src/foundation/filesystem/stable-resource-tree-read.ts` | `src/foundation/filesystem/bounded-directory-tree-scan.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-02 | `src/foundation/filesystem/stable-resource-tree-read.ts` | `src/foundation/filesystem/stable-file-read.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-03 | `src/foundation/filesystem/stable-resource-tree-read.ts` | `src/foundation/filesystem/rooted-directory.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-04 | `src/foundation/filesystem/stable-resource-tree-read.ts` | `src/foundation/filesystem/file-node-snapshot.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-05 | `src/foundation/filesystem/bounded-directory-tree-scan.ts` | `src/foundation/filesystem/stable-directory-read.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-06 | `src/foundation/filesystem/bounded-directory-tree-scan.ts` | `src/foundation/filesystem/rooted-directory.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-07 | `src/foundation/filesystem/bounded-directory-tree-scan.ts` | `src/foundation/filesystem/file-node-snapshot.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-08 | `src/foundation/filesystem/stable-directory-read.ts` | `src/foundation/filesystem/rooted-directory.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-09 | `src/foundation/filesystem/stable-directory-read.ts` | `src/foundation/filesystem/file-node-snapshot.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-10 | `src/foundation/filesystem/stable-file-read.ts` | `src/foundation/crypto/sha256-hasher.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-11 | `src/foundation/filesystem/stable-file-read.ts` | `src/foundation/filesystem/rooted-directory.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-12 | `src/foundation/filesystem/stable-file-read.ts` | `src/foundation/filesystem/file-node-snapshot.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF1-13 | `src/foundation/filesystem/rooted-directory.ts` | `src/foundation/filesystem/file-node-snapshot.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
 
-## 守卫、恢复与验证范围
+## 文件原子发布依赖
 
-文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
+```mermaid
+flowchart LR
+  accTitle: 文件原子发布依赖
+  accDescr: 当前代码精选的直接导入关系，完整文件身份在节点表，静态导入不等于运行时调用。
+  f8["原子写入口"]
+  f9["写入合同"]
+  f10["stage I/O"]
+  f11["stage 恢复"]
+  f12["目标 I/O"]
+  f13["父目录句柄"]
+  f14["精确 unlink"]
+  f8 -->|"E-IMPF2-01 导入"| f9
+  f8 -->|"E-IMPF2-02 导入"| f10
+  f8 -->|"E-IMPF2-03 导入"| f12
+  f10 -->|"E-IMPF2-04 导入"| f9
+  f10 -->|"E-IMPF2-05 导入"| f11
+  f10 -->|"E-IMPF2-06 导入"| f13
+  f11 -->|"E-IMPF2-07 导入"| f9
+  f11 -->|"E-IMPF2-08 导入"| f14
+  f12 -->|"E-IMPF2-09 导入"| f9
+  f12 -->|"E-IMPF2-10 导入"| f10
+  f12 -->|"E-IMPF2-11 导入"| f13
+  f14 -->|"E-IMPF2-12 导入"| f13
+```
 
-涉及的测试与核验入口：
+### 本图术语说明
 
-- `tests/foundation/filesystem/durable-atomic-file-write.test.ts`。
+| 术语 | 含义 |
+| --- | --- |
+| 导入 | AST中存在的直接模块引用，可能仅供类型检查。 |
+| 精选 | 仅展示所选文件之间的边，不声称是完整传递闭包。 |
+| 文件节点 | 使用稳定节点ID与完整相对路径，避免同名service.ts混淆。 |
 
-## 下钻与相关视图
+### 节点与实现定位
 
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+| 节点 | 文件 / 符号 | 职责 |
+| --- | --- | --- |
+| f8 | `src/foundation/filesystem/durable-atomic-file-write.ts` | 原子写入口 |
+| f9 | `src/foundation/filesystem/durable-atomic-file-write-contract.ts` | 写入合同 |
+| f10 | `src/foundation/filesystem/durable-atomic-file-stage-io.ts` | stage I/O |
+| f11 | `src/foundation/filesystem/durable-atomic-file-stage-recovery.ts` | stage 恢复 |
+| f12 | `src/foundation/filesystem/durable-atomic-file-target-io.ts` | 目标 I/O |
+| f13 | `src/foundation/filesystem/rooted-resource-parent-handle.ts` | 父目录句柄 |
+| f14 | `src/foundation/filesystem/exact-regular-file-unlink.ts` | 精确 unlink |
+
+### 本图边级证据
+
+| 编号 | 起点文件 | 终点文件 | 测试 / 核验 | 关系依据 |
+| --- | --- | --- | --- | --- |
+| E-IMPF2-01 | `src/foundation/filesystem/durable-atomic-file-write.ts` | `src/foundation/filesystem/durable-atomic-file-write-contract.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-02 | `src/foundation/filesystem/durable-atomic-file-write.ts` | `src/foundation/filesystem/durable-atomic-file-stage-io.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-03 | `src/foundation/filesystem/durable-atomic-file-write.ts` | `src/foundation/filesystem/durable-atomic-file-target-io.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-04 | `src/foundation/filesystem/durable-atomic-file-stage-io.ts` | `src/foundation/filesystem/durable-atomic-file-write-contract.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-05 | `src/foundation/filesystem/durable-atomic-file-stage-io.ts` | `src/foundation/filesystem/durable-atomic-file-stage-recovery.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-06 | `src/foundation/filesystem/durable-atomic-file-stage-io.ts` | `src/foundation/filesystem/rooted-resource-parent-handle.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-07 | `src/foundation/filesystem/durable-atomic-file-stage-recovery.ts` | `src/foundation/filesystem/durable-atomic-file-write-contract.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-08 | `src/foundation/filesystem/durable-atomic-file-stage-recovery.ts` | `src/foundation/filesystem/exact-regular-file-unlink.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-09 | `src/foundation/filesystem/durable-atomic-file-target-io.ts` | `src/foundation/filesystem/durable-atomic-file-write-contract.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-10 | `src/foundation/filesystem/durable-atomic-file-target-io.ts` | `src/foundation/filesystem/durable-atomic-file-stage-io.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-11 | `src/foundation/filesystem/durable-atomic-file-target-io.ts` | `src/foundation/filesystem/rooted-resource-parent-handle.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+| E-IMPF2-12 | `src/foundation/filesystem/exact-regular-file-unlink.ts` | `src/foundation/filesystem/rooted-resource-parent-handle.ts` | 未覆盖：静态关系由AST直接核验，不以运行测试冒充调用证据。 | 当前源文件的直接import或再导出 |
+
+[本模块总览](./README.md) · [实际调用与分支](./runtime-call-flow.md) · [逐文件台账](../02-file-review-index.md)。

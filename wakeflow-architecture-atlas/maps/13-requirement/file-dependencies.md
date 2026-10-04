@@ -1,143 +1,147 @@
 ---
-diagramId: ts-requirement-file-dependencies
+diagramId: ts-13-requirement-file-dependencies
 viewType: file-dependency
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L3
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:e2ff70e8e69bab3f8454763812c1031ec82fc482f6990a8a968a5293f13cf5d9
-audience: [maintainer, reviewer]
+verifiedAt: 2026-10-03
+baselineCommit: d8fafff33919c728e3a9b91ec04aa50ec5e07f0c
+testEvidence: anchored
+audience:
+  - maintainer
+  - reviewer
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
 sourcePaths:
-  - src/capabilities/requirement/*.ts
+  - src/capabilities/requirement/contract.ts
   - src/capabilities/requirement/decide.ts
   - src/capabilities/requirement/projection.ts
   - src/capabilities/requirement/service.ts
-  - src/configuration/*.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/ledger/*.ts
+  - src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts
+  - src/governance/ledger/ledger-authority-reader.ts
   - src/governance/ledger/ledger-authority-store.ts
-  - src/kernel/*.ts
-  - src/kernel/markdown-sections.ts
+  - src/governance/ledger/ledger-record-publication-recovery.ts
+  - src/governance/ledger/ledger-record-publication-storage.ts
+  - src/governance/ledger/ledger-record-publisher.ts
   - src/kernel/privacy-scan.ts
   - src/kernel/publication-transaction.ts
+  - src/kernel/requirement-acceptance.ts
   - src/kernel/requirement-board.ts
-  - src/workspace/*.ts
+  - tooling/codegen/schema-types.ts
 schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-board-inspection-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-board-inspection-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-requirement-publication-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-requirement-publication-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
   - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
   - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
   - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-testPaths:
-  - tests/capabilities/requirement/service.test.ts
+testPaths: []
 refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+  - src/capabilities/requirement/contract.ts
+  - src/capabilities/requirement/decide.ts
+  - src/capabilities/requirement/projection.ts
+  - src/capabilities/requirement/service.ts
+  - src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts
+  - src/governance/ledger/ledger-authority-reader.ts
+  - src/governance/ledger/ledger-authority-store.ts
+  - src/governance/ledger/ledger-record-publication-recovery.ts
+  - src/governance/ledger/ledger-record-publication-storage.ts
+  - src/governance/ledger/ledger-record-publisher.ts
+  - src/kernel/privacy-scan.ts
+  - src/kernel/publication-transaction.ts
+  - src/kernel/requirement-acceptance.ts
+  - src/kernel/requirement-board.ts
+  - tooling/codegen/schema-types.ts
+sourceFingerprint: sha256:04a20465891b607d753028b49ac5a8ad1734f183d8caf2df601f0cba2b815d6a
 ---
 
-# 需求包：文件直接导入
+# 需求包：发布、看板与Ledger的静态依赖
 
-这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
+> 核验于 2026-10-03，基线 `d8fafff` 加当前未提交工作树。图表达实际源码分支，未提交实现标为进行中；不把开发阶段计划当作运行事实。来源与测试锚点按本文精确范围列出。
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
+本图是从当前TypeScript AST选出的直接导入子图；每条边再对照已读源码用途。它只证明耦合方向，不证明调用顺序、状态转移或Agent授权。
 
-## 需求包的精选直接导入
+## 需求包：发布、看板与Ledger的静态依赖
 
 ```mermaid
-flowchart TB
-  accTitle: 需求包的精选直接导入
-  accDescr: 需求包所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
-  f1["能力执行 service.ts"]
-  f2["纯决定 decide.ts"]
-  f3["源码模块 projection.ts"]
-  f4["需求看板 requirement-board.ts"]
-  f5["源码模块 ledger-authority-store.ts"]
-  f6["源码模块 markdown-sections.ts"]
-  f7["源码模块 publication-transaction.ts"]
-  f8["源码模块 privacy-scan.ts"]
-  f1 -->|"E-L1056-01 直接导入"| f2
-  f1 -->|"E-L1056-02 直接导入"| f3
-  f1 -->|"E-L1056-03 直接导入"| f4
-  f1 -->|"E-L1056-04 直接导入"| f5
-  f1 -->|"E-L1056-05 直接导入"| f7
-  f2 -->|"E-L1056-06 直接导入"| f4
-  f2 -->|"E-L1056-07 直接导入"| f6
-  f2 -->|"E-L1056-08 直接导入"| f8
-  f3 -->|"E-L1056-09 直接导入"| f4
+flowchart LR
+  accTitle: 需求包：发布、看板与Ledger的静态依赖
+  accDescr: 文件直接import关系的审阅精选视图，运行调用与状态分支在独立页面。
+  f0["发布和读取入口<br/>service.ts"]
+  f1["章节与准入<br/>decide.ts"]
+  f2["看板视图<br/>projection.ts"]
+  f3["wire合同<br/>contract.ts"]
+  f4["认领状态owner<br/>requirement-board.ts"]
+  f5["共用验收解析<br/>requirement-acceptance.ts"]
+  f6["Ledger门面<br/>ledger-authority-store.ts"]
+  f7["发布owner<br/>ledger-record-publisher.ts"]
+  f8["恢复owner<br/>ledger-record-publication-recovery.ts"]
+  f9["final读取<br/>ledger-authority-reader.ts"]
+  f10["事务存储<br/>ledger-record-publication-storage.ts"]
+  f11["效果外壳<br/>publication-transaction.ts"]
+  f12["共享隐私扫描与系统路径分类"]
+  f0 -->|"E-RF0-01 直接导入"| f1
+  f0 -->|"E-RF0-02 直接导入"| f2
+  f0 -->|"E-RF0-03 直接导入"| f3
+  f0 -->|"E-RF0-04 直接导入"| f4
+  f0 -->|"E-RF0-05 直接导入"| f6
+  f0 -->|"E-RF0-06 直接导入"| f11
+  f1 -->|"E-RF0-07 直接导入"| f5
+  f2 -->|"E-RF0-08 直接导入"| f4
+  f6 -->|"E-RF0-09 直接导入"| f7
+  f6 -->|"E-RF0-10 直接导入"| f8
+  f6 -->|"E-RF0-11 直接导入"| f9
+  f7 -->|"E-RF0-12 直接导入"| f10
+  f8 -->|"E-RF0-13 直接导入"| f10
+  f1 -->|"E-RF0-14 直接导入"| f12
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
+| 直接导入 | 包含实际import或显式re-export；类型依赖同样算结构依赖。 |
+| 精选范围 | 按模块入口裁剪；被省略的依赖仍在逐文件台账和全局导入数据中。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| f1 | `src/capabilities/requirement/service.ts` | 能力执行 service.ts |
-| f2 | `src/capabilities/requirement/decide.ts` | 纯决定 decide.ts |
-| f3 | `src/capabilities/requirement/projection.ts` | 源码模块 projection.ts |
-| f4 | `src/kernel/requirement-board.ts` | 需求看板 requirement-board.ts |
-| f5 | `src/governance/ledger/ledger-authority-store.ts` | 源码模块 ledger-authority-store.ts |
-| f6 | `src/kernel/markdown-sections.ts` | 源码模块 markdown-sections.ts |
-| f7 | `src/kernel/publication-transaction.ts` | 源码模块 publication-transaction.ts |
-| f8 | `src/kernel/privacy-scan.ts` | 源码模块 privacy-scan.ts |
+| f0 | `src/capabilities/requirement/service.ts` | 发布和读取入口<br/>service.ts |
+| f1 | `src/capabilities/requirement/decide.ts` | 章节与准入<br/>decide.ts |
+| f2 | `src/capabilities/requirement/projection.ts` | 看板视图<br/>projection.ts |
+| f3 | `src/capabilities/requirement/contract.ts` | wire合同<br/>contract.ts |
+| f4 | `src/kernel/requirement-board.ts` | 认领状态owner<br/>requirement-board.ts |
+| f5 | `src/kernel/requirement-acceptance.ts` | 共用验收解析<br/>requirement-acceptance.ts |
+| f6 | `src/governance/ledger/ledger-authority-store.ts` | Ledger门面<br/>ledger-authority-store.ts |
+| f7 | `src/governance/ledger/ledger-record-publisher.ts` | 发布owner<br/>ledger-record-publisher.ts |
+| f8 | `src/governance/ledger/ledger-record-publication-recovery.ts` | 恢复owner<br/>ledger-record-publication-recovery.ts |
+| f9 | `src/governance/ledger/ledger-authority-reader.ts` | final读取<br/>ledger-authority-reader.ts |
+| f10 | `src/governance/ledger/ledger-record-publication-storage.ts` | 事务存储<br/>ledger-record-publication-storage.ts |
+| f11 | `src/kernel/publication-transaction.ts` | 效果外壳<br/>publication-transaction.ts |
+| f12 | `src/kernel/privacy-scan.ts` | 共享隐私扫描与系统路径分类 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1056-01 | `src/capabilities/requirement/service.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
-| E-L1056-02 | `src/capabilities/requirement/service.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
-| E-L1056-03 | `src/capabilities/requirement/service.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
-| E-L1056-04 | `src/capabilities/requirement/service.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
-| E-L1056-05 | `src/capabilities/requirement/service.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
-| E-L1056-06 | `src/capabilities/requirement/decide.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
-| E-L1056-07 | `src/capabilities/requirement/decide.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
-| E-L1056-08 | `src/capabilities/requirement/decide.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
-| E-L1056-09 | `src/capabilities/requirement/projection.ts` | `tests/capabilities/requirement/service.test.ts` | 直接导入 |
+| E-RF0-01 | `src/capabilities/requirement/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-02 | `src/capabilities/requirement/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-03 | `src/capabilities/requirement/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-04 | `src/capabilities/requirement/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-05 | `src/capabilities/requirement/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-06 | `src/capabilities/requirement/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-07 | `src/capabilities/requirement/decide.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-08 | `src/capabilities/requirement/projection.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-09 | `src/governance/ledger/ledger-authority-store.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-10 | `src/governance/ledger/ledger-authority-store.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-11 | `src/governance/ledger/ledger-authority-store.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-12 | `src/governance/ledger/ledger-record-publisher.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-13 | `src/governance/ledger/ledger-record-publication-recovery.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-RF0-14 | `src/capabilities/requirement/decide.ts` | 未覆盖：静态导入由源码 AST 校验；具体隐私分支见独立页面 | 共享扫描与系统路径分类器是直接依赖 |
 
-## 守卫、恢复与验证范围
+## 阅读边界
 
-文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
+前轮已对Ledger共12个手写文件逐文件审阅；本轮深审隐私消费者并保留原导入关系，精选图省略codec、path和资源声明的细边；它们的职责/消费者在逐文件台账。
 
-涉及的测试与核验入口：
+Schema是可移植wire源；`tooling/codegen/schema-types.ts`生成`src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts`等派生合同。生成文件只核实来源与生成链，不计作手写文件语义审阅；`package.json`的schema:build/schema:check负责生成与漂移检测。
 
-- `tests/capabilities/requirement/service.test.ts`。
+## 继续阅读
 
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[文件导入](./file-dependencies.md) · [运行分支](./runtime-call-flow.md) · [本模块总览](./README.md) · [全局入口](../README.md) · [本轮增量审阅](../../plans/review-2026-10-03/coordination.md) · [前轮完整审阅](../../plans/review-2026-10-02/coordination-evidence.md)

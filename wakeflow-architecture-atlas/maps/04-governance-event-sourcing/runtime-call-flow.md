@@ -1,301 +1,120 @@
 ---
-diagramId: ts-governance-demand-runtime-e0
-viewType: call-flow
-truthKind: current-code
-reviewDepth: L4
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:ff26c1614ceae4aa8f31d08a4bf8567be19b8125df26e823ea52cfdf2ec8a089
-audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Architecture Atlas
-generatedBy: manual-review
-sourcePaths:
-  - src/capabilities/demand/*.ts
-  - src/capabilities/demand/service.ts
-  - src/capabilities/tasking/*.ts
-  - src/capabilities/tasking/service.ts
-  - src/configuration/*.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/archive/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/governance/delivery/*.ts
-  - src/contracts/generated/governance/demand/*.ts
-  - src/contracts/generated/governance/evidence/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/governance/lifecycle/*.ts
-  - src/contracts/generated/governance/result/*.ts
-  - src/contracts/generated/governance/review/*.ts
-  - src/contracts/generated/governance/tasking/*.ts
-  - src/contracts/generated/governance/testing/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/generated/workspace/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/artifact/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/event-sourcing/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/git/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/controller/*.ts
-  - src/governance/delivery/*.ts
-  - src/governance/demand/*.ts
-  - src/governance/demand/event-sourcing/*.ts
-  - src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts
-  - src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts
-  - src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts
-  - src/governance/demand/event-sourcing/demand-file-event-snapshot-store.ts
-  - src/governance/demand/event-sourcing/demand-file-event-store.ts
-  - src/governance/demand/model/*.ts
-  - src/governance/demand/publication/*.ts
-  - src/governance/demand/publication/demand-event-sourcing-publication-package.ts
-  - src/governance/demand/publication/demand-event-sourcing-publication-service.ts
-  - src/governance/evidence/*.ts
-  - src/governance/ledger/*.ts
-  - src/governance/lifecycle/*.ts
-  - src/governance/result/*.ts
-  - src/governance/review/*.ts
-  - src/governance/tasking/*.ts
-  - src/governance/testing/*.ts
-  - src/kernel/*.ts
-  - src/kernel/event-stream/*.ts
-  - src/kernel/requirement-board.ts
-  - src/workspace/*.ts
-  - src/workspace/window-runtime/*.ts
-schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/git-object-id.schema.json
-  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/archive/demand-archive-manifest.schema.json
-  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
-  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
-  - src/contracts/schemas/governance/demand/demand-authority.schema.json
-  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-publication-transaction.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
-  - src/contracts/schemas/governance/demand/demand-identity.schema.json
-  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
-  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
-  - src/contracts/schemas/governance/result/target-result.schema.json
-  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
-  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
-  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
-  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
-  - src/contracts/schemas/governance/tasking/task-package.schema.json
-  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-  - src/contracts/schemas/workspace/window-host-binding.schema.json
-testPaths:
-  - tests/capabilities/demand/service.test.ts
-  - tests/capabilities/tasking/service.test.ts
-  - tests/governance/demand/demand-event-sourcing-command-handler.test.ts
-refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+diagramId: "ts-governance-event-sourcing-runtime-call-flow"
+viewType: "call-flow"
+truthKind: "in-progress-worktree"
+reviewDepth: "L4"
+verifiedAt: "2026-10-03"
+baselineCommit: "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c"
+sourceFingerprint: "sha256:2e599bbdcfc9177bd618f6bfcdd1bb6fe8ec4c70f93d5b1fabf52b9f9cb5ae9c"
+testEvidence: "anchored"
+audience: ["maintainer", "reviewer"]
+documentationOwner: "Wakeflow Architecture Atlas"
+generatedBy: "manual-review"
+sourcePaths: ["src/capabilities/demand/lifecycle.ts","src/capabilities/result-review/service.ts","src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts","src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts","src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts","src/governance/demand/event-sourcing/demand-event-stream-commit.ts","src/governance/demand/event-sourcing/demand-file-event-store.ts","src/governance/demand/publication/demand-event-sourcing-publication-contract.ts","src/governance/demand/publication/demand-event-sourcing-publication-package.ts","src/governance/demand/publication/demand-event-sourcing-publication-service.ts","src/governance/demand/publication/demand-event-sourcing-publication-stage.ts","src/governance/demand/publication/demand-event-sourcing-publication-storage.ts","src/governance/demand/publication/demand-event-sourcing-publication-transaction.ts","src/kernel/append-command.ts","src/kernel/command-shell.ts","src/kernel/publication-transaction.ts","src/kernel/requirement-board.ts","src/kernel/workspace-operation-scope.ts","src/foundation/filesystem/rooted-read-write-scope.ts"]
+schemaPaths: []
+testPaths: ["tests/capabilities/result-review/service.test.ts", "tests/capabilities/workspace/operation-scope.test.ts", "tests/governance/demand/demand-event-sourcing-command-handler.test.ts", "tests/governance/demand/demand-event-sourcing-publication-service.test.ts", "tests/kernel/append-command.test.ts", "tests/kernel/command-shell.test.ts", "tests/kernel/publication-transaction.test.ts", "tests/kernel/workspace-operation-scope.test.ts"]
+refreshTriggers: []
 ---
 
-# Demand：命令、检查点与首次发布
+# Demand：追加提交与首次发布的两条管线
 
-事件流保留持久化事实，内核及切片提供追加型和效果型调用形状。
-
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## 追加命令的幂等与 CAS
+> 2026-10-03 当前工作树语义复核；含未提交实现。HEAD 只定位已提交基线，来源指纹覆盖本页实际引用的文件。图谱不拥有业务状态。本页的测试锚点表示已核对的覆盖入口，运行结果见本轮总台账。
 
 ```mermaid
-sequenceDiagram
-  accTitle: 追加命令的幂等与 CAS
-  accDescr: 追加命令的幂等与 CAS；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant slice as 能力切片
-  participant handler as 命令处理器
-  participant repo as 事件仓储
-  participant decider as 纯决定器
-  participant store as 提交存储
-  slice->>handler: E-L1016-01 命令、幂等键和 expected revision
-  handler->>repo: E-L1016-02 先查幂等绑定，再加载一次聚合
-  handler->>decider: E-L1016-03 产生单个或多个事件
-  handler->>store: E-L1016-04 固定 commitSequence 槽位追加
-  handler->>repo: E-L1016-05 成功后刷新检查点
+flowchart TB
+  accTitle: 追加命令的幂等与提交点
+  accDescr: 追加命令的幂等与提交点；每条关系由当前实现的调用或条件支持，错误停止与恢复保持显式。
+  A["[代码] executeDemandEventSourcingCommand"]
+  B["[代码] 幂等键命中"]
+  C["[代码] load 与预期修订核对"]
+  D["[代码] 纯决定并演进提交批"]
+  F["[权威] appendPreparedCommit"]
+  H["[视图] refreshCheckpoints"]
+  A -->|"E-DEM02-01 同键同请求摘要直接回放；异摘要拒绝"| B
+  A -->|"E-DEM02-02 未命中绑定：加载聚合进入修订检查"| C
+  C -->|"E-DEM02-03 修订一致才执行新的领域决定"| D
+  D -->|"E-DEM02-04 领域转换全成功后一次追加事件批"| F
+  F -->|"E-DEM02-05 已提交才刷新；仓储错误记为 stale，提交保持有效"| H
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-| commit | 一次不可变事件提交批；文件槽位以预期修订防止并发覆盖。 |
-| snapshot | 可重建的事件聚合检查点；损坏时回退重放。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| slice | `src/capabilities/tasking/service.ts` | 能力切片 |
-| handler | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#executeDemandEventSourcingCommand` | 命令处理器 |
-| repo | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts` | 事件仓储 |
-| decider | `src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts` | 纯决定器 |
-| store | `src/governance/demand/event-sourcing/demand-file-event-store.ts` | 提交存储 |
+| [代码] | 确定性服务、守卫或纯决定；失败会拒绝转换。 |
+| [权威] | 持久事实；只能由指定写入者改变。 |
+| [视图] | 由权威派生的可重建数据，不授权写入。 |
+| commitId | 一次批提交的确定身份；与客户端 idempotency key 是不同层次。 |
+| streamRevision | 事件修订号；一个提交批可含多个连续事件。 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系与边界 |
 | --- | --- | --- | --- |
-| E-L1016-01 | `src/capabilities/tasking/service.ts#execute` | `tests/capabilities/tasking/service.test.ts` | 命令、幂等键和 expected revision |
-| E-L1016-02 | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#executeDemandEventSourcingCommand` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 先查幂等绑定，再加载一次聚合 |
-| E-L1016-03 | `src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts#decideDemandEventSourcingCommand` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 产生单个或多个事件 |
-| E-L1016-04 | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#executeDemandEventSourcingCommand` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 固定 commitSequence 槽位追加 |
-| E-L1016-05 | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts#DemandEventSourcingRepository.refreshCheckpoints` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 成功后刷新检查点 |
+| E-DEM02-01 | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#executeDemandEventSourcingCommand` | 间接覆盖：`tests/governance/demand/demand-event-sourcing-command-handler.test.ts#executeDemandEventSourcingCommand`（经公共切片入口执行此内部关系） | 同键同请求摘要直接回放；异摘要拒绝 |
+| E-DEM02-02 | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#loadAggregateForCommand` | 间接覆盖：`tests/governance/demand/demand-event-sourcing-command-handler.test.ts#executeDemandEventSourcingCommand`（经公共切片入口执行此内部关系） | 未命中绑定：加载聚合进入修订检查 |
+| E-DEM02-03 | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#executeDemandEventSourcingCommand` | 间接覆盖：`tests/governance/demand/demand-event-sourcing-command-handler.test.ts#executeDemandEventSourcingCommand`（经公共切片入口执行此内部关系） | 修订一致才执行新的领域决定 |
+| E-DEM02-04 | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#executeDemandEventSourcingCommand` | 间接覆盖：`tests/governance/demand/demand-event-sourcing-command-handler.test.ts#executeDemandEventSourcingCommand`（经公共切片入口执行此内部关系） | 领域转换全成功后一次追加事件批 |
+| E-DEM02-05 | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts#executeDemandEventSourcingCommand` | 间接覆盖：`tests/governance/demand/demand-event-sourcing-command-handler.test.ts#executeDemandEventSourcingCommand`（经公共切片入口执行此内部关系） | 已提交才刷新；仓储错误记为 stale，提交保持有效 |
 
-## 快照加尾部和完整审计
+幂等键命中时仍加载当前聚合，但直接返回旧提交，不再执行领域决定。预期修订过期时，只有同 commitId、命令摘要及原 expectedStreamRevision 都相符才重放；找不到或不匹配分别拒绝并发或幂等冲突。
+
+## 首次发布的中断收敛
+
+`src/governance/demand/publication/demand-event-sourcing-publication-service.ts#applyPublication` 顺序为：检查 pending 或同 Demand 已认领 → 构建 stage → 发布 final 根 → 复验根内 marker → CAS claim → 删除 marker → 加载根与认领闭包 → 删除 sidecar。final 与 stage 同时存在拒绝为 conflict。根存在但无 marker 且包未认领也拒绝，不把陌生根当作已发布。
+
+`src/governance/demand/publication/demand-event-sourcing-publication-service.ts#recoverDemandPublication` 只根据同级意图恢复；先恢复意图文件的临时阶段，复验意图后才可退休已死拥有者的锁，取锁后再读意图并向前应用。意图不存在返回 not-found；它不是任意残留清理器。
+
+错误的 publicationAuthority 为 unchanged、recoverable、current 或 unknown；读失败不可猜成功。纯事件命令对短暂 stream 读取冲突最多重读三次，不放宽校验、不无限重试。
+
+## 公共切片进入写入前的工作区边界
 
 ```mermaid
-sequenceDiagram
-  accTitle: 快照加尾部和完整审计
-  accDescr: 快照加尾部和完整审计；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant reader as 调用者
-  participant repo as 事件仓储
-  participant snapshot as 快照存储
-  participant store as 不可变提交
-  reader->>repo: E-L1017-01 普通 load
-  repo->>snapshot: E-L1017-02 选最新有效检查点
-  repo->>store: E-L1017-03 读锚定提交与 tail
-  alt 无有效缓存或显式 audit
-  repo->>store: E-L1017-04 从提交一完整复验
-  end
-  repo-->>reader: E-L1017-05 返回聚合与缓存状态，读过程零写
+flowchart TB
+  accTitle: 共享工作区作用域覆盖上下文与收尾
+  accDescr: 只读预览直接打开上下文；任务、投递、结果和生命周期写入先进入共享作用域，再加载配置并执行领域事务，结果边界和上下文关闭后才释放。维护保留或不支持协议时停止写入。
+  R["[代码] 公共请求与作用域选择"]
+  O["[代码] 只读 preview 或 review inspect"]
+  S["[代码] workspace shared 准入"]
+  C["[代码] 打开 Config、Ledger 与 Demand 上下文"]
+  D["[代码] 切片事务、next 与结果边界"]
+  F["[代码] 关闭上下文；写者再释放共享作用域"]
+  X["[停止] 协议、维护保留或等待取消"]
+  R -->|"E-DEM05-01 preview 与 inspect 选择 read"| O
+  O -->|"E-DEM05-02 只读路径不取得写入作用域"| C
+  R -->|"E-DEM05-03 append 与 Demand apply、recover 选择 shared"| S
+  S -->|"E-DEM05-04 当前协议与无维护保留才进入；signal 可中止等待"| C
+  S -->|"E-DEM05-05 不支持协议、维护残留或取消时拒绝"| X
+  C -->|"E-DEM05-06 上下文在准入之后加载；领域锁和 CAS 仍独立"| D
+  D -->|"E-DEM05-07 成功或失败均先关闭上下文，再退出作用域"| F
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| snapshot | 可重建的事件聚合检查点；损坏时回退重放。 |
-| commit | 一次不可变事件提交批；文件槽位以预期修订防止并发覆盖。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| reader | Agent / 用户 / 外部效果或条件视图 | 调用者 |
-| repo | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts` | 事件仓储 |
-| snapshot | `src/governance/demand/event-sourcing/demand-file-event-snapshot-store.ts` | 快照存储 |
-| store | `src/governance/demand/event-sourcing/demand-file-event-store.ts` | 不可变提交 |
+| shared | 普通写者共享租约，可与其他共享写者并存；与独占维护冲突。 |
+| read | 此处是不进入写入作用域的只读路径，不表示获得读写锁中的共享租约。 |
+| 维护保留 | 活跃维护门或未结算维护事务；进程结束不自动解除耐久保留。 |
+| signal | 请求取消信号传入准入等待；不等于撤销已经提交的事件。 |
+| CAS | 比较并交换；共享作用域不替代每个资源的并发条件。 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系与边界 |
 | --- | --- | --- | --- |
-| E-L1017-01 | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts#DemandEventSourcingRepository.load` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 普通 load |
-| E-L1017-02 | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts#DemandEventSourcingRepository.load` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 选最新有效检查点 |
-| E-L1017-03 | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts#DemandEventSourcingRepository.load` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 读锚定提交与 tail |
-| E-L1017-04 | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts#DemandEventSourcingRepository.audit` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 从提交一完整复验 |
-| E-L1017-05 | `src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts#DemandEventSourcingRepository.load` | `tests/governance/demand/demand-event-sourcing-command-handler.test.ts` | 返回聚合与缓存状态，读过程零写 |
+| E-DEM05-01 | `src/kernel/publication-transaction.ts#runPublicationTransaction`、`src/capabilities/result-review/service.ts#executeTargetResultReviewInspectionRequest` | `tests/kernel/publication-transaction.test.ts#runPublicationTransaction`、间接覆盖：`tests/capabilities/result-review/service.test.ts#inspectFixtureReview`（各自入口的只读行为） | preview/read 不持有写入租约。 |
+| E-DEM05-02 | `src/kernel/command-shell.ts#runCommandShell` | `tests/kernel/command-shell.test.ts#runCommandShell` | read 直接执行 open/body/close，仍检查公开结果。 |
+| E-DEM05-03 | `src/kernel/append-command.ts#runAppendCommand`、`src/capabilities/demand/lifecycle.ts#executeTerminal` | `tests/kernel/append-command.test.ts#runAppendCommand`、`tests/kernel/publication-transaction.test.ts#runPublicationTransaction` | 追加固定 shared，Demand 效果声明 mutationScope=shared。 |
+| E-DEM05-04 | `src/kernel/workspace-operation-scope.ts#withWorkspaceOperationScope` | `tests/kernel/workspace-operation-scope.test.ts#withWorkspaceOperationScope`；间接覆盖：`tests/capabilities/workspace/operation-scope.test.ts#refreshActiveProjection`（在途投影使维护等待） | 开上下文之前进入；嵌套只能借用相同根且不可提升。 |
+| E-DEM05-05 | `src/kernel/workspace-operation-scope.ts#prepareScope`、`src/kernel/workspace-operation-scope.ts#assertNoMaintenanceReservation` | `tests/capabilities/workspace/operation-scope.test.ts#withWorkspaceOperationScope` | 非当前协议或未结算维护拒绝；取消准入等待的逐切片组合未全部单测。 |
+| E-DEM05-06 | `src/kernel/command-shell.ts#runCommandShell` | `tests/kernel/command-shell.test.ts#runCommandShell` | open、body、结果脱敏及上限均在 execute 内。 |
+| E-DEM05-07 | `src/kernel/command-shell.ts#runCommandShell`、`src/kernel/workspace-operation-scope.ts#withWorkspaceOperationScope` | `tests/kernel/command-shell.test.ts#runCommandShell`、`tests/kernel/workspace-operation-scope.test.ts#withWorkspaceOperationScope` | execute 内上下文关闭不覆盖已有 body 错误；租约随后按自身 owner 结算，失败可另行覆盖。逃逸回调不能继续借用。 |
 
-## 根先发布后认领需求包
+该图只覆盖普通写入与只读分支；维护 owner 自行管理入口门，私有权限收窄不在此共享/独占模型中。已提交之后仍可能因下游 I/O 或取消需要幂等重放或日志恢复，不能把作用域称为跨资源回滚事务。
 
-```mermaid
-sequenceDiagram
-  accTitle: 根先发布后认领需求包
-  accDescr: 根先发布后认领需求包；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant agent as Controller
-  participant slice as Demand 切片
-  participant publication as 发布 owner
-  participant board as 看板 CAS
-  agent->>slice: E-L1018-01 preview requirementId 与可选 podId
-  slice-->>agent: E-L1018-02 确定性计划摘要与阻塞项
-  agent->>slice: E-L1018-03 同请求 apply
-  slice->>publication: E-L1018-04 sidecar、stage、身份与首个提交
-  publication->>board: E-L1018-05 按预期摘要 claim，同 Demand 可重放
-```
+当前租约取得即登记到外层，短 latch 结算失败后仍尝试释放已取得许可；未知同名替换者不被删除。清理错误可能覆盖原错误，这与 shell 的上下文关闭首错规则不同，见[许可交接与失败结算](../02-foundation/admission-races-and-recovery.md)。
 
-### 本图术语说明
+## 继续阅读
 
-| 术语 | 本图含义 |
-| --- | --- |
-| Demand | 一个需求的不可变身份和事件流；当前执行环境由 podId 指定。 |
-| Pod | 完整窗口组与每仓执行位置；main 是 primary Pod。 |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| agent | Agent / 用户 / 外部效果或条件视图 | Controller |
-| slice | `src/capabilities/demand/service.ts` | Demand 切片 |
-| publication | `src/governance/demand/publication/demand-event-sourcing-publication-service.ts` | 发布 owner |
-| board | `src/kernel/requirement-board.ts` | 看板 CAS |
-
-### 本图边级证据
-
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1018-01 | `src/capabilities/demand/service.ts#executeDemandCreationRequest` | `tests/capabilities/demand/service.test.ts` | preview requirementId 与可选 podId |
-| E-L1018-02 | `src/capabilities/demand/service.ts#planCreate` | `tests/capabilities/demand/service.test.ts` | 确定性计划摘要与阻塞项 |
-| E-L1018-03 | `src/capabilities/demand/service.ts#executeDemandCreationRequest` | `tests/capabilities/demand/service.test.ts` | 同请求 apply |
-| E-L1018-04 | `src/governance/demand/publication/demand-event-sourcing-publication-service.ts#publishDemandFromPackage` | `tests/capabilities/demand/service.test.ts` | sidecar、stage、身份与首个提交 |
-| E-L1018-05 | `src/governance/demand/publication/demand-event-sourcing-publication-package.ts#claimPackageForDemandPublication` | `tests/capabilities/demand/service.test.ts` | 按预期摘要 claim，同 Demand 可重放 |
-
-## 守卫、恢复与验证范围
-
-只画当前已有的恢复 owner。跨资源失败必须由原 sidecar 或日志前向结算；看板不是事件流的替代物。
-
-涉及的测试与核验入口：
-
-- `tests/capabilities/demand/service.test.ts`。
-- `tests/capabilities/tasking/service.test.ts`。
-- `tests/governance/demand/demand-event-sourcing-command-handler.test.ts`。
-
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[本专题总览](./README.md) · [文件导入](./file-dependencies.md) · [实际调用](./runtime-call-flow.md) · [逐文件审阅记录](../../plans/review-2026-10-03/demand-delivery.md) · [图谱入口](../README.md)

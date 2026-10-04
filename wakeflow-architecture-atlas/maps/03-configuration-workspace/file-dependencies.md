@@ -1,155 +1,135 @@
 ---
-diagramId: ts-configuration-workspace-file-f3
+diagramId: ts-configuration-workspace-files
 viewType: file-dependency
-truthKind: current-code
-reviewDepth: L3
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:e4e39d441991a82d13557acd8dadf758637ab0fb2c635125780a885458ae9269
-audience: [maintainer, reviewer]
+truthKind: in-progress-worktree
+reviewDepth: L4
+testEvidence: anchored
+verifiedAt: 2026-10-03
+baselineCommit: d8fafff33919c728e3a9b91ec04aa50ec5e07f0c
+sourceFingerprint: "sha256:46f53382f9781dc5a433644861110611a53b0a70f12556583be853efc91725e0"
+audience:
+  - maintainer
+  - reviewer
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
 sourcePaths:
-  - src/capabilities/workspace/*.ts
   - src/capabilities/workspace/maintain-workspace.ts
-  - src/configuration/*.ts
   - src/configuration/wakeflow-config-authority-snapshot.ts
-  - src/configuration/wakeflow-config-v3.ts
-  - src/configuration/wakeflow-fresh-config-selection.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/generated/workspace/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/git/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/demand/*.ts
-  - src/governance/demand/event-sourcing/*.ts
-  - src/governance/demand/publication/*.ts
-  - src/governance/ledger/*.ts
-  - src/governance/tasking/*.ts
-  - src/kernel/*.ts
-  - src/kernel/event-stream/*.ts
-  - src/kernel/publication-transaction.ts
-  - src/workspace/*.ts
-  - src/workspace/host-runtime/*.ts
-  - src/workspace/maintenance/*.ts
+  - src/governance/demand/demand-runtime-recovery.ts
+  - src/hosts/codex/codex-maintenance-execution.ts
+  - src/kernel/workspace-operation-scope.ts
+  - src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.ts
+  - src/workspace/maintenance/wakeflow-maintenance-execution-preview.ts
   - src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts
+  - src/workspace/maintenance/wakeflow-maintenance-gate.ts
+  - src/workspace/maintenance/wakeflow-maintenance-journal-store.ts
   - src/workspace/maintenance/wakeflow-static-materialization-preview.ts
-  - src/workspace/managed-integration/*.ts
-  - src/workspace/support/*.ts
-  - src/workspace/window-runtime/*.ts
+  - src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts
 schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
+  - src/contracts/schemas/configuration/wakeflow-config.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-maintenance-public-request.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-maintenance-public-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
   - src/contracts/schemas/workspace/maintenance-execution-intent.schema.json
   - src/contracts/schemas/workspace/maintenance-journal.schema.json
-  - src/contracts/schemas/workspace/window-runtime-unregistered-projection.schema.json
 testPaths:
+  - tests/capabilities/workspace/demand-runtime-recovery.test.ts
   - tests/capabilities/workspace/maintain-workspace.test.ts
+  - tests/capabilities/workspace/operation-scope.test.ts
+  - tests/hosts/codex/codex-maintenance-execution.test.ts
+  - tests/workspace/maintenance/wakeflow-maintenance-execution-transaction.test.ts
+  - tests/workspace/maintenance/wakeflow-static-materialization-step-executor.test.ts
 refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+  - src/capabilities/workspace/maintain-workspace.ts
+  - src/configuration/wakeflow-config-authority-snapshot.ts
+  - src/governance/demand/demand-runtime-recovery.ts
+  - src/hosts/codex/codex-maintenance-execution.ts
+  - src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.ts
+  - src/workspace/maintenance/wakeflow-maintenance-execution-preview.ts
+  - src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts
+  - src/workspace/maintenance/wakeflow-maintenance-gate.ts
+  - src/workspace/maintenance/wakeflow-maintenance-journal-store.ts
+  - src/workspace/maintenance/wakeflow-static-materialization-preview.ts
+  - src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts
 ---
 
-# 配置与维护：文件直接导入
+# 维护的直接文件依赖
 
-这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
-
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## 配置与维护的精选直接导入
+精选图只展开公共入口、计划聚合、事务、检查点和领域分派。每条边均为当前 TypeScript 文件的直接 import；能力目录与宿主配置不被误画为运行顺序。完整逐文件消费者见审阅记录。
 
 ```mermaid
-flowchart TB
-  accTitle: 配置与维护的精选直接导入
-  accDescr: 配置与维护所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
-  f1["源码模块 maintain-workspace.ts"]
-  f2["源码模块 publication-transaction.ts"]
-  f3["源码模块 wakeflow-static-materialization-preview.ts"]
-  f4["源码模块 wakeflow-maintenance-execution-transaction.ts"]
-  f5["源码模块 wakeflow-config-authority-snapshot.ts"]
-  f6["源码模块 wakeflow-config-v3.ts"]
-  f7["源码模块 wakeflow-fresh-config-selection.ts"]
-  f1 -->|"E-L1010-01 直接导入"| f2
-  f1 -->|"E-L1010-02 直接导入"| f4
-  f1 -->|"E-L1010-03 直接导入"| f6
-  f1 -->|"E-L1010-04 直接导入"| f7
-  f3 -->|"E-L1010-05 直接导入"| f5
-  f3 -->|"E-L1010-06 直接导入"| f6
-  f4 -->|"E-L1010-07 直接导入"| f5
-  f4 -->|"E-L1010-08 直接导入"| f6
-  f5 -->|"E-L1010-09 直接导入"| f6
-  f7 -->|"E-L1010-10 直接导入"| f6
+flowchart LR
+  accTitle: 工作区维护的直接导入边界
+  accDescr: 公共维护入口依赖事务端口与治理恢复，宿主组合固定能力，共享预览和事务分别依赖其领域所有者和检查点文件。
+  A["[源码] A 公共维护切片"]
+  B["[源码] B Codex 固定执行组合"]
+  C["[源码] C 聚合预览"]
+  D["[源码] D 聚合事务"]
+  E["[源码] E 静态预览"]
+  F["[源码] F 静态步骤分派"]
+  G["[源码] G gate"]
+  H["[源码] H intent store"]
+  I["[源码] I journal store"]
+  J["[源码] J 配置快照"]
+  K["[源码] K Demand runtime recovery"]
+  L["[源码] L 工作区操作作用域"]
+  A -->|"E-WSF-01 导入"| J
+  A -->|"E-WSF-02 导入"| K
+  B -->|"E-WSF-03 导入"| C
+  B -->|"E-WSF-04 导入"| D
+  C -->|"E-WSF-05 导入"| E
+  D -->|"E-WSF-06 导入"| C
+  D -->|"E-WSF-07 导入"| F
+  D -->|"E-WSF-08 导入"| G
+  D -->|"E-WSF-09 导入"| H
+  D -->|"E-WSF-10 导入"| I
+  F -->|"E-WSF-11 导入"| J
+  A -->|"E-WSF-12 导入"| L
+  G -->|"E-WSF-13 导入"| L
 ```
 
 ### 本图术语说明
 
-| 术语 | 本图含义 |
+| 术语 | 含义 |
 | --- | --- |
-| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
+| import | 编译时直接依赖，只证明结构关系；例如 gate 的 import 不证明已经取得门。 |
+| 精选图 | 为维护入口挑选的直接边，省略 Foundation 原语、错误类型、generated 合同与其他领域 owner。 |
+| 固定执行组合 | 此处选 Codex 为实例；Claude 另将其 capability 传入同一预览/事务，不由共享模块识别宿主。 |
 
-### 节点与实现定位
+### 文件、符号与消费者
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 主符号 | 职责 |
 | --- | --- | --- |
-| f1 | `src/capabilities/workspace/maintain-workspace.ts` | 源码模块 maintain-workspace.ts |
-| f2 | `src/kernel/publication-transaction.ts` | 源码模块 publication-transaction.ts |
-| f3 | `src/workspace/maintenance/wakeflow-static-materialization-preview.ts` | 源码模块 wakeflow-static-materialization-preview.ts |
-| f4 | `src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts` | 源码模块 wakeflow-maintenance-execution-transaction.ts |
-| f5 | `src/configuration/wakeflow-config-authority-snapshot.ts` | 源码模块 wakeflow-config-authority-snapshot.ts |
-| f6 | `src/configuration/wakeflow-config-v3.ts` | 源码模块 wakeflow-config-v3.ts |
-| f7 | `src/configuration/wakeflow-fresh-config-selection.ts` | 源码模块 wakeflow-fresh-config-selection.ts |
+| A | `src/capabilities/workspace/maintain-workspace.ts#executeWakeflowMaintenancePublicRequest` | 公开请求、分支和 next；消费者是两个维护入口。 |
+| B | `src/hosts/codex/codex-maintenance-execution.ts#executeCodexMaintenanceExecution` | 固定传入 Codex capability；消费者是 Codex entrypoint。 |
+| C | `src/workspace/maintenance/wakeflow-maintenance-execution-preview.ts#previewWakeflowMaintenanceExecution` | 合并共享预览与宿主贡献。 |
+| D | `src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts#executeWakeflowMaintenanceExecutionTransaction` | 门、意图、检查点、恢复与终态收尾。 |
+| E | `src/workspace/maintenance/wakeflow-static-materialization-preview.ts#previewWakeflowStaticMaterialization` | 读取布局与 owner 检查，生成 15 种共享 step 的候选序列。 |
+| F | `src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts#executeWakeflowStaticMaterializationStep` | 验证门与摘要，再分派真实 owner。 |
+| G | `src/workspace/maintenance/wakeflow-maintenance-gate.ts#withWakeflowMaintenanceGate` | 关联操作 ID 的 rooted lock 与不可伪造的活动 context。 |
+| H | `src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.ts#publishWakeflowMaintenanceExecutionIntent` | 冻结恢复输入，严格目录集合和源身份。 |
+| I | `src/workspace/maintenance/wakeflow-maintenance-journal-store.ts#checkpointWakeflowMaintenanceJournal` | 仅允许合法 successor 的精确源替换。 |
+| J | `src/configuration/wakeflow-config-authority-snapshot.ts#readWakeflowConfigAuthoritySnapshot` | 读取规范配置表示、身份、位置与摘要。 |
+| K | `src/governance/demand/demand-runtime-recovery.ts#inspectDemandRuntimeRecovery` | reconcile 的独立业务恢复 owner。 |
+| L | `src/kernel/workspace-operation-scope.ts#withWorkspaceOperationScope` | 共享/独占准入、维护预留和嵌套借用。 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1010-01 | `src/capabilities/workspace/maintain-workspace.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-02 | `src/capabilities/workspace/maintain-workspace.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-03 | `src/capabilities/workspace/maintain-workspace.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-04 | `src/capabilities/workspace/maintain-workspace.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-05 | `src/workspace/maintenance/wakeflow-static-materialization-preview.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-06 | `src/workspace/maintenance/wakeflow-static-materialization-preview.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-07 | `src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-08 | `src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-09 | `src/configuration/wakeflow-config-authority-snapshot.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
-| E-L1010-10 | `src/configuration/wakeflow-fresh-config-selection.ts` | `tests/capabilities/workspace/maintain-workspace.test.ts` | 直接导入 |
+| 编号 | import 所在文件 / 被导入符号 | 测试证据 |
+| --- | --- | --- |
+| E-WSF-01 | A 导入 readWakeflowConfigAuthoritySnapshot，用于 hasRecoveryConfig。 | `tests/capabilities/workspace/demand-runtime-recovery.test.ts#executeCodexWakeflowMaintenance` |
+| E-WSF-02 | A 导入 inspectDemandRuntimeRecovery / applyDemandRuntimeRecovery。 | `tests/capabilities/workspace/demand-runtime-recovery.test.ts#executeCodexWakeflowMaintenance` |
+| E-WSF-03 | B 导入 previewWakeflowMaintenanceExecution。 | `tests/hosts/codex/codex-maintenance-execution.test.ts#previewCodexMaintenanceExecution` |
+| E-WSF-04 | B 导入 execute / recoverWakeflowMaintenanceExecutionTransaction。 | `tests/hosts/codex/codex-maintenance-execution.test.ts#executeCodexMaintenanceExecution` |
+| E-WSF-05 | C 导入 previewWakeflowStaticMaterialization。 | 间接覆盖：`tests/capabilities/workspace/maintain-workspace.test.ts#executeCodexWakeflowMaintenance` 经聚合预览。 |
+| E-WSF-06 | D 导入 previewWakeflowMaintenanceExecution，用于门内外复算。 | `tests/workspace/maintenance/wakeflow-maintenance-execution-transaction.test.ts#executeWakeflowMaintenanceExecutionTransaction` |
+| E-WSF-07 | D 导入 executeWakeflowStaticMaterializationStep。 | `tests/workspace/maintenance/wakeflow-maintenance-execution-transaction.test.ts#executeWakeflowStaticMaterializationStep` |
+| E-WSF-08 | D 导入 withWakeflowMaintenanceGate 与 withExistingWakeflowMaintenanceGate。 | `tests/workspace/maintenance/wakeflow-maintenance-execution-transaction.test.ts#withWakeflowMaintenanceGate` |
+| E-WSF-09 | D 导入 intent publish/read/retire/recovery。 | `tests/workspace/maintenance/wakeflow-maintenance-execution-transaction.test.ts#publishWakeflowMaintenanceExecutionIntent` |
+| E-WSF-10 | D 导入 journal publish/checkpoint/read/retire/recovery。 | `tests/workspace/maintenance/wakeflow-maintenance-execution-transaction.test.ts#checkpointWakeflowMaintenanceJournal` |
+| E-WSF-11 | F 导入配置快照用于 executeConfig 的当前/创建/替换分支。 | `tests/workspace/maintenance/wakeflow-static-materialization-step-executor.test.ts#executeWakeflowStaticMaterializationStep` |
+| E-WSF-12 | A import withWorkspaceOperationScope，用于 Demand 候选恢复 apply。 | `tests/capabilities/workspace/demand-runtime-recovery.test.ts#executeCodexWakeflowMaintenance` |
+| E-WSF-13 | G import withWorkspaceOperationScope，将静态维护放入独占范围。 | `tests/capabilities/workspace/operation-scope.test.ts#executeCodexWakeflowMaintenance` |
 
-## 守卫、恢复与验证范围
+生成 Schema 由独立生成链核验，没有作为手写 runtime 重复审阅。静态依赖检查不会证明并发或效果行为，需结合 [实际调用与恢复图](./runtime-call-flow.md)。
 
-文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
-
-涉及的测试与核验入口：
-
-- `tests/capabilities/workspace/maintain-workspace.test.ts`。
-
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[返回工作区总览](./README.md)

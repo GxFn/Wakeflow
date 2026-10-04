@@ -1,193 +1,79 @@
 ---
-diagramId: ts-foundation-runtime-c0
-viewType: call-flow
-truthKind: current-code
-reviewDepth: L4
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:34ae75e76a433c4e4c8dfda9b864bedebd0ef0b840629cc5b2691a47c2d682d9
-audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Architecture Atlas
-generatedBy: manual-review
-sourcePaths:
-  - src/configuration/*.ts
-  - src/configuration/wakeflow-config-authority-snapshot.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/filesystem/deterministic-json-file.ts
-  - src/foundation/filesystem/durable-atomic-file-write.ts
-  - src/foundation/filesystem/rooted-directory.ts
-  - src/foundation/filesystem/rooted-exclusive-file-lock.ts
-  - src/foundation/filesystem/stable-file-read.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/kernel/*.ts
-  - src/kernel/requirement-board.ts
-schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-testPaths:
-  - tests/capabilities/requirement/service.test.ts
-  - tests/foundation/filesystem/durable-atomic-file-write.test.ts
-refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+diagramId: "ts-foundation-stable-read"
+viewType: "call-flow"
+truthKind: "in-progress-worktree"
+reviewDepth: "L5"
+verifiedAt: "2026-10-02"
+baselineCommit: "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c"
+audience: ["maintainer","reviewer"]
+documentationOwner: "Wakeflow Architecture Atlas"
+generatedBy: "manual-review"
+testEvidence: "anchored"
+sourcePaths: ["src/foundation/filesystem/stable-file-read.ts","src/foundation/filesystem/stable-directory-read.ts","src/foundation/filesystem/rooted-directory.ts","src/foundation/filesystem/file-node-snapshot.ts","src/foundation/crypto/sha256-hasher.ts"]
+schemaPaths: []
+testPaths: ["tests/foundation/filesystem/stable-file-read.test.ts","tests/foundation/filesystem/stable-directory-read.test.ts"]
+refreshTriggers: []
+sourceFingerprint: "sha256:1dfe10f2d22d5d1bbcdef21e4adc93a59dfa77a7c5c6f8fefd49ddceabf97ce9"
 ---
 
-# Foundation：稳定读取、提交与恢复
 
-三张图分别描述读取、替换和只创建资源；跨调用业务恢复由拥有 journal 的领域负责。
+# 稳定读取：既要检查字节，也要检查来源
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## 稳定读取的节点与字节核对
+读取结果是本次受验证的观察。没有读到、读取超限、目录变化与确实为空有不同结局。当前目录分页实现包含既有未提交改动。
 
 ```mermaid
-sequenceDiagram
-  accTitle: 稳定读取的节点与字节核对
-  accDescr: 稳定读取的节点与字节核对；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant caller as 读取者
-  participant root as 根能力
-  participant read as 稳定读取
-  participant json as 确定性解码
-  caller->>root: E-L1006-01 固定真实根与句柄
-  caller->>read: E-L1006-02 限定资源路径与容量
-  read->>root: E-L1006-03 复验根仍是原节点
-  read->>json: E-L1006-04 返回字节、节点与摘要
+flowchart TB
+  accTitle: 稳定文件读取的真实验证顺序
+  accDescr: 文件读取绑定根、原始节点和no-follow句柄，逐块累计摘要，探测增长，最后复验句柄与路径全快照后才返回。
+  beginRead["readStableFile / readStableFileDigest"]
+  admission["根、容量、expectedNode 与 signal 准入"]
+  initial["观察路径：普通文件与原节点"]
+  opened["no-follow 打开并核对句柄全快照"]
+  bytes["512KiB 分块读取与 Sha256Hasher"]
+  eof["EOF 探针：拒绝缩短或增长"]
+  finalCheck["句柄 stat 与路径节点再次全比较"]
+  resultRead["返回 source + digest；bytes模式另带字节"]
+  failureRead["分类失败并关闭句柄"]
+  beginRead -->|"E-FRD01-01 parseOptions与初始准入"| admission
+  admission -->|"E-FRD01-02 检查期望与大小"| initial
+  initial -->|"E-FRD01-03 打开同一节点"| opened
+  opened -->|"E-FRD01-04 readExactFile循环"| bytes
+  bytes -->|"E-FRD01-05 读到声明长度后探测"| eof
+  eof -->|"E-FRD01-06 复验物理来源"| finalCheck
+  finalCheck -->|"E-FRD01-07 完全一致才发布观察"| resultRead
+  finalCheck -->|"E-FRD01-08 source-changed等失败"| failureRead
 ```
 
 ### 本图术语说明
 
-| 术语 | 本图含义 |
+| 术语 | 含义 |
 | --- | --- |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| caller | `src/configuration/wakeflow-config-authority-snapshot.ts` | 读取者 |
-| root | `src/foundation/filesystem/rooted-directory.ts#RootedDirectory` | 根能力 |
-| read | `src/foundation/filesystem/stable-file-read.ts` | 稳定读取 |
-| json | `src/foundation/filesystem/deterministic-json-file.ts` | 确定性解码 |
+| expectedNode | 可选的已观察物理版本；本次读取不允许悄悄切到更新节点。 |
+| digest模式 | 同样读取全部字节并hash，但不在内存收集整个文件。 |
+| EOF探针 | 在声明长度后多读一个字节，用于识别读期间增长。 |
+| 分类失败 | not-found、symlink、too-large、source-changed、aborted等；不能统一解释成“无数据”。 |
 
 ### 本图边级证据
 
 | 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1006-01 | `src/foundation/filesystem/rooted-directory.ts#RootedDirectory.open` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 固定真实根与句柄 |
-| E-L1006-02 | `src/configuration/wakeflow-config-authority-snapshot.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 限定资源路径与容量 |
-| E-L1006-03 | `src/foundation/filesystem/stable-file-read.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 复验根仍是原节点 |
-| E-L1006-04 | `src/foundation/filesystem/deterministic-json-file.ts` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 返回字节、节点与摘要 |
+| E-FRD01-01 | `src/foundation/filesystem/stable-file-read.ts#readStableFileVersion` | `tests/foundation/filesystem/stable-file-read.test.ts#readStableFile` | 封闭选项与signal准入。 |
+| E-FRD01-02 | `src/foundation/filesystem/stable-file-read.ts#assertExpectedNode` | 间接覆盖：`tests/foundation/filesystem/stable-file-read.test.ts#readStableFile`（预期版本反例） | 读取前全快照比较。 |
+| E-FRD01-03 | `src/foundation/filesystem/stable-file-read.ts#openStableFile` | 间接覆盖：`tests/foundation/filesystem/stable-file-read.test.ts#readStableFile`（symlink拒绝） | O_NOFOLLOW句柄。 |
+| E-FRD01-04 | `src/foundation/filesystem/stable-file-read.ts#readExactFile` | 间接覆盖：`tests/foundation/filesystem/stable-file-read.test.ts#readStableFileDigest`（hash路径） | 两种模式共用读取主体。 |
+| E-FRD01-05 | `src/foundation/filesystem/stable-file-read.ts#readExactFile` | 未覆盖：本页不把常规读取测试当作EOF竞态注入证据。 | 少读或探测额外字节即拒绝。 |
+| E-FRD01-06 | `src/foundation/filesystem/stable-file-read.ts#readStableFileVersion` | 未覆盖：当前该测试文件未注入读取期间的路径/句柄变更；此处结论来自函数体核对。 | 再次stat和路径观察。 |
+| E-FRD01-07 | `src/foundation/filesystem/stable-file-read.ts#readStableFile` | `tests/foundation/filesystem/stable-file-read.test.ts#readStableFile` | 冻结source描述；Uint8Array本身不被深冻结。 |
+| E-FRD01-08 | `src/foundation/filesystem/stable-file-read.ts#readStableFileVersion` | `tests/foundation/filesystem/stable-file-read.test.ts#readStableFile` | 主体错误优先，成功后关闭失败单独报告。 |
 
-## 精确文件替换与提交边界
+## 目录分页是另一条读取协议
 
-```mermaid
-sequenceDiagram
-  accTitle: 精确文件替换与提交边界
-  accDescr: 精确文件替换与提交边界；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant owner as 领域 owner
-  participant lock as 独占锁
-  participant writer as 原子写入器
-  participant source as 稳定来源
-  owner->>lock: E-L1007-01 持有互斥后重读当前值
-  lock->>writer: E-L1007-02 携带节点与字节摘要预期
-  writer->>source: E-L1007-03 准备 stage 并复验来源
-  writer->>writer: E-L1007-04 rename 提交并完成持久性结算
-  writer-->>owner: E-L1007-05 回执或提交不确定错误
-```
+1. 两次完整枚举，各保留 `maximumEntries + 1` 个字典序最小候选。
+2. 对页内节点做两轮 lstat（最多8并发），名称与完整节点快照均需相等。
+3. 目录句柄及路径前后必须为同一完整快照。
+4. 返回一页及 `hasMore`；下一页携带上一页末名称与首个 `directoryNode`。
+5. 连续页目录漂移报 `expectation-changed`，中止报 `aborted`；不能拼接成伪完整清单。
 
-### 本图术语说明
+上述协议由 `src/foundation/filesystem/stable-directory-read.ts#readStableResourceDirectoryPage` 实现，正例与跨页修改反例见 `tests/foundation/filesystem/stable-directory-read.test.ts#readStableResourceDirectoryPage`。hook消费者另外要求查询complete，详见[观察模块](../16-observation/README.md)。
 
-| 术语 | 本图含义 |
-| --- | --- |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-| commit | 一次不可变事件提交批；文件槽位以预期修订防止并发覆盖。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| owner | `src/kernel/requirement-board.ts` | 领域 owner |
-| lock | `src/foundation/filesystem/rooted-exclusive-file-lock.ts` | 独占锁 |
-| writer | `src/foundation/filesystem/durable-atomic-file-write.ts` | 原子写入器 |
-| source | `src/foundation/filesystem/stable-file-read.ts` | 稳定来源 |
-
-### 本图边级证据
-
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1007-01 | `src/kernel/requirement-board.ts#replaceRequirementClaimStateFile` | `tests/capabilities/requirement/service.test.ts` | 持有互斥后重读当前值 |
-| E-L1007-02 | `src/kernel/requirement-board.ts#replaceRequirementClaimStateFile` | `tests/capabilities/requirement/service.test.ts` | 携带节点与字节摘要预期 |
-| E-L1007-03 | `src/foundation/filesystem/durable-atomic-file-write.ts#performWrite` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 准备 stage 并复验来源 |
-| E-L1007-04 | `src/foundation/filesystem/durable-atomic-file-write.ts#performWrite` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | rename 提交并完成持久性结算 |
-| E-L1007-05 | `src/foundation/filesystem/durable-atomic-file-write.ts#performWrite` | `tests/foundation/filesystem/durable-atomic-file-write.test.ts` | 回执或提交不确定错误 |
-
-## 具体 owner 的只创建记录幂等
-
-```mermaid
-sequenceDiagram
-  accTitle: 具体 owner 的只创建记录幂等
-  accDescr: 具体 owner 的只创建记录幂等；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant owner as 看板记录 owner
-  participant writer as 只创建发布
-  participant read as 读回已有资源
-  owner->>writer: E-L1008-01 目标不存在时创建
-  alt 目标已存在
-  owner->>read: E-L1008-02 完整重读并比较确定性字节
-  read-->>owner: E-L1008-03 相同为 current，不同为冲突
-  end
-```
-
-### 本图术语说明
-
-| 术语 | 本图含义 |
-| --- | --- |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-| projection | 根据权威重建的视图，不反向决定事实。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| owner | `src/kernel/requirement-board.ts` | 看板记录 owner |
-| writer | `src/foundation/filesystem/durable-atomic-file-write.ts` | 只创建发布 |
-| read | `src/foundation/filesystem/deterministic-json-file.ts` | 读回已有资源 |
-
-### 本图边级证据
-
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1008-01 | `src/kernel/requirement-board.ts` | `tests/capabilities/requirement/service.test.ts` | 目标不存在时创建 |
-| E-L1008-02 | `src/kernel/requirement-board.ts` | `tests/capabilities/requirement/service.test.ts` | 完整重读并比较确定性字节 |
-| E-L1008-03 | `src/kernel/requirement-board.ts` | `tests/capabilities/requirement/service.test.ts` | 相同为 current，不同为冲突 |
-
-## 守卫、恢复与验证范围
-
-原通用 create-only helper 已删除；最后一图以看板记录 owner 为当前消费者示例。锁不会按时间自动打破；创建者和领域恢复器依照精确节点、记录及提交事实决定退休。文件系统原语不构成对恶意同权限进程的 OS 沙箱。
-
-涉及的测试与核验入口：
-
-- `tests/capabilities/requirement/service.test.ts`。
-- `tests/foundation/filesystem/durable-atomic-file-write.test.ts`。
-
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[基础总览](./README.md) · [写入与恢复](./file-publication-and-recovery.md)。

@@ -1,135 +1,150 @@
 ---
-diagramId: ts-kernel-file-dependencies
+diagramId: ts-11-kernel-file-dependencies
 viewType: file-dependency
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L3
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:b85bcd7012fcecfc2e3379182088c26cfdbb2f3914cec752e94df999989992c5
-audience: [maintainer, reviewer]
+verifiedAt: 2026-10-03
+baselineCommit: d8fafff33919c728e3a9b91ec04aa50ec5e07f0c
+testEvidence: anchored
+audience:
+  - maintainer
+  - reviewer
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
 sourcePaths:
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/filesystem/*.ts
+  - src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts
   - src/foundation/filesystem/rooted-directory.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/kernel/*.ts
+  - src/foundation/filesystem/rooted-read-write-scope.ts
   - src/kernel/append-command.ts
   - src/kernel/command-shell.ts
+  - src/kernel/error.ts
+  - src/kernel/hook-observation-directory.ts
   - src/kernel/hook-observations.ts
-  - src/kernel/next-projection.ts
-  - src/kernel/pod-worktree-receipts.ts
+  - src/kernel/ids.ts
+  - src/kernel/limits.ts
+  - src/kernel/markdown-sections.ts
   - src/kernel/publication-transaction.ts
-  - src/kernel/requirement-board.ts
-  - src/kernel/tool-registry.ts
-  - src/kernel/work-claims.ts
-schemaPaths:
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-testPaths:
-  - tests/kernel/command-shell.test.ts
+  - src/kernel/redaction.ts
+  - src/kernel/requirement-acceptance.ts
+  - src/kernel/workspace-operation-scope.ts
+  - tooling/codegen/schema-types.ts
+schemaPaths: []
+testPaths: []
 refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+  - src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts
+  - src/foundation/filesystem/rooted-directory.ts
+  - src/kernel/append-command.ts
+  - src/kernel/command-shell.ts
+  - src/kernel/error.ts
+  - src/kernel/hook-observation-directory.ts
+  - src/kernel/hook-observations.ts
+  - src/kernel/ids.ts
+  - src/kernel/limits.ts
+  - src/kernel/markdown-sections.ts
+  - src/kernel/publication-transaction.ts
+  - src/kernel/redaction.ts
+  - src/kernel/requirement-acceptance.ts
+  - tooling/codegen/schema-types.ts
+sourceFingerprint: "sha256:37e96c8782a43bfc86f0e2b281aedae2a6827dbbce2060daa4d492a9b706bad9"
 ---
 
-# 内核：文件直接导入
+# 内核：两种外壳与证据机制的静态依赖
 
-这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
+> 核验于 2026-10-03，基线 `d8fafff` 加当前未提交工作树。图表达实际源码分支，未提交实现标为进行中；不把开发阶段计划当作运行事实。来源与测试锚点按本文精确范围列出。
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
+本图是从当前TypeScript AST选出的直接导入子图；每条边再对照已读源码用途。它只证明耦合方向，不证明调用顺序、状态转移或Agent授权。
 
-## 内核的精选直接导入
+## 内核：两种外壳与证据机制的静态依赖
 
 ```mermaid
-flowchart TB
-  accTitle: 内核的精选直接导入
-  accDescr: 内核所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
-  f1["命令外壳 command-shell.ts"]
-  f2["源码模块 append-command.ts"]
-  f3["源码模块 publication-transaction.ts"]
-  f4["源码模块 next-projection.ts"]
-  f5["源码模块 tool-registry.ts"]
-  f6["工作声明 work-claims.ts"]
-  f7["宿主观察 hook-observations.ts"]
-  f8["需求看板 requirement-board.ts"]
-  f9["源码模块 pod-worktree-receipts.ts"]
-  f10["源码模块 rooted-directory.ts"]
-  f1 -->|"E-L1047-01 直接导入"| f10
-  f2 -->|"E-L1047-02 直接导入"| f1
-  f2 -->|"E-L1047-03 直接导入"| f4
-  f2 -->|"E-L1047-04 直接导入"| f10
-  f3 -->|"E-L1047-05 直接导入"| f1
-  f3 -->|"E-L1047-06 直接导入"| f4
-  f3 -->|"E-L1047-07 直接导入"| f10
-  f6 -->|"E-L1047-08 直接导入"| f10
-  f7 -->|"E-L1047-09 直接导入"| f10
-  f8 -->|"E-L1047-10 直接导入"| f10
-  f9 -->|"E-L1047-11 直接导入"| f10
+flowchart LR
+  accTitle: 内核：两种外壳与证据机制的静态依赖
+  accDescr: 文件直接import关系的审阅精选视图，运行调用与状态分支在独立页面。
+  f0["追加外壳<br/>append-command.ts"]
+  f1["效果外壳<br/>publication-transaction.ts"]
+  f2["共用边界<br/>command-shell.ts"]
+  f3["确定性身份<br/>ids.ts"]
+  f4["私有值扫描<br/>redaction.ts"]
+  f5["容量<br/>limits.ts"]
+  f6["稳定错误<br/>error.ts"]
+  f7["hook记录<br/>hook-observations.ts"]
+  f8["分片遍历<br/>hook-observation-directory.ts"]
+  f9["根约束<br/>rooted-directory.ts"]
+  f10["验收语法<br/>requirement-acceptance.ts"]
+  f11["Markdown切分<br/>markdown-sections.ts"]
+  f12["工作区范围<br/>workspace-operation-scope.ts"]
+  f13["跨进程读写租约<br/>rooted-read-write-scope.ts"]
+  f0 -->|"E-KF0-01 直接导入"| f2
+  f0 -->|"E-KF0-02 直接导入"| f3
+  f1 -->|"E-KF0-03 直接导入"| f2
+  f2 -->|"E-KF0-04 直接导入"| f4
+  f2 -->|"E-KF0-05 直接导入"| f5
+  f2 -->|"E-KF0-06 直接导入"| f6
+  f2 -->|"E-KF0-07 直接导入"| f9
+  f7 -->|"E-KF0-08 直接导入"| f8
+  f7 -->|"E-KF0-09 直接导入"| f9
+  f8 -->|"E-KF0-10 直接导入"| f9
+  f10 -->|"E-KF0-11 直接导入"| f11
+  f3 -->|"E-KF0-12 直接导入"| f6
+  f4 -->|"E-KF0-13 直接导入"| f6
+  f5 -->|"E-KF0-14 直接导入"| f6
+  f2 -->|"E-KF0-15 直接导入"| f12
+  f12 -->|"E-KF0-16 直接导入"| f13
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
+| 直接导入 | 包含实际import或显式re-export；类型依赖同样算结构依赖。 |
+| 精选范围 | 按模块入口裁剪；被省略的依赖仍在逐文件台账和全局导入数据中。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| f1 | `src/kernel/command-shell.ts` | 命令外壳 command-shell.ts |
-| f2 | `src/kernel/append-command.ts` | 源码模块 append-command.ts |
-| f3 | `src/kernel/publication-transaction.ts` | 源码模块 publication-transaction.ts |
-| f4 | `src/kernel/next-projection.ts` | 源码模块 next-projection.ts |
-| f5 | `src/kernel/tool-registry.ts` | 源码模块 tool-registry.ts |
-| f6 | `src/kernel/work-claims.ts` | 工作声明 work-claims.ts |
-| f7 | `src/kernel/hook-observations.ts` | 宿主观察 hook-observations.ts |
-| f8 | `src/kernel/requirement-board.ts` | 需求看板 requirement-board.ts |
-| f9 | `src/kernel/pod-worktree-receipts.ts` | 源码模块 pod-worktree-receipts.ts |
-| f10 | `src/foundation/filesystem/rooted-directory.ts` | 源码模块 rooted-directory.ts |
+| f0 | `src/kernel/append-command.ts` | 追加外壳<br/>append-command.ts |
+| f1 | `src/kernel/publication-transaction.ts` | 效果外壳<br/>publication-transaction.ts |
+| f2 | `src/kernel/command-shell.ts` | 共用边界<br/>command-shell.ts |
+| f3 | `src/kernel/ids.ts` | 确定性身份<br/>ids.ts |
+| f4 | `src/kernel/redaction.ts` | 私有值扫描<br/>redaction.ts |
+| f5 | `src/kernel/limits.ts` | 容量<br/>limits.ts |
+| f6 | `src/kernel/error.ts` | 稳定错误<br/>error.ts |
+| f7 | `src/kernel/hook-observations.ts` | hook记录<br/>hook-observations.ts |
+| f8 | `src/kernel/hook-observation-directory.ts` | 分片遍历<br/>hook-observation-directory.ts |
+| f9 | `src/foundation/filesystem/rooted-directory.ts` | 根约束<br/>rooted-directory.ts |
+| f10 | `src/kernel/requirement-acceptance.ts` | 验收语法<br/>requirement-acceptance.ts |
+| f11 | `src/kernel/markdown-sections.ts` | Markdown切分<br/>markdown-sections.ts |
+| f12 | `src/kernel/workspace-operation-scope.ts` | 工作区范围 |
+| f13 | `src/foundation/filesystem/rooted-read-write-scope.ts` | 跨进程读写租约 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1047-01 | `src/kernel/command-shell.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-02 | `src/kernel/append-command.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-03 | `src/kernel/append-command.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-04 | `src/kernel/append-command.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-05 | `src/kernel/publication-transaction.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-06 | `src/kernel/publication-transaction.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-07 | `src/kernel/publication-transaction.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-08 | `src/kernel/work-claims.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-09 | `src/kernel/hook-observations.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-10 | `src/kernel/requirement-board.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
-| E-L1047-11 | `src/kernel/pod-worktree-receipts.ts` | `tests/kernel/command-shell.test.ts` | 直接导入 |
+| E-KF0-01 | `src/kernel/append-command.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-02 | `src/kernel/append-command.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-03 | `src/kernel/publication-transaction.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-04 | `src/kernel/command-shell.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-05 | `src/kernel/command-shell.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-06 | `src/kernel/command-shell.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-07 | `src/kernel/command-shell.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-08 | `src/kernel/hook-observations.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-09 | `src/kernel/hook-observations.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-10 | `src/kernel/hook-observation-directory.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-11 | `src/kernel/requirement-acceptance.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-12 | `src/kernel/ids.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-13 | `src/kernel/redaction.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-14 | `src/kernel/limits.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-KF0-15 | `src/kernel/command-shell.ts` | 未覆盖：静态导入由源码 AST 校验，运行测试不代替导入证据 | 直接导入 |
+| E-KF0-16 | `src/kernel/workspace-operation-scope.ts` | 未覆盖：静态导入由源码 AST 校验，运行测试不代替导入证据 | 直接导入 |
 
-## 守卫、恢复与验证范围
+## 阅读边界
 
-文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
+完整内核文件另见逐文件台账。新增 workspace-operation-scope 把公共 writer 与维护准入接在同一 Foundation 读写协调能力上。work-claim、Pod锁、board、投影和索引分别拥有物理机制，不因为都依赖RootedDirectory而成为一张业务状态机。
 
-涉及的测试与核验入口：
+Schema是可移植wire源；`tooling/codegen/schema-types.ts`生成`src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts`等派生合同。生成文件只核实来源与生成链，不计作手写文件语义审阅；`package.json`的schema:build/schema:check负责生成与漂移检测。
 
-- `tests/kernel/command-shell.test.ts`。
+## 继续阅读
 
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[文件导入](./file-dependencies.md) · [运行分支](./runtime-call-flow.md) · [本模块总览](./README.md) · [全局入口](../README.md) · [本轮增量审阅](../../plans/review-2026-10-03/coordination.md) · [前轮完整审阅](../../plans/review-2026-10-02/coordination-evidence.md)

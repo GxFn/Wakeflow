@@ -1,324 +1,77 @@
 ---
-diagramId: ts-review-completion-runtime-l1
-viewType: call-flow
-truthKind: current-code
-reviewDepth: L4
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:5fa291f4b4bd0cedcf639689e18ba331c73e3144c8daf3ae738fb8489a355b44
-audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Architecture Atlas
-generatedBy: manual-review
-sourcePaths:
-  - src/capabilities/demand/*.ts
-  - src/capabilities/demand/archive.ts
-  - src/capabilities/demand/lifecycle.ts
-  - src/capabilities/demand/verify.ts
-  - src/capabilities/result-review/*.ts
-  - src/capabilities/result-review/service.ts
-  - src/configuration/*.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/archive/*.ts
-  - src/contracts/generated/governance/board/*.ts
-  - src/contracts/generated/governance/delivery/*.ts
-  - src/contracts/generated/governance/demand/*.ts
-  - src/contracts/generated/governance/evidence/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/governance/lifecycle/*.ts
-  - src/contracts/generated/governance/result/*.ts
-  - src/contracts/generated/governance/review/*.ts
-  - src/contracts/generated/governance/tasking/*.ts
-  - src/contracts/generated/governance/testing/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/generated/workspace/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/artifact/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/event-sourcing/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/git/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/controller/*.ts
-  - src/governance/delivery/*.ts
-  - src/governance/demand/*.ts
-  - src/governance/demand/demand-verify-gates.ts
-  - src/governance/demand/event-sourcing/*.ts
-  - src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts
-  - src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts
-  - src/governance/demand/model/*.ts
-  - src/governance/demand/model/demand-aggregate-state.ts
-  - src/governance/demand/publication/*.ts
-  - src/governance/evidence/*.ts
-  - src/governance/ledger/*.ts
-  - src/governance/lifecycle/*.ts
-  - src/governance/result/*.ts
-  - src/governance/review/*.ts
-  - src/governance/tasking/*.ts
-  - src/governance/testing/*.ts
-  - src/kernel/*.ts
-  - src/kernel/event-stream/*.ts
-  - src/kernel/requirement-board.ts
-  - src/workspace/*.ts
-  - src/workspace/window-runtime/*.ts
-schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-cancellation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-completion-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-continuation-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-implementation-review-decision-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-target-result-import-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-target-result-review-inspection-result.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-test-review-decision-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/git-object-id.schema.json
-  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/archive/demand-archive-manifest.schema.json
-  - src/contracts/schemas/governance/board/requirement-claim-state.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
-  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
-  - src/contracts/schemas/governance/demand/demand-authority.schema.json
-  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-publication-transaction.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
-  - src/contracts/schemas/governance/demand/demand-identity.schema.json
-  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
-  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
-  - src/contracts/schemas/governance/result/target-result.schema.json
-  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
-  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
-  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
-  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
-  - src/contracts/schemas/governance/tasking/task-package.schema.json
-  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-  - src/contracts/schemas/workspace/window-host-binding.schema.json
-testPaths:
-  - tests/capabilities/demand/service.test.ts
-  - tests/capabilities/result-review/service.test.ts
-refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+diagramId: "ts-review-rework-completion-runtime-call-flow"
+viewType: "call-flow"
+truthKind: "in-progress-worktree"
+reviewDepth: "L4"
+verifiedAt: "2026-10-03"
+baselineCommit: "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c"
+sourceFingerprint: "sha256:a0dc9458864fb8d3ac2ecade18fa350e24b1f7007fdb07bfbd57d6b47dbe4b68"
+testEvidence: "anchored"
+audience: ["maintainer", "reviewer"]
+documentationOwner: "Wakeflow Architecture Atlas"
+generatedBy: "manual-review"
+sourcePaths: ["src/capabilities/delivery/service.ts", "src/capabilities/demand/lifecycle.ts", "src/capabilities/result-review/decide.ts", "src/capabilities/result-review/service.ts", "src/governance/delivery/target-delivery-rework-context.ts", "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts", "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts", "src/governance/demand/model/demand-aggregate-state.ts", "src/governance/review/controller-implementation-review-decision.ts", "src/governance/review/controller-review-decision-contract.ts", "src/governance/review/demand-result-review-snapshot.ts"]
+schemaPaths: []
+testPaths: ["tests/capabilities/result-review/service.test.ts"]
+refreshTriggers: []
 ---
 
-# 评审和生命周期：决定、归档与继续
+# 评审分支：返工、条件恢复与升级回答
 
-调用图将外部判断、事件变更和物理归档分开。
-
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## 决定和升级后的返回
+> 2026-10-03 当前工作树语义复核；含未提交实现。HEAD 只定位已提交基线，来源指纹覆盖本页实际引用的文件。图谱不拥有业务状态。本页的测试锚点表示已核对的覆盖入口，运行结果见本轮总台账。
 
 ```mermaid
-sequenceDiagram
-  accTitle: 决定和升级后的返回
-  accDescr: 决定和升级后的返回；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant controller as Controller
-  participant slice as 结果评审切片
-  participant event as 决定与升级事件
-  participant user as 用户
-  participant life as Demand 生命周期
-  controller->>slice: E-L1031-01 提交 snapshotDigest 与 reviewUnitDigest
-  slice->>event: E-L1031-02 校验决定、完成观察和 resumption
-  alt 需求或方案需要用户决定
-  event->>user: E-L1031-03 持久化 awaitingDecision
-  user->>life: E-L1031-04 continue_demand 的 record-decision
-  life->>event: E-L1031-05 回答指定升级事件
-  end
+flowchart TB
+  accTitle: 同一结果的评审与恢复路径
+  accDescr: 同一结果的评审与恢复路径；每条关系由当前实现的调用或条件支持，错误停止与恢复保持显式。
+  A["[视图] reported 评审单元"]
+  B["[代码] accept"]
+  C["[代码] rework"]
+  D["[权威] review-blocked"]
+  F["[权威] escalated 与待用户决定"]
+  H["[代码] resumption 再决定"]
+  I["[计划] 按原任务包准备返工投递"]
+  A -->|"E-REV02-01 结果与完成门满足后允许接受"| B
+  A -->|"E-REV02-02 失败独立检查形成整改依据"| C
+  A -->|"E-REV02-03 blocked 保存当前决定；不是删除结果"| D
+  A -->|"E-REV02-04 escalate 同提交附带升级事件"| F
+  D -->|"E-REV02-05 引用当前决定，basis=condition-cleared"| H
+  F -->|"E-REV02-06 先 record-decision，再引用 escalationEventId"| H
+  C -->|"E-REV02-07 从真实决定与前结果构建 rework context"| I
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| Demand | 一个需求的不可变身份和事件流；当前执行环境由 podId 指定。 |
-| hook | 宿主回交的会话/提示提交/完成观察记录，保存在宿主本地根。 |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| controller | Agent / 用户 / 外部效果或条件视图 | Controller |
-| slice | `src/capabilities/result-review/service.ts` | 结果评审切片 |
-| event | `src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts` | 决定与升级事件 |
-| user | Agent / 用户 / 外部效果或条件视图 | 用户 |
-| life | `src/capabilities/demand/lifecycle.ts` | Demand 生命周期 |
+| [代码] | 确定性服务、守卫或纯决定；失败会拒绝转换。 |
+| [权威] | 持久事实；只能由指定写入者改变。 |
+| [视图] | 由权威派生的可重建数据，不授权写入。 |
+| resumption | 对同一个结果继续评审的来源指针；必须引用当前决定。 |
+| rework | 保留原 TaskPackage 的返工；再次导入产生新评审单元并保留旧历史。 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系与边界 |
 | --- | --- | --- | --- |
-| E-L1031-01 | `src/capabilities/result-review/service.ts#executeImplementationDecision` | `tests/capabilities/result-review/service.test.ts` | 提交 snapshotDigest 与 reviewUnitDigest |
-| E-L1031-02 | `src/capabilities/result-review/service.ts#executeImplementationDecision` | `tests/capabilities/result-review/service.test.ts` | 校验决定、完成观察和 resumption |
-| E-L1031-03 | `src/governance/demand/model/demand-aggregate-state.ts#escalateDemandAggregateState` | `tests/capabilities/demand/service.test.ts` | 持久化 awaitingDecision |
-| E-L1031-04 | `src/capabilities/demand/lifecycle.ts#applyDecision` | `tests/capabilities/demand/service.test.ts` | continue_demand 的 record-decision |
-| E-L1031-05 | `src/governance/demand/model/demand-aggregate-state.ts#recordDecisionInDemandAggregateState` | `tests/capabilities/demand/service.test.ts` | 回答指定升级事件 |
+| E-REV02-01 | `src/capabilities/result-review/decide.ts#deriveImplementationDecisionBlockers` | 间接覆盖：`tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest`（经公共切片入口执行此内部关系） | 结果与完成门满足后允许接受 |
+| E-REV02-02 | `src/capabilities/result-review/decide.ts#deriveImplementationDecisionBlockers` | 间接覆盖：`tests/capabilities/result-review/service.test.ts#decideFixtureImplementation`（经公共切片入口执行此内部关系） | 失败独立检查形成整改依据 |
+| E-REV02-03 | `src/capabilities/result-review/service.ts#executeImplementationDecision` | 间接覆盖：`tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest`（经公共切片入口执行此内部关系） | blocked 保存当前决定；不是删除结果 |
+| E-REV02-04 | `src/capabilities/result-review/service.ts#executeImplementationDecision` | 间接覆盖：`tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest`（经公共切片入口执行此内部关系） | escalate 同提交附带升级事件 |
+| E-REV02-05 | `src/capabilities/result-review/decide.ts#deriveResumptionBlockers` | 间接覆盖：`tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest`（经公共切片入口执行此内部关系） | 引用当前决定，basis=condition-cleared |
+| E-REV02-06 | `src/capabilities/result-review/decide.ts#deriveResumptionBlockers` | 间接覆盖：`tests/capabilities/result-review/service.test.ts#executeDemandContinuationRequest`（经公共切片入口执行此内部关系） | 先 record-decision，再引用 escalationEventId |
+| E-REV02-07 | `src/capabilities/delivery/service.ts#loadReworkSource` | 间接覆盖：`tests/capabilities/result-review/service.test.ts#prepareFixtureDelivery`（经公共切片入口执行此内部关系） | 从真实决定与前结果构建 rework context |
 
-## 完成和取消的五步归档事务
+## 双摘要防止对旧输入作决定
 
-```mermaid
-sequenceDiagram
-  accTitle: 完成和取消的五步归档事务
-  accDescr: 完成和取消的五步归档事务；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant controller as Controller
-  participant slice as 生命周期切片
-  participant verify as 内嵌只读门
-  participant event as Demand 事件流
-  participant archive as 不可变归档包
-  participant board as 看板认领状态
-  participant claim as 工作声明
-  participant activeRoot as 活动根
-  controller->>slice: E-L1032-01 preview 后按摘要 apply
-  slice->>verify: E-L1032-02 配置、审计、声明、证据和隐私门
-  slice->>slice: E-L1032-03 先保存活动根外 journal
-  slice->>event: E-L1032-04 一：提交 completed 或 cancelled
-  slice->>archive: E-L1032-05 二：封 payload、verify 报告与 worktree 来源
-  slice->>board: E-L1032-06 三：archived / withdrawn
-  opt 取消事务
-    slice->>claim: E-L1032-08 四：释放本 Demand 的工作声明
-  end
-  slice->>activeRoot: E-L1032-07 五：核对归档摘要后退休活动根
-```
+`loadDecisionSources` 完整审计历史，先核 snapshotDigest，再定位结果并核 reviewUnitDigest，最后检查 resumption 和本次重新读取的 hook 观察。旧快照或旧单元分别返回 snapshot-stale / review-unit-stale。已绑定幂等键优先回放，避免刚提交的决定因当前 phase 已前进而被拒。
 
-### 本图术语说明
+两份摘要不包含本次 hook 集合；工具写决定时再次读取目标完成和回调落地，并把当次采用的引用放进决定记录。snapshotDigest / reviewUnitDigest 防止对旧业务单元判断，不能当成“已冻结全部环境观察”的证明。accept 的可选性与实际判断准入也不同：Controller 仍需提交符合决定合同的 assessment、independentChecks、rationale 与必要的 anchorEvidence。
 
-| 术语 | 本图含义 |
-| --- | --- |
-| ledger | 长期不可变需求包与归档的存储根。 |
-| commit | 一次不可变事件提交批；文件槽位以预期修订防止并发覆盖。 |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-| claim | 端点注意力及产品检出的工作声明，释放必须匹配当前令牌。 |
+blocked 解除不自动产生新结果；escalated 回答由 Demand 的 continue 工具 action=record-decision 追加，随后仍需 Controller 明确提交 resumption 决定。产品缺陷走测试专题的修复授权分支。
 
-### 节点与实现定位
+待答升级还有取消分支：取消结束 `awaitingDecision` 并按原事务归档，不记录一个虚构的用户回答。若用户选择继续，仍须先 record-decision 再 resumption。两条路径的事件历史不会互相代写，见[取消与归档](./state-and-recovery.md)。
 
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| controller | Agent / 用户 / 外部效果或条件视图 | Controller |
-| slice | `src/capabilities/demand/lifecycle.ts` | 生命周期切片 |
-| verify | `src/governance/demand/demand-verify-gates.ts#evaluateVerifyGates` | 内嵌只读门 |
-| event | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts` | Demand 事件流 |
-| archive | `src/capabilities/demand/archive.ts` | 不可变归档包 |
-| board | `src/kernel/requirement-board.ts` | 看板认领状态 |
-| claim | `src/kernel/work-claims.ts` | 工作声明 |
-| activeRoot | `src/capabilities/demand/archive.ts#retireDemandRoot` | 活动根 |
+## 继续阅读
 
-### 本图边级证据
-
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1032-01 | `src/capabilities/demand/lifecycle.ts#executeDemandCompletionRequest` | `tests/capabilities/demand/service.test.ts` | preview 后按摘要 apply |
-| E-L1032-02 | `src/governance/demand/demand-verify-gates.ts#evaluateVerifyGates` | `tests/capabilities/demand/service.test.ts` | 配置、审计、声明、证据和隐私门 |
-| E-L1032-03 | `src/capabilities/demand/lifecycle.ts#applyTerminal` | `tests/capabilities/demand/service.test.ts` | 先保存活动根外 journal |
-| E-L1032-04 | `src/capabilities/demand/lifecycle.ts#terminalEvent` | `tests/capabilities/demand/service.test.ts` | 一：提交 completed 或 cancelled |
-| E-L1032-05 | `src/capabilities/demand/lifecycle.ts#sealArchive` | `tests/capabilities/demand/service.test.ts` | 二：封 payload、verify 报告与 worktree 来源 |
-| E-L1032-06 | `src/capabilities/demand/lifecycle.ts#settlePackage` | `tests/capabilities/demand/service.test.ts` | 三：archived / withdrawn |
-| E-L1032-08 | `src/capabilities/demand/lifecycle.ts#releaseClaims` | `tests/capabilities/demand/service.test.ts` | 四：取消时释放本 Demand 的工作声明 |
-| E-L1032-07 | `src/capabilities/demand/archive.ts#retireDemandRoot` | `tests/capabilities/demand/service.test.ts` | 五：核对归档摘要后退休活动根 |
-
-## 从归档继续同一 Demand
-
-```mermaid
-sequenceDiagram
-  accTitle: 从归档继续同一 Demand
-  accDescr: 从归档继续同一 Demand；箭头区分当前代码步骤、返回事实与明确的条件。
-  participant controller as Controller
-  participant slice as 生命周期切片
-  participant archive as 已完成的归档
-  participant event as 恢复的活动事件流
-  participant board as 看板认领状态
-  controller->>slice: E-L1033-01 continue，核对所在 Pod 空闲
-  slice->>archive: E-L1033-02 按冻结清单读回负载
-  slice->>event: E-L1033-03 恢复根并追加 demand-continued
-  slice->>board: E-L1033-04 同 Demand archived 回 claimed
-  slice-->>controller: E-L1033-05 next 要求先规划新目标
-```
-
-### 本图术语说明
-
-| 术语 | 本图含义 |
-| --- | --- |
-| Demand | 一个需求的不可变身份和事件流；当前执行环境由 podId 指定。 |
-| Pod | 完整窗口组与每仓执行位置；main 是 primary Pod。 |
-| snapshot | 可重建的事件聚合检查点；损坏时回退重放。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| controller | Agent / 用户 / 外部效果或条件视图 | Controller |
-| slice | `src/capabilities/demand/lifecycle.ts` | 生命周期切片 |
-| archive | `src/capabilities/demand/archive.ts` | 已完成的归档 |
-| event | `src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts` | 恢复的活动事件流 |
-| board | `src/kernel/requirement-board.ts` | 看板认领状态 |
-
-### 本图边级证据
-
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
-| --- | --- | --- | --- |
-| E-L1033-01 | `src/capabilities/demand/lifecycle.ts#planContinue` | `tests/capabilities/demand/service.test.ts` | continue，核对所在 Pod 空闲 |
-| E-L1033-02 | `src/capabilities/demand/archive.ts#readArchivePayload` | `tests/capabilities/demand/service.test.ts` | 按冻结清单读回负载 |
-| E-L1033-03 | `src/capabilities/demand/lifecycle.ts#applyContinue` | `tests/capabilities/demand/service.test.ts` | 恢复根并追加 demand-continued |
-| E-L1033-04 | `src/kernel/requirement-board.ts#reclaimRequirementPackage` | `tests/capabilities/demand/service.test.ts` | 同 Demand archived 回 claimed |
-| E-L1033-05 | `src/capabilities/demand/lifecycle.ts#applyContinue` | `tests/capabilities/demand/service.test.ts` | next 要求先规划新目标 |
-
-## 守卫、恢复与验证范围
-
-取消的 Demand 不能 continue。日志只为当前事务恢复提供依据；恢复不是重新规划。归档包含已有事件历史而不包含可重建 snapshots/index/append-candidates。
-
-涉及的测试与核验入口：
-
-- `tests/capabilities/demand/service.test.ts`。
-- `tests/capabilities/result-review/service.test.ts`。
-
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[本专题总览](./README.md) · [文件导入](./file-dependencies.md) · [回调信任与只读评审](./callback-trust-and-review.md) · [逐文件审阅记录](../../plans/review-2026-10-03-rc4/callback-review.md) · [图谱入口](../README.md)

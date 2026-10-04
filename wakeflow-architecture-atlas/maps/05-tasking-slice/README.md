@@ -1,193 +1,79 @@
 ---
-diagramId: ts-tasking-vertical-t0
-viewType: vertical-slice
-truthKind: current-code
-reviewDepth: L2
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:9343f3b49ad70ccc7edd849ce0846e9fa675fef8e405d98ea4489504f4e88117
-audience: [maintainer, reviewer]
-documentationOwner: Wakeflow Architecture Atlas
-generatedBy: manual-review
-sourcePaths:
-  - src/capabilities/tasking/*.ts
-  - src/capabilities/tasking/decide.ts
-  - src/capabilities/tasking/service.ts
-  - src/configuration/*.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/delivery/*.ts
-  - src/contracts/generated/governance/demand/*.ts
-  - src/contracts/generated/governance/evidence/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/governance/lifecycle/*.ts
-  - src/contracts/generated/governance/result/*.ts
-  - src/contracts/generated/governance/review/*.ts
-  - src/contracts/generated/governance/tasking/*.ts
-  - src/contracts/generated/governance/testing/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/generated/workspace/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/artifact/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/event-sourcing/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/git/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/controller/*.ts
-  - src/governance/delivery/*.ts
-  - src/governance/demand/*.ts
-  - src/governance/demand/event-sourcing/*.ts
-  - src/governance/demand/model/*.ts
-  - src/governance/demand/model/demand-aggregate-state.ts
-  - src/governance/demand/publication/*.ts
-  - src/governance/evidence/*.ts
-  - src/governance/ledger/*.ts
-  - src/governance/lifecycle/*.ts
-  - src/governance/result/*.ts
-  - src/governance/review/*.ts
-  - src/governance/tasking/*.ts
-  - src/governance/tasking/task-package-projection-store.ts
-  - src/governance/tasking/task-package.ts
-  - src/governance/testing/*.ts
-  - src/kernel/*.ts
-  - src/kernel/event-stream/*.ts
-  - src/workspace/*.ts
-  - src/workspace/window-runtime/*.ts
-schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/git-object-id.schema.json
-  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
-  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
-  - src/contracts/schemas/governance/demand/demand-authority.schema.json
-  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
-  - src/contracts/schemas/governance/demand/demand-identity.schema.json
-  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
-  - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
-  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
-  - src/contracts/schemas/governance/result/target-result.schema.json
-  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
-  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
-  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
-  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
-  - src/contracts/schemas/governance/tasking/task-package.schema.json
-  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-  - src/contracts/schemas/workspace/window-host-binding.schema.json
-testPaths:
-  - tests/capabilities/tasking/service.test.ts
-refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+diagramId: "ts-tasking-slice-readme"
+viewType: "vertical-slice"
+truthKind: "in-progress-worktree"
+reviewDepth: "L4"
+verifiedAt: "2026-10-03"
+baselineCommit: "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c"
+sourceFingerprint: "sha256:d5205ca5eb6176e8a2c849d5093bf8fdae09d2a1d522fe47debbe50b79150e03"
+testEvidence: "anchored"
+audience: ["maintainer", "reviewer"]
+documentationOwner: "Wakeflow Architecture Atlas"
+generatedBy: "manual-review"
+sourcePaths: ["src/capabilities/tasking/decide.ts", "src/capabilities/tasking/service.ts", "src/governance/controller/demand-controller-route.ts", "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts", "src/governance/demand/model/demand-aggregate-state.ts", "src/governance/review/demand-post-acceptance-route.ts", "src/governance/tasking/task-package-projection-store.ts", "src/governance/tasking/task-package.ts", "src/kernel/next-projection.ts", "src/kernel/requirement-acceptance.ts"]
+schemaPaths: ["src/contracts/schemas/governance/tasking/task-package.schema.json"]
+testPaths: ["tests/capabilities/tasking/service.test.ts", "tests/governance/tasking/task-package-projection-store.test.ts", "tests/governance/tasking/task-package.test.ts"]
+refreshTriggers: []
 ---
 
-# 任务规划：需求锚点、谱系与测试合同
+# 任务规划：冻结合同之前的准入分支
 
-公共规划已改为一次追加。实现任务的锚点逐条指向需求包验收标准；测试任务直接携带 testContract，独立 TestCard 家族已经移除。
-
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
-
-## 一次追加生成任务合同
+> 2026-10-03 当前工作树语义复核；含未提交实现。HEAD 只定位已提交基线，来源指纹覆盖本页实际引用的文件。图谱不拥有业务状态。本页的测试锚点表示已核对的覆盖入口，运行结果见本轮总台账。
 
 ```mermaid
 flowchart TB
-  accTitle: 一次追加生成任务合同
-  accDescr: 一次追加生成任务合同；箭头区分当前代码步骤、返回事实与明确的条件。
-  request["Controller 任务草稿"]
-  anchors["核对章节与验收条目"]
-  lineage["检查 Pod、谱系与用户审阅门"]
-  package["不可变 TaskPackage"]
-  event["规划事件与聚合"]
-  view["任务投影与 next"]
-  request -->|"E-L1019-01 读取固定记录并切分条目"| anchors
-  anchors -->|"E-L1019-02 校验 requirementRef 和 sectionAnchors"| lineage
-  lineage -->|"E-L1019-03 确定性构造完整合同"| package
-  package -->|"E-L1019-04 tasking.target-task-planned"| event
-  event -->|"E-L1019-05 幂等物化并给出下一责任"| view
+  accTitle: 实现任务和测试任务分别冻结什么
+  accDescr: 实现任务和测试任务分别冻结什么；每条关系由当前实现的调用或条件支持，错误停止与恢复保持显式。
+  A["[代码] 幂等键未绑定的新任务请求"]
+  B["[代码] implementation：需求、审阅与拓扑"]
+  C["[代码] test：实现闭合与测试谱系"]
+  D["[计划] 冻结 TaskPackage"]
+  F["[权威] target-task-planned 事件"]
+  H["[视图] 任务包文件与 next"]
+  A -->|"E-TSK01-01 实现包检查本 Pod 产品窗口及仓库"| B
+  A -->|"E-TSK01-02 测试包派生本 Pod Test 窗口、环境和基线"| C
+  B -->|"E-TSK01-03 验收锚点逐条绑定需求条目；检查 replacement 或 continuation"| D
+  C -->|"E-TSK01-04 步骤赋 ts 序号；检查 real-environment 与 retest 授权"| D
+  D -->|"E-TSK01-05 单次追加；规划不发送宿主消息"| F
+  F -->|"E-TSK01-06 物化投影；失败后同键重放可补做"| H
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| TaskPackage | 目标任务的不可变合同，内容来自已发布需求包。 |
-| testContract | 测试任务包内冻结的步骤、环境、技能、预算与停止条件。 |
-| CAS | 比较已观察的摘要/修订后提交；来源已改变则拒绝。 |
-| next | 根据当前事实派生的下一责任与建议工具。 |
-
-### 节点与实现定位
-
-| 节点 | 文件 / 符号 | 责任 |
-| --- | --- | --- |
-| request | `src/capabilities/tasking/service.ts` | Controller 任务草稿 |
-| anchors | `src/capabilities/tasking/decide.ts` | 核对章节与验收条目 |
-| lineage | `src/capabilities/tasking/decide.ts` | 检查 Pod、谱系与用户审阅门 |
-| package | `src/governance/tasking/task-package.ts` | 不可变 TaskPackage |
-| event | `src/governance/demand/model/demand-aggregate-state.ts` | 规划事件与聚合 |
-| view | `src/governance/tasking/task-package-projection-store.ts` | 任务投影与 next |
+| [代码] | 确定性服务、守卫或纯决定；失败会拒绝转换。 |
+| [权威] | 持久事实；只能由指定写入者改变。 |
+| [视图] | 由权威派生的可重建数据，不授权写入。 |
+| TaskPackage | 冻结的目标合同，是事件内容；磁盘任务包只是可重建投影。 |
+| lineage | 实现替代/续接、测试 retest 的显式来源关系。 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系与边界 |
 | --- | --- | --- | --- |
-| E-L1019-01 | `src/capabilities/tasking/service.ts#buildImplementationPackage` | `tests/capabilities/tasking/service.test.ts` | 读取固定记录并切分条目 |
-| E-L1019-02 | `src/capabilities/tasking/decide.ts#deriveAnchorReferenceBlockers` | `tests/capabilities/tasking/service.test.ts` | 校验 requirementRef 和 sectionAnchors |
-| E-L1019-03 | `src/capabilities/tasking/service.ts#buildPackage` | `tests/capabilities/tasking/service.test.ts` | 确定性构造完整合同 |
-| E-L1019-04 | `src/capabilities/tasking/service.ts#execute` | `tests/capabilities/tasking/service.test.ts` | tasking.target-task-planned |
-| E-L1019-05 | `src/capabilities/tasking/service.ts#materialize` | `tests/capabilities/tasking/service.test.ts` | 幂等物化并给出下一责任 |
+| E-TSK01-01 | `src/capabilities/tasking/service.ts#buildImplementationPackage` | 间接覆盖：`tests/capabilities/tasking/service.test.ts#planFixtureTargetTask`（经公共切片入口执行此内部关系） | 实现包检查本 Pod 产品窗口及仓库 |
+| E-TSK01-02 | `src/capabilities/tasking/service.ts#buildTestPackage` | 间接覆盖：`tests/capabilities/tasking/service.test.ts#planFixtureTestTask`（经公共切片入口执行此内部关系） | 测试包派生本 Pod Test 窗口、环境和基线 |
+| E-TSK01-03 | `src/capabilities/tasking/service.ts#buildImplementationPackage` | 间接覆盖：`tests/capabilities/tasking/service.test.ts#planFixtureTargetTask`（经公共切片入口执行此内部关系） | 验收锚点逐条绑定需求条目；检查 replacement 或 continuation |
+| E-TSK01-04 | `src/capabilities/tasking/service.ts#buildTestPackage` | 间接覆盖：`tests/capabilities/tasking/service.test.ts#planFixtureTestTask`（经公共切片入口执行此内部关系） | 步骤赋 ts 序号；检查 real-environment 与 retest 授权 |
+| E-TSK01-05 | `src/capabilities/tasking/service.ts#execute` | 间接覆盖：`tests/capabilities/tasking/service.test.ts#planFixtureTargetTask`（经公共切片入口执行此内部关系） | 单次追加；规划不发送宿主消息 |
+| E-TSK01-06 | `src/capabilities/tasking/service.ts#materialize` | 间接覆盖：`tests/capabilities/tasking/service.test.ts#TaskPackageProjectionStore`（经公共切片入口执行此内部关系） | 物化投影；失败后同键重放可补做 |
 
-## 守卫、恢复与验证范围
+## 准入规则决定读图方式
 
-同一仓库的开放谱系须 replacement；只有接受的前序可 continuation。新 replacement 创建时旧目标成为 superseded。taskPlanReview:user 要求请求带确认时间；不是只保存一个未消费的元数据字段。
+| 分支 | 真实条件 | 失败或下一步 |
+| --- | --- | --- |
+| 实现 | 非 research；Demand active；当前测试代际尚未开始 | 测试已开始则禁止另开实现包；修复走已授权目标 |
+| 拓扑 | 指派窗口 role=product、repository 相同、pod 相同 | unknown / role / repository / pod mismatch 明确拒绝 |
+| 验收引用 | recordDigest、acceptance-criteria、itemId 均命中冻结需求 | 不允许发明条目；完成覆盖另由 verify 汇总 |
+| 用户审阅 | taskPlanReview=user 必须携带 confirmedAt | controller 模式多给确认时间也拒绝；代码记录声明，不验证真人身份 |
+| 同仓实现 | 未接受且未 superseded 的头必须 replacement | in-flight 不可替代；仅有 accepted 则 continuation 指向已接受目标 |
+| 测试 | real-environment、active、无 awaitingDecision、至少一个现存实现目标且全部 accepted | 当前代际至多一个未终结 test；product-defect 后须消费 pendingTestRetest |
 
-涉及的测试与核验入口：
+测试步骤的 GWT 由 Controller 撰写；窗口、landing 成员、实现已接受结果/决定摘要、修复授权身份由 Wakeflow 派生。任务规划不替 Agent 安装环境或执行测试。
 
-- `tests/capabilities/tasking/service.test.ts`。
+2026-10-03 增量没有改变任务合同或谱系规则；新增的共享工作区准入和取消传播位于调用外壳。混合失败的产品修复仍复用原实现包；修复接受后才以 retest 规划新测试包，其他失败不会随修复授权自动通过。
 
-## 下钻与相关视图
+## 继续阅读
 
-- [文件直接导入](./file-dependencies.md)
-- [运行调用与恢复](./runtime-call-flow.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[本专题总览](./README.md) · [文件导入](./file-dependencies.md) · [实际调用](./runtime-call-flow.md) · [逐文件审阅记录](../../plans/review-2026-10-03/demand-delivery.md) · [图谱入口](../README.md)

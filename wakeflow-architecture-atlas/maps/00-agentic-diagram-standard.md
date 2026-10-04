@@ -163,7 +163,6 @@ Wakeflow 图集采用两个正交维度：
 | `[未实现]` | 相邻能力缺失；只画停止节点，不画内部设计 |
 | `[历史]` | 旧 JS 或历史文档；与 TS 当前图物理分离 |
 | `[目标设计]` | accepted ADR 支持的独立设计图；不当作当前代码调用边 |
-| `[目标设计]` | accepted ADR 支持的独立设计图；不当作当前代码调用边 |
 | `[待复核]` | 来源路径在上次核验后变化；图不得继续作为当前事实 |
 
 颜色不能作为唯一编码。黑白输出或不支持样式的 Markdown renderer 中，文本标记仍必须完整表达状态。
@@ -192,7 +191,7 @@ Wakeflow 图集采用两个正交维度：
 ---
 diagramId: ts-<domain>-<view>
 viewType: architecture | authority | vertical-slice | file-dependency | call-flow | state | recovery | evidence
-truthKind: current-code | in-progress-worktree | stale | historical | target-design | target-design
+truthKind: current-code | in-progress-worktree | stale | historical | target-design
 reviewDepth: L0 | L1 | L2 | L3 | L4 | L5
 verifiedAt: YYYY-MM-DD
 baselineCommit: <git-commit>
@@ -374,8 +373,8 @@ flowchart TB
 10. 运行`git diff --check`，记录未执行的代码或发布验证。
 
 
-## 14. 本轮检查实现（2026-09-11）
+## 14. 当前检查实现（2026-10-03）
 
 `check:current` 现在按 SWC AST 验证具体文件直接导入与符号存在，检查精确来源路径、刷新输入、唯一边证据和紧邻术语。文件节点的身份以完整路径表为准，不以 basename 猜测。本地验证页使用锁定 Mermaid 在浏览器中实际解析并渲染所有图；`check:diagrams` 复验该回执的源码摘要、数量和版本，图有变化即要求重渲染。两者均不自动证明运行时调用顺序或产品验收。
 
-当前覆盖以 15 个真实专题和对应阅读问题检查，不以图数下限作为质量证明。目标设计可以展开已接受的设计细节；当前图的未实现边界仍只画停止点。原始导入关系可以机械提取，业务主线和状态守卫必须逐图阅读实际 owner 与测试。
+当前覆盖以 17 个真实专题和对应阅读问题检查；本轮为 71 份 maps 文档、90 张图，不以图数下限作为质量证明。目标设计可以展开已接受的设计细节；当前图的未实现边界仍只画停止点。原始导入关系可以机械提取，业务主线和状态守卫必须逐图阅读实际 owner 与测试。

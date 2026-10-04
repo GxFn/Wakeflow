@@ -1,211 +1,152 @@
 ---
-diagramId: ts-evidence-file-dependencies
+diagramId: ts-14-evidence-file-dependencies
 viewType: file-dependency
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L3
-verifiedAt: 2026-09-18
-baselineCommit: 1480271ecc8a6c17bb9042321644402bd6cbda56
-sourceFingerprint: sha256:da04273f15ac5ae372f7f752bec2b1cad6eca3f0aeed641b288fafe4786a8b1c
-audience: [maintainer, reviewer]
+verifiedAt: 2026-10-03
+baselineCommit: d8fafff33919c728e3a9b91ec04aa50ec5e07f0c
+testEvidence: anchored
+audience:
+  - maintainer
+  - reviewer
 documentationOwner: Wakeflow Architecture Atlas
 generatedBy: mixed
 sourcePaths:
-  - src/capabilities/evidence/*.ts
-  - src/capabilities/evidence/decide.ts
   - src/capabilities/evidence/service.ts
-  - src/configuration/*.ts
-  - src/contracts/generated/configuration/*.ts
-  - src/contracts/generated/entrypoints/*.ts
-  - src/contracts/generated/foundation/*.ts
-  - src/contracts/generated/governance/delivery/*.ts
-  - src/contracts/generated/governance/demand/*.ts
-  - src/contracts/generated/governance/evidence/*.ts
-  - src/contracts/generated/governance/ledger/*.ts
-  - src/contracts/generated/governance/lifecycle/*.ts
-  - src/contracts/generated/governance/result/*.ts
-  - src/contracts/generated/governance/review/*.ts
-  - src/contracts/generated/governance/tasking/*.ts
-  - src/contracts/generated/governance/testing/*.ts
-  - src/contracts/generated/identity/*.ts
-  - src/contracts/generated/workspace/*.ts
-  - src/contracts/identity/*.ts
-  - src/contracts/vocabulary/*.ts
-  - src/foundation/artifact/*.ts
-  - src/foundation/crypto/*.ts
-  - src/foundation/data/*.ts
-  - src/foundation/event-sourcing/*.ts
-  - src/foundation/filesystem/*.ts
-  - src/foundation/git/*.ts
-  - src/foundation/identity/*.ts
-  - src/foundation/node/*.ts
-  - src/foundation/numeric/*.ts
-  - src/foundation/resource/*.ts
-  - src/foundation/schema/*.ts
-  - src/foundation/text/*.ts
-  - src/foundation/time/*.ts
-  - src/governance/controller/*.ts
-  - src/governance/delivery/*.ts
-  - src/governance/demand/*.ts
-  - src/governance/demand/event-sourcing/*.ts
-  - src/governance/demand/model/*.ts
-  - src/governance/demand/publication/*.ts
-  - src/governance/evidence/*.ts
+  - src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts
   - src/governance/evidence/managed-evidence-capture-planning-service.ts
   - src/governance/evidence/managed-evidence-manifest.ts
   - src/governance/evidence/managed-evidence-publication-application-service.ts
+  - src/governance/evidence/managed-evidence-publication-payload-materializer.ts
+  - src/governance/evidence/managed-evidence-publication-record-publisher.ts
+  - src/governance/evidence/managed-evidence-publication-stage-materializer.ts
   - src/governance/evidence/managed-evidence-publication-transaction-settlement.ts
+  - src/governance/evidence/managed-evidence-publication-transaction-store.ts
   - src/governance/evidence/managed-evidence-reading-service.ts
-  - src/governance/evidence/managed-evidence-source-selection.ts
-  - src/governance/ledger/*.ts
-  - src/governance/lifecycle/*.ts
-  - src/governance/result/*.ts
-  - src/governance/review/*.ts
-  - src/governance/tasking/*.ts
-  - src/governance/testing/*.ts
-  - src/kernel/*.ts
-  - src/kernel/event-stream/*.ts
+  - src/governance/evidence/managed-evidence-record-reader.ts
+  - src/governance/evidence/managed-evidence-record-set-inventory.ts
   - src/kernel/privacy-scan.ts
-  - src/workspace/*.ts
-  - src/workspace/window-runtime/*.ts
+  - tooling/codegen/schema-types.ts
 schemaPaths:
-  - src/contracts/schemas/configuration/wakeflow-config-v3.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-record-evidence-request.schema.json
-  - src/contracts/schemas/entrypoints/wakeflow-record-evidence-result.schema.json
-  - src/contracts/schemas/foundation/directory-tree-candidate-plan.schema.json
-  - src/contracts/schemas/foundation/git-object-id.schema.json
-  - src/contracts/schemas/foundation/loaded-artifact-tree-manifest.schema.json
-  - src/contracts/schemas/foundation/portable-resource-path.schema.json
-  - src/contracts/schemas/foundation/sha256-digest.schema.json
-  - src/contracts/schemas/foundation/utc-instant.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-envelope.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-outcome.schema.json
-  - src/contracts/schemas/governance/delivery/delivery-rearm.schema.json
-  - src/contracts/schemas/governance/demand/callback-reissued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/controller-target-review-decided-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/decision-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-outcome-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-prepared-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/delivery-rearmed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-aggregate-state.schema.json
-  - src/contracts/schemas/governance/demand/demand-authority.schema.json
-  - src/contracts/schemas/governance/demand/demand-cancelled-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-completed-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-continued-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-escalated-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-sourcing-stored-event.schema.json
-  - src/contracts/schemas/governance/demand/demand-event-stream-commit.schema.json
-  - src/contracts/schemas/governance/demand/demand-identity.schema.json
-  - src/contracts/schemas/governance/demand/demand-published-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/managed-evidence-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/product-defect-remediation-authorized-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-result-recorded-event-data-v1.schema.json
-  - src/contracts/schemas/governance/demand/target-task-planned-event-data-v1.schema.json
   - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
   - src/contracts/schemas/governance/evidence/managed-evidence-publication-transaction.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-authority-member-reference.schema.json
-  - src/contracts/schemas/governance/ledger/ledger-record-publication-intent.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-lineage.schema.json
-  - src/contracts/schemas/governance/ledger/requirement-record.schema.json
-  - src/contracts/schemas/governance/lifecycle/demand-completion.schema.json
-  - src/contracts/schemas/governance/result/implementation-target-result-report.schema.json
-  - src/contracts/schemas/governance/result/target-result.schema.json
-  - src/contracts/schemas/governance/result/test-target-result-report.schema.json
-  - src/contracts/schemas/governance/review/controller-implementation-review-decision.schema.json
-  - src/contracts/schemas/governance/review/controller-product-defect-remediation-authorization.schema.json
-  - src/contracts/schemas/governance/review/controller-test-review-decision.schema.json
-  - src/contracts/schemas/governance/tasking/task-package.schema.json
-  - src/contracts/schemas/governance/testing/test-execution-attempt.schema.json
-  - src/contracts/schemas/identity/wakeflow-durable-id-kind.schema.json
-  - src/contracts/schemas/workspace/window-host-binding.schema.json
-testPaths:
-  - tests/capabilities/evidence/service.test.ts
+testPaths: []
 refreshTriggers:
-  - .dependency-cruiser.cjs
-  - docs/decisions/0012-flow-convergence-callback-calls-testing-redesign.md
-  - docs/decisions/0013-target-architecture-and-slice-plan.md
+  - src/capabilities/evidence/service.ts
+  - src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts
+  - src/governance/evidence/managed-evidence-capture-planning-service.ts
+  - src/governance/evidence/managed-evidence-manifest.ts
+  - src/governance/evidence/managed-evidence-publication-application-service.ts
+  - src/governance/evidence/managed-evidence-publication-payload-materializer.ts
+  - src/governance/evidence/managed-evidence-publication-record-publisher.ts
+  - src/governance/evidence/managed-evidence-publication-stage-materializer.ts
+  - src/governance/evidence/managed-evidence-publication-transaction-settlement.ts
+  - src/governance/evidence/managed-evidence-publication-transaction-store.ts
+  - src/governance/evidence/managed-evidence-reading-service.ts
+  - src/governance/evidence/managed-evidence-record-reader.ts
+  - src/governance/evidence/managed-evidence-record-set-inventory.ts
+  - src/kernel/privacy-scan.ts
+  - tooling/codegen/schema-types.ts
+sourceFingerprint: sha256:80dea90f09f26d6f0b78ca024dea0f3101efd38b15f1a4a82ad3be0404d6cec9
 ---
 
-# 证据发布：文件直接导入
+# 证据：捕获、发布与读取的静态依赖
 
-这是当前源码 AST 提取的审阅精选范围，只显示下表文件之间的真实直接导入。完整源码闭包可以继续沿导入下钻；此图不证明调用顺序。
+> 核验于 2026-10-03，基线 `d8fafff` 加当前未提交工作树。图表达实际源码分支，未提交实现标为进行中；不把开发阶段计划当作运行事实。来源与测试锚点按本文精确范围列出。
 
-> 核验基线：`1480271`（L1 observation 第十片已落地，20 个公共工具、18 个一次性场景）。工作树另有并行未提交改动（宿主 hook 通道等），本图不描绘；来源指纹按当前工作树计算。本文说明实现事实，未宣称双宿主真实会话已经验证。
+本图是从当前TypeScript AST选出的直接导入子图；每条边再对照已读源码用途。它只证明耦合方向，不证明调用顺序、状态转移或Agent授权。
 
-## 证据发布的精选直接导入
+## 证据：捕获、发布与读取的静态依赖
 
 ```mermaid
-flowchart TB
-  accTitle: 证据发布的精选直接导入
-  accDescr: 证据发布所列具体文件之间的直接导入，不把静态依赖解释成运行调用。
-  f1["能力执行 service.ts"]
-  f2["纯决定 decide.ts"]
-  f3["源码模块 managed-evidence-capture-planning-service.ts"]
-  f4["源码模块 managed-evidence-publication-application-service.ts"]
-  f5["源码模块 managed-evidence-publication-transaction-settlement.ts"]
-  f6["源码模块 managed-evidence-reading-service.ts"]
-  f7["源码模块 managed-evidence-manifest.ts"]
-  f8["源码模块 managed-evidence-source-selection.ts"]
-  f9["源码模块 privacy-scan.ts"]
-  f1 -->|"E-L1060-01 直接导入"| f2
-  f1 -->|"E-L1060-02 直接导入"| f3
-  f1 -->|"E-L1060-03 直接导入"| f4
-  f2 -->|"E-L1060-04 直接导入"| f7
-  f3 -->|"E-L1060-05 直接导入"| f7
-  f3 -->|"E-L1060-06 直接导入"| f8
-  f3 -->|"E-L1060-07 直接导入"| f9
-  f4 -->|"E-L1060-08 直接导入"| f5
-  f5 -->|"E-L1060-09 直接导入"| f7
-  f6 -->|"E-L1060-10 直接导入"| f7
-  f7 -->|"E-L1060-11 直接导入"| f8
+flowchart LR
+  accTitle: 证据：捕获、发布与读取的静态依赖
+  accDescr: 文件直接import关系的审阅精选视图，运行调用与状态分支在独立页面。
+  f0["公共效果入口<br/>service.ts"]
+  f1["来源捕获规划<br/>managed-evidence-capture-planning-service.ts"]
+  f2["跨资源编排<br/>managed-evidence-publication-application-service.ts"]
+  f3["Event边界结算<br/>managed-evidence-publication-transaction-settlement.ts"]
+  f4["stage物化<br/>managed-evidence-publication-stage-materializer.ts"]
+  f5["payload复制/重建<br/>managed-evidence-publication-payload-materializer.ts"]
+  f6["final发布<br/>managed-evidence-publication-record-publisher.ts"]
+  f7["journal<br/>managed-evidence-publication-transaction-store.ts"]
+  f8["Manifest codec<br/>managed-evidence-manifest.ts"]
+  f9["物理三级读取<br/>managed-evidence-record-reader.ts"]
+  f10["权威之上读取<br/>managed-evidence-reading-service.ts"]
+  f11["集合元数据清点<br/>managed-evidence-record-set-inventory.ts"]
+  f12["文本分类与凭证类别集合"]
+  f0 -->|"E-VF0-01 直接导入"| f1
+  f0 -->|"E-VF0-02 直接导入"| f2
+  f1 -->|"E-VF0-03 直接导入"| f8
+  f2 -->|"E-VF0-04 直接导入"| f3
+  f2 -->|"E-VF0-05 直接导入"| f4
+  f2 -->|"E-VF0-06 直接导入"| f7
+  f3 -->|"E-VF0-07 直接导入"| f6
+  f3 -->|"E-VF0-08 直接导入"| f7
+  f4 -->|"E-VF0-09 直接导入"| f5
+  f4 -->|"E-VF0-10 直接导入"| f7
+  f4 -->|"E-VF0-11 直接导入"| f8
+  f6 -->|"E-VF0-12 直接导入"| f7
+  f9 -->|"E-VF0-13 直接导入"| f8
+  f10 -->|"E-VF0-14 直接导入"| f9
+  f11 -->|"E-VF0-15 直接导入"| f9
+  f11 -->|"E-VF0-16 直接导入"| f7
+  f1 -->|"E-VF0-17 直接导入"| f12
 ```
 
 ### 本图术语说明
 
 | 术语 | 本图含义 |
 | --- | --- |
-| AST | 源码的语法树；直接导入自动提取，运行时调用顺序另行核实。 |
+| 直接导入 | 包含实际import或显式re-export；类型依赖同样算结构依赖。 |
+| 精选范围 | 按模块入口裁剪；被省略的依赖仍在逐文件台账和全局导入数据中。 |
 
-### 节点与实现定位
+### 节点与源码定位
 
-| 节点 | 文件 / 符号 | 责任 |
+| 节点 | 文件 / 符号 | 职责 |
 | --- | --- | --- |
-| f1 | `src/capabilities/evidence/service.ts` | 能力执行 service.ts |
-| f2 | `src/capabilities/evidence/decide.ts` | 纯决定 decide.ts |
-| f3 | `src/governance/evidence/managed-evidence-capture-planning-service.ts` | 源码模块 managed-evidence-capture-planning-service.ts |
-| f4 | `src/governance/evidence/managed-evidence-publication-application-service.ts` | 源码模块 managed-evidence-publication-application-service.ts |
-| f5 | `src/governance/evidence/managed-evidence-publication-transaction-settlement.ts` | 源码模块 managed-evidence-publication-transaction-settlement.ts |
-| f6 | `src/governance/evidence/managed-evidence-reading-service.ts` | 源码模块 managed-evidence-reading-service.ts |
-| f7 | `src/governance/evidence/managed-evidence-manifest.ts` | 源码模块 managed-evidence-manifest.ts |
-| f8 | `src/governance/evidence/managed-evidence-source-selection.ts` | 源码模块 managed-evidence-source-selection.ts |
-| f9 | `src/kernel/privacy-scan.ts` | 源码模块 privacy-scan.ts |
+| f0 | `src/capabilities/evidence/service.ts` | 公共效果入口<br/>service.ts |
+| f1 | `src/governance/evidence/managed-evidence-capture-planning-service.ts` | 来源捕获规划<br/>managed-evidence-capture-planning-service.ts |
+| f2 | `src/governance/evidence/managed-evidence-publication-application-service.ts` | 跨资源编排<br/>managed-evidence-publication-application-service.ts |
+| f3 | `src/governance/evidence/managed-evidence-publication-transaction-settlement.ts` | Event边界结算<br/>managed-evidence-publication-transaction-settlement.ts |
+| f4 | `src/governance/evidence/managed-evidence-publication-stage-materializer.ts` | stage物化<br/>managed-evidence-publication-stage-materializer.ts |
+| f5 | `src/governance/evidence/managed-evidence-publication-payload-materializer.ts` | payload复制/重建<br/>managed-evidence-publication-payload-materializer.ts |
+| f6 | `src/governance/evidence/managed-evidence-publication-record-publisher.ts` | final发布<br/>managed-evidence-publication-record-publisher.ts |
+| f7 | `src/governance/evidence/managed-evidence-publication-transaction-store.ts` | journal<br/>managed-evidence-publication-transaction-store.ts |
+| f8 | `src/governance/evidence/managed-evidence-manifest.ts` | Manifest codec<br/>managed-evidence-manifest.ts |
+| f9 | `src/governance/evidence/managed-evidence-record-reader.ts` | 物理三级读取<br/>managed-evidence-record-reader.ts |
+| f10 | `src/governance/evidence/managed-evidence-reading-service.ts` | 权威之上读取<br/>managed-evidence-reading-service.ts |
+| f11 | `src/governance/evidence/managed-evidence-record-set-inventory.ts` | 集合元数据清点<br/>managed-evidence-record-set-inventory.ts |
+| f12 | `src/kernel/privacy-scan.ts` | 文本分类与凭证类别集合 |
 
 ### 本图边级证据
 
-| 编号 | 代码定位 | 测试 / 核验 | 关系依据 |
+| 编号 | 代码证据 | 测试证据 | 关系依据 |
 | --- | --- | --- | --- |
-| E-L1060-01 | `src/capabilities/evidence/service.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-02 | `src/capabilities/evidence/service.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-03 | `src/capabilities/evidence/service.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-04 | `src/capabilities/evidence/decide.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-05 | `src/governance/evidence/managed-evidence-capture-planning-service.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-06 | `src/governance/evidence/managed-evidence-capture-planning-service.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-07 | `src/governance/evidence/managed-evidence-capture-planning-service.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-08 | `src/governance/evidence/managed-evidence-publication-application-service.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-09 | `src/governance/evidence/managed-evidence-publication-transaction-settlement.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-10 | `src/governance/evidence/managed-evidence-reading-service.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
-| E-L1060-11 | `src/governance/evidence/managed-evidence-manifest.ts` | `tests/capabilities/evidence/service.test.ts` | 直接导入 |
+| E-VF0-01 | `src/capabilities/evidence/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-02 | `src/capabilities/evidence/service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-03 | `src/governance/evidence/managed-evidence-capture-planning-service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-04 | `src/governance/evidence/managed-evidence-publication-application-service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-05 | `src/governance/evidence/managed-evidence-publication-application-service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-06 | `src/governance/evidence/managed-evidence-publication-application-service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-07 | `src/governance/evidence/managed-evidence-publication-transaction-settlement.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-08 | `src/governance/evidence/managed-evidence-publication-transaction-settlement.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-09 | `src/governance/evidence/managed-evidence-publication-stage-materializer.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-10 | `src/governance/evidence/managed-evidence-publication-stage-materializer.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-11 | `src/governance/evidence/managed-evidence-publication-stage-materializer.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-12 | `src/governance/evidence/managed-evidence-publication-record-publisher.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-13 | `src/governance/evidence/managed-evidence-record-reader.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-14 | `src/governance/evidence/managed-evidence-reading-service.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-15 | `src/governance/evidence/managed-evidence-record-set-inventory.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-16 | `src/governance/evidence/managed-evidence-record-set-inventory.ts` | 未覆盖：此边是静态导入，由源码 AST 校验；运行测试不代替导入证据 | 直接导入 |
+| E-VF0-17 | `src/governance/evidence/managed-evidence-capture-planning-service.ts` | 未覆盖：静态导入由源码 AST 校验；内容门的具体断言见独立页面 | 捕获直接复用扫描器及凭证类别集合 |
 
-## 守卫、恢复与验证范围
+## 阅读边界
 
-文件身份采用完整仓库相对路径；同名 service.ts、decide.ts 不靠文件名猜测。生成合同仍回指 Schema 权威。
+精选关系按捕获、事务、读取分支展开；前轮已对全部19个治理证据文件与3个能力文件逐文件审阅；本轮深审捕获规划、相关消费者与隐私边界。Publisher不直接导入Event提交器，Event-before-final由Settlement调用者保证。
 
-涉及的测试与核验入口：
+Schema是可移植wire源；`tooling/codegen/schema-types.ts`生成`src/contracts/generated/identity/wakeflow-durable-id-kind.generated.ts`等派生合同。生成文件只核实来源与生成链，不计作手写文件语义审阅；`package.json`的schema:build/schema:check负责生成与漂移检测。
 
-- `tests/capabilities/evidence/service.test.ts`。
+## 继续阅读
 
-## 下钻与相关视图
-
-- [本专题总览](./README.md)
-- [图谱总索引](../README.md)
-- [核验与剩余范围](../01-diagram-review-ledger.md)
+[文件导入](./file-dependencies.md) · [运行分支](./runtime-call-flow.md) · [本模块总览](./README.md) · [全局入口](../README.md) · [本轮增量审阅](../../plans/review-2026-10-03/coordination.md) · [前轮完整审阅](../../plans/review-2026-10-02/coordination-evidence.md)

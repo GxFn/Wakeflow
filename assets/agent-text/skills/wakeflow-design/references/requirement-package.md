@@ -42,13 +42,13 @@ preview before the user ever sees the package.
 **bug** - something is wrong:
 
 - `requirement.md`: reproduction, scope, non-goals, acceptance criteria
-  (required before the Controller can plan any task), user confirmation.
+  (required before publication), user confirmation.
 - `landing.md`: code facts, fix plan, testing decision.
 
 **supplement** - an addition to work already done:
 
 - `requirement.md`: requirement delta, completion definition, acceptance
-  criteria (required before the Controller can plan any task), user
+  criteria (required before publication), user
   confirmation.
 - `landing.md`: code facts, landing plan, testing decision.
 
@@ -73,7 +73,10 @@ someone would otherwise be tempted to include.
 
 **Scope / boundaries.** Which repositories, which areas, which are untouched.
 
-**Acceptance criteria.** A numbered list of independently checkable items.
+**Acceptance criteria.** A non-empty numbered or bulleted list of independently
+checkable items. Requirement, bug and supplement packages are rejected before
+publication when this list is absent or empty; prose and tables do not create
+referenceable items. The confirmation summary includes this section.
 These are load-bearing: the Controller binds each task's acceptance anchors to
 these items by their position, and a target's report answers them one by one.
 So each item must be:

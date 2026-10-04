@@ -3,8 +3,19 @@ import fs, {globSync} from 'node:fs';
 import path from 'node:path';
 import {parseSync} from '@swc/core';
 import {parse as parseYaml} from 'yaml';
+import {lexer} from 'marked';
 
 export const truthKinds = new Set(['current-code', 'in-progress-worktree', 'stale', 'historical', 'target-design']);
+/** Recognize the two repository-root directory rules used by this project, including a later explicit reversal. */
+export function rootBuildDirectoryIgnored(ignore) {
+  let ignored = false;
+  for (const raw of ignore.split(/\r?\n/u)) {
+    const rule = raw.trim();
+    if (rule === '.build/' || rule === '/.build/') ignored = true;
+    if (rule === '!.build/' || rule === '!/.build/') ignored = false;
+  }
+  return ignored;
+}
 export function parseSource(source, filename) {
   const ast = parseSync(source, {syntax: 'typescript', tsx: filename.endsWith('.tsx'), target: 'es2022'});
   const imports = new Set();
@@ -51,7 +62,7 @@ export function testIndex(repositoryRoot) {
   return modules;
 }
 export function sourceIndex(repositoryRoot) {
-  const files = globSync('src/**/*.ts', {cwd: repositoryRoot}).sort();
+  const files = [...globSync('src/**/*.ts', {cwd: repositoryRoot}), ...globSync('tooling/**/*.ts', {cwd: repositoryRoot})].sort();
   const set = new Set(files);
   const modules = new Map();
   for (const file of files) {
@@ -96,8 +107,9 @@ export function validateEdges(block) {
     else ids.push(matches[0][0]);
   }
   if (new Set(ids).size !== ids.length) errors.push('duplicate edge id');
+  const evidence = evidenceTables(block.after).flatMap(table => table.rows);
   for (const id of ids) {
-    const rows = block.after.split('\n').filter(line => new RegExp('^\\|\\s*`?' + id + '`?\\s*\\|').test(line));
+    const rows = evidence.filter(row => row.id === id);
     if (rows.length !== 1) errors.push(id + ': expected exactly one adjacent evidence row');
   }
   if (!/^\s*### 本图术语说明/u.test(block.after)) errors.push('terminology must immediately follow diagram');
@@ -106,7 +118,7 @@ export function validateEdges(block) {
 }
 export function dependencyNodes(body) {
   const nodes = new Map();
-  for (const m of body.matchAll(/^\|\s*([A-Za-z][A-Za-z0-9_]*)\s*\|\s*`(src\/[^`#]+\.ts)(?:#[^`]+)?`\s*\|/gmu)) nodes.set(m[1], m[2]);
+  for (const m of body.matchAll(/^\|\s*([A-Za-z][A-Za-z0-9_]*)\s*\|\s*`((?:src|tooling)\/[^`#]+\.ts)(?:#[^`]+)?`\s*\|/gmu)) nodes.set(m[1], m[2]);
   return nodes;
 }
 export function validateImports(body, modules) {
@@ -135,21 +147,29 @@ export function validateReferences(raw, repositoryRoot, modules, tests = new Map
   return {symbols, testSymbols, errors};
 }
 export const evidenceCoverageMarkers = new Set(['未覆盖', '间接覆盖']);
-/** Reads every `| 编号 | … | 测试 … |` table, keyed on the header cell, so four- and six-column evidence tables both resolve the right column. */
-export function evidenceTestCells(body) {
-  const cells = []; let testColumn = -1, idColumn = -1;
-  for (const line of body.split('\n')) {
-    const row = line.trim();
-    if (!row.startsWith('|') || !row.endsWith('|')) {testColumn = -1; idColumn = -1; continue;}
-    const values = row.slice(1, -1).split('|').map(value => value.trim());
-    if (values.every(value => /^:?-{3,}:?$/u.test(value))) continue;
-    const header = values.findIndex(value => /测试/u.test(value));
-    if (header >= 0 && values.some(value => /编号/u.test(value))) {
-      testColumn = header; idColumn = values.findIndex(value => /编号/u.test(value)); continue;
+/** Use the reader's Markdown grammar: code examples and orphan pipe lines are not tables. */
+function evidenceTables(body) {
+  const tables = [];
+  for (const token of lexer(body, {gfm: true})) {
+    if (token.type !== 'table') continue;
+    const idColumn = token.header.findIndex(cell => /编号/u.test(cell.text));
+    if (idColumn < 0) continue;
+    const testColumn = token.header.findIndex(cell => /测试/u.test(cell.text));
+    const rows = [];
+    for (const cells of token.rows) {
+      const id = (cells[idColumn]?.text ?? '').replace(/`/gu, '').trim();
+      if (/^E-[A-Z0-9]+-\d{2}$/u.test(id)) rows.push({id, cells});
     }
-    if (testColumn < 0 || idColumn < 0) continue;
-    const id = values[idColumn]?.replace(/`/gu, '');
-    if (id && /^E-[A-Z0-9]+-\d{2}$/u.test(id)) cells.push({id, cell: values[testColumn] ?? ''});
+    tables.push({testColumn, rows});
+  }
+  return tables;
+}
+/** Read actual GFM tables by their headers; escaped pipes remain inside their original cell. */
+export function evidenceTestCells(body) {
+  const cells = [];
+  for (const table of evidenceTables(body)) {
+    if (table.testColumn < 0) continue;
+    for (const row of table.rows) cells.push({id: row.id, cell: row.cells[table.testColumn]?.text ?? ''});
   }
   return cells;
 }
@@ -165,6 +185,9 @@ export function classifyTestEvidence(cell) {
 /** In a document that declares `testEvidence: anchored`, a row either anchors a real test symbol or says plainly that it is indirect or uncovered. */
 export function validateTestEvidence(body, strict) {
   const errors = []; const counts = {rows: 0, anchored: 0, marked: 0, unanchored: 0};
+  if (strict) for (const table of evidenceTables(body)) {
+    if (table.rows.length && table.testColumn < 0) errors.push(table.rows[0].id + ': evidence table needs a test column');
+  }
   for (const {id, cell} of evidenceTestCells(body)) {
     const {anchors, bare, marker, reason} = classifyTestEvidence(cell);
     counts.rows++;

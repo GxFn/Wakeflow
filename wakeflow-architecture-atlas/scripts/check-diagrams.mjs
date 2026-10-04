@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {diagramBlocks, validateRenderReceipt} from './atlas-validation.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
-const receiptFile = path.join(root, 'plans/evidence/l1-nine-slices-render.json');
+const receiptFile = path.join(root, 'plans/evidence/current-mermaid-render.json');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).dependencies.mermaid;
 const expected = [];
 for (const file of globSync('maps/**/*.md', {cwd: root}).sort()) {

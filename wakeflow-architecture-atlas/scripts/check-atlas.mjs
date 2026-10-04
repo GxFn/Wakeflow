@@ -1,7 +1,7 @@
 import fs, {globSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {documentParts, diagramBlocks, fingerprintInputs, sourceIndex, testIndex, truthKinds, validateEdges, validateImports, validateLinks, validateReferences, validateTestEvidence} from './atlas-validation.mjs';
+import {documentParts, diagramBlocks, fingerprintInputs, sourceIndex, testIndex, truthKinds, validateEdges, validateImports, validateLinks, validateReferences, validateTestEvidence, rootBuildDirectoryIgnored} from './atlas-validation.mjs';
 const atlasRoot = fileURLToPath(new URL('..', import.meta.url));
 const repositoryRoot = path.dirname(atlasRoot.replace(/\/$/u, ''));
 const requireCurrent = process.argv.includes('--require-current');
@@ -46,7 +46,7 @@ for (const relative of globSync('maps/**/*.md', {cwd: atlasRoot}).sort()) {
 const relativeAtlas=path.relative(repositoryRoot,atlasRoot).replace(/\/$/u,'');
 const rootPackage=JSON.parse(fs.readFileSync(path.join(repositoryRoot,'package.json'),'utf8'));
 const ignore=fs.readFileSync(path.join(repositoryRoot,'.gitignore'),'utf8');
-const isolation={rootWorkspaceMember:(rootPackage.workspaces??[]).some(x=>String(x).includes(relativeAtlas)),rootScriptReference:Object.values(rootPackage.scripts??{}).some(x=>String(x).includes(relativeAtlas)),integrationMentions:['tsconfig.json','.dependency-cruiser.cjs'].filter(f=>fs.readFileSync(path.join(repositoryRoot,f),'utf8').includes(relativeAtlas)),buildOutputIgnored:ignore.split('\n').includes('.build/'),nestedDependenciesIgnored:ignore.split('\n').includes('node_modules/')};
+const isolation={rootWorkspaceMember:(rootPackage.workspaces??[]).some(x=>String(x).includes(relativeAtlas)),rootScriptReference:Object.values(rootPackage.scripts??{}).some(x=>String(x).includes(relativeAtlas)),integrationMentions:['tsconfig.json','.dependency-cruiser.cjs'].filter(f=>fs.readFileSync(path.join(repositoryRoot,f),'utf8').includes(relativeAtlas)),buildOutputIgnored:rootBuildDirectoryIgnored(ignore),nestedDependenciesIgnored:ignore.split('\n').includes('node_modules/')};
 if(isolation.rootWorkspaceMember||isolation.rootScriptReference||isolation.integrationMentions.length||!isolation.buildOutputIgnored||!isolation.nestedDependenciesIgnored)errors.push('atlas isolation violated');
 for(const f of ['AGENTS.md','CLAUDE.md'])if(!fs.existsSync(path.join(atlasRoot,f)))errors.push('missing '+f);
 if(!fs.readFileSync(path.join(atlasRoot,'CLAUDE.md'),'utf8').includes('AGENTS.md'))errors.push('CLAUDE must reference AGENTS');

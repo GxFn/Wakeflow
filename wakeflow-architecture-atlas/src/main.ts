@@ -8,7 +8,7 @@ import type {
   DependencyExplorerSelection,
 } from "./dependency-explorer";
 import "./styles.css";
-import {statusLabel, statusClass, fileNodePaths, GROUP_LABELS, type TruthKind} from "./document-state";
+import {statusLabel, statusClass, fileNodePaths, reviewPresentation, GROUP_LABELS, type TruthKind} from "./document-state";
 
 interface FlowFrontmatter {
   readonly diagramId?: string;
@@ -20,6 +20,7 @@ interface FlowFrontmatter {
   readonly baselineCommit?: string;
   readonly sourceFingerprint?: string;
   readonly audience?: readonly string[];
+  readonly reviewSnapshot?: string;
 }
 
 interface FlowDocument {
@@ -61,13 +62,24 @@ interface DiagramEvidenceBinding {
 
 type DiagramFitMode = "read" | "all" | "actual";
 
+interface DiagramShell {
+  readonly root: HTMLElement;
+  readonly canvas: HTMLElement;
+  readonly controls: HTMLElement;
+  readonly evidenceCount: number;
+  readonly signal: AbortSignal;
+  readonly fit: (mode: DiagramFitMode) => void;
+  readonly destroy: () => void;
+}
+
 const rawModules = {
   ...import.meta.glob("../maps/**/*.md", {eager: true, import: "default", query: "?raw"}),
-  ...import.meta.glob("../plans/*.md", {eager: true, import: "default", query: "?raw"}),
+  ...import.meta.glob("../plans/**/*.md", {eager: true, import: "default", query: "?raw"}),
 } as Record<string, string>;
-const evidenceAssets = import.meta.glob("../plans/evidence/*.json", {
-  eager: true, import: "default", query: "?url",
+const evidenceAssets = import.meta.glob(["../plans/**/*.json", "../plans/evidence/*.png", "../plans/review-*/*.mjs"], {
+  eager: true, import: "default", query: "?url&no-inline",
 }) as Record<string, string>;
+const currentReviewSnapshot = parseDocument(rawModules["../maps/02-file-review-index.md"] ?? "").frontmatter.reviewSnapshot;
 
 const article = requiredElement<HTMLElement>("article");
 const mainContent = requiredElement<HTMLElement>("main-content");
@@ -93,6 +105,7 @@ let selectedEvidenceToken: string | null = null;
 let renderGeneration = 0;
 let articleLinksBound = false;
 let activeDependencyExplorer: DependencyExplorerHandle | null = null;
+const activeDiagramShells = new Set<DiagramShell>();
 
 marked.setOptions({gfm: true, breaks: false});
 
@@ -125,14 +138,14 @@ function createDocument(modulePath: string, raw: string): FlowDocument {
   const id = relativePath.replace(/\.md$/u, "");
   const parsed = parseDocument(raw);
   const title = parsed.body.match(/^#\s+(.+)$/mu)?.[1]?.trim() ?? id;
-  const group = id.includes("/") ? id.split("/")[0] ?? "其他" : "根目录";
+  const presentation = reviewPresentation(id, parsed.frontmatter.truthKind, currentReviewSnapshot);
   return {
     id,
     relativePath,
     title,
     body: parsed.body,
-    frontmatter: parsed.frontmatter,
-    group,
+    frontmatter: {...parsed.frontmatter, truthKind: presentation.truthKind},
+    group: presentation.group,
     searchText: `${title}\n${parsed.body}`.toLocaleLowerCase("zh-CN"),
   };
 }
@@ -166,7 +179,8 @@ function renderNavigation(): void {
     groups.set(item.group, group);
   }
 
-  for (const [groupName, groupDocuments] of groups) {
+  const groupRank = (name: string) => name === "review-records" ? 1 : name === "review-history" ? 2 : name === "plans" ? 3 : 0;
+  for (const [groupName, groupDocuments] of [...groups].sort(([left], [right]) => groupRank(left) - groupRank(right))) {
     const section = document.createElement("section");
     section.className = "navigation-group";
     const heading = document.createElement("h2");
@@ -250,7 +264,8 @@ function setTheme(theme: "light" | "dark", rerender = true): void {
 }
 
 function renderHome(): void {
-  destroyDependencyExplorer();
+  renderGeneration += 1;
+  destroyDiagramViews();
   currentDocument = null;
   setActiveNavigation(null);
   metadataPanel.replaceChildren();
@@ -261,11 +276,13 @@ function renderHome(): void {
       <p class="eyebrow">本地可重建阅读层</p>
       <h1>Wakeflow TypeScript 流程图集</h1>
       <p class="home-lead">从总体架构下钻到文件、符号、状态与证据。Markdown和Mermaid是唯一文档正典；本页面只负责导航、缩放与阅读。</p>
-      <div class="home-notice" role="note">核验基线 ${documentById.get("01-overall-architecture/README")?.frontmatter.baselineCommit?.slice(0, 7) ?? "未记录"}。各页标签表示其来源快照；真实宿主联合和新制品切换仍是后续范围。</div>
+      <div class="home-notice" role="note">核验基线 ${documentById.get("01-overall-architecture/README")?.frontmatter.baselineCommit?.slice(0, 7) ?? "未记录"}，包含已审阅的未提交工作树。源码审阅、测试运行、图形渲染与真实宿主会话分别记录；页面标签不代表需求已验收或版本已发布。</div>
     </section>
     <section class="home-grid" aria-label="流程图入口">
       ${homeCard("业务主线", "从需求包到归档、继续与 Pod 关闭。", "10-end-to-end-business-flow/README")}
       ${homeCard("总体架构", "六层职责、十个切片与只读观察边界。", "01-overall-architecture/README")}
+      ${homeCard("逐文件审阅", "每个手写文件的职责、分支、效果、摘要与证据记录。", "02-file-review-index")}
+      ${homeCard("修复与限制", "可复现的分支问题、实际限制与验证程度。", "10-end-to-end-business-flow/review-evidence")}
       ${homeCard("公共 MCP 调用", "登记表、固定宿主装配与真实能力执行器。", "01-overall-architecture/runtime-call-flow")}
       ${homeCard("核验快照", "代码、场景、图谱和未运行验证各有范围。", "01-overall-architecture/review-evidence")}
       ${homeCard("需求包与看板", "确认摘要、不可变记录、认领状态与恢复。", "13-requirement/README")}
@@ -278,6 +295,8 @@ function renderHome(): void {
       ${homeCard("受管证据", "文件、观察、链接、提交和不可变发布。", "14-evidence/README")}
       ${homeCard("Pod 执行环境", "完整窗口组、worktree 准入和两段关闭。", "15-pod/README")}
       ${homeCard("只读观察与核验", "一次观察派生总体状态、核验门与活动投影。", "16-observation/README")}
+      ${homeCard("宿主接缝", "MCP、hook、Codex线程与Claude会话的真实边界。", "09-public-mcp-host-seams/README")}
+      ${homeCard("合同与制品", "Schema、编译闭包、双宿主制品及分层验证。", "17-artifacts-and-contracts/README")}
       ${homeCard("应用内核", "调用形状、工作声明、观察和共享边界。", "11-kernel/README")}
       ${homeCard("事件流", "提交批、快照加尾部和首次发布。", "04-governance-event-sourcing/README")}
       ${homeCard("基础原语", "根约束、稳定读取、原子写入和恢复。", "02-foundation/README")}
@@ -322,7 +341,7 @@ function homeCard(title: string, description: string, id: string): string {
 async function renderDocument(item: FlowDocument): Promise<void> {
   const resetScroll = currentDocument?.id !== item.id;
   const previousScroll = window.scrollY;
-  destroyDependencyExplorer();
+  destroyDiagramViews();
   currentDocument = item;
   setActiveNavigation(item.id);
   resetSelection();
@@ -345,6 +364,7 @@ async function renderDocument(item: FlowDocument): Promise<void> {
   rewriteArticleLinks(item);
   bindArticleLinks();
   await renderMermaidDiagrams(generation);
+  if (generation !== renderGeneration) return;
   mainContent.focus({preventScroll: true});
   window.scrollTo({top: resetScroll ? 0 : previousScroll, behavior: "instant"});
   closeMobileSidebar();
@@ -415,12 +435,20 @@ function rewriteArticleLinks(item: FlowDocument): void {
     if (file?.endsWith(".md")) {
       const id = resolveDocumentLink(item.id, file);
       if (id !== null) anchor.href = documentRoute(id) + (fragment ? `?anchor=${encodeURIComponent(fragment)}` : "");
-    } else if (file?.endsWith(".json")) {
+    } else if (file !== undefined && /\.(?:json|png|mjs)$/u.test(file)) {
       const base = item.id.startsWith("plans/") ? `/${item.id}` : `/maps/${item.id}`;
       const resolved = new URL(file, `http://atlas.invalid${base}`).pathname;
       const asset = evidenceAssets[`..${resolved}`];
       if (asset) anchor.href = asset;
     }
+  }
+  for (const image of article.querySelectorAll<HTMLImageElement>("img[src]")) {
+    const source = image.getAttribute("src") ?? "";
+    if (/^[a-z]+:/iu.test(source) || source.startsWith("/")) continue;
+    const base = item.id.startsWith("plans/") ? `/${item.id}` : `/maps/${item.id}`;
+    const resolved = new URL(source, `http://atlas.invalid${base}`).pathname;
+    const asset = evidenceAssets[`..${resolved}`];
+    if (asset) image.src = asset;
   }
 }
 
@@ -481,6 +509,7 @@ async function renderMermaidDiagrams(generation: number): Promise<void> {
       pre.replaceWith(host);
       try {
         const {mountDependencyExplorer} = await import("./dependency-explorer");
+        if (generation !== renderGeneration) return;
         const handle = await mountDependencyExplorer(host, {
           source,
           filePaths: fileNodePaths(currentDocument?.body ?? ""),
@@ -502,24 +531,37 @@ async function renderMermaidDiagrams(generation: number): Promise<void> {
       }
     }
     const shell = createDiagramShell(source);
+    activeDiagramShells.add(shell);
     pre.replaceWith(shell.root);
     try {
       const result = await mermaid.render(`flow-atlas-${generation}-${index}`, source);
+      if (generation !== renderGeneration || !shell.root.isConnected) {
+        shell.destroy();
+        activeDiagramShells.delete(shell);
+        return;
+      }
       shell.canvas.innerHTML = result.svg;
       decorateDiagramSemantics(shell.canvas, source);
       bindEvidenceVisibility(shell);
-      bindDiagramSelection(shell.canvas);
+      bindDiagramSelection(shell.canvas, shell.signal);
       shell.fit("read");
     } catch {
+      if (generation !== renderGeneration || !shell.root.isConnected) {
+        shell.destroy();
+        activeDiagramShells.delete(shell);
+        return;
+      }
       shell.canvas.textContent = "流程图渲染失败。请在Markdown源文件中检查Mermaid语法。";
       shell.canvas.classList.add("diagram-error");
     }
   }
 }
 
-function destroyDependencyExplorer(): void {
+function destroyDiagramViews(): void {
   activeDependencyExplorer?.destroy();
   activeDependencyExplorer = null;
+  for (const shell of activeDiagramShells) shell.destroy();
+  activeDiagramShells.clear();
 }
 
 function setDependencySelection(selection: DependencyExplorerSelection | null): void {
@@ -533,13 +575,7 @@ function setDependencySelection(selection: DependencyExplorerSelection | null): 
   locateEvidenceButton.disabled = selectedEvidenceToken === null;
 }
 
-function createDiagramShell(source: string): {
-  readonly root: HTMLElement;
-  readonly canvas: HTMLElement;
-  readonly controls: HTMLElement;
-  readonly evidenceCount: number;
-  readonly fit: (mode: DiagramFitMode) => void;
-} {
+function createDiagramShell(source: string): DiagramShell {
   const root = document.createElement("section");
   const kind = diagramKind(source);
   const flowDirection = source.match(/^\s*flowchart\s+(TB|TD|BT|LR|RL)\b/mu)?.[1] ?? null;
@@ -563,14 +599,37 @@ function createDiagramShell(source: string): {
   toolbar.append(instructions, controls);
   root.append(toolbar, viewport);
 
+  const lifecycle = new AbortController();
+  const listenerOptions = {signal: lifecycle.signal};
   const transform: DiagramTransform = {scale: 1, x: 0, y: 0};
   let drag: DragState | null = null;
+  let fitMode: DiagramFitMode = "read";
+  let manuallyAdjusted = false;
+  let destroyed = false;
+  let fullscreen = false;
+  let fitFrame: number | null = null;
+  const cancelFit = () => {
+    if (fitFrame !== null) cancelAnimationFrame(fitFrame);
+    fitFrame = null;
+  };
+  const stopDrag = () => {
+    const pointerId = drag?.pointerId;
+    drag = null;
+    viewport.classList.remove("dragging");
+    if (pointerId !== undefined && viewport.hasPointerCapture(pointerId)) viewport.releasePointerCapture(pointerId);
+  };
   const applyTransform = () => {
+    if (destroyed) return;
     canvas.style.transform = `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`;
   };
   const fit = (mode: DiagramFitMode) => {
+    if (destroyed) return;
+    fitMode = mode;
+    manuallyAdjusted = false;
+    cancelFit();
+    stopDrag();
     const svg = canvas.querySelector<SVGSVGElement>("svg");
-    if (svg === null) return;
+    if (svg === null || viewport.clientWidth === 0 || viewport.clientHeight === 0) return;
     const viewBox = svg.viewBox.baseVal;
     const diagramWidth = Math.max(1, viewBox.width);
     const diagramHeight = Math.max(1, viewBox.height);
@@ -614,6 +673,8 @@ function createDiagramShell(source: string): {
     applyTransform();
   };
   const zoomAt = (factor: number, pointX = viewport.clientWidth / 2, pointY = viewport.clientHeight / 2) => {
+    manuallyAdjusted = true;
+    cancelFit();
     const scale = Math.min(5, Math.max(0.35, transform.scale * factor));
     const ratio = scale / transform.scale;
     transform.x = pointX - (pointX - transform.x) * ratio;
@@ -621,25 +682,49 @@ function createDiagramShell(source: string): {
     transform.scale = scale;
     applyTransform();
   };
+  const scheduleFit = () => {
+    if (destroyed || manuallyAdjusted) return;
+    cancelFit();
+    fitFrame = requestAnimationFrame(() => {
+      fitFrame = null;
+      if (!destroyed && !manuallyAdjusted && root.isConnected) fit(fitMode);
+    });
+  };
+  const fullscreenButton = diagramButton("全屏", () => {
+    if (document.fullscreenElement === root) void document.exitFullscreen();
+    else void root.requestFullscreen();
+  }, lifecycle.signal);
+  fullscreenButton.setAttribute("aria-pressed", "false");
   controls.append(
-    diagramButton("放大", () => zoomAt(1.2)),
-    diagramButton("缩小", () => zoomAt(1 / 1.2)),
-    diagramButton("阅读", () => fit("read")),
-    diagramButton("全图", () => fit("all")),
-    diagramButton("1:1", () => fit("actual")),
-    diagramButton("全屏", () => {
-      if (document.fullscreenElement === root) void document.exitFullscreen();
-      else void root.requestFullscreen();
-    }),
+    diagramButton("放大", () => zoomAt(1.2), lifecycle.signal),
+    diagramButton("缩小", () => zoomAt(1 / 1.2), lifecycle.signal),
+    diagramButton("阅读", () => fit("read"), lifecycle.signal),
+    diagramButton("全图", () => fit("all"), lifecycle.signal),
+    diagramButton("1:1", () => fit("actual"), lifecycle.signal),
+    fullscreenButton,
   );
+  document.addEventListener("fullscreenchange", () => {
+    const nextFullscreen = document.fullscreenElement === root;
+    if (nextFullscreen === fullscreen) return;
+    fullscreen = nextFullscreen;
+    const label = fullscreen ? "退出全屏" : "全屏";
+    fullscreenButton.textContent = label;
+    fullscreenButton.setAttribute("aria-label", `${label}流程图`);
+    fullscreenButton.setAttribute("aria-pressed", String(fullscreen));
+    // Fullscreen is an explicit layout change. Ordinary resize preserves a manual view.
+    manuallyAdjusted = false;
+    stopDrag();
+    scheduleFit();
+  }, listenerOptions);
+  const resizeObserver = new ResizeObserver(scheduleFit);
+  resizeObserver.observe(viewport);
   viewport.addEventListener("wheel", (event) => {
     event.preventDefault();
     const bounds = viewport.getBoundingClientRect();
     zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX - bounds.left, event.clientY - bounds.top);
-  }, {passive: false});
+  }, {...listenerOptions, passive: false});
   viewport.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
-    viewport.setPointerCapture(event.pointerId);
     drag = {
       pointerId: event.pointerId,
       startClientX: event.clientX,
@@ -647,24 +732,40 @@ function createDiagramShell(source: string): {
       startX: transform.x,
       startY: transform.y,
     };
-    viewport.classList.add("dragging");
-  });
+  }, listenerOptions);
   viewport.addEventListener("pointermove", (event) => {
     if (drag === null || drag.pointerId !== event.pointerId) return;
+    if (!viewport.hasPointerCapture(event.pointerId)) {
+      if (Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY) < 4) return;
+      viewport.setPointerCapture(event.pointerId);
+      viewport.classList.add("dragging");
+    }
+    manuallyAdjusted = true;
+    cancelFit();
     transform.x = drag.startX + event.clientX - drag.startClientX;
     transform.y = drag.startY + event.clientY - drag.startClientY;
     applyTransform();
-  });
+  }, listenerOptions);
   const finish = (event: PointerEvent) => {
     if (drag?.pointerId !== event.pointerId) return;
-    drag = null;
-    viewport.classList.remove("dragging");
-    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+    stopDrag();
   };
-  viewport.addEventListener("pointerup", finish);
-  viewport.addEventListener("pointercancel", finish);
-  viewport.addEventListener("dblclick", () => fit("read"));
-  return {root, canvas, controls, evidenceCount, fit};
+  viewport.addEventListener("pointerup", finish, listenerOptions);
+  viewport.addEventListener("pointercancel", finish, listenerOptions);
+  viewport.addEventListener("pointerleave", (event) => {
+    if (!viewport.hasPointerCapture(event.pointerId)) finish(event);
+  }, listenerOptions);
+  viewport.addEventListener("dblclick", () => fit("read"), listenerOptions);
+  return {
+    root, canvas, controls, evidenceCount, signal: lifecycle.signal, fit,
+    destroy: () => {
+      destroyed = true;
+      resizeObserver.disconnect();
+      lifecycle.abort();
+      cancelFit();
+      stopDrag();
+    },
+  };
 }
 
 function diagramKind(source: string): "flow" | "sequence" | "state" | "other" {
@@ -675,7 +776,7 @@ function diagramKind(source: string): "flow" | "sequence" | "state" | "other" {
 }
 
 function firstFlowchartNodeId(source: string): string | null {
-  const match = source.match(/^\s*([A-Z][A-Z0-9_]*)\s*(?:\[|\(|\{)/mu);
+  const match = source.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*(?:\[|\(|\{)/mu);
   return match?.[1] ?? null;
 }
 
@@ -736,6 +837,7 @@ function bindEvidenceVisibility(shell: {
   readonly canvas: HTMLElement;
   readonly controls: HTMLElement;
   readonly evidenceCount: number;
+  readonly signal: AbortSignal;
 }): void {
   if (shell.evidenceCount === 0) return;
   const bindings = collectEvidenceBindings(shell.canvas);
@@ -749,7 +851,7 @@ function bindEvidenceVisibility(shell: {
     shell.canvas.classList.toggle("evidence-identifiers-visible", visible);
     button.textContent = visible ? "隐藏证据编号" : "显示证据编号";
     button.setAttribute("aria-pressed", String(visible));
-  });
+  }, shell.signal);
   button.classList.add("evidence-toggle");
   button.setAttribute("aria-pressed", "false");
   shell.controls.prepend(button);
@@ -782,16 +884,16 @@ function normalizeDiagramText(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
 }
 
-function diagramButton(label: string, action: () => void): HTMLButtonElement {
+function diagramButton(label: string, action: () => void, signal?: AbortSignal): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = label;
   button.setAttribute("aria-label", `${label}流程图`);
-  button.addEventListener("click", action);
+  button.addEventListener("click", action, signal === undefined ? undefined : {signal});
   return button;
 }
 
-function bindDiagramSelection(canvas: HTMLElement): void {
+function bindDiagramSelection(canvas: HTMLElement, signal: AbortSignal): void {
   canvas.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -806,7 +908,7 @@ function bindDiagramSelection(canvas: HTMLElement): void {
     selectionText.textContent = text;
     selectedEvidenceToken = token;
     locateEvidenceButton.disabled = token === null;
-  });
+  }, {signal});
 }
 
 function resetSelection(): void {
@@ -887,11 +989,14 @@ async function renderRoute(): Promise<void> {
   const id = decodeURIComponent(pathPart ?? "");
   const item = documentById.get(id);
   if (item === undefined) {
+    renderGeneration += 1;
+    destroyDiagramViews();
+    currentDocument = null;
     article.innerHTML = "<h1>未找到文档</h1><p>该文档可能已移动或尚未生成。</p>";
     return;
   }
   await renderDocument(item);
-  if (anchorPart) document.getElementById(decodeURIComponent(anchorPart))?.scrollIntoView();
+  if (currentDocument === item && anchorPart) document.getElementById(decodeURIComponent(anchorPart))?.scrollIntoView();
 }
 
 menuToggle.addEventListener("click", () => {

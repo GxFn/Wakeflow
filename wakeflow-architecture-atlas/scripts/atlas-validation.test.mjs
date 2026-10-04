@@ -3,11 +3,32 @@ import {strict as assert} from 'node:assert';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {parseSource,validateEdges,validateImports,validateReferences,fingerprintInputs,truthKinds,sourceIndex,testIndex,evidenceTestCells,classifyTestEvidence,validateTestEvidence} from './atlas-validation.mjs';
+import {parseSource,validateEdges,validateImports,validateReferences,fingerprintInputs,truthKinds,sourceIndex,testIndex,evidenceTestCells,classifyTestEvidence,validateTestEvidence,rootBuildDirectoryIgnored} from './atlas-validation.mjs';
+
+test('根构建目录忽略规则接受锚定路径，拒绝其他路径和后续显式取消', () => {
+ assert.equal(rootBuildDirectoryIgnored('.build/\n'), true);
+ assert.equal(rootBuildDirectoryIgnored('/.build/\r\n'), true);
+ assert.equal(rootBuildDirectoryIgnored('nested/.build/\n# /.build/\n'), false);
+ assert.equal(rootBuildDirectoryIgnored('/.build/\n!/.build/\n'), false);
+ assert.equal(rootBuildDirectoryIgnored('!/.build/\n/.build/\n'), true);
+});
 
 test('AST ignores fake imports in text and comments, preserves real imports and symbols',()=>{
  const r=parseSource('// from "./fake.js"\nconst text="from fake"; import {f} from "./real.js"; export function start() {} class Store { async apply() {} }','sample.ts');
  assert.deepEqual(r.imports,['./real.js']);assert(r.symbols.has('start'));assert(r.symbols.has('Store.apply'));assert(!r.symbols.has('absent'));
+});
+test('制品工具的源码符号与直接导入也必须从真实TS核验', t => {
+ const base=fs.mkdtempSync(path.join(os.tmpdir(),'atlas-tooling-anchor-'));
+ t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
+ fs.mkdirSync(path.join(base,'tooling'),{recursive:true});
+ fs.mkdirSync(path.join(base,'src'),{recursive:true});
+ fs.writeFileSync(path.join(base,'src','profile.ts'),'export const profile = {};');
+ fs.writeFileSync(path.join(base,'tooling','build.ts'),'import {profile} from "../src/profile.js"; export function buildArtifact(){return profile;}');
+ const modules=sourceIndex(base);
+ assert.deepEqual(validateReferences('`tooling/build.ts#buildArtifact`',base,modules).errors,[]);
+ assert(validateReferences('`tooling/build.ts#inventedBuild`',base,modules).errors.length);
+ const body='```mermaid\nflowchart LR\n a -->|"E-TOL-01 导入"| b\n```\n| a | `tooling/build.ts` | 构建 |\n| b | `src/profile.ts` | 数据 |';
+ assert.deepEqual(validateImports(body,modules).errors,[]);
 });
 test('dependency edges require exact paths even for repeated service.ts basenames',()=>{
  const body='```mermaid\nflowchart LR\n a["甲"]\n b["乙"]\n a -->|"E-TST-01 导入"| b\n```\n| a | `src/a/service.ts` | 甲 |\n| b | `src/b/service.ts` | 乙 |';
@@ -18,7 +39,7 @@ test('dependency edges require exact paths even for repeated service.ts basename
 });
 test('evidence requires one row per numbered edge and adjacent terms',()=>{
  const source='flowchart LR\n accTitle: 测试\n accDescr: 测试关系\n a -->|"E-TST-01 调用"| b';
- const after='\n\n### 本图术语说明\n\n| E-TST-01 | source | test |';
+ const after='\n\n### 本图术语说明\n\n| 编号 | 代码 | 测试证据 |\n| --- | --- | --- |\n| E-TST-01 | source | test |';
  assert.equal(validateEdges({source,after}).errors.length,0);
  assert(validateEdges({source,after:after+'\n| E-TST-01 | duplicate | test |'}).errors.some(x=>x.includes('exactly one')));
  assert(validateEdges({source:source+'\n b --> c',after}).errors.some(x=>x.includes('one numeric')));
@@ -78,4 +99,25 @@ test('证据表的测试列按表头定位：六列表与四列表都取“测�
  assert.equal(classifyTestEvidence(evidenceTestCells(six)[0].cell).anchors[0],'tests/sample.test.ts#realThing');
  assert.deepEqual(validateTestEvidence(six,true).errors,[]);
  assert.deepEqual(evidenceTestCells('| 节点 | 文件 / 符号 | 责任 |\n| --- | --- | --- |\n| f1 | `src/a.ts` | 甲 |\n'),[]);
+});
+
+test('Markdown代码示例与孤立竖线文本不能冒充图边证据表',()=>{
+ const source='flowchart LR\n accTitle: 测试\n accDescr: 真实图边\n a -->|"E-TST-01 调用"| b';
+ const terms='\n\n### 本图术语说明\n\n';
+ const row='| E-TST-01 | 源码 | `tests/sample.test.ts#realThing` |';
+ const table='| 编号 | 代码 | 测试证据 |\n| --- | --- | --- |\n'+row;
+ assert(validateEdges({source,after:terms+row}).errors.some(x=>x.includes('exactly one')));
+ assert(validateEdges({source,after:terms+'```text\n'+table+'\n```'}).errors.some(x=>x.includes('exactly one')));
+ assert.deepEqual(evidenceTestCells('```text\n'+table+'\n```'),[]);
+ assert.deepEqual(validateEdges({source,after:terms+table}).errors,[]);
+});
+test('Markdown转义竖线不改变测试证据所在列',()=>{
+ const table='| 编号 | 代码 | 测试证据 |\n| --- | --- | --- |\n| E-TST-01 | `a \\| b` | `tests/sample.test.ts#realThing` |\n';
+ assert.equal(classifyTestEvidence(evidenceTestCells(table)[0].cell).anchors[0],'tests/sample.test.ts#realThing');
+ assert.deepEqual(validateTestEvidence(table,true).errors,[]);
+});
+test('anchored证据表不能通过删除测试列绕过覆盖检查',()=>{
+ const table='| 编号 | 代码 |\n| --- | --- |\n| E-TST-01 | `src/a.ts#realThing` |\n';
+ assert(validateTestEvidence(table,true).errors.some(x=>x.includes('test column')));
+ assert.deepEqual(validateTestEvidence(table,false).errors,[]);
 });

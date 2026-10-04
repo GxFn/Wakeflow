@@ -3,7 +3,7 @@ export type TruthKind = 'current-code' | 'in-progress-worktree' | 'stale' | 'his
 export function statusLabel(kind: string | undefined): string {
   switch (kind) {
     case 'current-code': return '当前';
-    case 'in-progress-worktree': return '进行中';
+    case 'in-progress-worktree': return '工作树快照';
     case 'stale': return '待复核';
     case 'historical': return '历史';
     case 'target-design': return '目标设计';
@@ -19,10 +19,23 @@ export function statusClass(kind: string | undefined): string {
     default: return 'status-stale';
   }
 }
+/** Review snapshots are historical unless the current source index explicitly selects them. */
+export function reviewPresentation(
+  id: string,
+  declared: TruthKind | undefined,
+  currentSnapshot: string | undefined,
+): {readonly group: string; readonly truthKind: TruthKind | undefined} {
+  if (!id.startsWith('plans/review-')) {
+    return {group: id.includes('/') ? id.split('/')[0] ?? '其他' : '根目录', truthKind: declared};
+  }
+  if (currentSnapshot === undefined) return {group: 'review-records', truthKind: declared};
+  const current = id.startsWith(`${currentSnapshot}/`);
+  return {group: current ? 'review-records' : 'review-history', truthKind: current ? declared : 'historical'};
+}
 /** The mapping table owns full file identity; repeated service.ts labels are presentation only. */
 export function fileNodePaths(body: string): Readonly<Record<string, string>> {
   const paths: Record<string, string> = {};
-  for (const m of body.matchAll(/^\|\s*([A-Za-z][A-Za-z0-9_]*)\s*\|\s*`(src\/[^`#]+\.ts)(?:#[^`]+)?`\s*\|/gmu)) {
+  for (const m of body.matchAll(/^\|\s*([A-Za-z][A-Za-z0-9_]*)\s*\|\s*`((?:src|tooling)\/[^`#]+\.ts)(?:#[^`]+)?`\s*\|/gmu)) {
     if (m[1] && m[2]) paths[m[1]] = m[2];
   }
   return paths;
@@ -30,6 +43,8 @@ export function fileNodePaths(body: string): Readonly<Record<string, string>> {
 export const GROUP_LABELS: Readonly<Record<string, string>> = {
   '根目录': '标准与总览',
   'plans': '更新记录与历史计划',
+  'review-records': '本轮审阅记录',
+  'review-history': '历史审阅快照',
   '01-overall-architecture': '总体架构',
   '02-foundation': '基础原语',
   '03-configuration-workspace': '配置与工作区',
@@ -46,4 +61,5 @@ export const GROUP_LABELS: Readonly<Record<string, string>> = {
   '14-evidence': '受管证据',
   '15-pod': 'Pod 执行环境',
   '16-observation': '只读观察与核验',
+  '17-artifacts-and-contracts': '合同生成与制品工具链',
 };

@@ -30,7 +30,7 @@ export default defineConfig({
             const receipt = JSON.parse(body);
             if (receipt.renderer !== "mermaid" || !Array.isArray(receipt.results)) throw new Error("invalid receipt");
             // Fixed local artifact only; this endpoint never accepts a destination path.
-            writeFileSync(new URL("./plans/evidence/l1-nine-slices-render.json", import.meta.url), JSON.stringify(receipt, null, 2) + "\n");
+            writeFileSync(new URL("./plans/evidence/current-mermaid-render.json", import.meta.url), JSON.stringify(receipt, null, 2) + "\n");
             response.setHeader("Content-Type", "application/json");
             response.end(JSON.stringify({saved: true}));
           } catch {
@@ -43,7 +43,7 @@ export default defineConfig({
   publicDir: "static",
   server: {
     // Writing the derived receipt must not reload the page that just produced it.
-    watch: {ignored: ["**/plans/evidence/l1-nine-slices-render.json"]},
+    watch: {ignored: ["**/plans/evidence/current-mermaid-render.json"]},
     fs: {
       allow: [siteRoot, documentationRoot],
     },

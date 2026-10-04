@@ -60,7 +60,7 @@
 | `TSD-12` | 宿主写效果由 Agent 执行，Wakeflow 内建内容与验证 | 开线程、线程投递、开 worktree、创建窗口由 Agent 执行；Wakeflow 提供精确内容与每宿主的动作说明，准入 Agent 交回的 attempt 与回读证据，验证摘要与状态转换。不内建 transport 执行器，foundation 不增加进程或 PTY 端口；只读观察同样由 Agent 观察并交回证据；不重建执行型宿主 CLI，操作步骤写入 skills；keep-live 与 unattended 后台自动化先放弃，场景层再议。依据 [ADR-0003](../decisions/0003-host-effect-layer-ownership.md) 2026-09-03 修订与 [ADR-0007](../decisions/0007-rebuild-mandate-and-bottom-up-flow.md) |
 | `TSD-13` | 公共工具目录有体积预算 | `tools/list` 总载荷低于 60 KB；outputSchema 不内联共享 `$defs`；apply 请求使用 `planRef` 加 `planDigest`，服务端重取并重新推导；description 只写一句工作流。JSON Schema 仍是 wire 权威。依据 [ADR-0004](../decisions/0004-mcp-tool-catalog-size.md) |
 | `TSD-14` | Demand 事件流读路径为快照加尾部 | 快照是每次 apply 成功后刷新的可重建缓存；operation 上下文默认快照加尾部，全量 audit 只用于 verify 类入口；一次命令内只加载一次事件流；Demand 完成后封流归档随 Archive 能力落地。依据 [ADR-0005](../decisions/0005-demand-event-stream-read-path.md) |
-| `TSD-15` | 旧能力取舍已裁定 | Pod 按 [ADR-0010](../decisions/0010-worktree-isolated-execution-and-converged-flow.md) 定为与 main 同型的完整窗口集加执行位置：main 是 `primary` 的 pod，一个 pod 同一时刻只推进一个 Demand，worktree 归产品窗口并由宿主原生能力创建，只有 main 的 Controller 创建与关闭 pod，不重建旧 11 段 Pod 状态机；`view` 放弃；`verify` 保留为公共只读入口；窗口替换与租约、continue 与 cancel、research 完成与实现重设计、archive、preserve、prune 保留；legacy 迁移放弃。依据 [ADR-0006](../decisions/0006-legacy-capability-retention.md) 与 ADR-0008 |
+| `TSD-15` | 旧能力取舍已裁定 | Pod 按 [ADR-0010](../decisions/0010-worktree-isolated-execution-and-converged-flow.md) 定为与 main 同型的完整窗口集加执行位置：main 是 `primary` 的 pod，一个 pod 同一时刻只推进一个 Demand，worktree 归产品窗口；Codex 按 ADR-0019 在外层项目创建聊天、在产品仓库独立创建 Git worktree，Claude 保留原生启动，只有 main 的 Controller 创建与关闭 pod，不重建旧 11 段 Pod 状态机；`view` 放弃；`verify` 保留为公共只读入口；窗口替换与租约、continue 与 cancel、research 完成与实现重设计、archive、preserve、prune 保留；legacy 迁移放弃。依据 [ADR-0006](../decisions/0006-legacy-capability-retention.md) 与 ADR-0008 |
 | `TSD-16` | 新 TS 是全新版本序列，配置从 v1 起版且不兼容旧文件 | 配置 schema `$id` 为 `urn:wakeflow:config:v1`，`schemaVersion` 从 1 开始，`kind` 保持 `WakeflowConfig`，代码去掉 `v3` 字样；不识别、不迁移、不 upcast 任何历史布局或配置，初始化遇到任何 Wakeflow 标记只拒绝并列出；配置只由 fresh-initialize 与 reconfigure 产生，物理产物永远由当前运行版本重新推导；首个新制品版本在 E4 从新序列起始，旧 0.9.x 序列终止。依据 [ADR-0008](../decisions/0008-discard-legacy-and-new-version-series.md) |
 
 基础服务候选 BFS-01 到 BFS-11 已由本计划重新映射，原需求文档已归档。将代码放入新目录不自动批准新的 class、service、registry、DI container 或公共抽象；review 中发现的候选继续登记，待统一设计后实施。
@@ -356,3 +356,21 @@ P0 必须核实并记录的事项：
 - 2026-09-04：用户接受 [ADR-0013](../decisions/0013-target-architecture-and-slice-plan.md)：六层目标架构、切片解剖、三种调用形状的内核实现、单一错误模型、foundation 收敛、20 个公共工具、L1 十个切片顺序。回写：§8.1 L0 与 L1 两行改写；§11 增加 decide 测试与场景验收规则及 `scenario:acceptance` 门；能力映射矩阵新增 §1.1 新工具清单。P0 结束，进入 L0。
 - 2026-09-18：L1 observation 切片 10 闭合，L1 十片完成（gate-log §13.94 到 §13.96）。回写：§8.1 L2 行把 hook 观察脚本与两宿主 hook 配置片段列为第一项（§13.94 D9，从 L3 提前）；§13 的 E2 与 E3 行改为当前事实；能力映射矩阵四行"缺席"改"重切"并写场景编号；场景清单 18 项；能力卡 9 追加修订节（Q1 不 spawn git、Q4 不设 verify 前置、Q6 两条维护操作、Q7 首版渲染范围、阈值不进配置）；ADR-0010 未决三项关闭；ADR-0009 与 ADR-0012 未决项追记。
 - 2026-09-20：E4 原子切换完成（gate-log §13.101 裁决、§13.102 配置 v1、§13.103 制品完整化、§13.104 切换）。回写：§5.1 旧基线改为结论；§8.1 L3 行记完成与 D1 偏离；§11 门表加 `build:artifacts`、`build:check`、`smoke:artifacts` 并改写 `release:check`；§13 四行改为 `complete` 与当前事实；§14 加 2026-09-20 状态段。
+
+- 2026-10-02：用户确认按 [ADR-0014](../decisions/0014-runtime-recovery-and-completion-coverage.md) 分批实施深审发现的正确性修复：取消传播、候选及锁恢复、pod 占用临界区、验收语法与全集完成门。历史事件和 v1 Ledger 读取合同保持；新发布及未来完成准入收紧。该工作补充既有 E0–E4 的验证边界，不把正常场景通过等同于异常恢复完整。每批需 focused 回归、双制品重建、完整整门和 smoke。
+
+
+2026-10-02 继续落实修复设计的 hook 容量及缺失制品诊断，边界见 ADR-0015，验收事实见 gate-log §13.142。采用分片、旧格式原位共读、完整性信号和有界聚合；不以数量删证据、不以 marker 或摘要猜测安装版本先后。B13 的分片内修复、C6 的宿主选定目标、历史 renderer 与格式回放语料仍是后续工作。
+
+
+2026-10-02 按图谱审阅交接完成 DD-F01/02/03：产品修复授权限定于产品缺陷步骤，其他失败继续受原测试合同约束；research 无成果与 awaitingDecision 均可按既有取消合同退出。验证覆盖真实文件系统、公开切片、旧生成 MCP 失败日志到新制品恢复，详见 gate-log §13.143。此批不改变持久结构或事件版本。
+
+
+2026-10-02 继续落实 B6 的窗口投影发布边界，见 ADR-0016 / gate-log §13.144：refresh 和 reconcile 与注册共用已有绑定锁，目录补齐改为只创建，六个双宿主交错回归约束陈旧投影覆盖。配置事务和维护之间的完整并发仍开放；原生重启回读确认上批构建已加载，但两个窗口缺少新的 SessionStart，单独登记 B14。
+
+
+2026-10-02 用户确认 ADR-0017 后实施工作区共享/独占准入、publisher 内的当前来源读取、观察结果 v2 和显式的配置 v1→v2 升级边界，见 gate-log §13.146。§13.145 保留三个基线反例与有限调度模型。不同 pod 并行和既有领域权威保持；不可变版本的实际安装、可信宿主身份关联与 v2 原生多窗口验收仍未完成，不能由生成进程测试代替。
+
+2026-10-02 后续用户裁决（ADR-0018）：当前结构作为首个支持基线，新建测试环境，不实现旧本地格式/结构升级。§13.146 的跨版本迁移部分退出当前范围；共享/独占准入、发布来源和运行证据修复保留。当前候选为小版本 1.1.0-rc.1，正常 reconfigure/reconcile 与同格式中断 recover 保持。
+
+2026-10-03 用户明确项目归属（ADR-0019）：所有 Codex 角色聊天归入外层 Workspace 项目，不为子目录建项目，不以外部 CLI 会话替代。项目创建和回读、启动根与执行根分离进入程序与技能；候选小版本为 1.1.0-rc.3。

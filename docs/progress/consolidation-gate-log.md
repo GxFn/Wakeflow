@@ -3974,3 +3974,291 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **门。** `npm run build:artifacts:committed` 后 `npm test` 整门通过：typecheck、架构规则、Biome（lint 只有本轮未改文件里的五条既有 warning / info）、knip、TypeScript 测试 1155/1155（含二十个端到端场景）、schema:check、build:check；`npm run smoke:artifacts` 通过；`git diff --check` 干净。第一次整门只因新加的 prompt 测试触发 Biome 的 noThenProperty（Given/When/Then 步骤的 then 字段）而停下，按源码的同一条豁免改写后重跑全绿。
 
 **未执行。** 经助手准备 worktree 的 pod 与加锁检出的关闭、I6 收养未登记窗口、就地自重启的新 prompt（"先重新加载技能"）在下一次更新时才会走到；Codex 宿主仍未有真实会话（E 主题）。
+
+
+## 13.137 Codex 首次现场、中断恢复与 GUI Node 启动修复（2026-10-01）
+
+**范围与基线。** 用户指定新的 `WakeflowTestWorkspace3` 为一次性测试环境，并明确授权建立八个 Codex 角色聊天、互相投递，由维护者代为确认纯测试需求与任务计划。源码基线为 `d8fafff3`。最初将已验证的 Codex 1.0.0 制品刷新到安装缓存，906 个文件逐字节相同，manifest 摘要为 `1e7b9f66ca58e6dbb63e3714f9dfffc0042b159d1852924d1bc35c1249b588d3`；当时 `npm test` 1155/1155 与双宿主冒烟通过。未提交、推送、打标签或发布。
+
+**已完成的真实宿主验证。** 公共 MCP 完成初始化、私有权限收敛和 reconcile no-op。初始四个 hook 未信任时，Controller 登记确实被 `hook-evidence-missing` 拒绝；用户信任后，六个未加载会话在恢复时产生真实 SessionStart，已加载的 Controller 和 Design 则换成新会话后才得到观察。八个窗口全部通过真实观察登记，main pod 为 ready，工作区 verify 为 15/15；thread id 与 hook session_id 一致，观察中的制品摘要与安装制品一致。Design 发布了真实需求包：唯一产品产物是一个固定 68 字节文本文件，三个锚点检查文件属性、完整字节与五仓库差异。
+
+**阻断与替代。** 五份测试副本中的旧 wakeflow:scope 段由维护者备份后移除，其他指令保留，作为测试准备基线。第一个实现目标在写文件之前发现仅一个 `.DS_Store` 内容与冻结基线不同，正确返回 blocked；Controller 独立复现并记录阻塞评审。经用户已授予的测试计划确认权限，维护者批准仅从产品内容清单排除普通 `.DS_Store` 文件。新的 harness、基线与 replacement 包另行建立，旧版本与旧结果保留；其他产品内容及完整 Git 观察逐项比较相等。替代目标已创建正确的 68 字节文件。投递使用真实 Codex 发送返回的摘要，记录为 host-send-return；没有把它声称成 UserPromptSubmit hook 证据。第一个阻塞评审的完成证据为 confirmed，callbackLanding 为 unlanded，后者没有被改写成 landed。
+
+**网络中断后的事实。** 恢复时文件和五仓库 v2 比较仍通过，但替代目标尚在结果导入前沿。目标随后用安装制品的公共 stdio MCP 补交了简明 needs-review 报告并发送回调，流推进至修订 16；不能将此当作 Controller 接受或 Test 通过。恢复的桌面聊天均看不到本地 Wakeflow MCP 工具，后续真实 Test 与归档尚未完成。
+
+**根因与实现。** 在同一台机器上，登录 shell 可找到 Node 24.19，Codex 实际非登录环境的 PATH 却没有 node；宿主已提供 `CODEX_MCP_NODE_PATH`，其运行时为 Node 24.21。原 Codex MCP 配置和 hook 命令均直接使用 node，重启后因而不能启动。Codex 的 process-launch profile 现在优先使用该宿主路径，变量缺失或为空时才回到 CLI 的 PATH；Node 路径和脚本路径都保持引号。MCP 通过 POSIX shell exec 启动并显式传递该环境变量。MCP 配置从共享构建器的宿主分支移入各宿主 profile；Claude 的生成字节保持不变。没有改事件、任务包、状态机或隐私准入规则。
+
+**验证。** 聚焦测试 15/15，包括无 node 的 PATH、含空格的运行时路径、缺失与空变量的 CLI 回退，以及无效宿主路径不静默回退；制品测试改用实际 Codex MCP 配置在空 PATH 下连接并列出全部 20 工具。真实非登录环境也通过新配置完成公共 MCP 握手及工具发现；hook 的无效输入探针抵达解析入口，未写入任何合成观察。重建后 `npm test` 1159/1159（含二十个端到端场景）、架构门、Schema drift、build:check、双宿主 smoke 全部通过。新增的动态 Claude MCP profile 按既有规则精确登记为构建入口，未放宽依赖规则。修复后的 Codex manifest 为 `77b9521fd489acb16a9e405856dea5cd5f62a4676533ec96e69f2efbf7f8d18d`，安装缓存的 906 个文件、模式与普通文件类型均已核对；版本仍为 1.0.0，来源是基线上的未提交修复。
+
+**尚待现场完成。** 新 hook 定义使宿主信任状态变为 modified。用户在原桌面界面重新信任后，只读检查仍见旧的四个信任哈希，恢复聊天也仍没有 Wakeflow 工具；独立的新 Codex app-server 可读取新配置并返回 20 工具目录。桌面进程尚需重新载入插件配置，再信任实际的新定义并产生新制品的真实会话观察。必须从当前结果继续 Test、评审与归档，不重做已落地的实现。Codex worktree pod、原生 Windows，以及这次修复后的完整桌面闭环仍未验证；POSIX 启动配置不构成跨平台验收。现场证据保存在该测试工作区的忽略目录中，不把私有会话标识或机器路径写入本日志。
+
+## 13.138 Codex 重启恢复、真实 Test 与归档闭环（2026-10-01）
+
+**桌面恢复。** 用户完整重启 Codex 并重新信任后，四个新 hook 定义均被宿主读为 trusted，20 个原生 Wakeflow MCP 工具恢复。沿用原八个角色聊天，各自完成一次只读状态回合；独立核对每个绑定都有修复制品的真实 SessionStart 和 Stop，八个窗口均为 current，工作区 verify 15/15。安装缓存再次逐文件核对，906 个文件的内容、模式和类型均与源码制品相同，manifest 仍为 §13.137 的 `77b9521f…`。没有替换绑定、重发已落地的实现，或补造任何 hook 观察。
+
+**实现接受与 Test。** Controller 从修订 16 的既有 needs-review 报告继续，检查恢复后的真实 Stop，独立执行三个验收锚点，并在修订 20 接受替代实现。随后冻结三步合同，仅向原 Test 窗口投递一次。Test 核对 v2 harness、冻结基线和已接受实现，在真实副本上分别执行文件属性、完整字节、五仓库差异检查，每步一次且退出 0、stderr 为空；三份完整输出由 Test 登记为 test-output，修订 27 导入 completed / pass 报告并原样回调一次。五仓库只新增预期的 68 字节文本，全部既有产品内容、准备阶段的 AGENTS 修改及 Git 观察保持原基线；普通 `.DS_Store` 的排除仍严格限定在先前批准的产品内容清单范围。
+
+**执行中的真实错误。** Test 自写的 setup 比较先后把保留父目录标记的 absolute 路径与 resolve 路径直接比较，又把任务包语义摘要当成保存文件的字节摘要。Controller 回读实际输出，提供规划工具返回的 documentDigest 和 taskPackageDigest 区别；Test 纠正比较方法，保留两次失败输出，未改合同、harness 或基线。这两次失败发生在冻结步骤之前，不记成产品失败或重跑通过。公共请求形状仍需要读取安装合同、摘要语义仍易混淆，这是可用性观察，不据此宣称全部宿主指引缺口已消除。
+
+**接受与归档。** Controller 对三份受管 payload、源输出、摘要、批准命令及实际观察逐项复核，等真实 Test Stop 被公共评审单元确认后，在修订 30 接受测试。完成预览的工作区 15 门与归档 8 门均通过，随后按同一计划完成并归档到终态修订 31。归档保留首次 blocked、replacement、实现接受、Test 结果和测试接受，共 31 条事件、14 份受管证据、64 个负载文件（2,024,518 字节；另有 manifest 和 verify-report 两个元数据文件）。维护者独立复算归档清单、verify-report、完整负载树与所有证据内容摘要，并确认 Test 证据与归档前逐字节相等、活动 Demand 根已消失、产品夹具仍为精确的 68 字节。
+
+**最后状态与责任边界。** 原生 status 为 idle，看板归档 1、claimed 0，活动 Demand 与 work claim 均为 0；八个绑定仍注册、制品 current、claim free。原生 verify 为 pass 15 / fail 0 / unavailable 0，未作修复。Wakeflow 保持状态、身份、不可变任务与证据、评审及归档的确定性；Design、产品和 Test Agent 完成各自工作，Controller 作接受判断，创建聊天和发送提示由 Codex 宿主工具执行。三次正式投递都依据真实 host-send-return；没有对应的 UserPromptSubmit 观察，三次评审也没有 callbackLanding hook 记录，均未被写成 hook 已落地。真实 Stop 完成证据与这条投递限制分别记录。
+
+**验证范围与交付。** §13.137 的聚焦 15/15、整门 1159/1159（含二十个场景）、build:check 和双宿主 smoke 仍对应本次源码与制品；后续仅补现场证据和开发文档，未再改运行时代码。维护者也独立复跑三项产品检查，全通过。E5 关闭为已修并经现场验证；D1、D2、E1 按新增覆盖更新，E2 保持开放。此次为 macOS 上 main pod 的八窗口登记和一个产品目标的完整需求闭环，未验证 Codex worktree pod 生命周期、原生 Windows 或 UserPromptSubmit 投递路径。版本仍为 1.0.0，源码来源仍是 `d8fafff3` 加未提交启动修复；没有提交、推送、打标签或发布。完整机器证据留在测试工作区的忽略目录中。
+
+## 13.139 Codex worktree pod、四类 hook 与真实回收验证（2026-10-01）
+
+**范围与宿主入口。** 用户要求继续验证，并明确授权在原八聊天之外新增八个测试聊天、五个临时 worktree，互相投递、代理确认纯测试需求和计划，以及验证后的归档与回收。沿用 1.0.0、manifest `77b9521f…`，所有测试数据与检出限定在指定的一次性工作区。Codex 保存项目中没有这些测试副本，App 的 create_thread(worktree) 也没有自选检出目录参数，因此没有拿真实产品 projectId 代替。维护者使用普通 Git 从各副本当前 HEAD 建立 detached worktree，再切到本轮临时分支，以官方 CLI/app-server 建立真实会话；这验证了 Codex 与 Git worktree 的组合，不是 App 原生工作树创建入口的验收。
+
+**启动与 hook。** 官方 CLI 尝试恢复一个由桌面持有的闲置聊天时，在提交 prompt 前被 active-writer 冲突拒绝；没有覆盖锁、复制会话状态或重复发送。在新增 Controller 会话上使用交互 CLI 继续验证：登记前只出现 SessionStart。源码核实后三类事件只写入持有该 session 绑定的工作区，这是现有身份门。通过公共工具正常登记后，同一交互输入产生精确匹配输入摘要的 UserPromptSubmit，随后有真实 Stop；正常退出产生 SessionEnd。同一 handle 再回到桌面执行原生 status，四类 hook 均已有真实证据，没有合成观察或跳过信任。默认线程列表会过滤非交互来源，本次归档核对显式包含 exec，未把列表里缺席当作已关闭。
+
+**pod 与隔离。** 公共 preview/apply 建立新 worktree pod，依次登记 Controller、Design、五个 Product，再按重新计算、含五个已登记检出的意图启动 Test。产品会话各自在自身 cwd 执行两条 Git 观察命令；维护者复算、对比实际输出后登记。两个 pod 均达到 8/8 ready，verify 15/15。新的冻结 harness 与 worktree 基线另行保存，原 main 的 harness、基线与 68 字节夹具保留；开工前五个 worktree 均干净，主副本三项检查通过。
+
+**真实闭环。** Design 在独立草稿目录起草，维护者直接审阅一页摘要，修正临时“只预览”状态混入需求正文以及 Test/Controller 证据职责的表述后代理确认。发布的新需求由新 pod Controller 显式指定 podId 认领，main 持续没有活动 Demand。唯一产品变更为 AlembicPlugin 已登记 worktree 内新增精确的 68 字节文本；落点检查还验证 linked worktree、分支及正确的 Git common-dir。Test 的冻结三步各执行一次，均退出 0、stderr 为空、passed=true；差异步骤同时验证五个 worktree 与五个主副本，包括旧主副本夹具的类型和全部字节。实现与 Test 均由该 pod Controller 独立审查、确认真实 Stop 后接受。一次过长 focus 输入在投递准备时被拒，收短说明后才取得 permit 并发送，冻结合同未改。
+
+**归档与证据。** 新 Demand 完成于修订 25，归档含 55 个负载文件、1,976,985 字节、13 份受管证据，另有 manifest 与 verify-report。维护者独立核对全部负载树、清单与证据摘要、三份真实 Test 输出，以及归档内属于该 pod 的 Controller 和五仓 worktree 来源成员；并独立执行三项产品检查，全通过。正式实现/Test 的投递仍依据真实 host-send-return，回调逐字回读且只发送一次；相应 callbackLanding 为 unlanded，不能用额外的 CLI hook 探针替代这条事实。证据 recordedBy 指向配置的主 Controller，与 Schema、发布校验及 F10 已解释的记录权威语义一致，采集者由报告说明，未改写任何受管字段。
+
+**关闭保护与回收。** 活动 Demand 存在时，close preview 返回 demand-active；预览未改变配置或分支处置，期间正式流程的并行修订被如实保留。归档后记录五条 abandoned 处置进入 closing，八个仍绑定窗口阻止继续移除。维护者逐一调用原生归档工具，再用官方 thread/list 的前后 archived 查询核对八个精确会话；main Controller 携当前绑定摘要退役八窗口。此时 close preview 又以五个 worktree-present 拒绝移除 pod。另在本轮干净的 Dashboard 检出上施加一个有记录的 Git lock：普通 remove 确实拒绝；退役后解开自己的锁，核对受管归档已经保存唯一夹具，再移除本轮夹具、普通 remove 五个干净检出、branch -d 五条临时分支并 prune。未用 force、reset 或 clean；各仓 worktree 清单恢复为创建前的单一主检出。最后重新 preview/apply 完成第二阶段，五份回执退役、pod 从配置移除。
+
+**最后状态。** 维护者的原生 status 为 idle，仅 main 8/8 ready，活动 Demand 与 claim 都为 0，看板 archived=2；verify pass 15 / fail 0 / unavailable 0，未应用修复。八个新聊天已归档，五个新检出及分支已回收，原八聊天保留。清理后的主副本三项检查全通过，原有准备修改和旧夹具保持；两份归档的清单和负载树复核一致。机器证据、宿主回执、负向检查及清理日志保存在工作区的忽略目录中。
+
+**构建与验证边界。** 本轮未改运行时代码或制品；运行时与制品指纹仍对应上轮通过的整门，后续只更新开发文档。1.0.0 安装缓存的 906 个文件仍与验证制品一致；§13.137 的 1159/1159、二十场景、build:check 与双宿主 smoke 继续对应这个构建，不记作本轮重新跑过。补充覆盖更新 D1、E1、E2、E3、E5，F10 的现有解释得到再次核实，没有把元数据观察新报成运行时缺陷。原生 Windows、App create_thread(worktree) 入口、根外检出和显式模型/effort 组合仍未验证；本轮默认 GPT-6-Astra / max 的正常运行不代表所有组合兼容。正式交付仍未单独以 hook 作为唯一落地证明。没有提交、推送、打标签或发布。
+
+## 13.140 可靠性与合同边界深审、真实进程复现及设计验证（2026-10-02）
+
+**范围。** 用户要求深入 review 根因、设计修复与优化，并授权按需新建真实测试文件夹。基线为 `d8fafff3` 加已有未提交的 Codex Node 启动修复；开始时 main 与本地 origin/main 相同。新建一次性工作区保存脚本、原始输出和故障夹具，未拿真实产品仓库或前轮工作区制造故障。生产源码、制品及安装缓存未修改，没有新增宿主聊天。设计见 [可靠性与合同修复设计](../reviews/2026-10-02-reliability-and-contract-repair-design.md)，状态 proposed，不冒充已接受的 ADR 或已完成修复。
+
+**真实进程与并发。** 从生成的 Codex 制品经官方 SDK 启动独立 stdio server，在真实候选内容持久化、提交硬链接持久化两个位置分别 SIGKILL/SIGHUP，共四种中断。重启后公开 status、规划、完成和取消均被 inventory 准入挡住；现有内部恢复器的对照分别退役未提交候选或结算已提交残留，原提交字节摘要不变。另杀死实际 claim/projector 锁的子进程持有者：claim 两次公开重试都约 10 秒超时；projector 让已提交的规划额外等约 10 秒而投影仍不恢复。内部精确退役仅用作诊断，未记为公开恢复通过。两个 server 在同 pod 分别通过守卫并持有不同 Demand 锁后交错继续，两次创建均成功，直接回读看板与 identity 确认两个 claimed Demand 属于同一 pod。B5 从推测风险收紧为已复现缺陷。
+
+**取消及修复方向对照。** 在真实 claim 锁等待中，SDK 已发 `notifications/cancelled`、客户端已结束；释放锁后，正式 server 仍把 pending 改为 withdrawn。核对当前 SDK v2 定义，信号位置为 `ctx.mcpReq.signal`。隔离的单工具 SDK 入口将该信号送入未经修改的正式领域执行器，相同场景以 aborted 结束，状态保持 pending、revision 1。该对照验证接线方向，未覆盖所有执行器、提交后取消和关闭语义，也未部署到插件。
+
+**合同与容量。** 三种草稿经全部公共入口发布与认领：验收节为段落、验收节为表格、bug 没有验收节；都在后续规划以 anchor-item-unknown 失败。另一个 controller-only 包含 10 条标准，只规划和接受 ac-1，公共完成预览 ready、apply 成功归档；直接回读归档确认没有覆盖其余 9 条。该流程还从 Product 的 cwd 和测试 session 环境调用 accept/complete 成功，确认角色约束没有在服务端执行；其身份和 Stop 为现有测试夹具，不宣称重新做过桌面宿主身份验证。hook 真实目录在 16384 条时可查一条，再由当前写入器写到 16385 条后，严格筛选的 limit=1 查询仍失败；种子是合成容量输入。一个普通的畸形保留前缀文件也能阻断后续 hook 写入，未知文件被保留。
+
+**兼容与成本。** 当前 managed-text 合同中，旧正文未作为 current target 时被拒，显式保留旧 renderer 输出后可转换且用户前缀字节不变。目录身份探针证明进程不发现同级新版本目录，旧 manifest 缺失变为 null，结合 runtimeArtifactGate 源码确认不会产生 server-outdated；未把该探针当作完整安装器升级。实际 tools/list 聚合 JSON 为 92691 UTF-8 字节，其中 tools 数组 92681 字节。按现有目录选 Design 三工具为 10035 字节，Product/Test 三工具为 16878 字节；这是设计候选的字节组合，不是已实现角色裁剪或 token/费用测试。
+
+**测试器修正。** 首次验收文本替换未命中而仍只有两条标准，补了构造前断言再以 10 条重跑；兼容探针把冻结返回对象当可变对象，改为复制后序列化；取消探针最初使用旧 SDK 三参数调用，实际上没发取消，改为 v2 两参数并断言 wire notification 后才采信结果。原失败输出和首次结果均保留，未把测试器问题算成产品失败。诊断断言成功表示复现成立，不表示生产缺陷已修复。
+
+**验证与剩余。** 本轮重新执行 `npm test`，1159/1159（含二十场景）、类型、架构、Biome、knip、Schema drift、build:check 均通过；双宿主 smoke:artifacts 通过。Codex manifest 仍为 `77b9521f…`，Claude 为 `3735e24a…`，对应既有未提交启动修复。复现及实验进程已退出，测试树和原始证据保留供后续修复回归使用。未执行断电、网络文件系统、PID 复用、Windows、新桌面聊天、App 原生 worktree 创建、模型组合或 hook-only 正式投递测试。真实崩溃矩阵覆盖尚不完整，也尚未进入持续测试套件。未提交、推送、打标签、发布或刷新缓存。
+
+**收尾核对。** 独立重新哈希漏验收用例归档中的 15 个负载与元数据文件，直接从需求正文数出 10 条标准、从事件提取出仅 ac-1 的引用；回读双认领 identity、正式取消后的 withdrawn、隔离对照的 pending 和 16385 个 hook 条目。四个中断用例的既有 commit 摘要保持。源码非文档 diff 与开始时完全相同，三个既有未跟踪源码文件逐字节保留；安装缓存只读核对 906 个文件，类型、模式和内容均与原制品一致。新报告相对文件链接及日志章节锚点有效，`git diff --check` 通过。登记仍为累计 125 项，补已有问题证据而不重复计数；B5 与 H4 按实测影响提高优先级。
+
+## 13.141 首批正确性修复、真实回归与 Codex 缓存同步（2026-10-02）
+
+**授权与边界。** 用户确认继续实施 §13.140 的设计；按 [ADR-0014](../decisions/0014-runtime-recovery-and-completion-coverage.md) 落地取消、恢复、pod 占用和验收全集的正确性修复。保留原有 Node 启动修复与未提交文档。源码仍在 `d8fafff3` 的 main 上，本地 origin/main 相同；未提交、推送、打标签或发布，版本号仍为 1.0.0。缓存同步沿用用户此前明确的本地插件更新授权，不把它称为新版本发布。
+
+**取消和恢复。** SDK v2 的 `ctx.mcpReq.signal` 进入两宿主的全部执行器及维护预览、应用、恢复。提交后取消可重建投影不会否定已有结果，结果事件后的条件化声明释放不再因取消遗留。stdio 对 SIGINT、SIGTERM、SIGHUP 统一关闭；真实子进程证明在途请求收到取消且能完成结算。claim writer 和 projector 正常入口退休已证明失活的锁，projector 同时进入所属暂存结算。未知或活动 owner 仍保护。
+
+**公开候选恢复。** `reconcile` 可返回只读的 `WakeflowDemandRuntimeRecoveryPlan`，apply 重算计划并在 Demand 发布锁下复验候选节点、身份与 owner，再交给已有精确恢复器。健康 inventory、历史事件和摘要未被放宽或重写；恢复与同进程 append 共用队列，跨进程仍依赖 owner、no-replace 和精确节点保护。两个真实 MCP 子进程分别在候选落盘、提交链接后 SIGKILL，公开维护能够恢复；原请求继续为 committed 或 idempotent，旧 commit 字节不变。未知条目保持阻塞。最后源码复查把恢复身份读取预算对齐既有身份合同，并加一个三个字段各 16000 字符、超过 128 KiB 的合法身份配半写候选的回归。
+
+**pod 与未结事务。** 公开 create、continue、完成/取消、关闭使用按 podId 隔离的短临界区，锁内复验配置，关闭重新推导计划。未结发布 sidecar 和生命周期日志持续占用对应 pod，避免进程退出释放锁后出现第二个需求。确定性交错测试覆盖同 pod 双创建恰一成功、不同 pod 在前者暂停期间仍能推进、创建提交后旧关闭计划被拒。另在生成制品的两个独立 stdio server 上重跑双认领场景，磁盘看板最终仅一个 claimed Demand。完整 workspace 维护并发及所有中断位置仍属于后续工作。
+
+**验收门。** 新发布的 requirement、bug、supplement 必须包含可引用的非空验收列表；发布、规划和完成共用解析器，确认摘要包含验收节，摘要 Schema 上限与生成类型一并更新。v1 Ledger 的历史章节读取合同保持。新 `requirement-coverage` 门对 controller-only 核对已接受实现锚点，对 real-environment 核对当前代际已接受测试合同，缺项阻断完成；取消和 research 的语义保留，旧封存归档不被新门追溯否定。十条仅接受 ac-1、以及实现全接受但测试仅覆盖两条均被阻断；完整覆盖仍可完成归档。工作区十五门的 ok 和 Demand 完成门仍是两个层次，未把前者改成业务完成判断。
+
+**回归过程。** 第一次整门执行 1175 项，1167 通过、5 失败、3 超时取消。失败来自旧的门列表/正向归档夹具及技能行数预算；新增完整链测试的 30/45 秒 watchdog 在并行整门下不足。修正了测试前提，把正向完成夹具显式覆盖完整需求，详细技能步骤移到 reference，入口仍在 200 行预算内；逻辑类临时测试使用可丢弃持久化策略并采用与完整链相称的测试超时，真实崩溃路径继续使用 fsync。随后 1175/1175 通过。读取预算边界修正后重建两制品，再跑最终整门 **1176/1176**，类型、架构、Biome、knip、Schema drift、build:check 均通过；二十场景仍全通过。数字来自各轮最终运行器输出，新增 17 项回归，没有放宽生产准入或测试 gate。
+
+**制品及历史数据。** 最终双宿主 smoke:artifacts 通过。Codex manifest 为 `511fe6ed3f28ca244e833b1c7e4af25eef308200534663846e87f2c5e67de531`，Claude 为 `db01c512ef5869a1f11c79684d0198db0d34768b5c4a7e99630820888a1562ae`。生成制品的实际 stdio 再验证两个崩溃恢复、同 pod 单占用和真实取消后不写入；前轮终态修订 31、25 的原始归档只读取出负载，仅在新一次性目录恢复并 audit，均回放到原 completed 状态与修订。原始归档树前后文件类型、模式、链接数、大小与摘要不变。
+
+**安装与当前进程。** 已保留旧缓存，核对新缓存 910 个文件的内容、模式和普通文件类型均与 Codex 生成制品相同。使用实际安装缓存的 `.mcp.json`、空 PATH 与宿主 Node 选择启动全新 MCP 服务，20 个工具可用，能看到并执行新的 requirement-coverage 门。hook 定义与 MCP 启动配置字节未改变。当前聊天的原生 MCP 只读探针仍返回旧的七个 Demand 门，并明确报 `runtime-artifact / server-outdated`；因此缓存同步已经成功，现有桌面进程尚需重连或重启才能加载修复。没有把独立新进程冒充桌面已热更新，也未要求重新信任未改变的 hook 定义。
+
+**剩余。** Q3/Q6/Q8 的推荐默认值已由用户确认并记录；B1/B2/B4/B5/H1/H4 的本轮修复已纳入持续回归。hook 容量和损坏影响范围、完整配置/维护并发、跨版本升级与 renderer 兼容、角色鉴权、补充需求追溯、目录成本和退出能力仍未全部实现。没有重新验收 Windows、App 原生 worktree 创建、模型组合或 hook-only 正式投递。测试脚本、原始失败输出、最终证据及缓存备份保留在新一次性测试工作区中。
+
+
+### 13.142 hook 历史容量、完整性与升级诊断（2026-10-02，制品与缓存验收完成，桌面进程待重载）
+
+- 重启后的原生 Codex Wakeflow 已实测加载 §13.141 制品：runtime-artifact pass，Demand 出现 requirement-coverage。样本故意未完成，不能把它的其他失败门写成工作区全通过。
+- ADR-0015 落实新记录按日期/recordId 前缀分片、旧平铺原位读取及幂等重试；Foundation 稳定目录分页保持两次枚举、节点复验和连续页的目录快照。没有提高原整目录读取上限，也没有数量驱动的证据删除。
+- Kernel 完整扫描采用固定页、八条记录批次和已复验的目录作用域。有限列表返回内部 complete，投递、评审及端点在截断或 skipped 时拒绝作否定证据判断；status 按会话聚合全部记录，时间相同时保留原文件名顺序语义。
+- 新写入的暂存清点限定到分片；未知旧条目保持原字节并继续报告。清理每轮最多检查 4096 个叶条目，保持 30 天年龄及失活 stage 的精确节点退役边界；被预算略过的旧记录可保留更久。分片内损坏的公共恢复、活动证据的跨保留期留存未实现。
+- 曾有运行 manifest、随后同路径不可读时，runtime-artifact 不再 pass；status 与 verify 都交用户检查安装。没有宿主选定目标事实，仍不能判断兄弟版本目录谁是当前安装目标。
+- 探索性检查发现两类问题并据此迭代：旧制品测试把完整相对路径当成文件名；大目录公开 status 与全量 suite 同时运行时超过 240 秒，部分既有测试触及 watchdog。随后复用经身份验证的目录作用域减少重复祖先校验；没有删除 no-follow、文件快照或完整性检查，没有放宽生产超时。
+- 首轮 37 项、跨模块 67 项、读取专项 22 项通过，属于迭代证据。最终完整门 1183/1183 通过，0 失败、0 取消，包含 20 个端到端场景，以及类型、架构、lint/format、未用代码、Schema 和制品漂移检查。双宿主 smoke 均通过：20 工具、初始化、对账、状态、严格验证、pod 预览和实际 hook launcher。中断和失败的探索性输出保留，不算通过。
+- 复核全部读取方后，补齐 Claude tmux 助手与 smoke 对新布局的支持；21 项助手回归覆盖新旧并存、启动/恢复/去重及损坏/符号链接拒绝。旧记录缺省 artifactManifestDigest 的重试冲突也有真实文件前后对照，修复保留原字节。
+- 证据优先级继续由既有决定函数负责：hook 查询的截断或 skipped 不能生成“未落地”的推断，但独立宿主成功返回与合法 Controller 显式裁决不被这些新检查否定；取消和其他 I/O 错误仍上抛。
+- 完整检查曾在 1181 与 1182 项时通过；后续补丁重跑出现工作区内两个同时进行的全量任务，以及默认每逻辑核一进程时的看门狗超时。只终止可确认归属本轮的失败运行，保留其他任务。测试工具新增 WAKEFLOW_TEST_CONCURRENCY，只允许 1 到可用逻辑核数；缺省保持原值。最终门使用 WAKEFLOW_TEST_CONCURRENCY=4 npm test，测试选择、用例内部并发及现有超时均未改变，4 项调度器回归通过。
+- 固定最终 Codex 制品的大目录实测：16400 条旧平铺与 800 条新分片记录均可读，host-hook-channel 门通过；再插入未知文件并运行实际 hook 子进程后，status 读到 17201 条、skipped 为 1，所有种子字节与未知文件均保留。本机本次 status 24.363 秒、verify 23.153 秒、按 ID 取证 2.211 秒、hook 进程 1.364 秒；这是合成历史与真实进程验证，不是长期真实聊天 soak，也没有把这个不完整样本的整体验证记为通过。大目录全量扫描仍有优化空间。
+- 真实 MCP 子进程运行在一次性制品副本中：移走该副本的 manifest 后，runtime-artifact 为 unavailable/manifest-unavailable，status/verify 的 next 均交用户检查安装；原字节放回后该门恢复 pass。
+- 最终 Codex manifest 为 `d935740c73dd1a43ce6bc1508e8a84730a45cc598352b73b3902f20da328d4dc`，Claude 为 `e03e1e3b3aa042250f695984250ba73b2679691e4552e713feb34a46fdccc99c`。本地 Codex 缓存已从生成制品同步，911 个普通文件的内容与权限逐一一致，旧缓存已备份。用安装缓存的实际 MCP 配置、空 PATH 和宿主 Node 选择启动新进程，20 工具、分片写入、截断信号、运行制品门及 hook 通道均通过；hook/MCP 启动定义字节未变。
+- 现有聊天的原生 MCP 回读仍为 server-outdated；它在本轮更新前已经启动，桌面尚需再次重载。独立新服务成功不代表现有聊天已热更新。后续只需重载后回读，不重复已完成的整轮测试。
+- 源码仍为未提交本地修改，版本仍为 1.0.0，本地 main 与本地 origin/main 无领先或落后；没有提交、推送、tag 或发布。并行任务产生的架构图谱文档未纳入本轮编辑。B13 分片内恢复、维护并发、完整跨版本兼容与角色身份边界仍未全部实现。
+
+
+### 13.143 混合失败授权与取消一致性（2026-10-02，制品与缓存验收完成，重载回读见 §13.144）
+
+图谱线程按用户分工移交 DD-F01、DD-F02、DD-F03；源码线程逐项复核当前实现，图谱目录只读。
+
+- DD-F01 的 producer、纯准入和 Repository consumer 已统一范围：新授权覆盖所有且仅产品缺陷失败；其他分类保留在结果。Repository 以决定明确映射的范围校验失败观察，结构、版本及摘要算法不变，保留旧决定明确映射完整失败集合的读取语义。四类混合失败聚焦通过；其中 flaky 已走产品修复接受、复测、未解决步骤重跑、测试接受及完成 ready 的实际切片路径。
+- DD-F02 仅把研究完成物门加入取消的成果豁免；完成与其他完整性门保持原条件。无 document 的 research 经公开预检、取消、归档撤回、重复恢复通过。
+- DD-F03 的纯取消转换丢弃活动 awaitingDecision 字段，升级事件仍在；不生成用户回答。追加前与追加后/归档前两种故障均经公开恢复验证。旧生成 MCP 制品对同一情形确实 preview ready、apply 返回错误并留下日志，保留现场供新制品恢复。
+- 全量 `WAKEFLOW_TEST_CONCURRENCY=4 npm test` 通过：1191/1191，0 失败、0 取消，含 20 个端到端场景、类型、架构、lint/format、未用代码、Schema 漂移及制品字节检查；Codex/Claude 两制品 smoke 均通过。聚焦命令分别验证取消/聚合、两个取消故障点和四种混合失败，不把重叠的用例数重复计入总覆盖。
+- 真实生成 MCP 的前后对照通过：旧制品的取消 ready → apply 错误日志，直接由新制品 recover 到 cancelled/withdrawn，重复恢复归档摘要相同；另一份 research 合成工作区经 MCP 创建、无成果完成预检 blocked、取消 cancelled/withdrawn。测试不依赖登录态宿主，也不据此声称新增真实聊天验证。
+- 主要实现路径为 `capabilities/result-review/{decide,service}.ts`、`governance/demand/event-sourcing/demand-event-sourcing-repository.ts`、`capabilities/demand/{decide,contract}.ts`、`governance/demand/model/demand-aggregate-state.ts`；授权合同注释与 Controller 参考同步，新增混合失败回归及取消恢复回归。持久结构、事件版本与摘要算法未改，没有追溯重写旧提交。
+- 沿用本线程原有本地 Codex 插件更新授权，同步已验证制品到安装缓存。911 个文件的内容、模式和普通文件类型一致，旧缓存保留；安装缓存实际 MCP 配置在空 PATH、宿主 Node 选择下启动的新进程通过，20 工具可用。Codex manifest 为 `fb54d0b4f9f509f3d5f9120980315e91cb30fd67edfb02b08f1140bdbb8a3ff5`，Claude 为 `6e74b18e531d76a87ecbf468ba65dbfb13b691fa35afa82a412036fabdf83d56`。
+- 当次缓存更新后、桌面重启前，原生 MCP 仍报 server-outdated；随后的重载回读见 §13.144。hook/MCP 启动定义字节未改变。版本仍是 1.0.0 的未提交本地构建，基线 d8fafff3，本地 main 与本地 origin/main 为 0/0；未提交、推送、tag 或发布。图谱目录未编辑，图谱线程可按实际差异和本节证据独立核销；完整历史语料库与登录态宿主矩阵不在本批验证范围。
+
+
+### 13.144 原生重载复验与窗口投影并发边界（2026-10-02）
+
+用户重启 Codex 后继续既有验证与修复；本轮复用原有八个测试聊天，未新增聊天，图谱目录只读。
+
+- 原生 status 确认 §13.143 安装的 Codex 构建 `fb54d0b4…` 已加载，artifactOnDisk 为 same，server-outdated 消失。两份取消归档经原生工具回读成功；旧制品失败日志的原生 recover 幂等返回同一归档摘要和 withdrawn 包状态。
+- 八个已授权真实聊天均完成原生 status，报告的运行构建相同。主窗口另行读取实际记录：八个 Stop、六个 SessionStart；原工作区无活动 Demand、无声明、保留两个归档，verify 为 14 pass / 1 fail / 0 unavailable，唯一失败是两个窗口缺少新启动证据的 windows-stale。此结果不记为全工作区验证通过，登记 B14。
+- 同一安装制品的八个真实 hook 子进程在独立一次性工作区并发执行合成 SessionStart，8/8 落盘，817–897ms，无超时、stderr 或 skipped。该对照没有复现现场缺失，不等同于八次真实桌面启动，也不能据此判断宿主是否触发过缺失的事件。没有伪造启动记录或放宽制品门。
+- B6 的局部根因得到确定性交错复现：维护先读取绑定、后重新读取输出文件，输出 CAS 成功仍可能覆盖随后注册的投影。修复后 refresh 与 execute 在现有 binding-store 锁内取得 inventory、渲染、核对目标和发布；skeleton 使用 no-replace，只补缺失文档。只读观察与持锁发布共用纯渲染函数；协议、Schema、事件及历史摘要不变。边界和锁序见 ADR-0016，更广的配置/维护并发仍开放。
+- 两个宿主各有 refresh、execute、skeleton 三条新回归，均曾在未修路径上复现新登记投影被覆盖。修复后端点/pod/投影聚焦 14 项通过；追加不可用根的错误转换回归后，投影聚焦 9 项通过，不叠加重复用例计算覆盖。保持既有活动绑定锁拒绝或有界等待语义，竞争调用在可重试失败后重试。测试使用真实文件系统和受控调度，不冒称宿主登录态并发。
+- 第一轮完整门在源码复核发现错误转换遗漏后主动终止，不计为通过；已补回既有投影错误边界并重启最终完整门。
+- 最终 `WAKEFLOW_TEST_CONCURRENCY=4 npm test` 完整通过：1198/1198，0 失败、0 取消，含 20 个端到端场景和全部类型、架构、Biome、knip、Schema、build:check 门。双宿主 smoke 均通过：20 工具、fresh 完成、reconcile 零操作、status idle、verify ok、pod 预览 ready、真实观察器落盘。
+- 按既有安装更新授权刷新 Codex 缓存，先备份旧构建，再逐文件验证 911 个普通文件的内容和模式。新 Codex manifest 为 `21bf03fdea8ddc5aed0ad82a67a65ff3259a361a8b5fac0d66e0cc6106283877`，Claude 为 `840309044282b0cf7d3e0c3843d91f0d887c159368063b039b622f7f507c1054`。安装缓存按实际 MCP 配置、空 PATH 加宿主 Node 启动新进程，20 工具与 runtime-artifact 门通过；不完整合成需求的 coverage 仍按预期失败，不把该夹具整体称作有效工作区。
+- 缓存切换后，原生 status 回读仍运行 `fb54d0b4…`、artifactOnDisk changed、next 为 runtime-artifact-outdated/owner user；需要下一次宿主重载才能验收本轮新构建。hook 和 MCP 启动定义字节未变，不需要重新信任。B14 的两个真实启动观察缺口仍开放。
+- `git diff --check` 通过，基线 d8fafff3，本地 main 对本地 origin/main 为 0/0。源码、测试、文档及制品均是未提交修改，版本仍为 1.0.0 本地构建；未 bump、提交、推送、tag 或发布。图谱目录未编辑，原有八个聊天保留，未新增测试聊天。
+
+
+### 13.145 配置作用域与运行证据的深入反例及系统性提案（2026-10-02）
+
+按用户要求进一步思考通用修复，基于 d8fafff3 加当前未提交修复审查。运行代码和双制品保持 §13.144 的构建；Codex 清单为 `21bf03fd…`。本轮只修改开发文档，实验脚本与完整现场数据留在既有可丢弃测试工作区。
+
+- D1 使用真实文件系统和公开 pod preview/apply：捕获旧配置 C1，创建 pod 发布 C2 并成功刷新，按 C2 检查零操作；延迟的生产刷新器再接收 C1，返回 refreshed/published 4，随后按 C2 检查出现 4 条修复操作。当前绑定锁不能保护旧配置来源。
+- D2 使用公开 reconfigure preview/apply：旧活动刷新在读取 C1、打开 Ledger 后暂停，尚未取得 projector 锁；重配置及新刷新完成 C2 后恢复旧刷新，当前状态页从 C2 摘要回退到 C1。证明同一根因也存在于活动投影，不能靠逐个输出文件 CAS 解决。
+- D3 启动旧目标 MCP 和新 Controller MCP，在独立副本中将目标目录替换为完整新制品，再执行真实观察器进程并输入文档支持的合成 compact SessionStart。新 Controller 报窗口 current，而仍活着的目标 MCP 报旧构建、磁盘 changed。旧为 `fb54d0b4…`、新为 `21bf03fd…`。这是两个真实生成 MCP 与观察器的合同反例，不是一次登录态桌面 compact；未触碰安装缓存或真实窗口绑定。
+- 官方 SessionStart 与公共输入文档已核对：事件包含 compact，子代理可使用父 session_id。hook 摘要没有证明目标 MCP 的运行身份。上轮两个真实 SessionStart 缺失的具体原因仍未知，B14 扩展记录已证实的证据主体缺陷，不把反例冒充对遗漏原因的定位。
+- 有限抽象模型中，无准入的 30 条完整调度有 16 条提交使用过期配置；增加独立重检的 140 条仍有 58 条；共享 runtime/独占结构维护的 526 条没有该失配，且能同时持有两个 runtime 许可。投影旧模型 11 条调度有 1 条回退，锁内新鲜读取模型 6 条没有回退。调度集合不同，不能比较为故障概率；模型不等于实际磁盘、取消或崩溃协议的验证。
+- 形成 ADR-0017（proposed）及 `reviews/2026-10-02-authority-scope-and-runtime-evidence-design.md`：工作区操作作用域；运行时当前配置与维护目标配置分别授权；派生来源指纹；MCP、安装、hook、会话及协议的证据主体分离；不可变构建和版本化启用。详细说明 owner 实例、混合旧 writer、在途排空、原 intent 恢复、零写观察与锁序前提。
+- 实验断言成功表示当前缺陷和设计模型性质被复现，不代表生产修复完成。1198 项整门是 §13.144 的上一轮结果，本轮没有为未改动的运行代码重复整门；没有新建聊天、改变 hook 信任、刷新安装缓存、bump、提交、推送、tag 或发布。图谱目录只读，B6/B14 继续开放。
+- 新文档相对链接与 `git diff --check` 通过；四个相关编译模块移除构建器正常剥除的 source-map 尾注后与制品字节一致。源码制品和安装缓存清单仍同为 `21bf03fd…`。本地 main 对本地 origin/main 为 0/0，保留原有未提交修改，本轮设计文档也未提交。
+
+
+### 13.146 按 ADR-0017 实施操作作用域、证据分离与协议升级（2026-10-02）
+
+用户确认继续后实施。基线仍为 d8fafff3 加前几轮未提交修复；保留其他任务的图谱修改。本节描述新的源码与生成制品，不能作为已更新原生 Codex 会话的证明。
+
+- **准入与来源**：Foundation 共享/独占许可使用短 latch 登记 reader、关闭新准入并排空 reader；维护持有独占作用域，普通领域操作保持共享，领域锁继续负责各自不变量。命令在打开上下文前进入，主体和结算在作用域内完成；过期回调、跨根借用和共享升级独占均被拒绝。未结维护事务继续保留写入边界，不因进程死亡或锁释放而变成空闲。运行时投影在 publisher/绑定锁内读取当前配置，维护过渡投影仍使用 intent 的目标配置。
+- **实例回收**：锁 v2 保存出生摘要和模块 registry；旧 v1 可读但同 PID 未登记 owner 不再直接判死。macOS boot session/start time 与 Linux boot ID/start ticks 的缺失或不确定性保持 unknown。持续测试包含真实持共享许可子进程 SIGKILL 后的回收、两个 reader 并行、等待 writer 阻止新 reader、取消和未知条目保护。没有把所有 candidate/stage 或未测试平台都称作已解决。
+- **公共合同**：status/verify 结果为 v2；`lastObservation.observerManifestDigest` 只指 hook 生产者，已绑定窗口的服务/指令 runtime 无可信宿主关联时为 unverified。完整 verify 可因此 unavailable；不从新 hook 推断 MCP 已重载，不循环重启、重绑或创建聊天。当前生成 MCP 的自身清单缺失/变化会在变更分派前被拒绝；read/preview 仍能诊断。这是本路径的清单 tripwire，不是完整加载证明或宿主选中版本证明。
+- **配置协议**：冻结当前 v1 Schema/表示，新增 v2；普通新 writer 在 v1 上拒绝，旧 writer 不认识 v2。公开 reconfigure 在操作者确认旧 writer 已停止、无活动业务/未结事务且意图字段完全相同时升级。升级确认不是机器自动证明的静止事实。测试在 v2 Config 激活后取消，验证剩余 intent/journal 阻断写入，随后仅用 operationId 公开 recover 完成；活动 Demand 阻止升级。旧 v1 intent 与已退休 intent 的 v1 terminal journal 保持字节并要求原构建收尾。
+- **三个反例的正向复测**：D1 经生成 MCP pod preview/apply 改变配置后，延迟的旧参数刷新不再写入旧投影，按当前配置的修复操作为 0。D2 父进程生产投影暂停时，另一生成 MCP 的维护写入等待；释放 reader 后激活新配置，最终页面只含新摘要。D3 真实旧/新生成 MCP 进程与真实 hook 进程中，新观察器记录不会使旧目标被判 current；新 writer/v1、旧 writer/v2 和自身清单变化的写入均被拒绝。会话关联与 compact 输入是合成，未声称发生原生桌面 compact。
+- **跨构建升级**：由保留的 `fb54d0b4…` Codex 生成 MCP 创建真实 v1 工作区，关闭该唯一旧进程后，以新生成 MCP 执行公开 preview/apply 升级；Ledger 文件与字节不变，未绑定原生聊天的空工作区 verify 为 15/0/0。这不是带活动 Demand 或真实旧窗口的升级验收。
+- **安装边界**：新增 `install:check`，完整校验制品并拒绝同版本不同字节覆盖；只读预检不保留目标、不会安装或激活，实际发布必须 create-only 到新版本目录。对当前 Codex 安装目录的只读预检已按预期拒绝同版本覆盖。版本仍为 1.0.0；本轮未刷新安装缓存，未改变 hook 定义信任。新版本号及原生激活仍待单独授权/操作。
+- **构建与现场区分**：定向生成进程验收时 Codex manifest 为 `e6518300…`；最终只调整维护工具说明，逐文件比较的 916 个文件中只有目录模块和清单变化。最终 Codex manifest `b04cdeedb112fe22b81942e079861e219c7877b561724d7e25b24a6863b64d11`，Claude `394e45ca114652d38b2d71b0bacc423da22572a2197889c004ea2b0214daaa59`；已安装 Codex 仍为 `21bf03fd…`，本聊天原生 status 回读仍为 `fb54d0b4…` / artifactOnDisk changed / schemaVersion 1。原测试工作区 idle、8 个绑定窗口；本轮未新建或投递聊天，未改它的配置。
+- **验收结果**：`WAKEFLOW_TEST_CONCURRENCY=4 npm test` 完整通过：1217/1217，0 fail/cancelled/skipped，测试阶段 442.381 秒，覆盖 20 个端到端场景；类型、架构（761 模块/5295 依赖/16 个生产根）、lint、format、knip、96 份 Schema 漂移门与 build:check 均通过。lint 保留 5 warnings/3 infos。最终两宿主 `npm run smoke:artifacts` 的 20 工具、fresh/reconcile、status/verify、pod preview 和 hook 子进程通过。迭代中修复工具说明长度及逐字合同、Claude helper v1-only 读取，并把缺少运行身份的断言改为 unavailable；没有降低目录长度限制或完整 verify 门。文档相对链接及 `git diff --check` 通过。未运行不满足前提的 release:check；没有把单宿主 macOS 证据计为 Linux、Windows 或登录态新版本会话已验证。
+- **保留限制**：B14 两个原生 SessionStart 缺失的物理原因仍未知；可信服务/窗口关联、宿主选中兄弟版本、技能加载证明、完整不可变加载器及全平台/全中断边界矩阵均未完成。保留原始反例，新增证据在指定可丢弃工作区中分开记录。源文件、生成文件、文档均未提交，main 对本地 origin/main 为 0/0；未 bump、提交、推送、tag 或发布。
+
+
+### 13.147 小版本候选与当前结构的新测试基线（2026-10-02—03）
+
+用户要求插件使用小版本，随后明确改建新的测试环境，将当前实现作为首个支持基线，不再考虑旧 Wakeflow 本地文件与结构升级。按 ADR-0018 执行；它取代 §13.146 的跨格式兼容/迁移部分，不撤销并发、投影与证据主体修复。
+
+- **版本与保护范围**：候选为 `1.1.0-rc.1`；唯一版本输入、两包、两插件 manifest 和 Claude 市场插件条目一致。短暂构建的 `2.0.0-rc.1` 未安装。旧测试区的升级未执行，其配置仍为原 v1；停写确认随升级计划取消。新环境不继承旧配置、绑定或账本。源仓库仍未提交、推送、tag 或发布，其他任务的图谱改动保留。
+- **简化合同**：移除新增的配置 v1 Schema/reader、协议升级 service、quiescenceConfirmed 参数、升级 next 和旧 intent 特例；锁只解析当前含进程出生摘要与 registry 的形状。当前配置、锁及 status/verify 的编号 2 是严格协议标识，不是插件大版本或迁移承诺。正常 reconfigure/reconcile、当前格式的 intent/journal 恢复、工作区作用域与精确残留保护保持。
+- **验证变化**：旧迁移用例替换为“未知格式拒绝且不改写”与“正常 reconfigure 激活后取消、未结事务阻断其他 writer、公开 recover 完成”；移除旧格式自动转换期待。64 项定向回归通过；简化后的完整 `npm test` 1214/1214、20 个端到端场景、95 份 Schema 与 build:check 通过，测试阶段 757.745 秒。两宿主最终制品 smoke 通过；不以先前迁移版的 1217 项结果代替本次验收。
+- **新环境**：新建 WakeflowTestWorkspace5，含两个独立的一次性产品 Git 仓库 Alpha/Beta，以及 Controller、Design、Test 共五个角色。从当前生成 MCP 的公共 fresh-initialize preview/apply 初始化，status idle、配置为当前格式；无原生绑定时 verify 15 pass/0 fail/0 unavailable。这不是原生五窗口已验收。
+- **宿主动作**：用户已明确授权新建五个测试聊天、相互投递、代确认纯测试需求/计划，以及结束后归档本轮聊天；测试写入限定在新环境内。用户随后要求仅保留外层项目；停止登记子项目，聊天分别设置工作目录。先前新增的 Design/Test/Alpha 三个侧栏入口由用户移除并经 list_projects 核实：项目工具未提供移除接口，Computer Use 明确禁止操作 Codex，因此未绕过界面限制修改私有状态。后续仅从真实项目和聊天身份推进。参考 [Codex CLI 插件命令](https://learn.chatgpt.com/docs/developer-commands#codex-plugin)。
+- **安装与原生结果**：官方 `codex plugin add wakeflow@gxfn --json` 已安装 1.1.0-rc.1；914 个普通文件与最终制品逐项核验。安装器清理了旧缓存，已验证备份并以不覆盖目标的独占 rename 恢复旧 1.0.0 的 911 个文件。新 Codex manifest 为 `484146afdbaf2d3746d0c7c622e2b8af88d1db5377cfe901c34c41e42b3f5f6b`，Claude 为 `9103072b9c7c325ff35db620ffe59bb0780667d0923a22d1fb9ab4d02926d13c`，旧 Codex 仍为 `21bf03fd…`。五个真实会话及主测试会话均从原生工具报告新摘要/Schema 2，四个 CLI 启动会话另核对了 JSONL 中原始 MCP structured_content。五个真实 SessionStart 均落盘并完成绑定；真实续接回合观察到 UserPromptSubmit、Stop、SessionEnd。绑定后的 verify 为 14 pass/0 fail/1 unavailable，唯一缺项为 window-runtime-unverified:5，不伪报完整通过。B14 历史缺失的物理原因及可信窗口/MCP 关联仍未关闭。
+
+
+§13.147 原生闭环及清理补记：
+
+- Design 在原生会话中起草、预览，经主测试线程逐字审阅并按用户授权代确认后发布四项验收。Controller 认领单个 Demand，规划并向 Alpha/Beta 真实投递，两端只增加约定四个产品文件；原生发送返回均被记录为 accepted。
+- 主测试线程直接读取四个文件并独立运行 46 项产品测试，全部通过；两个一次性仓库 HEAD、README、提交数与基线一致。Controller 登记六份受管证据并逐锚点绑定，分别接受两个 needs-review 实现结果，没有把报告自述直接当作验收。
+- 独立 Test 使用 Node v24.19.0（macOS arm64）执行四个冻结步骤：59 项独立断言与 46 项产品测试通过；70 条命令退出码为 0，60 项版本/隔离检查通过。四份原始记录包含所运行脚本的字节与摘要；主测试线程核对摘要并另行复跑 59 项独立断言，全部通过。
+- Test 接受后，完成预检 9/9 通过，Demand 在修订 28 完成归档。主测试线程独立读取归档、重算 56 个负载文件（366223 字节）的树摘要，并通过归档事件回放确认 completed/修订 28/三个目标。活动根已移除，最终 status 为 idle、活动 Demand 0、claims 0、看板 archived 1。
+- 五个新聊天结束后均已按授权归档；测试代码和证据保留。再次 list_projects 确认只有外层 WakeflowTestWorkspace5，没有子目录项目。旧测试区配置仍为原 v1，未执行升级。安装后的新旧缓存最终再次逐文件校验，候选 914 文件与源制品一致，旧版本备份恢复的 911 文件保持一致；源码 main 相对本地 origin/main 为 0/0，未提交、推送、打 tag 或发布。
+- 未把未验证项当作通过：工作区 verify 仍为 14 pass/0 fail/1 unavailable，原因是 window-runtime-unverified:5；原生回调发送与接收可见，但 Wakeflow 自动 landing 仍 pending/unlanded，最终由 Controller 正式评审确认，没有伪造落地或重复投递。F9 路径扫描误报得到两个真实例子（正则和斜杠分隔的类型列表），经既有内容确认或保持含义的文字修正继续，扫描器未被放宽；首次被拒的 Test 导入不计为成功导入。
+
+
+### 13.148 Codex 外层项目聊天与执行根分离（2026-10-03）
+
+依据 ADR-0019 和用户本轮的明确要求实施。基线仍为 `d8fafff`，源码与制品未提交，工作区内既有改动保留；不触碰图谱子项目。先以 `1.1.0-rc.2` 验证安装路径；描述合同校验修订后使用独立的 `1.1.0-rc.3` 候选，不覆盖已安装版本。
+
+本节校正 §13.147 的宿主验证边界：先前外部 CLI 会话完成了业务闭环，但没有证明桌面项目归属；五个旧聊天归档后外层项目显示为空。目录正确与侧栏归属是两项事实。
+
+- Codex 通过 `list_projects` 精确解析外层工作区项目，再以 project/local target 创建全部角色聊天。只建立外层项目；不为角色子目录建项目，也不降级到 CLI 或 projectless 会话。
+- 新的五个角色聊天由原生创建工具建立并保留。逐个读回实际命令输出，确认聊天 cwd 在工作区根，Design/Test 的显式 workdir 与产品角色的 Git 根分别正确。宿主列表暂时遗漏新创建条目，项目 UI 确认单独保存，不以 cwd 推断项目归属。
+- 新增纯启动说明渲染端口，Codex 与 Claude 各自在宿主模块生成工具或命令参数；共享端点切片只提供配置、意图、已准入 worktree 事实及绑定校验。
+- Codex 的真实 SessionStart 以工作区根准入；角色目录与产品检出是独立执行根。产品 worktree 显式观察执行根，核对 Git common dir、双向指针、分支与 pod 占用；Claude 保持原来的会话根合同。
+- 投递提示词新增相对工作区的明确执行目录，保留阅读条目相对该执行根的语义；实施、Test 与根外仓库的路径回归核对真实文件。Skills 明确读取角色指令、设置 workdir、处理含混创建及保留用户请求的聊天。
+
+验证进展：最终功能聚焦 48/48、描述目录聚焦 8/8、reconcile 聚焦 3/3 已通过；最终 4 并发 `npm test` 为 1217/1217、0 失败、0 取消、20 个 E2E 场景通过（测试阶段 564471.959 ms）；类型、架构、lint、format、knip、95 份 Schema 与 build:check 均通过，双宿主 smoke 和 `git diff --check` 通过。早期迭代发现工具描述超出 640 字节、Controller 源技能超过 200 行，以及新增路径说明混入编号阅读列表造成旧解析断言失败；保持原有预算和编号合同修复，没有放宽测试门。 `rc.3` 的 6 并发整门中 1216 项通过、1 项触发既有 20 秒测试总时限（无断言失败）；该并发/恢复文件单独 3/3 通过。保留断言和时限，以 4 并发重跑整门，不把超时冒充通过。
+
+
+本轮最终安装与剩余现场项：
+
+- 本机选择 `1.1.0-rc.3`；915 个普通文件（含 manifest）与源码生成候选逐字节校验一致，Codex manifest 摘要为 `sha256:085267f2627574efe141cd9f7c32680103d67bdd64823f864287d38552afd3e6`。安装器清理旧目录后，从已验证副本以排他方式恢复 `1.0.0`、`1.1.0-rc.1`、`1.1.0-rc.2`，各自摘要复核一致；不声称旧目录在安装过程中一直存在。
+- 五个新聊天均由同一个外层项目的 project/local 创建入口建立，实际 cwd 和 SessionStart 均为工作区根；角色命令的显式工作目录独立核实。用户已确认 Controller 在该项目中，五个聊天均保留；完整的五个聊天 UI 确认尚待答复，宿主列表仍遗漏新条目。
+- 主维护聊天与项目内 Controller 的原生 MCP 仍返回 `rc.1` 摘要，Controller 续接也未重载。四个 hook 定义字节未变。已请求宿主重载，再以新版原生 MCP 替换五个旧归档聊天的绑定并复验；这一项未通过，不用缓存校验、脚本或测试替代。
+- 没有业务写入、活动 Demand 或持有的 claim；旧绑定保持原状。源码与生成制品未提交，`main` 相对本地 `origin/main` 为 0/0；不运行不满足前提的发布门，不提交、推送、打标签或发布。原生 Windows 与新 Claude 登录会话未验证。
+
+
+### 13.149 重启后五个项目聊天的原生复验与绑定交接（2026-10-03）
+
+用户重启 Codex 后继续 §13.148。本轮不修改运行时代码、不新建聊天或子项目、不刷新缓存；复用已创建的五个外层项目聊天，并保留它们可用。
+
+1. 主维护聊天的原生 `wakeflow_status` 返回 `rc.3` 的实际 manifest 摘要；端点 inspect 返回 project/local 创建目标、程序根 SessionStart 和各角色独立 executionRoot。五个角色随后各自调用原生 status/inspect，摘要均为已安装的 `sha256:085267f2627574efe141cd9f7c32680103d67bdd64823f864287d38552afd3e6`。逐个读取原生工具调用记录、完整返回文件和真实命令输出，不以子聊天的成功总结代替核验。
+2. 五份最新 SessionStart 均来自外层工作区根；Design/Test 的显式 workdir 与 Alpha/Beta 的 Git 根核对正确。Alpha 5 项、Beta 41 项产品测试通过，独立 Test 的 4 步共 59 项检查通过；所有实际测试命令退出码为 0。
+3. 每个端点重新 inspect，以当次 bindingId、bindingDigest 和新 launchIntentDigest 顺序执行原生 replace。五次均返回 replaced；随后直接核对私有绑定文件，句柄精确对应原生创建工具返回的五个新聊天，绑定 ID 与回执一致。工作区无活动 Demand、无 claim，五个投影均 current。
+4. 产品文件的逐字节 SHA-256、Git HEAD 和 git status 在复验前后相同，未覆盖已有未提交产品文件。Controller 再从自身原生 MCP 回读 status/verify，确认五个新绑定并进入等待用户需求状态。
+5. 严格 verify 为 14 pass、0 fail、1 unavailable；唯一未验证项仍是 `window-runtime-unverified:5`。五次直接原生调用证明本轮服务构建，未把它们或 hook 摘要冒充持续的窗口到 MCP 自动关联。
+
+项目列表仍只有一个外层测试项目。宿主的聊天列表继续遗漏这些新聊天：保留实际 project target 创建回执及用户的 Controller UI 确认，不声称五个聊天的侧栏归属都已由列表自动回读。此限制和运行时自动关联缺口分开记录。本轮没有运行新的真实 worktree pod 全链路；其改变后的合同由 §13.148 的真实 Git 夹具及二十场景覆盖，不能称为本轮原生 pod 验证。
+
+源码与生成制品仍未提交，`main` 相对本地 `origin/main` 为 0/0。运行时代码未变，沿用 §13.148 已通过的 1217 项完整门和双宿主 smoke；本轮补充原生检查与 `git diff --check`，没有为日志变更重复整套测试。
+
+
+### 13.150 隐私与准入边界修复（2026-10-03）
+
+依据用户继续深入分析、修复和优化的要求，在 `d8fafff` 的既有未提交工作树上完成本轮审查。设计、已复现反例和保留边界见 [隐私与准入复验](../reviews/2026-10-03-privacy-and-admission-review.md)。候选为小版本 `1.1.0-rc.4`；未提交、推送、打标签或发布。
+
+- F6/F8/F9：统一文本隐私扫描与 opaque 分类，补常见凭证形式、规范化路径包含关系、文件 URI/盘符/UNC、Unicode 边界和 CSI 原文位置映射；所有可解码文本继续扫描，任何内容确认均不覆盖凭证命中。证据字节不改写。
+- F3：回调复用已有安全内联字面量渲染，数据说明前置，技能不再声称只读检查会确认回调或接受结果；不加入新的授权状态或弱化同用户威胁边界。
+- O1：真实读者释放可使锁的稳定检查返回 residue-changed。补齐检查阶段的有界重观察；未知替换文件仍保护，操作体不被重试。
+- 测试准备与被测操作分别限时，保留真实 fsync、锁、CAS 与 20/25 秒行为时限。没有以关闭生产耐久性或延长行为时限作为修复。
+
+阶段证据：聚焦 70 项通过；修改前锁释放与未知替换反例稳定失败，修复后通过；六个独立进程的并发/恢复文件共 18 项通过、无失败或取消（墙钟 55480 ms）。生成制品的独立 MCP 进程以真实文件验证 12 个凭证阻断组合，干净彩色日志与代码可实际落账且源字节相同。不是原生 Codex 聊天或真实业务验收。
+
+最终验证与安装：
+
+1. `npm test` 在并发度 6 下完成：1229 项通过，0 失败、0 取消、0 跳过，含二十个端到端场景；测试阶段 677556 ms。类型、架构、Biome、knip、95 份 Schema 漂移及 `build:check` 均通过。已先重建双制品，随后 Codex / Claude Code 的 `smoke:artifacts` 均通过。
+2. 官方本地插件安装入口选择 `1.1.0-rc.4`，915 个普通文件（含 manifest）与生成候选一致；Codex manifest 摘要为 `sha256:1e354abc6aea47401e4e3ea5580239067a36a562cad3788546d607cd827a76d7`。安装器清理旧版本后，从已验证副本排他恢复四个旧版本并分别复核摘要；不声称旧目录全程保留。rc.3 与 rc.4 的四个 hook 定义字节不变。
+3. 用户重启后，主维护聊天与外层项目的 Controller 原生 status 均返回 rc.4 实际摘要、磁盘制品 same。直接核对 Controller 两次原生调用记录、完整返回文件及文件摘要；现有五个绑定 registered、投影 current，无活动 Demand 或 claim。
+4. 另在现有测试区内创建独立的一次性合成夹具，经 Codex 原生公开证据工具复验 12 个凭证阻断组合；正常彩色日志与中文列表、正则代码 preview/apply 成功，84 字节原文与归档 payload 逐字节一致。该测试是原生工具调用加合成权威夹具，不是真实业务 Demand 验收或完整夹具工作区验证；留存调用和字节证据后已回收。
+5. 严格工作区 verify 仍为 14 pass、0 fail、1 unavailable：`window-runtime-unverified:5`。直接原生调用证明当次服务构建，不能替代宿主缺失的持续窗口到 MCP 自动关联。聊天列表回读限制继续单独保留；本轮没有重新创建、归档或重绑五个项目聊天，也没有新增项目入口。
+
+产品文件、Git HEAD 和工作树状态复核未变。本轮重启后仅补原生验证及文档，沿用上面的最终代码完整门与双宿主冒烟；`git diff --check` 通过。源码与生成制品未提交，`main` 相对本地 `origin/main` 为 0/0；未提交、推送、打标签或发布。原生 Windows、新的 Claude 登录会话及新的原生 worktree pod 闭环未在本轮运行，制品冒烟不能替代这些现场项。
+
+
+### 13.151 rc.4 后续补审的四项边界修复（2026-10-03）
+
+沿用用户要求深入分析和修复的范围，核实图谱只读线程转交的 PF-02、CF-01、CB-01、PF-01。基线仍为 `d8fafff` 的既有未提交工作树；图谱及其前态探针未改动。细节见 [隐私与准入复验的后续补审](../reviews/2026-10-03-privacy-and-admission-review.md)。
+
+1. 需求发布分析携带独立 `privacyHit`，纯发布评估同时返回该事实和有界 diagnostics，公共预览不再用截断列表决定是否隐藏摘要。保留既有 64 项与 256 码点展示上限，无公共 Schema 或本地状态格式变更。
+2. 读写许可在取得时立即登记释放责任，短 latch 的 release 失败不再导致许可丢失。结算失败仍使操作失败，业务体不会执行；未知替换节点仍由精确删除边界保护。
+3. 回调以 `algorithm:value` 明确保留 Git 对象身份，替换对象的隐式 String 转换；不改变已存结果或决策合同。
+4. UUID 候选匹配与已知前缀放行分开；白名单只接受完整前缀，未知 `_`/`-` 前缀不再绕过扫描，不扩大到任意字符串内的 UUID 子串。
+
+修改前正式回归确认需求正文/测试摘要回显、shared/exclusive 许可遗留、非空提交身份丢失和未知前缀漏检。修后聚焦 43 项通过，含真实目录、unlink 后 fsync 故障、同进程重入及未知替换字节保留。生成 Codex MCP 的一次性夹具确认五类隐私预览、干净摘要对照与四个前缀案例；生成回调代码确认两种算法、两种语言。不是新原生宿主或真实业务验收。
+
+候选小版本为 `1.1.0-rc.5`，双制品已重建。最终 `npm test`（并发度 6）1244 项通过、0 失败、0 取消、0 跳过，包含二十个端到端场景，测试阶段 636592 ms；类型、架构、Biome、knip、95 份 Schema 漂移与 `build:check` 均通过。双宿主 `smoke:artifacts` 均通过；`git diff --check` 通过。
+
+Codex 候选 manifest 为 `sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735`，Claude Code 为 `sha256:fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f`。当前原生 MCP 与已安装 manifest 再次核对，仍为 §13.150 验证的 rc.4（`1e354abc…`，磁盘 same），无活动 Demand 或 claim；新候选未安装，不能称为 rc.5 原生聊天验收。
+
+本轮没有刷新缓存、提交、推送、打标签、发布或创建聊天/项目。源码及生成产物仍未提交，`main` 相对本地 `origin/main` 为 0/0；现有改动与图谱文件保留。Windows、新 Claude 登录会话与 rc.5 原生会话未运行；旧有运行时自动关联和项目列表回读限制不因本轮修复而消失。
+
+
+### 13.152 按范围分批提交源码、制品与图谱（2026-10-03）
+
+用户明确要求分批提交 Wakeflow 修改，并随后确认图谱目录也单独分批提交。本系列从 `d8fafff3` 开始，前八批如下；第九批提交本节、已接受 ADR、维护计划、审阅及未决项记录。
+
+| 提交 | 范围 | 文件数 |
+| --- | --- | ---: |
+| `988a68ba` | 文件锁、进程身份与稳定读取 | 11 |
+| `6c57b134` | 工作流恢复、并发准入、宿主边界与隐私回归 | 153 |
+| `0cec41a6` | 不可变安装检查、宿主构建与测试调度 | 11 |
+| `23791451` | 角色聊天、执行目录与投递评审指引 | 9 |
+| `190e1371` | 1.1.0-rc.5 双宿主生成制品与版本源 | 180 |
+| `c39e1799` | 图谱阅读器与证据检查 | 9 |
+| `28e84430` | 历史审查、前后态探针与渲染证据 | 127 |
+| `a8540737` | 当前架构、业务和边界地图 | 77 |
+
+各批按明确路径暂存；提交前比对已审阅的工作树 blob 与索引 blob，提交后确认实际路径集合一致。基础原语与上层消费者、生成制品分批组织，完整构建一致性针对系列最终合成树验证，不宣称中间各批都单独通过制品漂移门。
+
+运行时代码、测试和双制品内容未在本次提交整理中改变，沿用 §13.151 已执行的 1244 项完整门、二十个端到端场景及双宿主 smoke。本轮重新运行 `build:check`，rc.5 两份候选摘要与 §13.151 完全一致；图谱 `npm run check` 通过，包含独立检查器测试、类型、当前指纹、100 张图的渲染回执和构建。
+
+图谱保留审阅时的工作树快照、基线及历史证据；入口补记源码现已提交。四份 Markdown 仅规范化多余的 EOF 空行，未改变正文或 Mermaid。最后执行差异空白检查和提交路径核对。此任务只包含本地提交，没有推送、打标签、发布或刷新安装缓存；正式发布门仍需另行满足对应前提。

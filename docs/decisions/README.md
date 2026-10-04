@@ -39,6 +39,13 @@
 | [0011](./0011-requirement-package-as-single-handoff.md) | 需求包作为唯一交接物：取消确认记录与 TODO 摄入、两份文档加必需章节、两个确认点、一个总控一次一个 Demand、同窗口多任务沿用任务包 | `accepted` | 2026-09-04 | 能力卡 3、4、5；`publish_confirmation` 与 `intake_todo` 删除；能力映射矩阵；场景 `card-04` 重塑 |
 | [0012](./0012-flow-convergence-callback-calls-testing-redesign.md) | 流程收敛：回传固定效果、三种调用形状、完成即归档、测试记录对比与失败分类、删除 redesign 改为 escalate | `accepted` | 2026-09-04 | 能力卡 4、5、6、7；能力映射矩阵；总览 F5 到 F9（已回写） |
 | [0013](./0013-target-architecture-and-slice-plan.md) | 目标架构六层、切片解剖、三种调用形状的内核实现、单一错误模型、foundation 收敛、20 个公共工具、L1 切片顺序 | `accepted` | 2026-09-04 | 计划 §8.1 L0 与 L1、§11；能力映射矩阵 §1.1 新工具清单；dependency-cruiser 规则 |
+| [0014](./0014-runtime-recovery-and-completion-coverage.md) | 取消与提交边界、公开候选恢复、pod 临界区、验收全集及历史格式保持 | `accepted` | 2026-10-02 | 修复设计前四批；Q3/Q6/Q8 推荐默认值；运行时、Schema、skills 和进程回归 |
+| [0015](./0015-hook-history-and-read-completeness.md) | hook 历史容量、读取完整性和损坏隔离 | `accepted` | 2026-10-02 | 分片与旧目录共读、有界查询、缺失制品诊断 |
+| [0016](./0016-window-projection-publication-boundary.md) | 窗口绑定与投影发布的并发边界 | `accepted` | 2026-10-02 | 维护与注册共用绑定锁、目录补齐只创建、保留配置并发未决范围 |
+| [0017](./0017-operation-scope-and-runtime-evidence.md) | 工作区操作作用域与运行证据主体 | `accepted` | 2026-10-02 | 共享/独占准入、当前配置与维护目标分离、运行身份拆分及版本化启用 |
+
+| [0018](./0018-current-workspace-baseline.md) | 当前工作区结构作为首个支持基线；新建测试环境，不实现旧本地格式迁移 | `accepted` | 2026-10-02 | 取代 ADR-0017 的旧工作区迁移部分；保留并发、证据和同格式恢复 |
+| [0019](./0019-codex-project-chats-and-execution-roots.md) | Codex 外层项目聊天、宿主启动根与角色执行根分离 | `accepted` | 2026-10-03 | 项目创建/回读、绑定准入、独立 Git worktree 与技能 |
 
 ## 4. 已在其他文档中确认、尚未转为 ADR 的决定
 

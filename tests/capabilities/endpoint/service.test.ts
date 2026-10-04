@@ -1,3 +1,5 @@
+import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal, match, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
@@ -36,11 +38,13 @@ const CODEX: WindowBindingHostFacade = {
   hostId: "codex",
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
+  renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 };
 const CLAUDE: WindowBindingHostFacade = {
   hostId: "claude-code",
   resourceProfile: claudeCodeWorkspaceHostResourceProfile,
   identityProfile: claudeCodeWindowHostIdentityProfile,
+  renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };
 const DIGEST = (fill: string) => `sha256:${fill.repeat(64)}` as Sha256Digest;
 
@@ -99,7 +103,7 @@ async function sessionStart(
     hostId,
     event: "session-start",
     sessionId,
-    cwd: path.resolve(rooted.absolutePath, placement),
+    cwd: hostId === "codex" ? rooted.absolutePath : path.resolve(rooted.absolutePath, placement),
     recordedAt,
   });
 }
@@ -115,6 +119,67 @@ async function expectFailure(
     return true;
   });
 }
+
+test("项目聊天：所有角色在同一程序根启动，角色目录仅用于执行，子目录会话不能冒充项目聊天", {
+  timeout: 60_000,
+}, async (t) => {
+  const { root, rooted, intents } = await fixture(t, executeCodexWakeflowMaintenance);
+  for (const [index, intent] of intents.entries()) {
+    const inspected = await executeWindowBindingRequest(CODEX, {
+      root,
+      operation: "inspect",
+      windowId: intent.windowId,
+    });
+    if (inspected.kind !== "WakeflowWindowBindingInspection")
+      throw new Error("Expected inspection.");
+    const execution = inspected.launchIntent.execution as {
+      readonly sessionRoot: string;
+      readonly executionRoot: string;
+      readonly target: { readonly type: string; readonly environment: { readonly type: string } };
+    };
+    equal(execution.sessionRoot, ".");
+    equal(execution.executionRoot, intent.root.configuredPlacement);
+    equal(execution.target.type, "project");
+    equal(execution.target.environment.type, "local");
+    equal("cwd" in execution, false, "create_thread has no arbitrary cwd parameter");
+    const handle = { kind: "codex-thread", value: `project-chat-${index}` };
+    const request = {
+      root,
+      operation: "register",
+      windowId: intent.windowId,
+      observation: {
+        handle,
+        launchIntentDigest: intent.intentDigest,
+        observedAt: "2026-09-04T10:00:00.000Z",
+      },
+    };
+    if (intent.root.configuredPlacement !== ".") {
+      await writeHostHookObservation(rooted, {
+        hostId: "codex",
+        event: "session-start",
+        sessionId: handle.value,
+        cwd: path.resolve(root, intent.root.configuredPlacement),
+        recordedAt: parseUtcInstant("2026-09-04T09:59:00.000Z"),
+      });
+      await expectFailure(
+        executeWindowBindingRequest(CODEX, request),
+        "precondition-failed",
+        "hook-evidence-missing",
+      );
+    }
+    await sessionStart(
+      rooted,
+      "codex",
+      handle.value,
+      ".",
+      parseUtcInstant("2026-09-04T10:00:00.000Z"),
+    );
+    const registered = await executeWindowBindingRequest(CODEX, request);
+    if (registered.kind !== "WakeflowWindowBindingMutation")
+      throw new Error("Expected registration.");
+    equal(registered.disposition, "registered");
+  }
+});
 
 test("Codex：inspect 给出启动意图与执行参数，register 需要 hook 证据，重放幂等，异句柄冲突", {
   timeout: 60_000,

@@ -1,15 +1,20 @@
 import { equal, ok, rejects } from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
 import { executeRearmDeliveryRequest } from "../../../src/capabilities/delivery/service.js";
+import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
+import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
-import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
-import { workClaimRef } from "../../../src/kernel/layout.js";
+import {
+  createHostHookObservation,
+  writeHostHookObservation,
+} from "../../../src/kernel/hook-observations.js";
+import { hostHookObservationsRootRef, workClaimRef } from "../../../src/kernel/layout.js";
 import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
 import {
   cleanupDeliveryWorkspaceFixture,
@@ -392,6 +397,10 @@ test("Controller 解决：indeterminate 可被显式判为 rejected-before-send 
     const prepared = await prepareFixtureDelivery(fixture);
     const indeterminate = await recordFixtureDeliveryOutcome(fixture, prepared);
     equal(indeterminate.outcome.disposition, "indeterminate");
+    const hooks = path.join(fixture.workspacePath, hostHookObservationsRootRef("codex"));
+    mkdirSync(hooks, { recursive: true, mode: 0o700 });
+    const damaged = path.join(hooks, "unrecognized.txt");
+    writeFileSync(damaged, "unavailable hook channel", { mode: 0o600 });
     const resolved = await recordFixtureDeliveryOutcome(fixture, prepared, {
       idempotencyKey: "fixture-outcome-resolved",
       expectedStreamRevision: indeterminate.event.streamRevision,
@@ -402,6 +411,8 @@ test("Controller 解决：indeterminate 可被显式判为 rejected-before-send 
     equal(resolved.outcome.claimHandling, "release-authorized");
     equal(resolved.target.phase, "host-effect-rejected");
     equal(existsSync(claimPath(fixture)), false);
+    equal(existsSync(damaged), true);
+    unlinkSync(damaged);
     const rearmed = await rearm(
       fixture,
       prepared.delivery.deliveryId,
@@ -484,10 +495,17 @@ function assertReadingOrderResolves(
   prompt: string,
   header: string,
   sectionsLabel: string,
-  fixture: Readonly<{ readonly fixtureRoot: string }>,
+  fixture: Readonly<{ readonly fixtureRoot: string; readonly workspacePath: string }>,
   windowPath: string,
   expectedSections: Readonly<Record<"requirement" | "landing", string | null>>,
 ): void {
+  const executionLabel =
+    header === "Read in this order:"
+      ? "Execution root (relative to workspace): "
+      : "执行目录（相对工作区根）: ";
+  const execution = prompt.split("\n").find((line) => line.startsWith(executionLabel));
+  ok(execution !== undefined, "the delivery must explicitly select its execution root");
+  equal(path.resolve(fixture.workspacePath, execution.slice(executionLabel.length)), windowPath);
   const entries = readingEntries(readingSection(prompt, header));
   const requirementRoot = path.join(
     fixture.fixtureRoot,
@@ -577,5 +595,51 @@ test("测试投递的 prompt 同样从 Test 窗口根解析需求包文档，不
     );
   } finally {
     await cleanupTestDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+test("投递查询不完整不能作未落地判断；独立宿主回执仍可证明落地", { timeout: 120_000 }, async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    const prepared = await prepareFixtureDelivery(fixture);
+    const directory = path.join(fixture.workspacePath, hostHookObservationsRootRef("codex"));
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const files: string[] = [];
+    for (let index = 0; index < 257; index += 1) {
+      const record = createHostHookObservation({
+        hostId: "codex",
+        event: "stop",
+        sessionId: fixture.route.rawHandle,
+        cwd: fixture.route.windowPath,
+        recordedAt: parseUtcInstant("2026-08-29T12:05:10.000Z"),
+        turnId: `noise-${index}`,
+      });
+      const file = path.join(directory, `20260829T120510000Z-stop-${record.recordId}.json`);
+      writeFileSync(file, renderDeterministicJsonDocument(parseJsonValue(record)), { mode: 0o600 });
+      files.push(file);
+    }
+    await rejects(
+      recordFixtureDeliveryOutcome(fixture, prepared),
+      rejectedWith("observation-query-incomplete", "io-failure"),
+    );
+    equal(existsSync(claimPath(fixture)), true);
+    // Retry at the same revision proves the failed observation never appended an outcome.
+    for (const file of files) unlinkSync(file);
+    const unknown = path.join(directory, "unrecognized.txt");
+    writeFileSync(unknown, "not hook evidence", { mode: 0o600 });
+    await rejects(
+      recordFixtureDeliveryOutcome(fixture, prepared),
+      rejectedWith("observation-query-unavailable", "io-failure"),
+    );
+    const result = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      attempt: { status: "sent", evidenceDigest: `sha256:${"7".repeat(64)}` },
+    });
+    equal(result.outcome.disposition, "accepted");
+    equal(result.outcome.evidenceKind, "host-send-return");
+    equal(result.outcome.hookRecordId, null);
+    equal(existsSync(unknown), true);
+    equal(result.event.streamRevision, prepared.event.streamRevision + 1);
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });

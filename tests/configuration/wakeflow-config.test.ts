@@ -36,6 +36,12 @@ function isDeeplyFrozen(value: unknown): boolean {
     && Object.values(value).every((child) => isDeeplyFrozen(child));
 }
 
+test("only the current config baseline is admitted", () => {
+  for (const schemaVersion of [1, 3]) {
+    expectConfigError(() => parseWakeflowConfig({ ...createMinimalWakeflowConfig(), $schema: `urn:wakeflow:config:v${schemaVersion}`, schemaVersion }), "schema");
+  }
+});
+
 function topology(value: Record<string, unknown>) {
   return value.topology as {
     repositories: Record<string, unknown>[];
@@ -51,7 +57,7 @@ test("public model preserves one explicit presentation language and builds typed
 
   equal(
     computeWakeflowConfigDigest(model),
-    "sha256:7509f2f4551d162aa9ecdbc55553895bdc5d91d49f2d8177c3acfdf59a59c15e",
+    "sha256:115f2fce6f298833110938bb63278a1425ede2f57534ec57fcb0e9d6e5b1f9c9",
   );
   equal(WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE, "en");
   equal(model.presentation.language, "en");

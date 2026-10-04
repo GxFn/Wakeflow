@@ -1,8 +1,9 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
+import { fail } from "../kernel/error.js";
 
 /**
  * Wakeflow Entrypoint / 制品身份（§13.127）。
@@ -40,14 +41,26 @@ export interface WakeflowArtifactIdentity {
   readonly manifestDigest: Sha256Digest | null;
   /** 现在磁盘上同一处 manifest 的摘要：与 `manifestDigest` 不同即制品已在进程脚下更新。 */
   readonly readCurrentManifestDigest: () => Sha256Digest | null;
+  /** Called by the actual generated MCP entrypoint before any mutation. */
+  readonly assertUnchanged: () => void;
 }
 
 /** 进程启动时固定一次的制品身份。 */
 export function resolveWakeflowArtifactIdentity(importMetaUrl: string): WakeflowArtifactIdentity {
   const root = resolveWakeflowArtifactRoot(importMetaUrl);
+  const manifestDigest = readWakeflowArtifactManifestDigest(root);
+  const generated = root !== null && existsSync(path.join(root, "mcp/server.mjs"));
   return Object.freeze({
     root,
-    manifestDigest: readWakeflowArtifactManifestDigest(root),
+    manifestDigest,
     readCurrentManifestDigest: () => readWakeflowArtifactManifestDigest(root),
+    assertUnchanged: () => {
+      if (!generated && manifestDigest === null) return;
+      const current = readWakeflowArtifactManifestDigest(root);
+      if (manifestDigest === null || current === null)
+        fail("precondition-failed", "runtime-artifact-unavailable", "$runtime");
+      if (current !== manifestDigest)
+        fail("precondition-failed", "runtime-artifact-outdated", "$runtime");
+    },
   });
 }

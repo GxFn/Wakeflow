@@ -25,14 +25,16 @@ import { parseWakeflowHostId } from "../../../src/kernel/layout.js";
 const EVENTS: readonly CodexHookEventName[] = ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"];
 // biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
 const PLUGIN_ROOT_PLACEHOLDER = "${PLUGIN_ROOT}";
-const EXPECTED_COMMAND = `node "${PLUGIN_ROOT_PLACEHOLDER}/hooks/observe.mjs" --wakeflow-hook-observer-v1 --host codex`;
+// biome-ignore lint/suspicious/noTemplateCurlyInString: 在宿主 shell 中选择 Node。
+const NODE_PLACEHOLDER = "${CODEX_MCP_NODE_PATH:-node}";
+const EXPECTED_COMMAND = `"${NODE_PLACEHOLDER}" "${PLUGIN_ROOT_PLACEHOLDER}/hooks/observe.mjs" --wakeflow-hook-observer-v1 --host codex`;
 
 /**
  * 渲染字节的期望形状写成字面量，不由片段或 `JSON.stringify` 推导：Codex 的信任按定义哈希记录，
  * 缩进、键序、命令串的 JSON 转义与尾随换行都是哈希的输入，必须由测试而不是实现表达式钉住。
  */
 // biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
-const EXPECTED_COMMAND_LINE = '            "command": "node \\"${PLUGIN_ROOT}/hooks/observe.mjs\\" --wakeflow-hook-observer-v1 --host codex",';
+const EXPECTED_COMMAND_LINE = '            "command": "\\"${CODEX_MCP_NODE_PATH:-node}\\" \\"${PLUGIN_ROOT}/hooks/observe.mjs\\" --wakeflow-hook-observer-v1 --host codex",';
 const EXPECTED_PREFIX: string = [
   "{",
   '  "hooks": {',
@@ -120,7 +122,7 @@ test("同步与异步按 D5：SessionStart 5 秒同步、UserPromptSubmit 异步
   }
 });
 
-test("命令串是 node 加双引号的插件根占位符脚本路径与入口约定的固定 argv，四个事件共用同一串，不含工作区根", () => {
+test("命令串选择宿主 Node 并引用插件根占位符脚本路径与入口约定的固定 argv，四个事件共用同一串，不含工作区根", () => {
   equal(CODEX_HOOK_OBSERVER_COMMAND, EXPECTED_COMMAND);
   for (const event of EVENTS) {
     equal(handlerOf(event).command, EXPECTED_COMMAND, event);
@@ -160,7 +162,7 @@ test("渲染文本跨版本字节稳定：只含占位符，不含版本号、�
   equal(rendered.includes("sha256"), false);
   equal(rendered.includes("CLAUDE_PLUGIN_ROOT"), false, "Codex 片段只用 Codex 的占位符");
   // 去掉占位符脚本路径后不再有任何路径分隔符或占位符起始：没有绝对路径与工作区根。
-  const remainder = rendered.split(`${PLUGIN_ROOT_PLACEHOLDER}/hooks/observe.mjs`).join("");
+  const remainder = rendered.split(`${PLUGIN_ROOT_PLACEHOLDER}/hooks/observe.mjs`).join("").split(NODE_PLACEHOLDER).join("");
   equal(remainder.includes("/"), false);
   equal(remainder.includes("$"), false);
 });

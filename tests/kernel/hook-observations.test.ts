@@ -6,8 +6,10 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  lstatSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -18,6 +20,8 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import { renderDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
+import { parseJsonValue } from "../../src/foundation/data/json-value.js";
 import { type Sha256Digest, Sha256Error } from "../../src/foundation/crypto/sha256.js";
 import { parseDurableAtomicFileStageFileName } from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
@@ -26,10 +30,12 @@ import { isWakeflowError } from "../../src/kernel/error.js";
 import {
   createHostHookObservation,
   HOST_HOOK_ABANDONED_STAGE_MILLISECONDS,
-  HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
+  HOST_HOOK_RECORDS_MAXIMUM,
   HOST_HOOK_RETENTION_MILLISECONDS,
   type HostHookObservationInput,
   readHostHookObservations,
+  readHostHookObservationRecord,
+  scanHostHookObservations,
   readHostHookObservationsInterleaved,
   writeHostHookObservation,
 } from "../../src/kernel/hook-observations.js";
@@ -91,8 +97,9 @@ test("hook 观察记录：确定性标识、私有文件、按事件与会话有
     ".wakeflow-local/runtime/hosts/claude-code/observations/hooks",
   );
   equal(statSync(directory).mode & 0o777, 0o700);
-  for (const name of readdirSync(directory)) {
-    equal(statSync(path.join(directory, name)).mode & 0o777, 0o600);
+  for (const name of readdirSync(directory, { recursive: true }) as string[]) {
+    const node = lstatSync(path.join(directory, name));
+    equal(node.mode & 0o777, node.isDirectory() ? 0o700 : 0o600);
   }
   writeFileSync(path.join(directory, "20260904T120010000Z-stop-not-a-uuid.json"), "{}\n");
   writeFileSync(path.join(directory, "stray.txt"), "x\n");
@@ -124,7 +131,7 @@ test("hook 观察记录：确定性标识、私有文件、按事件与会话有
   const limited = await readHostHookObservations(root, "claude-code", { limit: 1 });
   equal(limited.records.length, 1);
   const codex = await readHostHookObservations(root, "codex");
-  deepEqual(codex, { records: [], skipped: 0 });
+  deepEqual(codex, { records: [], skipped: 0, complete: true });
 });
 
 test("hook 观察记录拒绝越界输入与同名不同内容", async (t) => {
@@ -152,25 +159,14 @@ test("hook 观察记录拒绝越界输入与同名不同内容", async (t) => {
           : isWakeflowError(error) && error.reason === reason,
     );
   }
-  await writeHostHookObservation(root, {
+  const written = await writeHostHookObservation(root, {
     hostId: "codex",
     event: "session-start",
     sessionId: SESSION,
     cwd: workspace,
     recordedAt: AT(0),
   });
-  const record = createHostHookObservation({
-    hostId: "codex",
-    event: "session-start",
-    sessionId: SESSION,
-    cwd: workspace,
-    recordedAt: AT(0),
-  });
-  const file = path.join(
-    workspace,
-    ".wakeflow-local/runtime/hosts/codex/observations/hooks",
-    `20260904T120000000Z-session-start-${record.recordId}.json`,
-  );
+  const file = path.join(workspace, written.resourceRef);
   writeFileSync(file, '{\n  "tampered": true\n}\n');
   await rejects(
     writeHostHookObservation(root, {
@@ -205,6 +201,22 @@ function hooksDirectory(workspace: string, hostId: "codex" | "claude-code"): str
   return path.join(workspace, ...hostHookObservationsRootRef(hostId).split("/"));
 }
 
+function hookEntries(directory: string): string[] {
+  const entries: string[] = [];
+  for (const name of readdirSync(directory)) {
+    const child = path.join(directory, name);
+    if (/^\d{8}$/u.test(name) && lstatSync(child).isDirectory()) {
+      for (const shard of readdirSync(child)) {
+        const shardPath = path.join(child, shard);
+        if (/^[0-9a-f]{2}$/u.test(shard) && lstatSync(shardPath).isDirectory()) {
+          for (const leaf of readdirSync(shardPath)) entries.push(`${name}/${shard}/${leaf}`);
+        } else entries.push(`${name}/${shard}`);
+      }
+    } else entries.push(name);
+  }
+  return entries.sort();
+}
+
 function observation(
   workspace: string,
   recordedAt: UtcInstant,
@@ -221,7 +233,7 @@ function observation(
 }
 
 function recordName(receipt: Awaited<ReturnType<typeof writeHostHookObservation>>): string {
-  return `${compact(receipt.record.recordedAt)}-${receipt.record.event}-${receipt.record.recordId}.json`;
+  return `${compact(receipt.record.recordedAt).slice(0, 8)}/${receipt.record.recordId.slice(0, 2)}/${compact(receipt.record.recordedAt)}-${receipt.record.event}-${receipt.record.recordId}.json`;
 }
 
 test("hook 观察记录要求 recordedAt 恰好 3 位小数秒：其他精度写得进去却永远读不出（D7a）", async (t) => {
@@ -248,18 +260,18 @@ test("hook 观察记录要求 recordedAt 恰好 3 位小数秒：其他精度写
   );
   equal(HOST_HOOK_RETENTION_MILLISECONDS, 30 * DAY);
   // D7c：读取上限与目录列举上限是同一个内核常量，端点与观察域按它读取，不各自写字面量。
-  equal(HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES, 16384);
+  equal(HOST_HOOK_RECORDS_MAXIMUM, 16384);
   await rejects(
     readHostHookObservations(root, "claude-code", {
-      limit: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES + 1,
+      limit: HOST_HOOK_RECORDS_MAXIMUM + 1,
     }),
     (error: unknown) => isWakeflowError(error) && error.reason === "hook-limit",
   );
   deepEqual(
     await readHostHookObservations(root, "claude-code", {
-      limit: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
+      limit: HOST_HOOK_RECORDS_MAXIMUM,
     }),
-    { records: [], skipped: 0 },
+    { records: [], skipped: 0, complete: true },
   );
   // 中止不被当作"读不出"吞掉。
   await rejects(
@@ -292,7 +304,7 @@ test("新记录落地后只按龄修剪同一宿主目录：早于 30 天的记�
   mkdirSync(codexDirectory, { recursive: true, mode: 0o700 });
   writeFileSync(path.join(codexDirectory, staleGarbage), "garbage\n", { mode: 0o600 });
   deepEqual(
-    readdirSync(directory).sort(),
+    hookEntries(directory).sort(),
     [
       staleGarbage,
       staleDirectory,
@@ -307,14 +319,14 @@ test("新记录落地后只按龄修剪同一宿主目录：早于 30 天的记�
   // 29 天前的 young，所以基准是 29 天前而不是"现在"，31 天前的 stale 这一轮还留着。
   const settled = await writeHostHookObservation(root, observation(workspace, ago(1)));
   equal(settled.disposition, "created");
-  equal(readdirSync(directory).includes(recordName(stale)), true);
-  equal(readdirSync(directory).includes(staleGarbage), false);
+  equal(hookEntries(directory).includes(recordName(stale)), true);
+  equal(hookEntries(directory).includes(staleGarbage), false);
 
   // 现在目录里最新的另一条是 1 毫秒前的 settled：基准回到"现在"，30 天以前的才被修剪。
   const latest = await writeHostHookObservation(root, observation(workspace, ago(0)));
   equal(latest.disposition, "created");
   deepEqual(
-    readdirSync(directory).sort(),
+    hookEntries(directory).sort(),
     [
       staleDirectory,
       recordName(boundary),
@@ -343,14 +355,14 @@ test("新记录落地后只按龄修剪同一宿主目录：早于 30 天的记�
   writeFileSync(path.join(directory, expired), "garbage\n", { mode: 0o600 });
   const again = await writeHostHookObservation(root, observation(workspace, ago(0)));
   equal(again.disposition, "current");
-  equal(readdirSync(directory).includes(expired), true);
+  equal(hookEntries(directory).includes(expired), true);
   const next = await writeHostHookObservation(
     root,
     observation(workspace, ago(0), { event: "session-end" }),
   );
   equal(next.disposition, "created");
-  equal(readdirSync(directory).includes(expired), false);
-  equal(readdirSync(directory).length, 7);
+  equal(hookEntries(directory).includes(expired), false);
+  equal(hookEntries(directory).length, 7);
 });
 
 test("宿主时钟跳到未来时一次写入删不掉别的证据：截止基准被目录里已有的记录钳住（D7b）", async (t) => {
@@ -368,7 +380,7 @@ test("宿主时钟跳到未来时一次写入删不掉别的证据：截止基�
   );
   equal(skewed.disposition, "created");
   deepEqual(
-    readdirSync(directory).sort(),
+    hookEntries(directory).sort(),
     [recordName(first), recordName(second), recordName(skewed)].sort(),
   );
   const inventory = await readHostHookObservations(root, "claude-code");
@@ -426,7 +438,7 @@ async function concurrentPruneDuringRead(
     [kept.record.recordId],
   );
   equal(concurrent.skipped, 1);
-  equal(readdirSync(directory).includes(recordName(stale)), false);
+  equal(hookEntries(directory).includes(recordName(stale)), false);
 
   const settled = await readHostHookObservations(root, "claude-code");
   equal(settled.records.length, 2);
@@ -459,27 +471,25 @@ function fillOversizedDirectory(directory: string): void {
   }
 }
 
-test("目录越过读取上限时读取整体拒绝；修剪路径的上限更高，一次成功写入即把目录带回可读（D7b/D7c）", {
-  timeout: 60_000,
+test("旧目录超过 16384 项仍可分页完整读取与按龄修剪，未知条目不被删除", {
+  timeout: 120_000,
 }, async (t) => {
   const { root, path: workspace } = await fixture(t);
   const directory = hooksDirectory(workspace, "claude-code");
   const kept = await writeHostHookObservation(root, observation(workspace, ago(DAY)));
   fillOversizedDirectory(directory);
   const before = 1 + OVERSIZED_UNRECOGNIZED + OVERSIZED_EXPIRED;
-  equal(readdirSync(directory).length, before);
-  // 读取路径的列举上限是 16,384：条目数达到它就整体拒绝，不给出半份证据。
-  await rejects(
-    readHostHookObservations(root, "claude-code"),
-    (error: unknown) =>
-      isWakeflowError(error) &&
-      error.code === "io-failure" &&
-      error.reason === "observation-listing-too-many-entries",
+  equal(hookEntries(directory).length, before);
+  const beforeRead = await readHostHookObservations(root, "claude-code");
+  equal(beforeRead.complete, true);
+  equal(beforeRead.skipped, OVERSIZED_UNRECOGNIZED + OVERSIZED_EXPIRED);
+  deepEqual(
+    beforeRead.records.map((record) => record.recordId),
+    [kept.record.recordId],
   );
-  // 修剪路径的列举上限（65,536）高于读取上限，所以越界之后的一次成功写入仍能修剪。
   const latest = await writeHostHookObservation(root, observation(workspace, ago(0)));
   equal(latest.disposition, "created");
-  equal(readdirSync(directory).length, before + 1 - OVERSIZED_EXPIRED);
+  equal(hookEntries(directory).length, before + 1 - OVERSIZED_EXPIRED);
   const inventory = await readHostHookObservations(root, "claude-code");
   deepEqual(
     inventory.records.map((record) => record.recordId),
@@ -506,7 +516,11 @@ test("制品 manifest 摘要是后加的可选键：旧记录没有它读成 nul
     root,
     observation(workspace, "2026-09-18T11:00:00.000Z" as UtcInstant, { event: "session-start" }),
   );
-  const legacyPath = path.join(hooksDirectory(workspace, "claude-code"), recordName(legacy));
+  const legacyPath = path.join(
+    hooksDirectory(workspace, "claude-code"),
+    path.basename(legacy.resourceRef),
+  );
+  renameSync(path.join(workspace, legacy.resourceRef), legacyPath);
   const rendered = readFileSync(legacyPath, "utf8");
   const parsed = JSON.parse(rendered) as Record<string, unknown>;
   delete parsed.artifactManifestDigest;
@@ -519,6 +533,11 @@ test("制品 manifest 摘要是后加的可选键：旧记录没有它读成 nul
       ? `${JSON.stringify(sorted, null, 2)}\n`
       : `${JSON.stringify(sorted)}\n`,
   );
+  const legacyBytes = readFileSync(legacyPath);
+  const retried = await writeHostHookObservation(root, legacy.record);
+  equal(retried.disposition, "current");
+  equal(path.join(workspace, retried.resourceRef), legacyPath);
+  deepEqual(readFileSync(legacyPath), legacyBytes);
   const inventory = await readHostHookObservations(root, "claude-code");
   equal(inventory.skipped, 0);
   deepEqual(
@@ -620,7 +639,7 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
   utimesSync(path.join(directory, stageName(1)), ANCIENT, ANCIENT);
   const first = await writeHostHookObservation(root, observation(workspace, ago(3)));
   equal(first.disposition, "created");
-  deepEqual(readdirSync(directory), [recordName(first)]);
+  deepEqual(hookEntries(directory), [recordName(first)]);
 
   // 先落地第二条记录（稍后给它挂一个双链接的暂存文件），再摆放暂存文件，让下一次写入独自退休它们。
   const linked = await writeHostHookObservation(
@@ -653,7 +672,7 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
   const next = await writeHostHookObservation(root, observation(workspace, ago(1)));
   equal(next.disposition, "created");
   deepEqual(
-    readdirSync(directory).sort(),
+    hookEntries(directory).sort(),
     [
       recordName(first),
       recordName(linked),
@@ -685,4 +704,79 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
   equal(existsSync(path.join(directory, stageName(3))), false);
   equal(existsSync(path.join(directory, stageName(4))), true);
   equal(existsSync(path.join(directory, stageName(5, { pid: process.ppid }))), true);
+});
+
+test("旧平铺目录的 16385 条近期有效记录可完整扫描，目标查询与逐条证据读取不截断", {
+  timeout: 240_000,
+}, async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const directory = hooksDirectory(workspace, "codex");
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  let target: ReturnType<typeof createHostHookObservation> | undefined;
+  for (let index = 0; index < 16_385; index += 1) {
+    const record = createHostHookObservation({
+      hostId: "codex",
+      event: index === 16_384 ? "session-start" : "stop",
+      sessionId: `synthetic-${index}`,
+      cwd: workspace,
+      recordedAt: AT(0),
+    });
+    const name = `${compact(record.recordedAt)}-${record.event}-${record.recordId}.json`;
+    writeFileSync(
+      path.join(directory, name),
+      renderDeterministicJsonDocument(parseJsonValue(record)),
+      { mode: 0o600 },
+    );
+    if (index === 16_384) target = record;
+  }
+  if (target === undefined) throw new Error("Missing synthetic target");
+  const selected = await readHostHookObservations(root, "codex", {
+    event: "session-start",
+    sessionId: target.sessionId,
+    limit: 1,
+  });
+  equal(selected.complete, true);
+  deepEqual(selected.records, [target]);
+  equal(
+    (await readHostHookObservationRecord(root, "codex", target.recordId))?.record.recordId,
+    target.recordId,
+  );
+  const scan = await scanHostHookObservations(root, "codex", {}, () => {});
+  deepEqual(scan, { records: 16_385, skipped: 0 });
+  // Upgrading does not copy or rewrite an already durable legacy fact.
+  const retry = await writeHostHookObservation(root, target);
+  equal(retry.disposition, "current");
+  equal(
+    retry.resourceRef.split("/").length,
+    hostHookObservationsRootRef("codex").split("/").length + 1,
+  );
+  equal(readdirSync(directory).length, 16_385);
+});
+
+test("有限结果明确报告不完整；损坏旧目录不会阻断新分片，未知文件保留", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const directory = hooksDirectory(workspace, "claude-code");
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const unknown = path.join(directory, ".wakeflow-atomic-invalid");
+  writeFileSync(unknown, "unowned", { mode: 0o600 });
+  const first = await writeHostHookObservation(root, observation(workspace, AT(0)));
+  const second = await writeHostHookObservation(root, observation(workspace, AT(1)));
+  equal(first.disposition, "created");
+  equal(second.disposition, "created");
+  const limited = await readHostHookObservations(root, "claude-code", { limit: 1 });
+  equal(limited.complete, false);
+  equal(limited.skipped, 1);
+  equal(limited.records[0]?.recordId, first.record.recordId);
+  equal(readFileSync(unknown, "utf8"), "unowned");
+  const exact = await readHostHookObservationRecord(root, "claude-code", second.record.recordId);
+  equal(exact?.record.recordId, second.record.recordId);
+  // A valid fact at the wrong partition must not be accepted as authority.
+  const misplaced = path.join(directory, "20260904", "ff", path.basename(first.resourceRef));
+  mkdirSync(path.dirname(misplaced), { recursive: true, mode: 0o700 });
+  if (misplaced !== path.join(workspace, first.resourceRef)) {
+    writeFileSync(misplaced, readFileSync(path.join(workspace, first.resourceRef)), {
+      mode: 0o600,
+    });
+    equal((await readHostHookObservations(root, "claude-code")).skipped, 2);
+  }
 });

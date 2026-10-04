@@ -30,7 +30,7 @@ export async function createAcceptedDemandCompletionWorkspaceFixture(
   options: TargetTaskPlanningWorkspaceFixtureOptions = {},
 ): Promise<Readonly<AcceptedDemandCompletionWorkspaceFixture>> {
   const fixture =
-    await createControllerImplementationReviewDecisionServiceFixture(options);
+    await createControllerImplementationReviewDecisionServiceFixture({ coverAllCriteria: options.testingMode !== "real-environment", ...options });
   try {
     const accepted = await decideFixtureImplementation(fixture);
     if (accepted.target.phase !== "accepted") {

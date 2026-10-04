@@ -6,10 +6,12 @@
     "tsBuildInfoFile": "../../../.build/cache/hosts-codex.tsbuildinfo"
   },
   "files": [
+    "codex-window-launch-instructions.ts",
     "codex-agent-text-profile.ts",
     "codex-hook-fragment.ts",
     "codex-maintenance-capability.ts",
     "codex-maintenance-execution.ts",
+    "codex-process-launch-profile.ts",
     "codex-window-host-identity-profile.ts",
     "wakeflow-workspace-host-resource-profile.ts"
   ],

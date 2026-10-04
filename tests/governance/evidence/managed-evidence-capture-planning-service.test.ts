@@ -46,6 +46,38 @@ function service(fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixtur
   return new ManagedEvidenceCapturePlanningService(fixture.publication.workspaceRoot);
 }
 
+test("colored and opaque UTF-8 evidence rejects credentials even with controller confirmation", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const file = path.join(fixture.repositoryRoot, "artifacts/test-run/logs/colored.txt");
+    const secret = "synthetic".repeat(3);
+    for (const text of [
+      `\u001b[31mDATABASE_PASS\u001b[0mWORD=${secret}`,
+      `\u0000PASSWORD=${secret}`,
+      `\u001b]0;Authorization: Bearer ${secret}\u0007`,
+      `postgres://example:${secret}@host.invalid/db`,
+    ]) {
+      writeFileSync(file, text);
+      for (const review of ["reject", "controller-confirmed"] as const) {
+        const result = await service(fixture).preview(fixture.demandId, treeSelection(review));
+        equal(result.status, "blocked");
+        if (result.status === "blocked") {
+          equal(result.review.credentialFindings.some((f) => f.kind === "credential-assignment"), true);
+        }
+      }
+    }
+    writeFileSync(file, "\u001b[32mtests passed\u001b[0m\n");
+    const ready = readyCapturePlan(await service(fixture).preview(fixture.demandId, {
+      kind: "test-output",
+      source: { kind: "managed-path", root: { kind: "repository", repositoryId: EVIDENCE_REPOSITORY_ID }, path: "artifacts/test-run/logs/colored.txt", resourceType: "file" },
+      contentReview: "reject",
+    }, { clock: () => EVIDENCE_CAPTURED_AT }));
+    deepEqual(ready.manifest.contentReview, { disposition: "not-required", opaqueFileRefs: [], privacyFindings: [] });
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
 async function expectPlanningError(
   action: () => Promise<unknown>,
   reason: ManagedEvidenceCapturePlanningServiceErrorReason,

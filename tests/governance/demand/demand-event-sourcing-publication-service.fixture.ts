@@ -1,3 +1,4 @@
+import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -91,6 +92,7 @@ export async function createDemandEventSourcingPublicationWorkspaceFixture(): Pr
     renderWakeflowConfig(config),
     { mode: 0o644 },
   );
+  materializeFixtureOperationScope(workspacePath);
   const workspaceRoot = await RootedDirectory.open(
     workspacePath,
     "$root",

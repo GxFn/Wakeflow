@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { WAKEFLOW_DURABLE_ID_KINDS } from "../contracts/identity/wakeflow-durable-id.js";
 import { fail } from "./error.js";
 
@@ -48,13 +50,24 @@ export const DEFAULT_ALLOWED_ID_PREFIXES: readonly string[] = Object.freeze(
 
 const PRIVATE_KEY_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/gu;
 const PROVIDER_CREDENTIAL_PATTERN =
-  /\b(?:sk-(?:ant-)?[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abp]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})/gu;
+  /\b(?:sk-(?:ant-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{20,}|xox[abp]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})/gu;
 const CREDENTIAL_ASSIGNMENT_PATTERN =
-  /\b(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)\b\s*[:=]\s*["']?[^\s"']{8,}/giu;
+  /(?<![\p{L}\p{N}_])(?:[\p{L}\p{N}_]*_)?(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)["']?\s*[:=]\s*["']?[^\s"'<>]{8,}/giu;
+const AUTHORIZATION_PATTERN =
+  /\b(?:proxy-)?authorization["']?\s*:\s*["']?(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/giu;
+const URL_CREDENTIAL_PATTERN =
+  /(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s"'<>/?#:@]+:[^\s"'<>/?#@]+@/gu;
 const ABSOLUTE_PATH_PATTERN =
-  /(?<![A-Za-z0-9_./:-])(?:~|\/[^\s"'`()<>:/]+)(?:\/[^\s"'`()<>:/]+)+\/?/gu;
+  /(?<![A-Za-z0-9_+.-])file:\/\/[^\s"'`()<>]+|(?<![A-Za-z0-9_./\\-])(?:[A-Za-z]:[\\/]|\\\\)[^\s"'`()<>]+|(?<![\p{L}\p{N}_./\\-])(?:~|\$HOME|\/[^\s"'`()<>:/\\]+)(?:\/[^\s"'`()<>:/\\]+)+\/?/giu;
+// Natural-language text may adjoin a system location without an ASCII space.
+// Keep that protection without treating arbitrary Unicode slash lists as paths.
+const EMBEDDED_PATH_PATTERN = /(?<=\P{ASCII})\/[^\s"'`()<>:/\\]+(?:\/[^\s"'`()<>:/\\]+)+\/?/gu;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: CSI bytes delimit terminal formatting, not payload text.
+const CSI_PATTERN = /(?:\u001b\[|\u009b)[0-?]*[ -/]*[@-~]/gu;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: Unknown controls retain the opaque-content review boundary.
+const NON_TEXT_CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u;
 const UUID_PATTERN =
-  /(?<![A-Za-z0-9_-])[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![A-Za-z0-9-])/giu;
+  /(?<![A-Za-z0-9])[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![A-Za-z0-9_-])/giu;
 
 interface Match {
   readonly kind: PrivacyFindingKind;
@@ -62,25 +75,70 @@ interface Match {
   readonly length: number;
 }
 
-function normalizeRoot(root: string): string {
-  return root.length > 1 && root.endsWith("/") ? root.slice(0, -1) : root;
+interface PathValue {
+  readonly value: string;
+  readonly separator: "/" | "\\";
 }
 
-function pathIsAllowed(candidate: string, roots: readonly string[]): boolean {
-  const normalized = normalizeRoot(candidate);
-  return roots.some((root) => {
-    const admittedRoot = normalizeRoot(root);
-    return (
-      admittedRoot.length > 0 &&
-      (normalized === admittedRoot || normalized.startsWith(`${admittedRoot}/`))
-    );
+function fileUriPath(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.search !== "" || url.hash !== "") return null;
+    const pathname = decodeURIComponent(url.pathname);
+    if (url.hostname !== "") return `\\\\${url.hostname}${pathname.replaceAll("/", "\\")}`;
+    return /^\/[A-Za-z]:\//u.test(pathname) ? pathname.slice(1) : pathname;
+  } catch {
+    return null;
+  }
+}
+
+/** Lexical containment only: normalize dot segments without reading the filesystem. */
+function normalizePath(value: string): PathValue | null {
+  if (/^file:\/\//iu.test(value)) {
+    const decoded = fileUriPath(value);
+    if (decoded === null) return null;
+    value = decoded;
+  }
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: A malformed/encoded locator cannot gain a whitelist match.
+  if (/[\u0000-\u001f\u007f]/u.test(value)) return null;
+  if (/^[A-Za-z]:[\\/]|^\\\\/u.test(value)) {
+    const normalized = path.win32.normalize(value);
+    const root = path.win32.parse(normalized).root;
+    return {
+      value: normalized.length > root.length ? normalized.replace(/\\$/u, "") : normalized,
+      separator: "\\",
+    };
+  }
+  if (!value.startsWith("/")) return null;
+  const normalized = path.posix.normalize(value);
+  return {
+    value: normalized.length > 1 ? normalized.replace(/\/$/u, "") : normalized,
+    separator: "/",
+  };
+}
+
+function pathIsAllowed(candidate: string, roots: readonly PathValue[]): boolean {
+  const normalized = normalizePath(candidate);
+  if (normalized === null) return false;
+  return roots.some((admittedRoot) => {
+    if (admittedRoot.separator !== normalized.separator) return false;
+    const prefix = admittedRoot.value.endsWith(admittedRoot.separator)
+      ? admittedRoot.value
+      : `${admittedRoot.value}${admittedRoot.separator}`;
+    return normalized.value === admittedRoot.value || normalized.value.startsWith(prefix);
   });
 }
 
 function uuidIsPrefixed(text: string, index: number, prefixes: readonly string[]): boolean {
-  return prefixes.some(
-    (prefix) => index >= prefix.length && text.startsWith(prefix, index - prefix.length),
-  );
+  return prefixes.some((prefix) => {
+    const start = index - prefix.length;
+    return (
+      prefix.length > 0 &&
+      start >= 0 &&
+      text.startsWith(prefix, start) &&
+      (start === 0 || !/[A-Za-z0-9_-]/u.test(text[start - 1] ?? ""))
+    );
+  });
 }
 
 function collect(
@@ -116,16 +174,22 @@ function createLocator(text: string): (index: number) => { line: number; column:
 }
 
 /** 扫描一段文本，返回按位置排序的命中列表；空列表表示通过。 */
-export function scanPrivacy(text: string, policy: PrivacyScanPolicy): readonly PrivacyFinding[] {
+function scanMatches(
+  text: string,
+  policy: PrivacyScanPolicy,
+  roots: readonly PathValue[],
+): Match[] {
   const matches: Match[] = [];
   collect(text, PRIVATE_KEY_PATTERN, "private-key", () => true, matches);
   collect(text, PROVIDER_CREDENTIAL_PATTERN, "provider-credential", () => true, matches);
   collect(text, CREDENTIAL_ASSIGNMENT_PATTERN, "credential-assignment", () => true, matches);
+  collect(text, AUTHORIZATION_PATTERN, "credential-assignment", () => true, matches);
+  collect(text, URL_CREDENTIAL_PATTERN, "credential-assignment", () => true, matches);
   collect(
     text,
     ABSOLUTE_PATH_PATTERN,
     "unlisted-absolute-path",
-    (match) => !pathIsAllowed(match[0], policy.allowedPathRoots),
+    (match) => !pathIsAllowed(match[0], roots),
     matches,
   );
   collect(
@@ -135,10 +199,100 @@ export function scanPrivacy(text: string, policy: PrivacyScanPolicy): readonly P
     (match) => !uuidIsPrefixed(text, match.index, policy.allowedIdPrefixes),
     matches,
   );
-  matches.sort((left, right) => left.index - right.index);
+  collect(
+    text,
+    EMBEDDED_PATH_PATTERN,
+    "unlisted-absolute-path",
+    (match) => isSystemAbsolutePath(match[0]) && !pathIsAllowed(match[0], roots),
+    matches,
+  );
+  return matches;
+}
+
+interface RemovedCsi {
+  readonly index: number;
+  readonly removed: number;
+}
+
+/** Keep an offset map: findings always identify the original, unchanged payload. */
+function withoutCsi(text: string): { text: string; offsets: readonly RemovedCsi[] } {
+  const parts: string[] = [];
+  const offsets: RemovedCsi[] = [];
+  let cursor = 0;
+  let removed = 0;
+  for (const match of text.matchAll(CSI_PATTERN)) {
+    parts.push(text.slice(cursor, match.index));
+    removed += match[0].length;
+    cursor = match.index + match[0].length;
+    offsets.push({ index: cursor - removed, removed });
+  }
+  parts.push(text.slice(cursor));
+  return { text: parts.join(""), offsets };
+}
+
+/** Requirement prose may name site routes; explicit filesystem locators stay private. */
+export function isSystemAbsolutePath(text: string): boolean {
+  const candidate = withoutCsi(text).text;
+  if (/^(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|~\/|\$HOME\/)/iu.test(candidate)) return true;
+  const normalized = normalizePath(candidate);
+  return (
+    normalized !== null &&
+    normalized.separator === "/" &&
+    /^\/(?:Users|home|private|var|tmp|etc|opt|srv|root|mnt|Volumes|usr|Library|Applications)(?:\/|$)/u.test(
+      normalized.value,
+    )
+  );
+}
+
+function originalIndex(index: number, offsets: readonly RemovedCsi[]): number {
+  let low = 0;
+  let high = offsets.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if ((offsets[middle]?.index ?? Number.POSITIVE_INFINITY) <= index) low = middle + 1;
+    else high = middle;
+  }
+  return index + (offsets[low - 1]?.removed ?? 0);
+}
+
+export interface PrivacyTextScan {
+  readonly opaque: boolean;
+  readonly findings: readonly PrivacyFinding[];
+}
+
+/** Opaque classification never suppresses scanning of decodable text. */
+export function scanPrivacyText(
+  text: string,
+  policy: PrivacyScanPolicy,
+): Readonly<PrivacyTextScan> {
+  const view = withoutCsi(text);
+  const roots = policy.allowedPathRoots.map(normalizePath).filter((root) => root !== null);
+  // Decoration is not part of a filesystem name. Raw credentials are scanned as
+  // well, so hidden terminal payloads do not become an escape from detection.
+  const raw = scanMatches(text, policy, roots);
+  const matches =
+    view.offsets.length === 0
+      ? raw
+      : raw.filter((match) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(match.kind));
+  if (view.offsets.length > 0) {
+    for (const match of scanMatches(view.text, policy, roots)) {
+      const index = originalIndex(match.index, view.offsets);
+      matches.push({
+        ...match,
+        index,
+        length: originalIndex(match.index + match.length - 1, view.offsets) - index + 1,
+      });
+    }
+  }
+  const unique = new Map<string, Match>();
+  for (const match of matches) {
+    const key = `${match.kind}:${match.index}`;
+    if ((unique.get(key)?.length ?? 0) < match.length) unique.set(key, match);
+  }
+  const ordered = [...unique.values()].sort((left, right) => left.index - right.index);
   const locator = createLocator(text);
-  return Object.freeze(
-    matches.map((match) => {
+  const findings = Object.freeze(
+    ordered.map((match) => {
       const position = locator(match.index);
       return Object.freeze({
         kind: match.kind,
@@ -148,6 +302,11 @@ export function scanPrivacy(text: string, policy: PrivacyScanPolicy): readonly P
       });
     }),
   );
+  return Object.freeze({ opaque: NON_TEXT_CONTROL_PATTERN.test(view.text), findings });
+}
+
+export function scanPrivacy(text: string, policy: PrivacyScanPolicy): readonly PrivacyFinding[] {
+  return scanPrivacyText(text, policy).findings;
 }
 
 /** 任一命中即以 `privacy-violation` 失败，原因是第一个命中的类别。 */

@@ -71,7 +71,7 @@ export interface WakeflowWorkspaceHostTmuxAsset {
 
 export const WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES = Object.freeze([
   "claude-worktree-flag",
-  "codex-worktree-thread",
+  "git-worktree",
 ] as const);
 export type WakeflowWorkspaceHostWorktreeLaunch =
   (typeof WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES)[number];
@@ -110,7 +110,7 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
 
 /**
  * 宿主启动模板：端点切片按它渲染 Agent 的启动参数，不再按 hostId 分支。
- * `tmux-session` 携带宿主自己的缺省值（配置未声明时使用）；`host-thread` 由宿主工具建线程。
+ * `tmux-session` 携带宿主自己的缺省值（配置未声明时使用）；`project-thread` 在外层工作区项目内建聊天，执行目录单独分配。
  */
 export type WakeflowWorkspaceHostLaunchTemplate =
   | {
@@ -120,7 +120,7 @@ export type WakeflowWorkspaceHostLaunchTemplate =
     readonly permissionMode: string;
     readonly sessionName: string;
   }
-  | { readonly kind: "host-thread" };
+  | { readonly kind: "project-thread" };
 
 export interface WakeflowWorkspaceHostResourceProfile {
   readonly kind: typeof WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND;
@@ -387,9 +387,9 @@ function parseLaunchTemplate(
   value: unknown,
 ): Readonly<WakeflowWorkspaceHostLaunchTemplate> {
   const record = plainRecord(value, "$/launch");
-  if (record.kind === "host-thread") {
+  if (record.kind === "project-thread") {
     assertExactFields(record, THREAD_LAUNCH_FIELDS, "$/launch");
-    return Object.freeze({ kind: "host-thread" as const });
+    return Object.freeze({ kind: "project-thread" as const });
   }
   if (record.kind !== "tmux-session") fail("surface", "$/launch/kind");
   assertExactFields(record, TMUX_LAUNCH_FIELDS, "$/launch");

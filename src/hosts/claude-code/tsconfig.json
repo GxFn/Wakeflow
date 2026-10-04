@@ -6,11 +6,13 @@
     "tsBuildInfoFile": "../../../.build/cache/hosts-claude-code.tsbuildinfo"
   },
   "files": [
+    "claude-code-window-launch-instructions.ts",
     "claude-code-agent-text-profile.ts",
     "claude-code-hook-fragment.ts",
     "claude-code-host-asset-operation.ts",
     "claude-code-maintenance-capability.ts",
     "claude-code-maintenance-execution.ts",
+    "claude-code-mcp-configuration.ts",
     "claude-code-portable-settings-composition.ts",
     "claude-code-portable-settings-operation-executor.ts",
     "claude-code-portable-settings-publication.ts",

@@ -523,6 +523,7 @@ export async function executeRecordEvidenceRequest(
     RecordEvidenceResult
   >(
     {
+      mutationScope: "shared",
       tool: WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseRecordEvidenceRequest(raw);
@@ -544,6 +545,6 @@ export async function executeRecordEvidenceRequest(
       privateValues,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

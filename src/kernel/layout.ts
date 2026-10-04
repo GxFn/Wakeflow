@@ -25,6 +25,17 @@ const WAKEFLOW_LOCAL_RUNTIME_ROOT_REF = parsePortableResourcePath(
   "$layout",
 );
 
+/** Cross-process operation admission is private coordination, never business authority. */
+export const WORKSPACE_OPERATION_SCOPES_REF = parsePortableResourcePath(
+  `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/operation-admission`,
+);
+export const WORKSPACE_MAINTENANCE_GATE_REF = parsePortableResourcePath(
+  `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance.lock`,
+);
+export const WORKSPACE_MAINTENANCE_TRANSACTIONS_REF = parsePortableResourcePath(
+  `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance/transactions`,
+);
+
 const REQUIREMENT_ID_PATTERN =
   /^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 

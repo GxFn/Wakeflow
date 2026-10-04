@@ -32,6 +32,28 @@ import { deriveTargetResultCallbackStatus } from "../../../src/governance/result
  */
 
 const EVIDENCE_ID = "evidence_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+test("report admission shares credential detection without misclassifying regexes or Unicode slash lists", () => {
+  const policy = { allowedPathRoots: [], allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES };
+  deepEqual(
+    derivePrivacyRules(
+      [String.raw`replace(/\s+/g, " ")`, "BigInt/Symbol/函数/数组/Number"],
+      policy,
+    ),
+    [],
+  );
+  const secret = "synthetic".repeat(3);
+  deepEqual(
+    derivePrivacyRules(
+      [JSON.stringify({ password: secret }), `Authorization: Bearer ${secret}`],
+      policy,
+    ),
+    ["credential-assignment"],
+  );
+  deepEqual(derivePrivacyRules([String.raw`C:\Users\Example\private.txt`], policy), [
+    "unlisted-absolute-path",
+  ]);
+});
 const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
 const OTHER_DIGEST = parseSha256Digest(`sha256:${"2".repeat(64)}`);
 const REPORTED_AT = parseUtcInstant("2026-08-29T12:10:00.000Z");
@@ -541,7 +563,7 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
       },
       admission(defect),
     ),
-    ["remediation-step:ts-1"],
+    ["remediation-step:ts-1", "remediation-uncovered:ts-2"],
   );
   deepEqual(
     deriveTestDecisionBlockers(
@@ -560,6 +582,41 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
     deriveTestDecisionBlockers(
       { decision: "escalate", escalation: { classification: "needs-decision" } },
       admission(defect),
+    ),
+    [],
+  );
+  const twoDefects = deriveStepViews(
+    contract,
+    {
+      steps: [step("ts-1", "fail", "product-defect"), step("ts-2", "fail", "product-defect")],
+      stepIds: null,
+    },
+    [],
+    [],
+  );
+  deepEqual(
+    deriveTestDecisionBlockers(
+      {
+        decision: "escalate",
+        escalation: {
+          classification: "product-defect",
+          remediation: { affectedTargets: [{ failedStepIds: ["ts-1"] }] },
+        },
+      },
+      admission(twoDefects),
+    ),
+    ["remediation-uncovered:ts-2"],
+  );
+  deepEqual(
+    deriveTestDecisionBlockers(
+      {
+        decision: "escalate",
+        escalation: {
+          classification: "product-defect",
+          remediation: { affectedTargets: [{ failedStepIds: ["ts-1", "ts-2"] }] },
+        },
+      },
+      admission(twoDefects),
     ),
     [],
   );

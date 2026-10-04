@@ -14,6 +14,7 @@ import {
   renderActiveProjectionFiles,
 } from "../../kernel/active-projection.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
+import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { buildActiveProjectionFacts } from "./active-projection-facts.js";
 import { observeWorkspace } from "./workspace-observation.js";
 
@@ -97,25 +98,26 @@ async function renderRound(
  *
  * 观察、事实与渲染都在投影锁内：发布只按锁内那一刻的字节做 CAS，本身不带先后，所以在锁外
  * 观察的两轮并发刷新可以按与各自观察相反的顺序落盘，把旧状态写在新状态上，一直留到下一次
- * 变更才自愈。取锁在观察之前，这一轮读到的工作区就是它写回去的那一个。配置快照与账本根仍在
- * 锁外取得：它们决定这次刷新有没有可读的工作区，读不出就该以自己的原因失败，而不是先去占锁。
+ * 变更才自愈。配置与 Ledger 根也必须在 publisher 锁内读取，不能让闭包携带锁外的旧来源。
  */
 export async function refreshActiveProjection(
   root: RootedDirectory,
   options: RefreshActiveProjectionOptions = {},
 ): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
-  const snapshot = await readSnapshot(root, options.signal);
-  const ledgerRoot = await openLedgerRoot(root, snapshot);
-  try {
-    return await publishActiveProjection(root, () => renderRound(root, snapshot, ledgerRoot, options.signal), {
+  return withWorkspaceOperationScope(root, "shared", () => publishActiveProjection(root, async () => {
+    const snapshot = await readSnapshot(root, options.signal);
+    const ledgerRoot = await openLedgerRoot(root, snapshot);
+    try {
+      return await renderRound(root, snapshot, ledgerRoot, options.signal);
+    } finally {
+      await ledgerRoot.close();
+    }
+  }, {
       ...signalOptions(options.signal),
       ...(options.acquireTimeoutMilliseconds === undefined
         ? {}
         : { acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds }),
-    });
-  } finally {
-    await ledgerRoot.close();
-  }
+  }), signalOptions(options.signal));
 }
 
 /**
@@ -143,7 +145,13 @@ export async function afterMutationRefresh<Result>(
   signal: AbortSignal | undefined,
   mutate: () => Promise<Result>,
 ): Promise<Result> {
+  if (signal?.aborted === true) fail("io-failure", "aborted", "$signal");
   const result = await mutate();
-  await refreshActiveProjectionQuietly(root, signal);
+  // mutate 已经返回提交结果；取消只跳过可重建投影，不能否定该结果。
+  try {
+    await refreshActiveProjectionQuietly(root, signal);
+  } catch (error: unknown) {
+    if (!(error instanceof WakeflowError) || error.reason !== "aborted") throw error;
+  }
   return result;
 }

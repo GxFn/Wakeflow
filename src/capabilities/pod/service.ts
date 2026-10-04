@@ -1,3 +1,5 @@
+import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import path from "node:path";
 import {
   parseWakeflowConfig,
@@ -477,7 +479,7 @@ async function replaceConfig(context: PodSliceContext, desired: JsonValue): Prom
   } catch (error: unknown) {
     mapReplacementError(error);
   }
-  await refreshWindowProjectionsQuietly(context, model);
+  await refreshWindowProjectionsQuietly(context);
 }
 
 /**
@@ -508,13 +510,9 @@ async function retireProjectionsQuietly(
  * 窗口集或 pod 集变了：把本宿主的窗口运行投影收敛到新 Config（G6，§13.111 D5）。投影是派生物：
  * 收敛失败不让已经落盘的配置事务失败，留给 verify 的 window-runtime-projection 门报出；中止仍上抛。
  */
-async function refreshWindowProjectionsQuietly(
-  context: PodSliceContext,
-  model: WakeflowConfigModel,
-): Promise<void> {
+async function refreshWindowProjectionsQuietly(context: PodSliceContext): Promise<void> {
   try {
     await refreshWakeflowWindowRuntimeProjections(context.root, {
-      config: model,
       resourceProfile: context.facade.resourceProfile,
       identityProfile: context.facade.identityProfile,
       ...signalOptions(context.options.signal),
@@ -627,9 +625,32 @@ async function applyCloseComplete(
 
 async function applyPod(
   context: PodSliceContext,
-  _input: PodRequest,
+  input: PodRequest,
   plan: PodPlan,
 ): Promise<PodOutcome> {
+  return withPodMutation(
+    context.root,
+    plan.podId,
+    async () => {
+      await assertDemandOperationConfigCurrent(
+        context.root,
+        context.snapshot,
+        context.options.signal,
+      );
+      const current = await planPod(context, input);
+      if (
+        current.status !== "ready" ||
+        current.digest !== computeCanonicalJsonSha256Digest(parseJsonValue(plan))
+      ) {
+        fail("precondition-failed", "plan-drift", "$request.planDigest");
+      }
+      return applyPodLocked(context, plan);
+    },
+    context.options.signal,
+  );
+}
+
+async function applyPodLocked(context: PodSliceContext, plan: PodPlan): Promise<PodOutcome> {
   switch (plan.kind) {
     case "create":
       return applyCreate(context, plan);
@@ -862,6 +883,7 @@ export async function executePodRequest(
   let assembled: PodResult | null = null;
   return runPublicationTransaction<PodRequest, PodSliceContext, PodPlan, PodOutcome, PodResult>(
     {
+      mutationScope: "exclusive",
       tool: WAKEFLOW_POD_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parsePodRequest(raw);
@@ -887,6 +909,6 @@ export async function executePodRequest(
       privateValues,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

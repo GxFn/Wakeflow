@@ -167,7 +167,7 @@ test("发布：缺确认阻塞并给摘要，确认后 ready，apply 写记录�
   equal(blocked.next.frontier, "requirement-confirmation");
   deepEqual(
     blocked.summary?.sections.map((section) => section.anchor),
-    ["goal", "completion-definition", "non-goals", "testing-decision"],
+    ["goal", "completion-definition", "non-goals", "acceptance-criteria", "testing-decision"],
   );
   equal(JSON.stringify(blocked).includes(root), false, "preview leaked the workspace path");
 
@@ -679,6 +679,85 @@ test("预览边界：日历上不存在的确认时刻是请求错误；头部�
   equal(duplicate?.endsWith("…"), true);
 });
 
+test("privacy suppression survives truncated diagnostics across document and header sources", {
+  timeout: 60_000,
+}, async (t) => {
+  const workspace = await fixture(t);
+  const secret = "synthetic".repeat(3);
+  const credential = `PASSWORD=${secret}`;
+  const duplicates = Array.from(
+    { length: 64 },
+    (_, i) => `\n## Extra ${i}\n\none\n\n## Extra ${i}\n\ntwo\n`,
+  ).join("");
+  const cases = [
+    {
+      name: "requirement body",
+      requirement: FIXTURE_REQUIREMENT_MARKDOWN.replace(
+        "让 Controller",
+        `${credential}\n让 Controller`,
+      ),
+      overrides: {},
+    },
+    {
+      name: "landing body",
+      landing: `${FIXTURE_LANDING_MARKDOWN}\n${credential}\n`,
+      overrides: {},
+    },
+    { name: "title", overrides: { title: credential } },
+    {
+      name: "testing summary",
+      overrides: { testingDecision: { mode: "controller-only", summary: credential } },
+    },
+    {
+      name: "parked trigger with missing confirmation/sections",
+      landing: "# Draft only\n",
+      unconfirmed: true,
+      overrides: { parked: { trigger: credential } },
+    },
+  ];
+  for (const sample of cases) {
+    await t.test(sample.name, async () => {
+      writeDrafts(
+        workspace,
+        (sample.requirement ?? FIXTURE_REQUIREMENT_MARKDOWN) + duplicates,
+        sample.landing ?? FIXTURE_LANDING_MARKDOWN,
+      );
+      const preview = await executeRequirementPublicationRequest(
+        {
+          root: workspace.root,
+          mode: "preview",
+          action: "publish",
+          package: packageInput(workspace, {
+            ...(sample.unconfirmed ? {} : { confirmation: { confirmedAt: CONFIRMED_AT } }),
+            ...sample.overrides,
+          }),
+        },
+        { clock },
+      );
+      if (preview.kind !== "WakeflowRequirementPublicationPreview")
+        throw new Error("Expected preview.");
+      equal(preview.status, "blocked");
+      equal(preview.blockers.length, 64);
+      equal(preview.summary, null);
+      equal(JSON.stringify(preview).includes(secret), false);
+    });
+  }
+  // A saturated diagnostic list alone must not suppress a clean, useful summary.
+  writeDrafts(workspace, FIXTURE_REQUIREMENT_MARKDOWN + duplicates);
+  const clean = await executeRequirementPublicationRequest(
+    {
+      root: workspace.root,
+      mode: "preview",
+      action: "publish",
+      package: packageInput(workspace),
+    },
+    { clock },
+  );
+  if (clean.kind !== "WakeflowRequirementPublicationPreview") throw new Error("Expected preview.");
+  equal(clean.blockers.length, 64);
+  equal(clean.summary?.title, "示例需求");
+});
+
 test("摘要章节上限跟随两份文档乘以摘要锚点数", () => {
   const schema = JSON.parse(
     readFileSync(
@@ -698,4 +777,37 @@ test("摘要章节上限跟随两份文档乘以摘要锚点数", () => {
     return value;
   });
   deepEqual(found, [2 * REQUIREMENT_SUMMARY_ANCHORS.length]);
+});
+
+test("段落、表格或缺失的验收条目在发布前阻止，旧 v1 章节语法不被改写", async (t) => {
+  const workspace = await fixture(t);
+  for (const [demandType, body] of [
+    ["requirement", "Only a prose acceptance statement."],
+    ["requirement", "| ID | Expected |\n| --- | --- |\n| AC-1 | Works |"],
+    ["bug", ""],
+    ["supplement", ""],
+  ] as const) {
+    const requirement = FIXTURE_REQUIREMENT_MARKDOWN.replace(
+      /- AC-1[\s\S]*?\n\n## 用户确认/u,
+      `${body}\n\n## 用户确认`,
+    );
+    writeDrafts(workspace, requirement);
+    const result = await executeRequirementPublicationRequest(
+      {
+        root: workspace.root,
+        mode: "preview",
+        action: "publish",
+        package: packageInput(workspace, {
+          demandType,
+          confirmation: { confirmedAt: CONFIRMED_AT },
+        }),
+      },
+      { clock },
+    );
+    if (result.kind !== "WakeflowRequirementPublicationPreview")
+      throw new Error("Expected preview.");
+    equal(result.status, "blocked");
+    equal(result.blockers.includes("acceptance-criteria-empty:requirement.md"), true);
+    equal(result.planDigest, null);
+  }
 });

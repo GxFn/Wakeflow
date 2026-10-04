@@ -32,9 +32,9 @@ import {
 } from "../../kernel/active-projection.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import {
-  HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
+  HOST_HOOK_RECORDS_MAXIMUM,
   type HostHookEvent,
-  readHostHookObservations,
+  scanHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import {
   hostHookObservationsRootRef,
@@ -173,10 +173,8 @@ export interface ObservedHostHooks {
   readonly skipped: number;
   readonly latestBySession: ReadonlyMap<
     string,
-    Readonly<{ readonly event: HostHookEvent; readonly recordedAt: UtcInstant }>
+    Readonly<{ readonly event: HostHookEvent; readonly recordedAt: UtcInstant; readonly observerManifestDigest: Sha256Digest | null }>
   >;
-  /** 每个会话最近一条 session-start 记录里的制品 manifest 摘要；记录早于该字段时为 null（§13.127）。 */
-  readonly artifactBySession: ReadonlyMap<string, Sha256Digest | null>;
 }
 
 export interface ObservedPodReceipt {
@@ -256,8 +254,8 @@ export interface ObserveWorkspaceOptions {
 export type WorkspaceOverallStatus = "maintenance" | "blocked" | "degraded" | "active" | "idle";
 
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
-/** 等于内核 hook 目录的列举上限：可见集合由保留策略而不是读取上限决定（§13.97 D7）。 */
-const HOOK_RECORDS_MAXIMUM = HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES;
+/** Bound the session aggregate independently of the number of records scanned. */
+const HOOK_RECORDS_MAXIMUM = HOST_HOOK_RECORDS_MAXIMUM;
 const ASSET_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$asset.maximumBytes");
 const SETTINGS_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$settings.maximumBytes");
 const INDEX_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$boardIndex.maximumBytes");
@@ -510,41 +508,32 @@ async function observeHostHooks(
 ): Promise<Readonly<ObservedHostHooks>> {
   try {
     const directory = await hookDirectoryState(root, hostId);
-    const inventory = await readHostHookObservations(
-      root,
-      hostId,
-      { limit: HOOK_RECORDS_MAXIMUM },
-      signalOptions(signal),
-    );
     const latestBySession = new Map<
       string,
-      Readonly<{ readonly event: HostHookEvent; readonly recordedAt: UtcInstant }>
+      Readonly<{ readonly event: HostHookEvent; readonly recordedAt: UtcInstant; readonly observerManifestDigest: Sha256Digest | null }>
     >();
-    const artifactBySession = new Map<string, Sha256Digest | null>();
-    const startedAt = new Map<string, UtcInstant>();
-    for (const record of inventory.records) {
-      const previous = latestBySession.get(record.sessionId);
-      if (previous === undefined || previous.recordedAt <= record.recordedAt) {
-        latestBySession.set(record.sessionId, { event: record.event, recordedAt: record.recordedAt });
+    const latestKeys = new Map<string, string>();
+    const inventory = await scanHostHookObservations(root, hostId, {}, (record) => {
+      if (!latestBySession.has(record.sessionId) && latestBySession.size >= HOOK_RECORDS_MAXIMUM) {
+        fail("io-failure", "observation-session-limit", "$observations");
       }
-      if (record.event === "session-start") {
-        const previousStart = startedAt.get(record.sessionId);
-        if (previousStart === undefined || previousStart <= record.recordedAt) {
-          startedAt.set(record.sessionId, record.recordedAt);
-          artifactBySession.set(record.sessionId, record.artifactManifestDigest);
-        }
+      const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+      const previous = latestKeys.get(record.sessionId);
+      if (previous === undefined || previous <= key) {
+        latestKeys.set(record.sessionId, key);
+        latestBySession.set(record.sessionId, { event: record.event, recordedAt: record.recordedAt, observerManifestDigest: record.artifactManifestDigest });
       }
-    }
+
+    }, signalOptions(signal));
     return Object.freeze({
       hostId,
       current,
       status: "observed" as const,
       issue: null,
       directory,
-      records: inventory.records.length,
+      records: inventory.records,
       skipped: inventory.skipped,
       latestBySession,
-      artifactBySession,
     });
   } catch (error: unknown) {
     const reason = reasonOf(error);
@@ -562,7 +551,6 @@ async function observeHostHooks(
       records: 0,
       skipped: 0,
       latestBySession: new Map(),
-      artifactBySession: new Map(),
     });
   }
 }

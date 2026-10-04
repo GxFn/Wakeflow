@@ -120,6 +120,7 @@ export const REQUIREMENT_SUMMARY_ANCHORS: readonly RequirementSectionAnchor[] = 
   "scope",
   "boundaries",
   "testing-decision",
+  "acceptance-criteria",
 ]);
 
 function normalizeHeading(value: string): string {

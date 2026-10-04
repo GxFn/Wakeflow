@@ -34,6 +34,13 @@ const CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
 }) satisfies Readonly<WakeflowMaintenancePublicHostFacade>;
 
 /** 执行一个经过公共合同准入的 Claude Code workspace Maintenance 请求。 */
-export async function executeClaudeCodeWakeflowMaintenance(value: unknown) {
-  return executeWakeflowMaintenancePublicRequest(CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE, value);
+export async function executeClaudeCodeWakeflowMaintenance(
+  value: unknown,
+  options: { readonly signal?: AbortSignal } = {},
+) {
+  return executeWakeflowMaintenancePublicRequest(
+    CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE,
+    value,
+    options,
+  );
 }

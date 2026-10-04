@@ -1,5 +1,6 @@
 import { types } from "node:util";
 import { threadId } from "node:worker_threads";
+import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 
 import {
   parseSha256Digest,
@@ -369,7 +370,15 @@ async function runCorrelatedGate<Result>(
           CONTEXT_CORE_INSPECTIONS.set(context, admittedCoreInspection);
         }
         try {
-          return await operation(context);
+          return await withWorkspaceOperationScope(root, "exclusive", async () => operation(context), {
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+            maintenanceGuard: async () => {
+              assertWakeflowMaintenanceGateContext(context, root);
+              const current = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
+              if (current.status !== "held" || current.ownerState !== "active" || current.record.token !== expectedLockToken)
+                fail("recovery-required", "$gate");
+            },
+          });
         } finally {
           ACTIVE_CONTEXTS.delete(context);
           CONTEXT_ROOTS.delete(context);

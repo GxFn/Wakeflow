@@ -11,6 +11,7 @@ import {
 } from "../../../src/governance/tasking/task-package.js";
 import {
   cancelDemandAggregateState,
+  escalateDemandAggregateState,
   computeDemandAggregateStateDigest,
   continueDemandAggregateState,
   createInitialDemandAggregateState,
@@ -521,4 +522,20 @@ test("续接把此刻的 test 目标记为历史：没有 test 目标时不写�
         error.path === "$/continuation/historicalTestTargetIds",
     );
   }
+});
+
+
+test("取消等待决定的 Demand 清除活动等待，但保留目标摘要且重复取消仍拒绝", () => {
+  const pkg = createTaskPackageFixture();
+  const planned = planTargetTaskInDemandAggregateState(createInitialDemandAggregateState(pkg.demandId, pkg.demandAuthorityDigest), pkg);
+  const awaiting = escalateDemandAggregateState(planned, {
+    issue: "Synthetic cancellation during escalation",
+    source: { kind: "rework-brake", targetTaskId: pkg.targetTaskId, reworkCount: 3 },
+  }, "demand-event_99999999-9999-4999-8999-999999999999");
+  const cancelled = cancelDemandAggregateState(awaiting);
+  equal(cancelled.lifecycle, "cancelled");
+  equal(cancelled.awaitingDecision, undefined);
+  deepEqual(cancelled.targetTasks, awaiting.targetTasks);
+  equal(computeDemandAggregateStateDigest(cancelled), computeDemandAggregateStateDigest(cancelDemandAggregateState(planned)));
+  throws(() => cancelDemandAggregateState(cancelled), (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition");
 });

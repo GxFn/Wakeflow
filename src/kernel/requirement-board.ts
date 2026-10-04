@@ -32,6 +32,8 @@ import {
 } from "../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
+  inspectRootedExclusiveFileLock,
+  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
   withRootedExclusiveFileLock,
 } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
@@ -121,7 +123,13 @@ async function withClaimStateLock<Result>(
       mode: DIRECTORY_MODE,
       ...signalOptions(signal),
     });
-    return await withRootedExclusiveFileLock(root, claimStateLockRef(requirementId), operation, {
+    const lockRef = claimStateLockRef(requirementId);
+    const observed = await inspectRootedExclusiveFileLock(root, lockRef);
+    if (observed.status === "held" && observed.ownerState === "inactive") {
+      // 看板 owner 只退休已证明失活且仍匹配的锁；活动或未知 owner 仍由 acquire 等待。
+      await retireRootedExclusiveFileLockResidue(root, lockRef, observed);
+    }
+    return await withRootedExclusiveFileLock(root, lockRef, operation, {
       acquireTimeoutMilliseconds: LOCK_ACQUIRE_TIMEOUT_MILLISECONDS,
       ...signalOptions(signal),
     });

@@ -1,3 +1,9 @@
+import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import {
+  assertNoActiveDemand,
+  readDemandPodId,
+} from "../../governance/demand/publication/demand-active-guard.js";
+import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
@@ -802,6 +808,25 @@ async function applyTerminal(
   verify: VerifyReport,
   disposition: "apply" | "recover",
 ): Promise<TerminalOutcome> {
+  const podId = await readDemandPodId(context.root, plan.demandId, context.signal);
+  if (podId === null) fail("precondition-failed", "pod-unknown", "$demandRoot");
+  return withPodMutation(
+    context.root,
+    podId,
+    async () => {
+      await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+      return applyTerminalLocked(context, plan, verify, disposition);
+    },
+    context.signal,
+  );
+}
+
+async function applyTerminalLocked(
+  context: DemandSliceContext,
+  plan: TerminalPlan,
+  verify: VerifyReport,
+  disposition: "apply" | "recover",
+): Promise<TerminalOutcome> {
   const demandId = parseDemandId(plan.demandId);
   await writeJournal(context, {
     kind: JOURNAL_KIND,
@@ -965,6 +990,7 @@ async function executeTerminal<Request extends TerminalRequest, Result>(
     Result
   >(
     {
+      mutationScope: "shared",
       tool,
       parseRequest: (raw) => {
         const request = parse(raw);
@@ -997,7 +1023,7 @@ async function executeTerminal<Request extends TerminalRequest, Result>(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }
 
@@ -1214,6 +1240,25 @@ async function applyContinue(
   plan: ContinuePlan,
   disposition: "apply" | "recover",
 ): Promise<ContinuationOutcome> {
+  const podId = await readDemandPodId(context.root, plan.demandId, context.signal);
+  if (podId === null) fail("precondition-failed", "pod-unknown", "$demandRoot");
+  return withPodMutation(
+    context.root,
+    podId,
+    async () => {
+      await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+      await assertNoActiveDemand(context.root, context.signal, plan.demandId, podId);
+      return applyContinueLocked(context, plan, disposition);
+    },
+    context.signal,
+  );
+}
+
+async function applyContinueLocked(
+  context: DemandSliceContext,
+  plan: ContinuePlan,
+  disposition: "apply" | "recover",
+): Promise<ContinuationOutcome> {
   const demandId = parseDemandId(plan.demandId);
   await writeJournal(context, {
     kind: JOURNAL_KIND,
@@ -1366,6 +1411,7 @@ export async function executeDemandContinuationRequest(
     DemandContinuationResult
   >(
     {
+      mutationScope: "shared",
       tool: WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseDemandContinuationRequest(raw);
@@ -1399,6 +1445,6 @@ export async function executeDemandContinuationRequest(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

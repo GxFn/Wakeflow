@@ -1,3 +1,4 @@
+import { parseAcceptanceCriteria } from "../../kernel/requirement-acceptance.js";
 import {
   REQUIRED_REQUIREMENT_SECTIONS,
   REQUIREMENT_SUMMARY_ANCHORS,
@@ -15,7 +16,11 @@ import {
   normalizeMarkdownAnchor,
   parseMarkdownSections,
 } from "../../kernel/markdown-sections.js";
-import { DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy } from "../../kernel/privacy-scan.js";
+import {
+  DEFAULT_ALLOWED_ID_PREFIXES,
+  isSystemAbsolutePath,
+  scanPrivacy,
+} from "../../kernel/privacy-scan.js";
 import type {
   RequirementClaimState,
   RequirementClaimStatus,
@@ -59,6 +64,8 @@ export interface PackageAnalysis {
   readonly sections: readonly RecordSection[];
   readonly missing: readonly MissingSection[];
   readonly summary: readonly SummarySection[];
+  /** 独立的披露判定；不从有界的诊断展示列表反推。 */
+  readonly privacyHit: boolean;
   /** requirement.md 用户确认节正文的摘要；缺节或空节为 `null`。 */
   readonly confirmationSectionDigest: Sha256Digest | null;
   /** 阻塞项：重复章节与隐私命中。 */
@@ -76,8 +83,6 @@ const PRIVACY_POLICY = Object.freeze({
  * 需求文档里常见的 URL 路由与站内链接（`/api/orders`、`/docs/spec.md`）不是私有路径；
  * 只有指向用户目录或系统目录的绝对路径才算泄露。
  */
-const SYSTEM_PATH_PATTERN =
-  /^(?:~|\/(?:Users|home|private|var|tmp|etc|opt|srv|root|mnt|Volumes|usr|Library|Applications))(?:\/|$)/u;
 
 function matchedText(
   text: string,
@@ -93,13 +98,12 @@ export function privacyBlockers(label: string, text: string): readonly string[] 
     .filter(
       (finding) =>
         finding.kind !== "unlisted-absolute-path" ||
-        SYSTEM_PATH_PATTERN.test(matchedText(text, finding)),
+        isSystemAbsolutePath(matchedText(text, finding)),
     )
     .slice(0, PRIVACY_BLOCKER_MAXIMUM)
     .map((finding) => `privacy-violation:${label}:${finding.line}:${finding.kind}`);
 }
 
-export const PRIVACY_BLOCKER_PREFIX = "privacy-violation:";
 const BLOCKERS_MAXIMUM = 64;
 
 interface DocumentSections {
@@ -197,19 +201,31 @@ export function analyzePackageDocuments(
   const missing: MissingSection[] = [];
   const summary: SummarySection[] = [];
   const blockers: string[] = [...privacyBlockers("title", title)];
+  let privacyHit = blockers.length > 0;
   let confirmationSectionDigest: Sha256Digest | null = null;
   for (const document of documents) {
     const parsed = sectionsOf(document);
     sections.push(...parsed.recorded);
-    blockers.push(...parsed.duplicates, ...privacyBlockers(document.path, document.text));
+    const documentPrivacy = privacyBlockers(document.path, document.text);
+    privacyHit ||= documentPrivacy.length > 0;
+    blockers.push(...parsed.duplicates, ...documentPrivacy);
     missing.push(...missingSectionsOf(demandType, document, parsed));
     summary.push(...summaryOf(document, parsed));
     confirmationSectionDigest ??= confirmationDigestOf(document, parsed);
+    // 只收紧新发布准入，不修改 v1 ledger 的历史章节读取合同。
+    if (
+      document.role === "requirement" &&
+      demandType !== "research" &&
+      parseAcceptanceCriteria(document.text).length === 0
+    ) {
+      blockers.push(`acceptance-criteria-empty:${document.path}`);
+    }
   }
   return Object.freeze({
     sections: Object.freeze(sections),
     missing: Object.freeze(missing),
     summary: Object.freeze(summary),
+    privacyHit,
     confirmationSectionDigest,
     blockers: Object.freeze(blockers),
   });
@@ -236,11 +252,17 @@ function boundedBlocker(blocker: string): string {
     : blocker;
 }
 
-/** 发布计划的阻塞项；空即 ready。总数有界，超出的只剩前 64 项。 */
-export function derivePublishBlockers(input: Readonly<PublishBlockerInput>): readonly string[] {
+/** 披露判定独立于诊断展示；只有后者受 64 项上限约束。 */
+export function derivePublishAssessment(input: Readonly<PublishBlockerInput>): Readonly<{
+  readonly privacyHit: boolean;
+  readonly blockers: readonly string[];
+}> {
+  const headerPrivacy = input.headerTexts.flatMap((entry) =>
+    privacyBlockers(entry.label, entry.text),
+  );
   const blockers = [
     ...input.analysis.blockers,
-    ...input.headerTexts.flatMap((entry) => privacyBlockers(entry.label, entry.text)),
+    ...headerPrivacy,
     ...input.analysis.missing.map((entry) => `missing-section:${entry.path}#${entry.anchor}`),
   ];
   if (input.confirmedAt === null || input.analysis.confirmationSectionDigest === null) {
@@ -250,7 +272,10 @@ export function derivePublishBlockers(input: Readonly<PublishBlockerInput>): rea
     blockers.push("testing-decision-mode");
   }
   if (input.supersedes === "unknown") blockers.push("supersedes-unknown");
-  return Object.freeze([...new Set(blockers.map(boundedBlocker))].slice(0, BLOCKERS_MAXIMUM));
+  return Object.freeze({
+    privacyHit: input.analysis.privacyHit || headerPrivacy.length > 0,
+    blockers: Object.freeze([...new Set(blockers.map(boundedBlocker))].slice(0, BLOCKERS_MAXIMUM)),
+  });
 }
 
 export interface RequirementIdentityInput {

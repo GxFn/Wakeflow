@@ -58,7 +58,7 @@ export interface HookLandingRecord {
 export interface DispositionInput {
   /**
    * 宿主发送调用的返回摘要能否当作落地证据：由宿主资源 Profile 给出
-   * （`sendReturnProvesLanding(profile)`，即 `launch.kind === "host-thread"`），共享代码不按 hostId 推断。
+   * （`sendReturnProvesLanding(profile)`，即 `launch.kind === "project-thread"`），共享代码不按 hostId 推断。
    */
   readonly sendReturnProvesLanding: boolean;
   readonly attempt: Readonly<{
@@ -165,7 +165,7 @@ export function deriveDeliveryDisposition(input: Readonly<DispositionInput>): Di
 export function sendReturnProvesLanding(
   profile: Readonly<Pick<WakeflowWorkspaceHostResourceProfile, "launch">>,
 ): boolean {
-  return profile.launch.kind === "host-thread";
+  return profile.launch.kind === "project-thread";
 }
 
 /** 静默是否超过阈值：以当前代际第一次 indeterminate 结局的记录时刻为起点。 */

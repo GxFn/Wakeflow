@@ -31,6 +31,7 @@ interface Context {
 
 function spec(trace: string[]) {
   return {
+    scope: () => "read" as const,
     tool: "wakeflow_shell_test",
     parseRequest: (value: unknown) => {
       const record = value as { root: string; note: string };

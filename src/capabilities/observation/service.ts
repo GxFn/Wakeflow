@@ -411,30 +411,11 @@ function windowBindingOf(
   return null;
 }
 
-/**
- * 窗口的制品状态（§13.127）：绑定会话最近一次 session-start 记录里的 manifest 摘要等于本进程的
- * 即 current，不等即 stale；任一边不知道（没有记录、记录早于该字段、本进程没有 manifest）即 unknown。
- */
-function artifactStateOf(
-  context: SliceContext,
-  binding: WindowBindingView | null,
-): "current" | "stale" | "unknown" {
-  const own = context.facade.artifact?.manifestDigest ?? null;
-  if (binding === null || own === null) return "unknown";
-  const started = context.observation.hooks
-    .find((entry) => entry.hostId === binding.hostId)
-    ?.artifactBySession.get(binding.handleValue);
-  if (started === undefined || started === null) return "unknown";
-  return started === own ? "current" : "stale";
-}
-
-function staleArtifactWindowIds(context: SliceContext): readonly string[] {
+/** A host hook identifies its producer, not the bound MCP process or instruction context. */
+function unverifiedRuntimeWindowIds(context: SliceContext): readonly string[] {
   return context.snapshot.model.topology.windows
-    .map((window) => window.windowId)
-    .filter(
-      (windowId) =>
-        artifactStateOf(context, windowBindingOf(context.observation, windowId)) === "stale",
-    );
+    .filter((window) => windowBindingOf(context.observation, window.windowId) !== null)
+    .map((window) => window.windowId);
 }
 
 /**
@@ -470,7 +451,7 @@ function lastObservationOf(
   const latest = observation.hooks
     .find((entry) => entry.hostId === binding.hostId)
     ?.latestBySession.get(binding.handleValue);
-  return latest === undefined ? null : { event: latest.event, recordedAt: latest.recordedAt };
+  return latest === undefined ? null : { ...latest };
 }
 
 function claimViewOf(observation: Readonly<WorkspaceObservation>, windowId: string) {
@@ -534,7 +515,12 @@ function windowViews(context: SliceContext) {
       claim: claimViewOf(observation, window.windowId),
       lastObservation: lastObservationOf(observation, binding),
       projection: windowProjectionOf(observation, window.windowId),
-      artifact: artifactStateOf(context, binding),
+      runtime:
+        binding !== null
+          ? { status: "unverified", reason: "host-runtime-association-unavailable" }
+          : bindingsObserved
+            ? { status: "unregistered", reason: null }
+            : { status: "unverified", reason: "binding-unavailable" },
     };
   });
 }
@@ -697,8 +683,10 @@ function nextActionInput(
   // pod 域读不出时 pods 是空列表，不是"没有 pod"：登记动作只在真的观察到 pod 时才排得出来。
   const podsObserved = observation.pods.status === "observed";
   return Object.freeze({
-    staleArtifactWindows: staleArtifactWindowIds(context),
     artifactServerOutdated: runtime.artifactOnDisk === "changed",
+    artifactServerUnavailable:
+      context.facade.artifact !== undefined &&
+      (runtime.artifactManifestDigest === null || runtime.artifactOnDisk === "unknown"),
     // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
     maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
     unregisteredWindows:
@@ -831,6 +819,7 @@ async function assembleStatus(
     observedAt: observation.observedAt,
     overall: overallOf(context),
     config: {
+      schemaVersion: snapshot.model.schemaVersion,
       programId: snapshot.model.program.programId,
       displayName: snapshot.model.program.displayName,
       language: snapshot.model.presentation.language,
@@ -877,6 +866,7 @@ export async function executeStatusRequest(
 ): Promise<StatusResult> {
   return runCommandShell<Envelope, StatusRequest, SliceContext, StatusResult>(
     {
+      scope: () => "read",
       tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseStatusRequest(raw);
@@ -889,7 +879,7 @@ export async function executeStatusRequest(
     value,
     () => undefined,
     (context, binding) => assembleStatus(context, binding.input),
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }
 
@@ -1095,9 +1085,14 @@ async function gateFacts(
   const runtime = readRuntime(context);
   return Object.freeze({
     runtime: {
-      manifestDigest: runtime.view.artifactManifestDigest,
-      onDiskDigest: runtime.onDiskDigest,
-      staleWindows: staleArtifactWindowIds(context),
+      server:
+        context.facade.artifact === undefined
+          ? null
+          : {
+              manifestDigest: runtime.view.artifactManifestDigest,
+              onDiskDigest: runtime.onDiskDigest,
+            },
+      unverifiedWindows: unverifiedRuntimeWindowIds(context),
     },
     domains: {
       demands: { status: observation.demands.status, issue: observation.demands.issue },
@@ -1282,6 +1277,7 @@ export async function executeVerifyRequest(
 ): Promise<VerifyResult> {
   return runCommandShell<Envelope, VerifyRequest, SliceContext, VerifyResult>(
     {
+      scope: () => "read",
       tool: WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseVerifyRequest(raw);
@@ -1294,6 +1290,6 @@ export async function executeVerifyRequest(
     value,
     () => undefined,
     (context, binding) => assembleVerify(context, binding.input),
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

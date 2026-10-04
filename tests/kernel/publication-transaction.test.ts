@@ -1,5 +1,5 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -15,6 +15,14 @@ import {
 
 function fixture(t: TestContext): string {
   const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-effect-")));
+  mkdirSync(path.join(root, ".wakeflow-local/runtime/operation-admission"), {
+    recursive: true,
+    mode: 0o700,
+  });
+  writeFileSync(
+    path.join(root, "wakeflow.config.json"),
+    '{\n  "kind": "WakeflowConfig",\n  "schemaVersion": 2\n}\n',
+  );
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -30,6 +38,7 @@ type Outcome = { readonly status: string; readonly operationId: string | null };
 
 function spec(trace: string[], planStatus: "ready" | "blocked" = "ready") {
   return {
+    mutationScope: "shared" as const,
     tool: "wakeflow_effect_test",
     parseRequest: (value: unknown) => {
       const record = value as {
@@ -96,7 +105,11 @@ test("publication transaction：preview 零写出摘要，apply 重算比对，r
     next: { frontier: null, owner: "none", suggestedTool: null, blockers: [] },
   });
   deepEqual(trace, ["plan", "close"]);
-  deepEqual(readdirSync(root), [], "preview 不在根下留下任何文件");
+  deepEqual(
+    readdirSync(root).sort(),
+    [".wakeflow-local", "wakeflow.config.json"],
+    "preview 不添加文件",
+  );
 
   const applied = await runPublicationTransaction(spec(trace), {
     root,

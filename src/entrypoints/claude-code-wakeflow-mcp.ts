@@ -1,3 +1,4 @@
+import { renderClaudeCodeWindowLaunchInstructions } from "../hosts/claude-code/claude-code-window-launch-instructions.js";
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 
@@ -52,6 +53,7 @@ const CLAUDE_CODE_HOST_FACADE = Object.freeze({
   hostId: "claude-code" as const,
   resourceProfile: claudeCodeWorkspaceHostResourceProfile,
   identityProfile: claudeCodeWindowHostIdentityProfile,
+  renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 });
 
 /** 观察读两个宿主的绑定、hook 通道与资产：制品固定携带两份 profile（§13.94 D1）。 */
@@ -95,27 +97,30 @@ export function createClaudeCodeWakeflowMcpServer(serverVersion: string): McpSer
   return createWakeflowPublicMcpServer({
     serverName: CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME,
     serverVersion,
+    beforeMutation: CLAUDE_CODE_OBSERVATION_FACADE.artifact.assertUnchanged,
     ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,
     executeMaintenance: executeClaudeCodeWakeflowMaintenance,
-    registerWindowHostBinding: (value: unknown) =>
-      executeWindowBindingRequest(CLAUDE_CODE_HOST_FACADE, value),
-    managePod: (value: unknown) => executePodRequest(CLAUDE_CODE_HOST_FACADE, value),
-    inspectStatus: (value: unknown) => executeStatusRequest(CLAUDE_CODE_OBSERVATION_FACADE, value),
-    verifyWorkspace: (value: unknown) =>
-      executeVerifyRequest(CLAUDE_CODE_OBSERVATION_FACADE, value),
-    prepareDelivery: (value: unknown) =>
-      executePrepareDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
-    recordDeliveryOutcome: (value: unknown) =>
-      executeRecordDeliveryOutcomeRequest(CLAUDE_CODE_HOST_FACADE, value),
-    rearmDelivery: (value: unknown) => executeRearmDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
-    importTargetResult: (value: unknown) =>
-      executeTargetResultImportRequest(CLAUDE_CODE_HOST_FACADE, value),
-    inspectTargetResultReview: (value: unknown) =>
-      executeTargetResultReviewInspectionRequest(CLAUDE_CODE_HOST_FACADE, value),
-    recordImplementationReviewDecision: (value: unknown) =>
-      executeImplementationReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value),
-    recordTestReviewDecision: (value: unknown) =>
-      executeTestReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value),
+    registerWindowHostBinding: (value, options) =>
+      executeWindowBindingRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+    managePod: (value, options) => executePodRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+    inspectStatus: (value, options) =>
+      executeStatusRequest(CLAUDE_CODE_OBSERVATION_FACADE, value, options),
+    verifyWorkspace: (value, options) =>
+      executeVerifyRequest(CLAUDE_CODE_OBSERVATION_FACADE, value, options),
+    prepareDelivery: (value, options) =>
+      executePrepareDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+    recordDeliveryOutcome: (value, options) =>
+      executeRecordDeliveryOutcomeRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+    rearmDelivery: (value, options) =>
+      executeRearmDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+    importTargetResult: (value, options) =>
+      executeTargetResultImportRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+    inspectTargetResultReview: (value, options) =>
+      executeTargetResultReviewInspectionRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+    recordImplementationReviewDecision: (value, options) =>
+      executeImplementationReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+    recordTestReviewDecision: (value, options) =>
+      executeTestReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value, options),
   });
 }
 

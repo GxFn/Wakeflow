@@ -45,5 +45,6 @@ export interface WakeflowMaintenancePublicHostFacade {
   readonly recover: (
     root: RootedDirectory,
     operationId: WakeflowMaintenanceOperationId,
+    options?: Readonly<{ readonly signal?: AbortSignal }>,
   ) => Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>>;
 }

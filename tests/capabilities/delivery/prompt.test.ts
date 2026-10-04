@@ -65,6 +65,7 @@ function readingOrder(
   overrides: Partial<DeliveryPromptReadingOrder> = {},
 ): DeliveryPromptReadingOrder {
   return {
+    executionRootFromWorkspace: "Product",
     workspaceRootFromWindow: "..",
     attachedWorktrees: [],
     taskPackageRef: parsePortableResourcePath(
@@ -81,6 +82,19 @@ function readingOrder(
     ...overrides,
   };
 }
+
+test("交付路径以明确的执行目录为基准，不依赖项目聊天的初始 cwd", () => {
+  const prompt = render(readingOrder({ executionRootFromWorkspace: "Product" }));
+  ok(prompt.includes("Execution root (relative to workspace): Product"));
+  ok(prompt.includes("use explicit command workdir"));
+  ok(prompt.includes("The chat's initial cwd may differ"));
+  const worktree = render(
+    readingOrder({ executionRootFromWorkspace: "worktrees/feature/Product" }),
+    "zh-Hans",
+  );
+  ok(worktree.includes("执行目录（相对工作区根）: worktrees/feature/Product"));
+  ok(worktree.includes("以下路径均从此执行目录解析"));
+});
 
 function render(
   order: DeliveryPromptReadingOrder,
@@ -162,6 +176,7 @@ test("阅读顺序按文档列出完整 ledger 路径，章节列在所在文档
 test("程序根窗口、没有章节的任务与中文 prompt：路径规整，没有章节行，章节标签随语言", () => {
   const programRoot = render(
     readingOrder({
+      executionRootFromWorkspace: ".",
       workspaceRootFromWindow: ".",
       requirementSections: [],
       repositoryInstructionFile: null,

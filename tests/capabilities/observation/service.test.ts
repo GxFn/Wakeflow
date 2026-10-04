@@ -1,3 +1,4 @@
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -149,6 +150,7 @@ const CODEX_ENDPOINT_FACADE = Object.freeze({
   hostId: "codex" as const,
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
+  renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 });
 const CLOCK = { clock: () => parseUtcInstant("2026-09-18T09:00:00.000Z") };
 
@@ -408,6 +410,7 @@ test("status 不带 demandId：overall、看板计数、Demand、窗口身份、
   deepEqual(plain(controller.lastObservation), {
     event: "session-start",
     recordedAt: "2026-09-18T08:59:00.000Z",
+    observerManifestDigest: null,
   });
   const unregistered = status.windows.filter(
     (window) => window.windowId !== healthy.controllerWindowId,
@@ -555,7 +558,7 @@ test("status 带 demandId：附当前 Route，next 来自 Route 且与 nextActio
   );
 });
 
-test("verify：健康工作区十五门全 pass；hook 观察目录出现非法文件名即 host-hook-channel fail、ok false；删除后恢复；带 demandId 给出 Demand 门", {
+test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出现非法文件名即 host-hook-channel fail、ok false；删除后恢复；带 demandId 给出 Demand 门", {
   timeout: 120_000,
 }, async () => {
   const verified = await executeVerifyRequest(
@@ -570,18 +573,18 @@ test("verify：健康工作区十五门全 pass；hook 观察目录出现非法�
   );
   deepEqual(
     verified.gates.map((gate) => gate.status),
-    GATE_NAMES.map(() => "pass"),
+    GATE_NAMES.map((name) => (name === "runtime-artifact" ? "unavailable" : "pass")),
   );
-  equal(verified.ok, true);
-  deepEqual(plain(verified.summary), { pass: 15, fail: 0, unavailable: 0 });
+  equal(verified.ok, false);
+  deepEqual(plain(verified.summary), { pass: 14, fail: 0, unavailable: 1 });
   equal(verified.repairsApplied, false);
   equal(verified.demand, null);
   equal(/^sha256:[0-9a-f]{64}$/u.test(verified.observationDigest), true);
   deepEqual(plain(verified.next), {
-    frontier: null,
-    owner: "none",
+    frontier: "window-runtime-unverified",
+    owner: "controller",
     suggestedTool: null,
-    blockers: [],
+    blockers: ["runtime-artifact:unavailable"],
   });
   equal(verified.gates.find((gate) => gate.name === "local-layout")?.code, null);
   equal(verified.gates.find((gate) => gate.name === "window-identity")?.code, "unregistered:3");
@@ -604,8 +607,8 @@ test("verify：健康工作区十五门全 pass；hook 观察目录出现非法�
     const channel = broken.gates.find((gate) => gate.name === "host-hook-channel");
     deepEqual([channel?.status, channel?.code], ["fail", "codex:skipped-1"]);
     equal(broken.ok, false);
-    deepEqual(plain(broken.summary), { pass: 14, fail: 1, unavailable: 0 });
-    deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
+    deepEqual(plain(broken.summary), { pass: 13, fail: 1, unavailable: 1 });
+    deepEqual(broken.next.blockers, ["host-hook-channel:fail", "runtime-artifact:unavailable"]);
     equal(broken.next.suggestedTool, "wakeflow_maintain_workspace");
     notEqual(broken.observationDigest, verified.observationDigest);
   } finally {
@@ -616,7 +619,7 @@ test("verify：健康工作区十五门全 pass；hook 观察目录出现非法�
     { root: healthy.root },
     CLOCK,
   );
-  equal(restored.ok, true);
+  equal(restored.ok, false);
   equal(restored.observationDigest, verified.observationDigest);
 
   // §13.134 B12：kill-window 在原子创建中途杀掉 hook，留下写入器自己那种暂存文件（create、0600，
@@ -634,7 +637,7 @@ test("verify：健康工作区十五门全 pass；hook 观察目录出现非法�
     );
     const channel = withStage.gates.find((gate) => gate.name === "host-hook-channel");
     deepEqual([channel?.status, channel?.code], ["pass", null]);
-    equal(withStage.ok, true);
+    equal(withStage.ok, false);
     equal(withStage.observationDigest, verified.observationDigest);
     const status = await executeStatusRequest(
       CODEX_OBSERVATION_FACADE,
@@ -670,14 +673,21 @@ test("verify：健康工作区十五门全 pass；hook 观察目录出现非法�
       "work-claims-released",
       "append-candidates-clear",
       "evidence-integrity",
+      "requirement-coverage",
     ],
   );
   equal(
-    withDemand.demand.gates.every((gate) => gate.status === "pass"),
+    withDemand.demand.gates
+      .filter((gate) => gate.gate !== "requirement-coverage")
+      .every((gate) => gate.status === "pass"),
     true,
   );
+  equal(
+    withDemand.demand.gates.find((gate) => gate.gate === "requirement-coverage")?.status,
+    "fail",
+  );
   equal(typeof withDemand.demand.observationDigest, "string");
-  equal(withDemand.ok, true);
+  equal(withDemand.ok, false);
 });
 
 test("归档 Demand：完成即归档后带 demandId 的 status 给归档回执、route 为 null、next 指向 continue；verify 的 Demand 段为 archived", {
@@ -767,7 +777,7 @@ interface AcceptedCommittedResult {
  * leave-uncommitted，而带提交的报告要求 commit 期望：这里自行规划任务包。调用方负责清理 planning。
  */
 async function acceptCommittedResult(): Promise<AcceptedCommittedResult> {
-  const planning = await createTargetTaskPlanningWorkspaceFixture();
+  const planning = await createTargetTaskPlanningWorkspaceFixture({ coverAllCriteria: true });
   try {
     const draft = planning.request.taskPackage;
     if (draft.workType !== "implementation") throw new Error("Expected an implementation draft.");
@@ -776,7 +786,10 @@ async function acceptCommittedResult(): Promise<AcceptedCommittedResult> {
     });
     if (planned.targetTask.workType !== "implementation")
       throw new Error("Expected implementation.");
-    mkdirSync(path.join(planning.workspacePath, ".wakeflow-local", "runtime"), { mode: 0o700 });
+    mkdirSync(path.join(planning.workspacePath, ".wakeflow-local", "runtime"), {
+      recursive: true,
+      mode: 0o700,
+    });
     await publishFreshWakeflowWindowRuntime(
       planning.workspaceRoot,
       parseWakeflowConfig(createMinimalWakeflowConfig()),
@@ -1247,7 +1260,7 @@ test("verify 的加读阶段被中止：错误收敛为 io-failure/aborted，而
   equal(reads > 1, true, "the verify reads never reached the facade");
 });
 
-test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；带门面时窗口按 session-start 记录里的摘要判 current / stale，磁盘上的 manifest 变了报 changed，verify 与 nextActions 都能看到", {
+test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；hook 只能标识观察器，窗口运行始终未验证，磁盘上的 manifest 变了报 changed，verify 与 nextActions 都能看到", {
   timeout: 120_000,
 }, async () => {
   const plainStatus = await executeStatusRequest(
@@ -1260,12 +1273,15 @@ test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；带
     artifactOnDisk: "unknown",
   });
   equal(
-    plainStatus.windows.every((window) => window.artifact === "unknown"),
+    plainStatus.windows.every(
+      (window) =>
+        window.runtime.status === "unverified" || window.runtime.status === "unregistered",
+    ),
     true,
   );
   const current = `sha256:${"d".repeat(64)}`;
   const other = `sha256:${"e".repeat(64)}`;
-  const facadeWith = (onDisk: string) =>
+  const facadeWith = (onDisk: string | null) =>
     Object.freeze({
       ...CODEX_OBSERVATION_FACADE,
       artifact: Object.freeze({ manifestDigest: current, readCurrentManifestDigest: () => onDisk }),
@@ -1275,22 +1291,23 @@ test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；带
     healthy.root,
     ...hostHookObservationsRootRef("codex").split("/"),
   );
-  const hookFilesBefore = new Set(readdirSync(hooksDirectory));
+  const hookFilesBefore = new Set(readdirSync(hooksDirectory, { recursive: true }) as string[]);
   try {
     await assertArtifactIdentity(facadeWith, current, other);
   } finally {
-    for (const name of readdirSync(hooksDirectory)) {
-      if (!hookFilesBefore.has(name)) unlinkSync(path.join(hooksDirectory, name));
+    for (const name of readdirSync(hooksDirectory, { recursive: true }) as string[]) {
+      if (!hookFilesBefore.has(name) && lstatSync(path.join(hooksDirectory, name)).isFile())
+        unlinkSync(path.join(hooksDirectory, name));
     }
   }
 });
 
 async function assertArtifactIdentity(
-  facadeWith: (onDisk: string) => typeof CODEX_OBSERVATION_FACADE,
+  facadeWith: (onDisk: string | null) => typeof CODEX_OBSERVATION_FACADE,
   current: string,
   other: string,
 ): Promise<void> {
-  // 绑定会话在同一份制品下启动：current。
+  // 即使 SessionStart 观察器匹配，也没有目标 MCP 实例证明。
   const rooted = await RootedDirectory.open(healthy.root);
   try {
     await writeHostHookObservation(rooted, {
@@ -1307,12 +1324,16 @@ async function assertArtifactIdentity(
   const same = await executeStatusRequest(facadeWith(current), { root: healthy.root }, CLOCK);
   deepEqual(plain(same.runtime), { artifactManifestDigest: current, artifactOnDisk: "same" });
   const controller = same.windows.find((window) => window.role === "controller");
-  equal(controller?.artifact, "current");
+  equal(controller?.runtime.status, "unverified");
+  equal(controller?.runtime.reason, "host-runtime-association-unavailable");
+  equal(controller?.lastObservation?.observerManifestDigest, current);
+  const peerVerify = await executeVerifyRequest(facadeWith(current), { root: healthy.root }, CLOCK);
+  equal(peerVerify.gates.find((entry) => entry.name === "runtime-artifact")?.status, "unavailable");
   equal(
     same.nextActions.some((action) => action.reason === "window-artifact-stale"),
     false,
   );
-  // 更晚的 session-start 在另一份制品下：stale；磁盘上的 manifest 也换了：changed。
+  // 后续 SessionStart 更换观察器构建，不改变目标 runtime 未验证；服务自身磁盘变化仍可诊断。
   const rootedAgain = await RootedDirectory.open(healthy.root);
   try {
     await writeHostHookObservation(rootedAgain, {
@@ -1328,7 +1349,12 @@ async function assertArtifactIdentity(
   }
   const stale = await executeStatusRequest(facadeWith(other), { root: healthy.root }, CLOCK);
   deepEqual(plain(stale.runtime), { artifactManifestDigest: current, artifactOnDisk: "changed" });
-  equal(stale.windows.find((window) => window.role === "controller")?.artifact, "stale");
+  equal(stale.windows.find((window) => window.role === "controller")?.runtime.status, "unverified");
+  equal(
+    stale.windows.find((window) => window.role === "controller")?.lastObservation
+      ?.observerManifestDigest,
+    other,
+  );
   deepEqual(
     stale.nextActions
       .filter(
@@ -1337,14 +1363,26 @@ async function assertArtifactIdentity(
           action.reason === "runtime-artifact-outdated",
       )
       .map((action) => [action.owner, action.reason, action.subject]),
-    [
-      ["user", "runtime-artifact-outdated", null],
-      ["controller", "window-artifact-stale", controller?.windowId ?? null],
-    ],
+    [["user", "runtime-artifact-outdated", null]],
   );
   const verified = await executeVerifyRequest(facadeWith(other), { root: healthy.root }, CLOCK);
   const gate = verified.gates.find((entry) => entry.name === "runtime-artifact");
-  deepEqual([gate?.status, gate?.code], ["fail", "server-outdated,windows-stale:1"]);
+  deepEqual(
+    [gate?.status, gate?.code],
+    [
+      "fail",
+      `server-outdated,window-runtime-unverified:${same.windows.filter((window) => window.identity === "registered").length}`,
+    ],
+  );
+  const missing = await executeStatusRequest(facadeWith(null), { root: healthy.root }, CLOCK);
+  equal(missing.runtime.artifactOnDisk, "unknown");
+  equal(missing.nextActions[0]?.reason, "runtime-artifact-unavailable");
+  const missingVerify = await executeVerifyRequest(facadeWith(null), { root: healthy.root }, CLOCK);
+  equal(missingVerify.next.frontier, "runtime-artifact-unavailable");
+  equal(
+    missingVerify.gates.find((entry) => entry.name === "runtime-artifact")?.code,
+    `manifest-unavailable,window-runtime-unverified:${same.windows.filter((window) => window.identity === "registered").length}`,
+  );
 }
 
 /** 旧实现 T08 的零写断言：逐节点的类型、模式、大小与 mtime/ctime（不含 atime：只读也会更新它）。 */

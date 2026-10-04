@@ -51,6 +51,8 @@ export interface DeliveryPromptRequirementPackage {
 }
 
 export interface DeliveryPromptReadingOrder {
+  /** Assigned execution directory relative to the known workspace, independent of the chat cwd. */
+  readonly executionRootFromWorkspace: string;
   /** 从窗口根到工作区根的相对路径，例如 `..` 或兄弟目录窗口的 `../Workspace`；程序根窗口为 `.`；worktree 检出按回执路径计算。 */
   readonly workspaceRootFromWindow: string;
   /** worktree pod 的测试任务：每仓库一条从本窗口根到 worktree 检出的相对路径（ADR-0010 D4）。 */
@@ -173,6 +175,8 @@ type Labels = Readonly<
     | "binding"
     | "demand"
     | "workspaceRoot"
+    | "executionRoot"
+    | "executionPaths"
     | "worktrees"
     | "sections"
     | "moreAnchors"
@@ -204,6 +208,9 @@ const LABELS: Readonly<Record<WakeflowPresentationLanguage, Labels>> = Object.fr
     binding: "binding",
     demand: "demand",
     workspaceRoot: "workspace root (relative to this window's root)",
+    executionRoot: "Execution root (relative to workspace)",
+    executionPaths:
+      "Resolve the paths below from this execution root; read its instructions and use explicit command workdir. The chat's initial cwd may differ.",
     worktrees: "pod worktrees to read (relative to this window's root)",
     sections: "sections",
     moreAnchors: "more acceptance anchors are in the task package",
@@ -232,6 +239,9 @@ const LABELS: Readonly<Record<WakeflowPresentationLanguage, Labels>> = Object.fr
     binding: "绑定",
     demand: "demand",
     workspaceRoot: "工作区根（相对本窗口根）",
+    executionRoot: "执行目录（相对工作区根）",
+    executionPaths:
+      "以下路径均从此执行目录解析；读取当地指令并显式设置命令工作目录。聊天的初始 cwd 可能不同。",
     worktrees: "要读取的 pod worktree（相对本窗口根）",
     sections: "章节",
     moreAnchors: "条验收锚点在任务包里",
@@ -423,6 +433,9 @@ export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromp
     ...testLines(input, labels),
     ...reworkLines(input, labels),
     ...remediationLines(input, labels),
+    "",
+    `${labels.executionRoot}: ${input.readingOrder.executionRootFromWorkspace}`,
+    labels.executionPaths,
     ...section(labels.reading, readingLines(input, labels)),
     ...worktreeLines(input, labels),
     ...section(

@@ -389,8 +389,16 @@ async function inspectLocal(
     });
   }
   const runtime = await readDirectory(root, WAKEFLOW_RUNTIME_ROOT_REF, signal);
-  if (runtime.entries.some((entry) => entry.name !== "maintenance")) {
+  if (runtime.entries.some((entry) => entry.name !== "maintenance" && entry.name !== "operation-admission")) {
     freshCompatible = false;
+  }
+  const admission = entryNamed(runtime, "operation-admission");
+  if (admission !== null) {
+    if (!validPrivateDirectory(admission.node)) freshCompatible = false;
+    else {
+      const contents = await readDirectory(root, admission.resourcePath, signal);
+      if (contents.entries.length !== 0) freshCompatible = false;
+    }
   }
   const stagePresent = runtime.entries.some((entry) => (
     hasDurableAtomicFileStagePrefix(entry.name)

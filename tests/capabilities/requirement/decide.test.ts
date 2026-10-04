@@ -4,10 +4,31 @@ import { test } from "node:test";
 import {
   analyzePackageDocuments,
   deriveClaimTransitionBlockers,
-  derivePublishBlockers,
+  derivePublishAssessment,
   deriveRequirementId,
   type PackageDocumentText,
+  privacyBlockers,
 } from "../../../src/capabilities/requirement/decide.js";
+
+test("requirement route prose stays allowed while filesystem locators use normalized classification", () => {
+  deepEqual(
+    privacyBlockers("requirement", "/api/orders and /docs/spec.md; BigInt/Symbol/函数/数组/Number"),
+    [],
+  );
+  for (const text of [
+    "file:///Users/example/private/report.txt",
+    String.raw`C:\Users\Example\report.txt`,
+    String.raw`\\server\share\report.txt`,
+    "$HOME/.ssh/id",
+    "/api/../../Users/example/private.txt",
+    "/Us\u001b[31mers/example/private.txt\u001b[0m",
+  ])
+    equal(
+      privacyBlockers("requirement", text).some((b) => b.endsWith("unlisted-absolute-path")),
+      true,
+      text,
+    );
+});
 import {
   boardCounts,
   deriveRequirementNext,
@@ -60,7 +81,7 @@ test("章节切分：识别中英文标题、报缺章、抽摘要与用户确�
   deepEqual(analysis.missing, []);
   deepEqual(
     analysis.summary.map((section) => section.anchor),
-    ["goal", "completion-definition", "non-goals", "testing-decision"],
+    ["goal", "completion-definition", "non-goals", "acceptance-criteria", "testing-decision"],
   );
   equal(analysis.confirmationSectionDigest?.startsWith("sha256:"), true);
   deepEqual(analysis.blockers, []);
@@ -80,7 +101,7 @@ test("章节切分：识别中英文标题、报缺章、抽摘要与用户确�
 test("发布阻塞：缺确认、测试决策与类型不符、supersedes 未知、隐私命中", () => {
   const analysis = analyzePackageDocuments("requirement", "示例需求", [REQUIREMENT, LANDING]);
   deepEqual(
-    derivePublishBlockers({
+    derivePublishAssessment({
       analysis,
       demandType: "requirement",
       testingDecisionMode: "controller-only",
@@ -88,10 +109,10 @@ test("发布阻塞：缺确认、测试决策与类型不符、supersedes 未知
       supersedes: null,
       headerTexts: [],
     }),
-    [],
+    { privacyHit: false, blockers: [] },
   );
   deepEqual(
-    derivePublishBlockers({
+    derivePublishAssessment({
       analysis,
       demandType: "requirement",
       testingDecisionMode: "not-applicable",
@@ -104,13 +125,16 @@ test("发布阻塞：缺确认、测试决策与类型不符、supersedes 未知
         },
       ],
     }),
-    [
-      "privacy-violation:testingDecision.summary:1:credential-assignment",
-      "privacy-violation:testingDecision.summary:1:provider-credential",
-      "user-confirmation-missing",
-      "testing-decision-mode",
-      "supersedes-unknown",
-    ],
+    {
+      privacyHit: true,
+      blockers: [
+        "privacy-violation:testingDecision.summary:1:credential-assignment",
+        "privacy-violation:testingDecision.summary:1:provider-credential",
+        "user-confirmation-missing",
+        "testing-decision-mode",
+        "supersedes-unknown",
+      ],
+    },
   );
   const leaking = analyzePackageDocuments("requirement", "示例需求", [
     document(

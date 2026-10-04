@@ -73,11 +73,11 @@ test("snapshot binds the current source/config digests to one stable workspace r
     equal(snapshot.source.byteCount, 2590);
     equal(
       snapshot.source.digest,
-      "sha256:7326c4cccdc5ad5bdd5e76007ca8db5c93ef6333616da5540f4c67c27052ab55",
+      "sha256:a3ae4fe74b7742b4178bf9f8bbc9f941bb3f8546a174e1a6d1bc16e037bc6cfb",
     );
     equal(
       snapshot.configDigest,
-      "sha256:7509f2f4551d162aa9ecdbc55553895bdc5d91d49f2d8177c3acfdf59a59c15e",
+      "sha256:115f2fce6f298833110938bb63278a1425ede2f57534ec57fcb0e9d6e5b1f9c9",
     );
     equal(snapshot.indexes.controllerWindow.role, "controller");
     equal(snapshot.ledgerRoot, path.join(fixture.temporaryRoot, "wakeflow-ledger"));

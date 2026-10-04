@@ -557,7 +557,7 @@ test("退休证据：没看全活动 Demand 的一轮一个页面目录都不删
   equal(existsSync(directory), false);
 });
 
-test("投影锁：活动持有者让发布以 projection-contended 失败（可重试）；recovering 退休失活的锁", async (t) => {
+test("投影锁：活动持有者仍受保护；正常发布也退休失活锁", async (t) => {
   const root = await fixture(t);
   await materializeActiveLayout(root, { recovering: false });
   const files = renderActiveProjectionFiles(facts());
@@ -588,7 +588,7 @@ test("投影锁：活动持有者让发布以 projection-contended 失败（可�
     rootedExclusiveFileLockRecordTextForTest({ pid: 2_147_483_647, tokenUuid: LOCK_TOKEN_UUID }),
     { mode: 0o600 },
   );
-  const receipt = await publishActiveProjection(root, files, { recovering: true });
+  const receipt = await publishActiveProjection(root, files);
   equal(receipt.disposition, "created");
   equal(existsSync(lockPath), false, "the lock is released after the round");
   equal(existsSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF)), true);

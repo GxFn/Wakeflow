@@ -75,7 +75,7 @@ export async function runAppendCommand<Input, Context, Outcome, Result>(
   options: Readonly<CommandShellExecutionOptions> = {},
 ): Promise<Result> {
   return runCommandShell<AppendCommandEnvelope, Input, Context, Result>(
-    spec,
+    { ...spec, scope: () => "shared" },
     value,
     (binding) => {
       parseIdempotencyKey(binding.envelope.idempotencyKey, "$request.idempotencyKey");

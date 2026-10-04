@@ -116,7 +116,7 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       activityMonitor: false,
       temporaryPrompts: false,
     },
-    launch: { kind: "host-thread" },
+    launch: { kind: "project-thread" },
   });
   const escaped = createWakeflowGitignoreBodyAuthority([
     syntheticClaude,
@@ -204,7 +204,7 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       activityMonitor: false,
       temporaryPrompts: false,
     },
-    launch: { kind: "host-thread" },
+    launch: { kind: "project-thread" },
   });
   expectAuthorityError(
     () => createWakeflowGitignoreBodyAuthority([

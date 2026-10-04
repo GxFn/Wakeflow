@@ -155,7 +155,7 @@ test("准入：会话 cwd 等于一个非主检出且指针互相印证才通过
   const observation = { porcelain: fixture.porcelain(), commonDir: fixture.commonDir() };
   const admitted = await admitPodWorktreeObservation({
     observation,
-    sessionCwd: fixture.linked,
+    executionRoot: fixture.linked,
     repositoryRoot: fixture.main,
   });
   deepEqual(admitted, {
@@ -166,7 +166,7 @@ test("准入：会话 cwd 等于一个非主检出且指针互相印证才通过
   });
   const detached = await admitPodWorktreeObservation({
     observation,
-    sessionCwd: fixture.detached,
+    executionRoot: fixture.detached,
     repositoryRoot: fixture.main,
   });
   equal(detached.branch, null);
@@ -177,7 +177,7 @@ test("准入：会话 cwd 等于一个非主检出且指针互相印证才通过
   await rejects(
     admitPodWorktreeObservation({
       observation,
-      sessionCwd: fixture.main,
+      executionRoot: fixture.main,
       repositoryRoot: fixture.main,
     }),
     failsWith("worktree-receipt", "main-checkout"),
@@ -185,7 +185,7 @@ test("准入：会话 cwd 等于一个非主检出且指针互相印证才通过
   await rejects(
     admitPodWorktreeObservation({
       observation: { ...observation, commonDir: path.join(fixture.base, "elsewhere") },
-      sessionCwd: fixture.linked,
+      executionRoot: fixture.linked,
       repositoryRoot: fixture.main,
     }),
     failsWith("worktree-receipt", "common-dir"),
@@ -193,10 +193,10 @@ test("准入：会话 cwd 等于一个非主检出且指针互相印证才通过
   await rejects(
     admitPodWorktreeObservation({
       observation,
-      sessionCwd: fixture.base,
+      executionRoot: fixture.base,
       repositoryRoot: fixture.main,
     }),
-    failsWith("worktree-receipt", "session-worktree"),
+    failsWith("worktree-receipt", "execution-worktree"),
   );
   await rejects(
     admitPodWorktreeObservation({
@@ -207,7 +207,7 @@ test("准入：会话 cwd 等于一个非主检出且指针互相印证才通过
           "branch refs/heads/other",
         ),
       },
-      sessionCwd: fixture.linked,
+      executionRoot: fixture.linked,
       repositoryRoot: fixture.main,
     }),
     failsWith("worktree-receipt", "head-mismatch"),
@@ -216,7 +216,7 @@ test("准入：会话 cwd 等于一个非主检出且指针互相印证才通过
   await rejects(
     admitPodWorktreeObservation({
       observation,
-      sessionCwd: fixture.linked,
+      executionRoot: fixture.linked,
       repositoryRoot: fixture.main,
     }),
     failsWith("worktree-receipt", "gitdir-pointer"),

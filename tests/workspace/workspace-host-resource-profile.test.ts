@@ -46,7 +46,7 @@ function codexProfile(
       windowIdentity: true,
       podReceipts: true,
       worktree: {
-        launch: "codex-worktree-thread",
+        launch: "git-worktree",
         attachedDirectories: "prompt-path",
       },
       keepLive: true,
@@ -57,7 +57,7 @@ function codexProfile(
       activityMonitor: false,
       temporaryPrompts: false,
     },
-    launch: { kind: "host-thread" },
+    launch: { kind: "project-thread" },
     ...overrides,
   };
 }
@@ -85,7 +85,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       windowIdentity: true,
       podReceipts: true,
       worktree: {
-        launch: "codex-worktree-thread",
+        launch: "git-worktree",
         attachedDirectories: "prompt-path",
       },
       keepLive: true,
@@ -96,7 +96,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       activityMonitor: false,
       temporaryPrompts: false,
     },
-    launch: { kind: "host-thread" },
+    launch: { kind: "project-thread" },
   };
   const codex = parseWakeflowWorkspaceHostResourceProfile(codexInput);
   deepEqual(codex, codexInput);
@@ -173,7 +173,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         windowIdentity: true,
         podReceipts: true,
         worktree: {
-          launch: "codex-worktree-thread",
+          launch: "git-worktree",
           attachedDirectories: "prompt-path",
         },
         keepLive: true,
@@ -209,7 +209,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         windowIdentity: true,
         podReceipts: true,
         worktree: {
-          launch: "codex-worktree-thread",
+          launch: "git-worktree",
           attachedDirectories: "prompt-path",
         },
         keepLive: true,
@@ -223,7 +223,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         activityMonitor: false,
         temporaryPrompts: false,
       },
-      launch: { kind: "host-thread" },
+      launch: { kind: "project-thread" },
     })),
     "path",
     "$/surfaces/settingsIntegration/portablePath",
@@ -234,7 +234,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         windowIdentity: true,
         podReceipts: true,
         worktree: {
-          launch: "codex-worktree-thread",
+          launch: "git-worktree",
           attachedDirectories: "prompt-path",
         },
         keepLive: true,
@@ -249,7 +249,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         activityMonitor: false,
         temporaryPrompts: false,
       },
-      launch: { kind: "host-thread" },
+      launch: { kind: "project-thread" },
     })),
     "shape",
     "$/surfaces/settingsIntegration/realization",
@@ -260,7 +260,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         windowIdentity: true,
         podReceipts: true,
         worktree: {
-          launch: "codex-worktree-thread",
+          launch: "git-worktree",
           attachedDirectories: "prompt-path",
         },
         keepLive: true,
@@ -277,7 +277,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         activityMonitor: false,
         temporaryPrompts: false,
       },
-      launch: { kind: "host-thread" },
+      launch: { kind: "project-thread" },
     })),
     "shape",
     "$/surfaces/statuslineAsset/executable",
@@ -338,7 +338,7 @@ test("host resource profile closes relations without encoding host capability br
         activityMonitor: false,
         temporaryPrompts: false,
       },
-      launch: { kind: "host-thread" },
+      launch: { kind: "project-thread" },
     })),
     "contradiction",
     "$/surfaces/settingsIntegration/localPath",
@@ -349,7 +349,7 @@ test("host resource profile closes relations without encoding host capability br
         windowIdentity: true,
         podReceipts: true,
         worktree: {
-          launch: "codex-worktree-thread",
+          launch: "git-worktree",
           attachedDirectories: "prompt-path",
         },
         keepLive: true,
@@ -364,7 +364,7 @@ test("host resource profile closes relations without encoding host capability br
         activityMonitor: false,
         temporaryPrompts: false,
       },
-      launch: { kind: "host-thread" },
+      launch: { kind: "project-thread" },
     })),
     "contradiction",
     "$/surfaces/statuslineAsset",
@@ -376,7 +376,7 @@ test("host resource profile closes relations without encoding host capability br
         windowIdentity: false,
         podReceipts: false,
         worktree: {
-          launch: "codex-worktree-thread",
+          launch: "git-worktree",
           attachedDirectories: "prompt-path",
         },
         keepLive: false,
@@ -394,7 +394,7 @@ test("host resource profile closes relations without encoding host capability br
         activityMonitor: true,
         temporaryPrompts: true,
       },
-      launch: { kind: "host-thread" },
+      launch: { kind: "project-thread" },
     }));
   equal(capabilityIndependentCodex.hostId, "codex");
   equal(capabilityIndependentCodex.surfaces.windowIdentity, false);
@@ -427,7 +427,7 @@ test("host resource profile admits launch templates and rejects a tmux launch wi
   );
   expectHostResourceProfileError(
     () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      launch: { kind: "host-thread", sessionName: "wakeflow" },
+      launch: { kind: "project-thread", sessionName: "wakeflow" },
     })),
     "shape",
     "$/launch/sessionName",

@@ -70,7 +70,7 @@ async function taskPackageForDelivery(
 }
 
 test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controller Review与Completion且不执行宿主发送", async () => {
-  const fixture = await createDeliveryWorkspaceFixture();
+  const fixture = await createDeliveryWorkspaceFixture({ coverAllCriteria: true });
   const controllerRoute = await registerFixtureControllerWindow(fixture);
   const server = createCodexWakeflowMcpServer("1.0.0-test");
   const { client, close } = await connectWakeflowMcpServerForTest(server);

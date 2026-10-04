@@ -585,10 +585,10 @@ async function observeCodexHook(
 }
 
 /** Agent 在宿主里启动窗口后，宿主 hook 会留下 session-start 记录；这里代替宿主触发这一条。 */
-async function recordSessionStart(context: ScenarioContext, sessionId: string, placement: string) {
+async function recordSessionStart(context: ScenarioContext, sessionId: string) {
   await observeCodexHook(context, "SessionStart", {
     sessionId,
-    cwd: path.resolve(context.workspace.workspacePath, placement),
+    cwd: context.workspace.workspacePath,
   });
 }
 
@@ -622,7 +622,7 @@ async function scenarioWindowHandshake(context: ScenarioContext): Promise<string
   equal(inspection.launchIntent.execution.model, SCENARIO_CODEX_MODEL);
   equal(inspection.next.frontier, "window-registration");
   const handle = { kind: "codex-thread", value: "codex-host-owned-thread:scenario-1" };
-  await recordSessionStart(context, handle.value, inspection.launchIntent.root.configuredPlacement);
+  await recordSessionStart(context, handle.value);
   const observation = {
     handle,
     launchIntentDigest: inspection.launchIntent.intentDigest,
@@ -683,7 +683,7 @@ async function scenarioWindowReplace(context: ScenarioContext): Promise<string> 
     };
   };
   const handle = { kind: "codex-thread", value: "codex-host-owned-thread:scenario-2" };
-  await recordSessionStart(context, handle.value, inspection.launchIntent.root.configuredPlacement);
+  await recordSessionStart(context, handle.value);
   const stale = await context.connection.client.callTool({
     name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
     arguments: {
@@ -1297,7 +1297,7 @@ async function registerWindow(
     };
   };
   const handle = { kind: "codex-thread", value: handleValue };
-  await recordSessionStart(context, handle.value, inspection.launchIntent.root.configuredPlacement);
+  await recordSessionStart(context, handle.value);
   const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root,
     operation: "register",
@@ -2688,8 +2688,8 @@ async function registerPodWindow(
     readonly launchIntent: { readonly intentDigest: string; readonly podName: string };
   };
   // 与另外两个辅助函数同一条路：session-start 由观察入口按 Codex payload 落地，不绕开入口直接写内核
-  // （§13.97 D9）。worktree pod 的产品窗口在宿主自选的检出里启动，cwd 就是调用方给的检出路径。
-  await observeCodexHook(context, "SessionStart", { sessionId: handleValue, cwd });
+  // （§13.97 D9）。项目聊天在工作区根启动，产品执行检出由 worktree.executionRoot 单独登记。
+  await observeCodexHook(context, "SessionStart", { sessionId: handleValue, cwd: root });
   const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root,
     operation: "register",
@@ -2698,7 +2698,7 @@ async function registerPodWindow(
       handle: { kind: "codex-thread", value: handleValue },
       launchIntentDigest: inspection.launchIntent.intentDigest,
       observedAt: new Date().toISOString(),
-      ...(worktree === undefined ? {} : { worktree }),
+      ...(worktree === undefined ? {} : { worktree: { ...worktree, executionRoot: cwd } }),
     },
   });
   assertNoPrivatePath(context, registered);
@@ -2943,7 +2943,7 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
   const outcome = await recordOutcome(context, prepared.permit, "scenario-pod-outcome-1");
   equal(outcome.outcome.disposition, "accepted");
 
-  // worktree pod 的实现结果必须带分支（Codex 的 detached HEAD 规则）；回调落到 pod 的 Controller。
+  // worktree pod 的实现结果必须带分支（隔离交付的分支规则）；回调落到 pod 的 Controller。
   mkdirSync(path.join(checkout, "artifacts", "pod"), { recursive: true });
   writeFileSync(path.join(checkout, "artifacts", "pod", "verification.txt"), "pod checks passed\n");
   const podEvidence = await recordEvidenceSelection(context, {
@@ -3413,16 +3413,22 @@ function assertStatusWorkspace(
   equal(view.overall, "active");
   equal(view.route, null);
   equal(view.archive, null);
-  // D1 顺序：活动 pod 的未登记窗口（primary 算活动）> 活动 Demand 前沿；不带 demandId 的 next 取头项。
+  // Source composition has no artifact manifest; that limitation precedes operational suggestions.
   deepEqual(view.nextActions[0], {
+    owner: "user",
+    tool: null,
+    reason: "runtime-artifact-unavailable",
+    subject: null,
+  });
+  deepEqual(view.nextActions[1], {
     owner: "controller",
     tool: "wakeflow_register_window_binding",
     reason: "pod-window-registration",
     subject: context.designWindowId,
   });
-  equal(view.nextActions[1]?.reason, "implementation-host-effect-execution");
-  equal(view.nextActions[1]?.subject, demandId);
-  equal(view.next.frontier, "pod-window-registration");
+  equal(view.nextActions[2]?.reason, "implementation-host-effect-execution");
+  equal(view.nextActions[2]?.subject, demandId);
+  equal(view.next.frontier, "runtime-artifact-unavailable");
   equal(view.pods.length, 2);
   const primary = view.pods.find((entry) => entry.placement === "primary");
   const worktreePod = view.pods.find((entry) => entry.podId === pod.podId);
@@ -3582,7 +3588,7 @@ async function assertStatusRoutes(
   return `route=${frontier}; archive=${archived.archive?.outcome}`;
 }
 
-/** D3：15 门全 pass；hook 观察目录里的非法文件名只让 host-hook-channel fail，删除即恢复。 */
+/** Source runtime identity stays unavailable; a malformed hook adds a distinct failure. */
 async function assertVerifyGates(
   context: ScenarioContext,
   state: ObservationScenarioState,
@@ -3592,11 +3598,12 @@ async function assertVerifyGates(
     clean.gates.map((gate) => gate.name),
     WORKSPACE_GATE_NAMES,
   );
-  equal(clean.ok, true, failingGatesText(clean));
-  deepEqual(clean.summary, { pass: 15, fail: 0, unavailable: 0 });
+  equal(clean.ok, false, failingGatesText(clean));
+  deepEqual(clean.summary, { pass: 14, fail: 0, unavailable: 1 });
+  equal(gateOf(clean, "runtime-artifact").code, "manifest-unavailable,window-runtime-unverified:7");
   equal(clean.repairsApplied, false);
   equal(clean.demand, null);
-  equal(clean.next.frontier, null);
+  equal(clean.next.frontier, "runtime-artifact-unavailable");
   equal(gateOf(clean, "host-settings-assets").code, "not-applicable", "Codex has no statusline");
   equal(gateOf(clean, "window-identity").code, "unregistered:1", "unregistered is not damage");
   // 带 demandId：demand.gates 原样复用 demand 切片的门（D3，不改名）。它们是完成预检的语义，
@@ -3605,11 +3612,21 @@ async function assertVerifyGates(
   equal(withDemand.demand?.status, "current");
   const demandGates = withDemand.demand?.gates ?? [];
   deepEqual(
-    demandGates.filter((gate) => gate.status !== "pass"),
-    [{ gate: "work-claims-released", status: "fail", detail: state.pod.windowOf("product") }],
+    demandGates.filter((gate) => gate.status !== "pass").map((gate) => gate.gate),
+    ["work-claims-released", "requirement-coverage"],
     JSON.stringify(demandGates),
   );
-  equal(withDemand.ok, true, "the Demand gates do not fold into the workspace ok");
+  equal(
+    demandGates.find((gate) => gate.gate === "work-claims-released")?.detail,
+    state.pod.windowOf("product"),
+  );
+  equal(
+    demandGates
+      .find((gate) => gate.gate === "requirement-coverage")
+      ?.detail?.startsWith("uncovered:"),
+    true,
+  );
+  equal(withDemand.ok, false, "runtime identity remains unavailable independently of Demand gates");
 
   const stray = path.join(
     resourceAbsolutePath(context, hostHookObservationsRootRef("codex")),
@@ -3624,17 +3641,20 @@ async function assertVerifyGates(
   // §13.94：只有 hook 通道一门失败。投影指纹有意忽略本地运行时（D5），所以 active-projection 仍 pass。
   deepEqual(
     broken.gates.filter((gate) => gate.status !== "pass").map((gate) => [gate.name, gate.code]),
-    [["host-hook-channel", "codex:skipped-1"]],
+    [
+      ["host-hook-channel", "codex:skipped-1"],
+      ["runtime-artifact", "manifest-unavailable,window-runtime-unverified:7"],
+    ],
   );
-  deepEqual(broken.summary, { pass: 14, fail: 1, unavailable: 0 });
-  equal(broken.next.frontier, "workspace-maintenance");
-  deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
+  deepEqual(broken.summary, { pass: 13, fail: 1, unavailable: 1 });
+  equal(broken.next.frontier, "runtime-artifact-unavailable");
+  deepEqual(broken.next.blockers, ["host-hook-channel:fail", "runtime-artifact:unavailable"]);
   equal((await readStatus(context)).view.overall, "degraded", "skipped hook records degrade");
   rmSync(stray);
   const restored = await readVerify(context);
-  equal(restored.ok, true, failingGatesText(restored));
-  deepEqual(restored.summary, { pass: 15, fail: 0, unavailable: 0 });
-  return `verify=15/0/0; demand gates=work-claims-released fail only; hook-file→host-hook-channel=fail(${hookGate.code}) summary=14/1/0 overall=degraded; removed→15/0/0`;
+  equal(restored.ok, false, failingGatesText(restored));
+  deepEqual(restored.summary, { pass: 14, fail: 0, unavailable: 1 });
+  return `verify=14/0/1 (source manifest and peer runtime unverified); demand gates=work-claims-released+requirement-coverage fail; hook-file→host-hook-channel=fail(${hookGate.code}) summary=13/1/1 overall=degraded; removed→14/0/1`;
 }
 
 async function scenarioStatusAndVerify(context: ScenarioContext): Promise<string> {
@@ -3802,7 +3822,8 @@ async function scenarioActiveProjection(context: ScenarioContext): Promise<strin
   const projectionGate = gateOf(unsafeVerify, "active-projection");
   equal(projectionGate.status, "pass");
   equal(projectionGate.code, "handwritten,blocked:3");
-  equal(unsafeVerify.ok, true, failingGatesText(unsafeVerify));
+  equal(unsafeVerify.ok, false, failingGatesText(unsafeVerify));
+  deepEqual(unsafeVerify.summary, { pass: 14, fail: 0, unavailable: 1 });
 
   // 恢复标记后再变更：重建为 current，四份文件都换了字节。
   writeFileSync(progress.path, original);
@@ -3815,7 +3836,8 @@ async function scenarioActiveProjection(context: ScenarioContext): Promise<strin
   }
   const currentVerify = await readVerify(context);
   equal(gateOf(currentVerify, "active-projection").code, null);
-  equal(currentVerify.ok, true, failingGatesText(currentVerify));
+  equal(currentVerify.ok, false, failingGatesText(currentVerify));
+  deepEqual(currentVerify.summary, { pass: 14, fail: 0, unavailable: 1 });
   assertPodSection(context, state);
   return `evidence→4 files current; handwritten→zero-write, status=unsafe/handwritten, gate=pass(${projectionGate.code}); restored→current; pod section=2 pods`;
 }

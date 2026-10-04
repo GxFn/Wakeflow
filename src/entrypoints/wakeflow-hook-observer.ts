@@ -572,6 +572,7 @@ async function readWorkspaceDeclaration(root: string): Promise<WorkspaceDeclarat
   if (
     !isRecord(config) ||
     config.kind !== WAKEFLOW_CONFIG_KIND ||
+    typeof config.schemaVersion !== "number" ||
     config.schemaVersion !== WAKEFLOW_CONFIG_SCHEMA_VERSION ||
     !isRecord(config.topology)
   ) {

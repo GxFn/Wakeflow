@@ -111,7 +111,7 @@ import {
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
-import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
+import { fail, failWithBlockers as rejectWith, isWakeflowError } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
@@ -943,6 +943,12 @@ function renderPrompt(
       bindingId: route.binding.bindingId,
     },
     readingOrder: {
+      executionRootFromWorkspace:
+        path.relative(
+          context.workspaceRoot.absolutePath,
+          route.worktreePath ??
+            path.resolve(context.workspaceRoot.absolutePath, route.configuredPlacement),
+        ) || ".",
       workspaceRootFromWindow: workspaceRootFromWindow(context, route),
       attachedWorktrees: sources.attachedWorktrees,
       taskPackageRef: deliveryTaskPackageRef(taskPackage.demandId, taskPackage.taskPackageId),
@@ -1459,7 +1465,7 @@ export async function executePrepareDeliveryRequest(
       result: prepareResult,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }
 
@@ -1485,6 +1491,8 @@ async function sessionRecords(
     { sessionId, since },
     signalOptions(context.options.signal),
   );
+  if (!inventory.complete) fail("io-failure", "observation-query-incomplete", "$observations");
+  if (inventory.skipped > 0) fail("io-failure", "observation-query-unavailable", "$observations");
   return inventory.records.map((record) =>
     Object.freeze({
       recordId: record.recordId,
@@ -1615,6 +1623,34 @@ function decideOutcome(
   });
 }
 
+/** Hook uncertainty cannot negate an independent host receipt or Controller decision. */
+async function observedOutcomeDecision(
+  context: SliceContext,
+  input: OutcomeInput,
+  envelope: Readonly<DeliveryEnvelope>,
+  sessionId: string,
+  currentlyIndeterminate: boolean,
+): Promise<ReturnType<typeof deriveDeliveryDisposition>> {
+  try {
+    const records = await sessionRecords(context, sessionId, envelope.preparedAt);
+    return decideOutcome(context, input, envelope, records, currentlyIndeterminate);
+  } catch (error: unknown) {
+    const partial =
+      isWakeflowError(error) &&
+      (error.reason === "observation-query-incomplete" ||
+        error.reason === "observation-query-unavailable");
+    if (!partial) throw error;
+    const independent = decideOutcome(context, input, envelope, [], currentlyIndeterminate);
+    if (
+      independent.accepted &&
+      (independent.evidenceKind === "host-send-return" ||
+        independent.evidenceKind === "controller-resolution")
+    )
+      return independent;
+    throw error;
+  }
+}
+
 async function executeOutcome(
   context: SliceContext,
   input: OutcomeInput,
@@ -1638,8 +1674,13 @@ async function executeOutcome(
   const currentlyIndeterminate = assertOutcomeRecordable(target, input.claimDigest);
   const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
   const route = await loadRoute(context, envelope.route.windowId);
-  const records = await sessionRecords(context, route.binding.handle.value, envelope.preparedAt);
-  const decision = decideOutcome(context, input, envelope, records, currentlyIndeterminate);
+  const decision = await observedOutcomeDecision(
+    context,
+    input,
+    envelope,
+    route.binding.handle.value,
+    currentlyIndeterminate,
+  );
   if (!decision.accepted) {
     const blockers = [decision.blocker];
     if (
@@ -1808,7 +1849,7 @@ export async function executeRecordDeliveryOutcomeRequest(
       result: outcomeResult,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }
 
@@ -2078,6 +2119,6 @@ export async function executeRearmDeliveryRequest(
       result: rearmResult,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

@@ -111,7 +111,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
     executor: "executeMaintenance",
     title: "Maintain Wakeflow Workspace",
     description:
-      "Preview, apply, or recover one workspace Maintenance transaction (fresh-initialize, reconfigure, reconcile): preview is read-only and returns the plan with its planDigest, apply resends the same action and request with that planDigest so Wakeflow re-derives the plan and rejects drift, and recover finishes an interrupted transaction by operationId. Every result carries next; returned window launch intents require explicit Agent host actions.",
+      "Preview, apply, or recover one workspace Maintenance transaction (fresh-initialize, reconfigure, reconcile): preview is read-only; apply resends the same action and request with planDigest and rejects drift; recover finishes an interrupted operationId. Only the current workspace format is supported; no local-format migration is performed. Follow next; window launch intents require explicit Agent host actions.",
     requestSchema: WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA,
     annotations: {

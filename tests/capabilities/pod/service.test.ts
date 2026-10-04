@@ -1,3 +1,4 @@
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
@@ -27,10 +28,13 @@ import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixt
  * hook 记录直接写入，worktree 用真实 `git worktree add` 造出。
  */
 
-const CODEX: PodHostFacade = {
+const CODEX: PodHostFacade & {
+  readonly renderLaunchInstructions: typeof renderCodexWindowLaunchInstructions;
+} = {
   hostId: "codex",
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
+  renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 };
 const CLOCK = { clock: () => parseUtcInstant("2026-09-10T12:00:00.000Z") };
 
@@ -143,7 +147,7 @@ async function register(
     hostId: "codex",
     event: "session-start",
     sessionId: handleValue,
-    cwd,
+    cwd: fixture.root,
     recordedAt: parseUtcInstant("2026-09-10T11:59:00.000Z"),
   });
   const result = await executeWindowBindingRequest(
@@ -156,7 +160,7 @@ async function register(
         handle: { kind: "codex-thread", value: handleValue },
         launchIntentDigest: inspection.launchIntent.intentDigest,
         observedAt: "2026-09-10T11:59:30.000Z",
-        ...(worktree === undefined ? {} : { worktree }),
+        ...(worktree === undefined ? {} : { worktree: { ...worktree, executionRoot: cwd } }),
       },
     },
     CLOCK,
@@ -318,12 +322,12 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
   equal(productIntent.launchIntent.podPlacement, "worktree");
   equal(productIntent.launchIntent.worktree?.suggestedName, "wakeflow-feature-x");
   const execution = productIntent.launchIntent.execution as {
-    readonly environment: string;
+    readonly target: { readonly environment: { readonly type: string } };
     readonly worktree: { readonly launch: string; readonly hostBranch: string | null };
   };
-  equal(execution.environment, "worktree");
-  equal(execution.worktree.launch, "codex-worktree-thread");
-  equal(execution.worktree.hostBranch, null);
+  equal(execution.target.environment.type, "local");
+  equal(execution.worktree.launch, "git-worktree");
+  equal(execution.worktree.hostBranch, "wakeflow-feature-x");
   equal(JSON.stringify(productIntent).includes(fx.base), false);
 
   // 产品窗口没有 worktree 观察即拒绝；主检出当作检出也拒绝。
@@ -339,6 +343,35 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
     porcelain: git(checkout, "worktree", "list", "--porcelain"),
     commonDir: git(checkout, "rev-parse", "--git-common-dir").trim(),
   };
+  // A project-root SessionStart cannot silently select a product checkout.
+  const missingRootHandle = "project-chat:missing-execution-root";
+  await writeHostHookObservation(fx.rooted, {
+    hostId: "codex",
+    event: "session-start",
+    sessionId: missingRootHandle,
+    cwd: fx.root,
+    recordedAt: parseUtcInstant("2026-09-10T11:59:00.000Z"),
+  });
+  for (const extra of [{}, { executionRoot: "." }]) {
+    await rejects(
+      executeWindowBindingRequest(
+        CODEX,
+        {
+          root: fx.root,
+          operation: "register",
+          windowId: product.windowId,
+          observation: {
+            handle: { kind: "codex-thread", value: missingRootHandle },
+            launchIntentDigest: productIntent.launchIntent.intentDigest,
+            observedAt: "2026-09-10T11:59:30.000Z",
+            worktree: { ...worktree, ...extra },
+          },
+        },
+        CLOCK,
+      ),
+      failsWith("invalid-request", "worktree-execution-root-required"),
+    );
+  }
   await rejects(
     register(
       fx,

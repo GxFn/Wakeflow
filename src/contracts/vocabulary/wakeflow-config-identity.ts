@@ -7,6 +7,6 @@
  * 一段独立执行的脚本文本。配置的版本只由 `schemaVersion` 表达，符号名不带版本后缀。
  */
 
-export const WAKEFLOW_CONFIG_SCHEMA_ID = "urn:wakeflow:config:v1" as const;
+export const WAKEFLOW_CONFIG_SCHEMA_ID = "urn:wakeflow:config:v2" as const;
 export const WAKEFLOW_CONFIG_KIND = "WakeflowConfig" as const;
-export const WAKEFLOW_CONFIG_SCHEMA_VERSION = 1 as const;
+export const WAKEFLOW_CONFIG_SCHEMA_VERSION = 2 as const;

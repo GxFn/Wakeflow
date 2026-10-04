@@ -12,8 +12,11 @@ import type {
   TaskPackagePlanReview,
   TestImplementationBaseline,
 } from "../../governance/tasking/task-package.js";
-import { parseMarkdownListItems, parseMarkdownSections } from "../../kernel/markdown-sections.js";
-import { resolveRequirementSectionAnchor } from "../../contracts/vocabulary/requirement-sections.js";
+import type { AcceptanceCriterion } from "../../kernel/requirement-acceptance.js";
+export {
+  parseAcceptanceCriteria,
+  type AcceptanceCriterion,
+} from "../../kernel/requirement-acceptance.js";
 
 /**
  * Wakeflow Capabilities / Tasking：纯决定。
@@ -24,27 +27,6 @@ import { resolveRequirementSectionAnchor } from "../../contracts/vocabulary/requ
  */
 
 const ACCEPTANCE_CRITERIA_ANCHOR = "acceptance-criteria";
-const ACCEPTANCE_ITEM_PREFIX = "ac";
-
-export interface AcceptanceCriterion {
-  readonly itemId: string;
-  readonly text: string;
-}
-
-/** requirement.md 验收标准节里的顶层列表项；没有该节或没有列表项时为空。 */
-export function parseAcceptanceCriteria(requirementText: string): readonly AcceptanceCriterion[] {
-  const section = parseMarkdownSections(requirementText).find(
-    (candidate) =>
-      resolveRequirementSectionAnchor(candidate.heading) === ACCEPTANCE_CRITERIA_ANCHOR,
-  );
-  if (section === undefined) return Object.freeze([]);
-  return Object.freeze(
-    parseMarkdownListItems(section.body, ACCEPTANCE_ITEM_PREFIX).map((item) =>
-      Object.freeze({ itemId: item.itemId, text: item.text }),
-    ),
-  );
-}
-
 export interface AnchorReferenceInput {
   readonly anchors: readonly Readonly<TaskPackageAcceptanceAnchor>[];
   /** Demand 谱系里的需求包记录摘要。 */

@@ -58,6 +58,7 @@ export type PublicationTransactionPhase<Plan, Outcome> =
 
 export interface PublicationTransactionSpec<Input, Context, Plan, Outcome, Result> {
   readonly tool: string;
+  readonly mutationScope: "shared" | "exclusive" | "maintenance";
   readonly parseRequest: (value: unknown) => Readonly<{
     readonly envelope: PublicationTransactionEnvelope;
     readonly input: Input;
@@ -121,7 +122,10 @@ export async function runPublicationTransaction<Input, Context, Plan, Outcome, R
   options: Readonly<CommandShellExecutionOptions> = {},
 ): Promise<Result> {
   return runCommandShell<PublicationTransactionEnvelope, Input, Context, Result>(
-    spec,
+    {
+      ...spec,
+      scope: ({ envelope }) => (envelope.mode === "preview" ? "read" : spec.mutationScope),
+    },
     value,
     admitEnvelope,
     async (context, binding) => {

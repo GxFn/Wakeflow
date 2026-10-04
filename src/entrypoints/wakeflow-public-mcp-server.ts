@@ -39,11 +39,17 @@ export function createWakeflowPublicMcpServer(
       ].join(" "),
     },
   );
-  const { serverName: _serverName, serverVersion: _serverVersion, ...executors } = admitted;
+  const {
+    serverName: _serverName,
+    serverVersion: _serverVersion,
+    beforeMutation,
+    ...executors
+  } = admitted;
   registerWakeflowPublicMcpCatalog(
     server,
     WAKEFLOW_PUBLIC_TOOL_CATALOG,
     executors as Readonly<Record<string, WakeflowPublicMcpExecutor<unknown>>>,
+    beforeMutation,
   );
   return server;
 }

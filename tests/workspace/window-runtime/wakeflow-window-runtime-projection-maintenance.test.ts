@@ -1,4 +1,5 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   mkdtempSync,
   readFileSync,
@@ -12,18 +13,34 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { materializeDirectoryPath } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import {
+  createWakeflowWindowHostBindingInStore,
+  WakeflowWindowHostBindingStoreError,
+  withWakeflowWindowHostBindingStore,
+} from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-store.js";
+import { compileWakeflowWindowHostBindingStoreAuthority } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
+import { parseWakeflowWindowHostHandle } from "../../../src/workspace/window-runtime/wakeflow-window-host-identity-profile.js";
+import { wakeflowWindowHostBindingRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
+import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { publishWakeflowWindowRuntimeProjectionDocument } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-document.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import {
   executeWakeflowWindowRuntimeProjectionOperation,
+  ensureWakeflowWindowRuntimeSkeleton,
   planWakeflowWindowRuntimeProjectionMaintenance,
+  refreshWakeflowWindowRuntimeProjections,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,
@@ -43,7 +60,9 @@ async function fixture(t: TestContext) {
   const absolutePath = realpathSync(
     mkdtempSync(path.join(os.tmpdir(), "wakeflow-projection-maintenance-")),
   );
+  materializeFixtureOperationScope(absolutePath);
   const root = await RootedDirectory.open(absolutePath);
+  writeFileSync(path.join(absolutePath, "wakeflow.config.json"), renderWakeflowConfig(config()), { mode: 0o644 });
   await materializeDirectoryPath(root, parsePortableResourcePath(".wakeflow-local/runtime"), {
     mode: 0o700,
   });
@@ -213,3 +232,133 @@ test("window runtime projection publish reports an abort as aborted, not as a re
   }
   equal(isWakeflowError(caught) && caught.reason, "aborted");
 });
+
+test("window runtime projection refresh keeps unavailable-root errors at the projection boundary", async (t) => {
+  const workspace = await fixture(t);
+  await workspace.root.close();
+  await rejects(refreshWakeflowWindowRuntimeProjections(workspace.root, request("reconcile")),
+    (error: unknown) => error instanceof WakeflowWindowRuntimeProjectionError && error.reason === "input");
+});
+
+test("runtime projection refresh derives its config from authority, ignoring a delayed caller snapshot", async (t) => {
+  const workspace = await fixture(t);
+  const delayed = request("reconcile");
+  await publishFreshWakeflowWindowRuntime(workspace.root, delayed.config, delayed.resourceProfile, {
+    recoveringFreshPublication: false,
+  });
+  const raw = createMinimalWakeflowConfig();
+  const topology = raw.topology as { supportSurfaces: { capability: string; path: string }[] };
+  const surface = topology.supportSurfaces.find((entry) => entry.capability === "test");
+  if (surface === undefined) throw new Error("Expected a test surface.");
+  surface.path = "NewTest";
+  const current = parseWakeflowConfig(raw);
+  writeFileSync(path.join(workspace.absolutePath, "wakeflow.config.json"), renderWakeflowConfig(current));
+  await refreshWakeflowWindowRuntimeProjections(workspace.root, delayed);
+  deepEqual(await planWakeflowWindowRuntimeProjectionMaintenance(workspace.root, {
+    ...delayed, config: current,
+  }), { operations: [], blockerCodes: [] });
+});
+
+for (const [resourceProfile, identityProfile] of [
+  [codexWorkspaceHostResourceProfile, codexWindowHostIdentityProfile],
+  [claudeCodeWorkspaceHostResourceProfile, claudeCodeWindowHostIdentityProfile],
+] as const) {
+  for (const operation of ["refresh", "execute", "skeleton"] as const) {
+    test(`${resourceProfile.hostId} projection ${operation} cannot overwrite a concurrent registration`, {
+      timeout: 15_000,
+    }, async (t) => {
+      const workspace = await fixture(t);
+      const model = config();
+      await publishFreshWakeflowWindowRuntime(workspace.root, model, resourceProfile, {
+        recoveringFreshPublication: false,
+      });
+      const source = compileWakeflowWindowRuntimeUnregisteredProjectionSet(model, resourceProfile).entries[0];
+      const intent = compileWakeflowWindowLaunchIntents(model, resourceProfile).intents[0];
+      if (source === undefined || intent === undefined) throw new Error("Expected a window.");
+      const authority = compileWakeflowWindowHostBindingStoreAuthority(model, resourceProfile, identityProfile);
+      const projectionPath = path.join(workspace.absolutePath, source.resourceRef);
+      rmSync(projectionPath);
+      const paused = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const waitingForLock = Promise.withResolvers<void>();
+      let intercepted = false;
+      let registering = false;
+      const inspect = RootedDirectory.prototype.inspectExistingResource;
+      t.mock.method(RootedDirectory.prototype, "inspectExistingResource", async function (
+        this: RootedDirectory,
+        ...args: Parameters<typeof inspect>
+      ) {
+        let result: Awaited<ReturnType<typeof inspect>>;
+        try {
+          result = await inspect.apply(this, args);
+        } catch (error: unknown) {
+          if (this === workspace.root && !intercepted && args[0] === source.resourceRef) {
+            intercepted = true;
+            paused.resolve();
+            await release.promise;
+          }
+          throw error;
+        }
+        if (this === workspace.root && registering && args[0] === authority.lockRef) {
+          waitingForLock.resolve();
+        }
+        return result;
+      });
+      const inputs = { config: model, resourceProfile, identityProfile };
+      const maintenance = operation === "refresh"
+        ? refreshWakeflowWindowRuntimeProjections(workspace.root, inputs)
+        : operation === "skeleton"
+          ? ensureWakeflowWindowRuntimeSkeleton(workspace.root, inputs)
+          : executeWakeflowWindowRuntimeProjectionOperation(workspace.root, {
+            ...inputs,
+            operationId: `window-runtime-projection:${source.windowId}`,
+            targetKey: source.windowId,
+            targetDigest: source.documentDigest,
+          });
+      let registration: Promise<string | WakeflowWindowHostBindingStoreError> | undefined;
+      try {
+        await paused.promise;
+        registering = true;
+        const register = () => withWakeflowWindowHostBindingStore(workspace.root, authority, {}, async (store) => {
+          const binding = await createWakeflowWindowHostBindingInStore(workspace.root, {
+            ...authority,
+            windowId: source.windowId,
+            bindingRef: wakeflowWindowHostBindingRef(resourceProfile, source.windowId),
+            launchIntentDigest: intent.intentDigest,
+            handle: parseWakeflowWindowHostHandle(identityProfile, {
+              kind: identityProfile.handleKind, value: "test-registration-session",
+            }),
+            observedAt: parseUtcInstant("2026-09-01T00:00:00.000Z"),
+          }, store);
+          const entry = compileWakeflowWindowRuntimeRegisteredProjectionEntry(
+            resourceProfile, identityProfile, source.projection, binding,
+          );
+          await publishWakeflowWindowRuntimeProjectionDocument(workspace.root, {
+            ...entry,
+            projectionDigest: entry.projection.projectionDigest,
+          }, undefined);
+          return entry.document;
+        });
+        registration = register().catch((error: unknown) => {
+          if (!(error instanceof WakeflowWindowHostBindingStoreError)) throw error;
+          equal(error.reason, "lock");
+          return error;
+        });
+        // On the old implementation registration finishes while maintenance is paused.
+        // With the fix the existing store either waits or rejects an active lock for retry.
+        await Promise.race([registration, waitingForLock.promise]);
+        release.resolve();
+        await maintenance;
+        const firstAttempt = await registration;
+        const registered = typeof firstAttempt === "string" ? firstAttempt : await register();
+        equal(readFileSync(projectionPath, "utf8"), registered);
+        deepEqual(await planWakeflowWindowRuntimeProjectionMaintenance(workspace.root, {
+          ...inputs, action: "reconcile",
+        }), { operations: [], blockerCodes: [] });
+      } finally {
+        release.resolve();
+        await Promise.allSettled([maintenance, ...(registration === undefined ? [] : [registration])]);
+      }
+    });
+  }
+}

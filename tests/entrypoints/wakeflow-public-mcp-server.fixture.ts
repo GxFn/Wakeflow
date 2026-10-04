@@ -24,7 +24,7 @@ function unexpectedMcpExecutor(capability: keyof WakeflowMcpExecutorSet): never 
  *
  * 测试必须显式覆盖准备调用的能力；意外跨工具调用会立即失败。
  */
-function defaultMcpExecutors(): WakeflowMcpExecutorSet {
+export function defaultMcpExecutors(): WakeflowMcpExecutorSet {
   return {
     cancelDemand: async () => unexpectedMcpExecutor("cancelDemand"),
     completeDemand: async () => unexpectedMcpExecutor("completeDemand"),

@@ -396,7 +396,7 @@ test("optional Host resources are compiled from profile values without host bran
         windowIdentity: false,
         podReceipts: false,
         worktree: {
-          launch: "codex-worktree-thread",
+          launch: "git-worktree",
           attachedDirectories: "prompt-path",
         },
         keepLive: false,
@@ -410,7 +410,7 @@ test("optional Host resources are compiled from profile values without host bran
         activityMonitor: true,
         temporaryPrompts: true,
       },
-      launch: { kind: "host-thread" },
+      launch: { kind: "project-thread" },
     });
   deepEqual(
     createWakeflowWorkspaceHostResourceCatalog(

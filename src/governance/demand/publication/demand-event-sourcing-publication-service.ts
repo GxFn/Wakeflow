@@ -421,10 +421,8 @@ export async function publishDemandFromPackage(
     );
     if (exactClaimedPackage(initialPackage, transaction) === null) {
       assertPendingPackage(initialPackage, transaction);
-      // ADR-0011 D7 按 ADR-0010 D3 收窄到 pod，apply 再查一次：这是尽力而为的复查，只缩小
-      // preview 到 apply 之间的窗口，不是互斥保证——锁按 demandId 取、守卫只看已 claimed
-      // 的包，真正的保证需要一把同时覆盖 claim 的 pod 级锁。pod-busy 原样上抛，带占用者。
-      await assertNoActiveDemand(root, signal, null, transaction.identity.podId);
+      // 公共 create 的 apply 已持有 pod 临界区；排除自己的未完成发布，保留其他意图的占用。
+      await assertNoActiveDemand(root, signal, transaction.demandId, transaction.identity.podId);
     }
   } catch (error: unknown) {
     rethrowWithPublicationAuthority(error, "unchanged");

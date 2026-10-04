@@ -483,7 +483,8 @@ export async function inspectWakeflowWindowHostBindingInventory(
 /** 在恢复后的专用锁内提供一份完整 Binding inventory。 */
 export async function withWakeflowWindowHostBindingStore<Result>(
   root: RootedDirectory,
-  authority: Readonly<WakeflowWindowHostBindingStoreAuthority>,
+  authoritySource: Readonly<WakeflowWindowHostBindingStoreAuthority> |
+    (() => Promise<Readonly<WakeflowWindowHostBindingStoreAuthority>>),
   optionsValue: WakeflowWindowHostBindingStoreOptions,
   operation: (
     context: Readonly<WakeflowWindowHostBindingStoreContext>,
@@ -501,16 +502,22 @@ export async function withWakeflowWindowHostBindingStore<Result>(
   }
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
+  const authority = typeof authoritySource === "function" ? await authoritySource() : authoritySource;
   await prepareStaleLockRecovery(root, authority, options.signal);
   try {
     return await withRootedExclusiveFileLock(
       root,
       authority.lockRef,
       async () => {
-        await recoverStages(root, authority.bindingRefs, options.signal);
+        const current = typeof authoritySource === "function" ? await authoritySource() : authority;
+        if (current.lockRef !== authority.lockRef || current.bindingRootRef !== authority.bindingRootRef ||
+          current.programId !== authority.programId || current.resourceProfile.hostId !== authority.resourceProfile.hostId) {
+          fail("input", "$authority");
+        }
+        await recoverStages(root, current.bindingRefs, options.signal);
         return operation(
           Object.freeze({
-            inventory: await readInventory(root, authority, options.signal),
+            inventory: await readInventory(root, current, options.signal),
             uuidFactory: options.uuidFactory,
             wallClock: options.wallClock,
             signal: options.signal,

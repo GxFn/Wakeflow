@@ -374,7 +374,7 @@ function demandPodScope(context: SliceContext) {
   return scope;
 }
 
-/** worktree pod 的实现结果必须报分支：Codex 的 worktree 线程从 detached HEAD 起步（ADR-0010 D4）。 */
+/** worktree pod 的实现结果必须报分支：隔离交付必须留下可处理的分支（ADR-0010 D4）。 */
 function assertWorktreeBranch(context: SliceContext, result: Readonly<TargetResult>): void {
   if (result.workType !== "implementation") return;
   if (demandPodScope(context).pod.placement !== "worktree") return;
@@ -439,6 +439,8 @@ async function sessionRecords(
     { sessionId, since },
     signalOptions(context.options.signal),
   );
+  if (!inventory.complete) fail("io-failure", "observation-query-incomplete", "$observations");
+  if (inventory.skipped > 0) fail("io-failure", "observation-query-unavailable", "$observations");
   return inventory.records.map((record) =>
     Object.freeze({
       recordId: record.recordId,
@@ -885,7 +887,7 @@ async function releaseFence(
     context.workspaceRoot,
     windowId,
     fence,
-    signalOptions(context.options.signal),
+    // 此处只在结果事件已提交或幂等回放后执行；取消不应留下该事件已释放的围栏。
   );
 }
 
@@ -1058,7 +1060,7 @@ export async function executeTargetResultImportRequest(
       result: importResult,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }
 
@@ -1477,6 +1479,7 @@ export async function executeTargetResultReviewInspectionRequest(
     TargetResultReviewInspectionResult
   >(
     {
+      scope: () => "read",
       tool: WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseTargetResultReviewInspectionRequest(raw);
@@ -1490,7 +1493,7 @@ export async function executeTargetResultReviewInspectionRequest(
     value,
     () => undefined,
     (context, binding) => inspectReview(context, binding.input),
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }
 
@@ -1798,7 +1801,7 @@ export async function executeImplementationReviewDecisionRequest(
       result: implementationDecisionResult,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }
 
@@ -1816,7 +1819,7 @@ function stepIdTuple(values: readonly string[] | undefined): readonly [string, .
 }
 
 /**
- * `escalate{product-defect}` 的缺陷修复授权：失败步骤取自结果，基线取自测试任务包的
+ * `escalate{product-defect}` 的缺陷修复授权：只取结果中的产品缺陷失败，基线取自测试任务包的
  * 实现基线，状态摘要是决定之后的聚合状态（§13.87 D5）。
  */
 function remediationAuthorization(
@@ -1850,7 +1853,9 @@ function remediationAuthorization(
           taskPackageDigest: target.targetResult.taskPackage.digest,
         },
         failedSteps: target.targetResult.report.steps
-          .filter((step) => step.verdict === "fail")
+          .filter(
+            (step) => step.verdict === "fail" && step.failure?.classification === "product-defect",
+          )
           .map((step) => ({ stepId: step.stepId, observed: step.observed })),
         baselines: target.taskPackage.implementationBaselines,
       },
@@ -2018,6 +2023,6 @@ export async function executeTestReviewDecisionRequest(
       result: testDecisionResult,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

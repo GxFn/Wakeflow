@@ -97,6 +97,22 @@ test("归档负载排除可重建检查点，树摘要与顺序无关，只有�
   );
 });
 
+test("archive rescans decorated and structured credentials instead of trusting capture-time review", () => {
+  const secret = "synthetic".repeat(3);
+  for (const text of [
+    JSON.stringify({ password: secret }),
+    `\u001b[32mDATABASE_PASS\u001b[0mWORD=${secret}`,
+    `\u0000PASSWORD=${secret}`,
+    `Authorization: Bearer ${secret}`,
+  ])
+    equal(
+      payloadPrivacyBlockers([{ resourcePath: "artifacts/log.txt", text }]).some((b) =>
+        b.endsWith("credential-assignment"),
+      ),
+      true,
+    );
+});
+
 test("阻塞项派生：完成看路由与门，取消看待评审，continue 看归档结果，认领看看板", () => {
   const claim = {
     status: "claimed" as const,

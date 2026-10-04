@@ -4,7 +4,7 @@ import {
 } from "../../contracts/generated/entrypoints/wakeflow-status-request.generated.js";
 import {
   WAKEFLOW_STATUS_RESULT_SCHEMA,
-  type WakeflowStatusResultV1,
+  type WakeflowStatusResultV2,
 } from "../../contracts/generated/entrypoints/wakeflow-status-result.generated.js";
 import {
   WAKEFLOW_VERIFY_REQUEST_SCHEMA,
@@ -12,7 +12,7 @@ import {
 } from "../../contracts/generated/entrypoints/wakeflow-verify-request.generated.js";
 import {
   WAKEFLOW_VERIFY_RESULT_SCHEMA,
-  type WakeflowVerifyResultV1,
+  type WakeflowVerifyResultV2,
 } from "../../contracts/generated/entrypoints/wakeflow-verify-result.generated.js";
 import {
   type JsonValue,
@@ -36,12 +36,12 @@ import type { WakeflowToolRegistration } from "../../kernel/tool-registry.js";
 
 export const WAKEFLOW_STATUS_PUBLIC_TOOL_NAME = "wakeflow_status" as const;
 export const WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME = "wakeflow_verify" as const;
-export const WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION = 1 as const;
+export const WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION = 2 as const;
 
 export type StatusRequest = Readonly<WakeflowStatusRequestV1>;
-export type StatusResult = Readonly<WakeflowStatusResultV1>;
+export type StatusResult = Readonly<WakeflowStatusResultV2>;
 export type VerifyRequest = Readonly<WakeflowVerifyRequestV1>;
-export type VerifyResult = Readonly<WakeflowVerifyResultV1>;
+export type VerifyResult = Readonly<WakeflowVerifyResultV2>;
 
 function requestJson(value: unknown): JsonValue {
   try {
@@ -76,13 +76,13 @@ export const parseStatusRequest = requestParser(
   createRuntimeJsonSchemaValidator<WakeflowStatusRequestV1>(WAKEFLOW_STATUS_REQUEST_SCHEMA),
 );
 export const admitStatusResult = resultAdmitter(
-  createRuntimeJsonSchemaValidator<WakeflowStatusResultV1>(WAKEFLOW_STATUS_RESULT_SCHEMA),
+  createRuntimeJsonSchemaValidator<WakeflowStatusResultV2>(WAKEFLOW_STATUS_RESULT_SCHEMA),
 );
 export const parseVerifyRequest = requestParser(
   createRuntimeJsonSchemaValidator<WakeflowVerifyRequestV1>(WAKEFLOW_VERIFY_REQUEST_SCHEMA),
 );
 export const admitVerifyResult = resultAdmitter(
-  createRuntimeJsonSchemaValidator<WakeflowVerifyResultV1>(WAKEFLOW_VERIFY_RESULT_SCHEMA),
+  createRuntimeJsonSchemaValidator<WakeflowVerifyResultV2>(WAKEFLOW_VERIFY_RESULT_SCHEMA),
 );
 
 const READ_ANNOTATIONS = Object.freeze({
@@ -100,7 +100,7 @@ export const STATUS_TOOL_REGISTRATION = Object.freeze({
   executor: "inspectStatus",
   title: "Wakeflow Status",
   description:
-    "Read the workspace orientation from one observation: overall state, config summary, requirement board counts with pending packages, active Demands with their route disposition and frontier, windows with identity and work claims, pods with execution location, repository pointer facts, host hook channels, accepted results whose branch still exists, projection freshness, effective policy thresholds, and the next actions. Pass demandId to attach that Demand's controller route (or its archive receipt). Reads only.",
+    "Read the workspace orientation from one observation: overall state, config summary, requirement board counts with pending packages, active Demands with their route disposition and frontier, windows with identity and work claims, pods with execution location, repository pointer facts, host hook channels, accepted results whose branch still exists, projection freshness, effective policy thresholds, and the next actions. Window hook producer manifests are evidence only; unverified peer runtimes are reported separately from the serving process. Pass demandId to attach that Demand's controller route (or its archive receipt). Reads only.",
   requestSchema: WAKEFLOW_STATUS_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_STATUS_RESULT_SCHEMA,
   annotations: READ_ANNOTATIONS,
@@ -113,7 +113,7 @@ export const VERIFY_TOOL_REGISTRATION = Object.freeze({
   executor: "verifyWorkspace",
   title: "Verify Wakeflow Workspace",
   description:
-    "Strictly verify the workspace without repairing anything: fifteen gates (config authority, local layout, ledger layout, board consistency, Demand root audit, append candidates, evidence integrity, work claims, host hook channel, window identity, window runtime projection, pod execution location, host settings assets, active projection, runtime artifact) each pass, fail, or unavailable; ok requires every gate to pass and unavailable counts separately from fail. Pass demandId to also evaluate that Demand's own gates. Reads only; repairsApplied is always false.",
+    "Strictly verify the workspace without repairing anything: fifteen gates (config authority, local layout, ledger layout, board consistency, Demand root audit, append candidates, evidence integrity, work claims, host hook channel, window identity, window runtime projection, pod execution location, host settings assets, active projection, runtime artifact, including unverified bound runtimes) each pass, fail, or unavailable; ok requires every gate to pass and unavailable counts separately from fail. Pass demandId to also evaluate that Demand's own gates. Reads only; repairsApplied is always false.",
   requestSchema: WAKEFLOW_VERIFY_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_VERIFY_RESULT_SCHEMA,
   annotations: READ_ANNOTATIONS,

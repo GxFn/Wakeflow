@@ -1,5 +1,5 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -15,6 +15,14 @@ import { deriveDemandCommitId } from "../../src/kernel/ids.js";
 
 function fixture(t: TestContext): string {
   const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-append-")));
+  mkdirSync(path.join(root, ".wakeflow-local/runtime/operation-admission"), {
+    recursive: true,
+    mode: 0o700,
+  });
+  writeFileSync(
+    path.join(root, "wakeflow.config.json"),
+    '{\n  "kind": "WakeflowConfig",\n  "schemaVersion": 2\n}\n',
+  );
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }

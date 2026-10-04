@@ -81,9 +81,8 @@ import {
 import {
   analyzePackageDocuments,
   deriveClaimTransitionBlockers,
-  derivePublishBlockers,
+  derivePublishAssessment,
   deriveRequirementId,
-  PRIVACY_BLOCKER_PREFIX,
   privacyBlockers,
   type PackageAnalysis,
   type PackageDocumentText,
@@ -485,7 +484,7 @@ async function planPublish(
   const analysis = analyzePackageDocuments(input.demandType, input.title, documents);
   const supersedes = await supersededState(context, input.supersedes);
   const confirmedAt = input.confirmation?.confirmedAt ?? null;
-  const blockers = derivePublishBlockers({
+  const { blockers, privacyHit } = derivePublishAssessment({
     analysis,
     demandType: input.demandType,
     testingDecisionMode: input.testingDecision.mode,
@@ -499,7 +498,6 @@ async function planPublish(
     ],
   });
   // 隐私命中时不回显任何章节正文：阻塞项只说位置与类别。
-  const privacyHit = blockers.some((blocker) => blocker.startsWith(PRIVACY_BLOCKER_PREFIX));
   facts.current = Object.freeze({
     // 命中可能在标题或测试决策摘要里：整份摘要都不回显。
     summary: privacyHit
@@ -914,6 +912,7 @@ export async function executeRequirementPublicationRequest(
     RequirementPublicationResult
   >(
     {
+      mutationScope: "shared",
       tool: WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseRequirementPublicationRequest(raw);
@@ -964,7 +963,7 @@ export async function executeRequirementPublicationRequest(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }
 
@@ -1057,6 +1056,7 @@ export async function executeBoardInspectionRequest(
     BoardInspectionResult
   >(
     {
+      scope: () => "read",
       tool: WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseBoardInspectionRequest(raw);
@@ -1080,6 +1080,6 @@ export async function executeBoardInspectionRequest(
     value,
     () => {},
     (context, binding) => inspectBoard(context, binding.input),
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

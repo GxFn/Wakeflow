@@ -1,3 +1,4 @@
+import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
 import { equal, rejects } from "node:assert/strict";
 import {
   existsSync,
@@ -227,6 +228,12 @@ test("sidecar-only publication recovers without an event append journal", async 
     writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
       tokenUuid: "88888888-8888-4888-8888-888888888888",
     }), { mode: 0o600 });
+    await rejects(
+      assertNoActiveDemand(value.workspaceRoot, undefined, null, transaction.identity.podId),
+      (error: unknown) => error instanceof WakeflowError && error.reason === "pod-busy",
+    );
+    await assertNoActiveDemand(value.workspaceRoot, undefined, DEMAND_ID, transaction.identity.podId);
+    await assertNoActiveDemand(value.workspaceRoot, undefined, null, "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     const foreignTarget = demandPublicationTransactionRef(OTHER_DEMAND_ID);
     const foreignBytes = encodeUtf8("foreign-intent");
     const foreignAddress = issueDurableAtomicFileStageAddress(

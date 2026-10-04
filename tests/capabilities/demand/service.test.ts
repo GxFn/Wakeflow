@@ -1,3 +1,4 @@
+import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   existsSync,
@@ -406,7 +407,10 @@ test("未接受的目标让完成在 preview 阻塞；取消释放本 Demand 的
  * 计划推导只列出目录形态的归档，看不见这些占位；apply 写完日志后发布归档时撞上占位而失败。
  * 清掉占位后 recover 按日志重放，结果与一次正常 apply 相同。
  */
-async function interruptAndRecover(action: "complete" | "cancel"): Promise<void> {
+async function interruptAndRecover(
+  action: "complete" | "cancel",
+  awaitingDecision = false,
+): Promise<void> {
   const fixture = await createAcceptedDemandCompletionWorkspaceFixture();
   try {
     const root = fixture.workspacePath;
@@ -416,6 +420,11 @@ async function interruptAndRecover(action: "complete" | "cancel"): Promise<void>
     const execute =
       action === "complete" ? executeDemandCompletionRequest : executeDemandCancellationRequest;
     const reason = action === "cancel" ? { reason: "Interrupted cancellation." } : {};
+    if (awaitingDecision) await escalate(root, demandId, fixture.targetTaskId);
+    const commitsRoot = path.join(root, demandFinalRootRef(demandId), "event-sourcing", "commits");
+    const originalCommits = readdirSync(commitsRoot).map(
+      (name) => [name, readFileSync(path.join(commitsRoot, name), "utf8")] as const,
+    );
     const preview = await execute({ root, mode: "preview", demandId, ...reason });
     if (!("planDigest" in preview) || preview.planDigest === null)
       throw new Error("Expected a plan.");
@@ -429,7 +438,42 @@ async function interruptAndRecover(action: "complete" | "cancel"): Promise<void>
       execute({ root, mode: "apply", demandId, ...reason, planDigest: preview.planDigest }),
     );
     equal(existsSync(journal), true, "journal missing after the interrupted apply");
+    const interruptedRoot = await RootedDirectory.open(
+      path.join(root, demandFinalRootRef(demandId)),
+    );
+    try {
+      const audited = await new DemandEventSourcingRepository(interruptedRoot).audit();
+      equal(audited.aggregate.state.lifecycle, action === "cancel" ? "cancelled" : "completed");
+      equal(audited.aggregate.state.awaitingDecision, undefined);
+      for (const [name, bytes] of originalCommits)
+        equal(readFileSync(path.join(commitsRoot, name), "utf8"), bytes);
+      equal(audited.replayedCommitCount, originalCommits.length + 1);
+      if (awaitingDecision) {
+        const history = await new DemandEventSourcingRepository(
+          interruptedRoot,
+        ).auditTargetResultHistory();
+        equal(history.escalations.length, 1);
+        equal(history.decisionRecords.length, 0, "cancellation must not invent an answer");
+      }
+    } finally {
+      await interruptedRoot.close();
+    }
     equal(demandRootExists(root, demandId), true);
+    await rejects(
+      assertNoActiveDemand(
+        fixture.workspaceRoot,
+        undefined,
+        null,
+        "pod_99999999-9999-4999-8999-999999999999",
+      ),
+      (error: unknown) => error instanceof WakeflowError && error.reason === "pod-busy",
+    );
+    await assertNoActiveDemand(
+      fixture.workspaceRoot,
+      undefined,
+      demandId,
+      "pod_99999999-9999-4999-8999-999999999999",
+    );
     for (const placeholder of placeholders) rmSync(placeholder);
 
     const recovered = await execute({ root, mode: "recover", operationId: demandId });
@@ -451,4 +495,81 @@ test("完成的 apply 在日志之后中断：recover 按日志重放出与正�
 
 test("取消的 apply 在日志之后中断：recover 按日志重放出归档并撤回需求包", async () => {
   await interruptAndRecover("cancel");
+});
+
+test("等待决定时取消：预检 ready、终态已追加后中断可恢复，旧事件保持不变", {
+  timeout: 120_000,
+}, async () => {
+  await interruptAndRecover("cancel", true);
+});
+
+test("等待决定时取消在追加前中断：恢复读取原日志并完成取消，不伪造用户回答", {
+  timeout: 120_000,
+}, async (t) => {
+  const fixture = await createAcceptedDemandCompletionWorkspaceFixture();
+  try {
+    const root = fixture.workspacePath;
+    const demandId = fixture.demandId;
+    await escalate(root, demandId, fixture.targetTaskId);
+    const request = {
+      root,
+      demandId,
+      reason: "Cancel instead of answering the pending escalation.",
+    };
+    const preview = await executeDemandCancellationRequest({ ...request, mode: "preview" });
+    if (preview.kind !== "WakeflowDemandCancellationPreview" || preview.planDigest === null)
+      throw new Error("Expected cancellation plan");
+    const mock = t.mock.method(
+      DemandEventSourcingRepository.prototype,
+      "appendPreparedCommit",
+      async () => {
+        throw new Error("Injected failure before terminal append");
+      },
+    );
+    try {
+      await rejects(
+        executeDemandCancellationRequest({
+          ...request,
+          mode: "apply",
+          planDigest: preview.planDigest,
+        }),
+      );
+    } finally {
+      mock.mock.restore();
+    }
+    const journal = path.join(root, demandLifecycleJournalRef(demandId));
+    equal(existsSync(journal), true);
+    const demandRoot = await RootedDirectory.open(path.join(root, demandFinalRootRef(demandId)));
+    try {
+      const history = await new DemandEventSourcingRepository(
+        demandRoot,
+      ).auditTargetResultHistory();
+      equal(history.aggregate.state.lifecycle, "active");
+      equal(history.aggregate.state.awaitingDecision === undefined, false);
+      equal(history.decisionRecords.length, 0);
+    } finally {
+      await demandRoot.close();
+    }
+    const recovered = await executeDemandCancellationRequest({
+      root,
+      mode: "recover",
+      operationId: demandId,
+    });
+    if (recovered.kind !== "WakeflowDemandCancellationMutation")
+      throw new Error("Expected recovery");
+    equal(recovered.disposition, "recovered");
+    equal(recovered.package.status, "withdrawn");
+    equal(existsSync(journal), false);
+    equal(demandRootExists(root, demandId), false);
+    const again = await executeDemandCancellationRequest({
+      root,
+      mode: "recover",
+      operationId: demandId,
+    });
+    if (again.kind !== "WakeflowDemandCancellationMutation")
+      throw new Error("Expected repeated recovery");
+    equal(again.archive.manifestDigest, recovered.archive.manifestDigest);
+  } finally {
+    await cleanupAcceptedDemandCompletionWorkspaceFixture(fixture);
+  }
 });

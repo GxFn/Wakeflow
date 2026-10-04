@@ -730,6 +730,6 @@ export async function executeTargetTaskPlanningPublicRequest(
       result: assembleResult,
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

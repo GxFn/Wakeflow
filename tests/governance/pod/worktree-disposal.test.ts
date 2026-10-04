@@ -22,12 +22,12 @@ test("建议命令在 singleLineText 上界处原样保留，越界时截断回�
   const room = SINGLE_LINE_TEXT_MAXIMUM_LENGTH - REMOVE_COMMAND_PREFIX.length;
 
   const atBound = DEEP_RELATIVE_PATH.slice(0, room);
-  const at = worktreeDisposalGuidance("codex-worktree-thread", atBound, false);
+  const at = worktreeDisposalGuidance("git-worktree", atBound, false);
   equal(at.suggested, `${REMOVE_COMMAND_PREFIX}${atBound}`);
   equal(at.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH);
 
   const overBound = DEEP_RELATIVE_PATH.slice(0, room + 1);
-  const over = worktreeDisposalGuidance("codex-worktree-thread", overBound, false);
+  const over = worktreeDisposalGuidance("git-worktree", overBound, false);
   equal(over.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH);
   equal(over.suggested.startsWith(REMOVE_COMMAND_PREFIX), true);
   equal(over.suggested.endsWith("…"), true);
@@ -49,18 +49,18 @@ test("控制字符与换行被单行化，建议与备选都留在 singleLineTex
 
 test("带空格或 shell 元字符的检出路径整体加单引号，加锁时 unlock 与 remove 用同一个引用（§13.130 审查）", () => {
   equal(
-    worktreeDisposalGuidance("codex-worktree-thread", "work trees/a b", false).suggested,
+    worktreeDisposalGuidance("git-worktree", "work trees/a b", false).suggested,
     "git worktree remove 'work trees/a b'",
   );
   equal(
-    worktreeDisposalGuidance("codex-worktree-thread", "x;rm -rf $(y)", true).suggested,
+    worktreeDisposalGuidance("git-worktree", "x;rm -rf $(y)", true).suggested,
     "git worktree unlock 'x;rm -rf $(y)'; git worktree remove 'x;rm -rf $(y)'",
   );
 });
 
 test("越界截断按码位进行：不切断代理对，也不越过上界", () => {
   const astral = "𝔞".repeat(300);
-  const guidance = worktreeDisposalGuidance("codex-worktree-thread", astral, false);
+  const guidance = worktreeDisposalGuidance("git-worktree", astral, false);
 
   equal(guidance.suggested.length <= SINGLE_LINE_TEXT_MAXIMUM_LENGTH, true);
   equal(guidance.suggested, `${REMOVE_COMMAND_PREFIX}${"𝔞".repeat(245)}…`);
@@ -74,7 +74,7 @@ test("越界截断按码位进行：不切断代理对，也不越过上界", ()
 });
 
 test("清洗后为空的检出路径回落到工作区根，不产生带控制字符的空建议", () => {
-  const guidance = worktreeDisposalGuidance("codex-worktree-thread", "   \n\t  ", false);
+  const guidance = worktreeDisposalGuidance("git-worktree", "   \n\t  ", false);
 
   equal(guidance.suggested, `${REMOVE_COMMAND_PREFIX}.`);
   equal(NO_CONTROL_CHARACTERS.test(guidance.suggested), true);
@@ -127,6 +127,6 @@ test("宿主备选由宿主 Profile 的 worktree 启动方式选出，文本逐�
   equal(
     worktreeDisposalGuidance(codexWorkspaceHostResourceProfile.surfaces.worktree.launch, "w", false)
       .alternative,
-    "Archive the Codex thread that owns the worktree environment, then run git worktree prune in the repository.",
+    "Retire the window, remove its assigned checkout with git worktree remove, then prune in the product repository. Archiving its project chat does not remove this checkout.",
   );
 });

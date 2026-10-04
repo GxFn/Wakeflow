@@ -1,9 +1,7 @@
+import type { WakeflowWindowLaunchInstructionsRenderer } from "../../workspace/window-runtime/wakeflow-window-launch-instructions.js";
 import { realpath } from "node:fs/promises";
 import path from "node:path";
-import type {
-  WakeflowConfigPod,
-  WakeflowConfigWindow,
-} from "../../configuration/wakeflow-config.js";
+import type { WakeflowConfigPod } from "../../configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   type WakeflowConfigAuthoritySnapshot,
@@ -45,7 +43,7 @@ import { afterMutationRefresh } from "../../governance/observation/active-projec
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import {
-  HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
+  HOST_HOOK_RECORDS_MAXIMUM,
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
@@ -148,7 +146,7 @@ import {
  * 切片对账。
  *
  * worktree pod 的产品窗口（ADR-0010 D4）：`register` 与 `replace` 的观察必须带 worktree
- * 原文，会话的 `session-start` cwd 必须是 porcelain 里的一个非主检出；准入后在同一互斥
+ * 原文；会话根宿主用 `session-start` cwd，项目聊天宿主用明确的 executionRoot 选择非主检出；在同一互斥
  * 门内写 worktree 回执，结果只回 HEAD、分支与锁定状态。Test 窗口的执行说明列出已有回执
  * 的 worktree（相对工作区根的路径）。
  */
@@ -157,6 +155,7 @@ export interface WindowBindingHostFacade {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
+  readonly renderLaunchInstructions: WakeflowWindowLaunchInstructionsRenderer;
 }
 
 export interface ExecuteWindowBindingOptions {
@@ -202,6 +201,7 @@ interface AdmittedFacade {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
+  readonly renderLaunchInstructions: WakeflowWindowLaunchInstructionsRenderer;
 }
 
 interface EndpointContext {
@@ -278,11 +278,17 @@ function admitFacade(facade: Readonly<WindowBindingHostFacade>): AdmittedFacade 
     if (
       resourceProfile.hostId !== hostId ||
       identityProfile.hostId !== hostId ||
-      !resourceProfile.surfaces.windowIdentity
+      !resourceProfile.surfaces.windowIdentity ||
+      typeof facade.renderLaunchInstructions !== "function"
     ) {
       fail("unexpected", "host-facade", "$facade");
     }
-    return Object.freeze({ hostId, resourceProfile, identityProfile });
+    return Object.freeze({
+      hostId,
+      resourceProfile,
+      identityProfile,
+      renderLaunchInstructions: facade.renderLaunchInstructions,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostIdentityProfileError) {
       fail("unexpected", "host-facade", "$facade", { cause: error });
@@ -438,7 +444,7 @@ async function realpathOrNull(candidate: string): Promise<string | null> {
 }
 
 /**
- * `session-start` 记录属于本窗口的判据：普通窗口按配置根；worktree pod 的产品窗口按
+ * `session-start` 记录属于本窗口的判据：项目聊天按程序根；会话根宿主的普通窗口按配置根，worktree 产品窗口按
  * 观察里 porcelain 列出的非主检出（登记与换代），没有观察时按已有回执的检出路径。
  */
 async function sessionRootMatcher(
@@ -447,6 +453,11 @@ async function sessionRootMatcher(
   observation: CreationObservation | null,
   receipts: readonly Readonly<PodWorktreeReceipt>[],
 ): Promise<(cwd: string) => Promise<boolean>> {
+  // Project chats start in the program root. Their assigned execution directory is
+  // independent of that host fact; it never widens the accepted SessionStart roots.
+  if (context.facade.resourceProfile.launch.kind === "project-thread") {
+    return (cwd) => isWindowRoot(cwd, context.root.absolutePath);
+  }
   if (
     context.intent === null ||
     context.intent.worktree === null ||
@@ -484,13 +495,16 @@ async function loadHookSessions(
   const started = new Set<string>();
   const cwdBySession = new Map<string, string>();
   const ended = new Set<string>();
-  // 读取上限等于目录列举上限：让保留策略而不是读取上限决定可见集合（§13.97 D7d）。
+  // Query the retained start/end set; an over-capacity or damaged query cannot prove absence.
   const startRecords = await readHostHookObservations(
     context.root,
     context.facade.hostId,
-    { event: "session-start", limit: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES },
+    { event: "session-start", limit: HOST_HOOK_RECORDS_MAXIMUM },
     options,
   );
+  if (!startRecords.complete) fail("io-failure", "observation-query-incomplete", "$observations");
+  if (startRecords.skipped > 0)
+    fail("io-failure", "observation-query-unavailable", "$observations");
   for (const record of startRecords.records) {
     if (!(await matches(record.cwd))) continue;
     started.add(record.sessionId);
@@ -499,9 +513,11 @@ async function loadHookSessions(
   const endRecords = await readHostHookObservations(
     context.root,
     context.facade.hostId,
-    { event: "session-end", limit: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES },
+    { event: "session-end", limit: HOST_HOOK_RECORDS_MAXIMUM },
     options,
   );
+  if (!endRecords.complete) fail("io-failure", "observation-query-incomplete", "$observations");
+  if (endRecords.skipped > 0) fail("io-failure", "observation-query-unavailable", "$observations");
   for (const record of endRecords.records) ended.add(record.sessionId);
   return Object.freeze({ started, ended, cwdBySession });
 }
@@ -715,118 +731,18 @@ function attachedWorktreeViews(
   });
 }
 
-/** worktree 意图在执行说明里的投影：建议名称、基线策略与宿主动作，从不含路径。 */
-function worktreeInstructions(
-  context: EndpointContext,
-  intent: Readonly<WakeflowWindowLaunchIntent>,
-): JsonObject | null {
-  if (intent.worktree === null) return null;
-  const template = context.facade.resourceProfile.surfaces.worktree;
-  const shared = {
-    repositoryId: intent.worktree.repositoryId,
-    suggestedName: intent.worktree.suggestedName,
-    basePolicy: intent.worktree.basePolicy,
-    registration:
-      "after the session starts inside the worktree, report the handle plus the verbatim output of `git worktree list --porcelain` and `git rev-parse --git-common-dir` run in the session cwd",
-  };
-  if (template.launch === "claude-worktree-flag") {
-    return {
-      ...shared,
-      launch: template.launch,
-      hostBranch: `worktree-${intent.worktree.suggestedName}`,
-      note: "claude --worktree reuses an existing checkout at .claude/worktrees/<name> (create it from the local HEAD first for basePolicy local-head); without one it creates the checkout from the remote default branch when a remote exists; the session cwd is that checkout",
-    };
-  }
-  return {
-    ...shared,
-    launch: template.launch,
-    hostBranch: null,
-    note: `create_thread with a worktree environment starts on a detached HEAD; run git switch -c ${intent.worktree.suggestedName} before the first result import`,
-  };
-}
-
-function claudeAddDirArguments(
-  intent: Readonly<WakeflowWindowLaunchIntent>,
-  attached: readonly AttachedWorktreeView[],
-  ledgerRoot: string,
-): readonly string[] {
-  const arguments_: string[] = [];
-  if (intent.root.configuredPlacement !== ".") arguments_.push("--add-dir", "<workspace root>");
-  // 账本在工作区之外（缺省的 `../wakeflow-ledger`）时每个窗口都要读需求包（投递提示词的阅读顺序列出
-  // requirement.md 与 landing.md），它不在任何一个允许目录里（§13.133 现场 F11，§13.134）。
-  if (ledgerRoot.startsWith("../")) arguments_.push("--add-dir", `<workspace root>/${ledgerRoot}`);
-  for (const view of attached) {
-    if (view.pathFromWorkspaceRoot !== null) {
-      arguments_.push("--add-dir", `<workspace root>/${view.pathFromWorkspaceRoot}`);
-    }
-  }
-  return arguments_;
-}
-
-/** Agent 执行启动意图所需的参数：只含配置声明与占位符，绝不含绝对路径或宿主句柄。 */
+/** The host renders tool/CLI instructions; this slice supplies only current domain facts. */
 function executionInstructions(
   context: EndpointContext,
   intent: Readonly<WakeflowWindowLaunchIntent>,
   receipts: readonly Readonly<PodWorktreeReceipt>[],
 ): JsonObject {
-  const model = context.snapshot.model;
-  const hostId = context.facade.hostId;
-  const role = intent.role as WakeflowConfigWindow["role"];
-  const attached = attachedWorktreeViews(context, intent, receipts);
-  const worktree = worktreeInstructions(context, intent);
-  // 启动模板与缺省值由宿主资源画像提供；这里只按模板渲染，不按 hostId 分支。
-  const template = context.facade.resourceProfile.launch;
-  if (template.kind === "tmux-session") {
-    const host = model.hosts?.["claude-code"];
-    const launch = host?.launch;
-    const effort =
-      launch?.reasoningEffortByRole?.[role] ??
-      launch?.reasoningEffortByRole?.default ??
-      (role === "controller" ? template.controllerEffort : template.defaultEffort);
-    const modelName = launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null;
-    const permissionMode = launch?.permissionMode ?? template.permissionMode;
-    return {
-      kind: hostId,
-      tmux: {
-        socketName: host?.tmux?.socketName ?? null,
-        sessionName: host?.tmux?.sessionName ?? template.sessionName,
-        windowName: intent.displayTitle,
-        cwd: intent.root.configuredPlacement,
-      },
-      command: "claude",
-      arguments: [
-        ...(intent.worktree === null ? [] : ["--worktree", intent.worktree.suggestedName]),
-        "--session-id",
-        "<uuid-v4 generated by the Agent>",
-        "--permission-mode",
-        permissionMode,
-        "--effort",
-        effort,
-        ...(modelName === null ? [] : ["--model", modelName]),
-        ...claudeAddDirArguments(intent, attached, model.storage.ledgerRoot),
-      ],
-      sessionIdPolicy: "agent-generates-uuid-v4",
-      registration:
-        "report handle kind claude-session with the generated session id plus the tmux socket, session, window, and pane",
-      worktree,
-      attachedWorktrees: attached,
-    };
-  }
-  const launch = model.hosts?.codex?.launch;
-  return {
-    kind: hostId,
-    tool: "create_thread",
-    title: intent.displayTitle,
-    cwd: intent.root.configuredPlacement,
-    environment: intent.worktree === null ? "local" : "worktree",
-    model: launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null,
-    reasoningEffort:
-      launch?.reasoningEffortByRole?.[role] ?? launch?.reasoningEffortByRole?.default ?? null,
-    followUp: "set_thread_title",
-    registration: "report handle kind codex-thread with the created thread id",
-    worktree,
-    attachedWorktrees: attached,
-  };
+  return context.facade.renderLaunchInstructions({
+    model: context.snapshot.model,
+    intent,
+    profile: context.facade.resourceProfile,
+    attachedWorktrees: attachedWorktreeViews(context, intent, receipts),
+  });
 }
 
 function nextFor(
@@ -1012,9 +928,25 @@ async function admitWorktree(
   if (sessionCwd === undefined) {
     fail("precondition-failed", "hook-evidence-missing", "$request.observation.handle");
   }
+  const projectThread = context.facade.resourceProfile.launch.kind === "project-thread";
+  const executionRoot = projectThread ? observation.worktree.executionRoot : sessionCwd;
+  if (executionRoot === undefined || !path.isAbsolute(executionRoot)) {
+    fail(
+      "invalid-request",
+      "worktree-execution-root-required",
+      "$request.observation.worktree.executionRoot",
+    );
+  }
+  if (!projectThread && observation.worktree.executionRoot !== undefined) {
+    fail(
+      "invalid-request",
+      "worktree-execution-root-unexpected",
+      "$request.observation.worktree.executionRoot",
+    );
+  }
   const admitted = await admitPodWorktreeObservation({
     observation: observation.worktree,
-    sessionCwd,
+    executionRoot,
     repositoryRoot: context.repositoryRoot,
   });
   // 一个检出同一时刻只属于一个 pod（§13.128）：另一 pod 的回执还指着它就拒绝，不覆盖那份归属。
@@ -1445,6 +1377,7 @@ export async function executeWindowBindingRequest(
   const facade = admitFacade(facadeValue);
   return runCommandShell<Envelope, WindowBindingRequest, EndpointContext, WindowBindingResult>(
     {
+      scope: ({ input }) => (input.operation === "inspect" ? "read" : "shared"),
       tool: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const parsed = parseWindowBindingRequest(raw);
@@ -1463,6 +1396,6 @@ export async function executeWindowBindingRequest(
     value,
     () => {},
     (context, binding) => executeOperation(context, binding.input),
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

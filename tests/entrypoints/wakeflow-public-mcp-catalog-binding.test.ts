@@ -20,6 +20,7 @@ interface CapturedRegistration {
 }
 
 test("登记表把二十个工具绑定到同名executor，且只公开请求Schema", async () => {
+  const signal = new AbortController().signal;
   const captured = new Map<string, CapturedRegistration>();
   const server = new McpServer({ name: "catalog-binding-test", version: "1" });
   server.registerTool = ((
@@ -30,7 +31,7 @@ test("登记表把二十个工具绑定到同名executor，且只公开请求Sch
     captured.set(name, {
       configuration,
       handler: async (request: unknown) =>
-        callback(request as never, undefined as never) as Promise<CallToolResult>,
+        callback(request as never, { mcpReq: { signal } } as never) as Promise<CallToolResult>,
     });
     return Object.freeze({}) as never;
   }) as typeof server.registerTool;
@@ -38,7 +39,8 @@ test("登记表把二十个工具绑定到同名executor，且只公开请求Sch
   const calls: Array<Readonly<{ field: string; request: unknown }>> = [];
   const executors: Record<string, WakeflowPublicMcpExecutor<unknown>> = {};
   for (const field of WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS) {
-    executors[field] = async (request: unknown): Promise<never> => {
+    executors[field] = async (request, context): Promise<never> => {
+      equal(context.signal, signal);
       calls.push(Object.freeze({ field, request }));
       throw new Error(`sentinel:${field}`);
     };

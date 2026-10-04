@@ -175,8 +175,14 @@ function gateBlockers(input: Readonly<TerminalBlockerInput>): readonly string[] 
   const blockers: string[] = [];
   for (const gate of input.gates) {
     if (gate.status === "pass") continue;
-    // 取消自己释放窗口工作声明；该门只在完成时阻塞。
-    if (input.action === "cancel" && gate.gate === "work-claims-released") continue;
+    // 取消释放工作声明，也不要求成功完成的验收覆盖或研究成果。
+    if (
+      input.action === "cancel" &&
+      (gate.gate === "work-claims-released" ||
+        gate.gate === "requirement-coverage" ||
+        gate.gate === "research-evidence")
+    )
+      continue;
     blockers.push(`verify:${gate.gate}:${gate.status}`);
   }
   return blockers;

@@ -10,6 +10,7 @@ import {
   type RootedDirectoryOpenOptions,
 } from "../foundation/filesystem/rooted-directory.js";
 import { fail, toWakeflowError } from "./error.js";
+import { withWorkspaceOperationScope } from "./workspace-operation-scope.js";
 import { assertWithinByteLimit } from "./limits.js";
 import {
   assertPublicJson,
@@ -28,6 +29,10 @@ import {
 
 export interface CommandShellSpec<Envelope extends { readonly root: string }, Input, Context> {
   readonly tool: string;
+  /** Maintenance owns its gate; all other mutations enter before loading their context. */
+  readonly scope: (
+    binding: Readonly<CommandShellBinding<Envelope, Input>>,
+  ) => "read" | "shared" | "exclusive" | "maintenance";
   /** 用切片自己的 Schema 解析请求；返回信封与切片输入。 */
   readonly parseRequest: (
     value: unknown,
@@ -55,6 +60,7 @@ export interface CommandShellSpec<Envelope extends { readonly root: string }, In
 export interface CommandShellExecutionOptions {
   /** 工作区根这次打开的持久化级别；只有一次性测试工作区才会传 `none`。 */
   readonly durability?: RootedDirectoryDurability;
+  readonly signal?: AbortSignal;
 }
 
 function rootOpenOptions(
@@ -71,8 +77,12 @@ function rootOpenOptions(
  */
 export function commandShellExecutionOptions(
   durability: RootedDirectoryDurability | undefined,
+  signal?: AbortSignal,
 ): Readonly<CommandShellExecutionOptions> {
-  return durability === undefined ? Object.freeze({}) : Object.freeze({ durability });
+  return Object.freeze({
+    ...(durability === undefined ? {} : { durability }),
+    ...(signal === undefined ? {} : { signal }),
+  });
 }
 
 export interface CommandShellBinding<Envelope, Input> {
@@ -159,18 +169,44 @@ export async function runCommandShell<
       boundary,
       "$request",
     );
-    context = await spec.open(workspaceRoot, envelope);
-    if (spec.privateValues !== undefined) {
-      boundary = createRedactionBoundary([
-        ...boundary.privateValues,
-        ...spec.privateValues(context),
-      ]);
-    }
-    const assembled = await body(context, binding, boundary);
-    const assembledJson = parseJsonValue(assembled, "$result");
-    assertPublicJson(assembledJson, boundary, "$result");
-    assertWithinByteLimit(assembledJson, "publicResultBytes", "$result");
-    result = assembled;
+    const execute = async () => {
+      let bodyFailure: unknown;
+      try {
+        context = await spec.open(workspaceRoot, envelope);
+        if (spec.privateValues !== undefined) {
+          boundary = createRedactionBoundary([
+            ...boundary.privateValues,
+            ...spec.privateValues(context),
+          ]);
+        }
+        const assembled = await body(context, binding, boundary);
+        const assembledJson = parseJsonValue(assembled, "$result");
+        assertPublicJson(assembledJson, boundary, "$result");
+        assertWithinByteLimit(assembledJson, "publicResultBytes", "$result");
+        result = assembled;
+      } catch (error: unknown) {
+        bodyFailure = error;
+      }
+      const opened = context;
+      context = undefined;
+      if (opened !== undefined) {
+        try {
+          await spec.close(opened);
+        } catch (error: unknown) {
+          bodyFailure ??= error;
+        }
+      }
+      if (bodyFailure !== undefined) throw bodyFailure;
+    };
+    const mode = spec.scope(binding);
+    if (mode === "read" || mode === "maintenance") await execute();
+    else
+      await withWorkspaceOperationScope(
+        workspaceRoot,
+        mode,
+        execute,
+        options.signal === undefined ? {} : { signal: options.signal },
+      );
   } catch (error: unknown) {
     failure = toWakeflowError(error, "$request");
   }

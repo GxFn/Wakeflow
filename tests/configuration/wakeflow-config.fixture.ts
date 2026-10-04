@@ -1,9 +1,9 @@
 /** 新 TypeScript 配置测试共享的最小公开 v3 数据；字段顺序与持久 writer 一致。 */
 export function createMinimalWakeflowConfig(): Record<string, unknown> {
   return {
-    $schema: "urn:wakeflow:config:v1",
+    $schema: "urn:wakeflow:config:v2",
     kind: "WakeflowConfig",
-    schemaVersion: 1,
+    schemaVersion: 2,
     program: {
       programId: "program_11111111-1111-4111-8111-111111111111",
       displayName: "Example Program",

@@ -8,6 +8,7 @@ import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.j
 export interface CreateWakeflowPublicMcpServerOptions extends WakeflowPublicMcpExecutors {
   readonly serverName: string;
   readonly serverVersion: string;
+  readonly beforeMutation?: () => void;
 }
 
 export type WakeflowPublicMcpServerConfigurationErrorReason =
@@ -66,7 +67,12 @@ export function parseCreateWakeflowPublicMcpServerOptions(
     throw error;
   }
   const executorFields = catalog.tools.map((tool) => tool.executor);
-  const expectedKeys = [...executorFields, "serverName", "serverVersion"].sort();
+  const expectedKeys = [
+    ...executorFields,
+    "serverName",
+    "serverVersion",
+    ...(record.beforeMutation === undefined ? [] : ["beforeMutation"]),
+  ].sort();
   const keys = Object.keys(record).sort();
   if (
     keys.length !== expectedKeys.length ||
@@ -75,6 +81,11 @@ export function parseCreateWakeflowPublicMcpServerOptions(
     fail("options");
   }
   const executors: Record<string, unknown> = {};
+  if (
+    record.beforeMutation !== undefined &&
+    (typeof record.beforeMutation !== "function" || types.isProxy(record.beforeMutation))
+  )
+    fail("options");
   for (const field of executorFields) {
     const executor = record[field];
     if (typeof executor !== "function" || types.isProxy(executor)) {
@@ -86,5 +97,8 @@ export function parseCreateWakeflowPublicMcpServerOptions(
     ...(executors as unknown as WakeflowPublicMcpExecutors),
     serverName: nonEmptyText(record.serverName, "server-name"),
     serverVersion: nonEmptyText(record.serverVersion, "server-version"),
+    ...(record.beforeMutation === undefined
+      ? {}
+      : { beforeMutation: record.beforeMutation as () => void }),
   });
 }

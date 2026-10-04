@@ -71,7 +71,7 @@ const WINDOW_LAUNCH =
   "`resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session " +
   "that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait " +
   "up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook.sessionStart: pending` with " +
-  "a live pane means the record is late, so keep the printed observation and register or " +
+  "a live pane leaves startup unproven; inspect hook execution, keep the observation, and register or " +
   "relocate with it once the record exists, and pass a longer `--wait` next time.";
 
 /**
@@ -84,7 +84,7 @@ const WINDOW_LAUNCH =
  * 的服务、再对账装上新助手，然后从头再来。
  */
 const WINDOW_RESUME =
-  "first this window, when it is stale or its server outdated: tell the user in one sentence " +
+  "if this serving MCP is outdated, first tell the user in one sentence " +
   "that this window will restart in place in a few seconds and carry on by itself, then pipe " +
   `your own inspect result into \`${TMUX_HELPER} resume --window <this windowId> --in-place\` ` +
   "and end your turn. It returns at once (`self: true`, `scheduled: true`); about two seconds " +
@@ -94,18 +94,19 @@ const WINDOW_RESUME =
   "you left off. A helper installed before in-place restarts existed " +
   "refuses `--in-place` as `argument-unknown`: then ask the user to run `/mcp` in this window " +
   "and reconnect `wakeflow`, run a reconcile as in step 0, which installs the current helper, " +
-  "and start this section again. Then, after that verify and any reconcile, the other stale " +
-  "windows: take them one at a time, each only while it sits idle at an empty prompt, and " +
+  "and start this section again. If this server is already current, skip its restart. For peer " +
+  "windows whose own runtime evidence requires a reload, take them one at a time, each only while it sits idle at an empty prompt, and " +
   "pipe each one's inspect result into `resume --window <windowId> --in-place`, one helper " +
   "call per Bash command. The session restarts inside its own pane on the updated plugin; the " +
   "binding, coordinates and marks stay, so there is nothing to relocate or mark, and " +
-  "`hook.sessionStart: pending` only means its session-start record is late. `window-busy` " +
+  "`hook.sessionStart: pending` means startup is unproven; inspect hook execution. `window-busy` " +
   "means that window is working, shows a dialog or menu, or holds typed input, and `--force` " +
   "does not override it: go on with the next window and retry this one once its turn has " +
   "ended - a dialog, a menu or typed input waits for the user, so tell them which window it " +
-  "is. `resume-never-conversed` (the window is left untouched) and `resume-exited` both mean " +
-  "the session never held a conversation: close it, launch it again, register it with " +
-  "`replace` and `mark` it.";
+  "is. `resume-exited` means the process exited before startup evidence; inspect its diagnostics. " +
+  "`resume-never-conversed` reports missing conversation evidence: inspect host history first. " +
+  "Only if a fresh session is required and authorized, close the old one, launch it again, " +
+  "register it with `replace` and `mark` it.";
 
 /** 重发守卫：助手发送前查接收窗口的落地记录（§13.127）。 */
 const RESEND_GUARD =

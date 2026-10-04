@@ -23,12 +23,35 @@ import {
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
 } from "../../src/kernel/requirement-board.js";
+import { holdLockInChildProcess } from "../support/held-lock-process.js";
 
 const AT = parseUtcInstant("2026-09-04T10:00:00.000Z");
 const LATER = parseUtcInstant("2026-09-04T11:00:00.000Z");
 const REQUIREMENT = "requirement_77777777-7777-4777-8777-777777777777";
 const OTHER = "requirement_88888888-8888-4888-8888-888888888888";
 const DEMAND = "demand_99999999-9999-4999-8999-999999999999";
+
+test("claim 锁的真实持有进程死亡后，正常 CAS 退休残留并继续", async (t) => {
+  const root = await fixture(t);
+  await createRequirementClaimStateFile(root, pending());
+  const source = await readRequirementClaimState(root, REQUIREMENT);
+  if (source === null) throw new Error("Expected pending claim.");
+  const held = await holdLockInChildProcess(
+    root.absolutePath,
+    `.wakeflow-active/current/board/locks/${REQUIREMENT}.lock`,
+  );
+  try {
+    await held.crash();
+    await replaceRequirementClaimStateFile(
+      root,
+      source,
+      withdrawRequirementClaim(source.state, "done", LATER),
+    );
+    equal((await readRequirementClaimState(root, REQUIREMENT))?.state.status, "withdrawn");
+  } finally {
+    await held.close();
+  }
+});
 
 function pending(
   requirementId = REQUIREMENT,

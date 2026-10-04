@@ -27,6 +27,7 @@ export function runWakeflowMcpStdio(factory: McpServerFactory): StdioServerHandl
     if (closePromise !== undefined) return closePromise;
     process.off("SIGINT", closeFromSignal);
     process.off("SIGTERM", closeFromSignal);
+    process.off("SIGHUP", closeFromSignal);
     closePromise = Promise.resolve()
       .then(() => handle.close())
       .catch(() => {
@@ -41,5 +42,6 @@ export function runWakeflowMcpStdio(factory: McpServerFactory): StdioServerHandl
   }
   process.once("SIGINT", closeFromSignal);
   process.once("SIGTERM", closeFromSignal);
+  process.once("SIGHUP", closeFromSignal);
   return Object.freeze({ close });
 }

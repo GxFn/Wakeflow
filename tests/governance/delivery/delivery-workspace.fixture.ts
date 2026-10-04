@@ -1,3 +1,4 @@
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 
@@ -54,10 +55,11 @@ import {
  * `test-delivery-workspace.fixture.ts`，避免与评审链夹具互相引用。
  */
 
-export const CODEX_DELIVERY_FACADE: Readonly<DeliveryHostFacade> = Object.freeze({
+export const CODEX_DELIVERY_FACADE: Readonly<DeliveryHostFacade> & { readonly renderLaunchInstructions: typeof renderCodexWindowLaunchInstructions } = Object.freeze({
   hostId: "codex" as const,
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
+  renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 });
 
 export const DELIVERY_PREPARED_AT = parseUtcInstant("2026-08-29T12:05:00.000Z");
@@ -152,7 +154,7 @@ export async function registerFixtureWindowRoute(
     hostId: "codex",
     event: "session-start",
     sessionId: handle.value,
-    cwd: windowPath,
+    cwd: fixture.workspacePath,
     recordedAt: handle.observedAt,
   });
   const registration = await executeWindowBindingRequest(
@@ -206,7 +208,7 @@ async function buildDeliveryWorkspace(
     if (planned.targetTask.workType !== "implementation") {
       throw new Error("Expected an implementation TaskPackage fixture.");
     }
-    mkdirSync(path.join(fixture.workspacePath, ".wakeflow-local", "runtime"), { mode: 0o700 });
+    mkdirSync(path.join(fixture.workspacePath, ".wakeflow-local", "runtime"), { recursive: true, mode: 0o700 });
     await publishFreshWakeflowWindowRuntime(
       fixture.workspaceRoot,
       parseWakeflowConfig(createMinimalWakeflowConfig()),

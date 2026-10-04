@@ -1,3 +1,4 @@
+import { renderCodexWindowLaunchInstructions } from "../hosts/codex/codex-window-launch-instructions.js";
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 
@@ -39,6 +40,7 @@ const CODEX_HOST_FACADE = Object.freeze({
   hostId: "codex" as const,
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
+  renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 });
 
 /**
@@ -70,25 +72,30 @@ export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
   return createWakeflowPublicMcpServer({
     serverName: CODEX_WAKEFLOW_MCP_SERVER_NAME,
     serverVersion,
+    beforeMutation: CODEX_OBSERVATION_FACADE.artifact.assertUnchanged,
     ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,
     executeMaintenance: executeCodexWakeflowMaintenance,
-    registerWindowHostBinding: (value: unknown) =>
-      executeWindowBindingRequest(CODEX_HOST_FACADE, value),
-    managePod: (value: unknown) => executePodRequest(CODEX_HOST_FACADE, value),
-    inspectStatus: (value: unknown) => executeStatusRequest(CODEX_OBSERVATION_FACADE, value),
-    verifyWorkspace: (value: unknown) => executeVerifyRequest(CODEX_OBSERVATION_FACADE, value),
-    prepareDelivery: (value: unknown) => executePrepareDeliveryRequest(CODEX_HOST_FACADE, value),
-    recordDeliveryOutcome: (value: unknown) =>
-      executeRecordDeliveryOutcomeRequest(CODEX_HOST_FACADE, value),
-    rearmDelivery: (value: unknown) => executeRearmDeliveryRequest(CODEX_HOST_FACADE, value),
-    importTargetResult: (value: unknown) =>
-      executeTargetResultImportRequest(CODEX_HOST_FACADE, value),
-    inspectTargetResultReview: (value: unknown) =>
-      executeTargetResultReviewInspectionRequest(CODEX_HOST_FACADE, value),
-    recordImplementationReviewDecision: (value: unknown) =>
-      executeImplementationReviewDecisionRequest(CODEX_HOST_FACADE, value),
-    recordTestReviewDecision: (value: unknown) =>
-      executeTestReviewDecisionRequest(CODEX_HOST_FACADE, value),
+    registerWindowHostBinding: (value, options) =>
+      executeWindowBindingRequest(CODEX_HOST_FACADE, value, options),
+    managePod: (value, options) => executePodRequest(CODEX_HOST_FACADE, value, options),
+    inspectStatus: (value, options) =>
+      executeStatusRequest(CODEX_OBSERVATION_FACADE, value, options),
+    verifyWorkspace: (value, options) =>
+      executeVerifyRequest(CODEX_OBSERVATION_FACADE, value, options),
+    prepareDelivery: (value, options) =>
+      executePrepareDeliveryRequest(CODEX_HOST_FACADE, value, options),
+    recordDeliveryOutcome: (value, options) =>
+      executeRecordDeliveryOutcomeRequest(CODEX_HOST_FACADE, value, options),
+    rearmDelivery: (value, options) =>
+      executeRearmDeliveryRequest(CODEX_HOST_FACADE, value, options),
+    importTargetResult: (value, options) =>
+      executeTargetResultImportRequest(CODEX_HOST_FACADE, value, options),
+    inspectTargetResultReview: (value, options) =>
+      executeTargetResultReviewInspectionRequest(CODEX_HOST_FACADE, value, options),
+    recordImplementationReviewDecision: (value, options) =>
+      executeImplementationReviewDecisionRequest(CODEX_HOST_FACADE, value, options),
+    recordTestReviewDecision: (value, options) =>
+      executeTestReviewDecisionRequest(CODEX_HOST_FACADE, value, options),
   });
 }
 

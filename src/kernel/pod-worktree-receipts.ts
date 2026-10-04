@@ -64,8 +64,8 @@ import {
 /**
  * Wakeflow Kernel / Pod Worktree Receipts：worktree pod 产品窗口的执行位置回执（ADR-0010 D4）。
  *
- * Agent 在会话 cwd 里运行 `git worktree list --porcelain` 与 `git rev-parse --git-common-dir`
- * 并交回原文；这里解析 porcelain，取 path 等于该会话 `session-start` cwd 的那一条，然后用
+ * Agent 在执行检出里运行 `git worktree list --porcelain` 与 `git rev-parse --git-common-dir`
+ * 并交回原文；这里解析 porcelain，取 path 等于宿主合同提供的执行根的那一条，然后用
  * 文件系统事实核对：common dir 是配置仓库根下的 `.git`，检出不是主检出，`<path>/.git` 是
  * 指向 `<common>/worktrees/<name>` 的指针文件，admin 目录的 `gitdir` 指回检出，`HEAD` 与
  * 回执的分支或提交一致。Wakeflow 不 spawn git。回执是私有权威：目录 0700、文件 0600，
@@ -269,8 +269,8 @@ export function parseGitWorktreePorcelain(
 
 export interface AdmitPodWorktreeInput {
   readonly observation: Readonly<PodWorktreeObservation>;
-  /** 该会话 `session-start` 记录的 cwd；回执必须描述这一个检出。 */
-  readonly sessionCwd: string;
+  /** 宿主合同提供的执行检出绝对路径：会话 cwd 或明确分配的 worktree。 */
+  readonly executionRoot: string;
   /** 配置仓库根的绝对路径（主检出）。 */
   readonly repositoryRoot: string;
 }
@@ -299,30 +299,30 @@ async function readPointerFile(candidate: string): Promise<string | null> {
   }
 }
 
-/** 从 `git rev-parse --git-common-dir` 的原文得到 common dir 的 realpath；相对值按会话 cwd 解析。 */
-async function resolveCommonDir(commonDir: string, sessionReal: string): Promise<string> {
+/** 从 `git rev-parse --git-common-dir` 的原文得到 common dir 的 realpath；相对值按执行根解析。 */
+async function resolveCommonDir(commonDir: string, executionReal: string): Promise<string> {
   const trimmed = commonDir.trim();
   if (trimmed.length === 0 || trimmed.includes("\n")) receiptFail("common-dir");
-  const resolved = await realpathOrNull(path.resolve(sessionReal, trimmed));
+  const resolved = await realpathOrNull(path.resolve(executionReal, trimmed));
   if (resolved === null) receiptFail("common-dir");
   return resolved;
 }
 
-/** 候选检出的 realpath 等于会话 cwd 的那一条；主检出、bare 与 prunable 都不是执行位置。 */
-async function selectSessionEntry(
+/** 候选检出的 realpath 等于执行根的那一条；主检出、bare 与 prunable 都不是执行位置。 */
+async function selectExecutionEntry(
   entries: readonly Readonly<GitWorktreePorcelainEntry>[],
-  sessionReal: string,
+  executionReal: string,
   repositoryReal: string,
 ): Promise<Readonly<GitWorktreePorcelainEntry>> {
   for (const entry of entries) {
     if (entry.bare || entry.prunable) continue;
     const entryReal = await realpathOrNull(entry.path);
-    if (entryReal !== sessionReal) continue;
+    if (entryReal !== executionReal) continue;
     if (entryReal === repositoryReal) receiptFail("main-checkout");
     if (entry.head === null) receiptFail("head");
     return entry;
   }
-  receiptFail("session-worktree");
+  receiptFail("execution-worktree");
 }
 
 /** `<path>/.git` 指针、admin 目录回指针与 HEAD 三处必须与回执互相印证。 */
@@ -364,15 +364,15 @@ export async function admitPodWorktreeObservation(
   const entries = parseGitWorktreePorcelain(input.observation.porcelain);
   const repositoryReal = await realpathOrNull(input.repositoryRoot);
   if (repositoryReal === null) receiptFail("repository-root");
-  const sessionReal = await realpathOrNull(input.sessionCwd);
-  if (sessionReal === null) receiptFail("session-cwd");
-  const commonReal = await resolveCommonDir(input.observation.commonDir, sessionReal);
+  const executionReal = await realpathOrNull(input.executionRoot);
+  if (executionReal === null) receiptFail("execution-root");
+  const commonReal = await resolveCommonDir(input.observation.commonDir, executionReal);
   const expectedCommon = await realpathOrNull(path.join(repositoryReal, ".git"));
   if (expectedCommon === null || commonReal !== expectedCommon) receiptFail("common-dir");
-  const entry = await selectSessionEntry(entries, sessionReal, repositoryReal);
-  await verifyLinkedWorktree(sessionReal, commonReal, entry);
+  const entry = await selectExecutionEntry(entries, executionReal, repositoryReal);
+  await verifyLinkedWorktree(executionReal, commonReal, entry);
   return Object.freeze({
-    path: sessionReal,
+    path: executionReal,
     head: entry.head as string,
     branch: entry.branch,
     locked: entry.locked,

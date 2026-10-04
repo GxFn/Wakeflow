@@ -176,7 +176,7 @@ export const DEMAND_CANCELLATION_TOOL_REGISTRATION = Object.freeze({
   executor: "cancelDemand",
   title: "Cancel Wakeflow Demand",
   description:
-    "Cancel any non-terminal Demand with a reason: preview lists blockers (a pending review result rejects the cancel) and runs the archive gates; apply appends the cancellation event, seals the archive package with results and evidence kept, releases this Demand's window work claims, withdraws the requirement package, and deletes the active root; recover replays the journaled steps.",
+    "Cancel any non-terminal Demand with a reason, including research without completion evidence or a Demand awaiting a decision (cancellation ends the wait and preserves its history): preview lists blockers (a pending review result rejects the cancel) and runs the archive gates; apply appends the cancellation event, seals the archive package with results and evidence kept, releases this Demand's window work claims, withdraws the requirement package, and deletes the active root; recover replays the journaled steps.",
   requestSchema: WAKEFLOW_DEMAND_CANCELLATION_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_DEMAND_CANCELLATION_RESULT_SCHEMA,
   annotations: EFFECT_ANNOTATIONS,

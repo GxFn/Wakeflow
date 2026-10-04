@@ -147,7 +147,7 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
       windowIdentity: false,
       podReceipts: false,
       worktree: {
-        launch: "codex-worktree-thread",
+        launch: "git-worktree",
         attachedDirectories: "prompt-path",
       },
       keepLive: false,
@@ -158,7 +158,7 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
       activityMonitor: false,
       temporaryPrompts: false,
     },
-    launch: { kind: "host-thread" },
+    launch: { kind: "project-thread" },
   });
 
   let caught: unknown;

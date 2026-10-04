@@ -45,35 +45,53 @@ const INSTRUCTION_FILE = "AGENTS.md";
 
 /** Codex 线程不会被挪进新进程：relocate 在本宿主不适用，线程没了就开新线程再 replace（§13.134）。 */
 const WINDOW_LAUNCH =
-  "open a new Codex thread rooted at the directory the intent names, started with " +
-  "the parameters it lists. A thread is never moved into a new process, so relocate does " +
-  "not apply on this host: when a window's thread is gone, open a new one and replace the " +
-  "binding with its thread id.";
+  "use list_projects to resolve the existing outer workspace project by canonical path and " +
+  "host, then create_thread with target.type project, that projectId, and environment.type " +
+  "local for every role. Never register role directories as projects or substitute projectless " +
+  "chats or codex exec sessions. The chat starts in the workspace root; the role's execution " +
+  "root is separate and must be stated in its startup prompt with windowId, role skill, scope " +
+  "and return pointer. Read the execution root's instructions explicitly and use it as command " +
+  "workdir. Retain the creation result and wait for a ready threadId; clientThreadId is not a " +
+  "binding handle. Read back project membership and actual startup before registration. If " +
+  "the list omits a newly created chat, use direct UI confirmation and disclose that limitation; " +
+  "cwd and title alone do not prove project membership. A missing project or unavailable " +
+  "creation tool is a blocker, not permission for an external fallback. Do not retry creation " +
+  "after an ambiguous result until you establish whether the first chat exists. Keep requested " +
+  "role chats visible; archive only when the user authorizes retiring them. A thread is never " +
+  "moved into a new process, so relocate does not apply on this host; replace a gone thread " +
+  "only with an authorized new chat in the same outer project.";
 
 /** Codex 没有 tmux：Controller 就是当前线程，先登记自己再开别的。 */
 const WINDOW_BOOTSTRAP =
-  "the Controller is the thread you are in: register it with its own thread id before " +
-  "opening anything else, then work through the remaining launch intents.";
+  "reuse the current chat as Controller only when its outer workspace project membership " +
+  "and workspace-root SessionStart are established. A source-maintenance chat in another " +
+  "project is not that Controller. With the user's existing authorization, create the " +
+  "Controller in the workspace project first, verify and register it, then handle the other " +
+  "roles in that same project. Do not ask again for authorization already given.";
 
 const DELIVERY_ACTION =
   "send the permit's prompt into the target window's thread with your Codex thread " +
   "tool, once, and keep exactly what that send call returned.";
 
 const WORKTREE_LAUNCH =
-  "open the product window's thread with create_thread using a worktree environment for " +
-  "the repository the intent names. The checkout starts on a detached HEAD, so run " +
-  "`git switch -c <suggestedName>` in it before any result is imported from it.";
+  "create a linked checkout from the configured product repository's local HEAD using " +
+  "git worktree add with the suggested branch name and an available checkout path. Keep " +
+  "the role chat in the same outer project using a local environment: create_thread's " +
+  "worktree environment targets the project's primary repository. Pass the assigned " +
+  "checkout in the startup prompt and record worktree.executionRoot from pwd there along " +
+  "with git worktree list --porcelain and git rev-parse --git-common-dir. Wakeflow verifies " +
+  "the checkout's repository and pointer files independently of the chat's SessionStart.";
 
 /**
  * 插件更新后的窗口换代（§13.134）：本线程先换代——它的服务只有用户能重连，在那之前不跑维护、
  * 也不换别的窗口（过期服务给的启动意图是旧的）；之后其他过期窗口开新线程加 replace。
  */
 const WINDOW_RESUME =
-  "first this thread, when it is stale or its server outdated: only the user can reconnect " +
-  "its Wakeflow server or resume the session - tell them, and wait until they have before you " +
-  "continue. Then, after that verify and any reconcile, the other stale windows: open a new " +
-  "thread for each as its launch intent says and replace the binding with that thread's id - " +
-  "a thread is never moved into a new process, so there is no relocate path.";
+  "when this serving MCP is outdated, ask the user to reload its Wakeflow server or resume " +
+  "this existing chat before maintenance. For a peer with direct evidence of an outdated " +
+  "runtime, reload or resume that existing chat through the host. Replace its binding only " +
+  "when the old chat is gone and the user authorizes a replacement chat. A missing hook alone " +
+  "does not justify creating or rebinding a chat.";
 
 /** Codex 没有助手替你守重发：发送前自己看接收窗口的线程。 */
 const RESEND_GUARD =
@@ -87,6 +105,8 @@ const COMMAND_SURFACE_EN =
 const COMMAND_SURFACE_ZH = "本宿主不发 slash 命令。直接说人话即可，已加载的技能会把它路由到对应工具。";
 
 const HOST_TRUST_STEPS_EN = [
+  "Codex desktop uses the Node runtime supplied by the app. In the CLI, ensure Node 24",
+  "is on PATH when the host does not supply a runtime.",
   "Open `/hooks` and trust Wakeflow's four hooks after reviewing them by their",
   "definition hash. Until you do, all four are skipped: no session is observed, so no",
   "window can be registered and no delivery can be shown to have landed. If a plugin",
@@ -95,6 +115,7 @@ const HOST_TRUST_STEPS_EN = [
 ].join("\n");
 
 const HOST_TRUST_STEPS_ZH = [
+  "Codex 桌面应用使用宿主自带的 Node。CLI 未提供宿主运行时时，需要 PATH 中有 Node 24。",
   "在 `/hooks` 里按定义哈希审阅并信任 Wakeflow 的四个 hook。信任之前四个 hook 全部被",
   "跳过：没有会话被观察到，窗口无法登记，投递也拿不到落地证据。插件更新后若 hook 定义",
   "字节发生变化，Codex 会要求重新信任——正常更新后 `/hooks` 里不应出现待审阅的 Wakeflow",

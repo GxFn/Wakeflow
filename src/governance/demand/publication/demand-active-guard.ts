@@ -22,6 +22,13 @@ import {
   DemandOperationAuthorityContextError,
   openDemandOperationRoot,
 } from "../demand-operation-authority-context.js";
+import { readWakeflowConfigAuthoritySnapshot } from "../../../configuration/wakeflow-config-authority-snapshot.js";
+import { parsePortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
+import { readStableResourceDirectory, StableDirectoryReadError } from "../../../foundation/filesystem/stable-directory-read.js";
+import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../../kernel/layout.js";
+import { locateLatestDemandArchive } from "../../observation/demand-archive-locator.js";
+import { readPublicationTransactionAt } from "./demand-event-sourcing-publication-storage.js";
+import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF } from "./demand-publication-paths.js";
 import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
@@ -159,6 +166,7 @@ export async function assertNoActiveDemand(
   excluding: string | null = null,
   podId: string | null = null,
 ): Promise<void> {
+  await assertNoPendingPodMutation(root, signal, excluding, podId);
   const states = (await listRequirementClaimStates(root, signal)).states;
   for (const state of states) {
     // 看板关系保证 claimed 必有 claim；这里收窄一次，让 details 的 demandId 总是存在。
@@ -168,6 +176,59 @@ export async function assertNoActiveDemand(
       fail("precondition-failed", "pod-busy", "$board", {
         details: { demandId: state.claim.demandId },
       });
+    }
+  }
+}
+
+/** 活动根或最近归档中的 pod 身份；旧或损坏数据无法定位时返回 null，守卫保持保守。 */
+export async function readDemandPodId(root: RootedDirectory, demandId: string, signal?: AbortSignal): Promise<string | null> {
+  const id = parseWakeflowDurableIdOfKind(demandId, "demand");
+  if (await resourceExists(root, demandFinalRootRef(id))) {
+    const demandRoot = await openDemandOperationRoot(root, id);
+    try { return await identityPodId(demandRoot, signal); }
+    finally { await closeDemandOperationRoot(demandRoot); }
+  }
+  const options = signal === undefined ? {} : { signal };
+  const config = await readWakeflowConfigAuthoritySnapshot(root, options);
+  const ledger = await RootedDirectory.open(config.ledgerRoot, "$ledgerRoot", { durability: root.durability });
+  try { return (await locateLatestDemandArchive(ledger, demandId, signal))?.podId ?? null; }
+  finally { await ledger.close(); }
+}
+
+async function pendingEntries(root: RootedDirectory, ref: string, signal: AbortSignal | undefined) {
+  try {
+    return (await readStableResourceDirectory(root, parsePortableResourcePath(ref), {
+      maximumEntries: 4096, ...(signal === undefined ? {} : { signal }),
+    })).entries;
+  } catch (error: unknown) {
+    if (error instanceof StableDirectoryReadError && error.reason === "not-found") return [];
+    throw error;
+  }
+}
+
+/** 崩溃释放进程锁不代表业务已结清：已有发布意图和生命周期日志继续保留 pod 占用。 */
+async function assertNoPendingPodMutation(root: RootedDirectory, signal: AbortSignal | undefined, excluding: string | null, podId: string | null) {
+  for (const entry of await pendingEntries(root, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, signal)) {
+    if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
+      fail("precondition-failed", "pod-publication-residue", "$pod");
+    }
+    const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");
+    if (id === excluding) continue;
+    const stored = await readPublicationTransactionAt(root, entry.resourcePath, entry.node, signal);
+    if (stored.transaction.demandId !== id) fail("precondition-failed", "pod-publication-residue", "$pod");
+    if (podId === null || stored.transaction.identity.podId === podId) {
+      fail("precondition-failed", "pod-busy", "$board", { details: { demandId: id } });
+    }
+  }
+  for (const entry of await pendingEntries(root, DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, signal)) {
+    if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
+      fail("precondition-failed", "pod-lifecycle-residue", "$pod");
+    }
+    const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");
+    if (id === excluding) continue;
+    const ownerPodId = await readDemandPodId(root, id, signal);
+    if (podId === null || ownerPodId === null || ownerPodId === podId) {
+      fail("precondition-failed", "pod-busy", "$board", { details: { demandId: id } });
     }
   }
 }

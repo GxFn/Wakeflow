@@ -64,7 +64,7 @@ const OBSERVED = Object.freeze({ status: "observed" as const, issue: null });
 
 function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGateFacts {
   return {
-    runtime: { manifestDigest: null, onDiskDigest: null, staleWindows: [] },
+    runtime: { server: null, unverifiedWindows: [] },
     domains: { demands: OBSERVED, claims: OBSERVED, pods: OBSERVED },
     configRecheck: "current",
     configRef: WAKEFLOW_CONFIG_FILE_REF,
@@ -176,8 +176,8 @@ function nextInput(overrides: Partial<NextActionInput> = {}): NextActionInput {
     unregisteredWindows: [],
     demands: [],
     pendingPackages: [],
-    staleArtifactWindows: [],
     artifactServerOutdated: false,
+    artifactServerUnavailable: false,
     ...overrides,
   };
 }
@@ -864,14 +864,14 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
     code,
     evidence: [],
   });
-  deepEqual(verifyNext([...gates, artifactGate("server-outdated,windows-stale:1")]), {
+  deepEqual(verifyNext([...gates, artifactGate("server-outdated,window-runtime-unverified:1")]), {
     frontier: "runtime-artifact-outdated",
     owner: "user",
     suggestedTool: null,
     blockers: ["config-authority:fail", "ledger-layout:unavailable", "runtime-artifact:fail"],
   });
-  deepEqual(verifyNext([artifactGate("windows-stale:2")]), {
-    frontier: "window-artifact-stale",
+  deepEqual(verifyNext([artifactGate("window-runtime-unverified:2")]), {
+    frontier: "window-runtime-unverified",
     owner: "controller",
     suggestedTool: null,
     blockers: ["runtime-artifact:fail"],
@@ -1107,12 +1107,14 @@ test("window-runtime-projection：每个宿主的每个窗口投影都与重算�
   );
 });
 
-test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable 并 pass；磁盘上的 manifest 变了报 server-outdated；会话在旧制品下启动的窗口按数报 windows-stale", () => {
+test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable 并 pass；磁盘上的 manifest 变了报 server-outdated；窗口实例未关联时 unavailable，不能从 hook 推断 current/stale", () => {
   const same = digest("artifact-a");
   deepEqual(verdictOf(healthyFacts(), "runtime-artifact"), ["pass", "not-applicable"]);
   deepEqual(
     verdictOf(
-      healthyFacts({ runtime: { manifestDigest: same, onDiskDigest: same, staleWindows: [] } }),
+      healthyFacts({
+        runtime: { server: { manifestDigest: same, onDiskDigest: same }, unverifiedWindows: [] },
+      }),
       "runtime-artifact",
     ),
     ["pass", null],
@@ -1120,7 +1122,10 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
   deepEqual(
     verdictOf(
       healthyFacts({
-        runtime: { manifestDigest: same, onDiskDigest: digest("artifact-b"), staleWindows: [] },
+        runtime: {
+          server: { manifestDigest: same, onDiskDigest: digest("artifact-b") },
+          unverifiedWindows: [],
+        },
       }),
       "runtime-artifact",
     ),
@@ -1130,9 +1135,8 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     verdictOf(
       healthyFacts({
         runtime: {
-          manifestDigest: same,
-          onDiskDigest: null,
-          staleWindows: [
+          server: { manifestDigest: same, onDiskDigest: null },
+          unverifiedWindows: [
             "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
           ],
@@ -1140,23 +1144,15 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
       }),
       "runtime-artifact",
     ),
-    ["fail", "windows-stale:2"],
+    ["unavailable", "manifest-unavailable,window-runtime-unverified:2"],
   );
   deepEqual(
     deriveNextActions(
       nextInput({
         artifactServerOutdated: true,
-        staleArtifactWindows: [
-          "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-          "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ],
       }),
     ).map((action) => [action.owner, action.tool, action.reason, action.subject]),
-    [
-      ["user", null, "runtime-artifact-outdated", null],
-      ["controller", null, "window-artifact-stale", "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
-      ["controller", null, "window-artifact-stale", "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
-    ],
+    [["user", null, "runtime-artifact-outdated", null]],
   );
 });
 
@@ -1186,4 +1182,35 @@ test("verify 的公共描述与门集合同步：门数的数词与每个门的�
       `${gate.name} → "${phrase}" missing from description`,
     );
   }
+});
+
+test("曾有运行制品身份但磁盘清单消失时，verify/status 都要求检查安装，不冒充一致", () => {
+  const facts = healthyFacts({
+    runtime: {
+      server: { manifestDigest: digest("previous-artifact"), onDiskDigest: null },
+      unverifiedWindows: [],
+    },
+  });
+  deepEqual(verdictOf(facts, "runtime-artifact"), ["unavailable", "manifest-unavailable"]);
+  deepEqual(
+    verifyNext([
+      {
+        name: "runtime-artifact",
+        owner: "runtime",
+        status: "unavailable",
+        code: "manifest-unavailable",
+        evidence: [],
+      },
+    ]),
+    {
+      frontier: "runtime-artifact-unavailable",
+      owner: "user",
+      suggestedTool: null,
+      blockers: ["runtime-artifact:unavailable"],
+    },
+  );
+  equal(
+    deriveNextActions(nextInput({ artifactServerUnavailable: true }))[0]?.reason,
+    "runtime-artifact-unavailable",
+  );
 });

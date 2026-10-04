@@ -462,7 +462,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["porcelain", "commonDir"],
-      "description": "Git facts the Agent observed inside the product session of a worktree pod: the verbatim output of `git worktree list --porcelain` and of `git rev-parse --git-common-dir` run in the session cwd. Wakeflow parses them, selects the checkout equal to the session-start cwd, and cross-checks the .git pointer files; nothing here is echoed back.",
+      "description": "Git facts observed in the assigned product checkout. Session-root hosts use the SessionStart cwd; project-chat hosts require executionRoot from pwd in that checkout. Wakeflow cross-checks the selected porcelain entry, repository common dir and linked .git pointers. Paths remain private.",
       "properties": {
         "porcelain": {
           "type": "string",
@@ -473,6 +473,12 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 4096
+        },
+        "executionRoot": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Absolute assigned worktree directory, required for project chats whose SessionStart cwd is the outer workspace. Omit for session-root hosts."
         }
       }
     }

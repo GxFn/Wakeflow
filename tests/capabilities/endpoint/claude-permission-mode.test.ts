@@ -1,3 +1,4 @@
+import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import { equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
@@ -25,6 +26,7 @@ const CLAUDE: WindowBindingHostFacade = {
   hostId: "claude-code",
   resourceProfile: claudeCodeWorkspaceHostResourceProfile,
   identityProfile: claudeCodeWindowHostIdentityProfile,
+  renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };
 
 /** 一次性工作区经 Fresh 初始化后 inspect 第一个窗口，返回它的启动参数。 */

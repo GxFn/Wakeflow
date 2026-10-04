@@ -41,6 +41,7 @@ import {
   CREDENTIAL_PRIVACY_FINDING_KINDS,
   DEFAULT_ALLOWED_ID_PREFIXES,
   scanPrivacy,
+  scanPrivacyText,
   type PrivacyFinding,
   type PrivacyScanPolicy,
 } from "../../kernel/privacy-scan.js";
@@ -197,7 +198,6 @@ interface CapturedSource {
 const CONTENT_CLASSIFICATION_CONCURRENCY = 4;
 const MAXIMUM_FILE_BYTES = parseByteCount(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes);
 const CAPTURED_FILE_REF = parsePortableResourcePath("content");
-const NON_TEXT_CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u;
 const BLOCKER_LIMIT = 16;
 
 function ownString(value: unknown, key: string): string | null {
@@ -359,7 +359,7 @@ interface ClassifiedContent {
   readonly findings: readonly Readonly<ManagedEvidenceCaptureFinding>[];
 }
 
-/** opaque 字节不扫描；文本成员的每条命中带成员引用与行号。 */
+/** Every decodable member is scanned, including opaque text; findings retain source lines. */
 function classifyContent(
   bytes: Uint8Array,
   ref: PortableResourcePath,
@@ -372,11 +372,11 @@ function classifyContent(
     if (error instanceof Utf8Error) return Object.freeze({ opaque: true, findings: [] });
     throw error;
   }
-  if (NON_TEXT_CONTROL_PATTERN.test(text)) return Object.freeze({ opaque: true, findings: [] });
+  const scanned = scanPrivacyText(text, policy);
   return Object.freeze({
-    opaque: false,
+    opaque: scanned.opaque,
     findings: Object.freeze(
-      scanPrivacy(text, policy).map((finding) =>
+      scanned.findings.map((finding) =>
         Object.freeze({ ref, line: finding.line, kind: finding.kind }),
       ),
     ),

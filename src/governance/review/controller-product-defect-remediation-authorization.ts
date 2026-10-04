@@ -75,7 +75,7 @@ export interface ProductDefectRemediationRouteSource {
   readonly streamRevision: DemandEventStreamRevision;
 }
 
-/** 测试结果里判定为 fail 的合同步骤引用（stepId 与 observed 原文）。 */
+/** 决定授权修复的失败步骤引用（stepId 与 observed 原文），并非整份结果的所有失败。 */
 export interface ProductDefectRemediationFailedStep {
   readonly stepId: string;
   readonly observed: string;
@@ -137,7 +137,7 @@ export interface CreateControllerProductDefectRemediationAuthorizationInput {
     readonly taskPackageId: WakeflowDurableId<"task-package">;
     readonly taskPackageDigest: Sha256Digest;
   }>;
-  /** 被评审测试结果里 verdict 为 fail 的步骤；受影响目标的映射取自决定的 remediation。 */
+  /** 被授权修复的失败步骤；公共切片只传 product-defect，集合须与决定的 remediation 映射一致。 */
   readonly failedSteps: readonly Readonly<ProductDefectRemediationFailedStep>[];
   /** 决定引用的每个产品目标的当前 approved 基线（读侧派生，§13.87 D6）。 */
   readonly baselines: readonly Readonly<TestImplementationBaseline>[];

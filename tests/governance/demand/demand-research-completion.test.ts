@@ -12,7 +12,7 @@ import {
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
-import { executeDemandCompletionRequest } from "../../../src/capabilities/demand/lifecycle.js";
+import { executeDemandCompletionRequest, executeDemandCancellationRequest } from "../../../src/capabilities/demand/lifecycle.js";
 import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
@@ -514,7 +514,7 @@ test("verify 门：非 research Demand 不设 research-evidence 门", async (t) 
     fixture.request.demandId,
     PLANNING_REQUIREMENT_ID,
   );
-  deepEqual(report.gates.map((gate) => gate.gate), [...BASE_GATES]);
+  deepEqual(report.gates.map((gate) => gate.gate), [...BASE_GATES, "requirement-coverage"]);
 });
 
 test("research Demand 完成：有 document 证据即完成并归档，终态记 not-applicable，归档 verify 报告带 research-evidence 门", async (t) => {
@@ -642,4 +642,28 @@ test("聚合完成：存在 test 目标时 not-applicable 被拒，测试环节�
   } finally {
     await cleanupTestTaskPlanningWorkspaceFixture(fixture);
   }
+});
+
+
+test("research 没有 document 证据时完成仍阻塞，取消可归档并撤回，恢复幂等", { timeout: 120_000 }, async (t) => {
+  const fixture = await createResearchDemandFixture(t);
+  const request = { root: fixture.root, demandId: fixture.demandId };
+  const completion = await executeDemandCompletionRequest({ ...request, mode: "preview" }, CLOCK);
+  if (completion.kind !== "WakeflowDemandCompletionPreview") throw new Error("Expected completion preview");
+  equal(completion.status, "blocked");
+  equal(completion.blockers.includes("verify:research-evidence:fail"), true);
+  const cancel = { ...request, reason: "Stop research before producing an accepted document." };
+  const preview = await executeDemandCancellationRequest({ ...cancel, mode: "preview" }, CLOCK);
+  if (preview.kind !== "WakeflowDemandCancellationPreview" || preview.planDigest === null) throw new Error(JSON.stringify(preview));
+  equal(preview.status, "ready");
+  equal(preview.verify?.gates.find((gate) => gate.gate === "research-evidence")?.status, "fail");
+  const applied = await executeDemandCancellationRequest({ ...cancel, mode: "apply", planDigest: preview.planDigest }, CLOCK);
+  if (applied.kind !== "WakeflowDemandCancellationMutation") throw new Error("Expected cancellation");
+  equal(applied.disposition, "cancelled");
+  equal(applied.package.status, "withdrawn");
+  equal(existsSync(path.join(fixture.root, demandFinalRootRef(fixture.demandId))), false);
+  const recovered = await executeDemandCancellationRequest({ root: fixture.root, mode: "recover", operationId: fixture.demandId }, CLOCK);
+  if (recovered.kind !== "WakeflowDemandCancellationMutation") throw new Error("Expected recovery");
+  equal(recovered.archive.manifestDigest, applied.archive.manifestDigest);
+  equal(recovered.package.status, "withdrawn");
 });

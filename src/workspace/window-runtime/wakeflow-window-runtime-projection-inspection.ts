@@ -20,6 +20,7 @@ import {
 import type { WakeflowWindowHostBinding } from "./wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
+  type WakeflowWindowHostBindingInventory,
   WakeflowWindowHostBindingStoreError,
 } from "./wakeflow-window-host-binding-store.js";
 import {
@@ -36,6 +37,7 @@ import {
   type WakeflowWindowRuntimeProjectionDocumentTarget,
 } from "./wakeflow-window-runtime-projection-document.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "./wakeflow-window-runtime-registered-projection.js";
+import { wakeflowWindowRuntimeProjectionRootRef } from "./wakeflow-window-runtime-paths.js";
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,
   WakeflowWindowRuntimeUnregisteredProjectionError,
@@ -217,10 +219,8 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
   options: ResolveWakeflowWindowRuntimeProjectionExpectedEntriesOptions = {},
 ): Promise<WakeflowWindowRuntimeProjectionExpectedEntries> {
   const { config, resourceProfile, identityProfile } = inputs;
-  let unregistered;
   let authority;
   try {
-    unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
     authority = compileWakeflowWindowHostBindingStoreAuthority(
       config,
       resourceProfile,
@@ -237,7 +237,7 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
   }
   if (
     options.projectionRootRequired !== false
-    && !(await resourcePresent(root, unregistered.projectionRootRef, "$projectionRoot"))
+    && !(await resourcePresent(root, wakeflowWindowRuntimeProjectionRootRef(resourceProfile), "$projectionRoot"))
   ) {
     return Object.freeze({ kind: "runtime-missing" as const });
   }
@@ -257,7 +257,28 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
     }
     throw error;
   }
-  const entries = unregistered.entries.map((entry) => {
+  return Object.freeze({
+    kind: "entries" as const,
+    entries: compileWakeflowWindowRuntimeProjectionExpectedEntries(inputs, inventory),
+  });
+}
+
+/** Pure rendering shared by read-only observation and binding-locked publication. */
+export function compileWakeflowWindowRuntimeProjectionExpectedEntries(
+  inputs: WakeflowWindowRuntimeProjectionInputs,
+  inventory: Readonly<WakeflowWindowHostBindingInventory>,
+): readonly Readonly<WakeflowWindowRuntimeProjectionExpectedEntry>[] {
+  const { config, resourceProfile, identityProfile } = inputs;
+  let unregistered;
+  try {
+    unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
+      failWindowRuntimeProjection("topology", error.path);
+    }
+    throw error;
+  }
+  return Object.freeze(unregistered.entries.map((entry) => {
     const binding = inventory.bindings.find((candidate) => candidate.windowId === entry.windowId);
     const compiled = binding === undefined
       ? entry
@@ -277,8 +298,7 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
         projectionDigest: compiled.projection.projectionDigest,
       }),
     });
-  });
-  return Object.freeze({ kind: "entries" as const, entries: Object.freeze(entries) });
+  }));
 }
 
 /** 逐窗口比对磁盘文档与期望：current / stale / missing / unsafe，并带回当前文档摘要。 */

@@ -1,3 +1,4 @@
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -212,6 +213,7 @@ const CODEX_FACADE = {
   hostId: "codex",
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
+  renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 } as const;
 
 function projectionSteps(result: unknown): readonly string[] {
@@ -249,7 +251,7 @@ test("maintain_workspace reconcile rebuilds a missing or stale registered window
     hostId: "codex",
     event: "session-start",
     sessionId: handle.value,
-    cwd: path.resolve(root, intent.root.configuredPlacement),
+    cwd: root,
     recordedAt: parseUtcInstant("2026-09-21T09:58:00.000Z"),
   });
   const registered = await executeWindowBindingRequest(

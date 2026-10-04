@@ -8,6 +8,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -419,6 +420,18 @@ test("preflight reports node, tmux, claude, the configured session and the shell
   deepEqual(tmuxLog(current).map((entry) => entry[0]), ["has-session", "-V"]);
 });
 
+test("tmux helper admits only the current config version", async (t) => {
+  const current = await fixture(t);
+  const configPath = path.join(current.root, "wakeflow.config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  for (const version of [1, 2, 3, "2"]) {
+    writeFileSync(configPath, `${JSON.stringify({ ...config, schemaVersion: version })}\n`);
+    const run = runHelper(current, ["preflight"]);
+    equal(run.status, version === 2 ? 0 : 1);
+    if (version !== 2) equal(run.json.reason, "config-invalid");
+  }
+});
+
 test("the helper strips every Claude session and host variable before running tmux and keeps only the user's Claude configuration（§13.132）", async (t) => {
   const current = await fixture(t);
   const dump = path.join(current.state, "env.txt");
@@ -486,9 +499,11 @@ test("launch and resume grant the Wakeflow MCP tools and the helper by its absol
 
 test("launch opens the session or a window from the intent, freezes the title, writes the identity options and returns the observation", async (t) => {
   const current = await fixture(t);
+  const shard = path.join(current.hooks, "20260924", "aa");
+  mkdirSync(shard, { recursive: true });
   const first = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID, "--wait", "1"], {
     input: JSON.stringify({ windowId: CONTROLLER_WINDOW_ID, launchIntent: launchIntent("Controller", ".") }),
-    env: { WAKEFLOW_STUB_HOOKS: current.hooks },
+    env: { WAKEFLOW_STUB_HOOKS: shard },
   });
   equal(first.status, 0, JSON.stringify(first.json));
   equal(first.json.ok, true);
@@ -850,8 +865,10 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   equal((pendingLanding.json.landing as { status: string }).status, "pending");
   const promptDigest = computeSha256Digest(encodeUtf8(prompt.trim(), "$prompt"), "$prompt");
   const recordId = "11111111-2222-4333-8444-555555555555";
+  const landingDirectory = path.join(current.hooks, "20260924", "11");
+  mkdirSync(landingDirectory, { recursive: true });
   writeFileSync(
-    path.join(current.hooks, `20260924T010000000Z-user-prompt-submit-${recordId}.json`),
+    path.join(landingDirectory, `20260924T010000000Z-user-prompt-submit-${recordId}.json`),
     JSON.stringify({
       kind: "WakeflowHostHookObservation",
       event: "user-prompt-submit",
@@ -972,7 +989,10 @@ test("resume restarts the bound session in a new pane and launch refuses while t
   writeLocator(current, PRODUCT_WINDOW_ID);
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
   const intent = JSON.stringify(launchIntent("Product A", "../ProductA"));
-  const hooks = { WAKEFLOW_STUB_HOOKS: current.hooks };
+  const shard = path.join(current.hooks, "20260924", "bb");
+  mkdirSync(shard, { recursive: true });
+  const hooks = { WAKEFLOW_STUB_HOOKS: shard };
+  writeFileSync(path.join(current.hooks, "20260924T000000000Z-session-start-legacy.json"), JSON.stringify({ kind: "stub", event: "session-start", sessionId: SESSION_ID }));
   // 定位器指向的 pane 还活着：launch 与 resume 都拒绝，--force 才继续。
   writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
   const liveLaunch = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
@@ -1722,4 +1742,32 @@ test("nudge treats Claude Code 2.1.283's elapsed-time spinner as busy and its do
   const done = nudgeWith(screen("✻ Crunched for 3m 6s · done 4:10 PM", errorLine, "", "──────────", "❯ "));
   equal(done.json.status, "nudged", JSON.stringify(done.json));
   equal(done.json.observedBusy, undefined);
+});
+
+
+test("hook 分片中不可读候选或符号链接不能被当作未落地，助手在粘贴前拒绝", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
+  const shard = path.join(current.hooks, "20260924", "aa");
+  mkdirSync(shard, { recursive: true });
+  const candidate = path.join(shard, "20260924T010000000Z-user-prompt-submit-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.json");
+  writeFileSync(candidate, "not JSON");
+  const attempt = () => runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"], { input: "Keep this delivery unique." });
+  const broken = attempt();
+  equal(broken.status, 1);
+  equal(broken.json.reason, "hook-observations-unavailable");
+  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  rmSync(shard, { recursive: true });
+  const outside = path.join(current.parent, "unowned-hook-directory");
+  mkdirSync(outside);
+  writeFileSync(path.join(outside, "keep.txt"), "preserve");
+  symlinkSync(outside, shard, "dir");
+  resetLog(current);
+  const aliased = attempt();
+  equal(aliased.status, 1);
+  equal(aliased.json.reason, "hook-observations-unavailable");
+  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  equal(readFileSync(path.join(outside, "keep.txt"), "utf8"), "preserve");
 });

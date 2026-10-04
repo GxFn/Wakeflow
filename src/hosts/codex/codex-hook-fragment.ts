@@ -1,4 +1,5 @@
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { CODEX_NODE_SHELL_WORD } from "./codex-process-launch-profile.js";
 
 /**
  * Wakeflow Host / Codex：插件级 hook 配置片段（gate-log §13.97 D5、D6）。
@@ -6,7 +7,7 @@ import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/
  * 本模块是纯数据加确定性渲染：制品构建器把 `renderCodexHooksJson()` 的字节原样写成制品根的
  * `hooks/hooks.json`（Codex 的默认位置，不改插件清单），Codex 在用户于 `/hooks` 里按定义哈希审阅信任
  * 后按它在 `SessionStart`、`UserPromptSubmit`、`Stop`、`SessionEnd` 时启动 `hooks/observe.mjs`。Codex
- * 只有命令串形式：`node "${PLUGIN_ROOT}/hooks/observe.mjs" --wakeflow-hook-observer-v1 --host codex`，
+ * 只有命令串形式：Node 选择由本宿主的 process-launch profile 提供，脚本路径为插件根之下的 observe.mjs，
  * 占位符由宿主展开；argv 只带固定标记与 `--host codex`，工作区由脚本按声明拓扑定位（D2），所以片段里
  * 没有工作区根，四个事件都不设 matcher。
  *
@@ -16,7 +17,7 @@ import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/
  * 记录，字节一变四个 hook 就被跳过直到重新信任，所以只含占位符，不含版本号或构建标识；键序固定、
  * 2 空格缩进、尾随换行。
  *
- * 本模块只依赖 foundation crypto：标记与宿主参数是与入口 `wakeflow-hook-observer.ts` 约定的字面量，
+ * 本模块依赖 foundation crypto 与本宿主的进程启动 profile：标记与宿主参数是与入口 `wakeflow-hook-observer.ts` 约定的字面量，
  * 宿主层不能反向导入入口，测试核对两处相等。
  */
 
@@ -50,9 +51,9 @@ const USER_PROMPT_SUBMIT_TIMEOUT_SECONDS = 5;
 const STOP_TIMEOUT_SECONDS = 5;
 const SESSION_END_TIMEOUT_SECONDS = 3;
 
-/** 命令串：脚本路径带双引号（占位符展开后的路径可含空格），其余三个参数是固定字面量。 */
+/** 命令串：Node 选择与脚本路径均带双引号（占位符展开后的路径可含空格），其余三个参数是固定字面量。 */
 export const CODEX_HOOK_OBSERVER_COMMAND: string = [
-  "node",
+  CODEX_NODE_SHELL_WORD,
   `"${PLUGIN_ROOT_PLACEHOLDER}/${CODEX_HOOK_OBSERVER_SCRIPT_PATH}"`,
   CODEX_HOOK_OBSERVER_MARKER,
   CODEX_HOOK_OBSERVER_HOST_ARGUMENT,

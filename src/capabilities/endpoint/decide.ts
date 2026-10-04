@@ -33,7 +33,7 @@ export interface EndpointState {
   readonly claim: EndpointClaimState | null;
   /** 句柄值到已绑定窗口的映射，用于跨窗口唯一性。 */
   readonly handleOwners: ReadonlyMap<string, string>;
-  /** 有 `session-start` hook 记录且 cwd 与本窗口根一致的会话标识。 */
+  /** 有 `session-start` hook 记录且 cwd 与宿主规定的启动根一致的会话标识。 */
   readonly startedSessions: ReadonlySet<string>;
   /** 有 `session-end` hook 记录的会话标识。 */
   readonly endedSessions: ReadonlySet<string>;

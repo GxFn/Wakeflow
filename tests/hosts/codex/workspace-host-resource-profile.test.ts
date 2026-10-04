@@ -21,7 +21,7 @@ test("Codex host owns one exact matrix-shaping resource profile", () => {
       windowIdentity: true,
       podReceipts: true,
       worktree: {
-        launch: "codex-worktree-thread",
+        launch: "git-worktree",
         attachedDirectories: "prompt-path",
       },
       keepLive: true,
@@ -32,7 +32,7 @@ test("Codex host owns one exact matrix-shaping resource profile", () => {
       activityMonitor: false,
       temporaryPrompts: false,
     },
-    launch: { kind: "host-thread" },
+    launch: { kind: "project-thread" },
   });
   assertDeepFrozen(codexWorkspaceHostResourceProfile);
 });

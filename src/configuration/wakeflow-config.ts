@@ -323,9 +323,7 @@ function fail(reason: WakeflowConfigErrorReason, path: string): never {
   throw new WakeflowConfigError(reason, path);
 }
 
-const validateWireConfig = createRuntimeJsonSchemaValidator<WakeflowConfigWire>(
-  WAKEFLOW_CONFIG_SCHEMA,
-);
+const validateWireConfig = createRuntimeJsonSchemaValidator<WakeflowConfigWire>(WAKEFLOW_CONFIG_SCHEMA);
 
 /** 兄弟根放置至多一个前导 `..`：hook 观察脚本按"祖先或祖先的直接子目录"找回工作区（§13.97 D2e）。 */
 const SIBLING_PLACEMENT_MAXIMUM_PARENT_SEGMENTS = 1;

@@ -18,6 +18,13 @@ import {
   RequirementLineageError,
 } from "../../governance/demand/model/requirement-lineage.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
+import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import {
+  readPublicationTransactionAt,
+  publicationNodeOrNull,
+} from "../../governance/demand/publication/demand-event-sourcing-publication-storage.js";
+import { demandPublicationTransactionRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import { DemandEventSourcingPublicationServiceError } from "../../governance/demand/publication/demand-event-sourcing-publication-contract.js";
 import {
   publishDemandFromPackage,
@@ -364,6 +371,21 @@ function publicationReceipt(
 }
 
 async function applyCreate(context: DemandSliceContext, plan: CreatePlan): Promise<CreateOutcome> {
+  return withPodMutation(
+    context.root,
+    plan.podId,
+    async () => {
+      await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+      return applyCreateLocked(context, plan);
+    },
+    context.signal,
+  );
+}
+
+async function applyCreateLocked(
+  context: DemandSliceContext,
+  plan: CreatePlan,
+): Promise<CreateOutcome> {
   const loaded = await loadPackage(context, plan.requirementId);
   if (loaded === null) fail("precondition-failed", "package-record-absent", "$ledger");
   const at = now(context);
@@ -411,6 +433,32 @@ async function applyCreate(context: DemandSliceContext, plan: CreatePlan): Promi
 }
 
 async function recoverCreate(
+  context: DemandSliceContext,
+  operationId: string,
+): Promise<CreateOutcome> {
+  const demandId = parseDemandId(operationId, "$request.operationId");
+  const ref = demandPublicationTransactionRef(demandId);
+  const node = await publicationNodeOrNull(context.root, ref);
+  if (node === null) return recoverCreateLocked(context, operationId);
+  const stored = await readPublicationTransactionAt(context.root, ref, node, context.signal);
+  return withPodMutation(
+    context.root,
+    stored.transaction.identity.podId,
+    async () => {
+      await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+      await assertNoActiveDemand(
+        context.root,
+        context.signal,
+        demandId,
+        stored.transaction.identity.podId,
+      );
+      return recoverCreateLocked(context, operationId);
+    },
+    context.signal,
+  );
+}
+
+async function recoverCreateLocked(
   context: DemandSliceContext,
   operationId: string,
 ): Promise<CreateOutcome> {
@@ -487,6 +535,7 @@ export async function executeDemandCreationRequest(
     DemandCreationResult
   >(
     {
+      mutationScope: "shared",
       tool: WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseDemandCreationRequest(raw);
@@ -514,6 +563,6 @@ export async function executeDemandCreationRequest(
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
     },
     value,
-    commandShellExecutionOptions(options.durability),
+    commandShellExecutionOptions(options.durability, options.signal),
   );
 }

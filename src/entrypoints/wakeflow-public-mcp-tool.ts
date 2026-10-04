@@ -28,8 +28,16 @@ import { publicToolDefinition, type WakeflowToolCatalog } from "../kernel/tool-r
 /** 进程级脱敏边界：用户 home 路径永不进入任何公共结果，与各 owner 的根扫描叠加。 */
 const PROCESS_REDACTION_BOUNDARY = createRedactionBoundary([os.homedir()]);
 
-/** 公共MCP executor只接收SDK已解析的wire值，并返回一个领域公共结果。 */
-export type WakeflowPublicMcpExecutor<Result> = (value: unknown) => Promise<Readonly<Result>>;
+/** SDK 签发的执行上下文；不是 Agent 可填写的 wire 请求。 */
+export interface WakeflowPublicMcpExecutionContext {
+  readonly signal: AbortSignal;
+}
+
+/** 公共 executor 接收已解析的 wire 值和请求取消信号，返回领域公共结果。 */
+export type WakeflowPublicMcpExecutor<Result> = (
+  value: unknown,
+  context: Readonly<WakeflowPublicMcpExecutionContext>,
+) => Promise<Readonly<Result>>;
 
 /** 可安全公开到MCP错误信封中的稳定、脱敏领域错误字段。 */
 interface WakeflowPublicMcpErrorDetails {
@@ -207,6 +215,7 @@ export function registerWakeflowPublicMcpCatalog(
   server: McpServer,
   catalog: Readonly<WakeflowToolCatalog>,
   executors: Readonly<Record<string, WakeflowPublicMcpExecutor<unknown>>>,
+  beforeMutation?: () => void,
 ): void {
   for (const registration of catalog.tools) {
     const execute = executors[registration.executor];
@@ -225,9 +234,18 @@ export function registerWakeflowPublicMcpCatalog(
         ),
         annotations: definition.annotations,
       },
-      async (request: unknown) => {
+      async (request: unknown, context) => {
         try {
-          return successfulToolResult(await execute(request));
+          const input = parseJsonValue(request, "$request");
+          const inspected =
+            input !== null &&
+            typeof input === "object" &&
+            (("mode" in input && input.mode === "preview") ||
+              ("operation" in input && input.operation === "inspect"));
+          if (definition.annotations.readOnlyHint !== true && !inspected) beforeMutation?.();
+          return successfulToolResult(
+            await execute(request, Object.freeze({ signal: context.mcpReq.signal })),
+          );
         } catch (error: unknown) {
           return failedToolResult(registration.name, error);
         }

@@ -1,3 +1,4 @@
+import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
 import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
 import {
   mkdirSync,
@@ -131,6 +132,7 @@ async function fixture(t: TestContext, options: { readonly ledger: boolean } = {
     renderWakeflowConfig(parseWakeflowConfig(configWithWorktreePod())),
     { mode: 0o644 },
   );
+  materializeFixtureOperationScope(workspacePath);
   const workspaceRoot = await RootedDirectory.open(workspacePath);
   t.after(async () => {
     await workspaceRoot.close();
@@ -278,6 +280,7 @@ test("退休证据：域与其中每个 Demand 都读得出才算看全，任一
 test("刷新是派生物：非 io 的 Wakeflow 失败被静默吞下，已经提交的变更照常返回", async (t) => {
   // 账本放置根不存在：刷新以 precondition-failed 失败，那不是 io-failure。
   const workspace = await fixture(t, { ledger: false });
+  await materializeActiveLayout(workspace.workspaceRoot, { recovering: false });
   await rejects(
     refreshActiveProjection(workspace.workspaceRoot),
     (error: unknown) =>
@@ -299,6 +302,14 @@ test("刷新是派生物：非 io 的 Wakeflow 失败被静默吞下，已经提
     afterMutationRefresh(workspace.workspaceRoot, AbortSignal.abort(), async () => "committed"),
     (error: unknown) => error instanceof WakeflowError && error.reason === "aborted",
   );
+  const cancellation = new AbortController();
+  const committed = await afterMutationRefresh(workspace.workspaceRoot, cancellation.signal, async () => {
+    writeFileSync(path.join(workspace.workspaceRoot.absolutePath, "committed-result.txt"), "committed\n");
+    cancellation.abort();
+    return "committed";
+  });
+  equal(committed, "committed");
+  equal(readFileSync(path.join(workspace.workspaceRoot.absolutePath, "committed-result.txt"), "utf8"), "committed\n");
 });
 
 test("刷新这条路也在锁内：锁被别人持有时这一轮以 projection-contended 失败，一个字节都不写", async (t) => {

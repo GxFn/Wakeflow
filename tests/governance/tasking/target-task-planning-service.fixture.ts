@@ -1,3 +1,4 @@
+import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -32,6 +33,7 @@ import {
 } from "../../../src/capabilities/tasking/service.js";
 import type { TargetTaskPlanningResult } from "../../../src/capabilities/tasking/contract.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { parseAcceptanceCriteria } from "../../../src/kernel/requirement-acceptance.js";
 import {
   createPreparedWorkspaceStore,
   DISPOSABLE_ROOT_OPTIONS,
@@ -42,7 +44,7 @@ import {
   placePendingClaimState,
   requirementLineageOf,
 } from "../demand/requirement-board.fixture.js";
-import { fixtureDocuments, publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
+import { fixtureDocuments, FIXTURE_REQUIREMENT_MARKDOWN, publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
 
 export const PLANNING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -102,6 +104,10 @@ export interface TargetTaskPlanningWorkspaceFixture {
 }
 
 export interface TargetTaskPlanningWorkspaceFixtureOptions {
+  /** 正向完成用例显式覆盖需求全集；规划/负向覆盖用例仍可只选 ac-1。 */
+  readonly coverAllCriteria?: boolean;
+  /** 验证身份读取预算时使用，三个自由文本字段都保持合法且真实发布。 */
+  readonly identityText?: string;
   readonly testingMode?: Exclude<DemandTestingMode, "not-applicable">;
   /** 需求包头部的任务清单审阅要求；user 时切片要求请求带 planReview。 */
   readonly taskPlanReview?: "controller" | "user";
@@ -127,8 +133,8 @@ export interface TargetTaskPlanningWorkspaceFacts {
 export function targetTaskPlanningWorkspaceBaselineKey(
   options: TargetTaskPlanningWorkspaceFixtureOptions,
 ): string | null {
-  if (options.freshBaseline === true || options.requirementMarkdown !== undefined) return null;
-  return `${options.testingMode ?? "controller-only"}|${options.taskPlanReview ?? "controller"}`;
+  if (options.freshBaseline === true || options.requirementMarkdown !== undefined || options.identityText !== undefined) return null;
+  return `${options.testingMode ?? "controller-only"}|${options.taskPlanReview ?? "controller"}|${options.coverAllCriteria === true}`;
 }
 
 export function planningUuidFactory(): () => string {
@@ -165,6 +171,7 @@ async function buildTargetTaskPlanningWorkspace(
     renderWakeflowConfig(config),
     { mode: 0o644 },
   );
+  materializeFixtureOperationScope(workspacePath);
   const workspaceRoot = await RootedDirectory.open(
     workspacePath,
     "$root",
@@ -202,9 +209,9 @@ async function buildTargetTaskPlanningWorkspace(
     {
       programId: PLANNING_PROGRAM_ID,
       demandId: PLANNING_DEMAND_ID,
-      title: "Plan one target task",
-      goal: "建立一份可审计的 implementation TaskPackage",
-      completionDefinition: "事件提交并生成严格可重建投影",
+      title: options.identityText ?? "Plan one target task",
+      goal: options.identityText ?? "建立一份可审计的 implementation TaskPackage",
+      completionDefinition: options.identityText ?? "事件提交并生成严格可重建投影",
       demandType: "requirement",
       source: requirementLineageOf(loaded),
       podId: PLANNING_POD_ID,
@@ -313,6 +320,17 @@ async function buildTargetTaskPlanningWorkspace(
         lineage: null,
         sectionAnchors: [],
   };
+  if (options.coverAllCriteria === true) {
+    for (const criterion of parseAcceptanceCriteria(options.requirementMarkdown ?? FIXTURE_REQUIREMENT_MARKDOWN).slice(1)) {
+      taskPackage.acceptanceAnchors.push({
+        anchorId: `criterion-${criterion.itemId}`,
+        claim: criterion.text,
+        probe: "核对该条标准的实现与受管结果",
+        expected: criterion.text,
+        requirementRef: { recordDigest: loaded.recordDigest, sectionAnchor: "acceptance-criteria", itemId: criterion.itemId },
+      });
+    }
+  }
   await workspaceRoot.close();
   return Object.freeze({ recordDigest: loaded.recordDigest, taskPackage });
 }

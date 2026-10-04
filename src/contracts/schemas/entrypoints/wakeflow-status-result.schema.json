@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wakeflow:entrypoints:status-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_STATUS_RESULT_SCHEMA",
-  "title": "WakeflowStatusResultV1",
+  "title": "WakeflowStatusResultV2",
   "description": "wakeflow_status 的结果：一次观察派生的工作区定向投影——总体状态、配置摘要、看板摘要、活动 Demand、窗口与工作声明、pod、仓库指针事实、hook 通道、已接受但分支仍在的结果、没有自带 status 的域的观察状态、被上限略去的条数、投影目标、生效阈值与下一步；带 demandId 时附该 Demand 的 Controller Route 或归档回执。不含私有路径、句柄与摘要之外的内容。",
   "type": "object",
   "additionalProperties": false,
@@ -37,7 +37,7 @@
       "const": "WakeflowStatus"
     },
     "schemaVersion": {
-      "const": 1
+      "const": 2
     },
     "tool": {
       "const": "wakeflow_status"
@@ -58,7 +58,8 @@
         "configDigest",
         "pods",
         "windows",
-        "repositories"
+        "repositories",
+        "schemaVersion"
       ],
       "properties": {
         "programId": {
@@ -81,6 +82,10 @@
         },
         "repositories": {
           "$ref": "#/$defs/count"
+        },
+        "schemaVersion": {
+          "const": 2,
+          "description": "Current configuration protocol identifier; older workspace formats are unsupported."
         }
       }
     },
@@ -377,7 +382,7 @@
       }
     },
     "runtime": {
-      "description": "本 MCP 服务进程的制品身份：启动时的 manifest 摘要，以及磁盘上同一处 manifest 现在是否还是它（changed 即本窗口的服务进程要重连）。",
+      "description": "Serving process startup manifest and the current manifest at its own path. Does not identify the host-selected installation or any other window runtime.",
       "type": "object",
       "additionalProperties": false,
       "required": ["artifactManifestDigest", "artifactOnDisk"],
@@ -715,7 +720,7 @@
         "claim",
         "lastObservation",
         "projection",
-        "artifact"
+        "runtime"
       ],
       "properties": {
         "windowId": {
@@ -802,7 +807,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["event", "recordedAt"],
+              "required": ["event", "recordedAt", "observerManifestDigest"],
               "properties": {
                 "event": {
                   "enum": [
@@ -815,14 +820,42 @@
                 },
                 "recordedAt": {
                   "$ref": "#/$defs/utcInstant"
+                },
+                "observerManifestDigest": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/$defs/sha256Digest"
+                    }
+                  ],
+                  "description": "Manifest read by the hook observer; not the bound MCP process identity."
                 }
               }
             }
           ]
         },
-        "artifact": {
-          "description": "绑定会话最近一次 session-start 记录里的制品 manifest 摘要与本进程的比对：stale 的窗口要 resume 才跑当前制品；unknown 是没有可比的记录或本进程没有 manifest。",
-          "enum": ["current", "stale", "unknown"]
+        "runtime": {
+          "description": "The bound window runtime has no trusted host association in the current adapters; hook records cannot establish its loaded MCP or instruction version.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason"],
+          "properties": {
+            "status": {
+              "enum": ["unregistered", "unverified"]
+            },
+            "reason": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "enum": ["host-runtime-association-unavailable", "binding-unavailable"]
+                }
+              ]
+            }
+          }
         }
       }
     },

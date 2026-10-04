@@ -2,7 +2,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { types } from "node:util";
 import { threadId } from "node:worker_threads";
 
-import type { Sha256Digest } from "../crypto/sha256.js";
+import { parseSha256Digest, type Sha256Digest } from "../crypto/sha256.js";
+import { observeProcessInstance, recordedProcessIsInactive } from "../node/process-instance.js";
 import {
   renderDeterministicJsonDocument,
   DeterministicJsonDocumentError,
@@ -18,7 +19,6 @@ import {
   UuidV4Error,
   type UuidV4Factory,
 } from "../identity/uuid-v4.js";
-import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { parseByteCount, type ByteCount } from "../numeric/byte-count.js";
 import { encodeUtf8 } from "../text/utf8.js";
 import {
@@ -97,13 +97,15 @@ export interface RootedExclusiveFileLockResidueRetirementOptions {
   readonly relatedTargetResourcePaths?: readonly PortableResourcePath[];
 }
 
-export interface RootedExclusiveFileLockRecord {
+export type RootedExclusiveFileLockRecord = Readonly<{
   readonly kind: "WakeflowExclusiveFileLock";
   readonly pid: number;
   readonly threadId: number;
   readonly token: string;
-  readonly version: 1;
-}
+  readonly version: 2;
+  readonly ownerBirth: Sha256Digest | null;
+  readonly registryId: string;
+}>;
 
 export type RootedExclusiveFileLockOwnerState =
   | "active"
@@ -184,6 +186,7 @@ interface LockCandidate {
 
 const ISSUED_LOCK_OBSERVATIONS = new WeakSet<object>();
 const ACTIVE_LOCK_TOKENS = new Set<string>();
+const LOCK_REGISTRY_ID = createUuidV4();
 const LOCK_RECORD_FIELDS = Object.freeze([
   "kind",
   "pid",
@@ -361,9 +364,9 @@ function lockDeadline(timeoutMilliseconds: number): MonotonicDeadline {
   }
 }
 
-function createLockCandidate(
+async function createLockCandidate(
   tokenUuidFactory: UuidV4Factory | undefined,
-): Readonly<LockCandidate> {
+): Promise<Readonly<LockCandidate>> {
   let tokenUuid: string;
   try {
     tokenUuid = tokenUuidFactory === undefined
@@ -374,10 +377,12 @@ function createLockCandidate(
   }
   const record: Readonly<RootedExclusiveFileLockRecord> = Object.freeze({
     kind: "WakeflowExclusiveFileLock" as const,
+    ownerBirth: (await observeProcessInstance(process.pid)).birthDigest,
     pid: process.pid,
+    registryId: LOCK_REGISTRY_ID,
     threadId,
     token: `${process.pid}-${threadId}-${tokenUuid}`,
-    version: 1 as const,
+    version: 2 as const,
   });
   let bytes: Uint8Array;
   try {
@@ -394,21 +399,18 @@ function createLockCandidate(
   return Object.freeze({ record, bytes });
 }
 
-function observeOwnerState(
+async function observeOwnerState(
   record: Readonly<RootedExclusiveFileLockRecord>,
-): RootedExclusiveFileLockOwnerState {
+): Promise<RootedExclusiveFileLockOwnerState> {
+  const owner = await observeProcessInstance(record.pid);
+  if (recordedProcessIsInactive(record.ownerBirth, owner)) return "inactive";
   if (record.pid === process.pid) {
     if (record.threadId !== threadId) return "unknown";
-    return ACTIVE_LOCK_TOKENS.has(record.token) ? "active" : "inactive";
+    if (ACTIVE_LOCK_TOKENS.has(record.token)) return "active";
+    return record.registryId === LOCK_REGISTRY_ID ? "inactive" : "unknown";
   }
-  try {
-    process.kill(record.pid, 0);
-    return "active";
-  } catch (error: unknown) {
-    const code = readNodeSystemErrorCode(error);
-    if (code === "ESRCH") return "inactive";
-    return "unknown";
-  }
+  if (record.ownerBirth === null || owner.birthDigest === null) return "unknown";
+  return owner.state;
 }
 
 function parseLockRecord(value: unknown): Readonly<RootedExclusiveFileLockRecord> {
@@ -420,11 +422,12 @@ function parseLockRecord(value: unknown): Readonly<RootedExclusiveFileLockRecord
     throw error;
   }
   const keys = Object.keys(record).sort();
+  const expectedFields = [...LOCK_RECORD_FIELDS, "ownerBirth", "registryId"].sort();
   if (
-    keys.length !== LOCK_RECORD_FIELDS.length
-    || keys.some((key, index) => key !== LOCK_RECORD_FIELDS[index])
+    keys.length !== expectedFields.length
+    || keys.some((key, index) => key !== expectedFields[index])
     || record.kind !== "WakeflowExclusiveFileLock"
-    || record.version !== 1
+    || record.version !== 2
     || typeof record.pid !== "number"
     || !Number.isSafeInteger(record.pid)
     || record.pid <= 0
@@ -449,13 +452,12 @@ function parseLockRecord(value: unknown): Readonly<RootedExclusiveFileLockRecord
     if (error instanceof UuidV4Error) fail("unsafe-lock", "$lock");
     throw error;
   }
-  return Object.freeze({
-    kind: "WakeflowExclusiveFileLock",
-    pid: record.pid,
-    threadId: record.threadId,
-    token: record.token,
-    version: 1,
-  });
+  try {
+    const registryId = parseUuidV4(record.registryId, "$lock/registryId");
+    const ownerBirth = record.ownerBirth === null ? null : parseSha256Digest(record.ownerBirth, "$lock/ownerBirth");
+    return Object.freeze({ kind: "WakeflowExclusiveFileLock", ownerBirth, pid: record.pid,
+      registryId, threadId: record.threadId, token: record.token, version: 2 });
+  } catch { fail("unsafe-lock", "$lock"); }
 }
 
 /** 稳定观察锁记录；记录内容和令牌只供进程内恢复使用，不得进入公共结果。 */
@@ -533,7 +535,7 @@ export async function inspectRootedExclusiveFileLock(
     node: read.node,
     byteCount: read.byteCount,
     digest: read.digest,
-    ownerState: observeOwnerState(record),
+    ownerState: await observeOwnerState(record),
   });
   ISSUED_LOCK_OBSERVATIONS.add(observation);
   return observation;
@@ -656,7 +658,7 @@ async function tryAcquire(
 ): Promise<Readonly<AcquiredLock> | null> {
   // 竞争热点路径先执行一次不跟随符号链接的目标观察，避免每轮重试都扫描父目录。
   if (await lockTargetExists(root, lockPath)) return null;
-  const candidate = createLockCandidate(tokenUuidFactory);
+  const candidate = await createLockCandidate(tokenUuidFactory);
   ACTIVE_LOCK_TOKENS.add(candidate.record.token);
   try {
     const created = await createFileAtomically(root, lockPath, candidate.bytes, {
@@ -800,6 +802,31 @@ async function release(
   }
 }
 
+export interface RootedExclusiveFileLockLease {
+  /** Idempotent exact release; all callers observe the same settlement outcome. */
+  readonly release: () => Promise<void>;
+}
+
+/** Explicit lease for composing short admission latches with longer resource ownership. */
+export async function acquireRootedExclusiveFileLock(
+  root: RootedDirectory,
+  lockPath: PortableResourcePath,
+  options?: RootedExclusiveFileLockOptions,
+): Promise<Readonly<RootedExclusiveFileLockLease>> {
+  assertRoot(root);
+  const acquired = await acquire(root, lockPath, parseOptions(options));
+  let settlement: Promise<void> | undefined;
+  return Object.freeze({
+    release: () => {
+      settlement ??= (async () => {
+        try { await release(root, lockPath, acquired); }
+        finally { ACTIVE_LOCK_TOKENS.delete(acquired.token); }
+      })();
+      return settlement;
+    },
+  });
+}
+
 /** 在指定根作用域锁记录存续期间执行异步临界区。 */
 export async function withRootedExclusiveFileLock<Result>(
   root: RootedDirectory,
@@ -809,23 +836,10 @@ export async function withRootedExclusiveFileLock<Result>(
 ): Promise<Result> {
   assertRoot(root);
   assertOperation<Result>(operation);
-  const parsed = parseOptions(options);
-  const acquired = await acquire(root, lockPath, parsed);
-
-  let result: Result | undefined;
-  let operationError: unknown;
-  let operationFailed = false;
+  const lease = await acquireRootedExclusiveFileLock(root, lockPath, options);
   try {
-    result = await operation();
-  } catch (error: unknown) {
-    operationFailed = true;
-    operationError = error;
-  }
-  try {
-    await release(root, lockPath, acquired);
+    return await operation();
   } finally {
-    ACTIVE_LOCK_TOKENS.delete(acquired.token);
+    await lease.release();
   }
-  if (operationFailed) throw operationError;
-  return result as Result;
 }

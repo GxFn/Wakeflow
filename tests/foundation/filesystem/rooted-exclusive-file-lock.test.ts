@@ -289,13 +289,12 @@ test("explicit recovery retires an exact inactive-owner residue", async () => {
     if (sameThreadResidue.status !== "held") {
       throw new Error("Expected same-thread residue.");
     }
-    equal(sameThreadResidue.ownerState, "inactive");
-    await retireRootedExclusiveFileLockResidue(
-      root,
-      lockPath,
-      sameThreadResidue,
+    equal(sameThreadResidue.ownerState, "unknown");
+    await expectLockError(
+      () => retireRootedExclusiveFileLockResidue(root, lockPath, sameThreadResidue),
+      "owner-active",
     );
-    equal(existsSync(physicalLock), false);
+    equal(existsSync(physicalLock), true);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

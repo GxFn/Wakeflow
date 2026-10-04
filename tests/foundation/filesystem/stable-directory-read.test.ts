@@ -18,6 +18,8 @@ import {
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
+  readStableResourceDirectoryPage,
+  readStableRootDirectoryPage,
   readStableRootDirectory,
   StableDirectoryReadError,
   type StableDirectoryReadErrorReason,
@@ -332,6 +334,37 @@ test("options are closed, passive, and support pre-aborted reads", async () => {
       "$signal",
     );
     equal(aborted.message.includes("private-abort-reason"), false);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+
+test("directory pages bound memory, cover every name and reject mutation between pages", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-directory-pages-"));
+  mkdirSync(path.join(rootPath, "records"));
+  for (const name of ["z", "b", "d", "a", "c"]) writeFileSync(path.join(rootPath, "records", name), name);
+  const root = await RootedDirectory.open(rootPath);
+  const ref = parsePortableResourcePath("records");
+  try {
+    const rootPage = await readStableRootDirectoryPage(root, { maximumEntries: 2 });
+    equal(rootPage.directoryResourcePath, null);
+    deepEqual(rootPage.entries.map((entry) => entry.name), ["records"]);
+    equal(rootPage.hasMore, false);
+    const first = await readStableResourceDirectoryPage(root, ref, { maximumEntries: 2 });
+    deepEqual(first.entries.map((entry) => entry.name), ["a", "b"]);
+    equal(first.hasMore, true);
+    const second = await readStableResourceDirectoryPage(root, ref, { maximumEntries: 2, afterName: "b", expectedNode: first.directoryNode });
+    deepEqual(second.entries.map((entry) => entry.name), ["c", "d"]);
+    equal(second.hasMore, true);
+    const last = await readStableResourceDirectoryPage(root, ref, { maximumEntries: 2, afterName: "d", expectedNode: first.directoryNode });
+    deepEqual(last.entries.map((entry) => entry.name), ["z"]);
+    equal(last.hasMore, false);
+    writeFileSync(path.join(rootPath, "records", "aa"), "new");
+    await expectStableDirectoryReadError(() => readStableResourceDirectoryPage(root, ref, { maximumEntries: 2, afterName: "b", expectedNode: first.directoryNode }), "expectation-changed", "$options.expectedNode");
+    await expectStableDirectoryReadError(() => readStableResourceDirectoryPage(root, ref, { maximumEntries: 2, signal: AbortSignal.abort() }), "aborted", "$signal");
+    await expectStableDirectoryReadError(() => readStableResourceDirectoryPage(root, ref, { maximumEntries: 0 }), "input", "$options.maximumEntries");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

@@ -14,9 +14,11 @@ export function rootedExclusiveFileLockRecordTextForTest(
   const workerThreadId = fixture.threadId ?? 0;
   return renderDeterministicJsonDocument({
     kind: "WakeflowExclusiveFileLock",
+    ownerBirth: null,
     pid,
+    registryId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     threadId: workerThreadId,
     token: `${pid}-${workerThreadId}-${fixture.tokenUuid}`,
-    version: 1,
+    version: 2,
   });
 }

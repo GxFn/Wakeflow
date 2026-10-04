@@ -133,6 +133,7 @@ interface ParsedStableDirectoryReadOptions {
   readonly maximumEntries: number;
   readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
   readonly signal: AbortSignal | undefined;
+  readonly pageAfterName?: string;
 }
 
 interface DirectoryTarget<
@@ -421,6 +422,7 @@ async function enumerateNames(
   physicalPath: string,
   maximumEntries: number,
   signal: AbortSignal | undefined,
+  pageAfterName?: string,
 ): Promise<readonly string[]> {
   let directory: RawNameDirectory;
   try {
@@ -455,10 +457,25 @@ async function enumerateNames(
       if (entry === null) break;
       const rawName: unknown = entry.name;
       if (!Buffer.isBuffer(rawName)) fail("io-failure", "$entries");
-      if (names.length >= maximumEntries) {
-        fail("too-many-entries", "$entries");
+      const name = decodeDirectoryEntryName(rawName);
+      if (pageAfterName === undefined) {
+        if (names.length >= maximumEntries) fail("too-many-entries", "$entries");
+        names.push(name);
+      } else if (name > pageAfterName) {
+        // Keep only the smallest page, regardless of filesystem enumeration order.
+        // The extra lookahead name proves whether another page exists.
+        if (names.length === maximumEntries && name > (names.at(-1) as string)) continue;
+        let low = 0;
+        let high = names.length;
+        while (low < high) {
+          const middle = (low + high) >>> 1;
+          if ((names[middle] as string) < name) low = middle + 1;
+          else high = middle;
+        }
+        if (names[low] === name) fail("entry-path", "$entries");
+        names.splice(low, 0, name);
+        if (names.length > maximumEntries) names.pop();
       }
-      names.push(decodeDirectoryEntryName(rawName));
     }
   } catch (error: unknown) {
     primaryError = error;
@@ -594,6 +611,7 @@ async function readStableDirectory<
       target.physicalPath,
       options.maximumEntries,
       options.signal,
+      options.pageAfterName,
     );
     const firstEntries = await inspectEntries(
       target,
@@ -605,6 +623,7 @@ async function readStableDirectory<
       target.physicalPath,
       options.maximumEntries,
       options.signal,
+      options.pageAfterName,
     );
     if (!sameNames(firstNames, secondNames)) {
       fail("source-changed", "$entries");
@@ -675,4 +694,75 @@ export async function readStableResourceDirectory(
   assertExpectedNode(target.node, parsed.expectedNode);
   assertNotAborted(parsed.signal);
   return readStableDirectory(root, target, parsed);
+}
+
+
+export interface StableDirectoryPageOptions extends StableDirectoryReadOptions {
+  /** Exclusive UTF-16 name cursor; omit for the first page. */
+  readonly afterName?: string;
+}
+
+export interface StableDirectoryPage<DirectoryResourcePath extends PortableResourcePath | null = PortableResourcePath> extends StableDirectoryReadResult<DirectoryResourcePath> {
+  readonly hasMore: boolean;
+}
+
+function parsePageOptions(options: StableDirectoryPageOptions): Readonly<ParsedStableDirectoryReadOptions> {
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(options, "$options");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    throw error;
+  }
+  const { afterName, ...readOptions } = record;
+  const parsed = parseOptions(readOptions);
+  if (parsed.maximumEntries < 1 || parsed.maximumEntries >= Number.MAX_SAFE_INTEGER) {
+    fail("input", "$options.maximumEntries");
+  }
+  if (afterName !== undefined) {
+    if (typeof afterName !== "string" || afterName.includes("/")) fail("input", "$options.afterName");
+    try {
+      parsePortableResourcePath(afterName, "$options.afterName");
+    } catch {
+      fail("input", "$options.afterName");
+    }
+  }
+  return { ...parsed, maximumEntries: parsed.maximumEntries + 1, pageAfterName: (afterName as string | undefined) ?? "" };
+}
+
+function directoryPage<Ref extends PortableResourcePath | null>(page: Readonly<StableDirectoryReadResult<Ref>>, maximumEntries: number): Readonly<StableDirectoryPage<Ref>> {
+  return Object.freeze({ ...page, entries: Object.freeze(page.entries.slice(0, maximumEntries - 1)), hasMore: page.entries.length === maximumEntries });
+}
+
+/**
+ * Read a bounded page without bounding the directory's total entry count.
+ * Two full name enumerations retain only the smallest page plus one lookahead;
+ * node reads and memory are bounded by maximumEntries. Pass the first page's
+ * directoryNode as expectedNode on every subsequent page to reject changes
+ * between pages. A page is not a complete directory inventory when hasMore.
+ */
+export async function readStableResourceDirectoryPage(
+  root: RootedDirectory,
+  resourcePath: PortableResourcePath,
+  options: StableDirectoryPageOptions,
+): Promise<Readonly<StableDirectoryPage>> {
+  assertRoot(root);
+  const parsed = parsePageOptions(options);
+  assertNotAborted(parsed.signal);
+  const target = await inspectInitialResource(root, resourcePath);
+  assertExpectedNode(target.node, parsed.expectedNode);
+  return directoryPage(await readStableDirectory(root, target, parsed), parsed.maximumEntries);
+}
+
+/** Same paged contract at an already opened root, avoiding repeated ancestor walks. */
+export async function readStableRootDirectoryPage(
+  root: RootedDirectory,
+  options: StableDirectoryPageOptions,
+): Promise<Readonly<StableDirectoryPage<null>>> {
+  assertRoot(root);
+  const parsed = parsePageOptions(options);
+  assertNotAborted(parsed.signal);
+  const target = await inspectInitialRoot(root);
+  assertExpectedNode(target.node, parsed.expectedNode);
+  return directoryPage(await readStableDirectory(root, target, parsed), parsed.maximumEntries);
 }

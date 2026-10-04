@@ -16,7 +16,7 @@ import { fail, WakeflowError } from "../../kernel/error.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
 import { activateRequirementClaim, createRequirementClaimState, createRequirementClaimStateFile, listRequirementClaimStates, readRequirementClaimState, refreshRequirementBoardIndex, replaceRequirementClaimStateFile, withdrawRequirementClaim, } from "../../kernel/requirement-board.js";
 import { admitBoardInspectionResult, admitRequirementPublicationResult, parseBoardInspectionRequest, parseRequirementPublicationRequest, WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_REQUIREMENT_PUBLIC_SCHEMA_VERSION, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { analyzePackageDocuments, deriveClaimTransitionBlockers, derivePublishBlockers, deriveRequirementId, PRIVACY_BLOCKER_PREFIX, privacyBlockers, } from "./decide.js";
+import { analyzePackageDocuments, deriveClaimTransitionBlockers, derivePublishAssessment, deriveRequirementId, privacyBlockers, } from "./decide.js";
 import { boardCounts, deriveRequirementNext, selectBoardEntries, toBoardEntry, } from "./projection.js";
 const MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
 const MEDIA_TYPES = Object.freeze({
@@ -256,7 +256,7 @@ async function planPublish(context, request, facts) {
     const analysis = analyzePackageDocuments(input.demandType, input.title, documents);
     const supersedes = await supersededState(context, input.supersedes);
     const confirmedAt = input.confirmation?.confirmedAt ?? null;
-    const blockers = derivePublishBlockers({
+    const { blockers, privacyHit } = derivePublishAssessment({
         analysis,
         demandType: input.demandType,
         testingDecisionMode: input.testingDecision.mode,
@@ -270,7 +270,6 @@ async function planPublish(context, request, facts) {
         ],
     });
     // 隐私命中时不回显任何章节正文：阻塞项只说位置与类别。
-    const privacyHit = blockers.some((blocker) => blocker.startsWith(PRIVACY_BLOCKER_PREFIX));
     facts.current = Object.freeze({
         // 命中可能在标题或测试决策摘要里：整份摘要都不回显。
         summary: privacyHit
@@ -604,6 +603,7 @@ export async function executeRequirementPublicationRequest(value, options = {}) 
         }),
     };
     return runPublicationTransaction({
+        mutationScope: "shared",
         tool: WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseRequirementPublicationRequest(raw);
@@ -650,7 +650,7 @@ export async function executeRequirementPublicationRequest(value, options = {}) 
         next: async (_context, phase) => nextOf(phase, facts.current),
         result: (envelope, input, phase, next) => assembleResult(envelope, input, phase, next, facts.current),
         privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }
 function recordView(loaded) {
     const record = loaded.record;
@@ -717,6 +717,7 @@ async function inspectBoard(context, request) {
 /** 执行一次 `wakeflow_inspect_board`。 */
 export async function executeBoardInspectionRequest(value, options = {}) {
     return runCommandShell({
+        scope: () => "read",
         tool: WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseBoardInspectionRequest(raw);
@@ -736,5 +737,5 @@ export async function executeBoardInspectionRequest(value, options = {}) {
             await context.ledgerRoot.close();
         },
         privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
-    }, value, () => { }, (context, binding) => inspectBoard(context, binding.input), commandShellExecutionOptions(options.durability));
+    }, value, () => { }, (context, binding) => inspectBoard(context, binding.input), commandShellExecutionOptions(options.durability, options.signal));
 }

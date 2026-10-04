@@ -1,3 +1,6 @@
+import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { assertNoActiveDemand, readDemandPodId, } from "../../governance/demand/publication/demand-active-guard.js";
+import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
@@ -510,6 +513,15 @@ async function releaseClaims(context, plan) {
     return released;
 }
 async function applyTerminal(context, plan, verify, disposition) {
+    const podId = await readDemandPodId(context.root, plan.demandId, context.signal);
+    if (podId === null)
+        fail("precondition-failed", "pod-unknown", "$demandRoot");
+    return withPodMutation(context.root, podId, async () => {
+        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+        return applyTerminalLocked(context, plan, verify, disposition);
+    }, context.signal);
+}
+async function applyTerminalLocked(context, plan, verify, disposition) {
     const demandId = parseDemandId(plan.demandId);
     await writeJournal(context, {
         kind: JOURNAL_KIND,
@@ -637,6 +649,7 @@ function assembleTerminalResult(action, envelope, input, phase, next, facts) {
 async function executeTerminal(action, tool, parse, admit, value, options) {
     const facts = { verify: null, archiveRef: null };
     return runPublicationTransaction({
+        mutationScope: "shared",
         tool,
         parseRequest: (raw) => {
             const request = parse(raw);
@@ -661,7 +674,7 @@ async function executeTerminal(action, tool, parse, admit, value, options) {
             : nextAfterMutation(context, phase.outcome.demandId),
         result: (envelope, input, phase, next) => admit(assembleTerminalResult(action, envelope, input, phase, next, facts)),
         privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }
 /** 执行一次 `wakeflow_complete_demand`。 */
 export async function executeDemandCompletionRequest(value, options = {}) {
@@ -770,6 +783,16 @@ async function reclaimPackage(context, plan) {
     return packageReceipt(reread, lineage);
 }
 async function applyContinue(context, plan, disposition) {
+    const podId = await readDemandPodId(context.root, plan.demandId, context.signal);
+    if (podId === null)
+        fail("precondition-failed", "pod-unknown", "$demandRoot");
+    return withPodMutation(context.root, podId, async () => {
+        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+        await assertNoActiveDemand(context.root, context.signal, plan.demandId, podId);
+        return applyContinueLocked(context, plan, disposition);
+    }, context.signal);
+}
+async function applyContinueLocked(context, plan, disposition) {
     const demandId = parseDemandId(plan.demandId);
     await writeJournal(context, {
         kind: JOURNAL_KIND,
@@ -884,6 +907,7 @@ function assembleContinuationResult(envelope, input, phase, next) {
 /** 执行一次 `wakeflow_continue_demand`。 */
 export async function executeDemandContinuationRequest(value, options = {}) {
     return runPublicationTransaction({
+        mutationScope: "shared",
         tool: WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseDemandContinuationRequest(raw);
@@ -907,5 +931,5 @@ export async function executeDemandContinuationRequest(value, options = {}) {
             : nextAfterMutation(context, phase.outcome.demandId),
         result: (envelope, input, phase, next) => assembleContinuationResult(envelope, input, phase, next),
         privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }

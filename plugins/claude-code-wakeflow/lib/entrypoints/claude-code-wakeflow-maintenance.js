@@ -25,6 +25,6 @@ const CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
     recover: recoverClaudeCodeMaintenanceExecution,
 });
 /** 执行一个经过公共合同准入的 Claude Code workspace Maintenance 请求。 */
-export async function executeClaudeCodeWakeflowMaintenance(value) {
-    return executeWakeflowMaintenancePublicRequest(CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE, value);
+export async function executeClaudeCodeWakeflowMaintenance(value, options = {}) {
+    return executeWakeflowMaintenancePublicRequest(CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE, value, options);
 }

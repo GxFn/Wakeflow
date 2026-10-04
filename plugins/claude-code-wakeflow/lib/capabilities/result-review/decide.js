@@ -343,11 +343,17 @@ function escalateBlockers(request, view) {
         .map((step) => step.stepId));
     if (defects.size === 0)
         blockers.push("product-defect-missing");
+    const mapped = new Set();
     for (const target of escalation.remediation?.affectedTargets ?? []) {
         for (const stepId of target.failedStepIds) {
             if (!defects.has(stepId))
                 blockers.push(`remediation-step:${stepId}`);
+            mapped.add(stepId);
         }
+    }
+    for (const stepId of defects) {
+        if (!mapped.has(stepId))
+            blockers.push(`remediation-uncovered:${stepId}`);
     }
     return blockers;
 }
@@ -430,7 +436,7 @@ export function summarizeResultForCallback(result) {
         outcome: implementation.report.outcome,
         summary: implementation.report.summary,
         branch: implementation.report.repositoryChange.branch,
-        commits: Object.freeze(implementation.report.repositoryChange.commits.map(String)),
+        commits: Object.freeze(implementation.report.repositoryChange.commits.map((commit) => `${commit.algorithm}:${commit.value}`)),
         verdict: null,
     });
 }

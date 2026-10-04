@@ -121,16 +121,20 @@ A binding maps that logical window to the host handle you observed after
 launching it. Bindings live in the private local runtime and never appear in a
 public result.
 
-Before the first launch: the Controller is the thread you are in: register it with its own thread id before opening anything else, then work through the remaining launch intents.
+Before the first launch: reuse the current chat as Controller only when its outer workspace project membership and workspace-root SessionStart are established. A source-maintenance chat in another project is not that Controller. With the user's existing authorization, create the Controller in the workspace project first, verify and register it, then handle the other roles in that same project. Do not ask again for authorization already given.
 
 Launching and registering:
 
-1. Take the launch intent from the maintenance or pod result: it names the
-   role, the root and the launch parameters.
-2. Launch it by host means: open a new Codex thread rooted at the directory the intent names, started with the parameters it lists. A thread is never moved into a new process, so relocate does not apply on this host: when a window's thread is gone, open a new one and replace the binding with its thread id.
+1. Take the window id from the maintenance or pod result, then call
+   `wakeflow_register_window_binding` with `inspect` for its current launch
+   intent and execution instructions. Its role root is the assigned work
+   location; the host instructions separately determine the chat's startup root.
+2. Launch it by host means: use list_projects to resolve the existing outer workspace project by canonical path and host, then create_thread with target.type project, that projectId, and environment.type local for every role. Never register role directories as projects or substitute projectless chats or codex exec sessions. The chat starts in the workspace root; the role's execution root is separate and must be stated in its startup prompt with windowId, role skill, scope and return pointer. Read the execution root's instructions explicitly and use it as command workdir. Retain the creation result and wait for a ready threadId; clientThreadId is not a binding handle. Read back project membership and actual startup before registration. If the list omits a newly created chat, use direct UI confirmation and disclose that limitation; cwd and title alone do not prove project membership. A missing project or unavailable creation tool is a blocker, not permission for an external fallback. Do not retry creation after an ambiguous result until you establish whether the first chat exists. Keep requested role chats visible; archive only when the user authorizes retiring them. A thread is never moved into a new process, so relocate does not apply on this host; replace a gone thread only with an authorized new chat in the same outer project.
 3. Observe the handle the host reports for the window you just started.
 4. Call `wakeflow_register_window_binding` to register it. Registration
-   requires a real `session-start` hook record for that session and that root.
+   requires a real `session-start` hook record for that session at the startup
+   root required by the host instructions. Project membership is a separate
+   host observation; a hook record does not prove sidebar placement.
    If registration is refused for want of that record, the window either did
    not start, started somewhere else, or the host's hook channel is not
    trusted yet - check the install steps in the README before you retry.
@@ -163,27 +167,85 @@ Other actions on the same tool:
 Wakeflow never opens, inspects or closes a window. Every one of those actions
 is yours, and the binding tool only records what you observed.
 
+## Hook history
+
+Hook records are private facts. New records use UTC-day and digest-prefix
+partitions; older flat records remain readable in place. The reader pages
+through history and status aggregates all observed records. An incomplete
+query raises `observation-query-incomplete`; do not infer that a delivery never
+landed from it. Unreadable candidate evidence raises `observation-query-unavailable`.
+Directory races or unreadable partitions are unavailable,
+not an empty channel. Unknown entries remain visible as skipped and are not
+automatically removed. A damaged shard can still require manual diagnosis.
+Retirement is best effort in bounded batches; it never removes records merely
+to make a count limit fit, and the existing 30-day age boundary remains.
+
+## Workspace format baseline
+
+The current workspace format is the first supported baseline. Initialize a new,
+empty workspace with `fresh-initialize`; local formats from earlier development
+builds are not read or migrated by this version.
+
+`reconfigure` changes intent within the current format. `reconcile` repairs its
+owned resources, and `recover` resumes an interrupted current-format operation.
+These are normal maintenance, not format-upgrade or data-conversion tools.
+
+If a root has an unsupported configuration or layout, preserve it and choose a
+separate fresh workspace. Never change version headers, delete old authority, or
+reuse old bindings to make it appear initialized. `writer-protocol-unsupported`
+means this runtime cannot write that format; it does not offer an upgrade path.
+
 ## After a plugin update
 
-A window runs the plugin that was installed when its session started; an
-update on disk does not reach a running session. `wakeflow_status` shows this
-per window as `artifact: stale` (its session-start record names an older
-artifact than the one serving the status), and `wakeflow_verify` fails the
-`runtime-artifact` gate with `windows-stale:<n>`, or with `server-outdated`
-when the artifact changed under this very window's server; in `next` they
-appear as `window-artifact-stale` and `runtime-artifact-outdated`. That is
-all these codes mean. This section is the remedy, so do not read the plugin's
-implementation to find another.
+`runtime` describes the MCP server serving this call. A changed manifest at
+its own path produces `server-outdated` / `runtime-artifact-outdated`; a missing
+manifest produces `manifest-unavailable` / `runtime-artifact-unavailable`.
+Inspect the installation and reload this server before it performs maintenance.
+These checks do not identify the host-selected sibling installation.
 
-Never run maintenance from an outdated server - it would write the older
-assets back over the newer ones - and do not refresh another window from one
-either: the launch intents its `wakeflow_register_window_binding` inspect
-returns, which every refresh starts from, come from the older code too. So
-this window goes first. Once it runs the updated plugin, call
-`wakeflow_verify`; if a gate other than `runtime-artifact` fails -
-`host-settings-assets` does while the assets the older plugin installed are
-still in place - preview and apply a reconcile as in step 0. Only then
-refresh the other stale windows. On this host: first this thread, when it is stale or its server outdated: only the user can reconnect its Wakeflow server or resume the session - tell them, and wait until they have before you continue. Then, after that verify and any reconcile, the other stale windows: open a new thread for each as its launch intent says and replace the binding with that thread's id - a thread is never moved into a new process, so there is no relocate path.
+Install a new build in a new version directory and retain older directories
+for live processes and recovery. Reusing a version for different bytes is not
+an update path. Local installation preflight is read-only and does not reserve
+or activate a target; the installer must publish the new directory without
+replacing an existing version. The serving MCP also rejects mutations if its
+own manifest changed or became unavailable; reads and previews remain available.
+
+A window's `lastObservation.observerManifestDigest` identifies the hook observer
+only. SessionStart can occur on resume or compaction; Stop also does not prove
+that the window's MCP or instructions reloaded. Bound windows currently report
+`runtime.status: unverified` because the host adapters cannot establish that
+association. Strict verification reports `window-runtime-unverified:<n>` as
+unavailable. Keep this limitation explicit; do not fabricate records, rebind,
+or repeatedly restart windows to clear it. It is not a new blanket prerequisite
+for actions whose own contracts do not depend on that fact.
+
+Use direct host/runtime evidence when a particular task requires a specific
+build. If that evidence establishes a window needs a reload, use the host's
+reload procedure: when this serving MCP is outdated, ask the user to reload its Wakeflow server or resume this existing chat before maintenance. For a peer with direct evidence of an outdated runtime, reload or resume that existing chat through the host. Replace its binding only when the old chat is gone and the user authorizes a replacement chat. A missing hook alone does not justify creating or rebinding a chat. After this server is current, preview and
+apply reconcile for repairable workspace gates such as host-settings-assets.
+A peer runtime evidence gap remains separate from those repairs and from
+Controller acceptance of returned work.
+
+## Interrupted writes and cancellation
+
+`reconcile` can first return a `WakeflowDemandRuntimeRecoveryPlan` for known
+event append residues. Its preview is read-only. Apply rechecks the plan and
+owner facts, retires uncommitted candidates or settles already linked commits,
+and preserves committed event bytes. Re-preview afterwards for ordinary layout
+maintenance. `demand-candidates-busy:<demandId>` means the writer may still be
+active; wait and inspect again. Unknown owners, unknown files and changed
+resources are not permission to force cleanup.
+
+Board and projection writers retire a proven inactive lock before retrying their
+own operation. A lock with a live or unknown owner is still protected. A pending
+Demand publication or lifecycle journal continues to reserve its pod after the
+process exits; finish that operation's documented recovery before claiming a
+different requirement or closing the pod.
+
+Cancelling a tool call stops work before its next commit point. A disconnected
+or cancelled response does not prove that nothing was committed. Inspect the
+stored outcome and reuse the original idempotency key for an append retry. Do
+not resend a host delivery solely because its response was interrupted.
 
 ## Pods
 
@@ -197,8 +259,8 @@ main checkout; every other pod works in a worktree.
 1. Preview to derive the plan; it writes nothing.
 2. Apply with exactly what preview returned. One config transaction registers
    the pod, its window set, and one worktree intent per repository.
-3. Create each worktree by host means: open the product window's thread with create_thread using a worktree environment for the repository the intent names. The checkout starts on a detached HEAD, so run `git switch -c <suggestedName>` in it before any result is imported from it. Then launch that
-   pod's windows in their worktree roots and register each binding as in
+3. Create each worktree by host means: create a linked checkout from the configured product repository's local HEAD using git worktree add with the suggested branch name and an available checkout path. Keep the role chat in the same outer project using a local environment: create_thread's worktree environment targets the project's primary repository. Pass the assigned checkout in the startup prompt and record worktree.executionRoot from pwd there along with git worktree list --porcelain and git rev-parse --git-common-dir. Wakeflow verifies the checkout's repository and pointer files independently of the chat's SessionStart. Then launch that
+   pod's windows using their host launch instructions and register each binding as in
    step 1. A product window in a pod is refused registration until its worktree
    is actually there and observed, and a checkout another live pod already
    holds is refused as `worktree-occupied`. Bring the pod up in this order:

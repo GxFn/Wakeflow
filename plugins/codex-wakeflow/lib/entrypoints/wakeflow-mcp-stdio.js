@@ -23,6 +23,7 @@ export function runWakeflowMcpStdio(factory) {
             return closePromise;
         process.off("SIGINT", closeFromSignal);
         process.off("SIGTERM", closeFromSignal);
+        process.off("SIGHUP", closeFromSignal);
         closePromise = Promise.resolve()
             .then(() => handle.close())
             .catch(() => {
@@ -37,5 +38,6 @@ export function runWakeflowMcpStdio(factory) {
     }
     process.once("SIGINT", closeFromSignal);
     process.once("SIGTERM", closeFromSignal);
+    process.once("SIGHUP", closeFromSignal);
     return Object.freeze({ close });
 }

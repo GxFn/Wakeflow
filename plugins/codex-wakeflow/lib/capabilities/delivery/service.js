@@ -27,7 +27,7 @@ import { computeTaskPackageDigest, } from "../../governance/tasking/task-package
 import { createInitialTestExecutionAttempt, createRerunTestExecutionAttempt, TestExecutionAttemptError, } from "../../governance/testing/test-execution-attempt.js";
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
-import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
+import { fail, failWithBlockers as rejectWith, isWakeflowError } from "../../kernel/error.js";
 import { readHostHookObservations } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
@@ -498,6 +498,8 @@ function renderPrompt(context, input, sources, pointer) {
             bindingId: route.binding.bindingId,
         },
         readingOrder: {
+            executionRootFromWorkspace: path.relative(context.workspaceRoot.absolutePath, route.worktreePath ??
+                path.resolve(context.workspaceRoot.absolutePath, route.configuredPlacement)) || ".",
             workspaceRootFromWindow: workspaceRootFromWindow(context, route),
             attachedWorktrees: sources.attachedWorktrees,
             taskPackageRef: deliveryTaskPackageRef(taskPackage.demandId, taskPackage.taskPackageId),
@@ -902,10 +904,14 @@ export async function executePrepareDeliveryRequest(facade, value, options = {})
         execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executePrepare(context, input, binding)),
         next,
         result: prepareResult,
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }
 async function sessionRecords(context, sessionId, since) {
     const inventory = await readHostHookObservations(context.workspaceRoot, context.facade.hostId, { sessionId, since }, signalOptions(context.options.signal));
+    if (!inventory.complete)
+        fail("io-failure", "observation-query-incomplete", "$observations");
+    if (inventory.skipped > 0)
+        fail("io-failure", "observation-query-unavailable", "$observations");
     return inventory.records.map((record) => Object.freeze({
         recordId: record.recordId,
         promptDigest: record.promptDigest,
@@ -1008,6 +1014,26 @@ function decideOutcome(context, input, envelope, records, currentlyIndeterminate
         currentlyIndeterminate,
     });
 }
+/** Hook uncertainty cannot negate an independent host receipt or Controller decision. */
+async function observedOutcomeDecision(context, input, envelope, sessionId, currentlyIndeterminate) {
+    try {
+        const records = await sessionRecords(context, sessionId, envelope.preparedAt);
+        return decideOutcome(context, input, envelope, records, currentlyIndeterminate);
+    }
+    catch (error) {
+        const partial = isWakeflowError(error) &&
+            (error.reason === "observation-query-incomplete" ||
+                error.reason === "observation-query-unavailable");
+        if (!partial)
+            throw error;
+        const independent = decideOutcome(context, input, envelope, [], currentlyIndeterminate);
+        if (independent.accepted &&
+            (independent.evidenceKind === "host-send-return" ||
+                independent.evidenceKind === "controller-resolution"))
+            return independent;
+        throw error;
+    }
+}
 async function executeOutcome(context, input, binding) {
     const { authority, options } = context;
     const repository = new DemandEventSourcingRepository(authority.demandRoot);
@@ -1027,8 +1053,7 @@ async function executeOutcome(context, input, binding) {
     const currentlyIndeterminate = assertOutcomeRecordable(target, input.claimDigest);
     const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
     const route = await loadRoute(context, envelope.route.windowId);
-    const records = await sessionRecords(context, route.binding.handle.value, envelope.preparedAt);
-    const decision = decideOutcome(context, input, envelope, records, currentlyIndeterminate);
+    const decision = await observedOutcomeDecision(context, input, envelope, route.binding.handle.value, currentlyIndeterminate);
     if (!decision.accepted) {
         const blockers = [decision.blocker];
         if (decision.blocker === "landing-evidence-missing" &&
@@ -1149,7 +1174,7 @@ export async function executeRecordDeliveryOutcomeRequest(facade, value, options
         execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executeOutcome(context, input, binding)),
         next,
         result: outcomeResult,
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }
 /** 回调 id 命中某个已回报结果的当前回调即走回调分支；否则按投递 id 查找。 */
 function callbackTargetOf(context, callbackId) {
@@ -1377,5 +1402,5 @@ export async function executeRearmDeliveryRequest(facade, value, options = {}) {
         execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executeRearm(context, input, binding)),
         next,
         result: rearmResult,
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }

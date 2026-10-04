@@ -29,7 +29,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
 ]);
 export const WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES = Object.freeze([
     "claude-worktree-flag",
-    "codex-worktree-thread",
+    "git-worktree",
 ]);
 export const WAKEFLOW_WORKSPACE_HOST_ATTACHED_DIRECTORY_MODES = Object.freeze([
     "add-dir-flag",
@@ -214,9 +214,9 @@ function launchValue(value, path) {
 }
 function parseLaunchTemplate(value) {
     const record = plainRecord(value, "$/launch");
-    if (record.kind === "host-thread") {
+    if (record.kind === "project-thread") {
         assertExactFields(record, THREAD_LAUNCH_FIELDS, "$/launch");
-        return Object.freeze({ kind: "host-thread" });
+        return Object.freeze({ kind: "project-thread" });
     }
     if (record.kind !== "tmux-session")
         fail("surface", "$/launch/kind");

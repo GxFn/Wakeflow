@@ -1,7 +1,8 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeSha256Digest } from "../foundation/crypto/sha256.js";
+import { fail } from "../kernel/error.js";
 /**
  * Wakeflow Entrypoint / 制品身份（§13.127）。
  *
@@ -34,9 +35,20 @@ function readWakeflowArtifactManifestDigest(root) {
 /** 进程启动时固定一次的制品身份。 */
 export function resolveWakeflowArtifactIdentity(importMetaUrl) {
     const root = resolveWakeflowArtifactRoot(importMetaUrl);
+    const manifestDigest = readWakeflowArtifactManifestDigest(root);
+    const generated = root !== null && existsSync(path.join(root, "mcp/server.mjs"));
     return Object.freeze({
         root,
-        manifestDigest: readWakeflowArtifactManifestDigest(root),
+        manifestDigest,
         readCurrentManifestDigest: () => readWakeflowArtifactManifestDigest(root),
+        assertUnchanged: () => {
+            if (!generated && manifestDigest === null)
+                return;
+            const current = readWakeflowArtifactManifestDigest(root);
+            if (manifestDigest === null || current === null)
+                fail("precondition-failed", "runtime-artifact-unavailable", "$runtime");
+            if (current !== manifestDigest)
+                fail("precondition-failed", "runtime-artifact-outdated", "$runtime");
+        },
     });
 }

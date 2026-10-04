@@ -1,3 +1,4 @@
+import { renderClaudeCodeWindowLaunchInstructions } from "../hosts/claude-code/claude-code-window-launch-instructions.js";
 import { executePrepareDeliveryRequest, executeRearmDeliveryRequest, executeRecordDeliveryOutcomeRequest, } from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
 import { executeStatusRequest, executeVerifyRequest } from "../capabilities/observation/service.js";
@@ -27,6 +28,7 @@ const CLAUDE_CODE_HOST_FACADE = Object.freeze({
     hostId: "claude-code",
     resourceProfile: claudeCodeWorkspaceHostResourceProfile,
     identityProfile: claudeCodeWindowHostIdentityProfile,
+    renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 });
 /** 观察读两个宿主的绑定、hook 通道与资产：制品固定携带两份 profile（§13.94 D1）。 */
 const CLAUDE_CODE_OBSERVATION_FACADE = Object.freeze({
@@ -68,19 +70,20 @@ export function createClaudeCodeWakeflowMcpServer(serverVersion) {
     return createWakeflowPublicMcpServer({
         serverName: CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME,
         serverVersion,
+        beforeMutation: CLAUDE_CODE_OBSERVATION_FACADE.artifact.assertUnchanged,
         ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,
         executeMaintenance: executeClaudeCodeWakeflowMaintenance,
-        registerWindowHostBinding: (value) => executeWindowBindingRequest(CLAUDE_CODE_HOST_FACADE, value),
-        managePod: (value) => executePodRequest(CLAUDE_CODE_HOST_FACADE, value),
-        inspectStatus: (value) => executeStatusRequest(CLAUDE_CODE_OBSERVATION_FACADE, value),
-        verifyWorkspace: (value) => executeVerifyRequest(CLAUDE_CODE_OBSERVATION_FACADE, value),
-        prepareDelivery: (value) => executePrepareDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
-        recordDeliveryOutcome: (value) => executeRecordDeliveryOutcomeRequest(CLAUDE_CODE_HOST_FACADE, value),
-        rearmDelivery: (value) => executeRearmDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value),
-        importTargetResult: (value) => executeTargetResultImportRequest(CLAUDE_CODE_HOST_FACADE, value),
-        inspectTargetResultReview: (value) => executeTargetResultReviewInspectionRequest(CLAUDE_CODE_HOST_FACADE, value),
-        recordImplementationReviewDecision: (value) => executeImplementationReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value),
-        recordTestReviewDecision: (value) => executeTestReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value),
+        registerWindowHostBinding: (value, options) => executeWindowBindingRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+        managePod: (value, options) => executePodRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+        inspectStatus: (value, options) => executeStatusRequest(CLAUDE_CODE_OBSERVATION_FACADE, value, options),
+        verifyWorkspace: (value, options) => executeVerifyRequest(CLAUDE_CODE_OBSERVATION_FACADE, value, options),
+        prepareDelivery: (value, options) => executePrepareDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+        recordDeliveryOutcome: (value, options) => executeRecordDeliveryOutcomeRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+        rearmDelivery: (value, options) => executeRearmDeliveryRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+        importTargetResult: (value, options) => executeTargetResultImportRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+        inspectTargetResultReview: (value, options) => executeTargetResultReviewInspectionRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+        recordImplementationReviewDecision: (value, options) => executeImplementationReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value, options),
+        recordTestReviewDecision: (value, options) => executeTestReviewDecisionRequest(CLAUDE_CODE_HOST_FACADE, value, options),
     });
 }
 /** 通过官方 stdio transport 运行 Claude Code MCP composition root。 */

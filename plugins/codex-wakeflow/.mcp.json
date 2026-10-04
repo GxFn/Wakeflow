@@ -1,11 +1,16 @@
 {
   "mcpServers": {
     "wakeflow": {
-      "command": "node",
+      "command": "/bin/sh",
       "args": [
-        "./mcp/server.mjs"
+        "-c",
+        "exec \"${CODEX_MCP_NODE_PATH:-node}\" ./mcp/server.mjs \"$@\"",
+        "--"
       ],
-      "cwd": "."
+      "cwd": ".",
+      "env_vars": [
+        "CODEX_MCP_NODE_PATH"
+      ]
     }
   }
 }

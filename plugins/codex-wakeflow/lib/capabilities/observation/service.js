@@ -251,25 +251,11 @@ function windowBindingOf(observation, windowId) {
     }
     return null;
 }
-/**
- * 窗口的制品状态（§13.127）：绑定会话最近一次 session-start 记录里的 manifest 摘要等于本进程的
- * 即 current，不等即 stale；任一边不知道（没有记录、记录早于该字段、本进程没有 manifest）即 unknown。
- */
-function artifactStateOf(context, binding) {
-    const own = context.facade.artifact?.manifestDigest ?? null;
-    if (binding === null || own === null)
-        return "unknown";
-    const started = context.observation.hooks
-        .find((entry) => entry.hostId === binding.hostId)
-        ?.artifactBySession.get(binding.handleValue);
-    if (started === undefined || started === null)
-        return "unknown";
-    return started === own ? "current" : "stale";
-}
-function staleArtifactWindowIds(context) {
+/** A host hook identifies its producer, not the bound MCP process or instruction context. */
+function unverifiedRuntimeWindowIds(context) {
     return context.snapshot.model.topology.windows
-        .map((window) => window.windowId)
-        .filter((windowId) => artifactStateOf(context, windowBindingOf(context.observation, windowId)) === "stale");
+        .filter((window) => windowBindingOf(context.observation, window.windowId) !== null)
+        .map((window) => window.windowId);
 }
 /**
  * 本进程脚下的制品是否已更新：启动时与现在磁盘上的 manifest 摘要不同。一次调用只读一次磁盘，
@@ -298,7 +284,7 @@ function lastObservationOf(observation, binding) {
     const latest = observation.hooks
         .find((entry) => entry.hostId === binding.hostId)
         ?.latestBySession.get(binding.handleValue);
-    return latest === undefined ? null : { event: latest.event, recordedAt: latest.recordedAt };
+    return latest === undefined ? null : { ...latest };
 }
 function claimViewOf(observation, windowId) {
     const claim = (observation.claims.value?.claims ?? []).find((entry) => entry.windowId === windowId);
@@ -349,7 +335,11 @@ function windowViews(context) {
             claim: claimViewOf(observation, window.windowId),
             lastObservation: lastObservationOf(observation, binding),
             projection: windowProjectionOf(observation, window.windowId),
-            artifact: artifactStateOf(context, binding),
+            runtime: binding !== null
+                ? { status: "unverified", reason: "host-runtime-association-unavailable" }
+                : bindingsObserved
+                    ? { status: "unregistered", reason: null }
+                    : { status: "unverified", reason: "binding-unavailable" },
         };
     });
 }
@@ -486,8 +476,9 @@ function nextActionInput(context, runtime) {
     // pod 域读不出时 pods 是空列表，不是"没有 pod"：登记动作只在真的观察到 pod 时才排得出来。
     const podsObserved = observation.pods.status === "observed";
     return Object.freeze({
-        staleArtifactWindows: staleArtifactWindowIds(context),
         artifactServerOutdated: runtime.artifactOnDisk === "changed",
+        artifactServerUnavailable: context.facade.artifact !== undefined &&
+            (runtime.artifactManifestDigest === null || runtime.artifactOnDisk === "unknown"),
         // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
         maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
         unregisteredWindows: bindingsObserved && podsObserved
@@ -602,6 +593,7 @@ async function assembleStatus(context, request) {
         observedAt: observation.observedAt,
         overall: overallOf(context),
         config: {
+            schemaVersion: snapshot.model.schemaVersion,
             programId: snapshot.model.program.programId,
             displayName: snapshot.model.program.displayName,
             language: snapshot.model.presentation.language,
@@ -642,6 +634,7 @@ async function assembleStatus(context, request) {
 /** 执行一次 `wakeflow_status`。 */
 export async function executeStatusRequest(facade, value, options = {}) {
     return runCommandShell({
+        scope: () => "read",
         tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseStatusRequest(raw);
@@ -650,7 +643,7 @@ export async function executeStatusRequest(facade, value, options = {}) {
         open: (root) => openContext(root, facade, options),
         close: closeContext,
         privateValues,
-    }, value, () => undefined, (context, binding) => assembleStatus(context, binding.input), commandShellExecutionOptions(options.durability));
+    }, value, () => undefined, (context, binding) => assembleStatus(context, binding.input), commandShellExecutionOptions(options.durability, options.signal));
 }
 // ---- verify ----------------------------------------------------------------------
 async function configRecheck(context) {
@@ -816,9 +809,13 @@ async function gateFacts(context, reports) {
     const runtime = readRuntime(context);
     return Object.freeze({
         runtime: {
-            manifestDigest: runtime.view.artifactManifestDigest,
-            onDiskDigest: runtime.onDiskDigest,
-            staleWindows: staleArtifactWindowIds(context),
+            server: context.facade.artifact === undefined
+                ? null
+                : {
+                    manifestDigest: runtime.view.artifactManifestDigest,
+                    onDiskDigest: runtime.onDiskDigest,
+                },
+            unverifiedWindows: unverifiedRuntimeWindowIds(context),
         },
         domains: {
             demands: { status: observation.demands.status, issue: observation.demands.issue },
@@ -977,6 +974,7 @@ function computeGatesDigest(gates) {
 /** 执行一次 `wakeflow_verify`。 */
 export async function executeVerifyRequest(facade, value, options = {}) {
     return runCommandShell({
+        scope: () => "read",
         tool: WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseVerifyRequest(raw);
@@ -985,5 +983,5 @@ export async function executeVerifyRequest(facade, value, options = {}) {
         open: (root) => openContext(root, facade, options),
         close: closeContext,
         privateValues,
-    }, value, () => undefined, (context, binding) => assembleVerify(context, binding.input), commandShellExecutionOptions(options.durability));
+    }, value, () => undefined, (context, binding) => assembleVerify(context, binding.input), commandShellExecutionOptions(options.durability, options.signal));
 }

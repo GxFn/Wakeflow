@@ -87,7 +87,7 @@ export function deriveDeliveryDisposition(input) {
  * tmux 会话型宿主只能以目标会话的 hook 记录证明落地。
  */
 export function sendReturnProvesLanding(profile) {
-    return profile.launch.kind === "host-thread";
+    return profile.launch.kind === "project-thread";
 }
 /** 静默是否超过阈值：以当前代际第一次 indeterminate 结局的记录时刻为起点。 */
 export function landingSilenceExceeded(silenceStartedAt, now, thresholdMilliseconds = DELIVERY_LANDING_SILENCE_MILLISECONDS) {

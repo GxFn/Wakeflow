@@ -8,6 +8,7 @@ import { compileWakeflowWindowHostBindingStoreAuthority, WakeflowWindowHostBindi
 import { parseWakeflowWindowHostIdentityProfile, WakeflowWindowHostIdentityProfileError, } from "./wakeflow-window-host-identity-profile.js";
 import { inspectWakeflowWindowRuntimeProjectionDocument, } from "./wakeflow-window-runtime-projection-document.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "./wakeflow-window-runtime-registered-projection.js";
+import { wakeflowWindowRuntimeProjectionRootRef } from "./wakeflow-window-runtime-paths.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, WakeflowWindowRuntimeUnregisteredProjectionError, } from "./wakeflow-window-runtime-unregistered-projection.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow window runtime projection input is invalid.",
@@ -85,10 +86,8 @@ async function resourcePresent(root, resourceRef, path) {
 /** 每个配置窗口的期望文档：有 Binding 即 registered，否则 unregistered；尚无 Binding 目录的宿主只有未登记投影。 */
 export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(root, inputs, signal, options = {}) {
     const { config, resourceProfile, identityProfile } = inputs;
-    let unregistered;
     let authority;
     try {
-        unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
         authority = compileWakeflowWindowHostBindingStoreAuthority(config, resourceProfile, identityProfile);
     }
     catch (error) {
@@ -99,7 +98,7 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(root
         throw error;
     }
     if (options.projectionRootRequired !== false
-        && !(await resourcePresent(root, unregistered.projectionRootRef, "$projectionRoot"))) {
+        && !(await resourcePresent(root, wakeflowWindowRuntimeProjectionRootRef(resourceProfile), "$projectionRoot"))) {
         return Object.freeze({ kind: "runtime-missing" });
     }
     let inventory;
@@ -116,7 +115,25 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(root
         }
         throw error;
     }
-    const entries = unregistered.entries.map((entry) => {
+    return Object.freeze({
+        kind: "entries",
+        entries: compileWakeflowWindowRuntimeProjectionExpectedEntries(inputs, inventory),
+    });
+}
+/** Pure rendering shared by read-only observation and binding-locked publication. */
+export function compileWakeflowWindowRuntimeProjectionExpectedEntries(inputs, inventory) {
+    const { config, resourceProfile, identityProfile } = inputs;
+    let unregistered;
+    try {
+        unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
+    }
+    catch (error) {
+        if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
+            failWindowRuntimeProjection("topology", error.path);
+        }
+        throw error;
+    }
+    return Object.freeze(unregistered.entries.map((entry) => {
         const binding = inventory.bindings.find((candidate) => candidate.windowId === entry.windowId);
         const compiled = binding === undefined
             ? entry
@@ -131,8 +148,7 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(root
                 projectionDigest: compiled.projection.projectionDigest,
             }),
         });
-    });
-    return Object.freeze({ kind: "entries", entries: Object.freeze(entries) });
+    }));
 }
 /** 逐窗口比对磁盘文档与期望：current / stale / missing / unsafe，并带回当前文档摘要。 */
 export async function inspectWakeflowWindowRuntimeProjectionEntries(root, entries, signal) {

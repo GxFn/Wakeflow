@@ -1931,8 +1931,10 @@ export function cancelDemandAggregateState(currentValue) {
     const current = parseDemandAggregateState(currentValue);
     if (current.lifecycle !== "active")
         fail("transition", "$/lifecycle");
+    // The cancellation event ends the wait; the escalation remains in event history.
+    const { awaitingDecision: _awaitingDecision, ...rest } = current;
     return parseDemandAggregateState({
-        ...current,
+        ...rest,
         lifecycle: "cancelled",
     });
 }

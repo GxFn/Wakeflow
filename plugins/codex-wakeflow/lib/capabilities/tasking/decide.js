@@ -1,6 +1,5 @@
 import { currentTestTargetsOf, REPLACEABLE_PHASES, } from "../../governance/demand/model/demand-aggregate-state.js";
-import { parseMarkdownListItems, parseMarkdownSections } from "../../kernel/markdown-sections.js";
-import { resolveRequirementSectionAnchor } from "../../contracts/vocabulary/requirement-sections.js";
+export { parseAcceptanceCriteria, } from "../../kernel/requirement-acceptance.js";
 /**
  * Wakeflow Capabilities / Tasking：纯决定。
  *
@@ -9,14 +8,6 @@ import { resolveRequirementSectionAnchor } from "../../contracts/vocabulary/requ
  * 聚合在追加时再次执行谱系与基线规则；这里先把拒绝理由说清楚，让 Controller 不必猜。
  */
 const ACCEPTANCE_CRITERIA_ANCHOR = "acceptance-criteria";
-const ACCEPTANCE_ITEM_PREFIX = "ac";
-/** requirement.md 验收标准节里的顶层列表项；没有该节或没有列表项时为空。 */
-export function parseAcceptanceCriteria(requirementText) {
-    const section = parseMarkdownSections(requirementText).find((candidate) => resolveRequirementSectionAnchor(candidate.heading) === ACCEPTANCE_CRITERIA_ANCHOR);
-    if (section === undefined)
-        return Object.freeze([]);
-    return Object.freeze(parseMarkdownListItems(section.body, ACCEPTANCE_ITEM_PREFIX).map((item) => Object.freeze({ itemId: item.itemId, text: item.text })));
-}
 /** 锚点引用的阻塞：记录摘要、节锚点与条目都必须命中（ADR-0012 D5）。 */
 export function deriveAnchorReferenceBlockers(input) {
     const itemIds = new Set(input.criteria.map((criterion) => criterion.itemId));

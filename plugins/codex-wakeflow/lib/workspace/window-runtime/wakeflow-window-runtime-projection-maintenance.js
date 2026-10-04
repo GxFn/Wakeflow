@@ -1,13 +1,19 @@
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
+import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { isWakeflowError } from "../../kernel/error.js";
+import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
+import { withWakeflowWindowHostBindingStore, WakeflowWindowHostBindingStoreError, } from "./wakeflow-window-host-binding-store.js";
+import { compileWakeflowWindowHostBindingStoreAuthority, WakeflowWindowHostBindingStoreAuthorityError, } from "./wakeflow-window-host-binding-store-authority.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF, wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "../workspace-host-runtime-paths.js";
 import { wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRef, wakeflowWindowRuntimeProjectionRootRef, } from "./wakeflow-window-runtime-paths.js";
-import { inspectWakeflowWindowRuntimeProjectionDocument, publishWakeflowWindowRuntimeProjectionDocument, } from "./wakeflow-window-runtime-projection-document.js";
-import { admitWakeflowWindowRuntimeProjectionInputs, failWindowRuntimeProjection, inspectWakeflowWindowRuntimeProjectionEntries, resolveWakeflowWindowRuntimeProjectionExpectedEntries, } from "./wakeflow-window-runtime-projection-inspection.js";
+import { inspectWakeflowWindowRuntimeProjectionDocument, publishWakeflowWindowRuntimeProjectionDocument, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_FILE_MODE, } from "./wakeflow-window-runtime-projection-document.js";
+import { admitWakeflowWindowRuntimeProjectionInputs, compileWakeflowWindowRuntimeProjectionExpectedEntries, failWindowRuntimeProjection, inspectWakeflowWindowRuntimeProjectionEntries, resolveWakeflowWindowRuntimeProjectionExpectedEntries, } from "./wakeflow-window-runtime-projection-inspection.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, WakeflowWindowRuntimeUnregisteredProjectionError, } from "./wakeflow-window-runtime-unregistered-projection.js";
 /**
  * Wakeflow Workspace / Window Runtime：对账时窗口运行投影的重建（能力卡 1 §1.4 自动修复）。
@@ -85,6 +91,57 @@ export async function planWakeflowWindowRuntimeProjectionMaintenance(rootValue, 
         blockerCodes: Object.freeze(unsafe ? [WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNSAFE_BLOCKER] : []),
     });
 }
+/** Rendering inputs and publication share the registration lock; observation remains zero-write. */
+async function withCurrentProjectionEntries(root, source, signal, operation) {
+    let inputs = typeof source === "function" ? await source() : source;
+    let authority;
+    try {
+        authority = compileWakeflowWindowHostBindingStoreAuthority(inputs.config, inputs.resourceProfile, inputs.identityProfile);
+    }
+    catch (error) {
+        if (error instanceof WakeflowWindowHostBindingStoreAuthorityError) {
+            failWindowRuntimeProjection("topology", error.path);
+        }
+        throw error;
+    }
+    for (const resourceRef of [
+        wakeflowWindowRuntimeProjectionRootRef(inputs.resourceProfile),
+        authority.bindingRootRef,
+    ]) {
+        try {
+            await root.inspectExistingResource(resourceRef, "$projectionRoot");
+        }
+        catch (error) {
+            if (error instanceof RootedDirectoryError) {
+                if (error.reason === "resource-not-found")
+                    return operation({ kind: "runtime-missing" });
+                failWindowRuntimeProjection("input", "$root");
+            }
+            throw error;
+        }
+    }
+    let first = true;
+    const loadAuthority = async () => {
+        if (!first && typeof source === "function")
+            inputs = await source();
+        first = false;
+        return compileWakeflowWindowHostBindingStoreAuthority(inputs.config, inputs.resourceProfile, inputs.identityProfile);
+    };
+    try {
+        return await withWakeflowWindowHostBindingStore(root, loadAuthority, signal === undefined ? {} : { signal }, async (store) => operation({
+            kind: "entries",
+            entries: compileWakeflowWindowRuntimeProjectionExpectedEntries(inputs, store.inventory),
+        }));
+    }
+    catch (error) {
+        if (error instanceof WakeflowWindowHostBindingStoreError) {
+            if (error.reason === "aborted")
+                failWindowRuntimeProjection("aborted", "$signal");
+            return operation({ kind: "inventory-unavailable" });
+        }
+        throw error;
+    }
+}
 /**
  * 配置事务收尾：窗口集变了（pod 创建 / 关闭）就把本宿主缺失或过期的窗口投影收敛到新 Config 与
  * 当前 Binding 的重算；每份投影的指纹覆盖整个期望拓扑，所以别的窗口增减也会让它过期
@@ -93,33 +150,53 @@ export async function planWakeflowWindowRuntimeProjectionMaintenance(rootValue, 
 export async function refreshWakeflowWindowRuntimeProjections(rootValue, request) {
     if (request.signal?.aborted === true)
         failWindowRuntimeProjection("aborted", "$signal");
-    const inputs = admitWakeflowWindowRuntimeProjectionInputs(rootValue, request.config, request.resourceProfile, request.identityProfile);
-    const expected = await resolveWakeflowWindowRuntimeProjectionExpectedEntries(rootValue, inputs, request.signal);
-    if (expected.kind !== "entries") {
-        return Object.freeze({ status: expected.kind, published: 0, unsafe: 0 });
-    }
-    const inspected = await inspectWakeflowWindowRuntimeProjectionEntries(rootValue, expected.entries, request.signal);
-    let published = 0;
-    let unsafe = 0;
-    for (const item of inspected) {
-        if (item.status === "current")
-            continue;
-        if (item.status === "unsafe") {
-            unsafe += 1;
-            continue;
-        }
+    const loadInputs = async () => {
+        let snapshot;
         try {
-            await publishWakeflowWindowRuntimeProjectionDocument(rootValue, item.entry.target, request.signal);
+            snapshot = await readWakeflowConfigAuthoritySnapshot(rootValue, request.signal === undefined ? {} : { signal: request.signal });
         }
         catch (error) {
-            if (isWakeflowError(error)) {
-                failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "effect", "$projection");
+            if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+                failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "input", "$config");
             }
             throw error;
         }
-        published += 1;
+        return admitWakeflowWindowRuntimeProjectionInputs(rootValue, snapshot.model, request.resourceProfile, request.identityProfile);
+    };
+    try {
+        return await withWorkspaceOperationScope(rootValue, "shared", () => withCurrentProjectionEntries(rootValue, loadInputs, request.signal, async (expected) => {
+            if (expected.kind !== "entries") {
+                return Object.freeze({ status: expected.kind, published: 0, unsafe: 0 });
+            }
+            const inspected = await inspectWakeflowWindowRuntimeProjectionEntries(rootValue, expected.entries, request.signal);
+            let published = 0;
+            let unsafe = 0;
+            for (const item of inspected) {
+                if (item.status === "current")
+                    continue;
+                if (item.status === "unsafe") {
+                    unsafe += 1;
+                    continue;
+                }
+                try {
+                    await publishWakeflowWindowRuntimeProjectionDocument(rootValue, item.entry.target, request.signal);
+                }
+                catch (error) {
+                    if (isWakeflowError(error)) {
+                        failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "effect", "$projection");
+                    }
+                    throw error;
+                }
+                published += 1;
+            }
+            return Object.freeze({ status: "refreshed", published, unsafe });
+        }), request.signal === undefined ? {} : { signal: request.signal });
     }
-    return Object.freeze({ status: "refreshed", published, unsafe });
+    catch (error) {
+        if (isWakeflowError(error))
+            failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : error.reason === "config-authority" ? "input" : "effect", "$projection");
+        throw error;
+    }
 }
 /**
  * 对账 / 重配置补齐本宿主运行时的目录骨架（与 fresh 同一组六个 0700 目录）与缺失的未登记
@@ -207,9 +284,19 @@ export async function ensureWakeflowWindowRuntimeSkeleton(rootValue, request) {
             const inspection = await inspectWakeflowWindowRuntimeProjectionDocument(rootValue, target, signal);
             if (inspection.status !== "missing")
                 continue;
-            await publishWakeflowWindowRuntimeProjectionDocument(rootValue, target, signal);
+            // A registration may publish after the missing observation. Skeleton repair only
+            // creates: it must never reinterpret the new document as stale and replace it.
+            await createFileAtomically(rootValue, target.resourceRef, encodeUtf8(target.document), {
+                mode: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_FILE_MODE,
+                ...(signal === undefined ? {} : { signal }),
+            });
         }
         catch (error) {
+            if (error instanceof DurableAtomicFileWriteError) {
+                if (error.reason === "target-exists")
+                    continue;
+                failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "effect", "$projection");
+            }
             if (isWakeflowError(error)) {
                 failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "effect", "$projection");
             }
@@ -277,32 +364,33 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(rootValue,
     if (request.signal?.aborted === true)
         failWindowRuntimeProjection("aborted", "$signal");
     const inputs = admitWakeflowWindowRuntimeProjectionInputs(rootValue, request.config, request.resourceProfile, request.identityProfile);
-    const expected = await resolveWakeflowWindowRuntimeProjectionExpectedEntries(rootValue, inputs, request.signal);
-    if (expected.kind !== "entries")
-        failWindowRuntimeProjection("plan", "$operation");
-    const entry = expected.entries.find((candidate) => candidate.windowId === request.targetKey);
-    if (entry === undefined
-        || request.operationId !== `window-runtime-projection:${entry.windowId}`
-        || entry.target.documentDigest !== request.targetDigest) {
-        failWindowRuntimeProjection("plan", "$operation");
-    }
-    let receipt;
-    try {
-        receipt = await publishWakeflowWindowRuntimeProjectionDocument(rootValue, entry.target, request.signal);
-    }
-    catch (error) {
-        if (isWakeflowError(error)) {
-            failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "effect", "$projection");
+    return withCurrentProjectionEntries(rootValue, inputs, request.signal, async (expected) => {
+        if (expected.kind !== "entries")
+            failWindowRuntimeProjection("plan", "$operation");
+        const entry = expected.entries.find((candidate) => candidate.windowId === request.targetKey);
+        if (entry === undefined
+            || request.operationId !== `window-runtime-projection:${entry.windowId}`
+            || entry.target.documentDigest !== request.targetDigest) {
+            failWindowRuntimeProjection("plan", "$operation");
         }
-        throw error;
-    }
-    return Object.freeze({
-        operationId: request.operationId,
-        disposition: receipt.disposition === "current"
-            ? "current"
-            : receipt.disposition === "created"
-                ? "created"
-                : "updated",
-        observationDigest: receipt.documentDigest,
+        let receipt;
+        try {
+            receipt = await publishWakeflowWindowRuntimeProjectionDocument(rootValue, entry.target, request.signal);
+        }
+        catch (error) {
+            if (isWakeflowError(error)) {
+                failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "effect", "$projection");
+            }
+            throw error;
+        }
+        return Object.freeze({
+            operationId: request.operationId,
+            disposition: receipt.disposition === "current"
+                ? "current"
+                : receipt.disposition === "created"
+                    ? "created"
+                    : "updated",
+            observationDigest: receipt.documentDigest,
+        });
     });
 }

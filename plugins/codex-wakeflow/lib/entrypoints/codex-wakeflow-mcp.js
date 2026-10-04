@@ -1,3 +1,4 @@
+import { renderCodexWindowLaunchInstructions } from "../hosts/codex/codex-window-launch-instructions.js";
 import { executePrepareDeliveryRequest, executeRearmDeliveryRequest, executeRecordDeliveryOutcomeRequest, } from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
 import { executeStatusRequest, executeVerifyRequest } from "../capabilities/observation/service.js";
@@ -24,6 +25,7 @@ const CODEX_HOST_FACADE = Object.freeze({
     hostId: "codex",
     resourceProfile: codexWorkspaceHostResourceProfile,
     identityProfile: codexWindowHostIdentityProfile,
+    renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 });
 /**
  * 观察读两个宿主的绑定与 hook 通道：制品固定携带两份纯数据 profile（§13.94 D1）。
@@ -53,19 +55,20 @@ export function createCodexWakeflowMcpServer(serverVersion) {
     return createWakeflowPublicMcpServer({
         serverName: CODEX_WAKEFLOW_MCP_SERVER_NAME,
         serverVersion,
+        beforeMutation: CODEX_OBSERVATION_FACADE.artifact.assertUnchanged,
         ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,
         executeMaintenance: executeCodexWakeflowMaintenance,
-        registerWindowHostBinding: (value) => executeWindowBindingRequest(CODEX_HOST_FACADE, value),
-        managePod: (value) => executePodRequest(CODEX_HOST_FACADE, value),
-        inspectStatus: (value) => executeStatusRequest(CODEX_OBSERVATION_FACADE, value),
-        verifyWorkspace: (value) => executeVerifyRequest(CODEX_OBSERVATION_FACADE, value),
-        prepareDelivery: (value) => executePrepareDeliveryRequest(CODEX_HOST_FACADE, value),
-        recordDeliveryOutcome: (value) => executeRecordDeliveryOutcomeRequest(CODEX_HOST_FACADE, value),
-        rearmDelivery: (value) => executeRearmDeliveryRequest(CODEX_HOST_FACADE, value),
-        importTargetResult: (value) => executeTargetResultImportRequest(CODEX_HOST_FACADE, value),
-        inspectTargetResultReview: (value) => executeTargetResultReviewInspectionRequest(CODEX_HOST_FACADE, value),
-        recordImplementationReviewDecision: (value) => executeImplementationReviewDecisionRequest(CODEX_HOST_FACADE, value),
-        recordTestReviewDecision: (value) => executeTestReviewDecisionRequest(CODEX_HOST_FACADE, value),
+        registerWindowHostBinding: (value, options) => executeWindowBindingRequest(CODEX_HOST_FACADE, value, options),
+        managePod: (value, options) => executePodRequest(CODEX_HOST_FACADE, value, options),
+        inspectStatus: (value, options) => executeStatusRequest(CODEX_OBSERVATION_FACADE, value, options),
+        verifyWorkspace: (value, options) => executeVerifyRequest(CODEX_OBSERVATION_FACADE, value, options),
+        prepareDelivery: (value, options) => executePrepareDeliveryRequest(CODEX_HOST_FACADE, value, options),
+        recordDeliveryOutcome: (value, options) => executeRecordDeliveryOutcomeRequest(CODEX_HOST_FACADE, value, options),
+        rearmDelivery: (value, options) => executeRearmDeliveryRequest(CODEX_HOST_FACADE, value, options),
+        importTargetResult: (value, options) => executeTargetResultImportRequest(CODEX_HOST_FACADE, value, options),
+        inspectTargetResultReview: (value, options) => executeTargetResultReviewInspectionRequest(CODEX_HOST_FACADE, value, options),
+        recordImplementationReviewDecision: (value, options) => executeImplementationReviewDecisionRequest(CODEX_HOST_FACADE, value, options),
+        recordTestReviewDecision: (value, options) => executeTestReviewDecisionRequest(CODEX_HOST_FACADE, value, options),
     });
 }
 /** 通过官方 stdio transport 运行 Codex MCP composition root。 */

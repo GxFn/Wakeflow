@@ -441,6 +441,7 @@ async function readWorkspaceDeclaration(root) {
     const config = await readBoundedJson(nodePath.join(root, WAKEFLOW_CONFIG_FILE_NAME), CONFIG_MAXIMUM_BYTES);
     if (!isRecord(config) ||
         config.kind !== WAKEFLOW_CONFIG_KIND ||
+        typeof config.schemaVersion !== "number" ||
         config.schemaVersion !== WAKEFLOW_CONFIG_SCHEMA_VERSION ||
         !isRecord(config.topology)) {
         return null;

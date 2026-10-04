@@ -3,6 +3,7 @@ import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical
 import { JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
 import { fail, toWakeflowError } from "./error.js";
+import { withWorkspaceOperationScope } from "./workspace-operation-scope.js";
 import { assertWithinByteLimit } from "./limits.js";
 import { assertPublicJson, assertRequestFreeOfPrivateText, createRedactionBoundary, } from "./redaction.js";
 function rootOpenOptions(options) {
@@ -14,8 +15,11 @@ function rootOpenOptions(options) {
  * 切片的执行选项还带 `clock`、`signal` 等与内核无关的注入值；这里只取出持久化级别，
  * 缺省就什么都不传，使外壳与生产组合根看到的是同一个"未指定"。
  */
-export function commandShellExecutionOptions(durability) {
-    return durability === undefined ? Object.freeze({}) : Object.freeze({ durability });
+export function commandShellExecutionOptions(durability, signal) {
+    return Object.freeze({
+        ...(durability === undefined ? {} : { durability }),
+        ...(signal === undefined ? {} : { signal }),
+    });
 }
 function requestJson(value) {
     try {
@@ -68,18 +72,43 @@ export async function runCommandShell(spec, value, admit, body, options = {}) {
     try {
         admit(binding);
         assertRequestFreeOfPrivateText(withoutExemptPaths(payload, spec.requestPrivacyExemptPaths ?? []), boundary, "$request");
-        context = await spec.open(workspaceRoot, envelope);
-        if (spec.privateValues !== undefined) {
-            boundary = createRedactionBoundary([
-                ...boundary.privateValues,
-                ...spec.privateValues(context),
-            ]);
-        }
-        const assembled = await body(context, binding, boundary);
-        const assembledJson = parseJsonValue(assembled, "$result");
-        assertPublicJson(assembledJson, boundary, "$result");
-        assertWithinByteLimit(assembledJson, "publicResultBytes", "$result");
-        result = assembled;
+        const execute = async () => {
+            let bodyFailure;
+            try {
+                context = await spec.open(workspaceRoot, envelope);
+                if (spec.privateValues !== undefined) {
+                    boundary = createRedactionBoundary([
+                        ...boundary.privateValues,
+                        ...spec.privateValues(context),
+                    ]);
+                }
+                const assembled = await body(context, binding, boundary);
+                const assembledJson = parseJsonValue(assembled, "$result");
+                assertPublicJson(assembledJson, boundary, "$result");
+                assertWithinByteLimit(assembledJson, "publicResultBytes", "$result");
+                result = assembled;
+            }
+            catch (error) {
+                bodyFailure = error;
+            }
+            const opened = context;
+            context = undefined;
+            if (opened !== undefined) {
+                try {
+                    await spec.close(opened);
+                }
+                catch (error) {
+                    bodyFailure ??= error;
+                }
+            }
+            if (bodyFailure !== undefined)
+                throw bodyFailure;
+        };
+        const mode = spec.scope(binding);
+        if (mode === "read" || mode === "maintenance")
+            await execute();
+        else
+            await withWorkspaceOperationScope(workspaceRoot, mode, execute, options.signal === undefined ? {} : { signal: options.signal });
     }
     catch (error) {
         failure = toWakeflowError(error, "$request");

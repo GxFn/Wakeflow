@@ -1,6 +1,6 @@
 {
   "name": "wakeflow",
-  "version": "1.0.0",
+  "version": "1.1.0-rc.5",
   "description": "A disciplined control loop for multi-window agent work across a tmux-resident fleet of Claude Code sessions: a Controller window claims requirement packages, plans task packages, prepares deliveries, imports immutable target results, obtains independent Test validation and reviews the evidence before completing and archiving a Demand. Explicit on-disk state roots keep every step auditable; Agents perform the host actions, Wakeflow owns the content and the verification.",
   "author": {
     "name": "gaoxuefeng",

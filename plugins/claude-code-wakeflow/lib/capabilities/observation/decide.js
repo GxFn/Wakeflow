@@ -5,21 +5,21 @@ const MAINTENANCE_TOOL = "wakeflow_maintain_workspace";
 const REGISTRATION_TOOL = "wakeflow_register_window_binding";
 const CREATE_DEMAND_TOOL = "wakeflow_create_demand";
 /**
- * 顺序：制品过期（用户）> 过期窗口 resume > 维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿
+ * 顺序：制品过期（用户）> 维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿
  * （primary 先，再按 demandId）> 待认领需求包；去重，上限 64。
  */
 export function deriveNextActions(input) {
     const actions = [];
+    if (input.artifactServerUnavailable) {
+        actions.push({
+            owner: "user",
+            tool: null,
+            reason: "runtime-artifact-unavailable",
+            subject: null,
+        });
+    }
     if (input.artifactServerOutdated) {
         actions.push({ owner: "user", tool: null, reason: "runtime-artifact-outdated", subject: null });
-    }
-    for (const windowId of [...input.staleArtifactWindows].sort()) {
-        actions.push({
-            owner: "controller",
-            tool: null,
-            reason: "window-artifact-stale",
-            subject: windowId,
-        });
     }
     if (input.maintenance) {
         actions.push({
@@ -344,20 +344,22 @@ function podsGate(facts) {
     const failing = codes.some((code) => !PENDING_POD_CODE_SUFFIXES.some((suffix) => code.endsWith(suffix)));
     return gate("pod-execution-location", "pod", failing ? "fail" : unavailable ? "unavailable" : "pass", joinCodes(codes));
 }
-/**
- * runtime-artifact（§13.127）：本进程启动时的制品 manifest 与磁盘上的一致（否则 server-outdated，
- * 本窗口的服务进程要重连），且每个已登记窗口的会话都在同一份制品下启动（否则列出 stale 窗口，
- * 由 Controller 用助手 resume）。没有 manifest 可比的运行记 not-applicable 而不是冒充一致。
- */
+/** Serving process and peer runtime evidence have distinct subjects (ADR-0017). */
 function runtimeArtifactGate(facts) {
-    const { manifestDigest, onDiskDigest, staleWindows } = facts.runtime;
-    if (manifestDigest === null)
-        return gate("runtime-artifact", "runtime", "pass", "not-applicable");
+    const { server, unverifiedWindows } = facts.runtime;
+    const manifestDigest = server?.manifestDigest ?? null;
+    const onDiskDigest = server?.onDiskDigest ?? null;
+    const changed = manifestDigest !== null && onDiskDigest !== null && manifestDigest !== onDiskDigest;
     const codes = [
-        ...(onDiskDigest !== null && onDiskDigest !== manifestDigest ? ["server-outdated"] : []),
-        ...(staleWindows.length > 0 ? [`windows-stale:${staleWindows.length}`] : []),
+        ...(server !== null && (manifestDigest === null || onDiskDigest === null)
+            ? ["manifest-unavailable"]
+            : []),
+        ...(changed ? ["server-outdated"] : []),
+        ...(unverifiedWindows.length > 0
+            ? [`window-runtime-unverified:${unverifiedWindows.length}`]
+            : []),
     ];
-    return gate("runtime-artifact", "runtime", codes.length === 0 ? "pass" : "fail", joinCodes(codes));
+    return gate("runtime-artifact", "runtime", changed ? "fail" : codes.length > 0 ? "unavailable" : "pass", joinCodes(codes) ?? (manifestDigest === null ? "not-applicable" : null));
 }
 /** 资产字节与本地设置条目各一票：资产读不出、设置文件不是 JSON 对象算 unavailable。 */
 function assetsGate(facts) {
@@ -441,8 +443,8 @@ export function summarizeGates(gates) {
 }
 /**
  * verify 的 next：不通过时列出未通过的门。runtime-artifact 失败先于维护：`server-outdated`
- * 只能由用户重连服务（过期的服务跑维护会把旧资产写回），`windows-stale` 由 Controller 用助手
- * resume；其余一律指向维护，与 status 的 nextActions 同序。
+ * 只能由用户重连服务。Peer runtime 缺证据时只报告，不能用 hook 代替；
+ * 可修的其他门先交给维护。
  */
 export function verifyNext(gates) {
     const failing = gates.filter((entry) => entry.status !== "pass");
@@ -456,6 +458,14 @@ export function verifyNext(gates) {
     }
     const blockers = Object.freeze(failing.map((entry) => `${entry.name}:${entry.status}`));
     const artifactCodes = failing.find((entry) => entry.name === "runtime-artifact")?.code?.split(",") ?? [];
+    if (artifactCodes.includes("manifest-unavailable")) {
+        return Object.freeze({
+            frontier: "runtime-artifact-unavailable",
+            owner: "user",
+            suggestedTool: null,
+            blockers,
+        });
+    }
     if (artifactCodes.includes("server-outdated")) {
         return Object.freeze({
             frontier: "runtime-artifact-outdated",
@@ -464,9 +474,10 @@ export function verifyNext(gates) {
             blockers,
         });
     }
-    if (artifactCodes.some((code) => code.startsWith("windows-stale"))) {
+    if (failing.every((entry) => entry.name === "runtime-artifact") &&
+        artifactCodes.some((code) => code.startsWith("window-runtime-unverified"))) {
         return Object.freeze({
-            frontier: "window-artifact-stale",
+            frontier: "window-runtime-unverified",
             owner: "controller",
             suggestedTool: null,
             blockers,

@@ -7,6 +7,7 @@ import { inspectWorkClaim } from "../../kernel/work-claims.js";
 import { managedEvidenceManifestRef } from "../evidence/managed-evidence-resource-paths.js";
 import { inspectLedgerAuthorityLayout } from "../ledger/ledger-authority-layout.js";
 import { DemandEventSourcingRepository } from "./event-sourcing/demand-event-sourcing-repository.js";
+import { readDemandAcceptanceCoverage } from "./demand-acceptance-coverage.js";
 const MANIFEST_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$manifest.maximumBytes");
 export function computeVerifyObservationDigest(gates) {
     return computeCanonicalJsonSha256Digest(parseJsonValue({ gates }, "$verify"));
@@ -122,6 +123,17 @@ export async function evaluateVerifyGates(input) {
         await guarded("evidence-integrity", () => evidenceGate(input)),
         ...(input.payloadBlockers === null ? [] : [privacyGate(input.payloadBlockers)]),
         ...(research === null ? [] : [research]),
+        ...(input.loaded.identity.demandType === "research" || input.loaded.aggregate.state.lifecycle !== "active" ? [] : [
+            await guarded("requirement-coverage", async () => {
+                const coverage = await readDemandAcceptanceCoverage(input.demandRoot, input.ledgerRoot, input.loaded, input.signal);
+                if (coverage.total === 0)
+                    return gate("requirement-coverage", "fail", "acceptance-criteria-empty");
+                if (coverage.uncovered.length === 0)
+                    return gate("requirement-coverage", "pass");
+                const shown = coverage.uncovered.slice(0, 20).join(",");
+                return gate("requirement-coverage", "fail", `uncovered:${coverage.uncovered.length}:${shown}`);
+            }),
+        ]),
     ];
     return Object.freeze({
         kind: "WakeflowDemandVerifyReport",

@@ -6,49 +6,36 @@ import { readDeterministicJsonFile } from "../foundation/filesystem/deterministi
 import { DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "../foundation/filesystem/durable-atomic-file-stage-address.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
+import { sameFileNodeIdentity } from "../foundation/filesystem/file-node-snapshot.js";
 import { unlinkRegularFileExactly } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
-import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
-import { readStableFile, StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
+import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
+import { StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { deriveUuidV4 } from "../foundation/identity/uuid-v4.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { fail } from "./error.js";
+import { HOST_HOOK_FILE_NAME_PATTERN as FILE_NAME_PATTERN, partitionedHostHookRef, visitHostHookDirectory, } from "./hook-observation-directory.js";
 import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
 /**
- * Wakeflow Kernel / Hook Observations：宿主 hook 交回的观察记录（ADR-0009 调整一）。
+ * Host hooks persist private facts, never message bodies. Record schema and ids
+ * remain v1. New writes use UTC-day/digest-prefix partitions; flat v1 records are
+ * read in place, and their retries never migrate or rewrite existing bytes.
  *
- * 宿主进程在会话开始、提示提交、一轮结束、会话结束时调用 Wakeflow 自带的脚本，
- * 脚本把事实写成一条记录：会话或线程标识、cwd、时间、可选的 turn 标识与摘要。
- * 记录只存摘要，从不存提示或助手消息正文。登记、投递与关闭的准入按这些记录
- * 核对"宿主说的"与"Agent 说的"是否一致。记录是私有权威：目录 0700、文件 0600，
- * 不进入任何公共结果。
+ * Directory pages bound memory, not history length. Exact queries distinguish a
+ * complete result from truncation; full scans aggregate locally and must discard
+ * those aggregates on failure. Directory races, unreadable partitions and aborts
+ * cannot become evidence of absence. Known create/0600 stages are not records;
+ * unknown names and unsafe nodes count as skipped and are never auto-deleted.
  *
- * 保留策略（gate-log §13.97 D7）：`recordedAt` 恰好毫秒精度，文件名才能按时间预筛；写入器在
- * 新落地一条记录后只按龄修剪同一宿主目录里早于 `HOST_HOOK_RETENTION_MILLISECONDS` 的记录文件——
- * 这是 Wakeflow 第一条自动 unlink 路径，只动符合记录命名的普通文件（与下文 §13.134 的暂存残留）。
- * 截止基准不直接取调用方交来的 `recordedAt`，而取它与"目录里除本条之外最新的记录命名条目"的
- * 较小者：宿主时钟跳到未来时，一次未来时间的写入只能修剪到与不跳变时相同的那批记录，D7b 的
- * 30 天损失边界不会被一次写入越过；目录里没有别的记录命名条目时不修剪。幂等重写（`current`）
- * 没有新证据落地，跳过修剪，同步 hook 不为重复触发付一次目录列举。修剪失败吞掉（记录已写成），
- * 中止不吞：内核各模块一律把中止上抛为
- * `io-failure`/`aborted`，D7b 的"修剪失败吞掉"刻意不覆盖它——`writeHostHookObservation` 以
- * `aborted` 拒绝时记录可能已经 durable，调用方不能据此断定没写成。读取器把"列举后读取时已不存在"
- * 当作消失而不是 `skipped`：异步 hook 的修剪与 status 的读取并发时没有伪失败。所有消费者都只在
- * 有界窗口内读记录，被修剪的记录不再被引用。
- *
- * 暂存残留（gate-log §13.134 B12）：关闭窗口（helper close → tmux kill-window）会在耐久原子创建
- * 中途杀掉宿主的 session-end hook，留下写入器自己那种命名（`create`、0600）的暂存文件；活着的
- * 写入器的暂存文件也会被并发的读取短暂看到。读取器把这种命名的普通文件既不当记录、也不计
- * `skipped`——它不是证据，否则 verify 的 host-hook-channel 门会永久失败或偶发伪失败。原子写入器
- * 写前只恢复同一目标的暂存文件，而每条记录的目标名各不相同，残留等不到它。于是修剪在同一次
- * 列举里顺带 unlink mtime 比刚落地的记录早过 `HOST_HOOK_ABANDONED_STAGE_MILLISECONDS`、名字里的
- * 所有者进程也已不在的暂存文件，规则与记录修剪相同：精确命名、只动普通文件、不跟随符号链接、失败
- * 吞掉、中止上抛；更新的、所有者仍在或无法判定的暂存文件可能属于仍在写的 hook，不动。其他形状的
- * 暂存命名（`replace`、别的权限位、非普通文件）与名字对而节点不是 0600、链接数 1 或 2 的普通文件
- * 都不是本写入器能留下的，仍计 `skipped`、永远不修剪。
+ * Retirement is best effort after a durable create, bounded to 4096 inspected
+ * entries per write. The 30-day cutoff is capped by another observed record's
+ * timestamp, so one future clock jump cannot erase recent evidence. Unvisited
+ * entries can be retained longer. Known inactive stages older than ten minutes
+ * are retired by exact node identity. Caller cancellation still propagates even
+ * after the record becomes durable; cancellation does not imply rollback.
  */
 export const HOST_HOOK_EVENTS = Object.freeze([
     "session-start",
@@ -68,16 +55,13 @@ function hasControlCharacter(text) {
     }
     return false;
 }
-const FILE_NAME_PATTERN = /^(\d{8}T\d{9}Z)-(session-start|user-prompt-submit|stop|session-end|turn-complete)-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
 const RECORD_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$observation.maximumBytes");
-/**
- * 读取路径的目录列举上限，同时是 `limit` 的上限：每回合两条记录，30 天内活跃的工作区会越过
- * 4,096（§13.97 D7c）。端点与观察域按上限读取时引用这个常量，不各自重写字面量。
- */
-export const HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES = 16384;
-/** 修剪路径的列举上限高于读取路径：目录越过读取上限后仍能靠修剪恢复（§13.97 D7b）。 */
-const PRUNE_MAXIMUM_ENTRIES = 65536;
-/** 修剪 unlink 的并发上限：与稳定目录读取的 lstat 并发同量级，越界目录一次要 unlink 上万个文件。 */
+/** Maximum retained query results/session aggregates, independent of directory capacity. */
+export const HOST_HOOK_RECORDS_MAXIMUM = 16384;
+/** Best-effort retirement scan and deletion budget per newly committed record. */
+const PRUNE_MAXIMUM_ENTRIES = 4096;
+const PRUNE_SCAN_COMPLETE = Symbol("prune-scan-budget");
+/** 修剪 unlink 的并发上限：与稳定目录读取的 lstat 并发同量级，每次退休量受检查预算限制。 */
 const PRUNE_UNLINK_CONCURRENCY = 8;
 /** 记录只按龄保留：早于此值的记录文件在下一次成功写入后被 unlink（§13.97 D7b）。 */
 export const HOST_HOOK_RETENTION_MILLISECONDS = 30 * 24 * 60 * 60 * 1000;
@@ -246,11 +230,20 @@ function parseHostHookObservation(value) {
 function renderHostHookObservation(record) {
     return renderDeterministicJsonDocument(parseJsonValue(record, "$record"), "$record");
 }
+/** Optional v1 fields may be absent in older durable bytes; retries preserve them. */
+function sameObservationDocument(value, document) {
+    try {
+        return renderHostHookObservation(parseHostHookObservation(value)) === document;
+    }
+    catch {
+        return false;
+    }
+}
 /** 记录文件名：`<时间紧凑形>-<事件>-<recordId>.json`，按名字即可按时间与事件预筛。 */
 function hostHookObservationFileName(record) {
     return `${compactInstant(record.recordedAt)}-${record.event}-${record.recordId}.json`;
 }
-function hostHookObservationRef(record) {
+function legacyHostHookObservationRef(record) {
     return parsePortableResourcePath(`${hostHookObservationsRootRef(record.hostId)}/${hostHookObservationFileName(record)}`, "$record");
 }
 function isAbortFailure(error) {
@@ -271,24 +264,9 @@ function expandCompactInstant(value) {
         return null;
     return new Date(milliseconds).toISOString() === iso ? iso : null;
 }
-/** 目录里除刚写入的那条之外、最新的记录命名条目的紧凑形；一条都没有时返回 `null`。 */
-function newestOtherRecordCompact(entries, writtenName) {
-    let newest = null;
-    for (const entry of entries) {
-        if (entry.name === writtenName)
-            continue;
-        const match = FILE_NAME_PATTERN.exec(entry.name);
-        if (match === null)
-            continue;
-        const compact = match[1];
-        if (newest === null || compact > newest)
-            newest = compact;
-    }
-    return newest;
-}
 /**
  * 早于"截止基准 - 保留期"的记录文件名前缀：与文件名同为定宽紧凑形，可直接比较。基准取
- * `recordedAt` 与目录里除本条之外最新记录的**较小者**——钉住基准的是目录自己的历史，所以宿主
+ * `recordedAt` 与本批观察到的另一条最新记录的**较小者**——钉住基准的是目录自己的历史，所以宿主
  * 时钟跳到未来时，一条未来时间的记录只能修剪到与不跳变时相同的那批，D7b 的 30 天损失边界不会被
  * 一次写入越过。基准或结果不可表示（合成文件名、越出四位年份）时返回 `null`，即不修剪。
  */
@@ -305,41 +283,10 @@ function isExpiredRecordEntry(entry, cutoff) {
     const match = FILE_NAME_PATTERN.exec(entry.name);
     return match !== null && entry.node.kind === "file" && match[1] < cutoff;
 }
-/** 按 D7b 的截止基准挑出过期记录；目录里没有别的记录命名条目或基准不可表示时一条都不挑。 */
-function expiredRecordEntries(entries, record, writtenName) {
-    const newestOther = newestOtherRecordCompact(entries, writtenName);
-    if (newestOther === null)
-        return [];
-    const cutoff = retentionCutoffCompact(record.recordedAt, newestOther);
-    if (cutoff === null)
-        return [];
-    return entries.filter((entry) => isExpiredRecordEntry(entry, cutoff));
-}
-/**
- * 挑出被遗弃的暂存文件（§13.134 B12）：mtime 比刚落地的记录早过
- * `HOST_HOOK_ABANDONED_STAGE_MILLISECONDS`，且 foundation 判定名字里的所有者进程已不在
- * （`inactive`）。基准取刚落地记录文件的 mtime 而不是 `recordedAt`：两个时刻出自同一个文件系统
- * 时钟，调用方交来的时间（可能跳到未来）左右不了哪些暂存文件算旧，内核也不必读墙钟。所有者仍在
- * 或无法判定（机器休眠时挂在写入中途的 hook、进程号被复用）时不动——与 foundation 的暂存恢复同一条
- * 规矩；读取器本来就不计暂存文件，留着只是晚一点退休。列举里找不到刚写入的那条记录时一个都不挑。
- */
-function abandonedStageEntries(entries, writtenName) {
-    const written = entries.find((entry) => entry.name === writtenName);
-    if (written === undefined || written.node.kind !== "file")
-        return [];
-    const cutoff = written.node.modifiedAtNanoseconds -
-        BigInt(HOST_HOOK_ABANDONED_STAGE_MILLISECONDS) * NANOSECONDS_PER_MILLISECOND;
-    return entries.filter((entry) => {
-        if (entry.node.modifiedAtNanoseconds >= cutoff)
-            return false;
-        const address = hostHookStageAddress(entry);
-        return address !== null && readDurableAtomicFileStageOwnerState(address) === "inactive";
-    });
-}
 /**
  * unlink 一个过期记录文件或被遗弃的暂存文件。修剪是尽力而为且幂等的：崩溃后重现的过期文件在
  * 下一次成功写入时再被修剪，所以不给每个文件付 inode 与父目录两次 fsync——同步 hook 只有几秒
- * 预算，越界目录一次要 unlink 上万个文件。单个文件的失败只影响它自己；中止上抛。暂存文件若已与
+ * 预算，每次退休量受检查预算限制。单个文件的失败只影响它自己；中止上抛。暂存文件若已与
  * 目标记录双链接（创建在两次同步之间被杀），unlink 只让链接数减一，目标记录不受影响。
  */
 async function unlinkPrunedHostHookEntry(root, entry, signal) {
@@ -354,46 +301,72 @@ async function unlinkPrunedHostHookEntry(root, entry, signal) {
         rethrowAbort(error);
     }
 }
-/** 列举修剪范围；列举失败只让本次修剪作罢（记录已写成），中止上抛。 */
-async function listPruneEntries(root, hostId, signal) {
+function recognizedRecordLocation(hostId, entry) {
+    return (entry.resourcePath === `${hostHookObservationsRootRef(hostId)}/${entry.name}` ||
+        entry.resourcePath === partitionedHostHookRef(hostId, entry.name));
+}
+function isAbandonedStage(entry, cutoff) {
+    if (entry.node.modifiedAtNanoseconds >= cutoff)
+        return false;
+    const address = hostHookStageAddress(entry);
+    return address !== null && readDurableAtomicFileStageOwnerState(address) === "inactive";
+}
+function newestOtherCompact(entry, writtenRef, previous) {
+    if (entry.resourcePath === writtenRef)
+        return previous;
+    const timestamp = FILE_NAME_PATTERN.exec(entry.name)?.[1];
+    if (timestamp === undefined)
+        return previous;
+    return previous === null || timestamp > previous ? timestamp : previous;
+}
+/** Bounded retirement batch; never retain the complete directory in memory. */
+async function pruneExpiredHostHookObservations(root, record, resourceRef, signal) {
     try {
-        return (await readStableResourceDirectory(root, hostHookObservationsRootRef(hostId), {
-            maximumEntries: PRUNE_MAXIMUM_ENTRIES,
-            ...signal,
-        })).entries;
+        let newestOther = null;
+        const written = await root.inspectExistingResource(resourceRef, "$record");
+        const stageCutoff = written.node.modifiedAtNanoseconds -
+            BigInt(HOST_HOOK_ABANDONED_STAGE_MILLISECONDS) * NANOSECONDS_PER_MILLISECOND;
+        const candidates = [];
+        const earliestCutoff = retentionCutoffCompact(record.recordedAt, compactInstant(record.recordedAt));
+        let inspected = 0;
+        try {
+            await visitHostHookDirectory(root, record.hostId, async (entry) => {
+                if (inspected++ >= PRUNE_MAXIMUM_ENTRIES)
+                    throw PRUNE_SCAN_COMPLETE;
+                const match = FILE_NAME_PATTERN.exec(entry.name);
+                if (match !== null && !recognizedRecordLocation(record.hostId, entry))
+                    return;
+                newestOther = newestOtherCompact(entry, resourceRef, newestOther);
+                if (candidates.length >= PRUNE_MAXIMUM_ENTRIES)
+                    return;
+                if (earliestCutoff !== null && isExpiredRecordEntry(entry, earliestCutoff)) {
+                    candidates.push(entry);
+                }
+                else if (isAbandonedStage(entry, stageCutoff)) {
+                    candidates.push(entry);
+                }
+            }, signal);
+        }
+        catch (error) {
+            if (error !== PRUNE_SCAN_COMPLETE)
+                throw error;
+        }
+        const cutoff = newestOther === null ? null : retentionCutoffCompact(record.recordedAt, newestOther);
+        const pruned = candidates.filter((entry) => (cutoff !== null && isExpiredRecordEntry(entry, cutoff)) ||
+            hostHookStageAddress(entry) !== null);
+        const limit = pLimit(PRUNE_UNLINK_CONCURRENCY);
+        const settled = await Promise.allSettled(pruned.map((entry) => limit(unlinkPrunedHostHookEntry, root, entry, signal)));
+        for (const result of settled)
+            if (result.status === "rejected")
+                throw result.reason;
     }
     catch (error) {
         rethrowAbort(error);
-        return null;
     }
 }
-/**
- * 按龄修剪同一宿主目录：只 unlink 符合记录命名、早于截止基准减保留期的普通文件，以及同一次列举里
- * 被遗弃的本写入器暂存文件（§13.134 B12，见 `abandonedStageEntries`）；无法识别的条目留给 verify
- * 的门，永远不被修剪。截止基准由目录里已有的记录钳住（见 `retentionCutoffCompact`），目录里除刚
- * 写入的这条之外没有记录命名条目时一条记录都不修剪——暂存文件的退休不受这一条约束，它的基准是刚
- * 落地记录的 mtime。列举上限高于读取上限，目录越界后仍能恢复。每个失败只影响那一个文件；修剪整体
- * 失败被吞掉（记录已写成），中止不吞。
- */
-async function pruneExpiredHostHookObservations(root, record, signal) {
-    const entries = await listPruneEntries(root, record.hostId, signal);
-    if (entries === null)
-        return;
-    const writtenName = hostHookObservationFileName(record);
-    const pruned = [
-        ...expiredRecordEntries(entries, record, writtenName),
-        ...abandonedStageEntries(entries, writtenName),
-    ];
-    const limit = pLimit(PRUNE_UNLINK_CONCURRENCY);
-    const settled = await Promise.allSettled(pruned.map((entry) => limit(unlinkPrunedHostHookEntry, root, entry, signal)));
-    for (const result of settled) {
-        if (result.status === "rejected")
-            throw result.reason;
-    }
-}
-async function materializeHostHookDirectory(root, hostId, signal) {
+async function materializeHostHookDirectory(root, resourceRef, signal) {
     try {
-        await materializeDirectoryPath(root, hostHookObservationsRootRef(hostId), {
+        await materializeDirectoryPath(root, parsePortableResourcePath(resourceRef.slice(0, resourceRef.lastIndexOf("/")), "$directory"), {
             mode: DIRECTORY_MODE,
             ...signal,
         });
@@ -433,23 +406,46 @@ async function createHostHookObservationFile(root, resourceRef, document, signal
  */
 export async function writeHostHookObservation(root, input, options = {}) {
     const record = createHostHookObservation(input);
-    const resourceRef = hostHookObservationRef(record);
+    let resourceRef = partitionedHostHookRef(record.hostId, hostHookObservationFileName(record));
     const signal = options.signal === undefined ? {} : { signal: options.signal };
-    await materializeHostHookDirectory(root, record.hostId, signal);
     const document = renderHostHookObservation(record);
+    // A retry of a legacy observation stays in place; no migration or duplicate copy.
+    const legacyRef = legacyHostHookObservationRef(record);
+    try {
+        await root.inspectExistingResource(legacyRef, "$record");
+        resourceRef = legacyRef;
+    }
+    catch (error) {
+        if (!(error instanceof RootedDirectoryError) || error.reason !== "resource-not-found")
+            throw error;
+    }
+    try {
+        const existing = await readDeterministicJsonFile(root, resourceRef, {
+            maximumBytes: RECORD_MAXIMUM_BYTES,
+            ...signal,
+        });
+        if (!sameObservationDocument(existing.value, document))
+            fail("precondition-failed", "observation-conflict", "$observation");
+        return Object.freeze({ record, resourceRef, disposition: "current" });
+    }
+    catch (error) {
+        if (!(error instanceof StableFileReadError) || error.reason !== "not-found")
+            throw error;
+    }
+    await materializeHostHookDirectory(root, resourceRef, signal);
     let disposition = "created";
     if (!(await createHostHookObservationFile(root, resourceRef, document, signal))) {
         const existing = await readDeterministicJsonFile(root, resourceRef, {
             maximumBytes: RECORD_MAXIMUM_BYTES,
             ...signal,
         });
-        if (existing.text !== document) {
+        if (!sameObservationDocument(existing.value, document)) {
             fail("precondition-failed", "observation-conflict", "$observation");
         }
         disposition = "current";
     }
     if (disposition === "created")
-        await pruneExpiredHostHookObservations(root, record, signal);
+        await pruneExpiredHostHookObservations(root, record, resourceRef, signal);
     return Object.freeze({ record, resourceRef, disposition });
 }
 function namePrefilter(name, filter) {
@@ -463,38 +459,6 @@ function namePrefilter(name, filter) {
     if (filter.since !== undefined && compact < compactInstant(filter.since))
         return null;
     return Object.freeze({ event, compact });
-}
-async function listObservationCandidates(root, hostId, filter, signal) {
-    let listing;
-    try {
-        listing = await readStableResourceDirectory(root, hostHookObservationsRootRef(hostId), {
-            maximumEntries: HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES,
-            ...signal,
-        });
-    }
-    catch (error) {
-        if (error instanceof StableDirectoryReadError && error.reason === "not-found")
-            return null;
-        if (error instanceof StableDirectoryReadError) {
-            fail("io-failure", `observation-listing-${error.reason}`, "$observations", { cause: error });
-        }
-        throw error;
-    }
-    const candidates = [];
-    let unrecognized = 0;
-    for (const entry of listing.entries) {
-        if (FILE_NAME_PATTERN.exec(entry.name) === null) {
-            // 写入器自己的暂存文件（残留或正在写）既不是记录也不是损坏（§13.134 B12）。
-            if (hostHookStageAddress(entry) === null)
-                unrecognized += 1;
-            continue;
-        }
-        const prefilter = namePrefilter(entry.name, filter);
-        if (prefilter !== null)
-            candidates.push({ entry, event: prefilter.event });
-    }
-    candidates.sort((left, right) => left.entry.name.localeCompare(right.entry.name));
-    return Object.freeze({ candidates, unrecognized });
 }
 /** 列举后读取前已不存在的候选：不是证据通道的损坏，不计入 `skipped`（§13.97 D7c）。 */
 const VANISHED = Symbol("vanished");
@@ -525,10 +489,12 @@ async function candidateVanished(root, candidate, error) {
  * 读取一个候选文件；内容不可用、宿主不符或文件名与记录不一致都返回 `null`，列举后已消失返回
  * `VANISHED`。
  */
-async function readCandidateRecord(root, hostId, candidate, signal) {
+async function readCandidateRecord(root, hostId, candidate, signal, readRoot = root) {
     let record;
     try {
-        const read = await readDeterministicJsonFile(root, candidate.entry.resourcePath, {
+        const read = await readDeterministicJsonFile(readRoot, readRoot === root
+            ? candidate.entry.resourcePath
+            : parsePortableResourcePath(candidate.entry.name), {
             maximumBytes: RECORD_MAXIMUM_BYTES,
             expectedNode: candidate.entry.node,
             ...signal,
@@ -538,58 +504,181 @@ async function readCandidateRecord(root, hostId, candidate, signal) {
     catch (error) {
         return (await candidateVanished(root, candidate, error)) ? VANISHED : null;
     }
-    if (record.hostId !== hostId || hostHookObservationRef(record) !== candidate.entry.resourcePath) {
+    if (record.hostId !== hostId ||
+        (legacyHostHookObservationRef(record) !== candidate.entry.resourcePath &&
+            partitionedHostHookRef(hostId, hostHookObservationFileName(record)) !==
+                candidate.entry.resourcePath)) {
         return null;
     }
     return record;
 }
-/** 读取上限缺省 256，上限等于目录列举上限（§13.97 D7c）。 */
+/** 结果上限缺省 256，上限 16,384；扫描不会因达到结果上限而冒充完整。 */
 function readLimit(filter) {
     const limit = filter.limit ?? DEFAULT_LIMIT;
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES) {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > HOST_HOOK_RECORDS_MAXIMUM) {
         fail("invalid-request", "hook-limit", "$filter.limit");
     }
     return limit;
 }
-/** 逐条读取候选：读不出计入 `skipped`，消失跳过，会话过滤在记录内容上进行。 */
-async function readListedCandidates(root, hostId, candidates, filter, signal) {
-    const limit = readLimit(filter);
-    const records = [];
-    let skipped = 0;
-    for (const candidate of candidates) {
-        if (records.length >= limit)
-            break;
-        const record = await readCandidateRecord(root, hostId, candidate, signal);
-        if (record === VANISHED)
-            continue;
-        if (record === null) {
-            skipped += 1;
-        }
-        else if (filter.sessionId === undefined || record.sessionId === filter.sessionId) {
-            records.push(record);
-        }
+const SKIPPED = Symbol("skipped");
+async function scanEntry(root, hostId, entry, filter, signal, recordId, readRoot = root) {
+    const match = FILE_NAME_PATTERN.exec(entry.name);
+    if (match === null)
+        return hostHookStageAddress(entry) === null ? SKIPPED : null;
+    if (recordId !== undefined && match[3] !== recordId)
+        return null;
+    const prefilter = namePrefilter(entry.name, filter);
+    if (prefilter === null)
+        return null;
+    const record = await readCandidateRecord(root, hostId, { entry, event: prefilter.event }, signal, readRoot);
+    if (record === VANISHED)
+        return null;
+    if (record === null)
+        return SKIPPED;
+    return filter.sessionId === undefined || filter.sessionId === record.sessionId ? record : null;
+}
+/**
+ * Anchor a small batch to its already-verified parent. This avoids re-walking
+ * every workspace-relative ancestor for every file while preserving no-follow
+ * reads, file snapshots and parent identity checks before and after the batch.
+ */
+async function scanScopedBatch(root, hostId, entries, filter, signal, recordId) {
+    if (entries.length < 4) {
+        return Promise.allSettled(entries.map((entry) => scanEntry(root, hostId, entry, filter, signal, recordId)));
     }
-    return Object.freeze({ records: Object.freeze(records), skipped });
+    const directoryRef = parsePortableResourcePath(entries[0].resourcePath.replace(/\/[^/]+$/u, ""));
+    const parent = await root.inspectExistingResource(directoryRef, "$hooks");
+    const scoped = await RootedDirectory.open(parent.physicalPath, "$hooks");
+    try {
+        if (!sameFileNodeIdentity(parent.node, await scoped.assertCurrent("$hooks")))
+            fail("io-failure", "observation-scope-changed", "$hooks");
+        const results = await Promise.allSettled(entries.map((entry) => scanEntry(root, hostId, entry, filter, signal, recordId, scoped)));
+        const after = await root.inspectExistingResource(directoryRef, "$hooks");
+        if (!sameFileNodeIdentity(parent.node, after.node))
+            fail("io-failure", "observation-scope-changed", "$hooks");
+        return results;
+    }
+    finally {
+        await scoped.close();
+    }
+}
+async function scanEntryBatch(root, hostId, entries, filter, signal, recordId) {
+    const groups = new Map();
+    const immediate = [];
+    for (const entry of entries) {
+        const match = FILE_NAME_PATTERN.exec(entry.name);
+        if (match === null ||
+            namePrefilter(entry.name, filter) === null ||
+            (recordId !== undefined && match[3] !== recordId)) {
+            immediate.push(entry);
+            continue;
+        }
+        const key = entry.resourcePath.slice(0, entry.resourcePath.lastIndexOf("/"));
+        const group = groups.get(key) ?? [];
+        group.push(entry);
+        groups.set(key, group);
+    }
+    const immediateResults = await Promise.allSettled(immediate.map((entry) => scanEntry(root, hostId, entry, filter, signal, recordId)));
+    const groupsSettled = await Promise.allSettled([...groups.values()].map((group) => scanScopedBatch(root, hostId, group, filter, signal, recordId)));
+    const results = [...immediateResults];
+    for (const group of groupsSettled) {
+        if (group.status === "rejected")
+            throw group.reason;
+        results.push(...group.value);
+    }
+    return results;
+}
+/** Full, bounded-memory scan. Callers discard their local aggregates if it rejects. */
+async function scanObservations(root, hostIdValue, filter, visit, options = {}, onListed = null, recordId) {
+    const hostId = parseWakeflowHostId(hostIdValue);
+    let records = 0;
+    let skipped = 0;
+    let observed = false;
+    const signal = options.signal === undefined ? {} : { signal: options.signal };
+    const pending = [];
+    const flush = async () => {
+        const settled = await scanEntryBatch(root, hostId, pending.splice(0), filter, signal, recordId);
+        for (const result of settled) {
+            if (result.status === "rejected")
+                throw result.reason;
+            const record = result.value;
+            if (record === SKIPPED)
+                skipped += 1;
+            else if (record !== null) {
+                records += 1;
+                visit(record);
+            }
+        }
+    };
+    try {
+        await visitHostHookDirectory(root, hostId, async (entry) => {
+            if (!observed) {
+                observed = true;
+                if (onListed !== null)
+                    await onListed();
+            }
+            pending.push(entry);
+            if (pending.length >= 8)
+                await flush();
+        }, {
+            ...signal,
+            ...(filter.since === undefined
+                ? {}
+                : { sinceDay: compactInstant(filter.since).slice(0, 8) }),
+            ...(recordId === undefined ? {} : { recordId }),
+        });
+        await flush();
+    }
+    catch (error) {
+        rethrowAbort(error);
+        if (error instanceof RootedDirectoryError) {
+            fail("io-failure", `observation-scope-${error.reason}`, "$observations", { cause: error });
+        }
+        if (error instanceof StableDirectoryReadError) {
+            fail("io-failure", `observation-listing-${error.reason}`, "$observations", { cause: error });
+        }
+        throw error;
+    }
+    return Object.freeze({ records, skipped });
+}
+/** Complete streaming scan; a callback only builds disposable local aggregates. */
+export async function scanHostHookObservations(root, hostId, filter, visit, options = {}) {
+    return scanObservations(root, hostId, filter, visit, options);
 }
 async function readObservations(root, hostIdValue, filter, options, onListed) {
-    const hostId = parseWakeflowHostId(hostIdValue);
-    readLimit(filter);
-    const signal = options.signal === undefined ? {} : { signal: options.signal };
-    const listed = await listObservationCandidates(root, hostId, filter, signal);
-    if (listed === null)
-        return Object.freeze({ records: Object.freeze([]), skipped: 0 });
-    if (onListed !== null)
-        await onListed();
-    const read = await readListedCandidates(root, hostId, listed.candidates, filter, signal);
-    return Object.freeze({ records: read.records, skipped: listed.unrecognized + read.skipped });
+    const limit = readLimit(filter);
+    const records = [];
+    const compare = (a, b) => hostHookObservationFileName(a).localeCompare(hostHookObservationFileName(b));
+    const scan = await scanObservations(root, hostIdValue, filter, (record) => {
+        if (records.length === limit &&
+            compare(record, records[records.length - 1]) >= 0)
+            return;
+        let low = 0;
+        let high = records.length;
+        while (low < high) {
+            const middle = (low + high) >>> 1;
+            if (compare(records[middle], record) < 0)
+                low = middle + 1;
+            else
+                high = middle;
+        }
+        records.splice(low, 0, record);
+        if (records.length > limit)
+            records.pop();
+    }, options, onListed);
+    return Object.freeze({
+        records: Object.freeze(records),
+        skipped: scan.skipped,
+        complete: scan.records <= limit,
+    });
 }
 /** 有界读取一个宿主的记录；无法读入的条目只计数，不让证据通道整体失败。 */
 export async function readHostHookObservations(root, hostIdValue, filter = {}, options = {}) {
     return readObservations(root, hostIdValue, filter, options, null);
 }
 /**
- * 与 `readHostHookObservations` 走同一条读取路径，只是在列举完成、逐条读取之前调用一次
- * `onListed`：内核测试用它确定性地复现"列举后被修剪"的并发（§13.97 D7c）。观察点留在这个单独
+ * 与 `readHostHookObservations` 走同一条读取路径，只是在第一页候选即将读取之前调用一次
+ * `onListed`：内核测试用它确定性地复现"观察期间被修剪"的并发（§13.97 D7c）。观察点留在这个单独
  * 命名的导出里，`readHostHookObservations` 的选项因此保持 §13.97 定下的形状，生产调用方既传不进
  * 回调，也不会顺手把带回调的选项对象透传下去。
  */
@@ -600,31 +689,36 @@ export async function readHostHookObservationsInterleaved(root, hostIdValue, fil
 export async function readHostHookObservationRecord(root, hostIdValue, recordId, options = {}) {
     const hostId = parseWakeflowHostId(hostIdValue);
     const signal = options.signal === undefined ? {} : { signal: options.signal };
-    const listed = await listObservationCandidates(root, hostId, {}, signal);
-    if (listed === null)
+    let found = null;
+    await scanObservations(root, hostId, {}, (record) => {
+        found = record;
+    }, signal, null, recordId);
+    if (found === null)
         return null;
-    const candidate = listed.candidates.find((entry) => {
-        const match = FILE_NAME_PATTERN.exec(entry.entry.name);
-        return match !== null && match[3] === recordId;
-    });
-    if (candidate === undefined)
-        return null;
-    const record = await readCandidateRecord(root, hostId, candidate, signal);
-    if (record === VANISHED || record === null || record.recordId !== recordId)
-        return null;
-    try {
-        const read = await readStableFile(root, candidate.entry.resourcePath, {
-            maximumBytes: RECORD_MAXIMUM_BYTES,
-            expectedNode: candidate.entry.node,
-            ...signal,
-        });
-        return Object.freeze({ record, digest: read.digest, byteCount: Number(read.byteCount) });
-    }
-    catch (error) {
-        if (error instanceof StableFileReadError) {
-            rethrowAbort(error);
-            return null;
+    const record = found;
+    for (const ref of [
+        legacyHostHookObservationRef(record),
+        partitionedHostHookRef(hostId, hostHookObservationFileName(record)),
+    ]) {
+        try {
+            const read = await readDeterministicJsonFile(root, ref, {
+                maximumBytes: RECORD_MAXIMUM_BYTES,
+                ...signal,
+            });
+            const parsed = parseHostHookObservation(parseDeterministicJsonDocument(read.text, "$record"));
+            if (parsed.recordId !== recordId || parsed.hostId !== hostId)
+                return null;
+            return Object.freeze({
+                record: parsed,
+                digest: read.digest,
+                byteCount: Number(read.byteCount),
+            });
         }
-        throw error;
+        catch (error) {
+            rethrowAbort(error);
+            if (!(error instanceof StableFileReadError) || error.reason !== "not-found")
+                return null;
+        }
     }
+    return null;
 }

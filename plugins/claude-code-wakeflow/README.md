@@ -71,6 +71,14 @@ repository or an externally owned Design/Test surface gets the same kind of
 block in its own `CLAUDE.md` only when its config entry opts in with
 `instructionManagement: managed-block`; otherwise Wakeflow never writes there.
 
+## Workspace baseline
+
+This version supports the current workspace format as its first baseline.
+Start in a fresh workspace; local files and layouts from earlier development
+builds are not upgraded. Keep those folders separately if you need their history.
+Normal configuration changes, reconciliation, and recovery of interrupted work
+remain available within the current format.
+
 ## One-time host actions after install
 
 The first time you start Claude Code in the workspace directory, accept the

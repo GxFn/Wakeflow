@@ -789,7 +789,7 @@ async function retireInactiveLock(root) {
         throw error;
     }
     if (lock.status !== "held" || lock.ownerState !== "inactive")
-        return;
+        return false;
     try {
         // 退休先在锁的父目录内做 stage 恢复，集合外的 stage 一律拒绝。工作区索引与锁同住
         // `.wakeflow-active/`，崩溃留下的索引 stage 因此必须一起声明：否则恢复恰好在它存在的
@@ -804,6 +804,7 @@ async function retireInactiveLock(root) {
         }
         throw error;
     }
+    return true;
 }
 /** 目标的父目录尚不存在（首次发布前的 Demand 页面目录）：那里不可能有暂存文件，无需退休。 */
 async function stageParentPresent(root, resourcePath) {
@@ -885,10 +886,11 @@ export async function publishActiveProjection(root, render, options = {}) {
     const signal = options.signal;
     if (signal?.aborted === true)
         fail("io-failure", "aborted", "$signal");
-    if (options.recovering === true)
-        await retireInactiveLock(root);
+    // 正常变更后的刷新与维护恢复都必须能从已证明失活的 projector 锁继续。
+    const retiredLock = await retireInactiveLock(root);
+    const effectiveOptions = retiredLock ? { ...options, recovering: true } : options;
     try {
-        return await withRootedExclusiveFileLock(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, () => renderAndPublishLocked(root, render, options), {
+        return await withRootedExclusiveFileLock(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, () => renderAndPublishLocked(root, render, effectiveOptions), {
             acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds ?? LOCK_TIMEOUT_MILLISECONDS,
             ...signalOptions(signal),
         });

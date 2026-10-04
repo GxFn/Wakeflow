@@ -14,7 +14,7 @@ export const codexWorkspaceHostResourceProfile = parseWakeflowWorkspaceHostResou
         windowIdentity: true,
         podReceipts: true,
         worktree: {
-            launch: "codex-worktree-thread",
+            launch: "git-worktree",
             attachedDirectories: "prompt-path",
         },
         keepLive: true,
@@ -25,5 +25,5 @@ export const codexWorkspaceHostResourceProfile = parseWakeflowWorkspaceHostResou
         activityMonitor: false,
         temporaryPrompts: false,
     },
-    launch: { kind: "host-thread" },
+    launch: { kind: "project-thread" },
 });

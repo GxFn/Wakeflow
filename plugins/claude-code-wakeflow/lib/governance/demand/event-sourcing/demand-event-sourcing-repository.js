@@ -517,15 +517,19 @@ export class DemandEventSourcingRepository {
             const priorStoredEvent = storedEventByRevision.get(authorization.source.streamRevision);
             const decision = sourceDecision?.decision;
             const escalatedResult = targetResultById.get(authorization.source.targetResult.targetResultId);
-            const expectedFailedSteps = escalatedResult?.result.workType === "test"
-                ? escalatedResult.result.report.steps
-                    .filter((step) => step.verdict === "fail")
-                    .map((step) => ({ stepId: step.stepId, observed: step.observed }))
-                : [];
             const remediation = decision?.kind === "WakeflowControllerTestReviewDecision" &&
                 decision.escalation?.classification === "product-defect"
                 ? decision.escalation.remediation
                 : undefined;
+            // Validate the scope the persisted decision actually authorized, not all
+            // failures in its report. This also preserves older valid v1 authorizations
+            // whose decision explicitly mapped the whole failed set.
+            const authorizedStepIds = new Set(remediation?.affectedTargets.flatMap((target) => target.failedStepIds) ?? []);
+            const expectedFailedSteps = escalatedResult?.result.workType === "test"
+                ? escalatedResult.result.report.steps
+                    .filter((step) => step.verdict === "fail" && authorizedStepIds.has(step.stepId))
+                    .map((step) => ({ stepId: step.stepId, observed: step.observed }))
+                : [];
             if (decision === undefined ||
                 decision.kind !== "WakeflowControllerTestReviewDecision" ||
                 decision.decision !== "escalate" ||

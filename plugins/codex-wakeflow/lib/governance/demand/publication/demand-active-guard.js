@@ -8,6 +8,13 @@ import { DemandIdentityError, parseDemandIdentityDocument } from "../model/deman
 import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../event-sourcing/demand-event-sourcing-paths.js";
 import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "../event-sourcing/demand-event-sourcing-root-authority.js";
 import { closeDemandOperationRoot, DemandOperationAuthorityContextError, openDemandOperationRoot, } from "../demand-operation-authority-context.js";
+import { readWakeflowConfigAuthoritySnapshot } from "../../../configuration/wakeflow-config-authority-snapshot.js";
+import { parsePortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
+import { readStableResourceDirectory, StableDirectoryReadError } from "../../../foundation/filesystem/stable-directory-read.js";
+import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../../kernel/layout.js";
+import { locateLatestDemandArchive } from "../../observation/demand-archive-locator.js";
+import { readPublicationTransactionAt } from "./demand-event-sourcing-publication-storage.js";
+import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF } from "./demand-publication-paths.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "./demand-publication-paths.js";
 /**
@@ -125,6 +132,7 @@ export async function demandIsActive(root, state, signal, podId = null) {
  * `excluding` 让 continue 忽略自己；`podId` 为 null 时退回全局守卫。
  */
 export async function assertNoActiveDemand(root, signal, excluding = null, podId = null) {
+    await assertNoPendingPodMutation(root, signal, excluding, podId);
     const states = (await listRequirementClaimStates(root, signal)).states;
     for (const state of states) {
         // 看板关系保证 claimed 必有 claim；这里收窄一次，让 details 的 demandId 总是存在。
@@ -136,6 +144,69 @@ export async function assertNoActiveDemand(root, signal, excluding = null, podId
             fail("precondition-failed", "pod-busy", "$board", {
                 details: { demandId: state.claim.demandId },
             });
+        }
+    }
+}
+/** 活动根或最近归档中的 pod 身份；旧或损坏数据无法定位时返回 null，守卫保持保守。 */
+export async function readDemandPodId(root, demandId, signal) {
+    const id = parseWakeflowDurableIdOfKind(demandId, "demand");
+    if (await resourceExists(root, demandFinalRootRef(id))) {
+        const demandRoot = await openDemandOperationRoot(root, id);
+        try {
+            return await identityPodId(demandRoot, signal);
+        }
+        finally {
+            await closeDemandOperationRoot(demandRoot);
+        }
+    }
+    const options = signal === undefined ? {} : { signal };
+    const config = await readWakeflowConfigAuthoritySnapshot(root, options);
+    const ledger = await RootedDirectory.open(config.ledgerRoot, "$ledgerRoot", { durability: root.durability });
+    try {
+        return (await locateLatestDemandArchive(ledger, demandId, signal))?.podId ?? null;
+    }
+    finally {
+        await ledger.close();
+    }
+}
+async function pendingEntries(root, ref, signal) {
+    try {
+        return (await readStableResourceDirectory(root, parsePortableResourcePath(ref), {
+            maximumEntries: 4096, ...(signal === undefined ? {} : { signal }),
+        })).entries;
+    }
+    catch (error) {
+        if (error instanceof StableDirectoryReadError && error.reason === "not-found")
+            return [];
+        throw error;
+    }
+}
+/** 崩溃释放进程锁不代表业务已结清：已有发布意图和生命周期日志继续保留 pod 占用。 */
+async function assertNoPendingPodMutation(root, signal, excluding, podId) {
+    for (const entry of await pendingEntries(root, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, signal)) {
+        if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
+            fail("precondition-failed", "pod-publication-residue", "$pod");
+        }
+        const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");
+        if (id === excluding)
+            continue;
+        const stored = await readPublicationTransactionAt(root, entry.resourcePath, entry.node, signal);
+        if (stored.transaction.demandId !== id)
+            fail("precondition-failed", "pod-publication-residue", "$pod");
+        if (podId === null || stored.transaction.identity.podId === podId) {
+            fail("precondition-failed", "pod-busy", "$board", { details: { demandId: id } });
+        }
+    }
+    for (const entry of await pendingEntries(root, DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, signal)) {
+        if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
+            fail("precondition-failed", "pod-lifecycle-residue", "$pod");
+        }
+        const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");
+        if (id === excluding)
+            continue;
+        const ownerPodId = await readDemandPodId(root, id, signal);
+        if (podId === null || ownerPodId === null || ownerPodId === podId) {
+            fail("precondition-failed", "pod-busy", "$board", { details: { demandId: id } });
         }
     }
 }

@@ -12,6 +12,10 @@ export { WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_VERSION, } from "../contra
  * 布局的其余部分并入本模块。
  */
 const WAKEFLOW_LOCAL_RUNTIME_ROOT_REF = parsePortableResourcePath(".wakeflow-local/runtime", "$layout");
+/** Cross-process operation admission is private coordination, never business authority. */
+export const WORKSPACE_OPERATION_SCOPES_REF = parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/operation-admission`);
+export const WORKSPACE_MAINTENANCE_GATE_REF = parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance.lock`);
+export const WORKSPACE_MAINTENANCE_TRANSACTIONS_REF = parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance/transactions`);
 const REQUIREMENT_ID_PATTERN = /^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 /** 共享活动根：`.wakeflow-active`（0700）。 */
 export const WAKEFLOW_ACTIVE_ROOT_REF = parsePortableResourcePath(".wakeflow-active", "$layout");

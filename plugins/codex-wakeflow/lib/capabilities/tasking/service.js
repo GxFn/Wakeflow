@@ -492,5 +492,5 @@ export async function executeTargetTaskPlanningPublicRequest(value, options = {}
         execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => execute(context, input, binding)),
         next,
         result: assembleResult,
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }

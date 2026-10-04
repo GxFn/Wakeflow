@@ -39,13 +39,21 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         throw error;
     }
     const executorFields = catalog.tools.map((tool) => tool.executor);
-    const expectedKeys = [...executorFields, "serverName", "serverVersion"].sort();
+    const expectedKeys = [
+        ...executorFields,
+        "serverName",
+        "serverVersion",
+        ...(record.beforeMutation === undefined ? [] : ["beforeMutation"]),
+    ].sort();
     const keys = Object.keys(record).sort();
     if (keys.length !== expectedKeys.length ||
         keys.some((key, index) => key !== expectedKeys[index])) {
         fail("options");
     }
     const executors = {};
+    if (record.beforeMutation !== undefined &&
+        (typeof record.beforeMutation !== "function" || types.isProxy(record.beforeMutation)))
+        fail("options");
     for (const field of executorFields) {
         const executor = record[field];
         if (typeof executor !== "function" || types.isProxy(executor)) {
@@ -57,5 +65,8 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         ...executors,
         serverName: nonEmptyText(record.serverName, "server-name"),
         serverVersion: nonEmptyText(record.serverVersion, "server-version"),
+        ...(record.beforeMutation === undefined
+            ? {}
+            : { beforeMutation: record.beforeMutation }),
     });
 }

@@ -10,7 +10,7 @@ import { readDeterministicJsonFile, } from "../foundation/filesystem/determinist
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
-import { RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../foundation/filesystem/strict-text-file.js";
@@ -58,7 +58,13 @@ async function withClaimStateLock(root, requirementId, signal, operation) {
             mode: DIRECTORY_MODE,
             ...signalOptions(signal),
         });
-        return await withRootedExclusiveFileLock(root, claimStateLockRef(requirementId), operation, {
+        const lockRef = claimStateLockRef(requirementId);
+        const observed = await inspectRootedExclusiveFileLock(root, lockRef);
+        if (observed.status === "held" && observed.ownerState === "inactive") {
+            // 看板 owner 只退休已证明失活且仍匹配的锁；活动或未知 owner 仍由 acquire 等待。
+            await retireRootedExclusiveFileLockResidue(root, lockRef, observed);
+        }
+        return await withRootedExclusiveFileLock(root, lockRef, operation, {
             acquireTimeoutMilliseconds: LOCK_ACQUIRE_TIMEOUT_MILLISECONDS,
             ...signalOptions(signal),
         });

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_ROOT}/hooks/observe.mjs\" --wakeflow-hook-observer-v1 --host codex",
+            "command": "\"${CODEX_MCP_NODE_PATH:-node}\" \"${PLUGIN_ROOT}/hooks/observe.mjs\" --wakeflow-hook-observer-v1 --host codex",
             "timeout": 5
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_ROOT}/hooks/observe.mjs\" --wakeflow-hook-observer-v1 --host codex",
+            "command": "\"${CODEX_MCP_NODE_PATH:-node}\" \"${PLUGIN_ROOT}/hooks/observe.mjs\" --wakeflow-hook-observer-v1 --host codex",
             "async": true,
             "timeout": 5
           }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_ROOT}/hooks/observe.mjs\" --wakeflow-hook-observer-v1 --host codex",
+            "command": "\"${CODEX_MCP_NODE_PATH:-node}\" \"${PLUGIN_ROOT}/hooks/observe.mjs\" --wakeflow-hook-observer-v1 --host codex",
             "timeout": 5
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_ROOT}/hooks/observe.mjs\" --wakeflow-hook-observer-v1 --host codex",
+            "command": "\"${CODEX_MCP_NODE_PATH:-node}\" \"${PLUGIN_ROOT}/hooks/observe.mjs\" --wakeflow-hook-observer-v1 --host codex",
             "timeout": 3
           }
         ]

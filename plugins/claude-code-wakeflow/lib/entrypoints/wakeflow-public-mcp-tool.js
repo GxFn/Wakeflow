@@ -146,7 +146,7 @@ const WAKEFLOW_JSON_SCHEMA_VALIDATOR = Object.freeze({
  * `tools/list` 只公开请求 Schema（ADR-0004）；结果由各 owner 按结果 Schema 校验。
  * 本函数不保存动态 registry、不选择领域 owner，也不解释业务错误。
  */
-export function registerWakeflowPublicMcpCatalog(server, catalog, executors) {
+export function registerWakeflowPublicMcpCatalog(server, catalog, executors, beforeMutation) {
     for (const registration of catalog.tools) {
         const execute = executors[registration.executor];
         if (typeof execute !== "function") {
@@ -158,9 +158,16 @@ export function registerWakeflowPublicMcpCatalog(server, catalog, executors) {
             description: definition.description,
             inputSchema: fromJsonSchema(definition.inputSchema, WAKEFLOW_JSON_SCHEMA_VALIDATOR),
             annotations: definition.annotations,
-        }, async (request) => {
+        }, async (request, context) => {
             try {
-                return successfulToolResult(await execute(request));
+                const input = parseJsonValue(request, "$request");
+                const inspected = input !== null &&
+                    typeof input === "object" &&
+                    (("mode" in input && input.mode === "preview") ||
+                        ("operation" in input && input.operation === "inspect"));
+                if (definition.annotations.readOnlyHint !== true && !inspected)
+                    beforeMutation?.();
+                return successfulToolResult(await execute(request, Object.freeze({ signal: context.mcpReq.signal })));
             }
             catch (error) {
                 return failedToolResult(registration.name, error);

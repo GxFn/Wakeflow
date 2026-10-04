@@ -166,23 +166,23 @@ async function readPointerFile(candidate) {
         return null;
     }
 }
-/** 从 `git rev-parse --git-common-dir` 的原文得到 common dir 的 realpath；相对值按会话 cwd 解析。 */
-async function resolveCommonDir(commonDir, sessionReal) {
+/** 从 `git rev-parse --git-common-dir` 的原文得到 common dir 的 realpath；相对值按执行根解析。 */
+async function resolveCommonDir(commonDir, executionReal) {
     const trimmed = commonDir.trim();
     if (trimmed.length === 0 || trimmed.includes("\n"))
         receiptFail("common-dir");
-    const resolved = await realpathOrNull(path.resolve(sessionReal, trimmed));
+    const resolved = await realpathOrNull(path.resolve(executionReal, trimmed));
     if (resolved === null)
         receiptFail("common-dir");
     return resolved;
 }
-/** 候选检出的 realpath 等于会话 cwd 的那一条；主检出、bare 与 prunable 都不是执行位置。 */
-async function selectSessionEntry(entries, sessionReal, repositoryReal) {
+/** 候选检出的 realpath 等于执行根的那一条；主检出、bare 与 prunable 都不是执行位置。 */
+async function selectExecutionEntry(entries, executionReal, repositoryReal) {
     for (const entry of entries) {
         if (entry.bare || entry.prunable)
             continue;
         const entryReal = await realpathOrNull(entry.path);
-        if (entryReal !== sessionReal)
+        if (entryReal !== executionReal)
             continue;
         if (entryReal === repositoryReal)
             receiptFail("main-checkout");
@@ -190,7 +190,7 @@ async function selectSessionEntry(entries, sessionReal, repositoryReal) {
             receiptFail("head");
         return entry;
     }
-    receiptFail("session-worktree");
+    receiptFail("execution-worktree");
 }
 /** `<path>/.git` 指针、admin 目录回指针与 HEAD 三处必须与回执互相印证。 */
 async function verifyLinkedWorktree(checkoutReal, commonReal, entry) {
@@ -227,17 +227,17 @@ export async function admitPodWorktreeObservation(input) {
     const repositoryReal = await realpathOrNull(input.repositoryRoot);
     if (repositoryReal === null)
         receiptFail("repository-root");
-    const sessionReal = await realpathOrNull(input.sessionCwd);
-    if (sessionReal === null)
-        receiptFail("session-cwd");
-    const commonReal = await resolveCommonDir(input.observation.commonDir, sessionReal);
+    const executionReal = await realpathOrNull(input.executionRoot);
+    if (executionReal === null)
+        receiptFail("execution-root");
+    const commonReal = await resolveCommonDir(input.observation.commonDir, executionReal);
     const expectedCommon = await realpathOrNull(path.join(repositoryReal, ".git"));
     if (expectedCommon === null || commonReal !== expectedCommon)
         receiptFail("common-dir");
-    const entry = await selectSessionEntry(entries, sessionReal, repositoryReal);
-    await verifyLinkedWorktree(sessionReal, commonReal, entry);
+    const entry = await selectExecutionEntry(entries, executionReal, repositoryReal);
+    await verifyLinkedWorktree(executionReal, commonReal, entry);
     return Object.freeze({
-        path: sessionReal,
+        path: executionReal,
         head: entry.head,
         branch: entry.branch,
         locked: entry.locked,

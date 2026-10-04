@@ -1,4 +1,10 @@
+import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import path from "node:path";
+import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { StableDirectoryReadError } from "../../foundation/filesystem/stable-directory-read.js";
+import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
+import { DemandOperationAuthorityContextError } from "../../governance/demand/demand-operation-authority-context.js";
+import { applyDemandRuntimeRecovery, inspectDemandRuntimeRecovery, } from "../../governance/demand/demand-runtime-recovery.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { compileWakeflowFreshConfigSelection, WakeflowFreshConfigSelectionError, } from "../../configuration/wakeflow-fresh-config-selection.js";
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
@@ -232,7 +238,7 @@ function mapCensusError(error) {
 async function privateModePlan(context, action) {
     let census;
     try {
-        census = await inspectWakeflowPrivateModes(context.root);
+        census = await inspectWakeflowPrivateModes(context.root, context.options);
     }
     catch (error) {
         mapCensusError(error);
@@ -262,7 +268,7 @@ async function privateModePlan(context, action) {
 async function convergePrivateModes(context, plan) {
     let receipt;
     try {
-        receipt = await convergeWakeflowPrivateModes(context.root, plan.census);
+        receipt = await convergeWakeflowPrivateModes(context.root, plan.census, context.options);
     }
     catch (error) {
         mapCensusError(error);
@@ -281,6 +287,58 @@ async function convergePrivateModes(context, plan) {
         ]),
     });
 }
+async function hasRecoveryConfig(context) {
+    try {
+        // 缺失或不可用配置仍由原静态维护计划解释，不借恢复入口重建未知权威。
+        await readWakeflowConfigAuthoritySnapshot(context.root, context.options);
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal");
+            return false;
+        }
+        throw error;
+    }
+    return true;
+}
+/** reconcile 先结算已知 Demand 候选，再在下一轮做静态物化；preview 始终零写。 */
+async function planRuntimeRecovery(context) {
+    if (!(await hasRecoveryConfig(context)))
+        return null;
+    try {
+        const recovery = await inspectDemandRuntimeRecovery(context.root, context.options);
+        if (recovery.demands.length === 0)
+            return null;
+        if (recovery.blockers.length > 0)
+            return blockedPlan(recovery.blockers);
+        return Object.freeze({
+            status: "ready",
+            blockers: Object.freeze([]),
+            digest: recovery.digest,
+            plan: Object.freeze({
+                kind: "runtime-recovery",
+                recovery,
+                view: Object.freeze({
+                    kind: "WakeflowDemandRuntimeRecoveryPlan",
+                    demands: Object.freeze(recovery.demands.map(({ demandId, candidateCount }) => Object.freeze({ demandId, candidateCount }))),
+                }),
+            }),
+        });
+    }
+    catch (error) {
+        if (error instanceof StableDirectoryReadError && error.reason === "not-found")
+            return null;
+        if (error instanceof DemandFileEventStoreError ||
+            error instanceof DemandOperationAuthorityContextError ||
+            error instanceof StableDirectoryReadError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal");
+            return blockedPlan([`demand-recovery-${error.reason}`]);
+        }
+        throw error;
+    }
+}
 async function planMaintenance(context, input) {
     if (input.kind !== "effect") {
         fail("invalid-request", "mode", "$request.mode");
@@ -292,11 +350,17 @@ async function planMaintenance(context, input) {
     const privateModes = await privateModePlan(context, input.action);
     if (privateModes !== null)
         return privateModes;
+    if (input.action === "reconcile") {
+        const runtime = await planRuntimeRecovery(context);
+        if (runtime !== null)
+            return runtime;
+    }
     const executionRequest = Object.freeze({
         action: input.action,
         desiredConfig,
         currentHostProfile: context.profiles.currentHostProfile,
         hostProfiles: context.profiles.hostProfiles,
+        ...context.options,
     });
     let executionPlan;
     let launchIntentSet;
@@ -358,7 +422,7 @@ function deriveNext(phase) {
         });
     }
     if (phase.mode === "apply") {
-        if (phase.plan.kind === "private-mode-convergence") {
+        if (phase.plan.kind !== "materialization") {
             // 模式收回之后布局检查才看得见其余问题：再预览一次 reconcile。
             return Object.freeze({
                 frontier: "workspace-maintenance",
@@ -403,7 +467,7 @@ function previewResultOf(base, action, planned) {
         blockerCodes: planned.blockers,
         planDigest: planned.digest,
         plan: materialization?.executionPlan ??
-            (planned.plan?.kind === "private-mode-convergence" ? planned.plan.view : null),
+            (planned.plan !== null && planned.plan.kind !== "materialization" ? planned.plan.view : null),
         freshConfigCompilation: freshCompilationView(materialization?.compilation ?? null),
         launchIntents: launchIntentSet?.intents ?? [],
         launchSetDigest: launchIntentSet?.launchSetDigest ?? null,
@@ -487,20 +551,32 @@ function parseRequest(value) {
     });
 }
 /** 使用宿主 entrypoint 固定提供的 facade 执行一个公共 Maintenance 请求。 */
-export async function executeWakeflowMaintenancePublicRequest(facade, value) {
+export async function executeWakeflowMaintenancePublicRequest(facade, value, options = {}) {
     const profiles = admitHostFacade(facade);
     return runPublicationTransaction({
+        mutationScope: "maintenance",
         tool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
         parseRequest,
-        open: async (root) => Object.freeze({ root, facade, profiles }),
+        open: async (root) => Object.freeze({ root, facade, profiles, options }),
         close: async () => { },
         plan: planMaintenance,
         apply: async (context, _input, plan) => {
             if (plan.kind === "private-mode-convergence")
                 return convergePrivateModes(context, plan);
+            if (plan.kind === "runtime-recovery") {
+                const demands = await withWorkspaceOperationScope(context.root, "exclusive", () => applyDemandRuntimeRecovery(context.root, plan.recovery, context.options), context.options);
+                return Object.freeze({
+                    status: "completed",
+                    operationId: null,
+                    planDigest: plan.recovery.digest,
+                    stepReceipts: Object.freeze([
+                        Object.freeze({ kind: "WakeflowDemandRuntimeRecoveryReceipt", demands }),
+                    ]),
+                });
+            }
             try {
                 // 维护 apply 之后刷新一次活动投影：reconfigure 换语言或配置摘要、reconcile 重建派生文件（§13.94 D5）。
-                return await afterMutationRefresh(context.root, undefined, () => context.facade.apply(context.root, plan.executionPlan, plan.executionRequest));
+                return await afterMutationRefresh(context.root, options.signal, () => context.facade.apply(context.root, plan.executionPlan, plan.executionRequest));
             }
             catch (error) {
                 mapTransactionError(error);
@@ -508,7 +584,7 @@ export async function executeWakeflowMaintenancePublicRequest(facade, value) {
         },
         recover: async (context, operationId) => {
             try {
-                return await context.facade.recover(context.root, parseWakeflowMaintenanceOperationId(operationId, "$request.operationId"));
+                return await context.facade.recover(context.root, parseWakeflowMaintenanceOperationId(operationId, "$request.operationId"), options);
             }
             catch (error) {
                 mapTransactionError(error);

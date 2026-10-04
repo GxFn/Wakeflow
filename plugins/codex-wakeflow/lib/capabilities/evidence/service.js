@@ -355,6 +355,7 @@ function assembleResult(input, phase, next) {
 /** 执行一次 `wakeflow_record_evidence`。 */
 export async function executeRecordEvidenceRequest(value, options = {}) {
     return runPublicationTransaction({
+        mutationScope: "shared",
         tool: WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseRecordEvidenceRequest(raw);
@@ -370,5 +371,5 @@ export async function executeRecordEvidenceRequest(value, options = {}) {
             : nextAfterMutation(context, phase.outcome.demandId),
         result: (_envelope, input, phase, next) => assembleResult(input, phase, next),
         privateValues,
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }

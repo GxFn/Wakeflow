@@ -84,7 +84,7 @@ function removeCommand(relativePath, locked) {
  */
 const HOST_ALTERNATIVES = Object.freeze({
     "claude-worktree-flag": "End the Claude Code worktree session; Claude Code removes a worktree it created when the session ends, then run git worktree prune in the repository.",
-    "codex-worktree-thread": "Archive the Codex thread that owns the worktree environment, then run git worktree prune in the repository.",
+    "git-worktree": "Retire the window, remove its assigned checkout with git worktree remove, then prune in the product repository. Archiving its project chat does not remove this checkout.",
 });
 /**
  * `worktreeLaunch` 是当前宿主 Profile 的 `surfaces.worktree.launch`；

@@ -25,6 +25,6 @@ const CODEX_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
     recover: recoverCodexMaintenanceExecution,
 });
 /** 执行一个经过公共合同准入的 Codex workspace Maintenance 请求。 */
-export async function executeCodexWakeflowMaintenance(value) {
-    return executeWakeflowMaintenancePublicRequest(CODEX_MAINTENANCE_PUBLIC_HOST_FACADE, value);
+export async function executeCodexWakeflowMaintenance(value, options = {}) {
+    return executeWakeflowMaintenancePublicRequest(CODEX_MAINTENANCE_PUBLIC_HOST_FACADE, value, options);
 }

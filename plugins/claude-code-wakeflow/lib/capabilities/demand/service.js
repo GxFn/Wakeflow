@@ -6,6 +6,10 @@ import { createDemandAuthority, DemandAuthorityError, } from "../../governance/d
 import { createDemandIdentity, DemandIdentityError, } from "../../governance/demand/model/demand-identity.js";
 import { parseRequirementLineageReference, RequirementLineageError, } from "../../governance/demand/model/requirement-lineage.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
+import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { readPublicationTransactionAt, publicationNodeOrNull, } from "../../governance/demand/publication/demand-event-sourcing-publication-storage.js";
+import { demandPublicationTransactionRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import { DemandEventSourcingPublicationServiceError } from "../../governance/demand/publication/demand-event-sourcing-publication-contract.js";
 import { publishDemandFromPackage, recoverDemandPublication, } from "../../governance/demand/publication/demand-event-sourcing-publication-service.js";
 import { createDemandEventSourcingPublicationTransaction, DemandEventSourcingPublicationTransactionError, } from "../../governance/demand/publication/demand-event-sourcing-publication-transaction.js";
@@ -228,6 +232,12 @@ function publicationReceipt(publication) {
     });
 }
 async function applyCreate(context, plan) {
+    return withPodMutation(context.root, plan.podId, async () => {
+        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+        return applyCreateLocked(context, plan);
+    }, context.signal);
+}
+async function applyCreateLocked(context, plan) {
     const loaded = await loadPackage(context, plan.requirementId);
     if (loaded === null)
         fail("precondition-failed", "package-record-absent", "$ledger");
@@ -265,6 +275,19 @@ async function applyCreate(context, plan) {
     });
 }
 async function recoverCreate(context, operationId) {
+    const demandId = parseDemandId(operationId, "$request.operationId");
+    const ref = demandPublicationTransactionRef(demandId);
+    const node = await publicationNodeOrNull(context.root, ref);
+    if (node === null)
+        return recoverCreateLocked(context, operationId);
+    const stored = await readPublicationTransactionAt(context.root, ref, node, context.signal);
+    return withPodMutation(context.root, stored.transaction.identity.podId, async () => {
+        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+        await assertNoActiveDemand(context.root, context.signal, demandId, stored.transaction.identity.podId);
+        return recoverCreateLocked(context, operationId);
+    }, context.signal);
+}
+async function recoverCreateLocked(context, operationId) {
     const demandId = parseDemandId(operationId, "$request.operationId");
     let publication;
     try {
@@ -315,6 +338,7 @@ function assembleCreateResult(envelope, input, phase, next, facts) {
 export async function executeDemandCreationRequest(value, options = {}) {
     const facts = { demandId: null };
     return runPublicationTransaction({
+        mutationScope: "shared",
         tool: WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseDemandCreationRequest(raw);
@@ -334,5 +358,5 @@ export async function executeDemandCreationRequest(value, options = {}) {
             : nextAfterMutation(context, phase.outcome.demandId),
         result: (envelope, input, phase, next) => assembleCreateResult(envelope, input, phase, next, facts),
         privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }

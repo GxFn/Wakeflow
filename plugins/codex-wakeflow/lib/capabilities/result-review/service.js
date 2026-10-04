@@ -150,7 +150,7 @@ function demandPodScope(context) {
     }
     return scope;
 }
-/** worktree pod 的实现结果必须报分支：Codex 的 worktree 线程从 detached HEAD 起步（ADR-0010 D4）。 */
+/** worktree pod 的实现结果必须报分支：隔离交付必须留下可处理的分支（ADR-0010 D4）。 */
 function assertWorktreeBranch(context, result) {
     if (result.workType !== "implementation")
         return;
@@ -193,6 +193,10 @@ async function loadWindow(context, windowId) {
 }
 async function sessionRecords(context, sessionId, since) {
     const inventory = await readHostHookObservations(context.workspaceRoot, context.facade.hostId, { sessionId, since }, signalOptions(context.options.signal));
+    if (!inventory.complete)
+        fail("io-failure", "observation-query-incomplete", "$observations");
+    if (inventory.skipped > 0)
+        fail("io-failure", "observation-query-unavailable", "$observations");
     return inventory.records.map((record) => Object.freeze({
         recordId: record.recordId,
         event: record.event,
@@ -499,7 +503,7 @@ async function issueCallback(context, result, taskPackage, streamRevision, now) 
 }
 /** 结果事件之后释放围栏声明；缺失或已易主都不是错误——事件已经提交，清理找不到目标不能否定它。 */
 async function releaseFence(context, windowId, fence) {
-    await releaseWorkClaimIfHeld(context.workspaceRoot, windowId, fence, signalOptions(context.options.signal));
+    await releaseWorkClaimIfHeld(context.workspaceRoot, windowId, fence);
 }
 async function replayImport(context, commandResult) {
     const stored = commandResult.commit.events[0];
@@ -626,7 +630,7 @@ export async function executeTargetResultImportRequest(facade, value, options = 
         execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executeImport(context, input, binding)),
         next,
         result: importResult,
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }
 function targetPhaseLabel(target) {
     return target.status === "reported" ? "reported" : target.phase;
@@ -901,6 +905,7 @@ async function inspectReview(context, request) {
 /** 执行一次 `wakeflow_inspect_target_result_review`。 */
 export async function executeTargetResultReviewInspectionRequest(facade, value, options = {}) {
     return runCommandShell({
+        scope: () => "read",
         tool: WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseTargetResultReviewInspectionRequest(raw);
@@ -909,7 +914,7 @@ export async function executeTargetResultReviewInspectionRequest(facade, value, 
         open: (workspaceRoot, envelope) => openContext(workspaceRoot, envelope.demandId, facade, options, "read"),
         close: closeContext,
         privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-    }, value, () => undefined, (context, binding) => inspectReview(context, binding.input), commandShellExecutionOptions(options.durability));
+    }, value, () => undefined, (context, binding) => inspectReview(context, binding.input), commandShellExecutionOptions(options.durability, options.signal));
 }
 async function loadDecisionSources(context, request, workType) {
     const repository = new DemandEventSourcingRepository(context.authority.demandRoot);
@@ -1129,7 +1134,7 @@ export async function executeImplementationReviewDecisionRequest(facade, value, 
         execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executeImplementationDecision(context, input, binding)),
         next,
         result: implementationDecisionResult,
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }
 function stepIdTuple(values) {
     if (values === undefined)
@@ -1140,7 +1145,7 @@ function stepIdTuple(values) {
     return Object.freeze([first, ...rest]);
 }
 /**
- * `escalate{product-defect}` 的缺陷修复授权：失败步骤取自结果，基线取自测试任务包的
+ * `escalate{product-defect}` 的缺陷修复授权：只取结果中的产品缺陷失败，基线取自测试任务包的
  * 实现基线，状态摘要是决定之后的聚合状态（§13.87 D5）。
  */
 function remediationAuthorization(sources, decision, options) {
@@ -1166,7 +1171,7 @@ function remediationAuthorization(sources, decision, options) {
                 taskPackageDigest: target.targetResult.taskPackage.digest,
             },
             failedSteps: target.targetResult.report.steps
-                .filter((step) => step.verdict === "fail")
+                .filter((step) => step.verdict === "fail" && step.failure?.classification === "product-defect")
                 .map((step) => ({ stepId: step.stepId, observed: step.observed })),
             baselines: target.taskPackage.implementationBaselines,
         }, { ...decisionOptions(options), uuidFactory: authorizationUuidFactory });
@@ -1292,5 +1297,5 @@ export async function executeTestReviewDecisionRequest(facade, value, options = 
         execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executeTestDecision(context, input, binding)),
         next,
         result: testDecisionResult,
-    }, value, commandShellExecutionOptions(options.durability));
+    }, value, commandShellExecutionOptions(options.durability, options.signal));
 }

@@ -32,6 +32,10 @@ report, return the callback. You own no other step and no Controller authority.
 - Work only inside the repository checkout the package assigns you. If the
   delivery came with a worktree, that checkout is your only working tree; the
   main checkout and every other repository are off limits.
+- The chat's initial cwd may be the outer workspace. Read the assigned
+  checkout's `CLAUDE.md` explicitly and set command workdir to that
+  checkout, including for Git and tests. The chat's project does not change
+  your task's scope or grant Controller authority.
 - Do the assigned task and nothing adjacent. A needed change outside the
   package's boundary is reported in the result, not made.
 - Never take Controller actions: do not plan a task, prepare a delivery, record

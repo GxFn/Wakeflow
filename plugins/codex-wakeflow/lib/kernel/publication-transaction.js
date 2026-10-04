@@ -23,7 +23,10 @@ function admitEnvelope(binding) {
 }
 /** 执行一个效果型公共命令；`options` 是注入的执行选项，不是请求的一部分。 */
 export async function runPublicationTransaction(spec, value, options = {}) {
-    return runCommandShell(spec, value, admitEnvelope, async (context, binding) => {
+    return runCommandShell({
+        ...spec,
+        scope: ({ envelope }) => (envelope.mode === "preview" ? "read" : spec.mutationScope),
+    }, value, admitEnvelope, async (context, binding) => {
         const { envelope, input } = binding;
         const phase = await runPhase(spec, context, envelope, input);
         const next = spec.next === undefined ? NO_NEXT : await spec.next(context, phase);

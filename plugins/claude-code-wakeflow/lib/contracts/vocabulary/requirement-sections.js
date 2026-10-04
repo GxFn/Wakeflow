@@ -103,6 +103,7 @@ export const REQUIREMENT_SUMMARY_ANCHORS = Object.freeze([
     "scope",
     "boundaries",
     "testing-decision",
+    "acceptance-criteria",
 ]);
 function normalizeHeading(value) {
     return value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();

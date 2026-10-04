@@ -10,7 +10,7 @@ import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { inspectActiveLayout, } from "../../kernel/active-projection.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
-import { HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES, readHostHookObservations, } from "../../kernel/hook-observations.js";
+import { HOST_HOOK_RECORDS_MAXIMUM, scanHostHookObservations, } from "../../kernel/hook-observations.js";
 import { hostHookObservationsRootRef, hostRuntimeRootRef, REQUIREMENT_BOARD_INDEX_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WORK_CLAIMS_ROOT_REF, } from "../../kernel/layout.js";
 import { listPodWorktreeReceiptsAnyHost, worktreeCheckoutPresent, } from "../../kernel/pod-worktree-receipts.js";
 import { listRequirementClaimStates, renderRequirementBoardIndex, } from "../../kernel/requirement-board.js";
@@ -28,8 +28,8 @@ import { observeArchivedDemands, } from "./archived-demand-observation.js";
 import { WAKEFLOW_OBSERVATION_POLICY } from "./observation-policy.js";
 import { observeRepositoryPointers, } from "./repository-pointer-observation.js";
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
-/** 等于内核 hook 目录的列举上限：可见集合由保留策略而不是读取上限决定（§13.97 D7）。 */
-const HOOK_RECORDS_MAXIMUM = HOST_HOOK_DIRECTORY_MAXIMUM_ENTRIES;
+/** Bound the session aggregate independently of the number of records scanned. */
+const HOOK_RECORDS_MAXIMUM = HOST_HOOK_RECORDS_MAXIMUM;
 const ASSET_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$asset.maximumBytes");
 const SETTINGS_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$settings.maximumBytes");
 const INDEX_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$boardIndex.maximumBytes");
@@ -239,33 +239,28 @@ async function hookDirectoryState(root, hostId) {
 async function observeHostHooks(root, hostId, current, signal) {
     try {
         const directory = await hookDirectoryState(root, hostId);
-        const inventory = await readHostHookObservations(root, hostId, { limit: HOOK_RECORDS_MAXIMUM }, signalOptions(signal));
         const latestBySession = new Map();
-        const artifactBySession = new Map();
-        const startedAt = new Map();
-        for (const record of inventory.records) {
-            const previous = latestBySession.get(record.sessionId);
-            if (previous === undefined || previous.recordedAt <= record.recordedAt) {
-                latestBySession.set(record.sessionId, { event: record.event, recordedAt: record.recordedAt });
+        const latestKeys = new Map();
+        const inventory = await scanHostHookObservations(root, hostId, {}, (record) => {
+            if (!latestBySession.has(record.sessionId) && latestBySession.size >= HOOK_RECORDS_MAXIMUM) {
+                fail("io-failure", "observation-session-limit", "$observations");
             }
-            if (record.event === "session-start") {
-                const previousStart = startedAt.get(record.sessionId);
-                if (previousStart === undefined || previousStart <= record.recordedAt) {
-                    startedAt.set(record.sessionId, record.recordedAt);
-                    artifactBySession.set(record.sessionId, record.artifactManifestDigest);
-                }
+            const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+            const previous = latestKeys.get(record.sessionId);
+            if (previous === undefined || previous <= key) {
+                latestKeys.set(record.sessionId, key);
+                latestBySession.set(record.sessionId, { event: record.event, recordedAt: record.recordedAt, observerManifestDigest: record.artifactManifestDigest });
             }
-        }
+        }, signalOptions(signal));
         return Object.freeze({
             hostId,
             current,
             status: "observed",
             issue: null,
             directory,
-            records: inventory.records.length,
+            records: inventory.records,
             skipped: inventory.skipped,
             latestBySession,
-            artifactBySession,
         });
     }
     catch (error) {
@@ -286,7 +281,6 @@ async function observeHostHooks(root, hostId, current, signal) {
             records: 0,
             skipped: 0,
             latestBySession: new Map(),
-            artifactBySession: new Map(),
         });
     }
 }

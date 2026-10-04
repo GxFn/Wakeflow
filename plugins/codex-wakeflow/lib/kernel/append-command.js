@@ -9,7 +9,7 @@ const NO_NEXT = Object.freeze({
 });
 /** 执行一个追加型公共命令；`options` 是注入的执行选项，不是请求的一部分。 */
 export async function runAppendCommand(spec, value, options = {}) {
-    return runCommandShell(spec, value, (binding) => {
+    return runCommandShell({ ...spec, scope: () => "shared" }, value, (binding) => {
         parseIdempotencyKey(binding.envelope.idempotencyKey, "$request.idempotencyKey");
         if (!Number.isSafeInteger(binding.envelope.expectedStreamRevision) ||
             binding.envelope.expectedStreamRevision < 0) {

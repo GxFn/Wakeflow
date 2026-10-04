@@ -286,8 +286,8 @@ export class DemandFileEventStore {
             throw error;
         }
     }
-    /** 显式清理非活动的孤立候选、已链接残留或并发失败方。 */
-    async recoverAppendCandidates(options) {
+    /** 只读观察已知候选及其所有者；不要求健康清单先准入，供维护预览使用。 */
+    async inspectAppendCandidates(options) {
         const { signal } = parseDemandFileEventStoreOptions(options);
         const inventory = await readDemandFileEventDirectory(this.#root, DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF, 256, signal);
         const candidates = inventory.entries.map((entry, index) => {
@@ -305,11 +305,21 @@ export class DemandFileEventStore {
                 1n,
                 2n,
             ]);
-            if (candidateOwnerState(address) !== "inactive") {
-                fail("candidate-busy", `$candidates/${index}`);
-            }
-            return Object.freeze({ address, entry });
+            return Object.freeze({ address, entry, ownerState: candidateOwnerState(address) });
         });
+        return Object.freeze(candidates);
+    }
+    /** 显式清理非活动的孤立候选、已链接残留或并发失败方。同进程与 append 共用队列。 */
+    async recoverAppendCandidates(options) {
+        return APPEND_MUTATION_QUEUE.run(this.#root.absolutePath, () => this.#recoverAppendCandidates(options));
+    }
+    async #recoverAppendCandidates(options) {
+        const { signal } = parseDemandFileEventStoreOptions(options);
+        const candidates = await this.inspectAppendCandidates(options);
+        for (const [index, candidate] of candidates.entries()) {
+            if (candidate.ownerState !== "inactive")
+                fail("candidate-busy", `$candidates/${index}`);
+        }
         let committedResidueCount = 0;
         let durabilitySettledCommitCount = 0;
         let rolledBackCount = 0;

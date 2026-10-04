@@ -1,7 +1,7 @@
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { hostRuntimeRootRef } from "../../kernel/layout.js";
+import { hostRuntimeRootRef, WAKEFLOW_CONFIG_SCHEMA_VERSION } from "../../kernel/layout.js";
 /**
  * Wakeflow Host / Claude Code：tmux 助手资产（gate-log §13.117 D4）。
  *
@@ -278,6 +278,58 @@ function listJsonNames(directory) {
   return names;
 }
 
+// Hook history is either flat v1 or UTC-day/digest-prefix partitions. Stream
+// names so unrelated stop records never consume a lookup's in-memory capacity.
+function* hookNames(event, relative = "", depth = 0) {
+  const base = path.join(ROOT, ...HOOKS.split("/"));
+  const directory = path.join(base, relative);
+  let handle = null;
+  try {
+    const before = lstatSync(directory);
+    if (!before.isDirectory() || before.isSymbolicLink() || realpathSync(directory) !== directory) refuse("hook-observations-unavailable");
+    handle = opendirSync(directory);
+    for (;;) {
+      const entry = handle.readSync();
+      if (entry === null) break;
+      const child = relative === "" ? entry.name : relative + "/" + entry.name;
+      const partition = depth === 0 ? /^\d{8}$/u.test(entry.name) : depth === 1 && /^[0-9a-f]{2}$/u.test(entry.name);
+      if (partition) yield* hookNames(event, child, depth + 1);
+      else if (entry.name.endsWith(".json") && entry.name.includes("-" + event + "-")) yield child;
+    }
+    const after = lstatSync(directory);
+    if (before.dev !== after.dev || before.ino !== after.ino) refuse("hook-observations-unavailable");
+  } catch (error) {
+    if (relative === "" && handle === null && error?.code === "ENOENT") return;
+    if (error instanceof HelperFailure) throw error;
+    refuse("hook-observations-unavailable");
+  } finally {
+    if (handle !== null) {
+      try { handle.closeSync(); } catch { /* already closed */ }
+    }
+  }
+}
+
+function readHookRecord(name) {
+  const file = path.join(ROOT, ...HOOKS.split("/"), name);
+  const record = readBoundedJson(file, MAX_RECORD_BYTES);
+  if (record !== null && typeof record === "object" && typeof record.sessionId === "string") return record;
+  try { lstatSync(file); }
+  catch (error) { if (error?.code === "ENOENT") return null; }
+  refuse("hook-observations-unavailable");
+}
+
+function latestHookRecord(event, sessionId, promptDigest = null) {
+  let latest = null;
+  let latestName = "";
+  for (const name of hookNames(event)) {
+    const record = readHookRecord(name);
+    if (record === null || record.sessionId !== sessionId || (promptDigest !== null && record.promptDigest !== promptDigest)) continue;
+    const basename = path.basename(name);
+    if (basename > latestName) { latestName = basename; latest = record; }
+  }
+  return latest;
+}
+
 function readStdinBytes() {
   const chunks = [];
   let total = 0;
@@ -324,7 +376,7 @@ function readStdinJson() {
 function readConfig() {
   if (!existsSync(path.join(ROOT, "wakeflow.config.json"))) refuse("root-unresolved");
   const parsed = readBoundedJson(path.join(ROOT, "wakeflow.config.json"), MAX_CONFIG_BYTES);
-  if (parsed === null || typeof parsed !== "object" || parsed.kind !== "WakeflowConfig" || parsed.schemaVersion !== 1) {
+  if (parsed === null || typeof parsed !== "object" || parsed.kind !== "WakeflowConfig" || parsed.schemaVersion !== ${WAKEFLOW_CONFIG_SCHEMA_VERSION}) {
     refuse("config-invalid");
   }
   if (typeof parsed.program?.programId !== "string" || !Array.isArray(parsed.topology?.windows) || !Array.isArray(parsed.pods)) {
@@ -520,14 +572,7 @@ function sleep(milliseconds) {
 }
 
 function sessionStartRecord(sessionId) {
-  // 记录文件名里的 UUID 是 recordId，不是 session id：按内容的 sessionId 匹配，新记录在后所以倒序看。
-  const directory = path.join(ROOT, ...HOOKS.split("/"));
-  const names = listJsonNames(directory).filter((name) => name.includes("-session-start-")).reverse();
-  for (const name of names) {
-    const record = readBoundedJson(path.join(directory, name), MAX_RECORD_BYTES);
-    if (record !== null && typeof record === "object" && record.sessionId === sessionId) return record;
-  }
-  return null;
+  return latestHookRecord("session-start", sessionId);
 }
 
 function waitForSessionStart(sessionId, seconds) {
@@ -802,13 +847,15 @@ function assertLocatorNotLive(context, windowId, options) {
 }
 
 function sessionStartNames(sessionId) {
-  const directory = path.join(ROOT, ...HOOKS.split("/"));
   const names = [];
-  for (const name of listJsonNames(directory)) {
-    if (!name.includes("-session-start-")) continue;
-    const record = readBoundedJson(path.join(directory, name), MAX_RECORD_BYTES);
-    if (record !== null && typeof record === "object" && record.sessionId === sessionId) names.push(name);
+  for (const name of hookNames("session-start")) {
+    const record = readHookRecord(name);
+    if (record !== null && record.sessionId === sessionId) {
+      if (names.length >= 16384) refuse("hook-query-incomplete");
+      names.push(name);
+    }
   }
+  names.sort((left, right) => path.basename(left).localeCompare(path.basename(right)));
   return names;
 }
 
@@ -818,9 +865,8 @@ function waitForNewSessionStart(sessionId, before, seconds) {
   for (;;) {
     const fresh = sessionStartNames(sessionId).filter((name) => !before.has(name));
     if (fresh.length > 0) {
-      const directory = path.join(ROOT, ...HOOKS.split("/"));
-      const record = readBoundedJson(path.join(directory, fresh[fresh.length - 1]), MAX_RECORD_BYTES);
-      return Object.freeze({ status: "observed", record });
+      const record = readHookRecord(fresh[fresh.length - 1]);
+      if (record !== null) return Object.freeze({ status: "observed", record });
     }
     if (Date.now() >= deadline) return Object.freeze({ status: "pending", record: null });
     sleep(HOOK_POLL_MS);
@@ -1408,28 +1454,13 @@ function commandDeliver(config, options) {
 
 // 会话是否有过对话：保留期内有它的任一条 user-prompt-submit 记录。
 function sessionConversed(sessionId) {
-  const directory = path.join(ROOT, ...HOOKS.split("/"));
-  for (const name of listJsonNames(directory)) {
-    if (!name.includes("-user-prompt-submit-")) continue;
-    const record = readBoundedJson(path.join(directory, name), MAX_RECORD_BYTES);
-    if (record !== null && typeof record === "object" && record.sessionId === sessionId) return true;
-  }
-  return false;
+  return latestHookRecord("user-prompt-submit", sessionId) !== null;
 }
 
 // 落地证据是目标会话的 user-prompt-submit hook 记录：摘要按内核规则取去首尾空白后 UTF-8 的 SHA-256；
 // 观察脚本已剥掉宿主的粘贴外壳，所以记录里的摘要就是这里算的值。只查已存在的记录，不推断。
 function promptSubmitRecord(sessionId, promptDigest) {
-  const directory = path.join(ROOT, ...HOOKS.split("/"));
-  const names = listJsonNames(directory).filter((name) => name.includes("-user-prompt-submit-")).reverse();
-  for (const name of names) {
-    const record = readBoundedJson(path.join(directory, name), MAX_RECORD_BYTES);
-    if (
-      record !== null && typeof record === "object"
-      && record.sessionId === sessionId && record.promptDigest === promptDigest
-    ) return record;
-  }
-  return null;
+  return latestHookRecord("user-prompt-submit", sessionId, promptDigest);
 }
 
 function observeLanding(windowId, prompt, seconds) {

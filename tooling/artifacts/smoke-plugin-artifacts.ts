@@ -512,7 +512,9 @@ async function actHookObserver(
     fail("wakeflow-smoke-hook", "hook observer did not exit 0 with empty stdout and stderr");
   }
   const records = existsSync(directory)
-    ? readdirSync(directory).filter((name) => name.endsWith(".json"))
+    ? (readdirSync(directory, { recursive: true }) as string[]).filter((name) =>
+        name.endsWith(".json"),
+      )
     : [];
   if (records.length !== 1)
     fail("wakeflow-smoke-hook", `hook observer landed ${records.length} records`);

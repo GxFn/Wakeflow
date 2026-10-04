@@ -4,7 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { compiledTypeScriptTests } from "../../../tooling/testing/run-typescript-tests.js";
+import {
+  compiledTypeScriptTests,
+  resolveTestConcurrency,
+} from "../../../tooling/testing/run-typescript-tests.js";
 
 test("TypeScript test runner 从当前源文件映射 focused 输出", () => {
   const repositoryRoot = process.cwd();
@@ -60,4 +63,15 @@ test("full-mode test runner never executes a stale compiled output", (t) => {
 
   writeFileSync(path.join(repositoryRoot, "tests", "b.test.ts"), "");
   throws(() => compiledTypeScriptTests(repositoryRoot), /no regular compiled output/u);
+});
+
+test("test concurrency override changes only the worker budget and rejects invalid or excessive values", () => {
+  equal(resolveTestConcurrency(undefined, 8), 8);
+  equal(resolveTestConcurrency("", 8), 8);
+  equal(resolveTestConcurrency("4", 8), 4);
+  equal(resolveTestConcurrency("1", 8), 1);
+  for (const value of ["0", "-1", "4.0", "2e0", " 4", "9", "Infinity", "9007199254740992"]) {
+    throws(() => resolveTestConcurrency(value, 8), /WAKEFLOW_TEST_CONCURRENCY/u);
+  }
+  throws(() => resolveTestConcurrency(undefined, 0), /parallelism/u);
 });

@@ -578,11 +578,31 @@ test("制品搬到仓库之外后，两个 MCP 入口仍经官方 stdio Client �
 
   for (const artifact of built.artifacts) {
     const installed = outsideRepositoryCopy(t, path.join(output, artifact.outputDirectory));
+    const mcp = parseJsonFile<{
+      readonly mcpServers: {
+        readonly wakeflow: {
+          readonly command: string;
+          readonly args: readonly string[];
+          readonly cwd?: string;
+          readonly env_vars?: readonly string[];
+        };
+      };
+    }>(path.join(installed, ".mcp.json")).mcpServers.wakeflow;
+    const codex = artifact.hostId === "codex";
+    if (codex) {
+      equal(mcp.command, "/bin/sh");
+      equal(mcp.cwd, ".");
+      deepEqual(mcp.env_vars, ["CODEX_MCP_NODE_PATH"]);
+    }
+    // Codex 以实际出厂配置连接，模拟 GUI 的 PATH 中根本没有 node；
+    // 不能再由测试直接指定 process.execPath，掩盖宿主启动配置的缺陷。
     const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [path.join(installed, MCP_LAUNCHER)],
+      command: codex ? mcp.command : process.execPath,
+      args: codex ? [...mcp.args] : [path.join(installed, MCP_LAUNCHER)],
       cwd: installed,
-      env: { PATH: process.env.PATH ?? "" },
+      env: codex
+        ? { PATH: "", CODEX_MCP_NODE_PATH: process.execPath }
+        : { PATH: process.env.PATH ?? "" },
       stderr: "pipe",
     });
     let stderr = "";
@@ -621,9 +641,11 @@ test("两个制品的 hooks/observe.mjs 以宿主 SessionStart payload 把记录
     equal(landed.status, 0, artifact.hostId);
     equal(landed.stdout, "", artifact.hostId);
     equal(landed.stderr, "", artifact.hostId);
-    const records = readdirSync(directory).filter((name) => name.endsWith(".json"));
+    const records = (readdirSync(directory, { recursive: true }) as string[]).filter((name) =>
+      name.endsWith(".json"),
+    );
     equal(records.length, 1, artifact.hostId);
-    match(records[0] ?? "", RECORD_FILE_PATTERN);
+    match(path.basename(records[0] ?? ""), RECORD_FILE_PATTERN);
 
     // 观察目录的路径被普通文件顶替：内核的目录物化失败，launcher 仍退出 0、stdout 空，
     // stderr 恰好一行固定代码（D4、D8）——整行相等即证明不含根、cwd、句柄与 transcript 路径。

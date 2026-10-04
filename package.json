@@ -26,7 +26,8 @@
     "lint:fix": "biome lint --write src tests tooling",
     "format": "biome format --write src tests tooling",
     "format:check": "biome format src tests tooling",
-    "check:unused": "knip --no-progress --no-gitignore"
+    "check:unused": "knip --no-progress --no-gitignore",
+    "install:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/artifacts/inspect-local-installation.js"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",

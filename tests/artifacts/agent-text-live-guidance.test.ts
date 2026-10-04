@@ -100,15 +100,39 @@ function indexOfRequired(text: string, phrase: string): number {
   return index;
 }
 
+test("Codex 项目创建合同：一个外层项目、明确执行目录、项目回读与失败处理", () => {
+  const windows = codex(WINDOWS);
+  includesAll(
+    windows,
+    [
+      "list_projects",
+      "target.type project",
+      "environment.type local for every role",
+      "Never register role directories as projects",
+      "codex exec sessions",
+      "clientThreadId is not a binding handle",
+      "cwd and title alone do not prove project membership",
+      "Do not retry creation after an ambiguous result",
+      "Keep requested role chats visible",
+      "worktree.executionRoot",
+      "git worktree add",
+      "source-maintenance chat in another project",
+    ],
+    WINDOWS,
+  );
+  equal(claude(WINDOWS).includes("target.type project"), false);
+  equal(windows.includes("create_thread using a worktree environment"), false);
+});
+
 test("C16：Controller 技能把 server-outdated 与 windows-stale 直接路由到更新一节，不读插件实现", () => {
   for (const rendered of [claude(CONTROLLER), codex(CONTROLLER)]) {
     includesAll(
       rendered,
       [
-        "`server-outdated` and `windows-stale:<n>`",
-        "`runtime-artifact-outdated` and `window-artifact-stale`",
-        'Go straight to "After a plugin update" in `references/workspace-and-windows.md`',
-        "do not read the plugin's implementation",
+        "`server-outdated` (`runtime-artifact-outdated` in `next`)",
+        "`window-runtime-unverified:<n>` means peer runtime evidence is missing",
+        'Follow "After a plugin update" in `references/workspace-and-windows.md`',
+        "do not loop restarts or read plugin implementation",
       ],
       CONTROLLER,
     );
@@ -133,11 +157,11 @@ test("C8：更新后先告诉用户再就地重启 Controller 自己，verify �
   includesAll(
     update,
     [
-      "Never run maintenance from an outdated server",
-      "the launch intents its `wakeflow_register_window_binding` inspect returns",
-      "So this window goes first.",
-      "if a gate other than `runtime-artifact` fails - `host-settings-assets` does",
-      "preview and apply a reconcile as in step 0",
+      "MCP server serving this call",
+      "SessionStart can occur on resume or compaction",
+      "runtime.status: unverified",
+      "If that evidence establishes a window needs a reload",
+      "preview and apply reconcile for repairable workspace gates",
       "resume --window <windowId> --in-place`",
       "each only while it sits idle at an empty prompt",
       "`window-busy`",
@@ -178,16 +202,16 @@ test("C8：更新后先告诉用户再就地重启 Controller 自己，verify �
   includesAll(
     codexUpdate,
     [
-      "Never run maintenance from an outdated server",
-      "So this window goes first.",
-      "replace the binding with that thread's id",
-      "only the user can reconnect its Wakeflow server or resume the session",
+      "MCP server serving this call",
+      "ask the user to reload its Wakeflow server",
+      "reload or resume that existing chat through the host",
+      "user authorizes a replacement chat",
     ],
     "Codex plugin-update section",
   );
   ok(
-    indexOfRequired(codexUpdate, "only the user can reconnect") <
-      indexOfRequired(codexUpdate, "replace the binding with that thread's id"),
+    indexOfRequired(codexUpdate, "when this serving MCP is outdated") <
+      indexOfRequired(codexUpdate, "Replace its binding only"),
     "on Codex too this thread is refreshed before the other windows",
   );
   equal(codexUpdate.includes("--in-place"), false);

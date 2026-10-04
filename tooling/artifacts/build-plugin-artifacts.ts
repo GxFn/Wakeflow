@@ -40,8 +40,8 @@ import {
  * 写进 `lib/`；每个制品有两个 launcher（§13.97 D8）：`mcp/server.mjs` 与 `hooks/observe.mjs`
  * （闭包必须全是 shared 范围），闭包取两个根的并集，每个文件只写一次。其余内容按来源分四类：
  * 宿主配置由编译后的宿主模块在运行时动态 import 渲染（`hooks/hooks.json` 按片段自声明摘要核对，
- * agent 面文本按宿主取值表做一次封闭替换，§13.97 D6、§13.99 D9）；元数据由 `plugin-metadata`
- * 按唯一版本输入渲染（插件清单、`package.json`、`.mcp.json`）；静态资产原样复制（LICENSE、品牌
+ * MCP 启动配置由宿主 profile 提供，agent 面文本按宿主取值表做一次封闭替换，§13.97 D6、§13.99 D9）；元数据由 `plugin-metadata`
+ * 按唯一版本输入渲染（插件清单、`package.json`）；静态资产原样复制（LICENSE、品牌
  * SVG）；运行时依赖闭包按根锁文件的精确版本复制进 `node_modules/`（D5），所以装到宿主缓存目录
  * 后不需要再 `npm install`。清单 `artifact-manifest.json` 记下每个文件的字节数、sha256、模式与范围，
  * 是校验器的闭合依据（D6）：两次构建逐字节一致，committed 制品与清单不一致或存在清单外文件即拒绝。
@@ -145,6 +145,7 @@ interface CandidateDefinition extends CandidateHostIsolationRule {
     Readonly<LauncherDefinition & { readonly kind: "hook-observer" }>,
   ];
   readonly hookFragment: Readonly<HookFragmentDefinition>;
+  readonly mcpConfiguration: Readonly<{ readonly module: string; readonly exportName: string }>;
   readonly agentText: Readonly<AgentTextDefinition>;
 }
 
@@ -172,6 +173,10 @@ const CANDIDATES = Object.freeze([
       module: "hosts/codex/codex-hook-fragment.js",
       renderExport: "renderCodexHooksJson",
       digestExport: "CODEX_HOOK_FRAGMENT_DIGEST",
+    }),
+    mcpConfiguration: Object.freeze({
+      module: "hosts/codex/codex-process-launch-profile.js",
+      exportName: "CODEX_MCP_CONFIGURATION",
     }),
     agentText: Object.freeze({
       module: "hosts/codex/codex-agent-text-profile.js",
@@ -202,6 +207,10 @@ const CANDIDATES = Object.freeze([
       module: "hosts/claude-code/claude-code-hook-fragment.js",
       renderExport: "renderClaudeCodeHooksJson",
       digestExport: "CLAUDE_CODE_HOOK_FRAGMENT_DIGEST",
+    }),
+    mcpConfiguration: Object.freeze({
+      module: "hosts/claude-code/claude-code-mcp-configuration.js",
+      exportName: "CLAUDE_CODE_MCP_CONFIGURATION",
     }),
     agentText: Object.freeze({
       module: "hosts/claude-code/claude-code-agent-text-profile.js",
@@ -854,26 +863,22 @@ async function agentTextFiles(
   );
 }
 
-function mcpConfiguration(definition: Readonly<CandidateDefinition>): JsonRecord {
-  return definition.hostId === "codex"
-    ? {
-        mcpServers: {
-          wakeflow: {
-            command: "node",
-            args: ["./mcp/server.mjs"],
-            cwd: ".",
-          },
-        },
-      }
-    : {
-        mcpServers: {
-          wakeflow: {
-            command: "node",
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
-            args: ["${CLAUDE_PLUGIN_ROOT}/mcp/server.mjs"],
-          },
-        },
-      };
+/** MCP 配置与 hook 一样由宿主模块提供；共享构建器不包含宿主启动分支。 */
+async function mcpConfigurationBytes(
+  compiledRoot: string,
+  definition: Readonly<CandidateDefinition>,
+): Promise<Buffer> {
+  const profile = definition.mcpConfiguration;
+  const namespace = await importCompiledHostModule(
+    compiledRoot,
+    profile.module,
+    "wakeflow-artifact-mcp-configuration",
+  );
+  const configuration = namespace[profile.exportName];
+  if (!isPlainRecord(configuration) || !isPlainRecord(configuration.mcpServers)) {
+    fail("wakeflow-artifact-mcp-configuration", "host module lacks its MCP configuration");
+  }
+  return jsonBytes(configuration);
 }
 
 interface GeneratedFile {
@@ -980,6 +985,7 @@ function renderedFiles(
   definition: Readonly<CandidateDefinition>,
   version: string,
   hooksJson: Buffer,
+  mcpJson: Buffer,
   dependencies: Readonly<Record<string, string>>,
 ): readonly Readonly<GeneratedFile>[] {
   const [mcpLauncher, hookObserverLauncher] = definition.launchers;
@@ -1009,7 +1015,7 @@ function renderedFiles(
     }),
     Object.freeze({
       path: ".mcp.json",
-      bytes: jsonBytes(mcpConfiguration(definition)),
+      bytes: mcpJson,
       mode: 0o644 as const,
       scope: "metadata" as const,
     }),
@@ -1049,6 +1055,7 @@ async function assembleCandidate(
   const packages = resolveRuntimeDependencyClosure(repositoryRoot, closure.externalPackages);
   const dependencies = directDependencyVersions(closure, packages);
   const hooksJson = await hooksJsonBytes(compiledRoot, definition);
+  const mcpJson = await mcpConfigurationBytes(compiledRoot, definition);
   const candidateRoot = path.join(stageRoot, definition.directoryName);
   mkdirSync(candidateRoot, { mode: 0o755 });
 
@@ -1067,7 +1074,7 @@ async function assembleCandidate(
       scope: compiledFileScope(definition, relative),
     });
   }
-  for (const file of renderedFiles(definition, release.version, hooksJson, dependencies)) {
+  for (const file of renderedFiles(definition, release.version, hooksJson, mcpJson, dependencies)) {
     write(file);
   }
   for (const file of staticAssetFiles(repositoryRoot)) write(file);

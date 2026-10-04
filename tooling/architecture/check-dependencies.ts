@@ -43,6 +43,8 @@ const ADMITTED_PRODUCTION_ROOTS: ReadonlySet<string> = new Set([
   "src/governance/evidence/managed-evidence-reading-service.ts",
   "src/hosts/claude-code/claude-code-agent-text-profile.ts",
   "src/hosts/claude-code/claude-code-hook-fragment.ts",
+  // 制品构建器动态读取的宿主 MCP 配置；不是运行时内部依赖。
+  "src/hosts/claude-code/claude-code-mcp-configuration.ts",
   "src/hosts/codex/codex-agent-text-profile.ts",
   "src/hosts/codex/codex-hook-fragment.ts",
   "src/workspace/maintenance/wakeflow-maintenance-orphan-gate-recovery.ts",

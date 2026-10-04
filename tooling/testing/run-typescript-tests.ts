@@ -256,21 +256,28 @@ function parseInvocation(values: readonly string[]): readonly string[] | undefin
 }
 
 /**
- * 显式并发度：每个逻辑核一个工作进程。
- *
- * Node 的默认值是 `availableParallelism() - 1`，给交互式使用留出一核；测试门是批处理，
- * 那一核没有理由空着。再往上超订没有收益：这套测试的时间几乎全花在 fsync、rename 和
- * spawn 出去的子进程上，瓶颈是同一块盘而不是核，进程越多只会把单个文件拖得越慢。
- * 显式写出来还有一个好处：Node 以后改默认值，也不会悄悄改变这里的排程前提。
+ * Keep the default of one worker per available CPU. A shared machine may need
+ * fewer file workers to avoid filesystem contention; the override changes only
+ * file scheduling, not the selected tests, their internal concurrency or timeouts.
  */
-function testConcurrency(): number {
-  return Math.max(1, availableParallelism());
+export function resolveTestConcurrency(value: string | undefined, maximum: number): number {
+  if (!Number.isSafeInteger(maximum) || maximum < 1) fail("available parallelism is invalid");
+  if (value === undefined || value === "") return maximum;
+  const requested = Number(value);
+  if (!/^[1-9][0-9]*$/u.test(value) || !Number.isSafeInteger(requested) || requested > maximum) {
+    fail("WAKEFLOW_TEST_CONCURRENCY must be an integer from 1 to available parallelism");
+  }
+  return requested;
 }
 
 function run(): void {
   const repositoryRoot = process.cwd();
   const files = compiledTypeScriptTests(repositoryRoot, parseInvocation(process.argv.slice(2)));
-  const options = ["--test", `--test-concurrency=${testConcurrency()}`];
+  const concurrency = resolveTestConcurrency(
+    process.env.WAKEFLOW_TEST_CONCURRENCY,
+    Math.max(1, availableParallelism()),
+  );
+  const options = ["--test", `--test-concurrency=${concurrency}`];
   const result = spawnSync(process.execPath, [...options, ...files], {
     cwd: repositoryRoot,
     stdio: "inherit",

@@ -1,0 +1,105 @@
+{
+  "kind": "AtlasConcurrencyPostFixProbe",
+  "cases": [
+    {
+      "mode": "shared",
+      "latchReleaseNumber": 1,
+      "replacement": false,
+      "callbackEntered": false,
+      "failure": {
+        "name": "RootedExclusiveFileLockError",
+        "reason": "release-failure",
+        "path": "$lock/durability-failure"
+      },
+      "remainingLeaseKinds": [],
+      "sameProcessReadmission": [
+        "shared",
+        "exclusive"
+      ],
+      "originalLatchErrorPreserved": true
+    },
+    {
+      "mode": "exclusive",
+      "latchReleaseNumber": 1,
+      "replacement": false,
+      "callbackEntered": false,
+      "failure": {
+        "name": "RootedExclusiveFileLockError",
+        "reason": "release-failure",
+        "path": "$lock/durability-failure"
+      },
+      "remainingLeaseKinds": [],
+      "sameProcessReadmission": [
+        "shared",
+        "exclusive"
+      ],
+      "originalLatchErrorPreserved": true
+    },
+    {
+      "mode": "exclusive",
+      "latchReleaseNumber": 2,
+      "replacement": false,
+      "callbackEntered": false,
+      "failure": {
+        "name": "RootedExclusiveFileLockError",
+        "reason": "release-failure",
+        "path": "$lock/durability-failure"
+      },
+      "remainingLeaseKinds": [],
+      "sameProcessReadmission": [
+        "shared",
+        "exclusive"
+      ],
+      "originalLatchErrorPreserved": true
+    },
+    {
+      "mode": "shared",
+      "latchReleaseNumber": 1,
+      "replacement": true,
+      "callbackEntered": false,
+      "failure": {
+        "name": "RootedExclusiveFileLockError",
+        "reason": "release-failure",
+        "path": "$lock/source-changed"
+      },
+      "remainingLeaseKinds": [
+        "reader"
+      ],
+      "replacementOwnerState": "unknown",
+      "replacementBytesPreserved": true,
+      "retryFailure": {
+        "name": "RootedReadWriteScopeError",
+        "reason": "recovery-required"
+      },
+      "originalLatchErrorPreserved": false,
+      "errorPrecedence": "The failed outer cleanup replaces the earlier latch failure; no compound error is retained."
+    },
+    {
+      "mode": "exclusive",
+      "latchReleaseNumber": 1,
+      "replacement": true,
+      "callbackEntered": false,
+      "failure": {
+        "name": "RootedExclusiveFileLockError",
+        "reason": "release-failure",
+        "path": "$lock/source-changed"
+      },
+      "remainingLeaseKinds": [
+        "writer"
+      ],
+      "replacementOwnerState": "unknown",
+      "replacementBytesPreserved": true,
+      "retryFailure": {
+        "name": "RootedReadWriteScopeError",
+        "reason": "recovery-required"
+      },
+      "originalLatchErrorPreserved": false,
+      "errorPrecedence": "The failed outer cleanup replaces the earlier latch failure; no compound error is retained."
+    }
+  ],
+  "sourceSha256": "bd86e0e652bebf4e91dff8ef45b6031d295dfdec9c198849fa4c59c0946a4791",
+  "compiledSha256": "28051543e0d41fd6ab4633508ec917ed108c0020beb9460f1ca32e98a69e921d",
+  "fixture": "Separate explicitly disposable temporary directories; all removed in finally",
+  "productionFilesModified": false,
+  "scope": "Five deterministic filesystem fault-injection cases; not a live-host test or exhaustive fault model"
+}

@@ -1,0 +1,205 @@
+{
+  "kind": "WakeflowPrivacyEvidencePostFixSyntheticProbe",
+  "baselineSourceVersion": "1.1.0-rc.4",
+  "finalSourceVersion": "1.1.0-rc.5",
+  "execution": "Node current modules transformed in memory with SWC; existing .build dependencies and dedicated disposable fixture; no production edits or build",
+  "node": "v24.19.0",
+  "sourceSha256": {
+    "src/kernel/privacy-scan.ts": "27c15a87cf09b947d7df8adfc90ac31013e9a476a85be99b16c9237df0a43f87",
+    "src/capabilities/requirement/decide.ts": "bc7ce3d41cefdf995777e28a045b62c734baadc1c3f7337ed06fb320f7e5064d",
+    "src/capabilities/requirement/service.ts": "95877201026e3df68aaea75dbd59b5037283495d31245879db27de7483302e13",
+    "src/governance/evidence/managed-evidence-capture-planning-service.ts": "1ce8ec40c693eb0f5a22629ccbc0476793ba47eabda07dcaa93be6e3e9d27662"
+  },
+  "buildSha256": {
+    ".build/src/kernel/privacy-scan.js": "d11569e6aeab614af87f05cee5aa6e8731881e9e64f5a1c7e33c2f57326e9191",
+    ".build/src/capabilities/requirement/service.js": "cba506725a3a871eb41377bee4617d1f7bf3ca32aae4ae155b6dac52cdcbc565",
+    ".build/src/governance/evidence/managed-evidence-capture-planning-service.js": "a98d827cc5ff92c4cdc286fd12276ffae5fe2742871e000c6caa06e506bf95ab"
+  },
+  "scanResults": [
+    {
+      "label": "plain-credential",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "credential-assignment",
+          "line": 1,
+          "column": 1,
+          "length": 36
+        }
+      ]
+    },
+    {
+      "label": "CSI-split-credential",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "credential-assignment",
+          "line": 2,
+          "column": 6,
+          "length": 49
+        }
+      ]
+    },
+    {
+      "label": "unknown-control-credential",
+      "opaque": true,
+      "findings": [
+        {
+          "kind": "credential-assignment",
+          "line": 1,
+          "column": 2,
+          "length": 36
+        }
+      ]
+    },
+    {
+      "label": "safe-regex",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "safe-unicode-slash-list",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "safe-https-route",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "allowed-file-uri",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "file-uri-escape",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "unlisted-absolute-path",
+          "line": 1,
+          "column": 1,
+          "length": 39
+        }
+      ]
+    },
+    {
+      "label": "allowed-windows",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "windows-prefix-escape",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "unlisted-absolute-path",
+          "line": 1,
+          "column": 1,
+          "length": 33
+        }
+      ]
+    },
+    {
+      "label": "allowed-UNC",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "bare-uuid",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "bare-uuid",
+          "line": 1,
+          "column": 1,
+          "length": 36
+        }
+      ]
+    },
+    {
+      "label": "known-prefix-uuid",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "unknown-prefix-uuid",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "bare-uuid",
+          "line": 1,
+          "column": 9,
+          "length": 36
+        }
+      ]
+    },
+    {
+      "label": "hyphen-prefix-uuid",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "bare-uuid",
+          "line": 1,
+          "column": 8,
+          "length": 36
+        }
+      ]
+    }
+  ],
+  "blockerTruncation": {
+    "blockerCount": 64,
+    "hasPrivacyBlocker": false,
+    "independentPrivacyHit": true
+  },
+  "requirementPreview": {
+    "kind": "WakeflowRequirementPublicationPreview",
+    "status": "blocked",
+    "blockerCount": 64,
+    "hasPrivacyBlocker": false,
+    "summaryNull": true,
+    "publicSummaryContainsSynthetic": false
+  },
+  "evidenceClassification": [
+    {
+      "label": "valid-utf8-control",
+      "contentReview": "reject",
+      "status": "blocked",
+      "opaqueCount": 1,
+      "credentialCount": 1,
+      "blockers": [
+        "privacy:credential-assignment:content:1",
+        "opaque-content:content"
+      ]
+    },
+    {
+      "label": "valid-utf8-control",
+      "contentReview": "controller-confirmed",
+      "status": "blocked",
+      "opaqueCount": 1,
+      "credentialCount": 1,
+      "blockers": [
+        "privacy:credential-assignment:content:1"
+      ]
+    },
+    {
+      "label": "invalid-utf8",
+      "contentReview": "reject",
+      "status": "blocked",
+      "opaqueCount": 1,
+      "credentialCount": 0,
+      "blockers": [
+        "opaque-content:content"
+      ]
+    },
+    {
+      "label": "invalid-utf8",
+      "contentReview": "controller-confirmed",
+      "status": "ready",
+      "opaqueCount": 1,
+      "credentialCount": 0,
+      "blockers": []
+    }
+  ]
+}

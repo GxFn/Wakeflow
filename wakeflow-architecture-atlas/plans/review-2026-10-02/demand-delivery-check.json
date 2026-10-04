@@ -1,0 +1,13 @@
+{
+  "scope": "maps/04–08 and 10/state-and-recovery.md",
+  "checkedAt": "2026-10-02",
+  "handwrittenSemanticFiles": 44,
+  "documents": 19,
+  "diagrams": 19,
+  "errors": [],
+  "staleFingerprints": [],
+  "otherGroupsStillEditing": true,
+  "diagramRendering": "root agent owns final browser rendering; not asserted here",
+  "rootNpmTest": "root agent owns final gate; not run in this subagent",
+  "diffCheck": "passed for owned maps and review notes"
+}

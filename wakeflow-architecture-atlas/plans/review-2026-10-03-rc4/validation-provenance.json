@@ -1,0 +1,246 @@
+{
+  "kind": "WakeflowAtlasValidationProvenance",
+  "observedOn": "2026-10-03",
+  "baselineSourceVersion": "1.1.0-rc.4",
+  "finalSourceVersion": "1.1.0-rc.5",
+  "reviewSnapshot": "plans/review-2026-10-03-rc4",
+  "candidateOnly": true,
+  "sourceBaseline": {
+    "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/source-baseline-final.json",
+    "sha256": "d3f2ea7a45251ea7cebe3d2a110de91c7b9bf9f96d01538f1cac845eca07d038",
+    "currentBytesRechecked": true,
+    "mismatches": []
+  },
+  "coverage": {
+    "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/review-coverage.json",
+    "sha256": "56dfc6e83abe9fe265e7c5baef382d933b127e15c713d1e9a74a0c33881380f7",
+    "summary": {
+      "inventoryExpectationSource": "source-baseline-final.json; source/test quantities are enumerated, never assumed",
+      "expectedRuntime": 360,
+      "actualRuntime": 360,
+      "expectedTooling": 10,
+      "actualTooling": 10,
+      "handwrittenSourceFiles": 370,
+      "uniqueReviewedPaths": 370,
+      "currentSemanticRecords": 370,
+      "newlyReviewedSemanticRecords": 7,
+      "inheritedUnchangedSemanticRecords": 363,
+      "addedSincePreviousReview": 0,
+      "changedSincePreviousReview": 7,
+      "handwrittenLines": 139280,
+      "generatedFiles": 95,
+      "schemaFiles": 95,
+      "testFiles": 297,
+      "testFilesWithExistingAssociations": 281,
+      "anchoredTestAssociations": 1106,
+      "fileOnlyTestAssociations": 582,
+      "changedOrAddedTestAssociations": 69,
+      "inheritedSourceAssociationsToChangedTests": 34,
+      "inheritedAssociationRestrictionsCarriedForward": 219,
+      "inheritedSourceAssociationsWithUnrevalidatedAssertions": 248,
+      "maximumInheritanceHops": 2,
+      "explicitTestBoundaryDeclarations": 12,
+      "fullLineSemanticTestReviewClaimed": false,
+      "generatedSemanticReviewClaimed": false
+    },
+    "countsAreInventoryNotTestExecution": true
+  },
+  "evidenceLevels": {
+    "independentAtlasExecution": "本线程/授权并行分支的可重跑探针和机械检查；主代理另独立复跑后态探针",
+    "developmentGateWithRepositoryRecord": "其他开发线程执行；读取持久门日志并独立核对命令脚本、版本与manifest身份，不能写成本线程重新执行根gate",
+    "unverifiedNativeCandidate": "rc.5未安装/原生会话未验；rc.4历史原生证据不继承为rc.5通过"
+  },
+  "independentAtlasProbes": [
+    {
+      "id": "privacy",
+      "executionScope": "当前模块内存转译及既有.build依赖，显式一次性合成fixture；不是登录宿主",
+      "observedAssertions": [
+        "15组词法样例包括控制字符、路径正规化、已知/未知UUID前缀",
+        "64项展示blockers内没有隐私项时独立privacyHit仍为真，summary=null且不回显",
+        "有效UTF-8控制文本仍扫描凭证；人工内容确认不能覆盖命中",
+        "非法UTF-8的opaque审阅仍为明确的人工作用边界"
+      ],
+      "executionOwner": "atlas-thread-and-delegated-reviewers",
+      "rerunByAtlasCoordinator": true,
+      "scriptPath": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/privacy-evidence-probe-after-fix.mjs",
+      "receiptPath": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/privacy-evidence-probe-after-fix.json",
+      "scriptSha256": "725168d6daf11a168778b6714f3a947964c481e4bd971f5b5725509f42508b6d",
+      "receiptSha256": "664d3d5425ab19b1118e805471641b52cecf692d27ed4d3bfc58db678f6835c5"
+    },
+    {
+      "id": "callback",
+      "executionScope": "当前.build纯函数、记录构造与渲染；不运行公共import/inspect I/O或宿主发送",
+      "observedAssertions": [
+        "SHA-1/SHA-256以algorithm:value保真，无对象字符串",
+        "无授权说明前置、伪造Next/HTML/方向字符保持在引用数据内",
+        "十分钟阈值与+1ms的pending/silent区分",
+        "acknowledged可无落地；同刻stop可证明目标完成但不证明回调落地"
+      ],
+      "executionOwner": "atlas-thread-and-delegated-reviewers",
+      "rerunByAtlasCoordinator": true,
+      "scriptPath": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/callback-probes.mjs",
+      "receiptPath": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/callback-probes-after-fix.json",
+      "scriptSha256": "17686436ddc36f9442c8c91f06f2a83e0eae6ab2176c4f3722d7394c7b322f92",
+      "receiptSha256": "70651c3f6c1be3152321415c43a7371d39aada4a53a91ac6cb6802491ca095bc"
+    },
+    {
+      "id": "concurrency",
+      "executionScope": "5个独立一次性真实文件系统故障注入fixture；清理完毕，不触碰安装工作区",
+      "observedAssertions": [
+        "shared首轮、exclusive首轮/排空latch失败均清空许可且可同进程重入",
+        "两种模式的未知替换者保持原字节，后续独占要求恢复",
+        "cleanup成功透传原latch错误；cleanup失败返回后错，未伪称双错误同时保留"
+      ],
+      "executionOwner": "atlas-thread-and-delegated-reviewers",
+      "rerunByAtlasCoordinator": true,
+      "scriptPath": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/concurrency-release-post-fix-probe.mjs",
+      "receiptPath": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/concurrency-release-probe-after-fix.json",
+      "scriptSha256": "21277010479cf3106fb351e36ab5c7b04edf7f12643d973e7c77830b5257f2e0",
+      "receiptSha256": "8b4ba03905668e0ee94ad686a86c94f80dc2d06dc6f5edf87329b03348ece1d2"
+    }
+  ],
+  "independentAtlasMechanicalChecks": {
+    "aggregationReceipt": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/aggregation-verification.json",
+    "aggregationReceiptSha256": "ed3dd49f9851d2c0f47447ec4e163e93cc57c8ffa19bbf6160082db4120c60d7",
+    "result": "pass",
+    "sourceAndHistorySHAValidated": true,
+    "deterministicRegeneration": true,
+    "testsExecutedByAggregation": false
+  },
+  "developmentGate": {
+    "executionOwner": "separate-wakeflow-development-thread",
+    "executedByAtlasThread": false,
+    "resultAsRecorded": "pass",
+    "sourceVersion": "1.1.0-rc.5",
+    "commandAsRecorded": "npm test",
+    "concurrencyAsRecorded": 6,
+    "testSummary": {
+      "passed": 1244,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "endToEndScenarios": 20,
+      "testPhaseMilliseconds": 636592
+    },
+    "staticGatesAsRecorded": [
+      "typecheck",
+      "architecture",
+      "Biome lint/format",
+      "knip",
+      "95-schema drift",
+      "build:check"
+    ],
+    "smoke": {
+      "commandScriptAsRecorded": "smoke:artifacts",
+      "hosts": [
+        "codex",
+        "claude-code"
+      ],
+      "resultAsRecorded": "pass",
+      "executedByAtlasThread": false
+    },
+    "generatedMcpFixture": {
+      "resultAsRecorded": "pass",
+      "scope": "独立生成Codex MCP进程与一次性合成fixture，五类饱和诊断隐私预览、干净摘要对照、四个前缀案例；生成回调代码验证两算法两语言",
+      "exactInvocationRecordedInReferencedSection": false,
+      "nativeHostSession": false
+    },
+    "rawStdoutImportedIntoAtlas": false,
+    "artifactIdentityCrossCheck": [
+      {
+        "host": "codex",
+        "path": "plugins/codex-wakeflow/artifact-manifest.json",
+        "sourceVersion": "1.1.0-rc.5",
+        "byteSha256": "ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735",
+        "recordedInDevelopmentLogSha256": "ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735",
+        "digestMatchesRecordedRun": true,
+        "listedFiles": 914,
+        "fileCountIncludesManifest": false,
+        "releaseEligibleFlag": true,
+        "meaning": "manifest字节身份已独立核对；标志和摘要不等于发布、安装或原生会话验收"
+      },
+      {
+        "host": "claude-code",
+        "path": "plugins/claude-code-wakeflow/artifact-manifest.json",
+        "sourceVersion": "1.1.0-rc.5",
+        "byteSha256": "fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f",
+        "recordedInDevelopmentLogSha256": "fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f",
+        "digestMatchesRecordedRun": true,
+        "listedFiles": 941,
+        "fileCountIncludesManifest": false,
+        "releaseEligibleFlag": true,
+        "meaning": "manifest字节身份已独立核对；标志和摘要不等于发布、安装或原生会话验收"
+      }
+    ],
+    "repositoryEvidence": [
+      {
+        "path": "docs/progress/consolidation-gate-log.md",
+        "sha256": "cb547fbed5d86a19c5dee2056fd5bc560776ac0b24a208b0adddba5f6c6d87df",
+        "section": "13.151 rc.4 后续补审的四项边界修复（2026-10-03）",
+        "lineAtRead": 4227
+      },
+      {
+        "path": "docs/reviews/2026-10-03-privacy-and-admission-review.md",
+        "sha256": "790d94de5bdf3eae667ea81dfc4306249e172aeba1d4faaafc4191dd134c6414",
+        "section": "后续补审：披露判断、释放责任与身份保真",
+        "lineAtRead": 42
+      }
+    ],
+    "commandChainCheckedAgainst": {
+      "path": "package.json",
+      "sha256": "b8d381bb5bd26fd56e89bcfd2f7a23c315007e57c47c5e322ee619f94da0079a",
+      "npmTestExpandsTo": "check:typescript → typecheck, check:architecture, lint, format:check, check:unused, test:typescript, schema:check, build:check",
+      "smokeIsSeparateFromNpmTest": true
+    },
+    "limitation": "当前记录来自实际仓库持久门日志，已交叉核对候选manifest身份；本子任务没有获取/拷贝根gate原始stdout，也没有独立再次运行1244项。"
+  },
+  "nativeCandidate": {
+    "sourceVersion": "1.1.0-rc.5",
+    "status": "unverified",
+    "candidateInstalledAsRecorded": false,
+    "latestNativeVersionInDevelopmentLog": "1.1.0-rc.4",
+    "historicalNativeSection": "13.150",
+    "runtimeAssociationLimitation": "window-runtime-unverified:5 remains a documented prior native limitation; not a current rc.5 live measurement",
+    "windowsNativeVerified": false,
+    "newClaudeLoginSessionVerified": false,
+    "newNativePodLifecycleVerified": false
+  },
+  "visualValidation": {
+    "localMermaidDiagramCount": 100,
+    "browserRenderStatus": "pass",
+    "browserRenderExecutedBy": "atlas-coordinator",
+    "browserReceipt": "wakeflow-architecture-atlas/plans/evidence/current-mermaid-render.json",
+    "browserReceiptSha256": "74d51892beaf4aad5f5aa3e9a8a06da4a5f20e2eeb81decff32f128b2eb46ba9",
+    "renderer": "mermaid",
+    "rendererVersion": "11.17.2",
+    "rendered": 100,
+    "figjamStatus": "structure-semantics-and-scoped-visual-QA-complete",
+    "figjamExecutedBy": "atlas-coordinator",
+    "figjamDerivation": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/figjam-derivation.json",
+    "figjamCounts": {
+      "views": 17,
+      "nodes": 160,
+      "edges": 158,
+      "currentScreenshots": 8,
+      "inheritedUnchangedScreenshots": 9
+    },
+    "figjamCurrentEntry": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=62-1743",
+    "figjamCallbackState": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=76-2662",
+    "history": {
+      "rc3CloneSection": "68:1739",
+      "retiredOriginalDiagramsSection": "76:2634",
+      "historicalManifestFilesUnmodified": true
+    },
+    "semantics": "100张本地源图实际渲染；17个FigJam重点视图完成结构/语义比对；8面板本轮截图（7新增/重绘加1总体说明更新），9未变面板继承rc.3已检截图。派生图不替代业务/原生宿主验证。"
+  },
+  "operationsNotPerformedByThisAtlasWork": [
+    "production-source edits",
+    "artifact rebuild",
+    "commit",
+    "push",
+    "tag",
+    "publish",
+    "installed-cache refresh",
+    "native-host-session acceptance"
+  ]
+}

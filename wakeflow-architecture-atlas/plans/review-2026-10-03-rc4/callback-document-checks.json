@@ -1,0 +1,120 @@
+{
+  "kind": "WakeflowAtlasCallbackDocumentChecks",
+  "observedOn": "2026-10-03",
+  "method": "Current atlas GFM-based evidence, AST symbols/direct imports, source fingerprints and local links; no browser rendering or root runtime tests are claimed.",
+  "documents": [
+    {
+      "path": "wakeflow-architecture-atlas/maps/07-review-rework-completion/callback-trust-and-review.md",
+      "sha256": "bc102c93e870d531330c65a603b4f8a318ec536e6dff62f1f0d771c08d25781d",
+      "sourceFingerprint": "sha256:3dda74dc22fd5cdf29cd58d359f90be714c9bb5f3d564e7d1891fdc359ce6337",
+      "fingerprintMatches": true,
+      "diagrams": 3,
+      "edges": 18,
+      "sourceAndTestSymbols": 55,
+      "testSymbols": 24,
+      "errors": []
+    },
+    {
+      "path": "wakeflow-architecture-atlas/maps/07-review-rework-completion/README.md",
+      "sha256": "a76979d34d98579918829a0d761ade90c3a2d1bb49dde869dea12a57fa184d0f",
+      "sourceFingerprint": "sha256:1266d7fb0fc2f8216ea2c0dc0463bdec81b0ffd9319a2441dbcb136cfa10201d",
+      "fingerprintMatches": true,
+      "diagrams": 1,
+      "edges": 5,
+      "sourceAndTestSymbols": 10,
+      "testSymbols": 5,
+      "errors": []
+    },
+    {
+      "path": "wakeflow-architecture-atlas/maps/07-review-rework-completion/runtime-call-flow.md",
+      "sha256": "643c53cfa0f3a4df4974aa7d26189034a0f762205e48a874738d82af01b9f62a",
+      "sourceFingerprint": "sha256:a0dc9458864fb8d3ac2ecade18fa350e24b1f7007fdb07bfbd57d6b47dbe4b68",
+      "fingerprintMatches": true,
+      "diagrams": 1,
+      "edges": 7,
+      "sourceAndTestSymbols": 14,
+      "testSymbols": 7,
+      "errors": []
+    },
+    {
+      "path": "wakeflow-architecture-atlas/maps/07-review-rework-completion/file-dependencies.md",
+      "sha256": "7338c71e24fd05fcb4be65341e0cbe8ad0bafdd9cfb624c6668cd94cd3e4ee4d",
+      "sourceFingerprint": "sha256:7f6c0c02f22de17882956bc5e22079afa28aa72ec5bfee2074e7ec6c7c5069db",
+      "fingerprintMatches": true,
+      "diagrams": 1,
+      "edges": 6,
+      "sourceAndTestSymbols": 0,
+      "testSymbols": 0,
+      "errors": []
+    },
+    {
+      "path": "wakeflow-architecture-atlas/maps/06-implementation-delivery-review/state-and-recovery.md",
+      "sha256": "d28346c7a4235682c8206e6e0bf295a8786d987356dd012649b51c4df7adf6c4",
+      "sourceFingerprint": "sha256:d8ca3f004516579b4342220d7dfb21e2712aec222aed240babe7ee70291a2b8c",
+      "fingerprintMatches": true,
+      "diagrams": 1,
+      "edges": 5,
+      "sourceAndTestSymbols": 10,
+      "testSymbols": 5,
+      "errors": []
+    },
+    {
+      "path": "wakeflow-architecture-atlas/maps/08-real-environment-testing/README.md",
+      "sha256": "9d01ade99b5b9ae5ba729bc48f3f41046343e2bb50d8f12de216b0c1c35f6acb",
+      "sourceFingerprint": "sha256:b52f7829be16a8ea3ec85f523c0a24063580e021706decb3fc65708d6ed0bd2f",
+      "fingerprintMatches": true,
+      "diagrams": 1,
+      "edges": 5,
+      "sourceAndTestSymbols": 11,
+      "testSymbols": 5,
+      "errors": []
+    },
+    {
+      "path": "wakeflow-architecture-atlas/maps/08-real-environment-testing/file-dependencies.md",
+      "sha256": "3185fa1070721500b658d6fe5785d9b5e0570f69347ecbfe4dbde3fea377d6c3",
+      "sourceFingerprint": "sha256:6781b5808f01385a29c1bdea167a4d9b3aff4e52c617f60eb646fb214374fd46",
+      "fingerprintMatches": true,
+      "diagrams": 1,
+      "edges": 5,
+      "sourceAndTestSymbols": 0,
+      "testSymbols": 0,
+      "errors": []
+    },
+    {
+      "path": "wakeflow-architecture-atlas/maps/08-real-environment-testing/runtime-call-flow.md",
+      "sha256": "5005a95853be5108261a4f8a949fa4a779476315462987c3b82f5a8ce14b2a01",
+      "sourceFingerprint": "sha256:8ec59d35c72583b26704b664f300899df57cb9b4b9ae5d4c0299456d8abf297b",
+      "fingerprintMatches": true,
+      "diagrams": 1,
+      "edges": 8,
+      "sourceAndTestSymbols": 24,
+      "testSymbols": 11,
+      "errors": []
+    },
+    {
+      "path": "wakeflow-architecture-atlas/maps/09-public-mcp-host-seams/host-effect-handshake.md",
+      "sha256": "20f7e5eb8968bd876dec791a7a87956a2cc25ead20d69c10257b3f8650f0d50a",
+      "sourceFingerprint": "sha256:382220e2e2cf7514c4d34982223bf726b57b0b7ced7ae2d04ab29cbb6cce4e17",
+      "fingerprintMatches": true,
+      "diagrams": 3,
+      "edges": 30,
+      "sourceAndTestSymbols": 61,
+      "testSymbols": 37,
+      "errors": []
+    }
+  ],
+  "reviewRecords": [
+    {
+      "path": "src/capabilities/result-review/prompt.ts",
+      "shaMatches": true,
+      "unresolvedTestAnchors": []
+    },
+    {
+      "path": "src/capabilities/result-review/decide.ts",
+      "shaMatches": true,
+      "unresolvedTestAnchors": []
+    }
+  ],
+  "ok": true,
+  "finalSourceVersion": "1.1.0-rc.5"
+}

@@ -1,0 +1,412 @@
+[
+  {
+    "path": "src/governance/delivery/delivery-envelope.ts",
+    "sha256": "4f15aad38711013b3a14315fd94622a4d37644b4032938b1efaddc446987c4bb",
+    "responsibility": "冻结投递信封、route/fence/prompt与taskPackage关联",
+    "branches": [
+      "被动JSON+Schema",
+      "promptDigest",
+      "implementation rework与productDefectRemediation互斥",
+      "test attempt需对应targetTask/package",
+      "assertMatches还校验完整package摘要与projection ref"
+    ],
+    "effects": [
+      "纯codec/投影/摘要，无发送或持久写入"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/prompt.ts",
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/delivery/delivery-outcome.ts",
+      "src/governance/delivery/delivery-rearm.ts",
+      "src/governance/delivery/target-delivery-product-defect-remediation-context.ts",
+      "src/governance/delivery/target-delivery-rework-context.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-event.ts",
+      "src/governance/demand/model/demand-aggregate-state.ts",
+      "src/governance/result/implementation-target-result.ts",
+      "src/governance/result/target-result-callback.ts",
+      "src/governance/result/test-target-result.ts"
+    ],
+    "tests": [
+      "tests/kernel/prompt-digest.test.ts#computeDeliveryPromptDigest",
+      "tests/kernel/prompt-digest.test.ts#DeliveryEnvelopeError",
+      "tests/governance/review/controller-implementation-review-decision-service.fixture.ts#DeliveryEnvelope",
+      "tests/governance/review/controller-test-review-decision-service.fixture.ts#DeliveryEnvelope",
+      "tests/governance/result/target-result.fixture.ts#DeliveryEnvelope",
+      "tests/governance/demand/demand-event-sourcing-upcaster.test.ts#projectTargetDeliveryProductDefectRemediationContext",
+      "tests/governance/delivery/delivery-envelope.test.ts#computeDeliveryPromptDigest",
+      "tests/governance/delivery/delivery-envelope.test.ts#DeliveryEnvelopeError",
+      "tests/governance/delivery/delivery-envelope.test.ts#parseDeliveryEnvelope",
+      "tests/governance/delivery/delivery-records.fixture.ts#computeDeliveryPromptDigest",
+      "tests/governance/delivery/delivery-records.fixture.ts#createDeliveryEnvelope",
+      "tests/governance/delivery/delivery-records.fixture.ts#deliveryTaskPackageRef",
+      "tests/governance/delivery/delivery-records.fixture.ts#DeliveryEnvelope",
+      "tests/governance/delivery/delivery-records.fixture.ts#TargetDeliveryProductDefectRemediationContext",
+      "tests/governance/delivery/delivery-records.fixture.ts#TargetDeliveryReworkContext",
+      "tests/governance/delivery/delivery-workspace.fixture.ts#computeDeliveryPromptDigest",
+      "tests/governance/delivery/delivery-workspace.fixture.ts#DeliveryEnvelope",
+      "tests/entrypoints/wakeflow-hook-observer.test.ts#computeDeliveryPromptDigest",
+      "tests/capabilities/delivery/service.test.ts#computeDeliveryPromptDigest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/delivery/delivery-outcome.ts",
+    "sha256": "f7455c39332ede912e828b816a3673b378dd751a22bb80a5dcc0291e0826e670",
+    "responsibility": "投递代际结局与claimHandling合同",
+    "branches": [
+      "rejected-before-send释放授权",
+      "accepted/indeterminate保留",
+      "Schema约束evidence种类和附带字段",
+      "摘要复算"
+    ],
+    "effects": [
+      "纯codec",
+      "不查hook真伪、不释放claim"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/decide.ts",
+      "src/capabilities/delivery/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-event.ts",
+      "src/governance/demand/model/demand-aggregate-state.ts",
+      "src/governance/observation/observation-policy.ts",
+      "src/governance/result/target-result.ts"
+    ],
+    "tests": [
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#DELIVERY_LANDING_SILENCE_MILLISECONDS",
+      "tests/governance/result/target-result.fixture.ts#DeliveryOutcome",
+      "tests/governance/delivery/delivery-records.fixture.ts#createDeliveryOutcome",
+      "tests/governance/delivery/delivery-records.fixture.ts#DeliveryAttemptStatus",
+      "tests/governance/delivery/delivery-records.fixture.ts#DeliveryDisposition",
+      "tests/governance/delivery/delivery-records.fixture.ts#DeliveryEvidenceKind",
+      "tests/governance/delivery/delivery-records.fixture.ts#DeliveryOutcome",
+      "tests/governance/delivery/delivery-records.fixture.ts#DeliveryReadbackStatus",
+      "tests/governance/delivery/delivery-workspace.fixture.ts#DeliveryOutcome",
+      "tests/capabilities/observation/service.test.ts#DELIVERY_LANDING_SILENCE_MILLISECONDS"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/delivery/delivery-rearm.ts",
+    "sha256": "51047340f9e2a55fa26357d024dda8b04b931cd9fcdd0ed816d5280c6473d076",
+    "responsibility": "同一delivery的新代际围栏合同",
+    "branches": [
+      "prev+1",
+      "generation<=4",
+      "新claimId必须不同",
+      "rejectedOutcomeDigest只是引用"
+    ],
+    "effects": [
+      "纯codec",
+      "不执行宿主效果或证明拒绝事实"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/decide.ts",
+      "src/capabilities/delivery/service.ts",
+      "src/governance/controller/demand-controller-route.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-event.ts",
+      "src/governance/demand/model/demand-aggregate-state.ts",
+      "src/governance/observation/observation-policy.ts"
+    ],
+    "tests": [
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#DELIVERY_REARM_LIMIT",
+      "tests/governance/delivery/delivery-records.fixture.ts#createDeliveryRearm",
+      "tests/governance/delivery/delivery-records.fixture.ts#DeliveryRearm",
+      "tests/capabilities/observation/service.test.ts#DELIVERY_REARM_LIMIT"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/delivery/target-delivery-rework-context.ts",
+    "sha256": "69c869b873fac686c58546651f122479f8ce2f91a37959bbf6e4823fcc5111bc",
+    "responsibility": "从真实Controller rework决定及前结果裁剪上下文",
+    "branches": [
+      "program/demand/task/package/result全引用一致",
+      "非passed检查必须含failed",
+      "只rework决定准入"
+    ],
+    "effects": [
+      "纯投影",
+      "摘要及有界人读摘要"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-aggregate-state.test.ts#createTargetDeliveryReworkContext",
+      "tests/governance/demand/demand-event-sourcing-decider.test.ts#createTargetDeliveryReworkContext",
+      "tests/governance/demand/demand-event-sourcing-upcaster.test.ts#createTargetDeliveryReworkContext"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/delivery/target-delivery-product-defect-remediation-context.ts",
+    "sha256": "0c95df9dbbbe7221dc79e4513246ec346791ff8f3f374076b750d51489895492",
+    "responsibility": "从产品缺陷授权及受影响实现结果构造纠错上下文",
+    "branches": [
+      "前结果必须implementation且匹配affected baseline",
+      "按failedStepIds取原observed"
+    ],
+    "effects": [
+      "纯投影，不新授修复权限"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts"
+    ],
+    "tests": [],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/result/implementation-target-result-report.ts",
+    "sha256": "4995a34cb25bb2554dd46ffc4f0e256168f12bdf05765c0c5b8172bafcd39183",
+    "responsibility": "实现窗口报告content/时间/摘要与确定文档合同",
+    "branches": [
+      "completed/blocked/needs-review",
+      "commit disposition与commit非空一致",
+      "anchor evidence引用已列locators元组",
+      "文本NFC/预算"
+    ],
+    "effects": [
+      "纯codec，clock生产reportedAt",
+      "不验收或检查真实仓库"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/governance/result/implementation-target-result.ts",
+      "src/governance/result/target-result.ts"
+    ],
+    "tests": [
+      "tests/governance/result/implementation-target-result-report.fixture.ts#createImplementationTargetResultReport",
+      "tests/governance/result/implementation-target-result-report.test.ts#createImplementationTargetResultReport",
+      "tests/governance/result/implementation-target-result-report.test.ts#parseImplementationTargetResultReport",
+      "tests/governance/result/implementation-target-result-report.test.ts#parseImplementationTargetResultReportDocument",
+      "tests/governance/result/implementation-target-result-report.test.ts#renderImplementationTargetResultReport",
+      "tests/governance/result/implementation-target-result-report.test.ts#implementationTargetResultReportContentDigest",
+      "tests/governance/result/implementation-target-result-report.test.ts#ImplementationTargetResultReportError",
+      "tests/governance/result/target-result.test.ts#createImplementationTargetResultReport"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/result/implementation-target-result.ts",
+    "sha256": "1bf0c5ed8cd3c610612bb35c2ecbea8d25474a3dfe90ecfe78ac6c9c389483be",
+    "responsibility": "闭合实现task/envelope/delivery/report",
+    "branches": [
+      "accepted或indeterminate",
+      "generation1 fence匹配信封",
+      "completed完整anchor集合与commitExpectation",
+      "repository对应"
+    ],
+    "effects": [
+      "纯构造TargetResult",
+      "后续代际围栏真实性归调用方"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/governance/result/test-target-result.ts"
+    ],
+    "tests": [
+      "tests/governance/result/target-result.fixture.ts#createImplementationTargetResult",
+      "tests/governance/result/target-result.fixture.ts#CreateImplementationTargetResultInput",
+      "tests/governance/result/target-result.test.ts#createImplementationTargetResult",
+      "tests/governance/result/target-result.test.ts#ImplementationTargetResultError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/result/target-result-report-contract.ts",
+    "sha256": "469b37c99147ccc6361f57ba10706d0392c18df1bd3cd0b5e88881f0b2e15525",
+    "responsibility": "两类报告共用outcome与evidence locator类型",
+    "branches": [
+      "completed只代表目标合同完成",
+      "evidence定位字节不判断可信度"
+    ],
+    "effects": [
+      "纯类型，无运行效果"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/decide.ts",
+      "src/governance/result/implementation-target-result-report.ts",
+      "src/governance/result/target-result.ts",
+      "src/governance/result/test-target-result-report.ts",
+      "src/governance/review/controller-review-decision-contract.ts",
+      "src/governance/review/demand-result-review-snapshot.ts"
+    ],
+    "tests": [],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/result/target-result.ts",
+    "sha256": "67cf9a9fd5b5c7f91c0fb9043e81dc3f4243286427dcbfc7a8d3072d31fa034e",
+    "responsibility": "TargetResult联合合同与稳定ID/事件/commit派生",
+    "branches": [
+      "workType区分assignment/testExecution",
+      "resultId从claimUUID",
+      "report二次准入",
+      "结果摘要"
+    ],
+    "effects": [
+      "纯codec",
+      "不读取taskPackage内容或追加事件"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/result-review/decide.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/delivery/target-delivery-product-defect-remediation-context.ts",
+      "src/governance/delivery/target-delivery-rework-context.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-event.ts",
+      "src/governance/demand/model/demand-aggregate-state.ts",
+      "src/governance/result/implementation-target-result.ts",
+      "src/governance/result/test-target-result.ts",
+      "src/governance/review/demand-result-review-snapshot.ts"
+    ],
+    "tests": [
+      "tests/governance/result/target-result.fixture.ts#TargetResult",
+      "tests/governance/result/target-result.fixture.ts#TargetResultDeliveryBinding",
+      "tests/governance/result/target-result.test.ts#parseTargetResultDocument",
+      "tests/governance/result/target-result.test.ts#renderTargetResult",
+      "tests/governance/result/target-result.test.ts#targetResultIdForClaim",
+      "tests/governance/result/target-result.test.ts#targetResultRecordedCommitIdFromResult",
+      "tests/governance/result/target-result.test.ts#targetResultRecordedEventIdFromResult",
+      "tests/governance/result/target-result.test.ts#TargetResultDeliveryBinding",
+      "tests/governance/result/test-target-result.test.ts#parseTargetResultDocument",
+      "tests/governance/result/test-target-result.test.ts#renderTargetResult",
+      "tests/governance/demand/demand-event-sourcing-upcaster.test.ts#targetResultRecordedEventIdFromResult"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/result/test-target-result-report.ts",
+    "sha256": "df6154d36d504d739b6e5f5fc72642841845848a3b706515d32d0d01fbd8071c",
+    "responsibility": "逐步测试报告及整体verdict纯派生",
+    "branches": [
+      "fail>blocked>cannot-conclude>pass",
+      "空steps cannot-conclude",
+      "completed非空",
+      "blocked不许fail",
+      "pass无failure/非pass必有failure",
+      "证据元组存在"
+    ],
+    "effects": [
+      "纯codec与确定文档",
+      "不执行测试、不把报告当acceptance"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/decide.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/result/target-result.ts",
+      "src/governance/result/test-target-result.ts"
+    ],
+    "tests": [
+      "tests/governance/result/test-target-result-report.test.ts#createTestTargetResultReport",
+      "tests/governance/result/test-target-result-report.test.ts#deriveTestVerdict",
+      "tests/governance/result/test-target-result-report.test.ts#parseTestTargetResultReport",
+      "tests/governance/result/test-target-result-report.test.ts#parseTestTargetResultReportDocument",
+      "tests/governance/result/test-target-result-report.test.ts#renderTestTargetResultReport",
+      "tests/governance/result/test-target-result-report.test.ts#testTargetResultReportContentDigest",
+      "tests/governance/result/test-target-result-report.test.ts#TestTargetResultReportError",
+      "tests/governance/result/test-target-result.test.ts#createTestTargetResultReport",
+      "tests/capabilities/result-review/decide.test.ts#TestTargetResultStep"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/result/test-target-result.ts",
+    "sha256": "eede3bf3dc06cb0c69720134e58d47041a8605c77f01b8e8a027f1625ec447f0",
+    "responsibility": "闭合测试任务合同、attempt和报告scope",
+    "branches": [
+      "test envelope+attempt匹配",
+      "rerun只允许其stepIds",
+      "completed覆盖全部scope",
+      "accepted/indeterminate"
+    ],
+    "effects": [
+      "纯构造，不执行测试或修产品"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts"
+    ],
+    "tests": [
+      "tests/governance/result/test-target-result.test.ts#createTestTargetResult",
+      "tests/governance/result/test-target-result.test.ts#TestTargetResultError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  },
+  {
+    "path": "src/governance/result/target-result-callback.ts",
+    "sha256": "647c4262388486229881a6fe3ec7eb500f5407c943e594fc19bc38b52420c015",
+    "responsibility": "结果callback首次/重发/证据解析及派生状态",
+    "branches": [
+      "初代1",
+      "reissue prev+1最高4",
+      "64 evidence refs唯一",
+      "acknowledged优先，其次匹配prompt且晚于issued的landed，超10min为silent"
+    ],
+    "effects": [
+      "纯codec/状态派生，不发送callback，不筛选session目录"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-event.ts",
+      "src/governance/demand/model/demand-aggregate-state.ts",
+      "src/governance/observation/observation-policy.ts"
+    ],
+    "tests": [
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#TARGET_RESULT_CALLBACK_GENERATION_LIMIT",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS",
+      "tests/governance/result/target-result.fixture.ts#computeTargetResultCallbackPromptDigest",
+      "tests/governance/result/target-result.fixture.ts#deriveTargetResultCallbackId",
+      "tests/governance/result/target-result.fixture.ts#parseTargetResultCallbackRecord",
+      "tests/governance/result/target-result.fixture.ts#TargetResultCallbackRecord",
+      "tests/capabilities/result-review/decide.test.ts#deriveTargetResultCallbackStatus",
+      "tests/capabilities/observation/service.test.ts#TARGET_RESULT_CALLBACK_GENERATION_LIMIT",
+      "tests/capabilities/observation/service.test.ts#TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；类型合同另读原文；重点Schema与测试断言核验",
+    "testReviewMethod": "直接import锚点为关联索引；已人工核对重点断言见result-delivery-supplement.md"
+  }
+]

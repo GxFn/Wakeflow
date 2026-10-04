@@ -1,0 +1,561 @@
+{
+  "reviewedAt": "2026-10-02",
+  "method": "逐页读正文、节点、边、术语与恢复/错误陈述，按实际producer/consumer补齐精确文件；静态导入不声明执行覆盖。补审合同事实与12文件简报交叉核对。",
+  "pages": [
+    {
+      "page": "04-governance-event-sourcing/README.md",
+      "sourcePaths": [
+        "src/capabilities/demand/context.ts",
+        "src/capabilities/demand/decide.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/demand/service.ts",
+        "src/governance/controller/demand-controller-route.ts",
+        "src/governance/demand/demand-acceptance-coverage.ts",
+        "src/governance/demand/demand-operation-authority-context.ts",
+        "src/governance/demand/demand-verify-gates.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+        "src/governance/demand/model/demand-authority.ts",
+        "src/governance/demand/model/demand-identity.ts",
+        "src/governance/demand/publication/demand-active-guard.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-package.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+        "src/kernel/next-projection.ts",
+        "src/kernel/pod-mutation-lock.ts",
+        "src/kernel/requirement-board.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/demand/decide.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/governance/controller/demand-controller-route.ts",
+        "src/governance/demand/demand-acceptance-coverage.ts",
+        "src/governance/demand/demand-operation-authority-context.ts",
+        "src/governance/demand/demand-verify-gates.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+        "src/governance/demand/model/demand-authority.ts",
+        "src/governance/demand/model/demand-identity.ts",
+        "src/governance/demand/publication/demand-active-guard.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-package.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+        "src/kernel/next-projection.ts",
+        "src/kernel/pod-mutation-lock.ts",
+        "src/kernel/requirement-board.ts"
+      ],
+      "addedTests": [
+        "tests/capabilities/demand/acceptance-coverage.test.ts",
+        "tests/governance/demand/demand-event-sourcing-command-handler.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "身份和authority冻结、Pod锁/持久占用、终态owner、事件与快照分责、看板CAS与next派生均有正文陈述。",
+      "sourceFingerprint": "sha256:c75ec36f4f73ddebbcb9348908a9871456eefc330de4495d48287e80ee720989"
+    },
+    {
+      "page": "04-governance-event-sourcing/file-dependencies.md",
+      "sourcePaths": [
+        "src/capabilities/demand/context.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/demand/service.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/publication/demand-active-guard.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-service.ts"
+      ],
+      "addedSources": [],
+      "addedTests": [],
+      "removedTestCoverageClaims": "static import edges no longer assert runtime coverage",
+      "rationale": "精选静态导入页：全部节点与导入来源已在指纹内；折叠说明不宣称未展开模块的运行行为。",
+      "sourceFingerprint": "sha256:04e7d7ec24b1d52412f18861583ca5cb476ebc8a1ed0d407b5a03a55fead3880"
+    },
+    {
+      "page": "04-governance-event-sourcing/runtime-call-flow.md",
+      "sourcePaths": [
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+        "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+        "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-contract.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-package.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-transaction.ts",
+        "src/kernel/requirement-board.ts"
+      ],
+      "addedSources": [
+        "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+        "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+        "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-contract.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-package.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-transaction.ts",
+        "src/kernel/requirement-board.ts"
+      ],
+      "addedTests": [
+        "tests/governance/demand/demand-event-sourcing-publication-service.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "追加和checkpoint的实际被调用者；正文首次发布、sidecar恢复、claim CAS与失败authority词汇。",
+      "sourceFingerprint": "sha256:cff4ad0a5cde880cb2fea1f745e7379171f66dd18dc2b5a208b8f8c9221fe0cb"
+    },
+    {
+      "page": "04-governance-event-sourcing/state-and-recovery.md",
+      "sourcePaths": [
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/demand/service.ts",
+        "src/governance/demand/demand-runtime-recovery.ts",
+        "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+        "src/governance/demand/publication/demand-active-guard.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts",
+        "src/kernel/pod-mutation-lock.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/demand/service.ts",
+        "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts",
+        "src/kernel/pod-mutation-lock.ts"
+      ],
+      "addedTests": [
+        "tests/capabilities/demand/pod-concurrency.test.ts",
+        "tests/support/append-crash-process.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "候选退休/linked耐久结算实际owner；Pod锁消费者及根外日志持久占用；真实进程断点fixture。",
+      "sourceFingerprint": "sha256:d04a50a2d9ecb36acf278739c42a04bc6bf6d57b3faf1205e99784efe4bb3fb8"
+    },
+    {
+      "page": "05-tasking-slice/README.md",
+      "sourcePaths": [
+        "src/capabilities/tasking/decide.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/controller/demand-controller-route.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/tasking/task-package-projection-store.ts",
+        "src/governance/tasking/task-package.ts",
+        "src/kernel/next-projection.ts",
+        "src/kernel/requirement-acceptance.ts"
+      ],
+      "addedSources": [
+        "src/governance/controller/demand-controller-route.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/tasking/task-package-projection-store.ts",
+        "src/governance/tasking/task-package.ts",
+        "src/kernel/next-projection.ts",
+        "src/kernel/requirement-acceptance.ts"
+      ],
+      "addedTests": [
+        "tests/governance/tasking/task-package-projection-store.test.ts",
+        "tests/governance/tasking/task-package.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "冻结合同、投影修复、replacement允许阶段、当前测试代际、landing环境及验收条目来源。",
+      "sourceFingerprint": "sha256:e873942757e364a568bfb2e4c4189451a910c0858a4ff105c0c9fcc444cdf044"
+    },
+    {
+      "page": "05-tasking-slice/file-dependencies.md",
+      "sourcePaths": [
+        "src/capabilities/tasking/decide.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/tasking/task-package-projection-store.ts",
+        "src/governance/tasking/task-package.ts"
+      ],
+      "addedSources": [],
+      "addedTests": [],
+      "removedTestCoverageClaims": "static import edges no longer assert runtime coverage",
+      "rationale": "精选静态导入页：全部节点与导入来源已在指纹内；折叠说明不宣称未展开模块的运行行为。",
+      "sourceFingerprint": "sha256:82a6491766ec744f240735c23986582b1348dda58bbc8282af23b93194fa463a"
+    },
+    {
+      "page": "05-tasking-slice/runtime-call-flow.md",
+      "sourcePaths": [
+        "src/capabilities/tasking/decide.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/controller/demand-controller-route.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/governance/tasking/task-package-projection-store.ts",
+        "src/governance/tasking/task-package.ts",
+        "src/kernel/append-command.ts",
+        "src/kernel/ids.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/tasking/decide.ts",
+        "src/governance/controller/demand-controller-route.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/governance/tasking/task-package-projection-store.ts",
+        "src/governance/tasking/task-package.ts",
+        "src/kernel/append-command.ts",
+        "src/kernel/ids.ts"
+      ],
+      "addedTests": [
+        "tests/governance/tasking/task-package-projection-store.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "同键/修订机制、确定性身份、纯决定/时钟、物化失败恢复、route读取实际生产者。",
+      "sourceFingerprint": "sha256:db5001cea9d323d3df4d260dc9b8399f8c8a920d27cfff5364f22f08980a8a51"
+    },
+    {
+      "page": "06-implementation-delivery-review/README.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/contract.ts",
+        "src/capabilities/delivery/decide.ts",
+        "src/capabilities/delivery/prompt.ts",
+        "src/capabilities/delivery/service.ts",
+        "src/governance/delivery/delivery-envelope.ts",
+        "src/governance/delivery/target-delivery-product-defect-remediation-context.ts",
+        "src/governance/delivery/target-delivery-rework-context.ts",
+        "src/governance/testing/test-execution-attempt.ts",
+        "src/kernel/hook-observations.ts",
+        "src/kernel/pod-worktree-receipts.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedSources": [
+        "src/governance/delivery/delivery-envelope.ts",
+        "src/governance/delivery/target-delivery-product-defect-remediation-context.ts",
+        "src/governance/delivery/target-delivery-rework-context.ts",
+        "src/governance/testing/test-execution-attempt.ts",
+        "src/kernel/hook-observations.ts",
+        "src/kernel/pod-worktree-receipts.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedTests": [
+        "tests/capabilities/delivery/prompt.test.ts",
+        "tests/capabilities/result-review/service.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "信封冻结、返工/缺陷修复上下文、逻辑attempt、工作声明/回执/观察、prompt各分段事实。",
+      "sourceFingerprint": "sha256:730f5138b20580ca38b2994824f127ebede025f6b16d1090992fe4e701a03a11"
+    },
+    {
+      "page": "06-implementation-delivery-review/file-dependencies.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/decide.ts",
+        "src/capabilities/delivery/prompt.ts",
+        "src/capabilities/delivery/service.ts",
+        "src/governance/delivery/delivery-envelope.ts",
+        "src/kernel/hook-observations.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedSources": [],
+      "addedTests": [],
+      "removedTestCoverageClaims": "static import edges no longer assert runtime coverage",
+      "rationale": "精选静态导入页：全部节点与导入来源已在指纹内；折叠说明不宣称未展开模块的运行行为。",
+      "sourceFingerprint": "sha256:9df65a6eab9b318f4fb5dcd974bb7d7d100ef6de3f5d06cf06a1474ea97f7c01"
+    },
+    {
+      "page": "06-implementation-delivery-review/runtime-call-flow.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/decide.ts",
+        "src/capabilities/delivery/service.ts",
+        "src/governance/delivery/delivery-outcome.ts",
+        "src/kernel/hook-observations.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/delivery/service.ts",
+        "src/governance/delivery/delivery-outcome.ts",
+        "src/kernel/hook-observations.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedTests": [
+        "tests/capabilities/delivery/decide.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "原漏项：当前fence/phase准入、readback字段、代际首个indeterminate时刻、claimHandling派生和幂等补释放。",
+      "sourceFingerprint": "sha256:312b88dd90ee8c67d2b7b640389e11545469a16b09dd449027e1bb556fb85ec6"
+    },
+    {
+      "page": "06-implementation-delivery-review/state-and-recovery.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/decide.ts",
+        "src/capabilities/delivery/service.ts",
+        "src/capabilities/result-review/service.ts",
+        "src/governance/delivery/delivery-rearm.ts",
+        "src/governance/delivery/target-delivery-product-defect-remediation-context.ts",
+        "src/governance/delivery/target-delivery-rework-context.ts",
+        "src/governance/result/target-result-callback.ts",
+        "src/governance/testing/test-execution-attempt.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedSources": [
+        "src/governance/delivery/delivery-rearm.ts",
+        "src/governance/delivery/target-delivery-product-defect-remediation-context.ts",
+        "src/governance/delivery/target-delivery-rework-context.ts",
+        "src/governance/result/target-result-callback.ts",
+        "src/governance/testing/test-execution-attempt.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedTests": [
+        "tests/capabilities/result-review/decide.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "代际限制及新围栏、callback silent状态与上限、重发送不增attempt、返工来源在新信封保留。",
+      "sourceFingerprint": "sha256:d62bcfd4d8050fddfa468b10341e182bd73065751f5a3b6da029e46fc0f0e8d9"
+    },
+    {
+      "page": "07-review-rework-completion/README.md",
+      "sourcePaths": [
+        "src/capabilities/result-review/decide.ts",
+        "src/capabilities/result-review/service.ts",
+        "src/governance/evidence/managed-evidence-record-reader.ts",
+        "src/governance/result/implementation-target-result.ts",
+        "src/governance/result/target-result-callback.ts",
+        "src/governance/result/test-target-result.ts",
+        "src/governance/review/controller-implementation-review-decision.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/kernel/hook-observations.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedSources": [
+        "src/governance/evidence/managed-evidence-record-reader.ts",
+        "src/governance/result/implementation-target-result.ts",
+        "src/governance/result/target-result-callback.ts",
+        "src/governance/result/test-target-result.ts",
+        "src/governance/review/controller-implementation-review-decision.ts",
+        "src/governance/review/demand-result-review-snapshot.ts",
+        "src/kernel/hook-observations.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedTests": [
+        "tests/capabilities/result-review/evidence-citation.test.ts",
+        "tests/governance/review/controller-implementation-review-decision.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "结果构造与评审快照producer；单证据读取、anchorEvidence决定合同、提交后声明清理、hook完成/回调观察。",
+      "sourceFingerprint": "sha256:d01e628ea24fe2fcb6dea73b58863365c33e5cb5a2d343ef2c1d75bbde587ed9"
+    },
+    {
+      "page": "07-review-rework-completion/file-dependencies.md",
+      "sourcePaths": [
+        "src/capabilities/demand/archive.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/result-review/decide.ts",
+        "src/capabilities/result-review/prompt.ts",
+        "src/capabilities/result-review/service.ts",
+        "src/governance/review/demand-result-review-snapshot.ts"
+      ],
+      "addedSources": [],
+      "addedTests": [],
+      "removedTestCoverageClaims": "static import edges no longer assert runtime coverage",
+      "rationale": "精选静态导入页：全部节点与导入来源已在指纹内；折叠说明不宣称未展开模块的运行行为。",
+      "sourceFingerprint": "sha256:24de07b5641aec9599b852be770b180c7cf80cc17c3636c62166b2a2372964ec"
+    },
+    {
+      "page": "07-review-rework-completion/runtime-call-flow.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/service.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/result-review/decide.ts",
+        "src/capabilities/result-review/service.ts",
+        "src/governance/delivery/target-delivery-rework-context.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/review/controller-implementation-review-decision.ts",
+        "src/governance/review/controller-review-decision-contract.ts",
+        "src/governance/review/demand-result-review-snapshot.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/demand/lifecycle.ts",
+        "src/governance/delivery/target-delivery-rework-context.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/review/controller-implementation-review-decision.ts",
+        "src/governance/review/controller-review-decision-contract.ts",
+        "src/governance/review/demand-result-review-snapshot.ts"
+      ],
+      "addedTests": [],
+      "removedTestCoverageClaims": null,
+      "rationale": "同结果恢复的摘要历史、record-decision来源、同批escalation事件与原包返工上下文。",
+      "sourceFingerprint": "sha256:b2bab266530763e7aae0f7975d4db06fbe0e08c4920f4a0e1e9971835e1167d4"
+    },
+    {
+      "page": "07-review-rework-completion/state-and-recovery.md",
+      "sourcePaths": [
+        "src/capabilities/demand/archive.ts",
+        "src/capabilities/demand/decide.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/demand/demand-acceptance-coverage.ts",
+        "src/governance/demand/demand-verify-gates.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/lifecycle/demand-completion.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/kernel/pod-mutation-lock.ts",
+        "src/kernel/publication-transaction.ts",
+        "src/kernel/requirement-board.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/tasking/service.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/lifecycle/demand-completion.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/kernel/pod-mutation-lock.ts",
+        "src/kernel/publication-transaction.ts",
+        "src/kernel/requirement-board.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedTests": [
+        "tests/governance/demand/demand-research-completion.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "完成路由/载荷、当前测试代际、research不规划实施、Pod锁与板/声明实际写入者、apply重算计划。",
+      "sourceFingerprint": "sha256:4a862ded8bcb8e0b3e6ff9754c173006243e98ca4fe6758e6d563e403062188c"
+    },
+    {
+      "page": "08-real-environment-testing/README.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/service.ts",
+        "src/capabilities/result-review/decide.ts",
+        "src/capabilities/result-review/service.ts",
+        "src/capabilities/tasking/decide.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/demand/model/demand-authority.ts",
+        "src/governance/result/test-target-result-report.ts",
+        "src/governance/result/test-target-result.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/tasking/task-package.ts",
+        "src/governance/testing/test-execution-attempt.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/tasking/decide.ts",
+        "src/governance/demand/model/demand-authority.ts",
+        "src/governance/result/test-target-result-report.ts",
+        "src/governance/result/test-target-result.ts",
+        "src/governance/review/demand-post-acceptance-route.ts"
+      ],
+      "addedTests": [
+        "tests/governance/tasking/task-package.test.ts",
+        "tests/governance/testing/test-execution-attempt.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "测试准入、唯一landing角色、step/item唯一、setup策略与报告按attempt scope闭合。",
+      "sourceFingerprint": "sha256:9d6d27a9962652a60ed73c6bae88b9888d0c735984c13587369c948582bb869f"
+    },
+    {
+      "page": "08-real-environment-testing/file-dependencies.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/service.ts",
+        "src/capabilities/result-review/decide.ts",
+        "src/capabilities/result-review/service.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/tasking/task-package.ts",
+        "src/governance/testing/test-execution-attempt.ts"
+      ],
+      "addedSources": [],
+      "addedTests": [],
+      "removedTestCoverageClaims": "static import edges no longer assert runtime coverage",
+      "rationale": "精选静态导入页：全部节点与导入来源已在指纹内；折叠说明不宣称未展开模块的运行行为。",
+      "sourceFingerprint": "sha256:dbdc2e44ffe20d4c83f826a9ebf7c74773e64cdcda5eea0f8553adb26a20fe69"
+    },
+    {
+      "page": "08-real-environment-testing/runtime-call-flow.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/service.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/result-review/decide.ts",
+        "src/capabilities/result-review/service.ts",
+        "src/capabilities/tasking/decide.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/demand/demand-acceptance-coverage.ts",
+        "src/governance/demand/demand-verify-gates.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/review/controller-product-defect-remediation-authorization.ts",
+        "src/governance/review/controller-test-review-decision.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/testing/test-execution-attempt.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/delivery/service.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/tasking/decide.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/demand/demand-acceptance-coverage.ts",
+        "src/governance/demand/demand-verify-gates.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/governance/testing/test-execution-attempt.ts"
+      ],
+      "addedTests": [
+        "tests/capabilities/demand/acceptance-coverage.test.ts",
+        "tests/capabilities/result-review/decide.test.ts",
+        "tests/governance/review/controller-test-review-decision.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "纯分类门不足以覆盖正文：还涉及逻辑rerun、原目标修复、pendingRetest消费、后续完成路由与全需求覆盖。",
+      "sourceFingerprint": "sha256:42cf14d491a48f025282262f9eda70e71d8607ec4b1a6116fcc4d3d4a9b4f160"
+    },
+    {
+      "page": "10-end-to-end-business-flow/state-and-recovery.md",
+      "sourcePaths": [
+        "src/capabilities/delivery/decide.ts",
+        "src/capabilities/delivery/service.ts",
+        "src/capabilities/demand/archive.ts",
+        "src/capabilities/demand/context.ts",
+        "src/capabilities/demand/decide.ts",
+        "src/capabilities/demand/lifecycle.ts",
+        "src/capabilities/demand/service.ts",
+        "src/capabilities/result-review/decide.ts",
+        "src/capabilities/result-review/service.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/controller/demand-controller-route.ts",
+        "src/governance/demand/demand-acceptance-coverage.ts",
+        "src/governance/demand/demand-runtime-recovery.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/demand/publication/demand-active-guard.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
+        "src/governance/result/target-result-callback.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/kernel/pod-mutation-lock.ts",
+        "src/kernel/requirement-board.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedSources": [
+        "src/capabilities/delivery/decide.ts",
+        "src/capabilities/delivery/service.ts",
+        "src/capabilities/demand/archive.ts",
+        "src/capabilities/demand/service.ts",
+        "src/capabilities/result-review/decide.ts",
+        "src/capabilities/tasking/service.ts",
+        "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+        "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+        "src/governance/demand/model/demand-aggregate-state.ts",
+        "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
+        "src/governance/result/target-result-callback.ts",
+        "src/governance/review/demand-post-acceptance-route.ts",
+        "src/kernel/pod-mutation-lock.ts",
+        "src/kernel/requirement-board.ts",
+        "src/kernel/work-claims.ts"
+      ],
+      "addedTests": [
+        "tests/capabilities/demand/acceptance-coverage.test.ts",
+        "tests/capabilities/demand/pod-concurrency.test.ts",
+        "tests/capabilities/workspace/demand-runtime-recovery.test.ts"
+      ],
+      "removedTestCoverageClaims": null,
+      "rationale": "恢复入口表覆盖创建/候选/投递/回调/归档/继续；各入口实际owner与底层占用、状态转换和新规划消费者。",
+      "sourceFingerprint": "sha256:b741ed6b97f593d3a09126e089f3785d63326a901a58bc9de73a143e31068963"
+    }
+  ],
+  "lateChangeReview": "delivery/service observedOutcomeDecision 与相关测试晚变更已语义复核；06收窄不完整观察语义并标明未覆盖交叉组合。",
+  "hookLateChangeReview": "coordinator补审已确认sameObservationDocument规范比较旧v1文档且保留原字节，不改complete/skipped读者合同；本文页继续按同一读者合同成立，重算精确provider指纹。"
+}

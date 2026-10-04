@@ -1,0 +1,529 @@
+[
+  {
+    "path": "src/capabilities/delivery/decide.ts",
+    "sha256": "44838f02711e4e69a31e27376309512453a2bd43f2eca2ed270c8441ab1cae11",
+    "previousSha256": "077e6ee391576dbf4cc28d79c1a15b1185932ae1f91118c10c1215c600c1473a",
+    "change": "changed",
+    "responsibility": "投递处置、准备和重武装的纯决定",
+    "branches": [
+      "显式resolution优先且只接受indeterminate；accepted仍须目标hook记录",
+      "匹配promptDigest优先于发送声明；无hook时failed-before-send、project-thread发送回执、首次indeterminate依次判定",
+      "rearm仅拒发且未超代际；同目标孤儿工作声明可回收"
+    ],
+    "effects": [
+      "无I/O；不创建业务acceptance"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts#decideOutcome",
+      "src/capabilities/delivery/service.ts#executePrepare",
+      "src/capabilities/delivery/service.ts#executeRearm"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/delivery/decide.test.ts#sendReturnProvesLanding",
+        "coverage": "focused",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/delivery/decide.test.ts#deriveDeliveryDisposition",
+        "coverage": "focused",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-245"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "host-thread判断改为project-thread；宿主返回可证明落地的语义未改变。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/delivery/prompt.ts",
+    "sha256": "7f702a55ae05b20cfbd040173b3165f084a98bd8c02abb37d6a04d7311d6d343",
+    "previousSha256": "07bafd637d56debdf901d5e24d0ab7381cdce800cac5ee65aa098588b838bcfd",
+    "change": "changed",
+    "responsibility": "从冻结任务和路由渲染可移植投递文本",
+    "branches": [
+      "输出明确的executionRootFromWorkspace并要求显式命令workdir，聊天初始cwd可以不同",
+      "阅读路径仍由执行根反向到workspace，再到Ledger成员；requirement先于landing",
+      "实现显示前4锚点及剩余数，测试显示attempt预算与rerun子集；返工和产品缺陷上下文分开"
+    ],
+    "effects": [
+      "只渲染文本；长度超过上限拒绝；不发送"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts#renderPrompt"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/delivery/prompt.test.ts#renderDeliveryPortablePrompt",
+        "coverage": "focused",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/delivery/prompt.test.ts#deliveryPromptRequirementPackage",
+        "coverage": "focused",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-465"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "新增显式执行目录及中英文指令；原阅读顺序、身份块与返回指针保持。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/delivery/service.ts",
+    "sha256": "149f2e13654cf2c3744d8fe2eaf844218fe489f04351e573225314ee5c27a19a",
+    "previousSha256": "df0469fbd4d047416a9b49f8e2942630ca1820475c36c5c9a564fa70de021e8c",
+    "change": "changed",
+    "responsibility": "投递准备、结局与重武装的公共效果切片",
+    "branches": [
+      "所有append入口向command shell传signal；共享scope先于上下文打开",
+      "prepare先查幂等键，再核phase、绑定、worktree回执并取claim；绑定复验后冻结prompt与信封",
+      "route的worktreePath优先于configuredPlacement生成executionRoot；不从聊天cwd推定",
+      "hook查询不完整拒绝；独立project-thread回执或显式拒发resolution可保留自身证据",
+      "target rearm换fence代际但不换prompt；callback reissue沿原prompt且无claim"
+    ],
+    "effects": [
+      "追加投递事件，取得/释放匹配claim，刷新派生视图",
+      "只返回宿主动作许可；不执行真实发送"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/delivery/service.test.ts#prepareFixtureDelivery",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/delivery/service.test.ts#executeRearmDeliveryRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-2124"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "执行目录与项目聊天cwd分离；signal进入新workspace准入边界。既有hook独立证据回退仍保留。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/demand/contract.ts",
+    "sha256": "28d695cb87e61183d66f8d3ba1fd94d55cc5f89212b49e276a6740c75ed4cdb6",
+    "previousSha256": "370218d6adb608c5f6fef4b4627ab8b6dfc7965e23060dfa7f3f28344a7b1b3f",
+    "change": "changed",
+    "responsibility": "创建、完成、取消与继续四个公共工具的Schema边界及目录说明",
+    "branches": [
+      "passive JSON后按请求Schema准入",
+      "返回结果逐工具Schema校验",
+      "取消说明明确无成果research与等待决定可取消，同时仍拒绝待评审结果"
+    ],
+    "effects": [
+      "无业务I/O；不替代决定和归约器"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCancellationRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/governance/demand/demand-research-completion.test.ts#executeDemandCancellationRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-196"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "描述与DD-F02/F03实际修复同步；未新建审批或状态字段。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/demand/decide.ts",
+    "sha256": "0426f389b9d04e084cce5ab9f97d4ba585db1db3948f6d1360f38db0647aa64f",
+    "previousSha256": "c81841bb915b568a334a49a8e447b61d6632f34a69ff61d1d1d7aef07c4a4309",
+    "change": "changed",
+    "responsibility": "Demand创建/终态/续接的纯准入与确定身份",
+    "branches": [
+      "完成要求active、无等待、completion-preflight及全部verify门",
+      "取消仍拒绝待评审结果与错认领，但豁免work-claims-released、requirement-coverage、research-evidence",
+      "归档隐私仅阻断凭证类命中；continue只接completed非research并核开放空闲Pod"
+    ],
+    "effects": [
+      "无I/O；不把失败verify门改成pass"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/archive.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/decide.test.ts#deriveTerminalBlockers",
+        "coverage": "focused",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/governance/demand/demand-research-completion.test.ts#executeDemandCancellationRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-288"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "DD-F02闭合：取消不再要求研究完成物，完成门不放宽。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/demand/lifecycle.ts",
+    "sha256": "c7dd3e5ddb98dfca66dbe6e6aed1af860e472e02f9aad4b97b2de5a2d97dd586",
+    "previousSha256": "e597e3582d7e0d9f0bb91607c335560e002937385786debf380317b7c692be65",
+    "change": "changed",
+    "responsibility": "完成/取消五步归档、继续和记录回答的日志事务owner",
+    "branches": [
+      "preview只读重算plan，apply核digest；apply/recover进入workspace shared scope",
+      "终态/continue按Demand所属Pod取短锁并复验配置；continue另核Pod占用",
+      "cancel事件清等待由聚合负责；seal/archive、看板、claim、删根按原日志前向收敛",
+      "append前失败保留旧升级，append后失败从同commit取回执；record-decision仍是独立事件"
+    ],
+    "effects": [
+      "写根外journal、终态事件、归档包、看板CAS、claim释放与根退休",
+      "成功刷新索引；非所有后提交步骤忽略signal"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCancellationRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/governance/demand/demand-research-completion.test.ts#executeDemandCancellationRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandContinuationRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-1450"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "共享workspace边界包住上下文至结算；DD-F02/F03的公共取消与前后中断恢复由现有新增测试闭合。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/demand/service.ts",
+    "sha256": "e30cea4dbf60c0d40dd224bfa846cd92faf6cc5101db8e55b22f859e82bc8892",
+    "previousSha256": "cc9e39423409475cd7c0181b124a5606b61520b4ab8845e0c3a4e8fdc46459a0",
+    "change": "changed",
+    "responsibility": "从pending需求包创建Demand与发布恢复",
+    "branches": [
+      "preview以claim摘要派生Demand身份，核原记录、开放Pod及占用",
+      "apply在workspace shared scope内取Pod锁复验Config，再由发布服务发布根与CAS认领",
+      "recover有sidecar时先按其Pod取锁/复验占用；无sidecar交给原recover返回not-found"
+    ],
+    "effects": [
+      "发布自包含事务、Demand根与首事件、认领看板；刷新next"
+    ],
+    "consumers": [
+      "src/capabilities/demand/lifecycle.ts#activeDemandOnPod",
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/pod-concurrency.test.ts#executeDemandCreationRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#publishDemandFromPackage",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-568"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "公开创建/恢复接入shared scope和signal；内部Pod锁不取代workspace维护边界。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/result-review/decide.ts",
+    "sha256": "e5a5b1f55921c13bb49e6fb2ac155ba5eff9b39324465a98a35eeb701894a68d",
+    "previousSha256": "bc2cb44fcec9cf3483e2f175dc1e11a2d4298935559b7f296ee144387b13c124",
+    "change": "changed",
+    "responsibility": "证据引用、完成观察、步骤并集及评审准入的纯决定",
+    "branches": [
+      "结果证据去重保持kind差异；完成从reportedAt后的stop/turn-complete派生",
+      "accept要求结果与完成观察；test还要求全合同并集pass",
+      "rerun仅可重跑分类且预算未满，显式子集必须覆盖全部失败，环境恢复另核resumption",
+      "产品缺陷映射只准含product-defect fail且必须覆盖全部该类fail；其他分类不进入修复集合"
+    ],
+    "effects": [
+      "无I/O；允许集合不执行独立检查，不等同Controller判断"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/governance/observation/workspace-observation.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveTestDecisionBlockers",
+        "coverage": "focused",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveStepViews",
+        "coverage": "focused",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/mixed-failure-remediation.test.ts#deriveUnionVerdict",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-732"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "DD-F01准入补齐remediation-uncovered；防止遗漏产品缺陷后才在授权codec失败。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/result-review/service.ts",
+    "sha256": "4a9206ba93795bfdb05ba7d840a1102092fe0f30a72a944eed2289485fbd554b",
+    "previousSha256": "a206a84f72201b6ac22421c015f32ad33f5a39ad06fd6e1e0dd2338b8f6af267",
+    "change": "changed",
+    "responsibility": "导入结果、读取评审、记录实现/测试决定",
+    "branches": [
+      "import先幂等，再核围栏/phase/workType/证据；结果事件提交后无请求signal释放claim",
+      "inspect为read scope，重建快照并分别读目标完成和Controller回调；不完整hook查询拒绝",
+      "追加入口使用shared scope并传signal，决定重核snapshotDigest/reviewUnitDigest/revision/resumption",
+      "产品修复授权仅从当前报告筛product-defect fail，基线取测试包，同提交保存决定与授权"
+    ],
+    "effects": [
+      "追加结果/决定/授权事件，签发callback许可，释放匹配claim，刷新派生视图",
+      "不自动发送callback，不用hook producer digest证明目标MCP runtime"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/mixed-failure-remediation.test.ts#executeTestReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/evidence-citation.test.ts#importFixtureImplementationResult",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-2028"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "DD-F01生产者集合已修正；四种混合分类回归保留其他失败，flaky完整走修复/复测/重跑/接受。",
+    "findings": []
+  },
+  {
+    "path": "src/capabilities/tasking/service.ts",
+    "sha256": "3f43b2eea663c2e4dde7828ee229b10a750afa488da26dd1b51e49878b03e5a6",
+    "previousSha256": "7cef3e3d722c7bd5143a1036eb3848f8b9c5d76d63fd8d69cbddc774118073d8",
+    "change": "changed",
+    "responsibility": "冻结实现/测试TaskPackage并追加事件和物化投影",
+    "branches": [
+      "先读幂等键，同键同摘要重放并补投影",
+      "实现核需求锚点、拓扑、审阅与replacement/continuation；research拒绝实现包",
+      "测试核real-environment、accepted实现基线、环境成员与pendingTestRetest",
+      "公共入口signal传递到shared scope等待和上下文"
+    ],
+    "effects": [
+      "追加规划事件并物化TaskPackage文件、派生next；不发送"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTestTask",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-735"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "本文件增量仅signal传入commandShellExecutionOptions；workspace准入由runAppendCommand统一提供。",
+    "findings": []
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+    "sha256": "fe19547da99ad045988bb99fd6f55c0a2648f52f8165841036cdb0ae92e4c68d",
+    "previousSha256": "9b609a6774ace3d22c1a0d59e6956ebc1a2737c831002702eac0954da3977895",
+    "change": "changed",
+    "responsibility": "事件流加载、全量历史审计、定位与checkpoint协调",
+    "branches": [
+      "load优先可信快照加尾流；坏快照回退全流，audit始终重放全部提交",
+      "历史审计核任务、结果、决定、callback、授权与pending retest的交叉关系",
+      "授权failedSteps按持久决定的remediation映射限定，再从原报告取fail文本；不再拿整份失败集合比较",
+      "旧v1已映射全失败的合法授权仍按原决定校验；不重写历史字节"
+    ],
+    "effects": [
+      "读事件/快照/索引；append代理写提交；checkpoint保留2份定期清扫"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/review/demand-result-review-snapshot.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/mixed-failure-remediation.test.ts#DemandEventSourcingRepository",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-repository.test.ts#DemandEventSourcingRepository",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-1534"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "DD-F01消费者同步按持久决定的授权集合验证；当前生产准入更窄与旧v1读取兼容分离。",
+    "findings": []
+  },
+  {
+    "path": "src/governance/demand/model/demand-aggregate-state.ts",
+    "sha256": "53265d10c68729d3b82aa8799b93f0ee3df2b2dc076d4e6575ef1740779590bf",
+    "previousSha256": "761f9760c2cf0690367a20db81cc9d3fe50fc42c151a5495397723def79498ef",
+    "change": "changed",
+    "responsibility": "Demand纯聚合解析及任务/投递/结果/评审/生命周期状态转换",
+    "branches": [
+      "每步转换重新Schema及关系准入；任务/投递/结果/决定身份与摘要必须闭合",
+      "产品修复只改变已accepted的受影响实现，并产生pendingTestRetest；新retest消费它",
+      "cancel从active移除awaitingDecision后写cancelled；目标摘要与其他历史派生字段保持",
+      "complete仍拒绝awaitingDecision、未规划continuation或未闭合测试；终态不能重复cancel"
+    ],
+    "effects": [
+      "无I/O；事件日志保留由外层append-only事件存储承担"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/capabilities/result-review/service.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/demand/demand-aggregate-state.test.ts#cancelDemandAggregateState",
+        "coverage": "focused",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCancellationRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-3141"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "DD-F03闭合：活动等待被取消事件结束，不生成用户回答；纯聚合与公共中断恢复回归相互支持。",
+    "findings": []
+  },
+  {
+    "path": "src/governance/review/controller-product-defect-remediation-authorization.ts",
+    "sha256": "8efc15718a5d82598802b91d3429e29ab89b1a8121b3963e0dbed6a3346b4fca",
+    "previousSha256": "af356adf1a30113bc190baa32b72efaa81733c45cd9eb0c63cb8b1c0c7489475",
+    "change": "changed",
+    "responsibility": "产品修复授权v1的规范构建、关系校验与摘要",
+    "branches": [
+      "从精确product-defect决定与accepted基线生成existing-task-packages-only授权",
+      "failedSteps必须与affectedTargets映射集合完全一致；目标/仓库/基线身份唯一且不指向测试目标自身",
+      "规范排序、身份/时间/摘要/文本准入及确定性文档roundtrip"
+    ],
+    "effects": [
+      "纯合同；不读报告或分类，分类过滤在公共service负责"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/governance/delivery/target-delivery-product-defect-remediation-context.ts",
+      "src/governance/demand/model/demand-aggregate-state.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/review/controller-product-defect-remediation-authorization.test.ts#createControllerProductDefectRemediationAuthorization",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/mixed-failure-remediation.test.ts#executeTestReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "已读取实际使用点和相关断言；测试运行由主代理统一记录，不把符号关联当成全文件分支覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-815"
+    ],
+    "reviewMethod": "完整运行时函数体复读；大文件使用SWC去类型/注释但保留全部函数体，新增接口及Git差异另按TypeScript原文核对；真实调用方与关键测试断言复核。",
+    "conclusion": "字段注释改为被授权修复的失败集；保持v1字段/摘要/关系约束，未放宽codec迎合旧错误。",
+    "findings": []
+  }
+]

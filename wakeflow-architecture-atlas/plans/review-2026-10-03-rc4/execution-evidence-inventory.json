@@ -1,0 +1,78 @@
+{
+  "kind": "WakeflowAtlasExecutionEvidenceInventory",
+  "observedOn": "2026-10-03",
+  "sourceBaseline": {
+    "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/source-baseline-final.json",
+    "sha256": "d3f2ea7a45251ea7cebe3d2a110de91c7b9bf9f96d01538f1cac845eca07d038"
+  },
+  "semantics": "后态复验与日志独立于源码/测试快照；此清单只冻结已读证据字节，不把文件存在当成新的测试运行。修复前观察原样保留。",
+  "evidence": [
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/callback-probes-after-fix.json",
+      "sha256": "70651c3f6c1be3152321415c43a7371d39aada4a53a91ac6cb6802491ca095bc",
+      "role": "after-fix-observation",
+      "sameAsFirstInventoryObservation": true
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/callback-probes-before-fix.json",
+      "sha256": "4b32e1991fea2138c7f5bff35125e17ea1b794030455ff19b204e49d6ef13c7e",
+      "role": "before-fix-observation",
+      "sameAsFirstInventoryObservation": true
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/callback-probes.json",
+      "sha256": "70651c3f6c1be3152321415c43a7371d39aada4a53a91ac6cb6802491ca095bc",
+      "role": "initial-probe-observation",
+      "sameAsFirstInventoryObservation": true
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/concurrency-release-probe-after-fix.json",
+      "sha256": "8b4ba03905668e0ee94ad686a86c94f80dc2d06dc6f5edf87329b03348ece1d2",
+      "role": "after-fix-observation",
+      "sameAsFirstInventoryObservation": true
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/concurrency-release-probe-before-fix.json",
+      "sha256": "f28c82ff4b45d532a7e9b90452ed894cf4cf79b3eb40d435f92ac70a8344426b",
+      "role": "before-fix-observation",
+      "sameAsFirstInventoryObservation": true
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/privacy-evidence-probe-after-fix.json",
+      "sha256": "664d3d5425ab19b1118e805471641b52cecf692d27ed4d3bfc58db678f6835c5",
+      "role": "after-fix-observation",
+      "sameAsFirstInventoryObservation": false,
+      "reviewedReconciliation": {
+        "initialObservedSha256": "106944f34a118c98a2111a466ebf6bf830180756b801d3765c707d7c3b5b10bc",
+        "currentSha256": "664d3d5425ab19b1118e805471641b52cecf692d27ed4d3bfc58db678f6835c5",
+        "reason": "主代理独立重跑后态探针并明确 baselineSourceVersion rc.4 / finalSourceVersion rc.5；已完整重读结果、核对4条源摘要不变、summaryNull=true、无摘要回显和未知前缀命中。修复前证据未修改。",
+        "baselineSourceVersion": "1.1.0-rc.4",
+        "finalSourceVersion": "1.1.0-rc.5",
+        "behaviorChecks": {
+          "summaryNull": true,
+          "publicSummaryContainsSynthetic": false,
+          "unknownPrefixFinding": [
+            {
+              "kind": "bare-uuid",
+              "line": 1,
+              "column": 9,
+              "length": 36
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/privacy-evidence-probe-before-fix.json",
+      "sha256": "6ebbf66ba4ecfe75a80bcbd6c132f13a4f9992f8286cc959fccd6ac496fe7ae4",
+      "role": "before-fix-observation",
+      "sameAsFirstInventoryObservation": true
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/privacy-evidence-probe.json",
+      "sha256": "6ebbf66ba4ecfe75a80bcbd6c132f13a4f9992f8286cc959fccd6ac496fe7ae4",
+      "role": "initial-probe-observation",
+      "sameAsFirstInventoryObservation": true
+    }
+  ]
+}

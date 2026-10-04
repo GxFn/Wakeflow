@@ -1,0 +1,182 @@
+[
+  {
+    "path": "src/foundation/filesystem/rooted-exclusive-file-lock.ts",
+    "sha256": "960f242919c9fcd43ae6aec0dccd2d05060f84b658237ae5463e4385cb8ab612",
+    "responsibility": "签发当前v2独占文件锁与幂等lease，稳定观察owner并显式退休残留",
+    "branches": [
+      "严格v2字段；ownerBirth/registryId/token",
+      "ESRCH或不同正面出生摘要判旧实例失活",
+      "同进程跨线程/registry保守unknown，本实例活动token优先",
+      "获取不夺旧锁；退休需WeakSet签发观察＋相关stage闭合＋节点摘要复读"
+    ],
+    "effects": [
+      "原子新建锁文件",
+      "精确释放/退休并同步父目录"
+    ],
+    "consumers": [
+      "src/foundation/filesystem/rooted-read-write-scope.ts",
+      "src/kernel/workspace-operation-scope.ts",
+      "src/kernel/pod-mutation-lock.ts",
+      "src/configuration/wakeflow-config-authority-replacement.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/foundation/filesystem/rooted-exclusive-file-lock.test.ts#withRootedExclusiveFileLock",
+        "coverage": "focused",
+        "reason": "已读取真实用例；执行结果见本轮统一验证记录"
+      },
+      {
+        "anchor": "tests/foundation/filesystem/rooted-exclusive-file-lock.test.ts#retireRootedExclusiveFileLockResidue",
+        "coverage": "focused",
+        "reason": "已读取真实用例；执行结果见本轮统一验证记录"
+      }
+    ],
+    "findings": [
+      "出生识别不扩大到所有stage格式；原生Linux/Windows本轮未运行",
+      "本registry已退役token分支缺独立断言"
+    ],
+    "reviewDepth": "semantic",
+    "reviewMethod": "当前源文件全文与调用方/聚焦用例复核，保留未覆盖分支说明",
+    "reviewedLineRanges": [
+      "1-845"
+    ]
+  },
+  {
+    "path": "src/foundation/filesystem/rooted-read-write-scope.ts",
+    "sha256": "5044f9b384d6e9035043ff47377c105e49375c4c4c148246d12600fba26e16ed",
+    "responsibility": "以短latch协调共享reader和排空式exclusive writer",
+    "branches": [
+      "准入时核对目录0700/文件0600/owner与1024项界限",
+      "writer.lock关闭后到reader；reader并发且独立释放",
+      "exclusive保留writer后等所有reader释放或精确退休",
+      "unknown/不安全残留停止；仅瞬时目录漂移重试",
+      "beforeEnter由上层检查业务保留门；finally释放许可"
+    ],
+    "effects": [
+      "准入锁、reader/writer文件",
+      "回收已证inactive的锁与合法create暂存"
+    ],
+    "consumers": [
+      "src/kernel/workspace-operation-scope.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/foundation/filesystem/rooted-read-write-scope.test.ts#withRootedReadWriteScope",
+        "coverage": "focused",
+        "reason": "已读取真实用例；执行结果见本轮统一验证记录"
+      }
+    ],
+    "findings": [
+      "等待预算默认30秒上限300秒；不限制业务回调时长",
+      "Foundation不拥有业务intent恢复决定"
+    ],
+    "reviewDepth": "semantic",
+    "reviewMethod": "当前源文件全文与调用方/聚焦用例复核，保留未覆盖分支说明",
+    "reviewedLineRanges": [
+      "1-182"
+    ]
+  },
+  {
+    "path": "src/foundation/node/process-instance.ts",
+    "sha256": "7a11c57253de8171ef28c4b8278ab6d787f98977bdcd82137f49db661dac455d",
+    "responsibility": "读取进程存活和OS出生证据，为锁owner提供保守身份判断",
+    "branches": [
+      "kill(pid,0)的ESRCH确定inactive，其他错误保留unknown",
+      "Linux boot_id＋stat start ticks；macOS boot session＋ps lstart",
+      "本进程出生观察与boot identity进程内缓存",
+      "不同非空出生摘要证明旧实例失活，相同摘要不授权退休"
+    ],
+    "effects": [
+      "有界只读OS命令和proc文件读取"
+    ],
+    "consumers": [
+      "src/foundation/filesystem/rooted-exclusive-file-lock.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/foundation/node/process-instance.test.ts#observeProcessInstance",
+        "coverage": "focused",
+        "reason": "已读取真实用例；执行结果见本轮统一验证记录"
+      },
+      {
+        "anchor": "tests/foundation/node/process-instance.test.ts#recordedProcessIsInactive",
+        "coverage": "focused",
+        "reason": "已读取真实用例；执行结果见本轮统一验证记录"
+      }
+    ],
+    "findings": [
+      "不支持的平台/读取失败返回缺失出生证据；不按时间推断死亡"
+    ],
+    "reviewDepth": "semantic",
+    "reviewMethod": "当前源文件全文与调用方/聚焦用例复核，保留未覆盖分支说明",
+    "reviewedLineRanges": [
+      "1-79"
+    ]
+  },
+  {
+    "path": "src/contracts/vocabulary/wakeflow-config-identity.ts",
+    "sha256": "1aff5b17cf1f8f9b29230f6021184c991ecc0e30f65e1efde0fec89740cf6095",
+    "responsibility": "配置身份三元组的单一共享常量",
+    "branches": [
+      "urn:wakeflow:config:v2",
+      "WakeflowConfig",
+      "schemaVersion严格2，无旧格式读取或自动迁移"
+    ],
+    "effects": [
+      "无I/O"
+    ],
+    "consumers": [
+      "src/configuration/wakeflow-config.ts",
+      "src/kernel/layout.ts",
+      "src/entrypoints/wakeflow-hook-observer.ts",
+      "src/hosts/claude-code/claude-code-tmux-asset.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/configuration/wakeflow-config.test.ts#parseWakeflowConfig",
+        "coverage": "indirect",
+        "reason": "已读取真实用例；执行结果见本轮统一验证记录"
+      }
+    ],
+    "findings": [
+      "协议编号与插件1.1.0-rc.3版本分离"
+    ],
+    "reviewDepth": "semantic",
+    "reviewMethod": "当前源文件全文与调用方/聚焦用例复核，保留未覆盖分支说明",
+    "reviewedLineRanges": [
+      "1-12"
+    ]
+  },
+  {
+    "path": "tooling/artifacts/inspect-local-installation.ts",
+    "sha256": "cb3ac833ae2cd957027695aab92edc599301c627c9cb0b1e0ef703abb8fec16d",
+    "responsibility": "对完整制品和版本目录做只读安装预检",
+    "branches": [
+      "候选完整核验，再校验host和版本格式",
+      "目标末级必须等于version；目标不可为symlink",
+      "目标不存在给new-version；存在时完整核验并逐字节比较manifest",
+      "同版本不同字节拒绝；结果要求exclusive-create且activation=not-performed"
+    ],
+    "effects": [
+      "只读文件系统和摘要；不安装不预留不激活"
+    ],
+    "consumers": [
+      "package.json#install:check"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/artifacts/immutable-local-installation.test.ts#inspectLocalInstallation",
+        "coverage": "focused",
+        "reason": "已读取真实用例；执行结果见本轮统一验证记录"
+      }
+    ],
+    "findings": [
+      "安装器仍需独占发布；预检有TOCTOU边界且不解决宿主版本选择"
+    ],
+    "reviewDepth": "semantic",
+    "reviewMethod": "当前源文件全文与调用方/聚焦用例复核，保留未覆盖分支说明",
+    "reviewedLineRanges": [
+      "1-56"
+    ]
+  }
+]

@@ -1,0 +1,252 @@
+[
+  {
+    "path": "tooling/architecture/check-dependencies.ts",
+    "sha256": "55bfc2d17f0f348f07c4f663d76caa3e145ea1387118be5c9fbfc7704338dc17",
+    "responsibility": "执行dependency-cruiser并检查非零扫描与显式生产根",
+    "branches": [
+      "SWC parser必须实际生效",
+      "任何warning/error/violation失败",
+      "无src消费者的生产根必须在allowlist且allowlist不得陈旧"
+    ],
+    "effects": [
+      "spawn依赖扫描，只读src/tests/tooling"
+    ],
+    "consumers": [],
+    "tests": [],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；关键测试输入与断言核验；未运行这些工具",
+    "testReviewMethod": "直接import关联索引；具体人工断言核验见tooling-supplement.md"
+  },
+  {
+    "path": "tooling/artifacts/build-plugin-artifacts.ts",
+    "sha256": "479fcb11e583b672aa2ba07b4f534e1f2ea2e468bc8bc0a94d86fff1d7d2ad7b",
+    "responsibility": "从已编译闭包确定性构建双宿主插件",
+    "branches": [
+      "两launcher闭包",
+      "hook禁止hosts",
+      "peer仅两profile",
+      "非字面动态import拒绝",
+      "文本占位符闭合",
+      "hook摘要",
+      "output限定plugins或.build后代"
+    ],
+    "effects": [
+      "先stage全部payload/manifest，再rename+backup替换output",
+      "仅--committed写plugins"
+    ],
+    "consumers": [
+      "tooling/artifacts/check-plugin-artifacts.ts"
+    ],
+    "tests": [
+      "tests/artifacts/plugin-artifact-check.test.ts#buildWakeflowPluginArtifacts",
+      "tests/artifacts/plugin-artifact-smoke.manual.ts#buildWakeflowPluginArtifacts",
+      "tests/artifacts/plugin-artifacts.test.ts#assertRenderedHookFragmentDigest",
+      "tests/artifacts/plugin-artifacts.test.ts#assertSharedClosure",
+      "tests/artifacts/plugin-artifacts.test.ts#buildWakeflowPluginArtifacts",
+      "tests/artifacts/plugin-artifacts.test.ts#CandidateHostIsolationRule"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；关键测试输入与断言核验；未运行这些工具",
+    "testReviewMethod": "直接import关联索引；具体人工断言核验见tooling-supplement.md"
+  },
+  {
+    "path": "tooling/artifacts/check-plugin-artifacts.ts",
+    "sha256": "68e4c6906f067a72dada5a7901466d882f4e878abf44cf75d1044c3b704d82bf",
+    "responsibility": "committed制品自清单与新构建逐字节一致检查",
+    "branches": [
+      "清单外/缺文件/链接/模式/摘要漂移拒绝",
+      "marketplace结构相等且唯一entry"
+    ],
+    "effects": [
+      "在.build候选重建",
+      "只读committed与marketplaces"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/artifacts/plugin-artifact-check.test.ts#checkMarketplaces",
+      "tests/artifacts/plugin-artifact-check.test.ts#checkWakeflowPluginArtifacts",
+      "tests/artifacts/plugin-artifact-check.test.ts#CLAUDE_MARKETPLACE_PATH",
+      "tests/artifacts/plugin-artifact-check.test.ts#CODEX_MARKETPLACE_PATH",
+      "tests/artifacts/plugin-artifact-check.test.ts#jsonStructurallyEqual",
+      "tests/artifacts/plugin-artifact-check.test.ts#verifyArtifactAgainstManifest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；关键测试输入与断言核验；未运行这些工具",
+    "testReviewMethod": "直接import关联索引；具体人工断言核验见tooling-supplement.md"
+  },
+  {
+    "path": "tooling/artifacts/plugin-dependency-closure.ts",
+    "sha256": "c946aff4108f5a631fe34cc8a124a3742d2bd94136f4c157d197ebb19b9ff5c2",
+    "responsibility": "按lockv3展开真实运行依赖并准备vendored文件",
+    "branches": [
+      "deps/peers/已锁optional",
+      "拒dev/link/nested",
+      "实际安装版本等于锁",
+      "64包/2048文件/64MiB",
+      "剪类型/map/Markdown/隐藏文件"
+    ],
+    "effects": [
+      "读取lock与node_modules",
+      "返回字节，不执行npm install"
+    ],
+    "consumers": [
+      "tooling/artifacts/build-plugin-artifacts.ts"
+    ],
+    "tests": [
+      "tests/artifacts/plugin-artifacts.test.ts#resolveRuntimeDependencyClosure",
+      "tests/artifacts/plugin-dependency-closure.test.ts#collectVendoredFiles",
+      "tests/artifacts/plugin-dependency-closure.test.ts#resolveRuntimeDependencyClosure"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；关键测试输入与断言核验；未运行这些工具",
+    "testReviewMethod": "直接import关联索引；具体人工断言核验见tooling-supplement.md"
+  },
+  {
+    "path": "tooling/artifacts/plugin-metadata.ts",
+    "sha256": "ff0ad6511a1ae6f0258e7ff90b376b818abadf3b888fc442a1a78e4b4ec3f205",
+    "responsibility": "唯一版本输入和宿主manifest/package/marketplace模板",
+    "branches": [
+      "semver",
+      "releaseSeries major>=1",
+      "Node>=24.19.0<25",
+      "Codex marketplace无version"
+    ],
+    "effects": [
+      "只读version并纯渲染元数据"
+    ],
+    "consumers": [
+      "tooling/release/check-release-consistency.ts",
+      "tooling/artifacts/build-plugin-artifacts.ts",
+      "tooling/artifacts/check-plugin-artifacts.ts",
+      "tooling/artifacts/smoke-plugin-artifacts.ts"
+    ],
+    "tests": [
+      "tests/release/check-release-consistency.test.ts#expectedClaudeMarketplaceEntry",
+      "tests/artifacts/plugin-artifact-check.test.ts#expectedClaudeMarketplaceEntry",
+      "tests/artifacts/plugin-artifact-check.test.ts#expectedCodexMarketplaceEntry",
+      "tests/artifacts/plugin-artifact-check.test.ts#readReleaseVersion",
+      "tests/artifacts/plugin-artifacts.test.ts#pluginManifestPath",
+      "tests/artifacts/plugin-artifacts.test.ts#readReleaseVersion"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；关键测试输入与断言核验；未运行这些工具",
+    "testReviewMethod": "直接import关联索引；具体人工断言核验见tooling-supplement.md"
+  },
+  {
+    "path": "tooling/artifacts/smoke-plugin-artifacts.ts",
+    "sha256": "2a7bc670630ba8ea477146c9ac72e2a243c57b8d709271522f1515944cc1a600",
+    "responsibility": "repo外一次性目录真实stdio制品smoke",
+    "branches": [
+      "catalog闭合",
+      "fresh preview零写/apply",
+      "reconcile no-op",
+      "status/verify",
+      "pod preview零写",
+      "hook落地"
+    ],
+    "effects": [
+      "复制制品到tmp、git init、spawn SDK server/hook",
+      "finally清理",
+      "不登录真实宿主"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/artifacts/plugin-artifact-smoke.manual.ts#smokeWakeflowPluginArtifacts"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；关键测试输入与断言核验；未运行这些工具",
+    "testReviewMethod": "直接import关联索引；具体人工断言核验见tooling-supplement.md"
+  },
+  {
+    "path": "tooling/codegen/schema-types.ts",
+    "sha256": "dfc915a3d1f5701442bb61d83eac5bcb90f4f1203ea4baccdf544d18a094cf12",
+    "responsibility": "严格Schema目录生成TS类型与runtime合同",
+    "branches": [
+      "拒重复JSON键/id/外ref",
+      "Ajv2020 strict",
+      "四个特例生成词汇/正则",
+      "runtime schema冻结",
+      "check双次生成与committed digest"
+    ],
+    "effects": [
+      "stage生成",
+      "build先移除旧输出再rename",
+      "check只在.build写候选"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/codegen/schema-types.test.ts#buildSchemaTypes",
+      "tests/codegen/schema-types.test.ts#checkSchemaTypes",
+      "tests/codegen/schema-types.test.ts#loadSchemaCatalog",
+      "tests/codegen/schema-types.test.ts#SchemaCodegenError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；关键测试输入与断言核验；未运行这些工具",
+    "testReviewMethod": "直接import关联索引；具体人工断言核验见tooling-supplement.md"
+  },
+  {
+    "path": "tooling/release/check-release-consistency.ts",
+    "sha256": "4450643e9d7aa59cd4b5e6d7ce535a92eba1ae55aa5f834f0bcc58e1c9ab5809",
+    "responsibility": "发布后版本/制品/Node/Git一致性只读门",
+    "branches": [
+      "五源匹配唯一输入",
+      "major>=1",
+      "manifest releaseEligible",
+      "Git跟踪所有payload",
+      "CLI独立main/clean/tag/local-origin选项"
+    ],
+    "effects": [
+      "只读Git与文件",
+      "不会commit/push/tag/fetch/publish/cache refresh"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/release/check-release-consistency.test.ts#checkWakeflowReleaseConsistency"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；关键测试输入与断言核验；未运行这些工具",
+    "testReviewMethod": "直接import关联索引；具体人工断言核验见tooling-supplement.md"
+  },
+  {
+    "path": "tooling/testing/run-typescript-tests.ts",
+    "sha256": "84af14724b9bf7d59b6e102cdf60ec177c076de83165a715bc9bcfdabee54c91",
+    "responsibility": "当前测试源清单到编译文件的精确映射、耗时排程与有界文件并发预算",
+    "branches": [
+      "只收当前.test.ts；拒越界/重复/symlink/缺compiled",
+      "旧.build残留不执行",
+      "未知耗时优先、已知LPT",
+      "WAKEFLOW_TEST_CONCURRENCY未设置或空字符串时使用availableParallelism",
+      "覆盖值只接受1到可用并行度的规范十进制安全整数；拒零、负数、前导零、空白、小数、指数和超限",
+      "maximum必须正安全整数；并发覆盖不改变文件选择、测试内部并发或超时"
+    ],
+    "effects": [
+      "run从进程环境读取WAKEFLOW_TEST_CONCURRENCY，经resolveTestConcurrency准入后传给Node --test-concurrency",
+      "spawn既有选中测试文件并传播退出码"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/tooling/testing/run-typescript-tests.test.ts#compiledTypeScriptTests",
+      "tests/tooling/testing/run-typescript-tests.test.ts#resolveTestConcurrency",
+      "tests/tooling/testing/test-schedule-order.test.ts#TEST_DURATION_TABLE_PATH",
+      "tests/tooling/testing/test-schedule-order.test.ts#loadTestDurations",
+      "tests/tooling/testing/test-schedule-order.test.ts#orderTestSourcesByCost"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewMethod": "逐文件完整运行语句阅读；2026-10-02晚变更后全文复读并核对resolveTestConcurrency与run参数接线；未运行全量测试",
+    "testReviewMethod": "直接import关联索引；人工全文核对runner测试及新增并发预算断言，见tooling-supplement.md",
+    "lateChangeReview": {
+      "reviewedOn": "2026-10-02",
+      "previousSha256": "7517071644387a057661d39257fe9fe2329597bdbd4e7b1248632d0526c7643a",
+      "semanticChange": "新增WAKEFLOW_TEST_CONCURRENCY有界覆盖；默认并发不变，显式值只能降低或等于可用CPU预算"
+    }
+  }
+]

@@ -1,0 +1,247 @@
+{
+  "observedOn": "2026-10-03",
+  "scope": "Demand delivery review",
+  "documents": [
+    {
+      "path": "maps/04-governance-event-sourcing/README.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:9a5a136ffc9097575116c35364e264bafe2cb0606ac9875660f8424d641b5b56",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/04-governance-event-sourcing/file-dependencies.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:38a8f3226e447ce11ed6e5b3f15e4f89988065c43f5120eb3438c896d05557b6",
+      "testEvidence": {
+        "rows": 10,
+        "anchored": 0,
+        "marked": 10,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/04-governance-event-sourcing/runtime-call-flow.md",
+      "diagrams": 2,
+      "sourceFingerprint": "sha256:396e3f1132adf0ecfcf23b044656baf7c17c257d544050080aa502ffe5551707",
+      "testEvidence": {
+        "rows": 12,
+        "anchored": 7,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/04-governance-event-sourcing/state-and-recovery.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:9a7d23d696df068f3c003ed53e00fab8b026a95fb6856e976357657bd846eba4",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/05-tasking-slice/README.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:d5205ca5eb6176e8a2c849d5093bf8fdae09d2a1d522fe47debbe50b79150e03",
+      "testEvidence": {
+        "rows": 6,
+        "anchored": 0,
+        "marked": 6,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/05-tasking-slice/file-dependencies.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:798631ef9b092206643152e2b5f8aa5d1be0c9e8c718957e64e287888d0761c3",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/05-tasking-slice/runtime-call-flow.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:4be482a1de6fe83c029900f2cee95bdfe4ac2665899ff18fd9a72999c09bbe26",
+      "testEvidence": {
+        "rows": 6,
+        "anchored": 0,
+        "marked": 6,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/06-implementation-delivery-review/README.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:1e15ca10d6044a60c3a8139b8bb66bf44dc062bc65ee92afeb493c2119ecd8a5",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/06-implementation-delivery-review/file-dependencies.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:943ffbaed1fda6ba82474ab29aa77050bd5a1e697e1f74c60ef242e176d2458d",
+      "testEvidence": {
+        "rows": 6,
+        "anchored": 0,
+        "marked": 6,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/06-implementation-delivery-review/runtime-call-flow.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:bcd0d6678c5dc268508e30d5755f55f6d59845037f2b509942248967c597cc52",
+      "testEvidence": {
+        "rows": 9,
+        "anchored": 0,
+        "marked": 9,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/06-implementation-delivery-review/state-and-recovery.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:79ba115f50ae9b4cba53c7c65809031e2983f472a2f25e814b61890fb05ec6c6",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/07-review-rework-completion/README.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:cc4f02eeac022378c6a00421384e6513efd298b4f2cb73b18f815baa84de35fd",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/07-review-rework-completion/file-dependencies.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:241318c605a54a44909bc1e31336aed75ba27cef1d9db610334fb98b01d51d11",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/07-review-rework-completion/runtime-call-flow.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:d2afcd5f08ab8b90b9e6cefbb69dda34e4295691ff8649607d4536c55d05b3bd",
+      "testEvidence": {
+        "rows": 7,
+        "anchored": 0,
+        "marked": 7,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/07-review-rework-completion/state-and-recovery.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:d17b951a690956ef8c95731c94ed680478847c133a758913e5da63df85273ca5",
+      "testEvidence": {
+        "rows": 9,
+        "anchored": 1,
+        "marked": 8,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/08-real-environment-testing/README.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:5ddf008bfe8c43b043fc02d1245cdf6220546f19947b6009a721ef3d407763d4",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/08-real-environment-testing/file-dependencies.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:ebf65647c9a175c775fe7009151ab77cbd195887f5db2d50b67aadd682881788",
+      "testEvidence": {
+        "rows": 5,
+        "anchored": 0,
+        "marked": 5,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/08-real-environment-testing/runtime-call-flow.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:0b932fd07a20deed4cbd6f4e6706c3eec44f2589286ed4cd801cc107cc0fd2ee",
+      "testEvidence": {
+        "rows": 7,
+        "anchored": 1,
+        "marked": 6,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "path": "maps/10-end-to-end-business-flow/state-and-recovery.md",
+      "diagrams": 1,
+      "sourceFingerprint": "sha256:ddddad78b2ff3bbfdd38b3051c2d4ec43b2c4986ccd3679daa05dcc703496c49",
+      "testEvidence": {
+        "rows": 8,
+        "anchored": 1,
+        "marked": 7,
+        "unanchored": 0
+      },
+      "errors": []
+    }
+  ],
+  "guides": [
+    {
+      "path": "maps/10-end-to-end-business-flow/review-evidence.md",
+      "errors": []
+    },
+    {
+      "path": "plans/review-2026-10-03/demand-delivery.md",
+      "errors": []
+    }
+  ],
+  "recordCount": 13,
+  "recordErrors": [],
+  "ok": true
+}

@@ -1,0 +1,28 @@
+{
+  "kind": "WakeflowAtlasCoverageAggregationVerification",
+  "observedOn": "2026-10-03",
+  "sourceVersion": "1.1.0-rc.5",
+  "ok": true,
+  "deterministicRegeneration": true,
+  "sourceSemanticClaimsGenerated": false,
+  "currentSemanticRecords": 7,
+  "inheritedRecords": 363,
+  "maximumInheritanceHops": 2,
+  "historicalAndProbeFilesPreserved": 22,
+  "outputHashes": {
+    "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/review-coverage.json": "56dfc6e83abe9fe265e7c5baef382d933b127e15c713d1e9a74a0c33881380f7",
+    "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/import-graph.json": "9ddd75e60d792af26285dc918e2380bd070f661352cb18cf470fc050f578679b",
+    "wakeflow-architecture-atlas/maps/02-file-review-index.md": "30854ef9d8e21ce96b4132ac5ebd8a8689c093edf28637d9a11d73a30e2661bc",
+    "wakeflow-architecture-atlas/maps/01-diagram-review-ledger.md": "5f0784758967dbabe0c094f51378c468bf1fd1460bb89f8a38faf02d7be8ee5b"
+  },
+  "checks": [
+    "unique current path set",
+    "semantic source SHA and original ledger record equality",
+    "recursive prior coverage references",
+    "schema/generated one-to-one pair inventory",
+    "test locators revalidated without execution or inherited-assertion overclaim",
+    "second generation byte-identical",
+    "historical ledgers/coverage and before/after receipts unchanged"
+  ],
+  "rootTestsRunByThisStep": false
+}

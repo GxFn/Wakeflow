@@ -1,0 +1,2096 @@
+[
+  {
+    "path": "src/capabilities/endpoint/contract.ts",
+    "sha256": "1bdcd14a6d0619f500795fd7f1fba8e1702acc768b5f22e73b7df4fa7e7288d4",
+    "responsibility": "绑定工具六操作请求结果合同",
+    "branches": [
+      "inspect/register/replace/relocate/decommission/release-claim经生成Schema准入"
+    ],
+    "effects": [
+      "无I/O；目录标append但执行器走通用shell"
+    ],
+    "consumers": [
+      "src/capabilities/endpoint/projection.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-catalog.test.ts#WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/endpoint/decide.ts",
+    "sha256": "da25e555621fdc59efa71d1343e4e560e20f8b7814255d546926c76d9838ee48",
+    "responsibility": "端点纯决定矩阵",
+    "branches": [
+      "启动意图+hook+坐标+工作树准入；replace需无claim且换handle；relocate同handle允许claim；退役分机器/人工；释放条件OR"
+    ],
+    "effects": [
+      "无I/O/宿主操作；过期 OR session结束 OR liveness缺席即可释放"
+    ],
+    "consumers": [
+      "src/capabilities/endpoint/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/decide.test.ts#EndpointState"
+    ],
+    "findings": [
+      "decommission的manual-host-gate是证据分级，不是额外自动审批系统"
+    ],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/endpoint/locator-store.ts",
+    "sha256": "2b818167bb7edc5803d26d21b5ccbbfee097244c6e63442f9d1be259cd25832b",
+    "responsibility": "tmux四元组与绑定代际私有存储",
+    "branches": [
+      "locatorId从坐标和绑定派生；create或CAS replace；精确退役；损坏稳定错误"
+    ],
+    "effects": [
+      "0700目录0600文件，raw坐标不进入公共回执"
+    ],
+    "consumers": [
+      "src/capabilities/endpoint/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/locator-store.test.ts#WindowLocatorRecord"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/endpoint/pane-classification.ts",
+    "sha256": "57c4983f0ae9539f893b09015397eda85991ddbd7b961bbf693040cbb9a8e866",
+    "responsibility": "tmux观察固定优先级分类",
+    "branches": [
+      "binding/socket→缺席/重复→坐标/窗口→dead/process/metadata→live"
+    ],
+    "effects": [
+      "纯分类；不执行tmux"
+    ],
+    "consumers": [
+      "src/capabilities/endpoint/decide.ts",
+      "src/capabilities/endpoint/locator-store.ts",
+      "src/capabilities/endpoint/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/decide.test.ts#TmuxLocator"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/endpoint/projection.ts",
+    "sha256": "80fad360bb067824c2da0b1270908586f6195f2dda32f3d3c24be07b96fac1d9",
+    "responsibility": "窗口投影写入门面与next",
+    "branches": [
+      "未注册→用户登记；已持过期claim→controller恢复；其余pod窗口继续登记"
+    ],
+    "effects": [
+      "投影owner实际写入；不更改绑定"
+    ],
+    "consumers": [
+      "src/capabilities/endpoint/service.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/endpoint/service.ts",
+    "sha256": "dd8847dcd7369862ac77876521f4011a662d5731a31e5330028fd897cdb4af93",
+    "responsibility": "绑定工具一次加载决定提交",
+    "branches": [
+      "hook查询complete且skipped=0；绑定锁内复核；register/replace写回执和locator；relocate只locator；释放先receipt后unlink"
+    ],
+    "effects": [
+      "写绑定、定位器、worktree回执、窗口及活动投影；不创建关闭宿主窗口"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/claude-permission-mode.test.ts#WindowBindingHostFacade",
+      "tests/capabilities/endpoint/service.test.ts#WindowBindingHostFacade",
+      "tests/capabilities/observation/service.test.ts#resourceProfile",
+      "tests/capabilities/pod/service.test.ts#resourceProfile",
+      "tests/capabilities/workspace/maintain-workspace-reconcile-repair.test.ts#resourceProfile",
+      "tests/governance/delivery/delivery-workspace.fixture.ts#resourceProfile"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/evidence/contract.ts",
+    "sha256": "77b98e0011b284a89cc94b1cdb96aa748cafb1dd21aa294be0baf6a8bc02793c",
+    "responsibility": "受管证据效果工具wire合同",
+    "branches": [
+      "preview/apply/recover；七kind按四source闭合"
+    ],
+    "effects": [
+      "只登记元数据；非真实性证明"
+    ],
+    "consumers": [
+      "src/capabilities/evidence/decide.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-catalog.test.ts#WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/evidence/decide.ts",
+    "sha256": "0f5db557a0c773e8efba1233e9b98db930c42a64fb6ee237ae9ffd405453f5eb",
+    "responsibility": "证据公开plan摘要和Event身份",
+    "branches": [
+      "摘要排除capturedAt/CAS；ID从evidence派生；summary不回显完整tree"
+    ],
+    "effects": [
+      "纯计算"
+    ],
+    "consumers": [
+      "src/capabilities/evidence/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/decide.test.ts#deriveEvidencePlanDigest",
+      "tests/capabilities/evidence/service.test.ts#deriveEvidenceEventIdentity"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/evidence/service.ts",
+    "sha256": "7700f94bf52af81214c8618c59feb17d6ada5657195247e21d34b94504f81a4f",
+    "responsibility": "证据公开效果编排",
+    "branches": [
+      "重算capture；existing重放commit回执；新记录transaction apply；recover以Demand唯一journal"
+    ],
+    "effects": [
+      "委托发布和活动投影；next来自当前Controller route"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-shared-executors.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/service.test.ts#planDigest",
+      "tests/governance/demand/demand-research-completion.test.ts#planDigest",
+      "tests/governance/review/controller-implementation-review-decision-service.fixture.ts#planDigest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/observation/contract.ts",
+    "sha256": "78ef8ce6ae4ce89558ba0d89917e1e0fd45c609cb09338e349b3e34980b31141",
+    "responsibility": "status与verify只读工具wire合同",
+    "branches": [
+      "full观察各一次；15道工作区门；可加Demand结果"
+    ],
+    "effects": [
+      "无修复，repairsApplied false"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts",
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/decide.test.ts#VERIFY_TOOL_REGISTRATION",
+      "tests/entrypoints/wakeflow-public-mcp-catalog.test.ts#WAKEFLOW_STATUS_PUBLIC_TOOL_NAME",
+      "tests/entrypoints/wakeflow-public-mcp-error-envelope.test.ts#WAKEFLOW_STATUS_PUBLIC_TOOL_NAME",
+      "tests/entrypoints/wakeflow-public-mcp-lifecycle.test.ts#WAKEFLOW_STATUS_PUBLIC_TOOL_NAME",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#WAKEFLOW_STATUS_PUBLIC_TOOL_NAME"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/observation/decide.ts",
+    "sha256": "b9c365fd5c503db968f07ff0a0232a40001b3e8e2fd9b4c9754d8e9847c07112",
+    "responsibility": "status下一动作与15门纯派生",
+    "branches": [
+      "unavailable与fail区分；manifest缺失→user；手写活动投影pass/handwritten；未登记窗口及creating/closing非直接失败"
+    ],
+    "effects": [
+      "纯判断；ok只在至少一门且全pass"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/decide.test.ts#NextActionInput"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/observation/service.ts",
+    "sha256": "15a3bac28d7d690939dd8a905a631063390b8919fabd18612b301fe97565ecf6",
+    "responsibility": "status/verify观察编排与公开映射",
+    "branches": [
+      "打开config/ledger/full观察；status截断计数+archive回执；verify复读config/layout/Demand gates；manifest曾知后缺失不算same"
+    ],
+    "effects": [
+      "全程零写；私有路径句柄脱敏；顶层config/ledger失败仍整体拒绝"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/acceptance-coverage.test.ts#reason",
+      "tests/capabilities/demand/service.test.ts#reason",
+      "tests/capabilities/observation/maintenance-busy-residue.test.ts#residues",
+      "tests/capabilities/observation/observation-facade.fixture.ts#ObservationHostFacade",
+      "tests/capabilities/observation/service.test.ts#ObservationHostFacade",
+      "tests/capabilities/pod/service.test.ts#reason",
+      "tests/capabilities/workspace/maintain-workspace-reconcile-repair.test.ts#ledgerRoot",
+      "tests/capabilities/workspace/private-mode-reconcile.test.ts#reason",
+      "tests/capabilities/workspace/reconfigure-add-repository.test.ts#reason"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/pod/contract.ts",
+    "sha256": "08744fb4ce96eb9e821329c7fb8b5ca063a0e02fc023950a67b48766b381ce66",
+    "responsibility": "Pod效果工具wire合同",
+    "branches": [
+      "preview/apply/recover，create与两段close"
+    ],
+    "effects": [
+      "无I/O，host动作属于Agent"
+    ],
+    "consumers": [
+      "src/capabilities/pod/decide.ts",
+      "src/capabilities/pod/service.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-catalog.test.ts#WAKEFLOW_POD_PUBLIC_TOOL_NAME",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#WAKEFLOW_POD_PUBLIC_TOOL_NAME"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/pod/decide.ts",
+    "sha256": "1dda99d1afc9744e5cd0aa1f5b6d5b5365e67ba4f3410cb5c3ec97ae840d4762",
+    "responsibility": "Pod身份模板与两段关闭纯规则",
+    "branches": [
+      "ID按program/key；main保留；关闭需无活动Demand+分支处置；第二段无绑定无检出"
+    ],
+    "effects": [
+      "纯计划/next；state委托governance"
+    ],
+    "consumers": [
+      "src/capabilities/pod/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/pod/decide.test.ts#derivePodId"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/pod/service.ts",
+    "sha256": "b3a3848dafae9cc110c6963fe7472c39df852e1afbb12dedc20ea461646532c9",
+    "responsibility": "Pod配置事务及回执恢复",
+    "branches": [
+      "apply取pod锁再复验config与计划；创建open/第一段closing/第二段移除；recover退休stale或孤儿回执"
+    ],
+    "effects": [
+      "CAS替换配置，刷新/退役投影，清理自有回执；不删除实际检出"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/pod-concurrency.test.ts#planDigest",
+      "tests/capabilities/pod/service.test.ts#PodHostFacade",
+      "tests/capabilities/workspace/reconfigure-add-repository.test.ts#PodHostFacade"
+    ],
+    "findings": [
+      "recover只做回执对账，未走withPodMutation或afterMutationRefresh；不要把它画成配置事务恢复"
+    ],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/requirement/contract.ts",
+    "sha256": "5ff7bdd08251808f17be3be9d85018e6ec86930d41ccda34d1187be852ead48d",
+    "responsibility": "需求发布与看板读取wire合同",
+    "branches": [
+      "publish/activate/withdraw三模式；list/package只读"
+    ],
+    "effects": [
+      "不创建Demand"
+    ],
+    "consumers": [
+      "src/capabilities/requirement/projection.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-catalog.test.ts#WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/requirement/decide.ts",
+    "sha256": "6e350a3a62ae6b29237aa5a9662d786d291469e0e50eb2f1f7de3d9f43c947b6",
+    "responsibility": "章节隐私确认验收准入及内容身份",
+    "branches": [
+      "中英文H2别名；重复/缺章/隐私阻塞；非research顶层验收列表至少一项；内容确定ID"
+    ],
+    "effects": [
+      "纯分析；确认是传入记录事实不认证人类身份"
+    ],
+    "consumers": [
+      "src/capabilities/requirement/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/requirement/decide.test.ts#PackageDocumentText"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/requirement/projection.ts",
+    "sha256": "058c7237563b64ddbebeccd5c6c473d10d5a521aa3e94e058b3d216ec173763b",
+    "responsibility": "看板排序计数与下一责任",
+    "branches": [
+      "P0..P3→发布时间→ID；过滤分页；确认/待apply/待claim优先级"
+    ],
+    "effects": [
+      "纯视图"
+    ],
+    "consumers": [
+      "src/capabilities/requirement/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/requirement/decide.test.ts#boardCounts"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/requirement/service.ts",
+    "sha256": "39d3b4d111eb1fda436da66c529525e2ec2512500e17260640724e89f2b3aabd",
+    "responsibility": "草稿到不可变包及认领板编排",
+    "branches": [
+      "preview读Design并校验；apply复读成员digest、publish ledger→补board→撤supersedes→索引；recover精确record补板"
+    ],
+    "effects": [
+      "ledger不可变目录+board CAS；索引争用不否定权威；读取零写"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-shared-executors.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/service.test.ts#snapshot",
+      "tests/capabilities/requirement/service.test.ts#ledgerRoot"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-capture-plan.ts",
+    "sha256": "4572f7ad4b678f2261cf5b2fc71b57b2334ead88af453e8ea7ac184aa25cc4ff",
+    "responsibility": "零写捕获计划合同",
+    "branches": [
+      "configDigest与recordedBy一致；expectedDemand四项与完整Manifest封摘要"
+    ],
+    "effects": [
+      "纯数据，不授写入权限"
+    ],
+    "consumers": [
+      "src/capabilities/evidence/decide.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/decide.test.ts#streamRevision",
+      "tests/governance/evidence/managed-evidence-capture-planning-service.fixture.ts#ManagedEvidenceCapturePlan",
+      "tests/governance/evidence/managed-evidence-publication-transaction.test.ts#ManagedEvidenceCapturePlanError",
+      "tests/governance/evidence/managed-evidence-publication.fixture.ts#streamRevision"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+    "sha256": "7cca382e5febbf5f7f78f79e8bb9189407c26cf3f14a1e27f49e1e3668a6cf5e",
+    "responsibility": "实际来源捕获与隐私分类",
+    "branches": [
+      "active Demand；file稳定读/tree前后hash；reference投影；credential永阻塞；opaque/非凭证可confirmed；authority末尾复验"
+    ],
+    "effects": [
+      "只读preview；EvidenceID由Demand/sourceKey/payload决定；recordedBy配置controller"
+    ],
+    "consumers": [
+      "src/capabilities/evidence/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/decide.test.ts#ManagedEvidenceCaptureReview",
+      "tests/capabilities/evidence/service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-capture-planning-service.fixture.ts#ManagedEvidenceCapturePreview",
+      "tests/governance/evidence/managed-evidence-capture-planning-service.test.ts#ManagedEvidenceCapturePlanningServiceErrorReason",
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-reading-service.test.ts#ref",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#ref"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-configured-source-root.ts",
+    "sha256": "b5eba7caa1f1865fcc0a6faab0cbcd1c852db5921a02b7b4c8828e6955f7f7ce",
+    "responsibility": "逻辑根到当前配置物理根",
+    "branches": [
+      "repository/surface须present且realpath一致；pod-worktree须配置意图+回执"
+    ],
+    "effects": [
+      "仅打开来源根；不物化payload"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-publication-application-service.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-manifest.ts",
+    "sha256": "3c57bb26bad597d08b877db9b9432a89eb72c6ab472bee571388877cd868e244",
+    "responsibility": "证据不可变来源内容合同",
+    "branches": [
+      "Schema+typedID+payload digest+单content映射+contentReview子集排序；预留Manifest容量"
+    ],
+    "effects": [
+      "无字节/事件/验收；capture时间在创建时读钟"
+    ],
+    "consumers": [
+      "src/capabilities/evidence/decide.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-event.ts",
+      "src/governance/demand/model/demand-aggregate-state.ts",
+      "src/governance/evidence/managed-evidence-capture-plan.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-publication-stage-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction.ts",
+      "src/governance/evidence/managed-evidence-reading-service.ts",
+      "src/governance/evidence/managed-evidence-record-reader.ts",
+      "src/governance/evidence/managed-evidence-record-tree-plan.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/decide.test.ts#ref",
+      "tests/governance/evidence/managed-evidence-event-sourcing.test.ts#ManagedEvidenceManifest",
+      "tests/governance/evidence/managed-evidence-manifest.test.ts#MANAGED_EVIDENCE_MANIFEST_KIND",
+      "tests/governance/evidence/managed-evidence-publication-record-publisher.test.ts#path",
+      "tests/governance/evidence/managed-evidence-publication-stage-materializer.test.ts#path",
+      "tests/governance/evidence/managed-evidence-publication.fixture.ts#path",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#path",
+      "tests/governance/evidence/managed-evidence-record-tree-plan.test.ts#MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-publication-application-service.ts",
+    "sha256": "5d5749b488c8771eb63cefe3cdb21b8323316951d39e370bc300d955e1f25609",
+    "responsibility": "证据发布与恢复总编排",
+    "branches": [
+      "journal→stage→Event→final；Event存在前向；Event前CAS过期安全退休；complete stage不重读source/config关系"
+    ],
+    "effects": [
+      "跨资源写入；publicationAuthority明确unchanged/recoverable/current/unknown"
+    ],
+    "consumers": [
+      "src/capabilities/evidence/service.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-reading-service.test.ts#transaction"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-publication-payload-materializer.ts",
+    "sha256": "ba7fbbf0c29147c176c1d51902f1f761629266e7feb2119703cb0b1539ac6948",
+    "responsibility": "按来源物化payload",
+    "branches": [
+      "file流复制、tree双向identity、reference从Manifest重建；按缺失成员补"
+    ],
+    "effects": [
+      "仅stage/payload；不查journal、不写Manifest"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-publication-stage-materializer.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-publication-record-publisher.ts",
+    "sha256": "97ee5d522f17c8f7230f0c69d9defa204af9eeb0e70caabcbbb3f46cde9809c9",
+    "responsibility": "完整stage同根发布final",
+    "branches": [
+      "需exact journal；final存在且stage无才current；冲突/提交不确定复验winner"
+    ],
+    "effects": [
+      "同根rename；不查Event，顺序由Settlement保证"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-publication-application-service.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-publication-record-publisher.test.ts#ManagedEvidencePublicationRecordPublisherErrorReason"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-publication-stage-materializer.ts",
+    "sha256": "2d5768d9ab319365768c4e927ce5abe55932c67578dd6d90dfeb189fa0047304",
+    "responsibility": "journal约束的完整stage物化",
+    "branches": [
+      "complete重用；partial只在Manifest缺失时补；payload闭合后Manifest-last；提交后readback"
+    ],
+    "effects": [
+      "创建受管容器/stage/Manifest；不追加Event、不publish final"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-publication-application-service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-publication-stage-materializer.test.ts#ManagedEvidencePublicationStageMaterializationErrorReason"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts",
+    "sha256": "11d187bb7fc4e95480617f97df8c881d3a33aa9f7424f0f4bb14547ed8ad0ed1",
+    "responsibility": "Event不可逆边界与journal-last结算",
+    "branches": [
+      "提交精确命令；证明commit→final→事务闭合→retire journal→健康闭合；stale退休需Event与selector均缺"
+    ],
+    "effects": [
+      "追加Event、publish/retire；Event后绝不删回滚"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-publication-application-service.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#ManagedEvidencePublicationTransactionSettlementError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-publication-transaction-store.ts",
+    "sha256": "bd95ac31d11daa8ac30d01a1c984686eb9a82ffc06ef0875c01707ddc6fb9549",
+    "responsibility": "Demand唯一journal存储",
+    "branches": [
+      "absent-only create；exact load；WeakSet读回能力才能retire；提交后忽略取消完成readback"
+    ],
+    "effects": [
+      "0600 single-link日志；不决定Event边界"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-publication-application-service.ts",
+      "src/governance/evidence/managed-evidence-publication-record-publisher.ts",
+      "src/governance/evidence/managed-evidence-publication-stage-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts",
+      "src/governance/evidence/managed-evidence-record-set-inventory.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-publication-record-publisher.test.ts#source",
+      "tests/governance/evidence/managed-evidence-publication-stage-materializer.test.ts#source",
+      "tests/governance/evidence/managed-evidence-publication-transaction-store.test.ts#MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_MODE",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#source"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-publication-transaction.ts",
+    "sha256": "b8f32510fe9d124d635dc397bd4e8151804ddc59d353983a45b619e0d36abdb0",
+    "responsibility": "跨资源不可变恢复合同",
+    "branches": [
+      "capture/record计划摘要+完整Manifest+Event CAS四项/ID；无可变phase"
+    ],
+    "effects": [
+      "不复制payload；重建命令和paths"
+    ],
+    "consumers": [
+      "src/capabilities/evidence/service.ts",
+      "src/governance/evidence/managed-evidence-publication-application-service.ts",
+      "src/governance/evidence/managed-evidence-publication-payload-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-record-publisher.ts",
+      "src/governance/evidence/managed-evidence-publication-stage-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-store.ts",
+      "src/governance/evidence/managed-evidence-record-set-inventory.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/service.test.ts#capturePlan",
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#capturePlan",
+      "tests/governance/evidence/managed-evidence-publication-record-publisher.test.ts#result",
+      "tests/governance/evidence/managed-evidence-publication-stage-materializer.test.ts#capturePlan",
+      "tests/governance/evidence/managed-evidence-publication-transaction-store.test.ts#capturePlan",
+      "tests/governance/evidence/managed-evidence-publication-transaction.test.ts#ManagedEvidencePublicationTransactionErrorReason",
+      "tests/governance/evidence/managed-evidence-publication.fixture.ts#capturePlan",
+      "tests/governance/evidence/managed-evidence-reading-service.test.ts#capturePlan",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#capturePlan"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-reading-service.ts",
+    "sha256": "c81feec6f995e4b20eb752f31a576d16c4d81a28695ed5ea7839ea7842ce71f7",
+    "responsibility": "Event权威之上的证据读取",
+    "branches": [
+      "健康Demand+selector/inventory与record精确闭合，再metadata/member/complete"
+    ],
+    "effects": [
+      "只读，不决定MCP披露或内容真实性"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/capabilities/evidence/service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-reading-service.test.ts#ManagedEvidenceReadingServiceError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-record-reader.ts",
+    "sha256": "059178364d5ffb6fa198574c5cd685008c304bc01540545ed69e7d8c2ecd4921",
+    "responsibility": "单记录元数据、单成员、整树三级读取",
+    "branches": [
+      "top-level必须manifest+payload；WeakSet能力；member全文件length/hash/mode；verify整树"
+    ],
+    "effects": [
+      "只读；v1无分块摘要故无byte-range验证"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/governance/evidence/managed-evidence-reading-service.ts",
+      "src/governance/evidence/managed-evidence-record-set-inventory.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-reading-service.test.ts#ManagedEvidenceRecordReaderError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-record-set-inventory.ts",
+    "sha256": "20e2bc921fcc65dac1f344106e141917f2370497d7e58724364312392300705e",
+    "responsibility": "记录集合稳定结构清点",
+    "branches": [
+      "healthy只接完整final元数据；事务仅一个匹配stage/final；前后目录快照一致"
+    ],
+    "effects": [
+      "只读；历史payloadVerification deferred，当前事务整树验证"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.ts",
+      "src/governance/evidence/managed-evidence-reading-service.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-publication-record-publisher.test.ts#stored",
+      "tests/governance/evidence/managed-evidence-publication-stage-materializer.test.ts#stored"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-record-tree-plan.ts",
+    "sha256": "c8c18ad210d17215e642867fe4988400cbeeffc40b09d776e05e9bbee9ae8be6",
+    "responsibility": "Manifest+payload精确整树计划",
+    "branches": [
+      "Manifest文档hash与业务digest区分；0700目录/可执行文件、0600普通文件"
+    ],
+    "effects": [
+      "纯计划；要求payload先Manifest后"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-publication-payload-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-record-publisher.ts",
+      "src/governance/evidence/managed-evidence-publication-stage-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction.ts",
+      "src/governance/evidence/managed-evidence-record-reader.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-record-tree-plan.test.ts#MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-resource-catalog.ts",
+    "sha256": "9d398372cbe071c0bd116671f4bc6732edfd8168e081891939f4d1ef1b359337",
+    "responsibility": "证据资源声明",
+    "branches": [
+      "容器materialize；final manifested-tree；journal exclusive-create/exact-retire"
+    ],
+    "effects": [
+      "声明owner及私有模式，不执行"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-publication-record-publisher.ts",
+      "src/governance/evidence/managed-evidence-publication-stage-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-store.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-resource-paths-and-catalog.test.ts#MANAGED_EVIDENCE_RESOURCE_OWNER_ID"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-resource-paths.ts",
+    "sha256": "db881ac201cf65797be2b52220317653f5d0d5a1b879bacb9bd743b4c69b3443",
+    "responsibility": "Evidence final/stage及Demand唯一journal路径",
+    "branches": [
+      "typedID双向词法准入；final与stage分开"
+    ],
+    "effects": [
+      "纯路径不授予删除权限"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/governance/demand/demand-verify-gates.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.ts",
+      "src/governance/evidence/managed-evidence-publication-payload-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-stage-materializer.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-store.ts",
+      "src/governance/evidence/managed-evidence-record-reader.ts",
+      "src/governance/evidence/managed-evidence-record-set-inventory.ts",
+      "src/governance/evidence/managed-evidence-record-tree-plan.ts",
+      "src/governance/evidence/managed-evidence-resource-catalog.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#MANAGED_EVIDENCE_ROOT_REF",
+      "tests/governance/evidence/managed-evidence-publication-record-publisher.test.ts#MANAGED_EVIDENCE_ROOT_REF",
+      "tests/governance/evidence/managed-evidence-publication-stage-materializer.test.ts#MANAGED_EVIDENCE_ROOT_REF",
+      "tests/governance/evidence/managed-evidence-publication-transaction-store.test.ts#MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#MANAGED_EVIDENCE_ROOT_REF",
+      "tests/governance/evidence/managed-evidence-record-tree-plan.test.ts#evidenceId",
+      "tests/governance/evidence/managed-evidence-resource-paths-and-catalog.test.ts#MANAGED_EVIDENCE_ROOT_REF"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-source-projection.ts",
+    "sha256": "5300f452985e75873ba2cd7510ca27ce035c68f9621a426162642a8ca04a366c",
+    "responsibility": "引用来源的确定性payload",
+    "branches": [
+      "observation/link/commit投影为payload/content"
+    ],
+    "effects": [
+      "无外部读取，可由Manifest重建"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-publication-payload-materializer.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-source-selection.ts",
+    "sha256": "6795af4b8bb9073573547a0b1bf6b2d3c3eb929e7bf8e1bc077d1059fbb14e03",
+    "responsibility": "逻辑来源与kind关系准入",
+    "branches": [
+      "managed-path拒绝保留顶层目录；observation私有记录投影；https无userinfo；commit OID；transcript需present"
+    ],
+    "effects": [
+      "纯解析；链接不抓取、提交不执行Git"
+    ],
+    "consumers": [
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-configured-source-root.ts",
+      "src/governance/evidence/managed-evidence-manifest.ts",
+      "src/governance/evidence/managed-evidence-source-projection.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/decide.test.ts#url",
+      "tests/governance/evidence/managed-evidence-capture-planning-service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-source-selection.test.ts#ManagedEvidenceSourceSelectionErrorReason"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-authority-layout.ts",
+    "sha256": "0741a88ad22f09c96352b8494a021995f1b0fb26c60774e9b628ff6e4ed0975c",
+    "responsibility": "Ledger固定三容器布局",
+    "branches": [
+      "requirements/archives0755、transactions0700；absent/incomplete/conflict/current"
+    ],
+    "effects": [
+      "布局观察或幂等物化，不枚举包"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/governance/demand/demand-verify-gates.ts",
+      "src/governance/ledger/ledger-authority-store.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts"
+    ],
+    "tests": [
+      "tests/governance/ledger/ledger-authority-layout.test.ts#LEDGER_AUTHORITY_LAYOUT_DIGEST"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-authority-paths.ts",
+    "sha256": "6abf9620e5f76193db10aa59b77971a04a9849e097fd7adecab10d107a7f25f0",
+    "responsibility": "需求包、intent、lock、stage路径",
+    "branches": [
+      "仅requirement家族；typedID与成员路径词法派生"
+    ],
+    "effects": [
+      "纯路径"
+    ],
+    "consumers": [
+      "src/capabilities/tasking/service.ts",
+      "src/governance/demand/demand-acceptance-coverage.ts",
+      "src/governance/demand/model/requirement-lineage.ts",
+      "src/governance/ledger/ledger-authority-layout.ts",
+      "src/governance/ledger/ledger-authority-reader.ts",
+      "src/governance/ledger/ledger-authority-store-contract.ts",
+      "src/governance/ledger/ledger-record-publication-intent.ts",
+      "src/governance/ledger/ledger-record-publication-recovery.ts",
+      "src/governance/ledger/ledger-resource-catalog.ts"
+    ],
+    "tests": [
+      "tests/governance/ledger/ledger-record-publication-intent.test.ts#ledgerRecordPublicationIntentRef"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-authority-reader.ts",
+    "sha256": "96b9b8dde6911bbce6a277c2435320fd2c8f67cebb1368340a819ddd73066b5d",
+    "responsibility": "完整目录闭合与成员引用",
+    "branches": [
+      "稳定树所有节点/库存/digest；ref record/member语义绑定；具体成员复读"
+    ],
+    "effects": [
+      "只读final，不观察其他事务目录"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts",
+      "src/governance/ledger/ledger-authority-store.ts",
+      "src/governance/ledger/ledger-record-publication-storage.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-authority-record.ts",
+    "sha256": "8d451340e1d9523b5aa0a9cc3365a43f35357bee98c3c2e995f7cc6c966143aa",
+    "responsibility": "不可变需求record codec",
+    "branches": [
+      "主文档恰各一、路径排序大小写无冲突、章节唯一且属于成员；research与not-applicable对等"
+    ],
+    "effects": [
+      "纯编解码；必需章节在发布切片，不在历史codec"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/prompt.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/ledger/ledger-authority-paths.ts",
+      "src/governance/ledger/ledger-authority-reader.ts",
+      "src/governance/ledger/ledger-authority-store-contract.ts",
+      "src/governance/ledger/ledger-authority-store.ts",
+      "src/governance/ledger/ledger-record-publication-intent.ts",
+      "src/governance/ledger/ledger-record-publication-storage.ts",
+      "src/governance/ledger/ledger-record-publisher.ts",
+      "src/governance/ledger/ledger-resource-catalog.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/requirement-board.fixture.ts#RequirementRecord",
+      "tests/governance/ledger/ledger-authority-record.test.ts#RequirementDocumentRole",
+      "tests/governance/ledger/ledger-authority-store.test.ts#RequirementRecord",
+      "tests/governance/ledger/ledger-record-publication-intent.test.ts#RequirementRecord",
+      "tests/governance/ledger/ledger-resource-catalog.test.ts#kind",
+      "tests/governance/ledger/requirement-package.fixture.ts#RequirementRecord"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-authority-storage-policy.ts",
+    "sha256": "fd53bdbf8e85cb4f575f6a3c9497cdb0ac919516c96b92acf836d97ba185d3a0",
+    "responsibility": "Ledger权限与容量",
+    "branches": [
+      "durable0755/0644、private0700/0600；成员4MiB/树16MiB/18文档"
+    ],
+    "effects": [
+      "常量，无I/O"
+    ],
+    "consumers": [
+      "src/governance/ledger/ledger-authority-layout.ts",
+      "src/governance/ledger/ledger-authority-reader.ts",
+      "src/governance/ledger/ledger-authority-store-contract.ts",
+      "src/governance/ledger/ledger-record-publication-intent.ts",
+      "src/governance/ledger/ledger-record-publication-storage.ts",
+      "src/governance/ledger/ledger-record-publisher.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-authority-store-contract.ts",
+    "sha256": "bb69483537303258b8bee3c30307b26215c32d468ecaa96d628559e886524915",
+    "responsibility": "Ledger加载/引用/错误合同",
+    "branches": [
+      "passive options仅signal；节点模式单链接校验"
+    ],
+    "effects": [
+      "数据与错误，不持业务状态"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/prompt.ts",
+      "src/governance/ledger/ledger-authority-layout.ts",
+      "src/governance/ledger/ledger-authority-reader.ts",
+      "src/governance/ledger/ledger-authority-store.ts",
+      "src/governance/ledger/ledger-record-publication-recovery.ts",
+      "src/governance/ledger/ledger-record-publication-storage.ts",
+      "src/governance/ledger/ledger-record-publisher.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/requirement-board.fixture.ts#LoadedLedgerAuthorityRecord",
+      "tests/governance/ledger/requirement-package.fixture.ts#LedgerAuthorityMemberInput"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-authority-store.ts",
+    "sha256": "b2a6f63fea10a500113f249bff30827e7f008238178e879936cd07a9ffacdb95",
+    "responsibility": "Ledger根作用域公共门面",
+    "branches": [
+      "initialize/load/publish/recover/resolve；批量同record只load一次、32引用8并发"
+    ],
+    "effects": [
+      "委托只读/发布，持有已打开根不自动关闭"
+    ],
+    "consumers": [
+      "src/capabilities/demand/context.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/observation/service.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/demand/demand-acceptance-coverage.ts",
+      "src/governance/demand/demand-operation-authority-context.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/model/demand-authority.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/governance/review/demand-post-acceptance-route.ts",
+      "src/governance/tasking/task-package.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-active-guard.test.ts#LedgerAuthorityStore",
+      "tests/governance/demand/demand-event-sourcing-publication-service.fixture.ts#LedgerAuthorityStore",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#LedgerAuthorityStore",
+      "tests/governance/demand/demand-event-sourcing-publication-transaction.test.ts#requirementId",
+      "tests/governance/demand/demand-identity-authority.test.ts#LedgerAuthorityStore",
+      "tests/governance/demand/demand-research-completion.test.ts#LedgerAuthorityStore",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#LedgerAuthorityStore",
+      "tests/governance/ledger/ledger-authority-layout.test.ts#LedgerAuthorityStore",
+      "tests/governance/ledger/ledger-authority-store.test.ts#record",
+      "tests/governance/ledger/requirement-package.fixture.ts#record",
+      "tests/governance/tasking/target-task-planning-service.fixture.ts#LedgerAuthorityStore",
+      "tests/workspace/maintenance/wakeflow-static-materialization-preview.test.ts#LedgerAuthorityStore"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-record-publication-intent.ts",
+    "sha256": "1ff0c8f2895b84af836a680dfc7ee485671e18758c3720980af5b39ef4c0f1ff",
+    "responsibility": "精简不可变发布意图",
+    "branches": [
+      "record+treePlan+派生paths一致；成员正文不入intent"
+    ],
+    "effects": [
+      "纯codec；缺失stage字节无法从摘要生成"
+    ],
+    "consumers": [
+      "src/governance/ledger/ledger-record-publication-recovery.ts",
+      "src/governance/ledger/ledger-record-publication-storage.ts",
+      "src/governance/ledger/ledger-record-publisher.ts"
+    ],
+    "tests": [
+      "tests/governance/ledger/ledger-authority-store.test.ts#target",
+      "tests/governance/ledger/ledger-record-publication-intent.test.ts#LedgerRecordPublicationIntentError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-record-publication-recovery.ts",
+    "sha256": "08fb8d49e120bf811cab7a160ca89f39a5c5c4ff772ee8601cebaf004087e4cf",
+    "responsibility": "发布前向恢复",
+    "branches": [
+      "锁前后exact intent；final在则结算；stage完整才publish；partial/absent需原输入"
+    ],
+    "effects": [
+      "不虚构成员；不会阻断其他已提交记录"
+    ],
+    "consumers": [
+      "src/governance/ledger/ledger-authority-store.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-record-publication-storage.ts",
+    "sha256": "43dd10fd265d1cd259329604274c79a6207f484bc3da1e45f75bc3c552449208",
+    "responsibility": "逐记录物理协调与读回",
+    "branches": [
+      "inactive锁可退休；journal/stage模式验证；exact tree publish和intent精确retire"
+    ],
+    "effects": [
+      "只动该记录事务资源；不解释成员输入"
+    ],
+    "consumers": [
+      "src/governance/ledger/ledger-record-publication-recovery.ts",
+      "src/governance/ledger/ledger-record-publisher.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-record-publisher.ts",
+    "sha256": "652eb6a5c47d13168d2219fa6c86a1941dcfce1d56fea9c8e7638a728426b046",
+    "responsibility": "逐需求包正常发布",
+    "branches": [
+      "锁内exact intent；既有final严格复用；无归属stage拒绝；intent→stage→publish→读回→retire"
+    ],
+    "effects": [
+      "0755/0644共享包目录，0700父下stage；不可覆盖异内容"
+    ],
+    "consumers": [
+      "src/governance/ledger/ledger-authority-store.ts"
+    ],
+    "tests": [
+      "未覆盖：本轮未找到该文件直接测试调用；参见模块纵切的间接覆盖与边级说明"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/ledger/ledger-resource-catalog.ts",
+    "sha256": "2276f01ba94644cc09d445ae362f4b9d11acba00f983ae116c541a380136e83b",
+    "responsibility": "Ledger资源与允许操作声明",
+    "branches": [
+      "静态三容器、record树/成员immutable、intent/lock私有"
+    ],
+    "effects": [
+      "数据声明，不执行发布"
+    ],
+    "consumers": [
+      "src/governance/ledger/ledger-authority-layout.ts",
+      "src/governance/ledger/ledger-record-publication-storage.ts",
+      "src/workspace/wakeflow-workspace-static-resource-matrix.ts"
+    ],
+    "tests": [
+      "tests/governance/ledger/ledger-resource-catalog.test.ts#WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG",
+      "tests/workspace/wakeflow-workspace-static-resource-matrix.test.ts#WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/observation/active-projection-facts.ts",
+    "sha256": "fd814f043917b8fa1d3392eeaad1601936d093e18db455b56a86a7b0384043a5",
+    "responsibility": "观察到人读事实及已接受分支",
+    "branches": [
+      "投影剔除瞬时宿主/检出/仓库/归档；缺读Demand写coverage且禁止退休；完整branch集才推断缺席"
+    ],
+    "effects": [
+      "纯派生；merge只支持异分支尖端等于当前HEAD，不能验证祖先"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/governance/observation/active-projection-refresh.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/service.test.ts#targets",
+      "tests/governance/observation/active-projection-facts.test.ts#map"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/observation/active-projection-refresh.ts",
+    "sha256": "0d5707abaaf54058dea5ae41829b8fd207e293034d19e7bfa2d9ae7ed911c533",
+    "responsibility": "变更后投影刷新",
+    "branches": [
+      "锁内观察→facts→render；分类环境失败静默；mutation前取消拒绝，返回后取消不否定提交"
+    ],
+    "effects": [
+      "派生页面写入；编程错误仍上抛"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/capabilities/workspace/maintain-workspace.ts"
+    ],
+    "tests": [
+      "tests/governance/observation/active-projection-facts.test.ts#placement",
+      "tests/governance/observation/active-projection-facts.test.ts#refreshActiveProjection"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/observation/archived-demand-observation.ts",
+    "sha256": "1327484694507081cf4d2e7c2c66dd93b9c62fe86e3652962f6d51ccba163f52",
+    "responsibility": "仍存worktree Pod的归档评审补读",
+    "branches": [
+      "候选新到旧；清单1024、snapshot64双预算；primary不占snapshot；unreadable与skipped分开"
+    ],
+    "effects": [
+      "只读归档payload，不还原活动Demand"
+    ],
+    "consumers": [
+      "src/governance/observation/workspace-observation.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/service.test.ts#ARCHIVED_DEMAND_SCAN_MAXIMUM",
+      "tests/capabilities/observation/service.test.ts#executeStatusRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/observation/demand-archive-locator.ts",
+    "sha256": "f469c3386dfecd9b3b11e134c563093e442d7795d496696d8b96e3204d431cd6",
+    "responsibility": "最近归档小回执定位",
+    "branches": [
+      "按10位修订最大目录；局部校验outcome/time/event/digest/pod"
+    ],
+    "effects": [
+      "只读摘要，不全验证归档manifest或payload"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/observation/archived-demand-observation.ts"
+    ],
+    "tests": [
+      "tests/governance/observation/demand-archive-locator.test.ts#MAXIMUM_ARCHIVES_PER_DEMAND"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/observation/observation-policy.ts",
+    "sha256": "9c4cb07fe8c846c4638f7c1e7cff1b884ef47bf59cb3ed554f53f7d299309693",
+    "responsibility": "生效阈值汇总",
+    "branches": [
+      "直接引用各owner阈值、无自有默认分支"
+    ],
+    "effects": [
+      "纯报告，不是可配置策略owner"
+    ],
+    "consumers": [
+      "src/governance/observation/workspace-observation.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/service.test.ts#WAKEFLOW_OBSERVATION_POLICY",
+      "tests/governance/observation/active-projection-facts.test.ts#WAKEFLOW_OBSERVATION_POLICY"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/observation/repository-pointer-observation.ts",
+    "sha256": "8c2817623509ca6eade0e90c8addeecd829f01e58f99624300b36cdda725f545",
+    "responsibility": "Git指针只读观察",
+    "branches": [
+      "HEAD/loose/packed/worktree pointers；loose优先；branch读取不全标issue；主检出.git必须目录"
+    ],
+    "effects": [
+      "不spawn Git、不检查工作树dirty、不读对象图"
+    ],
+    "consumers": [
+      "src/governance/observation/active-projection-facts.ts",
+      "src/governance/observation/workspace-observation.ts"
+    ],
+    "tests": [
+      "tests/governance/observation/repository-pointer-observation.test.ts#repositoryBranchesComplete"
+    ],
+    "findings": [
+      "没有对象图，因此不能用此模块证明祖先合并或工作树清洁"
+    ],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/observation/workspace-observation.ts",
+    "sha256": "b5ecc05ff1d4c92e6e666860b0c60675486bc0e232ec9cabedd0f0b22c0ad7e8",
+    "responsibility": "分域一次观察",
+    "branches": [
+      "full额外host/repo/archive；domain带reason异常隔离unavailable，中止上抛；hook全扫描后才发布本地聚合"
+    ],
+    "effects": [
+      "只读；不能将空列表推断为不存在；不提供跨域原子快照"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/governance/observation/active-projection-facts.ts",
+      "src/governance/observation/active-projection-refresh.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/service.test.ts#ObservedDemand",
+      "tests/governance/observation/active-projection-facts.test.ts#ObservedDomain",
+      "tests/governance/observation/workspace-observation.test.ts#WorkspaceObservation"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/pod/pod-state.ts",
+    "sha256": "d3b2bb918e66cbdbb4d9ae63f846ff6c8dbaa0acd744c9d736404660ab83d637",
+    "responsibility": "Pod执行环境状态派生",
+    "branches": [
+      "open全部绑定+回执同代+检出在→ready，否则creating；closing全清→closed"
+    ],
+    "effects": [
+      "纯视图，四态不单独落盘"
+    ],
+    "consumers": [
+      "src/capabilities/pod/decide.ts",
+      "src/governance/observation/workspace-observation.ts"
+    ],
+    "tests": [
+      "tests/capabilities/pod/decide.test.ts#derivePodState"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/pod/worktree-disposal.ts",
+    "sha256": "fc80e9853d37332f7bf3183fdf91a53ea839637df2b2fa9291525bd812418b31",
+    "responsibility": "检出处置建议文本",
+    "branches": [
+      "已锁先unlock再remove；POSIX引用与512字符上限；host备选按profile选择"
+    ],
+    "effects": [
+      "只给建议，不执行；过长路径截断需Agent核对完整路径"
+    ],
+    "consumers": [
+      "src/capabilities/observation/decide.ts",
+      "src/capabilities/pod/service.ts"
+    ],
+    "tests": [
+      "tests/governance/pod/worktree-disposal.test.ts#REMOVE_COMMAND_PREFIX"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/active-projection.ts",
+    "sha256": "2d258e98fbc60cec04d4074bf476225d4dead3b550f9dc8cdcb8d3997d300dc7",
+    "responsibility": "活动布局与人读页面渲染发布",
+    "branches": [
+      "current/missing/stale/unsafe分类；任一unsafe零写；锁内render/CAS；完整活动集合才退休标记页面；inactive锁恢复"
+    ],
+    "effects": [
+      "0700目录0600页面；不读配置事件，输入事实不成为权威"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts",
+      "src/governance/observation/active-projection-facts.ts",
+      "src/governance/observation/active-projection-refresh.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts",
+      "src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.ts",
+      "src/workspace/wakeflow-active-fresh-projection.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-active-guard.test.ts#materializeActiveLayout",
+      "tests/governance/demand/demand-event-sourcing-publication-service.fixture.ts#materializeActiveLayout",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#status",
+      "tests/governance/observation/active-projection-facts.test.ts#status",
+      "tests/governance/tasking/target-task-planning-service.fixture.ts#created",
+      "tests/kernel/active-projection.test.ts#nodeDigest",
+      "tests/workspace/maintenance/wakeflow-static-materialization-preview.test.ts#current"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/append-command.ts",
+    "sha256": "af12ed351bfb6a2bc5f2b635d83ecef65499a02e111eec7f07c1fc787e670269",
+    "responsibility": "追加形状的确定性身份绑定",
+    "branches": [
+      "幂等键合法且修订非负→派生commitId/requestDigest→切片execute→next/result；不自建幂等存储"
+    ],
+    "effects": [
+      "委托切片提交；本身无文件写入"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts"
+    ],
+    "tests": [
+      "tests/kernel/append-command.test.ts#AppendCommandEnvelope"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/command-shell.ts",
+    "sha256": "15cdde10caca0d1308de41726ef086bb5bff544a805aa0e83cd6f3eb554a91e5",
+    "responsibility": "公共调用统一准入与资源关闭",
+    "branches": [
+      "JSON与字节上限→schema→根→admit→请求私有值扫描→open→body→输出边界；主体失败优先于close失败"
+    ],
+    "effects": [
+      "打开并关闭工作区根及切片上下文；本身不决定业务写入"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/observation/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/kernel/append-command.ts",
+      "src/kernel/publication-transaction.ts"
+    ],
+    "tests": [
+      "tests/kernel/command-shell.test.ts#runCommandShell"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/error.ts",
+    "sha256": "5a03f376c2842a99fbe5d92e8572b69697c51c9f0cac272c9e5ab61b9e04384d",
+    "responsibility": "封闭公开错误字段与原始cause隔离",
+    "branches": [
+      "短reason/结构path/details准入；failWithBlockers截取8项并清理自由文本；陌生错误unexpected"
+    ],
+    "effects": [
+      "无I/O；cause不进公共回执"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/contract.ts",
+      "src/capabilities/delivery/prompt.ts",
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/archive.ts",
+      "src/capabilities/demand/context.ts",
+      "src/capabilities/demand/contract.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/endpoint/contract.ts",
+      "src/capabilities/endpoint/locator-store.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/evidence/contract.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/observation/contract.ts",
+      "src/capabilities/observation/service.ts",
+      "src/capabilities/pod/contract.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/requirement/contract.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/capabilities/result-review/contract.ts",
+      "src/capabilities/result-review/prompt.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/contract.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/capabilities/workspace/maintain-workspace.ts",
+      "src/entrypoints/wakeflow-public-mcp-tool.ts",
+      "src/governance/demand/demand-acceptance-coverage.ts",
+      "src/governance/demand/demand-runtime-recovery.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-package.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-configured-source-root.ts",
+      "src/governance/evidence/managed-evidence-publication-application-service.ts",
+      "src/governance/observation/active-projection-facts.ts",
+      "src/governance/observation/active-projection-refresh.ts",
+      "src/governance/observation/archived-demand-observation.ts",
+      "src/governance/observation/demand-archive-locator.ts",
+      "src/governance/observation/repository-pointer-observation.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/kernel/active-projection.ts",
+      "src/kernel/append-command.ts",
+      "src/kernel/command-shell.ts",
+      "src/kernel/event-stream/stream-index.ts",
+      "src/kernel/hook-observation-directory.ts",
+      "src/kernel/hook-observations.ts",
+      "src/kernel/ids.ts",
+      "src/kernel/layout.ts",
+      "src/kernel/limits.ts",
+      "src/kernel/pod-mutation-lock.ts",
+      "src/kernel/pod-worktree-receipts.ts",
+      "src/kernel/privacy-scan.ts",
+      "src/kernel/publication-transaction.ts",
+      "src/kernel/redaction.ts",
+      "src/kernel/requirement-board.ts",
+      "src/kernel/tool-registry.ts",
+      "src/kernel/work-claims.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts",
+      "src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-document.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts"
+    ],
+    "tests": [
+      "tests/capabilities/delivery/service.test.ts#entries",
+      "tests/capabilities/demand/pod-concurrency.test.ts#WakeflowError",
+      "tests/capabilities/demand/service.test.ts#WakeflowError",
+      "tests/capabilities/endpoint/locator-store.test.ts#WakeflowError",
+      "tests/capabilities/endpoint/service.test.ts#WakeflowError",
+      "tests/capabilities/evidence/service.test.ts#entries",
+      "tests/capabilities/observation/service.test.ts#WakeflowError",
+      "tests/capabilities/pod/service.test.ts#WakeflowError",
+      "tests/capabilities/requirement/service.test.ts#WakeflowError",
+      "tests/capabilities/result-review/evidence-citation.test.ts#toPublicDetails",
+      "tests/capabilities/result-review/service.test.ts#isWakeflowError",
+      "tests/capabilities/tasking/service.test.ts#isWakeflowError",
+      "tests/capabilities/workspace/maintain-workspace.test.ts#isWakeflowError",
+      "tests/capabilities/workspace/private-mode-reconcile.test.ts#isWakeflowError",
+      "tests/capabilities/workspace/reconfigure-add-repository.test.ts#isWakeflowError",
+      "tests/entrypoints/wakeflow-maintenance-entrypoints.test.ts#isWakeflowError",
+      "tests/entrypoints/wakeflow-public-mcp-cancellation.test.ts#WakeflowError",
+      "tests/entrypoints/wakeflow-public-mcp-error-envelope.test.ts#WakeflowError",
+      "tests/governance/demand/demand-active-guard.test.ts#WakeflowError",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#WakeflowError",
+      "tests/governance/observation/active-projection-facts.test.ts#WakeflowError",
+      "tests/governance/observation/demand-archive-locator.test.ts#WakeflowError",
+      "tests/governance/observation/repository-pointer-observation.test.ts#WakeflowError",
+      "tests/governance/observation/workspace-observation.test.ts#WakeflowError",
+      "tests/kernel/active-projection.test.ts#entries",
+      "tests/kernel/append-command.test.ts#isWakeflowError",
+      "tests/kernel/command-shell.test.ts#isWakeflowError",
+      "tests/kernel/error.test.ts#WakeflowError",
+      "tests/kernel/hook-observations.test.ts#entries",
+      "tests/kernel/ids.test.ts#isWakeflowError",
+      "tests/kernel/limits.test.ts#isWakeflowError",
+      "tests/kernel/pod-worktree-receipts.test.ts#entries",
+      "tests/kernel/privacy-scan.test.ts#isWakeflowError",
+      "tests/kernel/publication-transaction.test.ts#isWakeflowError",
+      "tests/kernel/redaction.test.ts#isWakeflowError",
+      "tests/kernel/requirement-board.test.ts#WakeflowError",
+      "tests/kernel/stream-index.test.ts#isWakeflowError",
+      "tests/kernel/tool-registry.test.ts#isWakeflowError",
+      "tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts#entries"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/event-stream/stream-index.ts",
+    "sha256": "e38cfee947eaa2175fb2eef083e770e0cb4048d3eeb7f3611917950fd2c05a0b",
+    "responsibility": "事件身份与类型索引检查点",
+    "branches": [
+      "连续提交摘要/修订/ID准入；byType与events精确一致；坏或旧索引回退；同序号不可替换"
+    ],
+    "effects": [
+      "可重建索引；发布/退休durability none；不是事件权威"
+    ],
+    "consumers": [
+      "src/governance/demand/demand-resource-catalog.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store.ts"
+    ],
+    "tests": [
+      "tests/kernel/stream-index.test.ts#IndexableCommit"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/hook-observation-directory.ts",
+    "sha256": "99cf7c84e4da4c33b822e793e5d040fffd19e6a01b329d5341cbf8b899de4e2c",
+    "responsibility": "hook平铺及日期分片目录访问",
+    "branches": [
+      "2048项分页稳定快照；只进入合法UTC日/两位前缀0700目录；sinceDay/recordId剪枝"
+    ],
+    "effects": [
+      "只读；未知节点交读者诊断、不跟随删除"
+    ],
+    "consumers": [
+      "src/kernel/hook-observations.ts"
+    ],
+    "tests": [
+      "tests/kernel/hook-observations.test.ts#readHostHookObservations"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/hook-observations.ts",
+    "sha256": "7ef942624da86c3e81bde9ee4c09f51372ba2290714e6bfa24710a8357c15702",
+    "responsibility": "私有hook事实的确定性写入和完整读取",
+    "branches": [
+      "旧平铺重试原地；持久v1严格解析后规范事实比较，旧可选artifactManifestDigest缺省null；新日期/前缀分片；query limit显式complete；扫描8项一批；created后4096检查预算按龄修剪"
+    ],
+    "effects": [
+      "0700目录0600文件；保留30天，未来跳时以其他记录钳制；仅精确退休已知过期节点"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/entrypoints/wakeflow-hook-observer.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-source-selection.ts",
+      "src/governance/observation/observation-policy.ts",
+      "src/governance/observation/workspace-observation.ts"
+    ],
+    "tests": [
+      "tests/capabilities/delivery/service.test.ts#code",
+      "tests/capabilities/endpoint/service.test.ts#code",
+      "tests/capabilities/evidence/service.test.ts#code",
+      "tests/capabilities/observation/service.test.ts#code",
+      "tests/capabilities/pod/service.test.ts#code",
+      "tests/capabilities/workspace/maintain-workspace-reconcile-repair.test.ts#code",
+      "tests/entrypoints/wakeflow-hook-observer.test.ts#HostHookEvent",
+      "tests/governance/delivery/delivery-workspace.fixture.ts#cwd",
+      "tests/governance/evidence/managed-evidence-capture-planning-service.test.ts#code",
+      "tests/governance/review/controller-implementation-review-decision-service.fixture.ts#cwd",
+      "tests/kernel/hook-observations.test.ts#HostHookObservationInput",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#code"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "followupReview": {
+      "date": "2026-10-02",
+      "previousSha256": "ec2907fb877c82f468fcaa2c12b18639523cc77045a20b8d10ad45d313ba3d48",
+      "scope": "sameObservationDocument及writeHostHookObservation两处调用；撤销这三个差异的内存文本SHA与previousSha256完全相等",
+      "conclusion": "重放比较规范事实而非旧原始字节；保留旧平铺位置和原字节；其余已审阅字节未变",
+      "tests": [
+        "tests/kernel/hook-observations.test.ts#writeHostHookObservation"
+      ],
+      "testAssertionReview": "重读可选manifest字段测试的新断言：重试current、原平铺路径、旧bytes完全不变；本分支未重新运行根测试"
+    }
+  },
+  {
+    "path": "src/kernel/ids.ts",
+    "sha256": "acf2e6d006bc734194f520f589a297309df1e9289c7054376b278d152b28271c",
+    "responsibility": "命名空间与输入派生稳定typed ID",
+    "branches": [
+      "幂等键1至128字符；commit身份只从Demand+幂等键派生"
+    ],
+    "effects": [
+      "无I/O；不以物理路径为身份"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/decide.ts",
+      "src/capabilities/evidence/decide.ts",
+      "src/capabilities/pod/decide.ts",
+      "src/capabilities/requirement/decide.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/result/target-result-callback.ts",
+      "src/governance/result/target-result.ts",
+      "src/kernel/append-command.ts",
+      "src/kernel/work-claims.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/service.test.ts#deriveDurableId",
+      "tests/governance/result/target-result.test.ts#deriveDurableId",
+      "tests/kernel/append-command.test.ts#deriveDemandCommitId",
+      "tests/kernel/ids.test.ts#parseIdempotencyKey"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/layout.ts",
+    "sha256": "50aad133d8ab72639b636f8068b44f113b91e6dd2d3c38df5fe2dcd7d731dc44",
+    "responsibility": "活动面及宿主私有路径词汇",
+    "branches": [
+      "校验Demand/requirement/host/pod/repository身份；archive revision至少2"
+    ],
+    "effects": [
+      "纯路径；不创建目录"
+    ],
+    "consumers": [
+      "src/capabilities/demand/archive.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/endpoint/locator-store.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/observation/decide.ts",
+      "src/capabilities/observation/service.ts",
+      "src/entrypoints/wakeflow-hook-observer.ts",
+      "src/governance/demand/demand-runtime-recovery.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/demand/publication/demand-publication-paths.ts",
+      "src/governance/observation/demand-archive-locator.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/hosts/claude-code/claude-code-host-asset-operation.ts",
+      "src/hosts/claude-code/claude-code-statusline-asset.ts",
+      "src/hosts/claude-code/claude-code-tmux-asset.ts",
+      "src/kernel/active-projection.ts",
+      "src/kernel/hook-observation-directory.ts",
+      "src/kernel/hook-observations.ts",
+      "src/kernel/pod-worktree-receipts.ts",
+      "src/kernel/requirement-board.ts",
+      "src/kernel/work-claims.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts",
+      "src/workspace/wakeflow-active-static-resource-catalog.ts",
+      "src/workspace/wakeflow-shared-coordination-layout.ts",
+      "src/workspace/workspace-host-resource-catalog.ts",
+      "src/workspace/workspace-host-runtime-paths.ts"
+    ],
+    "tests": [
+      "tests/artifacts/plugin-artifacts.test.ts#hostHookObservationsRootRef",
+      "tests/capabilities/delivery/service.test.ts#hostHookObservationsRootRef",
+      "tests/capabilities/demand/service.test.ts#demandLifecycleJournalRef",
+      "tests/capabilities/observation/decide.test.ts#WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF",
+      "tests/capabilities/observation/service.test.ts#WAKEFLOW_ACTIVE_CURRENT_ROOT_REF",
+      "tests/entrypoints/wakeflow-hook-observer.test.ts#hostHookObservationsRootRef",
+      "tests/entrypoints/wakeflow-maintenance-entrypoints.test.ts#WORK_CLAIMS_ROOT_REF",
+      "tests/entrypoints/wakeflow-public-mcp-lifecycle.test.ts#repository",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#REQUIREMENT_BOARD_INDEX_REF",
+      "tests/governance/observation/active-projection-facts.test.ts#WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF",
+      "tests/governance/observation/demand-archive-locator.test.ts#demandArchivesRootRef",
+      "tests/governance/observation/workspace-observation.test.ts#REQUIREMENT_BOARD_ROOT_REF",
+      "tests/hosts/claude-code/claude-code-hook-fragment.test.ts#parseWakeflowHostId",
+      "tests/hosts/codex/codex-hook-fragment.test.ts#parseWakeflowHostId",
+      "tests/kernel/active-projection.test.ts#WAKEFLOW_ACTIVE_ROOT_REF",
+      "tests/kernel/hook-observations.test.ts#hostHookObservationsRootRef",
+      "tests/kernel/requirement-board.test.ts#REQUIREMENT_BOARD_INDEX_REF",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/limits.ts",
+    "sha256": "0e122f3ec34cc33df90e13c66cea0eeb1e67657182fa1f941b81e57137f638a2",
+    "responsibility": "公共请求结果与prompt分页容量",
+    "branches": [
+      "请求2MiB、结果24MiB、prompt65536字符、列表256项；越界分别capacity/output-boundary"
+    ],
+    "effects": [
+      "无I/O；24MiB仍是代码当前值"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-tool.ts",
+      "src/kernel/command-shell.ts"
+    ],
+    "tests": [
+      "tests/kernel/limits.test.ts#WAKEFLOW_LIMITS"
+    ],
+    "findings": [
+      "publicResultBytes仍24MiB，代码注释中的未来4MiB不应画作当前"
+    ],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/markdown-sections.ts",
+    "sha256": "d6e51ef2a7dc64e412d85063fd45a557041c883d10042bdb41d567a80a41aeac",
+    "responsibility": "H2切章与顶层列表解析",
+    "branches": [
+      "忽略围栏；高级标题结束、低级归正文；顶层列表生成ordinal；续行并入"
+    ],
+    "effects": [
+      "无I/O；并非完整Markdown解释器"
+    ],
+    "consumers": [
+      "src/capabilities/requirement/decide.ts",
+      "src/kernel/requirement-acceptance.ts"
+    ],
+    "tests": [
+      "tests/governance/ledger/requirement-package.fixture.ts#normalizeMarkdownAnchor",
+      "tests/kernel/markdown-sections.test.ts#normalizeMarkdownAnchor"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/next-projection.ts",
+    "sha256": "195524a69aa071b7c0ccfcb08299d04355dc95f2f3304dc7d196aad82b913506",
+    "responsibility": "路由事实到下一责任建议",
+    "branches": [
+      "terminal/无frontier归none；awaiting-decision归user；blocked不建议tool；未知前沿默认controller"
+    ],
+    "effects": [
+      "纯视图，不驱动状态"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/context.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/endpoint/projection.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/evidence/decide.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/observation/decide.ts",
+      "src/capabilities/observation/service.ts",
+      "src/capabilities/pod/decide.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/requirement/projection.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/capabilities/workspace/maintain-workspace.ts",
+      "src/governance/observation/active-projection-facts.ts",
+      "src/kernel/append-command.ts",
+      "src/kernel/publication-transaction.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/decide.test.ts#deriveNextProjection",
+      "tests/governance/demand/demand-research-completion.test.ts#deriveNextProjection",
+      "tests/kernel/next-projection.test.ts#NEXT_FRONTIER_TABLE"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/pod-mutation-lock.ts",
+    "sha256": "f5636899851664a0604cb4fc792474c198e81e7614249ab75e26ff8de821fc65",
+    "responsibility": "按pod隔离短变更临界区",
+    "branches": [
+      "仅退休已证明inactive锁；10秒等待；aborted与可重试并发冲突分类"
+    ],
+    "effects": [
+      "私有pod-mutations锁目录0700；不保存业务状态"
+    ],
+    "consumers": [
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/pod/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/pod-concurrency.test.ts#executeDemandCreationRequest",
+      "tests/capabilities/demand/pod-concurrency.test.ts#executePodRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/pod-worktree-receipts.ts",
+    "sha256": "5b46b1f78954fca9e0a82838e6eb842daa640fe648a2946f37409aa7b5b97111",
+    "responsibility": "会话检出观察准入及私有回执",
+    "branches": [
+      "porcelain与session cwd/common/.git/backpointer/HEAD核对；排除主检出/bare/prunable；跨pod同路径检查"
+    ],
+    "effects": [
+      "不spawn Git；写/换代/退休私有回执；retirePodReceipts删除自有目录"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-configured-source-root.ts",
+      "src/governance/observation/workspace-observation.ts"
+    ],
+    "tests": [
+      "tests/governance/observation/active-projection-facts.test.ts#head",
+      "tests/kernel/pod-worktree-receipts.test.ts#head"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/privacy-scan.ts",
+    "sha256": "f8f39b1f994c403ae55b77221b0476ac923a62f39667aa4af83ddde4c39f0c53",
+    "responsibility": "凭证、路径与UUID内容扫描",
+    "branches": [
+      "凭证三类不可豁免；路径根白名单与typed ID前缀；仅返回位置类别"
+    ],
+    "effects": [
+      "只读文本，拒绝而非修改"
+    ],
+    "consumers": [
+      "src/capabilities/demand/decide.ts",
+      "src/capabilities/requirement/decide.ts",
+      "src/capabilities/result-review/decide.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/result-review/decide.test.ts#DEFAULT_ALLOWED_ID_PREFIXES",
+      "tests/kernel/privacy-scan.test.ts#DEFAULT_ALLOWED_ID_PREFIXES"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/prompt-digest.ts",
+    "sha256": "b5184f63139f33d0116fbef7db1b7dcbf007cda35a34282ac897bfa983e83039",
+    "responsibility": "投递与hook共用prompt摘要",
+    "branches": [
+      "trim后空或超过65536字符返回null，否则UTF8 SHA256"
+    ],
+    "effects": [
+      "只散列，不记录正文"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-hook-observer.ts",
+      "src/governance/delivery/delivery-envelope.ts"
+    ],
+    "tests": [
+      "tests/kernel/prompt-digest.test.ts#DELIVERY_PROMPT_MAXIMUM_CHARACTERS"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/publication-transaction.ts",
+    "sha256": "c0340a2087d12a7ae51d631a4d50d045a6dea2e11d9179171ee0bc9171bba146",
+    "responsibility": "preview/apply/recover共用效果外壳",
+    "branches": [
+      "preview只plan；apply重算并要求ready且digest相等；recover只operationId交给领域owner"
+    ],
+    "effects": [
+      "具体效果只经注入apply/recover"
+    ],
+    "consumers": [
+      "src/capabilities/demand/context.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/capabilities/workspace/maintain-workspace.ts"
+    ],
+    "tests": [
+      "tests/kernel/publication-transaction.test.ts#PublicationTransactionEnvelope"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/redaction.ts",
+    "sha256": "6af9177c86be063145e1c77d199ab2110734aea03fdb552b81bdd0aa6419b3b3",
+    "responsibility": "公共JSON私有值边界",
+    "branches": [
+      "字符串和值/键递归扫描；短于2字符不纳入；错误path清洗"
+    ],
+    "effects": [
+      "不输出命中原文；无I/O"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-tool.ts",
+      "src/kernel/command-shell.ts"
+    ],
+    "tests": [
+      "tests/kernel/redaction.test.ts#createRedactionBoundary"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/requirement-acceptance.ts",
+    "sha256": "07b8cdac41f78701dc9a78e398e13312ff56f6f90a56b08e02c9a026230ed897",
+    "responsibility": "发布规划完成共用验收语法",
+    "branches": [
+      "首个已知验收H2的顶层列表形成ac-1等；段落表格或缺节为空"
+    ],
+    "effects": [
+      "纯解析；不改变旧ledger codec"
+    ],
+    "consumers": [
+      "src/capabilities/requirement/decide.ts",
+      "src/capabilities/tasking/decide.ts",
+      "src/governance/demand/demand-acceptance-coverage.ts"
+    ],
+    "tests": [
+      "tests/capabilities/requirement/service.test.ts#executeRequirementPublicationRequest",
+      "tests/governance/tasking/target-task-planning-service.fixture.ts#parseAcceptanceCriteria"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/requirement-board.ts",
+    "sha256": "d8cd2f5c596a687fd5b332a9405b569708226a5a47d0d3eb195a984b7f9ee107",
+    "responsibility": "需求认领状态与人读索引",
+    "branches": [
+      "pending/parked/claimed/withdrawn/archived转移；revision+previousDigest；每需求锁内重读CAS；索引争用4轮"
+    ],
+    "effects": [
+      "状态0600、目录0700；板索引可重建；只退休inactive锁"
+    ],
+    "consumers": [
+      "src/capabilities/demand/decide.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/observation/service.ts",
+      "src/capabilities/requirement/decide.ts",
+      "src/capabilities/requirement/projection.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/governance/demand/demand-verify-gates.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-contract.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-package.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/pod-concurrency.test.ts#path",
+      "tests/capabilities/demand/service.test.ts#path",
+      "tests/capabilities/requirement/decide.test.ts#path",
+      "tests/entrypoints/wakeflow-public-mcp-cancellation.test.ts#lockRef",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#lockRef",
+      "tests/governance/demand/demand-research-completion.test.ts#path",
+      "tests/governance/demand/requirement-board.fixture.ts#RequirementClaimState",
+      "tests/kernel/requirement-board.test.ts#path",
+      "tests/workspace/maintenance/wakeflow-static-materialization-preview.test.ts#path"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/tool-registry.ts",
+    "sha256": "cdcab102b540431a190ddf95336ca4c8c42c33ab51cdaf67ca632293e907fa21",
+    "responsibility": "公共工具目录结构准入",
+    "branches": [
+      "名字/executor/schema stem唯一、形状注解一致；公开目录省略resultSchema"
+    ],
+    "effects": [
+      "不持executor或SDK；无I/O"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/contract.ts",
+      "src/capabilities/demand/contract.ts",
+      "src/capabilities/endpoint/contract.ts",
+      "src/capabilities/evidence/contract.ts",
+      "src/capabilities/observation/contract.ts",
+      "src/capabilities/pod/contract.ts",
+      "src/capabilities/requirement/contract.ts",
+      "src/capabilities/result-review/contract.ts",
+      "src/capabilities/tasking/contract.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts",
+      "src/entrypoints/wakeflow-public-mcp-server-configuration.ts",
+      "src/entrypoints/wakeflow-public-mcp-tool.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-catalog.test.ts#schemaStem",
+      "tests/entrypoints/wakeflow-public-tool-descriptions.test.ts#WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES",
+      "tests/kernel/tool-registry.test.ts#WakeflowToolRegistration"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/kernel/work-claims.ts",
+    "sha256": "68a9275d69a996a4ac644e2130b971b4a5b100fdcfe620eb852a62a8972f5b57",
+    "responsibility": "窗口排他工作声明与围栏",
+    "branches": [
+      "同digest重放current；不同holder冲突；精确释放；IfHeld缺失/易主不否定已提交事件；generation1..4"
+    ],
+    "effects": [
+      "窗口唯一0600记录，无TTL自动失效；强制释放决策在endpoint"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/delivery/delivery-rearm.ts",
+      "src/governance/demand/demand-verify-gates.ts",
+      "src/governance/observation/observation-policy.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/governance/result/target-result.ts"
+    ],
+    "tests": [
+      "tests/capabilities/delivery/service.test.ts#record",
+      "tests/capabilities/endpoint/service.test.ts#WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS",
+      "tests/capabilities/observation/service.test.ts#MAXIMUM_WORK_CLAIM_GENERATION",
+      "tests/capabilities/result-review/service.test.ts#generation",
+      "tests/governance/delivery/delivery-records.fixture.ts#WorkClaim",
+      "tests/governance/observation/workspace-observation.test.ts#generation",
+      "tests/governance/result/target-result.fixture.ts#WorkClaim",
+      "tests/governance/result/test-target-result.test.ts#inspectWorkClaim",
+      "tests/kernel/work-claims.test.ts#MAXIMUM_WORK_CLAIM_GENERATION",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#MAXIMUM_WORK_CLAIM_GENERATION"
+    ],
+    "findings": [
+      "注释的过期且持有者消失不能替代endpoint OR实现；声明本身不会按时钟自动释放"
+    ],
+    "reviewDepth": "semantic"
+  }
+]

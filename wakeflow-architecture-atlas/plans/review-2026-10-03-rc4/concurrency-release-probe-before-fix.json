@@ -1,0 +1,23 @@
+{
+  "injectedBoundary": "latch unlink succeeded; parent sync failed once",
+  "callbackEntered": false,
+  "firstFailure": {
+    "name": "RootedExclusiveFileLockError",
+    "reason": "release-failure"
+  },
+  "remainingNames": [
+    "writer.lock"
+  ],
+  "writerOwnerState": "active",
+  "retryFailure": {
+    "name": "RootedReadWriteScopeError",
+    "reason": "timeout"
+  },
+  "conclusion": "The latch failure prevented assignment of the already acquired writer lease; same-process admission remains blocked.",
+  "sourceSha256": "2934a0db24829be2ee9a6018e0954ab44bea1409ae6c93df0c77e6bb0e7a29d9",
+  "fixture": "explicitly disposable temporary directory; removed in finally",
+  "productionFilesModified": false,
+  "compiledOutput": ".build/src/foundation/filesystem/rooted-read-write-scope.js",
+  "compiledSha256": "61c39b68a89bb92caef036ab087753901178bbaf24bdaef9de9f396d36c0f3b3",
+  "scope": "one injected post-unlink parent sync failure in exclusive admission; not a live-host test or exhaustive disk-failure model"
+}

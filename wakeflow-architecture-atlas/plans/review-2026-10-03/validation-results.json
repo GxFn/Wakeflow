@@ -1,0 +1,125 @@
+{
+  "kind": "WakeflowAtlasValidationResults",
+  "observedOn": "2026-10-03",
+  "sourceVersion": "1.1.0-rc.3",
+  "baselineCommit": "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c",
+  "truthKind": "in-progress-worktree",
+  "rootTest": {
+    "command": "env WAKEFLOW_TEST_CONCURRENCY=4 npm test",
+    "exitCode": 0,
+    "tests": 1217,
+    "passed": 1217,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMilliseconds": 563652.263542,
+    "log": "plans/review-2026-10-03/root-npm-test.log",
+    "gates": [
+      "typecheck",
+      "check:architecture",
+      "lint",
+      "format:check",
+      "check:unused",
+      "test:typescript",
+      "schema:check",
+      "build:check"
+    ],
+    "architecture": {
+      "modules": 762,
+      "dependencies": 5295,
+      "productionRoots": 16
+    },
+    "lint": {
+      "warnings": 5,
+      "infos": 3,
+      "errors": 0
+    },
+    "qualification": "本线程对本轮源码实际执行全量门；未修改运行源码、测试、Schema或plugins。"
+  },
+  "artifactSmoke": {
+    "command": "npm run smoke:artifacts",
+    "exitCode": 0,
+    "hosts": [
+      "codex",
+      "claude-code"
+    ],
+    "eachHost": {
+      "tools": 20,
+      "freshInitialize": "completed",
+      "reconcile": "no-op",
+      "status": "idle",
+      "verify": "ok",
+      "podCreatePreview": "ready",
+      "hookObserver": "landed"
+    },
+    "log": "plans/review-2026-10-03/artifact-smoke.log",
+    "qualification": "真实生成stdio与hook进程、指定一次性工作区；不是新的登录宿主会话。"
+  },
+  "sourceCoverage": {
+    "record": "plans/review-2026-10-03/review-coverage.json",
+    "handwrittenFiles": 370,
+    "reReviewed": 58,
+    "inheritedIdenticalBytes": 312,
+    "added": 7,
+    "changed": 51,
+    "schemas": 95,
+    "generated": 95,
+    "testsInventoried": 297,
+    "hashDrift": 0,
+    "fullSemanticTestFileReviewClaimed": false
+  },
+  "atlas": {
+    "status": "passed",
+    "command": "npm run check",
+    "exitCode": 0,
+    "checkerRegressionTests": 13,
+    "log": "plans/review-2026-10-03/atlas-final-check.log",
+    "documents": 71,
+    "mermaidBlocks": 90,
+    "fingerprints": 66,
+    "allFingerprintsCurrent": true,
+    "directImportEdgesChecked": 195,
+    "adjacentEvidenceRowsChecked": 788,
+    "symbolReferencesChecked": 1618,
+    "testSymbolReferencesChecked": 652,
+    "linksChecked": 888,
+    "unanchoredTestEvidenceRows": 0,
+    "qualification": "13项检查器回归、类型、当前来源/边/符号/测试锚点、浏览器回执和Vite构建全部通过；仅保留既有大chunk体积提示。"
+  },
+  "browser": {
+    "renderer": "mermaid",
+    "version": "11.17.2",
+    "diagrams": 90,
+    "rendered": 90,
+    "receipt": "plans/evidence/current-mermaid-render.json",
+    "archivedPreviousReceipt": "plans/evidence/2026-10-02-mermaid-render.json",
+    "readerChecks": [
+      "新增作用域与运行证据页面渲染",
+      "阅读/全图缩放",
+      "点击运行证据连线显示详情",
+      "定位E编号证据表",
+      "当前/历史导航链接"
+    ],
+    "readerStatus": "passed"
+  },
+  "figjam": {
+    "status": "passed",
+    "diagrams": 12,
+    "nodes": 120,
+    "edges": 116,
+    "fullConditions": true,
+    "visualPanelsInspected": 12,
+    "manifest": "plans/review-2026-10-03/figjam-derivation.json"
+  },
+  "liveHostSessions": {
+    "status": "not-run-by-this-thread",
+    "qualification": "另一线程的真实现场记录可作背景，但没有作为本线程执行回执；本轮未新建/投递宿主聊天或刷新安装缓存。"
+  },
+  "git": {
+    "branch": "main",
+    "localOriginMainAhead": 0,
+    "localOriginMainBehind": 0,
+    "diffCheck": "passed",
+    "qualification": "相对本地origin/main，未fetch；保留既有未提交修改。本线程只更新atlas，未commit、push、tag、发布或安装缓存操作。"
+  }
+}

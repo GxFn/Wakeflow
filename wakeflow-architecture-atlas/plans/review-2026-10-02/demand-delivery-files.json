@@ -1,0 +1,1380 @@
+[
+  {
+    "path": "src/capabilities/delivery/contract.ts",
+    "sha256": "e8161a4e2e4096146383526d7e3266a498135cfb837c4b960d4b3045f85c0cb6",
+    "responsibility": "公共工具Schema准入与工具登记",
+    "branches": [
+      "请求先passive JSON再Schema",
+      "输出Schema失败为output-boundary",
+      "登记append/read形状"
+    ],
+    "effects": [
+      "无业务写入"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/delivery/service.test.ts#prepareFixtureDelivery",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-177"
+    ]
+  },
+  {
+    "path": "src/capabilities/delivery/decide.ts",
+    "sha256": "077e6ee391576dbf4cc28d79c1a15b1185932ae1f91118c10c1215c600c1473a",
+    "responsibility": "投递处置、phase、声明与重武装纯决定",
+    "branches": [
+      "resolution优先",
+      "匹配hook",
+      "failed-before-send",
+      "host-thread返回",
+      "其余indeterminate",
+      "仅rejected可rearm"
+    ],
+    "effects": [
+      "无IO",
+      "落地不等于业务验收"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts#executeOutcome",
+      "src/capabilities/delivery/service.ts#executeRearm"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-245"
+    ]
+  },
+  {
+    "path": "src/capabilities/delivery/prompt.ts",
+    "sha256": "07bafd637d56debdf901d5e24d0ab7381cdce800cac5ee65aa098588b838bcfd",
+    "responsibility": "中英文可移植投递内容",
+    "branches": [
+      "需求成员按角色排序",
+      "四锚点截断提示",
+      "返工/修复/测试段",
+      "子集rerun指令"
+    ],
+    "effects": [
+      "只生成文本及相对路径",
+      "不发消息"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts#renderPrompt"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/delivery/service.test.ts#prepareFixtureDelivery",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-452"
+    ]
+  },
+  {
+    "path": "src/capabilities/delivery/service.ts",
+    "sha256": "df0469fbd4d047416a9b49f8e2942630ca1820475c36c5c9a564fa70de021e8c",
+    "responsibility": "prepare/outcome/rearm三追加执行器",
+    "branches": [
+      "绑定+worktree回执",
+      "取claim后复验binding",
+      "不完整hook禁无依据结局；独立host回执或Controller拒发解决可回退",
+      "rearm与callback分支",
+      "历史幂等permit"
+    ],
+    "effects": [
+      "追加信封/结局/换代",
+      "取得及释放工作声明",
+      "无宿主发送"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-tool.ts",
+      "src/capabilities/result-review/service.ts#executeImport"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/delivery/service.test.ts#prepareFixtureDelivery",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "许可同键回放不自动重发；需要Agent遵守一次性外部动作边界"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-2118"
+    ],
+    "lateChangeReview": {
+      "method": "重新读新增observedOutcomeDecision、executeOutcome调用、导入变化与两项service回归修改；非仅刷新摘要",
+      "tests": [
+        "tests/capabilities/delivery/service.test.ts#recordFixtureDeliveryOutcome"
+      ],
+      "limits": "独立回退回归覆盖unavailable；incomplete仅无独立证据停止，交叉组合未全部实跑"
+    }
+  },
+  {
+    "path": "src/capabilities/demand/archive.ts",
+    "sha256": "3ecaa91aba972692830f813e0f53dc521d6262afb6b4ca2dcce3052e74a0162e",
+    "responsibility": "归档包与活动根的物理读写",
+    "branches": [
+      "普通文件目录与容量边界",
+      "相同负载current/不同conflict",
+      "恢复补可重建目录",
+      "删除前复验负载摘要"
+    ],
+    "effects": [
+      "整树候选发布",
+      "活动根恢复与递归删除"
+    ],
+    "consumers": [
+      "src/capabilities/demand/lifecycle.ts#sealArchive",
+      "src/capabilities/demand/lifecycle.ts#applyContinueLocked"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "retireDemandRoot最终rm以物理路径执行；核验和删除间不应被外部非协作写者替换，未声称对抗性隔离"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-668"
+    ]
+  },
+  {
+    "path": "src/capabilities/demand/context.ts",
+    "sha256": "9997466d256b42819936d3f694545593baabfb05f98e1bf256e4d71ad67e7ed8",
+    "responsibility": "Demand工具共用Config/Ledger/活动根上下文",
+    "branches": [
+      "根不存在允许归档路径",
+      "缓存句柄reload先释放",
+      "next从活动路由或最近归档派生"
+    ],
+    "effects": [
+      "持有/关闭安全根",
+      "只读权威与next"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts#executeDemandCreationRequest",
+      "src/capabilities/demand/lifecycle.ts#executeTerminal"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-332"
+    ]
+  },
+  {
+    "path": "src/capabilities/demand/contract.ts",
+    "sha256": "370218d6adb608c5f6fef4b4627ab8b6dfc7965e23060dfa7f3f28344a7b1b3f",
+    "responsibility": "四个Demand工具请求结果准入与登记",
+    "branches": [
+      "effect preview/apply/recover",
+      "continue与record-decision共享入口",
+      "非法JSON/schema失败"
+    ],
+    "effects": [
+      "无文件写入",
+      "公开工具元数据"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts#executeDemandCreationRequest",
+      "src/capabilities/demand/lifecycle.ts#executeDemandContinuationRequest"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "取消description与research无文档门不一致：DD-F02"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-196"
+    ]
+  },
+  {
+    "path": "src/capabilities/demand/decide.ts",
+    "sha256": "c81841bb915b568a334a49a8e447b61d6632f34a69ff61d1d1d7aef07c4a4309",
+    "responsibility": "确定性ID、归档筛选、生命周期准入",
+    "branches": [
+      "排除快照/index/candidates",
+      "取消跳工作声明与覆盖门",
+      "continue禁止cancelled/research",
+      "待评审结果阻止取消"
+    ],
+    "effects": [
+      "纯函数无IO"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts#planCreate",
+      "src/capabilities/demand/lifecycle.ts#planTerminal"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "research-evidence取消不跳过：DD-F02",
+      "DD-F03：cancel预检不阻awaitingDecision且不清待答字段，聚合取消保留该字段造成终态关系失败；经event-core补审复现。"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-286"
+    ]
+  },
+  {
+    "path": "src/capabilities/demand/lifecycle.ts",
+    "sha256": "e597e3582d7e0d9f0bb91607c335560e002937385786debf380317b7c692be65",
+    "responsibility": "完成取消续接与升级回答的效果事务",
+    "branches": [
+      "根外日志后前向五步",
+      "无日志已归档返收据",
+      "continue仅completed且Podopen",
+      "record-decision要求待答升级"
+    ],
+    "effects": [
+      "写生命周期事件、归档、看板",
+      "取消释放声明",
+      "匹配负载后删活动根"
+    ],
+    "consumers": [
+      "src/capabilities/demand/contract.ts#DEMAND_COMPLETION_TOOL_REGISTRATION",
+      "src/entrypoints/wakeflow-public-mcp-tool.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "readJournal只校验kind再断言Journal，恢复依赖私有日志正确性；五个边界未全部做真实进程死亡验证",
+      "DD-F03：cancel预检不阻awaitingDecision且不清待答字段，聚合取消保留该字段造成终态关系失败；经event-core补审复现。"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-1448"
+    ]
+  },
+  {
+    "path": "src/capabilities/demand/service.ts",
+    "sha256": "cc9e39423409475cd7c0181b124a5606b61520b4ab8845e0c3a4e8fdc46459a0",
+    "responsibility": "创建Demand与中断发布恢复",
+    "branches": [
+      "先pending/record/pod准入",
+      "ID由requirement及claim摘要派生",
+      "apply/recover取得Pod锁并复验Config"
+    ],
+    "effects": [
+      "发布意图、stage/final、首提交、看板claim",
+      "失败映射authority/concurrency/recovery"
+    ],
+    "consumers": [
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts#publishDemandFromPackage",
+      "src/entrypoints/wakeflow-public-mcp-tool.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/pod-concurrency.test.ts#executeDemandCreationRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-567"
+    ]
+  },
+  {
+    "path": "src/capabilities/demand/verify.ts",
+    "sha256": "367ff4b502cace1c9727ada29e3364496f569510678b4b8f4a8bd740e79c546d",
+    "responsibility": "兼容重导出治理层verify门",
+    "branches": [
+      "所有门由同一governance owner实现"
+    ],
+    "effects": [
+      "无IO自身"
+    ],
+    "consumers": [
+      "src/capabilities/demand/lifecycle.ts#planTerminal"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-11"
+    ]
+  },
+  {
+    "path": "src/capabilities/result-review/contract.ts",
+    "sha256": "3405ff8cb745c0057c54d144f29934380d582e67afc237a718d9d3c660997730",
+    "responsibility": "公共工具Schema准入与工具登记",
+    "branches": [
+      "请求先passive JSON再Schema",
+      "输出Schema失败为output-boundary",
+      "登记append/read形状"
+    ],
+    "effects": [
+      "无业务写入"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-237"
+    ]
+  },
+  {
+    "path": "src/capabilities/result-review/decide.ts",
+    "sha256": "bc2cb44fcec9cf3483e2f175dc1e11a2d4298935559b7f296ee144387b13c124",
+    "responsibility": "证据引用、完成观察、评审恢复与测试基线纯决定",
+    "branches": [
+      "accept/rework/blocked/escalate",
+      "完成记录在reportedAt后",
+      "环境仅恢复后rerun",
+      "子集覆盖全部失败",
+      "基线按step/itemId"
+    ],
+    "effects": [
+      "无IO",
+      "allowedDecisions为机器允许集"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts#executeImport",
+      "src/capabilities/result-review/service.ts#executeTestDecision"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "混合product-defect及其他fail与授权全覆盖冲突：DD-F01"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-727"
+    ]
+  },
+  {
+    "path": "src/capabilities/result-review/prompt.ts",
+    "sha256": "e620720c5db61b85e51f0e7e9def148195b3ffd64ba64ab14bbb3237d503fa5d",
+    "responsibility": "结果回调内容骨架",
+    "branches": [
+      "目标文本压单行并按codepoint截断",
+      "中英文",
+      "branch仅实施",
+      "next指inspect"
+    ],
+    "effects": [
+      "只生成文本",
+      "不包含验收授权"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts#issueCallback"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#importFixtureImplementationResult",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-158"
+    ]
+  },
+  {
+    "path": "src/capabilities/result-review/service.ts",
+    "sha256": "a206a84f72201b6ac22421c015f32ad33f5a39ad06fd6e1e0dd2338b8f6af267",
+    "responsibility": "结果导入、评审读取与两类决定执行",
+    "branches": [
+      "accepted/indeterminate可import",
+      "历史同信封围栏兼容",
+      "同Demand证据摘要种类",
+      "snapshot/unit双摘要",
+      "blocked/escalated恢复",
+      "同提交附升级或修复授权"
+    ],
+    "effects": [
+      "追加结果与回调、决定事件",
+      "提交后释放围栏不传取消signal",
+      "只读inspect"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-tool.ts",
+      "src/capabilities/delivery/service.ts#executeCallbackReissue"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "DD-F01：授权输入为所有fail，而映射只允许产品缺陷；DD-L01：未运行真实宿主环境"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-2025"
+    ]
+  },
+  {
+    "path": "src/capabilities/tasking/contract.ts",
+    "sha256": "1994a811710431a14076eb9e69e40abe11f5aa1afe723ec46165286930d7f471",
+    "responsibility": "公共工具Schema准入与工具登记",
+    "branches": [
+      "请求先passive JSON再Schema",
+      "输出Schema失败为output-boundary",
+      "登记append/read形状"
+    ],
+    "effects": [
+      "无业务写入"
+    ],
+    "consumers": [
+      "src/capabilities/tasking/service.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-77"
+    ]
+  },
+  {
+    "path": "src/capabilities/tasking/decide.ts",
+    "sha256": "8db5c9f0c6ebd7f3c7b971d20d812bf1af43452760a1866c099af0456d83c72a",
+    "responsibility": "任务锚点、谱系、拓扑与测试准入纯决定",
+    "branches": [
+      "同仓replacement/continuation",
+      "test当前代际与pendingRetest",
+      "required用户确认",
+      "测试开始后拒新实现"
+    ],
+    "effects": [
+      "无IO",
+      "从accepted目标派生基线"
+    ],
+    "consumers": [
+      "src/capabilities/tasking/service.ts#buildImplementationPackage",
+      "src/capabilities/tasking/service.ts#buildTestPackage"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-325"
+    ]
+  },
+  {
+    "path": "src/capabilities/tasking/service.ts",
+    "sha256": "7cef3e3d722c7bd5143a1036eb3848f8b9c5d76d63fd8d69cbddc774118073d8",
+    "responsibility": "幂等追加任务包与物化投影",
+    "branches": [
+      "先查key后领域门",
+      "implementation/test分支",
+      "需求成员digest与item核验",
+      "research禁止实现包"
+    ],
+    "effects": [
+      "追加规划事件",
+      "投影失败同键补物化"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts#loadTaskPackage",
+      "src/capabilities/result-review/service.ts#loadTaskPackage"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-735"
+    ]
+  },
+  {
+    "path": "src/governance/controller/demand-controller-route.ts",
+    "sha256": "9be406a72b605496f3ff08ccb9e750fd59aee264b069135bea259b0bb3a6b68f",
+    "responsibility": "组合当前责任前沿与阻塞",
+    "branches": [
+      "terminal优先",
+      "awaitingDecision覆盖",
+      "continuation.planningRequired",
+      "research",
+      "多实施目标",
+      "postacceptance",
+      "rearm耗尽返回prepare"
+    ],
+    "effects": [
+      "纯读模型",
+      "无授权、宿主动作或状态写入"
+    ],
+    "consumers": [
+      "src/capabilities/demand/context.ts#nextAfterMutation",
+      "src/capabilities/tasking/service.ts#next",
+      "src/capabilities/delivery/service.ts#next"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-701"
+    ]
+  },
+  {
+    "path": "src/governance/demand/demand-acceptance-coverage.ts",
+    "sha256": "a652d21fd2ee9e322d585212adc15d739bd0e44f9184bcf56cca8b3be5782adb",
+    "responsibility": "从原始验收标准与accepted事件派生覆盖",
+    "branches": [
+      "复验需求record/member摘要",
+      "controller-only看实现锚点",
+      "real-environment看当前代际test步骤"
+    ],
+    "effects": [
+      "只读Ledger和规划事件",
+      "不改aggregate摘要"
+    ],
+    "consumers": [
+      "src/governance/demand/demand-verify-gates.ts#evaluateVerifyGates"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/acceptance-coverage.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-56"
+    ]
+  },
+  {
+    "path": "src/governance/demand/demand-operation-authority-context.ts",
+    "sha256": "b4ec86a829c66e3f9662fe5f777848968f9f52422f4b868b6e5e0e16b0c967e8",
+    "responsibility": "安全打开Config/Ledger/Demand及重新复验Config",
+    "branches": [
+      "私有目录权限+节点身份",
+      "Snapshot+tail",
+      "中途失败关根",
+      "配置digest与物理节点CAS"
+    ],
+    "effects": [
+      "读根句柄",
+      "无事件或投影写入"
+    ],
+    "consumers": [
+      "src/capabilities/tasking/service.ts#executeTargetTaskPlanningPublicRequest",
+      "src/capabilities/delivery/service.ts#openContext",
+      "src/capabilities/result-review/service.ts#openContext"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-290"
+    ]
+  },
+  {
+    "path": "src/governance/demand/demand-resource-catalog.ts",
+    "sha256": "57e245a7c7d6bc72776ce5a624f419e29647886918b51dd6e69927ced199d5f2",
+    "responsibility": "Demand长期资源及操作recipe声明",
+    "branches": [
+      "静态发布目录",
+      "identity/authority/commit不可变",
+      "snapshot/index派生",
+      "task投影exclusivecreate",
+      "候选不注册长期资源"
+    ],
+    "effects": [
+      "纯声明无磁盘副作用"
+    ],
+    "consumers": [
+      "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts#admitDemandPublicationResourceOperation",
+      "src/governance/tasking/task-package-projection-store.ts#admitProjectionOperations"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-425"
+    ]
+  },
+  {
+    "path": "src/governance/demand/demand-runtime-recovery.ts",
+    "sha256": "41203337842c220202317bd2cca71b8ef9c0d9428a052c3d32338af6975b7f19",
+    "responsibility": "维护入口的Demand候选恢复计划与应用",
+    "branches": [
+      "拥有者非inactive阻塞",
+      "plan摘要漂移拒绝",
+      "锁内重读",
+      "其他恢复者已完成则跳过"
+    ],
+    "effects": [
+      "只清理明确候选及死锁残留",
+      "不发领域命令"
+    ],
+    "consumers": [
+      "src/capabilities/workspace/maintain-workspace.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/workspace/demand-runtime-recovery.test.ts#executeCodexWakeflowMaintenance",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-110"
+    ]
+  },
+  {
+    "path": "src/governance/demand/demand-verify-gates.ts",
+    "sha256": "e141d483f31f3fcdebf266aaf2b992037d4ac7147d319379983b9526af96d1cf",
+    "responsibility": "完成取消与公开verify复用的只读门",
+    "branches": [
+      "异常转unavailable但aborted上抛",
+      "audit摘要",
+      "board/claim/candidates/evidence/privacy",
+      "research与requirement覆盖"
+    ],
+    "effects": [
+      "只读",
+      "固定门顺序与观察摘要"
+    ],
+    "consumers": [
+      "src/capabilities/demand/lifecycle.ts#planTerminal",
+      "src/capabilities/observation/service.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/acceptance-coverage.test.ts#executeVerifyRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "DD-F02：research成果门无action区分"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-216"
+    ]
+  },
+  {
+    "path": "src/governance/demand/publication/demand-active-guard.ts",
+    "sha256": "883a8703bb247cffcd9bf7189970e4e6853407c33fe4e6ebc202a0fea2d45088",
+    "responsibility": "Pod活动与持久意图占用守卫",
+    "branches": [
+      "先发布sidecar/生命周期日志",
+      "再claimed+aggregate",
+      "根坏或Pod未知保守",
+      "取消上抛",
+      "最近归档定位Pod"
+    ],
+    "effects": [
+      "只读不释放占用"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts#activeDemandOnPod",
+      "src/capabilities/demand/lifecycle.ts#applyContinue"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/pod-concurrency.test.ts#executeDemandCreationRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-234"
+    ]
+  },
+  {
+    "path": "src/governance/demand/publication/demand-event-sourcing-publication-contract.ts",
+    "sha256": "9233a57ca5f14e9f54daa5279e502025956925b09b5d3febd09adb9aaa629aa6",
+    "responsibility": "发布公共结果、状态和错误词汇",
+    "branches": [
+      "current/recoverable/unchanged/unknown",
+      "私有权限",
+      "10秒锁预算"
+    ],
+    "effects": [
+      "无IO"
+    ],
+    "consumers": [
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts#publishDemandFromPackage"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#publishDemandFromPackage",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-109"
+    ]
+  },
+  {
+    "path": "src/governance/demand/publication/demand-event-sourcing-publication-package.ts",
+    "sha256": "a8ac5b630de6edf2df5062947cfea93a74ea71306851321ab573f01c5f280cec",
+    "responsibility": "需求包claim精确前序与CAS",
+    "branches": [
+      "pending摘要必须相同",
+      "同Demand且previousStateDigest相同可重放",
+      "其他claim拒绝"
+    ],
+    "effects": [
+      "替换看板claim并刷新index"
+    ],
+    "consumers": [
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts#applyPublication"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#publishDemandFromPackage",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-129"
+    ]
+  },
+  {
+    "path": "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
+    "sha256": "67c69802a49870939be0623e715c9fc373b233e884259b4dea678752e25c6019",
+    "responsibility": "跨资源发布顺序和流程锁",
+    "branches": [
+      "先authority+pending准入",
+      "自包含意图",
+      "final/stage冲突拒绝",
+      "exacttransaction恢复",
+      "失败后分类权威"
+    ],
+    "effects": [
+      "Demand发布锁",
+      "stage/final/claim/marker/sidecar结算"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts#applyCreate",
+      "src/capabilities/demand/service.ts#recoverCreate"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#publishDemandFromPackage",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-598"
+    ]
+  },
+  {
+    "path": "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+    "sha256": "4f7634541681325e78c0fbbb07a94999f50918a9cf5adb8565af08ea8332f236",
+    "responsibility": "暂存根构建、整体发布与闭包加载",
+    "branches": [
+      "按精确内容写identity/authority/marker",
+      "恢复候选缓存",
+      "首提交必须revision1",
+      "rename持久失败要求恢复"
+    ],
+    "effects": [
+      "初始化私有目录",
+      "追加首提交",
+      "发布根",
+      "只读复验"
+    ],
+    "consumers": [
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts#applyPublication"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#publishDemandFromPackage",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-277"
+    ]
+  },
+  {
+    "path": "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts",
+    "sha256": "fe295bc19fa7dafa06db9b8ed0b6df245682660c9f3352bc89a0094e8d0db390",
+    "responsibility": "发布文件私有节点与精确写入边界",
+    "branches": [
+      "节点mode/owner/links",
+      "有限字节",
+      "已存在文本逐字相同",
+      "原子残留仅按目标恢复",
+      "unknownstage拒绝"
+    ],
+    "effects": [
+      "exclusivecreate及exactretire",
+      "继承根durability"
+    ],
+    "consumers": [
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts#publishDemandFromPackage",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts#materializeDemandPublicationStage"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#publishDemandFromPackage",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-418"
+    ]
+  },
+  {
+    "path": "src/governance/demand/publication/demand-event-sourcing-publication-transaction.ts",
+    "sha256": "e469026b3387936780cf621eafc429d0caaff31d249f74cf45fc2a9b0eec87bc",
+    "responsibility": "自包含不可变发布恢复合同",
+    "branches": [
+      "字段集合严格",
+      "路径由Demand派生",
+      "重新decide并重算首commit",
+      "摘要/identity/authority关系闭合"
+    ],
+    "effects": [
+      "纯编解码",
+      "不保存可变phase"
+    ],
+    "consumers": [
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts#publishDemandFromPackage",
+      "src/governance/demand/publication/demand-event-sourcing-publication-storage.ts#readPublicationTransactionAt"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#publishDemandFromPackage",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-501"
+    ]
+  },
+  {
+    "path": "src/governance/demand/publication/demand-publication-paths.ts",
+    "sha256": "b7b20c193ac04785272b05461e99f734f3ab14933e4d663a2a7123054f7e9a6b",
+    "responsibility": "发布目录与Demand根的路径词汇",
+    "branches": [
+      "ID品牌校验",
+      "stage/sidecar/lock/finalmarker固定派生"
+    ],
+    "effects": [
+      "纯路径无IO"
+    ],
+    "consumers": [
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
+      "src/governance/demand/demand-runtime-recovery.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#publishDemandFromPackage",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-71"
+    ]
+  },
+  {
+    "path": "src/governance/lifecycle/demand-completion.ts",
+    "sha256": "38d553278fc226cd48623e6842907f2c7d83015cfe27b05c65ec5ca774b46fff",
+    "responsibility": "成功终态的不可变载荷",
+    "branches": [
+      "仅completion-preflight",
+      "品牌ID/lineage",
+      "claim修订>=2",
+      "state修订>=1",
+      "自排除digest"
+    ],
+    "effects": [
+      "纯codec",
+      "不归档或删除"
+    ],
+    "consumers": [
+      "src/capabilities/demand/lifecycle.ts#completionCommand"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-341"
+    ]
+  },
+  {
+    "path": "src/governance/review/controller-implementation-review-decision.ts",
+    "sha256": "7bf17bf648c92531175adc2e258500bb87e3fb0f20216d0e8f8880649cc64455",
+    "responsibility": "实现决定严格编解码与自排除摘要",
+    "branches": [
+      "accept要求完成且aligned/satisfactory无阻塞",
+      "blocked要求原因",
+      "escalate字段一致",
+      "anchorEvidence去重且仅accept",
+      "null不进旧摘要"
+    ],
+    "effects": [
+      "纯领域记录",
+      "不执行检查或重投"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts#executeImplementationDecision",
+      "src/capabilities/delivery/service.ts#loadReworkSource"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-579"
+    ]
+  },
+  {
+    "path": "src/governance/review/controller-product-defect-remediation-authorization.ts",
+    "sha256": "af356adf1a30113bc190baa32b72efaa81733c45cd9eb0c63cb8b1c0c7489475",
+    "responsibility": "既有任务边界内的产品缺陷授权",
+    "branches": [
+      "测试决定精确productdefect",
+      "postdecision修订",
+      "affected基线唯一且排序",
+      "映射覆盖failedSteps",
+      "不跨到测试目标"
+    ],
+    "effects": [
+      "纯记录创建",
+      "ID摘要派生后由decider追加"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts#remediationAuthorization",
+      "src/capabilities/delivery/service.ts#loadRemediationSource"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeTestReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [
+      "DD-F01：覆盖全部fail与slice仅允许产品缺陷映射冲突"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-815"
+    ]
+  },
+  {
+    "path": "src/governance/review/controller-review-decision-contract.ts",
+    "sha256": "f897ce5ab40b1bcdd7b9e5f7e864c09a705af6b2844efecb33a1f84384a2c943",
+    "responsibility": "共享独立检查、升级与恢复词汇",
+    "branches": [
+      "文本NFC/长度",
+      "升级options非空",
+      "resumption按basis",
+      "分类只能remediation或userDecision其一"
+    ],
+    "effects": [
+      "纯normalize",
+      "hook事实由服务注入"
+    ],
+    "consumers": [
+      "src/governance/review/controller-implementation-review-decision.ts",
+      "src/governance/review/controller-test-review-decision.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-399"
+    ]
+  },
+  {
+    "path": "src/governance/review/controller-review-decision.ts",
+    "sha256": "2e5dcc0dc43111bb41b6cd40dd303844900de3b6176a34f0cfe26ba4070134f2",
+    "responsibility": "两类持久决定联合解析",
+    "branches": [
+      "kind分发implementation/test",
+      "无效变体拒绝",
+      "UUID派生event/commitID"
+    ],
+    "effects": [
+      "纯解析"
+    ],
+    "consumers": [
+      "src/governance/review/demand-result-review-snapshot.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeImplementationReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-102"
+    ]
+  },
+  {
+    "path": "src/governance/review/controller-test-review-decision.ts",
+    "sha256": "8d8ce3e81e5fa2b31e2fef266a643c47c8664470ea57d262d71edce8ec9862ad",
+    "responsibility": "测试决定严格合同与一致性",
+    "branches": [
+      "accept全passed/satisfied/sufficient",
+      "rerun须scope且失败或不确定检查",
+      "产品缺陷充分且failed",
+      "needsdecision非satisfied",
+      "blocked依据"
+    ],
+    "effects": [
+      "纯领域记录与摘要",
+      "时间仅审计观察"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts#executeTestDecision"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#executeTestReviewDecisionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-572"
+    ]
+  },
+  {
+    "path": "src/governance/review/demand-post-acceptance-route.ts",
+    "sha256": "0cd93822213092552317d27718ad4301b31235a86a2729cb692093e0df6e7168",
+    "responsibility": "实现接受后测试或完成的下一责任",
+    "branches": [
+      "先终态",
+      "research文档",
+      "未接受实施阻塞",
+      "controller-only闭合",
+      "当前测试代际",
+      "retest授权",
+      "唯一landing成员"
+    ],
+    "effects": [
+      "只读路由与摘要",
+      "不创建test/complete"
+    ],
+    "consumers": [
+      "src/capabilities/demand/lifecycle.ts#postAcceptanceStage",
+      "src/capabilities/tasking/service.ts#testEnvironmentOf"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/demand/service.test.ts#executeDemandCompletionRequest",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-779"
+    ]
+  },
+  {
+    "path": "src/governance/review/demand-result-review-snapshot.ts",
+    "sha256": "d875841eae97ed83cb4e886b765c6051dbf3f802a4d19a329fdf45a965245461",
+    "responsibility": "从完整事件历史重建当前评审输入",
+    "branches": [
+      "awaiting/reported/decided",
+      "任务结果决定身份闭合",
+      "先前历史按revision",
+      "旧anchorEvidence摘要兼容",
+      "归档node政策"
+    ],
+    "effects": [
+      "零写",
+      "不决定allowed/next"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts#inspectReview",
+      "src/governance/review/demand-post-acceptance-route.ts#readDemandPostAcceptanceRoute"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/service.test.ts#inspectFixtureReview",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-575"
+    ]
+  },
+  {
+    "path": "src/governance/tasking/task-package-projection-paths.ts",
+    "sha256": "abb0bf758c7c12854e65f68504fb42fd9ca4275e7350c9ef4f115901edcaf7b0",
+    "responsibility": "TaskPackage ID到投影路径的严格映射",
+    "branches": [
+      "只准UUIDv4品牌与精确json文件名"
+    ],
+    "effects": [
+      "纯路径无IO"
+    ],
+    "consumers": [
+      "src/governance/tasking/task-package-projection-store.ts",
+      "src/governance/demand/demand-resource-catalog.ts"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-111"
+    ]
+  },
+  {
+    "path": "src/governance/tasking/task-package-projection-store.ts",
+    "sha256": "82101dc2a6850f016af60aa49c412ae1cd67657a7690be2d532f71d82110ba32",
+    "responsibility": "从规划事件重建不可覆盖的任务投影",
+    "branches": [
+      "事件不存在无写",
+      "existing不同字节冲突",
+      "当前短暂双hardlink有界重读",
+      "load须事件digest预期"
+    ],
+    "effects": [
+      "原子创建派生文件",
+      "不覆写也不改事件"
+    ],
+    "consumers": [
+      "src/capabilities/tasking/service.ts#materialize"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-628"
+    ]
+  },
+  {
+    "path": "src/governance/tasking/task-package.ts",
+    "sha256": "06ee64096ced796b8fe1130ad2c9e9cd877a9275cefff6e1c432be85120e7771",
+    "responsibility": "实施与测试冻结合同的严格编解码",
+    "branches": [
+      "判别workType",
+      "canonical文本唯一性",
+      "typed引用",
+      "不可自谱系",
+      "test顺序ts-ID与item唯一",
+      "字段白名单",
+      "deterministicdocument"
+    ],
+    "effects": [
+      "纯值创建",
+      "时钟在草稿准入后读取"
+    ],
+    "consumers": [
+      "src/capabilities/tasking/service.ts#buildPackage",
+      "src/governance/tasking/task-package-projection-store.ts#materialize"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/tasking/service.test.ts#planFixtureTargetTask",
+        "coverage": "indirect",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-1047"
+    ]
+  },
+  {
+    "path": "src/governance/testing/test-execution-attempt.ts",
+    "sha256": "043236106e5c0ea2c2eac24c251fd7b1ec100bcf246ded7f1f2af8c1b43af123",
+    "responsibility": "真实测试逻辑attempt合同",
+    "branches": [
+      "initial=1",
+      "rerun连续ordinal",
+      "setup按policy",
+      "预算和step域",
+      "来源不可自指"
+    ],
+    "effects": [
+      "纯计划",
+      "不准备真实环境"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts#testAttemptFor"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/governance/testing/test-execution-attempt.test.ts#createRerunTestExecutionAttempt",
+        "coverage": "focused",
+        "reason": "通过该公共/fixture入口执行相关内部关系；非本文件全部边界独立覆盖"
+      }
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedLineRanges": [
+      "1-374"
+    ]
+  }
+]

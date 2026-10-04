@@ -1,0 +1,1325 @@
+{
+  "kind": "WakeflowAtlasFigJamDerivation",
+  "verifiedAt": "2026-10-02",
+  "truthKind": "in-progress-worktree",
+  "authority": "maps/**/*.md 是内容正典；此文件记录 FigJam 派生关系、标签缩写与实际画布核验。",
+  "boardUrl": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc",
+  "currentSectionId": "42:1099",
+  "overviewSectionId": "28:573",
+  "retainedLayoutDraftId": "47:1145",
+  "summary": {
+    "diagrams": 13,
+    "logicalNodes": 114,
+    "drawnNodes": 117,
+    "edges": 115,
+    "allNodeSetsMatch": true,
+    "allEndpointAndShortLabelTriplesMatch": true,
+    "allModuleFullConditionsPreserved": true,
+    "visualPanelsInspected": 13,
+    "sectionOverflow": 0
+  },
+  "validationMethod": "逐图从本地当前 Mermaid 提取节点、方向和完整条件；经显式标签映射与 FigJam connector 的端点/标签三元组对照；每个模块完整条件与 E 编号同时核对图下说明。13 个面板逐张截图检查。归一化仅忽略空白与 HTML 换行。",
+  "overview": {
+    "path": "maps/01-overall-architecture/README.md",
+    "diagramIndex": 0,
+    "sourceDigest": "sha256:723ab982e10a6dc777fef71b50400bf35d5d875caec81779f2f676e77d3e6d72",
+    "documentDigest": "sha256:9c19d16e14082687f541bc6060c1aea29426841648b6ba6e602f338fd5b3ca70",
+    "sourceFingerprint": "sha256:babef5f4844a60217e911ff2cd29bbd4d6fb3afd2559144c29a95e56b3b188c5",
+    "panelId": "28:573",
+    "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=28-573",
+    "nodesMatch": true,
+    "edgesMatch": true,
+    "nodeAliases": {
+      "entry": "entrypoints 公共 MCP 入口",
+      "host": "hosts 两宿主 profile 与资产",
+      "catalog": "20 工具的封闭登记表",
+      "slices": "capabilities 10 个能力切片",
+      "owners": "governance / workspace / configuration",
+      "kernel": "kernel 命令、声明、观察与投影",
+      "contracts": "contracts Schema 与词汇",
+      "foundation": "foundation 稳定读取与持久写入",
+      "disk": "本地文件、Git 只读查询"
+    },
+    "edgeAliases": [
+      {
+        "id": "E-OV01-01",
+        "full": "读取并组合宿主 profile",
+        "short": "组合 profile",
+        "from": "entrypoints 公共 MCP 入口",
+        "to": "hosts 两宿主 profile 与资产"
+      },
+      {
+        "id": "E-OV01-02",
+        "full": "绑定 executor",
+        "short": "绑定执行器",
+        "from": "entrypoints 公共 MCP 入口",
+        "to": "20 工具的封闭登记表"
+      },
+      {
+        "id": "E-OV01-03",
+        "full": "登记切片合同",
+        "short": "登记切片合同",
+        "from": "20 工具的封闭登记表",
+        "to": "capabilities 10 个能力切片"
+      },
+      {
+        "id": "E-OV01-04",
+        "full": "复用共同调用外壳",
+        "short": "调用内核",
+        "from": "capabilities 10 个能力切片",
+        "to": "kernel 命令、声明、观察与投影"
+      },
+      {
+        "id": "E-OV01-05",
+        "full": "调用所属领域 owner",
+        "short": "调用领域",
+        "from": "capabilities 10 个能力切片",
+        "to": "governance / workspace / configuration"
+      },
+      {
+        "id": "E-OV01-06",
+        "full": "消费词汇与生成合同",
+        "short": "合同与词汇",
+        "from": "kernel 命令、声明、观察与投影",
+        "to": "contracts Schema 与词汇"
+      },
+      {
+        "id": "E-OV01-07",
+        "full": "验证数据形状",
+        "short": "校验形状",
+        "from": "governance / workspace / configuration",
+        "to": "contracts Schema 与词汇"
+      },
+      {
+        "id": "E-OV01-08",
+        "full": "通过受根约束 I/O 落盘",
+        "short": "持久化",
+        "from": "governance / workspace / configuration",
+        "to": "foundation 稳定读取与持久写入"
+      },
+      {
+        "id": "E-OV01-09",
+        "full": "建立根与输出边界",
+        "short": "根约束",
+        "from": "kernel 命令、声明、观察与投影",
+        "to": "foundation 稳定读取与持久写入"
+      },
+      {
+        "id": "E-OV01-10",
+        "full": "执行有界物理操作",
+        "short": "执行有界物理操作",
+        "from": "foundation 稳定读取与持久写入",
+        "to": "本地文件、Git 只读查询"
+      }
+    ],
+    "screenshot": "plans/evidence/2026-10-02-figjam-architecture.png"
+  },
+  "modules": [
+    {
+      "title": "用户与四类窗口的成功主线",
+      "path": "maps/10-end-to-end-business-flow/README.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:8e1339a7184866599bfb728785c71b09890b0e7e573de19f12b48bb3799a0abb",
+      "documentDigest": "sha256:aebc93c7ba77fabb5bca57effdaa2a1a62f9971086aed8da87b170214deffe0a",
+      "sourceFingerprint": "sha256:212063b6cfa97a40ed811f4ffce3741c075e74d2a413b913d1e7eea2ab693099",
+      "diagramId": "30:613",
+      "panelId": "42:1102",
+      "legendId": "45:1099",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1102",
+      "nodeLabels": {
+        "designRole": "Design 与用户确认需求摘要",
+        "requirementFact": "Wakeflow：不可变需求记录与pending看板",
+        "controllerClaim": "Controller：认领包并创建 Demand",
+        "taskFact": "Wakeflow：冻结任务包与验收锚点",
+        "deliveryPermit": "Wakeflow：信封、工作声明与发送许可",
+        "agentSend": "Controller Agent：调用宿主发送并记录结局",
+        "targetWork": "Target：在指定检出工作并导入报告",
+        "callbackSend": "Target Agent：用返回许可唤醒 Controller",
+        "reviewRole": "Controller：读取评审单元并独立检查",
+        "testingRoute": "需求冻结的测试决策",
+        "testRole": "Test：按冻结合同执行并回传逐步证据",
+        "testReview": "Controller：评审测试结果",
+        "completeDemand": "Wakeflow：完整验收、封存归档、释放占用"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-BIZ01-01",
+          "from": "Design 与用户确认需求摘要",
+          "full": "发布确认后的内容",
+          "to": "Wakeflow：不可变需求记录与pending看板",
+          "short": "01 确认发布"
+        },
+        {
+          "id": "E-BIZ01-02",
+          "from": "Wakeflow：不可变需求记录与pending看板",
+          "full": "查看板并认领",
+          "to": "Controller：认领包并创建 Demand",
+          "short": "02 认领需求"
+        },
+        {
+          "id": "E-BIZ01-03",
+          "from": "Controller：认领包并创建 Demand",
+          "full": "规划一个有边界的目标",
+          "to": "Wakeflow：冻结任务包与验收锚点",
+          "short": "03 规划目标"
+        },
+        {
+          "id": "E-BIZ01-04",
+          "from": "Wakeflow：冻结任务包与验收锚点",
+          "full": "prepare_delivery",
+          "to": "Wakeflow：信封、工作声明与发送许可",
+          "short": "04 准备投递"
+        },
+        {
+          "id": "E-BIZ01-05",
+          "from": "Wakeflow：信封、工作声明与发送许可",
+          "full": "显式执行一次宿主动作",
+          "to": "Controller Agent：调用宿主发送并记录结局",
+          "short": "05 执行发送"
+        },
+        {
+          "id": "E-BIZ01-06",
+          "from": "Controller Agent：调用宿主发送并记录结局",
+          "full": "Target收到任务后执行",
+          "to": "Target：在指定检出工作并导入报告",
+          "short": "06 目标执行"
+        },
+        {
+          "id": "E-BIZ01-07",
+          "from": "Target：在指定检出工作并导入报告",
+          "full": "导入返回固定回调许可",
+          "to": "Target Agent：用返回许可唤醒 Controller",
+          "short": "07 返回回调"
+        },
+        {
+          "id": "E-BIZ01-08",
+          "from": "Target Agent：用返回许可唤醒 Controller",
+          "full": "Controller重新观察结果",
+          "to": "Controller：读取评审单元并独立检查",
+          "short": "08 重读结果"
+        },
+        {
+          "id": "E-BIZ01-09",
+          "from": "Controller：读取评审单元并独立检查",
+          "full": "实现被接受后派生路由",
+          "to": "需求冻结的测试决策",
+          "short": "09 派生路由"
+        },
+        {
+          "id": "E-BIZ01-10",
+          "from": "需求冻结的测试决策",
+          "full": "real-environment",
+          "to": "Test：按冻结合同执行并回传逐步证据",
+          "short": "10 真实测试"
+        },
+        {
+          "id": "E-BIZ01-11",
+          "from": "Test：按冻结合同执行并回传逐步证据",
+          "full": "导入记录而不是自行验收",
+          "to": "Controller：评审测试结果",
+          "short": "11 导入测试"
+        },
+        {
+          "id": "E-BIZ01-12",
+          "from": "Controller：评审测试结果",
+          "full": "当前验收全集已被接受",
+          "to": "Wakeflow：完整验收、封存归档、释放占用",
+          "short": "12 验收齐备"
+        },
+        {
+          "id": "E-BIZ01-13",
+          "from": "需求冻结的测试决策",
+          "full": "controller-only且完整覆盖",
+          "to": "Wakeflow：完整验收、封存归档、释放占用",
+          "short": "13 控制器完成"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-business.png",
+      "audit": {
+        "name": "02 · 业务主线",
+        "diagramId": "30:613",
+        "panelId": "42:1102",
+        "logicalNodes": 13,
+        "drawnNodes": 13,
+        "edges": 13,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "维护公共入口按当前问题选择单轮工作",
+      "path": "maps/03-configuration-workspace/runtime-call-flow.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:565b4a0ec6d26d92173449571b3be07d63afcbbd54719bbd4f1386f8928e7f66",
+      "documentDigest": "sha256:06ffd3f356ea8d6b12a3548baff56243923fe7f6b09eb2952b96a9b230197b20",
+      "sourceFingerprint": "sha256:30ea80cccedefff661d22473db650970b43fa00e4111acaeced109399b16cffb",
+      "diagramId": "31:669",
+      "panelId": "42:1106",
+      "legendId": "45:1101",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1106",
+      "nodeLabels": {
+        "M": "[代码] planMaintenance",
+        "P": "私有模式普查",
+        "R": "reconcile 且有 Demand 候选？",
+        "S": "[计划] 共享静态步骤与宿主贡献",
+        "B": "[代码] blocked 返回原因",
+        "C": "[计划] private-mode-convergence",
+        "D": "[计划] runtime-recovery",
+        "A": "[代码] apply + planDigest",
+        "N": "[视图] next 指向再次 reconcile",
+        "T": "[代码] 执行静态维护事务"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-WSP-01",
+          "from": "[代码] planMaintenance",
+          "full": "制品根重叠则停止",
+          "to": "[代码] blocked 返回原因",
+          "short": "01 根重叠"
+        },
+        {
+          "id": "E-WSP-02",
+          "from": "[代码] planMaintenance",
+          "full": "普查私有树",
+          "to": "私有模式普查",
+          "short": "02 权限普查"
+        },
+        {
+          "id": "E-WSP-03",
+          "from": "私有模式普查",
+          "full": "unsafe 或非 reconcile 漂移",
+          "to": "[代码] blocked 返回原因",
+          "short": "03 安全阻断"
+        },
+        {
+          "id": "E-WSP-04",
+          "from": "私有模式普查",
+          "full": "reconcile 的 safe-drift",
+          "to": "[计划] private-mode-convergence",
+          "short": "04 权限收敛"
+        },
+        {
+          "id": "E-WSP-05",
+          "from": "私有模式普查",
+          "full": "current 或 unavailable 继续",
+          "to": "reconcile 且有 Demand 候选？",
+          "short": "05 继续检查"
+        },
+        {
+          "id": "E-WSP-06",
+          "from": "reconcile 且有 Demand 候选？",
+          "full": "存在可恢复候选",
+          "to": "[计划] runtime-recovery",
+          "short": "06 候选恢复"
+        },
+        {
+          "id": "E-WSP-07",
+          "from": "reconcile 且有 Demand 候选？",
+          "full": "无候选或不是 reconcile",
+          "to": "[计划] 共享静态步骤与宿主贡献",
+          "short": "07 常规维护"
+        },
+        {
+          "id": "E-WSP-08",
+          "from": "[计划] private-mode-convergence",
+          "full": "重算摘要后收敛模式",
+          "to": "[代码] apply + planDigest",
+          "short": "08 复验模式"
+        },
+        {
+          "id": "E-WSP-09",
+          "from": "[计划] runtime-recovery",
+          "full": "重算摘要后结算候选",
+          "to": "[代码] apply + planDigest",
+          "short": "09 复验候选"
+        },
+        {
+          "id": "E-WSP-10",
+          "from": "[代码] apply + planDigest",
+          "full": "独立分支完成后再预览",
+          "to": "[视图] next 指向再次 reconcile",
+          "short": "10 再预览"
+        },
+        {
+          "id": "E-WSP-11",
+          "from": "[计划] 共享静态步骤与宿主贡献",
+          "full": "同请求同摘要进入事务",
+          "to": "[代码] 执行静态维护事务",
+          "short": "11 同摘要应用"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-maintenance.png",
+      "audit": {
+        "name": "03 · 维护分支",
+        "diagramId": "31:669",
+        "panelId": "42:1106",
+        "logicalNodes": 10,
+        "drawnNodes": 10,
+        "edges": 11,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "追加命令的幂等与提交点",
+      "path": "maps/04-governance-event-sourcing/runtime-call-flow.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:fd13d17a1014f4ce4db3935c0fd4e22e57908a1180fb8f3c9594e8d50534b4fa",
+      "documentDigest": "sha256:8b377f0c113a34ec1617f8eda5114936c780feab36bfd656ef9169eb0adc4007",
+      "sourceFingerprint": "sha256:cff4ad0a5cde880cb2fea1f745e7379171f66dd18dc2b5a208b8f8c9221fe0cb",
+      "diagramId": "32:710",
+      "panelId": "42:1110",
+      "legendId": "45:1103",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1110",
+      "nodeLabels": {
+        "A": "[代码] executeDemandEventSourcingCommand",
+        "B": "[代码] 幂等键命中",
+        "C": "[代码] load 与预期修订核对",
+        "D": "[代码] 纯决定并演进提交批",
+        "F": "[权威] appendPreparedCommit",
+        "H": "[视图] refreshCheckpoints"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-DEM02-01",
+          "from": "[代码] executeDemandEventSourcingCommand",
+          "full": "同键同请求摘要直接回放；异摘要拒绝",
+          "to": "[代码] 幂等键命中",
+          "short": "01 同键回放"
+        },
+        {
+          "id": "E-DEM02-02",
+          "from": "[代码] executeDemandEventSourcingCommand",
+          "full": "未命中绑定：加载聚合进入修订检查",
+          "to": "[代码] load 与预期修订核对",
+          "short": "02 加载聚合"
+        },
+        {
+          "id": "E-DEM02-03",
+          "from": "[代码] load 与预期修订核对",
+          "full": "修订一致才执行新的领域决定",
+          "to": "[代码] 纯决定并演进提交批",
+          "short": "03 复验修订"
+        },
+        {
+          "id": "E-DEM02-04",
+          "from": "[代码] 纯决定并演进提交批",
+          "full": "领域转换全成功后一次追加事件批",
+          "to": "[权威] appendPreparedCommit",
+          "short": "04 追加事件批"
+        },
+        {
+          "id": "E-DEM02-05",
+          "from": "[权威] appendPreparedCommit",
+          "full": "已提交才刷新；仓储错误记为 stale，提交保持有效",
+          "to": "[视图] refreshCheckpoints",
+          "short": "05 刷新检查点"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-event.png",
+      "audit": {
+        "name": "04 · 事件提交",
+        "diagramId": "32:710",
+        "panelId": "42:1110",
+        "logicalNodes": 6,
+        "drawnNodes": 6,
+        "edges": 5,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "记录投递结局的优先级",
+      "path": "maps/06-implementation-delivery-review/runtime-call-flow.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:99b3e2b3472d112f2f119fff061e3d23e1417e99daaa40ffae8a22f9a2c22660",
+      "documentDigest": "sha256:6a516ed50e71d47681ce34389be91fd68048f9dedc4bb7777d765cf0cb75daf1",
+      "sourceFingerprint": "sha256:312b88dd90ee8c67d2b7b640389e11545469a16b09dd449027e1bb556fb85ec6",
+      "diagramId": "46:1129",
+      "panelId": "42:1114",
+      "legendId": "45:1105",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1114",
+      "nodeLabels": {
+        "A": "[代码] 当前代际与 fence 相符",
+        "B": "[代码] 显式解决 indeterminate",
+        "C": "[代码] 匹配 user-prompt-submit 摘要",
+        "D": "[代码] 发送前失败或宿主发送返回",
+        "F": "[权威] accepted：保留声明",
+        "H": "[权威] rejected-before-send：释放声明",
+        "I": "[权威] indeterminate：保留声明"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-DLV02-01",
+          "from": "[代码] 当前代际与 fence 相符",
+          "full": "resolution 优先；必须处于 indeterminate",
+          "to": "[代码] 显式解决 indeterminate",
+          "short": "01 显式解决"
+        },
+        {
+          "id": "E-DLV02-02",
+          "from": "[代码] 显式解决 indeterminate",
+          "full": "accepted 必须引用已存在的落地记录",
+          "to": "[权威] accepted：保留声明",
+          "short": "02 有落地证据"
+        },
+        {
+          "id": "E-DLV02-03",
+          "from": "[代码] 显式解决 indeterminate",
+          "full": "Controller 显式声明未落地并说明理由",
+          "to": "[权威] rejected-before-send：释放声明",
+          "short": "03 确认未落地"
+        },
+        {
+          "id": "E-DLV02-04",
+          "from": "[代码] 当前代际与 fence 相符",
+          "full": "无 resolution 时查 promptDigest 匹配",
+          "to": "[代码] 匹配 user-prompt-submit 摘要",
+          "short": "04 查找 hook"
+        },
+        {
+          "id": "E-DLV02-05",
+          "from": "[代码] 匹配 user-prompt-submit 摘要",
+          "full": "目标会话落地记录可证明 accepted",
+          "to": "[权威] accepted：保留声明",
+          "short": "05 hook 已匹配"
+        },
+        {
+          "id": "E-DLV02-06",
+          "from": "[代码] 当前代际与 fence 相符",
+          "full": "未匹配 hook 才检查发送声明与 Profile",
+          "to": "[代码] 发送前失败或宿主发送返回",
+          "short": "06 宿主声明"
+        },
+        {
+          "id": "E-DLV02-07",
+          "from": "[代码] 发送前失败或宿主发送返回",
+          "full": "failed-before-send；不允许从 indeterminate 隐式降级",
+          "to": "[权威] rejected-before-send：释放声明",
+          "short": "07 发送前失败"
+        },
+        {
+          "id": "E-DLV02-08",
+          "from": "[代码] 发送前失败或宿主发送返回",
+          "full": "host-thread 型发送成功且 evidenceDigest 非空",
+          "to": "[权威] accepted：保留声明",
+          "short": "08 线程发送成功"
+        },
+        {
+          "id": "E-DLV02-09",
+          "from": "[代码] 发送前失败或宿主发送返回",
+          "full": "其余首次记录不确定；后续缺证据则拒绝",
+          "to": "[权威] indeterminate：保留声明",
+          "short": "09 首次不确定"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-delivery.png",
+      "audit": {
+        "name": "05 · 投递证据",
+        "diagramId": "46:1129",
+        "panelId": "42:1114",
+        "logicalNodes": 7,
+        "drawnNodes": 10,
+        "edges": 9,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      },
+      "layoutCopies": {
+        "common": "A",
+        "resolution": "B",
+        "hook": "C",
+        "host": "D",
+        "acceptedResolution": "F",
+        "rejectedResolution": "H",
+        "acceptedHook": "F",
+        "acceptedHost": "F",
+        "rejectedHost": "H",
+        "uncertain": "I"
+      },
+      "layoutQualification": "7 个逻辑节点中的 accepted/rejected 结局在不同分支重复显示，共 10 个显示节点；同名结局含义未改变。原排版保存在非当前草稿区。"
+    },
+    {
+      "title": "同一结果的评审与恢复路径",
+      "path": "maps/07-review-rework-completion/runtime-call-flow.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:e150a26a33b6b9b8380d43110e8c5e1bb3485db2709174bb16e0e4363622ec3e",
+      "documentDigest": "sha256:c376a08c4da3c38d0fa0d650d9c48783dcc76105d7362f9667074a5be4a7cd1a",
+      "sourceFingerprint": "sha256:b2bab266530763e7aae0f7975d4db06fbe0e08c4920f4a0e1e9971835e1167d4",
+      "diagramId": "34:781",
+      "panelId": "42:1118",
+      "legendId": "45:1107",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1118",
+      "nodeLabels": {
+        "A": "[视图] reported 评审单元",
+        "B": "[代码] accept",
+        "C": "[代码] rework",
+        "D": "[权威] review-blocked",
+        "F": "[权威] escalated 与待用户决定",
+        "H": "[代码] resumption 再决定",
+        "I": "[计划] 按原任务包准备返工投递"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-REV02-01",
+          "from": "[视图] reported 评审单元",
+          "full": "结果与完成门满足后允许接受",
+          "to": "[代码] accept",
+          "short": "01 接受"
+        },
+        {
+          "id": "E-REV02-02",
+          "from": "[视图] reported 评审单元",
+          "full": "失败独立检查形成整改依据",
+          "to": "[代码] rework",
+          "short": "02 返工"
+        },
+        {
+          "id": "E-REV02-03",
+          "from": "[视图] reported 评审单元",
+          "full": "blocked 保存当前决定；不是删除结果",
+          "to": "[权威] review-blocked",
+          "short": "03 阻塞"
+        },
+        {
+          "id": "E-REV02-04",
+          "from": "[视图] reported 评审单元",
+          "full": "escalate 同提交附带升级事件",
+          "to": "[权威] escalated 与待用户决定",
+          "short": "04 升级"
+        },
+        {
+          "id": "E-REV02-05",
+          "from": "[权威] review-blocked",
+          "full": "引用当前决定，basis=condition-cleared",
+          "to": "[代码] resumption 再决定",
+          "short": "05 条件解除"
+        },
+        {
+          "id": "E-REV02-06",
+          "from": "[权威] escalated 与待用户决定",
+          "full": "先 record-decision，再引用 escalationEventId",
+          "to": "[代码] resumption 再决定",
+          "short": "06 用户已回答"
+        },
+        {
+          "id": "E-REV02-07",
+          "from": "[代码] rework",
+          "full": "从真实决定与前结果构建 rework context",
+          "to": "[计划] 按原任务包准备返工投递",
+          "short": "07 构建返工依据"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-review.png",
+      "audit": {
+        "name": "06 · 评审与恢复",
+        "diagramId": "34:781",
+        "panelId": "42:1118",
+        "logicalNodes": 7,
+        "drawnNodes": 7,
+        "edges": 7,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "失败分类决定允许动作",
+      "path": "maps/08-real-environment-testing/runtime-call-flow.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:6e61043e0cffa2ab69799a382f91d9f95e3bdb9ee182cfb02de348a4a041013d",
+      "documentDigest": "sha256:cd0da85ea32b835a70f799b930f3990262a17874130d58c6be648f00c5492866",
+      "sourceFingerprint": "sha256:42cf14d491a48f025282262f9eda70e71d8607ec4b1a6116fcc4d3d4a9b4f160",
+      "diagramId": "35:819",
+      "panelId": "42:1122",
+      "legendId": "45:1109",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1122",
+      "nodeLabels": {
+        "A": "[视图] 全合同步骤的合并判定",
+        "B": "[代码] accept：并集 pass、completed、完成观察",
+        "C": "[代码] 可重跑故障与未满预算",
+        "D": "[权威] request-another-attempt",
+        "F": "[权威] blocked：环境条件未就绪",
+        "H": "[代码] resumption 后可按原合同重跑",
+        "I": "[权威] product-defect 修复授权",
+        "J": "[权威] needs-decision 升级"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-TST02-01",
+          "from": "[视图] 全合同步骤的合并判定",
+          "full": "并集 pass、结果 completed、完成证据 confirmed 同时满足",
+          "to": "[代码] accept：并集 pass、completed、完成观察",
+          "short": "01 通过且完成"
+        },
+        {
+          "id": "E-TST02-02",
+          "from": "[视图] 全合同步骤的合并判定",
+          "full": "harness-defect、flaky、missing-evidence；连续 flaky 拒绝",
+          "to": "[代码] 可重跑故障与未满预算",
+          "short": "02 可重跑分类"
+        },
+        {
+          "id": "E-TST02-03",
+          "from": "[代码] 可重跑故障与未满预算",
+          "full": "stepIds 只能含失败步骤且必须覆盖全部失败步骤",
+          "to": "[权威] request-another-attempt",
+          "short": "03 覆盖失败步骤"
+        },
+        {
+          "id": "E-TST02-04",
+          "from": "[视图] 全合同步骤的合并判定",
+          "full": "environment 或整体 blocked 才可 blocked",
+          "to": "[权威] blocked：环境条件未就绪",
+          "short": "04 环境阻塞"
+        },
+        {
+          "id": "E-TST02-05",
+          "from": "[权威] blocked：环境条件未就绪",
+          "full": "condition-cleared 或已回答升级；仍检查预算和范围",
+          "to": "[代码] resumption 后可按原合同重跑",
+          "short": "05 恢复后再试"
+        },
+        {
+          "id": "E-TST02-06",
+          "from": "[视图] 全合同步骤的合并判定",
+          "full": "产品缺陷步骤映射至受影响的已接受实现目标",
+          "to": "[权威] product-defect 修复授权",
+          "short": "06 产品缺陷"
+        },
+        {
+          "id": "E-TST02-07",
+          "from": "[视图] 全合同步骤的合并判定",
+          "full": "需要用户决定时同提交附加升级事件",
+          "to": "[权威] needs-decision 升级",
+          "short": "07 用户决定"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-testing.png",
+      "audit": {
+        "name": "07 · 测试分类",
+        "diagramId": "35:819",
+        "panelId": "42:1122",
+        "logicalNodes": 8,
+        "drawnNodes": 8,
+        "edges": 7,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "读取：完整扫描与有限返回分开",
+      "path": "maps/11-kernel/hook-history.md",
+      "diagramIndex": 1,
+      "sourceDigest": "sha256:b62d81215f2ee2f33750b9e71e65ee90cd461417b9748ec311742df10dd8191c",
+      "documentDigest": "sha256:f165029eff2d7b3ca09aaa6216803957bb464c29ba76058c54807fb96b97823a",
+      "sourceFingerprint": "sha256:d96ebcc599e511b7a19a97dd1820ed92f0506e5a71032df728a3c54aa1f05caf",
+      "diagramId": "36:856",
+      "panelId": "42:1126",
+      "legendId": "45:1111",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1126",
+      "nodeLabels": {
+        "a": "visitHostHookDirectory",
+        "b": "每目录2048项稳定分页",
+        "c": "八项批次按父目录固定读域",
+        "d": "文件名、位置、host、recordId复验",
+        "e": "query：records＋skipped＋complete",
+        "f": "scan：全量回调本地临时聚合",
+        "g": "失败丢弃聚合→unavailable",
+        "h": "endpoint要求complete且skipped为0"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-HREAD-01",
+          "from": "visitHostHookDirectory",
+          "full": "只进入合法日期和0700分片",
+          "to": "每目录2048项稳定分页",
+          "short": "01 合法分片"
+        },
+        {
+          "id": "E-HREAD-02",
+          "from": "每目录2048项稳定分页",
+          "full": "分页条目按小批次读取",
+          "to": "八项批次按父目录固定读域",
+          "short": "02 分批读取"
+        },
+        {
+          "id": "E-HREAD-03",
+          "from": "八项批次按父目录固定读域",
+          "full": "稳定文件与父节点双重核对",
+          "to": "文件名、位置、host、recordId复验",
+          "short": "03 双重复验"
+        },
+        {
+          "id": "E-HREAD-04",
+          "from": "文件名、位置、host、recordId复验",
+          "full": "超过结果上限complete为false",
+          "to": "query：records＋skipped＋complete",
+          "short": "04 标记不完整"
+        },
+        {
+          "id": "E-HREAD-05",
+          "from": "文件名、位置、host、recordId复验",
+          "full": "目录历史不受结果条数上限截断",
+          "to": "scan：全量回调本地临时聚合",
+          "short": "05 保留全量历史"
+        },
+        {
+          "id": "E-HREAD-06",
+          "from": "scan：全量回调本地临时聚合",
+          "full": "目录竞态、不可读、中止不伪造零记录",
+          "to": "失败丢弃聚合→unavailable",
+          "short": "06 报告扫描失败"
+        },
+        {
+          "id": "E-HREAD-07",
+          "from": "query：records＋skipped＋complete",
+          "full": "不完整或损坏阻止身份准入",
+          "to": "endpoint要求complete且skipped为0",
+          "short": "07 拒绝身份准入"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-hook.png",
+      "audit": {
+        "name": "08 · Hook 读取",
+        "diagramId": "36:856",
+        "panelId": "42:1126",
+        "logicalNodes": 8,
+        "drawnNodes": 8,
+        "edges": 7,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "真实发布调用：Event是不可逆边界",
+      "path": "maps/14-evidence/runtime-call-flow.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:c637e38f9ce3279b174d96c9f89539a4c84293d1e4688e69235118df1f84c7ee",
+      "documentDigest": "sha256:a33b90dc8c5c3eb76592ce0d063061bf2c0bd99d6de69add00c0681622d39f37",
+      "sourceFingerprint": "sha256:c17c6a14ab24a8ef1f717db7d22620c4dfe8c6a65229fe6fbbe69c9d53bf8b03",
+      "diagramId": "37:890",
+      "panelId": "42:1130",
+      "legendId": "45:1113",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1130",
+      "nodeLabels": {
+        "a": "Application.apply：复验健康基线",
+        "j": "createJournal：Demand唯一槽位",
+        "s": "stage：payload后Manifest",
+        "e": "追加精确Event",
+        "f": "完整stage同根发布final",
+        "c": "事务期Authority精确闭合",
+        "r": "删journal后健康闭包"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-EVPUB-01",
+          "from": "Application.apply：复验健康基线",
+          "full": "Config与Demand expectation相符",
+          "to": "createJournal：Demand唯一槽位",
+          "short": "01 预期一致"
+        },
+        {
+          "id": "E-EVPUB-02",
+          "from": "createJournal：Demand唯一槽位",
+          "full": "exact journal许可物化",
+          "to": "stage：payload后Manifest",
+          "short": "02 冻结日志"
+        },
+        {
+          "id": "E-EVPUB-03",
+          "from": "stage：payload后Manifest",
+          "full": "完整stage后追加",
+          "to": "追加精确Event",
+          "short": "03 提交事件"
+        },
+        {
+          "id": "E-EVPUB-04",
+          "from": "追加精确Event",
+          "full": "Settlement证明exact commit存在",
+          "to": "完整stage同根发布final",
+          "short": "04 确认 commit"
+        },
+        {
+          "id": "E-EVPUB-05",
+          "from": "完整stage同根发布final",
+          "full": "final整树与事务digest复验",
+          "to": "事务期Authority精确闭合",
+          "short": "05 复验 final"
+        },
+        {
+          "id": "E-EVPUB-06",
+          "from": "事务期Authority精确闭合",
+          "full": "journal最后退休再健康读取",
+          "to": "删journal后健康闭包",
+          "short": "06 退休日志"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-publication.png",
+      "audit": {
+        "name": "09 · 证据发布",
+        "diagramId": "37:890",
+        "panelId": "42:1130",
+        "logicalNodes": 7,
+        "drawnNodes": 7,
+        "edges": 6,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "恢复分支：日志、commit与物理清单",
+      "path": "maps/14-evidence/runtime-call-flow.md",
+      "diagramIndex": 1,
+      "sourceDigest": "sha256:31de00055108e3a644b626e25c0b5e3cce20d64645e56457a85fe7c5fb392a7f",
+      "documentDigest": "sha256:a33b90dc8c5c3eb76592ce0d063061bf2c0bd99d6de69add00c0681622d39f37",
+      "sourceFingerprint": "sha256:c17c6a14ab24a8ef1f717db7d22620c4dfe8c6a65229fe6fbbe69c9d53bf8b03",
+      "diagramId": "38:931",
+      "panelId": "42:1134",
+      "legendId": "45:1115",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1134",
+      "nodeLabels": {
+        "a": "recover加载journal",
+        "h": "无日志：healthy",
+        "i": "事务inventory＋commit查询",
+        "x": "selector有、commit无：停止",
+        "f": "commit在：前向完成",
+        "b": "commit无：比较CAS／Config／stage",
+        "r": "过期：安全退休candidate＋journal",
+        "s": "有效：检查stage完整度",
+        "p": "partial：重开来源补payload",
+        "e": "complete：跳过source追加Event"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-EVREC-01",
+          "from": "recover加载journal",
+          "full": "无日志验证健康根",
+          "to": "无日志：healthy",
+          "short": "01 无日志"
+        },
+        {
+          "id": "E-EVREC-02",
+          "from": "recover加载journal",
+          "full": "有日志用事务期闭包",
+          "to": "事务inventory＋commit查询",
+          "short": "02 有日志"
+        },
+        {
+          "id": "E-EVREC-03",
+          "from": "事务inventory＋commit查询",
+          "full": "矛盾证据不可回滚",
+          "to": "selector有、commit无：停止",
+          "short": "03 矛盾停止"
+        },
+        {
+          "id": "E-EVREC-04",
+          "from": "事务inventory＋commit查询",
+          "full": "commit存在只前向",
+          "to": "commit在：前向完成",
+          "short": "04 已提交前向"
+        },
+        {
+          "id": "E-EVREC-05",
+          "from": "事务inventory＋commit查询",
+          "full": "缺目标commit再比较预期",
+          "to": "commit无：比较CAS／Config／stage",
+          "short": "05 核对原预期"
+        },
+        {
+          "id": "E-EVREC-06",
+          "from": "commit无：比较CAS／Config／stage",
+          "full": "CAS变；或未完整且Config变",
+          "to": "过期：安全退休candidate＋journal",
+          "short": "06 过期退休"
+        },
+        {
+          "id": "E-EVREC-07",
+          "from": "commit无：比较CAS／Config／stage",
+          "full": "aggregate预期仍相同",
+          "to": "有效：检查stage完整度",
+          "short": "07 预期有效"
+        },
+        {
+          "id": "E-EVREC-08",
+          "from": "有效：检查stage完整度",
+          "full": "partial且Config仍同源",
+          "to": "partial：重开来源补payload",
+          "short": "08 补齐 partial"
+        },
+        {
+          "id": "E-EVREC-09",
+          "from": "有效：检查stage完整度",
+          "full": "stage-complete直接追加",
+          "to": "complete：跳过source追加Event",
+          "short": "09 完整 stage"
+        },
+        {
+          "id": "E-EVREC-10",
+          "from": "partial：重开来源补payload",
+          "full": "补齐后追加",
+          "to": "complete：跳过source追加Event",
+          "short": "10 追加事件"
+        },
+        {
+          "id": "E-EVREC-11",
+          "from": "complete：跳过source追加Event",
+          "full": "同一事务前向闭合",
+          "to": "commit在：前向完成",
+          "short": "11 前向闭合"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-recovery.png",
+      "audit": {
+        "name": "10 · 证据恢复",
+        "diagramId": "38:931",
+        "panelId": "42:1134",
+        "logicalNodes": 10,
+        "drawnNodes": 10,
+        "edges": 11,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "两段关闭与并发复验",
+      "path": "maps/15-pod/runtime-call-flow.md",
+      "diagramIndex": 1,
+      "sourceDigest": "sha256:877acea5da54364b9e8f3b3bfbe55ab903599720cf160cf775be24b9bef831a3",
+      "documentDigest": "sha256:43da3372e65fd50b6340929ff28ad06436eeeaa036434e8017fbe5604e29b60f",
+      "sourceFingerprint": "sha256:7bf5a286dc9477b6f4fc0463e48a229467a284f703ad6a98b8db8602d4bb7fca",
+      "diagramId": "39:978",
+      "panelId": "42:1138",
+      "legendId": "45:1117",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1138",
+      "nodeLabels": {
+        "a": "close intent→planClose",
+        "b": "open：非primary、无活动Demand、处置齐全",
+        "c": "closing：无绑定且回执检出不在",
+        "l": "applyPod：按podId短锁",
+        "v": "重验Config与新计划digest",
+        "first": "第一段：Config记closing＋branches",
+        "last": "第二段：Config移除Pod与窗口",
+        "r": "退役自有投影和回执目录"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-PODCLOSE-01",
+          "from": "close intent→planClose",
+          "full": "尚未closing用第一段准入",
+          "to": "open：非primary、无活动Demand、处置齐全",
+          "short": "01 首段准入"
+        },
+        {
+          "id": "E-PODCLOSE-02",
+          "from": "close intent→planClose",
+          "full": "已closing用第二段准入",
+          "to": "closing：无绑定且回执检出不在",
+          "short": "02 末段准入"
+        },
+        {
+          "id": "E-PODCLOSE-03",
+          "from": "open：非primary、无活动Demand、处置齐全",
+          "full": "ready计划允许apply",
+          "to": "applyPod：按podId短锁",
+          "short": "03 申请关闭"
+        },
+        {
+          "id": "E-PODCLOSE-04",
+          "from": "closing：无绑定且回执检出不在",
+          "full": "ready计划允许apply",
+          "to": "applyPod：按podId短锁",
+          "short": "04 完成关闭"
+        },
+        {
+          "id": "E-PODCLOSE-05",
+          "from": "applyPod：按podId短锁",
+          "full": "锁内重读占用并重算计划",
+          "to": "重验Config与新计划digest",
+          "short": "05 锁内复验"
+        },
+        {
+          "id": "E-PODCLOSE-06",
+          "from": "重验Config与新计划digest",
+          "full": "close-request分支",
+          "to": "第一段：Config记closing＋branches",
+          "short": "06 标记 closing"
+        },
+        {
+          "id": "E-PODCLOSE-07",
+          "from": "重验Config与新计划digest",
+          "full": "close-complete分支",
+          "to": "第二段：Config移除Pod与窗口",
+          "short": "07 最终清理"
+        },
+        {
+          "id": "E-PODCLOSE-08",
+          "from": "第二段：Config移除Pod与窗口",
+          "full": "只清Wakeflow自有记录",
+          "to": "退役自有投影和回执目录",
+          "short": "08 只清自有"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-pod.png",
+      "audit": {
+        "name": "11 · Pod 关闭",
+        "diagramId": "39:978",
+        "panelId": "42:1138",
+        "logicalNodes": 8,
+        "drawnNodes": 8,
+        "edges": 8,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "分域读取：完整性与局部失败",
+      "path": "maps/16-observation/runtime-call-flow.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:63eb09244df0ff8a94cca94f18338ca37f0d5683f8f63a143a713854f0364059",
+      "documentDigest": "sha256:da827f102c519f516cc3389967095e457c19db5496dd71f7bc054b59050e4e74",
+      "sourceFingerprint": "sha256:968c020aceaea158561759b07276ec0beee62e115f86e848ccc450e5b3f2daf2",
+      "diagramId": "40:1018",
+      "panelId": "42:1142",
+      "legendId": "45:1119",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1142",
+      "nodeLabels": {
+        "a": "observeWorkspace",
+        "b": "observeDomain：布局／板／Demand／claims",
+        "h": "full：Binding／hook／窗口投影／资产",
+        "r": "full：repo pointers与归档评审",
+        "v": "observed：有值但可含skipped或局部issue",
+        "u": "unavailable：value=null＋issue",
+        "x": "取消或无reason缺陷上抛",
+        "o": "route/overall/next只派生"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-OBSDOM-01",
+          "from": "observeWorkspace",
+          "full": "逐域读取，仍保留单次观察结构",
+          "to": "observeDomain：布局／板／Demand／claims",
+          "short": "01 分域观察"
+        },
+        {
+          "id": "E-OBSDOM-02",
+          "from": "observeWorkspace",
+          "full": "scope为full才读",
+          "to": "full：Binding／hook／窗口投影／资产",
+          "short": "02 full 读取"
+        },
+        {
+          "id": "E-OBSDOM-03",
+          "from": "observeWorkspace",
+          "full": "scope为full才读",
+          "to": "full：repo pointers与归档评审",
+          "short": "03 full 读取"
+        },
+        {
+          "id": "E-OBSDOM-04",
+          "from": "observeDomain：布局／板／Demand／claims",
+          "full": "读取成功",
+          "to": "observed：有值但可含skipped或局部issue",
+          "short": "04 观察成功"
+        },
+        {
+          "id": "E-OBSDOM-05",
+          "from": "observeDomain：布局／板／Demand／claims",
+          "full": "带reason环境失败隔离",
+          "to": "unavailable：value=null＋issue",
+          "short": "05 隔离环境失败"
+        },
+        {
+          "id": "E-OBSDOM-06",
+          "from": "observeDomain：布局／板／Demand／claims",
+          "full": "aborted或无reason不吞",
+          "to": "取消或无reason缺陷上抛",
+          "short": "06 中止不吞"
+        },
+        {
+          "id": "E-OBSDOM-07",
+          "from": "observed：有值但可含skipped或局部issue",
+          "full": "按优先级派生maintenance/blocked/degraded/active/idle",
+          "to": "route/overall/next只派生",
+          "short": "07 派生总体状态"
+        },
+        {
+          "id": "E-OBSDOM-08",
+          "from": "unavailable：value=null＋issue",
+          "full": "不可读域不会当作健康空集合",
+          "to": "route/overall/next只派生",
+          "short": "08 标明不可读"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-observation.png",
+      "audit": {
+        "name": "12 · 分域观察",
+        "diagramId": "40:1018",
+        "panelId": "42:1142",
+        "logicalNodes": 8,
+        "drawnNodes": 8,
+        "edges": 8,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    },
+    {
+      "title": "源码按真实闭包生成双宿主插件与文件清单",
+      "path": "maps/17-artifacts-and-contracts/README.md",
+      "diagramIndex": 0,
+      "sourceDigest": "sha256:0a3bb61bdeb8a5882d19daea5ee87c227df9f055cb3b936dffd1483fb453b732",
+      "documentDigest": "sha256:da14798511dbeedeb0ffc450ba555dc8b30233315d5d7a57529dc7d92b6af4e7",
+      "sourceFingerprint": "sha256:f67c2c474d9adf1396a93352a96648471d4f5b6e715fd771c4ca0c93189c3b38",
+      "diagramId": "41:1077",
+      "panelId": "42:1146",
+      "legendId": "45:1121",
+      "url": "https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=42-1146",
+      "nodeLabels": {
+        "S": "[源码] 手写 TS 与 generated 合同",
+        "T": "[工具] tsc -b",
+        "J": "[生成] .build/src 的 JS",
+        "C": "[工具] candidateClosure MCP 与 hook 分别展开",
+        "H": "[源码] 当前宿主数据模块",
+        "X": "[源码] agent-text 与品牌资产",
+        "V": "[权威] release/version.json",
+        "N": "[输入] lock v3 与已安装 npm 包",
+        "D": "[工具] 运行依赖闭包与文件裁剪",
+        "P": "[工具] assembleCandidate payload + artifact-manifest",
+        "R": "[工具] 整组 stage 输出替换",
+        "CO": "[生成] plugins/codex-wakeflow",
+        "CL": "[生成] plugins/claude-code-wakeflow"
+      },
+      "edgeAliases": [
+        {
+          "id": "E-ART-01",
+          "from": "[源码] 手写 TS 与 generated 合同",
+          "full": "编译当前源码",
+          "to": "[工具] tsc -b",
+          "short": "01 编译"
+        },
+        {
+          "id": "E-ART-02",
+          "from": "[工具] tsc -b",
+          "full": "生成 JS 供构建器读取",
+          "to": "[生成] .build/src 的 JS",
+          "short": "02 输出 JS"
+        },
+        {
+          "id": "E-ART-03",
+          "from": "[生成] .build/src 的 JS",
+          "full": "解析静态及字面动态 import",
+          "to": "[工具] candidateClosure MCP 与 hook 分别展开",
+          "short": "03 分析引用"
+        },
+        {
+          "id": "E-ART-04",
+          "from": "[工具] candidateClosure MCP 与 hook 分别展开",
+          "full": "提供直接外部包集合",
+          "to": "[工具] 运行依赖闭包与文件裁剪",
+          "short": "04 外部包集合"
+        },
+        {
+          "id": "E-ART-05",
+          "from": "[输入] lock v3 与已安装 npm 包",
+          "full": "锁版本与安装版本交叉核对",
+          "to": "[工具] 运行依赖闭包与文件裁剪",
+          "short": "05 版本复验"
+        },
+        {
+          "id": "E-ART-06",
+          "from": "[工具] candidateClosure MCP 与 hook 分别展开",
+          "full": "复制准入编译模块",
+          "to": "[工具] assembleCandidate payload + artifact-manifest",
+          "short": "06 编译模块"
+        },
+        {
+          "id": "E-ART-07",
+          "from": "[源码] 当前宿主数据模块",
+          "full": "构建期动态读取 hook MCP 与文本值",
+          "to": "[工具] assembleCandidate payload + artifact-manifest",
+          "short": "07 宿主数据"
+        },
+        {
+          "id": "E-ART-08",
+          "from": "[源码] agent-text 与品牌资产",
+          "full": "渲染文本并复制资产",
+          "to": "[工具] assembleCandidate payload + artifact-manifest",
+          "short": "08 渲染资产"
+        },
+        {
+          "id": "E-ART-09",
+          "from": "[权威] release/version.json",
+          "full": "填写两宿主版本元数据",
+          "to": "[工具] assembleCandidate payload + artifact-manifest",
+          "short": "09 版本元数据"
+        },
+        {
+          "id": "E-ART-10",
+          "from": "[工具] 运行依赖闭包与文件裁剪",
+          "full": "内置精确运行依赖文件",
+          "to": "[工具] assembleCandidate payload + artifact-manifest",
+          "short": "10 运行依赖"
+        },
+        {
+          "id": "E-ART-11",
+          "from": "[工具] assembleCandidate payload + artifact-manifest",
+          "full": "两宿主完成后才发布 stage",
+          "to": "[工具] 整组 stage 输出替换",
+          "short": "11 双宿主完成"
+        },
+        {
+          "id": "E-ART-12",
+          "from": "[工具] 整组 stage 输出替换",
+          "full": "生成 Codex 目录",
+          "to": "[生成] plugins/codex-wakeflow",
+          "short": "12 Codex 制品"
+        },
+        {
+          "id": "E-ART-13",
+          "from": "[工具] 整组 stage 输出替换",
+          "full": "生成 Claude 目录",
+          "to": "[生成] plugins/claude-code-wakeflow",
+          "short": "13 Claude 制品"
+        }
+      ],
+      "screenshot": "plans/evidence/2026-10-02-figjam-artifacts.png",
+      "audit": {
+        "name": "13 · 制品与合同",
+        "diagramId": "41:1077",
+        "panelId": "42:1146",
+        "logicalNodes": 13,
+        "drawnNodes": 13,
+        "edges": 13,
+        "nodesMatch": true,
+        "edgesMatch": true,
+        "legendMissing": [],
+        "overflow": false
+      }
+    }
+  ],
+  "limitations": [
+    "精选 13 张图同步到 FigJam；全部 77 张图及逐边源码/测试证据以本地为准。",
+    "截图是派生阅读面，不构成运行时、发布或真实宿主验证。",
+    "图下长条件保留本地 E 编号；简写箭头须结合条件表阅读。"
+  ]
+}

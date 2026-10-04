@@ -1,0 +1,157 @@
+{
+  "kind": "WakeflowAtlasValidationResults",
+  "observedOn": "2026-10-02",
+  "rootTest": {
+    "command": "npm test",
+    "exitCode": 0,
+    "tests": 1182,
+    "passed": 1182,
+    "failed": 0,
+    "skipped": 0,
+    "durationMilliseconds": 920862.056708,
+    "lateSourceChanges": [
+      "src/capabilities/delivery/service.ts",
+      "src/kernel/hook-observations.ts",
+      "tooling/testing/run-typescript-tests.ts"
+    ],
+    "qualification": "全量门通过；随后发现的三个手写文件晚变更已重新语义审阅，并由下列聚焦测试及最终静态门单独核验。原全量回执不冒充晚变更再次全量通过。"
+  },
+  "focusedLateChanges": {
+    "command": "npm run test:typescript:focused -- tests/capabilities/delivery/service.test.ts tests/kernel/hook-observations.test.ts",
+    "exitCode": 1,
+    "tests": 19,
+    "passed": 18,
+    "failed": 0,
+    "cancelled": 1,
+    "timeoutMilliseconds": 240000,
+    "test": "旧平铺目录的 16385 条近期有效记录可完整扫描，目标查询与逐条证据读取不截断",
+    "isolatedRerun": {
+      "command": "node --test --test-name-pattern='旧平铺目录的 16385 条近期有效记录' .build/tests/kernel/hook-observations.test.js",
+      "exitCode": 0,
+      "tests": 1,
+      "passed": 1,
+      "durationMilliseconds": 111474.036167,
+      "qualification": "The isolated case passed in 111 seconds; the earlier 240-second timeout remains recorded and was not an assertion failure."
+    }
+  },
+  "atlas": {
+    "status": "passed",
+    "lastPassingCommand": "npm run check",
+    "lastPassingExitCode": 0,
+    "checkerRegressionTests": 13,
+    "documents": 64,
+    "mermaidBlocks": 77,
+    "fingerprints": 59,
+    "allFingerprintsCurrent": true,
+    "directImportEdgesChecked": 181,
+    "symbolReferencesChecked": 1289,
+    "testSymbolReferencesChecked": 505,
+    "unanchoredTestEvidenceRows": 0,
+    "qualification": "独立门全部通过；Vite 保留大 chunk 体积提示，无构建错误。当前 JSON/PNG/复现脚本作为 URL 资产打包。",
+    "command": "npm run check",
+    "exitCode": 0,
+    "log": "plans/review-2026-10-02/atlas-final-check.log"
+  },
+  "browser": {
+    "renderer": "mermaid",
+    "rendererVersion": "11.17.2",
+    "diagrams": 77,
+    "rendered": 77,
+    "receipt": "plans/evidence/current-mermaid-render.json",
+    "initialIssueResolved": "03 总览的 subgraph/node ID 重名已修复，最终 77 张均通过。",
+    "readerChecks": [
+      "阅读与全图缩放",
+      "点选连线显示详情",
+      "定位证据跳转并高亮对应 E 行",
+      "静态导入探索页",
+      "全局搜索逐文件索引",
+      "嵌套审阅报告导航",
+      "递归 JSON 台账和 PNG 证据被纳入构建资产"
+    ],
+    "readerRepairs": [
+      "延迟到实际拖动时才捕获指针，恢复点击连线取证",
+      "阅读模式识别小写 Mermaid 节点 ID",
+      "打包 plans 递归 JSON 与 PNG 证据，避免构建版失去台账和截图链接"
+    ],
+    "productionPreviewProbe": {
+      "status": "blocked-by-browser",
+      "detail": "独立预览端口被当前浏览器客户端以 ERR_BLOCKED_BY_CLIENT 拒绝，未绕过；开发服务器的阅读器交互已验证。正式构建成功，产物中的 JSON/PNG/复现脚本另经文件检查。"
+    }
+  },
+  "figjam": {
+    "status": "passed",
+    "diagrams": 13,
+    "logicalNodes": 114,
+    "drawnNodes": 117,
+    "edges": 115,
+    "nodeAndConnectorParity": true,
+    "fullModuleConditionsPreserved": true,
+    "screenshotsInspected": 13,
+    "overflow": 0,
+    "manifest": "plans/review-2026-10-02/figjam-derivation.json",
+    "qualification": "投递图重复显示 accepted/rejected 结局以减少交叉；7 个逻辑节点展示为10个节点，语义一致。"
+  },
+  "liveHostSessions": {
+    "status": "not-run",
+    "qualification": "本轮没有启动登录真实 Codex 线程或 Claude Code 账户会话；不以静态门、场景或 smoke 替代。"
+  },
+  "artifactSmoke": {
+    "command": "npm run smoke:artifacts",
+    "exitCode": 0,
+    "hosts": [
+      "codex",
+      "claude-code"
+    ],
+    "eachHost": {
+      "tools": 20,
+      "fresh": "completed",
+      "reconcile": "noop",
+      "status": "idle",
+      "verify": "ok",
+      "podPreview": "ready",
+      "hook": "landed"
+    },
+    "qualification": "指定一次性目录中的 stdio 与 hook smoke；不等于登录真实宿主会话。"
+  },
+  "focusedRunnerChange": {
+    "command": "env WAKEFLOW_TEST_CONCURRENCY=1 npm run test:typescript:focused -- tests/tooling/testing/run-typescript-tests.test.ts tests/tooling/testing/test-schedule-order.test.ts",
+    "exitCode": 0,
+    "tests": 9,
+    "passed": 9,
+    "failed": 0
+  },
+  "focusedTestingDecisions": {
+    "command": "node --test .build/tests/capabilities/result-review/decide.test.js",
+    "sourceTest": "tests/capabilities/result-review/decide.test.ts",
+    "exitCode": 0,
+    "tests": 7,
+    "passed": 7,
+    "qualification": "代理直接执行既有 .build 产物；该次未单独重新编译。用于核对测试 accept 分支的合并 pass、completed 与完成证据要求，不替代最终根静态门。"
+  },
+  "finalRootStaticGate": {
+    "command": "npm run typecheck && npm run check:architecture && npm run lint && npm run format:check && npm run check:unused && npm run schema:check && npm run build:check",
+    "exitCode": 0,
+    "architecture": {
+      "modules": 746,
+      "dependencies": 5184,
+      "productionRoots": 16
+    },
+    "schemas": 95,
+    "qualification": "在三个晚变更之后运行；lint 保留既有 4 warning、3 info，无错误，未自动修改生产文件。"
+  },
+  "sourceCoverage": {
+    "semanticHandwrittenFiles": 363,
+    "schemaGeneratedPairs": 95,
+    "testFilesInventoried": 288,
+    "hashDrift": 0,
+    "fullSemanticTestFileReviewClaimed": false,
+    "record": "plans/review-2026-10-02/review-coverage.json"
+  },
+  "git": {
+    "branch": "main",
+    "localOriginMainAhead": 0,
+    "localOriginMainBehind": 0,
+    "diffCheck": "passed",
+    "qualification": "工作树包含大量既有及并行未提交改动；本任务只修改 wakeflow-architecture-atlas。未 commit、push、tag、发布或刷新插件缓存。未刷新远端引用，ahead/behind 相对本地 origin/main。"
+  }
+}

@@ -1,0 +1,172 @@
+[
+  {
+    "path": "src/kernel/privacy-scan.ts",
+    "responsibility": "共享词法隐私扫描：凭证类别、绝对路径和UUID候选、CSI去装饰视图、原文位置与opaque标记。",
+    "branches": [
+      "分别采集private-key、供应商凭证、assignment、Authorization和URL-userinfo；后3类归入credential-assignment，不依赖路径白名单。",
+      "候选路径含file URI、盘符、UNC、POSIX、HOME/波浪线；Unicode紧邻系统路径有附加规则，普通Unicode斜杠列表与JS正则有回归。",
+      "file URI拒绝query/hash并解码；Windows和POSIX各自规范化点段，含控制字符或无法规范化的候选不能获白名单；按同分隔符、根相等或完整子路径前缀判断，大小写敏感。",
+      "去CSI保留累计原始偏移；原文始终扫描；存在CSI时原文仅保留凭证类别，再把去装饰视图的所有命中映回原文首尾。",
+      "同kind/index选最长命中，按原始index排序，createLocator按LF定位1起始的UTF16行列；结果不携带匹配文本。",
+      "opaque仅由去CSI后的未知控制字符决定，不阻止可解码文本扫描；scanPrivacy仅投影findings，assertPrivacyClean首命中失败。",
+      "isSystemAbsolutePath供需求语境使用：显式定位器优先，POSIX在规范化后按固定系统目录集合分类。",
+      "UUID_PATTERN采集下划线/连字符前缀后的UUID；uuidIsPrefixed只承认非空完整已知前缀且前方不粘接ASCII字母数字/_/-。未知前缀和伪已知后缀被识别；直接粘接字母数字或有后缀的复合文本仍不采集为UUID（新测试明确约束）。"
+    ],
+    "effects": [
+      "纯文本/词法路径函数；不读文件、不查realpath、不修改文本、不自动脱敏。"
+    ],
+    "consumers": [
+      "src/capabilities/requirement/decide.ts",
+      "src/capabilities/demand/decide.ts",
+      "src/capabilities/result-review/decide.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts"
+    ],
+    "tests": [
+      "tests/kernel/privacy-scan.test.ts#scanPrivacy",
+      "tests/kernel/privacy-scan.test.ts#scanPrivacyText",
+      "tests/kernel/privacy-scan.test.ts#assertPrivacyClean",
+      "tests/capabilities/requirement/decide.test.ts#privacyBlockers",
+      "tests/capabilities/result-review/decide.test.ts#derivePrivacyRules",
+      "tests/capabilities/demand/decide.test.ts#payloadPrivacyBlockers",
+      "tests/governance/evidence/managed-evidence-capture-planning-service.test.ts#ManagedEvidenceCapturePlanningService"
+    ],
+    "findings": [
+      "RC4-PRIV-02已修复并独立复核：未知下划线/连字符前缀UUID现在命中；前态探针原样保留。",
+      "有限启发式边界仍存在：候选识别边界、编码内容、无法解码载荷不等于全面安全检查。"
+    ],
+    "changeConclusion": "rc.4扩展结构化凭证、URI/盘符/UNC及词法包含、CSI视图与opaque并行分类；新增误报回归，保留明确探测边界。 本轮另修UUID候选边界和完整允许前缀判断，新增空前缀/伪前缀/后缀边界回归。",
+    "sha256": "27c15a87cf09b947d7df8adfc90ac31013e9a476a85be99b16c9237df0a43f87",
+    "previousSha256": "f8f39b1f994c403ae55b77221b0476ac923a62f39667aa4af83ddde4c39f0c53",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "change": "changed",
+    "method": "完整读取当前TypeScript并核验相关调用方/消费者/Schema及聚焦断言；额外以当前源码内存转译和一次性fixture复现，不把仅符号存在视作全分支测试。",
+    "beforeFixSha256": "fb3bc815e07a5320331c85444b1391589516351546bd2ce1357c63d75189e1e9",
+    "baselineSha256": "fb3bc815e07a5320331c85444b1391589516351546bd2ce1357c63d75189e1e9",
+    "lateChange": "本轮发现后由另一开发线程修复；重读当前源码与新回归，并以独立后态探针验证。",
+    "finalSourceVersion": "1.1.0-rc.5"
+  },
+  {
+    "path": "src/capabilities/requirement/decide.ts",
+    "responsibility": "需求包纯分析：章节与验收、确认摘要、需求隐私语境、发布阻塞、确定性身份和认领迁移条件。",
+    "branches": [
+      "privacyBlockers扫描后只对路径命中调用isSystemAbsolutePath；普通站内路由被豁免，显式URI/盘符/UNC/HOME或规范化系统路径保留；每段最多32项，仅输出标签/行/类别。",
+      "sectionsOf映射中英文已知章节或规范化锚点，首次章节保留，后续重复记duplicate-section；必需章节按demandType和document role判断。",
+      "summaryOf不提取附件，只保留摘要锚点且每节最多4000码元；requirement的非空user-confirmation节产生bodyDigest。",
+      "analyzePackageDocuments独立积累title和每份文档的privacyHit；重复章节与隐私blocker仍按原顺序保留。非research要求至少一个顶层验收列表，保持历史ledger读取独立。",
+      "derivePublishAssessment将analysis.privacyHit与headerPrivacy非空合并；有界blockers仍包含缺章、确认、测试模式、supersedes并按256码点/64项限制，独立privacyHit不因展示截断丢失。",
+      "deriveRequirementId按program/design/title/type/priority/window/testing/taskPlanReview/supersedes/parked/confirmedAt/按path排序成员摘要/确认节摘要形成稳定ID。",
+      "deriveClaimTransitionBlockers拒绝未知包和stateDigest变化；activate仅parked，withdraw仅pending/parked。"
+    ],
+    "effects": [
+      "纯决定，不读取文件、时钟或宿主，不执行发布和看板写入。"
+    ],
+    "consumers": [
+      "src/capabilities/requirement/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/requirement/decide.test.ts#privacyBlockers",
+      "tests/capabilities/requirement/decide.test.ts#analyzePackageDocuments",
+      "tests/capabilities/requirement/decide.test.ts#derivePublishAssessment",
+      "tests/capabilities/requirement/decide.test.ts#deriveRequirementId",
+      "tests/capabilities/requirement/decide.test.ts#deriveClaimTransitionBlockers",
+      "tests/capabilities/requirement/service.test.ts#executeRequirementPublicationRequest"
+    ],
+    "findings": [
+      "RC4-PRIV-01已修复并独立复核：披露事实与有界展示诊断解耦；新公开服务回归覆盖五类文本来源及饱和干净列表。"
+    ],
+    "changeConclusion": "rc.4将需求系统路径分类统一到内核，新增URI/盘符/UNC/规范化路径/CSI处理，保留路由豁免。复核消费者时新增发现摘要隐藏依赖截断列表。 本轮新增PackageAnalysis.privacyHit与derivePublishAssessment，删除derivePublishBlockers旧导出，消费者同步使用独立披露事实。",
+    "sha256": "bc7ce3d41cefdf995777e28a045b62c734baadc1c3f7337ed06fb320f7e5064d",
+    "previousSha256": "6e350a3a62ae6b29237aa5a9662d786d291469e0e50eb2f1f7de3d9f43c947b6",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "change": "changed",
+    "method": "完整读取当前TypeScript并核验相关调用方/消费者/Schema及聚焦断言；额外以当前源码内存转译和一次性fixture复现，不把仅符号存在视作全分支测试。",
+    "beforeFixSha256": "03c0a493deb811d7096fd11dc051ecaf26c331b4aafae656343b45fbb19f38a4",
+    "baselineSha256": "03c0a493deb811d7096fd11dc051ecaf26c331b4aafae656343b45fbb19f38a4",
+    "lateChange": "本轮发现后由另一开发线程修复；重读当前源码与新回归，并以独立后态探针验证。",
+    "finalSourceVersion": "1.1.0-rc.5"
+  },
+  {
+    "path": "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+    "responsibility": "四类证据来源的零写捕获规划、内容审阅门、身份派生与权威复验。",
+    "branches": [
+      "解析非proxy options/AbortSignal/clock、typed Demand ID、选择closed shape和kind-source配对；预取消立即失败，错误按稳定类别映射。",
+      "打开Config与完整Demand，要求active且program一致，冻结Demand CAS四项；读取本Pod worktree回执作为扫描路径豁免，不把它们当来源物理权限。",
+      "managed-path只从配置/回执准入根取file/tree；拒绝符号链接和类型漂移；文件stable read绑定观察节点，树打开子根前后核验节点。",
+      "树先inspect identity，p-limit 4逐文件stable read并核对bytes/digest，再inspect一次整树identity；摘要变化返回source-changed，所有句柄优先保留首错并关闭。",
+      "有效UTF8调用scanPrivacyText，即使opaque仍保留findings；decode失败只标opaque，无findings。按(ref,line,kind)排序去重，分成credential与非credential。",
+      "凭证命中始终blocked；非凭证超过64项仍blocked；reject还阻塞opaque和任何非凭证命中；controller-confirmed可放行后两者，公开blockers最多16。",
+      "observation读取本地hook并只冻结限定字段，transcript kind须声明存在；link只扫描URL原文；commit只要求已配置repositoryId，二者不访问外部内容。",
+      "blocked不读取捕获时钟；ready前复验Config当前和Demand authorityDigest/CAS四项，再创建manifest/capture plan；Evidence ID按Demand/稳定来源key/载荷artifactDigest派生。",
+      "Manifest记录Controller配置窗口，contentReview只保留opaque及非凭证命中；existing从当前aggregate查同Evidence，不直接证明后续apply已完成。"
+    ],
+    "effects": [
+      "读取配置、需求权威、Pod worktree回执、选定文件树或hook记录；打开/关闭RootedDirectory。",
+      "Preview不创建证据目录、stage、Event或投影，不执行host/network/git效果；仅无阻塞时读取时钟用于manifest。"
+    ],
+    "consumers": [
+      "src/capabilities/evidence/service.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-capture-planning-service.test.ts#ManagedEvidenceCapturePlanningService",
+      "tests/governance/evidence/managed-evidence-capture-planning-service.test.ts#deriveManagedEvidenceId",
+      "tests/capabilities/evidence/service.test.ts#executeRecordEvidenceRequest"
+    ],
+    "findings": [
+      "已知边界：无效UTF8成员可经controller-confirmed录入而无文本扫描；合成非法字节+可读凭证探针确认。这不是“已命中凭证可确认”。",
+      "覆盖缺口：规划扫描期间并发整树替换、单次>64种非凭证命中未找到专用聚焦断言；不能以相关符号被测试导入代替该分支覆盖。"
+    ],
+    "changeConclusion": "rc.4改为先严格解码再统一scanPrivacyText；可解码opaque文本不再跳过扫描，已识别CSI颜色不再单独导致opaque。",
+    "sha256": "1ce8ec40c693eb0f5a22629ccbc0476793ba47eabda07dcaa93be6e3e9d27662",
+    "previousSha256": "7cca382e5febbf5f7f78f79e8bb9189407c26cf3f14a1e27f49e1e3668a6cf5e",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "change": "changed",
+    "method": "完整读取当前TypeScript并核验相关调用方/消费者/Schema及聚焦断言；额外以当前源码内存转译和一次性fixture复现，不把仅符号存在视作全分支测试。",
+    "finalSourceVersion": "1.1.0-rc.5"
+  },
+  {
+    "path": "src/capabilities/requirement/service.ts",
+    "responsibility": "需求发布/activate/withdraw/recover及看板查询的公共编排，连接纯评估、Ledger不可变内容、认领CAS和公共结果边界。",
+    "branches": [
+      "openContext读取当前Config，要求Ledger placement存在且打开的真实根等于快照；关闭Ledger句柄，由命令壳持有工作区根。",
+      "从Design能力surface读取requirement/landing及最多16附件；strict text最大4MiB，支持限定附件media type，按basename收纳附件且拒绝同名；逐成员read/alias失败分类。",
+      "publish验证originWindow存在，读文档→章节/隐私/验收分析→supersedes状态→derivePublishAssessment；独立privacyHit决定整summary隐藏，confirmationMissing从原始输入而非有界诊断推导。",
+      "无阻塞且有确认后解析实际UTC，按完整输入派生requirementId，禁止supersedes-self；preview就用Ledger codec验证record，record-invalid为blocked。计划摘要覆盖draft与supersedes。",
+      "candidateRecord recordedAt取confirmation时间使记录字节稳定；ensureRecord已存在时按去recordedAt的内容摘要比较，同内容为current；新记录复读成员digest再publish并load读回。",
+      "ensureClaimState从不可变record构造pending/parked，已存在保留；只撤回supersedes中仍pending/parked的旧包，claimed/archived不改。索引board-index-contended允许后台自愈，其他错误继续浮出。",
+      "activate/withdraw预览检查claim digest与可迁移状态，withdraw reason隐私扫描；apply重读expected digest，CAS替换后读回并返回记录收据。",
+      "recover按requirementId尝试Ledger恢复，not-found允许继续load已有record；随后補claim/supersedes/index。partial字节的Ledger恢复仍可要求原输入，不从摘要虚构。",
+      "公共发布由runPublicationTransaction编排：preview read、apply/recover shared；requestPackages WeakMap仅供本次apply复读原输入；privateValues扩展Ledger边界，结果经公共Schema准入。",
+      "看板查询scope read：list统计所有当前状态并按过滤/limit选取，超限或skipped标truncated；package读取claim与Ledger record，只返回元数据/章节锚点，不认领。"
+    ],
+    "effects": [
+      "读取配置、Design成员、Ledger和看板；apply可发布不可变Ledger记录与CAS看板、撤回可替代包并刷新人读索引。",
+      "preview零写但读取与解析当前真实文件；recover只根据Ledger残留和已发布record补齐状态，不创建Demand。"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-shared-executors.ts"
+    ],
+    "tests": [
+      "tests/capabilities/requirement/service.test.ts#executeRequirementPublicationRequest",
+      "tests/capabilities/requirement/service.test.ts#executeBoardInspectionRequest",
+      "tests/capabilities/observation/service.test.ts#executeRequirementPublicationRequest"
+    ],
+    "findings": [
+      "RC4-PRIV-01公开preview摘要泄漏路径已由独立privacyHit修复；前/后态一次性工作区探针对比验证。"
+    ],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "41dc2b42dd75f9e2216d3823e0906e45fa9b641a200e872157d82a539750b13e",
+    "baselineSha256": "41dc2b42dd75f9e2216d3823e0906e45fa9b641a200e872157d82a539750b13e",
+    "beforeFixSha256": "41dc2b42dd75f9e2216d3823e0906e45fa9b641a200e872157d82a539750b13e",
+    "change": "changed",
+    "lateChange": "rc.4本轮基线后新增修改，另一开发线程修复披露事实消费。",
+    "method": "全文读取1085行当前TypeScript并核验发布/看板分支；新回归五类来源逐条读断言；当前源码内存转译通过一次性fixture独立探针。",
+    "changeConclusion": "消费derivePublishAssessment返回的独立privacyHit，取消按截断blocker前缀推导披露判定；不改变公开Schema或用户确认模型。",
+    "sha256": "95877201026e3df68aaea75dbd59b5037283495d31245879db27de7483302e13",
+    "finalSourceVersion": "1.1.0-rc.5"
+  }
+]

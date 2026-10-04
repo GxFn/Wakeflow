@@ -1,0 +1,18 @@
+{
+  "kind": "WakeflowAtlasBrowserInteractionVerification",
+  "observedOn": "2026-10-03",
+  "environment": "Codex in-app browser; local Vite development reader",
+  "result": "pass",
+  "observations": {
+    "allModeBeforeFullscreen": {"viewport": [621, 504], "scale": 0.393187, "translation": [178.686, 20]},
+    "allModeFullscreen": {"viewport": [1440, 851], "scale": 0.68723, "translation": [489.609, 20], "button": "退出全屏"},
+    "allModeAfterExit": {"viewport": [621, 504], "scale": 0.393187, "translation": [178.686, 20]},
+    "manualViewPreservedAcrossResize": {"scale": 0.471824, "translation": [152.323, -26.4], "temporaryViewport": [1100, 800], "sameTransform": true},
+    "fitButtonRestoresAutomaticResize": {"temporaryScale": 0.440641, "afterViewportResetScale": 0.393187},
+    "evidenceSelection": {"token": "E-REQPRIV-07", "highlightedTableCell": true, "code": "src/capabilities/requirement/service.ts#planPublish", "test": "tests/capabilities/requirement/service.test.ts#executeRequirementPublicationRequest"},
+    "navigation": {"callbackPageDiagrams": 3, "callbackPageSvg": 3, "homeDiagrams": 0, "reviewGroups": ["本轮审阅记录", "历史审阅快照"]},
+    "browserApplicationErrors": [],
+    "temporaryViewportRestored": true
+  },
+  "limits": ["实际交互验收覆盖本轮修复路径；不等于跨浏览器自动化全矩阵。", "100张图的完整渲染与来源摘要另由Mermaid回执核验。"]
+}

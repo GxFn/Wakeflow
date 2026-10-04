@@ -1,0 +1,141 @@
+[
+  {
+    "path": "src/capabilities/result-review/prompt.ts",
+    "sha256": "b868db68d973a913c851534295f5c693dcd9fe74347577e71951e8710f69274c",
+    "responsibility": "把已准入的任务/结果事实确定性渲染为中英文 wake-controller 导航消息，将目标报告自由文本作为引用数据展示，并保留读取评审单元所需身份。",
+    "branches": [
+      "language 选择 en / zh-Hans 固定标签；authority 提醒位于数据字段之前。",
+      "clip 只对 objective / summary 先 trim、合并 Unicode 空白，再按 600 code points 上限截断并用省略号结尾。",
+      "objective / summary / 非空 branch 通过 renderMarkdownJsonStringLiteral；其 Unicode/NFC 拒绝向调用方传播，不擅自规范化。",
+      "verdict 为 null 时不显示；branch 为 null 时不显示；commits 为空时不显示，非空以逗号连接调用方提供的字符串。",
+      "身份、outcome、verdict、revision 直接使用上游已准入字段；本函数自身的 TypeScript 类型不是运行时 Schema 代替品。",
+      "固定 Next 仅指向 WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME，要求读取已存评审单元和独立核验。",
+      "组合文本超过 20,000 JavaScript 字符时 fail(capacity-exceeded, prompt-capacity, $prompt)，否则返回完整文本。"
+    ],
+    "effects": [
+      "无文件/网络/宿主 I/O，不写结果、回调落地、工作声明或决定。",
+      "返回文本由 issueCallback 计算 promptDigest 并在导入事件中保存；实际宿主传输由 Agent 执行。"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts#issueCallback"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/prompt.test.ts#renderWakeControllerPrompt",
+        "coverage": "focused",
+        "reason": "伪造 Next 压为单行，中英摘要 JSON 可还原，Markdown/HTML/双向控制字符转义且无授权声明先于数据；晚变新增 sha1/sha256 准入结果经摘要到两种语言渲染仍保留提交身份。"
+      },
+      {
+        "anchor": "tests/foundation/text/markdown-json-string-literal.test.ts#renderMarkdownJsonStringLiteral",
+        "coverage": "indirect",
+        "reason": "字面量 helper 直接验证结构分隔符、安全还原、NFC/孤立代理与强制转换拒绝；不能借此声称 callback 所有字段和长度边界已有组合覆盖。"
+      }
+    ],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/capabilities/result-review/decide.ts",
+    "sha256": "bcbf71daaf94688bda3f97e0433e29158d1eff50d6c59955320c3e89c312bd82",
+    "responsibility": "结果导入与评审的无 I/O 决策集合：受管证据定位、报告隐私、会话观察派生、允许动作/恢复守卫、测试步骤基线与 callback 展示摘要。",
+    "branches": [
+      "planEvidenceLocator 只识别 managed-evidence 下合法 evidence ID 与 manifest/payload 非空成员；真正 portable path 与受管归属复验由 service 完成。",
+      "collectEvidenceReferences 依 ref/digest 与 kind 去重：无 kind 可由有 kind 覆盖、不同 kind 分别保留；locateEvidenceReference 优先定位 locator，再 anchor，再 step。",
+      "reportTexts 收集报告自由文字，derivePrivacyRules 汇总 scanPrivacy 命中类别去重排序，不返回敏感原文。",
+      "deriveTargetCompletion 选 >= reportedAt 的最早 stop/turn-complete，deriveCallbackLanding 选 >= issuedAt 且 digest 相符的最早 user-prompt-submit。",
+      "resumption 在 reported 时多带即拒绝；blocked 需引用当前决定与 condition-cleared；escalated 需当前升级已回答并引用其事件。",
+      "实现 accept 需 confirmed 完成且 completed，或 needs-review 加本 Demand 证据覆盖全部锚点；允许集未给 anchorEvidence 只检查存在证据，真正请求另核完整映射。",
+      "实现 rework 给出 independentChecks 时至少一条 failed；纯允许集合不传这些检查，因此不是最终决定保证。",
+      "deriveStepViews 当前在范围内记录优先；缺记录时只选择历史 pass，先同目标 stepId，再 retest 前目标同验收 itemId，倒序尝试最近优先。",
+      "并集 verdict 依次 fail、blocked、cannot-conclude、pass；没有通过也没有基线绝不变为 pass。",
+      "测试 rerun 全部失败步骤必须可重跑、次数未满、无相同步骤连续 flaky；environment 仅 resumed 后放行；显式 stepIds 只能包含并且必须覆盖全部失败集合。",
+      "test blocked 需环境失败或整体 blocked；product-defect 升级需实际 product-defect fail 且映射完整、只包含这些步骤；其它升级类别交判断合同。",
+      "决定 phase 映射区分实现与测试、普通升级与产品缺陷修复授权；findReviewEscalationEventId 只按 review-decision 来源反查。",
+      "summarizeResultForCallback 对 test 固定无 branch/commits 并保留 verdict；implementation 当前显式输出 algorithm:value，修复旧 map(String) 对象显示，不改持久报告。"
+    ],
+    "effects": [
+      "无文件、网络、宿主、时钟读取或事件追加；只产出冻结读取计划/证据视图/阻塞项/候选动作/文本摘要。",
+      "不独立执行测试、不证明目标工作正确、不拥有 Controller 接受；service 重新核真实来源、调用合同并提交事件。"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts#executeImport",
+      "src/capabilities/result-review/service.ts#issueCallback",
+      "src/capabilities/result-review/service.ts#inspectReview",
+      "src/capabilities/result-review/service.ts#loadDecisionSources",
+      "src/capabilities/result-review/service.ts#executeImplementationDecision",
+      "src/capabilities/result-review/service.ts#executeTestDecision"
+    ],
+    "tests": [
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#planEvidenceLocator",
+        "coverage": "focused",
+        "reason": "仅生成同 Demand 受管证据的 manifest/payload 读取计划；本身不打开文件。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#collectEvidenceReferences",
+        "coverage": "focused",
+        "reason": "ref/digest 去重、typed/untyped 合并及不同种类冲突保留；locateEvidenceReference 定位报告第一处。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#reportTexts",
+        "coverage": "focused",
+        "reason": "只把摘要、verification、risks、逐步 observed/recommendedAction 作为自由文本交隐私扫描。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#derivePrivacyRules",
+        "coverage": "focused",
+        "reason": "隐私命中类别去重排序；已读当前凭证/Windows 路径/正则非误报断言，不把扫描变成事实验证。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveTargetCompletion",
+        "coverage": "focused",
+        "reason": "选择 recordedAt 不早于 reportedAt 的首条 stop/turn-complete；无记录 pending。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveCallbackLanding",
+        "coverage": "focused",
+        "reason": "只选 user-prompt-submit、匹配 promptDigest 且不早于 issuedAt；不同摘要/过早记录不算。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveResumptionBlockers",
+        "coverage": "focused",
+        "reason": "reported 不带恢复；blocked 需 condition-cleared；escalated 需指向已回答的当前升级。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveImplementationDecisionBlockers",
+        "coverage": "focused",
+        "reason": "accept 的报告/完成/needs-review 锚点门；实际 rework 请求至少一条 failed 独立检查。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveImplementationAllowedDecisions",
+        "coverage": "focused",
+        "reason": "候选集不携带具体检查和 anchorEvidence，不替代后续实际请求准入。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveStepViews",
+        "coverage": "focused",
+        "reason": "当次在范围内记录优先；否则只取同目标先前 pass，再按 retest 同 requirement itemId 取 pass，最近尝试优先。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveUnionVerdict",
+        "coverage": "focused",
+        "reason": "fail 优先于 blocked；缺当次 pass 且无基线为 cannot-conclude，其余 pass。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveTestDecisionBlockers",
+        "coverage": "focused",
+        "reason": "accept 三门、重跑分类/预算/连续 flaky/全失败范围、environment 恢复、产品缺陷完整且窄映射。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/decide.test.ts#deriveTestAllowedDecisions",
+        "coverage": "focused",
+        "reason": "候选集缺待提交范围/缺陷映射，记录入口仍需复验。"
+      },
+      {
+        "anchor": "tests/capabilities/result-review/prompt.test.ts#summarizeResultForCallback",
+        "coverage": "focused",
+        "reason": "晚变回归经真实 Report/TargetResult 准入，sha1 与 sha256 身份均在两种语言完整显示；原 report 中 algorithm/value 不变。"
+      }
+    ],
+    "reviewDepth": "semantic"
+  }
+]

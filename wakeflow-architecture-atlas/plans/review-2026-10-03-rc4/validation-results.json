@@ -1,0 +1,202 @@
+{
+  "kind": "WakeflowAtlasFinalValidation",
+  "status": "pass",
+  "observedAt": "2026-10-03T14:23:45.973912+00:00",
+  "sourceVersion": "1.1.0-rc.5",
+  "candidateOnly": true,
+  "baselineCommit": "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c",
+  "checks": {
+    "atlas": {
+      "command": "npm run check",
+      "cwd": "wakeflow-architecture-atlas",
+      "exitCode": 0,
+      "tests": {
+        "passed": 17,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "typecheck": "pass",
+      "structure": {
+        "ok": true,
+        "documents": 76,
+        "mermaidBlocks": 100,
+        "fingerprints": 71,
+        "allFingerprintsCurrent": true,
+        "staleFingerprints": [],
+        "directImportEdgesChecked": 198,
+        "adjacentEvidenceRowsChecked": 884,
+        "symbolReferencesChecked": 1894,
+        "testSymbolReferencesChecked": 765,
+        "testEvidence": {
+          "mode": "anchor-or-explicit-marker",
+          "anchoredDocuments": [
+            "maps/01-overall-architecture/README.md",
+            "maps/01-overall-architecture/file-dependencies.md",
+            "maps/01-overall-architecture/runtime-call-flow.md",
+            "maps/02-file-review-index.md",
+            "maps/02-foundation/README.md",
+            "maps/02-foundation/admission-races-and-recovery.md",
+            "maps/02-foundation/file-dependencies.md",
+            "maps/02-foundation/file-publication-and-recovery.md",
+            "maps/02-foundation/read-write-admission.md",
+            "maps/02-foundation/runtime-call-flow.md",
+            "maps/02-foundation/tree-publication-and-recovery.md",
+            "maps/03-configuration-workspace/README.md",
+            "maps/03-configuration-workspace/file-dependencies.md",
+            "maps/03-configuration-workspace/operation-scope-and-config-baseline.md",
+            "maps/03-configuration-workspace/runtime-call-flow.md",
+            "maps/04-governance-event-sourcing/README.md",
+            "maps/04-governance-event-sourcing/file-dependencies.md",
+            "maps/04-governance-event-sourcing/runtime-call-flow.md",
+            "maps/04-governance-event-sourcing/state-and-recovery.md",
+            "maps/05-tasking-slice/README.md",
+            "maps/05-tasking-slice/file-dependencies.md",
+            "maps/05-tasking-slice/runtime-call-flow.md",
+            "maps/06-implementation-delivery-review/README.md",
+            "maps/06-implementation-delivery-review/file-dependencies.md",
+            "maps/06-implementation-delivery-review/runtime-call-flow.md",
+            "maps/06-implementation-delivery-review/state-and-recovery.md",
+            "maps/07-review-rework-completion/README.md",
+            "maps/07-review-rework-completion/callback-trust-and-review.md",
+            "maps/07-review-rework-completion/file-dependencies.md",
+            "maps/07-review-rework-completion/runtime-call-flow.md",
+            "maps/07-review-rework-completion/state-and-recovery.md",
+            "maps/08-real-environment-testing/README.md",
+            "maps/08-real-environment-testing/file-dependencies.md",
+            "maps/08-real-environment-testing/runtime-call-flow.md",
+            "maps/09-public-mcp-host-seams/README.md",
+            "maps/09-public-mcp-host-seams/file-dependencies.md",
+            "maps/09-public-mcp-host-seams/host-effect-handshake.md",
+            "maps/09-public-mcp-host-seams/project-chats-and-execution-roots.md",
+            "maps/09-public-mcp-host-seams/runtime-call-flow.md",
+            "maps/10-end-to-end-business-flow/README.md",
+            "maps/10-end-to-end-business-flow/state-and-recovery.md",
+            "maps/11-kernel/README.md",
+            "maps/11-kernel/file-dependencies.md",
+            "maps/11-kernel/hook-history.md",
+            "maps/11-kernel/privacy-boundary.md",
+            "maps/11-kernel/runtime-call-flow.md",
+            "maps/11-kernel/workspace-operation-scope.md",
+            "maps/12-endpoint/README.md",
+            "maps/12-endpoint/execution-roots.md",
+            "maps/12-endpoint/file-dependencies.md",
+            "maps/12-endpoint/runtime-call-flow.md",
+            "maps/13-requirement/README.md",
+            "maps/13-requirement/file-dependencies.md",
+            "maps/13-requirement/privacy-preview.md",
+            "maps/13-requirement/runtime-call-flow.md",
+            "maps/14-evidence/README.md",
+            "maps/14-evidence/file-dependencies.md",
+            "maps/14-evidence/privacy-and-source-consistency.md",
+            "maps/14-evidence/runtime-call-flow.md",
+            "maps/15-pod/README.md",
+            "maps/15-pod/file-dependencies.md",
+            "maps/15-pod/runtime-call-flow.md",
+            "maps/16-observation/README.md",
+            "maps/16-observation/file-dependencies.md",
+            "maps/16-observation/projection-recovery.md",
+            "maps/16-observation/runtime-call-flow.md",
+            "maps/16-observation/runtime-evidence.md",
+            "maps/17-artifacts-and-contracts/README.md",
+            "maps/17-artifacts-and-contracts/file-dependencies.md",
+            "maps/17-artifacts-and-contracts/installation-and-runtime-identity.md",
+            "maps/17-artifacts-and-contracts/schema-and-validation.md"
+          ],
+          "rows": 877,
+          "anchored": 494,
+          "marked": 383,
+          "unanchored": 0
+        },
+        "linksChecked": 973,
+        "mermaidRendering": "separate check:diagrams",
+        "semanticReview": "documented manual source review; not inferred from imports",
+        "isolation": {
+          "rootWorkspaceMember": false,
+          "rootScriptReference": false,
+          "integrationMentions": [],
+          "buildOutputIgnored": true,
+          "nestedDependenciesIgnored": true
+        },
+        "errors": []
+      },
+      "renderReceipt": {
+        "ok": true,
+        "mode": "verified-browser-receipt",
+        "rendererVersion": "11.17.2",
+        "verifiedAt": "2026-10-03T14:20:58.391Z",
+        "diagrams": 100,
+        "errors": []
+      },
+      "build": "pass",
+      "log": "plans/review-2026-10-03-rc4/atlas-check.log",
+      "logSha256": "39ff98445979207791fd9dbe288977f4967f1d3350bcd56e839ab7bbcc2d31d2",
+      "warnings": [
+        "Vite大chunk提示仍存在；本轮未放宽阈值。"
+      ]
+    },
+    "sourceSnapshot": {
+      "verifiedFiles": 875,
+      "mismatches": []
+    },
+    "sourceCoverage": {
+      "handwritten": 370,
+      "currentFullReviews": 7,
+      "inheritedIdentical": 363,
+      "schemas": 95,
+      "generated": 95,
+      "testFiles": 297
+    },
+    "figjam": {
+      "diagrams": 17,
+      "logicalNodes": 160,
+      "drawnNodes": 160,
+      "edges": 158,
+      "nodeAndEdgeParity": true,
+      "fullConditionsPreserved": true,
+      "sectionOverflow": 0,
+      "screenshotsInspectedThisRound": 8,
+      "unchangedScreenshotsInherited": 9,
+      "regeneratedDiagrams": 7,
+      "identicalDiagramsRetained": 10
+    },
+    "browserInteractions": {
+      "result": "pass",
+      "record": "plans/review-2026-10-03-rc4/reader-ui-verification.json"
+    },
+    "gitDiffCheck": {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    "localBranchRelation": {
+      "branch": "main",
+      "ahead": 0,
+      "behind": 0,
+      "reference": "local origin/main; no fetch"
+    },
+    "newReviewLinks": "all-resolve",
+    "machinePrivatePathScan": "no matches",
+    "finalDocumentationBuild": {
+      "command": "npm run build",
+      "exitCode": 0,
+      "log": "plans/review-2026-10-03-rc4/atlas-final-build.log",
+      "logSha256": "7e75431d2dd8b1f13e77506536793a76367a91f682dfc1ff29fd34573b883cd1",
+      "reason": "交付记录与最终验证状态补全后重新生成阅读器产物"
+    }
+  },
+  "evidenceProvenance": "validation-provenance.json",
+  "rootGate": {
+    "executedBy": "other-development-thread",
+    "verifiedByAtlas": "read durable repository gate log and compare current candidate manifest identities",
+    "testsPassed": 1244,
+    "e2eScenarios": 20,
+    "bothHostArtifactSmoke": "recorded-pass",
+    "rerunByThisThread": false
+  },
+  "unverified": [
+    "rc.5原生宿主会话",
+    "Windows原生宿主",
+    "新增Claude登录会话"
+  ],
+  "workingTree": "uncommitted; atlas edits are separate from development-thread production changes"
+}

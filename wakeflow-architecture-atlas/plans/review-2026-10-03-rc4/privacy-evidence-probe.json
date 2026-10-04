@@ -1,0 +1,189 @@
+{
+  "kind": "WakeflowPrivacyEvidenceSyntheticProbe",
+  "sourceVersion": "1.1.0-rc.4",
+  "execution": "Node current modules transformed in memory with SWC; existing .build dependencies and dedicated disposable fixture; no production edits or build",
+  "node": "v24.19.0",
+  "sourceSha256": {
+    "src/kernel/privacy-scan.ts": "fb3bc815e07a5320331c85444b1391589516351546bd2ce1357c63d75189e1e9",
+    "src/capabilities/requirement/decide.ts": "03c0a493deb811d7096fd11dc051ecaf26c331b4aafae656343b45fbb19f38a4",
+    "src/capabilities/requirement/service.ts": "41dc2b42dd75f9e2216d3823e0906e45fa9b641a200e872157d82a539750b13e",
+    "src/governance/evidence/managed-evidence-capture-planning-service.ts": "1ce8ec40c693eb0f5a22629ccbc0476793ba47eabda07dcaa93be6e3e9d27662"
+  },
+  "buildSha256": {
+    ".build/src/kernel/privacy-scan.js": "0c3dd6c99d6a04b12c553a9080adc7e10dc1db35bb6e51da8fbb1aaf9dfdf974",
+    ".build/src/capabilities/requirement/service.js": "5c6b474a7110fb5fa1a718033f55d8dbc583bf14d4f797e452a1a55f353e9b5b",
+    ".build/src/governance/evidence/managed-evidence-capture-planning-service.js": "a98d827cc5ff92c4cdc286fd12276ffae5fe2742871e000c6caa06e506bf95ab"
+  },
+  "scanResults": [
+    {
+      "label": "plain-credential",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "credential-assignment",
+          "line": 1,
+          "column": 1,
+          "length": 36
+        }
+      ]
+    },
+    {
+      "label": "CSI-split-credential",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "credential-assignment",
+          "line": 2,
+          "column": 6,
+          "length": 49
+        }
+      ]
+    },
+    {
+      "label": "unknown-control-credential",
+      "opaque": true,
+      "findings": [
+        {
+          "kind": "credential-assignment",
+          "line": 1,
+          "column": 2,
+          "length": 36
+        }
+      ]
+    },
+    {
+      "label": "safe-regex",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "safe-unicode-slash-list",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "safe-https-route",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "allowed-file-uri",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "file-uri-escape",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "unlisted-absolute-path",
+          "line": 1,
+          "column": 1,
+          "length": 39
+        }
+      ]
+    },
+    {
+      "label": "allowed-windows",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "windows-prefix-escape",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "unlisted-absolute-path",
+          "line": 1,
+          "column": 1,
+          "length": 33
+        }
+      ]
+    },
+    {
+      "label": "allowed-UNC",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "bare-uuid",
+      "opaque": false,
+      "findings": [
+        {
+          "kind": "bare-uuid",
+          "line": 1,
+          "column": 1,
+          "length": 36
+        }
+      ]
+    },
+    {
+      "label": "known-prefix-uuid",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "unknown-prefix-uuid",
+      "opaque": false,
+      "findings": []
+    },
+    {
+      "label": "hyphen-prefix-uuid",
+      "opaque": false,
+      "findings": []
+    }
+  ],
+  "blockerTruncation": {
+    "blockerCount": 64,
+    "hasPrivacyBlocker": false
+  },
+  "requirementPreview": {
+    "kind": "WakeflowRequirementPublicationPreview",
+    "status": "blocked",
+    "blockerCount": 64,
+    "hasPrivacyBlocker": false,
+    "summaryNull": false,
+    "publicSummaryContainsSynthetic": true
+  },
+  "evidenceClassification": [
+    {
+      "label": "valid-utf8-control",
+      "contentReview": "reject",
+      "status": "blocked",
+      "opaqueCount": 1,
+      "credentialCount": 1,
+      "blockers": [
+        "privacy:credential-assignment:content:1",
+        "opaque-content:content"
+      ]
+    },
+    {
+      "label": "valid-utf8-control",
+      "contentReview": "controller-confirmed",
+      "status": "blocked",
+      "opaqueCount": 1,
+      "credentialCount": 1,
+      "blockers": [
+        "privacy:credential-assignment:content:1"
+      ]
+    },
+    {
+      "label": "invalid-utf8",
+      "contentReview": "reject",
+      "status": "blocked",
+      "opaqueCount": 1,
+      "credentialCount": 0,
+      "blockers": [
+        "opaque-content:content"
+      ]
+    },
+    {
+      "label": "invalid-utf8",
+      "contentReview": "controller-confirmed",
+      "status": "ready",
+      "opaqueCount": 1,
+      "credentialCount": 0,
+      "blockers": []
+    }
+  ]
+}

@@ -1,0 +1,551 @@
+[
+  {
+    "path": "src/kernel/workspace-operation-scope.ts",
+    "sha256": "8af19f617bf27104345df85707c4435709441f0e109059399036d0dce1a25b19",
+    "responsibility": "工作区跨进程读写准入和同调用链借用能力",
+    "branches": [
+      "普通 writer 要求 WakeflowConfig/schemaVersion 当前协议以及既有 operation-admission 目录；旧协议返回 writer-protocol-unsupported，无静默迁移",
+      "首层 shared/exclusive 调用底层读写范围；beforeEnter 再检查维护 gate 与事务目录，active gate 为可重试 maintenance-busy，失活 gate 或任何残留要求维护恢复",
+      "nested 用 AsyncLocalStorage 借用，只允许同绝对根、active 回调、无 shared→exclusive 晋升，并前后确认两个 RootedDirectory 能力仍当前",
+      "maintenanceGuard 只能搭配 exclusive，先调用 guard 再物化目录，后续入场仍使用 guard；回调 finally 立即 active=false，逃逸子任务不能复用",
+      "取消转 io-failure/aborted；底层 scope/lock 错误转 concurrency-conflict，只有 timeout 声明 retryable"
+    ],
+    "effects": [
+      "创建或取得私有 operation-admission 读写锁/租约；业务结果与上下文结算完成才退出范围"
+    ],
+    "consumers": [
+      "src/capabilities/workspace/maintain-workspace.ts",
+      "src/governance/observation/active-projection-refresh.ts",
+      "src/kernel/command-shell.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-gate.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts"
+    ],
+    "tests": [
+      "tests/kernel/workspace-operation-scope.test.ts#withWorkspaceOperationScope",
+      "tests/capabilities/workspace/operation-scope.test.ts#withWorkspaceOperationScope"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": null,
+    "change": "added",
+    "changeConclusion": "新增公共 writer 与维护共用的准入边界，不是业务权威或全局业务状态机",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/kernel/command-shell.ts",
+    "sha256": "3a0f71a78ca4a7722405270f7b37d9665884b6473a32203facbd6877cb85c4b4",
+    "responsibility": "公共请求与结果边界，按切片范围包住上下文生命周期",
+    "branches": [
+      "请求 JSON、容量、Schema、去 root 摘要先处理；打开 rooted 根后做形状 admit 与私有值扫描",
+      "spec.scope 为 read/maintenance 时直接 execute；shared/exclusive 经 withWorkspaceOperationScope 后才 open context",
+      "body 输出准入之后仍在同一范围内 close context；主体失败优先于关闭失败，根最后关闭",
+      "privacy exempt 只从请求扫描副本移除选定路径，不修改输入，不放宽结果边界"
+    ],
+    "effects": [
+      "打开与关闭根/领域上下文；范围实现决定协调文件写入"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/observation/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/kernel/append-command.ts",
+      "src/kernel/publication-transaction.ts"
+    ],
+    "tests": [
+      "tests/kernel/command-shell.test.ts#runCommandShell",
+      "tests/capabilities/workspace/operation-scope.test.ts#executeCodexWakeflowMaintenance"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "15cdde10caca0d1308de41726ef086bb5bff544a805aa0e83cd6f3eb554a91e5",
+    "change": "changed",
+    "changeConclusion": "新增必填 scope，并把上下文打开至关闭包进工作区范围",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/kernel/append-command.ts",
+    "sha256": "e8a04713bbb6fe92305cd3f6056f61d02f4de2a8dfaa65d94887292cbed156fc",
+    "responsibility": "追加型外壳稳定身份与修订准入",
+    "branches": [
+      "所有追加统一 scope shared；幂等键及非负安全整数修订在领域上下文前准入",
+      "Demand＋幂等键产生 commitId；requestDigest/expectedStreamRevision 交给领域 execute，next/result 在外壳边界内完成"
+    ],
+    "effects": [
+      "不自存幂等表或事件；I/O 委托 execute 与命令外壳"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts"
+    ],
+    "tests": [
+      "tests/kernel/append-command.test.ts#runAppendCommand"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "af12ed351bfb6a2bc5f2b635d83ecef65499a02e111eec7f07c1fc787e670269",
+    "change": "changed",
+    "changeConclusion": "所有追加进入 shared，领域事件 CAS/幂等仍独立",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/kernel/publication-transaction.ts",
+    "sha256": "746e1e8b1d169af4be1a4955ef496d85da01d42fb308456af3f983123a420c95",
+    "responsibility": "preview/apply/recover 三形状计划与范围编排",
+    "branches": [
+      "preview 强制 read；apply/recover 使用 owner 声明的 mutationScope shared/exclusive/maintenance",
+      "模式决定 planDigest 与 operationId 必填/禁止；apply 重算服务端计划，blocked 或摘要不同拒绝",
+      "recover 直接交 operationId 给 owner；不复用客户端 plan，也不制造通用事务日志"
+    ],
+    "effects": [
+      "领域 plan 零写约定，具体 apply/recover owner 持有效果；外壳仅编排"
+    ],
+    "consumers": [
+      "src/capabilities/demand/context.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/requirement/service.ts",
+      "src/capabilities/workspace/maintain-workspace.ts"
+    ],
+    "tests": [
+      "tests/kernel/publication-transaction.test.ts#runPublicationTransaction"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "c0340a2087d12a7ae51d631a4d50d045a6dea2e11d9179171ee0bc9171bba146",
+    "change": "changed",
+    "changeConclusion": "新增 mutationScope 合同，复原入口也受同一范围保护",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/kernel/layout.ts",
+    "sha256": "868c52846dcc12760da100a0cdba08b753fb5a685bd8b19b36be26b92aed4abd",
+    "responsibility": "工作区与宿主私有运行时、板项、生命周期日志、投影路径",
+    "branches": [
+      "统一导出 operation-admission、maintenance.lock、maintenance/transactions 三个协调位置",
+      "配置身份转发 vocabulary v2，不在路径模块再维护一份版本",
+      "构造 Demand/Requirement/Pod/repository 路径前分别校验对应身份，archive revision 要求至少 2"
+    ],
+    "effects": [
+      "纯路径构造，无目录创建"
+    ],
+    "consumers": [
+      "src/capabilities/demand/archive.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/endpoint/locator-store.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/observation/decide.ts",
+      "src/capabilities/observation/service.ts",
+      "src/entrypoints/wakeflow-hook-observer.ts",
+      "src/governance/demand/demand-runtime-recovery.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/demand/publication/demand-publication-paths.ts",
+      "src/governance/observation/demand-archive-locator.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/hosts/claude-code/claude-code-host-asset-operation.ts",
+      "src/hosts/claude-code/claude-code-statusline-asset.ts",
+      "src/hosts/claude-code/claude-code-tmux-asset.ts",
+      "src/kernel/active-projection.ts",
+      "src/kernel/hook-observation-directory.ts",
+      "src/kernel/hook-observations.ts",
+      "src/kernel/pod-worktree-receipts.ts",
+      "src/kernel/requirement-board.ts",
+      "src/kernel/work-claims.ts",
+      "src/kernel/workspace-operation-scope.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts",
+      "src/workspace/wakeflow-active-static-resource-catalog.ts",
+      "src/workspace/wakeflow-shared-coordination-layout.ts",
+      "src/workspace/workspace-host-resource-catalog.ts",
+      "src/workspace/workspace-host-runtime-paths.ts"
+    ],
+    "tests": [
+      "tests/kernel/workspace-operation-scope.test.ts#WORKSPACE_OPERATION_SCOPES_REF",
+      "tests/capabilities/workspace/operation-scope.test.ts#WORKSPACE_MAINTENANCE_TRANSACTIONS_REF"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "50aad133d8ab72639b636f8068b44f113b91e6dd2d3c38df5fe2dcd7d731dc44",
+    "change": "changed",
+    "changeConclusion": "新增共享协调布局与维护协议常量",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/kernel/pod-worktree-receipts.ts",
+    "sha256": "6314210ab9c502801174fa163c44158f32bf644344590268d67be58bf5ad9500",
+    "responsibility": "执行检出的 Git 结构准入及宿主私有回执存取",
+    "branches": [
+      "parseGitWorktreePorcelain 限 64Ki 字符/256 条；entry 拒绝 branch+detached、非 bare 缺 HEAD 等",
+      "从显式 executionRoot 解析 realpath；commonDir 相对此执行根解析，必须等于配置 repositoryRoot/.git",
+      "执行条目必须非 bare/prunable/主检出；.git→common/worktrees/admin、admin/gitdir→同 .git 双向吻合；HEAD 引用或 detached OID 与报告相符",
+      "回执严格字段/摘要/身份与确定性表示，0700 目录、0600 create 或 CAS replace；listAnyHost 返回首个非空宿主集合",
+      "精确退休单回执；退休 Pod 目录使用直接 rm recursive；checkoutPresent 只检查目录和 .git 普通文件存在"
+    ],
+    "effects": [
+      "文件系统 realpath/stat/read 与私有回执写/删；不 spawn Git、不验证 ancestry 或工作区 cleanliness"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-configured-source-root.ts",
+      "src/governance/observation/workspace-observation.ts"
+    ],
+    "tests": [
+      "tests/kernel/pod-worktree-receipts.test.ts#admitPodWorktreeObservation",
+      "tests/kernel/pod-worktree-receipts.test.ts#writePodWorktreeReceipt",
+      "tests/capabilities/pod/service.test.ts#executeWindowBindingRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "5b46b1f78954fca9e0a82838e6eb842daa640fe648a2946f37409aa7b5b97111",
+    "change": "changed",
+    "changeConclusion": "准入以 executionRoot 而非 hook cwd 命名，便于项目会话根与实际执行根解耦",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/capabilities/endpoint/decide.ts",
+    "sha256": "d2dce28b67c7b63942980177e0c1b6272d5d5428d470c46da8f5885cc43541bd",
+    "responsibility": "端点六操作中的五类变更纯准入",
+    "branches": [
+      "共同准入要求意图摘要、宿主 locator 坐标、worktree 观察、符合启动根规则的 session-start 与 handle 唯一性",
+      "register 同 handle 重放；replace 旧代 CAS、无 claim、新 handle；relocate 只限 tmux 且同 handle，允许原 claim",
+      "decommission 拒绝关闭失败或 post 活跃，仅满足全部 tmux/前后观察/session-end 条件才 machine-verified",
+      "release-claim 要求当前摘要，以及过期 OR session-end OR liveness 缺席"
+    ],
+    "effects": [
+      "纯决定，无 I/O；不发起宿主窗口动作"
+    ],
+    "consumers": [
+      "src/capabilities/endpoint/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/decide.test.ts#decideEndpointCommand"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "da25e555621fdc59efa71d1343e4e560e20f8b7814255d546926c76d9838ee48",
+    "change": "changed",
+    "changeConclusion": "startedSessions 的合同变为宿主规定启动根，不再等价所有角色的配置执行目录",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/capabilities/endpoint/service.ts",
+    "sha256": "9911957066d4d04cffb2b73cf92eb325aefe0adad3fcb17954a074e43a03f835",
+    "responsibility": "绑定、定位器、执行回执、claim 恢复与公开启动说明",
+    "branches": [
+      "inspect 为 read，五类变更为 shared，Config/拓扑/启动意图在 scope 内加载；launch instructions 由 host facade 注入",
+      "project-thread 宿主仅认可工作区项目根的 SessionStart；其他宿主按角色 configuredPlacement 或 worktree 候选匹配",
+      "project-thread worktree 要求独立绝对 observation.worktree.executionRoot；非 project-thread 采用会话 cwd 且禁止额外 executionRoot",
+      "读取 hook 必须 complete 且 skipped=0；Git 验证后拒绝同宿主其他 Pod 已占据的检出",
+      "绑定锁内重读旧摘要；replace/decommission 复验 claim，再写绑定/回执/locator/投影；非整体原子事务",
+      "release 先存审计回执再精确释放 claim；变更后刷新活动投影；私有 worktree 输入豁免不放宽输出隐私"
+    ],
+    "effects": [
+      "写私有 Binding/Locator/回执或释放 claim；发布派生页面；不调用 create_thread、Git、tmux"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/service.test.ts#executeWindowBindingRequest",
+      "tests/capabilities/pod/service.test.ts#executeWindowBindingRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "dd8847dcd7369862ac77876521f4011a662d5731a31e5330028fd897cdb4af93",
+    "change": "changed",
+    "changeConclusion": "项目聊天根/执行根分离；启动建议移到宿主 owner；所有端点 mutation 受 shared 准入保护",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/capabilities/evidence/service.ts",
+    "sha256": "dc4e20e17291aff099008a97a3f63ae761bb2c1f263de808dbc77a87fbddf54c",
+    "responsibility": "受管证据公开 preview/apply/recover 编排",
+    "branches": [
+      "preview read；apply/recover shared；recover 用 demandId 作 operationId，由证据 owner 定位日志",
+      "capture preview 阻塞则公开 blockers；已有 evidence 查精确 commit 重放，否则构造 publication transaction 并 apply",
+      "recover completed/retired-stale/healthy 映射公开结局；next 重新读 Demand/review snapshot 得 route",
+      "错误保留 publicationAuthority；apply 之后活动投影静默刷新，recover 不通过该包装"
+    ],
+    "effects": [
+      "I/O 委托 capture/publication/Demand owner；外层 shared 协调"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-shared-executors.ts"
+    ],
+    "tests": [
+      "tests/capabilities/evidence/service.test.ts#executeRecordEvidenceRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "7700f94bf52af81214c8618c59feb17d6ada5657195247e21d34b94504f81a4f",
+    "change": "changed",
+    "changeConclusion": "新增 shared mutationScope；证据 publication/Event 不可逆语义未变",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/capabilities/requirement/service.ts",
+    "sha256": "41dc2b42dd75f9e2216d3823e0906e45fa9b641a200e872157d82a539750b13e",
+    "responsibility": "需求包发布、激活、撤回、恢复及看板只读入口",
+    "branches": [
+      "publication preview read，apply/recover shared；inspect board read",
+      "读取 Design 根稳定文档，附件去重及扩展名限制，纯分析给确认/隐私/验收 blockers；摘要确定 requirementId",
+      "apply 重读成员摘要，先 Ledger immutable record 再 ensure board，再撤回 pending/parked supersedes，索引争用可忽略",
+      "activate/withdraw 带 state digest 重读 CAS；recover 先 Ledger 后补 claim/supersedes/index",
+      "看板 list 限量/过滤并显示 truncated，package 返回真实 record 与板项；不是 Demand 创建"
+    ],
+    "effects": [
+      "打开 Ledger/Design 根；写不可变包、板项、board index；读入口不修复"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-shared-executors.ts"
+    ],
+    "tests": [
+      "tests/capabilities/requirement/service.test.ts#executeRequirementPublicationRequest",
+      "tests/capabilities/requirement/service.test.ts#executeBoardInspectionRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "39d3b4d111eb1fda436da66c529525e2ec2512500e17260640724e89f2b3aabd",
+    "change": "changed",
+    "changeConclusion": "新增 shared mutationScope 及显式只读看板范围",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/capabilities/pod/service.ts",
+    "sha256": "3e38dab14a59d2c6efbdedd9c4470e64cc3c04854410a044f58788cc3c460d5e",
+    "responsibility": "Pod 配置效果编排、两段关闭及私有回执恢复",
+    "branches": [
+      "preview read，apply/recover workspace exclusive，在打开 Config 上下文前取得；内部 apply 仍按 Pod 短锁复验 Config 与 plan",
+      "create 稳定 Pod 身份，同键同名重放；新 Pod 加完整窗口组与 worktree 意图；尚未实际启动",
+      "close open 需非 primary、无 active Demand、处置齐全；closing 需无 Binding/检出；两段分别 CAS Config",
+      "close complete 移除窗口/Pod，再退休自有投影和回执；不删除真实 Git worktree",
+      "recover 不在 Pod 短锁包装，但外层 exclusive 已保护；只清孤儿目录或 checkout 缺失/Binding 代际不符回执，不恢复 Config 事务",
+      "窗口/活动投影刷新只辅助业务效果；宿主处置建议使用 profile.worktree.launch 而非 hostId 判断"
+    ],
+    "effects": [
+      "Config CAS、窗口和活动投影、私有回执退休；无实际 Git/宿主创建删除"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/capabilities/pod/service.test.ts#executePodRequest",
+      "tests/capabilities/demand/pod-concurrency.test.ts#executePodRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "b3a3848dafae9cc110c6963fe7472c39df852e1afbb12dedc20ea461646532c9",
+    "change": "changed",
+    "changeConclusion": "新增 exclusive workspace 范围，因此不能把跨 Pod 的配置变更描述为完全独立并发",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/governance/pod/worktree-disposal.ts",
+    "sha256": "159f5b6edba4562550adfd5316fa719951b407319c9e48f894ec5d30b29ef884",
+    "responsibility": "关闭 Pod 遗留检出的有界处置建议",
+    "branches": [
+      "按 profile 的 claude-worktree-flag/git-worktree 选择替代文字；不再以宿主 id 分支",
+      "路径单行化、shell 单引号转义；512 字符预算按码点截断，locked 同路径 unlock 后以分号 remove",
+      "建议仅是文本；超长截断路径需要操作者核对，不自动执行"
+    ],
+    "effects": [
+      "纯文本，无 Git 或宿主调用"
+    ],
+    "consumers": [
+      "src/capabilities/observation/decide.ts",
+      "src/capabilities/pod/service.ts"
+    ],
+    "tests": [
+      "tests/governance/pod/worktree-disposal.test.ts#worktreeDisposalGuidance"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "fc80e9853d37332f7bf3183fdf91a53ea839637df2b2fa9291525bd812418b31",
+    "change": "changed",
+    "changeConclusion": "将差异选择收敛为宿主能力值，Codex 归档聊天不再被描述为自动删除检出",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/governance/observation/active-projection-refresh.ts",
+    "sha256": "83f4f01e5fb236711481e19e00977b66a4aa80ca08caf6b3e832dfaefccd81c5",
+    "responsibility": "业务提交后的可重建活动页面刷新",
+    "branches": [
+      "refresh 进入/借用 workspace shared，再取得 publisher 锁，锁内才读配置并打开 Ledger，再 observe/render/publish",
+      "完整 Demand 观察才能提供退休证据；页面 CAS 由 kernel publisher 执行",
+      "quiet 吞已归类环境 Wakeflow 错误，aborted/unexpected/非 Wakeflow 错误不吞",
+      "afterMutationRefresh 在 mutate 前拒绝取消；mutate 成功后若刷新取消则保留已返回业务结果，其他后续读取仍可能失败"
+    ],
+    "effects": [
+      "私有 scope/publisher 协调与派生页面发布/退休，不改 Demand 权威"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/capabilities/workspace/maintain-workspace.ts"
+    ],
+    "tests": [
+      "tests/capabilities/workspace/operation-scope.test.ts#refreshActiveProjection",
+      "tests/governance/observation/active-projection-facts.test.ts#refreshActiveProjection",
+      "tests/governance/observation/active-projection-facts.test.ts#afterMutationRefresh"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "0d5707abaaf54058dea5ae41829b8fd207e293034d19e7bfa2d9ae7ed911c533",
+    "change": "changed",
+    "changeConclusion": "配置和 Ledger 根从锁外移入 publisher 回调，且维护必须等待整轮 shared 刷新退出",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/governance/observation/workspace-observation.ts",
+    "sha256": "165fbad6e92ad3422948cbd7e813431adcd7e819a5cb6fb0b134050dffa6174e",
+    "responsibility": "工作区各域隔离读取与总体朝向派生",
+    "branches": [
+      "projection/full 读取范围独立；read reason 环境错误变 unavailable，aborted 和无 reason 错误继续上抛",
+      "hook 全扫描后按 recordedAt/event/recordId 确定最近一条，latestBySession 暴露 observerManifestDigest，删除按启动记录推断窗口 runtime 的聚合",
+      "未发布同伴宿主 runtime 为空正常；当前宿主缺失投影不可用；只核当前 host 状态栏资产",
+      "Pod 状态依赖 Binding/回执/检出，归档结果只 full 读取；overall 不等同全部 verify gates",
+      "Git 仅读指针，archive candidate 源自板项；不是跨目录一致性事务"
+    ],
+    "effects": [
+      "只读文件和指针，不写运行权威/页面、不 spawn Git"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/governance/observation/active-projection-facts.ts",
+      "src/governance/observation/active-projection-refresh.ts"
+    ],
+    "tests": [
+      "tests/governance/observation/workspace-observation.test.ts#observeWorkspace",
+      "tests/capabilities/observation/service.test.ts#executeStatusRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "b5ecc05ff1d4c92e6e666860b0c60675486bc0e232ec9cabedd0f0b22c0ad7e8",
+    "change": "changed",
+    "changeConclusion": "hook 制品摘要明确归属观察器，而不是 MCP 服务进程或已加载指令",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/capabilities/observation/contract.ts",
+    "sha256": "b83e9c618ef141b61e6e347e237c4ebe77fab9f09c7661872f943593c4417dc2",
+    "responsibility": "status/verify 请求与结果 Schema 准入及工具目录",
+    "branches": [
+      "请求继续 V1；状态和核验结果升级 V2，公共 schemaVersion=2",
+      "读工具 annotations 保持 readOnly/idempotent、非 destructive；描述显式列十五门与 unverified peer runtime"
+    ],
+    "effects": [
+      "纯 Schema 准入，无工作区 I/O"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts",
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/service.test.ts#executeStatusRequest",
+      "tests/capabilities/observation/decide.test.ts#VERIFY_TOOL_REGISTRATION"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "78ef8ce6ae4ce89558ba0d89917e1e0fd45c609cb09338e349b3e34980b31141",
+    "change": "changed",
+    "changeConclusion": "状态 wire 断代：窗口 runtime 独立为 unregistered/unverified，不兼容旧 artifact current/stale",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/capabilities/observation/decide.ts",
+    "sha256": "0e994fe1ebec38779d5c0bab13f6a7cb072ab8997c0fd8060cdbf7a281e75749",
+    "responsibility": "只读观察的十五门、下一责任和限量规则",
+    "branches": [
+      "runtime-artifact 将 server evidence 和 unverifiedWindows 分开；已知启动/磁盘摘要不同 fail，有缺失或绑定 runtime 无关联证据 unavailable，无 adapter 且无 peer 才 pass/not-applicable",
+      "verifyNext 缺 manifest/换版优先 user；仅 peer runtime 未验证归 controller、无建议工具；与其他故障共存则建议维护处理可修问题",
+      "status nextActions 去掉 window-artifact-stale 动作；保留服务缺失/换版、维护、登记、Demand 前沿、需求包",
+      "十五门维持 pass/fail/unavailable；全部 pass 才 ok；手写投影/未登记窗口/过渡 Pod 的特殊 pass 提示保持"
+    ],
+    "effects": [
+      "纯函数，无 I/O，不因 gate 触发自动修复或窗口重启"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/decide.test.ts#deriveWorkspaceGates",
+      "tests/capabilities/observation/decide.test.ts#verifyNext",
+      "tests/capabilities/observation/decide.test.ts#deriveNextActions"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "b9c365fd5c503db968f07ff0a0232a40001b3e8e2fd9b4c9754d8e9847c07112",
+    "change": "changed",
+    "changeConclusion": "移除以 hook 做窗口制品当前/过期的假证据链，严格核验诚实报告不可验证",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  },
+  {
+    "path": "src/capabilities/observation/service.ts",
+    "sha256": "d5531401be1b2256ea6f6f976f05a1920325efcf9cbb1de46e8ae862c96af361",
+    "responsibility": "一次分域观察生成 status V2 与严格 verify V2",
+    "branches": [
+      "两个入口显式 scope read，Config/Ledger 打不开仍整调用拒绝；每次各观察一轮，verify 附加复验不写",
+      "当前 serving artifact adapter 的启动摘要与磁盘摘要单独公开 same/changed/unknown，读一次磁盘",
+      "所有已绑定窗口 runtime.status=unverified/reason host-runtime-association-unavailable；未绑定为 unregistered，绑定域不可读为 unverified/binding-unavailable",
+      "lastObservation 仅暴露 event/time/observerManifestDigest；hook 无论一致或不同均不能推出 target MCP/instructions 身份",
+      "gate facts 统计已知绑定窗口为 unverifiedWindows；请求带 demandId 时先确认活动集合，不可读不冒充归档/not-found",
+      "私有路径和会话句柄进入输出边界；状态列表限量、维护残留、归档已接受结果继续按原规则显式报告"
+    ],
+    "effects": [
+      "只读工作区/仓库指针/制品清单；repairsApplied=false；不写页面"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/capabilities/observation/service.test.ts#executeStatusRequest",
+      "tests/capabilities/observation/service.test.ts#executeVerifyRequest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "previousSha256": "15a3bac28d7d690939dd8a905a631063390b8919fabd18612b301fe97565ecf6",
+    "change": "changed",
+    "changeConclusion": "端到端去掉 artifactStateOf/staleArtifactWindowIds，serving process 与 peer runtime 主体不混淆",
+    "method": "全文读取 TypeScript；较大文件另用 SWC 去类型与注释展示全部运行体，保留所有分支与调用。相关类型、Schema、消费者和聚焦测试另行核对；未把仅静态锚点当作本轮测试通过。"
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "verification": "in-memory branch reproduction; no public-host session",
+  "mixedFailure": {
+    "sliceBlockers": [],
+    "controlProductDefectOnly": {
+      "ok": true
+    },
+    "mixedProductDefectAndFlaky": {
+      "ok": false,
+      "reason": "relation",
+      "path": "$/affectedTargets"
+    }
+  },
+  "researchCancellation": {
+    "blockers": [
+      "verify:research-evidence:fail"
+    ],
+    "scope": "Uses the gate produced by researchEvidenceGate; not a full filesystem/public-tool reproduction"
+  }
+}

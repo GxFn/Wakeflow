@@ -1,0 +1,79 @@
+{
+  "kind": "WakeflowAtlasCallbackPureProbes",
+  "observedOn": "2026-10-03",
+  "scope": "Read-only pure functions plus pure record/fixture constructors from the existing .build; no import service, hook filesystem or host session is exercised.",
+  "sourceDigests": [
+    {
+      "path": "src/capabilities/result-review/decide.ts",
+      "sha256": "e5a5b1f55921c13bb49e6fb2ac155ba5eff9b39324465a98a35eeb701894a68d"
+    },
+    {
+      "path": "src/capabilities/result-review/prompt.ts",
+      "sha256": "b868db68d973a913c851534295f5c693dcd9fe74347577e71951e8710f69274c"
+    },
+    {
+      "path": "src/governance/result/target-result-callback.ts",
+      "sha256": "647c4262388486229881a6fe3ec7eb500f5407c943e594fc19bc38b52420c015"
+    },
+    {
+      "path": "src/governance/result/implementation-target-result-report.ts",
+      "sha256": "4995a34cb25bb2554dd46ffc4f0e256168f12bdf05765c0c5b8172bafcd39183"
+    },
+    {
+      "path": "src/foundation/git/git-object-id.ts",
+      "sha256": "63af32cb94efc27dff6012541394353136190931d2849fc2909c51e9bbe407d7"
+    }
+  ],
+  "callbackCommitFinding": {
+    "inputCommits": [
+      {
+        "algorithm": "sha1",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "algorithm": "sha256",
+        "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "storedCommits": [
+      {
+        "algorithm": "sha1",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "algorithm": "sha256",
+        "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "summaryCommits": [
+      "[object Object]",
+      "[object Object]"
+    ],
+    "renderedLine": "- commits: [object Object], [object Object]",
+    "reproduced": true
+  },
+  "quoting": {
+    "authorityNoticeBeforeData": true,
+    "forgedNextContained": true,
+    "htmlAndDirectionalDelimitersEscaped": true
+  },
+  "states": {
+    "threshold": {
+      "status": "pending",
+      "landedRecordId": null,
+      "landedAt": null
+    },
+    "thresholdPlusOneMs": {
+      "status": "silent",
+      "landedRecordId": null,
+      "landedAt": null
+    },
+    "acknowledgedWithoutLanding": {
+      "status": "acknowledged",
+      "landedRecordId": null,
+      "landedAt": null
+    }
+  },
+  "sameInstantTargetCompletionConfirmed": true,
+  "stopDoesNotProveCallbackLanding": true
+}

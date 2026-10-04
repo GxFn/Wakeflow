@@ -1,0 +1,78 @@
+[
+  {
+    "path": "src/foundation/filesystem/rooted-read-write-scope.ts",
+    "sha256": "bd86e0e652bebf4e91dff8ef45b6031d295dfdec9c198849fa4c59c0946a4791",
+    "previousSha256": "5044f9b384d6e9035043ff47377c105e49375c4c4c148246d12600fba26e16ed",
+    "responsibility": "在私有准入目录以短 latch 协调共享许可登记、独占关闭与 reader 排空；只拥有物理许可，不解释领域恢复意图",
+    "branches": [
+      "mode/operation 与 options 被动输入检查；获取预算默认 30000 毫秒，合法 1..300000，signal 和 beforeEnter 拒绝代理对象",
+      "entriesOf 稳定枚举最多 1024 项，目录 0700、子节点普通文件 0600 且 owner 一致；仅允许 latch.lock、writer.lock、UUID reader 或可解析 create/0600 暂存",
+      "合法暂存只在 readDurableAtomicFileStageOwnerState 为 inactive 时精确 unlink；unknown/active 暂存要求恢复，不给 stage 套用锁 v2 的 birth/registry 协议",
+      "retireInactive 对 absent 返回 false，active 返回 true，unknown 抛 recovery-required，inactive 经签发观察和节点/摘要复验退休；rc.4 新增仅捕获 RootedExclusiveFileLockError/residue-changed，返回 true 维持本轮关闭",
+      "latched 在获取短锁前检查取消/截止并尝试退休失活 latch；latch 释放独立于业务回调，beforeEnter 在无 writer 时且创建业务许可前运行",
+      "shared 创建唯一 reader 文件；exclusive 创建 writer 后在短 latch 内累计每个 reader 的占用，保留 writer 阻止后到 reader，只有整轮无占用才入场",
+      "首次准入和独占排空只对 StableDirectoryReadError/source-changed 或 expectation-changed 重试，其余错误向外抛；20 毫秒重试仍受同一获取 deadline 和 signal 控制",
+      "operation 前最后检查取消/截止，但 operation 本身不受这个预算或 signal 强制中断；beforeEnter 也是返回后才检查，并未安装硬超时",
+      "acquire 返回后在 latch body 内立即 lease=acquired，故短 latch finally 抛错仍能释放已创建许可；正常结算或排空/业务失败均进入外层 finally。cleanup 成功保留先前结果/错误；cleanup 本身失败会覆盖先前错误。",
+      "精确释放绑定取得时的节点；未知同名替换者使 cleanup 拒绝，原字节保留，活动 token 在 release finally 退役；下次 owner 判定仍为 unknown 并要求恢复"
+    ],
+    "effects": [
+      "原子创建及精确删除 latch、唯一 reader 或 writer 文件；正常 reader 释放不持 latch",
+      "精确退休已证明 inactive 的锁及安全 create 暂存；从不按 mtime/TTL 抢占",
+      "调用上层 beforeEnter、operation；正常准入不写业务意图、事件或验收状态",
+      "释放失败可能发生在实际 unlink 之后，不能由错误反推路径仍存在；不回滚已完成的业务效果"
+    ],
+    "consumers": [
+      "src/kernel/workspace-operation-scope.ts"
+    ],
+    "tests": [
+      "tests/foundation/filesystem/rooted-read-write-scope.test.ts#withRootedReadWriteScope",
+      "tests/foundation/filesystem/rooted-read-write-scope.test.ts#RootedReadWriteScopeError",
+      "tests/kernel/workspace-operation-scope.test.ts#withWorkspaceOperationScope",
+      "tests/capabilities/workspace/operation-scope.test.ts#executeCodexWakeflowMaintenance"
+    ],
+    "testAssertions": [
+      "共享重叠、writer 排空、后到 reader 不越过等待 writer、成功和 body-failed 后目录为空",
+      "等待新 reader 取消不进入；same-PID 未知 registry 及未知文件保持原字节",
+      "rc.4 强制 reader 在 inspectExistingResource 快照之后释放：正常释放 writer 可进入；同名未知替换者拒绝进入并保留",
+      "真实 reader 子进程 SIGKILL 后才允许精确退休并进入 writer",
+      "Kernel 的维护事务残留同时拒绝 shared/exclusive 且不留下准入许可；公共维护中断预留直至 recover",
+      "新增回归：shared 首次、exclusive 首次及排空时第二次 latch 结算失败后回调不进入、目录为空，同进程两种模式均能重入",
+      "新增回归：shared/exclusive 的未知替换者不被 cleanup 删除，后续 exclusive recovery-required，字节保持；正式断言仅检查错误 reason，具体 path 优先级另由后态探针核验"
+    ],
+    "uncoveredBranches": [
+      "正式测试未强制 latch/writer 的 residue-changed、inactive 退休期间替换、两类稳定目录错误各自触发",
+      "正式测试未独立断言排空中的取消/timeout、超预算 operation、beforeEnter 无限等待、1024 项容量和所有权限/暂存错误组合",
+      "正式 suite 已补 CF-01 交接和未知替换者保护；双失败的具体 path 优先级尚无正式断言，独立 post-fix probe 覆盖了该观察"
+    ],
+    "findings": [
+      {
+        "id": "CF-01",
+        "status": "fixed-source-and-probe-verified",
+        "summary": "许可取得后立即登记给外层，latch 结算失败不再遗失 release；5 个后态探针确认 shared/exclusive 清理、排空失败及未知替换者保护",
+        "beforeEvidence": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/concurrency-release-probe-before-fix.json",
+        "afterProbe": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/concurrency-release-post-fix-probe.mjs",
+        "afterEvidence": "wakeflow-architecture-atlas/plans/review-2026-10-03-rc4/concurrency-release-probe-after-fix.json",
+        "limitation": "cleanup 自身失败时覆盖原 latch 错误；未知替换节点保持为独立可检查事实，未宣称双失败保留首错"
+      }
+    ],
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "reviewedLineRanges": [
+      "1-189"
+    ],
+    "reviewMethod": "当前 TypeScript 全文与新差异逐分支复核，核对唯一直接消费者、锁/进程/stage owner 和正式测试；先在显式一次性 fixture 复现，再用当前编译输出执行5个独立后态故障注入，不改生产文件",
+    "change": "changed",
+    "changeConclusion": "正常 reader 释放采用定向重观测，unknown 仍 fail closed；本轮发现的异常许可交接已修复，保留前态证据并补充后态验证",
+    "changesWithinReview": [
+      {
+        "sourceSha256": "2934a0db24829be2ee9a6018e0954ab44bea1409ae6c93df0c77e6bb0e7a29d9",
+        "conclusion": "reader 正常释放的 residue-changed 已修复；独立探针发现 CF-01"
+      },
+      {
+        "sourceSha256": "bd86e0e652bebf4e91dff8ef45b6031d295dfdec9c198849fa4c59c0946a4791",
+        "conclusion": "CF-01 已通过取得即登记修复，新增正式断言与5场景后态探针核验"
+      }
+    ]
+  }
+]

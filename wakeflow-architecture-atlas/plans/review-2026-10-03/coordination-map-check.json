@@ -1,0 +1,352 @@
+{
+  "reviewedAt": "2026-10-03",
+  "scope": "Selected maps static references, imports, numeric edges, tests, source digests and local links; not Mermaid browser rendering or root tests",
+  "ok": true,
+  "files": [
+    {
+      "file": "wakeflow-architecture-atlas/maps/11-kernel/README.md",
+      "diagrams": 1,
+      "inputs": 18,
+      "fingerprint": "sha256:bb25f69bf32242274fc686d1313f72e97ecf564a5729b0eaf74fc662176d2577",
+      "sourceAndTestSymbols": 33,
+      "testSymbols": 7,
+      "testEvidence": {
+        "rows": 7,
+        "anchored": 6,
+        "marked": 1,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/11-kernel/file-dependencies.md",
+      "diagrams": 1,
+      "inputs": 16,
+      "fingerprint": "sha256:4eb23bb85c10882a2db0818282cef0f63206ea80ae47c80d641eb4d758c6827c",
+      "sourceAndTestSymbols": 0,
+      "testSymbols": 0,
+      "testEvidence": {
+        "rows": 16,
+        "anchored": 0,
+        "marked": 16,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/11-kernel/hook-history.md",
+      "diagrams": 2,
+      "inputs": 7,
+      "fingerprint": "sha256:68bc4df3fc4ddacf2178e85cdc8b7b092339b4ed940a8660a328d21f4622e603",
+      "sourceAndTestSymbols": 43,
+      "testSymbols": 13,
+      "testEvidence": {
+        "rows": 13,
+        "anchored": 10,
+        "marked": 3,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/11-kernel/runtime-call-flow.md",
+      "diagrams": 2,
+      "inputs": 8,
+      "fingerprint": "sha256:d69c83d7fc3d2527121640e427ec472608efcb8598affc48ce038d57c9e6224d",
+      "sourceAndTestSymbols": 40,
+      "testSymbols": 12,
+      "testEvidence": {
+        "rows": 12,
+        "anchored": 12,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/11-kernel/workspace-operation-scope.md",
+      "diagrams": 2,
+      "inputs": 14,
+      "fingerprint": "sha256:dcb0fdab506046a9914da6d3326bbf69313b9f2f2f87bceeacc0e63f4a21f1f5",
+      "sourceAndTestSymbols": 59,
+      "testSymbols": 19,
+      "testEvidence": {
+        "rows": 18,
+        "anchored": 15,
+        "marked": 3,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/12-endpoint/README.md",
+      "diagrams": 1,
+      "inputs": 10,
+      "fingerprint": "sha256:400c426b91a49a53fe9ee55f5e4a062b2951c8696d528cc2c20ba2de458e7274",
+      "sourceAndTestSymbols": 24,
+      "testSymbols": 6,
+      "testEvidence": {
+        "rows": 6,
+        "anchored": 6,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/12-endpoint/execution-roots.md",
+      "diagrams": 1,
+      "inputs": 8,
+      "fingerprint": "sha256:dbc1bdfd18acfe30e9959937f4af751d85484a3231a069e070bb5742e6eee07d",
+      "sourceAndTestSymbols": 33,
+      "testSymbols": 11,
+      "testEvidence": {
+        "rows": 11,
+        "anchored": 10,
+        "marked": 1,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/12-endpoint/file-dependencies.md",
+      "diagrams": 1,
+      "inputs": 15,
+      "fingerprint": "sha256:1f05a1cc593f5af06beb74c3475697477f2c33a74d2a37f45d5b2e30823f7b9c",
+      "sourceAndTestSymbols": 0,
+      "testSymbols": 0,
+      "testEvidence": {
+        "rows": 13,
+        "anchored": 0,
+        "marked": 13,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/12-endpoint/runtime-call-flow.md",
+      "diagrams": 2,
+      "inputs": 6,
+      "fingerprint": "sha256:5682f12fb1abfac91b27c2691fbdd19db2a7f5d6367d3fb1b34859ee49250111",
+      "sourceAndTestSymbols": 52,
+      "testSymbols": 16,
+      "testEvidence": {
+        "rows": 16,
+        "anchored": 16,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/13-requirement/README.md",
+      "diagrams": 1,
+      "inputs": 9,
+      "fingerprint": "sha256:874d6fba28ed34f9cd8c790da49aa8f7ddc124ec7b406023988a42783866e9e6",
+      "sourceAndTestSymbols": 25,
+      "testSymbols": 7,
+      "testEvidence": {
+        "rows": 7,
+        "anchored": 7,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/13-requirement/file-dependencies.md",
+      "diagrams": 1,
+      "inputs": 17,
+      "fingerprint": "sha256:fe4f193fc59774ecd92216371fed621cb3d5f6dbf608c4cb4d39cd14c20c98bc",
+      "sourceAndTestSymbols": 0,
+      "testSymbols": 0,
+      "testEvidence": {
+        "rows": 13,
+        "anchored": 0,
+        "marked": 13,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/13-requirement/runtime-call-flow.md",
+      "diagrams": 3,
+      "inputs": 12,
+      "fingerprint": "sha256:2e0c8d206c1cebfeee989c07db977d952d16145aa2070e70372293b5a153e614",
+      "sourceAndTestSymbols": 69,
+      "testSymbols": 23,
+      "testEvidence": {
+        "rows": 23,
+        "anchored": 22,
+        "marked": 1,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/14-evidence/README.md",
+      "diagrams": 1,
+      "inputs": 9,
+      "fingerprint": "sha256:f20603147b01d8cc42dc767367ddf7c64b574d89df86303c38197dd3e047545d",
+      "sourceAndTestSymbols": 27,
+      "testSymbols": 9,
+      "testEvidence": {
+        "rows": 9,
+        "anchored": 9,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/14-evidence/file-dependencies.md",
+      "diagrams": 1,
+      "inputs": 16,
+      "fingerprint": "sha256:83d8cfc1ba0584557561d5d1da2a1bb24fd42e41d3dd79a24d79e4424ba6b769",
+      "sourceAndTestSymbols": 0,
+      "testSymbols": 0,
+      "testEvidence": {
+        "rows": 16,
+        "anchored": 0,
+        "marked": 16,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/14-evidence/runtime-call-flow.md",
+      "diagrams": 3,
+      "inputs": 11,
+      "fingerprint": "sha256:c17c6a14ab24a8ef1f717db7d22620c4dfe8c6a65229fe6fbbe69c9d53bf8b03",
+      "sourceAndTestSymbols": 63,
+      "testSymbols": 20,
+      "testEvidence": {
+        "rows": 21,
+        "anchored": 20,
+        "marked": 1,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/15-pod/README.md",
+      "diagrams": 1,
+      "inputs": 9,
+      "fingerprint": "sha256:b0854b5e7f87716c92f9860288ce2e18f5a224659e6d8daed4fa14220da7742f",
+      "sourceAndTestSymbols": 21,
+      "testSymbols": 6,
+      "testEvidence": {
+        "rows": 6,
+        "anchored": 6,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/15-pod/file-dependencies.md",
+      "diagrams": 1,
+      "inputs": 15,
+      "fingerprint": "sha256:21d8f747106b9cef0f86cdd54cb76ed4ef9457778dc153d271f2120695a189c6",
+      "sourceAndTestSymbols": 0,
+      "testSymbols": 0,
+      "testEvidence": {
+        "rows": 11,
+        "anchored": 0,
+        "marked": 11,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/15-pod/runtime-call-flow.md",
+      "diagrams": 2,
+      "inputs": 10,
+      "fingerprint": "sha256:d670be080c0afb44c1be7da3db11e3232488dc57c5bf9b4c167f6a6e971a5228",
+      "sourceAndTestSymbols": 52,
+      "testSymbols": 16,
+      "testEvidence": {
+        "rows": 16,
+        "anchored": 16,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/16-observation/README.md",
+      "diagrams": 1,
+      "inputs": 7,
+      "fingerprint": "sha256:fd20a9aecfcb792b693e1e65e7654fac545626ba1bc7e9ce5b07e31246a0a2a5",
+      "sourceAndTestSymbols": 24,
+      "testSymbols": 7,
+      "testEvidence": {
+        "rows": 7,
+        "anchored": 7,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/16-observation/file-dependencies.md",
+      "diagrams": 1,
+      "inputs": 17,
+      "fingerprint": "sha256:3bdbc725c259d83738e8c35f9d4e6626e7bb8ddf69c9e07f14f1dc959f784447",
+      "sourceAndTestSymbols": 0,
+      "testSymbols": 0,
+      "testEvidence": {
+        "rows": 17,
+        "anchored": 0,
+        "marked": 17,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/16-observation/projection-recovery.md",
+      "diagrams": 2,
+      "inputs": 6,
+      "fingerprint": "sha256:f36e2718aae75ddaad2596560b7783cf644c74baf36e6f7463833315170076c4",
+      "sourceAndTestSymbols": 44,
+      "testSymbols": 13,
+      "testEvidence": {
+        "rows": 13,
+        "anchored": 13,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/16-observation/runtime-call-flow.md",
+      "diagrams": 2,
+      "inputs": 8,
+      "fingerprint": "sha256:436efab320e6db2c8850f456598e6f201e096fb482411e045b563822d413b6f4",
+      "sourceAndTestSymbols": 50,
+      "testSymbols": 17,
+      "testEvidence": {
+        "rows": 17,
+        "anchored": 16,
+        "marked": 1,
+        "unanchored": 0
+      },
+      "errors": []
+    },
+    {
+      "file": "wakeflow-architecture-atlas/maps/16-observation/runtime-evidence.md",
+      "diagrams": 1,
+      "inputs": 9,
+      "fingerprint": "sha256:439a99cd89ddb0ccd67f94c0fd5131907855845a54c93edfe83693f07ad972d0",
+      "sourceAndTestSymbols": 24,
+      "testSymbols": 7,
+      "testEvidence": {
+        "rows": 7,
+        "anchored": 7,
+        "marked": 0,
+        "unanchored": 0
+      },
+      "errors": []
+    }
+  ]
+}

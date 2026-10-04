@@ -1,0 +1,1635 @@
+[
+  {
+    "name": "01 · 总体架构",
+    "path": "maps/01-overall-architecture/README.md",
+    "index": 0,
+    "title": "当前六层架构与职责边界",
+    "canonicalSource": "flowchart TB\n  accTitle: 当前六层架构与职责边界\n  accDescr: 入口组合宿主数据和能力切片，内核提供共同协议，治理所有者维护事实，基础层提供受根约束的物理原语。\n  subgraph composition[\"① 固定装配\"]\n    entry[\"entrypoints 公共 MCP 入口\"]\n    host[\"hosts 两宿主 profile 与资产\"]\n    catalog[\"20 工具的封闭登记表\"]\n  end\n  subgraph behavior[\"② 业务合同与执行\"]\n    slices[\"10 个 capabilities 能力切片\"]\n    owners[\"governance / workspace / configuration\"]\n    kernel[\"kernel 作用域、命令与证据\"]\n    contracts[\"contracts Schema 与词汇\"]\n  end\n  subgraph physical[\"③ 受约束的本地效果\"]\n    foundation[\"foundation 读写准入与持久原语\"]\n    disk[\"本地文件、Git 只读查询\"]\n  end\n  entry -->|\"E-OV01-01 读取并组合宿主 profile\"| host\n  entry -->|\"E-OV01-02 绑定 executor\"| catalog\n  catalog -->|\"E-OV01-03 登记切片合同\"| slices\n  slices -->|\"E-OV01-04 复用共同调用外壳\"| kernel\n  slices -->|\"E-OV01-05 调用所属领域 owner\"| owners\n  kernel -->|\"E-OV01-06 消费词汇与生成合同\"| contracts\n  owners -->|\"E-OV01-07 验证数据形状\"| contracts\n  owners -->|\"E-OV01-08 通过受根约束 I/O 落盘\"| foundation\n  kernel -->|\"E-OV01-09 建立根与写入准入\"| foundation\n  foundation -->|\"E-OV01-10 执行有界物理操作\"| disk\n",
+    "sourceDigest": "sha256:e7f0fb1a46b2c63a45c4439724da3ccfe7cb559ba5c795d141eb81637cca7662",
+    "documentDigest": "sha256:7faaee5176d2e79636fc8692f400e38a95e39d7077cd8a71cadf48014b89aa51",
+    "sourceFingerprint": "sha256:1dd722264d9a0a30af9ce0f206ae25dbc50381dec215ba5e6672acaa4fbbb2da",
+    "nodes": {
+      "entry": "entrypoints 公共 MCP 入口",
+      "host": "hosts 两宿主 profile 与资产",
+      "catalog": "20 工具的封闭登记表",
+      "slices": "10 个 capabilities 能力切片",
+      "owners": "governance / workspace / configuration",
+      "kernel": "kernel 作用域、命令与证据",
+      "contracts": "contracts Schema 与词汇",
+      "foundation": "foundation 读写准入与持久原语",
+      "disk": "本地文件、Git 只读查询"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "entry",
+        "to": "host",
+        "id": "E-OV01-01",
+        "full": "读取并组合宿主 profile",
+        "short": "01 组合宿主"
+      },
+      {
+        "from": "entry",
+        "to": "catalog",
+        "id": "E-OV01-02",
+        "full": "绑定 executor",
+        "short": "02 绑定执行器"
+      },
+      {
+        "from": "catalog",
+        "to": "slices",
+        "id": "E-OV01-03",
+        "full": "登记切片合同",
+        "short": "03 登记切片"
+      },
+      {
+        "from": "slices",
+        "to": "kernel",
+        "id": "E-OV01-04",
+        "full": "复用共同调用外壳",
+        "short": "04 调用外壳"
+      },
+      {
+        "from": "slices",
+        "to": "owners",
+        "id": "E-OV01-05",
+        "full": "调用所属领域 owner",
+        "short": "05 调用领域"
+      },
+      {
+        "from": "kernel",
+        "to": "contracts",
+        "id": "E-OV01-06",
+        "full": "消费词汇与生成合同",
+        "short": "06 消费合同"
+      },
+      {
+        "from": "owners",
+        "to": "contracts",
+        "id": "E-OV01-07",
+        "full": "验证数据形状",
+        "short": "07 校验形状"
+      },
+      {
+        "from": "owners",
+        "to": "foundation",
+        "id": "E-OV01-08",
+        "full": "通过受根约束 I/O 落盘",
+        "short": "08"
+      },
+      {
+        "from": "kernel",
+        "to": "foundation",
+        "id": "E-OV01-09",
+        "full": "建立根与写入准入",
+        "short": "09"
+      },
+      {
+        "from": "foundation",
+        "to": "disk",
+        "id": "E-OV01-10",
+        "full": "执行有界物理操作",
+        "short": "10 物理操作"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  subgraph composition[\"① 固定装配\"]\n    entry[\"entrypoints 公共 MCP 入口\"]\n    host[\"hosts 两宿主 profile 与资产\"]\n    catalog[\"20 工具的封闭登记表\"]\n  end\n  subgraph behavior[\"② 业务合同与执行\"]\n    slices[\"10 个 capabilities 能力切片\"]\n    owners[\"governance / workspace / configuration\"]\n    kernel[\"kernel 作用域、命令与证据\"]\n    contracts[\"contracts Schema 与词汇\"]\n  end\n  subgraph physical[\"③ 受约束的本地效果\"]\n    foundation[\"foundation 读写准入与持久原语\"]\n    disk[\"本地文件、Git 只读查询\"]\n  end\n  entry -->|\"01 组合宿主\"| host\n  entry -->|\"02 绑定执行器\"| catalog\n  catalog -->|\"03 登记切片\"| slices\n  slices -->|\"04 调用外壳\"| kernel\n  slices -->|\"05 调用领域\"| owners\n  kernel -->|\"06 消费合同\"| contracts\n  owners -->|\"07 校验形状\"| contracts\n  owners -->|\"08\"| foundation\n  kernel -->|\"09\"| foundation\n  foundation -->|\"10 物理操作\"| disk\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "50:1182",
+    "previousPanelId": "62:1743",
+    "previousLegendId": "62:1748"
+  },
+  {
+    "name": "02 · 工作区作用域",
+    "path": "maps/11-kernel/workspace-operation-scope.md",
+    "index": 0,
+    "title": "普通写者先获许可，读调用与维护分别分流",
+    "canonicalSource": "flowchart TB\n  accTitle: 普通写者先获许可，读调用与维护分别分流\n  accDescr: 普通shared或exclusive写者在短准入串行区内先检查维护预留，再登记许可，满足入场条件后才打开领域上下文。read无租约；maintenance先由外壳打开上下文，再交owner分支选择准入，不并入普通写者链。\n  a[\"runCommandShell：请求、根与隐私准入\"]\n  m[\"spec.scope选择调用形状\"]\n  r[\"read：只读调用或preview\"]\n  rc[\"无租约：open→body→结果准入→close\"]\n  w[\"shared／exclusive普通写者\"]\n  p[\"当前配置协议v2＋准入目录存在\"]\n  g[\"maintenance：先open上下文，再把body交owner\"]\n  q[\"短latch内检查现有writer与准入布局\"]\n  b[\"beforeEnter：核对维护gate与事务预留\"]\n  x[\"拒绝新writer，保留残留等待维护恢复\"]\n  k[\"登记reader或writer许可；独占等待共享持有者退出\"]\n  c[\"已有许可内：open→body→结果准入→close\"]\n  e[\"回调结束，能力失效并释放已有许可\"]\n  a -->|\"E-OPSCOPE-01 形状admit和隐私通过后选择\"| m\n  m -->|\"E-OPSCOPE-02 read不写入协调租约\"| r\n  r -->|\"E-OPSCOPE-03 直接执行只读上下文\"| rc\n  m -->|\"E-OPSCOPE-04 普通mutation选择shared或exclusive\"| w\n  w -->|\"E-OPSCOPE-05 首次进入检查协议与布局\"| p\n  p -->|\"E-OPSCOPE-06 条件满足后申请范围\"| q\n  m -->|\"E-OPSCOPE-07 外壳先open，再由维护owner选择内部准入\"| g\n  q -->|\"E-OPSCOPE-09 准入串行区内、许可登记前核对\"| b\n  b -->|\"E-OPSCOPE-10 active gate报busy；非active gate或事务残留要求恢复\"| x\n  b -->|\"E-OPSCOPE-11 无维护预留才登记许可\"| k\n  k -->|\"E-OPSCOPE-13 许可已取得且满足共享或独占入场条件\"| c\n  c -->|\"E-OPSCOPE-12 成功失败均先关闭上下文，再释放已有许可\"| e\n",
+    "sourceDigest": "sha256:319f293c5632b035dcb411b0542c5b5abd04d9e6bdf9a6f7318295d820b03be3",
+    "documentDigest": "sha256:b573c5d22969ce108530bc750ac499f0e33c63bf1b8cc5cd36bc9328d1b2c0ef",
+    "sourceFingerprint": "sha256:638f65575a2fe8c5368326d29b8d71215265c127f04e4e0968d69887fad67122",
+    "nodes": {
+      "a": "runCommandShell：请求、根与隐私准入",
+      "m": "spec.scope选择调用形状",
+      "r": "read：只读调用或preview",
+      "rc": "无租约：open→body→结果准入→close",
+      "w": "shared／exclusive普通写者",
+      "p": "当前配置协议v2＋准入目录存在",
+      "g": "maintenance：先open上下文，再把body交owner",
+      "q": "短latch内检查现有writer与准入布局",
+      "b": "beforeEnter：核对维护gate与事务预留",
+      "x": "拒绝新writer，保留残留等待维护恢复",
+      "k": "登记reader或writer许可；独占等待共享持有者退出",
+      "c": "已有许可内：open→body→结果准入→close",
+      "e": "回调结束，能力失效并释放已有许可"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "a",
+        "to": "m",
+        "id": "E-OPSCOPE-01",
+        "full": "形状admit和隐私通过后选择",
+        "short": "01 选择范围"
+      },
+      {
+        "from": "m",
+        "to": "r",
+        "id": "E-OPSCOPE-02",
+        "full": "read不写入协调租约",
+        "short": "02 只读路径"
+      },
+      {
+        "from": "r",
+        "to": "rc",
+        "id": "E-OPSCOPE-03",
+        "full": "直接执行只读上下文",
+        "short": "03 打开只读上下文"
+      },
+      {
+        "from": "m",
+        "to": "w",
+        "id": "E-OPSCOPE-04",
+        "full": "普通mutation选择shared或exclusive",
+        "short": "04 普通变更"
+      },
+      {
+        "from": "w",
+        "to": "p",
+        "id": "E-OPSCOPE-05",
+        "full": "首次进入检查协议与布局",
+        "short": "05 检查当前基线"
+      },
+      {
+        "from": "p",
+        "to": "q",
+        "id": "E-OPSCOPE-06",
+        "full": "条件满足后申请范围",
+        "short": "06 申请范围"
+      },
+      {
+        "from": "m",
+        "to": "g",
+        "id": "E-OPSCOPE-07",
+        "full": "外壳先open，再由维护owner选择内部准入",
+        "short": "07 维护另行准入"
+      },
+      {
+        "from": "q",
+        "to": "b",
+        "id": "E-OPSCOPE-09",
+        "full": "准入串行区内、许可登记前核对",
+        "short": "09 登记前复核"
+      },
+      {
+        "from": "b",
+        "to": "x",
+        "id": "E-OPSCOPE-10",
+        "full": "active gate报busy；非active gate或事务残留要求恢复",
+        "short": "10 预留阻挡"
+      },
+      {
+        "from": "b",
+        "to": "k",
+        "id": "E-OPSCOPE-11",
+        "full": "无维护预留才登记许可",
+        "short": "11 登记许可"
+      },
+      {
+        "from": "k",
+        "to": "c",
+        "id": "E-OPSCOPE-13",
+        "full": "许可已取得且满足共享或独占入场条件",
+        "short": "13 准入完成"
+      },
+      {
+        "from": "c",
+        "to": "e",
+        "id": "E-OPSCOPE-12",
+        "full": "成功失败均先关闭上下文，再释放已有许可",
+        "short": "12 关闭与释放"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  a[\"runCommandShell：请求、根与隐私准入\"]\n  m[\"spec.scope选择调用形状\"]\n  r[\"read：只读调用或preview\"]\n  rc[\"无租约：open→body→结果准入→close\"]\n  w[\"shared／exclusive普通写者\"]\n  p[\"当前配置协议v2＋准入目录存在\"]\n  g[\"maintenance：先open上下文，再把body交owner\"]\n  q[\"短latch内检查现有writer与准入布局\"]\n  b[\"beforeEnter：核对维护gate与事务预留\"]\n  x[\"拒绝新writer，保留残留等待维护恢复\"]\n  k[\"登记reader或writer许可；独占等待共享持有者退出\"]\n  c[\"已有许可内：open→body→结果准入→close\"]\n  e[\"回调结束，能力失效并释放已有许可\"]\n  a -->|\"01 选择范围\"| m\n  m -->|\"02 只读路径\"| r\n  r -->|\"03 打开只读上下文\"| rc\n  m -->|\"04 普通变更\"| w\n  w -->|\"05 检查当前基线\"| p\n  p -->|\"06 申请范围\"| q\n  m -->|\"07 维护另行准入\"| g\n  q -->|\"09 登记前复核\"| b\n  b -->|\"10 预留阻挡\"| x\n  b -->|\"11 登记许可\"| k\n  k -->|\"13 准入完成\"| c\n  c -->|\"12 关闭与释放\"| e\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "51:1239",
+    "previousPanelId": "62:1749",
+    "previousLegendId": "62:1754"
+  },
+  {
+    "name": "03 · 共享与独占",
+    "path": "maps/02-foundation/read-write-admission.md",
+    "index": 0,
+    "title": "共享与独占许可的准入顺序",
+    "canonicalSource": "flowchart TB\n  accTitle: 共享与独占许可的准入顺序\n  accDescr: 短latch串行登记，writer先关闭新准入再排空既有reader；unknown和未知文件停止，业务执行后精确释放自身许可。\n  entry[\"[代码] withRootedReadWriteScope\"]\n  latch[\"[代码] 短 latch 内核验目录与 writer\"]\n  reservation[\"[代码] beforeEnter 业务保留门\"]\n  mode{\"请求模式\"}\n  reader[\"[许可] 创建唯一 reader 文件\"]\n  writer[\"[许可] 创建 writer 文件\"]\n  drain[\"[代码] 短 latch 内排空既有 readers\"]\n  body[\"[代码] 执行调用方操作\"]\n  release[\"[代码] finally 精确释放自身许可\"]\n  retry[\"[等待] 20ms 重试与单调截止时间\"]\n  drainRetry[\"[等待] 保持 writer；20ms 后重查 readers\"]\n  stop[\"[停止] unsafe 或 recovery-required\"]\n  entry -->|\"E-RWS-01 截止与取消检查后取 latch\"| latch\n  latch -->|\"E-RWS-02 目录安全且没有活动 writer\"| reservation\n  latch -->|\"E-RWS-03 活动 writer 阻止新准入\"| retry\n  retry -->|\"E-RWS-04 未超时且未取消\"| latch\n  latch -->|\"E-RWS-05 未知条目或 owner 无法证明失活\"| stop\n  reservation -->|\"E-RWS-06 owner 保留门通过\"| mode\n  mode -->|\"E-RWS-07 shared\"| reader\n  mode -->|\"E-RWS-08 exclusive\"| writer\n  reader -->|\"E-RWS-09 已取得共享许可\"| body\n  writer -->|\"E-RWS-10 保留 writer 关闭新 reader\"| drain\n  drain -->|\"E-RWS-11 所有 reader 已释放或精确退休\"| body\n  body -->|\"E-RWS-12 成功与异常均释放\"| release\n  drain -->|\"E-RWS-13 活动 reader 或可重观测的来源变化\"| drainRetry\n  drainRetry -->|\"E-RWS-14 未取消且预算尚余\"| drain\n  drain -->|\"E-RWS-15 unknown 或不安全残留\"| stop\n",
+    "sourceDigest": "sha256:77606e97ffd0bc304538e3e907f566e903f692bd201b97e8f8405d19db703632",
+    "documentDigest": "sha256:5640b83270209aff76f93804f95a819694bdc5b217c8fe4eee0b254454d78986",
+    "sourceFingerprint": "sha256:2d94464f6f304335d518e09055e1d47443c600ee63a1f9017c07c79f68bac4ae",
+    "nodes": {
+      "entry": "[代码] withRootedReadWriteScope",
+      "latch": "[代码] 短 latch 内核验目录与 writer",
+      "reservation": "[代码] beforeEnter 业务保留门",
+      "mode": "请求模式",
+      "reader": "[许可] 创建唯一 reader 文件",
+      "writer": "[许可] 创建 writer 文件",
+      "drain": "[代码] 短 latch 内排空既有 readers",
+      "body": "[代码] 执行调用方操作",
+      "release": "[代码] finally 精确释放自身许可",
+      "retry": "[等待] 20ms 重试与单调截止时间",
+      "drainRetry": "[等待] 保持 writer；20ms 后重查 readers",
+      "stop": "[停止] unsafe 或 recovery-required"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "entry",
+        "to": "latch",
+        "id": "E-RWS-01",
+        "full": "截止与取消检查后取 latch",
+        "short": "01 取得短锁"
+      },
+      {
+        "from": "latch",
+        "to": "reservation",
+        "id": "E-RWS-02",
+        "full": "目录安全且没有活动 writer",
+        "short": "02 目录与writer就绪"
+      },
+      {
+        "from": "latch",
+        "to": "retry",
+        "id": "E-RWS-03",
+        "full": "活动 writer 阻止新准入",
+        "short": "03"
+      },
+      {
+        "from": "retry",
+        "to": "latch",
+        "id": "E-RWS-04",
+        "full": "未超时且未取消",
+        "short": "04"
+      },
+      {
+        "from": "latch",
+        "to": "stop",
+        "id": "E-RWS-05",
+        "full": "未知条目或 owner 无法证明失活",
+        "short": "05 未知则停止"
+      },
+      {
+        "from": "reservation",
+        "to": "mode",
+        "id": "E-RWS-06",
+        "full": "owner 保留门通过",
+        "short": "06 业务门通过"
+      },
+      {
+        "from": "mode",
+        "to": "reader",
+        "id": "E-RWS-07",
+        "full": "shared",
+        "short": "07 共享登记"
+      },
+      {
+        "from": "mode",
+        "to": "writer",
+        "id": "E-RWS-08",
+        "full": "exclusive",
+        "short": "08 独占登记"
+      },
+      {
+        "from": "reader",
+        "to": "body",
+        "id": "E-RWS-09",
+        "full": "已取得共享许可",
+        "short": "09 共享执行"
+      },
+      {
+        "from": "writer",
+        "to": "drain",
+        "id": "E-RWS-10",
+        "full": "保留 writer 关闭新 reader",
+        "short": "10 关闭新准入"
+      },
+      {
+        "from": "drain",
+        "to": "body",
+        "id": "E-RWS-11",
+        "full": "所有 reader 已释放或精确退休",
+        "short": "11 旧reader已排空"
+      },
+      {
+        "from": "body",
+        "to": "release",
+        "id": "E-RWS-12",
+        "full": "成功与异常均释放",
+        "short": "12 最后释放"
+      },
+      {
+        "from": "drain",
+        "to": "drainRetry",
+        "id": "E-RWS-13",
+        "full": "活动 reader 或可重观测的来源变化",
+        "short": "13"
+      },
+      {
+        "from": "drainRetry",
+        "to": "drain",
+        "id": "E-RWS-14",
+        "full": "未取消且预算尚余",
+        "short": "14"
+      },
+      {
+        "from": "drain",
+        "to": "stop",
+        "id": "E-RWS-15",
+        "full": "unknown 或不安全残留",
+        "short": "15 保留未知"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  entry[\"[代码] withRootedReadWriteScope\"]\n  latch[\"[代码] 短 latch 内核验目录与 writer\"]\n  reservation[\"[代码] beforeEnter 业务保留门\"]\n  mode{\"请求模式\"}\n  reader[\"[许可] 创建唯一 reader 文件\"]\n  writer[\"[许可] 创建 writer 文件\"]\n  drain[\"[代码] 短 latch 内排空既有 readers\"]\n  body[\"[代码] 执行调用方操作\"]\n  release[\"[代码] finally 精确释放自身许可\"]\n  retry[\"[等待] 20ms 重试与单调截止时间\"]\n  drainRetry[\"[等待] 保持 writer；20ms 后重查 readers\"]\n  stop[\"[停止] unsafe 或 recovery-required\"]\n  entry -->|\"01 取得短锁\"| latch\n  latch -->|\"02 目录与writer就绪\"| reservation\n  latch -->|\"03\"| retry\n  retry -->|\"04\"| latch\n  latch -->|\"05 未知则停止\"| stop\n  reservation -->|\"06 业务门通过\"| mode\n  mode -->|\"07 共享登记\"| reader\n  mode -->|\"08 独占登记\"| writer\n  reader -->|\"09 共享执行\"| body\n  writer -->|\"10 关闭新准入\"| drain\n  drain -->|\"11 旧reader已排空\"| body\n  body -->|\"12 最后释放\"| release\n  drain -->|\"13\"| drainRetry\n  drainRetry -->|\"14\"| drain\n  drain -->|\"15 保留未知\"| stop\n",
+    "note": null,
+    "action": "generate",
+    "previousDiagramId": "52:1295",
+    "previousPanelId": "62:1755",
+    "previousLegendId": "62:1760"
+  },
+  {
+    "name": "04 · 项目聊天",
+    "path": "maps/09-public-mcp-host-seams/project-chats-and-execution-roots.md",
+    "index": 1,
+    "title": "Codex角色聊天与产品检出的独立核验",
+    "canonicalSource": "flowchart TB\n  I[\"[计划] inspect 的启动说明\"]\n  P[\"[智能体] 解析外层项目与当前host\"]\n  C[\"[外部效果] project/local 创建聊天\"]\n  R[\"[观察] ready threadId 与项目回读\"]\n  S[\"[观察] 工作区根 SessionStart\"]\n  G[\"[代码] endpoint 登记准入\"]\n  W[\"[智能体] 在产品仓库建立 Git worktree\"]\n  O[\"[观察] executionRoot 与两份 Git 原文\"]\n  V[\"[代码] 检出身份与独占归属准入\"]\n  B[\"[权威] 私有绑定与检出回执\"]\n  accTitle: Codex角色聊天与产品检出的独立核验\n  accDescr: Agent创建外层项目聊天并回读项目，运行时只用工作区根SessionStart核验会话；worktree产品另带实际执行根和Git观察，经真实指针与归属核对后记录绑定。\n  I -->|\"E-PCH-01 Agent 遵循当前说明\"| P\n  P -->|\"E-PCH-02 项目唯一且创建已获授权\"| C\n  C -->|\"E-PCH-03 保留结果并等ready\"| R\n  R -->|\"E-PCH-04 句柄与intentDigest回交\"| G\n  S -->|\"E-PCH-05 精确匹配工作区启动根\"| G\n  I -->|\"E-PCH-06 worktree产品需要独立检出\"| W\n  W -->|\"E-PCH-07 在分配检出采集实际事实\"| O\n  O -->|\"E-PCH-08 必填绝对执行根并核验Git\"| V\n  G -->|\"E-PCH-09 产品worktree还须通过检出门\"| V\n  V -->|\"E-PCH-10 成功记录绑定及检出回执\"| B\n  G -->|\"E-PCH-11 普通角色登记绑定\"| B\n",
+    "sourceDigest": "sha256:12f5479a0ec1a2b04436d19b313da622ad9c6ee23f0621cde867af51769d37b6",
+    "documentDigest": "sha256:6d9a291b8c20c7274333d76a79ec0c7b8f632ec04d6f3da9e238a1a0b97699fa",
+    "sourceFingerprint": "sha256:0f2f95d1d055f6e60ae5a033b0912f0c2db476fe12ecf5939e4ee6d5144a5754",
+    "nodes": {
+      "I": "[计划] inspect 的启动说明",
+      "P": "[智能体] 解析外层项目与当前host",
+      "C": "[外部效果] project/local 创建聊天",
+      "R": "[观察] ready threadId 与项目回读",
+      "S": "[观察] 工作区根 SessionStart",
+      "G": "[代码] endpoint 登记准入",
+      "W": "[智能体] 在产品仓库建立 Git worktree",
+      "O": "[观察] executionRoot 与两份 Git 原文",
+      "V": "[代码] 检出身份与独占归属准入",
+      "B": "[权威] 私有绑定与检出回执"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "I",
+        "to": "P",
+        "id": "E-PCH-01",
+        "full": "Agent 遵循当前说明",
+        "short": "01 读取说明"
+      },
+      {
+        "from": "P",
+        "to": "C",
+        "id": "E-PCH-02",
+        "full": "项目唯一且创建已获授权",
+        "short": "02 创建"
+      },
+      {
+        "from": "C",
+        "to": "R",
+        "id": "E-PCH-03",
+        "full": "保留结果并等ready",
+        "short": "03 等待ready"
+      },
+      {
+        "from": "R",
+        "to": "G",
+        "id": "E-PCH-04",
+        "full": "句柄与intentDigest回交",
+        "short": "04 回交创建观察"
+      },
+      {
+        "from": "S",
+        "to": "G",
+        "id": "E-PCH-05",
+        "full": "精确匹配工作区启动根",
+        "short": "05 核对启动根"
+      },
+      {
+        "from": "I",
+        "to": "W",
+        "id": "E-PCH-06",
+        "full": "worktree产品需要独立检出",
+        "short": "06 产品独立检出"
+      },
+      {
+        "from": "W",
+        "to": "O",
+        "id": "E-PCH-07",
+        "full": "在分配检出采集实际事实",
+        "short": "07 采集Git事实"
+      },
+      {
+        "from": "O",
+        "to": "V",
+        "id": "E-PCH-08",
+        "full": "必填绝对执行根并核验Git",
+        "short": "08 核对执行根"
+      },
+      {
+        "from": "G",
+        "to": "V",
+        "id": "E-PCH-09",
+        "full": "产品worktree还须通过检出门",
+        "short": "09 复验检出门"
+      },
+      {
+        "from": "V",
+        "to": "B",
+        "id": "E-PCH-10",
+        "full": "成功记录绑定及检出回执",
+        "short": "10 记录绑定回执"
+      },
+      {
+        "from": "G",
+        "to": "B",
+        "id": "E-PCH-11",
+        "full": "普通角色登记绑定",
+        "short": "11"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  I[\"[计划] inspect 的启动说明\"]\n  P[\"[智能体] 解析外层项目与当前host\"]\n  C[\"[外部效果] project/local 创建聊天\"]\n  R[\"[观察] ready threadId 与项目回读\"]\n  S[\"[观察] 工作区根 SessionStart\"]\n  G[\"[代码] endpoint 登记准入\"]\n  W[\"[智能体] 在产品仓库建立 Git worktree\"]\n  O[\"[观察] executionRoot 与两份 Git 原文\"]\n  V[\"[代码] 检出身份与独占归属准入\"]\n  B[\"[权威] 私有绑定与检出回执\"]\n  I -->|\"01 读取说明\"| P\n  P -->|\"02 创建\"| C\n  C -->|\"03 等待ready\"| R\n  R -->|\"04 回交创建观察\"| G\n  S -->|\"05 核对启动根\"| G\n  I -->|\"06 产品独立检出\"| W\n  W -->|\"07 采集Git事实\"| O\n  O -->|\"08 核对执行根\"| V\n  G -->|\"09 复验检出门\"| V\n  V -->|\"10 记录绑定回执\"| B\n  G -->|\"11\"| B\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "53:1350",
+    "previousPanelId": "62:1761",
+    "previousLegendId": "62:1766"
+  },
+  {
+    "name": "05 · 产品执行根",
+    "path": "maps/12-endpoint/execution-roots.md",
+    "index": 0,
+    "title": "从SessionStart到已核实的产品检出",
+    "canonicalSource": "flowchart TB\n  accTitle: 从SessionStart到已核实的产品检出\n  accDescr: project-thread会话只证明项目根启动，执行根必须单独给出；其他宿主沿用会话cwd；两条路径汇合后核验Git关联再记回执。\n  a[\"完整hook查询：complete且skipped为零\"]\n  b[\"project-thread：SessionStart必须在项目根\"]\n  c[\"其他宿主：角色根或worktree候选匹配\"]\n  d[\"Codex worktree：要求独立绝对executionRoot\"]\n  e[\"其他宿主：用session cwd，禁止额外executionRoot\"]\n  f[\"执行根和配置仓库realpath可读\"]\n  g[\"commonDir相对执行根解析，等于仓库.git\"]\n  h[\"porcelain选非主／非bare／非prunable检出\"]\n  i[\".git与admin双向指针、HEAD关系一致\"]\n  j[\"同宿主其他Pod未占用该路径\"]\n  k[\"保存Binding绑定的0600私有worktree回执\"]\n  a -->|\"E-ROOTS-01 profile.launch.kind为project-thread\"| b\n  a -->|\"E-ROOTS-02 其他启动语义\"| c\n  b -->|\"E-ROOTS-03 项目会话匹配后再要求显式执行根\"| d\n  c -->|\"E-ROOTS-04 沿用已匹配的会话cwd\"| e\n  d -->|\"E-ROOTS-05 提供有效绝对executionRoot后继续\"| f\n  e -->|\"E-ROOTS-06 通过后调用同一Git准入\"| f\n  f -->|\"E-ROOTS-07 解析同仓库common-dir\"| g\n  g -->|\"E-ROOTS-08 按执行真实路径选择条目\"| h\n  h -->|\"E-ROOTS-09 逐项核对真实文件指针\"| i\n  i -->|\"E-ROOTS-10 Git结构通过后检查占用\"| j\n  j -->|\"E-ROOTS-11 准入后写当前Binding代际回执\"| k\n",
+    "sourceDigest": "sha256:134dd4f03d9ec763bb15a83240999e64e868771e8459622174ec33a16be8a80e",
+    "documentDigest": "sha256:52634254a966c09a85ca410d09420910393d2546f67bc0faf09a441ad02e1d66",
+    "sourceFingerprint": "sha256:dbc1bdfd18acfe30e9959937f4af751d85484a3231a069e070bb5742e6eee07d",
+    "nodes": {
+      "a": "完整hook查询：complete且skipped为零",
+      "b": "project-thread：SessionStart必须在项目根",
+      "c": "其他宿主：角色根或worktree候选匹配",
+      "d": "Codex worktree：要求独立绝对executionRoot",
+      "e": "其他宿主：用session cwd，禁止额外executionRoot",
+      "f": "执行根和配置仓库realpath可读",
+      "g": "commonDir相对执行根解析，等于仓库.git",
+      "h": "porcelain选非主／非bare／非prunable检出",
+      "i": ".git与admin双向指针、HEAD关系一致",
+      "j": "同宿主其他Pod未占用该路径",
+      "k": "保存Binding绑定的0600私有worktree回执"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "id": "E-ROOTS-01",
+        "full": "profile.launch.kind为project-thread",
+        "short": "01 项目聊天"
+      },
+      {
+        "from": "a",
+        "to": "c",
+        "id": "E-ROOTS-02",
+        "full": "其他启动语义",
+        "short": "02 其他宿主"
+      },
+      {
+        "from": "b",
+        "to": "d",
+        "id": "E-ROOTS-03",
+        "full": "项目会话匹配后再要求显式执行根",
+        "short": "03 要求执行根"
+      },
+      {
+        "from": "c",
+        "to": "e",
+        "id": "E-ROOTS-04",
+        "full": "沿用已匹配的会话cwd",
+        "short": "04 沿用会话根"
+      },
+      {
+        "from": "d",
+        "to": "f",
+        "id": "E-ROOTS-05",
+        "full": "提供有效绝对executionRoot后继续",
+        "short": "05 绝对根有效"
+      },
+      {
+        "from": "e",
+        "to": "f",
+        "id": "E-ROOTS-06",
+        "full": "通过后调用同一Git准入",
+        "short": "06 进入Git准入"
+      },
+      {
+        "from": "f",
+        "to": "g",
+        "id": "E-ROOTS-07",
+        "full": "解析同仓库common-dir",
+        "short": "07 核对commonDir"
+      },
+      {
+        "from": "g",
+        "to": "h",
+        "id": "E-ROOTS-08",
+        "full": "按执行真实路径选择条目",
+        "short": "08 选择真实检出"
+      },
+      {
+        "from": "h",
+        "to": "i",
+        "id": "E-ROOTS-09",
+        "full": "逐项核对真实文件指针",
+        "short": "09 复验双向指针"
+      },
+      {
+        "from": "i",
+        "to": "j",
+        "id": "E-ROOTS-10",
+        "full": "Git结构通过后检查占用",
+        "short": "10 检查Pod占用"
+      },
+      {
+        "from": "j",
+        "to": "k",
+        "id": "E-ROOTS-11",
+        "full": "准入后写当前Binding代际回执",
+        "short": "11 保存代际回执"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  a[\"完整hook查询：complete且skipped为零\"]\n  b[\"project-thread：SessionStart必须在项目根\"]\n  c[\"其他宿主：角色根或worktree候选匹配\"]\n  d[\"Codex worktree：要求独立绝对executionRoot\"]\n  e[\"其他宿主：用session cwd，禁止额外executionRoot\"]\n  f[\"执行根和配置仓库realpath可读\"]\n  g[\"commonDir相对执行根解析，等于仓库.git\"]\n  h[\"porcelain选非主／非bare／非prunable检出\"]\n  i[\".git与admin双向指针、HEAD关系一致\"]\n  j[\"同宿主其他Pod未占用该路径\"]\n  k[\"保存Binding绑定的0600私有worktree回执\"]\n  a -->|\"01 项目聊天\"| b\n  a -->|\"02 其他宿主\"| c\n  b -->|\"03 要求执行根\"| d\n  c -->|\"04 沿用会话根\"| e\n  d -->|\"05 绝对根有效\"| f\n  e -->|\"06 进入Git准入\"| f\n  f -->|\"07 核对commonDir\"| g\n  g -->|\"08 选择真实检出\"| h\n  h -->|\"09 复验双向指针\"| i\n  i -->|\"10 检查Pod占用\"| j\n  j -->|\"11 保存代际回执\"| k\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "54:1406",
+    "previousPanelId": "62:1767",
+    "previousLegendId": "62:1772"
+  },
+  {
+    "name": "06 · 投影来源",
+    "path": "maps/03-configuration-workspace/operation-scope-and-config-baseline.md",
+    "index": 1,
+    "title": "窗口投影从当前配置和绑定锁内生成",
+    "canonicalSource": "flowchart TB\n  accTitle: 窗口投影从当前配置和绑定锁内生成\n  accDescr: 刷新先进入共享作用域，锁内重新读取配置和绑定并重建期望文档；安全缺失或过期才发布，未知文档保留；骨架修复使用只创建语义保护并发登记。\n  R[\"[代码] refresh 当前投影\"]\n  S[\"[代码] shared 作用域\"]\n  L[\"[代码] binding store 专属锁\"]\n  C[\"[权威] 锁内重读配置与绑定\"]\n  E[\"[视图] 纯编译期望文档\"]\n  Q{\"当前文档状态\"}\n  P[\"[代码] 发布缺失或过期文档\"]\n  K[\"[结果] 原样保留\"]\n  B[\"[代码] skeleton 修复\"]\n  N[\"[代码] createFileAtomically\"]\n  R -->|\"E-WPR-01 进入后才加载事实\"| S\n  S -->|\"E-WPR-02 取得登记共用锁\"| L\n  L -->|\"E-WPR-03 authoritySource 再次求值\"| C\n  C -->|\"E-WPR-04 同锁内编译期望\"| E\n  E -->|\"E-WPR-05 稳定读取并比较\"| Q\n  Q -->|\"E-WPR-06 missing 或 stale\"| P\n  Q -->|\"E-WPR-07 current 或 unsafe\"| K\n  B -->|\"E-WPR-08 仅对 missing 尝试创建\"| N\n  N -->|\"E-WPR-09 target-exists 保留后来文档\"| K\n",
+    "sourceDigest": "sha256:8c8a5c4b5b7cc651844a37003a38d6199f9ad3d82f2dd22093880aed6b20c7c9",
+    "documentDigest": "sha256:2ce6753bf09f5df0ec576a233231b1f1ac235c9c50ae27c259959ef7a6e3c638",
+    "sourceFingerprint": "sha256:6db6be5ca0df9ffce723d68ea2cb82b8c676d0344bea94c164f9f9262d110353",
+    "nodes": {
+      "R": "[代码] refresh 当前投影",
+      "S": "[代码] shared 作用域",
+      "L": "[代码] binding store 专属锁",
+      "C": "[权威] 锁内重读配置与绑定",
+      "E": "[视图] 纯编译期望文档",
+      "Q": "当前文档状态",
+      "P": "[代码] 发布缺失或过期文档",
+      "K": "[结果] 原样保留",
+      "B": "[代码] skeleton 修复",
+      "N": "[代码] createFileAtomically"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "R",
+        "to": "S",
+        "id": "E-WPR-01",
+        "full": "进入后才加载事实",
+        "short": "01 准入后读取"
+      },
+      {
+        "from": "S",
+        "to": "L",
+        "id": "E-WPR-02",
+        "full": "取得登记共用锁",
+        "short": "02 取得绑定锁"
+      },
+      {
+        "from": "L",
+        "to": "C",
+        "id": "E-WPR-03",
+        "full": "authoritySource 再次求值",
+        "short": "03 锁内重读来源"
+      },
+      {
+        "from": "C",
+        "to": "E",
+        "id": "E-WPR-04",
+        "full": "同锁内编译期望",
+        "short": "04 重算期望"
+      },
+      {
+        "from": "E",
+        "to": "Q",
+        "id": "E-WPR-05",
+        "full": "稳定读取并比较",
+        "short": "05 比较当前文档"
+      },
+      {
+        "from": "Q",
+        "to": "P",
+        "id": "E-WPR-06",
+        "full": "missing 或 stale",
+        "short": "06 发布缺失或陈旧"
+      },
+      {
+        "from": "Q",
+        "to": "K",
+        "id": "E-WPR-07",
+        "full": "current 或 unsafe",
+        "short": "07 保持当前或不安全"
+      },
+      {
+        "from": "B",
+        "to": "N",
+        "id": "E-WPR-08",
+        "full": "仅对 missing 尝试创建",
+        "short": "08 只补缺失"
+      },
+      {
+        "from": "N",
+        "to": "K",
+        "id": "E-WPR-09",
+        "full": "target-exists 保留后来文档",
+        "short": "09 保留后来文档"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  R[\"[代码] refresh 当前投影\"]\n  S[\"[代码] shared 作用域\"]\n  L[\"[代码] binding store 专属锁\"]\n  C[\"[权威] 锁内重读配置与绑定\"]\n  E[\"[视图] 纯编译期望文档\"]\n  Q{\"当前文档状态\"}\n  P[\"[代码] 发布缺失或过期文档\"]\n  K[\"[结果] 原样保留\"]\n  B[\"[代码] skeleton 修复\"]\n  N[\"[代码] createFileAtomically\"]\n  R -->|\"01 准入后读取\"| S\n  S -->|\"02 取得绑定锁\"| L\n  L -->|\"03 锁内重读来源\"| C\n  C -->|\"04 重算期望\"| E\n  E -->|\"05 比较当前文档\"| Q\n  Q -->|\"06 发布缺失或陈旧\"| P\n  Q -->|\"07 保持当前或不安全\"| K\n  B -->|\"08 只补缺失\"| N\n  N -->|\"09 保留后来文档\"| K\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "55:1458",
+    "previousPanelId": "62:1773",
+    "previousLegendId": "62:1778"
+  },
+  {
+    "name": "07 · 运行证据",
+    "path": "maps/16-observation/runtime-evidence.md",
+    "index": 0,
+    "title": "三种证据分别流向公开字段",
+    "canonicalSource": "flowchart TB\n  accTitle: 三种证据分别流向公开字段\n  accDescr: 服务adapter只生成runtime字段；hook只生成最近观察器事实；Binding生成窗口身份与明确未验证的runtime，三者不互相冒充。\n  s[\"本进程artifact adapter：启动与磁盘digest\"]\n  sv[\"status.runtime：same／changed／unknown\"]\n  h[\"私有hook记录artifactManifestDigest\"]\n  o[\"全扫描，按时间与稳定次序选最近记录\"]\n  ov[\"lastObservation.observerManifestDigest\"]\n  b[\"当前Binding与绑定域可读性\"]\n  bv[\"window.identity：registered等\"]\n  u[\"已绑定：runtime unverified\"]\n  n[\"无Binding且域可读：unregistered\"]\n  x[\"绑定域不可读：unverified／binding-unavailable\"]\n  s -->|\"E-RUNTIME-01 当前服务独立比较\"| sv\n  h -->|\"E-RUNTIME-02 保留字段但明确归属观察器\"| o\n  o -->|\"E-RUNTIME-03 映射为观察器字段\"| ov\n  b -->|\"E-RUNTIME-04 只证明绑定关系\"| bv\n  b -->|\"E-RUNTIME-05 有Binding仍无目标实例关联\"| u\n  b -->|\"E-RUNTIME-06 可证明未登记\"| n\n  b -->|\"E-RUNTIME-07 不可读不当作未登记\"| x\n",
+    "sourceDigest": "sha256:9315876d396dc32b3d4b1d22866d05118331dd63ccaa746a2e01809390e8e02e",
+    "documentDigest": "sha256:fae2e2284c9f301a80d8b5e55b3bb80d0e2e7949ad16b30055a71c25bbd95fa1",
+    "sourceFingerprint": "sha256:439a99cd89ddb0ccd67f94c0fd5131907855845a54c93edfe83693f07ad972d0",
+    "nodes": {
+      "s": "本进程artifact adapter：启动与磁盘digest",
+      "sv": "status.runtime：same／changed／unknown",
+      "h": "私有hook记录artifactManifestDigest",
+      "o": "全扫描，按时间与稳定次序选最近记录",
+      "ov": "lastObservation.observerManifestDigest",
+      "b": "当前Binding与绑定域可读性",
+      "bv": "window.identity：registered等",
+      "u": "已绑定：runtime unverified",
+      "n": "无Binding且域可读：unregistered",
+      "x": "绑定域不可读：unverified／binding-unavailable"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "s",
+        "to": "sv",
+        "id": "E-RUNTIME-01",
+        "full": "当前服务独立比较",
+        "short": "01 本服务比较"
+      },
+      {
+        "from": "h",
+        "to": "o",
+        "id": "E-RUNTIME-02",
+        "full": "保留字段但明确归属观察器",
+        "short": "02 读取观察器记录"
+      },
+      {
+        "from": "o",
+        "to": "ov",
+        "id": "E-RUNTIME-03",
+        "full": "映射为观察器字段",
+        "short": "03 输出观察摘要"
+      },
+      {
+        "from": "b",
+        "to": "bv",
+        "id": "E-RUNTIME-04",
+        "full": "只证明绑定关系",
+        "short": "04 输出绑定身份"
+      },
+      {
+        "from": "b",
+        "to": "u",
+        "id": "E-RUNTIME-05",
+        "full": "有Binding仍无目标实例关联",
+        "short": "05 目标仍未验证"
+      },
+      {
+        "from": "b",
+        "to": "n",
+        "id": "E-RUNTIME-06",
+        "full": "可证明未登记",
+        "short": "06 未登记"
+      },
+      {
+        "from": "b",
+        "to": "x",
+        "id": "E-RUNTIME-07",
+        "full": "不可读不当作未登记",
+        "short": "07 绑定不可读"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  s[\"本进程artifact adapter：启动与磁盘digest\"]\n  sv[\"status.runtime：same／changed／unknown\"]\n  h[\"私有hook记录artifactManifestDigest\"]\n  o[\"全扫描，按时间与稳定次序选最近记录\"]\n  ov[\"lastObservation.observerManifestDigest\"]\n  b[\"当前Binding与绑定域可读性\"]\n  bv[\"window.identity：registered等\"]\n  u[\"已绑定：runtime unverified\"]\n  n[\"无Binding且域可读：unregistered\"]\n  x[\"绑定域不可读：unverified／binding-unavailable\"]\n  s -->|\"01 本服务比较\"| sv\n  h -->|\"02 读取观察器记录\"| o\n  o -->|\"03 输出观察摘要\"| ov\n  b -->|\"04 输出绑定身份\"| bv\n  b -->|\"05 目标仍未验证\"| u\n  b -->|\"06 未登记\"| n\n  b -->|\"07 绑定不可读\"| x\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "56:1505",
+    "previousPanelId": "62:1779",
+    "previousLegendId": "62:1784"
+  },
+  {
+    "name": "08 · 测试与修复授权",
+    "path": "maps/08-real-environment-testing/runtime-call-flow.md",
+    "index": 0,
+    "title": "失败分类决定允许动作",
+    "canonicalSource": "flowchart TB\n  accTitle: 失败分类决定允许动作\n  accDescr: 失败分类决定允许动作；每条关系由当前实现的调用或条件支持，错误停止与恢复保持显式。\n  A[\"[视图] 全合同步骤的合并判定\"]\n  B[\"[代码] accept：并集 pass、completed、完成观察\"]\n  C[\"[代码] 可重跑故障与未满预算\"]\n  D[\"[权威] request-another-attempt\"]\n  F[\"[权威] blocked：环境条件未就绪\"]\n  H[\"[代码] 合法 resumption 后可按原合同重跑\"]\n  I[\"[权威] product-defect 修复授权\"]\n  J[\"[权威] needs-decision 升级\"]\n  A -->|\"E-TST02-01 并集 pass、结果 completed、完成证据 confirmed 同时满足\"| B\n  A -->|\"E-TST02-02 harness-defect、flaky、missing-evidence；连续 flaky 拒绝\"| C\n  C -->|\"E-TST02-03 stepIds 只能含失败步骤且必须覆盖全部失败步骤\"| D\n  A -->|\"E-TST02-04 environment 或整体 blocked 才可 blocked\"| F\n  F -->|\"E-TST02-05 condition-cleared 续审；仍检查预算和范围\"| H\n  A -->|\"E-TST02-06 只授权全部 product-defect fail；不包含其他失败\"| I\n  A -->|\"E-TST02-07 需要用户决定时同提交附加升级事件\"| J\n  J -->|\"E-TST02-08 用户回答后 decision-recorded；仍须通过重跑门\"| H\n",
+    "sourceDigest": "sha256:176d8ac9bfa95d214e890a18b11b6c2e589effb6897d3a442660094fb6ac9475",
+    "documentDigest": "sha256:5005a95853be5108261a4f8a949fa4a779476315462987c3b82f5a8ce14b2a01",
+    "sourceFingerprint": "sha256:8ec59d35c72583b26704b664f300899df57cb9b4b9ae5d4c0299456d8abf297b",
+    "nodes": {
+      "A": "[视图] 全合同步骤的合并判定",
+      "B": "[代码] accept：并集 pass、completed、完成观察",
+      "C": "[代码] 可重跑故障与未满预算",
+      "D": "[权威] request-another-attempt",
+      "F": "[权威] blocked：环境条件未就绪",
+      "H": "[代码] 合法 resumption 后可按原合同重跑",
+      "I": "[权威] product-defect 修复授权",
+      "J": "[权威] needs-decision 升级"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "A",
+        "to": "B",
+        "id": "E-TST02-01",
+        "full": "并集 pass、结果 completed、完成证据 confirmed 同时满足",
+        "short": "01 通过且完成"
+      },
+      {
+        "from": "A",
+        "to": "C",
+        "id": "E-TST02-02",
+        "full": "harness-defect、flaky、missing-evidence；连续 flaky 拒绝",
+        "short": "02 可重跑分类"
+      },
+      {
+        "from": "C",
+        "to": "D",
+        "id": "E-TST02-03",
+        "full": "stepIds 只能含失败步骤且必须覆盖全部失败步骤",
+        "short": "03 覆盖失败步骤"
+      },
+      {
+        "from": "A",
+        "to": "F",
+        "id": "E-TST02-04",
+        "full": "environment 或整体 blocked 才可 blocked",
+        "short": "04 环境阻塞"
+      },
+      {
+        "from": "F",
+        "to": "H",
+        "id": "E-TST02-05",
+        "full": "condition-cleared 续审；仍检查预算和范围",
+        "short": "05 恢复后重跑"
+      },
+      {
+        "from": "A",
+        "to": "I",
+        "id": "E-TST02-06",
+        "full": "只授权全部 product-defect fail；不包含其他失败",
+        "short": "06 仅产品缺陷集合"
+      },
+      {
+        "from": "A",
+        "to": "J",
+        "id": "E-TST02-07",
+        "full": "需要用户决定时同提交附加升级事件",
+        "short": "07 用户决定"
+      },
+      {
+        "from": "J",
+        "to": "H",
+        "id": "E-TST02-08",
+        "full": "用户回答后 decision-recorded；仍须通过重跑门",
+        "short": "08 用户已回答"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  A[\"[视图] 全合同步骤的合并判定\"]\n  B[\"[代码] accept：并集 pass、completed、完成观察\"]\n  C[\"[代码] 可重跑故障与未满预算\"]\n  D[\"[权威] request-another-attempt\"]\n  F[\"[权威] blocked：环境条件未就绪\"]\n  H[\"[代码] 合法 resumption 后可按原合同重跑\"]\n  I[\"[权威] product-defect 修复授权\"]\n  J[\"[权威] needs-decision 升级\"]\n  A -->|\"01 通过且完成\"| B\n  A -->|\"02 可重跑分类\"| C\n  C -->|\"03 覆盖失败步骤\"| D\n  A -->|\"04 环境阻塞\"| F\n  F -->|\"05 恢复后重跑\"| H\n  A -->|\"06 仅产品缺陷集合\"| I\n  A -->|\"07 用户决定\"| J\n  J -->|\"08 用户已回答\"| H\n",
+    "note": null,
+    "action": "generate",
+    "previousDiagramId": "57:1540",
+    "previousPanelId": "62:1785",
+    "previousLegendId": "62:1790"
+  },
+  {
+    "name": "09 · 取消与归档恢复",
+    "path": "maps/07-review-rework-completion/state-and-recovery.md",
+    "index": 0,
+    "title": "终态事务的前向恢复",
+    "canonicalSource": "flowchart TB\n  accTitle: 终态事务的前向恢复\n  accDescr: 终态事务的前向恢复；每条关系由当前实现的调用或条件支持，错误停止与恢复保持显式。\n  A[\"[代码] preview：route、verify 与负载摘要\"]\n  B[\"[代码] Pod 锁、配置复验、写根外日志\"]\n  C[\"[权威] 追加 completed 或 cancelled\"]\n  D[\"[权威] 封存 payload 与 verify-report\"]\n  F[\"[权威] 看板 archived 或 withdrawn\"]\n  H[\"[代码] 取消释放本 Demand 声明\"]\n  I[\"[代码] 负载摘要一致才删除活动根\"]\n  J[\"[代码] 清日志、刷新看板索引\"]\n  X[\"[代码] cancel：移除活动等待，保留事件历史\"]\n  A -->|\"E-REV04-01 apply 重算计划摘要；recover 使用原日志\"| B\n  B -->|\"E-REV04-02 完成或无需清等待的取消；已终态按同 commitId 回放\"| C\n  C -->|\"E-REV04-03 归档包含终态提交；排除快照、索引、追加候选\"| D\n  D -->|\"E-REV04-04 按同 Demand 认领状态收敛；已有正确终态可重放\"| F\n  F -->|\"E-REV04-05 仅取消释放本 Demand 所有窗口声明\"| H\n  H -->|\"E-REV04-06 比较封存负载摘要，漂移拒绝删除\"| I\n  I -->|\"E-REV04-07 活动根消失后才移除日志；索引争用不否定终态\"| J\n  B -->|\"E-REV04-08 取消归约清除 awaitingDecision，不伪造回答\"| X\n  X -->|\"E-REV04-09 归约成功追加 cancelled；其余归档步骤相同\"| C\n",
+    "sourceDigest": "sha256:0b41f63d637a21fc170bdb9befd1c14a843b8add037da776e2a06dfdfd6d17d2",
+    "documentDigest": "sha256:6bf90dbbff0259e1826d2b0de5f857c23858dfac1a405d6d4344f1495cc0701e",
+    "sourceFingerprint": "sha256:d17b951a690956ef8c95731c94ed680478847c133a758913e5da63df85273ca5",
+    "nodes": {
+      "A": "[代码] preview：route、verify 与负载摘要",
+      "B": "[代码] Pod 锁、配置复验、写根外日志",
+      "C": "[权威] 追加 completed 或 cancelled",
+      "D": "[权威] 封存 payload 与 verify-report",
+      "F": "[权威] 看板 archived 或 withdrawn",
+      "H": "[代码] 取消释放本 Demand 声明",
+      "I": "[代码] 负载摘要一致才删除活动根",
+      "J": "[代码] 清日志、刷新看板索引",
+      "X": "[代码] cancel：移除活动等待，保留事件历史"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "A",
+        "to": "B",
+        "id": "E-REV04-01",
+        "full": "apply 重算计划摘要；recover 使用原日志",
+        "short": "01 同计划或原日志"
+      },
+      {
+        "from": "B",
+        "to": "C",
+        "id": "E-REV04-02",
+        "full": "完成或无需清等待的取消；已终态按同 commitId 回放",
+        "short": "02 普通终态提交"
+      },
+      {
+        "from": "C",
+        "to": "D",
+        "id": "E-REV04-03",
+        "full": "归档包含终态提交；排除快照、索引、追加候选",
+        "short": "03 封存终态负载"
+      },
+      {
+        "from": "D",
+        "to": "F",
+        "id": "E-REV04-04",
+        "full": "按同 Demand 认领状态收敛；已有正确终态可重放",
+        "short": "04 收敛看板"
+      },
+      {
+        "from": "F",
+        "to": "H",
+        "id": "E-REV04-05",
+        "full": "仅取消释放本 Demand 所有窗口声明",
+        "short": "05 取消释放声明"
+      },
+      {
+        "from": "H",
+        "to": "I",
+        "id": "E-REV04-06",
+        "full": "比较封存负载摘要，漂移拒绝删除",
+        "short": "06 核对后删根"
+      },
+      {
+        "from": "I",
+        "to": "J",
+        "id": "E-REV04-07",
+        "full": "活动根消失后才移除日志；索引争用不否定终态",
+        "short": "07 最后退休日志"
+      },
+      {
+        "from": "B",
+        "to": "X",
+        "id": "E-REV04-08",
+        "full": "取消归约清除 awaitingDecision，不伪造回答",
+        "short": "08 清除活动等待"
+      },
+      {
+        "from": "X",
+        "to": "C",
+        "id": "E-REV04-09",
+        "full": "归约成功追加 cancelled；其余归档步骤相同",
+        "short": "09 追加取消"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  A[\"[代码] preview：route、verify 与负载摘要\"]\n  B[\"[代码] Pod 锁、配置复验、写根外日志\"]\n  C[\"[权威] 追加 completed 或 cancelled\"]\n  D[\"[权威] 封存 payload 与 verify-report\"]\n  F[\"[权威] 看板 archived 或 withdrawn\"]\n  H[\"[代码] 取消释放本 Demand 声明\"]\n  I[\"[代码] 负载摘要一致才删除活动根\"]\n  J[\"[代码] 清日志、刷新看板索引\"]\n  X[\"[代码] cancel：移除活动等待，保留事件历史\"]\n  A -->|\"01 同计划或原日志\"| B\n  B -->|\"02 普通终态提交\"| C\n  C -->|\"03 封存终态负载\"| D\n  D -->|\"04 收敛看板\"| F\n  F -->|\"05 取消释放声明\"| H\n  H -->|\"06 核对后删根\"| I\n  I -->|\"07 最后退休日志\"| J\n  B -->|\"08 清除活动等待\"| X\n  X -->|\"09 追加取消\"| C\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "58:1580",
+    "previousPanelId": "62:1791",
+    "previousLegendId": "62:1796"
+  },
+  {
+    "name": "10 · 安装预检",
+    "path": "maps/17-artifacts-and-contracts/installation-and-runtime-identity.md",
+    "index": 0,
+    "title": "安装预检拒绝同版本不同字节",
+    "canonicalSource": "flowchart TB\n  accTitle: 安装预检拒绝同版本不同字节\n  accDescr: inspectLocalInstallation校验候选制品和目标版本目录；目标缺席给出new-version，已存在时验证完整内容并要求清单字节一致；此工具没有安装、保留或启用效果。\n  candidate[\"[代码] 完整核验候选制品\"]\n  version[\"[代码] 目标末级名等于制品版本\"]\n  exists{\"版本目录是否存在\"}\n  fresh[\"[结果] new-version\"]\n  verify[\"[代码] 完整核验已有版本目录\"]\n  equalManifest{\"manifest字节完全相同\"}\n  current[\"[结果] already-current\"]\n  refused[\"[停止] 拒绝同版本替换\"]\n  result[\"[结果] 要求exclusive-create；未启用\"]\n  candidate -->|\"E-INS-01 文件、模式、摘要与清单闭合\"| version\n  version -->|\"E-INS-02 host及版本合法\"| exists\n  exists -->|\"E-INS-03 缺席\"| fresh\n  exists -->|\"E-INS-04 普通目录且非symlink\"| verify\n  verify -->|\"E-INS-05 已有制品完整\"| equalManifest\n  equalManifest -->|\"E-INS-06 完全相同\"| current\n  equalManifest -->|\"E-INS-07 任意字节不同\"| refused\n  fresh -->|\"E-INS-08 只返回预检结果\"| result\n  current -->|\"E-INS-09 只返回预检结果\"| result\n",
+    "sourceDigest": "sha256:a1d506c0c946026bee0826ee0a218945cd01828e78ae8bfb83b37088930c3aa9",
+    "documentDigest": "sha256:e96d782a804a2ca3e3362fa27662d74e9b6254bf7b2dce782d3c61fd094166a6",
+    "sourceFingerprint": "sha256:637cae0c19dfb10ad5062520661d03b6291852e84a1b360e87660f3c74d1787a",
+    "nodes": {
+      "candidate": "[代码] 完整核验候选制品",
+      "version": "[代码] 目标末级名等于制品版本",
+      "exists": "版本目录是否存在",
+      "fresh": "[结果] new-version",
+      "verify": "[代码] 完整核验已有版本目录",
+      "equalManifest": "manifest字节完全相同",
+      "current": "[结果] already-current",
+      "refused": "[停止] 拒绝同版本替换",
+      "result": "[结果] 要求exclusive-create；未启用"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "candidate",
+        "to": "version",
+        "id": "E-INS-01",
+        "full": "文件、模式、摘要与清单闭合",
+        "short": "01 完整核验"
+      },
+      {
+        "from": "version",
+        "to": "exists",
+        "id": "E-INS-02",
+        "full": "host及版本合法",
+        "short": "02 核对版本名"
+      },
+      {
+        "from": "exists",
+        "to": "fresh",
+        "id": "E-INS-03",
+        "full": "缺席",
+        "short": "03 目标缺席"
+      },
+      {
+        "from": "exists",
+        "to": "verify",
+        "id": "E-INS-04",
+        "full": "普通目录且非symlink",
+        "short": "04 核对已有目录"
+      },
+      {
+        "from": "verify",
+        "to": "equalManifest",
+        "id": "E-INS-05",
+        "full": "已有制品完整",
+        "short": "05 已有制品完整"
+      },
+      {
+        "from": "equalManifest",
+        "to": "current",
+        "id": "E-INS-06",
+        "full": "完全相同",
+        "short": "06 清单完全相同"
+      },
+      {
+        "from": "equalManifest",
+        "to": "refused",
+        "id": "E-INS-07",
+        "full": "任意字节不同",
+        "short": "07 拒绝替换"
+      },
+      {
+        "from": "fresh",
+        "to": "result",
+        "id": "E-INS-08",
+        "full": "只返回预检结果",
+        "short": "08 仅返回预检"
+      },
+      {
+        "from": "current",
+        "to": "result",
+        "id": "E-INS-09",
+        "full": "只返回预检结果",
+        "short": "09 不执行启用"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  candidate[\"[代码] 完整核验候选制品\"]\n  version[\"[代码] 目标末级名等于制品版本\"]\n  exists{\"版本目录是否存在\"}\n  fresh[\"[结果] new-version\"]\n  verify[\"[代码] 完整核验已有版本目录\"]\n  equalManifest{\"manifest字节完全相同\"}\n  current[\"[结果] already-current\"]\n  refused[\"[停止] 拒绝同版本替换\"]\n  result[\"[结果] 要求exclusive-create；未启用\"]\n  candidate -->|\"01 完整核验\"| version\n  version -->|\"02 核对版本名\"| exists\n  exists -->|\"03 目标缺席\"| fresh\n  exists -->|\"04 核对已有目录\"| verify\n  verify -->|\"05 已有制品完整\"| equalManifest\n  equalManifest -->|\"06 清单完全相同\"| current\n  equalManifest -->|\"07 拒绝替换\"| refused\n  fresh -->|\"08 仅返回预检\"| result\n  current -->|\"09 不执行启用\"| result\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "59:1625",
+    "previousPanelId": "62:1797",
+    "previousLegendId": "62:1802"
+  },
+  {
+    "name": "11 · 变更分派门",
+    "path": "maps/17-artifacts-and-contracts/installation-and-runtime-identity.md",
+    "index": 1,
+    "title": "运行进程在变更分派前检查自身制品清单",
+    "canonicalSource": "flowchart TB\n  accTitle: 运行进程在变更分派前检查自身制品清单\n  accDescr: 组合根保存进程启动清单摘要，公共分派对read、preview或inspect保留诊断，其他调用先检查manifest仍存在且一致；这不是完整加载器或目标窗口身份关联。\n  request[\"[代码] MCP已通过Schema的请求\"]\n  kind{\"readOnlyHint 或 preview 或 inspect\"}\n  read[\"[代码] 继续诊断executor\"]\n  guard[\"[代码] beforeMutation → assertUnchanged\"]\n  known{\"启动与当前manifest均可读且相同\"}\n  execute[\"[代码] 分派变更executor\"]\n  stop[\"[停止] runtime-artifact-unavailable 或 outdated\"]\n  request -->|\"E-ARTGUARD-01 按登记与已解析输入分类\"| kind\n  kind -->|\"E-ARTGUARD-02 只读或预览\"| read\n  kind -->|\"E-ARTGUARD-03 其余调用\"| guard\n  guard -->|\"E-ARTGUARD-04 重读本进程制品根\"| known\n  known -->|\"E-ARTGUARD-05 摘要相同\"| execute\n  known -->|\"E-ARTGUARD-06 缺失或变化\"| stop\n",
+    "sourceDigest": "sha256:7bd1ce11bbb3862106ac4c3dea57be7a4c68f1cab8c9cc9819a70679a83ff644",
+    "documentDigest": "sha256:e96d782a804a2ca3e3362fa27662d74e9b6254bf7b2dce782d3c61fd094166a6",
+    "sourceFingerprint": "sha256:637cae0c19dfb10ad5062520661d03b6291852e84a1b360e87660f3c74d1787a",
+    "nodes": {
+      "request": "[代码] MCP已通过Schema的请求",
+      "kind": "readOnlyHint 或 preview 或 inspect",
+      "read": "[代码] 继续诊断executor",
+      "guard": "[代码] beforeMutation → assertUnchanged",
+      "known": "启动与当前manifest均可读且相同",
+      "execute": "[代码] 分派变更executor",
+      "stop": "[停止] runtime-artifact-unavailable 或 outdated"
+    },
+    "nodeAliases": {
+      "kind": {
+        "source": "readOnlyHint 或 preview 或 inspect",
+        "display": "只读、预览或检查"
+      }
+    },
+    "edges": [
+      {
+        "from": "request",
+        "to": "kind",
+        "id": "E-ARTGUARD-01",
+        "full": "按登记与已解析输入分类",
+        "short": "01 分类请求"
+      },
+      {
+        "from": "kind",
+        "to": "read",
+        "id": "E-ARTGUARD-02",
+        "full": "只读或预览",
+        "short": "02 保留诊断"
+      },
+      {
+        "from": "kind",
+        "to": "guard",
+        "id": "E-ARTGUARD-03",
+        "full": "其余调用",
+        "short": "03 变更先检查"
+      },
+      {
+        "from": "guard",
+        "to": "known",
+        "id": "E-ARTGUARD-04",
+        "full": "重读本进程制品根",
+        "short": "04 重读自身清单"
+      },
+      {
+        "from": "known",
+        "to": "execute",
+        "id": "E-ARTGUARD-05",
+        "full": "摘要相同",
+        "short": "05 摘要一致"
+      },
+      {
+        "from": "known",
+        "to": "stop",
+        "id": "E-ARTGUARD-06",
+        "full": "缺失或变化",
+        "short": "06 缺失或变化"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  request[\"[代码] MCP已通过Schema的请求\"]\n  kind{\"只读、预览或检查\"}\n  read[\"[代码] 继续诊断executor\"]\n  guard[\"[代码] beforeMutation → assertUnchanged\"]\n  known{\"启动与当前manifest均可读且相同\"}\n  execute[\"[代码] 分派变更executor\"]\n  stop[\"[停止] runtime-artifact-unavailable 或 outdated\"]\n  request -->|\"01 分类请求\"| kind\n  kind -->|\"02 保留诊断\"| read\n  kind -->|\"03 变更先检查\"| guard\n  guard -->|\"04 重读自身清单\"| known\n  known -->|\"05 摘要一致\"| execute\n  known -->|\"06 缺失或变化\"| stop\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "60:1664",
+    "previousPanelId": "62:1803",
+    "previousLegendId": "62:1808"
+  },
+  {
+    "name": "12 · 业务接力",
+    "path": "maps/10-end-to-end-business-flow/README.md",
+    "index": 0,
+    "title": "用户与四类窗口的成功主线",
+    "canonicalSource": "flowchart TB\n  accTitle: 用户与四类窗口的成功主线\n  accDescr: Design将已确认内容发布，Controller认领和规划，Agent执行宿主发送，Target导入结果，Controller独立评审，按需求决定是否进行真实环境测试，最后完整核验与归档。\n  designRole[\"Design 与用户确认需求摘要\"]\n  requirementFact[\"Wakeflow：不可变需求记录与pending看板\"]\n  controllerClaim[\"Controller：认领包并创建 Demand\"]\n  taskFact[\"Wakeflow：冻结任务包与验收锚点\"]\n  deliveryPermit[\"Wakeflow：信封、工作声明与发送许可\"]\n  agentSend[\"Controller Agent：调用宿主发送并记录结局\"]\n  targetWork[\"Target：按任务执行目录工作并导入报告\"]\n  callbackSend[\"Target Agent：用返回许可唤醒 Controller\"]\n  reviewRole[\"Controller：读取评审单元并独立检查\"]\n  testingRoute{\"需求冻结的测试决策\"}\n  testRole[\"Test：按冻结合同执行并回传逐步证据\"]\n  testReview[\"Controller：评审测试结果\"]\n  completeDemand[\"Wakeflow：完整验收、封存归档、释放占用\"]\n  designRole -->|\"E-BIZ01-01 发布确认后的内容\"| requirementFact\n  requirementFact -->|\"E-BIZ01-02 查看板并认领\"| controllerClaim\n  controllerClaim -->|\"E-BIZ01-03 规划一个有边界的目标\"| taskFact\n  taskFact -->|\"E-BIZ01-04 prepare_delivery\"| deliveryPermit\n  deliveryPermit -->|\"E-BIZ01-05 显式执行一次宿主动作\"| agentSend\n  agentSend -->|\"E-BIZ01-06 Target收到任务后执行\"| targetWork\n  targetWork -->|\"E-BIZ01-07 导入返回固定回调许可\"| callbackSend\n  callbackSend -->|\"E-BIZ01-08 Controller重新观察结果\"| reviewRole\n  reviewRole -->|\"E-BIZ01-09 实现被接受后派生路由\"| testingRoute\n  testingRoute -->|\"E-BIZ01-10 real-environment\"| testRole\n  testRole -->|\"E-BIZ01-11 导入记录而不是自行验收\"| testReview\n  testReview -->|\"E-BIZ01-12 当前验收全集已被接受\"| completeDemand\n  testingRoute -->|\"E-BIZ01-13 controller-only且完整覆盖\"| completeDemand\n",
+    "sourceDigest": "sha256:5ace55a24fe96b489792e33d5f3fa94d4d48092c1a583283f2bf8b9ee0af8224",
+    "documentDigest": "sha256:814361afb370dc95ca70a574e701404b4b3f7c2913fd98039b77dfe9bf7b91a5",
+    "sourceFingerprint": "sha256:97bc3e417e27e3214c04e332ef0532212115edd1eff16291f727c8d86702ec9b",
+    "nodes": {
+      "designRole": "Design 与用户确认需求摘要",
+      "requirementFact": "Wakeflow：不可变需求记录与pending看板",
+      "controllerClaim": "Controller：认领包并创建 Demand",
+      "taskFact": "Wakeflow：冻结任务包与验收锚点",
+      "deliveryPermit": "Wakeflow：信封、工作声明与发送许可",
+      "agentSend": "Controller Agent：调用宿主发送并记录结局",
+      "targetWork": "Target：按任务执行目录工作并导入报告",
+      "callbackSend": "Target Agent：用返回许可唤醒 Controller",
+      "reviewRole": "Controller：读取评审单元并独立检查",
+      "testingRoute": "需求冻结的测试决策",
+      "testRole": "Test：按冻结合同执行并回传逐步证据",
+      "testReview": "Controller：评审测试结果",
+      "completeDemand": "Wakeflow：完整验收、封存归档、释放占用"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "designRole",
+        "to": "requirementFact",
+        "id": "E-BIZ01-01",
+        "full": "发布确认后的内容",
+        "short": "01 确认发布"
+      },
+      {
+        "from": "requirementFact",
+        "to": "controllerClaim",
+        "id": "E-BIZ01-02",
+        "full": "查看板并认领",
+        "short": "02 认领需求"
+      },
+      {
+        "from": "controllerClaim",
+        "to": "taskFact",
+        "id": "E-BIZ01-03",
+        "full": "规划一个有边界的目标",
+        "short": "03 规划目标"
+      },
+      {
+        "from": "taskFact",
+        "to": "deliveryPermit",
+        "id": "E-BIZ01-04",
+        "full": "prepare_delivery",
+        "short": "04 准备投递"
+      },
+      {
+        "from": "deliveryPermit",
+        "to": "agentSend",
+        "id": "E-BIZ01-05",
+        "full": "显式执行一次宿主动作",
+        "short": "05 执行宿主动作"
+      },
+      {
+        "from": "agentSend",
+        "to": "targetWork",
+        "id": "E-BIZ01-06",
+        "full": "Target收到任务后执行",
+        "short": "06 按执行目录工作"
+      },
+      {
+        "from": "targetWork",
+        "to": "callbackSend",
+        "id": "E-BIZ01-07",
+        "full": "导入返回固定回调许可",
+        "short": "07 返回回调"
+      },
+      {
+        "from": "callbackSend",
+        "to": "reviewRole",
+        "id": "E-BIZ01-08",
+        "full": "Controller重新观察结果",
+        "short": "08 独立检查"
+      },
+      {
+        "from": "reviewRole",
+        "to": "testingRoute",
+        "id": "E-BIZ01-09",
+        "full": "实现被接受后派生路由",
+        "short": "09 派生测试路由"
+      },
+      {
+        "from": "testingRoute",
+        "to": "testRole",
+        "id": "E-BIZ01-10",
+        "full": "real-environment",
+        "short": "10 真实环境测试"
+      },
+      {
+        "from": "testRole",
+        "to": "testReview",
+        "id": "E-BIZ01-11",
+        "full": "导入记录而不是自行验收",
+        "short": "11 导入测试结果"
+      },
+      {
+        "from": "testReview",
+        "to": "completeDemand",
+        "id": "E-BIZ01-12",
+        "full": "当前验收全集已被接受",
+        "short": "12 验收完整"
+      },
+      {
+        "from": "testingRoute",
+        "to": "completeDemand",
+        "id": "E-BIZ01-13",
+        "full": "controller-only且完整覆盖",
+        "short": "13 控制器内完成"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  designRole[\"Design 与用户确认需求摘要\"]\n  requirementFact[\"Wakeflow：不可变需求记录与pending看板\"]\n  controllerClaim[\"Controller：认领包并创建 Demand\"]\n  taskFact[\"Wakeflow：冻结任务包与验收锚点\"]\n  deliveryPermit[\"Wakeflow：信封、工作声明与发送许可\"]\n  agentSend[\"Controller Agent：调用宿主发送并记录结局\"]\n  targetWork[\"Target：按任务执行目录工作并导入报告\"]\n  callbackSend[\"Target Agent：用返回许可唤醒 Controller\"]\n  reviewRole[\"Controller：读取评审单元并独立检查\"]\n  testingRoute{\"需求冻结的测试决策\"}\n  testRole[\"Test：按冻结合同执行并回传逐步证据\"]\n  testReview[\"Controller：评审测试结果\"]\n  completeDemand[\"Wakeflow：完整验收、封存归档、释放占用\"]\n  designRole -->|\"01 确认发布\"| requirementFact\n  requirementFact -->|\"02 认领需求\"| controllerClaim\n  controllerClaim -->|\"03 规划目标\"| taskFact\n  taskFact -->|\"04 准备投递\"| deliveryPermit\n  deliveryPermit -->|\"05 执行宿主动作\"| agentSend\n  agentSend -->|\"06 按执行目录工作\"| targetWork\n  targetWork -->|\"07 返回回调\"| callbackSend\n  callbackSend -->|\"08 独立检查\"| reviewRole\n  reviewRole -->|\"09 派生测试路由\"| testingRoute\n  testingRoute -->|\"10 真实环境测试\"| testRole\n  testRole -->|\"11 导入测试结果\"| testReview\n  testReview -->|\"12 验收完整\"| completeDemand\n  testingRoute -->|\"13 控制器内完成\"| completeDemand\n",
+    "note": null,
+    "action": "inherit-identical-diagram",
+    "previousDiagramId": "61:1714",
+    "previousPanelId": "62:1809",
+    "previousLegendId": "62:1814"
+  },
+  {
+    "name": "13 · 需求隐私与摘要",
+    "path": "maps/13-requirement/privacy-preview.md",
+    "index": 0,
+    "title": "需求文本的隐私准入与独立披露判定",
+    "canonicalSource": "flowchart TB\n  accTitle: 需求文本的隐私准入与独立披露判定\n  accDescr: 隐私命中事实独立于有界诊断列表；站内路由经过语境过滤，完整privacyHit决定摘要隐藏，64项上限只影响诊断展示。\n  input[\"标题、文档、测试摘要与停放条件\"]\n  scan[\"扫描类别与原文位置\"]\n  paths[\"仅系统路径保留；站内路由豁免\"]\n  parts[\"每段最多32项；是否命中单独保存\"]\n  all[\"完整隐私事实与其他阻塞合并评估\"]\n  limited[\"诊断去重并截到64项\"]\n  flag[\"文档或头部隐私命中独立保留\"]\n  hidden[\"privacyHit 为真：summary=null\"]\n  shown[\"privacyHit 为假：组装可读摘要\"]\n  input -->|\"E-REQPRIV-01 标题和正文先分析，头部后合并\"| scan\n  scan -->|\"E-REQPRIV-02 仅路径类进行语境过滤\"| paths\n  paths -->|\"E-REQPRIV-03 标题或任一文档命中即保留布尔事实\"| parts\n  parts -->|\"E-REQPRIV-04 加头部隐私、缺章与发布条件\"| all\n  all -->|\"E-REQPRIV-05 每条256码点；最终最多64条\"| limited\n  all -->|\"E-REQPRIV-06 analysis.privacyHit 或 headerPrivacy非空\"| flag\n  flag -->|\"E-REQPRIV-07 语境过滤后仍有隐私命中即隐藏整份摘要\"| hidden\n  flag -->|\"E-REQPRIV-08 确实没有隐私命中\"| shown\n",
+    "sourceDigest": "sha256:def24023d4d5fcbbf9fe6ae13875523e15b7b7e118d8e2dae749d1f03aa311fa",
+    "documentDigest": "sha256:b1c6ede84211480b22627f914a6f435a1b772cde89ae79d1d3ba2a50e51431b1",
+    "sourceFingerprint": "sha256:089cf9b062da24549f786bc6205ff2df849b42da7bb87d46dca7f4d5ec7468e2",
+    "nodes": {
+      "input": "标题、文档、测试摘要与停放条件",
+      "scan": "扫描类别与原文位置",
+      "paths": "仅系统路径保留；站内路由豁免",
+      "parts": "每段最多32项；是否命中单独保存",
+      "all": "完整隐私事实与其他阻塞合并评估",
+      "limited": "诊断去重并截到64项",
+      "flag": "文档或头部隐私命中独立保留",
+      "hidden": "privacyHit 为真：summary=null",
+      "shown": "privacyHit 为假：组装可读摘要"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "input",
+        "to": "scan",
+        "id": "E-REQPRIV-01",
+        "full": "标题和正文先分析，头部后合并",
+        "short": "01 先分析"
+      },
+      {
+        "from": "scan",
+        "to": "paths",
+        "id": "E-REQPRIV-02",
+        "full": "仅路径类进行语境过滤",
+        "short": "02 过滤路径"
+      },
+      {
+        "from": "paths",
+        "to": "parts",
+        "id": "E-REQPRIV-03",
+        "full": "标题或任一文档命中即保留布尔事实",
+        "short": "03 保留事实"
+      },
+      {
+        "from": "parts",
+        "to": "all",
+        "id": "E-REQPRIV-04",
+        "full": "加头部隐私、缺章与发布条件",
+        "short": "04 合并头部"
+      },
+      {
+        "from": "all",
+        "to": "limited",
+        "id": "E-REQPRIV-05",
+        "full": "每条256码点；最终最多64条",
+        "short": "05 有界诊断"
+      },
+      {
+        "from": "all",
+        "to": "flag",
+        "id": "E-REQPRIV-06",
+        "full": "analysis.privacyHit 或 headerPrivacy非空",
+        "short": "06 独立标志"
+      },
+      {
+        "from": "flag",
+        "to": "hidden",
+        "id": "E-REQPRIV-07",
+        "full": "语境过滤后仍有隐私命中即隐藏整份摘要",
+        "short": "07 隐藏摘要"
+      },
+      {
+        "from": "flag",
+        "to": "shown",
+        "id": "E-REQPRIV-08",
+        "full": "确实没有隐私命中",
+        "short": "08 显示摘要"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  input[\"标题、文档、测试摘要与停放条件\"]\n  scan[\"扫描类别与原文位置\"]\n  paths[\"仅系统路径保留；站内路由豁免\"]\n  parts[\"每段最多32项；是否命中单独保存\"]\n  all[\"完整隐私事实与其他阻塞合并评估\"]\n  limited[\"诊断去重并截到64项\"]\n  flag[\"文档或头部隐私命中独立保留\"]\n  hidden[\"privacyHit 为真：summary=null\"]\n  shown[\"privacyHit 为假：组装可读摘要\"]\n  input -->|\"01 先分析\"| scan\n  scan -->|\"02 过滤路径\"| paths\n  paths -->|\"03 保留事实\"| parts\n  parts -->|\"04 合并头部\"| all\n  all -->|\"05 有界诊断\"| limited\n  all -->|\"06 独立标志\"| flag\n  flag -->|\"07 隐藏摘要\"| hidden\n  flag -->|\"08 显示摘要\"| shown\n",
+    "note": "privacyHit 独立于64项诊断；站内路由先过滤。",
+    "action": "generate",
+    "previousDiagramId": null,
+    "previousPanelId": null,
+    "previousLegendId": null
+  },
+  {
+    "name": "14 · 证据内容检查",
+    "path": "maps/14-evidence/privacy-and-source-consistency.md",
+    "index": 0,
+    "title": "内容门：可解码文本、opaque 与凭证分别判断",
+    "canonicalSource": "flowchart TB\n  accTitle: 内容门：可解码文本、opaque 与凭证分别判断\n  accDescr: 有效UTF8即使含未知控制字符仍扫描；无效UTF8只进入opaque审阅；被识别的凭证与命中溢出在任何策略下都阻塞。\n  bytes[\"稳定读取后的成员字节\"]\n  scan[\"有效 UTF-8：扫描并分类\"]\n  opaque[\"无效 UTF-8：opaque，无文本命中\"]\n  review[\"按成员、行和类别去重分组\"]\n  blocked[\"blocked：不读取捕获时钟\"]\n  policy[\"无凭证且非凭证命中不超64项\"]\n  ready[\"无剩余阻塞：复验权威并生成 Manifest\"]\n  bytes -->|\"E-EVPRIV-01 严格 UTF-8 解码成功\"| scan\n  bytes -->|\"E-EVPRIV-02 解码失败只标 opaque\"| opaque\n  scan -->|\"E-EVPRIV-03 返回 opaque 与类别，两者独立\"| review\n  opaque -->|\"E-EVPRIV-04 保留成员引用供人工审阅\"| review\n  review -->|\"E-EVPRIV-05 任意凭证命中或非凭证超过64项\"| blocked\n  review -->|\"E-EVPRIV-06 其他情形继续比较内容策略\"| policy\n  policy -->|\"E-EVPRIV-07 reject 且存在 opaque 或非凭证命中\"| blocked\n  policy -->|\"E-EVPRIV-08 确认内容或根本无须确认\"| ready\n",
+    "sourceDigest": "sha256:92c3393a0d277b3e40827ce5eca041782235bfef34e2f3e0ddb0380eeb26cd13",
+    "documentDigest": "sha256:655c009c5354d78e388fa4c216f2932d2304ac17b61b86448d0e6d7da539cd0b",
+    "sourceFingerprint": "sha256:ebfb9544dda38766d4e033da8d3f11a59c9b99f06cb5b5efe13ff6836fb08cab",
+    "nodes": {
+      "bytes": "稳定读取后的成员字节",
+      "scan": "有效 UTF-8：扫描并分类",
+      "opaque": "无效 UTF-8：opaque，无文本命中",
+      "review": "按成员、行和类别去重分组",
+      "blocked": "blocked：不读取捕获时钟",
+      "policy": "无凭证且非凭证命中不超64项",
+      "ready": "无剩余阻塞：复验权威并生成 Manifest"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "bytes",
+        "to": "scan",
+        "id": "E-EVPRIV-01",
+        "full": "严格 UTF-8 解码成功",
+        "short": "01 解码成功"
+      },
+      {
+        "from": "bytes",
+        "to": "opaque",
+        "id": "E-EVPRIV-02",
+        "full": "解码失败只标 opaque",
+        "short": "02 解码失败"
+      },
+      {
+        "from": "scan",
+        "to": "review",
+        "id": "E-EVPRIV-03",
+        "full": "返回 opaque 与类别，两者独立",
+        "short": "03 扫描分类"
+      },
+      {
+        "from": "opaque",
+        "to": "review",
+        "id": "E-EVPRIV-04",
+        "full": "保留成员引用供人工审阅",
+        "short": "04 保留引用"
+      },
+      {
+        "from": "review",
+        "to": "blocked",
+        "id": "E-EVPRIV-05",
+        "full": "任意凭证命中或非凭证超过64项",
+        "short": "05 必须阻塞"
+      },
+      {
+        "from": "review",
+        "to": "policy",
+        "id": "E-EVPRIV-06",
+        "full": "其他情形继续比较内容策略",
+        "short": "06 比较策略"
+      },
+      {
+        "from": "policy",
+        "to": "blocked",
+        "id": "E-EVPRIV-07",
+        "full": "reject 且存在 opaque 或非凭证命中",
+        "short": "07 拒绝策略"
+      },
+      {
+        "from": "policy",
+        "to": "ready",
+        "id": "E-EVPRIV-08",
+        "full": "确认内容或根本无须确认",
+        "short": "08 策略允许"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  bytes[\"稳定读取后的成员字节\"]\n  scan[\"有效 UTF-8：扫描并分类\"]\n  opaque[\"无效 UTF-8：opaque，无文本命中\"]\n  review[\"按成员、行和类别去重分组\"]\n  blocked[\"blocked：不读取捕获时钟\"]\n  policy[\"无凭证且非凭证命中不超64项\"]\n  ready[\"无剩余阻塞：复验权威并生成 Manifest\"]\n  bytes -->|\"01 解码成功\"| scan\n  bytes -->|\"02 解码失败\"| opaque\n  scan -->|\"03 扫描分类\"| review\n  opaque -->|\"04 保留引用\"| review\n  review -->|\"05 必须阻塞\"| blocked\n  review -->|\"06 比较策略\"| policy\n  policy -->|\"07 拒绝策略\"| blocked\n  policy -->|\"08 策略允许\"| ready\n",
+    "note": "有效 UTF-8 即使有控制字符仍扫描；二进制确认不证明内部内容安全。",
+    "action": "generate",
+    "previousDiagramId": null,
+    "previousPanelId": null,
+    "previousLegendId": null
+  },
+  {
+    "name": "15 · 回调数据边界",
+    "path": "maps/07-review-rework-completion/callback-trust-and-review.md",
+    "index": 0,
+    "title": "回调展示中的不可信数据边界",
+    "canonicalSource": "flowchart TB\n  accTitle: 回调展示中的不可信数据边界\n  accDescr: 已准入结果与任务包先提取展示字段，目标和摘要压成单行并截短，三个自由文本字段转为内联 JSON 字符串，连同无授权声明组成冻结回调；它只提供评审入口。\n  A[\"[数据] 已准入的结果与任务包\"]\n  B[\"[代码] 提取结果摘要与身份字段\"]\n  C[\"[代码] 目标、摘要压成单行并限长\"]\n  D[\"[代码] 目标、摘要、分支引用为数据\"]\n  E[\"[消息] 首段声明无授权；只给读取入口\"]\n  F[\"[权威] 保存完整回调文本及摘要\"]\n  A -->|\"E-CBT01-01 按 implementation / test 分支提取\"| B\n  B -->|\"E-CBT01-02 只裁剪目标和摘要；不裁剪原结果记录\"| C\n  C -->|\"E-CBT01-03 JSON 字符串外包 code span，并转义分隔符\"| D\n  D -->|\"E-CBT01-04 选择中英文标签并组合固定下一步\"| E\n  E -->|\"E-CBT01-05 issueCallback 固定第一代并核 promptDigest\"| F\n",
+    "sourceDigest": "sha256:9071421c0909f9acdc644521991b2b8f6be6439a523f50c7174ba467d30d7446",
+    "documentDigest": "sha256:bc102c93e870d531330c65a603b4f8a318ec536e6dff62f1f0d771c08d25781d",
+    "sourceFingerprint": "sha256:3dda74dc22fd5cdf29cd58d359f90be714c9bb5f3d564e7d1891fdc359ce6337",
+    "nodes": {
+      "A": "[数据] 已准入的结果与任务包",
+      "B": "[代码] 提取结果摘要与身份字段",
+      "C": "[代码] 目标、摘要压成单行并限长",
+      "D": "[代码] 目标、摘要、分支引用为数据",
+      "E": "[消息] 首段声明无授权；只给读取入口",
+      "F": "[权威] 保存完整回调文本及摘要"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "A",
+        "to": "B",
+        "id": "E-CBT01-01",
+        "full": "按 implementation / test 分支提取",
+        "short": "01 提取字段"
+      },
+      {
+        "from": "B",
+        "to": "C",
+        "id": "E-CBT01-02",
+        "full": "只裁剪目标和摘要；不裁剪原结果记录",
+        "short": "02 限长展示"
+      },
+      {
+        "from": "C",
+        "to": "D",
+        "id": "E-CBT01-03",
+        "full": "JSON 字符串外包 code span，并转义分隔符",
+        "short": "03 引用数据"
+      },
+      {
+        "from": "D",
+        "to": "E",
+        "id": "E-CBT01-04",
+        "full": "选择中英文标签并组合固定下一步",
+        "short": "04 固定入口"
+      },
+      {
+        "from": "E",
+        "to": "F",
+        "id": "E-CBT01-05",
+        "full": "issueCallback 固定第一代并核 promptDigest",
+        "short": "05 冻结回调"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  A[\"[数据] 已准入的结果与任务包\"]\n  B[\"[代码] 提取结果摘要与身份字段\"]\n  C[\"[代码] 目标、摘要压成单行并限长\"]\n  D[\"[代码] 目标、摘要、分支引用为数据\"]\n  E[\"[消息] 首段声明无授权；只给读取入口\"]\n  F[\"[权威] 保存完整回调文本及摘要\"]\n  A -->|\"01 提取字段\"| B\n  B -->|\"02 限长展示\"| C\n  C -->|\"03 引用数据\"| D\n  D -->|\"04 固定入口\"| E\n  E -->|\"05 冻结回调\"| F\n",
+    "note": "自由文本是展示数据；回调不携带评审授权，提交摘要保留算法与完整值。",
+    "action": "generate",
+    "previousDiagramId": null,
+    "previousPanelId": null,
+    "previousLegendId": null
+  },
+  {
+    "name": "16 · 回调状态判定",
+    "path": "maps/07-review-rework-completion/callback-trust-and-review.md",
+    "index": 1,
+    "title": "回调状态的派生优先级",
+    "canonicalSource": "flowchart TB\n  accTitle: 回调状态的派生优先级\n  accDescr: inspect 不写确认；可续审单元已有决定时首先显示 acknowledged，否则优先匹配当前 Controller 会话的回调摘要记录，缺记录时再以严格超过十分钟区分 silent 和 pending。\n  A{\"[视图] 当前评审单元已有决定？\"}\n  B[\"[视图] acknowledged：已记录决定\"]\n  C{\"[观察] 摘要相符且不早于 issuedAt？\"}\n  D[\"[视图] landed：有回调落地记录\"]\n  E{\"[代码] 距签发严格超过十分钟？\"}\n  F[\"[视图] silent：无落地且超时\"]\n  G[\"[视图] pending：无落地且未超时\"]\n  A -->|\"E-CBT02-01 是；可以没有 landedRecordId\"| B\n  A -->|\"E-CBT02-02 否；读取当前绑定会话的观察\"| C\n  C -->|\"E-CBT02-03 找到匹配记录，优先于静默时间\"| D\n  C -->|\"E-CBT02-04 无匹配记录\"| E\n  E -->|\"E-CBT02-05 是；不自动重发、不判业务失败\"| F\n  E -->|\"E-CBT02-06 否；恰好十分钟仍属 pending\"| G\n",
+    "sourceDigest": "sha256:2801470cb316874d7a3a5d8f65d5bfcac4a16c50c9ad2ac5465f8fa7fdf39eb6",
+    "documentDigest": "sha256:bc102c93e870d531330c65a603b4f8a318ec536e6dff62f1f0d771c08d25781d",
+    "sourceFingerprint": "sha256:3dda74dc22fd5cdf29cd58d359f90be714c9bb5f3d564e7d1891fdc359ce6337",
+    "nodes": {
+      "A": "[视图] 当前评审单元已有决定？",
+      "B": "[视图] acknowledged：已记录决定",
+      "C": "[观察] 摘要相符且不早于 issuedAt？",
+      "D": "[视图] landed：有回调落地记录",
+      "E": "[代码] 距签发严格超过十分钟？",
+      "F": "[视图] silent：无落地且超时",
+      "G": "[视图] pending：无落地且未超时"
+    },
+    "nodeAliases": {
+      "C": {
+        "source": "[观察] 摘要相符且不早于 issuedAt？",
+        "display": "摘要匹配且不早于签发？"
+      }
+    },
+    "edges": [
+      {
+        "from": "A",
+        "to": "B",
+        "id": "E-CBT02-01",
+        "full": "是；可以没有 landedRecordId",
+        "short": "01 已有决定"
+      },
+      {
+        "from": "A",
+        "to": "C",
+        "id": "E-CBT02-02",
+        "full": "否；读取当前绑定会话的观察",
+        "short": "02 读取观察"
+      },
+      {
+        "from": "C",
+        "to": "D",
+        "id": "E-CBT02-03",
+        "full": "找到匹配记录，优先于静默时间",
+        "short": "03 找到落地"
+      },
+      {
+        "from": "C",
+        "to": "E",
+        "id": "E-CBT02-04",
+        "full": "无匹配记录",
+        "short": "04 缺少落地"
+      },
+      {
+        "from": "E",
+        "to": "F",
+        "id": "E-CBT02-05",
+        "full": "是；不自动重发、不判业务失败",
+        "short": "05 严格超时"
+      },
+      {
+        "from": "E",
+        "to": "G",
+        "id": "E-CBT02-06",
+        "full": "否；恰好十分钟仍属 pending",
+        "short": "06 尚未超时"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  A{\"[视图] 当前评审单元已有决定？\"}\n  B[\"[视图] acknowledged：已记录决定\"]\n  C{\"摘要匹配且不早于签发？\"}\n  D[\"[视图] landed：有回调落地记录\"]\n  E{\"[代码] 距签发严格超过十分钟？\"}\n  F[\"[视图] silent：无落地且超时\"]\n  G[\"[视图] pending：无落地且未超时\"]\n  A -->|\"01 已有决定\"| B\n  A -->|\"02 读取观察\"| C\n  C -->|\"03 找到落地\"| D\n  C -->|\"04 缺少落地\"| E\n  E -->|\"05 严格超时\"| F\n  E -->|\"06 尚未超时\"| G\n",
+    "note": "acknowledged 优先；恰好十分钟仍 pending；silent 不自动重发。",
+    "action": "generate",
+    "previousDiagramId": null,
+    "previousPanelId": null,
+    "previousLegendId": null
+  },
+  {
+    "name": "17 · 许可交接与清理",
+    "path": "maps/02-foundation/admission-races-and-recovery.md",
+    "index": 1,
+    "title": "准入许可的交接与异常释放边界",
+    "canonicalSource": "flowchart TB\n  accTitle: 准入许可的交接与异常释放边界\n  accDescr: beforeEnter通过后创建许可并立即保存到外层，再结算latch；latch失败也进入已有许可的精确释放。清理成功保留原失败，清理失败保留未知替换者并返回清理错误，获取预算不限制业务回调运行时间。\n  guard[\"[代码] 短 latch 内 beforeEnter 通过\"]\n  create[\"[许可] 创建 reader 或 writer\"]\n  latch[\"[代码] finally 释放短 latch\"]\n  owned[\"[代码] latch 内立即保存外层 lease\"]\n  check[\"[代码] exclusive 排空；入场前 check\"]\n  body[\"[代码] operation 由调用方控制时长与取消\"]\n  release[\"[代码] finally 调已有 lease.release\"]\n  done[\"[结果] 返回业务结果或原错误\"]\n  uncertain[\"[停止] 自身释放失败；不能保证目录已空\"]\n  residue[\"[停止] 若已换成未知节点则保留，后续要求恢复\"]\n  guard -->|\"E-LEASE-01 守卫后再次检查取消与截止\"| create\n  create -->|\"E-LEASE-02 acquire 成功立即登记所有权\"| owned\n  owned -->|\"E-LEASE-03 之后才进入短 latch 的 finally\"| latch\n  latch -->|\"E-LEASE-04 成功后独占排空或共享入场检查\"| check\n  check -->|\"E-LEASE-05 准入完成且未取消超时\"| body\n  check -->|\"E-LEASE-06 排空失败、取消或到期\"| release\n  body -->|\"E-LEASE-07 成功或抛错均进入 finally\"| release\n  release -->|\"E-LEASE-08 精确释放成功，保留原结果或错误\"| done\n  release -->|\"E-LEASE-09 清理失败覆盖先前错误\"| uncertain\n  latch -->|\"E-LEASE-10 latch 释放抛错仍结算已有许可\"| release\n  uncertain -->|\"E-LEASE-11 替换节点与预期不符时拒绝删除\"| residue\n",
+    "sourceDigest": "sha256:45da5a996a0fa331a7da2bc4c847ed7169d485e45f5cb35f77f0eb5c2549567b",
+    "documentDigest": "sha256:6c9974fb661a687c4527952ad702c7c45abfb8bcf92b4335dd85762e42a1102c",
+    "sourceFingerprint": "sha256:d8afcf3923ef91761302e66491ea992a9a2c76f6825f963fd4209ac0bc8957cc",
+    "nodes": {
+      "guard": "[代码] 短 latch 内 beforeEnter 通过",
+      "create": "[许可] 创建 reader 或 writer",
+      "latch": "[代码] finally 释放短 latch",
+      "owned": "[代码] latch 内立即保存外层 lease",
+      "check": "[代码] exclusive 排空；入场前 check",
+      "body": "[代码] operation 由调用方控制时长与取消",
+      "release": "[代码] finally 调已有 lease.release",
+      "done": "[结果] 返回业务结果或原错误",
+      "uncertain": "[停止] 自身释放失败；不能保证目录已空",
+      "residue": "[停止] 若已换成未知节点则保留，后续要求恢复"
+    },
+    "nodeAliases": {},
+    "edges": [
+      {
+        "from": "guard",
+        "to": "create",
+        "id": "E-LEASE-01",
+        "full": "守卫后再次检查取消与截止",
+        "short": "01 再次检查"
+      },
+      {
+        "from": "create",
+        "to": "owned",
+        "id": "E-LEASE-02",
+        "full": "acquire 成功立即登记所有权",
+        "short": "02 立即持有"
+      },
+      {
+        "from": "owned",
+        "to": "latch",
+        "id": "E-LEASE-03",
+        "full": "之后才进入短 latch 的 finally",
+        "short": "03 随后结算"
+      },
+      {
+        "from": "latch",
+        "to": "check",
+        "id": "E-LEASE-04",
+        "full": "成功后独占排空或共享入场检查",
+        "short": "04 准入检查"
+      },
+      {
+        "from": "check",
+        "to": "body",
+        "id": "E-LEASE-05",
+        "full": "准入完成且未取消超时",
+        "short": "05 业务执行"
+      },
+      {
+        "from": "check",
+        "to": "release",
+        "id": "E-LEASE-06",
+        "full": "排空失败、取消或到期",
+        "short": "06 入场失败"
+      },
+      {
+        "from": "body",
+        "to": "release",
+        "id": "E-LEASE-07",
+        "full": "成功或抛错均进入 finally",
+        "short": "07 总会结算"
+      },
+      {
+        "from": "release",
+        "to": "done",
+        "id": "E-LEASE-08",
+        "full": "精确释放成功，保留原结果或错误",
+        "short": "08 释放成功"
+      },
+      {
+        "from": "release",
+        "to": "uncertain",
+        "id": "E-LEASE-09",
+        "full": "清理失败覆盖先前错误",
+        "short": "09 释放失败"
+      },
+      {
+        "from": "latch",
+        "to": "release",
+        "id": "E-LEASE-10",
+        "full": "latch 释放抛错仍结算已有许可",
+        "short": "10 锁结算失败"
+      },
+      {
+        "from": "uncertain",
+        "to": "residue",
+        "id": "E-LEASE-11",
+        "full": "替换节点与预期不符时拒绝删除",
+        "short": "11 保护替换"
+      }
+    ],
+    "mermaidSyntax": "flowchart TB\n  guard[\"[代码] 短 latch 内 beforeEnter 通过\"]\n  create[\"[许可] 创建 reader 或 writer\"]\n  latch[\"[代码] finally 释放短 latch\"]\n  owned[\"[代码] latch 内立即保存外层 lease\"]\n  check[\"[代码] exclusive 排空；入场前 check\"]\n  body[\"[代码] operation 由调用方控制时长与取消\"]\n  release[\"[代码] finally 调已有 lease.release\"]\n  done[\"[结果] 返回业务结果或原错误\"]\n  uncertain[\"[停止] 自身释放失败；不能保证目录已空\"]\n  residue[\"[停止] 若已换成未知节点则保留，后续要求恢复\"]\n  guard -->|\"01 再次检查\"| create\n  create -->|\"02 立即持有\"| owned\n  owned -->|\"03 随后结算\"| latch\n  latch -->|\"04 准入检查\"| check\n  check -->|\"05 业务执行\"| body\n  check -->|\"06 入场失败\"| release\n  body -->|\"07 总会结算\"| release\n  release -->|\"08 释放成功\"| done\n  release -->|\"09 释放失败\"| uncertain\n  latch -->|\"10 锁结算失败\"| release\n  uncertain -->|\"11 保护替换\"| residue\n",
+    "note": "先保存 lease 再释放 latch；清理失败可覆盖原错误，未知替换者必须保留。",
+    "action": "generate",
+    "previousDiagramId": null,
+    "previousPanelId": null,
+    "previousLegendId": null
+  }
+]

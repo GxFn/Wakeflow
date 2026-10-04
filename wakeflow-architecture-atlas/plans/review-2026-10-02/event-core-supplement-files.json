@@ -1,0 +1,735 @@
+[
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-state-version.ts",
+    "sha256": "40da0865e779adf08d23bd8a7a522cfdc86ddf08dcc7762dfea29b99315641ba",
+    "responsibility": "状态模型版本独立准入",
+    "branches": [
+      "只支持v1；正整数未知版本在supported断言拒绝"
+    ],
+    "effects": [
+      "纯词汇；不冒充历史状态摘要迁移"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-persisted-event-envelope.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-version-compatibility.ts",
+      "src/governance/demand/event-sourcing/demand-event-stream-commit.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-state-version.test.ts#DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-version-compatibility.ts",
+    "sha256": "de5f7f9aa90a01ee119491b968b9255f779e497fa20a33e5832cc46e557270ad",
+    "responsibility": "事件及状态支持矩阵摘要",
+    "branches": [
+      "family当前/支持版本改变使snapshot不兼容并回退"
+    ],
+    "effects": [
+      "纯计算；不修改历史事件"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-snapshot.test.ts#computeDemandEventSourcingVersionCompatibilityDigest"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-stream-position.ts",
+    "sha256": "4dcb02def118a997cff1c1de929a21d7110005d77e4f35f31a1546879b5a75ac",
+    "responsibility": "逻辑修订与物理槽位品牌",
+    "branches": [
+      "持久位置都正安全整数；0只属于append预期空流"
+    ],
+    "effects": [
+      "纯解析"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/governance/demand/demand-resource-catalog.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-paths.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-persisted-event-envelope.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.ts",
+      "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-snapshot-store.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store-contract.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store-reader.ts",
+      "src/governance/evidence/managed-evidence-capture-plan.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction.ts",
+      "src/governance/review/controller-implementation-review-decision.ts",
+      "src/governance/review/controller-product-defect-remediation-authorization.ts",
+      "src/governance/review/controller-review-decision-contract.ts",
+      "src/governance/review/controller-test-review-decision.ts",
+      "src/governance/review/demand-result-review-snapshot.ts"
+    ],
+    "tests": [
+      "tests/capabilities/workspace/demand-runtime-recovery.test.ts#parseDemandEventCommitSequence",
+      "tests/governance/demand/demand-event-stream-commit.test.ts#DemandEventStreamPositionError",
+      "tests/governance/demand/demand-resource-catalog.test.ts#DemandEventStreamPositionError",
+      "tests/governance/review/controller-implementation-review-decision.fixture.ts#parseDemandEventStreamRevision",
+      "tests/governance/review/controller-product-defect-remediation-authorization.test.ts#parseDemandEventStreamRevision",
+      "tests/governance/review/controller-test-review-decision.fixture.ts#parseDemandEventStreamRevision"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-paths.ts",
+    "sha256": "6ee126ec4709b4746e76d43a6c9039c40e9633c57481beaadf0e9be55d70fe92",
+    "responsibility": "commits/snapshots/index/candidate路径",
+    "branches": [
+      "16位序号；候选含commitId和pid/thread/token；词法往返须canonical"
+    ],
+    "effects": [
+      "不写文件；候选不是权威"
+    ],
+    "consumers": [
+      "src/capabilities/demand/archive.ts",
+      "src/governance/demand/demand-resource-catalog.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-snapshot-store.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store-reader.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts"
+    ],
+    "tests": [
+      "tests/capabilities/workspace/demand-runtime-recovery.test.ts#pid",
+      "tests/governance/demand/demand-event-sourcing-repository.test.ts#commitSequence",
+      "tests/governance/demand/demand-event-stream-commit.test.ts#DemandEventSourcingPathError",
+      "tests/governance/demand/demand-file-event-store.test.ts#pid",
+      "tests/governance/demand/demand-resource-catalog.test.ts#DEMAND_EVENT_SOURCING_ROOT_REF"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.ts",
+    "sha256": "3d7d3a9715035ed0becf42d7c1d472acab1bad4c0ce2657bea7f52713db921a0",
+    "responsibility": "稳定持久封装门面与最新事件写入器",
+    "branches": [
+      "当前event+resulting state+revision→envelope；完整文档表示严格往返"
+    ],
+    "effects": [
+      "纯codec；只写家族最新版本"
+    ],
+    "consumers": [
+      "src/capabilities/result-review/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.ts",
+      "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store-reader.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-file-event-store.test.ts#state"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-persisted-event-envelope.ts",
+    "sha256": "80bffde40f16b0c6efc4449fe63a761e18377856c5b84c783dd8cd3654d7df2d",
+    "responsibility": "跨版本稳定路由封装",
+    "branches": [
+      "Schema/typedID/time/revision/digest；未知type/version在此层可保留，payload暂不解释"
+    ],
+    "effects": [
+      "纯codec；不决定当前事件支持性"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.ts"
+    ],
+    "tests": [
+      "间接覆盖：见事件提交、仓储和身份权威纵切聚焦测试；没有独立同名测试"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.ts",
+    "sha256": "f77f775cc3d82196faa57640bbf94b2505e7eea23668a4ec96bb89107d1a6e69",
+    "responsibility": "类型版本路由到当前领域事件",
+    "branches": [
+      "先envelope再注册表codec/evolve；未知类型或版本在reducer前拒绝"
+    ],
+    "effects": [
+      "纯转换；不改持久字节或历史digest"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-upcaster.test.ts#DemandEventSourcingUpcasterError",
+      "tests/governance/evidence/managed-evidence-event-sourcing.test.ts#upcastDemandEventSourcingStoredEvent"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.ts",
+    "sha256": "4ec4f65f9857523a03c58b25c898a029fbba36b15f1a874389c36ca3e39dc800",
+    "responsibility": "十五事件家族的版本注册表",
+    "branches": [
+      "所有当前/支持版本为1、steps为空；Schema复验payload后领域event准入"
+    ],
+    "effects": [
+      "纯编解码；类型联合新增强制registry穷尽"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-version-compatibility.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-state-version.test.ts#DEMAND_EVENT_SOURCING_EVENT_TYPES",
+      "tests/governance/demand/demand-event-sourcing-upcaster.test.ts#result",
+      "tests/governance/evidence/managed-evidence-event-sourcing.test.ts#encodeCurrentDemandEventVersion"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-event.ts",
+    "sha256": "0c237ec8cb0b341a9a22e44241b0c48d9fbfd760928b50f77646f1ed1f53f516",
+    "responsibility": "十五未提交领域事件联合",
+    "branches": [
+      "精确字段集与payload codecs；要求身份/记录时间/派生eventId/callbackId闭合；continue history可选保持旧字节"
+    ],
+    "effects": [
+      "无I/O；不携持久位置或状态digest"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.ts",
+      "src/governance/demand/event-sourcing/demand-event-stream-commit.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-event-sourcing.test.ts#DemandEventSourcingEventError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.ts",
+    "sha256": "8add40bae7e78cdb02b27625212453679c854bcf73b2c5d68861046e0f437901",
+    "responsibility": "当前聚合与尾部证明合同",
+    "branches": [
+      "Demand、revision、尾event、结果state digest一致；tail event/state版本受支持"
+    ],
+    "effects": [
+      "轻量数据，不保存完整历史"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.ts",
+      "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+      "src/governance/evidence/managed-evidence-publication-application-service.ts"
+    ],
+    "tests": [
+      "tests/governance/review/controller-target-review-event-sourcing.test.ts#DemandEventSourcingAggregate",
+      "tests/governance/review/demand-result-review-snapshot-legacy-history.test.ts#DemandEventSourcingAggregate"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+    "sha256": "1b148de513e320a848a46934361672572422b116bea51efc567aa7f7a296a176",
+    "responsibility": "load→decide→prepare→append→checkpoint",
+    "branches": [
+      "先客户端key/requestDigest重放；修订过期再按commitId复验；流瞬态最多3次重读；checkpoint失败标stale"
+    ],
+    "effects": [
+      "通过repository追加；领域演进在文件效果前完成"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/service.test.ts#commitId",
+      "tests/capabilities/evidence/service.test.ts#record",
+      "tests/governance/controller/demand-controller-route.test.ts#commitId",
+      "tests/governance/demand/demand-event-sourcing-command-handler.test.ts#DemandEventSourcingCommandHandlerError",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#commitId",
+      "tests/governance/demand/demand-event-sourcing-version-evolution.test.ts#commitId",
+      "tests/governance/demand/demand-research-completion.test.ts#commitId",
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#commitId",
+      "tests/governance/review/demand-post-acceptance-route.test.ts#commitId",
+      "tests/governance/tasking/target-task-planning-service.fixture.ts#commitId",
+      "tests/governance/tasking/task-package-projection-store.test.ts#commitId"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+    "sha256": "221d737ac649c0667235ef7483b6fd29e76d6801815ca9227a8b022bb80e9f16",
+    "responsibility": "多Event原子Commit及进程内预备能力",
+    "branches": [
+      "64事件上限；序号/修订/hash链；每事件upcast+evolve+result digest；特定event绑定提交边界；WeakSet签发prepared"
+    ],
+    "effects": [
+      "纯计算；plan不签append capability，prepare才签"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/service.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store-contract.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store-reader.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-transaction.ts",
+      "src/governance/evidence/managed-evidence-publication-application-service.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-repository.test.ts#commitSequence",
+      "tests/governance/demand/demand-event-sourcing-snapshot.test.ts#commitSequence",
+      "tests/governance/demand/demand-event-stream-commit.test.ts#DemandEventStreamCommitError",
+      "tests/governance/demand/demand-file-event-store.test.ts#result",
+      "tests/governance/evidence/managed-evidence-event-sourcing.test.ts#keys",
+      "tests/governance/review/controller-target-review-event-sourcing.test.ts#PreparedDemandEventStreamCommit",
+      "tests/governance/review/demand-result-review-snapshot-legacy-history.test.ts#PreparedDemandEventStreamCommit"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-file-event-store-contract.ts",
+    "sha256": "eb69bc98a2f9e81e420e76e3fcde84e751805f44ac4d2082a442bd8e84e78b3f",
+    "responsibility": "文件事件存储容量和稳定错误",
+    "branches": [
+      "10000commit，单16MiB，总64MiB；目录0700/文件0600与当前owner，常态单链接"
+    ],
+    "effects": [
+      "数据合同；linkCount2只显式恢复路径接纳"
+    ],
+    "consumers": [
+      "src/governance/demand/demand-operation-authority-context.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store-reader.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+      "src/governance/review/demand-result-review-snapshot.ts"
+    ],
+    "tests": [
+      "间接覆盖：见事件提交、仓储和身份权威纵切聚焦测试；没有独立同名测试"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-file-event-store-reader.ts",
+    "sha256": "5a713db3756dfe4f0001894aeaefd7eea389327039213924c93525b3e1d65033",
+    "responsibility": "稳定全流/尾部/按位读",
+    "branches": [
+      "全流前后目录快照、连续名/ID/hash链；尾部从anchor逐位到首缺席；private与archived节点政策区分"
+    ],
+    "effects": [
+      "只读；archived不要求私有mode但要求单链接"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+      "src/governance/review/demand-result-review-snapshot.ts"
+    ],
+    "tests": [
+      "间接覆盖：见事件提交、仓储和身份权威纵切聚焦测试；没有独立同名测试"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-file-event-store.ts",
+    "sha256": "2953ccc7df075f85c0b0167b36f6dd533ee58d283f757b78344bee9048575436",
+    "responsibility": "候选到不可替换权威槽位追加及恢复",
+    "branches": [
+      "同进程canonical-root队列；跨进程exclusive link；索引准入O1或全前缀；target存在同字节幂等；inactive候选安全清理"
+    ],
+    "effects": [
+      "候选content-only→link→退休candidate→权威回读→索引；双链接已提交残留先settle durability"
+    ],
+    "consumers": [
+      "src/capabilities/workspace/maintain-workspace.ts",
+      "src/governance/demand/demand-runtime-recovery.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-snapshot-store.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-command-handler.test.ts#DemandFileEventStore",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#DemandFileEventStore",
+      "tests/governance/demand/demand-event-sourcing-repository.test.ts#DemandFileEventStore",
+      "tests/governance/demand/demand-event-sourcing-root-inventory.test.ts#DemandFileEventStore",
+      "tests/governance/demand/demand-event-sourcing-version-evolution.test.ts#DemandFileEventStore",
+      "tests/governance/demand/demand-file-event-store.test.ts#DemandFileEventStore",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#DemandFileEventStore",
+      "tests/governance/review/controller-target-review-event-sourcing.test.ts#DemandFileEventStore",
+      "tests/governance/review/demand-result-review-snapshot-legacy-history.test.ts#DemandFileEventStore",
+      "tests/governance/tasking/target-task-planning-service.fixture.ts#DemandFileEventStore",
+      "tests/governance/tasking/task-package-projection-store.test.ts#release"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.ts",
+    "sha256": "365f85a52f08e16bdd6e37276912ddb40cd9b6e37d822e0d0e4142c3d1ed889d",
+    "responsibility": "版本兼容快照合同",
+    "branches": [
+      "绑定commit边界、tail event和state；restore复验anchor commit；compatibility变化拒绝使用"
+    ],
+    "effects": [
+      "纯codec；可删除检查点不是权威"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-file-event-snapshot-store.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-snapshot.test.ts#DemandEventSourcingSnapshotError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-file-event-snapshot-store.ts",
+    "sha256": "59befa9567a95675dd8b166b8b817111bfd54d2024a2e7d008e1ed71fa49b296",
+    "responsibility": "快照文件读写与stage恢复",
+    "branches": [
+      "坏内容返回invalid；未知资源/模式拒绝；按seq no-replace；现有异字节conflict；显式stage恢复"
+    ],
+    "effects": [
+      "只写缓存0600 durability none；正常读不修复"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-repository.test.ts#DemandFileEventSnapshotStore",
+      "tests/governance/demand/demand-file-event-store.test.ts#DemandFileEventSnapshotStoreError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+    "sha256": "9b609a6774ace3d22c1a0d59e6956ebc1a2737c831002702eac0954da3977895",
+    "responsibility": "snapshot+tail与完整审计两读取层次",
+    "branches": [
+      "正常load重试snapshot两次后fallback；audit自commit1；history闭合Task/Result/Review/授权/回调代际；查找索引复验失败全读"
+    ],
+    "effects": [
+      "load不写；显式append/snapshot，保留2份检查点并每16次清扫"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/demand/demand-acceptance-coverage.ts",
+      "src/governance/demand/demand-verify-gates.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts",
+      "src/governance/review/demand-result-review-snapshot.ts",
+      "src/governance/tasking/task-package-projection-store.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/service.test.ts#aggregate",
+      "tests/capabilities/evidence/service.test.ts#record",
+      "tests/capabilities/result-review/service.test.ts#aggregate",
+      "tests/capabilities/tasking/service.test.ts#aggregate",
+      "tests/entrypoints/wakeflow-public-mcp-lifecycle.test.ts#DemandEventSourcingRepository",
+      "tests/governance/controller/demand-controller-route.test.ts#aggregate",
+      "tests/governance/delivery/delivery-workspace.fixture.ts#DemandEventSourcingRepository",
+      "tests/governance/demand/demand-continuation-replay.test.ts#aggregate",
+      "tests/governance/demand/demand-event-sourcing-command-handler.test.ts#aggregate",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#aggregate",
+      "tests/governance/demand/demand-event-sourcing-repository.test.ts#DemandEventSourcingRepositoryError",
+      "tests/governance/demand/demand-event-sourcing-version-evolution.test.ts#aggregate",
+      "tests/governance/demand/demand-research-completion.test.ts#aggregate",
+      "tests/governance/evidence/managed-evidence-publication-application-service.test.ts#record",
+      "tests/governance/evidence/managed-evidence-reading-service.test.ts#aggregate",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#aggregate",
+      "tests/governance/result/test-target-result.test.ts#aggregate",
+      "tests/governance/review/controller-implementation-review-decision-service.fixture.ts#aggregate",
+      "tests/governance/review/demand-post-acceptance-route.test.ts#aggregate",
+      "tests/governance/tasking/target-task-planning-service.fixture.ts#aggregate",
+      "tests/governance/tasking/task-package-projection-store.test.ts#DemandEventSourcingRepository",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#fail"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.ts",
+    "sha256": "6e44863c17540d14a256a156841e4c47db3b8c7a786a5399b03e88960a302aa6",
+    "responsibility": "Demand允许资源的排他清单",
+    "branches": [
+      "根5项、event树4项；healthy候选/事务空；publication各仅单指定journal；证据元数据/当前事务整树；拒未知项"
+    ],
+    "effects": [
+      "只读结构；task-package投影命名/节点检查，不读业务内容"
+    ],
+    "consumers": [
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts"
+    ],
+    "tests": [
+      "tests/capabilities/tasking/service.test.ts#inspectDemandEventSourcingRootInventory",
+      "tests/capabilities/tasking/unicode-anchor.test.ts#inspectDemandEventSourcingRootInventory",
+      "tests/governance/demand/demand-event-sourcing-root-inventory.test.ts#DemandEventSourcingRootInventoryError",
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#DemandEventSourcingRootInventoryError",
+      "tests/governance/review/demand-post-acceptance-route.test.ts#inspectDemandEventSourcingRootInventory",
+      "tests/governance/review/demand-result-review-snapshot.test.ts#inspectDemandEventSourcingRootInventory"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+    "sha256": "979e716c62e12853d93683449b07bab4a8f9a3e1e50b7fd499869a6203fd1641",
+    "responsibility": "Identity/Authority/Ledger/事件/证据组合闭包",
+    "branches": [
+      "inventory前后稳定；首Commit唯一published；普通load可snapshot-tail；audit显式；事务期只放行同journal stage/final"
+    ],
+    "effects": [
+      "只读；不证明证据事务目标commit，Application另核对"
+    ],
+    "consumers": [
+      "src/capabilities/demand/context.ts",
+      "src/capabilities/observation/service.ts",
+      "src/governance/controller/demand-controller-route.ts",
+      "src/governance/demand/demand-acceptance-coverage.ts",
+      "src/governance/demand/demand-operation-authority-context.ts",
+      "src/governance/demand/demand-runtime-recovery.ts",
+      "src/governance/demand/demand-verify-gates.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-contract.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/evidence/managed-evidence-publication-application-service.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction-settlement.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/governance/review/demand-post-acceptance-route.ts"
+    ],
+    "tests": [
+      "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts#DemandEventSourcingRootAuthorityError"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+    "sha256": "694e5f441cb86cfa19653a2600bb35386c5b5628bc36f6b871a4c201cb717edb",
+    "responsibility": "十四命令到十五事件的纯决策与归约路由",
+    "branches": [
+      "publish仅null；review同批附escalation或product-defect授权；第三次rework附刹车；continue事件冻结历史test IDs"
+    ],
+    "effects": [
+      "无文件/时钟/网络；不分配流修订与提交序号"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/lifecycle.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.ts",
+      "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-transaction.ts",
+      "src/governance/evidence/managed-evidence-publication-transaction.ts",
+      "src/governance/observation/observation-policy.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/decide.test.ts#DemandEventSourcingDecisionError",
+      "tests/capabilities/observation/service.test.ts#DEMAND_REWORK_ESCALATION_THRESHOLD",
+      "tests/governance/demand/demand-continuation-replay.test.ts#event",
+      "tests/governance/demand/demand-event-sourcing-decider.test.ts#DemandEventSourcingDecisionError",
+      "tests/governance/demand/demand-event-sourcing-repository.test.ts#decideDemandEventSourcingCommand",
+      "tests/governance/demand/demand-event-sourcing-snapshot.test.ts#decideDemandEventSourcingCommand",
+      "tests/governance/demand/demand-event-stream-commit.test.ts#decideDemandEventSourcingCommand",
+      "tests/governance/demand/demand-file-event-store.test.ts#result",
+      "tests/governance/evidence/managed-evidence-event-sourcing.test.ts#DemandEventSourcingDecisionError",
+      "tests/governance/evidence/managed-evidence-publication-transaction.test.ts#event",
+      "tests/governance/review/controller-target-review-event-sourcing.test.ts#DemandEventSourcingCommand",
+      "tests/governance/review/demand-result-review-snapshot-legacy-history.test.ts#DemandEventSourcingCommand",
+      "tests/scenarios/wakeflow-scenario-acceptance.test.ts#DEMAND_REWORK_ESCALATION_THRESHOLD"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/model/demand-identity.ts",
+    "sha256": "c1db1d632497f6db03a867880c82970f502eaa9fdbd962eb531f96a9ae822049",
+    "responsibility": "Demand不可变身份",
+    "branches": [
+      "program/demand/pod/需求谱系及目标文本严格准入；草稿先校验再读clock"
+    ],
+    "effects": [
+      "纯codec，Pod存在性由发布能力检查"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts",
+      "src/governance/demand/demand-runtime-recovery.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/model/demand-authority.ts",
+      "src/governance/demand/publication/demand-active-guard.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-transaction.ts",
+      "src/governance/review/demand-post-acceptance-route.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-active-guard.test.ts#source",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#source",
+      "tests/governance/demand/demand-event-sourcing-publication-transaction.test.ts#source",
+      "tests/governance/demand/demand-identity-authority.test.ts#DemandIdentityError",
+      "tests/governance/tasking/target-task-planning-service.fixture.ts#source"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/model/requirement-lineage.ts",
+    "sha256": "3cb22d7ed7ed88e862241e4bf3fef28c1b76f7bd983689fe7f98c72aa07bcf0a",
+    "responsibility": "需求包记录谱系引用",
+    "branches": [
+      "typed requirementId+固定recordRef+recordDigest关系；不指向可变看板"
+    ],
+    "effects": [
+      "纯codec；实际Ledger和claim由上层准入"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts",
+      "src/governance/demand/model/demand-identity.ts",
+      "src/governance/lifecycle/demand-completion.ts"
+    ],
+    "tests": [
+      "tests/governance/demand/demand-event-sourcing-publication-transaction.test.ts#parseRequirementLineageReference",
+      "tests/governance/demand/demand-identity-authority.test.ts#RequirementLineageError",
+      "tests/governance/demand/demand-research-completion.test.ts#requirementLineageRecordRef",
+      "tests/governance/demand/requirement-board.fixture.ts#RequirementLineageReference"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/model/demand-authority.ts",
+    "sha256": "a06e7a3362e05482415dad528e3dd9da1cf205b91d7d34ee93fa2d8b9aecd750",
+    "responsibility": "身份与需求成员角色的强制权威关系",
+    "branches": [
+      "同一个record、requirement/landing各一；research iff not-applicable；environmentMemberRef恒null；resolve成员及program"
+    ],
+    "effects": [
+      "只读Ledger成员；不写Demand或事件"
+    ],
+    "consumers": [
+      "src/capabilities/demand/service.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-stage.ts",
+      "src/governance/demand/publication/demand-event-sourcing-publication-transaction.ts",
+      "src/governance/review/demand-post-acceptance-route.ts"
+    ],
+    "tests": [
+      "tests/capabilities/delivery/prompt.test.ts#ResolvedDemandAuthorityReference",
+      "tests/governance/demand/demand-active-guard.test.ts#environmentMemberRef",
+      "tests/governance/demand/demand-event-sourcing-publication-service.test.ts#index",
+      "tests/governance/demand/demand-event-sourcing-publication-transaction.test.ts#environmentMemberRef",
+      "tests/governance/demand/demand-identity-authority.test.ts#DemandAuthorityError",
+      "tests/governance/tasking/target-task-planning-service.fixture.ts#DemandTestingMode"
+    ],
+    "findings": [],
+    "reviewDepth": "semantic"
+  },
+  {
+    "path": "src/governance/demand/model/demand-aggregate-state.ts",
+    "sha256": "761f9760c2cf0690367a20db81cc9d3fe50fc42c151a5495397723def79498ef",
+    "responsibility": "Demand状态、目标摘要与纯转换守卫",
+    "branches": [
+      "同仓库一个未接受未superseded；当前test至多一且全accepted基线；delivery围栏与结果精确关联；rework/retest/continue/history；completion检测闭合"
+    ],
+    "effects": [
+      "无I/O；完整Task/Envelope/Result/Review属于事件；确认cancel保留awaiting导致终态解析拒绝"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/demand/decide.ts",
+      "src/capabilities/evidence/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/tasking/decide.ts",
+      "src/governance/controller/demand-controller-route.ts",
+      "src/governance/demand/demand-acceptance-coverage.ts",
+      "src/governance/demand/demand-verify-gates.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.ts",
+      "src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.ts",
+      "src/governance/demand/event-sourcing/demand-event-stream-commit.ts",
+      "src/governance/evidence/managed-evidence-capture-planning-service.ts",
+      "src/governance/observation/active-projection-facts.ts",
+      "src/governance/review/demand-post-acceptance-route.ts",
+      "src/governance/review/demand-result-review-snapshot.ts"
+    ],
+    "tests": [
+      "tests/capabilities/demand/decide.test.ts#DemandAggregateState",
+      "tests/capabilities/tasking/decide.test.ts#DemandAggregateState",
+      "tests/governance/demand/demand-aggregate-state.test.ts#DemandAggregateStateError",
+      "tests/governance/demand/demand-continuation-replay.test.ts#DemandAggregateState",
+      "tests/governance/demand/demand-event-sourcing-decider.test.ts#result",
+      "tests/governance/demand/demand-research-completion.test.ts#DemandAggregateState",
+      "tests/governance/evidence/managed-evidence-event-sourcing.test.ts#DemandAggregateStateError",
+      "tests/governance/review/controller-target-review-event-sourcing.test.ts#DemandAggregateStateError"
+    ],
+    "findings": [
+      "DD-F03：cancelDemandAggregateState保留awaitingDecision但把lifecycle变为cancelled；parseAwaitingDecision拒绝非active，取消等待决定的Demand失败。纯函数复现已确认；公共preview不阻塞awaiting。"
+    ],
+    "reviewDepth": "semantic"
+  }
+]

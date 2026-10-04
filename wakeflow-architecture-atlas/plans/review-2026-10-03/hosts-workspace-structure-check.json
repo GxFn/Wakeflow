@@ -1,0 +1,61 @@
+{
+  "kind": "WakeflowAtlasScopedStructureCheck",
+  "observedOn": "2026-10-03",
+  "scope": [
+    "maps/03-configuration-workspace/**",
+    "maps/09-public-mcp-host-seams/**"
+  ],
+  "command": "node scripts/check-atlas.mjs",
+  "ownedPathsOk": true,
+  "ownedPathErrors": [],
+  "documents": [
+    {
+      "path": "maps/03-configuration-workspace/README.md",
+      "sha256": "4729de34bc061c16f8f4e986761b250e90c29112ef3e4fff544f55f92b3f8840",
+      "mermaidBlocks": 1
+    },
+    {
+      "path": "maps/03-configuration-workspace/file-dependencies.md",
+      "sha256": "3f43997c950bbeff14036464fcd22bb30885b0393d81fe174e6e0877f629afec",
+      "mermaidBlocks": 1
+    },
+    {
+      "path": "maps/03-configuration-workspace/operation-scope-and-config-baseline.md",
+      "sha256": "03d8111bfb31065a3cbd228fa9aaa69321958dca5af6fd3429b62c17aaab632a",
+      "mermaidBlocks": 2
+    },
+    {
+      "path": "maps/03-configuration-workspace/runtime-call-flow.md",
+      "sha256": "8e16637cc7c34614d644d5a1efa35e3a3f507f82cf31a811cee44a12b70966de",
+      "mermaidBlocks": 3
+    },
+    {
+      "path": "maps/09-public-mcp-host-seams/README.md",
+      "sha256": "c60c6cd4a7bb818298b018873c07e07445f3b4185985fc7cb2ab67597f487b60",
+      "mermaidBlocks": 1
+    },
+    {
+      "path": "maps/09-public-mcp-host-seams/file-dependencies.md",
+      "sha256": "1c5358b1e62e20550eb26221ab88977bc4cff093415c474ae277fd87b684e712",
+      "mermaidBlocks": 1
+    },
+    {
+      "path": "maps/09-public-mcp-host-seams/host-effect-handshake.md",
+      "sha256": "cd924d17f19b28015e2da741def91244bbb079c05a237c78b58ae24a9544fbfe",
+      "mermaidBlocks": 3
+    },
+    {
+      "path": "maps/09-public-mcp-host-seams/project-chats-and-execution-roots.md",
+      "sha256": "68855bb573eb7f31748fa320658622e869c417c7f7f062fb6dfe8a9e2b3a45ca",
+      "mermaidBlocks": 2
+    },
+    {
+      "path": "maps/09-public-mcp-host-seams/runtime-call-flow.md",
+      "sha256": "0c35d04a5107fb5ddde883a70e410f7d9027f2045b43ea031bf3719b4a450890",
+      "mermaidBlocks": 1
+    }
+  ],
+  "globalCheckOkAtObservation": false,
+  "outsideScopeErrorsAtObservation": 26,
+  "note": "全局检查与其他并行修订重叠，整体尚有范围外漂移或链接；此回执只确认03/09结构/指纹/锚点0错误，不作为全atlas最终门。浏览器渲染与全局终验由根代理执行。"
+}

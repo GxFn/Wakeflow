@@ -1,0 +1,83 @@
+{
+  "kind": "WakeflowAtlasCallbackPureProbes",
+  "observedOn": "2026-10-03",
+  "finalSourceVersion": "1.1.0-rc.5",
+  "scope": "Read-only pure functions plus pure record/fixture constructors from the existing .build; no import service, hook filesystem or host session is exercised.",
+  "sourceDigests": [
+    {
+      "path": "src/capabilities/result-review/decide.ts",
+      "sha256": "bcbf71daaf94688bda3f97e0433e29158d1eff50d6c59955320c3e89c312bd82"
+    },
+    {
+      "path": "src/capabilities/result-review/prompt.ts",
+      "sha256": "b868db68d973a913c851534295f5c693dcd9fe74347577e71951e8710f69274c"
+    },
+    {
+      "path": "src/governance/result/target-result-callback.ts",
+      "sha256": "647c4262388486229881a6fe3ec7eb500f5407c943e594fc19bc38b52420c015"
+    },
+    {
+      "path": "src/governance/result/implementation-target-result-report.ts",
+      "sha256": "4995a34cb25bb2554dd46ffc4f0e256168f12bdf05765c0c5b8172bafcd39183"
+    },
+    {
+      "path": "src/foundation/git/git-object-id.ts",
+      "sha256": "63af32cb94efc27dff6012541394353136190931d2849fc2909c51e9bbe407d7"
+    }
+  ],
+  "callbackCommitFinding": {
+    "status": "fixed",
+    "inputCommits": [
+      {
+        "algorithm": "sha1",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "algorithm": "sha256",
+        "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "storedCommits": [
+      {
+        "algorithm": "sha1",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "algorithm": "sha256",
+        "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "summaryCommits": [
+      "sha1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "renderedLine": "- commits: sha1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "identitiesPreserved": true,
+    "legacyObjectStringAbsent": true,
+    "beforeFixEvidence": "callback-probes-before-fix.json"
+  },
+  "quoting": {
+    "authorityNoticeBeforeData": true,
+    "forgedNextContained": true,
+    "htmlAndDirectionalDelimitersEscaped": true
+  },
+  "states": {
+    "threshold": {
+      "status": "pending",
+      "landedRecordId": null,
+      "landedAt": null
+    },
+    "thresholdPlusOneMs": {
+      "status": "silent",
+      "landedRecordId": null,
+      "landedAt": null
+    },
+    "acknowledgedWithoutLanding": {
+      "status": "acknowledged",
+      "landedRecordId": null,
+      "landedAt": null
+    }
+  },
+  "sameInstantTargetCompletionConfirmed": true,
+  "stopDoesNotProveCallbackLanding": true
+}

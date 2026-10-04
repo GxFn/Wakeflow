@@ -1,0 +1,738 @@
+[
+  {
+    "path": "src/capabilities/workspace/maintain-workspace.ts",
+    "sha256": "77d9deda1d87725064c22f0dc6773ad405363b7ad4a917a2c747638b5ef602be",
+    "previousSha256": "7153333ad1e10aa3bf9ba188e09c50120ecf0ba4081258ddfe5b025efde79d9e",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "公共维护切片：严格请求、优先修复分支、摘要复算与 next",
+    "branches": [
+      "reconcile：权限模式收敛先于 Demand 候选恢复，静态物化最后",
+      "fresh/reconfigure 严格当前配置",
+      "recover按operationId"
+    ],
+    "effects": [
+      "静态事务由门进入exclusive",
+      "候选恢复显式exclusive",
+      "权限收敛保持逐节点CAS且无scope包装",
+      "投影刷新在物化apply后调用"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-maintenance.ts",
+      "src/entrypoints/codex-wakeflow-maintenance.ts",
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts"
+    ],
+    "tests": [
+      "tests/capabilities/workspace/operation-scope.test.ts#executeCodexWakeflowMaintenance",
+      "tests/capabilities/workspace/demand-runtime-recovery.test.ts#executeCodexWakeflowMaintenance"
+    ],
+    "conclusion": "mutationScope maintenance保留各维护分支自己的进入点，不能描述成所有apply从公共入口持同一作用域",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/configuration/wakeflow-config.ts",
+    "sha256": "3e0d67cc6bb6a4d29e028dd39cb52b83c5ae202dbb40e84b3f59e23096d7bea6",
+    "previousSha256": "7e58b5d4b818d993cdc629f713af4633a11f99793f900cb29eca7ea77d25783d",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "配置v2的被动JSON、Schema、placement、跨实体拓扑准入与冻结索引",
+    "branches": [
+      "先Schema后placement/topology",
+      "每pod三个角色单例",
+      "primary每仓库至少一个product",
+      "worktree每仓库唯一product及检出意图"
+    ],
+    "effects": [
+      "无I/O",
+      "规范摘要和派生索引不变更配置权威"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/prompt.ts",
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/pod/decide.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/result-review/prompt.ts",
+      "src/capabilities/workspace/maintain-workspace.ts",
+      "src/configuration/wakeflow-config-authority-publication.ts",
+      "src/configuration/wakeflow-config-authority-replacement-contract.ts",
+      "src/configuration/wakeflow-config-authority-snapshot.ts",
+      "src/configuration/wakeflow-config-document.ts",
+      "src/configuration/wakeflow-config-root-placement.ts",
+      "src/configuration/wakeflow-fresh-config-selection.ts",
+      "src/governance/delivery/delivery-envelope.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/governance/pod/pod-state.ts",
+      "src/hosts/claude-code/claude-code-portable-settings-composition.ts",
+      "src/hosts/claude-code/claude-code-portable-settings-operation-executor.ts",
+      "src/workspace/maintenance/wakeflow-host-maintenance-capability.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-execution-intent.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-execution-preview.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-resource-catalog.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview-contract.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts",
+      "src/workspace/managed-integration/wakeflow-external-instruction-body-authority.ts",
+      "src/workspace/managed-integration/wakeflow-external-instruction-inspection.ts",
+      "src/workspace/managed-integration/wakeflow-gitignore-body-authority.ts",
+      "src/workspace/managed-integration/wakeflow-program-instruction-body-authority.ts",
+      "src/workspace/managed-integration/wakeflow-program-instruction-inspection.ts",
+      "src/workspace/support/wakeflow-managed-support-resource-catalog.ts",
+      "src/workspace/support/wakeflow-managed-support-root-materialization.ts",
+      "src/workspace/support/wakeflow-support-memory-authority.ts",
+      "src/workspace/support/wakeflow-support-memory-inspection.ts",
+      "src/workspace/wakeflow-active-fresh-projection.ts",
+      "src/workspace/window-runtime/wakeflow-window-launch-instructions.ts",
+      "src/workspace/window-runtime/wakeflow-window-launch-intent.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-desired-topology.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.ts"
+    ],
+    "tests": [
+      "tests/configuration/wakeflow-config.test.ts#parseWakeflowConfig",
+      "tests/configuration/wakeflow-config.test.ts#buildWakeflowConfigIndexes"
+    ],
+    "conclusion": "当前模型只接受Schema v2；不注入迁移或旧格式兼容分支",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/entrypoints/claude-code-wakeflow-mcp.ts",
+    "sha256": "7525337edfdf2cc1bfb4367f02be28e6a5e59d04f044d85ec1e8ba4355148ab8",
+    "previousSha256": "1bfc233710d02fe8cd59f4fede6a5406430b9be3cbe5dbcb9eeaf2486c17556f",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "Claude公共MCP固定组合根",
+    "branches": [
+      "当前Claude执行facade",
+      "观察携带双宿主profile与Claude资产",
+      "共享executors不选宿主"
+    ],
+    "effects": [
+      "进程装载时固定manifest身份",
+      "beforeMutation注入服务",
+      "CLI启动说明renderer来自hosts"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-cancellation.test.ts#createClaudeCodeWakeflowMcpServer"
+    ],
+    "conclusion": "新增纯Claude启动说明注入与制品写前守卫；不因hook事实推断目标MCP版本",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/entrypoints/codex-wakeflow-mcp.ts",
+    "sha256": "7e81c22057ad34406c8cf280a654975737d584d4c9071d0b670cdcfdfc46134e",
+    "previousSha256": "48e674918e5b0f77e9c603e965dc06b24650cf50d56c6f4c3b582b06a733c8f2",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "Codex公共MCP固定组合根",
+    "branches": [
+      "Codex执行facade",
+      "观察携带双宿主profile但无Claude执行资产"
+    ],
+    "effects": [
+      "进程装载时固定manifest身份",
+      "beforeMutation注入服务",
+      "Codex renderer注入endpoint/pod"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-cancellation.test.ts#createCodexWakeflowMcpServer"
+    ],
+    "conclusion": "项目聊天说明由宿主渲染模块负责；当前进程制品摘要守卫在公共分派前执行",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/entrypoints/wakeflow-artifact-identity.ts",
+    "sha256": "5f51dc7b9bb5af0b3e6f3d6db1054b2470c1ea8e5eed886a9079ecc4e7cf117a",
+    "previousSha256": "994fe476269bad209de68f3675f8f26bb71e270ca356c10b6742fa53eba810b1",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "从入口realpath固定当前进程的制品根与启动manifest摘要",
+    "branches": [
+      "生成根或已有manifest必须可读且未变",
+      "非生成源码测试布局且无manifest时允许跳过"
+    ],
+    "effects": [
+      "同步只读manifest与路径",
+      "异常输出稳定runtime-artifact-unavailable或outdated"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-maintenance.ts",
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-maintenance.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-artifact-mutation-guard.test.ts#resolveWakeflowArtifactIdentity"
+    ],
+    "conclusion": "新增assertUnchanged；只核同路径manifest，不验证全部payload或宿主选中安装",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/entrypoints/wakeflow-hook-observer.ts",
+    "sha256": "1552b67309cbed04ac916212ff55ef1ea86657ec8efbd6fd1f99dc6c18ce7129",
+    "previousSha256": "0733cfd7b70e1e784b35212a12cb834427c24f86ea54ad763516108f2867f0cb",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "宿主hook的有界定位、载荷降级与观察发布",
+    "branches": [
+      "当前版本配置才匹配",
+      "session-start无需已有绑定",
+      "其他事件匹配私有handle",
+      "可选坏字段降null",
+      "局部写失败继续其他根"
+    ],
+    "effects": [
+      "通过kernel仅追加hook记录",
+      "stdout空且exit0",
+      "固定stderr诊断"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/entrypoints/wakeflow-hook-observer.test.ts#runWakeflowHookObserver",
+      "tests/entrypoints/wakeflow-hook-observer.test.ts#unwrapHostPrompt"
+    ],
+    "conclusion": "轻读严格使用v2词汇；hook manifest仍只属于observer。保留Claude wrapper特例和有界候选发现限制",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/entrypoints/wakeflow-public-mcp-catalog.ts",
+    "sha256": "6eb0f3f62bd7ffbf00b074c7cac40cfa8b84ce8ab40777f0f155cb9dfb07eef9",
+    "previousSha256": "33485e364111edc7996604eede6f72876b496ce998de1e8370f0999074a8c64b",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "20个公共工具及executor字段的唯一目录",
+    "branches": [
+      "维护preview/apply/recover",
+      "其他登记来自所属capability合同"
+    ],
+    "effects": [
+      "纯目录数据聚合，无宿主效果"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-server-configuration.ts",
+      "src/entrypoints/wakeflow-public-mcp-server.ts",
+      "src/entrypoints/wakeflow-public-mcp-shared-executors.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-catalog-binding.test.ts#WAKEFLOW_PUBLIC_TOOL_CATALOG"
+    ],
+    "conclusion": "维护描述明确仅当前格式、无本地格式迁移",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/entrypoints/wakeflow-public-mcp-server-configuration.ts",
+    "sha256": "2a82bfa216a61d95568fa9dcb4eb87cbb09eb4faec4c5eaed982881e3dcab476",
+    "previousSha256": "d4b1b4de6d050bbaef1600697d6697445978d9418a7fdab2ccd772225b6f49c0",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "封闭组合根选项与完整executor集合准入",
+    "branches": [
+      "允许可选beforeMutation且必须非Proxy函数",
+      "拒绝未知字段、缺executor、行为对象"
+    ],
+    "effects": [
+      "纯解析、冻结准入结果"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-public-mcp-catalog.test.ts#createWakeflowPublicMcpServer",
+      "tests/entrypoints/wakeflow-artifact-mutation-guard.test.ts#createWakeflowPublicMcpServer"
+    ],
+    "conclusion": "beforeMutation是固定进程端口，不是请求wire字段",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/entrypoints/wakeflow-public-mcp-server.ts",
+    "sha256": "eee6300593813b746b431f217af8976eb5bd48b767380aeae553d41534c53d80",
+    "previousSha256": "6b51660bfbfbfd4d23756c3e2be6e54d1c8016303b491f05d6d61af18110b62f",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "官方MCP服务根与目录装配",
+    "branches": [
+      "先准入选项，再登记目录",
+      "guard与executor解构分开"
+    ],
+    "effects": [
+      "构造SDK server与instructions，传递固定beforeMutation"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-artifact-mutation-guard.test.ts#createWakeflowPublicMcpServer"
+    ],
+    "conclusion": "新增beforeMutation传递；不赋予其业务选择或宿主执行职责",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/entrypoints/wakeflow-public-mcp-tool.ts",
+    "sha256": "8f642e0e229fec46d96e4a9d67eaf433d2e3b3de15eb4ae33025208571ad0d61",
+    "previousSha256": "9e5c7b4482d03ac8f413e43e75198f7d6e8f224ad9a0849727779def10041c34",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "MCP请求准入、写前守卫和公开结果边界",
+    "branches": [
+      "readonly或mode preview或operation inspect跳过guard",
+      "其余先guard再execute",
+      "成功规范化/限额/脱敏，失败稳定错误信封"
+    ],
+    "effects": [
+      "SDK注册回调，冻结请求signal并传owner",
+      "不直接写业务权威"
+    ],
+    "consumers": [
+      "src/entrypoints/wakeflow-public-mcp-catalog.ts",
+      "src/entrypoints/wakeflow-public-mcp-server.ts"
+    ],
+    "tests": [
+      "tests/entrypoints/wakeflow-artifact-mutation-guard.test.ts#createWakeflowPublicMcpServer",
+      "tests/entrypoints/wakeflow-public-mcp-catalog-binding.test.ts#registerWakeflowPublicMcpCatalog"
+    ],
+    "conclusion": "守卫未过不调用executor；保留read/preview可诊断，输入Schema先由SDK校验",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/hosts/claude-code/claude-code-agent-text-profile.ts",
+    "sha256": "ca7d92e1658a57240d2f372039b3749a5ee024fe947a3542b98d822aea5a6dd0",
+    "previousSha256": "711a90a8426bbd0974a68f50d2022be74161518fb06ab747535c8742a9e3bc30",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "九个Claude agent文本占位符与单遍封闭渲染",
+    "branches": [
+      "窗口首次启动/收养/新pane续接/原地续接",
+      "运行证据缺失与确证过期分别处理"
+    ],
+    "effects": [
+      "输出文本无会话效果",
+      "Agent明确调用部署的tmux助手"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/artifacts/agent-text-live-guidance.test.ts#CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS",
+      "tests/artifacts/agent-text-honesty.test.ts#CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS"
+    ],
+    "conclusion": "更新证据边界，缺hook不是循环重启或强制换绑依据；保留statusLine被文案称managed block而实际单键CAS的旧差异",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/hosts/claude-code/claude-code-tmux-asset.ts",
+    "sha256": "bc9e9e034fb489e866ff5d7337c78f20ffbf0ee2bb2a3ddc3bbd85ade590932d",
+    "previousSha256": "4abad0dc8ddcdc60089112a9c78b323c0824183a88cd73dcdf190d45edee27c2",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "Agent显式执行的Claude/tmux/Git助手脚本与固定摘要",
+    "branches": [
+      "启动/收养/续接/送前守卫/投递/诊断推动/标记/关闭",
+      "hook候选读取严格失败",
+      "配置只接受当前版本"
+    ],
+    "effects": [
+      "生成资产本身纯文本",
+      "运行资产会spawn tmux/Claude/Git、准备本地HEAD检出、修改git info exclude",
+      "只输出观察不写Demand"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/hosts/claude-code/claude-code-agent-text-profile.ts",
+      "src/hosts/claude-code/claude-code-portable-settings-transition.ts",
+      "src/hosts/claude-code/claude-code-tmux-asset-operation.ts"
+    ],
+    "tests": [
+      "tests/hosts/claude-code/claude-code-tmux-asset.test.ts#runHelper",
+      "tests/hosts/claude-code/claude-code-tmux-asset.test.ts#CLAUDE_CODE_TMUX_ASSET_CONTENT"
+    ],
+    "conclusion": "全文核对内嵌脚本；readConfig只认v2，屏幕判断与保留期hook缺席限制仍在",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/hosts/claude-code/claude-code-window-launch-instructions.ts",
+    "sha256": "ae6cfded30f8c6744008357840f63055636f31344d9ec4acfd792db305161d20",
+    "previousSha256": null,
+    "change": "added",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "Claude启动CLI与tmux纯说明渲染器",
+    "branches": [
+      "worktree意图加--worktree",
+      "role/default/profile偏好",
+      "workspace与外置ledger及已登记检出通过add-dir"
+    ],
+    "effects": [
+      "只生成JsonObject说明，不查询宿主或登记绑定"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/service.test.ts#renderClaudeCodeWindowLaunchInstructions"
+    ],
+    "conclusion": "从共享endpoint提取宿主专用参数；会话cwd仍为角色根或真实worktree，不能传额外executionRoot覆盖",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/hosts/codex/codex-agent-text-profile.ts",
+    "sha256": "877fb61235d7a6c3498caf66d9f3b18cd335de8677f6ae6aa274cb06ae28e8d1",
+    "previousSha256": "b092ed0983888b9d96b77252cd37c4b2e9a0d6efc736b28c43c95ca356b41a63",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "九个Codex文本占位符与项目聊天执行约束",
+    "branches": [
+      "按规范外层项目+host解析，project/local创建",
+      "含混先查不重建",
+      "缺项目为blocker",
+      "用户配置才传model/thinking"
+    ],
+    "effects": [
+      "只渲染文本",
+      "Agent负责创建、回读、git worktree和指定workdir"
+    ],
+    "consumers": [],
+    "tests": [
+      "tests/artifacts/agent-text-live-guidance.test.ts#CODEX_AGENT_TEXT_PLACEHOLDERS",
+      "tests/artifacts/agent-text-honesty.test.ts#CODEX_AGENT_TEXT_PLACEHOLDERS"
+    ],
+    "conclusion": "所有角色同外层项目；启动根与执行根分离，ready threadId才登记；不能从cwd/title/hook推项目归属",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/hosts/codex/codex-window-launch-instructions.ts",
+    "sha256": "773d696262c76b34565b1bd205d4bd366f7e96d1b3aebb20844a1ea83e6fcae2",
+    "previousSha256": null,
+    "change": "added",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "Codex项目聊天与产品执行根的纯说明渲染器",
+    "branches": [
+      "所有角色project/local",
+      "普通角色executionRoot=配置根，worktree角色指向已登记检出",
+      "角色偏好优先于default"
+    ],
+    "effects": [
+      "只生成启动参数占位符和验证说明，不存projectId或绝对路径"
+    ],
+    "consumers": [
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/service.test.ts#renderCodexWindowLaunchInstructions",
+      "tests/capabilities/pod/service.test.ts#renderCodexWindowLaunchInstructions"
+    ],
+    "conclusion": "projectRoot/sessionRoot固定点；Codex项目worktree环境不等于产品仓库检出，产品由git worktree add创建",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/hosts/codex/wakeflow-workspace-host-resource-profile.ts",
+    "sha256": "cbece12bda7cebf52f0939218d7e51b63dde2a032e70763dd0d69212dc70d13f",
+    "previousSha256": "16e81ae28f0055e20d01cf5817fe8654166127f461c8e65c86d7948ae0f0b47a",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "Codex资源与启动模板纯数据",
+    "branches": [
+      "windowIdentity/podReceipts有效，locator/settings/tmux禁用",
+      "keepLive只是表面声明"
+    ],
+    "effects": [
+      "纯解析冻结profile"
+    ],
+    "consumers": [
+      "src/entrypoints/claude-code-wakeflow-maintenance.ts",
+      "src/entrypoints/claude-code-wakeflow-mcp.ts",
+      "src/entrypoints/codex-wakeflow-maintenance.ts",
+      "src/entrypoints/codex-wakeflow-mcp.ts"
+    ],
+    "tests": [
+      "tests/hosts/codex/workspace-host-resource-profile.test.ts#codexWorkspaceHostResourceProfile"
+    ],
+    "conclusion": "launch改为project-thread，worktree.launch改为git-worktree",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/workspace/maintenance/wakeflow-maintenance-gate.ts",
+    "sha256": "58645a6809bea71541af2507470a88332f34a9897cb5790664bc00b0c11f0e79",
+    "previousSha256": "06fedf2d1e84d4ec5a1fdbcc8f97ca6a54a269e39b8299e495aa75090bce136b",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "维护短锁、bootstrap与独占工作区作用域的关联门",
+    "branches": [
+      "fresh/repair布局准入",
+      "关联operation token",
+      "门内guard复验active上下文与当前锁",
+      "恢复使用原operationId"
+    ],
+    "effects": [
+      "先私有协议前缀/维护锁，再exclusive并等在途shared结束",
+      "callback结束失效context"
+    ],
+    "consumers": [
+      "src/hosts/claude-code/claude-code-maintenance-capability.ts",
+      "src/hosts/codex/codex-maintenance-capability.ts",
+      "src/workspace/maintenance/wakeflow-host-maintenance-capability.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-execution-preview.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-journal-store.ts",
+      "src/workspace/maintenance/wakeflow-prepared-maintenance-recovery.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts"
+    ],
+    "tests": [
+      "tests/capabilities/workspace/operation-scope.test.ts#executeCodexWakeflowMaintenance",
+      "tests/workspace/maintenance/wakeflow-maintenance-execution-transaction.test.ts#withWakeflowMaintenanceGate"
+    ],
+    "conclusion": "exclusive写准入被纳入真实维护路径；同一上下文嵌套owner借用既有作用域",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.ts",
+    "sha256": "c01e05e95bda53368f27afcff99aa01e8f9052716d62e91a3602db7f32e1629b",
+    "previousSha256": "fe6225583fac94bbe8eda478b4b33d8d5f61edffdaa607f998a58220f03d9cd5",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "Active与私有维护协议的稳定只读分类和摘要",
+    "branches": [
+      "absent/bootstrap-prefix/idle/busy/recovery-required/conflict",
+      "unsafe门永远conflict",
+      "operation-admission空且0700允许fresh前缀"
+    ],
+    "effects": [
+      "只读目录和锁事实，不恢复或清理"
+    ],
+    "consumers": [
+      "src/capabilities/observation/service.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-gate.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-orphan-gate-recovery.ts",
+      "src/workspace/maintenance/wakeflow-prepared-maintenance-recovery.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts"
+    ],
+    "tests": [
+      "tests/workspace/maintenance/wakeflow-workspace-core-layout-inspection.test.ts#inspectWakeflowWorkspaceCoreLayout"
+    ],
+    "conclusion": "新增operation-admission空前缀认可；现存非空scope资源不冒充freshCompatible",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/workspace/window-runtime/wakeflow-window-host-binding-store.ts",
+    "sha256": "0831739ec99c3400ffe0cfcb32c506d158092415d3e4f3e881e6dda8e461a937",
+    "previousSha256": "382af9517f2eccc3a9b24e8c4585e4162582301d6cb369027c8bc0c5b9dc0509",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "绑定专属锁、完整inventory与0600创建owner",
+    "branches": [
+      "锁前/锁内重新加载可调用authority",
+      "固定lock/root/program/host",
+      "恢复inactive stage",
+      "只读inventory双读且锁缺席"
+    ],
+    "effects": [
+      "只写绑定no-replace与已证明inactive残留恢复",
+      "投影由回调owner写"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/workspace/window-runtime/wakeflow-window-host-binding-store-authority.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts"
+    ],
+    "tests": [
+      "tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts#withWakeflowWindowHostBindingStore",
+      "tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts#createWakeflowWindowHostBindingInStore"
+    ],
+    "conclusion": "authoritySource可在锁内重新加载，投影刷新可使用当前config+binding；现有登记低层仍only-create",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/workspace/window-runtime/wakeflow-window-launch-instructions.ts",
+    "sha256": "d35071b20929f32d9ef7c3720dbb98a55e64fea6871e5882988945a103a37668",
+    "previousSha256": null,
+    "change": "added",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "共享启动说明renderer类型端口",
+    "branches": [
+      "输入为配置/逻辑意图/宿主profile/已登记检出相对路径",
+      "输出JsonObject"
+    ],
+    "effects": [
+      "纯类型，无执行与持久化"
+    ],
+    "consumers": [
+      "src/capabilities/endpoint/service.ts",
+      "src/hosts/claude-code/claude-code-window-launch-instructions.ts",
+      "src/hosts/codex/codex-window-launch-instructions.ts"
+    ],
+    "tests": [
+      "tests/capabilities/endpoint/service.test.ts#renderCodexWindowLaunchInstructions",
+      "tests/capabilities/endpoint/service.test.ts#renderClaudeCodeWindowLaunchInstructions"
+    ],
+    "conclusion": "共享层不拥有projectId、CLI参数或宿主调用；host模块生成说明",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.ts",
+    "sha256": "8665ee4c262d7d9525bc7a4ed59aa245123891040687a6ba284b11bf9c14c325",
+    "previousSha256": "85b004c618f60777158e12f1f8ad110319e33085cd224c275ebfebbcd2ca1391",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "配置与binding派生窗口期望投影的只读观察",
+    "branches": [
+      "runtime缺失/库存不可用/逐窗口current-stale-missing-unsafe",
+      "独立纯编译器复用"
+    ],
+    "effects": [
+      "无写入",
+      "完整inventory不可得则整组unavailable"
+    ],
+    "consumers": [
+      "src/capabilities/pod/service.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/hosts/claude-code/claude-code-maintenance-capability.ts",
+      "src/hosts/codex/codex-maintenance-capability.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts"
+    ],
+    "tests": [
+      "tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts#planWakeflowWindowRuntimeProjectionMaintenance"
+    ],
+    "conclusion": "抽出compileWakeflowWindowRuntimeProjectionExpectedEntries供锁内发布复用，观察仍零写",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts",
+    "sha256": "a77bc847d187f2bd31b730c1ec29cc67b499fb6c3f1873368f0473b1725cc8bf",
+    "previousSha256": "9a1a9d79a4a49a243807434d70ab4653d5692983df35adc2d0bb54870a2735b6",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "窗口投影规划、刷新、骨架创建、精确退休与维护执行",
+    "branches": [
+      "refresh shared后重读配置",
+      "binding锁内再重读",
+      "unsafe不覆盖",
+      "骨架missing仅no-replace创建，目标已出现直接保留"
+    ],
+    "effects": [
+      "发布派生文档",
+      "维修执行锁内核目标摘要",
+      "退休按已知windowId精确删除"
+    ],
+    "consumers": [
+      "src/capabilities/pod/service.ts",
+      "src/hosts/claude-code/claude-code-maintenance-capability.ts",
+      "src/hosts/codex/codex-maintenance-capability.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts"
+    ],
+    "tests": [
+      "tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts#refreshWakeflowWindowRuntimeProjections",
+      "tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts#ensureWakeflowWindowRuntimeSkeleton",
+      "tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts#executeWakeflowWindowRuntimeProjectionOperation"
+    ],
+    "conclusion": "闭合旧快照晚写与并发登记覆盖；不再接受调用者旧config作为refresh事实，观察仍独立零写",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  },
+  {
+    "path": "src/workspace/workspace-host-resource-profile.ts",
+    "sha256": "0e7abb6e6d535aaad691c2fd4db90d5b5bc244ab7f708ec7e129edff1a69d204",
+    "previousSha256": "562b1b4f7c398368c5a1aaa0dc70c6d10bcdb7cbf3da0e2731d3e19c4f67cb73",
+    "change": "changed",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "responsibility": "宿主中立资源profile封闭准入",
+    "branches": [
+      "project-thread或tmux-session",
+      "worktree为git-worktree或claude-worktree-flag",
+      "属性和路径严格校验"
+    ],
+    "effects": [
+      "纯解析解除别名并递归冻结"
+    ],
+    "consumers": [
+      "src/capabilities/delivery/decide.ts",
+      "src/capabilities/delivery/service.ts",
+      "src/capabilities/endpoint/service.ts",
+      "src/capabilities/pod/service.ts",
+      "src/capabilities/result-review/service.ts",
+      "src/capabilities/workspace/maintain-workspace.ts",
+      "src/governance/delivery/delivery-envelope.ts",
+      "src/governance/demand/model/demand-aggregate-state.ts",
+      "src/governance/observation/workspace-observation.ts",
+      "src/governance/pod/worktree-disposal.ts",
+      "src/hosts/claude-code/claude-code-portable-settings-composition.ts",
+      "src/hosts/claude-code/claude-code-portable-settings-operation-executor.ts",
+      "src/hosts/claude-code/wakeflow-workspace-host-resource-profile.ts",
+      "src/hosts/codex/wakeflow-workspace-host-resource-profile.ts",
+      "src/workspace/host-runtime/wakeflow-host-capability-layout-authority.ts",
+      "src/workspace/host-runtime/wakeflow-host-capability-layout-materialization.ts",
+      "src/workspace/maintenance/wakeflow-host-maintenance-capability.ts",
+      "src/workspace/maintenance/wakeflow-host-maintenance-contribution.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-execution-intent.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-execution-plan.ts",
+      "src/workspace/maintenance/wakeflow-maintenance-public-host-facade.ts",
+      "src/workspace/maintenance/wakeflow-static-materialization-preview-contract.ts",
+      "src/workspace/managed-integration/wakeflow-external-instruction-body-authority.ts",
+      "src/workspace/managed-integration/wakeflow-external-instruction-inspection.ts",
+      "src/workspace/managed-integration/wakeflow-gitignore-body-authority.ts",
+      "src/workspace/managed-integration/wakeflow-gitignore-recomposition-contract.ts",
+      "src/workspace/managed-integration/wakeflow-program-instruction-body-authority.ts",
+      "src/workspace/managed-integration/wakeflow-program-instruction-inspection.ts",
+      "src/workspace/managed-integration/wakeflow-program-instruction-recomposition-contract.ts",
+      "src/workspace/managed-integration/wakeflow-support-gitignore-body-authority.ts",
+      "src/workspace/support/wakeflow-managed-support-resource-catalog.ts",
+      "src/workspace/support/wakeflow-managed-support-root-materialization.ts",
+      "src/workspace/support/wakeflow-support-memory-authority.ts",
+      "src/workspace/support/wakeflow-support-memory-inspection.ts",
+      "src/workspace/wakeflow-workspace-static-resource-matrix.ts",
+      "src/workspace/wakeflow-workspace-static-resource-operation-context.ts",
+      "src/workspace/window-runtime/wakeflow-window-host-binding-resource-catalog.ts",
+      "src/workspace/window-runtime/wakeflow-window-host-binding-store-authority.ts",
+      "src/workspace/window-runtime/wakeflow-window-host-binding-store.ts",
+      "src/workspace/window-runtime/wakeflow-window-host-binding.ts",
+      "src/workspace/window-runtime/wakeflow-window-host-identity-profile.ts",
+      "src/workspace/window-runtime/wakeflow-window-launch-instructions.ts",
+      "src/workspace/window-runtime/wakeflow-window-launch-intent.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-desired-topology.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-fresh-authority.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-registered-projection.ts",
+      "src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.ts",
+      "src/workspace/workspace-host-resource-catalog.ts",
+      "src/workspace/workspace-host-runtime-paths.ts"
+    ],
+    "tests": [
+      "tests/workspace/workspace-host-resource-profile.test.ts#parseWakeflowWorkspaceHostResourceProfile"
+    ],
+    "conclusion": "移除旧线程启动模板值，共享代码按launch.kind分支而不是按hostId推断参数",
+    "testEvidence": "本轮已读相关断言，执行结果由根统一验证记录提供；不将符号引用当作全分支覆盖。"
+  }
+]

@@ -1,0 +1,64 @@
+{
+  "source": "partial-local-test-events-before-explicit-cancellation",
+  "complete": false,
+  "reason": "Explicitly stopped after observed prior-test failures; not a full-suite result",
+  "concurrency": 4,
+  "observedFailedFileSummaries": [
+    {
+      "file": "tests/capabilities/workspace/operation-scope.test.ts",
+      "counts": {
+        "tests": 3,
+        "passed": 0,
+        "failed": 3,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "suites": 0
+      },
+      "durationMs": 74940.638667
+    },
+    {
+      "file": "tests/tooling/lab/sealing.test.ts",
+      "counts": {
+        "tests": 2,
+        "passed": 1,
+        "failed": 0,
+        "cancelled": 1,
+        "skipped": 0,
+        "todo": 0,
+        "suites": 0
+      },
+      "durationMs": 274057.500334
+    }
+  ],
+  "newCaptureTests": "16 checks passed before cancellation",
+  "sourceInputsUnchanged": true,
+  "observedFailedTests": [
+    {
+      "file": "tests/capabilities/workspace/operation-scope.test.ts",
+      "name": "maintenance waits for an in-flight projection before activating a new config",
+      "durationMs": 59745.086792
+    },
+    {
+      "file": "tests/capabilities/workspace/operation-scope.test.ts",
+      "name": "unsupported config cannot enter a writer scope or be silently upgraded",
+      "durationMs": 1.665625
+    },
+    {
+      "file": "tests/capabilities/workspace/operation-scope.test.ts",
+      "name": "an interrupted reconfigure reserves all writers until public recovery completes",
+      "durationMs": 0.433667
+    },
+    {
+      "file": "tests/tooling/lab/sealing.test.ts",
+      "name": "worktree disposal preserves a same-byte replacement of an owned output",
+      "durationMs": 240658.657834
+    },
+    {
+      "file": "tests/tooling/lab/workflow.test.ts",
+      "name": "fresh codex dual-product experiment executes products, archives evidence, then seals cleanup ownership",
+      "durationMs": 240799.265667
+    }
+  ],
+  "termination": "User-facing explanation followed by SIGTERM to the verified owned gate process; descendants exited"
+}

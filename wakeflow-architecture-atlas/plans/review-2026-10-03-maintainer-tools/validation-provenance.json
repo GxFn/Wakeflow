@@ -1,0 +1,38 @@
+{
+  "kind": "WakeflowAtlasValidationProvenance",
+  "reviewedOn": "2026-10-03",
+  "sourceInput": "sha256:130317dabcfed68566842dc91acbaa169db7e174eaa578b176a436ff7cb9e224",
+  "reusedPriorExecutions": [
+    {
+      "scope": "gate",
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-maintainer-tools/validation/gate/report.json",
+      "reportDigest": "sha256:12e7cc54a84d1e8fc2eb1b5b68623697e37d6b49c84ca0ac50b8794fd9ef656d",
+      "status": "passed",
+      "executedAt": "2026-10-04T06:00:27.388Z",
+      "inputMatchesCurrent": true
+    },
+    {
+      "scope": "artifact",
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-maintainer-tools/validation/artifact/report.json",
+      "reportDigest": "sha256:5d431d1f689fb6d23afacb4c468e6c967424939b9fdb814a246a79186504e7e1",
+      "status": "passed",
+      "executedAt": "2026-10-04T06:01:45.505Z",
+      "inputMatchesCurrent": true
+    }
+  ],
+  "rootGateReexecutedForDocumentation": false,
+  "remoteCiExecution": "unverified",
+  "nativeHostAcceptance": "unverified",
+  "platformScope": "darwin-arm64",
+  "semantics": "本轮重验摘要及当前输入匹配；1280项和制品smoke是先前已完成执行，不伪装成本轮新运行。图谱检查与浏览器渲染另记。",
+  "atlasChecks": {
+    "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-maintainer-tools/validation/atlas-check.json",
+    "sha256": "2106d9c918821d784130820e88325b1d6f06695fdd2f7b71008802f4e74210fb",
+    "status": "passed",
+    "checkerTests": 18,
+    "documents": 79,
+    "currentFingerprints": 74,
+    "actualBrowserRenderedDiagrams": 105,
+    "rootInputRechecked": true
+  }
+}

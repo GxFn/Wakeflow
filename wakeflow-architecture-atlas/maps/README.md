@@ -1,10 +1,8 @@
 # Wakeflow 当前架构与代码图谱
 
-**2026-10-03 工作树快照，1.1.0-rc.5 候选。** 20 个公共工具、10 个能力切片；Config、锁与 status/verify 采用当前 v2 合同，不提供旧工作区格式迁移。当前 370 个手写文件中，7 个本轮完整重审、363 个按相同字节递归继承；95 Schema、95 generated、297 tests 另记范围，见[逐文件索引](./02-file-review-index.md)。当前 76 份文档包含 100 张 Mermaid 图，本轮新增 5 页、10 图。
+**2026-10-04 当前工作树，基线04769897加维护工具修改，版本1.1.0-rc.5。** 20个公共工具、10个能力切片；当前407个手写文件，5个本轮工具语义复核、402个按同字节原记录继承；95 Schema、95 generated、314 tests另记范围，见[逐文件索引](./02-file-review-index.md)。本轮82份文档、112张Mermaid图、17个专题。
 
-当前审阅目录保留起始名称 `review-2026-10-03-rc4`，最终快照记录 rc.5。前轮 `review-2026-10-03`（rc.3）和 Oct2 记录属于历史，不能把它们的执行结果计入本轮。
-
-本轮核实并转交的四项问题已修复；[当前状态与限制](./10-end-to-end-business-flow/review-evidence.md)保留前后态证据。本线程独立探针与开发线程根门分别记录：后者有持久日志及候选身份交叉核对，记录 1244 项和双宿主 smoke 通过；rc.5 原生会话仍未验证，详见[验证来源](../plans/review-2026-10-03-rc4/validation-provenance.md)。100/100 本地图已实际浏览器渲染，17 个 FigJam 重点视图完成结构/语义比对与限定范围的截图核验，见[本轮交付](../plans/review-2026-10-03-rc4/handoff.md)。
+本轮增加只读故障包页及2张图，补充明确源采集、私有封存和封闭分享投影。本机Codex main/worktree原生业务与资源回收已完成，宿主自动关联、回调hook、列表回读、Windows和远端CI仍有未验证范围；来源和执行结论见[当前验证记录](../plans/review-2026-10-04-diagnostic-bundles/validation-provenance.md)。历史rc.5运行时修复、rc.3及Oct2审阅保留原记录，不将其测试结果重命名为本轮新执行。
 
 ## 按问题选择入口
 
@@ -28,10 +26,14 @@
 | status/verify、不可用域和活动投影怎样解释 | [16 Observation](./16-observation/README.md) |
 | Schema、编译闭包、制品、smoke与发布怎样区分 | [17 合同与制品工具链](./17-artifacts-and-contracts/README.md) |
 
-## 本轮新增下钻
+## 维护工具与历史下钻
 
 | 需要厘清的边界 | 当前实现入口 |
 | --- | --- |
+| 哪些字节经过哪些门，缺证据为何不能绿色 | [维护验证回执](./17-artifacts-and-contracts/maintainer-verification.md) |
+| 实验清理、新建尝试与原生证据如何分责 | [lab/live工具边界](./17-artifacts-and-contracts/lab-and-live-tools.md) |
+| 新环境业务、合成宿主和worktree清理如何闭合 | [固定业务实验](./17-artifacts-and-contracts/lab-business-scenarios.md) |
+| 模型如何重放，CI摘要能证明什么 | [CI与模型证据](./17-artifacts-and-contracts/ci-and-model-evidence.md) |
 | 正常 reader 退出为何需要重观测，latch 失败如何结算许可 | [竞争与失败结算](./02-foundation/admission-races-and-recovery.md) |
 | 回调如何引用不可信字段，发送、落地、完成与评审怎样分开 | [回调数据与评审边界](./07-review-rework-completion/callback-trust-and-review.md) |
 | 控制字符、凭证、路径与 UUID 如何分类 | [文本隐私边界](./11-kernel/privacy-boundary.md) |
@@ -59,8 +61,12 @@
 
 发现来源摘要变化时，先读实际差异并修订结论，不能仅刷新指纹。旧L1/L2/L3阶段描述保留在历史plans中，不再作为当前实现能力判断。
 
-[逐图台账](./01-diagram-review-ledger.md) · [逐文件索引](./02-file-review-index.md) · [绘图标准](./00-agentic-diagram-standard.md) · [全部静态import数据](../plans/review-2026-10-03-rc4/import-graph.json)。
+[逐图台账](./01-diagram-review-ledger.md) · [逐文件索引](./02-file-review-index.md) · [绘图标准](./00-agentic-diagram-standard.md) · [全部静态import数据](../plans/review-2026-10-04-diagnostic-bundles/import-graph.json)。
 
-[本轮验证来源](../plans/review-2026-10-03-rc4/validation-provenance.md) · [最终快照](../plans/review-2026-10-03-rc4/source-baseline-final.json) · [FigJam 当前架构](https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=62-1743) · [回调状态图](https://www.figma.com/board/RWZG8LK8IK9DKOtV2mgKhc?node-id=76-2662)。
+[本轮验证来源](../plans/review-2026-10-04-diagnostic-bundles/validation-provenance.md) · [当前覆盖](../plans/review-2026-10-04-diagnostic-bundles/review-coverage.json) · [历史运行时修复验证](../plans/review-2026-10-03-rc4/validation-provenance.md)。
 
-[17 视图派生清单](../plans/review-2026-10-03-rc4/figjam-derivation.json)记录 160 节点、158 条边及视觉证据：8 面板使用本轮新截图，9 个未变面板继承 rc.3 已检截图。100 张本地源图的[浏览器渲染回执](../plans/evidence/current-mermaid-render.json)单独保存，旧报告不自动证明当前图通过。
+FigJam的17视图仍为上一轮派生快照，尚未同步新增维护工具图；[旧派生清单](../plans/review-2026-10-03-rc4/figjam-derivation.json)与截图范围保持原样。全部当前本地图以[浏览器渲染回执](../plans/evidence/current-mermaid-render.json)匹配的源摘要为准。
+
+本轮维护入口：[测试捕获与回执](./17-artifacts-and-contracts/test-capture-and-receipts.md)；16项聚焦、22项历史材料隔离重放、2 worker完整门1314项及双宿主smoke通过；首轮4 worker失败/中断保留。图谱110张图及独立检查通过。
+
+本轮重点：[只读故障包与独立分享](./17-artifacts-and-contracts/diagnostic-bundles.md)。记录了宿主错配与权限夹具假设的修正，以及成功摘要缺少调用证据的一致性反例。

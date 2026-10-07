@@ -1,0 +1,97 @@
+{
+  "kind": "WakeflowMaintainerCaptureValidationProvenance",
+  "observedOn": "2026-10-04",
+  "sourceVersion": "1.1.0-rc.5",
+  "sourceIdentity": {
+    "commit": "04769897ea0376112eb1c052223aa546045f5a45",
+    "dirty": true,
+    "digest": "sha256:7c9baccdf2ceb8a9b432a4750fe5f745da2a8b0e5650340e101d5c005b42240d",
+    "fileCount": 2809,
+    "lockfileDigest": "sha256:196d521fbde18c2c9345f181548a2689c268e3b1dc2a47cdb984c5b9cf43a7f5",
+    "artifacts": [
+      {
+        "path": "plugins/claude-code-wakeflow/artifact-manifest.json",
+        "manifestDigest": "sha256:fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f"
+      },
+      {
+        "path": "plugins/codex-wakeflow/artifact-manifest.json",
+        "manifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735"
+      }
+    ]
+  },
+  "newSemanticFiles": 8,
+  "handwrittenInventory": 405,
+  "runtimeSourceChanges": false,
+  "installedCacheRefreshed": false,
+  "hostRestartPerformed": false,
+  "evidence": {
+    "quick": {
+      "report": "validation/quick/report.json",
+      "status": "passed",
+      "note": "Local unsigned observation; preserved export files have been rechecked"
+    },
+    "isolated": {
+      "report": "validation/isolated/report.json",
+      "status": "passed",
+      "note": "Local unsigned observation; preserved export files have been rechecked"
+    },
+    "firstGate": {
+      "report": "validation/interrupted-gate/report.json",
+      "status": "interrupted",
+      "note": "Local unsigned observation; preserved export files have been rechecked"
+    },
+    "gate": {
+      "report": "validation/gate/report.json",
+      "status": "passed",
+      "note": "Local unsigned observation; preserved export files have been rechecked"
+    },
+    "artifact": {
+      "report": "validation/artifact/report.json",
+      "status": "passed",
+      "note": "Local unsigned observation; preserved export files have been rechecked"
+    }
+  },
+  "timingProposal": {
+    "files": 279,
+    "applied": false,
+    "source": "complete-current-input-gate"
+  },
+  "remaining": [
+    "Higher-load four-worker stability is not established; the interrupted observations remain",
+    "Native host association, callback hook and list readback gaps from the prior session are not resolved",
+    "Windows, remote CI and a new Claude login session remain unverified",
+    "Capture commands are maintainer-only; no plugin-side entrypoint or current authorization attestation"
+  ],
+  "gate": {
+    "passedTests": 1313,
+    "files": 279,
+    "concurrency": 2,
+    "durationMs": 1753415,
+    "zeroFailuresCancellationsSkipsTodos": true
+  },
+  "artifactStages": [
+    {
+      "name": "build:check",
+      "status": "passed",
+      "durationMs": 2981
+    },
+    {
+      "name": "smoke:artifacts",
+      "status": "passed",
+      "durationMs": 32402
+    }
+  ],
+  "replay": {
+    "report": "validation/capture-replay.json",
+    "assertions": 22,
+    "nativeHostAcceptance": "unverified",
+    "runtimeStateWritten": false
+  },
+  "atlas": {
+    "report": "validation/atlas-check.json",
+    "documents": 81,
+    "diagrams": 110,
+    "currentFingerprints": 76,
+    "checkerTests": 18
+  }
+}

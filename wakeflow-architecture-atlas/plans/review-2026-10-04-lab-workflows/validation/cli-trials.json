@@ -1,0 +1,160 @@
+{
+  "kind": "WakeflowLabCliTrialSummary",
+  "status": "passed",
+  "source": "actual independent CLI processes",
+  "scenarios": [
+    {
+      "scenario": "single-product",
+      "host": "codex",
+      "startedAt": "2026-10-04T07:13:02.828Z",
+      "finishedAt": "2026-10-04T07:13:43.544Z",
+      "checks": [
+        "fresh-process-artifact-identity",
+        "idle-workspace",
+        "workspace-verification",
+        "reconcile-no-op",
+        "pod-create-preview",
+        "zero-workspace-writes",
+        "synthetic-window-bindings",
+        "requirement-published-and-claimed",
+        "implementation-Alpha-accepted",
+        "demand-completed-and-archived",
+        "archive-recovery-idempotent",
+        "synthetic-window-runtime-remains-unverified",
+        "synthetic-bindings-retired",
+        "final-workspace-verification"
+      ],
+      "runner": {
+        "node": "24.19.0",
+        "platform": "darwin",
+        "modules": {
+          "lab": "sha256:1217178ab8056f64983fa3cb8523fee9a5c4e520f38568ccd968006326fc34dd",
+          "inventory": "sha256:c97bf6f0f95d3c4cb320d6f861092b64441f4153dec783037b2fae1ff212ac12",
+          "mcp-session": "sha256:6205e0ca713d265d0817024b93048f0b3c3f3c4baf20bb426e298e7ca7ab68d1",
+          "scenarios": "sha256:3a734ecab2abc5fec38a4207525368f1f6af063cb5f2922efe2ca18e9a860c66",
+          "synthetic-host": "sha256:0ad9ff397bb70620369dfaad1a3680c121e9f9acf6ec9c04dcb2f074d0bc0b12",
+          "workflow-context": "sha256:43c240e77ba55ee8002755655371aed5bdca196d12d690aa14bfc809fa144d38",
+          "workflow-demand": "sha256:3c31173829ffe65e6ceb3372c7c39cd70f3aa27ac8a8087e047f1ed767b7dfb2",
+          "workflow-target": "sha256:89d06426a7bfdffb00a447bcb04a6d64e749cd08091c50b937ad50e3786d2386",
+          "workflow-test": "sha256:d75ae8c50468073eeaf8e725a7e2df0d24581ad62866f18b19f37f618af63cf3",
+          "workflow-pod": "sha256:42610e8b8bf978f1faab61a4120704d9e2a147318259117b7c34a8032aee6c2e",
+          "workflow": "sha256:4b52e74c8f0d9c17989f8212e5491e3c96362457a0a1c726bf1e704584357e26"
+        }
+      },
+      "classification": {
+        "environment": "synthetic",
+        "transport": "generated-stdio",
+        "durability": "fsync",
+        "nativeHostAcceptance": "unverified"
+      },
+      "unknownResourceRefused": "lab-resource-drift",
+      "disposed": "passed",
+      "evidenceRetained": true
+    },
+    {
+      "scenario": "dual-product",
+      "host": "claude-code",
+      "startedAt": "2026-10-04T07:13:51.475Z",
+      "finishedAt": "2026-10-04T07:15:23.006Z",
+      "checks": [
+        "fresh-process-artifact-identity",
+        "idle-workspace",
+        "workspace-verification",
+        "reconcile-no-op",
+        "pod-create-preview",
+        "zero-workspace-writes",
+        "synthetic-window-bindings",
+        "requirement-published-and-claimed",
+        "implementation-Alpha-accepted",
+        "implementation-Beta-accepted",
+        "independent-test-contract-accepted",
+        "demand-completed-and-archived",
+        "archive-recovery-idempotent",
+        "synthetic-window-runtime-remains-unverified",
+        "synthetic-bindings-retired",
+        "final-workspace-verification"
+      ],
+      "runner": {
+        "node": "24.19.0",
+        "platform": "darwin",
+        "modules": {
+          "lab": "sha256:1217178ab8056f64983fa3cb8523fee9a5c4e520f38568ccd968006326fc34dd",
+          "inventory": "sha256:c97bf6f0f95d3c4cb320d6f861092b64441f4153dec783037b2fae1ff212ac12",
+          "mcp-session": "sha256:6205e0ca713d265d0817024b93048f0b3c3f3c4baf20bb426e298e7ca7ab68d1",
+          "scenarios": "sha256:3a734ecab2abc5fec38a4207525368f1f6af063cb5f2922efe2ca18e9a860c66",
+          "synthetic-host": "sha256:0ad9ff397bb70620369dfaad1a3680c121e9f9acf6ec9c04dcb2f074d0bc0b12",
+          "workflow-context": "sha256:43c240e77ba55ee8002755655371aed5bdca196d12d690aa14bfc809fa144d38",
+          "workflow-demand": "sha256:3c31173829ffe65e6ceb3372c7c39cd70f3aa27ac8a8087e047f1ed767b7dfb2",
+          "workflow-target": "sha256:89d06426a7bfdffb00a447bcb04a6d64e749cd08091c50b937ad50e3786d2386",
+          "workflow-test": "sha256:d75ae8c50468073eeaf8e725a7e2df0d24581ad62866f18b19f37f618af63cf3",
+          "workflow-pod": "sha256:42610e8b8bf978f1faab61a4120704d9e2a147318259117b7c34a8032aee6c2e",
+          "workflow": "sha256:4b52e74c8f0d9c17989f8212e5491e3c96362457a0a1c726bf1e704584357e26"
+        }
+      },
+      "classification": {
+        "environment": "synthetic",
+        "transport": "generated-stdio",
+        "durability": "fsync",
+        "nativeHostAcceptance": "unverified"
+      },
+      "unknownResourceRefused": "lab-resource-drift",
+      "disposed": "passed",
+      "evidenceRetained": true
+    },
+    {
+      "scenario": "worktree",
+      "host": "codex",
+      "startedAt": "2026-10-04T07:15:31.508Z",
+      "finishedAt": "2026-10-04T07:17:17.092Z",
+      "checks": [
+        "fresh-process-artifact-identity",
+        "idle-workspace",
+        "workspace-verification",
+        "reconcile-no-op",
+        "pod-create-preview",
+        "zero-workspace-writes",
+        "test-worktree-attachments-verified",
+        "git-worktrees-registered-and-pod-ready",
+        "synthetic-window-bindings",
+        "requirement-published-and-claimed",
+        "implementation-Alpha-accepted",
+        "implementation-Beta-accepted",
+        "independent-test-contract-accepted",
+        "demand-completed-and-archived",
+        "archive-recovery-idempotent",
+        "synthetic-window-runtime-remains-unverified",
+        "pod-two-stage-close",
+        "owned-worktrees-and-branches-removed",
+        "final-workspace-verification"
+      ],
+      "runner": {
+        "node": "24.19.0",
+        "platform": "darwin",
+        "modules": {
+          "lab": "sha256:1217178ab8056f64983fa3cb8523fee9a5c4e520f38568ccd968006326fc34dd",
+          "inventory": "sha256:c97bf6f0f95d3c4cb320d6f861092b64441f4153dec783037b2fae1ff212ac12",
+          "mcp-session": "sha256:6205e0ca713d265d0817024b93048f0b3c3f3c4baf20bb426e298e7ca7ab68d1",
+          "scenarios": "sha256:3a734ecab2abc5fec38a4207525368f1f6af063cb5f2922efe2ca18e9a860c66",
+          "synthetic-host": "sha256:0ad9ff397bb70620369dfaad1a3680c121e9f9acf6ec9c04dcb2f074d0bc0b12",
+          "workflow-context": "sha256:43c240e77ba55ee8002755655371aed5bdca196d12d690aa14bfc809fa144d38",
+          "workflow-demand": "sha256:3c31173829ffe65e6ceb3372c7c39cd70f3aa27ac8a8087e047f1ed767b7dfb2",
+          "workflow-target": "sha256:89d06426a7bfdffb00a447bcb04a6d64e749cd08091c50b937ad50e3786d2386",
+          "workflow-test": "sha256:d75ae8c50468073eeaf8e725a7e2df0d24581ad62866f18b19f37f618af63cf3",
+          "workflow-pod": "sha256:42610e8b8bf978f1faab61a4120704d9e2a147318259117b7c34a8032aee6c2e",
+          "workflow": "sha256:4b52e74c8f0d9c17989f8212e5491e3c96362457a0a1c726bf1e704584357e26"
+        }
+      },
+      "classification": {
+        "environment": "synthetic",
+        "transport": "generated-stdio",
+        "durability": "fsync",
+        "nativeHostAcceptance": "unverified"
+      },
+      "unknownResourceRefused": "lab-resource-drift",
+      "disposed": "passed",
+      "evidenceRetained": true
+    }
+  ],
+  "nativeHostAcceptance": "unverified",
+  "scopeLimit": "Each execution carries its compiled module digests. These are not a claim that all trials used the later final source input; the final gate separately covers the final bytes."
+}

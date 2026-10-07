@@ -1,0 +1,46 @@
+{
+  "kind": "WakeflowAtlasMapReconciliation",
+  "method": "先完成21条工具语义记录、修订5页过时结论及新增3页，再计算来源指纹；不改写历史执行记录。",
+  "documents": [
+    {
+      "file": "maps/02-file-review-index.md",
+      "digest": "sha256:159d45473c078fb1614c180066a24a166f9baa3378650c04c8f9f45476da0747",
+      "inputFiles": 913
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/README.md",
+      "digest": "sha256:3038500a330aba4a105385b53eb8a6e5ce0c41872b200465ccac51928b9bd72a",
+      "inputFiles": 40
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/file-dependencies.md",
+      "digest": "sha256:ad80995a09b611bd5bf455bb41620c14a78a1dcd0dd18ff77881a08a311eaba3",
+      "inputFiles": 78
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/installation-and-runtime-identity.md",
+      "digest": "sha256:6cea54dd6226f6b43b74af7da257d63c5dd19f3154f66c5f2b3cb2230a4f9c0e",
+      "inputFiles": 15
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/schema-and-validation.md",
+      "digest": "sha256:a52fab0b4725009e9b333da09bfe5a94cf49e57b45490617868e70f21a093ff7",
+      "inputFiles": 239
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/maintainer-verification.md",
+      "digest": "sha256:900c3beac4c1303b3ac05f877ebca176bffb5e2fba0f3bfd5cf4444aaf639ba9",
+      "inputFiles": 16
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/lab-and-live-tools.md",
+      "digest": "sha256:660c50a75ab26c0f4c373bb189e58c866c236cd70fa55179cd9b615236ebbf0d",
+      "inputFiles": 17
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/ci-and-model-evidence.md",
+      "digest": "sha256:5789fc0a9ada96660bca412fb07bce78e68c96642f75cc0f1b0a72ae893442e7",
+      "inputFiles": 13
+    }
+  ]
+}

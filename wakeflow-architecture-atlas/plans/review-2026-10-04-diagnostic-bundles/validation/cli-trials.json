@@ -1,0 +1,57 @@
+{
+  "kind": "WakeflowDiagnosticCliTrials",
+  "schemaVersion": 1,
+  "status": "passed-with-preserved-harness-corrections",
+  "existingWorkspace": {
+    "source": "read-only-new-generated-stdio",
+    "explicitHookFiles": 2,
+    "wholeTreeUnchangedAtCapture": true,
+    "nativeHostAcceptance": "unverified"
+  },
+  "scenarios": [
+    {
+      "scenario": "codex-observer-on-codex-lab",
+      "diagnosis": "passed"
+    },
+    {
+      "scenario": "claude-observer-on-claude-lab",
+      "diagnosis": "passed"
+    },
+    {
+      "scenario": "claude-observer-on-codex-lab",
+      "diagnosis": "failed"
+    },
+    {
+      "scenario": "corrupt-config-exact-bytes",
+      "diagnosis": "unavailable"
+    },
+    {
+      "scenario": "extra-private-file-0600",
+      "diagnosis": "passed"
+    },
+    {
+      "scenario": "explicit-private-file-mode-drift-0644",
+      "diagnosis": "failed"
+    }
+  ],
+  "observedTreesUnchanged": true,
+  "modeDriftWasNotRepaired": true,
+  "cleanup": "two-owned-labs-and-container-removed",
+  "offlineInspectionsAfterRemoval": 7,
+  "forgedVerifiedClaim": "refused-with-recomputed-checksum",
+  "newChats": 0,
+  "uploads": 0,
+  "collectorWorkspaceWrites": 0,
+  "setup": "Explicit initialization and controlled corruption only in fresh disposable roots",
+  "harnessCorrections": [
+    {
+      "firstExpectation": "Claude observer on a Codex-initialized workspace would be healthy",
+      "observed": "Host-specific settings/layout gates failed; matching host fixtures passed"
+    },
+    {
+      "firstExpectation": "Any extra file below the private root would fail",
+      "observed": "0600 file passed; explicit chmod 0644 produced the expected drift failure",
+      "testFix": "Test fixtures now explicitly set both modes instead of depending on umask"
+    }
+  ]
+}

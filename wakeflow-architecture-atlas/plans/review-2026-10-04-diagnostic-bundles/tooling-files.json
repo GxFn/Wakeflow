@@ -1,0 +1,143 @@
+[
+  {
+    "path": "tooling/cli.ts",
+    "sha256": "be33af2499d98484686f57af31813218c34ed59472096d3e37afd881a0503c80",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文复核诊断实现、共享调用与文件/摘要消费者；核对19项聚焦、真实CLI正反路径、权限夹具和摘要一致性修前/修后反例。I/O同字节，按新增消费者补审。",
+    "responsibility": "维护CLI新增只读诊断包的采集、离线复验和独立导出。",
+    "branches": [
+      "collect只接受root/candidate及显式files；inspect在id与input之间互斥；export只接受id。",
+      "路径先按维护仓库解析，文件相对路径与数量由bundle owner准入；不派生宿主项目或自动选候选。",
+      "既有verify/lab/live/capture/CI分支保留，help补齐导入回执及诊断包边界。"
+    ],
+    "effects": [
+      "委托维护owner，不执行宿主动作、修复、上传或发布。"
+    ],
+    "consumers": [
+      "package.json"
+    ],
+    "tests": [
+      "tests/tooling/diagnostics/bundle.test.ts#runToolingCli",
+      "tests/tooling/diagnostics/workspace.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "只支持有开发仓库的维护者；inspect的matched是完整性，不是工作区健康。"
+    ]
+  },
+  {
+    "path": "tooling/diagnostics/workspace.ts",
+    "sha256": "b6b94b27933b70a08332ba8760bf8f6d568808524adb2116e79946ee551ea432",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文复核诊断实现、共享调用与文件/摘要消费者；核对19项聚焦、真实CLI正反路径、权限夹具和摘要一致性修前/修后反例。I/O同字节，按新增消费者补审。",
+    "responsibility": "共享原有只读诊断过程，向私有采集器保留投影SDK观察与已核验候选。",
+    "branches": [
+      "diagnoseWorkspace仍只调用status/verify，前后候选、配置、统计与截断判定保持。",
+      "inspectWorkspaceWithObservations返回同一次调用的diagnosis和部分观察；原inspectWorkspace仍只返回原诊断面。",
+      "失败时保留此前已核验的artifact信息，不能据此断言MCP身份或原生激活。"
+    ],
+    "effects": [
+      "新建并关闭生成stdio观察器；观察工作区，不写业务状态。"
+    ],
+    "consumers": [
+      "tooling/cli.ts",
+      "tooling/diagnostics/bundle.ts"
+    ],
+    "tests": [
+      "tests/tooling/diagnostics/workspace.test.ts#inspectWorkspace",
+      "tests/tooling/diagnostics/bundle.test.ts#collectDiagnosticBundle"
+    ],
+    "limits": [
+      "SDK投影不是原始传输或stderr；既有本地呈现与新分享投影分别拥有过滤规则。"
+    ]
+  },
+  {
+    "path": "tooling/capture/io.ts",
+    "sha256": "b6e47462b70058700014ca4a1abcb47c48b5037e22df0af95041994fb1aeab30",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文复核诊断实现、共享调用与文件/摘要消费者；核对19项聚焦、真实CLI正反路径、权限夹具和摘要一致性修前/修后反例。I/O同字节，按新增消费者补审。",
+    "responsibility": "复核通用有界文件/JSON/独占写助手在新增诊断消费者中的边界，文件字节未改。",
+    "branches": [
+      "读前固定常规单链接叶节点，句柄/路径/size/mtime/ctime复验，初始size加1约束分配。",
+      "diagnostic原始源副本使用bytes而不调用decodeJson，损坏JSON和非UTF8保持原字节。",
+      "只有自有request/probe/manifest/summary按严格UTF8、无重复键JSON解码；wx及fsync拒绝覆盖部分记录。"
+    ],
+    "effects": [
+      "按明确位置读或独占写，不拥有业务状态。"
+    ],
+    "consumers": [
+      "tooling/capture/plan.ts",
+      "tooling/capture/run.ts",
+      "tooling/live/receipt.ts",
+      "tooling/diagnostics/bundle.ts",
+      "tooling/diagnostics/public-summary.ts"
+    ],
+    "tests": [
+      "tests/tooling/capture/capture.test.ts#readJson",
+      "tests/tooling/capture/capture.test.ts#writeExclusiveJson",
+      "tests/tooling/diagnostics/bundle.test.ts#collectDiagnosticBundle"
+    ],
+    "limits": [
+      "不是运行时RootedFilesystem，不抵抗同用户恶意竞争；离线副本验证字节而非原副本inode。"
+    ]
+  },
+  {
+    "path": "tooling/diagnostics/bundle.ts",
+    "sha256": "0c618e3a7f4917002b66e6a6aaeb48c2af54e4b0a68a61b178bbec0f3f5a851d",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文复核诊断实现、共享调用与文件/摘要消费者；核对19项聚焦、真实CLI正反路径、权限夹具和摘要一致性修前/修后反例。I/O同字节，按新增消费者补审。",
+    "responsibility": "明确选取源文件及一次只读观察的私有故障包所有者。",
+    "branches": [
+      "新目录必须位于观察工作区和候选之外；自动选配置/manifest，最多32附件，禁止遍历/链接/硬链接。",
+      "每源4MiB、合计32MiB，观察8MiB；源读取失败、预算和前后变化保留独立字段，不截断成成功。",
+      "先写请求和编号副本，复用一次诊断并复查选定源，最后写自摘要manifest和seal；部分写入不补成功。",
+      "离线读取核对精确成员、引用、摘要、调用顺序和状态；完整封存的失败诊断仍可复验。",
+      "通过诊断必须有两次成功观察；校验摘要不授予宿主真实性或当前授权。"
+    ],
+    "effects": [
+      "只在维护仓库私有.build写材料；观察源，不修复或自动清理工作区。"
+    ],
+    "consumers": [
+      "tooling/cli.ts",
+      "tooling/diagnostics/public-summary.ts"
+    ],
+    "tests": [
+      "tests/tooling/diagnostics/bundle.test.ts#collectDiagnosticBundle",
+      "tests/tooling/diagnostics/bundle.test.ts#readDiagnosticBundle",
+      "tests/tooling/diagnostics/bundle.test.ts#inspectDiagnosticBundle"
+    ],
+    "limits": [
+      "coherent仅是选定源的前后观察，不是全树事务或期间不变证明；不自动采集原生宿主数据库/会话/未选中的日志。"
+    ]
+  },
+  {
+    "path": "tooling/diagnostics/public-summary.ts",
+    "sha256": "a2995ba536c012e2c45ef907777a05d4ddc521437fd84224389522eb420cab1b",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文复核诊断实现、共享调用与文件/摘要消费者；核对19项聚焦、真实CLI正反路径、权限夹具和摘要一致性修前/修后反例。I/O同字节，按新增消费者补审。",
+    "responsibility": "从私有包重建封闭分享摘要，并验证公开文件的一致性。",
+    "branches": [
+      "只输出固定别名、来源、门类别、布尔、计数、摘要和严格时间；不复制任意版本后缀、错误文本、owner、路径、标识或源字节。",
+      "未知门名分类other，细节留私有；候选摘要明确命名，observer匹配和原生未验证分开。",
+      "严格JSON、闭合Schema、自摘要及交叉计数共同准入；通过需要两次成功调用、候选信息与两次观察时间完整。",
+      "实际旧摘要重算checksum且置成功调用为0，修前matched、修后unavailable；不将checksum当来源认证。"
+    ],
+    "effects": [
+      "新建单独本地JSON；不上传，不修改私有包或业务状态。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/diagnostics/bundle.test.ts#exportDiagnosticSummary",
+      "tests/tooling/diagnostics/bundle.test.ts#inspectDiagnosticSummary"
+    ],
+    "limits": [
+      "摘要是未签名本地观察；匹配不证明原生效果或全环境正确。"
+    ]
+  }
+]

@@ -1,0 +1,73 @@
+{
+  "kind": "WakeflowAtlasValidationProvenance",
+  "reviewedOn": "2026-10-04",
+  "sourceInput": "sha256:75484da2fcbed378ecaf6775ba32764c67b2632cd20cf40d3f700ba4c0d6ab02",
+  "sourceInputFileCount": 2798,
+  "sourceCommit": "04769897ea0376112eb1c052223aa546045f5a45",
+  "sourceVersion": "1.1.0-rc.5",
+  "finalGate": {
+    "status": "passed",
+    "concurrency": 4,
+    "tests": 1297,
+    "testFiles": 276,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "testDurationMs": 801237.547625,
+    "commandDurationMs": 816483,
+    "report": "validation/gate/report.json",
+    "sha256": "89f8c5babbe6f2d7db071a9aa32ce4cb91ae377762539d0845c9dc5e0394d073"
+  },
+  "artifact": {
+    "status": "passed",
+    "buildCheckMs": 1194,
+    "dualHostSmokeMs": 20481,
+    "report": "validation/artifact/report.json",
+    "sha256": "028285bdbee4f1bbff62df8098ee3734541b72caffb92618c1d3e29af078b2a8"
+  },
+  "atlas": {
+    "status": "passed",
+    "checkerTests": 18,
+    "diagrams": 108,
+    "report": "validation/atlas-check.json",
+    "sha256": "b1a7b1944c6f4b1828ffc357a7ba66e702d6f898121551d98681522232eba90b",
+    "nativeFollowupCheck": "validation/atlas-native-check.json"
+  },
+  "focused": [
+    {
+      "tests": 15,
+      "scope": "resource and workspace diagnostics before the runner fix",
+      "report": "validation/quick/report.json"
+    },
+    {
+      "tests": 27,
+      "scope": "final actual dispatch, recording, cancellation and verification",
+      "report": "validation/scheduling-quick/report.json"
+    }
+  ],
+  "priorInterruptedGates": [
+    "validation/interrupted-gate.json",
+    "validation/interrupted-cli-order-gate.json"
+  ],
+  "actualCliTrials": "validation/cli-trials.json",
+  "native": {
+    "newEnvironmentInitialized": true,
+    "authorizedChats": 10,
+    "createdChats": 10,
+    "outerProjects": 1,
+    "roleProjects": 0,
+    "projectRegistration": "canonical outer project matched; all ten UI memberships confirmed by human",
+    "businessAcceptance": "scoped main Codex fixture completed and archived",
+    "worktreeAcceptance": "scoped Codex worktree fixture completed and archived; harness retry verified",
+    "cleanup": "ten archive acknowledgements and bindings retired; two checkouts and temporary branches removed; two verified bundles retained",
+    "archiveListReadback": 9,
+    "finalArchiveListOmission": 1,
+    "windowToMcpAutomaticAssociation": "unverified",
+    "callbackHookLanding": "not observed",
+    "evidence": "validation/native-scenarios.json"
+  },
+  "remoteCi": "unverified",
+  "windows": "unverified",
+  "scope": "Local macOS source gate, generated artifacts, synthetic lab scenarios, actual Codex main/worktree business flows with human project membership confirmation, and atlas. Host evidence limits remain explicit; no release or cache refresh."
+}

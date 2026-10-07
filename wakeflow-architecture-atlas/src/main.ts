@@ -76,7 +76,7 @@ const rawModules = {
   ...import.meta.glob("../maps/**/*.md", {eager: true, import: "default", query: "?raw"}),
   ...import.meta.glob("../plans/**/*.md", {eager: true, import: "default", query: "?raw"}),
 } as Record<string, string>;
-const evidenceAssets = import.meta.glob(["../plans/**/*.json", "../plans/evidence/*.png", "../plans/review-*/*.mjs"], {
+const evidenceAssets = import.meta.glob(["../plans/**/*.json", "../plans/evidence/*.png", "../plans/review-*/*.jpg", "../plans/review-*/*.mjs"], {
   eager: true, import: "default", query: "?url&no-inline",
 }) as Record<string, string>;
 const currentReviewSnapshot = parseDocument(rawModules["../maps/02-file-review-index.md"] ?? "").frontmatter.reviewSnapshot;
@@ -274,9 +274,9 @@ function renderHome(): void {
   article.innerHTML = DOMPurify.sanitize(`
     <section class="home-intro">
       <p class="eyebrow">本地可重建阅读层</p>
-      <h1>Wakeflow TypeScript 流程图集</h1>
+      <h1>Wakeflow 架构与代码图谱</h1>
       <p class="home-lead">从总体架构下钻到文件、符号、状态与证据。Markdown和Mermaid是唯一文档正典；本页面只负责导航、缩放与阅读。</p>
-      <div class="home-notice" role="note">核验基线 ${documentById.get("01-overall-architecture/README")?.frontmatter.baselineCommit?.slice(0, 7) ?? "未记录"}，包含已审阅的未提交工作树。源码审阅、测试运行、图形渲染与真实宿主会话分别记录；页面标签不代表需求已验收或版本已发布。</div>
+      <div class="home-notice" role="note">核验基线 ${documentById.get("02-file-review-index")?.frontmatter.baselineCommit?.slice(0, 8) ?? "未记录"}，包含已审阅的未提交工作树。源码审阅、测试运行、图形渲染与真实宿主会话分别记录；页面标签不代表需求已验收或版本已发布。</div>
     </section>
     <section class="home-grid" aria-label="流程图入口">
       ${homeCard("业务主线", "从需求包到归档、继续与 Pod 关闭。", "10-end-to-end-business-flow/README")}
@@ -284,7 +284,10 @@ function renderHome(): void {
       ${homeCard("逐文件审阅", "每个手写文件的职责、分支、效果、摘要与证据记录。", "02-file-review-index")}
       ${homeCard("修复与限制", "可复现的分支问题、实际限制与验证程度。", "10-end-to-end-business-flow/review-evidence")}
       ${homeCard("公共 MCP 调用", "登记表、固定宿主装配与真实能力执行器。", "01-overall-architecture/runtime-call-flow")}
-      ${homeCard("核验快照", "代码、场景、图谱和未运行验证各有范围。", "01-overall-architecture/review-evidence")}
+      ${homeCard("核验快照", "代码、场景、图谱和未运行验证各有范围。", currentReviewSnapshot ? `${currentReviewSnapshot}/validation-provenance` : "01-overall-architecture/review-evidence")}
+      ${homeCard("维护验证", "输入指纹、受管进程、原生测试事件与回执结算。", "17-artifacts-and-contracts/maintainer-verification")}
+      ${homeCard("实验与原生辅助", "合成资源清理、单次尝试与导入观察的证据边界。", "17-artifacts-and-contracts/lab-and-live-tools")}
+      ${homeCard("CI与模型证据", "有界命令序列、受限报告及下载后的字节核验。", "17-artifacts-and-contracts/ci-and-model-evidence")}
       ${homeCard("需求包与看板", "确认摘要、不可变记录、认领状态与恢复。", "13-requirement/README")}
       ${homeCard("配置与工作区", "Config、资源矩阵与维护事务。", "03-configuration-workspace/README")}
       ${homeCard("执行端点", "宿主观察、绑定代际和 worktree 回执。", "12-endpoint/README")}

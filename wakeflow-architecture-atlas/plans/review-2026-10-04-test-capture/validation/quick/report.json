@@ -1,0 +1,130 @@
+{
+  "kind": "WakeflowCiVerification",
+  "schemaVersion": 1,
+  "source": "unsigned-local-verification-receipt",
+  "status": "passed",
+  "profile": "quick",
+  "startedAt": "2026-10-04T12:59:27.953Z",
+  "finishedAt": "2026-10-04T13:00:55.711Z",
+  "receiptDigest": "sha256:3d819b365c99cf802f23be7cdaf46b7094b81b4ba2c6389d919ad7b156177822",
+  "input": {
+    "commit": "04769897ea0376112eb1c052223aa546045f5a45",
+    "digest": "sha256:7c9baccdf2ceb8a9b432a4750fe5f745da2a8b0e5650340e101d5c005b42240d",
+    "lockfileDigest": "sha256:196d521fbde18c2c9345f181548a2689c268e3b1dc2a47cdb984c5b9cf43a7f5"
+  },
+  "environment": {
+    "node": "24.19.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "inputsUnchanged": true,
+  "stages": [
+    {
+      "name": "typecheck",
+      "status": "passed",
+      "durationMs": 1238,
+      "exitCode": 0
+    },
+    {
+      "name": "check:architecture",
+      "status": "passed",
+      "durationMs": 5203,
+      "exitCode": 0
+    },
+    {
+      "name": "lint",
+      "status": "passed",
+      "durationMs": 2235,
+      "exitCode": 0
+    },
+    {
+      "name": "format:check",
+      "status": "passed",
+      "durationMs": 555,
+      "exitCode": 0
+    },
+    {
+      "name": "check:unused",
+      "status": "passed",
+      "durationMs": 4153,
+      "exitCode": 0
+    },
+    {
+      "name": "focused-tests",
+      "status": "passed",
+      "durationMs": 73412,
+      "exitCode": 0
+    }
+  ],
+  "tests": {
+    "complete": true,
+    "passed": true,
+    "counts": {
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "suites": 0
+    },
+    "selectedFiles": 3,
+    "files": [
+      {
+        "file": "tests/tooling/capture/capture.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 13,
+          "passed": 13,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/capture/contracts.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/live/receipt.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      }
+    ]
+  },
+  "modelTests": {
+    "seed": 20261003,
+    "numRuns": 200,
+    "replayRequested": false
+  },
+  "artifacts": [
+    {
+      "artifact": "plugins/claude-code-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f"
+    },
+    {
+      "artifact": "plugins/codex-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735"
+    }
+  ],
+  "nativeHostAcceptance": "unverified"
+}

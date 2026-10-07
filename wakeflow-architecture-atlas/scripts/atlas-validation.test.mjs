@@ -17,6 +17,15 @@ test('AST ignores fake imports in text and comments, preserves real imports and 
  const r=parseSource('// from "./fake.js"\nconst text="from fake"; import {f} from "./real.js"; export function start() {} class Store { async apply() {} }','sample.ts');
  assert.deepEqual(r.imports,['./real.js']);assert(r.symbols.has('start'));assert(r.symbols.has('Store.apply'));assert(!r.symbols.has('absent'));
 });
+test('具名默认导出函数和类表达式保留真实符号，匿名默认值不制造default符号',()=>{
+ const generator=parseSource('export default async function* testEventReporter(source: AsyncIterable<unknown>) { for await (const event of source) yield event; }','reporter.ts');
+ assert(generator.symbols.has('testEventReporter'));
+ const definition=parseSource('export default class RuntimeHandle { close() {} }','handle.ts');
+ assert(definition.symbols.has('RuntimeHandle'));assert(definition.symbols.has('RuntimeHandle.close'));
+ const local=parseSource('const callback = function localHandler() {}; const text="function invented() {}"; // function fake() {}','local.ts');
+ assert(local.symbols.has('callback'));assert(local.symbols.has('localHandler'));assert(!local.symbols.has('invented'));assert(!local.symbols.has('fake'));
+ assert(!parseSource('export default function() { return 1; }','anonymous.ts').symbols.has('default'));
+});
 test('制品工具的源码符号与直接导入也必须从真实TS核验', t => {
  const base=fs.mkdtempSync(path.join(os.tmpdir(),'atlas-tooling-anchor-'));
  t.after(()=>fs.rmSync(base,{recursive:true,force:true}));

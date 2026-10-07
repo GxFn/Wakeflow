@@ -1,0 +1,153 @@
+{
+  "kind": "WakeflowScopedNativeScenarioEvidence",
+  "schemaVersion": 1,
+  "reviewedOn": "2026-10-04",
+  "platform": "macOS",
+  "source": "actual Codex project chat tools and native Wakeflow MCP, independently checked against hooks, files, Git and archive bytes",
+  "sourceCommit": "04769897ea0376112eb1c052223aa546045f5a45",
+  "sourceInput": "sha256:75484da2fcbed378ecaf6775ba32764c67b2632cd20cf40d3f700ba4c0d6ab02",
+  "sourceInputFiles": 2798,
+  "artifact": {
+    "version": "1.1.0-rc.5",
+    "codexManifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735"
+  },
+  "startup": {
+    "outerProjects": 1,
+    "roleProjects": 0,
+    "createdChats": 10,
+    "actualSessionStarts": 10,
+    "reportedNativeRuntimesMatching": 10,
+    "membershipSource": "human UI confirmations; active thread-list readback unavailable",
+    "mainLiveConsistency": {
+      "matched": 35,
+      "failed": 0,
+      "missing": 0,
+      "nativeHostAcceptance": "unverified"
+    },
+    "manualWorktreeBootstrap": {
+      "matchedChecks": 32,
+      "testAttachments": "receipt-missing before product registration; receipt-present with both assigned checkouts before Test creation"
+    },
+    "liveHelperWorktreeScenario": "not implemented; worktree run used explicit authorized host actions"
+  },
+  "main": {
+    "outcome": "completed-and-archived",
+    "controlledImplementationRework": 1,
+    "independentAlphaBefore": {
+      "passed": 6,
+      "failed": 8
+    },
+    "independentAlphaAfter": {
+      "passed": 14,
+      "failed": 0
+    },
+    "independentBetaPassed": 5,
+    "independentTestCases": [
+      13,
+      5,
+      4
+    ],
+    "testAttempts": 1,
+    "completionGates": 9,
+    "archiveFiles": 51,
+    "archiveBytes": 225118,
+    "archiveDigestsIndependentlyMatched": true,
+    "deliveryIndeterminateRecovery": {
+      "missingReceiptDigestKeptIndeterminate": true,
+      "acceptedExistingReceiptWithoutResend": true
+    }
+  },
+  "worktree": {
+    "outcome": "completed-and-archived",
+    "independentControllerCases": {
+      "alpha": 14,
+      "beta": 12,
+      "composition": 8
+    },
+    "independentTestCases": [
+      14,
+      10,
+      12
+    ],
+    "testAttempts": 2,
+    "harnessFailure": {
+      "classification": "harness-defect",
+      "phase": "before product import",
+      "cause": "pinned transient event-sourcing snapshot retired after later commits",
+      "repair": "use frozen task package, native observations and immutable evidence; preserve original assertions",
+      "retryStepIds": [
+        "ts-2",
+        "ts-3"
+      ],
+      "passingFirstStepPreserved": true,
+      "firstAttemptFilesPreserved": 11
+    },
+    "completionGates": 9,
+    "archiveFiles": 56,
+    "archiveBytes": 374227,
+    "archiveDigestsIndependentlyMatched": true
+  },
+  "additionalIsolationCheck": {
+    "seed": 4296,
+    "cases": 128,
+    "outcome": "passed",
+    "checks": [
+      "invalid-value insertion invariance",
+      "extrema against sorted samples",
+      "main three-field result versus worktree five-field result",
+      "exact format extension"
+    ]
+  },
+  "transport": {
+    "targetDeliveries": 8,
+    "targetCallbacksWithHostSuccessReturns": 8,
+    "targetStopsConfirmedBeforeReview": 8,
+    "duplicatePermitSends": 0,
+    "callbackHookLanding": "not observed; retained as pending/unlanded"
+  },
+  "cleanup": {
+    "archiveMutationsAcknowledged": 10,
+    "archiveListReadback": 9,
+    "archiveListOmitted": 1,
+    "finalArchiveReconciliation": "idempotent repeat returned archived:true; direct read notLoaded, list still omitted; final post-state based on explicit archive-tool return",
+    "decommissionedBindings": 10,
+    "decommissionVerification": "manual-host-gate with actual host evidence",
+    "worktreesRemovedWithoutForce": 2,
+    "temporaryBranchesAbandonedAndRemoved": 2,
+    "gitBundlesVerified": 2,
+    "mainHeadsFilesStatusWorktreesBranchesRestored": true,
+    "podClosePhases": 2,
+    "worktreeReceiptsRetired": 2,
+    "activeDemands": 0,
+    "activeClaims": 0,
+    "activeBindings": 0,
+    "archivedDemands": 2,
+    "remainingPods": 1,
+    "workspaceVerify": {
+      "fail": 0,
+      "pass": 15,
+      "unavailable": 0
+    },
+    "doctor": {
+      "status": "passed",
+      "source": "new-generated-stdio-observer",
+      "nativeHostAcceptance": "unverified"
+    }
+  },
+  "limitations": {
+    "windowToMcpAutomaticAssociation": "unverified",
+    "preRetirementWorkspaceVerify": {
+      "pass": 14,
+      "fail": 0,
+      "unavailable": 1,
+      "unverifiedBoundWindows": 10
+    },
+    "postRetirementGreenMeaning": "empty runtime after authorized retirement; does not verify prior window-to-MCP association or callback hooks",
+    "activeThreadListMembership": "unavailable; human UI confirmed all ten",
+    "finalArchivedListOmission": 1,
+    "remoteCi": "not run",
+    "nativeWindows": "not run",
+    "newNativeClaudeSession": "not run"
+  },
+  "scope": "Two local Codex fixture business flows and resource lifecycle; no runtime/source implementation change, version bump, cache refresh, source commit, push, tag or release in this native follow-up."
+}

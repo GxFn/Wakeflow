@@ -1,0 +1,21 @@
+{
+  "kind": "WakeflowInterruptedGateObservation",
+  "status": "interrupted",
+  "profile": "gate",
+  "concurrency": 2,
+  "startedAt": "2026-10-04T07:23:49.131Z",
+  "finishedAt": "2026-10-04T07:48:20.143Z",
+  "input": "sha256:8ac010502650374718872b7dc50c98f8217bddbad27289049c77cb0d0d5a91ff",
+  "inputFileCount": 2798,
+  "stages": [
+    {
+      "name": "gate",
+      "status": "interrupted",
+      "reason": "cancelled",
+      "exitCode": null,
+      "durationMs": 1469978
+    }
+  ],
+  "reason": "2 workers and newly added long integration scenarios would exceed the fixed 30-minute outer budget; explicitly interrupted, retained, then rerun the unchanged full selection with 4 workers.",
+  "claim": "not a passing gate"
+}

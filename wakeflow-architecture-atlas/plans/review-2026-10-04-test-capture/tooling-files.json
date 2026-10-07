@@ -1,0 +1,223 @@
+[
+  {
+    "path": "tooling/cli.ts",
+    "sha256": "ae97fb7af9af1e8555d4a23579ff6bc84c79049ce185f6079f5f3ef38e5ea429",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文读取当前实现、调用及消费者，核对实际断言、16项聚焦执行和隔离CLI历史材料重放；不将导入一致性升级为宿主授权。",
+    "responsibility": "维护命令的封闭参数准入与分发；新增capture三入口和live receipt。",
+    "branches": [
+      "capture prepare只接受input；run必须有id与step；inspect不接受额外字段。",
+      "receipt要求request和input；CaptureError只投影固定code，保留其他命令及取消转发。"
+    ],
+    "effects": [
+      "委托各维护owner，输出有限摘要；不创建原生聊天或写Wakeflow权威。"
+    ],
+    "consumers": [
+      "package.json"
+    ],
+    "tests": [
+      "tests/tooling/capture/capture.test.ts#runToolingCli",
+      "tests/tooling/live/receipt.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "合法capture命令具有用户指定的进程效果，不属于只读诊断。"
+    ]
+  },
+  {
+    "path": "tooling/capture/io.ts",
+    "sha256": "b6e47462b70058700014ca4a1abcb47c48b5037e22df0af95041994fb1aeab30",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文读取当前实现、调用及消费者，核对实际断言、16项聚焦执行和隔离CLI历史材料重放；不将导入一致性升级为宿主授权。",
+    "responsibility": "严格JSON、固定错误、规范摘要和有界单链接文件观察。",
+    "branches": [
+      "重复键、注释、尾逗号和无效UTF8拒绝；路径分量与文本长度受限。",
+      "O_NOFOLLOW固定叶句柄，读前后比较设备/inode/size/mtime/ctime；按初始长度加1有界读取。",
+      "wx加文件及父目录fsync创建记录，部分残留不覆盖；规范摘要与原始文件摘要分开。"
+    ],
+    "effects": [
+      "只读文件或显式独占写私有记录。"
+    ],
+    "consumers": [
+      "tooling/capture/model.ts",
+      "tooling/capture/contracts.ts",
+      "tooling/capture/observations.ts",
+      "tooling/capture/plan.ts",
+      "tooling/capture/run.ts",
+      "tooling/live/receipt.ts"
+    ],
+    "tests": [
+      "tests/tooling/capture/capture.test.ts#readJson",
+      "tests/tooling/capture/capture.test.ts#writeExclusiveJson",
+      "tests/tooling/live/receipt.test.ts#captureHostReceipt"
+    ],
+    "limits": [
+      "不是运行时RootedFilesystem；不宣称抵抗同用户主动路径竞争，目录检查复用维护清单工具。"
+    ]
+  },
+  {
+    "path": "tooling/capture/model.ts",
+    "sha256": "1fa839f77b5bbd061611ab4888b242d40a30bd652dde70fdbf2c91bc181d7d2c",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文读取当前实现、调用及消费者，核对实际断言、16项聚焦执行和隔离CLI历史材料重放；不将导入一致性升级为宿主授权。",
+    "responsibility": "维护者提供的明确命令、文件与实施基线选择。",
+    "branches": [
+      "封闭字段集，唯一仓库/step/文件，提交必须完整40或64位hex。",
+      "root相对选择文件，其余源相对工作区；命令输入和输出相对派生Test根。",
+      "参数数组不解释shell；默认60秒/8MiB，最高10分钟/16MiB；不是业务测试期望生成器。"
+    ],
+    "effects": [
+      "纯解析归一化。"
+    ],
+    "consumers": [
+      "tooling/capture/plan.ts"
+    ],
+    "tests": [
+      "tests/tooling/capture/capture.test.ts#prepareCapture",
+      "tests/tooling/capture/capture.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "路径和命令由维护者选择，仍须遵守既有授权及合同；不提供任意命令沙箱。"
+    ]
+  },
+  {
+    "path": "tooling/capture/contracts.ts",
+    "sha256": "722d159095f34e947ea929053fd08fedcbfedfe5d2315febc578a1b35f656af7",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文读取当前实现、调用及消费者，核对实际断言、16项聚焦执行和隔离CLI历史材料重放；不将导入一致性升级为宿主授权。",
+    "responsibility": "消费可移植Schema和导入不可变合同，验证摘要与尝试/基线引用。",
+    "branches": [
+      "catalog复用既有加载器；包、信封、结果及嵌套报告摘要交叉验证。",
+      "只接受直接信封或Schema准入的不可变commit中唯一匹配信封，拒绝快照与错误工具返回。",
+      "rerun必须对应前次结果与连续序号；批准step集合不能含先前已通过项。",
+      "实施基线逐一匹配结果/任务/仓库/窗口，并要求committed结果中声明的明确提交。"
+    ],
+    "effects": [
+      "只读catalog与纯输入对象，无业务状态或宿主读写。"
+    ],
+    "consumers": [
+      "tooling/capture/plan.ts"
+    ],
+    "tests": [
+      "tests/tooling/capture/contracts.test.ts#selectEnvelope",
+      "tests/tooling/capture/contracts.test.ts#implementationBaseline",
+      "tests/tooling/capture/capture.test.ts#rerunFixture"
+    ],
+    "limits": [
+      "不是当前claim/授权或全事件链验证；自洽的导入合同仍是imported-unverified。"
+    ]
+  },
+  {
+    "path": "tooling/capture/observations.ts",
+    "sha256": "a68793cc23b2244cee5c919b959f7a42894a30ed5149037e23b31396c3298417",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文读取当前实现、调用及消费者，核对实际断言、16项聚焦执行和隔离CLI历史材料重放；不将导入一致性升级为宿主授权。",
+    "responsibility": "配置执行根与真实Git/选定文件观察。",
+    "branches": [
+      "Test必须属于open pod的test support-surface；产品窗口、仓库及同pod关系匹配，产品与Test不重叠。",
+      "primary必须实际主根；worktree必须同commonDir的独立linked checkout；拒绝复制的同提交仓库。",
+      "禁Git hooks/fsmonitor/系统及全局配置，限时限输出；HEAD、branch、clean状态及选定tracked blob逐项匹配。"
+    ],
+    "effects": [
+      "调用只读Git并读取指定文件；不登记binding或改变Git。"
+    ],
+    "consumers": [
+      "tooling/capture/plan.ts",
+      "tooling/capture/run.ts"
+    ],
+    "tests": [
+      "tests/tooling/capture/capture.test.ts#prepareCapture",
+      "tests/tooling/capture/capture.test.ts#runCapture"
+    ],
+    "limits": [
+      "只覆盖选定文件及Git状态，不涵盖忽略文件/所有传递依赖；live绑定权威由调用方另验。"
+    ]
+  },
+  {
+    "path": "tooling/capture/plan.ts",
+    "sha256": "d62da0c871e96d59219d61d1d2be272e8d17a33312112adf0611723d5a19ae7d",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文读取当前实现、调用及消费者，核对实际断言、16项聚焦执行和隔离CLI历史材料重放；不将导入一致性升级为宿主授权。",
+    "responsibility": "冻结导入合同、当前配置、产品和harness字节的维护计划。",
+    "branches": [
+      "先校验合同、唯一完整基线和准确命令范围，再复制最多512输入/128MiB并最后写ready。",
+      "content派生ID；已有目录只能复验，不覆盖未封存或含未知文件计划。",
+      "读计划核对self digest、非空步骤、归一化selection、ready、精确清单和全部副本字节。",
+      "执行前重验catalog、冻结关系、派生位置和基线，原始合同文件可以已删除。"
+    ],
+    "effects": [
+      "在私有.build/capture写独占计划；不执行命令或访问快照。"
+    ],
+    "consumers": [
+      "tooling/cli.ts",
+      "tooling/capture/run.ts"
+    ],
+    "tests": [
+      "tests/tooling/capture/capture.test.ts#prepareCapture",
+      "tests/tooling/capture/capture.test.ts#readCapturePlan",
+      "tests/tooling/capture/contracts.test.ts#prepareCapture"
+    ],
+    "limits": [
+      "副本摘要只证明局部一致性，非签名来源或当前授权；无自动重规划/修复部分封存。"
+    ]
+  },
+  {
+    "path": "tooling/capture/run.ts",
+    "sha256": "e1cf63163eeb273e84f05daf94c4898a7dfadb1a03e1594580e2e976c43dc632",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文读取当前实现、调用及消费者，核对实际断言、16项聚焦执行和隔离CLI历史材料重放；不将导入一致性升级为宿主授权。",
+    "responsibility": "显式单步骤执行、原始流捕获和离线完整性复验。",
+    "branches": [
+      "当前配置、harness节点/字节、Git基线在命令前后复验；稳定attempt/step wx标记跨换输出目录及重规划拒绝重复。",
+      "复用shell:false与进程组取消；周期输出预算观察，完整保留写入字节而不是截断冒充通过。",
+      "stdout/stderr/started/record四文件逐项核对；marker、记录、命令、主体和退出状态必须一致。",
+      "退出0仅表示命令成功且记录完整；失败1，不完整/中断2；无记录或空步骤不能绿色。"
+    ],
+    "effects": [
+      "在Test自有新输出目录写记录并运行唯一显式命令；不改Controller权威。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/capture/capture.test.ts#runCapture",
+      "tests/tooling/capture/capture.test.ts#inspectCapture",
+      "tests/tooling/capture/capture.test.ts#captureAttemptFile"
+    ],
+    "limits": [
+      "标记不证明命令已运行，含糊残留需人工对账；无重置、自动下一步或自动重试。输出软预算可短时超量。合同顺序/自然语言停止条件、当前授权及测试判断仍由Agent/Controller承担。"
+    ]
+  },
+  {
+    "path": "tooling/live/receipt.ts",
+    "sha256": "f8d8993b129bb202af85cebf728e2ddcc6e8143e136aa10bbb7f965cceb40084",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "全文读取当前实现、调用及消费者，核对实际断言、16项聚焦执行和隔离CLI历史材料重放；不将导入一致性升级为宿主授权。",
+    "responsibility": "保留完整导入请求/工具返回，显式区分两种摘要。",
+    "branches": [
+      "每个输入限4MiB且为严格JSON普通单链接文件，随机私有新目录独占保存原始字节。",
+      "resultFileDigest针对原始字节；resultJsonDigest针对JSON.stringify解析后的完整返回，保留解析后属性顺序。",
+      "reportedIsError仅记录输入声明，永远输出imported-unverified与native unverified。"
+    ],
+    "effects": [
+      "私有.build/live/receipts记录，不发送、创建、归档或导入业务evidence。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/live/receipt.test.ts#captureHostReceipt",
+      "tests/tooling/live/receipt.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "不能核实宿主效果或授权；原始材料可能含私密数据，没有自动分享或脱敏导出。"
+    ]
+  }
+]

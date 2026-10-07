@@ -1,0 +1,71 @@
+{
+  "method": "读取本轮源码差异、修订内容与边证据后再计算来源；未触及历史记录。",
+  "documents": [
+    {
+      "path": "maps/02-file-review-index.md",
+      "sourceFingerprint": "sha256:0679a3d67c7cad313f6016a72a3c44a7cfebe09caeb472f48731048add9f73fd",
+      "inputFiles": 926
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/README.md",
+      "sourceFingerprint": "sha256:ab4aea3586885cd5477ff469d6360820f4c5c5530f7336adab6ea99dc5181f7e",
+      "inputFiles": 40
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/file-dependencies.md",
+      "sourceFingerprint": "sha256:dea9f1432c56a7b3f3568ed4544a80eedddd845545ed5a3507af773ddb9c1a7f",
+      "inputFiles": 88
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/installation-and-runtime-identity.md",
+      "sourceFingerprint": "sha256:56eca29cbbfe162475af875e7f1ce4a4fa631e2c0bc9a9a18e6bf219490bd00c",
+      "inputFiles": 18
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/schema-and-validation.md",
+      "sourceFingerprint": "sha256:f7e09b7b440bb5d90e654659bb3aa8accd80c411ec33f2c87252a1817875b445",
+      "inputFiles": 251
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/lab-and-live-tools.md",
+      "sourceFingerprint": "sha256:0995c6a623ede69edd793ecb94d60ba1a221161c11559493cd6ae81c4386e86c",
+      "inputFiles": 26
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/lab-business-scenarios.md",
+      "sourceFingerprint": "sha256:c1520c1b48aa4ae6bcab005bed983ef90549f6c541c635bc60b227a3f8b626d4",
+      "inputFiles": 18
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/maintainer-verification.md",
+      "sourceFingerprint": "sha256:0eb89c149a8f3b30cb454b53e45e0e618422efc8e4bb1154b0b19d8f15b5b574",
+      "inputFiles": 16,
+      "scope": "CLI新增分支，verify路径内容未变，已核对调用关系。"
+    }
+  ],
+  "schedulingFollowup": {
+    "method": "补审Node CLI派发反例，修订真实运行调用、静态导入、原始测试断言后刷新这四页。",
+    "documents": [
+      {
+        "path": "maps/02-file-review-index.md",
+        "sourceFingerprint": "sha256:e6ba188582de42440aad1266f498c1262602f08bf8cb1966b9e5ef0dcf54abfa",
+        "inputFiles": 926
+      },
+      {
+        "path": "maps/17-artifacts-and-contracts/file-dependencies.md",
+        "sourceFingerprint": "sha256:56c5ff221aff57dc775127602700e4d7c1e98f10757916e421b7bbddbe167181",
+        "inputFiles": 88
+      },
+      {
+        "path": "maps/17-artifacts-and-contracts/maintainer-verification.md",
+        "sourceFingerprint": "sha256:d8574bebe35d46a51f67182807db58ba13b6059060b8d210eb66993f00b53db0",
+        "inputFiles": 16
+      },
+      {
+        "path": "maps/17-artifacts-and-contracts/schema-and-validation.md",
+        "sourceFingerprint": "sha256:735e882e8f55ffd1368225ad514312b686a49465031365db75bc95446dcd4d30",
+        "inputFiles": 251
+      }
+    ]
+  }
+}

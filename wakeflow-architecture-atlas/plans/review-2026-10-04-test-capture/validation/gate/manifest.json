@@ -1,0 +1,10 @@
+{
+  "kind": "WakeflowCiExportManifest",
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": "report.json",
+      "digest": "sha256:4db0592c289d26dab33a53aef1e8bd4024b909a929aa691f3e84f918f2257ff9"
+    }
+  ]
+}

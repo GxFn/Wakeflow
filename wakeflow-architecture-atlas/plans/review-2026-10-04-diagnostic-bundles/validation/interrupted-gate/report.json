@@ -1,0 +1,46 @@
+{
+  "kind": "WakeflowCiVerification",
+  "schemaVersion": 1,
+  "source": "unsigned-local-verification-receipt",
+  "status": "interrupted",
+  "profile": "gate",
+  "startedAt": "2026-10-04T15:21:25.243Z",
+  "finishedAt": "2026-10-04T15:28:05.218Z",
+  "receiptDigest": "sha256:9e376d14e740e7dee99ad657e07e1502369d7c0bae3c389cd301dc85a0c6d7eb",
+  "input": {
+    "commit": "04769897ea0376112eb1c052223aa546045f5a45",
+    "digest": "sha256:9205f86bfc5bdfa852d0e688e42430b2deedf0a5630314e895c33d730ef4de24",
+    "lockfileDigest": "sha256:196d521fbde18c2c9345f181548a2689c268e3b1dc2a47cdb984c5b9cf43a7f5"
+  },
+  "environment": {
+    "node": "24.19.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "inputsUnchanged": true,
+  "stages": [
+    {
+      "name": "gate",
+      "status": "interrupted",
+      "durationMs": 399175,
+      "exitCode": null
+    }
+  ],
+  "tests": null,
+  "modelTests": {
+    "seed": 20261003,
+    "numRuns": 200,
+    "replayRequested": false
+  },
+  "artifacts": [
+    {
+      "artifact": "plugins/claude-code-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f"
+    },
+    {
+      "artifact": "plugins/codex-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735"
+    }
+  ],
+  "nativeHostAcceptance": "unverified"
+}

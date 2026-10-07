@@ -25,7 +25,8 @@ export function parseSource(source, filename) {
     if (Array.isArray(node)) { for (const item of node) visit(item, owner); return; }
     if (['ImportDeclaration', 'ExportAllDeclaration', 'ExportNamedDeclaration'].includes(node.type) && node.source) imports.add(node.source.value);
     const id = node.identifier?.value ?? node.id?.value;
-    if (['FunctionDeclaration', 'ClassDeclaration', 'TsInterfaceDeclaration', 'TsTypeAliasDeclaration', 'TsEnumDeclaration'].includes(node.type) && id) symbols.add(id);
+    // SWC uses expression nodes for named default exports as well as local named expressions.
+    if (['FunctionDeclaration', 'FunctionExpression', 'ClassDeclaration', 'ClassExpression', 'TsInterfaceDeclaration', 'TsTypeAliasDeclaration', 'TsEnumDeclaration'].includes(node.type) && id) symbols.add(id);
     if (node.type === 'VariableDeclarator' && node.id?.type === 'Identifier') symbols.add(node.id.value);
     if (['ClassDeclaration', 'ClassExpression'].includes(node.type)) owner = id ?? owner;
     if (['ClassMethod', 'PrivateMethod'].includes(node.type) && node.key?.value) {

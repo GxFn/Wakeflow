@@ -4,16 +4,16 @@ viewType: "call-flow"
 truthKind: "in-progress-worktree"
 reviewDepth: "L4"
 testEvidence: "anchored"
-verifiedAt: "2026-10-03"
-baselineCommit: "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c"
-sourceFingerprint: "sha256:d2561b64f76f47fd611d541bcbb570c0aaf544f074d91392862b1c79d97be182"
+verifiedAt: "2026-10-04"
+baselineCommit: "04769897ea0376112eb1c052223aa546045f5a45"
+sourceFingerprint: "sha256:4520402a1a75c64a95d929236c789be35b9c81a4d148807ddbf161c506fd38a1"
 audience: ["maintainer","reviewer"]
 documentationOwner: "Wakeflow Architecture Atlas"
 generatedBy: "manual-review"
-sourcePaths: ["tooling/architecture/check-dependencies.ts","tooling/artifacts/check-plugin-artifacts.ts","tooling/artifacts/smoke-plugin-artifacts.ts","tooling/codegen/schema-types.ts","tooling/release/check-release-consistency.ts","tooling/testing/run-typescript-tests.ts","tooling/artifacts/inspect-local-installation.ts","src/contracts/vocabulary/wakeflow-config-identity.ts","src/foundation/filesystem/rooted-exclusive-file-lock.ts"]
+sourcePaths: ["tooling/architecture/check-dependencies.ts","tooling/artifacts/check-plugin-artifacts.ts","tooling/artifacts/smoke-plugin-artifacts.ts","tooling/codegen/schema-types.ts","tooling/release/check-release-consistency.ts","tooling/testing/run-typescript-tests.ts","tooling/artifacts/inspect-local-installation.ts","src/contracts/vocabulary/wakeflow-config-identity.ts","src/foundation/filesystem/rooted-exclusive-file-lock.ts","tooling/verification/*.ts","tooling/testing/*.ts","tooling/lab/*.ts","tooling/live/*.ts","tooling/capture/*.ts","tooling/diagnostics/*.ts"]
 schemaPaths: ["src/contracts/schemas/**/*.schema.json"]
-testPaths: ["tests/artifacts/plugin-artifact-check.test.ts","tests/artifacts/plugin-artifact-smoke.manual.ts","tests/codegen/schema-types.test.ts","tests/release/check-release-consistency.test.ts","tests/tooling/testing/run-typescript-tests.test.ts","tests/tooling/testing/test-schedule-order.test.ts","tests/artifacts/immutable-local-installation.test.ts"]
-refreshTriggers: ["package.json","package-lock.json",".dependency-cruiser.cjs","tooling/testing/test-durations.json","src/contracts/generated/**/*.generated.ts","assets/release/version.json"]
+testPaths: ["tests/artifacts/plugin-artifact-check.test.ts","tests/artifacts/plugin-artifact-smoke.manual.ts","tests/codegen/schema-types.test.ts","tests/release/check-release-consistency.test.ts","tests/tooling/testing/run-typescript-tests.test.ts","tests/tooling/testing/test-schedule-order.test.ts","tests/artifacts/immutable-local-installation.test.ts","tests/tooling/**/*.test.ts","tests/kernel/privacy-model.test.ts"]
+refreshTriggers: ["package.json","package-lock.json",".dependency-cruiser.cjs","tooling/testing/test-durations.json","src/contracts/generated/**/*.generated.ts","assets/release/version.json",".github/workflows/verify.yml"]
 ---
 
 # Schema 生成与验证层次
@@ -82,6 +82,7 @@ Schema build 先删除旧输出再 rename stage。它没有业务journal，也�
 | test:typescript | `tooling/testing/run-typescript-tests.ts#compiledTypeScriptTests` | 从当前.test.ts源清单映射编译输出；不运行被删源遗留的旧JS。focused拒重复/越界/缺输出/symlink。 | `tests/tooling/testing/run-typescript-tests.test.ts#compiledTypeScriptTests` |
 | 测试排程 | `tooling/testing/run-typescript-tests.ts#orderTestSourcesByCost` | 未知耗时优先，其余长用例优先；表非法失败；仅影响排程，不增删选中测试。 | `tests/tooling/testing/test-schedule-order.test.ts#orderTestSourcesByCost` |
 | 文件并发预算 | `tooling/testing/run-typescript-tests.ts#resolveTestConcurrency` | 默认取availableParallelism；WAKEFLOW_TEST_CONCURRENCY未设置或为空仍用默认，显式值只能为1到可用并行度的规范十进制安全整数。只改文件worker预算，不改选中测试、内部并发或超时。 | `tests/tooling/testing/run-typescript-tests.test.ts#resolveTestConcurrency` |
+| 真实派发保序 | `tooling/testing/run-typescript-tests.ts#run` 用官方node:test.run接收耗时队列，保持进程隔离 | Node CLI会重排argv；纯排序函数通过不能证明实际执行顺序。 | `tests/tooling/testing/test-schedule-order.test.ts#spawnSync` |
 | schema:check | `tooling/codegen/schema-types.ts#checkSchemaTypes` | 双次生成确定性及committed字节一致；不证明Schema表达了全部业务关系。 | `tests/codegen/schema-types.test.ts#checkSchemaTypes` |
 | build:check | `tooling/artifacts/check-plugin-artifacts.ts#checkWakeflowPluginArtifacts` | committed先自验文件集合/模式/摘要，再比全新候选manifest；同时核对两个marketplace。 | `tests/artifacts/plugin-artifact-check.test.ts#verifyArtifactAgainstManifest` |
 | smoke:artifacts | `tooling/artifacts/smoke-plugin-artifacts.ts#smokeWakeflowPluginArtifacts` | 完整制品搬到仓库外；真实stdio、fresh、reconcile、status/verify、pod预览和hook Node进程；无需登录账户。 | `tests/artifacts/plugin-artifact-smoke.manual.ts#smokeWakeflowPluginArtifacts` |
@@ -102,3 +103,24 @@ smoke通过SDK调用制品中的MCP服务，hook则调用制品的observe launch
 release:check检查**本地**origin/main引用，没有fetch，也不会push/tag/publish。根脚本传入四个require选项；库函数默认选项没有强制这些Git门，缺省库调用不能冒充完整发布门。`releaseEligible:true`仍只来自版本主号>=1，不能反推已经发布。
 
 [返回制品总览](./README.md) · [直接导入与动态装载](./file-dependencies.md) · [Foundation持久效果](../02-foundation/README.md)
+
+## 维护入口与验证记录
+
+`wf verify` 没有替换上面的根门。quick 为静态检查加显式文件；gate 仍委托 npm test；artifact 仍单独组合 build:check 与 smoke。差别是保留代码输入、子进程、选择范围及真实 Node 事件，并拒绝缺结尾、缺结果或变动输入的绿色结论，见[调用图](./maintainer-verification.md)。
+
+| 当前维护入口 | 新增保证 | 仍未证明 | 测试依据 |
+| --- | --- | --- | --- |
+| verify 与记录协议 | 阶段退出、完整汇总和输入首尾对应 | 没有签名；不能排除输入ABA或证明任意原生效果 | `tests/tooling/verification/verify.test.ts#verifyRepository` |
+| timings export | 重验同输入完整gate和当前源清单后给建议 | 不覆盖跟踪耗时表，不保证固定加速比例 | `tests/tooling/verification/verify.test.ts#proposeTestDurations` |
+| fault 与模型 | 明确15个测试源、固定/可重放种子与缩减日志 | 不把纯模型/注入错误当作OS崩溃或真实权限验收 | `tests/kernel/privacy-model.test.ts#TextCommand` |
+| lab readiness | 生成制品、生产默认fsync、前后完整实验清单相同 | 不等同原生聊天、业务完成或worktree验收 | `tests/tooling/lab/lab.test.ts#runLab` |
+| lab 固定业务 | 新根中实际 Node/Git、公共需求/任务/证据/归档协议；成功回执与资源清单交叉核对 | 合成 hook 与夹具决定不等于真实角色聊天验收；新资源或同字节替换阻断清理 | `tests/tooling/lab/workflow.test.ts#runToolingCli`、`tests/tooling/lab/sealing.test.ts#createLab` |
+| doctor workspace | 新生成观察进程只读 status/verify，允许字段、计数/配置/截断核对 | 不观察宿主选中版本，不认证 peer runtime，不自动修复 | `tests/tooling/diagnostics/workspace.test.ts#inspectWorkspace` |
+| live project-bootstrap | 主工作区项目匹配、准备尝试互斥、导入关联核对 | 来源和窗口到MCP关系始终未验证；不执行宿主动作 | `tests/tooling/live/live.test.ts#inspectLiveEvidence` |
+| CI导出与下载核验 | 受限字段、精确文件集合、摘要不符硬失败 | 当前只有本地配置/测试；无远端CI或供应链认证 | `tests/tooling/verification/verify.test.ts#verifyCiBundle` |
+
+旧1280项、273文件与双宿主smoke保持历史执行记录；本轮新增业务与诊断代码必须由新完整门验证，不能仅沿用旧门。当前结果及实际CLI/原生边界见[验证来源与剩余矩阵](../../plans/review-2026-10-04-lab-workflows/validation-provenance.md)。
+
+测试捕获复用 `tooling/codegen/schema-types.ts#loadSchemaCatalog` 的本地严格目录，再由 `tooling/capture/contracts.ts#captureSchemas` 对既有Schema执行实例验证，并补充包、信封、结果和Git基线之间的关系检查。这是维护者导入一致性子集，不替代运行时领域准入或当前授权。覆盖见 `tests/tooling/capture/contracts.test.ts#frozenTestContext` 与[捕获边界](./test-capture-and-receipts.md)。
+
+诊断分享摘要的维护合同由 `tooling/diagnostics/public-summary.ts#schema`封闭字段与类别，`validateSummary`另检查成功调用数、候选和时间是否齐备。它不是业务公共MCP Schema，也不由自身checksum取得真实来源。覆盖见 `tests/tooling/diagnostics/bundle.test.ts#inspectDiagnosticSummary`。

@@ -1,10 +1,10 @@
 {
   "renderer": "mermaid",
   "rendererVersion": "11.17.2",
-  "verifiedAt": "2026-10-03T14:25:54.692Z",
+  "verifiedAt": "2026-10-04T15:51:01.392Z",
   "ok": true,
-  "diagrams": 100,
-  "rendered": 100,
+  "diagrams": 112,
+  "rendered": 112,
   "results": [
     {
       "file": "maps/00-agentic-diagram-standard.md",
@@ -1527,6 +1527,54 @@
       }
     },
     {
+      "file": "maps/17-artifacts-and-contracts/ci-and-model-evidence.md",
+      "diagram": 1,
+      "title": "定向模型与 CI 的可重放输入及受限输出",
+      "sourceDigest": "sha256:f113052701ebc9327e95629a864d0f1894e76da90c0ded6ee6531c577ab43f69",
+      "status": "pass",
+      "width": 609,
+      "height": 1331,
+      "visibleTextNodes": 21,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 593,
+        "height": 1315
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/diagnostic-bundles.md",
+      "diagram": 1,
+      "title": "明确文件采集与只读观察的实际调用",
+      "sourceDigest": "sha256:c5c23657084db91fa97dd2324d540063309f85d3b9a1ebfa9fcc0b0438fdb41f",
+      "status": "pass",
+      "width": 1297,
+      "height": 1060,
+      "visibleTextNodes": 33,
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1197,
+        "height": 1039
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/diagnostic-bundles.md",
+      "diagram": 2,
+      "title": "私有故障材料投影成封闭的本地分享摘要",
+      "sourceDigest": "sha256:f3bf91c1dc832a2c989f992ae93301a06943cc332b98d8f3f28fe83c4adf60aa",
+      "status": "pass",
+      "width": 3131,
+      "height": 100,
+      "visibleTextNodes": 13,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 3115,
+        "height": 84
+      }
+    },
+    {
       "file": "maps/17-artifacts-and-contracts/file-dependencies.md",
       "diagram": 1,
       "title": "制品构建与检查工具的静态文件依赖",
@@ -1540,6 +1588,22 @@
         "y": 8,
         "width": 1683,
         "height": 384
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/file-dependencies.md",
+      "diagram": 2,
+      "title": "维护命令分发到各自的职责所有者",
+      "sourceDigest": "sha256:40f0a70fa8f7719fbe3fb7c70bc7ce97ad4ccbc2973efcf01d6ee57437cd731e",
+      "status": "pass",
+      "width": 1582,
+      "height": 1576,
+      "visibleTextNodes": 42,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1566,
+        "height": 1560
       }
     },
     {
@@ -1575,6 +1639,102 @@
       }
     },
     {
+      "file": "maps/17-artifacts-and-contracts/installation-and-runtime-identity.md",
+      "diagram": 3,
+      "title": "工作区诊断只证明本次新观察进程取得的事实",
+      "sourceDigest": "sha256:4567a47ed65ba99a1848da133a356d1926d0b8dc204ef01f490a52467093e058",
+      "status": "pass",
+      "width": 302,
+      "height": 1044,
+      "visibleTextNodes": 13,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 286,
+        "height": 1028
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/lab-and-live-tools.md",
+      "diagram": 1,
+      "title": "可丢弃实验的创建、关闭与精确清理",
+      "sourceDigest": "sha256:b9b94251528c3eba60f8729672e48ca5f364f65486c066a59641560659ccdede",
+      "status": "pass",
+      "width": 1144,
+      "height": 2105,
+      "visibleTextNodes": 28,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1128,
+        "height": 2089
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/lab-and-live-tools.md",
+      "diagram": 2,
+      "title": "行动单不能把导入回执提升为原生验收",
+      "sourceDigest": "sha256:8d8061f472d7dc572f0ec550d0d066f5ea7e69e4ea47227bc9dfbaab2e3a1dc2",
+      "status": "pass",
+      "width": 761,
+      "height": 1569,
+      "visibleTextNodes": 23,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 745,
+        "height": 1553
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/lab-business-scenarios.md",
+      "diagram": 1,
+      "title": "固定合成业务实验的真实公共调用与证据边界",
+      "sourceDigest": "sha256:cad05495a8b0c0a282856416a3f2eb46555a68fbb7165e1591b72e2b1695f098",
+      "status": "pass",
+      "width": 449,
+      "height": 1726,
+      "visibleTextNodes": 22,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 433,
+        "height": 1710
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/lab-business-scenarios.md",
+      "diagram": 2,
+      "title": "worktree 清理同时保护未知路径和同字节替换",
+      "sourceDigest": "sha256:bfc5a185fa6c33ffb390ee580c971a7f39181f145f8d633ff7d9e1e28720de00",
+      "status": "pass",
+      "width": 782,
+      "height": 1056,
+      "visibleTextNodes": 15,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 766,
+        "height": 1040
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/maintainer-verification.md",
+      "diagram": 1,
+      "title": "维护验证从输入快照到证据结算",
+      "sourceDigest": "sha256:7114abe7b5dd8daa2141243d2421bd50f01a0fe4645b34e2ab0ff59b29de164a",
+      "status": "pass",
+      "width": 617,
+      "height": 1722,
+      "visibleTextNodes": 26,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 601,
+        "height": 1706
+      }
+    },
+    {
       "file": "maps/17-artifacts-and-contracts/README.md",
       "diagram": 1,
       "title": "源码按真实闭包生成双宿主插件与文件清单",
@@ -1604,6 +1764,38 @@
         "y": 0,
         "width": 1188,
         "height": 1160
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/test-capture-and-receipts.md",
+      "diagram": 1,
+      "title": "测试输入封存与单步骤执行的调用边界",
+      "sourceDigest": "sha256:229296aeba4779cc3fadd8353a73950ed828a50ff617b746d51fc617459ff0ec",
+      "status": "pass",
+      "width": 1268,
+      "height": 1224,
+      "visibleTextNodes": 25,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 1252,
+        "height": 1208
+      }
+    },
+    {
+      "file": "maps/17-artifacts-and-contracts/test-capture-and-receipts.md",
+      "diagram": 2,
+      "title": "原生动作材料保存与摘要约定分开",
+      "sourceDigest": "sha256:4d35f0714e912e5e887613fd7c5fad8c4c5715e9cce6c83d6f6aa89b7e5240b3",
+      "status": "pass",
+      "width": 2769,
+      "height": 179,
+      "visibleTextNodes": 16,
+      "bounds": {
+        "x": 8,
+        "y": 8,
+        "width": 2753,
+        "height": 163
       }
     }
   ]

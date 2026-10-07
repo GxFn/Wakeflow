@@ -1,0 +1,22 @@
+{
+  "kind": "WakeflowNodeDispatchReproduction",
+  "node": "24.19.0",
+  "requestedOrder": [
+    "z",
+    "a"
+  ],
+  "cliObservedOrder": [
+    "a",
+    "z"
+  ],
+  "programmaticRunObservedOrder": [
+    "z",
+    "a"
+  ],
+  "formalRegression": {
+    "before": "Expected z-slow,a-fast; actual a-fast,z-slow",
+    "after": "17 focused tests passed; then 27 quick tests including external cancellation and process cleanup passed"
+  },
+  "scope": "actual Node child execution recorded by fixture files; not inferred from argv or event display order",
+  "reference": "https://nodejs.org/download/release/v24.19.0/docs/api/test.html#runoptions"
+}

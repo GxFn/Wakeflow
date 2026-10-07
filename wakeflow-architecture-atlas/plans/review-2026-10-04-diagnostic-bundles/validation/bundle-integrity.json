@@ -1,0 +1,36 @@
+{
+  "kind": "WakeflowLocalBundleIntegrityObservations",
+  "source": "actual-local-ci-verify",
+  "bundles": {
+    "quick": {
+      "status": "passed",
+      "integrity": "matched",
+      "reportDigest": "sha256:ed67c55489c7a2f2d8e7896d5f749c1b2be35de820a94613d8362503d71c52f2",
+      "origin": "unverified"
+    },
+    "interruptedForFix": {
+      "status": "interrupted",
+      "integrity": "matched",
+      "reportDigest": "sha256:fddeb14cd72a65d5da6d3140ac520163235b5019b7c5cf6f22c49f36c9720b8f",
+      "origin": "unverified"
+    },
+    "timeBudget": {
+      "status": "interrupted",
+      "integrity": "matched",
+      "reportDigest": "sha256:4b3e8391c0b8487bf258150a8dcdeed7de089d3a427a2da5894504c624b1f03c",
+      "origin": "unverified"
+    },
+    "artifact": {
+      "status": "passed",
+      "integrity": "matched",
+      "reportDigest": "sha256:8e37fc891cf43888f0cf6c38f28e2bea7c7f8524b64cf4ed3c955a3c847ea758",
+      "origin": "unverified"
+    },
+    "gate": {
+      "status": "passed",
+      "integrity": "matched",
+      "reportDigest": "sha256:6b3fb8cf3035eaf1e9e944e6b1133c0b57edc9062a0c4dc27839247112398bd4",
+      "origin": "unverified"
+    }
+  }
+}

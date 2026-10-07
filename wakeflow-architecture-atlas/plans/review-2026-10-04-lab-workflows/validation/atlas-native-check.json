@@ -1,0 +1,15 @@
+{
+  "kind": "WakeflowAtlasNativeFollowupCheck",
+  "checkedOn": "2026-10-04",
+  "command": "npm run check",
+  "exitCode": 0,
+  "checkerTests": 18,
+  "documents": 80,
+  "currentFingerprints": 75,
+  "renderedDiagrams": 108,
+  "failedDiagrams": 0,
+  "logSha256": "sha256:60d097ad65f8c35f565993704624a0a67b5b799bc1a2e429110fdf7928e0af2a",
+  "renderEvidenceSha256": "sha256:3d2dc964e70704595cbc8cf01dae1cc6621d3eefbec1bfe9693d706b6c2eb3ec",
+  "scope": "documentation and sanitized native evidence update; no Mermaid graph or runtime source change",
+  "warning": "Existing Vite chunks exceed 700 kB; threshold unchanged."
+}

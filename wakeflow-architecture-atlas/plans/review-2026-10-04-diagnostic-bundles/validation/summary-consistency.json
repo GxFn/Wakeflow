@@ -1,0 +1,17 @@
+{
+  "kind": "WakeflowDiagnosticSummaryConsistencyProbe",
+  "source": "actual-saved-public-summary-with-explicitly-modified-call-counts",
+  "input": "same absolute input file and recomputed canonical self-digest",
+  "before": {
+    "callsSucceeded": 0,
+    "status": "matched",
+    "diagnosisStatus": "passed",
+    "nativeHostAcceptance": "unverified"
+  },
+  "after": {
+    "status": "unavailable",
+    "reason": "diagnostic-summary-invalid-or-altered"
+  },
+  "nativeHostAcceptance": "unverified",
+  "note": "An initial relative-path API invocation was not the defect reproduction; it correctly rejected a noncanonical path. The recorded reproduction uses the same absolute path before and after."
+}

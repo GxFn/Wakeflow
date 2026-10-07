@@ -1,0 +1,65 @@
+{
+  "method": "实际读取新增诊断包/分享、共享诊断owner和I/O消费者，核对失败候选保留、原始/投影材料、私有模式及摘要一致性；补充CLI直接依赖。显式采用已验证耗时表，其他原有操作未改。",
+  "documents": [
+    {
+      "path": "maps/02-file-review-index.md",
+      "previousFingerprint": "sha256:568559af77bacf5808664229817ffe7f6602e9adcb39508440058875a55a3966",
+      "sourceFingerprint": "sha256:3e25fa104639686f5d7ca9328e7020bca12ef7f3ce7ca8ed07c375c52c8c0dfa",
+      "inputFiles": 944
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/README.md",
+      "previousFingerprint": "sha256:88c3ee9cef2161dfbbbcd21e1df0cc97aa2339f105a177bfe1b916b113d5c800",
+      "sourceFingerprint": "sha256:223fff6adf873a9a30d38779a7bdc04a1f423bc9c55a639055f79d8518d04d30",
+      "inputFiles": 40
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/file-dependencies.md",
+      "previousFingerprint": "sha256:337bb218842b2f5fd610dedff68d0c395aa80a063a24035aa359a276f2d2c2a4",
+      "sourceFingerprint": "sha256:00830b6f5d592762c2ad59af41a0cc6b740d3a15a14014991b4a5768a3dc1226",
+      "inputFiles": 102
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/installation-and-runtime-identity.md",
+      "previousFingerprint": "sha256:8856d014cfe603fa2795f3f5cdb5893c1ecc949c407c599e964f079cfe5638df",
+      "sourceFingerprint": "sha256:5ab96a2157ec71c43f6a47a50f76475cfe686b7967a1ecb0a891d2f3d9cf02ce",
+      "inputFiles": 18
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/lab-and-live-tools.md",
+      "previousFingerprint": "sha256:db2d715314cdb1bc743334b59ab68b6486a8732ae694ff320d1f9efe770d2dda",
+      "sourceFingerprint": "sha256:9940f669e98c42905037465ae3ff5488d558784ed7e9a117b2dbfd95ad3658b8",
+      "inputFiles": 28
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/lab-business-scenarios.md",
+      "previousFingerprint": "sha256:f925603ee0b1475df35e3176f8d3b2967bb6e7e59e4a645d1756e807bb80d565",
+      "sourceFingerprint": "sha256:34540f39c489702abf18316a1d1d2d28525d6b537501df93fbd1716a6aa01a07",
+      "inputFiles": 18
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/maintainer-verification.md",
+      "previousFingerprint": "sha256:bd4b2f5302f0941f075ef3c567ccdf350791c9e2ff63ae9e550af9e68fda6670",
+      "sourceFingerprint": "sha256:c1c65b2397f3d1b871f24da73c5e53d4c89ff98c3cadc5e09246c2f54d1d0266",
+      "inputFiles": 16
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/schema-and-validation.md",
+      "previousFingerprint": "sha256:890d754d656b873b4bcc686ba4900b1c70a1f46f901cdf63d065210f43c534c7",
+      "sourceFingerprint": "sha256:4520402a1a75c64a95d929236c789be35b9c81a4d148807ddbf161c506fd38a1",
+      "inputFiles": 264
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/test-capture-and-receipts.md",
+      "previousFingerprint": "sha256:1aa345126e6a1415a0fe1873f108cd7dcfca0fcd75d72bc1852828169b6e262a",
+      "sourceFingerprint": "sha256:5e6d1c7d95ce5a8b8ad8c75cce5ff1c66fd795312ae2451659de3e62dc5c442c",
+      "inputFiles": 111
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/diagnostic-bundles.md",
+      "previousFingerprint": "pending",
+      "sourceFingerprint": "sha256:6a1e922ab42327b096661ee3c9c56730c97924791be5cc86d3eddd8178d9a14e",
+      "inputFiles": 15
+    }
+  ]
+}

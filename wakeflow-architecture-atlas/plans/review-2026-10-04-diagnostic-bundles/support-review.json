@@ -1,0 +1,16 @@
+{
+  "path": "tooling/testing/test-durations.json",
+  "purpose": "Explicit adoption of the phase5 completed-gate proposal as scheduling hints",
+  "measuredSourceDigest": "sha256:7c9baccdf2ceb8a9b432a4750fe5f745da2a8b0e5650340e101d5c005b42240d",
+  "measuredFiles": 279,
+  "measurementConcurrency": 2,
+  "changes": [
+    "Replaces the older partial timing table with the existing complete measured proposal",
+    "New unmeasured diagnostic test still dispatches as unknown first",
+    "No tests, timeout, fsync or concurrency default changed"
+  ],
+  "limits": [
+    "Not a correctness cache or new-source passing proof",
+    "Timing differences across runs cannot be attributed solely to ordering or compared as a controlled benchmark"
+  ]
+}

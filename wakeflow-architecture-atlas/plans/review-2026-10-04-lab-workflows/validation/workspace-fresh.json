@@ -1,0 +1,160 @@
+{
+  "kind": "WakeflowWorkspaceDiagnosis",
+  "schemaVersion": 1,
+  "source": "new-generated-stdio-observer",
+  "hostSelection": "not-observed",
+  "nativeHostAcceptance": "unverified",
+  "windowRuntimeAssociation": "unverified",
+  "changesApplied": false,
+  "status": "passed",
+  "artifact": {
+    "hostId": "codex",
+    "version": "1.1.0-rc.5",
+    "manifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735"
+  },
+  "observerMatchesArtifact": true,
+  "facts": {
+    "observedAt": {
+      "status": "2026-10-04T07:55:29.926Z",
+      "verification": "2026-10-04T07:55:30.579Z"
+    },
+    "config": {
+      "statusDigest": "sha256:93f9b61b5d423408e41116a8961146a5803fb5b67e2c01d97cfba15a178ee9ba",
+      "verificationDigest": "sha256:93f9b61b5d423408e41116a8961146a5803fb5b67e2c01d97cfba15a178ee9ba",
+      "unchangedBetweenObservations": true
+    },
+    "omitted": {
+      "windows": 0,
+      "demands": 0,
+      "claims": 0,
+      "pods": 0,
+      "repositories": 0,
+      "archives": 0,
+      "unmergedAccepted": 0,
+      "worktrees": 0
+    },
+    "overall": "idle",
+    "runtime": {
+      "artifactManifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735",
+      "artifactOnDisk": "same"
+    },
+    "maintenance": {
+      "protocol": "idle",
+      "residues": 0
+    },
+    "activeWork": {
+      "demands": 0,
+      "claims": 0
+    },
+    "windows": {
+      "total": 5,
+      "registered": 0,
+      "runtimeUnverified": 0
+    },
+    "hooks": [
+      {
+        "hostId": "codex",
+        "status": "observed",
+        "records": 0,
+        "skipped": 0
+      },
+      {
+        "hostId": "claude-code",
+        "status": "observed",
+        "records": 0,
+        "skipped": 0
+      }
+    ],
+    "verification": {
+      "ok": true,
+      "summary": {
+        "pass": 15,
+        "fail": 0,
+        "unavailable": 0
+      },
+      "gates": [
+        {
+          "name": "active-projection",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "append-candidates-clear",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "board-consistency",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "config-authority",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "demand-root-audit",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "evidence-integrity",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "host-hook-channel",
+          "status": "pass",
+          "code": "detail-omitted"
+        },
+        {
+          "name": "host-settings-assets",
+          "status": "pass",
+          "code": "not-applicable"
+        },
+        {
+          "name": "ledger-layout",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "local-layout",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "pod-execution-location",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "runtime-artifact",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "window-identity",
+          "status": "pass",
+          "code": "detail-omitted"
+        },
+        {
+          "name": "window-runtime-projection",
+          "status": "pass",
+          "code": null
+        },
+        {
+          "name": "work-claims",
+          "status": "pass",
+          "code": null
+        }
+      ]
+    },
+    "next": {
+      "frontier": null,
+      "owner": "none"
+    }
+  },
+  "completedAt": "2026-10-04T07:55:32.061Z",
+  "exitCode": 0
+}

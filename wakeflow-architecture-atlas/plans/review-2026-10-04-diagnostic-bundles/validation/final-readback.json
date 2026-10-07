@@ -1,0 +1,9 @@
+{
+  "source": "final-source-actual-cli-offline-readback",
+  "status": "passed",
+  "privateBundles": 7,
+  "publicSummaries": 4,
+  "zeroSuccessfulCallForgery": "refused",
+  "nativeHostAcceptance": "unverified",
+  "environmentRecreated": false
+}

@@ -1,0 +1,143 @@
+{
+  "kind": "WakeflowCiVerification",
+  "schemaVersion": 1,
+  "source": "unsigned-local-verification-receipt",
+  "status": "passed",
+  "profile": "quick",
+  "startedAt": "2026-10-04T08:19:04.733Z",
+  "finishedAt": "2026-10-04T08:19:20.970Z",
+  "receiptDigest": "sha256:9ea9e524a11510366c9f1939e35ae8dcd55479a38d47cc2c7741ff7bd7b6e688",
+  "input": {
+    "commit": "04769897ea0376112eb1c052223aa546045f5a45",
+    "digest": "sha256:75484da2fcbed378ecaf6775ba32764c67b2632cd20cf40d3f700ba4c0d6ab02",
+    "lockfileDigest": "sha256:196d521fbde18c2c9345f181548a2689c268e3b1dc2a47cdb984c5b9cf43a7f5"
+  },
+  "environment": {
+    "node": "24.19.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "inputsUnchanged": true,
+  "stages": [
+    {
+      "name": "typecheck",
+      "status": "passed",
+      "durationMs": 682,
+      "exitCode": 0
+    },
+    {
+      "name": "check:architecture",
+      "status": "passed",
+      "durationMs": 4380,
+      "exitCode": 0
+    },
+    {
+      "name": "lint",
+      "status": "passed",
+      "durationMs": 1869,
+      "exitCode": 0
+    },
+    {
+      "name": "format:check",
+      "status": "passed",
+      "durationMs": 475,
+      "exitCode": 0
+    },
+    {
+      "name": "check:unused",
+      "status": "passed",
+      "durationMs": 3200,
+      "exitCode": 0
+    },
+    {
+      "name": "focused-tests",
+      "status": "passed",
+      "durationMs": 5097,
+      "exitCode": 0
+    }
+  ],
+  "tests": {
+    "complete": true,
+    "passed": true,
+    "counts": {
+      "tests": 27,
+      "passed": 27,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "suites": 0
+    },
+    "selectedFiles": 4,
+    "files": [
+      {
+        "file": "tests/tooling/testing/test-recording.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/verification/verify.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 9,
+          "passed": 9,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/testing/run-typescript-tests.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/testing/test-schedule-order.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      }
+    ]
+  },
+  "modelTests": {
+    "seed": 20261003,
+    "numRuns": 200,
+    "replayRequested": false
+  },
+  "artifacts": [
+    {
+      "artifact": "plugins/claude-code-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f"
+    },
+    {
+      "artifact": "plugins/codex-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735"
+    }
+  ],
+  "nativeHostAcceptance": "unverified"
+}

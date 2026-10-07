@@ -4,21 +4,21 @@ viewType: "architecture"
 truthKind: "in-progress-worktree"
 reviewDepth: "L4"
 testEvidence: "anchored"
-verifiedAt: "2026-10-03"
-baselineCommit: "d8fafff33919c728e3a9b91ec04aa50ec5e07f0c"
-sourceFingerprint: "sha256:ed8a05bedcd1f3c798b944e714cbbb1ab6471c193fc952e61f339a639f749001"
+verifiedAt: "2026-10-04"
+baselineCommit: "04769897ea0376112eb1c052223aa546045f5a45"
+sourceFingerprint: "sha256:223fff6adf873a9a30d38779a7bdc04a1f423bc9c55a639055f79d8518d04d30"
 audience: ["maintainer","reviewer"]
 documentationOwner: "Wakeflow Architecture Atlas"
 generatedBy: "manual-review"
-sourcePaths: ["src/hosts/claude-code/claude-code-agent-text-profile.ts","src/hosts/claude-code/claude-code-hook-fragment.ts","src/hosts/claude-code/claude-code-mcp-configuration.ts","src/hosts/codex/codex-agent-text-profile.ts","src/hosts/codex/codex-hook-fragment.ts","src/hosts/codex/codex-process-launch-profile.ts","tooling/artifacts/build-plugin-artifacts.ts","tooling/artifacts/plugin-dependency-closure.ts","tooling/artifacts/plugin-metadata.ts"]
+sourcePaths: ["src/hosts/claude-code/claude-code-agent-text-profile.ts","src/hosts/claude-code/claude-code-hook-fragment.ts","src/hosts/claude-code/claude-code-mcp-configuration.ts","src/hosts/codex/codex-agent-text-profile.ts","src/hosts/codex/codex-hook-fragment.ts","src/hosts/codex/codex-process-launch-profile.ts","tooling/artifacts/build-plugin-artifacts.ts","tooling/artifacts/plugin-dependency-closure.ts","tooling/artifacts/plugin-metadata.ts","tooling/cli.ts"]
 schemaPaths: []
-testPaths: ["tests/artifacts/plugin-artifact-check.test.ts","tests/artifacts/plugin-artifacts.test.ts","tests/artifacts/plugin-dependency-closure.test.ts"]
-refreshTriggers: ["package.json","package-lock.json","assets/release/version.json","assets/agent-text/**/*.md","assets/brand/*.svg","LICENSE","src/entrypoints/tsconfig.json",".agents/plugins/marketplace.json",".claude-plugin/marketplace.json"]
+testPaths: ["tests/artifacts/plugin-artifact-check.test.ts","tests/artifacts/plugin-artifacts.test.ts","tests/artifacts/plugin-dependency-closure.test.ts","tests/tooling/verification/verify.test.ts"]
+refreshTriggers: ["package.json","package-lock.json","assets/release/version.json","assets/agent-text/**/*.md","assets/brand/*.svg","LICENSE","src/entrypoints/tsconfig.json",".agents/plugins/marketplace.json",".claude-plugin/marketplace.json",".github/workflows/verify.yml"]
 ---
 
 # 制品与合同：从源码到两个宿主可加载的目录
 
-本仓库维护 Wakeflow 源码及生成插件。`src/` 的业务代码、Schema 派生合同、`assets/agent-text/` 与宿主 profile 是输入；`plugins/codex-wakeflow/`、`plugins/claude-code-wakeflow/` 是构建器输出，不能手改。以下按 **1.1.0-rc.5 源码候选**核验：本轮租约清理、隐私判定和回调渲染修正随真实编译闭包进入候选，Controller 技能由统一文本来源渲染。构建器字节与 rc.3 已核验基线相同；这里描述源码到候选的生成机制，不声明安装或宿主已加载。
+本仓库维护 Wakeflow 源码及生成插件。`src/` 的业务代码、Schema 派生合同、`assets/agent-text/` 与宿主 profile 是输入；`plugins/codex-wakeflow/`、`plugins/claude-code-wakeflow/` 是构建器输出，不能手改。以下按 **1.1.0-rc.5 源码候选**核验：候选保留先前租约清理、隐私判定和回调渲染修复，Controller 技能由统一文本来源渲染。本轮维护测试捕获和回执工具也不进入制品闭包；本图描述源码到候选的生成机制，不替代原生会话验收。
 
 ```mermaid
 flowchart LR
@@ -110,3 +110,22 @@ flowchart LR
 [Schema与验证层次](./schema-and-validation.md) · [直接文件依赖](./file-dependencies.md) · [公共MCP与宿主](../09-public-mcp-host-seams/README.md) · [本轮逐文件覆盖](../02-file-review-index.md)
 
 新安装边界：[版本目录只读预检与运行进程分派门](./installation-and-runtime-identity.md)。install:check不安装、不预留、不选择宿主版本；本服务manifest一致也不证明目标窗口已加载当前运行时。
+
+## 当前维护工具的独立职责
+
+维护工具当前为38个手写文件，统一入口为 `tooling/cli.ts#runToolingCli`。它们消费既有构建器、检查器和公共 MCP，不进入制品运行时闭包，也不成为需求或验收权威。新增 fast-check/yaml 为开发依赖，锁文件变化没有改变当前双制品清单摘要。
+
+| 维护问题 | 当前实现 | 图与边界 |
+| --- | --- | --- |
+| 哪些字节跑过哪些门 | verify 与原生 Node 事件记录；timings 只输出建议 | [维护验证](./maintainer-verification.md)，不自动重试、重建或签名 |
+| 安装和实际运行是否一致 | doctor 分开核验环境、制品与导入报告；workspace 用新进程只读汇总 | [安装与身份](./installation-and-runtime-identity.md)，不推断宿主激活 |
+| 如何稳定重建和回收实验 | 新根、合成 Git、真实协议业务场景、成功回执与清单匹配、逐项清理 | [实验与行动单](./lab-and-live-tools.md)，失败保留、未知资源拒绝 |
+| 合成业务与 worktree 如何验证 | 三种固定场景、实际 Node/Git、合成 hook、逻辑 Test 与归档 | [业务实验](./lab-business-scenarios.md)，原生验收仍未验证 |
+| 原生聊天如何避免重复创建 | live 生成行动单、持久尝试记录并核对导入字段 | 同页；已有绑定对账，来源/原生关联始终未验证 |
+| 故障如何重放、CI如何留证 | 五类回归、有界隐私模型、CI受限摘要与下载校验 | [CI与模型](./ci-and-model-evidence.md)，远端作业未执行 |
+
+本轮以 `04769897` 加维护工具未提交字节为新审阅基线，核对来源与测试范围；原 rc.5 运行时审阅保持历史记录。本轮完整门与制品验证单独执行，结果见[当前验证来源](../../plans/review-2026-10-04-lab-workflows/validation-provenance.md)；旧1280项门只作为历史，不替代本轮新字节的验证。
+
+新增[测试输入封存、单步捕获与导入回执](./test-capture-and-receipts.md)覆盖真实场景暴露的临时snapshot依赖、重复运行与摘要约定问题；仍不拥有宿主或Controller状态。
+
+本轮[只读故障包](./diagnostic-bundles.md)只属于维护CLI，分享时使用封闭投影；不进入上述制品闭包。新观察器的候选信息在后续失败时保留，也不等于宿主已激活。

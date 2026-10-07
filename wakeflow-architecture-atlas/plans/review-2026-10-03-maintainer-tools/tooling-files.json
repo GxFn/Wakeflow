@@ -1,0 +1,567 @@
+[
+  {
+    "path": "tooling/cli.ts",
+    "sha256": "8b89af814980059a5aaa59b58f00c9efb5596a43a73a9efac2f7eb89bc249188",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "维护命令分发和统一退出约定；不解释 Demand 状态。",
+    "branches": [
+      "拒绝未知、重复与错配参数；preview 是唯一无值选项。",
+      "verify/doctor/lab/fault/live/ci/timings 分别委托 owner；SIGINT/SIGTERM 只传递中止信号。",
+      "显式 exitCode 优先；普通 passed/failed/unavailable 分别为 0/1/2，错误消息不回显私有路径。"
+    ],
+    "effects": [
+      "输出 JSON 或帮助；实际写入和子进程由所选 owner 执行。"
+    ],
+    "consumers": [
+      "package.json"
+    ],
+    "tests": [
+      "tests/tooling/verification/verify.test.ts#runToolingCli",
+      "tests/tooling/live/live.test.ts#runToolingCli",
+      "tests/tooling/lab/lab.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "不是已安装插件的公共工具，不授予宿主操作权限。"
+    ]
+  },
+  {
+    "path": "tooling/diagnostics/doctor.ts",
+    "sha256": "fecf493fded45e47b7516775937b193b4793fece111deacc69a482bebfb9f8c7",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "区分当前 CLI 环境、候选/安装完整性与导入运行观察。",
+    "branches": [
+      "Node 范围只支持仓库现用的下界与主版本上界形式；npm/Git 探测限时。",
+      "候选与安装分别逐文件校验，区分宿主、版本及同版本字节漂移。",
+      "导入 status 只提取受限字段；即使摘要相同或自称 verified，也保持 unavailable/unverified。"
+    ],
+    "effects": [
+      "只读文件；启动 npm/Git 版本探测，不安装、不激活、不信任 hook。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/diagnostics/doctor.test.ts#inspectDevelopmentEnvironment",
+      "tests/tooling/diagnostics/doctor.test.ts#inspectArtifactInstallation"
+    ],
+    "limits": [
+      "不检查源码对齐、宿主选择或目标窗口实时 MCP；caller 应使用其他明确观察。"
+    ]
+  },
+  {
+    "path": "tooling/verification/files.ts",
+    "sha256": "f46b26ef4457ab57196cd9977d44a1b66c399798cb9472cb47b78cb7ad83b8ae",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "维护报告的有界普通文件读取、摘要、私有目录与临时文件替换。",
+    "branches": [
+      "读前检查普通单链接文件及容量，读后复查容量。",
+      "逐段拒绝符号链接目录；新目录 mode 0700。",
+      "报告以 .next 的 wx/0600 写入后 rename；未知残留不会被自动删除。"
+    ],
+    "effects": [
+      "文件读取和报告目录/文件写入。"
+    ],
+    "consumers": [
+      "tooling/verification/verify.ts",
+      "tooling/verification/export-ci.ts",
+      "tooling/lab/lab.ts",
+      "tooling/live/plan.ts"
+    ],
+    "tests": [
+      "tests/tooling/verification/verify.test.ts#verifyRepository",
+      "tests/tooling/lab/lab.test.ts#createLab"
+    ],
+    "limits": [
+      "不等同 Foundation 稳定能力或断电事务；已有目录权限不自动收敛，报告不签名。"
+    ]
+  },
+  {
+    "path": "tooling/verification/input-identity.ts",
+    "sha256": "a9fcc01f6a3c03cdf01d8bb8df475f06df247e5b15d5118ac9299c83eb06986a",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "冻结 Git 根的代码/测试/制品/CI 输入身份。",
+    "branches": [
+      "要求准确 Git 顶层；并集枚举 tracked 与非忽略 untracked，缺失已跟踪文件也入身份。",
+      "父目录和文件链接拒绝；源路径、模式、内容共同形成摘要。",
+      "包含 .github，排除 docs、图谱与 .build；另记录 commit、dirty、锁文件与制品清单身份。"
+    ],
+    "effects": [
+      "只读 Git 命令和文件。"
+    ],
+    "consumers": [
+      "tooling/verification/verify.ts",
+      "tooling/testing/test-duration-report.ts"
+    ],
+    "tests": [
+      "tests/tooling/verification/verify.test.ts#captureVerificationInput"
+    ],
+    "limits": [
+      "开始/结束快照不排除 ABA，也不覆盖所有已安装依赖或执行器二进制。"
+    ]
+  },
+  {
+    "path": "tooling/verification/process.ts",
+    "sha256": "82b7359c8632424efc90f2aa091856215d764a2b288a13a25274eccf7a0ac239",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "受管命令、私有日志与取消结算。",
+    "branches": [
+      "shell:false 参数数组；POSIX 独立进程组。",
+      "预先取消不启动；超时/取消先 TERM 后有界 KILL，close 时再次收尾后代。",
+      "启动失败、退出非零和中断分开；日志 fd 在 finally 关闭。"
+    ],
+    "effects": [
+      "启动命令、终止本次进程组、写 stdout/stderr 文件。"
+    ],
+    "consumers": [
+      "tooling/verification/verify.ts",
+      "tooling/diagnostics/doctor.ts"
+    ],
+    "tests": [
+      "tests/tooling/verification/verify.test.ts#runLoggedCommand"
+    ],
+    "limits": [
+      "Windows taskkill 分支没有当前实机执行证据；不保证对任意恶意脱离进程组的后代追踪。"
+    ]
+  },
+  {
+    "path": "tooling/verification/verify.ts",
+    "sha256": "f81906e0623532e76458652aa3c369f9e0788a4616e8cc9722c19bbc10c4f668",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "委托既有门并结算输入、阶段、测试及日志回执。",
+    "branches": [
+      "quick 要显式文件；gate 运行 npm test；artifact 独立运行 build:check 和 smoke。",
+      "每阶段失败即停止；Node 事件缺失、不完整或含失败/skip/todo 不能绿色。",
+      "首尾代码摘要/commit 变化时降为 unavailable；记录模型参数、运行器和日志摘要。"
+    ],
+    "effects": [
+      "在 .build/verification 创建私有回执和日志；启动受管子命令。"
+    ],
+    "consumers": [
+      "tooling/cli.ts",
+      "tooling/testing/fault-suites.ts"
+    ],
+    "tests": [
+      "tests/tooling/verification/verify.test.ts#verifyRepository"
+    ],
+    "limits": [
+      "不隐式重建 plugins，不自动重试；SIGKILL 可能只留下 running 回执。"
+    ]
+  },
+  {
+    "path": "tooling/testing/run-typescript-tests.ts",
+    "sha256": "433ae4ca0a73845f309c0b2aa9ce2dfd4d059182202ca5a8e5442ac2157a39d5",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "按当前源清单与成本提示运行编译测试，并可输出结构化记录。",
+    "branches": [
+      "全量/聚焦都验证真实文件链、源与编译输出；旧编译残留不进入选择。",
+      "未知成本优先、其余长任务优先；并发覆盖必须在可用 CPU 范围。",
+      "有记录目录时先保留选择/入口摘要，再配置 spec 与自定义 reporter；对子进程移除记录目录变量。"
+    ],
+    "effects": [
+      "启动 Node 测试进程；记录模式写私有选择及事件文件。"
+    ],
+    "consumers": [
+      "package.json",
+      "tooling/verification/verify.ts",
+      "tooling/testing/test-duration-report.ts"
+    ],
+    "tests": [
+      "tests/tooling/testing/run-typescript-tests.test.ts#compiledTypeScriptTests",
+      "tests/tooling/testing/test-schedule-order.test.ts#orderTestSourcesByCost",
+      "tests/tooling/testing/test-recording.test.ts#inspectTestRecording"
+    ],
+    "limits": [
+      "并发/成本只影响文件调度，不改变用例时限、fsync 或断言；reporter 为路径参数加载。"
+    ]
+  },
+  {
+    "path": "tooling/testing/test-recording.ts",
+    "sha256": "52e40d21f09d195864b02121fd3894f43e832cd2ebb0352a9158f7acf44a0f1d",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "准备记录文件并判定 Node 事件是否完整、通过。",
+    "branches": [
+      "限定 .build/verification/run-* 且 mode 0700；wx 防覆盖。",
+      "要求唯一总汇总、每个选中文件一个汇总及末尾标记，拒绝拼接流。",
+      "通过还要求统计可相加，零失败/取消/skip/todo 且至少一个用例。"
+    ],
+    "effects": [
+      "准备选择与事件文件；后续检查只读。"
+    ],
+    "consumers": [
+      "tooling/testing/run-typescript-tests.ts",
+      "tooling/verification/verify.ts",
+      "tooling/testing/test-duration-report.ts",
+      "tooling/verification/export-ci.ts"
+    ],
+    "tests": [
+      "tests/tooling/testing/test-recording.test.ts#prepareTestRecording",
+      "tests/tooling/testing/test-recording.test.ts#inspectTestRecording"
+    ],
+    "limits": [
+      "私有事件记录不是签名；file 与 run 对取消的分类差异保留而不抹平。"
+    ]
+  },
+  {
+    "path": "tooling/testing/test-event-reporter.ts",
+    "sha256": "aeca90a12fb32c75ebf24701050160475bee6fda50bf21e76512d433bd51f4f8",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "投影 Node 原生测试完成/汇总事件并输出 JSONL 边界。",
+    "branches": [
+      "编译文件定位为源相对路径，越根定位为 null。",
+      "保留有界 case 名、结果、时长、嵌套和 skip/todo；不序列化 Error 或任意 stdout。",
+      "输出 header 和结束标记；同时保留文件与总汇总。"
+    ],
+    "effects": [
+      "由 Node reporter 协议输出事件文本。"
+    ],
+    "consumers": [
+      "tooling/testing/run-typescript-tests.ts"
+    ],
+    "tests": [
+      "tests/tooling/testing/test-recording.test.ts#inspectTestRecording"
+    ],
+    "limits": [
+      "测试经真实 Node 子进程间接覆盖；case 名可能含路径，事件始终是私有证据。"
+    ]
+  },
+  {
+    "path": "tooling/testing/test-duration-report.ts",
+    "sha256": "e6687e7a59b28f35a6861236af6c05ce88949f8f57955fbc37f9ba1416cc8707",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "从完整 gate 回执提出排程耗时表。",
+    "branches": [
+      "必须完整通过、输入不变，且当前 Git/源码身份相符。",
+      "重验事件/选择摘要并重新检查当前完整测试库存。",
+      "采用文件汇总毫秒向上取整，输出建议而不改写跟踪表。"
+    ],
+    "effects": [
+      "只读回执、Git 和测试清单；返回候选 JSON。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/verification/verify.test.ts#proposeTestDurations"
+    ],
+    "limits": [
+      "不是性能承诺；不包含 worker 启动耗时，也不是证据认证。"
+    ]
+  },
+  {
+    "path": "tooling/testing/fault-suites.ts",
+    "sha256": "90d244565528c8ecbe770740650f0fd04a9b2b6f551dccd982f038b58da4663c",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "把五类现有故障回归收敛为明确选择。",
+    "branches": [
+      "list 给出源文件和技术分类；run 接受单族或 all 并去重。",
+      "委托 verify quick，保持底层断言与时限；无自动重试。"
+    ],
+    "effects": [
+      "run 的写入与子命令由 verify owner 负责。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/testing/fault-suites.test.ts#listFaultSuites",
+      "tests/tooling/testing/fault-suites.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "有效 run 分支另有开发阶段实际 CLI 回执；测试技术混合，不能整体当作原生或统一 fsync 验收。"
+    ]
+  },
+  {
+    "path": "tooling/testing/model-options.ts",
+    "sha256": "0665f94e9fa2bf16cee07f7fcc5ecfdd8e8c0e4f0091911412abef1bd09dbca9",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "准入有界、可重放的隐私模型参数。",
+    "branches": [
+      "seed 为有符号32位整数；运行次数1至1000。",
+      "path 限数字段，replayPath 限有界 Base64 两段；缺省 seed/次数固定。"
+    ],
+    "effects": [
+      "纯解析，无运行时故障开关。"
+    ],
+    "consumers": [
+      "tooling/verification/verify.ts",
+      "tooling/verification/export-ci.ts",
+      "tests/kernel/privacy-model.test.ts"
+    ],
+    "tests": [
+      "tests/tooling/verification/ci-workflow.test.ts#modelTestOptions",
+      "tests/kernel/privacy-model.test.ts#modelTestOptions"
+    ],
+    "limits": [
+      "maxCommands 由测试 owner 定义；模型不复制扫描器，也不覆盖文件系统崩溃。"
+    ]
+  },
+  {
+    "path": "tooling/lab/inventory.ts",
+    "sha256": "cee8a489da1b274398e4fbe6f497884127cd4f694b3fbacb166b39047098c051",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "实验树的完整清单、漂移拒绝和逐项删除。",
+    "branches": [
+      "规范目录、同设备、普通单链接文件和容量门；记录 inode/dev/mode 与内容摘要。",
+      "清单用固定字段投影比较，未知空目录、同字节替换与链接也拒绝。",
+      "删除前复核整树，再逆序检查祖先/节点身份后 unlink/rmdir；不递归吞掉后来加入的文件。"
+    ],
+    "effects": [
+      "读实验树；只删除给定清单内已复核节点；合成 Git 命令禁用全局配置/模板效果。"
+    ],
+    "consumers": [
+      "tooling/lab/lab.ts",
+      "tooling/lab/scenarios.ts",
+      "tooling/lab/mcp-session.ts",
+      "tooling/live/plan.ts",
+      "tooling/verification/export-ci.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/inventory.test.ts#snapshotLabTree",
+      "tests/tooling/lab/inventory.test.ts#removeInventoriedTree"
+    ],
+    "limits": [
+      "同用户恶意竞争或篡改不是安全隔离保证；部分删除不回滚，Windows 未实机验证。"
+    ]
+  },
+  {
+    "path": "tooling/lab/lab.ts",
+    "sha256": "22230397bf1db8c96d43ac2dc3f1b503fba7611f863cb566e2f3ca8766cd1974",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "创建、检查、运行与回收单次可丢弃实验环境。",
+    "branches": [
+      "只接受 Git 仓库外尚不存在的新根；核验并复制制品，创建三个合成 Git 仓库。",
+      "通过公共 MCP 初始化；成功后冻结资源、配置与 Git 清单，失败保留现场。",
+      "运行与清理先验完整归属；wx 互斥，MCP 关闭不明保留锁；清理需当前 preview 摘要，回执留在环境之外。"
+    ],
+    "effects": [
+      "创建/删除明确的新实验树、合成 Git 提交、私有报告及制品进程。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/lab.test.ts#createLab",
+      "tests/tooling/lab/lab.test.ts#runLab",
+      "tests/tooling/lab/lab.test.ts#disposeLab"
+    ],
+    "limits": [
+      "资源容器中的 Workspace 才是程序根；清单冻结后不支持任意业务改动被自动收编，不创建宿主聊天。"
+    ]
+  },
+  {
+    "path": "tooling/lab/mcp-session.ts",
+    "sha256": "d92b1e0af06690003545998ebb0a21a508a002a130f9c23a10214ab21184db56",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "生成制品 stdio 客户端、受限结果和可等待关闭。",
+    "branches": [
+      "请求含中止信号和60秒期限；错误只提取受限类别，公共输出检查实验根泄露。",
+      "SDK 握手可能非等待关闭，因此 transport 各调用共用 closing Promise。",
+      "等真实 close 事件，强制退出后仍等结算；关闭不明由 owner 抛出稳定错误，不形成后台未处理拒绝。"
+    ],
+    "effects": [
+      "启动/关闭新 MCP 子进程；内存收集公开结果并常量空间排空 stderr。"
+    ],
+    "consumers": [
+      "tooling/lab/lab.ts",
+      "tooling/live/plan.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/lab.test.ts#withLabMcp"
+    ],
+    "limits": [
+      "这是新 stdio 进程，不证明原生聊天 MCP；lab owner 对关闭不明保留操作锁。"
+    ]
+  },
+  {
+    "path": "tooling/lab/scenarios.ts",
+    "sha256": "9ae4cfd7c3fbdd642bac8932dde3798d404c10ff405de677628a24a3ae333a68",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "固定双产品选择和 readiness 场景。",
+    "branches": [
+      "fresh preview 前后验树；apply 使用实际返回 planDigest，要求 completed。",
+      "readiness 要求 idle、新进程摘要相符、verify通过、reconcile零步/no-op、pod仅预览。",
+      "前后完整清单相同才报告无持久变化，包含 .git 和制品副本。"
+    ],
+    "effects": [
+      "初始化通过公共 MCP 写合成业务环境；readiness 不主动执行业务写动作。"
+    ],
+    "consumers": [
+      "tooling/lab/lab.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/lab.test.ts#createLab",
+      "tests/tooling/lab/lab.test.ts#runLab"
+    ],
+    "limits": [
+      "经实验台入口间接覆盖；不是完整 Demand、投递或 worktree 原生验收。"
+    ]
+  },
+  {
+    "path": "tooling/live/contracts.ts",
+    "sha256": "5109468770ab0e982b3af796eb256cd2f728404fedd85c9a96abacb888f5bcab",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "维护行动单和导入 JSON 的有界投影合同。",
+    "branches": [
+      "普通文件上限4MiB；解码直接对象、structuredContent或唯一text包装，isError拒绝。",
+      "重算计划摘要，检查场景、关键摘要、窗口唯一性与受限文本。"
+    ],
+    "effects": [
+      "只读导入文件；不执行其中指令。"
+    ],
+    "consumers": [
+      "tooling/live/plan.ts",
+      "tooling/live/attempts.ts",
+      "tooling/live/evidence.ts",
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/live/live.test.ts#loadLivePlan",
+      "tests/tooling/live/live.test.ts#inspectLiveEvidence"
+    ],
+    "limits": [
+      "经公开维护入口间接覆盖；投影合同不是对全部公共 Schema 的重新准入，也不能认证来源。"
+    ]
+  },
+  {
+    "path": "tooling/live/plan.ts",
+    "sha256": "26014ae6b76addebf04da64b7bbdf13714507e40a4ec1f9b589b97702cfab641",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "按真实配置根和宿主 profile 建立项目聊天行动单。",
+    "branches": [
+      "项目路径/hostId/local类型精确匹配，必须唯一；不按标题选择。",
+      "候选逐文件核验，status与binding inspect只读获取配置及启动说明；仅支持project/local主pod且无claim。",
+      "前后核对配置和制品；稳定输入同计划ID，存计划及空证据模板。"
+    ],
+    "effects": [
+      "启动新只读 stdio 观察器，写私有行动单；不创建项目或聊天。"
+    ],
+    "consumers": [
+      "tooling/cli.ts",
+      "tooling/live/attempts.ts",
+      "tooling/live/evidence.ts"
+    ],
+    "tests": [
+      "tests/tooling/live/live.test.ts#planLiveProject",
+      "tests/tooling/live/live.test.ts#loadLivePlan"
+    ],
+    "limits": [
+      "project inventory 是导入材料；Claude/worktree场景不支持，当前观察不证明已有原生进程。"
+    ]
+  },
+  {
+    "path": "tooling/live/attempts.ts",
+    "sha256": "db8047b3ea0f5c27208332a2c53ec8710301e559dc206d46c2b884a090a28ce3",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "在外部宿主调用前记录一次准备尝试。",
+    "branches": [
+      "已有绑定拒绝新建；重新观察候选、配置、绑定与claim后才写记录。",
+      "键为工作区根+hostId+windowId，跨候选与标题变化保持稳定。",
+      "wx+文件fsync+目录fsync；失败残留不删除，重复记录要求对账。"
+    ],
+    "effects": [
+      "只创建私有尝试记录；不调用宿主工具，不发送消息。"
+    ],
+    "consumers": [
+      "tooling/cli.ts",
+      "tooling/live/evidence.ts"
+    ],
+    "tests": [
+      "tests/tooling/live/live.test.ts#recordLiveAttempt",
+      "tests/tooling/live/live.test.ts#execFile"
+    ],
+    "limits": [
+      "双独立CLI进程试验覆盖单次创建；记录不是调用发生/落地证明，也不阻止不遵循流程的外部参与者。"
+    ]
+  },
+  {
+    "path": "tooling/live/evidence.ts",
+    "sha256": "88d951b80e4f57b15d096a9306870a640ceb31c672a35215c096988348c35a4c",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "核对导入观察的字段一致性，并保留来源限制。",
+    "branches": [
+      "窗口/线程不得重复；分开检查创建上下文、ready句柄、项目、SessionStart、角色cwd、绑定和所报runtime。",
+      "缺项 unavailable、矛盾 failed；字段全匹配仍整体 unavailable，原生和窗口到MCP关联始终未验证。",
+      "文件入口验当前配置摘要和尝试记录，写私有结果及输入摘要；声明来源不提升信任。"
+    ],
+    "effects": [
+      "读取导入材料，写私有核验报告；无宿主动作或业务接受。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/live/live.test.ts#inspectLiveEvidence",
+      "tests/tooling/live/live.test.ts#verifyLiveEvidence"
+    ],
+    "limits": [
+      "只核对选定投影字段，不证明回执真实、即时或已执行完整业务链。"
+    ]
+  },
+  {
+    "path": "tooling/verification/export-ci.ts",
+    "sha256": "58a5e9da743d8a4546b804f8bf358f17c559317eddf07ce438b3e260c061c126",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-03",
+    "method": "完整读取当前实现，核对调用方、失败分支与相关断言；机械库存只用于闭合路径和字节。",
+    "responsibility": "把私有验证投影为可分享摘要，并硬核验下载后的字节。",
+    "branches": [
+      "summary只能指向标准私有回执路径；复验事件摘要、统计、阶段、输入首尾及时间。",
+      "仅复制受限分类、数字、摘要、相对测试路径与模型seed/次数；未知字段和任意计数键不透传。",
+      "bundle要求恰好report/manifest两文件和匹配摘要；校验通过仍来源未认证。"
+    ],
+    "effects": [
+      "写 .build/ci 报告与清单；bundle检查只读，不上传。"
+    ],
+    "consumers": [
+      "tooling/cli.ts",
+      ".github/workflows/verify.yml"
+    ],
+    "tests": [
+      "tests/tooling/verification/verify.test.ts#exportCiVerification",
+      "tests/tooling/verification/verify.test.ts#verifyCiBundle"
+    ],
+    "limits": [
+      "导出成功和被测验证状态分开；不是完整供应链签名或原生验收。"
+    ]
+  }
+]

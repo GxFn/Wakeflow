@@ -1,0 +1,33 @@
+{
+  "kind": "WakeflowAtlasReaderObservation",
+  "observedOn": "2026-10-04",
+  "mode": "actual-in-app-browser",
+  "homeBaseline": "04769897",
+  "handwrittenFiles": 398,
+  "visitedDocuments": [
+    "17-artifacts-and-contracts/lab-business-scenarios",
+    "17-artifacts-and-contracts/installation-and-runtime-identity"
+  ],
+  "controlsObserved": [
+    "fullscreen",
+    "fit-all",
+    "section-navigation"
+  ],
+  "allDiagramRendering": {
+    "diagrams": 108,
+    "rendered": 108,
+    "receipt": "plans/evidence/current-mermaid-render.json",
+    "receiptSha256": "6fa770ab7addbf2064086c488d19f343ac4598dc1594a557fa921a46130dcddd"
+  },
+  "screenshots": [
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-04-lab-workflows/reader-business.jpg",
+      "sha256": "1cb16ad533993bbb32c338004db2f0b121afbd300a391f8bffef409b9089a9c1"
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-04-lab-workflows/reader-diagnostic.jpg",
+      "sha256": "94d9d71c8f3fd59c873326c0c8f2e348f051b773dc58fcb5607fa362484146db"
+    }
+  ],
+  "scopeLimit": "全部当前源图实际渲染，有限视觉检查覆盖新增业务、清理和诊断图及页面；不声称全部历史图逐像素重审。 排程导入与调用图随后更新，全部108图再次真实渲染并复验。"
+}

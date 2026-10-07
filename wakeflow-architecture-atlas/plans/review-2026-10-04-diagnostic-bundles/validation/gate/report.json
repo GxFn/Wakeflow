@@ -1,0 +1,3701 @@
+{
+  "kind": "WakeflowCiVerification",
+  "schemaVersion": 1,
+  "source": "unsigned-local-verification-receipt",
+  "status": "passed",
+  "profile": "gate",
+  "startedAt": "2026-10-04T16:04:21.397Z",
+  "finishedAt": "2026-10-04T16:29:28.635Z",
+  "receiptDigest": "sha256:6ad535ef58bd6399f47cab5e00796a337251d9c5b42c15b6db08dd22b8737149",
+  "input": {
+    "commit": "04769897ea0376112eb1c052223aa546045f5a45",
+    "digest": "sha256:f135a04d22b4c46baa04921961d301434f99c93767e350751b35327a7b775a7c",
+    "lockfileDigest": "sha256:196d521fbde18c2c9345f181548a2689c268e3b1dc2a47cdb984c5b9cf43a7f5"
+  },
+  "environment": {
+    "node": "24.19.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "inputsUnchanged": true,
+  "stages": [
+    {
+      "name": "gate",
+      "status": "passed",
+      "durationMs": 1506663,
+      "exitCode": 0
+    }
+  ],
+  "tests": {
+    "complete": true,
+    "passed": true,
+    "counts": {
+      "tests": 1326,
+      "passed": 1326,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "suites": 0
+    },
+    "selectedFiles": 280,
+    "files": [
+      {
+        "file": "tests/tooling/diagnostics/bundle.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 13,
+          "passed": 13,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/lab/workflow.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/scenarios/wakeflow-scenario-acceptance.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/result-review/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 11,
+          "passed": 11,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/result-review/mixed-failure-remediation.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-maintenance-execution-transaction.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 14,
+          "passed": 14,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/lab/sealing.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/demand/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/observation/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 19,
+          "passed": 19,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/workspace/reconfigure-add-repository.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/workspace/maintain-workspace-reconcile-repair.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/endpoint/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/hook-observations.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 12,
+          "passed": 12,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/demand/acceptance-coverage.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/delivery/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/lab/lab.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/capture/capture.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 13,
+          "passed": 13,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/controller/demand-controller-route.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/evidence/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/workspace/operation-scope.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/live/live.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-tmux-asset.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 22,
+          "passed": 22,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-research-completion.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 9,
+          "passed": 9,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/pod/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/endpoint/claude-permission-mode.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/workspace/private-mode-reconcile.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/review/demand-post-acceptance-route.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-maintenance-execution.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/tasking/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-capture-planning-service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-public-mcp-lifecycle.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-maintenance-entrypoints.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-continuation-replay.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/observation/workspace-observation.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/result/test-target-result.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/requirement/service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 13,
+          "passed": 13,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-publication-service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-hook-observer.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 15,
+          "passed": 15,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-publication-application-service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/demand/pod-concurrency.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/workspace/maintain-workspace-external-instruction.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/diagnostics/workspace.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-reading-service.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/result-review/evidence-citation.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/workspace/maintain-workspace.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/review/demand-result-review-snapshot.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/workspace/demand-runtime-recovery.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/codex/codex-maintenance-execution.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/observation/maintenance-busy-residue.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-maintenance-gate-journal-store.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 9,
+          "passed": 9,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/artifacts/plugin-artifacts.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/codegen/schema-types.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-record-set-inventory.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-static-materialization-preview.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/release/check-release-consistency.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/tasking/prepared-workspace-baseline.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/active-projection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 12,
+          "passed": 12,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/host-runtime/wakeflow-host-capability-layout-materialization.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/review/demand-result-review-snapshot-legacy-history.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/verification/verify.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 9,
+          "passed": 9,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-static-materialization-step-executor.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/capture/contracts.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/rooted-read-write-scope.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 14,
+          "passed": 14,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/artifacts/plugin-artifact-check.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/ledger/ledger-authority-store.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-active-guard.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/requirement-board.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-file-event-store.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-command-handler.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/tasking/unicode-anchor.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/review/controller-target-review-event-sourcing.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-public-mcp-cancellation.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-publication-stage-materializer.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/tasking/task-package-projection-store.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-directory-tree-candidate-retirement.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-publication-record-publisher.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-gitignore-inspection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 16,
+          "passed": 16,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-gitignore-recomposition-recovery.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/configuration/wakeflow-config-authority-replacement.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/artifact/loaded-artifact-tree-transfer-publication.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-gitignore-recomposition.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/artifact/loaded-artifact-tree-transfer-candidate.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-prepared-maintenance-recovery.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/observation/repository-pointer-observation.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/rooted-exclusive-file-lock.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-identity-authority.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/observation/active-projection-facts.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/pod-worktree-receipts.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/testing/test-recording.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-statusline-asset.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/support/wakeflow-support-memory-publication.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/endpoint/locator-store.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-program-instruction-recomposition.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/publication-transaction.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-upcaster.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-repository.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-mcp-stdio.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-maintenance-execution-intent.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/demand/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/testing/test-schedule-order.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/codex/codex-process-launch-profile.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-directory-tree-publication.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/work-claims.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-version-evolution.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-decider.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/git/git-ignore-observation.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/git/git-ignore-candidate-observation.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/support/wakeflow-support-memory-inspection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-aggregate-state.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/review/controller-implementation-review-decision.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-manifest.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/append-command.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-atomic-file-write.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 14,
+          "passed": 14,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-portable-settings-operation-executor.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-publication-transaction-store.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/support/wakeflow-managed-support-root-materialization.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/artifact/loaded-artifact-tree-identity.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/diagnostics/doctor.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/workspace-operation-scope.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/configuration/wakeflow-config-authority-snapshot.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-external-instruction-recomposition.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/result-review/prompt.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-directory-tree-candidate.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-portable-settings-composition.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/result/target-result.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-publication-transaction.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-program-instruction-inspection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/window-runtime/wakeflow-window-runtime-registered-projection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/configuration/wakeflow-config-authority-publication.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-maintenance-orphan-gate-recovery.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-public-mcp-error-envelope.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/stream-index.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-workspace-core-layout-inspection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-event-sourcing.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-record-tree-plan.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-snapshot.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-file-copy-candidate.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 11,
+          "passed": 11,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-root-inventory.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-atomic-file-stage-recovery.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/review/controller-product-defect-remediation-authorization.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-directory-materialization.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/support/wakeflow-support-memory-authority.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-publication-transaction.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/delivery/delivery-envelope.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-stream-commit.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-support-gitignore.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-portable-settings-publication.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/review/controller-test-review-decision.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/ledger/ledger-record-publication-intent.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/tasking/task-package.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/wakeflow-workspace-static-resource-operation-context.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/configuration/wakeflow-fresh-config-selection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/pod/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/ledger/ledger-authority-record.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/configuration/wakeflow-config-document.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/schema/runtime-json-schema.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/support/wakeflow-managed-support-resource-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-resource-rename.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-maintenance-journal.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-regular-file-link.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/configuration/wakeflow-config-root-placement.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/requirement/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/result/implementation-target-result-report.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/stable-directory-read.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/stable-resource-tree-read.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-private-mode-census.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/testing/test-execution-attempt.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/configuration/wakeflow-config.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 9,
+          "passed": 9,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/exact-regular-file-unlink.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/window-runtime/wakeflow-window-runtime-desired-topology.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/result/test-target-result-report.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-artifact-mutation-guard.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-program-instruction-body-authority.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/window-runtime/wakeflow-window-launch-intent.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-public-mcp-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/wakeflow-workspace-static-resource-matrix.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-file-candidate.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/bounded-directory-tree-scan.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/ledger/ledger-resource-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-external-instruction-body-authority.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/absolute-directory-materialization.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-regular-file-settlement.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/git/git-object-id.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/deterministic-json-file.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/rooted-resource-parent-handle.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/strict-text-file.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 9,
+          "passed": 9,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/artifacts/plugin-dependency-closure.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/stable-file-read.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/observation/demand-archive-locator.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-maintenance-execution-plan.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/rooted-directory.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 12,
+          "passed": 12,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/rooted-exact-resource-handle.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/ledger/ledger-authority-layout.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/evidence/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/live/receipt.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-gitignore-body-authority.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/private-mode-convergence.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/window-runtime/wakeflow-window-host-binding.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/codegen/mcp-wire-schema-self-contained.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/artifacts/agent-text-live-guidance.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/data/json-value.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 9,
+          "passed": 9,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/command-shell.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/limits.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/observation/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 15,
+          "passed": 15,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/result-review/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/ids.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/privacy-model.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/absolute-directory-placement.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/testing/fault-suites.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/artifacts/agent-text-honesty.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 10,
+          "passed": 10,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/time/monotonic-clock.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/tasking/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-source-selection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/workspace-host-resource-profile.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/privacy-scan.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/markdown-sections.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/file-node-snapshot.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-managed-text-envelope.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-resource-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/testing/run-typescript-tests.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/workspace-host-resource-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/artifacts/immutable-local-installation.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/verification/ci-workflow.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-managed-text-authority-transition.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/delivery/prompt.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/data/passive-own-data.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 11,
+          "passed": 11,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/resource/resource-processing-contract.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/tooling/lab/inventory.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/artifact/loaded-artifact-tree-transfer-plan.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/file-byte-range.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/demand/demand-event-sourcing-state-version.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/prompt-digest.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/workspace-host-resource-profile.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/endpoint/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-public-mcp-catalog-binding.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/crypto/sha256-hasher.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/crypto/sha256.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/node/process-instance.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/pod/worktree-disposal.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/data/deterministic-json-document.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/event-sourcing/event-sourcing-version-evolution.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/portable-resource-path.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 9,
+          "passed": 9,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/numeric/byte-count.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/text/utf8.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/time/wall-clock.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/contracts/identity/wakeflow-durable-id.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/data/canonical-json.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/node/node-system-error.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/tool-registry.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/host-runtime/wakeflow-host-capability-layout-authority.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/time/monotonic-deadline.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/time/monotonic-duration.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/tasking/task-package-projection-paths.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-portable-settings-rules.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-portable-settings-transition.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/configuration/wakeflow-config-resource-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/entrypoints/wakeflow-public-tool-descriptions.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/crypto/canonical-json-sha256.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/whole-file-content-transition.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/identity/uuid-v4.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/time/utc-instant.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 6,
+          "passed": 6,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/evidence/managed-evidence-resource-paths-and-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/codex/codex-hook-fragment.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/error.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 4,
+          "passed": 4,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/workspace-resource-declaration.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/capabilities/delivery/decide.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 8,
+          "passed": 8,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/codex/workspace-host-resource-profile.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/filesystem/durable-atomic-file-stage-address.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/hosts/claude-code/claude-code-hook-fragment.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 5,
+          "passed": 5,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/redaction.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-maintenance-operation-id.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/foundation/text/markdown-json-string-literal.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/kernel/next-projection.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 2,
+          "passed": 2,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-static-materialization-preview-contract.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/governance/controller/demand-controller-route-frontier-matrix.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      },
+      {
+        "file": "tests/workspace/maintenance/wakeflow-maintenance-resource-catalog.test.ts",
+        "success": true,
+        "counts": {
+          "tests": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "suites": 0
+        }
+      }
+    ]
+  },
+  "modelTests": {
+    "seed": 20261003,
+    "numRuns": 200,
+    "replayRequested": false
+  },
+  "artifacts": [
+    {
+      "artifact": "plugins/claude-code-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f"
+    },
+    {
+      "artifact": "plugins/codex-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735"
+    }
+  ],
+  "nativeHostAcceptance": "unverified"
+}

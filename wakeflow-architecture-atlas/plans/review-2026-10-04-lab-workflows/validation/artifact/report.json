@@ -1,0 +1,48 @@
+{
+  "kind": "WakeflowCiVerification",
+  "schemaVersion": 1,
+  "source": "unsigned-local-verification-receipt",
+  "status": "passed",
+  "profile": "artifact",
+  "startedAt": "2026-10-04T08:34:57.712Z",
+  "finishedAt": "2026-10-04T08:35:19.946Z",
+  "receiptDigest": "sha256:bef2a9a5e6f8b4193f16e13e141213fc1c4745a15cb97819ff07322462b9a959",
+  "input": {
+    "commit": "04769897ea0376112eb1c052223aa546045f5a45",
+    "digest": "sha256:75484da2fcbed378ecaf6775ba32764c67b2632cd20cf40d3f700ba4c0d6ab02",
+    "lockfileDigest": "sha256:196d521fbde18c2c9345f181548a2689c268e3b1dc2a47cdb984c5b9cf43a7f5"
+  },
+  "environment": {
+    "node": "24.19.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "inputsUnchanged": true,
+  "stages": [
+    {
+      "name": "build:check",
+      "status": "passed",
+      "durationMs": 1194,
+      "exitCode": 0
+    },
+    {
+      "name": "smoke:artifacts",
+      "status": "passed",
+      "durationMs": 20481,
+      "exitCode": 0
+    }
+  ],
+  "tests": null,
+  "modelTests": null,
+  "artifacts": [
+    {
+      "artifact": "plugins/claude-code-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:fb4bf0c5eea17b6a25a233f74402cf47711b67d1ab8afe09f3b0b7d6fb203f9f"
+    },
+    {
+      "artifact": "plugins/codex-wakeflow/artifact-manifest.json",
+      "manifestDigest": "sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b78ceeacabbc5b18735"
+    }
+  ],
+  "nativeHostAcceptance": "unverified"
+}

@@ -1,0 +1,22 @@
+{
+  "kind": "WakeflowAtlasSupportReview",
+  "reviewedOn": "2026-10-03",
+  "changes": [
+    {
+      "path": "wakeflow-architecture-atlas/scripts/atlas-validation.mjs",
+      "sha256": "01211834fc9ea86d9d4ff1ee80f0085c26ed90b41464ae25aaf361783dc188cf",
+      "finding": "SWC将具名默认导出表示为FunctionExpression/ClassExpression；原索引漏掉真实声明。",
+      "fix": "索引实际具名表达式；匿名默认导出不制造default符号，文本和注释仍不算符号。",
+      "test": "wakeflow-architecture-atlas/scripts/atlas-validation.test.mjs",
+      "before": "具名报告器符号回归失败",
+      "after": "18项图谱检查器测试通过"
+    },
+    {
+      "path": "wakeflow-architecture-atlas/src/main.ts",
+      "sha256": "cc40e920cfd91a0512f57923fdaab29c02d86aa7d3eb49c3b32146689c310db5",
+      "finding": "首页从未改变的总体架构页取旧基线，核验快照卡也指向旧记录。",
+      "fix": "首页基线与当前审阅路径统一来自逐文件索引；新增维护图快捷入口。 首页标题缩短避免单字断行，证据资产支持本轮JPEG截图。",
+      "validation": "由阅读器类型检查和浏览器实际页面核验，结果另记。"
+    }
+  ]
+}

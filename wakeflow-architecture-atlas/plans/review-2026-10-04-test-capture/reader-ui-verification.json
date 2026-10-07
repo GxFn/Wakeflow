@@ -1,0 +1,16 @@
+{
+  "observedOn": "2026-10-04",
+  "source": "actual-local-in-app-browser",
+  "page": "maps/17-artifacts-and-contracts/test-capture-and-receipts.md",
+  "checks": {
+    "currentIndexShows405Handwritten": true,
+    "currentReviewSeparatedFromHistorical": true,
+    "newPageTitleAndProseVisible": true,
+    "bothDiagramsPresent": true,
+    "firstDiagramFullFitControlWorks": true
+  },
+  "limits": [
+    "有限页面观察，不是全站视觉回归",
+    "原生聊天和插件运行时不由阅读器验证"
+  ]
+}

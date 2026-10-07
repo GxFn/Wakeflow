@@ -1,0 +1,59 @@
+{
+  "method": "实际读取新增capture/receipt及CLI和测试，修订调用、直接依赖与边界；doctor/lab/安装机制的旧分支未变，明确说明新增入口的独立性后刷新关联页。",
+  "documents": [
+    {
+      "path": "maps/02-file-review-index.md",
+      "previousFingerprint": "sha256:e6ba188582de42440aad1266f498c1262602f08bf8cb1966b9e5ef0dcf54abfa",
+      "sourceFingerprint": "sha256:568559af77bacf5808664229817ffe7f6602e9adcb39508440058875a55a3966",
+      "inputFiles": 939
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/README.md",
+      "previousFingerprint": "sha256:ab4aea3586885cd5477ff469d6360820f4c5c5530f7336adab6ea99dc5181f7e",
+      "sourceFingerprint": "sha256:88c3ee9cef2161dfbbbcd21e1df0cc97aa2339f105a177bfe1b916b113d5c800",
+      "inputFiles": 40
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/file-dependencies.md",
+      "previousFingerprint": "sha256:56c5ff221aff57dc775127602700e4d7c1e98f10757916e421b7bbddbe167181",
+      "sourceFingerprint": "sha256:337bb218842b2f5fd610dedff68d0c395aa80a063a24035aa359a276f2d2c2a4",
+      "inputFiles": 98
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/installation-and-runtime-identity.md",
+      "previousFingerprint": "sha256:56eca29cbbfe162475af875e7f1ce4a4fa631e2c0bc9a9a18e6bf219490bd00c",
+      "sourceFingerprint": "sha256:8856d014cfe603fa2795f3f5cdb5893c1ecc949c407c599e964f079cfe5638df",
+      "inputFiles": 18
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/lab-and-live-tools.md",
+      "previousFingerprint": "sha256:0995c6a623ede69edd793ecb94d60ba1a221161c11559493cd6ae81c4386e86c",
+      "sourceFingerprint": "sha256:db2d715314cdb1bc743334b59ab68b6486a8732ae694ff320d1f9efe770d2dda",
+      "inputFiles": 28
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/lab-business-scenarios.md",
+      "previousFingerprint": "sha256:c1520c1b48aa4ae6bcab005bed983ef90549f6c541c635bc60b227a3f8b626d4",
+      "sourceFingerprint": "sha256:f925603ee0b1475df35e3176f8d3b2967bb6e7e59e4a645d1756e807bb80d565",
+      "inputFiles": 18
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/maintainer-verification.md",
+      "previousFingerprint": "sha256:d8574bebe35d46a51f67182807db58ba13b6059060b8d210eb66993f00b53db0",
+      "sourceFingerprint": "sha256:bd4b2f5302f0941f075ef3c567ccdf350791c9e2ff63ae9e550af9e68fda6670",
+      "inputFiles": 16
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/schema-and-validation.md",
+      "previousFingerprint": "sha256:735e882e8f55ffd1368225ad514312b686a49465031365db75bc95446dcd4d30",
+      "sourceFingerprint": "sha256:890d754d656b873b4bcc686ba4900b1c70a1f46f901cdf63d065210f43c534c7",
+      "inputFiles": 261
+    },
+    {
+      "path": "maps/17-artifacts-and-contracts/test-capture-and-receipts.md",
+      "previousFingerprint": "pending",
+      "sourceFingerprint": "sha256:1aa345126e6a1415a0fe1873f108cd7dcfca0fcd75d72bc1852828169b6e262a",
+      "inputFiles": 111
+    }
+  ]
+}

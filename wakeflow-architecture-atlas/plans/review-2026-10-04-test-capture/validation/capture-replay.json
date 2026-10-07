@@ -1,0 +1,54 @@
+{
+  "kind": "WakeflowHistoricalCaptureReplaySummary",
+  "schemaVersion": 1,
+  "provenance": "local-maintainer-observation-of-imported-historical-contracts",
+  "nativeHostAcceptance": "unverified",
+  "runtimeStateWritten": false,
+  "sourceContracts": [
+    "immutable-event-commit",
+    "frozen-task-package",
+    "previous-test-result",
+    "implementation-results",
+    "retained-git-bundles"
+  ],
+  "status": "passed-with-preserved-orchestrator-diagnostics",
+  "commands": [
+    {
+      "stepId": "ts-2",
+      "assertions": 10,
+      "status": "captured"
+    },
+    {
+      "stepId": "ts-3",
+      "assertions": 12,
+      "status": "captured"
+    }
+  ],
+  "priorPassingStepRefused": true,
+  "repeatedStepRefused": true,
+  "removedImportedOriginalCopiesAfterPrepare": true,
+  "inspection": "matched",
+  "linkedCheckoutsRemoved": 2,
+  "historicalConfigDeactivated": true,
+  "retained": "Test evidence and primary clone repositories; no new project or chat",
+  "receipt": {
+    "imported": true,
+    "source": "imported-unverified",
+    "rawFileDigestMatchesHistoricalEvidence": true,
+    "jsonDigestMatchesCompleteParsedReturn": true,
+    "rawAndJsonDigestsDiffer": true,
+    "hostEffect": "not-verified"
+  },
+  "orchestratorDiagnostics": [
+    {
+      "point": "finalization",
+      "reason": "attempted to re-read intentionally removed imported copies",
+      "resolution": "finalized from frozen observations without repeating commands"
+    },
+    {
+      "point": "cleanup precondition",
+      "reason": "explicit filename list omitted tests already present in the recovered commits",
+      "resolution": "checked actual commit tree and clean Git state; removed linked checkouts without force"
+    }
+  ]
+}

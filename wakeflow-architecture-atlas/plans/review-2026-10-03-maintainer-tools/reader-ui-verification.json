@@ -1,0 +1,39 @@
+{
+  "kind": "WakeflowAtlasReaderObservation",
+  "observedOn": "2026-10-03",
+  "mode": "actual-in-app-browser",
+  "site": "local-preview",
+  "homeBaseline": "04769897",
+  "newEntrypoints": [
+    "维护验证",
+    "实验与原生辅助",
+    "CI与模型证据"
+  ],
+  "visitedDocuments": [
+    "17-artifacts-and-contracts/maintainer-verification",
+    "17-artifacts-and-contracts/lab-and-live-tools"
+  ],
+  "controlsObserved": [
+    "fullscreen",
+    "fit-all",
+    "navigation"
+  ],
+  "allDiagramRendering": {
+    "diagrams": 105,
+    "rendered": 105,
+    "ok": true,
+    "receipt": "plans/evidence/current-mermaid-render.json",
+    "receiptSha256": "b0bd196be5d6623ad71e978094c0b6df7d96e17c8313710a14c9fef5037b87b0"
+  },
+  "screenshots": [
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-maintainer-tools/reader-home.jpg",
+      "sha256": "e4f2ad70213976855983353492cccc07d72d1bf8573303503a3efa4884925439"
+    },
+    {
+      "path": "wakeflow-architecture-atlas/plans/review-2026-10-03-maintainer-tools/reader-tools.jpg",
+      "sha256": "333fc14eb7e0574413582d5fe429bc538ba7a6696ac43ce10e6a6a0f7368ca9f"
+    }
+  ],
+  "scopeLimit": "全部源图实际渲染；本轮有限视觉检查包含首页、新维护页和全屏/全图控件，不声称105图逐像素重审。"
+}

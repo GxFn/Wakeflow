@@ -1,0 +1,332 @@
+[
+  {
+    "path": "tooling/cli.ts",
+    "sha256": "a3ebc89823a8a204b7344dfb15b1c229d586ad2e4561050675c610e3811f862b",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "维护命令准入、分发与退出码；新增 fresh 业务场景和工作区诊断入口。",
+    "branches": [
+      "业务 run 必须同时给场景、新根和候选，不能与已有 id 混用；未知场景在写入前拒绝。",
+      "doctor workspace 精确接受 root/candidate，转交中止信号。",
+      "保留既有 verify、live、CI 等命令及有界错误输出。"
+    ],
+    "effects": [
+      "实际效果由各 owner 执行；CLI 只输出摘要和转发取消。"
+    ],
+    "consumers": [
+      "package.json"
+    ],
+    "tests": [
+      "tests/tooling/lab/workflow.test.ts#runToolingCli",
+      "tests/tooling/diagnostics/workspace.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "不创建项目或聊天，不隐式安装、提交源码或发布。"
+    ]
+  },
+  {
+    "path": "tooling/lab/lab.ts",
+    "sha256": "29d22dfb1a99496f5f4eea99efbfc53975b3ee094cd69929ee2b107d6b0bf574",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "新实验创建、进程结算、资源清单封存及精确清理的所有者。",
+    "branches": [
+      "单产品场景只建 Workspace/Alpha，其余保留双产品拓扑；业务只在新目录创建阶段执行。",
+      "MCP 真实关闭后重验制品，再写资源清单与最终成功回执；失败/取消保留现场。",
+      "loadLab 同时要求 creation passed、身份和 inventoryDigest 匹配，拒绝最后回执发布失败留下的中间清单。",
+      "已有 id 只运行只读 readiness，清理仍比对预览摘要、设备/inode、模式和字节。"
+    ],
+    "effects": [
+      "复制候选、创建合成 Git 初始提交、调用生成 MCP、写私有回执、限定资源删除。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/lab.test.ts#createLab",
+      "tests/tooling/lab/workflow.test.ts#createLab",
+      "tests/tooling/lab/sealing.test.ts#createLab",
+      "tests/tooling/lab/sealing.test.ts#disposeLab"
+    ],
+    "limits": [
+      "没有任意场景、断点续跑或清单重扫收编；私有回执不是签名证明，失败需人工检查。"
+    ]
+  },
+  {
+    "path": "tooling/lab/scenarios.ts",
+    "sha256": "1332092c778f58956110be4b0f69bfcac645cbce4b3da07777e895f856256072",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "合成拓扑初始化与只读 readiness。",
+    "branches": [
+      "产品列表由封闭场景入口选择 Alpha 或 Alpha/Beta；公共 fresh preview/apply 生成权威。",
+      "readiness 核对新进程 manifest、idle、verify、reconcile 零步/no-op 和 pod 预览。",
+      "初始化 preview 与 readiness 前后比较完整实验树，不放宽零持久写入断言。"
+    ],
+    "effects": [
+      "初始化 apply 创建业务资源；readiness 只观察和执行健康 no-op。"
+    ],
+    "consumers": [
+      "tooling/lab/lab.ts",
+      "tooling/lab/workflow.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/lab.test.ts#runLab",
+      "tests/tooling/lab/workflow.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "不是原生宿主证明；无任意用户拓扑参数入口。"
+    ]
+  },
+  {
+    "path": "tooling/lab/workflow-context.ts",
+    "sha256": "a0eb9a837dbcae6938fd2cc1357c64090e63c78efe198ce33c94514a27900dab",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "固定场景的公共结果投影、引用载体与 CAS 修订读取。",
+    "branches": [
+      "场景名为三个封闭值；配置只投影已由公共 MCP 验证的新实验所需字段。",
+      "record/text/rows 守卫拒绝缺少预期形状；revision 每次从 status 实读，不在内存自增。",
+      "previewApply 只接受 ready 和工具返回的精确 planDigest；上下文只携带引用，不复制业务状态机。"
+    ],
+    "effects": [
+      "读取新实验配置，委托公共 MCP；无私有权威写入。"
+    ],
+    "consumers": [
+      "tooling/lab/workflow.ts",
+      "tooling/lab/workflow-demand.ts",
+      "tooling/lab/workflow-target.ts",
+      "tooling/lab/workflow-test.ts",
+      "tooling/lab/workflow-pod.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/workflow.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "字段投影不是完整 Config 解析器；只在固定新建夹具中使用。"
+    ]
+  },
+  {
+    "path": "tooling/lab/synthetic-host.ts",
+    "sha256": "206ce1bdd94e1834fb647ec9d70e412a1723af20a664b3413ec7cd87c652f972",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "按候选自带 profile 产生明确标记的合成宿主观察。",
+    "branches": [
+      "只从已核验候选读两种已知宿主 profile；共享逻辑消费 project-thread/windowLocator 能力，不另写宿主名称分支行为。",
+      "生成 hook 进程使用真实入口和封闭 payload；观察失败或超时中止实验。",
+      "产品先登记、Test 后登记，并逐个核对 worktree 附加路径；会话根与执行根分别处理。",
+      "绑定和退役使用公共端点；所有身份、tmux 位置、投递与结束事实均为测试驱动合成。"
+    ],
+    "effects": [
+      "启动 hook 子进程并通过公共工具写本实验绑定；不启动真实聊天/tmux 或实际发送。"
+    ],
+    "consumers": [
+      "tooling/lab/workflow.ts",
+      "tooling/lab/workflow-target.ts",
+      "tooling/lab/workflow-pod.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/workflow.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "不会证明原生授权、真实发送或 peer MCP 身份；不供任意产品环境使用。"
+    ]
+  },
+  {
+    "path": "tooling/lab/workflow-demand.ts",
+    "sha256": "3e61424673dad84c5e8c2eed7c8bcaecef41889f5c0e5376ea8bc604a4119ead",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "内置合成需求发布、认领、完成归档与幂等恢复验证。",
+    "branches": [
+      "仅在新 Design 草稿写固定需求，分别绑定每个产品的验收条目。",
+      "发布、创建与完成均走公共 preview/apply；引用和摘要来自真实结果。",
+      "归档后读取 manifest、status 和看板，再调用 recover 并要求终态事件及 manifest 字节不变。"
+    ],
+    "effects": [
+      "写固定草稿，调用公共业务工具，读取归档证据。"
+    ],
+    "consumers": [
+      "tooling/lab/workflow.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/workflow.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "确认仅针对用户选择的内置可丢弃实验，不发布用户业务需求或支持任意任务。"
+    ]
+  },
+  {
+    "path": "tooling/lab/workflow-target.ts",
+    "sha256": "8b755495b714cade5a07c3fb35bc704e3729e42dd0add2df475e1daaeec80b90",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "固定算术实现的真实执行、证据登记、合成投递回传与再次复算。",
+    "branches": [
+      "写入 summarize.mjs 和 verification.json 使用 wx；Node 实际执行预定样本，对照独立常量。",
+      "投递、结果导入、callback/Stop、review inspection 和接受均通过公共协议；未允许 accept 即失败。",
+      "导入成功仍复算代码与证据，代码改动时不会记录接受。",
+      "worktree 输出创建后捕获设备/inode、模式及摘要清单，供后续清理核验。"
+    ],
+    "effects": [
+      "写本次产品夹具，执行 Node，合成 hook，调用公共业务/证据工具。"
+    ],
+    "consumers": [
+      "tooling/lab/workflow.ts",
+      "tooling/lab/workflow-test.ts",
+      "tooling/lab/workflow-pod.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/workflow.test.ts#createLab",
+      "tests/tooling/lab/sealing.test.ts#createLab"
+    ],
+    "limits": [
+      "固定样本和再次复算不等于真实 Agent 的独立产品审查；仅证明这些夹具路径。"
+    ]
+  },
+  {
+    "path": "tooling/lab/workflow-test.ts",
+    "sha256": "1c2b63b140c1ee4e3bfb826e7007dca6dc708fcee0a6a41734d7b7e9386056da",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "独立逻辑 Test 目标的冻结合同、实际复算与不同来源证据。",
+    "branches": [
+      "每个产品对应一个可追溯的 Given/When/Then 步骤。",
+      "Test 实际重跑产品样本，在支持面新建各自证据，再经公共工具导入逐步报告。",
+      "接受前再次读取 Test 证据摘要并重跑产品；原生关联仍未验证。"
+    ],
+    "effects": [
+      "只读产品执行，写 Test 合成证据，通过公共协议记录结果与测试决定。"
+    ],
+    "consumers": [
+      "tooling/lab/workflow.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/workflow.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "没有真实 Test 聊天；不自动推断一般业务验收。"
+    ]
+  },
+  {
+    "path": "tooling/lab/workflow-pod.ts",
+    "sha256": "98d8f95d674617f818f2c1e1040097c9cf37c12d23121923820f0208871506bf",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "真实 Git worktree 的实验接线与受保护两阶段关闭。",
+    "branches": [
+      "创建 pod 后按 Controller/Design/产品/Test 顺序登记；产品使用真实 local HEAD 与 Git 回读。",
+      "归档后记录本次分支放弃，退役本次合成窗口，再清理本次检出。",
+      "核对精确路径集合、README/HEAD 基线和输出创建时的节点清单；每次 unlink 前再验，拒绝新增文件与同字节替换。",
+      "只移除本次两份输出，Git worktree remove 不使用 force，branch -d 拒绝未合入的新提交；最后验证 pod 消失。"
+    ],
+    "effects": [
+      "公共 pod/绑定操作，真实 Git 检出和分支创建/移除，限定本次输出删除。"
+    ],
+    "consumers": [
+      "tooling/lab/workflow.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/workflow.test.ts#createLab",
+      "tests/tooling/lab/sealing.test.ts#createLab"
+    ],
+    "limits": [
+      "失败可能停在 closing 并保留现场，不自动接管外部修改或未知检出。"
+    ]
+  },
+  {
+    "path": "tooling/lab/workflow.ts",
+    "sha256": "9290ccf5181979b4747b609a63ec43977e68a4010386e9ad39502f0351007d65",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "固定新实验业务链的顺序协调与证据边界断言。",
+    "branches": [
+      "readiness 后登记窗口、发布认领、实现、按场景运行 Test，再完成归档。",
+      "绑定仍在时必须保留且验证唯一的 window-runtime-unverified 门；不能由合成 hook 得到原生绿色。",
+      "退役合成绑定/关闭 pod 后，才要求工作区全部 verify 通过。"
+    ],
+    "effects": [
+      "委托场景 owner；返回实际检查点、归档和退役前 unavailable 结果。"
+    ],
+    "consumers": [
+      "tooling/lab/lab.ts"
+    ],
+    "tests": [
+      "tests/tooling/lab/workflow.test.ts#runToolingCli"
+    ],
+    "limits": [
+      "不是通用 Controller，不续跑旧环境；scenario passed 与 native unverified 分开。"
+    ]
+  },
+  {
+    "path": "tooling/diagnostics/workspace.ts",
+    "sha256": "4bc9488517032bf91b96789341f874420e05d49d15b3a56265681ea4cd84b269",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "完整读取本轮实现及调用/数据消费者，核对聚焦断言和真实生成制品/CLI观察；不把机械库存当作语义审阅或测试执行。",
+    "responsibility": "新生成 stdio 观察进程的只读工作区诊断与受限输出。",
+    "branches": [
+      "先验候选逐文件字节，只调用 status/verify，结束后再验候选摘要。",
+      "保留原始观测时刻和配置摘要；空门、重复门、计数/ok 矛盾拒绝；截断或配置变化不能整体通过。",
+      "允许列表只保留门、数量、摘要和有界 token，不复制路径、身份、原始证据或任意字段。",
+      "新观察进程可证明自身 manifest，不能说明宿主选中安装或 peer 窗口运行身份。"
+    ],
+    "effects": [
+      "启动临时 MCP 只读进程；不写业务状态，不安装、激活或修复。"
+    ],
+    "consumers": [
+      "tooling/cli.ts"
+    ],
+    "tests": [
+      "tests/tooling/diagnostics/workspace.test.ts#inspectWorkspace",
+      "tests/tooling/diagnostics/workspace.test.ts#summarizeWorkspaceProbe"
+    ],
+    "limits": [
+      "不是现场原始材料故障包，也不提供来源签名；两次调用不是同一事务快照。"
+    ]
+  },
+  {
+    "path": "tooling/testing/run-typescript-tests.ts",
+    "sha256": "ceaced5ea68be1becded12fb2e12c0d9668963cbcb6d870012137d2078c8ac14",
+    "reviewDepth": "semantic",
+    "reviewedAt": "2026-10-04",
+    "method": "重读实际Node派发边界；临时双文件与正式真实进程回归均复现CLI重排，再用官方run API验证保序、事件扇出和取消。",
+    "responsibility": "按当前源清单、既有耗时提示和显式并发运行独立Node测试进程，统一终端与结构化回执。",
+    "branches": [
+      "源码/编译输出准入和未知优先、已知降序算法保持；Node CLI会重排显式参数，改为run({files})真正保留队列。",
+      "显式process隔离和原worker预算；透传原环境并剔除记录目录变量，不修改测试内部并发或超时。",
+      "同一TestsStream经两个PassThrough分别进入spec和原事件reporter，等待两路结算；缺总summary不算完成。",
+      "SIGINT/SIGTERM中止run，管道失败也中止；失败、跳过、取消仍由原始计数和严格回执读取分别判定。"
+    ],
+    "effects": [
+      "Node自身创建每文件子进程；输出终端，按显式选择写私有事件文件。"
+    ],
+    "consumers": [
+      "package.json",
+      "tooling/verification/verify.ts"
+    ],
+    "tests": [
+      "tests/tooling/testing/test-schedule-order.test.ts#spawnSync",
+      "tests/tooling/testing/test-recording.test.ts#runLoggedCommand",
+      "tests/tooling/testing/run-typescript-tests.test.ts#compiledTypeScriptTests"
+    ],
+    "findings": [
+      "真实派发顺序此前只检查了排序函数，未验证Node CLI边界；修前a-fast先于z-slow，修后保留z-slow先行。"
+    ],
+    "limits": [
+      "耗时表仍是提示，不证明任意硬件上的固定耗时；不自动重试或缩减选择。"
+    ],
+    "reference": "https://nodejs.org/download/release/v24.19.0/docs/api/test.html#runoptions"
+  }
+]

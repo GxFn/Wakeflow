@@ -95,7 +95,7 @@ const WINDOW_RESUME =
   "refuses `--in-place` as `argument-unknown`: then ask the user to run `/mcp` in this window " +
   "and reconnect `wakeflow`, run a reconcile as in step 0, which installs the current helper, " +
   "and start this section again. If this server is already current, skip its restart. For peer " +
-  "windows whose own runtime evidence requires a reload, take them one at a time, each only while it sits idle at an empty prompt, and " +
+  "windows that verify reports as `stale` (`windows-stale:<n>`: each such session started under an older artifact), take them one at a time, each only while it sits idle at an empty prompt, and " +
   "pipe each one's inspect result into `resume --window <windowId> --in-place`, one helper " +
   "call per Bash command. The session restarts inside its own pane on the updated plugin; the " +
   "binding, coordinates and marks stay, so there is nothing to relocate or mark, and " +
@@ -103,7 +103,7 @@ const WINDOW_RESUME =
   "means that window is working, shows a dialog or menu, or holds typed input, and `--force` " +
   "does not override it: go on with the next window and retry this one once its turn has " +
   "ended - a dialog, a menu or typed input waits for the user, so tell them which window it " +
-  "is. `resume-exited` means the process exited before startup evidence; inspect its diagnostics. " +
+  "is. `resume-exited` means the process exited before startup evidence; read the refusal's `hint` and that pane before retrying. " +
   "`resume-never-conversed` reports missing conversation evidence: inspect host history first. " +
   "Only if a fresh session is required and authorized, close the old one, launch it again, " +
   "register it with `replace` and `mark` it.";

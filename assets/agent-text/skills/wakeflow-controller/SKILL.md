@@ -64,8 +64,8 @@ Inspect each returned window with `wakeflow_register_window_binding` for current
 host launch instructions; the execution root may differ from the startup root.
 First: {{windowBootstrap}} For each one:
 {{windowLaunch}} Then register the
-handle you observed with `wakeflow_register_window_binding`; registration needs a real `session-start` at its host startup root. Otherwise startup is unproven;
-inspect execution and observer diagnostics. Use the same tool to inspect a
+handle you observed with `wakeflow_register_window_binding`; registration needs a real `session-start` at its host startup root. Otherwise startup is unproven:
+the refusal names the missing evidence - re-inspect the window and the host's hook trust before retrying. Use the same tool to inspect a
 window, replace a stale binding, retire a window, or force-release an expired
 work claim.
 
@@ -121,9 +121,9 @@ Form your own judgment from the code and the evidence, not from the report's
 self-assessment. Record it with
 `wakeflow_record_implementation_review_decision` for an implementation result
 or `wakeflow_record_test_review_decision` for a test result. On escalate, hand
-the user the issue, the options and your recommendation, then bring their
-answer back through `wakeflow_continue_demand`. Depth:
-`references/delivery-and-review.md`.
+the user the issue, options and recommendation, then bring their answer back
+through `wakeflow_continue_demand`; a product-defect escalation instead returns
+to implementation delivery planning. Depth: `references/delivery-and-review.md`.
 
 ### Step 12 - Complete and archive
 
@@ -163,10 +163,10 @@ follow "Interrupted writes and cancellation" in
 `references/workspace-and-windows.md` without deleting files by hand.
 
 `server-outdated` (`runtime-artifact-outdated` in `next`) concerns this MCP
-server. `window-runtime-unverified:<n>` means peer runtime evidence is missing,
-not that a hook proved an old or new MCP. Follow "After a plugin update" in
-`references/workspace-and-windows.md`; do not loop restarts or read plugin
-implementation to interpret missing host evidence.
+server; `windows-stale:<n>` names peer sessions started under an older artifact.
+`window-runtime-unverified:<n>` means peer runtime evidence is missing, not an
+old or new MCP proven by a hook. Follow "After a plugin update" in
+`references/workspace-and-windows.md`; do not loop restarts or read plugin implementation to interpret missing host evidence.
 
 ## What you must return to the user
 

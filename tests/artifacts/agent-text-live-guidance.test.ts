@@ -159,8 +159,8 @@ test("C8：更新后先告诉用户再就地重启 Controller 自己，verify �
     [
       "MCP server serving this call",
       "SessionStart can occur on resume or compaction",
-      "runtime.status: unverified",
-      "If that evidence establishes a window needs a reload",
+      "`windows-stale:<n>`",
+      "Restart the stale windows with the host's procedure",
       "preview and apply reconcile for repairable workspace gates",
       "resume --window <windowId> --in-place`",
       "each only while it sits idle at an empty prompt",
@@ -203,8 +203,8 @@ test("C8：更新后先告诉用户再就地重启 Controller 自己，verify �
     codexUpdate,
     [
       "MCP server serving this call",
-      "ask the user to reload its Wakeflow server",
-      "reload or resume that existing chat through the host",
+      "ask the user to restart the Codex app",
+      "resumes that existing chat through the host",
       "user authorizes a replacement chat",
     ],
     "Codex plugin-update section",
@@ -216,6 +216,9 @@ test("C8：更新后先告诉用户再就地重启 Controller 自己，verify �
   );
   equal(codexUpdate.includes("--in-place"), false);
   equal(codexUpdate.includes("tmux"), false);
+  // §13.161 B6-1：只有重启 Codex 应用才会重载 MCP；resume/continue 不会。
+  ok(codexUpdate.includes("only an app restart reloads Wakeflow's MCP server"));
+  equal(codexUpdate.includes("reload its Wakeflow server"), false);
 
   // windowResume 只服务这一节；窗格没了的续接（新窗格加 relocate）留在 windowLaunch。
   equal(source(WINDOWS).split("{{windowResume}}").length - 1, 1);

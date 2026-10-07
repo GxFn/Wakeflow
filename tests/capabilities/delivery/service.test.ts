@@ -12,6 +12,7 @@ import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/de
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
   createHostHookObservation,
+  HOST_HOOK_RECORDS_MAXIMUM,
   writeHostHookObservation,
 } from "../../../src/kernel/hook-observations.js";
 import { hostHookObservationsRootRef, workClaimRef } from "../../../src/kernel/layout.js";
@@ -605,7 +606,8 @@ test("投递查询不完整不能作未落地判断；独立宿主回执仍可�
     const directory = path.join(fixture.workspacePath, hostHookObservationsRootRef("codex"));
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     const files: string[] = [];
-    for (let index = 0; index < 257; index += 1) {
+    // §13.161：投递读取整个有界集合（HOST_HOOK_RECORDS_MAXIMUM），超出才是不完整。
+    for (let index = 0; index < HOST_HOOK_RECORDS_MAXIMUM + 1; index += 1) {
       const record = createHostHookObservation({
         hostId: "codex",
         event: "stop",
@@ -625,12 +627,19 @@ test("投递查询不完整不能作未落地判断；独立宿主回执仍可�
     equal(existsSync(claimPath(fixture)), true);
     // Retry at the same revision proves the failed observation never appended an outcome.
     for (const file of files) unlinkSync(file);
+    // §13.161 B5-1：外来文件名只计 skipped，不再阻断；记录命名却读不出的文件可能藏着落地记录，才阻断。
     const unknown = path.join(directory, "unrecognized.txt");
     writeFileSync(unknown, "not hook evidence", { mode: 0o600 });
+    const unreadable = path.join(
+      directory,
+      "20260829T120510000Z-stop-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.json",
+    );
+    writeFileSync(unreadable, "not hook evidence", { mode: 0o600 });
     await rejects(
       recordFixtureDeliveryOutcome(fixture, prepared),
       rejectedWith("observation-query-unavailable", "io-failure"),
     );
+    unlinkSync(unreadable);
     const result = await recordFixtureDeliveryOutcome(fixture, prepared, {
       attempt: { status: "sent", evidenceDigest: `sha256:${"7".repeat(64)}` },
     });

@@ -837,13 +837,13 @@
           ]
         },
         "runtime": {
-          "description": "The bound window runtime has no trusted host association in the current adapters; hook records cannot establish its loaded MCP or instruction version.",
+          "description": "Runtime identity of the bound window. Hook records cannot establish its loaded MCP or instruction version, so a bound window is unverified by default; it is stale when its latest session-start record names an older artifact than the serving process (the session has not restarted since the update).",
           "type": "object",
           "additionalProperties": false,
           "required": ["status", "reason"],
           "properties": {
             "status": {
-              "enum": ["unregistered", "unverified"]
+              "enum": ["unregistered", "unverified", "stale"]
             },
             "reason": {
               "oneOf": [
@@ -851,7 +851,11 @@
                   "type": "null"
                 },
                 {
-                  "enum": ["host-runtime-association-unavailable", "binding-unavailable"]
+                  "enum": [
+                    "host-runtime-association-unavailable",
+                    "binding-unavailable",
+                    "session-started-under-older-artifact"
+                  ]
                 }
               ]
             }

@@ -2,7 +2,7 @@
 
 > 状态：`accepted`
 > 日期：2026-10-02
-> 后续裁决：旧工作区兼容/迁移部分由 [ADR-0018](./0018-current-workspace-baseline.md) 取代；并发和证据边界继续有效。
+> 后续裁决：旧工作区兼容/迁移部分由 [ADR-0018](./0018-current-workspace-baseline.md) 取代；并发和证据边界继续有效。决定 3 中"不可验证即门不通过"的后果于 2026-10-06 修订，见文末。
 > 相关：ADR-0014、ADR-0016；[根因、反例和完整设计](../reviews/2026-10-02-authority-scope-and-runtime-evidence-design.md)
 
 ## 背景
@@ -23,3 +23,13 @@
 ## 状态
 
 用户于 2026-10-02 确认继续实施。该决定扩展 ADR-0014/0016 的一致性与证据边界；反例和模型结果见 gate-log §13.145。按设计顺序分段实施，每段明确已经落地与尚未落地的合同，并执行源码仓库的整门和双制品验收。
+
+## 修订（2026-10-06）
+
+§13.161 复审发现决定 3 的后果让严格验证永远不能通过：绑定窗口一律 `unverified`，runtime-artifact 门因此恒为 unavailable，Controller 拿到一个没有工具可用的 frontier，插件更新后同伴窗口的刷新也失去了依据。用户于 2026-10-06 裁决同意按下述方式收窄：
+
+1. 主体分别报告的原则不变：hook 记录只标识观察器，SessionStart/Stop 仍不证明 MCP 或技能已重载，因此 `current` 从不被断言。
+2. 新增一个只在一个方向上可靠的信号。宿主画像以 `surfaces.runtimeStaleness` 声明判定方式：Claude Code 为 `session-start-observer-digest`，绑定会话最近一条 session-start 记录的观察器摘要不等于本进程路径上已安装的制品清单，即该会话在更新前启动且此后没有重启过，报 `stale`；严格验证计 `windows-stale:<n>`，runtime-artifact 门失败，`next` 为 Controller 的 `window-artifact-stale`。Codex 声明 `unverified`。
+3. `unverified` 不再使门 unavailable：它作为通过门上的信息码 `window-runtime-unverified:<n>` 报告，`verify.ok` 可以为 true；技能文本只对报 `stale` 的窗口执行宿主重启流程，对 `unverified` 的窗口不动。
+
+反方向仍不成立：启动记录新不等于已重载。兄弟版本安装目标的识别仍按 open-items C6 开放。

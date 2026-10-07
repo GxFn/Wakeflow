@@ -103,24 +103,32 @@ export interface MarkdownListItem {
   readonly text: string;
 }
 
-const LIST_ITEM_PATTERN = /^(?:[-*+]|[0-9]{1,3}[.)])\s+(.+?)\s*$/u;
+// 顶层列表标记可缩进 0–3 个空格（CommonMark），标记后至少一个空格再接非空文本：只有标记没有文字的行
+// 不是条目（§13.161 B4-5）。
+const LIST_ITEM_PATTERN = /^( {0,3})((?:[-*+]|[0-9]{1,3}[.)])[ \t]+)(\S.*?)\s*$/u;
 const CONTINUATION_PATTERN = /^\s+(\S.*?)\s*$/u;
 
 /**
- * 章节正文里的顶层列表项（`-`、`*`、`+` 或 `1.`），围栏代码块里的行不算；
- * 缩进的续行并入前一项。任务包的验收锚点以 `itemId` 引用需求包验收标准的一条。
+ * 章节正文里的顶层列表项（`-`、`*`、`+`、`1.` 或 `1)`），围栏代码块里的行不算；缩进的续行与
+ * 缩进到前一项内容列之内的嵌套子项都并入前一项（§13.161 B4-2：此前缩进一个空格的顶层标记会被
+ * 当成续行并进前一项，三条标准被数成一条）。条目序号只按顶层位置计，不看写出来的数字。
+ * 任务包的验收锚点以 `itemId` 引用需求包验收标准的一条。
  */
 export function parseMarkdownListItems(body: string, prefix = "item"): readonly MarkdownListItem[] {
   const items: { itemId: string; ordinal: number; line: number; text: string }[] = [];
   let fence: string | null = null;
+  // 当前顶层条目的内容列：缩进不到这一列的标记行是新的顶层条目，否则是它的嵌套子项。
+  let contentColumn = 0;
   body.split(/\r?\n/u).forEach((line, index) => {
     const fenced = nextFence(fence, line);
     fence = fenced.fence;
     if (fenced.hit || fence !== null) return;
     const item = LIST_ITEM_PATTERN.exec(line);
-    if (item !== null) {
+    const indent = item?.[1]?.length ?? 0;
+    if (item !== null && (items.length === 0 || indent < contentColumn)) {
       const ordinal = items.length + 1;
-      items.push({ itemId: `${prefix}-${ordinal}`, ordinal, line: index + 1, text: item[1] ?? "" });
+      contentColumn = indent + (item[2]?.length ?? 0);
+      items.push({ itemId: `${prefix}-${ordinal}`, ordinal, line: index + 1, text: item[3] ?? "" });
       return;
     }
     const continuation = CONTINUATION_PATTERN.exec(line);

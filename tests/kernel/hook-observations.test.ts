@@ -131,7 +131,7 @@ test("hook 观察记录：确定性标识、私有文件、按事件与会话有
   const limited = await readHostHookObservations(root, "claude-code", { limit: 1 });
   equal(limited.records.length, 1);
   const codex = await readHostHookObservations(root, "codex");
-  deepEqual(codex, { records: [], skipped: 0, complete: true });
+  deepEqual(codex, { records: [], skipped: 0, unreadable: 0, complete: true });
 });
 
 test("hook 观察记录拒绝越界输入与同名不同内容", async (t) => {
@@ -271,7 +271,7 @@ test("hook 观察记录要求 recordedAt 恰好 3 位小数秒：其他精度写
     await readHostHookObservations(root, "claude-code", {
       limit: HOST_HOOK_RECORDS_MAXIMUM,
     }),
-    { records: [], skipped: 0, complete: true },
+    { records: [], skipped: 0, unreadable: 0, complete: true },
   );
   // 中止不被当作"读不出"吞掉。
   await rejects(
@@ -742,7 +742,7 @@ test("旧平铺目录的 16385 条近期有效记录可完整扫描，目标查�
     target.recordId,
   );
   const scan = await scanHostHookObservations(root, "codex", {}, () => {});
-  deepEqual(scan, { records: 16_385, skipped: 0 });
+  deepEqual(scan, { records: 16_385, skipped: 0, unreadable: 0 });
   // Upgrading does not copy or rewrite an already durable legacy fact.
   const retry = await writeHostHookObservation(root, target);
   equal(retry.disposition, "current");
@@ -779,4 +779,65 @@ test("有限结果明确报告不完整；损坏旧目录不会阻断新分片�
     });
     equal((await readHostHookObservations(root, "claude-code")).skipped, 2);
   }
+});
+
+test("密集历史也按龄退役：基准取最新的另一条记录，只走截止日之前的日目录，清空的分片与日目录随手回收（§13.161 H2-01/H2-02）", {
+  timeout: 120_000,
+}, async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const directory = hooksDirectory(workspace, "claude-code");
+  // 40 天、每天 200 条，远高于旧实现约 137 条/天的饥饿阈值：最旧的 4096 个叶子跨不到 30 天，
+  // 旧实现的截止基准会被钉在陈旧历史上，永远修剪不到任何东西。
+  const perDay = 150;
+  const days = 40;
+  const dayDirectory = (day: number): string =>
+    path.join(
+      directory,
+      compact(new Date(NOW - day * DAY).toISOString() as UtcInstant).slice(0, 8),
+    );
+  for (let day = days; day >= 1; day -= 1) {
+    for (let index = 0; index < perDay; index += 1) {
+      const at = new Date(NOW - day * DAY + index * 60_000).toISOString() as UtcInstant;
+      const recordId = `${(index % 256).toString(16).padStart(2, "0")}000000-0000-4000-8000-${day
+        .toString(16)
+        .padStart(6, "0")}${index.toString(16).padStart(6, "0")}`;
+      const shard = path.join(dayDirectory(day), recordId.slice(0, 2));
+      mkdirSync(shard, { recursive: true, mode: 0o700 });
+      writeFileSync(path.join(shard, `${compact(at)}-stop-${recordId}.json`), "garbage\n", {
+        mode: 0o600,
+      });
+    }
+  }
+  const total = perDay * days;
+  equal(hookEntries(directory).length, total);
+  const latest = await writeHostHookObservation(root, observation(workspace, ago(0)));
+  equal(latest.disposition, "created");
+  // 基准是最新的另一条（昨天的最后一条），截止在 30 天多一点之前：40…32 天前的 9 天（1800 条）
+  // 整天过期，都在 4096 的检查预算之内，一次写入全部退役；31 天前那天跨过截止时刻，整天保留到下次。
+  equal(hookEntries(directory).length, total + 1 - 9 * perDay);
+  equal(existsSync(dayDirectory(40)), false);
+  equal(existsSync(dayDirectory(32)), false);
+  equal(existsSync(dayDirectory(31)), true);
+  equal(existsSync(dayDirectory(1)), true);
+});
+
+test("外来点文件不计，外来文件名只计 skipped，记录命名却读不出或叶子位置上的目录才计 unreadable（§13.161 B5-1）", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const directory = hooksDirectory(workspace, "claude-code");
+  const kept = await writeHostHookObservation(root, observation(workspace, ago(DAY)));
+  writeFileSync(path.join(directory, ".DS_Store"), "x", { mode: 0o600 });
+  writeFileSync(path.join(directory, "notes.txt"), "x", { mode: 0o600 });
+  writeFileSync(path.join(directory, `20260901T000000000Z-stop-${OLD_UUID}.json`), "garbage\n", {
+    mode: 0o600,
+  });
+  mkdirSync(path.join(directory, "stray-directory"));
+  const inventory = await readHostHookObservations(root, "claude-code");
+  deepEqual(
+    inventory.records.map((record) => record.recordId),
+    [kept.record.recordId],
+  );
+  // notes.txt、读不出的记录、目录各计一次 skipped；只有后两者可能藏着记录，计入 unreadable。
+  equal(inventory.skipped, 3);
+  equal(inventory.unreadable, 2);
+  equal(inventory.complete, true);
 });

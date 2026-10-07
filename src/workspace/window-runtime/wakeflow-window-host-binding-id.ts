@@ -1,3 +1,4 @@
+import { WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX } from "../../contracts/identity/wakeflow-typed-id-prefixes.js";
 import {
   createUuidV4,
   parseUuidV4,
@@ -12,9 +13,6 @@ import {
  * 词汇。每次新建或未来替换都会获得新的随机 UUIDv4；相同 Agent observation 的幂等
  * 重放继续返回已经提交的 bindingId，不重新分配。
  */
-
-const WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX =
-  "window_binding_" as const;
 
 declare const WINDOW_HOST_BINDING_ID_BRAND: unique symbol;
 

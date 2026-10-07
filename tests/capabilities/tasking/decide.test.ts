@@ -68,7 +68,12 @@ test("锚点引用：记录摘要、节锚点、条目三处各自报出阻塞",
       recordDigest: RECORD,
       criteria,
     }),
-    ["anchor-item-unknown:b:ac-9", "anchor-record-drift:c", "anchor-section:c:goal"],
+    [
+      "anchor-item-unknown:b:ac-9",
+      "anchor-record-drift:c",
+      "anchor-section:c:goal",
+      "acceptance-items:2",
+    ],
   );
   deepEqual(deriveSectionAnchorBlockers(["goal", "nope"], ["goal", "landing-plan"]), [
     "section-anchor-unknown:nope",
@@ -221,7 +226,12 @@ test("测试合同步骤引用：记录摘要、节锚点、条目三处各自�
       recordDigest: RECORD,
       criteria,
     }),
-    ["step-item-unknown:ts-1:ac-9", "step-record-drift:ts-2", "step-section:ts-3:goal"],
+    [
+      "step-item-unknown:ts-1:ac-9",
+      "step-record-drift:ts-2",
+      "step-section:ts-3:goal",
+      "acceptance-items:2",
+    ],
   );
 });
 

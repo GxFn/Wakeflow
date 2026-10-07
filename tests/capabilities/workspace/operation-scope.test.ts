@@ -7,6 +7,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -14,15 +15,19 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
+import { threadId } from "node:worker_threads";
 import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
+import { assertDemandOperationConfigCurrentOrFail } from "../../../src/governance/demand/demand-operation-authority-context.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { refreshActiveProjection } from "../../../src/governance/observation/active-projection-refresh.js";
 import { withWorkspaceOperationScope } from "../../../src/kernel/workspace-operation-scope.js";
 import {
+  WORKSPACE_MAINTENANCE_GATE_REF,
   WORKSPACE_OPERATION_SCOPES_REF,
   WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
 } from "../../../src/kernel/layout.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 
@@ -59,7 +64,7 @@ let fixtureIndex = 0;
 // Bound expensive, durable setup separately; operation deadlines and real fsync remain intact.
 before(
   async (context) => {
-    for (let i = 0; i < 3; i += 1) prepared.push(await prepareFixture(context.signal));
+    for (let i = 0; i < 5; i += 1) prepared.push(await prepareFixture(context.signal));
   },
   { timeout: 60_000 },
 );
@@ -240,4 +245,80 @@ test("an interrupted reconfigure reserves all writers until public recovery comp
   equal(recovered.status, "recovered");
   deepEqual(readdirSync(transactions), []);
   await withWorkspaceOperationScope(f.rooted, "shared", async () => {});
+});
+
+test("pod 互斥区里的 Config 复验以内核错误拒绝：过期为 config-stale、读不到为 config-authority、中止为 aborted（§13.161 B3-1）", {
+  timeout: 20000,
+}, async () => {
+  const f = fixture();
+  const snapshot = await readWakeflowConfigAuthoritySnapshot(f.rooted);
+  await assertDemandOperationConfigCurrentOrFail(f.rooted, snapshot, undefined);
+  const original = readFileSync(f.config, "utf8");
+  // 同样的字节换了一个文件节点：Preview 读到的物理节点不再是权威。
+  writeFileSync(`${f.config}.next`, original, { mode: 0o644 });
+  renameSync(`${f.config}.next`, f.config);
+  await rejects(
+    assertDemandOperationConfigCurrentOrFail(f.rooted, snapshot, undefined),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "precondition-failed" &&
+      error.reason === "config-stale" &&
+      error.path === "$config",
+  );
+  // 多出一个换行不再是规范字节：按 Config 权威失败拒绝，而不是 unexpected。
+  writeFileSync(f.config, `${original}\n`);
+  await rejects(
+    assertDemandOperationConfigCurrentOrFail(f.rooted, snapshot, undefined),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "precondition-failed" &&
+      error.reason === "config-authority",
+  );
+  writeFileSync(f.config, original);
+  await rejects(
+    assertDemandOperationConfigCurrentOrFail(f.rooted, snapshot, AbortSignal.abort()),
+    (error: unknown) =>
+      error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
+  );
+  rmSync(f.config);
+  await rejects(
+    assertDemandOperationConfigCurrentOrFail(f.rooted, snapshot, undefined),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "precondition-failed" &&
+      error.reason === "config-authority",
+  );
+});
+
+test("维护 gate 的所有者未知时按可重试的 maintenance-owner-unknown 等待，不要求恢复（§13.161 F2）", {
+  timeout: 20000,
+}, async () => {
+  const f = fixture();
+  const gate = path.join(f.root, ...WORKSPACE_MAINTENANCE_GATE_REF.split("/"));
+  mkdirSync(path.dirname(gate), { recursive: true, mode: 0o700 });
+  // 同进程同线程、令牌不在活动表、registry 不同：owner 既不能证明活着也不能证明死了。
+  const unknown = rootedExclusiveFileLockRecordTextForTest({
+    pid: process.pid,
+    threadId,
+    tokenUuid: "55555555-5555-4555-8555-555555555555",
+  });
+  writeFileSync(gate, unknown, { mode: 0o600 });
+  let entered = false;
+  await rejects(
+    withWorkspaceOperationScope(f.rooted, "shared", async () => {
+      entered = true;
+    }),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "concurrency-conflict" &&
+      error.reason === "maintenance-owner-unknown" &&
+      error.retryable === true,
+  );
+  equal(entered, false);
+  equal(readFileSync(gate, "utf8"), unknown, "an unknown owner's gate is never retired");
+  rmSync(gate);
+  await withWorkspaceOperationScope(f.rooted, "shared", async () => {
+    entered = true;
+  });
+  equal(entered, true);
 });

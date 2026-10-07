@@ -43,7 +43,14 @@ test("credentials in environment/JSON assignments, authorization and userinfo ne
     JSON.stringify({ password: secret }),
     `Authorization: Bearer ${secret}`,
     JSON.stringify({ Authorization: `Basic ${secret}` }),
+    `Authorization: Token ${secret}`,
     `postgres://example:${secret}@host.invalid/db`,
+    // §13.161 B9-2：框架常见的密钥名
+    `SECRET_KEY=${secret}`,
+    `DJANGO_SECRET_KEY = '${secret}'`,
+    `secret_key_base: ${secret}`,
+    `ENCRYPTION_KEY=${secret}`,
+    `APP_KEY=base64:${secret}`,
     ...["ghs_", "ghu_", "ghr_", "glpat-", "npm_"].map((prefix) => prefix + "a".repeat(32)),
   ];
   for (const sample of samples) {
@@ -55,6 +62,9 @@ test("credentials in environment/JSON assignments, authorization and userinfo ne
     equal(JSON.stringify(findings).includes(secret), false);
   }
   equal(scanPrivacy("TOKEN_COUNT=123456789 and MAX_TOKENS=987654321", policy).length, 0);
+  equal(scanPrivacy("-----BEGIN PGP PRIVATE KEY BLOCK-----", policy)[0]?.kind, "private-key");
+  // §13.161 B9-7：标题后换行接正文不是赋值。
+  equal(scanPrivacy("## Password:\nRequirements for passphrases follow.", policy).length, 0);
   equal(scanPrivacy("https://host.invalid/docs#authentication", policy).length, 0);
 });
 
@@ -194,4 +204,13 @@ test("assertPrivacyClean 以第一个命中的类别为原因失败", () => {
       error.reason === "credential-assignment" &&
       error.path === "$.summary",
   );
+});
+
+test("运行时身份前缀与持久身份一样放行：window_binding_ 与 maintenance_operation_ 不是裸 UUID（§13.161 B9-1）", () => {
+  const uuid = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  for (const prefix of ["window_binding_", "maintenance_operation_", "demand_"]) {
+    equal(DEFAULT_ALLOWED_ID_PREFIXES.includes(prefix), true, prefix);
+    deepEqual(scanPrivacy(`- binding: ${prefix}${uuid}`, policy), [], prefix);
+  }
+  equal(scanPrivacy(`unknown_binding_${uuid}`, policy)[0]?.kind, "bare-uuid");
 });

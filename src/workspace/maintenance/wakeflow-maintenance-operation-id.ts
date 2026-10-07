@@ -1,3 +1,4 @@
+import { WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX } from "../../contracts/identity/wakeflow-typed-id-prefixes.js";
 import {
   createUuidV4,
   parseUuidV4,
@@ -20,9 +21,6 @@ import {
  * 也不进入全局 durable ID kind。规范文本由固定前缀和小写 UUIDv4 组成，不从路径、
  * 时间或计划摘要派生。
  */
-
-export const WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX =
-  "maintenance_operation_" as const;
 
 declare const MAINTENANCE_OPERATION_ID_BRAND: unique symbol;
 

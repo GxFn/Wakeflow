@@ -1,3 +1,4 @@
+import { parseMarkdownListItems } from "../../kernel/markdown-sections.js";
 import { parseAcceptanceCriteria } from "../../kernel/requirement-acceptance.js";
 import {
   REQUIRED_REQUIREMENT_SECTIONS,
@@ -175,9 +176,21 @@ function summaryOf(
         path: document.path,
         anchor: section.anchor,
         heading: section.heading,
-        text: summaryText(parsed.bodies.get(section.anchor) ?? ""),
+        text: summaryText(
+          sectionSummaryBody(section.anchor, parsed.bodies.get(section.anchor) ?? ""),
+        ),
       }),
     );
+}
+
+/**
+ * 验收节在确认摘要里按解析出的条目展示（`ac-1: …`），而不是原文：用户确认的就是 Controller 之后
+ * 引用的那份可引用列表；原文里缩进、编号与解析结果不一致时，差异在确认前就看得见（§13.161 B4-2）。
+ */
+function sectionSummaryBody(anchor: string, body: string): string {
+  if (anchor !== "acceptance-criteria") return body;
+  const items = parseMarkdownListItems(body, "ac");
+  return items.length === 0 ? body : items.map((item) => `${item.itemId}: ${item.text}`).join("\n");
 }
 
 function confirmationDigestOf(

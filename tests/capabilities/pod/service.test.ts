@@ -1,7 +1,16 @@
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
@@ -382,6 +391,23 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
     ),
     failsWith("precondition-failed", "worktree-receipt"),
   );
+  // 工作区根、它的父目录和产品仓库之外的检出被拒：公开结果只写相对工作区的路径，不能写成
+  // `../../...`（§13.161 B5-3）。
+  const far = mkdtempSync(path.join(os.tmpdir(), "wakeflow-far-checkout-"));
+  const outside = path.join(far, "wt-feature-x");
+  try {
+    git(fx.product, "worktree", "add", "--quiet", outside, "-b", "wakeflow-outside-x");
+    await rejects(
+      register(fx, product.windowId, "codex-host-owned-thread:pod-product-outside", outside, {
+        porcelain: git(outside, "worktree", "list", "--porcelain"),
+        commonDir: git(outside, "rev-parse", "--git-common-dir").trim(),
+      }),
+      failsWith("precondition-failed", "worktree-outside-workspace"),
+    );
+    git(fx.product, "worktree", "remove", "--force", outside);
+  } finally {
+    rmSync(far, { recursive: true, force: true });
+  }
   const productRegistered = await register(
     fx,
     product.windowId,

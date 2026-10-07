@@ -43,7 +43,11 @@ repository is refused - finish or supersede the first.
 A test package additionally carries the frozen test contract: the approved
 steps bound to acceptance-criteria items, the allowed skills, the setup, the
 attempt budget and the stop conditions. Freeze it deliberately, because the
-test window is not allowed to revise it.
+test window is not allowed to revise it. The contract must carry one step for
+every acceptance criterion - planning refuses `test-contract-uncovered:<item>`
+and `step-item-unknown` names the real count as `acceptance-items:<n>` -
+because a Demand gets one test contract per generation and completion requires
+that contract to cover the whole list.
 
 When the requirement package asks for user review of the task plan, show the
 plan to the user and get their answer before applying. That is the flow's
@@ -206,9 +210,11 @@ For a product-defect escalation, map every failed product-defect step to its
 affected implementation baseline; do not include flakiness, harness, missing
 evidence or environment failures in that product repair authorization. Those
 failures remain in the report. After the product fix is accepted, plan the
-retest with every unresolved requirement covered and apply the usual failure
-classification rules. Only prior passing steps can supply a passing baseline;
-issuing a repair authorization does not turn another failed step into a pass.
+retest listing every acceptance criterion again - the steps that already passed
+may stay unrun and are accepted on the previous generation's baseline - and
+apply the usual failure classification rules. Only prior passing steps can
+supply a passing baseline; issuing a repair authorization does not turn another
+failed step into a pass.
 
 Write the decision in your own words and make the reason checkable: name the
 anchor, the file, the evidence. "Looks good" is not a review.
@@ -217,8 +223,8 @@ When the returned route is `awaiting-decision`, hand the user the issue,
 options and recommendation, then bring their answer back with
 `wakeflow_continue_demand` in its record-decision action before resuming work.
 Cancellation can end that wait without inventing an answer; the escalation
-remains in history. A product-defect repair authorization follows its returned
-implementation-repair route instead.
+remains in history. A product-defect repair authorization instead returns the
+Demand to `implementation-delivery-planning`: plan the repair target from there.
 
 After a decision that needs a follow-up decision - one recorded while blocked
 or escalated - carry the resumption the unit gave you. Recording a decision

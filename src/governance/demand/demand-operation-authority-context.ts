@@ -19,6 +19,7 @@ import {
 } from "./event-sourcing/demand-event-sourcing-root-authority.js";
 import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
 import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
+import { fail as failWakeflow } from "../../kernel/error.js";
 import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
@@ -286,5 +287,33 @@ export async function assertDemandOperationConfigCurrent(
     !sameFileNodeSnapshot(current.source.node, expected.source.node)
   ) {
     fail("stale-config");
+  }
+}
+
+/**
+ * pod 互斥区内的同一复验，直接以内核错误拒绝（§13.161 B3-1）：Config 过期是前置条件失败，
+ * 调用方要重新 preview；读不到 Config 按 Config 权威失败；中止按 io-failure/aborted。
+ * 不再把上下文错误漏给命令壳当作 unexpected。
+ */
+export async function assertDemandOperationConfigCurrentOrFail(
+  workspaceRoot: RootedDirectory,
+  expected: Readonly<WakeflowConfigAuthoritySnapshot>,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  try {
+    await assertDemandOperationConfigCurrent(workspaceRoot, expected, signal);
+  } catch (error: unknown) {
+    if (error instanceof DemandOperationAuthorityContextError) {
+      if (error.reason === "aborted") {
+        failWakeflow("io-failure", "aborted", "$signal", { cause: error });
+      }
+      failWakeflow(
+        "precondition-failed",
+        error.reason === "stale-config" ? "config-stale" : "config-authority",
+        "$config",
+        { cause: error },
+      );
+    }
+    throw error;
   }
 }

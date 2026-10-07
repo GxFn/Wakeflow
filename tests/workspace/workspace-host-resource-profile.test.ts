@@ -56,6 +56,7 @@ function codexProfile(
       tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
+      runtimeStaleness: "unverified",
     },
     launch: { kind: "project-thread" },
     ...overrides,
@@ -74,6 +75,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
     "tmuxAsset",
     "activityMonitor",
     "temporaryPrompts",
+    "runtimeStaleness",
   ]);
 
   const codexInput = {
@@ -95,6 +97,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
+      runtimeStaleness: "unverified",
     },
     launch: { kind: "project-thread" },
   };
@@ -133,6 +136,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       },
       activityMonitor: true,
       temporaryPrompts: true,
+      runtimeStaleness: "unverified",
     },
     launch: {
       kind: "tmux-session",
@@ -183,6 +187,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
+        runtimeStaleness: "unverified",
         close: true,
       },
     })),
@@ -222,6 +227,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
+        runtimeStaleness: "unverified",
       },
       launch: { kind: "project-thread" },
     })),
@@ -248,6 +254,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
+        runtimeStaleness: "unverified",
       },
       launch: { kind: "project-thread" },
     })),
@@ -276,6 +283,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
+        runtimeStaleness: "unverified",
       },
       launch: { kind: "project-thread" },
     })),
@@ -337,6 +345,7 @@ test("host resource profile closes relations without encoding host capability br
         tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
+        runtimeStaleness: "unverified",
       },
       launch: { kind: "project-thread" },
     })),
@@ -363,6 +372,7 @@ test("host resource profile closes relations without encoding host capability br
         },
         activityMonitor: false,
         temporaryPrompts: false,
+        runtimeStaleness: "unverified",
       },
       launch: { kind: "project-thread" },
     })),
@@ -393,6 +403,7 @@ test("host resource profile closes relations without encoding host capability br
         },
         activityMonitor: true,
         temporaryPrompts: true,
+        runtimeStaleness: "unverified",
       },
       launch: { kind: "project-thread" },
     }));

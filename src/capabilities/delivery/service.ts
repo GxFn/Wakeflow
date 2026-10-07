@@ -112,7 +112,10 @@ import {
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import { fail, failWithBlockers as rejectWith, isWakeflowError } from "../../kernel/error.js";
-import { readHostHookObservations } from "../../kernel/hook-observations.js";
+import {
+  HOST_HOOK_RECORDS_MAXIMUM,
+  readHostHookObservations,
+} from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -1485,14 +1488,18 @@ async function sessionRecords(
   sessionId: string,
   since: UtcInstant,
 ): Promise<readonly Readonly<HookLandingRecord & { readonly event: string }>[]> {
+  // A session's retained records easily exceed the default page: query the full bound, and
+  // let only unreadable record candidates (never foreign file names) void the evidence.
+  const query = { sessionId, since, limit: HOST_HOOK_RECORDS_MAXIMUM };
   const inventory = await readHostHookObservations(
     context.workspaceRoot,
     context.facade.hostId,
-    { sessionId, since },
+    query,
     signalOptions(context.options.signal),
   );
   if (!inventory.complete) fail("io-failure", "observation-query-incomplete", "$observations");
-  if (inventory.skipped > 0) fail("io-failure", "observation-query-unavailable", "$observations");
+  if (inventory.unreadable > 0)
+    fail("io-failure", "observation-query-unavailable", "$observations");
   return inventory.records.map((record) =>
     Object.freeze({
       recordId: record.recordId,

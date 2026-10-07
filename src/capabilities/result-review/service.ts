@@ -134,7 +134,10 @@ import {
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
-import { readHostHookObservations } from "../../kernel/hook-observations.js";
+import {
+  HOST_HOOK_RECORDS_MAXIMUM,
+  readHostHookObservations,
+} from "../../kernel/hook-observations.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../kernel/privacy-scan.js";
 import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
@@ -433,14 +436,18 @@ async function sessionRecords(
   sessionId: string,
   since: UtcInstant,
 ): Promise<readonly Readonly<SessionRecordView>[]> {
+  // A session's retained records easily exceed the default page: query the full bound, and
+  // let only unreadable record candidates (never foreign file names) void the evidence.
+  const query = { sessionId, since, limit: HOST_HOOK_RECORDS_MAXIMUM };
   const inventory = await readHostHookObservations(
     context.workspaceRoot,
     context.facade.hostId,
-    { sessionId, since },
+    query,
     signalOptions(context.options.signal),
   );
   if (!inventory.complete) fail("io-failure", "observation-query-incomplete", "$observations");
-  if (inventory.skipped > 0) fail("io-failure", "observation-query-unavailable", "$observations");
+  if (inventory.unreadable > 0)
+    fail("io-failure", "observation-query-unavailable", "$observations");
   return inventory.records.map((record) =>
     Object.freeze({
       recordId: record.recordId,

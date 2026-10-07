@@ -409,6 +409,7 @@ test("optional Host resources are compiled from profile values without host bran
         tmuxAsset: null,
         activityMonitor: true,
         temporaryPrompts: true,
+        runtimeStaleness: "unverified",
       },
       launch: { kind: "project-thread" },
     });

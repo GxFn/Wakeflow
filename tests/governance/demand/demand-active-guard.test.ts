@@ -1,15 +1,20 @@
 import { equal, rejects } from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createDemandAuthority } from "../../../src/governance/demand/model/demand-authority.js";
 import { createDemandIdentity } from "../../../src/governance/demand/model/demand-identity.js";
 import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
+import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { publishDemandFromPackage } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-service.js";
 import {
   createLedgerAuthorityMemberReference,
@@ -103,6 +108,49 @@ test("活动守卫在读取身份记录时被中止报告io-failure/aborted而�
       ),
     );
     equal(scripted.stacks[identityCheck]?.includes("identityPodId"), true);
+  } finally {
+    await workspace.cleanup();
+  }
+});
+
+test("发布意图目录里 foundation 的原子暂存不是残留：活写者按可重试冲突、死写者被跳过且不删除、外来文件仍是残留（§13.161 B3-2）", async () => {
+  const workspace = await activeDemandWorkspace();
+  try {
+    const transactions = path.join(
+      workspace.workspaceRoot.absolutePath,
+      ...DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF.split("/"),
+    );
+    mkdirSync(transactions, { recursive: true, mode: 0o700 });
+    const address = issueDurableAtomicFileStageAddress(
+      "create",
+      `${DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF}/demand_33333333-3333-4333-8333-333333333333.json`,
+      `sha256:${"0".repeat(64)}`,
+      0o600,
+    );
+    const stage = path.join(transactions, address.fileName);
+    writeFileSync(stage, "{}", { mode: 0o600 });
+    // 本进程还持有这个暂存地址：另一 pod 的守卫看到活写者，稍后重试。
+    await rejects(
+      assertNoActiveDemand(workspace.workspaceRoot, undefined, null, OTHER_POD_ID),
+      (error: unknown) =>
+        error instanceof WakeflowError
+        && error.code === "concurrency-conflict"
+        && error.reason === "pod-publication-in-flight"
+        && error.retryable === true,
+    );
+    releaseDurableAtomicFileStageAddress(address);
+    // 写者死了：暂存不再占用 pod，守卫通过，也不越权删除它。
+    await assertNoActiveDemand(workspace.workspaceRoot, undefined, null, OTHER_POD_ID);
+    equal(existsSync(stage), true);
+    rmSync(stage);
+    writeFileSync(path.join(transactions, "stray.json"), "{}", { mode: 0o600 });
+    await rejects(
+      assertNoActiveDemand(workspace.workspaceRoot, undefined, null, OTHER_POD_ID),
+      (error: unknown) =>
+        error instanceof WakeflowError
+        && error.code === "precondition-failed"
+        && error.reason === "pod-publication-residue",
+    );
   } finally {
     await workspace.cleanup();
   }

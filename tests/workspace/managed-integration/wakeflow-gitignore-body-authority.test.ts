@@ -115,6 +115,7 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
+      runtimeStaleness: "unverified",
     },
     launch: { kind: "project-thread" },
   });
@@ -203,6 +204,7 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
+      runtimeStaleness: "unverified",
     },
     launch: { kind: "project-thread" },
   });

@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { WAKEFLOW_DURABLE_ID_KINDS } from "../contracts/identity/wakeflow-durable-id.js";
+import { WAKEFLOW_TYPED_ID_PREFIXES } from "../contracts/identity/wakeflow-typed-id-prefixes.js";
 import { fail } from "./error.js";
 
 /**
@@ -44,17 +44,17 @@ export interface PrivacyScanPolicy {
   readonly allowedIdPrefixes: readonly string[];
 }
 
-export const DEFAULT_ALLOWED_ID_PREFIXES: readonly string[] = Object.freeze(
-  WAKEFLOW_DURABLE_ID_KINDS.map((kind) => `${kind}_`),
-);
+/** 持久身份与运行时身份（窗口绑定、维护操作）的前缀同出一源：新前缀只登记在 contracts。 */
+export const DEFAULT_ALLOWED_ID_PREFIXES: readonly string[] = WAKEFLOW_TYPED_ID_PREFIXES;
 
-const PRIVATE_KEY_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/gu;
+const PRIVATE_KEY_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/gu;
 const PROVIDER_CREDENTIAL_PATTERN =
   /\b(?:sk-(?:ant-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{20,}|xox[abp]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})/gu;
+// 键名与赋值只允许同一行上的空白：标题 `## Password:` 后换行接正文不是赋值（§13.161 B9-7）。
 const CREDENTIAL_ASSIGNMENT_PATTERN =
-  /(?<![\p{L}\p{N}_])(?:[\p{L}\p{N}_]*_)?(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)["']?\s*[:=]\s*["']?[^\s"'<>]{8,}/giu;
+  /(?<![\p{L}\p{N}_])(?:[\p{L}\p{N}_]*_)?(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|secret[_-]?key(?:[_-]?base)?|encryption[_-]?key|app[_-]?key)["']?[ \t]*[:=][ \t]*["']?[^\s"'<>]{8,}/giu;
 const AUTHORIZATION_PATTERN =
-  /\b(?:proxy-)?authorization["']?\s*:\s*["']?(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/giu;
+  /\b(?:proxy-)?authorization["']?[ \t]*:[ \t]*["']?(?:Bearer|Basic|Token)[ \t]+[A-Za-z0-9._~+/=-]{8,}/giu;
 const URL_CREDENTIAL_PATTERN =
   /(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s"'<>/?#:@]+:[^\s"'<>/?#@]+@/gu;
 const ABSOLUTE_PATH_PATTERN =

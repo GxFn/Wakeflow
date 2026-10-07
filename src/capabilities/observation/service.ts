@@ -79,6 +79,7 @@ import {
 import {
   capStatusList,
   deriveNextActions,
+  deriveWindowRuntime,
   deriveWorkspaceGates,
   disposalGuidance,
   type NextActionInput,
@@ -88,6 +89,7 @@ import {
   summarizeGates,
   type VerifyGateStatus,
   verifyNext,
+  type WindowRuntimeView,
   type WorkspaceGateFacts,
 } from "./decide.js";
 
@@ -411,10 +413,50 @@ function windowBindingOf(
   return null;
 }
 
-/** A host hook identifies its producer, not the bound MCP process or instruction context. */
-function unverifiedRuntimeWindowIds(context: SliceContext): readonly string[] {
+/**
+ * 绑定窗口的运行身份：判定方式来自绑定所在宿主的画像（`surfaces.runtimeStaleness`），对照本进程
+ * 路径上现在的制品——窗口重启后会加载的那份；规则本身在 decide.ts 的 `deriveWindowRuntime`。
+ */
+function windowRuntimeOf(
+  context: SliceContext,
+  binding: WindowBindingView | null,
+  bindingsObserved: boolean,
+  installedManifestDigest: Sha256Digest | null,
+): Readonly<WindowRuntimeView> {
+  const staleness =
+    binding === null
+      ? "unverified"
+      : (context.facade.hosts.find((host) => host.hostId === binding.hostId)?.resourceProfile
+          .surfaces.runtimeStaleness ?? "unverified");
+  return deriveWindowRuntime({
+    bound: binding !== null,
+    bindingsObserved,
+    staleness,
+    installedManifestDigest,
+    sessionStartObserverManifestDigest:
+      binding === null
+        ? null
+        : (context.observation.hooks
+            .find((entry) => entry.hostId === binding.hostId)
+            ?.latestBySession.get(binding.handleValue)?.sessionStartObserverManifestDigest ?? null),
+  });
+}
+
+/** 处于某一运行身份的绑定窗口（按拓扑顺序）；磁盘上的制品摘要每次调用只读一次。 */
+function runtimeWindowIds(
+  context: SliceContext,
+  status: "stale" | "unverified",
+): readonly string[] {
+  const bindingsObserved = context.observation.bindings.every((host) => host.status === "observed");
+  const installed = readRuntime(context).onDiskDigest;
   return context.snapshot.model.topology.windows
-    .filter((window) => windowBindingOf(context.observation, window.windowId) !== null)
+    .filter((window) => {
+      const binding = windowBindingOf(context.observation, window.windowId);
+      return (
+        binding !== null &&
+        windowRuntimeOf(context, binding, bindingsObserved, installed).status === status
+      );
+    })
     .map((window) => window.windowId);
 }
 
@@ -451,7 +493,13 @@ function lastObservationOf(
   const latest = observation.hooks
     .find((entry) => entry.hostId === binding.hostId)
     ?.latestBySession.get(binding.handleValue);
-  return latest === undefined ? null : { ...latest };
+  return latest === undefined
+    ? null
+    : {
+        event: latest.event,
+        recordedAt: latest.recordedAt,
+        observerManifestDigest: latest.observerManifestDigest,
+      };
 }
 
 function claimViewOf(observation: Readonly<WorkspaceObservation>, windowId: string) {
@@ -503,6 +551,7 @@ function windowRuntimeDomainView(observation: Readonly<WorkspaceObservation>) {
 function windowViews(context: SliceContext) {
   const { observation, snapshot } = context;
   const bindingsObserved = observation.bindings.every((host) => host.status === "observed");
+  const installed = readRuntime(context).onDiskDigest;
   return snapshot.model.topology.windows.map((window) => {
     const binding = windowBindingOf(observation, window.windowId);
     return {
@@ -515,12 +564,7 @@ function windowViews(context: SliceContext) {
       claim: claimViewOf(observation, window.windowId),
       lastObservation: lastObservationOf(observation, binding),
       projection: windowProjectionOf(observation, window.windowId),
-      runtime:
-        binding !== null
-          ? { status: "unverified", reason: "host-runtime-association-unavailable" }
-          : bindingsObserved
-            ? { status: "unregistered", reason: null }
-            : { status: "unverified", reason: "binding-unavailable" },
+      runtime: windowRuntimeOf(context, binding, bindingsObserved, installed),
     };
   });
 }
@@ -684,6 +728,7 @@ function nextActionInput(
   const podsObserved = observation.pods.status === "observed";
   return Object.freeze({
     artifactServerOutdated: runtime.artifactOnDisk === "changed",
+    staleWindows: runtimeWindowIds(context, "stale").length,
     artifactServerUnavailable:
       context.facade.artifact !== undefined &&
       (runtime.artifactManifestDigest === null || runtime.artifactOnDisk === "unknown"),
@@ -1092,7 +1137,8 @@ async function gateFacts(
               manifestDigest: runtime.view.artifactManifestDigest,
               onDiskDigest: runtime.onDiskDigest,
             },
-      unverifiedWindows: unverifiedRuntimeWindowIds(context),
+      staleWindows: runtimeWindowIds(context, "stale"),
+      unverifiedWindows: runtimeWindowIds(context, "unverified"),
     },
     domains: {
       demands: { status: observation.demands.status, issue: observation.demands.issue },

@@ -571,20 +571,27 @@ test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出
     verified.gates.map((gate) => gate.name),
     GATE_NAMES,
   );
+  // §13.161：绑定窗口没有宿主关联证据只是信息（门通过并带计数），工作区仍可整体通过。
   deepEqual(
     verified.gates.map((gate) => gate.status),
-    GATE_NAMES.map((name) => (name === "runtime-artifact" ? "unavailable" : "pass")),
+    GATE_NAMES.map(() => "pass"),
   );
-  equal(verified.ok, false);
-  deepEqual(plain(verified.summary), { pass: 14, fail: 0, unavailable: 1 });
+  equal(verified.ok, true);
+  deepEqual(plain(verified.summary), { pass: 15, fail: 0, unavailable: 0 });
+  equal(
+    verified.gates
+      .find((gate) => gate.name === "runtime-artifact")
+      ?.code?.startsWith("window-runtime-unverified:"),
+    true,
+  );
   equal(verified.repairsApplied, false);
   equal(verified.demand, null);
   equal(/^sha256:[0-9a-f]{64}$/u.test(verified.observationDigest), true);
   deepEqual(plain(verified.next), {
-    frontier: "window-runtime-unverified",
-    owner: "controller",
+    frontier: null,
+    owner: "none",
     suggestedTool: null,
-    blockers: ["runtime-artifact:unavailable"],
+    blockers: [],
   });
   equal(verified.gates.find((gate) => gate.name === "local-layout")?.code, null);
   equal(verified.gates.find((gate) => gate.name === "window-identity")?.code, "unregistered:3");
@@ -607,8 +614,8 @@ test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出
     const channel = broken.gates.find((gate) => gate.name === "host-hook-channel");
     deepEqual([channel?.status, channel?.code], ["fail", "codex:skipped-1"]);
     equal(broken.ok, false);
-    deepEqual(plain(broken.summary), { pass: 13, fail: 1, unavailable: 1 });
-    deepEqual(broken.next.blockers, ["host-hook-channel:fail", "runtime-artifact:unavailable"]);
+    deepEqual(plain(broken.summary), { pass: 14, fail: 1, unavailable: 0 });
+    deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
     equal(broken.next.suggestedTool, "wakeflow_maintain_workspace");
     notEqual(broken.observationDigest, verified.observationDigest);
   } finally {
@@ -619,7 +626,7 @@ test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出
     { root: healthy.root },
     CLOCK,
   );
-  equal(restored.ok, false);
+  equal(restored.ok, true);
   equal(restored.observationDigest, verified.observationDigest);
 
   // §13.134 B12：kill-window 在原子创建中途杀掉 hook，留下写入器自己那种暂存文件（create、0600，
@@ -637,7 +644,7 @@ test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出
     );
     const channel = withStage.gates.find((gate) => gate.name === "host-hook-channel");
     deepEqual([channel?.status, channel?.code], ["pass", null]);
-    equal(withStage.ok, false);
+    equal(withStage.ok, true);
     equal(withStage.observationDigest, verified.observationDigest);
     const status = await executeStatusRequest(
       CODEX_OBSERVATION_FACADE,
@@ -687,7 +694,8 @@ test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出
     "fail",
   );
   equal(typeof withDemand.demand.observationDigest, "string");
-  equal(withDemand.ok, false);
+  // `ok` 只汇总工作区门；Demand 门单列在 demand 段里（§13.161：runtime 门不再因 unverified 失败）。
+  equal(withDemand.ok, true);
 });
 
 test("归档 Demand：完成即归档后带 demandId 的 status 给归档回执、route 为 null、next 指向 continue；verify 的 Demand 段为 archived", {
@@ -1328,7 +1336,7 @@ async function assertArtifactIdentity(
   equal(controller?.runtime.reason, "host-runtime-association-unavailable");
   equal(controller?.lastObservation?.observerManifestDigest, current);
   const peerVerify = await executeVerifyRequest(facadeWith(current), { root: healthy.root }, CLOCK);
-  equal(peerVerify.gates.find((entry) => entry.name === "runtime-artifact")?.status, "unavailable");
+  equal(peerVerify.gates.find((entry) => entry.name === "runtime-artifact")?.status, "pass");
   equal(
     same.nextActions.some((action) => action.reason === "window-artifact-stale"),
     false,

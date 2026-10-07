@@ -52,7 +52,17 @@ export function deriveAnchorReferenceBlockers(
       blockers.push(`anchor-item-unknown:${anchor.anchorId}:${reference.itemId}`);
     }
   }
-  return Object.freeze(blockers);
+  return Object.freeze(withKnownItems(blockers, input.criteria));
+}
+
+/** 条目引用不存在时附上需求包实际有几条（ac-1 … ac-N 按顶层列表位置编号），Controller 不必再数。 */
+function withKnownItems(
+  blockers: readonly string[],
+  criteria: readonly AcceptanceCriterion[],
+): readonly string[] {
+  return blockers.some((blocker) => blocker.includes("-item-unknown:"))
+    ? [...blockers, `acceptance-items:${criteria.length}`]
+    : blockers;
 }
 
 /** 章节锚点必须在需求包记录的 sections 里。 */
@@ -219,7 +229,23 @@ export function deriveTestStepReferenceBlockers(
       blockers.push(`step-item-unknown:${step.stepId}:${reference.itemId}`);
     }
   }
-  return Object.freeze(blockers);
+  return Object.freeze(withKnownItems(blockers, input.criteria));
+}
+
+/**
+ * 测试合同必须覆盖需求包验收标准的全部条目（§13.161 B4-1）：一个 Demand 当前代际只有一份测试
+ * 合同，完成门又要求当前代际已接受的测试覆盖全集，漏掉的条目在规划时就拒绝，而不是归档时才发现
+ * 无路可走。复测合同同样列全——上一代际已通过的步骤可以不跑，按基线计。
+ */
+export function deriveTestContractCoverageBlockers(
+  input: Readonly<TestStepReferenceInput>,
+): readonly string[] {
+  const covered = new Set(input.steps.map((step) => step.requirementRef.itemId));
+  return Object.freeze(
+    input.criteria
+      .filter((criterion) => !covered.has(criterion.itemId))
+      .map((criterion) => `test-contract-uncovered:${criterion.itemId}`),
+  );
 }
 
 export interface TestPlanningInput {

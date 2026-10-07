@@ -85,6 +85,7 @@ import {
   derivePlanReview,
   deriveSectionAnchorBlockers,
   deriveTestPlanningBlockers,
+  deriveTestContractCoverageBlockers,
   deriveTestStepReferenceBlockers,
   deriveTopologyBlockers,
   parseAcceptanceCriteria,
@@ -409,12 +410,21 @@ async function buildTestPackage(
       requirementRef: step.requirementRef,
     }),
   );
+  const criteria = parseAcceptanceCriteria(await readRequirementText(context, loaded));
   const stepBlockers = deriveTestStepReferenceBlockers({
     steps,
     recordDigest: identity.source.recordDigest,
-    criteria: parseAcceptanceCriteria(await readRequirementText(context, loaded)),
+    criteria,
   });
   if (stepBlockers.length > 0) rejectWith(stepBlockers, "$request.taskPackage.testContract.steps");
+  const coverageBlockers = deriveTestContractCoverageBlockers({
+    steps,
+    recordDigest: identity.source.recordDigest,
+    criteria,
+  });
+  if (coverageBlockers.length > 0) {
+    rejectWith(coverageBlockers, "$request.taskPackage.testContract.steps");
+  }
   const selectedAuthorityRefs = resolveAuthorityReferences(
     context,
     requested.selectedAuthorityMemberRefs,

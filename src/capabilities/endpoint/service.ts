@@ -503,7 +503,7 @@ async function loadHookSessions(
     options,
   );
   if (!startRecords.complete) fail("io-failure", "observation-query-incomplete", "$observations");
-  if (startRecords.skipped > 0)
+  if (startRecords.unreadable > 0)
     fail("io-failure", "observation-query-unavailable", "$observations");
   for (const record of startRecords.records) {
     if (!(await matches(record.cwd))) continue;
@@ -517,7 +517,8 @@ async function loadHookSessions(
     options,
   );
   if (!endRecords.complete) fail("io-failure", "observation-query-incomplete", "$observations");
-  if (endRecords.skipped > 0) fail("io-failure", "observation-query-unavailable", "$observations");
+  if (endRecords.unreadable > 0)
+    fail("io-failure", "observation-query-unavailable", "$observations");
   for (const record of endRecords.records) ended.add(record.sessionId);
   return Object.freeze({ started, ended, cwdBySession });
 }
@@ -726,9 +727,49 @@ function attachedWorktreeViews(
       repositoryId: attached.repositoryId,
       status: receipt === undefined ? ("receipt-missing" as const) : ("receipt-present" as const),
       pathFromWorkspaceRoot:
-        receipt === undefined ? null : path.relative(context.root.absolutePath, receipt.path),
+        receipt === undefined
+          ? null
+          : relativeCheckoutPath(context.root.absolutePath, context.repositoryRoot, receipt.path),
     });
   });
+}
+
+function isInside(parent: string, candidate: string): boolean {
+  const relative = path.relative(parent, candidate);
+  return (
+    relative !== "" &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
+/**
+ * 产品检出允许的位置：工作区根之内或它的父目录之内（Codex 的外层项目把仓库和检出放在工作区旁边，
+ * §13.158；Claude 的检出建在仓库内的 `.claude/worktrees/`），或产品仓库自己的目录之内。别处的检出被
+ * 拒绝：公开结果只写相对工作区的路径，这样它最多以一级 `../` 开头，任意位置的 realpath 不会以
+ * `../../…` 的形式带出本机目录结构（§13.161 B5-3）。
+ */
+function checkoutWithinBounds(
+  workspace: string,
+  repositoryRoot: string | null,
+  candidate: string,
+): boolean {
+  return (
+    isInside(path.dirname(workspace), candidate) ||
+    (repositoryRoot !== null && isInside(repositoryRoot, candidate))
+  );
+}
+
+/** 检出相对工作区根的路径；越界的旧回执给 null，不写 `../../…`。 */
+function relativeCheckoutPath(
+  workspace: string,
+  repositoryRoot: string | null,
+  candidate: string,
+): string | null {
+  return checkoutWithinBounds(workspace, repositoryRoot, candidate)
+    ? path.relative(workspace, candidate)
+    : null;
 }
 
 /** The host renders tool/CLI instructions; this slice supplies only current domain facts. */
@@ -949,6 +990,14 @@ async function admitWorktree(
     executionRoot,
     repositoryRoot: context.repositoryRoot,
   });
+  // 检出必须在工作区根、它的父目录或产品仓库之内：公开结果与提示只写它相对工作区的路径（§13.161 B5-3）。
+  if (!checkoutWithinBounds(context.root.absolutePath, context.repositoryRoot, admitted.path)) {
+    fail(
+      "precondition-failed",
+      "worktree-outside-workspace",
+      "$request.observation.worktree.executionRoot",
+    );
+  }
   // 一个检出同一时刻只属于一个 pod（§13.128）：另一 pod 的回执还指着它就拒绝，不覆盖那份归属。
   const occupied = await findPodWorktreeReceiptByPath(
     context.root,

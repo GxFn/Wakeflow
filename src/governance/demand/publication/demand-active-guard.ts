@@ -9,6 +9,13 @@ import {
 } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStrictTextFile, StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
+import {
+  type DurableAtomicFileStageAddress,
+  DurableAtomicFileStageAddressError,
+  hasDurableAtomicFileStagePrefix,
+  parseDurableAtomicFileStageFileName,
+  readDurableAtomicFileStageOwnerState,
+} from "../../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import { fail } from "../../../kernel/error.js";
 import {
   listRequirementClaimStates,
@@ -206,10 +213,32 @@ async function pendingEntries(root: RootedDirectory, ref: string, signal: AbortS
   }
 }
 
+/**
+ * 目录里 foundation 自己的原子暂存文件不是发布意图（§13.161 B3-2）：活着的写者正在落一个事务，
+ * 按可重试冲突让调用方稍后再来；死写者留下的暂存由下一次同目标写入回收，守卫跳过且不删除；
+ * 所有者未知时仍按残留保守拒绝。
+ */
+function isDeadWriterStage(name: string, scope: "pod-publication" | "pod-lifecycle"): boolean {
+  if (!hasDurableAtomicFileStagePrefix(name)) return false;
+  let stage: Readonly<DurableAtomicFileStageAddress>;
+  try {
+    stage = parseDurableAtomicFileStageFileName(name);
+  } catch (error: unknown) {
+    if (error instanceof DurableAtomicFileStageAddressError) return false;
+    throw error;
+  }
+  const owner = readDurableAtomicFileStageOwnerState(stage);
+  if (owner === "active") {
+    fail("concurrency-conflict", `${scope}-in-flight`, "$board", { retryable: true });
+  }
+  return owner === "inactive";
+}
+
 /** 崩溃释放进程锁不代表业务已结清：已有发布意图和生命周期日志继续保留 pod 占用。 */
 async function assertNoPendingPodMutation(root: RootedDirectory, signal: AbortSignal | undefined, excluding: string | null, podId: string | null) {
   for (const entry of await pendingEntries(root, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, signal)) {
     if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
+      if (isDeadWriterStage(entry.name, "pod-publication")) continue;
       fail("precondition-failed", "pod-publication-residue", "$pod");
     }
     const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");
@@ -222,6 +251,7 @@ async function assertNoPendingPodMutation(root: RootedDirectory, signal: AbortSi
   }
   for (const entry of await pendingEntries(root, DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, signal)) {
     if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
+      if (isDeadWriterStage(entry.name, "pod-lifecycle")) continue;
       fail("precondition-failed", "pod-lifecycle-residue", "$pod");
     }
     const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");

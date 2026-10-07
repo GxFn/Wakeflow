@@ -1,4 +1,4 @@
-import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
 import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import path from "node:path";
 import {
@@ -632,7 +632,7 @@ async function applyPod(
     context.root,
     plan.podId,
     async () => {
-      await assertDemandOperationConfigCurrent(
+      await assertDemandOperationConfigCurrentOrFail(
         context.root,
         context.snapshot,
         context.options.signal,

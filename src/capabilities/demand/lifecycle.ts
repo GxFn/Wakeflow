@@ -1,4 +1,4 @@
-import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
 import {
   assertNoActiveDemand,
   readDemandPodId,
@@ -814,7 +814,11 @@ async function applyTerminal(
     context.root,
     podId,
     async () => {
-      await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+      await assertDemandOperationConfigCurrentOrFail(
+        context.root,
+        context.snapshot,
+        context.signal,
+      );
       return applyTerminalLocked(context, plan, verify, disposition);
     },
     context.signal,
@@ -1246,7 +1250,11 @@ async function applyContinue(
     context.root,
     podId,
     async () => {
-      await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+      await assertDemandOperationConfigCurrentOrFail(
+        context.root,
+        context.snapshot,
+        context.signal,
+      );
       await assertNoActiveDemand(context.root, context.signal, plan.demandId, podId);
       return applyContinueLocked(context, plan, disposition);
     },

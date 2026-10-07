@@ -4,6 +4,7 @@ import { VERIFY_TOOL_REGISTRATION } from "../../../src/capabilities/observation/
 import {
   capStatusList,
   deriveNextActions,
+  deriveWindowRuntime,
   deriveWorkspaceGates,
   type NextActionInput,
   nextFromActions,
@@ -64,7 +65,7 @@ const OBSERVED = Object.freeze({ status: "observed" as const, issue: null });
 
 function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGateFacts {
   return {
-    runtime: { server: null, unverifiedWindows: [] },
+    runtime: { server: null, staleWindows: [], unverifiedWindows: [] },
     domains: { demands: OBSERVED, claims: OBSERVED, pods: OBSERVED },
     configRecheck: "current",
     configRef: WAKEFLOW_CONFIG_FILE_REF,
@@ -178,6 +179,7 @@ function nextInput(overrides: Partial<NextActionInput> = {}): NextActionInput {
     pendingPackages: [],
     artifactServerOutdated: false,
     artifactServerUnavailable: false,
+    staleWindows: 0,
     ...overrides,
   };
 }
@@ -870,8 +872,8 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
     suggestedTool: null,
     blockers: ["config-authority:fail", "ledger-layout:unavailable", "runtime-artifact:fail"],
   });
-  deepEqual(verifyNext([artifactGate("window-runtime-unverified:2")]), {
-    frontier: "window-runtime-unverified",
+  deepEqual(verifyNext([artifactGate("windows-stale:2,window-runtime-unverified:1")]), {
+    frontier: "window-artifact-stale",
     owner: "controller",
     suggestedTool: null,
     blockers: ["runtime-artifact:fail"],
@@ -1113,7 +1115,11 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
   deepEqual(
     verdictOf(
       healthyFacts({
-        runtime: { server: { manifestDigest: same, onDiskDigest: same }, unverifiedWindows: [] },
+        runtime: {
+          server: { manifestDigest: same, onDiskDigest: same },
+          staleWindows: [],
+          unverifiedWindows: [],
+        },
       }),
       "runtime-artifact",
     ),
@@ -1124,6 +1130,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
       healthyFacts({
         runtime: {
           server: { manifestDigest: same, onDiskDigest: digest("artifact-b") },
+          staleWindows: [],
           unverifiedWindows: [],
         },
       }),
@@ -1136,6 +1143,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
       healthyFacts({
         runtime: {
           server: { manifestDigest: same, onDiskDigest: null },
+          staleWindows: [],
           unverifiedWindows: [
             "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -1146,6 +1154,34 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     ),
     ["unavailable", "manifest-unavailable,window-runtime-unverified:2"],
   );
+  // §13.161：没有宿主关联证据只是信息（门通过并带计数）；启动记录旧于磁盘制品才是确定的过期。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        runtime: {
+          server: { manifestDigest: same, onDiskDigest: same },
+          staleWindows: [],
+          unverifiedWindows: ["window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
+        },
+      }),
+      "runtime-artifact",
+    ),
+    ["pass", "window-runtime-unverified:1"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        runtime: {
+          server: { manifestDigest: same, onDiskDigest: same },
+          staleWindows: ["window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
+          unverifiedWindows: ["window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
+        },
+      }),
+      "runtime-artifact",
+    ),
+    ["fail", "windows-stale:1,window-runtime-unverified:1"],
+  );
+  equal(deriveNextActions(nextInput({ staleWindows: 2 }))[0]?.reason, "window-artifact-stale");
   deepEqual(
     deriveNextActions(
       nextInput({
@@ -1188,6 +1224,7 @@ test("曾有运行制品身份但磁盘清单消失时，verify/status 都要求
   const facts = healthyFacts({
     runtime: {
       server: { manifestDigest: digest("previous-artifact"), onDiskDigest: null },
+      staleWindows: [],
       unverifiedWindows: [],
     },
   });
@@ -1213,4 +1250,38 @@ test("曾有运行制品身份但磁盘清单消失时，verify/status 都要求
     deriveNextActions(nextInput({ artifactServerUnavailable: true }))[0]?.reason,
     "runtime-artifact-unavailable",
   );
+});
+
+test("绑定窗口的运行身份（§13.161）：只有宿主声明按启动记录判定、且启动记录不等于磁盘制品时才是 stale；其余一律 unverified", () => {
+  const installed = digest("artifact-installed");
+  const older = digest("artifact-older");
+  const base = {
+    bound: true,
+    bindingsObserved: true,
+    staleness: "session-start-observer-digest" as const,
+    installedManifestDigest: installed,
+    sessionStartObserverManifestDigest: older,
+  };
+  deepEqual(deriveWindowRuntime(base), {
+    status: "stale",
+    reason: "session-started-under-older-artifact",
+  });
+  const unverified = { status: "unverified", reason: "host-runtime-association-unavailable" };
+  // 同一制品下启动不证明 MCP 已重载：仍是 unverified，不是 current。
+  deepEqual(
+    deriveWindowRuntime({ ...base, sessionStartObserverManifestDigest: installed }),
+    unverified,
+  );
+  deepEqual(deriveWindowRuntime({ ...base, sessionStartObserverManifestDigest: null }), unverified);
+  deepEqual(deriveWindowRuntime({ ...base, installedManifestDigest: null }), unverified);
+  // Codex 宿主：安装按版本目录并存，不作方向性断言。
+  deepEqual(deriveWindowRuntime({ ...base, staleness: "unverified" }), unverified);
+  deepEqual(deriveWindowRuntime({ ...base, bound: false }), {
+    status: "unregistered",
+    reason: null,
+  });
+  deepEqual(deriveWindowRuntime({ ...base, bound: false, bindingsObserved: false }), {
+    status: "unverified",
+    reason: "binding-unavailable",
+  });
 });

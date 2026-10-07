@@ -35,6 +35,8 @@ export const claudeCodeWorkspaceHostResourceProfile =
       },
       activityMonitor: true,
       temporaryPrompts: true,
+      // 制品在原路径就地更新，助手能就地重启窗口：启动记录旧于磁盘制品的会话确定过期。
+      runtimeStaleness: "session-start-observer-digest",
     },
     launch: {
       kind: "tmux-session",

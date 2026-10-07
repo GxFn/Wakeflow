@@ -42,6 +42,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
   "tmuxAsset",
   "activityMonitor",
   "temporaryPrompts",
+  "runtimeStaleness",
 ] as const);
 
 export type WakeflowWorkspaceHostResourceSurfaceName =
@@ -106,6 +107,13 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
   readonly tmuxAsset: Readonly<WakeflowWorkspaceHostTmuxAsset> | null;
   readonly activityMonitor: boolean;
   readonly temporaryPrompts: boolean;
+  /**
+   * 绑定窗口的运行身份怎样判为过期（§13.161）。`session-start-observer-digest`：制品在原路径就地
+   * 更新、宿主有重启窗口的手段（Claude Code 的 tmux 助手），会话最近一次启动记录的观察器摘要不等于
+   * 磁盘上的制品 ⇒ 该会话没有在更新后重启过，报 stale；`unverified`：安装按版本目录并存、没有可信的
+   * 窗口到 MCP 关联（Codex），一律只报 unverified，不作方向性断言（ADR-0017 D3、C6）。
+   */
+  readonly runtimeStaleness: "session-start-observer-digest" | "unverified";
 }
 
 /**
@@ -373,7 +381,15 @@ function parseSurfaces(
     tmuxAsset: parseTmuxAsset(record.tmuxAsset),
     activityMonitor: surfaceBoolean(record.activityMonitor, "activityMonitor"),
     temporaryPrompts: surfaceBoolean(record.temporaryPrompts, "temporaryPrompts"),
+    runtimeStaleness: parseRuntimeStaleness(record.runtimeStaleness),
   });
+}
+
+function parseRuntimeStaleness(
+  value: unknown,
+): WakeflowWorkspaceHostResourceSurfaces["runtimeStaleness"] {
+  if (value === "session-start-observer-digest" || value === "unverified") return value;
+  fail("surface", "$/surfaces/runtimeStaleness");
 }
 
 function launchValue(value: unknown, path: string): string {

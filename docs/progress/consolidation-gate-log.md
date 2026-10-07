@@ -4262,3 +4262,209 @@ Codex 候选 manifest 为 `sha256:ab9d9a1e308db758ce88a02fd334b89843f995cfbb4f3b
 运行时代码、测试和双制品内容未在本次提交整理中改变，沿用 §13.151 已执行的 1244 项完整门、二十个端到端场景及双宿主 smoke。本轮重新运行 `build:check`，rc.5 两份候选摘要与 §13.151 完全一致；图谱 `npm run check` 通过，包含独立检查器测试、类型、当前指纹、100 张图的渲染回执和构建。
 
 图谱保留审阅时的工作树快照、基线及历史证据；入口补记源码现已提交。四份 Markdown 仅规范化多余的 EOF 空行，未改变正文或 Mermaid。最后执行差异空白检查和提交路径核对。此任务只包含本地提交，没有推送、打标签、发布或刷新安装缓存；正式发布门仍需另行满足对应前提。
+
+
+### 13.153 维护工具第一批实现（2026-10-03）
+
+用户确认工具规划后，在 `04769897` 上实现第一批维护入口。改动限于 tooling、相关测试、根 npm/knip 配置和维护文档；运行时、公共 Schema、插件版本、生成制品与安装缓存未改动。
+
+- `wf verify quick/gate/artifact` 委托现有命令，保留当前测试源清单及排程；新增私有运行回执、源码/锁文件/运行器/制品摘要、阶段日志和实际测试入口摘要。Node 原生事件同时记录文件与汇总统计，缺失、截断、拼接、不一致、失败、取消、skip 和 todo 不会给出绿色结果。
+- 开始和结束分别核对提交及内容指纹；变化时不复用结果。取消处理使用独立的受管进程组；SIGKILL 等无法结算的情况只留下 running 记录，不伪造通过。该回执是开发观测，不是业务权威或强认证证明。
+- `wf doctor env/artifact` 只读检查当前 CLI 环境与候选/安装目录，复用逐文件制品校验；不同版本、同版本不同字节、损坏和缺失分别报告。给定运行报告只作 imported-report 比较，不能升级为原生激活证明。
+- `wf timings export` 从完整通过的 gate 回执重新核对事件摘要、源码和全测试清单，生成耗时建议表，不自动覆盖跟踪文件。
+
+聚焦回归 23 项通过，覆盖真实 Node 的通过/失败/跳过/超时取消、截断和拼接事件、缺失证据、执行中源码变化、预先取消、忽略 SIGTERM 的后代进程清理、只读诊断与伪造的运行认证字段。实际 quick 命令完成六个阶段，23 项通过且输入指纹一致。
+
+实际环境探测为 Node 24.19.0、npm 11.17.0、Git 2.54.0。候选及当前指定的 rc.5 安装目录均核对 915 个文件、摘要一致；另导入 rc.4 历史 status 时，输出“安装一致、报告摘要不同、activation unverified”。这是历史报告对照，不是对当前聊天 MCP 版本的新原生结论。
+
+首次 6 并发整门保留为 failed：1263 项中 1259 pass、4 fail，工作区作用域的共享初始化超过 60 秒，场景首次初始化请求超时，其余 19 个场景未运行。失败回执保持输入一致并明确记录失败；耗时导出拒绝该回执。随后以 1 并发单独复验这两份测试文件，4 项 Node 测试通过，其中一项完成二十场景；测试阶段 266583 ms。原断言、初始化和请求时限未改，之后采用 4 并发复验完整门；两次整门的源码指纹和 267 文件选择清单完全相同。
+
+独立图谱 `check:current` 如实报告 5 页来源漂移：逐文件索引及制品/合同专题的四页。这是新 tooling 对现有审阅快照的影响，本批不改写图谱摘要；保持独立复核任务。
+
+最终 4 并发 `wf verify gate` 完成既有 `npm test`：1263/1263 通过，0 fail/cancelled/skipped/todo，覆盖当前 267 份测试文件和二十场景；测试阶段 848532 ms。类型、架构、lint、format、knip、95 份 Schema 漂移和 build:check 均通过；完整回执确认首尾输入一致。随后实际 `wf verify artifact` 的 build:check 与双宿主 smoke 均通过，rc.5 两份 manifest 摘要仍与 §13.151 相同。
+
+实际 `wf timings export` 对成功整门回执导出 267 份文件的建议耗时，事件摘要与当前输入重新核对通过；跟踪的旧耗时表保持不变。失败回执导出返回非零码。运行回执、原始日志、事件、首次失败和最终建议表均留在被忽略的私有验证目录中。
+
+文档链接、差异空白及修改范围检查通过。剩余边界为上述 5 页图谱待复核，以及未实施的宿主选择/实时 hook 采集、lab、live、impact、CI 和普通安装用户诊断入口；Windows 分支未实机验证。本批源码与文档未提交，`main` 相对本地 `origin/main` 为 0/0。用法见 [维护工具说明](../references/maintainer-tools.md)。未提交、推送、tag、发布或刷新缓存。
+
+
+### 13.154 维护工具第二批：可丢弃环境与固定故障矩阵（2026-10-03）
+
+用户确认继续后，在 `04769897` 与第一批未提交工具代码之上实现第二批。改动仍限于 tooling、相关测试和维护文档，保留第一批改动；运行时、公共 Schema、双制品、版本源和安装缓存保持不变。
+
+- `wf lab create` 要求源码仓库和其他 Git 仓库之外的新可丢弃根，复制并核验指定生成制品，创建 Alpha、Beta 与 Workspace 三个合成 Git 仓库。经真实生成 stdio MCP 的 fresh-initialize preview / apply 建立当前格式工作区，不手写业务配置或 ledger，不登记宿主项目或聊天。
+- `lab run` 的 readiness 场景检查新进程制品身份、idle 状态、verify、reconcile 零步/no-op、pod 创建预览和完整环境树无持久变化。生产默认 fsync 保持启用，明确标记 synthetic / generated-stdio，原生宿主验收仍为 unverified。每次运行保存独立回执和工具模块摘要。
+- 资源清单记录根及文件的设备/inode、模式、摘要、配置、Git HEAD/分支/worktree/status、制品身份。运行与删除不收编清单外资源；清理需 preview 摘要并再次核验，逐项删除，回执留在环境之外。失败和取消保留现场；未完成创建或中断删除不自动修复、递归抹除或宣称成功。互斥保护本工具的命令，不是对抗同用户恶意并发的隔离机制。
+- `wf fault list/run` 收敛五类现有回归：锁与许可、追加/维护恢复、隐私、投递/回调、文件边界。委托 quick 验证入口，选择 14 份真实源测试文件，无自动重试、无新公共故障开关；保留各用例原有持久化档位及超时。
+
+开发中真实制品试跑发现预设 selectionKey 重复和 JSON 回读后的字段序摘要差异；修复为独立窗口选择键及固定字段投影，加入回读一致性回归。新增工具聚焦 11 项全部通过，覆盖 Codex / Claude 两份生成制品的完整 lab 生命周期及重复运行、零写检查、额外文件和分支、同字节替换、软/硬链接、目录替换、过期清理摘要、未知占用锁、MCP 启动失败、预先取消和挂起握手取消后的子进程退出。错误诊断只保留公共有界类别。
+
+实际 CLI 在两个新外部根分别执行 Codex / Claude 创建、检查、readiness、清理预览。人为加入的本轮探针文件使 apply 返回 `lab-resource-drift` 且保留文件；只移除该已知探针后，使用原预览摘要完成精确清理。两根分别核验 1195 / 1243 个条目，目录均已回收，创建/场景/资源/清理回执仍保留在私有 `.build/labs/`。
+
+实际 `wf fault run --suite all --concurrency 2` 完成六个 quick 阶段，14 个文件共 102/102 通过、无 fail/cancelled/skipped/todo，首尾输入指纹一致。其中既有真实文件系统和子进程崩溃试验，也有纯决定/文本与注入错误测试；没有把整个矩阵统称为真实 fsync 或宿主验收。
+
+取消路径补审发现：abort 回调的非等待 close 与 finally 的 close 重叠，且所用 SDK 的握手异常也会自行发起非等待 close；后来的 close 可能提前返回并释放 lab 互斥。加强断言后，修前真实挂起子进程在函数返回时仍存活，定向回归按预期失败。lab 的 stdio 适配器现共用关闭 Promise，等待真实 close 事件，包括忽略 SIGTERM 后的强制退出；关闭无法核验时保留互斥锁及失败回执。SDK 自行丢弃关闭 Promise 的路径也由 owner 最终检查失败，避免非等待拒绝变成进程级未处理异常。未修改 SDK 或生产宿主适配器。断言直接核验返回时子进程已退出，不靠返回后的等待放宽条件。首次完整门因此被主动中止，保留 interrupted / exit 130 / inputsUnchanged 回执，不作为完整通过证据。
+
+修复后实际 quick 回执完成六个阶段，20/20 项通过，包含新增 11 项工具测试与既有验证回执回归；输入指纹一致。最终 4 并发 `wf verify gate` 完成现有 `npm test`：1274/1274 项、270 份文件全部通过，0 fail/cancelled/skipped/todo，含二十个端到端场景。测试阶段 546968 ms，完整命令阶段 556386 ms；类型、架构、lint、format、knip、95 份 Schema 漂移与 build:check 全部通过，首尾输入一致。
+
+独立图谱只读 `check:current` 仍报告 §13.153 的同一组 5 页来源漂移，未修改任何图谱文件或以刷新摘要代替语义复核。文档用法见 [维护工具说明](../references/maintainer-tools.md)。
+
+随后实际 `wf verify artifact` 的 build:check 与 Codex / Claude 双宿主 smoke 全部通过，输入未变化；两个 rc.5 manifest 摘要仍与 §13.151 相同。测试回执、首次主动中断、关闭竞态修前失败/修后回归、CLI 运行及清理证据均保留在被忽略的私有目录。文档链接及 `git diff --check` 通过。
+
+本轮没有创建宿主聊天或侧栏项目，没有提交、推送、tag、发布、升级版本或刷新缓存；两批维护工具与文档修改仍未提交，`main` 相对本地 `origin/main` 为 0/0。Windows、原生多窗口、完整 lab 业务/worktree 预设、随机性质试验、live 行动单、impact 与 CI 不在本批完成范围，仍保持未验证或未实施；图谱 5 页待语义复核。
+
+
+### 13.155 维护工具第三批：原生行动单、定向模型与 CI 配置（2026-10-03）
+
+用户确认继续后，在 `04769897` 和前两批未提交改动上实施第三批。范围限于维护工具、相关测试、开发依赖、CI 配置与文档；生产运行时、公共 Schema、角色技能和双制品未修改。
+
+`live plan` 的首个场景为 project-bootstrap：逐文件核验候选制品，通过生成 stdio 的 status / binding inspect 消费既有宿主 profile，按准确工作区根与宿主匹配导入项目清单。稳定输入对应稳定计划，绑定存在时对账；不通过目录名或聊天标题猜项目，不另写宿主启动器。当前只支持 profile 已声明的 project/local 主工作区能力，Claude 与 worktree 原生场景明确不支持。补正文档中 lab 外层资源容器与实际 `Workspace/` 程序根的区别，项目应匹配实际配置根。
+
+`live attempt` 在 Agent 调用宿主前，以跨重复规划的窗口键独占创建并 fsync 留下尝试记录；它不证明调用已发生，不授予授权。重复、部分、未知记录不自动退休；新建前再核对当前制品、配置、绑定及 claim。两次真实独立 CLI 进程并发试验只允许一个记录成功。`live verify` 核对项目、ready 句柄、SessionStart 事件、角色执行根、绑定身份/摘要与所报 MCP 身份；保留导入观察的声明时间、来源及 UI/宿主回读区别，始终维持 imported-unverified 和窗口到 MCP 关联未验证。即使合成记录完全匹配或自称 verified，也不能变成原生通过。
+
+真实宿主 `list_projects` 返回被最小化保存后，现有测试区的只读规划得到一个正确项目及 5 个已绑定窗口；实际 CLI 对其中一个既有绑定拒绝再创建（`live-existing-binding-requires-reconciliation`），空观察返回 5 项 unavailable，原生验收仍 unverified。没有创建、投递或关闭聊天，也没有修改测试区业务状态。这些读操作不构成新原生业务闭环。
+
+固定故障矩阵增加隐私命令模型，使用固定版本 fast-check，默认 seed 20261003、200 条序列、每条最多 24 步，模型只跟踪输入中风险的存在性。合成凭证、CSI、未知控制、白名单、路径越界、UUID 前缀与重置组合检查可缩减重放；seed / 次数 / path / replayPath 在验证回执和私有失败日志中保留，不引入运行时故障开关。其档位为纯函数模型，不替代真实进程与 fsync 故障试验。
+
+新增 GitHub workflow，独立运行 gate / artifact × Ubuntu 24.04 / macOS 15，固定 Node/npm 与完整 Action 提交、只读仓库权限、2 worker，不自动发布或访问原生会话。`.github` 纳入验证输入指纹。`ci export` 重验回执/测试摘要，按字段允许列表生成报告及摘要清单，只上传受限相对测试路径、统计、模型 seed/次数和构建身份；任意计数键、环境字段、原始日志与聊天数据不复制。`ci verify` 对下载后的文件集合与摘要做非零失败检查，保持来源未验证；没有将本地配置校验称为远端 CI 成功。
+
+开发阶段 16 项 quick 聚焦通过，覆盖生成制品规划、零业务写入、双进程单次尝试、错误项目/宿主/目录、pending 句柄、重复角色线程、伪造来源声明、修改配置、损坏尝试记录、CI 字段过滤、工作流约束和回执回归。补充 CI bundle 字节破坏检查后相关 12 项复验通过；另用 seed 42、-2147483648 各运行 1000 条有界隐私序列，均通过。
+
+最终 4 并发 `wf verify gate` 完成现有 `npm test`：1280/1280 项、273 份文件通过，0 fail/cancelled/skipped/todo，包含二十场景。测试阶段 834755 ms，完整命令阶段 846971 ms；类型、架构、lint、format、knip、95 份 Schema 漂移及 build:check 全部通过，首尾输入指纹一致。随后 `wf verify artifact` 的 build:check 与双宿主 smoke 全部通过，输入一致，两个 rc.5 manifest 摘要仍与 §13.151 相同。
+
+实际 `ci export` 从最终完整门回执输出 273 份文件的受限摘要，保留 1280 项计数和模型 seed/次数；检查未包含源码仓库绝对路径。完整 bundle 的实际 CLI 校验通过，复制后仅添加一个换行即返回非零退出；原始 bundle 和验证证据保留，破坏副本已清理。该检查只证明摘要匹配，来源和原生验收仍为 unverified。
+
+文档链接与 `git diff --check` 通过。独立图谱 `check:current` 仍为同一组 5 页来源指纹漂移，未改写图谱以消除检查。GitHub 上的 Ubuntu/macOS workflow 尚未执行，Windows、完整原生业务和 worktree 验收仍未覆盖；本批没有将这些列为通过。维护工具、CI 和文档改动仍未提交，`main` 相对本地 `origin/main` 为 0/0；没有推送、tag、发布、版本升级或刷新安装缓存。
+
+
+### 13.156 维护工具语义补审与图谱漂移闭合（2026-10-03）
+
+用户确认继续后，沿用 `04769897` 和前三批未提交维护工具。本轮不改运行时或维护工具实现，完整读取 20 个新增工具与 1 个已修改运行器，记录职责、分支、效果、消费者、测试断言与限制。其余 369 个手写文件逐一核对当前 SHA、前轮覆盖项和选中的原始语义记录，明确继承范围，不计为本轮重读。当前库存为 390 个手写文件（360 运行时、30 tooling）、95 Schema、95 生成 TS、306 测试相关 TS（273 个测试入口）。
+
+修正逐文件索引与制品/合同专题原有 5 页的内容和来源指纹；新增维护验证、lab/live、CI/模型证据三页，共增加 5 张图。静态导入、运行调用、资源清理与 Agent 外部动作分别表达。图谱直接指出 lab 的合成范围、live 尝试记录不证明发送、导入观察不能升级为原生通过、CI 摘要只证明字节匹配等边界。旧 rc.4/rc.5 审阅记录保持原样，可变渲染指针更新前另存旧回执。
+
+补审过程中修复两个图谱自身问题：SWC 将具名默认导出表示为函数/类表达式，检查器原先漏记其真实符号；先以回归复现，再补表达式索引，仍拒绝注释或字符串伪造的符号。阅读器首页原来从未改变的总体架构页取旧基线，改为跟随当前逐文件索引与审阅快照，并增加三个维护工具入口。两项均仅影响独立图谱包。
+
+实际浏览器渲染当前 105/105 张 Mermaid，保存逐图来源与尺寸；有限视觉检查覆盖首页基线、390 文件索引、新维护页及全屏/全图控件，截图与范围另记，不声称逐像素审阅全部图。随后图谱 `npm run check` 完整通过：18 项检查器回归、类型检查、79 份 maps 文档、74 份当前来源指纹、207 条直接导入边、941 行相邻证据、2010 个源码符号引用、828 个测试符号引用、渲染回执和构建。934 行测试证据均为真实锚点或明确的间接/未覆盖标记，没有未锚定行。保留 Vite 大于 700 kB 的分块警告，未放宽门或阈值。
+
+根验证输入仍为 `sha256:130317dabcfed68566842dc91acbaa169db7e174eaa578b176a436ff7cb9e224`，2787 个输入文件，与 §13.155 已执行的 1280 项完整门及双宿主 smoke 完全匹配。本轮重新核对输入、导出受限 CI 摘要并校验 bundle；没有为文档重跑根门，也没有把旧执行改记为新执行。两份 rc.5 manifest 摘要未变。当前图谱和[验证来源](../../wakeflow-architecture-atlas/plans/review-2026-10-03-maintainer-tools/validation-provenance.md)分别保留源码语义、测试运行、图形渲染与原生验收的证据范围。
+
+原 5 页图谱漂移已闭合；远端 GitHub workflow、Windows、原生窗口到 MCP 的可信连续关联、完整业务/worktree 与工作区故障包仍未闭合或未实施。没有新建项目、聊天、投递测试消息或更新 FigJam；没有提交、推送、tag、发布、版本升级或刷新缓存。前三批工具及本轮文档、图谱修改仍未提交，`main` 相对本地 `origin/main` 为 0/0；交付前差异空白与本轮文档链接检查通过。
+
+
+### 13.157 维护工具第四批：固定业务实验、资源封存与只读诊断（2026-10-04）
+
+用户确认继续后，在 `04769897` 和前三批未提交工具之上扩展业务实验。改动仍限于维护工具、相关测试、开发文档和独立图谱；生产运行时、公共 Schema、角色技能、版本输入、生成制品及安装缓存未改变。tooling 保持独立编译项目，宿主差异消费已核验候选自带的 profile，没有新增运行时项目引用或另一套 Controller 状态机。
+
+`lab run --scenario single-product|dual-product|worktree` 要求新的可丢弃根，不能与已有 `--id` 混用。固定算术夹具通过生成 MCP 完成需求、认领、任务、投递、受管证据、结果评审、可选 Test 合同和归档恢复；Node 实际执行产品样本并再次复算，worktree 使用真实 Git。宿主记录经生成 hook 入口合成，始终标为 synthetic-generated-hooks/native unverified。Test 在产品检出登记之后启动，并核对附加检出。已有 id 的 run 仍是只读 readiness。
+
+业务实验只在新目录创建阶段一次运行，确认 MCP 子进程关闭后才封存。补审发现 resources 写出而最后成功回执发布失败时，旧 loadLab 仍允许操作；定向回归修前因“未拒绝”失败。现在必须同时核对 creation passed、身份与 inventoryDigest。worktree 清理保存输出创建时的节点身份，每次删除前复验剩余清单；新增文件、同字节替换和 Git 拒绝均保留现场。只删除本次两份已知输出，再用不带 force 的 worktree remove 与 branch -d，最后完成 pod 第二阶段关闭。
+
+新增 `doctor workspace` 只通过新生成 stdio 观察器调用 status/verify，按允许列表返回数量、门、摘要和原始观测时间。空门、重复门、矛盾计数拒绝；配置不同、截断、失败或 unavailable 不会得到绿色整体结果。报告不包含原始路径、窗口/会话标识或任意扩展字段，也不把新观察进程的 manifest 当作 peer 运行身份。实际旧测试区诊断为14门通过、1门unavailable和5个运行身份未验证；新初始化区未绑定时15门通过，两者原生验收均 unverified。
+
+开发中初版业务场景在归档后的严格 verify 因 peer runtime 不可用而失败。修订场景先断言并保留该边界，再退役合成绑定，之后才检查清理后的工作区健康；没有修改生产门。两份生成制品的三种场景及取消/字节改变/未知文件/参数拒绝共10项通过。随后加强启动顺序、封存与同字节替换保护，最新 quick 完成全仓静态门及15项聚焦测试，首尾输入一致。三个新外部根完成实际 CLI run、inspect、readiness、doctor、清理预览、未知文件拒绝和精确清理，全部已回收；各次编译模块摘要和私有原始回执分别保留，不把开发中执行混称为同一最终字节。
+
+第一轮完整门使用2个worker，运行约24分30秒后仍有新增长场景待执行，预计超过固定30分钟外层预算，故显式中止并保留 interrupted/exit130/inputsUnchanged。没有改测试、断言或超时；同一2798个文件输入及完整276测试文件清单已用4个worker重新执行。4-worker运行也观察到长测试晚启动；实际双文件探针确认Node 24 CLI把传入z→a重排成a→z，原有耗时队列因此只停留在argv层。正式真实进程回归修前失败。改用官方node:test.run({files})保留排序，保持每文件进程隔离、原并发与超时，并从同一TestsStream扇出spec与原JSONL。真实顺序、记录、通过/失败/跳过/取消及退出共27项quick通过；旧4-worker运行保留为interrupted。最终新字节完整门以4个worker完成：1297/1297项、276个测试文件，0失败/取消/skip/todo，含原有二十场景。测试阶段801237.548 ms，完整命令816483 ms，首尾输入一致。随后build:check与双宿主smoke全部通过；两份rc.5制品摘要未变。
+
+独立图谱完整补审12个维护文件，其余386个按当前SHA与原始semantic记录继承；总计398个手写文件。增加固定业务实验页及3张图，修正资源封存和诊断边界。追加排程边界后图谱再次完整通过：18项检查器回归、类型、80份文档、75份当前来源指纹、212条直接导入、2080个源码符号、870个测试符号、零未锚定证据行、108/108实际浏览器渲染与构建。保留Vite分块体积警告。详见[本轮验证来源](../../wakeflow-architecture-atlas/plans/review-2026-10-04-lab-workflows/validation-provenance.md)。
+
+原生部分：人类已明确授权新环境内10个角色聊天、相互投递/回调、纯测试确认、测试产品提交，以及本轮聊天、worktree与分支清理。新环境通过实际 MCP fresh preview/apply 初始化；当前源维护聊天的 MCP 返回 rc.5 摘要匹配。尚未创建新聊天：正式项目列表没有新环境，界面控制工具拒绝操作 Codex 自身且没有项目登记 API，已请用户手动添加唯一外层项目。实际 live plan 也以 live-project-missing-or-ambiguous 非零拒绝；没有使用外部聊天、子目录项目或 codex exec 替代。新原生业务/worktree、远端 CI 和 Windows 仍未验证。
+
+本轮没有提交 Wakeflow 源码、推送、tag、发布、升级版本或刷新缓存。测试夹具的初始 Git 提交仅在明确新建的可丢弃目录内。最终代码输入为 `sha256:75484da2fcbed378ecaf6775ba32764c67b2632cd20cf40d3f700ba4c0d6ab02`；完整门、制品与保序quick受限报告经实际CI bundle核验，未上传原始材料。前三批及本批源代码、测试、文档和图谱仍未提交；仓库 main 相对本地 origin/main 为0/0。文档链接及git diff --check通过。
+
+---
+
+### 13.158 同一外层项目的 Codex 原生双 pod 验证与资源回收（2026-10-04）
+
+沿用 §13.157 的确切代码输入与 rc.5 制品，在新的指定可丢弃环境完成 main 和 worktree 两份独立 Demand。人类已授权十个测试聊天、相互投递和回调、纯测试需求/任务代确认、产品夹具提交及本轮资源清理；这次没有修改生产运行时、Schema、技能、版本或缓存。结果的受限摘要见[原生场景证据](../../wakeflow-architecture-atlas/plans/review-2026-10-04-lab-workflows/validation/native-scenarios.json)。
+
+**项目与启动。** 十个聊天均通过同一个外层项目的 `project/local` 入口创建，没有角色子项目、projectless 或 CLI 替代会话。保留每次 ready 创建回执、真实程序根 SessionStart、角色执行目录和各聊天的直接 MCP 返回，十份报告的 rc.5 manifest 均匹配。活动聊天列表仍漏报这些新条目，项目归属由人类逐个或分组 UI 确认；没有从 cwd、标题或 hook 推断侧栏归属。主 pod 的 `live plan/attempt/verify` 实际执行，35 项一致性匹配，导入来源和 native acceptance 仍为 unverified；绑定后旧计划拒绝第二次尝试。worktree 的 32 项启动复核来自明确的宿主动作与独立读取，不是宣称 live helper 已支持 worktree 场景。Test 在两个产品 checkout 登记后才创建，其附加路径由 receipt-missing 变为 receipt-present。
+
+**主流程。** Design 预览、代确认与发布后，由项目内真实 Controller 认领和计划。Alpha 首次按已确认的负面夹具提交 initializer=1，真实检查为6通过、8失败；源码维护侧也在稳定提交上独立复现 `[1,2,3]` 得到sum=7。正式 rework 后仅将初始值改为0并删除过时注释，测试期望未改，独立检查14/14通过。Beta独立5项通过。最终独立Test三步分别13、5、4项通过，共22项。第一次Alpha发送仅声明sent而未提供真实回执摘要，正确保持indeterminate；补入同一发送回执摘要后接受，没有重发。
+
+**worktree 流程。** 两个 linked checkout 均从各自产品的已接受 local HEAD 创建，第二份 Demand 只在其分配检出增加min/max。Controller独立检查为Alpha14、Beta12、组合8项通过，另由源码维护侧执行128组确定种子的无效值插入、极值、主检出/分支隔离和精确格式扩展检查。两个主检出的HEAD、跟踪字节和dirty state始终与主流程结束时的基线一致。
+
+独立Test真实发现一次 harness-defect：脚本固定读取某个 `event-sourcing/snapshots/<revision>.json`，该文件在后续证据提交中被轮换，第二步在产品导入前失败，第三步依停止条件未执行。`DemandEventSourcingRepository.refreshCheckpoints` 将快照视作可重建缓存并仅保留两份；延长缓存寿命不是这次修复。Controller正式批准第二次尝试，仅覆盖ts-2、ts-3；脚本改用冻结任务包、原生接受观察与不可变证据，保留原断言及首轮11份文件。有效覆盖为首轮14项加次轮10、12项，共36项。程序记录保留了首次失败、测试分类、限定重试及最终接受，第一步没有重跑或覆盖。
+
+**归档与处置。** 两份归档各9项完成门全部通过。源码维护侧独立复算manifest、payload tree及verify摘要：主流程51文件/225118字节，worktree流程56文件/374227字节，均匹配。归档后的status仍列出两条source=archived的待处置分支。两份完整Git bundle经真实verify/list-heads核对后保留；main Controller先记录abandoned，宿主归档聊天并退役绑定，按已知文件集合和精确HEAD检查后执行不带force的worktree remove，最后移除pod并退役两份worktree回执。只删除本轮两个明确放弃的临时分支，两个产品的HEAD、文件、dirty state、worktree列表和分支列表均恢复到保存的基线。
+
+十个聊天的归档操作均返回archived=true，九个在归档列表独立回读。最后的main Controller经一次幂等归档对账仍返回true，直接读取为notLoaded且回合completed，但列表遗漏仍存在；其post-close依据是归档工具明确返回的应用状态，不能写成十个均由列表证实。十个binding通过真实宿主观察退役，验证标记保留manual-host-gate。最终原生verify和[新stdio doctor](../../wakeflow-architecture-atlas/plans/review-2026-10-04-lab-workflows/validation/workspace-native-final.json)均15pass、0fail、0unavailable；仅保留main的五个未绑定逻辑窗口、两份归档和测试环境，无活动Demand、claim或binding。
+
+**不能因此升级的保证。** 八次正式目标投递均有一次性许可与真实host-send-return，八次结果回调均有宿主成功返回并到达对应Controller，评审前目标Stop均确认；没有观察到对应UserPromptSubmit hook，回调投影仍为pending/unlanded。绑定存活时严格verify为14pass、0fail、1unavailable，原因是十个窗口到MCP的自动关联不可验证。退役后的15/15只说明清理后环境健康，不补足先前关联或回调hook。新Claude登录会话、Windows和远端CI未在本轮执行。
+
+本轮新增的受限证据、使用经验和开发文档不改变已通过源码的2798文件输入，摘要仍为 `sha256:75484da2fcbed378ecaf6775ba32764c67b2632cd20cf40d3f700ba4c0d6ab02`；沿用该输入的1297项完整门及双宿主smoke，不把它们改记为本轮重跑。G11继续保留现场故障包、原生证据整理与测试记录脚手架的后续范围；没有为现场脚本错误改动运行时或放宽门。源码及图谱修改仍未提交，main相对本地origin/main为0/0；未推送、tag、发布或刷新缓存。
+
+
+### 13.159 原生场景后的测试捕获与导入回执脚手架（2026-10-04）
+
+用户确认继续后，本批只实现源码维护侧的 `wf capture prepare/run/inspect` 与 `wf live receipt`。不增加运行时状态、公共MCP工具、Schema或技能，不改插件版本、缓存和hook定义。当前安装不需要因这一批重新配置或重启。
+
+根因是临时脚本依赖可轮换snapshot，并把输入存活、一次执行、输出记录和业务判断混在一起。prepare改为消费既有可移植合同及不可变event commit中的唯一信封，核对任务、结果和尝试引用；明确的committed基线绑定实际Git检出与选定blob，复制合同和harness字节后最后封存。run只执行一条明确命令，稳定attempt/step标记跨换目录和重规划阻止重复，原始stdout/stderr与前后观察分别保留。inspect在原输入或worktree移除后仍可复验现存记录。工具不解释自然语言测试期望，不批准重试，不自动运行下一步或登记受管证据。
+
+receipt保存完整导入请求/返回的原始字节，同时明确文件摘要和解析后完整返回JSON.stringify摘要；reportedIsError是输入声明，记录成功不等于发送成功、实时来源或Controller接受。所有原始文件、命令、私有路径和身份留在私有位置，分享记录只投影有限事实。
+
+验证与残余范围：
+
+- 当前16项聚焦回归和全仓quick静态门通过，输入首尾一致。测试覆盖真实主根/linked Git、复制仓库拒绝、删除原输入、限定retry、两个CLI进程争用、部分标记、字节/节点变更、原始流、非零/超时/取消/预算、日志篡改、空计划与摘要约定。
+- 在独占的新目录中，用前轮保留的Git bundle和冻结合同做历史材料重放：ts-2/ts-3分别10、12项通过，ts-1及重复ts-2均在命令前拒绝。封存后删除本次源副本仍可运行；两个临时linked checkout回收、历史配置改名后，离线inspect仍匹配。保留Test证据和主克隆仓库，未新增项目或聊天。
+- 本地协调脚本结尾误读已故意删除的副本，以及清理文件清单漏列commit内原有测试文件，都先失败并保留诊断。随后仅修正结算/清理预检，没有重跑已通过步骤、修改产品或掩盖第一次协调命令退出。
+- 本轮图谱全文复核7个新增文件与CLI，其余397个手写文件逐项匹配原semantic字节；当前405个手写文件、500个静态模块/3465条本地导入。独立检查和实际浏览器110张图通过，现有Vite大分块警告保留。
+- 首轮4 worker完整门观察到既有工作区准备阶段、worktree清理及固定业务慢场景失败/超时，随后显式中断并保留回执。它不是通过的完整门；后续隔离诊断与较低并发整门结果须独立记录。
+
+本批只支持committed且干净的实施基线；显式命令不是沙箱，观察限于Git状态和指定文件，输出预算可能短时超量。导入合同和局部摘要不证明实时claim/授权/角色绑定，也不解决宿主列表遗漏、窗口MCP关联或回调hook。Windows、远端CI和新Claude登录会话仍未验证。最终门记录见[本轮验证来源](../../wakeflow-architecture-atlas/plans/review-2026-10-04-test-capture/validation-provenance.md)。
+
+
+本节点最终验证已闭合：5项隔离复验通过后，2 worker实际完整 `npm test` 为1313项/279文件全通过，零失败/取消/skip/todo，命令1753415毫秒，首尾输入一致；先前三处失败路径均在完整运行中通过。独立build:check与双宿主smoke随后通过，同一2809文件输入指纹 `sha256:7c9baccdf2ceb8a9b432a4750fe5f745da2a8b0e5650340e101d5c005b42240d`。两份rc.5制品摘要未变。4 worker首轮中断记录继续保留，不据此宣称高负载并发稳定。
+
+完整门生成的279文件耗时建议保留在私有目录，没有自动覆盖调度表。受限quick、隔离、中断、完整门和制品导出已逐一核验。代码仍未提交，main与本地origin/main对齐；未推送、发布、升级、刷新缓存或重启。
+
+
+### 13.160 只读故障包、封闭分享和权限夹具修正（2026-10-04）
+
+本批实现维护者 `doctor collect / inspect / export`。只复制配置、候选清单和明确选择的工作区相对文件；原始字节与SDK观察投影分开保留，采集目录位于被观察根之外。单文件、总体源数据及探测输出均有预算，前后节点/字节不一致、缺失与取消保留为非通过。最后seal、精确成员集、摘要和调用顺序控制离线完整性；完整故障包不等于健康环境。
+
+独立分享摘要按字段和值类别重建，只保留固定别名、门状态、计数、布尔、摘要和严格时间。任意错误文本、owner、版本后缀、路径、标识和原始文件没有复制路径，不自动上传。复查曾发现重算checksum后，成功调用数为0仍可与诊断passed共存；使用实际导出文件的绝对路径复现后，补齐两次成功调用、候选信息和两次观测时刻，原反例被拒绝。最初完整门因此显式中断并保留，修复后的新字节重新执行完整门。
+
+验证与观察：
+
+- 三文件19项聚焦和所有quick静态门通过，输入首尾一致。新增13项覆盖二进制原字节、源移除、预算、链接、漂移、取消、部分seal、未知文件、丢失/重复调用、私有字符串注入以及伪造分享声明；原workspace回归仍保留。
+- 既有测试区仅做只读采集，明确保存两份hook文件，工作区树前后匹配。两个新的可丢弃lab分别由Codex/Claude制品初始化，各自候选检查通过；Claude观察器用于Codex环境时如实失败。没有新增聊天或项目。
+- 损坏配置的无效UTF8原字节保留，诊断为unavailable；0600额外普通文件通过，明确chmod 0644后产生权限漂移失败。采集器没有修复权限。两种lab及容器均按原资源清单回收，7份故障包在源环境移除后仍可离线复验。
+- 前两次协调脚本分别错误期待跨宿主健康、额外文件必定失败，均保留失败日志。真正的后一边界来自private-mode census，而非文件名。测试改成显式设置0600/0644，消除默认umask依赖；没有改变运行时去迎合脚本。
+- 显式采用上一批已通过完整门导出的279文件耗时表，仅调整派发顺序。新测试仍按未知项优先，用例、断言、fsync及超时不变；旧1313项结果不作为本轮新字节证明。
+
+本批不改运行时、公共Schema、技能、生成制品、版本或安装缓存，也不要求重新信任hook或重启Codex。宿主可信关联、回调hook和列表回读缺口、无源码安装诊断、自动宿主取证、impact、Windows、远端CI及新Claude登录会话仍未关闭。最终完整门、制品及图谱结果见[本轮验证来源](../../wakeflow-architecture-atlas/plans/review-2026-10-04-diagnostic-bundles/validation-provenance.md)。
+
+
+本节点最终验证：补齐成功摘要一致性后19项quick通过。随后2 worker的全部1326项测试通过，但外层固定30分钟预算在后续检查结束前用尽，回执保留timeout；同输入独立制品门通过后，3 worker完整 `npm test` 为1326项/280文件全通过，零失败/取消/skip/todo，Schema及build:check完整结束，命令1506663毫秒。源码、断言、fsync、单项和外层超时均未放宽。首尾输入一致：2812文件 `sha256:f135a04d22b4c46baa04921961d301434f99c93767e350751b35327a7b775a7c`。
+
+最终源码CLI再次核验7份私有包、4份合法分享摘要，并拒绝同一零调用反例；没有重建已回收环境。图谱独立门及112张实际渲染通过，两份rc.5制品和安装缓存未改变。源码仍未提交，main与本地origin/main对齐，不要求重新配置、信任hook或重启。
+
+### 13.161 Codex 阶段变更的深度复审与修复（2026-10-05 至 2026-10-06）
+
+本节对用户在 Codex 侧完成并提交的 §13.137–§13.160 变更（d8fafff3..04769897）以及尚未提交的维护工具批次做一次对抗式复审并修复。复审先以 3 worker 跑一次基线完整门（1323/1326 通过，两项为负载超时：lab 双产品实验与 shared latch 用例，单独重跑通过），再按九个只读桶（锁与作用域、hook、恢复/取消/pod、验收覆盖、宿主与端点、Agent 文本、运行器与 CI、lab/live/诊断/捕获、隐私）逐文件审读，共记录六十余项发现，按高、中优先级修复，低优先级登记在 open-items。本节不改变公共工具的输入形状，不改版本号、安装缓存或 ADR 正文；status 结果 Schema 的窗口 runtime 枚举恢复 `stale`。
+
+运行时修复：
+
+- hook 历史：按龄退役改为从最新记录反向探测截止日，只进入截止日之前的日目录、根层旧平铺文件和本次写入分片，空分片/日目录随之删除且不逐目录 fsync；150 条/天×40 天的密集历史回归通过（原实现在密集历史下永不退役旧目录）。投递、结果评审与端点读取改为带 `limit` 的有界查询；外来点文件（`.DS_Store` 等）不计 `skipped`，`unreadable` 单独计数，只有它阻断证据判断。
+- 窗口 runtime：宿主画像新增 `surfaces.runtimeStaleness`。Claude 以最近 `session-start` 的观察器摘要 ≠ 已安装 manifest 判为 `stale`（`windows-stale:<n>` 使 `runtime-artifact` 门失败，`next` 为 `window-artifact-stale`），Codex 声明 `unverified`；`window-runtime-unverified:<n>` 只是通过门上的信息，`verify.ok` 重新可为 true。这覆盖 ADR-0017 §3 "unverified 即 unavailable" 的后果；用户于 2026-10-06 裁决同意（D1），ADR-0017 补修订记录。
+- 验收覆盖：测试合同未覆盖全部验收标准时规划即以 `test-contract-uncovered:<item>` 拒绝（Demand 只有一份测试合同，原先会留下无法完成的 Demand）；未知条目拒绝附 `acceptance-items:<n>`；验收列表按 CommonMark 解析（≤3 空格缩进的顶层标记、按内容列嵌套、`*`/`+`/`1)`），预览摘要显示解析后的 `ac-N`。
+- pod 临界区：`withPodMutation` 内的 Config 复验改经 `assertDemandOperationConfigCurrentOrFail`，过期为 `precondition-failed/config-stale`、读不到为 `config-authority`、中止为 `io-failure/aborted`（原先漏成 unexpected）；pod 锁目录物化错误同样映射；锁失败只在 timeout/owner-active/residue-changed 时可重试。
+- 占用守卫：发布意图与生命周期日志目录里 foundation 的原子暂存不再作为残留阻断全部 pod——活写者按可重试的 `pod-publication-in-flight`/`pod-lifecycle-in-flight` 拒绝，死写者跳过且不删除，所有者未知仍按残留拒绝。
+- 锁与作用域：读写作用域对活写者在途的 create 暂存跳过而非 `recovery-required`；未知 owner 当作活着等待，预算耗尽才请求恢复；共享模式积累 64 个 reader 租约时退役死 reader；维护 gate 的未知 owner 报可重试的 `maintenance-owner-unknown`；借用作用域携带 maintenanceGuard 视为 unexpected；进程出生证据读不到时不缓存 null，kill(0) 之后再确认一次 ESRCH。
+- 隐私：凭证规则补 `SECRET_KEY`/`*_SECRET_KEY`/`secret_key_base`/`ENCRYPTION_KEY`/`APP_KEY`、PGP PRIVATE KEY BLOCK、`Authorization: Token`，键值只允许同行空白；非 UTF-8 成员按宽松解码做凭证类扫描（证据捕获与归档负载）；`window_binding_`/`maintenance_operation_` 前缀登记进 contracts 唯一来源 `wakeflow-typed-id-prefixes.ts`；模型测试不再以 opaque 豁免漏检。
+- 检出边界：登记时产品检出的 realpath 必须在工作区根、工作区的父目录（§13.158 外层项目布局与 lab 的 `Worktree-<name>`）或产品仓库之内，否则以 `worktree-outside-workspace` 拒绝；端点结果对越界的旧回执给 null 而不是 `../../…`。第一版只允许工作区根内，被 lab 的 worktree 场景当场挡住后放宽。
+
+维护工具修复（未提交批次内）：`isMainModule` 统一八处入口判断（symlink 下 `argv[1]` 与模块路径的比较）；运行器在 Node 无总汇总、汇总文件数≠选中数或零用例时失败，子进程不继承 `NODE_TEST_CONTEXT`；`wf verify` 的 gate 阶段预算 90 分钟；CI 只取消被取代的 PR 运行、作业期限 120 分钟；`live verify` 把计划摘要不同的尝试记录列为 `supersededAttempts` 而非退出 2；`capture run` 先只读核对目录可创建，再独占写标记、后建目录，重复以 `capture-attempt-already-recorded` 拒绝，inspect 结果改用 `readsWorkspaceState`/`readsStepOutputs`；lab 操作锁已存在时以 `lab-operation-in-progress-or-interrupted` 拒绝、释放异常另存不覆盖成功结果、运行器模块摘要延迟计算；测试事件文件读取上限统一 128 MiB。
+
+文本与文档：Codex 窗口换代文本改为"只有重启 Codex 应用才重载 MCP，resume/continue 不会"，同伴窗口只在 verify 报 `stale` 时重启；Controller 参考写明 stale/unverified 三态与 `windows-stale`；去掉不存在的 `implementation-repair` 路由和"inspect its diagnostics"出口；Codex bootstrap 增加非 Controller 聊天的移交句；Codex 检出要求建在工作区根内、旁边的同一外层目录或产品仓库内；重新信任 hook 的说明按 1.1.0 实际改写；README 去掉 tmux 专属措辞并说明 Codex 桌面自带 node；安装目录规则移入维护者文档；Design 参考写明验收列表可接受写法；Controller 参考写明测试合同必须覆盖全部标准。CLAUDE.md 补维护 CLI、CI、图谱子项目的所有权说明；open-items 的 B3、B7、B10、B13、C6、C8、D9、E3、F6、F8、H4、I9 记录本节进展。
+
+验证与观察：
+
+- 复审前的基线：对用户已提交加未提交的字节以 3 worker 跑完整 `npm test`，1326 项中 1323 通过，两项为负载超时（lab 双产品实验 240 秒、shared latch 用例），单独重跑通过；这是本节改动前的状态，不作为新字节的证明。
+- 迭代中按改动分组跑聚焦测试（观察/任务/解析、hook 与守卫、锁与作用域、隐私与捕获、端点与 pod、Agent 文本与宿主画像），每组在修到绿后才进入下一组；期间两处由测试揭示的设计偏差被纠正：第一版把 Config 复验的"多一个换行"当成过期（实际按规范字节是 Config 权威失败），第一版检出边界只允许工作区根内、被 lab 的 worktree 场景（检出建在外层目录）挡住后放宽到工作区父目录与产品仓库。
+- 完整门三次：第一次在 lint 阶段止于 `pod-mutation-lock.ts` 认知复杂度 17 > 15（拆出目录物化与锁错误映射两个函数）；第二次 1339 项 1338 通过、1 失败——投递查询测试仍按旧的 256 条默认页与"外来文件即阻断"写断言，改为 `HOST_HOOK_RECORDS_MAXIMUM + 1` 条记录与记录命名的不可读文件（该用例现在约 26 秒）；第三次为最终门：2 worker，1339 项全部通过，零失败/取消/skip/todo，测试阶段 1188 秒，整门含 schema:check 与 build:check（claude ok / codex ok）约 20 分钟。
+- `npm run build:artifacts:committed` 后双制品 smoke 通过：两宿主各 20 个工具、fresh-initialize 完成、reconcile no-op、status idle、verify ok、pod 创建预览 ready、hook 观察落地。`git diff --check` 干净；改动过的源码、测试、文本与文档按绝对路径、会话句柄和凭证前缀的隐私检索为空。
+- 独立图谱子项目：`test:checks` 与 `typecheck` 通过，`check:structure` / `check:current` 报 77 份指纹中 72 份漂移（源码变了，图谱未按 §13.156 的方式重新复核），`check:diagrams` 与 `build` 未运行；图谱不在根门之内，本节未刷新它。
+
+本节不含任何原生宿主会话：Codex 真实聊天、Claude 真实窗口与 §13.157 的 lab 环境都未执行，Codex 文本里"重启应用才重载 MCP"来自 §13.142/§13.148 的既有证据，没有新的现场复验。源码与制品仍未提交，main 与本地 origin/main 对齐；两个裁决已由用户作出（2026-10-06）：stale/unverified 语义覆盖 ADR-0017 §3 的后果获同意；未提交的维护工具批次与本节修复一起提交。

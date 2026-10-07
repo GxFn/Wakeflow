@@ -171,9 +171,19 @@ export interface ObservedHostHooks {
   readonly directory: "absent" | "private" | "mode";
   readonly records: number;
   readonly skipped: number;
+  /**
+   * 每个会话最近一条记录，另带该会话最近一条 session-start 记录的观察器摘要：会话在哪份制品下
+   * 启动是一个健全的"过期"证据（启动摘要旧于本进程的制品 ⇒ 会话一定没有重启过），而新的
+   * 启动记录仍不证明 MCP 已重载（ADR-0017 D3）。没有启动记录时为 null。
+   */
   readonly latestBySession: ReadonlyMap<
     string,
-    Readonly<{ readonly event: HostHookEvent; readonly recordedAt: UtcInstant; readonly observerManifestDigest: Sha256Digest | null }>
+    Readonly<{
+      readonly event: HostHookEvent;
+      readonly recordedAt: UtcInstant;
+      readonly observerManifestDigest: Sha256Digest | null;
+      readonly sessionStartObserverManifestDigest: Sha256Digest | null;
+    }>
   >;
 }
 
@@ -510,21 +520,45 @@ async function observeHostHooks(
     const directory = await hookDirectoryState(root, hostId);
     const latestBySession = new Map<
       string,
-      Readonly<{ readonly event: HostHookEvent; readonly recordedAt: UtcInstant; readonly observerManifestDigest: Sha256Digest | null }>
+      Readonly<{
+        readonly event: HostHookEvent;
+        readonly recordedAt: UtcInstant;
+        readonly observerManifestDigest: Sha256Digest | null;
+        readonly sessionStartObserverManifestDigest: Sha256Digest | null;
+      }>
     >();
     const latestKeys = new Map<string, string>();
+    const startKeys = new Map<string, string>();
+    const startDigests = new Map<string, Sha256Digest | null>();
     const inventory = await scanHostHookObservations(root, hostId, {}, (record) => {
       if (!latestBySession.has(record.sessionId) && latestBySession.size >= HOOK_RECORDS_MAXIMUM) {
         fail("io-failure", "observation-session-limit", "$observations");
       }
       const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+      if (record.event === "session-start") {
+        const previousStart = startKeys.get(record.sessionId);
+        if (previousStart === undefined || previousStart <= key) {
+          startKeys.set(record.sessionId, key);
+          startDigests.set(record.sessionId, record.artifactManifestDigest);
+        }
+      }
       const previous = latestKeys.get(record.sessionId);
       if (previous === undefined || previous <= key) {
         latestKeys.set(record.sessionId, key);
-        latestBySession.set(record.sessionId, { event: record.event, recordedAt: record.recordedAt, observerManifestDigest: record.artifactManifestDigest });
+        latestBySession.set(record.sessionId, {
+          event: record.event,
+          recordedAt: record.recordedAt,
+          observerManifestDigest: record.artifactManifestDigest,
+          sessionStartObserverManifestDigest: null,
+        });
       }
-
     }, signalOptions(signal));
+    for (const [sessionId, latest] of latestBySession) {
+      latestBySession.set(sessionId, {
+        ...latest,
+        sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
+      });
+    }
     return Object.freeze({
       hostId,
       current,

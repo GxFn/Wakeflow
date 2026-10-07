@@ -34,7 +34,7 @@ import {
 } from "../../foundation/filesystem/stable-resource-tree-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
+import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import {
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
   DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
@@ -198,7 +198,7 @@ export async function readPayloadFiles(
   return Object.freeze(files);
 }
 
-/** 能解码为 UTF-8 的负载文件文本，供凭证扫描；二进制文件跳过。 */
+/** 负载文件文本，供凭证扫描；非 UTF-8 文件按宽松解码给出，凭证类命中不因夹着二进制字节而漏掉（§13.161 B9-3）。 */
 export function payloadTexts(
   files: readonly PayloadFile[],
 ): readonly Readonly<{ readonly resourcePath: string; readonly text: string }>[] {
@@ -211,8 +211,14 @@ export function payloadTexts(
           text: decodeUtf8(file.bytes, "$payload"),
         }),
       );
-    } catch {
-      // 非 UTF-8 内容不是文本，凭证扫描不适用。
+    } catch (error: unknown) {
+      if (!(error instanceof Utf8Error)) throw error;
+      texts.push(
+        Object.freeze({
+          resourcePath: file.resourcePath,
+          text: new TextDecoder("utf-8", { fatal: false }).decode(file.bytes),
+        }),
+      );
     }
   }
   return Object.freeze(texts);

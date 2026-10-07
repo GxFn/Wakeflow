@@ -18,7 +18,7 @@ export function renderCodexWindowLaunchInstructions(
           hostBranch: intent.worktree.suggestedName,
           registration:
             "report the project chat handle and worktree.executionRoot from pwd in the assigned checkout, plus verbatim git worktree list --porcelain and git rev-parse --git-common-dir from that checkout",
-          note: "create the product checkout with git worktree add from the configured repository local HEAD; keep the chat in the outer workspace project with a local environment. A project worktree environment would check out the outer repository, not the product repository",
+          note: "create the product checkout inside the workspace root, beside it in the same outer directory, or inside the product repository with git worktree add from the configured repository local HEAD; keep the chat in the outer workspace project with a local environment. A project worktree environment would check out the outer repository, not the product repository",
         };
   const launch = model.hosts?.codex?.launch;
   return {

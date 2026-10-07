@@ -44,6 +44,7 @@ test("Claude Code host owns one exact matrix-shaping resource profile", () => {
       },
       activityMonitor: true,
       temporaryPrompts: true,
+      runtimeStaleness: "session-start-observer-digest",
     },
     launch: {
       kind: "tmux-session",

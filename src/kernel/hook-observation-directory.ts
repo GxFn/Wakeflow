@@ -49,9 +49,12 @@ async function visitDirectory(
   ref: PortableResourcePath | null,
   visit: (entry: Readonly<StableDirectoryEntry>) => Promise<void>,
   options: { readonly signal?: AbortSignal },
+  order: "ascending" | "descending" = "ascending",
 ): Promise<void> {
   let afterName: string | undefined;
   let expectedNode: Readonly<FileNodeSnapshot> | undefined;
+  // 降序（最新在前）要先读完整个目录再反向走：分页游标只按名字升序前进。
+  const collected: Readonly<StableDirectoryEntry>[] = [];
   for (;;) {
     const pageOptions = {
       maximumEntries: PAGE_SIZE,
@@ -64,10 +67,31 @@ async function visitDirectory(
         ? await readStableRootDirectoryPage(root, pageOptions)
         : await readStableResourceDirectoryPage(root, ref, pageOptions);
     expectedNode ??= page.directoryNode;
-    for (const entry of page.entries) await visit(entry);
-    if (!page.hasMore) return;
+    if (order === "ascending") for (const entry of page.entries) await visit(entry);
+    else collected.push(...page.entries);
+    if (!page.hasMore) break;
     afterName = page.entries.at(-1)?.name;
   }
+  for (let index = collected.length - 1; index >= 0; index -= 1) {
+    await visit(collected[index] as Readonly<StableDirectoryEntry>);
+  }
+}
+
+export interface VisitHostHookDirectoryOptions {
+  readonly signal?: AbortSignal;
+  readonly sinceDay?: string;
+  readonly recordId?: string;
+  /** 只进入满足条件的日目录；根层条目总是访问。缺省进入全部。 */
+  readonly selectDay?: (day: string) => boolean;
+  /** 只进入满足条件的分片目录。缺省进入全部。 */
+  readonly selectShard?: (day: string, shard: string) => boolean;
+  /** 进入一个被识别的日目录或分片目录之前回调；路径已相对工作区根。 */
+  readonly onDirectory?: (
+    entry: Readonly<StableDirectoryEntry>,
+    kind: "day" | "shard",
+  ) => Promise<void> | void;
+  /** 每一层按名字降序（最新在前）访问；缺省升序。 */
+  readonly order?: "ascending" | "descending";
 }
 
 /**
@@ -79,14 +103,11 @@ export async function visitHostHookDirectory(
   root: RootedDirectory,
   hostId: WakeflowHostId,
   visit: (entry: Readonly<StableDirectoryEntry>) => Promise<void>,
-  options: {
-    readonly signal?: AbortSignal;
-    readonly sinceDay?: string;
-    readonly recordId?: string;
-  } = {},
+  options: VisitHostHookDirectoryOptions = {},
 ): Promise<void> {
   if (options.signal?.aborted === true) fail("io-failure", "aborted", "$signal");
   const signal = options.signal === undefined ? {} : { signal: options.signal };
+  const order = options.order ?? "ascending";
   const rootRef = hostHookObservationsRootRef(hostId);
   let parent: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
@@ -96,13 +117,15 @@ export async function visitHostHookDirectory(
     throw error;
   }
   const scoped = await RootedDirectory.open(parent.physicalPath, "$hooks");
+  const fromWorkspaceRoot = (
+    entry: Readonly<StableDirectoryEntry>,
+  ): Readonly<StableDirectoryEntry> =>
+    Object.freeze({
+      ...entry,
+      resourcePath: parsePortableResourcePath(`${rootRef}/${entry.resourcePath}`),
+    });
   const scopedVisit = (entry: Readonly<StableDirectoryEntry>): Promise<void> =>
-    visit(
-      Object.freeze({
-        ...entry,
-        resourcePath: parsePortableResourcePath(`${rootRef}/${entry.resourcePath}`),
-      }),
-    );
+    visit(fromWorkspaceRoot(entry));
   try {
     if (!sameFileNodeIdentity(parent.node, await scoped.assertCurrent("$hooks")))
       fail("io-failure", "observation-scope-changed", "$hooks");
@@ -119,6 +142,8 @@ export async function visitHostHookDirectory(
           return;
         }
         if (options.sinceDay !== undefined && day.name < options.sinceDay) return;
+        if (options.selectDay !== undefined && !options.selectDay(day.name)) return;
+        await options.onDirectory?.(fromWorkspaceRoot(day), "day");
         await visitDirectory(
           scoped,
           day.resourcePath,
@@ -132,12 +157,17 @@ export async function visitHostHookDirectory(
               return;
             }
             if (options.recordId !== undefined && !options.recordId.startsWith(shard.name)) return;
-            await visitDirectory(scoped, shard.resourcePath, scopedVisit, signal);
+            if (options.selectShard !== undefined && !options.selectShard(day.name, shard.name))
+              return;
+            await options.onDirectory?.(fromWorkspaceRoot(shard), "shard");
+            await visitDirectory(scoped, shard.resourcePath, scopedVisit, signal, order);
           },
           signal,
+          order,
         );
       },
       signal,
+      order,
     );
     const after = await root.inspectExistingResource(rootRef, "$hooks");
     if (!sameFileNodeIdentity(parent.node, after.node))

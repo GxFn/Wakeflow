@@ -49,7 +49,7 @@ docs/
 | [requirements/README.md](./requirements/README.md) | 需求锚点索引，含归档中仍被引用的 D1 到 D41 与 Pod 需求 | active |
 | [standards/resource-handling-standard.md](./standards/resource-handling-standard.md) | 资源处理归一标准与收敛矩阵 | 已确认，RH-1 到 RH-3 已实现 |
 | [standards/documentation-standard.md](./standards/documentation-standard.md) | 文档编写标准 | active |
-| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.152；源码、rc.5 双制品与图谱按九批本地提交，1244 项完整门及双宿主冒烟记录见 §13.151，提交前产物和图谱检查通过 |
+| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.161；对 Codex 阶段提交与未提交批次的深度复审修复：hook 退役与有界查询、可靠的 windows-stale 信号（unverified 只作信息）、测试合同规划期覆盖、pod 临界区与守卫错误映射、锁/作用域未知 owner 等待、凭证扫描扩展、检出位置边界，以及维护工具与 Agent 文本修正；2 worker 完整门 1339 项全通过、双宿主 smoke 通过；图谱指纹漂移未刷新，原生会话未执行，stale 语义覆盖 ADR-0017 §3 待裁决 |
 | [progress/file-review-ledger.md](./progress/file-review-ledger.md) | 逐文件审阅台账 | active |
 | [reviews/2026-09-03-typescript-checkpoint-review.md](./reviews/2026-09-03-typescript-checkpoint-review.md) | 关键节点架构与实现评估、缺口分析、建设计划建议 | 评估建议，待讨论 |
 | [reviews/2026-09-04-flow-optimization-analysis.md](./reviews/2026-09-04-flow-optimization-analysis.md) | 回传、调用形状、完成留痕、测试记录对比、重设计边界的旧代码事实、业界对照与设计建议 | 评估建议，已由 ADR-0012 接受 |
@@ -58,6 +58,8 @@ docs/
 | [reviews/2026-10-02-reliability-and-contract-repair-design.md](./reviews/2026-10-02-reliability-and-contract-repair-design.md) | 恢复、并发、取消、验收、角色与升级的根因、真实进程复现、修复边界和分批验收条件 | active；用户已确认实施，首批取消、恢复、pod 并发与验收门见 §13.141；hook 历史、完整性及升级诊断见 §13.142 |
 | [reviews/2026-10-02-authority-scope-and-runtime-evidence-design.md](./reviews/2026-10-02-authority-scope-and-runtime-evidence-design.md) | 配置作用域、派生发布、运行证据主体及协议启用的根因、三个反例和系统性方案 | accepted；基线反例见 §13.145，首轮实现见 §13.146；旧结构兼容/迁移部分已由 ADR-0018 取代，当前基线见 §13.147 |
 | [reviews/2026-10-03-privacy-and-admission-review.md](./reviews/2026-10-03-privacy-and-admission-review.md) | 隐私文本分类、路径白名单、证据扫描、回调数据边界与锁释放竞争的根因和复验 | active；两轮源码修复及验证见 §13.150/151 |
+| [reviews/2026-10-03-development-and-operations-tooling-plan.md](./reviews/2026-10-03-development-and-operations-tooling-plan.md) | 开发、测试、安装、排障与原生验收的工具缺口、复用边界、优先级和分批设计 | accepted；测试记录脚手架和维护者只读故障包已实现，本机Codex双pod场景已验证；无源码诊断、自动宿主取证、impact和远端CI保留后续范围 |
+| [references/maintainer-tools.md](./references/maintainer-tools.md) | 已实现维护命令的使用、证据、退出码及边界 | active；verify、doctor环境/制品/工作区与私有故障包、受限分享、耗时建议、lab、故障/模型测试、live、capture及CI字节核验 |
 | [references/legacy-js-scenario-closure-audit.md](./references/legacy-js-scenario-closure-audit.md) | 旧 JavaScript 产品全场景闭包审查 | 只读审计，E3 对比证据 |
 | [references/capability-map.md](./references/capability-map.md) | 能力映射矩阵：31 项旧工具、内部能力、宿主差异、D1 到 D41 与 I3 逐行判定 | active，重切或已落地 27、缺席 0、放弃 4（2026-09-18） |
 | [references/scenario-acceptance.md](./references/scenario-acceptance.md) | 场景验收清单与骨架运行入口 `npm run scenario:acceptance` | active，二十个场景 pass |

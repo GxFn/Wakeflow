@@ -157,6 +157,7 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
       tmuxAsset: null,
       activityMonitor: false,
       temporaryPrompts: false,
+      runtimeStaleness: "unverified",
     },
     launch: { kind: "project-thread" },
   });

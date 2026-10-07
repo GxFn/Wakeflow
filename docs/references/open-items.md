@@ -102,7 +102,7 @@
   - 证据：src/kernel/hook-observations.ts:145 上限 16384，:151 保留 30 天；按年龄裁剪（:380-386），不按数量；hook-observations.ts:566-575 列目录时带上限，stable-directory-read.ts:458-459 超限抛 too-many-entries，不截断；同一上限也用在 endpoint/service.ts:491,502 和 workspace-observation.ts:260；WakeflowTestWorkspace 两天轻度测试产生 373 条（09-24 97 条，09-25 276 条）；验证者估算按当前速率 30 天约 5.6k 条，低于上限；上限和裁剪有单元测试（hook-observations.test.ts:242-273），但没有长期运行的实证
   - 建议：采用按查询范围分片和有界流式枚举，明确观察是否完整；不能截取最新 N 条后把遗漏的落地证据判成未发生。保留策略还应保护活动工作引用的证据。加一个超过 16384 条的回归测试，外加约 1 万条记录的 soak 测试，量注册、落地查找、裁剪和 helper 轮询的延迟。
   - 2026-10-02 复验（§13.140）：16384 条有效记录下 limit=1 可读；当前写入器成功新增第 16385 条后，即使指定 event/session/since/limit=1，读取仍因 observation-listing-too-many-entries 失败。种子为合成记录，不是 30 天宿主持续运行的实证。
-
+  - 2026-10-05 后续（§13.161）：按龄退役改为从最新记录反向探测截止日，只进入截止日之前的日目录、根层旧平铺文件和本次写入的分片，空分片/日目录随之删除（不逐目录 fsync）；150 条/天×40 天的密集历史回归通过。投递、结果评审和端点读取改为带 limit 的有界查询；外来点文件不计 skipped，只有不可读条目（unreadable 单独计数）阻断证据判断。30 天宿主持续运行的 soak 仍未做。
 - **B4** [中 / 缺口] MCP 请求取消未接入已有 AbortSignal 管线（计划阶段 2；状态：已修，§13.141：两宿主、维护入口、真实取消协议与关闭信号通过）
   - 修复前说明：用户按 Esc 或宿主超时后，server 继续把维护 apply、10 秒锁等待、整份投影渲染跑完，这时 Agent 可能已经发出下一个调用，两者在同一个 server 里交错执行。幂等和 CAS 让结果大体安全，但设计以协作式 abort 为前提，测试验证的行为产品实际上从来不会发生。
   - 证据：wakeflow-public-mcp-tool.ts:228-233 handler 是 `async (request) => ...`，丢掉了 SDK 第二个参数上下文中的 AbortSignal（当前 v2 为 `ctx.mcpReq.signal`）；executor 签名是 (value: unknown) => Promise（:32），入口处从不传 options；grep 'signal' src/entrypoints 没有结果；数百个 aborted 分支（包括锁等待 rooted-exclusive-file-lock.ts:715-731）只有测试能走到；gate-log §13.128 多次记录 'Connection lost mid-response' 和用户中断
@@ -130,7 +130,7 @@
   - 建议：锁记录和 candidate、stage 名里加入 owner 进程启动时间（macOS 用 kern.proc sysctl，Linux 用 /proc/<pid>/stat）和 boot ID；pid 相同但启动时间不同就判为 inactive。遇到 EPERM 时比对记录的 uid 或启动时间，不直接返回 unknown。
   - 2026-10-02 实施（§13.146）：macOS/Linux 的出生事实可证明不同进程实例；缺失、EPERM、旧格式同 PID 和未知工作线程继续保护。真实子进程 SIGKILL 后的新许可回收通过，未声称所有平台及 candidate/stage owner 均已覆盖。
   - 2026-10-02 后续裁决（ADR-0018 / §13.147）：按 ADR-0018 移除锁 v1 解析；当前锁只使用含进程出生摘要和 registry 的 v2 形状，未知 owner 仍保护。
-
+  - 2026-10-05 后续（§13.161）：owner 未知不再立即报 recovery-required——读写作用域与维护 gate 把未知 owner 当作活着等待，预算耗尽才请求恢复（gate 为可重试的 maintenance-owner-unknown）；进程出生证据读不到时不再缓存 null，kill(0) 成功后再确认一次 ESRCH；活写者在途的暂存不再被当作残留；共享模式积累到 64 个 reader 租约时顺手退役死 reader。PID 复用的 stage owner 判断仍只靠 kill(0)。
 - **B8** [中 / 风险] 中断的维护事务在插件解析、矩阵或计划代码变更之后无法恢复（计划阶段 2；状态：开放）
   - 说明：apply 被崩溃、断连或关窗口打断后，如果恢复前插件代码更新了，recover 会在解析或计划比对时失败。status 一直显示 recovery-required，skill 一直让 Controller 去 recover，唯一的出口是手工删事务文件，而这一点没有任何文字说明。这需要“中断”和“升级”两件事叠在一起，窗口较窄。
   - 证据：wakeflow-maintenance-execution-intent.ts:245-293：normalize() 用当前代码重跑 createWakeflowMaintenanceExecutionPlan，要求 planDigest 一致；0ef5defa 之后 parseSurfaces 调用 parseTmuxAsset(record.tmuxAsset)，遇到 undefined 失败，0ef5defa 之前写的 intent 已经无法解析；maintenance-execution-intent.schema.json 把 currentHostProfile 和 sharedPreview 只类型化为 object，schema:check 看不出漂移；SKILL.md:148-153 遇到 recovery-required 只让 Controller 去 recover；验证者更正：recovery 用的是 intent 内嵌的预览和 profile（recovery.ts:199-220），单纯的资产变更不会破坏恢复
@@ -146,6 +146,7 @@
   - 说明：锁文件元数据漂移或瞬时 I/O 错误会让一次成功的 claim-state 写入以错误返回，Agent 重试时会碰到 CAS 失败或未释放的锁（board 锁本身又没有退役路径）。很少见，但违背了“要么有结果、要么什么都没发生”的约定。
   - 证据：withRootedExclusiveFileLock（:813-830）在 finally 里 release，没有 catch：release 抛错会丢掉成功结果，或者覆盖原本的操作错误；requirement-board.ts:132-137 把它映射成可重试的 concurrency-conflict
   - 建议：操作成功时照常返回结果，释放失败单独报告（警告加残留检查），或者至少标记为 committed-but-lock-residue，避免调用方盲目重试。
+  - 2026-10-05 后续（§13.161）：pod 锁的失败映射改为只有 timeout / owner-active / residue-changed 可重试，不安全锁记录、父目录与根作用域问题和释放失败不再标成可重试；释放失败覆盖成功结果这一点本身仍开放。
 - **B11** [低 / 待决] 平台范围（Windows、网络文件系统）没有对用户声明，锁机制依赖 POSIX 的 pid、link 和权限语义（计划阶段 2；状态：开放）
   - 说明：在 NFS/SMB 上，或者工作区跨机器、跨容器共享时，kill(pid,0) 查的是错误的 PID 命名空间，远端还活着的持锁者会被当作 inactive 退役，或者反过来。Windows 会被早早拒绝，但用户文档没有写。需求文档还声称已经声明过。
   - 证据：plugins/*/package.json 没有 "os" 字段；README 里没有平台说明；docs/requirements/README.md:37 声称“制品与 README 明确声明不支持 Windows”，但实际没有；验证者更正：至少十个 geteuid helper 在 win32 下以 unsupported-platform 失败，fresh-initialize 第一次写配置时就能早早拒绝 Windows；网络文件系统只在源码注释里排除（rooted-exclusive-file-lock.ts:79），没有 statfs 检查
@@ -159,7 +160,7 @@
   - 证据：`src/foundation/filesystem/durable-atomic-file-stage-recovery.ts` 的 `collectStages` / `assertStageNode`；§13.134 B12 修复只豁免并退役写入器自己能留下的 create / 0600 暂存。
   - 建议：由基础层决定：hook 目录的写前恢复只看同一目标的暂存（记录名唯一），或由对账把形状不对的暂存列为可退役项并在 verify 里点名。
   - 2026-10-02 复验（§13.140）：普通的 .wakeflow-atomic-invalid 文件使下一次 hook 写入报 observation-write-stage-recovery-required；原文件保留。修复应限定影响范围并提供诊断，不能以任意删除未知暂存文件作为通过条件。
-
+  - 2026-10-05 后续（§13.161）：Demand 发布意图与生命周期日志目录里 foundation 自己的暂存文件不再作为残留阻断全部 pod——活写者按可重试的 pod-publication-in-flight / pod-lifecycle-in-flight 拒绝，死写者的暂存跳过且不删除，所有者未知仍按残留保守拒绝。hook 目录的形状不对的暂存仍计 skipped、仍无公共恢复出口。
 - **B14** [高 / 缺陷及验证缺口] 会话 hook 与运行身份混用：缺失启动证据的原因不明，新的启动记录也可能误报运行就绪（状态：部分修复，§13.146 去除 hook 对 MCP 就绪的错误推断；原生事件缺失与可信实例关联仍未解决）。
   - 实测：8 个既有测试聊天全部通过原生 status 确认新构建，均有真实 Stop；仅 6 个出现新 SessionStart。其余两个仍被 runtime-artifact 门判为 windows-stale，严格 verify 为 14/15。不能用新 Stop 的摘要冒充会话启动证据，也不能据工具调用成功将全工作区计作通过。
   - 同一安装制品的 8 个观察器子进程在独立工作区并发执行，合成 SessionStart 全部落盘，耗时 817–897ms，无超时或 stderr；该对照不能代替真实宿主触发，也未复现现场缺失。
@@ -201,7 +202,7 @@
   - 证据：wakeflow-artifact-identity.ts:18-24,46-52：从进程自己的根重读 manifest；observation/decide.ts:627-639：只有 onDiskDigest 非空且不同才报 server-outdated，为 null 时放行；observation/service.ts:416-429：窗口产物状态只按相等判断（current/stale），不分新旧；缓存路径按版本分目录（gate-log 3427）；§13.127 只验证过原地修改 manifest；maintain-workspace.ts 没有产物新鲜度检查；“不要从过期 server 运行维护”只写在 workspace-and-windows.md:166-169；gate-log 3667：现场的 Controller 差点从过期 server 执行 reconcile
   - 建议：将运行身份与宿主安装目标或工作区升级计划选定的构建分开。由 host adapter 或版本化维护回执提供明确目标；读不到时为 unknown，不能由摘要猜测新旧，也不能按目录 mtime 选“最新”。维护 apply 对选定目标和兼容条件进行复验，分别指出 server 与窗口的偏差。加一个新旧两个版本目录并存或旧目录被删的场景测试。
   - 2026-10-02 复验（§13.140）：同级新版本目录不改变旧进程的 readCurrentManifestDigest；旧 manifest 缺失返回 null，runtimeArtifactGate 不将它列为 server-outdated。尚未执行真实安装器的跨版本切换。
-
+  - 2026-10-05 后续（§13.161）：恢复了可靠的 stale 信号并把它和 unverified 分开：宿主画像新增 surfaces.runtimeStaleness，Claude 为 session-start-observer-digest（最近 session-start 的观察器摘要 ≠ 已安装 manifest ⇒ stale，windows-stale:<n> 使 runtime-artifact 门失败，next 为 window-artifact-stale），Codex 为 unverified；window-runtime-unverified:<n> 只作为通过门上的信息，verify.ok 重新可为 true。这覆盖了 ADR-0017 §3 "unverified 即 unavailable" 的后果，用户 2026-10-06 裁决同意。兄弟版本目标识别仍开放。
 - **C7** [中 / 风险] 配置 schema 的任何改动都让工作区无路可走：reconcile/reconfigure 被阻塞，fresh-initialize 也被阻塞（计划阶段 3；状态：开放）
   - 说明：官方给出的补救办法（重新初始化）被 fresh-initialize 自己的拒绝规则挡住，唯一的出路是手工删除配置、.wakeflow-active、.wakeflow-local 和 ledger 根（包括归档和需求），board、活动 Demand、绑定和 pod 回执都会丢失。没有任何文字引导这个过程，违背了“由插件引导用户”的原则。发布后，第一次配置改动就会影响每一个用户。
   - 证据：wakeflow-config.schema.json:32-34：schemaVersion const 1，additionalProperties false；static-materialization-preview.ts:1152：配置无法解析时报 current-config-unavailable（currentSnapshot 返回 null，158-172）；fresh 被 fresh-config-present、fresh-active-not-absent、fresh-local-not-bootstrap-prefix（1143-1149）和 fresh-ledger-root-present（409）阻塞；gate-log 3295“只能重新初始化”；3746 没有配置时报 precondition-failed/config-authority
@@ -213,6 +214,7 @@
   - 说明：每次插件更新后，Controller 照着参考文档操作，每个窗口都会得到 locator-live，文本里没有安全的顺序（等空闲、close、resume、relocate、mark）。--force 会在同一个会话上再起一个进程。Controller 自己的窗口走 /mcp 重连后永远清不掉 stale，verify 始终达不到全部通过。这些刷新路径都没有由 Agent 按 shipped 文本实际执行过。
   - 证据：workspace-and-windows.md:165 对每个 stale 窗口套用 {{windowResume}}（claude-code-agent-text-profile.ts:72-76，这段文字是为进程已退出的情况写的）；claude-code-tmux-asset.ts:721-734：pane 仍在运行时 resume/launch 报 locator-live，除非加 --force；agent 文本里没有出现 locator-live；observation/service.ts:418-429 按 session-start 记录判断产物，/mcp 重连不会重写这条记录，Controller 一直是 stale，verify 一直报 windows-stale；文本也提供了“或 resume 会话”这个可行的替代（w&w:166-167）；§13.127 残留说 /mcp 重连能否切换代码未经验证；§13.130 是用外部脚本 live-130.mjs 刷新窗口的
   - 建议：在 windowResume 和参考文档里写出明确的刷新顺序：确认空闲（没有持有的 claim、没有进行中的回合）→ close → resume → relocate → mark；点名 locator-live，禁止对活会话用 --force。对 Controller 自己的窗口，要么把“正在服务的 MCP server 产物相同”视为 current，要么只教 resume。然后按 skill 文本在现场跑一遍。
+  - 2026-10-05 后续（§13.161）：技能文本按恢复的 stale 信号改写——只对 verify 报 stale 的同伴窗口执行宿主重启流程，unverified 的不动；Codex 文本改为只有重启 Codex 应用才重载 MCP（resume/continue 不会），引导测试固定这句；去掉 "inspect its diagnostics" 这类不存在的出口，指向拒绝里的 hint。
 - **C9** [中 / 缺口] 用户没有更新或升级流程，0.9.x 用户也不会被提前告知工作区会被拒绝（计划阶段 3；状态：开放）
   - 说明：老用户需要一整套步骤：更新 marketplace、更新插件、重启或 resume 每个窗口、重连 Controller 的 server、跑 status/verify。这些都没有面向用户写出来。0.9.x 用户更新后会被硬拒绝，没有迁移指引。
   - 证据：README.md:74-136 和 assets/agent-text/README.md 只讲安装和一次性信任；agent 文本里没有 plugin update 或 marketplace update；窗口刷新只写在 Controller 参考文档里（workspace-and-windows.md:156-169），而且依赖未经验证的 /mcp 重连；ADR-0008 D1：fresh-initialize 拒绝带旧标记的工作区；v0.9.4 用的是同一个名字 wakeflow@gxfn；README.md:254 只把这一点当作原则提了一句
@@ -297,6 +299,7 @@
   - 说明：5 到 11 分钟、带已知时序敏感用例的 gate 会促使大家只跑聚焦测试，而 continue 缺陷这类跨切面回归正是这样漏过去的。时长文件只是调度提示，不影响正确性。
   - 证据：tooling/testing/test-durations.json 测于 2026-09-18，224 个条目合计 1364 秒；246 个测试文件中有 22 个没有条目；§13.121 残留：机器负载高时连续三次超时，endpoint register/decommission 单个就要 31 秒；最慢的文件：场景验收 189 秒、result-review service 150 秒、maintenance transaction 126 秒
   - 建议：刷新时长文件，拆分或加速最慢的几个文件，把 endpoint 和 lock 测试里的墙钟等待改成注入时钟或显式的更长超时，并标注哪些测试对负载敏感。
+  - 2026-10-05 后续（§13.161）：运行器在 Node 没有发出总汇总、汇总文件数≠选中文件数或执行了零用例时按失败退出，子进程不再继承 NODE_TEST_CONTEXT；wf verify 的 gate 阶段外层预算改为 90 分钟，CI 作业 120 分钟、只取消被取代的 PR 运行。时序敏感本身（3 worker 下 lab 双产品实验与 shared latch 用例偶发超时）仍在。
 - **D10** [低 / 风险] 测试会继承开发者的全局和系统 git 配置（计划阶段 1；状态：开放）
   - 说明：在全局开启 commit.gpgsign 或 core.hooksPath 的机器上，临时仓库的提交会失败或弹出提示，pod 和场景测试会因与 Wakeflow 无关的原因失败，也会挡住以后接入 CI。
   - 证据：9 个测试文件设置了 GIT_AUTHOR_* 和 GIT_COMMITTER_*，但没有设置 GIT_CONFIG_GLOBAL/GIT_CONFIG_NOSYSTEM（例如 pod/service.test.ts:44、scenario test:2561）；只有 check-release-consistency.test.ts:54-55 和 tmux asset 测试做了隔离
@@ -322,6 +325,7 @@
   - 说明：早期“Codex 不认识 max”的判断不能泛用于当前模型。§13.139 使用默认 GPT-6-Astra / max 的真实会话完成测试，但 hosts 启动配置为空，未覆盖显式模型与 effort 组合；检出也全部位于测试根内，未覆盖根外路径。以下早期映射证据需按当前宿主能力重新核对。
   - 证据：wakeflow-config.schema.json $defs/reasoningEffort 枚举为 [medium, high, xhigh, max]，描述说“由宿主适配器映射”；endpoint/service.ts:818-820 不做映射，原样传给 Codex；'max' 是 Claude 的取值；service.ts:701-715 attachedWorktreeViews 对工作区根用 path.relative，根外的 Codex worktree 会得到 ../../.. 路径
   - 建议：在 host resource profile 里加每个宿主的 effort 映射，配置校验时拒绝宿主不支持的值；worktree 路径改用绝对路径或宿主中立的引用。
+  - 2026-10-05 后续（§13.161）：检出位置有了边界：登记时检出的 realpath 必须在工作区根、工作区的父目录（§13.158 的外层项目布局）或产品仓库之内，否则以 worktree-outside-workspace 拒绝；端点结果对越界的旧回执给 null 而不是 ../../…，相对路径最多以一级 ../ 开头；Codex 启动文本写明这三处位置。reasoningEffort 兼容性仍未验证。
 - **E4** [低 / 缺口] Codex 制品里混入 Claude 专属的操作文本，缺少对应的 Codex 指引，而且没有 gate 拦截（计划阶段 6；状态：开放）
   - 说明：Codex 的 Controller 读到的是它根本没有的 helper 和 pane 的流程，自己宿主上同类故障（回合被切断、server 过期）却没有任何指引。README 里对 Codex 用户说“attach tmux”则是真实的泄漏。
   - 证据：assets/agent-text/README.md:29“attach to tmux”原样进入 plugins/codex-wakeflow/README.md:29 和 README.zh-CN.md:24（“接管 tmux”）；codex delivery-and-review.md:90-124（helper deliver、nudge、API Error）和 workspace-and-windows.md:89、145-147、166-167 都带“On Claude Code”的限定，会造成困惑但不会误导；Codex profile（:46-72）没有“被切断回合的恢复”和“刷新自己的 server”这两项的 Codex 取值；hook-observer.ts:257-258 的 `if (hostId !== "claude-code")` 是临时的宿主判断，wrapper 表放在入口而不在 Claude profile 里；tests/artifacts/agent-text-honesty.test.ts 只检查工具、skill 和命令名
@@ -364,7 +368,7 @@
   - 证据：kernel/privacy-scan.ts:50-53：provider 前缀只有 sk-、ghp_、gho_、github_pat_、xox[abp]-、AKIA、AIza；赋值规则要求关键字前有 `\b`，下划线之后匹配失败；用同样的正则在 python3 中复现，以下都没有命中：DATABASE_PASSWORD=…、GITHUB_TOKEN=ghs_…、aws_secret_access_key = …、Authorization: Bearer eyJ…、glpat-…、npm_…、postgres://admin:pass@db；demand/decide.ts:96-115：归档 payload gate 只拦截凭证类；archive.ts:202-219 只扫描 UTF-8 文件；现场归档里含 managed-evidence 的 payload 字节；测试工作区的 .gitignore 没有忽略 ledger/
   - 建议：放宽规则：关键字前允许 `(?:^|[^A-Za-z0-9])` 或 `[A-Z0-9_]*_` 前缀；加入 ghs_/ghu_/ghr_、glpat-、npm_、xoxe-、JWT、`Bearer <token>`、`scheme://user:pass@`。每种都加回归用例，并给归档 gate 加夹具测试。
   - 2026-10-03 修复已复现模式：统一引擎识别带前缀环境变量、JSON 键、授权头、连接串用户信息及补充的令牌前缀；捕获、报告、需求与归档消费者均补回归。保留模式检测边界，不宣称覆盖任意短口令、未知编码或全部凭证形式。
-
+  - 2026-10-05 后续（§13.161）：补上 SECRET_KEY / *_SECRET_KEY / secret_key_base / ENCRYPTION_KEY / APP_KEY、PGP PRIVATE KEY BLOCK 与 Authorization: Token；键与值只允许同一行内的空白（标题后换行不再误判）；window_binding_ 与 maintenance_operation_ 前缀登记进 contracts 的唯一前缀来源，隐私扫描不再把它们当裸 UUID。
 - **F7** [中 / 缺口] 没有任何地方写下威胁模型，安全取舍散落在代码注释里各自决定（计划阶段 5；状态：开放）
   - 说明：不写明攻击者（诚实但会出错的 Agent、被注入的产品 Agent、其他本地用户）和受保护资产（事件流、落地证明、Controller 权限、跟踪的 ledger），审查者就无法判断本主题里的各项究竟是 bug 还是已接受的风险。逐文件审查也发现不了，因为每个文件相对于自己的局部假设都是对的。
   - 证据：在 docs/decisions 中 grep 威胁、threat、恶意、single-user、单用户、注入都没有结果；ADR-0001..0013 没有安全决策；隐含的模型互相冲突：rooted-directory.ts 是“受信任单用户工作区”，hook-observations.ts:41-47 称记录为“私有权威”，调用者身份交给 skill 文本（gate-log L2786），而产品 Agent 又在处理不受信任的内容
@@ -374,7 +378,7 @@
   - 证据：managed-evidence-capture-planning-service.ts:199 NON_TEXT_CONTROL_PATTERN 包含 ESC；:360-363 判为 opaque，不产生任何 finding；opaque 和非凭证类 finding 只在 reject 模式下阻断（:412-433）；contentReview 的 controller-confirmed 由调用方自己选；验证者更正：工作区/ledger/仓库内的绝对路径进入归档是卡片 08 Q1 的既定决定；Claude Code 的 Bash 是非 TTY，多数测试运行器不会输出颜色；agent 文本里没有提到 controller-confirmed；归档 gate 会对 UTF-8 文本再扫一遍凭证
   - 建议：分类和扫描之前先剥掉 ANSI CSI/OSC 序列，只有真正的二进制才判为 opaque；有了调用者身份之后，controller-confirmed 要记录确认者，并拒绝非 Controller 的调用。
   - 2026-10-03 已修复跳过扫描：有效 UTF-8 即使含未知控制字符仍扫描；CSI 格式视图保留原文位置映射，原文凭证同时检查，未知控制和非 UTF-8 保留 opaque 审阅。独立 MCP 进程证明 controller-confirmed 不能放行检出的凭证，正常彩色文本可以落账且字节不变。
-
+  - 2026-10-05 后续（§13.161）：非 UTF-8 的 opaque 成员改为按宽松解码做凭证类扫描（证据捕获与归档负载都适用），模型测试不再以 opaque 豁免漏检；ANSI 已由 §13.150 的 CSI 剥离覆盖。
 - **F9** [低 / 债务] 报告隐私扫描会误拒普通的 URL 路由和产品 UUID，却放过 file://、`key:/path` 和 Windows 路径（计划阶段 5；状态：开放）
   - 说明：Web 产品的报告经常引用 API 路由和实体 id，导入因此被拒，Agent 就学会转述证据，评审质量随之下降；而真正像泄漏的路径形式反而漏掉了。
   - 证据：result-review/service.ts:244-247 REPORT_PRIVACY_POLICY 没有允许的根，result-review/decide.ts:161-170 不做 SYSTEM_PATH 过滤（requirement/decide.ts:79-99 有）；用同样的正则复现：'/api/orders' 被标记，而 'file://<本机路径>'、'cwd:<本机路径>'、'$HOME/…'、'C:\\Users\\…' 不被标记；bare-uuid（privacy-scan.ts:56-57）拒绝所有不带 Wakeflow 前缀的 UUID
@@ -433,6 +437,14 @@
   - 证据：plugins/claude-code-wakeflow/mcp/server.mjs 只有 import 和调用，没有 uncaughtException/unhandledRejection 守卫；hooks/observe.mjs:3-24 显式加了守卫；src 里只有 hook-observer.ts:778-779 注册了守卫；src 里没有发现浮动的 promise，这条路径今天是否会触发未经证实
   - 建议：统一策略：MCP 启动器也加守卫，写脱敏后的 incident 记录和一行带 incident id 的 stderr，然后以非零码退出。在 Controller 的停止条件里加上“Wakeflow 工具不可用”，告诉用户用 /mcp 重连或重启。
 - **G11** [低 / 债务] 维护者的诊断工具（现场驱动脚本、调试开关）没有纳入版本管理，每次现场排查都从零开始（计划阶段 4；状态：开放）
+  - 后续进展（§13.153）：仓库内已实现并验证 `wf verify`、只读环境/制品 doctor 和完整回执的耗时建议导出，当前代码尚未提交。实验环境、原生宿主驱动与工作区故障包仍待后续批次；本项未整体关闭。
+  - 后续进展（§13.154）：增加可丢弃双产品实验环境、生成 stdio readiness 场景、精确清单保护的清理，以及五类固定故障矩阵。两个新根的双宿主 CLI 实跑与 102 项故障回归通过；原生宿主行动单、完整业务/worktree 预设和工作区故障包仍待实施，本项保持开放。
+  - 后续进展（§13.155）：增加原生项目聊天行动单、单次尝试记录与导入证据一致性检查、隐私命令模型、CI 配置和受限摘要导出/下载校验。真实测试区只读确认 5 个既有绑定，重复创建被拒绝；窗口到 MCP 的可信关联、完整原生业务/worktree 和故障包仍未闭合。远端 CI 尚未执行，本项保持开放。
+  - 后续进展（§13.156）：维护工具的 21 份文件完成语义补审，原 5 页图谱漂移已闭合；新增维护验证、lab/live 和 CI/模型证据图，105 图渲染及图谱独立门通过。图谱只记录已有实现与停止点，不补足原生业务、故障包或远端 CI 的缺口，本项保持开放。
+  - 后续进展（§13.157）：增加单产品、双产品与真实Git worktree的固定合成业务实验、成功回执与资源清单的交叉准入、同字节替换保护，以及只读工作区doctor。原生新环境已初始化并获10聊天授权，但项目入口仍待人工登记；追加修复Node CLI重排导致耗时队列失效的问题，真实进程回归、1297项完整门、双宿主smoke和108图独立门通过。原生闭环、工作区原始故障包和远端CI仍未关闭。
+  - 后续进展（§13.158）：同一外层项目的10个原生Codex聊天完成main与worktree两份Demand、一次实现返工及一次仅重跑失败步骤的测试尝试；独立Test分别22、36项通过，另有128组隔离检查。两份归档摘要独立复算一致；10个聊天的归档操作获得成功回执、10个binding退役，2个检出与临时分支回收并保留Git bundle。归档列表回读到9个聊天，最后一个仅有明确归档返回及notLoaded读回，该缺口保留。测试脚本曾依赖已轮换快照，已改用冻结合同与不可变证据；应优先补测试记录脚手架。原生宿主可信关联、回调hook、工作区原始故障包及远端CI仍未关闭。
+  - 后续进展（§13.159）：维护者测试捕获与导入回执已实现：冻结既有合同和显式命令、限定重试步骤、稳定独占标记、原始双流/前后观察、离线完整性及双摘要约定。16项聚焦回归和22项历史真实材料CLI重放通过，两个临时linked checkout已回收；此批未新增原生聊天，不补足实时授权、hook或宿主身份。首轮失败/中断、5项隔离复验和最终2 worker的1313项完整通过分别留证，双宿主smoke通过；工作区原始故障包、无源码安装诊断、impact、远端CI和生成产物差异展示仍未整体完成。
+  - 后续进展（§13.160）：已实现维护者明确文件的只读故障包、离线复验和独立分享摘要；19项聚焦与两种生成制品的真实CLI正反场景通过。保留损坏配置原字节、已核验候选和部分观察，修正成功摘要缺少调用证据的一致性缺口；权限夹具明确0600/0644，不再依赖umask。工作区全自动取证、无源码诊断、impact、原生关联及远端CI仍未闭合；最终3 worker完整门1326项、双宿主smoke与112图验证通过；2 worker外层预算中断保留。
   - 说明：每次真实环境验证都依赖一次性脚本，脚本本身的 bug 要在现场调试，经验也留不下来。对没验证过的 Codex 宿主，更是没有现成的驱动。
   - 证据：WAKEFLOW_DEBUG_EXIT=1 只出现在 gate-log（§13.125 L3625）；§13.130 L3830 用外部的 live-130.mjs 驱动；git ls-files 里没有 live-*；§13.128 L3734：维护者脚本把 `binding: {status: 'unregistered'}` 当成已绑定，发出了一次在 `$` 处被拒的 decommission；tooling/ 只有 architecture、artifacts、codegen、release、testing
   - 建议：在 tooling/ 下纳入一个只读诊断驱动（`npm run diagnose -- <workspace>`）：通过 stdio 对候选产物调用 status、verify、inspect，打印 incident 记录，路径脱敏。任何会修改状态的模式都放在显式开关后面，并且只用于指定的一次性工作区。
@@ -470,7 +482,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复。后续需
   - 建议：从包记录取得标准全集，按当前有效谱系分别计算实现覆盖和当前测试代际的已接受通过覆盖；不能以两者的简单并集冒充真实环境测试覆盖。在 complete_demand 预览、status、verify 显示缺口；推荐默认阻断，是否准许逐条正式豁免由 Q8 决定并记入归档。在完成场景里加入这项检查。
   - 2026-10-02 复验（§13.140）：controller-only 包含 10 条验收标准，仅 ac-1 有实现任务并被接受，公共完成预览仍 ready，apply 成功归档；直接回读归档确认其余 9 条未被覆盖。较早“尚未实际发生”的表述已被此复现取代。
   - 2026-10-02 修复（§13.141）：新 requirement-coverage 门按测试模式核对全部条目。十条仅接受一条、以及实现全接受但测试仅覆盖两条均被阻断；完整覆盖可归档，取消仍可用，旧封存归档不被追溯否定。
-
+  - 2026-10-05 后续（§13.161）：覆盖检查前移到规划：测试合同没有为每条验收标准配步骤时 plan 以 test-contract-uncovered:<item> 拒绝（Demand 只有一份测试合同，不再留下无法完成的 Demand）；未知条目的拒绝附 acceptance-items:<n>；验收列表按 CommonMark 解析（≤3 空格缩进的顶层标记、按内容列嵌套、`*`/`+`/`1)`），预览摘要显示解析后的 ac-N，Design 参考写明可接受的写法。
 - **H5** [中 / 缺口] research Demand 可以发布和认领，但 Controller 没有执行它的流程（计划阶段 7；状态：开放）
   - 说明：没有文字告诉 Agent 谁来做调研、文档写到哪里、要记录为 document 证据后零任务完成。研究也不能委派给产品窗口，因为投递需要带 anchor 的任务。用户提一个调研问题，Controller 会停在 research-evidence-missing，不知道下一步怎么走。
   - 证据：demand-controller-route.ts:596-618：没有任务的 research Demand 路由到 research-completion-required，在有 document 证据前被 research-evidence-missing 阻塞；demand-verify-gates.ts:174-182 需要 kind 为 document 的证据；research 不要求验收标准，所以没法规划任务（anchor minItems 1）；在 Controller skill 和 commands 中 grep research 没有结果；Design 的 requirement-package.md:55-58 却在推荐这个类型；没有 research 场景；§13.126 唯一的一个 research 包是占位，先搁置后撤回；research 也不能 continue（demand/decide.ts:229）
@@ -536,6 +548,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复。后续需
   - 说明：§13.135 现场：/mcp 重连后 Controller 没有再读参考，按旧文字关窗、resume、relocate，最后让用户 `/exit`、`Ctrl-b c` 开 shell 粘贴助手命令；用户点明"重新读一下 After a plugin update"后它才走就地自重启。技能正文在会话里只注入一次，resume 也保留旧对话。
   - 证据：§13.135 现场 L1、L2、L9。
   - 建议：（已做部分）状态命令与自重启 prompt；另可让 verify 的 next 在 runtime-artifact 帧上带"重新加载技能"的提示，或给产品与 Test 窗口的投递 prompt 加一句按磁盘上的技能执行。
+  - 2026-10-05 后续（§13.161）：Codex 窗口换代文本改为"重启应用才重载 MCP"，stale/unverified 语义写进 Controller 参考与技能；README 去掉 tmux 专属措辞并说明 Codex 桌面自带 node；Codex 重新信任 hook 的说明按 1.1.0 实际改写；安装目录规则从 Controller 参考移到维护者文档；product-defect 升级的回路写成真实 frontier（implementation-delivery-planning）。
 - **I10** [低 / 缺陷] 投递提示词最多列 4 条验收锚点，多出来的静默略去（计划阶段 7；状态：已修（§13.135）：超出时列出"另有 N 条在任务包里"，中英两种语言，渲染回归已加）
   - 说明：§13.135 现场第 5 条锚点（其余仓库保持基线）不在提示词里；实现窗口靠先读任务包才补上。
   - 证据：`delivery/prompt.ts` 的 `MAXIMUM_ANCHORS = 4`。
@@ -663,6 +676,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复。后续需
   - 证据：docs/requirements/wakeflow-functions-and-scenarios.md:3 自 09-04 起仍为草稿、等待确认，来源只到 ADR-0010；F9.3（L193）说清理会删除已关闭 pod 的 worktree，与 F3.5（L129“worktree 从不由 Wakeflow 删除”）和卡片 08 §8.4 矛盾；§3 分支列表（L91）有“评审 redesign 后”，代码只接受 accept|rework|blocked|escalate，src 里没有 redesign；已发布的 delivery-and-review.md:32 写着“After a redesign decision: a replacement package”，而替换实际上由可替换阶段里一个未关闭的目标触发（tasking/decide.ts:124-141）；§6 的 tmux 措辞（运行时不执行 tmux）仍然成立
   - 建议：按当前 ADR 和代码更新总览（F9.3、redesign 分支，以及前面 continue/supplement 语义定下来之后的相应内容），然后标为 active；把 delivery-and-review.md:32 改为“仓库的未关闭目标不在进行中时，规划替换”；扩展 agent-text honesty 测试，拒绝不在决策 schema 里的决策名。
 - **M4** [低 / 债务] 生成产物的改动占据了提交历史的大半，架构图谱陈旧且不在 gate 内（计划阶段 0；状态：开放）
+  - 后续进展（§13.152/156）：源码、制品与图谱已按用户要求分批提交过一轮；当前图谱又完成维护工具补审，74份来源指纹全部当前，105张图实际渲染与独立门通过。陈旧图谱这一子问题已闭合。图谱按局部规则保持独立，不并入根门；生成产物的差异展示方案仍未实施，本项不整体关闭。
   - 说明：每个提交约一半的 diff 是生成出来的，影响审查和 blame。图谱自称规范地图，但落后于后来的功能。
   - 证据：2457c961：751 个文件、+8761/-5834，其中 plugins/ 占 389 个文件；01ecfcde 的 plugins/ 有 +2796（全部 +6823）；没有 .gitattributes；每次改动在两个制品里各出现一次，另有约 230 KB 的 manifest 重写；vendored node_modules（5.4/5.2 MB）也提交了；wakeflow-architecture-atlas 最后一次提交是 be7432f0（09-18），check:current（scripts/check-atlas.mjs:41）不在 npm test 里；验证者更正：它引用的 97 个 src 路径中 96 个仍然存在，只是缺少 09-18 之后的功能
   - 建议：在 .gitattributes 中把 plugins/ 标记为 linguist-generated 并设 -diff，制品重建和源码改动分开提交；刷新图谱并把 check:current 纳入 gate，或者在 docs/README.md 中标为归档。

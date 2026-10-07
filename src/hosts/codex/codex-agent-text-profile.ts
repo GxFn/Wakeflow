@@ -67,7 +67,9 @@ const WINDOW_BOOTSTRAP =
   "and workspace-root SessionStart are established. A source-maintenance chat in another " +
   "project is not that Controller. With the user's existing authorization, create the " +
   "Controller in the workspace project first, verify and register it, then handle the other " +
-  "roles in that same project. Do not ask again for authorization already given.";
+  "roles in that same project. Do not ask again for authorization already given. If this " +
+  "chat is not that Controller, tell the user which chat is and continue there instead of " +
+  "running the Controller flow from here.";
 
 const DELIVERY_ACTION =
   "send the permit's prompt into the target window's thread with your Codex thread " +
@@ -75,7 +77,9 @@ const DELIVERY_ACTION =
 
 const WORKTREE_LAUNCH =
   "create a linked checkout from the configured product repository's local HEAD using " +
-  "git worktree add with the suggested branch name and an available checkout path. Keep " +
+  "git worktree add with the suggested branch name and an available checkout path inside " +
+  "the Wakeflow workspace root, beside it in the same outer directory, or inside that product " +
+  "repository - registration refuses a checkout anywhere else. Keep " +
   "the role chat in the same outer project using a local environment: create_thread's " +
   "worktree environment targets the project's primary repository. Pass the assigned " +
   "checkout in the startup prompt and record worktree.executionRoot from pwd there along " +
@@ -87,11 +91,14 @@ const WORKTREE_LAUNCH =
  * 也不换别的窗口（过期服务给的启动意图是旧的）；之后其他过期窗口开新线程加 replace。
  */
 const WINDOW_RESUME =
-  "when this serving MCP is outdated, ask the user to reload its Wakeflow server or resume " +
-  "this existing chat before maintenance. For a peer with direct evidence of an outdated " +
-  "runtime, reload or resume that existing chat through the host. Replace its binding only " +
-  "when the old chat is gone and the user authorizes a replacement chat. A missing hook alone " +
-  "does not justify creating or rebinding a chat.";
+  "when this serving MCP is outdated, ask the user to restart the Codex app and resume " +
+  "this existing chat before maintenance: only an app restart reloads Wakeflow's MCP server; " +
+  "resuming or continuing a chat does not. A peer window that verify reports as `stale` " +
+  "(its session started under an older artifact) is refreshed the same way - the user " +
+  "restarts the app once and resumes that existing chat through the host; `unverified` " +
+  "peers carry no such evidence and are left alone. Replace its binding only when the old " +
+  "chat is gone and the user authorizes a replacement chat. A missing hook alone does not " +
+  "justify creating or rebinding a chat.";
 
 /** Codex 没有助手替你守重发：发送前自己看接收窗口的线程。 */
 const RESEND_GUARD =
@@ -109,17 +116,18 @@ const HOST_TRUST_STEPS_EN = [
   "is on PATH when the host does not supply a runtime.",
   "Open `/hooks` and trust Wakeflow's four hooks after reviewing them by their",
   "definition hash. Until you do, all four are skipped: no session is observed, so no",
-  "window can be registered and no delivery can be shown to have landed. If a plugin",
-  "update changes the hook definition bytes, Codex asks you to trust them again -",
-  "under a normal update `/hooks` should show nothing of Wakeflow's waiting for review.",
+  "window can be registered and no delivery can be shown to have landed. A plugin",
+  "update that changes the hook definition bytes (the 1.1.0 update did) makes Codex ask",
+  "you to trust the four hooks again: after an update, open `/hooks` once; when nothing",
+  "of Wakeflow's is waiting there, the update kept the hooks.",
 ].join("\n");
 
 const HOST_TRUST_STEPS_ZH = [
   "Codex 桌面应用使用宿主自带的 Node。CLI 未提供宿主运行时时，需要 PATH 中有 Node 24。",
   "在 `/hooks` 里按定义哈希审阅并信任 Wakeflow 的四个 hook。信任之前四个 hook 全部被",
-  "跳过：没有会话被观察到，窗口无法登记，投递也拿不到落地证据。插件更新后若 hook 定义",
-  "字节发生变化，Codex 会要求重新信任——正常更新后 `/hooks` 里不应出现待审阅的 Wakeflow",
-  "条目。",
+  "跳过：没有会话被观察到，窗口无法登记，投递也拿不到落地证据。插件更新改变了 hook 定义",
+  "字节时（1.1.0 这次就改了），Codex 会要求重新信任这四个 hook：更新后打开一次 `/hooks`，",
+  "里面没有 Wakeflow 的待审阅条目，说明这次更新没有动 hook。",
 ].join("\n");
 
 /** 九个占位符的 Codex 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */

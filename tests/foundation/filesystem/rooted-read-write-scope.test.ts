@@ -8,6 +8,10 @@ import { threadId } from "node:worker_threads";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
+import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { RootedExclusiveFileLockError } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
@@ -96,7 +100,9 @@ test("a reader release during lease inspection is reobserved; a replacement with
       });
       let writerEntered = false;
       try {
-        const writer = withRootedReadWriteScope(f.root, AREA, "exclusive", async () => { writerEntered = true; });
+        // 未知所有者按活着等待，预算耗尽才是 recovery-required：给写者一个短预算。
+        const writer = withRootedReadWriteScope(f.root, AREA, "exclusive", async () => { writerEntered = true; },
+          { acquireTimeoutMilliseconds: 3000 });
         if (replacement) {
           await rejects(writer, (e: unknown) => e instanceof RootedReadWriteScopeError && e.reason === "recovery-required");
           equal(writerEntered, false);
@@ -188,8 +194,11 @@ test("unknown same-PID owners and unrecognized files stay protected", async (t) 
   const bytes = rootedExclusiveFileLockRecordTextForTest({ pid: process.pid, threadId,
     tokenUuid: "22222222-2222-4222-8222-222222222222" });
   writeFileSync(reader, bytes, { mode: 0o600 });
-  await rejects(withRootedReadWriteScope(f.root, AREA, "exclusive", async () => {}),
+  // An unknown owner is waited on like a live one; the spent budget turns it into a recovery request (§13.161 F2).
+  const started = performance.now();
+  await rejects(withRootedReadWriteScope(f.root, AREA, "exclusive", async () => {}, { acquireTimeoutMilliseconds: 300 }),
     (e: unknown) => e instanceof RootedReadWriteScopeError && e.reason === "recovery-required");
+  equal(performance.now() - started >= 250, true, "the writer must wait out its budget before asking for recovery");
   equal(readFileSync(reader, "utf8"), bytes);
   rmSync(reader);
   const unknown = path.join(f.area, "keep.txt"); writeFileSync(unknown, "keep", { mode: 0o600 });
@@ -220,4 +229,34 @@ test("a killed real reader process is retired exactly before the exclusive write
     equal(entered, true);
     deepEqual(readdirSync(f.area), []);
   } finally { child.kill("SIGKILL"); await Promise.allSettled([exit, writer]); }
+});
+
+test("a live contender's in-flight create stage is skipped, never retired; a dead one is retired on the next admission (§13.161 F1)", async (t) => {
+  const f = await fixture(t);
+  const address = issueDurableAtomicFileStageAddress("create", `${AREA}/latch.lock`, `sha256:${"0".repeat(64)}`, 0o600);
+  const stage = path.join(f.area, address.fileName);
+  writeFileSync(stage, "", { mode: 0o600 });
+  let entered = false;
+  await withRootedReadWriteScope(f.root, AREA, "exclusive", async () => { entered = true; });
+  equal(entered, true);
+  equal(existsSync(stage), true, "an active stage must survive admission");
+  releaseDurableAtomicFileStageAddress(address);
+  await withRootedReadWriteScope(f.root, AREA, "shared", async () => {});
+  equal(existsSync(stage), false, "a dead writer's stage is retired");
+});
+
+test("shared admission retires dead reader leases once they pile up, so shared-only workloads never hit the entry limit (§13.161 F4)", { timeout: 30000 }, async (t) => {
+  const f = await fixture(t);
+  for (let index = 0; index < 64; index += 1) {
+    const suffix = index.toString(16).padStart(12, "0");
+    const bytes = rootedExclusiveFileLockRecordTextForTest({ tokenUuid: `44444444-4444-4444-8444-${suffix}` });
+    writeFileSync(path.join(f.area, `reader-44444444-4444-4444-8444-${suffix}.lock`), bytes, { mode: 0o600 });
+  }
+  let entered = false;
+  await withRootedReadWriteScope(f.root, AREA, "shared", async () => {
+    entered = true;
+    equal(readdirSync(f.area).filter((name) => name.startsWith("reader-")).length, 1, "only the live reader remains");
+  });
+  equal(entered, true);
+  deepEqual(readdirSync(f.area), []);
 });

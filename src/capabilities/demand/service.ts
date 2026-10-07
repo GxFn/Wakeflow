@@ -18,7 +18,7 @@ import {
   RequirementLineageError,
 } from "../../governance/demand/model/requirement-lineage.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
-import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
 import {
   readPublicationTransactionAt,
   publicationNodeOrNull,
@@ -375,7 +375,11 @@ async function applyCreate(context: DemandSliceContext, plan: CreatePlan): Promi
     context.root,
     plan.podId,
     async () => {
-      await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+      await assertDemandOperationConfigCurrentOrFail(
+        context.root,
+        context.snapshot,
+        context.signal,
+      );
       return applyCreateLocked(context, plan);
     },
     context.signal,
@@ -445,7 +449,11 @@ async function recoverCreate(
     context.root,
     stored.transaction.identity.podId,
     async () => {
-      await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+      await assertDemandOperationConfigCurrentOrFail(
+        context.root,
+        context.snapshot,
+        context.signal,
+      );
       await assertNoActiveDemand(
         context.root,
         context.signal,

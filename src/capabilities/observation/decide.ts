@@ -22,6 +22,51 @@ export interface NextAction {
   readonly subject: string | null;
 }
 
+export interface WindowRuntimeView {
+  readonly status: "unregistered" | "unverified" | "stale";
+  readonly reason:
+    | "host-runtime-association-unavailable"
+    | "binding-unavailable"
+    | "session-started-under-older-artifact"
+    | null;
+}
+
+export interface WindowRuntimeInput {
+  readonly bound: boolean;
+  readonly bindingsObserved: boolean;
+  /** 宿主画像声明的过期判定方式（`surfaces.runtimeStaleness`）。 */
+  readonly staleness: "session-start-observer-digest" | "unverified";
+  /** 本进程路径上现在的制品清单摘要：窗口重启后会加载的那份。 */
+  readonly installedManifestDigest: Sha256Digest | null;
+  /** 绑定会话最近一条 session-start 记录的观察器摘要。 */
+  readonly sessionStartObserverManifestDigest: Sha256Digest | null;
+}
+
+/**
+ * 绑定窗口的运行身份（ADR-0017 D3，§13.161）：hook 记录只标识观察器，不证明窗口的 MCP 或指令已
+ * 重载，所以绑定窗口缺省是 unverified。宿主声明可按启动记录判定时，会话最近一次启动记录的观察器
+ * 摘要不等于磁盘上的制品 ⇒ 那个会话没有在更新之后重启过，报 stale，由 Controller 就地重启；
+ * 反方向（启动记录新 ⇒ 已重载）仍不成立，所以 current 从不被断言。
+ */
+export function deriveWindowRuntime(
+  input: Readonly<WindowRuntimeInput>,
+): Readonly<WindowRuntimeView> {
+  if (!input.bound) {
+    return input.bindingsObserved
+      ? Object.freeze({ status: "unregistered", reason: null })
+      : Object.freeze({ status: "unverified", reason: "binding-unavailable" });
+  }
+  if (
+    input.staleness === "session-start-observer-digest" &&
+    input.installedManifestDigest !== null &&
+    input.sessionStartObserverManifestDigest !== null &&
+    input.sessionStartObserverManifestDigest !== input.installedManifestDigest
+  ) {
+    return Object.freeze({ status: "stale", reason: "session-started-under-older-artifact" });
+  }
+  return Object.freeze({ status: "unverified", reason: "host-runtime-association-unavailable" });
+}
+
 export interface NextActionInput {
   /** 配置或活动布局读不到：先维护。 */
   readonly maintenance: boolean;
@@ -44,6 +89,8 @@ export interface NextActionInput {
   /** 本进程脚下的制品已更新：本窗口的服务进程要由用户重连（§13.127）。 */
   readonly artifactServerOutdated: boolean;
   readonly artifactServerUnavailable: boolean;
+  /** 会话在旧制品下启动、此后没有重启过的绑定窗口数：由 Controller 逐个就地重启（§13.161）。 */
+  readonly staleWindows: number;
 }
 
 const NEXT_ACTIONS_MAXIMUM = 64;
@@ -70,6 +117,14 @@ export function deriveNextActions(
   }
   if (input.artifactServerOutdated) {
     actions.push({ owner: "user", tool: null, reason: "runtime-artifact-outdated", subject: null });
+  }
+  if (input.staleWindows > 0) {
+    actions.push({
+      owner: "controller",
+      tool: null,
+      reason: "window-artifact-stale",
+      subject: null,
+    });
   }
   if (input.maintenance) {
     actions.push({
@@ -195,6 +250,9 @@ export interface WorkspaceGateFacts {
       readonly manifestDigest: Sha256Digest | null;
       readonly onDiskDigest: Sha256Digest | null;
     }> | null;
+    /** 会话在旧制品下启动的绑定窗口：确定过期，门因此不通过。 */
+    readonly staleWindows: readonly string[];
+    /** 没有宿主关联证据的绑定窗口：只作信息，不是门的失败。 */
     readonly unverifiedWindows: readonly string[];
   }>;
   /**
@@ -620,18 +678,23 @@ function podsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   );
 }
 
-/** Serving process and peer runtime evidence have distinct subjects (ADR-0017). */
+/**
+ * Serving process and peer runtime evidence have distinct subjects (ADR-0017). A window whose
+ * session started under an older artifact is proven stale (fail); a window without host
+ * association evidence is reported, not failed (§13.161): a gate that could never pass once a
+ * window is bound would make `ok` meaningless and leave the Controller an unactionable frontier.
+ */
 function runtimeArtifactGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
-  const { server, unverifiedWindows } = facts.runtime;
+  const { server, staleWindows, unverifiedWindows } = facts.runtime;
   const manifestDigest = server?.manifestDigest ?? null;
   const onDiskDigest = server?.onDiskDigest ?? null;
   const changed =
     manifestDigest !== null && onDiskDigest !== null && manifestDigest !== onDiskDigest;
+  const unavailable = server !== null && (manifestDigest === null || onDiskDigest === null);
   const codes = [
-    ...(server !== null && (manifestDigest === null || onDiskDigest === null)
-      ? ["manifest-unavailable"]
-      : []),
+    ...(unavailable ? ["manifest-unavailable"] : []),
     ...(changed ? ["server-outdated"] : []),
+    ...(staleWindows.length > 0 ? [`windows-stale:${staleWindows.length}`] : []),
     ...(unverifiedWindows.length > 0
       ? [`window-runtime-unverified:${unverifiedWindows.length}`]
       : []),
@@ -639,7 +702,7 @@ function runtimeArtifactGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   return gate(
     "runtime-artifact",
     "runtime",
-    changed ? "fail" : codes.length > 0 ? "unavailable" : "pass",
+    changed || staleWindows.length > 0 ? "fail" : unavailable ? "unavailable" : "pass",
     joinCodes(codes) ?? (manifestDigest === null ? "not-applicable" : null),
   );
 }
@@ -806,12 +869,9 @@ export function verifyNext(gates: readonly Readonly<VerifyGate>[]): Readonly<Nex
       blockers,
     });
   }
-  if (
-    failing.every((entry) => entry.name === "runtime-artifact") &&
-    artifactCodes.some((code) => code.startsWith("window-runtime-unverified"))
-  ) {
+  if (artifactCodes.some((code) => code.startsWith("windows-stale"))) {
     return Object.freeze({
-      frontier: "window-runtime-unverified",
+      frontier: "window-artifact-stale",
       owner: "controller",
       suggestedTool: null,
       blockers,

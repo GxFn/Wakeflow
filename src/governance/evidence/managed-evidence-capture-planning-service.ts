@@ -359,7 +359,12 @@ interface ClassifiedContent {
   readonly findings: readonly Readonly<ManagedEvidenceCaptureFinding>[];
 }
 
-/** Every decodable member is scanned, including opaque text; findings retain source lines. */
+/**
+ * Every decodable member is scanned, including opaque text; findings retain source lines.
+ * A member that is not UTF-8 is still scanned through a lossy decode for the credential kinds
+ * only: a key embedded among binary bytes must not escape the capture gate, while path and UUID
+ * hits in such bytes are noise and are not reported (§13.161 B9-3).
+ */
 function classifyContent(
   bytes: Uint8Array,
   ref: PortableResourcePath,
@@ -369,8 +374,16 @@ function classifyContent(
   try {
     text = decodeUtf8(bytes, "$content");
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) return Object.freeze({ opaque: true, findings: [] });
-    throw error;
+    if (!(error instanceof Utf8Error)) throw error;
+    const lossy = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    return Object.freeze({
+      opaque: true,
+      findings: Object.freeze(
+        scanPrivacyText(lossy, policy)
+          .findings.filter((finding) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))
+          .map((finding) => Object.freeze({ ref, line: finding.line, kind: finding.kind })),
+      ),
+    });
   }
   const scanned = scanPrivacyText(text, policy);
   return Object.freeze({

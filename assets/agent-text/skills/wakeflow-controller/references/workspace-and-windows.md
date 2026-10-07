@@ -203,28 +203,28 @@ manifest produces `manifest-unavailable` / `runtime-artifact-unavailable`.
 Inspect the installation and reload this server before it performs maintenance.
 These checks do not identify the host-selected sibling installation.
 
-Install a new build in a new version directory and retain older directories
-for live processes and recovery. Reusing a version for different bytes is not
-an update path. Local installation preflight is read-only and does not reserve
-or activate a target; the installer must publish the new directory without
-replacing an existing version. The serving MCP also rejects mutations if its
-own manifest changed or became unavailable; reads and previews remain available.
+The serving MCP rejects mutations while its own manifest has changed or is
+unavailable; reads and previews remain available.
 
 A window's `lastObservation.observerManifestDigest` identifies the hook observer
 only. SessionStart can occur on resume or compaction; Stop also does not prove
-that the window's MCP or instructions reloaded. Bound windows currently report
-`runtime.status: unverified` because the host adapters cannot establish that
-association. Strict verification reports `window-runtime-unverified:<n>` as
-unavailable. Keep this limitation explicit; do not fabricate records, rebind,
-or repeatedly restart windows to clear it. It is not a new blanket prerequisite
-for actions whose own contracts do not depend on that fact.
+that the window's MCP or instructions reloaded. Each bound window's `runtime`
+therefore carries one of three states. `stale` means its latest `session-start`
+record was written by an observer older than the installed artifact: that
+session started under the previous plugin and has not restarted since. Strict
+verification counts these as `windows-stale:<n>`, fails the `runtime-artifact`
+gate and names `window-artifact-stale` in `next`. `unverified` means the host
+adapter has no such evidence either way (Codex sessions, or a session-start
+record without an observer digest); verification reports
+`window-runtime-unverified:<n>` as information on a passing gate, never as a
+failure. Keep that limitation explicit: do not fabricate records, rebind, or
+repeatedly restart windows to clear it, and do not treat `unverified` as a
+blanket prerequisite for actions whose own contracts do not depend on it.
 
-Use direct host/runtime evidence when a particular task requires a specific
-build. If that evidence establishes a window needs a reload, use the host's
-reload procedure: {{windowResume}} After this server is current, preview and
-apply reconcile for repairable workspace gates such as host-settings-assets.
-A peer runtime evidence gap remains separate from those repairs and from
-Controller acceptance of returned work.
+Restart the stale windows with the host's procedure: {{windowResume}} After this
+server is current, preview and apply reconcile for repairable workspace gates
+such as host-settings-assets. A peer's `unverified` state remains separate from
+those repairs and from Controller acceptance of returned work.
 
 ## Interrupted writes and cancellation
 

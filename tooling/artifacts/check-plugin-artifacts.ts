@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { lstatSync, opendirSync, readFileSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { buildWakeflowPluginArtifacts } from "./build-plugin-artifacts.js";
 import {
@@ -13,6 +12,7 @@ import {
   readReleaseVersion,
   type PluginHostId,
 } from "./plugin-metadata.js";
+import { isMainModule } from "../main-module.js";
 
 /**
  * Wakeflow Tooling / Artifacts：committed 插件制品的校验器，`npm run build:check`（gate-log §13.101
@@ -369,11 +369,6 @@ export async function checkWakeflowPluginArtifacts(
   });
 }
 
-function isMainModule(): boolean {
-  const invoked = process.argv[1];
-  return invoked !== undefined && path.resolve(invoked) === fileURLToPath(import.meta.url);
-}
-
 async function runAsMain(): Promise<void> {
   try {
     const result = await checkWakeflowPluginArtifacts(process.cwd());
@@ -388,4 +383,4 @@ async function runAsMain(): Promise<void> {
   }
 }
 
-if (isMainModule()) await runAsMain();
+if (isMainModule(import.meta.url)) await runAsMain();

@@ -1,0 +1,58 @@
+name: Verify Wakeflow
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wakeflow-verify-${{ github.workflow }}-${{ github.ref }}
+  # Superseded pull-request runs are cancelled; every push to main keeps its own complete record.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: ${{ matrix.profile }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    # The gate profile runs the whole `npm test` under a 90-minute verifier budget at two workers.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+        profile: [gate, artifact]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.19.0
+          package-manager-cache: false
+      - run: npm install --global npm@11.17.0
+      - run: npm ci
+      - name: Run the existing verification profile
+        env:
+          WAKEFLOW_PROFILE: ${{ matrix.profile }}
+          WAKEFLOW_TEST_CONCURRENCY: "2"
+        run: |
+          mkdir -p .build/ci-private
+          npm run --silent wf -- verify "$WAKEFLOW_PROFILE" > .build/ci-private/summary.json
+      - name: Export bounded public fields
+        if: always()
+        run: npm run --silent wf -- ci export --summary .build/ci-private/summary.json
+      - name: Retain only the public report and its digest manifest
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verification-${{ matrix.os }}-${{ matrix.profile }}
+          path: |
+            .build/ci/report-*/report.json
+            .build/ci/report-*/manifest.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

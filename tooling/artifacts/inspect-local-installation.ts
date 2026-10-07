@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { lstatSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { verifyArtifactAgainstManifest } from "./check-plugin-artifacts.js";
+import { isMainModule } from "../main-module.js";
 
 /** Read-only preflight, not a reservation. The actual installer must publish create-only. */
 export function inspectLocalInstallation(source: string, destination: string) {
@@ -41,10 +41,7 @@ export function inspectLocalInstallation(source: string, destination: string) {
   };
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) {
+if (isMainModule(import.meta.url)) {
   const [source, destination, ...extra] = process.argv.slice(2);
   if (source === undefined || destination === undefined || extra.length !== 0)
     throw new Error(

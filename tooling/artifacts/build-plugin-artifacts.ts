@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import type { Stats } from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { initSync, parse } from "es-module-lexer";
 
@@ -31,6 +31,7 @@ import {
   type PluginHostId,
   type ReleaseVersion,
 } from "./plugin-metadata.js";
+import { isMainModule } from "../main-module.js";
 
 /**
  * Wakeflow Tooling / Artifacts：TypeScript 单一源码的双宿主插件制品构建器（gate-log §13.101 D1、
@@ -1224,11 +1225,6 @@ export async function buildWakeflowPluginArtifacts(
   });
 }
 
-function isMainModule(): boolean {
-  const invoked = process.argv[1];
-  return invoked !== undefined && path.resolve(invoked) === fileURLToPath(import.meta.url);
-}
-
 /** 命令行：无参数写候选到 `.build/artifacts`；`--committed` 写 committed 制品到 `plugins/`。 */
 function parseCommandLine(values: readonly string[]): Readonly<BuildPluginArtifactsOptions> {
   if (values.length === 0) return {};
@@ -1255,4 +1251,4 @@ async function runAsMain(): Promise<void> {
   }
 }
 
-if (isMainModule()) await runAsMain();
+if (isMainModule(import.meta.url)) await runAsMain();

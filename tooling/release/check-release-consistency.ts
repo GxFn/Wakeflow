@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import {
   PLUGIN_ENGINES_NODE,
@@ -12,6 +11,7 @@ import {
   pluginManifestPath,
   readReleaseVersion,
 } from "../artifacts/plugin-metadata.js";
+import { isMainModule } from "../main-module.js";
 
 /**
  * Wakeflow Tooling / Release：发布一致性门，`npm run release:check`（能力卡 10 Q5–Q7，场景
@@ -344,11 +344,6 @@ export function checkWakeflowReleaseConsistency(
   });
 }
 
-function isMainModule(): boolean {
-  const invoked = process.argv[1];
-  return invoked !== undefined && path.resolve(invoked) === fileURLToPath(import.meta.url);
-}
-
 function parseCommandLine(values: readonly string[]): Readonly<ReleaseCheckOptions> {
   const options = {
     requireMain: false,
@@ -383,4 +378,4 @@ function runAsMain(): void {
   }
 }
 
-if (isMainModule()) runAsMain();
+if (isMainModule(import.meta.url)) runAsMain();

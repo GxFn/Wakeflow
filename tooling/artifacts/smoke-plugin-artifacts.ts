@@ -15,12 +15,13 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
 import { type PluginHostId, pluginDirectoryName } from "./plugin-metadata.js";
+import { isMainModule } from "../main-module.js";
 
 /**
  * Wakeflow Tooling / Artifacts：插件制品的冒烟，`npm run smoke:artifacts`（能力卡 10 Q8，gate-log
@@ -591,11 +592,6 @@ export async function smokeWakeflowPluginArtifacts(
   });
 }
 
-function isMainModule(): boolean {
-  const invoked = process.argv[1];
-  return invoked !== undefined && path.resolve(invoked) === fileURLToPath(import.meta.url);
-}
-
 async function runAsMain(): Promise<void> {
   try {
     const result = await smokeWakeflowPluginArtifacts(process.cwd());
@@ -610,4 +606,4 @@ async function runAsMain(): Promise<void> {
   }
 }
 
-if (isMainModule()) await runAsMain();
+if (isMainModule(import.meta.url)) await runAsMain();

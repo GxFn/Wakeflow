@@ -1,14 +1,25 @@
 import { deepEqual, ok, throws } from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
+import { fileURLToPath } from "node:url";
 import {
-  TEST_DURATION_TABLE_PATH,
   loadTestDurations,
   orderTestSourcesByCost,
+  TEST_DURATION_TABLE_PATH,
 } from "../../../tooling/testing/run-typescript-tests.js";
+import { inspectTestRecording } from "../../../tooling/testing/test-recording.js";
 
 function temporaryRoot(after: (cleanup: () => void) => void): string {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-test-schedule-"));
@@ -117,4 +128,58 @@ test("签入的耗时表可被加载，且每一条都是当前仓库相对测�
   }
   // 最长的文件（端到端场景）必须有记录，否则整个 longest-first 排程失去意义。
   ok(durations.has("tests/scenarios/wakeflow-scenario-acceptance.test.ts"));
+});
+
+test("实际Node进程按耗时队列执行文件，终端与事件记录保持同一选择", () => {
+  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-dispatch-order-")));
+  try {
+    mkdirSync(path.join(root, "tests"));
+    mkdirSync(path.join(root, ".build/tests"), { recursive: true });
+    mkdirSync(path.join(root, ".build/verification"), { mode: 0o700 });
+    writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
+    for (const name of ["a-fast", "z-slow"]) {
+      writeFileSync(path.join(root, `tests/${name}.test.ts`), "// selected source fixture\n");
+      writeFileSync(
+        path.join(root, `.build/tests/${name}.test.js`),
+        `import {test} from 'node:test'; import {appendFileSync} from 'node:fs'; test('${name}',()=>appendFileSync('execution-order.txt','${name}\\n'));\n`,
+      );
+    }
+    writeTable(
+      root,
+      JSON.stringify({ durationsMs: { "tests/a-fast.test.ts": 1, "tests/z-slow.test.ts": 1000 } }),
+    );
+    const runner = fileURLToPath(
+      new URL("../../../tooling/testing/run-typescript-tests.js", import.meta.url),
+    );
+    for (const recorded of [false, true]) {
+      writeFileSync(path.join(root, "execution-order.txt"), "");
+      const env: NodeJS.ProcessEnv = { ...process.env, WAKEFLOW_TEST_CONCURRENCY: "1" };
+      delete env.NODE_TEST_CONTEXT;
+      delete env.WAKEFLOW_TEST_RECORD_DIR;
+      const directory = path.join(root, ".build/verification/run-order");
+      if (recorded) {
+        mkdirSync(directory, { mode: 0o700 });
+        env.WAKEFLOW_TEST_RECORD_DIR = directory;
+      }
+      const result = spawnSync(process.execPath, [runner], {
+        cwd: root,
+        env,
+        encoding: "utf8",
+        shell: false,
+        timeout: 15_000,
+      });
+      ok(result.status === 0, result.stderr);
+      deepEqual(readFileSync(path.join(root, "execution-order.txt"), "utf8").trim().split("\n"), [
+        "z-slow",
+        "a-fast",
+      ]);
+      if (recorded) {
+        const record = inspectTestRecording(directory);
+        ok(record.complete && record.passed);
+        deepEqual(record.selectedFiles, ["tests/z-slow.test.ts", "tests/a-fast.test.ts"]);
+      }
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

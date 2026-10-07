@@ -1,9 +1,14 @@
-import { lstatSync, opendirSync, readFileSync } from "node:fs";
 import type { Dirent } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { createWriteStream, lstatSync, opendirSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import nodePath from "node:path";
-import { fileURLToPath } from "node:url";
+import { PassThrough } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { run as runNodeTests } from "node:test";
+import { spec } from "node:test/reporters";
+import { isMainModule } from "../main-module.js";
+import testEventReporter from "./test-event-reporter.js";
+import { prepareTestRecording } from "./test-recording.js";
 
 /**
  * Wakeflow Tooling / Testing：由当前 `.test.ts` 源清单启动编译后测试。
@@ -270,27 +275,87 @@ export function resolveTestConcurrency(value: string | undefined, maximum: numbe
   return requested;
 }
 
-function run(): void {
+async function run(): Promise<void> {
   const repositoryRoot = process.cwd();
   const files = compiledTypeScriptTests(repositoryRoot, parseInvocation(process.argv.slice(2)));
   const concurrency = resolveTestConcurrency(
     process.env.WAKEFLOW_TEST_CONCURRENCY,
     Math.max(1, availableParallelism()),
   );
-  const options = ["--test", `--test-concurrency=${concurrency}`];
-  const result = spawnSync(process.execPath, [...options, ...files], {
+  const recordDirectory = process.env.WAKEFLOW_TEST_RECORD_DIR;
+  const recording =
+    recordDirectory === undefined
+      ? null
+      : prepareTestRecording(repositoryRoot, recordDirectory, files, concurrency);
+  const childEnvironment = { ...process.env };
+  delete childEnvironment.WAKEFLOW_TEST_RECORD_DIR;
+  // A runner started from inside another node:test process inherits NODE_TEST_CONTEXT, and
+  // run() then skips every file while still emitting a successful, empty summary. Drop it here
+  // (the children are fresh processes) so a nested invocation runs the files it was given.
+  delete process.env.NODE_TEST_CONTEXT;
+  delete childEnvironment.NODE_TEST_CONTEXT;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  process.once("SIGINT", abort);
+  process.once("SIGTERM", abort);
+  // The Node CLI glob-expands and sorts even explicit file arguments. The public run API
+  // preserves this already validated LPT queue while keeping one process per test file.
+  const options = {
+    files: [...files],
+    concurrency,
     cwd: repositoryRoot,
-    stdio: "inherit",
-    shell: false,
-    windowsHide: true,
-  });
-  if (result.error !== undefined) fail("Node test runner could not start");
-  if (result.status !== 0) process.exitCode = result.status ?? 1;
+    isolation: "process" as const,
+    env: childEnvironment,
+    signal: controller.signal,
+  };
+  const stream = runNodeTests(options);
+  // The exit code rests on three facts, not on the run summary alone: every selected file
+  // reported its own summary, the run executed at least one test, and the run succeeded.
+  const observed: { run: { success: boolean; counts?: { tests?: number } } | null } = {
+    run: null,
+  };
+  const reportedFiles = new Set<string>();
+  stream.on(
+    "test:summary",
+    (summary: { file?: string; success: boolean; counts?: { tests?: number } }) => {
+      if (summary.file === undefined) observed.run = summary;
+      else reportedFiles.add(summary.file);
+    },
+  );
+  const terminal = new PassThrough({ objectMode: true });
+  stream.pipe(terminal);
+  const reports = [pipeline(terminal, new spec(), process.stdout, { end: false })];
+  if (recording !== null) {
+    const events = new PassThrough({ objectMode: true });
+    stream.pipe(events);
+    // prepareTestRecording reserved this private file. Append never erases a foreign prefix;
+    // the recording reader rejects a noncanonical or concatenated event stream.
+    reports.push(
+      pipeline(
+        events,
+        testEventReporter,
+        createWriteStream(recording.events, { flags: "a", mode: 0o600 }),
+      ),
+    );
+  }
+  try {
+    await Promise.all(reports);
+    const summary = observed.run;
+    if (summary === null) fail("Node test runner did not finish its summary");
+    if (reportedFiles.size !== files.length) {
+      fail(`Node test runner reported ${reportedFiles.size} of ${files.length} test files`);
+    }
+    if ((summary.counts?.tests ?? 0) === 0) fail("Node test runner executed zero tests");
+    if (!summary.success) process.exitCode = 1;
+  } catch (error: unknown) {
+    controller.abort();
+    await Promise.allSettled(reports);
+    throw error;
+  } finally {
+    process.removeListener("SIGINT", abort);
+    process.removeListener("SIGTERM", abort);
+    if (controller.signal.aborted) process.exitCode = 130;
+  }
 }
 
-function isMainModule(): boolean {
-  const invoked = process.argv[1];
-  return invoked !== undefined && nodePath.resolve(invoked) === fileURLToPath(import.meta.url);
-}
-
-if (isMainModule()) run();
+if (isMainModule(import.meta.url)) await run();

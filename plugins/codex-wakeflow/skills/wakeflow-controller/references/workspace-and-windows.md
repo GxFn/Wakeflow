@@ -121,7 +121,7 @@ A binding maps that logical window to the host handle you observed after
 launching it. Bindings live in the private local runtime and never appear in a
 public result.
 
-Before the first launch: reuse the current chat as Controller only when its outer workspace project membership and workspace-root SessionStart are established. A source-maintenance chat in another project is not that Controller. With the user's existing authorization, create the Controller in the workspace project first, verify and register it, then handle the other roles in that same project. Do not ask again for authorization already given.
+Before the first launch: reuse the current chat as Controller only when its outer workspace project membership and workspace-root SessionStart are established. A source-maintenance chat in another project is not that Controller. With the user's existing authorization, create the Controller in the workspace project first, verify and register it, then handle the other roles in that same project. Do not ask again for authorization already given. If this chat is not that Controller, tell the user which chat is and continue there instead of running the Controller flow from here.
 
 Launching and registering:
 
@@ -203,28 +203,28 @@ manifest produces `manifest-unavailable` / `runtime-artifact-unavailable`.
 Inspect the installation and reload this server before it performs maintenance.
 These checks do not identify the host-selected sibling installation.
 
-Install a new build in a new version directory and retain older directories
-for live processes and recovery. Reusing a version for different bytes is not
-an update path. Local installation preflight is read-only and does not reserve
-or activate a target; the installer must publish the new directory without
-replacing an existing version. The serving MCP also rejects mutations if its
-own manifest changed or became unavailable; reads and previews remain available.
+The serving MCP rejects mutations while its own manifest has changed or is
+unavailable; reads and previews remain available.
 
 A window's `lastObservation.observerManifestDigest` identifies the hook observer
 only. SessionStart can occur on resume or compaction; Stop also does not prove
-that the window's MCP or instructions reloaded. Bound windows currently report
-`runtime.status: unverified` because the host adapters cannot establish that
-association. Strict verification reports `window-runtime-unverified:<n>` as
-unavailable. Keep this limitation explicit; do not fabricate records, rebind,
-or repeatedly restart windows to clear it. It is not a new blanket prerequisite
-for actions whose own contracts do not depend on that fact.
+that the window's MCP or instructions reloaded. Each bound window's `runtime`
+therefore carries one of three states. `stale` means its latest `session-start`
+record was written by an observer older than the installed artifact: that
+session started under the previous plugin and has not restarted since. Strict
+verification counts these as `windows-stale:<n>`, fails the `runtime-artifact`
+gate and names `window-artifact-stale` in `next`. `unverified` means the host
+adapter has no such evidence either way (Codex sessions, or a session-start
+record without an observer digest); verification reports
+`window-runtime-unverified:<n>` as information on a passing gate, never as a
+failure. Keep that limitation explicit: do not fabricate records, rebind, or
+repeatedly restart windows to clear it, and do not treat `unverified` as a
+blanket prerequisite for actions whose own contracts do not depend on it.
 
-Use direct host/runtime evidence when a particular task requires a specific
-build. If that evidence establishes a window needs a reload, use the host's
-reload procedure: when this serving MCP is outdated, ask the user to reload its Wakeflow server or resume this existing chat before maintenance. For a peer with direct evidence of an outdated runtime, reload or resume that existing chat through the host. Replace its binding only when the old chat is gone and the user authorizes a replacement chat. A missing hook alone does not justify creating or rebinding a chat. After this server is current, preview and
-apply reconcile for repairable workspace gates such as host-settings-assets.
-A peer runtime evidence gap remains separate from those repairs and from
-Controller acceptance of returned work.
+Restart the stale windows with the host's procedure: when this serving MCP is outdated, ask the user to restart the Codex app and resume this existing chat before maintenance: only an app restart reloads Wakeflow's MCP server; resuming or continuing a chat does not. A peer window that verify reports as `stale` (its session started under an older artifact) is refreshed the same way - the user restarts the app once and resumes that existing chat through the host; `unverified` peers carry no such evidence and are left alone. Replace its binding only when the old chat is gone and the user authorizes a replacement chat. A missing hook alone does not justify creating or rebinding a chat. After this
+server is current, preview and apply reconcile for repairable workspace gates
+such as host-settings-assets. A peer's `unverified` state remains separate from
+those repairs and from Controller acceptance of returned work.
 
 ## Interrupted writes and cancellation
 
@@ -259,7 +259,7 @@ main checkout; every other pod works in a worktree.
 1. Preview to derive the plan; it writes nothing.
 2. Apply with exactly what preview returned. One config transaction registers
    the pod, its window set, and one worktree intent per repository.
-3. Create each worktree by host means: create a linked checkout from the configured product repository's local HEAD using git worktree add with the suggested branch name and an available checkout path. Keep the role chat in the same outer project using a local environment: create_thread's worktree environment targets the project's primary repository. Pass the assigned checkout in the startup prompt and record worktree.executionRoot from pwd there along with git worktree list --porcelain and git rev-parse --git-common-dir. Wakeflow verifies the checkout's repository and pointer files independently of the chat's SessionStart. Then launch that
+3. Create each worktree by host means: create a linked checkout from the configured product repository's local HEAD using git worktree add with the suggested branch name and an available checkout path inside the Wakeflow workspace root, beside it in the same outer directory, or inside that product repository - registration refuses a checkout anywhere else. Keep the role chat in the same outer project using a local environment: create_thread's worktree environment targets the project's primary repository. Pass the assigned checkout in the startup prompt and record worktree.executionRoot from pwd there along with git worktree list --porcelain and git rev-parse --git-common-dir. Wakeflow verifies the checkout's repository and pointer files independently of the chat's SessionStart. Then launch that
    pod's windows using their host launch instructions and register each binding as in
    step 1. A product window in a pod is refused registration until its worktree
    is actually there and observed, and a checkout another live pod already

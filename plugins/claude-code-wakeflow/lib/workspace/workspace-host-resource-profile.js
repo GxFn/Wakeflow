@@ -26,6 +26,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
     "tmuxAsset",
     "activityMonitor",
     "temporaryPrompts",
+    "runtimeStaleness",
 ]);
 export const WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES = Object.freeze([
     "claude-worktree-flag",
@@ -204,7 +205,13 @@ function parseSurfaces(value) {
         tmuxAsset: parseTmuxAsset(record.tmuxAsset),
         activityMonitor: surfaceBoolean(record.activityMonitor, "activityMonitor"),
         temporaryPrompts: surfaceBoolean(record.temporaryPrompts, "temporaryPrompts"),
+        runtimeStaleness: parseRuntimeStaleness(record.runtimeStaleness),
     });
+}
+function parseRuntimeStaleness(value) {
+    if (value === "session-start-observer-digest" || value === "unverified")
+        return value;
+    fail("surface", "$/surfaces/runtimeStaleness");
 }
 function launchValue(value, path) {
     if (typeof value !== "string" || !LAUNCH_VALUE_PATTERN.test(value)) {

@@ -7,6 +7,7 @@ import { DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, pa
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
 import { sameFileNodeIdentity } from "../foundation/filesystem/file-node-snapshot.js";
+import { removeEmptyDirectoryExactly } from "../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
 import { unlinkRegularFileExactly } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
@@ -31,11 +32,19 @@ import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
  * unknown names and unsafe nodes count as skipped and are never auto-deleted.
  *
  * Retirement is best effort after a durable create, bounded to 4096 inspected
- * entries per write. The 30-day cutoff is capped by another observed record's
- * timestamp, so one future clock jump cannot erase recent evidence. Unvisited
- * entries can be retained longer. Known inactive stages older than ten minutes
- * are retired by exact node identity. Caller cancellation still propagates even
- * after the record becomes durable; cancellation does not imply rollback.
+ * entries per write. The 30-day cutoff is capped by the newest other record,
+ * found newest-first, so one future clock jump cannot erase recent evidence and
+ * a dense history cannot pin the cutoff to stale leaves (§13.161). Only day
+ * partitions before the cutoff day, flat v1 files and the written record's own
+ * shard are visited; emptied partitions are removed. Unvisited entries can be
+ * retained longer. Known inactive stages older than ten minutes are retired by
+ * exact node identity. Caller cancellation still propagates even after the
+ * record becomes durable; cancellation does not imply rollback.
+ *
+ * Foreign names count as skipped for verification but never block evidence
+ * queries: only a record-named entry that cannot be read, or a directory or
+ * link where a leaf should be, is unreadable. Dot-files other than Wakeflow's
+ * own stages (Finder's .DS_Store, editor swap files) are ignored outright.
  */
 export const HOST_HOOK_EVENTS = Object.freeze([
     "session-start",
@@ -311,23 +320,62 @@ function isAbandonedStage(entry, cutoff) {
     const address = hostHookStageAddress(entry);
     return address !== null && readDurableAtomicFileStageOwnerState(address) === "inactive";
 }
-function newestOtherCompact(entry, writtenRef, previous) {
-    if (entry.resourcePath === writtenRef)
-        return previous;
-    const timestamp = FILE_NAME_PATTERN.exec(entry.name)?.[1];
-    if (timestamp === undefined)
-        return previous;
-    return previous === null || timestamp > previous ? timestamp : previous;
+const PROBE_FOUND = Symbol("probe-found");
+/**
+ * 目录里除刚落地这条之外最新的记录（紧凑时间戳），从最新的一天往回探，命中即停：这是截止基准的
+ * 钳位。只看最旧的 4096 个叶子（§13.142 的实现）会把基准钉在陈旧历史上——每天超过约 137 条记录时
+ * 永远修剪不到任何东西（gate-log §13.161 H2-01）。根层的旧平铺记录与分片记录都算；只含本条记录
+ * 的日目录不算（它是本条自己造出来的，用它做基准会让一次未来时钟的写入越过 D7b 的保留边界）。
+ */
+async function newestOtherRecordCompact(root, hostId, writtenRef, signal) {
+    const probe = { found: null };
+    try {
+        await visitHostHookDirectory(root, hostId, async (entry) => {
+            if (entry.resourcePath === writtenRef || entry.node.kind !== "file")
+                return;
+            const match = FILE_NAME_PATTERN.exec(entry.name);
+            if (match === null || !recognizedRecordLocation(hostId, entry))
+                return;
+            probe.found = match[1];
+            throw PROBE_FOUND;
+        }, { ...signal, order: "descending" });
+    }
+    catch (error) {
+        if (error !== PROBE_FOUND)
+            throw error;
+    }
+    return probe.found;
 }
-/** Bounded retirement batch; never retain the complete directory in memory. */
+/**
+ * 空分片或空日目录的回收是尽力而为的：非空、已消失或任何别的失败都只让它留到下一次；和记录退役
+ * 一样不做 fsync（一次写入可能回收上千个目录，每个付一次父目录同步会把同步 hook 的预算用光）。
+ */
+async function removeEmptiedHookDirectory(root, entry, signal) {
+    try {
+        await removeEmptyDirectoryExactly(root, entry.resourcePath, entry.node, 0o700, signal.signal, "none");
+    }
+    catch (error) {
+        rethrowAbort(error);
+    }
+}
+/**
+ * 保留期修剪（§13.97 D7b，§13.161 重写）：基准由 `newestOtherRecordCompact` 钳住，截止日之前的
+ * 日目录整个过期，只走它们、根层的旧平铺文件，以及本条记录所在的分片（退休写入器留在那里的
+ * 暂存文件）；不再逐日走全部历史，所以 4096 个叶子的检查预算只花在能退役的条目上，积压随后续
+ * 写入逐次清完。清空的分片与日目录随手 rmdir，目录数不再随历史无限增长（H2-02）。
+ */
 async function pruneExpiredHostHookObservations(root, record, resourceRef, signal) {
     try {
-        let newestOther = null;
         const written = await root.inspectExistingResource(resourceRef, "$record");
         const stageCutoff = written.node.modifiedAtNanoseconds -
             BigInt(HOST_HOOK_ABANDONED_STAGE_MILLISECONDS) * NANOSECONDS_PER_MILLISECOND;
+        const newestOther = await newestOtherRecordCompact(root, record.hostId, resourceRef, signal);
+        const cutoff = newestOther === null ? null : retentionCutoffCompact(record.recordedAt, newestOther);
+        const cutoffDay = cutoff === null ? null : cutoff.slice(0, 8);
+        const writtenDay = compactInstant(record.recordedAt).slice(0, 8);
+        const writtenShard = record.recordId.slice(0, 2);
         const candidates = [];
-        const earliestCutoff = retentionCutoffCompact(record.recordedAt, compactInstant(record.recordedAt));
+        const emptiable = [];
         let inspected = 0;
         try {
             await visitHostHookDirectory(root, record.hostId, async (entry) => {
@@ -336,29 +384,38 @@ async function pruneExpiredHostHookObservations(root, record, resourceRef, signa
                 const match = FILE_NAME_PATTERN.exec(entry.name);
                 if (match !== null && !recognizedRecordLocation(record.hostId, entry))
                     return;
-                newestOther = newestOtherCompact(entry, resourceRef, newestOther);
                 if (candidates.length >= PRUNE_MAXIMUM_ENTRIES)
                     return;
-                if (earliestCutoff !== null && isExpiredRecordEntry(entry, earliestCutoff)) {
+                if (cutoff !== null && isExpiredRecordEntry(entry, cutoff))
                     candidates.push(entry);
-                }
-                else if (isAbandonedStage(entry, stageCutoff)) {
+                else if (isAbandonedStage(entry, stageCutoff))
                     candidates.push(entry);
-                }
-            }, signal);
+            }, {
+                ...signal,
+                selectDay: (day) => (cutoffDay !== null && day < cutoffDay) || day === writtenDay,
+                selectShard: (day, shard) => day !== writtenDay || shard === writtenShard,
+                onDirectory: (entry, kind) => {
+                    // 只有截止日之前、整个过期的日目录才值得回收；本条记录自己的那天不动。
+                    if (entry.name !== writtenDay && !entry.resourcePath.includes(`/${writtenDay}/`)) {
+                        emptiable.push({ entry, kind });
+                    }
+                },
+            });
         }
         catch (error) {
             if (error !== PRUNE_SCAN_COMPLETE)
                 throw error;
         }
-        const cutoff = newestOther === null ? null : retentionCutoffCompact(record.recordedAt, newestOther);
-        const pruned = candidates.filter((entry) => (cutoff !== null && isExpiredRecordEntry(entry, cutoff)) ||
-            hostHookStageAddress(entry) !== null);
         const limit = pLimit(PRUNE_UNLINK_CONCURRENCY);
-        const settled = await Promise.allSettled(pruned.map((entry) => limit(unlinkPrunedHostHookEntry, root, entry, signal)));
+        const settled = await Promise.allSettled(candidates.map((entry) => limit(unlinkPrunedHostHookEntry, root, entry, signal)));
         for (const result of settled)
             if (result.status === "rejected")
                 throw result.reason;
+        // 先分片后日目录，和访问顺序相反：一个日目录只有在它的分片都空了之后才会空。
+        for (const { entry } of emptiable.filter((item) => item.kind === "shard"))
+            await removeEmptiedHookDirectory(root, entry, signal);
+        for (const { entry } of emptiable.filter((item) => item.kind === "day"))
+            await removeEmptiedHookDirectory(root, entry, signal);
     }
     catch (error) {
         rethrowAbort(error);
@@ -520,11 +577,21 @@ function readLimit(filter) {
     }
     return limit;
 }
-const SKIPPED = Symbol("skipped");
+/** 外来文件名：计入 skipped，不阻断证据查询。 */
+const FOREIGN = Symbol("foreign");
+/** 记录命名但读不出，或叶子位置上的目录 / 链接：可能藏着记录，计入 skipped 与 unreadable。 */
+const UNREADABLE = Symbol("unreadable");
+// Finder、编辑器等留下的点文件不是证据通道的问题；Wakeflow 自己的暂存前缀除外。
+const IGNORED_FOREIGN_NAME_PATTERN = /^\.(?!wakeflow-)/u;
 async function scanEntry(root, hostId, entry, filter, signal, recordId, readRoot = root) {
     const match = FILE_NAME_PATTERN.exec(entry.name);
-    if (match === null)
-        return hostHookStageAddress(entry) === null ? SKIPPED : null;
+    if (match === null) {
+        if (hostHookStageAddress(entry) !== null)
+            return null;
+        if (entry.node.kind !== "file")
+            return UNREADABLE;
+        return IGNORED_FOREIGN_NAME_PATTERN.test(entry.name) ? null : FOREIGN;
+    }
     if (recordId !== undefined && match[3] !== recordId)
         return null;
     const prefilter = namePrefilter(entry.name, filter);
@@ -534,7 +601,7 @@ async function scanEntry(root, hostId, entry, filter, signal, recordId, readRoot
     if (record === VANISHED)
         return null;
     if (record === null)
-        return SKIPPED;
+        return UNREADABLE;
     return filter.sessionId === undefined || filter.sessionId === record.sessionId ? record : null;
 }
 /**
@@ -593,6 +660,7 @@ async function scanObservations(root, hostIdValue, filter, visit, options = {}, 
     const hostId = parseWakeflowHostId(hostIdValue);
     let records = 0;
     let skipped = 0;
+    let unreadable = 0;
     let observed = false;
     const signal = options.signal === undefined ? {} : { signal: options.signal };
     const pending = [];
@@ -602,8 +670,12 @@ async function scanObservations(root, hostIdValue, filter, visit, options = {}, 
             if (result.status === "rejected")
                 throw result.reason;
             const record = result.value;
-            if (record === SKIPPED)
+            if (record === FOREIGN)
                 skipped += 1;
+            else if (record === UNREADABLE) {
+                skipped += 1;
+                unreadable += 1;
+            }
             else if (record !== null) {
                 records += 1;
                 visit(record);
@@ -639,7 +711,7 @@ async function scanObservations(root, hostIdValue, filter, visit, options = {}, 
         }
         throw error;
     }
-    return Object.freeze({ records, skipped });
+    return Object.freeze({ records, skipped, unreadable });
 }
 /** Complete streaming scan; a callback only builds disposable local aggregates. */
 export async function scanHostHookObservations(root, hostId, filter, visit, options = {}) {
@@ -669,6 +741,7 @@ async function readObservations(root, hostIdValue, filter, options, onListed) {
     return Object.freeze({
         records: Object.freeze(records),
         skipped: scan.skipped,
+        unreadable: scan.unreadable,
         complete: scan.records <= limit,
     });
 }

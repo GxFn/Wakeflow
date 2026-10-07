@@ -24,6 +24,8 @@ export const codexWorkspaceHostResourceProfile = parseWakeflowWorkspaceHostResou
         tmuxAsset: null,
         activityMonitor: false,
         temporaryPrompts: false,
+        // 安装按版本目录并存，没有可信的窗口到 MCP 关联：只报 unverified（ADR-0017 D3）。
+        runtimeStaleness: "unverified",
     },
     launch: { kind: "project-thread" },
 });

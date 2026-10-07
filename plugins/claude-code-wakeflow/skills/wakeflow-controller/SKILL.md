@@ -64,8 +64,8 @@ Inspect each returned window with `wakeflow_register_window_binding` for current
 host launch instructions; the execution root may differ from the startup root.
 First: run `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs preflight` and read `insideTmux`. When it is true this session is the Controller: register it with `self` (pipe your own window's inspect result in). A window that a setup session started but never registered (it was closed too early) is still running: `launch` it as below and the helper adopts it instead of opening a second one (`adopted: true`); register that observation as usual, and run `mark --all` once every window is registered. If adoption is refused (`adopt-unproven`, `window-ambiguous`, `window-present-not-claude`), never open a second window and never `teardown` from inside tmux: tell the user which window it is and what the refusal's `hint` asks of them - exit `claude` there with `/exit` (in all but one of the windows, for `window-ambiguous`), or close a window that runs something else with `Ctrl-b &` and then `y` - and `launch` again once they have. An unproven window that still shows its trust dialog only needs that dialog accepted. When `insideTmux` is false this session only bootstraps and must not register itself: `launch` the Controller window's own intent too, so a fresh Controller starts inside the tmux session the helper creates, launch every other window with `--wait 0`, then give the user the exact `attach` command the helper printed, ask them to accept the trust dialog in every window (`Ctrl-b n` moves to the next one), to keep this session open until you have registered the windows, and to tell you when the dialogs are done; only then register each window from the observations you kept, run `mark --all`, and tell the user to continue in the tmux Controller and close this session. The user never sets tmux up by hand: you do it and tell them the one thing to run or press. If a bootstrap has to be redone before any window was registered, `teardown` kills that tmux session; with registered windows it refuses unless `--force`. For each one:
 pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. Make every helper call its own Bash command with literal arguments - no shell loop, variable or chain of helper calls: only such a plain call matches the helper's allow rule, and anything else stops at a permission prompt the user has to answer. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive (`locator-live`; a live window on an older plugin is restarted with `resume --in-place`, as the plugin-update steps say), and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook.sessionStart: pending` with a live pane leaves startup unproven; inspect hook execution, keep the observation, and register or relocate with it once the record exists, and pass a longer `--wait` next time. Then register the
-handle you observed with `wakeflow_register_window_binding`; registration needs a real `session-start` at its host startup root. Otherwise startup is unproven;
-inspect execution and observer diagnostics. Use the same tool to inspect a
+handle you observed with `wakeflow_register_window_binding`; registration needs a real `session-start` at its host startup root. Otherwise startup is unproven:
+the refusal names the missing evidence - re-inspect the window and the host's hook trust before retrying. Use the same tool to inspect a
 window, replace a stale binding, retire a window, or force-release an expired
 work claim.
 
@@ -121,9 +121,9 @@ Form your own judgment from the code and the evidence, not from the report's
 self-assessment. Record it with
 `wakeflow_record_implementation_review_decision` for an implementation result
 or `wakeflow_record_test_review_decision` for a test result. On escalate, hand
-the user the issue, the options and your recommendation, then bring their
-answer back through `wakeflow_continue_demand`. Depth:
-`references/delivery-and-review.md`.
+the user the issue, options and recommendation, then bring their answer back
+through `wakeflow_continue_demand`; a product-defect escalation instead returns
+to implementation delivery planning. Depth: `references/delivery-and-review.md`.
 
 ### Step 12 - Complete and archive
 
@@ -163,10 +163,10 @@ follow "Interrupted writes and cancellation" in
 `references/workspace-and-windows.md` without deleting files by hand.
 
 `server-outdated` (`runtime-artifact-outdated` in `next`) concerns this MCP
-server. `window-runtime-unverified:<n>` means peer runtime evidence is missing,
-not that a hook proved an old or new MCP. Follow "After a plugin update" in
-`references/workspace-and-windows.md`; do not loop restarts or read plugin
-implementation to interpret missing host evidence.
+server; `windows-stale:<n>` names peer sessions started under an older artifact.
+`window-runtime-unverified:<n>` means peer runtime evidence is missing, not an
+old or new MCP proven by a hook. Follow "After a plugin update" in
+`references/workspace-and-windows.md`; do not loop restarts or read plugin implementation to interpret missing host evidence.
 
 ## What you must return to the user
 

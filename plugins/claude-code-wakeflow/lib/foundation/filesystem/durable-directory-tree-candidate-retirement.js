@@ -348,7 +348,12 @@ function mapDirectoryHandleError(error, afterCommit) {
     }
     fail("candidate-conflict", "$candidate/directory");
 }
-async function removeEmptyDirectoryExactly(root, resourcePath, expectedIdentity, expectedMode, signal) {
+/**
+ * 精确删除一个空目录：节点身份、模式与路径都要对得上，非空（`ENOTEMPTY`）报 `candidate-conflict`，
+ * 已消失报 `source-changed`。候选树退役与 hook 目录的空分片回收共用（gate-log §13.161）；后者按
+ * `durability: "none"` 调用——尽力而为的回收不为每个目录付一次父目录 fsync，崩溃后重现的空目录下次再收。
+ */
+export async function removeEmptyDirectoryExactly(root, resourcePath, expectedIdentity, expectedMode, signal, durability = "fsync") {
     let current;
     try {
         current = await root.inspectExistingResource(resourcePath, "$directory");
@@ -407,9 +412,11 @@ async function removeEmptyDirectoryExactly(root, resourcePath, expectedIdentity,
             !sameFileNodeIdentity(opened, current.node)) {
             fail("commit-uncertain", "$candidate/directory");
         }
-        await parent.sync();
-        if ((await parent.inspectTarget()) !== null) {
-            fail("commit-uncertain", "$candidate/directory");
+        if (durability === "fsync") {
+            await parent.sync();
+            if ((await parent.inspectTarget()) !== null) {
+                fail("commit-uncertain", "$candidate/directory");
+            }
         }
     }
     catch (error) {

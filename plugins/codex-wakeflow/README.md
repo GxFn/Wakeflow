@@ -26,8 +26,8 @@ repositories.
 
 1. In the Controller window, ask to initialize the workspace. The agent opens
    the other windows from the launch intents and registers them, and tells you
-   at each point the one thing only you can do (attach to tmux, accept a trust
-   dialog).
+   at each point the one thing only you can do (look at a window it opened,
+   accept a trust dialog).
 2. In the Design window, work out the requirement with the agent. It reads your
    code read-only, drafts the package, and shows you a one-page summary. You
    confirm it, and it is published to the board.
@@ -54,9 +54,10 @@ status", "keep going", "open a pod for this".
 ## Install
 
 1. Install the plugin for your agent host.
-2. Make sure `node` is on your `PATH`. The plugin's tool server and its
-   observation hooks are started as `node`, and a shell that cannot find it
-   will fail silently.
+2. Make sure your agent host can start `node`: on the `PATH` it launches
+   with, or the runtime the host itself supplies (Codex desktop). The plugin's
+   tool server and its observation hooks are started as `node`, and a host
+   that cannot find it fails silently.
 3. Complete the one-time host actions below.
 4. Open your agent in the directory you want as the workspace and say
    "initialize a Wakeflow workspace". The directory must be a Git repository
@@ -85,14 +86,16 @@ Codex desktop uses the Node runtime supplied by the app. In the CLI, ensure Node
 is on PATH when the host does not supply a runtime.
 Open `/hooks` and trust Wakeflow's four hooks after reviewing them by their
 definition hash. Until you do, all four are skipped: no session is observed, so no
-window can be registered and no delivery can be shown to have landed. If a plugin
-update changes the hook definition bytes, Codex asks you to trust them again -
-under a normal update `/hooks` should show nothing of Wakeflow's waiting for review.
+window can be registered and no delivery can be shown to have landed. A plugin
+update that changes the hook definition bytes (the 1.1.0 update did) makes Codex ask
+you to trust the four hooks again: after an update, open `/hooks` once; when nothing
+of Wakeflow's is waiting there, the update kept the hooks.
 
 Both hosts, and the usual reason something is silently missing:
 
-- `node` must be on the `PATH` your agent host launches with - the same
-  assumption the tool server configuration makes.
+- `node` must be reachable by your agent host - on the `PATH` it launches
+  with, or as the runtime it supplies - the same assumption the tool server
+  configuration makes.
 - When `wakeflow_verify` reports its `host-hook-channel` gate as `absent` or
   `records-0`, check the actions above first. That gate is how Wakeflow knows
   a window really received what was sent to it; without the observation

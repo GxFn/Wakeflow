@@ -203,28 +203,28 @@ manifest produces `manifest-unavailable` / `runtime-artifact-unavailable`.
 Inspect the installation and reload this server before it performs maintenance.
 These checks do not identify the host-selected sibling installation.
 
-Install a new build in a new version directory and retain older directories
-for live processes and recovery. Reusing a version for different bytes is not
-an update path. Local installation preflight is read-only and does not reserve
-or activate a target; the installer must publish the new directory without
-replacing an existing version. The serving MCP also rejects mutations if its
-own manifest changed or became unavailable; reads and previews remain available.
+The serving MCP rejects mutations while its own manifest has changed or is
+unavailable; reads and previews remain available.
 
 A window's `lastObservation.observerManifestDigest` identifies the hook observer
 only. SessionStart can occur on resume or compaction; Stop also does not prove
-that the window's MCP or instructions reloaded. Bound windows currently report
-`runtime.status: unverified` because the host adapters cannot establish that
-association. Strict verification reports `window-runtime-unverified:<n>` as
-unavailable. Keep this limitation explicit; do not fabricate records, rebind,
-or repeatedly restart windows to clear it. It is not a new blanket prerequisite
-for actions whose own contracts do not depend on that fact.
+that the window's MCP or instructions reloaded. Each bound window's `runtime`
+therefore carries one of three states. `stale` means its latest `session-start`
+record was written by an observer older than the installed artifact: that
+session started under the previous plugin and has not restarted since. Strict
+verification counts these as `windows-stale:<n>`, fails the `runtime-artifact`
+gate and names `window-artifact-stale` in `next`. `unverified` means the host
+adapter has no such evidence either way (Codex sessions, or a session-start
+record without an observer digest); verification reports
+`window-runtime-unverified:<n>` as information on a passing gate, never as a
+failure. Keep that limitation explicit: do not fabricate records, rebind, or
+repeatedly restart windows to clear it, and do not treat `unverified` as a
+blanket prerequisite for actions whose own contracts do not depend on it.
 
-Use direct host/runtime evidence when a particular task requires a specific
-build. If that evidence establishes a window needs a reload, use the host's
-reload procedure: if this serving MCP is outdated, first tell the user in one sentence that this window will restart in place in a few seconds and carry on by itself, then pipe your own inspect result into `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs resume --window <this windowId> --in-place` and end your turn. It returns at once (`self: true`, `scheduled: true`); about two seconds later this session restarts with the updated plugin and a fresh Wakeflow server - no `/mcp` reconnect is needed - and resumes by itself with a prompt to load this skill again (the copy in your context predates the update), call `wakeflow_verify` and continue where you left off. A helper installed before in-place restarts existed refuses `--in-place` as `argument-unknown`: then ask the user to run `/mcp` in this window and reconnect `wakeflow`, run a reconcile as in step 0, which installs the current helper, and start this section again. If this server is already current, skip its restart. For peer windows whose own runtime evidence requires a reload, take them one at a time, each only while it sits idle at an empty prompt, and pipe each one's inspect result into `resume --window <windowId> --in-place`, one helper call per Bash command. The session restarts inside its own pane on the updated plugin; the binding, coordinates and marks stay, so there is nothing to relocate or mark, and `hook.sessionStart: pending` means startup is unproven; inspect hook execution. `window-busy` means that window is working, shows a dialog or menu, or holds typed input, and `--force` does not override it: go on with the next window and retry this one once its turn has ended - a dialog, a menu or typed input waits for the user, so tell them which window it is. `resume-exited` means the process exited before startup evidence; inspect its diagnostics. `resume-never-conversed` reports missing conversation evidence: inspect host history first. Only if a fresh session is required and authorized, close the old one, launch it again, register it with `replace` and `mark` it. After this server is current, preview and
-apply reconcile for repairable workspace gates such as host-settings-assets.
-A peer runtime evidence gap remains separate from those repairs and from
-Controller acceptance of returned work.
+Restart the stale windows with the host's procedure: if this serving MCP is outdated, first tell the user in one sentence that this window will restart in place in a few seconds and carry on by itself, then pipe your own inspect result into `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs resume --window <this windowId> --in-place` and end your turn. It returns at once (`self: true`, `scheduled: true`); about two seconds later this session restarts with the updated plugin and a fresh Wakeflow server - no `/mcp` reconnect is needed - and resumes by itself with a prompt to load this skill again (the copy in your context predates the update), call `wakeflow_verify` and continue where you left off. A helper installed before in-place restarts existed refuses `--in-place` as `argument-unknown`: then ask the user to run `/mcp` in this window and reconnect `wakeflow`, run a reconcile as in step 0, which installs the current helper, and start this section again. If this server is already current, skip its restart. For peer windows that verify reports as `stale` (`windows-stale:<n>`: each such session started under an older artifact), take them one at a time, each only while it sits idle at an empty prompt, and pipe each one's inspect result into `resume --window <windowId> --in-place`, one helper call per Bash command. The session restarts inside its own pane on the updated plugin; the binding, coordinates and marks stay, so there is nothing to relocate or mark, and `hook.sessionStart: pending` means startup is unproven; inspect hook execution. `window-busy` means that window is working, shows a dialog or menu, or holds typed input, and `--force` does not override it: go on with the next window and retry this one once its turn has ended - a dialog, a menu or typed input waits for the user, so tell them which window it is. `resume-exited` means the process exited before startup evidence; read the refusal's `hint` and that pane before retrying. `resume-never-conversed` reports missing conversation evidence: inspect host history first. Only if a fresh session is required and authorized, close the old one, launch it again, register it with `replace` and `mark` it. After this
+server is current, preview and apply reconcile for repairable workspace gates
+such as host-settings-assets. A peer's `unverified` state remains separate from
+those repairs and from Controller acceptance of returned work.
 
 ## Interrupted writes and cancellation
 

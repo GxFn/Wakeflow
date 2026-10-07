@@ -1,5 +1,5 @@
 import path from "node:path";
-import { WAKEFLOW_DURABLE_ID_KINDS } from "../contracts/identity/wakeflow-durable-id.js";
+import { WAKEFLOW_TYPED_ID_PREFIXES } from "../contracts/identity/wakeflow-typed-id-prefixes.js";
 import { fail } from "./error.js";
 /**
  * Wakeflow Kernel / Privacy Scan：文本内容的唯一隐私扫描引擎（能力卡 8 Q1，ADR-0013）。
@@ -21,11 +21,13 @@ export const CREDENTIAL_PRIVACY_FINDING_KINDS = Object.freeze([
     "provider-credential",
     "credential-assignment",
 ]);
-export const DEFAULT_ALLOWED_ID_PREFIXES = Object.freeze(WAKEFLOW_DURABLE_ID_KINDS.map((kind) => `${kind}_`));
-const PRIVATE_KEY_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/gu;
+/** 持久身份与运行时身份（窗口绑定、维护操作）的前缀同出一源：新前缀只登记在 contracts。 */
+export const DEFAULT_ALLOWED_ID_PREFIXES = WAKEFLOW_TYPED_ID_PREFIXES;
+const PRIVATE_KEY_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/gu;
 const PROVIDER_CREDENTIAL_PATTERN = /\b(?:sk-(?:ant-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{20,}|xox[abp]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})/gu;
-const CREDENTIAL_ASSIGNMENT_PATTERN = /(?<![\p{L}\p{N}_])(?:[\p{L}\p{N}_]*_)?(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)["']?\s*[:=]\s*["']?[^\s"'<>]{8,}/giu;
-const AUTHORIZATION_PATTERN = /\b(?:proxy-)?authorization["']?\s*:\s*["']?(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/giu;
+// 键名与赋值只允许同一行上的空白：标题 `## Password:` 后换行接正文不是赋值（§13.161 B9-7）。
+const CREDENTIAL_ASSIGNMENT_PATTERN = /(?<![\p{L}\p{N}_])(?:[\p{L}\p{N}_]*_)?(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|secret[_-]?key(?:[_-]?base)?|encryption[_-]?key|app[_-]?key)["']?[ \t]*[:=][ \t]*["']?[^\s"'<>]{8,}/giu;
+const AUTHORIZATION_PATTERN = /\b(?:proxy-)?authorization["']?[ \t]*:[ \t]*["']?(?:Bearer|Basic|Token)[ \t]+[A-Za-z0-9._~+/=-]{8,}/giu;
 const URL_CREDENTIAL_PATTERN = /(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s"'<>/?#:@]+:[^\s"'<>/?#@]+@/gu;
 const ABSOLUTE_PATH_PATTERN = /(?<![A-Za-z0-9_+.-])file:\/\/[^\s"'`()<>]+|(?<![A-Za-z0-9_./\\-])(?:[A-Za-z]:[\\/]|\\\\)[^\s"'`()<>]+|(?<![\p{L}\p{N}_./\\-])(?:~|\$HOME|\/[^\s"'`()<>:/\\]+)(?:\/[^\s"'`()<>:/\\]+)+\/?/giu;
 // Natural-language text may adjoin a system location without an ASCII space.

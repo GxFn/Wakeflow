@@ -1,4 +1,24 @@
 import { WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF, } from "../../kernel/layout.js";
+/**
+ * 绑定窗口的运行身份（ADR-0017 D3，§13.161）：hook 记录只标识观察器，不证明窗口的 MCP 或指令已
+ * 重载，所以绑定窗口缺省是 unverified。宿主声明可按启动记录判定时，会话最近一次启动记录的观察器
+ * 摘要不等于磁盘上的制品 ⇒ 那个会话没有在更新之后重启过，报 stale，由 Controller 就地重启；
+ * 反方向（启动记录新 ⇒ 已重载）仍不成立，所以 current 从不被断言。
+ */
+export function deriveWindowRuntime(input) {
+    if (!input.bound) {
+        return input.bindingsObserved
+            ? Object.freeze({ status: "unregistered", reason: null })
+            : Object.freeze({ status: "unverified", reason: "binding-unavailable" });
+    }
+    if (input.staleness === "session-start-observer-digest" &&
+        input.installedManifestDigest !== null &&
+        input.sessionStartObserverManifestDigest !== null &&
+        input.sessionStartObserverManifestDigest !== input.installedManifestDigest) {
+        return Object.freeze({ status: "stale", reason: "session-started-under-older-artifact" });
+    }
+    return Object.freeze({ status: "unverified", reason: "host-runtime-association-unavailable" });
+}
 const NEXT_ACTIONS_MAXIMUM = 64;
 const WORKSPACE_MAINTENANCE_FRONTIER = "workspace-maintenance";
 const MAINTENANCE_TOOL = "wakeflow_maintain_workspace";
@@ -20,6 +40,14 @@ export function deriveNextActions(input) {
     }
     if (input.artifactServerOutdated) {
         actions.push({ owner: "user", tool: null, reason: "runtime-artifact-outdated", subject: null });
+    }
+    if (input.staleWindows > 0) {
+        actions.push({
+            owner: "controller",
+            tool: null,
+            reason: "window-artifact-stale",
+            subject: null,
+        });
     }
     if (input.maintenance) {
         actions.push({
@@ -344,22 +372,27 @@ function podsGate(facts) {
     const failing = codes.some((code) => !PENDING_POD_CODE_SUFFIXES.some((suffix) => code.endsWith(suffix)));
     return gate("pod-execution-location", "pod", failing ? "fail" : unavailable ? "unavailable" : "pass", joinCodes(codes));
 }
-/** Serving process and peer runtime evidence have distinct subjects (ADR-0017). */
+/**
+ * Serving process and peer runtime evidence have distinct subjects (ADR-0017). A window whose
+ * session started under an older artifact is proven stale (fail); a window without host
+ * association evidence is reported, not failed (§13.161): a gate that could never pass once a
+ * window is bound would make `ok` meaningless and leave the Controller an unactionable frontier.
+ */
 function runtimeArtifactGate(facts) {
-    const { server, unverifiedWindows } = facts.runtime;
+    const { server, staleWindows, unverifiedWindows } = facts.runtime;
     const manifestDigest = server?.manifestDigest ?? null;
     const onDiskDigest = server?.onDiskDigest ?? null;
     const changed = manifestDigest !== null && onDiskDigest !== null && manifestDigest !== onDiskDigest;
+    const unavailable = server !== null && (manifestDigest === null || onDiskDigest === null);
     const codes = [
-        ...(server !== null && (manifestDigest === null || onDiskDigest === null)
-            ? ["manifest-unavailable"]
-            : []),
+        ...(unavailable ? ["manifest-unavailable"] : []),
         ...(changed ? ["server-outdated"] : []),
+        ...(staleWindows.length > 0 ? [`windows-stale:${staleWindows.length}`] : []),
         ...(unverifiedWindows.length > 0
             ? [`window-runtime-unverified:${unverifiedWindows.length}`]
             : []),
     ];
-    return gate("runtime-artifact", "runtime", changed ? "fail" : codes.length > 0 ? "unavailable" : "pass", joinCodes(codes) ?? (manifestDigest === null ? "not-applicable" : null));
+    return gate("runtime-artifact", "runtime", changed || staleWindows.length > 0 ? "fail" : unavailable ? "unavailable" : "pass", joinCodes(codes) ?? (manifestDigest === null ? "not-applicable" : null));
 }
 /** 资产字节与本地设置条目各一票：资产读不出、设置文件不是 JSON 对象算 unavailable。 */
 function assetsGate(facts) {
@@ -474,10 +507,9 @@ export function verifyNext(gates) {
             blockers,
         });
     }
-    if (failing.every((entry) => entry.name === "runtime-artifact") &&
-        artifactCodes.some((code) => code.startsWith("window-runtime-unverified"))) {
+    if (artifactCodes.some((code) => code.startsWith("windows-stale"))) {
         return Object.freeze({
-            frontier: "window-runtime-unverified",
+            frontier: "window-artifact-stale",
             owner: "controller",
             suggestedTool: null,
             blockers,

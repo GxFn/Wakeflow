@@ -76,7 +76,12 @@ someone would otherwise be tempted to include.
 **Acceptance criteria.** A non-empty numbered or bulleted list of independently
 checkable items. Requirement, bug and supplement packages are rejected before
 publication when this list is absent or empty; prose and tables do not create
-referenceable items. The confirmation summary includes this section.
+referenceable items. Only top-level items count: a line starting (after at most
+three spaces) with `-`, `*`, `+`, `1.` or `1)` and a space; a bullet indented
+under an item is part of that item, not a criterion of its own, and the ids
+`ac-1`, `ac-2`, … follow the top-level order, not the numbers you write. The
+confirmation summary shows the section as that parsed list, so what the user
+confirms is exactly what the Controller will reference.
 These are load-bearing: the Controller binds each task's acceptance anchors to
 these items by their position, and a target's report answers them one by one.
 So each item must be:

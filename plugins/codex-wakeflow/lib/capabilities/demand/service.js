@@ -6,7 +6,7 @@ import { createDemandAuthority, DemandAuthorityError, } from "../../governance/d
 import { createDemandIdentity, DemandIdentityError, } from "../../governance/demand/model/demand-identity.js";
 import { parseRequirementLineageReference, RequirementLineageError, } from "../../governance/demand/model/requirement-lineage.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
-import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
 import { readPublicationTransactionAt, publicationNodeOrNull, } from "../../governance/demand/publication/demand-event-sourcing-publication-storage.js";
 import { demandPublicationTransactionRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
@@ -233,7 +233,7 @@ function publicationReceipt(publication) {
 }
 async function applyCreate(context, plan) {
     return withPodMutation(context.root, plan.podId, async () => {
-        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+        await assertDemandOperationConfigCurrentOrFail(context.root, context.snapshot, context.signal);
         return applyCreateLocked(context, plan);
     }, context.signal);
 }
@@ -282,7 +282,7 @@ async function recoverCreate(context, operationId) {
         return recoverCreateLocked(context, operationId);
     const stored = await readPublicationTransactionAt(context.root, ref, node, context.signal);
     return withPodMutation(context.root, stored.transaction.identity.podId, async () => {
-        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+        await assertDemandOperationConfigCurrentOrFail(context.root, context.snapshot, context.signal);
         await assertNoActiveDemand(context.root, context.signal, demandId, stored.transaction.identity.podId);
         return recoverCreateLocked(context, operationId);
     }, context.signal);

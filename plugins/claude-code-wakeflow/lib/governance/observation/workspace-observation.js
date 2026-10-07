@@ -241,17 +241,37 @@ async function observeHostHooks(root, hostId, current, signal) {
         const directory = await hookDirectoryState(root, hostId);
         const latestBySession = new Map();
         const latestKeys = new Map();
+        const startKeys = new Map();
+        const startDigests = new Map();
         const inventory = await scanHostHookObservations(root, hostId, {}, (record) => {
             if (!latestBySession.has(record.sessionId) && latestBySession.size >= HOOK_RECORDS_MAXIMUM) {
                 fail("io-failure", "observation-session-limit", "$observations");
             }
             const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+            if (record.event === "session-start") {
+                const previousStart = startKeys.get(record.sessionId);
+                if (previousStart === undefined || previousStart <= key) {
+                    startKeys.set(record.sessionId, key);
+                    startDigests.set(record.sessionId, record.artifactManifestDigest);
+                }
+            }
             const previous = latestKeys.get(record.sessionId);
             if (previous === undefined || previous <= key) {
                 latestKeys.set(record.sessionId, key);
-                latestBySession.set(record.sessionId, { event: record.event, recordedAt: record.recordedAt, observerManifestDigest: record.artifactManifestDigest });
+                latestBySession.set(record.sessionId, {
+                    event: record.event,
+                    recordedAt: record.recordedAt,
+                    observerManifestDigest: record.artifactManifestDigest,
+                    sessionStartObserverManifestDigest: null,
+                });
             }
         }, signalOptions(signal));
+        for (const [sessionId, latest] of latestBySession) {
+            latestBySession.set(sessionId, {
+                ...latest,
+                sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
+            });
+        }
         return Object.freeze({
             hostId,
             current,

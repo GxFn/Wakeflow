@@ -1,4 +1,4 @@
-import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
 import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import path from "node:path";
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
@@ -394,7 +394,7 @@ async function applyCloseComplete(context, plan) {
 }
 async function applyPod(context, input, plan) {
     return withPodMutation(context.root, plan.podId, async () => {
-        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.options.signal);
+        await assertDemandOperationConfigCurrentOrFail(context.root, context.snapshot, context.options.signal);
         const current = await planPod(context, input);
         if (current.status !== "ready" ||
             current.digest !== computeCanonicalJsonSha256Digest(parseJsonValue(plan))) {

@@ -20,9 +20,11 @@ function isDay(name) {
     return Number.isFinite(time) && new Date(time).toISOString() === iso;
 }
 const PAGE_SIZE = 2048;
-async function visitDirectory(root, ref, visit, options) {
+async function visitDirectory(root, ref, visit, options, order = "ascending") {
     let afterName;
     let expectedNode;
+    // 降序（最新在前）要先读完整个目录再反向走：分页游标只按名字升序前进。
+    const collected = [];
     for (;;) {
         const pageOptions = {
             maximumEntries: PAGE_SIZE,
@@ -34,11 +36,17 @@ async function visitDirectory(root, ref, visit, options) {
             ? await readStableRootDirectoryPage(root, pageOptions)
             : await readStableResourceDirectoryPage(root, ref, pageOptions);
         expectedNode ??= page.directoryNode;
-        for (const entry of page.entries)
-            await visit(entry);
+        if (order === "ascending")
+            for (const entry of page.entries)
+                await visit(entry);
+        else
+            collected.push(...page.entries);
         if (!page.hasMore)
-            return;
+            break;
         afterName = page.entries.at(-1)?.name;
+    }
+    for (let index = collected.length - 1; index >= 0; index -= 1) {
+        await visit(collected[index]);
     }
 }
 /**
@@ -50,6 +58,7 @@ export async function visitHostHookDirectory(root, hostId, visit, options = {}) 
     if (options.signal?.aborted === true)
         fail("io-failure", "aborted", "$signal");
     const signal = options.signal === undefined ? {} : { signal: options.signal };
+    const order = options.order ?? "ascending";
     const rootRef = hostHookObservationsRootRef(hostId);
     let parent;
     try {
@@ -61,10 +70,11 @@ export async function visitHostHookDirectory(root, hostId, visit, options = {}) 
         throw error;
     }
     const scoped = await RootedDirectory.open(parent.physicalPath, "$hooks");
-    const scopedVisit = (entry) => visit(Object.freeze({
+    const fromWorkspaceRoot = (entry) => Object.freeze({
         ...entry,
         resourcePath: parsePortableResourcePath(`${rootRef}/${entry.resourcePath}`),
-    }));
+    });
+    const scopedVisit = (entry) => visit(fromWorkspaceRoot(entry));
     try {
         if (!sameFileNodeIdentity(parent.node, await scoped.assertCurrent("$hooks")))
             fail("io-failure", "observation-scope-changed", "$hooks");
@@ -77,6 +87,9 @@ export async function visitHostHookDirectory(root, hostId, visit, options = {}) 
             }
             if (options.sinceDay !== undefined && day.name < options.sinceDay)
                 return;
+            if (options.selectDay !== undefined && !options.selectDay(day.name))
+                return;
+            await options.onDirectory?.(fromWorkspaceRoot(day), "day");
             await visitDirectory(scoped, day.resourcePath, async (shard) => {
                 if (!/^[0-9a-f]{2}$/u.test(shard.name) ||
                     shard.node.kind !== "directory" ||
@@ -86,9 +99,12 @@ export async function visitHostHookDirectory(root, hostId, visit, options = {}) 
                 }
                 if (options.recordId !== undefined && !options.recordId.startsWith(shard.name))
                     return;
-                await visitDirectory(scoped, shard.resourcePath, scopedVisit, signal);
-            }, signal);
-        }, signal);
+                if (options.selectShard !== undefined && !options.selectShard(day.name, shard.name))
+                    return;
+                await options.onDirectory?.(fromWorkspaceRoot(shard), "shard");
+                await visitDirectory(scoped, shard.resourcePath, scopedVisit, signal, order);
+            }, signal, order);
+        }, signal, order);
         const after = await root.inspectExistingResource(rootRef, "$hooks");
         if (!sameFileNodeIdentity(parent.node, after.node))
             fail("io-failure", "observation-scope-changed", "$hooks");

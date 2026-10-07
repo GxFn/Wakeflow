@@ -62,10 +62,10 @@ its blockers to the user, and apply only after they confirm. Depth:
 
 Inspect each returned window with `wakeflow_register_window_binding` for current
 host launch instructions; the execution root may differ from the startup root.
-First: reuse the current chat as Controller only when its outer workspace project membership and workspace-root SessionStart are established. A source-maintenance chat in another project is not that Controller. With the user's existing authorization, create the Controller in the workspace project first, verify and register it, then handle the other roles in that same project. Do not ask again for authorization already given. For each one:
+First: reuse the current chat as Controller only when its outer workspace project membership and workspace-root SessionStart are established. A source-maintenance chat in another project is not that Controller. With the user's existing authorization, create the Controller in the workspace project first, verify and register it, then handle the other roles in that same project. Do not ask again for authorization already given. If this chat is not that Controller, tell the user which chat is and continue there instead of running the Controller flow from here. For each one:
 use list_projects to resolve the existing outer workspace project by canonical path and host, then create_thread with target.type project, that projectId, and environment.type local for every role. Never register role directories as projects or substitute projectless chats or codex exec sessions. The chat starts in the workspace root; the role's execution root is separate and must be stated in its startup prompt with windowId, role skill, scope and return pointer. Read the execution root's instructions explicitly and use it as command workdir. Retain the creation result and wait for a ready threadId; clientThreadId is not a binding handle. Read back project membership and actual startup before registration. If the list omits a newly created chat, use direct UI confirmation and disclose that limitation; cwd and title alone do not prove project membership. A missing project or unavailable creation tool is a blocker, not permission for an external fallback. Do not retry creation after an ambiguous result until you establish whether the first chat exists. Keep requested role chats visible; archive only when the user authorizes retiring them. A thread is never moved into a new process, so relocate does not apply on this host; replace a gone thread only with an authorized new chat in the same outer project. Then register the
-handle you observed with `wakeflow_register_window_binding`; registration needs a real `session-start` at its host startup root. Otherwise startup is unproven;
-inspect execution and observer diagnostics. Use the same tool to inspect a
+handle you observed with `wakeflow_register_window_binding`; registration needs a real `session-start` at its host startup root. Otherwise startup is unproven:
+the refusal names the missing evidence - re-inspect the window and the host's hook trust before retrying. Use the same tool to inspect a
 window, replace a stale binding, retire a window, or force-release an expired
 work claim.
 
@@ -121,9 +121,9 @@ Form your own judgment from the code and the evidence, not from the report's
 self-assessment. Record it with
 `wakeflow_record_implementation_review_decision` for an implementation result
 or `wakeflow_record_test_review_decision` for a test result. On escalate, hand
-the user the issue, the options and your recommendation, then bring their
-answer back through `wakeflow_continue_demand`. Depth:
-`references/delivery-and-review.md`.
+the user the issue, options and recommendation, then bring their answer back
+through `wakeflow_continue_demand`; a product-defect escalation instead returns
+to implementation delivery planning. Depth: `references/delivery-and-review.md`.
 
 ### Step 12 - Complete and archive
 
@@ -163,10 +163,10 @@ follow "Interrupted writes and cancellation" in
 `references/workspace-and-windows.md` without deleting files by hand.
 
 `server-outdated` (`runtime-artifact-outdated` in `next`) concerns this MCP
-server. `window-runtime-unverified:<n>` means peer runtime evidence is missing,
-not that a hook proved an old or new MCP. Follow "After a plugin update" in
-`references/workspace-and-windows.md`; do not loop restarts or read plugin
-implementation to interpret missing host evidence.
+server; `windows-stale:<n>` names peer sessions started under an older artifact.
+`window-runtime-unverified:<n>` means peer runtime evidence is missing, not an
+old or new MCP proven by a hook. Follow "After a plugin update" in
+`references/workspace-and-windows.md`; do not loop restarts or read plugin implementation to interpret missing host evidence.
 
 ## What you must return to the user
 

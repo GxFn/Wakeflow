@@ -28,7 +28,7 @@ import { createInitialTestExecutionAttempt, createRerunTestExecutionAttempt, Tes
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, failWithBlockers as rejectWith, isWakeflowError } from "../../kernel/error.js";
-import { readHostHookObservations } from "../../kernel/hook-observations.js";
+import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservations, } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { createWorkClaim, deriveWorkClaimId, inspectWorkClaim, releaseWorkClaim, releaseWorkClaimIfHeld, takeWorkClaim, } from "../../kernel/work-claims.js";
@@ -907,10 +907,13 @@ export async function executePrepareDeliveryRequest(facade, value, options = {})
     }, value, commandShellExecutionOptions(options.durability, options.signal));
 }
 async function sessionRecords(context, sessionId, since) {
-    const inventory = await readHostHookObservations(context.workspaceRoot, context.facade.hostId, { sessionId, since }, signalOptions(context.options.signal));
+    // A session's retained records easily exceed the default page: query the full bound, and
+    // let only unreadable record candidates (never foreign file names) void the evidence.
+    const query = { sessionId, since, limit: HOST_HOOK_RECORDS_MAXIMUM };
+    const inventory = await readHostHookObservations(context.workspaceRoot, context.facade.hostId, query, signalOptions(context.options.signal));
     if (!inventory.complete)
         fail("io-failure", "observation-query-incomplete", "$observations");
-    if (inventory.skipped > 0)
+    if (inventory.unreadable > 0)
         fail("io-failure", "observation-query-unavailable", "$observations");
     return inventory.records.map((record) => Object.freeze({
         recordId: record.recordId,

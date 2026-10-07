@@ -35,7 +35,16 @@ async function assertWriterProtocol(root, signal) {
 async function assertNoMaintenanceReservation(root) {
     const gate = await inspectRootedExclusiveFileLock(root, WORKSPACE_MAINTENANCE_GATE_REF);
     if (gate.status === "held") {
-        fail("concurrency-conflict", gate.ownerState === "active" ? "maintenance-busy" : "maintenance-recovery-required", "$workspace", { retryable: gate.ownerState === "active" });
+        // 所有者未知（出生证据缺失、PID 被复用或不可观察）不等于死了：当作仍在维护让调用方重试，
+        // 只有被证明不活跃的 gate 才需要恢复（§13.161 F2）。
+        const reason = gate.ownerState === "active"
+            ? "maintenance-busy"
+            : gate.ownerState === "unknown"
+                ? "maintenance-owner-unknown"
+                : "maintenance-recovery-required";
+        fail("concurrency-conflict", reason, "$workspace", {
+            retryable: gate.ownerState !== "inactive",
+        });
     }
     try {
         const entries = await readStableResourceDirectory(root, WORKSPACE_MAINTENANCE_TRANSACTIONS_REF, { maximumEntries: 1024 });
@@ -94,6 +103,9 @@ export async function withWorkspaceOperationScope(root, mode, operation, options
         fail("io-failure", "aborted", "$signal");
     const current = scopes.getStore();
     if (current !== undefined) {
+        // 维护 gate 只能由最外层作用域持有：借用的作用域没有执行过 guard（§13.161 F8）。
+        if (options.maintenanceGuard !== undefined)
+            fail("unexpected", "maintenance-scope-borrowed", "$workspace");
         assertBorrowable(current, root, mode);
         await current.root.assertCurrent();
         await root.assertCurrent();

@@ -31,8 +31,11 @@ async function readBirth(pid) {
     try {
         boot ??= bootIdentity();
         const bootId = await boot;
-        if (bootId === null)
+        // A failed read is not evidence: forget it so the next observation tries again (§13.161 F2).
+        if (bootId === null) {
+            boot = undefined;
             return null;
+        }
         let started;
         if (process.platform === "linux") {
             const stat = await readFile(`/proc/${pid}/stat`, "utf8");
@@ -73,6 +76,19 @@ export async function observeProcessInstance(pid) {
         ownBirth = readBirth(pid);
     const birth = pid === process.pid ? ownBirth : readBirth(pid);
     const birthDigest = (await birth) ?? null;
+    if (pid === process.pid && birthDigest === null)
+        ownBirth = undefined;
+    if (birthDigest === null && state === "active" && pid !== process.pid) {
+        // The process may have exited between kill(0) and the birth read: confirm it is still there.
+        try {
+            process.kill(pid, 0);
+        }
+        catch (error) {
+            if (readNodeSystemErrorCode(error) === "ESRCH")
+                return Object.freeze({ state: "inactive", birthDigest: null });
+            state = "unknown";
+        }
+    }
     return Object.freeze({ state, birthDigest });
 }
 /** A different positively observed birth proves the recorded process no longer exists. */

@@ -1,4 +1,4 @@
-import { assertDemandOperationConfigCurrent } from "../../governance/demand/demand-operation-authority-context.js";
+import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
 import { assertNoActiveDemand, readDemandPodId, } from "../../governance/demand/publication/demand-active-guard.js";
 import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
@@ -517,7 +517,7 @@ async function applyTerminal(context, plan, verify, disposition) {
     if (podId === null)
         fail("precondition-failed", "pod-unknown", "$demandRoot");
     return withPodMutation(context.root, podId, async () => {
-        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+        await assertDemandOperationConfigCurrentOrFail(context.root, context.snapshot, context.signal);
         return applyTerminalLocked(context, plan, verify, disposition);
     }, context.signal);
 }
@@ -787,7 +787,7 @@ async function applyContinue(context, plan, disposition) {
     if (podId === null)
         fail("precondition-failed", "pod-unknown", "$demandRoot");
     return withPodMutation(context.root, podId, async () => {
-        await assertDemandOperationConfigCurrent(context.root, context.snapshot, context.signal);
+        await assertDemandOperationConfigCurrentOrFail(context.root, context.snapshot, context.signal);
         await assertNoActiveDemand(context.root, context.signal, plan.demandId, podId);
         return applyContinueLocked(context, plan, disposition);
     }, context.signal);

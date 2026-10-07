@@ -1,12 +1,5 @@
+import { WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX } from "../../contracts/identity/wakeflow-typed-id-prefixes.js";
 import { createUuidV4, parseUuidV4, UuidV4Error, } from "../../foundation/identity/uuid-v4.js";
-/**
- * Wakeflow Workspace / Window Runtime：Window Host Binding 的代际身份。
- *
- * Binding 是可替换的运行时路由事实，不是持久业务实体，因此不进入 durable ID kind
- * 词汇。每次新建或未来替换都会获得新的随机 UUIDv4；相同 Agent observation 的幂等
- * 重放继续返回已经提交的 bindingId，不重新分配。
- */
-const WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX = "window_binding_";
 const ERROR_MESSAGES = {
     format: "Wakeflow Window Host Binding ID is invalid.",
     factory: "Wakeflow Window Host Binding ID could not be generated.",

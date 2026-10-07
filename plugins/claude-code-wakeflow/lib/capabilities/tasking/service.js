@@ -23,7 +23,7 @@ import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../ker
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { admitTargetTaskPlanningResult, parseTargetTaskPlanningRequest, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { deriveAnchorReferenceBlockers, deriveImplementationBaselines, deriveImplementationPlanningBlockers, deriveLineageBlockers, deriveLineageExpectation, derivePlanReview, deriveSectionAnchorBlockers, deriveTestPlanningBlockers, deriveTestStepReferenceBlockers, deriveTopologyBlockers, parseAcceptanceCriteria, } from "./decide.js";
+import { deriveAnchorReferenceBlockers, deriveImplementationBaselines, deriveImplementationPlanningBlockers, deriveLineageBlockers, deriveLineageExpectation, derivePlanReview, deriveSectionAnchorBlockers, deriveTestPlanningBlockers, deriveTestContractCoverageBlockers, deriveTestStepReferenceBlockers, deriveTopologyBlockers, parseAcceptanceCriteria, } from "./decide.js";
 const REQUIREMENT_MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
 function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
@@ -243,13 +243,22 @@ async function buildTestPackage(context, input, requested, binding) {
         then: step.then,
         requirementRef: step.requirementRef,
     }));
+    const criteria = parseAcceptanceCriteria(await readRequirementText(context, loaded));
     const stepBlockers = deriveTestStepReferenceBlockers({
         steps,
         recordDigest: identity.source.recordDigest,
-        criteria: parseAcceptanceCriteria(await readRequirementText(context, loaded)),
+        criteria,
     });
     if (stepBlockers.length > 0)
         rejectWith(stepBlockers, "$request.taskPackage.testContract.steps");
+    const coverageBlockers = deriveTestContractCoverageBlockers({
+        steps,
+        recordDigest: identity.source.recordDigest,
+        criteria,
+    });
+    if (coverageBlockers.length > 0) {
+        rejectWith(coverageBlockers, "$request.taskPackage.testContract.steps");
+    }
     const selectedAuthorityRefs = resolveAuthorityReferences(context, requested.selectedAuthorityMemberRefs);
     let taskPackage;
     try {

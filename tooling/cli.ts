@@ -2,7 +2,9 @@ import path from "node:path";
 import { CaptureError } from "./capture/io.js";
 import { prepareCapture } from "./capture/plan.js";
 import { inspectCapture, runCapture } from "./capture/run.js";
+import { BuildLockError } from "./build-lock.js";
 import { collectDiagnosticBundle, inspectDiagnosticBundle } from "./diagnostics/bundle.js";
+import { checkHandoff } from "./handoff/handoff.js";
 import {
   inspectArtifactInstallation,
   inspectDevelopmentEnvironment,
@@ -17,15 +19,19 @@ import { LiveError } from "./live/contracts.js";
 import { verifyLiveEvidence } from "./live/evidence.js";
 import { planLiveProject } from "./live/plan.js";
 import { captureHostReceipt } from "./live/receipt.js";
+import { planVersionBump } from "./release/bump-version.js";
 import { listFaultSuites, runFaultSuite } from "./testing/fault-suites.js";
+import { selectImpactedTests } from "./testing/impacted-tests.js";
 import { proposeTestDurations } from "./testing/test-duration-report.js";
 import { exportCiVerification, verifyCiBundle } from "./verification/export-ci.js";
+import { terminateOwnedCommands } from "./verification/process.js";
 import { type VerificationProfile, verifyRepository } from "./verification/verify.js";
 import { isMainModule } from "./main-module.js";
 
 const HELP = `Wakeflow maintainer tools (run from the repository root)
 
 npm run wf -- verify quick --files tests/path.test.ts [--concurrency N]
+npm run wf -- verify quick --changed [--since REF] [--concurrency N]
 npm run wf -- verify gate [--concurrency N]
 npm run wf -- verify artifact
 npm run wf -- timings export --receipt .build/verification/run-ID/receipt.json
@@ -53,6 +59,9 @@ npm run wf -- capture run --id CAPTURE_ID --step ts-N
 npm run wf -- capture inspect --id CAPTURE_ID
 npm run wf -- ci export --summary VERIFICATION_SUMMARY_JSON
 npm run wf -- ci verify --bundle EXPORTED_REPORT_DIRECTORY
+npm run wf -- impact tests [--since REF]
+npm run wf -- handoff [--no-artifacts]
+npm run wf -- release bump --version X.Y.Z[-pre] [--apply]
 
 Verification writes private receipts under .build/verification/. It never rebuilds plugins/ implicitly.
 Doctor reads only. Imported runtime reports are unverified; no command installs, trusts or activates a plugin.
@@ -61,6 +70,10 @@ Business scenarios allocate a NEW root, run fixed fixtures, then seal ownership.
 Live records plans, attempts and imported receipts. Imported evidence cannot establish native-host acceptance.
 Doctor collection stores explicit private files and projected stdio observations; export writes a separate allowlisted summary, never uploads or repairs a workspace.
 Capture freezes imported test contracts and explicit commands. Run executes one declared step once; it never decides test acceptance, retries or imports evidence.
+Impact lists the tests reached by a change set through static imports; it is a focusing aid, never a substitute for the full gate.
+Handoff runs the read-only pre-handoff checklist (whitespace, private content, build:check, docs pointers, Git state) and writes nothing.
+Release bump edits only assets/release/version.json and the Claude marketplace entry; rebuilding, committing, tagging and cache refreshes stay separate actions.
+Every verify, handoff build:check and \`npm run locked -- <command>\` holds the one repository build lock (.build/locks/build.lock).
 `;
 
 class UsageError extends Error {}
@@ -97,6 +110,11 @@ function flags(args: readonly string[]): Map<string, string[]> {
         "--input",
         "--request",
         "--step",
+        "--changed",
+        "--since",
+        "--no-artifacts",
+        "--version",
+        "--apply",
       ].includes(key) ||
       values.has(key)
     )
@@ -104,7 +122,7 @@ function flags(args: readonly string[]): Map<string, string[]> {
     const collected: string[] = [];
     while (i < args.length && !args[i]?.startsWith("--")) collected.push(args[i++] ?? "");
     if (
-      key === "--preview"
+      ["--preview", "--changed", "--no-artifacts", "--apply"].includes(key)
         ? collected.length !== 0
         : collected.length === 0 || (key !== "--files" && collected.length !== 1)
     )
@@ -319,41 +337,138 @@ function runCiCommand(action: string | undefined, options: Map<string, string[]>
   return exportCiVerification(root, path.resolve(root, summary));
 }
 
+function runVerifyCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+  signal?: AbortSignal,
+) {
+  if (action !== "quick" && action !== "gate" && action !== "artifact") invalid();
+  if (
+    [...options.keys()].some(
+      (key) => !["--files", "--concurrency", "--changed", "--since"].includes(key),
+    )
+  )
+    invalid();
+  const files = options.get("--files") ?? [];
+  const changed = options.has("--changed");
+  if (action !== "quick" && (files.length > 0 || changed || options.has("--since"))) invalid();
+  if (action === "quick" && files.length > 0 === changed) invalid();
+  if (options.has("--since") && !changed) invalid();
+  if (action === "artifact" && options.has("--concurrency")) invalid();
+  const concurrency = options.get("--concurrency")?.[0];
+  const since = options.get("--since")?.[0];
+  return verifyRepository(root, {
+    profile: action as VerificationProfile,
+    files,
+    ...(changed ? { changed: true } : {}),
+    ...(since === undefined ? {} : { since }),
+    ...(concurrency === undefined ? {} : { concurrency }),
+    ...(signal === undefined ? {} : { signal }),
+  });
+}
+
+function runImpactCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+) {
+  if (action !== "tests" || [...options.keys()].some((key) => key !== "--since")) invalid();
+  const since = options.get("--since")?.[0];
+  return {
+    ...selectImpactedTests(root, since === undefined ? {} : { since }),
+    status: "passed" as const,
+  };
+}
+
+function runHandoffCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+  signal?: AbortSignal,
+) {
+  if (action !== undefined || [...options.keys()].some((key) => key !== "--no-artifacts"))
+    invalid();
+  return checkHandoff(root, {
+    artifacts: !options.has("--no-artifacts"),
+    ...(signal === undefined ? {} : { signal }),
+  });
+}
+
+function runReleaseCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+) {
+  const version = options.get("--version")?.[0];
+  if (
+    action !== "bump" ||
+    version === undefined ||
+    [...options.keys()].some((key) => key !== "--version" && key !== "--apply")
+  )
+    invalid();
+  return planVersionBump(root, version, { apply: options.has("--apply") });
+}
+
+function runTimingsCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+) {
+  const receipt = options.get("--receipt")?.[0];
+  if (action !== "export" || options.size !== 1 || receipt === undefined) invalid();
+  return {
+    kind: "WakeflowTestDurationProposal",
+    schemaVersion: 1,
+    status: "passed" as const,
+    table: proposeTestDurations(root, path.resolve(root, receipt)),
+    changesApplied: false,
+  };
+}
+
+type CommandHandler = (
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+  signal?: AbortSignal,
+) => unknown;
+
+const COMMANDS: Readonly<Record<string, CommandHandler>> = Object.freeze({
+  capture: runCaptureCommand,
+  live: runLiveCommand,
+  ci: runCiCommand,
+  lab: runLabCommand,
+  fault: runFaultCommand,
+  verify: runVerifyCommand,
+  impact: runImpactCommand,
+  handoff: runHandoffCommand,
+  release: runReleaseCommand,
+  timings: runTimingsCommand,
+  doctor: runDoctorCommand,
+});
+
 export async function runToolingCli(args: readonly string[], root: string, signal?: AbortSignal) {
-  const [command, action, ...rest] = args;
-  const options = flags(rest);
-  if (command === "capture") return runCaptureCommand(action, options, root, signal);
-  if (command === "live") return runLiveCommand(action, options, root, signal);
-  if (command === "ci") return runCiCommand(action, options, root);
-  if (command === "lab") return runLabCommand(action, options, root, signal);
-  if (command === "fault") return runFaultCommand(action, options, root, signal);
-  if (command === "verify") {
-    if (action !== "quick" && action !== "gate" && action !== "artifact") invalid();
-    if ([...options.keys()].some((key) => key !== "--files" && key !== "--concurrency")) invalid();
-    const files = options.get("--files") ?? [];
-    if ((action === "quick") !== files.length > 0) invalid();
-    if (action === "artifact" && options.has("--concurrency")) invalid();
-    const concurrency = options.get("--concurrency")?.[0];
-    return verifyRepository(root, {
-      profile: action as VerificationProfile,
-      files,
-      ...(concurrency === undefined ? {} : { concurrency }),
-      ...(signal === undefined ? {} : { signal }),
-    });
-  }
-  if (command === "timings") {
-    const receipt = options.get("--receipt")?.[0];
-    if (action !== "export" || options.size !== 1 || receipt === undefined) invalid();
-    return {
-      kind: "WakeflowTestDurationProposal",
-      schemaVersion: 1,
-      status: "passed" as const,
-      table: proposeTestDurations(root, path.resolve(root, receipt)),
-      changesApplied: false,
-    };
-  }
-  if (command === "doctor") return runDoctorCommand(action, options, root, signal);
-  invalid();
+  const [command, second, ...rest] = args;
+  const handler = command === undefined ? undefined : COMMANDS[command];
+  if (handler === undefined) invalid();
+  // 没有动作的命令（handoff）直接跟标志：第二个词以 `--` 开头时它属于选项，不是动作。
+  const action = second?.startsWith("--") === true ? undefined : second;
+  const options = flags(action === undefined && second !== undefined ? [second, ...rest] : rest);
+  return (await handler(action, options, root, signal)) as Awaited<
+    ReturnType<
+      | typeof runCaptureCommand
+      | typeof runLiveCommand
+      | typeof runCiCommand
+      | typeof runLabCommand
+      | typeof runFaultCommand
+      | typeof runVerifyCommand
+      | typeof runImpactCommand
+      | typeof runHandoffCommand
+      | typeof runReleaseCommand
+      | typeof runTimingsCommand
+      | typeof runDoctorCommand
+    >
+  >;
 }
 
 if (isMainModule(import.meta.url)) {
@@ -361,9 +476,16 @@ if (isMainModule(import.meta.url)) {
   if (args.length === 0 || args.includes("--help")) process.stdout.write(HELP);
   else {
     const controller = new AbortController();
-    const abort = () => controller.abort();
-    process.once("SIGINT", abort);
-    process.once("SIGTERM", abort);
+    // 第一次信号取消并等待子进程结算；第二次信号立刻杀掉本进程派生的进程组再退出（T7-F5）。
+    const abort = () => {
+      if (controller.signal.aborted) {
+        terminateOwnedCommands();
+        process.exit(130);
+      }
+      controller.abort();
+    };
+    process.on("SIGINT", abort);
+    process.on("SIGTERM", abort);
     try {
       const result = await runToolingCli(args, process.cwd(), controller.signal);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
@@ -386,7 +508,8 @@ if (isMainModule(import.meta.url)) {
               ? "invalid-arguments"
               : error instanceof LabError ||
                   error instanceof LiveError ||
-                  error instanceof CaptureError
+                  error instanceof CaptureError ||
+                  error instanceof BuildLockError
                 ? error.code
                 : "tooling-input-or-execution-unavailable",
         })}\n`,

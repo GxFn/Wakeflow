@@ -7,6 +7,7 @@ import { pipeline } from "node:stream/promises";
 import { run as runNodeTests } from "node:test";
 import { spec } from "node:test/reporters";
 import { isMainModule } from "../main-module.js";
+import { selectImpactedTests } from "./impacted-tests.js";
 import testEventReporter from "./test-event-reporter.js";
 import { prepareTestRecording } from "./test-recording.js";
 
@@ -16,8 +17,9 @@ import { prepareTestRecording } from "./test-recording.js";
  * TypeScript 增量构建不会自动删除源文件移除后遗留的 `.build/tests/*.js`，因此测试门
  * 不能使用 glob 枚举编译目录。本入口只枚举当前测试源文件、映射对应的编译输出、
  * 复验普通文件并把清单交给 Node.js 测试运行器。无参数模式运行全部当前源；显式
- * `--focused` 模式只接受调用方列出的当前 `.test.ts` 源文件。旧输出不会被误执行，
- * 不存在、越界、重复或非测试路径也不能制造虚假的测试覆盖。
+ * `--focused` 模式接受调用方列出的当前 `.test.ts` 源文件或 `tests/` 下的目录（展开为其中
+ * 全部测试源）；`--changed [--since REF]` 由 Git 变更集推导受影响的测试（impacted-tests.ts）。
+ * 旧输出不会被误执行，不存在、越界、重复或非测试路径也不能制造虚假的测试覆盖。
  *
  * 清单顺序只影响排程，不影响任何一个测试的行为：Node 每个文件一个进程，先派发的
  * 文件先开始。按已知耗时降序派发（LPT）让最长的文件最早开始，整套墙钟由“最长文件”
@@ -85,32 +87,43 @@ function collectTestSources(root: string): readonly string[] {
     }
   }
   visit(root);
-  if (result.length === 0) fail("no .test.ts source files were found");
   return Object.freeze(result);
 }
 
-function assertCurrentTestSource(sourceRoot: string, value: string): string {
-  const source = nodePath.resolve(value);
+/** 一个 focused 值是 `tests/` 下的一个当前测试源文件，或一个展开为其中全部测试源的目录。 */
+function focusedTestSources(
+  sourceRoot: string,
+  resolved: string,
+  value: string,
+): readonly string[] {
+  const source = nodePath.resolve(resolved);
   const relative = nodePath.relative(sourceRoot, source);
   if (
-    relative.length === 0 ||
     relative === ".." ||
     relative.startsWith(`..${nodePath.sep}`) ||
-    nodePath.isAbsolute(relative) ||
-    !relative.endsWith(".test.ts")
+    nodePath.isAbsolute(relative)
   ) {
-    fail("focused test source must be one .test.ts file below tests/");
+    fail(`focused test source must be below tests/: ${value}`);
   }
+  // `tests` 本身也是合法的目录值：它的父链就是它自己。
   assertRealDirectoryChain(
     sourceRoot,
-    nodePath.dirname(source),
-    "focused test source parent chain must contain only real directories",
+    relative === "" ? sourceRoot : nodePath.dirname(source),
+    `focused test source parent chain must contain only real directories: ${value}`,
   );
   const stat = lstatSync(source, { throwIfNoEntry: false });
-  if (stat === undefined || stat.isSymbolicLink() || !stat.isFile()) {
-    fail("focused test source must be one current regular file");
+  if (stat !== undefined && !stat.isSymbolicLink() && stat.isDirectory()) {
+    const found = collectTestSources(source);
+    if (found.length === 0) fail(`focused test directory holds no .test.ts source: ${value}`);
+    return found;
   }
-  return source;
+  if (!relative.endsWith(".test.ts")) {
+    fail(`focused test source must be one .test.ts file below tests/: ${value}`);
+  }
+  if (stat === undefined || stat.isSymbolicLink() || !stat.isFile()) {
+    fail(`focused test source must be one current regular file: ${value}`);
+  }
+  return [source];
 }
 
 function selectedTestSources(
@@ -118,17 +131,27 @@ function selectedTestSources(
   focusedValues?: readonly string[],
 ): readonly string[] {
   const sourceRoot = nodePath.join(repositoryRoot, "tests");
-  if (focusedValues === undefined) return collectTestSources(sourceRoot);
+  if (focusedValues === undefined) {
+    const all = collectTestSources(sourceRoot);
+    if (all.length === 0) fail("no .test.ts source files were found");
+    return all;
+  }
   if (focusedValues.length === 0) {
     fail("focused mode requires at least one test source");
   }
   const seen = new Set<string>();
-  const sources = focusedValues.map((value) => {
-    const source = assertCurrentTestSource(sourceRoot, nodePath.resolve(repositoryRoot, value));
-    if (seen.has(source)) fail("focused test sources cannot contain duplicates");
-    seen.add(source);
-    return source;
-  });
+  const sources: string[] = [];
+  for (const value of focusedValues) {
+    for (const source of focusedTestSources(
+      sourceRoot,
+      nodePath.resolve(repositoryRoot, value),
+      value,
+    )) {
+      if (seen.has(source)) fail(`focused test sources cannot contain duplicates: ${value}`);
+      seen.add(source);
+      sources.push(source);
+    }
+  }
   // Final order is decided only by orderTestSourcesByCost in compiledTypeScriptTests.
   return Object.freeze(sources);
 }
@@ -252,12 +275,43 @@ export function compiledTypeScriptTests(
   );
 }
 
-function parseInvocation(values: readonly string[]): readonly string[] | undefined {
-  if (values.length === 0) return undefined;
-  if (values[0] !== "--focused") {
-    fail("the only supported runner option is --focused");
+interface RunnerInvocation {
+  readonly focused?: readonly string[];
+  readonly changed?: Readonly<{ readonly since?: string }>;
+}
+
+function parseInvocation(values: readonly string[]): RunnerInvocation {
+  if (values.length === 0) return {};
+  if (values[0] === "--changed") {
+    const rest = values.slice(1);
+    if (rest.length === 0) return { changed: {} };
+    if (rest.length === 2 && rest[0] === "--since" && rest[1] !== undefined)
+      return { changed: { since: rest[1] } };
+    fail("--changed accepts only an optional --since REF");
   }
-  return values.slice(1);
+  if (values[0] !== "--focused") {
+    fail("the supported runner options are --focused <sources> and --changed [--since REF]");
+  }
+  return { focused: values.slice(1) };
+}
+
+/** `--changed` 的选择：没有受影响的测试时如实说明并跳过，不制造一次空的"通过"。 */
+function selectedFiles(
+  repositoryRoot: string,
+  invocation: RunnerInvocation,
+): readonly string[] | null {
+  if (invocation.changed === undefined)
+    return compiledTypeScriptTests(repositoryRoot, invocation.focused);
+  const selection = selectImpactedTests(repositoryRoot, invocation.changed);
+  process.stderr.write(
+    `wakeflow tests: ${selection.tests.length} impacted test file(s) for ${selection.changed.length} changed file(s) since ${selection.since}${
+      selection.fullGateRecommended
+        ? `; full gate recommended (${selection.fullGateReasons.join(", ")})`
+        : ""
+    }\n`,
+  );
+  if (selection.tests.length === 0) return null;
+  return compiledTypeScriptTests(repositoryRoot, selection.tests);
 }
 
 /**
@@ -277,7 +331,8 @@ export function resolveTestConcurrency(value: string | undefined, maximum: numbe
 
 async function run(): Promise<void> {
   const repositoryRoot = process.cwd();
-  const files = compiledTypeScriptTests(repositoryRoot, parseInvocation(process.argv.slice(2)));
+  const files = selectedFiles(repositoryRoot, parseInvocation(process.argv.slice(2)));
+  if (files === null) return;
   const concurrency = resolveTestConcurrency(
     process.env.WAKEFLOW_TEST_CONCURRENCY,
     Math.max(1, availableParallelism()),

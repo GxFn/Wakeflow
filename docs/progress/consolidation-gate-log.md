@@ -4468,3 +4468,25 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 独立图谱子项目：`test:checks` 与 `typecheck` 通过，`check:structure` / `check:current` 报 77 份指纹中 72 份漂移（源码变了，图谱未按 §13.156 的方式重新复核），`check:diagrams` 与 `build` 未运行；图谱不在根门之内，本节未刷新它。
 
 本节不含任何原生宿主会话：Codex 真实聊天、Claude 真实窗口与 §13.157 的 lab 环境都未执行，Codex 文本里"重启应用才重载 MCP"来自 §13.142/§13.148 的既有证据，没有新的现场复验。源码与制品仍未提交，main 与本地 origin/main 对齐；两个裁决已由用户作出（2026-10-06）：stale/unverified 语义覆盖 ADR-0017 §3 的后果获同意；未提交的维护工具批次与本节修复一起提交。
+
+### 13.162 开发便捷脚本与脚手架第一批（2026-10-06）
+
+用户要求盘点 Wakeflow 自己的开发与使用方式、现有脚本，设计需要的便捷脚本并修正既有脚本。盘点与按场景排序的规划见[开发便捷脚本与脚手架规划](../reviews/2026-10-06-developer-scripts-and-scaffolding-plan.md)；它补 2026-10-03 工具规划没有覆盖的一类成本——维护者（人和 Agent）每天重复敲、每次会话结束就丢失、靠记忆才做得对的小动作，证据来自 §13.161 复审会话本身。第一批实现四个能力并修正四处既有脚本，不改运行时合同、公共 MCP 工具、制品内容或版本号。
+
+新增：
+
+- 构建锁：`tooling/build-lock.mjs`（`npm run locked -- <command>`，无需编译）与 `tooling/build-lock.ts`（`wf verify`、`wf handoff` 内置）共用 `mkdir .build/locks/build.lock` 协议：`owner.json` 记录持有者，已退出进程的陈旧声明被移除，活着的持有者按 `WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS`（缺省 3600）等待，超时退出 75；每次声明用新令牌，子进程继承 `WAKEFLOW_BUILD_LOCK_TOKEN`，只有祖先对同一根的声明才重入。第一版把继承的令牌直接当作新根的声明令牌，在测试进程本身运行于锁下时所有嵌套调用都"重入"，被三项测试当场抓住后改正。
+- 受影响测试：`tooling/testing/impacted-tests.ts` 沿 `src/**` 与 `tests/**` 的静态相对导入反向传播 Git 变更集（含未跟踪文件），`reasons` 记录来源；Schema/生成合同、agent-text 与宿主文本画像、工具链输入、架构规则、运行器与耗时表的改动或超过 80 个文件的选择集给出 `fullGateRecommended`。入口：运行器 `--changed [--since REF]`、`wf impact tests`、`wf verify quick --changed`（无受影响测试时只跑静态检查并把 `selection` 写进回执）。
+- 交接检查：`wf handoff [--no-artifacts]` 只读执行五项检查——`git diff --check`（含 staged）、私有内容（当前用户家目录路径按失败，临时目录前缀按 review；凭证样式在 `tests/` 外按失败、内按 review，值必须像字面秘密）、`build:check`（持锁运行，日志在 `.build/handoff/`）、文档指针（docs/README 的最新节点与 gate-log 末节一致，reviews/references 全部索引）、Git 概况。对本仓库的第一次真实运行就找出了四件事：维护者文档末尾多一个空行、本机路径样式出现在文档与模式源码里（因此把临时目录前缀降为 review）、`token = process.env[...]` 被当成凭证（因此值必须同时含字母与数字且只含令牌字符）、`docs/references/legacy-alignment-ledger.md` 从未被 docs/README 索引（已补）。
+- 版本准备：`wf release bump --version X [--apply]` 只改 `assets/release/version.json` 与 Claude marketplace 条目，列出由构建器渲染的四个生成文件当前版本与后续步骤；拒绝相同版本、非发布序列与非法文本。
+
+修正：聚焦运行器接受 `tests/` 下的目录并在错误里点名写错的路径；`wf` 收到第二次信号先 SIGKILL 自己派生的进程组再退出 130（T7-F5）；`test:tooling` 改为聚焦运行 `tests/codegen` 而不是直接执行旧编译产物；`runToolingCli` 改为命令表分发（认知复杂度回到上限内），没有动作的命令可以直接跟标志。文档：维护工具说明新增 §13–§16，CLAUDE.md 的验证与发布段落指向 `locked`、`--changed` 与 `handoff`，docs/README 索引新规划页与遗漏的对齐台账。
+
+验证与观察：
+
+- 新增 7 个测试文件/用例组：构建锁（进程内串行、陈旧声明回收、预算内 busy、同令牌重入、包装脚本的令牌/退出码/75）、受影响测试（直接与经夹具的间接依赖、未跟踪测试、`--since`、整门建议与过大选择集）、交接检查（干净检出、五类发现、真实 `build:check` 成功与失败）、版本准备（预览/写入/拒绝）、运行器目录选择与点名错误、CLI 接线与参数校验。第一轮 `tests/tooling` 整目录运行（本身就通过 `npm run locked` 与目录选择执行）9 项失败，全部是本批自己的缺陷：锁令牌语义、gate 档位不再要求测试证据、预先取消的锁等待被记成 unavailable、运行器错误里写的是解析后的绝对路径、`tests` 根目录自身不被接受、交接检查的期望顺序。修正后聚焦 26/26 通过。
+- 第一次完整门在 lint 阶段止于 `verifyRepository` 认知复杂度 34 > 30（拆出选择解析、单阶段执行与持锁循环三个函数）。最终完整门：2 worker，1352 项全部通过，零失败/取消/skip/todo，测试阶段 1950 秒，整门含 schema:check 与 build:check（claude ok / codex ok）约 33 分钟；比 §13.161 多 13 项用例。
+- `wf handoff`（含真实 `build:check`）对本仓库通过：空白、文档指针、Git 概况通过，私有内容只剩 4 条 review（文档与模式源码里的临时目录前缀、测试样本里的合成凭证）。制品未重建：本批不改 `src/`、`assets/` 与版本号，`build:check` 证明已提交制品与源码一致。
+- 未运行：原生宿主会话、lab/live 环境、`smoke:artifacts`（制品字节未变）。`.mjs` 包装脚本不进 TypeScript 项目，只靠包装脚本测试覆盖；Windows 上的锁与信号路径未实机验证。
+
+本批只改 `tooling/`、`tests/tooling/`、`package.json` 与文档，未提交。

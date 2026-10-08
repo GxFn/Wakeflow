@@ -1,4 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
+import { deepEqual, doesNotThrow, equal, throws } from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -30,6 +30,54 @@ test("TypeScript test runner 从当前源文件映射 focused 输出", () => {
   );
   throws(() => compiledTypeScriptTests(repositoryRoot, [source, source]), /duplicates/u);
   throws(() => compiledTypeScriptTests(repositoryRoot, ["test/legacy.test.mjs"]), /below tests/u);
+  // 错误点名具体路径，批量调用时一眼看出是哪个参数写错了（§13.162）。
+  throws(
+    () =>
+      compiledTypeScriptTests(repositoryRoot, [
+        "tests/workspace/window-runtime/removed-stale.test.ts",
+      ]),
+    /removed-stale\.test\.ts/u,
+  );
+});
+
+test("focused 值可以是 tests/ 下的目录：展开为其中全部当前测试源，空目录与越界目录被拒", (t) => {
+  const repositoryRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-typescript-test-runner-"));
+  t.after(() => rmSync(repositoryRoot, { recursive: true, force: true }));
+  for (const relative of [
+    "tests/kernel/a.test.ts",
+    "tests/kernel/deep/b.test.ts",
+    "tests/other/c.test.ts",
+  ]) {
+    mkdirSync(path.dirname(path.join(repositoryRoot, relative)), { recursive: true });
+    writeFileSync(path.join(repositoryRoot, relative), "");
+    const compiled = path.join(repositoryRoot, ".build", relative.replace(/\.ts$/u, ".js"));
+    mkdirSync(path.dirname(compiled), { recursive: true });
+    writeFileSync(compiled, "");
+  }
+  mkdirSync(path.join(repositoryRoot, "tests/empty"));
+  deepEqual(
+    compiledTypeScriptTests(repositoryRoot, ["tests/kernel", "tests/other/c.test.ts"]).map((file) =>
+      path.relative(repositoryRoot, file),
+    ),
+    [
+      ".build/tests/kernel/a.test.js",
+      ".build/tests/kernel/deep/b.test.js",
+      ".build/tests/other/c.test.js",
+    ],
+  );
+  throws(
+    () => compiledTypeScriptTests(repositoryRoot, ["tests/empty"]),
+    /holds no \.test\.ts source: tests\/empty/u,
+  );
+  doesNotThrow(
+    () => compiledTypeScriptTests(repositoryRoot, ["tests"]),
+    "the whole tests root is a valid directory value",
+  );
+  throws(
+    () => compiledTypeScriptTests(repositoryRoot, ["tests/kernel", "tests/kernel/a.test.ts"]),
+    /duplicates/u,
+  );
+  throws(() => compiledTypeScriptTests(repositoryRoot, ["src"]), /below tests\/: src/u);
 });
 
 test("focused test runner拒绝tests根内的symlink祖先", (t) => {

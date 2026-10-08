@@ -20,6 +20,32 @@ export interface CommandSettlement {
   readonly durationMs: number;
 }
 
+const OWNED_GROUPS = new Set<number>();
+
+/**
+ * 第二次 Ctrl-C：调用方要立刻退出时，先把本进程派生的进程组杀干净，不留下继续跑的
+ * `npm test` 孤儿（gate-log §13.161 T7-F5）。
+ */
+export function terminateOwnedCommands(): void {
+  for (const pid of OWNED_GROUPS) {
+    try {
+      if (process.platform === "win32") {
+        spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], {
+          timeout: 5000,
+          stdio: "ignore",
+          shell: false,
+          windowsHide: true,
+        });
+      } else {
+        process.kill(-pid, "SIGKILL");
+      }
+    } catch {
+      // The group is already gone.
+    }
+  }
+  OWNED_GROUPS.clear();
+}
+
 /** Each command gets its own process group. Cancellation never targets unrelated processes. */
 export async function runLoggedCommand(
   root: string,
@@ -56,6 +82,7 @@ export async function runLoggedCommand(
         detached: process.platform !== "win32",
         stdio: ["ignore", stdout, stderr],
       });
+      if (child.pid !== undefined) OWNED_GROUPS.add(child.pid);
       const kill = (force: boolean) => {
         if (child.pid === undefined) return;
         if (process.platform === "win32") {
@@ -90,6 +117,7 @@ export async function runLoggedCommand(
       child.once("close", (exitCode, signal) => {
         // npm may exit before a descendant that ignored SIGTERM. Finish the owned group.
         if (reason === "cancelled" || reason === "timeout") kill(true);
+        if (child.pid !== undefined) OWNED_GROUPS.delete(child.pid);
         clearTimeout(timeout);
         if (escalation !== undefined) clearTimeout(escalation);
         options.signal?.removeEventListener("abort", abort);

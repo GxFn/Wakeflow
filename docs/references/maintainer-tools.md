@@ -336,3 +336,45 @@ npm run --silent wf -- doctor inspect --input .build/diagnostics/exports/summary
 本入口需要开发仓库，仍不解决无源码安装诊断、宿主选择和窗口MCP可信关联。耗时表已显式采用上一批完整门测得的279文件数据；它只调整派发顺序，新测试仍按未知项优先，所有用例、断言、fsync和超时保持原设置。
 
 第六批结果见§13.160：19项quick、两种宿主的真实CLI正反场景、最终1326项完整门及双宿主smoke通过。2 worker已跑完测试但触达外层预算的回执保留；3 worker在原预算内完成整门。并发选择仍需依据负载，不能把一次通过当作稳定上限。
+
+## 13. 构建锁
+
+```sh
+npm run locked -- npm test
+npm run locked -- npm run test:typescript:focused -- tests/kernel
+npm run locked -- npm run build:artifacts:committed
+```
+
+所有会编译进 `.build/` 或改写 `plugins/` 的命令都应持有同一把仓库构建锁：两个 `tsc -b` 写同一个输出目录，或一次聚焦编译落在正在读 `.build/` 的完整门中间，都会产生混合字节与偶发失败（§13.161）。声明是 `mkdir .build/locks/build.lock`，目录内的 `owner.json` 写明 pid、令牌、命令和开始时间；持有者进程已退出的声明视为陈旧并移除，活着的持有者则等待，每 30 秒在 stderr 报告一次，`WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS`（缺省 3600）用完后以 75 退出。被包装的命令继承 `WAKEFLOW_BUILD_LOCK_TOKEN`，同令牌的嵌套调用直接重入。`wf verify` 与 `wf handoff` 的 `build:check` 自带这把锁，所以 `npm run wf -- verify gate` 不必再包一层；`npm run wf` 本身先编译 tooling 的那一步仍在锁外，它只写 `.build/tooling`，并且是增量的。PID 复用只会让等待变长，不会让两个写者同时进入；这不是跨仓库或跨机器的锁。
+
+## 14. 受影响测试与聚焦选择
+
+```sh
+npm run test:typescript:focused -- tests/kernel tests/capabilities/tasking/decide.test.ts
+npm run test:typescript:focused -- --changed
+npm run test:typescript:focused -- --changed --since HEAD~1
+npm run --silent wf -- impact tests [--since REF]
+npm run --silent wf -- verify quick --changed [--since REF]
+```
+
+聚焦值可以是 `tests/` 下的当前测试文件或目录（展开为其中全部测试源）；写错的路径在错误里点名。`--changed` 由 Git 变更集（`git diff --name-only <since>` 加未跟踪文件）沿 `src/**` 与 `tests/**` 的静态相对导入反向传播，落到 `.test.ts` 的入选，`reasons` 记录每个测试的第一条来源。它是开发时的聚焦建议，不是完整门：Schema 与生成合同、agent-text 与宿主文本画像、工具链输入（package/tsconfig/biome/knip）、架构规则、测试运行器与耗时表的改动，或超过 80 个文件的选择集，都给出 `fullGateRecommended` 和原因；动态装配、Schema `$ref` 与 agent-text 占位符不在静态图里。没有受影响的测试时运行器如实说明并跳过，`verify quick --changed` 只跑静态检查并把 `selection` 写进回执；未选中的测试不能被说成通过。
+
+## 15. 交接检查
+
+```sh
+npm run --silent wf -- handoff
+npm run --silent wf -- handoff --no-artifacts
+```
+
+把 CLAUDE.md 的交接规则变成一条只读命令，五项检查各自给出 passed / failed / unavailable：`git diff --check`（含 staged）；私有内容——新增行与未跟踪文本文件里的本机家目录（当前用户名）、`/private/tmp/claude-`、`/var/folders/` 路径按失败，凭证样式（提供商令牌、私钥块、`password/secret/token/api_key=` 赋值）在 `tests/` 外按失败、在 `tests/` 内按 review 列出；`build:check`（`--no-artifacts` 跳过时该项 unavailable，不阻止整体通过，日志留在 `.build/handoff/run-…/`）；docs/README 的"最新节点 §13.N"是否等于 gate-log 最后一节，`docs/reviews` 与 `docs/references` 的每个文件是否被索引；Git 分支、修改/未跟踪计数与相对本地 origin/main 的领先/落后。它不改任何文件，也不是隐私门的替代：内核的隐私扫描仍是证据与归档的权威。
+
+## 16. 版本准备
+
+```sh
+npm run --silent wf -- release bump --version 1.1.0-rc.6
+npm run --silent wf -- release bump --version 1.1.0-rc.6 --apply
+```
+
+唯一版本输入是 `assets/release/version.json`，Claude marketplace 的 `wakeflow` 条目是手工维护的第二处；两个插件的 `package.json` 与清单由构建器渲染。预览列出这两处的从/到、四个生成文件的当前版本和后续步骤；`--apply` 只写前两处。相同版本、非发布序列（主版本号低于 1）和非法文本被拒绝。重建（`build:artifacts:committed`）、整门与 smoke、提交、推送、打 tag 与缓存刷新仍是各自独立且分别授权的动作，`release:check` 仍是提交后的严格门。
+
+`wf` 收到第二次 SIGINT/SIGTERM 时先 SIGKILL 自己派生的进程组再以 130 退出，不再留下继续跑的 `npm test`（§13.161 T7-F5）。

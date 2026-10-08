@@ -92,9 +92,18 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
 ## Verification
 
 - Run focused tests for the changed behavior while iterating:
-  `npm run test:typescript:focused -- <test files>`. `npm run wf -- verify
-  quick --files <test files>` runs the same tests with the static checks and
-  leaves a receipt under `.build/verification/`.
+  `npm run test:typescript:focused -- <test files or tests/ directories>`, or
+  `-- --changed` to run the tests reached by the current Git change set.
+  `npm run wf -- verify quick --files <test files>` (or `--changed`) runs the
+  same tests with the static checks and leaves a receipt under
+  `.build/verification/`.
+- When another session or agent may be compiling or testing in this tree,
+  run every `.build/`- or `plugins/`-writing command under the repository
+  build lock: `npm run locked -- npm test`. `wf verify` and `wf handoff`
+  hold that lock themselves.
+- `npm run wf -- handoff` runs the read-only handoff checklist (whitespace,
+  private content, `build:check`, docs pointers, Git state); run it before
+  reporting completion and fix what it names.
 - `npm test` is the gate: typecheck, architecture rules, lint and format
   checks (Biome), unused-code check (knip), the TypeScript tests including the
   twenty end-to-end scenarios, the Schema drift check, and `build:check`
@@ -120,7 +129,8 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   version.
 - A version bump, artifact rebuild, commit, push to `main`, tag, publication,
   and local cache refresh are separate operations. Perform only the operations
-  the user asked for and preserve their order explicitly.
+  the user asked for and preserve their order explicitly. `npm run wf --
+  release bump --version X --apply` performs only the first of them.
 - `npm run release:check` is a strict post-commit release consistency gate. It
   expects `main`, a clean tree, the matching tag at `HEAD`, local
   `origin/main` at the same commit, release-eligible artifact manifests and a

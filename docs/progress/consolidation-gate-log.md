@@ -4513,3 +4513,19 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话、真实的 `claude plugin` 缓存刷新（只用假 CLI 验证两步顺序与核对）、lab/live 环境、`smoke:artifacts`（制品字节未变）。`wf mcp call` 只对一个空目录验证了拒绝路径，没有对初始化过的可丢弃工作区跑成功路径。
 
 本批只改 `tooling/`、`tests/tooling/` 与文档，未提交；§13.162 已作为 24c8a7db 提交。
+
+### 13.164 开发便捷脚本与脚手架第三批（2026-10-07）
+
+用户提交第二批后要求继续。本批补 2026-10-03 工具规划 §4.6 里仍开放的两项：变更影响检查与 Design 模板；都只改 `tooling/`、`tests/tooling/` 与文档。本节的小节头与 docs/README 指针仍由 `wf scaffold node --apply` 生成。
+
+- `wf impact report [--since REF]`：把 Git 变更集按 CLAUDE.md 的所有权规则分类——Schema、运行时（按六层与切片归 owner）、宿主、入口、agent-text、发布元数据、tooling、测试、文档、CI、工具链输入、仓库文件；手改的 `plugins/` 与 `src/contracts/generated/` 单独列出并警告，分不进规则的路径点名。给出 `schemaBuildRequired`、`artifactsAffected`、受影响测试（复用 §13.162 的选择）与按顺序排好的建议命令。静态图说明不了的影响仍由 `fullGateRecommended` 兜底；`impacted-tests.ts` 导出了变更集与修订校验供它复用。
+- `wf scaffold requirement (--root WORKSPACE | --design DIR) --name NAME --title TITLE [--apply]`：从 Design 技能参考的两个骨架代码块生成 `requirement.md` 与 `landing.md`，写进 Design 支持面的 `drafts/<name>/`；`--root` 从工作区配置解析 design 支持面路径。只限 `requirement` 类型，不填用户确认、不发明验收锚点、不发布，`nextSteps` 给出 preview 该传的 `requirementPath`/`landingPath`。技能文本是唯一来源，骨架不在 tooling 里另抄一份。
+
+验证与观察：
+
+- 新增 2 个测试文件、3 个用例：变更影响报告的分类、owner 归属、Schema 与制品判断、建议命令顺序、手改生成目录与制品的警告、只改 tooling 时不触及制品；需求包骨架的预览/写入、标题替换、已存在与参数错误拒绝、显式 `--design`；CLI 接线新增 `impact report` 与 `scaffold requirement` 的参数校验。第一轮聚焦暴露一处测试期望错误（夹具里手改的生成合同本身就建议整门，所以不该再期待聚焦命令），修正后聚焦 6/6。
+- 第一次完整门在 lint 阶段止于 `noAssignInExpressions`（`(owners[owner] ??= []).push`），改成显式三行后通过。最终完整门：2 worker，1365 项全部通过，零失败/取消/skip/todo，测试阶段 1194 秒，整门含 schema:check 与 build:check（claude ok / codex ok）约 22 分钟；比 §13.163 多 3 项用例。
+- `wf handoff`（含真实 `build:check`）五项全绿、无 review 提示。本节的小节头与 docs/README 指针由 `wf scaffold node --section 13.164 --apply` 生成。
+- 未运行：原生宿主会话、lab/live、`smoke:artifacts`（制品字节未变）；`wf scaffold requirement` 只在夹具工作区验证了文件与标题，没有接着用 `wakeflow_publish_requirement` 预览骨架。
+
+本批只改 `tooling/`、`tests/tooling/` 与文档，未提交；§13.162、§13.163 已分别作为 24c8a7db、2169db0b 提交。

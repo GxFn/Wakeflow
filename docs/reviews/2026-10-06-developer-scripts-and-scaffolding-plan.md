@@ -113,7 +113,11 @@ Schema/生成合同、agent-text 与宿主文本画像、工具链输入、架�
    清单摘要并与已提交制品比较；Codex 按 unavailable。
 3. `wf test flaky`、`wf atlas drift`、`wf scaffold test|node`、`wf timings apply`：按第 2 节的范围实现，
    各带未知输入、失败与清理责任的测试。
-4. `wf claude turn/read` 未实现，发现边界冲突：发货助手的 `deliver` 只接受 Wakeflow 投递许可，
+4. 第三批（§13.164）：`wf impact report` 按所有权规则分类变更集、判断是否要 `schema:build`/重建制品、
+   并按顺序给出命令（2026-10-03 规划 §4.6 的 impact 第一版，静态图之外仍由整门兜底）；`wf scaffold
+   requirement` 从 Design 技能参考的骨架生成 `drafts/<name>/` 的需求包草稿对（同一规划 §4.6 的
+   Design 模板，不填确认、不发明锚点）。
+5. `wf claude turn/read` 未实现，发现边界冲突：发货助手的 `deliver` 只接受 Wakeflow 投递许可，
    不能粘任意文本；另造 tmux 驱动与"不重建第二个 tmux 管理器"冲突。两个可选方案待裁决：给
    助手加一条仅供维护者的 `type` 子命令（随制品发货，需走生成闭包与隐私边界），或继续使用会话
    scratchpad 脚本并把它们固化进 `tests/support/`。

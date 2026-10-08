@@ -103,7 +103,9 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   hold that lock themselves.
 - `npm run wf -- handoff` runs the read-only handoff checklist (whitespace,
   private content, `build:check`, docs pointers, Git state); run it before
-  reporting completion and fix what it names.
+  reporting completion and fix what it names. `npm run wf -- impact report`
+  classifies the current change set by ownership and lists the commands to
+  run next (schema build, artifact rebuild, focused or full gate, smoke).
 - `npm test` is the gate: typecheck, architecture rules, lint and format
   checks (Biome), unused-code check (knip), the TypeScript tests including the
   twenty end-to-end scenarios, the Schema drift check, and `build:check`

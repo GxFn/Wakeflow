@@ -154,3 +154,99 @@ export function applyTestDurations(rootInput: string, receipt: string): Readonly
     ],
   );
 }
+
+const DESIGN_REFERENCE =
+  "assets/agent-text/skills/wakeflow-design/references/requirement-package.md";
+
+/** 从 Design 技能参考里取出 `requirement.md` 与 `landing.md` 两个骨架代码块：技能文本是唯一来源。 */
+function designSkeletons(
+  repositoryRoot: string,
+): Readonly<{ requirement: string; landing: string }> {
+  const reference = readFileSync(path.join(repositoryRoot, DESIGN_REFERENCE), "utf8");
+  const block = (label: string): string => {
+    const start = reference.indexOf(`\`${label}\`:\n\n\`\`\`markdown\n`);
+    if (start < 0) throw new Error(`${DESIGN_REFERENCE} has no ${label} skeleton.`);
+    const bodyStart = reference.indexOf("```markdown\n", start) + "```markdown\n".length;
+    const end = reference.indexOf("\n```", bodyStart);
+    if (end < 0) throw new Error(`${DESIGN_REFERENCE} has an unterminated ${label} skeleton.`);
+    return `${reference.slice(bodyStart, end)}\n`;
+  };
+  return { requirement: block("requirement.md"), landing: block("landing.md") };
+}
+
+function designSurfaceOf(workspace: string): string {
+  const parsed: unknown = JSON.parse(
+    readFileSync(path.join(workspace, "wakeflow.config.json"), "utf8"),
+  );
+  const topology =
+    parsed !== null && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>).topology
+      : null;
+  const surfaces =
+    topology !== null && typeof topology === "object"
+      ? (topology as Record<string, unknown>).supportSurfaces
+      : null;
+  const design = Array.isArray(surfaces)
+    ? surfaces.find(
+        (entry: unknown) =>
+          entry !== null &&
+          typeof entry === "object" &&
+          (entry as Record<string, unknown>).capability === "design",
+      )
+    : undefined;
+  const surfacePath = design === undefined ? undefined : (design as Record<string, unknown>).path;
+  if (typeof surfacePath !== "string")
+    throw new Error("The workspace config names no design surface.");
+  return path.resolve(workspace, surfacePath);
+}
+
+/**
+ * `wf scaffold requirement --root WORKSPACE | --design DIR --name NAME --title TITLE [--apply]`：
+ * 在 Design 支持面的 `drafts/<name>/` 写 `requirement.md` 与 `landing.md` 骨架（只限 `requirement`
+ * 类型；bug/supplement/research 的节换法见技能参考）。不填用户确认，不发明验收锚点，不发布。
+ */
+export function scaffoldRequirement(
+  repositoryRoot: string,
+  request: Readonly<{
+    workspace?: string;
+    design?: string;
+    name: string;
+    title: string;
+    apply?: boolean;
+  }>,
+): Readonly<ScaffoldResult> {
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/u.test(request.name))
+    throw new Error("--name must be a short kebab-case name.");
+  if (!/^[^\n`|]{2,80}$/u.test(request.title)) throw new Error("--title must be one short line.");
+  if ((request.workspace === undefined) === (request.design === undefined))
+    throw new Error("Give exactly one of --root WORKSPACE or --design DIR.");
+  const design =
+    request.design === undefined
+      ? designSurfaceOf(path.resolve(request.workspace ?? "."))
+      : path.resolve(request.design);
+  if (lstatSync(design, { throwIfNoEntry: false })?.isDirectory() !== true)
+    throw new Error("The design surface directory does not exist.");
+  const directory = path.join(design, "drafts", request.name);
+  if (lstatSync(directory, { throwIfNoEntry: false }) !== undefined)
+    throw new Error(`drafts/${request.name} already exists in the design surface.`);
+  const skeletons = designSkeletons(path.resolve(repositoryRoot));
+  const requirement = skeletons.requirement.replace("<Title>", request.title);
+  const landing = skeletons.landing.replace("<Title>", request.title);
+  if (request.apply === true) {
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(path.join(directory, "requirement.md"), requirement, { flag: "wx" });
+    writeFileSync(path.join(directory, "landing.md"), landing, { flag: "wx" });
+  }
+  const relative = `drafts/${request.name}`;
+  return finish(
+    directory,
+    `${relative}/requirement.md:\n${requirement}\n${relative}/landing.md:\n${landing}`,
+    request.apply === true,
+    [
+      request.apply === true
+        ? `replace every prompt line, then preview with wakeflow_publish_requirement using requirementPath "${relative}/requirement.md" and landingPath "${relative}/landing.md"`
+        : "re-run with --apply to write the two drafts",
+      "the skeleton carries no user confirmation and no acceptance anchors; preview refuses it until they are written",
+    ],
+  );
+}

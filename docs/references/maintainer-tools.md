@@ -433,3 +433,21 @@ npm run --silent wf -- timings apply --receipt .build/verification/run-EXAMPLE/r
 与 `timings export` 同一套核验（只接受完整通过的 gate 回执、源码指纹与完整清单一致），把候选表写回 `tooling/testing/test-durations.json`。写回后耗时表是新的仓库输入：旧回执不再证明新字节，交接前要重新跑门。
 
 `wf claude turn/read`（粘贴提示、等待回合、读会话记录）没有在本批实现：发货助手的 `deliver` 只接受 Wakeflow 投递许可，不能粘任意文本；另造一套 tmux 驱动与"不重建第二个 tmux 管理器"的边界冲突。可选方案是给助手加一条仅供维护者使用的 `type` 子命令，或继续用会话 scratchpad 脚本，待裁决。
+
+## 23. 变更影响报告
+
+```sh
+npm run --silent wf -- impact report
+npm run --silent wf -- impact report --since HEAD~1
+```
+
+把 Git 变更集（相对 `--since`，缺省 HEAD，加未跟踪文件）按 CLAUDE.md 的所有权规则分类：Schema、运行时（按六层与切片归 owner）、宿主、入口、agent-text、发布元数据、tooling、测试、文档、CI、工具链输入、仓库文件；手改的 `plugins/` 与 `src/contracts/generated/` 单独列出并给出警告，分不进任何规则的路径点名。随后给出 `schemaBuildRequired`、`artifactsAffected`、受影响测试（复用 §14 的选择）与按顺序排好的建议命令：`schema:build`/`schema:check`、`build:artifacts:committed`、聚焦或完整门、`smoke:artifacts`、`wf handoff`。它是开发建议，不替代完整门；静态图说明不了的影响仍由 `fullGateRecommended` 兜底。
+
+## 24. 脚手架：需求包草稿
+
+```sh
+npm run --silent wf -- scaffold requirement --root "<disposable-workspace>" --name smoke-file --title "Smoke file"
+npm run --silent wf -- scaffold requirement --design "<design-surface-dir>" --name smoke-file --title "Smoke file" --apply
+```
+
+从 Design 技能参考（`assets/agent-text/skills/wakeflow-design/references/requirement-package.md`）的两个骨架代码块生成 `requirement.md` 与 `landing.md`，写进 Design 支持面的 `drafts/<name>/`；`--root` 从工作区的 `wakeflow.config.json` 解析 design 支持面路径，`--design` 直接给目录。只限 `requirement` 类型；bug、supplement、research 的节换法按技能参考手工调整。骨架不填用户确认、不发明验收锚点、不发布：preview 会拒绝它，直到提示行被真实内容替换；`nextSteps` 给出 preview 该传的 `requirementPath` 与 `landingPath`。这是给维护者在可丢弃工作区演练 Design 流程用的，不是替 Design 窗口写需求。

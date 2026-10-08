@@ -11,7 +11,11 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-import { scaffoldGateLogNode, scaffoldTest } from "../../../tooling/scaffold/scaffold.js";
+import {
+  scaffoldGateLogNode,
+  scaffoldRequirement,
+  scaffoldTest,
+} from "../../../tooling/scaffold/scaffold.js";
 
 function write(root: string, relative: string, text: string): void {
   mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
@@ -73,4 +77,71 @@ test("日志节点骨架：只接受下一个节号，追加小节头并挪动 d
     () => scaffoldGateLogNode(root, { section: "13.3", title: "third" }),
     /must point at §13\.2/u,
   );
+});
+
+test("需求包骨架：从 Design 技能参考取两个骨架写进 Design 支持面的 drafts/<name>/，标题替换，已存在与参数错误被拒", (t) => {
+  const repository = process.cwd();
+  const workspace = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-scaffold-requirement-")),
+  );
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+  write(
+    workspace,
+    "wakeflow.config.json",
+    `${JSON.stringify({ kind: "WakeflowConfig", topology: { supportSurfaces: [{ capability: "design", path: "Design" }] } })}\n`,
+  );
+  mkdirSync(path.join(workspace, "Design", "drafts"), { recursive: true });
+  const preview = scaffoldRequirement(repository, {
+    workspace,
+    name: "smoke-file",
+    title: "Smoke file",
+  });
+  equal(preview.changesApplied, false);
+  match(preview.preview, /# Smoke file\n\n## Goal\n/u);
+  match(preview.preview, /## Acceptance criteria\n1\. /u);
+  match(preview.preview, /# Smoke file - landing\n\n## Code facts\n/u);
+  match(preview.preview, /## Testing decision\n/u);
+  equal(existsSync(path.join(workspace, "Design/drafts/smoke-file")), false);
+  const applied = scaffoldRequirement(repository, {
+    workspace,
+    name: "smoke-file",
+    title: "Smoke file",
+    apply: true,
+  });
+  equal(applied.changesApplied, true);
+  match(
+    readFileSync(path.join(workspace, "Design/drafts/smoke-file/requirement.md"), "utf8"),
+    /## User confirmation\n/u,
+  );
+  match(
+    readFileSync(path.join(workspace, "Design/drafts/smoke-file/landing.md"), "utf8"),
+    /## Landing plan\n/u,
+  );
+  match(applied.nextSteps[0] ?? "", /requirementPath "drafts\/smoke-file\/requirement\.md"/u);
+  throws(
+    () => scaffoldRequirement(repository, { workspace, name: "smoke-file", title: "Smoke file" }),
+    /already exists/u,
+  );
+  throws(
+    () => scaffoldRequirement(repository, { workspace, name: "Bad Name", title: "x y" }),
+    /kebab-case/u,
+  );
+  throws(() => scaffoldRequirement(repository, { name: "other", title: "x y" }), /exactly one of/u);
+  throws(
+    () =>
+      scaffoldRequirement(repository, {
+        workspace,
+        design: path.join(workspace, "Design"),
+        name: "other",
+        title: "x y",
+      }),
+    /exactly one of/u,
+  );
+  // 显式 --design 不读配置。
+  const explicit = scaffoldRequirement(repository, {
+    design: path.join(workspace, "Design"),
+    name: "second",
+    title: "Second",
+  });
+  equal(explicit.target, path.join(workspace, "Design", "drafts", "second"));
 });

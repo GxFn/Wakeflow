@@ -6,6 +6,7 @@ import { summarizeAtlasDrift } from "./atlas/drift.js";
 import { BuildLockError } from "./build-lock.js";
 import { collectDiagnosticBundle, inspectDiagnosticBundle } from "./diagnostics/bundle.js";
 import { checkHandoff } from "./handoff/handoff.js";
+import { reportChangeImpact } from "./impact/change-impact.js";
 import {
   inspectArtifactInstallation,
   inspectDevelopmentEnvironment,
@@ -23,7 +24,12 @@ import { callArtifactTool, parseToolArguments } from "./mcp/call.js";
 import { captureHostReceipt } from "./live/receipt.js";
 import { planVersionBump } from "./release/bump-version.js";
 import { refreshPluginCache } from "./release/cache-refresh.js";
-import { applyTestDurations, scaffoldGateLogNode, scaffoldTest } from "./scaffold/scaffold.js";
+import {
+  applyTestDurations,
+  scaffoldGateLogNode,
+  scaffoldRequirement,
+  scaffoldTest,
+} from "./scaffold/scaffold.js";
 import { listFaultSuites, runFaultSuite } from "./testing/fault-suites.js";
 import { triageFlakyTests } from "./testing/flaky.js";
 import { selectImpactedTests } from "./testing/impacted-tests.js";
@@ -65,6 +71,7 @@ npm run wf -- capture inspect --id CAPTURE_ID
 npm run wf -- ci export --summary VERIFICATION_SUMMARY_JSON
 npm run wf -- ci verify --bundle EXPORTED_REPORT_DIRECTORY
 npm run wf -- impact tests [--since REF]
+npm run wf -- impact report [--since REF]
 npm run wf -- handoff [--no-artifacts]
 npm run wf -- release bump --version X.Y.Z[-pre] [--apply]
 npm run wf -- mcp call --candidate ARTIFACT_DIR --root WORKSPACE --tool wakeflow_status [--input JSON_FILE | --arguments JSON]
@@ -73,6 +80,7 @@ npm run wf -- test flaky --files tests/path.test.ts [...] --runs N
 npm run wf -- atlas drift
 npm run wf -- scaffold test --for src/path.ts [--apply]
 npm run wf -- scaffold node --section 13.N --title TITLE [--apply]
+npm run wf -- scaffold requirement (--root WORKSPACE | --design DIR) --name NAME --title TITLE [--apply]
 npm run wf -- timings apply --receipt .build/verification/run-ID/receipt.json
 
 Verification writes private receipts under .build/verification/. It never rebuilds plugins/ implicitly.
@@ -82,14 +90,14 @@ Business scenarios allocate a NEW root, run fixed fixtures, then seal ownership.
 Live records plans, attempts and imported receipts. Imported evidence cannot establish native-host acceptance.
 Doctor collection stores explicit private files and projected stdio observations; export writes a separate allowlisted summary, never uploads or repairs a workspace.
 Capture freezes imported test contracts and explicit commands. Run executes one declared step once; it never decides test acceptance, retries or imports evidence.
-Impact lists the tests reached by a change set through static imports; it is a focusing aid, never a substitute for the full gate.
+Impact lists the tests reached by a change set through static imports (tests) or classifies the whole change set by ownership with the commands to run next (report); both are focusing aids, never a substitute for the full gate.
 Handoff runs the read-only pre-handoff checklist (whitespace, private content, build:check, docs pointers, Git state) and writes nothing.
 Release bump edits only assets/release/version.json and the Claude marketplace entry; rebuilding, committing, tagging and cache refreshes stay separate actions.
 Every verify, handoff build:check and \`npm run locked -- <command>\` holds the one repository build lock (.build/locks/build.lock).
 Mcp call starts a new stdio process on a verified artifact copy and calls one public tool once; mutations are real, so use only disposable workspaces. It proves nothing about an existing chat's MCP.
 Cache refresh runs the host CLI only with --yes (uninstall, then install) and compares the cache manifest with the committed artifact; windows still need a restart or resume.
 Test flaky repeats one focused run N times under the build lock and never retries a failure away. Atlas drift only reads the map subproject's own check.
-Scaffold writes a failing test skeleton or a gate-log section header only with --apply; timings apply rewrites the tracked duration table, which is a new repository input.
+Scaffold writes a failing test skeleton, a gate-log section header or a Design draft pair (requirement.md and landing.md from the Design skill's own skeletons) only with --apply; timings apply rewrites the tracked duration table, which is a new repository input.
 `;
 
 class UsageError extends Error {}
@@ -140,6 +148,8 @@ function flags(args: readonly string[]): Map<string, string[]> {
         "--for",
         "--section",
         "--title",
+        "--design",
+        "--name",
       ].includes(key) ||
       values.has(key)
     )
@@ -398,8 +408,13 @@ function runImpactCommand(
   options: Map<string, string[]>,
   root: string,
 ) {
-  if (action !== "tests" || [...options.keys()].some((key) => key !== "--since")) invalid();
+  if (
+    (action !== "tests" && action !== "report") ||
+    [...options.keys()].some((key) => key !== "--since")
+  )
+    invalid();
   const since = options.get("--since")?.[0];
+  if (action === "report") return reportChangeImpact(root, since === undefined ? {} : { since });
   return {
     ...selectImpactedTests(root, since === undefined ? {} : { since }),
     status: "passed" as const,
@@ -526,8 +541,28 @@ function runScaffoldCommand(
       invalid();
     return scaffoldTest(root, { for: target, apply });
   }
-  const section = options.get("--section")?.[0];
   const title = options.get("--title")?.[0];
+  if (action === "requirement") {
+    const name = options.get("--name")?.[0];
+    const workspace = options.get("--root")?.[0];
+    const design = options.get("--design")?.[0];
+    if (
+      name === undefined ||
+      title === undefined ||
+      [...options.keys()].some(
+        (key) => !["--root", "--design", "--name", "--title", "--apply"].includes(key),
+      )
+    )
+      invalid();
+    return scaffoldRequirement(root, {
+      ...(workspace === undefined ? {} : { workspace: path.resolve(root, workspace) }),
+      ...(design === undefined ? {} : { design: path.resolve(root, design) }),
+      name,
+      title,
+      apply,
+    });
+  }
+  const section = options.get("--section")?.[0];
   if (
     action !== "node" ||
     section === undefined ||

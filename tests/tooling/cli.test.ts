@@ -64,6 +64,14 @@ test("wf 新命令的接线：impact tests、handoff --no-artifacts、release bu
   equal(impact.kind, "WakeflowImpactedTests");
   equal(impact.tests.join(","), "tests/a.test.ts");
   equal(impact.status, "passed");
+  const impactReport = (await runToolingCli(["impact", "report"], root)) as unknown as {
+    kind: string;
+    changed: number;
+    recommended: string[];
+  };
+  equal(impactReport.kind, "WakeflowChangeImpact");
+  equal(impactReport.changed, 1);
+  equal(impactReport.recommended.includes("npm run build:artifacts:committed"), true);
   const handoff = (await runToolingCli(["handoff", "--no-artifacts"], root)) as unknown as {
     kind: string;
     status: string;
@@ -100,6 +108,7 @@ test("wf 新命令的接线：impact tests、handoff --no-artifacts、release bu
   equal(atlas.status, "unavailable");
   for (const args of [
     ["impact", "files"],
+    ["impact", "report", "--files", "x"],
     ["mcp", "call", "--candidate", "plugins/codex-wakeflow", "--root", "."],
     ["mcp", "call", "--candidate", "x", "--root", ".", "--tool", "wakeflow_status", "--runs", "1"],
     ["cache", "refresh"],

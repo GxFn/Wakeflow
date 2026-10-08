@@ -48,6 +48,12 @@ const FULL_GATE_PATTERNS: readonly Readonly<{ pattern: RegExp; reason: string }>
   { pattern: /^tooling\/testing\/test-durations\.json$/u, reason: "test-schedule" },
 ];
 
+export function assertRevision(since: string): string {
+  if (!/^[A-Za-z0-9_./~^-]{1,128}$/u.test(since) || since.startsWith("-"))
+    throw new Error("The change baseline must be one Git revision.");
+  return since;
+}
+
 function git(root: string, args: readonly string[]): string {
   const result = spawnSync("git", [...args], {
     cwd: root,
@@ -61,7 +67,8 @@ function git(root: string, args: readonly string[]): string {
   return result.stdout;
 }
 
-function changedFiles(root: string, since: string): readonly string[] {
+/** 变更集：相对 `since` 的 tracked 改动加未跟踪文件，仓库相对路径，排序去重。 */
+export function changedFiles(root: string, since: string): readonly string[] {
   const tracked = git(root, ["diff", "--name-only", "--diff-filter=ACMRD", since, "--"]).split(
     "\n",
   );
@@ -133,9 +140,7 @@ export function selectImpactedTests(
   options: Readonly<{ since?: string }> = {},
 ): Readonly<ImpactedTestSelection> {
   const root = path.resolve(rootInput);
-  const since = options.since ?? "HEAD";
-  if (!/^[A-Za-z0-9_./~^-]{1,128}$/u.test(since) || since.startsWith("-"))
-    throw new Error("The change baseline must be one Git revision.");
+  const since = assertRevision(options.since ?? "HEAD");
   const changed = changedFiles(root, since);
   const sources = [...collectTypeScript(root, "src"), ...collectTypeScript(root, "tests")];
   const importers = new Map<string, Set<string>>();

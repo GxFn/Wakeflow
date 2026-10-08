@@ -16,6 +16,7 @@ import { type TestContext, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { runToolingCli } from "../../../tooling/cli.js";
+import { applyTestDurations } from "../../../tooling/scaffold/scaffold.js";
 import { proposeTestDurations } from "../../../tooling/testing/test-duration-report.js";
 import { exportCiVerification, verifyCiBundle } from "../../../tooling/verification/export-ci.js";
 import { sha256 } from "../../../tooling/verification/files.js";
@@ -136,6 +137,16 @@ test("verification records a real child test run with source identity and durabl
   writeFileSync(summaryFile, JSON.stringify(result));
   const proposal = proposeTestDurations(root, path.join(root, result.receipt));
   deepEqual(Object.keys(proposal.durationsMs), ["tests/case.test.ts"]);
+  // timings apply 写回跟踪的耗时表；写回后它是新的仓库输入。
+  const applied = applyTestDurations(root, path.join(root, result.receipt));
+  equal(applied.target, "tooling/testing/test-durations.json");
+  equal(applied.changesApplied, true);
+  deepEqual(
+    JSON.parse(readFileSync(path.join(root, "tooling/testing/test-durations.json"), "utf8")),
+    proposal,
+  );
+  // 写回的耗时表是新的仓库输入；删掉它，后面的回执篡改检查才按原输入判断。
+  rmSync(path.join(root, "tooling"), { recursive: true, force: true });
   equal(proposal.measurement.files, 1);
   const events = path.join(root, path.dirname(result.receipt), "test-events.jsonl");
   writeFileSync(events, `${readFileSync(events, "utf8")}\n`);

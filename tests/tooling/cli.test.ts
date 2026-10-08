@@ -29,6 +29,7 @@ function fixture(t: TestContext): string {
     `${JSON.stringify({ plugins: [{ name: "wakeflow", version: "1.0.0" }] })}\n`,
   );
   write(root, "src/a.ts", "export const a = 1;\n");
+  write(root, "src/b.ts", "export const b = 1;\n");
   write(root, "tests/a.test.ts", 'import { a } from "../src/a.js";\n');
   const git = (args: string[]) => {
     const result = spawnSync(
@@ -80,8 +81,36 @@ test("wf 新命令的接线：impact tests、handoff --no-artifacts、release bu
   };
   equal(bump.kind, "WakeflowVersionBumpPlan");
   equal(bump.changesApplied, false);
+  const scaffold = (await runToolingCli(
+    ["scaffold", "test", "--for", "src/b.ts"],
+    root,
+  )) as unknown as {
+    kind: string;
+    target: string;
+    changesApplied: boolean;
+  };
+  equal(scaffold.kind, "WakeflowScaffold");
+  equal(scaffold.target, "tests/b.test.ts");
+  equal(scaffold.changesApplied, false);
+  const atlas = (await runToolingCli(["atlas", "drift"], root)) as unknown as {
+    kind: string;
+    status: string;
+  };
+  equal(atlas.kind, "WakeflowAtlasDrift");
+  equal(atlas.status, "unavailable");
   for (const args of [
     ["impact", "files"],
+    ["mcp", "call", "--candidate", "plugins/codex-wakeflow", "--root", "."],
+    ["mcp", "call", "--candidate", "x", "--root", ".", "--tool", "wakeflow_status", "--runs", "1"],
+    ["cache", "refresh"],
+    ["cache", "refresh", "--host", "claude-code", "--yes", "x"],
+    ["test", "flaky", "--files", "tests/a.test.ts"],
+    ["test", "flaky", "--runs", "2"],
+    ["atlas", "drift", "--since", "HEAD"],
+    ["scaffold", "test"],
+    ["scaffold", "node", "--section", "13.2"],
+    ["scaffold", "other", "--for", "src/a.ts"],
+    ["timings", "apply"],
     ["impact", "tests", "--files", "x"],
     ["handoff", "now"],
     ["handoff", "--no-artifacts", "x"],

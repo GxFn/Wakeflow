@@ -4490,3 +4490,26 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话、lab/live 环境、`smoke:artifacts`（制品字节未变）。`.mjs` 包装脚本不进 TypeScript 项目，只靠包装脚本测试覆盖；Windows 上的锁与信号路径未实机验证。
 
 本批只改 `tooling/`、`tests/tooling/`、`package.json` 与文档，未提交。
+
+### 13.163 开发便捷脚本与脚手架第二批（2026-10-07）
+
+用户确认第一批并要求继续。本批按[规划](../reviews/2026-10-06-developer-scripts-and-scaffolding-plan.md)第 2 节的 P1/P2 顺序实现六个命令，全部只改 `tooling/`、`tests/tooling/` 与文档，不改运行时、制品与版本号；本节的小节头与 docs/README 指针就是用本批的 `wf scaffold node --apply` 生成的。
+
+- `wf mcp call`：对已核验的制品副本起一个新 stdio 进程调用一次公共工具，复用 lab 的会话封装；工具拒绝按 failed 带公开错误码，结果里出现工作区路径或服务写 stderr 按 unavailable；`root` 只能来自 `--root`。它不证明既有聊天里的 MCP 身份，变更类工具只对可丢弃工作区使用。
+- `wf cache refresh --host claude-code [--yes]`：不带 `--yes` 只给计划与缓存现状；`--yes` 执行 `claude plugin uninstall/install wakeflow@gxfn` 两步，前后核对缓存目录里的制品清单摘要并与已提交制品比较（`--installed`、`--cli` 供覆盖与测试注入）；Codex 按 unavailable。
+- `wf test flaky --files … --runs N`：同一组文件重复运行，持锁，混合结果标 flaky 且非零退出，日志与 `triage.json` 在 `.build/flaky/`。
+- `wf atlas drift`：运行图谱 `check-atlas.mjs --require-current`，按专题汇总过期指纹，并按图谱 README 的基线提交列出此后变化的源文件；只读。
+- `wf scaffold test --for src/<path>.ts [--apply]` 与 `wf scaffold node --section 13.N --title … [--apply]`：镜像路径的失败占位用例；只接受下一个节号的日志小节头与 README 指针迁移。
+- `wf timings apply --receipt R`：与 `timings export` 同一套核验后写回耗时表，并说明它是新的仓库输入。
+
+未实现 `wf claude turn/read`：发货助手的 `deliver` 只接受投递许可，不能粘任意文本，另造 tmux 驱动与"不重建第二个 tmux 管理器"冲突；两个方案（助手加维护者专用 `type` 子命令，或把 scratchpad 脚本固化进 `tests/support/`）列为待裁决。
+
+验证与观察：
+
+- 新增 5 个测试文件、10 个用例：mcp call 对真实已提交制品起进程并以公开错误码拒绝空目录、参数校验；cache refresh 用可执行的假宿主 CLI 覆盖计划、卸载再安装、安装失败、Codex 不支持、版本目录与损坏缓存；flaky 分诊的交替通过/失败、单次通过与预先取消；atlas drift 用桩检查脚本覆盖按专题汇总与基线以来的源文件变化；scaffold 的骨架内容、重复与越界拒绝、节号与指针校验；CLI 接线与 12 组非法参数；`timings apply` 并入 verify 的回执测试。
+- 第一轮聚焦暴露四处本批自己的缺陷：CLI 测试夹具里要生成骨架的模块已有测试；假宿主 CLI 不可执行（需要 shebang 与 0755）且在失败前就复制了制品；耗时表写回在夹具根里缺目录；写回后回执篡改检查受输入变化影响、必须在写回后删掉新输入。修正后聚焦 14/14。
+- 最终完整门：2 worker，1362 项全部通过，零失败/取消/skip/todo，测试阶段 1075 秒，整门含 schema:check 与 build:check（claude ok / codex ok）约 18 分钟；比 §13.162 多 10 项用例。
+- `wf handoff`（含真实 `build:check`）通过，五项全绿、无 review 提示。本节的小节头与 docs/README 指针由 `wf scaffold node --section 13.163 --apply` 生成，日期按本地时区修正后脚手架改用本地日期。
+- 未运行：原生宿主会话、真实的 `claude plugin` 缓存刷新（只用假 CLI 验证两步顺序与核对）、lab/live 环境、`smoke:artifacts`（制品字节未变）。`wf mcp call` 只对一个空目录验证了拒绝路径，没有对初始化过的可丢弃工作区跑成功路径。
+
+本批只改 `tooling/`、`tests/tooling/` 与文档，未提交；§13.162 已作为 24c8a7db 提交。

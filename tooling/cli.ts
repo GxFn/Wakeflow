@@ -2,6 +2,7 @@ import path from "node:path";
 import { CaptureError } from "./capture/io.js";
 import { prepareCapture } from "./capture/plan.js";
 import { inspectCapture, runCapture } from "./capture/run.js";
+import { summarizeAtlasDrift } from "./atlas/drift.js";
 import { BuildLockError } from "./build-lock.js";
 import { collectDiagnosticBundle, inspectDiagnosticBundle } from "./diagnostics/bundle.js";
 import { checkHandoff } from "./handoff/handoff.js";
@@ -18,9 +19,13 @@ import { recordLiveAttempt } from "./live/attempts.js";
 import { LiveError } from "./live/contracts.js";
 import { verifyLiveEvidence } from "./live/evidence.js";
 import { planLiveProject } from "./live/plan.js";
+import { callArtifactTool, parseToolArguments } from "./mcp/call.js";
 import { captureHostReceipt } from "./live/receipt.js";
 import { planVersionBump } from "./release/bump-version.js";
+import { refreshPluginCache } from "./release/cache-refresh.js";
+import { applyTestDurations, scaffoldGateLogNode, scaffoldTest } from "./scaffold/scaffold.js";
 import { listFaultSuites, runFaultSuite } from "./testing/fault-suites.js";
+import { triageFlakyTests } from "./testing/flaky.js";
 import { selectImpactedTests } from "./testing/impacted-tests.js";
 import { proposeTestDurations } from "./testing/test-duration-report.js";
 import { exportCiVerification, verifyCiBundle } from "./verification/export-ci.js";
@@ -62,6 +67,13 @@ npm run wf -- ci verify --bundle EXPORTED_REPORT_DIRECTORY
 npm run wf -- impact tests [--since REF]
 npm run wf -- handoff [--no-artifacts]
 npm run wf -- release bump --version X.Y.Z[-pre] [--apply]
+npm run wf -- mcp call --candidate ARTIFACT_DIR --root WORKSPACE --tool wakeflow_status [--input JSON_FILE | --arguments JSON]
+npm run wf -- cache refresh --host claude-code [--yes] [--installed DIR] [--cli PATH]
+npm run wf -- test flaky --files tests/path.test.ts [...] --runs N
+npm run wf -- atlas drift
+npm run wf -- scaffold test --for src/path.ts [--apply]
+npm run wf -- scaffold node --section 13.N --title TITLE [--apply]
+npm run wf -- timings apply --receipt .build/verification/run-ID/receipt.json
 
 Verification writes private receipts under .build/verification/. It never rebuilds plugins/ implicitly.
 Doctor reads only. Imported runtime reports are unverified; no command installs, trusts or activates a plugin.
@@ -74,6 +86,10 @@ Impact lists the tests reached by a change set through static imports; it is a f
 Handoff runs the read-only pre-handoff checklist (whitespace, private content, build:check, docs pointers, Git state) and writes nothing.
 Release bump edits only assets/release/version.json and the Claude marketplace entry; rebuilding, committing, tagging and cache refreshes stay separate actions.
 Every verify, handoff build:check and \`npm run locked -- <command>\` holds the one repository build lock (.build/locks/build.lock).
+Mcp call starts a new stdio process on a verified artifact copy and calls one public tool once; mutations are real, so use only disposable workspaces. It proves nothing about an existing chat's MCP.
+Cache refresh runs the host CLI only with --yes (uninstall, then install) and compares the cache manifest with the committed artifact; windows still need a restart or resume.
+Test flaky repeats one focused run N times under the build lock and never retries a failure away. Atlas drift only reads the map subproject's own check.
+Scaffold writes a failing test skeleton or a gate-log section header only with --apply; timings apply rewrites the tracked duration table, which is a new repository input.
 `;
 
 class UsageError extends Error {}
@@ -115,6 +131,15 @@ function flags(args: readonly string[]): Map<string, string[]> {
         "--no-artifacts",
         "--version",
         "--apply",
+        "--tool",
+        "--arguments",
+        "--host",
+        "--yes",
+        "--cli",
+        "--runs",
+        "--for",
+        "--section",
+        "--title",
       ].includes(key) ||
       values.has(key)
     )
@@ -122,7 +147,7 @@ function flags(args: readonly string[]): Map<string, string[]> {
     const collected: string[] = [];
     while (i < args.length && !args[i]?.startsWith("--")) collected.push(args[i++] ?? "");
     if (
-      ["--preview", "--changed", "--no-artifacts", "--apply"].includes(key)
+      ["--preview", "--changed", "--no-artifacts", "--apply", "--yes"].includes(key)
         ? collected.length !== 0
         : collected.length === 0 || (key !== "--files" && collected.length !== 1)
     )
@@ -410,13 +435,118 @@ function runReleaseCommand(
   return planVersionBump(root, version, { apply: options.has("--apply") });
 }
 
+function runMcpCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+  signal?: AbortSignal,
+) {
+  const candidate = options.get("--candidate")?.[0];
+  const workspace = options.get("--root")?.[0];
+  const tool = options.get("--tool")?.[0];
+  if (
+    action !== "call" ||
+    candidate === undefined ||
+    workspace === undefined ||
+    tool === undefined ||
+    [...options.keys()].some(
+      (key) => !["--candidate", "--root", "--tool", "--input", "--arguments"].includes(key),
+    )
+  )
+    invalid();
+  const file = options.get("--input")?.[0];
+  const inline = options.get("--arguments")?.[0];
+  return callArtifactTool(
+    {
+      candidate: path.resolve(root, candidate),
+      workspace: path.resolve(root, workspace),
+      tool,
+      arguments: parseToolArguments(root, {
+        ...(file === undefined ? {} : { file }),
+        ...(inline === undefined ? {} : { inline }),
+      }),
+    },
+    signal,
+  );
+}
+
+function runCacheCommand(action: string | undefined, options: Map<string, string[]>, root: string) {
+  const hostId = options.get("--host")?.[0];
+  if (
+    action !== "refresh" ||
+    hostId === undefined ||
+    [...options.keys()].some((key) => !["--host", "--yes", "--installed", "--cli"].includes(key))
+  )
+    invalid();
+  const cli = options.get("--cli")?.[0];
+  const installed = options.get("--installed")?.[0];
+  return refreshPluginCache(root, {
+    hostId,
+    yes: options.has("--yes"),
+    ...(cli === undefined ? {} : { cli: path.resolve(root, cli) }),
+    ...(installed === undefined ? {} : { installed }),
+  });
+}
+
+function runTestCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+  signal?: AbortSignal,
+) {
+  const files = options.get("--files");
+  const runs = options.get("--runs")?.[0];
+  if (
+    action !== "flaky" ||
+    files === undefined ||
+    runs === undefined ||
+    [...options.keys()].some((key) => key !== "--files" && key !== "--runs")
+  )
+    invalid();
+  return triageFlakyTests(root, { files, runs, ...(signal === undefined ? {} : { signal }) });
+}
+
+function runAtlasCommand(action: string | undefined, options: Map<string, string[]>, root: string) {
+  if (action !== "drift" || options.size !== 0) invalid();
+  return summarizeAtlasDrift(root);
+}
+
+function runScaffoldCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+) {
+  const apply = options.has("--apply");
+  if (action === "test") {
+    const target = options.get("--for")?.[0];
+    if (
+      target === undefined ||
+      [...options.keys()].some((key) => key !== "--for" && key !== "--apply")
+    )
+      invalid();
+    return scaffoldTest(root, { for: target, apply });
+  }
+  const section = options.get("--section")?.[0];
+  const title = options.get("--title")?.[0];
+  if (
+    action !== "node" ||
+    section === undefined ||
+    title === undefined ||
+    [...options.keys()].some((key) => !["--section", "--title", "--apply"].includes(key))
+  )
+    invalid();
+  return scaffoldGateLogNode(root, { section, title, apply });
+}
+
 function runTimingsCommand(
   action: string | undefined,
   options: Map<string, string[]>,
   root: string,
 ) {
   const receipt = options.get("--receipt")?.[0];
-  if (action !== "export" || options.size !== 1 || receipt === undefined) invalid();
+  if ((action !== "export" && action !== "apply") || options.size !== 1 || receipt === undefined)
+    invalid();
+  if (action === "apply") return applyTestDurations(root, receipt);
   return {
     kind: "WakeflowTestDurationProposal",
     schemaVersion: 1,
@@ -445,6 +575,11 @@ const COMMANDS: Readonly<Record<string, CommandHandler>> = Object.freeze({
   release: runReleaseCommand,
   timings: runTimingsCommand,
   doctor: runDoctorCommand,
+  mcp: runMcpCommand,
+  cache: runCacheCommand,
+  test: runTestCommand,
+  atlas: runAtlasCommand,
+  scaffold: runScaffoldCommand,
 });
 
 export async function runToolingCli(args: readonly string[], root: string, signal?: AbortSignal) {
@@ -467,6 +602,11 @@ export async function runToolingCli(args: readonly string[], root: string, signa
       | typeof runReleaseCommand
       | typeof runTimingsCommand
       | typeof runDoctorCommand
+      | typeof runMcpCommand
+      | typeof runCacheCommand
+      | typeof runTestCommand
+      | typeof runAtlasCommand
+      | typeof runScaffoldCommand
     >
   >;
 }

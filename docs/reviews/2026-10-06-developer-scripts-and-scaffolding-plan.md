@@ -105,16 +105,18 @@ Schema/生成合同、agent-text 与宿主文本画像、工具链输入、架�
 `package.json` 与清单当前版本并说明它们由 `build:artifacts:committed` 重新渲染；拒绝相同版本、
 非发布序列与非法文本；`nextSteps` 明确重建、整门、提交、推送、打 tag、刷新缓存都是分开授权的动作。
 
-## 4. 第二批与之后
+## 4. 第二批（已实现，§13.163）与之后
 
-1. `wf mcp call`：从 `withLabMcp` 抽出不依赖 lab 清单的会话打开/关闭与错误类别投影；只允许
-   `--root` 指向含 `wakeflow.config.json` 的目录，不接受用户的真实工作区默认值。
-2. `wf cache refresh`：只在 `--yes` 下执行宿主安装命令；之前与之后各跑一次 `install:check`，报告将被
-   加载的 manifest 摘要；Codex 的缓存刷新路径待用户在 Codex 侧确认后再加。
-3. `wf claude turn/read`：包装发货助手的 deliver 与读回；等待"回合结束"用助手已有的 readback 标记，
-   不解析屏幕文字；会话记录读取限制在 `--workspace` 对应的项目目录。
-4. `wf docs node`、`wf scaffold test`、`wf atlas drift`、`wf test flaky`、`wf timings apply`：各自只在
-   确有重复成本时加入，每个都带未知输入、失败与清理责任的测试。
+1. `wf mcp call`：直接复用 `withLabMcp` 的会话与错误类别投影；`--root` 必须是真实目录，`root`
+   不能写进参数；结果带制品身份与 `generated-stdio-new-process` 标记。
+2. `wf cache refresh`：只在 `--yes` 下执行 `claude plugin uninstall/install`；前后核对缓存目录里的制品
+   清单摘要并与已提交制品比较；Codex 按 unavailable。
+3. `wf test flaky`、`wf atlas drift`、`wf scaffold test|node`、`wf timings apply`：按第 2 节的范围实现，
+   各带未知输入、失败与清理责任的测试。
+4. `wf claude turn/read` 未实现，发现边界冲突：发货助手的 `deliver` 只接受 Wakeflow 投递许可，
+   不能粘任意文本；另造 tmux 驱动与"不重建第二个 tmux 管理器"冲突。两个可选方案待裁决：给
+   助手加一条仅供维护者的 `type` 子命令（随制品发货，需走生成闭包与隐私边界），或继续使用会话
+   scratchpad 脚本并把它们固化进 `tests/support/`。
 
 验收口径与 2026-10-03 规划一致：每批先交付端到端的小案例；工具不给自己开门——影响运行时或制品
 的变更仍走重建、整门与 smoke；收益按"少了哪些手工步骤"记录，不以命令数量计。

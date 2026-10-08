@@ -378,3 +378,58 @@ npm run --silent wf -- release bump --version 1.1.0-rc.6 --apply
 唯一版本输入是 `assets/release/version.json`，Claude marketplace 的 `wakeflow` 条目是手工维护的第二处；两个插件的 `package.json` 与清单由构建器渲染。预览列出这两处的从/到、四个生成文件的当前版本和后续步骤；`--apply` 只写前两处。相同版本、非发布序列（主版本号低于 1）和非法文本被拒绝。重建（`build:artifacts:committed`）、整门与 smoke、提交、推送、打 tag 与缓存刷新仍是各自独立且分别授权的动作，`release:check` 仍是提交后的严格门。
 
 `wf` 收到第二次 SIGINT/SIGTERM 时先 SIGKILL 自己派生的进程组再以 130 退出，不再留下继续跑的 `npm test`（§13.161 T7-F5）。
+
+## 17. 对制品副本调用一个 MCP 工具
+
+```sh
+npm run --silent wf -- mcp call --candidate plugins/codex-wakeflow --root "<disposable-workspace>" --tool wakeflow_status
+npm run --silent wf -- mcp call --candidate plugins/codex-wakeflow --root "<disposable-workspace>" --tool wakeflow_verify --arguments '{"demandId":"demand_…"}'
+npm run --silent wf -- mcp call --candidate plugins/codex-wakeflow --root "<disposable-workspace>" --tool wakeflow_maintain_workspace --input request.json
+```
+
+它取代过去每个会话临时拼写的 `mcp-call` 脚本：制品先按自己的清单逐文件核验，工作区根必须是真实目录，`root` 由 `--root` 给出、不能写进参数。调用的是一个新的 stdio 进程，复用 lab 的会话封装：工具以公开错误拒绝时按 `failed` 返回 `mcpError` 的 code/reason，结果里出现工作区绝对路径或服务进程写了 stderr 时按 `unavailable` 报告对应的 lab 错误码。它不能证明既有聊天里的 MCP 身份；变更类工具会真的改工作区，所以只对可丢弃工作区使用。
+
+## 18. 刷新 Claude Code 的插件缓存
+
+```sh
+npm run --silent wf -- cache refresh --host claude-code
+npm run --silent wf -- cache refresh --host claude-code --yes
+```
+
+`claude plugin update` 在版本号不变时报告"已是最新"，所以刷新是 `claude plugin uninstall wakeflow@gxfn` 再 `claude plugin install wakeflow@gxfn` 两步。不带 `--yes` 只给计划与缓存现状；`--yes` 才执行宿主 CLI，前后各核对一次 `~/.claude/plugins/cache/<marketplace>/wakeflow/<version>/` 里的制品清单摘要并与已提交制品比较（`--installed DIR` 覆盖目录，`--cli PATH` 供测试注入桩）。刷新只在用户明确要求时运行；缓存更新不等于窗口已重载——hook 立即用新字节，MCP 服务与技能要等窗口重启或 resume，之后用 `wakeflow_status` 的 `runtime.artifactManifestDigest` 核对。Codex 的缓存路径未在本仓库确认，按 unavailable 报告。
+
+## 19. 偶发失败分诊
+
+```sh
+npm run --silent wf -- test flaky --files tests/tooling/lab/workflow.test.ts --runs 5
+```
+
+同一组文件重复运行 N 次（1–20），每次是一条完整的聚焦运行，整个分诊持有构建锁；输出每次的结果与耗时，混合结果标为 `flaky` 且非零退出，全部失败也非零。它不自动重试洗绿，日志与 `triage.json` 留在 `.build/flaky/run-…/`。
+
+## 20. 图谱漂移摘要
+
+```sh
+npm run --silent wf -- atlas drift
+```
+
+运行独立图谱子项目的 `scripts/check-atlas.mjs --require-current`，按 `maps/<专题>` 汇总过期指纹，并用图谱 README 记录的基线提交列出自那以后变化的 `src/`、`tooling/` 文件（最多 40 个样本）。只读；有漂移时非零退出。刷新图谱仍按 §13.156 的方式人工复核，`check:diagrams` 与 `build` 不在这里运行。
+
+## 21. 脚手架：回归用例与日志节点
+
+```sh
+npm run --silent wf -- scaffold test --for src/kernel/markdown-sections.ts
+npm run --silent wf -- scaffold test --for src/kernel/markdown-sections.ts --apply
+npm run --silent wf -- scaffold node --section 13.164 --title "下一批" --apply
+```
+
+`scaffold test` 把 `src/<path>.ts` 镜像到 `tests/<path>.test.ts`，写入导入与一个会失败的占位用例（生成内容不能自动通过）；已存在的文件、`src/contracts/generated/` 与不存在的模块被拒。`scaffold node` 只接受 gate-log 当前末节的下一个节号，追加小节头与"验证与观察"骨架，并把 docs/README 的"最新节点"指针挪过去；README 指针与末节不一致时拒绝。两者不带 `--apply` 只预览。
+
+## 22. 耗时表写回
+
+```sh
+npm run --silent wf -- timings apply --receipt .build/verification/run-EXAMPLE/receipt.json
+```
+
+与 `timings export` 同一套核验（只接受完整通过的 gate 回执、源码指纹与完整清单一致），把候选表写回 `tooling/testing/test-durations.json`。写回后耗时表是新的仓库输入：旧回执不再证明新字节，交接前要重新跑门。
+
+`wf claude turn/read`（粘贴提示、等待回合、读会话记录）没有在本批实现：发货助手的 `deliver` 只接受 Wakeflow 投递许可，不能粘任意文本；另造一套 tmux 驱动与"不重建第二个 tmux 管理器"的边界冲突。可选方案是给助手加一条仅供维护者使用的 `type` 子命令，或继续用会话 scratchpad 脚本，待裁决。

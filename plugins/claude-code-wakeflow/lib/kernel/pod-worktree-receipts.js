@@ -1,4 +1,3 @@
-import { readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../contracts/identity/wakeflow-durable-id.js";
 import { WAKEFLOW_HOST_IDS, } from "../contracts/vocabulary/wakeflow-host-id.js";
@@ -6,11 +5,13 @@ import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical
 import { parseSha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../foundation/data/json-value.js";
+import { observeAbsoluteNode, readAbsoluteRegularFileText, } from "../foundation/filesystem/absolute-node-observation.js";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
+import { RootedDirectoryTreeRemovalError, removeRootedDirectoryTree, } from "../foundation/filesystem/rooted-directory-tree-removal.js";
 import { RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
@@ -149,7 +150,8 @@ function receiptFail(check) {
 }
 async function realpathOrNull(candidate) {
     try {
-        return await realpath(candidate);
+        const observed = await observeAbsoluteNode(path.resolve(candidate), { follow: true });
+        return observed.state === "present" ? observed.realPath : null;
     }
     catch {
         return null;
@@ -157,10 +159,8 @@ async function realpathOrNull(candidate) {
 }
 async function readPointerFile(candidate) {
     try {
-        const node = await stat(candidate);
-        if (!node.isFile() || node.size > POINTER_FILE_MAXIMUM_BYTES)
-            return null;
-        return (await readFile(candidate, "utf8")).trim();
+        const text = await readAbsoluteRegularFileText(path.resolve(candidate), POINTER_FILE_MAXIMUM_BYTES);
+        return text === null ? null : text.trim();
     }
     catch {
         return null;
@@ -576,31 +576,26 @@ export async function retirePodWorktreeReceipt(root, hostId, podId, repositoryId
 /** 删除一个 pod 的整个回执目录（Wakeflow 自己的私有文件）；不存在即 false。 */
 export async function retirePodReceipts(root, hostId, podId) {
     const ref = podReceiptRootRef(hostId, podId);
-    const absolute = path.join(root.absolutePath, ...ref.split("/"));
     try {
-        const node = await stat(absolute);
-        if (!node.isDirectory())
-            return false;
-    }
-    catch {
-        return false;
-    }
-    try {
-        await rm(absolute, { recursive: true, force: true });
+        return ((await removeRootedDirectoryTree(root, ref, { missing: "ignore" }, "$receipt")) === "removed");
     }
     catch (error) {
+        // 不是目录或无法观察：与之前 `stat` 失败即 false 一致（§13.166；open-items G7 留给批次 2）。
+        if (error instanceof RootedDirectoryTreeRemovalError &&
+            (error.reason === "not-directory" || error.reason === "inspection-failure")) {
+            return false;
+        }
         fail("io-failure", "receipt-retire-directory", "$receipt", { cause: error });
     }
-    return true;
 }
 /** 检出是否仍在：目录存在且带 `.git` 指针文件。 */
 export async function worktreeCheckoutPresent(receipt) {
     try {
-        const node = await stat(receipt.path);
-        if (!node.isDirectory())
+        const checkout = await observeAbsoluteNode(receipt.path, { follow: true });
+        if (checkout.state !== "present" || checkout.node.kind !== "directory")
             return false;
-        const pointer = await stat(path.join(receipt.path, ".git"));
-        return pointer.isFile();
+        const pointer = await observeAbsoluteNode(path.join(receipt.path, ".git"), { follow: true });
+        return pointer.state === "present" && pointer.node.kind === "file";
     }
     catch {
         return false;

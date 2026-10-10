@@ -7,6 +7,7 @@ import { decodeUtf8, encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { createHostHookObservation, writeHostHookObservation, } from "../kernel/hook-observations.js";
 import { hostRuntimeRootRef, parseWakeflowHostId, WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_VERSION, } from "../kernel/layout.js";
+import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { computePromptDigest } from "../kernel/prompt-digest.js";
 /**
  * Wakeflow Entrypoint / Hook Observer：两宿主生命周期 hook 的观察脚本（gate-log §13.97 D1–D4）。
@@ -505,20 +506,21 @@ async function workspaceBindsSession(root, hostId, sessionId) {
     }
     return false;
 }
-// ---- 写入 ---------------------------------------------------------------------
 async function writeObservation(root, input) {
     let directory = null;
     try {
         directory = await RootedDirectory.open(root, "$workspaceRoot");
         const receipt = await writeHostHookObservation(directory, input);
         return Object.freeze({
-            workspaceRoot: root,
-            recordId: receipt.record.recordId,
-            disposition: receipt.disposition,
+            written: Object.freeze({
+                workspaceRoot: root,
+                recordId: receipt.record.recordId,
+                disposition: receipt.disposition,
+            }),
         });
     }
-    catch {
-        return null;
+    catch (error) {
+        return Object.freeze({ failure: error });
     }
     finally {
         if (directory !== null) {
@@ -560,14 +562,45 @@ async function observe(input, written) {
             continue;
         }
         const result = await writeObservation(workspace, record);
-        if (result === null) {
+        if ("failure" in result) {
             failed = true;
+            await recordWriteFailure(workspace, host.value, record.event, result.failure);
         }
         else {
-            written.push(result);
+            written.push(result.written);
         }
     }
     return outcome(failed ? "write-failed" : null, written);
+}
+/**
+ * 写失败留一条事故记录（open-items G8，§13.166）：工作区已初始化时才写，失败静默；verify 的
+ * host-hook-channel 门按宿主数这些记录，用户与 Controller 才看得到"投递看起来发了却没有证据"的原因。
+ */
+async function recordWriteFailure(root, hostId, event, failure) {
+    let directory = null;
+    try {
+        directory = await RootedDirectory.open(root, "$workspaceRoot");
+        await recordIncident(directory, {
+            incidentId: createIncidentId(),
+            source: "hook-observer",
+            hostId,
+            event,
+            error: failure,
+        });
+    }
+    catch {
+        // 事故记录是尽力而为。
+    }
+    finally {
+        if (directory !== null) {
+            try {
+                await directory.close();
+            }
+            catch {
+                // 根句柄关闭失败不改变结果。
+            }
+        }
+    }
 }
 /**
  * 纯函数入口：从不触碰 `process.*`、从不抛出、从不写 stdout。一个工作区写失败只标记

@@ -318,8 +318,8 @@
     },
     {
       "path": "lib/capabilities/demand/archive.js",
-      "bytes": 21486,
-      "sha256": "sha256:547d9b2dc9ef9c418856244064cd91895646dcdd190affcb578bfee6f2596f54",
+      "bytes": 21615,
+      "sha256": "sha256:6191c9b2b4f1ecf658fe498f89536c331ecbd0d3ad6f0968a5aaf070b7b5a1af",
       "mode": "0644",
       "scope": "shared"
     },
@@ -402,8 +402,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/service.js",
-      "bytes": 44549,
-      "sha256": "sha256:034da80de1fecf5f2bc596c8817fbd0053a49752735d4a424a405ec41ef3621e",
+      "bytes": 44789,
+      "sha256": "sha256:e77daa538db0699b4fc28ebde47b9957a3b5beb3e849deafbb91f86250ca96e5",
       "mode": "0644",
       "scope": "shared"
     },
@@ -437,15 +437,15 @@
     },
     {
       "path": "lib/capabilities/observation/decide.js",
-      "bytes": 25077,
-      "sha256": "sha256:9b4d4395cd334909c9ad6aa3829fed8e559f9ed18d9b0ec9d06c356b2c2410da",
+      "bytes": 25211,
+      "sha256": "sha256:d1e59540e85debec1a0f6723a17de05d0d6debd458b96a03256254c69460872e",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/observation/service.js",
-      "bytes": 46295,
-      "sha256": "sha256:7a306345ea901b99d9341a90cc24f7cd00a661a255de242b17c60ca1832d243a",
+      "bytes": 46342,
+      "sha256": "sha256:53e77dfd161a2dc6e0379772466965d7f001c4b3c4a35025f06b172daf76b442",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1291,8 +1291,8 @@
     },
     {
       "path": "lib/contracts/identity/wakeflow-typed-id-prefixes.js",
-      "bytes": 919,
-      "sha256": "sha256:6b984531f4ddebe9443d3fad1b87b121238e26c1bdf5732064e455150460b4ae",
+      "bytes": 1139,
+      "sha256": "sha256:d68d440237bdbc1909d394d998ea5cffab34b1a966f04da14aa9bf143c369d7b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1361,8 +1361,8 @@
     },
     {
       "path": "lib/entrypoints/wakeflow-hook-observer.js",
-      "bytes": 27131,
-      "sha256": "sha256:8a992537c53d449fe09b57ed44700487f501cc84a14e9ecf0583d2fe5af0dfcf",
+      "bytes": 28267,
+      "sha256": "sha256:4dacd042b4edf6cfee9c2c91c81955282d6c837e9303440142c2a8daca309b3b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1403,8 +1403,8 @@
     },
     {
       "path": "lib/entrypoints/wakeflow-public-mcp-tool.js",
-      "bytes": 7218,
-      "sha256": "sha256:66175dc47a781ec29dffb866321a43b5e62241b5fb0fc4a073e11eb74f8e90c4",
+      "bytes": 8403,
+      "sha256": "sha256:8c2a88b2ab049849a51d84573df9905ec48f827a225a2a6713032ff9e80dfb7e",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1496,6 +1496,13 @@
       "path": "lib/foundation/filesystem/absolute-directory-placement.js",
       "bytes": 6363,
       "sha256": "sha256:dae6adfdf3f9735b256b16c69945705d7eb3b433b3dae1f12f79e92a598520cc",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/foundation/filesystem/absolute-node-observation.js",
+      "bytes": 4654,
+      "sha256": "sha256:98a929217fe3299de68379b5c5b6730322b47a5619ebfec14595b25aac34636b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1675,6 +1682,13 @@
       "scope": "shared"
     },
     {
+      "path": "lib/foundation/filesystem/rooted-directory-tree-removal.js",
+      "bytes": 2804,
+      "sha256": "sha256:755fe4fdedd7b28f68e153fea677dbf84d122b24bc3f6180239e3fa7e8433b27",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
       "path": "lib/foundation/filesystem/rooted-directory.js",
       "bytes": 15010,
       "sha256": "sha256:72dc490ac3135861d363b7a0abc073079a6b74a0169998a917f3b1e9c9769d46",
@@ -1783,6 +1797,13 @@
       "path": "lib/foundation/node/process-instance.js",
       "bytes": 3947,
       "sha256": "sha256:7c53c6eb8d096d43ce9fd07fa9edbba4e2acc82a99f23faf394db55b54bd0568",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/foundation/node/user-home-directory.js",
+      "bytes": 487,
+      "sha256": "sha256:f808deed14e47872b421137cac93bb267f547ef70a937c8b98bac810439f06f3",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2418,15 +2439,15 @@
     },
     {
       "path": "lib/governance/observation/repository-pointer-observation.js",
-      "bytes": 10649,
-      "sha256": "sha256:8a94b792e454595011f61731e2afdead066333d0c8a276286849ad9a5a5439d7",
+      "bytes": 10814,
+      "sha256": "sha256:5d63d387b12d48c1c75b4ab3e90b0352bed862d825008c6a67e04c7070691d86",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/observation/workspace-observation.js",
-      "bytes": 30156,
-      "sha256": "sha256:5f31f391b3160d40fe3842e5e6351d051e533bdc16acec271ad2f1f9ad96ba2f",
+      "bytes": 30390,
+      "sha256": "sha256:1302de85d0d65b82546f115f805fa5db6b8f53fde6492bfd40eb0560b3de78a4",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2684,8 +2705,8 @@
     },
     {
       "path": "lib/kernel/active-projection.js",
-      "bytes": 43307,
-      "sha256": "sha256:3a2d90b7a2bc1c5756d01b89d444928e3fb56c2dded5106db4847c2751a8d00c",
+      "bytes": 43642,
+      "sha256": "sha256:21f203004cd3c62f3127cbb2daead6f31eb9a79b4431047e5b8aad9b237c8c67",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2698,15 +2719,15 @@
     },
     {
       "path": "lib/kernel/command-shell.js",
-      "bytes": 6406,
-      "sha256": "sha256:f128905e2a46478d5e475fc26738bc0eeb508c02db7de2e35d7dcdb6df221893",
+      "bytes": 6511,
+      "sha256": "sha256:c3e3ff6918283c8dc77e69c531ecdbd0c5f5fa67769424932e47ebe131ba6b68",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/kernel/error.js",
-      "bytes": 7194,
-      "sha256": "sha256:6b23395b400ac56b95279370d8a56c70a97d22938f01071d0ac9b49774128ff6",
+      "bytes": 9669,
+      "sha256": "sha256:bae7a7cea3156942b0cdcf70e05ea63ba37eda65774bdd38dabd040be8a048ee",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2739,9 +2760,23 @@
       "scope": "shared"
     },
     {
+      "path": "lib/kernel/incident.js",
+      "bytes": 7987,
+      "sha256": "sha256:305c51046ba7f678b44d5959e981d1c29217e38af650f2d88f41633274c31af4",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
       "path": "lib/kernel/layout.js",
-      "bytes": 8128,
-      "sha256": "sha256:7d872a8a4baafdbb0cc94bd3d4e6a506ff223b4c863a711fd0b6e651d8f47d72",
+      "bytes": 8377,
+      "sha256": "sha256:48cd87c418dd3c984b9fbb7cf1a0ee9fea1a5f51ffe3b69b1d1023626e94806e",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/kernel/legacy-error-families.js",
+      "bytes": 13660,
+      "sha256": "sha256:0adfea6d61ade7f5b57a4d8803126a7cae047d0052c1bffc7ba1ac54f59400b8",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2775,8 +2810,8 @@
     },
     {
       "path": "lib/kernel/pod-worktree-receipts.js",
-      "bytes": 25193,
-      "sha256": "sha256:af9eabda777bb45a935527f6cd00379013823d173839e55e5c7aba84c60ed115",
+      "bytes": 25760,
+      "sha256": "sha256:453699e7a7253fae22ffdd4587a4de5880bc01e09e993332c95a5196cea21229",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2971,8 +3006,8 @@
     },
     {
       "path": "lib/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js",
-      "bytes": 16669,
-      "sha256": "sha256:3cca7b2919694119d7062512d089b756d8a53eda1bdb2143fd8f28b286cdbf8e",
+      "bytes": 16844,
+      "sha256": "sha256:ed087607981f2b0f23af0d41e20fdd431d68bdf285978494eddb156afcabb814",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3328,8 +3363,8 @@
     },
     {
       "path": "mcp/server.mjs",
-      "bytes": 239,
-      "sha256": "sha256:39a47845a2669ee58c45c51676b3d0280f7febda1526636c41280d9207762ed7",
+      "bytes": 1073,
+      "sha256": "sha256:65e25e97f1196568bba9ffa4c5ac60f74388c1bc198b6eaa3e4a5c0f23b76b0f",
       "mode": "0755",
       "scope": "entrypoint"
     },

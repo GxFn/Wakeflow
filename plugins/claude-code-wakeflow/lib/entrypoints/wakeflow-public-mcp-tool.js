@@ -2,8 +2,10 @@ import os from "node:os";
 import { fromJsonSchema, } from "@modelcontextprotocol/server";
 import { canonicalizeJson } from "../foundation/data/canonical-json.js";
 import { parseJsonValue } from "../foundation/data/json-value.js";
+import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
-import { fail, isWakeflowError } from "../kernel/error.js";
+import { fail, toWakeflowError } from "../kernel/error.js";
+import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { assertCanonicalTextWithinLimit } from "../kernel/limits.js";
 import { assertPublicJson, createRedactionBoundary } from "../kernel/redaction.js";
 import { publicToolDefinition } from "../kernel/tool-registry.js";
@@ -17,46 +19,12 @@ import { publicToolDefinition } from "../kernel/tool-registry.js";
  */
 /** 进程级脱敏边界：用户 home 路径永不进入任何公共结果，与各 owner 的根扫描叠加。 */
 const PROCESS_REDACTION_BOUNDARY = createRedactionBoundary([os.homedir()]);
-const LEGACY_OPTIONAL_TEXT_FIELDS = Object.freeze([
-    "path",
-    "causeCode",
-    "causeReason",
-    "operationId",
-    "bindingAuthority",
-    "claimAuthority",
-    "eventAuthority",
-    "publicationAuthority",
-]);
-function ownText(value, key) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor !== undefined &&
-        Object.hasOwn(descriptor, "value") &&
-        typeof descriptor.value === "string"
-        ? descriptor.value
-        : null;
-}
-/**
- * 旧领域错误的结构投影：只取自身数据属性里的稳定字符串字段，从不复制消息、
- * 调用栈或原因链。内核错误走 `toPublicDetails`，随 L1 切片迁移后本投影退役。
- */
-function legacyErrorDetails(error) {
-    if (typeof error !== "object" || error === null)
-        return null;
-    const code = ownText(error, "code");
-    const reason = ownText(error, "reason");
-    if (code === null || reason === null)
-        return null;
-    const details = { code, reason };
-    for (const field of LEGACY_OPTIONAL_TEXT_FIELDS) {
-        const value = ownText(error, field);
-        if (value !== null)
-            details[field] = value;
-    }
-    return Object.freeze(details);
-}
-const UNEXPECTED_ERROR_DETAILS = Object.freeze({
-    code: "wakeflow-unexpected",
-    reason: "unexpected",
+/** 信封本身越过脱敏边界时退回的固定细节：封闭码里的 `unexpected`，原因只说明被脱敏。 */
+const REDACTED_ERROR_DETAILS = Object.freeze({
+    code: "unexpected",
+    reason: "redacted",
+    path: "$",
+    retryable: false,
 });
 function errorEnvelope(tool, details) {
     return Object.freeze({
@@ -67,25 +35,84 @@ function errorEnvelope(tool, details) {
         error: details,
     });
 }
-/** 错误信封与成功结果过同一进程脱敏边界；越界时退回固定的 unexpected 信封。 */
-function redactedErrorEnvelope(tool, error) {
-    const envelope = errorEnvelope(tool, isWakeflowError(error)
-        ? error.toPublicDetails()
-        : (legacyErrorDetails(error) ?? UNEXPECTED_ERROR_DETAILS));
+/**
+ * 错误信封与成功结果过同一进程脱敏边界；越界时退回固定的 redacted 信封。每个错误先经内核收敛：
+ * 内核错误原样投影，旧错误类按 `LEGACY_ERROR_CODE_FAMILIES` 翻成封闭码（§13.166 批次 1，旧的逐字段
+ * 投影已退役），其余是 `unexpected`。
+ */
+function redactedErrorEnvelope(tool, details) {
+    const envelope = errorEnvelope(tool, details);
     try {
         assertPublicJson(parseJsonValue(envelope, "$mcpError"), PROCESS_REDACTION_BOUNDARY, "$mcpError");
         return envelope;
     }
     catch {
-        return errorEnvelope(tool, UNEXPECTED_ERROR_DETAILS);
+        return errorEnvelope(tool, REDACTED_ERROR_DETAILS);
     }
 }
-function failedToolResult(tool, error) {
+/** 这两类失败对 Agent 没有可修的原因（G4），所以留事故记录并在信封里回显事故 id（G1）。 */
+const INCIDENT_CODES = new Set(["unexpected", "io-failure"]);
+function requestRoot(request) {
+    if (typeof request !== "object" || request === null)
+        return null;
+    const root = request.root;
+    return typeof root === "string" ? root : null;
+}
+/** 尽力而为：请求指向一个已初始化的工作区才写；打开失败、不是工作区或写失败都静默。 */
+async function recordToolIncident(request, tool, incidentId, failure) {
+    const root = requestRoot(request);
+    if (root === null)
+        return;
+    let directory = null;
+    try {
+        directory = await RootedDirectory.open(root, "$request.root");
+        await recordIncident(directory, {
+            incidentId,
+            source: "mcp-tool",
+            tool,
+            error: failure,
+            requestKeys: Object.keys(request),
+        });
+    }
+    catch {
+        // 事故记录从不让失败的调用失败得更厉害。
+    }
+    finally {
+        if (directory !== null) {
+            try {
+                await directory.close();
+            }
+            catch {
+                // 根句柄关闭失败不改变结果。
+            }
+        }
+    }
+}
+function writeIncidentLine(line) {
+    try {
+        process.stderr.write(`${line}\n`);
+    }
+    catch {
+        // stderr 不可用时结果不变。
+    }
+}
+async function failedToolResult(tool, error, request) {
+    const failure = toWakeflowError(error, "$");
+    let details = failure.toPublicDetails();
+    if (INCIDENT_CODES.has(failure.code)) {
+        const incidentId = createIncidentId();
+        details = Object.freeze({
+            ...details,
+            details: Object.freeze({ ...(details.details ?? {}), incidentId }),
+        });
+        await recordToolIncident(request, tool, incidentId, failure);
+        writeIncidentLine(`wakeflow: incident ${incidentId} (${tool}: ${failure.code}/${failure.reason})`);
+    }
     return {
         content: [
             {
                 type: "text",
-                text: canonicalizeJson(redactedErrorEnvelope(tool, error), "$mcpError"),
+                text: canonicalizeJson(redactedErrorEnvelope(tool, details), "$mcpError"),
             },
         ],
         isError: true,
@@ -170,7 +197,7 @@ export function registerWakeflowPublicMcpCatalog(server, catalog, executors, bef
                 return successfulToolResult(await execute(request, Object.freeze({ signal: context.mcpReq.signal })));
             }
             catch (error) {
-                return failedToolResult(registration.name, error);
+                return await failedToolResult(registration.name, error, request);
             }
         });
     }

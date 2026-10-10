@@ -1,10 +1,9 @@
-import { rmdir } from "node:fs/promises";
-import path from "node:path";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../foundation/crypto/sha256.js";
 import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { createDirectoryAtomically, DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
+import { removeEmptyDirectoryExactly } from "../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
@@ -768,7 +767,9 @@ async function retireDemandProjection(root, demandId, signal) {
     for (const member of members)
         await unlinkMember(root, member, directory, signal);
     try {
-        await rmdir(path.join(root.absolutePath, ...directory.split("/")));
+        // 成员退完后目录应当为空：按身份与模式精确删除，不同步父目录（可重建的派生页面，§13.166）。
+        const snapshot = await root.inspectExistingResource(directory, `$projection/${directory}`);
+        await removeEmptyDirectoryExactly(root, directory, snapshot.node, snapshot.node.permissionBits, signal, "none");
     }
     catch (error) {
         fail("io-failure", "projection-retire-directory", `$projection/${directory}`, {

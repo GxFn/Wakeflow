@@ -1,5 +1,5 @@
-import { stat } from "node:fs/promises";
 import path from "node:path";
+import { observeAbsoluteNode } from "../../foundation/filesystem/absolute-node-observation.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
@@ -159,7 +159,8 @@ async function checkoutPresent(entryDirectory, gitdirText) {
         return false;
     const gitdirPath = path.isAbsolute(gitdirText) ? gitdirText : path.resolve(entryDirectory, gitdirText);
     try {
-        return (await stat(gitdirPath)).isFile();
+        const observed = await observeAbsoluteNode(gitdirPath, { follow: true });
+        return observed.state === "present" && observed.node.kind === "file";
     }
     catch {
         return false;

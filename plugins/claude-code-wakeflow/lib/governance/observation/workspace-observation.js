@@ -9,6 +9,7 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { inspectActiveLayout, } from "../../kernel/active-projection.js";
+import { countIncidents } from "../../kernel/incident.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, scanHostHookObservations, } from "../../kernel/hook-observations.js";
 import { hostHookObservationsRootRef, hostRuntimeRootRef, REQUIREMENT_BOARD_INDEX_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WORK_CLAIMS_ROOT_REF, } from "../../kernel/layout.js";
@@ -272,6 +273,7 @@ async function observeHostHooks(root, hostId, current, signal) {
                 sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
             });
         }
+        const writeFailures = await countIncidents(root, { source: "hook-observer", hostId }, signalOptions(signal));
         return Object.freeze({
             hostId,
             current,
@@ -280,6 +282,7 @@ async function observeHostHooks(root, hostId, current, signal) {
             directory,
             records: inventory.records,
             skipped: inventory.skipped,
+            writeFailures,
             latestBySession,
         });
     }
@@ -300,6 +303,7 @@ async function observeHostHooks(root, hostId, current, signal) {
             directory: "absent",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
             latestBySession: new Map(),
         });
     }

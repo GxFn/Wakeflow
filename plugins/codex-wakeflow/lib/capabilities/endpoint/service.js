@@ -1,8 +1,8 @@
-import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
+import { observeAbsoluteNode } from "../../foundation/filesystem/absolute-node-observation.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
@@ -167,16 +167,13 @@ async function isWindowRoot(cwd, expectedRoot) {
     const literal = path.resolve(cwd);
     if (literal === expectedRoot)
         return true;
-    try {
-        return (await realpath(literal)) === expectedRoot;
-    }
-    catch {
-        return false;
-    }
+    return (await realpathOrNull(literal)) === expectedRoot;
 }
+/** 规范路径；目录不存在或无法观察都视为没有（§13.166：经 foundation 端口，不直接 `realpath`）。 */
 async function realpathOrNull(candidate) {
     try {
-        return await realpath(path.resolve(candidate));
+        const observed = await observeAbsoluteNode(path.resolve(candidate), { follow: true });
+        return observed.state === "present" ? observed.realPath : null;
     }
     catch {
         return null;

@@ -896,6 +896,7 @@ async function gateFacts(context, reports) {
             directory: host.directory,
             records: host.records,
             skipped: host.skipped,
+            writeFailures: host.writeFailures,
         })),
         windows: snapshot.model.topology.windows.map((window) => ({
             windowId: window.windowId,

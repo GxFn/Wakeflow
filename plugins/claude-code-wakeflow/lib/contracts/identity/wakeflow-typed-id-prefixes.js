@@ -8,8 +8,11 @@ import { WAKEFLOW_DURABLE_ID_KINDS } from "./wakeflow-durable-id.js";
  */
 export const WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX = "window_binding_";
 export const WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX = "maintenance_operation_";
+/** 边界事故记录的 id 前缀（§13.166 G1）：出现在公共错误信封里，所以是登记过的典型化身份。 */
+export const WAKEFLOW_INCIDENT_ID_PREFIX = "incident_";
 export const WAKEFLOW_TYPED_ID_PREFIXES = Object.freeze([
     ...WAKEFLOW_DURABLE_ID_KINDS.map((kind) => `${kind}_`),
     WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX,
     WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX,
+    WAKEFLOW_INCIDENT_ID_PREFIX,
 ]);

@@ -1,7 +1,7 @@
-import os from "node:os";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
+import { currentUserHomeDirectory } from "../foundation/node/user-home-directory.js";
 import { fail, toWakeflowError } from "./error.js";
 import { withWorkspaceOperationScope } from "./workspace-operation-scope.js";
 import { assertWithinByteLimit } from "./limits.js";
@@ -65,7 +65,11 @@ export async function runCommandShell(spec, value, admit, body, options = {}) {
         requestDigest,
         workspaceRoot,
     });
-    let boundary = createRedactionBoundary([envelope.root, workspaceRoot.absolutePath, os.homedir()]);
+    let boundary = createRedactionBoundary([
+        envelope.root,
+        workspaceRoot.absolutePath,
+        currentUserHomeDirectory(),
+    ]);
     let context;
     let result;
     let failure;

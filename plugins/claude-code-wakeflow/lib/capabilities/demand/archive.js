@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
@@ -14,6 +13,7 @@ import { createDirectoryTreeCandidateDurably } from "../../foundation/filesystem
 import { retireDirectoryTreeCandidateDurably } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
 import { publishDirectoryTreeCandidateDurably } from "../../foundation/filesystem/durable-directory-tree-publication.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { removeRootedDirectoryTree } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStableFile } from "../../foundation/filesystem/stable-file-read.js";
@@ -448,7 +448,7 @@ export async function retireDemandRoot(workspaceRoot, demandId, expectedPayloadT
         fail("precondition-failed", "demand-root-drift", "$demandRoot", { retryable: true });
     }
     try {
-        await rm(observation.physicalPath, { recursive: true, force: false });
+        await removeRootedDirectoryTree(workspaceRoot, demandFinalRootRef(demandId), signal === undefined ? {} : { signal }, "$demandRoot");
     }
     catch (error) {
         fail("io-failure", "demand-root-remove", "$demandRoot", { cause: error });

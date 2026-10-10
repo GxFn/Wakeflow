@@ -296,7 +296,10 @@ function hooksGate(facts) {
     const status = aggregate(statuses);
     const code = facts.hooks.flatMap((host) => {
         const hostCode = hookHostCode(host);
-        return hostCode === null ? [] : [`${host.hostId}:${hostCode}`];
+        return [
+            ...(hostCode === null ? [] : [`${host.hostId}:${hostCode}`]),
+            ...(host.writeFailures > 0 ? [`${host.hostId}:write-failures-${host.writeFailures}`] : []),
+        ];
     });
     return gate("host-hook-channel", "host-hooks", status, joinCodes(code));
 }

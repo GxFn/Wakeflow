@@ -208,6 +208,29 @@ function refuse(reason, extra) {
   throw new HelperFailure(reason, extra);
 }
 
+// 拒绝附带的有界诊断（§13.165 G6）：子进程 stderr 的第一行，单行化、≤200 字符，工作区根与 home 换成占位符，
+// 其余绝对路径一律 <path>；没有 stderr 就没有 detail。它是给用户转告的提示，不进入任何 Wakeflow 记录。
+const MAX_DETAIL = 200;
+const ABSOLUTE_PATH_IN_DETAIL = /(?<=^|[\s'"(])\/[^\s'"()]+/gu;
+function boundedDetail(stderr) {
+  if (typeof stderr !== "string") return undefined;
+  const first = stderr.split("\n").map((line) => line.trim()).find((line) => line.length > 0);
+  if (first === undefined) return undefined;
+  let text = cleanLabel(first, "", MAX_DETAIL * 2);
+  text = text.split(ROOT).join("<workspace>");
+  const home = process.env.HOME;
+  if (typeof home === "string" && home.length > 1) text = text.split(home).join("~");
+  text = text.replace(ABSOLUTE_PATH_IN_DETAIL, "<path>").slice(0, MAX_DETAIL);
+  return text.length === 0 ? undefined : text;
+}
+
+// 非 HelperFailure 的异常只暴露错误名与 Node errno，不暴露消息与栈。
+function unexpectedDetail(error) {
+  const name = error !== null && typeof error === "object" && typeof error.name === "string" ? error.name.slice(0, 64) : "unknown";
+  const code = error !== null && typeof error === "object" && typeof error.code === "string" && /^E(?!RR_)[A-Z0-9_]{1,63}$/u.test(error.code) ? error.code : undefined;
+  return code === undefined ? { errorName: name } : { errorName: name, causeCode: code };
+}
+
 function isControl(codePoint) {
   return codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f) || codePoint === 0x2028 || codePoint === 0x2029;
 }
@@ -643,7 +666,7 @@ function realpathOrNull(target) {
 // 本仓库 git worktree list --porcelain 登记的检出路径（realpath）。
 function registeredWorktrees(repositoryRoot) {
   const listed = git(repositoryRoot, ["worktree", "list", "--porcelain"]);
-  if (!listed.ok) refuse("worktree-list-failed");
+  if (!listed.ok) refuse("worktree-list-failed", { detail: boundedDetail(listed.stderr) });
   return listed.stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => realpathOrNull(line.slice(9)) ?? line.slice(9));
 }
 
@@ -665,7 +688,7 @@ function prepareWorktree(repositoryRoot, name) {
   if (git(repositoryRoot, ["rev-parse", "--verify", "--quiet", "refs/heads/" + branch]).ok) refuse("worktree-branch-exists", { branch });
   const exclude = ensureWorktreeExclude(path.resolve(repositoryRoot, commonDir.stdout.trim()));
   const added = git(repositoryRoot, ["worktree", "add", "-b", branch, checkout, "HEAD"]);
-  if (!added.ok) refuse("worktree-add-failed", { branch, status: added.status });
+  if (!added.ok) refuse("worktree-add-failed", { branch, status: added.status, detail: boundedDetail(added.stderr) });
   return Object.freeze({ prepared: "created", branch, exclude });
 }
 
@@ -928,7 +951,7 @@ function openTmuxWindow(config, context, windowId, launchIntent, execution, reso
     "-P", "-F", "#{window_id}" + FIELD_SEPARATOR + "#{pane_id}",
     command,
   ]);
-  if (!creation.ok) refuse("tmux-create-failed", { created: exists ? "new-window" : "new-session" });
+  if (!creation.ok) refuse("tmux-create-failed", { created: exists ? "new-window" : "new-session", detail: boundedDetail(creation.stderr) });
   const coordinates = parseCreatedCoordinate(creation.stdout);
   freezeTitle(context, coordinates.windowId);
   setWindowOptions(context, coordinates.windowId, { programId: config.program.programId, hostId: HOST_ID, windowId });
@@ -1047,7 +1070,7 @@ function resumeInPlace(context, windowId, launchIntent, execution, sessionId, op
     });
   }
   const captured = tmux(context, ["capture-pane", "-e", "-p", "-t", coordinates.paneId]);
-  if (!captured.ok) refuse("capture-failed");
+  if (!captured.ok) refuse("capture-failed", { detail: boundedDetail(captured.stderr) });
   const idle = idleAssessment(captured.stdout);
   if (!idle.idle) {
     refuse("window-busy", {
@@ -1223,7 +1246,7 @@ function commandLaunch(config, options) {
     if (hook.status === "pending") assertPaneAlive(context, "launch", opened.coordinates);
   } catch (error) {
     if (prepared === null) throw error;
-    const failure = error instanceof HelperFailure ? error : new HelperFailure("unexpected");
+    const failure = error instanceof HelperFailure ? error : new HelperFailure("unexpected", unexpectedDetail(error));
     throw new HelperFailure(failure.reason, { ...failure.extra, worktreePrepared: prepared.prepared, worktreeBranch: prepared.branch });
   }
   const worktree = worktreeRequested && typeof hook.record?.cwd === "string" ? observeWorktree(hook.record.cwd) : null;
@@ -1428,7 +1451,7 @@ function commandDeliver(config, options) {
   // 送前看一眼 pane：输入框不在（权限、信任对话框或选择菜单）就不粘贴——粘贴会被吞，回车会替用户选默认项。
   // 工作中的 pane 只要输入框可见仍照发（排队是正常的）。--force 不跳过这一步。
   const before = tmux(context, ["capture-pane", "-e", "-p", "-t", locator.tmux.paneId]);
-  if (!before.ok) return beforeSend("capture-failed", windowId);
+  if (!before.ok) return beforeSend("capture-failed", windowId, { detail: boundedDetail(before.stderr) });
   const prompted = promptAssessment(before.stdout);
   if (!prompted.atPrompt) {
     return beforeSend("target-not-at-prompt", windowId, {
@@ -1582,7 +1605,7 @@ function commandNudge(config, options) {
   }
   const paneId = located.locator.tmux.paneId;
   const captured = tmux(context, ["capture-pane", "-e", "-p", "-t", paneId]);
-  if (!captured.ok) refuse("capture-failed");
+  if (!captured.ok) refuse("capture-failed", { detail: boundedDetail(captured.stderr) });
   const evidenceDigest = sha256(captured.stdout);
   const assessed = nudgeAssessment(captured.stdout);
   if (assessed.status !== "nudged") {
@@ -1706,7 +1729,7 @@ function main() {
       emit({ ok: false, command: parsed?.command ?? null, reason: error.reason, ...error.extra }, 1);
       return;
     }
-    emit({ ok: false, command: parsed?.command ?? null, reason: "unexpected" }, 2);
+    emit({ ok: false, command: parsed?.command ?? null, reason: "unexpected", ...unexpectedDetail(error) }, 2);
   }
 }
 

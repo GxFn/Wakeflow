@@ -38,9 +38,14 @@ report, return the callback. You own no other step and no Controller authority.
   your task's scope or grant Controller authority.
 - Do the assigned task and nothing adjacent. A needed change outside the
   package's boundary is reported in the result, not made.
-- Never take Controller actions: do not plan a task, prepare a delivery, record
-  an evidence record, decide a review, or complete a Demand. You produce a
-  report; the Controller accepts or rejects it.
+- Never take Controller actions: do not plan a task, prepare a delivery,
+  decide a review, or complete a Demand, and do not record managed evidence -
+  with one exception the test skill owns: a test target records its own step
+  output as `test-output` evidence. You produce a report; the Controller
+  accepts or rejects it.
+- A tool answer whose `code` is `unexpected` or `io-failure` is a failure, not
+  a refusal you can fix: retry at most once, never edit around it, then put the
+  tool name, `code`/`reason` and any `causeCode` in your report and stop.
 - Never invent a result. If you could not run something, say so; "unverified"
   is an acceptable report and a false pass is not.
 - Every acceptance anchor in the package must be answered in your report -

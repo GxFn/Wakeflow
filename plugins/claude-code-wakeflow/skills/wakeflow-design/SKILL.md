@@ -44,6 +44,9 @@ Nothing you write reaches an implementer except through it.
 - Never put a credential, a token, a private handle or an absolute local path
   into a package. The privacy scan will refuse it, and refusing late wastes the
   user's turn.
+- A tool answer whose `code` is `unexpected` or `io-failure` is a failure, not
+  a refusal to fix: retry at most once, then tell the user the tool name,
+  `code`/`reason` and any `causeCode`, and stop.
 - If a host error cuts your turn, look before you act again: inspect the
   board for the package you were publishing. An apply that landed shows up
   there; one that did not is replayed with the same `planDigest` and never

@@ -1,4 +1,5 @@
 import { isWakeflowErrorCode, } from "../contracts/vocabulary/wakeflow-error-code.js";
+import { readNodeSystemErrorCode } from "../foundation/node/node-system-error.js";
 /**
  * Wakeflow Kernel / Error：整个运行时唯一的错误类型（ADR-0013 决定 D）。
  *
@@ -6,7 +7,9 @@ import { isWakeflowErrorCode, } from "../contracts/vocabulary/wakeflow-error-cod
  * 可选地附带少量短标识 `details`（例如恢复所需的 operationId）。
  * 这些字段都是稳定且可公开的：不含原始异常消息、绝对路径、句柄或用户文本；
  * `details` 的键与值都限定在短标识字符集内，写不进路径与自由文本。
- * 原始异常只保留在 `cause` 上供本地诊断，从不进入公共结果。
+ * 原始异常只保留在 `cause` 上供本地诊断，从不进入公共结果；唯一从 cause 链投影出来的是两个短
+ * 记号（§13.165 G3）：第一个 Node 系统错误码（`EACCES`、`ENOSPC`…）为 `causeCode`，第一个内层
+ * 错误的 kebab-case `reason` 为 `causeReason`。两者都不含路径与用户文本，是用户能据以行动的信息。
  */
 const REASON_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const REASON_MAXIMUM_LENGTH = 64;
@@ -50,6 +53,48 @@ function assertPath(path) {
     }
     return path;
 }
+const CAUSE_CHAIN_MAXIMUM_DEPTH = 8;
+function ownReasonToken(value) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, "reason");
+    const reason = descriptor !== undefined && Object.hasOwn(descriptor, "value") ? descriptor.value : null;
+    return typeof reason === "string" &&
+        reason.length > 0 &&
+        reason.length <= REASON_MAXIMUM_LENGTH &&
+        REASON_PATTERN.test(reason)
+        ? reason
+        : null;
+}
+/**
+ * 沿 cause 链（最多 8 层）取第一个 Node 系统错误码与第一个内层 `reason` 记号；两者都按词法核验，
+ * 既不复制消息，也不读取访问器或原型字段。
+ */
+function causeChain(cause) {
+    const chain = [];
+    let current = cause;
+    while (chain.length < CAUSE_CHAIN_MAXIMUM_DEPTH &&
+        typeof current === "object" &&
+        current !== null) {
+        chain.push(current);
+        try {
+            current = current.cause;
+        }
+        catch {
+            break;
+        }
+    }
+    return chain;
+}
+function causeProjection(cause) {
+    const chain = causeChain(cause);
+    const causeCode = chain
+        .map((node) => readNodeSystemErrorCode(node))
+        .find((code) => code !== undefined);
+    const causeReason = chain.map((node) => ownReasonToken(node)).find((reason) => reason !== null);
+    return {
+        ...(causeCode === undefined ? {} : { causeCode }),
+        ...(causeReason === null || causeReason === undefined ? {} : { causeReason }),
+    };
+}
 export class WakeflowError extends Error {
     name = "WakeflowError";
     code;
@@ -74,7 +119,7 @@ export class WakeflowError extends Error {
         this.details = admittedDetails;
         Object.freeze(this);
     }
-    /** 可进入公共结果与 MCP 错误信封的四个稳定字段。 */
+    /** 可进入公共结果与 MCP 错误信封的稳定字段：四个必有字段、details 与 cause 链的两个记号。 */
     toPublicDetails() {
         return Object.freeze({
             code: this.code,
@@ -82,6 +127,7 @@ export class WakeflowError extends Error {
             path: this.path,
             retryable: this.retryable,
             ...(this.details === null ? {} : { details: this.details }),
+            ...causeProjection(this.cause),
         });
     }
 }

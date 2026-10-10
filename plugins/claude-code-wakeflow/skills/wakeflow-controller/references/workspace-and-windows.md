@@ -129,7 +129,7 @@ Launching and registering:
    `wakeflow_register_window_binding` with `inspect` for its current launch
    intent and execution instructions. Its role root is the assigned work
    location; the host instructions separately determine the chat's startup root.
-2. Launch it by host means: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. Make every helper call its own Bash command with literal arguments - no shell loop, variable or chain of helper calls: only such a plain call matches the helper's allow rule, and anything else stops at a permission prompt the user has to answer. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive (`locator-live`; a live window on an older plugin is restarted with `resume --in-place`, as the plugin-update steps say), and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook.sessionStart: pending` with a live pane leaves startup unproven; inspect hook execution, keep the observation, and register or relocate with it once the record exists, and pass a longer `--wait` next time.
+2. Launch it by host means: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the tmux helper, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>`. Make every helper call its own Bash command with literal arguments - no shell loop, variable or chain of helper calls: only such a plain call matches the helper's allow rule, and anything else stops at a permission prompt the user has to answer. The helper opens the tmux window at the intent's root, starts `claude` with the listed parameters and a fresh session id, waits for the session-start hook record, and prints the creation observation to register verbatim. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation, and `close --window <windowId>` prints the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive (`locator-live`; a live window on an older plugin is restarted with `resume --in-place`, as the plugin-update steps say), and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook.sessionStart: pending` with a live pane leaves startup unproven; inspect hook execution, keep the observation, and register or relocate with it once the record exists, and pass a longer `--wait` next time. A helper refusal this text does not explain - an unfamiliar `reason`, or `reason: unexpected` with an `errorName` - is relayed to the user verbatim with its `hint`, `detail` and `causeCode`; then stop: do not retry it, do not edit files, do not read the helper's source.
 3. Observe the handle the host reports for the window you just started.
 4. Call `wakeflow_register_window_binding` to register it. Registration
    requires a real `session-start` hook record for that session at the startup
@@ -226,6 +226,16 @@ server is current, preview and apply reconcile for repairable workspace gates
 such as host-settings-assets. A peer's `unverified` state remains separate from
 those repairs and from Controller acceptance of returned work.
 
+When a fresh session is the only way (`resume-never-conversed`, or the user
+asked for a new one), the complete sequence on Claude Code is four calls, one
+helper call per Bash command, each printed result kept verbatim: `close
+--window <windowId>` (the binding stays; this is not a decommission); `launch
+--window <windowId> --wait 60` with that window's current inspect result piped
+in; `wakeflow_register_window_binding` with `operation: "replace"`, the printed
+`observation`, and the `expectedBindingId` / `expectedBindingDigest` the
+inspect returned; then `mark --window <windowId>`. Never reconstruct those
+calls from your own session transcript or from the plugin's source.
+
 ## Interrupted writes and cancellation
 
 `reconcile` can first return a `WakeflowDemandRuntimeRecoveryPlan` for known
@@ -292,7 +302,13 @@ abandon decision.
    `git worktree remove` command the status suggests. A host may lock a
    checkout while its session runs; once that window is retired the lock is
    stale, so `git worktree unlock` it first, then remove and
-   `git worktree prune`. Wakeflow never removes a checkout itself.
+   `git worktree prune`. Wakeflow never removes a checkout itself. What stays
+   behind is the user's to tidy: the pod branch (`worktree-<name>`), on Claude
+   Code a `.claude/worktrees/` line in each repository's `.git/info/exclude`,
+   and an empty `.claude/worktrees/` directory. Suggest `git branch -d <branch>`
+   for a merged branch, ask before `git branch -D` for an abandoned one, and
+   say that the same pod name is refused (`worktree-branch-exists`) while that
+   branch still exists.
 4. Remove the pod. Closing in this order is what keeps the config and the
    worktrees from disagreeing.
 

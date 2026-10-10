@@ -30,6 +30,7 @@ const LABELS = Object.freeze({
         anchors: "Acceptance anchors",
         reading: "Read in this order",
         skills: "Required skills",
+        skillsFromDisk: "Load each skill from the plugin as installed on disk now, even if a copy is already in your context: the plugin may have been updated since this session began.",
         identity: "Identity",
         return: "Return",
         record: "Dispatch record",
@@ -59,6 +60,7 @@ const LABELS = Object.freeze({
         anchors: "验收锚点",
         reading: "按序阅读",
         skills: "必需技能",
+        skillsFromDisk: "现在从磁盘上安装的插件重新加载每个技能，即使上下文里已有一份：插件可能在本会话开始后更新过。",
         identity: "身份",
         return: "交回",
         record: "派发记录",
@@ -230,7 +232,10 @@ export function renderDeliveryPortablePrompt(input) {
         labels.executionPaths,
         ...section(labels.reading, readingLines(input, labels)),
         ...worktreeLines(input, labels),
-        ...section(labels.skills, DELIVERY_REQUIRED_SKILLS[workType].map((skill) => `- ${skill}`)),
+        ...section(labels.skills, [
+            ...DELIVERY_REQUIRED_SKILLS[workType].map((skill) => `- ${skill}`),
+            labels.skillsFromDisk,
+        ]),
         ...section(labels.identity, identityLines(input, labels)),
         ...section(labels.return, [
             labels.returnInstruction,

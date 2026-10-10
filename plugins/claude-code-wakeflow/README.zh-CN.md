@@ -55,6 +55,9 @@ Wakeflow 会在工作区的 `CLAUDE.md` 里维护一个托管块。那个块归
 Wakeflow 所有，块以外的内容都是你的。产品仓库或外部拥有的 Design/Test 支撑面
 只有在配置里以 `instructionManagement: managed-block` 明确选择时，才会在它自己
 的 `CLAUDE.md` 里得到同样的托管块；否则 Wakeflow 绝不写入那里。
+pod 打开期间，Controller 的宿主动作还会碰每个产品仓库：为 pod 建一份关联检出
+（Claude Code 上在仓库的 `.claude/worktrees/` 下，并在 `.git/info/exclude` 加一行），
+位于 pod 的 `worktree-<name>` 分支上。关闭 pod 会移除检出；分支与 exclude 行留着，直到你删除。
 
 ## 工作区基线
 

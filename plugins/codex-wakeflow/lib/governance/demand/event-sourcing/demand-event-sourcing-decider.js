@@ -1152,7 +1152,7 @@ function reworkBrakeEscalation(decided, decision, decidedEvent) {
                 options: [
                     {
                         option: "Narrow or restate the requirement, then plan a replacement task package.",
-                        impact: "Requires a supplementary requirement package from Design.",
+                        impact: "Record the user's answer with wakeflow_continue_demand (record-decision); a restated requirement arrives only as a new package after this Demand is cancelled and the package re-claimed - Design cannot supplement a claimed package.",
                     },
                     {
                         option: "Accept the current result with the recorded residual risks.",

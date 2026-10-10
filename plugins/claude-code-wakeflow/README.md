@@ -71,6 +71,11 @@ That block belongs to Wakeflow; everything outside it is yours. A product
 repository or an externally owned Design/Test surface gets the same kind of
 block in its own `CLAUDE.md` only when its config entry opts in with
 `instructionManagement: managed-block`; otherwise Wakeflow never writes there.
+While a pod is open, the Controller's host actions also touch each product
+repository: a linked checkout for the pod (on Claude Code under the
+repository's `.claude/worktrees/`, with a matching line in `.git/info/exclude`)
+on the pod's `worktree-<name>` branch. Closing the pod removes the checkout;
+the branch and the exclude line stay until you delete them.
 
 ## Workspace baseline
 

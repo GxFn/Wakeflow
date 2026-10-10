@@ -91,7 +91,8 @@ Wakeflow derives the disposition itself:
   session. Only then is the work claim released and only then may the delivery
   be re-armed.
 - **indeterminate** - everything else, including a readback that failed. The
-  claim is retained and the delivery is never resent.
+  claim is retained; the delivery is not resent on a hunch - it waits for the
+  landing evidence or for your explicit resolution (below).
 
 On Claude Code the helper's `deliver` output carries that lookup for you as
 `landing`: `observed` with the record id means the prompt was submitted in the
@@ -109,6 +110,21 @@ screen text and never proves landing.
 An indeterminate delivery is not a dead end. When the landing evidence arrives
 later, call `wakeflow_record_delivery_outcome` again with a new idempotency
 key and the same delivery; it will accept then.
+
+Resolving an indeterminate delivery whose evidence never comes: a later
+`wakeflow_record_delivery_outcome` is refused with `landing-evidence-missing`,
+and once the silence window has passed the refusal also lists
+`landing-silence-exceeded`. That, or a host that shows the window is dead or is
+not the bound session, is the signal to establish where the prompt went before
+you act - on Claude Code the helper's landing lookup and `panes`, on Codex the
+receiving thread. Then record the outcome again with a new idempotency key and
+a `resolution`: `{"disposition": "rejected-before-send", "rationale": ...}`
+when the prompt provably never reached the bound session - the claim is
+released and `wakeflow_rearm_delivery` issues a fresh permit, which is the one
+sanctioned way to send again - or `{"disposition": "accepted", "hookRecordId":
+..., "rationale": ...}` when a matching `user-prompt-submit` record exists and
+was merely missed. A resolution is your decision and is recorded as such; it is
+refused while the delivery is not indeterminate.
 
 `wakeflow_rearm_delivery` re-issues the permit for a rejected-before-send
 delivery with a fresh claim and fence, at most three times per envelope. After

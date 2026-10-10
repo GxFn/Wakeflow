@@ -467,12 +467,13 @@ test("双宿主插件制品由确定性的闭合文件清单生成：编译闭�
         sourceEntrypoint: "src/entrypoints/wakeflow-hook-observer.ts",
       },
     ]);
-    // MCP launcher 把发布版本交给组合根。
-    ok(
-      readFileSync(path.join(artifactRoot, MCP_LAUNCHER), "utf8").includes(
-        `(${JSON.stringify(release.version)});`,
-      ),
-    );
+    // MCP launcher 把发布版本交给组合根，并带进程守卫：故障只打一行事故 id 与错误名（§13.166 G10）。
+    const mcpLauncherText = readFileSync(path.join(artifactRoot, MCP_LAUNCHER), "utf8");
+    ok(mcpLauncherText.includes(`(${JSON.stringify(release.version)});`));
+    ok(mcpLauncherText.includes('process.on("uncaughtException"'));
+    ok(mcpLauncherText.includes('process.on("unhandledRejection"'));
+    ok(mcpLauncherText.includes("wakeflow: incident incident_"));
+    equal(mcpLauncherText.includes("stack"), false);
 
     // D8：两个 hooks 文件在文件集合里，模式与范围固定；观察脚本的闭包根随并集进了 lib/。
     equal(byPath.get(MCP_LAUNCHER)?.mode, "0755");

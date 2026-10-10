@@ -1,5 +1,4 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -26,6 +25,7 @@ import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wake
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
+import { runGit } from "../../support/git-fixture.js";
 
 /**
  * reconfigure 的"先新增"（gate-log §13.124 D9，§13.130）：往运行中的工作区加一个产品仓库，连同它在
@@ -53,21 +53,8 @@ type ConfigDocument = Record<string, unknown> & {
   pods: Record<string, unknown>[];
 };
 
-function git(cwd: string, ...args: readonly string[]): void {
-  const result = spawnSync("git", [...args], {
-    cwd,
-    encoding: "utf8",
-    shell: false,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: "t",
-      GIT_AUTHOR_EMAIL: "t@example.invalid",
-      GIT_COMMITTER_NAME: "t",
-      GIT_COMMITTER_EMAIL: "t@example.invalid",
-    },
-  });
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
-}
+/** 共享的 git 夹具：隔离环境、失败即抛、返回去空白的 stdout（§13.166 D10）。 */
+const git = runGit;
 
 interface Fixture {
   readonly base: string;

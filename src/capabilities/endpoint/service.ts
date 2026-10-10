@@ -1,5 +1,4 @@
 import type { WakeflowWindowLaunchInstructionsRenderer } from "../../workspace/window-runtime/wakeflow-window-launch-instructions.js";
-import { realpath } from "node:fs/promises";
 import path from "node:path";
 import type { WakeflowConfigPod } from "../../configuration/wakeflow-config.js";
 import {
@@ -11,6 +10,7 @@ import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type JsonObject, parseJsonValue } from "../../foundation/data/json-value.js";
+import { observeAbsoluteNode } from "../../foundation/filesystem/absolute-node-observation.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -428,16 +428,14 @@ async function loadClaim(
 async function isWindowRoot(cwd: string, expectedRoot: string): Promise<boolean> {
   const literal = path.resolve(cwd);
   if (literal === expectedRoot) return true;
-  try {
-    return (await realpath(literal)) === expectedRoot;
-  } catch {
-    return false;
-  }
+  return (await realpathOrNull(literal)) === expectedRoot;
 }
 
+/** 规范路径；目录不存在或无法观察都视为没有（§13.166：经 foundation 端口，不直接 `realpath`）。 */
 async function realpathOrNull(candidate: string): Promise<string | null> {
   try {
-    return await realpath(path.resolve(candidate));
+    const observed = await observeAbsoluteNode(path.resolve(candidate), { follow: true });
+    return observed.state === "present" ? observed.realPath : null;
   } catch {
     return null;
   }

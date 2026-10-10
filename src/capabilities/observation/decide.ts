@@ -308,6 +308,8 @@ export interface WorkspaceGateFacts {
     readonly directory: "absent" | "private" | "mode";
     readonly records: number;
     readonly skipped: number;
+    /** 观察器写失败留下的事故记录数（G8）：只作信息报出，不改变 verdict。 */
+    readonly writeFailures: number;
   }>[];
   readonly windows: readonly Readonly<{
     readonly windowId: string;
@@ -572,7 +574,10 @@ function hooksGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   const status = aggregate(statuses);
   const code = facts.hooks.flatMap((host) => {
     const hostCode = hookHostCode(host);
-    return hostCode === null ? [] : [`${host.hostId}:${hostCode}`];
+    return [
+      ...(hostCode === null ? [] : [`${host.hostId}:${hostCode}`]),
+      ...(host.writeFailures > 0 ? [`${host.hostId}:write-failures-${host.writeFailures}`] : []),
+    ];
   });
   return gate("host-hook-channel", "host-hooks", status, joinCodes(code));
 }

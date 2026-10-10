@@ -1,6 +1,3 @@
-import { rmdir } from "node:fs/promises";
-import path from "node:path";
-
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
 import type { JsonValue } from "../foundation/data/json-value.js";
@@ -18,6 +15,7 @@ import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
 } from "../foundation/filesystem/durable-directory-materialization.js";
+import { removeEmptyDirectoryExactly } from "../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
 import {
   ExactRegularFileUnlinkError,
   unlinkRegularFileExactly,
@@ -1230,7 +1228,16 @@ async function retireDemandProjection(
   if (members === null) return Object.freeze({ demandId, disposition: "unsafe" as const });
   for (const member of members) await unlinkMember(root, member, directory, signal);
   try {
-    await rmdir(path.join(root.absolutePath, ...directory.split("/")));
+    // 成员退完后目录应当为空：按身份与模式精确删除，不同步父目录（可重建的派生页面，§13.166）。
+    const snapshot = await root.inspectExistingResource(directory, `$projection/${directory}`);
+    await removeEmptyDirectoryExactly(
+      root,
+      directory,
+      snapshot.node,
+      snapshot.node.permissionBits,
+      signal,
+      "none",
+    );
   } catch (error: unknown) {
     fail("io-failure", "projection-retire-directory", `$projection/${directory}`, {
       cause: error,

@@ -1,5 +1,4 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -19,6 +18,7 @@ import {
   repositoryBranchesComplete,
 } from "../../../src/governance/observation/repository-pointer-observation.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
+import { runGit } from "../../support/git-fixture.js";
 
 /**
  * 仓库指针事实（gate-log §13.94 D2）：只读 `.git/HEAD`、`refs/heads/**`、`packed-refs` 与
@@ -30,22 +30,8 @@ import { WakeflowError } from "../../../src/kernel/error.js";
 
 const REPOSITORY_ID = "repository_22222222-2222-4222-8222-222222222222";
 
-function git(cwd: string, ...args: readonly string[]): string {
-  const result = spawnSync("git", [...args], {
-    cwd,
-    encoding: "utf8",
-    shell: false,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: "t",
-      GIT_AUTHOR_EMAIL: "t@example.invalid",
-      GIT_COMMITTER_NAME: "t",
-      GIT_COMMITTER_EMAIL: "t@example.invalid",
-    },
-  });
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
-  return result.stdout.trim();
-}
+/** 共享的 git 夹具：隔离环境、失败即抛、返回去空白的 stdout（§13.166 D10）。 */
+const git = runGit;
 
 interface Fixture {
   readonly base: string;

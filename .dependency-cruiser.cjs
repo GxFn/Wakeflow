@@ -125,9 +125,12 @@ module.exports = {
     {
       name: "layer-domain-effects-use-foundation",
       severity: "error",
-      comment: "宿主中立运行时不得绕过根作用域 filesystem 与封闭的系统进程 foundation。",
+      comment:
+        "宿主中立运行时不得绕过根作用域 filesystem、封闭的系统进程与用户环境 foundation 端口直接取得 Node 核心模块（§13.166）。",
       from: { path: HOST_NEUTRAL_RUNTIME },
-      to: { path: "^node:(?:fs(?:/promises)?|child_process)$" },
+      // dependency-cruiser 把 `node:fs/promises` 记为核心模块 `fs/promises`（无 `node:` 前缀），并且
+      // 只有 includeOnly 放进图里的模块才参与规则；下面的 includeOnly 因此同时收下这四个核心模块。
+      to: { dependencyTypes: ["core"], path: "^(?:fs|fs/promises|child_process|os)$" },
     },
 
     // ---- 过渡：旧树内部接缝（随 L1 删除旧树时一并删除）---------------------
@@ -177,7 +180,7 @@ module.exports = {
         "npm-unknown",
       ],
     },
-    includeOnly: ["^(?:src|tests|tooling)/"],
+    includeOnly: ["^(?:src|tests|tooling)/", "^(?:fs|fs/promises|child_process|os)$"],
     tsConfig: { fileName: "tsconfig.json" },
     enhancedResolveOptions: {
       exportsFields: ["exports"],

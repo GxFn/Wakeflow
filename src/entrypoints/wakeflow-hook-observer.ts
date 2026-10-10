@@ -25,6 +25,7 @@ import {
   WAKEFLOW_CONFIG_KIND,
   WAKEFLOW_CONFIG_SCHEMA_VERSION,
 } from "../kernel/layout.js";
+import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { computePromptDigest } from "../kernel/prompt-digest.js";
 
 /**
@@ -659,21 +660,27 @@ async function workspaceBindsSession(
 
 // ---- 写入 ---------------------------------------------------------------------
 
+type WriteOutcome =
+  | Readonly<{ written: Readonly<HookObserverWrittenRecord> }>
+  | Readonly<{ failure: unknown }>;
+
 async function writeObservation(
   root: string,
   input: Readonly<HostHookObservationInput>,
-): Promise<Readonly<HookObserverWrittenRecord> | null> {
+): Promise<WriteOutcome> {
   let directory: RootedDirectory | null = null;
   try {
     directory = await RootedDirectory.open(root, "$workspaceRoot");
     const receipt = await writeHostHookObservation(directory, input);
     return Object.freeze({
-      workspaceRoot: root,
-      recordId: receipt.record.recordId,
-      disposition: receipt.disposition,
+      written: Object.freeze({
+        workspaceRoot: root,
+        recordId: receipt.record.recordId,
+        disposition: receipt.disposition,
+      }),
     });
-  } catch {
-    return null;
+  } catch (error: unknown) {
+    return Object.freeze({ failure: error });
   } finally {
     if (directory !== null) {
       try {
@@ -725,13 +732,47 @@ async function observe(
       continue;
     }
     const result = await writeObservation(workspace, record);
-    if (result === null) {
+    if ("failure" in result) {
       failed = true;
+      await recordWriteFailure(workspace, host.value, record.event, result.failure);
     } else {
-      written.push(result);
+      written.push(result.written);
     }
   }
   return outcome(failed ? "write-failed" : null, written);
+}
+
+/**
+ * 写失败留一条事故记录（open-items G8，§13.166）：工作区已初始化时才写，失败静默；verify 的
+ * host-hook-channel 门按宿主数这些记录，用户与 Controller 才看得到"投递看起来发了却没有证据"的原因。
+ */
+async function recordWriteFailure(
+  root: string,
+  hostId: HostId,
+  event: string,
+  failure: unknown,
+): Promise<void> {
+  let directory: RootedDirectory | null = null;
+  try {
+    directory = await RootedDirectory.open(root, "$workspaceRoot");
+    await recordIncident(directory, {
+      incidentId: createIncidentId(),
+      source: "hook-observer",
+      hostId,
+      event,
+      error: failure,
+    });
+  } catch {
+    // 事故记录是尽力而为。
+  } finally {
+    if (directory !== null) {
+      try {
+        await directory.close();
+      } catch {
+        // 根句柄关闭失败不改变结果。
+      }
+    }
+  }
 }
 
 /**

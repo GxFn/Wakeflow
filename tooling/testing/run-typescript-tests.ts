@@ -329,6 +329,25 @@ export function resolveTestConcurrency(value: string | undefined, maximum: numbe
   return requested;
 }
 
+/**
+ * Tests spawn git inside disposable repositories. Every test child gets the same isolated git
+ * environment: no global or system configuration (signing, hooksPath, templates), a pinned
+ * default branch and a fixture identity, so a developer's own git setup cannot fail or prompt a
+ * test (open-items D10, §13.166). A test that needs a different value sets it on its own spawn.
+ */
+const GIT_TEST_ENVIRONMENT: Readonly<Record<string, string>> = Object.freeze({
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "init.defaultBranch",
+  GIT_CONFIG_VALUE_0: "main",
+  GIT_AUTHOR_NAME: "Wakeflow Test",
+  GIT_AUTHOR_EMAIL: "test@wakeflow.invalid",
+  GIT_COMMITTER_NAME: "Wakeflow Test",
+  GIT_COMMITTER_EMAIL: "test@wakeflow.invalid",
+  GIT_TERMINAL_PROMPT: "0",
+});
+
 async function run(): Promise<void> {
   const repositoryRoot = process.cwd();
   const files = selectedFiles(repositoryRoot, parseInvocation(process.argv.slice(2)));
@@ -342,7 +361,7 @@ async function run(): Promise<void> {
     recordDirectory === undefined
       ? null
       : prepareTestRecording(repositoryRoot, recordDirectory, files, concurrency);
-  const childEnvironment = { ...process.env };
+  const childEnvironment = { ...process.env, ...GIT_TEST_ENVIRONMENT };
   delete childEnvironment.WAKEFLOW_TEST_RECORD_DIR;
   // A runner started from inside another node:test process inherits NODE_TEST_CONTEXT, and
   // run() then skips every file while still emitting a successful, empty summary. Drop it here

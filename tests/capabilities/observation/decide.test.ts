@@ -94,6 +94,7 @@ function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGat
         directory: "private",
         records: 2,
         skipped: 0,
+        writeFailures: 0,
       },
       {
         hostId: "claude-code",
@@ -102,6 +103,7 @@ function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGat
         directory: "absent",
         records: 0,
         skipped: 0,
+        writeFailures: 0,
       },
     ],
     windows: [
@@ -460,6 +462,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "private",
             records: 3,
             skipped: 1,
+            writeFailures: 0,
           },
           {
             hostId: "claude-code",
@@ -468,6 +471,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "mode",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
           },
         ],
       }),
@@ -486,12 +490,34 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "absent",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
           },
         ],
       }),
       "host-hook-channel",
     ),
     ["unavailable", "codex:unavailable"],
+  );
+
+  // §13.166 G8：观察器写失败的事故记录只作信息报出，门仍 pass。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [
+          {
+            hostId: "codex",
+            current: true,
+            status: "observed",
+            directory: "private",
+            records: 3,
+            skipped: 0,
+            writeFailures: 2,
+          },
+        ],
+      }),
+      "host-hook-channel",
+    ),
+    ["pass", "codex:write-failures-2"],
   );
 
   // §13.97 D10：当前宿主的目录缺席或零记录不是损坏（pass），但 code 报出，让"hook 从未触发"
@@ -507,6 +533,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "absent",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
           },
           {
             hostId: "claude-code",
@@ -515,6 +542,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "absent",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
           },
         ],
       }),
@@ -533,6 +561,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "private",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
           },
           {
             hostId: "claude-code",
@@ -541,6 +570,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "private",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
           },
         ],
       }),
@@ -559,6 +589,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "private",
             records: 1,
             skipped: 0,
+            writeFailures: 0,
           },
           {
             hostId: "claude-code",
@@ -567,6 +598,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "private",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
           },
         ],
       }),
@@ -586,6 +618,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "mode",
             records: 0,
             skipped: 0,
+            writeFailures: 0,
           },
         ],
       }),
@@ -604,6 +637,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             directory: "private",
             records: 0,
             skipped: 2,
+            writeFailures: 0,
           },
         ],
       }),

@@ -1,6 +1,6 @@
 # Wakeflow 技术债务深挖与处置方案
 
-> 状态：`in-progress`（批次 0 已执行，见 gate-log §13.165；批次 1 起与第 9 节的裁决项待用户确认）
+> 状态：`in-progress`（批次 0 已执行并提交，见 gate-log §13.165；批次 1 已执行，见 §13.166；批次 2 起与第 9 节的裁决项待用户确认）
 > 基线提交：`71755086`（main，领先本地 origin/main 3 个提交）
 > 建立日期：2026-10-07
 > 上位文档：[开发文档系统](../README.md)、[问题登记](../references/open-items.md)、[开发工具规划](./2026-10-03-development-and-operations-tooling-plan.md)
@@ -153,7 +153,7 @@ Claude 宿主层 18 文件 5,595 行（助手、状态行、四份可移植设�
 | 批次 | 内容 | 规模 | 前提 |
 | --- | --- | --- | --- |
 | 0 卫生（已执行，§13.165） | 第 7 节的登记更正；AGENTS/README 占位符数、decisions 表、plan §14、D9 文本；gate-log 标题归一；`.gitattributes` 标记 `plugins/**` 为生成；`wf handoff` 新增"待填/未提交"过期检查、耗时表覆盖检查、CLAUDE/AGENTS 逐节一致检查；K7、K1、I3、J3、H3、H6、I9、I11 文本；F6 JWT；G3、G4、G6；C13、C14。架构允许项经核实仍有效，未删 | S | 无 |
-| 1 架构规则与边界 | 3.2 的规则修正与 6 处导入改端口；错误边界翻译器与 `legacyErrorDetails` 退役；G1 事故记录 + G10 进程守卫 + G8 观察器失败落盘；`tests/support` 四个共享夹具并迁移 git 调用方 | M | 无 |
+| 1 架构规则与边界（已执行，§13.166） | 3.2 的规则修正与 6 处导入改端口；错误边界翻译器与 `legacyErrorDetails` 退役；G1 事故记录 + G10 进程守卫 + G8 观察器失败落盘；`tests/support` 四个共享夹具并迁移 git 调用方（运行器统一注入隔离 git 环境） | M | 无 |
 | 2 新用户与现场可见性 | A6/A5 运行时守卫；A7 Notification 观察；B13 hook 目录暂存分类；B10；A8；G7 三态；C5 托管文本历史（发布前必须） | M | 无 |
 | 3 安全最小集 | F7 威胁模型 ADR（先写）；F1 助手自检摘要；F2 按角色收窄允许规则；F4 遗留残留观察；E2 Codex 摘要定义与 status 投影 | M | F7 先于其余 |
 | 4 发布基线 | Q2 ADR；tag + `release:check` 真跑一次；CI tag 作业与字节→版本门；C15 锁文件核验；C9 更新章节；C6/C11 升级身份 | M | Q1/Q2/Q11 裁决 |

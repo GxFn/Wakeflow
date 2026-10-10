@@ -508,14 +508,38 @@ function compiledArtifactBytes(source: Buffer): Buffer {
 
 const GENERATED_FILE_NOTICE = "// 此文件由 Wakeflow 插件制品构建器生成，禁止手工修改。";
 
+/**
+ * MCP server 的 launcher（§13.166 G10）：与 hook launcher 对称地带进程守卫——未捕获异常、未处理拒绝
+ * 与动态 import 失败都只向 stderr 打一行带事故 id 与错误名的固定文本，不打消息、堆栈或路径，然后以
+ * 非 0 退出；不带守卫时 Node 默认处理器会打出带绝对路径的堆栈。组合根仍以版本参数启动。
+ */
 function mcpLauncherBytes(launcher: Readonly<LauncherDefinition>, version: string): Buffer {
   return Buffer.from(
     [
       "#!/usr/bin/env node",
       GENERATED_FILE_NOTICE,
-      `import { ${launcher.runExport} } from "../lib/${launcher.entrypoint}";`,
-      "",
-      `${launcher.runExport}(${JSON.stringify(version)});`,
+      'import { randomUUID } from "node:crypto";',
+      "let reported = false;",
+      "function reportIncident(stage, error) {",
+      "  if (reported) return;",
+      "  reported = true;",
+      '  const name = error !== null && typeof error === "object" && typeof error.name === "string" ? error.name : "unknown";',
+      "  try {",
+      '    process.stderr.write("wakeflow: incident incident_" + randomUUID() + " (" + stage + ": " + name + ")\\n");',
+      "  } catch {",
+      "    // stderr 不可用时也不改变退出码。",
+      "  }",
+      "  process.exit(1);",
+      "}",
+      'process.on("uncaughtException", (error) => reportIncident("uncaught-exception", error));',
+      'process.on("unhandledRejection", (error) => reportIncident("unhandled-rejection", error));',
+      "try {",
+      `  const server = await import(${JSON.stringify(`../lib/${launcher.entrypoint}`)});`,
+      `  if (typeof server.${launcher.runExport} !== "function") throw new TypeError(${JSON.stringify(launcher.runExport)});`,
+      `  await server.${launcher.runExport}(${JSON.stringify(version)});`,
+      "} catch (error) {",
+      '  reportIncident("launcher", error);',
+      "}",
       "",
     ].join("\n"),
     "utf8",

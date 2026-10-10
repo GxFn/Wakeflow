@@ -389,7 +389,10 @@ async function inspectLocal(
     });
   }
   const runtime = await readDirectory(root, WAKEFLOW_RUNTIME_ROOT_REF, signal);
-  if (runtime.entries.some((entry) => entry.name !== "maintenance" && entry.name !== "operation-admission")) {
+  // `incidents` 是边界诊断的可丢弃落点（§13.166 G1）：它的存在不说明工作区已被使用，不影响 fresh 兼容。
+  if (runtime.entries.some((entry) => (
+    entry.name !== "maintenance" && entry.name !== "operation-admission" && entry.name !== "incidents"
+  ))) {
     freshCompatible = false;
   }
   const admission = entryNamed(runtime, "operation-admission");

@@ -20,7 +20,7 @@ export {
  * 布局的其余部分并入本模块。
  */
 
-const WAKEFLOW_LOCAL_RUNTIME_ROOT_REF = parsePortableResourcePath(
+export const WAKEFLOW_LOCAL_RUNTIME_ROOT_REF = parsePortableResourcePath(
   ".wakeflow-local/runtime",
   "$layout",
 );
@@ -34,6 +34,10 @@ export const WORKSPACE_MAINTENANCE_GATE_REF = parsePortableResourcePath(
 );
 export const WORKSPACE_MAINTENANCE_TRANSACTIONS_REF = parsePortableResourcePath(
   `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance/transactions`,
+);
+/** 边界事故记录目录（§13.166 G1）：私有、有界、可丢弃的诊断落点，不是任何状态权威。 */
+export const WAKEFLOW_INCIDENTS_ROOT_REF = parsePortableResourcePath(
+  `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/incidents`,
 );
 
 const REQUIREMENT_ID_PATTERN =

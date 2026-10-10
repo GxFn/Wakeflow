@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, match } from "node:assert/strict";
 import os from "node:os";
 import { test } from "node:test";
 
@@ -171,7 +171,7 @@ test("内核错误的 cause 链只投影 errno 与内层 reason 两个记号，�
     arguments: { root: "/workspace/private-errno", demandId: TASKING_DEMAND_ID },
   });
   equal(result.isError, true);
-  deepEqual(JSON.parse(wakeflowMcpTextContent(result)), {
+  deepEqual(withoutIncidentId(JSON.parse(wakeflowMcpTextContent(result))), {
     error: {
       causeCode: "EACCES",
       code: "io-failure",
@@ -187,7 +187,23 @@ test("内核错误的 cause 链只投影 errno 与内层 reason 两个记号，�
   equal(wakeflowMcpTextContent(result).includes("permission denied"), false);
 });
 
-test("未知异常统一脱敏且不返回stack", async (t) => {
+/** unexpected / io-failure 信封带一个事故 id（§13.166 G1）；形状固定，值随机。 */
+function withoutIncidentId(envelope: { error: { details?: Record<string, string> } }) {
+  const incidentId = envelope.error.details?.incidentId;
+  match(
+    incidentId ?? "",
+    /^incident_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+  );
+  const { details: original, ...rest } = envelope.error;
+  const details = { ...original };
+  delete details.incidentId;
+  return {
+    ...envelope,
+    error: { ...rest, ...(Object.keys(details).length === 0 ? {} : { details }) },
+  };
+}
+
+test("未知异常统一收敛为封闭码 unexpected，带事故 id，不返回消息与 stack", async (t) => {
   const privateMarker = "private-unexpected-error-marker";
   const client = await connectWakeflowMcpTestClient(t, {
     inspectStatus: async () => {
@@ -199,21 +215,52 @@ test("未知异常统一脱敏且不返回stack", async (t) => {
     arguments: { root: "/workspace", demandId: TASKING_DEMAND_ID },
   });
   equal(result.isError, true);
+  const parsed = JSON.parse(wakeflowMcpTextContent(result));
+  const { details, ...rest } = parsed.error;
+  deepEqual(rest, { code: "unexpected", path: "$", reason: "unhandled", retryable: false });
+  match(details.incidentId, /^incident_/u);
+  equal(wakeflowMcpTextContent(result).includes(privateMarker), false);
+  equal(wakeflowMcpTextContent(result).includes("stack"), false);
+});
+
+test("旧错误类按家族表翻成封闭码，旧码与授权事实进 details，不带事故 id（§13.166 批次 1）", async (t) => {
+  const client = await connectWakeflowMcpTestClient(t, {
+    inspectStatus: async () => {
+      throw Object.assign(new Error("/Users/someone/private lock message"), {
+        code: "wakeflow-rooted-exclusive-file-lock",
+        reason: "timeout",
+        path: "$lock",
+        retryable: true,
+        publicationAuthority: "recoverable",
+      });
+    },
+  });
+  const result = await client.callTool({
+    name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+    arguments: { root: "/workspace/private-lock", demandId: TASKING_DEMAND_ID },
+  });
+  equal(result.isError, true);
   deepEqual(JSON.parse(wakeflowMcpTextContent(result)), {
     error: {
-      code: "wakeflow-unexpected",
-      reason: "unexpected",
+      causeReason: "timeout",
+      code: "concurrency-conflict",
+      details: {
+        legacyCode: "wakeflow-rooted-exclusive-file-lock",
+        publicationAuthority: "recoverable",
+      },
+      path: "$lock",
+      reason: "timeout",
+      retryable: true,
     },
     kind: "WakeflowMcpError",
     schemaVersion: 1,
     status: "error",
     tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
   });
-  equal(wakeflowMcpTextContent(result).includes(privateMarker), false);
-  equal(wakeflowMcpTextContent(result).includes("stack"), false);
+  equal(wakeflowMcpTextContent(result).includes("/Users"), false);
 });
 
-test("旧领域错误只投影自身稳定字符串字段，不回显消息", async (t) => {
+test("不带 wakeflow- 前缀的异常不再逐字段投影：收敛为 unexpected，只投影内层 reason", async (t) => {
   const privateMarker = "private-legacy-error-marker";
   const client = await connectWakeflowMcpTestClient(t, {
     inspectStatus: async () => {
@@ -230,12 +277,13 @@ test("旧领域错误只投影自身稳定字符串字段，不回显消息", as
     arguments: { root: "/workspace", demandId: TASKING_DEMAND_ID },
   });
   equal(result.isError, true);
-  deepEqual(JSON.parse(wakeflowMcpTextContent(result)), {
+  deepEqual(withoutIncidentId(JSON.parse(wakeflowMcpTextContent(result))), {
     error: {
-      causeCode: "event-store",
-      code: "legacy-conflict",
-      eventAuthority: "unknown",
-      reason: "stream-moved",
+      causeReason: "stream-moved",
+      code: "unexpected",
+      path: "$",
+      reason: "unhandled",
+      retryable: false,
     },
     kind: "WakeflowMcpError",
     schemaVersion: 1,
@@ -243,9 +291,10 @@ test("旧领域错误只投影自身稳定字符串字段，不回显消息", as
     tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
   });
   equal(wakeflowMcpTextContent(result).includes(privateMarker), false);
+  equal(wakeflowMcpTextContent(result).includes("event-store"), false);
 });
 
-test("旧领域错误字段含home路径时退回固定unexpected信封", async (t) => {
+test("异常字段里的 home 路径只留在 cause 上，信封里永不出现", async (t) => {
   const homePath = `${os.homedir()}/private-legacy-path`;
   const client = await connectWakeflowMcpTestClient(t, {
     inspectStatus: async () => {
@@ -261,9 +310,14 @@ test("旧领域错误字段含home路径时退回固定unexpected信封", async 
     arguments: { root: "/workspace", demandId: TASKING_DEMAND_ID },
   });
   equal(result.isError, true);
-  deepEqual(JSON.parse(wakeflowMcpTextContent(result)).error, {
-    code: "wakeflow-unexpected",
-    reason: "unexpected",
+  const { details, ...rest } = JSON.parse(wakeflowMcpTextContent(result)).error;
+  deepEqual(rest, {
+    causeReason: "stream-moved",
+    code: "unexpected",
+    path: "$",
+    reason: "unhandled",
+    retryable: false,
   });
+  match(details.incidentId, /^incident_/u);
   equal(wakeflowMcpTextContent(result).includes(homePath), false);
 });

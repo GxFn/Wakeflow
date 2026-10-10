@@ -3,6 +3,7 @@ import {
   type WakeflowErrorCode,
 } from "../contracts/vocabulary/wakeflow-error-code.js";
 import { readNodeSystemErrorCode } from "../foundation/node/node-system-error.js";
+import { LEGACY_ERROR_CODE_FAMILIES } from "./legacy-error-families.js";
 
 /**
  * Wakeflow Kernel / Error：整个运行时唯一的错误类型（ADR-0013 决定 D）。
@@ -219,11 +220,65 @@ export function failWithBlockers(blockers: readonly string[], path: string): nev
   });
 }
 
+const LEGACY_CODE_PATTERN = /^wakeflow-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+/** 旧发布与锁错误携带的授权事实：值是短记号，进入 `details` 原样转告。 */
+const LEGACY_DETAIL_FIELDS = Object.freeze([
+  "operationId",
+  "bindingAuthority",
+  "claimAuthority",
+  "eventAuthority",
+  "publicationAuthority",
+] as const);
+
+function ownStringProperty(value: object, key: string): string | null {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor !== undefined &&
+    Object.hasOwn(descriptor, "value") &&
+    typeof descriptor.value === "string"
+    ? descriptor.value
+    : null;
+}
+
 /**
- * 把任意异常收敛为 `WakeflowError`：已是内核错误则原样返回，否则包成
+ * 旧错误类的边界翻译（ADR-0013 决定 D，§13.166 批次 1）：自带 `wakeflow-<module>` 码与 kebab
+ * `reason` 的异常按 `LEGACY_ERROR_CODE_FAMILIES` 翻成封闭码；`retryable: true` 的一律是
+ * `concurrency-conflict`；`reason` 与结构 `path` 只有通过词法核验才沿用，旧码进入
+ * `details.legacyCode`，授权事实字段按短记号进入 `details`；原异常留在 `cause`（消息不复制，errno
+ * 经 `causeCode` 投影）。不是旧错误形状时返回 null。
+ */
+export function translateLegacyError(error: unknown, path = "$"): WakeflowError | null {
+  if (typeof error !== "object" || error === null) return null;
+  const code = ownStringProperty(error, "code");
+  const reason = ownStringProperty(error, "reason");
+  if (code === null || reason === null || !LEGACY_CODE_PATTERN.test(code)) return null;
+  const retryable = Object.getOwnPropertyDescriptor(error, "retryable")?.value === true;
+  const family = LEGACY_ERROR_CODE_FAMILIES[code] ?? "unexpected";
+  const legacyPath = ownStringProperty(error, "path");
+  const details: Record<string, string> = { legacyCode: code };
+  for (const field of LEGACY_DETAIL_FIELDS) {
+    const value = ownStringProperty(error, field);
+    if (value !== null && DETAIL_VALUE_PATTERN.test(value)) details[field] = value;
+  }
+  return new WakeflowError(
+    retryable ? "concurrency-conflict" : family,
+    reason.length > 0 && reason.length <= REASON_MAXIMUM_LENGTH && REASON_PATTERN.test(reason)
+      ? reason
+      : "legacy",
+    legacyPath !== null && legacyPath.length <= PATH_MAXIMUM_LENGTH && PATH_PATTERN.test(legacyPath)
+      ? legacyPath
+      : path,
+    { retryable, cause: error, details },
+  );
+}
+
+/**
+ * 把任意异常收敛为 `WakeflowError`：已是内核错误则原样返回，旧错误类按边界翻译，其余包成
  * `unexpected`，原始异常只作为 `cause` 保留，消息不复制。
  */
 export function toWakeflowError(error: unknown, path = "$"): WakeflowError {
   if (isWakeflowError(error)) return error;
-  return new WakeflowError("unexpected", "unhandled", path, { cause: error });
+  return (
+    translateLegacyError(error, path) ??
+    new WakeflowError("unexpected", "unhandled", path, { cause: error })
+  );
 }

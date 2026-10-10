@@ -66,7 +66,7 @@ test("登记表把二十个工具绑定到同名executor，且只公开请求Sch
     const envelope = JSON.parse((result.content[0] as { readonly text: string }).text) as {
       readonly error: { readonly code: string };
     };
-    equal(envelope.error.code, "wakeflow-unexpected");
+    equal(envelope.error.code, "unexpected");
   }
   equal(calls.length, WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length);
 });

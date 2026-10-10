@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
 
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
@@ -21,6 +20,7 @@ import {
   parsePortableResourcePath,
   type PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
+import { removeRootedDirectoryTree } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -663,7 +663,12 @@ export async function retireDemandRoot(
     fail("precondition-failed", "demand-root-drift", "$demandRoot", { retryable: true });
   }
   try {
-    await rm(observation.physicalPath, { recursive: true, force: false });
+    await removeRootedDirectoryTree(
+      workspaceRoot,
+      demandFinalRootRef(demandId),
+      signal === undefined ? {} : { signal },
+      "$demandRoot",
+    );
   } catch (error: unknown) {
     fail("io-failure", "demand-root-remove", "$demandRoot", { cause: error });
   }

@@ -1,37 +1,19 @@
 import { deepEqual, equal, match, ok } from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
-import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { checkHandoff } from "../../../tooling/handoff/handoff.js";
+import { runGit } from "../../support/git-fixture.js";
+import { disposableRoot } from "../../support/temp-root.js";
+import { writeTextFile } from "../../support/write-tree.js";
 
 function git(root: string, args: readonly string[]): void {
-  const result = spawnSync(
-    "git",
-    [
-      "-c",
-      "user.name=Wakeflow fixture",
-      "-c",
-      "user.email=fixture@example.invalid",
-      "-c",
-      "commit.gpgsign=false",
-      ...args,
-    ],
-    { cwd: root, encoding: "utf8" },
-  );
-  equal(result.status, 0, result.stderr);
+  runGit(root, ...args);
 }
 
-function write(root: string, relative: string, text: string): void {
-  const file = path.join(root, relative);
-  mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, text);
-}
+const write = writeTextFile;
 
 function fixture(t: TestContext): string {
-  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-handoff-")));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = disposableRoot(t, "wakeflow-handoff-");
   write(root, ".gitignore", ".build/\nnode_modules/\n");
   write(
     root,

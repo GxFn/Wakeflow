@@ -1,5 +1,4 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -45,6 +44,7 @@ import {
   createDeliveryWorkspaceFixture,
   prepareFixtureDelivery,
 } from "../delivery/delivery-workspace.fixture.js";
+import { runGit } from "../../support/git-fixture.js";
 
 /**
  * 一次观察多域（gate-log §13.94 D1、D4）：每个域独立读取并隔离失败，读不出只让该域
@@ -57,22 +57,8 @@ const CLAIMED_AT = parseUtcInstant("2026-09-18T07:59:00.000Z");
 const CONTROLLER_WINDOW_ID = "window_55555555-5555-4555-8555-555555555555";
 const DESIGN_WINDOW_ID = "window_66666666-6666-4666-8666-666666666666";
 
-function git(cwd: string, ...args: readonly string[]): string {
-  const result = spawnSync("git", [...args], {
-    cwd,
-    encoding: "utf8",
-    shell: false,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: "t",
-      GIT_AUTHOR_EMAIL: "t@example.invalid",
-      GIT_COMMITTER_NAME: "t",
-      GIT_COMMITTER_EMAIL: "t@example.invalid",
-    },
-  });
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
-  return result.stdout.trim();
-}
+/** 共享的 git 夹具：隔离环境、失败即抛、返回去空白的 stdout（§13.166 D10）。 */
+const git = runGit;
 
 interface Workspace {
   readonly root: string;

@@ -32,6 +32,7 @@ import {
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
 import { WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { writeFakeCli } from "../../support/fake-cli.js";
 
 /**
  * Claude tmux 助手资产（gate-log §13.117 D4）：资产由仓库测试用 node 直接执行，tmux、claude 与 git
@@ -161,10 +162,10 @@ async function fixture(t: TestContext, prefix = "wakeflow-tmux-asset-"): Promise
   }
   const bin = path.join(parent, "bin");
   mkdirSync(bin);
-  writeFileSync(path.join(bin, "tmux"), TMUX_STUB, { mode: 0o755 });
-  writeFileSync(path.join(bin, "claude"), CLAUDE_STUB, { mode: 0o755 });
-  writeFileSync(path.join(bin, "git"), GIT_STUB, { mode: 0o755 });
-  writeFileSync(path.join(bin, "ps"), PS_STUB, { mode: 0o755 });
+  writeFakeCli(bin, "tmux", TMUX_STUB);
+  writeFakeCli(bin, "claude", CLAUDE_STUB);
+  writeFakeCli(bin, "git", GIT_STUB);
+  writeFakeCli(bin, "ps", PS_STUB);
   const state = path.join(parent, "state");
   mkdirSync(state);
   const log = path.join(parent, "tmux.log");

@@ -23,6 +23,7 @@ import { sha256 } from "../../../tooling/verification/files.js";
 import { captureVerificationInput } from "../../../tooling/verification/input-identity.js";
 import { runLoggedCommand } from "../../../tooling/verification/process.js";
 import { verifyRepository } from "../../../tooling/verification/verify.js";
+import { killChildProcess, waitForChildPid } from "../../support/child-process.js";
 
 const RUNNER = fileURLToPath(
   new URL("../../../tooling/testing/run-typescript-tests.js", import.meta.url),
@@ -260,14 +261,8 @@ test("abort terminates the owned descendant even if it ignores SIGTERM", {
     }
     await delay(20);
   }
-  const pid = Number(readFileSync(pidFile, "utf8"));
-  t.after(() => {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      /* already terminated */
-    }
-  });
+  const pid = await waitForChildPid(pidFile);
+  t.after(() => killChildProcess(pid));
   controller.abort();
   const result = await pending;
   equal(result.status, "interrupted");

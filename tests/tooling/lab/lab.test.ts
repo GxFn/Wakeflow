@@ -19,6 +19,7 @@ import { inventoryDigest, snapshotLabTree } from "../../../tooling/lab/inventory
 import { createLab, disposeLab, inspectLab, runLab } from "../../../tooling/lab/lab.js";
 import { type LabToolObservation, withLabMcp } from "../../../tooling/lab/mcp-session.js";
 import { sha256 } from "../../../tooling/verification/files.js";
+import { killChildProcess, waitForChildPid } from "../../support/child-process.js";
 
 function fixture(t: TestContext) {
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-lab-integration-")));
@@ -207,18 +208,9 @@ test("cancelling a stalled stdio handshake closes the owned child and settles in
     controller.signal,
   );
   // Poll only for this child handshake checkpoint; no timing assumption about process startup.
-  const deadline = Date.now() + 5000;
-  while (!existsSync(pidFile) && Date.now() < deadline)
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  ok(existsSync(pidFile));
-  const pid = Number(readFileSync(pidFile, "utf8"));
-  t.after(() => {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      /* Already reaped. */
-    }
-  });
+  // The pid file may exist before its content lands: wait for a real pid (§13.166).
+  const pid = await waitForChildPid(pidFile);
+  t.after(() => killChildProcess(pid));
   controller.abort();
   await rejects(call);
   equal(entered, false);
@@ -279,18 +271,8 @@ test("unverified stdio shutdown keeps the lab lock and failure evidence instead 
   const pending = createLab(repository, root, candidate, controller.signal);
   const rejected = rejects(pending, /lab-mcp-shutdown-unverified/u);
   const pidFile = path.join(root, "child.pid");
-  const deadline = Date.now() + 5000;
-  while (!existsSync(pidFile) && Date.now() < deadline)
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  ok(existsSync(pidFile));
-  const pid = Number(readFileSync(pidFile, "utf8"));
-  t.after(() => {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      /* Already reaped. */
-    }
-  });
+  const pid = await waitForChildPid(pidFile);
+  t.after(() => killChildProcess(pid));
   controller.abort();
   await rejected;
   const labs = path.join(repository, ".build/labs");

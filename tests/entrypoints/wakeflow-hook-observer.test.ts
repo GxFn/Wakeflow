@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -41,6 +42,7 @@ import {
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
 import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
+import { runGit } from "../support/git-fixture.js";
 
 /**
  * hook 观察脚本（gate-log §13.97 D1–D4、D9）：进程内经 `runWakeflowHookObserver` 覆盖定位、映射、
@@ -79,22 +81,8 @@ function temporaryDirectory(t: TestContext, prefix: string): string {
   return directory;
 }
 
-function git(cwd: string, ...args: readonly string[]): void {
-  const result = spawnSync("git", [...args], {
-    cwd,
-    encoding: "utf8",
-    shell: false,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: "t",
-      GIT_AUTHOR_EMAIL: "t@example.invalid",
-      GIT_COMMITTER_NAME: "t",
-      GIT_COMMITTER_EMAIL: "t@example.invalid",
-    },
-  });
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
-}
+/** 共享的 git 夹具：隔离环境、失败即抛、返回去空白的 stdout（§13.166 D10）。 */
+const git = runGit;
 
 /** 一个只有配置与两个支持面目录的工作区：仓库按最小配置声明为兄弟目录 `../ProductA`。 */
 function createWorkspace(base: string, name: string): string {
@@ -723,6 +711,24 @@ test("写失败：观察目录被普通文件顶替的工作区报 write-failed�
   equal(other.skipped, 0);
   equal(other.records.length, 1);
   ok(statSync(observationsDirectory(fixture.workspace, "codex")).isFile());
+  // §13.166 G8：写失败在该工作区留一条事故记录（0600，无消息），verify 据此数 write-failures。
+  const incidentsDirectory = path.join(
+    fixture.workspace,
+    ".wakeflow-local",
+    "runtime",
+    "incidents",
+  );
+  const incidents = readdirSync(incidentsDirectory).filter((name) => name.endsWith(".json"));
+  equal(incidents.length, 1);
+  const incident = JSON.parse(
+    readFileSync(path.join(incidentsDirectory, incidents[0] ?? ""), "utf8"),
+  );
+  equal(incident.kind, "WakeflowIncident");
+  equal(incident.source, "hook-observer");
+  equal(incident.hostId, "codex");
+  equal(incident.event, "session-start");
+  equal(JSON.stringify(incident).includes("message"), false);
+  equal(statSync(path.join(incidentsDirectory, incidents[0] ?? "")).mode & 0o777, 0o600);
 });
 
 /**

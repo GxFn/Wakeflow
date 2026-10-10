@@ -30,6 +30,7 @@ import {
   type ActiveLayoutInspection,
   inspectActiveLayout,
 } from "../../kernel/active-projection.js";
+import { countIncidents } from "../../kernel/incident.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,
@@ -171,6 +172,8 @@ export interface ObservedHostHooks {
   readonly directory: "absent" | "private" | "mode";
   readonly records: number;
   readonly skipped: number;
+  /** 该宿主观察器写不进工作区而留下的事故记录数（open-items G8，§13.166）；只读计数，不是门的权威。 */
+  readonly writeFailures: number;
   /**
    * 每个会话最近一条记录，另带该会话最近一条 session-start 记录的观察器摘要：会话在哪份制品下
    * 启动是一个健全的"过期"证据（启动摘要旧于本进程的制品 ⇒ 会话一定没有重启过），而新的
@@ -559,6 +562,11 @@ async function observeHostHooks(
         sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
       });
     }
+    const writeFailures = await countIncidents(
+      root,
+      { source: "hook-observer", hostId },
+      signalOptions(signal),
+    );
     return Object.freeze({
       hostId,
       current,
@@ -567,6 +575,7 @@ async function observeHostHooks(
       directory,
       records: inventory.records,
       skipped: inventory.skipped,
+      writeFailures,
       latestBySession,
     });
   } catch (error: unknown) {
@@ -584,6 +593,7 @@ async function observeHostHooks(
       directory: "absent" as const,
       records: 0,
       skipped: 0,
+      writeFailures: 0,
       latestBySession: new Map(),
     });
   }

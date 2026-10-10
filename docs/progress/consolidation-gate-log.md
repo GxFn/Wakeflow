@@ -4558,3 +4558,28 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新。D9 的时序敏感用例仍在（本批两次负载超时即其证据）。
 
 本批改动 src/、tooling/、tests/、assets/、docs/、两个制品与耗时表；未提交。
+
+### 13.166 技术债务批次 1：架构规则落地、旧错误边界翻译、事故记录与测试 git 隔离（2026-10-10）
+
+用户在批次 0 提交后要求"继续批次 1"（技术债务深挖 §8）。本批做四件事，都在边界与检查层，不改 Schema、不改技能文本：
+
+- 让 `layer-domain-effects-use-foundation` 真的生效：dependency-cruiser 把 `node:fs/promises` 记为核心模块 `fs/promises` 且 `includeOnly` 把核心模块排除在图外，所以旧规则 `^node:…` 从未匹配过任何依赖。规则改为 `dependencyTypes: ["core"]` 加 `^(?:fs|fs/promises|child_process|os)$`，`includeOnly` 同时收下这四个核心模块。启用后恰好报出审计点名的 6 处：archive.ts、endpoint/service.ts、repository-pointer-observation.ts、active-projection.ts、command-shell.ts、pod-worktree-receipts.ts。六处全部改走 foundation：新增 `node/user-home-directory`（`os.homedir`）、`filesystem/absolute-node-observation`（根外绝对路径的 lstat/stat 快照、realpath 与小文件读取，缺席与失败分开）、`filesystem/rooted-directory-tree-removal`（根内整棵目录树的删除，先经 RootedDirectory 核对），空目录退役改用已有的 `removeEmptyDirectoryExactly`。调用方语义保持原样（任何失败仍按"不在"处理，open-items G7 留给批次 2）。foundation 不能取得内核的 `WakeflowError`，两个新模块按 foundation 既有样式各带一个错误类，旧错误类计数因此 189 → 191。
+- 旧错误的边界翻译（ADR-0013 D 的边界层）：内核新增 `legacy-error-families.ts`——185 个旧错误码到封闭码的表（foundation 文件系统/git/进程/时钟 → io-failure，foundation 数据/文本/Schema/身份 → unexpected，configuration/workspace/governance/hosts → precondition-failed，contracts 的 durable-id → invalid-request），`translateLegacyError` 按表翻译、`retryable: true` 一律 concurrency-conflict、旧 reason 与结构 path 通过词法核验才沿用、旧码进 `details.legacyCode`、五个授权事实字段按短记号进 details、原异常留在 cause；`toWakeflowError` 先走翻译器。公共信封的逐字段投影 `legacyErrorDetails` 与 `wakeflow-unexpected` 退役：信封里只剩封闭码；脱敏越界时退回 `unexpected/redacted`。静态测试断言表与源码里的旧错误类集合完全一致。capability 层的 `map*Error` 仍是主映射，收敛归批次 7。
+- 事故记录（G1、G8、G10）：内核 `incident.ts` 在 `.wakeflow-local/runtime/incidents/` 写 0600 的 JSON（事故 id、UTC 时间、来源、工具或宿主与事件、公开错误细节、cause 链每层的名/码/reason/errno、请求顶层键名；无消息无栈），最多保留 50 条，未初始化的根不写，写入尽力而为。`incident_` 前缀登记进 contracts 的典型化身份表，所以 id 能过隐私扫描进信封；`incidents` 目录加进 local-layout 的 fresh 兼容集合。公共工具以 `unexpected` 或 `io-failure` 失败时写一条，信封 `details.incidentId` 回显，stderr 打一行 `wakeflow: incident <id> (<tool>: <code>/<reason>)`。hook 观察器写不进工作区时留 `source: hook-observer` 的记录，verify 的 `host-hook-channel` 门按宿主报 `write-failures-<n>`（信息，不改 verdict；status 结果形状不变）。MCP launcher 与 hook launcher 对称地带进程守卫：动态 import 失败、未捕获异常、未处理拒绝只打一行事故 id 与错误名并以 1 退出，不再落到 Node 默认处理器的带路径堆栈。
+- 测试 git 隔离与共享夹具（D10）：测试运行器给每个测试子进程注入 `GIT_CONFIG_GLOBAL=/dev/null`、`GIT_CONFIG_NOSYSTEM=1`、`init.defaultBranch=main`、夹具身份与 `GIT_TERMINAL_PROMPT=0`；`tests/support` 新增 git-fixture（`runGit`）、temp-root（`disposableRoot`）、write-tree（`writeTextFile`）、fake-cli（`writeFakeCli`）；五个逐字相同的 git 助手副本、handoff 与 mcp call 的根夹具、tmux 测试的四个命令桩改用共享实现。两个保留原始 stdout 的 git 助手与 148 处 mkdtemp 留给批次 5。
+
+顺手修的测试基建缺陷：lab 与 verify 的测试把子进程写的 pid 文件"存在"当成"写完"，`Number("")` 为 0 时清理钩子的 `process.kill(0, "SIGKILL")` 杀掉调用方所在的整个进程组——本批第一次完整门（run-oen3rp，701 秒）就是这样被整组 SIGKILL 的，没有留下任何测试汇总。`tests/support/child-process.ts` 的 `waitForChildPid` 等到文件里出现正整数才返回，`killChildProcess` 从不向 0、负数或 1 发信号；三处调用方改用它。
+
+未做与遗留：技能文本尚未提及 `incidentId`（下一次改制品文本时加一句）；事故记录不含相对制品根的栈帧；launcher 的事故只打 stderr、不落盘（根未知）；观察器的 `internal` 分支没有根、不留记录；宿主是否展示 stderr 仍未在现场验证。
+
+验证与观察（本地，2 worker）：
+
+- 架构规则改动的证据：规则改为按 `dependencyTypes: core` 匹配后、六处调用改端口之前，`check:architecture` 恰好报出审计点名的 6 处（archive、endpoint service、repository-pointer-observation、active-projection、command-shell、pod-worktree-receipts）；改端口后 0 处，图里模块 843 → 853、依赖 5575 → 6077（核心模块入图）。
+- 聚焦：三个 foundation 端口与六个调用方 37 项、翻译器/家族表/事故/信封/观察器/门/git 隔离 77 项、迁移后的夹具与 tmux 桩 44 项、制品 14 项、verify 工具 9 项，全部通过；typecheck、Biome lint 与 format、knip、架构规则通过（lint 的 10 条既有 warning/info 不在本批文件内）。
+- 完整门两次：第一次（run-oen3rp）在 701 秒时被 SIGKILL 整组杀掉、没有任何汇总——根因是 lab 测试的 pid 文件竞态（上文），修后第二次（run-ZFNBe1，18 分钟）1380/1380 全通过，schema:check 与 build:check 通过；比批次 0 多出的 10 项是本批的新测试。
+- `wf timings apply --receipt run-ZFNBe1`：耗时表 294 → 299 条（五个新测试文件），测于 2026-10-10，合计 2,059 秒。
+- `smoke:artifacts`：两个制品 idle、verify ok、hook observer landed；重建后的 launcher 带守卫、lib 带翻译器与事故模块。
+- `wf handoff`（含真实 build:check）：七项通过，private-content 无 review 行。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新；launcher 守卫与事故记录没有在真实宿主上触发过。
+
+本批改动 src/（foundation 新增 3 模块、kernel 新增 2 模块、6 处调用方、入口与观察器、workspace 的 fresh 兼容集合、contracts 的身份前缀）、tooling/（构建器 launcher、测试运行器、cruiser 配置）、tests/（support 新增 5 模块、22 份测试）、两个制品与耗时表；未提交。

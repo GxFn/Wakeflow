@@ -1,6 +1,6 @@
-import { stat } from "node:fs/promises";
 import path from "node:path";
 
+import { observeAbsoluteNode } from "../../foundation/filesystem/absolute-node-observation.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -293,7 +293,8 @@ async function checkoutPresent(entryDirectory: string, gitdirText: string | null
   if (gitdirText === null) return false;
   const gitdirPath = path.isAbsolute(gitdirText) ? gitdirText : path.resolve(entryDirectory, gitdirText);
   try {
-    return (await stat(gitdirPath)).isFile();
+    const observed = await observeAbsoluteNode(gitdirPath, { follow: true });
+    return observed.state === "present" && observed.node.kind === "file";
   } catch {
     return false;
   }

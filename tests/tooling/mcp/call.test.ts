@@ -1,16 +1,14 @@
 import { equal, match, rejects, throws } from "node:assert/strict";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { callArtifactTool, parseToolArguments } from "../../../tooling/mcp/call.js";
+import { disposableRoot as sharedDisposableRoot } from "../../support/temp-root.js";
 
 const CANDIDATE = path.join(process.cwd(), "plugins", "codex-wakeflow");
 
 function disposableRoot(t: TestContext): string {
-  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-mcp-call-")));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  return root;
+  return sharedDisposableRoot(t, "wakeflow-mcp-call-");
 }
 
 test("mcp call：对已核验的制品副本起一个新 stdio 进程调用一次公共工具；工具拒绝按 failed 带公开错误码返回", {

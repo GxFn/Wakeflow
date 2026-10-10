@@ -1,6 +1,5 @@
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import {
   existsSync,
   lstatSync,
@@ -117,6 +116,7 @@ import {
   planFixtureTargetTask,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
 import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";
+import { runGit } from "../../support/git-fixture.js";
 
 /**
  * 两个读工具的读路径（gate-log §13.94 D1、D2、D3、D4）：status 一次观察多域并给出下一步；
@@ -154,22 +154,8 @@ const CODEX_ENDPOINT_FACADE = Object.freeze({
 });
 const CLOCK = { clock: () => parseUtcInstant("2026-09-18T09:00:00.000Z") };
 
-function git(cwd: string, ...args: readonly string[]): string {
-  const result = spawnSync("git", [...args], {
-    cwd,
-    encoding: "utf8",
-    shell: false,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: "t",
-      GIT_AUTHOR_EMAIL: "t@example.invalid",
-      GIT_COMMITTER_NAME: "t",
-      GIT_COMMITTER_EMAIL: "t@example.invalid",
-    },
-  });
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
-  return result.stdout.trim();
-}
+/** 共享的 git 夹具：隔离环境、失败即抛、返回去空白的 stdout（§13.166 D10）。 */
+const git = runGit;
 
 interface HealthyWorkspace {
   readonly base: string;

@@ -1,4 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
+import { deepEqual, equal, ok, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -6,6 +6,7 @@ import {
   failWithBlockers,
   isWakeflowError,
   toWakeflowError,
+  translateLegacyError,
   WakeflowError,
 } from "../../src/kernel/error.js";
 import {
@@ -32,6 +33,71 @@ test("WakeflowError 只接受封闭错误码、kebab-case 原因与结构路径"
   equal(WAKEFLOW_ERROR_CODES.length, 12);
   equal(isWakeflowErrorCode("io-failure"), true);
   equal(isWakeflowErrorCode("IoFailure"), false);
+});
+
+test("旧错误类按家族表翻成封闭码：retryable 为 concurrency-conflict，旧码与授权事实进 details，消息不复制（§13.166）", () => {
+  class LockError extends Error {
+    readonly code = "wakeflow-rooted-exclusive-file-lock";
+    readonly reason = "timeout";
+    readonly path = "$lock";
+    readonly retryable = true;
+  }
+  const lock = translateLegacyError(new LockError("/Users/someone/private lock"));
+  ok(lock !== null);
+  deepEqual(lock.toPublicDetails(), {
+    code: "concurrency-conflict",
+    reason: "timeout",
+    path: "$lock",
+    retryable: true,
+    details: { legacyCode: "wakeflow-rooted-exclusive-file-lock" },
+    causeReason: "timeout",
+  });
+  equal(lock.message.includes("/Users"), false);
+  const publication = translateLegacyError(
+    Object.assign(new Error("x"), {
+      code: "wakeflow-demand-event-sourcing-publication-transaction",
+      reason: "Not A Token",
+      path: "/Users/someone/not-a-structural-path",
+      publicationAuthority: "recoverable",
+      operationId: "maintenance_operation_11111111-1111-4111-8111-111111111111",
+      eventAuthority: "/Users/someone/leak",
+    }),
+    "$request",
+  );
+  ok(publication !== null);
+  deepEqual(publication.toPublicDetails(), {
+    code: "precondition-failed",
+    reason: "legacy",
+    path: "$request",
+    retryable: false,
+    details: {
+      legacyCode: "wakeflow-demand-event-sourcing-publication-transaction",
+      operationId: "maintenance_operation_11111111-1111-4111-8111-111111111111",
+      publicationAuthority: "recoverable",
+    },
+  });
+  // 表外的 wakeflow- 码落到 unexpected；不是旧错误形状的异常不翻译。
+  equal(
+    translateLegacyError(
+      Object.assign(new Error("x"), { code: "wakeflow-not-a-module", reason: "r" }),
+    )?.code,
+    "unexpected",
+  );
+  equal(
+    translateLegacyError(Object.assign(new Error("x"), { code: "legacy-conflict", reason: "r" })),
+    null,
+  );
+  equal(translateLegacyError(new Error("plain")), null);
+  equal(
+    toWakeflowError(Object.assign(new Error("x"), { code: "wakeflow-json-value", reason: "shape" }))
+      .code,
+    "unexpected",
+  );
+  equal(
+    toWakeflowError(Object.assign(new Error("x"), { code: "wakeflow-json-value", reason: "shape" }))
+      .reason,
+    "shape",
+  );
 });
 
 test("fail 抛出内核错误，toWakeflowError 把陌生异常包成 unexpected 且不复制消息", () => {

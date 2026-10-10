@@ -150,7 +150,7 @@ enabled = true
 | `src/` | 运行时，六层：`foundation` → `contracts` → `kernel` → `capabilities` / `governance` / `configuration` / `workspace` → `hosts` → `entrypoints`，依赖方向由架构门强制。 |
 | `src/contracts/schemas/` | 可移植的 JSON Schema；`src/contracts/generated/` 由它派生并做漂移检查。 |
 | `src/hosts/<host>/` | 一切 Codex 或 Claude 特有的东西：profile、hook 片段、agent 面文本取值表、维护执行。 |
-| `assets/agent-text/` | 两个制品里技能、命令与 README 的唯一来源；宿主差异是六个占位符，由各宿主的 profile 填值。 |
+| `assets/agent-text/` | 两个制品里技能、命令与 README 的唯一来源；宿主差异是九个占位符，由各宿主的 profile 填值。 |
 | `assets/brand/`、`assets/release/version.json` | 品牌资产与唯一的发布版本输入。 |
 | `tooling/` | 构建、codegen、架构、测试与发布工具。 |
 | `tests/` | 单元、能力、宿主、制品与场景测试；`tests/scenarios/` 在一次性工作区里经公共工具跑二十个端到端场景。 |

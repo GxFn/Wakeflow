@@ -43,7 +43,6 @@
 | [0015](./0015-hook-history-and-read-completeness.md) | hook 历史容量、读取完整性和损坏隔离 | `accepted` | 2026-10-02 | 分片与旧目录共读、有界查询、缺失制品诊断 |
 | [0016](./0016-window-projection-publication-boundary.md) | 窗口绑定与投影发布的并发边界 | `accepted` | 2026-10-02 | 维护与注册共用绑定锁、目录补齐只创建、保留配置并发未决范围 |
 | [0017](./0017-operation-scope-and-runtime-evidence.md) | 工作区操作作用域与运行证据主体 | `accepted` | 2026-10-02 | 共享/独占准入、当前配置与维护目标分离、运行身份拆分及版本化启用 |
-
 | [0018](./0018-current-workspace-baseline.md) | 当前工作区结构作为首个支持基线；新建测试环境，不实现旧本地格式迁移 | `accepted` | 2026-10-02 | 取代 ADR-0017 的旧工作区迁移部分；保留并发、证据和同格式恢复 |
 | [0019](./0019-codex-project-chats-and-execution-roots.md) | Codex 外层项目聊天、宿主启动根与角色执行根分离 | `accepted` | 2026-10-03 | 项目创建/回读、绑定准入、独立 Git worktree 与技能 |
 

@@ -61,7 +61,7 @@ function check(report: Awaited<ReturnType<typeof checkHandoff>>, name: string) {
   return found;
 }
 
-test("干净的检出：五项检查通过，不运行 build:check 时该项为 unavailable 但整体仍通过", async (t) => {
+test("干净的检出：七项检查通过，不运行 build:check 时该项为 unavailable 但整体仍通过", async (t) => {
   const root = fixture(t);
   const report = await checkHandoff(root, { artifacts: false });
   equal(report.status, "passed");
@@ -73,10 +73,99 @@ test("干净的检出：五项检查通过，不运行 build:check 时该项为 
       ["private-content", "passed"],
       ["artifacts", "unavailable"],
       ["docs-pointers", "passed"],
+      ["test-durations", "passed"],
+      ["instructions-parity", "passed"],
       ["git", "passed"],
     ],
   );
+  deepEqual(check(report, "test-durations").details, ["no tooling/testing/test-durations.json"]);
+  deepEqual(check(report, "instructions-parity").details, ["no instruction files"]);
   match(check(report, "git").details.join("\n"), /modified, 0 untracked/u);
+});
+
+test("过期标记点名：脚手架占位、README 的（待填）按失败；最后一节写未提交而树里只有 docs 改动按 review", async (t) => {
+  const root = fixture(t);
+  write(
+    root,
+    "docs/progress/consolidation-gate-log.md",
+    "### 13.1 first\n\nbody\n\n### 13.2 second（2026-10-09）\n\n<!-- §13.2 验证待填 -->\n\n本批未提交。\n",
+  );
+  write(
+    root,
+    "docs/README.md",
+    "| gate-log | active，最新节点 §13.2（2026-10-09）；second（待填） | reviews/first.md | references/tools.md |\n",
+  );
+  const report = await checkHandoff(root, { artifacts: false });
+  const docs = check(report, "docs-pointers");
+  equal(docs.status, "failed");
+  deepEqual(docs.details, [
+    "gate log §13.2 still carries the scaffold placeholder 验证待填",
+    "docs/README.md still says （待填）",
+    "review §13.2 says 未提交 but only docs/ differ from HEAD; update it if the batch is committed",
+  ]);
+  // 树里有 docs 之外的改动时，"未提交"是当下的事实，不点名。
+  write(root, "src/a.ts", "export const a = 2;\n");
+  write(
+    root,
+    "docs/README.md",
+    "| gate-log | active，最新节点 §13.2（2026-10-09）；second | reviews/first.md | references/tools.md |\n",
+  );
+  write(
+    root,
+    "docs/progress/consolidation-gate-log.md",
+    "### 13.1 first\n\nbody\n\n### 13.2 second（2026-10-09）\n\n本批未提交。\n",
+  );
+  const current = await checkHandoff(root, { artifacts: false });
+  equal(check(current, "docs-pointers").status, "passed");
+  deepEqual(check(current, "docs-pointers").details, []);
+});
+
+test("耗时表覆盖按 review 点名缺口与消失的文件；指令文件除标题与 Host Boundary 一节外必须逐节相同", async (t) => {
+  const root = fixture(t);
+  write(
+    root,
+    "tooling/testing/test-durations.json",
+    `${JSON.stringify({ durationsMs: { "tests/a.test.ts": 12, "tests/gone.test.ts": 3 } })}\n`,
+  );
+  write(root, "tests/new.test.ts", "// synthetic\n");
+  const shared = "intro line\n\n## Scope\n\n- rule one\n\n";
+  write(
+    root,
+    "CLAUDE.md",
+    `# Instructions For Claude Code\n${shared}## Claude Code Host Boundary\n\n- tmux is an adapter\n\n## Handoff\n\n- summarize\n`,
+  );
+  write(
+    root,
+    "AGENTS.md",
+    `# Instructions\n${shared}## Host Boundary\n\n- threads are an adapter\n\n## Handoff\n\n- summarize\n`,
+  );
+  const report = await checkHandoff(root, { artifacts: false });
+  equal(report.status, "passed");
+  deepEqual(check(report, "test-durations").details, [
+    "review tests/new.test.ts has no measured duration (run wf timings apply after a full gate)",
+    "review tests/gone.test.ts is in tooling/testing/test-durations.json but no longer exists",
+  ]);
+  deepEqual(check(report, "instructions-parity").details, []);
+  write(
+    root,
+    "AGENTS.md",
+    `# Instructions\n${shared}## Host Boundary\n\n- threads are an adapter\n\n## Handoff\n\n- summarize differently\n`,
+  );
+  const drifted = await checkHandoff(root, { artifacts: false });
+  equal(drifted.status, "failed");
+  deepEqual(check(drifted, "instructions-parity").details, [
+    'section "Handoff" differs between CLAUDE.md and AGENTS.md',
+  ]);
+  write(root, "AGENTS.md", `# Instructions\n${shared}## Handoff\n\n- summarize\n\n## Extra\n\nx\n`);
+  match(
+    check(await checkHandoff(root, { artifacts: false }), "instructions-parity").details.join("\n"),
+    /section headings differ/u,
+  );
+  write(root, "tooling/testing/test-durations.json", "{}\n");
+  equal(
+    check(await checkHandoff(root, { artifacts: false }), "test-durations").status,
+    "unavailable",
+  );
 });
 
 test("空白错误、本机路径、凭证样式、未索引文档与指针漂移各自点名；测试里的凭证只作 review", async (t) => {

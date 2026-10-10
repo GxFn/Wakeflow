@@ -62,7 +62,7 @@ cmd="\${1:-}"
 shift || true
 { printf '%s' "$cmd"; for arg in "$@"; do printf '\\x1f%s' "$arg"; done; printf '\\n'; } >> "$log"
 if [ -n "\${WAKEFLOW_STUB_ENV:-}" ]; then env > "$WAKEFLOW_STUB_ENV"; fi
-if [ "\${WAKEFLOW_STUB_FAIL:-}" = "$cmd" ]; then exit 1; fi
+if [ "\${WAKEFLOW_STUB_FAIL:-}" = "$cmd" ]; then echo "stub: $cmd failed at /private/stub/path" >&2; exit 1; fi
 case "$cmd" in
   -V) echo "tmux 3.6b" ;;
   has-session) [ -e "$state/session" ] ;;
@@ -792,6 +792,8 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
     env: { WAKEFLOW_STUB_FAIL: "capture-pane" },
   });
   equal(noCapture.json.reason, "capture-failed");
+  // §13.165 G6：拒绝带 stderr 首行作为有界 detail，绝对路径换成占位符。
+  equal(noCapture.json.detail, "stub: capture-pane failed at <path>");
   deepEqual(noCapture.json.attempt, { status: "failed-before-send" });
   equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
 
@@ -1336,6 +1338,12 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   const refused = launch("feature-t");
   equal(refused.status, 1);
   equal(refused.json.reason, "worktree-add-failed");
+  // §13.165 G6：真实 git 的 stderr 首行进 detail，不带本机路径，长度有界。
+  const detail = refused.json.detail as string;
+  equal(typeof detail, "string");
+  equal(detail.length <= 200, true);
+  equal(detail.includes(current.parent), false);
+  equal(detail.includes("\n"), false);
   equal(refused.json.branchExisted, undefined);
   equal(existsSync(path.join(repository, ".claude", "worktrees", "feature-t")), false);
   equal(opensWindow(), false);

@@ -20,4 +20,5 @@ windows are your host actions, and each window must then be registered.
 On close: the pod's Demand must already be archived and the user must have
 merged or abandoned its branch. Record the branch dispositions truthfully -
 never record a branch as merged that you have not seen merged - then retire the
-windows, remove the checkouts, and remove the pod in that order.
+windows, remove the checkouts, and remove the pod in that order. Closing leaves
+each repository's pod branch and its exclude line to the user; say what remains.

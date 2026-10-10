@@ -50,6 +50,55 @@ test("fail 抛出内核错误，toWakeflowError 把陌生异常包成 unexpected
   equal(toWakeflowError(original), original);
 });
 
+test("公共细节沿 cause 链投影第一个 Node errno 与第一个内层 reason，不复制消息（§13.165 G3）", () => {
+  const errno = Object.assign(new Error("EACCES: permission denied, rm '/Users/someone/x'"), {
+    code: "EACCES",
+  });
+  class LegacyError extends Error {
+    readonly reason = "stage-recovery-required";
+  }
+  const nested = new WakeflowError("io-failure", "demand-root-remove", "$demandRoot", {
+    cause: new LegacyError("legacy", { cause: errno }),
+  });
+  deepEqual(nested.toPublicDetails(), {
+    code: "io-failure",
+    reason: "demand-root-remove",
+    path: "$demandRoot",
+    retryable: false,
+    causeCode: "EACCES",
+    causeReason: "stage-recovery-required",
+  });
+  equal(JSON.stringify(nested.toPublicDetails()).includes("/Users"), false);
+  // 只有 errno：没有 causeReason；内层 reason 不是 kebab 记号时省略；没有 cause 时两者都不出现。
+  deepEqual(
+    new WakeflowError("io-failure", "receipt-read", "$receipt", { cause: errno }).toPublicDetails(),
+    {
+      code: "io-failure",
+      reason: "receipt-read",
+      path: "$receipt",
+      retryable: false,
+      causeCode: "EACCES",
+    },
+  );
+  const loud = Object.assign(new Error("x"), { reason: "Not A Token /Users/someone" });
+  equal(Object.hasOwn(toWakeflowError(loud).toPublicDetails(), "causeReason"), false);
+  equal(Object.hasOwn(new WakeflowError("unexpected", "x").toPublicDetails(), "causeCode"), false);
+  // 内核错误套内核错误：内层 reason 进入 causeReason；自引用的链在 8 层处停止。
+  const inner = new WakeflowError("concurrency-conflict", "lock-held", "$lock");
+  equal(
+    new WakeflowError("io-failure", "wrapped", "$", { cause: inner }).toPublicDetails().causeReason,
+    "lock-held",
+  );
+  const loop: { cause?: unknown } = {};
+  loop.cause = loop;
+  deepEqual(new WakeflowError("unexpected", "x", "$", { cause: loop }).toPublicDetails(), {
+    code: "unexpected",
+    reason: "x",
+    path: "$",
+    retryable: false,
+  });
+});
+
 test("WakeflowError details 只接受少量短标识并进入公共细节", () => {
   const operationId = "maintenance_operation_11111111-1111-4111-8111-111111111111";
   const error = new WakeflowError("recovery-required", "journal", "$request.root", {

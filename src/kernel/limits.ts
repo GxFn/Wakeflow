@@ -15,10 +15,10 @@ export const WAKEFLOW_LIMITS = Object.freeze({
   /** 公共工具请求的规范 JSON 字节数。 */
   publicRequestBytes: 2 * 1024 * 1024,
   /**
-   * 公共工具结果的规范 JSON 字节数。过渡值：现有效果型 preview 仍回显整份计划，
-   * ADR-0004 的 planRef 在 L1 落地后降为 4 MiB。
+   * 公共工具结果的规范 JSON 字节数。planRef 已以"原请求即引用"的形式落地（publication-transaction），
+   * 现场最大的结果约 32 KiB，4 MiB 是对投影回归有意义的上限（§13.165 K7）；按工具的预算归 Q12。
    */
-  publicResultBytes: 24 * 1024 * 1024,
+  publicResultBytes: 4 * 1024 * 1024,
   /** 投递 prompt 与回调正文的字符数。 */
   promptCharacters: 65_536,
   /** 分页读取一页的最大条目数。 */

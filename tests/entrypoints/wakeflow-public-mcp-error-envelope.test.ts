@@ -156,6 +156,37 @@ test("Review注册组返回稳定Completion前置条件错误且不回显root", 
   equal(wakeflowMcpTextContent(result).includes(root), false);
 });
 
+test("内核错误的 cause 链只投影 errno 与内层 reason 两个记号，不回显消息（§13.165 G3）", async (t) => {
+  const client = await connectWakeflowMcpTestClient(t, {
+    inspectStatus: async () => {
+      throw new WakeflowError("io-failure", "demand-root-remove", "$demandRoot", {
+        cause: Object.assign(new Error("EACCES: permission denied, rm '/Users/someone/private'"), {
+          code: "EACCES",
+        }),
+      });
+    },
+  });
+  const result = await client.callTool({
+    name: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+    arguments: { root: "/workspace/private-errno", demandId: TASKING_DEMAND_ID },
+  });
+  equal(result.isError, true);
+  deepEqual(JSON.parse(wakeflowMcpTextContent(result)), {
+    error: {
+      causeCode: "EACCES",
+      code: "io-failure",
+      path: "$demandRoot",
+      reason: "demand-root-remove",
+      retryable: false,
+    },
+    kind: "WakeflowMcpError",
+    schemaVersion: 1,
+    status: "error",
+    tool: WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
+  });
+  equal(wakeflowMcpTextContent(result).includes("permission denied"), false);
+});
+
 test("未知异常统一脱敏且不返回stack", async (t) => {
   const privateMarker = "private-unexpected-error-marker";
   const client = await connectWakeflowMcpTestClient(t, {

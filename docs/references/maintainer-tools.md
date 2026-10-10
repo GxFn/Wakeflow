@@ -366,7 +366,7 @@ npm run --silent wf -- handoff
 npm run --silent wf -- handoff --no-artifacts
 ```
 
-把 CLAUDE.md 的交接规则变成一条只读命令，五项检查各自给出 passed / failed / unavailable：`git diff --check`（含 staged）；私有内容——新增行与未跟踪文本文件里的本机家目录（当前用户名）、`/private/tmp/claude-`、`/var/folders/` 路径按失败，凭证样式（提供商令牌、私钥块、`password/secret/token/api_key=` 赋值）在 `tests/` 外按失败、在 `tests/` 内按 review 列出；`build:check`（`--no-artifacts` 跳过时该项 unavailable，不阻止整体通过，日志留在 `.build/handoff/run-…/`）；docs/README 的"最新节点 §13.N"是否等于 gate-log 最后一节，`docs/reviews` 与 `docs/references` 的每个文件是否被索引；Git 分支、修改/未跟踪计数与相对本地 origin/main 的领先/落后。它不改任何文件，也不是隐私门的替代：内核的隐私扫描仍是证据与归档的权威。
+把 CLAUDE.md 的交接规则变成一条只读命令，七项检查各自给出 passed / failed / unavailable：`git diff --check`（含 staged）；私有内容——新增行与未跟踪文本文件里的本机家目录（当前用户名）、`/private/tmp/claude-`、`/var/folders/` 路径按失败，凭证样式（提供商令牌含 JWT、私钥块、`password/secret/token/api_key=` 赋值）在 `tests/` 外按失败、在 `tests/` 内按 review 列出；`build:check`（`--no-artifacts` 跳过时该项 unavailable，不阻止整体通过，日志留在 `.build/handoff/run-…/`）；文档指针——docs/README 的"最新节点 §13.N"是否等于 gate-log 最后一节，`docs/reviews` 与 `docs/references` 的每个文件是否被索引，gate-log 里 `wf scaffold node` 的 `验证待填` 占位与 README 里的"（待填）"按失败，最后一节还写"未提交"而树里只有 `docs/` 改动时按 review 点名（§13.165）；耗时表覆盖——每个 `tests/**/*.test.ts` 在 `tooling/testing/test-durations.json` 里有条目、表里没有已消失的文件，缺口按 review 点名（完整门之后 `wf timings apply` 补上）；指令文件一致——`CLAUDE.md` 与 `AGENTS.md` 除标题与标题含 Host Boundary 的一节外逐节相同；Git 分支、修改/未跟踪计数与相对本地 origin/main 的领先/落后。它不改任何文件，也不是隐私门的替代：内核的隐私扫描仍是证据与归档的权威。
 
 ## 16. 版本准备
 

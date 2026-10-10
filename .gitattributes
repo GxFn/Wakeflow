@@ -1,0 +1,4 @@
+# Generated outputs: rebuilt from src/, assets/ and tooling/ (CLAUDE.md, Source Ownership).
+# They stay reviewable in local diffs; the attribute only marks them generated for hosting UIs and blame.
+plugins/** linguist-generated=true
+src/contracts/generated/** linguist-generated=true

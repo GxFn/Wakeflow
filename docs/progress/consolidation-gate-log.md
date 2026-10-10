@@ -2985,7 +2985,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **待用户确认的项。** D1（六个技能并成四个，`wakeflow-governance` 的多数章节放弃、`wakeflow-target-craft` 降级为 references，`DELIVERY_REQUIRED_SKILLS` 每工种只剩一条路径）、D2（命令 7 → 4 并删掉 `unattended`、`dispatch`、`review`、`windows`、`check`，与能力映射矩阵 §3 第 10 行"7 个 slash 命令随场景重写"相抵）、D3（文本源落在 `src/` 之外的新根 `assets/agent-text/`，并新增两份宿主文本 profile 生产根；ADR-0013 的六层只覆盖 TS 模块，不覆盖非 TS 出厂资产）、D4(b)（强制 20 个工具每个都有文本教，等于给文本定了下限）、D6（技能与命令只发英文，与工作区生成文本的双语开关不对称）五项是取舍或与既有裁决相抵；D8（13.97 D6 原文把两个宿主信任步骤留给"L3 的 README 与 skills"，本项把它们提前到 L2 并指定 README 为 owner）与 D10（要改写一份已接受 ADR 的后果条目）是把既有决定的时点或文字挪动了的两项，也请一并裁决；D5、D7、D9 是按既有边界落地的形状选择。用户于 2026-09-18 回复"确认 继续"，按建议列全部执行；同批确认的还有两项：墙钟按"可选持久化级别"做（给持久写一个显式的持久化级别，一次性测试工作区不再付 fsync），以及对测试总工作量做优化剪枝。
 
-## 13.100 L2 第二项：可选持久化级别的落地、测试总工作量剪枝与墙钟实测（2026-09-18）
+### 13.100 L2 第二项：可选持久化级别的落地、测试总工作量剪枝与墙钟实测（2026-09-18）
 
 **做了什么。** 三轮并行实现把 §13.99 同批确认的两件事落到代码里。
 
@@ -3014,7 +3014,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **其余处置。** 本轮三个并行桶的评审提出的应修项已修：投递必需技能收缩后 `tests/capabilities/delivery/decide.test.ts` 的断言同步（此项曾让门变红）；`docs/requirements/wakeflow-functions-and-scenarios.md` §2 与 §3 里残留的退役对象词"测试卡"改为"测试合同（由测试任务包携带）"；`demand-operation-authority-context.ts` 的注释不再宣称一条全工作区不变量，改为这条缝自己成立的陈述；`tests/support/prepared-workspace.ts` 里两个字面 NUL 分隔符改成 `\u0000` 转义，文件不再是二进制。`tooling/testing/test-durations.json` 按本次逐文件实测整表刷新（旧表是并发争用下的 1,617 秒旧数，把最慢文件排错了位）。
 
-## 13.101 L2 收口后的推进计划：功能补齐、L3 制品完整化与 E4 原子切换（2026-09-19）
+### 13.101 L2 收口后的推进计划：功能补齐、L3 制品完整化与 E4 原子切换（2026-09-19）
 
 **目标。** 用户 2026-09-18 晚定下的方向：以"新 TS 版本完整实现功能与代码逻辑、准备好新旧切换、清理旧代码"为目标，按阶段一步一个脚印推进，不遗漏功能与代码逻辑；本轮不用 ultracode，单人推进。本节先盘点现状与仍然开放的功能项，再给阶段计划与需要裁决的项。
 
@@ -3069,7 +3069,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 用户于 2026-09-19 回复"确认 继续"，D1 到 D12 按建议列全部执行。
 
-## 13.102 B1：配置从 v1 起版（TSD-16，ADR-0008 决定 5）（2026-09-19）
+### 13.102 B1：配置从 v1 起版（TSD-16，ADR-0008 决定 5）（2026-09-19）
 
 **做了什么。** 配置文件的身份改为新序列：Schema `$id` 与文档 `$schema` 常量都是 `urn:wakeflow:config:v1`，`schemaVersion` 为 `1`，`kind` 保持 `WakeflowConfig`；`maintenance-execution-intent.schema.json` 对配置 Schema 的 `$ref` 随之改为 URN。旧值指向 `https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json`，E4 删除 `core/` 后它就是一个死链接。代码按 §13.101 D8 去掉版本后缀：模块 `wakeflow-config.ts`、`wakeflow-config-document.ts`、`wakeflow-config.schema.json`、`wakeflow-config.generated.ts` 与三份测试文件改名，符号 `WakeflowConfig*`、`parseWakeflowConfig`、`createMinimalWakeflowConfig`、`WAKEFLOW_CONFIG_SCHEMA`、`WAKEFLOW_CONFIG_SCHEMA_ID`、`WAKEFLOW_CONFIG_SCHEMA_VERSION`、`WAKEFLOW_CONFIG_KIND`；注释与消息里的 "v3 配置" 措辞一并去掉，文件的版本只由 `schemaVersion` 表达。生成目录由 `schema:build` 重生成（95 份 Schema、132 条外部引用边）。
 
@@ -3079,7 +3079,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **验证。** 96 个文件改动、行数 +1,349/−1,350；`typecheck`、`check:architecture`（677 模块）、`schema:check`、Biome lint 与 format、knip 干净；配置切片聚焦测试 14/14，其中两处钉死的旧值（最小配置的规范摘要与文件字节数 2,661 → 2,590、文件摘要）按新身份更新；hook 观察、状态栏、制品与场景验收聚焦 25/25。能力映射矩阵行 2 与 D13 的"TSD-16 从 v1 起版未做"改为已做。全量 `npm test` 966/966，提交 `595878b1`。
 
-## 13.103 C：L3 制品完整化——构建器、依赖闭包、校验器、冒烟与发布门（2026-09-20）
+### 13.103 C：L3 制品完整化——构建器、依赖闭包、校验器、冒烟与发布门（2026-09-20）
 
 **做了什么。** 按 §13.101 D1–D7 把"技术骨干候选"构建器变成插件制品构建器，并补上切换前必须有的三道门。
 
@@ -3096,7 +3096,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **knip 从 12 分钟回到 3 秒。** 全量门这轮在 `check:unused` 上卡了 12 分 5 秒，`knip --performance` 把 99% 记在 `findAndParseGitignores`：它爬整棵树收集每一份 `.gitignore`，`test/fixtures/` 里有 291 份历史工作区的忽略文件，其中每一条否定模式都让它把累计的几千条模式重新编译成一个 picomatch 匹配器，代价随文件数平方增长；根 `.gitignore` 挡不住这次爬取，因为 `plugins/*` 两个工作区都在 `ignoreWorkspaces` 里，爬取没有可剪枝的"相关目录"。处置：`check:unused` 改为 `knip --no-progress --no-gitignore`，`knip.json` 的 `ignore` 显式加上 `.build/**`（否则 `package.json` 脚本里指向 `.build/` 的编译产物会被当作入口分析）。分析对象本来就由 `project` 与 `entry` 显式给出，不依赖 `.gitignore`。D 阶段删掉 `test/` 后这份开销本身也就没了。全量门 974/974，提交 `629e79c5`。
 
-## 13.104 D：E4 原子切换——`plugins/` 重生成、旧体系删除、版本 1.0.0（2026-09-20）
+### 13.104 D：E4 原子切换——`plugins/` 重生成、旧体系删除、版本 1.0.0（2026-09-20）
 
 **做了什么。** plan §10.1 的八项在一次提交里完成（第 8 项的打标签除外）。
 
@@ -3121,7 +3121,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余。** `check:unused` 的 `--no-gitignore` 在 `test/` 删除后已不再必要，保留它是因为分析对象本来就显式；`tooling/testing/test-durations.json` 的多数条目仍是 §13.100 的实测，新文件按本次实测补入；旧 `docs/archive/` 与 `file-review-ledger.md` 里对 `core/`、`tools/`、`test/` 的引用是历史证据，不改。
 
-## 13.105 切换后：墙钟处置 (a)、旧版本参考副本与功能对齐审计的开始（2026-09-20）
+### 13.105 切换后：墙钟处置 (a)、旧版本参考副本与功能对齐审计的开始（2026-09-20）
 
 **用户裁决。** 2026-09-20 回复"确认 继续，按 (a) 把冒烟测试移出 npm test"，并要求：把 Wakeflow 项目复制一份本地副本，继续推进直到新 TS 版本完全功能、删除全部旧项目文件，后续对齐功能与代码时到那份旧版本副本里找代码逻辑。
 
@@ -3131,7 +3131,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **功能对齐审计（下一阶段）。** 能力映射矩阵是按 31 项旧工具与 D1–D41 锚点判定的；用户要求的是代码逻辑层面的对齐，粒度要到旧模块。审计对象：旧 `core/scripts/lib/` 86 个模块、5 个入口脚本、`core/lib/` 2 个、`core/mcp/server.cjs`、Claude 独有 12 个与 Codex 独有 6 个宿主模块、19 份旧技能文本。每个模块一行：旧职责（按它的能力导航注释与导出）、新 owner（`src/` 路径）、判定（`covered`、`recut`、`dropped`（指向 ADR 或能力卡）、`gap`）、gap 的处置。台账放在 `docs/references/legacy-alignment-ledger.md`；每发现一个 gap 就修在代码里并加回归，按模块组分批提交。
 
-## 13.106 对齐台账 G1：managed-block 仓库与 external-owned 支撑面的托管块（2026-09-21）
+### 13.106 对齐台账 G1：managed-block 仓库与 external-owned 支撑面的托管块（2026-09-21）
 
 **缺口。** 对齐台账（§13.105）首轮唯一的 `gap`：配置里 `repositories[].instructionManagement: managed-block` 与 external-owned 支撑面的 `instructionManagement: managed-block` 只进了 fresh selection 与 config document，没有写入器、没有对账消费者（`wakeflow-managed-support-resource-catalog.ts` 的注释说"由独立 consumer 处理"，但那个 consumer 不存在）。能力卡 1 §1 表第 29–30 行与需求 F1.5 都要求 managed-block 时写托管块。旧实现把仓库记忆与外部支撑面记忆当作 `managed-block` 组件，与程序记忆走同一套托管内容机制（参考副本 `core/scripts/lib/wakeflow-managed-content.mjs` `semanticMemorySpecs`，`wakeflow-rule-model.mjs` `renderRepositoryMemoryCandidate` 与 `renderSupportRoleMemoryCandidate` 的 external 分支）。
 
@@ -3158,7 +3158,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余。** 外部根的暂存残留没有恢复 owner（程序指令的恢复 owner 也尚未接线到公共 recover，两者一起处理）；真实 WakeWorkspace 上的托管块写入未执行（用户项）。
 
-## 13.107 第二轮对齐 B 组：导出函数级核对与三处修复（2026-09-21）
+### 13.107 第二轮对齐 B 组：导出函数级核对与三处修复（2026-09-21）
 
 **用户裁决。** 2026-09-21 回复"确认 继续"，采纳第二轮对齐的四条建议：D1 按旧模块的导出函数核对；D2 先核仍在运行时路径上的组（配置/布局/维护 → 治理 → 观察 → 宿主 → 技能文本）；D3 错误形状、磁盘布局与消息文本差异不算 gap，只有缺失的行为分支才算（TSD-03）；D4 每个模块组一批提交、一节 gate-log。
 
@@ -3185,7 +3185,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余。** 三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；窗口投影 stale/missing 报告（F 组）；维护协议根缺失时 reconcile 仍阻塞。
 
-## 13.108 第二轮对齐 C 组：活动投影、账本、TODO 与归档的函数级核对与 G5（2026-09-21）
+### 13.108 第二轮对齐 C 组：活动投影、账本、TODO 与归档的函数级核对与 G5（2026-09-21）
 
 **核对结论（C 组 11 个模块，逐导出函数表在对齐台账 §3）。** 无 gap 的部分：活动投影的零写入检查与重建（三诊断轴归 `observeProjectionTargets` 与 `projectionFreshness`，unsafe 整轮零写归内核；旧公共 runtime 每个公共操作后的 rebuild 对应 `afterMutationRefresh` 在维护 apply 与九个 capability 收尾的调用）；ledger 记录的严格加载、幂等发布、异字节 conflict、成员引用与发布锁（归档包不加锁，靠候选目录 rename 的 `destination-exists` 判竞态）；归档服务的四个入口（plan → `planTerminal` 九门加隐私加包 claim 加 `archive-conflict`；commit → `applyTerminal` 的 journal → 终态事件 → 封包 → 结包 → 释放声明 → 退役活动根；recover → journal 重放或按已在归档收敛；inspect → status/verify 带 demandId 的归档回执）；TODO 服务的认领 CAS、归档消费与恢复 seam 在看板 claim state 链上逐条对应，TODO 摄入、行级 codec、ledger 四个 Markdown 索引、迁移归档共存按 ADR-0011 与首轮判定继续 dropped。台账 §2 三行 owner 引用改正：仓库里没有 `governance/archive/*` 与 `governance/demand/lifecycle/*` 目录，归档 owner 是 `capabilities/demand/archive.ts`、`demand-archive-manifest.schema.json` 与 `capabilities/demand/decide.ts`。
 
@@ -3206,7 +3206,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余。** G6（观察侧窗口投影新鲜度）待 F 组；三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞。
 
-## 13.109 第二轮对齐 D 组：Demand、结果、评审与证据的函数级核对（2026-09-21）
+### 13.109 第二轮对齐 D 组：Demand、结果、评审与证据的函数级核对（2026-09-21）
 
 **核对结论（D 组 13 个模块、约 90 个导出函数，逐函数表在对齐台账 §3）。** 没有新的 gap。分域小结：
 
@@ -3226,7 +3226,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余。** 同 §13.108：G6（观察侧窗口投影新鲜度，F 组）；三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞。下一组 E（投递、窗口、租约与宿主激活）。
 
-## 13.110 第二轮对齐 E 组：投递、窗口、租约与宿主激活的函数级核对（2026-09-21）
+### 13.110 第二轮对齐 E 组：投递、窗口、租约与宿主激活的函数级核对（2026-09-21）
 
 **核对结论（E 组 13 个模块、约 100 个导出函数，逐函数表在对齐台账 §3）。** 没有新的 gap。分域小结：
 
@@ -3245,7 +3245,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余。** 同 §13.109，另加 D1 的预览裁决项。下一组 F（Pod、观察与公共运行时），其中含 G6。
 
-## 13.111 第二轮对齐 F 组：Pod、观察与公共运行时的函数级核对与 G6（2026-09-21）
+### 13.111 第二轮对齐 F 组：Pod、观察与公共运行时的函数级核对与 G6（2026-09-21）
 
 **核对结论（F 组 6 个模块、约 55 个导出函数，逐函数表在对齐台账 §3）。** 一处 gap（G6，C 组核出、本组修）；其余：pod 记录与服务的窗口物化链、Design 交接、Test access、close intent / receipt 分别重切为配置 `pods[]` 加 worktree 回执、端点登记与退役证据、两段关闭（ADR-0010），Test access 与 Design 交接放弃（矩阵行 29）；观察的一次采集多域与 status / verify 投影对应 `observeWorkspace` 与 `assembleStatus` / `assembleVerify`；旧 verify 十七门映射为十四门（合并 owner-contract / layout-manager / managed-drift 进 local-layout，active-authority / transport-authority 进 demand-stream 两门，repository-roots / repository-owner 进 pod-execution-location，coordination-leases 改 work-claims；config-service、maintenance-gate、storage-inventory 放弃）；preservation 与 legacy 分类目录维持 dropped；公共 runtime 的 29 个处理器对应 20 个工具（能力映射矩阵）加 `afterMutationRefresh`。
 
@@ -3268,7 +3268,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余。** 三条无消费者的配置词汇待裁决；外部指令模块与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞；§13.110 D1 的投递预览裁决项。函数级 gap 归零；剩余组 A（基础原语，首轮多为 covered）、G（迁移，dropped）、H（入口与 MCP）、I / J（宿主）、K（技能文本）。
 
-## 13.112 第二轮对齐收尾：A、G、H、I、J、K 组的函数级核对（2026-09-21）
+### 13.112 第二轮对齐收尾：A、G、H、I、J、K 组的函数级核对（2026-09-21）
 
 **核对结论（六组 46 个模块 / 文件，逐函数表在对齐台账 §3）。** 没有新的 gap；第二轮至此把 117 行、约 420 个导出函数全部核完，函数级 gap 归零（G1–G6 已修）。分组小结：
 
@@ -3288,7 +3288,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余（第二轮结束时的全集）。** 三条无消费者的配置词汇（`governance.audit.preservedReviewAfterDays`、`governance.validation.runtimeResidue`、`repositories[].validation.residueExceptions`）待裁决；外部指令 inspection / recomposition 与通用托管块文件 owner 的合并；维护协议根缺失时 reconcile 仍阻塞；§13.110 D1 的投递 prepare 预览裁决项；被关闭 pod 的窗口投影文件留在磁盘（§13.111 D5）；用户侧待做：真实 `WakeWorkspace` 初始化 / 删除重建 / reconfigure / reconcile、每宿主一次真实投递并取回 hook 证据、真实 Claude 会话的状态栏、`git push`、tag `v1.0.0`、发布与本地缓存刷新（plan §14 第 12 项）。
 
-## 13.113 配置词汇裁决：删除三条无消费者的治理与残留字段（2026-09-21）
+### 13.113 配置词汇裁决：删除三条无消费者的治理与残留字段（2026-09-21）
 
 **用户裁决。** 2026-09-21 回复"确认 继续"，采纳 §13.112 之后提出的三条建议：D1 删除 `governance.audit.preservedReviewAfterDays`、`governance.validation.runtimeResidue`、`repositories[].validation.residueExceptions`；D2 `wakeflow_prepare_delivery` 不加 preview 模式，维持按客户端幂等键重放；D3 三项内部整理做成一批（外部指令模块并入通用托管块文件 owner、维护协议根缺失时 reconcile 不再阻塞、被关闭 pod 的窗口投影文件退役），记 §13.114。本节只做 D1，D2 无代码。
 
@@ -3305,7 +3305,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **文档写回。** 能力卡 1 §1.2 现 TS 状态（schema 路径与词汇删除）、能力卡 8 现 TS 状态、对齐台账 §3 B 组行、本节。
 
-## 13.114 内部整理一批：外部指令并入通用托管块 owner、对账重建 `.wakeflow-local`、退役关闭 pod 的投影（2026-09-21）
+### 13.114 内部整理一批：外部指令并入通用托管块 owner、对账重建 `.wakeflow-local`、退役关闭 pod 的投影（2026-09-21）
 
 **用户裁决。** §13.113 记录的 D3：三项内部整理做成一批。
 
@@ -3327,7 +3327,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残余。** 同伴宿主根里被关闭 pod 的投影文件；部分缺失（只删 identity 或 projections 子目录）走同一骨架路径但未单独测试；用户侧待做项不变（真实 WakeWorkspace、真实投递、Claude 状态栏、push / tag / 发布 / 缓存）。
 
-## 13.115 真实工作区验证：`WakeflowTestWorkspace` 两宿主七幕加对账修复与重配置；工作区根须是 Git 仓库（2026-09-21）
+### 13.115 真实工作区验证：`WakeflowTestWorkspace` 两宿主七幕加对账修复与重配置；工作区根须是 Git 仓库（2026-09-21）
 
 **用户环境。** 用户新建 `WakeflowTestWorkspace`（与 `Wakeflow` 仓库同级）作为一次性验证环境：根目录里是五个产品仓库副本（Alembic、AlembicAgent、AlembicCore、AlembicDashboard、AlembicPlugin，各自是干净的 Git 仓库，`main`），根本身不是 Git 仓库，没有任何 Wakeflow 标记。验证用一个临时驱动脚本（会话 scratchpad，不进仓库）把 committed 制品复制到仓库外，按 smoke 同一方式经 stdio 起 MCP 服务并逐工具调用；selection 为五个 owner-managed 仓库（各一个 product 窗口）、Design / Test 两个 wakeflow-managed 面、`Ledger`、`zh-Hans`。
 
@@ -3355,7 +3355,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **文档写回。** README 两语第 4 步、init 命令、Controller 技能工作区参考 Step 0、能力卡 1 §1.1 现 TS 状态、plan 环境边界；制品重建。
 
-## 13.116 reconfigure 接受宿主启动偏好：`hosts` 不是布局；联合真实宿主测试前的准备（2026-09-24）
+### 13.116 reconfigure 接受宿主启动偏好：`hosts` 不是布局；联合真实宿主测试前的准备（2026-09-24）
 
 **背景。** 用户要在 `WakeflowTestWorkspace` 上与 Claude 一起做真实宿主测试，且窗口要跑 Opus 模型。设 Opus 的正规途径是把 `hosts["claude-code"].launch.modelByRole.default` 写进配置，对已初始化的工作区只能走 reconfigure。用 Claude Code 制品（§13.115 提交后的重建副本）对该工作区做 reconfigure preview，被三个 blocker 挡住：`reconfigure-layout-change-unsupported`、`program-instruction-unknown-managed-body`、`support-memory-unadmitted-source`。
 
@@ -3378,7 +3378,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **未执行。** 真实宿主会话（安装插件、开窗口、登记、投递取回 hook 证据、Claude 状态栏）由用户在联合测试中操作；本机没有 `codex` CLI，Codex 侧真实会话仍未验证。
 
-## 13.117 tmux 助手资产与精确权限规则：Claude 宿主的 tmux 操作回到插件手里（2026-09-24）
+### 13.117 tmux 助手资产与精确权限规则：Claude 宿主的 tmux 操作回到插件手里（2026-09-24）
 
 **背景。** 用户授权设置插件权限与使用 tmux，并要求"用 plugin 来处理 tmux 的设置相关"。旧项目（`plugins/claude-code-wakeflow/scripts/lib/wakeflow-claude-lifecycle.mjs`、`-transport.mjs`、`-activity.mjs`）把 tmux 完全放在进程内；TSD-12 与 ADR-0009（2026-09-10）把执行移交 Agent 之后，技能文本只用文字描述 tmux 步骤，五个窗口选项、坐标格式、UUID 生成与 Controller 自身的登记都靠 Agent 手工完成。本节按用户对 D4-A 与 D5 的确认落地，同时执行 D3（重置测试工作区）；D2（对方宿主文件的时效）按用户确认留到联合测试之后。插件已按授权从本仓库 marketplace（`gxfn`）以用户范围安装。
 
@@ -3400,7 +3400,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **未执行。** 真实 tmux 上的助手（开窗口、登记、投递、状态栏）留给联合测试；插件缓存刷新与联合测试在本节提交之后进行。
 
-## 13.118 用户是被引导者：Controller 自己把 tmux 建起来（2026-09-24）
+### 13.118 用户是被引导者：Controller 自己把 tmux 建起来（2026-09-24）
 
 **背景。** 用户否决了 §13.117 之后我给出的联合测试步骤——那里让用户自己 `tmux new-session` 再在里面开 Controller。用户的模型是：在工作区里运行 `claude`，执行插件命令，其余由插件引导："你应该把 wakeflow 的用户当做被引导者，而不是让我来执行 tmux 命令"。这是对流程与文本的裁决，记为长期规则：用户自己做的只有启动 `claude` 与执行插件命令，其余宿主动作由 Controller 执行，只能由用户做的事（attach、信任对话、确认）由 Controller 当场告知。
 
@@ -3416,7 +3416,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **未执行。** 真实 tmux 上的引导流程（bootstrap、attach、信任对话、登记、投递）留给用户在 `WakeflowTestWorkspace` 里的联合测试；用户的动作只有在工作区里运行 `claude` 与 `/wakeflow-init`。
 
-## 13.119 联合真实宿主测试：Claude 的投递外壳、命令命名空间、回调传输与 rework 准入（2026-09-24）
+### 13.119 联合真实宿主测试：Claude 的投递外壳、命令命名空间、回调传输与 rework 准入（2026-09-24）
 
 **背景。** §13.118 之后用户在 `WakeflowTestWorkspace` 里执行 `claude --model opus` 与 `/wakeflow-init`，接受了八个窗口的信任对话，然后授权我通过 tmux 直接驱动各窗口做端到端验证，并要求"对比旧的项目功能实现和代码，选取有价值和验证过的功能和代码"。本节记录 Controller（Opus 5.5）引导下的一轮完整需求闭环里证实的事实、发现的问题与修法。三次提交：`97854859`（助手在真实宿主上活下来）、`1f387a36`（观察脚本剥壳、命令改名、回调传输）与本节的提交（闭合标签属性、rework 准入）。
 
@@ -3441,7 +3441,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **待裁决与残留。** D2（跨宿主指令/记忆文件的时效）留待用户裁决；rework 只能标 `implementationQuality: defective`，"产品改动没问题、只是报告要重做"没有专门词汇（本轮不改，记为 D6 待裁决）；locator 文件实际在 `identity/window-locators/`，目录与卡片 2 写的是 `operations/window-locators/`；owner 管理的产品仓库没有助手的 allow 规则，产品窗口调助手要么 bypassPermissions 要么弹一次确认；`<pasted_content>` 外壳可能让谨慎的会话犹豫。Codex 宿主本轮未做真实会话测试（未执行）。
 
-## 13.120 D2 对等宿主文件随本宿主事务保持当前、D6 rework 的质量词汇放开；八窗口重启后的第二轮联合测试（2026-09-24）
+### 13.120 D2 对等宿主文件随本宿主事务保持当前、D6 rework 的质量词汇放开；八窗口重启后的第二轮联合测试（2026-09-24）
 
 **背景。** §13.119 之后用户裁决："重启八个窗口再跑一遍，D2 和 D6 按你推荐的来"。D2 是 §13.116 留下的对等宿主指令/记忆文件时效问题，D6 是 §13.119 记下的 rework 只能标 `implementationQuality: defective` 的词汇问题。两项按当时的建议落地，然后在 `WakeflowTestWorkspace` 里把八个窗口全部重启（新 MCP 服务器、新技能与命令名生效）再走一遍完整闭环。
 
@@ -3457,7 +3457,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** D7（待裁决）：`controller-only` 的需求包在现行规则下总要两轮——目标第一次只能 `needs-review`（尚无托管证据可引用），Controller 登记证据后必须发一次只改报告的 rework 才能拿到 `completed` 再 accept。建议：允许 Controller 在证据已登记且自己的独立检查覆盖全部锚点时，对 `needs-review` 结果直接 accept（accept 的机器规则从"outcome 必须 completed"改为"completed，或 needs-review 且每个锚点都绑定了 Controller 登记的证据"），把默认路径压回一轮；不改的话，技能文本至少要写明这两轮是预期的。本节顺手修了两处现场发现：返工投递 prompt 里的整改项摘要上限 128/256 个码点把第一条证据 ref 截在半路（目标只好去 Demand 根读完整决定），方法/观察摘要上限提到 512/1024（Schema 与 envelope 同步，存量记录仍合法）；回调先于目标会话的 stop 记录约 9 秒到达，Controller 第一次读评审单元时完成记录还是 pending，技能第 10 步写明这是时序、稍后再读。其余残留：Controller 的探针文件留在 `Test/evidence/demand_*/`；hook 记录的 `cwd` 随目标会话 Bash 的 `cd` 漂移（§13.119 已记）；Codex 宿主仍未做真实会话测试（未执行）。
 
-## 13.121 D7：needs-review 结果凭 Controller 的锚点→证据绑定直接 accept（2026-09-24）
+### 13.121 D7：needs-review 结果凭 Controller 的锚点→证据绑定直接 accept（2026-09-24）
 
 **背景。** §13.120 第二轮暴露的结构性问题：`controller-only` 的需求包在旧规则下总要两轮——目标第一次只能 `needs-review`（尚无托管证据可引用），Controller 登记证据后还得发一次只改报告的 rework 才能拿到 `completed` 再 accept。用户裁决"D7 按你推荐的来"。能力卡 7 的 Q3 原裁决是"accept 必须 `outcome === completed`，needs-review 只能 rework 或 blocked"，旧 JavaScript 实现则是零证据也可机械接受；本节取中间：accept 也接受 `needs-review` 结果，但依据必须是 Controller 自己记录在决定里的锚点→托管证据绑定，零证据的机械接受仍不允许。
 
@@ -3478,7 +3478,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** 整门在机器繁忙时（第三方进程 `yyb_mac` 长时间占 160% CPU）连续三次各有一个计时敏感用例超时——锁串行用例（默认 2 s 等待，本节改为显式 30 s，断言的是串行与残留清理）、端点 register/decommission 用例（单跑 31 s，整套并行时超过 60 s 上限，未改）——单跑均通过；这是负载问题不是回归，但说明整门的计时余量在繁忙机器上偏紧。其余：Controller 的探针文件继续留在 `Test/evidence/`；Codex 宿主仍未做真实会话测试（未执行）。
 
-## 13.122 逐模块对齐第一轮：投递与落地——旧实现的已验证行为对照与两处移植（2026-09-24）
+### 13.122 逐模块对齐第一轮：投递与落地——旧实现的已验证行为对照与两处移植（2026-09-24）
 
 **背景。** 用户设定下一阶段："逐个文件 review 本地旧项目代码和模块，在新 TS 项目里逐个 review 对齐模块和功能逻辑，学习理解旧项目的已经成熟的方案与实现，然后进行多轮次的完善优化新 TS 项目，并多轮次的验证真实测试"，并指定从"投递与落地"开始。参考副本 `Wakeflow-legacy-reference` 核实为 `629e79c5`（E4 切换提交 `a8d0b4bb` 的父提交）的逐字节导出，无更新的分支或标签，版本正确。本轮的对照单位是旧实现的**测试名**——那是旧项目里已被验证的行为清单——对应的模块：`wakeflow-delivery-orchestration.mjs`（3780 行）、`wakeflow-transport-{records,store,retention}.mjs`、`wakeflow-window-lease-{records,service}.mjs`、Claude 宿主的 `wakeflow-claude-transport.mjs` 与 `wakeflow-claude-locator.mjs`，以及它们的七个测试文件。
 
@@ -3513,7 +3513,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** 回读在 Claude Code 上从未 confirmed（首行子串永远看不到），它现在只是"屏幕摘要"这一条证据，是否改成识别 TUI 的粘贴指示或干脆只保留摘要，留到窗口与宿主那一轮；隐私扫描把探针转录里的两个裸 UUID（hook 记录 id）拦下（`privacy:bare-uuid`），Controller 删掉后重登记——按设计工作，但技能文本可以提醒"证据文件里不要写 hook 记录 id"；旧实现的多目标 group 替换、journal 前向恢复与 keep-live 三项按既有裁决不移植；Codex 宿主仍未做真实会话测试（未执行）。
 
-## 13.123 逐模块对齐第二轮：评审与证据——旧实现的已验证行为对照，一处技能文本补充，一次故意的失败路径现场（2026-09-24）
+### 13.123 逐模块对齐第二轮：评审与证据——旧实现的已验证行为对照，一处技能文本补充，一次故意的失败路径现场（2026-09-24）
 
 **背景。** 第二轮按计划对照旧实现的评审、结果权威、证据与归档：`wakeflow-result-review-orchestration.mjs`（2428 行）、`wakeflow-target-result-authority.mjs`、`wakeflow-evidence-{importer,records,tree}.mjs`、`wakeflow-business-archive-{records,service}.mjs`，以及它们的九个测试文件（含 `evidence-mcp-surface`、`result-contract-invariants`、`pod-evidence`）。对照单位仍是旧测试名。新实现这一带在 §13.87–§13.90、§13.107、ADR-0012 已按函数级账本重切，本轮逐条核对可观察行为。
 
@@ -3550,7 +3550,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** blocked 决定（带 resumption 的再决定）与 `continue_demand` 重开已完成的 Demand 两条路径只有切片测试，没有现场；证据的 `link` / `commit` / `observation` 三种引用来源与 `controller-confirmed` 内容审阅同样只有测试；旧实现的证据"关系"记录（≤ 256 条）按现行设计不移植；Codex 宿主仍未做真实会话测试（未执行）。
 
-## 13.124 逐模块对齐第三轮：工作区维护与对账——对照、一处护栏移植、两项待裁决（2026-09-24）
+### 13.124 逐模块对齐第三轮：工作区维护与对账——对照、一处护栏移植、两项待裁决（2026-09-24）
 
 **背景。** 第三轮对照旧实现的初始化、对账、重配置、维护事务、本地布局、受管内容、支撑面与配置权威：`wakeflow-{fresh-initialize,reconcile,reconfigure}.mjs`、`wakeflow-maintenance-{plan,coordinator,action-composition,action-runtime}.mjs`、`wakeflow-local-layout{,-inspection,-realization}.mjs`、`wakeflow-managed-content.mjs`、`wakeflow-support-{materialization,surface-owner}.mjs`、`wakeflow-tracked-materialization.mjs`、`wakeflow-workspace-mutation.mjs`（6482 行）、`wakeflow-config-v3*.mjs`、`wakeflow-state-lock.mjs`，以及 `bootstrap` / `setup` / `validate` 入口，共二十余个测试文件、约两百条旧测试名。新实现这一带是 §13.94–§13.116 的重切主体，逐条核对可观察行为。
 
@@ -3591,7 +3591,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** D8 与 D9 待用户裁决（各建议单独一轮）；`wakeflow_verify` 门与 reconcile 阻塞码都只给代码不给路径，用户看到 `*-conflict` 时不知道是哪个节点——随 D8 一起处理；Codex 宿主仍未做真实会话测试（未执行）。
 
-## 13.125 逐模块对齐第四轮：窗口与宿主——对照、两处移植（resume / relocate；活 pane 守卫与退出探测）（2026-09-25）
+### 13.125 逐模块对齐第四轮：窗口与宿主——对照、两处移植（resume / relocate；活 pane 守卫与退出探测）（2026-09-25）
 
 **背景。** 第四轮对照旧实现的窗口绑定与运行投影、宿主 profile 与能力合同、Claude 宿主的生命周期 / 定位器 / settings / 退役、Codex 宿主模块、进程边界与制品校验：`wakeflow-window-{binding-records,binding-service,runtime-projector,runtime-records}.mjs`、`wakeflow-host-{profile,capability}.mjs`、`wakeflow-process-identity.mjs`、Claude 的 `wakeflow-claude-{lifecycle,locator,settings,decommission,host}.mjs`、Codex 的 `wakeflow-codex-*.mjs`，以及十三个测试文件。
 
@@ -3626,7 +3626,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** D8 与 D9 仍待用户裁决。Claude Code 不能 resume 一个从未有过对话的会话，这是宿主行为：Wakeflow 只探测并提示改走 launch + replace；pane 已被 tmux 关掉时助手拿不到 claude 的退出输出，退出原因只能由提示推断（`remain-on-exit` 打开的会话里 pane 会留下、报 `dead`）。`resume` 在 pane 活着但 hook 记录迟到时仍报 `pending`，relocate 的准入照样要这条记录，所以 Controller 只能稍后再 relocate，不能凭 pending 登记。Codex 宿主没有 resume 路径（它的窗口由用户自己开），Codex 真实会话测试仍未执行。旧实现的激活范围、迁移退役与 runtime-meta 仍是放弃项。
 
-## 13.126 逐模块对齐第五轮：需求包与 Design / Test 技能——对照、技能文本四处移植、看板视图带撤回原因、两道静态门与一条并发回归（2026-09-25）
+### 13.126 逐模块对齐第五轮：需求包与 Design / Test 技能——对照、技能文本四处移植、看板视图带撤回原因、两道静态门与一条并发回归（2026-09-25）
 
 **背景。** 第五轮对照旧实现的需求入口与两份角色技能：TODO 板与认领（`wakeflow-todo-{service,table}.mjs`）、ledger 记录与投影（`wakeflow-ledger-{records,materialization,projector}.mjs`）、需求发布事务（`wakeflow-demand-publication-service.mjs`、`wakeflow-demand-document-builder.mjs`）、模板资产（`wakeflow-template-{builder,source}.mjs`），以及 `core/skills/` 里的 `wakeflow-design`（SKILL 加五份 references、两份 assets）、`wakeflow-test`（SKILL 加四份 references）、`wakeflow-target-craft` 与 governance 的 `testing-validation.md`、`todo-backlog.md`；对照单位仍是旧实现的测试名（`wakeflow-todo-service`、`wakeflow-todo-table`、`wakeflow-ledger-v3`、`wakeflow-demand-v3-layout`、`wakeflow-demand-core-v3`、`wakeflow-skill-surface`、`wakeflow-template-{builder,source}`、`wakeflow-thin-doc-contract` 九个文件）。新实现对应 `src/capabilities/requirement/`、`src/kernel/requirement-board.ts`、`src/governance/ledger/`、`src/governance/{tasking,testing,result,review}/` 的测试合同与测试报告，以及 `assets/agent-text/skills/{wakeflow-design,wakeflow-test,wakeflow-target}/` 与 `tests/artifacts/agent-text-honesty.test.ts`。
 
@@ -3668,7 +3668,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** D8 与 D9 仍待用户裁决。窗口的 MCP 服务进程早于制品更新时，`verify` 会把助手资产报成 drift，而 reconcile 建议会指向旧代码：这是宿主生命周期的固有约束，本轮由 Controller 现场诊断并指引，还没有机器可读的"服务进程版本"信号（候选：`wakeflow_status` 报告加载中的制品 manifest 摘要，与磁盘上的比对）。Test 记录自己的 `test-output` 证据是本轮的裁决，与实现目标的 §13.123 D7 路径分工不同，已写进两份技能与 Controller 的 evidence 参考；Codex 宿主没有真实会话测试。旧实现的方案比较、切片、回归建议等方法按 ADR-0011 放弃。
 
-## 13.127 逐模块对齐第六轮：宿主中断、制品更新与窗口刷新——投递幂等、runtime-artifact 门、四份技能的中断规则（2026-09-25）
+### 13.127 逐模块对齐第六轮：宿主中断、制品更新与窗口刷新——投递幂等、runtime-artifact 门、四份技能的中断规则（2026-09-25）
 
 **背景。** 用户在第五轮之后要求把 "API Error: Connection lost mid-response" 这类宿主错误纳入 Wakeflow 运行时可能遇到的问题并给出规避方案，同时按需更新 tmux 各窗口。第五轮现场恰好提供了三个样本：Design 的更正 apply 与 Controller 的测试评审各被连接中断切断一次；Controller 在完成前发现自己的 MCP 服务进程早于第四轮的制品更新，`verify` 把磁盘上正确的助手报成 drift，而 reconcile 的建议会用旧代码把它改回去。本轮对照的是旧实现的传输与生命周期模块里与"中断后再来一次"有关的已验证行为（`wakeflow-claude-transport.mjs` 的 M4-T08 "paste uncertainty records ambiguous once, retains the lease, and never resends"、M3-T07 的 settled-replay，`wakeflow-delivery-orchestration.mjs` 的 run-first / replay），以及新实现每个效果工具的重放语义。
 
@@ -3697,7 +3697,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** D8 与 D9 仍待用户裁决。制品信号只在 hook 与 MCP 服务来自同一份制品时才能判 current（正式安装如此；本仓库的开发布局里 hook 走插件缓存、服务走仓库制品，两者要一起刷新，否则新会话也会被判 stale）。"本窗口的服务要重连"仍是用户动作（`/mcp` 或 resume 会话），Controller 只能提示；Claude Code 的 `/mcp` 重连是否总能换到新代码尚未在现场验证（本轮用助手 resume 代替）。Codex 宿主的 hook 同样会写摘要，但 Codex 真实会话测试仍未执行。下一轮：pod 与 worktree。
 
-## 13.128 逐模块对齐第七轮：pod 与 worktree——对照、检出占用守卫、拉起顺序，第一个真实 pod（2026-09-25）
+### 13.128 逐模块对齐第七轮：pod 与 worktree——对照、检出占用守卫、拉起顺序，第一个真实 pod（2026-09-25）
 
 **背景。** 第七轮对照旧实现的 Pod 领域：`wakeflow-pod-service.mjs`（7,062 行：inventory、materialization、Test access、close 四段）、`wakeflow-pod-records.mjs`（九类证据 codec）、Claude 与 Codex 的 pod 宿主适配器，以及六个测试文件（`wakeflow-pod-service-v3`、`wakeflow-pod-evidence-v3`、`wakeflow-pod`、`wakeflow-claude-pod-host`、`wakeflow-codex-pod-host`、`wakeflow-pod-design-v3`）。新实现是 ADR-0010 的 pod 模型：`src/capabilities/pod/`（`wakeflow_pod` 的 create 与两段 close 走配置事务，recover 对账回执）、`src/kernel/pod-worktree-receipts.ts`（porcelain 解析、检出准入、回执存储）、`src/governance/pod/`（状态派生、处置引导）、端点切片里 worktree 观察的准入与 Test 窗口的附加目录，以及 Controller 技能的 "Pods" 一节。此前七次联合运行都在 main pod 里跑，pod 从未在真实宿主上创建过。
 
@@ -3735,7 +3735,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** D8 与 D9 仍待用户裁决。本轮的宿主中断：pod Controller 评审两次 API Error，main Controller 关闭 pod 时两次 API Error 加一次上下文压缩，三个窗口都按第六轮的规则先看再做，没有一次重复或遗漏写入；但被切断的一轮不会自己续上，每次都要人再发一句"继续"——这是宿主的边界，Wakeflow 只能保证续上时的状态可判定。新看到的一种中断是登录过期（"Login expired · Please run /login"）：只有用户能 `/login`，Claude Code 在登录成功后自动续上被切断的那一轮，Wakeflow 不需要新机制，Controller 技能的中断一节补了这一句。status 建议的 `git worktree remove` 对 Claude Code 加过锁的检出会失败，要先 `git worktree unlock`；本轮只把这一步写进技能与 ADR-0010 补充，候选做法是用回执里的 `locked` 标志给建议命令加 unlock 前缀，但关闭时的锁状态 Wakeflow 并不观察，所以暂不做。`unmergedAccepted` 只从活动 Demand 派生：Demand 归档后，它接受过的 worktree 分支即使没合并也不再出现在 status 里，pod 关闭的第一段仍会逼一次处置，但两次关闭之间的窗口期里 status 沉默——候选做法是从 pod 的 worktree 回执加已归档结果补这一列。`claude --worktree` 从远端默认分支建检出这一行为只在这一个 Claude Code 版本上核实过；`basePolicy: local-head` 现在靠"先 git worktree add 再 --worktree 复用"的配方实现，而不是宿主保证。一个 pod 8 个窗口意味着一台机器上 16 个 Claude 会话，拉起（连修复）与关闭各花了十几分钟，主要是每个窗口的启动等待与登记；Codex 宿主的 pod 路径没有真实会话测试。
 
-## 13.129 逐模块对齐第八轮：观察与 verify——对照、投影覆盖提示、维护协议进 status、零写与隐私回归、冒烟的私有路径门（2026-09-25）
+### 13.129 逐模块对齐第八轮：观察与 verify——对照、投影覆盖提示、维护协议进 status、零写与隐私回归、冒烟的私有路径门（2026-09-25）
 
 **背景。** 第八轮对照旧实现的观察域：`wakeflow-observability-v3.mjs`（2,475 行：一次观察、config / storage / status / verification 四份投影、15 个门、下一步动作）、`wakeflow-local-layout-inspection.mjs`（1,720 行）、活动投影器（`wakeflow-active-projection-service` 27 个测试、`-maintenance` 5 个）、公共面（`wakeflow-mcp-verify-surface` 5 个）、宿主激活门（`wakeflow-host-activation-gate` 7 个）与候选制品门（`wakeflow-candidate-artifact-gates` 4 个）。新实现是 `src/capabilities/observation/`（`wakeflow_status` 与 `wakeflow_verify` 走同一个命令外壳、各观察一次）、`src/governance/observation/`（逐域隔离失败的一次观察、投影事实、刷新）、`src/kernel/active-projection.ts`（页面、标记、指纹、四类目标、投影锁）与 `tooling/artifacts/smoke-plugin-artifacts.ts`。这是逐模块对齐计划的最后一轮。
 
@@ -3775,7 +3775,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** D8 与 D9 仍待用户裁决。verify 工具描述的门数从 §13.111 起停在 "thirteen" 两轮没人发现——公共描述里的数字现在由决定测试对着门集合核对，但其他工具描述里的枚举（如 Design 的看板动作、Test 的判定词汇）还没有同类静态门，只靠人读。status 与 verify 报 `recovery-required` 时不点名残留文件、也不说文件名是否是合法的操作编号；recover 只认 `maintenance_operation_<uuid>`，格式错误的残留只能由人删——现场的 Controller 自己看出并指出了这一点，本轮记为残留（候选：`maintenance` 段加残留条目数与"可否 recover"）。`overall: maintenance` 现在也覆盖维护协议非 idle 的所有情形，包括另一次维护正在进行（busy）：并发的两个窗口同时看 status 会在那几秒里都看到 maintenance，这是如实的，不是缺陷。投影的覆盖提示只在工作区两页，Demand 页不提；提示进指纹意味着一次瞬时读失败会让页面变化一次、下一次刷新或变更再变回，与此前"读不出的 Demand 掉出列表再回来"的动态相同；本轮现场没有制造读不出的 Demand，提示只在内核测试里核实。旧实现的 storage 视图（4,096 项存储清单、forbiddenConclusions）与 view 工具按 ADR-0006 仍是放弃，不补。逐模块对齐八轮到此结束：投递与落地、评审与证据、维护与对账、窗口与宿主、需求包与 Design / Test 技能、宿主中断、pod 与 worktree、观察与 verify；Codex 宿主全程没有真实会话测试。
 
-## 13.130 残留清理：八轮对齐后的全部残留汇总、逐项方案与实现（2026-09-25）
+### 13.130 残留清理：八轮对齐后的全部残留汇总、逐项方案与实现（2026-09-25）
 
 **背景。** 八轮逐模块对齐（§13.122–§13.129）各自在"残留"里留下了没做的事。用户要求"全部汇总并分别进行方案设计和实现"。汇总共 18 项：12 项实现，1 项验证缺口（本轮现场没有补），5 项按宿主边界或既有裁决记录不做（表中写明理由）。实现分两批，之后三个只读审查对照代码报 15 条，全部核实修复。本轮先后用 Fable 5.1 与 Opus 5.5 执行：Fable 5.1 启动的两个多代理工作流在第一批只完成了一个分组（D），另两个分组（H、O）与 D8 / D9 的设计小组都因"agent stalled on all 6 attempts"失败（单次调用里构建锁最多等 15 分钟，加上 auto mode 的安全检查间歇不可用），额度用尽后由 Opus 5.5 接手：H 的代码与测试已在树里，补完文本；O 从头做；D8、D9、O2 重开只读设计小组，锁等待改为单次最多 60 秒。
 
@@ -3831,7 +3831,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** 上面"未执行"的现场项仍只由测试覆盖，下一次开真实 pod 或跑 Demand 时顺带核实。reconfigure 与 fresh-initialize 因 `private-mode-drift` 阻塞时 `next.suggestedTool` 是 null，要靠 Controller 参考里"先 reconcile"一句——让 `next` 直接指向 reconcile 更紧，留作小改进。私有模式普查只覆盖 `.wakeflow-local` 与 `.wakeflow-active` 两棵树；ledger 与支撑面按设计是可移植模式，不在其中。清单第 14–18 项维持记录不做：登录过期只有用户能 `/login`、开发布局下的 `/mcp` 重连、Codex 没有真实会话、ADR-0006 / ADR-0011 放弃的旧功能、投影覆盖提示只在内核测试里。本轮起先由 Fable 5.1 的多代理工作流执行，它们因模型响应慢被看门狗反复重启、额度用尽后由 Opus 5.5 接手；之后两次多代理工作流（D8 普查加三个审查、三个修复）各用 Opus 5.5 的 agent，按文件分工、构建锁每次最多等 60 秒，都完成，只有零星一两次重启。
 
-## 13.131 整体审查：逐文件 review 全部手写文件、核实后修复、代码逻辑梳理与细节优化（2026-09-25）
+### 13.131 整体审查：逐文件 review 全部手写文件、核实后修复、代码逻辑梳理与细节优化（2026-09-25）
 
 **背景与范围。** §13.130 提交之后，用户要求"使用 ultra 模式逐个 review 当前 wakeflow 项目的每一个文件，分析发现问题并修复，进行代码逻辑梳理优化和细节优化"。范围是全部手写文件：`src/`（生成的 `src/contracts/generated/` 除外，由 `schema:build` 从 Schema 派生）、`tests/`、`tooling/` 与 `assets/`（技能、命令、README 的单一来源），共 743 个文件、约 23.5 万行；`plugins/` 是生成物，`docs/` 只随代码改动同步。
 
@@ -3860,7 +3860,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留与待裁决。** **待裁决：** bug 与 supplement 需求包没有验收标准时，发布照样通过、规划时才走不下去；技能文本已教写验收标准，要不要让发布的 preview 直接要求（改 ADR-0011 D3 的必需章节表）留给用户。**已知限制：** 本次之前写下的 real-environment 续接事件没有历史边界（实际没有这样的流：continue 从未在现场用过）。**记录不做：** worktree 处置的两句备选仍是共享代码里按 `surfaces.worktree.launch` 取的表（完全移进宿主要给 profile 加字段）；端点服务按 `model.hosts["claude-code"]` 读配置段（配置形状按宿主分键，不是行为分支）；配置根放置的物理重叠分支在真实文件系统上走不到、没有测试；rename / link / unlink 提交后漂移的 `commit-uncertain` 映射与 `releaseWorkClaimIfHeld` 的并发释放需要故障注入缝，没有为测试给生产代码加钩子；一处"合并三对助手函数"的纯整理跳过；四条既有 Biome warning 未动；新测试文件没有进 `test-durations.json`（可选的排序提示）。123 条被怀疑者驳回的报告不处理。**现场：** 本轮没有现场复验；运行时与技能都换了，测试工作区的窗口与插件缓存仍在 §13.130 的制品上（实为 §13.129 的构建 `166f580c`，见 §13.132），下次驱动之前要刷新（缓存、resume / relaunch 窗口）。
 
-## 13.132 深度分析与阶段 0 / 1：未决问题登记、默认安装的主流程阻断（2026-09-26）
+### 13.132 深度分析与阶段 0 / 1：未决问题登记、默认安装的主流程阻断（2026-09-26）
 
 **深度分析。** 用户问"目前项目还存在哪些问题，深入思考分析"。只读分析从 10 个角度展开（遗留与决策、验证覆盖、架构、持久化演进、并发与故障、宿主适配、安全、Agent 文本与体验、发布运维、产品完整性），每个角度一个独立复核者逐条对照代码与文档；完整性检查又补查了 3 个方向（可诊断性、上下文与运行成本、占用与退出路径）。134 条报告保留 132 条（95 条原样确认，37 条修正了表述或严重度），驳回 2 条，按根因合并为 13 个主题、106 项（高 17、中 61、低 28）和 12 项待裁决。全部登记进新的 `docs/references/open-items.md`（唯一的未决问题登记处，编号 A1…M4 与待裁决 Q1…Q12 与分析报告页一致），`docs/README.md` 的文档表加了这一行，并改掉两处过时的状态（gate-log 最新节点、场景数）。主会话亲自核实了五条：产品与 Test 窗口拿不到 MCP 与助手的允许规则（A1）；`deliver` 粘贴前不看 pane、粘贴后无条件回车（A2）；追加事件时崩溃留下的 `append-candidates` 让 Demand 永久读不出、服务不处理 SIGHUP（B1）；窗口运行的是版本化安装缓存里的旧构建；`version.json` 一直是 1.0.0 而没有 v1.0.0 tag（C1）。
 
@@ -3876,7 +3876,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **残留。** A1 / A2 / A4 的修复只有助手与桩 tmux 的测试，默认安装下的真实效果（产品与 Test 窗口不再停在这两类权限确认、对话框时拒绝发送）要在现场核实；工作区路径带空格时，Agent 按加引号的绝对路径调用助手能否被 `Bash(node <路径> *)` 规则匹配未核实。A3 只做了版本报告，版本检测与固定仍开放。评审单元摘要的兼容分支是 Q3 的实例。其余 100 项与 12 项待裁决按 `docs/references/open-items.md` 跟踪。
 
-## 13.133 默认安装的第一次现场：新工作区从初始化到归档走完一轮，现场补修两处助手缺陷，改用 auto 权限模式（2026-09-26）
+### 13.133 默认安装的第一次现场：新工作区从初始化到归档走完一轮，现场补修两处助手缺陷，改用 auto 权限模式（2026-09-26）
 
 **环境。** 用户选择新建第二个一次性工作区 `WakeflowTestWorkspace2`（§13.132）：根目录 `git init`，五个产品仓库从第一个工作区的副本本地克隆并在克隆里删掉旧插件的 `.claude/settings.json`，配置里不写宿主偏好（权限模式默认 `acceptEdits`），ledger 用默认的 `../wakeflow-ledger`。用户只做被引导者该做的事：在工作区启动 `claude`、运行 `/wakeflow:init`、接受信任对话框；之后用户授权维护者"直接操作 tmux 来辅助验证和测试"，Design 与 Controller 的对话、确认与权限对话框由维护者经 tmux 代为完成，每一步从外部只读核对（status / verify 经插件副本，窗口屏幕，会话记录）。
 
@@ -3898,7 +3898,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **未执行。** 本轮现场没有覆盖：rework、rearm、blocked 后重新决策、continue 之后再次完成（§13.131 第三轮的续接修复仍未上现场）、经助手准备 worktree 的 pod 与加锁检出的关闭；`acceptEdits` 下产品与 Test 窗口导入与回调是否还停在确认上，因为改用 auto 而没有完整验证。
 
-## 13.134 修 §13.133 现场发现：就地换代、收养未登记窗口、auto 权限模式与七处文字和错误（2026-09-26）
+### 13.134 修 §13.133 现场发现：就地换代、收养未登记窗口、auto 权限模式与七处文字和错误（2026-09-26）
 
 **范围。** 用户在 §13.133 汇报后说"可以，先修这些问题再继续现场测试"。本节修 §13.133 登记的现场问题（B12、C8、C16、I6、I7、I8、G12、F10、A9）并落实 Q4 裁决（auto 权限模式）；多代理执行：五个实现者按文件分桶（助手、Agent 文本、运行时文字与错误、hook 暂存、权限模式）并行，随后四个复核者逐桶对抗性复核并就地修复，主会话补了两处、改文档、跑整门。
 
@@ -3931,7 +3931,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **未执行。** 真实 Claude Code 里的就地重启（含 Controller 自重启与旧助手回退）、收养、auto 缺省启动与账本 `--add-dir`、新的阅读顺序与拒绝 reason 都还没上现场；下一步在 `WakeflowTestWorkspace2` 按技能文字走一遍插件更新换代，再继续 §13.133 未覆盖的 continue、rework、rearm、blocked 与 pod 场景。
 
-## 13.135 §13.134 之后的现场：插件更新换代、续接再完成、re-arm、rework、blocked 恢复；补修测试重跑死角与四处小缺口（2026-09-27）
+### 13.135 §13.134 之后的现场：插件更新换代、续接再完成、re-arm、rework、blocked 恢复；补修测试重跑死角与四处小缺口（2026-09-27）
 
 **环境。** 仍是 `WakeflowTestWorkspace2` 的 8 个窗口（tmux 会话 `wakeflow`，Claude Code CLI 2.1.283，auto 权限模式），插件从仓库的 `plugins/` 运行。维护者按被引导用户的身份在窗口里说话、答对话框，从外部只读核对（repo 构建的 status / verify、窗口屏幕、会话记录、进程参数）。
 
@@ -3958,7 +3958,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **未执行。** 其他窗口的 `resume --in-place` 与 `resume-never-conversed`、就地自重启的新 prompt、H9 修复后的第 2 次测试尝试与完成、经助手准备 worktree 的 pod 与加锁检出的关闭、I6 收养，都还没上现场；下一步把本节构建交给现场：按 "After a plugin update" 换代（这次 Controller 已读过新参考，助手也已支持 `--in-place`），再在 `demand_8fe8072c…` 上以 `condition-cleared` 请求第 2 次尝试并完成。
 
-## 13.136 第二次插件更新换代全程无需用户、blocked 恢复后第 2 次尝试并完成；补修重跑范围与恢复路径（2026-09-27）
+### 13.136 第二次插件更新换代全程无需用户、blocked 恢复后第 2 次尝试并完成；补修重跑范围与恢复路径（2026-09-27）
 
 **换代（C8 第一次按新写法完整上现场）。** §13.135 的构建（`d257ac7f`）写入 `plugins/` 后，用户只在 Controller 里运行 `/wakeflow:status`。Controller 先就地自重启，重启后 verify 13/15（`host-settings-assets` 报 `tmux.mjs:drift`，`runtime-artifact` 报 `windows-stale:7`），对账只换了 `tmux.mjs`；然后对有过对话的 Design、Test、AlembicPlugin、AlembicCore 各调用一次 `resume --window <id> --in-place`（都等到了 session-start），对从未对话的 Alembic、AlembicAgent、AlembicDashboard 得到 `resume-never-conversed`，按文字 close、launch、replace、mark；verify 15/15。全程没有要求用户做任何事。过程中 Controller 为找 close / launch / mark 的写法用 node 翻了自己的 Claude Code 会话记录（登记 I11）。
 
@@ -3976,7 +3976,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 **未执行。** 经助手准备 worktree 的 pod 与加锁检出的关闭、I6 收养未登记窗口、就地自重启的新 prompt（"先重新加载技能"）在下一次更新时才会走到；Codex 宿主仍未有真实会话（E 主题）。
 
 
-## 13.137 Codex 首次现场、中断恢复与 GUI Node 启动修复（2026-10-01）
+### 13.137 Codex 首次现场、中断恢复与 GUI Node 启动修复（2026-10-01）
 
 **范围与基线。** 用户指定新的 `WakeflowTestWorkspace3` 为一次性测试环境，并明确授权建立八个 Codex 角色聊天、互相投递，由维护者代为确认纯测试需求与任务计划。源码基线为 `d8fafff3`。最初将已验证的 Codex 1.0.0 制品刷新到安装缓存，906 个文件逐字节相同，manifest 摘要为 `1e7b9f66ca58e6dbb63e3714f9dfffc0042b159d1852924d1bc35c1249b588d3`；当时 `npm test` 1155/1155 与双宿主冒烟通过。未提交、推送、打标签或发布。
 
@@ -3992,7 +3992,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **尚待现场完成。** 新 hook 定义使宿主信任状态变为 modified。用户在原桌面界面重新信任后，只读检查仍见旧的四个信任哈希，恢复聊天也仍没有 Wakeflow 工具；独立的新 Codex app-server 可读取新配置并返回 20 工具目录。桌面进程尚需重新载入插件配置，再信任实际的新定义并产生新制品的真实会话观察。必须从当前结果继续 Test、评审与归档，不重做已落地的实现。Codex worktree pod、原生 Windows，以及这次修复后的完整桌面闭环仍未验证；POSIX 启动配置不构成跨平台验收。现场证据保存在该测试工作区的忽略目录中，不把私有会话标识或机器路径写入本日志。
 
-## 13.138 Codex 重启恢复、真实 Test 与归档闭环（2026-10-01）
+### 13.138 Codex 重启恢复、真实 Test 与归档闭环（2026-10-01）
 
 **桌面恢复。** 用户完整重启 Codex 并重新信任后，四个新 hook 定义均被宿主读为 trusted，20 个原生 Wakeflow MCP 工具恢复。沿用原八个角色聊天，各自完成一次只读状态回合；独立核对每个绑定都有修复制品的真实 SessionStart 和 Stop，八个窗口均为 current，工作区 verify 15/15。安装缓存再次逐文件核对，906 个文件的内容、模式和类型均与源码制品相同，manifest 仍为 §13.137 的 `77b9521f…`。没有替换绑定、重发已落地的实现，或补造任何 hook 观察。
 
@@ -4006,7 +4006,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **验证范围与交付。** §13.137 的聚焦 15/15、整门 1159/1159（含二十个场景）、build:check 和双宿主 smoke 仍对应本次源码与制品；后续仅补现场证据和开发文档，未再改运行时代码。维护者也独立复跑三项产品检查，全通过。E5 关闭为已修并经现场验证；D1、D2、E1 按新增覆盖更新，E2 保持开放。此次为 macOS 上 main pod 的八窗口登记和一个产品目标的完整需求闭环，未验证 Codex worktree pod 生命周期、原生 Windows 或 UserPromptSubmit 投递路径。版本仍为 1.0.0，源码来源仍是 `d8fafff3` 加未提交启动修复；没有提交、推送、打标签或发布。完整机器证据留在测试工作区的忽略目录中。
 
-## 13.139 Codex worktree pod、四类 hook 与真实回收验证（2026-10-01）
+### 13.139 Codex worktree pod、四类 hook 与真实回收验证（2026-10-01）
 
 **范围与宿主入口。** 用户要求继续验证，并明确授权在原八聊天之外新增八个测试聊天、五个临时 worktree，互相投递、代理确认纯测试需求和计划，以及验证后的归档与回收。沿用 1.0.0、manifest `77b9521f…`，所有测试数据与检出限定在指定的一次性工作区。Codex 保存项目中没有这些测试副本，App 的 create_thread(worktree) 也没有自选检出目录参数，因此没有拿真实产品 projectId 代替。维护者使用普通 Git 从各副本当前 HEAD 建立 detached worktree，再切到本轮临时分支，以官方 CLI/app-server 建立真实会话；这验证了 Codex 与 Git worktree 的组合，不是 App 原生工作树创建入口的验收。
 
@@ -4024,7 +4024,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **构建与验证边界。** 本轮未改运行时代码或制品；运行时与制品指纹仍对应上轮通过的整门，后续只更新开发文档。1.0.0 安装缓存的 906 个文件仍与验证制品一致；§13.137 的 1159/1159、二十场景、build:check 与双宿主 smoke 继续对应这个构建，不记作本轮重新跑过。补充覆盖更新 D1、E1、E2、E3、E5，F10 的现有解释得到再次核实，没有把元数据观察新报成运行时缺陷。原生 Windows、App create_thread(worktree) 入口、根外检出和显式模型/effort 组合仍未验证；本轮默认 GPT-6-Astra / max 的正常运行不代表所有组合兼容。正式交付仍未单独以 hook 作为唯一落地证明。没有提交、推送、打标签或发布。
 
-## 13.140 可靠性与合同边界深审、真实进程复现及设计验证（2026-10-02）
+### 13.140 可靠性与合同边界深审、真实进程复现及设计验证（2026-10-02）
 
 **范围。** 用户要求深入 review 根因、设计修复与优化，并授权按需新建真实测试文件夹。基线为 `d8fafff3` 加已有未提交的 Codex Node 启动修复；开始时 main 与本地 origin/main 相同。新建一次性工作区保存脚本、原始输出和故障夹具，未拿真实产品仓库或前轮工作区制造故障。生产源码、制品及安装缓存未修改，没有新增宿主聊天。设计见 [可靠性与合同修复设计](../reviews/2026-10-02-reliability-and-contract-repair-design.md)，状态 proposed，不冒充已接受的 ADR 或已完成修复。
 
@@ -4042,7 +4042,7 @@ L2 的第二项（plan §8.1 L2 行"skills 与 commands 文本随场景重写"�
 
 **收尾核对。** 独立重新哈希漏验收用例归档中的 15 个负载与元数据文件，直接从需求正文数出 10 条标准、从事件提取出仅 ac-1 的引用；回读双认领 identity、正式取消后的 withdrawn、隔离对照的 pending 和 16385 个 hook 条目。四个中断用例的既有 commit 摘要保持。源码非文档 diff 与开始时完全相同，三个既有未跟踪源码文件逐字节保留；安装缓存只读核对 906 个文件，类型、模式和内容均与原制品一致。新报告相对文件链接及日志章节锚点有效，`git diff --check` 通过。登记仍为累计 125 项，补已有问题证据而不重复计数；B5 与 H4 按实测影响提高优先级。
 
-## 13.141 首批正确性修复、真实回归与 Codex 缓存同步（2026-10-02）
+### 13.141 首批正确性修复、真实回归与 Codex 缓存同步（2026-10-02）
 
 **授权与边界。** 用户确认继续实施 §13.140 的设计；按 [ADR-0014](../decisions/0014-runtime-recovery-and-completion-coverage.md) 落地取消、恢复、pod 占用和验收全集的正确性修复。保留原有 Node 启动修复与未提交文档。源码仍在 `d8fafff3` 的 main 上，本地 origin/main 相同；未提交、推送、打标签或发布，版本号仍为 1.0.0。缓存同步沿用用户此前明确的本地插件更新授权，不把它称为新版本发布。
 
@@ -4489,7 +4489,7 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - `wf handoff`（含真实 `build:check`）对本仓库通过：空白、文档指针、Git 概况通过，私有内容只剩 4 条 review（文档与模式源码里的临时目录前缀、测试样本里的合成凭证）。制品未重建：本批不改 `src/`、`assets/` 与版本号，`build:check` 证明已提交制品与源码一致。
 - 未运行：原生宿主会话、lab/live 环境、`smoke:artifacts`（制品字节未变）。`.mjs` 包装脚本不进 TypeScript 项目，只靠包装脚本测试覆盖；Windows 上的锁与信号路径未实机验证。
 
-本批只改 `tooling/`、`tests/tooling/`、`package.json` 与文档，未提交。
+本批只改 `tooling/`、`tests/tooling/`、`package.json` 与文档；用户确认后提交为 24c8a7db。
 
 ### 13.163 开发便捷脚本与脚手架第二批（2026-10-07）
 
@@ -4512,7 +4512,7 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - `wf handoff`（含真实 `build:check`）通过，五项全绿、无 review 提示。本节的小节头与 docs/README 指针由 `wf scaffold node --section 13.163 --apply` 生成，日期按本地时区修正后脚手架改用本地日期。
 - 未运行：原生宿主会话、真实的 `claude plugin` 缓存刷新（只用假 CLI 验证两步顺序与核对）、lab/live 环境、`smoke:artifacts`（制品字节未变）。`wf mcp call` 只对一个空目录验证了拒绝路径，没有对初始化过的可丢弃工作区跑成功路径。
 
-本批只改 `tooling/`、`tests/tooling/` 与文档，未提交；§13.162 已作为 24c8a7db 提交。
+本批只改 `tooling/`、`tests/tooling/` 与文档；提交为 2169db0b（§13.162 为 24c8a7db）。
 
 ### 13.164 开发便捷脚本与脚手架第三批（2026-10-07）
 
@@ -4528,4 +4528,33 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - `wf handoff`（含真实 `build:check`）五项全绿、无 review 提示。本节的小节头与 docs/README 指针由 `wf scaffold node --section 13.164 --apply` 生成。
 - 未运行：原生宿主会话、lab/live、`smoke:artifacts`（制品字节未变）；`wf scaffold requirement` 只在夹具工作区验证了文件与标题，没有接着用 `wakeflow_publish_requirement` 预览骨架。
 
-本批只改 `tooling/`、`tests/tooling/` 与文档，未提交；§13.162、§13.163 已分别作为 24c8a7db、2169db0b 提交。
+本批只改 `tooling/`、`tests/tooling/` 与文档；提交为 71755086（§13.162、§13.163 分别为 24c8a7db、2169db0b）。
+
+### 13.165 技术债务批次 0：登记更正、交接检查扩展、许可闭包、errno 投影与引导文本（2026-10-09）
+
+用户在 2026-10-07 的技术债务深挖（[docs/reviews/2026-10-07-technical-debt-review.md](../reviews/2026-10-07-technical-debt-review.md)）之后要求"按照你的建议开始"，即处置批次 0（卫生）。本批只做登记、文档、工具与边界，不碰架构、不改 Schema：
+
+- 登记与文档：open-items.md 36 处更正——A1、B6、C1/C2/C7/C12/C13/C14、D9、F3/F6/F8、G3/G4/G6/G11、H3/H6、I3/I9/I11、J3、K1/K7、M2/M4 的状态，A/B/C/G/H/I 六节各加一行 2026-10-09 核实，Q2/Q7/Q10 记事实状态；README/README.zh-CN/AGENTS.md 的"六个占位符"改九个；decisions/README 的索引表合回一张；plan §14 加 2026-10-09 更新段（第 14 项未满足、第 15 项的 tag 门从未通过）；gate-log §13.100–§13.141 的 42 个 `##` 节标题归一为 `###`；04-demand-lifecycle 与功能总览更正"补充包认领退出"为实际路径。
+- AGENTS.md 由 CLAUDE.md 重生：除标题与 Host Boundary 一节外逐节相同；CLAUDE.md 两处措辞改为宿主中立（session or thread identifiers、host account），并写明 Claude marketplace 的 `metadata.version` 是目录版本、不是发布版本源。
+- `.gitattributes`：`plugins/**` 与 `src/contracts/generated/**` 标 linguist-generated；不设 -diff，本地 diff 仍能审阅制品变化。
+- `wf handoff` 五项→七项：docs-pointers 加 `wf scaffold node` 的 `验证待填` 占位与 README 的 `（待填）`（失败）、最后一节写"未提交"而树里只有 docs 改动（review）；新增 test-durations（tests 下每个 `.test.ts` 在耗时表里有条目，缺口与消失的文件按 review）与 instructions-parity（CLAUDE.md/AGENTS.md 逐节一致，失败）；`wf scaffold node` 只挪 README 指针加日期，不再写"待填"；私有内容检查的提供商令牌加 JWT。
+- 制品闭包（C14）：许可文件（LICENSE*/LICENCE*/NOTICE*/COPYING*）不论扩展名保留，点开头目录整棵跳过；两个制品各去掉 7 个 `.github` 文件，Claude 制品补回 jsonc-parser 的 LICENSE.md；制品测试断言每个 vendored 包带许可文件、没有点目录。
+- `release:check`（C13）：Claude marketplace 的 `metadata.version` 必须是合法 semver（`wakeflow-release-marketplace-catalog`），与发布版本不同也通过；manifest 不记源提交，那会让 build:check 随每次提交漂移。
+- 内核：`WakeflowError.toPublicDetails` 沿 cause 链（至多 8 层）投影 `causeCode`（第一个 Node errno）与 `causeReason`（第一个内层 kebab reason），公开信封随之携带、消息不复制（G3）；`publicResultBytes` 24 MiB → 4 MiB（K7）；隐私扫描加 JWT 三段 `eyJ` 形状与 Slack xoxe/xoxr 前缀（F6）。
+- Claude 助手（G6）：worktree-list/add、tmux-create 与三处 capture 的拒绝附带有界 `detail`（stderr 首行、≤200 字符、工作区根与 home 占位、其余绝对路径 `<path>`），unexpected 附 `errorName` 与 errno `causeCode`；窗口文本教"未知 reason 原样转告 reason/hint/detail/causeCode 并停下"。
+- 决策器（H3）：rework 刹车升级选项的 impact 改为实际路径（record-decision；重述需求须取消后重新认领），不再承诺 Design 的补充包；持久化事件只影响新升级。
+- 投递 prompt（I9）："必需技能"一节加一句按磁盘上安装的插件重载技能（中英各一）。
+- 技能与命令文本：Controller SKILL.md 加不透明失败规则与 `causeCode` 含义（G4/G3）、不读宿主会话记录与插件实现（I11）、会话边界（K1）、"工具服务不可用"停止条件，为留在 200 行内压缩了六处措辞；delivery-and-review.md 第 8 步补 indeterminate 的 resolution 出口、把"从不重发"改准确（H6）；workspace-and-windows.md 补 pod 关闭残留的处置（J3）与 close → launch → replace → mark 四步（I11）；target/test 技能的证据矛盾改为唯一例外（I3），target/test/design 各加一条不透明失败规则；next.md 加会话接管一句（K1）；pod.md 与两份 README 写明 pod 期间对产品仓库的写入（J3）。
+
+更正审计结论：技术债务深挖 §3.2 称 `transitional-workspace-governance-composition-*` 两条规则已失效，核实后不成立——静态资源矩阵、预览与步骤执行器仍从 governance 的 ledger/demand 目录导入 7 处，规则守的正是这些接缝，未删，审计页已更正。B1 残留（inventory 的 `appendCandidateCount` 仍是字面量 0，`append-candidates-clear` 门恒过）记入登记，未改代码。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：tooling/kernel/entrypoints/助手/prompt 68 项、agent-text 20 项、制品 10 项、工具描述词汇与 agent-text 24 项全通过；typecheck、Biome lint、format、knip、架构规则通过（lint 的 5 条既有 warning 不在本批文件内）。
+- 完整门跑了三次：第一次在 format:check 停下（六个新改文件未格式化，`npm run format` 后重来）；第二次 1370 项只有 1 项失败——Test 技能新加的一行把 `code`、`io-failure` 放进反引号，撞上"反引号记号必须是报告 Schema 枚举"的规则（wakeflow-public-tool-descriptions.test.ts），改成不加反引号的写法；第三次（run-ovqFTh，39 分钟，当时负载均值 11–12 来自其他应用）1368 通过、endpoint 的 register/decommission 用例 60 秒超时、test-recording 的取消用例读到半写的记录，两者单独重跑 13/13 通过；第四次（run-IMBQba，24 分钟）1370/1370 全通过，schema:check 与 build:check 通过。
+- `wf timings apply --receipt run-IMBQba`：耗时表从 279 条刷新为 294 条（覆盖全部测试文件），测于 2026-10-09，合计 2,787 秒；`wf handoff` 的 test-durations 检查随之无缺口。
+- `smoke:artifacts`：两个制品 idle、verify ok、hook observer landed。
+- `wf handoff`（含真实 build:check）：七项通过；private-content 的 review 行只有维护者文档里作为模式写出的临时目录前缀与隐私扫描测试里的合成凭证。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新。D9 的时序敏感用例仍在（本批两次负载超时即其证据）。
+
+本批改动 src/、tooling/、tests/、assets/、docs/、两个制品与耗时表；未提交。

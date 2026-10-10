@@ -203,7 +203,7 @@ Everything hand-written is TypeScript under `src/`, `tooling/` and `tests/`;
 | `src/` | The runtime, in six layers: `foundation` → `contracts` → `kernel` → `capabilities` / `governance` / `configuration` / `workspace` → `hosts` → `entrypoints`. Dependency direction is enforced. |
 | `src/contracts/schemas/` | The portable JSON Schemas; `src/contracts/generated/` is derived from them and checked for drift. |
 | `src/hosts/<host>/` | Everything Codex- or Claude-specific: profiles, hook fragment, agent-text value table, maintenance execution. |
-| `assets/agent-text/` | The single source of the skills, commands and READMEs shipped in both artifacts; host differences are six placeholders filled by each host's profile. |
+| `assets/agent-text/` | The single source of the skills, commands and READMEs shipped in both artifacts; host differences are nine placeholders filled by each host's profile. |
 | `assets/brand/`, `assets/release/version.json` | Brand assets and the single release version input. |
 | `tooling/` | Build, codegen, architecture, test and release tooling. |
 | `tests/` | Unit, capability, host, artifact and scenario tests; `tests/scenarios/` runs twenty end-to-end scenarios through the public tools in a disposable workspace. |

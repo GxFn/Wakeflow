@@ -21,7 +21,8 @@ import { isMainModule } from "../main-module.js";
  * 条目——必须等于唯一的版本输入 `assets/release/version.json`，且属于新序列（主版本号不低于 1）；
  * Codex marketplace 无版本字段（Q6）。两个插件与仓库根的 Node 引擎下限相同（Q7），并且本次运行
  * 的 Node 就在该范围内——没有门只靠文本核对引擎。两份 committed 清单必须 `releaseEligible` 且版本
- * 一致。Git 门按标志逐项开启：分支是 main、工作树干净、标签 `v<version>` 指向 HEAD、本地
+ * 一致。Claude marketplace 自己的 `metadata.version` 是目录版本而不是发布版本源，只要求是合法
+ * semver（§13.165 C13）。Git 门按标志逐项开启：分支是 main、工作树干净、标签 `v<version>` 指向 HEAD、本地
  * `origin/main` 与 HEAD 同一提交——不取网络，本地远端引用过期则由推送流程负责刷新。这是提交后
  * 的严格门，不为让一次不完整的发布看起来合法而放宽。
  */
@@ -110,7 +111,20 @@ function readJsonFile(repositoryRoot: string, relative: string): JsonRecord {
   return parsed;
 }
 
+const CATALOG_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+
 function marketplaceVersion(document: JsonRecord): unknown {
+  const metadata = document.metadata;
+  if (
+    !isPlainRecord(metadata) ||
+    typeof metadata.version !== "string" ||
+    !CATALOG_VERSION_PATTERN.test(metadata.version)
+  ) {
+    fail(
+      "wakeflow-release-marketplace-catalog",
+      `${CLAUDE_MARKETPLACE_PATH} metadata.version must be a semver catalog version`,
+    );
+  }
   if (!Array.isArray(document.plugins)) {
     fail("wakeflow-release-source-json", `${CLAUDE_MARKETPLACE_PATH} has no plugins array`);
   }

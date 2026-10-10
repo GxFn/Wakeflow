@@ -226,6 +226,16 @@ server is current, preview and apply reconcile for repairable workspace gates
 such as host-settings-assets. A peer's `unverified` state remains separate from
 those repairs and from Controller acceptance of returned work.
 
+When a fresh session is the only way (`resume-never-conversed`, or the user
+asked for a new one), the complete sequence on Claude Code is four calls, one
+helper call per Bash command, each printed result kept verbatim: `close
+--window <windowId>` (the binding stays; this is not a decommission); `launch
+--window <windowId> --wait 60` with that window's current inspect result piped
+in; `wakeflow_register_window_binding` with `operation: "replace"`, the printed
+`observation`, and the `expectedBindingId` / `expectedBindingDigest` the
+inspect returned; then `mark --window <windowId>`. Never reconstruct those
+calls from your own session transcript or from the plugin's source.
+
 ## Interrupted writes and cancellation
 
 `reconcile` can first return a `WakeflowDemandRuntimeRecoveryPlan` for known
@@ -292,7 +302,13 @@ abandon decision.
    `git worktree remove` command the status suggests. A host may lock a
    checkout while its session runs; once that window is retired the lock is
    stale, so `git worktree unlock` it first, then remove and
-   `git worktree prune`. Wakeflow never removes a checkout itself.
+   `git worktree prune`. Wakeflow never removes a checkout itself. What stays
+   behind is the user's to tidy: the pod branch (`worktree-<name>`), on Claude
+   Code a `.claude/worktrees/` line in each repository's `.git/info/exclude`,
+   and an empty `.claude/worktrees/` directory. Suggest `git branch -d <branch>`
+   for a merged branch, ask before `git branch -D` for an abandoned one, and
+   say that the same pod name is refused (`worktree-branch-exists`) while that
+   branch still exists.
 4. Remove the pod. Closing in this order is what keeps the config and the
    worktrees from disagreeing.
 

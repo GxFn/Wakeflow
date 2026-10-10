@@ -220,7 +220,11 @@ export function resolveRuntimeDependencyClosure(
   );
 }
 
+/** 再分发必须附带的许可与声明文件，不论扩展名（MIT 等许可的条件；§13.165 C14）。 */
+const LICENSE_FILE_PATTERN = /^(?:licen[cs]e|notice|copying)(?:[.-][^/]*)?$/iu;
+
 function isExcludedFile(name: string): boolean {
+  if (LICENSE_FILE_PATTERN.test(name)) return false;
   return name.startsWith(".") || EXCLUDED_EXTENSIONS.some((extension) => name.endsWith(extension));
 }
 
@@ -270,7 +274,8 @@ function collectPackageFiles(
         if (entry.name === NODE_MODULES) {
           fail("wakeflow-artifact-dependency-nested", `${name} installs a nested ${NODE_MODULES}`);
         }
-        pending.push(relative);
+        // 点开头的目录（`.github` 等）没有运行时消费者，整棵跳过。
+        if (!entry.name.startsWith(".")) pending.push(relative);
         continue;
       }
       if (!entry.isFile() || isExcludedFile(entry.name)) continue;

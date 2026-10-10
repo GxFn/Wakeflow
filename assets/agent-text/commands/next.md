@@ -14,7 +14,8 @@ Its next actions are the authority on what comes next - do not infer the step
 from the conversation.
 
 Then do that one step, and stop. Do not run ahead into the step after it: each
-step produces state that the next one has to read.
+step produces state that the next one has to read. A fresh Controller session
+may take over at any step boundary: the state is in Wakeflow, not in this chat.
 
 Report what you did, the evidence Wakeflow recorded for it, and what is now
 next. If the next step belongs to the Design window or to a target window, say

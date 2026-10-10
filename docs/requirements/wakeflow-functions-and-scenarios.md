@@ -181,7 +181,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
 | F8.2 评审投影 | Controller 看结果集 | 只读：成员状态、就绪与阻塞分区、允许的决定、结果谱系、测试步骤的期望与实际并列 approved 基线；不装配证据正文；不判真伪 |
 | F8.3 实现决定 | Controller 验收 | `accept \| rework \| blocked \| escalate`；accept 要求 outcome completed 且锚点全映射；rework 只用于锚点内代码缺陷；同一任务第三次 rework 自动 escalate |
 | F8.4 测试决定 | Test 结果 | 逐步 `{{expected, observed, evidence, verdict}}` 与整体 verdict；失败步骤必带分类 `product-defect \| harness-defect \| environment \| flaky \| missing-evidence \| out-of-scope \| needs-decision`；决定 `accept \| request-another-attempt \| escalate` |
-| F8.5 升级与决策 | 需求或方案层面的问题 | `escalate` 事件带问题、需求引用、证据、备选方案，Demand 进入 awaiting-decision；用户直接回答记 `decision-recorded`，或 Design 发布补充需求包；`product-defect` 走授权有界返工与新的 Test 代际 |
+| F8.5 升级与决策 | 需求或方案层面的问题 | `escalate` 事件带问题、需求引用、证据、备选方案，Demand 进入 awaiting-decision；用户直接回答记 `decision-recorded`（Design 发布补充需求包并入升级中 Demand 的出口未实现，见 open-items H3 / Q7；需要重述需求时取消后重新认领）；`product-defect` 走授权有界返工与新的 Test 代际 |
 | F8.6 评审状态 | 全程 | 同一时间一个 pending 评审；pending 时拒绝结果导入与规划；cancel 遇 pending 拒绝 |
 
 ### F9 证据、归档与清理（能力卡 8）

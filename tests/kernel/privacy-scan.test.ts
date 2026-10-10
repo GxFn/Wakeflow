@@ -33,6 +33,28 @@ test("凭证类三条规则无条件命中，结果只含类别与位置", () =>
   equal(JSON.stringify(findings).includes("ghp_"), false);
 });
 
+test("JWT 的三段 eyJ 形状与 Slack 轮换/刷新令牌按 provider-credential 命中，不复制值（§13.165 F6）", () => {
+  const jwt =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+  const text = [
+    `session=${jwt}`,
+    "refresh xoxe-1-abcdefghijklmnop",
+    "rotate xoxr-abcdefghijklmnop",
+  ].join("\n");
+  const findings = scanPrivacy(text, policy);
+  deepEqual(
+    findings.map((finding) => [finding.kind, finding.line]),
+    [
+      ["provider-credential", 1],
+      ["provider-credential", 2],
+      ["provider-credential", 3],
+    ],
+  );
+  equal(JSON.stringify(findings).includes("eyJ"), false);
+  // 三段里有一段太短，或者只有两段，都不是 JWT；普通 base64 文本不受影响。
+  deepEqual(scanPrivacy("eyJhbGci.eyJzdWIi.sig\nZm9vYmFyYmF6cXV4", policy), []);
+});
+
 test("credentials in environment/JSON assignments, authorization and userinfo never inherit path allowances", () => {
   const secret = "synthetic".repeat(3);
   const samples = [

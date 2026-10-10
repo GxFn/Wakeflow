@@ -136,7 +136,7 @@
 
 | 项 | 修订后 |
 | --- | --- |
-| 状态词汇 | 人读投影增加 `awaiting-decision`：Controller 记 `escalate` 事件后进入，`decision-recorded` 事件或补充需求包认领后退出；该状态下拒绝规划与投递 |
+| 状态词汇 | 人读投影增加 `awaiting-decision`：Controller 记 `escalate` 事件后进入，`decision-recorded` 事件后退出；该状态下拒绝规划与投递。（2026-10-09 更正：原文的“补充需求包认领后退出”从未实现——已认领的包不能被补充包取代，pod 上有活动 Demand 时认领新包被 `pod-busy` 拒绝；实际出口是 `wakeflow_continue_demand` 的 record-decision，或取消后重新认领，见 open-items H3 / Q7） |
 | Q1 blocked 出路 | `blocked` 只用于外部条件；需求或方案层面的问题走 `escalate`，不再靠新的评审决定解除 |
 | 完成 | 完成即归档：`complete_demand` 的 preview 内嵌 verify 门与归档前置，apply 在一个事务里写终态事件、封归档包、删活动根、置需求包 archived；verify 报告作为归档成员保存。取消同理。旧的独立 archive 步骤与"已完成未归档"中间态取消 |
 | 机器刹车 | 同一任务第三次 `rework` 自动 `escalate`，阈值进 `governance`，默认 3 |

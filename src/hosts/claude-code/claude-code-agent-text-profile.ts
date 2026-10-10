@@ -72,7 +72,10 @@ const WINDOW_LAUNCH =
   "that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait " +
   "up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook.sessionStart: pending` with " +
   "a live pane leaves startup unproven; inspect hook execution, keep the observation, and register or " +
-  "relocate with it once the record exists, and pass a longer `--wait` next time.";
+  "relocate with it once the record exists, and pass a longer `--wait` next time. A helper " +
+  "refusal this text does not explain - an unfamiliar `reason`, or `reason: unexpected` with an " +
+  "`errorName` - is relayed to the user verbatim with its `hint`, `detail` and `causeCode`; then " +
+  "stop: do not retry it, do not edit files, do not read the helper's source.";
 
 /**
  * 插件更新后的窗口换代（§13.134 C8、C16）：先就地重启 Controller 自己，再逐个就地重启其他过期

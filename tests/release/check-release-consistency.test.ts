@@ -29,6 +29,8 @@ interface FixtureOverrides {
   readonly codexPackageVersion?: string;
   readonly claudeManifestVersion?: string;
   readonly marketplaceVersion?: string;
+  /** Claude marketplace 自己的目录版本；缺省合法，不等于发布版本。 */
+  readonly catalogVersion?: string;
   readonly pluginEngines?: string;
   readonly releaseEligible?: boolean;
   /** 构建清单里记录的版本；缺省与发布版本一致。 */
@@ -115,6 +117,7 @@ function writeSources(root: string, overrides: FixtureOverrides): void {
     path.join(root, ".claude-plugin", "marketplace.json"),
     json({
       name: "gxfn",
+      metadata: { description: "fixture catalog", version: overrides.catalogVersion ?? "1.0.0" },
       plugins: [expectedClaudeMarketplaceEntry(overrides.marketplaceVersion ?? version)],
     }),
   );
@@ -176,6 +179,15 @@ test("任一版本源漂移、主版本号为 0、引擎不一致、运行时不
   throws(
     () => checkWakeflowReleaseConsistency(repositoryFixture(t, { marketplaceVersion: "0.9.6" })),
     expectReleaseErrorCode("wakeflow-release-version-drift"),
+  );
+  // 目录版本不是发布版本源：与发布版本不同也通过，但必须是合法 semver（§13.165 C13）。
+  equal(
+    checkWakeflowReleaseConsistency(repositoryFixture(t, { catalogVersion: "2.3.4" })).version,
+    "1.0.0",
+  );
+  throws(
+    () => checkWakeflowReleaseConsistency(repositoryFixture(t, { catalogVersion: "latest" })),
+    expectReleaseErrorCode("wakeflow-release-marketplace-catalog"),
   );
   throws(
     () => checkWakeflowReleaseConsistency(repositoryFixture(t, { releaseVersion: "0.9.7" })),

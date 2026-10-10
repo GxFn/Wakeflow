@@ -91,7 +91,7 @@ Live records plans, attempts and imported receipts. Imported evidence cannot est
 Doctor collection stores explicit private files and projected stdio observations; export writes a separate allowlisted summary, never uploads or repairs a workspace.
 Capture freezes imported test contracts and explicit commands. Run executes one declared step once; it never decides test acceptance, retries or imports evidence.
 Impact lists the tests reached by a change set through static imports (tests) or classifies the whole change set by ownership with the commands to run next (report); both are focusing aids, never a substitute for the full gate.
-Handoff runs the read-only pre-handoff checklist (whitespace, private content, build:check, docs pointers, Git state) and writes nothing.
+Handoff runs the read-only pre-handoff checklist (whitespace, private content, build:check, docs pointers and stale markers, duration-table coverage, CLAUDE.md/AGENTS.md parity, Git state) and writes nothing.
 Release bump edits only assets/release/version.json and the Claude marketplace entry; rebuilding, committing, tagging and cache refreshes stay separate actions.
 Every verify, handoff build:check and \`npm run locked -- <command>\` holds the one repository build lock (.build/locks/build.lock).
 Mcp call starts a new stdio process on a verified artifact copy and calls one public tool once; mutations are real, so use only disposable workspaces. It proves nothing about an existing chat's MCP.

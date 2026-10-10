@@ -108,7 +108,7 @@ export function scaffoldGateLogNode(
   if (last === null) throw new Error("The gate log has no 13.N section.");
   const expected = `13.${Number(last.slice(3)) + 1}`;
   if (request.section !== expected) throw new Error(`The next section is ${expected}.`);
-  const pointer = /最新节点 §(13\.\d+)；/u.exec(index);
+  const pointer = /最新节点 §(13\.\d+)(?:（[^）]*）)?；/u.exec(index);
   if (pointer === null || pointer[1] !== last)
     throw new Error(`${DOCS_INDEX} must point at §${last} before a new node is added.`);
   const date = new Date().toLocaleDateString("sv-SE");
@@ -122,10 +122,8 @@ export function scaffoldGateLogNode(
 - <!-- 聚焦测试、完整门、smoke、未运行项 -->
 `;
   const nextGateLog = `${gateLog.replace(/\n*$/u, "\n")}${section}`;
-  const nextIndex = index.replace(
-    `最新节点 §${last}；`,
-    `最新节点 §${request.section}；${request.title}（待填）。§${last} `,
-  );
+  // README 的单元格只留"最新节点 §13.N（日期）"：进度正文在 gate-log，"待填"会被 wf handoff 点名。
+  const nextIndex = index.replace(pointer[0], `最新节点 §${request.section}（${date}）；`);
   const preview = `${GATE_LOG}:\n${section}\n${DOCS_INDEX}: 最新节点 §${last} -> §${request.section}\n`;
   if (request.apply === true) {
     writeFileSync(path.join(root, GATE_LOG), nextGateLog);

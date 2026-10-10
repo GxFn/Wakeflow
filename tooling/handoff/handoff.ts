@@ -9,15 +9,25 @@ import { npmCommand, runLoggedCommand } from "../verification/process.js";
 /**
  * Wakeflow Tooling / Handoff：交接前的只读检查单，把 CLAUDE.md 的交接规则变成一条命令。
  *
- * 五项检查各自给出 passed / failed / unavailable：空白错误（`git diff --check`）、私有内容
+ * 七项检查各自给出 passed / failed / unavailable：空白错误（`git diff --check`）、私有内容
  * （本机家目录与临时目录路径、凭证样式）、制品新鲜度（`npm run build:check`）、文档指针
- * （docs/README 的"最新节点"是否指向 gate-log 最后一节，reviews/references 是否都被索引）与
- * Git 概况。它不改任何文件，不是隐私门的替代：内核的隐私扫描仍是证据与归档的权威，这里只是
- * 提交前的维护者便利检查。
+ * （docs/README 的"最新节点"是否指向 gate-log 最后一节，reviews/references 是否都被索引，
+ * 脚手架的"验证待填"占位与 README 的"待填"是否还留着，最后一节写"未提交"而树里只有 docs
+ * 改动时按 review 点名）、耗时表覆盖（tests 下的每个 `.test.ts` 在 `test-durations.json` 里
+ * 有条目，按 review 点名缺口）、指令文件一致（`CLAUDE.md` 与 `AGENTS.md` 除标题与 Host
+ * Boundary 一节外逐节相同）与 Git 概况。它不改任何文件，不是隐私门的替代：内核的隐私扫描
+ * 仍是证据与归档的权威，这里只是提交前的维护者便利检查。
  */
 
 export interface HandoffCheck {
-  readonly name: "whitespace" | "private-content" | "artifacts" | "docs-pointers" | "git";
+  readonly name:
+    | "whitespace"
+    | "private-content"
+    | "artifacts"
+    | "docs-pointers"
+    | "test-durations"
+    | "instructions-parity"
+    | "git";
   readonly status: "passed" | "failed" | "unavailable";
   readonly details: readonly string[];
 }
@@ -41,13 +51,19 @@ const MAXIMUM_DETAILS = 40;
 const SKIPPED_PATH_PATTERN = /^(?:\.build|node_modules|coverage|dist)\/|\/node_modules\//u;
 const BINARY_EXTENSION_PATTERN = /\.(?:png|jpe?g|gif|webp|pdf|zip|gz|tgz|woff2?|ttf|ico|lock)$/iu;
 const PROVIDER_CREDENTIAL_PATTERN =
-  /\b(?:sk-(?:ant-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{20,}|xox[abp]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})/u;
+  /\b(?:sk-(?:ant-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{20,}|xox[abepr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})/u;
 const PRIVATE_KEY_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/u;
 // 值必须像一个字面秘密：只含令牌字符、同时有字母和数字；`token = process.env[X]` 这类代码不算。
 const ASSIGNMENT_PATTERN =
   /(?<![\p{L}\p{N}_])(?:[\p{L}\p{N}_]*_)?(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|secret[_-]?key)["']?[ \t]*[:=][ \t]*["']?(?=[A-Za-z0-9_\-+/=.]*[0-9])(?=[A-Za-z0-9_\-+/=.]*[A-Za-z])([A-Za-z0-9_\-+/=.]{16,})/iu;
 const PLACEHOLDER_PATTERN =
   /synthetic|example|placeholder|fixture|redacted|<[^>]*>|\$\{|xxx|\.\.\./iu;
+/** `wf scaffold node` 留下的占位注释；节写完就该删掉。 */
+const GATE_LOG_SCAFFOLD_PLACEHOLDER_PATTERN = /<!-- §(13\.\d+) 验证待填 -->/u;
+const TEST_DURATIONS_PATH = "tooling/testing/test-durations.json";
+const INSTRUCTION_FILES = Object.freeze(["CLAUDE.md", "AGENTS.md"] as const);
+/** 两份指令文件里按宿主写的那一节：标题含 Host Boundary 的节不参加一致性比较。 */
+const HOST_SPECIFIC_SECTION_PATTERN = /Host Boundary/u;
 
 function git(root: string, args: readonly string[]) {
   return spawnSync("git", [...args], {
@@ -285,8 +301,132 @@ function docsPointersCheck(root: string): HandoffCheck {
         details.push(`${directory}/${name} is not indexed in docs/README.md`);
     }
   }
+  const placeholder = GATE_LOG_SCAFFOLD_PLACEHOLDER_PATTERN.exec(gateLog);
+  if (placeholder !== null)
+    details.push(`gate log §${placeholder[1]} still carries the scaffold placeholder 验证待填`);
+  if (index.includes("（待填）")) details.push("docs/README.md still says （待填）");
+  const reviews: string[] = [];
+  if (latest !== undefined && /未提交/u.test(gateLog.slice(gateLog.lastIndexOf(`### ${latest}`)))) {
+    const changed = git(root, ["diff", "HEAD", "--name-only"]);
+    const outsideDocs = changed.stdout
+      .split("\n")
+      .filter((file) => file !== "" && !file.startsWith("docs/"));
+    if (changed.status === 0 && outsideDocs.length === 0)
+      reviews.push(
+        `§${latest} says 未提交 but only docs/ differ from HEAD; update it if the batch is committed`,
+      );
+  }
   return {
     name: "docs-pointers",
+    status: details.length === 0 ? "passed" : "failed",
+    details: bounded([...details, ...reviews.map((entry) => `review ${entry}`)]),
+  };
+}
+
+function listTestFiles(root: string): string[] {
+  const files: string[] = [];
+  const pending = ["tests"];
+  while (pending.length > 0) {
+    const directory = pending.pop() ?? "";
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(path.join(root, directory), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+      const relative = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) pending.push(relative);
+      else if (entry.isFile() && entry.name.endsWith(".test.ts")) files.push(relative);
+    }
+  }
+  return files.sort();
+}
+
+/** 耗时表只是调度提示，缺口按 review 点名：完整门之后 `wf timings apply` 补上。 */
+function testDurationsCheck(root: string): HandoffCheck {
+  const table = readText(root, TEST_DURATIONS_PATH);
+  if (table === null)
+    return { name: "test-durations", status: "passed", details: [`no ${TEST_DURATIONS_PATH}`] };
+  let durations: unknown;
+  try {
+    durations = (JSON.parse(table) as { durationsMs?: unknown }).durationsMs;
+  } catch {
+    durations = undefined;
+  }
+  if (typeof durations !== "object" || durations === null || Array.isArray(durations))
+    return {
+      name: "test-durations",
+      status: "unavailable",
+      details: [`${TEST_DURATIONS_PATH} has no durationsMs object`],
+    };
+  const measured = new Set(Object.keys(durations));
+  const files = listTestFiles(root);
+  const present = new Set(files);
+  const details = [
+    ...files
+      .filter((file) => !measured.has(file))
+      .map(
+        (file) =>
+          `review ${file} has no measured duration (run wf timings apply after a full gate)`,
+      ),
+    ...[...measured]
+      .filter((file) => !present.has(file))
+      .sort()
+      .map((file) => `review ${file} is in ${TEST_DURATIONS_PATH} but no longer exists`),
+  ];
+  return { name: "test-durations", status: "passed", details: bounded(details) };
+}
+
+interface InstructionSections {
+  readonly preamble: string;
+  readonly sections: ReadonlyMap<string, string>;
+  readonly headings: readonly string[];
+}
+
+function splitInstructionSections(text: string): InstructionSections {
+  const parts = text.split(/^(?=## )/mu);
+  const preamble = (parts[0] ?? "").split("\n").slice(1).join("\n");
+  const sections = new Map<string, string>();
+  const headings: string[] = [];
+  for (const part of parts.slice(1)) {
+    const newline = part.indexOf("\n");
+    const heading = (newline === -1 ? part : part.slice(0, newline)).slice("## ".length);
+    if (HOST_SPECIFIC_SECTION_PATTERN.test(heading)) continue;
+    headings.push(heading);
+    sections.set(heading, newline === -1 ? "" : part.slice(newline + 1));
+  }
+  return { preamble, sections, headings };
+}
+
+/** CLAUDE.md 与 AGENTS.md 是同一份仓库规则的两个宿主入口：除标题与 Host Boundary 一节外逐节相同。 */
+function instructionsParityCheck(root: string): HandoffCheck {
+  const claude = readText(root, INSTRUCTION_FILES[0]);
+  const agents = readText(root, INSTRUCTION_FILES[1]);
+  if (claude === null && agents === null)
+    return { name: "instructions-parity", status: "passed", details: ["no instruction files"] };
+  if (claude === null || agents === null)
+    return {
+      name: "instructions-parity",
+      status: "failed",
+      details: [`only one of ${INSTRUCTION_FILES.join(" and ")} exists`],
+    };
+  const left = splitInstructionSections(claude);
+  const right = splitInstructionSections(agents);
+  const details: string[] = [];
+  if (left.preamble !== right.preamble)
+    details.push("the text between the title and the first section differs");
+  if (left.headings.join("\n") !== right.headings.join("\n"))
+    details.push(
+      `section headings differ: CLAUDE.md [${left.headings.join(", ")}] vs AGENTS.md [${right.headings.join(", ")}]`,
+    );
+  else
+    for (const heading of left.headings)
+      if (left.sections.get(heading) !== right.sections.get(heading))
+        details.push(`section "${heading}" differs between CLAUDE.md and AGENTS.md`);
+  return {
+    name: "instructions-parity",
     status: details.length === 0 ? "passed" : "failed",
     details: bounded(details),
   };
@@ -317,7 +457,13 @@ export async function checkHandoff(
 ): Promise<Readonly<HandoffReport>> {
   const root = path.resolve(rootInput);
   const checks: HandoffCheck[] = [whitespaceCheck(root), privateContentCheck(root)];
-  checks.push(await artifactsCheck(root, options), docsPointersCheck(root), gitCheck(root));
+  checks.push(
+    await artifactsCheck(root, options),
+    docsPointersCheck(root),
+    testDurationsCheck(root),
+    instructionsParityCheck(root),
+    gitCheck(root),
+  );
   const status = checks.some((check) => check.status === "failed")
     ? "failed"
     : checks.some((check) => check.status === "unavailable" && check.name !== "artifacts")

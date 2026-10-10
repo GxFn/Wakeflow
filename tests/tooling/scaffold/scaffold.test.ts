@@ -66,13 +66,14 @@ test("日志节点骨架：只接受下一个节号，追加小节头并挪动 d
     gateLog,
     /### 13\.1 first（2026-10-01）\n\nbody\n\n### 13\.2 second batch（\d{4}-\d{2}-\d{2}）\n\n<!-- /u,
   );
+  // README 的单元格只挪指针与日期，不再写"待填"（wf handoff 会点名过期标记）。
   match(
     readFileSync(path.join(root, "docs/README.md"), "utf8"),
-    /最新节点 §13\.2；second batch（待填）。§13\.1 first done/u,
+    /最新节点 §13\.2（\d{4}-\d{2}-\d{2}）；first done/u,
   );
   // 现在指针指向 13.2，再要 13.3 必须先让 README 指向 13.2：这里已经是，所以可以继续。
   equal(scaffoldGateLogNode(root, { section: "13.3", title: "third" }).changesApplied, false);
-  write(root, "docs/README.md", "| gate-log | active，最新节点 §13.1；stale | x |\n");
+  write(root, "docs/README.md", "| gate-log | active，最新节点 §13.1（2026-10-01）；stale | x |\n");
   throws(
     () => scaffoldGateLogNode(root, { section: "13.3", title: "third" }),
     /must point at §13\.2/u,

@@ -150,7 +150,7 @@ test("未安装、开发依赖、工作区链接、版本漂移与嵌套安装�
   );
 });
 
-test("复制运行时文件：剪掉 .ts/.mts/.cts/.map/.md 与隐藏文件，保留 LICENSE 与 package.json，路径排序", (t) => {
+test("复制运行时文件：剪掉 .ts/.mts/.cts/.map/.md、隐藏文件与点开头目录，保留许可文件（不论扩展名）与 package.json，路径排序", (t) => {
   const root = repositoryFixture(t, [
     {
       name: "shaped",
@@ -165,19 +165,38 @@ test("复制运行时文件：剪掉 .ts/.mts/.cts/.map/.md 与隐藏文件，�
         "README.md": "# shaped\n",
         LICENSE: "MIT\n",
         ".npmignore": "x\n",
+        ".github/workflows/ci.yml": "on: push\n",
+        ".github/FUNDING.yml": "github: x\n",
         "src/index.ts": "export {};\n",
       },
     },
+    {
+      name: "licensed-md",
+      version: "2.0.0",
+      files: {
+        "lib/main.js": "export {};\n",
+        "LICENSE.md": "# MIT\n",
+        NOTICE: "notice\n",
+        "CHANGELOG.md": "# changes\n",
+      },
+    },
   ]);
-  const files = collectVendoredFiles(root, resolveRuntimeDependencyClosure(root, ["shaped"]));
+  const files = collectVendoredFiles(
+    root,
+    resolveRuntimeDependencyClosure(root, ["shaped", "licensed-md"]),
+  );
   deepEqual(
     files.map((file) => file.path),
     [
+      "node_modules/licensed-md/LICENSE.md",
+      "node_modules/licensed-md/NOTICE",
+      "node_modules/licensed-md/lib/main.js",
+      "node_modules/licensed-md/package.json",
       "node_modules/shaped/LICENSE",
       "node_modules/shaped/dist/index.js",
       "node_modules/shaped/dist/index.mjs",
       "node_modules/shaped/package.json",
     ],
   );
-  equal(files[0]?.bytes.toString("utf8"), "MIT\n");
+  equal(files[4]?.bytes.toString("utf8"), "MIT\n");
 });

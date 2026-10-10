@@ -431,12 +431,25 @@ test("双宿主插件制品由确定性的闭合文件清单生成：编译闭�
       );
     }
     for (const name of manifest.externalPackages) ok(dependencyNames.has(name), name);
+    // C14：每个 vendored 包都带许可或声明文件（不论扩展名），其余 .md 与点开头的文件、目录不进制品。
+    const licenseFilePattern = /^(?:licen[cs]e|notice|copying)(?:[.-][^/]*)?$/iu;
+    for (const entry of manifest.dependencies) {
+      ok(
+        manifest.files.some(
+          (file) =>
+            file.path.startsWith(`node_modules/${entry.name}/`) &&
+            licenseFilePattern.test(file.path.slice(`node_modules/${entry.name}/`.length)),
+        ),
+        `${entry.name} ships no license file`,
+      );
+    }
     for (const file of manifest.files) {
       if (!file.path.startsWith("node_modules/")) continue;
       equal(file.scope, "dependency", file.path);
       equal(file.mode, "0644", file.path);
-      doesNotMatch(file.path, /\.(?:md|markdown)$/u);
-      equal(/\/\.[^/]+$/u.test(file.path), false, file.path);
+      const basename = file.path.slice(file.path.lastIndexOf("/") + 1);
+      if (!licenseFilePattern.test(basename)) doesNotMatch(file.path, /\.(?:md|markdown)$/u);
+      equal(/\/\.[^/]+(?:\/|$)/u.test(file.path), false, file.path);
     }
 
     // D8：清单的 runtimeEntrypoint 仍指向 MCP，runtimeEntrypoints[] 列出两个 launcher（MCP 在前）。

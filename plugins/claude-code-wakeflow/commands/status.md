@@ -15,8 +15,11 @@ First tool call: `wakeflow_status`, passing a Demand id if the user named one,
 to attach that Demand's route or its archive receipt.
 
 Report in the user's terms: the overall state, what is on the board, the active
-Demand and its frontier, any window that is not registered, any work claim that
-is held, and the next actions the result named - with who owns each one.
+Demand and its frontier, any window that is not registered, any window whose
+`attention` is `needed` (the host is waiting for the user there - a permission
+prompt, an idle prompt, a login or usage limit - so name it before waiting on
+that window), any work claim that is held, and the next actions the result
+named - with who owns each one.
 
 Run `wakeflow_verify` as well when the status contradicts itself, when a
 delivery looked sent but no evidence arrived, or when the user asks whether the

@@ -1,7 +1,7 @@
 function worktreeReady(input) {
     return input.pod.worktrees.every((worktree) => {
         const receipt = input.receipts.find((entry) => entry.repositoryId === worktree.repositoryId);
-        return (receipt?.checkoutPresent === true &&
+        return (receipt?.checkout === "present" &&
             receipt.bindingId === input.bindingIdByWindowId.get(worktree.windowId));
     });
 }
@@ -12,7 +12,7 @@ function worktreeReady(input) {
 export function derivePodState(input) {
     const bound = input.windowIds.filter((windowId) => input.bindingIdByWindowId.has(windowId));
     if (input.pod.lifecycle === "closing") {
-        const checkouts = input.receipts.some((receipt) => receipt.checkoutPresent);
+        const checkouts = input.receipts.some((receipt) => receipt.checkout !== "absent");
         return bound.length === 0 && !checkouts ? "closed" : "closing";
     }
     return bound.length === input.windowIds.length && worktreeReady(input) ? "ready" : "creating";

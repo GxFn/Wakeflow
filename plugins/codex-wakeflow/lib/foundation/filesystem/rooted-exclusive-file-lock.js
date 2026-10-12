@@ -63,6 +63,26 @@ export class RootedExclusiveFileLockError extends Error {
 }
 const ISSUED_LOCK_OBSERVATIONS = new WeakSet();
 const ACTIVE_LOCK_TOKENS = new Set();
+let releaseFailureReporter = null;
+/**
+ * 组合根登记一次的旁路报告者（open-items B10，§13.167）：临界区成功之后锁释放失败时，结果照常
+ * 返回、残留交给报告者（入口把它写成事故记录）；没有报告者时沿用抛出。临界区本身失败时，释放
+ * 失败从不覆盖它——操作的错误才是结局。
+ */
+export function setRootedExclusiveFileLockReleaseFailureReporter(reporter) {
+    releaseFailureReporter = reporter;
+}
+function reportReleaseFailure(root, lockPath, error) {
+    if (releaseFailureReporter === null)
+        return false;
+    try {
+        releaseFailureReporter(Object.freeze({ root, lockPath, error }));
+    }
+    catch {
+        // 报告者不得改变临界区的结局。
+    }
+    return true;
+}
 const LOCK_REGISTRY_ID = createUuidV4();
 const LOCK_RECORD_FIELDS = Object.freeze([
     "kind",
@@ -603,10 +623,30 @@ export async function withRootedExclusiveFileLock(root, lockPath, operation, opt
     assertRoot(root);
     assertOperation(operation);
     const lease = await acquireRootedExclusiveFileLock(root, lockPath, options);
+    let result;
     try {
-        return await operation();
+        result = await operation();
     }
-    finally {
+    catch (error) {
+        try {
+            await lease.release();
+        }
+        catch (releaseError) {
+            if (releaseError instanceof RootedExclusiveFileLockError) {
+                reportReleaseFailure(root, lockPath, releaseError);
+            }
+        }
+        throw error;
+    }
+    try {
         await lease.release();
     }
+    catch (releaseError) {
+        if (releaseError instanceof RootedExclusiveFileLockError &&
+            reportReleaseFailure(root, lockPath, releaseError)) {
+            return result;
+        }
+        throw releaseError;
+    }
+    return result;
 }

@@ -151,7 +151,9 @@ message such as an earlier "Continue.", or other output), the pane is idle and
 the input box is empty; otherwise it reports `not-needed` or `busy` and sends
 nothing. A nudge is not a second delivery - the task
 package is already in that session. If the window stays silent after it,
-follow the next action `wakeflow_status` names.
+follow the next action `wakeflow_status` names. When that status shows the
+window's `attention` as `needed`, the window is waiting for the user, not for
+a nudge: tell them what it asks for (a permission, a login, their input).
 
 ## Step 10 - Inspecting the review unit
 

@@ -14,7 +14,7 @@ import { afterMutationRefresh } from "../../governance/observation/active-projec
 import { worktreeDisposalGuidance } from "../../governance/pod/worktree-disposal.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
-import { listPodWorktreeReceipts, retirePodReceipts, retirePodWorktreeReceipt, worktreeCheckoutPresent, } from "../../kernel/pod-worktree-receipts.js";
+import { listPodWorktreeReceipts, retirePodReceipts, retirePodWorktreeReceipt, observeWorktreeCheckout, } from "../../kernel/pod-worktree-receipts.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
@@ -93,6 +93,14 @@ async function loadBindings(context) {
         throw error;
     }
 }
+/** 回执的公开视图（G7）：unknown 以 checkout-unknown 报出，不冒充缺席。 */
+function receiptView(checkout) {
+    if (checkout === undefined)
+        return "absent";
+    if (checkout === "present")
+        return "present";
+    return checkout === "absent" ? "checkout-missing" : "checkout-unknown";
+}
 async function loadPodFacts(context, pod) {
     const windowIds = podWindowIds(context, pod.podId);
     const bindings = await loadBindings(context);
@@ -105,7 +113,7 @@ async function loadPodFacts(context, pod) {
     const stored = await listPodWorktreeReceipts(context.root, context.facade.hostId, pod.podId, signalOptions(context.options.signal));
     const receipts = [];
     for (const receipt of stored) {
-        receipts.push(Object.freeze({ receipt, checkoutPresent: await worktreeCheckoutPresent(receipt) }));
+        receipts.push(Object.freeze({ receipt, checkout: await observeWorktreeCheckout(receipt) }));
     }
     const state = derivePodState({
         pod,
@@ -114,7 +122,7 @@ async function loadPodFacts(context, pod) {
         receipts: receipts.map((entry) => Object.freeze({
             repositoryId: entry.receipt.repositoryId,
             bindingId: entry.receipt.bindingId,
-            checkoutPresent: entry.checkoutPresent,
+            checkout: entry.checkout,
         })),
     });
     return Object.freeze({
@@ -187,7 +195,10 @@ async function planClose(context, intent) {
         const blockers = deriveCloseCompleteBlockers({
             boundWindowIds: facts.windowIds.filter((id) => facts.bindingIdByWindowId.has(id)),
             presentCheckoutRepositoryIds: facts.receipts
-                .filter((entry) => entry.checkoutPresent)
+                .filter((entry) => entry.checkout === "present")
+                .map((entry) => entry.receipt.repositoryId),
+            unknownCheckoutRepositoryIds: facts.receipts
+                .filter((entry) => entry.checkout === "unknown")
                 .map((entry) => entry.receipt.repositoryId),
         });
         if (blockers.length > 0)
@@ -433,7 +444,8 @@ async function recoverPod(context, operationId) {
     let retired = 0;
     for (const entry of facts.receipts) {
         const bound = facts.bindingIdByWindowId.get(entry.receipt.windowId);
-        const stale = !entry.checkoutPresent || bound !== entry.receipt.bindingId;
+        // unknown 不是缺席：无法观察的检出不退役回执（G7）。
+        const stale = entry.checkout === "absent" || bound !== entry.receipt.bindingId;
         if (!stale)
             continue;
         if (await retirePodWorktreeReceipt(context.root, context.facade.hostId, podId, entry.receipt.repositoryId, signalOptions(context.options.signal))) {
@@ -461,6 +473,7 @@ async function currentViews(context, podId) {
                 boundWindowIds: [],
                 missingReceiptRepositoryIds: [],
                 presentCheckoutRepositoryIds: [],
+                unknownCheckoutRepositoryIds: [],
             }),
         });
     }
@@ -478,9 +491,9 @@ async function currentViews(context, podId) {
             repositoryId: worktree.repositoryId,
             windowId: worktree.windowId,
             suggestedName: worktree.suggestedName,
-            receipt: entry === undefined ? "absent" : entry.checkoutPresent ? "present" : "checkout-missing",
+            receipt: receiptView(entry?.checkout),
             // 关闭中仍在的检出：给 Agent 建议命令与宿主备选（§13.94 D10）；Wakeflow 自己不删。
-            disposal: pod.lifecycle === "closing" && entry?.checkoutPresent === true
+            disposal: pod.lifecycle === "closing" && entry?.checkout === "present"
                 ? worktreeDisposalGuidance(fresh.facade.resourceProfile.surfaces.worktree.launch, path.relative(fresh.root.absolutePath, entry.receipt.path) || ".", entry.receipt.locked)
                 : null,
         };
@@ -497,7 +510,10 @@ async function currentViews(context, podId) {
                 .filter((worktree) => !facts.receipts.some((entry) => entry.receipt.repositoryId === worktree.repositoryId))
                 .map((worktree) => worktree.repositoryId),
             presentCheckoutRepositoryIds: facts.receipts
-                .filter((entry) => entry.checkoutPresent)
+                .filter((entry) => entry.checkout === "present")
+                .map((entry) => entry.receipt.repositoryId),
+            unknownCheckoutRepositoryIds: facts.receipts
+                .filter((entry) => entry.checkout === "unknown")
                 .map((entry) => entry.receipt.repositoryId),
         }),
     });

@@ -13,7 +13,7 @@ import { countIncidents } from "../../kernel/incident.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, scanHostHookObservations, } from "../../kernel/hook-observations.js";
 import { hostHookObservationsRootRef, hostRuntimeRootRef, REQUIREMENT_BOARD_INDEX_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WORK_CLAIMS_ROOT_REF, } from "../../kernel/layout.js";
-import { listPodWorktreeReceiptsAnyHost, worktreeCheckoutPresent, } from "../../kernel/pod-worktree-receipts.js";
+import { listPodWorktreeReceiptsAnyHost, observeWorktreeCheckout, } from "../../kernel/pod-worktree-receipts.js";
 import { listRequirementClaimStates, renderRequirementBoardIndex, } from "../../kernel/requirement-board.js";
 import { inspectWorkClaim } from "../../kernel/work-claims.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
@@ -263,6 +263,7 @@ async function observeHostHooks(root, hostId, current, signal) {
                     event: record.event,
                     recordedAt: record.recordedAt,
                     observerManifestDigest: record.artifactManifestDigest,
+                    notificationType: record.notificationType,
                     sessionStartObserverManifestDigest: null,
                 });
             }
@@ -324,7 +325,7 @@ async function observePods(root, snapshot, bindings, demands, scope, signal) {
         const stored = await listPodWorktreeReceiptsAnyHost(root, pod.podId, signalOptions(signal));
         const receipts = [];
         for (const receipt of stored) {
-            receipts.push(Object.freeze({ receipt, checkoutPresent: await worktreeCheckoutPresent(receipt) }));
+            receipts.push(Object.freeze({ receipt, checkout: await observeWorktreeCheckout(receipt) }));
         }
         const state = bindingsObserved
             ? derivePodState({
@@ -334,7 +335,7 @@ async function observePods(root, snapshot, bindings, demands, scope, signal) {
                 receipts: receipts.map((entry) => Object.freeze({
                     repositoryId: entry.receipt.repositoryId,
                     bindingId: entry.receipt.bindingId,
-                    checkoutPresent: entry.checkoutPresent,
+                    checkout: entry.checkout,
                 })),
             })
             : null;

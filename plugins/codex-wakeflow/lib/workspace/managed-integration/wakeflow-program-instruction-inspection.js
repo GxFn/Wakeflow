@@ -9,6 +9,7 @@ import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspac
 import { createWakeflowWorkspaceStaticResourceMatrix, parseWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "../wakeflow-workspace-static-resource-matrix.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { planWakeflowManagedTextAuthorityTransition, WakeflowManagedTextAuthorityTransitionError, } from "./wakeflow-managed-text-authority-transition.js";
+import { historicalWakeflowManagedTextTargets, WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY, } from "./wakeflow-managed-text-history.js";
 import { createWakeflowProgramInstructionBodyAuthority, WakeflowProgramInstructionBodyAuthorityError, } from "./wakeflow-program-instruction-body-authority.js";
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的只读文件检查。
@@ -291,9 +292,13 @@ export async function inspectWakeflowProgramInstruction(rootValue, requestValue)
     let transition;
     try {
         transition = planWakeflowManagedTextAuthorityTransition(read?.bytes ?? new Uint8Array(), {
+            // C5（§13.167）：前序渲染作为额外 current 目标准入，旧正文被重组为当前渲染而不是阻塞。
             currentTargets: currentAuthority === null
                 ? []
-                : [currentAuthority.envelopeTarget],
+                : [
+                    currentAuthority.envelopeTarget,
+                    ...historicalWakeflowManagedTextTargets(WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY, currentAuthority.envelopeTarget, request.currentConfig, request.profile),
+                ],
             desiredTarget: desiredAuthority.envelopeTarget,
         });
     }

@@ -12,7 +12,8 @@ import { computePromptDigest } from "../kernel/prompt-digest.js";
 /**
  * Wakeflow Entrypoint / Hook Observer：两宿主生命周期 hook 的观察脚本（gate-log §13.97 D1–D4）。
  *
- * 宿主在 `SessionStart`、`UserPromptSubmit`、`Stop`、`SessionEnd` 时按插件级 hook 配置启动本入口：
+ * 宿主在 `SessionStart`、`UserPromptSubmit`、`Stop`、`SessionEnd`（Claude Code 还有 `Notification`，
+ * open-items A7，§13.167）时按插件级 hook 配置启动本入口：
  * stdin 是宿主的 hook JSON，argv 只带固定标记与 `--host <codex | claude-code>`，`--host` 只供给写进
  * 记录的 `hostId`，字段映射在两宿主间完全同形。工作区按声明拓扑定位（D2）：锚点是会话 cwd
  * （cwd 已删除时用 `CLAUDE_PROJECT_DIR`）与 worktree 指针指向的主仓库；候选根是锚点及其至多 8 级
@@ -38,6 +39,7 @@ const HOST_EVENTS = new Map([
     ["UserPromptSubmit", "user-prompt-submit"],
     ["Stop", "stop"],
     ["SessionEnd", "session-end"],
+    ["Notification", "notification"],
 ]);
 const WAKEFLOW_CONFIG_FILE_NAME = "wakeflow.config.json";
 const GIT_ENTRY_NAME = ".git";
@@ -137,6 +139,7 @@ function parsePayload(stdin) {
         prompt: optionalString(object.prompt),
         lastAssistantMessage: optionalString(object.last_assistant_message),
         turnId: optionalString(object.turn_id) ?? optionalString(object.prompt_id),
+        notificationType: optionalString(object.notification_type),
     }));
 }
 // ---- 记录映射（D3）--------------------------------------------------------------
@@ -213,11 +216,21 @@ function degradeToKernel(required, field, value) {
     if (value === null)
         return null;
     try {
-        createHostHookObservation(field === "turnId" ? { ...required, turnId: value } : { ...required, transcriptRef: value });
+        createHostHookObservation(withOptionalField(required, field, value));
         return value;
     }
     catch {
         return null;
+    }
+}
+function withOptionalField(required, field, value) {
+    switch (field) {
+        case "turnId":
+            return { ...required, turnId: value };
+        case "transcriptRef":
+            return { ...required, transcriptRef: value };
+        default:
+            return { ...required, notificationType: value };
     }
 }
 /** 必填字段不合合同即 null（stdin-invalid）；可选字段各自降级；写入阶段只剩 I/O 失败。 */
@@ -232,6 +245,9 @@ function recordInput(hostId, payload, event, clock, artifactManifestDigest) {
         promptDigest: event === "user-prompt-submit" ? promptDigest(hostId, payload.prompt) : null,
         lastAssistantMessageDigest: event === "stop" ? textDigest(payload.lastAssistantMessage) : null,
         transcriptRef: degradeToKernel(required, "transcriptRef", payload.transcriptPath),
+        notificationType: event === "notification"
+            ? degradeToKernel(required, "notificationType", payload.notificationType)
+            : null,
     });
 }
 async function nodeKind(target) {

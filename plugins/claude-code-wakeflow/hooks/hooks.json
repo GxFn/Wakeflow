@@ -35,6 +35,24 @@
         ]
       }
     ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/observe.mjs",
+              "--wakeflow-hook-observer-v1",
+              "--host",
+              "claude-code"
+            ],
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

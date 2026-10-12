@@ -153,17 +153,22 @@ function resolveHead(text, branches) {
         detached: true,
     });
 }
-/** Git 可在 gitdir 中写相对路径（worktree.useRelativePaths），它相对该 worktree 管理目录解析。 */
-async function checkoutPresent(entryDirectory, gitdirText) {
+/**
+ * Git 可在 gitdir 中写相对路径（worktree.useRelativePaths），它相对该 worktree 管理目录解析。
+ * 指针文件在为 present、不在为 absent、无法观察为 unknown（G7）：只有 absent 才算 prunable。
+ */
+async function observeCheckout(entryDirectory, gitdirText) {
     if (gitdirText === null)
-        return false;
+        return "absent";
     const gitdirPath = path.isAbsolute(gitdirText) ? gitdirText : path.resolve(entryDirectory, gitdirText);
     try {
         const observed = await observeAbsoluteNode(gitdirPath, { follow: true });
-        return observed.state === "present" && observed.node.kind === "file";
+        if (observed.state === "missing")
+            return "absent";
+        return observed.node.kind === "file" ? "present" : "absent";
     }
     catch {
-        return false;
+        return "unknown";
     }
 }
 async function collectWorktrees(root, branches, signal) {
@@ -181,7 +186,7 @@ async function collectWorktrees(root, branches, signal) {
             name: entry.name,
             head: resolved?.head ?? null,
             branch: resolved?.branch ?? null,
-            prunable: !(await checkoutPresent(path.join(root.absolutePath, entry.resourcePath), gitdir)),
+            prunable: (await observeCheckout(path.join(root.absolutePath, entry.resourcePath), gitdir)) === "absent",
         }));
     }
     return Object.freeze(worktrees.sort((left, right) => left.name.localeCompare(right.name)));

@@ -22,6 +22,7 @@ import { recomposeWakeflowExternalInstruction, WakeflowExternalInstructionRecomp
 import { createWakeflowGitignoreBodyAuthority } from "../managed-integration/wakeflow-gitignore-body-authority.js";
 import { recomposeWakeflowWorkspaceGitignore, WakeflowGitignoreRecompositionError, } from "../managed-integration/wakeflow-gitignore-recomposition.js";
 import { recomposeWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "../managed-integration/wakeflow-managed-block-file.js";
+import { historicalWakeflowManagedTextTargets, WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY, } from "../managed-integration/wakeflow-managed-text-history.js";
 import { createWakeflowProgramInstructionBodyAuthority } from "../managed-integration/wakeflow-program-instruction-body-authority.js";
 import { recomposeWakeflowProgramInstruction, WakeflowProgramInstructionRecompositionError, } from "../managed-integration/wakeflow-program-instruction-recomposition.js";
 import { createWakeflowSupportGitignoreBodyAuthority, WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME, } from "../managed-integration/wakeflow-support-gitignore-body-authority.js";
@@ -736,7 +737,10 @@ async function executeSupportGitignore(root, step, request, desired, signal) {
     try {
         result = await recomposeWakeflowManagedBlockFile(supportRoot, {
             resourcePath: WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
-            currentTargets: [authority.envelopeTarget],
+            currentTargets: [
+                authority.envelopeTarget,
+                ...historicalWakeflowManagedTextTargets(WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY, authority.envelopeTarget, request.hostProfiles),
+            ],
             desiredTarget: authority.envelopeTarget,
             ...(signal === undefined ? {} : { signal }),
         }, { createMode: WAKEFLOW_SUPPORT_GITIGNORE_FILE_MODE });

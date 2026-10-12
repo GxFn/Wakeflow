@@ -1,3 +1,4 @@
+import { parseWakeflowNodeEngineBounds, WAKEFLOW_NODE_ENGINES } from "../../contracts/vocabulary/wakeflow-runtime-engines.js";
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -192,6 +193,19 @@ const SELF_RESTART_DELAY_SECONDS = 2;
 const SELF_RESTART_PROMPT = "Wakeflow: this Controller session restarted in place to load the updated plugin. Load the wakeflow-controller skill again, since its text may have changed, then call wakeflow_verify and continue where you left off.";
 // 收养时读 claude 进程 argv 的上限（ps 的 args 列）。
 const MAX_PROCESS_ARGUMENTS = 8192;
+// Node 引擎范围与边界由 contracts 的声明在构建本脚本时填入（A6，§13.167）；preflight 用它核对当前 node。
+const NODE_ENGINES = "${WAKEFLOW_NODE_ENGINES}";
+const NODE_ENGINE_BOUNDS = ${JSON.stringify(parseWakeflowNodeEngineBounds(WAKEFLOW_NODE_ENGINES))};
+function nodeVersionSupported(version) {
+  const parts = /^v?(\d+)\.(\d+)\.(\d+)/u.exec(version);
+  if (parts === null) return false;
+  const [major, minor, patch] = [Number(parts[1]), Number(parts[2]), Number(parts[3])];
+  const [minMajor, minMinor, minPatch] = NODE_ENGINE_BOUNDS.minimum;
+  if (major >= NODE_ENGINE_BOUNDS.exclusiveMajor) return false;
+  if (major !== minMajor) return major > minMajor;
+  if (minor !== minMinor) return minor > minMinor;
+  return patch >= minPatch;
+}
 
 const ASSET_PATH = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(ASSET_PATH), "..", "..", "..", "..", "..", "..");
@@ -468,6 +482,27 @@ function claudeBinary() {
   return "claude";
 }
 
+// A5（§13.167）：claude 的安装形态——原生二进制（无 shebang）、npm 包装的 node 脚本（shebang 指向 node 或位于
+// node_modules 下）、其他解释器的包装脚本；只读文件头 128 字节，解析不出就是 unknown。
+function claudeInstallForm(binary) {
+  const resolved = realpathOrNull(binary);
+  if (resolved === null) return "unknown";
+  if (resolved.includes(path.sep + "node_modules" + path.sep)) return "node";
+  let descriptor = null;
+  try {
+    descriptor = openSync(resolved, "r");
+    const head = Buffer.alloc(128);
+    const length = readSync(descriptor, head, 0, head.length, 0);
+    const firstLine = head.toString("utf8", 0, length).split("\n")[0] ?? "";
+    if (!firstLine.startsWith("#!")) return "native";
+    return firstLine.includes("node") ? "node" : "wrapper";
+  } catch {
+    return "unknown";
+  } finally {
+    if (descriptor !== null) closeSync(descriptor);
+  }
+}
+
 function versionOf(command, versionArguments) {
   const result = run(command, versionArguments);
   if (!result.ok) return Object.freeze({ available: false, version: null });
@@ -682,14 +717,33 @@ function prepareWorktree(repositoryRoot, name) {
   if (existsSync(checkout)) {
     // §13.130：只有本仓库登记的这条检出才算复用；其他占位目录拒绝，不写任何东西。
     if (!registeredWorktrees(repositoryRoot).includes(realpathOrNull(checkout))) refuse("worktree-path-occupied", { branch });
-    return Object.freeze({ prepared: "reused", branch, exclude: ensureWorktreeExclude(path.resolve(repositoryRoot, commonDir.stdout.trim())) });
+    return Object.freeze({ prepared: "reused", branch, checkout, root: placement, exclude: ensureWorktreeExclude(path.resolve(repositoryRoot, commonDir.stdout.trim())) });
   }
   // §13.130：分支已存在而检出不在时不复用旧分支（它可能不在本地 HEAD 上），交给 Controller 问用户。
   if (git(repositoryRoot, ["rev-parse", "--verify", "--quiet", "refs/heads/" + branch]).ok) refuse("worktree-branch-exists", { branch });
   const exclude = ensureWorktreeExclude(path.resolve(repositoryRoot, commonDir.stdout.trim()));
   const added = git(repositoryRoot, ["worktree", "add", "-b", branch, checkout, "HEAD"]);
   if (!added.ok) refuse("worktree-add-failed", { branch, status: added.status, detail: boundedDetail(added.stderr) });
-  return Object.freeze({ prepared: "created", branch, exclude });
+  return Object.freeze({ prepared: "created", branch, checkout, root: placement, exclude });
+}
+
+// A8（§13.167）：hook 记录的会话 cwd 必须就是准备好的检出（按 realpath 比对）。不是时窗口在别的检出上工作、
+// 基线会悄悄漂移，所以拒绝；observedCwd 相对仓库根给出，仓库之外只说 outside-repository，不带绝对路径。
+function assertPreparedCheckoutCwd(prepared, cwd) {
+  const observed = realpathOrNull(cwd);
+  if (observed !== null && observed === realpathOrNull(prepared.checkout)) return;
+  let observedCwd = "unavailable";
+  if (observed !== null) {
+    const relative = path.relative(prepared.root, observed);
+    if (relative.length === 0) observedCwd = ".";
+    else if (relative.startsWith("..")) observedCwd = "outside-repository";
+    else observedCwd = relative;
+  }
+  refuse("worktree-cwd-mismatch", {
+    branch: prepared.branch,
+    observedCwd,
+    hint: "the session did not start in the prepared checkout; have the user close that window (/exit in claude), then launch again",
+  });
 }
 
 function creationObservation(sessionId, launchIntentDigest, coordinates, worktree) {
@@ -715,7 +769,17 @@ function processTable() {
   return rows;
 }
 
-// pane 进程或其两层内子进程里可执行名为 claude 的那个进程的 pid，没有就是 null。
+// npm 安装的 claude 是一个 node 脚本（open-items A5，§13.167）：进程名是 node，argv 的第二个词是
+// .../@anthropic-ai/claude-code/cli.js 或一个叫 claude 的脚本。只对 node 进程读一次 argv。
+function isClaudeNodeProcess(pid) {
+  const listed = run("ps", ["-o", "args=", "-p", String(pid)]);
+  if (!listed.ok) return false;
+  const words = listed.stdout.slice(0, MAX_PROCESS_ARGUMENTS).trim().split(/\s+/u);
+  const script = words[1] ?? "";
+  return script.includes("@anthropic-ai/claude-code/") || path.basename(script) === "claude";
+}
+
+// pane 进程或其两层内子进程里是 claude 的那个进程的 pid（原生二进制叫 claude；node 包装按 argv 认），没有就是 null。
 function claudeProcessFor(panePid, table) {
   if (table === null || !Number.isInteger(panePid)) return null;
   let frontier = [panePid];
@@ -726,7 +790,11 @@ function claudeProcessFor(panePid, table) {
       if (seen.has(pid)) continue;
       seen.add(pid);
       const row = table.find((entry) => entry.pid === pid);
-      if (row !== undefined && path.basename(row.executable) === "claude") return pid;
+      if (row !== undefined) {
+        const executable = path.basename(row.executable);
+        if (executable === "claude") return pid;
+        if (executable === "node" && isClaudeNodeProcess(pid)) return pid;
+      }
       for (const child of table) if (child.ppid === pid) next.push(child.pid);
     }
     frontier = next;
@@ -839,9 +907,16 @@ function commandPreflight(config) {
   return {
     ok: true,
     command: "preflight",
-    node: Object.freeze({ available: true, version: cleanLabel(process.version, "unknown", MAX_VERSION) }),
+    // A5（§13.167）：node 的路径与版本对 contracts 声明的引擎范围核对；claude 的路径说明安装形态。
+    node: Object.freeze({
+      available: true,
+      version: cleanLabel(process.version, "unknown", MAX_VERSION),
+      path: process.execPath,
+      engines: NODE_ENGINES,
+      supported: nodeVersionSupported(process.versions.node),
+    }),
     tmux: versionOf("tmux", ["-V"]),
-    claude: versionOf("claude", ["--version"]),
+    claude: Object.freeze({ ...versionOf("claude", ["--version"]), install: claudeInstallForm(claudeBinary()) }),
     session: { socketName: context.socketName, sessionName: context.sessionName, present: session.ok, attach: attachCommand(context) },
     insideTmux: typeof process.env.TMUX_PANE === "string" && process.env.TMUX_PANE.length > 0,
     currentSocketName: currentSocketName(),
@@ -1244,6 +1319,7 @@ function commandLaunch(config, options) {
     opened = openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments);
     hook = waitForSessionStart(sessionId, options.wait);
     if (hook.status === "pending") assertPaneAlive(context, "launch", opened.coordinates);
+    if (prepared !== null && typeof hook.record?.cwd === "string") assertPreparedCheckoutCwd(prepared, hook.record.cwd);
   } catch (error) {
     if (prepared === null) throw error;
     const failure = error instanceof HelperFailure ? error : new HelperFailure("unexpected", unexpectedDetail(error));

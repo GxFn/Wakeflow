@@ -16,6 +16,7 @@ import { listWakeflowExternalInstructionTargets, wakeflowExternalInstructionPlac
 import { inspectWakeflowExternalInstruction, WakeflowExternalInstructionInspectionError, } from "../managed-integration/wakeflow-external-instruction-inspection.js";
 import { inspectWakeflowWorkspaceGitignore, WakeflowGitignoreInspectionError, } from "../managed-integration/wakeflow-gitignore-inspection.js";
 import { inspectWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "../managed-integration/wakeflow-managed-block-file.js";
+import { historicalWakeflowManagedTextTargets, WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY, } from "../managed-integration/wakeflow-managed-text-history.js";
 import { inspectWakeflowProgramInstruction, WakeflowProgramInstructionInspectionError, } from "../managed-integration/wakeflow-program-instruction-inspection.js";
 import { createWakeflowSupportGitignoreBodyAuthority, WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME, } from "../managed-integration/wakeflow-support-gitignore-body-authority.js";
 import { createWakeflowManagedSupportResourceCatalog } from "../support/wakeflow-managed-support-resource-catalog.js";
@@ -343,7 +344,10 @@ async function inspectSupportGitignore(supportRoot, request, authority, surfaceI
     try {
         const inspected = await inspectWakeflowManagedBlockFile(supportRoot, {
             resourcePath: WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
-            currentTargets: [authority.envelopeTarget],
+            currentTargets: [
+                authority.envelopeTarget,
+                ...historicalWakeflowManagedTextTargets(WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY, authority.envelopeTarget, request.hostProfiles),
+            ],
             desiredTarget: authority.envelopeTarget,
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });

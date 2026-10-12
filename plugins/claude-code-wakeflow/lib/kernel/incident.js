@@ -19,6 +19,7 @@ const CHAIN_MAXIMUM_DEPTH = 8;
 const RECORD_MAXIMUM_BYTES = 64 * 1024;
 const LISTING_MAXIMUM_ENTRIES = 1024;
 const TOKEN_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/u;
+const RESOURCE_PATTERN = /^[A-Za-z0-9_.:/-]{1,256}$/u;
 const INCIDENT_ID_PATTERN = /^incident_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 export function createIncidentId(uuidFactory) {
     return `${WAKEFLOW_INCIDENT_ID_PREFIX}${createUuidV4(uuidFactory)}`;
@@ -71,6 +72,7 @@ function buildRecord(input, recordedAt) {
         tool: input.tool !== undefined && TOKEN_PATTERN.test(input.tool) ? input.tool : null,
         hostId: input.hostId !== undefined && TOKEN_PATTERN.test(input.hostId) ? input.hostId : null,
         event: input.event !== undefined && TOKEN_PATTERN.test(input.event) ? input.event : null,
+        resource: input.resource !== undefined && RESOURCE_PATTERN.test(input.resource) ? input.resource : null,
         error: isWakeflowError(input.error) ? input.error.toPublicDetails() : null,
         chain: describeIncidentChain(input.error),
         requestKeys: Object.freeze([...keys].sort()),

@@ -3,6 +3,8 @@ import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../capabilities/observation/co
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "./wakeflow-public-mcp-catalog.js";
 import { parseCreateWakeflowPublicMcpServerOptions, } from "./wakeflow-public-mcp-server-configuration.js";
 import { registerWakeflowPublicMcpCatalog, } from "./wakeflow-public-mcp-tool.js";
+import { setRootedExclusiveFileLockReleaseFailureReporter } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { createIncidentId, recordIncident } from "../kernel/incident.js";
 export { WakeflowPublicMcpServerConfigurationError } from "./wakeflow-public-mcp-server-configuration.js";
 /**
  * Wakeflow公共MCP的唯一组合根。
@@ -12,6 +14,22 @@ export { WakeflowPublicMcpServerConfigurationError } from "./wakeflow-public-mcp
  * 也不执行宿主效果。
  */
 export function createWakeflowPublicMcpServer(options) {
+    // B10（§13.167）：临界区成功后锁释放失败不再掩盖已提交的结果，残留写成事故记录并打一行 stderr。
+    setRootedExclusiveFileLockReleaseFailureReporter((failure) => {
+        const incidentId = createIncidentId();
+        void recordIncident(failure.root, {
+            incidentId,
+            source: "lock-release",
+            resource: failure.lockPath,
+            error: failure.error,
+        }).catch(() => false);
+        try {
+            process.stderr.write(`wakeflow: incident ${incidentId} (lock-release: ${failure.error.reason})\n`);
+        }
+        catch {
+            // stderr 不可用时结果不变。
+        }
+    });
     const admitted = parseCreateWakeflowPublicMcpServerOptions(options, WAKEFLOW_PUBLIC_TOOL_CATALOG);
     const server = new McpServer({
         name: admitted.serverName,

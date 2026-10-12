@@ -5,7 +5,7 @@ import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical
 import { parseSha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../foundation/data/json-value.js";
-import { observeAbsoluteNode, readAbsoluteRegularFileText, } from "../foundation/filesystem/absolute-node-observation.js";
+import { AbsoluteNodeObservationError, observeAbsoluteNode, readAbsoluteRegularFileText, } from "../foundation/filesystem/absolute-node-observation.js";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
@@ -588,16 +588,24 @@ export async function retirePodReceipts(root, hostId, podId) {
         fail("io-failure", "receipt-retire-directory", "$receipt", { cause: error });
     }
 }
-/** 检出是否仍在：目录存在且带 `.git` 指针文件。 */
-export async function worktreeCheckoutPresent(receipt) {
+/**
+ * 检出是否仍在（open-items G7，§13.167）：目录在且带 `.git` 指针文件为 `present`；目录或指针不在、
+ * 或不是对应的节点种类为 `absent`；无法观察（EACCES、EIO、ELOOP……）为 `unknown`——"没能检查"
+ * 不冒充"不在"，pod 关闭对 unknown 阻塞而不是退役回执。
+ */
+export async function observeWorktreeCheckout(receipt) {
     try {
         const checkout = await observeAbsoluteNode(receipt.path, { follow: true });
-        if (checkout.state !== "present" || checkout.node.kind !== "directory")
-            return false;
+        if (checkout.state === "missing" || checkout.node.kind !== "directory")
+            return "absent";
         const pointer = await observeAbsoluteNode(path.join(receipt.path, ".git"), { follow: true });
-        return pointer.state === "present" && pointer.node.kind === "file";
+        if (pointer.state === "missing")
+            return "absent";
+        return pointer.node.kind === "file" ? "present" : "absent";
     }
-    catch {
-        return false;
+    catch (error) {
+        if (error instanceof AbsoluteNodeObservationError && error.reason === "input")
+            return "absent";
+        return "unknown";
     }
 }

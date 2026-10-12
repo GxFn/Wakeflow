@@ -22,12 +22,27 @@ function reportFixedCode(code) {
 }
 process.on("uncaughtException", launcherGuard);
 process.on("unhandledRejection", launcherGuard);
-try {
-  const observer = await import("../lib/entrypoints/wakeflow-hook-observer.js");
-  if (typeof observer.main !== "function") throw new TypeError("main");
-  removeLauncherGuards();
-  await observer.main();
-} catch {
-  reportFixedCode("launcher");
+const WAKEFLOW_NODE_ENGINES = ">=24.19.0 <25";
+function wakeflowNodeSupported() {
+  const parts = /^v?(\d+)\.(\d+)\.(\d+)/u.exec(process.versions.node);
+  if (parts === null) return false;
+  const [major, minor, patch] = [Number(parts[1]), Number(parts[2]), Number(parts[3])];
+  if (major >= 25) return false;
+  if (major !== 24) return major > 24;
+  if (minor !== 19) return minor > 19;
+  return patch >= 0;
+}
+// 范围外的 Node 只打一行固定代码（D4 的词汇表里有 node-version），不 import 观察器，退出码仍为 0。
+if (!wakeflowNodeSupported()) {
+  reportFixedCode("node-version");
+} else {
+  try {
+    const observer = await import("../lib/entrypoints/wakeflow-hook-observer.js");
+    if (typeof observer.main !== "function") throw new TypeError("main");
+    removeLauncherGuards();
+    await observer.main();
+  } catch {
+    reportFixedCode("launcher");
+  }
 }
 process.exitCode = 0;

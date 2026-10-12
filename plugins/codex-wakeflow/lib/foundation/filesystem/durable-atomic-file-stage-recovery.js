@@ -193,8 +193,14 @@ async function readDirectory(root, directoryResourcePath, signal) {
         throw error;
     }
 }
-function collectStages(directory) {
+/**
+ * 收集目录里的协议暂存条目。`tolerateUnrecognized` 为 true 时（按目标匹配的写前恢复），名字不合法
+ * 或节点不合策略的带前缀条目只计数、不参与恢复——它们不是本次写入的暂存，也挡不住一次新建的
+ * 暂存随后链接到目标（open-items B13）；为 false 时沿用严格拒绝。
+ */
+function collectStages(directory, tolerateUnrecognized) {
     const stages = [];
+    let unrecognizedEntryCount = 0;
     for (const [index, entry] of directory.entries.entries()) {
         if (!hasDurableAtomicFileStagePrefix(entry.name))
             continue;
@@ -204,15 +210,28 @@ function collectStages(directory) {
         }
         catch (error) {
             if (error instanceof DurableAtomicFileStageAddressError) {
+                if (tolerateUnrecognized) {
+                    unrecognizedEntryCount += 1;
+                    continue;
+                }
                 fail("inventory", `$stages/${index}`);
             }
             throw error;
         }
         const stage = Object.freeze({ address, entry });
-        assertStageNode(stage, index);
+        try {
+            assertStageNode(stage, index);
+        }
+        catch (error) {
+            if (tolerateUnrecognized && error instanceof DurableAtomicFileStageRecoveryError) {
+                unrecognizedEntryCount += 1;
+                continue;
+            }
+            throw error;
+        }
         stages.push(stage);
     }
-    return Object.freeze(stages);
+    return Object.freeze({ stages: Object.freeze(stages), unrecognizedEntryCount });
 }
 function indexTargetsByDigest(directory) {
     const targets = new Map();
@@ -295,9 +314,10 @@ async function retireStage(root, stage, signal) {
         throw error;
     }
 }
-async function recoverDirectoryStages(root, directoryResourcePath, signal, targetDigests, foreignStagePolicy) {
+async function recoverDirectoryStages(root, directoryResourcePath, signal, targetDigests, foreignStagePolicy, tolerateUnrecognized = false) {
     const directory = await readDirectory(root, directoryResourcePath, signal);
-    const observedStages = collectStages(directory);
+    const collected = collectStages(directory, tolerateUnrecognized);
+    const observedStages = collected.stages;
     if (targetDigests !== null
         && foreignStagePolicy === "reject"
         && observedStages.some((stage) => (!targetDigests.has(stage.address.targetResourcePathDigest)))) {
@@ -339,6 +359,7 @@ async function recoverDirectoryStages(root, directoryResourcePath, signal, targe
         settledTargetCount,
         activeStageCount,
         unknownStageCount,
+        unrecognizedEntryCount: collected.unrecognizedEntryCount,
     });
 }
 /** 清理指定父目录内所有安全且不再活动的自描述原子暂存文件。 */
@@ -364,5 +385,5 @@ export async function recoverDurableAtomicFileStagesMatchingTargets(root, target
     assertRoot(root);
     const scope = parseTargetScope(targetResourcePathValues);
     const { signal } = parseOptions(options);
-    return recoverDirectoryStages(root, scope.directoryResourcePath, signal, scope.targetDigests, "ignore");
+    return recoverDirectoryStages(root, scope.directoryResourcePath, signal, scope.targetDigests, "ignore", true);
 }

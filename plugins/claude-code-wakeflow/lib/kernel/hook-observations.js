@@ -52,9 +52,12 @@ export const HOST_HOOK_EVENTS = Object.freeze([
     "stop",
     "session-end",
     "turn-complete",
+    "notification",
 ]);
 const RECORD_KIND = "WakeflowHostHookObservation";
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{1,256}$/u;
+/** Notification 类型标签：Claude Code 的 `permission_prompt`、`idle_prompt` 一类 snake_case 词（§13.167）。 */
+const NOTIFICATION_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
 const CWD_MAXIMUM_LENGTH = 4096;
 function hasControlCharacter(text) {
     for (const character of text) {
@@ -99,8 +102,8 @@ const RECORD_KEYS = Object.freeze([
     "lastAssistantMessageDigest",
     "transcriptRef",
 ]);
-/** 后加的可选键：旧记录没有它也合法（§13.127）。 */
-const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest"]);
+/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167）。 */
+const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest", "notificationType"]);
 /**
  * 条目若是本写入器自己那种原子暂存文件（§13.134 B12），返回它的暂存地址，否则返回 `null`：普通
  * 文件，名字精确符合 foundation 的暂存命名，且是 `create`、权限位 0600——`writeHostHookObservation`
@@ -139,6 +142,14 @@ function identifier(value, path) {
 function optionalIdentifier(value, path) {
     return value === null || value === undefined ? null : identifier(value, path);
 }
+function optionalNotificationType(value, path) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value !== "string" || !NOTIFICATION_TYPE_PATTERN.test(value)) {
+        fail("invalid-request", "hook-notification-type", path);
+    }
+    return value;
+}
 function optionalDigest(value, path) {
     return value === null || value === undefined ? null : parseSha256Digest(value, path);
 }
@@ -174,9 +185,12 @@ function millisecondInstant(value, path) {
     }
     return instant;
 }
-/** 由宿主、事件、会话、时间与 turn 派生记录标识：hook 重复触发不会造出第二条记录。 */
+/**
+ * 由宿主、事件、会话、时间与 turn 派生记录标识：hook 重复触发不会造出第二条记录。Notification 的类型
+ * 只在非 null 时参与（§13.167）：同一毫秒的两种通知是两条记录，早于该字段的记录标识不变。
+ */
 function deriveHostHookObservationId(input) {
-    return deriveUuidV4("wakeflow-host-hook-observation", input.hostId, input.event, input.sessionId, input.recordedAt, input.turnId ?? "");
+    return deriveUuidV4("wakeflow-host-hook-observation", input.hostId, input.event, input.sessionId, input.recordedAt, input.turnId ?? "", ...(input.notificationType === null ? [] : [input.notificationType]));
 }
 /** 用宿主交回的事实创建一条记录；不合法的输入以 `invalid-request` 拒绝。 */
 export function createHostHookObservation(input) {
@@ -197,6 +211,7 @@ export function createHostHookObservation(input) {
         lastAssistantMessageDigest: optionalDigest(input.lastAssistantMessageDigest, "$observation.lastAssistantMessageDigest"),
         transcriptRef: optionalText(input.transcriptRef, "$observation.transcriptRef"),
         artifactManifestDigest: optionalDigest(input.artifactManifestDigest, "$observation.artifactManifestDigest"),
+        notificationType: optionalNotificationType(input.notificationType, "$observation.notificationType"),
     };
     return Object.freeze({
         kind: RECORD_KIND,
@@ -230,6 +245,7 @@ function parseHostHookObservation(value) {
         lastAssistantMessageDigest: object.lastAssistantMessageDigest,
         transcriptRef: object.transcriptRef,
         artifactManifestDigest: (object.artifactManifestDigest ?? null),
+        notificationType: (object.notificationType ?? null),
     });
     if (record.recordId !== object.recordId) {
         fail("invalid-request", "hook-record-id", "$record.recordId");

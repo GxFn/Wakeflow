@@ -97,6 +97,7 @@ export function deriveCloseCompleteBlockers(input) {
     return Object.freeze([
         ...input.boundWindowIds.map((windowId) => `window-bound:${windowId}`),
         ...input.presentCheckoutRepositoryIds.map((repositoryId) => `worktree-present:${repositoryId}`),
+        ...(input.unknownCheckoutRepositoryIds ?? []).map((repositoryId) => `worktree-checkout-unknown:${repositoryId}`),
     ]);
 }
 const PLAN_FRONTIER = Object.freeze({
@@ -157,6 +158,16 @@ export function podMutationNext(input) {
             owner: "controller",
             suggestedTool: null,
             blockers: Object.freeze(input.presentCheckoutRepositoryIds.map((id) => `worktree-present:${id}`).slice(0, 32)),
+        });
+    }
+    const unknown = input.unknownCheckoutRepositoryIds ?? [];
+    if (unknown.length > 0) {
+        // 无法观察的检出（G7）：用户先让它可读（权限、挂载、TCC），Controller 才能继续关闭。
+        return Object.freeze({
+            frontier: "pod-worktree-disposal",
+            owner: "user",
+            suggestedTool: null,
+            blockers: Object.freeze(unknown.map((id) => `worktree-checkout-unknown:${id}`).slice(0, 32)),
         });
     }
     return Object.freeze({

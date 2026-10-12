@@ -12,7 +12,8 @@ export type PodState = "creating" | "ready" | "closing" | "closed";
 export interface PodReceiptFact {
   readonly repositoryId: string;
   readonly bindingId: string;
-  readonly checkoutPresent: boolean;
+  /** 检出观察（G7）：unknown 不是缺席，关闭中按"可能还在"处理。 */
+  readonly checkout: "present" | "absent" | "unknown";
 }
 
 export interface PodStateInput {
@@ -27,7 +28,7 @@ function worktreeReady(input: Readonly<PodStateInput>): boolean {
   return input.pod.worktrees.every((worktree) => {
     const receipt = input.receipts.find((entry) => entry.repositoryId === worktree.repositoryId);
     return (
-      receipt?.checkoutPresent === true &&
+      receipt?.checkout === "present" &&
       receipt.bindingId === input.bindingIdByWindowId.get(worktree.windowId)
     );
   });
@@ -40,7 +41,7 @@ function worktreeReady(input: Readonly<PodStateInput>): boolean {
 export function derivePodState(input: Readonly<PodStateInput>): PodState {
   const bound = input.windowIds.filter((windowId) => input.bindingIdByWindowId.has(windowId));
   if (input.pod.lifecycle === "closing") {
-    const checkouts = input.receipts.some((receipt) => receipt.checkoutPresent);
+    const checkouts = input.receipts.some((receipt) => receipt.checkout !== "absent");
     return bound.length === 0 && !checkouts ? "closed" : "closing";
   }
   return bound.length === input.windowIds.length && worktreeReady(input) ? "ready" : "creating";

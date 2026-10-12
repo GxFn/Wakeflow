@@ -221,6 +221,15 @@ failure. Keep that limitation explicit: do not fabricate records, rebind, or
 repeatedly restart windows to clear it, and do not treat `unverified` as a
 blanket prerequisite for actions whose own contracts do not depend on it.
 
+A window's `attention` says whether the host is waiting for the user there:
+`needed` when the bound session's latest hook record is a Claude Code
+`Notification` (its `notificationType` names the cause - a permission prompt,
+an idle prompt, an expired login or a usage limit), `none` once a later prompt
+or stop superseded it, `null` without a binding or any record. Tell the user
+which window needs them instead of waiting for a callback from it. No tool
+clears the state; the user's action in that window does. The field says
+nothing about the window's MCP or instruction state.
+
 Restart the stale windows with the host's procedure: {{windowResume}} After this
 server is current, preview and apply reconcile for repairable workspace gates
 such as host-settings-assets. A peer's `unverified` state remains separate from

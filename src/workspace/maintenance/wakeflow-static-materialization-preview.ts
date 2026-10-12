@@ -58,6 +58,10 @@ import {
   WakeflowManagedBlockFileError,
 } from "../managed-integration/wakeflow-managed-block-file.js";
 import {
+  historicalWakeflowManagedTextTargets,
+  WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY,
+} from "../managed-integration/wakeflow-managed-text-history.js";
+import {
   inspectWakeflowProgramInstruction,
   WakeflowProgramInstructionInspectionError,
 } from "../managed-integration/wakeflow-program-instruction-inspection.js";
@@ -499,7 +503,14 @@ async function inspectSupportGitignore(
   try {
     const inspected = await inspectWakeflowManagedBlockFile(supportRoot, {
       resourcePath: WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
-      currentTargets: [authority.envelopeTarget],
+      currentTargets: [
+        authority.envelopeTarget,
+        ...historicalWakeflowManagedTextTargets(
+          WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY,
+          authority.envelopeTarget,
+          request.hostProfiles,
+        ),
+      ],
       desiredTarget: authority.envelopeTarget,
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });

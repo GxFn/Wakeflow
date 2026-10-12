@@ -28,7 +28,13 @@ import {
   type CandidateHostIsolationRule,
 } from "../../tooling/artifacts/build-plugin-artifacts.js";
 import { resolveRuntimeDependencyClosure } from "../../tooling/artifacts/plugin-dependency-closure.js";
-import { pluginManifestPath, readReleaseVersion } from "../../tooling/artifacts/plugin-metadata.js";
+import {
+  parsePluginNodeEngineBounds,
+  PLUGIN_ENGINES_NODE,
+  pluginManifestPath,
+  readReleaseVersion,
+} from "../../tooling/artifacts/plugin-metadata.js";
+import { WAKEFLOW_NODE_ENGINES } from "../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import {
@@ -474,6 +480,16 @@ test("双宿主插件制品由确定性的闭合文件清单生成：编译闭�
     ok(mcpLauncherText.includes('process.on("unhandledRejection"'));
     ok(mcpLauncherText.includes("wakeflow: incident incident_"));
     equal(mcpLauncherText.includes("stack"), false);
+    // A6：两个 launcher 在 import 任何业务模块之前核对 Node 版本范围（范围来自 contracts 的唯一输入）。
+    ok(
+      mcpLauncherText.includes(
+        `const WAKEFLOW_NODE_ENGINES = ${JSON.stringify(PLUGIN_ENGINES_NODE)};`,
+      ),
+    );
+    ok(mcpLauncherText.includes("is outside the supported range"));
+    ok(
+      mcpLauncherText.indexOf("wakeflowNodeSupported()") < mcpLauncherText.indexOf("await import("),
+    );
 
     // D8：两个 hooks 文件在文件集合里，模式与范围固定；观察脚本的闭包根随并集进了 lib/。
     equal(byPath.get(MCP_LAUNCHER)?.mode, "0755");
@@ -519,6 +535,8 @@ test("双宿主插件制品由确定性的闭合文件清单生成：编译闭�
     ok(launcherText.includes('await import("../lib/entrypoints/wakeflow-hook-observer.js")'));
     ok(launcherText.includes('"uncaughtException"'));
     ok(launcherText.includes('"unhandledRejection"'));
+    ok(launcherText.includes('reportFixedCode("node-version")'));
+    ok(launcherText.indexOf("wakeflowNodeSupported()") < launcherText.indexOf("await import("));
     doesNotMatch(launcherText, /^import\s/mu);
     doesNotMatch(launcherText, /^export\s/mu);
 
@@ -764,4 +782,19 @@ test("真实仓库的运行时依赖闭包：ajv 展开为它在锁文件里的�
     () => resolveRuntimeDependencyClosure(process.cwd(), ["typescript"]),
     expectClosureErrorCode("wakeflow-artifact-dependency-dev"),
   );
+});
+
+test("the Node engine range is declared identically by the root package.json, the contracts vocabulary and the plugin metadata（A6，§13.167）", () => {
+  // tooling 不能 import src（各自的编译根），所以范围声明三次；这里核对三处逐字相同且可解析。
+  const rootPackage = JSON.parse(
+    readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+  ) as {
+    readonly engines?: { readonly node?: unknown };
+  };
+  equal(rootPackage.engines?.node, PLUGIN_ENGINES_NODE);
+  equal(WAKEFLOW_NODE_ENGINES, PLUGIN_ENGINES_NODE);
+  deepEqual(parsePluginNodeEngineBounds(PLUGIN_ENGINES_NODE), {
+    minimum: [24, 19, 0],
+    exclusiveMajor: 25,
+  });
 });

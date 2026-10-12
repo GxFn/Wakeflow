@@ -15,6 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
+import { WAKEFLOW_NODE_ENGINES } from "../../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
@@ -77,6 +78,10 @@ case "$cmd" in
         prev="$arg"
       done
       last="\${!#}"
+      # 真实宿主里 claude --worktree 的会话 cwd 是检出目录（A8，§13.167）；WAKEFLOW_STUB_SESSION_CWD 可覆盖。
+      wt=$(printf '%s' "$last" | sed -n "s/.*'--worktree' '\\([^']*\\)'.*/\\1/p")
+      if [ -n "$wt" ] && [ -d "$cwd/.claude/worktrees/$wt" ]; then cwd="$cwd/.claude/worktrees/$wt"; fi
+      if [ -n "\${WAKEFLOW_STUB_SESSION_CWD:-}" ]; then cwd="$WAKEFLOW_STUB_SESSION_CWD"; fi
       sid=$(printf '%s' "$last" | sed -n "s/.*'--session-id' '\\([^']*\\)'.*/\\1/p")
       if [ -n "$sid" ]; then
         printf '{"kind":"stub","event":"session-start","sessionId":"%s","cwd":"%s"}\\n' "$sid" "$cwd" > "$WAKEFLOW_STUB_HOOKS/20260924T000000000Z-session-start-$sid.json"
@@ -403,13 +408,44 @@ test("tmux asset is a fixed 0600 file whose command and permission rule agree an
   }
 });
 
+test("panes resolves an npm-installed claude: a node process whose argv names the Claude CLI entry is claude, other node processes are not（A5，§13.167）", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeFileSync(path.join(current.state, "panes.txt"), [
+    paneRow({ window: "@5", pane: "%9", command: "node", pid: 500 }),
+    paneRow({ window: "@3", pane: "%7", command: "node", pid: 300, options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID } }),
+    "",
+  ].join("\n"));
+  writeFileSync(path.join(current.state, "ps.txt"), [
+    "  500     1 /bin/zsh",
+    "  501   500 /opt/homebrew/bin/node",
+    "  300     1 /opt/homebrew/bin/node",
+    "",
+  ].join("\n"));
+  writeFileSync(
+    path.join(current.state, "args-501.txt"),
+    "node /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js --session-id 11111111-2222-4333-8444-555555555555\n",
+  );
+  writeFileSync(path.join(current.state, "args-300.txt"), "node /srv/app/server.js\n");
+  const panes = runHelper(current, ["panes"]);
+  equal(panes.status, 0, JSON.stringify(panes.json));
+  const observation = panes.json.observation as { panes: readonly { paneId: string; currentCommand: string }[] };
+  deepEqual(observation.panes.map((pane) => [pane.paneId, pane.currentCommand]), [["%9", "claude"], ["%7", "node"]]);
+});
+
 test("preflight reports node, tmux, claude, the configured session and the shell context without touching anything", async (t) => {
   const current = await fixture(t);
   const run = runHelper(current, ["preflight"]);
   equal(run.status, 0);
-  deepEqual(run.json.node, { available: true, version: process.version });
+  deepEqual(run.json.node, {
+    available: true,
+    version: process.version,
+    path: process.execPath,
+    engines: WAKEFLOW_NODE_ENGINES,
+    supported: true,
+  });
   deepEqual(run.json.tmux, { available: true, version: "tmux 3.6b" });
-  deepEqual(run.json.claude, { available: true, version: "9.9.9 (Claude Code)" });
+  deepEqual(run.json.claude, { available: true, version: "9.9.9 (Claude Code)", install: "wrapper" });
   deepEqual(run.json.session, {
     socketName: null,
     sessionName: "wakeflow",
@@ -419,6 +455,9 @@ test("preflight reports node, tmux, claude, the configured session and the shell
   equal(run.json.insideTmux, false);
   equal(run.json.sessionIdVisible, false);
   deepEqual(tmuxLog(current).map((entry) => entry[0]), ["has-session", "-V"]);
+  // A5（§13.167）：npm 安装的 claude 是 shebang 指向 node 的脚本，preflight 把安装形态报成 node。
+  writeFakeCli(current.bin, "claude", '#!/usr/bin/env node\nconsole.log("9.9.9 (Claude Code)");\n');
+  deepEqual(runHelper(current, ["preflight"]).json.claude, { available: true, version: "9.9.9 (Claude Code)", install: "node" });
 });
 
 test("tmux helper admits only the current config version", async (t) => {
@@ -1286,6 +1325,13 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   equal(reused.json.worktreePrepared, "reused");
   equal(reused.json.worktreeExclude, "present");
   equal(excludeLines(), 1);
+  // A8（§13.167）：会话的 hook 记录 cwd 不是准备好的检出（按 realpath 比对）就拒绝，仍报告留下的检出与分支。
+  const elsewhere = launch("feature-x", { WAKEFLOW_STUB_SESSION_CWD: repository });
+  equal(elsewhere.status, 1, JSON.stringify(elsewhere.json));
+  equal(elsewhere.json.reason, "worktree-cwd-mismatch");
+  equal(elsewhere.json.observedCwd, ".");
+  equal(elsewhere.json.worktreePrepared, "reused");
+  equal(elsewhere.json.worktreeBranch, "worktree-feature-x");
   const opensWindow = (): boolean => tmuxLog(current).some((entry) => entry[0] === "new-window" || entry[0] === "new-session");
   // 分支已在、检出不在：不复用旧分支（它不一定在本地 HEAD 上），拒绝且不写 git、不开窗口（§13.130）。
   git(["worktree", "remove", "--force", checkout]);

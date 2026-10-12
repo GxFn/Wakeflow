@@ -26,7 +26,7 @@ import { WAKEFLOW_INCIDENTS_ROOT_REF, WAKEFLOW_LOCAL_RUNTIME_ROOT_REF } from "./
  * 没有任何门或路由读取它去判定业务事实，verify 只数 hook 观察器的写失败条数。
  */
 
-export type WakeflowIncidentSource = "mcp-tool" | "hook-observer";
+export type WakeflowIncidentSource = "mcp-tool" | "hook-observer" | "lock-release";
 
 export interface WakeflowIncidentCauseLink {
   readonly name: string;
@@ -44,6 +44,8 @@ export interface WakeflowIncidentRecord {
   readonly tool: string | null;
   readonly hostId: string | null;
   readonly event: string | null;
+  /** 涉及的工作区内资源（可移植路径，例如锁文件）；没有则 null。 */
+  readonly resource: string | null;
   readonly error: Readonly<WakeflowErrorPublicDetails> | null;
   readonly chain: readonly Readonly<WakeflowIncidentCauseLink>[];
   readonly requestKeys: readonly string[];
@@ -55,6 +57,7 @@ export interface WakeflowIncidentInput {
   readonly tool?: string;
   readonly hostId?: string;
   readonly event?: string;
+  readonly resource?: string;
   readonly error: unknown;
   readonly requestKeys?: readonly string[];
 }
@@ -70,6 +73,7 @@ const CHAIN_MAXIMUM_DEPTH = 8;
 const RECORD_MAXIMUM_BYTES = 64 * 1024;
 const LISTING_MAXIMUM_ENTRIES = 1024;
 const TOKEN_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/u;
+const RESOURCE_PATTERN = /^[A-Za-z0-9_.:/-]{1,256}$/u;
 const INCIDENT_ID_PATTERN =
   /^incident_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
@@ -136,6 +140,8 @@ function buildRecord(
     tool: input.tool !== undefined && TOKEN_PATTERN.test(input.tool) ? input.tool : null,
     hostId: input.hostId !== undefined && TOKEN_PATTERN.test(input.hostId) ? input.hostId : null,
     event: input.event !== undefined && TOKEN_PATTERN.test(input.event) ? input.event : null,
+    resource:
+      input.resource !== undefined && RESOURCE_PATTERN.test(input.resource) ? input.resource : null,
     error: isWakeflowError(input.error) ? input.error.toPublicDetails() : null,
     chain: describeIncidentChain(input.error),
     requestKeys: Object.freeze([...keys].sort()),

@@ -47,7 +47,8 @@ import {
 import {
   listPodWorktreeReceiptsAnyHost,
   type PodWorktreeReceipt,
-  worktreeCheckoutPresent,
+  observeWorktreeCheckout,
+  type WorktreeCheckoutObservation,
 } from "../../kernel/pod-worktree-receipts.js";
 import {
   listRequirementClaimStates,
@@ -185,6 +186,8 @@ export interface ObservedHostHooks {
       readonly event: HostHookEvent;
       readonly recordedAt: UtcInstant;
       readonly observerManifestDigest: Sha256Digest | null;
+      /** 最近一条记录是 Notification 时它的类型（A7，§13.167）；其他事件为 null。 */
+      readonly notificationType: string | null;
       readonly sessionStartObserverManifestDigest: Sha256Digest | null;
     }>
   >;
@@ -192,7 +195,8 @@ export interface ObservedHostHooks {
 
 export interface ObservedPodReceipt {
   readonly receipt: Readonly<PodWorktreeReceipt>;
-  readonly checkoutPresent: boolean;
+  /** 检出观察（G7）：present / absent / unknown，unknown 不冒充缺席。 */
+  readonly checkout: WorktreeCheckoutObservation;
 }
 
 export interface ObservedPod {
@@ -527,6 +531,7 @@ async function observeHostHooks(
         readonly event: HostHookEvent;
         readonly recordedAt: UtcInstant;
         readonly observerManifestDigest: Sha256Digest | null;
+        readonly notificationType: string | null;
         readonly sessionStartObserverManifestDigest: Sha256Digest | null;
       }>
     >();
@@ -552,6 +557,7 @@ async function observeHostHooks(
           event: record.event,
           recordedAt: record.recordedAt,
           observerManifestDigest: record.artifactManifestDigest,
+          notificationType: record.notificationType,
           sessionStartObserverManifestDigest: null,
         });
       }
@@ -624,7 +630,7 @@ async function observePods(
     const stored = await listPodWorktreeReceiptsAnyHost(root, pod.podId, signalOptions(signal));
     const receipts: Readonly<ObservedPodReceipt>[] = [];
     for (const receipt of stored) {
-      receipts.push(Object.freeze({ receipt, checkoutPresent: await worktreeCheckoutPresent(receipt) }));
+      receipts.push(Object.freeze({ receipt, checkout: await observeWorktreeCheckout(receipt) }));
     }
     const state = bindingsObserved
       ? derivePodState({
@@ -635,7 +641,7 @@ async function observePods(
             Object.freeze({
               repositoryId: entry.receipt.repositoryId,
               bindingId: entry.receipt.bindingId,
-              checkoutPresent: entry.checkoutPresent,
+              checkout: entry.checkout,
             }),
           ),
         })

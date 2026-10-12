@@ -60,6 +60,10 @@ import {
   type WakeflowManagedTextEnvelopeInspection,
   type WakeflowManagedTextRecompositionResult,
 } from "./wakeflow-managed-text-envelope.js";
+import {
+  historicalWakeflowManagedTextBodies,
+  WAKEFLOW_GITIGNORE_BODY_HISTORY,
+} from "./wakeflow-managed-text-history.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：Workspace 根 `.gitignore` 的只读检查。
@@ -530,13 +534,18 @@ export async function inspectWakeflowWorkspaceGitignore(
   ) {
     fail("envelope", "$source");
   }
-  if (
-    envelope.kind === "managed"
-    && (
-      envelope.bodyDigest !== authority.bodyDigest
-      || envelope.body !== authority.body
-    )
-  ) {
+  const managedBodyCurrent = envelope.kind === "managed"
+    && envelope.bodyDigest === authority.bodyDigest
+    && envelope.body === authority.body;
+  // C5（§13.167）：前序渲染的正文被准入但不算 current，走下面的重组路径换成当前渲染。
+  const managedBodyHistorical = envelope.kind === "managed"
+    && !managedBodyCurrent
+    && historicalWakeflowManagedTextBodies(
+      WAKEFLOW_GITIGNORE_BODY_HISTORY,
+      authority.body,
+      request.hostProfiles,
+    ).includes(envelope.body);
+  if (envelope.kind === "managed" && !managedBodyCurrent && !managedBodyHistorical) {
     fail("unknown-managed-body", "$source");
   }
   const exactOutside = classifyWakeflowGitignoreExactOutsideRules(
@@ -553,7 +562,7 @@ export async function inspectWakeflowWorkspaceGitignore(
     await revalidateSource(rootValue, read, request.signal);
   }
   const allIgnored = gitRuleChecks.every((entry) => entry.ignored);
-  if (envelope.kind === "managed") {
+  if (envelope.kind === "managed" && managedBodyCurrent) {
     if (!allIgnored) fail("outside-conflict", "$git");
     return Object.freeze({
       status: "managed-current",

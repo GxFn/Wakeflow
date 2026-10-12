@@ -15,7 +15,37 @@ import path from "node:path";
 const RELEASE_VERSION_SOURCE = "assets/release/version.json";
 export const PLUGIN_NAME = "wakeflow";
 const PLUGIN_LICENSE = "MIT";
+
+/**
+ * Node 引擎范围（open-items A6，§13.167）。tooling 有自己的编译根，不能 import src，所以范围在三处各声明
+ * 一次：根 `package.json` 的 `engines.node`、contracts 的 `WAKEFLOW_NODE_ENGINES`（Claude 助手的
+ * preflight 读它）与这里（两个插件的 `package.json` 与两个 launcher 顶部的守卫读它）；制品测试核对三处
+ * 逐字相同。
+ */
 export const PLUGIN_ENGINES_NODE = ">=24.19.0 <25";
+const ENGINES_PATTERN = /^>=(\d+)\.(\d+)\.(\d+) <(\d+)$/u;
+
+export interface PluginNodeEngineBounds {
+  readonly minimum: readonly [number, number, number];
+  /** 不含的上界主版本号。 */
+  readonly exclusiveMajor: number;
+}
+
+/** 解析 `>=A.B.C <D` 形的范围；launcher 守卫与 release:check 据此做纯数字比较，不依赖 semver。 */
+export function parsePluginNodeEngineBounds(
+  range: string = PLUGIN_ENGINES_NODE,
+): Readonly<PluginNodeEngineBounds> {
+  const match = ENGINES_PATTERN.exec(range);
+  if (match === null) fail("wakeflow-release-engines", "the plugin engines range is malformed");
+  return Object.freeze({
+    minimum: Object.freeze([Number(match[1]), Number(match[2]), Number(match[3])]) as readonly [
+      number,
+      number,
+      number,
+    ],
+    exclusiveMajor: Number(match[4]),
+  });
+}
 const PLUGIN_HOMEPAGE = "https://github.com/GxFn/Wakeflow#readme";
 const PLUGIN_REPOSITORY = "https://github.com/GxFn/Wakeflow";
 const PLUGIN_AUTHOR = Object.freeze({

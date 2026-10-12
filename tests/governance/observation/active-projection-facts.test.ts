@@ -38,7 +38,10 @@ import {
 } from "../../../src/kernel/active-projection.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF } from "../../../src/kernel/layout.js";
-import { createPodWorktreeReceipt } from "../../../src/kernel/pod-worktree-receipts.js";
+import {
+  createPodWorktreeReceipt,
+  type WorktreeCheckoutObservation,
+} from "../../../src/kernel/pod-worktree-receipts.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
@@ -151,10 +154,10 @@ function observedDemands(
   return Object.freeze({ status: "observed" as const, issue: null, value: demands });
 }
 
-/** 配置里的 worktree pod 加一份回执；`checkoutPresent` 是那次 stat 的结果。 */
+/** 配置里的 worktree pod 加一份回执；`checkout` 是那次观察的结果（present / absent / unknown）。 */
 function worktreePod(
   fixtureValue: Readonly<Fixture>,
-  receipts: readonly boolean[],
+  receipts: readonly WorktreeCheckoutObservation[],
 ): Readonly<ObservedPod> {
   const pod = fixtureValue.snapshot.model.pods.find((entry) => entry.placement === "worktree");
   const worktree = pod?.worktrees[0];
@@ -164,7 +167,7 @@ function worktreePod(
     windowIds: [],
     boundWindowIds: [],
     receipts: Object.freeze(
-      receipts.map((checkoutPresent) =>
+      receipts.map((checkout) =>
         Object.freeze({
           receipt: createPodWorktreeReceipt({
             hostId: "codex",
@@ -180,7 +183,7 @@ function worktreePod(
             },
             observedAt: OBSERVED_AT,
           }),
-          checkoutPresent,
+          checkout,
         }),
       ),
     ),
@@ -218,7 +221,7 @@ function observationOf(
 function projectionOf(
   fixtureValue: Readonly<Fixture>,
   scope: "projection" | "full",
-  receipts: readonly boolean[],
+  receipts: readonly WorktreeCheckoutObservation[],
 ) {
   return renderActiveProjectionFiles(
     buildActiveProjectionFacts(
@@ -229,8 +232,8 @@ function projectionOf(
 
 test("检出目录此刻在不在不进投影：指纹与页面字节只认回执有没有，full 与 projection 算出同一份", async (t) => {
   const workspace = await fixture(t);
-  const present = projectionOf(workspace, "full", [true]);
-  const checkoutRemoved = projectionOf(workspace, "full", [false]);
+  const present = projectionOf(workspace, "full", ["present"]);
+  const checkoutRemoved = projectionOf(workspace, "full", ["absent"]);
 
   // 工作区外的一次 `git worktree remove` 不是 Wakeflow 变更，没有刷新能修复它带来的 stale。
   equal(checkoutRemoved[0]?.fingerprint, present[0]?.fingerprint);
@@ -240,7 +243,7 @@ test("检出目录此刻在不在不进投影：指纹与页面字节只认回�
   );
 
   // 变更后的刷新用 projection 作用域，status 与 verify 用 full：两边必须算出同一份指纹。
-  equal(projectionOf(workspace, "projection", [false])[0]?.fingerprint, present[0]?.fingerprint);
+  equal(projectionOf(workspace, "projection", ["absent"])[0]?.fingerprint, present[0]?.fingerprint);
 
   // 回执本身是 Wakeflow 的变更写下的事实：有没有回执仍然改变指纹与页面。
   const withoutReceipt = projectionOf(workspace, "full", []);

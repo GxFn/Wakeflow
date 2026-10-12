@@ -21,7 +21,13 @@ import { parseWakeflowHostId } from "../../../src/kernel/layout.js";
 
 /** Claude Code 插件级 hook 片段（gate-log §13.97 D5、D6）：事件集合、exec 形处理器、同步异步、字节稳定与摘要。 */
 
-const EVENTS: readonly ClaudeCodeHookEventName[] = ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"];
+const EVENTS: readonly ClaudeCodeHookEventName[] = [
+  "SessionStart",
+  "UserPromptSubmit",
+  "Notification",
+  "Stop",
+  "SessionEnd",
+];
 // biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
 const PLUGIN_ROOT_PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}";
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Codex 的占位符，本片段不得使用
@@ -103,8 +109,8 @@ function handlerOf(event: ClaudeCodeHookEventName) {
   return handler;
 }
 
-test("片段恰好覆盖四个生命周期事件（键序固定），每个事件一个无 matcher 的组、组里恰好一个 exec 形 command 处理器", () => {
-  // D3/D6：四个事件同名同形；键序是渲染字节的一部分，所以按顺序比较而不是按集合。
+test("片段恰好覆盖五个生命周期事件（键序固定），每个事件一个无 matcher 的组、组里恰好一个 exec 形 command 处理器", () => {
+  // D3/D6：五个事件同名同形（Notification 为 §13.167 A7 所加）；键序是渲染字节的一部分，所以按顺序比较而不是按集合。
   deepEqual(Object.keys(CLAUDE_CODE_HOOK_FRAGMENT.hooks), [...EVENTS]);
   deepEqual(Object.keys(CLAUDE_CODE_HOOK_FRAGMENT), ["hooks"]);
   for (const event of EVENTS) {
@@ -119,14 +125,15 @@ test("片段恰好覆盖四个生命周期事件（键序固定），每个事�
   }
 });
 
-test("同步与异步按 D5：SessionStart 5 秒同步、UserPromptSubmit 异步、Stop 5 秒同步、SessionEnd 3 秒同步；async 键只在异步处理器上出现且键序固定", () => {
+test("同步与异步按 D5：SessionStart 5 秒同步、UserPromptSubmit 与 Notification 异步 5 秒、Stop 5 秒同步、SessionEnd 3 秒同步；async 键只在异步处理器上出现且键序固定", () => {
   equal(handlerOf("SessionStart").timeout, 5);
   equal(handlerOf("UserPromptSubmit").timeout, 5);
+  equal(handlerOf("Notification").timeout, 5);
   equal(handlerOf("Stop").timeout, 5);
   equal(handlerOf("SessionEnd").timeout, 3);
   for (const event of EVENTS) {
     const handler = handlerOf(event);
-    if (event === "UserPromptSubmit") {
+    if (event === "UserPromptSubmit" || event === "Notification") {
       equal(handler.async, true);
       deepEqual(Object.keys(handler), ["type", "command", "args", "async", "timeout"]);
     } else {
@@ -137,7 +144,7 @@ test("同步与异步按 D5：SessionStart 5 秒同步、UserPromptSubmit 异步
   }
 });
 
-test("args 是插件根占位符脚本路径加入口约定的固定 argv，占位符在 args 里由宿主展开，四个事件共用，不含工作区根", () => {
+test("args 是插件根占位符脚本路径加入口约定的固定 argv，占位符在 args 里由宿主展开，五个事件共用，不含工作区根", () => {
   for (const event of EVENTS) {
     deepEqual(handlerOf(event).args, EXPECTED_ARGS, event);
   }

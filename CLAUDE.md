@@ -85,6 +85,16 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   text, or installed rule, update every real producer and consumer plus focused
   regression coverage, then rebuild the artifacts. Do not make documentation
   claim an unimplemented capability.
+- Managed text is admitted by exact body: the workspace `CLAUDE.md`/`AGENTS.md`
+  block, the external instruction blocks, the repository and support
+  `.gitignore` blocks and the support memories. When you change one of their
+  renderers, register the replaced render in
+  `src/workspace/managed-integration/wakeflow-managed-text-history.ts` (its
+  retiring version and a function that recomputes the old body from the same
+  inputs) and update the pinned digests in
+  `tests/workspace/managed-integration/wakeflow-managed-text-history.test.ts`.
+  Changing the digests without registering the old render locks every existing
+  workspace behind `unknown-managed-body`.
 - Keep prompts prioritized and lightweight: prompts state the immediate goal,
   bounded expectations, reading order, required skills, identity, and return
   pointer; task packages hold complete task context; requirement anchors hold

@@ -506,6 +506,74 @@ test("status 不带 demandId：overall、看板计数、Demand、窗口身份、
   assertPrivate(status, healthy.root, [CONTROLLER_HANDLE]);
 });
 
+test("status 的窗口 attention：绑定会话最近一条记录是 Notification 时为 needed 并带类型，之后任何记录把它清成 none，未绑定窗口为 null（A7，§13.167）", {
+  timeout: 120_000,
+}, async () => {
+  const workspace = await createHealthyWorkspace();
+  try {
+    const write = async (
+      event: "notification" | "stop",
+      recordedAt: string,
+      notificationType: string | null,
+    ) => {
+      const rooted = await RootedDirectory.open(workspace.root);
+      try {
+        await writeHostHookObservation(rooted, {
+          hostId: "codex",
+          event,
+          sessionId: CONTROLLER_HANDLE,
+          cwd: workspace.root,
+          recordedAt: parseUtcInstant(recordedAt),
+          notificationType,
+        });
+      } finally {
+        await rooted.close();
+      }
+    };
+    await write("notification", "2026-09-18T08:59:40.000Z", "permission_prompt");
+    const needed = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: workspace.root },
+      CLOCK,
+    );
+    const controller = needed.windows.find(
+      (window) => window.windowId === workspace.controllerWindowId,
+    );
+    deepEqual(plain(controller?.attention), {
+      status: "needed",
+      notificationType: "permission_prompt",
+      recordedAt: "2026-09-18T08:59:40.000Z",
+    });
+    deepEqual(plain(controller?.lastObservation), {
+      event: "notification",
+      recordedAt: "2026-09-18T08:59:40.000Z",
+      observerManifestDigest: null,
+    });
+    equal(
+      needed.windows
+        .filter((window) => window.windowId !== workspace.controllerWindowId)
+        .every((window) => window.attention === null),
+      true,
+      "unbound windows carry no attention state",
+    );
+    await write("stop", "2026-09-18T08:59:50.000Z", null);
+    const cleared = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: workspace.root },
+      CLOCK,
+    );
+    deepEqual(
+      plain(
+        cleared.windows.find((window) => window.windowId === workspace.controllerWindowId)
+          ?.attention,
+      ),
+      { status: "none", notificationType: null, recordedAt: null },
+    );
+  } finally {
+    rmSync(workspace.base, { recursive: true, force: true });
+  }
+});
+
 test("status 带 demandId：附当前 Route，next 来自 Route 且与 nextActions 里该 Demand 的条目一致；未知 demandId 为 not-found", {
   timeout: 120_000,
 }, async () => {

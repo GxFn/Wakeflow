@@ -94,8 +94,8 @@
           "pattern": "^[a-z][a-z0-9-]{0,63}$"
         },
         "receipt": {
-          "enum": ["absent", "present", "checkout-missing"],
-          "description": "absent: no worktree receipt yet; present: receipt admitted and the checkout still exists; checkout-missing: receipt exists but the checkout directory is gone."
+          "enum": ["absent", "present", "checkout-missing", "checkout-unknown"],
+          "description": "absent: no worktree receipt yet; present: receipt admitted and the checkout still exists; checkout-missing: receipt exists but the checkout directory is gone; checkout-unknown: the checkout could not be inspected (permissions, mount, EIO) and is treated as possibly present until it can be."
         },
         "disposal": {
           "description": "Guidance for a checkout that is still present while the pod is closing; null otherwise. Wakeflow never removes worktrees itself.",

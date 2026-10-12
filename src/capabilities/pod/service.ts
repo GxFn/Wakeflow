@@ -42,7 +42,8 @@ import {
   type PodWorktreeReceipt,
   retirePodReceipts,
   retirePodWorktreeReceipt,
-  worktreeCheckoutPresent,
+  observeWorktreeCheckout,
+  type WorktreeCheckoutObservation,
 } from "../../kernel/pod-worktree-receipts.js";
 import {
   type PublicationTransactionEnvelope,
@@ -124,7 +125,7 @@ interface PodFacts {
   readonly bindingIdByWindowId: ReadonlyMap<string, string>;
   readonly receipts: readonly Readonly<{
     readonly receipt: Readonly<PodWorktreeReceipt>;
-    readonly checkoutPresent: boolean;
+    readonly checkout: WorktreeCheckoutObservation;
   }>[];
   readonly state: PodState;
 }
@@ -264,6 +265,15 @@ async function loadBindings(
   }
 }
 
+/** 回执的公开视图（G7）：unknown 以 checkout-unknown 报出，不冒充缺席。 */
+function receiptView(
+  checkout: WorktreeCheckoutObservation | undefined,
+): "absent" | "present" | "checkout-missing" | "checkout-unknown" {
+  if (checkout === undefined) return "absent";
+  if (checkout === "present") return "present";
+  return checkout === "absent" ? "checkout-missing" : "checkout-unknown";
+}
+
 async function loadPodFacts(
   context: PodSliceContext,
   pod: Readonly<WakeflowConfigPod>,
@@ -284,9 +294,7 @@ async function loadPodFacts(
   );
   const receipts = [];
   for (const receipt of stored) {
-    receipts.push(
-      Object.freeze({ receipt, checkoutPresent: await worktreeCheckoutPresent(receipt) }),
-    );
+    receipts.push(Object.freeze({ receipt, checkout: await observeWorktreeCheckout(receipt) }));
   }
   const state = derivePodState({
     pod,
@@ -296,7 +304,7 @@ async function loadPodFacts(
       Object.freeze({
         repositoryId: entry.receipt.repositoryId,
         bindingId: entry.receipt.bindingId,
-        checkoutPresent: entry.checkoutPresent,
+        checkout: entry.checkout,
       }),
     ),
   });
@@ -387,7 +395,10 @@ async function planClose(
     const blockers = deriveCloseCompleteBlockers({
       boundWindowIds: facts.windowIds.filter((id) => facts.bindingIdByWindowId.has(id)),
       presentCheckoutRepositoryIds: facts.receipts
-        .filter((entry) => entry.checkoutPresent)
+        .filter((entry) => entry.checkout === "present")
+        .map((entry) => entry.receipt.repositoryId),
+      unknownCheckoutRepositoryIds: facts.receipts
+        .filter((entry) => entry.checkout === "unknown")
         .map((entry) => entry.receipt.repositoryId),
     });
     if (blockers.length > 0) return blocked(blockers);
@@ -681,7 +692,8 @@ async function recoverPod(context: PodSliceContext, operationId: string): Promis
   let retired = 0;
   for (const entry of facts.receipts) {
     const bound = facts.bindingIdByWindowId.get(entry.receipt.windowId);
-    const stale = !entry.checkoutPresent || bound !== entry.receipt.bindingId;
+    // unknown 不是缺席：无法观察的检出不退役回执（G7）。
+    const stale = entry.checkout === "absent" || bound !== entry.receipt.bindingId;
     if (!stale) continue;
     if (
       await retirePodWorktreeReceipt(
@@ -726,6 +738,7 @@ async function currentViews(context: PodSliceContext, podId: string): Promise<Po
         boundWindowIds: [],
         missingReceiptRepositoryIds: [],
         presentCheckoutRepositoryIds: [],
+        unknownCheckoutRepositoryIds: [],
       }),
     });
   }
@@ -745,11 +758,10 @@ async function currentViews(context: PodSliceContext, podId: string): Promise<Po
       repositoryId: worktree.repositoryId,
       windowId: worktree.windowId,
       suggestedName: worktree.suggestedName,
-      receipt:
-        entry === undefined ? "absent" : entry.checkoutPresent ? "present" : "checkout-missing",
+      receipt: receiptView(entry?.checkout),
       // 关闭中仍在的检出：给 Agent 建议命令与宿主备选（§13.94 D10）；Wakeflow 自己不删。
       disposal:
-        pod.lifecycle === "closing" && entry?.checkoutPresent === true
+        pod.lifecycle === "closing" && entry?.checkout === "present"
           ? worktreeDisposalGuidance(
               fresh.facade.resourceProfile.surfaces.worktree.launch,
               path.relative(fresh.root.absolutePath, entry.receipt.path) || ".",
@@ -773,7 +785,10 @@ async function currentViews(context: PodSliceContext, podId: string): Promise<Po
         )
         .map((worktree) => worktree.repositoryId),
       presentCheckoutRepositoryIds: facts.receipts
-        .filter((entry) => entry.checkoutPresent)
+        .filter((entry) => entry.checkout === "present")
+        .map((entry) => entry.receipt.repositoryId),
+      unknownCheckoutRepositoryIds: facts.receipts
+        .filter((entry) => entry.checkout === "unknown")
         .map((entry) => entry.receipt.repositoryId),
     }),
   });

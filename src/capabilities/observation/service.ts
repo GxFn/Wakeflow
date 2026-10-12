@@ -47,6 +47,7 @@ import {
   type WorkspaceObservation,
   type WorkspaceOverallStatus,
 } from "../../governance/observation/workspace-observation.js";
+import type { WorktreeCheckoutObservation } from "../../kernel/pod-worktree-receipts.js";
 import type { ActiveProjectionTargetInspection } from "../../kernel/active-projection.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
@@ -502,6 +503,29 @@ function lastObservationOf(
       };
 }
 
+/**
+ * 窗口是否在等用户（open-items A7，§13.167）：绑定会话最近一条 hook 记录是 Claude Code 的 Notification
+ * （等待权限、空闲等待、登录或用量提示）时为 needed 并带类型；之后任何一条记录都把它清成 none。
+ * 没有绑定或没有记录为 null。它只说宿主在等人，不说窗口的 MCP 或指令状态。
+ */
+function attentionOf(
+  observation: Readonly<WorkspaceObservation>,
+  binding: WindowBindingView | null,
+) {
+  if (binding === null) return null;
+  const latest = observation.hooks
+    .find((entry) => entry.hostId === binding.hostId)
+    ?.latestBySession.get(binding.handleValue);
+  if (latest === undefined) return null;
+  return latest.event === "notification"
+    ? {
+        status: "needed" as const,
+        notificationType: latest.notificationType,
+        recordedAt: latest.recordedAt,
+      }
+    : { status: "none" as const, notificationType: null, recordedAt: null };
+}
+
 function claimViewOf(observation: Readonly<WorkspaceObservation>, windowId: string) {
   const claim = (observation.claims.value?.claims ?? []).find(
     (entry) => entry.windowId === windowId,
@@ -563,6 +587,7 @@ function windowViews(context: SliceContext) {
       bindingId: binding?.bindingId ?? null,
       claim: claimViewOf(observation, window.windowId),
       lastObservation: lastObservationOf(observation, binding),
+      attention: attentionOf(observation, binding),
       projection: windowProjectionOf(observation, window.windowId),
       runtime: windowRuntimeOf(context, binding, bindingsObserved, installed),
     };
@@ -617,10 +642,10 @@ function podViews(context: SliceContext) {
       const receipt = pod.receipts.find(
         (entry) => entry.receipt.repositoryId === worktree.repositoryId,
       );
-      const present = receipt?.checkoutPresent === true;
+      const present = receipt?.checkout === "present";
       return {
         repositoryId: worktree.repositoryId,
-        receipt: receipt === undefined ? "absent" : present ? "present" : "checkout-missing",
+        receipt: receiptStateView(receipt?.checkout),
         disposal:
           pod.pod.lifecycle === "closing" &&
           present &&
@@ -672,6 +697,15 @@ function repositoryViews(observation: Readonly<WorkspaceObservation>) {
     entries: capped.entries,
     omitted: Object.freeze({ repositories: capped.omitted, worktrees: omitted }),
   });
+}
+
+/** 回执的公开视图（G7）：unknown 以 checkout-unknown 报出，不冒充缺席。 */
+function receiptStateView(
+  checkout: WorktreeCheckoutObservation | undefined,
+): "absent" | "present" | "checkout-missing" | "checkout-unknown" {
+  if (checkout === undefined) return "absent";
+  if (checkout === "present") return "present";
+  return checkout === "absent" ? "checkout-missing" : "checkout-unknown";
 }
 
 function hookViews(observation: Readonly<WorkspaceObservation>) {
@@ -1220,12 +1254,7 @@ async function gateFacts(
         );
         return {
           repositoryId: worktree.repositoryId,
-          receipt:
-            receipt === undefined
-              ? ("absent" as const)
-              : receipt.checkoutPresent
-                ? ("present" as const)
-                : ("checkout-missing" as const),
+          receipt: receiptStateView(receipt?.checkout),
         };
       }),
     })),

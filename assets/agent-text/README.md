@@ -57,7 +57,11 @@ status", "keep going", "open a pod for this".
 2. Make sure your agent host can start `node`: on the `PATH` it launches
    with, or the runtime the host itself supplies (Codex desktop). The plugin's
    tool server and its observation hooks are started as `node`, and a host
-   that cannot find it fails silently.
+   that cannot find it fails silently. Wakeflow needs Node 24.19 or later
+   below 25 (other versions are refused with one line on stderr before
+   anything runs), `git`, and on Claude Code `tmux`; it supports macOS and
+   Linux local file systems, not Windows. Claude Code may be the native
+   binary or the npm-installed `claude` script: both are recognized.
 3. Complete the one-time host actions below.
 4. Open your agent in the directory you want as the workspace and say
    "initialize a Wakeflow workspace". The directory must be a Git repository

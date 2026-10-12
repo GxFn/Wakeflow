@@ -110,7 +110,7 @@ test("状态派生：open 下全部绑定且回执同代检出仍在才 ready；
   const receipt = {
     repositoryId: REPOSITORY_ID,
     bindingId: "b4",
-    checkoutPresent: true,
+    checkout: "present" as const,
   };
   equal(
     derivePodState({ pod, windowIds, bindingIdByWindowId: bound, receipts: [receipt] }),
@@ -139,7 +139,7 @@ test("状态派生：open 下全部绑定且回执同代检出仍在才 ready；
       pod,
       windowIds,
       bindingIdByWindowId: bound,
-      receipts: [{ ...receipt, checkoutPresent: false }],
+      receipts: [{ ...receipt, checkout: "absent" as const }],
     }),
     "creating",
   );
@@ -153,7 +153,7 @@ test("状态派生：open 下全部绑定且回执同代检出仍在才 ready；
       pod: closing,
       windowIds,
       bindingIdByWindowId: new Map(),
-      receipts: [{ ...receipt, checkoutPresent: false }],
+      receipts: [{ ...receipt, checkout: "absent" as const }],
     }),
     "closed",
   );
@@ -273,4 +273,26 @@ test("两段关闭的阻塞项与 next：primary 不可关，活动 Demand 与�
     }).frontier,
     null,
   );
+});
+
+test("无法观察的检出（G7）：关闭阻塞 worktree-checkout-unknown，next 交给用户；present 仍交给 Controller 处置", () => {
+  deepEqual(
+    deriveCloseCompleteBlockers({
+      boundWindowIds: [],
+      presentCheckoutRepositoryIds: [],
+      unknownCheckoutRepositoryIds: ["repository_unknown"],
+    }),
+    ["worktree-checkout-unknown:repository_unknown"],
+  );
+  const next = podMutationNext({
+    state: "closing",
+    unboundWindowIds: [],
+    boundWindowIds: [],
+    missingReceiptRepositoryIds: [],
+    presentCheckoutRepositoryIds: [],
+    unknownCheckoutRepositoryIds: ["repository_unknown"],
+  });
+  equal(next.frontier, "pod-worktree-disposal");
+  equal(next.owner, "user");
+  deepEqual(next.blockers, ["worktree-checkout-unknown:repository_unknown"]);
 });

@@ -697,6 +697,46 @@ test("可选字段降级：turn_id 含空格、transcript_path 超长或含控�
   equal(find("session-exact", "session-start")?.transcriptRef, exactTranscript);
 });
 
+test("Notification 只记类型：notification_type 合文法时落地为 notificationType，不合文法降级为 null，message 与 title 从不进入记录（A7，§13.167）", async (t) => {
+  const fixture = createFixture(t);
+  const sessionId = SESSION_IDS["claude-code"];
+  writeBinding(fixture.workspace, "claude-code", sessionId);
+  const typed = await observe(
+    "claude-code",
+    hookPayload("Notification", sessionId, fixture.workspace, fixture.transcriptPath, {
+      notification_type: "permission_prompt",
+      message: "Claude needs your permission to use Bash",
+      title: "Permission needed",
+    }),
+  );
+  equal(typed.code, null);
+  deepEqual(writtenRoots(typed), [fixture.workspace]);
+  const untyped = await observe(
+    "claude-code",
+    hookPayload("Notification", sessionId, fixture.workspace, fixture.transcriptPath, {
+      notification_type: "not a label!",
+      message: "Waiting for your input",
+    }),
+  );
+  equal(untyped.code, null);
+  deepEqual(writtenRoots(untyped), [fixture.workspace]);
+  const inventory = await readBack(fixture.workspace, "claude-code");
+  const notifications = inventory.records.filter((record) => record.event === "notification");
+  equal(notifications.length, 2);
+  deepEqual(
+    new Set(notifications.map((record) => record.notificationType)),
+    new Set([null, "permission_prompt"]),
+  );
+  for (const record of notifications) {
+    equal(record.promptDigest, null);
+    equal(record.lastAssistantMessageDigest, null);
+  }
+  const rendered = JSON.stringify(inventory.records);
+  equal(rendered.includes("permission to use Bash"), false);
+  equal(rendered.includes("Permission needed"), false);
+  equal(rendered.includes("Waiting for your input"), false);
+});
+
 test("写失败：观察目录被普通文件顶替的工作区报 write-failed，其他匹配工作区照写，顶替的文件原样保留", async (t) => {
   const fixture = createFixture(t);
   const second = createWorkspace(fixture.base, "Wakeflow-2");
@@ -786,6 +826,7 @@ const STDERR_CODES: readonly HookObserverStderrCode[] = Object.freeze([
   "write-failed",
   "internal",
   "launcher",
+  "node-version",
 ]);
 const STDERR_VOCABULARY: ReadonlySet<string> = new Set<string>(STDERR_CODES);
 const FIXED_CODE_LINE = /^wakeflow-hook-observer: ([a-z-]+)\n$/u;

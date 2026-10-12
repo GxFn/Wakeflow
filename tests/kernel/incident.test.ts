@@ -97,6 +97,7 @@ test("事故记录：0600 的 JSON，带公开错误细节、cause 链的结构�
     kind: "WakeflowIncident",
     recordedAt: "2026-10-10T01:02:03.456Z",
     requestKeys: ["demandId", "mode", "root"],
+    resource: null,
     schemaVersion: 1,
     source: "mcp-tool",
     tool: "wakeflow_complete_demand",

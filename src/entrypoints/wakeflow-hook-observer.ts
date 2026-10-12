@@ -31,7 +31,8 @@ import { computePromptDigest } from "../kernel/prompt-digest.js";
 /**
  * Wakeflow Entrypoint / Hook Observer：两宿主生命周期 hook 的观察脚本（gate-log §13.97 D1–D4）。
  *
- * 宿主在 `SessionStart`、`UserPromptSubmit`、`Stop`、`SessionEnd` 时按插件级 hook 配置启动本入口：
+ * 宿主在 `SessionStart`、`UserPromptSubmit`、`Stop`、`SessionEnd`（Claude Code 还有 `Notification`，
+ * open-items A7，§13.167）时按插件级 hook 配置启动本入口：
  * stdin 是宿主的 hook JSON，argv 只带固定标记与 `--host <codex | claude-code>`，`--host` 只供给写进
  * 记录的 `hostId`，字段映射在两宿主间完全同形。工作区按声明拓扑定位（D2）：锚点是会话 cwd
  * （cwd 已删除时用 `CLAUDE_PROJECT_DIR`）与 worktree 指针指向的主仓库；候选根是锚点及其至多 8 级
@@ -66,10 +67,11 @@ export type HookObserverCode =
 
 /**
  * stderr 上的完整代码词汇表（D4、D10）：纯函数入口的闭集，加上只有制品 launcher 会打的
- * `launcher`（动态 import 失败或入口缺 `main`）。进程级守卫（未捕获异常、未处理拒绝）打的是
+ * `launcher`（动态 import 失败或入口缺 `main`）与 `node-version`（Node 不在 contracts 声明的引擎范围内，
+ * 观察器根本没被 import，A6）。进程级守卫（未捕获异常、未处理拒绝）打的是
  * 闭集里的 `internal`，与纯函数入口的内部故障同一个代码——用户与验证门看到的是这一个词汇表。
  */
-export type HookObserverStderrCode = HookObserverCode | "launcher";
+export type HookObserverStderrCode = HookObserverCode | "launcher" | "node-version";
 
 export interface HookObserverInput {
   readonly argv: readonly string[];
@@ -103,6 +105,8 @@ interface HookPayload {
   readonly prompt: string | null;
   readonly lastAssistantMessage: string | null;
   readonly turnId: string | null;
+  /** Claude Code `Notification` 的 `notification_type`；只记类型，消息文本从不进入记录（A7）。 */
+  readonly notificationType: string | null;
 }
 
 interface Subject {
@@ -123,6 +127,7 @@ const HOST_EVENTS: ReadonlyMap<string, HostHookEvent> = new Map<string, HostHook
   ["UserPromptSubmit", "user-prompt-submit"],
   ["Stop", "stop"],
   ["SessionEnd", "session-end"],
+  ["Notification", "notification"],
 ]);
 const WAKEFLOW_CONFIG_FILE_NAME = "wakeflow.config.json";
 const GIT_ENTRY_NAME = ".git";
@@ -228,6 +233,7 @@ function parsePayload(stdin: unknown): Parsed<HookPayload> {
       prompt: optionalString(object.prompt),
       lastAssistantMessage: optionalString(object.last_assistant_message),
       turnId: optionalString(object.turn_id) ?? optionalString(object.prompt_id),
+      notificationType: optionalString(object.notification_type),
     }),
   );
 }
@@ -310,17 +316,30 @@ function requiredInput(
  */
 function degradeToKernel(
   required: Readonly<HostHookObservationInput>,
-  field: "turnId" | "transcriptRef",
+  field: "turnId" | "transcriptRef" | "notificationType",
   value: string | null,
 ): string | null {
   if (value === null) return null;
   try {
-    createHostHookObservation(
-      field === "turnId" ? { ...required, turnId: value } : { ...required, transcriptRef: value },
-    );
+    createHostHookObservation(withOptionalField(required, field, value));
     return value;
   } catch {
     return null;
+  }
+}
+
+function withOptionalField(
+  required: Readonly<HostHookObservationInput>,
+  field: "turnId" | "transcriptRef" | "notificationType",
+  value: string,
+): Readonly<HostHookObservationInput> {
+  switch (field) {
+    case "turnId":
+      return { ...required, turnId: value };
+    case "transcriptRef":
+      return { ...required, transcriptRef: value };
+    default:
+      return { ...required, notificationType: value };
   }
 }
 
@@ -341,6 +360,10 @@ function recordInput(
     promptDigest: event === "user-prompt-submit" ? promptDigest(hostId, payload.prompt) : null,
     lastAssistantMessageDigest: event === "stop" ? textDigest(payload.lastAssistantMessage) : null,
     transcriptRef: degradeToKernel(required, "transcriptRef", payload.transcriptPath),
+    notificationType:
+      event === "notification"
+        ? degradeToKernel(required, "notificationType", payload.notificationType)
+        : null,
   });
 }
 

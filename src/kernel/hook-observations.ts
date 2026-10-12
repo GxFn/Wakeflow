@@ -84,6 +84,7 @@ export const HOST_HOOK_EVENTS = Object.freeze([
   "stop",
   "session-end",
   "turn-complete",
+  "notification",
 ] as const);
 
 export type HostHookEvent = (typeof HOST_HOOK_EVENTS)[number];
@@ -108,6 +109,11 @@ export interface HostHookObservation {
    * 早于本字段的记录没有它，读成 null。
    */
   readonly artifactManifestDigest: Sha256Digest | null;
+  /**
+   * Notification 事件带的宿主通知类型（open-items A7，§13.167）：等待权限、空闲等待、登录或用量提示等
+   * 阻塞状态只记类型标签，不记消息文本；其他事件与早于本字段的记录读成 null。
+   */
+  readonly notificationType: string | null;
 }
 
 export interface HostHookObservationInput {
@@ -121,6 +127,7 @@ export interface HostHookObservationInput {
   readonly lastAssistantMessageDigest?: Sha256Digest | null;
   readonly transcriptRef?: string | null;
   readonly artifactManifestDigest?: Sha256Digest | null;
+  readonly notificationType?: string | null;
 }
 
 export interface HostHookObservationFilter {
@@ -153,6 +160,8 @@ export interface HostHookObservationInventory {
 
 const RECORD_KIND = "WakeflowHostHookObservation";
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{1,256}$/u;
+/** Notification 类型标签：Claude Code 的 `permission_prompt`、`idle_prompt` 一类 snake_case 词（§13.167）。 */
+const NOTIFICATION_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
 const CWD_MAXIMUM_LENGTH = 4096;
 
 function hasControlCharacter(text: string): boolean {
@@ -197,8 +206,8 @@ const RECORD_KEYS = Object.freeze([
   "lastAssistantMessageDigest",
   "transcriptRef",
 ]);
-/** 后加的可选键：旧记录没有它也合法（§13.127）。 */
-const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest"]);
+/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167）。 */
+const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest", "notificationType"]);
 
 /**
  * 条目若是本写入器自己那种原子暂存文件（§13.134 B12），返回它的暂存地址，否则返回 `null`：普通
@@ -244,6 +253,14 @@ function optionalIdentifier(value: unknown, path: string): string | null {
   return value === null || value === undefined ? null : identifier(value, path);
 }
 
+function optionalNotificationType(value: unknown, path: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string" || !NOTIFICATION_TYPE_PATTERN.test(value)) {
+    fail("invalid-request", "hook-notification-type", path);
+  }
+  return value;
+}
+
 function optionalDigest(value: unknown, path: string): Sha256Digest | null {
   return value === null || value === undefined ? null : parseSha256Digest(value, path);
 }
@@ -287,9 +304,15 @@ function millisecondInstant(value: unknown, path: string): UtcInstant {
   return instant;
 }
 
-/** 由宿主、事件、会话、时间与 turn 派生记录标识：hook 重复触发不会造出第二条记录。 */
+/**
+ * 由宿主、事件、会话、时间与 turn 派生记录标识：hook 重复触发不会造出第二条记录。Notification 的类型
+ * 只在非 null 时参与（§13.167）：同一毫秒的两种通知是两条记录，早于该字段的记录标识不变。
+ */
 function deriveHostHookObservationId(
-  input: Pick<HostHookObservation, "hostId" | "event" | "sessionId" | "recordedAt" | "turnId">,
+  input: Pick<
+    HostHookObservation,
+    "hostId" | "event" | "sessionId" | "recordedAt" | "turnId" | "notificationType"
+  >,
 ): string {
   return deriveUuidV4(
     "wakeflow-host-hook-observation",
@@ -298,6 +321,7 @@ function deriveHostHookObservationId(
     input.sessionId,
     input.recordedAt,
     input.turnId ?? "",
+    ...(input.notificationType === null ? [] : [input.notificationType]),
   );
 }
 
@@ -326,6 +350,10 @@ export function createHostHookObservation(
     artifactManifestDigest: optionalDigest(
       input.artifactManifestDigest,
       "$observation.artifactManifestDigest",
+    ),
+    notificationType: optionalNotificationType(
+      input.notificationType,
+      "$observation.notificationType",
     ),
   };
   return Object.freeze({
@@ -363,6 +391,7 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
     lastAssistantMessageDigest: object.lastAssistantMessageDigest as Sha256Digest | null,
     transcriptRef: object.transcriptRef as string | null,
     artifactManifestDigest: (object.artifactManifestDigest ?? null) as Sha256Digest | null,
+    notificationType: (object.notificationType ?? null) as string | null,
   });
   if (record.recordId !== object.recordId) {
     fail("invalid-request", "hook-record-id", "$record.recordId");

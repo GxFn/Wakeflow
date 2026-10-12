@@ -46,6 +46,10 @@ import {
   type WakeflowManagedTextAuthorityTransition,
 } from "./wakeflow-managed-text-authority-transition.js";
 import {
+  historicalWakeflowManagedTextTargets,
+  WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY,
+} from "./wakeflow-managed-text-history.js";
+import {
   createWakeflowProgramInstructionBodyAuthority,
   WakeflowProgramInstructionBodyAuthorityError,
   type WakeflowProgramInstructionBodyAuthority,
@@ -462,9 +466,18 @@ export async function inspectWakeflowProgramInstruction(
     transition = planWakeflowManagedTextAuthorityTransition(
       read?.bytes ?? new Uint8Array(),
       {
+        // C5（§13.167）：前序渲染作为额外 current 目标准入，旧正文被重组为当前渲染而不是阻塞。
         currentTargets: currentAuthority === null
           ? []
-          : [currentAuthority.envelopeTarget],
+          : [
+              currentAuthority.envelopeTarget,
+              ...historicalWakeflowManagedTextTargets(
+                WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY,
+                currentAuthority.envelopeTarget,
+                request.currentConfig,
+                request.profile,
+              ),
+            ],
         desiredTarget: desiredAuthority.envelopeTarget,
       },
     );

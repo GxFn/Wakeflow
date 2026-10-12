@@ -21,6 +21,8 @@ import {
   type RuntimeDependencyPackage,
 } from "./plugin-dependency-closure.js";
 import {
+  parsePluginNodeEngineBounds,
+  PLUGIN_ENGINES_NODE,
   PLUGIN_NAME,
   pluginDirectoryName,
   pluginManifestPath,
@@ -509,6 +511,28 @@ function compiledArtifactBytes(source: Buffer): Buffer {
 const GENERATED_FILE_NOTICE = "// 此文件由 Wakeflow 插件制品构建器生成，禁止手工修改。";
 
 /**
+ * 两个 launcher 顶部的 Node 版本守卫（open-items A6，§13.167）：范围是 `PLUGIN_ENGINES_NODE`（制品测试核对它与 contracts 的声明一致）；
+ * 不在范围内时不 import 任何业务模块——范围外的 Node 会在错误处理路径深处才失败，用户只看到误导的消息。
+ * 生成的是纯数字比较，launcher 里不依赖 semver。
+ */
+function nodeVersionGuardLines(): readonly string[] {
+  const bounds = parsePluginNodeEngineBounds(PLUGIN_ENGINES_NODE);
+  const [major, minor, patch] = bounds.minimum;
+  return [
+    `const WAKEFLOW_NODE_ENGINES = ${JSON.stringify(PLUGIN_ENGINES_NODE)};`,
+    "function wakeflowNodeSupported() {",
+    "  const parts = /^v?(\\d+)\\.(\\d+)\\.(\\d+)/u.exec(process.versions.node);",
+    "  if (parts === null) return false;",
+    "  const [major, minor, patch] = [Number(parts[1]), Number(parts[2]), Number(parts[3])];",
+    `  if (major >= ${bounds.exclusiveMajor}) return false;`,
+    `  if (major !== ${major}) return major > ${major};`,
+    `  if (minor !== ${minor}) return minor > ${minor};`,
+    `  return patch >= ${patch};`,
+    "}",
+  ];
+}
+
+/**
  * MCP server 的 launcher（§13.166 G10）：与 hook launcher 对称地带进程守卫——未捕获异常、未处理拒绝
  * 与动态 import 失败都只向 stderr 打一行带事故 id 与错误名的固定文本，不打消息、堆栈或路径，然后以
  * 非 0 退出；不带守卫时 Node 默认处理器会打出带绝对路径的堆栈。组合根仍以版本参数启动。
@@ -519,6 +543,15 @@ function mcpLauncherBytes(launcher: Readonly<LauncherDefinition>, version: strin
       "#!/usr/bin/env node",
       GENERATED_FILE_NOTICE,
       'import { randomUUID } from "node:crypto";',
+      ...nodeVersionGuardLines(),
+      "if (!wakeflowNodeSupported()) {",
+      "  try {",
+      '    process.stderr.write("wakeflow: node " + process.versions.node + " is outside the supported range " + WAKEFLOW_NODE_ENGINES + "\\n");',
+      "  } catch {",
+      "    // stderr 不可用时退出码仍说明问题。",
+      "  }",
+      "  process.exit(1);",
+      "}",
       "let reported = false;",
       "function reportIncident(stage, error) {",
       "  if (reported) return;",
@@ -583,13 +616,19 @@ function hookObserverLauncherBytes(launcher: Readonly<LauncherDefinition>): Buff
       "}",
       'process.on("uncaughtException", launcherGuard);',
       'process.on("unhandledRejection", launcherGuard);',
-      "try {",
-      `  const observer = await import(${JSON.stringify(`../lib/${launcher.entrypoint}`)});`,
-      `  if (typeof observer.${runExport} !== "function") throw new TypeError(${JSON.stringify(runExport)});`,
-      "  removeLauncherGuards();",
-      `  await observer.${runExport}();`,
-      "} catch {",
-      '  reportFixedCode("launcher");',
+      ...nodeVersionGuardLines(),
+      "// 范围外的 Node 只打一行固定代码（D4 的词汇表里有 node-version），不 import 观察器，退出码仍为 0。",
+      "if (!wakeflowNodeSupported()) {",
+      '  reportFixedCode("node-version");',
+      "} else {",
+      "  try {",
+      `    const observer = await import(${JSON.stringify(`../lib/${launcher.entrypoint}`)});`,
+      `    if (typeof observer.${runExport} !== "function") throw new TypeError(${JSON.stringify(runExport)});`,
+      "    removeLauncherGuards();",
+      `    await observer.${runExport}();`,
+      "  } catch {",
+      '    reportFixedCode("launcher");',
+      "  }",
       "}",
       "process.exitCode = 0;",
       "",

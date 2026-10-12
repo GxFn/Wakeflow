@@ -186,6 +186,43 @@ interface LockCandidate {
 
 const ISSUED_LOCK_OBSERVATIONS = new WeakSet<object>();
 const ACTIVE_LOCK_TOKENS = new Set<string>();
+
+export interface RootedExclusiveFileLockReleaseFailure {
+  readonly root: RootedDirectory;
+  readonly lockPath: PortableResourcePath;
+  readonly error: RootedExclusiveFileLockError;
+}
+
+export type RootedExclusiveFileLockReleaseFailureReporter = (
+  failure: Readonly<RootedExclusiveFileLockReleaseFailure>,
+) => void;
+
+let releaseFailureReporter: RootedExclusiveFileLockReleaseFailureReporter | null = null;
+
+/**
+ * 组合根登记一次的旁路报告者（open-items B10，§13.167）：临界区成功之后锁释放失败时，结果照常
+ * 返回、残留交给报告者（入口把它写成事故记录）；没有报告者时沿用抛出。临界区本身失败时，释放
+ * 失败从不覆盖它——操作的错误才是结局。
+ */
+export function setRootedExclusiveFileLockReleaseFailureReporter(
+  reporter: RootedExclusiveFileLockReleaseFailureReporter | null,
+): void {
+  releaseFailureReporter = reporter;
+}
+
+function reportReleaseFailure(
+  root: RootedDirectory,
+  lockPath: PortableResourcePath,
+  error: RootedExclusiveFileLockError,
+): boolean {
+  if (releaseFailureReporter === null) return false;
+  try {
+    releaseFailureReporter(Object.freeze({ root, lockPath, error }));
+  } catch {
+    // 报告者不得改变临界区的结局。
+  }
+  return true;
+}
 const LOCK_REGISTRY_ID = createUuidV4();
 const LOCK_RECORD_FIELDS = Object.freeze([
   "kind",
@@ -837,9 +874,29 @@ export async function withRootedExclusiveFileLock<Result>(
   assertRoot(root);
   assertOperation<Result>(operation);
   const lease = await acquireRootedExclusiveFileLock(root, lockPath, options);
+  let result: Result;
   try {
-    return await operation();
-  } finally {
-    await lease.release();
+    result = await operation();
+  } catch (error: unknown) {
+    try {
+      await lease.release();
+    } catch (releaseError: unknown) {
+      if (releaseError instanceof RootedExclusiveFileLockError) {
+        reportReleaseFailure(root, lockPath, releaseError);
+      }
+    }
+    throw error;
   }
+  try {
+    await lease.release();
+  } catch (releaseError: unknown) {
+    if (
+      releaseError instanceof RootedExclusiveFileLockError &&
+      reportReleaseFailure(root, lockPath, releaseError)
+    ) {
+      return result;
+    }
+    throw releaseError;
+  }
+  return result;
 }

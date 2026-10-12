@@ -81,6 +81,10 @@ import {
   recomposeWakeflowManagedBlockFile,
   WakeflowManagedBlockFileError,
 } from "../managed-integration/wakeflow-managed-block-file.js";
+import {
+  historicalWakeflowManagedTextTargets,
+  WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY,
+} from "../managed-integration/wakeflow-managed-text-history.js";
 import { createWakeflowProgramInstructionBodyAuthority } from "../managed-integration/wakeflow-program-instruction-body-authority.js";
 import {
   recomposeWakeflowProgramInstruction,
@@ -1065,7 +1069,14 @@ async function executeSupportGitignore(
       supportRoot,
       {
         resourcePath: WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
-        currentTargets: [authority.envelopeTarget],
+        currentTargets: [
+          authority.envelopeTarget,
+          ...historicalWakeflowManagedTextTargets(
+            WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY,
+            authority.envelopeTarget,
+            request.hostProfiles,
+          ),
+        ],
         desiredTarget: authority.envelopeTarget,
         ...(signal === undefined ? {} : { signal }),
       },

@@ -20,7 +20,7 @@ import { fail } from "./error.js";
 import { hostHookObservationsRootRef } from "./layout.js";
 
 export const HOST_HOOK_FILE_NAME_PATTERN =
-  /^(\d{8}T\d{9}Z)-(session-start|user-prompt-submit|stop|session-end|turn-complete)-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
+  /^(\d{8}T\d{9}Z)-(session-start|user-prompt-submit|stop|session-end|turn-complete|notification)-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
 
 /** New files partition by UTC day and record digest prefix; old flat files stay readable. */
 export function partitionedHostHookRef(

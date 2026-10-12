@@ -719,6 +719,7 @@
         "bindingId",
         "claim",
         "lastObservation",
+        "attention",
         "projection",
         "runtime"
       ],
@@ -815,7 +816,8 @@
                     "user-prompt-submit",
                     "stop",
                     "session-end",
-                    "turn-complete"
+                    "turn-complete",
+                    "notification"
                   ]
                 },
                 "recordedAt": {
@@ -831,6 +833,45 @@
                     }
                   ],
                   "description": "Manifest read by the hook observer; not the bound MCP process identity."
+                }
+              }
+            }
+          ]
+        },
+        "attention": {
+          "description": "Whether the host is waiting for the user in this window (open-items A7): needed when the bound session's latest hook record is a Claude Code Notification, with the host's notification type (permission prompt, idle prompt, login or usage limit); none once a later record superseded it; null without a binding or any record. Says nothing about the window's MCP or instruction state.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "notificationType", "recordedAt"],
+              "properties": {
+                "status": {
+                  "enum": ["needed", "none"]
+                },
+                "notificationType": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                    }
+                  ]
+                },
+                "recordedAt": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/$defs/utcInstant"
+                    }
+                  ]
                 }
               }
             }
@@ -969,7 +1010,7 @@
                 "$ref": "#/$defs/repositoryId"
               },
               "receipt": {
-                "enum": ["absent", "present", "checkout-missing"]
+                "enum": ["absent", "present", "checkout-missing", "checkout-unknown"]
               },
               "disposal": {
                 "oneOf": [

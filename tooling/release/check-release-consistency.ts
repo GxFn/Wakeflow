@@ -3,6 +3,7 @@ import { lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  parsePluginNodeEngineBounds,
   PLUGIN_ENGINES_NODE,
   PLUGIN_NAME,
   isReleaseSeries,
@@ -30,7 +31,6 @@ import { isMainModule } from "../main-module.js";
 const CLAUDE_MARKETPLACE_PATH = ".claude-plugin/marketplace.json";
 const MANIFEST_FILE = "artifact-manifest.json";
 const MAXIMUM_JSON_BYTES = 8 * 1024 * 1024;
-const ENGINES_PATTERN = /^>=(\d+)\.(\d+)\.(\d+) <(\d+)$/u;
 
 export interface ReleaseCheckOptions {
   readonly requireMain?: boolean;
@@ -191,8 +191,7 @@ function collectVersionSources(
 }
 
 function checkEngines(repositoryRoot: string, committedRoot: string, nodeVersion: string): void {
-  const bounds = ENGINES_PATTERN.exec(PLUGIN_ENGINES_NODE);
-  if (bounds === null) fail("wakeflow-release-engines", "the plugin engines range is malformed");
+  const bounds = parsePluginNodeEngineBounds(PLUGIN_ENGINES_NODE);
   const relativeCommitted = path.relative(repositoryRoot, committedRoot).split(path.sep).join("/");
   for (const relative of [
     "package.json",
@@ -212,10 +211,8 @@ function checkEngines(repositoryRoot: string, committedRoot: string, nodeVersion
   const major = Number.parseInt(running[1] ?? "", 10);
   const minor = Number.parseInt(running[2] ?? "", 10);
   const patch = Number.parseInt(running[3] ?? "", 10);
-  const minimumMajor = Number.parseInt(bounds[1] ?? "", 10);
-  const minimumMinor = Number.parseInt(bounds[2] ?? "", 10);
-  const minimumPatch = Number.parseInt(bounds[3] ?? "", 10);
-  const exclusiveMajor = Number.parseInt(bounds[4] ?? "", 10);
+  const [minimumMajor, minimumMinor, minimumPatch] = bounds.minimum;
+  const exclusiveMajor = bounds.exclusiveMajor;
   const atLeastMinimum =
     major > minimumMajor ||
     (major === minimumMajor &&

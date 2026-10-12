@@ -332,7 +332,7 @@ export interface WorkspaceGateFacts {
     readonly state: "creating" | "ready" | "closing" | "closed" | "unobserved";
     readonly worktrees: readonly Readonly<{
       readonly repositoryId: string;
-      readonly receipt: "absent" | "present" | "checkout-missing";
+      readonly receipt: "absent" | "present" | "checkout-missing" | "checkout-unknown";
     }>[];
   }>[];
   /** primary pod 的仓库根 `.git` 是否都是目录（主检出）；仓库未观察为 null。 */

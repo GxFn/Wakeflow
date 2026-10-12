@@ -39,6 +39,10 @@ import {
   type WakeflowManagedBlockFileRequest,
 } from "./wakeflow-managed-block-file.js";
 import type { WakeflowManagedTextAuthorityTransition } from "./wakeflow-managed-text-authority-transition.js";
+import {
+  historicalWakeflowManagedTextTargets,
+  WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
+} from "./wakeflow-managed-text-history.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：外部根托管块的只读文件检查。
@@ -333,9 +337,19 @@ export function wakeflowExternalInstructionManagedBlockFileRequest(
 ): WakeflowManagedBlockFileRequest {
   return {
     resourcePath: request.profile.instructionFileName,
+    // C5（§13.167）：前序渲染作为额外 current 目标准入。
     currentTargets: authorities.currentAuthority === null
       ? []
-      : [authorities.currentAuthority.envelopeTarget],
+      : [
+          authorities.currentAuthority.envelopeTarget,
+          ...historicalWakeflowManagedTextTargets(
+            WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
+            authorities.currentAuthority.envelopeTarget,
+            request.currentConfig,
+            request.profile,
+            request.target,
+          ),
+        ],
     desiredTarget: authorities.desiredAuthority.envelopeTarget,
     maximumBytes: WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES,
     ...(signal === undefined ? {} : { signal }),

@@ -44,7 +44,10 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 1. 为你的 Agent 宿主安装插件。
 2. 确认 Agent 宿主能启动 `node`：在它启动时所用的 `PATH` 上，或由宿主自带
    （Codex 桌面应用）。插件的工具服务与观察 hook 都以 `node` 启动，找不到它时
-   会静默失败。
+   会静默失败。Wakeflow 需要 Node 24.19 及以上、低于 25 的版本（其他版本在任何
+   代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux`；
+   支持 macOS 与 Linux 的本地文件系统，不支持 Windows。Claude Code 可以是原生
+   二进制，也可以是 npm 安装的 `claude` 脚本，两者都能识别。
 3. 完成下面这一节的一次性宿主动作。
 4. 在你想作为工作区的目录里打开 Agent，说"初始化一个 Wakeflow 工作区"。该目录
    本身必须是一个 Git 仓库（不是时 Agent 会提出替你在那里 `git init`；Wakeflow 靠

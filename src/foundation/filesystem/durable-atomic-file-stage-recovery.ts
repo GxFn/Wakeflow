@@ -71,6 +71,12 @@ export interface DurableAtomicFileStageRecoveryReceipt {
   readonly settledTargetCount: number;
   readonly activeStageCount: number;
   readonly unknownStageCount: number;
+  /**
+   * 带暂存前缀却不是本协议暂存文件的条目数（名字不合法、节点种类或模式不对、不属于当前用户）：
+   * 只有按目标匹配的写前恢复会跳过并计数它们（open-items B13，§13.167），目录级与闭合集合的恢复
+   * 仍把它们当作损坏拒绝。
+   */
+  readonly unrecognizedEntryCount: number;
 }
 
 export type DurableAtomicFileStageRecoveryErrorReason =
@@ -317,10 +323,17 @@ async function readDirectory(
   }
 }
 
+/**
+ * 收集目录里的协议暂存条目。`tolerateUnrecognized` 为 true 时（按目标匹配的写前恢复），名字不合法
+ * 或节点不合策略的带前缀条目只计数、不参与恢复——它们不是本次写入的暂存，也挡不住一次新建的
+ * 暂存随后链接到目标（open-items B13）；为 false 时沿用严格拒绝。
+ */
 function collectStages(
   directory: Readonly<StableDirectoryReadResult>,
-): readonly Readonly<StageEntry>[] {
+  tolerateUnrecognized: boolean,
+): Readonly<{ stages: readonly Readonly<StageEntry>[]; unrecognizedEntryCount: number }> {
   const stages: StageEntry[] = [];
+  let unrecognizedEntryCount = 0;
   for (const [index, entry] of directory.entries.entries()) {
     if (!hasDurableAtomicFileStagePrefix(entry.name)) continue;
     let address: Readonly<DurableAtomicFileStageAddress>;
@@ -328,15 +341,27 @@ function collectStages(
       address = parseDurableAtomicFileStageFileName(entry.name);
     } catch (error: unknown) {
       if (error instanceof DurableAtomicFileStageAddressError) {
+        if (tolerateUnrecognized) {
+          unrecognizedEntryCount += 1;
+          continue;
+        }
         fail("inventory", `$stages/${index}`);
       }
       throw error;
     }
     const stage = Object.freeze({ address, entry });
-    assertStageNode(stage, index);
+    try {
+      assertStageNode(stage, index);
+    } catch (error: unknown) {
+      if (tolerateUnrecognized && error instanceof DurableAtomicFileStageRecoveryError) {
+        unrecognizedEntryCount += 1;
+        continue;
+      }
+      throw error;
+    }
     stages.push(stage);
   }
-  return Object.freeze(stages);
+  return Object.freeze({ stages: Object.freeze(stages), unrecognizedEntryCount });
 }
 
 function indexTargetsByDigest(
@@ -443,9 +468,11 @@ async function recoverDirectoryStages(
   signal: AbortSignal | undefined,
   targetDigests: ReadonlySet<Sha256Digest> | null,
   foreignStagePolicy: "ignore" | "reject",
+  tolerateUnrecognized = false,
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
   const directory = await readDirectory(root, directoryResourcePath, signal);
-  const observedStages = collectStages(directory);
+  const collected = collectStages(directory, tolerateUnrecognized);
+  const observedStages = collected.stages;
   if (
     targetDigests !== null
     && foreignStagePolicy === "reject"
@@ -496,6 +523,7 @@ async function recoverDirectoryStages(
     settledTargetCount,
     activeStageCount,
     unknownStageCount,
+    unrecognizedEntryCount: collected.unrecognizedEntryCount,
   });
 }
 
@@ -554,5 +582,6 @@ export async function recoverDurableAtomicFileStagesMatchingTargets(
     signal,
     scope.targetDigests,
     "ignore",
+    true,
   );
 }

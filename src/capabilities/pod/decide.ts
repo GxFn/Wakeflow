@@ -161,6 +161,8 @@ export function deriveCloseRequestBlockers(
 export interface CloseCompleteBlockerInput {
   readonly boundWindowIds: readonly string[];
   readonly presentCheckoutRepositoryIds: readonly string[];
+  /** 无法观察的检出（G7）：既不能当作还在，也不能当作已删，关闭阻塞直到能看清。 */
+  readonly unknownCheckoutRepositoryIds?: readonly string[];
 }
 
 /** 第二段关闭：全部窗口绑定已退役；每个检出目录已不存在（处置由 Agent 以宿主手段完成）。 */
@@ -170,6 +172,9 @@ export function deriveCloseCompleteBlockers(
   return Object.freeze([
     ...input.boundWindowIds.map((windowId) => `window-bound:${windowId}`),
     ...input.presentCheckoutRepositoryIds.map((repositoryId) => `worktree-present:${repositoryId}`),
+    ...(input.unknownCheckoutRepositoryIds ?? []).map(
+      (repositoryId) => `worktree-checkout-unknown:${repositoryId}`,
+    ),
   ]);
 }
 
@@ -208,6 +213,8 @@ export interface PodNextInput {
   readonly boundWindowIds: readonly string[];
   readonly missingReceiptRepositoryIds: readonly string[];
   readonly presentCheckoutRepositoryIds: readonly string[];
+  /** 无法观察的检出（G7）：关闭在用户让它可读之前不能继续。 */
+  readonly unknownCheckoutRepositoryIds?: readonly string[];
 }
 
 /** 变更后的 next：创建后登记窗口，closing 先退役窗口再处置检出，都清了回到 close。 */
@@ -249,6 +256,16 @@ export function podMutationNext(input: Readonly<PodNextInput>): Readonly<NextPro
       blockers: Object.freeze(
         input.presentCheckoutRepositoryIds.map((id) => `worktree-present:${id}`).slice(0, 32),
       ),
+    });
+  }
+  const unknown = input.unknownCheckoutRepositoryIds ?? [];
+  if (unknown.length > 0) {
+    // 无法观察的检出（G7）：用户先让它可读（权限、挂载、TCC），Controller 才能继续关闭。
+    return Object.freeze({
+      frontier: "pod-worktree-disposal",
+      owner: "user",
+      suggestedTool: null,
+      blockers: Object.freeze(unknown.map((id) => `worktree-checkout-unknown:${id}`).slice(0, 32)),
     });
   }
   return Object.freeze({

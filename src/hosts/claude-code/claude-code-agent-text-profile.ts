@@ -175,7 +175,10 @@ const WORKTREE_LAUNCH =
   "without its checkout (`worktree-branch-exists`: ask the user whether to delete or rename it) " +
   "or when another directory holds the path (`worktree-path-occupied`). A launch that fails " +
   "after the checkout was prepared still reports `worktreePrepared` and `worktreeBranch`, so " +
-  "tell the user that checkout was left behind. Do not start such a window with a " +
+  "tell the user that checkout was left behind. Once the session has started, `launch` " +
+  "compares its hook-recorded working directory with the prepared checkout and refuses " +
+  "`worktree-cwd-mismatch` when the session is not working in it; have the user close that " +
+  "window, then launch again. Do not start such a window with a " +
   "bare `claude --worktree`: without an existing checkout Claude Code creates it from the " +
   "remote default branch, not from the local HEAD.";
 

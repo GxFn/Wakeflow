@@ -46,6 +46,10 @@ import {
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
+  historicalWakeflowManagedTextBodies,
+  WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY,
+} from "../managed-integration/wakeflow-managed-text-history.js";
+import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostResourceProfile,
@@ -527,7 +531,19 @@ export async function inspectWakeflowSupportMemory(
     transition = planWholeFileContentTransition(
       source?.bytes ?? null,
       {
-        currentContents: current === null ? [] : [encodeUtf8(current.body)],
+        // C5（§13.167）：前序渲染作为额外 current 内容准入，旧记忆被重写为当前渲染而不是阻塞。
+        currentContents: current === null
+          ? []
+          : [
+              encodeUtf8(current.body),
+              ...historicalWakeflowManagedTextBodies(
+                WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY,
+                current.body,
+                request.currentConfig,
+                request.profile,
+                request.surfaceId,
+              ).map((body) => encodeUtf8(body)),
+            ],
         desiredContent: encodeUtf8(desired.body),
       },
     );

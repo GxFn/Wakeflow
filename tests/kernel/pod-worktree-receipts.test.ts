@@ -28,7 +28,7 @@ import {
   readPodWorktreeReceipt,
   retirePodReceipts,
   retirePodWorktreeReceipt,
-  worktreeCheckoutPresent,
+  observeWorktreeCheckout,
   writePodWorktreeReceipt,
 } from "../../src/kernel/pod-worktree-receipts.js";
 
@@ -258,7 +258,7 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
   deepEqual(await listPodWorktreeReceipts(root, "codex", POD_ID), [receipt]);
   deepEqual(await listPodWorktreeReceiptsAnyHost(root, POD_ID), [receipt]);
   deepEqual(await listPodReceiptDirectories(root, "codex"), [POD_ID]);
-  equal(await worktreeCheckoutPresent(receipt), true);
+  equal(await observeWorktreeCheckout(receipt), "present");
   // 占用查找（§13.128）：同一检出被另一个 pod 的回执指着即命中；排除自己的 pod；别的路径不命中。
   const otherPod = "pod_ffffffff-ffff-4fff-8fff-ffffffffffff";
   equal(
@@ -287,5 +287,5 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
   equal(existsSync(path.dirname(path.dirname(file))), false);
   equal(await retirePodReceipts(root, "codex", POD_ID), false);
   git(fixture.main, "worktree", "remove", "--force", fixture.linked);
-  equal(await worktreeCheckoutPresent(receipt), false);
+  equal(await observeWorktreeCheckout(receipt), "absent");
 });

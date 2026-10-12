@@ -1,4 +1,4 @@
-import { deepEqual, equal, rejects, throws } from "node:assert/strict";
+import { deepEqual, equal, notEqual, rejects, throws } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -546,6 +546,62 @@ test("制品 manifest 摘要是后加的可选键：旧记录没有它读成 nul
       [legacy.record.recordId, null],
       [written.record.recordId, artifact],
     ],
+  );
+});
+
+test("Notification 类型是后加的可选键：合文法的标签原样往返并参与标识，旧记录没有它读成 null，不合文法的标签以 invalid-request 拒绝（A7，§13.167）", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const at = "2026-09-18T13:00:00.000Z" as UtcInstant;
+  const permission = await writeHostHookObservation(
+    root,
+    observation(workspace, at, { event: "notification", notificationType: "permission_prompt" }),
+  );
+  const idle = await writeHostHookObservation(
+    root,
+    observation(workspace, at, { event: "notification", notificationType: "idle_prompt" }),
+  );
+  equal(permission.record.notificationType, "permission_prompt");
+  equal(idle.record.notificationType, "idle_prompt");
+  notEqual(permission.record.recordId, idle.record.recordId, "同一毫秒的两种通知是两条记录");
+  const stop = await writeHostHookObservation(root, observation(workspace, at, { event: "stop" }));
+  equal(stop.record.notificationType, null);
+  // 旧记录：没有 notificationType 键——把内核自己写出的规范文件去掉这个键再放回去，读成 null，标识不变。
+  const legacyPath = path.join(
+    hooksDirectory(workspace, "claude-code"),
+    path.basename(stop.resourceRef),
+  );
+  renameSync(path.join(workspace, stop.resourceRef), legacyPath);
+  const rendered = readFileSync(legacyPath, "utf8");
+  const parsed = JSON.parse(rendered) as Record<string, unknown>;
+  equal("notificationType" in parsed, true);
+  delete parsed.notificationType;
+  const sorted = Object.fromEntries(
+    Object.entries(parsed).sort(([left], [right]) => (left < right ? -1 : 1)),
+  );
+  writeFileSync(
+    legacyPath,
+    rendered.startsWith("{\n")
+      ? `${JSON.stringify(sorted, null, 2)}\n`
+      : `${JSON.stringify(sorted)}\n`,
+  );
+  const inventory = await readHostHookObservations(root, "claude-code");
+  equal(inventory.skipped, 0);
+  deepEqual(
+    Object.fromEntries(
+      inventory.records.map((record) => [record.recordId, record.notificationType]),
+    ),
+    {
+      [permission.record.recordId]: "permission_prompt",
+      [idle.record.recordId]: "idle_prompt",
+      [stop.record.recordId]: null,
+    },
+  );
+  await rejects(
+    writeHostHookObservation(
+      root,
+      observation(workspace, at, { event: "notification", notificationType: "Permission Prompt!" }),
+    ),
+    (error: unknown) => isWakeflowError(error) && error.reason === "hook-notification-type",
   );
 });
 

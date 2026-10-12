@@ -2,7 +2,7 @@
 
 > 2026-10-02 后续范围裁决：按 ADR-0018，当前结构为首个支持基线，旧开发版工作区不做兼容/迁移；§13.146 中有关 v1→v2 的实现已撤回。并发、投影、证据主体和当前格式恢复继续保留。以下旧迁移条目保留历史证据，不是当前待交付承诺。
 
-状态：active。本表是项目未决问题、验证缺口与待裁决事项的唯一登记处；新发现追加到这里，关闭时写明提交与 gate-log 节。累计条目包含已解决项与历史证据，不等于当前未修复缺陷数。相关源码已纳入 `988a68ba`（基础原语）和 `6c57b134`（运行时与回归）；提交分批与验证见 §13.152。最新修复见 gate-log §13.161（Codex 阶段复审）与 §13.165（技术债务批次 0）；2026-10-07 的[技术债务深挖](../reviews/2026-10-07-technical-debt-review.md)按当前代码逐条重判了本表的状态并排出处置批次，本表 2026-10-09 据此更正；深入反例与提案见 §13.145 / ADR-0017；前三批见 §13.141/142/143；深审复验见 §13.140 和 [可靠性与合同修复设计](../reviews/2026-10-02-reliability-and-contract-repair-design.md)；新复验优先于同条目内较早的“尚未测试”叙述。
+状态：active。本表是项目未决问题、验证缺口与待裁决事项的唯一登记处；新发现追加到这里，关闭时写明提交与 gate-log 节。累计条目包含已解决项与历史证据，不等于当前未修复缺陷数。相关源码已纳入 `988a68ba`（基础原语）和 `6c57b134`（运行时与回归）；提交分批与验证见 §13.152。最新修复见 gate-log §13.161（Codex 阶段复审）与 §13.165–§13.167（技术债务批次 0–2）；2026-10-07 的[技术债务深挖](../reviews/2026-10-07-technical-debt-review.md)按当前代码逐条重判了本表的状态并排出处置批次，本表 2026-10-09 据此更正；深入反例与提案见 §13.145 / ADR-0017；前三批见 §13.141/142/143；深审复验见 §13.140 和 [可靠性与合同修复设计](../reviews/2026-10-02-reliability-and-contract-repair-design.md)；新复验优先于同条目内较早的“尚未测试”叙述。
 
 来源：2026-09-26 只读深度分析（gate-log §13.132）。10 个分析角度各配独立复核，外加完整性检查补查的 3 个方向；134 条报告中 132 条经复核保留（95 条原样确认、37 条修正了表述或严重度），按同一根因合并为下列 13 个主题、106 项（§13.133 现场追加 8 项、§13.134 追加 3 项、§13.135 追加 6 项、§13.136 追加 1 项、§13.137 追加 1 项，§13.143 再追加 3 项，§13.144 追加 1 项，§13.150 追加 1 项、§13.151 追加 4 项，现为 134 项）。编号与分析报告页一致（问题 A1…O5，待裁决 Q1…Q12）；“计划阶段”指 §13.132 的路线图。严重度按用户影响计：高 / 中 / 低。
 
@@ -56,19 +56,19 @@
   - 说明：原意是不让引导会话的 CLAUDECODE、CLAUDE_CODE_SESSION_ID 漏进子会话，但按前缀过滤把用户配置也一起删了。依赖 CLAUDE_CONFIG_DIR 或 CLAUDE_CODE_USE_BEDROCK/VERTEX、CLAUDE_CODE_OAUTH_TOKEN 的用户，子窗口会悄悄换成另一个配置目录或登录身份，可能根本没装 Wakeflow 插件，于是永远不会注册，launch 一直 pending。
   - 证据：claude-code-tmux-asset.ts:299-306 hostEnvironment：`name.startsWith("CLAUDE")` 一律跳过；tmux-asset.ts:308-315：所有 spawn（包括 tmux new-session）都用这个环境；L785-794 只用 -e 补回 PATH；03f8acec（§13.117）引入；由 helper 启动的 tmux server 会把过滤后的环境作为全局环境，后续 new-window 都继承它
   - 建议：只剔除会话级标记（CLAUDECODE、CLAUDE_CODE_SESSION_ID、CLAUDE_CODE_ENTRYPOINT 之类），其余全部透传。加一个 helper 测试，断言 CLAUDE_CONFIG_DIR 能传到 tmux 命令里。
-- **A5** [中 / 风险] pane 进程检查只认 comm 名为 claude 的原生安装，hook 默认调用 PATH 上的 node 且不检查版本（计划阶段 1；状态：开放）
+- **A5** [中 / 风险] pane 进程检查只认 comm 名为 claude 的原生安装，hook 默认调用 PATH 上的 node 且不检查版本（计划阶段 1；状态：已修（§13.167 批次 2）：pane 进程或其两层内子进程里，comm 为 `claude` 的原生安装与 argv 第二个词指向 `@anthropic-ai/claude-code/` 或叫 `claude` 的 node 进程都算 claude（只对 node 进程读一次 `ps -o args=`）；preflight 的 `node` 报 `path`、`engines` 与 `supported`，`claude` 报安装形态 `install`（native / node / wrapper / unknown）；README 中英文列出支持的运行环境与两种安装形态。node 版本守卫见 A6）
   - 说明：用 npm 安装或包装过 claude 的用户，每次 deliver 都会因 wrong-process 被拒，尽管窗口是对的，对他们来说整个流程不可用。hook runner 看到的 node 如果缺失或版本太旧，hook 会静默失败，session-start 记录永远不会出现。
   - 证据：claude-code-tmux-asset.ts:593-609 claudeCommandFor 只认 ps comm basename 为 'claude'，退而求其次用 pane_current_command（L627），不符合就在 L1023 报 wrong-process；npm 安装和 node 包装脚本的 comm 是 'node'，只有 macOS 原生安装做过现场测试（§13.119 第 6 点）；hooks.json 直接调用 `node`，preflight（L705-718）不报告 node 的版本和路径；claudeBinary（L328-339）用启动时 PATH 上的 claude
   - 建议：preflight 报告 node 的版本和路径，并与 engines 范围比对。进程检查放宽为也接受命令行参数里带 Claude Code CLI 的 node 进程，或者改为依赖窗口选项加上绑定会话的 session-start 记录。README 列出支持的安装形态。
-- **A6** [中 / 风险] 运行时没有 Node 版本守卫：Node 22 下失败发生在错误处理路径深处，Node 26 不在声明范围内（计划阶段 1；状态：开放）
+- **A6** [中 / 风险] 运行时没有 Node 版本守卫：Node 22 下失败发生在错误处理路径深处，Node 26 不在声明范围内（计划阶段 1；状态：已修（§13.167 批次 2）：构建器在两个 launcher 顶部生成纯数字版本守卫——范围外时 MCP launcher 打一行 `wakeflow: node <v> is outside the supported range <range>` 以 1 退出，hook launcher 打固定码 `node-version`、退出 0、不 import 业务模块；范围 `>=24.19.0 <25` 在根 package.json、contracts `WAKEFLOW_NODE_ENGINES` 与 tooling `PLUGIN_ENGINES_NODE` 三处各声明一次，制品测试核对逐字相同（tooling 不能 import src）。是否放宽到 26 仍是 Q11；守卫未在范围外的 Node 上真实触发过）
   - 说明：PATH 上是 Node 22 的用户（nvm、从 GUI 启动的宿主）能启动 server，但第一次文件系统报错时就会在错误分类器里抛 TypeError，init 或维护会以一条误导性的消息失败。hook 按设计静默失败，所以落地证明的通道会直接消失。另一头，`<25` 把 Node 26 排除在外，却既没测过也没有明确拒绝。
   - 证据：src/foundation/node/node-system-error.ts:17-23,47 调用 `Error.isError`（Node 24 才提供），有 20 个 src 文件 import 它；plugins/*/.mcp.json 和 hooks.json 直接调用 `node`；grep 在 src 里找不到 process.versions 守卫；engines `>=24.19.0 <25`，宿主不强制执行；shipped README（assets/agent-text/README.md:54-59,79）只写“node 在 PATH 上”
   - 建议：在生成的 server.mjs 和 observe.mjs 开头加一段极小的版本检查，给出明确的“需要 Node >=24.19”提示后退出。shipped README 写明 Node 版本、git、tmux（Claude）和仅支持 POSIX。测试 Node 26 后决定是放宽范围还是明确钉住。
-- **A7** [中 / 缺口] 看不到宿主阻塞状态（登录过期、用量上限、API 错误、等待权限），而 UserPromptSubmit 落地并不代表提示已经被处理（计划阶段 1；状态：开放）
+- **A7** [中 / 缺口] 看不到宿主阻塞状态（登录过期、用量上限、API 错误、等待权限），而 UserPromptSubmit 落地并不代表提示已经被处理（计划阶段 1；状态：已修（§13.167 批次 2）：Claude hook 片段订阅 `Notification`（异步 5 秒），观察器映射为内核事件 `notification` 并只记 `notification_type`（消息文本从不进入记录），内核记录新增可选键 `notificationType`（旧记录读成 null），status 的窗口视图新增 `attention`（最近一条记录是 Notification 时 `needed` 带类型，之后任何记录清成 `none`），status 命令与窗口/投递参考教 Controller 点名"窗口 X 需要你"。API 错误没有 Notification，仍靠 nudge 的 pane 文本识别；未在真实会话中由真实 Notification 触发过）
   - 说明：UserPromptSubmit 在模型调用之前触发，所以向登录已过期或已到用量上限的窗口投递，也会记录为落地并被接受，但不会有任何工作发生，Demand 只能等一个永远不来的回调。status 分不清长回合和死回合，被引导的用户也不会被告知去某个窗口执行 /login 或点一下批准。
   - 证据：wakeflow-hook-observer.ts:120-125 HOST_EVENTS 只有 SessionStart、UserPromptSubmit、Stop、SessionEnd，没有 Notification hook；grep 在 src 里找不到 login 或 usage limit 的处理，只有 Controller SKILL.md:177-182 的描述；gate-log §13.128：pod Controller 在关闭中途遇到 'Login expired'，是维护者恰好在看才发现的；wakeflow-status-result.schema.json:805 的 lastObservation 只有 {event, recordedAt}；§13.130 第 14 行把 /login 本身判定为宿主边界，但这个判定不涉及让阻塞状态可观察
   - 建议：在 claude-code-hook-fragment.ts 订阅 Notification hook，记录只含类型、不含消息正文的 attention 观察。status 按窗口报告“等待用户：permission 或 idle-prompt”以及距上次观察的时长。Controller skill 教它把这些当作用户唯一要做的动作转告用户。
-- **A8** [中 / 风险] worktree 启动后不核对 Claude Code 实际用的是不是 helper 准备好的 checkout（计划阶段 1；状态：开放）
+- **A8** [中 / 风险] worktree 启动后不核对 Claude Code 实际用的是不是 helper 准备好的 checkout（计划阶段 1；状态：已修（§13.167 批次 2）：`launch` 在准备了检出且拿到 session-start 记录时按 realpath 比较记录 cwd 与检出，不符拒绝 `worktree-cwd-mismatch`（带分支、相对仓库根的 observedCwd 与 hint，仍带 worktreePrepared/worktreeBranch）；Controller 文本列入该拒绝）
   - 说明：如果 Claude Code 更新后改了 worktree 目录或分支命名，就会再建一个基于远端默认分支的 checkout。receipt 照样接受会话报告的 cwd，产品工作悄悄从一个不同于 local-head 承诺的基线开始，唯一的症状是后来的合并出乎意料。
   - 证据：claude-code-tmux-asset.ts:25-29、522-568：预先创建 `<repo>/.claude/worktrees/<name>` 和分支 worktree-<name>，依赖 Claude Code 的内部命名约定；tmux-asset.ts:872-906：启动后观察 hook.record.cwd（L889），但不和准备好的 checkout 比较，照样报 worktreePrepared: created；gate-log §13.128：裸 `claude --worktree` 从 origin/main 建出 checkout，而本地 main 落后 12-38 个提交，是碰巧才发现的
   - 建议：在 launch 里，prepared 不为 null 且 hook 记录存在时，比较 realpath(hook.record.cwd) 和 realpath(checkout)，不一致就报 `worktree-cwd-mismatch` 并停止，不进入注册。
@@ -144,7 +144,7 @@
   - 说明：§13.140 已用实际生成的 Codex MCP stdio server 复现四个 append 中断及两类子进程锁残留，证实公开恢复不可达。binding、ledger 证据、维护、pod 等操作及其他写入位置仍未覆盖，也未做断电试验。§13.141 已把关键目标行为纳入 tests，原诊断脚本和输出仍保留；下列“没有杀进程”的检索是早期基线证据。
   - 证据：tests 里没有 SIGKILL、子进程 .kill() 或 Worker 构造；锁残留测试用同线程伪造（rooted-exclusive-file-lock.test.ts:239-292）；gate-log §13.131 L3861 明确推迟了故障注入 seam；§13.130 唯一的现场故障注入是伪造 intent 文件；上面三类没有公开恢复路径的残留，正是杀进程矩阵能发现的问题
   - 建议：建一个崩溃矩阵 harness：以子进程启动真实 MCP server，在注入点（环境变量控制的暂停标记，或轮询 stage/candidate 文件）SIGKILL，断言 status 能指出问题，并且一次有文档的公开调用就能恢复到 idle。覆盖 append、board claim、projection、binding、ledger 证据、demand 发布、维护 apply、pod 事务。
-- **B10** [低 / 风险] 锁释放失败时，已经成功提交的变更会被报成失败，锁也可能留在原地（计划阶段 2；状态：开放）
+- **B10** [低 / 风险] 锁释放失败时，已经成功提交的变更会被报成失败，锁也可能留在原地（计划阶段 2；状态：已修（§13.167 批次 2）：`withRootedExclusiveFileLock` 操作异常优先；操作成功后释放失败时，组合根登记了报告器就返回结果并写一条 `source: lock-release` 的事故记录（带锁路径，stderr 一行 `wakeflow: incident <id> (lock-release: <reason>)`），未登记时照旧抛出）
   - 说明：锁文件元数据漂移或瞬时 I/O 错误会让一次成功的 claim-state 写入以错误返回，Agent 重试时会碰到 CAS 失败或未释放的锁（board 锁本身又没有退役路径）。很少见，但违背了“要么有结果、要么什么都没发生”的约定。
   - 证据：withRootedExclusiveFileLock（:813-830）在 finally 里 release，没有 catch：release 抛错会丢掉成功结果，或者覆盖原本的操作错误；requirement-board.ts:132-137 把它映射成可重试的 concurrency-conflict
   - 建议：操作成功时照常返回结果，释放失败单独报告（警告加残留检查），或者至少标记为 committed-but-lock-residue，避免调用方盲目重试。
@@ -157,7 +157,7 @@
   - 说明：助手 `close`（tmux kill-window）结束会话时，Claude Code 的 session-end hook 进程在原子创建的中途被杀，`observations/hooks/` 里留下一个暂存文件（内容是一条完整的 session-end 记录）。读取方把它算作无法识别的条目，`hooks.skipped=1`，verify 的 `host-hook-channel` 以 `claude-code:skipped-1` 失败，整体变 `degraded`；对账与观察者都不清理它，Controller 也无从知道原因。
   - 证据：§13.133 现场（刷新窗口时关掉的 AlembicCore）；`src/kernel/hook-observations.ts` 的 `listed.unrecognized` 计入 `skipped`。
   - 建议：把 `.wakeflow-atomic-*` 暂存文件从"无法识别"里分出来：超过一段时间的暂存残留由观察者或对账退役（它是 Wakeflow 自有私有目录里的中间文件），读取方不计入 skipped；另测一次"关窗时 hook 被杀"的回归。
-- **B13** [中 / 缺陷] hook 目录里任一形状不对的 `.wakeflow-atomic-*` 条目会让之后所有 hook 写入失败（计划阶段 2；状态：部分修复，§13.142 分片隔离及核心/Claude 助手的新旧布局读取已验证；分片内损坏的公共恢复仍开放）
+- **B13** [中 / 缺陷] hook 目录里任一形状不对的 `.wakeflow-atomic-*` 条目会让之后所有 hook 写入失败（计划阶段 2；状态：部分修复，§13.142 分片隔离及核心/Claude 助手的新旧布局读取已验证；§13.167 批次 2：写前恢复对目标摘要集合之外的保留前缀条目只计数（回执 `unrecognizedEntryCount`）不失败，一个畸形条目不再让该宿主所有 hook 写入失败；reconcile 把它列为可退役项与 verify 点名仍开放）
   - 说明：写入器每次写前由基础层检查目标目录里全部暂存前缀条目；只要有一个是目录、符号链接、格式不对、权限位不对或属于别的用户，就以 `stage-recovery-required` 拒绝，hook 写入以 `io-failure/observation-write-stage-recovery-required` 失败，这个宿主的 hook 通道从此断掉，直到有人删掉那个条目。读取方会把它计入 skipped，verify 看得见，但没有恢复出口。
   - 证据：`src/foundation/filesystem/durable-atomic-file-stage-recovery.ts` 的 `collectStages` / `assertStageNode`；§13.134 B12 修复只豁免并退役写入器自己能留下的 create / 0600 暂存。
   - 建议：由基础层决定：hook 目录的写前恢复只看同一目标的暂存（记录名唯一），或由对账把形状不对的暂存列为可退役项并在 verify 里点名。
@@ -195,7 +195,7 @@
   - 说明：两轮评审都在这些归档封存之后修改了聚合、decider 和事件解析。HEAD 能否逐字节重放它们目前未知。如果不能，continue_demand 会失败，主 pod 归档的问题要到 continue 或读取归档时才会暴露。这是现成、成本最低的真实数据兼容性检查。
   - 证据：只读扫描 WakeflowTestWorkspace/ledger/archives：7 份归档、95 个事件，全部是 (1,1,1)，覆盖 11 种事件类型；目录时间 09-24 至 09-25 01:43，早于 2457c961 和 0ef5defa；gate-log §13.131：本轮没有现场复验；归档读取经 demand-result-review-snapshot.ts:510-534 → repository.ts:482-486 → replayCommits 用当前 reducer 回放；验证者更正：读取失败不是静默的，archived-demand-observation 单独计为 unreadable，service.ts:798-805 显示为 archives:unreadable-N，但 status 只读 worktree-pod 的归档
   - 建议：下次现场之前，用 HEAD 对每份归档和活动根做一次只读回放（带 demandId 的 status 和 verify，或专门的回放脚本），结果记进 gate-log，随后把这些数据脱敏后作为上面提到的 golden 语料。
-- **C5** [高 / 风险] 托管正文输出变更缺少历史准入时，持有旧组件的工作区会被未知正文检查阻塞（计划阶段 3；状态：开放，§13.140 补当前转换合同对照）
+- **C5** [高 / 风险] 托管正文输出变更缺少历史准入时，持有旧组件的工作区会被未知正文检查阻塞（计划阶段 3；状态：已修（§13.167 批次 2）：`wakeflow-managed-text-history.ts` 为五种托管正文各设一张历史渲染表（退役版本 + 用相同输入重算旧正文的函数，上限 7 项），五个生产者把历史正文作为额外 currentTargets / currentContents 传入，仓库 .gitignore 对历史正文走重组路径；黄金测试钉住 22 份当前渲染的摘要，改渲染器不登记旧渲染就红；CLAUDE.md/AGENTS.md 加同一条规则。表今天为空，第一条真实历史在下一次改渲染器时登记；§13.140 的转换合同对照仍有效）
   - 说明：工作区的 CLAUDE.md/AGENTS.md 块、.gitignore 块、Design/Test 记忆文件、产品仓库块都由 src 里的常量文本渲染。下一次发布若改变托管正文输出又没有准入旧 renderer，持有该旧组件的工作区在 reconcile 预览和 local-layout verify 中会被阻塞。skill 告诉 Controller 手改过的块永远不会被覆盖，所以用户只能手工删块，这恰恰是被引导的用户不应该需要做的事。测试用同一构建渲染再读回，发布前发现不了。
   - 证据：wakeflow-managed-text-authority-transition.ts:24-29、213-217：已有托管正文必须等于当前渲染，或等于传入的 currentTarget；各生产者只传当前构建的渲染：static-materialization-preview.ts:502、step-executor.ts:1068、program-instruction-inspection.ts:465、external-instruction-inspection.ts:336；support-memory-inspection.ts:74 同理；wakeflow-managed-text-envelope.ts:39：marker 摘要只证明自洽，不授予权限；gate-log §13.116 L3365 在现场遇到过（unknown-managed-body/unadmitted-source，阻塞归用户）；§13.120 D2 只修了跨宿主的情况；没有测试固定渲染摘要，CLAUDE.md 和发布规则里也没有保留旧渲染的要求
   - 建议：为每个托管组件维护一张带版本的历史渲染输出（或正文摘要）表，作为准入的 currentTargets 传入。加 golden 测试，固定每个渲染块在固定配置下的摘要，任何文本改动都要先把旧摘要加进准入集合才能通过。在 CLAUDE.md 的 Change Discipline 里写下这条规则。
@@ -427,7 +427,7 @@
   - 说明：对不懂 tmux 的用户来说，helper 是 Controller 执行所有宿主步骤的方式。tmux 或 git 失败时，唯一能说明原因的那一行（嵌套会话、没有 server、分支已被检出）被丢掉了，Controller 拿到的是一个没教过的 token，无法告诉用户该做什么。
   - 证据：claude-code-tmux-asset.ts:308-318 run() 返回 stderr，但全文件只在 :317 出现一次；refuse('worktree-add-failed', {branch, status})（:566）丢掉了 git 的原因；tmux-create-failed（:795）、worktree-list-failed（:544）、capture-failed（:1187）也一样；主 catch（:1306-1312）输出 reason 'unexpected' 并 exit 2；:883-885 把任何错误重新包装成 HelperFailure('unexpected')；36 个 refuse() reason 中只有 3 个出现在 agent 文本里（许多是自解释的参数错误）；statusline 资产（:80-187）的 catch 一律静默回退
   - 建议：helper 拒绝时附带有界的 detail：stderr 第一行，单行化，最多 200 字符，工作区根和 home 替换为占位符。unexpected 路径附带 error.name 和 errno。在 Claude profile 里教一条通用规则：遇到未知的 helper reason，就把 detail 转告用户然后停下。可选：helper 也写 incident 记录。
-- **G7** [中 / 风险] “没能检查”被报告成“不存在”：任何 stat 错误都会让还在的 worktree 显示为 checkout-missing 或 prunable（计划阶段 4；状态：开放）
+- **G7** [中 / 风险] “没能检查”被报告成“不存在”：任何 stat 错误都会让还在的 worktree 显示为 checkout-missing 或 prunable（计划阶段 4；状态：已修（§13.167 批次 2）：`observeWorktreeCheckout` 三态 present / absent / unknown（输入错误 → absent，其他观察错误 → unknown），pod 状态、工作区观察与仓库指针观察都用三态，prunable 只在 absent；pod close 预览对 unknown 以 `worktree-checkout-unknown:<id>` 阻塞并交给用户，recover 只把 absent 当过期；status/pod 结果的 receipt 枚举加 `checkout-unknown`）
   - 说明：EACCES/EPERM（例如 macOS TCC 挡住了 Documents 子树）、ELOOP、EIO 都会被当成“checkout 已不在”，pod 关闭照样走到 close-complete 并退役 receipt，而 checkout 还在，最后留下一个孤儿 worktree。Wakeflow 本身不删 checkout，所以不会丢数据。这违背了 README 自己的承诺。触发条件是推断出来的，可能不常见。
   - 证据：kernel/pod-worktree-receipts.ts:800-811 worktreeCheckoutPresent：任何错误都 return false；repository-pointer-observation.ts:292-299 同样处理，结果喂给 :330 的 prunable；pod/service.ts:384-391、:663、:728、:753-755：false 映射为 checkout-missing，receipt 被退役，并放行 close-complete；assets/agent-text/README.md:88-90 承诺“无法检查”永远不会被报告成“没问题”；有 28 处 catch 后返回 null 或 false，分布在 9 个文件里（hook observer 占 13 处）
   - 建议：用 readNodeSystemErrorCode，只把 ENOENT/ENOTDIR 视为不存在，其他 errno 变成第三种状态 unknown：阻止 close-complete，并以 unavailable 加 causeCode 显示。其余 27 处 catch-to-null 按同样方式审一遍。

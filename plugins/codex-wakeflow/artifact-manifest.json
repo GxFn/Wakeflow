@@ -2328,8 +2328,8 @@
     },
     {
       "path": "lib/governance/ledger/ledger-record-publisher.js",
-      "bytes": 9522,
-      "sha256": "sha256:d2c51d45a72237b0e036da72437f0ebced4b837be803031bd1abfeacff028cf0",
+      "bytes": 9758,
+      "sha256": "sha256:73f7b618f91d7ccc9856e6f0570991d4ad68c1b7333a3d34fa2936ef186cd769",
       "mode": "0644",
       "scope": "shared"
     },

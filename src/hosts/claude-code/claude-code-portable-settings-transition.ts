@@ -18,6 +18,11 @@ import {
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES as WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULE_LIST } from "../../workspace/wakeflow-legacy-residue-scan.js";
+import {
+  claudeCodeMcpPermissionRulesFor,
+  WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE,
+} from "./claude-code-mcp-permission-rules.js";
 import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "./claude-code-tmux-asset.js";
 
 /**
@@ -30,29 +35,42 @@ import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "./claude-code-tmux-as
  * `permissions.allow`，保留其他用户字段及其原始表示。
  */
 
-export const WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE =
-  "mcp__plugin_wakeflow_wakeflow" as const;
+export const WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE = WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE;
 
-export const WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES = Object.freeze([
-  "Bash(node *)",
-  "Bash(tmux *)",
-  "Bash(git *)",
-] as const);
+/** 旧插件的三条宽泛规则；唯一来源在 workspace 的遗留残留扫描（F4，§13.168），这里只转发。 */
+export const WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES = WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULE_LIST;
 
 const DEFAULT_RULES: readonly string[] = Object.freeze([
   WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
 ]);
 
-/** 每种根拥有的 allow 规则：支撑面只有 MCP 一条，工作区根多一条 tmux 助手调用。 */
+/** 一个根的规则归属：工作区根，或带角色（design / test）的支撑面根。 */
+export type ClaudeCodePortableSettingsRuleOwner =
+  | Readonly<{ readonly rootKind: "program" }>
+  | Readonly<{ readonly rootKind: "support-surface"; readonly role: "design" | "test" }>;
+
+/**
+ * 每种根拥有的 allow 规则（§13.117 D5；ADR-0020 决定 3，§13.168）：工作区根是整服务器 MCP 规则加一条
+ * tmux 助手调用；支撑面按角色只放行该角色使用的工具，不再放行整个服务器。
+ */
 export function claudeCodePortableSettingsRulesFor(
-  rootKind: "program" | "support-surface",
+  owner: ClaudeCodePortableSettingsRuleOwner,
 ): readonly string[] {
-  return rootKind === "program"
+  return owner.rootKind === "program"
     ? Object.freeze([
         WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
         WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
       ])
-    : DEFAULT_RULES;
+    : claudeCodeMcpPermissionRulesFor(owner.role);
+}
+
+/** 该根上 Wakeflow 曾写过、现已退役的规则，转换时精确删除：支撑面的整服务器规则（§13.168）。 */
+export function claudeCodePortableSettingsRetiredRulesFor(
+  owner: ClaudeCodePortableSettingsRuleOwner,
+): readonly string[] {
+  return owner.rootKind === "program"
+    ? Object.freeze([])
+    : Object.freeze([WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE]);
 }
 
 export type ClaudeCodePortableSettingsTransitionStatus =
@@ -169,15 +187,21 @@ function sourceFormatting(text: string) {
   };
 }
 
-/** 用户条目原位保留；每条托管规则只留第一次出现，缺席的按规则顺序追加到末尾。 */
+/**
+ * 用户条目原位保留；每条托管规则只留第一次出现，缺席的按规则顺序追加到末尾；退役规则
+ * （Wakeflow 曾写过、现已不再拥有的条目）精确删除，用户的其他条目不动。
+ */
 function managedAllowEntries(
   existing: readonly string[],
   rules: readonly string[],
+  retired: readonly string[],
 ): readonly string[] {
   const managed = new Set(rules);
+  const retiredSet = new Set(retired.filter((rule) => !managed.has(rule)));
   const emitted = new Set<string>();
   const result: string[] = [];
   for (const entry of existing) {
+    if (retiredSet.has(entry)) continue;
     if (!managed.has(entry)) {
       result.push(entry);
     } else if (!emitted.has(entry)) {
@@ -217,19 +241,34 @@ function parseRules(value: unknown): readonly string[] {
   return Object.freeze([...(value as readonly string[])]);
 }
 
+/** 退役规则：缺省为空；非空字符串、不重复。 */
+function parseRetiredRules(value: unknown): readonly string[] {
+  if (value === undefined) return Object.freeze([]);
+  if (
+    !Array.isArray(value)
+    || value.some((entry) => typeof entry !== "string" || entry.length === 0)
+    || new Set(value).size !== value.length
+  ) {
+    failInput("$retiredRules");
+  }
+  return Object.freeze([...(value as readonly string[])]);
+}
+
 /**
  * 从 absent 或现有严格 JSON 文本计算最小 permissions.allow 变化。
  * `null` 明确表示目标文件不存在；空字符串是非法现有文件，不会被当成 absent。
- * `rules` 是这个根拥有的托管规则，缺省只有 MCP 一条。
+ * `rules` 是这个根拥有的托管规则，缺省只有 MCP 一条；`retiredRules` 是曾拥有、现在要精确删除的条目。
  */
 export function planClaudeCodePortableSettingsTransition(
   sourceTextValue: unknown,
   rulesValue?: unknown,
+  retiredRulesValue?: unknown,
 ): Readonly<ClaudeCodePortableSettingsTransition> {
   if (sourceTextValue !== null && typeof sourceTextValue !== "string") {
     failInput("$sourceText");
   }
   const rules = parseRules(rulesValue);
+  const retiredRules = parseRetiredRules(retiredRulesValue);
   if (sourceTextValue === null) {
     const desiredText = desiredCreateText(rules);
     return Object.freeze({
@@ -282,7 +321,7 @@ export function planClaudeCodePortableSettingsTransition(
   ))) {
     return blocked("legacy-broad-permission-present", sourceDigest);
   }
-  const desiredAllow = managedAllowEntries(existingAllow, rules);
+  const desiredAllow = managedAllowEntries(existingAllow, rules, retiredRules);
   if (
     existingAllow.length === desiredAllow.length
     && existingAllow.every((entry, index) => entry === desiredAllow[index])

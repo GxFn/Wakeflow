@@ -30,7 +30,9 @@
     "next",
     "nextActions",
     "runtime",
-    "maintenance"
+    "maintenance",
+    "hostAssets",
+    "legacyResidue"
   ],
   "properties": {
     "kind": {
@@ -399,6 +401,108 @@
         },
         "artifactOnDisk": {
           "enum": ["same", "changed", "unknown"]
+        }
+      }
+    },
+    "hostAssets": {
+      "description": "Files Wakeflow published for each host (the status line and, on Claude Code, the tmux helper beside it) and whether their bytes are still the artifact's (F1, ADR-0020). A helper that is not current is not the Controller's to run: wakeflow_prepare_delivery refuses with host-asset-<status> until a reconcile republishes it. Peer hosts' assets are not-applicable.",
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hostId", "status", "settings", "companion"],
+        "properties": {
+          "hostId": {
+            "$ref": "#/$defs/hostId"
+          },
+          "status": {
+            "enum": ["current", "missing", "drift", "mode", "not-applicable", "unavailable"]
+          },
+          "settings": {
+            "enum": ["current", "missing", "drift", "mode", "unreadable", "not-applicable"]
+          },
+          "companion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/$defs/singleLineText"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "legacyResidue": {
+      "description": "Content the old JavaScript plugin left in the workspace root, the present repository roots and support-surface roots (F4, ADR-0020): legacy scope blocks in instruction files, the broad Bash allow rules and additionalDirectories in .claude settings, old root markers and a wakeflow-ledger directory beside a root. User-owned findings reported read-only with the file and line to remove; Wakeflow never edits them. unreadable counts files that could not be checked, which is not an absence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "issue", "items", "itemsOmitted", "unreadable"],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/domainStatus"
+        },
+        "issue": {
+          "$ref": "#/$defs/nullableCode"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["root", "kind", "path", "line", "detail"],
+            "properties": {
+              "root": {
+                "type": "string",
+                "pattern": "^(?:workspace\\.root|repository\\.repository_[0-9a-f-]{36}\\.root|support\\.surface_[0-9a-f-]{36}\\.root)$"
+              },
+              "kind": {
+                "enum": [
+                  "scope-block",
+                  "broad-permission",
+                  "additional-directories",
+                  "root-marker",
+                  "ledger-directory"
+                ]
+              },
+              "path": {
+                "$ref": "#/$defs/singleLineText"
+              },
+              "line": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000
+                  }
+                ]
+              },
+              "detail": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/singleLineText"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "itemsOmitted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unreadable": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

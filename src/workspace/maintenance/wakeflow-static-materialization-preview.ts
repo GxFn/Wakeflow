@@ -119,6 +119,7 @@ import {
   type WakeflowWorkspaceCoreLayoutInspection,
   WakeflowWorkspaceCoreLayoutInspectionError,
 } from "./wakeflow-workspace-core-layout-inspection.js";
+import { scanWakeflowLegacyResidue } from "../wakeflow-legacy-residue-scan.js";
 
 /**
  * Wakeflow Workspace / Maintenance：当前静态 owner 集合的 preview-only 物化计划。
@@ -1159,6 +1160,11 @@ export async function previewWakeflowStaticMaterialization(
     if (!core.local.freshCompatible) {
       addBlocker(blockers, "fresh-local-not-bootstrap-prefix");
     }
+    // ADR-0008 决定 1 与 ADR-0020（F4）：工作区根里旧插件的标记只拒绝并列出（status 的 legacyResidue），由用户清理。
+    const residue = await scanWakeflowLegacyResidue([
+      { key: "workspace.root", absolutePath: rootValue.absolutePath },
+    ]);
+    if (residue.items.length > 0) addBlocker(blockers, "fresh-legacy-residue-present");
   } else {
     if (current === null) addBlocker(blockers, "current-config-unavailable");
     // 活动布局缺失或不完整由维护 ensure 补齐（能力卡 1 §1.4 自动修复）；节点政策冲突只报告。

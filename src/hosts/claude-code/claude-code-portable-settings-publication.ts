@@ -60,6 +60,8 @@ export interface ClaudeCodePortableSettingsPublicationOptions {
   readonly signal?: AbortSignal;
   /** 这个根拥有的托管 allow 规则；缺省是 transition 的默认（只有 MCP 一条）。 */
   readonly rules?: readonly string[];
+  /** 这个根上曾拥有、现在要精确删除的规则（§13.168）。 */
+  readonly retiredRules?: readonly string[];
 }
 
 export interface ClaudeCodePortableSettingsPublicationResult {
@@ -127,6 +129,7 @@ const MAXIMUM_SETTINGS_BYTES = parseByteCount(1024 * 1024);
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
   readonly rules: readonly string[] | undefined;
+  readonly retiredRules: readonly string[] | undefined;
 }
 
 interface SettingsSourceInspection {
@@ -157,7 +160,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal" && key !== "rules")
+    Object.keys(record).some((key) => key !== "signal" && key !== "rules" && key !== "retiredRules")
     || (
       record.signal !== undefined
       && (
@@ -174,6 +177,13 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
         || record.rules.some((entry) => typeof entry !== "string")
       )
     )
+    || (
+      record.retiredRules !== undefined
+      && (
+        !Array.isArray(record.retiredRules)
+        || record.retiredRules.some((entry) => typeof entry !== "string")
+      )
+    )
   ) {
     fail("input", "$options");
   }
@@ -182,6 +192,9 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     rules: record.rules === undefined
       ? undefined
       : Object.freeze([...(record.rules as readonly string[])]),
+    retiredRules: record.retiredRules === undefined
+      ? undefined
+      : Object.freeze([...(record.retiredRules as readonly string[])]),
   });
 }
 
@@ -277,6 +290,7 @@ async function inspectSource(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
   rules: readonly string[] | undefined,
+  retiredRules: readonly string[] | undefined,
 ): Promise<Readonly<SettingsSourceInspection>> {
   const directoryNode = await directoryNodeOrNull(root);
   const source = directoryNode === null
@@ -291,7 +305,7 @@ async function inspectSource(
       throw error;
     }
   }
-  const transition = planClaudeCodePortableSettingsTransition(sourceText, rules);
+  const transition = planClaudeCodePortableSettingsTransition(sourceText, rules, retiredRules);
   return Object.freeze({ directoryNode, source, sourceText, transition });
 }
 
@@ -310,7 +324,7 @@ export async function inspectClaudeCodePortableSettings(
   }
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const inspection = await inspectSource(rootValue, options.signal, options.rules);
+  const inspection = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
   return Object.freeze({
     kind: "ClaudeCodePortableSettingsInspection",
     directoryStatus: inspection.directoryNode === null ? "absent" : "present",
@@ -424,7 +438,7 @@ export async function publishClaudeCodePortableSettings(
   }
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const before = await inspectSource(rootValue, options.signal, options.rules);
+  const before = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
   if (before.transition.status === "blocked") {
     fail("transition-blocked", "$transition", before.transition.reason);
   }
@@ -441,7 +455,7 @@ export async function publishClaudeCodePortableSettings(
   }
   await ensureSettingsDirectory(rootValue, before, options.signal);
   if (before.directoryNode === null) {
-    const afterDirectory = await inspectSource(rootValue, options.signal, options.rules);
+    const afterDirectory = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
     if (
       afterDirectory.source !== null
       || afterDirectory.transition.status !== "create"
@@ -450,7 +464,7 @@ export async function publishClaudeCodePortableSettings(
     }
   }
   await publishTransition(rootValue, before, options.signal);
-  const after = await inspectSource(rootValue, options.signal, options.rules);
+  const after = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
   if (
     after.transition.status !== "current"
     || before.transition.desiredDigest === null

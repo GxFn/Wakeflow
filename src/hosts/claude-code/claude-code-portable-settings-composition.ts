@@ -39,6 +39,7 @@ import {
 import {
   type ClaudeCodePortableSettingsTransition,
   type ClaudeCodePortableSettingsTransitionReason,
+  claudeCodePortableSettingsRetiredRulesFor,
   claudeCodePortableSettingsRulesFor,
   planClaudeCodePortableSettingsTransition,
 } from "./claude-code-portable-settings-transition.js";
@@ -71,6 +72,8 @@ export type ClaudeCodePortableSettingsRoot =
       readonly rootId: WakeflowDurableId<"surface">;
       readonly configuredPlacement: WakeflowConfigPlacement;
       readonly resourceRef: typeof CLAUDE_CODE_PORTABLE_SETTINGS_REF;
+      /** 支撑面的角色决定它放行的工具子集（ADR-0020 决定 3）。 */
+      readonly role: "design" | "test";
     }>;
 
 export interface ClaudeCodePortableSettingsRootAuthority {
@@ -255,6 +258,7 @@ export function compileClaudeCodePortableSettingsRootAuthority(
       rootId: surface.surfaceId,
       configuredPlacement: surface.path,
       resourceRef: CLAUDE_CODE_PORTABLE_SETTINGS_REF,
+      role: surface.capability,
     }));
   }
   const frozenRoots = Object.freeze(roots);
@@ -335,6 +339,8 @@ async function inspectRootSettings(
 async function inspectPresentRoot(
   absolutePath: string,
   signal: AbortSignal | undefined,
+  rules: readonly string[],
+  retiredRules: readonly string[],
 ): Promise<RootSettingsInspection> {
   let root: RootedDirectory;
   try {
@@ -348,7 +354,7 @@ async function inspectPresentRoot(
   try {
     inspection = await inspectRootSettings(
       root,
-      signal === undefined ? {} : { signal },
+      { rules, retiredRules, ...(signal === undefined ? {} : { signal }) },
     );
   } catch (error: unknown) {
     primaryError = error;
@@ -402,7 +408,8 @@ export async function planClaudeCodePortableSettingsComposition(
     if (root.rootKind === "program") {
       placementStatus = "present";
       inspection = await inspectRootSettings(workspaceRootValue, {
-        rules: claudeCodePortableSettingsRulesFor("program"),
+        rules: claudeCodePortableSettingsRulesFor(root),
+        retiredRules: claudeCodePortableSettingsRetiredRulesFor(root),
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
     } else {
@@ -423,13 +430,19 @@ export async function planClaudeCodePortableSettingsComposition(
         }
         placementStatus = "planned-missing";
         inspection = {
-          transition: planClaudeCodePortableSettingsTransition(null),
+          transition: planClaudeCodePortableSettingsTransition(
+            null,
+            claudeCodePortableSettingsRulesFor(root),
+            claudeCodePortableSettingsRetiredRulesFor(root),
+          ),
         };
       } else {
         placementStatus = "present";
         inspection = await inspectPresentRoot(
           placement.absolutePath,
           request.signal,
+          claudeCodePortableSettingsRulesFor(root),
+          claudeCodePortableSettingsRetiredRulesFor(root),
         );
       }
     }

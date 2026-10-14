@@ -13,6 +13,7 @@
     "claude-code-maintenance-capability.ts",
     "claude-code-maintenance-execution.ts",
     "claude-code-mcp-configuration.ts",
+    "claude-code-mcp-permission-rules.ts",
     "claude-code-portable-settings-composition.ts",
     "claude-code-portable-settings-operation-executor.ts",
     "claude-code-portable-settings-publication.ts",

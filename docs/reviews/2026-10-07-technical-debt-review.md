@@ -155,7 +155,7 @@ Claude 宿主层 18 文件 5,595 行（助手、状态行、四份可移植设�
 | 0 卫生（已执行，§13.165） | 第 7 节的登记更正；AGENTS/README 占位符数、decisions 表、plan §14、D9 文本；gate-log 标题归一；`.gitattributes` 标记 `plugins/**` 为生成；`wf handoff` 新增"待填/未提交"过期检查、耗时表覆盖检查、CLAUDE/AGENTS 逐节一致检查；K7、K1、I3、J3、H3、H6、I9、I11 文本；F6 JWT；G3、G4、G6；C13、C14。架构允许项经核实仍有效，未删 | S | 无 |
 | 1 架构规则与边界（已执行，§13.166） | 3.2 的规则修正与 6 处导入改端口；错误边界翻译器与 `legacyErrorDetails` 退役；G1 事故记录 + G10 进程守卫 + G8 观察器失败落盘；`tests/support` 四个共享夹具并迁移 git 调用方（运行器统一注入隔离 git 环境） | M | 无 |
 | 2 新用户与现场可见性（已执行，§13.167） | A6/A5 运行时守卫与安装形态（三处一致的引擎范围、两个 launcher 守卫、npm 安装的 claude、preflight 的 node 路径/范围与安装形态）；A7 Notification 观察（hook 片段、观察器、内核可选键、status 的窗口 `attention`、Controller 文本）；B13 写前暂存分类（计数不失败；reconcile/verify 点名未做）；B10 释放失败不掩盖成功（lock-release 事故记录）；A8 launch 比对 hook cwd 与准备好的检出；G7 检出三态与 close 阻塞；C5 托管文本历史表与黄金摘要 | M | 无 |
-| 3 安全最小集 | F7 威胁模型 ADR（先写）；F1 助手自检摘要；F2 按角色收窄允许规则；F4 遗留残留观察；E2 Codex 摘要定义与 status 投影 | M | F7 先于其余 |
+| 3 安全最小集（已执行，§13.168） | F7 威胁模型 ADR-0020（proposed，待 Q5）；F1 服务器侧助手字节核对进 prepare_delivery 前置条件 + status `hostAssets`（助手不自检）；F2 角色工具归属表 + Claude 支撑面与启动的按角色允许规则（退役整服务器规则）；F4 只读遗留残留观察（status `legacyResidue`、verify 点名、fresh 拒绝）；E2 `attempt.sendReturn` 由 Wakeflow 算摘要、评审检查显示 `evidenceKind`、文本标明自述 | M | F7 先于其余 |
 | 4 发布基线 | Q2 ADR；tag + `release:check` 真跑一次；CI tag 作业与字节→版本门；C15 锁文件核验；C9 更新章节；C6/C11 升级身份 | M | Q1/Q2/Q11 裁决 |
 | 5 测试体系 | 场景链拆分与宿主参数化；lab 矩阵拆文件；负载敏感标签与时钟注入；governance 镜像测试；模型测试反例持久化与 CI 种子轮换；CI 加 handoff/图谱 | M–L | 批 1 的共享夹具 |
 | 6 质量门解除 | 按目录解除 Biome 豁免（foundation→hosts→configuration→workspace→governance）；恢复模块接线或删除；knip 收缩到全 src；未使用导出清理 | L（每目录 S–M） | Q12；与批 7 交错 |

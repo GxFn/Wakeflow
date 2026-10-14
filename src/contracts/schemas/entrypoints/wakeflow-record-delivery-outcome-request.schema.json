@@ -81,13 +81,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["status"],
-      "description": "Agent 对发送调用本身的声明：sent 已送出、failed-before-send 调用失败且未触碰目标会话、unknown 结果未知。",
+      "description": "Agent 对发送调用本身的声明：sent 已送出、failed-before-send 调用失败且未触碰目标会话、unknown 结果未知。这是 Agent 自述（ADR-0020 证据分级 agent-reported），不是宿主观察。",
       "properties": {
         "status": {
           "enum": ["sent", "failed-before-send", "unknown"]
         },
         "evidenceDigest": {
-          "$ref": "#/$defs/sha256Digest"
+          "$ref": "#/$defs/sha256Digest",
+          "description": "发送返回值规范 JSON（键排序、无空白、UTF-8）的 sha256。给了 sendReturn 时由 Wakeflow 计算并核对一致；只给摘要时按原样记录。"
+        },
+        "sendReturn": {
+          "type": "object",
+          "description": "宿主发送调用的原样返回值（Codex 线程工具的返回对象），规范 JSON 至多 16 KiB。Wakeflow 只保存它的 sha256 作为 evidenceDigest，不保存内容；它是 Agent 自述，不是宿主观察。"
         }
       }
     },

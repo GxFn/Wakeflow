@@ -4608,3 +4608,26 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话（真实 Notification、npm 安装的 claude、范围外的 Node、worktree cwd 不符都未在现场触发）、lab/live、远端 CI；图谱指纹漂移未刷新。
 
 本批改动 src/（contracts 新增引擎范围词汇、workspace 新增托管文本历史模块，kernel 的 hook 记录/文件名模式/事故/worktree 回执，foundation 的锁与写前恢复，governance 的工作区观察/仓库指针/pod 状态，capabilities 的 observation 与 pod，入口的观察器与 MCP 组合根，hosts 的 Claude hook 片段/助手脚本/agent 文本取值，两份 Schema 与生成类型）、tooling/（构建器 launcher 守卫、插件元数据、release 一致性检查）、tests/（5 份新测试、13 份修改）、assets/agent-text（README 中英文、status 命令、两份 Controller 参考）、CLAUDE.md 与 AGENTS.md（托管文本历史规则）、docs（README 指针、登记 8 行、深挖批次表）、两个制品与耗时表；未提交，main 领先 origin/main 7 个提交（批次 0、1 与此前的提交）。
+
+### 13.168 技术债务批次 3：威胁模型 ADR、助手字节核对、按角色的允许规则、遗留残留观察与自述证据（2026-10-11）
+
+用户在批次 2 提交后要求"继续批次 3"（技术债务深挖 §8 第 3 行"安全最小集"，F7 先于其余）。本批五项，前一项是文字，后四项是不依赖 Q5 裁决的控制：
+
+- **F7 威胁模型（[ADR-0020](../decisions/0020-threat-model-and-trust-boundaries.md)，proposed）。** 写下三类对手与各自的立场——A 诚实但会出错的 Agent 与宿主（运行时必须防住，现有控制以此为设计对手）；B 被仓库内容牵引的产品或 Test Agent（降低误用、保持可见、不替用户授权，不承诺同用户进程级隔离）；C 同一操作系统用户的其他进程与用户本人（只检测报告，不加签名）——证据分级（host-observed / agent-reported / controller-judged）、状态转移归属表（Controller 全部；Design inspect_board、publish_requirement、status；产品 import_target_result、status；Test import_target_result、record_evidence、status）、永不进入跟踪 ledger 的内容、到 Q5 裁决为止接受的残余风险，以及 Q5 的建议裁决。决策索引与 docs/README 登记为 proposed，等用户裁决。
+- **F1 助手字节核对（服务器侧）。** 登记建议的"助手运行前自检摘要"不成立——被改写的文件核对不出自己——改为制品字节在 `wakeflow_prepare_delivery` 签发许可前核对本宿主已发布资产（状态栏与伴随的 tmux 助手）：Claude 组合根把资产期望（`CLAUDE_CODE_HOST_ASSETS`）同时交给观察 facade 与投递 facade，governance 导出 `observeHostAssetState`，不是 current 即以 `host-asset-<status>[:<companion>]` 拒绝签发；status 新增 `hostAssets`（每宿主的 status、settings、companion，同伴宿主 not-applicable）。Controller 文本写明被改写的助手不该跑、由对账重新发布、告诉用户有东西改写了文件。
+- **F2 按角色收窄允许规则（第一步）。** contracts 新增角色工具归属表 `wakeflow-role-tool-access.ts`，诚实性测试核对它与 Design、Target、Test 技能正文点名的工具逐一相同且每个名字都在公共目录；Claude 宿主新增 `claudeCodeMcpPermissionRulesFor(role)`：Controller 整服务器规则，其他角色 `mcp__plugin_wakeflow_wakeflow__<tool>` 逐工具。支撑面设置的根带 `role`（design / test），规则按角色；设置转换新增退役规则表，把以前写进支撑面的整服务器规则精确删除、用户条目原位保留；tmux 助手的 `--allowedTools` 按意图的角色取规则，角色不在表里拒绝 `intent-invalid`。运行时调用者身份校验仍待 Q5。
+- **F4 遗留残留只读观察。** workspace 新增 `wakeflow-legacy-residue-scan.ts`（foundation 新增一个有界的绝对路径目录条目列举端口）：扫描工作区根、在场的仓库根与支撑面根里的 `<!-- wakeflow:scope:start -->` 块、`.claude/settings*.json` 的三条宽泛 Bash 规则与 `additionalDirectories: [".."]`、旧根标记（`workspace.config.json`、`.workspace-active`、`.wakeflow-publish`、`.wakeflow-stage*`、`.wakeflow-maintenance-*`、`.wakeflow-create-stage-*`）与旁边的 `wakeflow-ledger/`，按根、文件、行号报告，至多 64 条，读不出的只计数不当作没有。governance 观察新增 `legacyResidue` 域（full 作用域），status 新增 `legacyResidue`，verify 在 local-layout 门上以 `legacy-residue:<n>` 点名而不改 verdict，fresh-initialize 对工作区根的残留以 `fresh-legacy-residue-present` 拒绝（补全 ADR-0008 决定 1 的"拒绝并列出"）。Claude 宿主的三条宽泛规则常量改为转发 workspace 的唯一来源；dependency-cruiser 的 governance→workspace 允许表收下新模块。不写任何根。
+- **E2 自述证据的定义与投影。** `wakeflow_record_delivery_outcome` 的 `attempt.sendReturn` 接收宿主发送调用的原样返回值，Wakeflow 算其规范 JSON（键排序、无空白、UTF-8）的 sha256 作为 `evidenceDigest`（规范 JSON 至多 16 KiB；同时给出的摘要必须一致，否则 `send-return-digest-mismatch`），记录只留摘要不留内容；评审检查的 `delivery.evidenceKind` 来自事件流派生的结局摘要——第一版把它写进持久化 TargetResult 的构造器，governance 的记录合同按既有键集丢掉了它，评审检查的 Schema 随即拒绝，于是改为只在视图里从聚合结局取值，持久记录不变。Codex 投递文本写明传回原值、这是 Agent 自述、目标线程的 user-prompt-submit 记录优先；Controller 技能第 8 步与投递参考说明四个证据等级。
+
+未做与遗留：助手不自检（设计上不可能，由服务器核对替代）；`--add-dir` 收窄、角色令牌或进程祖先校验、hook 记录链式摘要、按角色暴露工具子集待 Q5；status 的 Demand 路由不显示 evidenceKind（路由不带结局，评审检查与记录结果显示）；Codex 发送返回的真实形状未在现场确认；收窄后的允许规则在真实 Claude Code 会话里的提示行为、被改写助手的拒绝路径、带旧内容的真实工作区上的残留观察都未在现场跑过（测试用夹具）；F5 按 ADR-0020 归为"检测而非防护"，未加签名。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：设置规则、转换、组合、执行器、发布与 tmux 助手、诚实性、投递与评审 123 项（首轮 2 项红：维护执行测试仍期望支撑面放行整服务器、新加的参考段落落进了现场引导 C8 切出的"插件更新"一节，修正后 26/26）；status 服务、维护预览与遗留残留扫描 29 项；投递与评审 49 项（首轮全红：第一版把 evidenceKind 写进持久化 TargetResult 的构造器，governance 的记录合同丢掉它、评审 Schema 随即拒绝，改为视图从聚合结局取值后全绿）。typecheck、Biome lint 与 format、架构规则（模块 869 → 873，依赖 6160 → 6176）、knip 通过。
+- 中途被检查抓到的四处：新宿主模块没登记进 Claude 宿主 tsconfig 的 files 列表，tsc 把 .js/.d.ts 吐在源码旁边、cruiser 把 .ts 当成未被导入的生产根；评审检查 Schema 里的 `$defs.evidenceKind` 是托管证据种类枚举（与投递证据无关），结构化修复时误删一次，从 HEAD 恢复；`isWakeflowWindowRole` 无消费者被 knip 点名后删除；两处脚本追加留下 EOF 空行。
+- 完整门（run-kSeclX，32 分钟）1397/1397 全通过，schema:check 与 build:check 通过；比批次 2 多出的 4 项是本批的新测试。`wf timings apply --receipt .build/verification/run-kSeclX/receipt.json`：耗时表 304 → 305 个文件，测于 2026-10-12（UTC）。两处 EOF 空行在门之后修正：应用耗时表时按门时的字节恢复、应用后再去掉，门没有在最终字节上重跑（差异只有两个尾随换行与耗时表）。
+- `smoke:artifacts`：两个制品 idle、verify ok、hook observer landed；重建后的制品新增角色工具归属表、Claude 的 MCP 规则模块与遗留残留扫描模块。
+- `wf handoff`（含真实 build:check）：七项通过；`git diff --check` 干净。
+- 未运行：原生宿主会话（收窄后的允许规则提示、被改写助手的拒绝、真实工作区的遗留残留、Codex 发送返回的形状都未在现场触发）、lab/live、远端 CI；图谱指纹漂移未刷新。
+
+本批改动 docs/（ADR-0020 与决策索引、登记 5 行、深挖批次表、README 指针）、src/（contracts 新增角色工具归属表、hosts 新增 Claude MCP 规则模块并改设置转换/组合/执行器/发布与 tmux 助手、workspace 新增遗留残留扫描与 fresh 阻塞、foundation 新增目录条目列举端口、governance 观察新增 legacyResidue 域与资产核对导出、capabilities 的投递（sendReturn 摘要、资产核对）、评审（evidenceKind 视图）与观察（hostAssets、legacyResidue、门信息码）、两个入口的 facade 资产、两份 Schema 与生成类型）、tooling（无）、tests（新增 2 份、修改 12 份）、assets/agent-text（Controller 技能第 8 步、status 命令、两份参考、Codex 投递取值）、cruiser 允许表、两个制品与耗时表；未提交，main 领先 origin/main 9 个提交（批次 0–2 与此前的提交）。

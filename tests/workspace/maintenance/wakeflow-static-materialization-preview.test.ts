@@ -8,6 +8,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -527,4 +528,24 @@ test("fresh preview on a root that is not a Git repository blocks with gitignore
   equal(preview.blockerCodes.includes("gitignore-git-repository"), true, preview.blockerCodes.join(","));
   equal(preview.blockerCodes.includes("gitignore-git"), false);
   deepEqual(readdirSync(absolutePath), []);
+});
+
+test("fresh-initialize refuses while the workspace root carries old-plugin markers and writes nothing（F4，ADR-0008 决定 1，ADR-0020）", async (t) => {
+  const workspace = await fixture(t);
+  writeFileSync(path.join(workspace.absolutePath, ".workspace-active"), "", { mode: 0o600 });
+  const preview = await previewWakeflowStaticMaterialization(
+    workspace.root,
+    request("fresh-initialize", desiredConfig()),
+  );
+  equal(preview.status, "blocked");
+  equal(
+    preview.blockerCodes.includes("fresh-legacy-residue-present"),
+    true,
+    JSON.stringify(preview.blockerCodes),
+  );
+  deepEqual(
+    readdirSync(workspace.absolutePath).sort(),
+    [".git", ".workspace-active"],
+    "a blocked fresh preview writes nothing",
+  );
 });

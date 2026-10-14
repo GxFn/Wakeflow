@@ -68,6 +68,7 @@ function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGat
     runtime: { server: null, staleWindows: [], unverifiedWindows: [] },
     domains: { demands: OBSERVED, claims: OBSERVED, pods: OBSERVED },
     configRecheck: "current",
+    legacyResidue: { status: "observed", items: 0 },
     configRef: WAKEFLOW_CONFIG_FILE_REF,
     configDigest: digest("config"),
     layout: "current",
@@ -665,6 +666,15 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
       "window-identity",
     ),
     ["unavailable", "unobserved:1"],
+  );
+  // ADR-0020（F4）：旧插件留下的内容只在 local-layout 门上点名，门仍然通过。
+  deepEqual(
+    verdictOf(healthyFacts({ legacyResidue: { status: "observed", items: 3 } }), "local-layout"),
+    ["pass", "legacy-residue:3"],
+  );
+  deepEqual(
+    verdictOf(healthyFacts({ legacyResidue: { status: "unavailable", items: 0 } }), "local-layout"),
+    ["pass", null],
   );
 
   deepEqual(

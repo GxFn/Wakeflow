@@ -1,3 +1,4 @@
+import { WAKEFLOW_WINDOW_ROLES } from "../../contracts/vocabulary/wakeflow-role-tool-access.js";
 import { parseWakeflowNodeEngineBounds, WAKEFLOW_NODE_ENGINES } from "../../contracts/vocabulary/wakeflow-runtime-engines.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
@@ -6,6 +7,7 @@ import {
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { hostRuntimeRootRef, WAKEFLOW_CONFIG_SCHEMA_VERSION } from "../../kernel/layout.js";
+import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-rules.js";
 
 /**
  * Wakeflow Host / Claude Code：tmux 助手资产（gate-log §13.117 D4）。
@@ -197,7 +199,9 @@ const USER_CLAUDE_ENVIRONMENT_PREFIXES = Object.freeze(["CLAUDE_CODE_USE_", "CLA
 // 每个启动或续上的会话都带的两条 allow 规则（--allowedTools）：Wakeflow MCP 工具与按本助手绝对路径调用的
 // 助手本身。产品与测试窗口的根没有工作区根的 settings，助手又按绝对路径调用，相对规则对不上。
 // MCP 规则必须等于 WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE（测试核对）。
-const MCP_PERMISSION_RULE = "mcp__plugin_wakeflow_wakeflow";
+// 按角色的 MCP 允许规则（ADR-0020 决定 3，F2，§13.168）：Controller 整服务器，其他角色只放行归属表里的工具；
+// 表由 contracts 的归属表在构建本脚本时填入。
+const ROLE_MCP_PERMISSION_RULES = ${JSON.stringify(Object.fromEntries(WAKEFLOW_WINDOW_ROLES.map((role) => [role, claudeCodeMcpPermissionRulesFor(role)])))};
 // 送前屏幕：选择菜单或权限、信任对话框的光标行（"❯ 1. Yes"），此时输入框不在，粘贴会被吞、回车会选默认项。
 const MENU_CURSOR_PATTERN = /^[❯>]\s?[0-9]+[.)]\s/u;
 // resume --in-place 重启助手自己所在的 pane 时（§13.134）：先打印结果，再由脱离的子进程隔几秒 respawn；
@@ -1005,13 +1009,15 @@ function assertPaneAlive(context, command, coordinates) {
 }
 
 // 绝对路径只在助手进程里算出、只进 tmux 的启动命令，不进任何输出。
-function sessionPermissionRules() {
-  return [MCP_PERMISSION_RULE, "Bash(node " + ASSET_PATH + " *)"];
+function sessionPermissionRules(role) {
+  const mcpRules = ROLE_MCP_PERMISSION_RULES[role];
+  if (mcpRules === undefined) refuse("intent-invalid", { field: "role" });
+  return [...mcpRules, "Bash(node " + ASSET_PATH + " *)"];
 }
 
 // pane 里启动 claude 的整条命令：--allowedTools 是变长参数，必须放在意图自己的参数之后、作为最后一个选项，只加一次。
-function claudePaneCommand(resolvedArguments) {
-  return [claudeBinary(), ...resolvedArguments, "--allowedTools", ...sessionPermissionRules()].map(shellQuote).join(" ");
+function claudePaneCommand(resolvedArguments, role) {
+  return [claudeBinary(), ...resolvedArguments, "--allowedTools", ...sessionPermissionRules(role)].map(shellQuote).join(" ");
 }
 
 function paneEnvironmentArguments() {
@@ -1029,7 +1035,7 @@ function intentWindowName(launchIntent, execution) {
 function openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments) {
   const placement = intentPlacement(launchIntent, execution);
   const windowName = intentWindowName(launchIntent, execution);
-  const command = claudePaneCommand(resolvedArguments);
+  const command = claudePaneCommand(resolvedArguments, launchIntent.role);
   const exists = tmux(context, ["has-session", "-t", "=" + context.sessionName]).ok;
   const creation = tmux(context, [
     ...(exists ? ["new-window", "-d", "-t", "=" + context.sessionName] : ["new-session", "-d", "-s", context.sessionName]),
@@ -1137,7 +1143,7 @@ function resumeInPlace(context, windowId, launchIntent, execution, sessionId, op
       refuse("self-mismatch", { hint: "this pane runs a different Claude session than the window binding; register this window again with self instead of resuming it" });
     }
     // 固定的首条 prompt 紧跟 --resume <id>，在变长的 --allowedTools 之前。
-    const command = claudePaneCommand([...resolvedArguments, SELF_RESTART_PROMPT]);
+    const command = claudePaneCommand([...resolvedArguments, SELF_RESTART_PROMPT], launchIntent.role);
     scheduleSelfRespawn(context, respawnArguments(coordinates.paneId, placement, command));
     return {
       ok: true,
@@ -1168,7 +1174,7 @@ function resumeInPlace(context, windowId, launchIntent, execution, sessionId, op
     });
   }
   const before = new Set(sessionStartNames(sessionId));
-  const respawned = tmux(context, respawnArguments(coordinates.paneId, placement, claudePaneCommand(resolvedArguments)));
+  const respawned = tmux(context, respawnArguments(coordinates.paneId, placement, claudePaneCommand(resolvedArguments, launchIntent.role)));
   if (!respawned.ok) refuse("tmux-respawn-failed");
   const hook = waitForNewSessionStart(sessionId, before, options.wait);
   if (hook.status === "pending") assertPaneAlive(context, "resume", coordinates);

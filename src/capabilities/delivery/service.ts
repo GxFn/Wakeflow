@@ -111,7 +111,12 @@ import {
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
+import { CanonicalJsonError, encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
 import { fail, failWithBlockers as rejectWith, isWakeflowError } from "../../kernel/error.js";
+import {
+  type ObservationHostAssets,
+  observeHostAssetState,
+} from "../../governance/observation/workspace-observation.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,
   readHostHookObservations,
@@ -183,6 +188,8 @@ export interface DeliveryHostFacade {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
+  /** 本宿主已发布资产的期望（F1）；没有资产面的宿主为 null 或缺省。 */
+  readonly assets?: Readonly<ObservationHostAssets> | null;
 }
 
 export interface ExecuteDeliveryOptions {
@@ -1037,6 +1044,7 @@ async function executePrepare(
   if (blockers.length > 0) rejectWith(blockers, "$request.targetTaskId");
   const taskPackage = await loadTaskPackage(repository, target, options.signal);
   const route = await loadRoute(context, taskPackage.assignment.windowId);
+  await assertHostAssetsCurrent(context, route);
   const demandId = authority.loaded.identity.demandId;
   const deliveryId = deriveDurableId(
     "target-delivery",
@@ -1102,6 +1110,27 @@ async function executePrepare(
     if (taken.created) await releaseQuietly(context, taken.claim);
     throw error;
   }
+}
+
+/**
+ * F1（ADR-0020 决定 1 的 B 类）：许可一经签发，Controller 就会免提示运行已发布的 tmux 助手去投递，所以
+ * 签发前由服务器核对本宿主已发布资产（状态栏与伴随的助手）的字节。字节不是制品的就拒绝——被改写的助手
+ * 不该跑；对账会重新发布它。只核对投递窗口所在宿主就是本宿主的情形。
+ */
+async function assertHostAssetsCurrent(context: SliceContext, route: WindowRoute): Promise<void> {
+  const assets = context.facade.assets ?? null;
+  if (assets === null || route.binding.hostId !== context.facade.hostId) return;
+  const observed = await observeHostAssetState(
+    context.workspaceRoot,
+    context.facade.hostId,
+    assets,
+    context.options.signal,
+  );
+  if (observed.status === "current") return;
+  rejectWith(
+    [`host-asset-${observed.status}${observed.companion === null ? "" : `:${observed.companion}`}`],
+    "$request.targetTaskId",
+  );
 }
 
 interface PrepareSources {
@@ -1474,6 +1503,36 @@ export async function executePrepareDeliveryRequest(
 
 // ---- outcome ------------------------------------------------------------------
 
+const SEND_RETURN_MAXIMUM_BYTES = 16 * 1024;
+
+/**
+ * E2（ADR-0020 决定 2）：Agent 交回宿主发送调用的原样返回值时，由 Wakeflow 算它规范 JSON 的 sha256 作为
+ * `evidenceDigest`——摘要的定义因此在合同里而不在 Agent 手里；同时给出的 evidenceDigest 必须一致。记录只留
+ * 摘要，不留内容。
+ */
+function normalizeOutcomeAttempt(
+  attempt: RecordDeliveryOutcomeRequest["attempt"],
+): RecordDeliveryOutcomeRequest["attempt"] {
+  if (attempt.sendReturn === undefined) return attempt;
+  let bytes: Uint8Array;
+  try {
+    bytes = encodeCanonicalJson(attempt.sendReturn, "$request.attempt.sendReturn");
+  } catch (error: unknown) {
+    if (error instanceof CanonicalJsonError) {
+      rejectWith(["send-return-invalid"], "$request.attempt.sendReturn");
+    }
+    throw error;
+  }
+  if (bytes.byteLength > SEND_RETURN_MAXIMUM_BYTES) {
+    rejectWith(["send-return-too-large"], "$request.attempt.sendReturn");
+  }
+  const computed = computeSha256Digest(bytes, "$request.attempt.sendReturn");
+  if (attempt.evidenceDigest !== undefined && attempt.evidenceDigest !== computed) {
+    rejectWith(["send-return-digest-mismatch"], "$request.attempt.evidenceDigest");
+  }
+  return Object.freeze({ status: attempt.status, evidenceDigest: computed });
+}
+
 interface OutcomeInput {
   readonly deliveryId: string;
   readonly claimDigest: string;
@@ -1838,7 +1897,7 @@ export async function executeRecordDeliveryOutcomeRequest(
           input: Object.freeze({
             deliveryId: request.deliveryId,
             claimDigest: request.claimDigest,
-            attempt: request.attempt,
+            attempt: normalizeOutcomeAttempt(request.attempt),
             readback: request.readback,
             resolution: request.resolution,
             observedAt: parseInstant(request.observedAt, "$request.observedAt"),

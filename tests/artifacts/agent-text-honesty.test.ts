@@ -7,6 +7,7 @@ import { DELIVERY_REQUIRED_SKILLS } from "../../src/capabilities/delivery/decide
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import { CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS } from "../../src/hosts/claude-code/claude-code-agent-text-profile.js";
 import { CODEX_AGENT_TEXT_PLACEHOLDERS } from "../../src/hosts/codex/codex-agent-text-profile.js";
+import { WAKEFLOW_ROLE_TOOL_ACCESS } from "../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 
 /**
  * agent 面文本的诚实性门（gate-log §13.99 D4、D5、D7）。
@@ -360,5 +361,22 @@ test("源目录恰好是四份技能、四个命令与两份 README，且只有�
   for (const source of SOURCES) {
     if (source.path === "README.zh-CN.md") continue;
     equal(/[一-鿿]/u.test(source.text), false, `${source.path} must be English only (D6)`);
+  }
+});
+
+test("角色工具归属表与技能正文点名的工具逐一相同，且每个名字都在公共目录里（ADR-0020 决定 3，F2，§13.168）", () => {
+  // Design 技能 ↔ design 角色，Target 技能 ↔ 产品窗口，Test 技能 ↔ test 角色；Controller 不收窄，不在表里。
+  const skillOfRole = {
+    design: "wakeflow-design",
+    product: "wakeflow-target",
+    test: "wakeflow-test",
+  } as const;
+  for (const [role, skill] of Object.entries(skillOfRole) as readonly (readonly [
+    keyof typeof skillOfRole,
+    string,
+  ])[]) {
+    const expected = [...skillTokens(skill)].sort();
+    deepEqual([...WAKEFLOW_ROLE_TOOL_ACCESS[role]].sort(), expected, `${role} ↔ ${skill}`);
+    for (const tool of WAKEFLOW_ROLE_TOOL_ACCESS[role]) ok(CATALOG_TOOL_NAMES.includes(tool), tool);
   }
 });

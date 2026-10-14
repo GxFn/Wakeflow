@@ -18,6 +18,7 @@ import {
   recoverClaudeCodeMaintenanceExecution,
 } from "../../../src/hosts/claude-code/claude-code-maintenance-execution.js";
 import {
+  claudeCodePortableSettingsRulesFor,
   WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
 import {
@@ -206,16 +207,17 @@ test("Claude aggregate transaction publishes three portable settings, the two as
       command: claudeCodeStatuslineCommand(workspace.root.absolutePath),
     },
   });
-  // 工作区根多一条只放行 tmux 助手的规则（§13.117 D5）；支撑面仍只有 MCP 一条，且没有任何 Bash 规则。
+  // 工作区根多一条只放行 tmux 助手的规则（§13.117 D5）；支撑面只放行该角色使用的工具（ADR-0020 决定 3），且没有任何 Bash 规则。
   deepEqual(settingsPermission(workspace.absolutePath), [
     WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
     WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
   ]);
   equal(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE.includes(" *)"), true);
   equal(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE.startsWith("Bash(node .wakeflow-local/"), true);
-  for (const root of ["Design", "Test"].map((entry) => path.join(workspace.absolutePath, entry))) {
+  for (const [directory, role] of [["Design", "design"], ["Test", "test"]] as const) {
+    const root = path.join(workspace.absolutePath, directory);
     deepEqual(settingsPermission(root), [
-      WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+      ...claudeCodePortableSettingsRulesFor({ rootKind: "support-surface", role }),
     ]);
     equal(readFileSync(
       path.join(root, ".claude", "settings.json"),

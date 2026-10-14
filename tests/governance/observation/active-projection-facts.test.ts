@@ -215,6 +215,7 @@ function observationOf(
     repositories: unavailable(),
     archives: unavailable(),
     assets: Object.freeze([]),
+    legacyResidue: unavailable(),
   });
 }
 

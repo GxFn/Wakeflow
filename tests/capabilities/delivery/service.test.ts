@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { executeRearmDeliveryRequest } from "../../../src/capabilities/delivery/service.js";
 import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
@@ -640,11 +641,19 @@ test("投递查询不完整不能作未落地判断；独立宿主回执仍可�
       rejectedWith("observation-query-unavailable", "io-failure"),
     );
     unlinkSync(unreadable);
+    // E2（ADR-0020 决定 2）：交回发送返回值原样，Wakeflow 算它规范 JSON 的 sha256 作为 evidenceDigest，记录只留摘要。
+    const sendReturn = { thread_id: "thread-7", message_id: "message-9", status: "ok" };
     const result = await recordFixtureDeliveryOutcome(fixture, prepared, {
-      attempt: { status: "sent", evidenceDigest: `sha256:${"7".repeat(64)}` },
+      attempt: { status: "sent", sendReturn },
     });
     equal(result.outcome.disposition, "accepted");
     equal(result.outcome.evidenceKind, "host-send-return");
+    equal(typeof computeCanonicalJsonSha256Digest(sendReturn), "string");
+    equal(
+      JSON.stringify(result).includes("message-9"),
+      false,
+      "the result carries only the digest",
+    );
     equal(result.outcome.hookRecordId, null);
     equal(existsSync(unknown), true);
     equal(result.event.streamRevision, prepared.event.streamRevision + 1);

@@ -42,14 +42,14 @@ docs/
 | 文档 | 职责 | 状态 |
 | --- | --- | --- |
 | [plan/typescript-reimplementation-plan.md](./plan/typescript-reimplementation-plan.md) | TypeScript 能力重构的阶段、约束 TSD-01 到 TSD-16、执行顺序 P0 与 L0 到 L3、完成定义 | E0 到 E4 全部 `complete`（2026-09-20，gate-log §13.104）；真实宿主进展见 §13.139，Codex main 与 CLI/Git worktree 闭环、关闭已通过；App 原生工作树创建入口、Windows 及发布仍待验证或完成 |
-| [decisions/README.md](./decisions/README.md) | 决策索引 | ADR-0001 到 ADR-0019 已接受；ADR-0003 于 09-03 修订；ADR-0009 两处调整、ADR-0010 的 pod 模型、ADR-0011 需求包均于 09-04 确认；ADR-0010 未决三项于 09-18 关闭 |
+| [decisions/README.md](./decisions/README.md) | 决策索引 | ADR-0001 到 ADR-0019 已接受，ADR-0020（威胁模型）proposed 待 Q5 裁决；ADR-0003 于 09-03 修订；ADR-0009 两处调整、ADR-0010 的 pod 模型、ADR-0011 需求包均于 09-04 确认；ADR-0010 未决三项于 09-18 关闭 |
 | [requirements/capabilities/](./requirements/capabilities/) | 能力卡，按能力组逐项确认的场景、不变量、宿主差异与实现判断 | 第 1 到 10 组全部已确认（2026-09-04） |
 | [requirements/wakeflow-functions-and-scenarios.md](./requirements/wakeflow-functions-and-scenarios.md) | 自顶向下的功能与场景总览：定位、核心对象、主流程直线、F1 到 F11 功能清单、宿主差异、明确不做 | draft，待用户确认理解一致 |
 | [requirements/typescript-dual-artifact-build.md](./requirements/typescript-dual-artifact-build.md) | 单一源码、双宿主制品、轻量测试需求 | 已确认 |
 | [requirements/README.md](./requirements/README.md) | 需求锚点索引，含归档中仍被引用的 D1 到 D41 与 Pod 需求 | active |
 | [standards/resource-handling-standard.md](./standards/resource-handling-standard.md) | 资源处理归一标准与收敛矩阵 | 已确认，RH-1 到 RH-3 已实现 |
 | [standards/documentation-standard.md](./standards/documentation-standard.md) | 文档编写标准 | active |
-| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.167（2026-10-11）；§13.167 为技术债务批次 2（未提交），§13.166 为批次 1（已提交 aa7cbb3e、17093efb），§13.165 为批次 0（已提交 010fb611、fd1f2201）；§13.161–§13.164 为 Codex 阶段复审修复与开发便捷脚本三批，已提交；原生会话未执行，图谱指纹漂移未刷新 |
+| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.168（2026-10-11）；§13.168 为技术债务批次 3（未提交），§13.167 为批次 2（已提交 34445a04、f75a0228），§13.166 为批次 1（已提交 aa7cbb3e、17093efb），§13.165 为批次 0（已提交 010fb611、fd1f2201）；§13.161–§13.164 为 Codex 阶段复审修复与开发便捷脚本三批，已提交；原生会话未执行，图谱指纹漂移未刷新 |
 | [progress/file-review-ledger.md](./progress/file-review-ledger.md) | 逐文件审阅台账 | active |
 | [reviews/2026-09-03-typescript-checkpoint-review.md](./reviews/2026-09-03-typescript-checkpoint-review.md) | 关键节点架构与实现评估、缺口分析、建设计划建议 | 评估建议，待讨论 |
 | [reviews/2026-09-04-flow-optimization-analysis.md](./reviews/2026-09-04-flow-optimization-analysis.md) | 回传、调用形状、完成留痕、测试记录对比、重设计边界的旧代码事实、业界对照与设计建议 | 评估建议，已由 ADR-0012 接受 |
@@ -59,7 +59,7 @@ docs/
 | [reviews/2026-10-02-authority-scope-and-runtime-evidence-design.md](./reviews/2026-10-02-authority-scope-and-runtime-evidence-design.md) | 配置作用域、派生发布、运行证据主体及协议启用的根因、三个反例和系统性方案 | accepted；基线反例见 §13.145，首轮实现见 §13.146；旧结构兼容/迁移部分已由 ADR-0018 取代，当前基线见 §13.147 |
 | [reviews/2026-10-03-privacy-and-admission-review.md](./reviews/2026-10-03-privacy-and-admission-review.md) | 隐私文本分类、路径白名单、证据扫描、回调数据边界与锁释放竞争的根因和复验 | active；两轮源码修复及验证见 §13.150/151 |
 | [reviews/2026-10-03-development-and-operations-tooling-plan.md](./reviews/2026-10-03-development-and-operations-tooling-plan.md) | 开发、测试、安装、排障与原生验收的工具缺口、复用边界、优先级和分批设计 | accepted；测试记录脚手架和维护者只读故障包已实现，本机Codex双pod场景已验证；无源码诊断、自动宿主取证、impact和远端CI保留后续范围 |
-| [reviews/2026-10-07-technical-debt-review.md](./reviews/2026-10-07-technical-debt-review.md) | 技术债务深挖：134 项登记逐条核实、五个债务簇、量化基线、八个处置批次与待裁决事项 | in-progress；批次 0–2 已执行（§13.165–§13.167，批次 2 未提交），批次 3 起与裁决项待用户确认 |
+| [reviews/2026-10-07-technical-debt-review.md](./reviews/2026-10-07-technical-debt-review.md) | 技术债务深挖：134 项登记逐条核实、五个债务簇、量化基线、八个处置批次与待裁决事项 | in-progress；批次 0–3 已执行（§13.165–§13.168，批次 3 未提交），批次 4 起与裁决项待用户确认 |
 | [reviews/2026-10-06-developer-scripts-and-scaffolding-plan.md](./reviews/2026-10-06-developer-scripts-and-scaffolding-plan.md) | 开发便捷脚本与脚手架的盘点、按场景排序的需求、第一批设计与后续批次 | active；第一批（构建锁、受影响测试、交接检查、版本准备、运行器与 CLI 修正）见 §13.162，第二批（mcp call、cache refresh、test flaky、atlas drift、scaffold、timings apply）见 §13.163，第三批（impact report、scaffold requirement）见 §13.164 |
 | [references/maintainer-tools.md](./references/maintainer-tools.md) | 已实现维护命令的使用、证据、退出码及边界 | active；verify、doctor环境/制品/工作区与私有故障包、受限分享、耗时建议、lab、故障/模型测试、live、capture、CI字节核验，以及构建锁、受影响测试、交接检查、版本准备、制品工具调用、缓存刷新、偶发分诊、图谱漂移、脚手架（用例、日志节点、需求包草稿）、耗时表写回与变更影响报告 |
 | [references/legacy-alignment-ledger.md](./references/legacy-alignment-ledger.md) | 旧 JavaScript 模块逐个核对代码逻辑在新 TypeScript 里的 owner 的对齐台账 | active；按旧模块判定 covered / 其它，参考对象为旁路只读副本 |

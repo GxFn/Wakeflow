@@ -346,3 +346,21 @@ edit. That is not a failure to repair; it is the edit being respected. A
 window's runtime projection that is missing or stale is different: verify names
 the window in its `window-runtime-projection` gate and reconcile rebuilds it;
 only an unreadable one stays reported.
+
+`hostAssets` lists the files Wakeflow published for each host (the status line
+and, on Claude Code, the tmux helper beside it) and whether their bytes are
+still the artifact's. A helper that is `drift`, `missing` or `mode` is not
+yours to run: `wakeflow_prepare_delivery` refuses with `host-asset-<status>`
+until a reconcile republishes it. Tell the user that something rewrote the
+file; never repair it by hand.
+
+`legacyResidue` lists what the old JavaScript plugin left behind in the
+workspace root, the present repository roots and the support-surface roots:
+`scope-block` (an old instruction block the product windows still read),
+`broad-permission` and `additional-directories` (settings entries that let a
+window run shell commands or edit the parent directory without a prompt),
+`root-marker` and `ledger-directory`. They are user-owned files: report each
+one with its root, path and line and let the user delete them; Wakeflow never
+edits a product repository. `unreadable` counts files it could not check,
+which is not an absence. A fresh initialization refuses while the workspace
+root itself carries one (`fresh-legacy-residue-present`).

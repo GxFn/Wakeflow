@@ -98,7 +98,7 @@ Perform the host effect exactly once: {{deliveryAction}} Then call
 `wakeflow_record_delivery_outcome` with the permit's delivery identity and
 fence. Wakeflow derives the disposition from evidence, not from your
 impression: accepted needs the target session's `user-prompt-submit` record
-matching the permit's prompt, or the host send call's own success return. A
+matching the permit's prompt, or your own report of the host send's return. A
 missing readback is indeterminate, never a failure; only a send that provably
 failed before touching the session is re-armed with `wakeflow_rearm_delivery`,
 and an indeterminate delivery is resolved as the reference says, never resent

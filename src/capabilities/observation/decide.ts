@@ -283,6 +283,11 @@ export interface WorkspaceGateFacts {
     readonly codes: readonly string[];
   }>;
   readonly ledger: string;
+  /** 旧插件留下的内容（F4）：只作信息报在 local-layout 门上，不改变 verdict。 */
+  readonly legacyResidue: Readonly<{
+    readonly status: "observed" | "unavailable";
+    readonly items: number;
+  }>;
   readonly board: Readonly<{
     readonly status: "observed" | "unavailable";
     readonly skipped: number;
@@ -425,6 +430,8 @@ function localLayoutGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   const codes = [
     ...(local.status === "ready" ? [] : [`local:${local.status}`, ...local.codes]),
     ...(facts.layout === "current" ? [] : [`active:${facts.layout}`]),
+    // ADR-0020（F4）：用户所有的遗留内容只点名，不是门的失败。
+    ...(facts.legacyResidue.items > 0 ? [`legacy-residue:${facts.legacyResidue.items}`] : []),
   ];
   return gate(
     "local-layout",

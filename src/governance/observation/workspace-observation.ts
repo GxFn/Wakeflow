@@ -93,6 +93,10 @@ import {
   observeRepositoryPointers,
   type RepositoryPointerObservation,
 } from "./repository-pointer-observation.js";
+import {
+  scanWakeflowLegacyResidue,
+  type WakeflowLegacyResidueScan,
+} from "../../workspace/wakeflow-legacy-residue-scan.js";
 
 /**
  * Wakeflow Governance / Observation：一次观察，多份投影（能力卡 9 §9.1，gate-log §13.94 D4）。
@@ -257,6 +261,11 @@ export interface WorkspaceObservation {
    */
   readonly archives: ObservedDomain<Readonly<ObservedArchivedDemands>>;
   readonly assets: readonly Readonly<ObservedHostAsset>[];
+  /**
+   * 旧插件留下的内容（ADR-0020，F4，§13.168）：工作区根、每个在场的仓库根与支撑面根里的旧指令块、
+   * 宽泛允许规则、旧根标记与旁边的 ledger 目录。用户所有的发现，只报告；只在 full 作用域读。
+   */
+  readonly legacyResidue: ObservedDomain<Readonly<WakeflowLegacyResidueScan>>;
 }
 
 export interface ObserveWorkspaceOptions {
@@ -705,7 +714,7 @@ type SettingsEntryStatus = Exclude<ObservedHostAsset["settings"], "not-applicabl
 
 async function observeAssetFile(
   root: RootedDirectory,
-  host: Readonly<ObservationHost>,
+  host: Readonly<Pick<ObservationHost, "hostId">>,
   asset: Readonly<{ readonly fileName: string; readonly digest: Sha256Digest }>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<{ readonly status: AssetFileStatus; readonly issue: string | null }>> {
@@ -782,9 +791,25 @@ async function observeSettingsEntry(
   }
 }
 
+/** 一个宿主已发布资产的期望：状态栏资产、它的设置条目与同目录的伴随资产（tmux 助手）。 */
+export type ObservationHostAssets = NonNullable<ObservationHost["statuslineAsset"]>;
+
+/**
+ * F1（ADR-0020 决定 1 的 B 类）：按宿主核对已发布资产的字节与设置条目。投递许可签发前由服务器（制品
+ * 字节）调用——被改写的助手自己核对不出自己，只有服务器侧的核对有意义。
+ */
+export async function observeHostAssetState(
+  root: RootedDirectory,
+  hostId: WakeflowHostId,
+  assets: Readonly<ObservationHostAssets>,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<ObservedHostAsset>> {
+  return observeHostAsset(root, { hostId, statuslineAsset: assets }, hostId, signal);
+}
+
 async function observeHostAsset(
   root: RootedDirectory,
-  host: Readonly<ObservationHost>,
+  host: Readonly<Pick<ObservationHost, "hostId" | "statuslineAsset">>,
   currentHostId: WakeflowHostId | null,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ObservedHostAsset>> {
@@ -995,6 +1020,10 @@ export async function observeWorkspace(
           ),
         )
       : Object.freeze({ status: "unavailable" as const, issue: "scope:projection", value: null });
+  const legacyResidue =
+    scope === "full"
+      ? await observeDomain("legacyResidue", () => observeLegacyResidue(root, snapshot))
+      : Object.freeze({ status: "unavailable" as const, issue: "scope:projection", value: null });
   return Object.freeze({
     observedAt,
     scope,
@@ -1012,7 +1041,26 @@ export async function observeWorkspace(
     repositories,
     archives,
     assets: Object.freeze(assets),
+    legacyResidue,
   });
+}
+
+/** 遗留残留只看在场的配置根：工作区根、仓库根与支撑面根；缺席的根没有东西可报。 */
+async function observeLegacyResidue(
+  root: RootedDirectory,
+  snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
+): Promise<Readonly<WakeflowLegacyResidueScan>> {
+  const roots = [
+    { key: "workspace.root", absolutePath: root.absolutePath },
+    ...snapshot.placements.roots
+      .filter(
+        (entry) =>
+          (entry.key.startsWith("repository.") || entry.key.startsWith("support.")) &&
+          entry.state === "present",
+      )
+      .map((entry) => ({ key: entry.key, absolutePath: entry.realPath ?? entry.absolutePath })),
+  ];
+  return scanWakeflowLegacyResidue(roots);
 }
 
 /** 声明是否孤儿：持有者不是活动 Demand，或窗口当前绑定不是声明记下的那一代。 */

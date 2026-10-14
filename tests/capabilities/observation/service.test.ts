@@ -345,6 +345,22 @@ test("status 不带 demandId：overall、看板计数、Demand、窗口身份、
   equal(status.kind, "WakeflowStatus");
   equal(status.observedAt, CLOCK.clock());
   equal(status.overall, "active");
+  // ADR-0020：Codex 制品没有资产面，两份宿主资产都是 not-applicable；干净的工作区没有遗留残留。
+  equal(status.hostAssets.length, 2);
+  deepEqual(
+    plain(status.hostAssets).map((asset) => [asset.status, asset.settings, asset.companion]),
+    [
+      ["not-applicable", "not-applicable", null],
+      ["not-applicable", "not-applicable", null],
+    ],
+  );
+  deepEqual(plain(status.legacyResidue), {
+    status: "observed",
+    issue: null,
+    items: [],
+    itemsOmitted: 0,
+    unreadable: 0,
+  });
   equal(status.config.language, "en");
   deepEqual([status.config.pods, status.config.windows, status.config.repositories], [1, 4, 1]);
   deepEqual(plain(status.board.counts), {

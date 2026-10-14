@@ -1412,6 +1412,11 @@ async function inspectReview(
   ) {
     fail("unexpected", "result-missing", "$request");
   }
+  if (!("outcome" in aggregateTarget.currentDelivery)) {
+    fail("unexpected", "outcome-missing", "$request");
+  }
+  // ADR-0020 决定 2：落地证据的等级来自事件流派生的结局摘要，持久化的 TargetResult 不带它。
+  const deliveryEvidenceKind = aggregateTarget.currentDelivery.outcome.evidenceKind;
   const callback = aggregateTarget.currentDelivery.targetResult.callback;
   const callbackStatus = deriveTargetResultCallbackStatus({
     issuedAt: callback.issuedAt,
@@ -1439,7 +1444,15 @@ async function inspectReview(
       taskPackageSourceEvent: unit.target.taskPackageSourceEvent,
       taskPackage: unit.target.taskPackage,
       targetResultSourceEvent: unit.target.targetResultSourceEvent,
-      targetResult: unit.target.targetResult,
+      // ADR-0020 决定 2：评审者要看见落地证据是宿主观察还是 Agent 自述。持久化的 TargetResult 不带它，
+      // 证据等级来自事件流派生的结局摘要。
+      targetResult: {
+        ...unit.target.targetResult,
+        delivery: {
+          ...unit.target.targetResult.delivery,
+          evidenceKind: deliveryEvidenceKind,
+        },
+      },
       priorReviewHistory: unit.target.priorReviewHistory.map((entry) => ({
         sourceEvent: entry.sourceEvent,
         decision: decisionSummary(entry.decision),

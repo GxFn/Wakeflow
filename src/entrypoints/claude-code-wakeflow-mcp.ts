@@ -49,11 +49,30 @@ import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-e
 
 const CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-claude-code" as const;
 
+/** 本宿主已发布资产的期望：状态栏资产、它的设置条目与同目录的 tmux 助手（§13.117 D4）。 */
+const CLAUDE_CODE_HOST_ASSETS = Object.freeze({
+  fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+  digest: CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
+  settings: Object.freeze({
+    path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+    key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+    expectedEntry: claudeCodeStatuslineSettingsEntry,
+  }),
+  companions: Object.freeze([
+    Object.freeze({
+      fileName: CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
+      digest: CLAUDE_CODE_TMUX_ASSET_DIGEST,
+    }),
+  ]),
+});
+
 const CLAUDE_CODE_HOST_FACADE = Object.freeze({
   hostId: "claude-code" as const,
   resourceProfile: claudeCodeWorkspaceHostResourceProfile,
   identityProfile: claudeCodeWindowHostIdentityProfile,
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
+  // F1（ADR-0020）：投递许可签发前核对这些资产的字节。
+  assets: CLAUDE_CODE_HOST_ASSETS,
 });
 
 /** 观察读两个宿主的绑定、hook 通道与资产：制品固定携带两份 profile（§13.94 D1）。 */
@@ -66,22 +85,7 @@ const CLAUDE_CODE_OBSERVATION_FACADE = Object.freeze({
       hostId: "claude-code" as const,
       resourceProfile: claudeCodeWorkspaceHostResourceProfile,
       identityProfile: claudeCodeWindowHostIdentityProfile,
-      statuslineAsset: Object.freeze({
-        fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
-        digest: CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
-        settings: Object.freeze({
-          path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
-          key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
-          expectedEntry: claudeCodeStatuslineSettingsEntry,
-        }),
-        // tmux 助手与状态栏同目录、同门核对（§13.117 D4）。
-        companions: Object.freeze([
-          Object.freeze({
-            fileName: CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
-            digest: CLAUDE_CODE_TMUX_ASSET_DIGEST,
-          }),
-        ]),
-      }),
+      statuslineAsset: CLAUDE_CODE_HOST_ASSETS,
     }),
     Object.freeze({
       hostId: "codex" as const,

@@ -73,7 +73,11 @@ const WINDOW_BOOTSTRAP =
 
 const DELIVERY_ACTION =
   "send the permit's prompt into the target window's thread with your Codex thread " +
-  "tool, once, and keep exactly what that send call returned.";
+  "tool, once, and keep exactly what that send call returned. When you record the outcome, " +
+  "pass that return value unchanged as `attempt.sendReturn`: Wakeflow stores only the sha256 " +
+  "of its canonical JSON as the attempt's evidence digest. This is your own report of the " +
+  "send, not host evidence; a `user-prompt-submit` hook record from the target thread, when " +
+  "one exists, outranks it.";
 
 const WORKTREE_LAUNCH =
   "create a linked checkout from the configured product repository's local HEAD using " +

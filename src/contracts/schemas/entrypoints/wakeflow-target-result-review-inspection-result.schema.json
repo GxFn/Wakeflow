@@ -1657,6 +1657,7 @@
         "fence",
         "outcomeDigest",
         "disposition",
+        "evidenceKind",
         "readbackStatus",
         "observedAt"
       ],
@@ -1684,6 +1685,10 @@
         },
         "disposition": {
           "enum": ["accepted", "indeterminate"]
+        },
+        "evidenceKind": {
+          "description": "结局的证据等级（ADR-0020 决定 2）：hook-record 是宿主观察所得，host-send-return 与 agent-declaration 是 Agent 自述，controller-resolution 是 Controller 的解决。",
+          "enum": ["hook-record", "host-send-return", "agent-declaration", "controller-resolution"]
         },
         "readbackStatus": {
           "enum": ["confirmed", "pending", "unavailable"]

@@ -41,6 +41,8 @@ const CODEX_HOST_FACADE = Object.freeze({
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
+  /** Codex 没有已发布资产面，没有东西可核对（F1）。 */
+  assets: null,
 });
 
 /**

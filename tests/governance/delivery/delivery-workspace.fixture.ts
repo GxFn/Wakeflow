@@ -343,7 +343,12 @@ export async function landFixturePrompt(
 export interface RecordFixtureOutcomeOverrides {
   readonly idempotencyKey?: string;
   readonly expectedStreamRevision?: number;
-  readonly attempt?: Readonly<{ readonly status: "sent" | "failed-before-send" | "unknown"; readonly evidenceDigest?: string }>;
+  readonly attempt?: Readonly<{
+    readonly status: "sent" | "failed-before-send" | "unknown";
+    readonly evidenceDigest?: string;
+    /** E2（ADR-0020）：宿主发送调用的原样返回值，Wakeflow 只记它的摘要。 */
+    readonly sendReturn?: Readonly<Record<string, unknown>>;
+  }>;
   readonly readback?: Readonly<{ readonly status: "confirmed" | "pending" | "unavailable"; readonly evidenceDigest?: string }>;
   readonly resolution?: Readonly<{ readonly disposition: "accepted" | "rejected-before-send"; readonly hookRecordId?: string; readonly rationale: string }>;
   readonly observedAt?: UtcInstant;

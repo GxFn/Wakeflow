@@ -31,7 +31,8 @@ import {
   executeClaudeCodeTmuxAssetOperation,
   planClaudeCodeTmuxAssetOperation,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
-import { WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
+import { claudeCodeMcpPermissionRulesFor } from "../../../src/hosts/claude-code/claude-code-mcp-permission-rules.js";
+import type { WakeflowWindowRole } from "../../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { writeFakeCli } from "../../support/fake-cli.js";
 
@@ -207,14 +208,14 @@ function shellWords(command: string): readonly string[] {
   return result.stdout.split("\0").slice(0, -1);
 }
 
-/** launch 与 resume 的启动命令以恰好一次 --allowedTools 和两条规则结尾（MCP 规则与助手的绝对路径规则）。 */
-function assertSessionPermissionRules(current: Fixture, command: string): void {
+/**
+ * launch 与 resume 的启动命令以恰好一次 --allowedTools 结尾：该角色的 MCP 规则（Controller 整服务器，
+ * 其他角色逐工具，ADR-0020 决定 3）加助手的绝对路径规则。
+ */
+function assertSessionPermissionRules(current: Fixture, command: string, role: WakeflowWindowRole = "product"): void {
   const words = shellWords(command);
-  deepEqual(words.slice(-3), [
-    "--allowedTools",
-    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-    `Bash(node ${current.assetPath} *)`,
-  ]);
+  const expected = ["--allowedTools", ...claudeCodeMcpPermissionRulesFor(role), `Bash(node ${current.assetPath} *)`];
+  deepEqual(words.slice(-expected.length), expected);
   equal(words.filter((word) => word === "--allowedTools").length, 1, command);
 }
 
@@ -275,9 +276,12 @@ function launchIntent(
   displayTitle: string,
   cwd: string,
   extraArguments: readonly string[] = [],
+  // 夹具里只有 Controller 与产品窗口两种标题；角色决定 --allowedTools 的 MCP 规则（§13.168）。
+  role: WakeflowWindowRole = displayTitle === "Controller" ? "controller" : "product",
 ): Record<string, unknown> {
   return {
     intentDigest: INTENT_DIGEST,
+    role,
     podId: "pod_99999999-9999-4999-8999-999999999999",
     podName: "main",
     podPlacement: "primary",
@@ -582,7 +586,7 @@ test("launch opens the session or a window from the intent, freezes the title, w
   equal(command.includes("'--model' 'opus'"), true);
   equal(command.includes(SESSION_ID_PLACEHOLDER), false);
   equal(command.endsWith("'"), true);
-  assertSessionPermissionRules(current, command);
+  assertSessionPermissionRules(current, command, "controller");
   deepEqual(log[3], ["set-option", "-w", "-t", "@1", "automatic-rename", "off"]);
   deepEqual(log[4], ["set-option", "-w", "-t", "@1", "@wakeflow_program_id", PROGRAM_ID]);
   deepEqual(log[5], ["set-option", "-w", "-t", "@1", "@wakeflow_host_id", "claude-code"]);

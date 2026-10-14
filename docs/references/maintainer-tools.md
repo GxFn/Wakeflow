@@ -163,7 +163,9 @@ privacy 组增加了基于 fast-check 的定向命令模型：添加合成凭证
 WAKEFLOW_MODEL_SEED=123 WAKEFLOW_MODEL_RUNS=1000 npm run wf -- fault run --suite privacy --concurrency 2
 ```
 
-运行次数范围为 1–1000，seed 为有符号 32 位整数；模型选项进入 verify 回执。失败时原始阶段日志保留 fast-check 的 seed、path、replayPath 与缩减样本，可通过 `WAKEFLOW_MODEL_PATH`、`WAKEFLOW_MODEL_REPLAY_PATH` 配合原 seed 重放。仅在需要重放时传入失败日志中的值，不从另一个模型借用。其他业务序列的生成试验仍待按收益增加。[fast-check 模型与重放](https://fast-check.dev/docs/advanced/model-based-testing/)
+运行次数范围为 1–1000，seed 为有符号 32 位整数；模型选项进入 verify 回执。失败时原始阶段日志保留 fast-check 的 seed、path、replayPath 与缩减样本，可通过 `WAKEFLOW_MODEL_PATH`、`WAKEFLOW_MODEL_REPLAY_PATH` 配合原 seed 重放。仅在需要重放时传入失败日志中的值，不从另一个模型借用。其他业务序列的生成试验仍待按收益增加。
+
+自 2026-10-14（gate-log §13.169）起，模型测试失败时还把反例写成 `.build/model/<模型名>.json`（`tooling/testing/model-options.ts` 的 `persistModelCounterexample`：模型名、seed、numRuns、从失败文本里取出的 fast-check path 与缩减后的反例文本，不含环境变量或本机路径），CI 以 `WAKEFLOW_MODEL_SEED=${{ github.run_number }}` 逐次轮换种子并把该目录随摘要一起上传，所以远端失败可以用文件里的 seed 与 path 在本地重放；本地默认种子不变。[fast-check 模型与重放](https://fast-check.dev/docs/advanced/model-based-testing/)
 
 ## 7. 原生项目聊天行动单与回执一致性
 
@@ -206,7 +208,7 @@ npm run --silent wf -- live verify --id live-EXAMPLE --evidence "<collected-evid
 
 ## 8. CI 与可分享验证摘要
 
-`.github/workflows/verify.yml` 为 pull request、main push 和手动触发分别运行 `gate` / `artifact` × Ubuntu 24.04 / macOS 15，固定 Node 24.19.0、npm 11.17.0、2 个测试 worker。矩阵不隐藏失败；被后续提交取代的 pull request 运行会被取消，main 上的每次 push 都保留完整记录，作业外层期限 120 分钟（§13.161）。workflow 只给 contents: read，不保留 checkout 凭证；不调用原生聊天、发布或安装缓存操作。
+`.github/workflows/verify.yml` 为 pull request、main push 和手动触发分别运行 `gate` / `artifact` × Ubuntu 24.04 / macOS 15，固定 Node 24.19.0、npm 11.17.0、2 个测试 worker；另有一个 Ubuntu 上的 `handoff` 作业运行 `wf handoff`（完整历史检出，§15 的只读交接检查）。模型测试的种子按 `github.run_number` 轮换，反例文件 `.build/model/*.json` 随摘要上传（§6）。矩阵不隐藏失败；被后续提交取代的 pull request 运行会被取消，main 上的每次 push 都保留完整记录，作业外层期限 120 分钟（§13.161）。workflow 只给 contents: read，不保留 checkout 凭证；不调用原生聊天、发布或安装缓存操作。
 
 三个 Action 固定完整 Git 提交，版本来源为 [checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1)、[setup-node v7.0.0](https://github.com/actions/setup-node/releases/tag/v7.0.0)、[upload-artifact v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1)。本地保存配置和静态验证不等于 GitHub 上已经运行成功；提交、推送与远端执行仍需分别完成。Windows 尚不纳入完整门矩阵，不通过 skip 将其说成支持。
 
@@ -405,6 +407,8 @@ npm run --silent wf -- test flaky --files tests/tooling/lab/workflow.test.ts --r
 ```
 
 同一组文件重复运行 N 次（1–20），每次是一条完整的聚焦运行，整个分诊持有构建锁；输出每次的结果与耗时，混合结果标为 `flaky` 且非零退出，全部失败也非零。它不自动重试洗绿，日志与 `triage.json` 留在 `.build/flaky/run-…/`。
+
+负载敏感用例带标签（`tests/support/load-sensitive.ts` 的 `loadSensitive(t, reason)`，open-items D9）：真实子进程、墙钟等待或外部 CLI 的用例——lab 的 240 秒实验、读写许可的真实读者进程与 latch 等待、排他锁的八方争用、tmux 助手的脱离重启、运行器取消真实测试子进程——在测试诊断里写出原因，并在 `WAKEFLOW_TEST_CONCURRENCY` 高于推荐值 2 时点名（CI 固定 2 个 worker；本地 `wf verify` 缺省一 CPU 一 worker，复现门的负载特征用 `WAKEFLOW_TEST_CONCURRENCY=2`）；它不改变断言。开发机繁忙时 `WAKEFLOW_TEST_SKIP_LOAD_SENSITIVE=1` 把这些用例标为 skip，门与 CI 从不设置它，所以不能用它把偶发失败说成通过。latch 与锁等待仍是墙钟（`rooted-exclusive-file-lock.ts` 的 `waitForRetry`、读写许可的 latch），时钟注入未做。
 
 ## 20. 图谱漂移摘要
 

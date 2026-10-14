@@ -206,13 +206,13 @@ Everything hand-written is TypeScript under `src/`, `tooling/` and `tests/`;
 | `assets/agent-text/` | The single source of the skills, commands and READMEs shipped in both artifacts; host differences are nine placeholders filled by each host's profile. |
 | `assets/brand/`, `assets/release/version.json` | Brand assets and the single release version input. |
 | `tooling/` | Build, codegen, architecture, test and release tooling. |
-| `tests/` | Unit, capability, host, artifact and scenario tests; `tests/scenarios/` runs twenty end-to-end scenarios through the public tools in a disposable workspace. |
+| `tests/` | Unit, capability, host, artifact and scenario tests; `tests/scenarios/` runs the 23 end-to-end scenarios through the public tools in a disposable workspace, once per host (Codex and Claude Code). |
 | `plugins/` | The two generated plugin artifacts. Rebuild them; do not edit them. |
 | `docs/` | The development documentation system; start at `docs/README.md`. |
 
 ```sh
 npm test                       # typecheck, architecture rules, lint, format, knip, tests, schema drift, artifact check
-npm run scenario:acceptance    # the twenty end-to-end scenarios only
+npm run scenario:acceptance    # the end-to-end scenarios only (both hosts)
 npm run build:artifacts        # build both artifacts into .build/artifacts (candidates)
 npm run build:artifacts:committed  # rebuild plugins/ from source
 npm run build:check            # rebuild and compare against plugins/ byte for byte

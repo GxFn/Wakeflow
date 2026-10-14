@@ -22,7 +22,7 @@
     "check:typescript": "npm run typecheck && npm run check:architecture && npm run lint && npm run format:check && npm run check:unused && npm run test:typescript && npm run schema:check && npm run build:check",
     "release:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/release/check-release-consistency.js --require-main --require-clean --require-tag --require-remote",
     "test": "npm run check:typescript",
-    "scenario:acceptance": "npm run test:typescript:focused -- tests/scenarios/wakeflow-scenario-acceptance.test.ts",
+    "scenario:acceptance": "npm run test:typescript:focused -- tests/scenarios",
     "lint": "biome lint src tests tooling",
     "lint:fix": "biome lint --write src tests tooling",
     "format": "biome format --write src tests tooling",

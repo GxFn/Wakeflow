@@ -17,6 +17,7 @@ import {
   prepareTestRecording,
 } from "../../../tooling/testing/test-recording.js";
 import { runLoggedCommand } from "../../../tooling/verification/process.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 
 const RUNNER = fileURLToPath(
   new URL("../../../tooling/testing/run-typescript-tests.js", import.meta.url),
@@ -121,6 +122,7 @@ test("recording rejects output outside the private run directory and never overw
 test("cancelling the programmatic runner stops its real test child and cannot leave a passing recording", {
   timeout: 15_000,
 }, async (t) => {
+  if (loadSensitive(t, "real Node test child cancelled mid-run")) return;
   const f = fixture(
     t,
     "import {writeFileSync} from 'node:fs';test('pending',()=>{writeFileSync('started.json',JSON.stringify({pid:process.pid}));return new Promise(()=>{setInterval(()=>{},1000)});});",

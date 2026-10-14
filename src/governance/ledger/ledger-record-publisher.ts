@@ -2,26 +2,38 @@ import { types } from "node:util";
 
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import {
   createDirectoryTreeCandidateDurably,
-  planDirectoryTreeCandidate,
-  settleDirectoryTreeCandidateDurably,
-  DurableDirectoryTreeCandidateError,
   type DirectoryTreeCandidateFileInput,
   type DirectoryTreeCandidateResult,
+  DurableDirectoryTreeCandidateError,
+  planDirectoryTreeCandidate,
+  settleDirectoryTreeCandidateDurably,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
+  type LedgerAuthorityRecord,
+  LedgerAuthorityRecordError,
   parseLedgerAuthorityRecord,
   renderLedgerAuthorityRecord,
-  LedgerAuthorityRecordError,
-  type LedgerAuthorityRecord,
 } from "./ledger-authority-record.js";
+import {
+  LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS,
+  LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH,
+  LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES,
+  LEDGER_AUTHORITY_MAXIMUM_TREE_FILES,
+  LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES,
+  LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES,
+  LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
+  LEDGER_DURABLE_DIRECTORY_MODE,
+  LEDGER_DURABLE_FILE_MODE,
+  LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
+} from "./ledger-authority-storage-policy.js";
 import {
   throwLedgerAuthorityStoreError as fail,
   type LedgerAuthorityMemberInput,
@@ -29,10 +41,10 @@ import {
 } from "./ledger-authority-store-contract.js";
 import {
   createLedgerRecordPublicationIntent,
+  type LedgerRecordPublicationIntent,
+  LedgerRecordPublicationIntentError,
   renderLedgerRecordPublicationIntent,
   sameLedgerRecordPublicationIntent,
-  LedgerRecordPublicationIntentError,
-  type LedgerRecordPublicationIntent,
 } from "./ledger-record-publication-intent.js";
 import {
   ensureLedgerRecordPublicationIntent,
@@ -47,18 +59,6 @@ import {
   settleCommittedLedgerIntent,
   withLedgerRecordPublicationLock,
 } from "./ledger-record-publication-storage.js";
-import {
-  LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS,
-  LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH,
-  LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES,
-  LEDGER_AUTHORITY_MAXIMUM_TREE_FILES,
-  LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES,
-  LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES,
-  LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
-  LEDGER_DURABLE_DIRECTORY_MODE,
-  LEDGER_DURABLE_FILE_MODE,
-  LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
-} from "./ledger-authority-storage-policy.js";
 
 /**
  * Wakeflow Governance / Ledger：单记录聚合的暂存发布编排。
@@ -196,6 +196,8 @@ function preparePublication(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
+      // 规划候选树先核对取消信号：已取消的调用是 aborted，不是成员输入问题（镜像测试 §13.169 发现）。
+      if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "capacity") fail("capacity", "$members");
       fail("member", "$members");
     }

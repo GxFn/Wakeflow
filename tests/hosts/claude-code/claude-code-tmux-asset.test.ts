@@ -35,6 +35,7 @@ import { claudeCodeMcpPermissionRulesFor } from "../../../src/hosts/claude-code/
 import type { WakeflowWindowRole } from "../../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { writeFakeCli } from "../../support/fake-cli.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 
 /**
  * Claude tmux 助手资产（gate-log §13.117 D4）：资产由仓库测试用 node 直接执行，tmux、claude 与 git
@@ -1570,6 +1571,7 @@ test("resume --in-place restarts the bound session inside the window's own pane 
 });
 
 test("resume --in-place from inside the window's own pane checks the session, schedules a detached restart and returns first（§13.134）", async (t) => {
+  if (loadSensitive(t, "detached restart child observed through the tmux log with wall-clock waits")) return;
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);

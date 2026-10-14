@@ -4,8 +4,8 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -17,19 +17,19 @@ import { after, before, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { threadId } from "node:worker_threads";
 import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
-import { assertDemandOperationConfigCurrentOrFail } from "../../../src/governance/demand/demand-operation-authority-context.js";
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { assertDemandOperationConfigCurrentOrFail } from "../../../src/governance/demand/demand-operation-authority-context.js";
 import { refreshActiveProjection } from "../../../src/governance/observation/active-projection-refresh.js";
-import { withWorkspaceOperationScope } from "../../../src/kernel/workspace-operation-scope.js";
+import { WakeflowError } from "../../../src/kernel/error.js";
 import {
   WORKSPACE_MAINTENANCE_GATE_REF,
-  WORKSPACE_OPERATION_SCOPES_REF,
   WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
+  WORKSPACE_OPERATION_SCOPES_REF,
 } from "../../../src/kernel/layout.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
-import { WakeflowError } from "../../../src/kernel/error.js";
+import { withWorkspaceOperationScope } from "../../../src/kernel/workspace-operation-scope.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
 async function prepareFixture(signal: AbortSignal) {
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-operation-scope-")));
@@ -62,11 +62,13 @@ async function prepareFixture(signal: AbortSignal) {
 const prepared: Awaited<ReturnType<typeof prepareFixture>>[] = [];
 let fixtureIndex = 0;
 // Bound expensive, durable setup separately; operation deadlines and real fsync remain intact.
+// 五份真实 fsync 夹具在 2 worker 的门里与两个 lab 文件和双宿主场景链同跑时超过了 60 秒（§13.169），
+// 预算放到 180 秒：它只约束准备阶段，各测试自己的 20–25 秒操作期限不变。
 before(
   async (context) => {
     for (let i = 0; i < 5; i += 1) prepared.push(await prepareFixture(context.signal));
   },
-  { timeout: 60_000 },
+  { timeout: 180_000 },
 );
 after(async () => {
   for (const fixture of prepared) {
@@ -97,7 +99,7 @@ test("maintenance waits for an in-flight projection before activating a new conf
   const release = Promise.withResolvers<void>();
   const original = RootedDirectory.open;
   let intercepted = false;
-  t.mock.method(RootedDirectory, "open", async function (...args: Parameters<typeof original>) {
+  t.mock.method(RootedDirectory, "open", async (...args: Parameters<typeof original>) => {
     const opened = await original.apply(RootedDirectory, args);
     if (!intercepted && args[0] === old.ledgerRoot) {
       intercepted = true;

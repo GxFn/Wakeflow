@@ -148,12 +148,36 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     title:
       "Demand 变更后四份投影文件存在且标记有效、status 报 current；去掉一份标记（手写）再变更即整轮零写、status 报 unsafe/handwritten、verify 的 active-projection 门 pass 且 code handwritten；恢复标记后重建为 current；workspace-current-status.md 含两个 pod 的 pod 段",
   },
+  {
+    scenarioId: "card-06/rejected-before-send-rearm",
+    card: "06-delivery-and-callback",
+    title:
+      "发送前失败的结局释放声明并指向 rearm，可 rearm 时不能换新信封；rearm 同信封同 prompt、新围栏、代际加一且重放幂等，第二代落地即 accepted",
+  },
+  {
+    scenarioId: "card-07/rework-loop",
+    card: "07-results-and-review",
+    title:
+      "目标按 prompt 里第一代的声明摘要导入，陌生摘要被拒；rework 后 Route 回到投递规划，返工投递是带返工依据的新信封；第二轮导入后检查投影把 rework 列进历史，上一轮的完成记录不算",
+  },
+  {
+    scenarioId: "card-07/blocked-and-resume",
+    card: "07-results-and-review",
+    title:
+      "reported 单元带 resumption 被拒；blocked 后 Route 前沿为评审阻塞、投影 resumptionBasis 为 condition-cleared；缺 resumption、指错前一决定、basis 错各被拒；带 condition-cleared 的 accept 直接进入完成预检",
+  },
 ]);
+
+/** 产品仓库相对工作区根的位置：`sibling` 是兄弟目录（`../ProductA`），`nested` 嵌套在根下面（`ProductA`）。 */
+export type ScenarioLayout = "sibling" | "nested";
 
 export interface ScenarioWorkspace {
   readonly fixtureRoot: string;
   readonly workspacePath: string;
   readonly productPath: string;
+  readonly layout: ScenarioLayout;
+  /** 配置里产品仓库的落点。 */
+  readonly productPlacement: string;
 }
 
 function gitInit(directory: string): void {
@@ -168,18 +192,28 @@ function gitInit(directory: string): void {
   }
 }
 
-/** 建立一次性工作区：工作区根与一个兄弟产品仓库，两者都是真实 Git 仓库。 */
-export function createScenarioWorkspace(): ScenarioWorkspace {
+/**
+ * 建立一次性工作区：工作区根与一个产品仓库，两者都是真实 Git 仓库。`sibling` 把仓库放在根旁边（旧夹具的
+ * 布局），`nested` 把仓库嵌套在根下面——真实工作区的布局（open-items D3，§13.169）。
+ */
+export function createScenarioWorkspace(layout: ScenarioLayout = "sibling"): ScenarioWorkspace {
   const fixtureRoot = realpathSync(
     mkdtempSync(path.join(os.tmpdir(), "wakeflow-scenario-acceptance-")),
   );
   const workspacePath = path.join(fixtureRoot, "Workspace");
-  const productPath = path.join(fixtureRoot, "ProductA");
+  const productPath =
+    layout === "nested" ? path.join(workspacePath, "ProductA") : path.join(fixtureRoot, "ProductA");
   mkdirSync(workspacePath, { mode: 0o755 });
   mkdirSync(productPath, { mode: 0o755 });
   gitInit(workspacePath);
   gitInit(productPath);
-  return Object.freeze({ fixtureRoot, workspacePath, productPath });
+  return Object.freeze({
+    fixtureRoot,
+    workspacePath,
+    productPath,
+    layout,
+    productPlacement: layout === "nested" ? "ProductA" : "../ProductA",
+  });
 }
 
 export function cleanupScenarioWorkspace(workspace: ScenarioWorkspace): void {

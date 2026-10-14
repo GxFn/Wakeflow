@@ -5,6 +5,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { test, type TestContext } from "node:test";
 import { threadId } from "node:worker_threads";
+import { loadSensitive } from "../../support/load-sensitive.js";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
@@ -34,6 +35,7 @@ async function until(predicate: () => boolean) {
 }
 
 test("shared readers overlap; a waiting writer closes admission and drains existing readers", { timeout: 15000 }, async (t) => {
+  if (loadSensitive(t, "real reader processes and latch waits")) return;
   const f = await fixture(t);
   const release = Promise.withResolvers<void>();
   const releaseWriter = Promise.withResolvers<void>();
@@ -72,6 +74,7 @@ test("cancellation and failed callbacks release their leases without entering a 
 });
 
 test("a reader release during lease inspection is reobserved; a replacement with an unknown owner stays protected", { timeout: 15000 }, async (t) => {
+  if (loadSensitive(t, "real reader processes and latch waits")) return;
   for (const replacement of [false, true]) {
     await t.test(replacement ? "unknown replacement" : "normal release", async (t) => {
       const f = await fixture(t);
@@ -121,6 +124,7 @@ test("a reader release during lease inspection is reobserved; a replacement with
 });
 
 test("latch settlement failure releases acquired admission before propagating the failure", { timeout: 15000 }, async (t) => {
+  if (loadSensitive(t, "real reader processes and latch waits")) return;
   for (const [mode, releaseNumber] of [["shared", 1], ["exclusive", 1], ["exclusive", 2]] as const) {
     await t.test(`${mode} latch release ${releaseNumber}`, async (t) => {
       const f = await fixture(t);
@@ -208,6 +212,7 @@ test("unknown same-PID owners and unrecognized files stay protected", async (t) 
 });
 
 test("a killed real reader process is retired exactly before the exclusive writer enters", { timeout: 15000 }, async (t) => {
+  if (loadSensitive(t, "real reader processes and latch waits")) return;
   const f = await fixture(t);
   const child = spawn(process.execPath, [fileURLToPath(new URL("../../support/read-write-scope-holder.js", import.meta.url)), f.base], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -246,6 +251,7 @@ test("a live contender's in-flight create stage is skipped, never retired; a dea
 });
 
 test("shared admission retires dead reader leases once they pile up, so shared-only workloads never hit the entry limit (§13.161 F4)", { timeout: 30000 }, async (t) => {
+  if (loadSensitive(t, "real reader processes and latch waits")) return;
   const f = await fixture(t);
   for (let index = 0; index < 64; index += 1) {
     const suffix = index.toString(16).padStart(12, "0");

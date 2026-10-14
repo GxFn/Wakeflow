@@ -2,7 +2,10 @@ import { equal, ok } from "node:assert/strict";
 import { test } from "node:test";
 import fc from "fast-check";
 import { DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacyText } from "../../src/kernel/privacy-scan.js";
-import { modelTestOptions } from "../../tooling/testing/model-options.js";
+import {
+  modelTestOptions,
+  persistModelCounterexample,
+} from "../../tooling/testing/model-options.js";
 
 interface Model {
   credential: boolean;
@@ -107,26 +110,33 @@ test(`privacy command model: seed=${options.seed}, runs=${options.numRuns}`, (t)
       fc.nat({ max: 2048 }),
     )
     .map(([operation, position]) => new TextCommand(operation, position));
-  fc.assert(
-    fc.property(
-      fc.commands([command], {
-        maxCommands: 24,
-        ...(options.replayPath === undefined ? {} : { replayPath: options.replayPath }),
-      }),
-      (commands) => {
-        fc.modelRun(
-          () => ({
-            model: { credential: false, opaque: false, locator: false },
-            real: { text: "", roots: ["/allowed/work"] },
-          }),
-          commands,
-        );
+  try {
+    fc.assert(
+      fc.property(
+        fc.commands([command], {
+          maxCommands: 24,
+          ...(options.replayPath === undefined ? {} : { replayPath: options.replayPath }),
+        }),
+        (commands) => {
+          fc.modelRun(
+            () => ({
+              model: { credential: false, opaque: false, locator: false },
+              real: { text: "", roots: ["/allowed/work"] },
+            }),
+            commands,
+          );
+        },
+      ),
+      {
+        seed: options.seed,
+        numRuns: options.numRuns,
+        ...(options.path === undefined ? {} : { path: options.path }),
       },
-    ),
-    {
-      seed: options.seed,
-      numRuns: options.numRuns,
-      ...(options.path === undefined ? {} : { path: options.path }),
-    },
-  );
+    );
+  } catch (error: unknown) {
+    // 反例落盘到 .build/model/，带本次 seed；回放用 WAKEFLOW_MODEL_SEED 与 WAKEFLOW_MODEL_PATH。
+    const file = persistModelCounterexample(process.cwd(), "privacy-command-model", options, error);
+    if (file !== null) t.diagnostic(`counterexample persisted: ${file}`);
+    throw error;
+  }
 });

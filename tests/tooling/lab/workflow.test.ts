@@ -1,95 +1,12 @@
 import { equal, ok, rejects } from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import os from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { Client } from "@modelcontextprotocol/client";
 import { runToolingCli } from "../../../tooling/cli.js";
-import { createLab, disposeLab, inspectLab } from "../../../tooling/lab/lab.js";
-import { BUSINESS_SCENARIOS } from "../../../tooling/lab/workflow-context.js";
-
-function fixture(t: TestContext) {
-  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-workflow-lab-")));
-  t.after(() => rmSync(base, { recursive: true, force: true }));
-  const repository = path.join(base, "Reports");
-  mkdirSync(repository);
-  return {
-    base,
-    repository,
-    root: path.join(base, "Lab"),
-    candidate: path.join(process.cwd(), "plugins/codex-wakeflow"),
-  };
-}
-
-for (const host of ["codex", "claude-code"]) {
-  for (const scenario of BUSINESS_SCENARIOS) {
-    test(`fresh ${host} ${scenario} experiment executes products, archives evidence, then seals cleanup ownership`, {
-      timeout: 240_000,
-    }, async (t) => {
-      const { repository, root } = fixture(t);
-      const result = await runToolingCli(
-        [
-          "lab",
-          "run",
-          "--scenario",
-          scenario,
-          "--dir",
-          root,
-          "--candidate",
-          path.join(process.cwd(), `plugins/${host}-wakeflow`),
-        ],
-        repository,
-      );
-      ok("receipt" in result && typeof result.receipt === "string");
-      const receipt = JSON.parse(readFileSync(path.join(repository, result.receipt), "utf8"));
-      equal(
-        result.status,
-        "passed",
-        JSON.stringify({ reason: receipt.reason, last: receipt.observations.slice(-2) }),
-      );
-      equal(receipt.business.scenario, scenario);
-      equal(receipt.business.implementations, scenario === "single-product" ? 1 : 2);
-      equal(receipt.business.independentTest, scenario !== "single-product");
-      equal(receipt.business.nativeHostAcceptance, "unverified");
-      equal(receipt.business.hostObservations, "synthetic-generated-hooks");
-      ok(receipt.business.acts.includes("archive-recovery-idempotent"));
-      const archiveRoot = path.join(root, "ledger", receipt.business.archive.archiveRef);
-      ok(existsSync(path.join(archiveRoot, "manifest.json")));
-      equal(existsSync(path.join(root, "Beta")), scenario !== "single-product");
-      if (scenario === "worktree") {
-        equal(existsSync(path.join(root, "Worktree-Alpha")), false);
-        equal(existsSync(path.join(root, "Worktree-Beta")), false);
-        ok(receipt.business.acts.includes("pod-two-stage-close"));
-        ok(receipt.business.acts.includes("test-worktree-attachments-verified"));
-        equal(existsSync(path.join(root, "Alpha/summarize.mjs")), false);
-      } else {
-        const observed = JSON.parse(
-          readFileSync(path.join(root, "Alpha/verification.json"), "utf8"),
-        );
-        equal(observed.total, 6);
-        equal(observed.count, 3);
-      }
-      equal(inspectLab(repository, receipt.id).status, "passed");
-      const preview = await disposeLab(repository, receipt.id);
-      ok("planDigest" in preview);
-      writeFileSync(path.join(root, "user-note.txt"), "preserve");
-      await rejects(disposeLab(repository, receipt.id, preview.planDigest), /lab-resource-drift/);
-      equal(readFileSync(path.join(root, "user-note.txt"), "utf8"), "preserve");
-      rmSync(path.join(root, "user-note.txt"));
-      equal((await disposeLab(repository, receipt.id, preview.planDigest)).status, "passed");
-      equal(existsSync(root), false);
-      ok(existsSync(path.join(repository, result.receipt)));
-    });
-  }
-}
+import { createLab, disposeLab } from "../../../tooling/lab/lab.js";
+import { fixture } from "./workflow-matrix.fixture.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 
 function intercept(t: TestContext, observe: (args: Parameters<Client["callTool"]>[0]) => void) {
   const original = Client.prototype.callTool;
@@ -158,6 +75,7 @@ test("changed product bytes prevent fixture acceptance even when import returned
 test("worktree cleanup refuses a newly introduced file and preserves the checkout", {
   timeout: 240_000,
 }, async (t) => {
+  if (loadSensitive(t, "lab CLI with real product sessions against a built artifact")) return;
   const { repository, root, candidate } = fixture(t);
   let injected = false;
   intercept(t, (request) => {

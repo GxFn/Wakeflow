@@ -39,6 +39,8 @@ jobs:
         env:
           WAKEFLOW_PROFILE: ${{ matrix.profile }}
           WAKEFLOW_TEST_CONCURRENCY: "2"
+          # 轮换的模型种子（open-items 批次 5）：每次运行一个新种子，种子进公共报告的 modelTests；反例落盘随制品上传。
+          WAKEFLOW_MODEL_SEED: ${{ github.run_number }}
         run: |
           mkdir -p .build/ci-private
           npm run --silent wf -- verify "$WAKEFLOW_PROFILE" > .build/ci-private/summary.json
@@ -53,6 +55,27 @@ jobs:
           path: |
             .build/ci/report-*/report.json
             .build/ci/report-*/manifest.json
+            .build/model/*.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
+  handoff:
+    name: handoff / ubuntu
+    runs-on: ubuntu-24.04
+    # The read-only handoff checklist (whitespace, private content, build:check, docs pointers,
+    # duration-table coverage, CLAUDE.md/AGENTS.md parity, Git state) ran only locally before
+    # batch 5 (open-items D9); a push that passes the gate but fails handoff is now visible remotely.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.19.0
+          package-manager-cache: false
+      - run: npm install --global npm@11.17.0
+      - run: npm ci
+      - name: Run the handoff checklist
+        run: npm run --silent wf -- handoff

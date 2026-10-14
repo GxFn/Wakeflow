@@ -16,6 +16,7 @@ import { threadId } from "node:worker_threads";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "./rooted-exclusive-file-lock-test-support.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 import {
   inspectRootedExclusiveFileLock,
   retireRootedExclusiveFileLockResidue,
@@ -40,7 +41,8 @@ async function expectLockError(
   equal(caught.reason, reason);
 }
 
-test("concurrent async critical sections are serialized and lock residue is removed", async () => {
+test("concurrent async critical sections are serialized and lock residue is removed", async (t) => {
+  if (loadSensitive(t, "eight contenders on one lock file with wall-clock retries")) return;
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-exclusive-lock-"));
   mkdirSync(path.join(rootPath, "state"));
   const root = await RootedDirectory.open(rootPath);

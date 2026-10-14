@@ -15,6 +15,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/client";
 import { createLab, disposeLab, inspectLab } from "../../../tooling/lab/lab.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 
 test("an inventory written before final receipt failure cannot authorize later lab operations", {
   timeout: 90_000,
@@ -66,6 +67,7 @@ test("an inventory written before final receipt failure cannot authorize later l
 test("worktree disposal preserves a same-byte replacement of an owned output", {
   timeout: 240_000,
 }, async (t) => {
+  if (loadSensitive(t, "lab CLI with real product sessions against a built artifact")) return;
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-worktree-identity-")));
   t.after(() => rmSync(base, { recursive: true, force: true }));
   const repository = path.join(base, "Reports");

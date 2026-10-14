@@ -126,8 +126,9 @@ test("签入的耗时表可被加载，且每一条都是当前仓库相对测�
     ok(Number.isSafeInteger(value) && value >= 0, key);
     ok(statSync(path.join(process.cwd(), key), { throwIfNoEntry: false })?.isFile() === true, key);
   }
-  // 最长的文件（端到端场景）必须有记录，否则整个 longest-first 排程失去意义。
-  ok(durations.has("tests/scenarios/wakeflow-scenario-acceptance.test.ts"));
+  // 最长的文件（端到端场景链，每宿主一个文件）必须有记录，否则整个 longest-first 排程失去意义。
+  ok(durations.has("tests/scenarios/wakeflow-scenario-acceptance-codex.test.ts"));
+  ok(durations.has("tests/scenarios/wakeflow-scenario-acceptance-claude-code.test.ts"));
 });
 
 test("实际Node进程按耗时队列执行文件，终端与事件记录保持同一选择", () => {

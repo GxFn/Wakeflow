@@ -136,6 +136,17 @@ landing is proven by that prompt's digest - so its dispatch record still names
 generation 1 and that claim digest; the target imports with it, and Wakeflow
 accepts an earlier generation's fence of the same delivery.
 
+Every recorded outcome names its evidence kind (`evidenceKind`, also shown by
+`wakeflow_inspect_target_result_review`): `hook-record` is what the host
+observed (a `user-prompt-submit` record whose digest matches the permit);
+`host-send-return` and `agent-declaration` are your own report of the send,
+which Wakeflow stores only as a digest; `controller-resolution` is your
+explicit resolution. Treat a self-reported landing as weaker than an observed
+one when you weigh a silent window. `wakeflow_prepare_delivery` itself refuses
+with `host-asset-<status>` when the published helper's bytes are not the
+artifact's (see `hostAssets` in `wakeflow_status`): reconcile first, and tell
+the user that something rewrote the file.
+
 Never resend a prompt by hand because a window "looks idle". Duplicate work in
 a target window is expensive and invisible until the results disagree. After
 a turn was cut between the send and recording its outcome, check the receiving window's thread before sending again; when the prompt already arrived there, record or report that landing instead of sending a second time.

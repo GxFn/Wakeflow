@@ -1,4 +1,4 @@
-import { lstat, readFile, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import nodePath from "node:path";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError } from "./file-node-snapshot.js";
@@ -116,4 +116,28 @@ export async function readAbsoluteRegularFileText(value, maximumBytes, errorPath
             return null;
         fail("read-failure", path, error);
     }
+}
+/**
+ * 列出一个绝对路径目录的条目名（不跟随链接、不读节点），按名字排序，至多 `maximumEntries` 个；超出的
+ * 不返回、以 `truncated` 计数。目录不存在（含中途不是目录）为 null；其余失败为 `inspection-failure`。
+ */
+export async function listAbsoluteDirectoryEntryNames(value, maximumEntries, errorPath) {
+    const path = normalizeErrorPath(errorPath, "$directory");
+    const absolutePath = parseAbsolutePath(value, path);
+    if (!Number.isSafeInteger(maximumEntries) || maximumEntries < 1)
+        fail("input", path);
+    let names;
+    try {
+        names = await readdir(absolutePath);
+    }
+    catch (error) {
+        if (isAbsence(error))
+            return null;
+        fail("inspection-failure", path, error);
+    }
+    names.sort();
+    return Object.freeze({
+        names: Object.freeze(names.slice(0, maximumEntries)),
+        truncated: Math.max(0, names.length - maximumEntries),
+    });
 }

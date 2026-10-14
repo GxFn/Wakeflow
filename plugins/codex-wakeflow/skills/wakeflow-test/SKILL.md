@@ -102,7 +102,7 @@ of test work, and it overrides one target rule: you do record managed evidence
    classification. Wakeflow derives the overall verdict from these records -
    do not assert it yourself.
 6. Send the returned wake-controller callback prompt to the Controller window
-   by the host's own means: send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. No other transport counts as a
+   by the host's own means: send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. When you record the outcome, pass that return value unchanged as `attempt.sendReturn`: Wakeflow stores only the sha256 of its canonical JSON as the attempt's evidence digest. This is your own report of the send, not host evidence; a `user-prompt-submit` hook record from the target thread, when one exists, outranks it. No other transport counts as a
    send. Then end your turn.
 
 ## What you must return

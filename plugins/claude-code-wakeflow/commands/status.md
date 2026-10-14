@@ -18,8 +18,10 @@ Report in the user's terms: the overall state, what is on the board, the active
 Demand and its frontier, any window that is not registered, any window whose
 `attention` is `needed` (the host is waiting for the user there - a permission
 prompt, an idle prompt, a login or usage limit - so name it before waiting on
-that window), any work claim that is held, and the next actions the result
-named - with who owns each one.
+that window), any `legacyResidue` item (old-plugin content the user removes by
+hand - name its root, file and line), any `hostAssets` entry that is not
+`current`, any work claim that is held, and the next actions the result named -
+with who owns each one.
 
 Run `wakeflow_verify` as well when the status contradicts itself, when a
 delivery looked sent but no evidence arrived, or when the user asks whether the

@@ -96,7 +96,7 @@ report, return the callback. You own no other step and no Controller authority.
    evidence, verifies every anchor itself and accepts your report directly.
 6. The import returns a wake-controller callback permit. Send its prompt to the
    Controller window the permit's host action names, by the host's own means:
-   send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. That is the only transport for this send - not a
+   send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. When you record the outcome, pass that return value unchanged as `attempt.sendReturn`: Wakeflow stores only the sha256 of its canonical JSON as the attempt's evidence digest. This is your own report of the send, not host evidence; a `user-prompt-submit` hook record from the target thread, when one exists, outranks it. That is the only transport for this send - not a
    cross-session messaging tool, not a file, not another window - because
    landing is proven by the hook record of a prompt submitted in that window.
    That send is the last thing you do for this target.

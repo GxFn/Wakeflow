@@ -26,6 +26,8 @@ const CODEX_HOST_FACADE = Object.freeze({
     resourceProfile: codexWorkspaceHostResourceProfile,
     identityProfile: codexWindowHostIdentityProfile,
     renderLaunchInstructions: renderCodexWindowLaunchInstructions,
+    /** Codex 没有已发布资产面，没有东西可核对（F1）。 */
+    assets: null,
 });
 /**
  * 观察读两个宿主的绑定与 hook 通道：制品固定携带两份纯数据 profile（§13.94 D1）。

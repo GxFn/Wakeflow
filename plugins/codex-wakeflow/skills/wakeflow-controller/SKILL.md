@@ -94,11 +94,11 @@ takes the work claim, renders the prompt around your text, returns a permit.
 
 ### Step 8 - Perform the host effect and record the outcome
 
-Perform the host effect exactly once: send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. Then call
+Perform the host effect exactly once: send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. When you record the outcome, pass that return value unchanged as `attempt.sendReturn`: Wakeflow stores only the sha256 of its canonical JSON as the attempt's evidence digest. This is your own report of the send, not host evidence; a `user-prompt-submit` hook record from the target thread, when one exists, outranks it. Then call
 `wakeflow_record_delivery_outcome` with the permit's delivery identity and
 fence. Wakeflow derives the disposition from evidence, not from your
 impression: accepted needs the target session's `user-prompt-submit` record
-matching the permit's prompt, or the host send call's own success return. A
+matching the permit's prompt, or your own report of the host send's return. A
 missing readback is indeterminate, never a failure; only a send that provably
 failed before touching the session is re-armed with `wakeflow_rearm_delivery`,
 and an indeterminate delivery is resolved as the reference says, never resent

@@ -28,6 +28,7 @@ import { readDemandResultReviewSnapshot, } from "../review/demand-result-review-
 import { observeArchivedDemands, } from "./archived-demand-observation.js";
 import { WAKEFLOW_OBSERVATION_POLICY } from "./observation-policy.js";
 import { observeRepositoryPointers, } from "./repository-pointer-observation.js";
+import { scanWakeflowLegacyResidue, } from "../../workspace/wakeflow-legacy-residue-scan.js";
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
 /** Bound the session aggregate independently of the number of records scanned. */
 const HOOK_RECORDS_MAXIMUM = HOST_HOOK_RECORDS_MAXIMUM;
@@ -453,6 +454,13 @@ async function observeSettingsEntry(root, settings, signal) {
         return "unreadable";
     }
 }
+/**
+ * F1（ADR-0020 决定 1 的 B 类）：按宿主核对已发布资产的字节与设置条目。投递许可签发前由服务器（制品
+ * 字节）调用——被改写的助手自己核对不出自己，只有服务器侧的核对有意义。
+ */
+export async function observeHostAssetState(root, hostId, assets, signal) {
+    return observeHostAsset(root, { hostId, statuslineAsset: assets }, hostId, signal);
+}
 async function observeHostAsset(root, host, currentHostId, signal) {
     if (host.statuslineAsset === null || host.hostId !== currentHostId) {
         return Object.freeze({
@@ -610,6 +618,9 @@ export async function observeWorkspace(root, snapshot, ledgerRoot, options) {
     const archives = scope === "full"
         ? await observeDomain("archives", () => observeArchivedDemands(ledgerRoot, archivedDemandCandidates(board, demands), worktreePodIdsOf(snapshot), signal))
         : Object.freeze({ status: "unavailable", issue: "scope:projection", value: null });
+    const legacyResidue = scope === "full"
+        ? await observeDomain("legacyResidue", () => observeLegacyResidue(root, snapshot))
+        : Object.freeze({ status: "unavailable", issue: "scope:projection", value: null });
     return Object.freeze({
         observedAt,
         scope,
@@ -627,7 +638,19 @@ export async function observeWorkspace(root, snapshot, ledgerRoot, options) {
         repositories,
         archives,
         assets: Object.freeze(assets),
+        legacyResidue,
     });
+}
+/** 遗留残留只看在场的配置根：工作区根、仓库根与支撑面根；缺席的根没有东西可报。 */
+async function observeLegacyResidue(root, snapshot) {
+    const roots = [
+        { key: "workspace.root", absolutePath: root.absolutePath },
+        ...snapshot.placements.roots
+            .filter((entry) => (entry.key.startsWith("repository.") || entry.key.startsWith("support.")) &&
+            entry.state === "present")
+            .map((entry) => ({ key: entry.key, absolutePath: entry.realPath ?? entry.absolutePath })),
+    ];
+    return scanWakeflowLegacyResidue(roots);
 }
 /** 声明是否孤儿：持有者不是活动 Demand，或窗口当前绑定不是声明记下的那一代。 */
 export function orphanWorkClaims(observation) {

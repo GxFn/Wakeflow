@@ -192,6 +192,8 @@ function localLayoutGate(facts) {
     const codes = [
         ...(local.status === "ready" ? [] : [`local:${local.status}`, ...local.codes]),
         ...(facts.layout === "current" ? [] : [`active:${facts.layout}`]),
+        // ADR-0020（F4）：用户所有的遗留内容只点名，不是门的失败。
+        ...(facts.legacyResidue.items > 0 ? [`legacy-residue:${facts.legacyResidue.items}`] : []),
     ];
     return gate("local-layout", "workspace-layout", verdict(pass, local.status === "unavailable" || facts.layout === "unavailable"), joinCodes(codes));
 }

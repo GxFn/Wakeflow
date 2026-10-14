@@ -6,7 +6,7 @@ import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/pa
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, } from "./claude-code-portable-settings-publication.js";
-import { claudeCodePortableSettingsRulesFor, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
+import { claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
 /**
  * Wakeflow Host / Claude Code：portable settings 的多根只读 composition。
  *
@@ -113,6 +113,7 @@ export function compileClaudeCodePortableSettingsRootAuthority(model) {
             rootId: surface.surfaceId,
             configuredPlacement: surface.path,
             resourceRef: CLAUDE_CODE_PORTABLE_SETTINGS_REF,
+            role: surface.capability,
         }));
     }
     const frozenRoots = Object.freeze(roots);
@@ -171,7 +172,7 @@ async function inspectRootSettings(root, options) {
         fail("inspection", "$settings");
     }
 }
-async function inspectPresentRoot(absolutePath, signal) {
+async function inspectPresentRoot(absolutePath, signal, rules, retiredRules) {
     let root;
     try {
         root = await RootedDirectory.open(absolutePath, "$configuredRoot");
@@ -184,7 +185,7 @@ async function inspectPresentRoot(absolutePath, signal) {
     let inspection;
     let primaryError;
     try {
-        inspection = await inspectRootSettings(root, signal === undefined ? {} : { signal });
+        inspection = await inspectRootSettings(root, { rules, retiredRules, ...(signal === undefined ? {} : { signal }) });
     }
     catch (error) {
         primaryError = error;
@@ -235,7 +236,8 @@ export async function planClaudeCodePortableSettingsComposition(workspaceRootVal
         if (root.rootKind === "program") {
             placementStatus = "present";
             inspection = await inspectRootSettings(workspaceRootValue, {
-                rules: claudeCodePortableSettingsRulesFor("program"),
+                rules: claudeCodePortableSettingsRulesFor(root),
+                retiredRules: claudeCodePortableSettingsRetiredRulesFor(root),
                 ...(request.signal === undefined ? {} : { signal: request.signal }),
             });
         }
@@ -256,12 +258,12 @@ export async function planClaudeCodePortableSettingsComposition(workspaceRootVal
                 }
                 placementStatus = "planned-missing";
                 inspection = {
-                    transition: planClaudeCodePortableSettingsTransition(null),
+                    transition: planClaudeCodePortableSettingsTransition(null, claudeCodePortableSettingsRulesFor(root), claudeCodePortableSettingsRetiredRulesFor(root)),
                 };
             }
             else {
                 placementStatus = "present";
-                inspection = await inspectPresentRoot(placement.absolutePath, request.signal);
+                inspection = await inspectPresentRoot(placement.absolutePath, request.signal, claudeCodePortableSettingsRulesFor(root), claudeCodePortableSettingsRetiredRulesFor(root));
             }
         }
         if ("blockedReason" in inspection) {

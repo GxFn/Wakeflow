@@ -33,6 +33,7 @@ import { WakeflowMaintenanceGateError, wakeflowMaintenanceCoreInspectionForGateC
 import { WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION, WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./wakeflow-maintenance-resource-catalog.js";
 import { computeWakeflowStaticMaterializationPreviewDigest, failWakeflowStaticMaterializationPreview as fail, parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, } from "./wakeflow-static-materialization-preview-contract.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
+import { scanWakeflowLegacyResidue } from "../wakeflow-legacy-residue-scan.js";
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
@@ -877,6 +878,12 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         if (!core.local.freshCompatible) {
             addBlocker(blockers, "fresh-local-not-bootstrap-prefix");
         }
+        // ADR-0008 决定 1 与 ADR-0020（F4）：工作区根里旧插件的标记只拒绝并列出（status 的 legacyResidue），由用户清理。
+        const residue = await scanWakeflowLegacyResidue([
+            { key: "workspace.root", absolutePath: rootValue.absolutePath },
+        ]);
+        if (residue.items.length > 0)
+            addBlocker(blockers, "fresh-legacy-residue-present");
     }
     else {
         if (current === null)

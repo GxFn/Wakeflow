@@ -57,7 +57,7 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal" && key !== "rules")
+    if (Object.keys(record).some((key) => key !== "signal" && key !== "rules" && key !== "retiredRules")
         || (record.signal !== undefined
             && (typeof record.signal !== "object"
                 || record.signal === null
@@ -65,7 +65,10 @@ function parseOptions(value) {
                 || !(record.signal instanceof AbortSignal)))
         || (record.rules !== undefined
             && (!Array.isArray(record.rules)
-                || record.rules.some((entry) => typeof entry !== "string")))) {
+                || record.rules.some((entry) => typeof entry !== "string")))
+        || (record.retiredRules !== undefined
+            && (!Array.isArray(record.retiredRules)
+                || record.retiredRules.some((entry) => typeof entry !== "string")))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -73,6 +76,9 @@ function parseOptions(value) {
         rules: record.rules === undefined
             ? undefined
             : Object.freeze([...record.rules]),
+        retiredRules: record.retiredRules === undefined
+            ? undefined
+            : Object.freeze([...record.retiredRules]),
     });
 }
 function currentUserId() {
@@ -149,7 +155,7 @@ async function sourceOrNull(root, signal) {
         throw error;
     }
 }
-async function inspectSource(root, signal, rules) {
+async function inspectSource(root, signal, rules, retiredRules) {
     const directoryNode = await directoryNodeOrNull(root);
     const source = directoryNode === null
         ? null
@@ -165,7 +171,7 @@ async function inspectSource(root, signal, rules) {
             throw error;
         }
     }
-    const transition = planClaudeCodePortableSettingsTransition(sourceText, rules);
+    const transition = planClaudeCodePortableSettingsTransition(sourceText, rules, retiredRules);
     return Object.freeze({ directoryNode, source, sourceText, transition });
 }
 /** 只读检查一个已授权根的 portable settings，不返回用户源文本或节点身份。 */
@@ -179,7 +185,7 @@ export async function inspectClaudeCodePortableSettings(rootValue, optionsValue 
     const options = parseOptions(optionsValue);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
-    const inspection = await inspectSource(rootValue, options.signal, options.rules);
+    const inspection = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
     return Object.freeze({
         kind: "ClaudeCodePortableSettingsInspection",
         directoryStatus: inspection.directoryNode === null ? "absent" : "present",
@@ -272,7 +278,7 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
     const options = parseOptions(optionsValue);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
-    const before = await inspectSource(rootValue, options.signal, options.rules);
+    const before = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
     if (before.transition.status === "blocked") {
         fail("transition-blocked", "$transition", before.transition.reason);
     }
@@ -289,14 +295,14 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
     }
     await ensureSettingsDirectory(rootValue, before, options.signal);
     if (before.directoryNode === null) {
-        const afterDirectory = await inspectSource(rootValue, options.signal, options.rules);
+        const afterDirectory = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
         if (afterDirectory.source !== null
             || afterDirectory.transition.status !== "create") {
             fail("source-changed", "$settings");
         }
     }
     await publishTransition(rootValue, before, options.signal);
-    const after = await inspectSource(rootValue, options.signal, options.rules);
+    const after = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
     if (after.transition.status !== "current"
         || before.transition.desiredDigest === null
         || after.source?.digest !== before.transition.desiredDigest) {

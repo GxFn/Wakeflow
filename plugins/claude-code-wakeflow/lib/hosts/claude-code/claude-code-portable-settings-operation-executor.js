@@ -8,7 +8,7 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { compileClaudeCodePortableSettingsRootAuthority, createClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-composition.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, publishClaudeCodePortableSettings, settleClaudeCodePortableSettingsPublicationStages, } from "./claude-code-portable-settings-publication.js";
-import { claudeCodePortableSettingsRulesFor } from "./claude-code-portable-settings-transition.js";
+import { claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, } from "./claude-code-portable-settings-transition.js";
 const ERROR_MESSAGES = {
     input: "Claude portable settings operation execution input is invalid.",
     config: "Claude portable settings operation Config is invalid.",
@@ -58,13 +58,11 @@ function operationRoot(value) {
             fail("operation", "$operation.root");
         throw error;
     }
-    const keys = Object.keys(record).sort();
-    if (keys.length !== 4
-        || keys[0] !== "configuredPlacement"
-        || keys[1] !== "resourceRef"
-        || keys[2] !== "rootId"
-        || keys[3] !== "rootKind"
-        || record.resourceRef !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
+    const keys = Object.keys(record).sort().join("\u0000");
+    const expectedKeys = record.rootKind === "support-surface"
+        ? "configuredPlacement\u0000resourceRef\u0000role\u0000rootId\u0000rootKind"
+        : "configuredPlacement\u0000resourceRef\u0000rootId\u0000rootKind";
+    if (keys !== expectedKeys || record.resourceRef !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
         fail("operation", "$operation.root");
     }
     if (record.rootKind === "program") {
@@ -109,11 +107,15 @@ function operationRoot(value) {
         }
         throw error;
     }
+    if (record.role !== "design" && record.role !== "test") {
+        fail("operation", "$operation.root.role");
+    }
     return Object.freeze({
         rootKind: "support-surface",
         rootId,
         configuredPlacement,
         resourceRef: CLAUDE_CODE_PORTABLE_SETTINGS_REF,
+        role: record.role,
     });
 }
 function parseOperation(value) {
@@ -220,7 +222,10 @@ function sameRoot(left, right) {
     return left.rootKind === right.rootKind
         && left.rootId === right.rootId
         && left.configuredPlacement === right.configuredPlacement
-        && left.resourceRef === right.resourceRef;
+        && left.resourceRef === right.resourceRef
+        && (left.rootKind !== "support-surface"
+            || right.rootKind !== "support-surface"
+            || left.role === right.role);
 }
 async function executeAtRoot(root, request) {
     if (request.recoveringAffectedOperation) {
@@ -239,7 +244,8 @@ async function executeAtRoot(root, request) {
     let inspection;
     try {
         inspection = await inspectClaudeCodePortableSettings(root, {
-            rules: claudeCodePortableSettingsRulesFor(request.operation.root.rootKind),
+            rules: claudeCodePortableSettingsRulesFor(request.operation.root),
+            retiredRules: claudeCodePortableSettingsRetiredRulesFor(request.operation.root),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
     }
@@ -275,7 +281,8 @@ async function executeAtRoot(root, request) {
     let published;
     try {
         published = await publishClaudeCodePortableSettings(root, {
-            rules: claudeCodePortableSettingsRulesFor(request.operation.root.rootKind),
+            rules: claudeCodePortableSettingsRulesFor(request.operation.root),
+            retiredRules: claudeCodePortableSettingsRetiredRulesFor(request.operation.root),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
     }

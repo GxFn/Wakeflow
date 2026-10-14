@@ -633,6 +633,28 @@ function archivesDomainView(observation) {
         issue: archives.issue ?? (unreadable > 0 ? `archives:unreadable-${unreadable}` : null),
     };
 }
+const LEGACY_RESIDUE_MAXIMUM_ITEMS = 64;
+/**
+ * 遗留残留（ADR-0020，F4，§13.168）：旧插件留下的内容，用户所有的发现，只报告——给出根、文件与行号，
+ * Controller 转告用户自己删；status 不替任何根写东西。读不出的计数单独报出，不是"没有"。
+ */
+function legacyResidueView(observation) {
+    const scan = observation.legacyResidue;
+    const items = capStatusList(scan.value?.items ?? [], LEGACY_RESIDUE_MAXIMUM_ITEMS);
+    return {
+        status: scan.status,
+        issue: scan.issue,
+        items: items.entries.map((item) => ({
+            root: item.root,
+            kind: item.kind,
+            path: item.path,
+            line: item.line,
+            detail: item.detail,
+        })),
+        itemsOmitted: items.omitted + (scan.value?.omitted ?? 0),
+        unreadable: scan.value?.unreadable ?? 0,
+    };
+}
 async function assembleStatus(context, request) {
     const { observation, snapshot } = context;
     const runtime = readRuntime(context).view;
@@ -674,6 +696,13 @@ async function assembleStatus(context, request) {
         domains: domainViews(context),
         runtime,
         maintenance: maintenanceView(context.maintenance),
+        hostAssets: observation.assets.map((asset) => ({
+            hostId: asset.hostId,
+            status: asset.status,
+            settings: asset.settings,
+            companion: asset.companion,
+        })),
+        legacyResidue: legacyResidueView(observation),
         truncated: {
             demands: demands.omitted,
             windows: windows.omitted,
@@ -965,6 +994,10 @@ async function gateFacts(context, reports) {
             settings: asset.settings,
             companion: asset.companion,
         })),
+        legacyResidue: {
+            status: observation.legacyResidue.status,
+            items: observation.legacyResidue.value?.items.length ?? 0,
+        },
         projection: {
             status: context.projection.status,
             targets: (context.projection.value ?? []).map((target) => ({

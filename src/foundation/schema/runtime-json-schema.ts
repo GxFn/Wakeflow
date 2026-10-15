@@ -126,16 +126,24 @@ function sameJsonValue(left: JsonValue, right: JsonValue): boolean {
     const rightArray = right as JsonArray;
     return (
       leftArray.length === rightArray.length &&
-      leftArray.every((entry, index) => sameJsonValue(entry, rightArray[index]!))
+      leftArray.every((entry, index) => {
+        const other = rightArray[index];
+        return other !== undefined && sameJsonValue(entry, other);
+      })
     );
   }
   const leftRecord = left as JsonObject;
   const rightRecord = right as JsonObject;
   const leftKeys = Object.keys(leftRecord);
   if (leftKeys.length !== Object.keys(rightRecord).length) return false;
-  return leftKeys.every(
-    (key) => Object.hasOwn(rightRecord, key) && sameJsonValue(leftRecord[key]!, rightRecord[key]!),
-  );
+  return leftKeys.every((key) => {
+    if (!Object.hasOwn(rightRecord, key)) return false;
+    const leftValue = leftRecord[key];
+    const rightValue = rightRecord[key];
+    return (
+      leftValue !== undefined && rightValue !== undefined && sameJsonValue(leftValue, rightValue)
+    );
+  });
 }
 
 /** JSON Schema `uniqueItems`的无原型安全实现。 */
@@ -143,8 +151,11 @@ function uniqueJsonItems(enabled: boolean, value: unknown): boolean {
   if (!enabled || !Array.isArray(value)) return true;
   const items = value as JsonArray;
   for (let right = 1; right < items.length; right += 1) {
+    const rightItem = items[right];
+    if (rightItem === undefined) continue;
     for (let left = 0; left < right; left += 1) {
-      if (sameJsonValue(items[left]!, items[right]!)) return false;
+      const leftItem = items[left];
+      if (leftItem !== undefined && sameJsonValue(leftItem, rightItem)) return false;
     }
   }
   return true;

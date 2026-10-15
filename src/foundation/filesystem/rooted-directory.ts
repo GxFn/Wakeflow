@@ -121,6 +121,7 @@ interface InspectedResourceEntry {
   readonly isFinal: boolean;
 }
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 
 function normalizeErrorPath(value: unknown, fallback: string): string {

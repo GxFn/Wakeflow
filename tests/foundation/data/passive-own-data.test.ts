@@ -188,6 +188,7 @@ test("plain record snapshots special property names without prototype effects", 
 
   const snapshot = parsePlainRecord(source);
   equal(Object.getPrototypeOf(snapshot), null);
+  // biome-ignore lint/suspicious/noProto: the test asserts that "__proto__" is read back as a plain data key
   equal(snapshot.__proto__, "proto-data");
   equal(snapshot.constructor, "constructor-data");
   equal(snapshot.toString, "to-string-data");

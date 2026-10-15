@@ -79,7 +79,7 @@ export async function removeRootedDirectoryTree(
   if (!(root instanceof RootedDirectory)) fail("input", "$root");
   const options = parseOptions(optionsValue, errorPath);
   assertNotAborted(options.signal);
-  let snapshot;
+  let snapshot: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     snapshot = await root.inspectExistingResource(resourcePath, errorPath);
   } catch (error: unknown) {

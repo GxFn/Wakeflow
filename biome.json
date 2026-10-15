@@ -97,19 +97,41 @@
       }
     },
     {
-      "includes": ["src/foundation/**", "tests/foundation/**"],
+      "includes": [
+        "src/foundation/artifact/loaded-artifact-tree-identity.ts",
+        "src/foundation/artifact/loaded-artifact-tree-transfer-plan.ts",
+        "src/foundation/data/passive-own-data.ts",
+        "src/foundation/filesystem/absolute-directory-materialization.ts",
+        "src/foundation/filesystem/bounded-directory-tree-scan.ts",
+        "src/foundation/filesystem/directory-tree-candidate-inspection.ts",
+        "src/foundation/filesystem/durable-atomic-file-stage-io.ts",
+        "src/foundation/filesystem/durable-atomic-file-stage-recovery.ts",
+        "src/foundation/filesystem/durable-atomic-file-target-io.ts",
+        "src/foundation/filesystem/durable-atomic-file-write.ts",
+        "src/foundation/filesystem/durable-directory-materialization.ts",
+        "src/foundation/filesystem/durable-directory-tree-candidate-retirement.ts",
+        "src/foundation/filesystem/durable-directory-tree-candidate.ts",
+        "src/foundation/filesystem/durable-file-candidate.ts",
+        "src/foundation/filesystem/durable-file-copy-candidate.ts",
+        "src/foundation/filesystem/durable-regular-file-link.ts",
+        "src/foundation/filesystem/durable-resource-rename.ts",
+        "src/foundation/filesystem/exact-regular-file-unlink.ts",
+        "src/foundation/filesystem/private-mode-convergence.ts",
+        "src/foundation/filesystem/rooted-directory.ts",
+        "src/foundation/filesystem/rooted-exact-resource-handle.ts",
+        "src/foundation/filesystem/rooted-exclusive-file-lock.ts",
+        "src/foundation/filesystem/rooted-read-write-scope.ts",
+        "src/foundation/filesystem/rooted-resource-parent-handle.ts",
+        "src/foundation/filesystem/stable-directory-read.ts",
+        "src/foundation/filesystem/stable-file-read.ts",
+        "src/foundation/filesystem/whole-file-content-transition.ts",
+        "src/foundation/git/git-ignore-observation.ts",
+        "src/foundation/node/process-instance.ts"
+      ],
       "linter": {
         "rules": {
           "complexity": {
             "noExcessiveCognitiveComplexity": "off"
-          },
-          "suspicious": {
-            "noImplicitAnyLet": "off",
-            "noControlCharactersInRegex": "off"
-          },
-          "style": {
-            "noNonNullAssertion": "off",
-            "useImportType": "off"
           }
         }
       }

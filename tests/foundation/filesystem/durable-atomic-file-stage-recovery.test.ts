@@ -191,8 +191,12 @@ test("target-scoped atomic stage recovery rejects foreign stages before mutation
 
     const firstReceipt = await recoverDurableAtomicFileStagesMatchingTargets(root, [firstTarget]);
     equal(firstReceipt.retiredStageCount, 1);
-    equal(existsSync(path.join(rootPath, ...stages[0]!.split("/"))), false);
-    equal(existsSync(path.join(rootPath, ...stages[1]!.split("/"))), true);
+    const [firstStage, secondStage] = stages;
+    if (firstStage === undefined || secondStage === undefined) {
+      throw new Error("expected two staged files");
+    }
+    equal(existsSync(path.join(rootPath, ...firstStage.split("/"))), false);
+    equal(existsSync(path.join(rootPath, ...secondStage.split("/"))), true);
 
     const receipt = await recoverDurableAtomicFileStagesForTargets(root, [secondTarget]);
     equal(receipt.retiredStageCount, 1);

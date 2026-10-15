@@ -18,7 +18,7 @@ import {
   parsePortableResourcePath,
 } from "../filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
-import { type LoadedArtifactTreeIdentity } from "./loaded-artifact-tree-identity.js";
+import type { LoadedArtifactTreeIdentity } from "./loaded-artifact-tree-identity.js";
 import {
   type LoadedArtifactTreeTransferPlan,
   LoadedArtifactTreeTransferPlanError,

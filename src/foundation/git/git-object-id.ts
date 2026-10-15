@@ -45,7 +45,7 @@ function fail(reason: GitObjectIdErrorReason, path: string): never {
 
 /** 严格解析一个带算法标签的完整Git object ID。 */
 export function parseGitObjectId(value: unknown, path = "$gitObjectId"): Readonly<GitObjectId> {
-  let json;
+  let json: ReturnType<typeof parseJsonValue>;
   try {
     json = parseJsonValue(value, path);
   } catch (error: unknown) {

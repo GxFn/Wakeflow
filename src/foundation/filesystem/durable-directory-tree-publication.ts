@@ -242,7 +242,7 @@ export async function publishDirectoryTreeCandidateDurably(
     "$destinationResourcePath",
   );
 
-  let inspected;
+  let inspected: Awaited<ReturnType<typeof inspectDirectoryTreeCandidate>>;
   try {
     inspected = await inspectDirectoryTreeCandidate(
       root,
@@ -260,7 +260,7 @@ export async function publishDirectoryTreeCandidateDurably(
     throw error;
   }
 
-  let moved;
+  let moved: Awaited<ReturnType<typeof renameResourceDurably>>;
   try {
     moved = await renameResourceDurably(
       root,
@@ -279,7 +279,7 @@ export async function publishDirectoryTreeCandidateDurably(
     fail("commit-uncertain", "$destinationResourcePath");
   }
 
-  let finalInspection;
+  let finalInspection: Awaited<ReturnType<typeof inspectDirectoryTreeCandidate>>;
   try {
     finalInspection = await inspectDirectoryTreeCandidate(
       root,

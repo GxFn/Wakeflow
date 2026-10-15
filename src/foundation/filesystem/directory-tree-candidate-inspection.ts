@@ -267,7 +267,7 @@ export async function inspectPartialDirectoryTreeCandidate(
   for (const filePath of existingFiles) {
     const expected = expectedFiles.get(filePath);
     if (expected === undefined) fail("tree-conflict", "$candidate");
-    let read;
+    let read: Awaited<ReturnType<typeof readStableFile>>;
     try {
       read = await readStableFile(
         root,

@@ -370,7 +370,7 @@ async function assertPublishedTarget(
     fail("target-conflict", "$target");
   }
   assertCurrentOwner(target.node, "$target");
-  let read;
+  let read: Awaited<ReturnType<typeof readStableFileDigest>>;
   try {
     read = await readStableFileDigest(root, target.resourcePath, {
       maximumBytes: DURABLE_ATOMIC_FILE_MAXIMUM_BYTES,

@@ -4680,3 +4680,26 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 深挖 §10 跟踪指标：本批不动旧错误类数、Biome 豁免占比、复杂度错误数、未使用导出数、旧域导入条数、无调用者模块行数；tools/list 字节不变（结果 Schema 不进 tools/list，ADR-0004 选项 A）；Controller 参考与 README 各增一段；门测试阶段 1,452 → 1,170 秒（2 worker，1505 项，含两个 lab 文件与两个场景文件并行后的新排程）。
 
 本批改动 docs/（gate-log、docs README、open-items、深挖批次表）、仓库 README、`assets/agent-text`（两份 README、status 命令、workspace-and-windows 参考）、src/（contracts 的 status Schema 与生成类型；workspace 宿主画像新面；两个宿主画像；观察 decide 与 service；两个宿主的 Agent 文本画像）、tooling（依赖闭包）、tests（闭包、画像、观察 decide/service、CI workflow、六份画像夹具、两份宿主画像快照）、耗时表与两个制品；未提交，main 领先 origin/main 13 个提交。
+
+### 13.171 技术债务批次 6 第一目录：foundation 出 Biome 豁免（2026-10-14）
+
+深挖 §8 第 6 行"质量门解除"按 §3.1 的方案逐目录推进，顺序 foundation → hosts → configuration → workspace → governance；本节只做 foundation（`src/foundation` 68 份、`tests/foundation` 67 份），每个目录两步、两次提交。
+
+- **第一步：只有格式的提交（0d079753）。** `biome.json` 把 foundation 从最后一条豁免 override 里拿出来，另起一条只关五条规则的 override 让格式器先开；`biome check --write` 改了 130 份文件（格式 130、import 整理 102），`tests/foundation` 387 项与仓库范围的 lint / format / knip / 架构规则在改后全部通过。这一步没有任何行为改动，单独成一个提交便于 review。
+- **第二步：规则全开。** 删掉过渡 override，foundation 与仓库其余部分同一套规则。按严格配置量到的 318 条诊断里，非格式的 86 条按类处理：12 处隐式 any 的 `let` 补上 `Awaited<ReturnType<typeof …>>` 或 `ReturnType<…>` 类型；4 处 `useImportType` 由 `--write` 改成 `import type`；7 处非空断言改写成显式的 `undefined` 守卫（`runtime-json-schema.ts` 的 `sameJsonValue` / `uniqueJsonItems` 三处、阶段恢复测试两处）；6 处控制字符正则是三份文件里有意拒绝路径中控制字符的 `CONTROL_PATTERN`，加 `biome-ignore` 并写明理由（注释必须紧贴语句，中间隔一个空行就不生效）；2 处 `noProto` 是测试故意把 `__proto__` 当普通数据键读回，同样 `biome-ignore` 并写明；1 处未用的 `catch (error)` 改为 `catch {}`。54 处认知复杂度超限（29 份文件，集中在 filesystem：durable-atomic-file-stage-recovery.ts（4）、durable-directory-materialization.ts（4）、durable-file-copy-candidate.ts（4）、rooted-exclusive-file-lock.ts（3）、git-ignore-observation.ts（3）、directory-tree-candidate-inspection.ts（2） 等）不在本批重构，按 §3.1 的方案登记为 `biome.json` 里按文件的允许清单——只对这 29 份文件关复杂度一条规则，其余规则照常；所有者与撤销条件写在登记 L2（批次 7 A.5 的拆分，拆一个撤一个）。处理后 `biome check src/foundation tests/foundation` 零诊断，`tests/foundation` 388 项通过。
+- **格式顺带抓到的缺口。** 第二步的完整门在 `tests/kernel/legacy-error-families.test.ts` 失败：格式器把 `durable-directory-tree-candidate-retirement.ts` 折成两行的 `readonly code =\n "…"` 并回一行，清点正则 `readonly code = "…"` 这才第一次看见它——它的旧错误码从批次 1 建表起就漏在 `LEGACY_ERROR_CODE_FAMILIES` 之外，表外的码按 `unexpected` 翻译而不是 `io-failure`。把正则的等号后改成允许任意空白后，源码里还有七个同样被折行藏住的码（workspace 的静态资源操作上下文、governance 的四个托管证据发布类、产品缺陷修复授权与上下文），一并按各自旧域的家族补进表里（foundation 文件系统 `io-failure`，workspace 与 governance `precondition-failed`）。
+- **没做的：** 复杂度本身没有下降（54 处原样，只是从"整目录关规则"变成"逐文件登记"）；hosts（11 处）、configuration（5 处）、workspace（83 处）、governance（81 处）待后续目录；knip 的 `ignore` 仍覆盖这五个目录，等 Q12 对恢复模块的裁决后再收。
+
+文档：登记 L2（允许清单与所有者）、深挖批次表第 6 行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 第一步后：`tests/foundation` 387 项通过，lint / format / knip / 架构规则通过，制品未重建（格式只改源码，第二步一起重建）。
+- 第二步后：`biome check src/foundation tests/foundation` 零诊断；`tests/foundation` + 隐私模型 388 项通过；lint / format / knip / 架构规则通过。制品重建改了 122 份文件（foundation 的编译输出随源码格式变化），`smoke:artifacts` 两个制品 verify ok、hook observer landed。
+- 完整门两次。第一次（run-offNIS，18.5 分钟）1505 项 1504 通过、1 失败：`legacy-error-families.test.ts` 的清点第一次看见被格式器并回一行的 retirement 旧码（上文"格式顺带抓到的缺口"）；补表并把正则放宽后又补进七个被折行藏住的码，制品再次重建（124 份文件）、smoke 再次通过。第二次为认证运行：run-LCLAx1（01:12–01:30，18.6 分钟）1505/1505 全通过、316 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-LCLAx1/receipt.json`：316 份文件、并发 2；写回在认证门之后。
+- `wf handoff`（含真实 build:check，run-pEPuWN）：七项通过；`git diff --check` 干净。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新。
+- 深挖 §10 跟踪指标：Biome 豁免行数占比下降——`src/foundation` 22,668 行 + `tests/foundation` 出豁免（原 78% 的分母是五个旧域目录；hosts/configuration/workspace/governance 仍在豁免内）；严格配置下的复杂度错误数 233 中 54 处改为逐文件登记（规则对这 29 份文件关，其余 foundation 文件开）；旧错误类数 189 不变但家族表多了 8 个此前漏登记的码；其余指标不动。
+
+本批改动 `biome.json`（foundation 出豁免 + 29 份文件的复杂度允许清单）、src/foundation（130 份格式 + 12 处类型注解 + 3 处 biome-ignore + 7 处守卫改写 + 1 处 catch）、tests/foundation（格式 + 2 处 biome-ignore + 1 处守卫改写）、`src/kernel/legacy-error-families.ts`（+8）、`tests/kernel/legacy-error-families.test.ts`（正则）、docs/（gate-log、登记 L2、深挖批次表、docs README）与两个制品（124 份）；第一步已提交 0d079753，第二步未提交，main 领先 origin/main 16 个提交。

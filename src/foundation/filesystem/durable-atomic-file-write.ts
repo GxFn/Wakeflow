@@ -40,7 +40,7 @@ import {
 } from "./durable-atomic-file-write-contract.js";
 import { type FileNodeSnapshot, sameFileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 
 /**
  * Wakeflow Foundation / Filesystem：单个完整字节文件的耐久原子发布门面。

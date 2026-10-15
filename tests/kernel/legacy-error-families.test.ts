@@ -7,7 +7,9 @@ import { isWakeflowErrorCode } from "../../src/contracts/vocabulary/wakeflow-err
 import { LEGACY_ERROR_CODE_FAMILIES } from "../../src/kernel/legacy-error-families.js";
 
 const SOURCE_ROOT = path.join(process.cwd(), "src");
-const LEGACY_CODE_DECLARATION = /readonly code = "(wakeflow-[a-z0-9-]+)"/gu;
+// 声明可能被格式器折成两行（`readonly code =\n    "…"`），所以等号后允许任意空白（§13.171：foundation 出豁免时
+// 发现 retirement 模块的旧码就因此漏在表外）。
+const LEGACY_CODE_DECLARATION = /readonly code =\s*"(wakeflow-[a-z0-9-]+)"/gu;
 
 function sourceFiles(directory: string): string[] {
   const files: string[] = [];

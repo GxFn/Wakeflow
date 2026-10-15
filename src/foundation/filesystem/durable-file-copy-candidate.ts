@@ -27,7 +27,7 @@ import {
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
 } from "./rooted-directory.js";

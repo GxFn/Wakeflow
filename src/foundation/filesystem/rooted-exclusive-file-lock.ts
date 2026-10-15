@@ -461,7 +461,7 @@ export async function inspectRootedExclusiveFileLock(
   lockPath: PortableResourcePath,
 ): Promise<RootedExclusiveFileLockObservation> {
   assertRoot(root);
-  let read;
+  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(root, lockPath, {
       maximumBytes: parseByteCount(ROOTED_EXCLUSIVE_LOCK_MAXIMUM_RECORD_BYTES),
@@ -685,7 +685,7 @@ async function assertSafeExistingLock(
 async function waitForRetry(milliseconds: number, signal: AbortSignal | undefined): Promise<void> {
   try {
     await delay(milliseconds, undefined, signal === undefined ? {} : { signal });
-  } catch (error: unknown) {
+  } catch {
     if (signal?.aborted === true) {
       fail("aborted", "$signal");
     }

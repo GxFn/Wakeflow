@@ -68,6 +68,7 @@ export class AbsoluteDirectoryPlacementError extends Error {
   }
 }
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 
 function fail(reason: AbsoluteDirectoryPlacementErrorReason, path: string): never {

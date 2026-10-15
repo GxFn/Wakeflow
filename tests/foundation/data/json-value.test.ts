@@ -262,6 +262,7 @@ test("special keys remain data and nested paths use JSON Pointer escaping", () =
   Object.defineProperty(source, "constructor", { value: "data", enumerable: true });
   const snapshot = requireJsonObject(parseJsonValue(source));
   equal(Object.getPrototypeOf(snapshot), null);
+  // biome-ignore lint/suspicious/noProto: the test asserts that "__proto__" is read back as a plain data key
   equal(snapshot.__proto__, "safe");
   equal(snapshot.constructor, "data");
 

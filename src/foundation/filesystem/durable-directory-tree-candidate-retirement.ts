@@ -346,7 +346,7 @@ async function captureMembers(
 
   for (const directory of plan.directories) {
     if (missingDirectories.has(directory)) continue;
-    let inspected;
+    let inspected: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
     try {
       inspected = await root.inspectExistingResource(
         memberPath(candidateRootPath, directory),
@@ -502,7 +502,7 @@ export async function removeEmptyDirectoryExactly(
   signal: AbortSignal | undefined,
   durability: "fsync" | "none" = "fsync",
 ): Promise<void> {
-  let current;
+  let current: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     current = await root.inspectExistingResource(resourcePath, "$directory");
   } catch (error: unknown) {

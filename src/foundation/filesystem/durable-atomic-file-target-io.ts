@@ -14,7 +14,7 @@ import {
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
@@ -139,7 +139,7 @@ export async function assertExpectedDurableAtomicFileTarget(
   if (expected.resourcePath !== resourcePath) {
     fail("input", "$options.expected.resourcePath");
   }
-  let current;
+  let current: Awaited<ReturnType<typeof readStableFileDigest>>;
   try {
     current = await readStableFileDigest(
       root,

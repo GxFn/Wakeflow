@@ -139,7 +139,7 @@ async function entriesOf(root: RootedDirectory, area: PortableResourcePath) {
       readers.push(entry.resourcePath);
       continue;
     }
-    let stage;
+    let stage: ReturnType<typeof parseDurableAtomicFileStageFileName>;
     try {
       stage = parseDurableAtomicFileStageFileName(entry.name);
     } catch (error: unknown) {

@@ -2,7 +2,7 @@ import { deepEqual, equal, match, ok, throws } from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   collectVendoredFiles,
@@ -27,6 +27,10 @@ interface FixturePackage {
   readonly link?: boolean;
   readonly nested?: boolean;
   readonly files?: Readonly<Record<string, string>>;
+  /** 隐藏锁文件里记的完整性与根锁文件不同：装的不是锁定的那个压缩包。 */
+  readonly installedIntegrity?: string;
+  /** 不写隐藏锁文件：安装不是 npm 按锁文件做的。 */
+  readonly hiddenLockfileMissing?: boolean;
 }
 
 function json(value: unknown): string {
@@ -73,6 +77,24 @@ function repositoryFixture(t: TestContext, packages: readonly FixturePackage[]):
     path.join(root, "package-lock.json"),
     json({ name: "fixture", version: "0.0.0", lockfileVersion: 3, packages: lockPackages }),
   );
+  // npm 的隐藏锁文件：缺省与根锁文件逐包一致，夹具可按包改写装入的完整性或把文件整个去掉（C15）。
+  const installedPackages: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(lockPackages)) {
+    if (key === "" || !value || typeof value !== "object") continue;
+    const entry = packages.find((candidate) => `node_modules/${candidate.name}` === key);
+    if (entry?.link) continue;
+    installedPackages[key] = {
+      ...(value as Record<string, unknown>),
+      ...(entry?.installedIntegrity === undefined ? {} : { integrity: entry.installedIntegrity }),
+    };
+  }
+  if (!packages.some((entry) => entry.hiddenLockfileMissing === true)) {
+    mkdirSync(path.join(root, "node_modules"), { recursive: true });
+    writeFileSync(
+      path.join(root, "node_modules", ".package-lock.json"),
+      json({ name: "fixture", version: "0.0.0", lockfileVersion: 3, packages: installedPackages }),
+    );
+  }
   return root;
 }
 
@@ -148,6 +170,44 @@ test("未安装、开发依赖、工作区链接、版本漂移与嵌套安装�
     () => collectVendoredFiles(nested, resolveRuntimeDependencyClosure(nested, ["nested"])),
     expectClosureErrorCode("wakeflow-artifact-dependency-nested"),
   );
+});
+
+test("装进来的必须是锁定的压缩包：隐藏锁文件缺失、条目缺席或完整性不同各以稳定错误码拒绝（C15）", (t) => {
+  throws(
+    () =>
+      resolveRuntimeDependencyClosure(
+        repositoryFixture(t, [{ name: "alpha", version: "1.0.0", hiddenLockfileMissing: true }]),
+        ["alpha"],
+      ),
+    expectClosureErrorCode("wakeflow-artifact-dependency-installed"),
+  );
+  throws(
+    () =>
+      resolveRuntimeDependencyClosure(
+        repositoryFixture(t, [
+          {
+            name: "tampered",
+            version: "1.0.0",
+            installedIntegrity: `sha512-${"B".repeat(86)}==`,
+          },
+        ]),
+        ["tampered"],
+      ),
+    expectClosureErrorCode("wakeflow-artifact-dependency-integrity"),
+  );
+  const absent = repositoryFixture(t, [{ name: "alpha", version: "1.0.0" }]);
+  const hidden = path.join(absent, "node_modules", ".package-lock.json");
+  writeFileSync(
+    hidden,
+    json({ name: "fixture", version: "0.0.0", lockfileVersion: 3, packages: {} }),
+  );
+  throws(
+    () => resolveRuntimeDependencyClosure(absent, ["alpha"]),
+    expectClosureErrorCode("wakeflow-artifact-dependency-integrity"),
+  );
+  // 一致时照常求解：隐藏锁文件的核对不改变闭包内容。
+  const clean = repositoryFixture(t, [{ name: "alpha", version: "1.0.0" }]);
+  equal(resolveRuntimeDependencyClosure(clean, ["alpha"]).length, 1);
 });
 
 test("复制运行时文件：剪掉 .ts/.mts/.cts/.map/.md、隐藏文件与点开头目录，保留许可文件（不论扩展名）与 package.json，路径排序", (t) => {

@@ -17,7 +17,7 @@
  * 本模块不导入任何东西：取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 九个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume）；源目录里出现表外的占位符即构建失败。 */
+/** 十个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume，C9 加 pluginUpdateSteps）；源目录里出现表外的占位符即构建失败。 */
 export type CodexAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
@@ -27,7 +27,8 @@ export type CodexAgentTextPlaceholderKey =
   | "commandSurface"
   | "hostTrustSteps"
   | "windowResume"
-  | "resendGuard";
+  | "resendGuard"
+  | "pluginUpdateSteps";
 
 /** 渲染语言：`zh` 只用于 `README.zh-CN.md`，其余源文件一律 `en`（D6）。 */
 export type CodexAgentTextLanguage = "en" | "zh";
@@ -134,7 +135,28 @@ const HOST_TRUST_STEPS_ZH = [
   "里面没有 Wakeflow 的待审阅条目，说明这次更新没有动 hook。",
 ].join("\n");
 
-/** 九个占位符的 Codex 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */
+const PLUGIN_UPDATE_STEPS_EN = [
+  "Codex documents no plugin update command (checked 2026-10-14): `codex plugin marketplace",
+  "upgrade <marketplace>` refreshes a Git marketplace's catalog, and the `codex-marketplace`",
+  "helper used for installation documents only `add` and `remove`. Refresh, run the same",
+  "`add` command you installed with, then restart the Codex app - only an app restart",
+  "reloads Wakeflow's MCP server; resuming a chat does not - and resume the existing chats.",
+  "Open `/hooks` once: an update that changed the hook definition bytes asks you to trust",
+  "the four hooks again. `wakeflow_status` from the resumed Controller chat must no longer",
+  "report `runtime-artifact-outdated`; peer windows stay `unverified` on Codex, which is",
+  "not a failure.",
+].join("\n");
+
+const PLUGIN_UPDATE_STEPS_ZH = [
+  "Codex 没有文档化的插件更新命令（2026-10-14 核对）：`codex plugin marketplace upgrade <marketplace>`",
+  "刷新 Git marketplace 的目录，安装用的 `codex-marketplace` 助手只文档化了 `add` 与 `remove`。先刷新，",
+  "再执行你安装时用的那条 `add` 命令，然后重启 Codex 应用——只有重启应用才会重载 Wakeflow 的 MCP",
+  "server，续接聊天不会——再续接原有聊天。打开一次 `/hooks`：改变了 hook 定义字节的更新会要求你重新",
+  "信任四个 hook。续接后的 Controller 聊天里 `wakeflow_status` 不应再报 `runtime-artifact-outdated`；",
+  "Codex 上的同伴窗口保持 `unverified`，这不是失败。",
+].join("\n");
+
+/** 十个占位符的 Codex 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */
 export const CODEX_AGENT_TEXT_PLACEHOLDERS: Readonly<
   Record<CodexAgentTextPlaceholderKey, Readonly<CodexAgentTextPlaceholderValue>>
 > = Object.freeze({
@@ -147,6 +169,7 @@ export const CODEX_AGENT_TEXT_PLACEHOLDERS: Readonly<
   hostTrustSteps: Object.freeze({ en: HOST_TRUST_STEPS_EN, zh: HOST_TRUST_STEPS_ZH }),
   windowResume: Object.freeze({ en: WINDOW_RESUME }),
   resendGuard: Object.freeze({ en: RESEND_GUARD }),
+  pluginUpdateSteps: Object.freeze({ en: PLUGIN_UPDATE_STEPS_EN, zh: PLUGIN_UPDATE_STEPS_ZH }),
 });
 
 /** 未登记占位符的稳定错误码；构建器的预检先于它触发，本抛出是最后一道防线。 */

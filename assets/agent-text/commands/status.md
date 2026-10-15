@@ -7,7 +7,9 @@ Report where this Wakeflow workspace stands.
 
 Load the `wakeflow-controller` skill and follow its "Checking the workspace"
 section. `runtime-artifact-outdated` / `server-outdated` describe this serving
-MCP process. `window-runtime-unverified` describes missing peer runtime evidence,
+MCP process; its `next` owner follows the host - `controller` where this
+Controller restarts its own window in place, `user` where only an application
+restart reloads the server. `window-runtime-unverified` describes missing peer runtime evidence,
 not a proven stale process. Load the current skill and follow "After a plugin
 update"; do not infer MCP readiness from SessionStart or Stop records.
 
@@ -18,7 +20,9 @@ Report in the user's terms: the overall state, what is on the board, the active
 Demand and its frontier, any window that is not registered, any window whose
 `attention` is `needed` (the host is waiting for the user there - a permission
 prompt, an idle prompt, a login or usage limit - so name it before waiting on
-that window), any `legacyResidue` item (old-plugin content the user removes by
+that window), any registered window whose `launchIntent` is `drifted` (it was
+launched or last resumed under an older launch intent; a replacing handshake
+renews the record, nothing fails on it), any `legacyResidue` item (old-plugin content the user removes by
 hand - name its root, file and line), any `hostAssets` entry that is not
 `current`, any work claim that is held, and the next actions the result named -
 with who owns each one.

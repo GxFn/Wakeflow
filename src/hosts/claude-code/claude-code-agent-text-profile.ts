@@ -19,7 +19,7 @@ import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "./claude-code-tmux-asset.js";
  * 本模块只导入 tmux 助手的命令常量（与权限规则同源）；取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 九个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume）；源目录里出现表外的占位符即构建失败。 */
+/** 十个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume，C9 加 pluginUpdateSteps）；源目录里出现表外的占位符即构建失败。 */
 export type ClaudeCodeAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
@@ -29,7 +29,8 @@ export type ClaudeCodeAgentTextPlaceholderKey =
   | "commandSurface"
   | "hostTrustSteps"
   | "windowResume"
-  | "resendGuard";
+  | "resendGuard"
+  | "pluginUpdateSteps";
 
 /** 渲染语言：`zh` 只用于 `README.zh-CN.md`，其余源文件一律 `en`（D6）。 */
 export type ClaudeCodeAgentTextLanguage = "en" | "zh";
@@ -241,7 +242,33 @@ const HOST_TRUST_STEPS_ZH = [
   "`hosts.claude-code.launch.permissionMode` 设为 `acceptEdits`；之后窗口执行命令时会弹权限确认。",
 ].join("\n");
 
-/** 九个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */
+const PLUGIN_UPDATE_STEPS_EN = [
+  "Updating is two host actions and one Wakeflow read. Refresh the marketplace catalog",
+  "with `/plugin marketplace update gxfn` (from a shell: `claude plugin marketplace update",
+  "gxfn`), then update the plugin: in a session open `/plugin`, pick Wakeflow under",
+  "Installed and choose Update now; from a shell, `claude plugin update wakeflow@gxfn`.",
+  "Claude Code replaces the installed copy only when the plugin's manifest version",
+  "changed, and every Wakeflow release changes it. Running sessions keep the old hooks and",
+  "MCP server until `/reload-plugins` or a new session, so the Controller's",
+  "`wakeflow_status` then reports `runtime-artifact-outdated` for its own server and",
+  "`windows-stale:<n>` for peer windows started under the previous artifact; the",
+  "Controller refreshes them itself through the tmux helper (its skill section \"After a",
+  "plugin update\"). Expect `wakeflow_verify` to pass `runtime-artifact` again once no",
+  "window is stale; `unverified` is not a failure.",
+].join("\n");
+
+const PLUGIN_UPDATE_STEPS_ZH = [
+  "更新是两步宿主动作加一次 Wakeflow 读取。先用 `/plugin marketplace update gxfn`（shell 里是",
+  "`claude plugin marketplace update gxfn`）刷新 marketplace 目录，再更新插件：会话里打开 `/plugin`，",
+  "在 Installed 下选中 Wakeflow 点 Update now；shell 里是 `claude plugin update wakeflow@gxfn`。",
+  "Claude Code 只在插件清单的版本号变化时替换已安装的副本，Wakeflow 每次发布都会改它。正在运行的",
+  "会话在 `/reload-plugins` 或新会话之前仍用旧的 hook 与 MCP server，所以 Controller 的",
+  "`wakeflow_status` 会对自己的 server 报 `runtime-artifact-outdated`、对在旧制品下启动的同伴窗口报",
+  "`windows-stale:<n>`；Controller 按技能的 \"After a plugin update\" 一节用 tmux 助手自己刷新它们。",
+  "没有窗口再是 stale 之后，`wakeflow_verify` 的 `runtime-artifact` 门重新通过；`unverified` 不是失败。",
+].join("\n");
+
+/** 十个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */
 export const CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS: Readonly<
   Record<ClaudeCodeAgentTextPlaceholderKey, Readonly<ClaudeCodeAgentTextPlaceholderValue>>
 > = Object.freeze({
@@ -254,6 +281,7 @@ export const CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS: Readonly<
   hostTrustSteps: Object.freeze({ en: HOST_TRUST_STEPS_EN, zh: HOST_TRUST_STEPS_ZH }),
   windowResume: Object.freeze({ en: WINDOW_RESUME }),
   resendGuard: Object.freeze({ en: RESEND_GUARD }),
+  pluginUpdateSteps: Object.freeze({ en: PLUGIN_UPDATE_STEPS_EN, zh: PLUGIN_UPDATE_STEPS_ZH }),
 });
 
 /** 未登记占位符的稳定错误码；构建器的预检先于它触发，本抛出是最后一道防线。 */

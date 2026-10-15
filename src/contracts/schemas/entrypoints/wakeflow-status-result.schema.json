@@ -825,7 +825,8 @@
         "lastObservation",
         "attention",
         "projection",
-        "runtime"
+        "runtime",
+        "launchIntent"
       ],
       "properties": {
         "windowId": {
@@ -1005,6 +1006,30 @@
               ]
             }
           }
+        },
+        "launchIntent": {
+          "description": "Whether the binding was registered under the launch intent the current config and host profile produce (open-items C18): current when the digests agree; drifted when the registered intent digest differs, so the window was launched or last resumed under an older intent (a relocate keeps the registered digest, only a replacing handshake renews it); null without a binding or when the host profile cannot compile intents. Information only: no gate fails on it.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "registeredDigest", "currentDigest"],
+              "properties": {
+                "status": {
+                  "enum": ["current", "drifted"]
+                },
+                "registeredDigest": {
+                  "$ref": "#/$defs/sha256Digest"
+                },
+                "currentDigest": {
+                  "$ref": "#/$defs/sha256Digest"
+                }
+              }
+            }
+          ]
         }
       }
     },

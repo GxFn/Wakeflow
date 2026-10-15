@@ -1,12 +1,12 @@
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../foundation/data/passive-own-data.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  splitPortableResourcePath,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
+  splitPortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 
 /**
@@ -43,6 +43,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
   "activityMonitor",
   "temporaryPrompts",
   "runtimeStaleness",
+  "runtimeRefresh",
 ] as const);
 
 export type WakeflowWorkspaceHostResourceSurfaceName =
@@ -114,6 +115,12 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
    * 窗口到 MCP 关联（Codex），一律只报 unverified，不作方向性断言（ADR-0017 D3、C6）。
    */
   readonly runtimeStaleness: "session-start-observer-digest" | "unverified";
+  /**
+   * 本进程的 MCP 过期（`server-outdated`）后由谁换代（open-items C17）。`controller-in-place`：Controller
+   * 能按技能用宿主助手就地重启自己的窗口（Claude Code），`next` 的 owner 是 controller；
+   * `user-app-restart`：只有用户重启宿主应用才能重载 MCP（Codex），owner 是 user。
+   */
+  readonly runtimeRefresh: "controller-in-place" | "user-app-restart";
 }
 
 /**
@@ -382,7 +389,15 @@ function parseSurfaces(
     activityMonitor: surfaceBoolean(record.activityMonitor, "activityMonitor"),
     temporaryPrompts: surfaceBoolean(record.temporaryPrompts, "temporaryPrompts"),
     runtimeStaleness: parseRuntimeStaleness(record.runtimeStaleness),
+    runtimeRefresh: parseRuntimeRefresh(record.runtimeRefresh),
   });
+}
+
+function parseRuntimeRefresh(
+  value: unknown,
+): WakeflowWorkspaceHostResourceSurfaces["runtimeRefresh"] {
+  if (value === "controller-in-place" || value === "user-app-restart") return value;
+  fail("surface", "$/surfaces/runtimeRefresh");
 }
 
 function parseRuntimeStaleness(

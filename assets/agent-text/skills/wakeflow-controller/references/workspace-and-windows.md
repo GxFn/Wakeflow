@@ -201,6 +201,9 @@ means this runtime cannot write that format; it does not offer an upgrade path.
 its own path produces `server-outdated` / `runtime-artifact-outdated`; a missing
 manifest produces `manifest-unavailable` / `runtime-artifact-unavailable`.
 Inspect the installation and reload this server before it performs maintenance.
+The owner named in `next` comes from the host profile: `controller` where this
+Controller can restart its own window in place through the host procedure
+below, `user` where only an application restart reloads the server.
 These checks do not identify the host-selected sibling installation.
 
 The serving MCP rejects mutations while its own manifest has changed or is
@@ -229,6 +232,14 @@ or stop superseded it, `null` without a binding or any record. Tell the user
 which window needs them instead of waiting for a callback from it. No tool
 clears the state; the user's action in that window does. The field says
 nothing about the window's MCP or instruction state.
+
+A registered window's `launchIntent` compares the intent digest recorded at its
+handshake with the intent the current config and host profile produce:
+`current` when they agree, `drifted` when the window was launched or last
+resumed under an older intent (a config or plugin change since). A relocate
+keeps the recorded digest; only a replacing handshake renews it. It is
+information for your review of that window's actual launch parameters; no gate
+fails on it and it never justifies rebinding by itself.
 
 Restart the stale windows with the host's procedure: {{windowResume}} After this
 server is current, preview and apply reconcile for repairable workspace gates

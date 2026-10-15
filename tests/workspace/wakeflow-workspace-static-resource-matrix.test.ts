@@ -158,6 +158,7 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
       activityMonitor: false,
       temporaryPrompts: false,
       runtimeStaleness: "unverified",
+      runtimeRefresh: "user-app-restart",
     },
     launch: { kind: "project-thread" },
   });

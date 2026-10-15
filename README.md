@@ -135,6 +135,32 @@ When `wakeflow_verify` reports its `host-hook-channel` gate as `absent` or
 `records-0`, check these actions first. That gate is how Wakeflow knows a window
 really received what was sent to it.
 
+## Updating
+
+**Claude Code.** Refresh the catalog with `/plugin marketplace update gxfn`
+(shell: `claude plugin marketplace update gxfn`), then update the plugin: in a
+session open `/plugin`, pick Wakeflow under Installed and choose Update now, or
+run `claude plugin update wakeflow@gxfn` from a shell. Claude Code replaces the
+installed copy (`~/.claude/plugins/cache/gxfn/wakeflow/<version>/`) only when
+the manifest version changed; every release changes it. Running sessions keep
+the old hooks and MCP server until `/reload-plugins` or a new session, so
+`wakeflow_status` then reports `runtime-artifact-outdated` for the Controller's
+own server and `windows-stale:<n>` for peer windows; the Controller refreshes
+them through the tmux helper (skill section "After a plugin update").
+
+**Codex.** Codex documents no plugin update command (checked 2026-10-14):
+`codex plugin marketplace upgrade <marketplace>` refreshes a Git marketplace,
+and the `codex-marketplace` helper documents only `add` and `remove`. Refresh,
+re-run the `add` command above, restart the Codex app (only an app restart
+reloads the MCP server), resume the existing chats and open `/hooks` once in
+case the hook definitions changed.
+
+**From 0.9.x.** The current workspace format is the first supported baseline
+(ADR-0018): a workspace initialized by 0.9.x is refused
+(`fresh-legacy-residue-present`) and `wakeflow_status` lists its leftovers under
+`legacyResidue`. Archive or remove them by hand and initialize again; 0.9.x
+history is not migrated.
+
 ## Initialize a workspace
 
 Open your agent in the directory you want as the workspace — it must not be a

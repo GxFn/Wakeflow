@@ -1,5 +1,5 @@
-import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import type { Stats } from "node:fs";
+import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -9,13 +9,18 @@ import path from "node:path";
  * npm 包。闭包从编译闭包记下的直接外部包出发，沿根 `package-lock.json`（v3）的 `packages`
  * 表逐级取 `dependencies`、`peerDependencies` 与已装的 `optionalDependencies`，每一级都核对
  * 锁文件版本与 `node_modules/` 里实际装着的版本相等；锁里标为 `dev`、`link` 或嵌套安装的包一律
- * 失败——制品只接受扁平、精确、可复现的一层 `node_modules/`。文件按扩展名剪掉类型声明、
+ * 失败——制品只接受扁平、精确、可复现的一层 `node_modules/`。每个包还要在 npm 写下的隐藏锁文件
+ * `node_modules/.package-lock.json` 里以同一版本、同一 SRI 完整性出现：npm 在安装时按它核对过
+ * 压缩包字节，所以这条相等关系证明装进来的就是锁定的那个压缩包（open-items C15）；安装之后对
+ * 文件的改动只有远端 artifact 档从干净 `npm ci` 重建的 build:check 能发现。文件按扩展名剪掉类型声明、
  * source map 与 Markdown（它们没有运行时消费者），其余原样复制；顺序与字节只由锁文件和已装
  * 包决定，所以两次构建逐字节一致。不用 bundler：需求文档 §5 把"通过 bundling 隐藏领域依赖或
  * 宿主边界"列为非目标。
  */
 
 const LOCKFILE_NAME = "package-lock.json";
+/** npm 7+ 在安装后写下的隐藏锁文件：记录实际装进 `node_modules/` 的版本与完整性。 */
+const HIDDEN_LOCKFILE_NAME = ".package-lock.json";
 const NODE_MODULES = "node_modules";
 const MAXIMUM_LOCKFILE_BYTES = 8 * 1024 * 1024;
 const MAXIMUM_PACKAGES = 64;
@@ -113,6 +118,53 @@ function readLockPackages(repositoryRoot: string): JsonRecord {
   return lock.packages;
 }
 
+/** 隐藏锁文件的 `packages` 表；缺失或不可读即安装不是 npm 按锁文件做的（例如别的包管理器或手工拷贝）。 */
+function readInstalledLockPackages(repositoryRoot: string): JsonRecord {
+  const file = path.join(repositoryRoot, NODE_MODULES, HIDDEN_LOCKFILE_NAME);
+  if (lstatOrNull(file)?.isFile() !== true) {
+    fail(
+      "wakeflow-artifact-dependency-installed",
+      `${NODE_MODULES}/${HIDDEN_LOCKFILE_NAME} is missing; install with npm ci before building`,
+    );
+  }
+  const lock = readBoundedJson(
+    file,
+    MAXIMUM_LOCKFILE_BYTES,
+    "wakeflow-artifact-dependency-installed",
+  );
+  if (lock.lockfileVersion !== 3 || !isPlainRecord(lock.packages)) {
+    fail(
+      "wakeflow-artifact-dependency-installed",
+      `${NODE_MODULES}/${HIDDEN_LOCKFILE_NAME} must be lockfile version 3`,
+    );
+  }
+  return lock.packages;
+}
+
+/**
+ * 装进来的必须是锁定的那个压缩包：隐藏锁文件里同名条目的版本与 SRI 完整性都要等于根锁文件（C15）。
+ * npm 安装时已按完整性核对过压缩包字节，这条相等关系把那次核对接到制品上。
+ */
+function assertInstalledFromLockedTarball(
+  installedPackages: JsonRecord,
+  name: string,
+  locked: Readonly<{ readonly version: string; readonly integrity: string }>,
+): void {
+  const installed = installedPackages[`${NODE_MODULES}/${name}`];
+  if (!isPlainRecord(installed)) {
+    fail(
+      "wakeflow-artifact-dependency-integrity",
+      `${name} is absent from ${NODE_MODULES}/${HIDDEN_LOCKFILE_NAME}; reinstall with npm ci`,
+    );
+  }
+  if (installed.version !== locked.version || installed.integrity !== locked.integrity) {
+    fail(
+      "wakeflow-artifact-dependency-integrity",
+      `${name} was installed from ${String(installed.version)} ${String(installed.integrity)} but the lockfile pins ${locked.version} ${locked.integrity}`,
+    );
+  }
+}
+
 /** 锁文件里一个包的依赖名：`dependencies` 与 `peerDependencies` 必须在锁里，`optionalDependencies` 在锁里才算。 */
 function lockedDependencyNames(
   packages: JsonRecord,
@@ -165,6 +217,7 @@ function assertInstalledVersion(repositoryRoot: string, name: string, lockedVers
 function lockedPackage(
   repositoryRoot: string,
   packages: JsonRecord,
+  installedPackages: JsonRecord,
   name: string,
 ): Readonly<RuntimeDependencyPackage> {
   const entry = packages[`${NODE_MODULES}/${name}`];
@@ -184,6 +237,10 @@ function lockedPackage(
     fail("wakeflow-artifact-lockfile", `${name} has no sha512 integrity in the lockfile`);
   }
   assertInstalledVersion(repositoryRoot, name, entry.version);
+  assertInstalledFromLockedTarball(installedPackages, name, {
+    version: entry.version,
+    integrity: entry.integrity,
+  });
   return Object.freeze({
     name,
     version: entry.version,
@@ -201,6 +258,7 @@ export function resolveRuntimeDependencyClosure(
   directPackages: readonly string[],
 ): readonly Readonly<RuntimeDependencyPackage>[] {
   const packages = readLockPackages(repositoryRoot);
+  const installedPackages = readInstalledLockPackages(repositoryRoot);
   const resolved = new Map<string, Readonly<RuntimeDependencyPackage>>();
   const pending = [...directPackages].sort(compareCodeUnits);
   while (pending.length > 0) {
@@ -209,7 +267,7 @@ export function resolveRuntimeDependencyClosure(
     if (resolved.size >= MAXIMUM_PACKAGES) {
       fail("wakeflow-artifact-dependency-count", `closure exceeds ${MAXIMUM_PACKAGES} packages`);
     }
-    const locked = lockedPackage(repositoryRoot, packages, name);
+    const locked = lockedPackage(repositoryRoot, packages, installedPackages, name);
     resolved.set(name, locked);
     for (const dependency of locked.dependencies) {
       if (!resolved.has(dependency)) pending.push(dependency);

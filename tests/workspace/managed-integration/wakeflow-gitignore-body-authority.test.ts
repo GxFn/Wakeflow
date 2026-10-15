@@ -116,6 +116,7 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       activityMonitor: false,
       temporaryPrompts: false,
       runtimeStaleness: "unverified",
+      runtimeRefresh: "user-app-restart",
     },
     launch: { kind: "project-thread" },
   });
@@ -205,6 +206,7 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       activityMonitor: false,
       temporaryPrompts: false,
       runtimeStaleness: "unverified",
+      runtimeRefresh: "user-app-restart",
     },
     launch: { kind: "project-thread" },
   });

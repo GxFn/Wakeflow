@@ -1,14 +1,13 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "../../../src/hosts/claude-code/claude-code-statusline-asset.js";
 import {
   CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
   CLAUDE_CODE_TMUX_ASSET_REF,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
+import {
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../../src/workspace/workspace-host-resource-catalog.js";
 
 function assertDeepFrozen(value: unknown): void {
@@ -45,6 +44,7 @@ test("Claude Code host owns one exact matrix-shaping resource profile", () => {
       activityMonitor: true,
       temporaryPrompts: true,
       runtimeStaleness: "session-start-observer-digest",
+      runtimeRefresh: "controller-in-place",
     },
     launch: {
       kind: "tmux-session",

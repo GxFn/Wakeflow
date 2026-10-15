@@ -410,6 +410,7 @@ test("optional Host resources are compiled from profile values without host bran
         activityMonitor: true,
         temporaryPrompts: true,
         runtimeStaleness: "unverified",
+        runtimeRefresh: "user-app-restart",
       },
       launch: { kind: "project-thread" },
     });

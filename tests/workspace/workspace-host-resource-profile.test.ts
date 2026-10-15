@@ -57,6 +57,7 @@ function codexProfile(
       activityMonitor: false,
       temporaryPrompts: false,
       runtimeStaleness: "unverified",
+      runtimeRefresh: "user-app-restart",
     },
     launch: { kind: "project-thread" },
     ...overrides,
@@ -76,6 +77,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
     "activityMonitor",
     "temporaryPrompts",
     "runtimeStaleness",
+    "runtimeRefresh",
   ]);
 
   const codexInput = {
@@ -98,6 +100,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       activityMonitor: false,
       temporaryPrompts: false,
       runtimeStaleness: "unverified",
+      runtimeRefresh: "user-app-restart",
     },
     launch: { kind: "project-thread" },
   };
@@ -137,6 +140,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       activityMonitor: true,
       temporaryPrompts: true,
       runtimeStaleness: "unverified",
+      runtimeRefresh: "user-app-restart",
     },
     launch: {
       kind: "tmux-session",
@@ -188,6 +192,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         activityMonitor: false,
         temporaryPrompts: false,
         runtimeStaleness: "unverified",
+        runtimeRefresh: "user-app-restart",
         close: true,
       },
     })),
@@ -228,6 +233,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         activityMonitor: false,
         temporaryPrompts: false,
         runtimeStaleness: "unverified",
+        runtimeRefresh: "user-app-restart",
       },
       launch: { kind: "project-thread" },
     })),
@@ -255,6 +261,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         activityMonitor: false,
         temporaryPrompts: false,
         runtimeStaleness: "unverified",
+        runtimeRefresh: "user-app-restart",
       },
       launch: { kind: "project-thread" },
     })),
@@ -284,6 +291,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
         activityMonitor: false,
         temporaryPrompts: false,
         runtimeStaleness: "unverified",
+        runtimeRefresh: "user-app-restart",
       },
       launch: { kind: "project-thread" },
     })),
@@ -346,6 +354,7 @@ test("host resource profile closes relations without encoding host capability br
         activityMonitor: false,
         temporaryPrompts: false,
         runtimeStaleness: "unverified",
+        runtimeRefresh: "user-app-restart",
       },
       launch: { kind: "project-thread" },
     })),
@@ -373,6 +382,7 @@ test("host resource profile closes relations without encoding host capability br
         activityMonitor: false,
         temporaryPrompts: false,
         runtimeStaleness: "unverified",
+        runtimeRefresh: "user-app-restart",
       },
       launch: { kind: "project-thread" },
     })),
@@ -404,6 +414,7 @@ test("host resource profile closes relations without encoding host capability br
         activityMonitor: true,
         temporaryPrompts: true,
         runtimeStaleness: "unverified",
+        runtimeRefresh: "user-app-restart",
       },
       launch: { kind: "project-thread" },
     }));

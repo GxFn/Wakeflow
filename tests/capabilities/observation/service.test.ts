@@ -1,4 +1,3 @@
-import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
 import {
   existsSync,
@@ -16,7 +15,6 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-
 import {
   executeDemandCancellationRequest,
   executeDemandCompletionRequest,
@@ -34,8 +32,8 @@ import {
   executeTargetResultImportRequest,
 } from "../../../src/capabilities/result-review/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
-import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
+import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -60,6 +58,7 @@ import {
   TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
 } from "../../../src/governance/result/target-result-callback.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -115,8 +114,8 @@ import {
   PLANNING_REPOSITORY_ID,
   planFixtureTargetTask,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
-import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";
 import { runGit } from "../../support/git-fixture.js";
+import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";
 
 /**
  * 两个读工具的读路径（gate-log §13.94 D1、D2、D3、D4）：status 一次观察多域并给出下一步；
@@ -414,10 +413,18 @@ test("status 不带 demandId：overall、看板计数、Demand、窗口身份、
     recordedAt: "2026-09-18T08:59:00.000Z",
     observerManifestDigest: null,
   });
+  // C18：登记握手时的意图摘要等于当前 Config 与宿主画像编译出的意图 → current；未绑定窗口为 null。
+  equal(controller.launchIntent?.status, "current");
+  equal(controller.launchIntent?.registeredDigest, controller.launchIntent?.currentDigest);
   const unregistered = status.windows.filter(
     (window) => window.windowId !== healthy.controllerWindowId,
   );
   equal(unregistered.length, 3);
+  equal(
+    unregistered.every((window) => window.launchIntent === null),
+    true,
+    "unbound windows carry no launch intent comparison",
+  );
   deepEqual(
     unregistered.map((window) => [
       window.identity,
@@ -584,6 +591,70 @@ test("status 的窗口 attention：绑定会话最近一条记录是 Notificatio
           ?.attention,
       ),
       { status: "none", notificationType: null, recordedAt: null },
+    );
+  } finally {
+    rmSync(workspace.base, { recursive: true, force: true });
+  }
+});
+
+test("status 的窗口 launchIntent：reconfigure 改变 Config 摘要后，登记窗口的意图摘要落后于当前意图即 drifted，其余字段与门不受影响（C18）", {
+  timeout: 120_000,
+}, async () => {
+  const workspace = await createHealthyWorkspace();
+  try {
+    const before = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: workspace.root },
+      CLOCK,
+    );
+    const registered = before.windows.find(
+      (window) => window.windowId === workspace.controllerWindowId,
+    )?.launchIntent;
+    equal(registered?.status, "current");
+    const desired = JSON.parse(
+      readFileSync(path.join(workspace.root, "wakeflow.config.json"), "utf8"),
+    ) as { program: { displayName: string } };
+    desired.program.displayName = "After the intent drift";
+    const request = {
+      root: workspace.root,
+      action: "reconfigure",
+      mode: "preview",
+      request: { desiredConfig: desired },
+    } as const;
+    const preview = await executeCodexWakeflowMaintenance(request);
+    if (preview.mode !== "preview" || preview.planDigest === null) {
+      throw new Error("Expected a ready reconfigure preview.");
+    }
+    await executeCodexWakeflowMaintenance({
+      ...request,
+      mode: "apply",
+      planDigest: preview.planDigest,
+    });
+    const after = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: workspace.root },
+      CLOCK,
+    );
+    const drifted = after.windows.find(
+      (window) => window.windowId === workspace.controllerWindowId,
+    )?.launchIntent;
+    equal(drifted?.status, "drifted");
+    equal(drifted?.registeredDigest, registered?.registeredDigest);
+    notEqual(drifted?.currentDigest, drifted?.registeredDigest);
+    // 只是信息：不进 nextActions，也不让 verify 的门失败。
+    equal(
+      after.nextActions.some((action) => action.reason.includes("intent")),
+      false,
+    );
+    const verified = await executeVerifyRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: workspace.root },
+      CLOCK,
+    );
+    equal(
+      verified.gates.some((gate) => (gate.code ?? "").includes("intent")),
+      false,
+      "no gate reports the launch intent drift",
     );
   } finally {
     rmSync(workspace.base, { recursive: true, force: true });

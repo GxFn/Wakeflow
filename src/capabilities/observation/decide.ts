@@ -86,8 +86,10 @@ export interface NextActionInput {
     readonly suggestedTool: string | null;
   }>[];
   readonly pendingPackages: readonly Readonly<{ readonly requirementId: string }>[];
-  /** 本进程脚下的制品已更新：本窗口的服务进程要由用户重连（§13.127）。 */
+  /** 本进程脚下的制品已更新：本窗口的服务进程要重载（§13.127）。 */
   readonly artifactServerOutdated: boolean;
+  /** 谁来换代过期的服务进程：按宿主画像的 `surfaces.runtimeRefresh`（C17）——Claude Code 的 Controller 就地重启，Codex 由用户重启应用。 */
+  readonly artifactServerRefreshOwner: Extract<NextActionOwner, "controller" | "user">;
   readonly artifactServerUnavailable: boolean;
   /** 会话在旧制品下启动、此后没有重启过的绑定窗口数：由 Controller 逐个就地重启（§13.161）。 */
   readonly staleWindows: number;
@@ -116,7 +118,12 @@ export function deriveNextActions(
     });
   }
   if (input.artifactServerOutdated) {
-    actions.push({ owner: "user", tool: null, reason: "runtime-artifact-outdated", subject: null });
+    actions.push({
+      owner: input.artifactServerRefreshOwner,
+      tool: null,
+      reason: "runtime-artifact-outdated",
+      subject: null,
+    });
   }
   if (input.staleWindows > 0) {
     actions.push({
@@ -852,7 +859,10 @@ export function summarizeGates(
  * 只能由用户重连服务。Peer runtime 缺证据时只报告，不能用 hook 代替；
  * 可修的其他门先交给维护。
  */
-export function verifyNext(gates: readonly Readonly<VerifyGate>[]): Readonly<NextProjection> {
+export function verifyNext(
+  gates: readonly Readonly<VerifyGate>[],
+  artifactServerRefreshOwner: Extract<NextActionOwner, "controller" | "user">,
+): Readonly<NextProjection> {
   const failing = gates.filter((entry) => entry.status !== "pass");
   if (failing.length === 0) {
     return Object.freeze({
@@ -876,7 +886,7 @@ export function verifyNext(gates: readonly Readonly<VerifyGate>[]): Readonly<Nex
   if (artifactCodes.includes("server-outdated")) {
     return Object.freeze({
       frontier: "runtime-artifact-outdated",
-      owner: "user",
+      owner: artifactServerRefreshOwner,
       suggestedTool: null,
       blockers,
     });

@@ -4654,5 +4654,29 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - `smoke:artifacts`（制品重建后、在第一次完整门的锁后排队执行）：两个制品各 20 个工具，fresh-initialize completed、reconcile no-op、status idle、verify ok、pod create preview ready、hook observer landed。
 - `wf handoff`（含真实 build:check，run-JXVAFI）：空白、私有内容、制品、文档指针、耗时表覆盖、指令文件一致、Git 概况七项通过；`git diff --check` 干净。
 - 未运行：原生宿主会话、lab/live、远端 CI（新 handoff 作业、种子轮换与反例上传只有本地 YAML 断言）；图谱指纹漂移未刷新；latch/锁等待的时钟注入未做。
+- 深挖 §10 跟踪指标：本批只动测试与文档，旧错误类数、Biome 豁免占比、复杂度错误数、未使用导出数、旧域导入条数、无调用者模块行数、tools/list 字节与技能字节按设计不变；门测试阶段从 1,194 秒（4 worker 基线）变为认证运行的 1,452 秒（2 worker，1503 项：场景链两宿主各跑一遍 + 61 项镜像测试），耗时表合计 3,396 → 2,832 秒。
 
 本批改动 docs/（gate-log、docs README、plan §13 E3、maintainer-tools、open-items、scenario-acceptance、深挖批次表）、仓库 README、CLAUDE.md/AGENTS.md、`package.json`（scenario:acceptance）、`.github/workflows/verify.yml`、src/（ledger 发布者一处映射）、tooling（model-options、耗时表）、tests（新增 12 份测试文件——8 份镜像、2 份 lab 宿主、2 份场景宿主——加 `support/load-sensitive.ts` 与 `lab/workflow-matrix.fixture.ts`，场景链改名为 `.chain.ts`，修改 12 份）与两个制品（发布者模块与清单）；未提交，main 领先 origin/main 11 个提交。
+
+### 13.170 技术债务批次 4（不依赖裁决的部分）：锁文件安装核对、过期 server 的换代归属、启动意图漂移信息与更新章节（2026-10-14）
+
+批次 5 提交后继续深挖 §8 第 4 行"发布基线"里不需要 Q1/Q2/Q11 裁决的四项；Q2 ADR、tag 与 `release:check` 真跑、CI tag 作业与字节→版本门留给裁决，C6/C11（宿主安装目标识别、提交记写入者构建）涉及持久格式与宿主安装目标，另行评估。
+
+- **C15 隐藏锁文件核对。** `tooling/artifacts/plugin-dependency-closure.ts` 解析闭包时读 npm 7+ 写下的 `node_modules/.package-lock.json`：同名条目的版本与 SRI 完整性必须等于根锁文件（新错误码 `wakeflow-artifact-dependency-integrity`；隐藏锁文件缺失或不是 v3 即 `wakeflow-artifact-dependency-installed`，提示 `npm ci`）。npm 安装时已按完整性核对过压缩包字节，这条相等关系把那次核对接到制品上。按 npm 缓存比对压缩包的做法不可行——本机 `~/.npm` 里没有 `_cacache`，12 个运行时包的内容地址一个也不在；安装后对文件的改动仍只有远端 artifact 档（干净 `npm ci` 后的 build:check）能发现，登记如实写成部分。
+- **C17 过期 server 的换代归属。** 宿主画像新增 `surfaces.runtimeRefresh`：Claude `controller-in-place`（Controller 按 "After a plugin update" 用 tmux 助手 `resume --in-place` 自己换代），Codex `user-app-restart`（只有用户重启应用才重载 MCP）。`deriveNextActions` 与 `verifyNext` 不再把 `runtime-artifact-outdated` 写死给 user，而是取本进程所属宿主画像给出的 owner；画像缺席时保守给 user。status 命令与 workspace-and-windows 参考写明 owner 随宿主。
+- **C18 启动意图漂移信息。** 登记里的 `source.launchIntentDigest` 由 governance 观察原样带出，status 的每个登记窗口新增 `launchIntent{status: current|drifted, registeredDigest, currentDigest}`：当前 Config 与该窗口所属宿主画像编译出的意图（每宿主编译一次）与登记摘要不同即 `drifted`；未绑定为 null，不进任何门、不进 nextActions。没有走"relocate 以 CAS 重写摘要"：投递路由钉住 `bindingDigest`（`delivery/service.ts` 的 binding-changed 复核），relocate 时改写绑定会让在飞投递失效，§13.125 的"绑定不动"保留；只有替换握手刷新登记摘要，参考与 status 命令照此说明。注意：本批改了宿主画像，所有既有工作区的登记窗口在升级后都会显示 `drifted`——这正是该字段要说的事。
+- **C9 更新章节。** 第十个占位符 `pluginUpdateSteps`（en/zh 各一面，§13.118 D3 的封闭表随之为十个）：Claude 的取值写 `/plugin marketplace update gxfn`、`/plugin` → Installed → Update now 或 `claude plugin update wakeflow@gxfn`、清单版本号不变则不替换、`/reload-plugins` 或新会话之前旧 hook/MCP 仍在用、Controller 随后看到 `runtime-artifact-outdated` 与 `windows-stale:<n>` 并自己刷新、verify 的预期；Codex 的取值如实写"没有文档化的插件更新命令（2026-10-14 核对）"、`codex plugin marketplace upgrade`、重跑安装用的 `add`、重启应用、重新信任 hook、同伴窗口保持 `unverified`。两份插件 README 新增"更新/更新"一章并带"从 0.9.x 过来"段落，逐项列出 `legacyResidue` 的标记（scope 块、三条宽泛 Bash 规则与 `..` 附加目录、三个根标记名、三个前缀目录、`wakeflow-ledger`）与"不迁移"；仓库 README 加同一章。命令事实由一个只读子代理从 Claude Code 与 Codex 官方文档核对（引用页：plugins/cli-reference、plugins/install、plugins/loading；Codex developer-commands、plugins/build），未经现场执行。
+
+文档：登记 C15/C17/C18/C9、深挖批次表第 4 行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：依赖闭包 4 项（新增隐藏锁文件三种拒绝与一致放行）；宿主画像、观察 decide、Agent 文本诚实性与现场引导 41 项；观察 service、公共目录、Schema 自足与 Claude 场景链 49 项（含新的 launchIntent 漂移用例）；Agent 文本、制品与宿主 97 项中两项红——两份宿主画像快照测试缺新字段，补上后 3 项通过；knip、架构规则、lint、format、schema:check 通过。
+- 完整门三次。第一次（run-XEbqbN）5 秒止于 format：改 status Schema 时用 Python 重排了 JSON 的缩进，Biome 的 JSON 格式器不认；`biome format --write` 还原后 schema:check 仍通过（生成物与源缩进无关）。此前我把 `npm run format:check` 的退出码读错了（zsh 里 `${PIPESTATUS[0]}` 为空），教训是用 `; echo $?` 紧跟命令。第二次（run-W6Aepg，23 分钟）1505 项 1502 通过、3 失败：三份手写宿主画像记录的测试（gitignore 正文权威、静态资源矩阵、宿主资源目录）没有新的 `runtimeRefresh` 面——它们不在我第一轮 grep 的前十行里；统一按 `runtimeStaleness` 推出取值补上，六份画像夹具文件 14 项通过。第三次为认证运行：run-5eqnYv（00:22–00:41，19.5 分钟）1505/1505 全通过、316 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-5eqnYv/receipt.json`：316 份文件、并发 2；耗时表只是调度提示，写回在认证门之后，与前两批同一做法。
+- `smoke:artifacts`（制品重建后）：两个制品各 20 个工具，fresh-initialize completed、reconcile no-op、status idle、verify ok、pod create preview ready、hook observer landed；渲染后的两份 README 都有"Updating/更新"一章，制品里没有残留占位符。
+- `wf handoff`（含真实 build:check，run-eEulG7）：七项通过；`git diff --check` 干净。
+- 未运行：原生宿主会话（更新命令只经官方文档核对，Claude 的 `/plugin` → Update now、`/reload-plugins` 与 Codex 的重启应用都未在现场执行；`runtimeRefresh` 的 owner 与 `launchIntent` 漂移也未在真实工作区看过）、lab/live、远端 CI；图谱指纹漂移未刷新。
+- 深挖 §10 跟踪指标：本批不动旧错误类数、Biome 豁免占比、复杂度错误数、未使用导出数、旧域导入条数、无调用者模块行数；tools/list 字节不变（结果 Schema 不进 tools/list，ADR-0004 选项 A）；Controller 参考与 README 各增一段；门测试阶段 1,452 → 1,170 秒（2 worker，1505 项，含两个 lab 文件与两个场景文件并行后的新排程）。
+
+本批改动 docs/（gate-log、docs README、open-items、深挖批次表）、仓库 README、`assets/agent-text`（两份 README、status 命令、workspace-and-windows 参考）、src/（contracts 的 status Schema 与生成类型；workspace 宿主画像新面；两个宿主画像；观察 decide 与 service；两个宿主的 Agent 文本画像）、tooling（依赖闭包）、tests（闭包、画像、观察 decide/service、CI workflow、六份画像夹具、两份宿主画像快照）、耗时表与两个制品；未提交，main 领先 origin/main 13 个提交。

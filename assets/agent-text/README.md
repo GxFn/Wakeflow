@@ -104,6 +104,23 @@ Both hosts, and the usual reason something is silently missing:
   records, a delivery can look sent and produce no evidence, and Wakeflow will
   correctly refuse to call it accepted.
 
+## Updating
+
+{{pluginUpdateSteps}}
+
+Within the supported workspace baseline an update needs no workspace migration;
+`wakeflow_status` after the update names what is left to do (an outdated server,
+stale windows, host assets that `reconcile` repairs). A workspace initialized by
+Wakeflow 0.9.x is different: this version refuses it
+(`fresh-legacy-residue-present`) and `wakeflow_status` lists the leftovers under
+`legacyResidue` - `<!-- wakeflow:scope:start -->` blocks in the instruction
+files, broad `Bash(node *)`, `Bash(tmux *)` or `Bash(git *)` rules and the `..`
+additional directory in `.claude/settings*.json`, the `workspace.config.json`,
+`.workspace-active` and `.wakeflow-publish` root markers, `.wakeflow-stage*`,
+`.wakeflow-maintenance-*` and `.wakeflow-create-stage-*` directories, and a
+`wakeflow-ledger` directory. Archive or remove them by hand, then initialize
+again; 0.9.x Demand history is not migrated.
+
 ## Checking that it works
 
 Ask for the status. `wakeflow_status` reads every domain at once and names the

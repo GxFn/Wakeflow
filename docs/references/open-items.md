@@ -219,7 +219,7 @@
   - 证据：workspace-and-windows.md:165 对每个 stale 窗口套用 {{windowResume}}（claude-code-agent-text-profile.ts:72-76，这段文字是为进程已退出的情况写的）；claude-code-tmux-asset.ts:721-734：pane 仍在运行时 resume/launch 报 locator-live，除非加 --force；agent 文本里没有出现 locator-live；observation/service.ts:418-429 按 session-start 记录判断产物，/mcp 重连不会重写这条记录，Controller 一直是 stale，verify 一直报 windows-stale；文本也提供了“或 resume 会话”这个可行的替代（w&w:166-167）；§13.127 残留说 /mcp 重连能否切换代码未经验证；§13.130 是用外部脚本 live-130.mjs 刷新窗口的
   - 建议：在 windowResume 和参考文档里写出明确的刷新顺序：确认空闲（没有持有的 claim、没有进行中的回合）→ close → resume → relocate → mark；点名 locator-live，禁止对活会话用 --force。对 Controller 自己的窗口，要么把“正在服务的 MCP server 产物相同”视为 current，要么只教 resume。然后按 skill 文本在现场跑一遍。
   - 2026-10-05 后续（§13.161）：技能文本按恢复的 stale 信号改写——只对 verify 报 stale 的同伴窗口执行宿主重启流程，unverified 的不动；Codex 文本改为只有重启 Codex 应用才重载 MCP（resume/continue 不会），引导测试固定这句；去掉 "inspect its diagnostics" 这类不存在的出口，指向拒绝里的 hint。
-- **C9** [中 / 缺口] 用户没有更新或升级流程，0.9.x 用户也不会被提前告知工作区会被拒绝（计划阶段 3；状态：开放）
+- **C9** [中 / 缺口] 用户没有更新或升级流程，0.9.x 用户也不会被提前告知工作区会被拒绝（计划阶段 3；状态：已解决 2026-10-14，§13.170：两份插件 README 与仓库 README 各加"更新"一章，宿主命令经第十个占位符 `pluginUpdateSteps` 按宿主取值（Claude：`/plugin marketplace update` + `/plugin` Update now 或 `claude plugin update wakeflow@gxfn`、`/reload-plugins`；Codex：文档化的只有 marketplace upgrade 与 add/remove、重启应用、重新信任 hook），写明 Controller 接下来做什么与 verify 的预期；"从 0.9.x 过来"段落列出 `legacyResidue` 的全部标记并说明不迁移）
   - 说明：老用户需要一整套步骤：更新 marketplace、更新插件、重启或 resume 每个窗口、重连 Controller 的 server、跑 status/verify。这些都没有面向用户写出来。0.9.x 用户更新后会被硬拒绝，没有迁移指引。
   - 证据：README.md:74-136 和 assets/agent-text/README.md 只讲安装和一次性信任；agent 文本里没有 plugin update 或 marketplace update；窗口刷新只写在 Controller 参考文档里（workspace-and-windows.md:156-169），而且依赖未经验证的 /mcp 重连；ADR-0008 D1：fresh-initialize 拒绝带旧标记的工作区；v0.9.4 用的是同一个名字 wakeflow@gxfn；README.md:254 只把这一点当作原则提了一句
   - 建议：两份 README 都加“更新”一节，写明宿主命令、Controller 接下来会引导什么、预期的 verify 状态。加一段简短的“从 0.9.x 过来”：先归档或清理旧的根，再重新初始化。
@@ -246,7 +246,7 @@
   - 说明：MIT 许可要求随再分发的副本附带版权和许可声明，当前一个制品缺了一份。影响小，但确实是合规缺陷。
   - 证据：tooling/artifacts/plugin-dependency-closure.ts:26-33 EXCLUDED_EXTENSIONS 包含 .md；:223-224 只跳过点开头的文件，点开头的目录照样遍历；plugins/claude-code-wakeflow/node_modules/jsonc-parser 只剩 lib 和 package.json（Codex 制品不 vendor jsonc-parser，其他包都带 LICENSE）；每个制品带 7 个 .github 文件（fast-uri、json-schema-traverse）
   - 建议：无论扩展名如何，都保留 LICENSE*/LICENCE*/NOTICE*/COPYING*，跳过点开头的目录；在制品检查里断言每个 vendored 包都带许可文件（或者生成 THIRD_PARTY_NOTICES），然后重建。
-- **C15** [低 / 缺口] 依赖字节直接从本地 node_modules 复制，没有按 lockfile 的 integrity 校验（计划阶段 3；状态：开放）
+- **C15** [低 / 缺口] 依赖字节直接从本地 node_modules 复制，没有按 lockfile 的 integrity 校验（计划阶段 3；状态：部分，§13.170：闭包解析要求 npm 的隐藏锁文件 `node_modules/.package-lock.json` 里同名条目的版本与 SRI 完整性等于根锁文件（`wakeflow-artifact-dependency-integrity`；隐藏锁文件缺失即 `wakeflow-artifact-dependency-installed`），把 npm 安装时对压缩包的核对接到制品上；安装后对文件的改动仍只有远端 artifact 档从干净 `npm ci` 重建的 build:check 能发现——本机 npm 缓存里没有这些压缩包，按缓存比对不可行）
   - 说明：npm ci 之后被修改过的 node_modules（install script、本地调试时的改动）会原样进入提交的制品，build 和 build:check 都能通过。闭包很小且版本钉死，风险低，而且 integrity 数据已经现成。
   - 证据：plugin-dependency-closure.ts:183-190 只检查版本号和 sha512 字段是否存在，没有对字节做哈希校验；build:check 与同一份 node_modules 的新构建比较；只有 dev 依赖 @swc/core 带 install script；plugins/ 已提交，字节变化会出现在 git diff 里（部分缓解）
   - 建议：在 release:check 或 build:check 中按 lockfile 的 tarball integrity 校验每个复制的包（npm pack 重新取，或比对 cacache），或者在干净目录里用 npm ci --ignore-scripts 构建制品。
@@ -254,11 +254,11 @@
   - 说明：刷新 7 个窗口时 Controller 把 close / launch 写成带变量的 for 循环（不匹配精确的助手 allow 规则，acceptEdits 下要确认）；看到 server-outdated 时先去 grep 插件目录与运行时代码。SKILL.md 没有把 server-outdated / windows-stale 直接导向 "After a plugin update"。
   - 证据：§13.133 现场（F5、F8）。
   - 建议：SKILL.md 把这两个码直接指到那一节；技能要求一次 Bash 只调一次助手，或助手提供批量刷新命令。
-- **C17** [低 / 缺口] `runtime-artifact-outdated` 的 next 仍固定 owner 为 `user`，而 Claude Code 上 Controller 已能就地自重启（计划阶段 3；状态：开放，§13.134）
+- **C17** [低 / 缺口] `runtime-artifact-outdated` 的 next 仍固定 owner 为 `user`，而 Claude Code 上 Controller 已能就地自重启（计划阶段 3；状态：已解决 2026-10-14，§13.170：宿主画像新增 `surfaces.runtimeRefresh`（Claude `controller-in-place`、Codex `user-app-restart`），status 的 nextActions 与 verify 的 next 据此给 `runtime-artifact-outdated` 的 owner；status 命令与参考写明）
   - 说明：`observation/decide.ts` 的 `verifyNext` 与 status 的 nextActions 把 server-outdated 交给用户，注释也说只有用户能重连服务；§13.134 起 Claude 的 Controller 按技能用 `resume --in-place` 自己换代，只有旧助手时才需要用户 /mcp。技能文字已按宿主写对，next 的 owner 与注释是宿主中立代码里的过时说法。
   - 证据：`src/capabilities/observation/decide.ts` 的 `verifyNext`（`runtime-artifact-outdated` → owner `user`）。
   - 建议：owner 由宿主画像提供（Claude 为 controller，Codex 为 user），或改成中立的 owner 并把宿主差异只留在技能文字里。
-- **C18** [低 / 缺口] relocate 接受当前意图摘要的观察，但绑定里记的仍是登记时的 `launchIntentDigest`（计划阶段 3；状态：开放，§13.135 现场）
+- **C18** [低 / 缺口] relocate 接受当前意图摘要的观察，但绑定里记的仍是登记时的 `launchIntentDigest`（计划阶段 3；状态：已解决 2026-10-14，§13.170，取信息路线：status 的每个登记窗口带 `launchIntent{status: current|drifted, registeredDigest, currentDigest}`；relocate 不改绑定——投递路由钉住 bindingDigest（delivery/service.ts 的 binding-changed 复核），改写会让在飞投递失效——只有替换握手刷新登记摘要；不进任何门）
   - 说明：§13.134 把 Claude 画像的缺省权限模式改成 auto，画像摘要进了意图摘要，所有窗口的意图摘要都变了；窗口按新意图 resume、relocate 之后，绑定里的来源摘要仍是旧值（现场 Design 为 `9a49…`，当前意图 `683d…`）。没有门比较它，只是历史值与实际启动参数对不上，审阅时会误读。
   - 证据：§13.135 现场 Controller 报告；`endpoint/decide.ts` 的 relocate 只核对观察摘要等于当前意图，不改绑定的 `source.launchIntentDigest`。
   - 建议：relocate 时把绑定的来源摘要更新为观察里的摘要（绑定 CAS 已在），或在 status 里把"绑定意图与当前意图不同"作为信息显示。

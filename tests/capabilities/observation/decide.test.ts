@@ -181,6 +181,7 @@ function nextInput(overrides: Partial<NextActionInput> = {}): NextActionInput {
     demands: [],
     pendingPackages: [],
     artifactServerOutdated: false,
+    artifactServerRefreshOwner: "user",
     artifactServerUnavailable: false,
     staleWindows: 0,
     ...overrides,
@@ -311,7 +312,7 @@ test("deriveWorkspaceGates：健康事实十五门全 pass、按名字排序；�
     [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF],
   );
   deepEqual(summarizeGates(gates), { ok: true, summary: { pass: 15, fail: 0, unavailable: 0 } });
-  deepEqual(verifyNext(gates), {
+  deepEqual(verifyNext(gates, "user"), {
     frontier: null,
     owner: "none",
     suggestedTool: null,
@@ -897,7 +898,7 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
     healthyFacts({ configRecheck: "changed", ledger: "unavailable" }),
   );
   deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 13, fail: 1, unavailable: 1 } });
-  deepEqual(verifyNext(gates), {
+  deepEqual(verifyNext(gates, "user"), {
     frontier: "workspace-maintenance",
     owner: "controller",
     suggestedTool: "wakeflow_maintain_workspace",
@@ -910,13 +911,18 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
     code,
     evidence: [],
   });
-  deepEqual(verifyNext([...gates, artifactGate("server-outdated,window-runtime-unverified:1")]), {
-    frontier: "runtime-artifact-outdated",
-    owner: "user",
-    suggestedTool: null,
-    blockers: ["config-authority:fail", "ledger-layout:unavailable", "runtime-artifact:fail"],
-  });
-  deepEqual(verifyNext([artifactGate("windows-stale:2,window-runtime-unverified:1")]), {
+  deepEqual(
+    verifyNext([...gates, artifactGate("server-outdated,window-runtime-unverified:1")], "user"),
+    {
+      frontier: "runtime-artifact-outdated",
+      owner: "user",
+      suggestedTool: null,
+      blockers: ["config-authority:fail", "ledger-layout:unavailable", "runtime-artifact:fail"],
+    },
+  );
+  // C17：换代者按宿主画像——Claude Code 的 Controller 就地重启自己的窗口。
+  equal(verifyNext([...gates, artifactGate("server-outdated")], "controller").owner, "controller");
+  deepEqual(verifyNext([artifactGate("windows-stale:2,window-runtime-unverified:1")], "user"), {
     frontier: "window-artifact-stale",
     owner: "controller",
     suggestedTool: null,
@@ -1234,6 +1240,12 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     ).map((action) => [action.owner, action.tool, action.reason, action.subject]),
     [["user", null, "runtime-artifact-outdated", null]],
   );
+  deepEqual(
+    deriveNextActions(
+      nextInput({ artifactServerOutdated: true, artifactServerRefreshOwner: "controller" }),
+    ).map((action) => [action.owner, action.reason]),
+    [["controller", "runtime-artifact-outdated"]],
+  );
 });
 
 /** 门数的英文数词：描述里的门数必须跟实现走（§13.129：描述曾两轮停在 "thirteen"）。 */
@@ -1274,15 +1286,18 @@ test("曾有运行制品身份但磁盘清单消失时，verify/status 都要求
   });
   deepEqual(verdictOf(facts, "runtime-artifact"), ["unavailable", "manifest-unavailable"]);
   deepEqual(
-    verifyNext([
-      {
-        name: "runtime-artifact",
-        owner: "runtime",
-        status: "unavailable",
-        code: "manifest-unavailable",
-        evidence: [],
-      },
-    ]),
+    verifyNext(
+      [
+        {
+          name: "runtime-artifact",
+          owner: "runtime",
+          status: "unavailable",
+          code: "manifest-unavailable",
+          evidence: [],
+        },
+      ],
+      "user",
+    ),
     {
       frontier: "runtime-artifact-unavailable",
       owner: "user",

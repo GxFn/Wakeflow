@@ -32,6 +32,7 @@ test("Codex host owns one exact matrix-shaping resource profile", () => {
       activityMonitor: false,
       temporaryPrompts: false,
       runtimeStaleness: "unverified",
+      runtimeRefresh: "user-app-restart",
     },
     launch: { kind: "project-thread" },
   });

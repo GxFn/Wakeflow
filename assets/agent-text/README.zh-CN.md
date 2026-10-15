@@ -80,6 +80,19 @@ pod 打开期间，Controller 的宿主动作还会碰每个产品仓库：为 p
   西"的依据；没有观察记录，投递看起来发出去了却拿不到证据，Wakeflow 会正确地拒
   绝把它算作 accepted。
 
+## 更新
+
+{{pluginUpdateSteps}}
+
+在受支持的工作区基线内，更新不需要迁移工作区；更新后的 `wakeflow_status` 会点名剩下要做的事
+（过期的 server、stale 的窗口、`reconcile` 可修复的宿主资产）。由 Wakeflow 0.9.x 初始化的工作区
+不同：这个版本会拒绝它（`fresh-legacy-residue-present`），`wakeflow_status` 在 `legacyResidue`
+里列出残留——指令文件里的 `<!-- wakeflow:scope:start -->` 块、`.claude/settings*.json` 里宽泛的
+`Bash(node *)`、`Bash(tmux *)`、`Bash(git *)` 规则与 `..` 附加目录、`workspace.config.json`、
+`.workspace-active`、`.wakeflow-publish` 根标记、`.wakeflow-stage*`、`.wakeflow-maintenance-*`、
+`.wakeflow-create-stage-*` 目录，以及 `wakeflow-ledger` 目录。手工归档或删除后重新初始化；
+0.9.x 的 Demand 历史不迁移。
+
 ## 怎么确认它在工作
 
 问一下状态就行。`wakeflow_status` 一次读遍所有域并给出下一步动作；

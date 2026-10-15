@@ -84,6 +84,24 @@ Codex 桌面应用使用宿主自带的 Node。CLI 未提供宿主运行时时�
   西"的依据；没有观察记录，投递看起来发出去了却拿不到证据，Wakeflow 会正确地拒
   绝把它算作 accepted。
 
+## 更新
+
+Codex 没有文档化的插件更新命令（2026-10-14 核对）：`codex plugin marketplace upgrade <marketplace>`
+刷新 Git marketplace 的目录，安装用的 `codex-marketplace` 助手只文档化了 `add` 与 `remove`。先刷新，
+再执行你安装时用的那条 `add` 命令，然后重启 Codex 应用——只有重启应用才会重载 Wakeflow 的 MCP
+server，续接聊天不会——再续接原有聊天。打开一次 `/hooks`：改变了 hook 定义字节的更新会要求你重新
+信任四个 hook。续接后的 Controller 聊天里 `wakeflow_status` 不应再报 `runtime-artifact-outdated`；
+Codex 上的同伴窗口保持 `unverified`，这不是失败。
+
+在受支持的工作区基线内，更新不需要迁移工作区；更新后的 `wakeflow_status` 会点名剩下要做的事
+（过期的 server、stale 的窗口、`reconcile` 可修复的宿主资产）。由 Wakeflow 0.9.x 初始化的工作区
+不同：这个版本会拒绝它（`fresh-legacy-residue-present`），`wakeflow_status` 在 `legacyResidue`
+里列出残留——指令文件里的 `<!-- wakeflow:scope:start -->` 块、`.claude/settings*.json` 里宽泛的
+`Bash(node *)`、`Bash(tmux *)`、`Bash(git *)` 规则与 `..` 附加目录、`workspace.config.json`、
+`.workspace-active`、`.wakeflow-publish` 根标记、`.wakeflow-stage*`、`.wakeflow-maintenance-*`、
+`.wakeflow-create-stage-*` 目录，以及 `wakeflow-ledger` 目录。手工归档或删除后重新初始化；
+0.9.x 的 Demand 历史不迁移。
+
 ## 怎么确认它在工作
 
 问一下状态就行。`wakeflow_status` 一次读遍所有域并给出下一步动作；

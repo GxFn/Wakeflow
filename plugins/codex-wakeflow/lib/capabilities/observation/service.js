@@ -19,6 +19,7 @@ import { readRequirementClaimState } from "../../kernel/requirement-board.js";
 import { inspectWakeflowPrivateModes, wakeflowPrivateModeAreas, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import { previewWakeflowStaticMaterialization } from "../../workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "../../workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
+import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitStatusResult, admitVerifyResult, parseStatusRequest, parseVerifyRequest, WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { capStatusList, deriveNextActions, deriveWindowRuntime, deriveWorkspaceGates, disposalGuidance, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
 /** status 的残留列表上限（wire 的 maxItems）；超出只报略去的条数。 */
@@ -246,6 +247,7 @@ function windowBindingOf(observation, windowId) {
                 hostId: host.hostId,
                 bindingId: binding.bindingId,
                 handleValue: binding.handle.value,
+                launchIntentDigest: binding.source.launchIntentDigest,
             };
         }
     }
@@ -378,6 +380,7 @@ function windowViews(context) {
     const { observation, snapshot } = context;
     const bindingsObserved = observation.bindings.every((host) => host.status === "observed");
     const installed = readRuntime(context).onDiskDigest;
+    const intents = new Map();
     return snapshot.model.topology.windows.map((window) => {
         const binding = windowBindingOf(observation, window.windowId);
         return {
@@ -392,7 +395,38 @@ function windowViews(context) {
             attention: attentionOf(observation, binding),
             projection: windowProjectionOf(observation, window.windowId),
             runtime: windowRuntimeOf(context, binding, bindingsObserved, installed),
+            launchIntent: launchIntentOf(context, binding, window.windowId, intents),
         };
+    });
+}
+/**
+ * 绑定登记时的启动意图摘要对照当前 Config 与宿主画像编译出的意图（C18）：不同即 `drifted`——窗口是在旧意图
+ * 下启动或续接的，relocate 不改登记摘要，只有替换握手会刷新。每个宿主的意图集只编译一次；画像编不出
+ * 意图（不该发生，Config 已经过权威校验）时给 null，不让 status 失败。
+ */
+function launchIntentOf(context, binding, windowId, intents) {
+    if (binding === null)
+        return null;
+    if (!intents.has(binding.hostId)) {
+        const profile = context.facade.hosts.find((host) => host.hostId === binding.hostId)?.resourceProfile;
+        let compiled = null;
+        if (profile !== undefined) {
+            try {
+                compiled = new Map(compileWakeflowWindowLaunchIntents(context.snapshot.model, profile).intents.map((intent) => [intent.windowId, intent.intentDigest]));
+            }
+            catch {
+                compiled = null;
+            }
+        }
+        intents.set(binding.hostId, compiled);
+    }
+    const current = intents.get(binding.hostId)?.get(windowId) ?? null;
+    if (current === null)
+        return null;
+    return Object.freeze({
+        status: current === binding.launchIntentDigest ? "current" : "drifted",
+        registeredDigest: binding.launchIntentDigest,
+        currentDigest: current,
     });
 }
 function claimViews(observation) {
@@ -537,6 +571,7 @@ function nextActionInput(context, runtime) {
     const podsObserved = observation.pods.status === "observed";
     return Object.freeze({
         artifactServerOutdated: runtime.artifactOnDisk === "changed",
+        artifactServerRefreshOwner: artifactServerRefreshOwnerOf(context),
         staleWindows: runtimeWindowIds(context, "stale").length,
         artifactServerUnavailable: context.facade.artifact !== undefined &&
             (runtime.artifactManifestDigest === null || runtime.artifactOnDisk === "unknown"),
@@ -1054,8 +1089,14 @@ async function assembleVerify(context, request) {
         demand: demandSection,
         repairsApplied: false,
         observationDigest: computeGatesDigest(gates),
-        next: verifyNext(gates),
+        next: verifyNext(gates, artifactServerRefreshOwnerOf(context)),
     });
+}
+/** 过期服务进程由谁换代：本进程所属宿主画像的 `surfaces.runtimeRefresh`（C17）；画像缺席时保守地交给用户。 */
+function artifactServerRefreshOwnerOf(context) {
+    const refresh = context.facade.hosts.find((host) => host.hostId === context.facade.hostId)
+        ?.resourceProfile.surfaces.runtimeRefresh;
+    return refresh === "controller-in-place" ? "controller" : "user";
 }
 function computeGatesDigest(gates) {
     return computeCanonicalJsonSha256Digest({

@@ -26,6 +26,8 @@ export const codexWorkspaceHostResourceProfile = parseWakeflowWorkspaceHostResou
         temporaryPrompts: false,
         // 安装按版本目录并存，没有可信的窗口到 MCP 关联：只报 unverified（ADR-0017 D3）。
         runtimeStaleness: "unverified",
+        // 只有用户重启 Codex 应用才重载 MCP（§13.142/§13.148）。
+        runtimeRefresh: "user-app-restart",
     },
     launch: { kind: "project-thread" },
 });

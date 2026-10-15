@@ -111,6 +111,31 @@ Both hosts, and the usual reason something is silently missing:
   records, a delivery can look sent and produce no evidence, and Wakeflow will
   correctly refuse to call it accepted.
 
+## Updating
+
+Codex documents no plugin update command (checked 2026-10-14): `codex plugin marketplace
+upgrade <marketplace>` refreshes a Git marketplace's catalog, and the `codex-marketplace`
+helper used for installation documents only `add` and `remove`. Refresh, run the same
+`add` command you installed with, then restart the Codex app - only an app restart
+reloads Wakeflow's MCP server; resuming a chat does not - and resume the existing chats.
+Open `/hooks` once: an update that changed the hook definition bytes asks you to trust
+the four hooks again. `wakeflow_status` from the resumed Controller chat must no longer
+report `runtime-artifact-outdated`; peer windows stay `unverified` on Codex, which is
+not a failure.
+
+Within the supported workspace baseline an update needs no workspace migration;
+`wakeflow_status` after the update names what is left to do (an outdated server,
+stale windows, host assets that `reconcile` repairs). A workspace initialized by
+Wakeflow 0.9.x is different: this version refuses it
+(`fresh-legacy-residue-present`) and `wakeflow_status` lists the leftovers under
+`legacyResidue` - `<!-- wakeflow:scope:start -->` blocks in the instruction
+files, broad `Bash(node *)`, `Bash(tmux *)` or `Bash(git *)` rules and the `..`
+additional directory in `.claude/settings*.json`, the `workspace.config.json`,
+`.workspace-active` and `.wakeflow-publish` root markers, `.wakeflow-stage*`,
+`.wakeflow-maintenance-*` and `.wakeflow-create-stage-*` directories, and a
+`wakeflow-ledger` directory. Archive or remove them by hand, then initialize
+again; 0.9.x Demand history is not migrated.
+
 ## Checking that it works
 
 Ask for the status. `wakeflow_status` reads every domain at once and names the

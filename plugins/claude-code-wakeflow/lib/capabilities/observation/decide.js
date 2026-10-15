@@ -39,7 +39,12 @@ export function deriveNextActions(input) {
         });
     }
     if (input.artifactServerOutdated) {
-        actions.push({ owner: "user", tool: null, reason: "runtime-artifact-outdated", subject: null });
+        actions.push({
+            owner: input.artifactServerRefreshOwner,
+            tool: null,
+            reason: "runtime-artifact-outdated",
+            subject: null,
+        });
     }
     if (input.staleWindows > 0) {
         actions.push({
@@ -484,7 +489,7 @@ export function summarizeGates(gates) {
  * 只能由用户重连服务。Peer runtime 缺证据时只报告，不能用 hook 代替；
  * 可修的其他门先交给维护。
  */
-export function verifyNext(gates) {
+export function verifyNext(gates, artifactServerRefreshOwner) {
     const failing = gates.filter((entry) => entry.status !== "pass");
     if (failing.length === 0) {
         return Object.freeze({
@@ -507,7 +512,7 @@ export function verifyNext(gates) {
     if (artifactCodes.includes("server-outdated")) {
         return Object.freeze({
             frontier: "runtime-artifact-outdated",
-            owner: "user",
+            owner: artifactServerRefreshOwner,
             suggestedTool: null,
             blockers,
         });

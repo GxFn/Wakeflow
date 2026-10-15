@@ -1,5 +1,5 @@
-import { parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, splitPortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 /**
  * Wakeflow Workspace：会改变资源矩阵形状的宿主静态画像。
  *
@@ -27,6 +27,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
     "activityMonitor",
     "temporaryPrompts",
     "runtimeStaleness",
+    "runtimeRefresh",
 ]);
 export const WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES = Object.freeze([
     "claude-worktree-flag",
@@ -206,7 +207,13 @@ function parseSurfaces(value) {
         activityMonitor: surfaceBoolean(record.activityMonitor, "activityMonitor"),
         temporaryPrompts: surfaceBoolean(record.temporaryPrompts, "temporaryPrompts"),
         runtimeStaleness: parseRuntimeStaleness(record.runtimeStaleness),
+        runtimeRefresh: parseRuntimeRefresh(record.runtimeRefresh),
     });
+}
+function parseRuntimeRefresh(value) {
+    if (value === "controller-in-place" || value === "user-app-restart")
+        return value;
+    fail("surface", "$/surfaces/runtimeRefresh");
 }
 function parseRuntimeStaleness(value) {
     if (value === "session-start-observer-digest" || value === "unverified")

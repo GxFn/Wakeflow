@@ -95,6 +95,26 @@ Controller 会告诉你是哪个窗口在问。你的账号没有 auto 模式时
   西"的依据；没有观察记录，投递看起来发出去了却拿不到证据，Wakeflow 会正确地拒
   绝把它算作 accepted。
 
+## 更新
+
+更新是两步宿主动作加一次 Wakeflow 读取。先用 `/plugin marketplace update gxfn`（shell 里是
+`claude plugin marketplace update gxfn`）刷新 marketplace 目录，再更新插件：会话里打开 `/plugin`，
+在 Installed 下选中 Wakeflow 点 Update now；shell 里是 `claude plugin update wakeflow@gxfn`。
+Claude Code 只在插件清单的版本号变化时替换已安装的副本，Wakeflow 每次发布都会改它。正在运行的
+会话在 `/reload-plugins` 或新会话之前仍用旧的 hook 与 MCP server，所以 Controller 的
+`wakeflow_status` 会对自己的 server 报 `runtime-artifact-outdated`、对在旧制品下启动的同伴窗口报
+`windows-stale:<n>`；Controller 按技能的 "After a plugin update" 一节用 tmux 助手自己刷新它们。
+没有窗口再是 stale 之后，`wakeflow_verify` 的 `runtime-artifact` 门重新通过；`unverified` 不是失败。
+
+在受支持的工作区基线内，更新不需要迁移工作区；更新后的 `wakeflow_status` 会点名剩下要做的事
+（过期的 server、stale 的窗口、`reconcile` 可修复的宿主资产）。由 Wakeflow 0.9.x 初始化的工作区
+不同：这个版本会拒绝它（`fresh-legacy-residue-present`），`wakeflow_status` 在 `legacyResidue`
+里列出残留——指令文件里的 `<!-- wakeflow:scope:start -->` 块、`.claude/settings*.json` 里宽泛的
+`Bash(node *)`、`Bash(tmux *)`、`Bash(git *)` 规则与 `..` 附加目录、`workspace.config.json`、
+`.workspace-active`、`.wakeflow-publish` 根标记、`.wakeflow-stage*`、`.wakeflow-maintenance-*`、
+`.wakeflow-create-stage-*` 目录，以及 `wakeflow-ledger` 目录。手工归档或删除后重新初始化；
+0.9.x 的 Demand 历史不迁移。
+
 ## 怎么确认它在工作
 
 问一下状态就行。`wakeflow_status` 一次读遍所有域并给出下一步动作；

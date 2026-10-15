@@ -201,6 +201,9 @@ means this runtime cannot write that format; it does not offer an upgrade path.
 its own path produces `server-outdated` / `runtime-artifact-outdated`; a missing
 manifest produces `manifest-unavailable` / `runtime-artifact-unavailable`.
 Inspect the installation and reload this server before it performs maintenance.
+The owner named in `next` comes from the host profile: `controller` where this
+Controller can restart its own window in place through the host procedure
+below, `user` where only an application restart reloads the server.
 These checks do not identify the host-selected sibling installation.
 
 The serving MCP rejects mutations while its own manifest has changed or is
@@ -229,6 +232,14 @@ or stop superseded it, `null` without a binding or any record. Tell the user
 which window needs them instead of waiting for a callback from it. No tool
 clears the state; the user's action in that window does. The field says
 nothing about the window's MCP or instruction state.
+
+A registered window's `launchIntent` compares the intent digest recorded at its
+handshake with the intent the current config and host profile produce:
+`current` when they agree, `drifted` when the window was launched or last
+resumed under an older intent (a config or plugin change since). A relocate
+keeps the recorded digest; only a replacing handshake renews it. It is
+information for your review of that window's actual launch parameters; no gate
+fails on it and it never justifies rebinding by itself.
 
 Restart the stale windows with the host's procedure: if this serving MCP is outdated, first tell the user in one sentence that this window will restart in place in a few seconds and carry on by itself, then pipe your own inspect result into `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs resume --window <this windowId> --in-place` and end your turn. It returns at once (`self: true`, `scheduled: true`); about two seconds later this session restarts with the updated plugin and a fresh Wakeflow server - no `/mcp` reconnect is needed - and resumes by itself with a prompt to load this skill again (the copy in your context predates the update), call `wakeflow_verify` and continue where you left off. A helper installed before in-place restarts existed refuses `--in-place` as `argument-unknown`: then ask the user to run `/mcp` in this window and reconnect `wakeflow`, run a reconcile as in step 0, which installs the current helper, and start this section again. If this server is already current, skip its restart. For peer windows that verify reports as `stale` (`windows-stale:<n>`: each such session started under an older artifact), take them one at a time, each only while it sits idle at an empty prompt, and pipe each one's inspect result into `resume --window <windowId> --in-place`, one helper call per Bash command. The session restarts inside its own pane on the updated plugin; the binding, coordinates and marks stay, so there is nothing to relocate or mark, and `hook.sessionStart: pending` means startup is unproven; inspect hook execution. `window-busy` means that window is working, shows a dialog or menu, or holds typed input, and `--force` does not override it: go on with the next window and retry this one once its turn has ended - a dialog, a menu or typed input waits for the user, so tell them which window it is. `resume-exited` means the process exited before startup evidence; read the refusal's `hint` and that pane before retrying. `resume-never-conversed` reports missing conversation evidence: inspect host history first. Only if a fresh session is required and authorized, close the old one, launch it again, register it with `replace` and `mark` it. After this
 server is current, preview and apply reconcile for repairable workspace gates

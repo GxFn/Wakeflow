@@ -1,7 +1,7 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { deriveUuidV4 } from "../../foundation/identity/uuid-v4.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
@@ -12,24 +12,24 @@ import { closeDemandOperationAuthorityContext, DemandOperationAuthorityContextEr
 import { DemandEventSourcingCommandHandlerError, executeDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { parseDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { parseDemandEventStreamRevision } from "../../governance/demand/event-sourcing/demand-event-stream-position.js";
-import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import { computeDemandAggregateStateDigest, decideTargetResultReviewInDemandAggregateState, } from "../../governance/demand/model/demand-aggregate-state.js";
 import { MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, MANAGED_EVIDENCE_PAYLOAD_LIMITS, } from "../../governance/evidence/managed-evidence-manifest.js";
 import { loadManagedEvidenceRecord, ManagedEvidenceRecordReaderError, readManagedEvidencePayloadMember, } from "../../governance/evidence/managed-evidence-record-reader.js";
 import { managedEvidenceRecordAddress } from "../../governance/evidence/managed-evidence-resource-paths.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { createImplementationTargetResult, ImplementationTargetResultError, } from "../../governance/result/implementation-target-result.js";
 import { createImplementationTargetResultReport, ImplementationTargetResultReportError, } from "../../governance/result/implementation-target-result-report.js";
 import { computeTargetResultCallbackPromptDigest, deriveTargetResultCallbackId, deriveTargetResultCallbackStatus, parseTargetResultCallbackRecord, TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS, TargetResultCallbackError, } from "../../governance/result/target-result-callback.js";
 import { createTestTargetResult, TestTargetResultError, } from "../../governance/result/test-target-result.js";
 import { createTestTargetResultReport, TestTargetResultReportError, } from "../../governance/result/test-target-result-report.js";
-import { createControllerImplementationReviewDecision, ControllerImplementationReviewDecisionError, } from "../../governance/review/controller-implementation-review-decision.js";
-import { createControllerProductDefectRemediationAuthorization, ControllerProductDefectRemediationAuthorizationError, } from "../../governance/review/controller-product-defect-remediation-authorization.js";
+import { ControllerImplementationReviewDecisionError, createControllerImplementationReviewDecision, } from "../../governance/review/controller-implementation-review-decision.js";
+import { ControllerProductDefectRemediationAuthorizationError, createControllerProductDefectRemediationAuthorization, } from "../../governance/review/controller-product-defect-remediation-authorization.js";
 import { normalizeControllerReviewEscalation, normalizeControllerReviewResumption, normalizeControllerTestReviewEscalation, } from "../../governance/review/controller-review-decision-contract.js";
-import { createControllerTestReviewDecision, ControllerTestReviewDecisionError, } from "../../governance/review/controller-test-review-decision.js";
+import { ControllerTestReviewDecisionError, createControllerTestReviewDecision, } from "../../governance/review/controller-test-review-decision.js";
 import { buildDemandResultReviewSnapshotFromHistory, computeReportedReviewUnitDigest, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
@@ -868,11 +868,14 @@ async function inspectReview(context, request) {
     });
     const testView = testUnitView(history, unit, evidence.targetCompletion);
     const resumptionBasis = resumptionBasisView(unit);
+    // K5：Controller 规划时自己写过任务包，复审时常常只需要锚点；summary 把整个包换成身份、目标与锚点。
+    const detail = request.detail ?? "full";
     return admitTargetResultReviewInspectionResult({
         kind: "WakeflowTargetResultReviewInspectionResult",
         schemaVersion: WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION,
         tool: WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
         status: "current",
+        detail,
         demand: snapshot.demand,
         eventStream: snapshot.eventStream,
         snapshotDigest: snapshot.snapshotDigest,
@@ -882,7 +885,9 @@ async function inspectReview(context, request) {
             targetTaskId: unit.target.targetTaskId,
             outcome: unit.target.outcome,
             taskPackageSourceEvent: unit.target.taskPackageSourceEvent,
-            taskPackage: unit.target.taskPackage,
+            taskPackage: detail === "summary"
+                ? summarizeReviewTaskPackage(unit.target.taskPackage)
+                : unit.target.taskPackage,
             targetResultSourceEvent: unit.target.targetResultSourceEvent,
             // ADR-0020 决定 2：评审者要看见落地证据是宿主观察还是 Agent 自述。持久化的 TargetResult 不带它，
             // 证据等级来自事件流派生的结局摘要。
@@ -916,6 +921,19 @@ async function inspectReview(context, request) {
             testSteps: testView === null ? null : testView.steps,
             attemptScope: testView === null ? null : testView.attemptScope,
         },
+    });
+}
+/** summary 档的任务包：身份、目标、锚点（id 与 claim）与测试合同的步骤 id；复审所需的引用都在，正文不重发。 */
+function summarizeReviewTaskPackage(taskPackage) {
+    return Object.freeze({
+        detail: "summary",
+        taskPackageId: taskPackage.taskPackageId,
+        workType: taskPackage.workType,
+        objective: taskPackage.objective,
+        acceptanceAnchors: taskPackage.acceptanceAnchors.map((anchor) => Object.freeze({ anchorId: anchor.anchorId, claim: anchor.claim })),
+        testStepIds: taskPackage.workType === "test"
+            ? taskPackage.testContract.steps.map((step) => step.stepId)
+            : null,
     });
 }
 /** 执行一次 `wakeflow_inspect_target_result_review`。 */

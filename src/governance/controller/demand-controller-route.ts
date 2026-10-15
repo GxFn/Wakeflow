@@ -1,4 +1,8 @@
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import {
+  WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES,
+  type WakeflowImplementationFrontierDescriptor,
+} from "../../contracts/vocabulary/wakeflow-target-phases.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { DELIVERY_REARM_LIMIT } from "../delivery/delivery-rearm.js";
@@ -77,32 +81,8 @@ type DemandFrontierDescriptor =
       readonly owner: "user";
     }>;
 
-type ImplementationFrontierDescriptor =
-  | Readonly<{
-      readonly kind: "implementation-delivery-planning";
-      readonly owner: "target-delivery-preparation";
-    }>
-  | Readonly<{
-      readonly kind: "implementation-host-effect-execution";
-      readonly owner: "agent-host";
-    }>
-  | Readonly<{
-      readonly kind: "implementation-target-result-import";
-      readonly owner: "target-result-import";
-    }>
-  | Readonly<{
-      readonly kind: "implementation-host-effect-rearm";
-      readonly owner: "target-host-effect-rearm";
-    }>
-  | Readonly<{
-      readonly kind: "implementation-result-review";
-      readonly owner: "controller-implementation-review";
-    }>
-  | Readonly<{
-      /** blocked 之后等待外部条件解除；解除后 Controller 带 resumption 再决定（§13.87 D4）。 */
-      readonly kind: "implementation-review-blocked";
-      readonly owner: "controller-implementation-review";
-    }>;
+/** 实现目标的前沿描述只有一份：contracts 的 Target 阶段表（open-items L1）。 */
+type ImplementationFrontierDescriptor = WakeflowImplementationFrontierDescriptor;
 
 type TestFrontierDescriptor =
   | Readonly<{
@@ -236,56 +216,12 @@ export function resolveDemandControllerDemandFrontierDescriptor(
   }
 }
 
-/** 把Implementation Target phase解析为唯一Controller责任前沿。 */
+/** 把Implementation Target phase解析为唯一Controller责任前沿：从 contracts 的 Target 阶段表派生。 */
 export function resolveDemandControllerImplementationFrontierDescriptor(
   phase: DemandControllerImplementationTargetPhase,
 ): ScopedImplementationFrontierDescriptor | null {
-  switch (phase) {
-    case "accepted":
-    case "superseded":
-      return null;
-    case "planned":
-    case "rework-requested":
-    case "product-defect-rework-requested":
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "implementation-delivery-planning" as const,
-        owner: "target-delivery-preparation" as const,
-      });
-    case "delivery-prepared":
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "implementation-host-effect-execution" as const,
-        owner: "agent-host" as const,
-      });
-    case "host-effect-accepted":
-    case "host-effect-indeterminate":
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "implementation-target-result-import" as const,
-        owner: "target-result-import" as const,
-      });
-    case "host-effect-rejected":
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "implementation-host-effect-rearm" as const,
-        owner: "target-host-effect-rearm" as const,
-      });
-    case "result-reported":
-    case "escalated":
-      // escalated 期间由 Demand 的 awaiting-decision 前沿覆盖；回答后回到评审。
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "implementation-result-review" as const,
-        owner: "controller-implementation-review" as const,
-      });
-    case "review-blocked":
-      return Object.freeze({
-        scope: "target" as const,
-        kind: "implementation-review-blocked" as const,
-        owner: "controller-implementation-review" as const,
-      });
-  }
+  const frontier = WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES[phase].frontier;
+  return frontier === null ? null : Object.freeze({ scope: "target" as const, ...frontier });
 }
 
 /** 把已闭合Post-Acceptance stage解析为唯一Controller责任前沿。 */

@@ -1,14 +1,18 @@
-import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../governance/delivery/delivery-outcome.js";
+import {
+  wakeflowRearmablePhase,
+  wakeflowTargetPhaseAdmission,
+} from "../../contracts/vocabulary/wakeflow-target-phases.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
-import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
-import { DELIVERY_REARM_LIMIT } from "../../governance/delivery/delivery-rearm.js";
 import type {
   DeliveryAttemptStatus,
   DeliveryDisposition,
   DeliveryEvidenceKind,
   DeliveryReadbackStatus,
 } from "../../governance/delivery/delivery-outcome.js";
+import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../governance/delivery/delivery-outcome.js";
+import { DELIVERY_REARM_LIMIT } from "../../governance/delivery/delivery-rearm.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 
 /**
  * Wakeflow Capabilities / Delivery：投递切片的纯决定（能力卡 6，ADR-0009，ADR-0012 D2）。
@@ -34,20 +38,6 @@ export const DELIVERY_REQUIRED_SKILLS: Readonly<
   implementation: Object.freeze(["skills/wakeflow-target/SKILL.md"]),
   test: Object.freeze(["skills/wakeflow-target/SKILL.md", "skills/wakeflow-test/SKILL.md"]),
 });
-
-/** 可以准备投递的目标 phase；两种发送前拒绝都只在 rearm 用尽后允许换新信封。 */
-const PREPARABLE_IMPLEMENTATION_PHASES: readonly string[] = Object.freeze([
-  "planned",
-  "rework-requested",
-  "product-defect-rework-requested",
-  "host-effect-rejected",
-]);
-
-const PREPARABLE_TEST_PHASES: readonly string[] = Object.freeze([
-  "planned",
-  "test-another-attempt-requested",
-  "test-host-effect-rejected",
-]);
 
 export interface HookLandingRecord {
   readonly recordId: string;
@@ -185,13 +175,13 @@ export interface PrepareTargetView {
 
 /** 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm。 */
 export function derivePrepareBlockers(target: Readonly<PrepareTargetView>): readonly string[] {
-  const admitted =
-    target.workType === "test"
-      ? PREPARABLE_TEST_PHASES.includes(target.phase)
-      : PREPARABLE_IMPLEMENTATION_PHASES.includes(target.phase);
-  if (!admitted) return Object.freeze([`target-phase:${target.phase}`]);
+  // 阶段许可只有一份：contracts 的 Target 阶段表（open-items L1）。
+  const admission = wakeflowTargetPhaseAdmission(target.workType, target.phase);
+  if (admission === null || admission.prepare === "no") {
+    return Object.freeze([`target-phase:${target.phase}`]);
+  }
   if (
-    (target.phase === "host-effect-rejected" || target.phase === "test-host-effect-rejected") &&
+    admission.prepare === "after-rearm-exhausted" &&
     target.generation !== null &&
     target.generation <= DELIVERY_REARM_LIMIT
   ) {
@@ -207,7 +197,7 @@ export interface RearmTargetView {
 
 /** rearm 的阻塞项：只有 rejected-before-send 的当前代际可以 rearm，且不超过上限。 */
 export function deriveRearmBlockers(target: Readonly<RearmTargetView>): readonly string[] {
-  if (target.phase !== "host-effect-rejected" && target.phase !== "test-host-effect-rejected") {
+  if (!wakeflowRearmablePhase(target.phase)) {
     return Object.freeze([`target-phase:${target.phase}`]);
   }
   if (target.generation > DELIVERY_REARM_LIMIT)

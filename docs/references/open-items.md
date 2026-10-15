@@ -637,7 +637,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 中。约 79% 的运行时代码行不受 knip、复杂度和格式检查。阶段转移规则至少写在四个地方，而且 capability 一侧用的是无类型字符串。约 2,100 行恢复模块没有生产调用者，服务样板在切片之间复制，最常改动的几个文件是巨石。宿主知识渗进了宿主中立层，架构目标和 ADR 与现状脱节。
 
-- **L1** [高 / 债务] Target 阶段转移规则至少写在四个地方，capability 一侧用的是无类型字符串（计划阶段 9；状态：开放）
+- **L1** [高 / 债务] Target 阶段转移规则至少写在四个地方，capability 一侧用的是无类型字符串（计划阶段 9；状态：部分，§13.174：`contracts/vocabulary/wakeflow-target-phases.ts` 成为阶段联合、准备 / rearm 许可与 Route 前沿的唯一来源，delivery decide 与 Controller Route 从它派生，类型层面与聚合的阶段联合同一；聚合守卫与 Post-Acceptance 的 phase → stage switch 仍独立编码，只被类型核对，待 A.5 拆分聚合时派生）
   - 说明：预览的阻塞项（decide）、聚合的转移守卫、计算 next 的路由、status，各自独立编码“阶段 X 允许做什么”。它们一旦不一致，用户就会进死路：status 说可以做，工具却拒绝，或者反过来。capability 用 string，改名或新增阶段时编译器不会报错。
   - 证据：capabilities/delivery/decide.ts:39-50：PREPARABLE_*_PHASES 为 readonly string[]，PrepareTargetView.phase 为 string（:182）；聚合用有类型的阶段联合（demand-aggregate-state.ts:154-280），prepareDeliveryInDemandAggregateState（:1670+）自己再检查一遍；demand-controller-route.ts:408-411、:469 单独推导 rearm 耗尽；demand-post-acceptance-route.ts 另有自己的视图；'test-another-attempt-requested' 出现在 8 个非生成文件中；capabilities 里有 31 处阶段字符串比较；frontier-matrix 测试不 import decide 或聚合守卫，所以验证不了它们是否一致；DELIVERY_REARM_LIMIT 倒是共用的常量；gate-log §13.131（L3843、L3856）：rearm 耗尽后无法重新 prepare、research 继续进入无法规划的阶段、post-acceptance 计入旧测试目标，好几个死路都属于这一类
   - 建议：在 governance/demand/model 或 contracts 中为每种工作类型建一张声明式转移表（阶段 → 允许的命令，附带 DELIVERY_REARM_LIMIT 这类限制），以聚合的阶段联合作为类型，decide 阻塞项、聚合守卫、路由前沿都从这张表派生；加一个性质测试：对每个可达状态，next 指向的工具都能通过对应的 decide 和聚合检查。

@@ -4747,3 +4747,25 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 深挖 §10 跟踪指标：Biome 豁免行数占比 78% → 0（五个旧域目录全部与仓库其余部分同一套格式器与规则；唯一的例外是 114 份文件的复杂度允许清单）；严格配置下的复杂度错误 233（09 月计数）→ 现值 238 处全部登记在允许清单里、门不再隐藏它们；旧错误类数 189 不变；其余指标不动。
 
 本批改动 `biome.json`（最后一条豁免 override 删除 + 允许清单扩到 114 份）、src/workspace 与 src/governance（格式 + 139 处类型注解 + 14 处 biome-ignore + 6 处守卫改写 + 1 处可选链 + import type）、tests/workspace 与 tests/governance（格式 + 10 处 `fixtureMember` + 1 处字面量键）、docs/（gate-log、登记 L2、深挖批次表、docs README）、耗时表与两个制品（322 份）；第一步已提交 fe203bca，第二步未提交，main 领先 origin/main 22 个提交。
+
+### 13.174 技术债务批次 7 第一项：Target 阶段表只写一次（L1）（2026-10-14）
+
+深挖 §8 第 7 行"架构收敛"里不依赖裁决、规模最小的一项。登记 L1 的现场：预览的阻塞项（capabilities/delivery/decide）、聚合的转移守卫、Controller Route 的前沿、status 各自编码"阶段 X 允许做什么"，capability 一侧用的是 `readonly string[]`，改名或新增阶段时编译器不报错。
+
+- **一张表。** 新增 `src/contracts/vocabulary/wakeflow-target-phases.ts`：实现目标 12 个阶段与测试目标 11 个阶段的封闭联合；每个阶段一条规则——`prepare`（`yes` / `after-rearm-exhausted` / `no`）、`rearm`、实现侧的 Route 前沿描述（种类 + 所有者，终态为 null）、测试侧作为唯一未终结目标时 Post-Acceptance 的 stage 名（`test-product-defect` 为 null）；`wakeflowTargetPhaseAdmission(workType, phase)` 按 `Object.hasOwn` 查表，`wakeflowRearmablePhase(phase)` 给不带工作类型的 rearm 请求用。
+- **两个消费者改为派生。** `capabilities/delivery/decide.ts` 删掉两份 `PREPARABLE_*_PHASES` 字符串数组，`derivePrepareBlockers` / `deriveRearmBlockers` 按表给 `target-phase` 与 `rearm-available` 阻塞项（rearm 上限仍是 governance/delivery 的常量，表只写"用尽后才准备新信封"）；`governance/controller/demand-controller-route.ts` 删掉本地的实现前沿联合与十二分支 switch，`resolveDemandControllerImplementationFrontierDescriptor` 直接查表（rearm 用尽时按代际切回 planned 的逻辑不变）。
+- **一致性由类型与测试钉住。** `tests/contracts/vocabulary/wakeflow-target-phases.test.ts`：类型层面要求表的两个联合与聚合的阶段联合、Route 的实现阶段联合逐字相等、测试侧 stage 名都是 Post-Acceptance 的 status（多一个少一个阶段都编译失败）；运行时对每个阶段核对 Route 描述等于表、decide 的三种许可（无代际 / 代际 1 / 超上限）与 rearm 许可等于表、另一工作类型的阶段被拒、原型键不是阶段。十七项前沿矩阵测试保持不变。
+- **没做的：** 聚合的转移守卫（`prepareDeliveryInDemandAggregateState` 等）仍独立编码——它核对的是整条命令而不只阶段，本批只用类型同一性把它的阶段联合锁到表上，守卫本身的派生留给 A.5 拆分聚合时一起做；Post-Acceptance 的 phase → stage 派生仍在 `demand-post-acceptance-route.ts` 的 switch 里，表里的 stage 名只被类型核对为合法 status、未与那段 switch 逐项比对（需要按阶段构造完整测试目标状态的夹具）；status 一侧不再有自己的阶段编码（它读 Route）。
+
+文档：登记 L1（部分 → 见上）、深挖批次表第 7 行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：新增的阶段表测试 2 项、投递 decide 与 Controller Route 目录共 16 项通过；knip、架构规则（contracts 不向上导入；governance 与 capabilities 向下取 contracts）、lint、format 通过。制品重建改了 8 份文件（decide、route、新词表与清单），`smoke:artifacts` 在重建后的制品上两个 verify ok、hook observer landed。
+- 完整门一次即过：run-BO8OdZ（02:34–02:52，18.4 分钟）1507/1507 全通过、317 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-BO8OdZ/receipt.json`：317 份文件、并发 2。
+- `wf handoff`（含真实 build:check，run-P2NXYP）：七项通过；`git diff --check` 干净。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新。
+- 深挖 §10 跟踪指标：能力层对旧域的导入条数不变（decide 新增的是对 contracts 的导入）；其余指标不动。
+
+本批改动 src/（contracts 新增词表；delivery decide 与 Controller Route 改为派生）、tests（新增 1 份）、docs/（gate-log、登记 L1、深挖批次表、docs README）、耗时表与两个制品（8 份）；未提交，main 领先 origin/main 24 个提交。

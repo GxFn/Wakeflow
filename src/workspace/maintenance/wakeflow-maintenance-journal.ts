@@ -122,7 +122,7 @@ export function createPreparedWakeflowMaintenanceJournal(
     }
     throw error;
   }
-  let plan;
+  let plan: ReturnType<typeof parseWakeflowMaintenanceExecutionPlan>;
   try {
     plan = parseWakeflowMaintenanceExecutionPlan(planValue);
   } catch (error: unknown) {

@@ -253,7 +253,7 @@ async function readStoredAtNode(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
   assertJournalNode(expectedNode);
-  let source;
+  let source: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     source = await readDeterministicJsonFile(root, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, {
       maximumBytes: TRANSACTION_MAXIMUM_BYTES,
@@ -381,7 +381,7 @@ export async function createManagedEvidencePublicationTransactionJournal(
   if (bytes.byteLength > MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES) {
     fail("capacity", "$transaction");
   }
-  let publication;
+  let publication: Awaited<ReturnType<typeof createFileAtomically>>;
   try {
     publication = await createFileAtomically(
       root,

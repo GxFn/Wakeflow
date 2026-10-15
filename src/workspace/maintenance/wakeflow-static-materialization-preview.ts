@@ -604,7 +604,7 @@ async function inspectSupportMemories(
       continue;
     }
     // 根缺失或 scaffold 目录缺失时由维护补齐（能力卡 1 §1.4 的支撑面目录修复）；冲突只报告。
-    let rootInspection;
+    let rootInspection: Awaited<ReturnType<typeof inspectWakeflowManagedSupportRoot>>;
     try {
       rootInspection = await inspectWakeflowManagedSupportRoot(root, {
         config: desired,
@@ -963,7 +963,7 @@ async function planHostCapabilityLayoutRepair(
     }
     throw error;
   }
-  let inspection;
+  let inspection: Awaited<ReturnType<typeof inspectWakeflowHostCapabilityLayout>>;
   try {
     inspection = await inspectWakeflowHostCapabilityLayout(
       root,

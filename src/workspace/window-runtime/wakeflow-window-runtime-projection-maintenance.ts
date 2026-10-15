@@ -229,7 +229,7 @@ async function withCurrentProjectionEntries<Result>(
   operation: (expected: WakeflowWindowRuntimeProjectionExpectedEntries) => Promise<Result>,
 ): Promise<Result> {
   let inputs = typeof source === "function" ? await source() : source;
-  let authority;
+  let authority: ReturnType<typeof compileWakeflowWindowHostBindingStoreAuthority>;
   try {
     authority = compileWakeflowWindowHostBindingStoreAuthority(
       inputs.config,
@@ -297,7 +297,7 @@ export async function refreshWakeflowWindowRuntimeProjections(
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionRefreshReceipt>> {
   if (request.signal?.aborted === true) failWindowRuntimeProjection("aborted", "$signal");
   const loadInputs = async () => {
-    let snapshot;
+    let snapshot: Awaited<ReturnType<typeof readWakeflowConfigAuthoritySnapshot>>;
     try {
       snapshot = await readWakeflowConfigAuthoritySnapshot(
         rootValue,
@@ -402,7 +402,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     if (error instanceof WakeflowConfigError) failWindowRuntimeProjection("input", error.path);
     throw error;
   }
-  let resourceProfile;
+  let resourceProfile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   try {
     resourceProfile = parseWakeflowWorkspaceHostResourceProfile(request.resourceProfile);
   } catch (error: unknown) {
@@ -411,7 +411,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     }
     throw error;
   }
-  let unregistered;
+  let unregistered: ReturnType<typeof compileWakeflowWindowRuntimeUnregisteredProjectionSet>;
   try {
     unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
   } catch (error: unknown) {
@@ -524,7 +524,7 @@ export async function retireWakeflowWindowRuntimeProjections(
   request: RetireWakeflowWindowRuntimeProjectionsRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionRetirementReceipt>> {
   if (request.signal?.aborted === true) failWindowRuntimeProjection("aborted", "$signal");
-  let resourceProfile;
+  let resourceProfile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   try {
     resourceProfile = parseWakeflowWorkspaceHostResourceProfile(request.resourceProfile);
   } catch (error: unknown) {
@@ -537,7 +537,7 @@ export async function retireWakeflowWindowRuntimeProjections(
   let absent = 0;
   for (const windowId of request.windowIds) {
     const resourceRef = wakeflowWindowRuntimeProjectionRef(resourceProfile, windowId);
-    let node;
+    let node: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>["node"];
     try {
       node = (await rootValue.inspectExistingResource(resourceRef, "$projection")).node;
     } catch (error: unknown) {
@@ -588,7 +588,7 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(
     ) {
       failWindowRuntimeProjection("plan", "$operation");
     }
-    let receipt;
+    let receipt: Awaited<ReturnType<typeof publishWakeflowWindowRuntimeProjectionDocument>>;
     try {
       receipt = await publishWakeflowWindowRuntimeProjectionDocument(
         rootValue,

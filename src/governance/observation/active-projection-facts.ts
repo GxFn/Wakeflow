@@ -132,8 +132,7 @@ export function acceptedBranchFacts(
         commit: commit.value,
         acceptedAt: target.reviewDecision.decidedAt,
         // 核对过 = 分支清单读全了，并且在里面真的看见了这个分支尖端。
-        repositoryObserved:
-          repository !== undefined && repository.branchesComplete && tip !== undefined,
+        repositoryObserved: repository?.branchesComplete === true && tip !== undefined,
         source,
       }),
     );

@@ -485,7 +485,7 @@ export class TaskPackageProjectionStore {
   ): Promise<Readonly<TaskPackageProjectionMaterializationReceipt>> {
     const taskPackageId = parseTaskPackageId(taskPackageIdValue);
     const { signal } = parseMaterializeOptions(optionsValue);
-    let located;
+    let located: Awaited<ReturnType<DemandEventSourcingRepository["findTargetTaskPlannedEvent"]>>;
     try {
       located = await this.#repository.findTargetTaskPlannedEvent(
         taskPackageId,
@@ -506,7 +506,7 @@ export class TaskPackageProjectionStore {
       fail("capacity", "$projection");
     }
     admitProjectionOperations(taskPackage);
-    let projectionRoot;
+    let projectionRoot: Awaited<ReturnType<typeof materializeDirectoryPath>>;
     try {
       projectionRoot = await materializeDirectoryPath(
         this.#root,

@@ -980,11 +980,11 @@ function parseProductDefectRemediationSummary(
 ): Readonly<DemandProductDefectRemediationSummary> {
   const parsedStepIds = value.failedStepIds;
   if (
-    parsedStepIds.some(
-      (stepId, index) =>
-        !STEP_ID_PATTERN.test(stepId) ||
-        (index > 0 && compareStepId(parsedStepIds[index - 1]!, stepId) >= 0),
-    )
+    parsedStepIds.some((stepId, index) => {
+      if (!STEP_ID_PATTERN.test(stepId)) return true;
+      const previous = index > 0 ? parsedStepIds[index - 1] : undefined;
+      return previous !== undefined && compareStepId(previous, stepId) >= 0;
+    })
   ) {
     fail("relation", `${path}/failedStepIds`);
   }
@@ -1104,8 +1104,7 @@ function parseTestAttemptLineage(
   const deliveryIds = new Set<string>();
   const priorResultIds = new Set<string>();
   const reviewDecisionIds = new Set<string>();
-  for (let index = 0; index < attempts.length; index += 1) {
-    const state = attempts[index]!;
+  for (const [index, state] of attempts.entries()) {
     const attempt = state.attempt;
     const previous = index === 0 ? undefined : attempts[index - 1];
     if (

@@ -55,7 +55,7 @@ function fail(reason: DemandEventSourcingUpcasterErrorReason, path: string): nev
 export function upcastDemandEventSourcingStoredEvent(
   value: unknown,
 ): Readonly<DemandUncommittedEvent> {
-  let envelope;
+  let envelope: ReturnType<typeof parseDemandEventSourcingPersistedEventEnvelope>;
   try {
     envelope = parseDemandEventSourcingPersistedEventEnvelope(value);
   } catch (error: unknown) {

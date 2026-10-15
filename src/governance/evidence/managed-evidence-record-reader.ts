@@ -465,7 +465,7 @@ export async function loadManagedEvidenceRecord(
   const evidenceId = parseEvidenceId(evidenceIdValue);
   const options = parseLoadOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  let address;
+  let address: ReturnType<typeof managedEvidenceRecordAddress>;
   try {
     address = managedEvidenceRecordAddress(evidenceId);
   } catch (error: unknown) {
@@ -481,7 +481,7 @@ export async function loadManagedEvidenceRecord(
     options.signal,
   );
   const topLevel = exactRecordRoot(before);
-  let read;
+  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(rootValue, address.manifestRef, {
       maximumBytes: MANIFEST_MAXIMUM_BYTES,
@@ -591,7 +591,7 @@ export async function readManagedEvidencePayloadMember(
     memberRef,
     "$memberPath",
   );
-  let read;
+  let read: Awaited<ReturnType<typeof readStableFile>>;
   try {
     read = await readStableFile(rootValue, memberPath, {
       maximumBytes: options.maximumBytes,

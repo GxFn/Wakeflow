@@ -2,7 +2,7 @@ import {
   DurableAtomicFileStageRecoveryError,
   recoverDurableAtomicFileStagesForTargets,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { publishWakeflowSupportMemory } from "./wakeflow-support-memory-publication.js";
 import {
   assertWakeflowSupportMemoryPublicationNotAborted,
@@ -31,7 +31,7 @@ export async function recoverWakeflowSupportMemory(
   const request = parseWakeflowSupportMemoryPublicationRequest(requestValue);
   const options = parseWakeflowSupportMemoryPublicationOptions(optionsValue);
   assertWakeflowSupportMemoryPublicationNotAborted(options.signal);
-  let stageRecovery;
+  let stageRecovery: Awaited<ReturnType<typeof recoverDurableAtomicFileStagesForTargets>>;
   try {
     stageRecovery = await recoverDurableAtomicFileStagesForTargets(
       supportRoot,

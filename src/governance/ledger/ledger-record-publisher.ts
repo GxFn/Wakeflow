@@ -14,7 +14,7 @@ import {
   planDirectoryTreeCandidate,
   settleDirectoryTreeCandidateDurably,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   type LedgerAuthorityRecord,

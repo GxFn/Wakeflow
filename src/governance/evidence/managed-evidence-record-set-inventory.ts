@@ -272,7 +272,7 @@ async function readTransaction(
   expectedNode: Readonly<FileNodeSnapshot>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
-  let stored;
+  let stored: Awaited<ReturnType<typeof loadManagedEvidencePublicationTransaction>>;
   try {
     stored = await loadManagedEvidencePublicationTransaction(
       root,
@@ -322,7 +322,7 @@ async function inspectRecord(
   entry: Readonly<StableDirectoryEntry>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ManagedEvidenceRecordInventoryEntry>> {
-  let address;
+  let address: ReturnType<typeof parseManagedEvidenceRecordDirectoryName>;
   try {
     address = parseManagedEvidenceRecordDirectoryName(entry.name);
   } catch (error: unknown) {
@@ -331,7 +331,7 @@ async function inspectRecord(
     }
     throw error;
   }
-  let loaded;
+  let loaded: Awaited<ReturnType<typeof loadManagedEvidenceRecord>>;
   try {
     loaded = await loadManagedEvidenceRecord(root, address.evidenceId, {
       expectedRootNode: entry.node,
@@ -407,7 +407,7 @@ async function inspectStage(
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DirectoryTreeCandidateProgress>> {
-  let address;
+  let address: ReturnType<typeof parseManagedEvidenceStageDirectoryName>;
   try {
     address = parseManagedEvidenceStageDirectoryName(entry.name);
   } catch (error: unknown) {

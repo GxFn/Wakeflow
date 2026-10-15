@@ -64,6 +64,7 @@ import {
 const AUTHORIZATION_KIND = "WakeflowControllerProductDefectRemediationAuthorization" as const;
 const AUTHORIZATION_SCHEMA_VERSION = 1 as const;
 const AUTHORIZATION_ID_PREFIX = "product-defect-remediation_";
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
 
@@ -292,7 +293,8 @@ function admitStepIds(
   const first = stepIds[0];
   if (first === undefined) fail("relation", path);
   stepIds.forEach((value, index) => {
-    if (index > 0 && compareStepId(stepIds[index - 1]!, value) >= 0) {
+    const previous = index > 0 ? stepIds[index - 1] : undefined;
+    if (previous !== undefined && compareStepId(previous, value) >= 0) {
       fail("relation", `${path}/${index}`);
     }
   });
@@ -344,7 +346,8 @@ function parseFailedSteps(
   const first = steps[0];
   if (first === undefined) fail("relation", path);
   steps.forEach((step, index) => {
-    if (index > 0 && compareStepId(steps[index - 1]!.stepId, step.stepId) >= 0) {
+    const previous = index > 0 ? steps[index - 1] : undefined;
+    if (previous !== undefined && compareStepId(previous.stepId, step.stepId) >= 0) {
       fail("relation", `${path}/${index}/stepId`);
     }
   });
@@ -412,10 +415,10 @@ function assertRelations(
   affectedTargets.forEach((target, index) => {
     const path = `$/affectedTargets/${index}`;
     const baseline = target.baseline;
+    const previousTarget = index > 0 ? affectedTargets[index - 1] : undefined;
     if (
-      (index > 0 &&
-        compareText(affectedTargets[index - 1]!.baseline.targetTaskId, baseline.targetTaskId) >=
-          0) ||
+      (previousTarget !== undefined &&
+        compareText(previousTarget.baseline.targetTaskId, baseline.targetTaskId) >= 0) ||
       targetTaskIds.has(baseline.targetTaskId) ||
       taskPackageIds.has(baseline.taskPackageId) ||
       repositoryIds.has(baseline.repositoryId) ||

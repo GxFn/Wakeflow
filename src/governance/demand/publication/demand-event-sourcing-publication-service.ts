@@ -409,7 +409,7 @@ async function prepareLockRecovery(
     fail("conflict", "$transaction");
   }
   const lockRef = demandPublicationLockRef(stored.transaction.demandId);
-  let observation;
+  let observation: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
     observation = await inspectRootedExclusiveFileLock(root, lockRef);
   } catch (error: unknown) {
@@ -442,7 +442,7 @@ export async function recoverDemandPublication(
   assertRoot(root);
   assertLedgerStore(ledgerStore);
   let signal: AbortSignal | undefined;
-  let demandId;
+  let demandId: ReturnType<typeof parseWakeflowDurableIdOfKind>;
   try {
     signal = parseSignal(options);
     demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");

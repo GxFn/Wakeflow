@@ -46,7 +46,7 @@ function fail(reason: ControllerReviewDecisionErrorReason): never {
 }
 
 export function parseControllerReviewDecision(value: unknown): Readonly<ControllerReviewDecision> {
-  let json;
+  let json: ReturnType<typeof parseJsonValue>;
   try {
     json = parseJsonValue(value, "$decision");
   } catch (error: unknown) {

@@ -22,6 +22,7 @@ import {
   createControllerTestReviewDecision,
 } from "../../../src/governance/review/controller-test-review-decision.js";
 import type { TestImplementationBaseline } from "../../../src/governance/tasking/task-package.js";
+import { fixtureMember } from "../../support/fixture-member.js";
 import { testReviewDecisionBaseInput } from "./controller-test-review-decision.fixture.js";
 
 const DECIDED_AT = parseUtcInstant("2026-08-29T12:35:00.000Z");
@@ -230,7 +231,7 @@ test("修复授权在分配身份与时间前拒绝错误Decision、缺失基线
   throws(
     () =>
       createControllerProductDefectRemediationAuthorization(
-        { ...valid, failedSteps: [valid.failedSteps[1]!] },
+        { ...valid, failedSteps: [fixtureMember(valid.failedSteps, 1)] },
         options,
       ),
     (error: unknown) =>

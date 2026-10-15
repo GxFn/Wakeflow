@@ -61,7 +61,7 @@ export function compileWakeflowFreshWindowRuntimeAuthority(
   configValue: unknown,
   profileValue: unknown,
 ): Readonly<WakeflowFreshWindowRuntimeAuthority> {
-  let profile;
+  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   try {
     profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   } catch (error: unknown) {

@@ -22,7 +22,7 @@ import {
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { type FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
+import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -209,7 +209,7 @@ async function loadExactJournal(
   signal: AbortSignal | undefined,
   expectedNode?: Readonly<FileNodeSnapshot>,
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
-  let stored;
+  let stored: Awaited<ReturnType<typeof requireCurrentManagedEvidencePublicationTransaction>>;
   try {
     stored = await requireCurrentManagedEvidencePublicationTransaction(
       demandRoot,
@@ -284,7 +284,7 @@ async function ensureEvidenceRoot(
 ): Promise<void> {
   admitEvidenceRootMaterialization(transaction);
   await ensureDirectory(demandRoot, MANAGED_EVIDENCE_ROOT_REF, "$managedEvidenceRoot", signal);
-  let observation;
+  let observation: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     observation = await demandRoot.inspectExistingResource(
       MANAGED_EVIDENCE_ROOT_REF,

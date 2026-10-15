@@ -104,9 +104,9 @@ function assertReportMatchesContract(
 export function createTestTargetResult(
   input: Readonly<CreateTestTargetResultInput>,
 ): Readonly<TestTargetResult> {
-  let taskPackage;
-  let envelope;
-  let report;
+  let taskPackage: ReturnType<typeof parseTaskPackage>;
+  let envelope: ReturnType<typeof parseDeliveryEnvelope>;
+  let report: ReturnType<typeof parseTestTargetResultReport>;
   try {
     taskPackage = parseTaskPackage(input.taskPackage);
   } catch (error: unknown) {
@@ -178,7 +178,7 @@ export function createTestTargetResult(
     }),
     report,
   } satisfies Readonly<TargetResultBasis>;
-  let result;
+  let result: ReturnType<typeof parseTargetResult>;
   try {
     result = parseTargetResult({
       ...basis,

@@ -428,7 +428,7 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
   configValue: unknown,
   profileValue: unknown,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjectionSet> {
-  let desired;
+  let desired: ReturnType<typeof compileWakeflowWindowRuntimeDesiredTopology>;
   try {
     desired = compileWakeflowWindowRuntimeDesiredTopology(configValue, profileValue);
   } catch (error: unknown) {

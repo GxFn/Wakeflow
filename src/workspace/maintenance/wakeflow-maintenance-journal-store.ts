@@ -20,7 +20,7 @@ import {
 } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -188,7 +188,7 @@ export function assertWakeflowPreparedMaintenanceJournalCapacity(
   intentDigest: unknown,
   plan: unknown,
 ): ByteCount {
-  let journal;
+  let journal: ReturnType<typeof createPreparedWakeflowMaintenanceJournal>;
   try {
     journal = createPreparedWakeflowMaintenanceJournal(operationId, intentDigest, plan);
   } catch (error: unknown) {
@@ -260,7 +260,7 @@ export async function assertWakeflowMaintenanceJournalIsOnlyTransaction(
   if (typeof sourceValue !== "object" || sourceValue === null || !ISSUED_SOURCES.has(sourceValue)) {
     fail("input", "$source");
   }
-  let read;
+  let read: Awaited<ReturnType<typeof readStableResourceDirectory>>;
   try {
     read = await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, {
       maximumEntries: 1,
@@ -286,7 +286,7 @@ export async function readWakeflowMaintenanceJournal(
 ): Promise<Readonly<WakeflowMaintenanceJournalSource>> {
   const operationId = admittedOperationId(operationIdValue);
   const resourcePath = wakeflowMaintenanceJournalRef(operationId);
-  let read;
+  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(root, resourcePath, {
       maximumBytes: WAKEFLOW_MAINTENANCE_JOURNAL_MAXIMUM_BYTES,

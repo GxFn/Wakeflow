@@ -81,7 +81,7 @@ async function resolveDesiredConfig(
 ): Promise<WakeflowConfigModel | null> {
   if (request.desiredConfig !== null) return request.desiredConfig;
   assertNotAborted(request.signal);
-  let snapshot;
+  let snapshot: Awaited<ReturnType<typeof readWakeflowConfigAuthoritySnapshot>>;
   try {
     snapshot = await readWakeflowConfigAuthoritySnapshot(
       root,

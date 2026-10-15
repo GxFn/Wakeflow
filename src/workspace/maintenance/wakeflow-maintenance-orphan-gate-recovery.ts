@@ -4,7 +4,7 @@ import {
   materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -146,7 +146,7 @@ export async function recoverWakeflowMaintenanceOrphanGate(
     }
     throw error;
   }
-  let observation;
+  let observation: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
     observation = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
   } catch (error: unknown) {

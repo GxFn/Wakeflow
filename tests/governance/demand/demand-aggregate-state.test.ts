@@ -23,6 +23,7 @@ import {
   computeTaskPackageDigest,
   createTaskPackage,
 } from "../../../src/governance/tasking/task-package.js";
+import { fixtureMember } from "../../support/fixture-member.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -81,7 +82,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   ]);
   equal(Object.isFrozen(planned.targetTasks), true);
   equal(Object.isFrozen(planned.targetTasks[0]), true);
-  equal(Object.hasOwn(planned.targetTasks[0]!, "workType"), false);
+  equal(Object.hasOwn(fixtureMember(planned.targetTasks, 0), "workType"), false);
 
   const claim = createWorkClaimFixture();
   const envelope = createDeliveryEnvelopeFixture({ claim });

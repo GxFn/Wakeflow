@@ -694,7 +694,7 @@ export async function readDemandPostAcceptanceRoute(
   optionsValue?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandPostAcceptanceRoute>> {
   const input = parseInput(workspaceRootValue, demandIdValue, optionsValue);
-  let context;
+  let context: Awaited<ReturnType<typeof openDemandOperationAuthorityContext>>;
   try {
     context = await openDemandOperationAuthorityContext(
       input.workspaceRoot,

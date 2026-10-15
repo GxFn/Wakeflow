@@ -86,6 +86,7 @@ const PROFILE_FIELDS = Object.freeze([
 ] as const);
 const HANDLE_FIELDS = Object.freeze(["kind", "value"] as const);
 const HANDLE_KIND_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in profile text
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 

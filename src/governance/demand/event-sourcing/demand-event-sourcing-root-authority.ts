@@ -482,7 +482,7 @@ async function loadRootAuthority(
     }
     throw error;
   }
-  let firstCommit;
+  let firstCommit: Awaited<ReturnType<DemandFileEventStore["readCommitAt"]>>;
   try {
     firstCommit = await eventStore.readCommitAt(1, signal === undefined ? undefined : { signal });
   } catch (error: unknown) {
@@ -493,7 +493,7 @@ async function loadRootAuthority(
     throw error;
   }
   const firstPersistedEvent = firstCommit?.events[0];
-  let firstEvent;
+  let firstEvent: ReturnType<typeof upcastDemandEventSourcingStoredEvent> | undefined;
   try {
     firstEvent =
       firstPersistedEvent === undefined

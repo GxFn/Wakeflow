@@ -403,7 +403,7 @@ async function openTreeSource(
   sourceRoot: RootedDirectory,
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
 ): Promise<RootedDirectory> {
-  let observation;
+  let observation: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     const source = transaction.manifest.source;
     if (source.kind !== "managed-path") fail("input", "$transaction/manifest/source");
@@ -477,7 +477,7 @@ async function materializeTreePayload(
   let copied: readonly PortableResourcePath[] | undefined;
   let failure: unknown;
   try {
-    let transferPlan;
+    let transferPlan: ReturnType<typeof planLoadedArtifactTreeTransfer>;
     try {
       transferPlan = planLoadedArtifactTreeTransfer(
         transaction.manifest.payload.treeManifest,

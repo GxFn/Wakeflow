@@ -7,7 +7,7 @@ import {
   DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidateProgress,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   ledgerRecordPublicationIntentRefForIdentity,
   ledgerRecordPublicationLockRefForIdentity,
@@ -94,7 +94,7 @@ async function recoverPublication(
     if (residues.stageNode === null) {
       fail("recovery-input-required", "$stage");
     }
-    let progress;
+    let progress: Awaited<ReturnType<typeof inspectDirectoryTreeCandidateProgress>>;
     try {
       progress = await inspectDirectoryTreeCandidateProgress(
         root,

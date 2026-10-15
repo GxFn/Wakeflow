@@ -352,7 +352,7 @@ export class DemandFileEventSnapshotStore {
       }>
     > = [];
     for (const [index, entry] of before.entries.entries()) {
-      let parsed;
+      let parsed: ReturnType<typeof parseDemandEventStreamCommitFileName>;
       try {
         parsed = parseDemandEventStreamCommitFileName(entry.name);
       } catch (error: unknown) {
@@ -427,7 +427,7 @@ export class DemandFileEventSnapshotStore {
     const ref = demandEventSourcingSnapshotRef(
       parseDemandEventCommitSequence(sequence, "$sequence"),
     );
-    let node;
+    let node: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>["node"];
     try {
       node = (await this.#root.inspectExistingResource(ref)).node;
     } catch (error: unknown) {
@@ -462,7 +462,7 @@ export class DemandFileEventSnapshotStore {
     if (!Number.isSafeInteger(keepFromSequence) || keepFromSequence < 1) {
       fail("input", "$keepFromSequence");
     }
-    let read;
+    let read: Awaited<ReturnType<typeof readDirectory>>;
     try {
       read = await readDirectory(this.#root, signal);
     } catch (error: unknown) {
@@ -475,7 +475,7 @@ export class DemandFileEventSnapshotStore {
     let retired = 0;
     let failed = 0;
     for (const entry of read.entries) {
-      let sequence;
+      let sequence: ReturnType<typeof parseDemandEventStreamCommitFileName>["commitSequence"];
       try {
         sequence = parseDemandEventStreamCommitFileName(entry.name).commitSequence;
       } catch (error: unknown) {
@@ -564,7 +564,7 @@ export class DemandFileEventSnapshotStore {
         fail("operation-failure", "$snapshot");
       }
     }
-    let resource;
+    let resource: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
     try {
       resource = await this.#root.inspectExistingResource(ref);
     } catch (error: unknown) {

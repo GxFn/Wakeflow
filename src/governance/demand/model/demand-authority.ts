@@ -152,6 +152,7 @@ const REQUIRED_ROLES = Object.freeze({
   supplement: PACKAGE_ROLES,
   research: PACKAGE_ROLES,
 } as const satisfies Readonly<Record<DemandType, readonly string[]>>);
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const DRAFT_FIELDS = Object.freeze(["authorityRefs", "testingDecision"] as const);
 
@@ -427,7 +428,7 @@ export async function admitDemandAuthority(
   const signal = optionRecord.signal as AbortSignal | undefined;
   if (signal?.aborted === true) fail("aborted", "$signal");
   const resolved: ResolvedDemandAuthorityReference[] = [];
-  let ledgerResolutions;
+  let ledgerResolutions: Awaited<ReturnType<LedgerAuthorityStore["resolveMemberReferences"]>>;
   try {
     ledgerResolutions = await ledgerStore.resolveMemberReferences(
       authority.authorityRefs,

@@ -119,9 +119,9 @@ export function assertDeliveryBindingFollowsEnvelope(
 export function createImplementationTargetResult(
   input: Readonly<CreateImplementationTargetResultInput>,
 ): Readonly<ImplementationTargetResult> {
-  let taskPackage;
-  let envelope;
-  let report;
+  let taskPackage: ReturnType<typeof parseTaskPackage>;
+  let envelope: ReturnType<typeof parseDeliveryEnvelope>;
+  let report: ReturnType<typeof parseImplementationTargetResultReport>;
   try {
     taskPackage = parseTaskPackage(input.taskPackage);
   } catch (error: unknown) {
@@ -173,7 +173,7 @@ export function createImplementationTargetResult(
     }),
     report,
   } satisfies Readonly<TargetResultBasis>;
-  let result;
+  let result: ReturnType<typeof parseTargetResult>;
   try {
     result = parseTargetResult({
       ...basis,

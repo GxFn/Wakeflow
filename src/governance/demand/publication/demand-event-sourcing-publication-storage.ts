@@ -148,7 +148,7 @@ export async function readPublicationTransactionAt(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StoredDemandEventSourcingPublicationTransaction>> {
   assertPrivatePublicationNode(node, "file", "$transaction");
-  let read;
+  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(root, ref, {
       maximumBytes: TRANSACTION_MAXIMUM_BYTES,
@@ -158,7 +158,7 @@ export async function readPublicationTransactionAt(
   } catch (error: unknown) {
     mapPublicationReadError(error, "$transaction");
   }
-  let transaction;
+  let transaction: ReturnType<typeof parseDemandEventSourcingPublicationTransactionDocument>;
   try {
     transaction = parseDemandEventSourcingPublicationTransactionDocument(read.text);
   } catch (error: unknown) {
@@ -212,7 +212,7 @@ export async function ensureExactPublicationTextFile(
   }
   if (node === null) fail("operation-failure", "$write");
   assertPrivatePublicationNode(node, "file", "$write");
-  let read;
+  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(root, ref, {
       maximumBytes: admittedMaximumBytes,

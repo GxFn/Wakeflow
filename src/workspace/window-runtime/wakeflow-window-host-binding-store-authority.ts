@@ -82,7 +82,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
   ) {
     fail("profile", "$profiles");
   }
-  let topology;
+  let topology: ReturnType<typeof compileWakeflowWindowRuntimeDesiredTopology>;
   try {
     topology = compileWakeflowWindowRuntimeDesiredTopology(configValue, resourceProfile);
   } catch (error: unknown) {
@@ -91,7 +91,11 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
     }
     throw error;
   }
-  let bindingRefs;
+  let bindingRefs: readonly NonNullable<
+    ReturnType<
+      typeof createWakeflowWindowHostBindingResourceCatalog
+    >[number]["placement"]["relativePath"]
+  >[];
   try {
     bindingRefs = Object.freeze(
       createWakeflowWindowHostBindingResourceCatalog(configValue, resourceProfile).map(

@@ -380,7 +380,7 @@ async function inspectProjectionInventory(
     const entry = expected.get(directoryEntry.name);
     if (entry === undefined) fail("prefix-conflict", "$projectionInventory");
     assertPrivateNode(directoryEntry.node, "file", `$projectionInventory/${directoryEntry.name}`);
-    let source;
+    let source: Awaited<ReturnType<typeof readStrictTextFile>>;
     try {
       source = await readStrictTextFile(root, entry.resourceRef, {
         maximumBytes: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES,
@@ -564,7 +564,7 @@ export async function publishFreshWakeflowWindowRuntime(
     fail("prefix-conflict", "$bindingInventory");
   }
   for (const effect of directoryEffects) {
-    let current;
+    let current: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
     try {
       current = await rootValue.inspectExistingResource(effect.resourcePath);
     } catch (error: unknown) {

@@ -10,6 +10,7 @@ import {
   TaskPackageError,
   type TaskPackageErrorReason,
 } from "../../../src/governance/tasking/task-package.js";
+import { fixtureMember } from "../../support/fixture-member.js";
 import {
   createTaskPackageFixture,
   SELECTED_AUTHORITY_REF,
@@ -167,7 +168,7 @@ test("test TaskPackage is a closed discriminated variant without repository muta
           when: "执行冷启动",
           // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段（§13.85 D1）
           then: "入口按需求响应",
-          requirementRef: implementation.acceptanceAnchors[0]!.requirementRef,
+          requirementRef: fixtureMember(implementation.acceptanceAnchors, 0).requirementRef,
         },
       ],
       environment: SELECTED_AUTHORITY_REF,

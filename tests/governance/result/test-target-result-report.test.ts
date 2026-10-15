@@ -11,6 +11,7 @@ import {
   TestTargetResultReportError,
   testTargetResultReportContentDigest,
 } from "../../../src/governance/result/test-target-result-report.js";
+import { fixtureMember } from "../../support/fixture-member.js";
 
 const REPORTED_AT = parseUtcInstant("2026-08-30T10:00:00.000Z");
 const FIRST_DIGEST = `sha256:${"1".repeat(64)}`;
@@ -71,21 +72,24 @@ test("TestTargetResultReport保存逐步记录并由Wakeflow派生整体判定",
     testTargetResultReportContentDigest({ ...content }),
   );
   const failed = createTestTargetResultReport(
-    { ...content, steps: [content.steps[0]!, failedStep("ts-2")] },
+    { ...content, steps: [fixtureMember(content.steps, 0), failedStep("ts-2")] },
     { clock: () => REPORTED_AT },
   );
   equal(failed.verdict, "fail");
   equal(failed.steps[1]?.failure?.classification, "product-defect");
   equal(deriveTestVerdict([]), "cannot-conclude");
   equal(
-    deriveTestVerdict([{ ...content.steps[0]!, verdict: "blocked" }, content.steps[0]!]),
+    deriveTestVerdict([
+      { ...fixtureMember(content.steps, 0), verdict: "blocked" },
+      fixtureMember(content.steps, 0),
+    ]),
     "blocked",
   );
 });
 
 test("TestTargetResultReport拒绝悬空Evidence、重复stepId、缺失或多余的failure与篡改的verdict", () => {
   const content = completedContent();
-  const firstStep = content.steps[0]!;
+  const firstStep = fixtureMember(content.steps, 0);
   throws(
     () =>
       createTestTargetResultReport({

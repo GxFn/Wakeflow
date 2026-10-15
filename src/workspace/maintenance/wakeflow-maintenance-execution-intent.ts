@@ -321,7 +321,7 @@ export function createWakeflowMaintenanceExecutionIntent(
     }
     throw error;
   }
-  let request;
+  let request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
   try {
     request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {

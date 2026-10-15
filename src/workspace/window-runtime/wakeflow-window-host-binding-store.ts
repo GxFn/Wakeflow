@@ -284,7 +284,7 @@ async function prepareStaleLockRecovery(
   authority: Readonly<WakeflowWindowHostBindingStoreAuthority>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  let lock;
+  let lock: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
     lock = await inspectRootedExclusiveFileLock(root, authority.lockRef);
   } catch (error: unknown) {
@@ -309,7 +309,7 @@ async function readInventory(
   authority: Readonly<WakeflowWindowHostBindingStoreAuthority>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowWindowHostBindingInventory>> {
-  let directory;
+  let directory: Awaited<ReturnType<typeof readStableResourceDirectory>>;
   try {
     directory = await readStableResourceDirectory(root, authority.bindingRootRef, {
       maximumEntries: authority.bindingRefs.length + 1,
@@ -332,7 +332,7 @@ async function readInventory(
     }
     if (!expected.has(entry.resourcePath)) fail("inventory", "$inventory");
     privateNode(entry.node, "file", "$inventory");
-    let read;
+    let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
     try {
       read = await readDeterministicJsonFile(root, entry.resourcePath, {
         maximumBytes: MAXIMUM_BINDING_BYTES,

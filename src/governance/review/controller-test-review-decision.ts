@@ -72,6 +72,7 @@ import {
 const DECISION_KIND = "WakeflowControllerTestReviewDecision" as const;
 const DECISION_SCHEMA_VERSION = 1 as const;
 const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
 export type ControllerTestReviewDecisionType =

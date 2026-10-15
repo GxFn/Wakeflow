@@ -218,6 +218,7 @@ const MAXIMUM_REWORK_RATIONALE_CODE_POINTS = 1_024;
 const MAXIMUM_REWORK_METHOD_CODE_POINTS = 512;
 const MAXIMUM_REWORK_OBSERVATION_CODE_POINTS = 1_024;
 const REWORK_CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const HOST_IDS = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const LANGUAGES = new Set<string>(WAKEFLOW_PRESENTATION_LANGUAGES);

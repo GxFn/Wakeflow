@@ -56,7 +56,7 @@ function fail(reason: WakeflowHostCapabilityLayoutAuthorityErrorReason, path: st
 export function compileWakeflowHostCapabilityLayoutAuthority(
   profileValue: unknown,
 ): Readonly<WakeflowHostCapabilityLayoutAuthority> {
-  let profile;
+  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   try {
     profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   } catch (error: unknown) {

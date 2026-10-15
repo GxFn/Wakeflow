@@ -310,7 +310,7 @@ export async function inspectDemandEventSourcingRootInventory(
     fail("input", "$root");
   }
   const { phase, signal } = parseOptions(options);
-  let before;
+  let before: Awaited<ReturnType<typeof readStableRootDirectory>>;
   try {
     before = await readStableRootDirectory(root, {
       maximumEntries: 64,
@@ -451,7 +451,7 @@ export async function inspectDemandEventSourcingRootInventory(
   assertDirectory(snapshots.directoryNode, "$snapshots");
   commits.entries.forEach((entry, index) => {
     assertFile(entry.node, `$commits/${index}`);
-    let parsed;
+    let parsed: ReturnType<typeof parseDemandEventStreamCommitFileName>;
     try {
       parsed = parseDemandEventStreamCommitFileName(entry.name);
     } catch (error: unknown) {
@@ -488,7 +488,7 @@ export async function inspectDemandEventSourcingRootInventory(
     }
   });
 
-  let after;
+  let after: Awaited<ReturnType<typeof readStableRootDirectory>>;
   try {
     after = await readStableRootDirectory(root, {
       maximumEntries: 64,

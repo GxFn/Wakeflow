@@ -22,7 +22,7 @@ import {
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -154,7 +154,7 @@ function admittedByteCount(bytes: Uint8Array): ByteCount {
 
 /** 在任何bootstrap/gate效果前验证intent的确定性持久表示容量。 */
 export function assertWakeflowMaintenanceExecutionIntentCapacity(value: unknown): ByteCount {
-  let bytes;
+  let bytes: ReturnType<typeof encodeUtf8>;
   try {
     bytes = encodeUtf8(renderWakeflowMaintenanceExecutionIntent(value));
   } catch (error: unknown) {
@@ -200,7 +200,7 @@ async function assertTransactionEntries(
   root: RootedDirectory,
   expected: readonly PortableResourcePath[],
 ): Promise<void> {
-  let read;
+  let read: Awaited<ReturnType<typeof readStableResourceDirectory>>;
   try {
     read = await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, {
       maximumEntries: expected.length,
@@ -319,7 +319,7 @@ async function readIntentAtNode(
     fail("source-policy", "$intent");
   }
   const resourcePath = wakeflowMaintenanceIntentRef(operationId);
-  let read;
+  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(root, resourcePath, {
       maximumBytes: WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES,
@@ -335,7 +335,7 @@ async function readIntentAtNode(
     }
     throw error;
   }
-  let intent;
+  let intent: ReturnType<typeof parseWakeflowMaintenanceExecutionIntent>;
   try {
     intent = parseWakeflowMaintenanceExecutionIntent(read.value);
     if (renderWakeflowMaintenanceExecutionIntent(intent) !== read.text) {

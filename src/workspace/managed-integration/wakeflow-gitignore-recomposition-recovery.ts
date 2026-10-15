@@ -3,7 +3,7 @@ import {
   type DurableAtomicFileStageRecoveryReceipt,
   recoverDurableAtomicFileStagesForTargets,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
@@ -114,7 +114,7 @@ export async function recoverWakeflowWorkspaceGitignoreRecomposition(
   const expectedUserId = currentWakeflowGitignoreRecompositionUserId();
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(rootValue, expectedUserId);
 
-  let observation;
+  let observation: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
     observation = await inspectRootedExclusiveFileLock(
       rootValue,

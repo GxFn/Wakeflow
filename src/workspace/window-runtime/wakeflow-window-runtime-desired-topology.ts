@@ -160,7 +160,7 @@ export function compileWakeflowWindowRuntimeDesiredTopology(
     if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
-  let profile;
+  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   try {
     profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   } catch (error: unknown) {

@@ -457,6 +457,7 @@ const DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS = Object.freeze([
   "commandVersion",
   "decision",
 ] as const);
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
 function fail(reason: DemandEventSourcingDecisionErrorReason, path: string): never {

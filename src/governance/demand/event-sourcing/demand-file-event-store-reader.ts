@@ -13,7 +13,7 @@ import {
 } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../../foundation/filesystem/rooted-directory.js";
 import {
@@ -158,7 +158,7 @@ export async function readDemandFileEventCommit(
   policy: DemandFileEventNodePolicy = "private",
 ): Promise<Readonly<LoadedDemandFileEventCommit>> {
   assertFilePolicy(expectedNode, path, policy, admittedLinkCounts);
-  let read;
+  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(root, resourcePath, {
       maximumBytes: DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES,
@@ -260,7 +260,7 @@ function parseCursor(value: unknown): Readonly<DemandFileEventStoreCursor> {
   ) {
     fail("input", "$cursor");
   }
-  let lastCommitDigest;
+  let lastCommitDigest: ReturnType<typeof parseSha256Digest>;
   try {
     lastCommitDigest = parseSha256Digest(record.lastCommitDigest, "$/lastCommitDigest");
   } catch (error: unknown) {
@@ -318,7 +318,7 @@ function assertInventoryNames(
 ): void {
   let totalBytes = 0;
   read.entries.forEach((entry, index) => {
-    let parsed;
+    let parsed: ReturnType<typeof parseDemandEventStreamCommitFileName>;
     try {
       parsed = parseDemandEventStreamCommitFileName(entry.name);
     } catch (error: unknown) {
@@ -431,7 +431,7 @@ export async function readDemandFileEventCommitOrNull(
   signal: AbortSignal | undefined,
   admittedLinkCounts: readonly bigint[] = [1n],
 ): Promise<Readonly<LoadedDemandFileEventCommit> | null> {
-  let resource;
+  let resource: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     resource = await root.inspectExistingResource(ref);
   } catch (error: unknown) {
@@ -449,7 +449,7 @@ export async function readDemandFileEventCommitAt(
   sequenceValue: unknown,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandEventStreamCommit> | null> {
-  let sequence;
+  let sequence: ReturnType<typeof parseDemandEventCommitSequence>;
   try {
     sequence = parseDemandEventCommitSequence(sequenceValue);
   } catch (error: unknown) {

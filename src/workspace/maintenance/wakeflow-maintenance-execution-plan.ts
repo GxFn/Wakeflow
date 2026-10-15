@@ -286,7 +286,7 @@ export function createWakeflowMaintenanceExecutionPlan(
   contributionValue: unknown | null,
 ): Readonly<WakeflowMaintenanceExecutionPlan> {
   const preview = parseSharedPreview(previewValue);
-  let profile;
+  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   try {
     profile = parseWakeflowWorkspaceHostResourceProfile(currentHostProfileValue);
   } catch (error: unknown) {

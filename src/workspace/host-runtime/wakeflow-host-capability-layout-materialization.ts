@@ -461,7 +461,7 @@ export async function ensureWakeflowHostCapabilityLayout(
       );
       continue;
     }
-    let materialized;
+    let materialized: Awaited<ReturnType<typeof materializeDirectoryPath>>;
     try {
       materialized = await materializeDirectoryPath(rootValue, resourcePath, {
         mode: 0o700,

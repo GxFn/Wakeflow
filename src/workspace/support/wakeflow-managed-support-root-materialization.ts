@@ -293,7 +293,7 @@ function scaffoldPaths(request: Readonly<ParsedRequest>): readonly PortableResou
 }
 
 async function placementFor(workspaceRoot: RootedDirectory, request: Readonly<ParsedRequest>) {
-  let report;
+  let report: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
   try {
     report = await validateWakeflowConfigRootPlacements(workspaceRoot, request.config);
   } catch (error: unknown) {
@@ -389,7 +389,7 @@ async function ensureScaffold(
   expectedUserId: bigint,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowManagedSupportScaffoldEffect>> {
-  let result;
+  let result: Awaited<ReturnType<typeof materializeDirectoryPath>>;
   try {
     result = await materializeDirectoryPath(supportRoot, relativePath, {
       mode: WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE,
@@ -490,7 +490,7 @@ export async function materializeWakeflowManagedSupportRoot(
   if (request.signal?.aborted === true) fail("aborted", "$signal");
   const placement = await placementFor(workspaceRootValue, request);
   const key = `support.${request.surfaceId}.root`;
-  let materialized;
+  let materialized: Awaited<ReturnType<typeof materializeAbsoluteDirectoryPlacement>>;
   try {
     materialized = await materializeAbsoluteDirectoryPlacement(placement.absolutePath, {
       mode: WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE,
@@ -529,7 +529,7 @@ export async function materializeWakeflowManagedSupportRoot(
       return Object.freeze(effects);
     },
   );
-  let after;
+  let after: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
   try {
     after = await validateWakeflowConfigRootPlacements(workspaceRootValue, request.config);
   } catch (error: unknown) {

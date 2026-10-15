@@ -6,6 +6,7 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claud
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { compileWakeflowWindowRuntimeDesiredTopology } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-desired-topology.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { fixtureMember } from "../../support/fixture-member.js";
 
 function config() {
   return parseWakeflowConfig(createMinimalWakeflowConfig());
@@ -37,10 +38,10 @@ test("Window Runtime desired topology compiles only stable logical facts", () =>
     topology.windows.every((entry) => Object.isFrozen(entry)),
     true,
   );
-  equal("displayName" in topology.windows[0]!, false);
-  equal("dispatchEligibility" in topology.windows[0]!, false);
-  equal("identity" in topology.windows[0]!, false);
-  equal("absolutePath" in topology.windows[0]!, false);
+  equal("displayName" in fixtureMember(topology.windows, 0), false);
+  equal("dispatchEligibility" in fixtureMember(topology.windows, 0), false);
+  equal("identity" in fixtureMember(topology.windows, 0), false);
+  equal("absolutePath" in fixtureMember(topology.windows, 0), false);
 });
 
 test("desired topology ignores presentation and display text but tracks placement and host", () => {

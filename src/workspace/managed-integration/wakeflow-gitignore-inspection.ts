@@ -337,7 +337,7 @@ async function observeRules(
   signal: AbortSignal | undefined,
 ): Promise<readonly Readonly<WakeflowGitignoreRuleCheck>[]> {
   const probes = Object.freeze(rules.map((rule) => probePath(rule)));
-  let observed;
+  let observed: Awaited<ReturnType<typeof observeGitIgnorePaths>>;
   try {
     observed = await observeGitIgnorePaths(
       root,
@@ -402,7 +402,7 @@ async function observeTargetRules(
     fail("target-capacity", "$target");
   }
   const probes = Object.freeze(rules.map((rule) => probePath(rule)));
-  let observed;
+  let observed: Awaited<ReturnType<typeof observeGitIgnoreCandidate>>;
   try {
     observed = await observeGitIgnoreCandidate(
       root,

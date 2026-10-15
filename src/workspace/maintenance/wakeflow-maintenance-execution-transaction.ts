@@ -11,7 +11,7 @@ import {
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
@@ -586,7 +586,7 @@ async function retireInactiveCorrelatedGate(
   root: RootedDirectory,
   operationId: WakeflowMaintenanceOperationId,
 ): Promise<void> {
-  let gate;
+  let gate: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
     gate = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
   } catch (error: unknown) {
@@ -709,7 +709,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
     fail("source-config", "$config");
   }
   const operationId = createOperationId(options.uuidFactory);
-  let intent;
+  let intent: ReturnType<typeof createWakeflowMaintenanceExecutionIntent>;
   try {
     intent = createWakeflowMaintenanceExecutionIntent(
       operationId,

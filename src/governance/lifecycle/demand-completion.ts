@@ -207,7 +207,7 @@ export function parseDemandCompletion(value: unknown): Readonly<DemandCompletion
   const validated = validateWire(json);
   if (!validated.ok) fail("schema", validated.path);
   const wire = validated.value;
-  let lineage;
+  let lineage: ReturnType<typeof parseRequirementLineageReference>;
   try {
     lineage = parseRequirementLineageReference({
       artifactKind: "wakeflow-requirement-lineage",

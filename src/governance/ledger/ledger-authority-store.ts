@@ -106,7 +106,7 @@ export class LedgerAuthorityStore {
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<LoadedLedgerAuthorityRecord<RequirementRecord>>> {
     const { signal } = parseLedgerAuthorityStoreOptions(options);
-    let requirementId;
+    let requirementId: ReturnType<typeof parseWakeflowDurableIdOfKind>;
     try {
       requirementId = parseWakeflowDurableIdOfKind(
         requirementIdValue,

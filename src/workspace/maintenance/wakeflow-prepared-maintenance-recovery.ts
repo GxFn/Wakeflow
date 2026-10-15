@@ -1,5 +1,5 @@
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
@@ -149,8 +149,8 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
     throw error;
   }
   assertNotAborted(parsedOptions.signal);
-  let intentSource;
-  let source;
+  let intentSource: Awaited<ReturnType<typeof readWakeflowMaintenanceExecutionIntentOrNull>>;
+  let source: Awaited<ReturnType<typeof readWakeflowMaintenanceJournalOrNull>>;
   try {
     await recoverWakeflowMaintenanceExecutionIntentStages(root, operationId);
     await recoverWakeflowMaintenanceJournalStages(root, operationId);
@@ -216,7 +216,7 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
   ) {
     fail("journal", "$journal");
   }
-  let oldGate;
+  let oldGate: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
     oldGate = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
   } catch (error: unknown) {

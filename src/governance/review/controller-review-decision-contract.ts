@@ -134,6 +134,7 @@ export type ControllerReviewSharedErrorReason = "identifier" | "digest" | "time"
 
 type SharedFail = (reason: ControllerReviewSharedErrorReason, path: string) => never;
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
 export interface ControllerReviewEscalationWire {

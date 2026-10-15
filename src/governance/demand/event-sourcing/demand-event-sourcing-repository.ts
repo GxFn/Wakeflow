@@ -380,7 +380,7 @@ export class DemandEventSourcingRepository {
       }
     }
 
-    let stream;
+    let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
@@ -404,7 +404,7 @@ export class DemandEventSourcingRepository {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<AuditedDemandEventSourcingAggregate>> {
     const signal = parseSignal(options);
-    let stream;
+    let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
@@ -427,7 +427,7 @@ export class DemandEventSourcingRepository {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<AuditedDemandTargetResultHistory>> {
     const signal = parseSignal(options);
-    let stream;
+    let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
@@ -479,7 +479,7 @@ export class DemandEventSourcingRepository {
     for (const commit of commits) {
       for (const storedEvent of commit.events) {
         storedEventByRevision.set(storedEvent.streamRevision, storedEvent);
-        let event;
+        let event: ReturnType<typeof upcastDemandEventSourcingStoredEvent>;
         try {
           event = upcastDemandEventSourcingStoredEvent(storedEvent);
         } catch (error: unknown) {
@@ -1074,7 +1074,7 @@ export class DemandEventSourcingRepository {
       "delivery.delivery-outcome-recorded",
       signal,
     )) {
-      let event;
+      let event: ReturnType<typeof upcastDemandEventSourcingStoredEvent>;
       try {
         event = upcastDemandEventSourcingStoredEvent(storedEvent);
       } catch (error: unknown) {
@@ -1162,7 +1162,7 @@ export class DemandEventSourcingRepository {
       const collected: Readonly<DemandEventSourcingStoredEvent>[] = [];
       let consistent = true;
       for (const sequence of [...sequences].sort((left, right) => left - right)) {
-        let commit;
+        let commit: Awaited<ReturnType<DemandFileEventStore["readCommitAt"]>>;
         try {
           commit = await this.#eventStore.readCommitAt(
             sequence,
@@ -1186,7 +1186,7 @@ export class DemandEventSourcingRepository {
       }
       if (consistent) return Object.freeze(collected);
     }
-    let stream;
+    let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
@@ -1221,7 +1221,7 @@ export class DemandEventSourcingRepository {
         }>
       | undefined;
     for (const storedEvent of await this.#storedEventsOfType(aggregate, eventType, signal)) {
-      let event;
+      let event: ReturnType<typeof upcastDemandEventSourcingStoredEvent>;
       try {
         event = upcastDemandEventSourcingStoredEvent(storedEvent);
       } catch (error: unknown) {
@@ -1257,7 +1257,7 @@ export class DemandEventSourcingRepository {
     );
     const indexedSequence = located?.index.commits[commitId];
     if (indexedSequence !== undefined) {
-      let commit;
+      let commit: Awaited<ReturnType<DemandFileEventStore["readCommitAt"]>>;
       try {
         commit = await this.#eventStore.readCommitAt(
           indexedSequence,
@@ -1268,7 +1268,7 @@ export class DemandEventSourcingRepository {
       }
       if (commit !== null && commit.commitId === commitId) return commit;
     }
-    let stream;
+    let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
@@ -1292,7 +1292,7 @@ export class DemandEventSourcingRepository {
     );
     const indexedSequence = located?.index.keys[key];
     if (indexedSequence !== undefined) {
-      let commit;
+      let commit: Awaited<ReturnType<DemandFileEventStore["readCommitAt"]>>;
       try {
         commit = await this.#eventStore.readCommitAt(
           indexedSequence,
@@ -1303,7 +1303,7 @@ export class DemandEventSourcingRepository {
       }
       if (commit !== null && commit.idempotency?.key === key) return commit;
     }
-    let stream;
+    let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
@@ -1327,7 +1327,7 @@ export class DemandEventSourcingRepository {
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventSnapshotPublishReceipt>> {
     const signal = parseSignal(options);
-    let snapshot;
+    let snapshot: ReturnType<typeof createDemandEventSourcingSnapshot>;
     try {
       snapshot = createDemandEventSourcingSnapshot(aggregateValue);
     } catch (error: unknown) {

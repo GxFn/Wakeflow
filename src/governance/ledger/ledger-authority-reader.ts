@@ -29,7 +29,7 @@ import {
   parsePortableResourcePath,
   splitPortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
   StableFileReadError,
@@ -168,7 +168,7 @@ export async function loadLedgerAuthorityRecord(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LoadedLedgerAuthorityRecord>> {
   const rootRef = requirementRootRef(requirementId);
-  let tree;
+  let tree: Awaited<ReturnType<typeof readStableResourceTree>>;
   try {
     tree = await readStableResourceTree(root, rootRef, {
       maximumEntries: LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES,
@@ -351,7 +351,7 @@ export async function resolveLoadedLedgerAuthorityMemberReference(
   ) {
     fail("conflict", "$reference");
   }
-  let read;
+  let read: Awaited<ReturnType<typeof readStableFile>>;
   try {
     read = await readStableFile(root, document.memberRef, {
       maximumBytes: LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES,

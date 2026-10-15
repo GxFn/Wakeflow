@@ -313,7 +313,7 @@ async function admitRoots(
   supportRoot: RootedDirectory,
   request: Readonly<ParsedWakeflowSupportMemoryInspectionRequest>,
 ): Promise<void> {
-  let report;
+  let report: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
   try {
     report = await validateWakeflowConfigRootPlacements(workspaceRoot, request.desiredConfig);
   } catch (error: unknown) {
@@ -326,7 +326,7 @@ async function admitRoots(
   if (placement?.state !== "present" || placement.realPath !== supportRoot.absolutePath) {
     fail("placement", "$supportRoot");
   }
-  let node;
+  let node: Awaited<ReturnType<RootedDirectory["assertCurrent"]>>;
   try {
     node = await supportRoot.assertCurrent("$supportRoot");
   } catch (error: unknown) {

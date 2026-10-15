@@ -29,7 +29,7 @@ import {
   openDemandOperationAuthorityContext,
   openDemandOperationRoot,
 } from "../demand/demand-operation-authority-context.js";
-import { type DemandEventSourcingAggregate } from "../demand/event-sourcing/demand-event-sourcing-aggregate.js";
+import type { DemandEventSourcingAggregate } from "../demand/event-sourcing/demand-event-sourcing-aggregate.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandEventStreamCommit } from "../demand/event-sourcing/demand-event-stream-commit.js";
 import {
@@ -232,8 +232,8 @@ function parseApplyInput(
   readonly transaction: Readonly<ManagedEvidencePublicationTransaction>;
   readonly transactionDigest: Sha256Digest;
 }> {
-  let transaction;
-  let transactionDigest;
+  let transaction: ReturnType<typeof parseManagedEvidencePublicationTransaction>;
+  let transactionDigest: ReturnType<typeof parseSha256Digest>;
   try {
     transaction = parseManagedEvidencePublicationTransaction(transactionValue);
     transactionDigest = parseSha256Digest(transactionDigestValue, "$transactionDigest");

@@ -129,7 +129,7 @@ export function createDemandEventSourcingStoredEvent(
   }
   if (state.demandId !== event.demandId) fail("state", "$state/demandId");
   const encoded = encodeCurrentDemandEventVersion(event);
-  let streamRevision;
+  let streamRevision: ReturnType<typeof parseDemandEventStreamRevision>;
   try {
     streamRevision = parseDemandEventStreamRevision(streamRevisionValue);
   } catch (error: unknown) {

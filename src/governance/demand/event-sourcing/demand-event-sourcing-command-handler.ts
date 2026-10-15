@@ -322,7 +322,7 @@ export async function executeDemandEventSourcingCommand(
       checkpoint: "unchanged",
     });
   }
-  let events;
+  let events: ReturnType<typeof decideDemandEventSourcingCommand>;
   try {
     events = decideDemandEventSourcingCommand(current?.state ?? null, command);
   } catch (error: unknown) {
@@ -331,7 +331,7 @@ export async function executeDemandEventSourcingCommand(
     }
     throw error;
   }
-  let prepared;
+  let prepared: ReturnType<typeof prepareDemandEventStreamCommit>;
   try {
     prepared = prepareDemandEventStreamCommit(current, {
       commitId: options.commitId,
@@ -345,7 +345,7 @@ export async function executeDemandEventSourcingCommand(
     }
     throw error;
   }
-  let receipt;
+  let receipt: Awaited<ReturnType<DemandEventSourcingRepository["appendPreparedCommit"]>>;
   try {
     receipt = await repository.appendPreparedCommit(
       prepared,

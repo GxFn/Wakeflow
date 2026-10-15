@@ -103,7 +103,7 @@ export async function openDemandOperationRoot(
   workspaceRoot: RootedDirectory,
   demandId: WakeflowDurableId<"demand">,
 ): Promise<RootedDirectory> {
-  let observation;
+  let observation: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     observation = await workspaceRoot.inspectExistingResource(
       demandFinalRootRef(demandId),
@@ -262,7 +262,7 @@ export async function assertDemandOperationConfigCurrent(
   expected: Readonly<WakeflowConfigAuthoritySnapshot>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  let current;
+  let current: Awaited<ReturnType<typeof readWakeflowConfigAuthoritySnapshot>>;
   try {
     current = await readWakeflowConfigAuthoritySnapshot(
       workspaceRoot,

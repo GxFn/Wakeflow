@@ -24,7 +24,7 @@ import {
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -145,7 +145,7 @@ async function readStoredIntent(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StoredLedgerRecordPublicationIntent>> {
   assertTransactionFileNode(expectedNode);
-  let read;
+  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(root, intentRef, {
       maximumBytes: LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
@@ -163,7 +163,7 @@ async function readStoredIntent(
     }
     throw error;
   }
-  let intent;
+  let intent: ReturnType<typeof parseLedgerRecordPublicationIntentDocument>;
   try {
     intent = parseLedgerRecordPublicationIntentDocument(read.text);
   } catch (error: unknown) {
@@ -301,7 +301,7 @@ export async function prepareLedgerRecordPublicationLockRecovery(
   root: RootedDirectory,
   lockRef: PortableResourcePath,
 ): Promise<void> {
-  let observation;
+  let observation: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
     observation = await inspectRootedExclusiveFileLock(root, lockRef);
   } catch (error: unknown) {

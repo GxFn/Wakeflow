@@ -442,7 +442,7 @@ export class DemandFileEventStore {
       signal,
     );
     const candidates = inventory.entries.map((entry, index) => {
-      let address;
+      let address: ReturnType<typeof parseDemandEventAppendCandidateFileName>;
       try {
         address = parseDemandEventAppendCandidateFileName(entry.name);
       } catch (error: unknown) {
@@ -486,7 +486,7 @@ export class DemandFileEventStore {
         signal,
         [1n, 2n],
       );
-      let candidate;
+      let candidate: Awaited<ReturnType<typeof readDemandFileEventCommit>>;
       try {
         candidate = await readDemandFileEventCommit(
           this.#root,

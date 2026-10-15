@@ -587,7 +587,7 @@ test("publication apply refuses a pod that already has another active Demand", a
       (error: unknown) =>
         error instanceof WakeflowError &&
         error.reason === "pod-busy" &&
-        error.details?.["demandId"] === OTHER_DEMAND_ID,
+        error.details?.demandId === OTHER_DEMAND_ID,
     );
     equal(existsSync(workspaceFile(value, demandFinalRootRef(DEMAND_ID))), false);
   } finally {

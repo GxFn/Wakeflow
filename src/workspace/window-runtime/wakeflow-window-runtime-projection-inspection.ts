@@ -219,7 +219,7 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
   options: ResolveWakeflowWindowRuntimeProjectionExpectedEntriesOptions = {},
 ): Promise<WakeflowWindowRuntimeProjectionExpectedEntries> {
   const { config, resourceProfile, identityProfile } = inputs;
-  let authority;
+  let authority: ReturnType<typeof compileWakeflowWindowHostBindingStoreAuthority>;
   try {
     authority = compileWakeflowWindowHostBindingStoreAuthority(
       config,
@@ -273,7 +273,7 @@ export function compileWakeflowWindowRuntimeProjectionExpectedEntries(
   inventory: Readonly<WakeflowWindowHostBindingInventory>,
 ): readonly Readonly<WakeflowWindowRuntimeProjectionExpectedEntry>[] {
   const { config, resourceProfile, identityProfile } = inputs;
-  let unregistered;
+  let unregistered: ReturnType<typeof compileWakeflowWindowRuntimeUnregisteredProjectionSet>;
   try {
     unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
   } catch (error: unknown) {
@@ -316,7 +316,7 @@ export async function inspectWakeflowWindowRuntimeProjectionEntries(
 ): Promise<readonly Readonly<WakeflowWindowRuntimeProjectionInspectedEntry>[]> {
   const inspected: Readonly<WakeflowWindowRuntimeProjectionInspectedEntry>[] = [];
   for (const entry of entries) {
-    let inspection;
+    let inspection: Awaited<ReturnType<typeof inspectWakeflowWindowRuntimeProjectionDocument>>;
     try {
       inspection = await inspectWakeflowWindowRuntimeProjectionDocument(root, entry.target, signal);
     } catch (error: unknown) {

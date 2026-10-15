@@ -191,6 +191,7 @@ const validateRequirementWire = createRuntimeJsonSchemaValidator<RequirementReco
   ],
 );
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const REQUIREMENT_DRAFT_FIELDS = Object.freeze([
   "confirmation",

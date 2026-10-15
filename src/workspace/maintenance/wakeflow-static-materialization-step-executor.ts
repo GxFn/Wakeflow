@@ -512,7 +512,7 @@ async function executeLedgerLayout(
   assertStepTarget(step, LEDGER_AUTHORITY_LAYOUT_DIGEST);
   // fresh 要求根严格不存在；reconcile/reconfigure 的修复接受已有根并只补齐缺失容器。
   const ensure = recovering || request.action !== "fresh-initialize";
-  let placements;
+  let placements: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
   try {
     placements = await validateWakeflowConfigRootPlacements(root, desired);
   } catch (error: unknown) {
@@ -524,7 +524,7 @@ async function executeLedgerLayout(
   const placement = placements.roots.find((entry) => entry.key === "ledger.root");
   if (placement === undefined) fail("plan", "$ledgerRoot");
 
-  let materialized;
+  let materialized: Awaited<ReturnType<typeof materializeAbsoluteDirectoryPlacement>>;
   try {
     materialized = await materializeAbsoluteDirectoryPlacement(placement.absolutePath, {
       mode: LEDGER_DURABLE_DIRECTORY_MODE,
@@ -556,7 +556,7 @@ async function executeLedgerLayout(
     if (error instanceof RootedDirectoryError) fail("root-scope", "$ledgerRoot");
     throw error;
   }
-  let inspection;
+  let inspection: Awaited<ReturnType<LedgerAuthorityStore["inspectLayout"]>> | undefined;
   let primaryError: unknown;
   try {
     const store = new LedgerAuthorityStore(ledgerRoot);
@@ -862,7 +862,7 @@ async function executeExternalInstruction(
     throw error;
   }
   assertStepTarget(step, authorityDigest);
-  let placements;
+  let placements: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
   try {
     placements = await validateWakeflowConfigRootPlacements(root, desired);
   } catch (error: unknown) {
@@ -940,7 +940,7 @@ async function executeSupportGitignore(
     (entry) => entry.surfaceId === step.targetKey && entry.ownership === "wakeflow-managed",
   );
   if (surface === undefined) fail("plan", "$step.targetKey");
-  let placements;
+  let placements: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
   try {
     placements = await validateWakeflowConfigRootPlacements(root, desired);
   } catch (error: unknown) {
@@ -1022,7 +1022,7 @@ async function executeSupportMemory(
   const profile = hostProfileFor(request, step.targetKey.slice(separator + 1));
   const authority = createWakeflowSupportMemoryAuthority(desired, profile, surfaceId);
   assertStepTarget(step, authority.authorityDigest);
-  let placements;
+  let placements: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
   try {
     placements = await validateWakeflowConfigRootPlacements(root, desired);
   } catch (error: unknown) {

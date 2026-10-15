@@ -173,7 +173,7 @@ function setupDirective(
 }
 
 function testPackage(value: unknown): Readonly<TestTaskPackage> {
-  let taskPackage;
+  let taskPackage: ReturnType<typeof parseTaskPackage>;
   try {
     taskPackage = parseTaskPackage(value);
   } catch (error: unknown) {

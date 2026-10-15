@@ -278,6 +278,7 @@ const validateWire = createRuntimeJsonSchemaValidator<TaskPackageWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const DRAFT_FIELDS = Object.freeze([
   "acceptanceAnchors",

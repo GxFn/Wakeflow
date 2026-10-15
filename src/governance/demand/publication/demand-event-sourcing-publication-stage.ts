@@ -7,7 +7,7 @@ import {
   renameResourceDurably,
 } from "../../../foundation/filesystem/durable-resource-rename.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import type { LedgerAuthorityStore } from "../../ledger/ledger-authority-store.js";
 import { TASK_PACKAGE_PROJECTIONS_ROOT_REF } from "../../tasking/task-package-projection-paths.js";
 import {

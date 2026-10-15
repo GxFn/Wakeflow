@@ -273,7 +273,7 @@ export function parseDemandEventSourcingPublicationTransaction(
   );
   const stageRef = parsePath(wire.stageRef, "$/stageRef");
   const finalRootRef = parsePath(wire.finalRootRef, "$/finalRootRef");
-  let recomputed;
+  let recomputed: ReturnType<typeof planDemandEventStreamCommit>;
   try {
     recomputed = planDemandEventStreamCommit(null, {
       commitId: initialCommit.commitId,

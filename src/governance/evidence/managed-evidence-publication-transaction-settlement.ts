@@ -8,7 +8,7 @@ import {
   DurableDirectoryTreeCandidateRetirementError,
   settleDirectoryTreeCandidateRetirement,
 } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   DemandEventSourcingCommandHandlerError,
   type DemandEventSourcingCommandResult,
@@ -475,7 +475,7 @@ export async function loadCurrentManagedEvidencePublicationTransaction(
     fail("closure");
   }
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
-  let finalRecord;
+  let finalRecord: Awaited<ReturnType<typeof inspectDirectoryTreeCandidate>>;
   try {
     finalRecord = await inspectDirectoryTreeCandidate(
       demandRoot,

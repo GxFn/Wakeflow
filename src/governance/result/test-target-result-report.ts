@@ -61,6 +61,7 @@ import type {
 
 const REPORT_KIND = "WakeflowTestTargetResultReport" as const;
 const REPORT_SCHEMA_VERSION = 1 as const;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const MAXIMUM_EVIDENCE_LOCATORS = 64;
 const MAXIMUM_CONTRACT_STEPS = 20;

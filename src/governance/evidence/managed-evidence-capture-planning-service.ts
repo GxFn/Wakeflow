@@ -412,9 +412,10 @@ function compareFinding(
 function uniqueFindings(
   sorted: readonly Readonly<ManagedEvidenceCaptureFinding>[],
 ): Readonly<ManagedEvidenceCaptureFinding>[] {
-  return sorted.filter(
-    (finding, index) => index === 0 || compareFinding(sorted[index - 1]!, finding) !== 0,
-  );
+  return sorted.filter((finding, index) => {
+    const previous = index === 0 ? undefined : sorted[index - 1];
+    return previous === undefined || compareFinding(previous, finding) !== 0;
+  });
 }
 
 function reviewOf(

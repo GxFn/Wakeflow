@@ -4725,3 +4725,25 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 深挖 §10 跟踪指标：Biome 豁免再去掉 `src/hosts`、`src/configuration` 及其测试（剩 workspace 与 governance 两个目录在豁免内）；严格配置下的复杂度错误 233 处中累计 70 处改为逐文件登记；其余指标不动。
 
 本批改动 `biome.json`（四目录出豁免 + 允许清单扩到 37 份）、src/hosts 与 src/configuration（格式 + 18 处类型注解/IIFE + 1 处 biome-ignore + 2 处模板字符串 + import type）、tests/hosts 与 tests/configuration（格式 + 16 处 `fixtureMember` + 1 处 biome-ignore 挪位 + 1 处模板字符串）、`tests/support/fixture-member.ts`（新增）、docs/（gate-log、登记 L2、深挖批次表、docs README）、耗时表与两个制品（40 份）；第一步已提交 f2226217，第二步未提交，main 领先 origin/main 19 个提交。
+
+### 13.173 技术债务批次 6 最后两个目录：workspace 与 governance 出 Biome 豁免，五个旧域目录全部回到同一套门（2026-10-14）
+
+按 §13.171 的两步法做最大的两个目录：`src/workspace` + `tests/workspace`（128 份）与 `src/governance` + `tests/governance`（189 份）。做完后 `biome.json` 里不再有任何"关格式器 / 关规则"的目录豁免，只剩 tooling 与 tests 的复杂度阈值和按文件的复杂度允许清单。
+
+- **第一步：只有格式的提交（fe203bca）。** 最后一条豁免 override 去掉 `formatter: false`（规则仍关）；`biome check --write` 改了 308 份文件（格式 298、import 整理 250）；两个测试目录 459 项与仓库范围的 lint / format / knip / 架构规则通过。
+- **第二步：规则全开。** 删掉最后一条豁免 override。严格配置量到的非格式诊断：139 处隐式 any 的 `let`——115 处由一个脚本按"第一次赋值是直接函数调用"机械补 `Awaited<ReturnType<typeof …>>` / `ReturnType<typeof …>`（对 `root.*` 方法补 `RootedDirectory["…"]`），其余 24 处按接收者类型手写（`DemandFileEventStore["readCommits" | "readCommitAt"]`、`DemandEventSourcingRepository["appendPreparedCommit" | "findTargetTaskPlannedEvent"]`、`LedgerAuthorityStore["resolveMemberReferences" | "inspectLayout"]`、两份结果模块里延后赋值的 `report`、绑定目录的 `readonly NonNullable<…["relativePath"]>[]`）；脚本误判的一处（`parseDemandEventStreamCommitFileName(…).commitSequence`）由 tsc 抓住后改成 `[…]["commitSequence"]`。14 处控制字符正则全是各解析器里有意拒绝记录文本控制字符的 `CONTROL_EXCEPT_LF_PATTERN` / `CONTROL_PATTERN`，加 `biome-ignore` 并说明；16 处非空断言：10 处测试夹具换 `fixtureMember`，6 处源码里"已排序 / 去重"检查的 `items[index - 1]!` 改成取出 `previous` 再判 `undefined`（聚合里的一处循环改用 `attempts.entries()`）；1 处 `useOptionalChain`（`repository?.branchesComplete === true`）、1 处 `useLiteralKeys` 与 20 处 `useImportType` 由 `--write` 或手改。168 处认知复杂度超限（77 份文件）进按文件允许清单，清单现在共 114 份文件、238 处；所有者与撤销条件不变（批次 7 A.5 的拆分）。处理后四个目录 `biome check` 零诊断，`tests/workspace` + `tests/governance` + 旧错误家族清点 460 项通过。
+- **没做的：** 复杂度本身没有下降（238 处只是从"整目录关规则"变成"逐文件登记"，深挖 §10 的 233 是 09 月的计数）；knip 的 `ignore` 仍覆盖五个旧域目录（待 Q12 对恢复模块的裁决，批次 6 的"knip 收缩到全 src"与"未使用导出清理"留在那之后）。
+
+文档：登记 L2（允许清单 114 份；五目录全部出豁免）、深挖批次表第 6 行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 第一步后：两个测试目录 459 项通过，lint / format / knip / 架构规则通过。
+- 第二步后：四个目录 `biome check` 零诊断；workspace、governance 与旧错误家族清点 460 项通过（中途 tsc 抓到脚本误判的一处类型与五处写错层级的 `fixtureMember` 导入路径，改正后通过）；lint / format / knip / 架构规则通过。制品重建改了 322 份文件，`smoke:artifacts` 在重建后的制品上两个 verify ok、hook observer landed。
+- 完整门一次即过：run-Uv86BD（02:08–02:27，18.3 分钟）1505/1505 全通过、316 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-Uv86BD/receipt.json`：316 份文件、并发 2。
+- `wf handoff`（含真实 build:check，run-xtU9au）：七项通过；`git diff --check` 干净。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新。
+- 深挖 §10 跟踪指标：Biome 豁免行数占比 78% → 0（五个旧域目录全部与仓库其余部分同一套格式器与规则；唯一的例外是 114 份文件的复杂度允许清单）；严格配置下的复杂度错误 233（09 月计数）→ 现值 238 处全部登记在允许清单里、门不再隐藏它们；旧错误类数 189 不变；其余指标不动。
+
+本批改动 `biome.json`（最后一条豁免 override 删除 + 允许清单扩到 114 份）、src/workspace 与 src/governance（格式 + 139 处类型注解 + 14 处 biome-ignore + 6 处守卫改写 + 1 处可选链 + import type）、tests/workspace 与 tests/governance（格式 + 10 处 `fixtureMember` + 1 处字面量键）、docs/（gate-log、登记 L2、深挖批次表、docs README）、耗时表与两个制品（322 份）；第一步已提交 fe203bca，第二步未提交，main 领先 origin/main 22 个提交。

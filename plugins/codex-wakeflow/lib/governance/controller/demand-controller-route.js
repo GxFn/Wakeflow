@@ -1,3 +1,4 @@
+import { WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES, } from "../../contracts/vocabulary/wakeflow-target-phases.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { DELIVERY_REARM_LIMIT } from "../delivery/delivery-rearm.js";
 import { buildDemandPostAcceptanceRoute, DemandPostAcceptanceRouteError, } from "../review/demand-post-acceptance-route.js";
@@ -43,54 +44,10 @@ export function resolveDemandControllerDemandFrontierDescriptor(condition) {
             });
     }
 }
-/** 把Implementation Target phase解析为唯一Controller责任前沿。 */
+/** 把Implementation Target phase解析为唯一Controller责任前沿：从 contracts 的 Target 阶段表派生。 */
 export function resolveDemandControllerImplementationFrontierDescriptor(phase) {
-    switch (phase) {
-        case "accepted":
-        case "superseded":
-            return null;
-        case "planned":
-        case "rework-requested":
-        case "product-defect-rework-requested":
-            return Object.freeze({
-                scope: "target",
-                kind: "implementation-delivery-planning",
-                owner: "target-delivery-preparation",
-            });
-        case "delivery-prepared":
-            return Object.freeze({
-                scope: "target",
-                kind: "implementation-host-effect-execution",
-                owner: "agent-host",
-            });
-        case "host-effect-accepted":
-        case "host-effect-indeterminate":
-            return Object.freeze({
-                scope: "target",
-                kind: "implementation-target-result-import",
-                owner: "target-result-import",
-            });
-        case "host-effect-rejected":
-            return Object.freeze({
-                scope: "target",
-                kind: "implementation-host-effect-rearm",
-                owner: "target-host-effect-rearm",
-            });
-        case "result-reported":
-        case "escalated":
-            // escalated 期间由 Demand 的 awaiting-decision 前沿覆盖；回答后回到评审。
-            return Object.freeze({
-                scope: "target",
-                kind: "implementation-result-review",
-                owner: "controller-implementation-review",
-            });
-        case "review-blocked":
-            return Object.freeze({
-                scope: "target",
-                kind: "implementation-review-blocked",
-                owner: "controller-implementation-review",
-            });
-    }
+    const frontier = WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES[phase].frontier;
+    return frontier === null ? null : Object.freeze({ scope: "target", ...frontier });
 }
 /** 把已闭合Post-Acceptance stage解析为唯一Controller责任前沿。 */
 export function resolveDemandControllerPostAcceptanceFrontierDescriptor(status) {

@@ -242,8 +242,8 @@
     },
     {
       "path": "lib/capabilities/delivery/decide.js",
-      "bytes": 6870,
-      "sha256": "sha256:0d3246307d85d37d46455972c2ae5d03e170c89bddb0b46591abff5821677558",
+      "bytes": 6533,
+      "sha256": "sha256:f161961298f52b3f139b9787fc3efb8ca1c58e2e7309780af7a49e951a8dca71",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1284,6 +1284,13 @@
       "scope": "shared"
     },
     {
+      "path": "lib/contracts/vocabulary/wakeflow-target-phases.js",
+      "bytes": 6177,
+      "sha256": "sha256:c127aa5127e909635bb4cd4681ad86e94e5494db7f88f30252643bb445ec8829",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
       "path": "lib/entrypoints/codex-wakeflow-maintenance.js",
       "bytes": 1854,
       "sha256": "sha256:e8d35a7ff7defe6a0c9ed98b5b8b6c1e24e5022148caf70fd7da587f1aa30758",
@@ -1824,8 +1831,8 @@
     },
     {
       "path": "lib/governance/controller/demand-controller-route.js",
-      "bytes": 16887,
-      "sha256": "sha256:08092c22aa5968387ac6aab342a6c57a5ed99dc69a0d1011d6c5cbd995d75282",
+      "bytes": 15503,
+      "sha256": "sha256:891a21eedbbdec2aa0470cd8855072f526bc06917caa5be175b72a2378ac10fc",
       "mode": "0644",
       "scope": "shared"
     },

@@ -1,3 +1,4 @@
+import { wakeflowRearmablePhase, wakeflowTargetPhaseAdmission, } from "../../contracts/vocabulary/wakeflow-target-phases.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../governance/delivery/delivery-rearm.js";
 /**
@@ -20,18 +21,6 @@ export const DELIVERY_REQUIRED_SKILLS = Object.freeze({
     implementation: Object.freeze(["skills/wakeflow-target/SKILL.md"]),
     test: Object.freeze(["skills/wakeflow-target/SKILL.md", "skills/wakeflow-test/SKILL.md"]),
 });
-/** 可以准备投递的目标 phase；两种发送前拒绝都只在 rearm 用尽后允许换新信封。 */
-const PREPARABLE_IMPLEMENTATION_PHASES = Object.freeze([
-    "planned",
-    "rework-requested",
-    "product-defect-rework-requested",
-    "host-effect-rejected",
-]);
-const PREPARABLE_TEST_PHASES = Object.freeze([
-    "planned",
-    "test-another-attempt-requested",
-    "test-host-effect-rejected",
-]);
 function decided(disposition, evidenceKind, hookRecordId = null, rationale = null) {
     return Object.freeze({
         accepted: true,
@@ -95,12 +84,12 @@ export function landingSilenceExceeded(silenceStartedAt, now, thresholdMilliseco
 }
 /** 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm。 */
 export function derivePrepareBlockers(target) {
-    const admitted = target.workType === "test"
-        ? PREPARABLE_TEST_PHASES.includes(target.phase)
-        : PREPARABLE_IMPLEMENTATION_PHASES.includes(target.phase);
-    if (!admitted)
+    // 阶段许可只有一份：contracts 的 Target 阶段表（open-items L1）。
+    const admission = wakeflowTargetPhaseAdmission(target.workType, target.phase);
+    if (admission === null || admission.prepare === "no") {
         return Object.freeze([`target-phase:${target.phase}`]);
-    if ((target.phase === "host-effect-rejected" || target.phase === "test-host-effect-rejected") &&
+    }
+    if (admission.prepare === "after-rearm-exhausted" &&
         target.generation !== null &&
         target.generation <= DELIVERY_REARM_LIMIT) {
         return Object.freeze([`rearm-available:${target.generation}`]);
@@ -109,7 +98,7 @@ export function derivePrepareBlockers(target) {
 }
 /** rearm 的阻塞项：只有 rejected-before-send 的当前代际可以 rearm，且不超过上限。 */
 export function deriveRearmBlockers(target) {
-    if (target.phase !== "host-effect-rejected" && target.phase !== "test-host-effect-rejected") {
+    if (!wakeflowRearmablePhase(target.phase)) {
         return Object.freeze([`target-phase:${target.phase}`]);
     }
     if (target.generation > DELIVERY_REARM_LIMIT)

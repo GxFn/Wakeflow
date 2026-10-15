@@ -52,5 +52,9 @@ export function executeClaudeCodeStatuslineAssetOperation(
   root: RootedDirectory,
   request: Readonly<ExecuteClaudeCodeHostAssetOperationRequest>,
 ): Promise<Readonly<ClaudeCodeHostAssetOperationResult>> {
-  return executeClaudeCodeHostAssetOperation(root, CLAUDE_CODE_STATUSLINE_ASSET_DESCRIPTOR, request);
+  return executeClaudeCodeHostAssetOperation(
+    root,
+    CLAUDE_CODE_STATUSLINE_ASSET_DESCRIPTOR,
+    request,
+  );
 }

@@ -2,9 +2,9 @@ import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  ClaudeCodePortableSettingsTransitionError,
   claudeCodePortableSettingsRetiredRulesFor,
   claudeCodePortableSettingsRulesFor,
-  ClaudeCodePortableSettingsTransitionError,
   planClaudeCodePortableSettingsTransition,
   WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
@@ -23,24 +23,31 @@ function allowOf(text: string | null): string[] {
 }
 
 test("the program root owns the server-wide MCP rule and the precise tmux helper rule; surfaces own only their role's tool rules and retire the server-wide rule（ADR-0020 决定 3，§13.168）", () => {
-  deepEqual([...claudeCodePortableSettingsRulesFor({ rootKind: "program" })], [
-    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-    WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
-  ]);
-  deepEqual([...claudeCodePortableSettingsRulesFor({ rootKind: "support-surface", role: "design" })], [
-    `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_inspect_board`,
-    `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_publish_requirement`,
-    `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_status`,
-  ]);
-  deepEqual([...claudeCodePortableSettingsRulesFor({ rootKind: "support-surface", role: "test" })], [
-    `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_import_target_result`,
-    `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_record_evidence`,
-    `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_status`,
-  ]);
+  deepEqual(
+    [...claudeCodePortableSettingsRulesFor({ rootKind: "program" })],
+    [WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE, WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE],
+  );
+  deepEqual(
+    [...claudeCodePortableSettingsRulesFor({ rootKind: "support-surface", role: "design" })],
+    [
+      `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_inspect_board`,
+      `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_publish_requirement`,
+      `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_status`,
+    ],
+  );
+  deepEqual(
+    [...claudeCodePortableSettingsRulesFor({ rootKind: "support-surface", role: "test" })],
+    [
+      `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_import_target_result`,
+      `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_record_evidence`,
+      `${WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE}__wakeflow_status`,
+    ],
+  );
   deepEqual([...claudeCodePortableSettingsRetiredRulesFor({ rootKind: "program" })], []);
-  deepEqual([...claudeCodePortableSettingsRetiredRulesFor({ rootKind: "support-surface", role: "test" })], [
-    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-  ]);
+  deepEqual(
+    [...claudeCodePortableSettingsRetiredRulesFor({ rootKind: "support-surface", role: "test" })],
+    [WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE],
+  );
   // 支撑面里以前写的整服务器规则被精确删除，用户条目原位保留，角色规则追加到末尾。
   const narrowed = planClaudeCodePortableSettingsTransition(
     `${JSON.stringify({ permissions: { allow: ["Read(./docs/**)", WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE] } }, null, 2)}\n`,
@@ -68,9 +75,13 @@ test("program rules create both entries and append only the missing one on updat
   deepEqual(allowOf(created.desiredText), [...rules]);
 
   // 已有 MCP 规则与用户条目：只追加缺的助手规则，用户条目原位保留。
-  const partial = `${JSON.stringify({
-    permissions: { allow: ["Read(./docs/**)", WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE] },
-  }, null, 2)}\n`;
+  const partial = `${JSON.stringify(
+    {
+      permissions: { allow: ["Read(./docs/**)", WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE] },
+    },
+    null,
+    2,
+  )}\n`;
   const updated = planClaudeCodePortableSettingsTransition(partial, rules);
   equal(updated.status, "update");
   deepEqual(allowOf(updated.desiredText), [
@@ -80,25 +91,33 @@ test("program rules create both entries and append only the missing one on updat
   ]);
 
   // 两条都在（顺序无所谓，重复只留第一次）：current。
-  const complete = `${JSON.stringify({
-    permissions: {
-      allow: [
-        WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
-        "Read(./docs/**)",
-        WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-      ],
+  const complete = `${JSON.stringify(
+    {
+      permissions: {
+        allow: [
+          WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
+          "Read(./docs/**)",
+          WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+        ],
+      },
     },
-  }, null, 2)}\n`;
+    null,
+    2,
+  )}\n`;
   equal(planClaudeCodePortableSettingsTransition(complete, rules).status, "current");
-  const duplicated = `${JSON.stringify({
-    permissions: {
-      allow: [
-        WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-        WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
-        WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
-      ],
+  const duplicated = `${JSON.stringify(
+    {
+      permissions: {
+        allow: [
+          WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+          WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
+          WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
+        ],
+      },
     },
-  }, null, 2)}\n`;
+    null,
+    2,
+  )}\n`;
   const deduplicated = planClaudeCodePortableSettingsTransition(duplicated, rules);
   equal(deduplicated.status, "update");
   deepEqual(allowOf(deduplicated.desiredText), [
@@ -116,9 +135,8 @@ test("rule sets are validated: empty, duplicated or legacy broad rules are refus
   for (const rules of [[], ["a", "a"], ["Bash(tmux *)"], [""], "not-an-array"]) {
     throws(
       () => planClaudeCodePortableSettingsTransition(null, rules),
-      (error: unknown) => (
-        error instanceof ClaudeCodePortableSettingsTransitionError && error.path === "$rules"
-      ),
+      (error: unknown) =>
+        error instanceof ClaudeCodePortableSettingsTransitionError && error.path === "$rules",
     );
   }
 });

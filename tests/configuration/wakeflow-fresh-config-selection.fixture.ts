@@ -1,6 +1,4 @@
-import {
-  createMinimalWakeflowConfig,
-} from "./wakeflow-config.fixture.js";
+import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
 export const MINIMAL_WAKEFLOW_FRESH_SELECTION_UUIDS = Object.freeze([
   "11111111-1111-4111-8111-111111111111",
@@ -43,17 +41,18 @@ export function createMinimalWakeflowFreshConfigSelection() {
     return {
       selectionKey: `window-${index + 1}`,
       ...rest,
-      root: root.kind === "program"
-        ? { kind: "program" }
-        : root.kind === "repository"
-          ? {
-              kind: "repository",
-              selectionKey: repositoryKeys.get(String(root.repositoryId)),
-            }
-          : {
-              kind: "support-surface",
-              selectionKey: surfaceKeys.get(String(root.surfaceId)),
-            },
+      root:
+        root.kind === "program"
+          ? { kind: "program" }
+          : root.kind === "repository"
+            ? {
+                kind: "repository",
+                selectionKey: repositoryKeys.get(String(root.repositoryId)),
+              }
+            : {
+                kind: "support-surface",
+                selectionKey: surfaceKeys.get(String(root.surfaceId)),
+              },
     };
   });
   return {
@@ -69,9 +68,7 @@ export function createMinimalWakeflowFreshConfigSelection() {
 }
 
 /** 为纯编译测试返回按给定序列消费 UUID 的工厂。 */
-export function createSequenceUuidV4Factory(
-  values = MINIMAL_WAKEFLOW_FRESH_SELECTION_UUIDS,
-) {
+export function createSequenceUuidV4Factory(values = MINIMAL_WAKEFLOW_FRESH_SELECTION_UUIDS) {
   let index = 0;
   return () => values[index++] ?? "invalid";
 }

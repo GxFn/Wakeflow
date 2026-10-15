@@ -14,11 +14,12 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-
+import type { WakeflowWindowRole } from "../../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 import { WAKEFLOW_NODE_ENGINES } from "../../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
+import { claudeCodeMcpPermissionRulesFor } from "../../../src/hosts/claude-code/claude-code-mcp-permission-rules.js";
 import {
   CLAUDE_CODE_TMUX_ASSET_COMMAND,
   CLAUDE_CODE_TMUX_ASSET_CONTENT,
@@ -31,8 +32,6 @@ import {
   executeClaudeCodeTmuxAssetOperation,
   planClaudeCodeTmuxAssetOperation,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
-import { claudeCodeMcpPermissionRulesFor } from "../../../src/hosts/claude-code/claude-code-mcp-permission-rules.js";
-import type { WakeflowWindowRole } from "../../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { writeFakeCli } from "../../support/fake-cli.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
@@ -204,7 +203,9 @@ async function fixture(t: TestContext, prefix = "wakeflow-tmux-asset-"): Promise
 
 /** 按 shell 规则拆开助手交给 tmux 的启动命令，核对引号之后的 argv。 */
 function shellWords(command: string): readonly string[] {
-  const result = spawnSync("bash", ["-c", 'eval "set -- $1"; printf "%s\\0" "$@"', "_", command], { encoding: "utf8" });
+  const result = spawnSync("bash", ["-c", 'eval "set -- $1"; printf "%s\\0" "$@"', "_", command], {
+    encoding: "utf8",
+  });
   equal(result.status, 0, result.stderr);
   return result.stdout.split("\0").slice(0, -1);
 }
@@ -213,9 +214,17 @@ function shellWords(command: string): readonly string[] {
  * launch 与 resume 的启动命令以恰好一次 --allowedTools 结尾：该角色的 MCP 规则（Controller 整服务器，
  * 其他角色逐工具，ADR-0020 决定 3）加助手的绝对路径规则。
  */
-function assertSessionPermissionRules(current: Fixture, command: string, role: WakeflowWindowRole = "product"): void {
+function assertSessionPermissionRules(
+  current: Fixture,
+  command: string,
+  role: WakeflowWindowRole = "product",
+): void {
   const words = shellWords(command);
-  const expected = ["--allowedTools", ...claudeCodeMcpPermissionRulesFor(role), `Bash(node ${current.assetPath} *)`];
+  const expected = [
+    "--allowedTools",
+    ...claudeCodeMcpPermissionRulesFor(role),
+    `Bash(node ${current.assetPath} *)`,
+  ];
   deepEqual(words.slice(-expected.length), expected);
   equal(words.filter((word) => word === "--allowedTools").length, 1, command);
 }
@@ -319,7 +328,13 @@ function writeLocator(
   tmux: { readonly windowId: string; readonly paneId: string } = { windowId: "@5", paneId: "%9" },
 ): void {
   writeFileSync(
-    path.join(current.root, ...RUNTIME.split("/"), "identity", "window-locators", `${windowId}.json`),
+    path.join(
+      current.root,
+      ...RUNTIME.split("/"),
+      "identity",
+      "window-locators",
+      `${windowId}.json`,
+    ),
     JSON.stringify({
       kind: "WakeflowWindowLocator",
       schemaVersion: 1,
@@ -337,7 +352,13 @@ function writeLocator(
 
 function writeBinding(current: Fixture, windowId: string, sessionId: string): void {
   writeFileSync(
-    path.join(current.root, ...RUNTIME.split("/"), "identity", "window-bindings", `${windowId}.json`),
+    path.join(
+      current.root,
+      ...RUNTIME.split("/"),
+      "identity",
+      "window-bindings",
+      `${windowId}.json`,
+    ),
     JSON.stringify({
       kind: "WakeflowWindowHostBinding",
       schemaVersion: 1,
@@ -357,7 +378,9 @@ function paneRow(row: {
   readonly dead?: boolean;
   readonly command?: string;
   readonly pid?: number;
-  readonly options?: Readonly<Partial<Record<"programId" | "hostId" | "windowId" | "bindingId" | "locatorId", string>>>;
+  readonly options?: Readonly<
+    Partial<Record<"programId" | "hostId" | "windowId" | "bindingId" | "locatorId", string>>
+  >;
 }): string {
   const options = row.options ?? {};
   return [
@@ -396,7 +419,9 @@ test("tmux asset is a fixed 0600 file whose command and permission rule agree an
   const rooted = await RootedDirectory.open(current.root);
   try {
     equal(await planClaudeCodeTmuxAssetOperation(rooted), null);
-    writeFileSync(current.assetPath, `${CLAUDE_CODE_TMUX_ASSET_CONTENT}// drift\n`, { mode: 0o600 });
+    writeFileSync(current.assetPath, `${CLAUDE_CODE_TMUX_ASSET_CONTENT}// drift\n`, {
+      mode: 0o600,
+    });
     const drifted = await planClaudeCodeTmuxAssetOperation(rooted);
     ok(drifted !== null, "byte drift must plan one operation");
     equal(drifted.operationId, CLAUDE_CODE_TMUX_ASSET_OPERATION_ID);
@@ -416,17 +441,29 @@ test("tmux asset is a fixed 0600 file whose command and permission rule agree an
 test("panes resolves an npm-installed claude: a node process whose argv names the Claude CLI entry is claude, other node processes are not（A5，§13.167）", async (t) => {
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
-  writeFileSync(path.join(current.state, "panes.txt"), [
-    paneRow({ window: "@5", pane: "%9", command: "node", pid: 500 }),
-    paneRow({ window: "@3", pane: "%7", command: "node", pid: 300, options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID } }),
-    "",
-  ].join("\n"));
-  writeFileSync(path.join(current.state, "ps.txt"), [
-    "  500     1 /bin/zsh",
-    "  501   500 /opt/homebrew/bin/node",
-    "  300     1 /opt/homebrew/bin/node",
-    "",
-  ].join("\n"));
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      paneRow({ window: "@5", pane: "%9", command: "node", pid: 500 }),
+      paneRow({
+        window: "@3",
+        pane: "%7",
+        command: "node",
+        pid: 300,
+        options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID },
+      }),
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    path.join(current.state, "ps.txt"),
+    [
+      "  500     1 /bin/zsh",
+      "  501   500 /opt/homebrew/bin/node",
+      "  300     1 /opt/homebrew/bin/node",
+      "",
+    ].join("\n"),
+  );
   writeFileSync(
     path.join(current.state, "args-501.txt"),
     "node /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js --session-id 11111111-2222-4333-8444-555555555555\n",
@@ -434,8 +471,16 @@ test("panes resolves an npm-installed claude: a node process whose argv names th
   writeFileSync(path.join(current.state, "args-300.txt"), "node /srv/app/server.js\n");
   const panes = runHelper(current, ["panes"]);
   equal(panes.status, 0, JSON.stringify(panes.json));
-  const observation = panes.json.observation as { panes: readonly { paneId: string; currentCommand: string }[] };
-  deepEqual(observation.panes.map((pane) => [pane.paneId, pane.currentCommand]), [["%9", "claude"], ["%7", "node"]]);
+  const observation = panes.json.observation as {
+    panes: readonly { paneId: string; currentCommand: string }[];
+  };
+  deepEqual(
+    observation.panes.map((pane) => [pane.paneId, pane.currentCommand]),
+    [
+      ["%9", "claude"],
+      ["%7", "node"],
+    ],
+  );
 });
 
 test("preflight reports node, tmux, claude, the configured session and the shell context without touching anything", async (t) => {
@@ -450,7 +495,11 @@ test("preflight reports node, tmux, claude, the configured session and the shell
     supported: true,
   });
   deepEqual(run.json.tmux, { available: true, version: "tmux 3.6b" });
-  deepEqual(run.json.claude, { available: true, version: "9.9.9 (Claude Code)", install: "wrapper" });
+  deepEqual(run.json.claude, {
+    available: true,
+    version: "9.9.9 (Claude Code)",
+    install: "wrapper",
+  });
   deepEqual(run.json.session, {
     socketName: null,
     sessionName: "wakeflow",
@@ -459,10 +508,17 @@ test("preflight reports node, tmux, claude, the configured session and the shell
   });
   equal(run.json.insideTmux, false);
   equal(run.json.sessionIdVisible, false);
-  deepEqual(tmuxLog(current).map((entry) => entry[0]), ["has-session", "-V"]);
+  deepEqual(
+    tmuxLog(current).map((entry) => entry[0]),
+    ["has-session", "-V"],
+  );
   // A5（§13.167）：npm 安装的 claude 是 shebang 指向 node 的脚本，preflight 把安装形态报成 node。
   writeFakeCli(current.bin, "claude", '#!/usr/bin/env node\nconsole.log("9.9.9 (Claude Code)");\n');
-  deepEqual(runHelper(current, ["preflight"]).json.claude, { available: true, version: "9.9.9 (Claude Code)", install: "node" });
+  deepEqual(runHelper(current, ["preflight"]).json.claude, {
+    available: true,
+    version: "9.9.9 (Claude Code)",
+    install: "node",
+  });
 });
 
 test("tmux helper admits only the current config version", async (t) => {
@@ -503,7 +559,10 @@ test("the helper strips every Claude session and host variable before running tm
   });
   equal(run.status, 0, JSON.stringify(run.json));
   const names = new Map(
-    readFileSync(dump, "utf8").split("\n").filter((line) => line.includes("=")).map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
+    readFileSync(dump, "utf8")
+      .split("\n")
+      .filter((line) => line.includes("="))
+      .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
   );
   equal(names.get("CLAUDE_CONFIG_DIR"), "claude-config");
   equal(names.get("CLAUDE_CODE_USE_BEDROCK"), "1");
@@ -511,7 +570,18 @@ test("the helper strips every Claude session and host variable before running tm
   equal(names.get("CLAUDE_CODE_SKIP_BEDROCK_AUTH"), "1");
   equal(names.get("CLAUDE_CODE_OAUTH_TOKEN"), "user-token");
   equal(names.get("ANTHROPIC_BASE_URL"), "https://example.invalid");
-  for (const stripped of ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR", "CLAUDE_ENV_FILE", "CLAUDE_EFFORT", "CLAUDE_CODE_DISABLE_CRON", "CLAUDE_CODE_DESKTOP_APP_VERSION", "TMUX_PANE"]) {
+  for (const stripped of [
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_SSE_PORT",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_PROJECT_DIR",
+    "CLAUDE_ENV_FILE",
+    "CLAUDE_EFFORT",
+    "CLAUDE_CODE_DISABLE_CRON",
+    "CLAUDE_CODE_DESKTOP_APP_VERSION",
+    "TMUX_PANE",
+  ]) {
     equal(names.has(stripped), false, stripped);
   }
 });
@@ -521,11 +591,16 @@ test("launch and resume grant the Wakeflow MCP tools and the helper by its absol
   ok(current.assetPath.includes(" "));
   const hooks = { WAKEFLOW_STUB_HOOKS: current.hooks };
   const launched = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
-    input: JSON.stringify({ windowId: PRODUCT_WINDOW_ID, launchIntent: launchIntent("Product A", "../ProductA") }),
+    input: JSON.stringify({
+      windowId: PRODUCT_WINDOW_ID,
+      launchIntent: launchIntent("Product A", "../ProductA"),
+    }),
     env: hooks,
   });
   equal(launched.status, 0, JSON.stringify(launched.json));
-  const created = tmuxLog(current).filter((entry) => entry[0] === "new-session" || entry[0] === "new-window");
+  const created = tmuxLog(current).filter(
+    (entry) => entry[0] === "new-session" || entry[0] === "new-window",
+  );
   assertSessionPermissionRules(current, created.at(-1)?.at(-1) ?? "");
   writeLocator(current, PRODUCT_WINDOW_ID);
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
@@ -536,7 +611,9 @@ test("launch and resume grant the Wakeflow MCP tools and the helper by its absol
     env: hooks,
   });
   equal(resumed.status, 0, JSON.stringify(resumed.json));
-  const reopened = tmuxLog(current).filter((entry) => entry[0] === "new-session" || entry[0] === "new-window");
+  const reopened = tmuxLog(current).filter(
+    (entry) => entry[0] === "new-session" || entry[0] === "new-window",
+  );
   const command = reopened.at(-1)?.at(-1) ?? "";
   assertSessionPermissionRules(current, command);
   equal(shellWords(command).includes("--resume"), true);
@@ -547,7 +624,10 @@ test("launch opens the session or a window from the intent, freezes the title, w
   const shard = path.join(current.hooks, "20260924", "aa");
   mkdirSync(shard, { recursive: true });
   const first = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID, "--wait", "1"], {
-    input: JSON.stringify({ windowId: CONTROLLER_WINDOW_ID, launchIntent: launchIntent("Controller", ".") }),
+    input: JSON.stringify({
+      windowId: CONTROLLER_WINDOW_ID,
+      launchIntent: launchIntent("Controller", "."),
+    }),
     env: { WAKEFLOW_STUB_HOOKS: shard },
   });
   equal(first.status, 0, JSON.stringify(first.json));
@@ -564,7 +644,12 @@ test("launch opens the session or a window from the intent, freezes the title, w
   match(observation.handle.value, UUID_PATTERN);
   equal(observation.launchIntentDigest, INTENT_DIGEST);
   match(observation.observedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
-  deepEqual(observation.tmux, { socketName: null, sessionName: "wakeflow", windowId: "@1", paneId: "%1" });
+  deepEqual(observation.tmux, {
+    socketName: null,
+    sessionName: "wakeflow",
+    windowId: "@1",
+    paneId: "%1",
+  });
   equal(observation.worktree, undefined);
   deepEqual(first.json.hook, { sessionStart: "observed" });
   deepEqual(first.json.window, { name: "Controller", cwd: ".", created: "new-session" });
@@ -596,7 +681,10 @@ test("launch opens the session or a window from the intent, freezes the title, w
 
   // 会话已存在：第二个窗口走 new-window；仓库在根旁边（../ProductA）也能作为 cwd。
   // hook 还没到但新 pane 活着：待定，不是失败。
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@2", pane: "%2" })}\n`);
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@2", pane: "%2" })}\n`,
+  );
   resetLog(current);
   const second = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
     input: JSON.stringify(launchIntent("Product A", "../ProductA")),
@@ -618,12 +706,16 @@ test("launch opens the session or a window from the intent, freezes the title, w
   // worktree pod 的产品窗口：hook 记录带 cwd，助手在那里读 git 事实并附在观察里。
   resetLog(current);
   const third = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
-    input: JSON.stringify(launchIntent("Product A", "../ProductA", ["--worktree", "wakeflow-feature"])),
+    input: JSON.stringify(
+      launchIntent("Product A", "../ProductA", ["--worktree", "wakeflow-feature"]),
+    ),
     env: { WAKEFLOW_STUB_HOOKS: current.hooks },
     allowPaths: true,
   });
   equal(third.status, 0, JSON.stringify(third.json));
-  const worktree = (third.json.observation as { readonly worktree?: { porcelain: string; commonDir: string } }).worktree;
+  const worktree = (
+    third.json.observation as { readonly worktree?: { porcelain: string; commonDir: string } }
+  ).worktree;
   ok(worktree !== undefined, "worktree launch must observe the checkout");
   equal(worktree.porcelain.startsWith("worktree "), true);
   equal(worktree.commonDir, "/stub/common/.git");
@@ -631,7 +723,9 @@ test("launch opens the session or a window from the intent, freezes the title, w
 
 test("launch refuses malformed intents before touching tmux", async (t) => {
   const current = await fixture(t);
-  const missingWindow = runHelper(current, ["launch"], { input: JSON.stringify(launchIntent("Controller", ".")) });
+  const missingWindow = runHelper(current, ["launch"], {
+    input: JSON.stringify(launchIntent("Controller", ".")),
+  });
   equal(missingWindow.status, 1);
   equal(missingWindow.json.reason, "window-required");
   const badDigest = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], {
@@ -640,15 +734,28 @@ test("launch refuses malformed intents before touching tmux", async (t) => {
   equal(badDigest.json.reason, "intent-invalid");
   const codex = launchIntent("Controller", ".");
   (codex.execution as Record<string, unknown>).kind = "codex";
-  equal(runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], { input: JSON.stringify(codex) }).json.reason, "intent-invalid");
+  equal(
+    runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], {
+      input: JSON.stringify(codex),
+    }).json.reason,
+    "intent-invalid",
+  );
   const noPlaceholder = launchIntent("Controller", ".");
   (noPlaceholder.execution as { arguments: string[] }).arguments = ["--model", "opus"];
-  equal(runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], { input: JSON.stringify(noPlaceholder) }).json.reason, "intent-invalid");
+  equal(
+    runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], {
+      input: JSON.stringify(noPlaceholder),
+    }).json.reason,
+    "intent-invalid",
+  );
   const missingCwd = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], {
     input: JSON.stringify(launchIntent("Controller", "Nowhere")),
   });
   equal(missingCwd.json.reason, "cwd-missing");
-  equal(runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID]).json.reason, "stdin-empty");
+  equal(
+    runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID]).json.reason,
+    "stdin-empty",
+  );
   equal(tmuxLog(current).length, 0, "no tmux call before the intent is admitted");
   equal(runHelper(current, ["dance"]).json.reason, "command-unknown");
   equal(runHelper(current, ["launch", "--window", "window_x"]).json.reason, "window-id-invalid");
@@ -663,12 +770,18 @@ test("self registers the Controller's own pane from the environment and refuses 
     CLAUDE_CODE_SESSION_ID: SESSION_ID,
   };
   const run = runHelper(current, ["self"], {
-    input: JSON.stringify({ windowId: CONTROLLER_WINDOW_ID, launchIntent: launchIntent("Controller", ".") }),
+    input: JSON.stringify({
+      windowId: CONTROLLER_WINDOW_ID,
+      launchIntent: launchIntent("Controller", "."),
+    }),
     env: environment,
   });
   equal(run.status, 0, JSON.stringify(run.json));
   equal(run.json.windowId, CONTROLLER_WINDOW_ID);
-  deepEqual((run.json.observation as { handle: unknown }).handle, { kind: "claude-session", value: SESSION_ID });
+  deepEqual((run.json.observation as { handle: unknown }).handle, {
+    kind: "claude-session",
+    value: SESSION_ID,
+  });
   deepEqual((run.json.observation as { tmux: unknown }).tmux, {
     socketName: null,
     sessionName: "wakeflow",
@@ -677,7 +790,13 @@ test("self registers the Controller's own pane from the environment and refuses 
   });
   equal((run.json.observation as { launchIntentDigest: string }).launchIntentDigest, INTENT_DIGEST);
   const log = tmuxLog(current);
-  deepEqual(log[0], ["display-message", "-p", "-t", "%7", `#{session_name}${FIELDS}#{window_id}${FIELDS}#{pane_id}`]);
+  deepEqual(log[0], [
+    "display-message",
+    "-p",
+    "-t",
+    "%7",
+    `#{session_name}${FIELDS}#{window_id}${FIELDS}#{pane_id}`,
+  ]);
   deepEqual(log[1], ["set-option", "-w", "-t", "@3", "automatic-rename", "off"]);
   deepEqual(log[4], ["set-option", "-w", "-t", "@3", "@wakeflow_window_id", CONTROLLER_WINDOW_ID]);
 
@@ -690,7 +809,8 @@ test("self registers the Controller's own pane from the environment and refuses 
 
   equal(runHelper(current, ["self"], { input: "{}" }).json.reason, "not-in-tmux");
   equal(
-    runHelper(current, ["self"], { input: "{}", env: { TMUX_PANE: "%7", TMUX: environment.TMUX } }).json.reason,
+    runHelper(current, ["self"], { input: "{}", env: { TMUX_PANE: "%7", TMUX: environment.TMUX } })
+      .json.reason,
     "session-id-unavailable",
   );
   equal(
@@ -705,29 +825,48 @@ test("self registers the Controller's own pane from the environment and refuses 
 test("panes keeps only Wakeflow-related rows, mark writes the locator identity, close returns the closure evidence", async (t) => {
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
-  writeFileSync(path.join(current.state, "panes.txt"), [
-    paneRow({ window: "@3", pane: "%7", command: "2.1.281", pid: 300, options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID } }),
-    paneRow({ session: "other", window: "@9", pane: "%20", command: "zsh", pid: 900 }),
-    paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500 }),
-    "",
-  ].join("\n"));
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      paneRow({
+        window: "@3",
+        pane: "%7",
+        command: "2.1.281",
+        pid: 300,
+        options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID },
+      }),
+      paneRow({ session: "other", window: "@9", pane: "%20", command: "zsh", pid: 900 }),
+      paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500 }),
+      "",
+    ].join("\n"),
+  );
   // 原生 claude 的进程名是版本号：pane 进程或其子进程的可执行名是 claude 才算 claude。
-  writeFileSync(path.join(current.state, "ps.txt"), [
-    "  300     1 /Users/someone/.local/bin/claude",
-    "  301   300 node",
-    "  900     1 /bin/zsh",
-    "  500     1 /bin/zsh",
-    "  501   500 /Users/someone/.local/bin/claude",
-    "",
-  ].join("\n"));
+  writeFileSync(
+    path.join(current.state, "ps.txt"),
+    [
+      "  300     1 /Users/someone/.local/bin/claude",
+      "  301   300 node",
+      "  900     1 /bin/zsh",
+      "  500     1 /bin/zsh",
+      "  501   500 /Users/someone/.local/bin/claude",
+      "",
+    ].join("\n"),
+  );
   const panes = runHelper(current, ["panes"]);
   equal(panes.status, 0);
-  const observation = panes.json.observation as { kind: string; panes: readonly Record<string, unknown>[] };
+  const observation = panes.json.observation as {
+    kind: string;
+    panes: readonly Record<string, unknown>[];
+  };
   equal(observation.kind, "tmux-panes");
   equal(observation.panes.length, 2, "one row related by options, one by the locator coordinates");
   equal(panes.json.total, 3);
   equal(panes.json.truncated, false);
-  equal(observation.panes[0]?.currentCommand, "claude", "pane process resolved through the process table");
+  equal(
+    observation.panes[0]?.currentCommand,
+    "claude",
+    "pane process resolved through the process table",
+  );
   deepEqual(observation.panes[1], {
     socketName: null,
     sessionName: "wakeflow",
@@ -739,7 +878,10 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
     options: { programId: null, hostId: null, windowId: null, bindingId: null, locatorId: null },
   });
   equal(
-    (runHelper(current, ["panes"], { env: { WAKEFLOW_STUB_FAIL: "list-panes" } }).json.observation as { kind: string }).kind,
+    (
+      runHelper(current, ["panes"], { env: { WAKEFLOW_STUB_FAIL: "list-panes" } }).json
+        .observation as { kind: string }
+    ).kind,
     "unobserved",
   );
 
@@ -750,14 +892,19 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
   deepEqual(marked.json.windows, [{ windowId: PRODUCT_WINDOW_ID, status: "marked" }]);
   const markLog = tmuxLog(current);
   deepEqual(markLog[0], ["display-message", "-p", "-t", "%9", "#{window_id}"]);
-  deepEqual(markLog.slice(1).map((entry) => entry.slice(4)), [
-    ["@wakeflow_program_id", PROGRAM_ID],
-    ["@wakeflow_host_id", "claude-code"],
-    ["@wakeflow_window_id", PRODUCT_WINDOW_ID],
-    ["@wakeflow_binding_id", BINDING_ID],
-    ["@wakeflow_locator_id", LOCATOR_ID],
+  deepEqual(
+    markLog.slice(1).map((entry) => entry.slice(4)),
+    [
+      ["@wakeflow_program_id", PROGRAM_ID],
+      ["@wakeflow_host_id", "claude-code"],
+      ["@wakeflow_window_id", PRODUCT_WINDOW_ID],
+      ["@wakeflow_binding_id", BINDING_ID],
+      ["@wakeflow_locator_id", LOCATOR_ID],
+    ],
+  );
+  deepEqual(runHelper(current, ["mark", "--all"]).json.windows, [
+    { windowId: PRODUCT_WINDOW_ID, status: "marked" },
   ]);
-  deepEqual(runHelper(current, ["mark", "--all"]).json.windows, [{ windowId: PRODUCT_WINDOW_ID, status: "marked" }]);
   const unknown = runHelper(current, ["mark", "--window", CONTROLLER_WINDOW_ID]);
   equal(unknown.status, 1);
   deepEqual(unknown.json.windows, [{ windowId: CONTROLLER_WINDOW_ID, status: "locator-missing" }]);
@@ -767,14 +914,28 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
   resetLog(current);
   const refusedClose = runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]);
   equal(refusedClose.status, 0, JSON.stringify(refusedClose.json));
-  deepEqual((refusedClose.json.closure as { closeResult: unknown }).closeResult, { status: "unknown" });
-  equal(tmuxLog(current).some((entry) => entry[0] === "kill-window"), false);
+  deepEqual((refusedClose.json.closure as { closeResult: unknown }).closeResult, {
+    status: "unknown",
+  });
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "kill-window"),
+    false,
+  );
 
-  writeFileSync(path.join(current.state, "panes.txt"), [
-    paneRow({ window: "@3", pane: "%7", command: "2.1.281", pid: 300, options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID } }),
-    paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500, options: LIVE_OPTIONS }),
-    "",
-  ].join("\n"));
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      paneRow({
+        window: "@3",
+        pane: "%7",
+        command: "2.1.281",
+        pid: 300,
+        options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID },
+      }),
+      paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500, options: LIVE_OPTIONS }),
+      "",
+    ].join("\n"),
+  );
   resetLog(current);
   const closed = runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]);
   equal(closed.status, 0, JSON.stringify(closed.json));
@@ -786,13 +947,26 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
   equal(closure.preClose.kind, "tmux-panes");
   deepEqual(closure.closeResult, { status: "closed" });
   equal(closure.postClose.kind, "tmux-panes");
-  deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes", "list-panes", "kill-window", "list-panes"]);
+  deepEqual(
+    tmuxLog(current).map((entry) => entry[0]),
+    ["list-panes", "list-panes", "kill-window", "list-panes"],
+  );
   deepEqual(tmuxLog(current)[2], ["kill-window", "-t", "@5"]);
   writeFileSync(path.join(current.state, "kill-fail"), "");
-  deepEqual((runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]).json.closure as { closeResult: unknown }).closeResult, {
-    status: "failed",
-  });
-  equal(runHelper(current, ["close", "--window", CONTROLLER_WINDOW_ID]).json.reason, "locator-missing");
+  deepEqual(
+    (
+      runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]).json.closure as {
+        closeResult: unknown;
+      }
+    ).closeResult,
+    {
+      status: "failed",
+    },
+  );
+  equal(
+    runHelper(current, ["close", "--window", CONTROLLER_WINDOW_ID]).json.reason,
+    "locator-missing",
+  );
 });
 
 test("deliver pastes once, presses Return once, reads back once, and never sends when the pane or handle does not match", async (t) => {
@@ -801,13 +975,21 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
   const livePane = paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS });
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
-  const prompt = "Implement the task package for Product A now.\n\nRead the package first; touch only ProductA.\n";
-  writeFileSync(path.join(current.state, "capture.txt"), `> Implement the task package for Product A now.\n\nWorking...\n──────────\n❯ \n──────────\n`);
+  const prompt =
+    "Implement the task package for Product A now.\n\nRead the package first; touch only ProductA.\n";
+  writeFileSync(
+    path.join(current.state, "capture.txt"),
+    `> Implement the task package for Product A now.\n\nWorking...\n──────────\n❯ \n──────────\n`,
+  );
   const handleDigest = computeSha256Digest(encodeUtf8(SESSION_ID, "$handle"), "$handle");
 
-  const sent = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--handle-digest", handleDigest], {
-    input: prompt,
-  });
+  const sent = runHelper(
+    current,
+    ["deliver", "--window", PRODUCT_WINDOW_ID, "--handle-digest", handleDigest],
+    {
+      input: prompt,
+    },
+  );
   equal(sent.status, 0, JSON.stringify(sent.json));
   equal(sent.json.ok, true);
   const attempt = sent.json.attempt as { status: string; evidenceDigest: string };
@@ -819,7 +1001,10 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), prompt);
   const log = tmuxLog(current);
   // 送前带属性截屏一次（看输入框，暗色提示不算已打的字），粘贴、回车，再回读一次。
-  deepEqual(log.map((entry) => entry[0]), ["list-panes", "capture-pane", "load-buffer", "paste-buffer", "send-keys", "capture-pane"]);
+  deepEqual(
+    log.map((entry) => entry[0]),
+    ["list-panes", "capture-pane", "load-buffer", "paste-buffer", "send-keys", "capture-pane"],
+  );
   deepEqual(log[1], ["capture-pane", "-e", "-p", "-t", "%9"]);
   const bufferName = log[2]?.[2] ?? "";
   match(bufferName, /^wakeflow-[0-9a-f-]{36}$/u);
@@ -828,8 +1013,17 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   deepEqual(log[5], ["capture-pane", "-p", "-t", "%9"]);
 
   // 回读没看到首行：pending；不影响 attempt=sent。
-  writeFileSync(path.join(current.state, "capture.txt"), "something else\n──────────\n❯ \n──────────\n");
-  equal((runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json.readback as { status: string }).status, "pending");
+  writeFileSync(
+    path.join(current.state, "capture.txt"),
+    "something else\n──────────\n❯ \n──────────\n",
+  );
+  equal(
+    (
+      runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json
+        .readback as { status: string }
+    ).status,
+    "pending",
+  );
   // 截屏失败时看不到输入框：送前拒绝，不粘贴。
   resetLog(current);
   const noCapture = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], {
@@ -840,21 +1034,36 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   // §13.165 G6：拒绝带 stderr 首行作为有界 detail，绝对路径换成占位符。
   equal(noCapture.json.detail, "stub: capture-pane failed at <path>");
   deepEqual(noCapture.json.attempt, { status: "failed-before-send" });
-  equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"),
+    false,
+  );
 
   // 发送前的拒绝：句柄摘要不符、pane 不在、元数据不符、load-buffer 失败，都是 failed-before-send。
-  const wrongHandle = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--handle-digest", `sha256:${"00".repeat(32)}`], {
-    input: prompt,
-  });
+  const wrongHandle = runHelper(
+    current,
+    ["deliver", "--window", PRODUCT_WINDOW_ID, "--handle-digest", `sha256:${"00".repeat(32)}`],
+    {
+      input: prompt,
+    },
+  );
   equal(wrongHandle.status, 1);
   equal(wrongHandle.json.reason, "handle-mismatch");
   deepEqual(wrongHandle.json.attempt, { status: "failed-before-send" });
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9" })}\n`);
-  const unmarked = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt });
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9" })}\n`,
+  );
+  const unmarked = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], {
+    input: prompt,
+  });
   equal(unmarked.json.reason, "metadata-mismatch");
   deepEqual(unmarked.json.attempt, { status: "failed-before-send" });
   writeFileSync(path.join(current.state, "panes.txt"), "");
-  equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json.reason, "pane-missing");
+  equal(
+    runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json.reason,
+    "pane-missing",
+  );
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
   resetLog(current);
   const loadFailed = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], {
@@ -863,7 +1072,10 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   });
   equal(loadFailed.json.reason, "load-buffer-failed");
   deepEqual(loadFailed.json.attempt, { status: "failed-before-send" });
-  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+    false,
+  );
 
   // 粘贴或回车失败：效果不明，attempt=unknown；粘贴失败时删掉缓冲区。
   resetLog(current);
@@ -873,42 +1085,63 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   });
   equal(pasteFailed.json.reason, "paste-failed");
   deepEqual(pasteFailed.json.attempt, { status: "unknown" });
-  equal(tmuxLog(current).some((entry) => entry[0] === "delete-buffer"), true);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "delete-buffer"),
+    true,
+  );
   const enterFailed = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], {
     input: prompt,
     env: { WAKEFLOW_STUB_FAIL: "send-keys" },
   });
   equal(enterFailed.json.reason, "enter-failed");
   deepEqual(enterFailed.json.attempt, { status: "unknown" });
-  equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: "   \n" }).json.reason, "stdin-empty");
-  equal(runHelper(current, ["deliver", "--window", CONTROLLER_WINDOW_ID], { input: prompt }).json.reason, "locator-missing");
+  equal(
+    runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: "   \n" }).json.reason,
+    "stdin-empty",
+  );
+  equal(
+    runHelper(current, ["deliver", "--window", CONTROLLER_WINDOW_ID], { input: prompt }).json
+      .reason,
+    "locator-missing",
+  );
 
   // 与旧实现同形的送前 pane authority：重复 pane、跑的不是 claude、坐标过期都不粘贴（§13.122）。
   writeFileSync(
     path.join(current.state, "panes.txt"),
     `${livePane}\n${paneRow({ window: "@6", pane: "%12", options: LIVE_OPTIONS })}\n`,
   );
-  const duplicate = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt });
+  const duplicate = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], {
+    input: prompt,
+  });
   equal(duplicate.json.reason, "duplicate-pane");
   deepEqual(duplicate.json.attempt, { status: "failed-before-send" });
   writeFileSync(
     path.join(current.state, "panes.txt"),
     `${paneRow({ window: "@5", pane: "%9", command: "zsh", options: LIVE_OPTIONS })}\n`,
   );
-  const wrongProcess = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt });
+  const wrongProcess = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], {
+    input: prompt,
+  });
   equal(wrongProcess.json.reason, "wrong-process");
   equal(wrongProcess.json.observed, "zsh");
   writeFileSync(
     path.join(current.state, "panes.txt"),
     `${paneRow({ window: "@6", pane: "%12", options: LIVE_OPTIONS })}\n`,
   );
-  equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json.reason, "locator-stale");
+  equal(
+    runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json.reason,
+    "locator-stale",
+  );
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
 
   // 落地观察：目标会话的 user-prompt-submit 记录摘要等于去首尾空白 prompt 的摘要时 observed，否则 pending。
-  const pendingLanding = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"], {
-    input: prompt,
-  });
+  const pendingLanding = runHelper(
+    current,
+    ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"],
+    {
+      input: prompt,
+    },
+  );
   equal((pendingLanding.json.landing as { status: string }).status, "pending");
   const promptDigest = computeSha256Digest(encodeUtf8(prompt.trim(), "$prompt"), "$prompt");
   const recordId = "11111111-2222-4333-8444-555555555555";
@@ -927,9 +1160,13 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   );
   // 幂等（§13.127）：这段 prompt 已在目标会话落地，再投递就拒绝并交回那条落地记录；--force 才照发。
   resetLog(current);
-  const alreadyLanded = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "1"], {
-    input: prompt,
-  });
+  const alreadyLanded = runHelper(
+    current,
+    ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "1"],
+    {
+      input: prompt,
+    },
+  );
   equal(alreadyLanded.status, 1);
   equal(alreadyLanded.json.reason, "already-landed");
   deepEqual(alreadyLanded.json.attempt, { status: "failed-before-send" });
@@ -938,29 +1175,48 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
     recordId,
     recordedAt: "2026-09-24T01:00:00.000Z",
   });
-  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
-  const observedLanding = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "1", "--force"], {
-    input: prompt,
-  });
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+    false,
+  );
+  const observedLanding = runHelper(
+    current,
+    ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "1", "--force"],
+    {
+      input: prompt,
+    },
+  );
   equal(observedLanding.status, 0, JSON.stringify(observedLanding.json));
   deepEqual(observedLanding.json.landing, {
     status: "observed",
     recordId,
     recordedAt: "2026-09-24T01:00:00.000Z",
   });
-  equal(runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "999"], { input: prompt }).json.reason, "wait-landing-invalid");
+  equal(
+    runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "999"], {
+      input: prompt,
+    }).json.reason,
+    "wait-landing-invalid",
+  );
 });
 
 test("deliver never pastes into a permission dialog or menu, even with --force, but still delivers to an idle or working prompt", async (t) => {
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`,
+  );
   const prompt = "wake-controller: Product A finished its task package.\n";
   const deliverWith = (screen: string, args: readonly string[] = []): HelperRun => {
     writeFileSync(path.join(current.state, "capture.txt"), screen);
     resetLog(current);
-    return runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0", ...args], { input: prompt });
+    return runHelper(
+      current,
+      ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0", ...args],
+      { input: prompt },
+    );
   };
   const dialog = [
     "● Bash(rm -rf build)",
@@ -977,14 +1233,25 @@ test("deliver never pastes into a permission dialog or menu, even with --force, 
     equal(refused.json.reason, "target-not-at-prompt");
     deepEqual(refused.json.attempt, { status: "failed-before-send" });
     equal(refused.json.observed, "menu-cursor");
-    equal(refused.json.evidenceDigest, computeSha256Digest(encodeUtf8(dialog, "$screen"), "$screen"));
-    deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes", "capture-pane"]);
+    equal(
+      refused.json.evidenceDigest,
+      computeSha256Digest(encodeUtf8(dialog, "$screen"), "$screen"),
+    );
+    deepEqual(
+      tmuxLog(current).map((entry) => entry[0]),
+      ["list-panes", "capture-pane"],
+    );
   }
   // 输入框不在尾部（例如信任对话框没有编号光标）：同样拒绝，observed 说明没看到输入框。
-  const unseen = deliverWith("Do you trust the files in this folder?\nEnter to confirm · Esc to exit\n");
+  const unseen = deliverWith(
+    "Do you trust the files in this folder?\nEnter to confirm · Esc to exit\n",
+  );
   equal(unseen.json.reason, "target-not-at-prompt");
   equal(unseen.json.observed, "input-box-unseen");
-  equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"),
+    false,
+  );
   // Claude Code 2.1.283 的真实信任对话框（§13.132 现场）：光标行 "❯ No, exit" 没有编号，也不在两条边框线之间；
   // 粘贴后的回车会选中 "No, exit" 让会话退出，所以必须拒绝。
   const trust = [
@@ -1005,13 +1272,21 @@ test("deliver never pastes into a permission dialog or menu, even with --force, 
     const refusedTrust = deliverWith(trust, args);
     equal(refusedTrust.json.reason, "target-not-at-prompt", JSON.stringify(refusedTrust.json));
     equal(refusedTrust.json.observed, "input-box-unseen");
-    equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
+    equal(
+      tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"),
+      false,
+    );
   }
   // 输入框里已有别人打了一半的字：粘贴会接在后面一起提交，拒绝（§13.132）。
-  const typed = deliverWith(`● Done.\n──────────\n\u276f half-typed question\n──────────\n  footer\n`);
+  const typed = deliverWith(
+    `● Done.\n──────────\n\u276f half-typed question\n──────────\n  footer\n`,
+  );
   equal(typed.json.reason, "target-not-at-prompt");
   equal(typed.json.observed, "input-not-empty");
-  equal(tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"),
+    false,
+  );
   // 闲置的输入框与工作中但输入框可见的 pane（排队是正常的）都照发。
   const footer = "──────────\n  ⏵⏵ accept edits on (shift+tab to cycle)\n";
   for (const screen of [
@@ -1039,13 +1314,23 @@ test("resume restarts the bound session in a new pane and launch refuses while t
   const shard = path.join(current.hooks, "20260924", "bb");
   mkdirSync(shard, { recursive: true });
   const hooks = { WAKEFLOW_STUB_HOOKS: shard };
-  writeFileSync(path.join(current.hooks, "20260924T000000000Z-session-start-legacy.json"), JSON.stringify({ kind: "stub", event: "session-start", sessionId: SESSION_ID }));
+  writeFileSync(
+    path.join(current.hooks, "20260924T000000000Z-session-start-legacy.json"),
+    JSON.stringify({ kind: "stub", event: "session-start", sessionId: SESSION_ID }),
+  );
   // 定位器指向的 pane 还活着：launch 与 resume 都拒绝，--force 才继续。
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
-  const liveLaunch = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`,
+  );
+  const liveLaunch = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
+    input: intent,
+  });
   equal(liveLaunch.status, 1);
   equal(liveLaunch.json.reason, "locator-live");
-  const liveResume = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  const liveResume = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
+    input: intent,
+  });
   equal(liveResume.json.reason, "locator-live");
   // 提示指向 resume --in-place 在原 pane 里重启（§13.134），而不是让用户敲 tmux 命令；launch 没有 --in-place，
   // 所以提示写明是 resume 的选项。
@@ -1057,35 +1342,66 @@ test("resume restarts the bound session in a new pane and launch refuses while t
   // pane 已死：resume 用绑定里的会话 id 起 claude --resume，等到新的 session-start 记录。
   writeFileSync(path.join(current.state, "panes.txt"), "");
   resetLog(current);
-  const resumed = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "2"], { input: intent, env: hooks });
+  const resumed = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "2"], {
+    input: intent,
+    env: hooks,
+  });
   equal(resumed.status, 0, JSON.stringify(resumed.json));
   equal(resumed.json.command, "resume");
   equal(resumed.json.resumed, true);
-  const observation = resumed.json.observation as { handle: { value: string }; tmux: { paneId: string } };
+  const observation = resumed.json.observation as {
+    handle: { value: string };
+    tmux: { paneId: string };
+  };
   equal(observation.handle.value, SESSION_ID);
   deepEqual(resumed.json.hook, { sessionStart: "observed" });
-  const created = tmuxLog(current).find((entry) => entry[0] === "new-session" || entry[0] === "new-window");
+  const created = tmuxLog(current).find(
+    (entry) => entry[0] === "new-session" || entry[0] === "new-window",
+  );
   if (created === undefined) throw new Error("resume must open a tmux window");
   const command = created[created.length - 1] ?? "";
   equal(command.includes(`'--resume' '${SESSION_ID}'`), true, command);
   equal(command.includes("--session-id"), false, command);
   assertSessionPermissionRules(current, command);
   // 没有绑定的窗口不能 resume。
-  equal(runHelper(current, ["resume", "--window", CONTROLLER_WINDOW_ID, "--wait", "0"], { input: JSON.stringify(launchIntent("Controller", ".")) }).json.reason, "binding-missing");
+  equal(
+    runHelper(current, ["resume", "--window", CONTROLLER_WINDOW_ID, "--wait", "0"], {
+      input: JSON.stringify(launchIntent("Controller", ".")),
+    }).json.reason,
+    "binding-missing",
+  );
   // SessionStart 没到但新 pane 还活着：待定，交给 Controller 稍后核对。
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@2", pane: "%2" })}\n`);
-  const pendingResume = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@2", pane: "%2" })}\n`,
+  );
+  const pendingResume = runHelper(
+    current,
+    ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"],
+    { input: intent },
+  );
   equal(pendingResume.status, 0, JSON.stringify(pendingResume.json));
   deepEqual(pendingResume.json.hook, { sessionStart: "pending" });
   // claude 拒绝 --resume（会话从未有过对话）会直接退出：pane 消失或已死都是 resume-exited，不能当待定成功交给 relocate。
   writeFileSync(path.join(current.state, "panes.txt"), "");
-  const exitedResume = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  const exitedResume = runHelper(
+    current,
+    ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"],
+    { input: intent },
+  );
   equal(exitedResume.status, 1);
   equal(exitedResume.json.reason, "resume-exited");
   deepEqual(exitedResume.json.tmux, { windowId: "@3", paneId: "%3", pane: "absent" });
   equal(typeof exitedResume.json.hint, "string");
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@4", pane: "%4", dead: true })}\n`);
-  const exitedLaunch = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@4", pane: "%4", dead: true })}\n`,
+  );
+  const exitedLaunch = runHelper(
+    current,
+    ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"],
+    { input: intent },
+  );
   equal(exitedLaunch.status, 1);
   equal(exitedLaunch.json.reason, "launch-exited");
   deepEqual(exitedLaunch.json.tmux, { windowId: "@4", paneId: "%4", pane: "dead" });
@@ -1105,8 +1421,16 @@ test("teardown kills the configured session only when nothing is registered, unl
   writeFileSync(path.join(current.state, "session"), "");
   const killed = runHelper(current, ["teardown"]);
   equal(killed.status, 0, JSON.stringify(killed.json));
-  deepEqual(killed.json, { ok: true, command: "teardown", sessionName: "wakeflow", status: "killed" });
-  deepEqual(tmuxLog(current).map((entry) => entry[0]), ["has-session", "kill-session"]);
+  deepEqual(killed.json, {
+    ok: true,
+    command: "teardown",
+    sessionName: "wakeflow",
+    status: "killed",
+  });
+  deepEqual(
+    tmuxLog(current).map((entry) => entry[0]),
+    ["has-session", "kill-session"],
+  );
   deepEqual(tmuxLog(current)[1], ["kill-session", "-t", "=wakeflow"]);
   rmSync(path.join(current.state, "session"));
   deepEqual(runHelper(current, ["teardown"]).json, {
@@ -1129,14 +1453,28 @@ test("deliver readback confirms Claude Code's collapsed paste indicator when its
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`,
+  );
   // 去首尾空白后四行，尾随一个换行：折叠指示的 "+3 lines"（行数减一）与 "+4 lines"（原样粘贴的换行数）都认。
-  const prompt = "Implement the task package for Product A now.\n\nRead the package first; touch only ProductA.\nReport back.\n";
-  const readbackFor = (screen: string, input = prompt): { status: string; evidenceDigest?: string } => {
+  const prompt =
+    "Implement the task package for Product A now.\n\nRead the package first; touch only ProductA.\nReport back.\n";
+  const readbackFor = (
+    screen: string,
+    input = prompt,
+  ): { status: string; evidenceDigest?: string } => {
     // 送前截屏看到的是空输入框，送后截屏才是被测的回读屏幕（桩的 capture-before 只用一次）。
-    writeFileSync(path.join(current.state, "capture-before.txt"), "● Ready.\n──────────\n❯ \n──────────\n");
+    writeFileSync(
+      path.join(current.state, "capture-before.txt"),
+      "● Ready.\n──────────\n❯ \n──────────\n",
+    );
     writeFileSync(path.join(current.state, "capture.txt"), screen);
-    const run = runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"], { input });
+    const run = runHelper(
+      current,
+      ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"],
+      { input },
+    );
     equal(run.status, 0, JSON.stringify(run.json));
     return run.json.readback as { status: string; evidenceDigest?: string };
   };
@@ -1150,17 +1488,33 @@ test("deliver readback confirms Claude Code's collapsed paste indicator when its
   equal(readbackFor("❯ [Pasted text #1 +7 lines]\n").status, "pending");
   equal(readbackFor("❯ [Pasted text #1]\n").status, "pending");
   // 首行子串可见（未折叠的粘贴）：confirmed；什么都看不到：pending。
-  equal(readbackFor("> Implement the task package for Product A now.\n\nWorking...\n").status, "confirmed");
+  equal(
+    readbackFor("> Implement the task package for Product A now.\n\nWorking...\n").status,
+    "confirmed",
+  );
   equal(readbackFor("✻ Worked for 2s · done 2:30 AM\n\n❯ \n").status, "pending");
   // 一行的 prompt：不带计数的指示即 confirmed，带别的计数不算。
   const oneLine = "Continue with the plan as written.\n";
   equal(readbackFor("❯ [Pasted text #2]\n", oneLine).status, "confirmed");
   equal(readbackFor("❯ [Pasted text #2 +4 lines]\n", oneLine).status, "pending");
   // 对话区里更早投递留下的同形指示不算：输入框为空或输入框里是别的指示时仍是 pending（§13.130）。
-  equal(readbackFor("> [Pasted text #1 +3 lines]\n\n● Done.\n──────────\n❯ \n──────────\n").status, "pending");
-  equal(readbackFor("> [Pasted text #1 +3 lines]\n● Done.\n❯ [Pasted text #2 +7 lines]\n").status, "pending");
-  equal(readbackFor("> [Pasted text #1 +3 lines]\n\n● Done.\n──────────\n", oneLine).status, "pending");
-  equal(readbackFor("> old reply\n──────────\n❯ [Pasted text #3 +3 lines]\n──────────\n  footer\n").status, "confirmed");
+  equal(
+    readbackFor("> [Pasted text #1 +3 lines]\n\n● Done.\n──────────\n❯ \n──────────\n").status,
+    "pending",
+  );
+  equal(
+    readbackFor("> [Pasted text #1 +3 lines]\n● Done.\n❯ [Pasted text #2 +7 lines]\n").status,
+    "pending",
+  );
+  equal(
+    readbackFor("> [Pasted text #1 +3 lines]\n\n● Done.\n──────────\n", oneLine).status,
+    "pending",
+  );
+  equal(
+    readbackFor("> old reply\n──────────\n❯ [Pasted text #3 +3 lines]\n──────────\n  footer\n")
+      .status,
+    "confirmed",
+  );
 });
 
 test("nudge sends one phrase only when the pane shows an API error, is idle and has an empty input box（§13.130 H3）", async (t) => {
@@ -1169,8 +1523,14 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
   const livePane = paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS });
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
-  const errorLine = "  ⎿  API Error: Connection lost mid-response. The response above may be incomplete.";
-  const footer = ["──────────", "  Opus 5.5 · Product A", "  ⏵⏵ bypass permissions on (shift+tab to cycle)", ""];
+  const errorLine =
+    "  ⎿  API Error: Connection lost mid-response. The response above may be incomplete.";
+  const footer = [
+    "──────────",
+    "  Opus 5.5 · Product A",
+    "  ⏵⏵ bypass permissions on (shift+tab to cycle)",
+    "",
+  ];
   const screen = (...lines: readonly string[]): string => [...lines, ...footer].join("\n");
   const idle = screen("  Reading the task package first.", errorLine, "", "──────────", "❯ ");
   const nudgeWith = (capture: string, args: readonly string[] = []): HelperRun => {
@@ -1181,7 +1541,15 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
   // 错误行在尾部、没有工作中标记、输入框为空：粘贴默认的一句并回车一次。
   // 输入框里的暗色提示建议不算已打的字：照样推一句（§13.133 现场）。
   equal(
-    nudgeWith(screen("  Reading the task package first.", errorLine, "", "──────────", "❯ \u001b[2mcontinue\u001b[0m")).json.status,
+    nudgeWith(
+      screen(
+        "  Reading the task package first.",
+        errorLine,
+        "",
+        "──────────",
+        "❯ \u001b[2mcontinue\u001b[0m",
+      ),
+    ).json.status,
     "nudged",
   );
   const nudged = nudgeWith(idle);
@@ -1191,36 +1559,67 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
     command: "nudge",
     windowId: PRODUCT_WINDOW_ID,
     status: "nudged",
-    observedError: "⎿ API Error: Connection lost mid-response. The response above may be incomplete.",
+    observedError:
+      "⎿ API Error: Connection lost mid-response. The response above may be incomplete.",
     evidenceDigest: computeSha256Digest(encodeUtf8(idle, "$screen"), "$screen"),
     textDigest: computeSha256Digest(encodeUtf8("Continue.", "$text"), "$text"),
   });
   equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), "Continue.");
   const log = tmuxLog(current);
-  deepEqual(log.map((entry) => entry[0]), ["list-panes", "capture-pane", "load-buffer", "paste-buffer", "send-keys"]);
+  deepEqual(
+    log.map((entry) => entry[0]),
+    ["list-panes", "capture-pane", "load-buffer", "paste-buffer", "send-keys"],
+  );
   deepEqual(log[1], ["capture-pane", "-e", "-p", "-t", "%9"]);
   deepEqual(log[3]?.slice(0, 4), ["paste-buffer", "-d", "-p", "-b"]);
   deepEqual(log[4], ["send-keys", "-t", "%9", "Enter"]);
   // 工作区语言的一句也行；输入框里的占位提示算空。
-  const chinese = nudgeWith(screen(errorLine, "❯ Try \"fix lint errors\""), ["--text", "继续"]);
+  const chinese = nudgeWith(screen(errorLine, '❯ Try "fix lint errors"'), ["--text", "继续"]);
   equal(chinese.json.status, "nudged");
   equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), "继续");
   // 没有错误行：not-needed，不粘贴；错误行已滚出尾部（后面跟着十二个以上非空行）同样 not-needed。
-  const calm = nudgeWith(screen("  Done.", "✻ Worked for 3m 2s · done 2:30 AM", "──────────", "❯ "));
+  const calm = nudgeWith(
+    screen("  Done.", "✻ Worked for 3m 2s · done 2:30 AM", "──────────", "❯ "),
+  );
   equal(calm.status, 0);
   equal(calm.json.status, "not-needed");
   equal(calm.json.observedError, null);
-  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
-  const scrolled = nudgeWith(screen(errorLine, ...Array.from({ length: 12 }, (_, index) => `  line ${index}`), "❯ "));
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+    false,
+  );
+  const scrolled = nudgeWith(
+    screen(errorLine, ...Array.from({ length: 12 }, (_, index) => `  line ${index}`), "❯ "),
+  );
   equal(scrolled.json.status, "not-needed");
   // 错误行之后已有输出（续上的一轮已完成、已渲染的用户消息）：错误行不再是最后一条对话行，not-needed
   // 且不粘贴（§13.130）。
-  const finished = nudgeWith(screen(errorLine, "● Done, the fix is in.", "✻ Worked for 9s · done 2:31 AM", "──────────", "❯ "));
+  const finished = nudgeWith(
+    screen(
+      errorLine,
+      "● Done, the fix is in.",
+      "✻ Worked for 9s · done 2:31 AM",
+      "──────────",
+      "❯ ",
+    ),
+  );
   equal(finished.json.status, "not-needed");
-  equal(finished.json.observedError, "⎿ API Error: Connection lost mid-response. The response above may be incomplete.");
-  equal(nudgeWith(screen(errorLine, "", "❯ Continue.", "──────────", "❯ ")).json.status, "not-needed");
-  equal(nudgeWith(screen(errorLine, "  some later output", "──────────", "❯ ")).json.status, "not-needed");
-  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  equal(
+    finished.json.observedError,
+    "⎿ API Error: Connection lost mid-response. The response above may be incomplete.",
+  );
+  equal(
+    nudgeWith(screen(errorLine, "", "❯ Continue.", "──────────", "❯ ")).json.status,
+    "not-needed",
+  );
+  equal(
+    nudgeWith(screen(errorLine, "  some later output", "──────────", "❯ ")).json.status,
+    "not-needed",
+  );
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+    false,
+  );
   // 有错误行但还在工作、在跑 hook、输入框有字、看不到输入框：busy，不粘贴。
   const spinner = nudgeWith(screen(errorLine, "✻ Cogitating… (esc to interrupt)", "❯ "));
   equal(spinner.json.status, "busy");
@@ -1233,7 +1632,10 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
   const unseen = nudgeWith(screen(errorLine));
   equal(unseen.json.status, "busy");
   equal(unseen.json.observedBusy, "input-box-unseen");
-  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+    false,
+  );
   // pane 定位失败：pane-missing 带具体原因，退出码 1，从不粘贴。
   writeFileSync(path.join(current.state, "panes.txt"), "");
   const missing = nudgeWith(idle);
@@ -1248,22 +1650,41 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
   const wrongProcess = nudgeWith(idle);
   equal(wrongProcess.json.status, "pane-missing");
   equal(wrongProcess.json.reason, "wrong-process");
-  equal(tmuxLog(current).some((entry) => entry[0] === "capture-pane"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "capture-pane"),
+    false,
+  );
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
-  equal(runHelper(current, ["nudge", "--window", CONTROLLER_WINDOW_ID]).json.reason, "locator-missing");
+  equal(
+    runHelper(current, ["nudge", "--window", CONTROLLER_WINDOW_ID]).json.reason,
+    "locator-missing",
+  );
   // 截屏失败、粘贴失败与参数错误。
   writeFileSync(path.join(current.state, "capture.txt"), idle);
-  const noCapture = runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID], { env: { WAKEFLOW_STUB_FAIL: "capture-pane" } });
+  const noCapture = runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID], {
+    env: { WAKEFLOW_STUB_FAIL: "capture-pane" },
+  });
   equal(noCapture.status, 1);
   equal(noCapture.json.reason, "capture-failed");
-  const pasteFailed = runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID], { env: { WAKEFLOW_STUB_FAIL: "paste-buffer" } });
+  const pasteFailed = runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID], {
+    env: { WAKEFLOW_STUB_FAIL: "paste-buffer" },
+  });
   equal(pasteFailed.status, 1);
   equal(pasteFailed.json.reason, "paste-failed");
   equal(pasteFailed.json.status, undefined);
   equal(runHelper(current, ["nudge"]).json.reason, "window-required");
-  equal(runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", ""]).json.reason, "text-invalid");
-  equal(runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", "   "]).json.reason, "text-invalid");
-  equal(runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", "a\nb"]).json.reason, "text-invalid");
+  equal(
+    runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", ""]).json.reason,
+    "text-invalid",
+  );
+  equal(
+    runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", "   "]).json.reason,
+    "text-invalid",
+  );
+  equal(
+    runHelper(current, ["nudge", "--window", PRODUCT_WINDOW_ID, "--text", "a\nb"]).json.reason,
+    "text-invalid",
+  );
 });
 
 function realGitPath(): string {
@@ -1277,7 +1698,11 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   const gitPath = realGitPath();
   const repository = path.join(current.parent, "ProductA");
   // 真实的临时仓库；全局与系统配置都关掉，签名、模板与钩子设置不会漏进来。
-  const isolation = { HOME: current.parent, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
+  const isolation = {
+    HOME: current.parent,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+  };
   const gitEnvironment = {
     PATH: process.env.PATH ?? "",
     ...isolation,
@@ -1296,13 +1721,25 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   git(["add", "README.md"]);
   git(["commit", "-q", "-m", "init"]);
   const head = git(["rev-parse", "HEAD"]).trim();
-  const helperEnvironment = { WAKEFLOW_REAL_GIT: gitPath, WAKEFLOW_STUB_HOOKS: current.hooks, ...isolation };
+  const helperEnvironment = {
+    WAKEFLOW_REAL_GIT: gitPath,
+    WAKEFLOW_STUB_HOOKS: current.hooks,
+    ...isolation,
+  };
   const intentFor = (name: string, placement = "../ProductA"): string => {
     const intent = launchIntent("Product A", placement, ["--worktree", name]);
-    intent.worktree = { repositoryId: "repository_12345678-1234-4123-8123-123456789abc", suggestedName: name, basePolicy: "local-head" };
+    intent.worktree = {
+      repositoryId: "repository_12345678-1234-4123-8123-123456789abc",
+      suggestedName: name,
+      basePolicy: "local-head",
+    };
     return JSON.stringify(intent);
   };
-  const launch = (name: string, extraEnvironment: Record<string, string> = {}, placement?: string): HelperRun =>
+  const launch = (
+    name: string,
+    extraEnvironment: Record<string, string> = {},
+    placement?: string,
+  ): HelperRun =>
     runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
       input: intentFor(name, placement),
       env: { ...helperEnvironment, ...extraEnvironment },
@@ -1310,7 +1747,10 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
     });
   const checkout = path.join(repository, ".claude", "worktrees", "feature-x");
   const exclude = path.join(repository, ".git", "info", "exclude");
-  const excludeLines = (): number => readFileSync(exclude, "utf8").split("\n").filter((line) => line === ".claude/worktrees/").length;
+  const excludeLines = (): number =>
+    readFileSync(exclude, "utf8")
+      .split("\n")
+      .filter((line) => line === ".claude/worktrees/").length;
   // 创建：从本地 HEAD 建 worktree-feature-x 分支与检出，exclude 加一行，主检出的 status 保持干净。
   const created = launch("feature-x");
   equal(created.status, 0, JSON.stringify(created.json));
@@ -1322,8 +1762,14 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   equal(existsSync(path.join(checkout, "README.md")), true);
   equal(excludeLines(), 1);
   equal(git(["status", "--porcelain"]).trim(), "");
-  const observed = (created.json.observation as { readonly worktree?: { readonly porcelain: string } }).worktree;
-  equal(observed?.porcelain.includes("refs/heads/worktree-feature-x"), true, "the observation lists the prepared checkout");
+  const observed = (
+    created.json.observation as { readonly worktree?: { readonly porcelain: string } }
+  ).worktree;
+  equal(
+    observed?.porcelain.includes("refs/heads/worktree-feature-x"),
+    true,
+    "the observation lists the prepared checkout",
+  );
   // 复用：检出已在就不再 add；exclude 不重复。
   const reused = launch("feature-x");
   equal(reused.status, 0, JSON.stringify(reused.json));
@@ -1337,7 +1783,8 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   equal(elsewhere.json.observedCwd, ".");
   equal(elsewhere.json.worktreePrepared, "reused");
   equal(elsewhere.json.worktreeBranch, "worktree-feature-x");
-  const opensWindow = (): boolean => tmuxLog(current).some((entry) => entry[0] === "new-window" || entry[0] === "new-session");
+  const opensWindow = (): boolean =>
+    tmuxLog(current).some((entry) => entry[0] === "new-window" || entry[0] === "new-session");
   // 分支已在、检出不在：不复用旧分支（它不一定在本地 HEAD 上），拒绝且不写 git、不开窗口（§13.130）。
   git(["worktree", "remove", "--force", checkout]);
   resetLog(current);
@@ -1351,7 +1798,10 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   mkdirSync(path.join(repository, ".claude", "worktrees", "feature-z"), { recursive: true });
   const occupied = launch("feature-z");
   equal(occupied.json.reason, "worktree-path-occupied");
-  equal(git(["rev-parse", "--verify", "--quiet", "refs/heads/worktree-feature-z"], repository, true), "");
+  equal(
+    git(["rev-parse", "--verify", "--quiet", "refs/heads/worktree-feature-z"], repository, true),
+    "",
+  );
   equal(opensWindow(), false);
   // 没有 worktree 意图：不准备，照常启动。
   const plain = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
@@ -1380,7 +1830,10 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
   const nested = launch("feature-u", {}, "../ProductA/sub");
   equal(nested.status, 1);
   equal(nested.json.reason, "worktree-root-not-toplevel");
-  equal(git(["rev-parse", "--verify", "--quiet", "refs/heads/worktree-feature-u"], repository, true), "");
+  equal(
+    git(["rev-parse", "--verify", "--quiet", "refs/heads/worktree-feature-u"], repository, true),
+    "",
+  );
   equal(existsSync(path.join(repository, "sub", ".claude")), false);
   equal(opensWindow(), false);
   // `git worktree add` 本身失败（一个 worktree-feature-t/x 分支占住了引用名空间）：开窗之前拒绝，
@@ -1406,7 +1859,11 @@ const SELF_RESTART_PROMPT =
   "Wakeflow: this Controller session restarted in place to load the updated plugin. Load the wakeflow-controller skill again, since its text may have changed, then call wakeflow_verify and continue where you left off.";
 
 /** 脱离的子进程晚一点才调用 tmux：只看已写完整的日志行，等到某个子命令出现或超时。 */
-async function waitForTmuxCall(current: Fixture, command: string, timeoutMs: number): Promise<readonly string[]> {
+async function waitForTmuxCall(
+  current: Fixture,
+  command: string,
+  timeoutMs: number,
+): Promise<readonly string[]> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const raw = readFileSync(current.log, "utf8");
@@ -1440,21 +1897,36 @@ test("resume --in-place restarts the bound session inside the window's own pane 
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
   const livePane = paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS });
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
-  const intent = JSON.stringify({ windowId: PRODUCT_WINDOW_ID, launchIntent: launchIntent("Product A", "../ProductA") });
+  const intent = JSON.stringify({
+    windowId: PRODUCT_WINDOW_ID,
+    launchIntent: launchIntent("Product A", "../ProductA"),
+  });
   const footer = "──────────\n  ⏵⏵ auto mode on (shift+tab to cycle)\n";
   const idle = `● Done.\n✻ Crunched for 3m 6s · done 4:10 PM\n\n──────────\n❯ \n${footer}`;
   // 从未有过对话的会话不能 --resume：没有它的 user-prompt-submit 记录就拒绝，不截屏、不 respawn。
   writeFileSync(path.join(current.state, "capture.txt"), idle);
   resetLog(current);
-  const neverConversed = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--in-place"], { input: intent });
+  const neverConversed = runHelper(
+    current,
+    ["resume", "--window", PRODUCT_WINDOW_ID, "--in-place"],
+    { input: intent },
+  );
   equal(neverConversed.status, 1, JSON.stringify(neverConversed.json));
   equal(neverConversed.json.reason, "resume-never-conversed");
   equal(typeof neverConversed.json.hint, "string");
-  deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes"]);
+  deepEqual(
+    tmuxLog(current).map((entry) => entry[0]),
+    ["list-panes"],
+  );
   const conversedId = "22222222-3333-4444-8555-666666666666";
   writeFileSync(
     path.join(current.hooks, `20260924T000500000Z-user-prompt-submit-${conversedId}.json`),
-    JSON.stringify({ kind: "WakeflowHostHookObservation", event: "user-prompt-submit", sessionId: SESSION_ID, recordId: conversedId }),
+    JSON.stringify({
+      kind: "WakeflowHostHookObservation",
+      event: "user-prompt-submit",
+      sessionId: SESSION_ID,
+      recordId: conversedId,
+    }),
   );
   const resumeWith = (screen: string, args: readonly string[] = [], hooks = true): HelperRun => {
     writeFileSync(path.join(current.state, "capture.txt"), screen);
@@ -1485,13 +1957,28 @@ test("resume --in-place restarts the bound session inside the window's own pane 
   };
   deepEqual(observation.handle, { kind: "claude-session", value: SESSION_ID });
   equal(observation.launchIntentDigest, INTENT_DIGEST);
-  deepEqual(observation.tmux, { socketName: null, sessionName: "wakeflow", windowId: "@5", paneId: "%9" });
+  deepEqual(observation.tmux, {
+    socketName: null,
+    sessionName: "wakeflow",
+    windowId: "@5",
+    paneId: "%9",
+  });
   equal(observation.worktree, undefined);
   const log = tmuxLog(current);
-  deepEqual(log.map((entry) => entry[0]), ["list-panes", "capture-pane", "respawn-pane"]);
+  deepEqual(
+    log.map((entry) => entry[0]),
+    ["list-panes", "capture-pane", "respawn-pane"],
+  );
   deepEqual(log[1], ["capture-pane", "-e", "-p", "-t", "%9"]);
   const respawn = log[2] ?? [];
-  deepEqual(respawn.slice(0, 6), ["respawn-pane", "-k", "-t", "%9", "-c", path.join(current.parent, "ProductA")]);
+  deepEqual(respawn.slice(0, 6), [
+    "respawn-pane",
+    "-k",
+    "-t",
+    "%9",
+    "-c",
+    path.join(current.parent, "ProductA"),
+  ]);
   equal(respawn[6], "-e");
   equal(respawn[7]?.startsWith("PATH="), true);
   equal(respawn.length, 9);
@@ -1500,7 +1987,11 @@ test("resume --in-place restarts the bound session inside the window's own pane 
   const resumeAt = words.indexOf("--resume");
   deepEqual(words.slice(resumeAt, resumeAt + 3), ["--resume", SESSION_ID, "--allowedTools"]);
   equal(words.includes("--session-id"), false, command);
-  equal(words.includes(SELF_RESTART_PROMPT), false, "only the self restart carries the restart prompt");
+  equal(
+    words.includes(SELF_RESTART_PROMPT),
+    false,
+    "only the self restart carries the restart prompt",
+  );
   assertSessionPermissionRules(current, command);
 
   // 还在工作（2.1.283 的计时行）、停在对话框或菜单、输入框有字、看不到输入框：window-busy，只报分类，
@@ -1510,11 +2001,21 @@ test("resume --in-place restarts the bound session inside the window's own pane 
     equal(busy.status, 1, JSON.stringify(busy.json));
     equal(busy.json.reason, "window-busy");
     equal(busy.json.observed, "working");
-    equal(busy.json.evidenceDigest, computeSha256Digest(encodeUtf8(WORKING_2_1_283, "$screen"), "$screen"));
+    equal(
+      busy.json.evidenceDigest,
+      computeSha256Digest(encodeUtf8(WORKING_2_1_283, "$screen"), "$screen"),
+    );
     equal(typeof busy.json.hint, "string");
-    deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes", "capture-pane"]);
+    deepEqual(
+      tmuxLog(current).map((entry) => entry[0]),
+      ["list-panes", "capture-pane"],
+    );
   }
-  equal(resumeWith(`✻ Cogitating… (esc to interrupt)\n──────────\n❯ \n${footer}`, ["--wait", "0"]).json.observed, "working");
+  equal(
+    resumeWith(`✻ Cogitating… (esc to interrupt)\n──────────\n❯ \n${footer}`, ["--wait", "0"]).json
+      .observed,
+    "working",
+  );
   // 计时行下面挂着长待办清单：它被推出屏幕尾部，闲置判断仍看整屏，照样是 working。
   const todos = Array.from({ length: 12 }, (_, index) => `     ◻ Step ${index + 1} of the plan`);
   const workingWithTodos = [
@@ -1531,15 +2032,35 @@ test("resume --in-place restarts the bound session inside the window's own pane 
   equal(busyWithTodos.json.reason, "window-busy", JSON.stringify(busyWithTodos.json));
   equal(busyWithTodos.json.observed, "working");
   // 一屏长的已结束对话（没有工作中标记）仍是闲置：整屏扫描不把普通对话当工作中。
-  const transcript = Array.from({ length: 30 }, (_, index) => `  Finished step ${index + 1}: tests pass (12s).`);
-  const longIdle = resumeWith([...transcript, "✻ Crunched for 3m 6s · done 4:10 PM", "", "──────────", "❯ ", footer].join("\n"), ["--wait", "0"]);
+  const transcript = Array.from(
+    { length: 30 },
+    (_, index) => `  Finished step ${index + 1}: tests pass (12s).`,
+  );
+  const longIdle = resumeWith(
+    [...transcript, "✻ Crunched for 3m 6s · done 4:10 PM", "", "──────────", "❯ ", footer].join(
+      "\n",
+    ),
+    ["--wait", "0"],
+  );
   equal(longIdle.status, 0, JSON.stringify(longIdle.json));
   equal(longIdle.json.inPlace, true);
   resetLog(current);
-  equal(resumeWith(" Do you want to proceed?\n ❯ 1. Yes\n   2. No\n", ["--wait", "0"]).json.observed, "menu-cursor");
-  equal(resumeWith(`● Done.\n──────────\n❯ half-typed\n${footer}`, ["--wait", "0"]).json.observed, "input-not-empty");
-  equal(resumeWith("Resuming the conversation\n", ["--wait", "0"]).json.observed, "input-box-unseen");
-  equal(tmuxLog(current).some((entry) => entry[0] === "respawn-pane"), false);
+  equal(
+    resumeWith(" Do you want to proceed?\n ❯ 1. Yes\n   2. No\n", ["--wait", "0"]).json.observed,
+    "menu-cursor",
+  );
+  equal(
+    resumeWith(`● Done.\n──────────\n❯ half-typed\n${footer}`, ["--wait", "0"]).json.observed,
+    "input-not-empty",
+  );
+  equal(
+    resumeWith("Resuming the conversation\n", ["--wait", "0"]).json.observed,
+    "input-box-unseen",
+  );
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "respawn-pane"),
+    false,
+  );
 
   // SessionStart 没到但 pane 还活着：待定；claude 拒绝 --resume 退出、窗口随之关闭：resume-exited。
   const pending = resumeWith(idle, ["--wait", "0"], false);
@@ -1555,7 +2076,10 @@ test("resume --in-place restarts the bound session inside the window's own pane 
   // 定位失败按 deliver 的原因拒绝；没有绑定不能 resume；不带 --in-place 时照旧拒绝活着的 pane。
   writeFileSync(path.join(current.state, "panes.txt"), "");
   equal(resumeWith(idle, ["--wait", "0"]).json.reason, "pane-missing");
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9" })}\n`);
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9" })}\n`,
+  );
   equal(resumeWith(idle, ["--wait", "0"]).json.reason, "metadata-mismatch");
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
   equal(
@@ -1565,20 +2089,34 @@ test("resume --in-place restarts the bound session inside the window's own pane 
     "binding-missing",
   );
   resetLog(current);
-  const notInPlace = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], { input: intent });
+  const notInPlace = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
+    input: intent,
+  });
   equal(notInPlace.json.reason, "locator-live");
-  equal(tmuxLog(current).some((entry) => entry[0] === "respawn-pane" || entry[0] === "new-window"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "respawn-pane" || entry[0] === "new-window"),
+    false,
+  );
 });
 
 test("resume --in-place from inside the window's own pane checks the session, schedules a detached restart and returns first（§13.134）", async (t) => {
-  if (loadSensitive(t, "detached restart child observed through the tmux log with wall-clock waits")) return;
+  if (
+    loadSensitive(t, "detached restart child observed through the tmux log with wall-clock waits")
+  )
+    return;
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`,
+  );
   // 屏幕是工作中：自己重启自己时不看屏幕（此刻它正在跑这一次 Bash）。
   writeFileSync(path.join(current.state, "capture.txt"), WORKING_2_1_283);
-  const intent = JSON.stringify({ windowId: PRODUCT_WINDOW_ID, launchIntent: launchIntent("Product A", "../ProductA") });
+  const intent = JSON.stringify({
+    windowId: PRODUCT_WINDOW_ID,
+    launchIntent: launchIntent("Product A", "../ProductA"),
+  });
   const inPane = { TMUX_PANE: "%9", TMUX: "/private/tmp/tmux-501/default,111,0" };
   // 这个 pane 跑的不是绑定的会话：拒绝，不安排重启。
   const mismatch = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--in-place"], {
@@ -1588,7 +2126,13 @@ test("resume --in-place from inside the window's own pane checks the session, sc
   equal(mismatch.status, 1);
   equal(mismatch.json.reason, "self-mismatch");
   equal(typeof mismatch.json.hint, "string");
-  equal(runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--in-place"], { input: intent, env: inPane }).json.reason, "self-mismatch");
+  equal(
+    runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--in-place"], {
+      input: intent,
+      env: inPane,
+    }).json.reason,
+    "self-mismatch",
+  );
   resetLog(current);
   const scheduled = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--in-place"], {
     input: intent,
@@ -1606,20 +2150,38 @@ test("resume --in-place from inside the window's own pane checks the session, sc
     restartAfterSeconds: 2,
   });
   // 返回时只读过 pane 清单：没有截屏，也没有同步 respawn 自己。
-  deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes"]);
+  deepEqual(
+    tmuxLog(current).map((entry) => entry[0]),
+    ["list-panes"],
+  );
   // 脱离的子进程隔两秒执行同一条 respawn-pane；重启后的会话以固定 prompt 开头，它在 --resume <id> 之后、
   // 变长的 --allowedTools 之前。
   const respawn = await waitForTmuxCall(current, "respawn-pane", 10_000);
-  deepEqual(respawn.slice(0, 6), ["respawn-pane", "-k", "-t", "%9", "-c", path.join(current.parent, "ProductA")]);
+  deepEqual(respawn.slice(0, 6), [
+    "respawn-pane",
+    "-k",
+    "-t",
+    "%9",
+    "-c",
+    path.join(current.parent, "ProductA"),
+  ]);
   const command = respawn.at(-1) ?? "";
   const words = shellWords(command);
   const resumeAt = words.indexOf("--resume");
-  deepEqual(words.slice(resumeAt, resumeAt + 4), ["--resume", SESSION_ID, SELF_RESTART_PROMPT, "--allowedTools"]);
+  deepEqual(words.slice(resumeAt, resumeAt + 4), [
+    "--resume",
+    SESSION_ID,
+    SELF_RESTART_PROMPT,
+    "--allowedTools",
+  ]);
   assertSessionPermissionRules(current, command);
   // 被拒绝的两次在它之前运行：若它们也安排了重启，此刻已经出现在日志里。
   await new Promise((resolve) => setTimeout(resolve, 500));
   equal(tmuxLog(current).filter((entry) => entry[0] === "respawn-pane").length, 1);
-  equal(tmuxLog(current).some((entry) => entry[0] === "capture-pane"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "capture-pane"),
+    false,
+  );
 });
 
 test("launch adopts an unregistered marked claude window instead of opening a duplicate, and refuses when it cannot prove or pick one（§13.134）", async (t) => {
@@ -1627,7 +2189,10 @@ test("launch adopts an unregistered marked claude window instead of opening a du
   const adoptedSession = "1a1a1a1a-2222-4333-8444-555555555555";
   const resumedSession = "2b2b2b2b-3333-4444-8555-666666666666";
   const marks = { programId: PROGRAM_ID, hostId: "claude-code", windowId: PRODUCT_WINDOW_ID };
-  const intent = JSON.stringify({ windowId: PRODUCT_WINDOW_ID, launchIntent: launchIntent("Product A", "../ProductA") });
+  const intent = JSON.stringify({
+    windowId: PRODUCT_WINDOW_ID,
+    launchIntent: launchIntent("Product A", "../ProductA"),
+  });
   // 照常开窗口的那几次由桩写出新会话的 session-start 记录；收养的那几次不开窗口，这个环境不起作用。
   const launch = (): HelperRun => {
     resetLog(current);
@@ -1637,28 +2202,62 @@ test("launch adopts an unregistered marked claude window instead of opening a du
     });
   };
   const touchesWindows = (): boolean =>
-    tmuxLog(current).some((entry) => ["has-session", "new-session", "new-window", "set-option", "respawn-pane"].includes(entry[0] ?? ""));
+    tmuxLog(current).some((entry) =>
+      ["has-session", "new-session", "new-window", "set-option", "respawn-pane"].includes(
+        entry[0] ?? "",
+      ),
+    );
   const sessionStart = (sessionId: string): void => {
     writeFileSync(
       path.join(current.hooks, `20260924T000000000Z-session-start-${sessionId}.json`),
-      JSON.stringify({ kind: "stub", event: "session-start", sessionId, cwd: path.join(current.parent, "ProductA") }),
+      JSON.stringify({
+        kind: "stub",
+        event: "session-start",
+        sessionId,
+        cwd: path.join(current.parent, "ProductA"),
+      }),
     );
   };
-  const claudePane = paneRow({ window: "@4", pane: "%6", command: "2.1.283", pid: 600, options: marks });
-  writeFileSync(path.join(current.state, "panes.txt"), [
-    claudePane,
-    // 已死的同标识 pane 不算候选；别的窗口的标识也不算。
-    paneRow({ window: "@7", pane: "%11", dead: true, command: "2.1.283", pid: 700, options: marks }),
-    paneRow({ window: "@8", pane: "%12", command: "zsh", pid: 800, options: { ...marks, windowId: CONTROLLER_WINDOW_ID } }),
-    "",
-  ].join("\n"));
-  writeFileSync(path.join(current.state, "ps.txt"), [
-    "  600     1 /bin/zsh",
-    "  601   600 /opt/claude/bin/claude",
-    "  700     1 /bin/zsh",
-    "  800     1 /bin/zsh",
-    "",
-  ].join("\n"));
+  const claudePane = paneRow({
+    window: "@4",
+    pane: "%6",
+    command: "2.1.283",
+    pid: 600,
+    options: marks,
+  });
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      claudePane,
+      // 已死的同标识 pane 不算候选；别的窗口的标识也不算。
+      paneRow({
+        window: "@7",
+        pane: "%11",
+        dead: true,
+        command: "2.1.283",
+        pid: 700,
+        options: marks,
+      }),
+      paneRow({
+        window: "@8",
+        pane: "%12",
+        command: "zsh",
+        pid: 800,
+        options: { ...marks, windowId: CONTROLLER_WINDOW_ID },
+      }),
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    path.join(current.state, "ps.txt"),
+    [
+      "  600     1 /bin/zsh",
+      "  601   600 /opt/claude/bin/claude",
+      "  700     1 /bin/zsh",
+      "  800     1 /bin/zsh",
+      "",
+    ].join("\n"),
+  );
   writeFileSync(
     path.join(current.state, "args-601.txt"),
     `claude --session-id ${adoptedSession} --permission-mode auto --model opus --allowedTools mcp__plugin_wakeflow_wakeflow Bash(node /opt/x/tmux.mjs *)\n`,
@@ -1670,7 +2269,10 @@ test("launch adopts an unregistered marked claude window instead of opening a du
   equal(unproven.json.reason, "adopt-unproven");
   deepEqual(unproven.json.tmux, { windowId: "@4", paneId: "%6" });
   equal(typeof unproven.json.hint, "string");
-  deepEqual(tmuxLog(current).map((entry) => entry[0]), ["list-panes"]);
+  deepEqual(
+    tmuxLog(current).map((entry) => entry[0]),
+    ["list-panes"],
+  );
 
   // 有记录：收养那个 pane 的会话，observation 带当前意图的摘要；不开窗口、不写选项。
   sessionStart(adoptedSession);
@@ -1689,7 +2291,12 @@ test("launch adopts an unregistered marked claude window instead of opening a du
   deepEqual(observation.handle, { kind: "claude-session", value: adoptedSession });
   equal(observation.launchIntentDigest, INTENT_DIGEST);
   match(observation.observedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
-  deepEqual(observation.tmux, { socketName: null, sessionName: "wakeflow", windowId: "@4", paneId: "%6" });
+  deepEqual(observation.tmux, {
+    socketName: null,
+    sessionName: "wakeflow",
+    windowId: "@4",
+    paneId: "%6",
+  });
   equal(observation.worktree, undefined);
   deepEqual(adopted.json.hook, { sessionStart: "observed" });
   deepEqual(adopted.json.window, { name: "Product A", cwd: "../ProductA", created: "adopted" });
@@ -1706,7 +2313,10 @@ test("launch adopts an unregistered marked claude window instead of opening a du
   sessionStart(resumedSession);
   const resumed = launch();
   equal(resumed.status, 0, JSON.stringify(resumed.json));
-  deepEqual((resumed.json.observation as { handle: unknown }).handle, { kind: "claude-session", value: resumedSession });
+  deepEqual((resumed.json.observation as { handle: unknown }).handle, {
+    kind: "claude-session",
+    value: resumedSession,
+  });
   equal(touchesWindows(), false);
   // "--session-id=<id>" 这种写法也认。
   writeFileSync(
@@ -1715,15 +2325,21 @@ test("launch adopts an unregistered marked claude window instead of opening a du
   );
   const inline = launch();
   equal(inline.status, 0, JSON.stringify(inline.json));
-  deepEqual((inline.json.observation as { handle: unknown }).handle, { kind: "claude-session", value: adoptedSession });
+  deepEqual((inline.json.observation as { handle: unknown }).handle, {
+    kind: "claude-session",
+    value: adoptedSession,
+  });
   equal(touchesWindows(), false);
 
   // 同标识的活 pane 不止一个：window-ambiguous；跑的不是 claude：window-present-not-claude。都不开窗口。
-  writeFileSync(path.join(current.state, "panes.txt"), [
-    claudePane,
-    paneRow({ window: "@9", pane: "%13", command: "2.1.283", pid: 600, options: marks }),
-    "",
-  ].join("\n"));
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      claudePane,
+      paneRow({ window: "@9", pane: "%13", command: "2.1.283", pid: 600, options: marks }),
+      "",
+    ].join("\n"),
+  );
   const ambiguous = launch();
   equal(ambiguous.status, 1);
   equal(ambiguous.json.reason, "window-ambiguous");
@@ -1760,7 +2376,10 @@ test("launch adopts an unregistered marked claude window instead of opening a du
   equal(retired.status, 0, JSON.stringify(retired.json));
   equal(retired.json.adopted, undefined);
   equal((retired.json.window as { created: string }).created, "new-window");
-  notEqual((retired.json.observation as { handle: { value: string } }).handle.value, adoptedSession);
+  notEqual(
+    (retired.json.observation as { handle: { value: string } }).handle.value,
+    adoptedSession,
+  );
 
   // 窗口已有定位器：不收养（定位器不活时照旧开新窗口，活着时照旧 locator-live）。
   writeFileSync(path.join(current.state, "panes.txt"), `${claudePane}\n`);
@@ -1775,8 +2394,12 @@ test("nudge treats Claude Code 2.1.283's elapsed-time spinner as busy and its do
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
-  const errorLine = "  ⎿  API Error: Connection lost mid-response. The response above may be incomplete.";
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`,
+  );
+  const errorLine =
+    "  ⎿  API Error: Connection lost mid-response. The response above may be incomplete.";
   const footer = ["──────────", "  ⏵⏵ auto mode on (shift+tab to cycle)", ""];
   const screen = (...lines: readonly string[]): string => [...lines, ...footer].join("\n");
   const nudgeWith = (capture: string): HelperRun => {
@@ -1794,32 +2417,50 @@ test("nudge treats Claude Code 2.1.283's elapsed-time spinner as busy and its do
     const busy = nudgeWith(screen(errorLine, spinner, "", "──────────", "❯ "));
     equal(busy.json.status, "busy", spinner);
     equal(busy.json.observedBusy, spinner);
-    equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+    equal(
+      tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+      false,
+    );
   }
   // 带 SGR 颜色的真实计时行也算工作中。
-  const colored = nudgeWith(WORKING_2_1_283.replace("● Reading the task package first.", errorLine));
+  const colored = nudgeWith(
+    WORKING_2_1_283.replace("● Reading the task package first.", errorLine),
+  );
   equal(colored.json.status, "busy");
   // 回合结束的 "✻ Crunched for 3m 6s · done 4:10 PM" 不是工作中标记：错误行是最后一条对话行时照样推一句。
-  const done = nudgeWith(screen("✻ Crunched for 3m 6s · done 4:10 PM", errorLine, "", "──────────", "❯ "));
+  const done = nudgeWith(
+    screen("✻ Crunched for 3m 6s · done 4:10 PM", errorLine, "", "──────────", "❯ "),
+  );
   equal(done.json.status, "nudged", JSON.stringify(done.json));
   equal(done.json.observedBusy, undefined);
 });
-
 
 test("hook 分片中不可读候选或符号链接不能被当作未落地，助手在粘贴前拒绝", async (t) => {
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
   writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
-  writeFileSync(path.join(current.state, "panes.txt"), `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`);
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`,
+  );
   const shard = path.join(current.hooks, "20260924", "aa");
   mkdirSync(shard, { recursive: true });
-  const candidate = path.join(shard, "20260924T010000000Z-user-prompt-submit-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.json");
+  const candidate = path.join(
+    shard,
+    "20260924T010000000Z-user-prompt-submit-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.json",
+  );
   writeFileSync(candidate, "not JSON");
-  const attempt = () => runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"], { input: "Keep this delivery unique." });
+  const attempt = () =>
+    runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0"], {
+      input: "Keep this delivery unique.",
+    });
   const broken = attempt();
   equal(broken.status, 1);
   equal(broken.json.reason, "hook-observations-unavailable");
-  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+    false,
+  );
   rmSync(shard, { recursive: true });
   const outside = path.join(current.parent, "unowned-hook-directory");
   mkdirSync(outside);
@@ -1829,6 +2470,9 @@ test("hook 分片中不可读候选或符号链接不能被当作未落地，助
   const aliased = attempt();
   equal(aliased.status, 1);
   equal(aliased.json.reason, "hook-observations-unavailable");
-  equal(tmuxLog(current).some((entry) => entry[0] === "paste-buffer"), false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+    false,
+  );
   equal(readFileSync(path.join(outside, "keep.txt"), "utf8"), "preserve");
 });

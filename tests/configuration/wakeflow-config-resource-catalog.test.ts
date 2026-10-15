@@ -1,13 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import {
-  admitWakeflowResourceOperation,
-  WakeflowResourceProcessingContractError,
-} from "../../src/foundation/resource/resource-processing-contract.js";
-import {
-  WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
-} from "../../src/configuration/wakeflow-config-authority-replacement-contract.js";
+import { WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF } from "../../src/configuration/wakeflow-config-authority-replacement-contract.js";
 import {
   WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
   WAKEFLOW_CONFIG_FILE_REF,
@@ -17,6 +10,10 @@ import {
   WAKEFLOW_CONFIG_AUTHORITY_RESOURCE_DECLARATION,
   WAKEFLOW_CONFIG_RESOURCE_CATALOG,
 } from "../../src/configuration/wakeflow-config-resource-catalog.js";
+import {
+  admitWakeflowResourceOperation,
+  WakeflowResourceProcessingContractError,
+} from "../../src/foundation/resource/resource-processing-contract.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -62,10 +59,7 @@ test("Config resource catalog owns only its stable authority and lock surfaces",
     processing: {
       kind: "resource",
       role: "mutable-snapshot",
-      allowedMutationRecipes: [
-        "exclusive-create",
-        "exact-source-replace",
-      ],
+      allowedMutationRecipes: ["exclusive-create", "exact-source-replace"],
       recoveryStrategy: "owner-forward-recovery",
     },
   });
@@ -92,10 +86,7 @@ test("Config resource catalog owns only its stable authority and lock surfaces",
     processing: {
       kind: "resource",
       role: "transaction-artifact",
-      allowedMutationRecipes: [
-        "exclusive-create",
-        "exact-retire",
-      ],
+      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
       recoveryStrategy: "owner-transaction-recovery",
     },
   });
@@ -108,17 +99,15 @@ test("Config resource catalog owns only its stable authority and lock surfaces",
     throw new Error("Config authority node policy must be a file.");
   }
   equal(
-    Number.parseInt(
-      WAKEFLOW_CONFIG_AUTHORITY_RESOURCE_DECLARATION.nodePolicy.mode,
-      8,
-    ),
+    Number.parseInt(WAKEFLOW_CONFIG_AUTHORITY_RESOURCE_DECLARATION.nodePolicy.mode, 8),
     WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
   );
 
   equal(WAKEFLOW_CONFIG_RESOURCE_CATALOG.length, 2);
   equal(
-    WAKEFLOW_CONFIG_RESOURCE_CATALOG.some((entry) =>
-      entry.placement.relativePath?.startsWith(".wakeflow-atomic-") === true),
+    WAKEFLOW_CONFIG_RESOURCE_CATALOG.some(
+      (entry) => entry.placement.relativePath?.startsWith(".wakeflow-atomic-") === true,
+    ),
     false,
   );
 
@@ -144,10 +133,12 @@ test("Config resource catalog owns only its stable authority and lock surfaces",
       recipe: "exact-source-replace",
     },
   );
-  expectOperationRejection(() => admitWakeflowResourceOperation(
-    WAKEFLOW_CONFIG_AUTHORITY_RESOURCE_DECLARATION.processing,
-    "exact-retire",
-  ));
+  expectOperationRejection(() =>
+    admitWakeflowResourceOperation(
+      WAKEFLOW_CONFIG_AUTHORITY_RESOURCE_DECLARATION.processing,
+      "exact-retire",
+    ),
+  );
 
   deepEqual(
     admitWakeflowResourceOperation(
@@ -160,8 +151,10 @@ test("Config resource catalog owns only its stable authority and lock surfaces",
       recipe: "exact-retire",
     },
   );
-  expectOperationRejection(() => admitWakeflowResourceOperation(
-    WAKEFLOW_CONFIG_AUTHORITY_LOCK_RESOURCE_DECLARATION.processing,
-    "exact-source-replace",
-  ));
+  expectOperationRejection(() =>
+    admitWakeflowResourceOperation(
+      WAKEFLOW_CONFIG_AUTHORITY_LOCK_RESOURCE_DECLARATION.processing,
+      "exact-source-replace",
+    ),
+  );
 });

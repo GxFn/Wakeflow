@@ -5,9 +5,7 @@ import {
   CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
   CLAUDE_CODE_TMUX_ASSET_REF,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../../src/workspace/workspace-host-resource-catalog.js";
 
 function assertDeepFrozen(value: unknown): void {
@@ -64,6 +62,8 @@ test("Profile 的资产文件名与资产模块一致，目录里的 tmux 助手
   const catalog = createWakeflowWorkspaceHostResourceCatalog(
     claudeCodeWorkspaceHostResourceProfile,
   );
-  const tmux = catalog.find((entry) => entry.declarationId === "host-runtime.claude-code.tmux-asset");
+  const tmux = catalog.find(
+    (entry) => entry.declarationId === "host-runtime.claude-code.tmux-asset",
+  );
   equal(tmux?.placement.relativePath, CLAUDE_CODE_TMUX_ASSET_REF);
 });

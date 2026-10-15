@@ -2,24 +2,22 @@ import { equal } from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
+import { type TestContext, test } from "node:test";
+import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "../../src/configuration/wakeflow-config-root-placement.js";
-import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
-async function fixture(t: TestContext): Promise<Readonly<{
-  root: RootedDirectory;
-  rootPath: string;
-}>> {
-  const rootPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-config-root-placement-",
-  ));
+async function fixture(t: TestContext): Promise<
+  Readonly<{
+    root: RootedDirectory;
+    rootPath: string;
+  }>
+> {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-config-root-placement-"));
   const root = await RootedDirectory.open(rootPath);
   t.after(async () => {
     await root.close();
@@ -37,33 +35,28 @@ function placementModel(overlap = false) {
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
   topology.repositories[0]!.path = "Repositories/ProductA";
   topology.supportSurfaces[0]!.path = overlap ? "Shared" : "Support/Design";
-  topology.supportSurfaces[1]!.path = overlap
-    ? "shared/child"
-    : "Support/Test";
+  topology.supportSurfaces[1]!.path = overlap ? "shared/child" : "Support/Test";
   return parseWakeflowConfig(value);
 }
 
 test("Config root placement records one stable ancestor for missing roots", async (t) => {
   const current = await fixture(t);
-  const report = await validateWakeflowConfigRootPlacements(
-    current.root,
-    placementModel(),
-  );
+  const report = await validateWakeflowConfigRootPlacements(current.root, placementModel());
 
   equal(report.workspaceRoot, current.root.absolutePath);
   equal(report.roots.length, 6);
   equal(report.missingRootKeys.length, 6);
-  equal(report.roots.every((entry) => entry.state === "missing"), true);
+  equal(
+    report.roots.every((entry) => entry.state === "missing"),
+    true,
+  );
 });
 
 test("Config root placement rejects portable case-folded containment", async (t) => {
   const current = await fixture(t);
   let caught: unknown;
   try {
-    await validateWakeflowConfigRootPlacements(
-      current.root,
-      placementModel(true),
-    );
+    await validateWakeflowConfigRootPlacements(current.root, placementModel(true));
   } catch (error: unknown) {
     caught = error;
   }

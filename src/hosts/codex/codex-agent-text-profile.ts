@@ -114,7 +114,8 @@ const COMMAND_SURFACE_EN =
   "This host ships no slash commands. Say what you want in plain words; the skill " +
   "that is loaded routes it to the right tool.";
 
-const COMMAND_SURFACE_ZH = "本宿主不发 slash 命令。直接说人话即可，已加载的技能会把它路由到对应工具。";
+const COMMAND_SURFACE_ZH =
+  "本宿主不发 slash 命令。直接说人话即可，已加载的技能会把它路由到对应工具。";
 
 const HOST_TRUST_STEPS_EN = [
   "Codex desktop uses the Node runtime supplied by the app. In the CLI, ensure Node 24",

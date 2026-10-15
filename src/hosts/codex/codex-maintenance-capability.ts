@@ -100,9 +100,9 @@ export const codexMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapabil
         throw error;
       }
       if (
-        request.profile.hostId !== "codex"
-        || request.operation.operationKind !== WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND
-        || request.operation.ownerId !== WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID
+        request.profile.hostId !== "codex" ||
+        request.operation.operationKind !== WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND ||
+        request.operation.ownerId !== WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID
       ) {
         fail("operation", "$operation");
       }

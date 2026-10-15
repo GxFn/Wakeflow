@@ -12,25 +12,14 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  planClaudeCodePortableSettingsComposition,
-} from "../../../src/hosts/claude-code/claude-code-portable-settings-composition.js";
-import {
-  publishClaudeCodePortableSettings,
-} from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
+import { planClaudeCodePortableSettingsComposition } from "../../../src/hosts/claude-code/claude-code-portable-settings-composition.js";
+import { publishClaudeCodePortableSettings } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
 import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 async function fixture(t: TestContext) {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-claude-settings-composition-",
-  ));
+  const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-claude-settings-composition-"));
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -42,19 +31,18 @@ async function fixture(t: TestContext) {
 function config() {
   const value = createMinimalWakeflowConfig();
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  const repositories = (value.topology as {
-    repositories: Record<string, unknown>[];
-  }).repositories;
+  const repositories = (
+    value.topology as {
+      repositories: Record<string, unknown>[];
+    }
+  ).repositories;
   const repository = repositories[0];
   if (repository === undefined) throw new Error("Expected repository.");
   repository.path = "ProductA";
   return value;
 }
 
-function request(
-  action: "fresh-initialize" | "reconfigure" | "reconcile",
-  configValue: unknown,
-) {
+function request(action: "fresh-initialize" | "reconfigure" | "reconcile", configValue: unknown) {
   return Object.freeze({
     action,
     config: configValue,
@@ -72,23 +60,30 @@ test("Fresh Claude composition plans Program and managed Support roots without w
   equal(plan.status, "ready");
   equal(plan.roots.length, 3);
   equal(plan.operations.length, 3);
-  deepEqual(plan.roots.map((entry) => ({
-    kind: entry.root.rootKind,
-    placement: entry.root.configuredPlacement,
-    status: entry.placementStatus,
-  })), [{
-    kind: "program",
-    placement: ".",
-    status: "present",
-  }, {
-    kind: "support-surface",
-    placement: "Design",
-    status: "planned-missing",
-  }, {
-    kind: "support-surface",
-    placement: "Test",
-    status: "planned-missing",
-  }]);
+  deepEqual(
+    plan.roots.map((entry) => ({
+      kind: entry.root.rootKind,
+      placement: entry.root.configuredPlacement,
+      status: entry.placementStatus,
+    })),
+    [
+      {
+        kind: "program",
+        placement: ".",
+        status: "present",
+      },
+      {
+        kind: "support-surface",
+        placement: "Design",
+        status: "planned-missing",
+      },
+      {
+        kind: "support-surface",
+        placement: "Test",
+        status: "planned-missing",
+      },
+    ],
+  );
   equal(JSON.stringify(plan).includes(value.absolutePath), false);
   deepEqual(readdirSync(value.absolutePath), before);
 
@@ -111,9 +106,11 @@ test("composition reads present roots, excludes external Support, and never leak
   writeFileSync(source, currentText, { mode: 0o644 });
 
   const valueWithExternal = config();
-  const surfaces = (valueWithExternal.topology as {
-    supportSurfaces: Record<string, unknown>[];
-  }).supportSurfaces;
+  const surfaces = (
+    valueWithExternal.topology as {
+      supportSurfaces: Record<string, unknown>[];
+    }
+  ).supportSurfaces;
   const design = surfaces[0];
   if (design === undefined) throw new Error("Expected Design surface.");
   design.ownership = "external-owned";
@@ -125,9 +122,10 @@ test("composition reads present roots, excludes external Support, and never leak
   );
   equal(plan.status, "ready");
   equal(plan.roots.length, 2);
-  equal(plan.roots.some((entry) => (
-    entry.root.configuredPlacement === "Design"
-  )), false);
+  equal(
+    plan.roots.some((entry) => entry.root.configuredPlacement === "Design"),
+    false,
+  );
   equal(plan.operations.length, 1);
   equal(JSON.stringify(plan).includes("do-not-project"), false);
 });
@@ -140,24 +138,23 @@ test("one blocked managed Support source blocks composition without touching oth
       recursive: true,
     });
   }
-  const legacy = "{\"permissions\":{\"allow\":[\"Bash(git *)\"]}}\n";
-  writeFileSync(
-    path.join(value.absolutePath, "Design", ".claude", "settings.json"),
-    legacy,
-    { mode: 0o644 },
-  );
+  const legacy = '{"permissions":{"allow":["Bash(git *)"]}}\n';
+  writeFileSync(path.join(value.absolutePath, "Design", ".claude", "settings.json"), legacy, {
+    mode: 0o644,
+  });
   const plan = await planClaudeCodePortableSettingsComposition(
     value.root,
     request("reconcile", config()),
   );
   equal(plan.status, "blocked");
-  equal(plan.blockerCodes.some((entry) => (
-    entry.includes("legacy-broad-permission-present")
-  )), true);
-  equal(readFileSync(
-    path.join(value.absolutePath, "Design", ".claude", "settings.json"),
-    "utf8",
-  ), legacy);
+  equal(
+    plan.blockerCodes.some((entry) => entry.includes("legacy-broad-permission-present")),
+    true,
+  );
+  equal(
+    readFileSync(path.join(value.absolutePath, "Design", ".claude", "settings.json"), "utf8"),
+    legacy,
+  );
 });
 
 test("a settings.json outside the Wakeflow node policy becomes a blocker, not a failure", async (t) => {
@@ -168,7 +165,7 @@ test("a settings.json outside the Wakeflow node policy becomes a blocker, not a 
       recursive: true,
     });
   }
-  const userText = "{\"permissions\":{\"allow\":[]}}\n";
+  const userText = '{"permissions":{"allow":[]}}\n';
   for (const directory of [".", "Design"]) {
     const source = path.join(value.absolutePath, directory, ".claude", "settings.json");
     writeFileSync(source, userText);
@@ -179,23 +176,19 @@ test("a settings.json outside the Wakeflow node policy becomes a blocker, not a 
     request("reconcile", config()),
   );
   equal(plan.status, "blocked");
-  const policyBlockers = plan.blockerCodes.filter((entry) => (
-    entry.endsWith(":source-policy")
-  ));
+  const policyBlockers = plan.blockerCodes.filter((entry) => entry.endsWith(":source-policy"));
   equal(policyBlockers.length, 2);
-  equal(policyBlockers.some((entry) => (
-    entry.startsWith("settings-blocked:program:")
-  )), true);
-  equal(policyBlockers.some((entry) => (
-    entry.startsWith("settings-blocked:support-surface:")
-  )), true);
-  deepEqual(plan.roots.map((entry) => entry.settingsStatus), [
-    "blocked",
-    "blocked",
-    "create",
-  ]);
-  equal(readFileSync(
-    path.join(value.absolutePath, ".claude", "settings.json"),
-    "utf8",
-  ), userText);
+  equal(
+    policyBlockers.some((entry) => entry.startsWith("settings-blocked:program:")),
+    true,
+  );
+  equal(
+    policyBlockers.some((entry) => entry.startsWith("settings-blocked:support-surface:")),
+    true,
+  );
+  deepEqual(
+    plan.roots.map((entry) => entry.settingsStatus),
+    ["blocked", "blocked", "create"],
+  );
+  equal(readFileSync(path.join(value.absolutePath, ".claude", "settings.json"), "utf8"), userText);
 });

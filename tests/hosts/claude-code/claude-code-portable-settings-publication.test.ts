@@ -19,15 +19,10 @@ import {
   type ClaudeCodePortableSettingsPublicationErrorReason,
   publishClaudeCodePortableSettings,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
-import {
-  WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-} from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
+import { WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
 
 async function fixture(t: TestContext) {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-claude-portable-settings-",
-  ));
+  const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-claude-portable-settings-"));
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -78,9 +73,9 @@ test("portable settings publication minimally replaces an exact mixed-owned sour
   const file = path.join(directory, "settings.json");
   const source = [
     "{",
-    "\t\"theme\": \"dark\",",
-    "\t\"permissions\": { \"allow\": [\"Read(./docs/**)\"] },",
-    "\t\"custom\": { \"preserved\": true }",
+    '\t"theme": "dark",',
+    '\t"permissions": { "allow": ["Read(./docs/**)"] },',
+    '\t"custom": { "preserved": true }',
     "}",
   ].join("\n");
   writeFileSync(file, source, { mode: 0o644 });
@@ -89,8 +84,8 @@ test("portable settings publication minimally replaces an exact mixed-owned sour
   const updated = await publishClaudeCodePortableSettings(value.root);
   equal(updated.disposition, "updated");
   const desired = readFileSync(file, "utf8");
-  equal(desired.includes("\t\"theme\": \"dark\","), true);
-  equal(desired.includes("\t\"custom\": { \"preserved\": true }"), true);
+  equal(desired.includes('\t"theme": "dark",'), true);
+  equal(desired.includes('\t"custom": { "preserved": true }'), true);
   equal(desired.includes(WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE), true);
   equal(lstatSync(file, { bigint: true }).ino === inode, false);
 });
@@ -100,7 +95,7 @@ test("portable settings publication preserves blocked legacy and unsafe sources"
   const directory = path.join(value.absolutePath, ".claude");
   mkdirSync(directory, { mode: 0o755 });
   const file = path.join(directory, "settings.json");
-  const legacy = "{\"permissions\":{\"allow\":[\"Bash(git *)\"]}}\n";
+  const legacy = '{"permissions":{"allow":["Bash(git *)"]}}\n';
   writeFileSync(file, legacy, { mode: 0o644 });
   chmodSync(file, 0o644);
   const blocked = await expectPublicationError(

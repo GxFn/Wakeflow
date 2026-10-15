@@ -83,10 +83,10 @@ function decodeCommand(command: string): DecodedCommand {
   const match = COMMAND_PATTERN.exec(command);
   const [, quotedAsset, marker, rootArgument, encodedRoot] = match ?? [];
   if (
-    quotedAsset === undefined
-    || marker === undefined
-    || rootArgument === undefined
-    || encodedRoot === undefined
+    quotedAsset === undefined ||
+    marker === undefined ||
+    rootArgument === undefined ||
+    encodedRoot === undefined
   ) {
     throw new Error("statusline command is not shaped as node -- <asset> <marker> <root>");
   }
@@ -219,8 +219,18 @@ function expectSingleLine(run: AssetRun, expected: string, privateValues: readon
 
 test("状态栏资产以 node 执行：main pod 窗口为「模型 · 窗口」，worktree pod 为「模型 · pod · 窗口」，未匹配会话只打印模型", (t) => {
   const workspace = createWorkspace(t, configWithFeaturePod());
-  writeBinding(workspace, MAIN_CONTROLLER_WINDOW_ID, MAIN_SESSION_ID, "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1");
-  writeBinding(workspace, FEATURE_PRODUCT_WINDOW_ID, FEATURE_SESSION_ID, "b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2");
+  writeBinding(
+    workspace,
+    MAIN_CONTROLLER_WINDOW_ID,
+    MAIN_SESSION_ID,
+    "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1",
+  );
+  writeBinding(
+    workspace,
+    FEATURE_PRODUCT_WINDOW_ID,
+    FEATURE_SESSION_ID,
+    "b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2",
+  );
 
   // 命令行的形状本身是合同：资产路径在工作区运行时目录里，根以 base64url 显式传入。
   const decoded = decodeCommand(claudeCodeStatuslineCommand(workspace));
@@ -231,7 +241,11 @@ test("状态栏资产以 node 执行：main pod 窗口为「模型 · 窗口」�
   const argv = nodeArgv(decoded);
   const privateValues = [workspace, MAIN_SESSION_ID, FEATURE_SESSION_ID, UNKNOWN_SESSION_ID];
 
-  expectSingleLine(runAsset(argv, statuslineInput(MAIN_SESSION_ID)), `${MODEL_NAME} · Controller`, privateValues);
+  expectSingleLine(
+    runAsset(argv, statuslineInput(MAIN_SESSION_ID)),
+    `${MODEL_NAME} · Controller`,
+    privateValues,
+  );
   expectSingleLine(
     runAsset(argv, statuslineInput(FEATURE_SESSION_ID)),
     `${MODEL_NAME} · feature-x · Product A`,
@@ -248,7 +262,12 @@ test("状态栏资产以 node 执行：main pod 窗口为「模型 · 窗口」�
 
 test("状态栏资产退化输入：超大 stdin、缺少标记、非绝对或未规范化的根、缺少配置都只打印模型且 stderr 为空", (t) => {
   const workspace = createWorkspace(t, configWithFeaturePod());
-  writeBinding(workspace, MAIN_CONTROLLER_WINDOW_ID, MAIN_SESSION_ID, "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1");
+  writeBinding(
+    workspace,
+    MAIN_CONTROLLER_WINDOW_ID,
+    MAIN_SESSION_ID,
+    "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1",
+  );
   const decoded = decodeCommand(claudeCodeStatuslineCommand(workspace));
   const argv = nodeArgv(decoded);
   const privateValues = [workspace, MAIN_SESSION_ID];
@@ -263,7 +282,10 @@ test("状态栏资产退化输入：超大 stdin、缺少标记、非绝对或�
 
   // 缺少标记：根不被采用，即使 base64url 根仍在 argv 里。
   expectSingleLine(
-    runAsset(["--", decoded.asset, decoded.rootArgument, decoded.encodedRoot], statuslineInput(MAIN_SESSION_ID)),
+    runAsset(
+      ["--", decoded.asset, decoded.rootArgument, decoded.encodedRoot],
+      statuslineInput(MAIN_SESSION_ID),
+    ),
     MODEL_NAME,
     privateValues,
   );
@@ -282,9 +304,17 @@ test("状态栏资产退化输入：超大 stdin、缺少标记、非绝对或�
 
   // 根存在但没有 wakeflow.config.json：只打印模型。
   const bare = createWorkspace(t, null);
-  writeBinding(bare, MAIN_CONTROLLER_WINDOW_ID, MAIN_SESSION_ID, "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1");
+  writeBinding(
+    bare,
+    MAIN_CONTROLLER_WINDOW_ID,
+    MAIN_SESSION_ID,
+    "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1",
+  );
   expectSingleLine(
-    runAsset(nodeArgv(decodeCommand(claudeCodeStatuslineCommand(bare))), statuslineInput(MAIN_SESSION_ID)),
+    runAsset(
+      nodeArgv(decodeCommand(claudeCodeStatuslineCommand(bare))),
+      statuslineInput(MAIN_SESSION_ID),
+    ),
     MODEL_NAME,
     [bare, MAIN_SESSION_ID],
   );
@@ -293,10 +323,13 @@ test("状态栏资产退化输入：超大 stdin、缺少标记、非绝对或�
 test("状态栏资产维护操作：缺失创建 0600、当前零写、字节与模式漂移替换、恢复接受已提交目标", async (t) => {
   const workspace = temporaryDirectory(t, "wakeflow-claude-statusline-operation-");
   // 资产目录 `operations/assets` 由操作自己物化；它上面的运行时目录链由静态布局提供。
-  mkdirSync(path.join(workspace, ".wakeflow-local", "runtime", "hosts", "claude-code", "operations"), {
-    recursive: true,
-    mode: 0o700,
-  });
+  mkdirSync(
+    path.join(workspace, ".wakeflow-local", "runtime", "hosts", "claude-code", "operations"),
+    {
+      recursive: true,
+      mode: 0o700,
+    },
+  );
   const root = await RootedDirectory.open(workspace);
   t.after(async () => {
     await root.close();
@@ -458,8 +491,8 @@ test("状态栏设置维护操作：缺文件创建只含 statusLine 的 0600 �
 
   // 不是 JSON 对象：计划不猜，报 settings-unreadable（宿主贡献把它变成 blocker）。
   const isUnreadable = (error: unknown) =>
-    error instanceof ClaudeCodeStatuslineSettingsOperationError
-    && error.reason === "settings-unreadable";
+    error instanceof ClaudeCodeStatuslineSettingsOperationError &&
+    error.reason === "settings-unreadable";
   writeFileSync(settingsPath, "[]\n", { mode: 0o600 });
   await rejects(planClaudeCodeStatuslineSettingsOperation(root), isUnreadable);
   writeFileSync(settingsPath, "{ not json\n", { mode: 0o600 });

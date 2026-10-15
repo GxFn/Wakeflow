@@ -1,15 +1,11 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  previewWakeflowMaintenanceExecution,
-} from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
+import { previewWakeflowMaintenanceExecution } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import {
   executeWakeflowMaintenanceExecutionTransaction,
   recoverWakeflowMaintenanceExecutionTransaction,
   type WakeflowMaintenanceExecutionTransactionOptions,
 } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
-import type {
-  WakeflowStaticMaterializationPreviewRequest,
-} from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
+import type { WakeflowStaticMaterializationPreviewRequest } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { codexMaintenanceCapability } from "./codex-maintenance-capability.js";
 
 /**

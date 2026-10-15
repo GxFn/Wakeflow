@@ -8,10 +8,7 @@ import {
   parseTree,
 } from "jsonc-parser";
 
-import {
-  computeSha256Digest,
-  type Sha256Digest,
-} from "../../foundation/crypto/sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   type JsonObject,
   JsonValueError,
@@ -35,14 +32,14 @@ import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "./claude-code-tmux-as
  * `permissions.allow`，保留其他用户字段及其原始表示。
  */
 
-export const WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE = WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE;
+export const WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE =
+  WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE;
 
 /** 旧插件的三条宽泛规则；唯一来源在 workspace 的遗留残留扫描（F4，§13.168），这里只转发。 */
-export const WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES = WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULE_LIST;
+export const WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES =
+  WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULE_LIST;
 
-const DEFAULT_RULES: readonly string[] = Object.freeze([
-  WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-]);
+const DEFAULT_RULES: readonly string[] = Object.freeze([WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE]);
 
 /** 一个根的规则归属：工作区根，或带角色（design / test）的支撑面根。 */
 export type ClaudeCodePortableSettingsRuleOwner =
@@ -148,10 +145,11 @@ function duplicateKeyExists(node: JsonNode): boolean {
       const keyNode = property.children?.[0];
       const valueNode = property.children?.[1];
       if (
-        keyNode?.type !== "string"
-        || typeof keyNode.value !== "string"
-        || valueNode === undefined
-      ) return true;
+        keyNode?.type !== "string" ||
+        typeof keyNode.value !== "string" ||
+        valueNode === undefined
+      )
+        return true;
       if (seen.has(keyNode.value)) return true;
       seen.add(keyNode.value);
       if (duplicateKeyExists(valueNode)) return true;
@@ -216,25 +214,29 @@ function managedAllowEntries(
 }
 
 function desiredCreateText(rules: readonly string[]): string {
-  return `${JSON.stringify({
-    permissions: {
-      allow: [...rules],
+  return `${JSON.stringify(
+    {
+      permissions: {
+        allow: [...rules],
+      },
     },
-  }, null, 2)}\n`;
+    null,
+    2,
+  )}\n`;
 }
 
 function parseRules(value: unknown): readonly string[] {
   if (value === undefined) return DEFAULT_RULES;
   if (
-    !Array.isArray(value)
-    || value.length === 0
-    || value.some((entry) => typeof entry !== "string" || entry.length === 0)
-    || new Set(value).size !== value.length
-    || value.some((entry) => (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((entry) => typeof entry !== "string" || entry.length === 0) ||
+    new Set(value).size !== value.length ||
+    value.some((entry) =>
       WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(
         entry as (typeof WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES)[number],
-      )
-    ))
+      ),
+    )
   ) {
     failInput("$rules");
   }
@@ -245,9 +247,9 @@ function parseRules(value: unknown): readonly string[] {
 function parseRetiredRules(value: unknown): readonly string[] {
   if (value === undefined) return Object.freeze([]);
   if (
-    !Array.isArray(value)
-    || value.some((entry) => typeof entry !== "string" || entry.length === 0)
-    || new Set(value).size !== value.length
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string" || entry.length === 0) ||
+    new Set(value).size !== value.length
   ) {
     failInput("$retiredRules");
   }
@@ -303,28 +305,28 @@ export function planClaudeCodePortableSettingsTransition(
   let existingAllow: readonly string[] = Object.freeze([]);
   if (allowNode !== undefined) {
     if (
-      allowNode.type !== "array"
-      || (allowNode.children ?? []).some((entry) => (
-        entry.type !== "string" || typeof entry.value !== "string"
-      ))
+      allowNode.type !== "array" ||
+      (allowNode.children ?? []).some(
+        (entry) => entry.type !== "string" || typeof entry.value !== "string",
+      )
     ) {
       return blocked("allow-not-string-array", sourceDigest);
     }
-    existingAllow = Object.freeze(
-      (allowNode.children ?? []).map((entry) => entry.value as string),
-    );
+    existingAllow = Object.freeze((allowNode.children ?? []).map((entry) => entry.value as string));
   }
-  if (existingAllow.some((entry) => (
-    WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(
-      entry as (typeof WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES)[number],
+  if (
+    existingAllow.some((entry) =>
+      WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(
+        entry as (typeof WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES)[number],
+      ),
     )
-  ))) {
+  ) {
     return blocked("legacy-broad-permission-present", sourceDigest);
   }
   const desiredAllow = managedAllowEntries(existingAllow, rules, retiredRules);
   if (
-    existingAllow.length === desiredAllow.length
-    && existingAllow.every((entry, index) => entry === desiredAllow[index])
+    existingAllow.length === desiredAllow.length &&
+    existingAllow.every((entry, index) => entry === desiredAllow[index])
   ) {
     return Object.freeze({
       kind: "ClaudeCodePortableSettingsTransition",
@@ -337,26 +339,18 @@ export function planClaudeCodePortableSettingsTransition(
   }
   let desiredText: string;
   try {
-    desiredText = applyEdits(sourceText, modify(
+    desiredText = applyEdits(
       sourceText,
-      ["permissions", "allow"],
-      desiredAllow,
-      { formattingOptions: sourceFormatting(sourceText) },
-    ));
+      modify(sourceText, ["permissions", "allow"], desiredAllow, {
+        formattingOptions: sourceFormatting(sourceText),
+      }),
+    );
   } catch {
     return blocked("syntax", sourceDigest);
   }
   const desiredErrors: ParseError[] = [];
-  const desiredRoot = parseTree(
-    desiredText,
-    desiredErrors,
-    STRICT_PARSE_OPTIONS,
-  );
-  if (
-    desiredRoot === undefined
-    || desiredErrors.length > 0
-    || duplicateKeyExists(desiredRoot)
-  ) {
+  const desiredRoot = parseTree(desiredText, desiredErrors, STRICT_PARSE_OPTIONS);
+  if (desiredRoot === undefined || desiredErrors.length > 0 || duplicateKeyExists(desiredRoot)) {
     return blocked("syntax", sourceDigest);
   }
   return Object.freeze({

@@ -1,6 +1,15 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
@@ -37,27 +46,13 @@ import {
   WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import { CLAUDE_CODE_TMUX_ASSET_OPERATION_ID } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  createWakeflowMaintenanceExecutionIntent,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
-import {
-  publishWakeflowMaintenanceExecutionIntent,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
-import {
-  WakeflowMaintenanceExecutionPreviewError,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-preview.js";
-import {
-  WakeflowMaintenanceExecutionTransactionError,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
-import {
-  withWakeflowMaintenanceGate,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
+import { publishWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
+import { WakeflowMaintenanceExecutionPreviewError } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-preview.js";
+import { WakeflowMaintenanceExecutionTransactionError } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
+import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
 import {
   beginWakeflowMaintenanceJournalStep,
   completeWakeflowMaintenanceJournalStep,
@@ -66,30 +61,21 @@ import {
   checkpointWakeflowMaintenanceJournal,
   publishPreparedWakeflowMaintenanceJournal,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
-import {
-  parseWakeflowMaintenanceOperationId,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
-import {
-  executeWakeflowStaticMaterializationStep,
-} from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
+import { executeWakeflowStaticMaterializationStep } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostResourceProfile,
 ]);
 const UUID = "11111111-1111-4111-8111-111111111111";
-const OPERATION_ID = parseWakeflowMaintenanceOperationId(
-  `maintenance_operation_${UUID}`,
-);
+const OPERATION_ID = parseWakeflowMaintenanceOperationId(`maintenance_operation_${UUID}`);
 
 async function fixture(t: TestContext) {
-  const absolutePath = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-claude-maintenance-execution-",
-  )));
+  const absolutePath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-claude-maintenance-execution-")),
+  );
   const initialized = spawnSync("git", ["init", "--quiet"], {
     cwd: absolutePath,
     encoding: "utf8",
@@ -121,10 +107,9 @@ function request(config: ReturnType<typeof desiredConfig>) {
 }
 
 function settingsPermission(absoluteRoot: string): readonly string[] {
-  const value = JSON.parse(readFileSync(
-    path.join(absoluteRoot, ".claude", "settings.json"),
-    "utf8",
-  )) as { permissions: { allow: string[] } };
+  const value = JSON.parse(
+    readFileSync(path.join(absoluteRoot, ".claude", "settings.json"), "utf8"),
+  ) as { permissions: { allow: string[] } };
   return value.permissions.allow;
 }
 
@@ -137,10 +122,8 @@ test("Claude aggregate preview preserves cancellation as an operation outcome", 
       ...request(desiredConfig()),
       signal: controller.signal,
     }),
-    (error: unknown) => (
-      error instanceof WakeflowMaintenanceExecutionPreviewError
-      && error.reason === "aborted"
-    ),
+    (error: unknown) =>
+      error instanceof WakeflowMaintenanceExecutionPreviewError && error.reason === "aborted",
   );
 });
 
@@ -148,10 +131,7 @@ test("Claude aggregate transaction publishes three portable settings, the two as
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const plan = await previewClaudeCodeMaintenanceExecution(
-    workspace.root,
-    input,
-  );
+  const plan = await previewClaudeCodeMaintenanceExecution(workspace.root, input);
   equal(plan.status, "ready");
   // 三条 portable settings、状态栏资产、本地设置条目、tmux 助手资产；按标识排序（§13.94 D6，§13.117 D4）。
   equal(plan.hostContribution?.operations.length, 6);
@@ -168,31 +148,21 @@ test("Claude aggregate transaction publishes three portable settings, the two as
   equal(tmuxAsset?.operationKind, "tmux-asset");
   equal(tmuxAsset?.targetDigest, CLAUDE_CODE_TMUX_ASSET_DIGEST);
   equal(plan.steps.at(-1)?.stepId, "authority:config");
-  equal(plan.steps.filter((entry) => (
-    entry.boundary === "host-capability"
-  )).length, 6);
+  equal(plan.steps.filter((entry) => entry.boundary === "host-capability").length, 6);
 
-  const completed = await executeClaudeCodeMaintenanceExecution(
-    workspace.root,
-    plan,
-    input,
-    { uuidFactory: () => UUID },
-  );
+  const completed = await executeClaudeCodeMaintenanceExecution(workspace.root, plan, input, {
+    uuidFactory: () => UUID,
+  });
   equal(completed.status, "completed");
   equal(completed.operationId, OPERATION_ID);
-  equal(completed.stepReceipts.filter((entry) => (
-    entry.boundary === "host-capability"
-  )).length, 6);
+  equal(completed.stepReceipts.filter((entry) => entry.boundary === "host-capability").length, 6);
   const assetPath = path.join(
     workspace.absolutePath,
     ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/"),
   );
   equal(statSync(assetPath).mode & 0o777, 0o600);
   equal(computeSha256Digest(readFileSync(assetPath)), CLAUDE_CODE_STATUSLINE_ASSET_DIGEST);
-  const tmuxAssetPath = path.join(
-    workspace.absolutePath,
-    ...CLAUDE_CODE_TMUX_ASSET_REF.split("/"),
-  );
+  const tmuxAssetPath = path.join(workspace.absolutePath, ...CLAUDE_CODE_TMUX_ASSET_REF.split("/"));
   equal(statSync(tmuxAssetPath).mode & 0o777, 0o600);
   equal(computeSha256Digest(readFileSync(tmuxAssetPath)), CLAUDE_CODE_TMUX_ASSET_DIGEST);
   // 本地设置只有 statusLine 一键，命令指向资产并带 base64url 的根；文件 0600（忽略的私有文件）。
@@ -214,15 +184,18 @@ test("Claude aggregate transaction publishes three portable settings, the two as
   ]);
   equal(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE.includes(" *)"), true);
   equal(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE.startsWith("Bash(node .wakeflow-local/"), true);
-  for (const [directory, role] of [["Design", "design"], ["Test", "test"]] as const) {
+  for (const [directory, role] of [
+    ["Design", "design"],
+    ["Test", "test"],
+  ] as const) {
     const root = path.join(workspace.absolutePath, directory);
     deepEqual(settingsPermission(root), [
       ...claudeCodePortableSettingsRulesFor({ rootKind: "support-surface", role }),
     ]);
-    equal(readFileSync(
-      path.join(root, ".claude", "settings.json"),
-      "utf8",
-    ).includes("Bash("), false);
+    equal(
+      readFileSync(path.join(root, ".claude", "settings.json"), "utf8").includes("Bash("),
+      false,
+    );
   }
   equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 
@@ -232,10 +205,7 @@ test("Claude aggregate transaction publishes three portable settings, the two as
     currentHostProfile: claudeCodeWorkspaceHostResourceProfile,
     hostProfiles: PROFILES,
   });
-  const reconcilePlan = await previewClaudeCodeMaintenanceExecution(
-    workspace.root,
-    reconcileInput,
-  );
+  const reconcilePlan = await previewClaudeCodeMaintenanceExecution(workspace.root, reconcileInput);
   equal(reconcilePlan.steps.length, 0);
   const noOp = await executeClaudeCodeMaintenanceExecution(
     workspace.root,
@@ -250,17 +220,13 @@ test("recovery replays only the affected Claude operation from the exact journal
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const plan = await previewClaudeCodeMaintenanceExecution(
-    workspace.root,
-    input,
-  );
+  const plan = await previewClaudeCodeMaintenanceExecution(workspace.root, input);
   const privateError = new Error("interrupt after first Claude host effect");
   try {
     await withWakeflowMaintenanceGate(
       workspace.root,
       {
-        expectedCoreLayoutInspectionDigest:
-          plan.sharedPreview.coreLayoutInspectionDigest,
+        expectedCoreLayoutInspectionDigest: plan.sharedPreview.coreLayoutInspectionDigest,
         operationId: OPERATION_ID,
       },
       async (context) => {
@@ -299,22 +265,18 @@ test("recovery replays only the affected Claude operation from the exact journal
               { sourceConfig: null, recoveringAffectedStep: false },
             );
           } else {
-            const operation = plan.hostContribution?.operations.find((entry) => (
-              entry.operationId === step.operationId
-            ));
+            const operation = plan.hostContribution?.operations.find(
+              (entry) => entry.operationId === step.operationId,
+            );
             if (operation === undefined) {
               throw new Error("Missing host operation.");
             }
-            await claudeCodeMaintenanceCapability.executeOperation(
-              workspace.root,
-              context,
-              {
-                config: desired,
-                profile: claudeCodeWorkspaceHostResourceProfile,
-                operation,
-                recoveringAffectedOperation: false,
-              },
-            );
+            await claudeCodeMaintenanceCapability.executeOperation(workspace.root, context, {
+              config: desired,
+              profile: claudeCodeWorkspaceHostResourceProfile,
+              operation,
+              recoveringAffectedOperation: false,
+            });
             throw privateError;
           }
           source = await checkpointWakeflowMaintenanceJournal(
@@ -331,23 +293,11 @@ test("recovery replays only the affected Claude operation from the exact journal
   } catch (error: unknown) {
     equal(error, privateError);
   }
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    ".claude",
-    "settings.json",
-  )), true);
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    "Design",
-    ".claude",
-    "settings.json",
-  )), false);
+  equal(existsSync(path.join(workspace.absolutePath, ".claude", "settings.json")), true);
+  equal(existsSync(path.join(workspace.absolutePath, "Design", ".claude", "settings.json")), false);
   equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), false);
 
-  const recovered = await recoverClaudeCodeMaintenanceExecution(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverClaudeCodeMaintenanceExecution(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts[0]?.boundary, "host-capability");
   equal(recovered.stepReceipts[0]?.disposition, "current");
@@ -367,12 +317,7 @@ test("recovery replays only the affected Claude operation from the exact journal
     true,
     "recovery installs the local settings entry too",
   );
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    "Design",
-    ".claude",
-    "settings.json",
-  )), true);
+  equal(existsSync(path.join(workspace.absolutePath, "Design", ".claude", "settings.json")), true);
   equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 });
 
@@ -380,24 +325,18 @@ test("Claude aggregate execution rejects settings drift before acquiring the gat
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const plan = await previewClaudeCodeMaintenanceExecution(
-    workspace.root,
-    input,
-  );
+  const plan = await previewClaudeCodeMaintenanceExecution(workspace.root, input);
   mkdirSync(path.join(workspace.absolutePath, ".claude"), { mode: 0o755 });
   writeFileSync(
     path.join(workspace.absolutePath, ".claude", "settings.json"),
-    "{\n  \"theme\": \"dark\"\n}\n",
+    '{\n  "theme": "dark"\n}\n',
     { mode: 0o644 },
   );
   let caught: unknown;
   try {
-    await executeClaudeCodeMaintenanceExecution(
-      workspace.root,
-      plan,
-      input,
-      { uuidFactory: () => UUID },
-    );
+    await executeClaudeCodeMaintenanceExecution(workspace.root, plan, input, {
+      uuidFactory: () => UUID,
+    });
   } catch (error: unknown) {
     caught = error;
   }
@@ -413,10 +352,10 @@ test("Claude aggregate execution rejects settings drift before acquiring the gat
 test("状态栏资产不是常规文件时贡献 blocked 并带稳定 blocker，工作区仍可维护", async (t) => {
   const workspace = await fixture(t);
   // 资产路径被一个目录占住（解压残留）：字节读不稳，但这不能让整个工作区无法维护。
-  mkdirSync(
-    path.join(workspace.absolutePath, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/")),
-    { recursive: true, mode: 0o700 },
-  );
+  mkdirSync(path.join(workspace.absolutePath, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/")), {
+    recursive: true,
+    mode: 0o700,
+  });
   const input = request(desiredConfig());
   const plan = await previewClaudeCodeMaintenanceExecution(workspace.root, input);
   equal(plan.status, "blocked");
@@ -434,17 +373,15 @@ test("状态栏资产不是常规文件时贡献 blocked 并带稳定 blocker，
     "宿主 blocker 以贡献身份前缀进入计划",
   );
   equal(
-    plan.hostContribution?.operations.some((entry) => (
-      entry.operationKind === "statusline-asset"
-    )),
+    plan.hostContribution?.operations.some((entry) => entry.operationKind === "statusline-asset"),
     false,
     "读不出的资产不带安装操作",
   );
   // 其他宿主操作仍在计划里：blocked 只丢掉读不出的那一条。
   equal(
-    plan.hostContribution?.operations.some((entry) => (
-      entry.operationId === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID
-    )),
+    plan.hostContribution?.operations.some(
+      (entry) => entry.operationId === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
+    ),
     true,
   );
 });

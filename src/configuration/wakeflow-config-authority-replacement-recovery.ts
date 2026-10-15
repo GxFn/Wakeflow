@@ -4,26 +4,18 @@ import {
   parseDurableAtomicFileStageFileName,
   readDurableAtomicFileStageOwnerState,
 } from "../foundation/filesystem/durable-atomic-file-stage-address.js";
-import {
-  DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES,
-} from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES } from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
+  retireRootedExclusiveFileLockResidue,
 } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   readStableRootDirectory,
   StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
-import {
-  WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
-  WAKEFLOW_CONFIG_FILE_REF,
-} from "./wakeflow-config-authority-snapshot.js";
-import {
-  replaceWakeflowConfigAuthority,
-} from "./wakeflow-config-authority-replacement.js";
+import { replaceWakeflowConfigAuthority } from "./wakeflow-config-authority-replacement.js";
 import {
   assertCurrentUserWakeflowConfigAuthorityRoot,
   assertWakeflowConfigAuthorityDesiredPlacements,
@@ -34,16 +26,20 @@ import {
   failWakeflowConfigAuthorityReplacement as fail,
   mapWakeflowConfigAuthorityLockError,
   matchesWakeflowConfigAuthorityExpectation,
+  type ParsedWakeflowConfigAuthorityExpectation,
+  type PreparedWakeflowConfigAuthorityDesired,
   parseWakeflowConfigAuthorityExpectation,
   parseWakeflowConfigAuthorityRecoveryOptions,
   prepareWakeflowConfigAuthorityDesired,
   readCurrentWakeflowConfigAuthority,
   WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
-  type ParsedWakeflowConfigAuthorityExpectation,
-  type PreparedWakeflowConfigAuthorityDesired,
-  type WakeflowConfigAuthorityReplacementRecoveryOptions,
   type WakeflowConfigAuthorityReplacementReceipt,
+  type WakeflowConfigAuthorityReplacementRecoveryOptions,
 } from "./wakeflow-config-authority-replacement-contract.js";
+import {
+  WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
+  WAKEFLOW_CONFIG_FILE_REF,
+} from "./wakeflow-config-authority-snapshot.js";
 
 /**
  * Wakeflow Configuration：非活动 Config 替换残留的显式恢复。
@@ -74,9 +70,7 @@ async function inspectRecoveryStages(
     }
     fail("recovery-required", "$stages");
   }
-  const configTargetDigest = computeDurableAtomicFileStageTargetDigest(
-    WAKEFLOW_CONFIG_FILE_REF,
-  );
+  const configTargetDigest = computeDurableAtomicFileStageTargetDigest(WAKEFLOW_CONFIG_FILE_REF);
   const lockTargetDigest = computeDurableAtomicFileStageTargetDigest(
     WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
   );
@@ -92,27 +86,26 @@ async function inspectRecoveryStages(
       fail("recovery-required", "$stages");
     }
     if (
-      entry.node.kind !== "file"
-      || entry.node.userId !== expectedUserId
-      || (entry.node.permissionBits !== 0o600
-        && entry.node.permissionBits !== address.mode)
+      entry.node.kind !== "file" ||
+      entry.node.userId !== expectedUserId ||
+      (entry.node.permissionBits !== 0o600 && entry.node.permissionBits !== address.mode)
     ) {
       fail("recovery-required", "$stages");
     }
     if (address.targetResourcePathDigest === configTargetDigest) {
       if (
-        address.operation !== "replace"
-        || address.inputDigest !== desiredSourceDigest
-        || address.mode !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
-        || entry.node.linkCount !== 1n
+        address.operation !== "replace" ||
+        address.inputDigest !== desiredSourceDigest ||
+        address.mode !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
+        entry.node.linkCount !== 1n
       ) {
         fail("recovery-required", "$stages");
       }
     } else if (address.targetResourcePathDigest === lockTargetDigest) {
       if (
-        address.operation !== "create"
-        || address.mode !== 0o600
-        || (entry.node.linkCount !== 1n && entry.node.linkCount !== 2n)
+        address.operation !== "create" ||
+        address.mode !== 0o600 ||
+        (entry.node.linkCount !== 1n && entry.node.linkCount !== 2n)
       ) {
         fail("recovery-required", "$stages");
       }
@@ -128,8 +121,10 @@ function currentIsRecoverable(
   expected: Readonly<ParsedWakeflowConfigAuthorityExpectation>,
   desired: Readonly<PreparedWakeflowConfigAuthorityDesired>,
 ): boolean {
-  return current.configDigest === desired.configDigest
-    || matchesWakeflowConfigAuthorityExpectation(root, current, expected);
+  return (
+    current.configDigest === desired.configDigest ||
+    matchesWakeflowConfigAuthorityExpectation(root, current, expected)
+  );
 }
 
 /**
@@ -148,10 +143,7 @@ export async function recoverWakeflowConfigAuthorityReplacement(
   assertWakeflowConfigAuthorityNotAborted(parsed.signal);
   const expectedUserId = currentWakeflowConfigAuthorityUserId();
   const desired = prepareWakeflowConfigAuthorityDesired(desiredModelValue);
-  const expected = parseWakeflowConfigAuthorityExpectation(
-    expectedSnapshotValue,
-    expectedUserId,
-  );
+  const expected = parseWakeflowConfigAuthorityExpectation(expectedSnapshotValue, expectedUserId);
   if (expected.workspaceRoot !== root.absolutePath) {
     fail("conflict", "$expected.workspaceRoot");
   }
@@ -164,10 +156,7 @@ export async function recoverWakeflowConfigAuthorityReplacement(
 
   let observation;
   try {
-    observation = await inspectRootedExclusiveFileLock(
-      root,
-      WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
-    );
+    observation = await inspectRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF);
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) {
       mapWakeflowConfigAuthorityLockError(error, false);
@@ -181,22 +170,13 @@ export async function recoverWakeflowConfigAuthorityReplacement(
     fail("recovery-required", "$lock");
   }
 
-  const current = await readCurrentWakeflowConfigAuthority(
-    root,
-    parsed.signal,
-    false,
-  );
+  const current = await readCurrentWakeflowConfigAuthority(root, parsed.signal, false);
   assertWakeflowConfigAuthoritySourcePolicy(current, expectedUserId);
   if (!currentIsRecoverable(root, current, expected, desired)) {
     fail("conflict", "$source");
   }
   // program 身份已由上方 desired/expected 检查加 currentIsRecoverable 保证一致。
-  await inspectRecoveryStages(
-    root,
-    desired.sourceDigest,
-    expectedUserId,
-    parsed.signal,
-  );
+  await inspectRecoveryStages(root, desired.sourceDigest, expectedUserId, parsed.signal);
   assertWakeflowConfigAuthorityNotAborted(parsed.signal);
 
   try {

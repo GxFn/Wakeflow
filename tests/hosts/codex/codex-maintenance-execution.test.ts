@@ -1,24 +1,13 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
-import {
-  parseWakeflowConfig,
-} from "../../../src/configuration/wakeflow-config.js";
-import {
-  RootedDirectory,
-} from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
   CodexMaintenanceCapabilityError,
   codexMaintenanceCapability,
@@ -27,17 +16,13 @@ import {
   executeCodexMaintenanceExecution,
   previewCodexMaintenanceExecution,
 } from "../../../src/hosts/codex/codex-maintenance-execution.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import type { WakeflowHostMaintenanceOperation } from "../../../src/workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import {
   type WakeflowMaintenanceGateContext,
   withWakeflowMaintenanceGate,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
@@ -45,10 +30,9 @@ const PROFILES = Object.freeze([
 ]);
 
 async function fixture(t: TestContext) {
-  const absolutePath = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-codex-maintenance-execution-",
-  )));
+  const absolutePath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-maintenance-execution-")),
+  );
   const initialized = spawnSync("git", ["init", "--quiet"], {
     cwd: absolutePath,
     encoding: "utf8",
@@ -87,19 +71,16 @@ test("Codex fixed composition executes shared maintenance with an empty projecti
   equal(plan.hostContribution?.capabilityId, "codex-maintenance");
   equal(plan.hostContribution?.status, "ready");
   deepEqual([...(plan.hostContribution?.operations ?? [{}])], []);
-  equal(plan.steps.some((entry) => entry.boundary === "host-capability"), false);
-
-  const receipt = await executeCodexMaintenanceExecution(
-    workspace.root,
-    plan,
-    request,
-    { uuidFactory: () => "11111111-1111-4111-8111-111111111111" },
+  equal(
+    plan.steps.some((entry) => entry.boundary === "host-capability"),
+    false,
   );
+
+  const receipt = await executeCodexMaintenanceExecution(workspace.root, plan, request, {
+    uuidFactory: () => "11111111-1111-4111-8111-111111111111",
+  });
   equal(receipt.status, "completed");
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    "wakeflow.config.json",
-  )), true);
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 });
 
 test("Codex maintenance capability maps a foreign gate context and a foreign operation to its own error", async (t) => {
@@ -118,13 +99,14 @@ test("Codex maintenance capability maps a foreign gate context and a foreign ope
     targetKey: "foreign",
     targetDigest: `sha256:${"0".repeat(64)}`,
   }) as unknown as WakeflowHostMaintenanceOperation;
-  const failsWith = (reason: string, errorPath: string) => (error: unknown) => (
-    error instanceof CodexMaintenanceCapabilityError
-    && error.code === "wakeflow-codex-maintenance-capability"
-    && error.reason === reason
-    && error.path === errorPath
-  );
-  const forgedContext = Object.freeze({ operationId: "forged" }) as unknown as WakeflowMaintenanceGateContext;
+  const failsWith = (reason: string, errorPath: string) => (error: unknown) =>
+    error instanceof CodexMaintenanceCapabilityError &&
+    error.code === "wakeflow-codex-maintenance-capability" &&
+    error.reason === reason &&
+    error.path === errorPath;
+  const forgedContext = Object.freeze({
+    operationId: "forged",
+  }) as unknown as WakeflowMaintenanceGateContext;
   await rejects(
     codexMaintenanceCapability.executeOperation(workspace.root, forgedContext, {
       config: desired,

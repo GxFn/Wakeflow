@@ -15,10 +15,7 @@ import {
 test("minimal config renders in its one explicit domain field order", () => {
   const value = createMinimalWakeflowConfig();
   const reordered = Object.fromEntries(Object.entries(value).reverse());
-  equal(
-    renderWakeflowConfig(reordered),
-    serializeWakeflowConfigFixture(value),
-  );
+  equal(renderWakeflowConfig(reordered), serializeWakeflowConfigFixture(value));
 });
 
 test("optional nested fields survive representation normalization", () => {

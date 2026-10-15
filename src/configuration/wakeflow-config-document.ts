@@ -1,8 +1,5 @@
 import { renderDeterministicJsonDocument } from "../foundation/data/deterministic-json-document.js";
-import {
-  type JsonValue,
-  parseJsonValue,
-} from "../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
 import {
   parseWakeflowConfig,
   type WakeflowConfigModel,
@@ -21,10 +18,7 @@ import {
  * 在此显式维护，不从 JSON Schema 的 `properties` 或输入文本推断。
  */
 
-function optionalField(
-  key: string,
-  value: unknown,
-): Readonly<Record<string, unknown>> {
+function optionalField(key: string, value: unknown): Readonly<Record<string, unknown>> {
   return value === undefined ? {} : { [key]: value };
 }
 
@@ -36,9 +30,7 @@ function programRepresentation(program: WakeflowConfigProgram) {
   };
 }
 
-function presentationRepresentation(
-  presentation: WakeflowConfigModel["presentation"],
-) {
+function presentationRepresentation(presentation: WakeflowConfigModel["presentation"]) {
   return { language: presentation.language };
 }
 
@@ -67,17 +59,18 @@ function supportSurfaceRepresentation(surface: WakeflowConfigSupportSurface) {
 }
 
 function windowRepresentation(window: WakeflowConfigWindow) {
-  const root = window.role === "controller"
-    ? { kind: "program" as const }
-    : window.role === "product"
-      ? {
-          kind: "repository" as const,
-          repositoryId: window.root.repositoryId,
-        }
-      : {
-          kind: "support-surface" as const,
-          surfaceId: window.root.surfaceId,
-        };
+  const root =
+    window.role === "controller"
+      ? { kind: "program" as const }
+      : window.role === "product"
+        ? {
+            kind: "repository" as const,
+            repositoryId: window.root.repositoryId,
+          }
+        : {
+            kind: "support-surface" as const,
+            surfaceId: window.root.surfaceId,
+          };
   return {
     windowId: window.windowId,
     podId: window.podId,
@@ -99,16 +92,17 @@ function podRepresentation(pod: WakeflowConfigPod) {
       windowId: worktree.windowId,
       suggestedName: worktree.suggestedName,
     })),
-    closing: pod.closing === null
-      ? null
-      : {
-          requestedAt: pod.closing.requestedAt,
-          branches: pod.closing.branches.map((branch) => ({
-            repositoryId: branch.repositoryId,
-            branch: branch.branch,
-            disposition: branch.disposition,
-          })),
-        },
+    closing:
+      pod.closing === null
+        ? null
+        : {
+            requestedAt: pod.closing.requestedAt,
+            branches: pod.closing.branches.map((branch) => ({
+              repositoryId: branch.repositoryId,
+              branch: branch.branch,
+              disposition: branch.disposition,
+            })),
+          },
   };
 }
 
@@ -140,9 +134,7 @@ function launchRepresentation(value: LaunchRepresentationInput) {
   return {
     ...optionalField(
       "modelByRole",
-      value.modelByRole === undefined
-        ? undefined
-        : roleMapRepresentation(value.modelByRole),
+      value.modelByRole === undefined ? undefined : roleMapRepresentation(value.modelByRole),
     ),
     ...optionalField(
       "reasoningEffortByRole",
@@ -185,14 +177,8 @@ function hostsRepresentation(hosts: WakeflowConfigModel["hosts"]) {
               hosts["claude-code"].tmux === undefined
                 ? undefined
                 : {
-                    ...optionalField(
-                      "sessionName",
-                      hosts["claude-code"].tmux.sessionName,
-                    ),
-                    ...optionalField(
-                      "socketName",
-                      hosts["claude-code"].tmux.socketName,
-                    ),
+                    ...optionalField("sessionName", hosts["claude-code"].tmux.sessionName),
+                    ...optionalField("socketName", hosts["claude-code"].tmux.socketName),
                   },
             ),
           },
@@ -209,9 +195,7 @@ function configRepresentation(model: WakeflowConfigModel) {
     presentation: presentationRepresentation(model.presentation),
     topology: {
       repositories: model.topology.repositories.map(repositoryRepresentation),
-      supportSurfaces: model.topology.supportSurfaces.map(
-        supportSurfaceRepresentation,
-      ),
+      supportSurfaces: model.topology.supportSurfaces.map(supportSurfaceRepresentation),
       windows: model.topology.windows.map(windowRepresentation),
     },
     pods: model.pods.map(podRepresentation),
@@ -228,19 +212,11 @@ function configRepresentation(model: WakeflowConfigModel) {
  * 该值供需要嵌入 Config 快照的私有恢复意图复用；它不携带文件路径、节点身份或
  * 写入授权，也不会保留调用方对象引用。
  */
-export function createWakeflowConfigDocumentValue(
-  value: unknown,
-): JsonValue {
-  return parseJsonValue(
-    configRepresentation(parseWakeflowConfig(value)),
-    "$config",
-  );
+export function createWakeflowConfigDocumentValue(value: unknown): JsonValue {
+  return parseJsonValue(configRepresentation(parseWakeflowConfig(value)), "$config");
 }
 
 /** 从严格 Config 领域模型生成唯一 deterministic pretty JSON 表示。 */
 export function renderWakeflowConfig(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    createWakeflowConfigDocumentValue(value),
-    "$config",
-  );
+  return renderDeterministicJsonDocument(createWakeflowConfigDocumentValue(value), "$config");
 }

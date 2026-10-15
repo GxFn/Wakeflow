@@ -1,10 +1,7 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   DurableAtomicFileStageRecoveryError,
   recoverDurableAtomicFileStagesForTargets,
@@ -19,9 +16,7 @@ import {
   DurableDirectoryMaterializationError,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
-import {
-  parsePortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
+import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -32,11 +27,7 @@ import {
   type StableFileReadResult,
 } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import {
-  decodeUtf8,
-  encodeUtf8,
-  Utf8Error,
-} from "../../foundation/text/utf8.js";
+import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import {
   type ClaudeCodePortableSettingsTransition,
   type ClaudeCodePortableSettingsTransitionReason,
@@ -51,10 +42,8 @@ import {
  * transaction；这些仍由上层 maintenance participant 排序和授权。
  */
 
-export const CLAUDE_CODE_SETTINGS_DIRECTORY_REF =
-  parsePortableResourcePath(".claude");
-export const CLAUDE_CODE_PORTABLE_SETTINGS_REF =
-  parsePortableResourcePath(".claude/settings.json");
+export const CLAUDE_CODE_SETTINGS_DIRECTORY_REF = parsePortableResourcePath(".claude");
+export const CLAUDE_CODE_PORTABLE_SETTINGS_REF = parsePortableResourcePath(".claude/settings.json");
 
 export interface ClaudeCodePortableSettingsPublicationOptions {
   readonly signal?: AbortSignal;
@@ -99,10 +88,7 @@ const ERROR_MESSAGES = {
   aborted: "Claude Code portable settings publication was aborted.",
   "recovery-required": "Claude Code portable settings publication requires recovery.",
   "operation-failure": "Claude Code portable settings publication failed.",
-} as const satisfies Readonly<Record<
-  ClaudeCodePortableSettingsPublicationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<ClaudeCodePortableSettingsPublicationErrorReason, string>>;
 
 /** Claude Code portable settings 发布失败的稳定、脱敏错误。 */
 export class ClaudeCodePortableSettingsPublicationError extends Error {
@@ -144,11 +130,7 @@ function fail(
   path: string,
   transitionReason: ClaudeCodePortableSettingsTransitionReason | null = null,
 ): never {
-  throw new ClaudeCodePortableSettingsPublicationError(
-    reason,
-    path,
-    transitionReason,
-  );
+  throw new ClaudeCodePortableSettingsPublicationError(reason, path, transitionReason);
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -160,55 +142,44 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal" && key !== "rules" && key !== "retiredRules")
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
-    || (
-      record.rules !== undefined
-      && (
-        !Array.isArray(record.rules)
-        || record.rules.some((entry) => typeof entry !== "string")
-      )
-    )
-    || (
-      record.retiredRules !== undefined
-      && (
-        !Array.isArray(record.retiredRules)
-        || record.retiredRules.some((entry) => typeof entry !== "string")
-      )
-    )
+    Object.keys(record).some(
+      (key) => key !== "signal" && key !== "rules" && key !== "retiredRules",
+    ) ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal))) ||
+    (record.rules !== undefined &&
+      (!Array.isArray(record.rules) || record.rules.some((entry) => typeof entry !== "string"))) ||
+    (record.retiredRules !== undefined &&
+      (!Array.isArray(record.retiredRules) ||
+        record.retiredRules.some((entry) => typeof entry !== "string")))
   ) {
     fail("input", "$options");
   }
   return Object.freeze({
     signal: record.signal as AbortSignal | undefined,
-    rules: record.rules === undefined
-      ? undefined
-      : Object.freeze([...(record.rules as readonly string[])]),
-    retiredRules: record.retiredRules === undefined
-      ? undefined
-      : Object.freeze([...(record.retiredRules as readonly string[])]),
+    rules:
+      record.rules === undefined
+        ? undefined
+        : Object.freeze([...(record.rules as readonly string[])]),
+    retiredRules:
+      record.retiredRules === undefined
+        ? undefined
+        : Object.freeze([...(record.retiredRules as readonly string[])]),
   });
 }
 
 function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 
 function assertDirectoryNode(node: Readonly<FileNodeSnapshot>): void {
   if (
-    node.kind !== "directory"
-    || (node.permissionBits !== 0o700 && node.permissionBits !== 0o755)
-    || (currentUserId() !== null && node.userId !== currentUserId())
+    node.kind !== "directory" ||
+    (node.permissionBits !== 0o700 && node.permissionBits !== 0o755) ||
+    (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     fail("directory-policy", "$settingsDirectory");
   }
@@ -216,10 +187,10 @@ function assertDirectoryNode(node: Readonly<FileNodeSnapshot>): void {
 
 function assertSourceNode(node: Readonly<FileNodeSnapshot>): void {
   if (
-    node.kind !== "file"
-    || node.permissionBits !== 0o644
-    || node.linkCount !== 1n
-    || (currentUserId() !== null && node.userId !== currentUserId())
+    node.kind !== "file" ||
+    node.permissionBits !== 0o644 ||
+    node.linkCount !== 1n ||
+    (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     fail("source-policy", "$settings");
   }
@@ -229,16 +200,11 @@ async function directoryNodeOrNull(
   root: RootedDirectory,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    const resource = await root.inspectExistingResource(
-      CLAUDE_CODE_SETTINGS_DIRECTORY_REF,
-    );
+    const resource = await root.inspectExistingResource(CLAUDE_CODE_SETTINGS_DIRECTORY_REF);
     assertDirectoryNode(resource.node);
     return resource.node;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) return null;
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (error instanceof ClaudeCodePortableSettingsPublicationError) throw error;
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
@@ -251,14 +217,9 @@ async function sourceOrNull(
 ): Promise<Readonly<StableFileReadResult> | null> {
   let resource;
   try {
-    resource = await root.inspectExistingResource(
-      CLAUDE_CODE_PORTABLE_SETTINGS_REF,
-    );
+    resource = await root.inspectExistingResource(CLAUDE_CODE_PORTABLE_SETTINGS_REF);
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) return null;
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
   }
@@ -274,9 +235,9 @@ async function sourceOrNull(
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "root-scope") fail("root-scope", "$root");
       if (
-        error.reason === "expectation-changed"
-        || error.reason === "source-changed"
-        || error.reason === "not-found"
+        error.reason === "expectation-changed" ||
+        error.reason === "source-changed" ||
+        error.reason === "not-found"
       ) {
         fail("source-changed", "$settings");
       }
@@ -293,9 +254,7 @@ async function inspectSource(
   retiredRules: readonly string[] | undefined,
 ): Promise<Readonly<SettingsSourceInspection>> {
   const directoryNode = await directoryNodeOrNull(root);
-  const source = directoryNode === null
-    ? null
-    : await sourceOrNull(root, signal);
+  const source = directoryNode === null ? null : await sourceOrNull(root, signal);
   let sourceText: string | null = null;
   if (source !== null) {
     try {
@@ -315,16 +274,21 @@ export async function inspectClaudeCodePortableSettings(
   optionsValue: ClaudeCodePortableSettingsPublicationOptions = {},
 ): Promise<Readonly<ClaudeCodePortableSettingsInspection>> {
   if (
-    typeof rootValue !== "object"
-    || rootValue === null
-    || types.isProxy(rootValue)
-    || !(rootValue instanceof RootedDirectory)
+    typeof rootValue !== "object" ||
+    rootValue === null ||
+    types.isProxy(rootValue) ||
+    !(rootValue instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const inspection = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
+  const inspection = await inspectSource(
+    rootValue,
+    options.signal,
+    options.rules,
+    options.retiredRules,
+  );
   return Object.freeze({
     kind: "ClaudeCodePortableSettingsInspection",
     directoryStatus: inspection.directoryNode === null ? "absent" : "present",
@@ -340,14 +304,10 @@ async function ensureSettingsDirectory(
 ): Promise<void> {
   if (inspection.directoryNode !== null) return;
   try {
-    const created = await createDirectoryAtomically(
-      root,
-      CLAUDE_CODE_SETTINGS_DIRECTORY_REF,
-      {
-        mode: 0o755,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    const created = await createDirectoryAtomically(root, CLAUDE_CODE_SETTINGS_DIRECTORY_REF, {
+      mode: 0o755,
+      ...(signal === undefined ? {} : { signal }),
+    });
     assertDirectoryNode(created.node);
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) throw error;
@@ -367,9 +327,9 @@ function assertTransitionReady(
   readonly desiredDigest: Sha256Digest;
 } {
   if (
-    (transition.status !== "create" && transition.status !== "update")
-    || transition.desiredText === null
-    || transition.desiredDigest === null
+    (transition.status !== "create" && transition.status !== "update") ||
+    transition.desiredText === null ||
+    transition.desiredDigest === null
   ) {
     fail("transition-blocked", "$transition", transition.reason);
   }
@@ -408,9 +368,9 @@ async function publishTransition(
     if (error instanceof DurableAtomicFileWriteError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (
-        error.reason === "target-exists"
-        || error.reason === "expectation-changed"
-        || error.reason === "expectation-read-failure"
+        error.reason === "target-exists" ||
+        error.reason === "expectation-changed" ||
+        error.reason === "expectation-read-failure"
       ) {
         fail("source-changed", "$settings");
       }
@@ -429,16 +389,21 @@ export async function publishClaudeCodePortableSettings(
   optionsValue: ClaudeCodePortableSettingsPublicationOptions = {},
 ): Promise<Readonly<ClaudeCodePortableSettingsPublicationResult>> {
   if (
-    typeof rootValue !== "object"
-    || rootValue === null
-    || types.isProxy(rootValue)
-    || !(rootValue instanceof RootedDirectory)
+    typeof rootValue !== "object" ||
+    rootValue === null ||
+    types.isProxy(rootValue) ||
+    !(rootValue instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const before = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
+  const before = await inspectSource(
+    rootValue,
+    options.signal,
+    options.rules,
+    options.retiredRules,
+  );
   if (before.transition.status === "blocked") {
     fail("transition-blocked", "$transition", before.transition.reason);
   }
@@ -455,20 +420,22 @@ export async function publishClaudeCodePortableSettings(
   }
   await ensureSettingsDirectory(rootValue, before, options.signal);
   if (before.directoryNode === null) {
-    const afterDirectory = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
-    if (
-      afterDirectory.source !== null
-      || afterDirectory.transition.status !== "create"
-    ) {
+    const afterDirectory = await inspectSource(
+      rootValue,
+      options.signal,
+      options.rules,
+      options.retiredRules,
+    );
+    if (afterDirectory.source !== null || afterDirectory.transition.status !== "create") {
       fail("source-changed", "$settings");
     }
   }
   await publishTransition(rootValue, before, options.signal);
   const after = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
   if (
-    after.transition.status !== "current"
-    || before.transition.desiredDigest === null
-    || after.source?.digest !== before.transition.desiredDigest
+    after.transition.status !== "current" ||
+    before.transition.desiredDigest === null ||
+    after.source?.digest !== before.transition.desiredDigest
   ) {
     fail("operation-failure", "$readback");
   }
@@ -486,10 +453,10 @@ export async function settleClaudeCodePortableSettingsPublicationStages(
   optionsValue: ClaudeCodePortableSettingsPublicationOptions = {},
 ): Promise<void> {
   if (
-    typeof rootValue !== "object"
-    || rootValue === null
-    || types.isProxy(rootValue)
-    || !(rootValue instanceof RootedDirectory)
+    typeof rootValue !== "object" ||
+    rootValue === null ||
+    types.isProxy(rootValue) ||
+    !(rootValue instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -522,9 +489,6 @@ export async function recoverClaudeCodePortableSettingsPublication(
   rootValue: RootedDirectory,
   optionsValue: ClaudeCodePortableSettingsPublicationOptions = {},
 ): Promise<Readonly<ClaudeCodePortableSettingsPublicationResult>> {
-  await settleClaudeCodePortableSettingsPublicationStages(
-    rootValue,
-    optionsValue,
-  );
+  await settleClaudeCodePortableSettingsPublicationStages(rootValue, optionsValue);
   return publishClaudeCodePortableSettings(rootValue, optionsValue);
 }

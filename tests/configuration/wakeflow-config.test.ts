@@ -32,13 +32,20 @@ function expectConfigError(
 
 function isDeeplyFrozen(value: unknown): boolean {
   if (value === null || typeof value !== "object") return true;
-  return Object.isFrozen(value)
-    && Object.values(value).every((child) => isDeeplyFrozen(child));
+  return Object.isFrozen(value) && Object.values(value).every((child) => isDeeplyFrozen(child));
 }
 
 test("only the current config baseline is admitted", () => {
   for (const schemaVersion of [1, 3]) {
-    expectConfigError(() => parseWakeflowConfig({ ...createMinimalWakeflowConfig(), $schema: `urn:wakeflow:config:v${schemaVersion}`, schemaVersion }), "schema");
+    expectConfigError(
+      () =>
+        parseWakeflowConfig({
+          ...createMinimalWakeflowConfig(),
+          $schema: `urn:wakeflow:config:v${schemaVersion}`,
+          schemaVersion,
+        }),
+      "schema",
+    );
   }
 });
 
@@ -67,10 +74,7 @@ test("public model preserves one explicit presentation language and builds typed
   equal(indexes.productWindows.length, 1);
   const repositoryId = model.topology.repositories[0]?.repositoryId;
   if (repositoryId === undefined) throw new Error("Expected one repository.");
-  equal(
-    indexes.windowsByRepositoryId[repositoryId]?.length,
-    1,
-  );
+  equal(indexes.windowsByRepositoryId[repositoryId]?.length, 1);
   equal(isDeeplyFrozen(model), true);
   equal(isDeeplyFrozen(indexes), true);
   equal(isDeeplyFrozen(WAKEFLOW_CONFIG_SCHEMA), true);
@@ -92,24 +96,28 @@ test("presentation language is explicit, closed and never inferred", () => {
   expectConfigError(() => parseWakeflowConfig(legacyAuto), "schema");
 
   const simplifiedChinese = createMinimalWakeflowConfig();
-  (simplifiedChinese.presentation as Record<string, unknown>).language =
-    "zh-Hans";
-  equal(
-    parseWakeflowConfig(simplifiedChinese).presentation.language,
-    "zh-Hans",
-  );
+  (simplifiedChinese.presentation as Record<string, unknown>).language = "zh-Hans";
+  equal(parseWakeflowConfig(simplifiedChinese).presentation.language, "zh-Hans");
 });
 
 test("Schema owns closed shape, cardinality, ownership, host constraints and the reserved governance object", () => {
   const cases: Array<(value: Record<string, unknown>) => void> = [
-    (value) => { value.unknown = true; },
-    (value) => { topology(value).windows.pop(); },
+    (value) => {
+      value.unknown = true;
+    },
+    (value) => {
+      topology(value).windows.pop();
+    },
     (value) => {
       topology(value).supportSurfaces[0]!.instructionManagement = "managed-block";
     },
-    (value) => { value.hosts = { github: {} }; },
+    (value) => {
+      value.hosts = { github: {} };
+    },
     // governance 是保留的空对象：任何治理词汇都是未知字段（2026-09-21 裁决删除审阅期与运行残留）。
-    (value) => { value.governance = { audit: { preservedReviewAfterDays: 30 } }; },
+    (value) => {
+      value.governance = { audit: { preservedReviewAfterDays: 30 } };
+    },
     (value) => {
       topology(value).repositories[0]!.validation = { residueExceptions: [] };
     },
@@ -125,15 +133,11 @@ test("typed identity, references and topology relationships are validated togeth
   const collision = createMinimalWakeflowConfig();
   topology(collision).repositories[0]!.repositoryId =
     "repository_11111111-1111-4111-8111-111111111111";
-  expectConfigError(
-    () => parseWakeflowConfig(collision),
-    "identifier-collision",
-  );
+  expectConfigError(() => parseWakeflowConfig(collision), "identifier-collision");
 
   const missingReference = createMinimalWakeflowConfig();
   const productRoot = topology(missingReference).windows[3]!.root as Record<string, unknown>;
-  productRoot.repositoryId =
-    "repository_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  productRoot.repositoryId = "repository_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   expectConfigError(() => parseWakeflowConfig(missingReference), "reference");
 
   const wrongCapability = createMinimalWakeflowConfig();
@@ -158,10 +162,7 @@ test("placement adds Unicode and per-segment canonicality beyond the public Sche
     expectConfigError(() => parseWakeflowConfig(value), "placement");
   }
   for (const placement of ["C:\\workspace", "Design\\nested"] as const) {
-    expectConfigError(
-      () => parseWakeflowConfigPlacement(placement),
-      "placement",
-    );
+    expectConfigError(() => parseWakeflowConfigPlacement(placement), "placement");
   }
 });
 
@@ -230,25 +231,28 @@ test("typed indexes group product windows in one topology pass", () => {
     displayName: "Product B",
     instructionManagement: "owner-managed",
   });
-  topology(value).windows.push({
-    windowId: "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-    podId: "pod_99999999-9999-4999-8999-999999999999",
-    role: "product",
-    displayName: "Product A 2",
-    root: {
-      kind: "repository",
-      repositoryId: "repository_22222222-2222-4222-8222-222222222222",
+  topology(value).windows.push(
+    {
+      windowId: "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      podId: "pod_99999999-9999-4999-8999-999999999999",
+      role: "product",
+      displayName: "Product A 2",
+      root: {
+        kind: "repository",
+        repositoryId: "repository_22222222-2222-4222-8222-222222222222",
+      },
     },
-  }, {
-    windowId: "window_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-    podId: "pod_99999999-9999-4999-8999-999999999999",
-    role: "product",
-    displayName: "Product B",
-    root: {
-      kind: "repository",
-      repositoryId: "repository_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    {
+      windowId: "window_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      podId: "pod_99999999-9999-4999-8999-999999999999",
+      role: "product",
+      displayName: "Product B",
+      root: {
+        kind: "repository",
+        repositoryId: "repository_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      },
     },
-  });
+  );
 
   const model = parseWakeflowConfig(value);
   const indexes = buildWakeflowConfigIndexes(model);
@@ -258,14 +262,8 @@ test("typed indexes group product windows in one topology pass", () => {
     throw new Error("Expected two repositories.");
   }
   equal(indexes.productWindows.length, 3);
-  equal(
-    indexes.windowsByRepositoryId[firstRepositoryId]?.length,
-    2,
-  );
-  equal(
-    indexes.windowsByRepositoryId[secondRepositoryId]?.length,
-    1,
-  );
+  equal(indexes.windowsByRepositoryId[firstRepositoryId]?.length, 2);
+  equal(indexes.windowsByRepositoryId[secondRepositoryId]?.length, 1);
 });
 
 test("in-memory admission is passive and never executes decorated input", () => {
@@ -282,8 +280,5 @@ test("in-memory admission is passive and never executes decorated input", () => 
   equal(getterCalls, 0);
 
   const plain = createMinimalWakeflowConfig();
-  deepEqual(
-    parseWakeflowConfig(plain).program.displayName,
-    "Example Program",
-  );
+  deepEqual(parseWakeflowConfig(plain).program.displayName, "Example Program");
 });

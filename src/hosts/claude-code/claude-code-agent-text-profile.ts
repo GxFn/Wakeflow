@@ -252,8 +252,8 @@ const PLUGIN_UPDATE_STEPS_EN = [
   "MCP server until `/reload-plugins` or a new session, so the Controller's",
   "`wakeflow_status` then reports `runtime-artifact-outdated` for its own server and",
   "`windows-stale:<n>` for peer windows started under the previous artifact; the",
-  "Controller refreshes them itself through the tmux helper (its skill section \"After a",
-  "plugin update\"). Expect `wakeflow_verify` to pass `runtime-artifact` again once no",
+  'Controller refreshes them itself through the tmux helper (its skill section "After a',
+  'plugin update"). Expect `wakeflow_verify` to pass `runtime-artifact` again once no',
   "window is stale; `unverified` is not a failure.",
 ].join("\n");
 
@@ -264,7 +264,7 @@ const PLUGIN_UPDATE_STEPS_ZH = [
   "Claude Code 只在插件清单的版本号变化时替换已安装的副本，Wakeflow 每次发布都会改它。正在运行的",
   "会话在 `/reload-plugins` 或新会话之前仍用旧的 hook 与 MCP server，所以 Controller 的",
   "`wakeflow_status` 会对自己的 server 报 `runtime-artifact-outdated`、对在旧制品下启动的同伴窗口报",
-  "`windows-stale:<n>`；Controller 按技能的 \"After a plugin update\" 一节用 tmux 助手自己刷新它们。",
+  '`windows-stale:<n>`；Controller 按技能的 "After a plugin update" 一节用 tmux 助手自己刷新它们。',
   "没有窗口再是 stale 之后，`wakeflow_verify` 的 `runtime-artifact` 门重新通过；`unverified` 不是失败。",
 ].join("\n");
 

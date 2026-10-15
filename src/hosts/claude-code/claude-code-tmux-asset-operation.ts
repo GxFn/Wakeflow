@@ -27,17 +27,16 @@ export const CLAUDE_CODE_TMUX_ASSET_OPERATION_ID = "claude-tmux-asset:install" a
 /** 资产读不出（目录、符号链接、超过 256 KiB、权限不足）时宿主贡献报出的 blocker。 */
 export const CLAUDE_CODE_TMUX_ASSET_BLOCKER = "claude-tmux-asset-unreadable" as const;
 
-const CLAUDE_CODE_TMUX_ASSET_DESCRIPTOR: Readonly<ClaudeCodeHostAssetDescriptor> =
-  Object.freeze({
-    fileName: CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
-    ref: CLAUDE_CODE_TMUX_ASSET_REF,
-    content: CLAUDE_CODE_TMUX_ASSET_CONTENT,
-    digest: CLAUDE_CODE_TMUX_ASSET_DIGEST,
-    operationId: CLAUDE_CODE_TMUX_ASSET_OPERATION_ID,
-    operationKind: CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND,
-    ownerId: CLAUDE_CODE_TMUX_ASSET_OWNER_ID,
-    targetKey: "asset:claude-code:tmux",
-  });
+const CLAUDE_CODE_TMUX_ASSET_DESCRIPTOR: Readonly<ClaudeCodeHostAssetDescriptor> = Object.freeze({
+  fileName: CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
+  ref: CLAUDE_CODE_TMUX_ASSET_REF,
+  content: CLAUDE_CODE_TMUX_ASSET_CONTENT,
+  digest: CLAUDE_CODE_TMUX_ASSET_DIGEST,
+  operationId: CLAUDE_CODE_TMUX_ASSET_OPERATION_ID,
+  operationKind: CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND,
+  ownerId: CLAUDE_CODE_TMUX_ASSET_OWNER_ID,
+  targetKey: "asset:claude-code:tmux",
+});
 
 /** 零写计划：字节已是期望即 null，否则一条操作（sourceDigest 是当前字节摘要或 null）。 */
 export function planClaudeCodeTmuxAssetOperation(

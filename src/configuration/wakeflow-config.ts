@@ -26,11 +26,7 @@ import {
 } from "../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
-import {
-  type JsonValue,
-  JsonValueError,
-  parseJsonValue,
-} from "../foundation/data/json-value.js";
+import { type JsonValue, JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 
 /**
@@ -56,19 +52,14 @@ export {
 } from "../contracts/vocabulary/wakeflow-config-identity.js";
 export const WAKEFLOW_ACTIVE_ROOT = ".wakeflow-active" as const;
 export const WAKEFLOW_LOCAL_ROOT = ".wakeflow-local" as const;
-export const WAKEFLOW_PRESENTATION_LANGUAGES = Object.freeze([
-  "en",
-  "zh-Hans",
-] as const);
-export type WakeflowPresentationLanguage =
-  (typeof WAKEFLOW_PRESENTATION_LANGUAGES)[number];
+export const WAKEFLOW_PRESENTATION_LANGUAGES = Object.freeze(["en", "zh-Hans"] as const);
+export type WakeflowPresentationLanguage = (typeof WAKEFLOW_PRESENTATION_LANGUAGES)[number];
 
 /**
  * Fresh Config producer 在用户未选择语言时写入的显式值。
  * Parser 不会为缺失字段注入默认值，持久文档始终保存唯一语言权威。
  */
-export const WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE:
-  WakeflowPresentationLanguage = "en";
+export const WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE: WakeflowPresentationLanguage = "en";
 
 declare const CONFIG_PLACEMENT_BRAND: unique symbol;
 
@@ -77,14 +68,13 @@ export type WakeflowConfigPlacement = string & {
   readonly [CONFIG_PLACEMENT_BRAND]: "WakeflowConfigPlacement";
 };
 
-type DeepReadonly<Value> =
-  Value extends string | number | boolean | null | undefined
-    ? Value
-    : Value extends readonly (infer Entry)[]
-      ? readonly DeepReadonly<Entry>[]
-      : Value extends object
-        ? { readonly [Key in keyof Value]: DeepReadonly<Value[Key]> }
-        : Value;
+type DeepReadonly<Value> = Value extends string | number | boolean | null | undefined
+  ? Value
+  : Value extends readonly (infer Entry)[]
+    ? readonly DeepReadonly<Entry>[]
+    : Value extends object
+      ? { readonly [Key in keyof Value]: DeepReadonly<Value[Key]> }
+      : Value;
 
 export type WakeflowConfigProgram = DeepReadonly<
   Omit<ProgramWire, "programId"> & {
@@ -207,21 +197,12 @@ export type WakeflowConfigStorage = DeepReadonly<
 export type WakeflowConfigModel = DeepReadonly<
   Omit<
     WakeflowConfigWire,
-    | "governance"
-    | "hosts"
-    | "pods"
-    | "presentation"
-    | "program"
-    | "storage"
-    | "topology"
+    "governance" | "hosts" | "pods" | "presentation" | "program" | "storage" | "topology"
   > & {
     readonly program: WakeflowConfigProgram;
     readonly presentation: WakeflowConfigPresentation;
     readonly topology: {
-      readonly repositories: readonly [
-        WakeflowConfigRepository,
-        ...WakeflowConfigRepository[],
-      ];
+      readonly repositories: readonly [WakeflowConfigRepository, ...WakeflowConfigRepository[]];
       readonly supportSurfaces: readonly [
         WakeflowConfigSupportSurface,
         WakeflowConfigSupportSurface,
@@ -249,30 +230,21 @@ export interface WakeflowConfigPodScope {
   readonly designWindow: WakeflowDesignWindow;
   readonly testWindow: WakeflowTestWindow;
   readonly productWindows: readonly WakeflowProductWindow[];
-  readonly windowsByRepositoryId: Readonly<Record<
-    WakeflowDurableId<"repository">,
-    readonly WakeflowProductWindow[]
-  >>;
+  readonly windowsByRepositoryId: Readonly<
+    Record<WakeflowDurableId<"repository">, readonly WakeflowProductWindow[]>
+  >;
 }
 
 export interface WakeflowConfigIndexes {
-  readonly repositoryById: Readonly<Record<
-    WakeflowDurableId<"repository">,
-    WakeflowConfigRepository
-  >>;
-  readonly surfaceById: Readonly<Record<
-    WakeflowDurableId<"surface">,
-    WakeflowConfigSupportSurface
-  >>;
-  readonly windowById: Readonly<Record<
-    WakeflowDurableId<"window">,
-    WakeflowConfigWindow
-  >>;
+  readonly repositoryById: Readonly<
+    Record<WakeflowDurableId<"repository">, WakeflowConfigRepository>
+  >;
+  readonly surfaceById: Readonly<
+    Record<WakeflowDurableId<"surface">, WakeflowConfigSupportSurface>
+  >;
+  readonly windowById: Readonly<Record<WakeflowDurableId<"window">, WakeflowConfigWindow>>;
   readonly podById: Readonly<Record<WakeflowDurableId<"pod">, WakeflowConfigPod>>;
-  readonly podIdByWindowId: Readonly<Record<
-    WakeflowDurableId<"window">,
-    WakeflowDurableId<"pod">
-  >>;
+  readonly podIdByWindowId: Readonly<Record<WakeflowDurableId<"window">, WakeflowDurableId<"pod">>>;
   readonly podScopes: Readonly<Record<WakeflowDurableId<"pod">, WakeflowConfigPodScope>>;
   readonly primaryPod: WakeflowConfigPodScope;
   /** 以下五项是 primary pod 作用域的别名；pod 内消费者必须按 Demand 的 podId 取 `podScopes`。 */
@@ -294,12 +266,12 @@ export type WakeflowConfigErrorReason =
 
 const ERROR_MESSAGES = {
   "json-value": "Wakeflow config input is not passive JSON data.",
-  "schema": "Wakeflow config does not satisfy the public Schema.",
-  "identifier": "Wakeflow config contains an invalid typed identifier.",
+  schema: "Wakeflow config does not satisfy the public Schema.",
+  identifier: "Wakeflow config contains an invalid typed identifier.",
   "identifier-collision": "Wakeflow config durable identifiers collide.",
-  "reference": "Wakeflow config contains an unresolved typed reference.",
-  "topology": "Wakeflow config topology relationships are inconsistent.",
-  "placement": "Wakeflow config contains a non-canonical placement.",
+  reference: "Wakeflow config contains an unresolved typed reference.",
+  topology: "Wakeflow config topology relationships are inconsistent.",
+  placement: "Wakeflow config contains a non-canonical placement.",
 } as const satisfies Readonly<Record<WakeflowConfigErrorReason, string>>;
 
 /** 配置内存模型失败的稳定、脱敏错误。 */
@@ -323,7 +295,8 @@ function fail(reason: WakeflowConfigErrorReason, path: string): never {
   throw new WakeflowConfigError(reason, path);
 }
 
-const validateWireConfig = createRuntimeJsonSchemaValidator<WakeflowConfigWire>(WAKEFLOW_CONFIG_SCHEMA);
+const validateWireConfig =
+  createRuntimeJsonSchemaValidator<WakeflowConfigWire>(WAKEFLOW_CONFIG_SCHEMA);
 
 /** 兄弟根放置至多一个前导 `..`：hook 观察脚本按"祖先或祖先的直接子目录"找回工作区（§13.97 D2e）。 */
 const SIBLING_PLACEMENT_MAXIMUM_PARENT_SEGMENTS = 1;
@@ -334,11 +307,11 @@ function parsePlacement(
   maximumParentSegments = Number.POSITIVE_INFINITY,
 ): WakeflowConfigPlacement {
   if (
-    !value.isWellFormed()
-    || value.normalize("NFC") !== value
-    || CONTROL_PATTERN.test(value)
-    || value.includes("\\")
-    || WINDOWS_DRIVE_PATTERN.test(value)
+    !value.isWellFormed() ||
+    value.normalize("NFC") !== value ||
+    CONTROL_PATTERN.test(value) ||
+    value.includes("\\") ||
+    WINDOWS_DRIVE_PATTERN.test(value)
   ) {
     fail("placement", path);
   }
@@ -347,13 +320,13 @@ function parsePlacement(
   while (segments[parentSegments] === "..") parentSegments += 1;
   if (parentSegments > maximumParentSegments) fail("placement", path);
   if (
-    parentSegments === segments.length
-    || segments.slice(parentSegments).some(
-      (segment) => segment.length === 0
-        || segment === "."
-        || segment === ".."
-        || segment.trim() !== segment,
-    )
+    parentSegments === segments.length ||
+    segments
+      .slice(parentSegments)
+      .some(
+        (segment) =>
+          segment.length === 0 || segment === "." || segment === ".." || segment.trim() !== segment,
+      )
   ) {
     fail("placement", path);
   }
@@ -440,12 +413,7 @@ function validateTopology(model: WakeflowConfigWire): void {
 
   const pods = validatePodRecords(model, uuids);
   for (const [index, window] of model.topology.windows.entries()) {
-    registerIdentity(
-      window.windowId,
-      "window",
-      `$/topology/windows/${index}/windowId`,
-      uuids,
-    );
+    registerIdentity(window.windowId, "window", `$/topology/windows/${index}/windowId`, uuids);
     const podAt = `$/topology/windows/${index}/podId`;
     if (!pods.has(parseIdentity(window.podId, "pod", podAt))) fail("reference", podAt);
     if (window.role === "design" || window.role === "test") {
@@ -588,9 +556,7 @@ export function parseWakeflowConfig(value: unknown): WakeflowConfigModel {
 }
 
 /** 基于规范化 JSON 语义计算配置时效性摘要，不绑定空白或键顺序。 */
-export function computeWakeflowConfigDigest(
-  model: WakeflowConfigModel,
-): Sha256Digest {
+export function computeWakeflowConfigDigest(model: WakeflowConfigModel): Sha256Digest {
   return computeCanonicalJsonSha256Digest(model as unknown as JsonValue);
 }
 
@@ -605,16 +571,10 @@ export function buildWakeflowConfigIndexes(
   model: WakeflowConfigModel,
 ): Readonly<WakeflowConfigIndexes> {
   const repositoryById = frozenRecord(
-    model.topology.repositories.map((repository) => [
-      repository.repositoryId,
-      repository,
-    ] as const),
+    model.topology.repositories.map((repository) => [repository.repositoryId, repository] as const),
   );
   const surfaceById = frozenRecord(
-    model.topology.supportSurfaces.map((surface) => [
-      surface.surfaceId,
-      surface,
-    ] as const),
+    model.topology.supportSurfaces.map((surface) => [surface.surfaceId, surface] as const),
   );
   const windowEntries: Array<readonly [string, WakeflowConfigWindow]> = [];
   const podIdEntries: Array<readonly [string, WakeflowDurableId<"pod">]> = [];
@@ -622,9 +582,7 @@ export function buildWakeflowConfigIndexes(
     windowEntries.push([window.windowId, window] as const);
     podIdEntries.push([window.windowId, window.podId] as const);
   }
-  const scopeEntries = model.pods.map(
-    (pod) => [pod.podId, buildPodScope(model, pod)] as const,
-  );
+  const scopeEntries = model.pods.map((pod) => [pod.podId, buildPodScope(model, pod)] as const);
   const primary = scopeEntries.find(([, scope]) => scope.pod.placement === "primary");
   if (primary === undefined) fail("topology", "$/pods");
   const primaryPod = primary[1];
@@ -672,11 +630,7 @@ function buildPodScope(
       members.push(window);
     }
   }
-  if (
-    controllerWindow === undefined
-    || designWindow === undefined
-    || testWindow === undefined
-  ) {
+  if (controllerWindow === undefined || designWindow === undefined || testWindow === undefined) {
     fail("topology", "$/pods");
   }
   return Object.freeze({
@@ -687,10 +641,13 @@ function buildPodScope(
     testWindow,
     productWindows: Object.freeze(productWindows),
     windowsByRepositoryId: frozenRecord(
-      model.topology.repositories.map((repository) => [
-        repository.repositoryId,
-        Object.freeze(windowsByRepository.get(repository.repositoryId) ?? []),
-      ] as const),
+      model.topology.repositories.map(
+        (repository) =>
+          [
+            repository.repositoryId,
+            Object.freeze(windowsByRepository.get(repository.repositoryId) ?? []),
+          ] as const,
+      ),
     ) as WakeflowConfigPodScope["windowsByRepositoryId"],
   });
 }

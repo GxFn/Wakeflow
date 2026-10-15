@@ -20,36 +20,42 @@ test("Fresh selection allocates typed IDs and resolves request-local roots", () 
   deepEqual(input, before);
   equal(compiled.config.program.programId, `program_${UUIDS[0]}`);
   equal(compiled.config.presentation.language, "en");
-  deepEqual(compiled.allocations.repositories, [{
-    selectionKey: "repository-1",
-    id: `repository_${UUIDS[1]}`,
-  }]);
-  deepEqual(compiled.allocations.supportSurfaces, [{
-    selectionKey: "design",
-    id: `surface_${UUIDS[2]}`,
-  }, {
-    selectionKey: "test",
-    id: `surface_${UUIDS[3]}`,
-  }]);
-  deepEqual(compiled.allocations.windows.map((entry) => entry.id), [
-    `window_${UUIDS[4]}`,
-    `window_${UUIDS[5]}`,
-    `window_${UUIDS[6]}`,
-    `window_${UUIDS[7]}`,
+  deepEqual(compiled.allocations.repositories, [
+    {
+      selectionKey: "repository-1",
+      id: `repository_${UUIDS[1]}`,
+    },
   ]);
+  deepEqual(compiled.allocations.supportSurfaces, [
+    {
+      selectionKey: "design",
+      id: `surface_${UUIDS[2]}`,
+    },
+    {
+      selectionKey: "test",
+      id: `surface_${UUIDS[3]}`,
+    },
+  ]);
+  deepEqual(
+    compiled.allocations.windows.map((entry) => entry.id),
+    [`window_${UUIDS[4]}`, `window_${UUIDS[5]}`, `window_${UUIDS[6]}`, `window_${UUIDS[7]}`],
+  );
   deepEqual(compiled.allocations.pods, [{ selectionKey: "main", id: `pod_${UUIDS[8]}` }]);
-  deepEqual(JSON.parse(JSON.stringify(compiled.config.pods)), [{
-    podId: `pod_${UUIDS[8]}`,
-    name: "main",
-    placement: "primary",
-    lifecycle: "open",
-    worktrees: [],
-    closing: null,
-  }]);
-  equal(compiled.config.topology.windows.every((entry) => entry.podId === `pod_${UUIDS[8]}`), true);
-  const product = compiled.config.topology.windows.find((entry) => (
-    entry.role === "product"
-  ));
+  deepEqual(JSON.parse(JSON.stringify(compiled.config.pods)), [
+    {
+      podId: `pod_${UUIDS[8]}`,
+      name: "main",
+      placement: "primary",
+      lifecycle: "open",
+      worktrees: [],
+      closing: null,
+    },
+  ]);
+  equal(
+    compiled.config.topology.windows.every((entry) => entry.podId === `pod_${UUIDS[8]}`),
+    true,
+  );
+  const product = compiled.config.topology.windows.find((entry) => entry.role === "product");
   equal(product?.root.kind, "repository");
   if (product?.root.kind === "repository") {
     equal(product.root.repositoryId, `repository_${UUIDS[1]}`);
@@ -59,12 +65,10 @@ test("Fresh selection allocates typed IDs and resolves request-local roots", () 
 });
 
 test("Fresh selection is deterministic with an injected UUID sequence", () => {
-  const first = compileWakeflowFreshConfigSelection(
-    createMinimalWakeflowFreshConfigSelection(), {
+  const first = compileWakeflowFreshConfigSelection(createMinimalWakeflowFreshConfigSelection(), {
     uuidFactory: createSequenceUuidV4Factory(),
   });
-  const second = compileWakeflowFreshConfigSelection(
-    createMinimalWakeflowFreshConfigSelection(), {
+  const second = compileWakeflowFreshConfigSelection(createMinimalWakeflowFreshConfigSelection(), {
     uuidFactory: createSequenceUuidV4Factory(),
   });
   deepEqual(second, first);
@@ -85,11 +89,7 @@ test("Fresh selection rejects duplicate keys, unresolved roots, and UUID collisi
   for (const [candidate, factory, reason] of [
     [duplicate, createSequenceUuidV4Factory(), "selection-key"],
     [unresolved, createSequenceUuidV4Factory(), "reference"],
-    [
-      createMinimalWakeflowFreshConfigSelection(),
-      () => UUIDS[0] ?? "invalid",
-      "id-collision",
-    ],
+    [createMinimalWakeflowFreshConfigSelection(), () => UUIDS[0] ?? "invalid", "id-collision"],
   ] as const) {
     let caught: unknown;
     try {
@@ -160,8 +160,7 @@ test("Fresh selection snapshots all data and validates before ID allocation", ()
   equal(caught instanceof WakeflowFreshConfigSelectionError, true);
 
   const overCapacity = createMinimalWakeflowFreshConfigSelection();
-  const repositories = overCapacity.topology.repositories as
-    Record<string, unknown>[];
+  const repositories = overCapacity.topology.repositories as Record<string, unknown>[];
   for (let index = 0; index < 250; index += 1) {
     repositories.push({
       selectionKey: `extra-${index}`,
@@ -189,12 +188,8 @@ test("Fresh selection snapshots all data and validates before ID allocation", ()
 });
 
 test("Fresh selection without a factory derives the same IDs from the same selection", () => {
-  const first = compileWakeflowFreshConfigSelection(
-    createMinimalWakeflowFreshConfigSelection(),
-  );
-  const second = compileWakeflowFreshConfigSelection(
-    createMinimalWakeflowFreshConfigSelection(),
-  );
+  const first = compileWakeflowFreshConfigSelection(createMinimalWakeflowFreshConfigSelection());
+  const second = compileWakeflowFreshConfigSelection(createMinimalWakeflowFreshConfigSelection());
   deepEqual(second.allocations, first.allocations);
   equal(second.configDigest, first.configDigest);
   const renamed = createMinimalWakeflowFreshConfigSelection();
@@ -207,8 +202,8 @@ test("Fresh selection without a factory derives the same IDs from the same selec
       ...third.allocations.repositories.map((entry) => entry.id),
       ...third.allocations.supportSurfaces.map((entry) => entry.id),
     ]).size,
-    third.allocations.windows.length
-      + third.allocations.repositories.length
-      + third.allocations.supportSurfaces.length,
+    third.allocations.windows.length +
+      third.allocations.repositories.length +
+      third.allocations.supportSurfaces.length,
   );
 });

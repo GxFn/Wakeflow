@@ -7,11 +7,12 @@ import {
   type Sha256Digest,
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import { type JsonValue, JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
 import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+  type JsonValue,
+  JsonValueError,
+  parseJsonValue,
+} from "../../foundation/data/json-value.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -56,8 +57,8 @@ export const CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID =
   "claude-statusline-settings:install" as const;
 export const CLAUDE_CODE_STATUSLINE_SETTINGS_KEY = "statusLine" as const;
 export const CLAUDE_CODE_LOCAL_SETTINGS_REF: PortableResourcePath = parsePortableResourcePath(
-  claudeCodeWorkspaceHostResourceProfile.surfaces.settingsIntegration?.localPath
-    ?? ".claude/settings.local.json",
+  claudeCodeWorkspaceHostResourceProfile.surfaces.settingsIntegration?.localPath ??
+    ".claude/settings.local.json",
   "$settings",
 );
 /** 计划失败时宿主贡献报出的 blocker。 */
@@ -127,10 +128,10 @@ function signalOptions(signal: AbortSignal | undefined): { readonly signal?: Abo
 
 function assertRoot(root: unknown): asserts root is RootedDirectory {
   if (
-    typeof root !== "object"
-    || root === null
-    || types.isProxy(root)
-    || !(root instanceof RootedDirectory)
+    typeof root !== "object" ||
+    root === null ||
+    types.isProxy(root) ||
+    !(root instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -202,10 +203,7 @@ async function currentSettings(
 }
 
 /** 只改 `statusLine` 一键：已有键原位替换，否则追加在末尾；其他键与顺序原样保留。 */
-function renderTarget(
-  document: Readonly<Record<string, JsonValue>>,
-  entry: JsonValue,
-): Uint8Array {
+function renderTarget(document: Readonly<Record<string, JsonValue>>, entry: JsonValue): Uint8Array {
   const next: Record<string, JsonValue> = {};
   let replaced = false;
   for (const [key, value] of Object.entries(document)) {
@@ -224,9 +222,9 @@ function entryCurrent(current: CurrentSettings | null, entry: JsonValue): boolea
   if (current === null) return false;
   const existing = current.document[CLAUDE_CODE_STATUSLINE_SETTINGS_KEY];
   return (
-    existing !== undefined
-    && computeCanonicalJsonSha256Digest(existing) === computeCanonicalJsonSha256Digest(entry)
-    && current.source.node.permissionBits === SETTINGS_MODE
+    existing !== undefined &&
+    computeCanonicalJsonSha256Digest(existing) === computeCanonicalJsonSha256Digest(entry) &&
+    current.source.node.permissionBits === SETTINGS_MODE
   );
 }
 
@@ -263,9 +261,9 @@ function parsePayload(value: unknown): Readonly<ClaudeCodeStatuslineSettingsOper
     throw error;
   }
   if (
-    Object.keys(record).sort().join(" ") !== "key path"
-    || record.path !== CLAUDE_CODE_LOCAL_SETTINGS_REF
-    || record.key !== CLAUDE_CODE_STATUSLINE_SETTINGS_KEY
+    Object.keys(record).sort().join(" ") !== "key path" ||
+    record.path !== CLAUDE_CODE_LOCAL_SETTINGS_REF ||
+    record.key !== CLAUDE_CODE_STATUSLINE_SETTINGS_KEY
   ) {
     fail("operation", "$operation");
   }
@@ -275,9 +273,10 @@ function parsePayload(value: unknown): Readonly<ClaudeCodeStatuslineSettingsOper
   });
 }
 
-function parseDigests(
-  request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>,
-): { readonly sourceDigest: Sha256Digest | null; readonly targetDigest: Sha256Digest } {
+function parseDigests(request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>): {
+  readonly sourceDigest: Sha256Digest | null;
+  readonly targetDigest: Sha256Digest;
+} {
   try {
     return {
       sourceDigest:
@@ -356,9 +355,9 @@ export async function executeClaudeCodeStatuslineSettingsOperation(
   const digests = parseDigests(request);
   const current = await currentSettings(root, request.signal);
   if (
-    current !== null
-    && current.source.digest === digests.targetDigest
-    && current.source.node.permissionBits === SETTINGS_MODE
+    current !== null &&
+    current.source.digest === digests.targetDigest &&
+    current.source.node.permissionBits === SETTINGS_MODE
   ) {
     return Object.freeze({
       operationId: CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
@@ -367,8 +366,8 @@ export async function executeClaudeCodeStatuslineSettingsOperation(
     });
   }
   if (
-    !request.recoveringAffectedOperation
-    && (current?.source.digest ?? null) !== digests.sourceDigest
+    !request.recoveringAffectedOperation &&
+    (current?.source.digest ?? null) !== digests.sourceDigest
   ) {
     fail("source-stale", "$settings");
   }

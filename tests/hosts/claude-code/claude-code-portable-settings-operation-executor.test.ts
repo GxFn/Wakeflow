@@ -16,38 +16,23 @@ import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import {
-  createFileCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import {
-  planClaudeCodePortableSettingsComposition,
-} from "../../../src/hosts/claude-code/claude-code-portable-settings-composition.js";
+import { planClaudeCodePortableSettingsComposition } from "../../../src/hosts/claude-code/claude-code-portable-settings-composition.js";
 import {
   ClaudeCodePortableSettingsOperationExecutionError,
   type ClaudeCodePortableSettingsOperationExecutionErrorReason,
   executeClaudeCodePortableSettingsOperation,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-operation-executor.js";
-import {
-  CLAUDE_CODE_PORTABLE_SETTINGS_REF,
-} from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
-import {
-  planClaudeCodePortableSettingsTransition,
-} from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { CLAUDE_CODE_PORTABLE_SETTINGS_REF } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
+import { planClaudeCodePortableSettingsTransition } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 
 async function fixture(t: TestContext) {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-claude-settings-operation-",
-  ));
+  const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-claude-settings-operation-"));
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -59,9 +44,11 @@ async function fixture(t: TestContext) {
 function config() {
   const value = createMinimalWakeflowConfig();
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  const repositories = (value.topology as {
-    repositories: Record<string, unknown>[];
-  }).repositories;
+  const repositories = (
+    value.topology as {
+      repositories: Record<string, unknown>[];
+    }
+  ).repositories;
   const repository = repositories[0];
   if (repository === undefined) throw new Error("Expected repository.");
   repository.path = "ProductA";
@@ -112,9 +99,7 @@ test("single operation executes once and only recovery accepts committed target"
     value.root,
     planRequest(configValue),
   );
-  const operation = plan.operations.find((entry) => (
-    entry.root.rootKind === "program"
-  ));
+  const operation = plan.operations.find((entry) => entry.root.rootKind === "program");
   if (operation === undefined) throw new Error("Expected Program operation.");
   const created = await executeClaudeCodePortableSettingsOperation(
     value.root,
@@ -125,10 +110,11 @@ test("single operation executes once and only recovery accepts committed target"
   const inode = lstatSync(file, { bigint: true }).ino;
 
   await expectExecutionError(
-    () => executeClaudeCodePortableSettingsOperation(
-      value.root,
-      executeRequest(configValue, operation, false),
-    ),
+    () =>
+      executeClaudeCodePortableSettingsOperation(
+        value.root,
+        executeRequest(configValue, operation, false),
+      ),
     "source-stale",
   );
   const recovered = await executeClaudeCodePortableSettingsOperation(
@@ -146,9 +132,7 @@ test("Fresh Support operation remains valid after its planned root is materializ
     value.root,
     planRequest(configValue),
   );
-  const operation = plan.operations.find((entry) => (
-    entry.root.configuredPlacement === "Design"
-  ));
+  const operation = plan.operations.find((entry) => entry.root.configuredPlacement === "Design");
   if (operation === undefined) throw new Error("Expected Design operation.");
   mkdirSync(path.join(value.absolutePath, "Design"), { mode: 0o755 });
   const executed = await executeClaudeCodePortableSettingsOperation(
@@ -156,10 +140,13 @@ test("Fresh Support operation remains valid after its planned root is materializ
     executeRequest(configValue, operation, false),
   );
   equal(executed.disposition, "created");
-  equal(readFileSync(
-    path.join(value.absolutePath, "Design", ".claude", "settings.json"),
-    "utf8",
-  ).includes("mcp__plugin_wakeflow_wakeflow"), true);
+  equal(
+    readFileSync(
+      path.join(value.absolutePath, "Design", ".claude", "settings.json"),
+      "utf8",
+    ).includes("mcp__plugin_wakeflow_wakeflow"),
+    true,
+  );
 });
 
 test("affected recovery retires an inactive candidate stage before publishing", async (t) => {
@@ -169,9 +156,7 @@ test("affected recovery retires an inactive candidate stage before publishing", 
     value.root,
     planRequest(configValue),
   );
-  const operation = plan.operations.find((entry) => (
-    entry.root.rootKind === "program"
-  ));
+  const operation = plan.operations.find((entry) => entry.root.rootKind === "program");
   if (operation === undefined) throw new Error("Expected Program operation.");
   mkdirSync(path.join(value.absolutePath, ".claude"), { mode: 0o755 });
   const transition = planClaudeCodePortableSettingsTransition(null);
@@ -183,10 +168,7 @@ test("affected recovery retires an inactive candidate stage before publishing", 
     computeSha256Digest(bytes),
     0o644,
   );
-  const stageRef = durableAtomicFileStageRefForTest(
-    CLAUDE_CODE_PORTABLE_SETTINGS_REF,
-    address,
-  );
+  const stageRef = durableAtomicFileStageRefForTest(CLAUDE_CODE_PORTABLE_SETTINGS_REF, address);
   let released = false;
   try {
     await createFileCandidateDurably(value.root, stageRef, bytes, {
@@ -202,11 +184,7 @@ test("affected recovery retires an inactive candidate stage before publishing", 
     );
     equal(recovered.disposition, "created");
     equal(existsSync(stagePath), false);
-    equal(existsSync(path.join(
-      value.absolutePath,
-      ".claude",
-      "settings.json",
-    )), true);
+    equal(existsSync(path.join(value.absolutePath, ".claude", "settings.json")), true);
   } finally {
     if (!released) releaseDurableAtomicFileStageAddress(address);
   }
@@ -218,23 +196,22 @@ test("source, authority, and operation drift fail before mutation", async (t) =>
   const sourceDirectory = path.join(value.absolutePath, ".claude");
   mkdirSync(sourceDirectory, { mode: 0o755 });
   const sourceFile = path.join(sourceDirectory, "settings.json");
-  writeFileSync(sourceFile, "{\"theme\":\"dark\"}\n", { mode: 0o644 });
+  writeFileSync(sourceFile, '{"theme":"dark"}\n', { mode: 0o644 });
   const plan = await planClaudeCodePortableSettingsComposition(
     value.root,
     planRequest(configValue),
   );
-  const operation = plan.operations.find((entry) => (
-    entry.root.rootKind === "program"
-  ));
+  const operation = plan.operations.find((entry) => entry.root.rootKind === "program");
   if (operation === undefined) throw new Error("Expected Program operation.");
 
-  const changedSource = "{\"theme\":\"light\"}\n";
+  const changedSource = '{"theme":"light"}\n';
   writeFileSync(sourceFile, changedSource, { mode: 0o644 });
   await expectExecutionError(
-    () => executeClaudeCodePortableSettingsOperation(
-      value.root,
-      executeRequest(configValue, operation, false),
-    ),
+    () =>
+      executeClaudeCodePortableSettingsOperation(
+        value.root,
+        executeRequest(configValue, operation, false),
+      ),
     "source-stale",
   );
   equal(readFileSync(sourceFile, "utf8"), changedSource);
@@ -242,10 +219,11 @@ test("source, authority, and operation drift fail before mutation", async (t) =>
   const changedConfig = config();
   (changedConfig.presentation as Record<string, unknown>).language = "zh-Hans";
   await expectExecutionError(
-    () => executeClaudeCodePortableSettingsOperation(
-      value.root,
-      executeRequest(changedConfig, operation, false),
-    ),
+    () =>
+      executeClaudeCodePortableSettingsOperation(
+        value.root,
+        executeRequest(changedConfig, operation, false),
+      ),
     "authority-changed",
   );
   equal(readFileSync(sourceFile, "utf8"), changedSource);
@@ -255,10 +233,11 @@ test("source, authority, and operation drift fail before mutation", async (t) =>
     targetDigest: `sha256:${"0".repeat(64)}`,
   };
   await expectExecutionError(
-    () => executeClaudeCodePortableSettingsOperation(
-      value.root,
-      executeRequest(configValue, forged, false),
-    ),
+    () =>
+      executeClaudeCodePortableSettingsOperation(
+        value.root,
+        executeRequest(configValue, forged, false),
+      ),
     "operation",
   );
   equal(readFileSync(sourceFile, "utf8"), changedSource);

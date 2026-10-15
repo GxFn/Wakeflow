@@ -10,11 +10,14 @@ import {
  * `mcp__<server>__<tool>` 只放行一个工具。Controller 拿整服务器规则，其他角色按归属表逐工具放行。
  * 支撑面根里以前写的整服务器规则由设置转换按退役规则表精确删除。
  */
-export const WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE = "mcp__plugin_wakeflow_wakeflow" as const;
+export const WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE =
+  "mcp__plugin_wakeflow_wakeflow" as const;
 
 export function claudeCodeMcpPermissionRulesFor(role: WakeflowWindowRole): readonly string[] {
   const tools = wakeflowRoleToolAccess(role);
   return tools === null
     ? Object.freeze([WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE])
-    : Object.freeze(tools.map((tool) => `${WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE}__${tool}`));
+    : Object.freeze(
+        tools.map((tool) => `${WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE}__${tool}`),
+      );
 }

@@ -17,11 +17,15 @@ for (const selection of ["host", "unset", "empty", "invalid-host"] as const) {
     const plugin = path.join(root, "plugin with spaces");
     const bin = path.join(root, "bin");
     mkdirSync(bin);
-    for (const [directory, file] of [["mcp", "server.mjs"], ["hooks", "observe.mjs"]] as const) {
+    for (const [directory, file] of [
+      ["mcp", "server.mjs"],
+      ["hooks", "observe.mjs"],
+    ] as const) {
       mkdirSync(path.join(plugin, directory), { recursive: true });
       writeFileSync(
         path.join(plugin, directory, file),
-        "process.stdout.write(JSON.stringify({entry:" + JSON.stringify(directory) +
+        "process.stdout.write(JSON.stringify({entry:" +
+          JSON.stringify(directory) +
           ",args:process.argv.slice(2)}));\n",
       );
     }

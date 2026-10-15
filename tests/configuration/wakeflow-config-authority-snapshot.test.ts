@@ -82,7 +82,9 @@ test("snapshot binds the current source/config digests to one stable workspace r
     equal(snapshot.indexes.controllerWindow.role, "controller");
     equal(snapshot.ledgerRoot, path.join(fixture.temporaryRoot, "wakeflow-ledger"));
     equal(
-      snapshot.placements.roots.find((entry) => entry.key === "repository.repository_22222222-2222-4222-8222-222222222222.root")?.state,
+      snapshot.placements.roots.find(
+        (entry) => entry.key === "repository.repository_22222222-2222-4222-8222-222222222222.root",
+      )?.state,
       "present",
     );
     equal(Object.isFrozen(snapshot), true);
@@ -100,14 +102,8 @@ test("domain field-order drift is rejected instead of becoming another config re
   try {
     await readWakeflowConfigAuthoritySnapshot(root);
     const reordered = Object.fromEntries(Object.entries(value).reverse());
-    writeFileSync(
-      fixture.configPath,
-      `${JSON.stringify(reordered, null, 2)}\n`,
-    );
-    await expectSnapshotError(
-      () => readWakeflowConfigAuthoritySnapshot(root),
-      "representation",
-    );
+    writeFileSync(fixture.configPath, `${JSON.stringify(reordered, null, 2)}\n`);
+    await expectSnapshotError(() => readWakeflowConfigAuthoritySnapshot(root), "representation");
   } finally {
     await root.close();
     rmSync(fixture.temporaryRoot, { recursive: true, force: true });
@@ -121,10 +117,7 @@ test("encoding, JSON, Schema and source node policy remain distinct failures", a
   }> = [
     {
       reason: "encoding",
-      prepare: (fixture) => writeFileSync(
-        fixture.configPath,
-        Buffer.from([0xc3, 0x28]),
-      ),
+      prepare: (fixture) => writeFileSync(fixture.configPath, Buffer.from([0xc3, 0x28])),
     },
     {
       reason: "json",
@@ -132,13 +125,14 @@ test("encoding, JSON, Schema and source node policy remain distinct failures", a
     },
     {
       reason: "config",
-      prepare: (fixture) => writeFileSync(
-        fixture.configPath,
-        serializeWakeflowConfigFixture({
-          ...createMinimalWakeflowConfig(),
-          unknown: true,
-        }),
-      ),
+      prepare: (fixture) =>
+        writeFileSync(
+          fixture.configPath,
+          serializeWakeflowConfigFixture({
+            ...createMinimalWakeflowConfig(),
+            unknown: true,
+          }),
+        ),
     },
     {
       reason: "source-policy",
@@ -154,10 +148,7 @@ test("encoding, JSON, Schema and source node policy remain distinct failures", a
     const root = await RootedDirectory.open(fixture.workspaceRoot);
     try {
       scenario.prepare(fixture);
-      await expectSnapshotError(
-        () => readWakeflowConfigAuthoritySnapshot(root),
-        scenario.reason,
-      );
+      await expectSnapshotError(() => readWakeflowConfigAuthoritySnapshot(root), scenario.reason);
     } finally {
       await root.close();
       rmSync(fixture.temporaryRoot, { recursive: true, force: true });
@@ -173,10 +164,7 @@ test("config symlink and hard-link aliases cannot become authority", async () =>
     rmSync(linked.configPath);
     writeFileSync(target, serializeWakeflowConfigFixture(createMinimalWakeflowConfig()));
     symlinkSync(target, linked.configPath);
-    await expectSnapshotError(
-      () => readWakeflowConfigAuthoritySnapshot(linkedRoot),
-      "source",
-    );
+    await expectSnapshotError(() => readWakeflowConfigAuthoritySnapshot(linkedRoot), "source");
   } finally {
     await linkedRoot.close();
     rmSync(linked.temporaryRoot, { recursive: true, force: true });
@@ -206,10 +194,7 @@ test("overlapping and symlinked configured roots fail before snapshot publicatio
   const overlap = createWorkspace(overlapValue);
   const overlapRoot = await RootedDirectory.open(overlap.workspaceRoot);
   try {
-    await expectSnapshotError(
-      () => readWakeflowConfigAuthoritySnapshot(overlapRoot),
-      "placement",
-    );
+    await expectSnapshotError(() => readWakeflowConfigAuthoritySnapshot(overlapRoot), "placement");
   } finally {
     await overlapRoot.close();
     rmSync(overlap.temporaryRoot, { recursive: true, force: true });
@@ -221,10 +206,7 @@ test("overlapping and symlinked configured roots fail before snapshot publicatio
   symlinkSync(outside, path.join(symbolic.workspaceRoot, "Design"), "dir");
   const symbolicRoot = await RootedDirectory.open(symbolic.workspaceRoot);
   try {
-    await expectSnapshotError(
-      () => readWakeflowConfigAuthoritySnapshot(symbolicRoot),
-      "placement",
-    );
+    await expectSnapshotError(() => readWakeflowConfigAuthoritySnapshot(symbolicRoot), "placement");
   } finally {
     await symbolicRoot.close();
     rmSync(symbolic.temporaryRoot, { recursive: true, force: true });
@@ -238,9 +220,10 @@ test("snapshot options are passive and support cancellation", async () => {
     const controller = new AbortController();
     controller.abort();
     await expectSnapshotError(
-      () => readWakeflowConfigAuthoritySnapshot(root, {
-        signal: controller.signal,
-      }),
+      () =>
+        readWakeflowConfigAuthoritySnapshot(root, {
+          signal: controller.signal,
+        }),
       "aborted",
     );
     await expectSnapshotError(

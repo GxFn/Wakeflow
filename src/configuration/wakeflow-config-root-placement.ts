@@ -1,10 +1,10 @@
-import { types } from "node:util";
 import nodePath from "node:path";
+import { types } from "node:util";
 
 import {
   AbsoluteDirectoryPlacementError,
-  inspectAbsoluteDirectoryPlacement,
   type AbsoluteDirectoryPlacementObservation,
+  inspectAbsoluteDirectoryPlacement,
 } from "../foundation/filesystem/absolute-directory-placement.js";
 import {
   RootedDirectory,
@@ -13,8 +13,8 @@ import {
 import {
   WAKEFLOW_ACTIVE_ROOT,
   WAKEFLOW_LOCAL_ROOT,
-  type WakeflowConfigPlacement,
   type WakeflowConfigModel,
+  type WakeflowConfigPlacement,
 } from "./wakeflow-config.js";
 
 /**
@@ -56,18 +56,15 @@ export type WakeflowConfigRootPlacementErrorReason =
   | "inspection-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Wakeflow config placement input is invalid.",
+  input: "Wakeflow config placement input is invalid.",
   "root-scope": "Wakeflow workspace root changed during placement admission.",
   "lexical-overlap": "Wakeflow configured roots overlap lexically.",
-  "symlink": "Wakeflow configured root contains a symbolic link.",
+  symlink: "Wakeflow configured root contains a symbolic link.",
   "not-directory": "Wakeflow configured root contains a non-directory node.",
-  "alias": "Wakeflow configured root does not use its canonical physical spelling.",
+  alias: "Wakeflow configured root does not use its canonical physical spelling.",
   "physical-overlap": "Wakeflow configured roots overlap physically.",
   "inspection-failure": "Wakeflow configured roots could not be inspected safely.",
-} as const satisfies Readonly<Record<
-  WakeflowConfigRootPlacementErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowConfigRootPlacementErrorReason, string>>;
 
 /** 配置根目录位置准入失败时返回的稳定、脱敏错误。 */
 export class WakeflowConfigRootPlacementError extends Error {
@@ -89,19 +86,16 @@ interface PlannedRoot {
   readonly absolutePath: string;
 }
 
-function fail(
-  reason: WakeflowConfigRootPlacementErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowConfigRootPlacementErrorReason, path: string): never {
   throw new WakeflowConfigRootPlacementError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -133,13 +127,14 @@ function planRoots(
       configuredPath: repository.path,
     })),
   ];
-  return Object.freeze(values.map((value) => Object.freeze({
-    ...value,
-    absolutePath: nodePath.resolve(
-      workspaceRoot,
-      ...value.configuredPath.split("/"),
+  return Object.freeze(
+    values.map((value) =>
+      Object.freeze({
+        ...value,
+        absolutePath: nodePath.resolve(workspaceRoot, ...value.configuredPath.split("/")),
+      }),
     ),
-  })));
+  );
 }
 
 function assertNoOverlap<Entry>(
@@ -175,10 +170,7 @@ function assertNoOverlap<Entry>(
   }
 }
 
-function mapInspectionError(
-  error: AbsoluteDirectoryPlacementError,
-  path: string,
-): never {
+function mapInspectionError(error: AbsoluteDirectoryPlacementError, path: string): never {
   if (error.reason === "symlink") fail("symlink", path);
   if (error.reason === "not-directory") fail("not-directory", path);
   if (error.reason === "input") fail("input", path);
@@ -217,28 +209,19 @@ export async function validateWakeflowConfigRootPlacements(
   assertRoot(root);
   await assertCurrentRoot(root);
   const planned = planRoots(root.absolutePath, model);
-  assertNoOverlap(
-    planned,
-    (entry) => entry.absolutePath,
-    "lexical-overlap",
-  );
+  assertNoOverlap(planned, (entry) => entry.absolutePath, "lexical-overlap");
 
   const observed: AbsoluteDirectoryPlacementObservation[] = [];
   for (const [index, entry] of planned.entries()) {
     const observation = await observeRoot(entry, index);
-    if (
-      observation.state === "present"
-      && observation.spellingIsCanonical !== true
-    ) {
+    if (observation.state === "present" && observation.spellingIsCanonical !== true) {
       fail("alias", `$placements/${index}`);
     }
     if (observation.state === "missing") {
       if (observation.nearestExistingAncestor === null) {
         fail("inspection-failure", `$placements/${index}`);
       }
-      if (
-        observation.nearestExistingAncestor.spellingIsCanonical !== true
-      ) {
+      if (observation.nearestExistingAncestor.spellingIsCanonical !== true) {
         fail("alias", `$placements/${index}`);
       }
     }
@@ -259,23 +242,24 @@ export async function validateWakeflowConfigRootPlacements(
   );
   await assertCurrentRoot(root);
 
-  const roots = Object.freeze(planned.map((entry, index) => {
-    const observation = observed[index];
-    if (observation === undefined) fail("inspection-failure", "$placements");
-    return Object.freeze({
-      key: entry.key,
-      configuredPath: entry.configuredPath,
-      absolutePath: entry.absolutePath,
-      state: observation.state,
-      realPath: observation.realPath,
-    });
-  }));
+  const roots = Object.freeze(
+    planned.map((entry, index) => {
+      const observation = observed[index];
+      if (observation === undefined) fail("inspection-failure", "$placements");
+      return Object.freeze({
+        key: entry.key,
+        configuredPath: entry.configuredPath,
+        absolutePath: entry.absolutePath,
+        state: observation.state,
+        realPath: observation.realPath,
+      });
+    }),
+  );
   return Object.freeze({
     workspaceRoot: root.absolutePath,
     roots,
     missingRootKeys: Object.freeze(
-      roots.filter((entry) => entry.state === "missing")
-        .map((entry) => entry.key),
+      roots.filter((entry) => entry.state === "missing").map((entry) => entry.key),
     ),
   });
 }

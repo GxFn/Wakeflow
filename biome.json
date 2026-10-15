@@ -68,14 +68,10 @@
     },
     {
       "includes": [
-        "src/configuration/**",
         "src/workspace/**",
         "src/governance/**",
-        "src/hosts/**",
-        "tests/configuration/**",
         "tests/workspace/**",
-        "tests/governance/**",
-        "tests/hosts/**"
+        "tests/governance/**"
       ],
       "formatter": {
         "enabled": false
@@ -132,6 +128,29 @@
         "rules": {
           "complexity": {
             "noExcessiveCognitiveComplexity": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/hosts/**",
+        "tests/hosts/**",
+        "src/configuration/**",
+        "tests/configuration/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          },
+          "suspicious": {
+            "noImplicitAnyLet": "off",
+            "noControlCharactersInRegex": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off",
+            "useImportType": "off"
           }
         }
       }

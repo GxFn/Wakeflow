@@ -1,22 +1,21 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   type DurableAtomicFileWriteResult,
 } from "../foundation/filesystem/durable-atomic-file-write.js";
-import {
-  sameFileNodeSnapshot,
-} from "../foundation/filesystem/file-node-snapshot.js";
-import {
-  RootedDirectory,
-} from "../foundation/filesystem/rooted-directory.js";
+import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
+import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
+import {
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "./wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
@@ -24,17 +23,11 @@ import {
   WAKEFLOW_CONFIG_MAXIMUM_BYTES,
   type WakeflowConfigAuthoritySnapshot,
 } from "./wakeflow-config-authority-snapshot.js";
+import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "./wakeflow-config-root-placement.js";
-import {
-  computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "./wakeflow-config.js";
-import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 
 /**
  * Wakeflow Configuration：严格 Config 权威记录的仅限首次创建持久发布。
@@ -72,21 +65,19 @@ export type WakeflowConfigAuthorityPublicationErrorReason =
   | "commit-uncertain";
 
 const ERROR_MESSAGES = {
-  "input": "Wakeflow config authority publication input is invalid.",
-  "unsupported-platform": "Wakeflow config authority publication requires reliable local POSIX ownership semantics.",
+  input: "Wakeflow config authority publication input is invalid.",
+  "unsupported-platform":
+    "Wakeflow config authority publication requires reliable local POSIX ownership semantics.",
   "root-scope": "Wakeflow config authority publication lost its workspace root scope.",
   "root-policy": "Wakeflow config authority publication requires a current-user workspace root.",
-  "config": "Wakeflow config authority publication requires one strict model.",
-  "capacity": "Wakeflow config authority publication exceeds its recoverable byte limit.",
-  "placement": "Wakeflow config authority publication declares an unsafe root placement.",
+  config: "Wakeflow config authority publication requires one strict model.",
+  capacity: "Wakeflow config authority publication exceeds its recoverable byte limit.",
+  placement: "Wakeflow config authority publication declares an unsafe root placement.",
   "target-exists": "Wakeflow config authority already exists.",
-  "aborted": "Wakeflow config authority publication was aborted before commit.",
+  aborted: "Wakeflow config authority publication was aborted before commit.",
   "publication-failure": "Wakeflow config authority could not be published safely.",
   "commit-uncertain": "Published Wakeflow config authority could not be proven exact.",
-} as const satisfies Readonly<Record<
-  WakeflowConfigAuthorityPublicationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowConfigAuthorityPublicationErrorReason, string>>;
 
 /** Config 首次发布失败时返回的稳定、脱敏错误。 */
 export class WakeflowConfigAuthorityPublicationError extends Error {
@@ -95,10 +86,7 @@ export class WakeflowConfigAuthorityPublicationError extends Error {
   readonly reason: WakeflowConfigAuthorityPublicationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowConfigAuthorityPublicationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowConfigAuthorityPublicationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -109,29 +97,28 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: WakeflowConfigAuthorityPublicationErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowConfigAuthorityPublicationErrorReason, path: string): never {
   throw new WakeflowConfigAuthorityPublicationError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -143,8 +130,8 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$options");
   }
@@ -164,10 +151,7 @@ function currentEffectiveUserId(): bigint {
   return BigInt(process.geteuid());
 }
 
-async function assertCurrentUserRoot(
-  root: RootedDirectory,
-  expectedUserId: bigint,
-): Promise<void> {
+async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigint): Promise<void> {
   try {
     const node = await root.assertCurrent("$root");
     if (node.userId !== expectedUserId) fail("root-policy", "$root");
@@ -199,10 +183,7 @@ function renderModelBytes(model: WakeflowConfigModel): Uint8Array {
   return bytes;
 }
 
-async function assertPlacements(
-  root: RootedDirectory,
-  model: WakeflowConfigModel,
-): Promise<void> {
+async function assertPlacements(root: RootedDirectory, model: WakeflowConfigModel): Promise<void> {
   try {
     await validateWakeflowConfigRootPlacements(root, model);
   } catch (error: unknown) {
@@ -230,17 +211,14 @@ function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$config");
-  if (
-    error.reason === "root-scope"
-    || error.reason === "parent-changed"
-  ) {
+  if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("root-scope", "$root");
   }
   if (
-    error.reason === "commit-uncertain"
-    || error.reason === "durability-failure"
-    || error.reason === "stage-cleanup-failure"
-    || error.reason === "close-failure"
+    error.reason === "commit-uncertain" ||
+    error.reason === "durability-failure" ||
+    error.reason === "stage-cleanup-failure" ||
+    error.reason === "close-failure"
   ) {
     fail("commit-uncertain", "$resourcePath");
   }
@@ -282,16 +260,16 @@ function assertReadback(
   expectedUserId: bigint,
 ): void {
   if (
-    publication.resourcePath !== WAKEFLOW_CONFIG_FILE_REF
-    || publication.node.kind !== "file"
-    || publication.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
-    || publication.node.linkCount !== 1n
-    || publication.node.userId !== expectedUserId
-    || authority.source.resourcePath !== publication.resourcePath
-    || authority.source.byteCount !== publication.byteCount
-    || authority.source.digest !== publication.digest
-    || !sameFileNodeSnapshot(authority.source.node, publication.node)
-    || authority.configDigest !== expectedConfigDigest
+    publication.resourcePath !== WAKEFLOW_CONFIG_FILE_REF ||
+    publication.node.kind !== "file" ||
+    publication.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
+    publication.node.linkCount !== 1n ||
+    publication.node.userId !== expectedUserId ||
+    authority.source.resourcePath !== publication.resourcePath ||
+    authority.source.byteCount !== publication.byteCount ||
+    authority.source.digest !== publication.digest ||
+    !sameFileNodeSnapshot(authority.source.node, publication.node) ||
+    authority.configDigest !== expectedConfigDigest
   ) {
     fail("commit-uncertain", "$resourcePath");
   }
@@ -326,12 +304,7 @@ export async function publishWakeflowConfigAuthority(
   const publication = await publishBytes(root, bytes, parsed.signal);
   // 发布已经跨过不替换目标的提交点；此后的失败不能再表述为“提交前已取消”。
   const authority = await readBackCommittedAuthority(root);
-  assertReadback(
-    publication,
-    authority,
-    expectedConfigDigest,
-    expectedUserId,
-  );
+  assertReadback(publication, authority, expectedConfigDigest, expectedUserId);
   return Object.freeze({
     publication,
     authority,

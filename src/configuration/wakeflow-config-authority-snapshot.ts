@@ -1,33 +1,18 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../foundation/data/passive-own-data.js";
+import { DeterministicJsonDocumentError } from "../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import {
-  readDeterministicJsonFile,
-} from "../foundation/filesystem/deterministic-json-file.js";
-import {
-  DeterministicJsonDocumentError,
-} from "../foundation/data/deterministic-json-document.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
-import {
-  parseByteCount,
-  type ByteCount,
-} from "../foundation/numeric/byte-count.js";
-import {
-  validateWakeflowConfigRootPlacements,
-  WakeflowConfigRootPlacementError,
-  type WakeflowConfigRootPlacementReport,
-} from "./wakeflow-config-root-placement.js";
+import { type ByteCount, parseByteCount } from "../foundation/numeric/byte-count.js";
 import {
   buildWakeflowConfigIndexes,
   computeWakeflowConfigDigest,
@@ -37,6 +22,11 @@ import {
   type WakeflowConfigModel,
 } from "./wakeflow-config.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
+import {
+  validateWakeflowConfigRootPlacements,
+  WakeflowConfigRootPlacementError,
+  type WakeflowConfigRootPlacementReport,
+} from "./wakeflow-config-root-placement.js";
 
 /**
  * Wakeflow Configuration：单次操作范围内的 配置权威快照。
@@ -50,9 +40,7 @@ import { renderWakeflowConfig } from "./wakeflow-config-document.js";
  * 必须在自己的互斥锁或比较并交换边界内重新加载，并核对源快照和配置摘要。
  */
 
-export const WAKEFLOW_CONFIG_FILE_REF = parsePortableResourcePath(
-  "wakeflow.config.json",
-);
+export const WAKEFLOW_CONFIG_FILE_REF = parsePortableResourcePath("wakeflow.config.json");
 export const WAKEFLOW_CONFIG_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
 export const WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE = 0o644;
 
@@ -92,22 +80,19 @@ export type WakeflowConfigAuthoritySnapshotErrorReason =
   | "load-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Wakeflow config authority snapshot input is invalid.",
+  input: "Wakeflow config authority snapshot input is invalid.",
   "root-scope": "Wakeflow config workspace root could not be held stable.",
-  "source": "Wakeflow canonical config source is unavailable or unsafe.",
+  source: "Wakeflow canonical config source is unavailable or unsafe.",
   "source-policy": "Wakeflow canonical config source violates its node policy.",
   "source-changed": "Wakeflow canonical config changed during snapshot loading.",
-  "encoding": "Wakeflow canonical config is not strict UTF-8 text.",
-  "json": "Wakeflow canonical config is not valid JSON.",
-  "representation": "Wakeflow canonical config does not use its deterministic domain representation.",
-  "config": "Wakeflow canonical config is not the strict public authority.",
-  "placement": "Wakeflow canonical config declares unsafe root placements.",
-  "aborted": "Wakeflow config authority snapshot loading was aborted.",
+  encoding: "Wakeflow canonical config is not strict UTF-8 text.",
+  json: "Wakeflow canonical config is not valid JSON.",
+  representation: "Wakeflow canonical config does not use its deterministic domain representation.",
+  config: "Wakeflow canonical config is not the strict public authority.",
+  placement: "Wakeflow canonical config declares unsafe root placements.",
+  aborted: "Wakeflow config authority snapshot loading was aborted.",
   "load-failure": "Wakeflow config authority snapshot failed closed.",
-} as const satisfies Readonly<Record<
-  WakeflowConfigAuthoritySnapshotErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowConfigAuthoritySnapshotErrorReason, string>>;
 
 /** 配置权威快照失败时返回的稳定、脱敏错误。 */
 export class WakeflowConfigAuthoritySnapshotError extends Error {
@@ -116,10 +101,7 @@ export class WakeflowConfigAuthoritySnapshotError extends Error {
   readonly reason: WakeflowConfigAuthoritySnapshotErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowConfigAuthoritySnapshotErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowConfigAuthoritySnapshotErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -130,29 +112,28 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: WakeflowConfigAuthoritySnapshotErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowConfigAuthoritySnapshotErrorReason, path: string): never {
   throw new WakeflowConfigAuthoritySnapshotError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -187,9 +168,7 @@ function mapStrictTextError(error: StrictTextFileError): never {
   fail("representation", "$source");
 }
 
-function mapDeterministicJsonError(
-  error: DeterministicJsonDocumentError,
-): never {
+function mapDeterministicJsonError(error: DeterministicJsonDocumentError): never {
   if (error.reason === "json-syntax") fail("json", "$document");
   if (error.reason === "non-deterministic") {
     fail("representation", "$document");
@@ -197,20 +176,13 @@ function mapDeterministicJsonError(
   fail("config", error.path);
 }
 
-async function readConfigSource(
-  root: RootedDirectory,
-  signal: AbortSignal | undefined,
-) {
+async function readConfigSource(root: RootedDirectory, signal: AbortSignal | undefined) {
   const options = {
     maximumBytes: WAKEFLOW_CONFIG_MAXIMUM_BYTES,
     ...(signal === undefined ? {} : { signal }),
   };
   try {
-    return await readDeterministicJsonFile(
-      root,
-      WAKEFLOW_CONFIG_FILE_REF,
-      options,
-    );
+    return await readDeterministicJsonFile(root, WAKEFLOW_CONFIG_FILE_REF, options);
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) mapStableReadError(error);
     if (error instanceof StrictTextFileError) mapStrictTextError(error);
@@ -231,9 +203,9 @@ function assertSourcePolicy(node: Readonly<FileNodeSnapshot>): void {
     }
   }
   if (
-    node.linkCount !== 1n
-    || node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
-    || (currentUserId !== null && node.userId !== currentUserId)
+    node.linkCount !== 1n ||
+    node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
+    (currentUserId !== null && node.userId !== currentUserId)
   ) {
     fail("source-policy", "$source");
   }
@@ -263,9 +235,7 @@ async function validatePlacements(
   }
 }
 
-function requiredLedgerRoot(
-  placements: Readonly<WakeflowConfigRootPlacementReport>,
-): string {
+function requiredLedgerRoot(placements: Readonly<WakeflowConfigRootPlacementReport>): string {
   const ledger = placements.roots.find((entry) => entry.key === "ledger.root");
   if (ledger === undefined) fail("placement", "$placements");
   return ledger.absolutePath;

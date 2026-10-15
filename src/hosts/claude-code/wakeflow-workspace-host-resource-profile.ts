@@ -1,6 +1,4 @@
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-} from "../../workspace/workspace-host-resource-profile.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 
 /**
  * Wakeflow Host / Claude Code：资源矩阵所需的 Claude Code 静态值。
@@ -8,45 +6,44 @@ import {
  * 本模块只提供宿主资源表面，不导入定位器、活动观察器、设置写入器、生命周期门面
  * 或任何副作用。状态栏脚本由 Node.js 调用，Profile 只声明普通文件名。
  */
-export const claudeCodeWorkspaceHostResourceProfile =
-  parseWakeflowWorkspaceHostResourceProfile({
-    kind: "WakeflowWorkspaceHostResourceProfile",
-    hostId: "claude-code",
-    runtimeDirectoryName: "claude-code",
-    instructionFileName: "CLAUDE.md",
-    surfaces: {
-      windowIdentity: true,
-      podReceipts: true,
-      worktree: {
-        launch: "claude-worktree-flag",
-        attachedDirectories: "add-dir-flag",
-      },
-      keepLive: true,
-      windowLocator: true,
-      settingsIntegration: {
-        portablePath: ".claude/settings.json",
-        localPath: ".claude/settings.local.json",
-      },
-      statuslineAsset: {
-        fileName: "statusline.mjs",
-      },
-      tmuxAsset: {
-        fileName: "tmux.mjs",
-      },
-      activityMonitor: true,
-      temporaryPrompts: true,
-      // 制品在原路径就地更新，助手能就地重启窗口：启动记录旧于磁盘制品的会话确定过期。
-      runtimeStaleness: "session-start-observer-digest",
-      // Controller 按 "After a plugin update" 用 tmux 助手 `resume --in-place` 自己换代（§13.134）。
-      runtimeRefresh: "controller-in-place",
+export const claudeCodeWorkspaceHostResourceProfile = parseWakeflowWorkspaceHostResourceProfile({
+  kind: "WakeflowWorkspaceHostResourceProfile",
+  hostId: "claude-code",
+  runtimeDirectoryName: "claude-code",
+  instructionFileName: "CLAUDE.md",
+  surfaces: {
+    windowIdentity: true,
+    podReceipts: true,
+    worktree: {
+      launch: "claude-worktree-flag",
+      attachedDirectories: "add-dir-flag",
     },
-    launch: {
-      kind: "tmux-session",
-      controllerEffort: "max",
-      defaultEffort: "xhigh",
-      // 缺省 auto：由 Claude Code 自己审每个动作，被引导的用户不必逐条批准常规工具调用；
-      // 配置仍可显式选 acceptEdits 或 bypassPermissions（用户裁决 Q4，gate-log §13.134）。
-      permissionMode: "auto",
-      sessionName: "wakeflow",
+    keepLive: true,
+    windowLocator: true,
+    settingsIntegration: {
+      portablePath: ".claude/settings.json",
+      localPath: ".claude/settings.local.json",
     },
-  });
+    statuslineAsset: {
+      fileName: "statusline.mjs",
+    },
+    tmuxAsset: {
+      fileName: "tmux.mjs",
+    },
+    activityMonitor: true,
+    temporaryPrompts: true,
+    // 制品在原路径就地更新，助手能就地重启窗口：启动记录旧于磁盘制品的会话确定过期。
+    runtimeStaleness: "session-start-observer-digest",
+    // Controller 按 "After a plugin update" 用 tmux 助手 `resume --in-place` 自己换代（§13.134）。
+    runtimeRefresh: "controller-in-place",
+  },
+  launch: {
+    kind: "tmux-session",
+    controllerEffort: "max",
+    defaultEffort: "xhigh",
+    // 缺省 auto：由 Claude Code 自己审每个动作，被引导的用户不必逐条批准常规工具调用；
+    // 配置仍可显式选 acceptEdits 或 bypassPermissions（用户裁决 Q4，gate-log §13.134）。
+    permissionMode: "auto",
+    sessionName: "wakeflow",
+  },
+});

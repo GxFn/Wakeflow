@@ -1,22 +1,16 @@
 import { types } from "node:util";
-
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../foundation/crypto/canonical-json-sha256.js";
-import type { Sha256Digest } from "../foundation/crypto/sha256.js";
-import {
-  JsonValueError,
-  parseJsonValue,
-} from "../foundation/data/json-value.js";
-import {
-  parseDenseArray,
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../foundation/data/passive-own-data.js";
 import {
   createWakeflowDurableId,
   type WakeflowDurableId,
 } from "../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
+import type { Sha256Digest } from "../foundation/crypto/sha256.js";
+import { JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
+import {
+  PassiveOwnDataError,
+  parseDenseArray,
+  parsePlainRecord,
+} from "../foundation/data/passive-own-data.js";
 import {
   createUuidV4,
   deriveUuidV4,
@@ -43,8 +37,7 @@ import {
  * 文本和路径）都会得到新ID；省略presentation.language时显式持久化默认`en`。
  */
 
-const WAKEFLOW_FRESH_SELECTION_KEY_PATTERN =
-  /^[a-z][a-z0-9-]{0,63}$/u;
+const WAKEFLOW_FRESH_SELECTION_KEY_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
 const WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES = 256;
 
 interface WakeflowFreshConfigSelectionAllocation<
@@ -60,15 +53,15 @@ export interface WakeflowFreshConfigCompilation {
   readonly configDigest: Sha256Digest;
   readonly allocations: Readonly<{
     readonly programId: WakeflowDurableId<"program">;
-    readonly repositories:
-      readonly Readonly<WakeflowFreshConfigSelectionAllocation<"repository">>[];
-    readonly supportSurfaces:
-      readonly Readonly<WakeflowFreshConfigSelectionAllocation<"surface">>[];
-    readonly windows:
-      readonly Readonly<WakeflowFreshConfigSelectionAllocation<"window">>[];
+    readonly repositories: readonly Readonly<
+      WakeflowFreshConfigSelectionAllocation<"repository">
+    >[];
+    readonly supportSurfaces: readonly Readonly<
+      WakeflowFreshConfigSelectionAllocation<"surface">
+    >[];
+    readonly windows: readonly Readonly<WakeflowFreshConfigSelectionAllocation<"window">>[];
     /** fresh-initialize 只生成 primary pod `main`（ADR-0010 D1，能力卡 1 Q12）。 */
-    readonly pods:
-      readonly Readonly<WakeflowFreshConfigSelectionAllocation<"pod">>[];
+    readonly pods: readonly Readonly<WakeflowFreshConfigSelectionAllocation<"pod">>[];
   }>;
 }
 
@@ -95,10 +88,7 @@ const ERROR_MESSAGES = {
   "id-source": "Wakeflow Fresh Config durable identity source failed.",
   "id-collision": "Wakeflow Fresh Config generated duplicate UUID identities.",
   config: "Wakeflow Fresh Config selection does not form a valid Config model.",
-} as const satisfies Readonly<Record<
-  WakeflowFreshConfigSelectionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowFreshConfigSelectionErrorReason, string>>;
 
 /** Fresh Config selection 编译失败的稳定、脱敏错误。 */
 export class WakeflowFreshConfigSelectionError extends Error {
@@ -127,10 +117,7 @@ const TOP_LEVEL_FIELDS = Object.freeze([
   "topology",
 ]);
 
-function fail(
-  reason: WakeflowFreshConfigSelectionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowFreshConfigSelectionErrorReason, path: string): never {
   throw new WakeflowFreshConfigSelectionError(reason, path);
 }
 
@@ -154,11 +141,7 @@ function snapshotSelection(value: unknown): unknown {
 
 function array(value: unknown, path: string): readonly unknown[] {
   try {
-    return parseDenseArray(
-      value,
-      WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES,
-      path,
-    );
+    return parseDenseArray(value, WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES, path);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
       if (error.reason === "array-length") fail("capacity", path);
@@ -176,8 +159,8 @@ function assertFields(
 ): void {
   const allowed = new Set([...required, ...optional]);
   if (
-    required.some((key) => !Object.hasOwn(value, key))
-    || Object.keys(value).some((key) => !allowed.has(key))
+    required.some((key) => !Object.hasOwn(value, key)) ||
+    Object.keys(value).some((key) => !allowed.has(key))
   ) {
     fail("shape", path);
   }
@@ -186,14 +169,9 @@ function assertFields(
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
   const parsed = record(value, "$options");
   if (
-    Object.keys(parsed).some((key) => key !== "uuidFactory")
-    || (
-      parsed.uuidFactory !== undefined
-      && (
-        typeof parsed.uuidFactory !== "function"
-        || types.isProxy(parsed.uuidFactory)
-      )
-    )
+    Object.keys(parsed).some((key) => key !== "uuidFactory") ||
+    (parsed.uuidFactory !== undefined &&
+      (typeof parsed.uuidFactory !== "function" || types.isProxy(parsed.uuidFactory)))
   ) {
     fail("input", "$options");
   }
@@ -202,15 +180,11 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function selectionKey(
-  value: unknown,
-  path: string,
-  seen: Set<string>,
-): string {
+function selectionKey(value: unknown, path: string, seen: Set<string>): string {
   if (
-    typeof value !== "string"
-    || !WAKEFLOW_FRESH_SELECTION_KEY_PATTERN.test(value)
-    || seen.has(value)
+    typeof value !== "string" ||
+    !WAKEFLOW_FRESH_SELECTION_KEY_PATTERN.test(value) ||
+    seen.has(value)
   ) {
     fail("selection-key", path);
   }
@@ -242,9 +216,10 @@ function allocateId<Kind extends "program" | "repository" | "surface" | "window"
 ): WakeflowDurableId<Kind> {
   let uuid;
   try {
-    uuid = options.uuidFactory === undefined
-      ? deriveUuidV4(FRESH_SELECTION_ID_NAMESPACE, seed, kind, key)
-      : createUuidV4(options.uuidFactory);
+    uuid =
+      options.uuidFactory === undefined
+        ? deriveUuidV4(FRESH_SELECTION_ID_NAMESPACE, seed, kind, key)
+        : createUuidV4(options.uuidFactory);
   } catch (error: unknown) {
     if (error instanceof UuidV4Error) fail("id-source", "$options.uuidFactory");
     throw error;
@@ -257,13 +232,11 @@ function allocateId<Kind extends "program" | "repository" | "surface" | "window"
 function sortedAllocations<Kind extends "repository" | "surface" | "window" | "pod">(
   values: readonly Readonly<WakeflowFreshConfigSelectionAllocation<Kind>>[],
 ): readonly Readonly<WakeflowFreshConfigSelectionAllocation<Kind>>[] {
-  return Object.freeze([...values].sort((left, right) => (
-    left.selectionKey < right.selectionKey
-      ? -1
-      : left.selectionKey > right.selectionKey
-        ? 1
-        : 0
-  )));
+  return Object.freeze(
+    [...values].sort((left, right) =>
+      left.selectionKey < right.selectionKey ? -1 : left.selectionKey > right.selectionKey ? 1 : 0,
+    ),
+  );
 }
 
 /** 把闭合Fresh selection编译为完整typed Config和可审查ID allocation。 */
@@ -273,10 +246,7 @@ export function compileWakeflowFreshConfigSelection(
 ): Readonly<WakeflowFreshConfigCompilation> {
   const options = parseOptions(optionsValue);
   const selection = record(snapshotSelection(selectionValue), "$selection");
-  if (
-    Object.keys(selection).sort().join("\u0000")
-      !== TOP_LEVEL_FIELDS.join("\u0000")
-  ) {
+  if (Object.keys(selection).sort().join("\u0000") !== TOP_LEVEL_FIELDS.join("\u0000")) {
     fail("shape", "$selection");
   }
   const program = record(selection.program, "$/program");
@@ -284,28 +254,17 @@ export function compileWakeflowFreshConfigSelection(
   const presentation = record(selection.presentation, "$/presentation");
   assertFields(presentation, [], ["language"], "$/presentation");
   const topology = record(selection.topology, "$/topology");
-  assertFields(
-    topology,
-    ["repositories", "supportSurfaces", "windows"],
-    [],
-    "$/topology",
-  );
+  assertFields(topology, ["repositories", "supportSurfaces", "windows"], [], "$/topology");
   const storage = record(selection.storage, "$/storage");
   const governance = record(selection.governance, "$/governance");
   const hosts = record(selection.hosts, "$/hosts");
 
-  const repositoryValues = array(
-    topology.repositories,
-    "$/topology/repositories",
-  );
-  const surfaceValues = array(
-    topology.supportSurfaces,
-    "$/topology/supportSurfaces",
-  );
+  const repositoryValues = array(topology.repositories, "$/topology/repositories");
+  const surfaceValues = array(topology.supportSurfaces, "$/topology/supportSurfaces");
   const windowValues = array(topology.windows, "$/topology/windows");
   if (
-    repositoryValues.length + surfaceValues.length + windowValues.length
-      > WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES
+    repositoryValues.length + surfaceValues.length + windowValues.length >
+    WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES
   ) {
     fail("capacity", "$/topology");
   }
@@ -321,11 +280,7 @@ export function compileWakeflowFreshConfigSelection(
       path,
     );
     return Object.freeze({
-      key: selectionKey(
-        value.selectionKey,
-        `${path}/selectionKey`,
-        seenKeys,
-      ),
+      key: selectionKey(value.selectionKey, `${path}/selectionKey`, seenKeys),
       value,
     });
   });
@@ -339,37 +294,24 @@ export function compileWakeflowFreshConfigSelection(
       path,
     );
     return Object.freeze({
-      key: selectionKey(
-        value.selectionKey,
-        `${path}/selectionKey`,
-        seenKeys,
-      ),
+      key: selectionKey(value.selectionKey, `${path}/selectionKey`, seenKeys),
       value,
     });
   });
   const windowSelections = windowValues.map((entry, index) => {
     const path = `$/topology/windows/${index}`;
     const value = record(entry, path);
-    assertFields(
-      value,
-      ["selectionKey", "role", "displayName", "root"],
-      ["description"],
-      path,
-    );
-    const key = selectionKey(
-      value.selectionKey,
-      `${path}/selectionKey`,
-      seenKeys,
-    );
+    assertFields(value, ["selectionKey", "role", "displayName", "root"], ["description"], path);
+    const key = selectionKey(value.selectionKey, `${path}/selectionKey`, seenKeys);
     const root = record(value.root, `${path}/root`);
     if (root.kind === "program") {
       assertFields(root, ["kind"], [], `${path}/root`);
     } else {
       assertFields(root, ["kind", "selectionKey"], [], `${path}/root`);
       if (
-        (root.kind !== "repository" && root.kind !== "support-surface")
-        || typeof root.selectionKey !== "string"
-        || !WAKEFLOW_FRESH_SELECTION_KEY_PATTERN.test(root.selectionKey)
+        (root.kind !== "repository" && root.kind !== "support-surface") ||
+        typeof root.selectionKey !== "string" ||
+        !WAKEFLOW_FRESH_SELECTION_KEY_PATTERN.test(root.selectionKey)
       ) {
         fail("reference", `${path}/root`);
       }
@@ -381,9 +323,10 @@ export function compileWakeflowFreshConfigSelection(
   for (const selectionEntry of windowSelections) {
     if (selectionEntry.root.kind === "program") continue;
     const reference = selectionEntry.root.selectionKey as string;
-    const found = selectionEntry.root.kind === "repository"
-      ? repositoryKeys.has(reference)
-      : surfaceKeys.has(reference);
+    const found =
+      selectionEntry.root.kind === "repository"
+        ? repositoryKeys.has(reference)
+        : surfaceKeys.has(reference);
     if (!found) fail("reference", `${selectionEntry.path}/root/selectionKey`);
   }
 
@@ -395,10 +338,12 @@ export function compileWakeflowFreshConfigSelection(
   const repositories = repositorySelections.map(({ key, value }) => {
     const repositoryId = allocateId("repository", options, seenUuid, seed, key);
     repositoryByKey.set(key, repositoryId);
-    repositoryAllocations.push(Object.freeze({
-      selectionKey: key,
-      id: repositoryId,
-    }));
+    repositoryAllocations.push(
+      Object.freeze({
+        selectionKey: key,
+        id: repositoryId,
+      }),
+    );
     return {
       repositoryId,
       path: value.path,

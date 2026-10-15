@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { deepEqual, doesNotMatch, equal, ok } from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 
 import {
@@ -22,7 +22,12 @@ import { parseWakeflowHostId } from "../../../src/kernel/layout.js";
 
 /** Codex 插件级 hook 片段（gate-log §13.97 D5、D6）：事件集合、处理器形状、同步异步、字节稳定与摘要。 */
 
-const EVENTS: readonly CodexHookEventName[] = ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"];
+const EVENTS: readonly CodexHookEventName[] = [
+  "SessionStart",
+  "UserPromptSubmit",
+  "Stop",
+  "SessionEnd",
+];
 // biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
 const PLUGIN_ROOT_PLACEHOLDER = "${PLUGIN_ROOT}";
 // biome-ignore lint/suspicious/noTemplateCurlyInString: 在宿主 shell 中选择 Node。
@@ -34,7 +39,8 @@ const EXPECTED_COMMAND = `"${NODE_PLACEHOLDER}" "${PLUGIN_ROOT_PLACEHOLDER}/hook
  * 缩进、键序、命令串的 JSON 转义与尾随换行都是哈希的输入，必须由测试而不是实现表达式钉住。
  */
 // biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
-const EXPECTED_COMMAND_LINE = '            "command": "\\"${CODEX_MCP_NODE_PATH:-node}\\" \\"${PLUGIN_ROOT}/hooks/observe.mjs\\" --wakeflow-hook-observer-v1 --host codex",';
+const EXPECTED_COMMAND_LINE =
+  '            "command": "\\"${CODEX_MCP_NODE_PATH:-node}\\" \\"${PLUGIN_ROOT}/hooks/observe.mjs\\" --wakeflow-hook-observer-v1 --host codex",';
 const EXPECTED_PREFIX: string = [
   "{",
   '  "hooks": {',
@@ -162,7 +168,11 @@ test("渲染文本跨版本字节稳定：只含占位符，不含版本号、�
   equal(rendered.includes("sha256"), false);
   equal(rendered.includes("CLAUDE_PLUGIN_ROOT"), false, "Codex 片段只用 Codex 的占位符");
   // 去掉占位符脚本路径后不再有任何路径分隔符或占位符起始：没有绝对路径与工作区根。
-  const remainder = rendered.split(`${PLUGIN_ROOT_PLACEHOLDER}/hooks/observe.mjs`).join("").split(NODE_PLACEHOLDER).join("");
+  const remainder = rendered
+    .split(`${PLUGIN_ROOT_PLACEHOLDER}/hooks/observe.mjs`)
+    .join("")
+    .split(NODE_PLACEHOLDER)
+    .join("");
   equal(remainder.includes("/"), false);
   equal(remainder.includes("$"), false);
 });

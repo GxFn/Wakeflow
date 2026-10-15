@@ -15,7 +15,5 @@
     "codex-window-host-identity-profile.ts",
     "wakeflow-workspace-host-resource-profile.ts"
   ],
-  "references": [
-    { "path": "../../tsconfig.runtime.json" }
-  ]
+  "references": [{ "path": "../../tsconfig.runtime.json" }]
 }

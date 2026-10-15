@@ -1,6 +1,4 @@
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-} from "../../workspace/workspace-host-resource-profile.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 
 /**
  * Wakeflow Host / Codex：资源矩阵所需的 Codex 静态值。
@@ -8,30 +6,29 @@ import {
  * 本模块只提供宿主静态值，不实现共享解析器、宿主适配器、窗口观察或任何副作用。
  * `keepLive: true` 只表示 Codex 具有该资源表面，不证明真实自动化当前可用。
  */
-export const codexWorkspaceHostResourceProfile =
-  parseWakeflowWorkspaceHostResourceProfile({
-    kind: "WakeflowWorkspaceHostResourceProfile",
-    hostId: "codex",
-    runtimeDirectoryName: "codex",
-    instructionFileName: "AGENTS.md",
-    surfaces: {
-      windowIdentity: true,
-      podReceipts: true,
-      worktree: {
-        launch: "git-worktree",
-        attachedDirectories: "prompt-path",
-      },
-      keepLive: true,
-      windowLocator: false,
-      settingsIntegration: null,
-      statuslineAsset: null,
-      tmuxAsset: null,
-      activityMonitor: false,
-      temporaryPrompts: false,
-      // 安装按版本目录并存，没有可信的窗口到 MCP 关联：只报 unverified（ADR-0017 D3）。
-      runtimeStaleness: "unverified",
-      // 只有用户重启 Codex 应用才重载 MCP（§13.142/§13.148）。
-      runtimeRefresh: "user-app-restart",
+export const codexWorkspaceHostResourceProfile = parseWakeflowWorkspaceHostResourceProfile({
+  kind: "WakeflowWorkspaceHostResourceProfile",
+  hostId: "codex",
+  runtimeDirectoryName: "codex",
+  instructionFileName: "AGENTS.md",
+  surfaces: {
+    windowIdentity: true,
+    podReceipts: true,
+    worktree: {
+      launch: "git-worktree",
+      attachedDirectories: "prompt-path",
     },
-    launch: { kind: "project-thread" },
-  });
+    keepLive: true,
+    windowLocator: false,
+    settingsIntegration: null,
+    statuslineAsset: null,
+    tmuxAsset: null,
+    activityMonitor: false,
+    temporaryPrompts: false,
+    // 安装按版本目录并存，没有可信的窗口到 MCP 关联：只报 unverified（ADR-0017 D3）。
+    runtimeStaleness: "unverified",
+    // 只有用户重启 Codex 应用才重载 MCP（§13.142/§13.148）。
+    runtimeRefresh: "user-app-restart",
+  },
+  launch: { kind: "project-thread" },
+});

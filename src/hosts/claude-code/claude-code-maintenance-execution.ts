@@ -1,18 +1,12 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  previewWakeflowMaintenanceExecution,
-} from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
+import { previewWakeflowMaintenanceExecution } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import {
   executeWakeflowMaintenanceExecutionTransaction,
   recoverWakeflowMaintenanceExecutionTransaction,
   type WakeflowMaintenanceExecutionTransactionOptions,
 } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
-import type {
-  WakeflowStaticMaterializationPreviewRequest,
-} from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
-import {
-  claudeCodeMaintenanceCapability,
-} from "./claude-code-maintenance-capability.js";
+import type { WakeflowStaticMaterializationPreviewRequest } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
+import { claudeCodeMaintenanceCapability } from "./claude-code-maintenance-capability.js";
 
 /**
  * Wakeflow Host / Claude Code：Claude 维护执行的固定 composition root。
@@ -26,11 +20,7 @@ export async function previewClaudeCodeMaintenanceExecution(
   root: RootedDirectory,
   request: WakeflowStaticMaterializationPreviewRequest,
 ) {
-  return previewWakeflowMaintenanceExecution(
-    root,
-    request,
-    claudeCodeMaintenanceCapability,
-  );
+  return previewWakeflowMaintenanceExecution(root, request, claudeCodeMaintenanceCapability);
 }
 
 /** 执行已经确认且重新验证后的 Claude 聚合维护计划。 */

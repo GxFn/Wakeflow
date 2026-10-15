@@ -1,12 +1,10 @@
-import {
-  equal,
-} from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -15,16 +13,15 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
+import {
+  computeWakeflowConfigDigest,
+  parseWakeflowConfig,
+} from "../../src/configuration/wakeflow-config.js";
 import {
   publishWakeflowConfigAuthority,
   WakeflowConfigAuthorityPublicationError,
   type WakeflowConfigAuthorityPublicationErrorReason,
 } from "../../src/configuration/wakeflow-config-authority-publication.js";
-import {
-  computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-} from "../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { sameFileNodeSnapshot } from "../../src/foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
@@ -37,10 +34,9 @@ interface WorkspaceFixture {
 }
 
 function createWorkspace(): WorkspaceFixture {
-  const temporaryRoot = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-config-publication-",
-  )));
+  const temporaryRoot = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-config-publication-")),
+  );
   const workspaceRoot = path.join(temporaryRoot, "WakeflowProgram");
   mkdirSync(workspaceRoot, { mode: 0o755 });
   mkdirSync(path.join(temporaryRoot, "ProductA"), { mode: 0o755 });
@@ -85,23 +81,12 @@ test("Config authority publication 持久创建0644文件并由Snapshot readback
     equal(receipt.publication.node.linkCount, 1n);
     equal(receipt.authority.source.digest, receipt.publication.digest);
     equal(receipt.authority.source.byteCount, receipt.publication.byteCount);
-    equal(
-      sameFileNodeSnapshot(
-        receipt.authority.source.node,
-        receipt.publication.node,
-      ),
-      true,
-    );
-    equal(
-      receipt.authority.configDigest,
-      computeWakeflowConfigDigest(expectedModel),
-    );
+    equal(sameFileNodeSnapshot(receipt.authority.source.node, receipt.publication.node), true);
+    equal(receipt.authority.configDigest, computeWakeflowConfigDigest(expectedModel));
     equal(readFileSync(fixture.configPath, "utf8"), expectedText);
     equal(statSync(fixture.configPath).mode & 0o777, 0o644);
     equal(
-      readdirSync(fixture.workspaceRoot).some(
-        (name) => name.startsWith(".wakeflow-atomic-"),
-      ),
+      readdirSync(fixture.workspaceRoot).some((name) => name.startsWith(".wakeflow-atomic-")),
       false,
     );
     equal(Object.isFrozen(receipt), true);
@@ -140,16 +125,10 @@ test("Config authority publication 是absent-only且不覆盖任何现存目标"
   const unknownRoot = await RootedDirectory.open(unknownFixture.workspaceRoot);
   try {
     await expectPublicationError(
-      () => publishWakeflowConfigAuthority(
-        unknownRoot,
-        createMinimalWakeflowConfig(),
-      ),
+      () => publishWakeflowConfigAuthority(unknownRoot, createMinimalWakeflowConfig()),
       "target-exists",
     );
-    equal(
-      readFileSync(unknownFixture.configPath, "utf8"),
-      "external-owner-bytes\n",
-    );
+    equal(readFileSync(unknownFixture.configPath, "utf8"), "external-owner-bytes\n");
   } finally {
     await unknownRoot.close();
     rmSync(unknownFixture.temporaryRoot, { recursive: true, force: true });
@@ -161,10 +140,11 @@ test("Config authority publication 在非法、超限或取消输入下保持零
   const invalidRoot = await RootedDirectory.open(invalidFixture.workspaceRoot);
   try {
     await expectPublicationError(
-      () => publishWakeflowConfigAuthority(invalidRoot, {
-        ...createMinimalWakeflowConfig(),
-        kind: "WrongConfig",
-      }),
+      () =>
+        publishWakeflowConfigAuthority(invalidRoot, {
+          ...createMinimalWakeflowConfig(),
+          kind: "WrongConfig",
+        }),
       "config",
     );
     equal(existsSync(invalidFixture.configPath), false);
@@ -174,9 +154,7 @@ test("Config authority publication 在非法、超限或取消输入下保持零
   }
 
   const placementFixture = createWorkspace();
-  const placementRoot = await RootedDirectory.open(
-    placementFixture.workspaceRoot,
-  );
+  const placementRoot = await RootedDirectory.open(placementFixture.workspaceRoot);
   try {
     const value = createMinimalWakeflowConfig();
     (value.storage as Record<string, unknown>).ledgerRoot = ".wakeflow-active";
@@ -194,9 +172,7 @@ test("Config authority publication 在非法、超限或取消输入下保持零
   const capacityRoot = await RootedDirectory.open(capacityFixture.workspaceRoot);
   try {
     const value = createMinimalWakeflowConfig();
-    (value.program as Record<string, unknown>).description = "x".repeat(
-      1024 * 1024,
-    );
+    (value.program as Record<string, unknown>).description = "x".repeat(1024 * 1024);
     await expectPublicationError(
       () => publishWakeflowConfigAuthority(capacityRoot, value),
       "capacity",
@@ -213,11 +189,10 @@ test("Config authority publication 在非法、超限或取消输入下保持零
     const controller = new AbortController();
     controller.abort("private-abort-reason");
     await expectPublicationError(
-      () => publishWakeflowConfigAuthority(
-        abortedRoot,
-        createMinimalWakeflowConfig(),
-        { signal: controller.signal },
-      ),
+      () =>
+        publishWakeflowConfigAuthority(abortedRoot, createMinimalWakeflowConfig(), {
+          signal: controller.signal,
+        }),
       "aborted",
     );
     equal(existsSync(abortedFixture.configPath), false);
@@ -232,11 +207,12 @@ test("Config authority publication 在非法、超限或取消输入下保持零
       },
     });
     await expectPublicationError(
-      () => publishWakeflowConfigAuthority(
-        abortedRoot,
-        createMinimalWakeflowConfig(),
-        decorated as never,
-      ),
+      () =>
+        publishWakeflowConfigAuthority(
+          abortedRoot,
+          createMinimalWakeflowConfig(),
+          decorated as never,
+        ),
       "input",
     );
     equal(getterCalls, 0);

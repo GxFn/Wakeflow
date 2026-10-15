@@ -5,9 +5,7 @@ import type {
   WakeflowHostMaintenanceCapability,
   WakeflowHostMaintenanceOperationReceipt,
 } from "../../workspace/maintenance/wakeflow-host-maintenance-capability.js";
-import {
-  createWakeflowHostMaintenanceContribution,
-} from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
+import { createWakeflowHostMaintenanceContribution } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import {
   assertWakeflowMaintenanceGateContext,
   type WakeflowMaintenanceGateContext,
@@ -21,9 +19,7 @@ import {
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { ClaudeCodeHostAssetOperationError } from "./claude-code-host-asset-operation.js";
-import {
-  planClaudeCodePortableSettingsComposition,
-} from "./claude-code-portable-settings-composition.js";
+import { planClaudeCodePortableSettingsComposition } from "./claude-code-portable-settings-composition.js";
 import {
   ClaudeCodePortableSettingsOperationExecutionError,
   executeClaudeCodePortableSettingsOperation,
@@ -61,22 +57,15 @@ import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-i
  * 维护预览：读不出的宿主制品不能让整个工作区无法维护。
  */
 
-export const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID =
-  "claude-code-maintenance" as const;
+export const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID = "claude-code-maintenance" as const;
 
-export type ClaudeCodeMaintenanceCapabilityErrorReason =
-  | "gate"
-  | "operation"
-  | "owner";
+export type ClaudeCodeMaintenanceCapabilityErrorReason = "gate" | "operation" | "owner";
 
 const ERROR_MESSAGES = {
   gate: "Claude Code maintenance capability requires the active matching gate.",
   operation: "Claude Code maintenance capability operation is invalid.",
   owner: "Claude Code maintenance capability owner failed.",
-} as const satisfies Readonly<Record<
-  ClaudeCodeMaintenanceCapabilityErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<ClaudeCodeMaintenanceCapabilityErrorReason, string>>;
 
 /** Claude Code maintenance capability 失败的稳定、脱敏错误。 */
 export class ClaudeCodeMaintenanceCapabilityError extends Error {
@@ -85,26 +74,19 @@ export class ClaudeCodeMaintenanceCapabilityError extends Error {
   readonly reason: ClaudeCodeMaintenanceCapabilityErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ClaudeCodeMaintenanceCapabilityErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ClaudeCodeMaintenanceCapabilityErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: ClaudeCodeMaintenanceCapabilityErrorReason,
-  path: string,
-): never {
+function fail(reason: ClaudeCodeMaintenanceCapabilityErrorReason, path: string): never {
   throw new ClaudeCodeMaintenanceCapabilityError(reason, path);
 }
 
 /** 资产读不出（目录、符号链接、超过 256 KiB、权限不足）时宿主贡献报出的 blocker。 */
-export const CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER =
-  "claude-statusline-asset-unreadable" as const;
+export const CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER = "claude-statusline-asset-unreadable" as const;
 
 interface HostAssetPlan {
   readonly operation: Awaited<ReturnType<typeof planClaudeCodeStatuslineAssetOperation>>;
@@ -199,8 +181,7 @@ async function planContribution(
         operationId: operation.operationId,
         operationKind: "portable-settings",
         ownerId: "claude-code-portable-settings",
-        targetKey:
-          `settings:${operation.root.rootKind}:${operation.root.rootId}`,
+        targetKey: `settings:${operation.root.rootKind}:${operation.root.rootId}`,
         sourceDigest: operation.sourceDigest,
         targetDigest: operation.targetDigest,
         payload: operation,
@@ -268,8 +249,8 @@ async function executeHostAssetOperation(
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
     if (
-      executed.operationId !== request.operation.operationId
-      || executed.targetDigest !== request.operation.targetDigest
+      executed.operationId !== request.operation.operationId ||
+      executed.targetDigest !== request.operation.targetDigest
     ) {
       fail("owner", "$operation");
     }
@@ -323,32 +304,32 @@ async function executeOperation(
   }
   if (request.profile.hostId !== "claude-code") fail("operation", "$operation");
   if (
-    request.operation.operationKind === CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND
-    && request.operation.ownerId === CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID
+    request.operation.operationKind === CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND &&
+    request.operation.ownerId === CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID
   ) {
     return executeHostAssetOperation(executeClaudeCodeStatuslineAssetOperation, root, request);
   }
   if (
-    request.operation.operationKind === CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND
-    && request.operation.ownerId === CLAUDE_CODE_TMUX_ASSET_OWNER_ID
+    request.operation.operationKind === CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND &&
+    request.operation.ownerId === CLAUDE_CODE_TMUX_ASSET_OWNER_ID
   ) {
     return executeHostAssetOperation(executeClaudeCodeTmuxAssetOperation, root, request);
   }
   if (
-    request.operation.operationKind === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND
-    && request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID
+    request.operation.operationKind === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND &&
+    request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID
   ) {
     return executeStatuslineSettingsOperation(root, request);
   }
   if (
-    request.operation.operationKind === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND
-    && request.operation.ownerId === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID
+    request.operation.operationKind === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND &&
+    request.operation.ownerId === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID
   ) {
     return executeProjectionOperation(root, request);
   }
   if (
-    request.operation.operationKind !== "portable-settings"
-    || request.operation.ownerId !== "claude-code-portable-settings"
+    request.operation.operationKind !== "portable-settings" ||
+    request.operation.ownerId !== "claude-code-portable-settings"
   ) {
     fail("operation", "$operation");
   }
@@ -368,8 +349,8 @@ async function executeOperation(
     throw error;
   }
   if (
-    executed.operationId !== request.operation.operationId
-    || executed.targetDigest !== request.operation.targetDigest
+    executed.operationId !== request.operation.operationId ||
+    executed.targetDigest !== request.operation.targetDigest
   ) {
     fail("owner", "$operation");
   }
@@ -381,11 +362,11 @@ async function executeOperation(
 }
 
 /** Claude Code 当前唯一、闭合的宿主维护端口实现。 */
-export const claudeCodeMaintenanceCapability:
-Readonly<WakeflowHostMaintenanceCapability> = Object.freeze({
-  kind: "WakeflowHostMaintenanceCapability",
-  hostId: "claude-code",
-  capabilityId: CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID,
-  planContribution,
-  executeOperation,
-});
+export const claudeCodeMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapability> =
+  Object.freeze({
+    kind: "WakeflowHostMaintenanceCapability",
+    hostId: "claude-code",
+    capabilityId: CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID,
+    planContribution,
+    executeOperation,
+  });

@@ -5,10 +5,7 @@ import {
   type Sha256Digest,
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -121,10 +118,10 @@ function signalOptions(signal: AbortSignal | undefined): { readonly signal?: Abo
 
 function assertRoot(root: unknown): asserts root is RootedDirectory {
   if (
-    typeof root !== "object"
-    || root === null
-    || types.isProxy(root)
-    || !(root instanceof RootedDirectory)
+    typeof root !== "object" ||
+    root === null ||
+    types.isProxy(root) ||
+    !(root instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -166,9 +163,9 @@ export async function planClaudeCodeHostAssetOperation(
   assertRoot(root);
   const current = await currentAsset(root, asset, options.signal);
   if (
-    current !== null
-    && current.digest === asset.digest
-    && current.node.permissionBits === ASSET_MODE
+    current !== null &&
+    current.digest === asset.digest &&
+    current.node.permissionBits === ASSET_MODE
   ) {
     return null;
   }
@@ -205,9 +202,9 @@ function parsePayload(
     throw error;
   }
   if (
-    Object.keys(record).sort().join(" ") !== "digest fileName"
-    || record.fileName !== asset.fileName
-    || digest !== asset.digest
+    Object.keys(record).sort().join(" ") !== "digest fileName" ||
+    record.fileName !== asset.fileName ||
+    digest !== asset.digest
   ) {
     fail("operation", "$operation");
   }
@@ -242,9 +239,9 @@ export async function executeClaudeCodeHostAssetOperation(
   const payload = parsePayload(request.operation, asset);
   const current = await currentAsset(root, asset, request.signal);
   if (
-    current !== null
-    && current.digest === payload.digest
-    && current.node.permissionBits === ASSET_MODE
+    current !== null &&
+    current.digest === payload.digest &&
+    current.node.permissionBits === ASSET_MODE
   ) {
     return Object.freeze({
       operationId: asset.operationId,

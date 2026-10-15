@@ -4,10 +4,16 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { DELIVERY_REQUIRED_SKILLS } from "../../src/capabilities/delivery/decide.js";
-import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
-import { CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS } from "../../src/hosts/claude-code/claude-code-agent-text-profile.js";
-import { CODEX_AGENT_TEXT_PLACEHOLDERS } from "../../src/hosts/codex/codex-agent-text-profile.js";
 import { WAKEFLOW_ROLE_TOOL_ACCESS } from "../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
+import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
+import {
+  CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS,
+  renderClaudeCodeAgentText,
+} from "../../src/hosts/claude-code/claude-code-agent-text-profile.js";
+import {
+  CODEX_AGENT_TEXT_PLACEHOLDERS,
+  renderCodexAgentText,
+} from "../../src/hosts/codex/codex-agent-text-profile.js";
 
 /**
  * agent 面文本的诚实性门（gate-log §13.99 D4、D5、D7）。
@@ -378,5 +384,30 @@ test("角色工具归属表与技能正文点名的工具逐一相同，且每�
     const expected = [...skillTokens(skill)].sort();
     deepEqual([...WAKEFLOW_ROLE_TOOL_ACCESS[role]].sort(), expected, `${role} ↔ ${skill}`);
     for (const tool of WAKEFLOW_ROLE_TOOL_ACCESS[role]) ok(CATALOG_TOOL_NAMES.includes(tool), tool);
+  }
+});
+
+/** I4：渲染后的 Controller 技能按宿主各有预算——宿主取值表的膨胀在这里被抓住，源预算（D7）管不到它。 */
+const MAXIMUM_RENDERED_CONTROLLER_SKILL_BYTES = 14 * 1024;
+const MAXIMUM_RENDERED_CONTROLLER_SKILL_WORDS = 2_200;
+
+test("渲染后的 Controller SKILL.md 每宿主不超过 2,200 词与 14 KiB，且不剩占位符（I4：渲染预算）", () => {
+  const source = SOURCES.find((entry) => entry.path === "skills/wakeflow-controller/SKILL.md");
+  ok(source !== undefined, "Controller SKILL.md source missing");
+  for (const [host, rendered] of [
+    ["claude-code", renderClaudeCodeAgentText(source.text, "en")],
+    ["codex", renderCodexAgentText(source.text, "en")],
+  ] as const) {
+    const bytes = Buffer.byteLength(rendered, "utf8");
+    const words = rendered.split(/\s+/u).filter((word) => word.length > 0).length;
+    ok(
+      bytes <= MAXIMUM_RENDERED_CONTROLLER_SKILL_BYTES,
+      `${host} rendered SKILL.md has ${bytes} bytes`,
+    );
+    ok(
+      words <= MAXIMUM_RENDERED_CONTROLLER_SKILL_WORDS,
+      `${host} rendered SKILL.md has ${words} words`,
+    );
+    ok(!rendered.includes("{{"), `${host} rendered SKILL.md still carries a placeholder`);
   }
 });

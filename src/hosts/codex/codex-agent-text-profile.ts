@@ -17,7 +17,7 @@
  * 本模块不导入任何东西：取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 十个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume，C9 加 pluginUpdateSteps）；源目录里出现表外的占位符即构建失败。 */
+/** 十一个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume，C9 加 pluginUpdateSteps，I4 加 hostEffectRule）；源目录里出现表外的占位符即构建失败。 */
 export type CodexAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
@@ -28,7 +28,8 @@ export type CodexAgentTextPlaceholderKey =
   | "hostTrustSteps"
   | "windowResume"
   | "resendGuard"
-  | "pluginUpdateSteps";
+  | "pluginUpdateSteps"
+  | "hostEffectRule";
 
 /** 渲染语言：`zh` 只用于 `README.zh-CN.md`，其余源文件一律 `en`（D6）。 */
 export type CodexAgentTextLanguage = "en" | "zh";
@@ -157,7 +158,12 @@ const PLUGIN_UPDATE_STEPS_ZH = [
   "Codex 上的同伴窗口保持 `unverified`，这不是失败。",
 ].join("\n");
 
-/** 十个占位符的 Codex 取值；键序与 D3 列出的顺序一致，新增的两个排在最后。 */
+/** Codex 没有助手：每个宿主效果都是 Agent 自己的一次线程工具调用（I4，§13.178；与 C16 的 Claude 面对应）。 */
+const HOST_EFFECT_RULE =
+  "Every host effect is one call of your own Codex thread tool, kept exactly as it returned; " +
+  "Wakeflow never sends anything for you.";
+
+/** 十一个占位符的 Codex 取值；键序与 D3 列出的顺序一致，新增的排在最后。 */
 export const CODEX_AGENT_TEXT_PLACEHOLDERS: Readonly<
   Record<CodexAgentTextPlaceholderKey, Readonly<CodexAgentTextPlaceholderValue>>
 > = Object.freeze({
@@ -171,6 +177,7 @@ export const CODEX_AGENT_TEXT_PLACEHOLDERS: Readonly<
   windowResume: Object.freeze({ en: WINDOW_RESUME }),
   resendGuard: Object.freeze({ en: RESEND_GUARD }),
   pluginUpdateSteps: Object.freeze({ en: PLUGIN_UPDATE_STEPS_EN, zh: PLUGIN_UPDATE_STEPS_ZH }),
+  hostEffectRule: Object.freeze({ en: HOST_EFFECT_RULE }),
 });
 
 /** 未登记占位符的稳定错误码；构建器的预检先于它触发，本抛出是最后一道防线。 */

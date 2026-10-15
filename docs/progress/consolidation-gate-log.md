@@ -4839,3 +4839,25 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话（真实 Controller 按引用投递）、lab/live、远端 CI；图谱指纹漂移未刷新。
 
 本批改动 src/governance（delivery 落盘模块、demand 路径与清单）、src/capabilities（delivery、result-review）、src/contracts/schemas 与 generated（三份许可结果）、src/hosts/claude-code（助手与 deliveryAction 文本）、tests（delivery、result-review、助手、路径单测、wire 自包含、场景链）、plugins/（重建）、docs/；未提交，main 领先 origin/main 29 个提交。
+
+### 13.178 技术债务批次 8 第三项：Controller 技能瘦身与渲染预算（I4）（2026-10-14）
+
+登记 I4 说 Claude 版 Controller 每次必读的 SKILL.md 把约 500 词的 tmux 助手细节内联进了第 1 步。核实发现更糟一点：`{{windowBootstrap}}` 与 `{{windowLaunch}}` 同时渲染在 SKILL 第 1 步和 `references/workspace-and-windows.md` 第 1 步，每个宿主都读两遍（Claude 两段约 800 词）。
+
+- **第 1 步只留一句。** SKILL 不再内联两个占位符，改为"按参考第 1 步开窗（bootstrap 一次、每窗一次 launch），再用同一工具登记"，第 1 步仍是八行，文件仍 200 行；参考里的渲染不动，两个占位符各仍被用一次，构建的"占位符未使用"检查照常通过。渲染后的 Controller SKILL：Claude 从 17,411 字节 / 2,617 词降到 13,375 字节 / 2,041 词，Codex 从 13,513 / 2,077 降到 11,751 / 1,805。
+- **第十一个占位符。** 去掉内联后，C16 回归（`agent-text-live-guidance`）立刻指出技能层丢了"每次助手调用独占一条字面参数的 Bash 命令"这条规则——它原本只活在 `windowLaunch` 的 Claude 取值里。新占位符 `{{hostEffectRule}}` 作为第 1 步最后一句：Claude 面就是那句规则（`windowLaunch` 改为引用同一常量，不再重复一份字面量），Codex 面是"每个宿主效果都是你自己的一次线程工具调用，照返回值记录；Wakeflow 不替你发送"。CLAUDE.md/AGENTS.md/README 里的占位符数从早已过时的"九个"改为十一个。
+- **渲染预算。** `tests/artifacts/agent-text-honesty.test.ts` 加一条：按两个宿主渲染 Controller SKILL.md，各不超过 2,200 词与 14 KiB，且不剩 `{{`（Claude 现为 2,011 词，预算留约一成余量）；源预算 D7（200 行、12 KiB）不变——两者抓的是不同的膨胀来源（源文本 vs 宿主取值表）。
+- **没做的：** 三份参考文档本身的字数（约 1,800/800/2,800 词）没动；K5 时顶满的 200 行源预算也没放宽——技能层继续只写规则与顺序，细节留在参考。
+
+文档：登记 I4（关闭）、技术债务复审第 8 行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：tests/artifacts 第一轮 36/38——C16 回归丢了助手一次调用规则、渲染预算按 2,000 词定得太紧（Claude 2,011 词）；加占位符、预算改 2,200 后 tests/artifacts + tests/hosts 108/108。
+- 制品重建（`build:artifacts:committed`）与 `smoke:artifacts` 均 exit 0。
+- 完整门一次即过：run-aN9BZU（06:31–06:52 UTC，20.6 分钟）1516/1516 全通过、318 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-aN9BZU/receipt.json`：318 份文件、并发 2（耗时表随本批提交）。
+- `wf handoff`（含真实 build:check，run-Id2wIU）：七项通过（whitespace、private-content、artifacts、docs-pointers、test-durations、instructions-parity、git）；`git diff --check` 干净。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新。
+
+本批改动 assets/agent-text（Controller SKILL 第 1 步）、src/hosts 两个取值表（`hostEffectRule`）、tests/artifacts（渲染预算）、CLAUDE.md/AGENTS.md/README 的占位符数、plugins/（重建）、docs/；未提交，main 领先 origin/main 31 个提交。

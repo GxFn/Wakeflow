@@ -160,7 +160,7 @@ Claude 宿主层 18 文件 5,595 行（助手、状态行、四份可移植设�
 | 5 测试体系（已执行，§13.169） | 场景链一场景一 `test()` 并按宿主参数化、每宿主一个测试文件（Codex 兄弟布局 / Claude Code 嵌套布局各 23 个），新增 rejected-before-send → rearm、rework 闭环、blocked → 恢复三条评审分支场景；lab 矩阵拆成两个宿主文件；负载敏感标签 `loadSensitive` 与推荐并发（时钟注入未做）；ledger、Demand 发布存储/暂存/事件读取器、证据负载物化器与持久化事件信封的镜像测试；模型测试反例落盘 `.build/model/` 与 CI 按 run_number 轮换种子；CI 加 handoff 作业（图谱检查未入 CI：74 处指纹漂移且无刷新器） | M–L | 批 1 的共享夹具 |
 | 6 质量门解除（Biome 部分已执行，§13.171–§13.173） | 按目录解除 Biome 豁免（五个目录全部出豁免：格式 + 五条规则，238 处复杂度登记为按文件允许清单，拆一个撤一个）；恢复模块接线或删除；knip 收缩到全 src；未使用导出清理 | L（每目录 S–M） | Q12；与批 7 交错 |
 | 7 架构收敛（阶段转移表已执行，§13.174） | 错误体系按目录收敛；三个切片吸收旧域导入；合同接缝上移 contracts；decider/aggregate/预览拆分；共享切片上下文；阶段转移表（已做：contracts 的 Target 阶段表，decide 与 Route 派生，聚合守卫待拆分时派生）；tmux 助手改真实模块；能力层去 tmux 字面量 | L | 批 6 同步 |
-| 8 产品缺口 | J1 detach 与 J2 缺省（Q9）；H2/H10 supplement 血缘；H5 research 流程；K4 角色子集（Q5）；K5 摘要模式（inspect 的 `detail: summary` 已落地 2026-10-14，status 摘要与默认档待裁决）；K6 按 id 投递（已落地 2026-10-14：Wakeflow 落盘许可 prompt，Claude 助手按 `promptRef` 读取并自校摘要）；H7/H8（Q10）；E1 标注；I4 技能瘦身与渲染字节预算 | M–L | 对应裁决 |
+| 8 产品缺口 | J1 detach 与 J2 缺省（Q9）；H2/H10 supplement 血缘；H5 research 流程；K4 角色子集（Q5）；K5 摘要模式（inspect 的 `detail: summary` 已落地 2026-10-14，status 摘要与默认档待裁决）；K6 按 id 投递（已落地 2026-10-14：Wakeflow 落盘许可 prompt，Claude 助手按 `promptRef` 读取并自校摘要）；H7/H8（Q10）；E1 标注；I4 技能瘦身与渲染字节预算（已落地 2026-10-14：第 1 步只留指向参考的一句，渲染预算 ≤ 2,200 词 / 14 KiB） | M–L | 对应裁决 |
 
 建议的开工顺序：0 → 1 → 2 → 3 → 4，然后 5 与 6/7 交错推进，8 按裁决逐条进入。前四批加起来是三到四个中等批次的量，能在不触碰架构的情况下把"新用户第一次用就撞上"与"发布后无法回退"两类风险压下去。
 

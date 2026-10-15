@@ -19,7 +19,7 @@ import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "./claude-code-tmux-asset.js";
  * 本模块只导入 tmux 助手的命令常量（与权限规则同源）；取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 十个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume，C9 加 pluginUpdateSteps）；源目录里出现表外的占位符即构建失败。 */
+/** 十一个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume，C9 加 pluginUpdateSteps，I4 加 hostEffectRule）；源目录里出现表外的占位符即构建失败。 */
 export type ClaudeCodeAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
@@ -30,7 +30,8 @@ export type ClaudeCodeAgentTextPlaceholderKey =
   | "hostTrustSteps"
   | "windowResume"
   | "resendGuard"
-  | "pluginUpdateSteps";
+  | "pluginUpdateSteps"
+  | "hostEffectRule";
 
 /** 渲染语言：`zh` 只用于 `README.zh-CN.md`，其余源文件一律 `en`（D6）。 */
 export type ClaudeCodeAgentTextLanguage = "en" | "zh";
@@ -49,13 +50,17 @@ const INSTRUCTION_FILE = "CLAUDE.md";
 /** 助手的调用前缀：从工作区根用 node 调用，与权限规则同一字符串（§13.117 D4、D5）。 */
 const TMUX_HELPER: string = CLAUDE_CODE_TMUX_ASSET_COMMAND;
 
+/** C16：助手调用的唯一形态；技能第 1 步（`{{hostEffectRule}}`）与参考里的 launch 说明共用这一句（I4，§13.178）。 */
+const HOST_EFFECT_RULE =
+  "Make every helper call its own Bash command with literal arguments - no shell loop, " +
+  "variable or chain of helper calls: only such a plain call matches the helper's allow rule, " +
+  "and anything else stops at a permission prompt the user has to answer.";
+
 const WINDOW_LAUNCH =
   "pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect " +
   "returns, or the maintenance result's entry for that window) into the tmux helper, run " +
-  `from the workspace root: \`${TMUX_HELPER} launch --window <windowId>\`. Make every helper ` +
-  "call its own Bash command with literal arguments - no shell loop, variable or chain of " +
-  "helper calls: only such a plain call matches the helper's allow rule, and anything else " +
-  "stops at a permission prompt the user has to answer. The helper opens " +
+  `from the workspace root: \`${TMUX_HELPER} launch --window <windowId>\`. ${HOST_EFFECT_RULE} ` +
+  "The helper opens " +
   "the tmux window at the intent's root, starts `claude` with the listed parameters and a " +
   "fresh session id, waits for the session-start hook record, and prints the creation " +
   "observation to register verbatim. After each registration run `mark --window <windowId>` " +
@@ -286,6 +291,7 @@ export const CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS: Readonly<
   windowResume: Object.freeze({ en: WINDOW_RESUME }),
   resendGuard: Object.freeze({ en: RESEND_GUARD }),
   pluginUpdateSteps: Object.freeze({ en: PLUGIN_UPDATE_STEPS_EN, zh: PLUGIN_UPDATE_STEPS_ZH }),
+  hostEffectRule: Object.freeze({ en: HOST_EFFECT_RULE }),
 });
 
 /** 未登记占位符的稳定错误码；构建器的预检先于它触发，本抛出是最后一道防线。 */

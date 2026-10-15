@@ -62,14 +62,14 @@ blockers, and apply only after they confirm. Depth: `references/workspace-and-wi
 
 ### Step 1 - Open windows and register their bindings
 
-Inspect each returned window with `wakeflow_register_window_binding` for current
-host launch instructions; the execution root may differ from the startup root.
-First: {{windowBootstrap}} For each one:
-{{windowLaunch}} Then register the handle you observed with
-`wakeflow_register_window_binding`; it needs a real `session-start` at the host
-startup root, and a refusal names the missing evidence - re-inspect the window
-and the host's hook trust before retrying. The same tool inspects a window,
-replaces a stale binding, retires a window, or force-releases an expired claim.
+Inspect each returned window with `wakeflow_register_window_binding` for its
+current host launch instructions (the execution root may differ from the startup
+root), open it exactly as "Step 1 - Windows and bindings" in
+`references/workspace-and-windows.md` says (bootstrap once, one launch per
+window), then register the handle you observed with the same tool: it needs a
+real `session-start` at the host startup root, and a refusal names the missing
+evidence - re-inspect the window and the host's hook trust before retrying.
+{{hostEffectRule}}
 
 ### Step 5 - Claim a requirement package into a Demand
 

@@ -534,7 +534,8 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：谨慎的模型可能拒绝记录证据，然后导入没有证据的步骤被拒；也可能类推，在实现目标里也去记录证据。现场碰巧是好的，但依赖模型自己判断该信哪个 skill。
   - 证据：wakeflow-target/SKILL.md:37-38：禁止 Controller 动作，包括记录证据，没有例外；wakeflow-test/SKILL.md:15-18 让先读 target skill、说自己“只补充”，:46-50、70-73 却要求 wakeflow_record_evidence test-output；§13.126 把测试窗口记录证据定为有意的裁决，现场表现正确
   - 建议：把 target SKILL.md:37-38 改成“不记录证据（测试目标以 test-output 记录自己的步骤输出，见 test skill）”，并在 test skill 中写明它覆盖这一行。
-- **I4** [低 / 债务] Controller 每次的阅读负担偏重：Claude 版把约 500 词的 tmux helper 细节放进了每次必读的 SKILL.md（计划阶段 7；状态：开放）
+- **I4** [低 / 债务] Controller 每次的阅读负担偏重：Claude 版把约 500 词的 tmux helper 细节放进了每次必读的 SKILL.md（计划阶段 7；状态：关闭 2026-10-14，§13.178）
+  - 2026-10-14 处置（§13.178）：SKILL 第 1 步不再内联 `{{windowBootstrap}}`/`{{windowLaunch}}`（它们早已在 `references/workspace-and-windows.md` 第 1 步渲染，等于每个宿主读两遍），只留一句指向参考，再加一个新占位符 `{{hostEffectRule}}` 把 C16 的"每次助手调用独占一条字面参数的 Bash 命令"规则留在技能层（Codex 面：每个宿主效果都是你自己的一次线程工具调用）；渲染后的 Controller SKILL 每宿主加预算（≤ 2,200 词、≤ 14 KiB，`tests/artifacts/agent-text-honesty.test.ts`），源文本预算 D7（200 行、12 KiB）不变。
   - 说明：即使只是做一次评审决策，也要先读完完整的 helper 参考。信息密度过高，会增加同一文件里关键规则（resend guard、维护协议的取值）被略读的概率。skill 通常每个会话只加载一次，成本不算大。
   - 证据：渲染后的 Claude Controller SKILL.md 2,122 词，Codex 版 1,595 词；三个参考文档约 1,819、797、2,843 词；SKILL.md:22 要求在第一次工具调用前从头读到尾；第 1 步内联了 {{windowBootstrap}} 和 {{windowLaunch}}（约 20 行）；CLAUDE.md 要求 prompt 有优先级、保持轻量
   - 建议：SKILL.md 第 1 步只保留一句占位（“用宿主 helper 启动，见 references/workspace-and-windows.md”），把 windowLaunch 和 windowBootstrap 的正文移到参考文档；给 Controller SKILL 设词数预算，并在 agent-text 构建中检查。

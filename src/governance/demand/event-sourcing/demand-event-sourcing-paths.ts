@@ -48,13 +48,17 @@ export type DemandEventSourcingPathErrorReason =
   | "commit-file-name"
   | "append-candidate-file-name"
   | "append-owner-token"
-  | "commit-identity";
+  | "commit-identity"
+  | "permit-prompt-kind"
+  | "permit-prompt-file-name";
 
 const ERROR_MESSAGES = {
   "commit-file-name": "Demand event commit filename is invalid.",
   "append-candidate-file-name": "Demand append candidate filename is invalid.",
   "append-owner-token": "Demand append candidate owner token is invalid.",
   "commit-identity": "Demand append candidate commit identity is invalid.",
+  "permit-prompt-kind": "Demand permit prompt kind is invalid.",
+  "permit-prompt-file-name": "Demand permit prompt filename is invalid.",
 } as const satisfies Readonly<Record<DemandEventSourcingPathErrorReason, string>>;
 
 export class DemandEventSourcingPathError extends Error {
@@ -239,4 +243,47 @@ export function demandEventSourcingSnapshotRef(
       sequence,
     )}`,
   );
+}
+
+const PERMIT_PROMPT_FILE_PATTERN =
+  /^(?<permitId>target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.txt$/u;
+
+/**
+ * 许可 prompt 文件根（K6，§13.177）：投递与回调许可的 prompt 由 Wakeflow 原样落在
+ * `artifacts/permits/<kind>/<target-delivery id>.txt`，宿主助手按工作区相对引用读取并核对摘要。
+ * 它是可选工件目录：没有许可时不存在，有了也只允许这两类子目录与这种文件名。
+ */
+export const DEMAND_PERMIT_PROMPTS_ROOT_REF = parsePortableResourcePath("artifacts/permits");
+export const DEMAND_PERMIT_PROMPT_KINDS = Object.freeze(["callback", "delivery"] as const);
+export type DemandPermitPromptKind = (typeof DEMAND_PERMIT_PROMPT_KINDS)[number];
+
+export function parseDemandPermitPromptKind(value: unknown): DemandPermitPromptKind {
+  if (value !== "callback" && value !== "delivery") fail("permit-prompt-kind", "$kind");
+  return value;
+}
+
+/** 某一类许可 prompt 的目录。 */
+export function demandPermitPromptKindRootRef(kind: DemandPermitPromptKind): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${DEMAND_PERMIT_PROMPTS_ROOT_REF}/${parseDemandPermitPromptKind(kind)}`,
+  );
+}
+
+/** 一个许可的 prompt 文件（相对 Demand 私有根）；身份必须是 target-delivery 这一类。 */
+export function demandPermitPromptRef(
+  kind: DemandPermitPromptKind,
+  permitId: unknown,
+): PortableResourcePath {
+  const parsed = parseWakeflowDurableIdOfKind(permitId, "target-delivery", "$permitId");
+  return parsePortableResourcePath(`${demandPermitPromptKindRootRef(kind)}/${parsed}.txt`);
+}
+
+/** 从严格文件名恢复许可身份；别的名字都不是许可 prompt。 */
+export function parseDemandPermitPromptFileName(
+  value: unknown,
+): WakeflowDurableId<"target-delivery"> {
+  if (typeof value !== "string") fail("permit-prompt-file-name", "$fileName");
+  const permitId = PERMIT_PROMPT_FILE_PATTERN.exec(value)?.groups?.permitId;
+  if (permitId === undefined) fail("permit-prompt-file-name", "$fileName");
+  return parseWakeflowDurableIdOfKind(permitId, "target-delivery", "$fileName");
 }

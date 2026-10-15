@@ -59,7 +59,9 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  *   `CLAUDE_CODE_SESSION_ID` 来自 Claude Code 交给 shell 的环境）。
  * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上。
  * - `panes`：`tmux list-panes -a` 转成 `tmux-panes` 观察。
- * - `deliver --window <windowId> [--handle-digest <sha256>] [--wait-landing <seconds>]`：stdin 是
+ * - `deliver --window <windowId> [--handle-digest <sha256>] [--prompt-ref <permit.promptRef>
+ *   --prompt-digest <permit.promptDigest>] [--wait-landing <seconds>]`：带 `--prompt-ref` 时从工作区根下
+ *   Wakeflow 落盘的许可文件读 prompt 并核对摘要（不符为 `prompt-digest-mismatch`，K6），否则 stdin 是
  *   许可里的 prompt；先核对 pane（与定位器相关的 pane 恰好一个、活着、跑的是 claude、标识与坐标都对），
  *   粘贴前截屏一次：尾部看不到输入框（权限、信任对话框或选择菜单）就拒绝为 failed-before-send 的
  *   `target-not-at-prompt`（`--force` 不跳过），截屏失败为 `capture-failed`；
@@ -544,7 +546,7 @@ function parseWindowId(value, name) {
 
 function parseArguments(argv) {
   const [command, ...rest] = argv;
-  const options = { window: null, all: false, force: false, inPlace: false, wait: DEFAULT_WAIT_SECONDS, handleDigest: null, waitLanding: DEFAULT_LANDING_WAIT_SECONDS, text: null };
+  const options = { window: null, all: false, force: false, inPlace: false, wait: DEFAULT_WAIT_SECONDS, handleDigest: null, promptRef: null, promptDigest: null, waitLanding: DEFAULT_LANDING_WAIT_SECONDS, text: null };
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index];
     if (argument === "--all") {
@@ -583,6 +585,16 @@ function parseArguments(argv) {
       const digest = rest[index + 1];
       if (typeof digest !== "string" || !DIGEST_PATTERN.test(digest)) refuse("handle-digest-invalid");
       options.handleDigest = digest;
+      index += 1;
+    } else if (argument === "--prompt-ref") {
+      const ref = rest[index + 1];
+      if (!isPermitPromptRef(ref)) refuse("prompt-ref-invalid");
+      options.promptRef = ref;
+      index += 1;
+    } else if (argument === "--prompt-digest") {
+      const digest = rest[index + 1];
+      if (typeof digest !== "string" || !DIGEST_PATTERN.test(digest)) refuse("prompt-digest-invalid");
+      options.promptDigest = digest;
       index += 1;
     } else {
       refuse("argument-unknown");
@@ -1528,11 +1540,43 @@ function readbackObservation(prompt, screen) {
   return { status: seen ? "confirmed" : "pending", evidenceDigest: sha256(screen) };
 }
 
+// K6：许可 prompt 由 Wakeflow 落在 Demand 根下的 artifacts/permits/<kind>/<id>.txt；按引用读取并核对摘要，
+// Agent 不再把 prompt 从 stdin 重打一遍，也不用去读事件溯源文件。路径只认工作区根下的许可目录。
+const PERMIT_PROMPT_REF_PATTERN =
+  /^\.wakeflow-active\/current\/demand_[0-9a-f-]{36}\/artifacts\/permits\/(delivery|callback)\/target-delivery_[0-9a-f-]{36}\.txt$/u;
+
+function isPermitPromptRef(value) {
+  return typeof value === "string" && PERMIT_PROMPT_REF_PATTERN.test(value);
+}
+
+function readPermitPrompt(promptRef, promptDigest) {
+  if (promptDigest === null) refuse("prompt-digest-required");
+  let bytes;
+  try {
+    bytes = readFileSync(path.join(ROOT, ...promptRef.split("/")));
+  } catch (error) {
+    if (error?.code === "ENOENT") refuse("prompt-ref-missing");
+    refuse("prompt-ref-unreadable");
+  }
+  if (bytes.length > MAX_STDIN_BYTES) refuse("prompt-ref-too-large");
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    refuse("prompt-ref-invalid");
+  }
+  if (text.trim().length === 0) refuse("prompt-ref-empty");
+  if (sha256(text.trim()) !== promptDigest) refuse("prompt-digest-mismatch");
+  return text;
+}
+
 function commandDeliver(config, options) {
   const context = tmuxContext(config);
   if (options.window === null) refuse("window-required");
   const windowId = options.window;
-  const prompt = readStdinText();
+  const prompt = options.promptRef === null
+    ? readStdinText()
+    : readPermitPrompt(options.promptRef, options.promptDigest);
   if (prompt.trim().length === 0) refuse("stdin-empty");
   const located = locateDeliveryPane(context, windowId, options.handleDigest);
   if (!located.ok) return beforeSend(located.reason, windowId, located.extra);

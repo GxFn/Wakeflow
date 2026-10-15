@@ -816,12 +816,20 @@
     "callbackPermit": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["prompt", "hostAction", "generation", "issuedAt"],
+      "required": ["prompt", "promptRef", "promptDigest", "hostAction", "generation", "issuedAt"],
       "properties": {
         "prompt": {
           "type": "string",
           "minLength": 1,
           "maxLength": 65536
+        },
+        "promptRef": {
+          "$ref": "#/$defs/portableResourcePath",
+          "description": "Workspace-relative file that holds this prompt verbatim, written by Wakeflow when the permit was issued; a host helper delivers it by reference instead of the agent retyping the prompt."
+        },
+        "promptDigest": {
+          "$ref": "#/$defs/sha256Digest",
+          "description": "sha256 of the trimmed prompt; the helper refuses a prompt file whose digest differs."
         },
         "hostAction": {
           "$ref": "#/$defs/hostAction"

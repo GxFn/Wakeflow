@@ -47,6 +47,7 @@ import {
 import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
+import { computeDeliveryPromptDigest } from "../../src/governance/delivery/delivery-envelope.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../src/governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../src/governance/delivery/delivery-rearm.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
@@ -186,6 +187,8 @@ interface ImportResult {
     readonly callbackId: string;
     readonly permit: {
       readonly prompt: string;
+      readonly promptRef: string;
+      readonly promptDigest: string;
       readonly generation: number;
       readonly issuedAt: string;
       readonly hostAction: { readonly effect: string; readonly windowId: string };
@@ -269,6 +272,8 @@ interface DeliveryPermit {
   readonly claimId: string;
   readonly claimDigest: string;
   readonly prompt: string;
+  readonly promptRef: string;
+  readonly promptDigest: string;
   readonly issuedAt: string;
   readonly streamRevision: number;
 }
@@ -1321,6 +1326,8 @@ async function prepareDelivery(
     readonly delivery: { readonly deliveryId: string };
     readonly permit: {
       readonly prompt: string;
+      readonly promptRef: string;
+      readonly promptDigest: string;
       readonly hostAction: { readonly effect: string };
       readonly fence: {
         readonly claimId: string;
@@ -1338,6 +1345,8 @@ async function prepareDelivery(
       claimId: body.permit.fence.claimId,
       claimDigest: body.permit.fence.claimDigest,
       prompt: body.permit.prompt,
+      promptRef: body.permit.promptRef,
+      promptDigest: body.permit.promptDigest,
       issuedAt: body.permit.issuedAt,
       streamRevision: body.permit.fence.streamRevision,
     },
@@ -1427,6 +1436,8 @@ interface RearmResult {
   readonly delivery: { readonly deliveryId: string; readonly generation: number };
   readonly permit: {
     readonly prompt: string;
+    readonly promptRef: string;
+    readonly promptDigest: string;
     readonly issuedAt: string;
     readonly fence: {
       readonly claimId: string;
@@ -1468,6 +1479,16 @@ async function scenarioDeliveryChain(context: ScenarioContext): Promise<string> 
   equal(prepared.permit.prompt.includes(context.workspace.fixtureRoot), false);
   equal(prepared.permit.prompt.includes(prepared.permit.deliveryId), true);
   equal(prepared.permit.prompt.includes(prepared.permit.claimDigest), true);
+  // K6：许可 prompt 由 Wakeflow 落在 Demand 根下，助手按 promptRef 读取并核对 promptDigest，Agent 不再重打。
+  equal(
+    prepared.permit.promptRef,
+    `.wakeflow-active/current/${context.demandId}/artifacts/permits/delivery/${prepared.permit.deliveryId}.txt`,
+  );
+  equal(
+    readFileSync(path.join(root, ...prepared.permit.promptRef.split("/")), "utf8"),
+    prepared.permit.prompt,
+  );
+  equal(prepared.permit.promptDigest, computeDeliveryPromptDigest(prepared.permit.prompt));
   equal(existsSync(path.join(root, ...workClaimRef(context.productWindowId).split("/"))), true);
   const afterPrepare = await inspectRoute(context);
   equal(afterPrepare.route?.frontiers[0]?.kind, "implementation-host-effect-execution");
@@ -1944,6 +1965,18 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
   equal(importResult.callback.permit.hostAction.effect, "send-prompt-to-window");
   equal(importResult.callback.permit.hostAction.windowId, context.controllerWindowId);
   equal(importResult.callback.permit.generation, 1);
+  equal(
+    importResult.callback.permit.promptRef,
+    `.wakeflow-active/current/${context.demandId}/artifacts/permits/callback/${importResult.callback.callbackId}.txt`,
+  );
+  equal(
+    readFileSync(path.join(root, ...importResult.callback.permit.promptRef.split("/")), "utf8"),
+    importResult.callback.permit.prompt,
+  );
+  equal(
+    importResult.callback.permit.promptDigest,
+    computeDeliveryPromptDigest(importResult.callback.permit.prompt),
+  );
   equal(
     importResult.callback.permit.prompt.includes(
       WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,

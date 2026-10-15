@@ -29,6 +29,10 @@ import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import type { DeliveryEnvelope } from "../../governance/delivery/delivery-envelope.js";
 import {
+  deliveryPermitPromptRef,
+  materializeDeliveryPermitPrompt,
+} from "../../governance/delivery/delivery-permit-prompt-file.js";
+import {
   closeDemandOperationAuthorityContext,
   type DemandOperationAuthorityContext,
   DemandOperationAuthorityContextError,
@@ -584,6 +588,21 @@ interface ImportOutcome extends CommandOutcome {
   readonly window: Readonly<WindowView>;
 }
 
+/** 回调许可一经签发（含重放），prompt 就以文件落在 Demand 根下，目标侧助手按 `promptRef` 读取并核对摘要（K6）。 */
+async function materializedCallbackPermit(
+  context: SliceContext,
+  outcome: ImportOutcome,
+): Promise<ImportOutcome> {
+  await materializeDeliveryPermitPrompt(
+    context.authority.demandRoot,
+    "callback",
+    outcome.callback.callbackId,
+    outcome.callback.portablePrompt,
+    signalOptions(context.options.signal),
+  );
+  return outcome;
+}
+
 type DeliveryBearingTarget = Exclude<
   DemandTargetTaskState,
   { readonly phase: "planned" | "superseded" }
@@ -1013,6 +1032,8 @@ function importResult(
       callbackId: callback.callbackId,
       permit: {
         prompt: callback.portablePrompt,
+        promptRef: deliveryPermitPromptRef(envelope.demandId, "callback", callback.callbackId),
+        promptDigest: callback.promptDigest,
         hostAction: {
           effect: "send-prompt-to-window",
           hostId: window.binding.hostId,
@@ -1060,8 +1081,8 @@ export async function executeTargetResultImportRequest(
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
       execute: (context, input, binding) =>
-        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
-          executeImport(context, input, binding),
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, async () =>
+          materializedCallbackPermit(context, await executeImport(context, input, binding)),
         ),
       next,
       result: importResult,

@@ -1,9 +1,11 @@
 import path from "node:path";
-
+import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { CanonicalJsonError, encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import type {
   RootedDirectory,
@@ -12,28 +14,31 @@ import type {
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
-import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import {
   computeDeliveryPromptDigest,
   createDeliveryEnvelope,
+  type DeliveryEnvelope,
   DeliveryEnvelopeError,
   deliveryTaskPackageRef,
-  type DeliveryEnvelope,
 } from "../../governance/delivery/delivery-envelope.js";
 import {
   createDeliveryOutcome,
-  DeliveryOutcomeError,
   type DeliveryOutcome,
+  DeliveryOutcomeError,
 } from "../../governance/delivery/delivery-outcome.js";
 import {
+  deliveryPermitPromptRef,
+  materializeDeliveryPermitPrompt,
+} from "../../governance/delivery/delivery-permit-prompt-file.js";
+import {
   createDeliveryRearm,
-  DeliveryRearmError,
   type DeliveryRearm,
+  DeliveryRearmError,
 } from "../../governance/delivery/delivery-rearm.js";
 import {
   createTargetDeliveryProductDefectRemediationContext,
@@ -45,36 +50,38 @@ import {
 } from "../../governance/delivery/target-delivery-rework-context.js";
 import {
   closeDemandOperationAuthorityContext,
+  type DemandOperationAuthorityContext,
   DemandOperationAuthorityContextError,
   openDemandOperationAuthorityContext,
-  type DemandOperationAuthorityContext,
 } from "../../governance/demand/demand-operation-authority-context.js";
-import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
-import {
-  listPodWorktreeReceipts,
-  readPodWorktreeReceipt,
-} from "../../kernel/pod-worktree-receipts.js";
 import {
   DemandEventSourcingCommandHandlerError,
-  executeDemandEventSourcingCommand,
   type DemandEventSourcingCommandResult,
+  executeDemandEventSourcingCommand,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import {
-  parseDemandEventSourcingCommand,
   type DemandEventSourcingCommand,
+  parseDemandEventSourcingCommand,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   type AuditedDemandTargetResultHistory,
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
+import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import type {
   DemandCurrentDeliveryBase,
   DemandDeliveryOutcomeSummary,
   DemandTargetTaskState,
 } from "../../governance/demand/model/demand-aggregate-state.js";
+import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import {
+  type ObservationHostAssets,
+  observeHostAssetState,
+} from "../../governance/observation/workspace-observation.js";
+import type { TargetResult } from "../../governance/result/target-result.js";
 import {
   deriveTargetResultCallbackStatus,
   parseTargetResultCallbackReissue,
@@ -83,7 +90,6 @@ import {
   TargetResultCallbackError,
   type TargetResultCallbackReissue,
 } from "../../governance/result/target-result-callback.js";
-import type { TargetResult } from "../../governance/result/target-result.js";
 import {
   ControllerImplementationReviewDecisionError,
   parseControllerImplementationReviewDecision,
@@ -92,7 +98,6 @@ import {
   DemandResultReviewSnapshotError,
   readDemandResultReviewSnapshot,
 } from "../../governance/review/demand-result-review-snapshot.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   computeTaskPackageDigest,
   type TaskPackage,
@@ -101,28 +106,26 @@ import {
 import {
   createInitialTestExecutionAttempt,
   createRerunTestExecutionAttempt,
-  TestExecutionAttemptError,
   type TestExecutionAttempt,
+  TestExecutionAttemptError,
 } from "../../governance/testing/test-execution-attempt.js";
 import {
-  runAppendCommand,
   type AppendCommandBinding,
   type AppendCommandEnvelope,
+  runAppendCommand,
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
-import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
-import { CanonicalJsonError, encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
-import { fail, failWithBlockers as rejectWith, isWakeflowError } from "../../kernel/error.js";
-import {
-  type ObservationHostAssets,
-  observeHostAssetState,
-} from "../../governance/observation/workspace-observation.js";
+import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
+import {
+  listPodWorktreeReceipts,
+  readPodWorktreeReceipt,
+} from "../../kernel/pod-worktree-receipts.js";
 import {
   createWorkClaim,
   deriveWorkClaimId,
@@ -132,12 +135,12 @@ import {
   takeWorkClaim,
   type WorkClaim,
 } from "../../kernel/work-claims.js";
+import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
   WakeflowWindowHostBindingStoreError,
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
-import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
 import {
   compileWakeflowWindowLaunchIntents,
@@ -148,32 +151,32 @@ import {
   admitPrepareDeliveryResult,
   admitRearmDeliveryResult,
   admitRecordDeliveryOutcomeResult,
+  type PrepareDeliveryRequest,
+  type PrepareDeliveryResult,
   parsePrepareDeliveryRequest,
   parseRearmDeliveryRequest,
   parseRecordDeliveryOutcomeRequest,
+  type RearmDeliveryResult,
+  type RecordDeliveryOutcomeRequest,
+  type RecordDeliveryOutcomeResult,
   WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION,
   WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
   WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
   WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
-  type PrepareDeliveryRequest,
-  type PrepareDeliveryResult,
-  type RearmDeliveryResult,
-  type RecordDeliveryOutcomeRequest,
-  type RecordDeliveryOutcomeResult,
 } from "./contract.js";
 import {
   deriveClaimBlocker,
   deriveDeliveryDisposition,
   derivePrepareBlockers,
   deriveRearmBlockers,
+  type HookLandingRecord,
   landingSilenceExceeded,
   sendReturnProvesLanding,
-  type HookLandingRecord,
 } from "./decide.js";
 import {
+  type DeliveryTestContractSection,
   deliveryPromptRequirementPackage,
   renderDeliveryPortablePrompt,
-  type DeliveryTestContractSection,
 } from "./prompt.js";
 
 /**
@@ -262,6 +265,32 @@ type RearmOutcome = PermitOutcome | CallbackPermitOutcome;
 
 function isCallbackPermit(outcome: RearmOutcome): outcome is CallbackPermitOutcome {
   return "kind" in outcome && outcome.kind === "callback";
+}
+
+/** 许可一经签发（含重放与重臂），prompt 就以文件落在 Demand 根下，助手按 `promptRef` 读取并核对摘要（K6）。 */
+async function materializedPermit<Outcome extends RearmOutcome>(
+  context: SliceContext,
+  outcome: Outcome,
+): Promise<Outcome> {
+  const permit: RearmOutcome = outcome;
+  if (isCallbackPermit(permit)) {
+    await materializeDeliveryPermitPrompt(
+      context.authority.demandRoot,
+      "callback",
+      permit.callbackId,
+      permit.prompt,
+      signalOptions(context.options.signal),
+    );
+  } else {
+    await materializeDeliveryPermitPrompt(
+      context.authority.demandRoot,
+      "delivery",
+      permit.envelope.deliveryId,
+      permit.envelope.portablePrompt,
+      signalOptions(context.options.signal),
+    );
+  }
+  return outcome;
 }
 
 interface OutcomeOutcome extends CommandOutcome {
@@ -1334,6 +1363,12 @@ function permitBody(
     },
     permit: {
       prompt: outcome.envelope.portablePrompt,
+      promptRef: deliveryPermitPromptRef(
+        envelope.demandId,
+        "delivery",
+        outcome.envelope.deliveryId,
+      ),
+      promptDigest: outcome.envelope.promptDigest,
       hostAction: {
         effect: "send-prompt-to-window",
         hostId: route.binding.hostId,
@@ -1402,6 +1437,8 @@ function callbackPermitBody(
     },
     permit: {
       prompt: outcome.prompt,
+      promptRef: deliveryPermitPromptRef(envelope.demandId, "callback", outcome.callbackId),
+      promptDigest: outcome.promptDigest,
       hostAction: {
         effect: "send-prompt-to-window",
         hostId: route.binding.hostId,
@@ -1490,8 +1527,8 @@ export async function executePrepareDeliveryRequest(
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
       execute: (context, input, binding) =>
-        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
-          executePrepare(context, input, binding),
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, async () =>
+          materializedPermit(context, await executePrepare(context, input, binding)),
         ),
       next,
       result: prepareResult,
@@ -2178,8 +2215,8 @@ export async function executeRearmDeliveryRequest(
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
       execute: (context, input, binding) =>
-        afterMutationRefresh(context.workspaceRoot, context.options.signal, () =>
-          executeRearm(context, input, binding),
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, async () =>
+          materializedPermit(context, await executeRearm(context, input, binding)),
         ),
       next,
       result: rearmResult,

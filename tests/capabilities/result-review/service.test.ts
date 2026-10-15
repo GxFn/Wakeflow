@@ -1,4 +1,6 @@
 import { deepEqual, equal, ok, rejects } from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
 
 import { executeRearmDeliveryRequest } from "../../../src/capabilities/delivery/service.js";
@@ -15,6 +17,7 @@ import {
 import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -151,6 +154,22 @@ test("import 重放幂等、已回报目标拒绝二次导入；回调只在静�
     equal(imported.status, "committed");
     equal(imported.callback.permit.generation, 1);
     equal(imported.callback.permit.hostAction.windowId, fixture.controllerRoute.windowId);
+    // K6：回调 prompt 也落在 Demand 根下，目标侧助手按 promptRef 读取并核对 promptDigest。
+    equal(
+      imported.callback.permit.promptRef,
+      `.wakeflow-active/current/${fixture.demandId}/artifacts/permits/callback/${imported.callback.callbackId}.txt`,
+    );
+    equal(
+      imported.callback.permit.promptDigest,
+      computeDeliveryPromptDigest(imported.callback.permit.prompt),
+    );
+    equal(
+      readFileSync(
+        path.join(fixture.workspacePath, ...imported.callback.permit.promptRef.split("/")),
+        "utf8",
+      ),
+      imported.callback.permit.prompt,
+    );
     equal(imported.next.frontier, "implementation-result-review");
     const replayed = await importFixtureImplementationResult(fixture, fixture.delivered, {
       evidence: fixture.evidence,
@@ -184,6 +203,8 @@ test("import 重放幂等、已回报目标拒绝二次导入；回调只在静�
       equal(reissued.rearm.generation, generation);
       equal(reissued.permit.fence, null);
       equal(reissued.permit.prompt, imported.callback.permit.prompt);
+      equal(reissued.permit.promptRef, imported.callback.permit.promptRef);
+      equal(reissued.permit.promptDigest, imported.callback.permit.promptDigest);
       equal(reissued.permit.hostAction.windowId, fixture.controllerRoute.windowId);
       equal(reissued.permit.issuedAt, clock);
       equal(reissued.delivery.deliveryId, callbackId);

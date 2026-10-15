@@ -728,6 +728,6 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   ]);
   deepEqual(
     Object.keys(definition(resultImportResult, "callbackPermit").properties as JsonObject).sort(),
-    ["generation", "hostAction", "issuedAt", "prompt"],
+    ["generation", "hostAction", "issuedAt", "prompt", "promptDigest", "promptRef"],
   );
 });

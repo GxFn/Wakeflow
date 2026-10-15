@@ -34,8 +34,14 @@ import {
   DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
   DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+  DEMAND_PERMIT_PROMPT_KINDS,
+  DEMAND_PERMIT_PROMPTS_ROOT_REF,
   DemandEventSourcingPathError,
+  type DemandPermitPromptKind,
+  demandPermitPromptKindRootRef,
   parseDemandEventStreamCommitFileName,
+  parseDemandPermitPromptFileName,
+  parseDemandPermitPromptKind,
 } from "./demand-event-sourcing-paths.js";
 import {
   DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
@@ -129,7 +135,7 @@ const EVENT_SOURCING_NAMES = Object.freeze([
   "index",
   "snapshots",
 ] as const);
-const ARTIFACT_NAMES = new Set(["managed-evidence", "task-packages"]);
+const ARTIFACT_NAMES = new Set(["managed-evidence", "permits", "task-packages"]);
 
 function fail(reason: DemandEventSourcingRootInventoryErrorReason, path: string): never {
   throw new DemandEventSourcingRootInventoryError(reason, path);
@@ -293,6 +299,59 @@ function optionalEntryNode(
   return read.entries.find((candidate) => candidate.name === name)?.node;
 }
 
+function permitPromptKind(name: string, path: string): DemandPermitPromptKind {
+  try {
+    return parseDemandPermitPromptKind(name);
+  } catch (error: unknown) {
+    if (error instanceof DemandEventSourcingPathError) fail("tree-shape", path);
+    throw error;
+  }
+}
+
+/** 可选的许可 prompt 工件（K6）：两类子目录各装以 target-delivery 身份命名的 `.txt`；别的形状都是 tree-shape。 */
+async function inspectPermitPrompts(
+  root: RootedDirectory,
+  artifacts: Readonly<StableDirectoryReadResult<PortableResourcePath | null>>,
+  signal: AbortSignal | undefined,
+): Promise<number> {
+  const permitsNode = optionalEntryNode(artifacts, "permits");
+  if (permitsNode === undefined) return 0;
+  const permits = await readResource(
+    root,
+    DEMAND_PERMIT_PROMPTS_ROOT_REF,
+    DEMAND_PERMIT_PROMPT_KINDS.length,
+    signal,
+    permitsNode,
+  );
+  assertDirectory(permits.directoryNode, "$permits");
+  let count = 0;
+  for (const [kindIndex, entry] of permits.entries.entries()) {
+    const kind = permitPromptKind(entry.name, `$permits/${kindIndex}`);
+    assertDirectory(entry.node, `$permits/${kind}`);
+    const prompts = await readResource(
+      root,
+      demandPermitPromptKindRootRef(kind),
+      DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
+      signal,
+      entry.node,
+    );
+    assertDirectory(prompts.directoryNode, `$permits/${kind}`);
+    prompts.entries.forEach((prompt, index) => {
+      assertFile(prompt.node, `$permits/${kind}/${index}`);
+      try {
+        parseDemandPermitPromptFileName(prompt.name);
+      } catch (error: unknown) {
+        if (error instanceof DemandEventSourcingPathError) {
+          fail("tree-shape", `$permits/${kind}/${index}`);
+        }
+        throw error;
+      }
+    });
+    count += prompts.entries.length;
+  }
+  return count;
+}
+
 /** 稳定证明一个 normal-load Demand root 的完整允许集合。 */
 export async function inspectDemandEventSourcingRootInventory(
   root: RootedDirectory,
@@ -410,6 +469,7 @@ export async function inspectDemandEventSourcingRootInventory(
       throw error;
     }
   });
+  const permitCount = await inspectPermitPrompts(root, artifacts, signal);
   assertDirectory(transactions.directoryNode, "$transactions");
   let managedEvidenceTransactionNode: Readonly<FileNodeSnapshot> | undefined;
   if (phase === "healthy") {
@@ -519,7 +579,7 @@ export async function inspectDemandEventSourcingRootInventory(
   return Object.freeze({
     commitCount: commits.entries.length,
     snapshotCount: snapshots.entries.length,
-    artifactCount: taskPackages.entries.length + managedEvidence.recordCount,
+    artifactCount: taskPackages.entries.length + managedEvidence.recordCount + permitCount,
     transactionCount: transactions.entries.length as 0 | 1,
     appendCandidateCount: 0,
     managedEvidence,

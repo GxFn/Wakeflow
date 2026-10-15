@@ -151,9 +151,13 @@ const WINDOW_BOOTSTRAP =
   "`--force`.";
 
 const DELIVERY_ACTION =
-  "pipe the permit's prompt into the tmux helper, run from the workspace root: " +
-  `\`${TMUX_HELPER} deliver --window <windowId> --handle-digest <the permit's handleDigest>\`. ` +
-  "It checks the pane against the locator and the handle digest, refuses before sending with " +
+  "run the tmux helper from the workspace root with the permit's `promptRef` and `promptDigest`: " +
+  `\`${TMUX_HELPER} deliver --window <windowId> --handle-digest <the permit's handleDigest> ` +
+  "--prompt-ref <the permit's promptRef> --prompt-digest <the permit's promptDigest>`. " +
+  "It reads the prepared prompt from that file - Wakeflow wrote it when it issued the permit, so " +
+  "never retype, pipe or reconstruct the prompt and never read `.wakeflow-active` event files " +
+  "yourself - refuses with `prompt-digest-mismatch` when the file does not match, " +
+  "checks the pane against the locator and the handle digest, refuses before sending with " +
   "`target-not-at-prompt` when the pane shows a dialog or menu instead of its input box (nothing " +
   "was sent: ask the user to answer it in that window, then send again - a target delivery recorded as " +
   "`failed-before-send` is re-armed by the Controller, a callback is simply delivered again with the same " +

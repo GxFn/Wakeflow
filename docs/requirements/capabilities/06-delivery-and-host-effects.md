@@ -42,6 +42,8 @@
 
 2026-09-25 §13.127（对齐第六轮，宿主中断）：Claude 助手 `deliver` 在粘贴前查目标会话的落地记录——同一段 prompt（去首尾空白后的摘要）已有 `user-prompt-submit` 记录即拒绝为 `already-landed`，并带回那条 `landing{recordId, recordedAt}` 与提示；`--force` 才照发。这是 Wakeflow 唯一不能替 Agent 重放的效果：被宿主中断（API 连接中途断开）的一轮重发时拿到的是证据而不是第二次投递。真实宿主上对同一 pane 连发两次：第一次 `sent` 且落地 observed，第二次 `already-landed`，hook 目录里只有一条记录。
 
+2026-10-14 §13.177（技术债务批次 8，K6）：三类许可结果（`prepare_delivery`、`rearm_delivery`、`import_target_result` 的回调）加 `promptRef` 与 `promptDigest`：Wakeflow 在签发许可时（含重放与重臂）把 prompt 原样落到 Demand 根的可选工件目录 `artifacts/permits/<delivery|callback>/<target-delivery id>.txt`，Demand 根清单把它登记为可选工件（只认两类子目录与严格文件名，随归档负载保存）；Claude 助手 `deliver --prompt-ref <permit.promptRef> --prompt-digest <permit.promptDigest>` 从工作区根按引用读文件、核对去空白 sha256（不符为 `prompt-digest-mismatch`，路径只认该目录；缺文件、缺摘要、超大、非 UTF-8 各有拒绝码，都在碰 tmux 之前），Agent 不再从 stdin 重打 prompt，也不读事件溯源文件（stdin 形式仍保留为兼容入口）。Codex 没有助手，仍由 Agent 把 `permit.prompt` 交给线程工具。
+
 **实现判断**：按 ADR-0009，Claude 的粘贴、回车、`capture-pane` 与 Codex 的线程发送都成为 skills 步骤；旧的首行子串匹配放弃；回读改为 Agent 的结构化观察声明加宿主 hook 记录引用，Wakeflow 只做摘要与一致性；prompt 临时文件路径与 inspect、sweep 命令放弃；tmux 控制模式写进 Claude skills 作为可选的更强观察手段。
 
 **待确认**：

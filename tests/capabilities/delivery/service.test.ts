@@ -1,13 +1,13 @@
 import { equal, ok, rejects } from "node:assert/strict";
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
 import { executeRearmDeliveryRequest } from "../../../src/capabilities/delivery/service.js";
-import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
-import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
+import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
@@ -19,14 +19,14 @@ import {
 import { hostHookObservationsRootRef, workClaimRef } from "../../../src/kernel/layout.js";
 import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
 import {
-  cleanupDeliveryWorkspaceFixture,
   CODEX_DELIVERY_FACADE,
+  cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
   DELIVERY_AUTHORED,
+  type DeliveryWorkspaceFixture,
   landFixturePrompt,
   prepareFixtureDelivery,
   recordFixtureDeliveryOutcome,
-  type DeliveryWorkspaceFixture,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
   cleanupTestDeliveryWorkspaceFixture,
@@ -71,6 +71,14 @@ async function rearm(
   );
 }
 
+/** 许可 prompt 文件在工作区里的物理路径（K6：结果里的 `promptRef` 相对工作区根）。 */
+function permitPath(
+  fixture: Readonly<{ readonly workspacePath: string }>,
+  promptRef: string,
+): string {
+  return path.join(fixture.workspacePath, ...promptRef.split("/"));
+}
+
 test("prepare_delivery 一次追加、取得声明并返回可移植许可；重放、异请求、过期修订、非法 phase 各有结局", async () => {
   const fixture = await createDeliveryWorkspaceFixture();
   try {
@@ -96,6 +104,13 @@ test("prepare_delivery 一次追加、取得声明并返回可移植许可；重
     equal(prepared.next.suggestedTool, "wakeflow_record_delivery_outcome");
     const prompt = prepared.permit.prompt;
     equal(prompt.includes(fixture.workspacePath), false, "prompt leaked the workspace root");
+    // K6：同一段 prompt 由 Wakeflow 落在 Demand 根下，结果只给工作区相对的 promptRef 与去空白摘要。
+    equal(prepared.permit.promptDigest, computeDeliveryPromptDigest(prompt));
+    equal(
+      prepared.permit.promptRef,
+      `.wakeflow-active/current/${fixture.demandId}/artifacts/permits/delivery/${prepared.delivery.deliveryId}.txt`,
+    );
+    equal(readFileSync(permitPath(fixture, prepared.permit.promptRef), "utf8"), prompt);
     equal(prompt.includes(prepared.delivery.deliveryId), true);
     equal(prompt.includes(prepared.permit.fence.claimDigest), true);
     equal(prompt.includes(DELIVERY_AUTHORED.goal), true);
@@ -122,6 +137,23 @@ test("prepare_delivery 一次追加、取得声明并返回可移植许可；重
     equal(replayed.delivery.deliveryId, prepared.delivery.deliveryId);
     equal(replayed.permit.fence.claimDigest, prepared.permit.fence.claimDigest);
     equal(replayed.permit.prompt, prompt);
+    equal(replayed.permit.promptRef, prepared.permit.promptRef);
+    equal(readFileSync(permitPath(fixture, replayed.permit.promptRef), "utf8"), prompt);
+    // 许可目录只认两类子目录与 target-delivery 文件名：杂项文件让 Demand 根清单当场拒绝后续打开。
+    const stray = permitPath(
+      fixture,
+      `.wakeflow-active/current/${fixture.demandId}/artifacts/permits/delivery/stray.txt`,
+    );
+    writeFileSync(stray, "not a permit\n");
+    await rejects(
+      prepareFixtureDelivery(
+        fixture,
+        {},
+        { clock: () => parseUtcInstant("2026-08-29T12:09:30.000Z") },
+      ),
+      rejectedWith("authority-demand-authority", "precondition-failed"),
+    );
+    unlinkSync(stray);
     equal(replayed.event.eventId, prepared.event.eventId);
     await rejects(
       prepareFixtureDelivery(fixture, {
@@ -321,6 +353,12 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
       equal(rearmed.delivery.generation, generation);
       equal(rearmed.rearm.kind, "target");
       equal(rearmed.permit.prompt, prepared.permit.prompt);
+      equal(rearmed.permit.promptRef, prepared.permit.promptRef);
+      equal(rearmed.permit.promptDigest, prepared.permit.promptDigest);
+      equal(
+        readFileSync(permitPath(fixture, rearmed.permit.promptRef), "utf8"),
+        rearmed.permit.prompt,
+      );
       const fence = rearmed.permit.fence;
       if (fence === null) throw new Error("Expected a target rearm fence.");
       equal(fence.claimId === permit.fence.claimId, false);

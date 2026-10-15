@@ -63,22 +63,54 @@
     {
       "if": {
         "properties": {
-          "rearm": { "type": "object", "properties": { "kind": { "const": "callback" } } }
+          "rearm": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "callback"
+              }
+            }
+          }
         }
       },
       "then": {
         "properties": {
-          "delivery": { "type": "object", "properties": { "workType": { "const": "callback" } } },
-          "permit": { "type": "object", "properties": { "fence": { "type": "null" } } }
+          "delivery": {
+            "type": "object",
+            "properties": {
+              "workType": {
+                "const": "callback"
+              }
+            }
+          },
+          "permit": {
+            "type": "object",
+            "properties": {
+              "fence": {
+                "type": "null"
+              }
+            }
+          }
         }
       },
       "else": {
         "properties": {
           "delivery": {
             "type": "object",
-            "properties": { "workType": { "enum": ["implementation", "test"] } }
+            "properties": {
+              "workType": {
+                "enum": ["implementation", "test"]
+              }
+            }
           },
-          "permit": { "type": "object", "properties": { "fence": { "type": "object" } } }
+          "permit": {
+            "type": "object",
+            "properties": {
+              "fence": {
+                "type": "object"
+              }
+            }
+          }
         }
       }
     }
@@ -254,12 +286,20 @@
     "permit": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["prompt", "hostAction", "fence", "issuedAt"],
+      "required": ["prompt", "promptRef", "promptDigest", "hostAction", "fence", "issuedAt"],
       "properties": {
         "prompt": {
           "type": "string",
           "minLength": 1,
           "maxLength": 65536
+        },
+        "promptRef": {
+          "$ref": "#/$defs/portableResourcePath",
+          "description": "Workspace-relative file that holds this prompt verbatim, written by Wakeflow when the permit was issued; a host helper delivers it by reference instead of the agent retyping the prompt."
+        },
+        "promptDigest": {
+          "$ref": "#/$defs/sha256Digest",
+          "description": "sha256 of the trimmed prompt; the helper refuses a prompt file whose digest differs."
         },
         "hostAction": {
           "$ref": "#/$defs/hostAction"
@@ -345,6 +385,11 @@
           "maximum": 4
         }
       }
+    },
+    "portableResourcePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
     }
   }
 }

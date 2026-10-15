@@ -4815,3 +4815,27 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话（Controller 真实传 `detail: summary`）、lab/live、远端 CI；图谱指纹漂移未刷新。
 
 本批改动 src/capabilities/result-review（contract、service）、src/contracts/schemas 与 generated（inspection request/result）、assets/agent-text（SKILL 第 10 步、delivery-and-review）、tests（result-review 服务测试、review 夹具、场景链）、plugins/（重建）、docs/；未提交，main 领先 origin/main 27 个提交。
+
+### 13.177 技术债务批次 8 第二项：许可 prompt 按引用投递（K6）（2026-10-14）
+
+登记 K6 记的是现场事故：Claude Controller 为了把 5–8 KB 的许可 prompt 原样喂给助手，去读 `.wakeflow-active/current/demand_*/event-sourcing/commits/*.json` 自己算摘要——越过了状态权威边界，摘要对不上、落地识别失败都出现过。根因是传输入口要 Agent 逐字节重打 prompt。本节让 Wakeflow 自己把 prompt 落盘、助手按引用取，Agent 只传两个短字段。
+
+- **合同。** 三类许可结果（`prepare_delivery`、`rearm_delivery` 的投递与回调、`import_target_result` 的回调）加必填 `promptRef`（工作区相对的可移植路径）与 `promptDigest`（去空白 sha256，与信封 `promptDigest` 同一规则）。`portableResourcePath` 词法镜像照搬进 prepare/rearm 两份 Schema；wire 自包含测试的许可属性表随之加两项。
+- **落盘位置。** 第一版放在 Demand 根下的 `permits/`，第一轮聚焦测试就被 Demand 根清单以 `authority-demand-authority`（`root-authority: inventory`）整批拒绝——Demand 根只认 `ROOT_NAMES`，`artifacts/` 只认 `task-packages` 与可选的 `managed-evidence`。于是改成**可选工件** `artifacts/permits/<callback|delivery>/<target-delivery id>.txt`：路径与严格文件名解析进 `demand-event-sourcing-paths`（新错误 reason `permit-prompt-kind`、`permit-prompt-file-name`），清单 `inspectPermitPrompts` 只放行两类子目录与该文件名、计入 `artifactCount`，杂项文件仍是 `tree-shape`；归档负载过滤本就只排除 snapshots/index/append-candidates，所以许可文件随 Demand 一起归档与恢复，不是第二份权威。
+- **写入。** `governance/delivery/delivery-permit-prompt-file.ts`：`materializeDeliveryPermitPrompt(demandRoot, kind, id, prompt)` 用事件存储同一套目录/文件模式，缺失创建、同字节不动、不同替换（重放与重臂都走它）；delivery 与 result-review 两个切片在 `execute` 外层包一句 `materializedPermit` / `materializedCallbackPermit`，结果体由 `deliveryPermitPromptRef(demandId, kind, id)` 给出工作区相对路径。
+- **助手。** `deliver --prompt-ref <permit.promptRef> --prompt-digest <permit.promptDigest>`：路径只认 `.wakeflow-active/current/demand_*/artifacts/permits/(delivery|callback)/target-delivery_*.txt`，从工作区根读、256 KiB 上限、严格 UTF-8，`sha256(text.trim())` 必须等于 `--prompt-digest`（`prompt-digest-mismatch`），缺摘要 `prompt-digest-required`、缺文件 `prompt-ref-missing`、路径不合 `prompt-ref-invalid`——全部在碰 tmux 之前拒绝；不带 `--prompt-ref` 时 stdin 入口照旧（兼容）。Claude 的 `deliveryAction` 占位符改写：带两个字段跑助手，"never retype, pipe or reconstruct the prompt and never read `.wakeflow-active` event files yourself"。Codex 没有助手，文本不变。
+- **测试。** delivery 服务：prepare/replay/rearm 的 `promptRef` 指向存在的文件、内容逐字等于 `permit.prompt`、`promptDigest` 等于 `computeDeliveryPromptDigest`，许可目录里塞一个杂项文件后下一次打开被 `authority-demand-authority` 拒；result-review：导入与回调重发的 `promptRef`/`promptDigest`；助手：按引用投递成功、摘要不符/缺摘要/缺文件/路径越界/摘要格式错各自拒绝且 tmux 日志为空；路径解析单测；场景链 `card-06/delivery-chain` 与 `card-07/import-and-review` 核对两类许可文件。
+- **没做的：** Codex 侧没有等价传输（Agent 仍把 `permit.prompt` 交给线程工具）；现场验证（真实 Controller 用 `--prompt-ref` 投递）留给用户的真实场景测试；D5（助手迁成类型化模块）仍开放，这次只是在字符串脚本里加了一个入口。
+
+文档：需求卡 6、capability-map 第 7 行、登记 K6（Claude 侧关闭）、技术债务复审第 8 行、scenario-acceptance 两行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：delivery + result-review + tmux 助手 + codegen + MCP 目录 + governance/demand + evidence 清单 + tasking + demand 207/207（前两轮：`permits/` 被 Demand 根清单拒绝；wire 自包含测试的许可属性表少两项）；架构检查通过。
+- 制品重建（`build:artifacts:committed`）与 `smoke:artifacts` 均 exit 0（两宿主 hookObserver landed）。
+- 完整门一次即过：run-7DkydW（05:56–06:22 UTC，26.2 分钟）1515/1515 全通过、318 份文件（新增路径单测）、零失败/取消/skip/todo，schema:check 与 build:check 通过；stderr 仍只有 tooling/lab 两条既有的 Biome `useTemplate` 警告。
+- `wf timings apply --receipt .build/verification/run-7DkydW/receipt.json`：318 份文件、并发 2（耗时表随本批提交；与此前各批一样不为它再跑一次门）。
+- `wf handoff`（含真实 build:check，run-fPUr2E）：七项通过（whitespace、private-content、artifacts、docs-pointers、test-durations、instructions-parity、git）；`git diff --check` 干净。
+- 未运行：原生宿主会话（真实 Controller 按引用投递）、lab/live、远端 CI；图谱指纹漂移未刷新。
+
+本批改动 src/governance（delivery 落盘模块、demand 路径与清单）、src/capabilities（delivery、result-review）、src/contracts/schemas 与 generated（三份许可结果）、src/hosts/claude-code（助手与 deliveryAction 文本）、tests（delivery、result-review、助手、路径单测、wire 自包含、场景链）、plugins/（重建）、docs/；未提交，main 领先 origin/main 29 个提交。

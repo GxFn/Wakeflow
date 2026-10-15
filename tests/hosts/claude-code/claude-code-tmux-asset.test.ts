@@ -2476,3 +2476,112 @@ test("hook 分片中不可读候选或符号链接不能被当作未落地，助
   );
   equal(readFileSync(path.join(outside, "keep.txt"), "utf8"), "preserve");
 });
+
+test("deliver reads the permit prompt by reference, verifies its digest, and sends nothing when the file or digest is wrong", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  const livePane = paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS });
+  writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
+  const prompt =
+    "Implement the task package for Product A now.\n\nRead the package first; touch only ProductA.\n";
+  writeFileSync(
+    path.join(current.state, "capture.txt"),
+    `> Implement the task package for Product A now.\n\nWorking...\n──────────\n❯ \n──────────\n`,
+  );
+  // K6：Wakeflow 把许可 prompt 落在 Demand 根下；助手按引用读文件、自己核对摘要，stdin 不再是来源。
+  const promptRef =
+    ".wakeflow-active/current/demand_11111111-1111-4111-8111-111111111111/artifacts/permits/delivery/target-delivery_22222222-2222-4222-8222-222222222222.txt";
+  const promptFile = path.join(current.root, ...promptRef.split("/"));
+  mkdirSync(path.dirname(promptFile), { recursive: true });
+  writeFileSync(promptFile, prompt);
+  const promptDigest = computeSha256Digest(encodeUtf8(prompt.trim(), "$prompt"), "$prompt");
+  const handleDigest = computeSha256Digest(encodeUtf8(SESSION_ID, "$handle"), "$handle");
+  const sent = runHelper(
+    current,
+    [
+      "deliver",
+      "--window",
+      PRODUCT_WINDOW_ID,
+      "--handle-digest",
+      handleDigest,
+      "--prompt-ref",
+      promptRef,
+      "--prompt-digest",
+      promptDigest,
+    ],
+    { input: "stdin is ignored when the prompt comes by reference\n" },
+  );
+  equal(sent.status, 0, JSON.stringify(sent.json));
+  equal(sent.json.ok, true);
+  equal((sent.json.attempt as { status: string }).status, "sent");
+  equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), prompt);
+  equal((sent.json.readback as { status: string }).status, "confirmed");
+
+  // 摘要不符、缺摘要、文件缺失、路径不在许可目录：都在碰 tmux 之前拒绝，什么都不发。
+  resetLog(current);
+  const mismatch = runHelper(current, [
+    "deliver",
+    "--window",
+    PRODUCT_WINDOW_ID,
+    "--prompt-ref",
+    promptRef,
+    "--prompt-digest",
+    `sha256:${"00".repeat(32)}`,
+  ]);
+  equal(mismatch.json.ok, false);
+  equal(mismatch.json.reason, "prompt-digest-mismatch");
+  equal(
+    runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--prompt-ref", promptRef]).json
+      .reason,
+    "prompt-digest-required",
+  );
+  const missing = promptRef.replace("22222222-2222", "33333333-3333");
+  equal(
+    runHelper(current, [
+      "deliver",
+      "--window",
+      PRODUCT_WINDOW_ID,
+      "--prompt-ref",
+      missing,
+      "--prompt-digest",
+      promptDigest,
+    ]).json.reason,
+    "prompt-ref-missing",
+  );
+  for (const outside of [
+    "/etc/passwd",
+    "../outside.txt",
+    ".wakeflow-active/current/demand_x/artifacts/permits/delivery/a.txt",
+    promptRef.replace("artifacts/permits/", "permits/"),
+    ".wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs",
+    promptRef.replace("permits/delivery/", "permits/other/"),
+  ]) {
+    equal(
+      runHelper(current, [
+        "deliver",
+        "--window",
+        PRODUCT_WINDOW_ID,
+        "--prompt-ref",
+        outside,
+        "--prompt-digest",
+        promptDigest,
+      ]).json.reason,
+      "prompt-ref-invalid",
+      outside,
+    );
+  }
+  equal(
+    runHelper(current, [
+      "deliver",
+      "--window",
+      PRODUCT_WINDOW_ID,
+      "--prompt-ref",
+      promptRef,
+      "--prompt-digest",
+      "not-a-digest",
+    ]).json.reason,
+    "prompt-digest-invalid",
+  );
+  deepEqual(tmuxLog(current), []);
+});

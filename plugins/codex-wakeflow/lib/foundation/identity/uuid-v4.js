@@ -15,7 +15,7 @@ import { encodeUtf8 } from "../text/utf8.js";
 const UUID_V4_TEXT_LENGTH = 36;
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const ERROR_MESSAGES = {
-    "format": "UUID v4 must be a canonical lowercase RFC 9562 UUID version 4 string.",
+    format: "UUID v4 must be a canonical lowercase RFC 9562 UUID version 4 string.",
     "factory-type": "The UUID v4 factory must be a function.",
     "factory-failure": "The UUID v4 factory failed.",
     "factory-result": "The UUID v4 factory must return one canonical lowercase RFC 9562 UUID version 4 string.",
@@ -45,9 +45,7 @@ function fail(reason, path) {
     throw new UuidV4Error(reason, path);
 }
 function isCanonicalUuidV4(value) {
-    return (typeof value === "string"
-        && value.length === UUID_V4_TEXT_LENGTH
-        && UUID_V4_PATTERN.test(value));
+    return (typeof value === "string" && value.length === UUID_V4_TEXT_LENGTH && UUID_V4_PATTERN.test(value));
 }
 /**
  * 严格解析规范化小写 UUIDv4，不执行字符串强制转换。
@@ -85,9 +83,7 @@ export function createUuidV4(uuidFactory = randomUUID) {
     return value;
 }
 function isDerivationText(value) {
-    return typeof value === "string"
-        && !value.includes("\u0000")
-        && value.isWellFormed();
+    return typeof value === "string" && !value.includes("\u0000") && value.isWellFormed();
 }
 /**
  * 由命名空间与若干片段确定性派生一个 UUID v4 形状的值。

@@ -1,4 +1,4 @@
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "./passive-own-data.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "./passive-own-data.js";
 /**
  * Wakeflow Foundation / Data：递归 JSON 值准入。
  *
@@ -18,10 +18,10 @@ const ERROR_MESSAGES = {
     "non-finite-number": "JSON numbers must be finite IEEE 754 values.",
     "negative-zero": "Negative zero is not accepted as Wakeflow JSON data.",
     "lone-surrogate": "JSON strings must not contain lone Unicode surrogates.",
-    "cycle": "JSON values must not contain circular references.",
+    cycle: "JSON values must not contain circular references.",
     "maximum-depth": "The JSON value exceeds the structural depth limit.",
     "invalid-container": "The JSON container is not structurally valid.",
-    "proxy": "Proxy values are not accepted as JSON data.",
+    proxy: "Proxy values are not accepted as JSON data.",
     "record-prototype": "JSON objects require a plain or null prototype.",
     "symbol-key": "JSON containers must not contain symbol-keyed properties.",
     "non-enumerable-property": "JSON containers must not contain hidden properties.",
@@ -31,7 +31,7 @@ const ERROR_MESSAGES = {
     "array-extra-property": "JSON arrays must not contain additional own properties.",
 };
 const PASSIVE_REASON_MAP = {
-    "proxy": "proxy",
+    proxy: "proxy",
     "value-type": "invalid-container",
     "record-prototype": "record-prototype",
     "symbol-key": "symbol-key",
@@ -159,10 +159,10 @@ function parseValue(value, path, ancestors, depth) {
  * 不读取属性值。返回 false 时调用方必须失败，避免已准入数据再次执行外部行为。
  */
 export function hasPassiveJsonSerializationEnvironment() {
-    const hasStandardPrototypeChain = Object.getPrototypeOf(Array.prototype) === Object.prototype
-        && Object.getPrototypeOf(Object.prototype) === null;
-    const hasInheritedToJson = Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") !== undefined
-        || Object.getOwnPropertyDescriptor(Object.prototype, "toJSON") !== undefined;
+    const hasStandardPrototypeChain = Object.getPrototypeOf(Array.prototype) === Object.prototype &&
+        Object.getPrototypeOf(Object.prototype) === null;
+    const hasInheritedToJson = Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") !== undefined ||
+        Object.getOwnPropertyDescriptor(Object.prototype, "toJSON") !== undefined;
     return hasStandardPrototypeChain && !hasInheritedToJson;
 }
 /**

@@ -1,11 +1,11 @@
 import { constants as bufferConstants } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
-import { open as openFileHandle, } from "node:fs/promises";
+import { open as openFileHandle } from "node:fs/promises";
 import { types } from "node:util";
-import { Sha256Hasher, Sha256HasherError, } from "../crypto/sha256-hasher.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
+import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
+import { ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
 /**
@@ -23,17 +23,17 @@ import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
 /** regular-file positioned read 的内部性能参数，不属于公共容量合同。 */
 const STABLE_FILE_READ_CHUNK_BYTES = 512 * 1024;
 const ERROR_MESSAGES = {
-    "input": "Stable file read input is invalid.",
+    input: "Stable file read input is invalid.",
     "unsupported-platform": "Stable file read requires Node no-follow file handles.",
     "root-scope": "Stable file read could not establish its rooted resource scope.",
     "not-found": "Stable file read target does not exist.",
-    "symlink": "Stable file read target cannot be a symbolic link.",
+    symlink: "Stable file read target cannot be a symbolic link.",
     "not-file": "Stable file read target must be a regular file.",
     "expectation-changed": "Stable file read target no longer matches its expected node.",
     "too-large": "Stable file read target exceeds the caller or runtime byte limit.",
     "io-failure": "Stable file bytes could not be read and hashed safely.",
     "source-changed": "Stable file target changed while it was being read.",
-    "aborted": "Stable file read was aborted.",
+    aborted: "Stable file read was aborted.",
     "close-failure": "Stable file handle could not be closed safely.",
 };
 /**
@@ -56,18 +56,18 @@ function fail(reason, path) {
     throw new StableFileReadError(reason, path);
 }
 function isAbortSignal(value) {
-    return (typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal);
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseExpectedNode(value) {
     if (value === undefined)
         return undefined;
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         fail("input", "$options.expectedNode");
     }
     try {
@@ -94,8 +94,8 @@ function parseOptions(value) {
         throw error;
     }
     const allowed = new Set(["expectedNode", "maximumBytes", "signal"]);
-    if (!Object.hasOwn(record, "maximumBytes")
-        || Object.keys(record).some((key) => !allowed.has(key))) {
+    if (!Object.hasOwn(record, "maximumBytes") ||
+        Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
     }
     let maximumBytes;
@@ -122,10 +122,10 @@ function assertNotAborted(signal) {
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -141,8 +141,7 @@ async function inspectInitialResource(root, resourcePath) {
             if (error.reason === "resource-path") {
                 fail("input", "$resourcePath");
             }
-            if (error.reason === "resource-changed"
-                || error.reason === "resource-alias") {
+            if (error.reason === "resource-changed" || error.reason === "resource-alias") {
                 fail("source-changed", "$resourcePath");
             }
             if (error.reason === "unsupported-platform") {
@@ -202,9 +201,7 @@ function requiredOpenFlags() {
     if (typeof noFollow !== "number") {
         fail("unsupported-platform", "$resourcePath");
     }
-    const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number"
-        ? fileSystemConstants.O_NONBLOCK
-        : 0;
+    const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number" ? fileSystemConstants.O_NONBLOCK : 0;
     return fileSystemConstants.O_RDONLY | noFollow | nonBlocking;
 }
 async function openStableFile(initial) {
@@ -315,8 +312,7 @@ async function readStableFileVersion(root, resourcePath, options, mode) {
     let result;
     try {
         const opened = await snapshotOpenedFile(handle);
-        if (opened.kind !== "file"
-            || !sameFileNodeSnapshot(initial.node, opened)) {
+        if (opened.kind !== "file" || !sameFileNodeSnapshot(initial.node, opened)) {
             fail("source-changed", "$resourcePath");
         }
         assertWithinMaximum(opened.byteCount, parsed.maximumBytes);
@@ -324,9 +320,9 @@ async function readStableFileVersion(root, resourcePath, options, mode) {
         const read = await readExactFile(handle, opened.byteCount, capture, parsed.signal);
         const afterHandle = await snapshotOpenedFile(handle);
         const afterPath = await inspectFinalResource(root, resourcePath);
-        if (afterPath.node.kind !== "file"
-            || !sameFileNodeSnapshot(opened, afterHandle)
-            || !sameFileNodeSnapshot(afterHandle, afterPath.node)) {
+        if (afterPath.node.kind !== "file" ||
+            !sameFileNodeSnapshot(opened, afterHandle) ||
+            !sameFileNodeSnapshot(afterHandle, afterPath.node)) {
             fail("source-changed", "$resourcePath");
         }
         assertNotAborted(parsed.signal);

@@ -1,11 +1,11 @@
 import nodePath from "node:path";
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { inspectAbsoluteDirectoryPlacement, AbsoluteDirectoryPlacementError, } from "./absolute-directory-placement.js";
-import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "./durable-directory-materialization.js";
-import { sameFileNodeIdentity, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { AbsoluteDirectoryPlacementError, inspectAbsoluteDirectoryPlacement, } from "./absolute-directory-placement.js";
+import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "./durable-directory-materialization.js";
+import { sameFileNodeIdentity } from "./file-node-snapshot.js";
+import { PortableResourcePathError, parsePortableResourcePath } from "./portable-resource-path.js";
+import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 const ERROR_MESSAGES = {
     input: "Absolute directory materialization input is invalid.",
     scope: "Absolute directory materialization requires a non-root safe ancestor.",
@@ -34,10 +34,10 @@ function fail(reason, path) {
     throw new AbsoluteDirectoryMaterializationError(reason, path);
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;
@@ -49,13 +49,13 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (!Object.hasOwn(record, "mode")
-        || Object.keys(record).some((key) => key !== "mode" && key !== "signal")
-        || typeof record.mode !== "number"
-        || !Number.isInteger(record.mode)
-        || record.mode < 0
-        || record.mode > 0o777
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (!Object.hasOwn(record, "mode") ||
+        Object.keys(record).some((key) => key !== "mode" && key !== "signal") ||
+        typeof record.mode !== "number" ||
+        !Number.isInteger(record.mode) ||
+        record.mode < 0 ||
+        record.mode > 0o777 ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -86,10 +86,10 @@ async function inspect(value, path) {
 }
 function relativeResourcePath(ancestor, target) {
     const relative = nodePath.relative(ancestor, target);
-    if (relative.length === 0
-        || relative === ".."
-        || relative.startsWith(`..${nodePath.sep}`)
-        || nodePath.isAbsolute(relative)) {
+    if (relative.length === 0 ||
+        relative === ".." ||
+        relative.startsWith(`..${nodePath.sep}`) ||
+        nodePath.isAbsolute(relative)) {
         fail("scope", "$absolutePath");
     }
     try {
@@ -110,15 +110,14 @@ function mapMaterializationError(error) {
     if (error.reason === "target-symlink" || error.reason === "parent-symlink") {
         fail("symlink", "$absolutePath");
     }
-    if (error.reason === "target-not-directory"
-        || error.reason === "parent-not-directory") {
+    if (error.reason === "target-not-directory" || error.reason === "parent-not-directory") {
         fail("not-directory", "$absolutePath");
     }
     if (error.reason === "close-failure")
         fail("close-failure", "$root");
-    if (error.reason === "root-scope"
-        || error.reason === "parent-changed"
-        || error.reason === "path-changed") {
+    if (error.reason === "root-scope" ||
+        error.reason === "parent-changed" ||
+        error.reason === "path-changed") {
         fail("path-changed", "$absolutePath");
     }
     fail("materialization", "$absolutePath");
@@ -130,18 +129,19 @@ export async function materializeAbsoluteDirectoryPlacement(value, optionsValue)
     const initial = await inspect(value, "$absolutePath");
     const absolutePath = initial.absolutePath;
     if (initial.state === "present") {
-        if (initial.spellingIsCanonical !== true
-            || initial.node === null) {
+        if (initial.spellingIsCanonical !== true || initial.node === null) {
             fail("alias", "$absolutePath");
         }
         return Object.freeze({
             absolutePath,
             node: initial.node,
-            segments: Object.freeze([Object.freeze({
+            segments: Object.freeze([
+                Object.freeze({
                     absolutePath,
                     disposition: "existing",
                     node: initial.node,
-                })]),
+                }),
+            ]),
         });
     }
     const nearestAncestor = initial.nearestExistingAncestor;
@@ -192,16 +192,16 @@ export async function materializeAbsoluteDirectoryPlacement(value, optionsValue)
     if (materialized === undefined)
         fail("materialization", "$absolutePath");
     const final = await inspect(absolutePath, "$absolutePath");
-    if (final.state !== "present"
-        || final.spellingIsCanonical !== true
-        || final.node === null
-        || !sameFileNodeIdentity(materialized.node, final.node)) {
+    if (final.state !== "present" ||
+        final.spellingIsCanonical !== true ||
+        final.node === null ||
+        !sameFileNodeIdentity(materialized.node, final.node)) {
         fail("path-changed", "$absolutePath");
     }
-    const segments = Object.freeze(materialized.segments.map((entry) => (Object.freeze({
+    const segments = Object.freeze(materialized.segments.map((entry) => Object.freeze({
         absolutePath: nodePath.join(ancestor, ...entry.resourcePath.split("/")),
         disposition: entry.disposition,
         node: entry.node,
-    }))));
+    })));
     return Object.freeze({ absolutePath, node: final.node, segments });
 }

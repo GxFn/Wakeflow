@@ -1,14 +1,14 @@
-import { threadId } from "node:worker_threads";
 import { types } from "node:util";
+import { threadId } from "node:worker_threads";
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../crypto/sha256.js";
-import { createUuidV4, parseUuidV4, UuidV4Error, } from "../identity/uuid-v4.js";
+import { createUuidV4, parseUuidV4, UuidV4Error } from "../identity/uuid-v4.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { encodeUtf8 } from "../text/utf8.js";
-import { parsePortableResourcePath, PortableResourcePathError, splitPortableResourcePath, } from "./portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
 const ERROR_MESSAGES = {
-    "input": "Durable atomic file stage address input is invalid.",
-    "digest": "Durable atomic file stage address digest is invalid.",
-    "identifier": "Durable atomic file stage owner identity is invalid.",
+    input: "Durable atomic file stage address input is invalid.",
+    digest: "Durable atomic file stage address digest is invalid.",
+    identifier: "Durable atomic file stage owner identity is invalid.",
     "not-issued": "Durable atomic file stage address was not issued by this process.",
 };
 export class DurableAtomicFileStageAddressError extends Error {
@@ -38,10 +38,7 @@ function parseOperation(value) {
     return value;
 }
 function parseMode(value) {
-    if (typeof value !== "number"
-        || !Number.isInteger(value)
-        || value < 0
-        || value > 0o777) {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
         fail("input", "$mode");
     }
     return value;
@@ -65,16 +62,13 @@ function parseOwnerInteger(value, allowZero, path) {
     if (value === undefined)
         fail("identifier", path);
     const parsed = Number(value);
-    if (!Number.isSafeInteger(parsed)
-        || parsed < (allowZero ? 0 : 1)) {
+    if (!Number.isSafeInteger(parsed) || parsed < (allowZero ? 0 : 1)) {
         fail("identifier", path);
     }
     return parsed;
 }
 function readAddressFileName(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)) {
+    if (typeof value !== "object" || value === null || types.isProxy(value)) {
         fail("input", "$address");
     }
     let descriptor;
@@ -84,9 +78,9 @@ function readAddressFileName(value) {
     catch {
         fail("input", "$address");
     }
-    if (descriptor === undefined
-        || !Object.hasOwn(descriptor, "value")
-        || typeof descriptor.value !== "string") {
+    if (descriptor === undefined ||
+        !Object.hasOwn(descriptor, "value") ||
+        typeof descriptor.value !== "string") {
         fail("input", "$address");
     }
     return descriptor.value;
@@ -104,8 +98,7 @@ export function computeDurableAtomicFileStageTargetDigest(value) {
         throw error;
     }
     const resourceName = splitPortableResourcePath(resourcePath).at(-1);
-    if (resourceName === undefined
-        || hasDurableAtomicFileStagePrefix(resourceName)) {
+    if (resourceName === undefined || hasDurableAtomicFileStagePrefix(resourceName)) {
         fail("input", "$resourcePath");
     }
     return computeSha256Digest(encodeUtf8(resourcePath, "$resourcePath"));
@@ -116,8 +109,7 @@ export function hasDurableAtomicFileStagePrefix(value) {
 }
 /** 解析自描述原子暂存文件名；不授予清理权限。 */
 export function parseDurableAtomicFileStageFileName(value) {
-    if (typeof value !== "string"
-        || value.length > MAXIMUM_STAGE_FILE_NAME_LENGTH) {
+    if (typeof value !== "string" || value.length > MAXIMUM_STAGE_FILE_NAME_LENGTH) {
         fail("input", "$fileName");
     }
     const groups = STAGE_PATTERN.exec(value)?.groups;
@@ -181,11 +173,11 @@ export function issueDurableAtomicFileStageAddress(operationValue, resourcePathV
 }
 /** 结束本进程签发的暂存地址所有者生命周期；不会操作任何文件。 */
 export function releaseDurableAtomicFileStageAddress(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)
-        || !ISSUED_STAGE_ADDRESSES.has(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value) ||
+        !ISSUED_STAGE_ADDRESSES.has(value)) {
         fail("not-issued", "$address");
     }
     ACTIVE_STAGE_TOKENS.delete(value.token);

@@ -1,9 +1,9 @@
 import { types } from "node:util";
 import pLimit from "p-limit";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { addByteCounts, ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
 import { BoundedDirectoryTreeScanError, scanBoundedResourceDirectoryTree, scanBoundedRootDirectoryTree, } from "./bounded-directory-tree-scan.js";
-import { sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { sameFileNodeSnapshot } from "./file-node-snapshot.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import { readStableFileDigest, StableFileReadError, } from "./stable-file-read.js";
 /**
@@ -20,10 +20,10 @@ import { readStableFileDigest, StableFileReadError, } from "./stable-file-read.j
 /** 文件摘要读取的内部固定并发上限，不属于调用方容量或领域策略。 */
 const STABLE_RESOURCE_TREE_FILE_CONCURRENCY = 8;
 const ERROR_MESSAGES = {
-    "input": "Stable resource tree read input is invalid.",
+    input: "Stable resource tree read input is invalid.",
     "root-scope": "Stable resource tree read could not establish its rooted scope.",
     "not-found": "Stable resource tree read target does not exist.",
-    "symlink": "Stable resource tree read target cannot be a symbolic link.",
+    symlink: "Stable resource tree read target cannot be a symbolic link.",
     "not-directory": "Stable resource tree read target must be a directory.",
     "entry-limit": "Stable resource tree exceeds the caller entry limit.",
     "depth-limit": "Stable resource tree exceeds the caller depth limit.",
@@ -33,7 +33,7 @@ const ERROR_MESSAGES = {
     "entry-path": "Stable resource tree contains a non-portable resource path.",
     "io-failure": "Stable resource tree facts could not be observed safely.",
     "source-changed": "Stable resource tree changed while it was being read.",
-    "aborted": "Stable resource tree read was aborted.",
+    aborted: "Stable resource tree read was aborted.",
 };
 /**
  * 稳定资源树读取的公共、脱敏错误。
@@ -55,15 +55,13 @@ function fail(reason, path) {
     throw new StableResourceTreeReadError(reason, path);
 }
 function isAbortSignal(value) {
-    return (typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal);
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseCount(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value < 0) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
         fail("input", path);
     }
     return value;
@@ -96,8 +94,8 @@ function parseOptions(value) {
         "maximumTotalBytes",
     ]);
     const allowed = new Set([...required, "expectedNode", "signal"]);
-    if (required.some((field) => !Object.hasOwn(record, field))
-        || Object.keys(record).some((key) => !allowed.has(key))) {
+    if (required.some((field) => !Object.hasOwn(record, field)) ||
+        Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
     }
     if (record.signal !== undefined && !isAbortSignal(record.signal)) {
@@ -114,10 +112,10 @@ function parseOptions(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -135,12 +133,12 @@ function mapTreeScanError(error, phase) {
     if (error.reason === "source-changed")
         fail("source-changed", "$tree");
     if (phase === "after") {
-        if (error.reason === "not-found"
-            || error.reason === "symlink"
-            || error.reason === "not-directory"
-            || error.reason === "entry-limit"
-            || error.reason === "depth-limit"
-            || error.reason === "entry-path") {
+        if (error.reason === "not-found" ||
+            error.reason === "symlink" ||
+            error.reason === "not-directory" ||
+            error.reason === "entry-limit" ||
+            error.reason === "depth-limit" ||
+            error.reason === "entry-path") {
             fail("source-changed", "$tree");
         }
         fail("io-failure", "$tree");
@@ -162,19 +160,18 @@ function mapTreeScanError(error, phase) {
 function mapStableFileReadError(error) {
     if (error.reason === "input")
         fail("input", error.path);
-    if (error.reason === "root-scope"
-        || error.reason === "unsupported-platform") {
+    if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
         fail("root-scope", "$root");
     }
     if (error.reason === "too-large")
         fail("io-failure", "$tree.files");
     if (error.reason === "aborted")
         fail("aborted", "$signal");
-    if (error.reason === "not-found"
-        || error.reason === "symlink"
-        || error.reason === "not-file"
-        || error.reason === "expectation-changed"
-        || error.reason === "source-changed") {
+    if (error.reason === "not-found" ||
+        error.reason === "symlink" ||
+        error.reason === "not-file" ||
+        error.reason === "expectation-changed" ||
+        error.reason === "source-changed") {
         fail("source-changed", "$tree.files");
     }
     fail("io-failure", "$tree.files");
@@ -264,18 +261,18 @@ async function readFiles(root, entries, options) {
     return Object.freeze(files);
 }
 function sameTree(left, right) {
-    return left.treeRootResourcePath === right.treeRootResourcePath
-        && sameFileNodeSnapshot(left.treeRootNode, right.treeRootNode)
-        && left.entries.length === right.entries.length
-        && left.entries.every((entry, index) => {
+    return (left.treeRootResourcePath === right.treeRootResourcePath &&
+        sameFileNodeSnapshot(left.treeRootNode, right.treeRootNode) &&
+        left.entries.length === right.entries.length &&
+        left.entries.every((entry, index) => {
             const other = right.entries[index];
-            return other !== undefined
-                && entry.name === other.name
-                && entry.resourcePath === other.resourcePath
-                && entry.parentResourcePath === other.parentResourcePath
-                && entry.depth === other.depth
-                && sameFileNodeSnapshot(entry.node, other.node);
-        });
+            return (other !== undefined &&
+                entry.name === other.name &&
+                entry.resourcePath === other.resourcePath &&
+                entry.parentResourcePath === other.parentResourcePath &&
+                entry.depth === other.depth &&
+                sameFileNodeSnapshot(entry.node, other.node));
+        }));
 }
 async function readTree(root, treeRootResourcePath, options) {
     const before = await scanTree(root, treeRootResourcePath, options, options.expectedNode, "before");

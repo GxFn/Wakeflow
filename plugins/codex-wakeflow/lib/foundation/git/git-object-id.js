@@ -43,6 +43,5 @@ export function parseGitObjectId(value, path = "$gitObjectId") {
 export function sameGitObjectId(left, right) {
     const admittedLeft = parseGitObjectId(left, "$left");
     const admittedRight = parseGitObjectId(right, "$right");
-    return (admittedLeft.algorithm === admittedRight.algorithm &&
-        admittedLeft.value === admittedRight.value);
+    return (admittedLeft.algorithm === admittedRight.algorithm && admittedLeft.value === admittedRight.value);
 }

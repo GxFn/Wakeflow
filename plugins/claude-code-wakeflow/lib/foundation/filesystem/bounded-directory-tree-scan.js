@@ -1,19 +1,19 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import { readStableResourceDirectory, readStableRootDirectory, StableDirectoryReadError, } from "./stable-directory-read.js";
 const ERROR_MESSAGES = {
-    "input": "Bounded directory tree scan input is invalid.",
+    input: "Bounded directory tree scan input is invalid.",
     "root-scope": "Directory tree scan could not establish its rooted scope.",
     "not-found": "Directory tree scan target does not exist.",
-    "symlink": "Directory tree scan target cannot be a symbolic link.",
+    symlink: "Directory tree scan target cannot be a symbolic link.",
     "not-directory": "Directory tree scan target must be a directory.",
     "entry-limit": "Directory tree exceeds the caller total-entry limit.",
     "depth-limit": "Directory tree exceeds the caller relative-depth limit.",
     "entry-path": "Directory tree contains a non-portable resource path.",
     "inspection-failure": "Directory tree node facts could not be inspected safely.",
     "source-changed": "Directory tree changed while it was being traversed.",
-    "aborted": "Bounded directory tree scan was aborted.",
+    aborted: "Bounded directory tree scan was aborted.",
     "close-failure": "A directory tree scan handle could not be closed safely.",
 };
 /**
@@ -34,32 +34,30 @@ export class BoundedDirectoryTreeScanError extends Error {
     }
 }
 const LOWER_REASON_MAP = {
-    "input": "input",
+    input: "input",
     "unsupported-platform": "root-scope",
     "root-scope": "root-scope",
     "not-found": "not-found",
-    "symlink": "symlink",
+    symlink: "symlink",
     "not-directory": "not-directory",
     "expectation-changed": "source-changed",
     "entry-path": "entry-path",
     "io-failure": "inspection-failure",
     "source-changed": "source-changed",
-    "aborted": "aborted",
+    aborted: "aborted",
     "close-failure": "close-failure",
 };
 function fail(reason, path) {
     throw new BoundedDirectoryTreeScanError(reason, path);
 }
 function isAbortSignal(value) {
-    return (typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal);
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseLimit(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value < 0) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
         fail("input", path);
     }
     return value;
@@ -76,8 +74,8 @@ function parseOptions(value) {
     }
     const required = ["maximumDepth", "maximumEntries"];
     const allowed = new Set([...required, "expectedNode", "signal"]);
-    if (required.some((field) => !Object.hasOwn(record, field))
-        || Object.keys(record).some((key) => !allowed.has(key))) {
+    if (required.some((field) => !Object.hasOwn(record, field)) ||
+        Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
     }
     const maximumEntries = parseLimit(record.maximumEntries, "$options.maximumEntries");
@@ -93,10 +91,10 @@ function parseOptions(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -109,9 +107,7 @@ function compareText(left, right) {
 }
 function mapDirectoryReadError(error, limitReason) {
     if (error.reason === "too-many-entries") {
-        fail(limitReason, limitReason === "entry-limit"
-            ? "$tree.entries"
-            : "$tree.depth");
+        fail(limitReason, limitReason === "entry-limit" ? "$tree.entries" : "$tree.depth");
     }
     fail(LOWER_REASON_MAP[error.reason], error.path);
 }
@@ -131,10 +127,10 @@ async function readOneDirectory(root, resourcePath, maximumEntries, expectedNode
     }
     catch (error) {
         if (error instanceof StableDirectoryReadError) {
-            if (expectedNode !== undefined
-                && (error.reason === "not-found"
-                    || error.reason === "symlink"
-                    || error.reason === "not-directory")) {
+            if (expectedNode !== undefined &&
+                (error.reason === "not-found" ||
+                    error.reason === "symlink" ||
+                    error.reason === "not-directory")) {
                 fail("source-changed", "$options.expectedNode");
             }
             mapDirectoryReadError(error, limitReason);
@@ -152,11 +148,13 @@ function createTreeEntry(parent, entry) {
     });
 }
 async function scanTree(root, treeRootResourcePath, options) {
-    const pendingDirectories = [{
+    const pendingDirectories = [
+        {
             resourcePath: treeRootResourcePath,
             depth: 0,
             expectedNode: options.expectedNode,
-        }];
+        },
+    ];
     const entries = [];
     let treeRootNode;
     while (pendingDirectories.length > 0) {

@@ -1,11 +1,11 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { open as openFileHandle, } from "node:fs/promises";
+import { open as openFileHandle } from "node:fs/promises";
 import { types } from "node:util";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
 const ERROR_MESSAGES = {
-    "input": "Rooted exact resource handle input is invalid.",
+    input: "Rooted exact resource handle input is invalid.",
     "root-scope": "Rooted exact resource could not establish its root scope.",
     "resource-not-found": "Rooted exact resource does not exist.",
     "resource-symlink": "Rooted exact resource cannot be a symbolic link.",
@@ -13,7 +13,7 @@ const ERROR_MESSAGES = {
     "resource-open-failure": "Rooted exact resource could not be opened safely.",
     "resource-changed": "Rooted exact resource no longer matches its admission.",
     "sync-failure": "Rooted exact resource could not be synchronized safely.",
-    "closed": "Rooted exact resource handle is already closed.",
+    closed: "Rooted exact resource handle is already closed.",
     "close-failure": "Rooted exact resource handle could not be closed safely.",
 };
 /**
@@ -33,26 +33,24 @@ export class RootedExactResourceHandleError extends Error {
     }
 }
 function normalizeErrorPath(value) {
-    return typeof value === "string" && value.length > 0
-        ? value
-        : "$resourcePath";
+    return typeof value === "string" && value.length > 0 ? value : "$resourcePath";
 }
 function fail(reason, path) {
     throw new RootedExactResourceHandleError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function parseExpectedNode(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         fail("input", "$expectedNode");
     }
     try {
@@ -86,9 +84,7 @@ function requiredOpenFlags(kind, errorPath) {
     const noFollow = fileSystemConstants.O_NOFOLLOW;
     if (typeof noFollow !== "number")
         fail("root-scope", errorPath);
-    const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number"
-        ? fileSystemConstants.O_NONBLOCK
-        : 0;
+    const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number" ? fileSystemConstants.O_NONBLOCK : 0;
     let directory = 0;
     if (kind === "directory") {
         const value = fileSystemConstants.O_DIRECTORY;
@@ -188,8 +184,7 @@ export class RootedExactResourceHandle {
         }
         try {
             const opened = snapshotOpenedHandle(await handle.stat({ bigint: true }), errorPath);
-            if (opened.kind !== initial.kind
-                || !sameFileNodeSnapshot(initial.resource.node, opened)) {
+            if (opened.kind !== initial.kind || !sameFileNodeSnapshot(initial.resource.node, opened)) {
                 fail("resource-changed", errorPath);
             }
             const result = new RootedExactResourceHandle(root, initial.resource, initial.kind, handle, errorPath);
@@ -237,8 +232,7 @@ export class RootedExactResourceHandle {
                 throw error;
             fail("resource-changed", this.#errorPath);
         }
-        if (opened.kind !== this.#kind
-            || !sameFileNodeIdentity(this.#initialNodeSnapshot, opened)) {
+        if (opened.kind !== this.#kind || !sameFileNodeIdentity(this.#initialNodeSnapshot, opened)) {
             fail("resource-changed", this.#errorPath);
         }
         return opened;
@@ -257,9 +251,9 @@ export class RootedExactResourceHandle {
             }
             throw error;
         }
-        if (pathResource.node.kind !== this.#kind
-            || !sameFileNodeSnapshot(this.#initialNodeSnapshot, opened)
-            || !sameFileNodeSnapshot(opened, pathResource.node)) {
+        if (pathResource.node.kind !== this.#kind ||
+            !sameFileNodeSnapshot(this.#initialNodeSnapshot, opened) ||
+            !sameFileNodeSnapshot(opened, pathResource.node)) {
             fail("resource-changed", this.#errorPath);
         }
         return pathResource.node;

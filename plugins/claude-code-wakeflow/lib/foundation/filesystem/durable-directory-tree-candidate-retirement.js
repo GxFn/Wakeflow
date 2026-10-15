@@ -1,15 +1,15 @@
 import { rmdir } from "node:fs/promises";
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import { inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, parseDirectoryTreeCandidatePlan, DurableDirectoryTreeCandidateError, } from "./durable-directory-tree-candidate.js";
-import { joinDirectoryTreeCandidatePath, directoryTreeCandidateMaximumPathDepth, } from "./directory-tree-candidate-plan.js";
-import { sameFileNodeIdentity, sameFileNodeSnapshot, FileNodeSnapshotError, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
+import { directoryTreeCandidateMaximumPathDepth, joinDirectoryTreeCandidatePath, } from "./directory-tree-candidate-plan.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, parseDirectoryTreeCandidatePlan, } from "./durable-directory-tree-candidate.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "./exact-regular-file-unlink.js";
+import { FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "./exact-regular-file-unlink.js";
 import { readStableFileDigest, StableFileReadError, } from "./stable-file-read.js";
 const ERROR_MESSAGES = {
     input: "Directory tree candidate retirement input is invalid.",
@@ -173,8 +173,7 @@ async function candidateExists(root, candidateRootPath) {
                 return false;
             if (error.reason === "resource-path")
                 fail("input", "$candidate");
-            if (error.reason === "ancestor-symlink" ||
-                error.reason === "ancestor-type") {
+            if (error.reason === "ancestor-symlink" || error.reason === "ancestor-type") {
                 fail("candidate-conflict", "$candidate");
             }
             fail("root-scope", "$root");
@@ -268,8 +267,7 @@ async function captureMembers(root, candidateRootPath, plan, signal) {
         files.set(file.path, read);
     }
     const confirmed = await inspectProgress(root, candidateRootPath, plan, progress.rootNode, signal);
-    if (confirmed.missingDirectories.length !==
-        progress.missingDirectories.length ||
+    if (confirmed.missingDirectories.length !== progress.missingDirectories.length ||
         confirmed.missingFiles.length !== progress.missingFiles.length ||
         confirmed.missingDirectories.some((entry, index) => entry !== progress.missingDirectories[index]) ||
         confirmed.missingFiles.some((entry, index) => entry !== progress.missingFiles[index])) {
@@ -293,8 +291,7 @@ function mapFileUnlinkError(error) {
     if (error.reason === "commit-uncertain" || error.reason === "close-failure") {
         fail("commit-uncertain", "$candidate/file");
     }
-    if (error.reason === "source-changed" ||
-        error.reason === "source-not-found") {
+    if (error.reason === "source-changed" || error.reason === "source-not-found") {
         fail("source-changed", "$candidate/file");
     }
     if (error.reason === "root-scope" || error.reason === "parent-changed") {
@@ -408,8 +405,7 @@ export async function removeEmptyDirectoryExactly(root, resourcePath, expectedId
             fail("commit-uncertain", "$candidate/directory");
         }
         const opened = await source.inspectOpenedNode();
-        if (opened.kind !== "directory" ||
-            !sameFileNodeIdentity(opened, current.node)) {
+        if (opened.kind !== "directory" || !sameFileNodeIdentity(opened, current.node)) {
             fail("commit-uncertain", "$candidate/directory");
         }
         if (durability === "fsync") {

@@ -1,12 +1,12 @@
 import { Buffer } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
-import { open as openFileHandle, unlink, } from "node:fs/promises";
-import { Sha256Hasher, Sha256HasherError, } from "../crypto/sha256-hasher.js";
+import { open as openFileHandle, unlink } from "node:fs/promises";
+import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
+import { assertDurableFileCopyNotAborted, assertDurableFileCopyRoot, DurableFileCopyCandidateError, failDurableFileCopyCandidate as fail, parseDurableFileCopyExpectation, parseDurableFileCopyOptions, parseDurableFileCopyPath, snapshotDurableFileCopyNode, } from "./durable-file-copy-candidate-contract.js";
 import { sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
+import { RootedDirectoryError, } from "./rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
-import { assertDurableFileCopyNotAborted, assertDurableFileCopyRoot, failDurableFileCopyCandidate as fail, parseDurableFileCopyExpectation, parseDurableFileCopyOptions, parseDurableFileCopyPath, snapshotDurableFileCopyNode, DurableFileCopyCandidateError, } from "./durable-file-copy-candidate-contract.js";
 const DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES = 512 * 1024;
 function allocateScratch(byteCount, path) {
     try {
@@ -62,8 +62,7 @@ async function inspectInitialSource(root, resourcePath, expectation, maximumByte
             if (error.reason === "resource-path") {
                 fail("input", "$sourceResourcePath");
             }
-            if (error.reason === "resource-changed"
-                || error.reason === "resource-alias") {
+            if (error.reason === "resource-changed" || error.reason === "resource-alias") {
                 fail("source-changed", "$source");
             }
             fail("source-root-scope", "$sourceRoot");
@@ -75,13 +74,12 @@ async function inspectInitialSource(root, resourcePath, expectation, maximumByte
     }
     if (source.node.kind !== "file")
         fail("source-not-file", "$source");
-    if (source.node.byteCount > maximumBytes
-        || expectation.byteCount > maximumBytes) {
+    if (source.node.byteCount > maximumBytes || expectation.byteCount > maximumBytes) {
         fail("capacity", "$source");
     }
-    if (source.node.byteCount !== expectation.byteCount
-        || (expectation.expectedNode !== undefined
-            && !sameFileNodeSnapshot(source.node, expectation.expectedNode))) {
+    if (source.node.byteCount !== expectation.byteCount ||
+        (expectation.expectedNode !== undefined &&
+            !sameFileNodeSnapshot(source.node, expectation.expectedNode))) {
         fail("source-changed", "$source");
     }
     return source;
@@ -90,9 +88,7 @@ function sourceOpenFlags() {
     const noFollow = fileSystemConstants.O_NOFOLLOW;
     if (typeof noFollow !== "number")
         fail("source-root-scope", "$sourceRoot");
-    const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number"
-        ? fileSystemConstants.O_NONBLOCK
-        : 0;
+    const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number" ? fileSystemConstants.O_NONBLOCK : 0;
     return fileSystemConstants.O_RDONLY | noFollow | nonBlocking;
 }
 function candidateOpenFlags() {
@@ -100,10 +96,7 @@ function candidateOpenFlags() {
     if (typeof noFollow !== "number") {
         fail("destination-root-scope", "$destinationRoot");
     }
-    return fileSystemConstants.O_RDWR
-        | fileSystemConstants.O_CREAT
-        | fileSystemConstants.O_EXCL
-        | noFollow;
+    return (fileSystemConstants.O_RDWR | fileSystemConstants.O_CREAT | fileSystemConstants.O_EXCL | noFollow);
 }
 async function openSource(source) {
     try {
@@ -139,9 +132,7 @@ async function assertDestinationParentCurrent(parent, reason) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
-            fail(reason, reason === "destination-parent"
-                ? "$candidateResourcePath"
-                : "$candidate");
+            fail(reason, reason === "destination-parent" ? "$candidateResourcePath" : "$candidate");
         }
         throw error;
     }
@@ -152,9 +143,7 @@ async function inspectDestinationTarget(parent, reason) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
-            fail(reason, reason === "destination-parent"
-                ? "$candidateResourcePath"
-                : "$candidate");
+            fail(reason, reason === "destination-parent" ? "$candidateResourcePath" : "$candidate");
         }
         throw error;
     }
@@ -258,10 +247,10 @@ async function inspectFinalSource(root, resourcePath, sourceHandle, initial) {
             throw error;
         fail("source-changed", "$source");
     }
-    if (opened.kind !== "file"
-        || pathNode.kind !== "file"
-        || !sameFileNodeSnapshot(initial, opened)
-        || !sameFileNodeSnapshot(opened, pathNode)) {
+    if (opened.kind !== "file" ||
+        pathNode.kind !== "file" ||
+        !sameFileNodeSnapshot(initial, opened) ||
+        !sameFileNodeSnapshot(opened, pathNode)) {
         fail("source-changed", "$source");
     }
     return pathNode;
@@ -327,8 +316,7 @@ async function verifyCandidate(handle, expectation, signal) {
         throw error;
     }
     const after = await snapshotHandle(handle, "candidate-changed", "$candidate");
-    if (digest !== expectation.digest
-        || !sameFileNodeSnapshot(before, after)) {
+    if (digest !== expectation.digest || !sameFileNodeSnapshot(before, after)) {
         fail("candidate-changed", "$candidate");
     }
     return after;
@@ -356,18 +344,18 @@ async function closeParent(parent) {
     }
 }
 function sameRetiredCandidateNode(before, after) {
-    return (sameFileNodeIdentity(before, after)
-        && before.kind === "file"
-        && after.kind === "file"
-        && before.rawMode === after.rawMode
-        && before.permissionBits === after.permissionBits
-        && before.linkCount === 1n
-        && after.linkCount === 0n
-        && before.userId === after.userId
-        && before.groupId === after.groupId
-        && before.specialDeviceId === after.specialDeviceId
-        && before.byteCount === after.byteCount
-        && before.modifiedAtNanoseconds === after.modifiedAtNanoseconds);
+    return (sameFileNodeIdentity(before, after) &&
+        before.kind === "file" &&
+        after.kind === "file" &&
+        before.rawMode === after.rawMode &&
+        before.permissionBits === after.permissionBits &&
+        before.linkCount === 1n &&
+        after.linkCount === 0n &&
+        before.userId === after.userId &&
+        before.groupId === after.groupId &&
+        before.specialDeviceId === after.specialDeviceId &&
+        before.byteCount === after.byteCount &&
+        before.modifiedAtNanoseconds === after.modifiedAtNanoseconds);
 }
 /**
  * 按内容预期把一个来源普通文件流式复制为目标根内具名、非权威、已同步的候选文件。
@@ -393,13 +381,12 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
     try {
         sourceHandle = await openSource(initialSource);
         const openedSource = await snapshotHandle(sourceHandle, "source-changed", "$source");
-        if (openedSource.kind !== "file"
-            || !sameFileNodeSnapshot(initialSource.node, openedSource)) {
+        if (openedSource.kind !== "file" || !sameFileNodeSnapshot(initialSource.node, openedSource)) {
             fail("source-changed", "$source");
         }
         parent = await openDestinationParent(destinationRootValue, candidateResourcePath);
         await assertDestinationParentCurrent(parent, "destination-parent");
-        if (await inspectDestinationTarget(parent, "destination-parent") !== null) {
+        if ((await inspectDestinationTarget(parent, "destination-parent")) !== null) {
             fail("target-exists", "$candidateResourcePath");
         }
         try {
@@ -425,10 +412,10 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
             fail("candidate-write-failure", "$candidate");
         }
         let candidateNode = await verifyCandidate(candidateHandle, expectation, options.signal);
-        if (candidateNode.kind !== "file"
-            || candidateNode.linkCount !== 1n
-            || candidateNode.permissionBits !== options.mode
-            || candidateNode.byteCount !== expectation.byteCount) {
+        if (candidateNode.kind !== "file" ||
+            candidateNode.linkCount !== 1n ||
+            candidateNode.permissionBits !== options.mode ||
+            candidateNode.byteCount !== expectation.byteCount) {
             fail("candidate-changed", "$candidate");
         }
         // 候选内容的同步由目的地根的持久化级别决定；`none` 只省掉这次 `fsync`，
@@ -444,16 +431,15 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
         candidateNode = await verifyCandidate(candidateHandle, expectation, options.signal);
         await assertDestinationParentCurrent(parent, "candidate-changed");
         const pathNode = await inspectDestinationTarget(parent, "candidate-changed");
-        if (pathNode === null
-            || !sameFileNodeSnapshot(candidateNode, pathNode)) {
+        if (pathNode === null || !sameFileNodeSnapshot(candidateNode, pathNode)) {
             fail("candidate-changed", "$candidate");
         }
         await syncDestinationParent(parent);
         const finalHandleNode = await snapshotHandle(candidateHandle, "candidate-changed", "$candidate");
         const finalPathNode = await inspectDestinationTarget(parent, "candidate-changed");
-        if (finalPathNode === null
-            || !sameFileNodeSnapshot(candidateNode, finalHandleNode)
-            || !sameFileNodeSnapshot(finalHandleNode, finalPathNode)) {
+        if (finalPathNode === null ||
+            !sameFileNodeSnapshot(candidateNode, finalHandleNode) ||
+            !sameFileNodeSnapshot(finalHandleNode, finalPathNode)) {
             fail("candidate-changed", "$candidate");
         }
         result = Object.freeze({
@@ -474,18 +460,18 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
     catch (error) {
         primaryError = error;
     }
-    if (candidateCreated
-        && result === undefined
-        && candidateHandle !== undefined
-        && parent !== undefined) {
+    if (candidateCreated &&
+        result === undefined &&
+        candidateHandle !== undefined &&
+        parent !== undefined) {
         try {
             const opened = await snapshotHandle(candidateHandle, "cleanup-failure", "$candidate");
             const current = await parent.inspectTarget();
-            if (current === null
-                || opened.kind !== "file"
-                || current.kind !== "file"
-                || opened.linkCount !== 1n
-                || !sameFileNodeSnapshot(opened, current)) {
+            if (current === null ||
+                opened.kind !== "file" ||
+                current.kind !== "file" ||
+                opened.linkCount !== 1n ||
+                !sameFileNodeSnapshot(opened, current)) {
                 fail("cleanup-failure", "$candidate");
             }
             await unlink(parent.resourceAbsolutePath);
@@ -496,9 +482,10 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
             await parent.sync();
         }
         catch (error) {
-            primaryError = error instanceof DurableFileCopyCandidateError
-                ? error
-                : new DurableFileCopyCandidateError("cleanup-failure", "$candidate");
+            primaryError =
+                error instanceof DurableFileCopyCandidateError
+                    ? error
+                    : new DurableFileCopyCandidateError("cleanup-failure", "$candidate");
         }
     }
     for (const closeError of [

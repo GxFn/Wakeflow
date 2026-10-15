@@ -1,4 +1,4 @@
-import { parseUtcInstant, UtcInstantError, } from "./utc-instant.js";
+import { parseUtcInstant, UtcInstantError } from "./utc-instant.js";
 const ERROR_MESSAGES = {
     "clock-type": "UTC wall clock must be a function.",
     "clock-failure": "UTC wall clock failed while reading the current time.",
@@ -30,7 +30,7 @@ function fail(reason, path) {
  * `Date` 只生成当前 UTC 毫秒文本，最终仍交给 `utc-instant` 授予品牌类型。函数不
  * 缓存 `Date` 或上一次结果，因此每次调用都是一次新的系统时间观察。
  */
-const systemUtcWallClock = () => (parseUtcInstant(new Date().toISOString(), "$systemUtcWallClock"));
+const systemUtcWallClock = () => parseUtcInstant(new Date().toISOString(), "$systemUtcWallClock");
 /**
  * 读取一次 UTC 墙上时钟，并对可注入来源实行稳定错误映射和结果复验。
  *

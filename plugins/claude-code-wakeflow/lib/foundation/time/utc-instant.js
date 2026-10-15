@@ -70,8 +70,7 @@ function parseUtcInstantParts(input, path) {
     const fractionalNanoseconds = BigInt(fraction.padEnd(9, "0") || "0");
     return {
         value: input,
-        epochNanoseconds: BigInt(epochMilliseconds) * NANOSECONDS_PER_MILLISECOND +
-            fractionalNanoseconds,
+        epochNanoseconds: BigInt(epochMilliseconds) * NANOSECONDS_PER_MILLISECOND + fractionalNanoseconds,
     };
 }
 /**
@@ -87,8 +86,7 @@ export function parseUtcInstant(value, errorPath) {
  * 本函数只暴露时间线坐标，不读取当前时间，也不定义 freshness、TTL 或 Lease 策略。
  */
 export function utcInstantEpochNanoseconds(value, errorPath) {
-    return parseUtcInstantParts(value, normalizeErrorPath(errorPath))
-        .epochNanoseconds;
+    return parseUtcInstantParts(value, normalizeErrorPath(errorPath)).epochNanoseconds;
 }
 /**
  * 按真实纳秒时间线比较两个 UTC 时刻；不同精度的文本可以表示相同时刻。
@@ -98,9 +96,5 @@ export function utcInstantEpochNanoseconds(value, errorPath) {
 export function compareUtcInstants(left, right) {
     const leftNanoseconds = parseUtcInstantParts(left, "$left").epochNanoseconds;
     const rightNanoseconds = parseUtcInstantParts(right, "$right").epochNanoseconds;
-    return leftNanoseconds < rightNanoseconds
-        ? -1
-        : leftNanoseconds > rightNanoseconds
-            ? 1
-            : 0;
+    return leftNanoseconds < rightNanoseconds ? -1 : leftNanoseconds > rightNanoseconds ? 1 : 0;
 }

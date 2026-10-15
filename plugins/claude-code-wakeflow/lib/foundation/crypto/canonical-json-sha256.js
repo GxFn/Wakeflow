@@ -1,5 +1,5 @@
 import { encodeCanonicalJson } from "../data/canonical-json.js";
-import { computeSha256Digest, } from "./sha256.js";
+import { computeSha256Digest } from "./sha256.js";
 /**
  * Wakeflow Foundation / Crypto：Canonical JSON 与 SHA-256 的纯组合层。
  *

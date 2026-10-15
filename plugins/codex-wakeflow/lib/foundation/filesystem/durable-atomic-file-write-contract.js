@@ -1,14 +1,14 @@
 import { types } from "node:util";
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 /** 耐久原子文件写入的公共合同、输入快照和稳定错误。 */
 export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(64 * 1024 * 1024, "$durableAtomicFile.maximumBytes");
 const ERROR_MESSAGES = {
-    "input": "Durable atomic file write input is invalid.",
+    input: "Durable atomic file write input is invalid.",
     "root-scope": "Atomic file target could not establish its rooted scope.",
     "parent-not-found": "Atomic file target parent directory does not exist.",
     "parent-symlink": "Atomic file target parent chain cannot contain a symbolic link.",
@@ -20,7 +20,7 @@ const ERROR_MESSAGES = {
     "expectation-changed": "Atomic file replace expectation no longer matches the target.",
     "expectation-read-failure": "Atomic file replace target could not be re-read safely.",
     "hash-failure": "Atomic file input digest could not be computed safely.",
-    "capacity": "Atomic file input exceeds the recoverable stage capacity.",
+    capacity: "Atomic file input exceeds the recoverable stage capacity.",
     "stage-create-failure": "Private atomic file stage could not be created safely.",
     "stage-write-failure": "Private atomic file stage could not be written exactly.",
     "stage-sync-failure": "Private atomic file stage could not be synchronized safely.",
@@ -30,7 +30,7 @@ const ERROR_MESSAGES = {
     "durability-failure": "Published atomic file directory entry could not be synchronized.",
     "stage-cleanup-failure": "Private atomic file stage could not be retired safely.",
     "stage-recovery-required": "Private atomic file stage recovery requires explicit intervention.",
-    "aborted": "Durable atomic file write was aborted before publication.",
+    aborted: "Durable atomic file write was aborted before publication.",
     "close-failure": "An atomic file write handle could not be closed safely.",
 };
 /** 耐久单文件写入的稳定、脱敏错误。 */
@@ -54,24 +54,21 @@ export function assertDurableAtomicFileNotAborted(signal) {
     }
 }
 export function assertDurableAtomicFileRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         failDurableAtomicFileWrite("input", "$root");
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseMode(value) {
-    if (typeof value !== "number"
-        || !Number.isInteger(value)
-        || value < 0
-        || value > 0o777) {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
         failDurableAtomicFileWrite("input", "$options.mode");
     }
     return value;
@@ -88,8 +85,8 @@ function parseOptionRecord(value, required, optional = []) {
         throw error;
     }
     const allowed = new Set([...required, ...optional, "signal"]);
-    if (required.some((field) => !Object.hasOwn(record, field))
-        || Object.keys(record).some((key) => !allowed.has(key))) {
+    if (required.some((field) => !Object.hasOwn(record, field)) ||
+        Object.keys(record).some((key) => !allowed.has(key))) {
         failDurableAtomicFileWrite("input", "$options");
     }
     return record;
@@ -119,10 +116,10 @@ export function parseDurableAtomicFileCreateOptions(value) {
     });
 }
 function parseExpectedNode(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         failDurableAtomicFileWrite("input", "$options.expected.node");
     }
     try {
@@ -154,11 +151,11 @@ function parseExpectation(value) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if (keys.length !== 4
-        || keys[0] !== "byteCount"
-        || keys[1] !== "digest"
-        || keys[2] !== "node"
-        || keys[3] !== "resourcePath") {
+    if (keys.length !== 4 ||
+        keys[0] !== "byteCount" ||
+        keys[1] !== "digest" ||
+        keys[2] !== "node" ||
+        keys[3] !== "resourcePath") {
         failDurableAtomicFileWrite("input", "$options.expected");
     }
     let resourcePath;
@@ -206,12 +203,12 @@ export function parseDurableAtomicFileReplaceOptions(value) {
     });
 }
 export function snapshotDurableAtomicFileInputBytes(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !ArrayBuffer.isView(value)
-        || !(value instanceof Uint8Array)
-        || value.buffer instanceof SharedArrayBuffer) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !ArrayBuffer.isView(value) ||
+        !(value instanceof Uint8Array) ||
+        value.buffer instanceof SharedArrayBuffer) {
         failDurableAtomicFileWrite("input", "$bytes");
     }
     const byteCount = parseByteCount(value.byteLength, "$bytes");

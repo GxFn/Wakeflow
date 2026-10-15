@@ -1,6 +1,6 @@
 import { hasPassiveJsonSerializationEnvironment, JsonValueError, parseJsonValue, } from "./json-value.js";
 const ERROR_MESSAGES = {
-    "input": "Deterministic JSON document input is invalid.",
+    input: "Deterministic JSON document input is invalid.",
     "json-syntax": "Deterministic JSON document syntax is invalid.",
     "non-deterministic": "JSON text does not use the deterministic pretty representation.",
     "render-failure": "Deterministic JSON document rendering failed after JSON admission.",
@@ -8,10 +8,10 @@ const ERROR_MESSAGES = {
     "non-finite-number": "Deterministic JSON numbers must be finite.",
     "negative-zero": "Deterministic JSON does not accept negative zero.",
     "lone-surrogate": "Deterministic JSON text contains invalid Unicode.",
-    "cycle": "Deterministic JSON values cannot contain cycles.",
+    cycle: "Deterministic JSON values cannot contain cycles.",
     "maximum-depth": "Deterministic JSON exceeds its structural depth limit.",
     "invalid-container": "Deterministic JSON contains an invalid container.",
-    "proxy": "Deterministic JSON does not accept Proxy values.",
+    proxy: "Deterministic JSON does not accept Proxy values.",
     "record-prototype": "Deterministic JSON objects require a plain prototype.",
     "symbol-key": "Deterministic JSON objects cannot contain symbol keys.",
     "non-enumerable-property": "Deterministic JSON cannot contain hidden properties.",

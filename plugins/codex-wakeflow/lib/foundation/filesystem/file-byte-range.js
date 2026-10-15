@@ -30,9 +30,7 @@ function fail(reason, path) {
     throw new FileByteRangeError(reason, path);
 }
 function parseOffset(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value < 0) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
         fail("offset-range", path);
     }
     return value;

@@ -1,10 +1,10 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { mkdir, open as openFileHandle, } from "node:fs/promises";
+import { mkdir, open as openFileHandle } from "node:fs/promises";
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, sameFileNodeIdentity, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, splitPortableResourcePath, } from "./portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
 /**
@@ -25,7 +25,7 @@ import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./
 /** 新目录在设置最终权限位前只允许当前用户进入。 */
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const ERROR_MESSAGES = {
-    "input": "Durable directory materialization input is invalid.",
+    input: "Durable directory materialization input is invalid.",
     "root-scope": "Directory target could not establish its rooted scope.",
     "parent-not-found": "Directory target parent does not exist.",
     "parent-symlink": "Directory target parent chain cannot contain a symbolic link.",
@@ -40,7 +40,7 @@ const ERROR_MESSAGES = {
     "commit-uncertain": "Created directory target could not be proven exact.",
     "durability-failure": "Created directory and parent could not be synchronized.",
     "path-changed": "Materialized directory path changed during final verification.",
-    "aborted": "Directory materialization was aborted before the next mkdir.",
+    aborted: "Directory materialization was aborted before the next mkdir.",
     "close-failure": "A directory materialization handle could not be closed safely.",
 };
 /**
@@ -64,28 +64,25 @@ function fail(reason, path) {
     throw new DurableDirectoryMaterializationError(reason, path);
 }
 function isAbortSignal(value) {
-    return (typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal);
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function parseMode(value) {
-    if (typeof value !== "number"
-        || !Number.isInteger(value)
-        || value < 0
-        || value > 0o777) {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
         fail("input", "$options.mode");
     }
     return value;
@@ -101,8 +98,7 @@ function parseOptions(value) {
         throw error;
     }
     const allowed = new Set(["mode", "signal"]);
-    if (!Object.hasOwn(record, "mode")
-        || Object.keys(record).some((key) => !allowed.has(key))) {
+    if (!Object.hasOwn(record, "mode") || Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
     }
     const signal = record.signal;
@@ -131,8 +127,7 @@ function mapParentHandleError(error, operation, inspectReason) {
     if (operation === "sync" && error.reason === "sync-failure") {
         fail("durability-failure", "$resourcePath");
     }
-    if (operation === "inspect"
-        && error.reason === "target-inspection-failure") {
+    if (operation === "inspect" && error.reason === "target-inspection-failure") {
         fail(inspectReason ?? "target-inspection-failure", "$resourcePath");
     }
     if (operation === "open") {
@@ -221,13 +216,13 @@ async function closeHandle(handle) {
     }
 }
 function sameDirectoryFacts(left, right) {
-    return (left.kind === "directory"
-        && right.kind === "directory"
-        && sameFileNodeIdentity(left, right)
-        && left.rawMode === right.rawMode
-        && left.permissionBits === right.permissionBits
-        && left.userId === right.userId
-        && left.groupId === right.groupId);
+    return (left.kind === "directory" &&
+        right.kind === "directory" &&
+        sameFileNodeIdentity(left, right) &&
+        left.rawMode === right.rawMode &&
+        left.permissionBits === right.permissionBits &&
+        left.userId === right.userId &&
+        left.groupId === right.groupId);
 }
 async function performAtomicCreate(root, resourcePath, options) {
     const parent = await openResourceParent(root, resourcePath);
@@ -237,7 +232,7 @@ async function performAtomicCreate(root, resourcePath, options) {
     try {
         assertNotAborted(options.signal);
         await assertParentCurrent(parent);
-        if (await inspectParentTarget(parent, "target-inspection-failure") !== null) {
+        if ((await inspectParentTarget(parent, "target-inspection-failure")) !== null) {
             fail("target-exists", "$resourcePath");
         }
         assertNotAborted(options.signal);
@@ -264,10 +259,10 @@ async function performAtomicCreate(root, resourcePath, options) {
         }
         const opened = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
         const pathBefore = await inspectParentTarget(parent, "commit-uncertain");
-        if (pathBefore === null
-            || opened.kind !== "directory"
-            || pathBefore.kind !== "directory"
-            || !sameFileNodeIdentity(opened, pathBefore)) {
+        if (pathBefore === null ||
+            opened.kind !== "directory" ||
+            pathBefore.kind !== "directory" ||
+            !sameFileNodeIdentity(opened, pathBefore)) {
             fail("commit-uncertain", "$resourcePath");
         }
         try {
@@ -277,9 +272,9 @@ async function performAtomicCreate(root, resourcePath, options) {
             fail("commit-uncertain", "$resourcePath");
         }
         const hardened = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
-        if (hardened.kind !== "directory"
-            || hardened.permissionBits !== options.mode
-            || !sameFileNodeIdentity(opened, hardened)) {
+        if (hardened.kind !== "directory" ||
+            hardened.permissionBits !== options.mode ||
+            !sameFileNodeIdentity(opened, hardened)) {
             fail("commit-uncertain", "$resourcePath");
         }
         // 新目录 inode 与父目录条目的同步由根的持久化级别决定；`none` 只省掉这两次
@@ -298,11 +293,11 @@ async function performAtomicCreate(root, resourcePath, options) {
         const afterPath = await inspectParentTarget(parent, "commit-uncertain");
         // 目录一旦发布，其他写入者就可以在里面建立事实；这会改变链接数、大小与时间戳，
         // 但不改变目录本身的身份、类型、权限位与属主。终检只比较这些稳定事实。
-        if (afterPath === null
-            || afterPath.kind !== "directory"
-            || afterHandle.permissionBits !== options.mode
-            || !sameDirectoryFacts(hardened, afterHandle)
-            || !sameDirectoryFacts(afterHandle, afterPath)) {
+        if (afterPath === null ||
+            afterPath.kind !== "directory" ||
+            afterHandle.permissionBits !== options.mode ||
+            !sameDirectoryFacts(hardened, afterHandle) ||
+            !sameDirectoryFacts(afterHandle, afterPath)) {
             fail("commit-uncertain", "$resourcePath");
         }
         result = Object.freeze({
@@ -434,8 +429,8 @@ export async function materializeDirectoryPath(root, resourcePath, options) {
             }));
         }
         catch (error) {
-            if (error instanceof DurableDirectoryMaterializationError
-                && error.reason === "target-exists") {
+            if (error instanceof DurableDirectoryMaterializationError &&
+                error.reason === "target-exists") {
                 const concurrent = await inspectExistingDirectoryOrNull(root, prefix);
                 if (concurrent === null)
                     fail("path-changed", "$resourcePath");
@@ -452,8 +447,7 @@ export async function materializeDirectoryPath(root, resourcePath, options) {
     const finalEntries = [];
     for (const observation of observations) {
         const current = await inspectExistingDirectoryOrNull(root, observation.resourcePath);
-        if (current === null
-            || !sameFileNodeIdentity(observation.node, current)) {
+        if (current === null || !sameFileNodeIdentity(observation.node, current)) {
             fail("path-changed", "$resourcePath");
         }
         finalEntries.push(Object.freeze({

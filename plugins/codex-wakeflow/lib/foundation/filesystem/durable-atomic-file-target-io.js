@@ -1,16 +1,14 @@
-import { failDurableAtomicFileWrite as fail, DurableAtomicFileWriteError, } from "./durable-atomic-file-write-contract.js";
 import { snapshotDurableAtomicFileHandle, } from "./durable-atomic-file-stage-io.js";
+import { DurableAtomicFileWriteError, failDurableAtomicFileWrite as fail, } from "./durable-atomic-file-write-contract.js";
 import { sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { RootedDirectory } from "./rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
-import { readStableFileDigest, StableFileReadError, } from "./stable-file-read.js";
+import { readStableFileDigest, StableFileReadError } from "./stable-file-read.js";
 /** 耐久原子写入中，目标及父目录 I/O 与替换预期的精确复验。 */
 function mapParentHandleError(error, operation) {
     if (operation === "sync" && error.reason === "sync-failure") {
         fail("durability-failure", "$resourcePath");
     }
-    if (operation === "inspect"
-        && error.reason === "target-inspection-failure") {
+    if (operation === "inspect" && error.reason === "target-inspection-failure") {
         fail("target-inspection-failure", "$resourcePath");
     }
     if (operation === "open") {
@@ -67,7 +65,7 @@ export async function inspectDurableAtomicFileTarget(parent) {
     }
 }
 export async function assertDurableAtomicFileTargetAbsent(parent) {
-    if (await inspectDurableAtomicFileTarget(parent) !== null) {
+    if ((await inspectDurableAtomicFileTarget(parent)) !== null) {
         fail("target-exists", "$resourcePath");
     }
 }
@@ -117,25 +115,24 @@ export async function assertExpectedDurableAtomicFileTarget(root, resourcePath, 
                 fail("aborted", "$signal");
             if (error.reason === "input")
                 fail("input", "$resourcePath");
-            if (error.reason === "root-scope"
-                || error.reason === "unsupported-platform") {
+            if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
                 fail("root-scope", "$resourcePath");
             }
-            if (error.reason === "not-found"
-                || error.reason === "symlink"
-                || error.reason === "not-file"
-                || error.reason === "expectation-changed"
-                || error.reason === "source-changed") {
+            if (error.reason === "not-found" ||
+                error.reason === "symlink" ||
+                error.reason === "not-file" ||
+                error.reason === "expectation-changed" ||
+                error.reason === "source-changed") {
                 fail("expectation-changed", "$resourcePath");
             }
             fail("expectation-read-failure", "$resourcePath");
         }
         throw error;
     }
-    if (current.resourcePath !== expected.resourcePath
-        || current.byteCount !== expected.byteCount
-        || current.digest !== expected.digest
-        || !sameFileNodeSnapshot(current.node, expected.node)) {
+    if (current.resourcePath !== expected.resourcePath ||
+        current.byteCount !== expected.byteCount ||
+        current.digest !== expected.digest ||
+        !sameFileNodeSnapshot(current.node, expected.node)) {
         fail("expectation-changed", "$resourcePath");
     }
 }
@@ -144,15 +141,15 @@ export async function inspectCommittedDurableAtomicFileTarget(parent, stage, inp
     if (target === null)
         fail("commit-uncertain", "$resourcePath");
     const opened = await snapshotDurableAtomicFileHandle(stage.handle, "commit-uncertain", "$resourcePath");
-    if (target.kind !== "file"
-        || opened.kind !== "file"
-        || target.byteCount !== input.byteCount
-        || target.permissionBits !== mode
-        || target.linkCount !== expectedLinkCount
-        || opened.linkCount !== expectedLinkCount
-        || !sameFileNodeIdentity(stage.node, opened)
-        || !sameFileNodeIdentity(opened, target)
-        || !sameFileNodeSnapshot(opened, target)) {
+    if (target.kind !== "file" ||
+        opened.kind !== "file" ||
+        target.byteCount !== input.byteCount ||
+        target.permissionBits !== mode ||
+        target.linkCount !== expectedLinkCount ||
+        opened.linkCount !== expectedLinkCount ||
+        !sameFileNodeIdentity(stage.node, opened) ||
+        !sameFileNodeIdentity(opened, target) ||
+        !sameFileNodeSnapshot(opened, target)) {
         fail("commit-uncertain", "$resourcePath");
     }
     return target;

@@ -1,10 +1,10 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { lstat, open as openFileHandle, unlink, } from "node:fs/promises";
+import { lstat, open as openFileHandle, unlink } from "node:fs/promises";
 import nodePath from "node:path";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import { issueDurableAtomicFileStageAddress, releaseDurableAtomicFileStageAddress, DurableAtomicFileStageAddressError, } from "./durable-atomic-file-stage-address.js";
-import { recoverDurableAtomicFileStagesMatchingTargets, DurableAtomicFileStageRecoveryError, } from "./durable-atomic-file-stage-recovery.js";
-import { assertDurableAtomicFileNotAborted, failDurableAtomicFileWrite as fail, DurableAtomicFileWriteError, } from "./durable-atomic-file-write-contract.js";
+import { DurableAtomicFileStageAddressError, issueDurableAtomicFileStageAddress, releaseDurableAtomicFileStageAddress, } from "./durable-atomic-file-stage-address.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesMatchingTargets, } from "./durable-atomic-file-stage-recovery.js";
+import { assertDurableAtomicFileNotAborted, DurableAtomicFileWriteError, failDurableAtomicFileWrite as fail, } from "./durable-atomic-file-write-contract.js";
 import { createFileNodeSnapshot, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 /** 耐久原子写入中，自描述暂存文件的 I/O 生命周期。 */
 const PRIVATE_STAGE_MODE = 0o600;
@@ -14,10 +14,7 @@ function requiredStageOpenFlags() {
     const noFollow = fileSystemConstants.O_NOFOLLOW;
     if (typeof noFollow !== "number")
         fail("root-scope", "$root");
-    return fileSystemConstants.O_RDWR
-        | fileSystemConstants.O_CREAT
-        | fileSystemConstants.O_EXCL
-        | noFollow;
+    return (fileSystemConstants.O_RDWR | fileSystemConstants.O_CREAT | fileSystemConstants.O_EXCL | noFollow);
 }
 export async function snapshotDurableAtomicFileHandle(handle, reason, path) {
     try {
@@ -161,10 +158,10 @@ export async function prepareDurableAtomicFileStage(exclusive, input, mode, sign
         fail("stage-write-failure", "$stage");
     }
     const beforeSync = await snapshotDurableAtomicFileHandle(exclusive.handle, "stage-write-failure", "$stage");
-    if (beforeSync.kind !== "file"
-        || beforeSync.linkCount !== 1n
-        || beforeSync.byteCount !== input.byteCount
-        || beforeSync.permissionBits !== mode) {
+    if (beforeSync.kind !== "file" ||
+        beforeSync.linkCount !== 1n ||
+        beforeSync.byteCount !== input.byteCount ||
+        beforeSync.permissionBits !== mode) {
         fail("stage-write-failure", "$stage");
     }
     if (durability === "fsync") {
@@ -190,12 +187,12 @@ export async function assertDurableAtomicFileStageCurrent(stage) {
     catch {
         fail("stage-changed", "$stage");
     }
-    if (handleNode.kind !== "file"
-        || pathNode.kind !== "file"
-        || handleNode.linkCount !== 1n
-        || pathNode.linkCount !== 1n
-        || !sameFileNodeSnapshot(stage.node, handleNode)
-        || !sameFileNodeSnapshot(handleNode, pathNode)) {
+    if (handleNode.kind !== "file" ||
+        pathNode.kind !== "file" ||
+        handleNode.linkCount !== 1n ||
+        pathNode.linkCount !== 1n ||
+        !sameFileNodeSnapshot(stage.node, handleNode) ||
+        !sameFileNodeSnapshot(handleNode, pathNode)) {
         fail("stage-changed", "$stage");
     }
 }
@@ -210,10 +207,10 @@ export async function unlinkOwnedDurableAtomicFileStage(stage) {
         fail("stage-cleanup-failure", "$stage");
     }
     const opened = await snapshotDurableAtomicFileHandle(stage.handle, "stage-cleanup-failure", "$stage");
-    if (pathNode.kind !== "file"
-        || opened.kind !== "file"
-        || (opened.linkCount !== 1n && opened.linkCount !== 2n)
-        || !sameFileNodeIdentity(pathNode, opened)) {
+    if (pathNode.kind !== "file" ||
+        opened.kind !== "file" ||
+        (opened.linkCount !== 1n && opened.linkCount !== 2n) ||
+        !sameFileNodeIdentity(pathNode, opened)) {
         fail("stage-cleanup-failure", "$stage");
     }
     try {
@@ -225,8 +222,8 @@ export async function unlinkOwnedDurableAtomicFileStage(stage) {
         fail("stage-cleanup-failure", "$stage");
     }
     const afterUnlink = await snapshotDurableAtomicFileHandle(stage.handle, "stage-cleanup-failure", "$stage");
-    if (!sameFileNodeIdentity(opened, afterUnlink)
-        || afterUnlink.linkCount !== opened.linkCount - 1n) {
+    if (!sameFileNodeIdentity(opened, afterUnlink) ||
+        afterUnlink.linkCount !== opened.linkCount - 1n) {
         fail("stage-cleanup-failure", "$stage");
     }
 }

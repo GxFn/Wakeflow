@@ -2,10 +2,10 @@ import { lstat } from "node:fs/promises";
 import nodePath from "node:path";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, } from "./file-node-snapshot.js";
-import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
+import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 const ERROR_MESSAGES = {
-    "input": "Absolute directory placement input is invalid.",
-    "symlink": "Absolute directory placement contains a symbolic link.",
+    input: "Absolute directory placement input is invalid.",
+    symlink: "Absolute directory placement contains a symbolic link.",
     "not-directory": "Absolute directory placement contains a non-directory node.",
     "inspection-failure": "Absolute directory placement could not be inspected safely.",
 };
@@ -21,6 +21,7 @@ export class AbsoluteDirectoryPlacementError extends Error {
         this.path = path;
     }
 }
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 function fail(reason, path) {
     throw new AbsoluteDirectoryPlacementError(reason, path);
@@ -29,14 +30,14 @@ function normalizeErrorPath(value) {
     return typeof value === "string" && value.length > 0 ? value : "$directory";
 }
 function parseAbsolutePath(value, path) {
-    if (typeof value !== "string"
-        || value.length === 0
-        || value !== value.trim()
-        || !value.isWellFormed()
-        || CONTROL_PATTERN.test(value)
-        || !nodePath.isAbsolute(value)
-        || nodePath.resolve(value) !== value
-        || nodePath.parse(value).root === value) {
+    if (typeof value !== "string" ||
+        value.length === 0 ||
+        value !== value.trim() ||
+        !value.isWellFormed() ||
+        CONTROL_PATTERN.test(value) ||
+        !nodePath.isAbsolute(value) ||
+        nodePath.resolve(value) !== value ||
+        nodePath.parse(value).root === value) {
         fail("input", path);
     }
     return value;

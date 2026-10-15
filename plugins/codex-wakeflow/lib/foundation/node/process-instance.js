@@ -9,7 +9,9 @@ let boot;
 let ownBirth;
 async function command(file, args) {
     const result = await execute(file, [...args], {
-        encoding: "utf8", timeout: 2_000, maxBuffer: 4096,
+        encoding: "utf8",
+        timeout: 2_000,
+        maxBuffer: 4096,
         env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LC_ALL: "C", TZ: "UTC" },
     });
     return result.stdout.trim();
@@ -41,7 +43,11 @@ async function readBirth(pid) {
             const stat = await readFile(`/proc/${pid}/stat`, "utf8");
             if (stat.length > 8192 || !stat.startsWith(`${pid} (`))
                 return null;
-            started = stat.slice(stat.lastIndexOf(")") + 2).trim().split(/\s+/u)[19] ?? "";
+            started =
+                stat
+                    .slice(stat.lastIndexOf(")") + 2)
+                    .trim()
+                    .split(/\s+/u)[19] ?? "";
             if (!/^[0-9]+$/u.test(started))
                 return null;
         }
@@ -93,6 +99,8 @@ export async function observeProcessInstance(pid) {
 }
 /** A different positively observed birth proves the recorded process no longer exists. */
 export function recordedProcessIsInactive(recordedBirth, current) {
-    return current.state === "inactive" ||
-        (recordedBirth !== null && current.birthDigest !== null && recordedBirth !== current.birthDigest);
+    return (current.state === "inactive" ||
+        (recordedBirth !== null &&
+            current.birthDigest !== null &&
+            recordedBirth !== current.birthDigest));
 }

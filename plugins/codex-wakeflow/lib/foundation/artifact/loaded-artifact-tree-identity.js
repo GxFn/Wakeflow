@@ -1,13 +1,13 @@
 import { Buffer } from "node:buffer";
 import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../crypto/canonical-json-sha256.js";
-import { parseSha256Digest, Sha256Error, } from "../crypto/sha256.js";
-import { JsonValueError, parseJsonValue, } from "../data/json-value.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { addByteCounts, ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../filesystem/portable-resource-path.js";
+import { parseSha256Digest, Sha256Error } from "../crypto/sha256.js";
+import { JsonValueError, parseJsonValue } from "../data/json-value.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../filesystem/rooted-directory.js";
 import { readStableRootResourceTree, StableResourceTreeReadError, } from "../filesystem/stable-resource-tree-read.js";
+import { addByteCounts, ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
 /**
  * Wakeflow Foundation / Artifact：已加载制品目录树的位置无关内容身份。
  *
@@ -33,7 +33,7 @@ export const LOADED_ARTIFACT_TREE_IDENTITY_LIMITS = Object.freeze({
     maxTotalBytes: 256 * 1024 * 1024,
 });
 const ERROR_MESSAGES = {
-    "input": "Loaded artifact tree identity input is invalid.",
+    input: "Loaded artifact tree identity input is invalid.",
     "root-scope": "Loaded artifact tree could not establish its root scope.",
     "entry-limit": "Loaded artifact tree exceeds its physical entry budget.",
     "depth-limit": "Loaded artifact tree exceeds its relative depth budget.",
@@ -42,7 +42,7 @@ const ERROR_MESSAGES = {
     "total-bytes": "Loaded artifact tree exceeds its total byte budget.",
     "ref-bytes": "A loaded artifact ref exceeds its UTF-8 byte budget.",
     "ref-collision": "Loaded artifact refs collide under portable comparison.",
-    "symlink": "Loaded artifact tree cannot contain symbolic links.",
+    symlink: "Loaded artifact tree cannot contain symbolic links.",
     "special-node": "Loaded artifact tree can contain only directories and regular files.",
     "empty-tree": "Loaded artifact tree must contain at least one regular file.",
     "source-changed": "Loaded artifact tree changed while it was inspected.",
@@ -50,7 +50,7 @@ const ERROR_MESSAGES = {
     "manifest-shape": "Loaded artifact tree manifest shape is invalid.",
     "manifest-order": "Loaded artifact tree manifest refs are not canonical.",
     "manifest-totals": "Loaded artifact tree manifest totals are inconsistent.",
-    "aborted": "Loaded artifact tree inspection was aborted.",
+    aborted: "Loaded artifact tree inspection was aborted.",
 };
 export class LoadedArtifactTreeIdentityError extends Error {
     name = "LoadedArtifactTreeIdentityError";
@@ -78,12 +78,7 @@ const MANIFEST_FIELDS = Object.freeze([
     "schemaVersion",
     "totalBytes",
 ]);
-const FILE_FIELDS = Object.freeze([
-    "bytes",
-    "digest",
-    "executable",
-    "ref",
-]);
+const FILE_FIELDS = Object.freeze(["bytes", "digest", "executable", "ref"]);
 function fail(reason, path) {
     throw new LoadedArtifactTreeIdentityError(reason, path);
 }
@@ -92,8 +87,7 @@ function compareText(left, right) {
 }
 function assertExactFields(record, fields, path, reason) {
     const keys = Object.keys(record).sort(compareText);
-    if (keys.length !== fields.length
-        || keys.some((key, index) => key !== fields[index])) {
+    if (keys.length !== fields.length || keys.some((key, index) => key !== fields[index])) {
         fail(reason, path);
     }
 }
@@ -104,9 +98,7 @@ function parsePositiveInteger(value, path) {
     return value;
 }
 function parseNonNegativeInteger(value, path, reason) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value < 0) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
         fail(reason, path);
     }
     return value;
@@ -136,10 +128,10 @@ function parseLimits(value) {
     return Object.freeze(parsed);
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseIdentityOptions(value) {
     let record;
@@ -254,8 +246,7 @@ function assertManifestTopology(files, limits) {
     const admit = (ref, kind, path) => {
         const key = ref.toLowerCase();
         const existing = resources.get(key);
-        if (existing !== undefined
-            && (existing.ref !== ref || existing.kind !== kind)) {
+        if (existing !== undefined && (existing.ref !== ref || existing.kind !== kind)) {
             fail("ref-collision", path);
         }
         if (existing === undefined) {
@@ -292,8 +283,8 @@ function parseManifest(value, limits) {
         throw error;
     }
     assertExactFields(record, MANIFEST_FIELDS, "$manifest", "manifest-shape");
-    if (record.artifactKind !== LOADED_ARTIFACT_TREE_MANIFEST_KIND
-        || record.schemaVersion !== LOADED_ARTIFACT_TREE_MANIFEST_VERSION) {
+    if (record.artifactKind !== LOADED_ARTIFACT_TREE_MANIFEST_KIND ||
+        record.schemaVersion !== LOADED_ARTIFACT_TREE_MANIFEST_VERSION) {
         fail("manifest-shape", "$manifest");
     }
     let values;
@@ -316,8 +307,7 @@ function parseManifest(value, limits) {
     let totalBytes = parseByteCount(0, "$manifest.totalBytes");
     for (const [index, value] of values.entries()) {
         const file = parseManifestFile(value, index, limits);
-        if (previousRef !== undefined
-            && compareText(previousRef, file.ref) >= 0) {
+        if (previousRef !== undefined && compareText(previousRef, file.ref) >= 0) {
             fail("manifest-order", `$manifest.files.${index}.ref`);
         }
         previousRef = file.ref;
@@ -356,10 +346,10 @@ function assertNotAborted(signal) {
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }

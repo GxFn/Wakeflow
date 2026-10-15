@@ -1,10 +1,9 @@
-import { link, rename, } from "node:fs/promises";
+import { link, rename } from "node:fs/promises";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import { assertDurableAtomicFileNotAborted, assertDurableAtomicFileRoot, failDurableAtomicFileWrite as fail, parseDurableAtomicFileCreateOptions, parseDurableAtomicFileReplaceOptions, snapshotDurableAtomicFileInputBytes, } from "./durable-atomic-file-write-contract.js";
 import { assertDurableAtomicFileStageCurrent, closeDurableAtomicFileStageHandle, createExclusiveDurableAtomicFileStage, prepareDurableAtomicFileStage, recoverDurableAtomicFileStagesBeforeWrite, releaseDurableAtomicFileStage, unlinkOwnedDurableAtomicFileStage, verifyDurableAtomicFileHandleBytes, } from "./durable-atomic-file-stage-io.js";
 import { assertDurableAtomicFileTargetAbsent, assertDurableAtomicFileTargetParentCurrent, assertExpectedDurableAtomicFileTarget, closeDurableAtomicFileTargetParent, inspectCommittedDurableAtomicFileTarget, openDurableAtomicFileTargetParent, syncDurableAtomicFileTargetParent, } from "./durable-atomic-file-target-io.js";
-import { sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { assertDurableAtomicFileNotAborted, assertDurableAtomicFileRoot, failDurableAtomicFileWrite as fail, parseDurableAtomicFileCreateOptions, parseDurableAtomicFileReplaceOptions, snapshotDurableAtomicFileInputBytes, } from "./durable-atomic-file-write-contract.js";
+import { sameFileNodeSnapshot } from "./file-node-snapshot.js";
 /**
  * Wakeflow Foundation / Filesystem：单个完整字节文件的耐久原子发布门面。
  *

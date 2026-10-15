@@ -1,9 +1,9 @@
-import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import nodePath from "node:path";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import { createFileNodeSnapshot, FileNodeSnapshotError } from "./file-node-snapshot.js";
+import { createFileNodeSnapshot, FileNodeSnapshotError, } from "./file-node-snapshot.js";
 const ERROR_MESSAGES = {
-    "input": "Absolute node observation input is invalid.",
+    input: "Absolute node observation input is invalid.",
     "inspection-failure": "Absolute node could not be inspected safely.",
     "read-failure": "Absolute regular file could not be read safely.",
 };
@@ -19,6 +19,7 @@ export class AbsoluteNodeObservationError extends Error {
         this.path = path;
     }
 }
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 function fail(reason, path, cause) {
     throw new AbsoluteNodeObservationError(reason, path, cause);
@@ -27,13 +28,13 @@ function normalizeErrorPath(value, fallback) {
     return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 function parseAbsolutePath(value, path) {
-    if (typeof value !== "string"
-        || value.length === 0
-        || value !== value.trim()
-        || !value.isWellFormed()
-        || CONTROL_PATTERN.test(value)
-        || !nodePath.isAbsolute(value)
-        || nodePath.resolve(value) !== value) {
+    if (typeof value !== "string" ||
+        value.length === 0 ||
+        value !== value.trim() ||
+        !value.isWellFormed() ||
+        CONTROL_PATTERN.test(value) ||
+        !nodePath.isAbsolute(value) ||
+        nodePath.resolve(value) !== value) {
         fail("input", path);
     }
     return value;

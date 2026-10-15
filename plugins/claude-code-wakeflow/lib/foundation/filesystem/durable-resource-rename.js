@@ -1,14 +1,14 @@
 import { rename } from "node:fs/promises";
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
 const ERROR_MESSAGES = {
-    "input": "Durable resource rename input is invalid.",
+    input: "Durable resource rename input is invalid.",
     "root-scope": "Resource rename could not establish its rooted scope.",
     "parent-not-found": "Resource rename parent directory does not exist.",
     "parent-symlink": "Resource rename parent chain cannot contain a symbolic link.",
@@ -26,7 +26,7 @@ const ERROR_MESSAGES = {
     "rename-failure": "Resource rename commit could not be executed safely.",
     "commit-uncertain": "Resource rename commit result could not be proven exact.",
     "durability-failure": "Resource rename parent entries could not be synchronized.",
-    "aborted": "Resource rename was aborted before commit.",
+    aborted: "Resource rename was aborted before commit.",
     "close-failure": "A resource rename handle could not be closed safely.",
 };
 /**
@@ -60,28 +60,28 @@ function parseResourcePath(value, path) {
     }
 }
 function isAbortSignal(value) {
-    return (typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal);
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function parseExpectedNode(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         fail("input", "$options.expectedSourceNode");
     }
     try {
@@ -108,8 +108,8 @@ function parseOptions(value) {
         throw error;
     }
     const allowed = new Set(["expectedSourceNode", "signal"]);
-    if (!Object.hasOwn(record, "expectedSourceNode")
-        || Object.keys(record).some((key) => !allowed.has(key))) {
+    if (!Object.hasOwn(record, "expectedSourceNode") ||
+        Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
     }
     const signal = record.signal;
@@ -125,8 +125,7 @@ function mapParentHandleError(error, operation, errorPath, inspectionReason) {
     if (operation === "sync" && error.reason === "sync-failure") {
         fail("durability-failure", errorPath);
     }
-    if (operation === "inspect"
-        && error.reason === "target-inspection-failure") {
+    if (operation === "inspect" && error.reason === "target-inspection-failure") {
         fail(inspectionReason ?? "destination-inspection-failure", errorPath);
     }
     if (operation === "open") {
@@ -148,8 +147,8 @@ function mapParentHandleError(error, operation, errorPath, inspectionReason) {
         }
     }
     // 提交后的 inspect 与 sync 遇到父目录漂移时，不能读作干净的提交前拒绝。
-    if ((operation === "inspect" && inspectionReason === "commit-uncertain")
-        || operation === "sync") {
+    if ((operation === "inspect" && inspectionReason === "commit-uncertain") ||
+        operation === "sync") {
         fail("commit-uncertain", errorPath);
     }
     fail("parent-changed", errorPath);
@@ -282,19 +281,19 @@ async function closeSource(source) {
     }
 }
 function sameMovedNode(before, after) {
-    return (sameFileNodeIdentity(before, after)
-        && before.kind === after.kind
-        && before.rawMode === after.rawMode
-        && before.permissionBits === after.permissionBits
-        && before.linkCount === after.linkCount
-        && before.userId === after.userId
-        && before.groupId === after.groupId
-        && before.specialDeviceId === after.specialDeviceId
-        && before.byteCount === after.byteCount
-        && before.modifiedAtNanoseconds === after.modifiedAtNanoseconds);
+    return (sameFileNodeIdentity(before, after) &&
+        before.kind === after.kind &&
+        before.rawMode === after.rawMode &&
+        before.permissionBits === after.permissionBits &&
+        before.linkCount === after.linkCount &&
+        before.userId === after.userId &&
+        before.groupId === after.groupId &&
+        before.specialDeviceId === after.specialDeviceId &&
+        before.byteCount === after.byteCount &&
+        before.modifiedAtNanoseconds === after.modifiedAtNanoseconds);
 }
 async function assertSourceAbsent(sourceParent) {
-    if (await inspectParentTarget(sourceParent, "$sourceResourcePath", "commit-uncertain") !== null) {
+    if ((await inspectParentTarget(sourceParent, "$sourceResourcePath", "commit-uncertain")) !== null) {
         fail("commit-uncertain", "$sourceResourcePath");
     }
 }
@@ -304,16 +303,15 @@ async function inspectMovedDestination(destination, source) {
         fail("commit-uncertain", "$destinationResourcePath");
     }
     const opened = await inspectCommittedSource(source);
-    if (!sameMovedNode(source.initialNodeSnapshot, opened)
-        || !sameFileNodeSnapshot(opened, destinationNode)) {
+    if (!sameMovedNode(source.initialNodeSnapshot, opened) ||
+        !sameFileNodeSnapshot(opened, destinationNode)) {
         fail("commit-uncertain", "$destinationResourcePath");
     }
     return destinationNode;
 }
 async function syncParents(sourceParent, destinationParent) {
     await syncParent(sourceParent, "$sourceResourcePath");
-    if (destinationParent.parentResourcePath
-        !== sourceParent.parentResourcePath) {
+    if (destinationParent.parentResourcePath !== sourceParent.parentResourcePath) {
         await syncParent(destinationParent, "$destinationResourcePath");
     }
 }
@@ -331,9 +329,9 @@ export async function renameResourceDurably(root, sourceResourcePath, destinatio
     const parsed = parseOptions(options);
     const sourcePath = parseResourcePath(sourceResourcePath, "$sourceResourcePath");
     const destinationPath = parseResourcePath(destinationResourcePath, "$destinationResourcePath");
-    if (sourcePath === destinationPath
-        || (parsed.expectedSourceNode.kind === "directory"
-            && destinationInsideSource(sourcePath, destinationPath))) {
+    if (sourcePath === destinationPath ||
+        (parsed.expectedSourceNode.kind === "directory" &&
+            destinationInsideSource(sourcePath, destinationPath))) {
         fail("input", "$destinationResourcePath");
     }
     assertNotAborted(parsed.signal);
@@ -348,17 +346,16 @@ export async function renameResourceDurably(root, sourceResourcePath, destinatio
         if (source.resourceAbsolutePath !== sourceParent.resourceAbsolutePath) {
             fail("root-scope", "$sourceResourcePath");
         }
-        if (source.initialNodeSnapshot.deviceId
-            !== destinationParent.parentDeviceId) {
+        if (source.initialNodeSnapshot.deviceId !== destinationParent.parentDeviceId) {
             fail("cross-device", "$destinationResourcePath");
         }
-        if (await inspectParentTarget(destinationParent, "$destinationResourcePath", "destination-inspection-failure") !== null) {
+        if ((await inspectParentTarget(destinationParent, "$destinationResourcePath", "destination-inspection-failure")) !== null) {
             fail("destination-exists", "$destinationResourcePath");
         }
         await assertParentCurrent(sourceParent, "$sourceResourcePath");
         await assertParentCurrent(destinationParent, "$destinationResourcePath");
         await assertSourceCurrent(source);
-        if (await inspectParentTarget(destinationParent, "$destinationResourcePath", "destination-inspection-failure") !== null) {
+        if ((await inspectParentTarget(destinationParent, "$destinationResourcePath", "destination-inspection-failure")) !== null) {
             fail("destination-exists", "$destinationResourcePath");
         }
         assertNotAborted(parsed.signal);

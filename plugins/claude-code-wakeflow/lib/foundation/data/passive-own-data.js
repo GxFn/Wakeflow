@@ -1,6 +1,6 @@
 import { types } from "node:util";
 const ERROR_MESSAGES = {
-    "proxy": "Proxy values are not accepted by passive data readers.",
+    proxy: "Proxy values are not accepted by passive data readers.",
     "value-type": "The value is not an accepted data container.",
     "record-prototype": "The record does not have an accepted prototype.",
     "symbol-key": "Symbol-keyed properties are not accepted.",
@@ -40,8 +40,7 @@ function appendPropertyPath(basePath, key) {
     return `${basePath}/${escaped}`;
 }
 function isObjectOrFunction(value) {
-    return ((typeof value === "object" && value !== null)
-        || typeof value === "function");
+    return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 /**
  * 必须在任何反射操作之前拒绝 Proxy；Node.js 的原生检测不会触发代理陷阱。
@@ -121,9 +120,9 @@ function parsePropertySelection(value, basePath) {
     for (let index = 0; index < length; index += 1) {
         const indexPath = appendPropertyPath(selectionPath, String(index));
         const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-        if (descriptor === undefined
-            || !Object.hasOwn(descriptor, "value")
-            || descriptor.enumerable !== true) {
+        if (descriptor === undefined ||
+            !Object.hasOwn(descriptor, "value") ||
+            descriptor.enumerable !== true) {
             fail("property-selection", indexPath);
         }
         const key = descriptor.value;

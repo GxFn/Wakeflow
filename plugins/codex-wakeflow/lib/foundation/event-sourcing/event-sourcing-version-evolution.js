@@ -1,13 +1,13 @@
 import { types } from "node:util";
-import { JsonValueError, parseJsonValue, } from "../data/json-value.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { JsonValueError, parseJsonValue } from "../data/json-value.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
 const ERROR_MESSAGES = {
-    "input": "Event Sourcing version evolution input is invalid.",
-    "definition": "Event Sourcing version evolution definition is invalid.",
+    input: "Event Sourcing version evolution input is invalid.",
+    definition: "Event Sourcing version evolution definition is invalid.",
     "unsupported-version": "Persisted Event Sourcing version is unsupported.",
-    "codec": "Persisted Event Sourcing version data is invalid.",
+    codec: "Persisted Event Sourcing version data is invalid.",
     "missing-step": "Event Sourcing version evolution chain is incomplete.",
-    "upcast": "Event Sourcing version upcast failed.",
+    upcast: "Event Sourcing version upcast failed.",
 };
 export class EventSourcingVersionEvolutionError extends Error {
     name = "EventSourcingVersionEvolutionError";
@@ -47,8 +47,7 @@ function exactRecord(value, fields, path) {
     }
     const keys = Object.keys(record).sort();
     const expected = [...fields].sort();
-    if (keys.length !== expected.length
-        || keys.some((key, index) => key !== expected[index])) {
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
         fail("definition", path);
     }
     return record;
@@ -124,10 +123,10 @@ export class EventSourcingVersionEvolutionRegistry {
         }
         const steps = new Map();
         for (const [index, step] of definition.steps.entries()) {
-            if (step.toVersion > definition.currentVersion
-                || steps.has(step.fromVersion)
-                || !codecs.has(step.fromVersion)
-                || !codecs.has(step.toVersion)) {
+            if (step.toVersion > definition.currentVersion ||
+                steps.has(step.fromVersion) ||
+                !codecs.has(step.fromVersion) ||
+                !codecs.has(step.toVersion)) {
                 fail("definition", `$/steps/${index}`);
             }
             steps.set(step.fromVersion, step);
@@ -151,8 +150,7 @@ export class EventSourcingVersionEvolutionRegistry {
     }
     /** 从任一受支持的持久化版本确定性演进到当前版本。 */
     evolve(sourceVersionValue, sourceDataValue) {
-        if (!Number.isSafeInteger(sourceVersionValue)
-            || sourceVersionValue < 1) {
+        if (!Number.isSafeInteger(sourceVersionValue) || sourceVersionValue < 1) {
             fail("input", "$sourceVersion");
         }
         const sourceVersion = sourceVersionValue;

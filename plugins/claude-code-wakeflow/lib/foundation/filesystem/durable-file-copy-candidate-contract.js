@@ -1,9 +1,9 @@
 import { types } from "node:util";
-import { parseSha256Digest, Sha256Error, } from "../crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
+import { parseSha256Digest, Sha256Error } from "../crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 const ERROR_MESSAGES = {
     input: "Durable file copy candidate input is invalid.",
@@ -43,10 +43,10 @@ export function failDurableFileCopyCandidate(reason, path) {
     throw new DurableFileCopyCandidateError(reason, path);
 }
 export function assertDurableFileCopyRoot(value, path) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         failDurableFileCopyCandidate("input", path);
     }
 }
@@ -75,10 +75,10 @@ function plainRecord(value, path) {
 function parseExpectedNode(value) {
     if (value === undefined)
         return undefined;
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         failDurableFileCopyCandidate("input", "$expectation.expectedNode");
     }
     try {
@@ -101,10 +101,10 @@ function parseExpectedNode(value) {
 export function parseDurableFileCopyExpectation(value) {
     const record = plainRecord(value, "$expectation");
     const keys = Object.keys(record).sort();
-    if ((keys.length !== 2 && keys.length !== 3)
-        || keys[0] !== "byteCount"
-        || keys[1] !== "digest"
-        || (keys.length === 3 && keys[2] !== "expectedNode")) {
+    if ((keys.length !== 2 && keys.length !== 3) ||
+        keys[0] !== "byteCount" ||
+        keys[1] !== "digest" ||
+        (keys.length === 3 && keys[2] !== "expectedNode")) {
         failDurableFileCopyCandidate("input", "$expectation");
     }
     let byteCount;
@@ -134,16 +134,13 @@ export function parseDurableFileCopyExpectation(value) {
     return Object.freeze({ byteCount, digest, expectedNode });
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseMode(value) {
-    if (typeof value !== "number"
-        || !Number.isInteger(value)
-        || value < 0
-        || value > 0o777) {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
         failDurableFileCopyCandidate("input", "$options.mode");
     }
     return value;
@@ -151,10 +148,10 @@ function parseMode(value) {
 export function parseDurableFileCopyOptions(value) {
     const record = plainRecord(value, "$options");
     const keys = Object.keys(record).sort();
-    if ((keys.length !== 2 && keys.length !== 3)
-        || keys[0] !== "maximumBytes"
-        || keys[1] !== "mode"
-        || (keys.length === 3 && keys[2] !== "signal")) {
+    if ((keys.length !== 2 && keys.length !== 3) ||
+        keys[0] !== "maximumBytes" ||
+        keys[1] !== "mode" ||
+        (keys.length === 3 && keys[2] !== "signal")) {
         failDurableFileCopyCandidate("input", "$options");
     }
     let maximumBytes;

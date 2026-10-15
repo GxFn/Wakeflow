@@ -1,12 +1,12 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { copyFileToCandidateDurably, DurableFileCopyCandidateError, } from "../filesystem/durable-file-copy-candidate.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { joinDirectoryTreeCandidatePath } from "../filesystem/directory-tree-candidate-plan.js";
 import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from "../filesystem/durable-directory-materialization.js";
-import { inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, DurableDirectoryTreeCandidateError, } from "../filesystem/durable-directory-tree-candidate.js";
-import { joinDirectoryTreeCandidatePath, } from "../filesystem/directory-tree-candidate-plan.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, } from "../filesystem/durable-directory-tree-candidate.js";
+import { copyFileToCandidateDurably, DurableFileCopyCandidateError, } from "../filesystem/durable-file-copy-candidate.js";
 import { RootedDirectory } from "../filesystem/rooted-directory.js";
 import { inspectLoadedArtifactTree, LoadedArtifactTreeIdentityError, } from "./loaded-artifact-tree-identity.js";
-import { parseLoadedArtifactTreeTransferPlan, LoadedArtifactTreeTransferPlanError, } from "./loaded-artifact-tree-transfer-plan.js";
+import { LoadedArtifactTreeTransferPlanError, parseLoadedArtifactTreeTransferPlan, } from "./loaded-artifact-tree-transfer-plan.js";
 const ERROR_MESSAGES = {
     input: "Loaded artifact tree transfer candidate input is invalid.",
     capacity: "Loaded artifact tree transfer exceeds its admitted capacity.",
@@ -34,18 +34,18 @@ function fail(reason, path) {
     throw new LoadedArtifactTreeTransferCandidateError(reason, path);
 }
 function assertRoot(value, path) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", path);
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;
@@ -57,8 +57,8 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$options");
     }
     return Object.freeze({ signal: record.signal });
@@ -85,12 +85,12 @@ function mapSourceError(error) {
         fail("aborted", "$signal");
     if (error.reason === "root-scope")
         fail("source-root-scope", "$sourceRoot");
-    if (error.reason === "entry-limit"
-        || error.reason === "depth-limit"
-        || error.reason === "file-count"
-        || error.reason === "file-bytes"
-        || error.reason === "total-bytes"
-        || error.reason === "ref-bytes") {
+    if (error.reason === "entry-limit" ||
+        error.reason === "depth-limit" ||
+        error.reason === "file-count" ||
+        error.reason === "file-bytes" ||
+        error.reason === "total-bytes" ||
+        error.reason === "ref-bytes") {
         fail("capacity", "$source");
     }
     if (error.reason === "input")
@@ -120,11 +120,11 @@ function mapDirectoryError(error, allowExistingRoot) {
     if (error.reason === "root-scope" || error.reason === "parent-changed") {
         fail("destination-root-scope", "$destinationRoot");
     }
-    if (error.reason === "target-symlink"
-        || error.reason === "target-not-directory"
-        || error.reason === "parent-symlink"
-        || error.reason === "parent-not-directory"
-        || error.reason === "target-exists") {
+    if (error.reason === "target-symlink" ||
+        error.reason === "target-not-directory" ||
+        error.reason === "parent-symlink" ||
+        error.reason === "parent-not-directory" ||
+        error.reason === "target-exists") {
         fail("candidate-conflict", "$candidate");
     }
     fail("operation-failure", "$candidate");
@@ -151,8 +151,7 @@ function mapCandidateInspectionError(error) {
         fail("input", error.path);
     if (error.reason === "capacity")
         fail("capacity", "$candidate");
-    if (error.reason === "tree-conflict"
-        || error.reason === "source-changed") {
+    if (error.reason === "tree-conflict" || error.reason === "source-changed") {
         fail("candidate-conflict", "$candidate");
     }
     fail("operation-failure", "$candidate");
@@ -195,20 +194,20 @@ function mapCopyError(error) {
     if (error.reason === "source-root-scope") {
         fail("source-root-scope", "$sourceRoot");
     }
-    if (error.reason === "source-not-found"
-        || error.reason === "source-symlink"
-        || error.reason === "source-not-file"
-        || error.reason === "source-changed"
-        || error.reason === "source-mismatch") {
+    if (error.reason === "source-not-found" ||
+        error.reason === "source-symlink" ||
+        error.reason === "source-not-file" ||
+        error.reason === "source-changed" ||
+        error.reason === "source-mismatch") {
         fail("source-changed", "$source");
     }
     if (error.reason === "destination-root-scope") {
         fail("destination-root-scope", "$destinationRoot");
     }
-    if (error.reason === "destination-parent"
-        || error.reason === "target-exists"
-        || error.reason === "candidate-changed"
-        || error.reason === "cleanup-failure") {
+    if (error.reason === "destination-parent" ||
+        error.reason === "target-exists" ||
+        error.reason === "candidate-changed" ||
+        error.reason === "cleanup-failure") {
         fail("candidate-conflict", "$candidate");
     }
     fail("copy-failure", "$candidate");
@@ -220,8 +219,7 @@ async function copyMissingFiles(sourceRoot, destinationRoot, plan, missingFiles,
         if (!missing.has(plannedFile.path))
             continue;
         const copy = plan.copies[index];
-        if (copy === undefined
-            || copy.sourceResourcePath !== plannedFile.path) {
+        if (copy === undefined || copy.sourceResourcePath !== plannedFile.path) {
             fail("input", "$plan");
         }
         try {

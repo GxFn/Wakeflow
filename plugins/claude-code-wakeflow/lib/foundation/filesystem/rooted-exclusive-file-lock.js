@@ -2,22 +2,22 @@ import { setTimeout as delay } from "node:timers/promises";
 import { types } from "node:util";
 import { threadId } from "node:worker_threads";
 import { parseSha256Digest } from "../crypto/sha256.js";
+import { DeterministicJsonDocumentError, renderDeterministicJsonDocument, } from "../data/deterministic-json-document.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
+import { createUuidV4, parseUuidV4, UuidV4Error } from "../identity/uuid-v4.js";
 import { observeProcessInstance, recordedProcessIsInactive } from "../node/process-instance.js";
-import { renderDeterministicJsonDocument, DeterministicJsonDocumentError, } from "../data/deterministic-json-document.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { createUuidV4, parseUuidV4, UuidV4Error, } from "../identity/uuid-v4.js";
 import { parseByteCount } from "../numeric/byte-count.js";
 import { encodeUtf8 } from "../text/utf8.js";
-import { readMonotonicClock, } from "../time/monotonic-clock.js";
+import { readMonotonicClock } from "../time/monotonic-clock.js";
 import { isMonotonicDeadlineReached, monotonicDeadlineAfter, monotonicDeadlineRemaining, } from "../time/monotonic-deadline.js";
 import { monotonicDurationFromMilliseconds, } from "../time/monotonic-duration.js";
-import { createFileAtomically, DurableAtomicFileWriteError, } from "./durable-atomic-file-write.js";
-import { DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE, recoverDurableAtomicFileStagesForTargets, DurableAtomicFileStageRecoveryError, } from "./durable-atomic-file-stage-recovery.js";
 import { readDeterministicJsonFile } from "./deterministic-json-file.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "./exact-regular-file-unlink.js";
-import { sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, splitPortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
+import { DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE, DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "./durable-atomic-file-stage-recovery.js";
+import { createFileAtomically, DurableAtomicFileWriteError } from "./durable-atomic-file-write.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "./exact-regular-file-unlink.js";
+import { sameFileNodeSnapshot } from "./file-node-snapshot.js";
+import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
+import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 import { StableFileReadError } from "./stable-file-read.js";
 import { StrictTextFileError } from "./strict-text-file.js";
 /**
@@ -38,13 +38,13 @@ const ROOTED_EXCLUSIVE_LOCK_DEFAULT_TIMEOUT_MILLISECONDS = 2_000;
 const ROOTED_EXCLUSIVE_LOCK_DEFAULT_RETRY_MILLISECONDS = 25;
 const ROOTED_EXCLUSIVE_LOCK_MAXIMUM_RECORD_BYTES = 4 * 1024;
 const ERROR_MESSAGES = {
-    "input": "Rooted exclusive file lock input is invalid.",
+    input: "Rooted exclusive file lock input is invalid.",
     "root-scope": "Rooted exclusive file lock lost its root scope.",
-    "parent": "Rooted exclusive file lock parent is unavailable or unsafe.",
+    parent: "Rooted exclusive file lock parent is unavailable or unsafe.",
     "unsafe-lock": "Existing rooted exclusive lock target is not a safe lock record.",
     "acquire-failure": "Rooted exclusive file lock could not be acquired safely.",
-    "timeout": "Rooted exclusive file lock acquisition timed out.",
-    "aborted": "Rooted exclusive file lock acquisition was aborted.",
+    timeout: "Rooted exclusive file lock acquisition timed out.",
+    aborted: "Rooted exclusive file lock acquisition was aborted.",
     "release-failure": "Rooted exclusive file lock could not release its exact record.",
     "owner-active": "Rooted exclusive file lock owner is still active or unverifiable.",
     "residue-changed": "Rooted exclusive file lock residue changed before retirement.",
@@ -84,39 +84,31 @@ function reportReleaseFailure(root, lockPath, error) {
     return true;
 }
 const LOCK_REGISTRY_ID = createUuidV4();
-const LOCK_RECORD_FIELDS = Object.freeze([
-    "kind",
-    "pid",
-    "threadId",
-    "token",
-    "version",
-]);
+const LOCK_RECORD_FIELDS = Object.freeze(["kind", "pid", "threadId", "token", "version"]);
 const LOCK_TOKEN_PATTERN = /^([1-9][0-9]*)-(0|[1-9][0-9]*)-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
 const MAXIMUM_NODE_TIMER_DELAY_MILLISECONDS = 2_147_483_647;
 function fail(reason, path) {
     throw new RootedExclusiveFileLockError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function parsePositiveMilliseconds(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value <= 0) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
         fail("input", path);
     }
     return value;
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;
@@ -140,9 +132,8 @@ function parseOptions(value) {
     if (record.signal !== undefined && !isAbortSignal(record.signal)) {
         fail("input", "$options.signal");
     }
-    if (record.tokenUuidFactory !== undefined
-        && (typeof record.tokenUuidFactory !== "function"
-            || types.isProxy(record.tokenUuidFactory))) {
+    if (record.tokenUuidFactory !== undefined &&
+        (typeof record.tokenUuidFactory !== "function" || types.isProxy(record.tokenUuidFactory))) {
         fail("input", "$options.tokenUuidFactory");
     }
     return Object.freeze({
@@ -164,9 +155,7 @@ function parseRetirementTargets(lockPath, value) {
         if (Object.keys(record).some((key) => key !== "relatedTargetResourcePaths")) {
             fail("input", "$options");
         }
-        relatedValues = parseDenseArray(record.relatedTargetResourcePaths === undefined
-            ? []
-            : record.relatedTargetResourcePaths, DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE - 1, "$options.relatedTargetResourcePaths");
+        relatedValues = parseDenseArray(record.relatedTargetResourcePaths === undefined ? [] : record.relatedTargetResourcePaths, DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE - 1, "$options.relatedTargetResourcePaths");
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
@@ -191,7 +180,7 @@ function parseRetirementTargets(lockPath, value) {
         targets.push(target);
     }
     const lockParent = splitPortableResourcePath(lockPath).slice(0, -1).join("/");
-    if (targets.some((target) => (splitPortableResourcePath(target).slice(0, -1).join("/") !== lockParent))) {
+    if (targets.some((target) => splitPortableResourcePath(target).slice(0, -1).join("/") !== lockParent)) {
         fail("input", "$options.relatedTargetResourcePaths");
     }
     return Object.freeze(targets);
@@ -226,9 +215,7 @@ function lockDeadline(timeoutMilliseconds) {
 async function createLockCandidate(tokenUuidFactory) {
     let tokenUuid;
     try {
-        tokenUuid = tokenUuidFactory === undefined
-            ? createUuidV4()
-            : createUuidV4(tokenUuidFactory);
+        tokenUuid = tokenUuidFactory === undefined ? createUuidV4() : createUuidV4(tokenUuidFactory);
     }
     catch {
         fail("acquire-failure", "$lock");
@@ -281,23 +268,21 @@ function parseLockRecord(value) {
     }
     const keys = Object.keys(record).sort();
     const expectedFields = [...LOCK_RECORD_FIELDS, "ownerBirth", "registryId"].sort();
-    if (keys.length !== expectedFields.length
-        || keys.some((key, index) => key !== expectedFields[index])
-        || record.kind !== "WakeflowExclusiveFileLock"
-        || record.version !== 2
-        || typeof record.pid !== "number"
-        || !Number.isSafeInteger(record.pid)
-        || record.pid <= 0
-        || typeof record.threadId !== "number"
-        || !Number.isSafeInteger(record.threadId)
-        || record.threadId < 0
-        || typeof record.token !== "string") {
+    if (keys.length !== expectedFields.length ||
+        keys.some((key, index) => key !== expectedFields[index]) ||
+        record.kind !== "WakeflowExclusiveFileLock" ||
+        record.version !== 2 ||
+        typeof record.pid !== "number" ||
+        !Number.isSafeInteger(record.pid) ||
+        record.pid <= 0 ||
+        typeof record.threadId !== "number" ||
+        !Number.isSafeInteger(record.threadId) ||
+        record.threadId < 0 ||
+        typeof record.token !== "string") {
         fail("unsafe-lock", "$lock");
     }
     const token = LOCK_TOKEN_PATTERN.exec(record.token);
-    if (token === null
-        || Number(token[1]) !== record.pid
-        || Number(token[2]) !== record.threadId) {
+    if (token === null || Number(token[1]) !== record.pid || Number(token[2]) !== record.threadId) {
         fail("unsafe-lock", "$lock");
     }
     try {
@@ -311,8 +296,15 @@ function parseLockRecord(value) {
     try {
         const registryId = parseUuidV4(record.registryId, "$lock/registryId");
         const ownerBirth = record.ownerBirth === null ? null : parseSha256Digest(record.ownerBirth, "$lock/ownerBirth");
-        return Object.freeze({ kind: "WakeflowExclusiveFileLock", ownerBirth, pid: record.pid,
-            registryId, threadId: record.threadId, token: record.token, version: 2 });
+        return Object.freeze({
+            kind: "WakeflowExclusiveFileLock",
+            ownerBirth,
+            pid: record.pid,
+            registryId,
+            threadId: record.threadId,
+            token: record.token,
+            version: 2,
+        });
     }
     catch {
         fail("unsafe-lock", "$lock");
@@ -328,25 +320,22 @@ export async function inspectRootedExclusiveFileLock(root, lockPath) {
         });
     }
     catch (error) {
-        if (error instanceof StableFileReadError
-            && error.reason === "not-found") {
+        if (error instanceof StableFileReadError && error.reason === "not-found") {
             const absent = Object.freeze({ status: "absent" });
             return absent;
         }
-        if (error instanceof StableFileReadError
-            && error.reason === "source-changed") {
+        if (error instanceof StableFileReadError && error.reason === "source-changed") {
             fail("residue-changed", "$lock");
         }
         if (error instanceof StableFileReadError) {
-            if (error.reason === "symlink"
-                || error.reason === "not-file"
-                || error.reason === "too-large") {
+            if (error.reason === "symlink" ||
+                error.reason === "not-file" ||
+                error.reason === "too-large") {
                 fail("unsafe-lock", "$lock");
             }
             if (error.reason === "input")
                 fail("input", error.path);
-            if (error.reason === "root-scope"
-                || error.reason === "unsupported-platform") {
+            if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
                 fail("root-scope", "$root");
             }
             if (error.reason === "aborted")
@@ -364,11 +353,10 @@ export async function inspectRootedExclusiveFileLock(root, lockPath) {
         throw error;
     }
     // `createFileAtomically` 先 link(stage, target) 再 unlink stage，竞争者可能短暂看到两个链接。
-    if (read.node.kind !== "file"
-        || (read.node.linkCount !== 1n && read.node.linkCount !== 2n)
-        || read.node.permissionBits !== 0o600
-        || (typeof process.geteuid === "function"
-            && read.node.userId !== BigInt(process.geteuid()))) {
+    if (read.node.kind !== "file" ||
+        (read.node.linkCount !== 1n && read.node.linkCount !== 2n) ||
+        read.node.permissionBits !== 0o600 ||
+        (typeof process.geteuid === "function" && read.node.userId !== BigInt(process.geteuid()))) {
         fail("unsafe-lock", "$lock");
     }
     const record = parseLockRecord(read.value);
@@ -396,19 +384,18 @@ export async function inspectRootedExclusiveFileLock(root, lockPath) {
 export async function retireRootedExclusiveFileLockResidue(root, lockPath, observation, options) {
     assertRoot(root);
     const retirementTargets = parseRetirementTargets(lockPath, options);
-    if (typeof observation !== "object"
-        || observation === null
-        || !Object.isFrozen(observation)
-        || !ISSUED_LOCK_OBSERVATIONS.has(observation)
-        || observation.status !== "held") {
+    if (typeof observation !== "object" ||
+        observation === null ||
+        !Object.isFrozen(observation) ||
+        !ISSUED_LOCK_OBSERVATIONS.has(observation) ||
+        observation.status !== "held") {
         fail("input", "$observation");
     }
     if (observation.ownerState !== "inactive")
         fail("owner-active", "$lock");
     try {
         const stageRecovery = await recoverDurableAtomicFileStagesForTargets(root, retirementTargets);
-        if (stageRecovery.activeStageCount !== 0
-            || stageRecovery.unknownStageCount !== 0) {
+        if (stageRecovery.activeStageCount !== 0 || stageRecovery.unknownStageCount !== 0) {
             fail("residue-changed", "$lock");
         }
     }
@@ -421,11 +408,11 @@ export async function retireRootedExclusiveFileLockResidue(root, lockPath, obser
         throw error;
     }
     const current = await inspectRootedExclusiveFileLock(root, lockPath);
-    if (current.status !== "held"
-        || current.ownerState !== "inactive"
-        || current.record.token !== observation.record.token
-        || current.digest !== observation.digest
-        || !sameFileNodeSnapshot(current.node, observation.node)) {
+    if (current.status !== "held" ||
+        current.ownerState !== "inactive" ||
+        current.record.token !== observation.record.token ||
+        current.digest !== observation.digest ||
+        !sameFileNodeSnapshot(current.node, observation.node)) {
         fail("residue-changed", "$lock");
     }
     try {
@@ -447,11 +434,11 @@ function mapCreateError(error) {
         fail("input", error.path);
     if (error.reason === "root-scope")
         fail("root-scope", "$root");
-    if (error.reason === "parent-not-found"
-        || error.reason === "parent-symlink"
-        || error.reason === "parent-not-directory"
-        || error.reason === "parent-open-failure"
-        || error.reason === "parent-changed") {
+    if (error.reason === "parent-not-found" ||
+        error.reason === "parent-symlink" ||
+        error.reason === "parent-not-directory" ||
+        error.reason === "parent-open-failure" ||
+        error.reason === "parent-changed") {
         fail("parent", "$lock");
     }
     if (error.reason === "aborted")
@@ -475,8 +462,7 @@ async function lockTargetExists(root, lockPath) {
                 return true;
             if (error.reason === "resource-path")
                 fail("input", "$lockPath");
-            if (error.reason === "ancestor-symlink"
-                || error.reason === "ancestor-type") {
+            if (error.reason === "ancestor-symlink" || error.reason === "ancestor-type") {
                 fail("parent", "$lock");
             }
             fail("root-scope", "$root");
@@ -529,11 +515,9 @@ async function assertSafeExistingLock(root, lockPath) {
             throw error;
         }
         if (error instanceof RootedDirectoryError) {
-            if (error.reason === "resource-not-found"
-                || error.reason === "resource-changed")
+            if (error.reason === "resource-not-found" || error.reason === "resource-changed")
                 return;
-            if (error.reason === "ancestor-symlink"
-                || error.reason === "ancestor-type") {
+            if (error.reason === "ancestor-symlink" || error.reason === "ancestor-type") {
                 fail("parent", "$lock");
             }
             fail("root-scope", "$root");
@@ -545,7 +529,7 @@ async function waitForRetry(milliseconds, signal) {
     try {
         await delay(milliseconds, undefined, signal === undefined ? {} : { signal });
     }
-    catch (error) {
+    catch {
         if (signal?.aborted === true) {
             fail("aborted", "$signal");
         }

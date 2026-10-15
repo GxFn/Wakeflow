@@ -11,7 +11,7 @@ import { PORTABLE_RESOURCE_PATH_PATTERN_SOURCE, } from "../../contracts/generate
  */
 const PORTABLE_RESOURCE_PATH_PATTERN = new RegExp(PORTABLE_RESOURCE_PATH_PATTERN_SOURCE, "u");
 const ERROR_MESSAGES = {
-    "format": "Portable resource path must use one canonical root-relative slash-separated form.",
+    format: "Portable resource path must use one canonical root-relative slash-separated form.",
     "unicode-well-formed": "Portable resource path must contain well-formed Unicode text.",
     "unicode-normalization": "Portable resource path must already use Unicode NFC.",
 };

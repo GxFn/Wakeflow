@@ -1,6 +1,6 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { parsePlainRecord, pickOwnDataProperties, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { byteCountFromBigInt, ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
+import { PassiveOwnDataError, parsePlainRecord, pickOwnDataProperties, } from "../data/passive-own-data.js";
+import { ByteCountError, byteCountFromBigInt, parseByteCount, } from "../numeric/byte-count.js";
 const ERROR_MESSAGES = {
     "stat-shape": "File node Stats must expose passive own bigint data fields.",
     "stat-field": "File node Stats contains an invalid physical field.",
@@ -82,8 +82,7 @@ function fail(reason, path) {
 }
 function readBigIntField(record, field, basePath, nonNegative = false) {
     const value = record[field];
-    if (typeof value !== "bigint"
-        || (nonNegative && value < 0n)) {
+    if (typeof value !== "bigint" || (nonNegative && value < 0n)) {
         fail("stat-field", fieldPath(basePath, field));
     }
     return value;
@@ -148,8 +147,7 @@ export function createFileNodeSnapshot(value, errorPath) {
 }
 function readSnapshotBigInt(record, field, path, nonNegative = false) {
     const value = record[field];
-    if (typeof value !== "bigint"
-        || (nonNegative && value < 0n)) {
+    if (typeof value !== "bigint" || (nonNegative && value < 0n)) {
         fail("snapshot-field", fieldPath(path, field));
     }
     return value;
@@ -166,8 +164,8 @@ function parseFileNodeSnapshot(value, path) {
     }
     const keys = Object.keys(record).sort();
     const expectedKeys = [...SNAPSHOT_FIELDS].sort();
-    if (keys.length !== expectedKeys.length
-        || keys.some((key, index) => key !== expectedKeys[index])) {
+    if (keys.length !== expectedKeys.length ||
+        keys.some((key, index) => key !== expectedKeys[index])) {
         fail("snapshot-shape", path);
     }
     const kind = record.kind;
@@ -194,11 +192,11 @@ function parseFileNodeSnapshot(value, path) {
         throw error;
     }
     const admittedPermissionBits = record.permissionBits;
-    if (typeof admittedPermissionBits !== "number"
-        || !Number.isSafeInteger(admittedPermissionBits)
-        || admittedPermissionBits < 0
-        || admittedPermissionBits > Number(PERMISSION_MASK)
-        || admittedPermissionBits !== permissionBits(rawMode)) {
+    if (typeof admittedPermissionBits !== "number" ||
+        !Number.isSafeInteger(admittedPermissionBits) ||
+        admittedPermissionBits < 0 ||
+        admittedPermissionBits > Number(PERMISSION_MASK) ||
+        admittedPermissionBits !== permissionBits(rawMode)) {
         fail("snapshot-field", fieldPath(path, "permissionBits"));
     }
     if (kind !== fileNodeKind(rawMode)) {
@@ -227,25 +225,23 @@ function parseFileNodeSnapshot(value, path) {
 export function sameFileNodeIdentity(left, right) {
     const admittedLeft = parseFileNodeSnapshot(left, "$left");
     const admittedRight = parseFileNodeSnapshot(right, "$right");
-    return (admittedLeft.deviceId === admittedRight.deviceId
-        && admittedLeft.inodeId === admittedRight.inodeId);
+    return (admittedLeft.deviceId === admittedRight.deviceId &&
+        admittedLeft.inodeId === admittedRight.inodeId);
 }
 /** 判断两个节点快照的全部稳定物理事实是否逐项相同。 */
 export function sameFileNodeSnapshot(left, right) {
     const admittedLeft = parseFileNodeSnapshot(left, "$left");
     const admittedRight = parseFileNodeSnapshot(right, "$right");
-    return (admittedLeft.kind === admittedRight.kind
-        && admittedLeft.deviceId === admittedRight.deviceId
-        && admittedLeft.inodeId === admittedRight.inodeId
-        && admittedLeft.rawMode === admittedRight.rawMode
-        && admittedLeft.permissionBits === admittedRight.permissionBits
-        && admittedLeft.linkCount === admittedRight.linkCount
-        && admittedLeft.userId === admittedRight.userId
-        && admittedLeft.groupId === admittedRight.groupId
-        && admittedLeft.specialDeviceId === admittedRight.specialDeviceId
-        && admittedLeft.byteCount === admittedRight.byteCount
-        && admittedLeft.modifiedAtNanoseconds
-            === admittedRight.modifiedAtNanoseconds
-        && admittedLeft.changedAtNanoseconds
-            === admittedRight.changedAtNanoseconds);
+    return (admittedLeft.kind === admittedRight.kind &&
+        admittedLeft.deviceId === admittedRight.deviceId &&
+        admittedLeft.inodeId === admittedRight.inodeId &&
+        admittedLeft.rawMode === admittedRight.rawMode &&
+        admittedLeft.permissionBits === admittedRight.permissionBits &&
+        admittedLeft.linkCount === admittedRight.linkCount &&
+        admittedLeft.userId === admittedRight.userId &&
+        admittedLeft.groupId === admittedRight.groupId &&
+        admittedLeft.specialDeviceId === admittedRight.specialDeviceId &&
+        admittedLeft.byteCount === admittedRight.byteCount &&
+        admittedLeft.modifiedAtNanoseconds === admittedRight.modifiedAtNanoseconds &&
+        admittedLeft.changedAtNanoseconds === admittedRight.changedAtNanoseconds);
 }

@@ -1,11 +1,11 @@
 import { Buffer } from "node:buffer";
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { parseByteCount } from "../numeric/byte-count.js";
-import { assertDirectoryTreeCandidateNotAborted, directoryTreeCandidateMaximumPathDepth, isDirectoryTreeCandidateAbortSignal, parseDirectoryTreeCandidatePath, parseDirectoryTreeCandidatePlan, throwDirectoryTreeCandidateError as fail, } from "./directory-tree-candidate-plan.js";
-import { sameFileNodeSnapshot, FileNodeSnapshotError, } from "./file-node-snapshot.js";
+import { assertDirectoryTreeCandidateNotAborted, directoryTreeCandidateMaximumPathDepth, throwDirectoryTreeCandidateError as fail, isDirectoryTreeCandidateAbortSignal, parseDirectoryTreeCandidatePath, parseDirectoryTreeCandidatePlan, } from "./directory-tree-candidate-plan.js";
+import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { RootedDirectory } from "./rooted-directory.js";
-import { readStableFile, StableFileReadError, } from "./stable-file-read.js";
+import { readStableFile, StableFileReadError } from "./stable-file-read.js";
 import { readStableResourceTree, StableResourceTreeReadError, } from "./stable-resource-tree-read.js";
 /** Wakeflow Foundation / Filesystem：目录树候选的稳定进度检查与清单闭合验证。 */
 function inspectionLimits(plan) {
@@ -51,10 +51,10 @@ function parseInspectionOptions(value) {
     }
     const expectedRootNode = record.expectedRootNode;
     if (expectedRootNode !== undefined) {
-        if (typeof expectedRootNode !== "object"
-            || expectedRootNode === null
-            || types.isProxy(expectedRootNode)
-            || !Object.isFrozen(expectedRootNode)) {
+        if (typeof expectedRootNode !== "object" ||
+            expectedRootNode === null ||
+            types.isProxy(expectedRootNode) ||
+            !Object.isFrozen(expectedRootNode)) {
             fail("input", "$options/expectedRootNode");
         }
         try {
@@ -99,8 +99,8 @@ export async function inspectDirectoryTreeCandidateProgress(root, candidateRootP
     const { expectedRootNode, signal } = parseInspectionOptions(optionsValue);
     assertDirectoryTreeCandidateNotAborted(signal);
     const tree = await readCandidateTree(root, candidateRootPath, plan, expectedRootNode, signal);
-    if (tree.treeRootNode.kind !== "directory"
-        || tree.treeRootNode.permissionBits !== plan.directoryMode) {
+    if (tree.treeRootNode.kind !== "directory" ||
+        tree.treeRootNode.permissionBits !== plan.directoryMode) {
         fail("tree-conflict", "$candidate");
     }
     const expectedDirectories = new Set(plan.directories);
@@ -110,18 +110,17 @@ export async function inspectDirectoryTreeCandidateProgress(root, candidateRootP
     for (const entry of tree.entries) {
         const relative = relativeFromCandidate(candidateRootPath, entry.resourcePath);
         if (entry.node.kind === "directory") {
-            if (!expectedDirectories.has(relative)
-                || entry.node.permissionBits !== plan.directoryMode) {
+            if (!expectedDirectories.has(relative) || entry.node.permissionBits !== plan.directoryMode) {
                 fail("tree-conflict", "$candidate");
             }
             observedDirectories.add(relative);
             continue;
         }
         const expected = expectedFiles.get(relative);
-        if (expected === undefined
-            || entry.node.kind !== "file"
-            || entry.node.permissionBits !== expected.mode
-            || entry.node.linkCount !== 1n) {
+        if (expected === undefined ||
+            entry.node.kind !== "file" ||
+            entry.node.permissionBits !== expected.mode ||
+            entry.node.linkCount !== 1n) {
             fail("tree-conflict", "$candidate");
         }
         observedFiles.add(relative);
@@ -129,23 +128,21 @@ export async function inspectDirectoryTreeCandidateProgress(root, candidateRootP
     for (const file of tree.files) {
         const relative = relativeFromCandidate(candidateRootPath, file.resourcePath);
         const expected = expectedFiles.get(relative);
-        if (expected === undefined
-            || file.byteCount !== expected.byteCount
-            || file.digest !== expected.digest
-            || file.node.permissionBits !== expected.mode
-            || file.node.linkCount !== 1n) {
+        if (expected === undefined ||
+            file.byteCount !== expected.byteCount ||
+            file.digest !== expected.digest ||
+            file.node.permissionBits !== expected.mode ||
+            file.node.linkCount !== 1n) {
             fail("tree-conflict", "$candidate");
         }
     }
     const missingDirectories = Object.freeze(plan.directories.filter((directory) => !observedDirectories.has(directory)));
-    const missingFiles = Object.freeze(plan.files
-        .filter((file) => !observedFiles.has(file.path))
-        .map((file) => file.path));
+    const missingFiles = Object.freeze(plan.files.filter((file) => !observedFiles.has(file.path)).map((file) => file.path));
     const complete = missingDirectories.length === 0 && missingFiles.length === 0;
-    if (complete
-        && (tree.entries.length !== plan.directories.length + plan.files.length
-            || tree.files.length !== plan.files.length
-            || tree.totalFileBytes !== plan.totalBytes)) {
+    if (complete &&
+        (tree.entries.length !== plan.directories.length + plan.files.length ||
+            tree.files.length !== plan.files.length ||
+            tree.totalFileBytes !== plan.totalBytes)) {
         fail("tree-conflict", "$candidate");
     }
     assertDirectoryTreeCandidateNotAborted(signal);
@@ -171,15 +168,11 @@ export async function inspectDirectoryTreeCandidate(root, candidateRootPathValue
 }
 /** 写入前验证已有暂存目录是输入计划的安全子集，且现有文件字节完全一致。 */
 export async function inspectPartialDirectoryTreeCandidate(root, candidateRootPath, prepared) {
-    const progress = await inspectDirectoryTreeCandidateProgress(root, candidateRootPath, prepared.plan, prepared.options.signal === undefined
-        ? undefined
-        : { signal: prepared.options.signal });
+    const progress = await inspectDirectoryTreeCandidateProgress(root, candidateRootPath, prepared.plan, prepared.options.signal === undefined ? undefined : { signal: prepared.options.signal });
     const missingDirectories = new Set(progress.missingDirectories);
     const missingFiles = new Set(progress.missingFiles);
     const existingDirectories = new Set(prepared.plan.directories.filter((directory) => !missingDirectories.has(directory)));
-    const existingFiles = new Set(prepared.plan.files
-        .filter((file) => !missingFiles.has(file.path))
-        .map((file) => file.path));
+    const existingFiles = new Set(prepared.plan.files.filter((file) => !missingFiles.has(file.path)).map((file) => file.path));
     const expectedFiles = new Map(prepared.files.map((file) => [file.path, file]));
     for (const filePath of existingFiles) {
         const expected = expectedFiles.get(filePath);
@@ -189,9 +182,7 @@ export async function inspectPartialDirectoryTreeCandidate(root, candidateRootPa
         try {
             read = await readStableFile(root, parseDirectoryTreeCandidatePath(`${candidateRootPath}/${filePath}`, "$candidate/file"), {
                 maximumBytes: expected.byteCount,
-                ...(prepared.options.signal === undefined
-                    ? {}
-                    : { signal: prepared.options.signal }),
+                ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
             });
         }
         catch (error) {
@@ -205,8 +196,7 @@ export async function inspectPartialDirectoryTreeCandidate(root, candidateRootPa
             }
             throw error;
         }
-        if (read.digest !== expected.digest
-            || !sameBytes(read.bytes, expected.bytes)) {
+        if (read.digest !== expected.digest || !sameBytes(read.bytes, expected.bytes)) {
             fail("tree-conflict", "$candidate");
         }
     }

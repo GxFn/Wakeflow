@@ -15,8 +15,7 @@ const NODE_SYSTEM_ERROR_CODE_PATTERN = /^E(?!RR_)[A-Z0-9_]{1,63}$/u;
 /** Node 24.19 runtime 已提供该标准入口；当前 TypeScript lib 尚未声明。 */
 const node24ErrorConstructor = Error;
 function isCanonicalNodeSystemErrorCode(value) {
-    return (typeof value === "string"
-        && NODE_SYSTEM_ERROR_CODE_PATTERN.test(value));
+    return typeof value === "string" && NODE_SYSTEM_ERROR_CODE_PATTERN.test(value);
 }
 /**
  * 无副作用地读取真实 `Error` 中符合规范词法的系统错误代码。
@@ -36,9 +35,9 @@ export function readNodeSystemErrorCode(value) {
     catch {
         return undefined;
     }
-    if (descriptor === undefined
-        || !Object.hasOwn(descriptor, "value")
-        || !isCanonicalNodeSystemErrorCode(descriptor.value)) {
+    if (descriptor === undefined ||
+        !Object.hasOwn(descriptor, "value") ||
+        !isCanonicalNodeSystemErrorCode(descriptor.value)) {
         return undefined;
     }
     return descriptor.value;

@@ -3,9 +3,9 @@ import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../crypto/canonical-json-sha256.js";
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../crypto/sha256.js";
 import { JsonValueError, parseJsonValue } from "../data/json-value.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { addByteCounts, parseByteCount, ByteCountError, } from "../numeric/byte-count.js";
-import { joinPortableResourcePath, parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
+import { addByteCounts, ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
+import { joinPortableResourcePath, PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 /** Wakeflow Foundation / Filesystem：目录树候选的精确清单计划与公共合同。 */
 export const DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND = "wakeflow-directory-tree-candidate-plan";
 export const DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION = 1;
@@ -67,12 +67,7 @@ const PLAN_FIELDS = Object.freeze([
     "totalBytes",
     "treeDigest",
 ]);
-const PLAN_FILE_FIELDS = Object.freeze([
-    "byteCount",
-    "digest",
-    "mode",
-    "path",
-]);
+const PLAN_FILE_FIELDS = Object.freeze(["byteCount", "digest", "mode", "path"]);
 const INPUT_FILE_FIELDS = Object.freeze(["bytes", "mode", "path"]);
 export function throwDirectoryTreeCandidateError(reason, path) {
     return fail(reason, path);
@@ -86,8 +81,7 @@ function compareText(left, right) {
 function exactFields(value, fields, path) {
     const actual = Object.keys(value).sort(compareText);
     const expected = [...fields].sort(compareText);
-    if (actual.length !== expected.length
-        || actual.some((key, index) => key !== expected[index])) {
+    if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
         fail("input", path);
     }
 }
@@ -115,10 +109,7 @@ function denseArray(value, maximumLength, path) {
     }
 }
 function parseMode(value, path) {
-    if (typeof value !== "number"
-        || !Number.isInteger(value)
-        || value < 0
-        || value > 0o777) {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
         fail("input", path);
     }
     return value;
@@ -136,9 +127,7 @@ function parseCandidateFileMode(value, path) {
     return mode;
 }
 function parsePositiveCount(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value <= 0) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
         fail("input", path);
     }
     return value;
@@ -154,10 +143,10 @@ function byteCount(value, path) {
     }
 }
 export function isDirectoryTreeCandidateAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseCapacityFields(record, path) {
     const capacity = Object.freeze({
@@ -193,9 +182,7 @@ function parseCapacity(value) {
 function parseOptions(value) {
     const record = plainRecord(value, "$options");
     const allowed = new Set(OPTION_FIELDS);
-    const missing = OPTION_FIELDS
-        .filter((field) => field !== "signal")
-        .find((field) => !Object.hasOwn(record, field));
+    const missing = OPTION_FIELDS.filter((field) => field !== "signal").find((field) => !Object.hasOwn(record, field));
     const unexpected = Object.keys(record).find((key) => !allowed.has(key));
     if (missing !== undefined || unexpected !== undefined) {
         fail("input", `$options/${unexpected ?? missing}`);
@@ -240,10 +227,9 @@ function portablePathDepth(path) {
     return depth;
 }
 function assertPlanPathHardCapacity(pathValue, path) {
-    if (Buffer.byteLength(pathValue, "utf8")
-        > DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumPathBytes
-        || portablePathDepth(pathValue)
-            > DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumDepth) {
+    if (Buffer.byteLength(pathValue, "utf8") >
+        DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumPathBytes ||
+        portablePathDepth(pathValue) > DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumDepth) {
         fail("capacity", path);
     }
 }
@@ -264,8 +250,7 @@ function addParentDirectories(filePath, filePaths, directories, fileCount) {
         if (filePaths.has(directory))
             fail("path-conflict", "$/files");
         directories.add(directory);
-        if (directories.size + fileCount
-            > DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumEntries) {
+        if (directories.size + fileCount > DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumEntries) {
             fail("capacity", "$/files");
         }
     }
@@ -353,13 +338,12 @@ function buildPlan(directoryMode, files) {
     });
 }
 function assertPlanComponentsCapacity(directories, files, totalBytes, capacity, path) {
-    if (files.length > capacity.maximumFiles
-        || directories.length > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES
-        || directories.length + files.length > capacity.maximumEntries
-        || files.some((file) => file.byteCount > capacity.maximumFileBytes)
-        || totalBytes > capacity.maximumTotalBytes
-        || directoryTreeCandidateMaximumPathDepth(directories, files)
-            > capacity.maximumDepth) {
+    if (files.length > capacity.maximumFiles ||
+        directories.length > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES ||
+        directories.length + files.length > capacity.maximumEntries ||
+        files.some((file) => file.byteCount > capacity.maximumFileBytes) ||
+        totalBytes > capacity.maximumTotalBytes ||
+        directoryTreeCandidateMaximumPathDepth(directories, files) > capacity.maximumDepth) {
         fail("capacity", path);
     }
 }
@@ -376,10 +360,10 @@ export function prepareDirectoryTreeCandidate(filesValue, optionsValue) {
         const input = plainRecord(value, `$files/${index}`);
         exactFields(input, INPUT_FILE_FIELDS, `$files/${index}`);
         const inputBytes = input.bytes;
-        if (!ArrayBuffer.isView(inputBytes)
-            || !(inputBytes instanceof Uint8Array)
-            || types.isProxy(inputBytes)
-            || inputBytes.buffer instanceof SharedArrayBuffer) {
+        if (!ArrayBuffer.isView(inputBytes) ||
+            !(inputBytes instanceof Uint8Array) ||
+            types.isProxy(inputBytes) ||
+            inputBytes.buffer instanceof SharedArrayBuffer) {
             fail("input", `$files/${index}/bytes`);
         }
         if (inputBytes.byteLength > options.maximumFileBytes) {
@@ -448,25 +432,22 @@ export function planDirectoryTreeCandidateFromFileDescriptors(filesValue, option
  * 不进入持久计划或tree digest，同一内容的身份不会因调用方准入政策而改变。
  */
 export function parseDirectoryTreeCandidatePlan(value, capacityValue) {
-    const capacity = capacityValue === undefined
-        ? undefined
-        : parseCapacity(capacityValue);
+    const capacity = capacityValue === undefined ? undefined : parseCapacity(capacityValue);
     const record = plainRecord(value, "$plan");
     exactFields(record, PLAN_FIELDS, "$plan");
-    if (record.artifactKind !== DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND
-        || record.schemaVersion !== DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION) {
+    if (record.artifactKind !== DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND ||
+        record.schemaVersion !== DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION) {
         fail("input", "$plan");
     }
     const files = Object.freeze(denseArray(record.files, DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES, "$/files").map(parsePlanFile));
     const rebuilt = buildPlan(parseCandidateDirectoryMode(record.directoryMode, "$/directoryMode"), files);
-    const rawDirectories = denseArray(record.directories, DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES, "$/directories")
-        .map((entry, index) => parsePlanPath(entry, `$/directories/${index}`));
+    const rawDirectories = denseArray(record.directories, DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES, "$/directories").map((entry, index) => parsePlanPath(entry, `$/directories/${index}`));
     const totalBytes = byteCount(record.totalBytes, "$/totalBytes");
     const treeDigest = parseDigest(record.treeDigest, "$/treeDigest");
-    if (rawDirectories.length !== rebuilt.directories.length
-        || rawDirectories.some((entry, index) => entry !== rebuilt.directories[index])
-        || totalBytes !== rebuilt.totalBytes
-        || treeDigest !== rebuilt.treeDigest) {
+    if (rawDirectories.length !== rebuilt.directories.length ||
+        rawDirectories.some((entry, index) => entry !== rebuilt.directories[index]) ||
+        totalBytes !== rebuilt.totalBytes ||
+        treeDigest !== rebuilt.treeDigest) {
         fail("path-conflict", "$plan");
     }
     if (capacity !== undefined) {

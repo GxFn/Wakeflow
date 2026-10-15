@@ -1,27 +1,27 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { lstat, open as openFileHandle, opendir, } from "node:fs/promises";
+import { lstat, opendir, open as openFileHandle } from "node:fs/promises";
 import nodePath from "node:path";
 import { types } from "node:util";
 import pLimit from "p-limit";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import { decodeUtf8, Utf8Error, } from "../text/utf8.js";
+import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
 const ERROR_MESSAGES = {
-    "input": "Stable directory read input is invalid.",
+    input: "Stable directory read input is invalid.",
     "unsupported-platform": "Stable directory read requires Node no-follow directory handles.",
     "root-scope": "Stable directory read could not establish its rooted scope.",
     "not-found": "Stable directory read target does not exist.",
-    "symlink": "Stable directory read target cannot be a symbolic link.",
+    symlink: "Stable directory read target cannot be a symbolic link.",
     "not-directory": "Stable directory read target must be a directory.",
     "expectation-changed": "Stable directory read target no longer matches its expected node.",
     "too-many-entries": "Directory contains more entries than the caller limit.",
     "entry-path": "Directory entry cannot form a portable rooted resource path.",
     "io-failure": "Directory target and entry facts could not be observed safely.",
     "source-changed": "Directory or one of its entries changed during the read.",
-    "aborted": "Stable directory read was aborted.",
+    aborted: "Stable directory read was aborted.",
     "close-failure": "A directory read handle could not be closed safely.",
 };
 /**
@@ -53,18 +53,18 @@ function fail(reason, path) {
     throw new StableDirectoryReadError(reason, path);
 }
 function isAbortSignal(value) {
-    return (typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal);
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseExpectedNode(value) {
     if (value === undefined)
         return undefined;
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         fail("input", "$options.expectedNode");
     }
     try {
@@ -91,13 +91,13 @@ function parseOptions(value) {
         throw error;
     }
     const allowed = new Set(["expectedNode", "maximumEntries", "signal"]);
-    if (!Object.hasOwn(record, "maximumEntries")
-        || Object.keys(record).some((key) => !allowed.has(key))) {
+    if (!Object.hasOwn(record, "maximumEntries") ||
+        Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
     }
-    if (typeof record.maximumEntries !== "number"
-        || !Number.isSafeInteger(record.maximumEntries)
-        || record.maximumEntries < 0) {
+    if (typeof record.maximumEntries !== "number" ||
+        !Number.isSafeInteger(record.maximumEntries) ||
+        record.maximumEntries < 0) {
         fail("input", "$options.maximumEntries");
     }
     if (record.signal !== undefined && !isAbortSignal(record.signal)) {
@@ -110,10 +110,10 @@ function parseOptions(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -125,8 +125,7 @@ function compareText(left, right) {
     return left < right ? -1 : left > right ? 1 : 0;
 }
 function sameNames(left, right) {
-    return (left.length === right.length
-        && left.every((name, index) => name === right[index]));
+    return left.length === right.length && left.every((name, index) => name === right[index]);
 }
 function assertExpectedNode(actual, expected) {
     if (expected !== undefined && !sameFileNodeSnapshot(actual, expected)) {
@@ -176,8 +175,7 @@ async function inspectInitialResource(root, resourcePath) {
             }
             if (error.reason === "resource-path")
                 fail("input", "$resourcePath");
-            if (error.reason === "resource-changed"
-                || error.reason === "resource-alias") {
+            if (error.reason === "resource-changed" || error.reason === "resource-alias") {
                 fail("source-changed", "$resourcePath");
             }
             if (error.reason === "unsupported-platform") {
@@ -332,9 +330,7 @@ async function enumerateNames(physicalPath, maximumEntries, signal, pageAfterNam
     return Object.freeze(names);
 }
 function entryResourcePath(directoryResourcePath, name, index) {
-    const candidate = directoryResourcePath === null
-        ? name
-        : `${directoryResourcePath}/${name}`;
+    const candidate = directoryResourcePath === null ? name : `${directoryResourcePath}/${name}`;
     try {
         return parsePortableResourcePath(candidate, `$entries/${index}`);
     }
@@ -376,13 +372,13 @@ async function inspectEntries(target, names, signal, verification) {
     return Object.freeze(entries);
 }
 function sameEntries(left, right) {
-    return (left.length === right.length
-        && left.every((entry, index) => {
+    return (left.length === right.length &&
+        left.every((entry, index) => {
             const other = right[index];
-            return (other !== undefined
-                && entry.name === other.name
-                && entry.resourcePath === other.resourcePath
-                && sameFileNodeSnapshot(entry.node, other.node));
+            return (other !== undefined &&
+                entry.name === other.name &&
+                entry.resourcePath === other.resourcePath &&
+                sameFileNodeSnapshot(entry.node, other.node));
         }));
 }
 async function readStableDirectory(root, target, options) {
@@ -391,8 +387,7 @@ async function readStableDirectory(root, target, options) {
     let result;
     try {
         const opened = await snapshotOpenedDirectory(handle, target.errorPath);
-        if (opened.kind !== "directory"
-            || !sameFileNodeSnapshot(target.node, opened)) {
+        if (opened.kind !== "directory" || !sameFileNodeSnapshot(target.node, opened)) {
             fail("source-changed", target.errorPath);
         }
         const firstNames = await enumerateNames(target.physicalPath, options.maximumEntries, options.signal, options.pageAfterName);
@@ -407,9 +402,9 @@ async function readStableDirectory(root, target, options) {
         }
         const afterHandle = await snapshotOpenedDirectory(handle, target.errorPath);
         const afterPath = await inspectFinalTarget(root, target);
-        if (afterPath.kind !== "directory"
-            || !sameFileNodeSnapshot(opened, afterHandle)
-            || !sameFileNodeSnapshot(afterHandle, afterPath)) {
+        if (afterPath.kind !== "directory" ||
+            !sameFileNodeSnapshot(opened, afterHandle) ||
+            !sameFileNodeSnapshot(afterHandle, afterPath)) {
             fail("source-changed", target.errorPath);
         }
         assertNotAborted(options.signal);
@@ -480,10 +475,18 @@ function parsePageOptions(options) {
             fail("input", "$options.afterName");
         }
     }
-    return { ...parsed, maximumEntries: parsed.maximumEntries + 1, pageAfterName: afterName ?? "" };
+    return {
+        ...parsed,
+        maximumEntries: parsed.maximumEntries + 1,
+        pageAfterName: afterName ?? "",
+    };
 }
 function directoryPage(page, maximumEntries) {
-    return Object.freeze({ ...page, entries: Object.freeze(page.entries.slice(0, maximumEntries - 1)), hasMore: page.entries.length === maximumEntries });
+    return Object.freeze({
+        ...page,
+        entries: Object.freeze(page.entries.slice(0, maximumEntries - 1)),
+        hasMore: page.entries.length === maximumEntries,
+    });
 }
 /**
  * Read a bounded page without bounding the directory's total entry count.

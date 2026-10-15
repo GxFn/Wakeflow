@@ -1,8 +1,8 @@
 import { types } from "node:util";
-import { joinDirectoryTreeCandidatePath, parseDirectoryTreeCandidatePath, prepareDirectoryTreeCandidate, throwDirectoryTreeCandidateError as fail, } from "./directory-tree-candidate-plan.js";
 import { inspectDirectoryTreeCandidate, inspectPartialDirectoryTreeCandidate, } from "./directory-tree-candidate-inspection.js";
+import { throwDirectoryTreeCandidateError as fail, joinDirectoryTreeCandidatePath, parseDirectoryTreeCandidatePath, prepareDirectoryTreeCandidate, } from "./directory-tree-candidate-plan.js";
 import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from "./durable-directory-materialization.js";
-import { createFileCandidateDurably, DurableFileCandidateError, } from "./durable-file-candidate.js";
+import { createFileCandidateDurably, DurableFileCandidateError } from "./durable-file-candidate.js";
 import { RootedDirectory } from "./rooted-directory.js";
 /**
  * Wakeflow Foundation / Filesystem：目录树候选的持久化创建与精确补齐入口。
@@ -17,10 +17,10 @@ function mapDirectoryError(error, target) {
     if (error.reason === "target-exists") {
         fail(target === "candidate-root" ? "target-exists" : "tree-conflict", "$candidateRootPath");
     }
-    if (error.reason === "target-symlink"
-        || error.reason === "target-not-directory"
-        || error.reason === "parent-symlink"
-        || error.reason === "parent-not-directory") {
+    if (error.reason === "target-symlink" ||
+        error.reason === "target-not-directory" ||
+        error.reason === "parent-symlink" ||
+        error.reason === "parent-not-directory") {
         fail("tree-conflict", "$candidateRootPath");
     }
     fail("operation-failure", "$candidateRootPath");
@@ -43,9 +43,7 @@ export async function createDirectoryTreeCandidateDurably(root, candidateRootPat
     try {
         await createDirectoryAtomically(root, candidateRootPath, {
             mode: prepared.options.directoryMode,
-            ...(prepared.options.signal === undefined
-                ? {}
-                : { signal: prepared.options.signal }),
+            ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
         });
     }
     catch (error) {
@@ -58,17 +56,13 @@ export async function createDirectoryTreeCandidateDurably(root, candidateRootPat
         for (const directory of prepared.plan.directories) {
             await createDirectoryAtomically(root, joinDirectoryTreeCandidatePath(candidateRootPath, directory), {
                 mode: prepared.options.directoryMode,
-                ...(prepared.options.signal === undefined
-                    ? {}
-                    : { signal: prepared.options.signal }),
+                ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
             });
         }
         for (const file of prepared.files) {
             await createFileCandidateDurably(root, joinDirectoryTreeCandidatePath(candidateRootPath, file.path), file.bytes, {
                 mode: file.mode,
-                ...(prepared.options.signal === undefined
-                    ? {}
-                    : { signal: prepared.options.signal }),
+                ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
             });
         }
     }
@@ -80,9 +74,7 @@ export async function createDirectoryTreeCandidateDurably(root, candidateRootPat
             mapFileError(error);
         throw error;
     }
-    return inspectDirectoryTreeCandidate(root, candidateRootPath, prepared.plan, prepared.options.signal === undefined
-        ? undefined
-        : { signal: prepared.options.signal });
+    return inspectDirectoryTreeCandidate(root, candidateRootPath, prepared.plan, prepared.options.signal === undefined ? undefined : { signal: prepared.options.signal });
 }
 /**
  * 仅在归属已确认的候选根目录中补齐缺失项，随后重新验证清单闭合状态。
@@ -101,9 +93,7 @@ export async function settleDirectoryTreeCandidateDurably(root, candidateRootPat
                 continue;
             await createDirectoryAtomically(root, joinDirectoryTreeCandidatePath(candidateRootPath, directory), {
                 mode: prepared.options.directoryMode,
-                ...(prepared.options.signal === undefined
-                    ? {}
-                    : { signal: prepared.options.signal }),
+                ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
             });
         }
         for (const file of prepared.files) {
@@ -111,9 +101,7 @@ export async function settleDirectoryTreeCandidateDurably(root, candidateRootPat
                 continue;
             await createFileCandidateDurably(root, joinDirectoryTreeCandidatePath(candidateRootPath, file.path), file.bytes, {
                 mode: file.mode,
-                ...(prepared.options.signal === undefined
-                    ? {}
-                    : { signal: prepared.options.signal }),
+                ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
             });
         }
     }
@@ -125,9 +113,7 @@ export async function settleDirectoryTreeCandidateDurably(root, candidateRootPat
             mapFileError(error);
         throw error;
     }
-    return inspectDirectoryTreeCandidate(root, candidateRootPath, prepared.plan, prepared.options.signal === undefined
-        ? undefined
-        : { signal: prepared.options.signal });
+    return inspectDirectoryTreeCandidate(root, candidateRootPath, prepared.plan, prepared.options.signal === undefined ? undefined : { signal: prepared.options.signal });
 }
-export { DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND, DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION, DurableDirectoryTreeCandidateError, parseDirectoryTreeCandidatePlan, planDirectoryTreeCandidate, planDirectoryTreeCandidateFromFileDescriptors, } from "./directory-tree-candidate-plan.js";
 export { inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, } from "./directory-tree-candidate-inspection.js";
+export { DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND, DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION, DurableDirectoryTreeCandidateError, parseDirectoryTreeCandidatePlan, planDirectoryTreeCandidate, planDirectoryTreeCandidateFromFileDescriptors, } from "./directory-tree-candidate-plan.js";

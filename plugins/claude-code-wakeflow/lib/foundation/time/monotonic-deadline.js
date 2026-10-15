@@ -51,7 +51,5 @@ export function isMonotonicDeadlineReached(deadline, now) {
 export function monotonicDeadlineRemaining(deadline, now) {
     const deadlineNanoseconds = parseNonNegativeBigint(deadline, "deadline-type", "$deadline");
     const nowNanoseconds = parseNonNegativeBigint(now, "moment-type", "$now");
-    return (nowNanoseconds >= deadlineNanoseconds
-        ? 0n
-        : deadlineNanoseconds - nowNanoseconds);
+    return (nowNanoseconds >= deadlineNanoseconds ? 0n : deadlineNanoseconds - nowNanoseconds);
 }

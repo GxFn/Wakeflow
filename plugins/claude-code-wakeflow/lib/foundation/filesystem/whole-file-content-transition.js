@@ -1,6 +1,6 @@
 import { types } from "node:util";
-import { computeSha256Digest, } from "../crypto/sha256.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { computeSha256Digest } from "../crypto/sha256.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
 import { parseByteCount } from "../numeric/byte-count.js";
 const ERROR_MESSAGES = {
     input: "Whole-file content transition input is invalid.",
@@ -24,12 +24,12 @@ function fail(reason, path) {
     throw new WholeFileContentTransitionError(reason, path);
 }
 function snapshotBytes(value, path) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !ArrayBuffer.isView(value)
-        || !(value instanceof Uint8Array)
-        || value.buffer instanceof SharedArrayBuffer) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !ArrayBuffer.isView(value) ||
+        !(value instanceof Uint8Array) ||
+        value.buffer instanceof SharedArrayBuffer) {
         fail("input", path);
     }
     const bytes = Buffer.from(value);
@@ -40,9 +40,9 @@ function snapshotBytes(value, path) {
     });
 }
 function sameContent(left, right) {
-    return left.byteCount === right.byteCount
-        && left.digest === right.digest
-        && left.bytes.equals(right.bytes);
+    return (left.byteCount === right.byteCount &&
+        left.digest === right.digest &&
+        left.bytes.equals(right.bytes));
 }
 function parseRequest(value) {
     let record;
@@ -55,9 +55,7 @@ function parseRequest(value) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if (keys.length !== 2
-        || keys[0] !== "currentContents"
-        || keys[1] !== "desiredContent") {
+    if (keys.length !== 2 || keys[0] !== "currentContents" || keys[1] !== "desiredContent") {
         fail("input", "$request");
     }
     let currentValues;
@@ -70,7 +68,7 @@ function parseRequest(value) {
         throw error;
     }
     const desired = snapshotBytes(record.desiredContent, "$request.desiredContent");
-    const current = Object.freeze(currentValues.map((content, index) => (snapshotBytes(content, `$request.currentContents/${index}`))));
+    const current = Object.freeze(currentValues.map((content, index) => snapshotBytes(content, `$request.currentContents/${index}`)));
     for (let index = 0; index < current.length; index += 1) {
         const entry = current[index];
         if (entry === undefined)
@@ -87,9 +85,7 @@ function parseRequest(value) {
 /** 计划一份 absent/current/replace 的整文件字节转换，不执行任何 I/O。 */
 export function planWholeFileContentTransition(sourceValue, requestValue) {
     const request = parseRequest(requestValue);
-    const source = sourceValue === null
-        ? null
-        : snapshotBytes(sourceValue, "$source");
+    const source = sourceValue === null ? null : snapshotBytes(sourceValue, "$source");
     if (source === null) {
         return Object.freeze({
             disposition: "create-required",
@@ -108,7 +104,7 @@ export function planWholeFileContentTransition(sourceValue, requestValue) {
             desiredBytes: Buffer.from(request.desired.bytes),
         });
     }
-    const isAdmittedCurrent = request.current.some((content) => (sameContent(source, content)));
+    const isAdmittedCurrent = request.current.some((content) => sameContent(source, content));
     if (!isAdmittedCurrent)
         fail("unadmitted-source", "$source");
     return Object.freeze({

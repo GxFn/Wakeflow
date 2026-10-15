@@ -1,4 +1,4 @@
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
 /**
  * Wakeflow Foundation / Resource：资源处理角色与机械操作合同。
  *
@@ -76,18 +76,12 @@ const ROLE_POLICIES = Object.freeze({
     }),
     "mutable-snapshot": Object.freeze({
         recoveryStrategy: "owner-forward-recovery",
-        allowedRecipes: Object.freeze([
-            "exclusive-create",
-            "exact-source-replace",
-        ]),
+        allowedRecipes: Object.freeze(["exclusive-create", "exact-source-replace"]),
         requiredRecipes: Object.freeze(["exact-source-replace"]),
     }),
     "derived-projection": Object.freeze({
         recoveryStrategy: "rebuild-from-authority",
-        allowedRecipes: Object.freeze([
-            "exclusive-create",
-            "deterministic-rewrite",
-        ]),
+        allowedRecipes: Object.freeze(["exclusive-create", "deterministic-rewrite"]),
         requiredRecipes: Object.freeze([]),
     }),
     "derived-checkpoint": Object.freeze({
@@ -118,12 +112,7 @@ const ROLE_POLICIES = Object.freeze({
 });
 const ROLE_SET = new Set(WAKEFLOW_RESOURCE_ROLES);
 const RECIPE_INDEX = new Map(WAKEFLOW_RESOURCE_MUTATION_RECIPES.map((recipe, index) => [recipe, index]));
-const RESOURCE_FIELDS = new Set([
-    "kind",
-    "role",
-    "allowedMutationRecipes",
-    "recoveryStrategy",
-]);
+const RESOURCE_FIELDS = new Set(["kind", "role", "allowedMutationRecipes", "recoveryStrategy"]);
 const DIRECTORY_CONTAINER_FIELDS = new Set([
     "kind",
     "materializationRecipe",
@@ -139,7 +128,9 @@ function propertyPath(key) {
     return `$/${key.replaceAll("~", "~0").replaceAll("/", "~1")}`;
 }
 function assertExactFields(record, allowed) {
-    const unknown = Object.keys(record).sort().find((key) => !allowed.has(key));
+    const unknown = Object.keys(record)
+        .sort()
+        .find((key) => !allowed.has(key));
     if (unknown !== undefined)
         fail("shape", propertyPath(unknown));
 }
@@ -287,8 +278,8 @@ export function admitWakeflowResourceOperation(contractValue, recipeValue) {
         });
     }
     const allowedRecipes = contract.allowedMutationRecipes;
-    if (typeof recipeValue !== "string"
-        || !allowedRecipes.includes(recipeValue)) {
+    if (typeof recipeValue !== "string" ||
+        !allowedRecipes.includes(recipeValue)) {
         fail("operation", "$/recipe");
     }
     return Object.freeze({

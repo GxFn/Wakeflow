@@ -1,5 +1,5 @@
 import canonicalize from "canonicalize";
-import { encodeUtf8, Utf8Error, } from "../text/utf8.js";
+import { encodeUtf8, Utf8Error } from "../text/utf8.js";
 import { hasPassiveJsonSerializationEnvironment, JsonValueError, parseJsonValue, } from "./json-value.js";
 /**
  * Canonical JSON 适配层失败时返回的稳定错误。

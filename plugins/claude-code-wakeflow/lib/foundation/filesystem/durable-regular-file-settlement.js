@@ -1,11 +1,11 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
 const ERROR_MESSAGES = {
-    "input": "Durable regular file settlement input is invalid.",
+    input: "Durable regular file settlement input is invalid.",
     "root-scope": "Regular file settlement could not establish its rooted scope.",
     "parent-not-found": "Regular file settlement parent directory does not exist.",
     "parent-symlink": "Regular file settlement parent chain cannot contain a symbolic link.",
@@ -19,7 +19,7 @@ const ERROR_MESSAGES = {
     "resource-changed": "Regular file settlement target no longer matches its expectation.",
     "durability-failure": "Regular file and parent could not be synchronized safely.",
     "commit-uncertain": "Regular file settlement result could not be proven exact.",
-    "aborted": "Regular file settlement was aborted before synchronization.",
+    aborted: "Regular file settlement was aborted before synchronization.",
     "close-failure": "A regular file settlement handle could not be closed safely.",
 };
 /** 指定普通文件持久性结算失败时返回的稳定、脱敏错误。 */
@@ -38,28 +38,28 @@ function fail(reason, path) {
     throw new DurableRegularFileSettlementError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
 function parseExpectedNode(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         fail("input", "$options.expectedNode");
     }
     try {
@@ -89,8 +89,8 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (!Object.hasOwn(record, "expectedNode")
-        || Object.keys(record).some((key) => key !== "expectedNode" && key !== "signal")) {
+    if (!Object.hasOwn(record, "expectedNode") ||
+        Object.keys(record).some((key) => key !== "expectedNode" && key !== "signal")) {
         fail("input", "$options");
     }
     if (record.signal !== undefined && !isAbortSignal(record.signal)) {
@@ -271,8 +271,8 @@ export async function settleRegularFileDurability(root, resourcePath, options) {
         await syncParent(parent);
         await assertParentCurrent(parent);
         const finalNode = await assertResourceCurrent(resource, "settled");
-        if (!sameFileNodeSnapshot(parsed.expectedNode, finalNode)
-            || !sameFileNodeSnapshot(syncedNode, finalNode)) {
+        if (!sameFileNodeSnapshot(parsed.expectedNode, finalNode) ||
+            !sameFileNodeSnapshot(syncedNode, finalNode)) {
             fail("commit-uncertain", "$resourcePath");
         }
         settled = true;

@@ -1,9 +1,9 @@
 import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import { types } from "node:util";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../filesystem/portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "../filesystem/rooted-directory.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../filesystem/portable-resource-path.js";
+import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 /**
@@ -51,18 +51,18 @@ function fail(reason, path) {
     throw new GitIgnoreObservationError(reason, path);
 }
 function assertRoot(value, path) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", path);
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;
@@ -75,8 +75,8 @@ function parseOptions(value) {
         throw error;
     }
     const keys = Object.keys(record);
-    if (keys.some((key) => key !== "signal")
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (keys.some((key) => key !== "signal") ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -223,10 +223,8 @@ function runGitCheckIgnore(repositoryRoot, workTreeRoot, probePaths, signal) {
         };
         child.stdout.on("data", (chunk) => {
             outputByteCount += chunk.byteLength;
-            if (outputByteCount
-                > GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputBytes
-                || outputChunks.length
-                    >= GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputChunks) {
+            if (outputByteCount > GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputBytes ||
+                outputChunks.length >= GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputChunks) {
                 outputExceeded = true;
                 terminate();
                 return;
@@ -315,8 +313,7 @@ function parseOutput(result, probePaths) {
         throw error;
     }
     const fields = output.split("\u0000");
-    if (fields.length !== (probePaths.length * 4) + 1
-        || fields.at(-1) !== "") {
+    if (fields.length !== probePaths.length * 4 + 1 || fields.at(-1) !== "") {
         fail("protocol", "$git.stdout");
     }
     const paths = [];
@@ -326,10 +323,10 @@ function parseOutput(result, probePaths) {
         const line = fields[offset + 1];
         const pattern = fields[offset + 2];
         const pathname = fields[offset + 3];
-        if (source === undefined
-            || line === undefined
-            || pattern === undefined
-            || pathname !== expectedPath) {
+        if (source === undefined ||
+            line === undefined ||
+            pattern === undefined ||
+            pathname !== expectedPath) {
             fail("protocol", "$git.stdout");
         }
         if (source === "" && line === "" && pattern === "") {
@@ -340,9 +337,7 @@ function parseOutput(result, probePaths) {
             }));
             continue;
         }
-        if (source.length === 0
-            || pattern.length === 0
-            || !/^[1-9][0-9]*$/u.test(line)) {
+        if (source.length === 0 || pattern.length === 0 || !/^[1-9][0-9]*$/u.test(line)) {
             fail("protocol", "$git.stdout");
         }
         const lineNumber = Number(line);

@@ -1,9 +1,9 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, parseDirectoryTreeCandidatePlan, } from "./durable-directory-tree-candidate.js";
-import { renameResourceDurably, DurableResourceRenameError, } from "./durable-resource-rename.js";
-import { sameFileNodeSnapshot, FileNodeSnapshotError, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
+import { DurableResourceRenameError, renameResourceDurably } from "./durable-resource-rename.js";
+import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 const ERROR_MESSAGES = {
     input: "Directory tree publication input is invalid.",
@@ -52,10 +52,10 @@ function parsePath(value, path) {
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     const record = plainRecord(value, "$options");
@@ -69,10 +69,10 @@ function parseOptions(value) {
     return Object.freeze({ signal });
 }
 function parseExpectedNode(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         fail("input", "$candidate/rootNode");
     }
     try {
@@ -94,10 +94,10 @@ function parseExpectedNode(value) {
 function parseCandidate(value) {
     const record = plainRecord(value, "$candidate");
     const keys = Object.keys(record).sort();
-    if (keys.length !== 3
-        || keys[0] !== "candidateRootPath"
-        || keys[1] !== "plan"
-        || keys[2] !== "rootNode") {
+    if (keys.length !== 3 ||
+        keys[0] !== "candidateRootPath" ||
+        keys[1] !== "plan" ||
+        keys[2] !== "rootNode") {
         fail("input", "$candidate");
     }
     const candidateRootPath = parsePath(record.candidateRootPath, "$candidate/candidateRootPath");
@@ -140,20 +140,18 @@ function mapRenameError(error) {
     if (error.reason === "cross-device") {
         fail("cross-device", "$destinationResourcePath");
     }
-    if (error.reason === "source-not-found"
-        || error.reason === "source-changed") {
+    if (error.reason === "source-not-found" || error.reason === "source-changed") {
         fail("source-changed", "$sourceResourcePath");
     }
-    if (error.reason === "source-symlink"
-        || error.reason === "source-not-supported") {
+    if (error.reason === "source-symlink" || error.reason === "source-not-supported") {
         fail("source-conflict", "$sourceResourcePath");
     }
     if (error.reason === "durability-failure") {
         fail("durability-failure", "$destinationResourcePath");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "rename-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "rename-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$destinationResourcePath");
     }
     fail("operation-failure", "$destinationResourcePath");

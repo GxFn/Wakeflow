@@ -1,6 +1,6 @@
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { JsonValueError, parseJsonValue, } from "../data/json-value.js";
-import { parseDenseArray, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parseDenseArray } from "../data/passive-own-data.js";
 const ERROR_MESSAGES = {
     "schema-input": "Runtime JSON Schema input is invalid.",
     "schema-dependency": "Runtime JSON Schema dependency catalog is invalid.",
@@ -31,9 +31,7 @@ function schemaObject(value, path, reason) {
             fail(reason, error.path);
         throw error;
     }
-    if (admitted === null ||
-        Array.isArray(admitted) ||
-        typeof admitted !== "object") {
+    if (admitted === null || Array.isArray(admitted) || typeof admitted !== "object") {
         fail(reason, path);
     }
     // 上述准入已经排除原始值和 JsonArray；此处恢复 TypeScript 无法保留的只读类型收窄。
@@ -71,10 +69,7 @@ function validationPath(instancePath) {
 function sameJsonValue(left, right) {
     if (left === right)
         return true;
-    if (left === null ||
-        right === null ||
-        typeof left !== "object" ||
-        typeof right !== "object") {
+    if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
         return false;
     }
     const leftIsArray = Array.isArray(left);
@@ -84,15 +79,23 @@ function sameJsonValue(left, right) {
         const leftArray = left;
         const rightArray = right;
         return (leftArray.length === rightArray.length &&
-            leftArray.every((entry, index) => sameJsonValue(entry, rightArray[index])));
+            leftArray.every((entry, index) => {
+                const other = rightArray[index];
+                return other !== undefined && sameJsonValue(entry, other);
+            }));
     }
     const leftRecord = left;
     const rightRecord = right;
     const leftKeys = Object.keys(leftRecord);
     if (leftKeys.length !== Object.keys(rightRecord).length)
         return false;
-    return leftKeys.every((key) => Object.hasOwn(rightRecord, key) &&
-        sameJsonValue(leftRecord[key], rightRecord[key]));
+    return leftKeys.every((key) => {
+        if (!Object.hasOwn(rightRecord, key))
+            return false;
+        const leftValue = leftRecord[key];
+        const rightValue = rightRecord[key];
+        return (leftValue !== undefined && rightValue !== undefined && sameJsonValue(leftValue, rightValue));
+    });
 }
 /** JSON Schema `uniqueItems`的无原型安全实现。 */
 function uniqueJsonItems(enabled, value) {
@@ -100,8 +103,12 @@ function uniqueJsonItems(enabled, value) {
         return true;
     const items = value;
     for (let right = 1; right < items.length; right += 1) {
+        const rightItem = items[right];
+        if (rightItem === undefined)
+            continue;
         for (let left = 0; left < right; left += 1) {
-            if (sameJsonValue(items[left], items[right]))
+            const leftItem = items[left];
+            if (leftItem !== undefined && sameJsonValue(leftItem, rightItem))
                 return false;
         }
     }

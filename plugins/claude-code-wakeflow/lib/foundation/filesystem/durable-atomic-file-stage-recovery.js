@@ -1,14 +1,14 @@
 import { types } from "node:util";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "./exact-regular-file-unlink.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
+import { computeDurableAtomicFileStageTargetDigest, DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "./durable-atomic-file-stage-address.js";
+import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES } from "./durable-atomic-file-write-contract.js";
+import { DurableRegularFileSettlementError, settleRegularFileDurability, } from "./durable-regular-file-settlement.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "./exact-regular-file-unlink.js";
 import { sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { computeDurableAtomicFileStageTargetDigest, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, DurableAtomicFileStageAddressError, } from "./durable-atomic-file-stage-address.js";
-import { settleRegularFileDurability, DurableRegularFileSettlementError, } from "./durable-regular-file-settlement.js";
-import { parsePortableResourcePath, PortableResourcePathError, splitPortableResourcePath, } from "./portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import { readStableResourceDirectory, readStableRootDirectory, StableDirectoryReadError, } from "./stable-directory-read.js";
-import { readStableFileDigest, StableFileReadError, } from "./stable-file-read.js";
-import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES, } from "./durable-atomic-file-write-contract.js";
+import { readStableFileDigest, StableFileReadError } from "./stable-file-read.js";
 /**
  * Wakeflow Foundation / Filesystem：自描述原子暂存文件的有界崩溃恢复。
  *
@@ -20,17 +20,17 @@ import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES, } from "./durable-atomic-file-write-
 export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES = 100_000;
 export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE = 1_024;
 const ERROR_MESSAGES = {
-    "input": "Durable atomic file stage recovery input is invalid.",
+    input: "Durable atomic file stage recovery input is invalid.",
     "root-scope": "Atomic file stage recovery lost its rooted scope.",
-    "directory": "Atomic file stage recovery parent directory is unavailable.",
-    "capacity": "Atomic file stage recovery inventory exceeds its bounded capacity.",
-    "inventory": "Atomic file stage recovery found an invalid reserved stage name.",
+    directory: "Atomic file stage recovery parent directory is unavailable.",
+    capacity: "Atomic file stage recovery inventory exceeds its bounded capacity.",
+    inventory: "Atomic file stage recovery found an invalid reserved stage name.",
     "node-policy": "Atomic file stage recovery found an unsafe stage node.",
     "target-scope": "Atomic file stage recovery found a stage outside its admitted targets.",
     "target-conflict": "Atomic file stage recovery cannot prove its published target.",
-    "busy": "Atomic file stage recovery inventory changed during observation.",
+    busy: "Atomic file stage recovery inventory changed during observation.",
     "cleanup-required": "Atomic file stage recovery could not retire an exact stage.",
-    "aborted": "Atomic file stage recovery was aborted before its next mutation.",
+    aborted: "Atomic file stage recovery was aborted before its next mutation.",
     "operation-failure": "Atomic file stage recovery failed.",
 };
 export class DurableAtomicFileStageRecoveryError extends Error {
@@ -48,10 +48,10 @@ function fail(reason, path) {
     throw new DurableAtomicFileStageRecoveryError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -65,30 +65,28 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
         fail("input", "$options");
     }
     return Object.freeze({ signal: record.signal });
 }
 function assertCurrentOwner(node, path) {
-    if (typeof process.geteuid === "function"
-        && node.userId !== BigInt(process.geteuid())) {
+    if (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid())) {
         fail("node-policy", path);
     }
 }
 function assertStageNode(stage, index) {
     const { address, entry } = stage;
-    if (entry.node.kind !== "file"
-        || entry.node.byteCount > DURABLE_ATOMIC_FILE_MAXIMUM_BYTES
-        || (entry.node.permissionBits !== 0o600
-            && entry.node.permissionBits !== address.mode)
-        || (entry.node.linkCount !== 1n && entry.node.linkCount !== 2n)
-        || (address.operation === "replace" && entry.node.linkCount !== 1n)) {
+    if (entry.node.kind !== "file" ||
+        entry.node.byteCount > DURABLE_ATOMIC_FILE_MAXIMUM_BYTES ||
+        (entry.node.permissionBits !== 0o600 && entry.node.permissionBits !== address.mode) ||
+        (entry.node.linkCount !== 1n && entry.node.linkCount !== 2n) ||
+        (address.operation === "replace" && entry.node.linkCount !== 1n)) {
         fail("node-policy", `$stages/${index}`);
     }
     assertCurrentOwner(entry.node, `$stages/${index}`);
@@ -108,9 +106,7 @@ function parseDirectoryRef(value) {
 }
 function parentDirectoryRef(resourcePath) {
     const segments = splitPortableResourcePath(resourcePath);
-    return segments.length === 1
-        ? null
-        : parsePortableResourcePath(segments.slice(0, -1).join("/"));
+    return segments.length === 1 ? null : parsePortableResourcePath(segments.slice(0, -1).join("/"));
 }
 function parseTargetScope(value) {
     let values;
@@ -183,9 +179,9 @@ async function readDirectory(root, directoryResourcePath, signal) {
                 fail("root-scope", "$root");
             if (error.reason === "source-changed")
                 fail("busy", "$directory");
-            if (error.reason === "not-found"
-                || error.reason === "symlink"
-                || error.reason === "not-directory") {
+            if (error.reason === "not-found" ||
+                error.reason === "symlink" ||
+                error.reason === "not-directory") {
                 fail("directory", "$directory");
             }
             fail("operation-failure", "$directory");
@@ -256,11 +252,11 @@ function targetForStage(targetsByDigest, stage) {
     return target;
 }
 async function assertPublishedTarget(root, stage, target, signal) {
-    if (target.node.kind !== "file"
-        || target.node.permissionBits !== stage.address.mode
-        || target.node.linkCount !== 2n
-        || !sameFileNodeIdentity(stage.entry.node, target.node)
-        || !sameFileNodeSnapshot(stage.entry.node, target.node)) {
+    if (target.node.kind !== "file" ||
+        target.node.permissionBits !== stage.address.mode ||
+        target.node.linkCount !== 2n ||
+        !sameFileNodeIdentity(stage.entry.node, target.node) ||
+        !sameFileNodeSnapshot(stage.entry.node, target.node)) {
         fail("target-conflict", "$target");
     }
     assertCurrentOwner(target.node, "$target");
@@ -318,15 +314,15 @@ async function recoverDirectoryStages(root, directoryResourcePath, signal, targe
     const directory = await readDirectory(root, directoryResourcePath, signal);
     const collected = collectStages(directory, tolerateUnrecognized);
     const observedStages = collected.stages;
-    if (targetDigests !== null
-        && foreignStagePolicy === "reject"
-        && observedStages.some((stage) => (!targetDigests.has(stage.address.targetResourcePathDigest)))) {
+    if (targetDigests !== null &&
+        foreignStagePolicy === "reject" &&
+        observedStages.some((stage) => !targetDigests.has(stage.address.targetResourcePathDigest))) {
         fail("target-scope", "$stages");
     }
     const stages = targetDigests === null
         ? observedStages
-        : observedStages.filter((stage) => (targetDigests.has(stage.address.targetResourcePathDigest)));
-    const targetsByDigest = stages.some((stage) => (stage.entry.node.linkCount === 2n))
+        : observedStages.filter((stage) => targetDigests.has(stage.address.targetResourcePathDigest));
+    const targetsByDigest = stages.some((stage) => stage.entry.node.linkCount === 2n)
         ? indexTargetsByDigest(directory)
         : null;
     let retiredStageCount = 0;

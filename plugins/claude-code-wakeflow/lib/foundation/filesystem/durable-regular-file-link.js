@@ -1,14 +1,14 @@
 import { link } from "node:fs/promises";
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "./portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
 const ERROR_MESSAGES = {
-    "input": "Durable regular file link input is invalid.",
+    input: "Durable regular file link input is invalid.",
     "root-scope": "Regular file link could not establish its rooted scope.",
     "parent-not-found": "Regular file link parent directory does not exist.",
     "parent-symlink": "Regular file link parent chain cannot contain a symbolic link.",
@@ -26,7 +26,7 @@ const ERROR_MESSAGES = {
     "link-failure": "Regular file hard-link commit could not be executed safely.",
     "commit-uncertain": "Regular file linked-pair commit could not be proven exact.",
     "durability-failure": "Regular file linked pair could not be synchronized safely.",
-    "aborted": "Regular file link was aborted before commit.",
+    aborted: "Regular file link was aborted before commit.",
     "close-failure": "A regular file link handle could not be closed safely.",
 };
 /**
@@ -60,28 +60,28 @@ function parseResourcePath(value, path) {
     }
 }
 function isAbortSignal(value) {
-    return (typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal);
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function parseExpectedNode(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !Object.isFrozen(value)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !Object.isFrozen(value)) {
         fail("input", "$options.expectedSourceNode");
     }
     try {
@@ -108,8 +108,8 @@ function parseOptions(value) {
         throw error;
     }
     const allowed = new Set(["expectedSourceNode", "signal"]);
-    if (!Object.hasOwn(record, "expectedSourceNode")
-        || Object.keys(record).some((key) => !allowed.has(key))) {
+    if (!Object.hasOwn(record, "expectedSourceNode") ||
+        Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
     }
     const signal = record.signal;
@@ -125,8 +125,7 @@ function mapParentHandleError(error, operation, errorPath, inspectionReason) {
     if (operation === "sync" && error.reason === "sync-failure") {
         fail("durability-failure", errorPath);
     }
-    if (operation === "inspect"
-        && error.reason === "target-inspection-failure") {
+    if (operation === "inspect" && error.reason === "target-inspection-failure") {
         fail(inspectionReason ?? "destination-inspection-failure", errorPath);
     }
     if (operation === "open") {
@@ -148,8 +147,8 @@ function mapParentHandleError(error, operation, errorPath, inspectionReason) {
         }
     }
     // 提交后的 inspect 与 sync 遇到父目录漂移时，不能读作干净的提交前拒绝。
-    if ((operation === "inspect" && inspectionReason === "commit-uncertain")
-        || operation === "sync") {
+    if ((operation === "inspect" && inspectionReason === "commit-uncertain") ||
+        operation === "sync") {
         fail("commit-uncertain", errorPath);
     }
     fail("parent-changed", errorPath);
@@ -216,8 +215,7 @@ function mapExactSourceError(error, operation) {
     if (operation === "sync-after-commit" && error.reason === "sync-failure") {
         fail("durability-failure", "$destinationResourcePath");
     }
-    if (operation === "inspect-after-commit"
-        || operation === "sync-after-commit") {
+    if (operation === "inspect-after-commit" || operation === "sync-after-commit") {
         fail("commit-uncertain", "$destinationResourcePath");
     }
     if (operation === "current")
@@ -297,17 +295,17 @@ async function closeSource(source) {
     }
 }
 function sameLinkedNode(before, after, expectedLinkCount) {
-    return (sameFileNodeIdentity(before, after)
-        && before.kind === "file"
-        && after.kind === "file"
-        && before.rawMode === after.rawMode
-        && before.permissionBits === after.permissionBits
-        && after.linkCount === expectedLinkCount
-        && before.userId === after.userId
-        && before.groupId === after.groupId
-        && before.specialDeviceId === after.specialDeviceId
-        && before.byteCount === after.byteCount
-        && before.modifiedAtNanoseconds === after.modifiedAtNanoseconds);
+    return (sameFileNodeIdentity(before, after) &&
+        before.kind === "file" &&
+        after.kind === "file" &&
+        before.rawMode === after.rawMode &&
+        before.permissionBits === after.permissionBits &&
+        after.linkCount === expectedLinkCount &&
+        before.userId === after.userId &&
+        before.groupId === after.groupId &&
+        before.specialDeviceId === after.specialDeviceId &&
+        before.byteCount === after.byteCount &&
+        before.modifiedAtNanoseconds === after.modifiedAtNanoseconds);
 }
 async function inspectLinkedPair(source, sourceParent, destinationParent, linkedPairLinkCount) {
     const sourceNode = await inspectParentTarget(sourceParent, "$sourceResourcePath", "commit-uncertain");
@@ -319,9 +317,9 @@ async function inspectLinkedPair(source, sourceParent, destinationParent, linked
         fail("commit-uncertain", "$destinationResourcePath");
     }
     const opened = await inspectCommittedSource(source);
-    if (!sameLinkedNode(source.initialNodeSnapshot, opened, linkedPairLinkCount)
-        || !sameFileNodeSnapshot(opened, sourceNode)
-        || !sameFileNodeSnapshot(opened, destinationNode)) {
+    if (!sameLinkedNode(source.initialNodeSnapshot, opened, linkedPairLinkCount) ||
+        !sameFileNodeSnapshot(opened, sourceNode) ||
+        !sameFileNodeSnapshot(opened, destinationNode)) {
         fail("commit-uncertain", "$destinationResourcePath");
     }
     return Object.freeze({
@@ -354,17 +352,16 @@ export async function linkRegularFileWithoutReplacement(root, sourceResourcePath
         if (source.resourceAbsolutePath !== sourceParent.resourceAbsolutePath) {
             fail("root-scope", "$sourceResourcePath");
         }
-        if (source.initialNodeSnapshot.deviceId
-            !== destinationParent.parentDeviceId) {
+        if (source.initialNodeSnapshot.deviceId !== destinationParent.parentDeviceId) {
             fail("cross-device", "$destinationResourcePath");
         }
-        if (await inspectParentTarget(destinationParent, "$destinationResourcePath", "destination-inspection-failure") !== null) {
+        if ((await inspectParentTarget(destinationParent, "$destinationResourcePath", "destination-inspection-failure")) !== null) {
             fail("destination-exists", "$destinationResourcePath");
         }
         await assertParentCurrent(sourceParent, "$sourceResourcePath");
         await assertParentCurrent(destinationParent, "$destinationResourcePath");
         await assertSourceCurrent(source);
-        if (await inspectParentTarget(destinationParent, "$destinationResourcePath", "destination-inspection-failure") !== null) {
+        if ((await inspectParentTarget(destinationParent, "$destinationResourcePath", "destination-inspection-failure")) !== null) {
             fail("destination-exists", "$destinationResourcePath");
         }
         assertNotAborted(parsed.signal);
@@ -387,8 +384,8 @@ export async function linkRegularFileWithoutReplacement(root, sourceResourcePath
         await assertParentCurrent(sourceParent, "$sourceResourcePath", true);
         await assertParentCurrent(destinationParent, "$destinationResourcePath", true);
         const final = await inspectLinkedPair(source, sourceParent, destinationParent, linkedPairLinkCount);
-        if (!sameFileNodeSnapshot(linked.sourceNode, final.sourceNode)
-            || !sameFileNodeSnapshot(linked.destinationNode, final.destinationNode)) {
+        if (!sameFileNodeSnapshot(linked.sourceNode, final.sourceNode) ||
+            !sameFileNodeSnapshot(linked.destinationNode, final.destinationNode)) {
             fail("commit-uncertain", "$destinationResourcePath");
         }
         result = Object.freeze({

@@ -3,12 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import nodePath from "node:path";
 import { types } from "node:util";
-import { computeSha256Digest, Sha256Error, } from "../crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { computeSha256Digest, Sha256Error } from "../crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { createFileCandidateDurably, DurableFileCandidateError, } from "../filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath, } from "../filesystem/portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "../filesystem/rooted-directory.js";
-import { parseByteCount, } from "../numeric/byte-count.js";
+import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
+import { parseByteCount } from "../numeric/byte-count.js";
 import { GitIgnoreObservationError, observeGitIgnorePathsInWorkTree, } from "./git-ignore-observation.js";
 /**
  * Wakeflow Foundation / Git：尚未发布的 Gitignore 文件候选语义观察。
@@ -49,18 +49,18 @@ function fail(reason, path) {
     throw new GitIgnoreCandidateObservationError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$repositoryRoot");
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;
@@ -72,8 +72,8 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -81,12 +81,12 @@ function parseOptions(value) {
     });
 }
 function snapshotCandidate(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !ArrayBuffer.isView(value)
-        || !(value instanceof Uint8Array)
-        || value.buffer instanceof SharedArrayBuffer) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !ArrayBuffer.isView(value) ||
+        !(value instanceof Uint8Array) ||
+        value.buffer instanceof SharedArrayBuffer) {
         fail("input", "$candidateBytes");
     }
     const byteCount = parseByteCount(value.byteLength, "$candidateBytes");
@@ -181,8 +181,7 @@ async function observeCandidate(repositoryRoot, workTreeRoot, probePaths, signal
                 fail("aborted", "$options.signal");
             if (error.reason === "input")
                 fail("input", error.path);
-            if (error.reason === "root-scope"
-                && error.path === "$repositoryRoot") {
+            if (error.reason === "root-scope" && error.path === "$repositoryRoot") {
                 fail("root-scope", "$repositoryRoot");
             }
             fail("observation-failure", "$git");

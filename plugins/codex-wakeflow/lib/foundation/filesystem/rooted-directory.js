@@ -1,10 +1,10 @@
-import { constants as fileSystemConstants, } from "node:fs";
-import { lstat, open as openFileHandle, realpath, } from "node:fs/promises";
+import { constants as fileSystemConstants } from "node:fs";
+import { lstat, open as openFileHandle, realpath } from "node:fs/promises";
 import nodePath from "node:path";
-import { parsePlainRecord, PassiveOwnDataError, } from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, splitPortableResourcePath, } from "./portable-resource-path.js";
-import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 const ERROR_MESSAGES = {
     "root-input": "Rooted directory requires one normalized non-root absolute path.",
     "unsupported-platform": "Rooted directory requires Node no-follow directory handles.",
@@ -21,7 +21,7 @@ const ERROR_MESSAGES = {
     "resource-alias": "Rooted resource resolves through a non-canonical path alias.",
     "resource-changed": "Rooted resource changed while it was being inspected.",
     "inspection-failure": "Rooted resource could not be inspected safely.",
-    "closed": "Rooted directory is already closed.",
+    closed: "Rooted directory is already closed.",
     "close-failure": "Rooted directory handle could not be closed safely.",
 };
 /**
@@ -41,6 +41,7 @@ export class RootedDirectoryError extends Error {
         this.path = path;
     }
 }
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 function normalizeErrorPath(value, fallback) {
     return typeof value === "string" && value.length > 0 ? value : fallback;
@@ -49,14 +50,14 @@ function fail(reason, path) {
     throw new RootedDirectoryError(reason, path);
 }
 function normalizeRootPath(value, errorPath) {
-    if (typeof value !== "string"
-        || value.length === 0
-        || value !== value.trim()
-        || !value.isWellFormed()
-        || CONTROL_PATTERN.test(value)
-        || !nodePath.isAbsolute(value)
-        || nodePath.resolve(value) !== value
-        || nodePath.parse(value).root === value) {
+    if (typeof value !== "string" ||
+        value.length === 0 ||
+        value !== value.trim() ||
+        !value.isWellFormed() ||
+        CONTROL_PATTERN.test(value) ||
+        !nodePath.isAbsolute(value) ||
+        nodePath.resolve(value) !== value ||
+        nodePath.parse(value).root === value) {
         fail("root-input", errorPath);
     }
     return value;
@@ -148,10 +149,10 @@ async function resolveCanonicalRootPath(physicalPath, errorPath) {
 function resourcePhysicalPath(rootPath, segments, errorPath) {
     const candidate = nodePath.join(rootPath, ...segments);
     const relative = nodePath.relative(rootPath, candidate);
-    if (relative.length === 0
-        || nodePath.isAbsolute(relative)
-        || relative === ".."
-        || relative.startsWith(`..${nodePath.sep}`)) {
+    if (relative.length === 0 ||
+        nodePath.isAbsolute(relative) ||
+        relative === ".." ||
+        relative.startsWith(`..${nodePath.sep}`)) {
         fail("resource-path", errorPath);
     }
     return candidate;
@@ -194,8 +195,7 @@ export class RootedDirectory {
             fail("root-type", path);
         const canonicalRootPath = await resolveCanonicalRootPath(absolutePath, path);
         const canonicalBefore = await inspectPathNode(canonicalRootPath, path, "root-changed");
-        if (canonicalBefore.kind !== "directory"
-            || !sameFileNodeIdentity(before, canonicalBefore)) {
+        if (canonicalBefore.kind !== "directory" || !sameFileNodeIdentity(before, canonicalBefore)) {
             fail("root-changed", path);
         }
         const flags = requiredOpenFlags(path);
@@ -215,10 +215,10 @@ export class RootedDirectory {
             const opened = snapshotNode(await handle.stat({ bigint: true }), path);
             const after = await inspectPathNode(canonicalRootPath, path, "root-changed");
             await inspectCanonicalPath(canonicalRootPath, path, "root-alias", "root-changed");
-            if (opened.kind !== "directory"
-                || after.kind !== "directory"
-                || !sameFileNodeIdentity(canonicalBefore, opened)
-                || !sameFileNodeIdentity(opened, after)) {
+            if (opened.kind !== "directory" ||
+                after.kind !== "directory" ||
+                !sameFileNodeIdentity(canonicalBefore, opened) ||
+                !sameFileNodeIdentity(opened, after)) {
                 fail("root-changed", path);
             }
             return new RootedDirectory(canonicalRootPath, after, handle, durability);
@@ -273,8 +273,8 @@ export class RootedDirectory {
             fail("root-changed", path);
         }
         await inspectCanonicalPath(this.#absolutePath, path, "root-alias", "root-changed");
-        if (!sameFileNodeIdentity(this.#initialSnapshot, opened)
-            || !sameFileNodeIdentity(opened, current)) {
+        if (!sameFileNodeIdentity(this.#initialSnapshot, opened) ||
+            !sameFileNodeIdentity(opened, current)) {
             fail("root-changed", path);
         }
         return current;
@@ -326,8 +326,7 @@ export class RootedDirectory {
         let finalNode;
         for (const entry of entries) {
             const currentNode = await inspectPathNode(entry.physicalPath, path, "resource-changed");
-            if (currentNode.kind !== entry.node.kind
-                || !sameFileNodeIdentity(entry.node, currentNode)) {
+            if (currentNode.kind !== entry.node.kind || !sameFileNodeIdentity(entry.node, currentNode)) {
                 fail("resource-changed", path);
             }
             if (!entry.isFinal && currentNode.kind !== "directory") {

@@ -12,7 +12,7 @@ const NANOSECONDS_PER_MILLISECOND = 1000000n;
 const ERROR_MESSAGES = {
     "moment-type": "Monotonic moment must be non-negative nanoseconds as bigint.",
     "moment-order": "Monotonic end moment must not precede the start moment.",
-    "milliseconds": "Monotonic milliseconds must be a non-negative safe integer.",
+    milliseconds: "Monotonic milliseconds must be a non-negative safe integer.",
 };
 /**
  * 单调时刻差值或时长转换失败时返回的稳定错误。

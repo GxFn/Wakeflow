@@ -43,9 +43,7 @@ function fail(reason, path) {
     throw new ByteCountError(reason, path);
 }
 function parseNumberByteCount(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value < 0) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
         fail("number-range", path);
     }
     return value;
@@ -67,9 +65,7 @@ export function parseByteCount(value, errorPath) {
  */
 export function byteCountFromBigInt(value, errorPath) {
     const path = normalizeErrorPath(errorPath);
-    if (typeof value !== "bigint"
-        || value < 0n
-        || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    if (typeof value !== "bigint" || value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
         fail("bigint-range", path);
     }
     return Number(value);
